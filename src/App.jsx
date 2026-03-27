@@ -27,14 +27,16 @@ const AppContent = () => {
         (target.tagName === 'INPUT' && (target.type === 'text' || target.type === 'password' || target.type === 'email' || target.type === 'number' || target.type === 'search' || target.type === 'tel' || target.type === 'url')) ||
         target.tagName === 'TEXTAREA'
       ) {
+        // Store original state before making it readonly
+        if (!target.hasAttribute('data-original-readonly')) {
+          target.setAttribute('data-original-readonly', target.readOnly ? 'true' : 'false');
+        }
+
         // Prevent default mobile keyboard
         if (!target.readOnly) {
           target.readOnly = true;
-          // After a short delay, restore it (if needed for typical functioning),
-          // but we might want to keep it readonly while virtual keyboard is open.
-          // In the current architecture, useKeyboardInput makes it readonly permanently and handles state.
-          // Let's create a faux-ref for the target to match what KeyboardContext expects.
         }
+
         const inputRef = { current: target };
         showKeyboard(inputRef, target.value || '');
       }
@@ -51,12 +53,29 @@ const AppContent = () => {
       }
     };
 
+    const handleFocusOut = (e) => {
+      const target = e.target;
+      if (
+        (target.tagName === 'INPUT' && (target.type === 'text' || target.type === 'password' || target.type === 'email' || target.type === 'number' || target.type === 'search' || target.type === 'tel' || target.type === 'url')) ||
+        target.tagName === 'TEXTAREA'
+      ) {
+        // Restore original readonly state
+        if (target.hasAttribute('data-original-readonly')) {
+          const original = target.getAttribute('data-original-readonly') === 'true';
+          target.readOnly = original;
+          target.removeAttribute('data-original-readonly');
+        }
+      }
+    };
+
     // Use capturing phase to ensure we catch events before they are stopped
     document.addEventListener('focusin', handleFocus, true);
+    document.addEventListener('focusout', handleFocusOut, true);
     document.addEventListener('click', handleClick, true);
 
     return () => {
       document.removeEventListener('focusin', handleFocus, true);
+      document.removeEventListener('focusout', handleFocusOut, true);
       document.removeEventListener('click', handleClick, true);
     };
   }, [showKeyboard]);

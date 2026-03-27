@@ -14,28 +14,39 @@ const NavigationBar = ({ onNavigate, currentPage }) => {
     { key: 'settings', icon: SettingsIcon, label: 'Settings' },
   ];
 
-  const handleGlobalKeyboardToggle = () => {
-    if (isGlobalKeyboardVisible) {
-      // Hide keyboard - kill all virtual keyboard processes
-      console.log('Nascondendo tastiera virtuale...');
-      // Use a simple approach - just toggle the state for now
-      setIsGlobalKeyboardVisible(false);
-      console.log('Tastiera virtuale chiusa (simulato)');
-    } else {
-      // Show keyboard - try to launch onboard
-      console.log('Aprendo tastiera virtuale...');
-      // For now, just toggle the state
-      setIsGlobalKeyboardVisible(true);
-      console.log('Tastiera virtuale aperta (simulato)');
-      
-      // Try to launch onboard in background
-      try {
-        // This is a simple approach - in a real app you'd use proper system calls
-        console.log('Tentativo di avviare onboard...');
-        // We'll implement proper system integration later
-      } catch (error) {
-        console.error('Errore nell\'avvio della tastiera:', error);
+  const handleGlobalKeyboardToggle = async () => {
+    try {
+      if (isGlobalKeyboardVisible) {
+        console.log('Nascondendo tastiera virtuale di sistema...');
+        if (window.electronAPI && window.electronAPI.hideGlobalKeyboard) {
+          const result = await window.electronAPI.hideGlobalKeyboard();
+          if (result.success) {
+            setIsGlobalKeyboardVisible(false);
+          } else {
+            console.error('Errore:', result.message);
+            // Fallback: toggle state anyway in case it was hidden externally
+            setIsGlobalKeyboardVisible(false);
+          }
+        } else {
+          setIsGlobalKeyboardVisible(false);
+        }
+      } else {
+        console.log('Aprendo tastiera virtuale di sistema...');
+        if (window.electronAPI && window.electronAPI.showGlobalKeyboard) {
+          const result = await window.electronAPI.showGlobalKeyboard();
+          if (result.success) {
+            setIsGlobalKeyboardVisible(true);
+          } else {
+            console.error('Errore:', result.message);
+            // Alert user that no system keyboard was found
+            alert("Nessuna tastiera virtuale di sistema trovata. Assicurati di aver installato 'onboard' o 'florence'.");
+          }
+        } else {
+          setIsGlobalKeyboardVisible(true);
+        }
       }
+    } catch (error) {
+      console.error('Errore nel controllo della tastiera globale:', error);
     }
   };
 
