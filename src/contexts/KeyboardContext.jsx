@@ -33,25 +33,35 @@ export const KeyboardProvider = ({ children }) => {
   const updateInputValue = (value) => {
     setInputValue(value);
     if (activeInput && activeInput.current) {
-      activeInput.current.value = value;
+      // Use native setters to correctly trigger React's synthetic events
+      if (activeInput.current.tagName === 'INPUT') {
+        const nativeInputValueSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value").set;
+        nativeInputValueSetter.call(activeInput.current, value);
+      } else if (activeInput.current.tagName === 'TEXTAREA') {
+        const nativeTextAreaValueSetter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, "value").set;
+        nativeTextAreaValueSetter.call(activeInput.current, value);
+      } else {
+        activeInput.current.value = value;
+      }
+
       // Trigger change event
       const event = new Event('input', { bubbles: true });
       activeInput.current.dispatchEvent(event);
-      
-      // Also trigger React's onChange if it exists
-      const reactEvent = {
-        target: activeInput.current,
-        currentTarget: activeInput.current
-      };
-      if (activeInput.current.onChange) {
-        activeInput.current.onChange(reactEvent);
-      }
     }
   };
 
   const confirmInput = () => {
     if (activeInput && activeInput.current) {
-      activeInput.current.value = inputValue;
+      if (activeInput.current.tagName === 'INPUT') {
+        const nativeInputValueSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value").set;
+        nativeInputValueSetter.call(activeInput.current, inputValue);
+      } else if (activeInput.current.tagName === 'TEXTAREA') {
+        const nativeTextAreaValueSetter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, "value").set;
+        nativeTextAreaValueSetter.call(activeInput.current, inputValue);
+      } else {
+        activeInput.current.value = inputValue;
+      }
+
       // Trigger change event
       const event = new Event('input', { bubbles: true });
       activeInput.current.dispatchEvent(event);

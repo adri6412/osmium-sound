@@ -27,15 +27,13 @@ const AppContent = () => {
         (target.tagName === 'INPUT' && (target.type === 'text' || target.type === 'password' || target.type === 'email' || target.type === 'number' || target.type === 'search' || target.type === 'tel' || target.type === 'url')) ||
         target.tagName === 'TEXTAREA'
       ) {
-        // Store original state before making it readonly
-        if (!target.hasAttribute('data-original-readonly')) {
-          target.setAttribute('data-original-readonly', target.readOnly ? 'true' : 'false');
+        // Store original inputmode before changing it
+        if (!target.hasAttribute('data-original-inputmode')) {
+          target.setAttribute('data-original-inputmode', target.getAttribute('inputmode') || '');
         }
 
-        // Prevent default mobile keyboard
-        if (!target.readOnly) {
-          target.readOnly = true;
-        }
+        // Prevent default mobile keyboard without breaking selection/typing
+        target.setAttribute('inputmode', 'none');
 
         const inputRef = { current: target };
         showKeyboard(inputRef, target.value || '');
@@ -59,11 +57,15 @@ const AppContent = () => {
         (target.tagName === 'INPUT' && (target.type === 'text' || target.type === 'password' || target.type === 'email' || target.type === 'number' || target.type === 'search' || target.type === 'tel' || target.type === 'url')) ||
         target.tagName === 'TEXTAREA'
       ) {
-        // Restore original readonly state
-        if (target.hasAttribute('data-original-readonly')) {
-          const original = target.getAttribute('data-original-readonly') === 'true';
-          target.readOnly = original;
-          target.removeAttribute('data-original-readonly');
+        // Restore original inputmode state
+        if (target.hasAttribute('data-original-inputmode')) {
+          const original = target.getAttribute('data-original-inputmode');
+          if (original) {
+            target.setAttribute('inputmode', original);
+          } else {
+            target.removeAttribute('inputmode');
+          }
+          target.removeAttribute('data-original-inputmode');
         }
       }
     };
