@@ -98,6 +98,43 @@ export class LyrionAPI {
     return this.request(playerMac, ['power', powerState]);
   }
 
+  // --- Library Browsing Methods ---
+
+  async getArtists(limit = 100, offset = 0) {
+    return this.request('', ['artists', offset, limit, 'tags:s']);
+  }
+
+  async getAlbums(limit = 100, offset = 0, artistId = null) {
+    const params = ['albums', offset, limit, 'tags:alSj'];
+    if (artistId) {
+      params.push(`artist_id:${artistId}`);
+    }
+    return this.request('', params);
+  }
+
+  async getTracks(limit = 100, offset = 0, albumId = null) {
+    const params = ['titles', offset, limit, 'tags:aAlcdtu'];
+    if (albumId) {
+      params.push(`album_id:${albumId}`);
+    }
+    return this.request('', params);
+  }
+
+  async getMusicFolders(folderId = null, limit = 100, offset = 0) {
+    const params = ['musicfolder', offset, limit, 'tags:u'];
+    if (folderId) {
+      params.push(`folder_id:${folderId}`);
+    }
+    return this.request('', params);
+  }
+
+  // --- Playback Commands ---
+
+  async playItem(playerMac, itemType, itemId) {
+    // itemType can be 'artist_id', 'album_id', 'track_id', or 'folder_id'
+    return this.request(playerMac, ['playlistcontrol', 'cmd:load', `${itemType}:${itemId}`]);
+  }
+
   getArtworkUrl(trackId, size = 300) {
     if (!trackId) return null;
     return `${this.baseUrl}/music/${trackId}/cover.jpg?size=${size}`;
