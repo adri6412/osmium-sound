@@ -13,11 +13,53 @@ import NavigationBar from './components/NavigationBar';
 import VirtualKeyboard from './components/VirtualKeyboard';
 
 // Import contexts
-import { KeyboardProvider } from './contexts/KeyboardContext';
+import { KeyboardProvider, useKeyboard } from './contexts/KeyboardContext';
 
 // Main app component with simple state-based navigation
 const AppContent = () => {
   const [currentPage, setCurrentPage] = useState('home');
+  const { showKeyboard } = useKeyboard();
+
+  React.useEffect(() => {
+    const handleFocus = (e) => {
+      const target = e.target;
+      if (
+        (target.tagName === 'INPUT' && (target.type === 'text' || target.type === 'password' || target.type === 'email' || target.type === 'number' || target.type === 'search' || target.type === 'tel' || target.type === 'url')) ||
+        target.tagName === 'TEXTAREA'
+      ) {
+        // Prevent default mobile keyboard
+        if (!target.readOnly) {
+          target.readOnly = true;
+          // After a short delay, restore it (if needed for typical functioning),
+          // but we might want to keep it readonly while virtual keyboard is open.
+          // In the current architecture, useKeyboardInput makes it readonly permanently and handles state.
+          // Let's create a faux-ref for the target to match what KeyboardContext expects.
+        }
+        const inputRef = { current: target };
+        showKeyboard(inputRef, target.value || '');
+      }
+    };
+
+    const handleClick = (e) => {
+      const target = e.target;
+      if (
+        (target.tagName === 'INPUT' && (target.type === 'text' || target.type === 'password' || target.type === 'email' || target.type === 'number' || target.type === 'search' || target.type === 'tel' || target.type === 'url')) ||
+        target.tagName === 'TEXTAREA'
+      ) {
+        const inputRef = { current: target };
+        showKeyboard(inputRef, target.value || '');
+      }
+    };
+
+    // Use capturing phase to ensure we catch events before they are stopped
+    document.addEventListener('focusin', handleFocus, true);
+    document.addEventListener('click', handleClick, true);
+
+    return () => {
+      document.removeEventListener('focusin', handleFocus, true);
+      document.removeEventListener('click', handleClick, true);
+    };
+  }, [showKeyboard]);
 
   const renderPage = () => {
     switch (currentPage) {

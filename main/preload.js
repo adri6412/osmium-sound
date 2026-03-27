@@ -16,7 +16,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // System control
   systemUpdate: () => ipcRenderer.invoke('system-update'),
   systemReboot: () => ipcRenderer.invoke('system-reboot'),
-  systemShutdown: () => ipcRenderer.invoke('syst  // Network configuration
+  systemShutdown: () => ipcRenderer.invoke('system-shutdown'),
+
+  // Network configuration
   setNetworkConfig: (config) => ipcRenderer.invoke('set-network-config', config),
   
   // Simple-keyboard control
@@ -34,7 +36,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
   },
   removeToggleSimpleKeyboard: (callback) => {
     ipcRenderer.removeListener('toggle-simple-keyboard', callback);
-  },
-});config', config),
+  }
 });
 
