@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Server, Settings, Play, Pause, SkipBack, SkipForward,
@@ -128,10 +129,10 @@ const LyrionServer = () => {
         const res = await lyrionApi.getArtists();
         data = res?.artists_loop || [];
       } else if (view === 'albums') {
-        const res = await lyrionApi.getAlbums(100, 0, params?.artistId);
+        const res = await lyrionApi.getAlbums(9999, 0, params?.artistId);
         data = res?.albums_loop || [];
       } else if (view === 'tracks') {
-        const res = await lyrionApi.getTracks(100, 0, params?.albumId);
+        const res = await lyrionApi.getTracks(9999, 0, params?.albumId);
         data = res?.titles_loop || [];
       } else if (view === 'folders') {
         const res = await lyrionApi.getMusicFolders(params?.folderId);
@@ -165,10 +166,10 @@ const LyrionServer = () => {
           const res = await lyrionApi.getArtists();
           data = res?.artists_loop || [];
         } else if (prevState.view === 'albums') {
-          const res = await lyrionApi.getAlbums(100, 0, prevState.params?.artistId);
+          const res = await lyrionApi.getAlbums(9999, 0, prevState.params?.artistId);
           data = res?.albums_loop || [];
         } else if (prevState.view === 'tracks') {
-          const res = await lyrionApi.getTracks(100, 0, prevState.params?.albumId);
+          const res = await lyrionApi.getTracks(9999, 0, prevState.params?.albumId);
           data = res?.titles_loop || [];
         } else if (prevState.view === 'folders') {
           const res = await lyrionApi.getMusicFolders(prevState.params?.folderId);
@@ -426,8 +427,8 @@ const LyrionServer = () => {
     }
 
     // Now Playing State
-    const playlistIndex = playerStatus?.playlist_cur_index ? parseInt(playerStatus.playlist_cur_index) : 0;
-    const currentTrack = playerStatus?.playlist_loop?.[playlistIndex] || {};
+    // The API request in getPlayerStatus returns only 1 track (the current one) in playlist_loop
+    const currentTrack = playerStatus?.playlist_loop?.[0] || {};
 
     const title = currentTrack.title || 'Nessuna traccia';
     const artist = currentTrack.artist || 'Artista Sconosciuto';
@@ -481,16 +482,17 @@ const LyrionServer = () => {
             </div>
         </div>
 
-        {/* Full Screen Player Overlay */}
-        <AnimatePresence>
-          {isPlayerExpanded && (
-            <motion.div
-              initial={{ y: "100%" }}
-              animate={{ y: 0 }}
-              exit={{ y: "100%" }}
-              transition={{ type: "spring", damping: 25, stiffness: 200 }}
-              className="absolute inset-0 z-30 flex flex-col bg-hifi-dark"
-            >
+        {/* Full Screen Player Overlay (Using Portal to cover entire app) */}
+        {createPortal(
+          <AnimatePresence>
+            {isPlayerExpanded && (
+              <motion.div
+                initial={{ y: "100%" }}
+                animate={{ y: 0 }}
+                exit={{ y: "100%" }}
+                transition={{ type: "spring", damping: 25, stiffness: 200 }}
+                className="fixed inset-0 z-50 flex flex-col bg-hifi-dark"
+              >
                {/* Blurred background */}
                <div
                   className="absolute inset-0 opacity-20 bg-cover bg-center blur-3xl scale-125 transition-all duration-1000 pointer-events-none"
@@ -599,11 +601,13 @@ const LyrionServer = () => {
                     >
                       <SkipForward size={40} />
                     </motion.button>
-                  </div>
-               </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
+                    </div>
+                 </div>
+              </motion.div>
+            )}
+          </AnimatePresence>,
+          document.body
+        )}
 
         {/* Persistent Bottom Player Bar (Mini Player) */}
         <div className="relative h-24 bg-hifi-dark border-t border-hifi-accent shadow-[0_-10px_30px_rgba(0,0,0,0.5)] z-20 shrink-0">

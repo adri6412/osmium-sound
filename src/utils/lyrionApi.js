@@ -100,11 +100,11 @@ export class LyrionAPI {
 
   // --- Library Browsing Methods ---
 
-  async getArtists(limit = 100, offset = 0) {
+  async getArtists(limit = 9999, offset = 0) {
     return this.request('', ['artists', offset, limit, 'tags:s']);
   }
 
-  async getAlbums(limit = 100, offset = 0, artistId = null) {
+  async getAlbums(limit = 9999, offset = 0, artistId = null) {
     const params = ['albums', offset, limit, 'tags:alSj'];
     if (artistId) {
       params.push(`artist_id:${artistId}`);
@@ -112,7 +112,7 @@ export class LyrionAPI {
     return this.request('', params);
   }
 
-  async getTracks(limit = 100, offset = 0, albumId = null) {
+  async getTracks(limit = 9999, offset = 0, albumId = null) {
     const params = ['titles', offset, limit, 'tags:aAlcdtu'];
     if (albumId) {
       params.push(`album_id:${albumId}`);
@@ -120,7 +120,7 @@ export class LyrionAPI {
     return this.request('', params);
   }
 
-  async getMusicFolders(folderId = null, limit = 100, offset = 0) {
+  async getMusicFolders(folderId = null, limit = 9999, offset = 0) {
     const params = ['musicfolder', offset, limit, 'tags:u'];
     if (folderId) {
       params.push(`folder_id:${folderId}`);
