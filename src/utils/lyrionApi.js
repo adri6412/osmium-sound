@@ -137,7 +137,7 @@ export class LyrionAPI {
 
   getArtworkUrl(trackId, size = 300) {
     if (!trackId) return null;
-    return `${this.baseUrl}/music/${trackId}/cover.jpg?size=${size}`;
+    return `${this.baseUrl}/music/${trackId}/cover?size=${size}`;
   }
 }
 

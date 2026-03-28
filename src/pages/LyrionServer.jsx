@@ -10,6 +10,35 @@ import {
 import { lyrionApi } from '../utils/lyrionApi';
 
 /**
+ * Artwork Component with local error state
+ */
+const ArtworkImage = ({ src, alt, className, fallbackIcon: FallbackIcon }) => {
+  const [hasError, setHasError] = useState(false);
+
+  // Reset error state if src changes
+  useEffect(() => {
+    setHasError(false);
+  }, [src]);
+
+  if (!src || hasError) {
+    return (
+      <div className={`absolute inset-0 flex items-center justify-center text-hifi-silver/30 bg-hifi-gray`}>
+        <FallbackIcon size={48} />
+      </div>
+    );
+  }
+
+  return (
+    <img
+      src={src}
+      alt={alt}
+      className={className}
+      onError={() => setHasError(true)}
+    />
+  );
+};
+
+/**
  * Native Lyrion Server Player
  * Interfaces with LMS via JSON-RPC
  */
@@ -226,6 +255,9 @@ const LyrionServer = ({ onNavigate }) => {
               const artworkId = item.artwork_track_id || item.id;
               const artworkUrl = artworkId ? lyrionApi.getArtworkUrl(artworkId, 300) : null;
               return (
+                <div key={item.id || idx} className="bg-hifi-light/10 hover:bg-hifi-light/20 rounded-xl overflow-hidden group cursor-pointer transition-colors" onClick={() => navigateTo('tracks', item.album, { albumId: item.id })}>
+                  <div className="relative aspect-square bg-hifi-gray">
+                    <ArtworkImage src={artworkUrl} alt={item.album} className="w-full h-full object-cover" fallbackIcon={Disc} />
                 <div key={idx} className="bg-hifi-light/10 hover:bg-hifi-light/20 rounded-xl overflow-hidden group cursor-pointer transition-colors" onClick={() => navigateTo('tracks', item.album, { albumId: item.id })}>
                   <div className="relative aspect-square bg-hifi-gray">
                     {artworkUrl ? (
