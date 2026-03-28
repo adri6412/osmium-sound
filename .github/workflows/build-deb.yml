@@ -1,0 +1,35 @@
+name: Build HiFi Player App (.deb)
+
+on:
+  push:
+    branches: [ "main" ]
+  workflow_dispatch:
+
+jobs:
+  build-deb:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+        cache: 'npm'
+
+    - name: Install dependencies
+      run: npm ci
+
+    - name: Build App (deb)
+      run: npm run package -- --linux deb -c.publish=never
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Upload .deb Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: hifi-media-player-deb
+        path: dist/*.deb
+        retention-days: 7
