@@ -44,20 +44,12 @@ const VirtualKeyboard = () => {
             class: "hg-button-custom",
             buttons: "1 2 3 4 5 6 7 8 9 0 q w e r t y u i o p a s d f g h j k l z x c v b n m . - {space} {bksp}"
           }
-        ]
+        ],
+        onChange: (input) => {
+          updateInputValue(input);
+        }
       });
 
-      // Handle key press
-      simpleKeyboardRef.current.onKeyPress = (button) => {
-        console.log('🎹 Key pressed on virtual keyboard:', button);
-        if (button === '{space}') {
-          updateInputValue(inputValue + ' ');
-        } else if (button === '{bksp}') {
-          updateInputValue(inputValue.slice(0, -1));
-        } else {
-          updateInputValue(inputValue + button);
-        }
-      };
       console.log('🎹 SimpleKeyboard created successfully!');
     }
 
@@ -131,9 +123,6 @@ const VirtualKeyboard = () => {
             <div className="flex items-center justify-between mb-6">
               <h3 className="text-xl font-semibold text-white">Tastiera Virtuale</h3>
               <div className="flex items-center space-x-2">
-                <div className="text-xs text-green-400 bg-green-900/20 px-2 py-1 rounded">
-                  DEBUG: Visibile
-                </div>
                 <motion.button
                   onClick={hideKeyboard}
                   className="p-2 rounded-lg bg-hifi-light hover:bg-hifi-accent text-white transition-colors"
