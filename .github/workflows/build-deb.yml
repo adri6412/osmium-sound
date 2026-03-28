@@ -23,7 +23,9 @@ jobs:
       run: npm ci
 
     - name: Build App (deb)
-      run: npm run package -- --linux deb
+      run: npm run package -- --linux deb -c.publish=never
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
     - name: Upload .deb Artifact
       uses: actions/upload-artifact@v4
