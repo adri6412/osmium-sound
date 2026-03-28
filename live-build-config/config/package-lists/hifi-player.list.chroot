@@ -1,0 +1,37 @@
+# Pacchetti base per X11 (minimo indispensabile)
+xserver-xorg-core
+xserver-xorg-video-all
+xserver-xorg-input-all
+xinit
+lightdm
+
+# Supporto Audio ALSA Bit-perfect
+alsa-utils
+libasound2
+
+# Dipendenze tipiche di Electron su Debian Minimal
+libnss3
+libxss1
+libasound2
+libatk1.0-0
+libatk-bridge2.0-0
+libgdk-pixbuf2.0-0
+libgtk-3-0
+libdrm2
+libgbm1
+libx11-xcb1
+libxcb-dri3-0
+libxshmfence1
+
+# Network Manager se ti serve connettere al WiFi o gestire IP
+network-manager
+
+# Utilità essenziali
+sudo
+curl
+ca-certificates
+unzip
+
+# Installer
+calamares
+calamares-settings-debian

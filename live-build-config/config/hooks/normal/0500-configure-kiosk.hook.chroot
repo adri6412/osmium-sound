@@ -1,0 +1,51 @@
+#!/bin/sh
+
+# Crea l'utente kiosk per l'app
+if ! id "hifi" >/dev/null 2>&1; then
+    useradd -m -G audio,video,plugdev,netdev -s /bin/bash hifi
+    # Password di default (opzionale): user=hifi pass=live
+    echo "hifi:live" | chpasswd
+    echo "root:root" | chpasswd
+fi
+
+# Abilitiamo l'autologin del gestore grafico lightdm
+cat <<EOF > /etc/lightdm/lightdm.conf
+[Seat:*]
+autologin-user=hifi
+autologin-user-timeout=0
+user-session=hifi-kiosk
+xserver-command=X -s 0 -dpms
+EOF
+
+# Crea un Xsession custom per l'utente (non un intero DE, ma l'app pura)
+mkdir -p /usr/share/xsessions
+cat <<EOF > /usr/share/xsessions/hifi-kiosk.desktop
+[Desktop Entry]
+Name=HiFi Kiosk
+Comment=Start HiFi Media Player Appliance Mode
+Exec=/home/hifi/.xsession
+Type=Application
+EOF
+
+# Configurazione sessione X per avviare la nostra app in full screen
+cat <<EOF > /home/hifi/.xsession
+#!/bin/sh
+# Disabilita il salvaschermo e lo spegnimento dello schermo per l'appliance
+xset s off
+xset -dpms
+xset s noblank
+
+# Nasconde il cursore (se installi unclutter in futuro, utile su touch)
+# unclutter -idle 0.1 -root &
+
+# Avvia l'app in modalita' kiosk
+exec /opt/hifi-media-player/hifi-media-player --no-sandbox --disable-dev-shm-usage --enable-features=UseOzonePlatform --ozone-platform=x11
+EOF
+chmod +x /home/hifi/.xsession
+chown hifi:hifi /home/hifi/.xsession
+
+# Assicuriamoci che l'audio non sia mutato (ALSA default state)
+amixer -q sset Master unmute || true
+
+# Configura Calamares (l'installer grafico) per avviarsi dal desktop o per essere l'opzione principale
+# Al momento l'app parte in full screen, possiamo creare un servizio o una shortcut.

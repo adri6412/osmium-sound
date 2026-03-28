@@ -51,6 +51,13 @@
     "files": [
       "main/**/*",
       "renderer-dist/**/*"
-    ]
+    ],
+    "linux": {
+      "target": [
+        "deb"
+      ],
+      "executableName": "hifi-media-player",
+      "category": "Audio"
+    }
   }
 }

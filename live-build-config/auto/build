@@ -1,0 +1,4 @@
+#!/bin/sh
+
+# Wrapper per eseguire il build della live image
+lb build noauto "${@}" 2>&1 | tee build.log
