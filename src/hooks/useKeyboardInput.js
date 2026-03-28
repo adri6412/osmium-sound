@@ -18,12 +18,10 @@ export const useKeyboardInput = (value, onChange) => {
 
     // Make input look clickable but still allow focus
     input.style.cursor = 'pointer';
-    input.readOnly = true; // Prevent physical keyboard input
 
     return () => {
       if (input) {
         input.style.cursor = 'text';
-        input.readOnly = false;
       }
     };
   }, []);
