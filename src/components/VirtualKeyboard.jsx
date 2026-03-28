@@ -8,6 +8,7 @@ import 'simple-keyboard/build/css/index.css';
 const VirtualKeyboard = () => {
   const { isKeyboardVisible, inputValue, updateInputValue, hideKeyboard, confirmInput, activeInput } = useKeyboard();
   const keyboardRef = useRef(null);
+  const containerRef = useRef(null);
   const simpleKeyboardRef = useRef(null);
 
   // Scroll active input into view when keyboard becomes visible
@@ -87,17 +88,23 @@ const VirtualKeyboard = () => {
   // Close keyboard when clicking outside
   useEffect(() => {
     const handleClickOutside = (event) => {
-      if (keyboardRef.current && !keyboardRef.current.contains(event.target)) {
+      // Use composedPath to handle elements that might be removed from the DOM
+      // (like simple-keyboard buttons during re-renders)
+      const path = event.composedPath();
+      const isInside = path.some(el => el === containerRef.current);
+
+      if (containerRef.current && !isInside) {
         hideKeyboard();
       }
     };
 
     if (isKeyboardVisible) {
-      document.addEventListener('mousedown', handleClickOutside);
+      // Use capture phase to ensure we get the event before elements are removed
+      document.addEventListener('mousedown', handleClickOutside, true);
     }
 
     return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('mousedown', handleClickOutside, true);
     };
   }, [isKeyboardVisible, hideKeyboard]);
 
@@ -124,7 +131,7 @@ const VirtualKeyboard = () => {
           }}
         >
           <motion.div
-            ref={keyboardRef}
+            ref={containerRef}
             initial={{ y: 100, opacity: 0 }}
             animate={{ y: 0, opacity: 1 }}
             exit={{ y: 100, opacity: 0 }}
