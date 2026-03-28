@@ -18,7 +18,7 @@
     "hifi",
     "touchscreen"
   ],
-  "author": "",
+  "author": "HiFi Audio <admin@hifiaudio.local>",
   "license": "MIT",
   "dependencies": {
     "framer-motion": "^10.16.16",
