@@ -220,6 +220,32 @@ const LyrionServer = ({ onNavigate }) => {
 
     return (
       <div className="flex-1 overflow-y-auto px-6 pb-6">
+        {currentView === 'albums' ? (
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 md:gap-6">
+            {libraryData.map((item, idx) => {
+              const artworkUrl = item.id ? lyrionApi.getArtworkUrl(item.id, 300) : null;
+              return (
+                <div key={idx} className="bg-hifi-light/10 hover:bg-hifi-light/20 rounded-xl overflow-hidden group cursor-pointer transition-colors" onClick={() => navigateTo('tracks', item.album, { albumId: item.id })}>
+                  <div className="relative aspect-square bg-hifi-gray">
+                    {artworkUrl ? (
+                      <img src={artworkUrl} alt={item.album} className="w-full h-full object-cover" onError={(e) => { e.target.style.display = 'none'; e.target.nextSibling.style.display = 'flex'; }} />
+                    ) : null}
+                    <div className="absolute inset-0 flex items-center justify-center text-hifi-silver/30 bg-hifi-gray" style={{ display: artworkUrl ? 'none' : 'flex' }}>
+                      <Disc size={48} />
+                    </div>
+                    <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                      <button onClick={(e) => { e.stopPropagation(); handlePlayItem('album_id', item.id); }} className="p-4 bg-hifi-gold text-black rounded-full hover:scale-110 transition-transform shadow-lg"><Play size={24} fill="currentColor" /></button>
+                    </div>
+                  </div>
+                  <div className="p-3">
+                    <h3 className="text-white font-medium truncate" title={item.album}>{item.album}</h3>
+                    <p className="text-hifi-silver text-sm truncate" title={item.artist}>{item.artist}</p>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        ) : (
         <ul className="space-y-2">
           {libraryData.map((item, idx) => {
             if (currentView === 'artists') {
@@ -228,16 +254,6 @@ const LyrionServer = ({ onNavigate }) => {
                   <span className="text-lg text-white">{item.artist}</span>
                   <div className="flex space-x-2 opacity-0 group-hover:opacity-100 transition-opacity">
                     <button onClick={(e) => { e.stopPropagation(); handlePlayItem('artist_id', item.id); }} className="p-2 bg-hifi-gold/20 text-hifi-gold rounded-full hover:bg-hifi-gold hover:text-black transition-colors"><Play size={20} fill="currentColor" /></button>
-                  </div>
-                </li>
-              );
-            }
-            if (currentView === 'albums') {
-              return (
-                <li key={idx} className="flex items-center justify-between p-4 bg-hifi-light/20 hover:bg-hifi-light/40 rounded-lg group cursor-pointer" onClick={() => navigateTo('tracks', item.album, { albumId: item.id })}>
-                  <span className="text-lg text-white">{item.album} <span className="text-sm text-hifi-silver ml-2">{item.artist}</span></span>
-                  <div className="flex space-x-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <button onClick={(e) => { e.stopPropagation(); handlePlayItem('album_id', item.id); }} className="p-2 bg-hifi-gold/20 text-hifi-gold rounded-full hover:bg-hifi-gold hover:text-black transition-colors"><Play size={20} fill="currentColor" /></button>
                   </div>
                 </li>
               );
@@ -266,6 +282,7 @@ const LyrionServer = ({ onNavigate }) => {
             return null;
           })}
         </ul>
+        )}
       </div>
     );
   };
