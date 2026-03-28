@@ -74,6 +74,13 @@ body {
   margin: 16px 0;
 }
 
+.simple-keyboard-container-compact {
+  background: #1a1a1a;
+  border-radius: 8px;
+  padding: 8px;
+  margin: 0;
+}
+
 .simple-keyboard {
   background: #1a1a1a !important;
   font-family: inherit !important;
@@ -84,11 +91,11 @@ body {
   background: #2a2a2a !important;
   color: #ffffff !important;
   border: 1px solid #3a3a3a !important;
-  border-radius: 8px !important;
-  font-size: 16px !important;
+  border-radius: 6px !important;
+  font-size: 15px !important;
   font-weight: 600 !important;
-  min-width: 48px !important;
-  min-height: 48px !important;
+  min-width: 40px !important;
+  min-height: 40px !important;
   transition: all 0.2s ease !important;
   touch-action: manipulation !important;
   -webkit-tap-highlight-color: rgba(255, 215, 0, 0.3) !important;
@@ -143,11 +150,11 @@ body {
   background: #2a2a2a !important;
   color: #ffffff !important;
   border: 1px solid #3a3a3a !important;
-  border-radius: 8px !important;
-  font-size: 16px !important;
+  border-radius: 6px !important;
+  font-size: 15px !important;
   font-weight: 600 !important;
-  min-width: 48px !important;
-  min-height: 48px !important;
+  min-width: 40px !important;
+  min-height: 40px !important;
   transition: all 0.2s ease !important;
   touch-action: manipulation !important;
   -webkit-tap-highlight-color: rgba(255, 215, 0, 0.3) !important;
