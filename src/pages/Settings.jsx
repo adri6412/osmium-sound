@@ -266,9 +266,6 @@ const Settings = () => {
         >
           <h1 className="text-4xl font-bold text-white mb-2">Settings</h1>
           <p className="text-hifi-silver text-lg">Configure your HiFi Media Player</p>
-          <div className="text-xs text-blue-400 bg-blue-900/20 px-2 py-1 rounded mt-2 inline-block">
-            DEBUG: Keyboard Visible: {isKeyboardVisible ? '✅ Sì' : '❌ No'}
-          </div>
           {isLoading && (
             <div className="flex items-center space-x-2 text-hifi-gold mt-2">
               <Loader2 size={16} className="animate-spin" />
