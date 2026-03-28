@@ -93,7 +93,7 @@ const AppContent = () => {
       case 'spotify':
         return <Spotify />;
       case 'lyrion':
-        return <LyrionServer />;
+        return <LyrionServer onNavigate={setCurrentPage} />;
       default:
         return <Home onNavigate={setCurrentPage} />;
     }
@@ -101,7 +101,9 @@ const AppContent = () => {
 
   return (
     <div className="h-screen w-screen flex flex-col bg-hifi-dark overflow-hidden">
-      <NavigationBar onNavigate={setCurrentPage} currentPage={currentPage} />
+      {currentPage !== 'lyrion' && (
+        <NavigationBar onNavigate={setCurrentPage} currentPage={currentPage} />
+      )}
       
       <main className="flex-1 overflow-hidden">
         <AnimatePresence mode="wait">

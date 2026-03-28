@@ -32,6 +32,7 @@ const Settings = () => {
   const [staticIP, setStaticIP] = useState('192.168.1.100');
   const [staticGateway, setStaticGateway] = useState('192.168.1.1');
   const [staticDNS, setStaticDNS] = useState('8.8.8.8');
+  const [lyrionUrl, setLyrionUrl] = useState(localStorage.getItem('lyrionUrl') || 'http://localhost:9000');
   const [isUpdating, setIsUpdating] = useState(false);
   const [updateMessage, setUpdateMessage] = useState('');
   const [isLoading, setIsLoading] = useState(true);
@@ -41,6 +42,7 @@ const Settings = () => {
   const ipInputRef = useKeyboardInput(staticIP, setStaticIP);
   const gatewayInputRef = useKeyboardInput(staticGateway, setStaticGateway);
   const dnsInputRef = useKeyboardInput(staticDNS, setStaticDNS);
+  const lyrionUrlRef = useKeyboardInput(lyrionUrl, setLyrionUrl);
   
   // Test keyboard context
   const { showKeyboard, isKeyboardVisible } = useKeyboard();
@@ -66,6 +68,11 @@ const Settings = () => {
 
   const handleDNSChange = (e) => {
     setStaticDNS(e.target.value);
+  };
+
+  const handleLyrionUrlChange = (e) => {
+    setLyrionUrl(e.target.value);
+    localStorage.setItem('lyrionUrl', e.target.value);
   };
 
   const loadSystemData = async () => {
@@ -216,6 +223,11 @@ const Settings = () => {
 
   const settingsSections = [
     {
+      title: 'Configurazione Lyrion',
+      icon: Network,
+      content: 'custom-lyrion'
+    },
+    {
       title: 'Configurazione Rete',
       icon: Wifi,
       content: 'custom-network'
@@ -289,6 +301,30 @@ const Settings = () => {
                   </div>
                   <h2 className="text-xl font-semibold text-white">{section.title}</h2>
                 </div>
+
+                {/* Custom Lyrion Section */}
+                {section.content === 'custom-lyrion' && (
+                  <div className="space-y-4">
+                    <div className="space-y-3">
+                      <label className="text-white font-medium">Lyrion Server URL</label>
+                      <p className="text-sm text-hifi-silver mb-2">Inserisci l'indirizzo del tuo Lyrion Media Server (es. http://192.168.1.100:9000)</p>
+                      <div
+                        onClick={() => showKeyboard(lyrionUrlRef, lyrionUrl)}
+                        className="cursor-pointer"
+                      >
+                        <input
+                          ref={lyrionUrlRef}
+                          type="text"
+                          value={lyrionUrl}
+                          onChange={handleLyrionUrlChange}
+                          className="w-full bg-hifi-dark border border-hifi-accent rounded-lg px-4 py-3 text-white focus:outline-none focus:border-hifi-gold cursor-pointer"
+                          placeholder="http://localhost:9000"
+                          readOnly
+                        />
+                      </div>
+                    </div>
+                  </div>
+                )}
 
                 {/* Custom Network Section */}
                 {section.content === 'custom-network' && (

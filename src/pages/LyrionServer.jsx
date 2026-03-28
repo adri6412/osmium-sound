@@ -7,17 +7,14 @@ import {
   Folder, User, Disc, Library, Home, ChevronRight, ListMusic,
   ChevronUp, ChevronDown
 } from 'lucide-react';
-import { useKeyboard } from '../contexts/KeyboardContext';
 import { lyrionApi } from '../utils/lyrionApi';
 
 /**
  * Native Lyrion Server Player
  * Interfaces with LMS via JSON-RPC
  */
-const LyrionServer = () => {
-  const [serverUrl, setServerUrl] = useState('http://localhost:9000');
-  const [customUrl, setCustomUrl] = useState('');
-  const [showSettings, setShowSettings] = useState(false);
+const LyrionServer = ({ onNavigate }) => {
+  const [serverUrl, setServerUrl] = useState(localStorage.getItem('lyrionUrl') || 'http://localhost:9000');
 
   // LMS State
   const [isConnected, setIsConnected] = useState(false);
@@ -36,8 +33,6 @@ const LyrionServer = () => {
   // UI State
   const [isPlayerExpanded, setIsPlayerExpanded] = useState(false);
 
-  const urlInputRef = useRef(null);
-  const { showKeyboard } = useKeyboard();
 
   // Initialize and connect
   useEffect(() => {
@@ -103,13 +98,6 @@ const LyrionServer = () => {
     }
   };
 
-  const handleUrlChange = () => {
-    if (customUrl) {
-      setServerUrl(customUrl);
-      setShowSettings(false);
-      setIsLoading(true);
-    }
-  };
 
   // Helper to format time (seconds to m:ss)
   const formatTime = (seconds) => {
@@ -197,102 +185,6 @@ const LyrionServer = () => {
 
   // --- Render Methods ---
 
-  const renderHeader = () => (
-    <div className="bg-gradient-to-b from-hifi-gray to-hifi-dark border-b border-hifi-accent px-6 py-4 flex-shrink-0 z-20">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center space-x-4">
-          <div className="p-2 rounded-xl bg-blue-600 shadow-lg shadow-blue-600/20">
-            <Server size={24} className="text-white" />
-          </div>
-          <div>
-            <h1 className="text-xl font-bold text-white tracking-wide">Lyrion Media Server</h1>
-            <div className="flex items-center space-x-2 mt-1">
-              <span className={`w-2 h-2 rounded-full ${isConnected ? 'bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)]' : 'bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.6)]'}`}></span>
-              <span className="text-xs text-hifi-silver font-medium">
-                {isConnected ? 'Connesso' : 'Disconnesso'}
-              </span>
-              {!showSettings && (
-                <span className="text-xs text-blue-400 opacity-70 ml-2">
-                  {serverUrl}
-                </span>
-              )}
-            </div>
-          </div>
-        </div>
-
-        <div className="flex items-center space-x-4">
-          {players.length > 0 && (
-            <select
-              value={activePlayer?.playerid || ''}
-              onChange={(e) => {
-                const p = players.find(p => p.playerid === e.target.value);
-                if (p) {
-                  setActivePlayer(p);
-                  setPlayerStatus(null); // Clear old status while fetching new
-                  goHome();
-                }
-              }}
-              className="bg-hifi-dark border border-hifi-accent text-white text-sm rounded-lg focus:ring-hifi-gold focus:border-hifi-gold block w-full p-2.5"
-            >
-              {players.map(p => (
-                <option key={p.playerid} value={p.playerid}>
-                  {p.name}
-                </option>
-              ))}
-            </select>
-          )}
-
-          <motion.button
-            onClick={() => setShowSettings(!showSettings)}
-            className={`p-2.5 rounded-xl transition-all duration-200 ${showSettings ? 'bg-hifi-gold text-black' : 'bg-hifi-light hover:bg-hifi-accent text-white'}`}
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.95 }}
-          >
-            <Settings size={20} />
-          </motion.button>
-        </div>
-      </div>
-
-      <AnimatePresence>
-        {showSettings && (
-          <motion.div
-            initial={{ height: 0, opacity: 0, marginTop: 0 }}
-            animate={{ height: 'auto', opacity: 1, marginTop: 16 }}
-            exit={{ height: 0, opacity: 0, marginTop: 0 }}
-            className="overflow-hidden"
-          >
-            <div className="bg-hifi-light/50 border border-hifi-accent rounded-xl p-4 backdrop-blur-sm">
-              <label className="block text-sm font-medium text-hifi-silver mb-2">URL Server (es. http://192.168.1.100:9000)</label>
-              <div className="flex items-center space-x-3">
-                <div
-                  onClick={() => showKeyboard(urlInputRef, customUrl || serverUrl)}
-                  className="flex-1 cursor-pointer"
-                >
-                  <input
-                    ref={urlInputRef}
-                    type="text"
-                    placeholder={serverUrl}
-                    value={customUrl}
-                    onChange={(e) => setCustomUrl(e.target.value)}
-                    className="w-full bg-hifi-dark border border-hifi-accent rounded-lg px-4 py-3 text-white focus:outline-none focus:border-hifi-gold focus:ring-1 focus:ring-hifi-gold cursor-pointer transition-all"
-                    readOnly
-                  />
-                </div>
-                <motion.button
-                  onClick={handleUrlChange}
-                  className="bg-hifi-gold text-black px-6 py-3 rounded-lg font-bold shadow-lg shadow-hifi-gold/20"
-                  whileHover={{ scale: 1.05 }}
-                  whileTap={{ scale: 0.95 }}
-                >
-                  Connetti
-                </motion.button>
-              </div>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-    </div>
-  );
 
   const renderLibraryContent = () => {
     if (libraryLoading) {
@@ -446,7 +338,12 @@ const LyrionServer = () => {
         <div className="flex-1 flex overflow-hidden">
             <div className="flex-1 flex flex-col bg-black/40">
               {/* Library Breadcrumbs/Header */}
-              <div className="flex items-center px-6 py-4 border-b border-hifi-accent/30 bg-hifi-dark/80 backdrop-blur-sm sticky top-0 z-10">
+              <div className="flex items-center px-4 md:px-6 py-4 border-b border-hifi-accent/30 bg-hifi-dark/80 backdrop-blur-sm sticky top-0 z-10 shrink-0">
+                 {onNavigate && (
+                   <button onClick={() => onNavigate('home')} className="p-2 mr-2 md:mr-4 bg-hifi-light/50 text-white hover:bg-hifi-accent rounded-lg shadow transition-colors flex items-center">
+                     <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m15 18-6-6 6-6"/></svg>
+                   </button>
+                 )}
                  <button onClick={goHome} className="p-2 text-hifi-silver hover:text-white hover:bg-white/10 rounded-lg transition-colors">
                     <Home size={20} />
                  </button>
@@ -714,9 +611,8 @@ const LyrionServer = () => {
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      className="h-full w-full flex flex-col font-sans"
+      className="h-full w-full flex flex-col font-sans bg-hifi-dark"
     >
-      {renderHeader()}
       {renderContent()}
     </motion.div>
   );
