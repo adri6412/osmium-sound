@@ -1,0 +1,15 @@
+#!/bin/sh
+
+# Set options for live-build
+lb config noauto \
+	--architecture amd64 \
+	--linux-flavours amd64 \
+	--distribution bookworm \
+	--archive-areas "main contrib non-free non-free-firmware" \
+	--debian-installer live \
+	--bootappend-live "boot=live components quiet splash loglevel=0 vt.global_cursor_default=0 vga=current" \
+	--bootappend-install "quiet splash loglevel=0 vt.global_cursor_default=0 vga=current" \
+	--iso-volume "HIFI_PLAYER" \
+	--iso-application "HiFi Media Player Appliance" \
+	--iso-publisher "HiFi Audio" \
+	"${@}"
