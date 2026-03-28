@@ -258,14 +258,6 @@ const LyrionServer = ({ onNavigate }) => {
                 <div key={item.id || idx} className="bg-hifi-light/10 hover:bg-hifi-light/20 rounded-xl overflow-hidden group cursor-pointer transition-colors" onClick={() => navigateTo('tracks', item.album, { albumId: item.id })}>
                   <div className="relative aspect-square bg-hifi-gray">
                     <ArtworkImage src={artworkUrl} alt={item.album} className="w-full h-full object-cover" fallbackIcon={Disc} />
-                <div key={idx} className="bg-hifi-light/10 hover:bg-hifi-light/20 rounded-xl overflow-hidden group cursor-pointer transition-colors" onClick={() => navigateTo('tracks', item.album, { albumId: item.id })}>
-                  <div className="relative aspect-square bg-hifi-gray">
-                    {artworkUrl ? (
-                      <img src={artworkUrl} alt={item.album} className="w-full h-full object-cover" onError={(e) => { e.target.style.display = 'none'; e.target.nextSibling.style.display = 'flex'; }} />
-                    ) : null}
-                    <div className="absolute inset-0 flex items-center justify-center text-hifi-silver/30 bg-hifi-gray" style={{ display: artworkUrl ? 'none' : 'flex' }}>
-                      <Disc size={48} />
-                    </div>
                     <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
                       <button onClick={(e) => { e.stopPropagation(); handlePlayItem('album_id', item.id); }} className="p-4 bg-hifi-gold text-black rounded-full hover:scale-110 transition-transform shadow-lg"><Play size={24} fill="currentColor" /></button>
                     </div>

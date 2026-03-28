@@ -319,7 +319,6 @@ const Settings = () => {
                           onChange={handleLyrionUrlChange}
                           className="w-full bg-hifi-dark border border-hifi-accent rounded-lg px-4 py-3 text-white focus:outline-none focus:border-hifi-gold cursor-pointer"
                           placeholder="http://localhost:9000"
-                          readOnly
                         />
                       </div>
                     </div>
@@ -452,7 +451,6 @@ const Settings = () => {
                               onChange={handleIPChange}
                               className="w-full bg-hifi-dark border border-hifi-accent rounded-lg px-4 py-2 text-white font-mono focus:outline-none focus:border-hifi-gold cursor-pointer"
                               placeholder="192.168.1.100"
-                              readOnly
                             />
                           </div>
                         </div>
@@ -472,7 +470,6 @@ const Settings = () => {
                               onChange={handleGatewayChange}
                               className="w-full bg-hifi-dark border border-hifi-accent rounded-lg px-4 py-2 text-white font-mono focus:outline-none focus:border-hifi-gold cursor-pointer"
                               placeholder="192.168.1.1"
-                              readOnly
                             />
                           </div>
                         </div>
@@ -492,7 +489,6 @@ const Settings = () => {
                               onChange={handleDNSChange}
                               className="w-full bg-hifi-dark border border-hifi-accent rounded-lg px-4 py-2 text-white font-mono focus:outline-none focus:border-hifi-gold cursor-pointer"
                               placeholder="8.8.8.8"
-                              readOnly
                             />
                           </div>
                         </div>
