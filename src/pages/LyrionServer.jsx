@@ -223,7 +223,8 @@ const LyrionServer = ({ onNavigate }) => {
         {currentView === 'albums' ? (
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 md:gap-6">
             {libraryData.map((item, idx) => {
-              const artworkUrl = item.id ? lyrionApi.getArtworkUrl(item.id, 300) : null;
+              const artworkId = item.artwork_track_id || item.id;
+              const artworkUrl = artworkId ? lyrionApi.getArtworkUrl(artworkId, 300) : null;
               return (
                 <div key={idx} className="bg-hifi-light/10 hover:bg-hifi-light/20 rounded-xl overflow-hidden group cursor-pointer transition-colors" onClick={() => navigateTo('tracks', item.album, { albumId: item.id })}>
                   <div className="relative aspect-square bg-hifi-gray">
