@@ -6,9 +6,19 @@ import SimpleKeyboard from 'simple-keyboard';
 import 'simple-keyboard/build/css/index.css';
 
 const VirtualKeyboard = () => {
-  const { isKeyboardVisible, inputValue, updateInputValue, hideKeyboard, confirmInput } = useKeyboard();
+  const { isKeyboardVisible, inputValue, updateInputValue, hideKeyboard, confirmInput, activeInput } = useKeyboard();
   const keyboardRef = useRef(null);
   const simpleKeyboardRef = useRef(null);
+
+  // Scroll active input into view when keyboard becomes visible
+  useEffect(() => {
+    if (isKeyboardVisible && activeInput && activeInput.current) {
+      // Small delay to allow keyboard animation to start/complete so layout is updated
+      setTimeout(() => {
+        activeInput.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }, 150);
+    }
+  }, [isKeyboardVisible, activeInput]);
 
   // Initialize SimpleKeyboard when component mounts and keyboard is visible
   useEffect(() => {
@@ -100,7 +110,7 @@ const VirtualKeyboard = () => {
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          className="fixed inset-0 bg-black/50 flex items-end justify-center z-50"
+          className="fixed inset-0 flex items-end justify-center z-50 pointer-events-none"
           style={{ 
             position: 'fixed',
             top: 0,
@@ -108,7 +118,9 @@ const VirtualKeyboard = () => {
             right: 0,
             bottom: 0,
             zIndex: 9999,
-            backgroundColor: 'rgba(0, 0, 0, 0.5)'
+            // Keep background transparent so you can still see the page but we can't click things behind easily without dismissing.
+            // But we actually DO want to close on outside click. We will let the handleClickOutside handle document clicks.
+            backgroundColor: 'transparent'
           }}
         >
           <motion.div
@@ -117,47 +129,39 @@ const VirtualKeyboard = () => {
             animate={{ y: 0, opacity: 1 }}
             exit={{ y: 100, opacity: 0 }}
             transition={{ type: "spring", damping: 20, stiffness: 300 }}
-            className="bg-hifi-dark border-t border-hifi-accent rounded-t-2xl p-6 w-full max-w-4xl"
+            className="bg-hifi-dark border-t border-hifi-accent rounded-t-xl p-3 w-full max-w-3xl pointer-events-auto shadow-2xl"
           >
             {/* Header */}
-            <div className="flex items-center justify-between mb-6">
-              <h3 className="text-xl font-semibold text-white">Tastiera Virtuale</h3>
+            <div className="flex items-center justify-between mb-2">
+              <h3 className="text-lg font-semibold text-white">Tastiera Virtuale</h3>
               <div className="flex items-center space-x-2">
                 <motion.button
                   onClick={hideKeyboard}
-                  className="p-2 rounded-lg bg-hifi-light hover:bg-hifi-accent text-white transition-colors"
+                  className="p-1.5 rounded-lg bg-hifi-light hover:bg-hifi-accent text-white transition-colors"
                   whileTap={{ scale: 0.95 }}
                 >
-                  <X size={20} />
+                  <X size={18} />
                 </motion.button>
               </div>
             </div>
 
-            {/* Current value display */}
-            <div className="mb-6 p-4 bg-hifi-light rounded-lg">
-              <div className="text-hifi-silver text-sm mb-1">Valore corrente:</div>
-              <div className="text-white font-mono text-lg break-all">
-                {inputValue || 'Nessun testo inserito'}
-              </div>
-            </div>
-
             {/* Keyboard */}
-            <div className="simple-keyboard-container">
+            <div className="simple-keyboard-container-compact">
               <div ref={keyboardRef} className="simple-keyboard"></div>
             </div>
 
             {/* Action buttons */}
-            <div className="flex gap-3 mt-6">
+            <div className="flex gap-2 mt-3">
               <motion.button
                 onClick={() => updateInputValue('')}
-                className="flex-1 bg-red-600 hover:bg-red-700 text-white py-3 rounded-lg font-semibold transition-colors"
+                className="flex-1 bg-red-600 hover:bg-red-700 text-white py-2 rounded-lg font-semibold text-sm transition-colors"
                 whileTap={{ scale: 0.95 }}
               >
                 Cancella Tutto
               </motion.button>
               <motion.button
                 onClick={confirmInput}
-                className="flex-1 bg-hifi-gold hover:bg-yellow-600 text-black py-3 rounded-lg font-semibold transition-colors"
+                className="flex-1 bg-hifi-gold hover:bg-yellow-600 text-black py-2 rounded-lg font-semibold text-sm transition-colors"
                 whileTap={{ scale: 0.95 }}
               >
                 Conferma
