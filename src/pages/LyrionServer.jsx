@@ -8,7 +8,7 @@ import {
   ChevronUp, ChevronDown
 } from 'lucide-react';
 import { lyrionApi } from '../utils/lyrionApi';
-import VUMeter from '../components/VUMeter';
+import AnalogVUMeter from '../components/AnalogVUMeter';
 
 /**
  * Artwork Component with local error state
@@ -555,9 +555,8 @@ const LyrionServer = ({ onNavigate }) => {
                     </div>
 
                     {/* VU Meter */}
-                    <div className="w-full shrink-0">
-                       <p className="text-xs text-hifi-silver/50 tracking-[0.2em] uppercase mb-2">Audio Level</p>
-                       <VUMeter isPlaying={isPlaying} bars={32} className="h-20" />
+                    <div className="w-full shrink-0 flex justify-center md:justify-start">
+                       <AnalogVUMeter isPlaying={isPlaying} className="w-full max-w-sm mt-4" />
                     </div>
                   </motion.div>
                  </div>
