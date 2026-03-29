@@ -6,8 +6,24 @@ import signal
 import sys
 import socket
 import platform
+import threading
 
 app = Flask(__name__)
+
+# Start the VU meter daemon as a background process when the API server starts
+def start_vu_meter_daemon():
+    try:
+        # Check if it's already running
+        subprocess.run(["pkill", "-f", "vu_meter_daemon.py"], capture_output=True)
+        # Launch it
+        daemon_path = os.path.join(os.path.dirname(__file__), "vu_meter_daemon.py")
+        print(f"Starting VU meter daemon from: {daemon_path}")
+        subprocess.Popen([sys.executable, daemon_path], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    except Exception as e:
+        print(f"Error starting VU meter daemon: {e}")
+
+# Run daemon initialization in background to not block Flask startup
+threading.Thread(target=start_vu_meter_daemon, daemon=True).start()
 CORS(app)  # Abilita CORS per tutte le route
 
 # Funzione per aggiornare il sistema
