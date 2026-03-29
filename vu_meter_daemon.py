@@ -174,19 +174,25 @@ class SqueezeliteVisualizer:
                 sum_sq = sum(float(x)**2 for x in chunk)
                 rms = math.sqrt(sum_sq / len(chunk))
 
-                # Boost RMS value artificially if it's very low, to make meter more responsive
-                # Since digital volume control can make RMS tiny
                 if rms <= 0:
                     percent = 0
                 else:
-                    # dB calculation
+                    # Adjust dB calculation to match real-world VU meter dynamics
+                    # 0 VU is typically around -18dBFS to -14dBFS depending on calibration
+                    # Let's map -50dB to 0% and -10dB to 100%
                     db = 20 * math.log10(rms / 32767.0)
-                    # map -60dB -> 0%, 0dB -> 100%
-                    percent = max(0, min(100, (db + 60) * (100/60)))
 
-                    # Boost lower volumes non-linearly to make the visualizer more lively
+                    # map -50dB -> 0%, -5dB -> 100%
+                    min_db = -50
+                    max_db = -5
+
+                    percent = ((db - min_db) / (max_db - min_db)) * 100
+                    percent = max(0, min(100, percent))
+
+                    # Apply a slight non-linear curve to make it behave more like an analog meter
+                    # where the higher ranges are compressed
                     if percent > 0:
-                        percent = min(100, percent * 1.5)
+                        percent = math.pow(percent / 100.0, 1.2) * 100.0
 
                 levels.append(int(percent))
 
