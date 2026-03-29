@@ -1,11 +1,13 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { createPortal } from 'react-dom';
+import {
+  createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Server, Settings, Play, Pause, SkipBack, SkipForward,
   Volume2, VolumeX, Music, AlertCircle, RefreshCw,
   Folder, User, Disc, Library, Home, ChevronRight, ListMusic,
-  ChevronUp, ChevronDown
+  ChevronUp, ChevronDown,
+  Radio, AppWindow, Disc3 as CDIcon
 } from 'lucide-react';
 import { lyrionApi } from '../utils/lyrionApi';
 import AnalogVUMeter from '../components/AnalogVUMeter';
@@ -161,6 +163,17 @@ const LyrionServer = ({ onNavigate }) => {
       } else if (view === 'folders') {
         const res = await lyrionApi.getMusicFolders(params?.folderId);
         data = res?.folder_loop || [];
+      } else if (view === 'radios') {
+        const res = await lyrionApi.getRadios();
+        data = res?.radios_loop || [];
+      } else if (view === 'apps') {
+        const res = await lyrionApi.getApps();
+        data = res?.apps_loop || [];
+      } else if (view === 'plugin_items') {
+        const res = await lyrionApi.getPluginItems(params.pluginCmd, 9999, 0, params.itemId);
+        // The results usually come back in a generic array like 'item_loop' or similar based on plugin
+        // Some plugins use pluginCmd + '_loop' (like radiotime_loop) or just 'item_loop'.
+        data = res?.item_loop || res?.[`${params.pluginCmd}_loop`] || [];
       }
 
       const newStack = [...navigationStack, { view, title, params }];
@@ -198,6 +211,15 @@ const LyrionServer = ({ onNavigate }) => {
         } else if (prevState.view === 'folders') {
           const res = await lyrionApi.getMusicFolders(prevState.params?.folderId);
           data = res?.folder_loop || [];
+        } else if (prevState.view === 'radios') {
+          const res = await lyrionApi.getRadios();
+          data = res?.radios_loop || [];
+        } else if (prevState.view === 'apps') {
+          const res = await lyrionApi.getApps();
+          data = res?.apps_loop || [];
+        } else if (prevState.view === 'plugin_items') {
+          const res = await lyrionApi.getPluginItems(prevState.params.pluginCmd, 9999, 0, prevState.params.itemId);
+          data = res?.item_loop || res?.[`${prevState.params.pluginCmd}_loop`] || [];
         }
         setLibraryData(data);
       } catch (err) {
@@ -237,7 +259,7 @@ const LyrionServer = ({ onNavigate }) => {
 
     if (currentView === 'home') {
       return (
-        <div className="grid grid-cols-2 gap-4 p-6">
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-4 p-6">
           <button onClick={() => navigateTo('artists', 'Artisti')} className="flex flex-col items-center justify-center p-8 bg-hifi-light/30 hover:bg-hifi-light/50 rounded-xl border border-white/5 transition-colors">
             <User size={48} className="text-hifi-silver mb-4" />
             <span className="text-xl font-medium text-white">Artisti</span>
@@ -249,6 +271,14 @@ const LyrionServer = ({ onNavigate }) => {
           <button onClick={() => navigateTo('folders', 'Cartelle')} className="flex flex-col items-center justify-center p-8 bg-hifi-light/30 hover:bg-hifi-light/50 rounded-xl border border-white/5 transition-colors">
             <Folder size={48} className="text-hifi-silver mb-4" />
             <span className="text-xl font-medium text-white">Cartelle</span>
+          </button>
+          <button onClick={() => navigateTo('radios', 'Radio')} className="flex flex-col items-center justify-center p-8 bg-hifi-light/30 hover:bg-hifi-light/50 rounded-xl border border-white/5 transition-colors">
+            <Radio size={48} className="text-hifi-silver mb-4" />
+            <span className="text-xl font-medium text-white">Radio</span>
+          </button>
+          <button onClick={() => navigateTo('apps', 'App')} className="flex flex-col items-center justify-center p-8 bg-hifi-light/30 hover:bg-hifi-light/50 rounded-xl border border-white/5 transition-colors">
+            <AppWindow size={48} className="text-hifi-silver mb-4" />
+            <span className="text-xl font-medium text-white">App / CD</span>
           </button>
         </div>
       );
@@ -311,6 +341,58 @@ const LyrionServer = ({ onNavigate }) => {
                 </li>
               );
             }
+            if (currentView === 'radios' || currentView === 'apps') {
+              return (
+                <li key={idx} className="flex items-center justify-between p-4 bg-hifi-light/20 hover:bg-hifi-light/40 rounded-lg group cursor-pointer" onClick={() => navigateTo('plugin_items', item.name, { pluginCmd: item.cmd })}>
+                  <div className="flex items-center space-x-3">
+                    {item.icon ? (
+                      <img src={item.icon.startsWith('http') ? item.icon : `${serverUrl}/${item.icon}`} className="w-8 h-8 rounded" alt="" onError={(e) => e.target.style.display='none'} />
+                    ) : (
+                      currentView === 'radios' ? <Radio size={24} className="text-hifi-silver" /> : <AppWindow size={24} className="text-hifi-silver" />
+                    )}
+                    <span className="text-lg text-white">{item.name}</span>
+                  </div>
+                </li>
+              );
+            }
+            if (currentView === 'plugin_items') {
+              // Extract pluginCmd from the current params
+              const currentParams = navigationStack[navigationStack.length - 1].params;
+              const pluginCmd = currentParams.pluginCmd;
+
+              // Handle items that can be clicked into (folders/links) vs played (audio)
+              const hasItems = item.hasitems === 1 || item.type === 'link';
+              const isAudio = item.isaudio === 1 || item.type === 'audio';
+
+              return (
+                <li key={idx} className="flex items-center justify-between p-4 bg-hifi-light/20 hover:bg-hifi-light/40 rounded-lg group cursor-pointer" onClick={() => {
+                  if (hasItems) {
+                    navigateTo('plugin_items', item.name || item.title, { pluginCmd, itemId: item.id });
+                  } else if (isAudio || item.play) {
+                    handleAction(() => lyrionApi.playPluginItem(activePlayer.playerid, pluginCmd, item.id || item.play));
+                  }
+                }}>
+                  <div className="flex items-center space-x-3 min-w-0">
+                    {item.icon ? (
+                      <img src={item.icon.startsWith('http') ? item.icon : `${serverUrl}/${item.icon}`} className="w-8 h-8 rounded flex-shrink-0" alt="" onError={(e) => e.target.style.display='none'} />
+                    ) : (
+                      hasItems ? <Folder size={24} className="text-hifi-silver flex-shrink-0" /> : <Music size={24} className="text-hifi-silver flex-shrink-0" />
+                    )}
+                    <span className="text-lg text-white truncate">{item.name || item.title}</span>
+                  </div>
+                  {(isAudio || item.play) && (
+                     <div className="flex space-x-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <button onClick={(e) => {
+                        e.stopPropagation();
+                        handleAction(() => lyrionApi.playPluginItem(activePlayer.playerid, pluginCmd, item.id || item.play));
+                      }} className="p-2 bg-hifi-gold/20 text-hifi-gold rounded-full hover:bg-hifi-gold hover:text-black transition-colors"><Play size={20} fill="currentColor" /></button>
+                    </div>
+                  )}
+                </li>
+              );
+            }
+
+
             return null;
           })}
         </ul>
