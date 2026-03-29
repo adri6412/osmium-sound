@@ -164,13 +164,13 @@ const LyrionServer = ({ onNavigate }) => {
         const res = await lyrionApi.getMusicFolders(params?.folderId);
         data = res?.folder_loop || [];
       } else if (view === 'radios') {
-        const res = await lyrionApi.getRadios();
+        const res = await lyrionApi.getRadios(activePlayer?.playerid);
         data = res?.radios_loop || [];
       } else if (view === 'apps') {
-        const res = await lyrionApi.getApps();
+        const res = await lyrionApi.getApps(activePlayer?.playerid);
         data = res?.apps_loop || [];
       } else if (view === 'plugin_items') {
-        const res = await lyrionApi.getPluginItems(params.pluginCmd, 9999, 0, params.itemId);
+        const res = await lyrionApi.getPluginItems(activePlayer?.playerid, params.pluginCmd, 9999, 0, params.itemId);
         // The results usually come back in a generic array like 'item_loop' or similar based on plugin
         // Some plugins use pluginCmd + '_loop' (like radiotime_loop) or just 'item_loop'.
         data = res?.item_loop || res?.[`${params.pluginCmd}_loop`] || [];
@@ -212,13 +212,13 @@ const LyrionServer = ({ onNavigate }) => {
           const res = await lyrionApi.getMusicFolders(prevState.params?.folderId);
           data = res?.folder_loop || [];
         } else if (prevState.view === 'radios') {
-          const res = await lyrionApi.getRadios();
+          const res = await lyrionApi.getRadios(activePlayer?.playerid);
           data = res?.radios_loop || [];
         } else if (prevState.view === 'apps') {
-          const res = await lyrionApi.getApps();
+          const res = await lyrionApi.getApps(activePlayer?.playerid);
           data = res?.apps_loop || [];
         } else if (prevState.view === 'plugin_items') {
-          const res = await lyrionApi.getPluginItems(prevState.params.pluginCmd, 9999, 0, prevState.params.itemId);
+          const res = await lyrionApi.getPluginItems(activePlayer?.playerid, prevState.params.pluginCmd, 9999, 0, prevState.params.itemId);
           data = res?.item_loop || res?.[`${prevState.params.pluginCmd}_loop`] || [];
         }
         setLibraryData(data);

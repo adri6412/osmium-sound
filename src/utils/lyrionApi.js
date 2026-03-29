@@ -131,20 +131,20 @@ export class LyrionAPI {
 
   // --- Plugins (Apps, Radios) Methods ---
 
-  async getRadios(limit = 9999, offset = 0) {
-    return this.request('', ['radios', offset, limit]);
+  async getRadios(playerMac = '', limit = 9999, offset = 0) {
+    return this.request(playerMac, ['radios', offset, limit]);
   }
 
-  async getApps(limit = 9999, offset = 0) {
-    return this.request('', ['apps', offset, limit]);
+  async getApps(playerMac = '', limit = 9999, offset = 0) {
+    return this.request(playerMac, ['apps', offset, limit]);
   }
 
-  async getPluginItems(pluginCmd, limit = 9999, offset = 0, itemId = null) {
+  async getPluginItems(playerMac = '', pluginCmd, limit = 9999, offset = 0, itemId = null) {
     const params = [pluginCmd, 'items', offset, limit];
     if (itemId) {
       params.push(`item_id:${itemId}`);
     }
-    return this.request('', params);
+    return this.request(playerMac, params);
   }
 
   async playPluginItem(playerMac, pluginCmd, itemId) {
