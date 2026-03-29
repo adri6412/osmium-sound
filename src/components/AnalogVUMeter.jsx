@@ -22,7 +22,7 @@ const SingleVUMeter = ({ value, label }) => {
   const rotate = useTransform(springValue, [0, 100], [-45, 45]);
 
   return (
-    <div className="relative w-full min-w-[150px] max-w-[350px] aspect-[4/3] bg-[#d9c79e] rounded-sm shadow-inner overflow-hidden flex flex-col items-center justify-end pb-4 border-[6px] border-[#2a2a2a] box-border relative"
+    <div className="relative w-full min-w-[150px] max-w-[450px] h-full aspect-[4/3] bg-[#d9c79e] rounded-sm shadow-inner overflow-hidden flex flex-col items-center justify-end pb-4 border-[6px] border-[#2a2a2a] box-border relative"
          style={{
            backgroundImage: 'radial-gradient(circle at 50% 120%, #fcf5d4 0%, #c2ac74 80%, #a68f56 100%)'
          }}>
@@ -187,7 +187,12 @@ const AnalogVUMeter = ({ isPlaying, className = "" }) => {
             const rightBars = data.levels.slice(mid);
 
             // Get max or average to drive the needle
-            const getPeak = (arr) => arr.length ? Math.max(...arr) : 0;
+            const getPeak = (arr) => {
+              if (!arr.length) return 0;
+              // Reduce the sensitivity by multiplying by 0.75 so the needle isn't stuck at 100
+              const maxVal = Math.max(...arr);
+              return maxVal * 0.75;
+            };
 
             setLeftValue(getPeak(leftBars));
             setRightValue(getPeak(rightBars));
@@ -218,12 +223,12 @@ const AnalogVUMeter = ({ isPlaying, className = "" }) => {
           if (!isActive) return;
 
           setLeftValue(() => {
-            const base = Math.random() * 100;
-            return base > 85 ? base : Math.random() * 50 + 5;
+            const base = Math.random() * 100 * 0.75;
+            return base > 60 ? base : Math.random() * 40 + 5;
           });
           setRightValue(() => {
-            const base = Math.random() * 100;
-            return base > 85 ? base : Math.random() * 50 + 5;
+            const base = Math.random() * 100 * 0.75;
+            return base > 60 ? base : Math.random() * 40 + 5;
           });
 
           timeoutId = setTimeout(() => {
@@ -243,7 +248,7 @@ const AnalogVUMeter = ({ isPlaying, className = "" }) => {
 
   return (
     <div className={`flex items-center justify-center bg-[#111] p-2 md:p-3 rounded-lg shadow-[inset_0_0_10px_rgba(0,0,0,1)] border-2 md:border-4 border-[#1a1a1a] w-full max-w-full ${className}`}>
-      <div className="flex w-full justify-center gap-1 md:gap-2">
+      <div className="flex w-full h-full justify-center gap-1 md:gap-2">
         <SingleVUMeter value={leftValue} label="L" />
         <div className="w-1 md:w-2 rounded bg-gradient-to-b from-[#222] to-[#111] shadow-inner" /> {/* Separator */}
         <SingleVUMeter value={rightValue} label="R" />
