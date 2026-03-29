@@ -48,28 +48,55 @@ class SqueezeliteVisualizer:
             size = os.path.getsize(self.shm_file)
             self.mmap_obj = mmap.mmap(self.fd, size, access=mmap.ACCESS_READ)
 
-            # Read buf_size to determine total expected size and validate struct alignment
+            # Autodetect the actual layout. Different Squeezelite forks (like R2)
+            # or platforms have different headers.
+            # For example, standard Linux 64-bit has a 32-byte header.
+            # A specific DietPi x86 version has an 80-byte header with a 52-byte prefix.
+            # The actual struct vis_t contains:
+            # [sync: 4] [buf_size: 4] [buf_index: 4] [running: 4/1] [rate: 4] [updated: 8/4] [buffer: buf_size*2]
+
+            # To reliably find the buffer and index, let's scan for a matching buf_size.
+            # Usually buf_size is 4096, 8192, 16384.
+            # We look for a 4-byte integer `S` where `S * 2 + offset_of_buffer == file_size`.
+
             self.mmap_obj.seek(0)
-            header = self.mmap_obj.read(12)
-            sync, buf_size, buf_index = struct.unpack('<III', header)
-            self.buf_size = buf_size
+            data = self.mmap_obj.read(128) # Read enough header
+            ints = struct.unpack(f'<{len(data)//4}I', data)
 
-            # Autodetect 32-bit vs 64-bit alignment for time_t
-            # buffer starts right after time_t updated.
-            # 64-bit: 32 bytes header
-            # 32-bit: 24 bytes header
+            self.buffer_offset = None
+            self.index_offset = None
 
-            # The easiest way to determine offset is to check if size - offset == buf_size * 2 (s16_t)
-            if size - 32 == buf_size * 2:
+            for i, val in enumerate(ints):
+                # Check if this integer could be buf_size
+                if val in (4096, 8192, 16384, 32768):
+                    # In vis_t, if val is buf_size, then buf_index is the next integer (i+1)
+                    # and running is i+2, rate is i+3, time_t is i+4 (or i+5 if 64-bit).
+                    # Let's check if file_size perfectly matches a known header size:
+                    # buffer_size_in_bytes = val * 2
+
+                    if size - 24 == val * 2:
+                        self.buffer_offset = 24
+                        self.index_offset = (i + 1) * 4
+                        print(f"Detected 32-bit architecture shared memory (offset 24, size {val})")
+                        break
+                    elif size - 32 == val * 2:
+                        self.buffer_offset = 32
+                        self.index_offset = (i + 1) * 4
+                        print(f"Detected standard 64-bit architecture shared memory (offset 32, size {val})")
+                        break
+                    elif size - 80 == val * 2:
+                        # Seen on DietPi x86 with some specific Squeezelite build
+                        self.buffer_offset = 80
+                        self.index_offset = (i + 1) * 4
+                        print(f"Detected custom/DietPi 80-byte header shared memory (offset 80, size {val})")
+                        break
+
+            if self.buffer_offset is None:
+                print(f"Warning: Could not auto-detect offset. File size: {size}. Defaulting to 32.")
                 self.buffer_offset = 32
-                print("Detected 64-bit architecture shared memory (offset 32)")
-            elif size - 24 == buf_size * 2:
-                self.buffer_offset = 24
-                print("Detected 32-bit architecture shared memory (offset 24)")
-            else:
-                # Fallback to standard 64-bit if sizes are weird
-                print(f"Warning: Could not auto-detect offset. Size: {size}, buf_size: {buf_size}. Defaulting to 32.")
-                self.buffer_offset = 32
+                self.index_offset = 8 # Default standard buf_index offset
+
+            self.buf_size = (size - self.buffer_offset) // 2
 
             return True
         except Exception as e:
@@ -92,8 +119,8 @@ class SqueezeliteVisualizer:
                 return None
 
         try:
-            # We only need to reliably read buf_index (at offset 8)
-            self.mmap_obj.seek(8)
+            # We only need to reliably read buf_index
+            self.mmap_obj.seek(self.index_offset)
             buf_index = struct.unpack('<I', self.mmap_obj.read(4))[0]
 
             # If buf_index hasn't changed for a few ticks, we consider it stopped/paused
