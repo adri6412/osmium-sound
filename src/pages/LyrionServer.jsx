@@ -483,27 +483,27 @@ const LyrionServer = ({ onNavigate }) => {
 
                   {/* Right Side: Info, Progress, Controls, and VU Meter */}
                   <motion.div
-                    className="w-full md:w-1/2 flex flex-col justify-center shrink-0 min-w-0 max-w-xl text-center md:text-left py-2"
+                    className="w-full md:w-1/2 flex flex-col justify-start md:justify-center h-full shrink-0 min-w-0 max-w-xl text-center md:text-left py-2"
                     initial={{ x: 20, opacity: 0 }}
                     animate={{ x: 0, opacity: 1 }}
                     transition={{ delay: 0.2, duration: 0.5 }}
                   >
                     {/* Track Info */}
-                    <div className="mb-4 shrink-0">
-                      <h2 className="text-3xl md:text-4xl lg:text-5xl font-bold text-white mb-2 line-clamp-2 leading-tight">
+                    <div className="mb-1 shrink-0 pt-2">
+                      <h2 className="text-2xl md:text-3xl lg:text-4xl font-bold text-white mb-1 line-clamp-2 leading-tight">
                         {title}
                       </h2>
-                      <p className="text-xl md:text-2xl lg:text-3xl text-hifi-gold mb-1 font-medium truncate">
+                      <p className="text-lg md:text-xl lg:text-2xl text-hifi-gold mb-1 font-medium truncate">
                         {artist}
                       </p>
-                      <p className="text-lg md:text-xl text-hifi-silver/80 truncate">
+                      <p className="text-base md:text-lg text-hifi-silver/80 truncate">
                         {album}
                       </p>
                     </div>
 
                     {/* Big Progress Bar */}
-                    <div className="w-full mb-4 md:mb-6 shrink-0">
-                      <div className="flex justify-between text-xs md:text-sm text-hifi-silver font-medium mb-2">
+                    <div className="w-full mb-3 md:mb-4 shrink-0">
+                      <div className="flex justify-between text-xs md:text-sm text-hifi-silver font-medium mb-1">
                         <span>{formatTime(time)}</span>
                         <span>{formatTime(duration)}</span>
                       </div>
@@ -525,38 +525,38 @@ const LyrionServer = ({ onNavigate }) => {
                     </div>
 
                     {/* Big Controls */}
-                    <div className="flex items-center justify-center md:justify-start space-x-6 sm:space-x-8 shrink-0 mb-4 md:mb-6">
+                    <div className="flex items-center justify-center md:justify-start space-x-6 sm:space-x-8 shrink-0 mb-2">
                       <motion.button
                         whileHover={{ scale: 1.1 }}
                         whileTap={{ scale: 0.9 }}
-                        className="p-3 text-hifi-silver hover:text-white transition-colors"
+                        className="p-2 text-hifi-silver hover:text-white transition-colors"
                         onClick={() => handleAction(() => lyrionApi.previous(activePlayer.playerid))}
                       >
-                        <SkipBack size={32} className="md:w-10 md:h-10" />
+                        <SkipBack size={28} className="md:w-8 md:h-8" />
                       </motion.button>
 
                       <motion.button
                         whileHover={{ scale: 1.05 }}
                         whileTap={{ scale: 0.95 }}
-                        className="w-16 h-16 md:w-20 md:h-20 lg:w-24 lg:h-24 flex items-center justify-center bg-hifi-gold text-black rounded-full shadow-[0_0_20px_rgba(212,175,55,0.4)] hover:shadow-[0_0_35px_rgba(212,175,55,0.6)] transition-all border-4 border-black/20"
+                        className="w-14 h-14 md:w-16 md:h-16 lg:w-20 lg:h-20 flex items-center justify-center bg-hifi-gold text-black rounded-full shadow-[0_0_20px_rgba(212,175,55,0.4)] hover:shadow-[0_0_35px_rgba(212,175,55,0.6)] transition-all border-4 border-black/20"
                         onClick={() => handleAction(() => lyrionApi.togglePause(activePlayer.playerid))}
                       >
-                        {isPlaying ? <Pause size={32} className="md:w-12 md:h-12" fill="currentColor" /> : <Play size={32} className="md:w-12 md:h-12 ml-1" fill="currentColor" />}
+                        {isPlaying ? <Pause size={28} className="md:w-10 md:h-10" fill="currentColor" /> : <Play size={28} className="md:w-10 md:h-10 ml-1" fill="currentColor" />}
                       </motion.button>
 
                       <motion.button
                         whileHover={{ scale: 1.1 }}
                         whileTap={{ scale: 0.9 }}
-                        className="p-3 text-hifi-silver hover:text-white transition-colors"
+                        className="p-2 text-hifi-silver hover:text-white transition-colors"
                         onClick={() => handleAction(() => lyrionApi.next(activePlayer.playerid))}
                       >
-                        <SkipForward size={32} className="md:w-10 md:h-10" />
+                        <SkipForward size={28} className="md:w-8 md:h-8" />
                       </motion.button>
                     </div>
 
                     {/* VU Meter */}
-                    <div className="w-full shrink-0 flex justify-center md:justify-start">
-                       <AnalogVUMeter isPlaying={isPlaying} className="w-full max-w-sm mt-2 md:mt-4" />
+                    <div className="w-full shrink-0 flex justify-center md:justify-start mt-1 flex-1 min-h-0 pb-2">
+                       <AnalogVUMeter isPlaying={isPlaying} className="w-full max-w-lg lg:max-w-xl h-full max-h-[180px] md:max-h-[200px]" />
                     </div>
                   </motion.div>
                  </div>
