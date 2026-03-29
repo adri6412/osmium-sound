@@ -9,31 +9,6 @@ import math
 import time
 import glob
 
-# Squeezelite shared memory structure for visualizer (-v)
-# Source reference from Squeezelite output.c:
-# struct vis_t {
-#     u32_t sync;      // 0
-#     u32_t buf_size;  // 4
-#     u32_t buf_index; // 8
-#     bool running;    // 12
-#     u32_t rate;      // 16
-#     time_t updated;  // 24 (on 64-bit systems)
-#     s16_t buffer[vis_mmap_buffer_size]; // size varies (usually 4096 or 8192)
-# };
-
-# For our 64bit system layout (Python struct packing):
-# I = unsigned int (4)
-# ? = bool (1)
-# 3x padding (3) to align 'rate' to 4-byte boundary
-# I = rate (4)
-# 4x padding (4) to align 'updated' to 8-byte boundary
-# q = time_t (8)
-# We will just map the header to find running state and buf_index,
-# then read the raw PCM values (s16_t, 2 bytes each) interleaved L/R.
-
-HEADER_FMT = '<III?3xI4xq'
-HEADER_SIZE = struct.calcsize(HEADER_FMT)
-
 class SqueezeliteVisualizer:
     def __init__(self):
         self.shm_file = self.find_shm_file()
@@ -43,9 +18,17 @@ class SqueezeliteVisualizer:
         # We want to send 32 bars to the frontend
         self.num_bars = 32
 
+        # Track the last known buffer index to detect playback state
+        # instead of relying on the running boolean flag which may be incorrectly aligned.
+        self.last_buf_index = -1
+        self.same_index_count = 0
+
+        # Buffer offset will be determined dynamically
+        self.buffer_offset = None
+        self.buf_size = 0
+
     def find_shm_file(self):
         """Find the squeezelite shared memory file in /dev/shm"""
-        # Usually named /dev/shm/squeezelite-xxx
         files = glob.glob('/dev/shm/squeezelite-*')
         if files:
             print(f"Found Squeezelite shared memory at: {files[0]}")
@@ -62,9 +45,32 @@ class SqueezeliteVisualizer:
 
         try:
             self.fd = os.open(self.shm_file, os.O_RDONLY)
-            # Map the entire file
             size = os.path.getsize(self.shm_file)
             self.mmap_obj = mmap.mmap(self.fd, size, access=mmap.ACCESS_READ)
+
+            # Read buf_size to determine total expected size and validate struct alignment
+            self.mmap_obj.seek(0)
+            header = self.mmap_obj.read(12)
+            sync, buf_size, buf_index = struct.unpack('<III', header)
+            self.buf_size = buf_size
+
+            # Autodetect 32-bit vs 64-bit alignment for time_t
+            # buffer starts right after time_t updated.
+            # 64-bit: 32 bytes header
+            # 32-bit: 24 bytes header
+
+            # The easiest way to determine offset is to check if size - offset == buf_size * 2 (s16_t)
+            if size - 32 == buf_size * 2:
+                self.buffer_offset = 32
+                print("Detected 64-bit architecture shared memory (offset 32)")
+            elif size - 24 == buf_size * 2:
+                self.buffer_offset = 24
+                print("Detected 32-bit architecture shared memory (offset 24)")
+            else:
+                # Fallback to standard 64-bit if sizes are weird
+                print(f"Warning: Could not auto-detect offset. Size: {size}, buf_size: {buf_size}. Defaulting to 32.")
+                self.buffer_offset = 32
+
             return True
         except Exception as e:
             print(f"Error opening shared memory: {e}")
@@ -86,35 +92,43 @@ class SqueezeliteVisualizer:
                 return None
 
         try:
-            # Read header
-            self.mmap_obj.seek(0)
-            header_data = self.mmap_obj.read(HEADER_SIZE)
-            sync, buf_size, buf_index, running, rate, updated = struct.unpack(HEADER_FMT, header_data)
+            # We only need to reliably read buf_index (at offset 8)
+            self.mmap_obj.seek(8)
+            buf_index = struct.unpack('<I', self.mmap_obj.read(4))[0]
 
-            if not running:
-                # Music is stopped/paused
+            # If buf_index hasn't changed for a few ticks, we consider it stopped/paused
+            if buf_index == self.last_buf_index:
+                self.same_index_count += 1
+            else:
+                self.same_index_count = 0
+                self.last_buf_index = buf_index
+
+            # If it hasn't changed for ~10 frames, send zeros
+            if self.same_index_count > 10:
                 return [0] * self.num_bars
 
             # If buf_index is very small, we might not have enough data to read a frame
             samples_to_read = 1024  # Read last 1024 interleaved samples (512 pairs)
 
             if buf_index < samples_to_read * 2: # 2 bytes per s16_t sample
-                # Wrap around logic could be implemented, but for simple VU meter, just skip frame
-                start_offset = HEADER_SIZE
+                start_offset = self.buffer_offset
             else:
-                start_offset = HEADER_SIZE + (buf_index - (samples_to_read * 2))
+                start_offset = self.buffer_offset + (buf_index - (samples_to_read * 2))
+
+            # Ensure we don't read past the file limit
+            file_size = self.mmap_obj.size()
+            if start_offset + (samples_to_read * 2) > file_size:
+                # Re-connect or reset if size is weird
+                return [0] * self.num_bars
 
             self.mmap_obj.seek(start_offset)
             raw_samples = self.mmap_obj.read(samples_to_read * 2)
 
-            # Unpack as signed 16-bit integers
             num_samples = len(raw_samples) // 2
-            samples = struct.unpack(f'<{num_samples}h', raw_samples)
+            if num_samples == 0:
+                return [0] * self.num_bars
 
-            # Separate into Left and Right channels (interleaved)
-            # samples[0::2] is Left, samples[1::2] is Right
-            # For a combined VU meter (like typical single-bar displays), we can just average L/R
-            # or calculate RMS of both combined.
+            samples = struct.unpack(f'<{num_samples}h', raw_samples)
 
             # Simple downsampling/bucketing to num_bars
             levels = []
@@ -133,16 +147,19 @@ class SqueezeliteVisualizer:
                 sum_sq = sum(float(x)**2 for x in chunk)
                 rms = math.sqrt(sum_sq / len(chunk))
 
-                # Convert to a 0-100 percentage
-                # Max s16_t is 32767.
-                # We use a non-linear scaling (log-like) to make lower volumes visible
+                # Boost RMS value artificially if it's very low, to make meter more responsive
+                # Since digital volume control can make RMS tiny
                 if rms <= 0:
                     percent = 0
                 else:
-                    # dB calculation (roughly)
+                    # dB calculation
                     db = 20 * math.log10(rms / 32767.0)
                     # map -60dB -> 0%, 0dB -> 100%
                     percent = max(0, min(100, (db + 60) * (100/60)))
+
+                    # Boost lower volumes non-linearly to make the visualizer more lively
+                    if percent > 0:
+                        percent = min(100, percent * 1.5)
 
                 levels.append(int(percent))
 

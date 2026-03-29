@@ -62,24 +62,32 @@ const VUMeter = ({ isPlaying, bars = 32, className = "" }) => {
     if (readyState !== ReadyState.OPEN) {
         if (!isPlaying) {
           // Smoothly drop to zero when paused (fallback)
-          let currentLevels = [...levels];
           const dropDown = () => {
             if (!isActive) return;
-            let changed = false;
-            currentLevels = currentLevels.map(level => {
-              const newLevel = Math.max(0, level - 5);
-              if (newLevel !== level) changed = true;
-              return newLevel;
+
+            setLevels(prevLevels => {
+              let hasChanged = false;
+              const newLevels = prevLevels.map(level => {
+                const newLevel = Math.max(0, level - 5);
+                if (newLevel !== level) hasChanged = true;
+                return newLevel;
+              });
+
+              return hasChanged ? newLevels : prevLevels;
             });
-            setLevels([...currentLevels]);
-            if (changed) {
-              animationFrameId = requestAnimationFrame(dropDown);
-            }
           };
-          animationFrameId = requestAnimationFrame(dropDown);
+
+          const loop = () => {
+            if (!isActive) return;
+            dropDown();
+            animationFrameId = requestAnimationFrame(loop);
+          }
+
+          animationFrameId = requestAnimationFrame(loop);
+
           return () => {
             isActive = false;
-            cancelAnimationFrame(animationFrameId);
+            if (animationFrameId) cancelAnimationFrame(animationFrameId);
           };
         }
 
@@ -103,11 +111,11 @@ const VUMeter = ({ isPlaying, bars = 32, className = "" }) => {
 
         return () => {
           isActive = false;
-          clearTimeout(timeoutId);
-          cancelAnimationFrame(animationFrameId);
+          if (timeoutId) clearTimeout(timeoutId);
+          if (animationFrameId) cancelAnimationFrame(animationFrameId);
         };
     }
-  }, [isPlaying, readyState, levels, bars]);
+  }, [isPlaying, readyState]); // Removed 'levels' and 'bars' from dependencies to prevent infinite loops
 
   return (
     <div className={`flex items-end justify-between h-16 w-full gap-[2px] ${className}`}>
