@@ -67,7 +67,13 @@ const LyrionServer = ({ onNavigate }) => {
   // Initialize and connect
   useEffect(() => {
     lyrionApi.setBaseUrl(serverUrl);
-    connectToServer();
+
+    // Add a 10-second delay before attempting to connect
+    const timer = setTimeout(() => {
+      connectToServer();
+    }, 10000);
+
+    return () => clearTimeout(timer);
   }, [serverUrl]);
 
   const connectToServer = async () => {
