@@ -128,6 +128,29 @@ export class LyrionAPI {
     return this.request('', params);
   }
 
+
+  // --- Plugins (Apps, Radios) Methods ---
+
+  async getRadios(limit = 9999, offset = 0) {
+    return this.request('', ['radios', offset, limit]);
+  }
+
+  async getApps(limit = 9999, offset = 0) {
+    return this.request('', ['apps', offset, limit]);
+  }
+
+  async getPluginItems(pluginCmd, limit = 9999, offset = 0, itemId = null) {
+    const params = [pluginCmd, 'items', offset, limit];
+    if (itemId) {
+      params.push(`item_id:${itemId}`);
+    }
+    return this.request('', params);
+  }
+
+  async playPluginItem(playerMac, pluginCmd, itemId) {
+    return this.request(playerMac, [pluginCmd, 'playlist', 'play', `item_id:${itemId}`]);
+  }
+
   // --- Playback Commands ---
 
   async playItem(playerMac, itemType, itemId) {
