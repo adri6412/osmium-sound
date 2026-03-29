@@ -1,22 +1,28 @@
 import React, { useState, useEffect } from 'react';
 import useWebSocket, { ReadyState } from 'react-use-websocket';
-import { motion, useSpring, useTransform } from 'framer-motion';
+import { motion, useSpring, useTransform, useMotionValue } from 'framer-motion';
 
 const SingleVUMeter = ({ value, label }) => {
   // value is between 0 and 100
   // we want to map this to an angle. Let's say -45 deg to +45 deg
 
+  const motionVal = useMotionValue(value);
+
   // Create a spring for smooth needle movement
-  const springValue = useSpring(value, {
+  const springValue = useSpring(motionVal, {
     stiffness: 150,
     damping: 15,
     mass: 0.5,
   });
 
+  useEffect(() => {
+    motionVal.set(value);
+  }, [value, motionVal]);
+
   const rotate = useTransform(springValue, [0, 100], [-45, 45]);
 
   return (
-    <div className="relative w-full min-w-[200px] max-w-[350px] aspect-[4/3] bg-[#d9c79e] rounded-sm shadow-inner overflow-hidden flex flex-col items-center justify-end pb-4 border-[6px] border-[#2a2a2a] box-border relative"
+    <div className="relative w-full min-w-[150px] max-w-[350px] aspect-[4/3] bg-[#d9c79e] rounded-sm shadow-inner overflow-hidden flex flex-col items-center justify-end pb-4 border-[6px] border-[#2a2a2a] box-border relative"
          style={{
            backgroundImage: 'radial-gradient(circle at 50% 120%, #fcf5d4 0%, #c2ac74 80%, #a68f56 100%)'
          }}>
@@ -236,10 +242,10 @@ const AnalogVUMeter = ({ isPlaying, className = "" }) => {
   }, [isPlaying, readyState]);
 
   return (
-    <div className={`flex items-center justify-center bg-[#111] p-3 rounded-lg shadow-[inset_0_0_10px_rgba(0,0,0,1)] border-4 border-[#1a1a1a] w-full max-w-full ${className}`}>
-      <div className="flex w-full justify-center gap-2">
+    <div className={`flex items-center justify-center bg-[#111] p-2 md:p-3 rounded-lg shadow-[inset_0_0_10px_rgba(0,0,0,1)] border-2 md:border-4 border-[#1a1a1a] w-full max-w-full ${className}`}>
+      <div className="flex w-full justify-center gap-1 md:gap-2">
         <SingleVUMeter value={leftValue} label="L" />
-        <div className="w-2 rounded bg-gradient-to-b from-[#222] to-[#111] shadow-inner" /> {/* Separator */}
+        <div className="w-1 md:w-2 rounded bg-gradient-to-b from-[#222] to-[#111] shadow-inner" /> {/* Separator */}
         <SingleVUMeter value={rightValue} label="R" />
       </div>
     </div>
