@@ -189,9 +189,11 @@ const AnalogVUMeter = ({ isPlaying, className = "" }) => {
             // Get max or average to drive the needle
             const getPeak = (arr) => {
               if (!arr.length) return 0;
-              // Reduce the sensitivity by multiplying by 0.75 so the needle isn't stuck at 100
+              // After server-side adjustments, we don't need a strict 0.75 multiplier.
+              // We'll use the raw value since the daemon scales it better now.
+              // However, we can use a small smoothing factor if desired.
               const maxVal = Math.max(...arr);
-              return maxVal * 0.75;
+              return maxVal;
             };
 
             setLeftValue(getPeak(leftBars));
@@ -223,12 +225,12 @@ const AnalogVUMeter = ({ isPlaying, className = "" }) => {
           if (!isActive) return;
 
           setLeftValue(() => {
-            const base = Math.random() * 100 * 0.75;
-            return base > 60 ? base : Math.random() * 40 + 5;
+            const base = Math.random() * 100;
+            return base > 80 ? base : Math.random() * 50 + 5;
           });
           setRightValue(() => {
-            const base = Math.random() * 100 * 0.75;
-            return base > 60 ? base : Math.random() * 40 + 5;
+            const base = Math.random() * 100;
+            return base > 80 ? base : Math.random() * 50 + 5;
           });
 
           timeoutId = setTimeout(() => {
