@@ -19,6 +19,7 @@ import json
 import os
 import re
 import glob
+import time
 import subprocess
 import threading
 
@@ -112,11 +113,45 @@ def remount_all():
 
 
 # ─────────────────────────── Lyrion mediadirs ───────────────────────
+def _prefs_dir_from_service():
+    """Read the real PREFSDIR from the lyrionmusicserver systemd unit."""
+    try:
+        r = _run(["systemctl", "show", LYRION_SERVICE, "-p", "Environment"])
+        m = re.search(r"PREFSDIR=(\S+)", r.stdout)
+        if m:
+            return m.group(1)
+    except Exception:
+        pass
+    return None
+
 def _find_prefs():
+    candidates = []
+    pd = _prefs_dir_from_service()
+    if pd:
+        candidates.append(os.path.join(pd, "server.prefs"))
+    candidates += [
+        "/var/lib/squeezeboxserver/prefs/server.prefs",
+        "/var/lib/lyrionmusicserver/prefs/server.prefs",
+    ]
     for pat in PREFS_GLOBS:
-        hits = glob.glob(pat)
-        if hits:
-            return hits[0]
+        candidates += glob.glob(pat)
+    for c in candidates:
+        if c and os.path.isfile(c):
+            return c
+    return None
+
+def _ensure_prefs():
+    """Find server.prefs; if missing (fresh install), start Lyrion and wait
+    for it to create the file on first run."""
+    prefs = _find_prefs()
+    if prefs:
+        return prefs
+    _run(["systemctl", "start", LYRION_SERVICE], timeout=30)
+    for _ in range(20):  # up to ~40s
+        time.sleep(2)
+        prefs = _find_prefs()
+        if prefs:
+            return prefs
     return None
 
 
@@ -136,9 +171,9 @@ def apply_to_lyrion(state):
     except Exception:
         return False, "python3-yaml non installato"
 
-    prefs = _find_prefs()
+    prefs = _ensure_prefs()
     if not prefs:
-        return False, "File prefs di Lyrion non trovato"
+        return False, "File prefs di Lyrion non trovato. Verifica che Lyrion sia avviato (systemctl status lyrionmusicserver)."
 
     paths = current_paths(state)
 
