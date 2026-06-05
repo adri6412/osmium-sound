@@ -1,0 +1,25 @@
+#!/bin/sh
+# HiFi Player appliance — finalise the Electron app installed under /opt.
+set -e
+
+APPDIR=/opt/hifi-media-player
+BIN="$APPDIR/hifi-media-player"
+
+if [ ! -x "$BIN" ]; then
+    echo "E: [hifi] $BIN not found — the app payload was not injected. Aborting." >&2
+    exit 1
+fi
+
+echo "I: [hifi] linking app into PATH"
+ln -sf "$BIN" /usr/bin/hifi-media-player
+
+echo "I: [hifi] fixing chrome-sandbox permissions (SUID root)"
+if [ -f "$APPDIR/chrome-sandbox" ]; then
+    chown root:root "$APPDIR/chrome-sandbox"
+    chmod 4755 "$APPDIR/chrome-sandbox"
+fi
+
+echo "I: [hifi] ensuring python services are executable"
+chmod +x /usr/local/bin/vu_meter_daemon.py /usr/local/bin/api_server.py 2>/dev/null || true
+
+echo "I: [hifi] app-install hook done"

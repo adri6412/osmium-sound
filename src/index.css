@@ -206,6 +206,65 @@ body {
   transform: scale(0.95) !important;
 }
 
+/* ── Commercial streamer UI ── */
+
+.panel-divider {
+  width: 1px;
+  flex-shrink: 0;
+  background: linear-gradient(to bottom, transparent, #252525 15%, #252525 85%, transparent);
+}
+
+.artwork-glow {
+  filter: blur(50px);
+  opacity: 0.25;
+  position: absolute;
+  inset: -30px;
+  background-size: cover;
+  background-position: center;
+  pointer-events: none;
+}
+
+.content-scrollbar::-webkit-scrollbar { width: 3px; }
+.content-scrollbar::-webkit-scrollbar-track { background: transparent; }
+.content-scrollbar::-webkit-scrollbar-thumb { background: #333; border-radius: 2px; }
+.content-scrollbar::-webkit-scrollbar-thumb:hover { background: #444; }
+
+@keyframes bar-bounce {
+  0%, 100% { transform: scaleY(0.35); }
+  50%       { transform: scaleY(1.0); }
+}
+.playing-bar {
+  width: 3px;
+  border-radius: 2px;
+  background: #d4af37;
+  transform-origin: bottom;
+  animation: bar-bounce 0.9s ease-in-out infinite;
+}
+.playing-bar:nth-child(2) { animation-delay: 0.18s; }
+.playing-bar:nth-child(3) { animation-delay: 0.36s; }
+
+input[type=range].vol-slider {
+  -webkit-appearance: none;
+  height: 24px;
+  background: transparent;
+  cursor: pointer;
+}
+input[type=range].vol-slider::-webkit-slider-runnable-track {
+  height: 3px;
+  border-radius: 2px;
+  background: #252525;
+}
+input[type=range].vol-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 13px;
+  height: 13px;
+  border-radius: 50%;
+  background: #d4af37;
+  margin-top: -5px;
+  cursor: pointer;
+  box-shadow: 0 0 5px rgba(212,175,55,0.5);
+}
+
 /* Optimize touch targets for 1024x600 resolution */
 @media (max-width: 1024px) and (max-height: 600px) {
   /* Ensure buttons are at least 44px for touch */

@@ -1,0 +1,8 @@
+[Plymouth Theme]
+Name=HiFi Player
+Description=HiFi Player branded boot splash
+ModuleName=script
+
+[script]
+ImageDir=/usr/share/plymouth/themes/hifi
+ScriptFile=/usr/share/plymouth/themes/hifi/hifi.script
