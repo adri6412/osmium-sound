@@ -12,12 +12,14 @@ if [ -z "$DEB" ]; then
     exit 1
 fi
 
-echo "I: [hifi] installing Lyrion Music Server from $DEB"
+echo "I: [hifi] installing Lyrion Music Server from $DEB (for the live image)"
 export DEBIAN_FRONTEND=noninteractive
 # apt resolves the perl/runtime dependencies (already in the package list)
 apt-get install -y "$DEB"
 
-echo "I: [hifi] cleaning up staged Lyrion package"
-rm -rf "$LYRION_DIR"
+# NOTE: do NOT remove $LYRION_DIR here. The Debian installer does not carry
+# packages installed via chroot hooks onto the installed system, so the .deb
+# must survive in the image to be re-installed in-target by the preseed
+# late_command (hifi-finalize-install.sh removes it afterwards).
 
 echo "I: [hifi] Lyrion install hook done"
