@@ -1,12 +1,22 @@
 # ── HiFi Player appliance — package list ──────────────────────────
-# Kernel / firmware (broad x86 hardware support)
+# Kernel
 linux-image-amd64
+
+# Firmware — broad coverage for all mainline-supported WiFi/Ethernet/etc.
+# (requires non-free-firmware archive area, set in build-distro.sh)
+# Note: MediaTek MT76xx firmware ships inside firmware-misc-nonfree on bookworm.
 firmware-linux-free
 firmware-linux-nonfree
-firmware-misc-nonfree
-firmware-realtek
-firmware-iwlwifi
-firmware-atheros
+firmware-misc-nonfree       # incl. MediaTek MT76xx, Marvell, misc WiFi/Ethernet
+firmware-realtek            # Realtek WiFi/BT/Ethernet
+firmware-iwlwifi            # Intel WiFi
+firmware-atheros            # Qualcomm Atheros ath9k/ath10k/ath11k
+firmware-brcm80211          # Broadcom / Cypress (many laptops, mini-PCs)
+firmware-libertas           # Marvell 8388/8686/8688
+firmware-ti-connectivity    # Texas Instruments wl12xx/wl18xx
+firmware-zd1211             # ZyDAS zd1211 USB
+wireless-regdb              # WiFi regulatory database (channels/power)
+wpasupplicant               # WPA/WPA2/WPA3 supplicant
 
 # Xorg + minimal display stack (no desktop environment)
 xserver-xorg-core
