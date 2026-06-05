@@ -88,4 +88,14 @@ export const systemAPI = {
   configureNetwork: (config) => apiPost('/configure_network', config),
   showGlobalKeyboard: () => apiPost('/show_global_keyboard'),
   hideGlobalKeyboard: () => apiPost('/hide_global_keyboard'),
+
+  // ── First-setup wizard ──────────────────────────────────────────
+  // Current active connection: { type: 'wired'|'wireless'|'none', ip, ssid, connected }
+  getNetworkStatus: () => apiGet('/network_status'),
+  // Scan WiFi: { networks: [{ ssid, signal, security, in_use }] }
+  scanWifi: () => apiGet('/wifi_scan'),
+  // Connect to a WiFi network (DHCP). Returns { success, message, ip }
+  connectWifi: (ssid, password) => apiPost('/wifi_connect', { ssid, password }),
+  // Force DHCP on the wired interface. Returns { success, message, ip }
+  useWiredDhcp: () => apiPost('/wired_dhcp', {}),
 };

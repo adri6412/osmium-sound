@@ -1,0 +1,6 @@
+# HiFi Player - allow the kiosk user to run the system-control commands
+# used by api_server.py without a password prompt.
+hifi ALL=(ALL) NOPASSWD: /sbin/reboot, /sbin/shutdown, /usr/sbin/reboot, /usr/sbin/shutdown
+hifi ALL=(ALL) NOPASSWD: /usr/bin/apt-get update, /usr/bin/apt-get upgrade *
+hifi ALL=(ALL) NOPASSWD: /sbin/dhclient, /usr/sbin/dhclient, /usr/bin/ip, /sbin/ip
+hifi ALL=(ALL) NOPASSWD: /usr/bin/nmcli *

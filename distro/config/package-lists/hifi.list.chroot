@@ -1,0 +1,70 @@
+# ── HiFi Player appliance — package list ──────────────────────────
+# Kernel / firmware (broad x86 hardware support)
+linux-image-amd64
+firmware-linux-free
+firmware-linux-nonfree
+firmware-misc-nonfree
+firmware-realtek
+firmware-iwlwifi
+firmware-atheros
+
+# Xorg + minimal display stack (no desktop environment)
+xserver-xorg-core
+xserver-xorg-video-all
+xserver-xorg-input-all
+x11-xserver-utils
+xinit
+lightdm
+unclutter
+
+# Electron runtime libraries
+libgtk-3-0
+libnss3
+libxss1
+libxtst6
+libatk-bridge2.0-0
+libatk1.0-0
+libcups2
+libgbm1
+libdrm2
+libasound2
+libnotify4
+libxkbcommon0
+xdg-utils
+
+# Audio
+alsa-utils
+
+# Squeezelite (DietPi build — includes VISEXPORT for the VU meter)
+squeezelite
+
+# Python services (api_server.py + vu_meter_daemon.py + sources_server.py)
+python3
+python3-flask
+python3-flask-cors
+python3-psutil
+python3-websockets
+python3-yaml
+
+# Network shares (SMB mounting for music sources)
+cifs-utils
+
+# Lyrion Music Server perl dependencies (the .deb itself is added via packages.chroot)
+perl
+libio-socket-ssl-perl
+libcrypt-openssl-rsa-perl
+psmisc
+procps
+
+# Boot splash (hidden/branded boot)
+plymouth
+plymouth-themes
+
+# System / networking
+sudo
+curl
+ca-certificates
+isc-dhcp-client
+iproute2
+network-manager
+locales

@@ -6,6 +6,7 @@ import signal
 import sys
 import socket
 import platform
+import re
 
 app = Flask(__name__)
 CORS(app)  # Abilita CORS per tutte le route
@@ -152,6 +153,131 @@ def configure_network(config):
     except Exception as e:
         return f"Network configuration failed: {str(e)}"
 
+# ──────────────────────────────────────────────────────────────────
+#  WiFi / network helpers (NetworkManager / nmcli) — used by the
+#  first-setup wizard. DHCP is always used (no static IP).
+# ──────────────────────────────────────────────────────────────────
+
+def _run(cmd, timeout=20):
+    return subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
+
+def _terse_split(line):
+    """Split an `nmcli -t` line on unescaped ':' and unescape the fields."""
+    fields = re.split(r'(?<!\\):', line)
+    return [f.replace('\\:', ':').replace('\\\\', '\\') for f in fields]
+
+def _device_ip(device):
+    if not device:
+        return None
+    try:
+        r = _run(['nmcli', '-t', '-f', 'IP4.ADDRESS', 'device', 'show', device])
+        for line in r.stdout.strip().split('\n'):
+            if ':' in line:
+                val = line.split(':', 1)[1].strip()
+                if val:
+                    return val.split('/')[0]
+    except Exception:
+        pass
+    return None
+
+def _active_device():
+    """Return (device, type) of the first connected wifi/ethernet device."""
+    try:
+        r = _run(['nmcli', '-t', '-f', 'DEVICE,TYPE,STATE', 'device', 'status'])
+        for line in r.stdout.strip().split('\n'):
+            parts = _terse_split(line)
+            if len(parts) >= 3 and parts[2] == 'connected' and parts[1] in ('wifi', 'ethernet'):
+                return parts[0], parts[1]
+    except Exception:
+        pass
+    return None, None
+
+def _first_device_of_type(dtype):
+    try:
+        r = _run(['nmcli', '-t', '-f', 'DEVICE,TYPE', 'device', 'status'])
+        for line in r.stdout.strip().split('\n'):
+            parts = _terse_split(line)
+            if len(parts) >= 2 and parts[1] == dtype:
+                return parts[0]
+    except Exception:
+        pass
+    return None
+
+def _active_ssid():
+    try:
+        r = _run(['nmcli', '-t', '-f', 'IN-USE,SSID', 'device', 'wifi', 'list'])
+        for line in r.stdout.strip().split('\n'):
+            parts = _terse_split(line)
+            if len(parts) >= 2 and parts[0] == '*':
+                return parts[1]
+    except Exception:
+        pass
+    return None
+
+def get_network_status():
+    device, dtype = _active_device()
+    ip = _device_ip(device) if device else None
+    ssid = _active_ssid() if dtype == 'wifi' else None
+    typ = 'wireless' if dtype == 'wifi' else ('wired' if dtype == 'ethernet' else 'none')
+    return {'type': typ, 'ip': ip, 'ssid': ssid, 'connected': bool(ip), 'device': device}
+
+def wifi_scan():
+    try:
+        _run(['nmcli', 'device', 'wifi', 'rescan'], timeout=12)
+    except Exception:
+        pass
+    networks = []
+    try:
+        r = _run(['nmcli', '-t', '-f', 'IN-USE,SSID,SIGNAL,SECURITY', 'device', 'wifi', 'list'])
+        for line in r.stdout.strip().split('\n'):
+            if not line:
+                continue
+            parts = _terse_split(line)
+            if len(parts) < 4:
+                continue
+            in_use, ssid, signal_, security = parts[0], parts[1], parts[2], parts[3]
+            if not ssid:
+                continue
+            networks.append({
+                'ssid': ssid,
+                'signal': signal_,
+                'security': security,
+                'in_use': in_use == '*',
+            })
+    except Exception as e:
+        return {'networks': [], 'error': str(e)}
+    return {'networks': networks}
+
+def wifi_connect(ssid, password):
+    if not ssid:
+        return {'success': False, 'message': 'SSID mancante'}
+    cmd = ['nmcli', 'device', 'wifi', 'connect', ssid]
+    if password:
+        cmd += ['password', password]
+    try:
+        r = _run(cmd, timeout=45)
+    except subprocess.TimeoutExpired:
+        return {'success': False, 'message': 'Timeout durante la connessione'}
+    except Exception as e:
+        return {'success': False, 'message': str(e)}
+    if r.returncode == 0:
+        device, _ = _active_device()
+        return {'success': True, 'message': f'Connesso a {ssid}', 'ip': _device_ip(device)}
+    return {'success': False, 'message': (r.stderr or r.stdout).strip() or 'Connessione fallita'}
+
+def wired_dhcp():
+    eth = _first_device_of_type('ethernet')
+    if not eth:
+        return {'success': False, 'message': 'Nessuna interfaccia Ethernet trovata'}
+    try:
+        r = _run(['nmcli', 'device', 'connect', eth], timeout=45)
+    except Exception as e:
+        return {'success': False, 'message': str(e)}
+    ip = _device_ip(eth)
+    if ip:
+        return {'success': True, 'message': 'Connesso via cavo', 'ip': ip}
+    return {'success': r.returncode == 0, 'message': (r.stderr or r.stdout).strip() or 'Cavo non connesso', 'ip': ip}
+
 # Funzione per mostrare la tastiera virtuale globale
 def show_global_keyboard():
     try:
@@ -233,6 +359,23 @@ def api_configure_network():
     
     result = configure_network(config)
     return jsonify({"message": result})
+
+@app.route('/network_status', methods=['GET'])
+def api_network_status():
+    return jsonify(get_network_status())
+
+@app.route('/wifi_scan', methods=['GET'])
+def api_wifi_scan():
+    return jsonify(wifi_scan())
+
+@app.route('/wifi_connect', methods=['POST'])
+def api_wifi_connect():
+    data = request.get_json(silent=True) or {}
+    return jsonify(wifi_connect(data.get('ssid'), data.get('password', '')))
+
+@app.route('/wired_dhcp', methods=['POST'])
+def api_wired_dhcp():
+    return jsonify(wired_dhcp())
 
 @app.route('/show_global_keyboard', methods=['POST'])
 def api_show_global_keyboard():

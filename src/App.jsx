@@ -1,143 +1,80 @@
-import React, { useState } from 'react';
-import { AnimatePresence } from 'framer-motion';
+import React from 'react';
 
-// Import pages
-import Settings from './pages/Settings';
-import YouTube from './pages/YouTube';
-import Spotify from './pages/Spotify';
 import LyrionServer from './pages/LyrionServer';
-
-// Import components
-import Sidebar from './components/Sidebar';
+import SetupWizard from './pages/SetupWizard';
 import VirtualKeyboard from './components/VirtualKeyboard';
 import Screensaver from './components/Screensaver';
-
-// Import contexts
 import { KeyboardProvider, useKeyboard } from './contexts/KeyboardContext';
-
-// Import lyrion API for playback state
 import { lyrionApi } from './utils/lyrionApi';
 
-// Main app component with simple state-based navigation
 const AppContent = () => {
-  const [currentPage, setCurrentPage] = useState('lyrion'); // Default to local library
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-  const { showKeyboard } = useKeyboard();
-  const [isScreensaverActive, setIsScreensaverActive] = useState(false);
+  const [isScreensaverActive, setIsScreensaverActive] = React.useState(false);
+  const [showWizard, setShowWizard] = React.useState(
+    () => localStorage.getItem('firstSetupComplete') !== 'true'
+  );
   const inactivityTimer = React.useRef(null);
+  const { showKeyboard } = useKeyboard();
 
-  // Screensaver logic
   const resetInactivityTimer = React.useCallback(() => {
     setIsScreensaverActive(false);
-    if (inactivityTimer.current) {
-      clearTimeout(inactivityTimer.current);
-    }
-
+    if (inactivityTimer.current) clearTimeout(inactivityTimer.current);
     inactivityTimer.current = setTimeout(async () => {
-      // Check if music is playing before showing screensaver
       let isPlaying = false;
       try {
         const status = await lyrionApi.getServerStatus();
         const players = status?.players_loop || [];
         if (players.length > 0) {
-          const playerStatus = await lyrionApi.getPlayerStatus(players[0].playerid);
-          isPlaying = playerStatus?.mode === 'play';
+          const ps = await lyrionApi.getPlayerStatus(players[0].playerid);
+          isPlaying = ps?.mode === 'play';
         }
-      } catch (err) {
-        console.error("Failed to check player status for screensaver:", err);
-      }
-
-      if (!isPlaying) {
-        setIsScreensaverActive(true);
-      } else {
-        // If playing, check again in 5 minutes
-        resetInactivityTimer();
-      }
-    }, 5 * 60 * 1000); // 5 minutes
+      } catch (_) {}
+      if (!isPlaying) setIsScreensaverActive(true);
+      else resetInactivityTimer();
+    }, 5 * 60 * 1000);
   }, []);
 
   React.useEffect(() => {
-    // Start initial timer
     resetInactivityTimer();
-
-    const activityEvents = [
-      'mousedown', 'mousemove', 'keydown',
-      'scroll', 'touchstart', 'click'
-    ];
-
-    const handleActivity = () => {
-      resetInactivityTimer();
-    };
-
-    activityEvents.forEach(eventName => {
-      document.addEventListener(eventName, handleActivity, true);
-    });
-
+    const events = ['mousedown', 'mousemove', 'keydown', 'scroll', 'touchstart', 'click'];
+    events.forEach(e => document.addEventListener(e, resetInactivityTimer, true));
     return () => {
-      if (inactivityTimer.current) {
-        clearTimeout(inactivityTimer.current);
-      }
-      activityEvents.forEach(eventName => {
-        document.removeEventListener(eventName, handleActivity, true);
-      });
+      if (inactivityTimer.current) clearTimeout(inactivityTimer.current);
+      events.forEach(e => document.removeEventListener(e, resetInactivityTimer, true));
     };
   }, [resetInactivityTimer]);
 
+  // Auto-show virtual keyboard on text input focus
   React.useEffect(() => {
+    const textTypes = ['text', 'password', 'email', 'number', 'search', 'tel', 'url'];
+    const isTextInput = (t) =>
+      (t.tagName === 'INPUT' && textTypes.includes(t.type)) || t.tagName === 'TEXTAREA';
+
     const handleFocus = (e) => {
-      const target = e.target;
-      if (
-        (target.tagName === 'INPUT' && (target.type === 'text' || target.type === 'password' || target.type === 'email' || target.type === 'number' || target.type === 'search' || target.type === 'tel' || target.type === 'url')) ||
-        target.tagName === 'TEXTAREA'
-      ) {
-        // Store original inputmode before changing it
-        if (!target.hasAttribute('data-original-inputmode')) {
-          target.setAttribute('data-original-inputmode', target.getAttribute('inputmode') || '');
-        }
-
-        // Prevent default mobile keyboard without breaking selection/typing
-        target.setAttribute('inputmode', 'none');
-
-        const inputRef = { current: target };
-        showKeyboard(inputRef, target.value || '');
-      }
+      if (!isTextInput(e.target)) return;
+      const t = e.target;
+      if (!t.hasAttribute('data-original-inputmode'))
+        t.setAttribute('data-original-inputmode', t.getAttribute('inputmode') || '');
+      t.setAttribute('inputmode', 'none');
+      showKeyboard({ current: t }, t.value || '');
     };
-
     const handleClick = (e) => {
-      const target = e.target;
-      if (
-        (target.tagName === 'INPUT' && (target.type === 'text' || target.type === 'password' || target.type === 'email' || target.type === 'number' || target.type === 'search' || target.type === 'tel' || target.type === 'url')) ||
-        target.tagName === 'TEXTAREA'
-      ) {
-        const inputRef = { current: target };
-        showKeyboard(inputRef, target.value || '');
-      }
+      if (!isTextInput(e.target)) return;
+      showKeyboard({ current: e.target }, e.target.value || '');
     };
-
     const handleFocusOut = (e) => {
-      const target = e.target;
-      if (
-        (target.tagName === 'INPUT' && (target.type === 'text' || target.type === 'password' || target.type === 'email' || target.type === 'number' || target.type === 'search' || target.type === 'tel' || target.type === 'url')) ||
-        target.tagName === 'TEXTAREA'
-      ) {
-        // Restore original inputmode state
-        if (target.hasAttribute('data-original-inputmode')) {
-          const original = target.getAttribute('data-original-inputmode');
-          if (original) {
-            target.setAttribute('inputmode', original);
-          } else {
-            target.removeAttribute('inputmode');
-          }
-          target.removeAttribute('data-original-inputmode');
-        }
+      if (!isTextInput(e.target)) return;
+      const t = e.target;
+      if (t.hasAttribute('data-original-inputmode')) {
+        const orig = t.getAttribute('data-original-inputmode');
+        if (orig) t.setAttribute('inputmode', orig);
+        else t.removeAttribute('inputmode');
+        t.removeAttribute('data-original-inputmode');
       }
     };
 
-    // Use capturing phase to ensure we catch events before they are stopped
     document.addEventListener('focusin', handleFocus, true);
     document.addEventListener('focusout', handleFocusOut, true);
     document.addEventListener('click', handleClick, true);
-
     return () => {
       document.removeEventListener('focusin', handleFocus, true);
       document.removeEventListener('focusout', handleFocusOut, true);
@@ -145,39 +82,18 @@ const AppContent = () => {
     };
   }, [showKeyboard]);
 
-  const renderPage = () => {
-    switch (currentPage) {
-      case 'settings':
-        return <Settings />;
-      case 'youtube':
-        return <YouTube />;
-      case 'spotify':
-        return <Spotify />;
-      case 'lyrion':
-      default:
-        return <LyrionServer onNavigate={setCurrentPage} />;
-    }
-  };
+  // Allow re-opening the setup wizard from Settings
+  React.useEffect(() => {
+    const open = () => setShowWizard(true);
+    window.addEventListener('hifi-open-wizard', open);
+    return () => window.removeEventListener('hifi-open-wizard', open);
+  }, []);
 
   return (
-    <div className="h-screen w-screen flex flex-col bg-hifi-dark overflow-hidden relative">
-      <Sidebar
-        onNavigate={setCurrentPage}
-        currentPage={currentPage}
-        isOpen={isSidebarOpen}
-        setIsOpen={setIsSidebarOpen}
-      />
-      
-      <main className="flex-1 overflow-hidden">
-        <AnimatePresence mode="wait">
-          {renderPage()}
-        </AnimatePresence>
-      </main>
-
-      <Screensaver
-        isActive={isScreensaverActive}
-        onWake={() => setIsScreensaverActive(false)}
-      />
+    <div className="h-screen w-screen overflow-hidden bg-hifi-dark relative">
+      <LyrionServer />
+      {showWizard && <SetupWizard onComplete={() => setShowWizard(false)} />}
+      <Screensaver isActive={isScreensaverActive && !showWizard} onWake={() => setIsScreensaverActive(false)} />
     </div>
   );
 };
@@ -192,4 +108,3 @@ function App() {
 }
 
 export default App;
-
