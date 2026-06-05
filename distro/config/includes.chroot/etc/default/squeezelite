@@ -1,0 +1,7 @@
+# Squeezelite arguments for the HiFi Player appliance.
+# -v  enables the visualizer shared-memory export (/dev/shm/squeezelite-*)
+#     which the VU-meter daemon reads. DO NOT remove -v or the VU meter stops working.
+# -s 127.0.0.1  points to the local Lyrion Music Server.
+# -o default    uses the ALSA default device. Change to e.g. -o hw:CARD,DEV for a
+#               specific USB DAC (run `aplay -l` to list cards).
+ARGS='-o default -v -C 5 -s 127.0.0.1 -n HiFiPlayer'

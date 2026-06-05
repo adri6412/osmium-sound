@@ -1,106 +1,94 @@
-import React, { useState, useEffect, useRef } from 'react';
-import {
-  createPortal } from 'react-dom';
+import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-  Server, Settings, Play, Pause, SkipBack, SkipForward,
+  Play, Pause, SkipBack, SkipForward,
   Volume2, VolumeX, Music, AlertCircle, RefreshCw,
-  Folder, User, Disc, Library, Home, ChevronRight, ListMusic,
-  ChevronUp, ChevronDown,
-  Radio, AppWindow, Disc3 as CDIcon
+  Folder, User, Disc, Home, ChevronRight, ChevronDown,
+  Radio, AppWindow, Disc3,
+  Settings as SettingsIcon, Maximize2,
+  Youtube
 } from 'lucide-react';
 import { lyrionApi } from '../utils/lyrionApi';
 import AnalogVUMeter from '../components/AnalogVUMeter';
+import SettingsPage from './Settings';
+import SpotifyPage from './Spotify';
+import YouTubePage from './YouTube';
 
-/**
- * Artwork Component with local error state
- */
-const ArtworkImage = ({ src, alt, className, fallbackIcon: FallbackIcon }) => {
-  const [hasError, setHasError] = useState(false);
+// ── Tab definitions ──────────────────────────────────────────
+const TABS = [
+  { id: 'musica',   label: 'Musica',   Icon: Music },
+  { id: 'radio',    label: 'Radio',    Icon: Radio },
+  { id: 'apps',     label: 'App / CD', Icon: AppWindow },
+  { id: 'spotify',  label: 'Spotify',  Icon: Disc3 },
+  { id: 'youtube',  label: 'YouTube',  Icon: Youtube },
+  { id: 'settings', label: null,       Icon: SettingsIcon },
+];
 
-  // Reset error state if src changes
-  useEffect(() => {
-    setHasError(false);
-  }, [src]);
-
-  if (!src || hasError) {
+// ── Artwork with error fallback ───────────────────────────────
+const ArtworkImage = ({ src, alt, className, FallbackIcon }) => {
+  const [err, setErr] = useState(false);
+  useEffect(() => { setErr(false); }, [src]);
+  if (!src || err) {
     return (
-      <div className={`absolute inset-0 flex items-center justify-center text-hifi-silver/30 bg-hifi-gray`}>
-        <FallbackIcon size={48} />
+      <div className="absolute inset-0 flex items-center justify-center text-hifi-silver/20 bg-gradient-to-br from-hifi-gray to-hifi-dark">
+        <FallbackIcon size={40} />
       </div>
     );
   }
-
-  return (
-    <img
-      src={src}
-      alt={alt}
-      className={className}
-      onError={() => setHasError(true)}
-    />
-  );
+  return <img src={src} alt={alt} className={className} onError={() => setErr(true)} />;
 };
 
-/**
- * Native Lyrion Server Player
- * Interfaces with LMS via JSON-RPC
- */
-const LyrionServer = ({ onNavigate }) => {
-  const [serverUrl, setServerUrl] = useState(localStorage.getItem('lyrionUrl') || 'http://localhost:9000');
+// ── Animated playing indicator ────────────────────────────────
+const PlayingBars = () => (
+  <div className="flex items-end space-x-[2px] h-4 ml-1.5 shrink-0 self-center">
+    <div className="playing-bar h-3" />
+    <div className="playing-bar h-4" />
+    <div className="playing-bar h-2.5" />
+  </div>
+);
 
-  // LMS State
+// ── Main component ────────────────────────────────────────────
+const LyrionServer = () => {
+  const [serverUrl] = useState(localStorage.getItem('lyrionUrl') || 'http://localhost:9000');
+
+  // LMS state
   const [isConnected, setIsConnected] = useState(false);
-  const [players, setPlayers] = useState([]);
   const [activePlayer, setActivePlayer] = useState(null);
   const [playerStatus, setPlayerStatus] = useState(null);
   const [error, setError] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  // Library State
-  const [currentView, setCurrentView] = useState('home'); // home, artists, albums, folders, tracks
+  // UI state
+  const [isPlayerExpanded, setIsPlayerExpanded] = useState(false);
+  const [activeTab, setActiveTab] = useState('musica');
+
+  // Library state
+  const [currentView, setCurrentView] = useState('home');
   const [libraryData, setLibraryData] = useState([]);
   const [libraryLoading, setLibraryLoading] = useState(false);
-  const [navigationStack, setNavigationStack] = useState([{ view: 'home', title: 'Home', data: null }]);
+  const [navigationStack, setNavigationStack] = useState([{ view: 'home', title: 'Home', params: null }]);
 
-  // UI State
-  const [isPlayerExpanded, setIsPlayerExpanded] = useState(false);
-
-
-  // Initialize and connect
+  // ── Server connection ──────────────────────────────────────
   useEffect(() => {
     lyrionApi.setBaseUrl(serverUrl);
-
-    // Add a 10-second delay before attempting to connect
-    const timer = setTimeout(() => {
-      connectToServer();
-    }, 10000);
-
-    return () => clearTimeout(timer);
+    const t = setTimeout(connectToServer, 10000);
+    return () => clearTimeout(t);
   }, [serverUrl]);
 
   const connectToServer = async () => {
     setIsLoading(true);
     setError(null);
     try {
-      const serverStatus = await lyrionApi.getServerStatus();
+      const ss = await lyrionApi.getServerStatus();
       setIsConnected(true);
-
-      const availablePlayers = serverStatus?.players_loop || [];
-      setPlayers(availablePlayers);
-
-      if (availablePlayers.length > 0) {
-        // Select first player if none selected, or keep current if it still exists
-        if (!activePlayer || !availablePlayers.find(p => p.playerid === activePlayer.playerid)) {
-          setActivePlayer(availablePlayers[0]);
-        }
-      } else {
-        setActivePlayer(null);
-        setPlayerStatus(null);
-      }
-    } catch (err) {
-      console.error("Failed to connect to Lyrion Server:", err);
+      const avail = ss?.players_loop || [];
+      if (avail.length > 0)
+        setActivePlayer(p => p && avail.find(x => x.playerid === p.playerid) ? p : avail[0]);
+      else { setActivePlayer(null); setPlayerStatus(null); }
+    } catch (_) {
       setIsConnected(false);
-      setError("Impossibile connettersi al server. Verifica l'URL.");
+      setError("Impossibile connettersi al server. Verifica l'URL nelle Impostazioni.");
     } finally {
       setIsLoading(false);
     }
@@ -108,130 +96,65 @@ const LyrionServer = ({ onNavigate }) => {
 
   const fetchStatus = async () => {
     if (!activePlayer) return;
-    try {
-      const status = await lyrionApi.getPlayerStatus(activePlayer.playerid);
-      setPlayerStatus(status);
-    } catch (err) {
-      console.error("Failed to fetch player status:", err);
-    }
+    try { setPlayerStatus(await lyrionApi.getPlayerStatus(activePlayer.playerid)); } catch (_) {}
   };
 
-  // Polling logic for player status
   useEffect(() => {
     if (!activePlayer) return;
-
-    fetchStatus(); // Fetch immediately on player change
-    const interval = setInterval(fetchStatus, 1000);
-
-    return () => clearInterval(interval);
+    fetchStatus();
+    const id = setInterval(fetchStatus, 1000);
+    return () => clearInterval(id);
   }, [activePlayer]);
 
-  // Immediate update after an action
-  const handleAction = async (actionFn) => {
-    try {
-      await actionFn();
-      fetchStatus(); // Immediately fetch new status to update UI
-    } catch (err) {
-      console.error("Action failed:", err);
+  const handleAction = async (fn) => {
+    try { await fn(); fetchStatus(); } catch (_) {}
+  };
+
+  const formatTime = (s) => {
+    if (!s || isNaN(s)) return '0:00';
+    return `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
+  };
+
+  // ── Library navigation ─────────────────────────────────────
+  const fetchViewData = async (view, params) => {
+    if (view === 'artists')      { const r = await lyrionApi.getArtists(); return r?.artists_loop || []; }
+    if (view === 'albums')       { const r = await lyrionApi.getAlbums(9999, 0, params?.artistId); return r?.albums_loop || []; }
+    if (view === 'tracks')       { const r = await lyrionApi.getTracks(9999, 0, params?.albumId); return r?.titles_loop || []; }
+    if (view === 'folders')      { const r = await lyrionApi.getMusicFolders(params?.folderId); return r?.folder_loop || []; }
+    if (view === 'radios')       { const r = await lyrionApi.getRadios(activePlayer?.playerid); return r?.radios_loop || []; }
+    if (view === 'apps')         { const r = await lyrionApi.getApps(activePlayer?.playerid); return r?.apps_loop || []; }
+    if (view === 'plugin_items') {
+      const r = await lyrionApi.getPluginItems(activePlayer?.playerid, params.pluginCmd, 9999, 0, params.itemId);
+      return r?.item_loop || r?.[`${params.pluginCmd}_loop`] || [];
     }
+    return [];
   };
-
-
-  // Helper to format time (seconds to m:ss)
-  const formatTime = (seconds) => {
-    if (!seconds || isNaN(seconds)) return '0:00';
-    const mins = Math.floor(seconds / 60);
-    const secs = Math.floor(seconds % 60);
-    return `${mins}:${secs.toString().padStart(2, '0')}`;
-  };
-
-  // --- Library Navigation Methods ---
 
   const navigateTo = async (view, title, params = null) => {
     setLibraryLoading(true);
-    let data = [];
     try {
-      if (view === 'artists') {
-        const res = await lyrionApi.getArtists();
-        data = res?.artists_loop || [];
-      } else if (view === 'albums') {
-        const res = await lyrionApi.getAlbums(9999, 0, params?.artistId);
-        data = res?.albums_loop || [];
-      } else if (view === 'tracks') {
-        const res = await lyrionApi.getTracks(9999, 0, params?.albumId);
-        data = res?.titles_loop || [];
-      } else if (view === 'folders') {
-        const res = await lyrionApi.getMusicFolders(params?.folderId);
-        data = res?.folder_loop || [];
-      } else if (view === 'radios') {
-        const res = await lyrionApi.getRadios(activePlayer?.playerid);
-        data = res?.radios_loop || [];
-      } else if (view === 'apps') {
-        const res = await lyrionApi.getApps(activePlayer?.playerid);
-        data = res?.apps_loop || [];
-      } else if (view === 'plugin_items') {
-        const res = await lyrionApi.getPluginItems(activePlayer?.playerid, params.pluginCmd, 9999, 0, params.itemId);
-        // The results usually come back in a generic array like 'item_loop' or similar based on plugin
-        // Some plugins use pluginCmd + '_loop' (like radiotime_loop) or just 'item_loop'.
-        data = res?.item_loop || res?.[`${params.pluginCmd}_loop`] || [];
-      }
-
-      const newStack = [...navigationStack, { view, title, params }];
-      setNavigationStack(newStack);
+      const data = await fetchViewData(view, params);
+      setNavigationStack(prev => [...prev, { view, title, params }]);
       setCurrentView(view);
       setLibraryData(data);
-    } catch (err) {
-      console.error(`Failed to load ${view}:`, err);
-    } finally {
-      setLibraryLoading(false);
-    }
+    } catch (err) { console.error(`Failed to load ${view}:`, err); }
+    finally { setLibraryLoading(false); }
   };
 
   const goBack = async () => {
     if (navigationStack.length <= 1) return;
     const newStack = navigationStack.slice(0, -1);
-    const prevState = newStack[newStack.length - 1];
-
+    const prev = newStack[newStack.length - 1];
     setNavigationStack(newStack);
-    setCurrentView(prevState.view);
-
-    if (prevState.view !== 'home') {
-      setLibraryLoading(true);
-      try {
-        let data = [];
-        if (prevState.view === 'artists') {
-          const res = await lyrionApi.getArtists();
-          data = res?.artists_loop || [];
-        } else if (prevState.view === 'albums') {
-          const res = await lyrionApi.getAlbums(9999, 0, prevState.params?.artistId);
-          data = res?.albums_loop || [];
-        } else if (prevState.view === 'tracks') {
-          const res = await lyrionApi.getTracks(9999, 0, prevState.params?.albumId);
-          data = res?.titles_loop || [];
-        } else if (prevState.view === 'folders') {
-          const res = await lyrionApi.getMusicFolders(prevState.params?.folderId);
-          data = res?.folder_loop || [];
-        } else if (prevState.view === 'radios') {
-          const res = await lyrionApi.getRadios(activePlayer?.playerid);
-          data = res?.radios_loop || [];
-        } else if (prevState.view === 'apps') {
-          const res = await lyrionApi.getApps(activePlayer?.playerid);
-          data = res?.apps_loop || [];
-        } else if (prevState.view === 'plugin_items') {
-          const res = await lyrionApi.getPluginItems(activePlayer?.playerid, prevState.params.pluginCmd, 9999, 0, prevState.params.itemId);
-          data = res?.item_loop || res?.[`${prevState.params.pluginCmd}_loop`] || [];
-        }
-        setLibraryData(data);
-      } catch (err) {
-        console.error(`Failed to load ${prevState.view}:`, err);
-      } finally {
-        setLibraryLoading(false);
-      }
-    }
+    setCurrentView(prev.view);
+    if (prev.view === 'home') return;
+    setLibraryLoading(true);
+    try { setLibraryData(await fetchViewData(prev.view, prev.params)); } catch (_) {}
+    finally { setLibraryLoading(false); }
   };
 
   const goHome = () => {
-    setNavigationStack([{ view: 'home', title: 'Home', data: null }]);
+    setNavigationStack([{ view: 'home', title: 'Home', params: null }]);
     setCurrentView('home');
   };
 
@@ -240,527 +163,584 @@ const LyrionServer = ({ onNavigate }) => {
     handleAction(() => lyrionApi.playItem(activePlayer.playerid, type, id));
   };
 
+  // ── Tab switch ─────────────────────────────────────────────
+  const handleTabSwitch = async (tabId) => {
+    setActiveTab(tabId);
+    if (tabId === 'radio' || tabId === 'apps') {
+      const view = tabId === 'radio' ? 'radios' : 'apps';
+      const title = tabId === 'radio' ? 'Radio' : 'App / CD';
+      setLibraryLoading(true);
+      try {
+        const data = await fetchViewData(view, null);
+        setNavigationStack([
+          { view: 'home', title: 'Home', params: null },
+          { view, title, params: null }
+        ]);
+        setCurrentView(view);
+        setLibraryData(data);
+      } catch (_) {}
+      finally { setLibraryLoading(false); }
+    } else if (tabId === 'musica') {
+      if (!['artists', 'albums', 'tracks', 'folders', 'home'].includes(currentView)) {
+        goHome();
+      }
+    }
+  };
 
-  // --- Render Methods ---
+  // ── Derived player values ──────────────────────────────────
+  const currentTrack = playerStatus?.playlist_loop?.[0] || {};
+  const title        = currentTrack.title  || 'Nessuna traccia';
+  const artist       = currentTrack.artist || 'Artista Sconosciuto';
+  const album        = currentTrack.album  || '';
+  const isPlaying    = playerStatus?.mode === 'play';
+  const volume       = playerStatus?.mixer_volume ?? 0;
+  const duration     = currentTrack.duration || 0;
+  const time         = playerStatus?.time || 0;
+  const progress     = duration > 0 ? (time / duration) * 100 : 0;
+  const artworkUrl   = currentTrack.id ? lyrionApi.getArtworkUrl(currentTrack.id, 300) : null;
+  const artworkUrlLg = currentTrack.id ? lyrionApi.getArtworkUrl(currentTrack.id, 600) : null;
 
+  const samplerate = currentTrack.samplerate;
+  const samplesize = currentTrack.samplesize;
+  const codecType  = currentTrack.type;
+  const formatLabel = codecType
+    ? `${String(codecType).toUpperCase()}${samplesize ? ` · ${samplesize}bit` : ''}${samplerate ? ` · ${Math.round(samplerate / 1000)}kHz` : ''}`
+    : null;
 
+  // ── Library content renderer ───────────────────────────────
   const renderLibraryContent = () => {
     if (libraryLoading) {
       return (
         <div className="flex-1 flex items-center justify-center">
-           <motion.div
-              animate={{ rotate: 360 }}
-              transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
-              className="w-12 h-12 border-4 border-hifi-gold border-t-transparent rounded-full"
-            />
+          <motion.div animate={{ rotate: 360 }} transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
+            className="w-10 h-10 border-4 border-hifi-gold border-t-transparent rounded-full" />
         </div>
       );
     }
 
     if (currentView === 'home') {
       return (
-        <div className="grid grid-cols-2 md:grid-cols-3 gap-4 p-6">
-          <button onClick={() => navigateTo('artists', 'Artisti')} className="flex flex-col items-center justify-center p-8 bg-hifi-light/30 hover:bg-hifi-light/50 rounded-xl border border-white/5 transition-colors">
-            <User size={48} className="text-hifi-silver mb-4" />
-            <span className="text-xl font-medium text-white">Artisti</span>
-          </button>
-          <button onClick={() => navigateTo('albums', 'Album')} className="flex flex-col items-center justify-center p-8 bg-hifi-light/30 hover:bg-hifi-light/50 rounded-xl border border-white/5 transition-colors">
-            <Disc size={48} className="text-hifi-silver mb-4" />
-            <span className="text-xl font-medium text-white">Album</span>
-          </button>
-          <button onClick={() => navigateTo('folders', 'Cartelle')} className="flex flex-col items-center justify-center p-8 bg-hifi-light/30 hover:bg-hifi-light/50 rounded-xl border border-white/5 transition-colors">
-            <Folder size={48} className="text-hifi-silver mb-4" />
-            <span className="text-xl font-medium text-white">Cartelle</span>
-          </button>
-          <button onClick={() => navigateTo('radios', 'Radio')} className="flex flex-col items-center justify-center p-8 bg-hifi-light/30 hover:bg-hifi-light/50 rounded-xl border border-white/5 transition-colors">
-            <Radio size={48} className="text-hifi-silver mb-4" />
-            <span className="text-xl font-medium text-white">Radio</span>
-          </button>
-          <button onClick={() => navigateTo('apps', 'App')} className="flex flex-col items-center justify-center p-8 bg-hifi-light/30 hover:bg-hifi-light/50 rounded-xl border border-white/5 transition-colors">
-            <AppWindow size={48} className="text-hifi-silver mb-4" />
-            <span className="text-xl font-medium text-white">App / CD</span>
-          </button>
+        <div className="grid grid-cols-3 gap-3 p-4">
+          {[
+            { label: 'Artisti',  Icon: User,   action: () => navigateTo('artists', 'Artisti') },
+            { label: 'Album',    Icon: Disc,   action: () => navigateTo('albums',  'Album') },
+            { label: 'Cartelle', Icon: Folder, action: () => navigateTo('folders', 'Cartelle') },
+          ].map(({ label, Icon, action }) => (
+            <button key={label} onClick={action}
+              className="flex flex-col items-center justify-center py-7 bg-hifi-surface hover:bg-hifi-light rounded-xl border border-hifi-border hover:border-hifi-accent transition-colors">
+              <Icon size={30} className="text-hifi-silver mb-2.5" />
+              <span className="text-sm font-medium text-white">{label}</span>
+            </button>
+          ))}
         </div>
       );
     }
 
     return (
-      <div className="flex-1 overflow-y-auto px-6 pb-6">
+      <div className="flex-1 overflow-y-auto content-scrollbar px-3 pb-3">
         {currentView === 'albums' ? (
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 md:gap-6">
+          <div className="grid grid-cols-3 gap-3 pt-1">
             {libraryData.map((item, idx) => {
-              const artworkId = item.artwork_track_id || item.id;
-              const artworkUrl = artworkId ? lyrionApi.getArtworkUrl(artworkId, 300) : null;
+              const aId  = item.artwork_track_id || item.id;
+              const aUrl = aId ? lyrionApi.getArtworkUrl(aId, 200) : null;
               return (
-                <div key={item.id || idx} className="bg-hifi-light/10 hover:bg-hifi-light/20 rounded-xl overflow-hidden group cursor-pointer transition-colors" onClick={() => navigateTo('tracks', item.album, { albumId: item.id })}>
+                <div key={item.id || idx}
+                  onClick={() => navigateTo('tracks', item.album, { albumId: item.id })}
+                  className="bg-hifi-surface hover:bg-hifi-light rounded-xl overflow-hidden group cursor-pointer border border-hifi-border hover:border-hifi-accent transition-colors">
                   <div className="relative aspect-square bg-hifi-gray">
-                    <ArtworkImage src={artworkUrl} alt={item.album} className="w-full h-full object-cover" fallbackIcon={Disc} />
-                    <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                      <button onClick={(e) => { e.stopPropagation(); handlePlayItem('album_id', item.id); }} className="p-4 bg-hifi-gold text-black rounded-full hover:scale-110 transition-transform shadow-lg"><Play size={24} fill="currentColor" /></button>
+                    <ArtworkImage src={aUrl} alt={item.album} className="w-full h-full object-cover" FallbackIcon={Disc} />
+                    <div className="absolute inset-0 bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                      <button onClick={(e) => { e.stopPropagation(); handlePlayItem('album_id', item.id); }}
+                        className="p-3 bg-hifi-gold text-black rounded-full hover:scale-110 transition-transform shadow-lg">
+                        <Play size={16} fill="currentColor" />
+                      </button>
                     </div>
                   </div>
-                  <div className="p-3">
-                    <h3 className="text-white font-medium truncate" title={item.album}>{item.album}</h3>
-                    <p className="text-hifi-silver text-sm truncate" title={item.artist}>{item.artist}</p>
+                  <div className="p-2">
+                    <p className="text-white text-xs font-medium truncate">{item.album}</p>
+                    <p className="text-hifi-silver/70 text-xs truncate">{item.artist}</p>
                   </div>
                 </div>
               );
             })}
           </div>
         ) : (
-        <ul className="space-y-2">
-          {libraryData.map((item, idx) => {
-            if (currentView === 'artists') {
-              return (
-                <li key={idx} className="flex items-center justify-between p-4 bg-hifi-light/20 hover:bg-hifi-light/40 rounded-lg group cursor-pointer" onClick={() => navigateTo('albums', item.artist, { artistId: item.id })}>
-                  <span className="text-lg text-white">{item.artist}</span>
-                  <div className="flex space-x-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <button onClick={(e) => { e.stopPropagation(); handlePlayItem('artist_id', item.id); }} className="p-2 bg-hifi-gold/20 text-hifi-gold rounded-full hover:bg-hifi-gold hover:text-black transition-colors"><Play size={20} fill="currentColor" /></button>
-                  </div>
-                </li>
-              );
-            }
-            if (currentView === 'tracks') {
-              return (
-                <li key={idx} className="flex items-center justify-between p-4 bg-hifi-light/20 hover:bg-hifi-light/40 rounded-lg group cursor-pointer" onClick={() => handlePlayItem('track_id', item.id)}>
-                   <span className="text-lg text-white">{item.title}</span>
-                </li>
-              );
-            }
-            if (currentView === 'folders') {
-              const isDir = item.type === 'folder';
-              return (
-                <li key={idx} className="flex items-center justify-between p-4 bg-hifi-light/20 hover:bg-hifi-light/40 rounded-lg group cursor-pointer" onClick={() => isDir ? navigateTo('folders', item.filename, { folderId: item.id }) : handlePlayItem('track_id', item.id)}>
+          <ul className="space-y-1 pt-1">
+            {libraryData.map((item, idx) => {
+              if (currentView === 'artists') return (
+                <li key={idx}
+                  onClick={() => navigateTo('albums', item.artist, { artistId: item.id })}
+                  className="flex items-center justify-between px-3 py-2.5 bg-hifi-surface hover:bg-hifi-light rounded-lg group cursor-pointer border border-transparent hover:border-hifi-border transition-colors">
                   <div className="flex items-center space-x-3">
-                    {isDir ? <Folder size={24} className="text-hifi-silver" /> : <Music size={24} className="text-hifi-silver" />}
-                    <span className="text-lg text-white truncate max-w-sm">{item.filename || item.title}</span>
-                  </div>
-                   <div className="flex space-x-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <button onClick={(e) => { e.stopPropagation(); handlePlayItem(isDir ? 'folder_id' : 'track_id', item.id); }} className="p-2 bg-hifi-gold/20 text-hifi-gold rounded-full hover:bg-hifi-gold hover:text-black transition-colors"><Play size={20} fill="currentColor" /></button>
-                  </div>
-                </li>
-              );
-            }
-            if (currentView === 'radios' || currentView === 'apps') {
-              return (
-                <li key={idx} className="flex items-center justify-between p-4 bg-hifi-light/20 hover:bg-hifi-light/40 rounded-lg group cursor-pointer" onClick={() => navigateTo('plugin_items', item.name, { pluginCmd: item.cmd })}>
-                  <div className="flex items-center space-x-3">
-                    {item.icon ? (
-                      <img src={item.icon.startsWith('http') ? item.icon : `${serverUrl}/${item.icon}`} className="w-8 h-8 rounded" alt="" onError={(e) => e.target.style.display='none'} />
-                    ) : (
-                      currentView === 'radios' ? <Radio size={24} className="text-hifi-silver" /> : <AppWindow size={24} className="text-hifi-silver" />
-                    )}
-                    <span className="text-lg text-white">{item.name}</span>
-                  </div>
-                </li>
-              );
-            }
-            if (currentView === 'plugin_items') {
-              // Extract pluginCmd from the current params
-              const currentParams = navigationStack[navigationStack.length - 1].params;
-              const pluginCmd = currentParams.pluginCmd;
-
-              // Handle items that can be clicked into (folders/links) vs played (audio)
-              const hasItems = item.hasitems === 1 || item.type === 'link';
-              const isAudio = item.isaudio === 1 || item.type === 'audio';
-
-              return (
-                <li key={idx} className="flex items-center justify-between p-4 bg-hifi-light/20 hover:bg-hifi-light/40 rounded-lg group cursor-pointer" onClick={() => {
-                  if (hasItems) {
-                    navigateTo('plugin_items', item.name || item.title, { pluginCmd, itemId: item.id });
-                  } else if (isAudio || item.play) {
-                    handleAction(() => lyrionApi.playPluginItem(activePlayer.playerid, pluginCmd, item.id || item.play));
-                  }
-                }}>
-                  <div className="flex items-center space-x-3 min-w-0">
-                    {item.icon ? (
-                      <img src={item.icon.startsWith('http') ? item.icon : `${serverUrl}/${item.icon}`} className="w-8 h-8 rounded flex-shrink-0" alt="" onError={(e) => e.target.style.display='none'} />
-                    ) : (
-                      hasItems ? <Folder size={24} className="text-hifi-silver flex-shrink-0" /> : <Music size={24} className="text-hifi-silver flex-shrink-0" />
-                    )}
-                    <span className="text-lg text-white truncate">{item.name || item.title}</span>
-                  </div>
-                  {(isAudio || item.play) && (
-                     <div className="flex space-x-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <button onClick={(e) => {
-                        e.stopPropagation();
-                        handleAction(() => lyrionApi.playPluginItem(activePlayer.playerid, pluginCmd, item.id || item.play));
-                      }} className="p-2 bg-hifi-gold/20 text-hifi-gold rounded-full hover:bg-hifi-gold hover:text-black transition-colors"><Play size={20} fill="currentColor" /></button>
+                    <div className="w-7 h-7 rounded-full bg-hifi-light flex items-center justify-center flex-shrink-0">
+                      <User size={13} className="text-hifi-silver" />
                     </div>
-                  )}
+                    <span className="text-sm text-white">{item.artist}</span>
+                  </div>
+                  <div className="opacity-0 group-hover:opacity-100 transition-opacity">
+                    <button onClick={(e) => { e.stopPropagation(); handlePlayItem('artist_id', item.id); }}
+                      className="p-1.5 bg-hifi-gold/20 text-hifi-gold rounded-full hover:bg-hifi-gold hover:text-black transition-colors">
+                      <Play size={12} fill="currentColor" />
+                    </button>
+                  </div>
                 </li>
               );
-            }
 
+              if (currentView === 'tracks') return (
+                <li key={idx}
+                  onClick={() => handlePlayItem('track_id', item.id)}
+                  className="flex items-center px-3 py-2.5 bg-hifi-surface hover:bg-hifi-light rounded-lg cursor-pointer border border-transparent hover:border-hifi-border transition-colors">
+                  <Music size={13} className="text-hifi-silver/60 mr-3 flex-shrink-0" />
+                  <span className="text-sm text-white truncate">{item.title}</span>
+                </li>
+              );
 
-            return null;
-          })}
-        </ul>
+              if (currentView === 'folders') {
+                const isDir = item.type === 'folder';
+                return (
+                  <li key={idx}
+                    onClick={() => isDir ? navigateTo('folders', item.filename, { folderId: item.id }) : handlePlayItem('track_id', item.id)}
+                    className="flex items-center justify-between px-3 py-2.5 bg-hifi-surface hover:bg-hifi-light rounded-lg group cursor-pointer border border-transparent hover:border-hifi-border transition-colors">
+                    <div className="flex items-center space-x-3 min-w-0">
+                      {isDir
+                        ? <Folder size={15} className="text-hifi-gold flex-shrink-0" />
+                        : <Music size={15} className="text-hifi-silver/60 flex-shrink-0" />}
+                      <span className="text-sm text-white truncate">{item.filename || item.title}</span>
+                    </div>
+                    <div className="opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
+                      <button onClick={(e) => { e.stopPropagation(); handlePlayItem(isDir ? 'folder_id' : 'track_id', item.id); }}
+                        className="p-1.5 bg-hifi-gold/20 text-hifi-gold rounded-full hover:bg-hifi-gold hover:text-black transition-colors">
+                        <Play size={12} fill="currentColor" />
+                      </button>
+                    </div>
+                  </li>
+                );
+              }
+
+              if (currentView === 'radios' || currentView === 'apps') return (
+                <li key={idx}
+                  onClick={() => navigateTo('plugin_items', item.name, { pluginCmd: item.cmd })}
+                  className="flex items-center px-3 py-2.5 bg-hifi-surface hover:bg-hifi-light rounded-lg cursor-pointer border border-transparent hover:border-hifi-border transition-colors">
+                  {item.icon
+                    ? <img src={item.icon.startsWith('http') ? item.icon : `${serverUrl}/${item.icon}`}
+                        className="w-6 h-6 rounded mr-3 flex-shrink-0" alt=""
+                        onError={(e) => { e.target.style.display = 'none'; }} />
+                    : currentView === 'radios'
+                      ? <Radio size={15} className="text-hifi-silver/60 mr-3 flex-shrink-0" />
+                      : <AppWindow size={15} className="text-hifi-silver/60 mr-3 flex-shrink-0" />
+                  }
+                  <span className="text-sm text-white">{item.name}</span>
+                </li>
+              );
+
+              if (currentView === 'plugin_items') {
+                const params = navigationStack[navigationStack.length - 1].params;
+                const pluginCmd = params?.pluginCmd;
+                const hasItems = item.hasitems === 1 || item.type === 'link';
+                const isAudio  = item.isaudio === 1 || item.type === 'audio';
+                return (
+                  <li key={idx}
+                    onClick={() => {
+                      if (hasItems) navigateTo('plugin_items', item.name || item.title, { pluginCmd, itemId: item.id });
+                      else if (isAudio || item.play) handleAction(() => lyrionApi.playPluginItem(activePlayer.playerid, pluginCmd, item.id || item.play));
+                    }}
+                    className="flex items-center justify-between px-3 py-2.5 bg-hifi-surface hover:bg-hifi-light rounded-lg group cursor-pointer border border-transparent hover:border-hifi-border transition-colors">
+                    <div className="flex items-center space-x-3 min-w-0">
+                      {item.icon
+                        ? <img src={item.icon.startsWith('http') ? item.icon : `${serverUrl}/${item.icon}`}
+                            className="w-6 h-6 rounded flex-shrink-0" alt=""
+                            onError={(e) => { e.target.style.display = 'none'; }} />
+                        : hasItems
+                          ? <Folder size={15} className="text-hifi-silver/60 flex-shrink-0" />
+                          : <Music size={15} className="text-hifi-silver/60 flex-shrink-0" />
+                      }
+                      <span className="text-sm text-white truncate">{item.name || item.title}</span>
+                    </div>
+                    {(isAudio || item.play) && (
+                      <div className="opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
+                        <button onClick={(e) => { e.stopPropagation(); handleAction(() => lyrionApi.playPluginItem(activePlayer.playerid, pluginCmd, item.id || item.play)); }}
+                          className="p-1.5 bg-hifi-gold/20 text-hifi-gold rounded-full hover:bg-hifi-gold hover:text-black transition-colors">
+                          <Play size={12} fill="currentColor" />
+                        </button>
+                      </div>
+                    )}
+                  </li>
+                );
+              }
+
+              return null;
+            })}
+          </ul>
         )}
       </div>
     );
   };
 
-  const renderContent = () => {
-    if (isLoading && !isConnected) {
-      return (
-        <div className="flex-1 flex flex-col items-center justify-center bg-black/50">
-          <motion.div
-            animate={{ rotate: 360 }}
-            transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
-            className="w-16 h-16 border-4 border-blue-500 border-t-transparent rounded-full mb-6"
-          />
-          <h2 className="text-2xl font-bold text-white mb-2">Connessione in corso...</h2>
-          <p className="text-hifi-silver">{serverUrl}</p>
-        </div>
-      );
-    }
+  // ── Right-panel content ────────────────────────────────────
+  const renderTabContent = () => {
+    if (activeTab === 'spotify')  return <SpotifyPage />;
+    if (activeTab === 'youtube')  return <YouTubePage />;
+    if (activeTab === 'settings') return <SettingsPage />;
 
-    if (error) {
-      return (
-        <div className="flex-1 flex flex-col items-center justify-center bg-black/50 px-8 text-center">
-          <div className="w-24 h-24 bg-red-500/10 rounded-full flex items-center justify-center mb-6">
-            <AlertCircle size={48} className="text-red-500" />
-          </div>
-          <h2 className="text-2xl font-bold text-white mb-4">Errore di Connessione</h2>
-          <p className="text-hifi-silver max-w-md mb-8">{error}</p>
-          <motion.button
-            onClick={connectToServer}
-            className="flex items-center space-x-2 bg-hifi-light hover:bg-hifi-accent px-6 py-3 rounded-lg text-white transition-colors"
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.95 }}
-          >
-            <RefreshCw size={20} />
-            <span>Riprova</span>
-          </motion.button>
-        </div>
-      );
-    }
-
-    if (!activePlayer) {
-      return (
-        <div className="flex-1 flex flex-col items-center justify-center bg-black/50">
-          <div className="w-24 h-24 bg-hifi-light rounded-full flex items-center justify-center mb-6 border border-hifi-accent">
-            <Music size={48} className="text-hifi-silver" />
-          </div>
-          <h2 className="text-2xl font-bold text-white mb-2">Nessun Player Trovato</h2>
-          <p className="text-hifi-silver">Assicurati che ci sia almeno un player Lyrion attivo.</p>
-        </div>
-      );
-    }
-
-    // Now Playing State
-    // The API request in getPlayerStatus returns only 1 track (the current one) in playlist_loop
-    const currentTrack = playerStatus?.playlist_loop?.[0] || {};
-
-    const title = currentTrack.title || 'Nessuna traccia';
-    const artist = currentTrack.artist || 'Artista Sconosciuto';
-    const album = currentTrack.album || 'Album Sconosciuto';
-    const isPlaying = playerStatus?.mode === 'play';
-    const volume = playerStatus?.mixer_volume || 0;
-    const duration = currentTrack.duration || 0;
-    const time = playerStatus?.time || 0;
-    const progress = duration > 0 ? (time / duration) * 100 : 0;
-    const artworkUrl = currentTrack.id ? lyrionApi.getArtworkUrl(currentTrack.id, 200) : null;
+    // musica / radio / apps — library browser
+    if (isLoading && !isConnected) return (
+      <div className="flex-1 flex flex-col items-center justify-center">
+        <motion.div animate={{ rotate: 360 }} transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
+          className="w-12 h-12 border-4 border-hifi-gold border-t-transparent rounded-full mb-4" />
+        <p className="text-hifi-silver text-sm">Connessione a Lyrion in corso…</p>
+      </div>
+    );
+    if (error) return (
+      <div className="flex-1 flex flex-col items-center justify-center px-8 text-center">
+        <AlertCircle size={40} className="text-red-400 mb-4" />
+        <h2 className="text-base font-bold text-white mb-2">Errore di Connessione</h2>
+        <p className="text-hifi-silver/70 text-sm mb-6 max-w-xs">{error}</p>
+        <button onClick={connectToServer}
+          className="flex items-center space-x-2 bg-hifi-surface hover:bg-hifi-light px-5 py-2.5 rounded-lg text-white text-sm transition-colors border border-hifi-border">
+          <RefreshCw size={15} />
+          <span>Riprova</span>
+        </button>
+      </div>
+    );
+    if (!activePlayer) return (
+      <div className="flex-1 flex flex-col items-center justify-center">
+        <Music size={48} className="text-hifi-silver/20 mb-4" />
+        <p className="text-hifi-silver/60 text-sm">Nessun player Lyrion trovato</p>
+      </div>
+    );
 
     return (
-      <div className="flex-1 flex flex-col overflow-hidden bg-hifi-dark relative">
-        {/* Main Content Area: Library Browser (Full width now) */}
-        <div className="flex-1 flex overflow-hidden">
-            <div className="flex-1 flex flex-col bg-black/40">
-              {/* Library Breadcrumbs/Header */}
-              <div className="flex items-center px-4 md:px-6 py-4 border-b border-hifi-accent/30 bg-hifi-dark/80 backdrop-blur-sm sticky top-0 z-10 shrink-0">
-                 {onNavigate && (
-                   <button onClick={() => onNavigate('home')} className="p-2 mr-2 md:mr-4 bg-hifi-light/50 text-white hover:bg-hifi-accent rounded-lg shadow transition-colors flex items-center">
-                     <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m15 18-6-6 6-6"/></svg>
-                   </button>
-                 )}
-                 <button onClick={goHome} className="p-2 text-hifi-silver hover:text-white hover:bg-white/10 rounded-lg transition-colors">
-                    <Home size={20} />
-                 </button>
-                 {navigationStack.length > 1 && (
-                   <div className="flex items-center ml-2 space-x-2 text-sm">
-                      {navigationStack.map((nav, idx) => (
-                        <React.Fragment key={idx}>
-                          {idx > 0 && <ChevronRight size={16} className="text-hifi-silver/50" />}
-                          <span className={`truncate max-w-[150px] ${idx === navigationStack.length - 1 ? 'text-white font-medium' : 'text-hifi-silver cursor-pointer hover:text-white'}`} onClick={() => {
-                            if (idx < navigationStack.length - 1) {
-                               const newStack = navigationStack.slice(0, idx + 1);
-                               setNavigationStack(newStack);
-                               setCurrentView(newStack[newStack.length-1].view);
-                               navigateTo(newStack[newStack.length-1].view, newStack[newStack.length-1].title, newStack[newStack.length-1].params);
-                            }
-                          }}>
-                            {nav.title}
-                          </span>
-                        </React.Fragment>
-                      ))}
-                   </div>
-                 )}
-                 <div className="flex-1"></div>
-                 {navigationStack.length > 1 && (
-                    <button onClick={goBack} className="px-4 py-2 text-sm bg-white/5 hover:bg-white/10 text-white rounded-lg transition-colors">
-                      Indietro
-                    </button>
-                 )}
-              </div>
-
-              {/* Library Content */}
-              {renderLibraryContent()}
+      <div className="flex-1 flex flex-col overflow-hidden">
+        {/* Breadcrumb */}
+        <div className="flex items-center px-3 py-2 border-b border-hifi-border/50 shrink-0 bg-hifi-panel/40">
+          <button onClick={goHome}
+            className="p-1.5 text-hifi-silver/60 hover:text-white hover:bg-white/10 rounded-lg transition-colors">
+            <Home size={15} />
+          </button>
+          {navigationStack.length > 1 && (
+            <div className="flex items-center space-x-1 text-xs ml-1 min-w-0 flex-1">
+              {navigationStack.map((nav, idx) => (
+                <React.Fragment key={idx}>
+                  {idx > 0 && <ChevronRight size={11} className="text-hifi-silver/30 flex-shrink-0" />}
+                  <span
+                    className={`truncate max-w-[100px] ${idx === navigationStack.length - 1 ? 'text-white font-medium' : 'text-hifi-silver/60 cursor-pointer hover:text-white'}`}
+                    onClick={() => {
+                      if (idx < navigationStack.length - 1) {
+                        const ns = navigationStack.slice(0, idx + 1);
+                        setNavigationStack(ns);
+                        const last = ns[ns.length - 1];
+                        setCurrentView(last.view);
+                        if (last.view !== 'home') navigateTo(last.view, last.title, last.params);
+                      }
+                    }}>
+                    {nav.title}
+                  </span>
+                </React.Fragment>
+              ))}
             </div>
+          )}
+          <div className="flex-1" />
+          {navigationStack.length > 1 && (
+            <button onClick={goBack}
+              className="text-xs px-3 py-1 bg-white/5 hover:bg-white/10 text-hifi-silver/70 hover:text-white rounded-lg transition-colors ml-2">
+              Indietro
+            </button>
+          )}
         </div>
 
-        {/* Full Screen Player Overlay (Using Portal to cover entire app) */}
-        {createPortal(
-          <AnimatePresence>
-            {isPlayerExpanded && (
-              <motion.div
-                initial={{ y: "100%" }}
-                animate={{ y: 0 }}
-                exit={{ y: "100%" }}
-                transition={{ type: "spring", damping: 25, stiffness: 200 }}
-                className="fixed inset-0 z-50 flex flex-col bg-hifi-dark"
-              >
-               {/* Blurred background */}
-               <div
-                  className="absolute inset-0 opacity-20 bg-cover bg-center blur-3xl scale-125 transition-all duration-1000 pointer-events-none"
-                  style={{ backgroundImage: artworkUrl ? `url(${artworkUrl})` : 'none' }}
-                />
-               <div className="absolute inset-0 bg-gradient-to-t from-black via-black/80 to-transparent pointer-events-none" />
-
-               {/* Top Bar (Collapse Button) */}
-               <div className="relative z-40 p-2 md:p-4 flex justify-between items-center shrink-0">
-                 <button
-                   onClick={() => setIsPlayerExpanded(false)}
-                   className="p-2 bg-white/10 hover:bg-white/20 rounded-full text-white transition-colors"
-                 >
-                   <ChevronDown size={24} />
-                 </button>
-                 <div className="text-center flex-1">
-                   <p className="text-[10px] md:text-xs tracking-widest text-hifi-silver uppercase">In Riproduzione</p>
-                 </div>
-                 <div className="w-10"></div> {/* Spacer for centering */}
-               </div>
-
-               {/* Main Expanded Player Content (Restyled split layout) */}
-               <div className="relative z-40 flex-1 flex flex-col md:flex-row items-center justify-center p-2 sm:p-4 max-w-7xl mx-auto w-full min-h-0 overflow-y-auto md:overflow-hidden gap-4 md:gap-8">
-                  {/* Left Side: Large Album Cover */}
-                  <motion.div
-                    className="w-full md:w-1/2 flex items-center justify-center shrink-0 min-h-0"
-                    initial={{ x: -20, opacity: 0 }}
-                    animate={{ x: 0, opacity: 1 }}
-                    transition={{ delay: 0.1, duration: 0.5 }}
-                  >
-                     <div className="relative w-full h-full max-h-[70vh] aspect-square max-w-md rounded-2xl overflow-hidden shadow-[0_20px_50px_rgba(0,0,0,0.5)] border border-white/10 bg-hifi-gray shrink-1">
-                        {artworkUrl ? (
-                          <img
-                            src={artworkUrl}
-                            alt="Album Art"
-                            className="w-full h-full object-cover"
-                            onError={(e) => { e.target.style.display = 'none'; e.target.nextSibling.style.display = 'flex'; }}
-                          />
-                        ) : null}
-                        <div
-                          className="absolute inset-0 bg-gradient-to-br from-hifi-gray to-hifi-dark flex flex-col items-center justify-center text-hifi-silver/30"
-                          style={{ display: artworkUrl ? 'none' : 'flex' }}
-                        >
-                          <Music size={80} className="md:w-32 md:h-32 mb-4" />
-                        </div>
-                     </div>
-                  </motion.div>
-
-                  {/* Right Side: Info, Progress, Controls, and VU Meter */}
-                  <motion.div
-                    className="w-full md:w-1/2 flex flex-col justify-start md:justify-center h-full shrink-0 min-w-0 max-w-xl text-center md:text-left py-2"
-                    initial={{ x: 20, opacity: 0 }}
-                    animate={{ x: 0, opacity: 1 }}
-                    transition={{ delay: 0.2, duration: 0.5 }}
-                  >
-                    {/* Track Info */}
-                    <div className="mb-1 shrink-0 pt-2">
-                      <h2 className="text-2xl md:text-3xl lg:text-4xl font-bold text-white mb-1 line-clamp-2 leading-tight">
-                        {title}
-                      </h2>
-                      <p className="text-lg md:text-xl lg:text-2xl text-hifi-gold mb-1 font-medium truncate">
-                        {artist}
-                      </p>
-                      <p className="text-base md:text-lg text-hifi-silver/80 truncate">
-                        {album}
-                      </p>
-                    </div>
-
-                    {/* Big Progress Bar */}
-                    <div className="w-full mb-3 md:mb-4 shrink-0">
-                      <div className="flex justify-between text-xs md:text-sm text-hifi-silver font-medium mb-1">
-                        <span>{formatTime(time)}</span>
-                        <span>{formatTime(duration)}</span>
-                      </div>
-                      <div className="relative h-2 bg-white/10 rounded-full overflow-hidden cursor-pointer shadow-inner"
-                           onClick={(e) => {
-                             if (!duration) return;
-                             const rect = e.currentTarget.getBoundingClientRect();
-                             const clickX = e.clientX - rect.left;
-                             const percentage = clickX / rect.width;
-                             const newTime = duration * percentage;
-                             handleAction(() => lyrionApi.seek(activePlayer.playerid, newTime));
-                           }}>
-                        <motion.div
-                          className="absolute top-0 left-0 h-full bg-gradient-to-r from-hifi-gold to-yellow-500 rounded-full shadow-[0_0_15px_currentColor]"
-                          style={{ width: `${progress}%` }}
-                          layoutId="progressBar"
-                        />
-                      </div>
-                    </div>
-
-                    {/* Big Controls */}
-                    <div className="flex items-center justify-center md:justify-start space-x-6 sm:space-x-8 shrink-0 mb-2">
-                      <motion.button
-                        whileHover={{ scale: 1.1 }}
-                        whileTap={{ scale: 0.9 }}
-                        className="p-2 text-hifi-silver hover:text-white transition-colors"
-                        onClick={() => handleAction(() => lyrionApi.previous(activePlayer.playerid))}
-                      >
-                        <SkipBack size={28} className="md:w-8 md:h-8" />
-                      </motion.button>
-
-                      <motion.button
-                        whileHover={{ scale: 1.05 }}
-                        whileTap={{ scale: 0.95 }}
-                        className="w-14 h-14 md:w-16 md:h-16 lg:w-20 lg:h-20 flex items-center justify-center bg-hifi-gold text-black rounded-full shadow-[0_0_20px_rgba(212,175,55,0.4)] hover:shadow-[0_0_35px_rgba(212,175,55,0.6)] transition-all border-4 border-black/20"
-                        onClick={() => handleAction(() => lyrionApi.togglePause(activePlayer.playerid))}
-                      >
-                        {isPlaying ? <Pause size={28} className="md:w-10 md:h-10" fill="currentColor" /> : <Play size={28} className="md:w-10 md:h-10 ml-1" fill="currentColor" />}
-                      </motion.button>
-
-                      <motion.button
-                        whileHover={{ scale: 1.1 }}
-                        whileTap={{ scale: 0.9 }}
-                        className="p-2 text-hifi-silver hover:text-white transition-colors"
-                        onClick={() => handleAction(() => lyrionApi.next(activePlayer.playerid))}
-                      >
-                        <SkipForward size={28} className="md:w-8 md:h-8" />
-                      </motion.button>
-                    </div>
-
-                    {/* VU Meter */}
-                    <div className="w-full shrink-0 flex justify-center md:justify-start mt-1 flex-1 min-h-0 pb-2">
-                       <AnalogVUMeter isPlaying={isPlaying} className="w-full max-w-lg lg:max-w-xl h-full max-h-[180px] md:max-h-[200px]" />
-                    </div>
-                  </motion.div>
-                 </div>
-              </motion.div>
-            )}
-          </AnimatePresence>,
-          document.body
-        )}
-
-        {/* Persistent Bottom Player Bar (Mini Player) */}
-        <div className="relative h-24 bg-hifi-dark border-t border-hifi-accent shadow-[0_-10px_30px_rgba(0,0,0,0.5)] z-20 shrink-0">
-            {/* Progress Bar (Absolute positioned at top of bar) */}
-            <div className="absolute top-0 left-0 right-0 h-1 bg-white/5 cursor-pointer z-30"
-                 onClick={(e) => {
-                   if (!duration) return;
-                   const rect = e.currentTarget.getBoundingClientRect();
-                   const clickX = e.clientX - rect.left;
-                   const percentage = clickX / rect.width;
-                   const newTime = duration * percentage;
-                   handleAction(() => lyrionApi.seek(activePlayer.playerid, newTime));
-                 }}>
-              <motion.div
-                className="h-full bg-hifi-gold"
-                style={{ width: `${progress}%` }}
-                layoutId="bottomProgressBar"
-              />
-            </div>
-
-            <div className="flex items-center justify-between h-full px-4 sm:px-6">
-                {/* Left: Mini Track Info (Clickable to expand) */}
-                <div
-                  className="w-1/3 flex items-center group cursor-pointer"
-                  onClick={() => setIsPlayerExpanded(true)}
-                >
-                  <div className="relative w-14 h-14 rounded overflow-hidden mr-4 flex-shrink-0 bg-hifi-gray">
-                    {artworkUrl ? (
-                      <img src={artworkUrl} alt="" className="w-full h-full object-cover group-hover:opacity-50 transition-opacity" />
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center text-hifi-silver/30 group-hover:opacity-50 transition-opacity"><Music size={24} /></div>
-                    )}
-                    <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                      <ChevronUp size={24} className="text-white drop-shadow-md" />
-                    </div>
-                  </div>
-                  <div className="flex flex-col min-w-0">
-                     <span className="text-white font-medium truncate">{title}</span>
-                     <span className="text-sm text-hifi-silver truncate">{artist}</span>
-                  </div>
-                </div>
-
-                {/* Center: Playback Controls */}
-                <div className="w-1/3 flex justify-center items-center space-x-4 sm:space-x-6">
-                   <motion.button
-                      whileHover={{ scale: 1.1 }}
-                      whileTap={{ scale: 0.9 }}
-                      className="p-2 text-hifi-silver hover:text-white transition-colors"
-                      onClick={() => handleAction(() => lyrionApi.previous(activePlayer.playerid))}
-                    >
-                      <SkipBack size={24} />
-                    </motion.button>
-
-                    <motion.button
-                      whileHover={{ scale: 1.05 }}
-                      whileTap={{ scale: 0.95 }}
-                      className="w-12 h-12 flex items-center justify-center bg-white text-black rounded-full hover:bg-hifi-gold transition-all"
-                      onClick={() => handleAction(() => lyrionApi.togglePause(activePlayer.playerid))}
-                    >
-                      {isPlaying ? <Pause size={24} fill="currentColor" /> : <Play size={24} fill="currentColor" className="ml-1" />}
-                    </motion.button>
-
-                    <motion.button
-                      whileHover={{ scale: 1.1 }}
-                      whileTap={{ scale: 0.9 }}
-                      className="p-2 text-hifi-silver hover:text-white transition-colors"
-                      onClick={() => handleAction(() => lyrionApi.next(activePlayer.playerid))}
-                    >
-                      <SkipForward size={24} />
-                    </motion.button>
-                </div>
-
-                {/* Right: Volume */}
-                <div className="w-1/3 flex items-center justify-end space-x-3 hidden sm:flex">
-                   <button
-                      onClick={() => handleAction(() => lyrionApi.setVolume(activePlayer.playerid, volume === 0 ? 50 : 0))}
-                      className="text-hifi-silver hover:text-white transition-colors"
-                    >
-                      {volume === 0 ? <VolumeX size={20} /> : <Volume2 size={20} />}
-                    </button>
-                    <input
-                      type="range"
-                      min="0"
-                      max="100"
-                      value={volume}
-                      onChange={(e) => {
-                        const newVol = parseInt(e.target.value);
-                        setPlayerStatus(prev => ({...prev, mixer_volume: newVol}));
-                        handleAction(() => lyrionApi.setVolume(activePlayer.playerid, newVol));
-                      }}
-                      className="w-24 h-1.5 bg-white/10 rounded-lg appearance-none cursor-pointer accent-hifi-gold"
-                    />
-                </div>
-            </div>
-        </div>
+        {renderLibraryContent()}
       </div>
     );
   };
 
+  // ─────────────────────────────────────────────────────────────────────────────
   return (
-    <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-      className="h-full w-full flex flex-col font-sans bg-hifi-dark"
-    >
-      {renderContent()}
-    </motion.div>
+    <div className="h-screen w-screen flex overflow-hidden bg-hifi-dark font-display">
+
+      {/* ══════════════════ LEFT — NOW PLAYING (340px) ══════════════════ */}
+      <div className="w-[340px] flex-shrink-0 flex flex-col bg-hifi-panel overflow-hidden">
+
+        {/* Brand header */}
+        <div className="flex items-center justify-between px-4 h-10 shrink-0 border-b border-hifi-border/60">
+          <div className="flex items-center space-x-2">
+            <div className="w-2 h-2 rounded-full bg-hifi-gold shadow-[0_0_6px_rgba(212,175,55,0.8)]" />
+            <span className="text-[11px] font-bold tracking-[0.18em] text-hifi-silver/80 uppercase select-none">
+              HiFi Player
+            </span>
+          </div>
+          <div className="flex items-center space-x-2">
+            {isConnected && activePlayer && (
+              <span className="text-[10px] text-hifi-silver/50 truncate max-w-[90px]">
+                {activePlayer.name || activePlayer.playerid}
+              </span>
+            )}
+            <div className={`w-1.5 h-1.5 rounded-full ${isConnected ? 'bg-emerald-500' : 'bg-red-500/70'}`} />
+            {activePlayer && (
+              <button onClick={() => setIsPlayerExpanded(true)}
+                className="p-1 text-hifi-silver/40 hover:text-hifi-silver transition-colors rounded" title="Espandi">
+                <Maximize2 size={13} />
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Spacer (centers now-playing block vertically) */}
+        <div className="flex-1 min-h-0" />
+
+        {/* Artwork */}
+        <div className="flex justify-center px-5 pt-2 pb-3 shrink-0">
+          <div
+            className="relative w-[250px] h-[250px] rounded-2xl overflow-hidden shadow-[0_8px_40px_rgba(0,0,0,0.7)] border border-white/5 cursor-pointer group bg-hifi-gray flex-shrink-0"
+            onClick={() => activePlayer && setIsPlayerExpanded(true)}>
+            {artworkUrl && (
+              <div className="artwork-glow" style={{ backgroundImage: `url(${artworkUrl})` }} />
+            )}
+            <ArtworkImage src={artworkUrl} alt="Album Art" className="w-full h-full object-cover relative z-10" FallbackIcon={Music} />
+            {activePlayer && (
+              <div className="absolute inset-0 z-20 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity rounded-2xl">
+                <Maximize2 size={26} className="text-white drop-shadow-lg" />
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Track info */}
+        <div className="px-4 pb-1 shrink-0">
+          <div className="flex items-start">
+            <h2 className="text-[15px] font-bold text-white line-clamp-2 leading-tight flex-1">
+              {title}
+            </h2>
+            {isPlaying && <PlayingBars />}
+          </div>
+          <p className="text-[13px] text-hifi-gold truncate mt-0.5 font-medium">{artist}</p>
+          {album && <p className="text-[12px] text-hifi-silver/60 truncate">{album}</p>}
+          {formatLabel && (
+            <span className="inline-block mt-1 px-2 py-0.5 bg-white/5 text-[10px] text-hifi-silver/50 rounded border border-white/5 tracking-wide">
+              {formatLabel}
+            </span>
+          )}
+        </div>
+
+        {/* Progress */}
+        <div className="px-4 pt-1 pb-0.5 shrink-0">
+          <div className="flex justify-between text-[10px] text-hifi-silver/50 mb-1 font-mono">
+            <span>{formatTime(time)}</span>
+            <span>{formatTime(duration)}</span>
+          </div>
+          <div className="relative h-[3px] bg-white/8 rounded-full overflow-hidden cursor-pointer group"
+            onClick={(e) => {
+              if (!duration || !activePlayer) return;
+              const r = e.currentTarget.getBoundingClientRect();
+              handleAction(() => lyrionApi.seek(activePlayer.playerid, duration * ((e.clientX - r.left) / r.width)));
+            }}>
+            <div className="absolute inset-0 bg-white/5 rounded-full" />
+            <motion.div className="absolute top-0 left-0 h-full bg-gradient-to-r from-hifi-gold to-yellow-400 rounded-full"
+              style={{ width: `${progress}%` }} />
+          </div>
+        </div>
+
+        {/* Transport controls */}
+        <div className="flex items-center justify-center space-x-3 px-4 py-1.5 shrink-0">
+          <motion.button whileHover={{ scale: 1.12 }} whileTap={{ scale: 0.88 }}
+            onClick={() => handleAction(() => lyrionApi.previous(activePlayer?.playerid))}
+            className="w-10 h-10 flex items-center justify-center text-hifi-silver hover:text-white rounded-full hover:bg-white/8 transition-colors">
+            <SkipBack size={19} />
+          </motion.button>
+
+          <motion.button whileHover={{ scale: 1.06 }} whileTap={{ scale: 0.94 }}
+            onClick={() => handleAction(() => lyrionApi.togglePause(activePlayer?.playerid))}
+            className="w-[52px] h-[52px] flex items-center justify-center bg-hifi-gold text-black rounded-full shadow-[0_0_18px_rgba(212,175,55,0.35)] hover:shadow-[0_0_28px_rgba(212,175,55,0.55)] transition-all">
+            {isPlaying
+              ? <Pause size={20} fill="currentColor" />
+              : <Play size={20} fill="currentColor" className="ml-0.5" />}
+          </motion.button>
+
+          <motion.button whileHover={{ scale: 1.12 }} whileTap={{ scale: 0.88 }}
+            onClick={() => handleAction(() => lyrionApi.next(activePlayer?.playerid))}
+            className="w-10 h-10 flex items-center justify-center text-hifi-silver hover:text-white rounded-full hover:bg-white/8 transition-colors">
+            <SkipForward size={19} />
+          </motion.button>
+        </div>
+
+        {/* Volume */}
+        <div className="flex items-center space-x-2 px-4 py-1 shrink-0">
+          <button
+            onClick={() => handleAction(() => lyrionApi.setVolume(activePlayer?.playerid, volume === 0 ? 50 : 0))}
+            className="text-hifi-silver/60 hover:text-hifi-silver transition-colors flex-shrink-0">
+            {volume === 0 ? <VolumeX size={14} /> : <Volume2 size={14} />}
+          </button>
+          <input type="range" min="0" max="100" value={volume}
+            className="vol-slider flex-1"
+            onChange={(e) => {
+              const v = parseInt(e.target.value);
+              setPlayerStatus(prev => ({ ...prev, mixer_volume: v }));
+              handleAction(() => lyrionApi.setVolume(activePlayer?.playerid, v));
+            }} />
+          <span className="text-[10px] text-hifi-silver/40 w-6 text-right font-mono flex-shrink-0">{volume}</span>
+        </div>
+
+        {/* Spacer (balances vertical centering; VU meters live in fullscreen view) */}
+        <div className="flex-1 min-h-0" />
+      </div>
+
+      {/* Panel divider */}
+      <div className="panel-divider" />
+
+      {/* ══════════════════ RIGHT — CONTENT (flex-1) ══════════════════ */}
+      <div className="flex-1 flex flex-col overflow-hidden bg-hifi-dark min-w-0">
+
+        {/* Tab bar */}
+        <div className="flex shrink-0 border-b border-hifi-border bg-hifi-panel/50 overflow-x-auto">
+          {TABS.map(({ id, label, Icon }) => {
+            const active = activeTab === id;
+            return (
+              <button key={id} onClick={() => handleTabSwitch(id)}
+                className={`relative flex items-center space-x-1.5 px-4 py-3 text-xs font-medium whitespace-nowrap transition-colors flex-shrink-0
+                  ${active ? 'text-white' : 'text-hifi-silver/50 hover:text-hifi-silver'}`}>
+                <Icon size={14} />
+                {label && <span>{label}</span>}
+                {active && (
+                  <span className="absolute bottom-0 left-2 right-2 h-[2px] bg-hifi-gold rounded-t-sm" />
+                )}
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Tab content */}
+        <div className="flex-1 overflow-hidden flex flex-col">
+          <AnimatePresence mode="wait">
+            <motion.div key={activeTab}
+              initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+              transition={{ duration: 0.12 }}
+              className="flex-1 flex flex-col overflow-hidden">
+              {renderTabContent()}
+            </motion.div>
+          </AnimatePresence>
+        </div>
+      </div>
+
+      {/* ══════════════════ FULLSCREEN NOW PLAYING (portal) ══════════════════ */}
+      {createPortal(
+        <AnimatePresence>
+          {isPlayerExpanded && (
+            <motion.div
+              initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }}
+              transition={{ type: 'spring', damping: 26, stiffness: 200 }}
+              className="fixed inset-0 z-50 flex flex-col bg-hifi-dark overflow-hidden">
+
+              {/* Blurred art background */}
+              <div className="absolute inset-0 opacity-20 bg-cover bg-center blur-3xl scale-125 pointer-events-none transition-all duration-1000"
+                style={{ backgroundImage: artworkUrlLg ? `url(${artworkUrlLg})` : 'none' }} />
+              <div className="absolute inset-0 bg-gradient-to-t from-black/95 via-black/60 to-transparent pointer-events-none" />
+
+              {/* Close button row */}
+              <div className="relative z-40 flex items-center justify-between px-5 pt-3 pb-1 shrink-0">
+                <button onClick={() => setIsPlayerExpanded(false)}
+                  className="p-2 bg-white/10 hover:bg-white/20 rounded-full text-white transition-colors">
+                  <ChevronDown size={22} />
+                </button>
+                <p className="text-[10px] tracking-[0.25em] text-hifi-silver/70 uppercase">In Riproduzione</p>
+                <div className="w-10" />
+              </div>
+
+              {/* Body: artwork (left) | info + controls + VU (right) */}
+              <div className="relative z-40 flex-1 flex flex-row items-stretch px-5 pb-5 gap-6 min-h-0">
+
+                {/* Left: artwork */}
+                <motion.div className="w-[44%] flex items-center justify-center flex-shrink-0"
+                  initial={{ x: -20, opacity: 0 }} animate={{ x: 0, opacity: 1 }} transition={{ delay: 0.08 }}>
+                  <div className="relative w-full max-w-[320px] aspect-square rounded-2xl overflow-hidden shadow-[0_20px_60px_rgba(0,0,0,0.7)] border border-white/8 bg-hifi-gray">
+                    {artworkUrlLg
+                      ? <img src={artworkUrlLg} alt="Album Art" className="w-full h-full object-cover" />
+                      : <div className="w-full h-full flex items-center justify-center text-hifi-silver/20"><Music size={80} /></div>}
+                  </div>
+                </motion.div>
+
+                {/* Right: info + progress + controls + VU */}
+                <motion.div className="flex-1 flex flex-col min-w-0 justify-center py-1"
+                  initial={{ x: 20, opacity: 0 }} animate={{ x: 0, opacity: 1 }} transition={{ delay: 0.12 }}>
+
+                  {/* Track info */}
+                  <div className="mb-2 shrink-0">
+                    <div className="flex items-start">
+                      <h2 className="text-2xl font-bold text-white leading-tight line-clamp-2 flex-1">{title}</h2>
+                      {isPlaying && <PlayingBars />}
+                    </div>
+                    <p className="text-lg text-hifi-gold truncate mt-0.5 font-medium">{artist}</p>
+                    <p className="text-sm text-hifi-silver/70 truncate">{album}</p>
+                    {formatLabel && (
+                      <span className="inline-block mt-1 px-2 py-0.5 bg-white/5 text-[10px] text-hifi-silver/50 rounded border border-white/5 tracking-wide">
+                        {formatLabel}
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Progress */}
+                  <div className="w-full mb-3 shrink-0">
+                    <div className="flex justify-between text-xs text-hifi-silver/60 font-mono mb-1.5">
+                      <span>{formatTime(time)}</span>
+                      <span>{formatTime(duration)}</span>
+                    </div>
+                    <div className="relative h-1.5 bg-white/10 rounded-full overflow-hidden cursor-pointer"
+                      onClick={(e) => {
+                        if (!duration || !activePlayer) return;
+                        const r = e.currentTarget.getBoundingClientRect();
+                        handleAction(() => lyrionApi.seek(activePlayer.playerid, duration * ((e.clientX - r.left) / r.width)));
+                      }}>
+                      <motion.div className="absolute top-0 left-0 h-full bg-gradient-to-r from-hifi-gold to-yellow-400 rounded-full"
+                        style={{ width: `${progress}%` }} />
+                    </div>
+                  </div>
+
+                  {/* Controls row */}
+                  <div className="flex items-center space-x-5 mb-3 shrink-0">
+                    <motion.button whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }}
+                      className="text-hifi-silver hover:text-white transition-colors"
+                      onClick={() => handleAction(() => lyrionApi.previous(activePlayer?.playerid))}>
+                      <SkipBack size={26} />
+                    </motion.button>
+
+                    <motion.button whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}
+                      className="w-16 h-16 flex items-center justify-center bg-hifi-gold text-black rounded-full shadow-[0_0_24px_rgba(212,175,55,0.4)] hover:shadow-[0_0_36px_rgba(212,175,55,0.65)] transition-all"
+                      onClick={() => handleAction(() => lyrionApi.togglePause(activePlayer?.playerid))}>
+                      {isPlaying ? <Pause size={28} fill="currentColor" /> : <Play size={28} fill="currentColor" className="ml-1" />}
+                    </motion.button>
+
+                    <motion.button whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }}
+                      className="text-hifi-silver hover:text-white transition-colors"
+                      onClick={() => handleAction(() => lyrionApi.next(activePlayer?.playerid))}>
+                      <SkipForward size={26} />
+                    </motion.button>
+
+                    {/* Volume (inline) */}
+                    <div className="flex items-center space-x-2 ml-auto">
+                      <button onClick={() => handleAction(() => lyrionApi.setVolume(activePlayer?.playerid, volume === 0 ? 50 : 0))}
+                        className="text-hifi-silver/70 hover:text-hifi-silver transition-colors">
+                        {volume === 0 ? <VolumeX size={17} /> : <Volume2 size={17} />}
+                      </button>
+                      <input type="range" min="0" max="100" value={volume}
+                        className="w-28 h-1.5 bg-white/10 rounded-full appearance-none cursor-pointer accent-hifi-gold"
+                        onChange={(e) => {
+                          const v = parseInt(e.target.value);
+                          setPlayerStatus(prev => ({ ...prev, mixer_volume: v }));
+                          handleAction(() => lyrionApi.setVolume(activePlayer?.playerid, v));
+                        }} />
+                    </div>
+                  </div>
+
+                  {/* VU Meters — large, fills remaining vertical space */}
+                  <div className="flex-1 min-h-0">
+                    <AnalogVUMeter isPlaying={isPlaying} className="w-full h-full" />
+                  </div>
+                </motion.div>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>,
+        document.body
+      )}
+    </div>
   );
 };
 

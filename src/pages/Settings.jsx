@@ -618,6 +618,19 @@ const Settings = () => {
           })}
         </div>
 
+        {/* First-setup wizard */}
+        <motion.button
+          onClick={() => {
+            localStorage.removeItem('firstSetupComplete');
+            window.dispatchEvent(new Event('hifi-open-wizard'));
+          }}
+          className="w-full mt-6 bg-hifi-light hover:bg-hifi-accent text-white py-4 rounded-lg font-semibold flex items-center justify-center space-x-2 transition-colors"
+          whileTap={{ scale: 0.95 }}
+        >
+          <RotateCw size={20} />
+          <span>Riavvia configurazione guidata</span>
+        </motion.button>
+
         {/* About section */}
         <motion.div
           initial={{ y: 20, opacity: 0 }}

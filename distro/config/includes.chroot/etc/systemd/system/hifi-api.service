@@ -1,0 +1,16 @@
+[Unit]
+Description=HiFi Player - System Control API (Flask)
+After=network.target
+
+[Service]
+Type=simple
+# Runs as root so it can manage the OS (reboot/shutdown/update/network),
+# matching the existing api_server.py behaviour.
+User=root
+WorkingDirectory=/usr/local/bin
+ExecStart=/usr/bin/python3 /usr/local/bin/api_server.py
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target

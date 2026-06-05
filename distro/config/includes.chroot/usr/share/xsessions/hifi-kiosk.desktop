@@ -1,0 +1,5 @@
+[Desktop Entry]
+Name=HiFi Kiosk
+Comment=HiFi Player appliance kiosk session
+Exec=/home/hifi/.xsession
+Type=Application

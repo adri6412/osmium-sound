@@ -1,0 +1,44 @@
+#!/bin/sh
+# HiFi Player appliance — create kiosk user, X session, hostname.
+set -e
+
+echo "I: [hifi] creating kiosk user 'hifi'"
+if ! id hifi >/dev/null 2>&1; then
+    useradd -m -G audio,video,plugdev,netdev,sudo -s /bin/bash hifi
+    echo "hifi:hifi" | chpasswd
+fi
+
+echo "I: [hifi] writing kiosk X session for user 'hifi'"
+cat > /home/hifi/.xsession <<'XSESSION'
+#!/bin/sh
+# Disable screen blanking / power management
+xset s off
+xset -dpms
+xset s noblank
+
+# Hide the mouse cursor when idle
+unclutter -idle 1 -root &
+
+# Make sure audio is unmuted
+amixer -q sset Master unmute 2>/dev/null || true
+amixer -q sset PCM unmute 2>/dev/null || true
+
+# Resolve the Electron binary (electron-builder symlinks it into /usr/bin)
+APP="$(command -v hifi-media-player || true)"
+[ -z "$APP" ] && APP="/opt/hifi-media-player/hifi-media-player"
+
+# Launch the player in kiosk/fullscreen mode on X11
+exec "$APP" \
+    --no-sandbox \
+    --disable-dev-shm-usage \
+    --enable-features=UseOzonePlatform \
+    --ozone-platform=x11 \
+    --start-fullscreen
+XSESSION
+chmod +x /home/hifi/.xsession
+chown hifi:hifi /home/hifi/.xsession
+
+echo "I: [hifi] setting hostname"
+echo "hifiplayer" > /etc/hostname
+
+echo "I: [hifi] system setup hook done"

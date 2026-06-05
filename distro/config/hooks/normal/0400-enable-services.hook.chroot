@@ -1,0 +1,21 @@
+#!/bin/sh
+# HiFi Player appliance — enable all services and boot straight into the kiosk.
+set -e
+
+echo "I: [hifi] enabling graphical target + display manager"
+systemctl set-default graphical.target || true
+systemctl enable lightdm || true
+
+echo "I: [hifi] enabling HiFi services"
+systemctl enable hifi-api.service     || true
+systemctl enable hifi-vumeter.service || true
+systemctl enable hifi-sources.service || true
+
+echo "I: [hifi] enabling audio backend (squeezelite + Lyrion Music Server)"
+systemctl enable squeezelite.service        || true
+systemctl enable lyrionmusicserver.service  || true
+
+echo "I: [hifi] disabling getty on tty1 (no text console flashes)"
+systemctl mask getty@tty1.service || true
+
+echo "I: [hifi] enable-services hook done"

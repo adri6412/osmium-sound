@@ -1,0 +1,16 @@
+[Unit]
+Description=HiFi Player - Music Sources manager (SMB mount + Lyrion mediadirs)
+After=network-online.target lyrionmusicserver.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+# Runs as root: needs mount.cifs and to restart Lyrion.
+User=root
+WorkingDirectory=/usr/local/bin
+ExecStart=/usr/bin/python3 /usr/local/bin/sources_server.py
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target

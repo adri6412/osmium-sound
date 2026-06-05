@@ -1,0 +1,15 @@
+[Unit]
+Description=HiFi Player - Squeezelite VU Meter WebSocket Daemon
+After=network.target squeezelite.service
+Requires=squeezelite.service
+
+[Service]
+Type=simple
+User=hifi
+WorkingDirectory=/usr/local/bin
+ExecStart=/usr/bin/python3 /usr/local/bin/vu_meter_daemon.py
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target
