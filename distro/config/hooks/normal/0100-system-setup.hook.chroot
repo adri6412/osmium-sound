@@ -3,10 +3,15 @@
 set -e
 
 echo "I: [hifi] creating kiosk user 'hifi'"
+# Groups required for LightDM passwordless autologin on Debian
+groupadd -f autologin
+groupadd -f nopasswdlogin
 if ! id hifi >/dev/null 2>&1; then
-    useradd -m -G audio,video,plugdev,netdev,sudo -s /bin/bash hifi
+    useradd -m -G audio,video,plugdev,netdev,sudo,autologin,nopasswdlogin -s /bin/bash hifi
     echo "hifi:hifi" | chpasswd
 fi
+# Ensure autologin groups even if the user already existed
+usermod -aG autologin,nopasswdlogin hifi || true
 
 echo "I: [hifi] writing kiosk X session for user 'hifi'"
 cat > /home/hifi/.xsession <<'XSESSION'
