@@ -1,22 +1,25 @@
 # ── HiFi Player appliance — package list ──────────────────────────
+# IMPORTANT: one package per line, NO inline comments. live-build passes
+# whole lines to apt, so a trailing "# ... a/b/c" becomes a bogus argument.
+
 # Kernel
 linux-image-amd64
 
 # Firmware — broad coverage for all mainline-supported WiFi/Ethernet/etc.
-# (requires non-free-firmware archive area, set in build-distro.sh)
-# Note: MediaTek MT76xx firmware ships inside firmware-misc-nonfree on bookworm.
+# (requires the non-free-firmware archive area, set in build-distro.sh).
+# MediaTek MT76xx firmware ships inside firmware-misc-nonfree on bookworm.
 firmware-linux-free
 firmware-linux-nonfree
-firmware-misc-nonfree       # incl. MediaTek MT76xx, Marvell, misc WiFi/Ethernet
-firmware-realtek            # Realtek WiFi/BT/Ethernet
-firmware-iwlwifi            # Intel WiFi
-firmware-atheros            # Qualcomm Atheros ath9k/ath10k/ath11k
-firmware-brcm80211          # Broadcom / Cypress (many laptops, mini-PCs)
-firmware-libertas           # Marvell 8388/8686/8688
-firmware-ti-connectivity    # Texas Instruments wl12xx/wl18xx
-firmware-zd1211             # ZyDAS zd1211 USB
-wireless-regdb              # WiFi regulatory database (channels/power)
-wpasupplicant               # WPA/WPA2/WPA3 supplicant
+firmware-misc-nonfree
+firmware-realtek
+firmware-iwlwifi
+firmware-atheros
+firmware-brcm80211
+firmware-libertas
+firmware-ti-connectivity
+firmware-zd1211
+wireless-regdb
+wpasupplicant
 
 # Xorg + minimal display stack (no desktop environment)
 xserver-xorg-core
@@ -45,8 +48,7 @@ xdg-utils
 # Audio
 alsa-utils
 
-# Squeezelite — the Debian build is compiled with VISEXPORT, so `-v` exports
-# /dev/shm/squeezelite-* for the VU meter (verified against the Debian package).
+# Squeezelite (Debian build has VISEXPORT; -v exports /dev/shm/squeezelite-*)
 squeezelite
 
 # Python services (api_server.py + vu_meter_daemon.py + sources_server.py)
@@ -60,7 +62,7 @@ python3-yaml
 # Network shares (SMB mounting for music sources)
 cifs-utils
 
-# Lyrion Music Server perl dependencies (the .deb itself is added via packages.chroot)
+# Lyrion Music Server runtime dependencies (the .deb is installed via hook 0050)
 perl
 libio-socket-ssl-perl
 libcrypt-openssl-rsa-perl
