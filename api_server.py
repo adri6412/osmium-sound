@@ -278,6 +278,67 @@ def wired_dhcp():
         return {'success': True, 'message': 'Connesso via cavo', 'ip': ip}
     return {'success': r.returncode == 0, 'message': (r.stderr or r.stdout).strip() or 'Cavo non connesso', 'ip': ip}
 
+# ──────────────────────────────────────────────────────────────────
+#  Audio output (DAC) selection for squeezelite — used by the wizard.
+# ──────────────────────────────────────────────────────────────────
+
+SQUEEZELITE_DEFAULT = '/etc/default/squeezelite'
+
+def list_audio_devices():
+    """List ALSA playback devices (cards) usable as squeezelite output."""
+    devices = [{'id': 'default', 'name': 'Predefinito di sistema', 'card': None, 'device': None}]
+    try:
+        r = _run(['aplay', '-l'])
+        for line in r.stdout.split('\n'):
+            # e.g. "card 0: D50s [Topping D50s], device 0: USB Audio [USB Audio]"
+            m = re.match(r'card (\d+): \S+ \[([^\]]+)\], device (\d+): [^\[]*\[([^\]]+)\]', line)
+            if m:
+                card, cname, dev, dname = int(m.group(1)), m.group(2), int(m.group(3)), m.group(4)
+                devices.append({
+                    'id': f'hw:{card},{dev}',
+                    'name': f'{cname} — {dname}',
+                    'card': card,
+                    'device': dev,
+                })
+    except Exception as e:
+        return {'devices': devices, 'error': str(e)}
+    return {'devices': devices}
+
+def set_audio_device(device):
+    """Rewrite the -o option in /etc/default/squeezelite and restart it."""
+    if not device:
+        return {'success': False, 'message': 'Device mancante'}
+    try:
+        with open(SQUEEZELITE_DEFAULT) as f:
+            content = f.read()
+    except Exception:
+        content = "ARGS='-o default -v -C 5 -s 127.0.0.1 -n HiFiPlayer'\n"
+
+    m = re.search(r"ARGS=(['\"])(.*?)\1", content)
+    if m:
+        args = m.group(2)
+        if re.search(r'-o\s+\S+', args):
+            args = re.sub(r'-o\s+\S+', f'-o {device}', args)
+        else:
+            args = f'-o {device} ' + args
+        content = content[:m.start()] + f"ARGS='{args}'" + content[m.end():]
+    else:
+        content += f"\nARGS='-o {device} -v -C 5 -s 127.0.0.1 -n HiFiPlayer'\n"
+
+    try:
+        with open(SQUEEZELITE_DEFAULT, 'w') as f:
+            f.write(content)
+    except Exception as e:
+        return {'success': False, 'message': f'Scrittura configurazione fallita: {e}'}
+
+    try:
+        r = _run(['systemctl', 'restart', 'squeezelite'], timeout=30)
+        if r.returncode != 0:
+            return {'success': True, 'message': f'Device impostato ({device}); riavvio squeezelite: {(r.stderr or "").strip()}'}
+    except Exception as e:
+        return {'success': True, 'message': f'Device impostato ({device}); riavvio non riuscito: {e}'}
+    return {'success': True, 'message': f'Uscita audio impostata su {device}'}
+
 # Funzione per mostrare la tastiera virtuale globale
 def show_global_keyboard():
     try:
@@ -376,6 +437,15 @@ def api_wifi_connect():
 @app.route('/wired_dhcp', methods=['POST'])
 def api_wired_dhcp():
     return jsonify(wired_dhcp())
+
+@app.route('/audio_devices', methods=['GET'])
+def api_audio_devices():
+    return jsonify(list_audio_devices())
+
+@app.route('/set_audio_device', methods=['POST'])
+def api_set_audio_device():
+    data = request.get_json(silent=True) or {}
+    return jsonify(set_audio_device(data.get('device')))
 
 @app.route('/show_global_keyboard', methods=['POST'])
 def api_show_global_keyboard():

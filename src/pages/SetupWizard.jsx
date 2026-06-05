@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { QRCodeSVG } from 'qrcode.react';
 import {
   Wifi, Network, Lock, Music, Server, FolderTree,
-  Check, ChevronRight, ChevronLeft, RefreshCw, X, Loader2, AlertCircle, Disc3
+  Check, ChevronRight, ChevronLeft, RefreshCw, X, Loader2, AlertCircle, Disc3, Speaker
 } from 'lucide-react';
 import { systemAPI } from '../utils/api';
 
@@ -35,6 +35,12 @@ const SetupWizard = ({ onComplete }) => {
   const [wifiPassword, setWifiPassword] = useState('');
   const [netError, setNetError] = useState('');
 
+  // audio (DAC) sub-state
+  const [audioDevices, setAudioDevices] = useState([]);
+  const [selectedAudio, setSelectedAudio] = useState('default');
+  const [audioBusy, setAudioBusy] = useState(false);
+  const [audioError, setAudioError] = useState('');
+
   // Resolve the device IP whenever we need to show service URLs
   const refreshIp = async () => {
     const res = await systemAPI.getNetworkStatus();
@@ -62,7 +68,7 @@ const SetupWizard = ({ onComplete }) => {
     if (res.success) {
       const ip = res.data?.ip || (await refreshIp());
       setStatusMsg(ip ? `Connesso · IP ${ip}` : 'Connesso');
-      setStep('sources');
+      setStep('audio');
       await refreshIp();
     } else {
       setNetError(res.message || 'Connessione cavo non riuscita. Verifica che il cavo sia collegato.');
@@ -105,7 +111,7 @@ const SetupWizard = ({ onComplete }) => {
     if (res.success && res.data?.success !== false) {
       const ip = res.data?.ip || (await refreshIp());
       setStatusMsg(ip ? `Connesso a ${selectedSsid} · IP ${ip}` : `Connesso a ${selectedSsid}`);
-      setStep('sources');
+      setStep('audio');
       await refreshIp();
     } else {
       setNetError(res.data?.message || res.message || 'Connessione WiFi non riuscita. Controlla la password.');
@@ -113,7 +119,34 @@ const SetupWizard = ({ onComplete }) => {
     }
   };
 
+  // ── Audio output (DAC) ─────────────────────────────────────────
+  const loadAudioDevices = async () => {
+    setAudioBusy(true);
+    setAudioError('');
+    const res = await systemAPI.getAudioDevices();
+    setAudioBusy(false);
+    if (res.success && Array.isArray(res.data?.devices)) {
+      setAudioDevices(res.data.devices);
+      // prefer first real DAC (hw:...) over "default", else default
+      const firstHw = res.data.devices.find(d => d.id !== 'default');
+      setSelectedAudio(firstHw ? firstHw.id : 'default');
+    } else {
+      setAudioError(res.message || 'Elenco dispositivi audio non disponibile.');
+      setAudioDevices([{ id: 'default', name: 'Predefinito di sistema' }]);
+    }
+  };
+
+  const confirmAudio = async () => {
+    setAudioBusy(true);
+    setAudioError('');
+    const res = await systemAPI.setAudioDevice(selectedAudio);
+    setAudioBusy(false);
+    // proceed regardless: a wrong DAC can be changed later in the sources/settings
+    setStep('sources');
+  };
+
   useEffect(() => {
+    if (step === 'audio' && audioDevices.length === 0) loadAudioDevices();
     if ((step === 'sources' || step === 'lyrion') && !deviceIp) refreshIp();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [step]);
@@ -152,8 +185,8 @@ const SetupWizard = ({ onComplete }) => {
   );
   const Dots = () => (
     <div className="flex items-center space-x-2">
-      {['welcome', 'network', 'sources', 'lyrion'].map((s, i) => {
-        const order = { welcome: 0, network: 1, 'wifi-scan': 1, sources: 2, lyrion: 3 }[step];
+      {['welcome', 'network', 'audio', 'sources', 'lyrion'].map((s, i) => {
+        const order = { welcome: 0, network: 1, 'wifi-scan': 1, audio: 2, sources: 3, lyrion: 4 }[step];
         return <div key={s} className={`h-1.5 rounded-full transition-all ${i === order ? 'w-6 bg-hifi-gold' : 'w-1.5 bg-hifi-border'}`} />;
       })}
     </div>
@@ -261,10 +294,62 @@ const SetupWizard = ({ onComplete }) => {
           </Shell>
         )}
 
+        {/* ───────── AUDIO / DAC ───────── */}
+        {step === 'audio' && (
+          <Shell footer={<>
+            <button onClick={() => setStep('network')} className="flex items-center space-x-1 text-hifi-silver/60 hover:text-white transition"><ChevronLeft size={18} /><span className="text-sm">Indietro</span></button>
+            <Dots />
+            <button onClick={confirmAudio} disabled={audioBusy}
+              className="flex items-center space-x-2 bg-hifi-gold text-black font-semibold px-6 py-2.5 rounded-xl hover:brightness-110 transition disabled:opacity-50">
+              {audioBusy ? <Loader2 size={16} className="animate-spin" /> : <><span>Avanti</span><ChevronRight size={18} /></>}
+            </button>
+          </>}>
+            <div className="w-full max-w-lg">
+              <div className="flex flex-col items-center text-center mb-6">
+                <div className="w-14 h-14 rounded-xl bg-hifi-surface border border-hifi-border flex items-center justify-center mb-4">
+                  <Speaker size={26} className="text-hifi-gold" />
+                </div>
+                <h2 className="text-2xl font-bold text-white mb-1">Uscita audio</h2>
+                <p className="text-hifi-silver/60 text-sm max-w-sm">Scegli il DAC o la scheda audio da usare per la riproduzione.</p>
+              </div>
+
+              <div className="flex items-center justify-end mb-2">
+                <button onClick={loadAudioDevices} disabled={audioBusy} className="p-2 text-hifi-silver/60 hover:text-white rounded-lg hover:bg-white/10 transition">
+                  <RefreshCw size={15} className={audioBusy ? 'animate-spin' : ''} />
+                </button>
+              </div>
+
+              {audioError && <p className="text-amber-400/80 text-xs mb-3 flex items-center"><AlertCircle size={14} className="mr-2" />{audioError}</p>}
+
+              <div className="space-y-1.5 max-h-[260px] overflow-y-auto content-scrollbar pr-1">
+                {audioBusy && audioDevices.length === 0 && (
+                  <p className="text-hifi-silver/40 text-sm text-center py-8 flex items-center justify-center"><Loader2 size={16} className="animate-spin mr-2" />Ricerca dispositivi…</p>
+                )}
+                {audioDevices.map((d) => {
+                  const active = selectedAudio === d.id;
+                  return (
+                    <button key={d.id} onClick={() => setSelectedAudio(d.id)}
+                      className={`w-full flex items-center justify-between px-4 py-3 rounded-xl border transition ${active ? 'bg-hifi-gold/10 border-hifi-gold/60' : 'bg-hifi-surface border-hifi-border hover:bg-hifi-light'}`}>
+                      <div className="flex items-center space-x-3 min-w-0">
+                        <Speaker size={18} className={active ? 'text-hifi-gold' : 'text-hifi-silver/70'} />
+                        <div className="text-left min-w-0">
+                          <p className="text-white text-sm truncate">{d.name}</p>
+                          <p className="text-hifi-silver/40 text-xs font-mono">{d.id}</p>
+                        </div>
+                      </div>
+                      {active && <Check size={16} className="text-hifi-gold shrink-0" />}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          </Shell>
+        )}
+
         {/* ───────── SOURCES ───────── */}
         {step === 'sources' && (
           <Shell footer={<>
-            <button onClick={() => setStep('network')} className="flex items-center space-x-1 text-hifi-silver/60 hover:text-white transition"><ChevronLeft size={18} /><span className="text-sm">Indietro</span></button>
+            <button onClick={() => setStep('audio')} className="flex items-center space-x-1 text-hifi-silver/60 hover:text-white transition"><ChevronLeft size={18} /><span className="text-sm">Indietro</span></button>
             <Dots />
             <button onClick={() => setStep('lyrion')} className="flex items-center space-x-2 bg-hifi-gold text-black font-semibold px-6 py-2.5 rounded-xl hover:brightness-110 transition">
               <span>Avanti</span><ChevronRight size={18} />

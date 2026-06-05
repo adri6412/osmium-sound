@@ -98,4 +98,8 @@ export const systemAPI = {
   connectWifi: (ssid, password) => apiPost('/wifi_connect', { ssid, password }),
   // Force DHCP on the wired interface. Returns { success, message, ip }
   useWiredDhcp: () => apiPost('/wired_dhcp', {}),
+  // List ALSA output devices (DAC): { devices: [{ id, name, card, device }] }
+  getAudioDevices: () => apiGet('/audio_devices'),
+  // Set squeezelite output device and restart it. Returns { success, message }
+  setAudioDevice: (device) => apiPost('/set_audio_device', { device }),
 };
