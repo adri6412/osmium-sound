@@ -11,7 +11,7 @@ branded Plymouth splash) that goes straight into the fullscreen player.
 |---|---|---|
 | HiFi Player (Electron) | Fullscreen kiosk UI | LightDM autologin → `hifi-kiosk` session |
 | Lyrion Music Server `9.1.0` | Music server / library / streaming | `lyrionmusicserver.service` (`:9000`) |
-| squeezelite (DietPi build, `-v`) | Local player + VU visualizer export | `squeezelite.service` |
+| squeezelite (Debian, `-v`) | Local player + VU visualizer export | `squeezelite.service` |
 | `vu_meter_daemon.py` | Streams VU levels from `/dev/shm/squeezelite-*` | `hifi-vumeter.service` (`:9001`) |
 | `api_server.py` | OS control + WiFi setup (reboot/shutdown/update/network) | `hifi-api.service` (`:8000`) |
 | `sources_server.py` | Web UI to add music sources (local + SMB) to Lyrion | `hifi-sources.service` (`:8080`) |
@@ -28,9 +28,15 @@ SMB shares are mounted with `cifs-utils` under `/mnt/hifi-sources/<name>` and
 written into Lyrion's `mediadirs` (so Lyrion sees them as local folders); the
 mount state is re-applied on boot by `hifi-sources.service`.
 
-The VU meter works because squeezelite is pulled from the **DietPi APT repo**
-(`https://dietpi.com/apt`), whose build enables `VISEXPORT` and is launched with
-`-v` (see `config/includes.chroot/etc/default/squeezelite`).
+The VU meter works because the Debian `squeezelite` package is built with
+`VISEXPORT` and is launched with `-v` (see
+`config/includes.chroot/etc/default/squeezelite`), which exports
+`/dev/shm/squeezelite-*` for the VU daemon.
+
+Lyrion Music Server is downloaded by `build-distro.sh` into
+`includes.chroot/opt/hifi-lyrion/` and installed during the chroot stage by
+`config/hooks/normal/0050-install-lyrion.hook.chroot` (it is **not** placed in
+`packages.chroot`, which current apt/live-build rejects).
 
 ## Prerequisites (on the build server)
 
@@ -128,8 +134,7 @@ the name with `aplay -l`), then `systemctl restart squeezelite`.
 ## Troubleshooting
 
 - **VU meter flat / not moving** → confirm `/dev/shm/squeezelite-*` exists while
-  playing. If not, squeezelite lacks `VISEXPORT` or isn't started with `-v`.
-  Verify the DietPi APT repo was reachable during the build.
+  playing. If not, check squeezelite is started with `-v` (`/etc/default/squeezelite`).
 - **Black screen after install** → check `systemctl status lightdm` and
   `~/.xsession` errors in `/home/hifi/.xserver-errors`.
 - **Lyrion not reachable** → `systemctl status lyrionmusicserver`; first start

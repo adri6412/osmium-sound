@@ -45,7 +45,8 @@ xdg-utils
 # Audio
 alsa-utils
 
-# Squeezelite (DietPi build — includes VISEXPORT for the VU meter)
+# Squeezelite — the Debian build is compiled with VISEXPORT, so `-v` exports
+# /dev/shm/squeezelite-* for the VU meter (verified against the Debian package).
 squeezelite
 
 # Python services (api_server.py + vu_meter_daemon.py + sources_server.py)

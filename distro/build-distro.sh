@@ -89,13 +89,16 @@ cp -f "$REPO_ROOT/sources_server.py"  "$BIN_DEST/"
 sed -i 's/\r$//' "$BIN_DEST/api_server.py" "$BIN_DEST/vu_meter_daemon.py" "$BIN_DEST/sources_server.py"
 chmod +x "$BIN_DEST/api_server.py" "$BIN_DEST/vu_meter_daemon.py" "$BIN_DEST/sources_server.py"
 
-log "Downloading Lyrion Music Server .deb → packages.chroot"
-PKG_DEST="$CONFIG/packages.chroot"
-mkdir -p "$PKG_DEST"
-if ! ls "$PKG_DEST"/lyrionmusicserver_*.deb >/dev/null 2>&1; then
-    curl -fL --retry 3 -o "$PKG_DEST/lyrionmusicserver.deb" "$LYRION_DEB_URL" \
-        || die "Failed to download Lyrion .deb from $LYRION_DEB_URL"
-fi
+log "Downloading Lyrion Music Server .deb → includes.chroot/opt/hifi-lyrion"
+# Staged inside the chroot filesystem and installed by hook 0050 (apt-get),
+# NOT in packages.chroot which current apt/live-build rejects.
+LYRION_DEST="$CONFIG/includes.chroot/opt/hifi-lyrion"
+rm -rf "$LYRION_DEST"; mkdir -p "$LYRION_DEST"
+curl -fL --retry 3 -o "$LYRION_DEST/lyrionmusicserver.deb" "$LYRION_DEB_URL" \
+    || die "Failed to download Lyrion .deb from $LYRION_DEB_URL"
+# sanity-check it is really a .deb (download errors often yield HTML)
+head -c2 "$LYRION_DEST/lyrionmusicserver.deb" | grep -q '!<' \
+    || die "Downloaded Lyrion file is not a valid .deb (got HTML/redirect?). Check LYRION_DEB_URL."
 
 log "Generating Plymouth boot logo (ImageMagick)"
 THEME_DIR="$CONFIG/includes.chroot/usr/share/plymouth/themes/hifi"

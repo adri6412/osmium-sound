@@ -1,0 +1,23 @@
+#!/bin/sh
+# Install Lyrion Music Server from the .deb staged by build-distro.sh.
+# Done via a hook (not packages.chroot) because current apt/live-build
+# rejects the way packages.chroot passes local .debs ("Unsupported file").
+set -e
+
+LYRION_DIR=/opt/hifi-lyrion
+DEB="$(ls "$LYRION_DIR"/lyrionmusicserver*.deb 2>/dev/null | head -n1)"
+
+if [ -z "$DEB" ]; then
+    echo "E: [hifi] Lyrion .deb not found in $LYRION_DIR — was it downloaded?" >&2
+    exit 1
+fi
+
+echo "I: [hifi] installing Lyrion Music Server from $DEB"
+export DEBIAN_FRONTEND=noninteractive
+# apt resolves the perl/runtime dependencies (already in the package list)
+apt-get install -y "$DEB"
+
+echo "I: [hifi] cleaning up staged Lyrion package"
+rm -rf "$LYRION_DIR"
+
+echo "I: [hifi] Lyrion install hook done"
