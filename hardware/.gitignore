@@ -1,0 +1,4 @@
+# File scratch/temporanei generati durante i render
+freecad/out/_*
+freecad/out/*.echo
+*.echo
