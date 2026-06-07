@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Serigrafia frontale per JLCPCB Sheet Metal (Silk Screen).
+     Dimensioni in mm. Testo nero, fondo trasparente.
+     Larghezza 150 mm x altezza 12 mm: la fascia "brand" della scocca.
+     Modifica il testo/font come preferisci. -->
+<svg xmlns="http://www.w3.org/2000/svg"
+     width="150mm" height="12mm" viewBox="0 0 150 12">
+  <text x="75" y="9.2"
+        font-family="Arial, Helvetica, sans-serif"
+        font-weight="700" font-size="8"
+        letter-spacing="2"
+        text-anchor="middle" fill="#000000">HIFI STREAMER</text>
+</svg>
