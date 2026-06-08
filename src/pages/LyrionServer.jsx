@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -66,6 +66,8 @@ const LyrionServer = () => {
   // Search prompt for Lyrion menu items that require text input (e.g. TuneIn / global search)
   const [menuSearch, setMenuSearch] = useState(null); // { action, title }
   const [searchText, setSearchText] = useState('');
+  // `base` object from the last Lyrion menu response (Jive base+item action model)
+  const menuBaseRef = useRef(null);
 
   // ── Server connection ──────────────────────────────────────
   useEffect(() => {
@@ -126,6 +128,7 @@ const LyrionServer = () => {
       // (Applicazioni/Spotty, Preferiti, CD, YouTube, Suoni…). Local-library
       // browse modes live under the Musica tab; Radio has its own tab.
       const all = await lyrionApi.getHomeMenu(activePlayer?.playerid);
+      menuBaseRef.current = null; // home items carry their own complete actions
       const EXCLUDE = new Set(['myMusic', 'radios', 'playerpower']);
       return all
         .filter(it => it.actions && (it.actions.go || it.actions.do || it.input)
@@ -134,7 +137,9 @@ const LyrionServer = () => {
         .sort((a, b) => (Number(a.weight) || 0) - (Number(b.weight) || 0));
     }
     if (view === 'menu') {
-      return await lyrionApi.menuGo(activePlayer?.playerid, params.action, { input: params.input });
+      const { items, base } = await lyrionApi.menuGo(activePlayer?.playerid, params.action, { input: params.input });
+      menuBaseRef.current = base;
+      return items;
     }
     if (view === 'plugin_items') {
       const r = await lyrionApi.getPluginItems(activePlayer?.playerid, params.pluginCmd, 9999, 0, params.itemId);
@@ -186,13 +191,14 @@ const LyrionServer = () => {
 
   const handleMenuItem = (item) => {
     if (!activePlayer) return;
-    const go = item.actions?.go;
-    const play = item.actions?.play || item.actions?.playall;
-    const doAct = item.actions?.do;
+    const base = menuBaseRef.current;
+    const go = lyrionApi.resolveMenuAction(base, item, 'go');
+    const play = lyrionApi.resolveMenuAction(base, item, 'play');
+    const doAct = lyrionApi.resolveMenuAction(base, item, 'do');
     if (item.input && go) {                 // needs text input → search prompt
       setSearchText('');
       setMenuSearch({ action: go, title: item.text || item.name || 'Cerca' });
-    } else if (go) {                        // submenu → drill in
+    } else if (go) {                        // submenu (or play-on-go leaf) → drill in
       navigateTo('menu', item.text || item.name || '…', { action: go });
     } else if (play) {                      // playable leaf
       handleAction(() => lyrionApi.menuDo(activePlayer.playerid, play));
@@ -408,8 +414,13 @@ const LyrionServer = () => {
 
               if (currentView === 'menu_home' || currentView === 'menu') {
                 const iconUrl = resolveMenuIcon(item);
-                const play = item.actions?.play || item.actions?.playall;
-                const isNav = !!(item.actions?.go || item.input);
+                // Resolve through the menu `base` (Jive base+item model): sub-items
+                // inherit base.actions and only supply params, so reading
+                // item.actions directly would miss them.
+                const base = menuBaseRef.current;
+                const play = lyrionApi.resolveMenuAction(base, item, 'play')
+                  || lyrionApi.resolveMenuAction(base, item, 'playall');
+                const isNav = !!(lyrionApi.resolveMenuAction(base, item, 'go') || item.input);
                 return (
                   <li key={item.id || idx}
                     onClick={() => handleMenuItem(item)}

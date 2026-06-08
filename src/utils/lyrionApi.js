@@ -162,15 +162,35 @@ export class LyrionAPI {
     return isItems ? [...cmd, offset, limit, ...params] : [...cmd, ...params];
   }
 
-  // Navigate into a menu node — returns its child items.
+  // Navigate into a menu node — returns its child items plus the response `base`.
+  // In the Lyrion "menu" protocol, child items often DON'T carry their own
+  // `actions`; they inherit `base.actions` and only supply `params` (e.g.
+  // item_id). Callers must resolve actions with resolveMenuAction(base, item).
   async menuGo(playerMac = '', action, opts = {}) {
     const r = await this.request(playerMac, this._actionToRequest(action, opts));
-    return r?.item_loop || [];
+    return { items: r?.item_loop || [], base: r?.base || null };
   }
 
   // Execute a playback / toggle action (actions.play / actions.do / actions.add).
   async menuDo(playerMac = '', action, opts = {}) {
     return this.request(playerMac, this._actionToRequest(action, opts));
+  }
+
+  // Resolve the effective action for a menu item, merging the response `base`
+  // with the item's own data (the Jive base+item model). `name` is
+  // 'go' | 'play' | 'add' | 'do'. Returns { cmd, params } or null.
+  resolveMenuAction(base, item, name) {
+    const itemAction = item.actions && item.actions[name];
+    const baseAction = base && base.actions && base.actions[name];
+    const action = itemAction || baseAction;
+    if (!action || !action.cmd) return null;
+    let params = { ...(action.params || {}) };
+    // `itemsParams` names the item key (usually "params") whose key/values get
+    // merged into the action's params. Fall back to item.params when using base.
+    const ip = action.itemsParams;
+    if (ip && item[ip]) params = { ...params, ...item[ip] };
+    else if (!itemAction && item.params) params = { ...params, ...item.params };
+    return { cmd: [...action.cmd], params };
   }
 
   async getPluginItems(playerMac = '', pluginCmd, limit = 9999, offset = 0, itemId = null) {
