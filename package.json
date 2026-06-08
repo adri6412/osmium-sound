@@ -59,7 +59,8 @@
         "deb"
       ],
       "executableName": "hifi-media-player",
-      "category": "Audio"
+      "category": "Audio",
+      "maintainer": "HiFi Audio <admin@hifiaudio.local>"
     }
   }
 }
