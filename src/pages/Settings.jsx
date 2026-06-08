@@ -55,6 +55,13 @@ const Settings = () => {
   const [lyrionStatus, setLyrionStatus] = useState(null);
   const lyrionPollRef = useRef(null);
 
+  // OS (signed) update state
+  const [osUpdate, setOsUpdate] = useState(null);
+  const [isCheckingOs, setIsCheckingOs] = useState(false);
+  const [isApplyingOs, setIsApplyingOs] = useState(false);
+  const [osStatus, setOsStatus] = useState(null);
+  const osPollRef = useRef(null);
+
   // Combined UI+System OTA (single-button) state
   const [isApplyingAll, setIsApplyingAll] = useState(false);
   const [allStatus, setAllStatus] = useState(null); // { phase, message } combined progress
@@ -85,11 +92,13 @@ const Settings = () => {
       checkAppUpdate();
       checkSystemUpdate();
       checkLyrionUpdate();
+      checkOsUpdate();
     }
     return () => {
       if (otaPollRef.current) clearInterval(otaPollRef.current);
       if (systemPollRef.current) clearInterval(systemPollRef.current);
       if (lyrionPollRef.current) clearInterval(lyrionPollRef.current);
+      if (osPollRef.current) clearInterval(osPollRef.current);
     };
   }, []);
 
@@ -305,6 +314,58 @@ const Settings = () => {
     } catch (error) {
       setLyrionStatus({ state: 'error', message: 'Errore durante l\'aggiornamento di Lyrion' });
       setIsApplyingLyrion(false);
+    }
+  };
+
+  // ── OS (signed) update handlers ─────────────────────────────────
+  const checkOsUpdate = async () => {
+    setIsCheckingOs(true);
+    try {
+      const result = await systemAPI.checkOsUpdate();
+      if (result.success && !result.data.error) {
+        setOsUpdate(result.data);
+      } else {
+        setOsUpdate({ error: result.data?.error || result.message });
+      }
+    } catch (error) {
+      setOsUpdate({ error: 'Controllo aggiornamenti OS fallito' });
+    } finally {
+      setIsCheckingOs(false);
+    }
+  };
+
+  const applyOsUpdate = async () => {
+    if (!apiConnected) {
+      setUpdateMessage('Errore: Server API non disponibile');
+      return;
+    }
+    if (!confirm('Aggiornare il sistema operativo? Il dispositivo potrebbe riavviarsi al termine.')) {
+      return;
+    }
+    setIsApplyingOs(true);
+    setOsStatus({ state: 'starting', message: 'Avvio aggiornamento OS…' });
+    try {
+      const result = await systemAPI.applyOsUpdate();
+      if (!result.success || !result.data.started) {
+        setOsStatus({ state: 'error', message: result.data?.message || result.message || 'Avvio fallito' });
+        setIsApplyingOs(false);
+        return;
+      }
+      osPollRef.current = setInterval(async () => {
+        const s = await systemAPI.getOsUpdateStatus();
+        if (s.success) {
+          setOsStatus(s.data);
+          if (s.data.state === 'done' || s.data.state === 'error') {
+            clearInterval(osPollRef.current);
+            osPollRef.current = null;
+            setIsApplyingOs(false);
+            if (s.data.state === 'done') checkOsUpdate();
+          }
+        }
+      }, 2000);
+    } catch (error) {
+      setOsStatus({ state: 'error', message: 'Errore durante l\'aggiornamento del sistema operativo' });
+      setIsApplyingOs(false);
     }
   };
 
@@ -758,7 +819,7 @@ const Settings = () => {
                       onClick={() => setShowAdvanced((v) => !v)}
                       className="w-full text-left text-sm text-hifi-silver hover:text-white pt-2 transition-colors"
                     >
-                      {showAdvanced ? '▾' : '▸'} Avanzate (Lyrion Music Server)
+                      {showAdvanced ? '▾' : '▸'} Avanzate (Lyrion + Sistema operativo)
                     </button>
 
                     {showAdvanced && (
@@ -850,6 +911,101 @@ const Settings = () => {
                             )}
                           </div>
                         )}
+
+                        {/* OS (signed) update */}
+                        <div className="border-t border-hifi-accent pt-4 space-y-3">
+                          <div className="flex items-center justify-between">
+                            <span className="text-sm text-white font-medium">Sistema operativo</span>
+                            <span className="text-[10px] uppercase tracking-wide text-hifi-gold border border-hifi-gold/40 rounded px-2 py-0.5">firmato</span>
+                          </div>
+                          <div className="bg-hifi-dark rounded-lg p-4 space-y-2">
+                            <div className="flex items-center justify-between">
+                              <span className="text-hifi-silver text-sm">Versione installata</span>
+                              <span className="text-white font-mono text-sm">{osUpdate?.current || '...'}</span>
+                            </div>
+                            <div className="flex items-center justify-between">
+                              <span className="text-hifi-silver text-sm">Ultima versione</span>
+                              <span className="text-white font-mono text-sm">
+                                {osUpdate?.error ? 'N/D' : (osUpdate?.latest || '...')}
+                              </span>
+                            </div>
+                          </div>
+
+                          {osUpdate?.update_available && (
+                            <div className="rounded-lg p-3 text-center text-sm bg-hifi-gold/20 text-hifi-gold border border-hifi-gold/40">
+                              Aggiornamento OS disponibile: {osUpdate.latest}
+                            </div>
+                          )}
+                          {osUpdate && !osUpdate.error && !osUpdate.update_available && (
+                            <div className="rounded-lg p-3 text-center text-sm bg-hifi-dark text-hifi-silver">
+                              Il sistema operativo è aggiornato
+                            </div>
+                          )}
+                          {osUpdate?.error && (
+                            <div className="rounded-lg p-3 text-center text-sm bg-red-900/20 text-red-300 border border-red-500/30">
+                              {osUpdate.error}
+                            </div>
+                          )}
+
+                          <motion.button
+                            onClick={checkOsUpdate}
+                            disabled={isCheckingOs || isApplyingOs}
+                            className="w-full bg-hifi-accent hover:bg-hifi-light disabled:bg-hifi-dark text-white py-3 rounded-lg font-medium flex items-center justify-center space-x-2 transition-colors"
+                            whileTap={{ scale: isCheckingOs ? 1 : 0.95 }}
+                          >
+                            {isCheckingOs ? (
+                              <>
+                                <Loader2 size={18} className="animate-spin" />
+                                <span>Controllo in corso...</span>
+                              </>
+                            ) : (
+                              <>
+                                <RotateCw size={18} />
+                                <span>Controlla aggiornamenti OS</span>
+                              </>
+                            )}
+                          </motion.button>
+
+                          {osUpdate?.update_available && (
+                            <motion.button
+                              onClick={applyOsUpdate}
+                              disabled={isApplyingOs}
+                              className="w-full bg-hifi-gold hover:bg-yellow-600 disabled:bg-hifi-accent text-black py-4 rounded-lg font-semibold flex items-center justify-center space-x-2 transition-colors"
+                              whileTap={{ scale: isApplyingOs ? 1 : 0.95 }}
+                            >
+                              {isApplyingOs ? (
+                                <>
+                                  <Loader2 size={20} className="animate-spin" />
+                                  <span>Aggiornamento...</span>
+                                </>
+                              ) : (
+                                <>
+                                  <Download size={20} />
+                                  <span>Aggiorna OS ({osUpdate.latest})</span>
+                                </>
+                              )}
+                            </motion.button>
+                          )}
+
+                          {isApplyingOs && (
+                            <p className="text-xs text-hifi-silver text-center">
+                              La firma viene verificata prima di applicare. Il dispositivo potrebbe riavviarsi al termine.
+                            </p>
+                          )}
+
+                          {osStatus && (
+                            <div className={`rounded-lg p-3 text-center text-sm ${
+                              osStatus.state === 'error'
+                                ? 'bg-red-900/20 text-red-300 border border-red-500/30'
+                                : 'bg-hifi-dark text-hifi-silver'
+                            }`}>
+                              {osStatus.message || osStatus.state}
+                              {typeof osStatus.progress === 'number' && osStatus.state !== 'error' && (
+                                <span className="ml-1">({osStatus.progress}%)</span>
+                              )}
+                            </div>
+                          )}
+                        </div>
                       </div>
                     )}
                   </div>

@@ -78,6 +78,35 @@ jobs:
           sha256sum "$TAR" > "${TAR}.sha256"
           echo "tarball=$TAR" >> "$GITHUB_OUTPUT"
 
+      - name: Package OS OTA bundle (signed tarball + sha256 + signature)
+        id: packos
+        env:
+          OTA_SIGNING_KEY: ${{ secrets.OTA_SIGNING_KEY }}
+        run: |
+          VERSION="${{ steps.ver.outputs.version }}"
+          SRC=distro/os-update
+          # ship the version actually being released, overriding the placeholder
+          printf '%s\n' "$VERSION" > "$SRC/OS_VERSION"
+          TAR="hifi-os-${VERSION}.tar.gz"
+          # Exclude docs from the runtime payload; keep apply.sh + OS_VERSION + any files/.
+          tar czf "$TAR" -C "$SRC" --exclude=README.md .
+          # sha256 sidecar — exact bytes the device reconstructs and verifies.
+          DIGEST=$(sha256sum "$TAR" | awk '{print $1}')
+          printf '%s  %s\n' "$DIGEST" "$TAR" > "${TAR}.sha256"
+          # Sign the sidecar with the offline Ed25519 key. Without the secret we
+          # skip signing — the device will then refuse the (unsigned) bundle.
+          if [ -n "$OTA_SIGNING_KEY" ]; then
+            printf '%s' "$OTA_SIGNING_KEY" > /tmp/ota-key.pem
+            openssl pkeyutl -sign -inkey /tmp/ota-key.pem -rawin \
+              -in "${TAR}.sha256" -out "${TAR}.sha256.sig"
+            rm -f /tmp/ota-key.pem
+            echo "signed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::warning::OTA_SIGNING_KEY not set — OS bundle published UNSIGNED and will be rejected by devices."
+            echo "signed=false" >> "$GITHUB_OUTPUT"
+          fi
+          echo "tarball=$TAR" >> "$GITHUB_OUTPUT"
+
       - name: Publish to GitHub Release
         if: github.ref_type == 'tag'
         uses: softprops/action-gh-release@v2
@@ -87,6 +116,9 @@ jobs:
             ${{ steps.pack.outputs.tarball }}.sha256
             ${{ steps.packsys.outputs.tarball }}
             ${{ steps.packsys.outputs.tarball }}.sha256
+            ${{ steps.packos.outputs.tarball }}
+            ${{ steps.packos.outputs.tarball }}.sha256
+            ${{ steps.packos.outputs.tarball }}.sha256.sig
 
       - name: Upload artifact (manual runs)
         if: github.ref_type != 'tag'
@@ -98,4 +130,7 @@ jobs:
             ${{ steps.pack.outputs.tarball }}.sha256
             ${{ steps.packsys.outputs.tarball }}
             ${{ steps.packsys.outputs.tarball }}.sha256
+            ${{ steps.packos.outputs.tarball }}
+            ${{ steps.packos.outputs.tarball }}.sha256
+            ${{ steps.packos.outputs.tarball }}.sha256.sig
           retention-days: 7

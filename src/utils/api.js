@@ -119,6 +119,14 @@ export const systemAPI = {
   // Poll system update progress: { state, progress, version, message }
   getSystemUpdateStatus: () => apiGet('/system_update/status'),
 
+  // ── OTA update of the operating system (signed bundle + apply.sh) ──
+  // Check GitHub Releases for the hifi-os bundle: { current, latest, update_available, ... }
+  checkOsUpdate: () => apiGet('/os_update/check'),
+  // Start the OS update (verify signature + checksum → run apply.sh as root). { started, version|message }
+  applyOsUpdate: () => apiPost('/os_update/apply'),
+  // Poll OS update progress: { state, progress, version, message }
+  getOsUpdateStatus: () => apiGet('/os_update/status'),
+
   // ── Lyrion Music Server update ──────────────────────────────────
   // Check downloads server: { current, latest, update_available, asset_url }
   checkLyrionUpdate: () => apiGet('/lyrion_update/check'),

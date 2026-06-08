@@ -148,6 +148,22 @@ mkdir -p "$SYS_VERSION_DEST"
 printf '%s\n' "$APP_VERSION" > "$SYS_VERSION_DEST/SYSTEM_VERSION"
 log "Seeded SYSTEM_VERSION = $APP_VERSION"
 
+# Seed the OS OTA baseline version (so hifi-os-* comparisons have a baseline).
+printf '%s\n' "$APP_VERSION" > "$SYS_VERSION_DEST/OS_VERSION"
+log "Seeded OS_VERSION = $APP_VERSION"
+
+# Bake the OTA public key so the device can verify signed OS bundles. Without
+# it, the OS updater safely refuses every update. Generate it once with
+# distro/ota-keys/gen-ota-key.sh (see distro/ota-keys/README.md).
+OTA_PUBKEY_SRC="$SCRIPT_DIR/ota-keys/ota-pubkey.pem"
+if [ -f "$OTA_PUBKEY_SRC" ]; then
+    cp -f "$OTA_PUBKEY_SRC" "$SYS_VERSION_DEST/ota-pubkey.pem"
+    chmod 644 "$SYS_VERSION_DEST/ota-pubkey.pem"
+    log "Baked OTA public key → /etc/hifi-player/ota-pubkey.pem"
+else
+    log "WARNING: $OTA_PUBKEY_SRC missing — OS OTA updates will be refused on this image."
+fi
+
 log "Downloading Lyrion Music Server .deb → includes.chroot/opt/hifi-lyrion"
 # Staged inside the chroot filesystem and installed by hook 0050 (apt-get),
 # NOT in packages.chroot which current apt/live-build rejects.
