@@ -1,6 +1,6 @@
 {
   "name": "hifi-media-player",
-  "version": "1.0.9",
+  "version": "1.2.0",
   "description": "Touchscreen-friendly hi-fi media player for DietPi",
   "main": "main/main.js",
   "type": "module",
