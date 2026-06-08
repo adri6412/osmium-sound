@@ -59,7 +59,8 @@ jobs:
             ca-certificates curl git xz-utils sudo \
             python3 build-essential \
             live-build imagemagick xorriso debootstrap \
-            debian-archive-keyring rsync fakeroot
+            debian-archive-keyring rsync fakeroot \
+            cpio gzip squashfs-tools dosfstools mtools isolinux syslinux-common
 
       - name: Checkout repository
         uses: actions/checkout@v4
