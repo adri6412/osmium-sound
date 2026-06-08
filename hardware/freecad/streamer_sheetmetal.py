@@ -45,7 +45,7 @@ cd_slot_w, cd_slot_h = cd_w + 4, cd_h + 3
 cd_feet = 0.0                   # CD appoggiato sul fondo (fissato con biadesivo)
 
 # Mini PC BMAX N100
-pc_w, pc_d, pc_h = 121.0, 141.1, 27.1     # altezza confermata 27.1 mm
+pc_w, pc_d, pc_h = 120.0, 120.0, 32.0     # da sito (modello corretto)
 
 text_band  = 16.0    # spazio serigrafia tra fessura e schermo
 top_margin = 8.0
