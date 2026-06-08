@@ -1,0 +1,25 @@
+[Unit]
+# Native systemd unit for squeezelite on the HiFi Player appliance.
+#
+# The Debian `squeezelite` package only ships a SysV init script
+# (/etc/init.d/squeezelite); enabling that during the live-build chroot does
+# not create a persistent autostart, so squeezelite did not come up on a fresh
+# install. This native unit (shadowing the sysv-generated one) is enabled with a
+# real wants-symlink by hook 0400 and starts reliably at boot.
+#
+# Arguments come from /etc/default/squeezelite (ARGS=...), so the UI's DAC
+# selection (api_server.py set_audio_device, which rewrites ARGS and restarts
+# this service) keeps working. DO NOT hardcode the output device here.
+Description=Squeezelite Audio Player (HiFi Player)
+After=network-online.target sound.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+EnvironmentFile=-/etc/default/squeezelite
+ExecStart=/usr/bin/squeezelite $ARGS
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

@@ -102,4 +102,20 @@ export const systemAPI = {
   getAudioDevices: () => apiGet('/audio_devices'),
   // Set squeezelite output device and restart it. Returns { success, message }
   setAudioDevice: (device) => apiPost('/set_audio_device', { device }),
+
+  // ── OTA update of the Electron UI ───────────────────────────────
+  // Check GitHub Releases: { current, latest, update_available, notes, asset_url, asset_size }
+  checkAppUpdate: () => apiGet('/app_update/check'),
+  // Start the OTA update (download + swap + restart). Returns { started, version|message }
+  applyAppUpdate: () => apiPost('/app_update/apply'),
+  // Poll OTA progress: { state, progress, version, message }
+  getAppUpdateStatus: () => apiGet('/app_update/status'),
+
+  // ── Lyrion Music Server update ──────────────────────────────────
+  // Check downloads server: { current, latest, update_available, asset_url }
+  checkLyrionUpdate: () => apiGet('/lyrion_update/check'),
+  // Start the Lyrion update (download + apt install + restart). { started, version|message }
+  applyLyrionUpdate: () => apiPost('/lyrion_update/apply'),
+  // Poll Lyrion update progress: { state, progress, version, message }
+  getLyrionUpdateStatus: () => apiGet('/lyrion_update/status'),
 };

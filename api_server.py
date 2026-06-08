@@ -7,9 +7,32 @@ import sys
 import socket
 import platform
 import re
+import json
+import urllib.request
 
 app = Flask(__name__)
 CORS(app)  # Abilita CORS per tutte le route
+
+# ──────────────────────────────────────────────────────────────────
+#  OTA update of the Electron UI (whole /opt/hifi-media-player dir).
+#  The actual download/swap/restart is done as root by the helper
+#  script; here we only check GitHub Releases and kick it off.
+# ──────────────────────────────────────────────────────────────────
+OTA_REPO = os.environ.get('HIFI_OTA_REPO', 'adri6412/hifi-media-player')
+OTA_APPDIR = '/opt/hifi-media-player'
+OTA_VERSION_FILE = os.path.join(OTA_APPDIR, 'UI_VERSION')
+OTA_SCRIPT = '/usr/local/sbin/hifi-ota-update.sh'
+OTA_STATUS_FILE = '/run/hifi-ota-status.json'
+
+# ──────────────────────────────────────────────────────────────────
+#  OTA update of Lyrion Music Server (stable .deb from the community
+#  downloads server). We parse the downloads page for the latest
+#  stable release and install it as root.
+# ──────────────────────────────────────────────────────────────────
+LYRION_DOWNLOADS_PAGE = os.environ.get('HIFI_LYRION_PAGE', 'https://downloads.lms-community.org/')
+LYRION_PKG = 'lyrionmusicserver'
+LYRION_SCRIPT = '/usr/local/sbin/hifi-lyrion-update.sh'
+LYRION_STATUS_FILE = '/run/hifi-lyrion-status.json'
 
 # Funzione per aggiornare il sistema
 def update_system():
@@ -339,6 +362,178 @@ def set_audio_device(device):
         return {'success': True, 'message': f'Device impostato ({device}); riavvio non riuscito: {e}'}
     return {'success': True, 'message': f'Uscita audio impostata su {device}'}
 
+# ──────────────────────────────────────────────────────────────────
+#  OTA update helpers
+# ──────────────────────────────────────────────────────────────────
+
+def _installed_ui_version():
+    try:
+        with open(OTA_VERSION_FILE) as f:
+            return f.read().strip() or 'unknown'
+    except Exception:
+        return 'unknown'
+
+def _version_tuple(v):
+    """Best-effort numeric tuple from a version like 'v1.2.0' → (1, 2, 0)."""
+    nums = re.findall(r'\d+', v or '')
+    return tuple(int(n) for n in nums) if nums else None
+
+def _is_newer(latest, current):
+    """True if `latest` should be offered over `current`."""
+    if not latest:
+        return False
+    if current in (None, '', 'unknown'):
+        return True
+    lt, ct = _version_tuple(latest), _version_tuple(current)
+    if lt and ct:
+        return lt > ct
+    return latest != current  # fallback: any difference is an update
+
+def check_app_update():
+    current = _installed_ui_version()
+    url = f'https://api.github.com/repos/{OTA_REPO}/releases/latest'
+    req = urllib.request.Request(url, headers={
+        'Accept': 'application/vnd.github+json',
+        'User-Agent': 'hifi-player-ota',
+    })
+    try:
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            release = json.load(resp)
+    except Exception as e:
+        return {'error': f'Controllo aggiornamenti fallito: {e}', 'current': current}
+
+    latest = release.get('tag_name') or release.get('name') or ''
+    assets = release.get('assets', [])
+    tarball = next((a for a in assets if a.get('name', '').endswith('.tar.gz')), None)
+    sha_asset = next((a for a in assets if a.get('name', '').endswith('.sha256')), None)
+
+    return {
+        'current': current,
+        'latest': latest,
+        'update_available': _is_newer(latest, current) and tarball is not None,
+        'notes': release.get('body', ''),
+        'asset_url': tarball.get('browser_download_url') if tarball else None,
+        'asset_size': tarball.get('size') if tarball else None,
+        'sha_url': sha_asset.get('browser_download_url') if sha_asset else None,
+    }
+
+def _fetch_sha256(sha_url):
+    """Download the .sha256 sidecar and return just the hex digest."""
+    req = urllib.request.Request(sha_url, headers={'User-Agent': 'hifi-player-ota'})
+    with urllib.request.urlopen(req, timeout=15) as resp:
+        text = resp.read().decode('utf-8', 'replace').strip()
+    # format is "<sha>  <filename>"; take the first whitespace-delimited token
+    return text.split()[0] if text else ''
+
+def apply_app_update():
+    info = check_app_update()
+    if info.get('error'):
+        return {'started': False, 'message': info['error']}
+    if not info.get('update_available'):
+        return {'started': False, 'message': 'Nessun aggiornamento disponibile'}
+    if not info.get('sha_url'):
+        return {'started': False, 'message': 'Checksum (.sha256) mancante nella release'}
+
+    try:
+        sha = _fetch_sha256(info['sha_url'])
+    except Exception as e:
+        return {'started': False, 'message': f'Lettura checksum fallita: {e}'}
+    if not sha:
+        return {'started': False, 'message': 'Checksum vuoto'}
+
+    cmd = [
+        'systemd-run', '--no-block', '--collect', '--unit=hifi-ota',
+        OTA_SCRIPT, info['asset_url'], sha, info['latest'],
+    ]
+    try:
+        subprocess.run(cmd, capture_output=True, text=True, timeout=15, check=True)
+    except FileNotFoundError:
+        # systemd-run unavailable → fall back to a detached subprocess
+        subprocess.Popen([OTA_SCRIPT, info['asset_url'], sha, info['latest']],
+                         start_new_session=True)
+    except subprocess.CalledProcessError as e:
+        return {'started': False, 'message': (e.stderr or str(e)).strip()}
+    except Exception as e:
+        return {'started': False, 'message': str(e)}
+    return {'started': True, 'version': info['latest']}
+
+def app_update_status():
+    try:
+        with open(OTA_STATUS_FILE) as f:
+            return json.load(f)
+    except Exception:
+        return {'state': 'idle'}
+
+# ──────────────────────────────────────────────────────────────────
+#  Lyrion Music Server update helpers
+# ──────────────────────────────────────────────────────────────────
+
+def _lyrion_installed_version():
+    try:
+        r = _run(['dpkg-query', '-W', '-f=${Version}', LYRION_PKG])
+        if r.returncode == 0 and r.stdout.strip():
+            return r.stdout.strip()
+    except Exception:
+        pass
+    return 'unknown'
+
+def check_lyrion_update():
+    current = _lyrion_installed_version()
+    req = urllib.request.Request(LYRION_DOWNLOADS_PAGE,
+                                 headers={'User-Agent': 'hifi-player-ota'})
+    try:
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            html = resp.read().decode('utf-8', 'replace')
+    except Exception as e:
+        return {'error': f'Controllo aggiornamenti Lyrion fallito: {e}', 'current': current}
+
+    # Stable releases live under LyrionMusicServer_v<X.Y.Z>/lyrionmusicserver_<X.Y.Z>_all.deb
+    # (nightlies are under /nightly/ and do not match this pattern → excluded).
+    matches = re.findall(
+        r'https://downloads\.lms-community\.org/LyrionMusicServer_v(\d+\.\d+\.\d+)/'
+        r'lyrionmusicserver_\1_all\.deb', html)
+    if not matches:
+        return {'error': 'Nessuna release stabile trovata sul server download', 'current': current}
+
+    latest = max(set(matches), key=_version_tuple)
+    asset_url = (f'https://downloads.lms-community.org/LyrionMusicServer_v{latest}/'
+                 f'lyrionmusicserver_{latest}_all.deb')
+    return {
+        'current': current,
+        'latest': latest,
+        'update_available': _is_newer(latest, current),
+        'asset_url': asset_url,
+    }
+
+def apply_lyrion_update():
+    info = check_lyrion_update()
+    if info.get('error'):
+        return {'started': False, 'message': info['error']}
+    if not info.get('update_available'):
+        return {'started': False, 'message': 'Nessun aggiornamento Lyrion disponibile'}
+
+    cmd = [
+        'systemd-run', '--no-block', '--collect', '--unit=hifi-lyrion-update',
+        LYRION_SCRIPT, info['asset_url'], info['latest'],
+    ]
+    try:
+        subprocess.run(cmd, capture_output=True, text=True, timeout=15, check=True)
+    except FileNotFoundError:
+        subprocess.Popen([LYRION_SCRIPT, info['asset_url'], info['latest']],
+                         start_new_session=True)
+    except subprocess.CalledProcessError as e:
+        return {'started': False, 'message': (e.stderr or str(e)).strip()}
+    except Exception as e:
+        return {'started': False, 'message': str(e)}
+    return {'started': True, 'version': info['latest']}
+
+def lyrion_update_status():
+    try:
+        with open(LYRION_STATUS_FILE) as f:
+            return json.load(f)
+    except Exception:
+        return {'state': 'idle'}
+
 # Funzione per mostrare la tastiera virtuale globale
 def show_global_keyboard():
     try:
@@ -386,6 +581,30 @@ def api_check():
 def api_update_system():
     result = update_system()
     return jsonify({"message": result})
+
+@app.route('/app_update/check', methods=['GET'])
+def api_app_update_check():
+    return jsonify(check_app_update())
+
+@app.route('/app_update/apply', methods=['POST'])
+def api_app_update_apply():
+    return jsonify(apply_app_update())
+
+@app.route('/app_update/status', methods=['GET'])
+def api_app_update_status():
+    return jsonify(app_update_status())
+
+@app.route('/lyrion_update/check', methods=['GET'])
+def api_lyrion_update_check():
+    return jsonify(check_lyrion_update())
+
+@app.route('/lyrion_update/apply', methods=['POST'])
+def api_lyrion_update_apply():
+    return jsonify(apply_lyrion_update())
+
+@app.route('/lyrion_update/status', methods=['GET'])
+def api_lyrion_update_status():
+    return jsonify(lyrion_update_status())
 
 @app.route('/reboot', methods=['POST'])
 def api_reboot():

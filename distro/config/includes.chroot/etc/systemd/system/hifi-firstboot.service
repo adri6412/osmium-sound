@@ -1,0 +1,17 @@
+[Unit]
+Description=HiFi Player first-boot finalisation (ensure Lyrion Music Server)
+# Runs ONLY on the installed system, never in the live ISO session, so it does
+# not delete the staged .deb the installer still needs to clone.
+ConditionKernelCommandLine=!boot=live
+# No-op once the staged dir has been cleaned up by a successful run.
+ConditionPathExists=/opt/hifi-lyrion
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/bin/sh /usr/local/sbin/hifi-firstboot.sh
+RemainAfterExit=no
+
+[Install]
+WantedBy=multi-user.target

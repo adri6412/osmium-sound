@@ -38,6 +38,16 @@ Lyrion Music Server is downloaded by `build-distro.sh` into
 `config/hooks/normal/0050-install-lyrion.hook.chroot` (it is **not** placed in
 `packages.chroot`, which current apt/live-build rejects).
 
+> **Lyrion on the installed system.** The debian-installer step
+> `finish-install.d/14remove-live-packages` (live-installer) runs *after* the
+> preseed `late_command` and **purges packages added via chroot hooks**,
+> including Lyrion — so a fresh install would boot without it. To survive this,
+> the staged `/opt/hifi-lyrion/*.deb` is kept in the image and `hifi-firstboot.service`
+> re-installs Lyrion on the **first boot of the real system**, then self-disables
+> (and removes the staged `.deb`). It runs only outside the live session
+> (`ConditionKernelCommandLine=!boot=live`). If first boot has no network and the
+> staged `.deb` is somehow missing, it retries on the next boot.
+
 ## Prerequisites (on the build server)
 
 A Debian **bookworm** machine (or container/VM) with internet access. The build
@@ -130,6 +140,51 @@ the name with `aplay -l`), then `systemctl restart squeezelite`.
 | Kiosk launch flags | `.xsession` written by `config/hooks/normal/0100-system-setup.hook.chroot` |
 | Autologin user/session | `config/includes.chroot/etc/lightdm/lightdm.conf.d/99-hifi-autologin.conf` |
 | squeezelite args (incl. `-v`) | `config/includes.chroot/etc/default/squeezelite` |
+
+## Aggiornamento OTA della UI
+
+La UI Electron può essere aggiornata **over-the-air** senza reinstallare la ISO.
+L'intera cartella `/opt/hifi-media-player` viene sostituita in modo atomico con
+backup per rollback.
+
+**Pubblicare un aggiornamento** (manutentore):
+
+1. Aggiorna la `version` in `package.json` e crea un tag, es. `git tag v1.1.0 && git push --tags`.
+2. Il workflow `.github/workflows/build-ui-ota.yml` costruisce
+   `dist/linux-unpacked`, lo impacchetta in `hifi-ui-<tag>.tar.gz` + `.sha256`
+   e li allega alla **Release** del tag.
+
+**Aggiornare un dispositivo** (utente): la UI controlla automaticamente la
+disponibilità all'apertura di **Settings → Aggiornamento UI**, mostra la versione
+disponibile e — su pressione di **"Aggiorna ora"** — scarica il bundle, ne verifica
+lo `sha256`, sostituisce l'app e riavvia l'interfaccia.
+
+Sotto il cofano, `api_server.py` (root) interroga
+`https://api.github.com/repos/<owner>/<repo>/releases/latest` (override con la env
+`HIFI_OTA_REPO`) e lancia `/usr/local/sbin/hifi-ota-update.sh` via `systemd-run`,
+così l'update sopravvive al riavvio di `lightdm`. La versione installata è in
+`/opt/hifi-media-player/UI_VERSION` (seminata da `build-distro.sh`, override con
+`--app-version`).
+
+### Aggiornamento di Lyrion Music Server
+
+Dalla stessa pagina **Settings → Aggiornamento Lyrion** è possibile aggiornare il
+server musicale. La UI rileva la versione installata (`dpkg-query`) e l'ultima
+**stable** pubblicata su `https://downloads.lms-community.org/` (le nightly sotto
+`/nightly/` sono escluse), e — su **"Aggiorna Lyrion"** — `api_server.py` (root)
+lancia `/usr/local/sbin/hifi-lyrion-update.sh` che scarica il `.deb`, lo installa
+con `apt-get` (risolve le dipendenze) e riavvia `lyrionmusicserver`. Il controllo
+è automatico all'apertura di Settings; l'installazione resta manuale.
+
+**Rollback**: la versione precedente resta in `/opt/hifi-media-player.old`. Per
+ripristinarla:
+
+```bash
+sudo systemctl stop lightdm
+sudo rm -rf /opt/hifi-media-player && sudo mv /opt/hifi-media-player.old /opt/hifi-media-player
+sudo chmod 4755 /opt/hifi-media-player/chrome-sandbox
+sudo systemctl start lightdm
+```
 
 ## Troubleshooting
 

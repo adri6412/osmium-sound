@@ -1,0 +1,76 @@
+name: Build HiFi Player UI (OTA bundle)
+
+# Builds the Electron UI as an unpacked linux directory, packs it into a
+# tarball + sha256, and publishes both as assets of the GitHub Release.
+# The appliance's OTA updater (Settings → Aggiornamento UI) downloads these.
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-ui-ota:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build renderer + unpacked Electron app
+        run: |
+          npm run build
+          npx electron-builder --linux dir
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Resolve version
+        id: ver
+        run: |
+          if [ "${GITHUB_REF_TYPE}" = "tag" ]; then
+            VERSION="${GITHUB_REF_NAME}"
+          else
+            VERSION="$(node -p "require('./package.json').version")"
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Package OTA bundle (tarball + sha256)
+        id: pack
+        run: |
+          VERSION="${{ steps.ver.outputs.version }}"
+          printf '%s\n' "$VERSION" > dist/linux-unpacked/UI_VERSION
+          TAR="hifi-ui-${VERSION}.tar.gz"
+          tar czf "$TAR" -C dist/linux-unpacked .
+          sha256sum "$TAR" > "${TAR}.sha256"
+          echo "tarball=$TAR" >> "$GITHUB_OUTPUT"
+
+      - name: Publish to GitHub Release
+        if: github.ref_type == 'tag'
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            ${{ steps.pack.outputs.tarball }}
+            ${{ steps.pack.outputs.tarball }}.sha256
+
+      - name: Upload artifact (manual runs)
+        if: github.ref_type != 'tag'
+        uses: actions/upload-artifact@v4
+        with:
+          name: hifi-ui-ota
+          path: |
+            ${{ steps.pack.outputs.tarball }}
+            ${{ steps.pack.outputs.tarball }}.sha256
+          retention-days: 7

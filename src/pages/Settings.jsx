@@ -38,6 +38,20 @@ const Settings = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [apiConnected, setApiConnected] = useState(false);
 
+  // OTA UI update state
+  const [appUpdate, setAppUpdate] = useState(null); // { current, latest, update_available, ... }
+  const [isCheckingUpdate, setIsCheckingUpdate] = useState(false);
+  const [isApplyingUpdate, setIsApplyingUpdate] = useState(false);
+  const [otaStatus, setOtaStatus] = useState(null); // { state, progress, message }
+  const otaPollRef = useRef(null);
+
+  // Lyrion update state
+  const [lyrionUpdate, setLyrionUpdate] = useState(null);
+  const [isCheckingLyrion, setIsCheckingLyrion] = useState(false);
+  const [isApplyingLyrion, setIsApplyingLyrion] = useState(false);
+  const [lyrionStatus, setLyrionStatus] = useState(null);
+  const lyrionPollRef = useRef(null);
+
   // Refs for input fields with automatic keyboard
   const ipInputRef = useKeyboardInput(staticIP, setStaticIP);
   const gatewayInputRef = useKeyboardInput(staticGateway, setStaticGateway);
@@ -51,6 +65,114 @@ const Settings = () => {
   useEffect(() => {
     loadSystemData();
   }, []);
+
+  // Auto-check for a UI (OTA) update on mount; clean up any poll on unmount
+  useEffect(() => {
+    checkAppUpdate();
+    checkLyrionUpdate();
+    return () => {
+      if (otaPollRef.current) clearInterval(otaPollRef.current);
+      if (lyrionPollRef.current) clearInterval(lyrionPollRef.current);
+    };
+  }, []);
+
+  // ── OTA UI update handlers ──────────────────────────────────────
+  const checkAppUpdate = async () => {
+    setIsCheckingUpdate(true);
+    try {
+      const result = await systemAPI.checkAppUpdate();
+      if (result.success && !result.data.error) {
+        setAppUpdate(result.data);
+      } else {
+        setAppUpdate({ error: result.data?.error || result.message });
+      }
+    } catch (error) {
+      setAppUpdate({ error: 'Controllo aggiornamenti fallito' });
+    } finally {
+      setIsCheckingUpdate(false);
+    }
+  };
+
+  const applyAppUpdate = async () => {
+    if (!apiConnected) {
+      setUpdateMessage('Errore: Server API non disponibile');
+      return;
+    }
+    setIsApplyingUpdate(true);
+    setOtaStatus({ state: 'starting', message: 'Avvio aggiornamento…' });
+    try {
+      const result = await systemAPI.applyAppUpdate();
+      if (!result.success || !result.data.started) {
+        setOtaStatus({ state: 'error', message: result.data?.message || result.message || 'Avvio fallito' });
+        setIsApplyingUpdate(false);
+        return;
+      }
+      // Poll progress until done/error (the UI will be restarted on success).
+      otaPollRef.current = setInterval(async () => {
+        const s = await systemAPI.getAppUpdateStatus();
+        if (s.success) {
+          setOtaStatus(s.data);
+          if (s.data.state === 'done' || s.data.state === 'error') {
+            clearInterval(otaPollRef.current);
+            otaPollRef.current = null;
+            setIsApplyingUpdate(false);
+          }
+        }
+      }, 2000);
+    } catch (error) {
+      setOtaStatus({ state: 'error', message: 'Errore durante l\'aggiornamento' });
+      setIsApplyingUpdate(false);
+    }
+  };
+
+  // ── Lyrion update handlers ──────────────────────────────────────
+  const checkLyrionUpdate = async () => {
+    setIsCheckingLyrion(true);
+    try {
+      const result = await systemAPI.checkLyrionUpdate();
+      if (result.success && !result.data.error) {
+        setLyrionUpdate(result.data);
+      } else {
+        setLyrionUpdate({ error: result.data?.error || result.message });
+      }
+    } catch (error) {
+      setLyrionUpdate({ error: 'Controllo aggiornamenti Lyrion fallito' });
+    } finally {
+      setIsCheckingLyrion(false);
+    }
+  };
+
+  const applyLyrionUpdate = async () => {
+    if (!apiConnected) {
+      setUpdateMessage('Errore: Server API non disponibile');
+      return;
+    }
+    setIsApplyingLyrion(true);
+    setLyrionStatus({ state: 'starting', message: 'Avvio aggiornamento Lyrion…' });
+    try {
+      const result = await systemAPI.applyLyrionUpdate();
+      if (!result.success || !result.data.started) {
+        setLyrionStatus({ state: 'error', message: result.data?.message || result.message || 'Avvio fallito' });
+        setIsApplyingLyrion(false);
+        return;
+      }
+      lyrionPollRef.current = setInterval(async () => {
+        const s = await systemAPI.getLyrionUpdateStatus();
+        if (s.success) {
+          setLyrionStatus(s.data);
+          if (s.data.state === 'done' || s.data.state === 'error') {
+            clearInterval(lyrionPollRef.current);
+            lyrionPollRef.current = null;
+            setIsApplyingLyrion(false);
+            if (s.data.state === 'done') checkLyrionUpdate();
+          }
+        }
+      }, 2000);
+    } catch (error) {
+      setLyrionStatus({ state: 'error', message: 'Errore durante l\'aggiornamento di Lyrion' });
+      setIsApplyingLyrion(false);
+    }
+  };
 
   // Input change handlers
   const handleInputChange = (e, setter) => {
@@ -242,6 +364,16 @@ const Settings = () => {
         { label: 'App Version', value: systemInfo.version, type: 'info' },
         { label: 'Stato API', value: apiConnected ? 'Connesso' : 'Disconnesso', type: 'info' },
       ]
+    },
+    {
+      title: 'Aggiornamento UI',
+      icon: Download,
+      content: 'custom-app-update'
+    },
+    {
+      title: 'Aggiornamento Lyrion',
+      icon: Download,
+      content: 'custom-lyrion-update'
     },
     {
       title: 'Controlli Sistema',
@@ -539,6 +671,205 @@ const Settings = () => {
                           : 'bg-hifi-dark text-hifi-silver'
                       }`}>
                         {updateMessage}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Custom App (OTA) Update Section */}
+                {section.content === 'custom-app-update' && (
+                  <div className="space-y-4">
+                    {/* Version info */}
+                    <div className="bg-hifi-dark rounded-lg p-4 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-hifi-silver text-sm">Versione installata</span>
+                        <span className="text-white font-mono text-sm">
+                          {appUpdate?.current || systemInfo.version || '...'}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-hifi-silver text-sm">Ultima versione</span>
+                        <span className="text-white font-mono text-sm">
+                          {appUpdate?.error ? 'N/D' : (appUpdate?.latest || '...')}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Update available badge */}
+                    {appUpdate?.update_available && (
+                      <div className="rounded-lg p-3 text-center text-sm bg-hifi-gold/20 text-hifi-gold border border-hifi-gold/40">
+                        Aggiornamento disponibile: {appUpdate.latest}
+                      </div>
+                    )}
+                    {appUpdate && !appUpdate.error && !appUpdate.update_available && (
+                      <div className="rounded-lg p-3 text-center text-sm bg-hifi-dark text-hifi-silver">
+                        L'interfaccia è aggiornata
+                      </div>
+                    )}
+                    {appUpdate?.error && (
+                      <div className="rounded-lg p-3 text-center text-sm bg-red-900/20 text-red-300 border border-red-500/30">
+                        {appUpdate.error}
+                      </div>
+                    )}
+
+                    {/* Check for updates */}
+                    <motion.button
+                      onClick={checkAppUpdate}
+                      disabled={isCheckingUpdate || isApplyingUpdate}
+                      className="w-full bg-hifi-accent hover:bg-hifi-light disabled:bg-hifi-dark text-white py-3 rounded-lg font-medium flex items-center justify-center space-x-2 transition-colors"
+                      whileTap={{ scale: isCheckingUpdate ? 1 : 0.95 }}
+                    >
+                      {isCheckingUpdate ? (
+                        <>
+                          <Loader2 size={18} className="animate-spin" />
+                          <span>Controllo in corso...</span>
+                        </>
+                      ) : (
+                        <>
+                          <RotateCw size={18} />
+                          <span>Controlla aggiornamenti</span>
+                        </>
+                      )}
+                    </motion.button>
+
+                    {/* Apply update */}
+                    {appUpdate?.update_available && (
+                      <motion.button
+                        onClick={applyAppUpdate}
+                        disabled={isApplyingUpdate}
+                        className="w-full bg-hifi-gold hover:bg-yellow-600 disabled:bg-hifi-accent text-black py-4 rounded-lg font-semibold flex items-center justify-center space-x-2 transition-colors"
+                        whileTap={{ scale: isApplyingUpdate ? 1 : 0.95 }}
+                      >
+                        {isApplyingUpdate ? (
+                          <>
+                            <Loader2 size={20} className="animate-spin" />
+                            <span>Aggiornamento...</span>
+                          </>
+                        ) : (
+                          <>
+                            <Download size={20} />
+                            <span>Aggiorna ora ({appUpdate.latest})</span>
+                          </>
+                        )}
+                      </motion.button>
+                    )}
+
+                    {isApplyingUpdate && (
+                      <p className="text-xs text-hifi-silver text-center">
+                        Il dispositivo riavvierà l'interfaccia al termine.
+                      </p>
+                    )}
+
+                    {/* OTA progress */}
+                    {otaStatus && (
+                      <div className={`rounded-lg p-3 text-center text-sm ${
+                        otaStatus.state === 'error'
+                          ? 'bg-red-900/20 text-red-300 border border-red-500/30'
+                          : 'bg-hifi-dark text-hifi-silver'
+                      }`}>
+                        {otaStatus.message || otaStatus.state}
+                        {typeof otaStatus.progress === 'number' && otaStatus.state !== 'error' && (
+                          <span className="ml-1">({otaStatus.progress}%)</span>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Custom Lyrion Update Section */}
+                {section.content === 'custom-lyrion-update' && (
+                  <div className="space-y-4">
+                    {/* Version info */}
+                    <div className="bg-hifi-dark rounded-lg p-4 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-hifi-silver text-sm">Versione installata</span>
+                        <span className="text-white font-mono text-sm">
+                          {lyrionUpdate?.current || '...'}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-hifi-silver text-sm">Ultima versione</span>
+                        <span className="text-white font-mono text-sm">
+                          {lyrionUpdate?.error ? 'N/D' : (lyrionUpdate?.latest || '...')}
+                        </span>
+                      </div>
+                    </div>
+
+                    {lyrionUpdate?.update_available && (
+                      <div className="rounded-lg p-3 text-center text-sm bg-hifi-gold/20 text-hifi-gold border border-hifi-gold/40">
+                        Aggiornamento disponibile: {lyrionUpdate.latest}
+                      </div>
+                    )}
+                    {lyrionUpdate && !lyrionUpdate.error && !lyrionUpdate.update_available && (
+                      <div className="rounded-lg p-3 text-center text-sm bg-hifi-dark text-hifi-silver">
+                        Lyrion è aggiornato
+                      </div>
+                    )}
+                    {lyrionUpdate?.error && (
+                      <div className="rounded-lg p-3 text-center text-sm bg-red-900/20 text-red-300 border border-red-500/30">
+                        {lyrionUpdate.error}
+                      </div>
+                    )}
+
+                    {/* Check for updates */}
+                    <motion.button
+                      onClick={checkLyrionUpdate}
+                      disabled={isCheckingLyrion || isApplyingLyrion}
+                      className="w-full bg-hifi-accent hover:bg-hifi-light disabled:bg-hifi-dark text-white py-3 rounded-lg font-medium flex items-center justify-center space-x-2 transition-colors"
+                      whileTap={{ scale: isCheckingLyrion ? 1 : 0.95 }}
+                    >
+                      {isCheckingLyrion ? (
+                        <>
+                          <Loader2 size={18} className="animate-spin" />
+                          <span>Controllo in corso...</span>
+                        </>
+                      ) : (
+                        <>
+                          <RotateCw size={18} />
+                          <span>Controlla aggiornamenti</span>
+                        </>
+                      )}
+                    </motion.button>
+
+                    {/* Apply update */}
+                    {lyrionUpdate?.update_available && (
+                      <motion.button
+                        onClick={applyLyrionUpdate}
+                        disabled={isApplyingLyrion}
+                        className="w-full bg-hifi-gold hover:bg-yellow-600 disabled:bg-hifi-accent text-black py-4 rounded-lg font-semibold flex items-center justify-center space-x-2 transition-colors"
+                        whileTap={{ scale: isApplyingLyrion ? 1 : 0.95 }}
+                      >
+                        {isApplyingLyrion ? (
+                          <>
+                            <Loader2 size={20} className="animate-spin" />
+                            <span>Aggiornamento...</span>
+                          </>
+                        ) : (
+                          <>
+                            <Download size={20} />
+                            <span>Aggiorna Lyrion ({lyrionUpdate.latest})</span>
+                          </>
+                        )}
+                      </motion.button>
+                    )}
+
+                    {isApplyingLyrion && (
+                      <p className="text-xs text-hifi-silver text-center">
+                        Il server musicale verrà riavviato al termine.
+                      </p>
+                    )}
+
+                    {/* Lyrion update progress */}
+                    {lyrionStatus && (
+                      <div className={`rounded-lg p-3 text-center text-sm ${
+                        lyrionStatus.state === 'error'
+                          ? 'bg-red-900/20 text-red-300 border border-red-500/30'
+                          : 'bg-hifi-dark text-hifi-silver'
+                      }`}>
+                        {lyrionStatus.message || lyrionStatus.state}
+                        {typeof lyrionStatus.progress === 'number' && lyrionStatus.state !== 'error' && (
+                          <span className="ml-1">({lyrionStatus.progress}%)</span>
+                        )}
                       </div>
                     )}
                   </div>

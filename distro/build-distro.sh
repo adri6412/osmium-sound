@@ -23,6 +23,7 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 CONFIG="$SCRIPT_DIR/config"
 APP_DIR=""
+APP_VERSION=""
 
 log()  { printf '\033[1;33m[hifi-build]\033[0m %s\n' "$*"; }
 die()  { printf '\033[1;31m[hifi-build ERROR]\033[0m %s\n' "$*" >&2; exit 1; }
@@ -31,6 +32,7 @@ die()  { printf '\033[1;31m[hifi-build ERROR]\033[0m %s\n' "$*" >&2; exit 1; }
 while [ $# -gt 0 ]; do
     case "$1" in
         --app-dir) APP_DIR="$2"; shift 2 ;;
+        --app-version) APP_VERSION="$2"; shift 2 ;;
         --lyrion-url) LYRION_DEB_URL="$2"; shift 2 ;;
         --suite) DEBIAN_SUITE="$2"; shift 2 ;;
         -h|--help)
@@ -79,6 +81,15 @@ log "Injecting Electron app → includes.chroot/opt/hifi-media-player"
 APP_DEST="$CONFIG/includes.chroot/opt/hifi-media-player"
 rm -rf "$APP_DEST"; mkdir -p "$APP_DEST"
 cp -a "$APP_DIR/." "$APP_DEST/"
+
+# Seed the installed UI version (baseline for OTA update comparison). Default to
+# the version in package.json unless overridden with --app-version.
+if [ -z "$APP_VERSION" ] && [ -f "$REPO_ROOT/package.json" ]; then
+    APP_VERSION="$(sed -n 's/.*"version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$REPO_ROOT/package.json" | head -n1)"
+fi
+[ -n "$APP_VERSION" ] || APP_VERSION="unknown"
+printf '%s\n' "$APP_VERSION" > "$APP_DEST/UI_VERSION"
+log "Seeded UI_VERSION = $APP_VERSION"
 
 log "Injecting python daemons → includes.chroot/usr/local/bin"
 BIN_DEST="$CONFIG/includes.chroot/usr/local/bin"
