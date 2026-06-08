@@ -26,12 +26,13 @@ A professional touchscreen-friendly hi-fi media player built with Electron, Reac
 
 - **Modern Hi-Fi Aesthetic**: Dark metallic theme with golden accents
 - **Touch-Optimized UI**: Large buttons and intuitive gestures for 1024x600 displays
-- **Embedded Web Interfaces**:
-  - **Lyrion Server**: Full Material skin interface for local music library
-  - **YouTube**: Embedded YouTube web player
-  - **Spotify**: Embedded Spotify Web Player
-  - **Internet Radio**: Coming soon
-- **Simple Navigation**: Home screen for source selection, each app loads independently
+- **Lyrion Music Server front-end**: native browser for the local library, plus
+  **Radio** and **Apps** tabs driven by Lyrion's own menus
+- **Compatible with Lyrion plugins**: streaming and radio sources are provided by
+  Lyrion plugins (e.g. Spotty for Spotify Connect, internet radio, YouTube,
+  UPnP/DLNA, AirPlay) — install them from the Lyrion web UI and they appear in the
+  Radio/Apps tabs. No separate per-service screens to maintain.
+- **Simple Navigation**: home screen for source selection, each view loads independently
 - **System Settings**: Network info, display controls, audio device selection
 - **Clean Design**: Each source uses its native interface and controls
 
@@ -298,12 +299,10 @@ hifi-media-player/
 ├── src/                   # React application
 │   ├── components/        # Reusable components
 │   │   └── NavigationBar.jsx
-│   ├── pages/            # Page components (embedded web interfaces)
-│   │   ├── Home.jsx       # Source selection
-│   │   ├── Settings.jsx   # System settings
-│   │   ├── YouTube.jsx    # YouTube embedded
-│   │   ├── Spotify.jsx    # Spotify Web Player embedded
-│   │   └── LyrionServer.jsx # Lyrion Material skin embedded
+│   ├── pages/            # Page components
+│   │   ├── Settings.jsx   # System settings + OTA updates
+│   │   ├── SetupWizard.jsx # First-run setup
+│   │   └── LyrionServer.jsx # Lyrion front-end (Music / Radio / Apps)
 │   ├── App.jsx           # Main app component
 │   ├── main.jsx          # React entry point
 │   └── index.css         # Global styles
@@ -337,24 +336,12 @@ colors: {
 }
 ```
 
-### Adding New Sources (Web Apps)
-1. Create a new page component in `src/pages/` (use YouTube.jsx as template)
-2. Add the webview with your URL
-3. Add route in `src/App.jsx`
-4. Add source button in `src/pages/Home.jsx` with icon and color
+### Adding New Sources
 
-Example for a new source:
-```jsx
-// src/pages/Tidal.jsx
-<iframe
-  src="https://listen.tidal.com"
-  className="w-full h-full border-0"
-  onLoad={() => setIsLoaded(true)}
-  allow="autoplay; encrypted-media; fullscreen"
-  allowFullScreen
-  title="Tidal"
-/>
-```
+Sources are not coded into the app — they come from **Lyrion plugins**. To add a
+streaming service or radio source, install the matching plugin from the Lyrion
+web UI (Settings → Plugins); it then shows up automatically under the **Radio**
+or **Apps** tab of the Lyrion front-end. No UI changes or rebuilds required.
 
 ## 🔌 IPC API Reference
 
@@ -385,64 +372,23 @@ window.electronAPI.setAudioDevice(deviceId)
 
 ### Recommended Additions
 
-1. **Additional Streaming Services**:
-   - Tidal
-   - Deezer
-   - Apple Music Web
-   - SoundCloud
-   - Bandcamp
+1. **More streaming / radio sources**: provided by Lyrion plugins (Spotty,
+   internet radio, UPnP/DLNA, AirPlay, etc.) — install from the Lyrion web UI,
+   no app changes needed.
 
-2. **Internet Radio Integration**:
-   - Embed Radio Browser or TuneIn
-   - Create custom radio station list
-   - Add favorites and presets
-
-3. **Bluetooth/USB DAC Support**:
+2. **Bluetooth/USB DAC Support**:
    - Enumerate audio devices via ALSA/PulseAudio/PipeWire
    - Add real-time device switching in Settings
    - Support high-resolution audio output
 
-4. **Advanced Lyrion Integration**:
+3. **Advanced Lyrion Integration**:
    - Direct API communication instead of just embedding
-   - Custom UI for Lyrion if desired
    - Sync playback state
 
-5. **Kiosk Mode Enhancements**:
+4. **Kiosk Mode Enhancements**:
    - Auto-hide cursor after inactivity
    - Screen saver with album art or visualizations
    - Power management (display off timer)
-
-6. **Network Features**:
-   - AirPlay receiver support
-   - DLNA/UPnP renderer
-   - Chromecast support
-
-### Example: Adding Internet Radio
-
-Create `src/pages/InternetRadio.jsx`:
-```jsx
-const InternetRadio = () => {
-  const [isLoaded, setIsLoaded] = useState(false);
-  
-  return (
-    <div className="min-h-full flex flex-col">
-      {/* Header */}
-      <div className="bg-gradient-to-b from-hifi-gray to-hifi-dark border-b border-hifi-accent px-8 py-4">
-        <h1 className="text-2xl font-bold text-white">Internet Radio</h1>
-      </div>
-      
-      {/* Embed Radio Browser or custom interface */}
-      <iframe
-        src="https://www.radio-browser.info"
-        className="flex-1 border-0"
-        onLoad={() => setIsLoaded(true)}
-        allow="autoplay"
-        title="Internet Radio"
-      />
-    </div>
-  );
-};
-```
 
 ## 🐛 Troubleshooting
 
@@ -451,11 +397,10 @@ const InternetRadio = () => {
 - Reinstall dependencies: `rm -rf node_modules && npm install`
 - Check Electron dependencies: `sudo apt install libgtk-3-0 libnss3`
 
-### Iframe not loading
-- Some sites block iframe embedding (X-Frame-Options)
-- Check network connectivity
-- Try "Open in Browser" button for sites that don't allow embedding
-- For local development, CORS might cause issues - use production mode
+### Lyrion front-end not loading
+- Check the Lyrion server URL in Settings (default `http://localhost:9000`)
+- Verify the Lyrion service is running and reachable on the network
+- For missing streaming/radio sources, install the matching plugin in the Lyrion web UI
 
 ### Touch screen not responding
 - Calibrate touch screen in DietPi settings
