@@ -1,3 +1,6 @@
+# OTA signing — PRIVATE key must never be committed (public key is tracked)
+ota-keys/ota-signing-key.pem
+
 # live-build working artefacts
 .build/
 cache/

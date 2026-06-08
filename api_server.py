@@ -38,6 +38,18 @@ SYS_STATUS_FILE = '/run/hifi-system-status.json'
 SYS_PREFIX = 'hifi-system-'
 
 # ──────────────────────────────────────────────────────────────────
+#  OTA update of the operating system itself, shipped as a *signed*
+#  `hifi-os-<ver>.tar.gz` bundle carrying its own apply.sh. Because
+#  apply.sh runs as root, the helper script refuses to apply it unless
+#  a detached Ed25519 signature (asset `.tar.gz.sha256.sig`) verifies
+#  against the public key baked into the image at ota-pubkey.pem.
+# ──────────────────────────────────────────────────────────────────
+OS_VERSION_FILE = '/etc/hifi-player/OS_VERSION'
+OS_SCRIPT = '/usr/local/sbin/hifi-os-update.sh'
+OS_STATUS_FILE = '/run/hifi-os-status.json'
+OS_PREFIX = 'hifi-os-'
+
+# ──────────────────────────────────────────────────────────────────
 #  OTA update of Lyrion Music Server (stable .deb from the community
 #  downloads server). We parse the downloads page for the latest
 #  stable release and install it as root.
@@ -433,6 +445,7 @@ def _check_release_update(current, prefix):
 
     tarball = _named('.tar.gz')
     sha_asset = _named('.tar.gz.sha256')
+    sig_asset = _named('.tar.gz.sha256.sig')
 
     return {
         'current': current,
@@ -442,6 +455,7 @@ def _check_release_update(current, prefix):
         'asset_url': tarball.get('browser_download_url') if tarball else None,
         'asset_size': tarball.get('size') if tarball else None,
         'sha_url': sha_asset.get('browser_download_url') if sha_asset else None,
+        'sig_url': sig_asset.get('browser_download_url') if sig_asset else None,
     }
 
 def check_app_update():
@@ -538,6 +552,58 @@ def apply_system_update():
 def system_update_status():
     try:
         with open(SYS_STATUS_FILE) as f:
+            return json.load(f)
+    except Exception:
+        return {'state': 'idle'}
+
+# ──────────────────────────────────────────────────────────────────
+#  OTA update of the operating system (signed bundle + apply.sh)
+# ──────────────────────────────────────────────────────────────────
+def _installed_os_version():
+    return _read_version_file(OS_VERSION_FILE)
+
+def check_os_update():
+    return _check_release_update(_installed_os_version(), OS_PREFIX)
+
+def apply_os_update():
+    info = check_os_update()
+    if info.get('error'):
+        return {'started': False, 'message': info['error']}
+    if not info.get('update_available'):
+        return {'started': False, 'message': 'Nessun aggiornamento OS disponibile'}
+    if not info.get('sha_url'):
+        return {'started': False, 'message': 'Checksum (.sha256) mancante nella release'}
+    # The OS bundle runs root scripts, so a valid signature is mandatory.
+    if not info.get('sig_url'):
+        return {'started': False,
+                'message': 'Firma (.sha256.sig) mancante: aggiornamento OS rifiutato'}
+
+    try:
+        sha = _fetch_sha256(info['sha_url'])
+    except Exception as e:
+        return {'started': False, 'message': f'Lettura checksum fallita: {e}'}
+    if not sha:
+        return {'started': False, 'message': 'Checksum vuoto'}
+
+    cmd = [
+        'systemd-run', '--no-block', '--collect', '--unit=hifi-os-update',
+        OS_SCRIPT, info['asset_url'], sha, info['sig_url'], info['latest'],
+    ]
+    try:
+        subprocess.run(cmd, capture_output=True, text=True, timeout=15, check=True)
+    except FileNotFoundError:
+        # systemd-run unavailable → fall back to a detached subprocess
+        subprocess.Popen([OS_SCRIPT, info['asset_url'], sha, info['sig_url'], info['latest']],
+                         start_new_session=True)
+    except subprocess.CalledProcessError as e:
+        return {'started': False, 'message': (e.stderr or str(e)).strip()}
+    except Exception as e:
+        return {'started': False, 'message': str(e)}
+    return {'started': True, 'version': info['latest']}
+
+def os_update_status():
+    try:
+        with open(OS_STATUS_FILE) as f:
             return json.load(f)
     except Exception:
         return {'state': 'idle'}
@@ -683,6 +749,18 @@ def api_system_update_apply():
 @app.route('/system_update/status', methods=['GET'])
 def api_system_update_status():
     return jsonify(system_update_status())
+
+@app.route('/os_update/check', methods=['GET'])
+def api_os_update_check():
+    return jsonify(check_os_update())
+
+@app.route('/os_update/apply', methods=['POST'])
+def api_os_update_apply():
+    return jsonify(apply_os_update())
+
+@app.route('/os_update/status', methods=['GET'])
+def api_os_update_status():
+    return jsonify(os_update_status())
 
 @app.route('/lyrion_update/check', methods=['GET'])
 def api_lyrion_update_check():

@@ -88,6 +88,7 @@ plymouth-themes
 sudo
 curl
 ca-certificates
+openssl
 isc-dhcp-client
 iproute2
 network-manager
