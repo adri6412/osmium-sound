@@ -515,9 +515,17 @@ const LyrionServer = () => {
       </div>
     );
     if (!activePlayer) return (
-      <div className="flex-1 flex flex-col items-center justify-center">
+      <div className="flex-1 flex flex-col items-center justify-center px-8 text-center">
         <Music size={48} className="text-hifi-silver/20 mb-4" />
-        <p className="text-hifi-silver/60 text-sm">Nessun player Lyrion trovato</p>
+        <p className="text-hifi-silver/60 text-sm mb-2">Nessun player Lyrion trovato</p>
+        <p className="text-hifi-silver/40 text-xs mb-6 max-w-xs">
+          Il server potrebbe non aver ancora risposto. Riprova a connetterti.
+        </p>
+        <button onClick={connectToServer} disabled={isLoading}
+          className="flex items-center space-x-2 bg-hifi-surface hover:bg-hifi-light disabled:opacity-50 px-5 py-2.5 rounded-lg text-white text-sm transition-colors border border-hifi-border">
+          <RefreshCw size={15} className={isLoading ? 'animate-spin' : ''} />
+          <span>{isLoading ? 'Connessione…' : 'Riconnetti'}</span>
+        </button>
       </div>
     );
 

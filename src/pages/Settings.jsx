@@ -102,13 +102,14 @@ const Settings = () => {
     };
   }, []);
 
-  // Publish "update available" so the Sidebar can show a badge. We consider
-  // only UI + System here (Lyrion lives under Advanced).
+  // Publish "update available" so the Sidebar can show a badge. We consider the
+  // core channels behind the single button (UI + System + OS); Lyrion and the
+  // apt upgrade live on their own buttons.
   useEffect(() => {
-    const available = !!(appUpdate?.update_available || systemUpdate?.update_available);
+    const available = !!(appUpdate?.update_available || systemUpdate?.update_available || osUpdate?.update_available);
     localStorage.setItem('hifiUpdateAvailable', available ? '1' : '0');
     window.dispatchEvent(new CustomEvent('hifi-update-available', { detail: available }));
-  }, [appUpdate, systemUpdate]);
+  }, [appUpdate, systemUpdate, osUpdate]);
 
   // ── OTA UI update handlers ──────────────────────────────────────
   const checkAppUpdate = async () => {
@@ -127,8 +128,8 @@ const Settings = () => {
     }
   };
 
-  // Resolves to true on success, false on error. Used both by the single
-  // "UI" button and by the combined UI+System flow.
+  // Resolves to true on success, false on error. Used by the combined flow.
+  // Applying the UI restarts the Electron front-end, so this is run last.
   const applyAppUpdate = async () => {
     if (!apiConnected) {
       setUpdateMessage('Errore: Server API non disponibile');
@@ -221,29 +222,47 @@ const Settings = () => {
     }
   };
 
-  // ── Combined UI + System OTA (single button) ────────────────────
-  // Updates the system components FIRST (API/daemons/scripts) and the UI
-  // LAST, since applying the UI restarts the Electron front-end and would
-  // otherwise interrupt an in-progress system update.
+  // ── Combined UI + System + OS OTA (single button) ───────────────
+  // One button applies every core update, in the order that survives:
+  //   1. System components (API/daemons/scripts) — doesn't tear down the page.
+  //   2. OS — verifies the signature and runs apply.sh. apply.sh is a clean
+  //      no-op when the system already matches (so this step usually just falls
+  //      through); only a real OS change reboots, which is rare and ends here.
+  //   3. UI — restarts the Electron front-end, so it goes last (terminal).
+  // (apt system upgrade and Lyrion stay on their own buttons.)
   const applyAllUpdates = async () => {
     if (!apiConnected) {
       setUpdateMessage('Errore: Server API non disponibile');
       return;
     }
+    const hasSystem = !!systemUpdate?.update_available;
+    const hasUI = !!appUpdate?.update_available;
+    const hasOS = !!osUpdate?.update_available;
+    if (!hasSystem && !hasUI && !hasOS) return;
+
     setIsApplyingAll(true);
     try {
-      if (systemUpdate?.update_available) {
+      if (hasSystem) {
         setAllStatus({ phase: 'system', message: 'Aggiornamento componenti di sistema…' });
-        const ok = await applySystemUpdate();
-        if (!ok) {
+        if (!await applySystemUpdate()) {
           setAllStatus({ phase: 'error', message: 'Aggiornamento sistema fallito' });
           setIsApplyingAll(false);
           return;
         }
       }
-      if (appUpdate?.update_available) {
+      if (hasOS) {
+        setAllStatus({ phase: 'os', message: 'Verifica e aggiornamento sistema operativo…' });
+        // Reboots only if apply.sh made a real change; otherwise resolves and we
+        // continue to the UI step.
+        if (!await applyOsUpdate()) {
+          setAllStatus({ phase: 'error', message: 'Aggiornamento sistema operativo fallito' });
+          setIsApplyingAll(false);
+          return;
+        }
+      }
+      if (hasUI) {
         setAllStatus({ phase: 'ui', message: 'Aggiornamento interfaccia (riavvio al termine)…' });
-        await applyAppUpdate(); // restarts the UI on success
+        await applyAppUpdate(); // restarts the kiosk on success
       }
       setAllStatus({ phase: 'done', message: 'Aggiornamento completato' });
     } catch (error) {
@@ -256,6 +275,7 @@ const Settings = () => {
   const refreshAllChecks = () => {
     checkAppUpdate();
     checkSystemUpdate();
+    checkOsUpdate();
   };
 
   const toggleAutoCheck = () => {
@@ -266,7 +286,7 @@ const Settings = () => {
     });
   };
 
-  const uiOrSystemAvailable = !!(appUpdate?.update_available || systemUpdate?.update_available);
+  const coreUpdateAvailable = !!(appUpdate?.update_available || systemUpdate?.update_available || osUpdate?.update_available);
 
   // ── Lyrion update handlers ──────────────────────────────────────
   const checkLyrionUpdate = async () => {
@@ -334,13 +354,13 @@ const Settings = () => {
     }
   };
 
+  // Resolves to true on success, false on error. Reboots the device on success
+  // (so polling usually just stops as the device goes down). The reboot is
+  // confirmed up-front by the combined flow, so there's no prompt here.
   const applyOsUpdate = async () => {
     if (!apiConnected) {
       setUpdateMessage('Errore: Server API non disponibile');
-      return;
-    }
-    if (!confirm('Aggiornare il sistema operativo? Il dispositivo potrebbe riavviarsi al termine.')) {
-      return;
+      return false;
     }
     setIsApplyingOs(true);
     setOsStatus({ state: 'starting', message: 'Avvio aggiornamento OS…' });
@@ -349,23 +369,27 @@ const Settings = () => {
       if (!result.success || !result.data.started) {
         setOsStatus({ state: 'error', message: result.data?.message || result.message || 'Avvio fallito' });
         setIsApplyingOs(false);
-        return;
+        return false;
       }
-      osPollRef.current = setInterval(async () => {
-        const s = await systemAPI.getOsUpdateStatus();
-        if (s.success) {
-          setOsStatus(s.data);
-          if (s.data.state === 'done' || s.data.state === 'error') {
-            clearInterval(osPollRef.current);
-            osPollRef.current = null;
-            setIsApplyingOs(false);
-            if (s.data.state === 'done') checkOsUpdate();
+      return await new Promise((resolve) => {
+        osPollRef.current = setInterval(async () => {
+          const s = await systemAPI.getOsUpdateStatus();
+          if (s.success) {
+            setOsStatus(s.data);
+            if (s.data.state === 'done' || s.data.state === 'error') {
+              clearInterval(osPollRef.current);
+              osPollRef.current = null;
+              setIsApplyingOs(false);
+              if (s.data.state === 'done') checkOsUpdate();
+              resolve(s.data.state === 'done');
+            }
           }
-        }
-      }, 2000);
+        }, 2000);
+      });
     } catch (error) {
       setOsStatus({ state: 'error', message: 'Errore durante l\'aggiornamento del sistema operativo' });
       setIsApplyingOs(false);
+      return false;
     }
   };
 
@@ -704,7 +728,7 @@ const Settings = () => {
                 {/* Unified UI + System OTA Update Section */}
                 {section.content === 'custom-updates' && (
                   <div className="space-y-4">
-                    {/* Version rows: UI + System */}
+                    {/* Version rows: UI + System + OS */}
                     <div className="bg-hifi-dark rounded-lg p-4 space-y-3">
                       <div className="space-y-1">
                         <div className="flex items-center justify-between">
@@ -725,33 +749,45 @@ const Settings = () => {
                             )}
                           </span>
                         </div>
+                        <div className="flex items-center justify-between">
+                          <span className="text-hifi-silver text-sm">
+                            Sistema operativo
+                            <span className="ml-1 text-[10px] uppercase tracking-wide text-hifi-gold/80">firmato</span>
+                          </span>
+                          <span className="text-white font-mono text-sm">
+                            {osUpdate?.error ? 'N/D' : (osUpdate?.current || '...')}
+                            {osUpdate?.update_available && (
+                              <span className="text-hifi-gold"> → {osUpdate.latest}</span>
+                            )}
+                          </span>
+                        </div>
                       </div>
                     </div>
 
                     {/* Status summary */}
-                    {uiOrSystemAvailable ? (
+                    {coreUpdateAvailable ? (
                       <div className="rounded-lg p-3 text-center text-sm bg-hifi-gold/20 text-hifi-gold border border-hifi-gold/40">
                         Aggiornamento disponibile
                       </div>
-                    ) : (appUpdate && systemUpdate && !appUpdate.error && !systemUpdate.error) ? (
+                    ) : (appUpdate && systemUpdate && osUpdate && !appUpdate.error && !systemUpdate.error && !osUpdate.error) ? (
                       <div className="rounded-lg p-3 text-center text-sm bg-hifi-dark text-hifi-silver">
                         Tutto aggiornato
                       </div>
                     ) : null}
-                    {(appUpdate?.error || systemUpdate?.error) && (
+                    {(appUpdate?.error || systemUpdate?.error || osUpdate?.error) && (
                       <div className="rounded-lg p-3 text-center text-sm bg-red-900/20 text-red-300 border border-red-500/30">
-                        {appUpdate?.error || systemUpdate?.error}
+                        {appUpdate?.error || systemUpdate?.error || osUpdate?.error}
                       </div>
                     )}
 
                     {/* Check for updates */}
                     <motion.button
                       onClick={refreshAllChecks}
-                      disabled={isCheckingUpdate || isCheckingSystem || isApplyingAll}
+                      disabled={isCheckingUpdate || isCheckingSystem || isCheckingOs || isApplyingAll}
                       className="w-full bg-hifi-accent hover:bg-hifi-light disabled:bg-hifi-dark text-white py-3 rounded-lg font-medium flex items-center justify-center space-x-2 transition-colors"
-                      whileTap={{ scale: (isCheckingUpdate || isCheckingSystem) ? 1 : 0.95 }}
+                      whileTap={{ scale: (isCheckingUpdate || isCheckingSystem || isCheckingOs) ? 1 : 0.95 }}
                     >
-                      {(isCheckingUpdate || isCheckingSystem) ? (
+                      {(isCheckingUpdate || isCheckingSystem || isCheckingOs) ? (
                         <>
                           <Loader2 size={18} className="animate-spin" />
                           <span>Controllo in corso...</span>
@@ -764,8 +800,8 @@ const Settings = () => {
                       )}
                     </motion.button>
 
-                    {/* Single apply button: System then UI */}
-                    {uiOrSystemAvailable && (
+                    {/* Single apply button: System → UI → OS */}
+                    {coreUpdateAvailable && (
                       <motion.button
                         onClick={applyAllUpdates}
                         disabled={isApplyingAll}
@@ -780,7 +816,7 @@ const Settings = () => {
                         ) : (
                           <>
                             <Download size={20} />
-                            <span>Aggiorna ora (UI + Sistema)</span>
+                            <span>Aggiorna ora</span>
                           </>
                         )}
                       </motion.button>
@@ -788,7 +824,7 @@ const Settings = () => {
 
                     {isApplyingAll && (
                       <p className="text-xs text-hifi-silver text-center">
-                        Vengono aggiornati prima i componenti di sistema, poi l'interfaccia (che si riavvierà al termine).
+                        Si aggiornano in ordine: sistema, interfaccia e — se presente — il sistema operativo (con riavvio finale).
                       </p>
                     )}
 
@@ -800,6 +836,9 @@ const Settings = () => {
                           : 'bg-hifi-dark text-hifi-silver'
                       }`}>
                         {allStatus.message}
+                        {osStatus && allStatus.phase === 'os' && typeof osStatus.progress === 'number' && osStatus.state !== 'error' && (
+                          <span className="ml-1">({osStatus.progress}%)</span>
+                        )}
                       </div>
                     )}
 
@@ -814,12 +853,13 @@ const Settings = () => {
                       </span>
                     </button>
 
-                    {/* Advanced (Lyrion) collapsible */}
+                    {/* Advanced (Lyrion) collapsible — the OS channel is now part
+                        of the single "Aggiorna ora" button above. */}
                     <button
                       onClick={() => setShowAdvanced((v) => !v)}
                       className="w-full text-left text-sm text-hifi-silver hover:text-white pt-2 transition-colors"
                     >
-                      {showAdvanced ? '▾' : '▸'} Avanzate (Lyrion + Sistema operativo)
+                      {showAdvanced ? '▾' : '▸'} Avanzate (Lyrion)
                     </button>
 
                     {showAdvanced && (
@@ -911,101 +951,6 @@ const Settings = () => {
                             )}
                           </div>
                         )}
-
-                        {/* OS (signed) update */}
-                        <div className="border-t border-hifi-accent pt-4 space-y-3">
-                          <div className="flex items-center justify-between">
-                            <span className="text-sm text-white font-medium">Sistema operativo</span>
-                            <span className="text-[10px] uppercase tracking-wide text-hifi-gold border border-hifi-gold/40 rounded px-2 py-0.5">firmato</span>
-                          </div>
-                          <div className="bg-hifi-dark rounded-lg p-4 space-y-2">
-                            <div className="flex items-center justify-between">
-                              <span className="text-hifi-silver text-sm">Versione installata</span>
-                              <span className="text-white font-mono text-sm">{osUpdate?.current || '...'}</span>
-                            </div>
-                            <div className="flex items-center justify-between">
-                              <span className="text-hifi-silver text-sm">Ultima versione</span>
-                              <span className="text-white font-mono text-sm">
-                                {osUpdate?.error ? 'N/D' : (osUpdate?.latest || '...')}
-                              </span>
-                            </div>
-                          </div>
-
-                          {osUpdate?.update_available && (
-                            <div className="rounded-lg p-3 text-center text-sm bg-hifi-gold/20 text-hifi-gold border border-hifi-gold/40">
-                              Aggiornamento OS disponibile: {osUpdate.latest}
-                            </div>
-                          )}
-                          {osUpdate && !osUpdate.error && !osUpdate.update_available && (
-                            <div className="rounded-lg p-3 text-center text-sm bg-hifi-dark text-hifi-silver">
-                              Il sistema operativo è aggiornato
-                            </div>
-                          )}
-                          {osUpdate?.error && (
-                            <div className="rounded-lg p-3 text-center text-sm bg-red-900/20 text-red-300 border border-red-500/30">
-                              {osUpdate.error}
-                            </div>
-                          )}
-
-                          <motion.button
-                            onClick={checkOsUpdate}
-                            disabled={isCheckingOs || isApplyingOs}
-                            className="w-full bg-hifi-accent hover:bg-hifi-light disabled:bg-hifi-dark text-white py-3 rounded-lg font-medium flex items-center justify-center space-x-2 transition-colors"
-                            whileTap={{ scale: isCheckingOs ? 1 : 0.95 }}
-                          >
-                            {isCheckingOs ? (
-                              <>
-                                <Loader2 size={18} className="animate-spin" />
-                                <span>Controllo in corso...</span>
-                              </>
-                            ) : (
-                              <>
-                                <RotateCw size={18} />
-                                <span>Controlla aggiornamenti OS</span>
-                              </>
-                            )}
-                          </motion.button>
-
-                          {osUpdate?.update_available && (
-                            <motion.button
-                              onClick={applyOsUpdate}
-                              disabled={isApplyingOs}
-                              className="w-full bg-hifi-gold hover:bg-yellow-600 disabled:bg-hifi-accent text-black py-4 rounded-lg font-semibold flex items-center justify-center space-x-2 transition-colors"
-                              whileTap={{ scale: isApplyingOs ? 1 : 0.95 }}
-                            >
-                              {isApplyingOs ? (
-                                <>
-                                  <Loader2 size={20} className="animate-spin" />
-                                  <span>Aggiornamento...</span>
-                                </>
-                              ) : (
-                                <>
-                                  <Download size={20} />
-                                  <span>Aggiorna OS ({osUpdate.latest})</span>
-                                </>
-                              )}
-                            </motion.button>
-                          )}
-
-                          {isApplyingOs && (
-                            <p className="text-xs text-hifi-silver text-center">
-                              La firma viene verificata prima di applicare. Il dispositivo potrebbe riavviarsi al termine.
-                            </p>
-                          )}
-
-                          {osStatus && (
-                            <div className={`rounded-lg p-3 text-center text-sm ${
-                              osStatus.state === 'error'
-                                ? 'bg-red-900/20 text-red-300 border border-red-500/30'
-                                : 'bg-hifi-dark text-hifi-silver'
-                            }`}>
-                              {osStatus.message || osStatus.state}
-                              {typeof osStatus.progress === 'number' && osStatus.state !== 'error' && (
-                                <span className="ml-1">({osStatus.progress}%)</span>
-                              )}
-                            </div>
-                          )}
-                        </div>
                       </div>
                     )}
                   </div>
