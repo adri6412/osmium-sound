@@ -38,6 +38,11 @@ jobs:
   build-iso:
     runs-on: ubuntu-latest
     timeout-minutes: 120
+    # The debian:bookworm container defaults `run:` steps to sh (dash), which
+    # lacks `set -o pipefail`. Force bash for every step.
+    defaults:
+      run:
+        shell: bash
     # Build inside a real Debian container so live-build/debootstrap and the
     # Debian archive keyring behave correctly (Ubuntu hosts can trip on this).
     container:
