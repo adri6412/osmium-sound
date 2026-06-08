@@ -38,10 +38,8 @@ echo "Applying HiFi OS update ${HIFI_OS_VERSION:-?}"
 HIFI_HOME=/home/hifi
 XSESSION="$HIFI_HOME/.xsession"
 
-if [ -d "$HIFI_HOME" ]; then
-    echo "Installing self-healing kiosk session at $XSESSION"
-    cat > "$XSESSION" <<'XSESSION_EOF'
-#!/bin/sh
+# The desired self-healing kiosk session.
+NEW_XSESSION='#!/bin/sh
 # Disable screen blanking / power management
 xset s off
 xset -dpms
@@ -71,15 +69,22 @@ while true; do
         --start-fullscreen
     echo "hifi kiosk exited ($?) — relaunching in 3s" >&2
     sleep 3
-done
-XSESSION_EOF
+done'
+
+if [ ! -d "$HIFI_HOME" ]; then
+    echo "W: $HIFI_HOME not present — skipping kiosk session update" >&2
+elif [ -f "$XSESSION" ] && [ "$(cat "$XSESSION")" = "$NEW_XSESSION" ]; then
+    # Already up to date. Crucially, do NOT request a reboot: this OS payload is
+    # re-applied on every release (the version is the release tag), so it must be
+    # a clean no-op when nothing changed — otherwise every update would reboot.
+    echo "Kiosk session already current — nothing to do."
+else
+    echo "Installing self-healing kiosk session at $XSESSION"
+    printf '%s\n' "$NEW_XSESSION" > "$XSESSION"
     chmod +x "$XSESSION"
     chown hifi:hifi "$XSESSION" 2>/dev/null || true
-
-    # The new session takes effect on the next login, so reboot to apply cleanly.
+    # The new session only takes effect on the next login, so reboot to apply it.
     : > "$HIFI_PAYLOAD_DIR/REBOOT"
-else
-    echo "W: $HIFI_HOME not present — skipping kiosk session update" >&2
 fi
 
 echo "OS update ${HIFI_OS_VERSION:-?} applied."
