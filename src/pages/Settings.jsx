@@ -1245,7 +1245,7 @@ const Settings = () => {
           transition={{ delay: 0.6 }}
           className="mt-8 text-center text-hifi-silver text-sm"
         >
-          <p>HiFi Media Player v1.0.0</p>
+          <p>HiFi Media Player v{__APP_VERSION__}</p>
           <p className="mt-1">Built with Electron, React, and Tailwind CSS</p>
         </motion.div>
       </div>
