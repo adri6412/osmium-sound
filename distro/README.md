@@ -111,6 +111,21 @@ sudo ./build-distro.sh \
   --suite bookworm
 ```
 
+### Build the ISO on GitHub (manual, by tag)
+
+You can also rebuild the ISO in CI without a local Debian box. In GitHub →
+**Actions → "Build HiFi Player ISO (manual)" → Run workflow**, type the **tag**
+by hand (e.g. `v1.0.5`) and run it. The workflow:
+
+1. compiles the Electron app (`npm run build` + `electron-builder --linux dir`),
+2. runs `distro/build-distro.sh` as root to produce `hifi-player-<tag>.iso`,
+3. uploads the ISO (+ `.sha256`) as a build **artifact**, and
+4. if **make_release** is on (default), creates the tag (if missing) and
+   attaches the ISO to a **GitHub Release** for it.
+
+Optional inputs: `lyrion_url` (override the Lyrion .deb) and `suite` (default
+`bookworm`). See `.github/workflows/build-iso.yml`.
+
 ## 3. Install on the target PC
 
 Write the ISO to a USB stick and boot the target:
