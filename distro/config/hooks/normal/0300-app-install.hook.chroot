@@ -23,9 +23,14 @@ echo "I: [hifi] ensuring python services are executable"
 chmod +x /usr/local/bin/vu_meter_daemon.py /usr/local/bin/api_server.py 2>/dev/null || true
 
 echo "I: [hifi] making OTA update scripts executable"
-chmod +x /usr/local/sbin/hifi-ota-update.sh /usr/local/sbin/hifi-lyrion-update.sh 2>/dev/null || true
+chmod +x /usr/local/sbin/hifi-ota-update.sh /usr/local/sbin/hifi-lyrion-update.sh \
+         /usr/local/sbin/hifi-system-update.sh 2>/dev/null || true
 
 echo "I: [hifi] seeding UI_VERSION if missing"
 [ -f "$APPDIR/UI_VERSION" ] || echo "unknown" > "$APPDIR/UI_VERSION"
+
+echo "I: [hifi] seeding SYSTEM_VERSION if missing"
+mkdir -p /etc/hifi-player
+[ -f /etc/hifi-player/SYSTEM_VERSION ] || echo "unknown" > /etc/hifi-player/SYSTEM_VERSION
 
 echo "I: [hifi] app-install hook done"

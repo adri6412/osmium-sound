@@ -23,6 +23,19 @@ OTA_APPDIR = '/opt/hifi-media-player'
 OTA_VERSION_FILE = os.path.join(OTA_APPDIR, 'UI_VERSION')
 OTA_SCRIPT = '/usr/local/sbin/hifi-ota-update.sh'
 OTA_STATUS_FILE = '/run/hifi-ota-status.json'
+# The UI release carries several tarballs; pick ours by name prefix.
+OTA_UI_PREFIX = 'hifi-ui-'
+
+# ──────────────────────────────────────────────────────────────────
+#  OTA update of the custom system components (Python API/daemons,
+#  helper scripts and systemd units) shipped in the same GitHub
+#  Release as a `hifi-system-<ver>.tar.gz` bundle. Installed as root
+#  by a helper script which restarts the affected services.
+# ──────────────────────────────────────────────────────────────────
+SYS_VERSION_FILE = '/etc/hifi-player/SYSTEM_VERSION'
+SYS_SCRIPT = '/usr/local/sbin/hifi-system-update.sh'
+SYS_STATUS_FILE = '/run/hifi-system-status.json'
+SYS_PREFIX = 'hifi-system-'
 
 # ──────────────────────────────────────────────────────────────────
 #  OTA update of Lyrion Music Server (stable .deb from the community
@@ -389,8 +402,16 @@ def _is_newer(latest, current):
         return lt > ct
     return latest != current  # fallback: any difference is an update
 
-def check_app_update():
-    current = _installed_ui_version()
+def _read_version_file(path):
+    try:
+        with open(path) as f:
+            return f.read().strip() or 'unknown'
+    except Exception:
+        return 'unknown'
+
+def _check_release_update(current, prefix):
+    """Look at the latest GitHub Release and return update info for the asset
+    whose name starts with `prefix` (e.g. 'hifi-ui-' or 'hifi-system-')."""
     url = f'https://api.github.com/repos/{OTA_REPO}/releases/latest'
     req = urllib.request.Request(url, headers={
         'Accept': 'application/vnd.github+json',
@@ -404,8 +425,14 @@ def check_app_update():
 
     latest = release.get('tag_name') or release.get('name') or ''
     assets = release.get('assets', [])
-    tarball = next((a for a in assets if a.get('name', '').endswith('.tar.gz')), None)
-    sha_asset = next((a for a in assets if a.get('name', '').endswith('.sha256')), None)
+
+    def _named(suffix):
+        return next((a for a in assets
+                     if a.get('name', '').startswith(prefix)
+                     and a.get('name', '').endswith(suffix)), None)
+
+    tarball = _named('.tar.gz')
+    sha_asset = _named('.tar.gz.sha256')
 
     return {
         'current': current,
@@ -416,6 +443,9 @@ def check_app_update():
         'asset_size': tarball.get('size') if tarball else None,
         'sha_url': sha_asset.get('browser_download_url') if sha_asset else None,
     }
+
+def check_app_update():
+    return _check_release_update(_installed_ui_version(), OTA_UI_PREFIX)
 
 def _fetch_sha256(sha_url):
     """Download the .sha256 sidecar and return just the hex digest."""
@@ -460,6 +490,54 @@ def apply_app_update():
 def app_update_status():
     try:
         with open(OTA_STATUS_FILE) as f:
+            return json.load(f)
+    except Exception:
+        return {'state': 'idle'}
+
+# ──────────────────────────────────────────────────────────────────
+#  OTA update of the custom system components
+# ──────────────────────────────────────────────────────────────────
+def _installed_system_version():
+    return _read_version_file(SYS_VERSION_FILE)
+
+def check_system_update():
+    return _check_release_update(_installed_system_version(), SYS_PREFIX)
+
+def apply_system_update():
+    info = check_system_update()
+    if info.get('error'):
+        return {'started': False, 'message': info['error']}
+    if not info.get('update_available'):
+        return {'started': False, 'message': 'Nessun aggiornamento disponibile'}
+    if not info.get('sha_url'):
+        return {'started': False, 'message': 'Checksum (.sha256) mancante nella release'}
+
+    try:
+        sha = _fetch_sha256(info['sha_url'])
+    except Exception as e:
+        return {'started': False, 'message': f'Lettura checksum fallita: {e}'}
+    if not sha:
+        return {'started': False, 'message': 'Checksum vuoto'}
+
+    cmd = [
+        'systemd-run', '--no-block', '--collect', '--unit=hifi-system-update',
+        SYS_SCRIPT, info['asset_url'], sha, info['latest'],
+    ]
+    try:
+        subprocess.run(cmd, capture_output=True, text=True, timeout=15, check=True)
+    except FileNotFoundError:
+        # systemd-run unavailable → fall back to a detached subprocess
+        subprocess.Popen([SYS_SCRIPT, info['asset_url'], sha, info['latest']],
+                         start_new_session=True)
+    except subprocess.CalledProcessError as e:
+        return {'started': False, 'message': (e.stderr or str(e)).strip()}
+    except Exception as e:
+        return {'started': False, 'message': str(e)}
+    return {'started': True, 'version': info['latest']}
+
+def system_update_status():
+    try:
+        with open(SYS_STATUS_FILE) as f:
             return json.load(f)
     except Exception:
         return {'state': 'idle'}
@@ -593,6 +671,18 @@ def api_app_update_apply():
 @app.route('/app_update/status', methods=['GET'])
 def api_app_update_status():
     return jsonify(app_update_status())
+
+@app.route('/system_update/check', methods=['GET'])
+def api_system_update_check():
+    return jsonify(check_system_update())
+
+@app.route('/system_update/apply', methods=['POST'])
+def api_system_update_apply():
+    return jsonify(apply_system_update())
+
+@app.route('/system_update/status', methods=['GET'])
+def api_system_update_status():
+    return jsonify(system_update_status())
 
 @app.route('/lyrion_update/check', methods=['GET'])
 def api_lyrion_update_check():

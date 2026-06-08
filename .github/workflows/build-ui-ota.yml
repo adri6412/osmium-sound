@@ -1,8 +1,10 @@
-name: Build HiFi Player UI (OTA bundle)
+name: Build HiFi Player OTA bundles (UI + system)
 
-# Builds the Electron UI as an unpacked linux directory, packs it into a
-# tarball + sha256, and publishes both as assets of the GitHub Release.
-# The appliance's OTA updater (Settings → Aggiornamento UI) downloads these.
+# Builds two OTA payloads and publishes them as assets of the GitHub Release:
+#  • hifi-ui-<ver>.tar.gz     — the Electron UI (unpacked linux dir)
+#  • hifi-system-<ver>.tar.gz — the custom system components (Python API/daemons,
+#                                helper scripts, systemd units)
+# The appliance's OTA updaters (Settings → Aggiornamenti) download these.
 
 on:
   push:
@@ -47,13 +49,32 @@ jobs:
           fi
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
 
-      - name: Package OTA bundle (tarball + sha256)
+      - name: Package UI OTA bundle (tarball + sha256)
         id: pack
         run: |
           VERSION="${{ steps.ver.outputs.version }}"
           printf '%s\n' "$VERSION" > dist/linux-unpacked/UI_VERSION
           TAR="hifi-ui-${VERSION}.tar.gz"
           tar czf "$TAR" -C dist/linux-unpacked .
+          sha256sum "$TAR" > "${TAR}.sha256"
+          echo "tarball=$TAR" >> "$GITHUB_OUTPUT"
+
+      - name: Package system-components OTA bundle (tarball + sha256)
+        id: packsys
+        run: |
+          VERSION="${{ steps.ver.outputs.version }}"
+          ROOT=sysbundle
+          rm -rf "$ROOT"
+          mkdir -p "$ROOT/usr/local/bin" "$ROOT/usr/local/sbin" "$ROOT/etc/systemd/system"
+          # Python API + daemons
+          cp api_server.py vu_meter_daemon.py sources_server.py "$ROOT/usr/local/bin/"
+          # Helper / OTA scripts
+          cp distro/config/includes.chroot/usr/local/sbin/*.sh "$ROOT/usr/local/sbin/"
+          # systemd units
+          cp distro/config/includes.chroot/etc/systemd/system/*.service "$ROOT/etc/systemd/system/"
+          printf '%s\n' "$VERSION" > "$ROOT/SYSTEM_VERSION"
+          TAR="hifi-system-${VERSION}.tar.gz"
+          tar czf "$TAR" -C "$ROOT" .
           sha256sum "$TAR" > "${TAR}.sha256"
           echo "tarball=$TAR" >> "$GITHUB_OUTPUT"
 
@@ -64,13 +85,17 @@ jobs:
           files: |
             ${{ steps.pack.outputs.tarball }}
             ${{ steps.pack.outputs.tarball }}.sha256
+            ${{ steps.packsys.outputs.tarball }}
+            ${{ steps.packsys.outputs.tarball }}.sha256
 
       - name: Upload artifact (manual runs)
         if: github.ref_type != 'tag'
         uses: actions/upload-artifact@v4
         with:
-          name: hifi-ui-ota
+          name: hifi-ota
           path: |
             ${{ steps.pack.outputs.tarball }}
             ${{ steps.pack.outputs.tarball }}.sha256
+            ${{ steps.packsys.outputs.tarball }}
+            ${{ steps.packsys.outputs.tarball }}.sha256
           retention-days: 7

@@ -111,6 +111,14 @@ export const systemAPI = {
   // Poll OTA progress: { state, progress, version, message }
   getAppUpdateStatus: () => apiGet('/app_update/status'),
 
+  // ── OTA update of the custom system components (API/daemons/units) ──
+  // Check GitHub Releases for the hifi-system bundle: { current, latest, update_available, ... }
+  checkSystemUpdate: () => apiGet('/system_update/check'),
+  // Start the system update (download + install files + restart services). { started, version|message }
+  applySystemUpdate: () => apiPost('/system_update/apply'),
+  // Poll system update progress: { state, progress, version, message }
+  getSystemUpdateStatus: () => apiGet('/system_update/status'),
+
   // ── Lyrion Music Server update ──────────────────────────────────
   // Check downloads server: { current, latest, update_available, asset_url }
   checkLyrionUpdate: () => apiGet('/lyrion_update/check'),

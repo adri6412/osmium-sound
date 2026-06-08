@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Settings as SettingsIcon, Keyboard, X, Menu, Server, Youtube, Disc3 } from 'lucide-react';
+import { Settings as SettingsIcon, Keyboard, X, Menu, Server } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 /**
@@ -11,8 +11,6 @@ const Sidebar = ({ onNavigate, currentPage, isOpen, setIsOpen }) => {
 
   const navItems = [
     { key: 'lyrion', icon: Server, label: 'Libreria Locale' },
-    { key: 'spotify', icon: Disc3, label: 'Spotify' },
-    { key: 'youtube', icon: Youtube, label: 'YouTube' },
     { key: 'settings', icon: SettingsIcon, label: 'Impostazioni' },
   ];
 
