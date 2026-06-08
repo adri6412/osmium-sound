@@ -55,6 +55,18 @@ const Settings = () => {
   const [lyrionStatus, setLyrionStatus] = useState(null);
   const lyrionPollRef = useRef(null);
 
+  // Combined UI+System OTA (single-button) state
+  const [isApplyingAll, setIsApplyingAll] = useState(false);
+  const [allStatus, setAllStatus] = useState(null); // { phase, message } combined progress
+
+  // "Advanced" updates (Lyrion) collapsible
+  const [showAdvanced, setShowAdvanced] = useState(false);
+
+  // Check-for-updates-on-startup preference (persisted)
+  const [autoCheck, setAutoCheck] = useState(
+    localStorage.getItem('hifiAutoCheckUpdates') !== 'false'
+  );
+
   // Refs for input fields with automatic keyboard
   const lyrionUrlRef = useKeyboardInput(lyrionUrl, setLyrionUrl);
   
@@ -66,17 +78,28 @@ const Settings = () => {
     loadSystemData();
   }, []);
 
-  // Auto-check for a UI (OTA) update on mount; clean up any poll on unmount
+  // Auto-check for updates on mount (only if the user kept it enabled);
+  // clean up any poll on unmount.
   useEffect(() => {
-    checkAppUpdate();
-    checkSystemUpdate();
-    checkLyrionUpdate();
+    if (autoCheck) {
+      checkAppUpdate();
+      checkSystemUpdate();
+      checkLyrionUpdate();
+    }
     return () => {
       if (otaPollRef.current) clearInterval(otaPollRef.current);
       if (systemPollRef.current) clearInterval(systemPollRef.current);
       if (lyrionPollRef.current) clearInterval(lyrionPollRef.current);
     };
   }, []);
+
+  // Publish "update available" so the Sidebar can show a badge. We consider
+  // only UI + System here (Lyrion lives under Advanced).
+  useEffect(() => {
+    const available = !!(appUpdate?.update_available || systemUpdate?.update_available);
+    localStorage.setItem('hifiUpdateAvailable', available ? '1' : '0');
+    window.dispatchEvent(new CustomEvent('hifi-update-available', { detail: available }));
+  }, [appUpdate, systemUpdate]);
 
   // ── OTA UI update handlers ──────────────────────────────────────
   const checkAppUpdate = async () => {
@@ -95,10 +118,12 @@ const Settings = () => {
     }
   };
 
+  // Resolves to true on success, false on error. Used both by the single
+  // "UI" button and by the combined UI+System flow.
   const applyAppUpdate = async () => {
     if (!apiConnected) {
       setUpdateMessage('Errore: Server API non disponibile');
-      return;
+      return false;
     }
     setIsApplyingUpdate(true);
     setOtaStatus({ state: 'starting', message: 'Avvio aggiornamento…' });
@@ -107,23 +132,27 @@ const Settings = () => {
       if (!result.success || !result.data.started) {
         setOtaStatus({ state: 'error', message: result.data?.message || result.message || 'Avvio fallito' });
         setIsApplyingUpdate(false);
-        return;
+        return false;
       }
       // Poll progress until done/error (the UI will be restarted on success).
-      otaPollRef.current = setInterval(async () => {
-        const s = await systemAPI.getAppUpdateStatus();
-        if (s.success) {
-          setOtaStatus(s.data);
-          if (s.data.state === 'done' || s.data.state === 'error') {
-            clearInterval(otaPollRef.current);
-            otaPollRef.current = null;
-            setIsApplyingUpdate(false);
+      return await new Promise((resolve) => {
+        otaPollRef.current = setInterval(async () => {
+          const s = await systemAPI.getAppUpdateStatus();
+          if (s.success) {
+            setOtaStatus(s.data);
+            if (s.data.state === 'done' || s.data.state === 'error') {
+              clearInterval(otaPollRef.current);
+              otaPollRef.current = null;
+              setIsApplyingUpdate(false);
+              resolve(s.data.state === 'done');
+            }
           }
-        }
-      }, 2000);
+        }, 2000);
+      });
     } catch (error) {
       setOtaStatus({ state: 'error', message: 'Errore durante l\'aggiornamento' });
       setIsApplyingUpdate(false);
+      return false;
     }
   };
 
@@ -144,10 +173,11 @@ const Settings = () => {
     }
   };
 
+  // Resolves to true on success, false on error.
   const applySystemUpdate = async () => {
     if (!apiConnected) {
       setUpdateMessage('Errore: Server API non disponibile');
-      return;
+      return false;
     }
     setIsApplyingSystem(true);
     setSystemStatus({ state: 'starting', message: 'Avvio aggiornamento…' });
@@ -156,27 +186,78 @@ const Settings = () => {
       if (!result.success || !result.data.started) {
         setSystemStatus({ state: 'error', message: result.data?.message || result.message || 'Avvio fallito' });
         setIsApplyingSystem(false);
-        return;
+        return false;
       }
       // Poll progress until done/error. The API itself restarts at the end, so
       // a transient network error during polling is expected near completion.
-      systemPollRef.current = setInterval(async () => {
-        const s = await systemAPI.getSystemUpdateStatus();
-        if (s.success) {
-          setSystemStatus(s.data);
-          if (s.data.state === 'done' || s.data.state === 'error') {
-            clearInterval(systemPollRef.current);
-            systemPollRef.current = null;
-            setIsApplyingSystem(false);
-            if (s.data.state === 'done') checkSystemUpdate();
+      return await new Promise((resolve) => {
+        systemPollRef.current = setInterval(async () => {
+          const s = await systemAPI.getSystemUpdateStatus();
+          if (s.success) {
+            setSystemStatus(s.data);
+            if (s.data.state === 'done' || s.data.state === 'error') {
+              clearInterval(systemPollRef.current);
+              systemPollRef.current = null;
+              setIsApplyingSystem(false);
+              if (s.data.state === 'done') checkSystemUpdate();
+              resolve(s.data.state === 'done');
+            }
           }
-        }
-      }, 2000);
+        }, 2000);
+      });
     } catch (error) {
       setSystemStatus({ state: 'error', message: 'Errore durante l\'aggiornamento' });
       setIsApplyingSystem(false);
+      return false;
     }
   };
+
+  // ── Combined UI + System OTA (single button) ────────────────────
+  // Updates the system components FIRST (API/daemons/scripts) and the UI
+  // LAST, since applying the UI restarts the Electron front-end and would
+  // otherwise interrupt an in-progress system update.
+  const applyAllUpdates = async () => {
+    if (!apiConnected) {
+      setUpdateMessage('Errore: Server API non disponibile');
+      return;
+    }
+    setIsApplyingAll(true);
+    try {
+      if (systemUpdate?.update_available) {
+        setAllStatus({ phase: 'system', message: 'Aggiornamento componenti di sistema…' });
+        const ok = await applySystemUpdate();
+        if (!ok) {
+          setAllStatus({ phase: 'error', message: 'Aggiornamento sistema fallito' });
+          setIsApplyingAll(false);
+          return;
+        }
+      }
+      if (appUpdate?.update_available) {
+        setAllStatus({ phase: 'ui', message: 'Aggiornamento interfaccia (riavvio al termine)…' });
+        await applyAppUpdate(); // restarts the UI on success
+      }
+      setAllStatus({ phase: 'done', message: 'Aggiornamento completato' });
+    } catch (error) {
+      setAllStatus({ phase: 'error', message: 'Errore durante l\'aggiornamento' });
+    } finally {
+      setIsApplyingAll(false);
+    }
+  };
+
+  const refreshAllChecks = () => {
+    checkAppUpdate();
+    checkSystemUpdate();
+  };
+
+  const toggleAutoCheck = () => {
+    setAutoCheck((prev) => {
+      const next = !prev;
+      localStorage.setItem('hifiAutoCheckUpdates', next ? 'true' : 'false');
+      return next;
+    });
+  };
+
+  const uiOrSystemAvailable = !!(appUpdate?.update_available || systemUpdate?.update_available);
 
   // ── Lyrion update handlers ──────────────────────────────────────
   const checkLyrionUpdate = async () => {
@@ -363,19 +444,9 @@ const Settings = () => {
       ]
     },
     {
-      title: 'Aggiornamento UI',
+      title: 'Aggiornamenti',
       icon: Download,
-      content: 'custom-app-update'
-    },
-    {
-      title: 'Aggiornamento Sistema',
-      icon: Download,
-      content: 'custom-system-update'
-    },
-    {
-      title: 'Aggiornamento Lyrion',
-      icon: Download,
-      content: 'custom-lyrion-update'
+      content: 'custom-updates'
     },
     {
       title: 'Controlli Sistema',
@@ -569,50 +640,57 @@ const Settings = () => {
                   </div>
                 )}
 
-                {/* Custom App (OTA) Update Section */}
-                {section.content === 'custom-app-update' && (
+                {/* Unified UI + System OTA Update Section */}
+                {section.content === 'custom-updates' && (
                   <div className="space-y-4">
-                    {/* Version info */}
-                    <div className="bg-hifi-dark rounded-lg p-4 space-y-2">
-                      <div className="flex items-center justify-between">
-                        <span className="text-hifi-silver text-sm">Versione installata</span>
-                        <span className="text-white font-mono text-sm">
-                          {appUpdate?.current || systemInfo.version || '...'}
-                        </span>
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <span className="text-hifi-silver text-sm">Ultima versione</span>
-                        <span className="text-white font-mono text-sm">
-                          {appUpdate?.error ? 'N/D' : (appUpdate?.latest || '...')}
-                        </span>
+                    {/* Version rows: UI + System */}
+                    <div className="bg-hifi-dark rounded-lg p-4 space-y-3">
+                      <div className="space-y-1">
+                        <div className="flex items-center justify-between">
+                          <span className="text-hifi-silver text-sm">Interfaccia (UI)</span>
+                          <span className="text-white font-mono text-sm">
+                            {appUpdate?.current || systemInfo.version || '...'}
+                            {appUpdate?.update_available && (
+                              <span className="text-hifi-gold"> → {appUpdate.latest}</span>
+                            )}
+                          </span>
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <span className="text-hifi-silver text-sm">Sistema (API/daemon/script)</span>
+                          <span className="text-white font-mono text-sm">
+                            {systemUpdate?.current || '...'}
+                            {systemUpdate?.update_available && (
+                              <span className="text-hifi-gold"> → {systemUpdate.latest}</span>
+                            )}
+                          </span>
+                        </div>
                       </div>
                     </div>
 
-                    {/* Update available badge */}
-                    {appUpdate?.update_available && (
+                    {/* Status summary */}
+                    {uiOrSystemAvailable ? (
                       <div className="rounded-lg p-3 text-center text-sm bg-hifi-gold/20 text-hifi-gold border border-hifi-gold/40">
-                        Aggiornamento disponibile: {appUpdate.latest}
+                        Aggiornamento disponibile
                       </div>
-                    )}
-                    {appUpdate && !appUpdate.error && !appUpdate.update_available && (
+                    ) : (appUpdate && systemUpdate && !appUpdate.error && !systemUpdate.error) ? (
                       <div className="rounded-lg p-3 text-center text-sm bg-hifi-dark text-hifi-silver">
-                        L'interfaccia è aggiornata
+                        Tutto aggiornato
                       </div>
-                    )}
-                    {appUpdate?.error && (
+                    ) : null}
+                    {(appUpdate?.error || systemUpdate?.error) && (
                       <div className="rounded-lg p-3 text-center text-sm bg-red-900/20 text-red-300 border border-red-500/30">
-                        {appUpdate.error}
+                        {appUpdate?.error || systemUpdate?.error}
                       </div>
                     )}
 
                     {/* Check for updates */}
                     <motion.button
-                      onClick={checkAppUpdate}
-                      disabled={isCheckingUpdate || isApplyingUpdate}
+                      onClick={refreshAllChecks}
+                      disabled={isCheckingUpdate || isCheckingSystem || isApplyingAll}
                       className="w-full bg-hifi-accent hover:bg-hifi-light disabled:bg-hifi-dark text-white py-3 rounded-lg font-medium flex items-center justify-center space-x-2 transition-colors"
-                      whileTap={{ scale: isCheckingUpdate ? 1 : 0.95 }}
+                      whileTap={{ scale: (isCheckingUpdate || isCheckingSystem) ? 1 : 0.95 }}
                     >
-                      {isCheckingUpdate ? (
+                      {(isCheckingUpdate || isCheckingSystem) ? (
                         <>
                           <Loader2 size={18} className="animate-spin" />
                           <span>Controllo in corso...</span>
@@ -625,15 +703,15 @@ const Settings = () => {
                       )}
                     </motion.button>
 
-                    {/* Apply update */}
-                    {appUpdate?.update_available && (
+                    {/* Single apply button: System then UI */}
+                    {uiOrSystemAvailable && (
                       <motion.button
-                        onClick={applyAppUpdate}
-                        disabled={isApplyingUpdate}
+                        onClick={applyAllUpdates}
+                        disabled={isApplyingAll}
                         className="w-full bg-hifi-gold hover:bg-yellow-600 disabled:bg-hifi-accent text-black py-4 rounded-lg font-semibold flex items-center justify-center space-x-2 transition-colors"
-                        whileTap={{ scale: isApplyingUpdate ? 1 : 0.95 }}
+                        whileTap={{ scale: isApplyingAll ? 1 : 0.95 }}
                       >
-                        {isApplyingUpdate ? (
+                        {isApplyingAll ? (
                           <>
                             <Loader2 size={20} className="animate-spin" />
                             <span>Aggiornamento...</span>
@@ -641,138 +719,143 @@ const Settings = () => {
                         ) : (
                           <>
                             <Download size={20} />
-                            <span>Aggiorna ora ({appUpdate.latest})</span>
+                            <span>Aggiorna ora (UI + Sistema)</span>
                           </>
                         )}
                       </motion.button>
                     )}
 
-                    {isApplyingUpdate && (
+                    {isApplyingAll && (
                       <p className="text-xs text-hifi-silver text-center">
-                        Il dispositivo riavvierà l'interfaccia al termine.
+                        Vengono aggiornati prima i componenti di sistema, poi l'interfaccia (che si riavvierà al termine).
                       </p>
                     )}
 
-                    {/* OTA progress */}
-                    {otaStatus && (
+                    {/* Combined progress */}
+                    {allStatus && (
                       <div className={`rounded-lg p-3 text-center text-sm ${
-                        otaStatus.state === 'error'
+                        allStatus.phase === 'error'
                           ? 'bg-red-900/20 text-red-300 border border-red-500/30'
                           : 'bg-hifi-dark text-hifi-silver'
                       }`}>
-                        {otaStatus.message || otaStatus.state}
-                        {typeof otaStatus.progress === 'number' && otaStatus.state !== 'error' && (
-                          <span className="ml-1">({otaStatus.progress}%)</span>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                {/* Custom System-components Update Section */}
-                {section.content === 'custom-system-update' && (
-                  <div className="space-y-4">
-                    <p className="text-sm text-hifi-silver">
-                      Aggiorna i componenti interni: server API, daemon VU-meter, servizio sorgenti e script di sistema.
-                    </p>
-
-                    {/* Version info */}
-                    <div className="bg-hifi-dark rounded-lg p-4 space-y-2">
-                      <div className="flex items-center justify-between">
-                        <span className="text-hifi-silver text-sm">Versione installata</span>
-                        <span className="text-white font-mono text-sm">
-                          {systemUpdate?.current || '...'}
-                        </span>
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <span className="text-hifi-silver text-sm">Ultima versione</span>
-                        <span className="text-white font-mono text-sm">
-                          {systemUpdate?.error ? 'N/D' : (systemUpdate?.latest || '...')}
-                        </span>
-                      </div>
-                    </div>
-
-                    {systemUpdate?.update_available && (
-                      <div className="rounded-lg p-3 text-center text-sm bg-hifi-gold/20 text-hifi-gold border border-hifi-gold/40">
-                        Aggiornamento disponibile: {systemUpdate.latest}
-                      </div>
-                    )}
-                    {systemUpdate && !systemUpdate.error && !systemUpdate.update_available && (
-                      <div className="rounded-lg p-3 text-center text-sm bg-hifi-dark text-hifi-silver">
-                        I componenti di sistema sono aggiornati
-                      </div>
-                    )}
-                    {systemUpdate?.error && (
-                      <div className="rounded-lg p-3 text-center text-sm bg-red-900/20 text-red-300 border border-red-500/30">
-                        {systemUpdate.error}
+                        {allStatus.message}
                       </div>
                     )}
 
-                    {/* Check for updates */}
-                    <motion.button
-                      onClick={checkSystemUpdate}
-                      disabled={isCheckingSystem || isApplyingSystem}
-                      className="w-full bg-hifi-accent hover:bg-hifi-light disabled:bg-hifi-dark text-white py-3 rounded-lg font-medium flex items-center justify-center space-x-2 transition-colors"
-                      whileTap={{ scale: isCheckingSystem ? 1 : 0.95 }}
+                    {/* Auto-check toggle */}
+                    <button
+                      onClick={toggleAutoCheck}
+                      className="w-full flex items-center justify-between bg-hifi-dark hover:bg-hifi-light/40 rounded-lg px-4 py-3 transition-colors"
                     >
-                      {isCheckingSystem ? (
-                        <>
-                          <Loader2 size={18} className="animate-spin" />
-                          <span>Controllo in corso...</span>
-                        </>
-                      ) : (
-                        <>
-                          <RotateCw size={18} />
-                          <span>Controlla aggiornamenti</span>
-                        </>
-                      )}
-                    </motion.button>
+                      <span className="text-sm text-white">Controlla aggiornamenti all'avvio</span>
+                      <span className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${autoCheck ? 'bg-hifi-gold' : 'bg-hifi-accent'}`}>
+                        <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${autoCheck ? 'translate-x-6' : 'translate-x-1'}`} />
+                      </span>
+                    </button>
 
-                    {/* Apply update */}
-                    {systemUpdate?.update_available && (
-                      <motion.button
-                        onClick={applySystemUpdate}
-                        disabled={isApplyingSystem}
-                        className="w-full bg-hifi-gold hover:bg-yellow-600 disabled:bg-hifi-accent text-black py-4 rounded-lg font-semibold flex items-center justify-center space-x-2 transition-colors"
-                        whileTap={{ scale: isApplyingSystem ? 1 : 0.95 }}
-                      >
-                        {isApplyingSystem ? (
-                          <>
-                            <Loader2 size={20} className="animate-spin" />
-                            <span>Aggiornamento...</span>
-                          </>
-                        ) : (
-                          <>
-                            <Download size={20} />
-                            <span>Aggiorna ora ({systemUpdate.latest})</span>
-                          </>
+                    {/* Advanced (Lyrion) collapsible */}
+                    <button
+                      onClick={() => setShowAdvanced((v) => !v)}
+                      className="w-full text-left text-sm text-hifi-silver hover:text-white pt-2 transition-colors"
+                    >
+                      {showAdvanced ? '▾' : '▸'} Avanzate (Lyrion Music Server)
+                    </button>
+
+                    {showAdvanced && (
+                      <div className="space-y-3 border-t border-hifi-accent pt-4">
+                        <div className="bg-hifi-dark rounded-lg p-4 space-y-2">
+                          <div className="flex items-center justify-between">
+                            <span className="text-hifi-silver text-sm">Lyrion installato</span>
+                            <span className="text-white font-mono text-sm">{lyrionUpdate?.current || '...'}</span>
+                          </div>
+                          <div className="flex items-center justify-between">
+                            <span className="text-hifi-silver text-sm">Ultima versione</span>
+                            <span className="text-white font-mono text-sm">
+                              {lyrionUpdate?.error ? 'N/D' : (lyrionUpdate?.latest || '...')}
+                            </span>
+                          </div>
+                        </div>
+
+                        {lyrionUpdate?.update_available && (
+                          <div className="rounded-lg p-3 text-center text-sm bg-hifi-gold/20 text-hifi-gold border border-hifi-gold/40">
+                            Aggiornamento Lyrion disponibile: {lyrionUpdate.latest}
+                          </div>
                         )}
-                      </motion.button>
-                    )}
+                        {lyrionUpdate && !lyrionUpdate.error && !lyrionUpdate.update_available && (
+                          <div className="rounded-lg p-3 text-center text-sm bg-hifi-dark text-hifi-silver">
+                            Lyrion è aggiornato
+                          </div>
+                        )}
+                        {lyrionUpdate?.error && (
+                          <div className="rounded-lg p-3 text-center text-sm bg-red-900/20 text-red-300 border border-red-500/30">
+                            {lyrionUpdate.error}
+                          </div>
+                        )}
 
-                    {isApplyingSystem && (
-                      <p className="text-xs text-hifi-silver text-center">
-                        I servizi di sistema verranno riavviati al termine.
-                      </p>
-                    )}
+                        <motion.button
+                          onClick={checkLyrionUpdate}
+                          disabled={isCheckingLyrion || isApplyingLyrion}
+                          className="w-full bg-hifi-accent hover:bg-hifi-light disabled:bg-hifi-dark text-white py-3 rounded-lg font-medium flex items-center justify-center space-x-2 transition-colors"
+                          whileTap={{ scale: isCheckingLyrion ? 1 : 0.95 }}
+                        >
+                          {isCheckingLyrion ? (
+                            <>
+                              <Loader2 size={18} className="animate-spin" />
+                              <span>Controllo in corso...</span>
+                            </>
+                          ) : (
+                            <>
+                              <RotateCw size={18} />
+                              <span>Controlla aggiornamenti Lyrion</span>
+                            </>
+                          )}
+                        </motion.button>
 
-                    {/* System update progress */}
-                    {systemStatus && (
-                      <div className={`rounded-lg p-3 text-center text-sm ${
-                        systemStatus.state === 'error'
-                          ? 'bg-red-900/20 text-red-300 border border-red-500/30'
-                          : 'bg-hifi-dark text-hifi-silver'
-                      }`}>
-                        {systemStatus.message || systemStatus.state}
-                        {typeof systemStatus.progress === 'number' && systemStatus.state !== 'error' && (
-                          <span className="ml-1">({systemStatus.progress}%)</span>
+                        {lyrionUpdate?.update_available && (
+                          <motion.button
+                            onClick={applyLyrionUpdate}
+                            disabled={isApplyingLyrion}
+                            className="w-full bg-hifi-gold hover:bg-yellow-600 disabled:bg-hifi-accent text-black py-4 rounded-lg font-semibold flex items-center justify-center space-x-2 transition-colors"
+                            whileTap={{ scale: isApplyingLyrion ? 1 : 0.95 }}
+                          >
+                            {isApplyingLyrion ? (
+                              <>
+                                <Loader2 size={20} className="animate-spin" />
+                                <span>Aggiornamento...</span>
+                              </>
+                            ) : (
+                              <>
+                                <Download size={20} />
+                                <span>Aggiorna Lyrion ({lyrionUpdate.latest})</span>
+                              </>
+                            )}
+                          </motion.button>
+                        )}
+
+                        {isApplyingLyrion && (
+                          <p className="text-xs text-hifi-silver text-center">
+                            Il server musicale verrà riavviato al termine.
+                          </p>
+                        )}
+
+                        {lyrionStatus && (
+                          <div className={`rounded-lg p-3 text-center text-sm ${
+                            lyrionStatus.state === 'error'
+                              ? 'bg-red-900/20 text-red-300 border border-red-500/30'
+                              : 'bg-hifi-dark text-hifi-silver'
+                          }`}>
+                            {lyrionStatus.message || lyrionStatus.state}
+                            {typeof lyrionStatus.progress === 'number' && lyrionStatus.state !== 'error' && (
+                              <span className="ml-1">({lyrionStatus.progress}%)</span>
+                            )}
+                          </div>
                         )}
                       </div>
                     )}
                   </div>
                 )}
 
-                {/* Custom Lyrion Update Section */}
+                {/* Legacy standalone Lyrion section (now under Advanced) */}
                 {section.content === 'custom-lyrion-update' && (
                   <div className="space-y-4">
                     {/* Version info */}

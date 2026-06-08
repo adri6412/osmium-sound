@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Settings as SettingsIcon, Keyboard, X, Menu, Server } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -8,6 +8,17 @@ import { motion, AnimatePresence } from 'framer-motion';
  */
 const Sidebar = ({ onNavigate, currentPage, isOpen, setIsOpen }) => {
   const [isGlobalKeyboardVisible, setIsGlobalKeyboardVisible] = useState(false);
+
+  // Show a badge on Settings when a UI/System update is available. The
+  // Settings screen publishes this flag via localStorage + a custom event.
+  const [updateAvailable, setUpdateAvailable] = useState(
+    localStorage.getItem('hifiUpdateAvailable') === '1'
+  );
+  useEffect(() => {
+    const onUpdate = (e) => setUpdateAvailable(!!e.detail);
+    window.addEventListener('hifi-update-available', onUpdate);
+    return () => window.removeEventListener('hifi-update-available', onUpdate);
+  }, []);
 
   const navItems = [
     { key: 'lyrion', icon: Server, label: 'Libreria Locale' },
@@ -100,7 +111,12 @@ const Sidebar = ({ onNavigate, currentPage, isOpen, setIsOpen }) => {
                       }
                     `}
                   >
-                    <Icon size={24} />
+                    <span className="relative">
+                      <Icon size={24} />
+                      {item.key === 'settings' && updateAvailable && (
+                        <span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-hifi-gold ring-2 ring-hifi-dark" />
+                      )}
+                    </span>
                     <span className="text-lg">{item.label}</span>
                   </button>
                 );
