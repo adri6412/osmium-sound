@@ -30,3 +30,7 @@ config/includes.chroot/usr/local/bin/sources_server.py
 config/includes.chroot/usr/share/plymouth/themes/hifi/logo.png
 config/includes.chroot/opt/hifi-lyrion/
 config/packages.chroot/*.deb
+
+# Installer boot splash + menus generated at build time by build-distro.sh
+config/includes.binary/isolinux/splash.png
+config/includes.binary/boot/grub/splash.png

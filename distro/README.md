@@ -1,9 +1,11 @@
 # HiFi Player — Debian Appliance Distro
 
-Builds a self-contained, **installable Debian ISO** that turns any x86 PC into a
-commercial-style network streamer running the HiFi Player UI on top of Lyrion
-Music Server — with a **completely hidden boot** (no GRUB menu, no kernel text,
-branded Plymouth splash) that goes straight into the fullscreen player.
+Builds a self-contained, **installer-only Debian ISO** (no bootable live
+system) that turns any x86 PC into a commercial-style network streamer running
+the HiFi Player UI on top of Lyrion Music Server. The ISO boot menu is branded
+with the **same logo as the Plymouth splash**, and after install the machine
+has a **completely hidden boot** (no GRUB menu, no kernel text, branded Plymouth
+splash) that goes straight into the fullscreen player.
 
 ## What the image contains
 
@@ -117,7 +119,10 @@ Write the ISO to a USB stick and boot the target:
 sudo dd if=hifi-player-installer.iso of=/dev/sdX bs=4M status=progress conv=fsync
 ```
 
-Pick **Install** from the boot menu. The installation is **fully automatic**
+> The ISO is **installer-only** (no bootable live system). The boot menu is
+> branded with the **same logo as the Plymouth splash** (gold "HiFi Player" on
+> black) and shows a single **Install HiFi Player** entry that auto-starts after
+> a few seconds. The installation is **fully automatic**
 (preseeded — see `config/includes.installer/preseed.cfg`):
 
 - It **clones** the live system, so the `hifi` user, services and app already
@@ -137,10 +142,12 @@ Default credentials (for SSH/maintenance): user `hifi` / password `hifi`.
 
 ### Choosing automatic vs interactive install
 
-The boot menu entry passes `auto=true priority=critical preseed/file=/preseed.cfg`
-(set in `build-distro.sh` via `--bootappend-install`). For a one-off interactive
-install, edit that line at the boot prompt (press `Tab`/`e`) and remove the
-`auto=true priority=critical preseed/file=...` part.
+The single **Install HiFi Player** entry passes
+`auto=true priority=critical preseed/file=/preseed.cfg` (see the branded menus
+written by `build-distro.sh` into `config/includes.binary/isolinux/install.cfg`
+and `config/includes.binary/boot/grub/grub.cfg`). For a one-off interactive
+install, edit that line at the boot prompt (press `Tab` on BIOS / `e` on UEFI)
+and remove the `auto=true priority=critical preseed/file=...` part.
 
 ## Audio output
 
@@ -153,7 +160,8 @@ the name with `aplay -l`), then `systemctl restart squeezelite`.
 | Want to change | Edit |
 |---|---|
 | Packages installed | `config/package-lists/hifi.list.chroot` |
-| Boot splash logo/text | logo generated in `build-distro.sh`; theme in `config/.../plymouth/themes/hifi/` |
+| Plymouth splash logo/text | logo generated in `build-distro.sh`; theme in `config/.../plymouth/themes/hifi/` |
+| ISO installer boot menu / splash | splash + menus generated in `build-distro.sh` → `config/includes.binary/{isolinux,boot/grub}` |
 | GRUB / kernel quiet flags | `config/hooks/normal/0200-hidden-boot.hook.chroot` |
 | Kiosk launch flags | `.xsession` written by `config/hooks/normal/0100-system-setup.hook.chroot` |
 | Autologin user/session | `config/includes.chroot/etc/lightdm/lightdm.conf.d/99-hifi-autologin.conf` |
