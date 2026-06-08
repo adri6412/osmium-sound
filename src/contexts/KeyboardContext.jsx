@@ -16,15 +16,12 @@ export const KeyboardProvider = ({ children }) => {
   const [inputValue, setInputValue] = useState('');
 
   const showKeyboard = (inputRef, currentValue = '') => {
-    console.log('⌨️ showKeyboard called!', { inputRef, currentValue, activeInput });
     setActiveInput(inputRef);
     setInputValue(currentValue);
     setIsKeyboardVisible(true);
-    console.log('⌨️ Keyboard should be visible now!');
   };
 
   const hideKeyboard = () => {
-    console.log('❌ hideKeyboard called!');
     setIsKeyboardVisible(false);
     setActiveInput(null);
     setInputValue('');
@@ -70,7 +67,6 @@ export const KeyboardProvider = ({ children }) => {
   };
 
   const toggleKeyboard = () => {
-    console.log('🔄 toggleKeyboard called!', { isKeyboardVisible });
     if (isKeyboardVisible) {
       hideKeyboard();
     } else {
@@ -81,7 +77,6 @@ export const KeyboardProvider = ({ children }) => {
   // Listen for global shortcut toggle
   useEffect(() => {
     const handleGlobalToggle = () => {
-      console.log('🌐 Global shortcut triggered - toggling keyboard');
       toggleKeyboard();
     };
 

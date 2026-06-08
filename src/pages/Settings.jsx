@@ -28,10 +28,6 @@ const Settings = () => {
   });
   const [networkInfo, setNetworkInfo] = useState([]);
   const [selectedInterface, setSelectedInterface] = useState('');
-  const [networkMode, setNetworkMode] = useState('dhcp');
-  const [staticIP, setStaticIP] = useState('192.168.1.100');
-  const [staticGateway, setStaticGateway] = useState('192.168.1.1');
-  const [staticDNS, setStaticDNS] = useState('8.8.8.8');
   const [lyrionUrl, setLyrionUrl] = useState(localStorage.getItem('lyrionUrl') || 'http://localhost:9000');
   const [isUpdating, setIsUpdating] = useState(false);
   const [updateMessage, setUpdateMessage] = useState('');
@@ -53,13 +49,10 @@ const Settings = () => {
   const lyrionPollRef = useRef(null);
 
   // Refs for input fields with automatic keyboard
-  const ipInputRef = useKeyboardInput(staticIP, setStaticIP);
-  const gatewayInputRef = useKeyboardInput(staticGateway, setStaticGateway);
-  const dnsInputRef = useKeyboardInput(staticDNS, setStaticDNS);
   const lyrionUrlRef = useKeyboardInput(lyrionUrl, setLyrionUrl);
   
   // Test keyboard context
-  const { showKeyboard, isKeyboardVisible } = useKeyboard();
+  const { showKeyboard } = useKeyboard();
 
   // Load system and network data on component mount
   useEffect(() => {
@@ -174,24 +167,7 @@ const Settings = () => {
     }
   };
 
-  // Input change handlers
-  const handleInputChange = (e, setter) => {
-    setter(e.target.value);
-  };
-
   // Keyboard input handlers that work with the virtual keyboard
-  const handleIPChange = (e) => {
-    setStaticIP(e.target.value);
-  };
-
-  const handleGatewayChange = (e) => {
-    setStaticGateway(e.target.value);
-  };
-
-  const handleDNSChange = (e) => {
-    setStaticDNS(e.target.value);
-  };
-
   const handleLyrionUrlChange = (e) => {
     setLyrionUrl(e.target.value);
     localStorage.setItem('lyrionUrl', e.target.value);
@@ -296,45 +272,6 @@ const Settings = () => {
       } catch (error) {
         setUpdateMessage('Errore durante lo spegnimento del sistema');
       }
-    }
-  };
-
-  const handleNetworkModeChange = async () => {
-    if (!apiConnected) {
-      setUpdateMessage('Errore: Server API non disponibile');
-      return;
-    }
-
-    if (!selectedInterface) {
-      setUpdateMessage('Seleziona un\'interfaccia di rete');
-      return;
-    }
-
-    setUpdateMessage('Configurazione di rete in corso...');
-    
-    try {
-      const config = {
-        interface: selectedInterface,
-        mode: networkMode,
-        ...(networkMode === 'static' && {
-          ip: staticIP,
-          gateway: staticGateway,
-          dns: staticDNS
-        })
-      };
-
-      const result = await systemAPI.configureNetwork(config);
-      if (result.success) {
-        setUpdateMessage(result.data.message || 'Configurazione di rete applicata!');
-        // Reload network info after configuration
-        setTimeout(() => {
-          loadSystemData();
-        }, 2000);
-      } else {
-        setUpdateMessage(result.message || 'Errore durante la configurazione di rete');
-      }
-    } catch (error) {
-      setUpdateMessage('Errore durante la configurazione di rete');
     }
   };
 
@@ -528,120 +465,11 @@ const Settings = () => {
                       </div>
                     )}
 
-                    {/* Network Mode Selection */}
-                    <div className="space-y-3">
-                      <label className="text-white font-medium">Modalità Rete</label>
-                      <div className="flex gap-4">
-                        <motion.button
-                          onClick={() => setNetworkMode('dhcp')}
-                          className={`flex-1 py-3 rounded-lg font-semibold transition-colors ${
-                            networkMode === 'dhcp'
-                              ? 'bg-hifi-gold text-black'
-                              : 'bg-hifi-light text-white hover:bg-hifi-accent'
-                          }`}
-                          whileTap={{ scale: 0.95 }}
-                        >
-                          DHCP (Automatico)
-                        </motion.button>
-                        <motion.button
-                          onClick={() => setNetworkMode('static')}
-                          className={`flex-1 py-3 rounded-lg font-semibold transition-colors ${
-                            networkMode === 'static'
-                              ? 'bg-hifi-gold text-black'
-                              : 'bg-hifi-light text-white hover:bg-hifi-accent'
-                          }`}
-                          whileTap={{ scale: 0.95 }}
-                        >
-                          IP Statico
-                        </motion.button>
-                      </div>
+                    {/* Network info notice */}
+                    <div className="flex items-start space-x-2 text-xs text-hifi-silver bg-hifi-dark rounded-lg p-3">
+                      <Info size={14} className="text-hifi-gold mt-0.5 shrink-0" />
+                      <span>La rete è configurata automaticamente tramite DHCP. Collega il cavo Ethernet o configura il Wi-Fi per ottenere un indirizzo IP.</span>
                     </div>
-
-                    {/* Static IP Configuration */}
-                    {networkMode === 'static' && (
-                      <motion.div
-                        initial={{ opacity: 0, height: 0 }}
-                        animate={{ opacity: 1, height: 'auto' }}
-                        className="space-y-3"
-                      >
-                        <div>
-                          <label className="text-sm text-hifi-silver mb-1 block">Indirizzo IP</label>
-                          <div 
-                            onClick={() => {
-                              console.log('🖱️ IP Input wrapper clicked!');
-                              showKeyboard(ipInputRef, staticIP);
-                            }}
-                            className="cursor-pointer"
-                          >
-                            <input
-                              ref={ipInputRef}
-                              type="text"
-                              value={staticIP}
-                              onChange={handleIPChange}
-                              className="w-full bg-hifi-dark border border-hifi-accent rounded-lg px-4 py-2 text-white font-mono focus:outline-none focus:border-hifi-gold cursor-pointer"
-                              placeholder="192.168.1.100"
-                            />
-                          </div>
-                        </div>
-                        <div>
-                          <label className="text-sm text-hifi-silver mb-1 block">Gateway</label>
-                          <div 
-                            onClick={() => {
-                              console.log('🖱️ Gateway Input wrapper clicked!');
-                              showKeyboard(gatewayInputRef, staticGateway);
-                            }}
-                            className="cursor-pointer"
-                          >
-                            <input
-                              ref={gatewayInputRef}
-                              type="text"
-                              value={staticGateway}
-                              onChange={handleGatewayChange}
-                              className="w-full bg-hifi-dark border border-hifi-accent rounded-lg px-4 py-2 text-white font-mono focus:outline-none focus:border-hifi-gold cursor-pointer"
-                              placeholder="192.168.1.1"
-                            />
-                          </div>
-                        </div>
-                        <div>
-                          <label className="text-sm text-hifi-silver mb-1 block">DNS</label>
-                          <div 
-                            onClick={() => {
-                              console.log('🖱️ DNS Input wrapper clicked!');
-                              showKeyboard(dnsInputRef, staticDNS);
-                            }}
-                            className="cursor-pointer"
-                          >
-                            <input
-                              ref={dnsInputRef}
-                              type="text"
-                              value={staticDNS}
-                              onChange={handleDNSChange}
-                              className="w-full bg-hifi-dark border border-hifi-accent rounded-lg px-4 py-2 text-white font-mono focus:outline-none focus:border-hifi-gold cursor-pointer"
-                              placeholder="8.8.8.8"
-                            />
-                          </div>
-                        </div>
-                        <motion.button
-                          onClick={handleNetworkModeChange}
-                          className="w-full bg-hifi-gold text-black py-3 rounded-lg font-semibold hover:bg-yellow-600 transition-colors"
-                          whileTap={{ scale: 0.95 }}
-                        >
-                          Applica Configurazione
-                        </motion.button>
-                      </motion.div>
-                    )}
-
-                    {/* Test Virtual Keyboard Button */}
-                    <motion.button
-                      onClick={() => {
-                        console.log('🧪 Test keyboard button clicked!');
-                        showKeyboard({ current: null }, 'Test value');
-                      }}
-                      className="w-full bg-purple-600 hover:bg-purple-700 text-white py-2 rounded-lg font-medium flex items-center justify-center space-x-2 transition-colors"
-                      whileTap={{ scale: 0.95 }}
-                    >
-                      <span>🧪 Test Tastiera Virtuale</span>
-                    </motion.button>
 
                     {/* Reload Button */}
                     <motion.button
