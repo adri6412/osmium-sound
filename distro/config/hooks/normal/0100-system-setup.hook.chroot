@@ -6,12 +6,18 @@ echo "I: [hifi] creating kiosk user 'hifi'"
 # Groups required for LightDM passwordless autologin on Debian
 groupadd -f autologin
 groupadd -f nopasswdlogin
+# NOTE: 'hifi' is deliberately NOT in the 'sudo' group. The appliance only needs
+# the few specific commands whitelisted in /etc/sudoers.d/hifi (reboot/shutdown,
+# apt, network). Full 'sudo' membership would turn the well-known default
+# password (hifi) into trivial full-root — keep the kiosk account least-privilege.
 if ! id hifi >/dev/null 2>&1; then
-    useradd -m -G audio,video,plugdev,netdev,sudo,autologin,nopasswdlogin -s /bin/bash hifi
+    useradd -m -G audio,video,plugdev,netdev,autologin,nopasswdlogin -s /bin/bash hifi
     echo "hifi:hifi" | chpasswd
 fi
-# Ensure autologin groups even if the user already existed
+# Ensure autologin groups even if the user already existed, and make sure the
+# account is not left in 'sudo' from an earlier build.
 usermod -aG autologin,nopasswdlogin hifi || true
+gpasswd -d hifi sudo 2>/dev/null || true
 
 echo "I: [hifi] writing kiosk X session for user 'hifi'"
 cat > /home/hifi/.xsession <<'XSESSION'

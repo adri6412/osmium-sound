@@ -7,7 +7,8 @@ import {
   RotateCw,
   Download,
   Loader2,
-  Network
+  Network,
+  Volume2
 } from 'lucide-react';
 import { systemAPI, checkApiServer } from '../utils/api';
 import { useKeyboardInput } from '../hooks/useKeyboardInput';
@@ -33,6 +34,12 @@ const Settings = () => {
   const [updateMessage, setUpdateMessage] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const [apiConnected, setApiConnected] = useState(false);
+
+  // Audio output (DAC) selection
+  const [audioDevices, setAudioDevices] = useState([]);
+  const [selectedAudio, setSelectedAudio] = useState('default');
+  const [audioBusy, setAudioBusy] = useState(false);
+  const [audioMessage, setAudioMessage] = useState('');
 
   // OTA UI update state
   const [appUpdate, setAppUpdate] = useState(null); // { current, latest, update_available, ... }
@@ -83,7 +90,32 @@ const Settings = () => {
   // Load system and network data on component mount
   useEffect(() => {
     loadSystemData();
+    loadAudioDevices();
   }, []);
+
+  // ── Audio output (DAC) handlers ─────────────────────────────────
+  const loadAudioDevices = async () => {
+    setAudioBusy(true);
+    setAudioMessage('');
+    const res = await systemAPI.getAudioDevices();
+    setAudioBusy(false);
+    if (res.success && Array.isArray(res.data?.devices)) {
+      setAudioDevices(res.data.devices);
+      // preselect whatever squeezelite is currently configured to use
+      if (res.data.current) setSelectedAudio(res.data.current);
+    } else {
+      setAudioMessage(res.message || 'Elenco dispositivi audio non disponibile.');
+      setAudioDevices([{ id: 'default', name: 'Predefinito di sistema' }]);
+    }
+  };
+
+  const applyAudioDevice = async () => {
+    setAudioBusy(true);
+    setAudioMessage('');
+    const res = await systemAPI.setAudioDevice(selectedAudio);
+    setAudioBusy(false);
+    setAudioMessage(res.data?.message || res.message || (res.success ? 'Uscita audio aggiornata.' : 'Impostazione fallita.'));
+  };
 
   // Auto-check for updates on mount (only if the user kept it enabled);
   // clean up any poll on unmount.
@@ -513,6 +545,11 @@ const Settings = () => {
       content: 'custom-lyrion'
     },
     {
+      title: 'Uscita Audio (DAC)',
+      icon: Volume2,
+      content: 'custom-audio'
+    },
+    {
       title: 'Configurazione Rete',
       icon: Wifi,
       content: 'custom-network'
@@ -609,6 +646,65 @@ const Settings = () => {
                         />
                       </div>
                     </div>
+                  </div>
+                )}
+
+                {/* Custom Audio Output (DAC) Section */}
+                {section.content === 'custom-audio' && (
+                  <div className="space-y-4">
+                    <p className="text-sm text-hifi-silver">
+                      Scegli il dispositivo di riproduzione (DAC). La selezione viene salvata
+                      e mantenuta ai riavvii. La riproduzione DSD è bit-perfect (DoP).
+                    </p>
+
+                    <div className="space-y-2">
+                      {audioDevices.map((dev) => (
+                        <motion.button
+                          key={dev.id}
+                          onClick={() => setSelectedAudio(dev.id)}
+                          className={`w-full p-3 rounded-lg text-left transition-colors ${
+                            selectedAudio === dev.id
+                              ? 'bg-hifi-gold text-black'
+                              : 'bg-hifi-light text-white hover:bg-hifi-accent'
+                          }`}
+                          whileTap={{ scale: 0.95 }}
+                        >
+                          <div className="font-medium text-sm">{dev.name}</div>
+                          <div className="text-xs opacity-75 font-mono">{dev.id}</div>
+                        </motion.button>
+                      ))}
+                    </div>
+
+                    <div className="flex gap-3">
+                      <motion.button
+                        onClick={loadAudioDevices}
+                        disabled={audioBusy}
+                        className="flex-1 bg-hifi-accent hover:bg-hifi-light disabled:bg-hifi-dark text-white py-3 rounded-lg font-medium flex items-center justify-center space-x-2 transition-colors"
+                        whileTap={{ scale: audioBusy ? 1 : 0.95 }}
+                      >
+                        {audioBusy ? <Loader2 size={18} className="animate-spin" /> : <RotateCw size={18} />}
+                        <span>Aggiorna elenco</span>
+                      </motion.button>
+                      <motion.button
+                        onClick={applyAudioDevice}
+                        disabled={audioBusy}
+                        className="flex-1 bg-hifi-gold hover:bg-yellow-600 disabled:bg-hifi-accent text-black py-3 rounded-lg font-semibold flex items-center justify-center space-x-2 transition-colors"
+                        whileTap={{ scale: audioBusy ? 1 : 0.95 }}
+                      >
+                        <Volume2 size={18} />
+                        <span>Imposta uscita</span>
+                      </motion.button>
+                    </div>
+
+                    {audioMessage && (
+                      <div className={`rounded-lg p-3 text-center text-sm ${
+                        audioMessage.toLowerCase().includes('fallit') || audioMessage.toLowerCase().includes('non disponibile')
+                          ? 'bg-red-900/20 text-red-300 border border-red-500/30'
+                          : 'bg-hifi-dark text-hifi-silver'
+                      }`}>
+                        {audioMessage}
+                      </div>
+                    )}
                   </div>
                 )}
 

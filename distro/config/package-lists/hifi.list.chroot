@@ -93,3 +93,8 @@ isc-dhcp-client
 iproute2
 network-manager
 locales
+
+# Automatic security updates (config in /etc/apt/apt.conf.d/52hifi-unattended).
+# The appliance is internet-connected, so unpatched Debian security holes are a
+# real risk; this keeps the base OS patched without manual intervention.
+unattended-upgrades

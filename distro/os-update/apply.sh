@@ -87,4 +87,91 @@ else
     : > "$HIFI_PAYLOAD_DIR/REBOOT"
 fi
 
+# ── Security hardening (idempotent, no reboot) ────────────────────────
+# These changes are baked into new ISOs at build time; this block carries the
+# same hardening to devices that were already installed. Every step is a clean
+# no-op once applied, and NONE of them request a reboot — they take effect live.
+
+# 1) Drop the kiosk user from the 'sudo' group. The appliance only needs the
+#    specific NOPASSWD commands in /etc/sudoers.d/hifi; full 'sudo' membership
+#    would turn the well-known default password into trivial full-root.
+if id -nG hifi 2>/dev/null | tr ' ' '\n' | grep -qx sudo; then
+    gpasswd -d hifi sudo >/dev/null 2>&1 || deluser hifi sudo >/dev/null 2>&1 || true
+    echo "Hardening: removed 'hifi' from sudo group"
+fi
+
+# 2) Pin the apt sudoers rule: `apt-get upgrade *` allows `-o DPkg::Pre-Invoke=…`
+#    (arbitrary root command execution). Replace the wildcard with the exact
+#    invocation the API actually uses. Edit on a backup and revert if visudo
+#    rejects the result, so a bad edit can never lock sudo out.
+SUDOERS=/etc/sudoers.d/hifi
+if [ -f "$SUDOERS" ] && grep -q 'apt-get upgrade \*' "$SUDOERS"; then
+    cp -a "$SUDOERS" "$SUDOERS.hifi-bak.$$"
+    sed -i 's#/usr/bin/apt-get upgrade \*#/usr/bin/apt-get upgrade -y#' "$SUDOERS"
+    if visudo -cf "$SUDOERS" >/dev/null 2>&1; then
+        rm -f "$SUDOERS.hifi-bak.$$"
+        echo "Hardening: pinned apt-get sudoers rule"
+    else
+        mv -f "$SUDOERS.hifi-bak.$$" "$SUDOERS"
+        echo "W: sudoers edit reverted (validation failed)" >&2
+    fi
+fi
+
+# 3) Enable automatic Debian security updates (security archive only, no auto
+#    reboot — the box may be mid-playback).
+UNATT=/etc/apt/apt.conf.d/52hifi-unattended
+DESIRED_UNATT='// HiFi Player appliance — automatic security updates (security archive only,
+// no automatic reboot). Managed by the OS-update channel.
+APT::Periodic::Update-Package-Lists "1";
+APT::Periodic::Unattended-Upgrade "1";
+APT::Periodic::AutocleanInterval "7";
+Unattended-Upgrade::Origins-Pattern {
+        "origin=Debian,codename=${distro_codename}-security,label=Debian-Security";
+};
+Unattended-Upgrade::Automatic-Reboot "false";
+Unattended-Upgrade::Remove-Unused-Kernel-Packages "true";
+Unattended-Upgrade::Remove-Unused-Dependencies "true";'
+if [ ! -f "$UNATT" ] || [ "$(cat "$UNATT" 2>/dev/null)" != "$DESIRED_UNATT" ]; then
+    printf '%s\n' "$DESIRED_UNATT" > "$UNATT"
+    echo "Hardening: installed $UNATT"
+fi
+if ! dpkg -s unattended-upgrades >/dev/null 2>&1; then
+    echo "Hardening: installing unattended-upgrades…"
+    DEBIAN_FRONTEND=noninteractive apt-get install -y unattended-upgrades >/dev/null 2>&1 \
+        || echo "W: could not install unattended-upgrades now (config is in place; retry later)" >&2
+fi
+
+# ── Audio fixes for already-installed devices ─────────────────────────
+# These mirror what the UI/System update now does going forward, but apply to
+# the existing /etc/default/squeezelite so users don't have to re-run anything.
+SQ=/etc/default/squeezelite
+if [ -f "$SQ" ] && grep -q '^ARGS=' "$SQ"; then
+    # a) Enable bit-perfect DSD (DoP). Without -D squeezelite downconverts DSD to
+    #    PCM. Insert it right after the -o device token if not already present.
+    if ! grep '^ARGS=' "$SQ" | grep -q -- ' -D'; then
+        sed -i "/^ARGS=/ s/\(-o[[:space:]]\{1,\}[^ ']\{1,\}\)/\1 -D/" "$SQ"
+        echo "Audio: enabled DSD (-D) in $SQ"
+        SQ_CHANGED=1
+    fi
+    # b) Migrate a number-based output device (-o hw:N,M) to the stable card name
+    #    (-o hw:CARD=<name>,DEV=M). Card numbers reorder across reboots, which is
+    #    why the selected DAC reverted to the onboard card; the name is stable.
+    o=$(grep '^ARGS=' "$SQ" | sed -n "s/.*-o[[:space:]]\{1,\}\([^ ']\{1,\}\).*/\1/p")
+    case "$o" in
+        hw:[0-9]*,[0-9]*)
+            cardnum=${o#hw:}; cardnum=${cardnum%%,*}
+            devnum=${o##*,}
+            name=$(aplay -l 2>/dev/null | sed -n "s/^card ${cardnum}: \([^ ]*\) .*/\1/p" | head -n1)
+            if [ -n "$name" ]; then
+                sed -i "/^ARGS=/ s#-o[[:space:]]\{1,\}${o}#-o hw:CARD=${name},DEV=${devnum}#" "$SQ"
+                echo "Audio: migrated output device ${o} -> hw:CARD=${name},DEV=${devnum}"
+                SQ_CHANGED=1
+            fi
+            ;;
+    esac
+    if [ "${SQ_CHANGED:-0}" = 1 ]; then
+        systemctl restart squeezelite 2>/dev/null || true
+    fi
+fi
+
 echo "OS update ${HIFI_OS_VERSION:-?} applied."

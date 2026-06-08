@@ -152,6 +152,16 @@ def get_system_info():
             'error': str(e)
         }
 
+def _valid_ipv4(addr):
+    """True only for a well-formed dotted-quad IPv4 address (no shell metachars)."""
+    if not isinstance(addr, str):
+        return False
+    parts = addr.split('.')
+    if len(parts) != 4:
+        return False
+    return all(p.isdigit() and 0 <= int(p) <= 255 and (p == '0' or not p.startswith('0'))
+               for p in parts)
+
 # Funzione per configurare la rete
 def configure_network(config):
     try:
@@ -172,7 +182,19 @@ def configure_network(config):
             ip = config.get('ip', '192.168.1.100')
             gateway = config.get('gateway', '192.168.1.1')
             dns = config.get('dns', '8.8.8.8')
-            
+
+            # Validate every value before it reaches a shell/privileged command.
+            # `dns` in particular is interpolated into `sh -c` below; without this
+            # a value like '8.8.8.8"; reboot #' would be a root command injection.
+            if not _valid_ipv4(ip):
+                return f"Invalid IP address: {ip}"
+            if not _valid_ipv4(gateway):
+                return f"Invalid gateway: {gateway}"
+            if not _valid_ipv4(dns):
+                return f"Invalid DNS address: {dns}"
+            if not re.match(r'^[A-Za-z0-9._-]+$', interface_name or ''):
+                return f"Invalid interface: {interface_name}"
+
             # Rimuovi l'IP esistente
             subprocess.run(['sudo', 'ip', 'addr', 'flush', 'dev', interface_name], 
                          capture_output=True, text=True)
@@ -333,24 +355,46 @@ def wired_dhcp():
 SQUEEZELITE_DEFAULT = '/etc/default/squeezelite'
 
 def list_audio_devices():
-    """List ALSA playback devices (cards) usable as squeezelite output."""
+    """List ALSA playback devices (cards) usable as squeezelite output.
+
+    Devices are addressed by their stable ALSA card *name* (hw:CARD=<id>,DEV=<n>)
+    rather than the card *number* (hw:<n>,<d>): card numbers are assigned at boot
+    in probe order, so a USB DAC that enumerates after the onboard card can swap
+    numbers across reboots and the saved "-o hw:1,0" would then point at the PC's
+    sound card. The CARD= name is stable, so the selection survives reboots.
+    """
     devices = [{'id': 'default', 'name': 'Predefinito di sistema', 'card': None, 'device': None}]
     try:
         r = _run(['aplay', '-l'])
         for line in r.stdout.split('\n'):
             # e.g. "card 0: D50s [Topping D50s], device 0: USB Audio [USB Audio]"
-            m = re.match(r'card (\d+): \S+ \[([^\]]+)\], device (\d+): [^\[]*\[([^\]]+)\]', line)
+            m = re.match(r'card (\d+): (\S+) \[([^\]]+)\], device (\d+): [^\[]*\[([^\]]+)\]', line)
             if m:
-                card, cname, dev, dname = int(m.group(1)), m.group(2), int(m.group(3)), m.group(4)
+                card, cid, cname, dev, dname = (
+                    int(m.group(1)), m.group(2), m.group(3), int(m.group(4)), m.group(5))
                 devices.append({
-                    'id': f'hw:{card},{dev}',
+                    'id': f'hw:CARD={cid},DEV={dev}',
                     'name': f'{cname} — {dname}',
                     'card': card,
                     'device': dev,
                 })
     except Exception as e:
-        return {'devices': devices, 'error': str(e)}
-    return {'devices': devices}
+        return {'devices': devices, 'current': _current_audio_device(), 'error': str(e)}
+    return {'devices': devices, 'current': _current_audio_device()}
+
+def _current_audio_device():
+    """Return the -o output device currently configured in /etc/default/squeezelite."""
+    try:
+        with open(SQUEEZELITE_DEFAULT) as f:
+            content = f.read()
+        m = re.search(r"ARGS=(['\"])(.*?)\1", content)
+        if m:
+            o = re.search(r'-o\s+(\S+)', m.group(2))
+            if o:
+                return o.group(1)
+    except Exception:
+        pass
+    return 'default'
 
 def set_audio_device(device):
     """Rewrite the -o option in /etc/default/squeezelite and restart it."""
@@ -360,7 +404,7 @@ def set_audio_device(device):
         with open(SQUEEZELITE_DEFAULT) as f:
             content = f.read()
     except Exception:
-        content = "ARGS='-o default -v -C 5 -s 127.0.0.1 -n HiFiPlayer'\n"
+        content = "ARGS='-o default -D -v -C 5 -s 127.0.0.1 -n HiFiPlayer'\n"
 
     m = re.search(r"ARGS=(['\"])(.*?)\1", content)
     if m:
@@ -369,9 +413,13 @@ def set_audio_device(device):
             args = re.sub(r'-o\s+\S+', f'-o {device}', args)
         else:
             args = f'-o {device} ' + args
+        # Ensure DSD-over-PCM (bit-perfect DSD) is enabled. Without -D squeezelite
+        # downconverts DSD to PCM; -D passes DSD verbatim to a DSD-capable DAC (DoP).
+        if not re.search(r'(^|\s)-D(\s|$)', args):
+            args = re.sub(r'(-o\s+\S+)', r'\1 -D', args, count=1)
         content = content[:m.start()] + f"ARGS='{args}'" + content[m.end():]
     else:
-        content += f"\nARGS='-o {device} -v -C 5 -s 127.0.0.1 -n HiFiPlayer'\n"
+        content += f"\nARGS='-o {device} -D -v -C 5 -s 127.0.0.1 -n HiFiPlayer'\n"
 
     try:
         with open(SQUEEZELITE_DEFAULT, 'w') as f:
@@ -845,4 +893,9 @@ def api_hide_global_keyboard():
     return jsonify({"message": result})
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=8000)
+    # Bind to loopback only. This API runs as root and exposes reboot/shutdown,
+    # OS/system updates and network reconfiguration with NO authentication; it is
+    # consumed solely by the local kiosk UI (src/utils/api.js → http://localhost:8000).
+    # Listening on 0.0.0.0 would hand every device on the LAN root-equivalent
+    # control of the appliance.
+    app.run(host='127.0.0.1', port=8000)

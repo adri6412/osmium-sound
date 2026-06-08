@@ -1,0 +1,25 @@
+// HiFi Player appliance — automatic security updates.
+//
+// The device is internet-connected and unattended, so we let
+// unattended-upgrades pull Debian security fixes on its own. We deliberately
+// keep it conservative for an appliance:
+//   - security archive only (no feature upgrades that could change behaviour);
+//   - NO automatic reboot — the box may be mid-playback; the user reboots from
+//     the UI (or a kernel/OS update goes through the signed OS-update channel).
+
+// Run the periodic stages daily.
+APT::Periodic::Update-Package-Lists "1";
+APT::Periodic::Unattended-Upgrade "1";
+APT::Periodic::AutocleanInterval "7";
+
+// Only the security origin.
+Unattended-Upgrade::Origins-Pattern {
+        "origin=Debian,codename=${distro_codename}-security,label=Debian-Security";
+};
+
+// Never reboot automatically — would interrupt audio playback.
+Unattended-Upgrade::Automatic-Reboot "false";
+
+// Clean up obsolete dependencies/kernels so the small appliance disk doesn't fill.
+Unattended-Upgrade::Remove-Unused-Kernel-Packages "true";
+Unattended-Upgrade::Remove-Unused-Dependencies "true";
