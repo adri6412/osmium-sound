@@ -1,0 +1,126 @@
+name: Build HiFi Player ISO (manual)
+
+# Manually rebuilds the installer ISO and (optionally) attaches it to a GitHub
+# Release for a tag you type in by hand.
+#
+#   Actions → "Build HiFi Player ISO (manual)" → Run workflow
+#     • tag         : e.g. v1.0.5  (created on the current commit if missing)
+#     • make_release: attach the ISO to a Release for that tag (default: true)
+#     • lyrion_url  : override the Lyrion .deb URL (optional)
+#     • suite       : Debian suite (default: bookworm)
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag to build/publish (e.g. v1.0.5)'
+        required: true
+        type: string
+      make_release:
+        description: 'Create/attach a GitHub Release for the tag'
+        required: true
+        type: boolean
+        default: true
+      lyrion_url:
+        description: 'Lyrion Music Server .deb URL (leave empty for default)'
+        required: false
+        type: string
+      suite:
+        description: 'Debian suite'
+        required: false
+        type: string
+        default: 'bookworm'
+
+permissions:
+  contents: write
+
+jobs:
+  build-iso:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build renderer + unpacked Electron app
+        run: |
+          npm run build
+          npx electron-builder --linux dir
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Free up disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/lib/android "$AGENT_TOOLSDIRECTORY" || true
+          df -h
+
+      - name: Build installer ISO (live-build, as root)
+        run: |
+          set -euo pipefail
+          ARGS="--app-dir $GITHUB_WORKSPACE/dist/linux-unpacked --app-version ${INPUT_TAG#v} --suite $INPUT_SUITE"
+          if [ -n "${INPUT_LYRION_URL}" ]; then
+            ARGS="$ARGS --lyrion-url ${INPUT_LYRION_URL}"
+          fi
+          chmod +x distro/build-distro.sh
+          cd distro
+          sudo env ISO_NAME="hifi-player-${INPUT_TAG}.iso" ./build-distro.sh $ARGS
+        env:
+          INPUT_TAG: ${{ inputs.tag }}
+          INPUT_SUITE: ${{ inputs.suite }}
+          INPUT_LYRION_URL: ${{ inputs.lyrion_url }}
+
+      - name: Locate + checksum the ISO
+        id: iso
+        run: |
+          set -euo pipefail
+          ISO="hifi-player-${{ inputs.tag }}.iso"
+          [ -f "$ISO" ] || ISO="$(ls -1 *.iso 2>/dev/null | head -n1)"
+          [ -n "$ISO" ] && [ -f "$ISO" ] || { echo "No ISO produced"; exit 1; }
+          sudo chown "$USER" "$ISO" || true
+          sha256sum "$ISO" > "${ISO}.sha256"
+          echo "iso=$ISO" >> "$GITHUB_OUTPUT"
+          ls -lh "$ISO" "${ISO}.sha256"
+
+      - name: Upload ISO artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: hifi-player-iso-${{ inputs.tag }}
+          path: |
+            ${{ steps.iso.outputs.iso }}
+            ${{ steps.iso.outputs.iso }}.sha256
+          retention-days: 14
+
+      - name: Create tag if missing
+        if: ${{ inputs.make_release }}
+        run: |
+          set -euo pipefail
+          TAG="${{ inputs.tag }}"
+          if git rev-parse "$TAG" >/dev/null 2>&1; then
+            echo "Tag $TAG already exists."
+          else
+            git tag -a "$TAG" -m "HiFi Player $TAG"
+            git push origin "$TAG"
+          fi
+
+      - name: Publish ISO to GitHub Release
+        if: ${{ inputs.make_release }}
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ inputs.tag }}
+          name: HiFi Player ${{ inputs.tag }}
+          fail_on_unmatched_files: true
+          files: |
+            ${{ steps.iso.outputs.iso }}
+            ${{ steps.iso.outputs.iso }}.sha256
