@@ -252,10 +252,14 @@ def make_shelf():
         cuts.append(cyl_x(tap_d, t + 2, t - 1, sy, shelf_z - 8))
         cuts.append(cyl_x(tap_d, t + 2, W - 2 * t - 1, sy, shelf_z - 8))
     # mini PC fissato con biadesivo: nessun foro sul ripiano
-    # ventilazione
+    # PASSACAVI: apertura verso il retro per i cavi dal lettore CD (sotto) al PC (sopra)
+    cab_w, cab_d = 90.0, 50.0
+    cuts.append(box(cab_w, cab_d, t + 2,
+                    (W / 2 - cab_w / 2, shelf_y0 + shelf_len - cab_d - 5, shelf_z - 1)))
+    # ventilazione (nella metà anteriore, sopra il PC)
     for i in range(5):
-        cuts.append(box(4, shelf_len * 0.5, t + 2,
-                        (W * 0.35 + i * 12, shelf_y0 + shelf_len * 0.25, shelf_z - 1)))
+        cuts.append(box(4, shelf_len * 0.30, t + 2,
+                        (W * 0.35 + i * 12, shelf_y0 + 8, shelf_z - 1)))
     for c in cuts:
         s = s.cut(c)
     return s
