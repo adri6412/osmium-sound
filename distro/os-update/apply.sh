@@ -18,11 +18,22 @@
 #                         install -m644 "$HIFI_PAYLOAD_DIR/files/foo.conf" /etc/foo.conf
 #
 # Contract:
-#   • Be idempotent — it may re-run after a failed/aborted update.
+#   • CUMULATIVE — this is the most important rule. The updater only ever fetches
+#     and runs the LATEST release's apply.sh (check_os_update → releases/latest);
+#     there is NO sequential replay of intermediate versions. So a device that
+#     jumps from an old version straight to the newest runs ONLY this script. It
+#     must therefore contain EVERY OS change ever shipped, as stacked idempotent
+#     blocks. NEVER write a "delta-only" apply.sh and NEVER delete an old block —
+#     doing so silently breaks any device that skipped versions. To add a change,
+#     APPEND a new idempotent block; leave the existing ones in place forever.
+#   • Idempotent — every block must be a clean no-op when already applied (it may
+#     also re-run after a failed/aborted update).
 #   • Exit non-zero on failure; the updater records the error and stops.
 #   • If the change needs a reboot to take effect, leave a REBOOT marker:
 #         : > "$HIFI_PAYLOAD_DIR/REBOOT"
-#     and the updater will reboot cleanly once apply.sh succeeds.
+#     and the updater will reboot cleanly once apply.sh succeeds. Only set it on a
+#     REAL change — the version is the release tag, so this runs on every release;
+#     a reboot when nothing changed would reboot the box on every single update.
 set -eu
 
 echo "Applying HiFi OS update ${HIFI_OS_VERSION:-?}"
