@@ -142,16 +142,17 @@ Default credentials (for SSH/maintenance): user `hifi` / password `hifi`.
 
 ### Choosing automatic vs interactive install
 
-The **Install** entry passes `auto=true priority=critical preseed/file=/preseed.cfg`
-(set in `build-distro.sh` via `--bootappend-install`; live-build keeps the
-correct kernel/initrd paths). The boot menus are **not** rewritten by hand —
-that broke booting with "vmlinuz not found". Instead, only the look (splash,
-colours, title, timeout) is patched in place by the binary hook
-`config/hooks/normal/0500-brand-boot.hook.binary`, and the splash images come
-from `config/includes.binary/{isolinux,boot/grub}/splash.png`. For a one-off
-interactive install, edit the kernel line at the boot prompt (press `Tab` on
-BIOS / `e` on UEFI) and remove the `auto=true priority=critical preseed/file=...`
-part.
+The boot menus are written by the binary hook
+`config/hooks/normal/0500-brand-boot.hook.binary`, which **autodetects** the
+real `vmlinuz`/`initrd.gz` location on the ISO (the d-i directory varies by
+version/arch — e.g. `/install` vs `/install.amd`; hardcoding it broke booting
+with "vmlinuz not found") and writes a single branded **Install HiFi Player**
+entry for both isolinux (BIOS) and grub (UEFI). It passes
+`auto=true priority=critical preseed/file=/preseed.cfg`, and the gold-on-black
+splash comes from `config/includes.binary/{isolinux,boot/grub}/splash.png`. For
+a one-off interactive install, edit the kernel line at the boot prompt (press
+`Tab` on BIOS / `e` on UEFI) and remove the
+`auto=true priority=critical preseed/file=...` part.
 
 ## Audio output
 

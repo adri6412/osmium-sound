@@ -1,76 +1,106 @@
 #!/bin/sh
-# HiFi Player — brand the installer boot menus IN PLACE.
+# HiFi Player — brand the installer boot menus and fix kernel/initrd paths.
 #
 # Runs during live-build's *binary* stage (cwd = binary/), AFTER isolinux and
-# grub menus have been generated with the correct kernel/initrd paths. We must
-# NOT rewrite those paths ourselves (they differ between live-build/d-i
-# versions and hardcoding them broke booting with "vmlinuz not found"). Here we
-# only:
-#   • use our gold-on-black splash.png as the background,
-#   • recolour the isolinux menu to match,
-#   • set the menu title to "HiFi Player",
-#   • shorten the boot timeout,
-#   • make "Install" the default and drop noisy extra entries where safe.
+# grub menus have been generated.
+#
+# The actual debian-installer directory on the ISO varies by version/arch
+# (e.g. /install, /install.amd, /d-i/...). Hardcoding it broke booting with
+# "vmlinuz not found". So we AUTODETECT where vmlinuz/initrd.gz really live and
+# write a single, branded, preseeded "Install HiFi Player" entry for both
+# isolinux (BIOS) and grub (UEFI), plus apply the gold-on-black look.
 set -e
 
 echo "I: [hifi] branding installer boot menus (binary hook)"
 
+# ─────────── locate the installer kernel + initrd on the ISO ───────
+# Search the binary tree for the d-i kernel; derive ISO-absolute paths.
+KPATH="$(find . -type f \( -name 'vmlinuz' -o -name 'vmlinuz.*' -o -name 'linux' \) \
+            -path '*install*' 2>/dev/null | head -n1 || true)"
+[ -n "$KPATH" ] || KPATH="$(find . -type f -name 'vmlinuz' 2>/dev/null | head -n1 || true)"
+
+if [ -z "$KPATH" ]; then
+    echo "W: [hifi] no installer vmlinuz found — leaving boot menus untouched"
+    exit 0
+fi
+
+KDIR="$(dirname "$KPATH")"                      # e.g. ./install
+IPATH="$(find "$KDIR" -maxdepth 1 -type f \( -name 'initrd.gz' -o -name 'initrd.img' -o -name 'initrd' \) 2>/dev/null | head -n1 || true)"
+[ -n "$IPATH" ] || IPATH="$(find . -type f \( -name 'initrd.gz' -o -name 'initrd.img' \) -path '*install*' 2>/dev/null | head -n1 || true)"
+
+# Convert "./install/vmlinuz" → "/install/vmlinuz" (ISO-absolute).
+KERNEL="$(printf '%s' "$KPATH" | sed 's|^\.||')"
+INITRD="$(printf '%s' "$IPATH" | sed 's|^\.||')"
+[ -n "$INITRD" ] || INITRD="${KERNEL%/*}/initrd.gz"
+
+APPEND="vga=788 auto=true priority=critical preseed/file=/preseed.cfg --- quiet"
+echo "I: [hifi] installer kernel=$KERNEL initrd=$INITRD"
+
 # ─────────────────────────── isolinux / BIOS ───────────────────────
 if [ -d isolinux ]; then
-    # Splash is already dropped via includes.binary; ensure it's referenced.
-    for cfg in isolinux/menu.cfg isolinux/stdmenu.cfg isolinux/isolinux.cfg; do
-        [ -f "$cfg" ] || continue
-        # Point the menu background at our splash.
-        if grep -q '^menu background' "$cfg"; then
-            sed -i 's|^menu background.*|menu background splash.png|' "$cfg"
-        fi
-        # Branded title.
-        sed -i 's|^menu title .*|menu title HiFi Player|' "$cfg"
-        # Gold-on-black colour scheme.
-        sed -i \
-            -e 's|^menu color title .*|menu color title 1;37;40 #ffd4af37 #00000000 std|' \
-            -e 's|^menu color sel .*|menu color sel 7;37;40 #ff000000 #ffd4af37 all|' \
-            -e 's|^menu color unsel .*|menu color unsel 37;40 #ffd4af37 #00000000 std|' \
-            -e 's|^menu color hotsel .*|menu color hotsel 1;7;37;40 #ff000000 #ffd4af37 all|' \
-            -e 's|^menu color timeout_msg .*|menu color timeout_msg 37;40 #ff888888 #00000000 std|' \
-            -e 's|^menu color timeout .*|menu color timeout 1;37;40 #ffd4af37 #00000000 std|' \
-            "$cfg"
-    done
+    # One branded, preseeded install entry with the DETECTED paths.
+    cat > isolinux/menu.cfg <<EOF
+menu title HiFi Player
+menu background splash.png
+menu color title       1;37;40   #ffd4af37 #00000000 std
+menu color sel         7;37;40   #ff000000 #ffd4af37 all
+menu color unsel       37;40     #ffd4af37 #00000000 std
+menu color hotkey      1;37;40   #ffffffff #00000000 std
+menu color hotsel      1;7;37;40 #ff000000 #ffd4af37 all
+menu color border      30;44     #00000000 #00000000 std
+menu color scrollbar   30;44     #ffd4af37 #00000000 std
+menu color tabmsg      31;40     #ff888888 #00000000 std
+menu color timeout_msg 37;40     #ff888888 #00000000 std
+menu color timeout     1;37;40   #ffd4af37 #00000000 std
+menu vshift 12
+menu rows 4
+menu timeoutrow 14
 
-    # If there's no explicit "menu background" yet, inject one into stdmenu.cfg
-    # (the file most menu fragments include).
-    if [ -f isolinux/stdmenu.cfg ] && ! grep -q '^menu background' isolinux/stdmenu.cfg; then
-        sed -i '1i menu background splash.png' isolinux/stdmenu.cfg
-    fi
+label install
+    menu label ^Install HiFi Player
+    menu default
+    kernel $KERNEL
+    append initrd=$INITRD $APPEND
+EOF
 
-    # Shorten the boot timeout (value is in 1/10 s for isolinux).
-    for cfg in isolinux/isolinux.cfg isolinux/menu.cfg; do
-        [ -f "$cfg" ] || continue
-        if grep -q '^timeout ' "$cfg"; then
-            sed -i 's|^timeout .*|timeout 50|' "$cfg"
-        fi
-    done
+    cat > isolinux/isolinux.cfg <<'EOF'
+include menu.cfg
+prompt 0
+timeout 50
+ui vesamenu.c32
+default install
+EOF
+    # Some live-build layouts read stdmenu.cfg; neutralise it so only our
+    # single entry shows.
+    : > isolinux/stdmenu.cfg 2>/dev/null || true
 fi
 
 # ─────────────────────────── grub / UEFI ───────────────────────────
-for gcfg in boot/grub/grub.cfg boot/grub/grub_install.cfg EFI/debian/grub.cfg; do
+for gcfg in boot/grub/grub.cfg EFI/debian/grub.cfg; do
     [ -f "$gcfg" ] || continue
-    # Background image (path is relative to the grub root → /boot/grub/splash.png).
-    if ! grep -q 'background_image' "$gcfg"; then
-        sed -i '1i background_image /boot/grub/splash.png' "$gcfg"
-    else
-        sed -i 's|background_image.*|background_image /boot/grub/splash.png|' "$gcfg"
-    fi
-    # Gold highlight, short timeout.
-    if grep -q '^set timeout' "$gcfg"; then
-        sed -i 's|^set timeout=.*|set timeout=5|' "$gcfg"
-    else
-        sed -i '1i set timeout=5' "$gcfg"
-    fi
-    grep -q 'menu_color_highlight' "$gcfg" \
-        || sed -i '1i set menu_color_highlight=black/yellow' "$gcfg"
-    grep -q 'menu_color_normal' "$gcfg" \
-        || sed -i '1i set menu_color_normal=light-gray/black' "$gcfg"
+    cat > "$gcfg" <<EOF
+if loadfont /boot/grub/font.pf2 ; then
+    set gfxmode=640x480
+    insmod efi_gop
+    insmod efi_uga
+    insmod video_bochs
+    insmod video_cirrus
+    insmod gfxterm
+    insmod png
+    terminal_output gfxterm
+fi
+
+background_image /boot/grub/splash.png
+set menu_color_normal=light-gray/black
+set menu_color_highlight=black/yellow
+set timeout=5
+set default=0
+
+menuentry "Install HiFi Player" {
+    linux  $KERNEL $APPEND
+    initrd $INITRD
+}
+EOF
 done
 
 echo "I: [hifi] installer boot branding done"
