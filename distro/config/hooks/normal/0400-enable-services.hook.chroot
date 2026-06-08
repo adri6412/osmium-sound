@@ -14,17 +14,8 @@ systemctl enable hifi-sources.service || true
 echo "I: [hifi] enabling audio backend (squeezelite + Lyrion Music Server)"
 systemctl enable squeezelite.service        || true
 systemctl enable lyrionmusicserver.service  || true
-
-echo "I: [hifi] enabling network audio receivers (AirPlay + UPnP/DLNA)"
-# AirPlay needs mDNS (avahi). UPnP renderer = upmpdcli driving a local mpd.
-# Disable mpd's socket-activation: our /etc/mpd.conf binds 127.0.0.1:6600
-# directly, and leaving mpd.socket enabled causes an "address in use" clash.
-systemctl disable mpd.socket            || true
-systemctl mask    mpd.socket            || true
-systemctl enable avahi-daemon.service   || true
-systemctl enable shairport-sync.service || true
-systemctl enable mpd.service            || true
-systemctl enable upmpdcli.service       || true
+# Network audio receivers (AirPlay/UPnP/Spotify Connect) are Lyrion plugins,
+# not system services — nothing to enable here.
 
 echo "I: [hifi] enabling first-boot finalisation (re-installs Lyrion after the"
 echo "          installer's remove-live-packages purge; self-disables on success)"

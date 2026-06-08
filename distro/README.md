@@ -15,32 +15,24 @@ branded Plymouth splash) that goes straight into the fullscreen player.
 | `vu_meter_daemon.py` | Streams VU levels from `/dev/shm/squeezelite-*` | `hifi-vumeter.service` (`:9001`) |
 | `api_server.py` | OS control + WiFi setup (reboot/shutdown/update/network) | `hifi-api.service` (`:8000`) |
 | `sources_server.py` | Web UI to add music sources (local + SMB) to Lyrion | `hifi-sources.service` (`:8080`) |
-| shairport-sync | AirPlay receiver (cast audio from iPhone/Mac) | `shairport-sync.service` (mDNS via `avahi-daemon`) |
-| upmpdcli + mpd | UPnP/DLNA renderer (cast from BubbleUPnP & co.) | `upmpdcli.service` + `mpd.service` (`127.0.0.1:6600`) |
 
 ## Network audio receivers ("cast" dal telefono)
 
-Il device appare in rete come bersaglio audio dalle app del telefono. Una sola
-sorgente alla volta: AirPlay/UPnP e Lyrion/squeezelite si contendono il device
-ALSA in modo esclusivo (chi inizia a suonare prende la scheda).
+Il device può apparire in rete come bersaglio audio dalle app del telefono. Si
+realizza con i **plugin di Lyrion**, non con servizi di sistema: l'audio passa
+per Lyrion/squeezelite, quindi un solo percorso audio e nessuna contesa ALSA.
+Si installano una volta dal web di Lyrion → **Settings → Plugins** (il device ha
+internet):
 
-| Protocollo | Nome di rete | Come | Config |
-|---|---|---|---|
-| **AirPlay** | `HiFi Player` | iPhone/iPad/Mac → icona AirPlay | `/etc/shairport-sync.conf` |
-| **UPnP/DLNA** | `HiFi Player` | app come BubbleUPnP (Android) | `/etc/upmpdcli.conf` + `/etc/mpd.conf` |
-| **Spotify Connect** | `HiFi Player` | app Spotify (Premium) → dispositivi | plugin **Spotty** di Lyrion |
+| Protocollo | Plugin Lyrion | App sorgente |
+|---|---|---|
+| **AirPlay** | ShairTunes2 | iPhone/iPad/Mac → icona AirPlay |
+| **UPnP/DLNA** | UPnP/DLNA Media Interface | BubbleUPnP & co. (Android) |
+| **Spotify Connect** | Spotty | app Spotify (Premium) → dispositivi |
 
-Tutti escono su ALSA `default`. Con un DAC USB specifico, imposta lo stesso
-`output_device` in `shairport-sync.conf` e `mpd.conf` che il picker della UI usa
-per squeezelite.
-
-**Spotify Connect** passa attraverso Lyrion (nessun servizio ALSA extra): si
-installa una volta dal web di Lyrion → **Settings → Plugins → Spotty** (il
-device ha internet). Non è automatizzato nell'ISO perché il plugin si scarica a
-runtime da Lyrion.
-
-> Un vero ricevitore **Google Cast/Chromecast** non è incluso: il lato ricevitore
-> del protocollo è proprietario e non esiste un'implementazione open per audio.
+> Un vero ricevitore **Google Cast/Chromecast** non è disponibile: il lato
+> ricevitore del protocollo è proprietario e non esiste un'implementazione open
+> per l'audio.
 
 ## First-run setup wizard
 
