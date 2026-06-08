@@ -139,6 +139,40 @@ export class LyrionAPI {
     return this.request(playerMac, ['apps', offset, limit]);
   }
 
+  // --- Home menu (the "My Apps"/home node tree, like Material/the LMS app) ---
+  // This is what actually exposes installed plugins (Spotty, Favourites, CD,
+  // YouTube, Radio…). Each item carries `actions.go/.play/.do` to drive it.
+
+  async getHomeMenu(playerMac = '') {
+    const r = await this.request(playerMac, ['menu', 0, 999, 'direct:1']);
+    return r?.item_loop || [];
+  }
+
+  // Turn a menu action ({cmd, params, …}) into a slim.request command array.
+  // Browse commands ending in "items" take <offset> <limit>; others don't.
+  // `__TAGGEDINPUT__` / `__INPUT__` placeholders are replaced with user text.
+  _actionToRequest(action, { offset = 0, limit = 200, input } = {}) {
+    const cmd = [...(action.cmd || [])];
+    const params = Object.entries(action.params || {}).map(([k, v]) => {
+      let val = v;
+      if (val === '__TAGGEDINPUT__' || val === '__INPUT__') val = input ?? '';
+      return `${k}:${val}`;
+    });
+    const isItems = cmd[cmd.length - 1] === 'items';
+    return isItems ? [...cmd, offset, limit, ...params] : [...cmd, ...params];
+  }
+
+  // Navigate into a menu node — returns its child items.
+  async menuGo(playerMac = '', action, opts = {}) {
+    const r = await this.request(playerMac, this._actionToRequest(action, opts));
+    return r?.item_loop || [];
+  }
+
+  // Execute a playback / toggle action (actions.play / actions.do / actions.add).
+  async menuDo(playerMac = '', action, opts = {}) {
+    return this.request(playerMac, this._actionToRequest(action, opts));
+  }
+
   async getPluginItems(playerMac = '', pluginCmd, limit = 9999, offset = 0, itemId = null) {
     const params = [pluginCmd, 'items', offset, limit];
     if (itemId) {

@@ -63,6 +63,9 @@ const LyrionServer = () => {
   const [libraryData, setLibraryData] = useState([]);
   const [libraryLoading, setLibraryLoading] = useState(false);
   const [navigationStack, setNavigationStack] = useState([{ view: 'home', title: 'Home', params: null }]);
+  // Search prompt for Lyrion menu items that require text input (e.g. TuneIn / global search)
+  const [menuSearch, setMenuSearch] = useState(null); // { action, title }
+  const [searchText, setSearchText] = useState('');
 
   // ── Server connection ──────────────────────────────────────
   useEffect(() => {
@@ -117,7 +120,22 @@ const LyrionServer = () => {
     if (view === 'tracks')       { const r = await lyrionApi.getTracks(9999, 0, params?.albumId); return r?.titles_loop || []; }
     if (view === 'folders')      { const r = await lyrionApi.getMusicFolders(params?.folderId); return r?.folder_loop || []; }
     if (view === 'radios')       { const r = await lyrionApi.getRadios(activePlayer?.playerid); return r?.radios_loop || []; }
-    if (view === 'apps')         { const r = await lyrionApi.getApps(activePlayer?.playerid); return r?.apps_loop || []; }
+    if (view === 'apps')         { const r = await lyrionApi.getApps(activePlayer?.playerid); return r?.appss_loop || r?.apps_loop || []; }
+    if (view === 'menu_home') {
+      // The full Lyrion home menu, filtered to the top-level "app"-like entries
+      // (Applicazioni/Spotty, Preferiti, CD, YouTube, Suoni…). Local-library
+      // browse modes live under the Musica tab; Radio has its own tab.
+      const all = await lyrionApi.getHomeMenu(activePlayer?.playerid);
+      const EXCLUDE = new Set(['myMusic', 'radios', 'playerpower']);
+      return all
+        .filter(it => it.actions && (it.actions.go || it.actions.do || it.input)
+          && ['home', '', 'extras'].includes(it.node)
+          && !EXCLUDE.has(it.id))
+        .sort((a, b) => (Number(a.weight) || 0) - (Number(b.weight) || 0));
+    }
+    if (view === 'menu') {
+      return await lyrionApi.menuGo(activePlayer?.playerid, params.action, { input: params.input });
+    }
     if (view === 'plugin_items') {
       const r = await lyrionApi.getPluginItems(activePlayer?.playerid, params.pluginCmd, 9999, 0, params.itemId);
       return r?.item_loop || r?.[`${params.pluginCmd}_loop`] || [];
@@ -149,6 +167,7 @@ const LyrionServer = () => {
   };
 
   const goHome = () => {
+    setMenuSearch(null);
     setNavigationStack([{ view: 'home', title: 'Home', params: null }]);
     setCurrentView('home');
   };
@@ -158,12 +177,46 @@ const LyrionServer = () => {
     handleAction(() => lyrionApi.playItem(activePlayer.playerid, type, id));
   };
 
+  // ── Generic Lyrion menu items (home menu / plugin nodes) ───
+  const resolveMenuIcon = (item) => {
+    const ic = item['icon-id'] || item.window?.['icon-id'] || item.icon || item.image;
+    if (!ic) return null;
+    return ic.startsWith('http') ? ic : `${serverUrl}/${ic.replace(/^\//, '')}`;
+  };
+
+  const handleMenuItem = (item) => {
+    if (!activePlayer) return;
+    const go = item.actions?.go;
+    const play = item.actions?.play || item.actions?.playall;
+    const doAct = item.actions?.do;
+    if (item.input && go) {                 // needs text input → search prompt
+      setSearchText('');
+      setMenuSearch({ action: go, title: item.text || item.name || 'Cerca' });
+    } else if (go) {                        // submenu → drill in
+      navigateTo('menu', item.text || item.name || '…', { action: go });
+    } else if (play) {                      // playable leaf
+      handleAction(() => lyrionApi.menuDo(activePlayer.playerid, play));
+    } else if (doAct) {                     // toggle / settings action
+      handleAction(() => lyrionApi.menuDo(activePlayer.playerid, doAct));
+    }
+  };
+
+  const submitMenuSearch = () => {
+    if (!menuSearch) return;
+    const { action, title } = menuSearch;
+    const q = searchText;
+    setMenuSearch(null);
+    setSearchText('');
+    navigateTo('menu', title, { action, input: q });
+  };
+
   // ── Tab switch ─────────────────────────────────────────────
   const handleTabSwitch = async (tabId) => {
     setActiveTab(tabId);
+    setMenuSearch(null);
     if (tabId === 'radio' || tabId === 'apps') {
-      const view = tabId === 'radio' ? 'radios' : 'apps';
-      const title = tabId === 'radio' ? 'Radio' : 'App / CD';
+      const view = tabId === 'radio' ? 'radios' : 'menu_home';
+      const title = tabId === 'radio' ? 'Radio' : 'App';
       setLibraryLoading(true);
       try {
         const data = await fetchViewData(view, null);
@@ -204,6 +257,31 @@ const LyrionServer = () => {
 
   // ── Library content renderer ───────────────────────────────
   const renderLibraryContent = () => {
+    if (menuSearch) {
+      return (
+        <div className="p-4 space-y-3">
+          <p className="text-sm font-medium text-white">{menuSearch.title}</p>
+          <input
+            type="text"
+            value={searchText}
+            onChange={(e) => setSearchText(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter') submitMenuSearch(); }}
+            placeholder="Digita e premi Cerca…"
+            className="w-full bg-hifi-dark border border-hifi-accent rounded-lg px-4 py-3 text-white focus:outline-none focus:border-hifi-gold"
+          />
+          <div className="flex gap-2">
+            <button onClick={() => { setMenuSearch(null); setSearchText(''); }}
+              className="flex-1 bg-hifi-light hover:bg-hifi-accent text-white py-2.5 rounded-lg text-sm font-medium transition-colors">
+              Annulla
+            </button>
+            <button onClick={submitMenuSearch}
+              className="flex-1 bg-hifi-gold hover:bg-yellow-600 text-black py-2.5 rounded-lg text-sm font-semibold transition-colors">
+              Cerca
+            </button>
+          </div>
+        </div>
+      );
+    }
     if (libraryLoading) {
       return (
         <div className="flex-1 flex items-center justify-center">
@@ -327,6 +405,36 @@ const LyrionServer = () => {
                   <span className="text-sm text-white">{item.name}</span>
                 </li>
               );
+
+              if (currentView === 'menu_home' || currentView === 'menu') {
+                const iconUrl = resolveMenuIcon(item);
+                const play = item.actions?.play || item.actions?.playall;
+                const isNav = !!(item.actions?.go || item.input);
+                return (
+                  <li key={item.id || idx}
+                    onClick={() => handleMenuItem(item)}
+                    className="flex items-center justify-between px-3 py-2.5 bg-hifi-surface hover:bg-hifi-light rounded-lg group cursor-pointer border border-transparent hover:border-hifi-border transition-colors">
+                    <div className="flex items-center space-x-3 min-w-0">
+                      {iconUrl
+                        ? <img src={iconUrl} className="w-6 h-6 rounded flex-shrink-0 object-cover" alt=""
+                            onError={(e) => { e.target.style.display = 'none'; }} />
+                        : isNav
+                          ? <AppWindow size={15} className="text-hifi-silver/60 flex-shrink-0" />
+                          : <Music size={15} className="text-hifi-silver/60 flex-shrink-0" />
+                      }
+                      <span className="text-sm text-white truncate">{item.text || item.name}</span>
+                    </div>
+                    {play && (
+                      <div className="opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
+                        <button onClick={(e) => { e.stopPropagation(); handleAction(() => lyrionApi.menuDo(activePlayer.playerid, play)); }}
+                          className="p-1.5 bg-hifi-gold/20 text-hifi-gold rounded-full hover:bg-hifi-gold hover:text-black transition-colors">
+                          <Play size={12} fill="currentColor" />
+                        </button>
+                      </div>
+                    )}
+                  </li>
+                );
+              }
 
               if (currentView === 'plugin_items') {
                 const params = navigationStack[navigationStack.length - 1].params;
