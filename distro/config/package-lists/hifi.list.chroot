@@ -51,6 +51,18 @@ alsa-utils
 # Squeezelite (Debian build has VISEXPORT; -v exports /dev/shm/squeezelite-*)
 squeezelite
 
+# Network audio receivers ("cast from phone" to the streamer)
+# AirPlay receiver (needs avahi/mDNS for discovery)
+shairport-sync
+avahi-daemon
+libnss-mdns
+# UPnP/DLNA renderer (upmpdcli renders via a local MPD backend)
+upmpdcli
+mpd
+# NOTE: Spotify Connect is provided by the Lyrion "Spotty" plugin (routes
+# through Lyrion/squeezelite, no extra ALSA service). Installed one-click from
+# the Lyrion web UI → Settings → Plugins → Spotty (the device has internet).
+
 # Python services (api_server.py + vu_meter_daemon.py + sources_server.py)
 python3
 python3-flask
