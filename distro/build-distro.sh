@@ -9,6 +9,22 @@
 # (the `linux-unpacked` folder produced by electron-builder). This script
 # does NOT need Node/npm — it only assembles and builds the ISO.
 #
+# ── Incremental / staged builds ──────────────────────────────────────
+# live-build runs three stages: bootstrap → chroot → binary. They are slow to
+# the left, fast to the right. Pass --stage to rebuild only what you need and
+# reuse the rest (+ the package cache):
+#
+#   --stage all      (default) full build: bootstrap + chroot + binary
+#   --stage chroot   rebuild chroot + binary (keep bootstrap & pkg cache)
+#   --stage binary   rebuild ONLY the binary/ISO (reuse existing chroot)
+#
+# Typical loop while iterating on boot menus / splash / ISO layout:
+#   sudo ./build-distro.sh --app-dir … --stage all      # once
+#   sudo ./build-distro.sh --app-dir … --stage binary   # fast re-spins
+#
+# The Debian package cache (config/../cache/) is preserved across runs unless
+# you pass --clean-cache.
+#
 set -euo pipefail
 
 # ─────────────────────────── Configurable ───────────────────────────
@@ -24,6 +40,8 @@ REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 CONFIG="$SCRIPT_DIR/config"
 APP_DIR=""
 APP_VERSION=""
+STAGE="all"          # all | chroot | binary
+CLEAN_CACHE=0        # 1 → also wipe the Debian package cache
 
 log()  { printf '\033[1;33m[hifi-build]\033[0m %s\n' "$*"; }
 die()  { printf '\033[1;31m[hifi-build ERROR]\033[0m %s\n' "$*" >&2; exit 1; }
@@ -35,37 +53,53 @@ while [ $# -gt 0 ]; do
         --app-version) APP_VERSION="$2"; shift 2 ;;
         --lyrion-url) LYRION_DEB_URL="$2"; shift 2 ;;
         --suite) DEBIAN_SUITE="$2"; shift 2 ;;
+        --stage) STAGE="$2"; shift 2 ;;
+        --clean-cache) CLEAN_CACHE=1; shift ;;
         -h|--help)
             grep '^#' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
         *) die "Unknown argument: $1" ;;
     esac
 done
 
+case "$STAGE" in
+    all|chroot|binary) ;;
+    *) die "Invalid --stage '$STAGE' (use: all | chroot | binary)." ;;
+esac
+
 # ─────────────────────────── Pre-flight ─────────────────────────────
 [ "$(id -u)" -eq 0 ] || die "Please run as root (sudo)."
+
+# A binary-only re-spin needs an already-built chroot to reuse.
+if [ "$STAGE" = "binary" ] && [ ! -d "$SCRIPT_DIR/chroot" ]; then
+    die "--stage binary needs an existing chroot. Run '--stage all' (or '--stage chroot') first."
+fi
 
 log "Installing build prerequisites (live-build, imagemagick, curl, xorriso)…"
 export DEBIAN_FRONTEND=noninteractive
 apt-get update -qq
 apt-get install -y --no-install-recommends live-build imagemagick curl xorriso ca-certificates
 
-# Locate the Electron unpacked app dir if not given
-if [ -z "$APP_DIR" ]; then
-    for c in \
-        "$REPO_ROOT/dist/linux-unpacked" \
-        "$REPO_ROOT/linux-unpacked" \
-        "$HOME/hifi-build/dist/linux-unpacked" \
-        /root/hifi-build/dist/linux-unpacked ; do
-        [ -x "$c/hifi-media-player" ] && APP_DIR="$c" && break
-    done
-fi
-[ -n "$APP_DIR" ] && [ -x "$APP_DIR/hifi-media-player" ] \
-    || die "Electron app not found. Pass --app-dir /path/to/linux-unpacked (must contain ./hifi-media-player)."
-log "Using Electron app from: $APP_DIR"
+# The Electron app + python daemons are only needed when we (re)build the
+# chroot. A binary-only re-spin reuses the existing chroot, so skip these.
+if [ "$STAGE" != "binary" ]; then
+    # Locate the Electron unpacked app dir if not given
+    if [ -z "$APP_DIR" ]; then
+        for c in \
+            "$REPO_ROOT/dist/linux-unpacked" \
+            "$REPO_ROOT/linux-unpacked" \
+            "$HOME/hifi-build/dist/linux-unpacked" \
+            /root/hifi-build/dist/linux-unpacked ; do
+            [ -x "$c/hifi-media-player" ] && APP_DIR="$c" && break
+        done
+    fi
+    [ -n "$APP_DIR" ] && [ -x "$APP_DIR/hifi-media-player" ] \
+        || die "Electron app not found. Pass --app-dir /path/to/linux-unpacked (must contain ./hifi-media-player)."
+    log "Using Electron app from: $APP_DIR"
 
-[ -f "$REPO_ROOT/api_server.py" ]      || die "Missing $REPO_ROOT/api_server.py"
-[ -f "$REPO_ROOT/vu_meter_daemon.py" ] || die "Missing $REPO_ROOT/vu_meter_daemon.py"
-[ -f "$REPO_ROOT/sources_server.py" ]  || die "Missing $REPO_ROOT/sources_server.py"
+    [ -f "$REPO_ROOT/api_server.py" ]      || die "Missing $REPO_ROOT/api_server.py"
+    [ -f "$REPO_ROOT/vu_meter_daemon.py" ] || die "Missing $REPO_ROOT/vu_meter_daemon.py"
+    [ -f "$REPO_ROOT/sources_server.py" ]  || die "Missing $REPO_ROOT/sources_server.py"
+fi
 
 # ─────────────────────────── Normalise text files ──────────────────
 # Config files were authored on Windows → strip CR so chroot shebangs work.
@@ -77,6 +111,13 @@ find "$CONFIG" -type f \
     -exec sed -i 's/\r$//' {} +
 
 # ─────────────────────────── Inject payloads ───────────────────────
+# All of these land in includes.chroot/ and are baked into the chroot during
+# the CHROOT stage. For a binary-only re-spin (--stage binary) the chroot is
+# reused as-is, so we SKIP these (notably the slow Lyrion download).
+if [ "$STAGE" = "binary" ]; then
+    log "Skipping chroot payload injection (binary-only re-spin)."
+else
+
 log "Injecting Electron app → includes.chroot/opt/hifi-media-player"
 APP_DEST="$CONFIG/includes.chroot/opt/hifi-media-player"
 rm -rf "$APP_DEST"; mkdir -p "$APP_DEST"
@@ -137,6 +178,8 @@ mkdir -p "$GRUB_BG_DIR"
 convert -size 1920x1080 xc:black "$GRUB_BG_DIR/hifi-bg.png" 2>/dev/null \
     || die "Failed to generate GRUB background image."
 
+fi  # end: chroot payload injection (skipped for --stage binary)
+
 # ─────────────────────────── Installer boot splash ─────────────────
 # Brand the ISO boot menu (isolinux/BIOS + grub/UEFI) with the SAME logo
 # look as the Plymouth splash: gold "HiFi Player" + grey subtitle on black.
@@ -173,41 +216,86 @@ convert -size 640x480 xc:black \
 chmod +x "$CONFIG"/hooks/normal/*.hook.chroot
 chmod +x "$CONFIG"/hooks/normal/*.hook.binary 2>/dev/null || true
 
-# ─────────────────────────── live-build config ─────────────────────
+# ─────────────────────────── live-build clean (stage-aware) ────────
 cd "$SCRIPT_DIR"
-log "Cleaning previous build artefacts…"
-lb clean >/dev/null 2>&1 || true
+log "Build stage: $STAGE"
 
-log "Configuring live-build (suite=$DEBIAN_SUITE arch=$ARCH)…"
-# IMPORTANT: keep --debian-installer LIVE. The whole appliance (Electron app,
-# python daemons, Lyrion, helper scripts, the hifi user/services) is assembled
-# in the live filesystem (squashfs), and the install works by CLONING that
-# filesystem onto the target (preseed: live-installer/enable=true). With
-# --debian-installer=true there is NO live squashfs to clone, so the target
-# gets a plain Debian without our files → the preseed late_command
-# (hifi-finalize-install.sh) then fails with "file not found".
-#
-# The ISO still behaves as "installer only" because the binary hook
-# 0500-brand-boot.hook.binary rewrites the boot menus to a SINGLE branded
-# "Install HiFi Player" entry (no live entry is shown to the user).
-lb config \
-    --distribution "$DEBIAN_SUITE" \
-    --architectures "$ARCH" \
-    --archive-areas "main contrib non-free non-free-firmware" \
-    --debian-installer live \
-    --debian-installer-gui false \
-    --bootloaders "syslinux,grub-efi" \
-    --bootappend-live "boot=live components quiet splash loglevel=0 vt.global_cursor_default=0 hostname=hifiplayer" \
-    --bootappend-install "auto=true priority=critical preseed/file=/preseed.cfg ---" \
-    --iso-application "$BRAND_NAME" \
-    --iso-publisher "$BRAND_NAME" \
-    --iso-volume "HIFI_PLAYER" \
-    --memtest none \
-    --apt-recommends false
+# Clean only what the requested stage needs to rebuild. The Debian package
+# cache (cache/) is preserved unless --clean-cache is given, so re-spins don't
+# re-download packages.
+case "$STAGE" in
+    all)
+        log "Cleaning chroot + binary artefacts (keeping package cache)…"
+        lb clean --chroot --binary >/dev/null 2>&1 || true
+        ;;
+    chroot)
+        log "Cleaning chroot + binary artefacts (keeping bootstrap + cache)…"
+        lb clean --chroot --binary >/dev/null 2>&1 || true
+        ;;
+    binary)
+        log "Cleaning ONLY binary artefacts (reusing existing chroot)…"
+        lb clean --binary >/dev/null 2>&1 || true
+        ;;
+esac
+if [ "$CLEAN_CACHE" -eq 1 ]; then
+    log "Wiping package cache (--clean-cache)…"
+    lb clean --cache >/dev/null 2>&1 || true
+fi
 
-# ─────────────────────────── Build ──────────────────────────────────
-log "Building ISO — this can take 20-40 minutes…"
-lb build
+# ─────────────────────────── live-build config ─────────────────────
+# (Re)generate the live-build config for full/chroot builds. For a binary-only
+# re-spin we keep the existing config/ (generated by a previous run) so we
+# don't disturb the chroot we're about to reuse.
+if [ "$STAGE" != "binary" ]; then
+    log "Configuring live-build (suite=$DEBIAN_SUITE arch=$ARCH)…"
+    # IMPORTANT: keep --debian-installer LIVE. The whole appliance (Electron
+    # app, python daemons, Lyrion, helper scripts, the hifi user/services) is
+    # assembled in the live filesystem (squashfs), and the install works by
+    # CLONING that filesystem onto the target (preseed: live-installer/enable=
+    # true). With --debian-installer=true there is NO live squashfs to clone,
+    # so the target gets a plain Debian without our files → the preseed
+    # late_command (hifi-finalize-install.sh) then fails with "file not found".
+    #
+    # The ISO still behaves as "installer only" because the binary hook
+    # 0500-brand-boot.hook.binary rewrites the boot menus to a SINGLE branded
+    # "Install HiFi Player" entry (no live entry is shown to the user).
+    lb config \
+        --distribution "$DEBIAN_SUITE" \
+        --architectures "$ARCH" \
+        --archive-areas "main contrib non-free non-free-firmware" \
+        --debian-installer live \
+        --debian-installer-gui false \
+        --bootloaders "syslinux,grub-efi" \
+        --bootappend-live "boot=live components quiet splash loglevel=0 vt.global_cursor_default=0 hostname=hifiplayer" \
+        --bootappend-install "auto=true priority=critical preseed/file=/preseed.cfg ---" \
+        --iso-application "$BRAND_NAME" \
+        --iso-publisher "$BRAND_NAME" \
+        --iso-volume "HIFI_PLAYER" \
+        --memtest none \
+        --apt-recommends false
+else
+    [ -d config/bootstrap ] \
+        || die "--stage binary but no live-build config found. Run '--stage all' first."
+    log "Reusing existing live-build config (binary-only re-spin)."
+fi
+
+# ─────────────────────────── Build (stage-aware) ───────────────────
+case "$STAGE" in
+    all)
+        log "Building full ISO (bootstrap → chroot → binary) — 20-40 min…"
+        lb build
+        ;;
+    chroot)
+        log "Building bootstrap + chroot + binary…"
+        lb bootstrap
+        lb chroot
+        lb binary
+        ;;
+    binary)
+        log "Building ONLY the binary stage (fast re-spin)…"
+        lb binary
+        ;;
+esac
 
 ISO_SRC="$(ls -1 *.iso 2>/dev/null | head -n1 || true)"
 [ -n "$ISO_SRC" ] || die "Build finished but no .iso was produced."

@@ -121,6 +121,30 @@ sudo ./build-distro.sh \
   --suite bookworm
 ```
 
+### Incremental / staged builds (don't rebuild everything)
+
+live-build runs three stages — **bootstrap → chroot → binary** — slow on the
+left, fast on the right. Use `--stage` to rebuild only what changed and reuse
+the rest (the Debian package cache in `distro/cache/` is kept across runs):
+
+| `--stage` | Rebuilds | Reuses | When |
+|---|---|---|---|
+| `all` *(default)* | chroot + binary | package cache | first build, or chroot contents changed |
+| `chroot` | bootstrap (if missing) + chroot + binary | package cache | changed packages / chroot hooks / app payload |
+| `binary` | only the ISO image | the existing chroot | iterating on **boot menus / splash / ISO layout** |
+
+```bash
+# First time (full build)
+sudo ./build-distro.sh --app-dir ../dist/linux-unpacked --stage all
+
+# Then fast re-spins after tweaking the boot splash / 0500-brand-boot hook:
+sudo ./build-distro.sh --stage binary       # seconds-to-minutes, reuses chroot
+```
+
+A `--stage binary` run skips the Electron/Lyrion/python injection entirely
+(those live in the chroot, which is reused), so `--app-dir` isn't required for
+it. Add `--clean-cache` to also wipe the downloaded-package cache.
+
 ### Build the ISO on GitHub (manual, by tag)
 
 You can also rebuild the ISO in CI without a local Debian box. The job runs
