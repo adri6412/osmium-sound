@@ -7,6 +7,37 @@ const __dirname = dirname(__filename);
 
 let mainWindow;
 
+// Renderer-crash recovery: how many times we've auto-reloaded, and when we last
+// did. After long uptime the Chromium renderer/GPU process can die (OOM, GPU
+// driver fault) leaving the window alive but blank — a white screen the user
+// can't recover from. We reload it ourselves instead of leaving it dead.
+let recoveryReloads = 0;
+let lastRecoveryAt = 0;
+
+/**
+ * Reload the renderer after a crash/hang, with a tiny backoff so a tight
+ * crash-loop can't spin the CPU. The counter resets whenever the page has been
+ * healthy for a while (handled in did-finish-load).
+ */
+function recoverRenderer(reason) {
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  const now = Date.now();
+  // If the last recovery was very recent we're in a crash loop — back off harder.
+  const tightLoop = now - lastRecoveryAt < 10000;
+  lastRecoveryAt = now;
+  recoveryReloads += 1;
+  const delay = tightLoop ? Math.min(30000, 2000 * recoveryReloads) : 1000;
+  console.error(`Renderer recovery (${reason}); reload #${recoveryReloads} in ${delay}ms`);
+  setTimeout(() => {
+    if (!mainWindow || mainWindow.isDestroyed()) return;
+    try {
+      mainWindow.webContents.reloadIgnoringCache();
+    } catch (err) {
+      console.error('Recovery reload failed:', err);
+    }
+  }, delay);
+}
+
 /**
  * Create the main application window
  * Optimized for 1024x600 touchscreen displays
@@ -63,12 +94,38 @@ function createWindow() {
   });
 
   // Add error handling for web contents
-  mainWindow.webContents.on('did-fail-load', (event, errorCode, errorDescription, validatedURL) => {
+  mainWindow.webContents.on('did-fail-load', (event, errorCode, errorDescription, validatedURL, isMainFrame) => {
     console.error('Failed to load:', errorCode, errorDescription, validatedURL);
+    // -3 (ERR_ABORTED) is benign (e.g. a superseded navigation). Anything else
+    // on the main frame means we have no usable page — retry the load.
+    if (isMainFrame && errorCode !== -3) {
+      recoverRenderer(`did-fail-load ${errorCode}`);
+    }
   });
 
   mainWindow.webContents.on('did-finish-load', () => {
     console.log('Web contents finished loading');
+    // The page loaded successfully; if it then stays healthy for a while, forget
+    // earlier crashes so a future incident gets a fast (non-backed-off) reload.
+    setTimeout(() => {
+      if (mainWindow && !mainWindow.isDestroyed() && Date.now() - lastRecoveryAt > 60000) {
+        recoveryReloads = 0;
+      }
+    }, 60000);
+  });
+
+  // Renderer process died (crash, OOM, killed). Without this the window is left
+  // showing a blank/white page after long uptime. Reload it. ('crashed' is the
+  // pre-Electron-22 name; 'render-process-gone' is current — handle both.)
+  mainWindow.webContents.on('render-process-gone', (event, details) => {
+    if (details && details.reason === 'clean-exit') return;
+    recoverRenderer(`render-process-gone:${details ? details.reason : '?'}`);
+  });
+
+  // The renderer stopped responding to input/events (event-loop wedged). Reload
+  // rather than leaving the user staring at a frozen screen.
+  mainWindow.on('unresponsive', () => {
+    recoverRenderer('unresponsive');
   });
 
   // Handle window closed
