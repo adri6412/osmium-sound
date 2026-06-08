@@ -5,7 +5,7 @@
 # (the installer otherwise regenerates GRUB and overwrites these settings).
 set -e
 
-chmod +x /usr/local/sbin/hifi-finalize-boot.sh
+chmod +x /usr/local/sbin/hifi-finalize-boot.sh /usr/local/sbin/hifi-finalize-install.sh 2>/dev/null || true
 
 echo "I: [hifi] applying silent/branded boot config (chroot)"
 /usr/local/sbin/hifi-finalize-boot.sh || true

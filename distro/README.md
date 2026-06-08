@@ -1,11 +1,21 @@
 # HiFi Player — Debian Appliance Distro
 
-Builds a self-contained, **installer-only Debian ISO** (no bootable live
-system) that turns any x86 PC into a commercial-style network streamer running
-the HiFi Player UI on top of Lyrion Music Server. The ISO boot menu is branded
-with the **same logo as the Plymouth splash**, and after install the machine
-has a **completely hidden boot** (no GRUB menu, no kernel text, branded Plymouth
-splash) that goes straight into the fullscreen player.
+Builds a self-contained, **installable Debian ISO** that turns any x86 PC into a
+commercial-style network streamer running the HiFi Player UI on top of Lyrion
+Music Server. The boot menu shows a single, branded **Install HiFi Player**
+entry (with the **same logo as the Plymouth splash**), and after install the
+machine has a **completely hidden boot** (no GRUB menu, no kernel text, branded
+Plymouth splash) that goes straight into the fullscreen player.
+
+> **Why a live filesystem still exists.** The whole appliance (Electron app,
+> Python daemons, Lyrion, helper scripts, the `hifi` user/services) is assembled
+> in the live squashfs, and the install works by **cloning that filesystem**
+> onto the disk (`live-installer/enable=true`). That's why `build-distro.sh`
+> keeps `--debian-installer live`. The user never sees a "live" boot entry —
+> the boot menu is rewritten to a single "Install" item by the binary hook
+> `config/hooks/normal/0500-brand-boot.hook.binary`. Using
+> `--debian-installer true` would drop the live squashfs and install a plain
+> Debian without our files, making the preseed `late_command` fail.
 
 ## What the image contains
 
@@ -136,10 +146,9 @@ Write the ISO to a USB stick and boot the target:
 sudo dd if=hifi-player-installer.iso of=/dev/sdX bs=4M status=progress conv=fsync
 ```
 
-> The ISO is **installer-only** (no bootable live system). The boot menu is
-> branded with the **same logo as the Plymouth splash** (gold "HiFi Player" on
-> black background) and the **Install** entry is preseeded to auto-start. The
-> installation is **fully automatic**
+> The boot menu shows a single **Install HiFi Player** entry, branded with the
+> **same logo as the Plymouth splash** (gold "HiFi Player" on black), preseeded
+> to auto-start. The installation is **fully automatic**
 (preseeded — see `config/includes.installer/preseed.cfg`):
 
 - It **clones** the live system, so the `hifi` user, services and app already

@@ -169,17 +169,26 @@ cd "$SCRIPT_DIR"
 log "Cleaning previous build artefacts…"
 lb clean >/dev/null 2>&1 || true
 
-log "Configuring live-build (suite=$DEBIAN_SUITE arch=$ARCH) — INSTALLER ONLY…"
-# --debian-installer true  → installer-only ISO (no bootable live system).
-# The installer still clones the chroot filesystem, so the appliance is
-# assembled exactly as before; we just drop the "live" boot path entirely.
+log "Configuring live-build (suite=$DEBIAN_SUITE arch=$ARCH)…"
+# IMPORTANT: keep --debian-installer LIVE. The whole appliance (Electron app,
+# python daemons, Lyrion, helper scripts, the hifi user/services) is assembled
+# in the live filesystem (squashfs), and the install works by CLONING that
+# filesystem onto the target (preseed: live-installer/enable=true). With
+# --debian-installer=true there is NO live squashfs to clone, so the target
+# gets a plain Debian without our files → the preseed late_command
+# (hifi-finalize-install.sh) then fails with "file not found".
+#
+# The ISO still behaves as "installer only" because the binary hook
+# 0500-brand-boot.hook.binary rewrites the boot menus to a SINGLE branded
+# "Install HiFi Player" entry (no live entry is shown to the user).
 lb config \
     --distribution "$DEBIAN_SUITE" \
     --architectures "$ARCH" \
     --archive-areas "main contrib non-free non-free-firmware" \
-    --debian-installer true \
+    --debian-installer live \
     --debian-installer-gui false \
     --bootloaders "syslinux,grub-efi" \
+    --bootappend-live "boot=live components quiet splash loglevel=0 vt.global_cursor_default=0 hostname=hifiplayer" \
     --bootappend-install "auto=true priority=critical preseed/file=/preseed.cfg ---" \
     --iso-application "$BRAND_NAME" \
     --iso-publisher "$BRAND_NAME" \
