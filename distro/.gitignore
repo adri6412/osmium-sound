@@ -28,6 +28,7 @@ config/includes.chroot/usr/local/bin/api_server.py
 config/includes.chroot/usr/local/bin/vu_meter_daemon.py
 config/includes.chroot/usr/local/bin/sources_server.py
 config/includes.chroot/usr/share/plymouth/themes/hifi/logo.png
+config/includes.chroot/boot/grub/hifi-bg.png
 config/includes.chroot/opt/hifi-lyrion/
 config/packages.chroot/*.deb
 

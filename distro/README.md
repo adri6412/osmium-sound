@@ -258,5 +258,9 @@ sudo systemctl start lightdm
   Lyrion al gruppo `cdrom`. Verifica con `cdparanoia -Q -d /dev/sr0` (a livello OS)
   e `ls -l /dev/sr0`; se serve `sudo usermod -aG cdrom squeezeboxserver && sudo
   systemctl restart lyrionmusicserver`.
-- **GRUB menu still shows briefly** → normal on some firmware; the installed
-  system uses `GRUB_TIMEOUT=0` + `hidden`. Hold `Shift` to reveal it for repair.
+- **GRUB menu still shows briefly** → the installed system hides GRUB entirely:
+  `GRUB_TIMEOUT=0` + `GRUB_TIMEOUT_STYLE=hidden`, a black `gfxterm` background
+  (`/boot/grub/hifi-bg.png`), and `hifi-finalize-boot.sh` blanks the
+  "Loading Linux …/initial ramdisk …" strings in `/etc/grub.d/10_linux` so no
+  text appears at all. Hold `Shift` (BIOS) / press `Esc` (UEFI) to reveal it for
+  repair.

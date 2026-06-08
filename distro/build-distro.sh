@@ -128,6 +128,15 @@ convert -size 720x200 xc:black \
     "$THEME_DIR/logo.png" \
     || convert -size 720x200 xc:black -gravity center -fill white -pointsize 60 -annotate 0 'HiFi Player' "$THEME_DIR/logo.png"
 
+# Solid-black GRUB background for the installed system, so the (hidden) GRUB
+# graphical terminal shows nothing — no menu, no "Loading Linux…" text.
+# Bake it into the image here (ImageMagick is not installed on the target).
+log "Generating black GRUB background → includes.chroot/boot/grub/hifi-bg.png"
+GRUB_BG_DIR="$CONFIG/includes.chroot/boot/grub"
+mkdir -p "$GRUB_BG_DIR"
+convert -size 1920x1080 xc:black "$GRUB_BG_DIR/hifi-bg.png" 2>/dev/null \
+    || die "Failed to generate GRUB background image."
+
 # ─────────────────────────── Installer boot splash ─────────────────
 # Brand the ISO boot menu (isolinux/BIOS + grub/UEFI) with the SAME logo
 # look as the Plymouth splash: gold "HiFi Player" + grey subtitle on black.
