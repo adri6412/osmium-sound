@@ -33,6 +33,17 @@ if dpkg -s lyrionmusicserver >/dev/null 2>&1; then
     echo "[hifi-firstboot] Lyrion present — enabling service and self-disabling"
     # Keep it from being autoremoved and make sure it runs.
     apt-mark manual lyrionmusicserver 2>/dev/null
+
+    # Give the Lyrion service user access to the optical drive so the CD Player
+    # plugin can read audio CDs (done before starting the service so it picks up
+    # the new group). Skip if Lyrion runs as root.
+    LYRION_USER="$(systemctl show -p User --value lyrionmusicserver 2>/dev/null)"
+    [ -n "$LYRION_USER" ] || LYRION_USER=squeezeboxserver
+    if [ "$LYRION_USER" != "root" ] && id "$LYRION_USER" >/dev/null 2>&1; then
+        usermod -aG cdrom "$LYRION_USER" 2>/dev/null \
+            && echo "[hifi-firstboot] added $LYRION_USER to cdrom group"
+    fi
+
     systemctl enable --now lyrionmusicserver 2>/dev/null
 
     # Success: clean up the staged .deb and remove ourselves so we never re-run.

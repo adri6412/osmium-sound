@@ -212,5 +212,11 @@ sudo systemctl start lightdm
   `~/.xsession` errors in `/home/hifi/.xserver-errors`.
 - **Lyrion not reachable** → `systemctl status lyrionmusicserver`; first start
   initialises under `/var/lib/squeezeboxserver` and can take a minute.
+- **CD Player: "No CD in drive (-1)"** con un CD inserito → l'utente di Lyrion non
+  accede al lettore. L'immagine include `cdparanoia`/`libcdio-utils`/`icedax`, una
+  regola udev (`/dev/cdrom`, gruppo `cdrom`) e al primo boot aggiunge l'utente
+  Lyrion al gruppo `cdrom`. Verifica con `cdparanoia -Q -d /dev/sr0` (a livello OS)
+  e `ls -l /dev/sr0`; se serve `sudo usermod -aG cdrom squeezeboxserver && sudo
+  systemctl restart lyrionmusicserver`.
 - **GRUB menu still shows briefly** → normal on some firmware; the installed
   system uses `GRUB_TIMEOUT=0` + `hidden`. Hold `Shift` to reveal it for repair.
