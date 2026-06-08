@@ -121,8 +121,8 @@ sudo dd if=hifi-player-installer.iso of=/dev/sdX bs=4M status=progress conv=fsyn
 
 > The ISO is **installer-only** (no bootable live system). The boot menu is
 > branded with the **same logo as the Plymouth splash** (gold "HiFi Player" on
-> black) and shows a single **Install HiFi Player** entry that auto-starts after
-> a few seconds. The installation is **fully automatic**
+> black background) and the **Install** entry is preseeded to auto-start. The
+> installation is **fully automatic**
 (preseeded — see `config/includes.installer/preseed.cfg`):
 
 - It **clones** the live system, so the `hifi` user, services and app already
@@ -142,12 +142,16 @@ Default credentials (for SSH/maintenance): user `hifi` / password `hifi`.
 
 ### Choosing automatic vs interactive install
 
-The single **Install HiFi Player** entry passes
-`auto=true priority=critical preseed/file=/preseed.cfg` (see the branded menus
-written by `build-distro.sh` into `config/includes.binary/isolinux/install.cfg`
-and `config/includes.binary/boot/grub/grub.cfg`). For a one-off interactive
-install, edit that line at the boot prompt (press `Tab` on BIOS / `e` on UEFI)
-and remove the `auto=true priority=critical preseed/file=...` part.
+The **Install** entry passes `auto=true priority=critical preseed/file=/preseed.cfg`
+(set in `build-distro.sh` via `--bootappend-install`; live-build keeps the
+correct kernel/initrd paths). The boot menus are **not** rewritten by hand —
+that broke booting with "vmlinuz not found". Instead, only the look (splash,
+colours, title, timeout) is patched in place by the binary hook
+`config/hooks/normal/0500-brand-boot.hook.binary`, and the splash images come
+from `config/includes.binary/{isolinux,boot/grub}/splash.png`. For a one-off
+interactive install, edit the kernel line at the boot prompt (press `Tab` on
+BIOS / `e` on UEFI) and remove the `auto=true priority=critical preseed/file=...`
+part.
 
 ## Audio output
 
@@ -161,7 +165,8 @@ the name with `aplay -l`), then `systemctl restart squeezelite`.
 |---|---|
 | Packages installed | `config/package-lists/hifi.list.chroot` |
 | Plymouth splash logo/text | logo generated in `build-distro.sh`; theme in `config/.../plymouth/themes/hifi/` |
-| ISO installer boot menu / splash | splash + menus generated in `build-distro.sh` → `config/includes.binary/{isolinux,boot/grub}` |
+| ISO installer boot splash | generated in `build-distro.sh` → `config/includes.binary/{isolinux,boot/grub}/splash.png` |
+| ISO boot menu colours/title/timeout | patched in place by `config/hooks/normal/0500-brand-boot.hook.binary` |
 | GRUB / kernel quiet flags | `config/hooks/normal/0200-hidden-boot.hook.chroot` |
 | Kiosk launch flags | `.xsession` written by `config/hooks/normal/0100-system-setup.hook.chroot` |
 | Autologin user/session | `config/includes.chroot/etc/lightdm/lightdm.conf.d/99-hifi-autologin.conf` |
