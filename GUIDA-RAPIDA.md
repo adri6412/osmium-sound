@@ -35,18 +35,13 @@ npm run electron:dev
 
 ## 🎮 Come Usare l'Applicazione
 
-### Schermata Home
-- Seleziona la sorgente musicale tra:
-  - **Lyrion Server**: Interfaccia Material skin (richiede server attivo su localhost:9000)
-  - **YouTube**: Interfaccia web di YouTube embedded
-  - **Spotify**: Web player di Spotify embedded
-  - **Internet Radio**: In arrivo
-
-### Ogni App È Indipendente
-- Ogni sorgente carica l'interfaccia web completa
-- I controlli sono quelli nativi dell'app embedded
-- Usa il pulsante "Home" per tornare alla selezione
-- Usa "Open in Browser" se alcune funzionalità sono limitate
+### Front-end Lyrion
+- Interfaccia per il server Lyrion Music Server (default `http://localhost:9000`),
+  con i tab **Musica**, **Radio** e **App**.
+- **Compatibile con i plugin di Lyrion**: streaming e radio (es. Spotty per
+  Spotify Connect, radio internet, YouTube, UPnP/DLNA, AirPlay) si installano dalla
+  web UI di Lyrion (Impostazioni → Plugin) e compaiono automaticamente nei tab
+  Radio/App. Nessuna schermata dedicata da gestire nell'app.
 
 ### Impostazioni
 - Info di sistema (hostname, IP, versione)
@@ -106,9 +101,10 @@ npm install
 - Chiudi altre istanze di Vite/applicazioni sulla porta 5173
 - Oppure modifica la porta in `vite.config.js`
 
-### WebView non carica YouTube/Spotify
-- È normale, alcune funzionalità sono limitate in modalità embedded
-- Usa il pulsante "Open in Browser" per funzionalità complete
+### Il front-end Lyrion non carica
+- Verifica l'URL del server Lyrion nelle Impostazioni (default `http://localhost:9000`)
+- Controlla che il servizio Lyrion sia attivo e raggiungibile
+- Per sorgenti streaming/radio mancanti, installa il plugin corrispondente dalla web UI di Lyrion
 
 ### DevTools non si aprono
 - Premi `F12` o `Ctrl+Shift+I`
@@ -160,27 +156,17 @@ Quando sei pronto per il deploy sul dispositivo finale:
 
 ## 🔌 Configurazione Sorgenti
 
-### Lyrion Server (Consigliato per collezione locale)
-1. Installa Lyrion Music Server su DietPi:
-   ```bash
-   sudo apt install lyrionmusicserver
-   # o scarica da lyrion.org
-   ```
-2. Lyrion si avvia su `http://localhost:9000`
-3. Configura la tua libreria musicale in Lyrion
-4. L'app caricherà automaticamente l'interfaccia Material
+### Lyrion Music Server
+1. Lyrion è già installato sull'appliance e si avvia su `http://localhost:9000`
+   (in sviluppo: `sudo apt install lyrionmusicserver` o scarica da lyrion.org).
+2. Configura la tua libreria musicale in Lyrion.
+3. L'app carica automaticamente il front-end (tab Musica / Radio / App).
 
-### YouTube
-- Funziona subito, nessuna configurazione
-- Caricato in iframe
-- Alcune funzionalità potrebbero essere limitate (es. login)
-- Usa "Open in Browser" per funzionalità complete
-
-### Spotify
-- Richiede account Spotify (Premium per playback)
-- Caricato in iframe
-- Login direttamente nell'interfaccia embedded
-- Usa "Open in Browser" se hai problemi di login o funzionalità limitate
+### Sorgenti streaming e radio (plugin Lyrion)
+- Streaming e radio **non** sono codificati nell'app: arrivano dai **plugin di Lyrion**.
+- Installa il plugin desiderato dalla web UI di Lyrion (Impostazioni → Plugin),
+  es. **Spotty** (Spotify Connect), radio internet, **YouTube**, UPnP/DLNA, AirPlay.
+- Una volta installato, compare da solo nei tab **Radio**/**App** — nessuna modifica all'app.
 
 ## 📚 Risorse
 
