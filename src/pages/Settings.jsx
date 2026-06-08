@@ -561,7 +561,6 @@ const Settings = () => {
         { label: 'Hostname', value: systemInfo.hostname, type: 'info' },
         { label: 'IP Dispositivo', value: currentInterface?.address || systemInfo.local_ip || 'Non disponibile', type: 'info' },
         { label: 'Platform', value: `${systemInfo.platform} (${systemInfo.arch})`, type: 'info' },
-        { label: 'App Version', value: systemInfo.version, type: 'info' },
         { label: 'Stato API', value: apiConnected ? 'Connesso' : 'Disconnesso', type: 'info' },
       ]
     },
