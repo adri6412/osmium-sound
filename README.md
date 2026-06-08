@@ -5,6 +5,23 @@ A professional touchscreen-friendly hi-fi media player built with Electron, Reac
 ![HiFi Media Player](https://img.shields.io/badge/platform-Electron-blue)
 ![License](https://img.shields.io/badge/license-MIT-green)
 
+> ## ⚠️ APPLIANCE ISO — DESTRUCTIVE, UNATTENDED INSTALL
+>
+> The appliance ISO (built under `distro/`) installs **fully unattended**. It does
+> **NOT** ask where to install and does **NOT** ask for confirmation before
+> formatting.
+>
+> - It automatically picks the **first disk it detects** (`list-devices disk | head -n1`)
+>   and **wipes it entirely** (new GPT label, all existing partitions/data erased).
+> - It then **reboots automatically** with no final prompt.
+> - The installed system has root login enabled with a **default password (`hifi`)** —
+>   change it on first boot.
+>
+> **Before booting the ISO on any machine, physically disconnect every drive you
+> don't want erased.** "First detected disk" is not necessarily the one you expect
+> (USB enumeration order, NVMe vs SATA, etc.). There is no undo and no confirmation
+> screen. See [`distro/config/includes.installer/preseed.cfg`](distro/config/includes.installer/preseed.cfg).
+
 ## ✨ Features
 
 - **Modern Hi-Fi Aesthetic**: Dark metallic theme with golden accents
