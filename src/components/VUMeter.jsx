@@ -53,7 +53,6 @@ const VUMeter = ({ isPlaying, bars = 32, className = "" }) => {
   }, [lastMessage, bars]);
 
   // Fallback animation logic if WebSocket is disconnected but track is playing
-  // (e.g. playing Spotify or YouTube instead of local Lyrion/Squeezelite)
   useEffect(() => {
     let timeoutId;
     let animationFrameId;

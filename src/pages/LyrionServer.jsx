@@ -5,23 +5,18 @@ import {
   Play, Pause, SkipBack, SkipForward,
   Volume2, VolumeX, Music, AlertCircle, RefreshCw,
   Folder, User, Disc, Home, ChevronRight, ChevronDown,
-  Radio, AppWindow, Disc3,
-  Settings as SettingsIcon, Maximize2,
-  Youtube
+  Radio, AppWindow,
+  Settings as SettingsIcon, Maximize2
 } from 'lucide-react';
 import { lyrionApi } from '../utils/lyrionApi';
 import AnalogVUMeter from '../components/AnalogVUMeter';
 import SettingsPage from './Settings';
-import SpotifyPage from './Spotify';
-import YouTubePage from './YouTube';
 
 // ── Tab definitions ──────────────────────────────────────────
 const TABS = [
   { id: 'musica',   label: 'Musica',   Icon: Music },
   { id: 'radio',    label: 'Radio',    Icon: Radio },
   { id: 'apps',     label: 'App / CD', Icon: AppWindow },
-  { id: 'spotify',  label: 'Spotify',  Icon: Disc3 },
-  { id: 'youtube',  label: 'YouTube',  Icon: Youtube },
   { id: 'settings', label: null,       Icon: SettingsIcon },
 ];
 
@@ -378,8 +373,6 @@ const LyrionServer = () => {
 
   // ── Right-panel content ────────────────────────────────────
   const renderTabContent = () => {
-    if (activeTab === 'spotify')  return <SpotifyPage />;
-    if (activeTab === 'youtube')  return <YouTubePage />;
     if (activeTab === 'settings') return <SettingsPage />;
 
     // musica / radio / apps — library browser

@@ -100,6 +100,13 @@ cp -f "$REPO_ROOT/sources_server.py"  "$BIN_DEST/"
 sed -i 's/\r$//' "$BIN_DEST/api_server.py" "$BIN_DEST/vu_meter_daemon.py" "$BIN_DEST/sources_server.py"
 chmod +x "$BIN_DEST/api_server.py" "$BIN_DEST/vu_meter_daemon.py" "$BIN_DEST/sources_server.py"
 
+# Seed the installed system-components version (baseline for OTA comparison),
+# matching the UI version so a fresh image reports a real baseline.
+SYS_VERSION_DEST="$CONFIG/includes.chroot/etc/hifi-player"
+mkdir -p "$SYS_VERSION_DEST"
+printf '%s\n' "$APP_VERSION" > "$SYS_VERSION_DEST/SYSTEM_VERSION"
+log "Seeded SYSTEM_VERSION = $APP_VERSION"
+
 log "Downloading Lyrion Music Server .deb → includes.chroot/opt/hifi-lyrion"
 # Staged inside the chroot filesystem and installed by hook 0050 (apt-get),
 # NOT in packages.chroot which current apt/live-build rejects.
