@@ -48,6 +48,11 @@ xdg-utils
 # Audio
 alsa-utils
 
+# Audio CD support (Lyrion "CD Player" plugin reads the optical drive via these)
+cdparanoia
+libcdio-utils
+icedax
+
 # Squeezelite (Debian build has VISEXPORT; -v exports /dev/shm/squeezelite-*)
 squeezelite
 

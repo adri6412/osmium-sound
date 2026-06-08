@@ -1,0 +1,7 @@
+# HiFi Player appliance — make the optical drive usable by Lyrion's CD Player.
+#
+# Guarantees a stable /dev/cdrom symlink and group/permissions that the Lyrion
+# service user (member of the "cdrom" group, see hifi-firstboot.sh) can open.
+# Without this, the CD Player plugin reports "No CD in drive (-1)" even with a
+# disc inserted, because it cannot access the device node.
+SUBSYSTEM=="block", KERNEL=="sr[0-9]*", SYMLINK+="cdrom", GROUP="cdrom", MODE="0660"
