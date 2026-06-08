@@ -38,8 +38,24 @@ jobs:
   build-iso:
     runs-on: ubuntu-latest
     timeout-minutes: 120
+    # Build inside a real Debian container so live-build/debootstrap and the
+    # Debian archive keyring behave correctly (Ubuntu hosts can trip on this).
+    container:
+      image: debian:bookworm
+      options: --privileged
 
     steps:
+      - name: Install base tooling (container is minimal)
+        run: |
+          set -eux
+          export DEBIAN_FRONTEND=noninteractive
+          apt-get update -qq
+          apt-get install -y --no-install-recommends \
+            ca-certificates curl git xz-utils sudo \
+            python3 build-essential \
+            live-build imagemagick xorriso debootstrap \
+            debian-archive-keyring rsync fakeroot
+
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
@@ -61,11 +77,6 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Free up disk space
-        run: |
-          sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/lib/android "$AGENT_TOOLSDIRECTORY" || true
-          df -h
-
       - name: Build installer ISO (live-build, as root)
         run: |
           set -euo pipefail
@@ -75,7 +86,8 @@ jobs:
           fi
           chmod +x distro/build-distro.sh
           cd distro
-          sudo env ISO_NAME="hifi-player-${INPUT_TAG}.iso" ./build-distro.sh $ARGS
+          # Already root inside the container — no sudo needed.
+          ISO_NAME="hifi-player-${INPUT_TAG}.iso" ./build-distro.sh $ARGS
         env:
           INPUT_TAG: ${{ inputs.tag }}
           INPUT_SUITE: ${{ inputs.suite }}
@@ -88,7 +100,6 @@ jobs:
           ISO="hifi-player-${{ inputs.tag }}.iso"
           [ -f "$ISO" ] || ISO="$(ls -1 *.iso 2>/dev/null | head -n1)"
           [ -n "$ISO" ] && [ -f "$ISO" ] || { echo "No ISO produced"; exit 1; }
-          sudo chown "$USER" "$ISO" || true
           sha256sum "$ISO" > "${ISO}.sha256"
           echo "iso=$ISO" >> "$GITHUB_OUTPUT"
           ls -lh "$ISO" "${ISO}.sha256"
@@ -106,13 +117,18 @@ jobs:
         if: ${{ inputs.make_release }}
         run: |
           set -euo pipefail
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
           TAG="${{ inputs.tag }}"
           if git rev-parse "$TAG" >/dev/null 2>&1; then
             echo "Tag $TAG already exists."
           else
             git tag -a "$TAG" -m "HiFi Player $TAG"
-            git push origin "$TAG"
+            git push "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" "$TAG"
           fi
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Publish ISO to GitHub Release
         if: ${{ inputs.make_release }}

@@ -113,7 +113,9 @@ sudo ./build-distro.sh \
 
 ### Build the ISO on GitHub (manual, by tag)
 
-You can also rebuild the ISO in CI without a local Debian box. In GitHub →
+You can also rebuild the ISO in CI without a local Debian box. The job runs
+inside a **`debian:bookworm` container** (so live-build/debootstrap and the
+Debian archive keyring behave correctly). In GitHub →
 **Actions → "Build HiFi Player ISO (manual)" → Run workflow**, type the **tag**
 by hand (e.g. `v1.0.5`) and run it. The workflow:
 
