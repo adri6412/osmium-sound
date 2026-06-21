@@ -12,7 +12,7 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import com.hifi.mediaplayer.Preferences;
-import com.hifi.mediaplayer.Squeezer;
+import com.hifi.mediaplayer.HiFiMediaPlayer;
 import com.hifi.mediaplayer.itemlist.IServiceItemListCallback;
 import com.hifi.mediaplayer.model.MusicFolderItem;
 import com.hifi.mediaplayer.model.Player;
@@ -140,7 +140,7 @@ public class RandomPlay {
                     .param("play_index", "1").param("track_id", first).exec();
             this.played.add(first);
             RandomPlay.this.firstFound = true;
-            Squeezer.getPreferences().saveRandomPlayed(folderID, played);
+            HiFiMediaPlayer.getPreferences().saveRandomPlayed(folderID, played);
             Log.i(TAG, String.format("Saved first Random Play track to preferences for %s on %s", folderID, player.getName()));
         }
     }

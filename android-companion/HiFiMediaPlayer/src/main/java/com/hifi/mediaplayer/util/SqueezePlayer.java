@@ -12,7 +12,7 @@ import android.util.Log;
 import android.widget.Toast;
 
 import com.hifi.mediaplayer.Preferences;
-import com.hifi.mediaplayer.Squeezer;
+import com.hifi.mediaplayer.HiFiMediaPlayer;
 
 public class SqueezePlayer extends Handler {
     private static final int MSG_STOP = 0;
@@ -50,7 +50,7 @@ public class SqueezePlayer extends Handler {
     }
 
     public static SqueezePlayer startControllingSqueezePlayer(Context context) {
-        Preferences preferences = Squeezer.getPreferences();
+        Preferences preferences = HiFiMediaPlayer.getPreferences();
         Preferences.ServerAddress serverAddress = preferences.getServerAddress();
         return new SqueezePlayer(context, serverAddress);
     }

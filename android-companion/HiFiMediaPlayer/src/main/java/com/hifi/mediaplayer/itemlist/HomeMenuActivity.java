@@ -30,7 +30,7 @@ import java.util.Collections;
 import java.util.List;
 
 import com.hifi.mediaplayer.R;
-import com.hifi.mediaplayer.Squeezer;
+import com.hifi.mediaplayer.HiFiMediaPlayer;
 import com.hifi.mediaplayer.framework.ItemAdapter;
 import com.hifi.mediaplayer.framework.ItemViewHolder;
 import com.hifi.mediaplayer.itemlist.dialog.ArtworkListLayout;
@@ -65,12 +65,12 @@ public class HomeMenuActivity extends JiveItemListActivity {
 
     @Override
     public ArtworkListLayout getPreferredListLayout() {
-        return Squeezer.getPreferences().getHomeMenuLayout();
+        return HiFiMediaPlayer.getPreferences().getHomeMenuLayout();
     }
 
     @Override
     protected void saveListLayout(ArtworkListLayout listLayout) {
-        Squeezer.getPreferences().setHomeMenuLayout(listLayout);
+        HiFiMediaPlayer.getPreferences().setHomeMenuLayout(listLayout);
     }
 
     @Override

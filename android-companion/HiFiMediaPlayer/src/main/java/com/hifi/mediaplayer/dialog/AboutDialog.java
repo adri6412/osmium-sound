@@ -34,7 +34,7 @@ import android.widget.TextView;
 import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 
 import com.hifi.mediaplayer.R;
-import com.hifi.mediaplayer.Squeezer;
+import com.hifi.mediaplayer.HiFiMediaPlayer;
 
 public class AboutDialog extends DialogFragment {
     @NonNull
@@ -61,7 +61,7 @@ public class AboutDialog extends DialogFragment {
         builder.setView(view);
         builder.setPositiveButton(android.R.string.ok, null);
         builder.setNeutralButton(R.string.changelog_full_title, (dialog, which) -> {
-            ChangeLogDialog changeLog = new ChangeLogDialog(getActivity(), Squeezer.getPreferences().getSharedPreferences());
+            ChangeLogDialog changeLog = new ChangeLogDialog(getActivity(), HiFiMediaPlayer.getPreferences().getSharedPreferences());
             changeLog.getThemedFullLogDialog().show();
         });
         builder.setNegativeButton(R.string.dialog_license, (dialog, which) -> requireActivity().startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(getString(R.string.license)))));

@@ -172,7 +172,7 @@ public class ConnectActivity extends BaseActivity {
 
     private void onHandshakeComplete(HandshakeComplete event) {
         Log.d("ConnectActivity", "Handshake complete");
-        Squeezer.getPreferences().saveServer();
+        HiFiMediaPlayer.getPreferences().saveServer();
         HomeActivity.show(this);
     }
 }

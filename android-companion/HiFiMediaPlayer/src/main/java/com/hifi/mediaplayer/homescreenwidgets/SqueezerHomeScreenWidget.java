@@ -13,7 +13,7 @@ import android.widget.Toast;
 
 import androidx.annotation.Nullable;
 
-import com.hifi.mediaplayer.Squeezer;
+import com.hifi.mediaplayer.HiFiMediaPlayer;
 import com.hifi.mediaplayer.service.ISqueezeService;
 import com.hifi.mediaplayer.service.SqueezeService;
 import com.hifi.mediaplayer.service.event.PlayersChanged;

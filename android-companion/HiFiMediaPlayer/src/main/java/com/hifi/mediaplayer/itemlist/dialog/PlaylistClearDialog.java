@@ -23,7 +23,7 @@ import androidx.fragment.app.FragmentManager;
 
 import com.hifi.mediaplayer.Preferences;
 import com.hifi.mediaplayer.R;
-import com.hifi.mediaplayer.Squeezer;
+import com.hifi.mediaplayer.HiFiMediaPlayer;
 import com.hifi.mediaplayer.framework.BaseConfirmDialog;
 
 public class PlaylistClearDialog extends BaseConfirmDialog {
@@ -49,7 +49,7 @@ public class PlaylistClearDialog extends BaseConfirmDialog {
     @Override
     protected void ok(boolean persist) {
         if (persist) {
-            Squeezer.getPreferences().setClearPlaylistConfirmation(false);
+            HiFiMediaPlayer.getPreferences().setClearPlaylistConfirmation(false);
         }
         host.clearPlaylist();
     }

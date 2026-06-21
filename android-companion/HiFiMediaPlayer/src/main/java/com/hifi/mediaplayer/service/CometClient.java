@@ -49,7 +49,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.regex.Pattern;
 
 import com.hifi.mediaplayer.Preferences;
-import com.hifi.mediaplayer.Squeezer;
+import com.hifi.mediaplayer.HiFiMediaPlayer;
 import com.hifi.mediaplayer.SqueezerRepository;
 import com.hifi.mediaplayer.Util;
 import com.hifi.mediaplayer.model.AlertWindow;
@@ -208,7 +208,7 @@ class CometClient extends BaseClient {
         mBackgroundHandler.post(() -> {
             cleanupBayeuxClient();
 
-            final Preferences.ServerAddress serverAddress = Squeezer.getPreferences().getServerAddress();
+            final Preferences.ServerAddress serverAddress = HiFiMediaPlayer.getPreferences().getServerAddress();
             mConnectionState.initLastScan(serverAddress.lastScan);
             final String username = serverAddress.userName;
             final String password = serverAddress.password;
@@ -354,7 +354,7 @@ class CometClient extends BaseClient {
 
         long lastScan = Util.getLong(data, "lastscan");
         if (mConnectionState.setLastScan(lastScan)) {
-            final Preferences preferences = Squeezer.getPreferences();
+            final Preferences preferences = HiFiMediaPlayer.getPreferences();
             final Preferences.ServerAddress serverAddress = preferences.getServerAddress();
             preferences.saveLastScan(serverAddress, lastScan);
         }

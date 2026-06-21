@@ -3,7 +3,7 @@ package com.hifi.mediaplayer.util;
 import android.content.Context;
 
 import com.hifi.mediaplayer.Preferences;
-import com.hifi.mediaplayer.Squeezer;
+import com.hifi.mediaplayer.HiFiMediaPlayer;
 
 public class DevicePlayers {
 
@@ -15,13 +15,13 @@ public class DevicePlayers {
     }
 
     public void onCreate() {
-        Preferences preferences = Squeezer.getPreferences();
+        Preferences preferences = HiFiMediaPlayer.getPreferences();
         SqueezeLite squeezeLite = new SqueezeLite(context);
         if (preferences.controlSqueezelite() && squeezeLite.has()) squeezeLite.start();
     }
 
     public void onResume() {
-        Preferences preferences = Squeezer.getPreferences();
+        Preferences preferences = HiFiMediaPlayer.getPreferences();
         squeezePlayer = (preferences.controlSqueezePlayer() && SqueezePlayer.has(context)) ? SqueezePlayer.startControllingSqueezePlayer(context) : null;
     }
 

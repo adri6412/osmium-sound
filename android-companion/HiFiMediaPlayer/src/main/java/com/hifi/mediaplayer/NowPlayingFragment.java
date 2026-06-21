@@ -210,7 +210,7 @@ public class NowPlayingFragment extends Fragment  implements CallStateDialog.Cal
     @UiThread
     private void showConnectingDialog() {
         if (connectingDialog == null || !connectingDialog.isShowing()) {
-            Squeezer.getPreferences(preferences -> {
+            HiFiMediaPlayer.getPreferences(preferences -> {
                 // We may no longer be attached to the parent activity. If so, do nothing.
                 if (!isAdded()) {
                     return;
@@ -277,7 +277,7 @@ public class NowPlayingFragment extends Fragment  implements CallStateDialog.Cal
         View v;
 
         mFullHeightLayout = (container.getLayoutParams().height != ViewGroup.LayoutParams.WRAP_CONTENT);
-        Preferences preferences = Squeezer.getPreferences();
+        Preferences preferences = HiFiMediaPlayer.getPreferences();
         boolean largeArtwork = preferences.isLargeArtwork();
 
         if (mFullHeightLayout) {
@@ -411,7 +411,7 @@ public class NowPlayingFragment extends Fragment  implements CallStateDialog.Cal
 
             totalTime.setOnClickListener(view -> {
                 showRemainingTime = !showRemainingTime;
-                Squeezer.getPreferences().setShowRemainingTime(showRemainingTime);
+                HiFiMediaPlayer.getPreferences().setShowRemainingTime(showRemainingTime);
                 PlayerState playerState = getPlayerState();
                 if (playerState != null) {
                     updateTimeDisplayTo(playerState.getTrackElapsed(), playerState.getCurrentTrackDuration());
@@ -699,7 +699,7 @@ public class NowPlayingFragment extends Fragment  implements CallStateDialog.Cal
     private void updateSongInfo(@NonNull PlayerState playerState) {
         updateTimeDisplayTo(playerState.getTrackElapsed(), playerState.getCurrentTrackDuration());
 
-        Preferences preferences = Squeezer.getPreferences();
+        Preferences preferences = HiFiMediaPlayer.getPreferences();
         CurrentTrack song = playerState.getCurrentTrack();
         if (song == null) {
             // Create empty song if this is called (via _HandshakeComplete) before status is received
@@ -852,7 +852,7 @@ public class NowPlayingFragment extends Fragment  implements CallStateDialog.Cal
 
     private void updateVolumeInfo() {
         if (mFullHeightLayout) {
-            Preferences preferences = Squeezer.getPreferences();
+            Preferences preferences = HiFiMediaPlayer.getPreferences();
             VolumeUpdater updater = preferences.isLargeArtwork() ? preferences.nowPlayingVolume() ? volumeBar : null : volumeWheel;
             if (updater != null) updater.update(requireService().getVolume());
         }
@@ -1041,7 +1041,7 @@ public class NowPlayingFragment extends Fragment  implements CallStateDialog.Cal
             return;
         }
 
-        Squeezer.getPreferences(preferences -> {
+        HiFiMediaPlayer.getPreferences(preferences -> {
             if (!preferences.hasServerConfig()) {
                 // Set up a server connection, if it is not present
                 ConnectActivity.show(mActivity);
@@ -1113,11 +1113,11 @@ public class NowPlayingFragment extends Fragment  implements CallStateDialog.Cal
 
         updateUiFromPlayerState(playerState);
 
-        requestCallStateLauncher.trySetAction(Squeezer.getPreferences().getActionOnIncomingCall());
+        requestCallStateLauncher.trySetAction(HiFiMediaPlayer.getPreferences().getActionOnIncomingCall());
     }
 
     private void onHomeMenuChange(HomeMenuEvent event) {
-        boolean myMusicSearch = Squeezer.getPreferences().getTopBarSearch() == Preferences.TopBarSearch.MY_MUSIC;
+        boolean myMusicSearch = HiFiMediaPlayer.getPreferences().getTopBarSearch() == Preferences.TopBarSearch.MY_MUSIC;
         String searchKey = myMusicSearch ? "myMusicSearch" : "globalSearch";
         topBarSearch = null;
         for (JiveItem menuItem : event.menuItems) if (menuItem.goAction != null) {

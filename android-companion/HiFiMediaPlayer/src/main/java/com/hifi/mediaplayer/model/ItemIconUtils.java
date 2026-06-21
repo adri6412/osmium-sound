@@ -33,7 +33,7 @@ import java.util.Map;
 import java.util.function.BiPredicate;
 
 import com.hifi.mediaplayer.R;
-import com.hifi.mediaplayer.Squeezer;
+import com.hifi.mediaplayer.HiFiMediaPlayer;
 import com.hifi.mediaplayer.util.FluentHashMap;
 
 
@@ -46,7 +46,7 @@ public class ItemIconUtils {
         @DrawableRes Integer itemIcon = getItemIcon(item);
         Drawable icon = AppCompatResources.getDrawable(context, itemIcon != null ? itemIcon : defaultIcon);
 
-        if (Squeezer.getPreferences().useFlatIcons()) {
+        if (HiFiMediaPlayer.getPreferences().useFlatIcons()) {
             return icon;
         }
 
@@ -70,7 +70,7 @@ public class ItemIconUtils {
 
     @DrawableRes static public Integer getItemIcon(JiveItem item) {
         Integer itemIcon = itemIcons.get(iconStyle(item));
-        if (itemIcon == null && Squeezer.getPreferences().useFlatIcons()) {
+        if (itemIcon == null && HiFiMediaPlayer.getPreferences().useFlatIcons()) {
             String path = item.getIcon().getPath();
             Log.d("GetIcon", "path: " + path);
             if (path != null) {

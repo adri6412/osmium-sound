@@ -36,7 +36,7 @@ import androidx.recyclerview.widget.ItemTouchHelper;
 import java.util.Map;
 
 import com.hifi.mediaplayer.R;
-import com.hifi.mediaplayer.Squeezer;
+import com.hifi.mediaplayer.HiFiMediaPlayer;
 import com.hifi.mediaplayer.framework.ItemAdapter;
 import com.hifi.mediaplayer.framework.ItemViewHolder;
 import com.hifi.mediaplayer.itemlist.dialog.PlaylistClearDialog;
@@ -151,7 +151,7 @@ public class CurrentPlaylistActivity extends JiveItemListActivity implements Pla
     public boolean onOptionsItemSelected(MenuItem item) {
         int itemId = item.getItemId();
         if (itemId == R.id.menu_item_playlist_clear) {
-            if (Squeezer.getPreferences().isClearPlaylistConfirmation()) {
+            if (HiFiMediaPlayer.getPreferences().isClearPlaylistConfirmation()) {
                 PlaylistClearDialog.show(this);
             } else {
                 clearPlaylist();

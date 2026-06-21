@@ -34,7 +34,7 @@ import java.util.List;
 import java.util.Map;
 
 import com.hifi.mediaplayer.R;
-import com.hifi.mediaplayer.Squeezer;
+import com.hifi.mediaplayer.HiFiMediaPlayer;
 import com.hifi.mediaplayer.dialog.VolumeSettings;
 import com.hifi.mediaplayer.itemlist.IServiceItemListCallback;
 import com.hifi.mediaplayer.itemlist.dialog.ArtworkListLayout;
@@ -225,7 +225,7 @@ public abstract class ItemListActivity<VH extends ItemViewHolder<T>, T extends I
     protected abstract void orderPage(int start);
 
     public ArtworkListLayout getPreferredListLayout() {
-        return Squeezer.getPreferences().getAlbumListLayout();
+        return HiFiMediaPlayer.getPreferences().getAlbumListLayout();
     }
 
     /**
