@@ -167,9 +167,8 @@
                 android:scaleType="centerInside"
                 app:icon="@drawable/ic_action_previous"
                 app:iconSize="24dp"
-                style="@style/Widget.MaterialComponents.Button.OutlinedButton"
-                android:backgroundTint="#1a1a1a"
-                app:borderWidth="1dp"
+                style="@style/Widget.MaterialComponents.Button"
+                android:backgroundTint="#D4AF37"
                 app:cornerRadius="24dp"
                 app:iconTint="#ffffff" />
 
@@ -196,9 +195,8 @@
                 android:scaleType="centerInside"
                 app:icon="@drawable/ic_action_next"
                 app:iconSize="24dp"
-                style="@style/Widget.MaterialComponents.Button.OutlinedButton"
-                android:backgroundTint="#1a1a1a"
-                app:borderWidth="1dp"
+                style="@style/Widget.MaterialComponents.Button"
+                android:backgroundTint="#D4AF37"
                 app:cornerRadius="24dp"
                 app:iconTint="#ffffff" />
         </LinearLayout>
