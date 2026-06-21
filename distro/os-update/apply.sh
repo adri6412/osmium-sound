@@ -5,11 +5,13 @@
 # hifi-os-<ver>.tar.gz, signed, and executed AS ROOT on the appliance by
 # /usr/local/sbin/hifi-os-update.sh after the signature + checksum verify.
 #
-# Put here whatever change to the operating system this release needs:
-# rewrite a config under /etc, add a udev/modprobe rule, install a file that
-# ships alongside this script, migrate data, adjust GRUB, etc. Use apt-get only
-# if you truly must — the whole point of this channel is scripted, deterministic
-# changes that don't depend on a package being in the archive.
+# To add an OS change, APPEND a new idempotent block at the bottom (rewrite a
+# config under /etc, add a udev/modprobe rule, install a file that ships
+# alongside this script, migrate data, adjust GRUB, etc.) and leave every
+# existing block untouched — this script is CUMULATIVE (see the contract below),
+# NOT a per-release delta. Use apt-get only if you truly must — the whole point
+# of this channel is scripted, deterministic changes that don't depend on a
+# package being in the archive.
 #
 # Environment provided by the updater:
 #   HIFI_OS_VERSION   the version string being applied (e.g. v1.4.0)
