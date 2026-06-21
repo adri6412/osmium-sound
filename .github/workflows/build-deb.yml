@@ -3,6 +3,15 @@ name: Build HiFi Player App (.deb)
 on:
   push:
     branches: [ "main" ]
+    paths:
+      - 'src/**'
+      - 'main/**'
+      - 'package*.json'
+      - 'vite.config.js'
+      - 'tailwind.config.js'
+      - 'electron-builder.yml'
+      - '.github/workflows/build-deb.yml'
+      - '!android-companion/**'
   workflow_dispatch:
 
 jobs:
