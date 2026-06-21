@@ -168,7 +168,7 @@
                 app:icon="@drawable/ic_action_previous"
                 app:iconSize="24dp"
                 style="@style/Widget.MaterialComponents.Button"
-                android:backgroundTint="#D4AF37"
+                android:background="@color/gold_button"
                 app:cornerRadius="24dp"
                 app:iconTint="#ffffff" />
 
@@ -183,7 +183,7 @@
                 app:iconSize="32dp"
                 app:cornerRadius="32dp"
                 style="@style/Widget.MaterialComponents.Button"
-                android:backgroundTint="#D4AF37"
+                android:background="@color/gold_button"
                 android:textColor="#ffffff"
                 app:iconTint="#ffffff" />
 
@@ -196,7 +196,7 @@
                 app:icon="@drawable/ic_action_next"
                 app:iconSize="24dp"
                 style="@style/Widget.MaterialComponents.Button"
-                android:backgroundTint="#D4AF37"
+                android:background="@color/gold_button"
                 app:cornerRadius="24dp"
                 app:iconTint="#ffffff" />
         </LinearLayout>
