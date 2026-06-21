@@ -1,0 +1,183 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+   Copyright (C) 2009 Google Inc.  All Rights Reserved.
+
+   Licensed under the Apache License, Version 2.0 (the "License");
+   you may not use this file except in compliance with the License.
+   You may obtain a copy of the License at
+
+        http://www.apache.org/licenses/LICENSE-2.0
+
+   Unless required by applicable law or agreed to in writing, software
+   distributed under the License is distributed on an "AS IS" BASIS,
+   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+   See the License for the specific language governing permissions and
+   limitations under the License.
+-->
+
+<PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android"
+    android:key="first_preferencescreen">
+
+    <uk.org.ngo.squeezer.IntEditTextPreference
+        android:key="squeezer.fadeInSecs"
+        android:title="@string/settings_fadeinsecs_title"
+        android:dialogMessage="@string/settings_fadeinsecs_summary"/>
+
+    <ListPreference
+        android:key="squeezer.action_on_incoming_call"
+        android:title="@string/settings_action_on_incoming_call_title"
+        android:summary="%s"/>
+
+    <CheckBoxPreference
+        android:key="squeezer.restore_after_call"
+        android:summary="@string/settings_restore_after_call"/>
+
+    <PreferenceCategory
+        android:title="@string/settings_category_display">
+
+        <ListPreference
+            android:key="squeezer.theme"
+            android:title="@string/settings_theme_title"
+            android:summary="%s"/>
+
+        <ListPreference
+            android:key="squeezer.screensaver"
+            android:title="@string/settings_screensaver_title"
+            android:summary="%s"/>
+        <ListPreference
+            android:key="squeezer.fullscreen"
+            android:title="@string/fullscreen_mode"
+            android:summary="%s"/>
+
+    </PreferenceCategory>
+
+    <PreferenceCategory
+        android:title="@string/settings_category_nowplaying_trackinfo">
+
+        <SwitchPreferenceCompat
+            android:key="squeezer.now_playing_volume"
+            android:summaryOff="@string/don_t_show_volume_control"
+            android:summaryOn="@string/show_volume_control"
+            android:title="@string/volume"/>
+
+        <SwitchPreferenceCompat
+            android:key="squeezer.show_track_count"
+            android:summaryOff="@string/settings_show_track_number_off"
+            android:summaryOn="@string/settings_show_track_number_on"
+            android:title="@string/settings_show_track_number_title"/>
+
+        <SwitchPreferenceCompat
+            android:key="squeezer.show_technical_info"
+            android:summaryOff="@string/settings_show_technical_info_off"
+            android:summaryOn="@string/settings_show_technical_info_on"
+            android:title="@string/settings_show_technical_info_title"/>
+
+        <SwitchPreferenceCompat
+            android:key="squeezer.add_composer_line"
+            android:summaryOff="@string/settings_add_composer_line_off"
+            android:summaryOn="@string/settings_add_composer_line_on"
+            android:title="@string/settings_add_composer_line_title"/>
+
+        <SwitchPreferenceCompat
+            android:key="squeezer.add_conductor_line"
+            android:summaryOff="@string/settings_add_conductor_line_off"
+            android:summaryOn="@string/settings_add_conductor_line_on"
+            android:title="@string/settings_add_conductor_line_title"/>
+
+        <SwitchPreferenceCompat
+            android:key="squeezer.display_classical_music_tags"
+            android:summaryOff="@string/settings_classical_music_tags_off"
+            android:summaryOn="@string/settings_classical_music_tags_on"
+            android:title="@string/settings_classical_music_tags_title"/>
+
+    </PreferenceCategory>
+
+    <PreferenceCategory
+        android:title="@string/settings_category_ui">
+
+        <ListPreference
+            android:key="squeezer.top_bar.search"
+            android:title="@string/settings_top_bar_search"
+            android:summary="%s"/>
+
+        <SwitchPreferenceCompat
+            android:key="squeezer.launcher.enabled"
+            android:title="@string/settings_launcher_title"
+            android:summary="@string/settings_launcher_summary"/>
+
+        <SwitchPreferenceCompat
+            android:key="squeezer.clear.current_playlist.confirmation"
+            android:summaryOff="@string/settings_clear_current_playlist_confirmation_off"
+            android:summaryOn="@string/settings_clear_current_playlist_confirmation_on"
+            android:title="@string/settings_clear_current_playlist_confirmation"/>
+
+        <ListPreference
+            android:key="squeezer.customize_home_menu.mode"
+            android:title="@string/settings_customize_home_menu_mode"
+            android:dialogTitle="@string/settings_customize_home_menu_info"
+            android:summary="%s"/>
+        <ListPreference
+            android:key="squeezer.customize_shortcut.mode"
+            android:title="@string/settings_customize_customShortcut_mode"
+            android:dialogTitle="@string/settings_customize_customShortcut_info"
+            android:summary="%s"/>
+
+        <ListPreference
+            android:key="squeezer.action.onswipe.right"
+            android:title="@string/settings_swipe_right_action"
+            android:dialogTitle="@string/settings_swipe_right_action_summary"
+            android:summary="%s"/>
+        <ListPreference
+            android:key="squeezer.action.onswipe.left"
+            android:title="@string/settings_swipe_left_action"
+            android:dialogTitle="@string/settings_swipe_left_action_summary"
+            android:summary="%s"/>
+    </PreferenceCategory>
+
+    <PreferenceCategory
+        android:title="@string/pref_cat_third_party">
+
+        <SwitchPreferenceCompat
+            android:key="squeezer.scrobble.enabled"
+            android:summaryOff="@string/settings_scrobble_off"
+            android:summaryOn="@string/settings_scrobble_on"
+            android:title="@string/settings_scrobble_title"/>
+
+        <SwitchPreferenceCompat
+            android:key="squeezer.squeezeplayer.enabled"
+            android:summary="@string/settings_squeezeplayer_summary"
+            android:title="@string/settings_squeezeplayer_title"/>
+
+        <SwitchPreferenceCompat
+            android:key="squeezer.squeezelite.enabled"
+            android:summary="@string/settings_squeezelite_summary"
+            android:title="@string/settings_squeezelite_title"/>
+    </PreferenceCategory>
+
+    <PreferenceCategory
+        android:title="@string/settings_category_download">
+
+        <SwitchPreferenceCompat
+            android:key="squeezer.download.enabled"
+            android:title="@string/settings_download_enabled"/>
+
+        <CheckBoxPreference
+            android:key="squeezer.download.confirmation"
+            android:title="@string/settings_download_confirmation"/>
+
+        <CheckBoxPreference
+            android:key="squeezer.download.use_server_path"
+            android:title="@string/settings_download_use_server_path"/>
+
+        <ListPreference
+            android:key="squeezer.download.path_structure"
+            android:title="@string/settings_download_path_structure"
+            android:summary="%s"/>
+
+        <ListPreference
+            android:key="squeezer.download.filename_structure"
+            android:title="@string/settings_download_filename_structure"
+            android:summary="%s"/>
+
+    </PreferenceCategory>
+</PreferenceScreen>

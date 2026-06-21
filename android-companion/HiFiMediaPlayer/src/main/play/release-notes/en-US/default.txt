@@ -1,0 +1,7 @@
+&bull; Optional fullscreen mode
+
+&bull; Show the currently playing track on the screensaver
+
+&bull; Enable the app to be a Launcher so a device can boot directly into it
+
+&bull; Swipe gestures for standard LMS actions. By default, swipe right for play-next, and left for add-to-end

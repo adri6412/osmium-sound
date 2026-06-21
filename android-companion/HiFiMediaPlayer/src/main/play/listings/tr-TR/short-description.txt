@@ -1,0 +1,1 @@
+Lyrion Music Server ve oyuncular için uzaktan kumanda.

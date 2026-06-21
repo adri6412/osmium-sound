@@ -1,0 +1,30 @@
+# Gradle
+.gradle
+/build
+*.iml
+
+# Android Studio
+.idea
+*.iws
+*.ipr
+*.apk
+*.dex
+*.class
+local.properties
+
+# Build artifacts
+/HiFiMediaPlayer/build
+*.keystore
+*.jks
+
+# Gradle wrapper (keep the wrapper itself, ignore the distributions)
+gradle/wrapper/dists/
+
+# Misc
+.DS_Store
+*.swp
+*.swo
+*~
+
+# Gradle cache
+.gradle/

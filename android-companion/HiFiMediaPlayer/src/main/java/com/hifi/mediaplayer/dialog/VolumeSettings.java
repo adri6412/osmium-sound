@@ -1,0 +1,72 @@
+package com.hifi.mediaplayer.dialog;
+
+import android.app.Dialog;
+import android.os.Bundle;
+import android.view.View;
+import android.widget.TextView;
+
+import androidx.annotation.NonNull;
+import androidx.fragment.app.DialogFragment;
+
+import com.google.android.material.dialog.MaterialAlertDialogBuilder;
+import com.google.android.material.slider.Slider;
+import com.google.android.material.switchmaterial.SwitchMaterial;
+
+import com.hifi.mediaplayer.Preferences;
+import com.hifi.mediaplayer.R;
+import com.hifi.mediaplayer.Squeezer;
+import com.hifi.mediaplayer.framework.BaseActivity;
+import com.hifi.mediaplayer.model.Player;
+import com.hifi.mediaplayer.service.ISqueezeService;
+
+public class VolumeSettings extends DialogFragment {
+    @NonNull
+    @Override
+    public Dialog onCreateDialog(Bundle savedInstanceState) {
+        BaseActivity activity = (BaseActivity)requireActivity();
+        ISqueezeService service = activity.getService();
+        Preferences preferences = Squeezer.getPreferences();
+
+        View view = requireActivity().getLayoutInflater().inflate(R.layout.volume_settings, null);
+
+        SwitchMaterial backgroundVolume = view.findViewById(R.id.background_volume);
+        TextView backgroundVolumeHint = view.findViewById(R.id.bg_volume_hint);
+        backgroundVolume.setOnCheckedChangeListener((buttonView, isChecked) -> backgroundVolumeHint.setText(isChecked ? R.string.settings_background_volume_on : R.string.settings_background_volume_off));
+        backgroundVolume.setChecked(preferences.isBackgroundVolume());
+
+        Slider volumeIncrements = view.findViewById(R.id.volume_increments);
+        volumeIncrements.setValue(preferences.getVolumeIncrements());
+
+        boolean canAdjustVolumeForSyncGroup = service.canAdjustVolumeForSyncGroup();
+        SwitchMaterial groupVolume = view.findViewById(R.id.group_volume);
+        TextView groupVolumeHint = view.findViewById(R.id.group_volume_hint);
+        view.findViewById(R.id.group_volume_title).setVisibility(canAdjustVolumeForSyncGroup ? View.VISIBLE : View.GONE);
+        view.findViewById(R.id.group_volume_hint).setVisibility(canAdjustVolumeForSyncGroup ? View.VISIBLE : View.GONE);
+        groupVolume.setVisibility(canAdjustVolumeForSyncGroup ? View.VISIBLE : View.GONE);
+        groupVolume.setOnCheckedChangeListener((buttonView, isChecked) -> groupVolumeHint.setText(isChecked ? R.string.player_group_volume_on : R.string.player_group_volume_off));
+        groupVolume.setChecked(preferences.isGroupVolume());
+
+        String digitalVolumeControl = service.getActivePlayerState().prefs.get(Player.Pref.DIGITAL_VOLUME_CONTROL);
+        boolean canFixedVolume = digitalVolumeControl != null; // TODO check for hasDigitalOut
+        SwitchMaterial fixedVolume = view.findViewById(R.id.fixed_volume);
+        TextView fixedVolumeHint = view.findViewById(R.id.fixed_volume_hint);
+        view.findViewById(R.id.fixed_volume_title).setVisibility(canFixedVolume ? View.VISIBLE : View.GONE);
+        view.findViewById(R.id.fixed_volume_hint).setVisibility(canFixedVolume ? View.VISIBLE : View.GONE);
+        fixedVolume.setVisibility(canFixedVolume ? View.VISIBLE : View.GONE);
+        fixedVolume.setOnCheckedChangeListener((buttonView, isChecked) -> fixedVolumeHint.setText(isChecked ? R.string.SETUP_DIGITALVOLUMECONTROL_ON : R.string.SETUP_DIGITALVOLUMECONTROL_OFF));
+        fixedVolume.setChecked("1".equals(digitalVolumeControl));
+
+        MaterialAlertDialogBuilder builder = new MaterialAlertDialogBuilder(requireActivity());
+        builder.setTitle(R.string.settings_volume_title)
+                .setView(view)
+                .setPositiveButton(android.R.string.ok, (dialog, id) -> {
+                    preferences.setBackgroundVolume(backgroundVolume.isChecked());
+                    preferences.setVolumeIncrements((int) volumeIncrements.getValue());
+                    preferences.setGroupVolume(groupVolume.isChecked());
+                    service.preferenceChanged(preferences, null);
+                    service.playerPref(Player.Pref.DIGITAL_VOLUME_CONTROL, fixedVolume.isChecked() ? "1" : "0");
+                })
+                .setNegativeButton(android.R.string.cancel, null);
+        return builder.create();
+    }
+}

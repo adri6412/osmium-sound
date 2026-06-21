@@ -1,0 +1,97 @@
+/*
+ * Copyright (c) 2020 Kurt Aaholst <kaaholst@gmail.com>
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package com.hifi.mediaplayer.itemlist;
+
+import android.graphics.drawable.Drawable;
+import android.graphics.drawable.LayerDrawable;
+import android.view.View;
+
+import androidx.annotation.NonNull;
+import androidx.appcompat.content.res.AppCompatResources;
+import androidx.core.graphics.drawable.DrawableCompat;
+import androidx.palette.graphics.Palette;
+
+import com.hifi.mediaplayer.R;
+import com.hifi.mediaplayer.Util;
+import com.hifi.mediaplayer.itemlist.dialog.ArtworkListLayout;
+import com.hifi.mediaplayer.model.JiveItem;
+import com.hifi.mediaplayer.model.Window;
+import com.hifi.mediaplayer.service.ISqueezeService;
+
+class CurrentPlaylistItemView extends JiveItemView {
+
+    public CurrentPlaylistItemView(CurrentPlaylistActivity activity, @NonNull View view) {
+        super(activity, Window.WindowStyle.PLAY_LIST, ArtworkListLayout.list, view);
+    }
+
+    @Override
+    public CurrentPlaylistActivity getActivity() {
+        return (CurrentPlaylistActivity) super.getActivity();
+    }
+
+    @Override
+    public void bindView(JiveItem item) {
+        super.bindView(item);
+        itemView.setOnLongClickListener(null);
+
+        if (getBindingAdapterPosition() == getActivity().getSelectedIndex()) {
+            itemView.setBackgroundResource(getActivity().getAttributeValue(R.attr.currentTrackBackground));
+            text1.setTextAppearance(getActivity(), R.style.SqueezerTextAppearance_ListItem_Primary_Highlight);
+            text2.setTextAppearance(getActivity(), R.style.SqueezerTextAppearance_ListItem_Secondary_Highlight);
+        } else {
+            itemView.setBackgroundResource(getActivity().getAttributeValue(R.attr.selectableItemBackground));
+            text1.setTextAppearance(getActivity(), R.style.SqueezerTextAppearance_ListItem_Primary);
+            text2.setTextAppearance(getActivity(), R.style.SqueezerTextAppearance_ListItem_Secondary);
+        }
+    }
+
+    @Override
+    protected boolean isSelectable() {
+        return true;
+    }
+
+    @Override
+    public void onIcon() {
+        super.onIcon();
+        if (getBindingAdapterPosition() == getActivity().getSelectedIndex()) {
+            Drawable drawable = icon.getDrawable();
+            Drawable marker = DrawableCompat.wrap(AppCompatResources.getDrawable(getActivity(), R.drawable.ic_action_nowplaying));
+            Palette colorPalette = Palette.from(Util.drawableToBitmap(drawable)).generate();
+            Palette.Swatch dominantSwatch = colorPalette.getDominantSwatch();
+            if (dominantSwatch != null) {
+                DrawableCompat.setTint(marker, dominantSwatch.getBodyTextColor());
+            }
+
+            LayerDrawable layerDrawable = new LayerDrawable(new Drawable[]{drawable, marker});
+            int inset = getActivity().getResources().getDimensionPixelSize(R.dimen.now_playing_emblem_inset);
+            layerDrawable.setLayerInset(1, inset, inset, inset, inset);
+
+            icon.setImageDrawable(layerDrawable);
+        }
+    }
+
+    /**
+     * Jumps to whichever song the user chose.
+     */
+    @Override
+    public void onItemSelected() {
+        ISqueezeService service = getActivity().getService();
+        if (service != null) {
+            getActivity().getService().playlistIndex(getBindingAdapterPosition());
+        }
+    }
+}

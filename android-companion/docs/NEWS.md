@@ -1,0 +1,982 @@
+---
+description: Changelog
+permalink: /changelog/
+---
+
+2.4.1
+=====
+
+*   Optional fullscreen mode
+
+*   Show the currently playing track on the screensaver
+
+*   Enable the app to be a Launcher so a device can boot directly into it
+
+*   Swipe gestures for standard LMS actions. By default, swipe right for
+    play-next, and left for add-to-end
+
+
+2.4.0
+=====
+
+*   Home screen optionally organized with a horizontal list for each item.
+
+*   Fix issue where lists are not filled after scrolling
+
+*   Target Android 16
+
+*   Do not attempt pending commands to LMS after disconnect
+
+
+2.3.12
+======
+
+*   Fix artist displayed twice on now playing bottom section
+
+*   Orientation change does not reload items
+
+*   Empty items in search results, are not selectable and not counted
+
+*   Show keyboard and keep it up in search pages
+
+*   Fix assorted potential crashes
+
+
+2.3.11
+======
+
+*   Update French translations, thanks to Guiv42
+
+*   Show error if device player cannot be started
+
+
+2.3.10
+======
+
+*   Keep connection when device is in doze mode
+
+*   Display name of radio station
+
+*   Volume slider is accessible from all screens. Drag down to show the slider
+
+*   Optionally hide volume slider on Now Playing screen
+
+*   Automatic search
+
+*   Possibility to stop and restart server
+
+*   Update remaining time when dragging song slider
+
+*   Integrate with Squeezelite for Android
+
+*   Bug and stability fixes
+
+
+2.3.9
+=====
+
+*   Add Polish translation. Contributed by Michał Szkutnik
+
+*   Remove the obsolete possibility to connect to mysqueezebox.com
+
+*   Embed icon for Disk and folders Plugin
+
+*   Target Android 15 and enable EdgeToEdge
+
+*   Don't display scanning progress popup messages
+
+*   Fixed various minor issues
+
+
+2.3.8
+=====
+
+*   Disable full rebuild of client caches to prevent slow startup in some
+    scenarios
+
+
+2.3.7
+=====
+
+*   Classical music information (composer, band, conductor). Contributed by
+    schup011 <philipp.schumnn@web.de>
+
+*   Rename Logitech Media Server to Lyrion Music Server
+
+*   Optionally show technical info (bitrate and samplerate) and track number
+
+*   Possibility to move the current playlist to the new player when switching
+    player
+
+*   Remember previously connected servers so you don't have to type them
+
+*   Show server scanning progress and reload current page when scanning is
+    complete
+
+*   Refresh shortcuts after a music library rescan
+
+*   Target API 34
+
+*   Fixed various minor issues
+
+
+2.3.6
+=====
+
+*   Support weblink in context menu items
+
+*   Improve connection stability
+
+*   Flat icons for Deezer local plugin
+
+*   Update the Deezer icon to match the new branding
+
+*   Option to choose whether search from the top bar searches in all places or
+    My Music only
+
+*   Options to mute or pause all players on call
+
+*   UI fixes and improvements, contributed by Danny Baumann
+
+*   Fix assorted potential crashes.
+
+
+2.3.5
+=====
+
+*   Fix current playlist when showing QR code
+
+
+2.3.4
+=====
+
+*   Bring back notification controls. This also gives a better experience over
+    bluetooth, and brings back background volume control on some devices.
+
+*   Smooth volume slider on Now Playing screen, prevents sudden volume changes
+
+*   Possibility to seek current song from notification
+
+*   Power on/off now possible from notification
+
+*   Fix context menu initially hidden in landscape
+
+*   Remove obsolete volume button on Now Playing mini layout
+
+*   Minor improvements when the app is sideloaded on Google TV
+
+*   Workaround an Android issue
+    https://issuetracker.google.com/issues/160946170
+
+
+2.3.3
+=====
+
+*   Always on volume control on "Now Playing" screen.
+
+*   Move the button for the current playlist on the "Now Playing" screen to
+    the top bar, so it's always the same place.
+
+*   Search results are populated when expanded. This fixes an issue where a
+    new Pandora station would be created.
+
+*   Support rich content (images, links, etc) from LMS
+
+*   Support weblinks (display eg. a PDF booklet)
+
+*   Don't show context menu in a destroyed activity
+
+
+2.3.2
+=====
+
+*   Context menu in a bottom sheet
+
+*   Display results for global and library search in an expandable list.
+
+*   More space for Player names
+
+*   Fix a bug in Wake on LAN.
+
+*   Load preferences in the background and other changes to avoid Application
+    Not Responding
+
+*   Fix some reported crashes.
+
+
+2.3.1
+=====
+
+*   Fix a regression in call handling.
+
+*   Show the alphabet position when using the scroll bar.
+
+*   Move the volume controls to a bottom sheet, which keeps open until it's
+    closed.
+
+
+2.3.0
+=====
+
+*   Support player specific LMS plugins.
+
+*   Ability to set own Sleep Timer
+
+*   Optionally continue music when a call ends, if it was stopped by Squeezer,
+    when the call started. To enable, select Settings from the 3-dot menu in
+    the top right.
+
+*   Use flat icons. Control this via View via the 3-dot menu in the top right.
+
+*   Implement keep screen on and screensaver. Select via 3-dot menu in the top
+    right / Settings
+
+*   Target Android 12
+
+*   Fix an issue which could cause the loading view to keep showing
+
+*   Fix playlist not updating after resume
+
+*   Fix a network issue, which enables Squeezer to connect to a server from
+    the internet via a VPN.
+
+*   Fix various potential crashes.
+
+
+2.2.9
+=====
+
+*   Fix assorted potential crashes.
+
+
+2.2.8
+=====
+
+*   Random play folder. Start from the context menu of a music folder
+
+*   Tap album artwork on the "Now Playing" screen to quickly jump forwards or
+    backwards in the currently playing song.
+
+*   Items from a music service are marked with the corresponding logo.
+
+*   Don't require Wi-Fi for server discovery.
+
+*   Custom Shortcuts. Long press an item to add a shortcut to the top level
+    menu.
+
+*   Volume buttons and volume popup can control volume of synced players,
+    instead of only the selected player.
+
+*   Settings for Volume Control is now accessible from the window of the
+    volume that appears when you change it.
+
+*   Ongoing notification show current track number and number of tracks in the
+    current playlist.
+
+
+2.2.7
+=====
+
+*   The home screen as well as several submenus can be customized. Long press
+    an item to activate. Contributed by Benjamin Viertel
+
+*   Display remaining track time. Press track time at the right of the
+    progression bar to switch between total time and remaining time.
+
+*   Time counter while live streaming.
+
+*   Button for players screen in top bar if room.
+
+*   Allow changing player volume with the app running only in background.
+
+*   Configurable volume increments.
+
+*   Attempt to reconnect when the app is brought into the foreground.
+
+*   Use proper icons for slider items.
+
+*   Add missing icons for Boom settings.
+
+*   Unmute before volume is adjusted via hardware volume controls.
+
+*   Use skeleton views while loading.
+
+
+2.2.6
+=====
+
+*   Fix bug in players screen when some players are synced
+
+
+2.2.5
+=====
+
+*   Ability to mute/unmute players and mute music on call
+
+*   Support for pictures in plugins like Music & Artist Information
+
+*   Fix bug in setting alarm time
+
+*   Fix various potential crashes.
+
+
+2.2.4
+=====
+
+*   Updated German translation. Contributed by Benjamin Viertel
+
+*   Fixed the icons for the Settings/Audio menu
+
+*   Material design time pickers
+
+*   Remove Google Analytics from settings screen
+
+*   Rehandshake with the server when connection is lost, or the server
+    requests it
+
+*   Fix some reported crashes.
+
+
+2.2.3
+=====
+
+*   Restore the scroll bar
+
+
+2.2.2
+=====
+
+*   Interactive Now Playing screen
+
+*   Confirmation dialog for clear current playlist
+
+*   Wake up server (Wake-on-LAN)
+
+*   Select how much info to display per item
+
+*   Shortcut for current playlist on top bar if room
+
+*   Volume button on bottom bar if room
+
+*   Synchronize Volume and Power for player group
+
+*   Pause music on call
+
+*   Bug and stability fixes
+
+
+2.2.1
+=====
+
+*   Current playlist control; Possibility to undo a clear current playlist.
+    Remove a track by swiping left or right. Touch and hold to move a track
+
+*   Download confirmation and option to disable downloads
+
+*   Fix an issue where Android 10 would falsely add .mp3 to filenames
+
+*   Work around an issue with recent Spotty versions, where only one search
+    result is displayed
+
+*   Switch radio buttons properly
+
+*   Bug and stability fixes
+
+
+2.2.0
+=====
+
+*   Download of local music
+
+*   Automatic connection on app startup
+
+*   Home Screen Widget, contributed by Charlie Hayes
+
+*   Material Design
+
+*   Support RTL interface
+
+
+2.1.0
+=====
+
+*   Button for global search in the top bar.
+
+*   Access current playlist and volume control from the Now Playing screen.
+
+*   Radial volume control to enable finer control of the volume.
+
+*   Navigate back from the Now Playing or current playlist screens via the
+    home button or swipe down. To indicate the function of the home button,
+    specifically that it doesn't navigate home, set a close icon for the
+    current playlist and a down arrow for the now playing screen.
+
+*   Control LMS settings playtrackalbum and defeatDestructiveTouchToPlay.
+    These settings control what happens when you select a playable item.
+    Access via three-dot menu on the players screen.
+
+*   Work around issues in LMS which causes the context menu and
+    defeatDestructiveTouchToPlay to not work properly.
+
+
+2.0.1
+=====
+
+*   Separate list layout settings for home menu items and Slimbrowseitems.
+
+*   Notification shows button for next song instead of the previous one.
+
+*   Fix artwork display in the Spotty plugin.
+
+*   Option to easy switch between list and grid layouts.
+
+*   Ignore icon based popup message when in the Now Playing screen.
+
+*   Handle invalid server address.
+
+*   Fix some reported crashes.
+
+
+2.0.0
+=====
+
+*   Rewrite Squeezer to use the more modern CometD protocol to connect to the
+    server.
+
+*   Full support for Apps/Plugins.
+
+*   Connect to mysqueezebox.com.
+
+*   Additional browse modes, Album Artists, All Artists and Composers.
+
+*   Support for extra information and options for Artists/albums/Tracks via
+    the context menu.
+
+*   Library Views and Remote Music Libraries.
+
+*   Add French translation. Contributed by Olivier Sirol.
+
+
+1.5.4
+=====
+
+*   Show a button on the notification to disconnect Squeezer (and remove the
+    notification).
+
+*   Disconnect Squeezer when it's swiped from the recent apps list.
+
+
+1.5.3
+=====
+
+*   Always show a notification while connected to a server. This is a
+    requirement of Android.
+
+*   Show lyrics if provided by the server.
+
+*   Show artist instead of album in notifications.
+
+*   Fix race condition in display of favorite.
+
+*   Fix display problems on earlier Android versions.
+
+
+1.5.2
+=====
+
+*   Update to support Android Pie.
+
+*   Support notification settings.
+
+*   Ask for permissions at runtime.
+
+*   Add/remove music from favorites.
+
+
+1.5.1
+=====
+
+*   Fix assorted potential crashes.
+
+
+1.5.0
+=====
+
+*   Download enhancements: choose whether to store downloaded music on/off the
+    device's removable storage (if it has one); choose the folder structure
+    that's used.
+
+*   Enable next/previous track support on some streaming services, like
+    Spotify. Submitted by gerrelt_m@hotmail.com.
+
+*   Include artist information in the "Now playing" section. Submitted by
+    Frieder Schrempf <fr.sc@online.de>
+
+*   Support searching in plugins that provide that feature. Submitted by
+    original@flautz.de.
+
+*   Include additional music player controls on devices with larger screens,
+    or when in landscape orientation.
+
+*   Sort the list of players alphabetically. Submitted by
+    gerrelt_m@hotmail.com.
+
+*   Fixed an issue where Squeezer would appear to hang after a period of
+    inactivity on Android devices that support Doze mode.
+
+*   Fixed memory leak on devices running Android Marshmallow and below.
+
+*   Increase the amount of space that can be used by the image cache.
+
+*   Assorted small UI fixes and improvements.
+
+
+1.4.1
+=====
+
+*   Fixed a crash when scrobbling song information. Contributed by
+    HumbleBeeBumbleBeeDebugs@gmail.com.
+
+*   Workaround an issue on some devices where the currently playing item is
+    not highlighted in the playlist. Also add menu item to select the current
+    song. Contributed by spiritcroc@gmail.com.
+
+*   Fixed a crash when retrieving playlists for alarms.
+
+*   Fixed poor UI in Internet Radio search.
+
+*   Show search results in a list or a grid depending on user preferences.
+
+*   Show a dialog to allow the user to choose what happens when tapping a song
+    or an album.
+
+*   Provide "Play from here" option when looking at albums, playlists,
+    artists, genres, and years.
+
+*   Provide an option to disable notifications entirely.
+
+
+1.4.0
+=====
+
+*   New support for managing alarms on players. Most of the code by Kurt.
+
+*   Improved the support for apps, contributed by Christer Wendel.
+
+*   Reduced risk of out-of-memory crashes when loading large album artwork.
+
+*   Fixed a bug that prevented changing a player's sleep time.
+
+*   Fixed a crash on Samsung devices.
+
+*   Fixed potential crash when viewing the list of players.
+
+
+1.3.1
+=====
+
+*   Remote and plugin song artwork is now supported in notification messages,
+    based on code submitted by Christer Wendel,
+    https://github.com/nikclayton/android-squeezer/pull/128.
+
+*   A partial translation in to Turkish, submitted by
+    https://www.transifex.com/accounts/profile/echelon/.
+
+*   Improved the efficiency of the image cache.
+
+*   Fixed UI issue with spinners on older devices.
+
+*   Fixed issue with track information not updating on some devices when the
+    song changes, https://github.com/nikclayton/android-squeezer/issues/125.
+
+*   Fixed a crash on rooted devices.
+
+*   Fixed bug where the UI would not update after selecting a different player
+    (https://github.com/nikclayton/android-squeezer/issues/121).
+
+*   Fixed crash caused by race condition when connecting to a server.
+
+
+1.3.0
+=====
+
+*   Support richer notifications with playback controls from the notification
+    and lock screen. Based on work from Matthew Schmidt
+    (https://github.com/maxpower47). Includes support for notifications on
+    Android Wear devices.
+
+*   Fixed bug where song artwork could stop loading.
+
+*   Fixed crash that could occur when scanning for servers.
+
+*   Fixed issue where opening a playlist and leaving Squeezer while music is
+    playing would result in the playlist being at the wrong point when
+    returning to Squeezer.
+
+
+1.2.7
+=====
+
+*   Support skipping tracks in remote streams that have that feature, such as
+    Slacker Radio. Code from Sean Wilson (https://github.com/swilson).
+
+*   Simplified the configuration process for new users. Squeezer now
+    automatically searches for servers on the local network, saves connection
+    information per-server, and numerous other fixes.
+
+*   Changed saving files to remove non-VFAT compatible characters from
+    filenames to make it easier to export them to Windows and similar systems.
+
+*   Fixed issue where some plugin icons were not showing.
+
+*   Fixed issue where Internet radio stations were not working when connected
+    to servers running version 7.8 or above.
+
+*   Fixed issue where the UI could stop showing player progress.
+
+
+1.2.6
+=====
+
+*   Better handle the connection lifecycle with the server, which should
+    reduce opportunities for crashing.
+
+*   Add theme-specific icons for the view-option dialogs.
+
+*   Bring the Danish translation up to date.
+
+
+1.2.5
+=====
+
+*   Fixed potential crash if the connected players change while a player's
+    context menu is open.
+
+*   Fixed potential crash when setAdapter() is called from the wrong thread.
+
+
+1.2.4
+=====
+
+*   Fixed potential crash when resuming Squeezer.
+
+*   Fixed bug with players not showing on devices running Android 2.1 and
+    2.2.x.
+
+
+1.2.3
+=====
+
+*   Fixed bug that hid playlist management options.
+
+*   Fixed crash when all players disconnect and a player context menu is open.
+
+*   Fixed tracknames not scrolling properly on the "Now playing" screen.
+
+*   Fixed crash if a player's identifier is not its MAC address.
+
+*   Fixed crashes caused by initialising the UI before the connection to the
+    server completes.
+
+
+1.2.2
+=====
+
+*   Fixed potential crash after connecting to the server.
+
+*   Fixed potential crash downloading music folder items from servers older
+    than version 7.6.
+
+*   Fixed potential crash when viewing the current playlist.
+
+
+1.2.1
+=====
+
+*   Fixed potential crash when the notification message is updated.
+
+*   Fixed potential crash when disconnecting and reconnecting to the server.
+
+
+1.2.0
+=====
+
+*   Support creating and managing groups of players. Fixes
+    https://code.google.com/p/android-squeezer/issues/detail?id=4.
+
+*   Change the default colour theme to light with a dark action bar.
+
+*   Fixed a bug where returning to Squeezer from some other application (using
+    the "Recent Apps" button) would result in incomplete information being
+    displayed. Fixes
+    https://code.google.com/p/android-squeezer/issues/detail?id=79.
+
+*   Fixed potential crash when no players are connected to the server.
+
+
+1.1.1
+=====
+
+*   Fixed potential crash when browsing music folders.
+
+
+1.1.0
+=====
+
+*   Support for "My Apps" installed via mysqueezebox.com. Fixes
+    https://code.google.com/p/android-squeezer/issues/detail?id=26,
+    https://code.google.com/p/android-squeezer/issues/detail?id=46.
+
+*   Show the current player name in the Action Bar at the top of the screen,
+    with a drop-down menu allowing you to easily switch between players. Fixes
+    https://code.google.com/p/android-squeezer/issues/detail?id=53.
+
+*   Enhance the display of available players. You can now rename a player,
+    adjust the volume, set a sleep duration, and power on/off players directly
+    from the list. Fixes
+    https://code.google.com/p/android-squeezer/issues/detail?id=47,
+    https://code.google.com/p/android-squeezer/issues/detail?id=63,
+    https://code.google.com/p/android-squeezer/issues/detail?id=64.
+
+*   Support downloading all songs by album, artist, genre, year, or music
+    folder. This uses features only available in Android 2.3 (Gingerbread) and
+    above. Fixes
+    https://code.google.com/p/android-squeezer/issues/detail?id=55.
+
+*   Add newly downloaded files to the device's media library when they are
+    downloaded.
+
+*   Integration with SqueezePlayer (http://www.squeezeplayer.com/). Squeezer
+    can automatically start SqueezePlayer when Squeezer is started. Fixes
+    https://code.google.com/p/android-squeezer/issues/detail?id=48.
+
+*   A grid layout when viewing the song list on larger devices.
+
+*   When viewing albums containing songs by a searched-for artist, filter the
+    list of displayed songs to show those by that artist. Fixes
+    https://code.google.com/p/android-squeezer/issues/detail?id=51.
+
+*   The Dutch translation is fully up to date, thanks to spamba@gmail.com.
+
+*   Save album sort-order preference on the server.
+
+*   Fixed a bug where Squeezer was forgetting the active player.
+
+*   Fixed a bug where Squeezer was not updating the power status of a
+    powered-off player.
+
+*   Fixed a bug where song information for songs being remotely streamed would
+    not update when the song changes.
+
+*   Fixed a bug where the current playlist was not updated after the current
+    player changed.
+
+*   Fixed a bug when determining whether album artwork is available.
+
+*   Fixed https://code.google.com/p/android/issues/detail?id=63570, a bug in
+    Android 4.4.2 when tasks are re-ordered.
+
+*   Internal restructuring to make Squeezer faster and use less memory.
+
+*   Fixed assorted null pointer bugs.
+
+*   Use Crashlytics instead of ACRA for crash reporting.
+
+
+1.0.2
+=====
+
+*   Include a small progress indicator just above the mini-player.
+
+*   Tapping items when browsing music folders will follow your song
+    preferences. Fixes
+    https://code.google.com/p/android-squeezer/issues/detail?id=52.
+
+*   Added an option (disabled by default) to include your e-mail address in
+    error reports. If enabled and you send an error report the developers may
+    contact you for more details.
+
+*   Fixed a crash where beginBroadcast() was being called twice.
+
+
+1.0.1
+=====
+
+*   Fixed crash after a fragment was detached from an activity.
+
+*   Fixed crash when zero plugin items are returned by the SqueezeServer.
+
+*   Fixed crash when an IO error occurs processing artwork.
+
+*   Fixed crash when some versions of the SqueezeServer don't return play
+    state (play, pause, stop).
+
+
+1.0.0
+=====
+
+*   A complete refresh of the UI to match modern Android guidelines. The logo
+    is by Reddit user http://www.reddit.com/user/PdtS.
+
+*   A persistent mini-player on all screens (see what's playing, quickly
+    pause/play the track).
+
+*   A grid layout when viewing albums on larger devices (and it's selectable
+    on smaller devices).
+
+*   Moving through the UI is now smoother than ever.
+
+*   Viewing an album shows all the tracks on that album, with additional track
+    information.
+
+*   User preferences to control the order in which albums, tracks, and other
+    information is shown.
+
+*   Proper support for orientation changes -- flipping your device no longer
+    sends you back to the start of the list.
+
+*   The action to take when tapping an item (like a song or an album) is now
+    configurable -- no more inadvertently tapping a song and having it start
+    playing if that's not what you want.
+
+*   Voice support for searches.
+
+*   A German translation, contributed by Olaf Sebelin
+    (https://github.com/osebelin).
+
+*   Login support, for password protected servers.
+
+*   Only show the "Tips" dialog after successfully connecting to a server.
+
+*   This change log view
+
+
+0.9.1
+=====
+
+*   Disable song download functionality when not connected to a server.
+
+*   Disable "Download playing song" functionality when no song is playing.
+
+*   Fixed crash when scanning for servers on Android devices running
+    Honeycomb.
+
+*   Reduced (possibly eliminated) the potential for out-of-memory errors on
+    low-end devices when downloading album artwork.
+
+*   Improvements to smoothness when scrolling through lists that show album
+    artwork.
+
+
+0.9
+===
+
+*   Support for browsing and playing "New Music" on the Squeezeserver.
+
+*   You can now download tracks to your device from the "Now Playing", "Music
+    Folders" screens, and everywhere a song is shown.
+
+*   Significantly sped up downloading album artwork from the Squeezeserver,
+    and made scrolling through songs and albums much smoother.
+
+*   Highlight the currently playing track when viewing playlists.
+
+*   Simplified options when scrobbling, and link to suitable apps in Google
+    Play if the user tries to scrobble without an app installed.
+
+*   Fixed a memory leak when scanning for servers, and made the scanning
+    faster.
+
+*   Fixed a bug when moving songs in playlists.
+
+
+0.8
+===
+
+*   Support browsing and playing favourites on the Squeezeserver.
+
+*   Add a startup tip about how to control volume.
+
+*   Fixed a crash caused by trying to scrobble when a song wasn't playing.
+
+
+0.7.1
+=====
+
+*   Increased the speed of network scanning by a factor of ~ 12. If multiple
+    servers are present on the network then show their configured names, when
+    choosing between them, instead of IP addresses.
+
+*   Added a Dutch translation, contributed by Sebastian van Winkel.
+
+*   Fixed a bug where changing the server's address would not be picked up,
+    and Squeezer would continue to try and use the old server address.
+
+*   Fixed a crash when the device has no active network connections.
+
+*   Fixed a crash when displaying the "Enabling Wi-Fi" dialog.
+
+
+0.7
+===
+
+*   Added support for browsing the Squeezeserver's music folder (if the server
+    includes this feature).
+
+*   Added support for scanning the local network to find compatible
+    Squeezeservers, as an alternative to entering IP addresses by hand.
+
+*   Fixed a crash caused by pressing the "back" key while the "Connecting..."
+    dialog was showing.
+
+*   Fixed a crash when renaming or deleting playlists.
+
+*   Fixed a bug where duplicated items might appear on the menu.
+
+
+0.6.2
+=====
+
+*   Fixed crashes on orientation change, and assorted Honeycomb crashes after
+    incorrect API selection.
+
+
+0.6.1
+=====
+
+*   Included higher resolution icons for devices with a higher display
+    density, such as the Galaxy Nexus.
+
+*   Fixed a rare crash when releasing the Wi-Fi lock.
+
+*   The hardware volume controls now work from all activities, not just the
+    Now Playing activity. This fixes
+    http://code.google.com/p/android-squeezer/issues/detail?id=20.
+
+*   The "Settings" menu option is now visible in all activities, not just the
+    Now Playing activity. This fixes
+    http://code.google.com/p/android-squeezer/issues/detail?id=23.
+
+
+0.6
+===
+
+*   Browse the library: Full support for browsing by artist, album, song,
+    genre, or year. Also use Internet radio stations.
+
+*   Search: Search your library by artist, album, song, and genre.
+
+*   Playlists: Create, modify, and delete playlists on the server.
+
+*   Scrobble the currently playing track to Last.fm.
+
+*   "Now playing" UI: Larger album artwork, and the current artist and album
+    are now links to searches for more songs by the same artist / from the
+    same album. There is also a "landscape" optimised UI.
+
+*   "Scrub" through the currently playing track using the seekbar.
+
+*   Control the player's volume using your device's hardware volume keys.
+
+*   Error reporting. If Squeezer encounters an error you can (optionally)
+    submit an error report to the developers.

@@ -1,0 +1,69 @@
+/*
+ * Copyright (c) 2020 Kurt Aaholst.  All Rights Reserved.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package com.hifi.mediaplayer.itemlist.dialog;
+
+import android.annotation.SuppressLint;
+import android.app.Activity;
+import android.app.Dialog;
+import android.view.LayoutInflater;
+import android.view.View;
+import android.widget.RadioButton;
+import android.widget.RadioGroup;
+import android.widget.TextView;
+
+import androidx.fragment.app.DialogFragment;
+
+import com.google.android.material.dialog.MaterialAlertDialogBuilder;
+
+import com.hifi.mediaplayer.R;
+
+public abstract class BaseChoicesDialog extends DialogFragment {
+
+    Dialog createDialog(String title, String message, int selectedIndex, String[] choiceStrings) {
+        final Activity activity = getActivity();
+        final LayoutInflater inflater = activity.getLayoutInflater();
+
+        @SuppressLint({"InflateParams"})
+        View content = inflater.inflate(R.layout.choices_layout, null);
+
+        if (message != null) {
+            content.<TextView>findViewById(R.id.message).setVisibility(View.VISIBLE);
+            content.<TextView>findViewById(R.id.message).setText(message);
+        }
+
+        RadioGroup radioGroup = content.findViewById(R.id.choices);
+        for (int i = 0; i < choiceStrings.length; i++) {
+            RadioButton radioButton = (RadioButton) inflater.inflate(R.layout.choices_item, radioGroup, false);
+            radioButton.setText(choiceStrings[i]);
+            radioButton.setId(i);
+            radioGroup.addView(radioButton);
+        }
+        radioGroup.check(selectedIndex);
+
+        radioGroup.setOnCheckedChangeListener((RadioGroup, checkedId) -> {
+            onSelectOption(checkedId);
+            dismiss();
+        });
+
+        return new MaterialAlertDialogBuilder(getContext())
+                .setTitle(title)
+                .setView(content)
+                .create();
+    }
+
+    protected abstract void onSelectOption(int checkedId);
+}

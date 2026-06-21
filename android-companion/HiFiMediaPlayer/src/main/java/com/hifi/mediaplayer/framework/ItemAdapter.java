@@ -1,0 +1,396 @@
+/*
+ * Copyright (c) 2011 Kurt Aaholst <kaaholst@gmail.com>
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package com.hifi.mediaplayer.framework;
+
+import android.os.Parcelable;
+import android.util.SparseArray;
+import android.view.LayoutInflater;
+import android.view.View;
+import android.view.ViewGroup;
+
+import androidx.annotation.NonNull;
+import androidx.recyclerview.widget.RecyclerView;
+
+import java.lang.reflect.Field;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+
+import com.hifi.mediaplayer.R;
+import com.hifi.mediaplayer.itemlist.IServiceItemListCallback;
+import com.hifi.mediaplayer.itemlist.ItemReceiver;
+import com.hifi.mediaplayer.model.Item;
+import com.hifi.mediaplayer.util.Reflection;
+
+
+/**
+ * A generic class for an adapter to list items of a particular slimserver data type. The data
+ * type is defined by the generic type argument, and must be an extension of {@link Item}.
+ * <p>
+ * Extend this and {@link VH}, to display a list of items
+ *
+ * @param <T> Denotes the class of the items this class should list
+ *
+ * @author Kurt Aaholst
+ * @see ItemViewHolder
+ */
+public abstract class ItemAdapter<VH extends ItemViewHolder<T>, T extends Item> extends RecyclerView.Adapter<VH> implements IServiceItemListCallback<T> {
+
+    /**
+     * Activity which hosts this adapter
+     */
+    private BaseActivity activity;
+    private PageOrderer orderer;
+    private ItemReceiver<T> itemReceiver;
+    private boolean listScrolling;
+
+    /** The pages that have been requested from the server. */
+    private final Set<Integer> orderedPages = new HashSet<>();
+
+    /** The pages that have been received from the server */
+    private final Set<Integer> receivedPages = new HashSet<>();
+
+    /**
+     * List of items, possibly headed with an empty item.
+     * <p>
+     * As the items are received from slimserver they will be inserted in the list.
+     */
+    private int count;
+
+    private final SparseArray<T[]> pages = new SparseArray<>();
+
+    /**
+     * Number of elements to be fetched at a time
+     */
+    private final int pageSize;
+
+    /**
+     * Creates a new adapter. Initially the item list is populated with items displaying the
+     * localized "loading" text. Call {@link #update(int, int, List)} as items arrives from
+     * slimserver.
+     *
+     * @param activity The {@link ItemListActivity} which hosts this adapter
+     */
+    public ItemAdapter(BaseActivity activity, PageOrderer orderer) {
+        this.activity = activity;
+        this.orderer = orderer;
+        pageSize = getActivity().getResources().getInteger(R.integer.PageSize);
+        pages.clear();
+    }
+
+    /**
+     * @see #ItemAdapter(BaseActivity, PageOrderer)
+     * */
+    public ItemAdapter(ItemListActivity<VH, T> activity) {
+        this(activity, activity::orderPage);
+    }
+
+    private int pageNumber(int position) {
+        return position / pageSize;
+    }
+
+    /**
+     * Orders a page worth of data, starting at the specified position, if it has not already been
+     * ordered, and if the service is connected and the handshake has completed.
+     *
+     * @param pagePosition position in the list to start the fetch.
+     */
+    public void maybeOrderPage(int pagePosition) {
+        if (!listScrolling && !receivedPages.contains(pagePosition) && !orderedPages.contains(pagePosition) ) {
+            orderer.orderPage(pagePosition);
+            orderedPages.add(pagePosition);
+        }
+    }
+
+    /** Removes any outstanding requests from mOrderedPages. */
+    public void cancelOrders() {
+        orderedPages.clear();
+    }
+
+    /** Removes all items from this adapter leaving it empty. */
+    public void clear() {
+        count = 0;
+        pages.clear();
+        orderedPages.clear();
+        receivedPages.clear();
+        notifyDataSetChanged();
+    }
+
+    @NonNull
+    @Override
+    public final VH onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
+        View view = LayoutInflater.from(parent.getContext()).inflate(viewType, parent, false);
+        return createViewHolder(view, viewType);
+    }
+
+    public abstract VH createViewHolder(View view, int viewType);
+
+    @Override
+    public void onBindViewHolder(@NonNull VH holder, int position) {
+        T item = getItem(position);
+        holder.bindView(item);
+    }
+
+    @Override
+    public int getItemViewType(int position) {
+        return getItemViewType(getItem(position));
+    }
+
+    protected abstract int getItemViewType(T item);
+
+    protected BaseActivity getActivity() {
+        return activity;
+    }
+
+    public void setOrderer(PageOrderer orderer) {
+        this.orderer = orderer;
+    }
+
+    public void setItemReceiver(ItemReceiver<T> handler) {
+        this.itemReceiver = handler;
+    }
+
+    public void setActivity(ItemListActivity<VH, T> activity) {
+        this.activity = activity;
+        this.orderer = activity == null ? null : activity::orderPage;
+    }
+
+    @Override
+    public Object getClient() {
+        return activity;
+    }
+
+    @Override
+    public void onItemsReceived(int count, int start, Map<String, Object> parameters, List<T> items, Class<T> dataType) {
+        activity.runOnUiThread(() -> {
+            if (itemReceiver != null) itemReceiver.onItemsReceived(count, start, parameters, items, dataType);
+            update(count, start, items);
+        });
+    }
+
+    @Override
+    public int getItemCount() {
+        return count;
+    }
+
+    public int getActiveCount() {
+        return count;
+    }
+
+    private T[] getPage(int position) {
+        int pageNumber = pageNumber(position);
+        T[] page = pages.get(pageNumber);
+        if (page == null) {
+            pages.put(pageNumber, page = arrayInstance(pageSize));
+        }
+        return page;
+    }
+
+    private void setItems(int start, List<T> items) {
+        T[] page = getPage(start);
+        int offset = start % pageSize;
+        for (T item : items) {
+            if (offset >= pageSize) {
+                start += offset;
+                page = getPage(start);
+                offset = 0;
+            }
+            page[offset++] = item;
+        }
+    }
+
+    protected T item(int position) {
+        return getPage(position)[position % pageSize];
+    }
+
+    public T getItem(int position) {
+        T item = item(position);
+        if (item == null) {
+            maybeOrderPage(pageNumber(position) * pageSize);
+        }
+        return item;
+    }
+
+    @Override
+    public long getItemId(int position) {
+        return position;
+    }
+
+    /**
+     * Called when the number of items in the list changes. The default implementation is empty.
+     */
+    protected void onCountUpdated() {
+    }
+
+    /**
+     * Update the contents of the items in this list.
+     * <p>
+     * The size of the list of items is automatically adjusted if necessary, to obey the given
+     * parameters.
+     *
+     * @param count Number of items as reported by slimserver.
+     * @param start The start position of items in this update.
+     * @param items New items to insert in the main list
+     */
+    public void update(int count, int start, List<T> items) {
+        int size = items.size();
+        // If this doesn't add any items, then don't register the page as received
+        if (start < count && size != 0) {
+            // Because we might receive a page in chunks, we test if this is the end of a page
+            // before we register the page as received.
+            if (((start + size) % pageSize == 0) || (start + size == count)) {
+                // Add this page of data to mReceivedPages and remove from mOrderedPages.
+                int pageStart = (start / pageSize) * pageSize;
+                receivedPages.add(pageStart);
+                orderedPages.remove(pageStart);
+            }
+        }
+
+        boolean countUpdated = (count == 0 || count != getItemCount());
+
+        setItems(start, items);
+        if (countUpdated) {
+            this.count = count;
+            onCountUpdated();
+            notifyDataSetChanged();
+        } else {
+            notifyItemRangeChanged(start, items.size());
+        }
+    }
+
+    public void update(List<T> items) {
+        update(items.size(), 0, items);
+    }
+
+    /**
+     * Move the item at the specified position to the new position and notify the change.
+     */
+    public void moveItem(int fromPosition, int toPosition) {
+        T item = getItem(fromPosition);
+        remove(fromPosition);
+        insert(toPosition, item);
+        notifyItemMoved(fromPosition, toPosition);
+    }
+
+    /**
+     * Remove the item at the specified position, update the count and notify the change.
+     */
+    public void removeItem(int position) {
+        remove(position);
+        count--;
+        onCountUpdated();
+        notifyItemRemoved(position);
+    }
+
+    /**
+     * Insert an item at the specified position, update the count and notify the change.
+     */
+    public void insertItem(int position, T item) {
+        insert(position, item);
+        count++;
+        onCountUpdated();
+        notifyItemInserted(position);
+    }
+
+    private void remove(int position) {
+        T[] page = getPage(position);
+        int offset = position % pageSize;
+        while (position++ <= count) {
+            if (offset == pageSize - 1) {
+                T[] nextPage = getPage(position);
+                page[offset] = nextPage[0];
+                offset = 0;
+                page = nextPage;
+            } else {
+                page[offset] = page[offset+1];
+                offset++;
+            }
+        }
+
+    }
+
+    private void insert(int position, T item) {
+        int n = count;
+        T[] page = getPage(n);
+        int offset = n % pageSize;
+        while (n-- > position) {
+            if (offset == 0) {
+                T[] nextPage = getPage(n);
+                offset = pageSize - 1;
+                page[0] = nextPage[offset];
+                page = nextPage;
+            } else {
+                page[offset] = page[offset-1];
+                offset--;
+            }
+        }
+        page[offset] = item;
+    }
+
+    private T[] arrayInstance(int size) {
+        return getItemCreator().newArray(size);
+    }
+
+    private Class<T> _itemClass;
+
+    private Parcelable.Creator<T> _itemCreator;
+    /**
+     * @return The generic argument of the implementation
+     */
+    @SuppressWarnings("unchecked")
+    public Class<T> getItemClass() {
+        if (_itemClass == null) {
+            _itemClass = (Class<T>) Reflection.getGenericClass(getClass(), ItemAdapter.class,
+                    1);
+            if (_itemClass == null) {
+                throw new RuntimeException("Could not read generic argument for: " + getClass());
+            }
+        }
+        return _itemClass;
+    }
+
+    /**
+     * @return the creator for the current {@link Item} implementation
+     */
+    @SuppressWarnings("unchecked")
+    public Parcelable.Creator<T> getItemCreator() {
+        if (_itemCreator == null) {
+            Field field;
+            try {
+                field = getItemClass().getField("CREATOR");
+            } catch (Exception e) {
+                throw new RuntimeException(e);
+            }
+            try {
+                _itemCreator = (Parcelable.Creator<T>) field.get(null);
+            } catch (Exception e) {
+                throw new RuntimeException(e);
+            }
+        }
+        return _itemCreator;
+    }
+
+    public void setListScrolling(boolean listScrolling) {
+        this.listScrolling = listScrolling;
+    }
+
+    public interface PageOrderer {
+        void orderPage(int pagePosition);
+    }
+
+}

@@ -1,0 +1,312 @@
+<?xml version="1.0" encoding="UTF-8"?><!--
+ Copyright (c) 2009 Google Inc.  All Rights Reserved.
+
+ Licensed under the Apache License, Version 2.0 (the "License");
+ you may not use this file except in compliance with the License.
+ You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+ Unless required by applicable law or agreed to in writing, software
+ distributed under the License is distributed on an "AS IS" BASIS,
+ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ See the License for the specific language governing permissions and
+ limitations under the License.
+-->
+<resources
+    xmlns:tools="http://schemas.android.com/tools"
+    tools:ignore="MissingTranslation">
+    <string name="app_name" translatable="false">HiFi Media Player Companion</string>
+    <string name="undo">Undo</string>
+    <string name="disabled">Disabled</string>
+    <string name="mute">Mute</string>
+    <string name="no_action">No action</string>
+    <string name="pause_active">Pause selected player</string>
+    <string name="pause_all">Pause all players</string>
+    <string name="mute_active">Mute selected player</string>
+    <string name="mute_all">Mute all players</string>
+    <string name="minutes">minutes</string>
+    <string name="menu_item_players">Players</string>
+    <string name="menu_item_settings_label">Settings</string>
+    <string name="menu_item_about_label">About</string>
+    <string name="menu_item_view">View</string>
+    <string name="menu_nowplaying_trackinfo">Track infos</string>
+    <string name="activity_settings_name">Settings</string>
+    <string name="settings_serveraddr_hint">Name or IP address of server</string>
+    <string name="settings_manual_server_addr">Manually enter address</string>
+    <string name="settings_server_prompt">Choose a server</string>
+    <string name="settings_theme_title">Theme</string>
+    <string name="settings_theme_dark">Dark</string>
+    <string name="settings_theme_light">Light</string>
+    <string name="settings_layout_grouped">Grouped</string>
+    <string name="settings_screensaver_title">Keep screen on</string>
+    <string name="settings_screensaver_off">No</string>
+    <string name="settings_screensaver_on">Yes</string>
+    <string name="settings_fullscreen_off">No</string>
+    <string name="settings_fullscreen_on">Yes</string>
+    <string name="settings_screensaver_clock">Show clock when idle</string>
+    <string name="settings_show_track_number">Track number</string>
+    <string name="settings_show_technical_info">Technical info (bitrate, etc)</string>
+    <string name="settings_add_composer_line">Show composer</string>
+    <string name="settings_band_instead_album">Classical music information</string>
+    <string name="settings_add_conductor_line">Show band and conductor</string>
+    <string name="settings_use_flat_icons">Flat icons</string>
+    <string name="settings_top_bar_search">Top bar search</string>
+    <string name="settings_top_bar_search_global">All places</string>
+    <string name="settings_top_bar_search_my_music">My music</string>
+    <string name="settings_launcher_title">Launcher mode</string>
+    <string name="settings_launcher_summary">Use Squeezer as your device\'s home screen</string>
+    <string name="settings_launcher_explanation">Launcher mode allows Squeezer to be your device\'s home screen.\n\nThis will replace your current home screen, wallpaper and all other launcher functionality.\n\nTo use this feature, you must enable it here and then select Squeezer as the Home app in your device\'s system settings.</string>
+    <string name="settings_launcher_open_system_settings">Open system settings</string>
+    <string name="settings_clear_current_playlist_confirmation">When clearing a playlist</string>
+    <string name="settings_clear_current_playlist_confirmation_off">Do not ask for confirmation</string>
+    <string name="settings_clear_current_playlist_confirmation_on">Ask for confirmation</string>
+    <string name="settings_username_hint">User name (optional)</string>
+    <string name="settings_password_hint">Password (optional)</string>
+    <string name="settings_use_wake_on_lan">Wake up server (Wake-on-LAN)</string>
+    <string name="settings_MAC_label">MAC-address</string>
+    <string name="settings_invalid_MAC">Invalid MAC address, format: 01:23:45:67:89:AB</string>
+    <string name="settings_MAC_help">Example: 01:23:45:67:89:AB</string>
+    <string name="settings_MAC_info"><![CDATA[If filled a Wake-on-LAN (WoL) message is sent before connecting.
+        <p>Wake-on-LAN is a networking standard that allows a computer to be turned on or awakened by a network message.</p>
+        <p>This requires the computer running the Squeezebox Server to be configured to use Wake-on-LAN.</p>]]>
+    </string>
+    <string name="settings_server_scan_progress">Scanning for servers…</string>
+    <string name="settings_volume_title">Settings for Volume Control</string>
+    <string name="settings_background_volume_title">Background Volume Control</string>
+    <string name="settings_background_volume_off">Control player volume only when the app is visible.</string>
+    <string name="settings_background_volume_on">Allow changing player volume even when the app is not visible.</string>
+    <string name="settings_volume_increment_title">Volume up/down increments</string>
+    <string name="settings_volume_increment_summary">Set the increments for the phone volume buttons</string>
+    <string name="settings_fadeinsecs_title">Fade in duration</string>
+    <string name="settings_fadeinsecs_summary">Enter the amount of time to take to fade in when
+        unpausing, in seconds. Enter 0 to disable fade in.
+    </string>
+    <string name="settings_action_on_incoming_call_title">Action when you receive or make a call</string>
+    <string name="settings_restore_after_call">Automatically return to music after a phone call</string>
+    <string name="call_state_permission_title">Call state permission required</string>
+    <string name="call_state_permission_message">Squeezer can pause music when you receive or make a call.
+        This requires that Squeezer is allowed to be notified when call state changes.</string>
+    <string name="request_permission">Request permission</string>
+
+    <string name="settings_scrobble_title">Scrobble to Last.fm</string>
+    <string name="settings_scrobble_on">Song information is sent to Last.fm</string>
+    <string name="settings_scrobble_off">Song information is not sent to Last.fm</string>
+    <string name="settings_scrobble_noapp">No apps that can scrobble are installed</string>
+    <string name="settings_market_not_found">Could not start Google Play, is it installed?</string>
+
+    <string name="settings_squeezeplayer_title">Start SqueezePlayer</string>
+    <string name="settings_squeezeplayer_summary">Check this option to make sure SqueezePlayer is running, when using Squeezer</string>
+    <string name="settings_squeezelite_title">Start squeezelite</string>
+    <string name="settings_squeezelite_summary">When checked automatically start squeezelite when Squeezer starts.</string>
+
+    <string name="settings_category_display">Display</string>
+    <string name="settings_category_ui">Shortcuts, etc.</string>
+    <string name="settings_customize_home_menu_mode">Archive</string>
+    <string name="settings_customize_home_menu_info">Long press on suitable menu item puts it into an archive</string>
+    <string name="settings_customize_home_menu_archive">Enabled</string>
+    <string name="settings_customize_home_menu_disabled">Disabled</string>
+    <string name="settings_customize_home_menu_locked">Disabled, but keep archive</string>
+
+    <string name="settings_swipe_right_action">Swipe right action</string>
+    <string name="settings_swipe_right_action_summary">What to do when swiping right on a playable item</string>
+    <string name="settings_swipe_left_action">Swipe left action</string>
+    <string name="settings_swipe_left_action_summary">What to do when swiping left on a playable item</string>
+
+    <string name="menu_item_disconnect">Disconnect</string>
+    <string name="menu_item_connect">Connect</string>
+    <string name="menu_item_stop_server">Stop Lyrion Music Server</string>
+    <string name="menu_item_restart_server">Restart Lyrion Music Server</string>
+    <string name="menu_item_poweron">Turn on \"%s\"</string>
+    <string name="menu_item_poweroff">Turn off \"%s\"</string>
+    <string name="menu_item_rename">Rename</string>
+    <string name="menu_item_playlist">Playlist</string>
+    <string name="menu_item_playlist_clear">Clear playlist</string>
+    <string name="menu_item_playlist_save">Save as playlist</string>
+    <string name="menu_item_playlist_show_current_song">Go to current song</string>
+    <string name="menu_item_volume">Change volume</string>
+    <string name="connecting_text">Connecting</string>
+    <string name="connecting_to_text">Connecting to Lyrion Music Server at %s</string>
+    <string name="connection_failed_text">Connection failed.</string>
+    <string name="login_failed_text">Login failed. Make sure the correct user name and password is entered.</string>
+    <string name="invalid_url_text">Please enter a valid address.</string>
+    <string name="disconnected_text">Disconnected.</string>
+    <string name="save_playlist_title">Save playlist</string>
+    <string name="save_playlist_hint">Enter name of playlist</string>
+    <string name="rename_title">Rename %s</string>
+    <string name="sync_title">Synchronize %s to…</string>
+
+    <string name="player_group_header">Group: %s</string>
+    <string name="player_group_volume">Group volume</string>
+    <string name="player_group_volume_on">Adjust volume for synced players</string>
+    <string name="player_group_volume_off">Adjust volume for selected player only</string>
+    <string name="menu_item_player_sync">Synchronize…</string>
+    <string name="menu_item_player_unsync">No synchronization</string>
+
+    <string name="no_players_connected">No players are connected.</string>
+    <string name="player_list_changed">Connected players changed while context menu was open,
+        ignoring request</string>
+
+    <string name="unknown_track">Unknown track</string>
+    <string name="unknown_album">Unknown album</string>
+    <string name="unknown_artist">Unknown artist</string>
+    <string name="unknown_artistalbum">Unknown artist/album</string>
+    <string name="conductor">Conductor: %s</string>
+    <string name="soloist">Soloist: %s</string>
+    <string name="soloists">Soloists: %s</string>
+
+    <!-- NowPlaying Track Info -->
+    <string name="settings_category_nowplaying_trackinfo">NowPlaying track information</string>
+    <string name="settings_show_track_number_title">Track number</string>
+    <string name="settings_show_track_number_off">Don\'t show track number</string>
+    <string name="settings_show_track_number_on">Show track number above time in track</string>
+    <string name="settings_show_technical_info_title">Technical info (bitrate, etc)</string>
+    <string name="settings_show_technical_info_off">Don\'t show technical info</string>
+    <string name="settings_show_technical_info_on">Show technical info above time in track</string>
+    <string name="settings_add_composer_line_off">Don\'t show composer</string>
+    <string name="settings_add_composer_line_on">Show composer in front of the track title</string>
+    <string name="settings_add_composer_line_title">Composer information</string>
+    <string name="settings_add_conductor_line_off">Don\'t show band/orchestra and conductor</string>
+    <string name="settings_add_conductor_line_on">Show band/orchestra instead of album and show conductor on separate line</string>
+    <string name="settings_add_conductor_line_title">Band/orchestra and conductor information</string>
+    <string name="settings_classical_music_tags_off">Normal behavior</string>
+    <string name="settings_classical_music_tags_on">Adapted to classical music, including description of conductor and soloists</string>
+    <string name="settings_classical_music_tags_title">Appearance of track information</string>
+
+    <!-- Alarm management -->
+    <string name="all_alarms_on_hint">Individual alarms can be enabled</string>
+    <string name="all_alarms_off_hint">All alarms are disabled</string>
+
+    <string name="alarm_music_prompt">Music for alarm</string>
+
+    <string name="alarms_settings_dialog_title">%s alarm settings</string>
+    <string name="alarm_volume_text">Alarm volume</string>
+
+    <string name="alarm_snooze_duration_text">Snooze duration</string>
+    <plurals name="alarm_snooze_hint_text">
+        <item quantity="one">Alarms snooze for %d minute</item>
+        <item quantity="other">Alarms snooze for %d minutes</item>
+    </plurals>
+
+    <string name="alarm_timeout_text">Alarm timeout</string>
+    <string name="alarm_timeout_hint_text_zero">Alarms play indefinitely</string>
+    <plurals name="alarm_timeout_hint_text">
+        <item quantity="one">Alarms stop after %d minute</item>
+        <item quantity="other">Alarms stop after %d minutes</item>
+    </plurals>
+
+    <string name="alarm_fade_text">Fade alarms up</string>
+    <string name="alarm_fade_on_text">Alarms will fade in</string>
+    <string name="alarm_fade_off_text">Alarms will not fade in</string>
+
+    <string name="tips_title">Tips</string>
+    <string name="tip_volume">Use your device\'s hardware volume controls to change the playing
+        volume.\n\nTry it now.
+    </string>
+
+    <!-- Reporting errors that from the server. -->
+    <string name="server_error">%1$s reported an error: \"%2$s\".</string>
+
+    <string name="menu_item_power_off">Turn off</string>
+    <string name="menu_item_power_on">Turn on</string>
+    <string name="set_sleep_timer">Set sleep timer</string>
+
+    <!-- Dialog buttons -->
+    <string name="dialog_license">License</string>
+
+    <string name="copyright_text">Copyright © 2009 Google Inc. All Rights Reserved\nCopyright
+        © 2011 Kurt Aaholst. All Rights Reserved.
+    </string>
+
+    <string name="PLAY_NOW">Play</string>
+    <string name="ADD_TO_END">Add to playlist</string>
+    <string name="PLAY_NEXT">Play after the current song</string>
+    <string name="DOWNLOAD">Download</string>
+    <string name="DOWNLOAD_REQUIRES_WRITE_PERMISSION">Download cancelled, as we don\'t have permission to save the downloaded files</string>
+    <string name="DONT_ASK_AGAIN">Don\'t ask again</string>
+
+    <!-- Song display options -->
+
+    <plurals name="seconds">
+        <item quantity="one">second</item>
+        <item quantity="other">seconds</item>
+    </plurals>
+
+    <string name="pref_cat_third_party">Third-party integration</string>
+    <string name="confirm_cancel_downloads">Cancel pending downloads?</string>
+
+    <string name="settings_category_download">Download</string>
+    <string name="settings_download_enabled">Enable downloads</string>
+    <string name="settings_download_confirmation">Ask for confirmation before downloading</string>
+    <string name="settings_download_use_server_path">Use server path and filename</string>
+    <string name="settings_download_path_structure">Folder hierarchy</string>
+    <string name="settings_download_filename_structure">File name</string>
+    <string name="download_path_structure_artist_artistalbum">Artist/Artist - Album</string>
+    <string name="download_path_structure_artist_album">Artist/Album</string>
+    <string name="download_path_structure_artistalbum">Artist - Album</string>
+    <string name="download_path_structure_album">Album</string>
+    <string name="download_path_structure_artist">Artist</string>
+    <string name="download_filename_structure_number_title">Number - Title</string>
+    <string name="download_filename_structure_artist_title">Artist - Title</string>
+    <string name="download_filename_structure_artist_number_title">Artist - Number - Title</string>
+    <string name="download_filename_structure_albumartist_number_title">Artist (Album) - Number - Title</string>
+    <string name="download_filename_structure_title">Title</string>
+    <string name="download_filename_structure_number_dot_artist_title">Number. Artist - Title</string>
+    <string name="NOTIFICATION_DOWNLOAD_MEDIA_SCANNER_ERROR">could not be added to the device\'s media database</string>
+
+    <!-- Download dialog -->
+    <string name="download_item">Download %s</string>
+    <string name="disable_downloads">Disable downloads</string>
+
+    <string name="about_team" translatable="false">Team</string>
+    <string name="about_authors" translatable="false">Benjamin Viertel\nKurt Aaholst\nNik Clayton\nBrad Fitzpatrick</string>
+    <string name="about_website" translatable="false"><a href="https://kaaholst.github.io/android-squeezer/">Website</a></string>
+    <string name="about_issues" translatable="false"><a href="https://github.com/kaaholst/android-squeezer/issues">Issues</a></string>
+    <string name="about_privacy_policy" translatable="false"><a href="https://kaaholst.github.io/android-squeezer/privacy">Privacy policy</a></string>
+    <string name="license" translatable="false">https://kaaholst.github.io/android-squeezer/license</string>
+    <string name="configure_select_player">Select player to control</string>
+    <string name="configure_select_button">Widget action</string>
+    <string name="remote_unknownDescription">Unknown</string>
+    <string name="remote_openPlayer">Open player in Squeezer</string>
+    <string name="remote_openNowPlaying">Open Now Playing for player</string>
+    <string name="remote_openCurrentPlaylist">Open current playlist for player</string>
+    <string name="remote_powerDescription">Power</string>
+    <string name="remote_pausePlayDescription">Pause/Play</string>
+    <string name="remote_nextDescription">Next song</string>
+    <string name="remote_previousDescription">Previous song</string>
+    <string name="remote_preset1Description">Preset 1</string>
+    <string name="remote_preset2Description">Preset 2</string>
+    <string name="remote_preset3Description">Preset 3</string>
+    <string name="remote_preset4Description">Preset 4</string>
+    <string name="remote_preset5Description">Preset 5</string>
+    <string name="remote_preset6Description">Preset 6</string>
+    <string name="ARCHIVE_NODE">Archive</string>
+    <string name="MENU_ITEM_MOVED">Menu item (un)archived</string>
+    <string name="MENU_IS_SUBMENU_IN_ARCHIVE">You are already in Archive!</string>
+    <string name="ARCHIVE_CANNOT_BE_ARCHIVED">Archive cannot be archived!</string>
+    <string name="ARCHIVE_NODE_REMOVED">Removed empty Archive</string>
+    <string name="ITEM_CANNOT_BE_ARCHIVED">This item can not be archived!</string>
+    <string name="SHORTCUTS">Shortcuts</string>
+    <string name="CUSTOM_SHORTCUT_REMOVED">Shortcut removed from home menu</string>
+    <string name="ITEM_IS_ALREADY_A_SHORTCUT">Is already a shortcut!</string>
+    <string name="ITEM_PUT_AS_SHORTCUT_ON_HOME_MENU">Shortcut put on home menu</string>
+    <string name="ITEM_CAN_NOT_BE_SHORTCUT_OR_ARCHIVED">Can not be shortcut or archived!</string>
+    <string name="settings_custom_shortcut_enabled">Enabled</string>
+    <string name="settings_custom_shortcut_disabled">Disabled</string>
+    <string name="settings_custom_shortcut_locked">Disabled, but show existing shortcuts.</string>
+    <string name="settings_customize_customShortcut_mode">Shortcuts</string>
+    <string name="settings_customize_customShortcut_info">Long press puts shortcuts in home menu.</string>
+    <string name="ITEM_CANNOT_BE_SHORTCUT">Item can not be shortcut!</string>
+    <string name="PLAY_RANDOM_FOLDER">Play random</string>
+    <string name="backward" translatable="false">⏪ %d</string>
+    <string name="forward" translatable="false">%d ⏩</string>
+    <string name="backward_seconds">Backward seconds</string>
+    <string name="forward_seconds">Forward seconds</string>
+    <string name="RANDOM_PLAY_UNABLE">Unable to start Random Play</string>
+    <string name="RANDOM_PLAY_STARTED">Random Play started</string>
+    <string name="continue_playback">Continue playback</string>
+    <string name="volume">Volume</string>
+    <string name="don_t_show_volume_control">Don\'t show volume slider</string>
+    <string name="show_volume_control">Show volume slider</string>
+    <string name="fullscreen_mode">Fullscreen mode</string>
+</resources>

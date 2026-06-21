@@ -1,0 +1,164 @@
+package com.hifi.mediaplayer.homescreenwidgets;
+
+import android.appwidget.AppWidgetManager;
+import android.content.Context;
+import android.content.Intent;
+import android.os.Bundle;
+import android.util.Log;
+import android.view.LayoutInflater;
+import android.view.View;
+import android.view.ViewGroup;
+
+import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
+import androidx.appcompat.app.ActionBar;
+import androidx.recyclerview.widget.LinearLayoutManager;
+import androidx.recyclerview.widget.RecyclerView;
+
+import java.util.Collections;
+import java.util.List;
+
+import com.hifi.mediaplayer.R;
+import com.hifi.mediaplayer.framework.BaseActivity;
+import com.hifi.mediaplayer.itemlist.PlayerBaseView;
+import com.hifi.mediaplayer.model.Player;
+import com.hifi.mediaplayer.service.ISqueezeService;
+import com.hifi.mediaplayer.service.event.HandshakeComplete;
+import com.hifi.mediaplayer.service.event.PlayerStateChanged;
+import com.hifi.mediaplayer.widget.ViewUtilities;
+
+/**
+ * The configuration screen for the {@link SqueezerRemoteControl SqueezerRemoteControl} AppWidget.
+ */
+public class SqueezerRemoteControlPlayerSelectActivity extends BaseActivity {
+
+    private static final String TAG = SqueezerRemoteControlPlayerSelectActivity.class.getName();
+
+    private static final int GET_BUTTON_ACTIVITY = 1001;
+
+    private int mAppWidgetId = AppWidgetManager.INVALID_APPWIDGET_ID;
+    private PlayerAdapter adapter;
+
+
+    @Override
+    public void onCreate(Bundle icicle) {
+        adapter = new PlayerAdapter();
+        super.onCreate(icicle);
+        setContentView(R.layout.widget_list_activity_layout);
+
+        // Set the result to CANCELED.  This will cause the widget host to cancel
+        // out of the widget placement if the user presses the back button.
+        // Actual result, when successful is below in the onGroupSelected handler
+        setResult(RESULT_CANCELED);
+
+        // Find the widget id from the intent.
+        Intent intent = getIntent();
+        Bundle extras = intent.getExtras();
+        if (extras != null) {
+            mAppWidgetId = extras.getInt(
+                    AppWidgetManager.EXTRA_APPWIDGET_ID, AppWidgetManager.INVALID_APPWIDGET_ID);
+        }
+
+        // If this activity was started with an intent without an app widget ID, finish with an error.
+        if (mAppWidgetId == AppWidgetManager.INVALID_APPWIDGET_ID) {
+            finish();
+            return;
+        }
+
+        RecyclerView listView = requireView(R.id.item_list);
+        listView.setAdapter(adapter);
+        listView.setLayoutManager(new LinearLayoutManager(this));
+
+        setSupportActionBar(requireView(R.id.toolbar));
+        ViewUtilities.setInsetsListener(requireView(R.id.toolbar), true, false, false);
+        ViewUtilities.setInsetsListener(listView, false, true, false);
+
+        ActionBar actionBar = getSupportActionBar();
+        if (actionBar != null) {
+            actionBar.setTitle(R.string.configure_select_player);
+        }
+    }
+
+    @Override
+    protected void onServiceConnected(@NonNull ISqueezeService service) {
+        super.onServiceConnected(service);
+        Log.d(TAG, "onServiceConnected: service.isConnected=" + service.isConnected());
+
+        repository().observe(this, (HandshakeComplete event) -> updatePlayerList());
+        repository().observe(this, (PlayerStateChanged event) -> updatePlayerList());
+
+        if (!service.isConnected()) {
+            service.startConnect(false);
+        }
+    }
+
+    private class PlayerAdapter extends RecyclerView.Adapter<SqueezerRemoteControlConfigureActivityPlayerView> {
+        private List<Player> players = Collections.emptyList();
+
+        @NonNull
+        @Override
+        public SqueezerRemoteControlConfigureActivityPlayerView onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
+            View view = LayoutInflater.from(parent.getContext()).inflate(R.layout.list_item, parent, false);
+            return new SqueezerRemoteControlConfigureActivityPlayerView(SqueezerRemoteControlPlayerSelectActivity.this, view);
+        }
+
+        @Override
+        public void onBindViewHolder(@NonNull SqueezerRemoteControlConfigureActivityPlayerView holder, int position) {
+            holder.bindView(players.get(position));
+        }
+
+        @Override
+        public int getItemCount() {
+            return players.size();
+        }
+    }
+
+    protected void updatePlayerList() {
+        adapter.players = getService().getPlayers();
+        adapter.notifyDataSetChanged();
+    }
+
+    public class SqueezerRemoteControlConfigureActivityPlayerView extends PlayerBaseView {
+        public SqueezerRemoteControlConfigureActivityPlayerView(BaseActivity activity, View view) {
+            super(activity, view);
+            setItemViewParams(VIEW_PARAM_ICON);
+        }
+
+        @Override
+        public void bindView(Player player) {
+            super.bindView(player);
+            itemView.setOnClickListener(view -> {
+                final Context context = SqueezerRemoteControlPlayerSelectActivity.this;
+
+                Intent intent = new Intent(context, SqueezerRemoteControlButtonSelectActivity.class);
+                intent.putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, mAppWidgetId);
+                intent.putExtra(SqueezerRemoteControl.EXTRA_PLAYER, player);
+
+                startActivityForResult(intent, GET_BUTTON_ACTIVITY);
+            });
+
+        }
+
+    }
+
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, @Nullable Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+
+        switch (requestCode) {
+            case GET_BUTTON_ACTIVITY:
+                if (resultCode != RESULT_CANCELED) {
+                    SqueezerRemoteControl.savePrefs(this.getBaseContext(), data);
+
+                    Intent resultValue = new Intent();
+                    resultValue.putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, mAppWidgetId);
+                    setResult(RESULT_OK, resultValue);
+                    finish();
+                }
+                break;
+            default:
+                Log.w(TAG, "Unknown request code: " + requestCode);
+        }
+    }
+}
+

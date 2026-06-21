@@ -1,0 +1,686 @@
+/*
+ * Copyright (c) 2011 Kurt Aaholst <kaaholst@gmail.com>
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package com.hifi.mediaplayer.itemlist;
+
+import android.app.Activity;
+import android.content.DialogInterface;
+import android.content.Intent;
+import android.content.res.Resources;
+import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
+import android.text.Editable;
+import android.text.TextUtils;
+import android.util.Base64;
+import android.util.Log;
+import android.view.KeyEvent;
+import android.view.Menu;
+import android.view.MenuItem;
+import android.view.View;
+import android.view.inputmethod.EditorInfo;
+import android.view.inputmethod.InputMethodManager;
+import android.webkit.WebView;
+import android.widget.EditText;
+import android.widget.TextView;
+
+import androidx.annotation.LayoutRes;
+import androidx.annotation.NonNull;
+import androidx.core.view.MenuCompat;
+import androidx.recyclerview.widget.GridLayoutManager;
+import androidx.recyclerview.widget.ItemTouchHelper;
+import androidx.recyclerview.widget.LinearLayoutManager;
+import androidx.recyclerview.widget.RecyclerView;
+import androidx.webkit.WebSettingsCompat;
+import androidx.webkit.WebViewFeature;
+
+import com.google.android.material.textfield.TextInputLayout;
+import com.qtalk.recyclerviewfastscroller.RecyclerViewFastScroller;
+
+import java.util.Arrays;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+
+import com.hifi.mediaplayer.NowPlayingActivity;
+import com.hifi.mediaplayer.Preferences;
+import com.hifi.mediaplayer.R;
+import com.hifi.mediaplayer.Squeezer;
+import com.hifi.mediaplayer.Util;
+import com.hifi.mediaplayer.dialog.NetworkErrorDialogFragment;
+import com.hifi.mediaplayer.framework.ContextMenu;
+import com.hifi.mediaplayer.framework.ItemAdapter;
+import com.hifi.mediaplayer.framework.ItemListActivity;
+import com.hifi.mediaplayer.framework.ItemViewHolder;
+import com.hifi.mediaplayer.framework.ViewParamItemView;
+import com.hifi.mediaplayer.itemlist.dialog.ArtworkDialog;
+import com.hifi.mediaplayer.itemlist.dialog.ArtworkListLayout;
+import com.hifi.mediaplayer.model.Action;
+import com.hifi.mediaplayer.model.Input;
+import com.hifi.mediaplayer.model.JiveItem;
+import com.hifi.mediaplayer.model.Player;
+import com.hifi.mediaplayer.model.RefreshWindow;
+import com.hifi.mediaplayer.model.Window;
+import com.hifi.mediaplayer.service.ISqueezeService;
+import com.hifi.mediaplayer.service.event.ActivePlayerChanged;
+import com.hifi.mediaplayer.util.AfterTextChangedLister;
+import com.hifi.mediaplayer.util.ThemeManager;
+import com.hifi.mediaplayer.widget.GridAutofitLayoutManager;
+
+/*
+ * The activity's content view scrolls in from the right, and disappear to the left, to provide a
+ * spatial component to navigation.
+ */
+public class JiveItemListActivity extends ItemListActivity<ItemViewHolder<JiveItem>, JiveItem>
+        implements NetworkErrorDialogFragment.NetworkErrorDialogListener {
+    private static final int GO = 1;
+    private static final String FINISH = "FINISH";
+    private static final String RELOAD = "RELOAD";
+    private static final String RELOAD_PARENT = "RELOAD_PARENT";
+    private static final String RELOAD_ON_FINISH = "RELOAD_ON_PARENT";
+    private static final String WINDOW = "WINDOW";
+    public static final String WINDOW_EXTRA = "windowId";
+    private static final String TAG = "JiveItemListActivity";
+
+    protected JiveItem parent;
+    private Action action;
+    Window window = new Window();
+    private int selectedIndex;
+
+    private Menu viewMenu;
+    private MenuItem menuItemLight;
+    private MenuItem menuItemDark;
+    protected MenuItem menuItemGrouped;
+    protected MenuItem menuItemList;
+    protected MenuItem menuItemGrid;
+    private MenuItem menuItemOneLine;
+    private MenuItem menuItemTwoLines;
+    private MenuItem menuItemAllInfo;
+    private MenuItem menuItemFlatIcons;
+
+    protected ViewParamItemView<JiveItem> parentViewHolder;
+    private RecyclerViewFastScroller fastScroller;
+
+    @Override
+    protected ItemAdapter<ItemViewHolder<JiveItem>, JiveItem> createItemListAdapter() {
+        return (isGrouped()) ? new GroupAdapter(this) : new JiveItemAdapter(this);
+    }
+
+    private boolean isPlaylist() {
+        return parent != null && "playlist".equals(parent.getType());
+    }
+
+    private boolean isGrouped() {
+        if (parent != null) {
+            if ("myMusicSearch".equals(parent.getId())) return true;
+            return "globalSearch".equals(parent.getId());
+        }
+        return false;
+    }
+
+    @Override
+    public void onCreate(Bundle savedInstanceState) {
+        Bundle extras = Objects.requireNonNull(getIntent().getExtras(), "intent did not contain extras");
+        parent = extras.getParcelable(JiveItem.class.getName());
+        action = extras.getParcelable(Action.class.getName());
+
+        super.onCreate(savedInstanceState);
+        setParentViewHolder();
+
+        // If initial setup is performed, use it
+        Window window = (savedInstanceState != null ? savedInstanceState.getParcelable("window") : null);
+        updateHeader(window);
+
+        if (isGrouped() && !parent.hasInputField()) parent.input = new Input();
+        findViewById(R.id.plugin_input_til).setVisibility((hasInputField()) ? View.VISIBLE : View.GONE);
+        if (hasInputField()) {
+            final EditText inputText = findViewById(R.id.plugin_input);
+            TextInputLayout inputTextLayout = findViewById(R.id.plugin_input_til);
+            inputTextLayout.setHint(TextUtils.isEmpty(parent.input.title) ? this.window.text : parent.input.title);
+            inputText.post(() -> {
+                inputText.requestFocus();
+                InputMethodManager imm = (InputMethodManager) getSystemService(INPUT_METHOD_SERVICE);
+                imm.showSoftInput(inputText, InputMethodManager.SHOW_IMPLICIT);
+            });
+            inputText.setText(parent.input.initialText);
+            parent.inputValue = parent.input.initialText;
+
+            inputText.setOnKeyListener((v, keyCode, event) -> {
+                if ((event.getAction() == KeyEvent.ACTION_DOWN)
+                        && (keyCode == KeyEvent.KEYCODE_ENTER)) {
+                    clearAndReOrderItems(inputText.getText().toString());
+                    return true;
+                }
+                return false;
+            });
+
+            if (action.getInputType() == Action.InputType.SEARCH || isGrouped()) {
+                Handler handler = new Handler(Looper.getMainLooper());
+                final Runnable[] job = {null};
+
+                inputText.addTextChangedListener(new AfterTextChangedLister() {
+                    @Override
+                    public void afterTextChanged(Editable s) {
+                        if (job[0] != null) handler.removeCallbacks(job[0]);
+                        if (TextUtils.isEmpty(s)) {
+                            getItemAdapter().clear();
+                        } else {
+                            job[0] = () -> clearAndReOrderItems(inputText.getText().toString());
+                            handler.postDelayed(job[0], 1000);
+                        }
+                    }
+                });
+                inputTextLayout.setEndIconMode(TextInputLayout.END_ICON_CLEAR_TEXT);
+            } else {
+                int inputType = EditorInfo.TYPE_CLASS_TEXT | switch (action.getInputType()) {
+                    case EMAIL -> EditorInfo.TYPE_TEXT_VARIATION_EMAIL_ADDRESS;
+                    case PASSWORD -> EditorInfo.TYPE_TEXT_VARIATION_PASSWORD;
+                    default -> 0;
+                };
+                inputText.setInputType(inputType);
+                inputTextLayout.setEndIconDrawable(R.drawable.keyboard_return);
+                inputTextLayout.setEndIconOnClickListener(v -> clearAndReOrderItems(inputText.getText().toString()));
+            }
+        }
+    }
+
+    private void setParentViewHolder() {
+        parentViewHolder = new ViewParamItemView<>(this, findViewById(R.id.parent_container));
+        parentViewHolder.contextMenuButton.setOnClickListener(v -> ContextMenu.show(this, parent));
+    }
+
+    @Override
+    protected void onServiceConnected(@NonNull ISqueezeService service) {
+        super.onServiceConnected(service);
+        repository().observe(this, (ActivePlayerChanged event) -> {
+            if (action != null && !forActivePlayer(action)) {
+                finish();
+            }
+        });
+    }
+
+    @Override
+    protected void onSaveInstanceState(Bundle outState) {
+        super.onSaveInstanceState(outState);
+        outState.putParcelable("window", window);
+    }
+
+    @Override
+    public void onResume() {
+        super.onResume();
+        setupListView(getListView(), getListLayout());
+    }
+
+    @Override
+    public void setContentView(@LayoutRes int layoutResID) {
+        setContentView(layoutResID, new JiveItemCallback(this));
+    }
+
+    public void setContentView(@LayoutRes int layoutResID, ItemTouchHelper.Callback callback) {
+        super.setContentView(layoutResID);
+        fastScroller = findViewById(R.id.fastscroller);
+
+        setupListView(getListView(), getListLayout());
+
+        ItemTouchHelper itemTouchHelper = new ItemTouchHelper(callback);
+        itemTouchHelper.attachToRecyclerView(getListView());
+    }
+
+    public void setupListView(RecyclerView list, ArtworkListLayout listLayout) {
+        RecyclerView.LayoutManager layoutManager = list.getLayoutManager();
+        if (listLayout == ArtworkListLayout.grid && !(layoutManager instanceof GridLayoutManager)) {
+            list.setLayoutManager(new GridAutofitLayoutManager(this, R.dimen.grid_column_width));
+        }
+        if ((listLayout == ArtworkListLayout.list || listLayout == ArtworkListLayout.grouped) && (layoutManager instanceof GridLayoutManager)) {
+            list.setLayoutManager(new LinearLayoutManager(this));
+        }
+    }
+
+    protected Window.WindowStyle defaultWindowStyle() {
+        return Window.WindowStyle.TEXT_ONLY;
+    }
+
+    void updateHeader(Window win) {
+        if (win == null && parent != null) win = parent.window;
+
+        if (win != null) {
+            updateWindowStyle(win.windowStyle);
+        } else if (isGrouped() || isPlaylist()) {
+            updateWindowStyle(Window.WindowStyle.PLAY_LIST);
+        } else {
+            updateWindowStyle(defaultWindowStyle());
+        }
+
+        window.text = null;
+        if (win != null && !TextUtils.isEmpty(win.text)) {
+            window.text = win.text;
+        } else if (parent != null && !TextUtils.isEmpty(parent.getName())) {
+            window.text = parent.getName();
+        }
+
+        if (hasInputField()) {
+            return;
+        }
+
+        if (window.text != null) {
+            parentViewHolder.itemView.setVisibility(View.VISIBLE);
+            parentViewHolder.text1.setText(window.text);
+        }
+
+        if (parent != null && !TextUtils.isEmpty(parent.text2())) {
+            parentViewHolder.text2.setVisibility(View.VISIBLE);
+            parentViewHolder.text2.setText(parent.text2());
+        }
+
+        if (parent != null && parent.hasIcon()) {
+            parentViewHolder.icon.setVisibility(View.VISIBLE);
+            JiveItemViewLogic.icon(parentViewHolder.icon, parent, this::updateHeaderIcon);
+            parentViewHolder.icon.setOnClickListener(view -> ArtworkDialog.show(this, parent));
+        } else {
+            parentViewHolder.icon.setVisibility(View.GONE);
+        }
+
+        parentViewHolder.contextMenuButtonHolder.setVisibility((parent != null && parent.hasContextMenu()) ? View.VISIBLE : View.GONE);
+
+        findViewById(R.id.sub_header_container).setVisibility(View.GONE);
+        findViewById(R.id.content).setVisibility(View.GONE);
+        if (win != null && !TextUtils.isEmpty(win.html)) {
+            WebView header = findViewById(R.id.content);
+            if (WebViewFeature.isFeatureSupported(WebViewFeature.ALGORITHMIC_DARKENING)) {
+                WebSettingsCompat.setAlgorithmicDarkeningAllowed(header.getSettings(), true);
+            }
+            String encoded = Base64.encodeToString(win.html.getBytes(), Base64.NO_PADDING);
+            header.loadData(encoded, "text/html", "base64");
+            findViewById(R.id.content).setVisibility(View.VISIBLE);
+        } else if (win != null && !TextUtils.isEmpty(win.textarea)) {
+            TextView header = findViewById(R.id.sub_header);
+            header.setText(win.textarea);
+            findViewById(R.id.sub_header_container).setVisibility(View.VISIBLE);
+        }
+    }
+
+    private void updateHeaderIcon() {
+        JiveItemViewLogic.addLogo(parentViewHolder.icon, parent);
+    }
+
+
+    void updateWindowStyle(Window.WindowStyle windowStyle) {
+        updateWindowStyle(windowStyle, getListLayout());
+    }
+
+    void updateWindowStyle(Window.WindowStyle windowStyle, ArtworkListLayout prevListLayout) {
+        ArtworkListLayout listLayout = JiveItemView.listLayout(getPreferredListLayout(), windowStyle);
+        updateViewMenuItems(listLayout, windowStyle);
+        ItemAdapter<ItemViewHolder<JiveItem>, JiveItem> adapter = getItemAdapter();
+        if (windowStyle != null && adapter instanceof JiveItemAdapter jiveItemAdapter) {
+            jiveItemAdapter.setWindowStyle(getPreferredListLayout(), windowStyle);
+        }
+        if (windowStyle != window.windowStyle || listLayout != prevListLayout) {
+            window.windowStyle = windowStyle;
+            if (windowStyle != Window.WindowStyle.TEXT_ONLY) {
+                parentViewHolder.icon.setVisibility(View.GONE);
+            }
+            adapter.notifyItemRangeChanged(0, adapter.getItemCount());
+        }
+        if (listLayout != prevListLayout) {
+            setupListView(getListView(), listLayout);
+        }
+    }
+
+
+    private void clearAndReOrderItems(String inputString) {
+        if (getService() != null && !TextUtils.isEmpty(inputString)) {
+            parent.inputValue = inputString;
+            clearAndReOrderItems();
+        }
+    }
+
+    private boolean hasInputField() {
+        return parent != null && parent.hasInputField();
+    }
+
+    @Override
+    protected void orderPage(int start) {
+        if (parent != null) {
+            if (parent.hasSubItems()) {
+                onItemsReceived(parent.subItems.size(), 0, parent.subItems);
+            } else if (action == null || (parent.hasInput() && !parent.isInputReady())) {
+                showContent();
+            } else
+                requireService().pluginItems(start, parent, action, this);
+        }
+    }
+
+    protected boolean forActivePlayer(Action action) {
+        Player activePlayer = requireService().getActivePlayer();
+        String playerId = (activePlayer != null ? activePlayer.getId() : null);
+        return !action.isPlayerSpecific() || Arrays.asList(action.action.players).contains(playerId);
+    }
+
+    @Override
+    public void onItemsReceived(int count, int start, final Map<String, Object> parameters, List<JiveItem> items, Class<JiveItem> dataType) {
+        if (parameters.containsKey("goNow")) {
+            Action.NextWindow nextWindow = Action.NextWindow.fromString(Util.getString(parameters, "goNow"));
+            switch (nextWindow.nextWindow) {
+                case nowPlaying -> NowPlayingActivity.show(this);
+                case playlist -> CurrentPlaylistActivity.show(this);
+                case home -> HomeActivity.show(this);
+            }
+            finish();
+            return;
+        }
+
+        final Window window = JiveItem.extractWindow(Util.getRecord(parameters, "window"), null);
+        if (window != null) {
+            // override server based icon_list style for playlist and search results
+            if ((window.windowStyle == Window.WindowStyle.ICON_LIST && isPlaylist()) || isGrouped()) {
+                window.windowStyle = Window.WindowStyle.PLAY_LIST;
+            }
+            runOnUiThread(() -> updateHeader(window));
+        }
+
+        // The documentation says "Returned with value 1 if there was a network error accessing
+        // the content source.". In practice (with at least the Napster and Pandora plugins) the
+        // value is an error message suitable for displaying to the user.
+        if (parameters.containsKey("networkerror")) {
+            Resources resources = getResources();
+            ISqueezeService service = getService();
+            String playerName;
+
+            if (service == null) {
+                playerName = "Unknown";
+            } else {
+                playerName = service.getActivePlayer().getName();
+            }
+
+            String errorMsg = Util.getString(parameters, "networkerror");
+
+            String errorMessage = String.format(resources.getString(R.string.server_error),
+                    playerName, errorMsg);
+            NetworkErrorDialogFragment networkErrorDialogFragment =
+                    NetworkErrorDialogFragment.newInstance(errorMessage);
+            networkErrorDialogFragment.show(getSupportFragmentManager(), "networkerror");
+        }
+
+        super.onItemsReceived(count, start, parameters, items, dataType);
+
+        boolean hasTextKey = items.stream().anyMatch(item -> !TextUtils.isEmpty(item.textkey));
+        runOnUiThread(() -> fastScroller.popupTextView.setVisibility(hasTextKey ? View.VISIBLE : View.GONE));
+    }
+
+    @Override
+    public void action(JiveItem item, Action action, int alreadyPopped) {
+        if (getService() == null) {
+            return;
+        }
+
+        if (action != null) {
+            getService().action(item, action);
+        }
+
+        Action.JsonAction jAction = (action != null && action.action != null) ? action.action : null;
+        Action.NextWindow nextWindow = (jAction != null ? jAction.nextWindow : item.nextWindow);
+        setRefreshWindow(item.onClick);
+        nextWindow(nextWindow, alreadyPopped);
+    }
+
+    @Override
+    public void action(JiveItem item, Action.JsonAction action, int alreadyPopped) {
+        if (getService() == null) {
+            return;
+        }
+
+        getService().action(action);
+        setRefreshWindow(item.onClick);
+        nextWindow(action.nextWindow, alreadyPopped);
+    }
+
+    private void nextWindow(Action.NextWindow nextWindow, int alreadyPopped) {
+        while (alreadyPopped > 0 && nextWindow != null) {
+            nextWindow = popNextWindow(nextWindow);
+            alreadyPopped--;
+        }
+        if (nextWindow != null) {
+            Log.d(TAG, "nextWindow(" + nextWindow.nextWindow +")");
+            switch (nextWindow.nextWindow) {
+                case nowPlaying -> {
+                    // Do nothing as now playing is always available in Squeezer (maybe toast the action)
+                }
+                case playlist -> CurrentPlaylistActivity.show(this);
+                case home -> HomeActivity.show(this);
+                case parentNoRefresh -> finish();
+                case grandparent -> {
+                    setResult(Activity.RESULT_OK, new Intent(RELOAD_PARENT));
+                    finish();
+                }
+                case refresh -> clearAndReOrderItems();
+                case parent,
+                     refreshOrigin -> {
+                    setResult(Activity.RESULT_OK, new Intent(RELOAD));
+                    finish();
+                }
+                case windowId -> {
+                    setResult(Activity.RESULT_OK, new Intent(WINDOW).putExtra(WINDOW_EXTRA, nextWindow.windowId));
+                    finish();
+                }
+            }
+        }
+    }
+
+    private Action.NextWindow popNextWindow(Action.NextWindow nextWindow) {
+        return switch (nextWindow.nextWindow) {
+            case parent, parentNoRefresh -> null;
+            case grandparent -> new Action.NextWindow(Action.NextWindowEnum.parentNoRefresh);
+            case refreshOrigin -> new Action.NextWindow(Action.NextWindowEnum.refresh);
+            default -> nextWindow;
+        };
+    }
+
+    private void setRefreshWindow(RefreshWindow refreshWindow) {
+        if (refreshWindow != null) {
+            Log.i(TAG, "setRefreshWindow: " + refreshWindow);
+            switch (refreshWindow) {
+                case refreshMe -> clearAndReOrderItems();
+                case refreshOrigin -> setResult(Activity.RESULT_OK, new Intent(RELOAD));
+                case refreshGrandparent -> setResult(Activity.RESULT_OK, new Intent(RELOAD_ON_FINISH));
+            }
+        }
+    }
+
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        if (requestCode == GO) {
+            Log.d(TAG, "onActivityResult(" + requestCode + ", " + resultCode + "): " + (data != null ? data.getAction() : ""));
+            if (resultCode == RESULT_OK) {
+                if (FINISH.equals(data.getAction())) {
+                    finish();
+                } else if (RELOAD.equals(data.getAction())) {
+                    clearAndReOrderItems();
+                } else if (RELOAD_ON_FINISH.equals(data.getAction())) {
+                    setResult(Activity.RESULT_OK, new Intent(RELOAD));
+                } else if (RELOAD_PARENT.equals(data.getAction())) {
+                    setResult(Activity.RESULT_OK, new Intent(RELOAD));
+                    finish();
+                } else if (WINDOW.equals(data.getAction())) {
+                    String windowId = data.getStringExtra(WINDOW_EXTRA);
+                    if (!(windowId.equals(parent.getId()) ||
+                            (parent.window != null && windowId.equals(parent.window.windowId)) ||
+                            JiveItem.HOME.getId().equals(parent.getId()))) {
+                        setResult(Activity.RESULT_OK, new Intent(WINDOW).putExtra(WINDOW_EXTRA, windowId));
+                        finish();
+                    }
+                }
+            }
+        }
+    }
+
+    /**
+     * Save the supplied theme in preferences and restart activity to apply it.
+     */
+    private void setTheme(ThemeManager.Theme theme) {
+        if (getThemeId() != theme.themeId) {
+            Squeezer.getPreferences().setTheme(theme);
+            recreate();
+        }
+    }
+
+    public void setPreferredListLayout(ArtworkListLayout listLayout) {
+        ArtworkListLayout prevListLayout = getListLayout();
+        saveListLayout(listLayout);
+        updateWindowStyle(window.windowStyle, prevListLayout);
+    }
+
+    public ArtworkListLayout getListLayout() {
+        return JiveItemView.listLayout(getPreferredListLayout(), window.windowStyle);
+    }
+
+    protected void saveListLayout(ArtworkListLayout listLayout) {
+        Squeezer.getPreferences().setAlbumListLayout(listLayout);
+    }
+
+    public int getSelectedIndex() {
+        return selectedIndex;
+    }
+
+    public void setSelectedIndex(int index) {
+        selectedIndex = index;
+    }
+
+    /**
+     * The user dismissed the network error dialog box. There's nothing more to do, so finish
+     * the activity.
+     */
+    @Override
+    public void onDialogDismissed(DialogInterface dialog) {
+        runOnUiThread(this::finish);
+    }
+
+
+    @Override
+    public boolean onCreateOptionsMenu(Menu menu) {
+        getMenuInflater().inflate(R.menu.jiveitemlist_menu, menu);
+        viewMenu = menu.findItem(R.id.menu_item_view).getSubMenu();
+        MenuCompat.setGroupDividerEnabled(viewMenu, true);
+        menuItemLight = viewMenu.findItem(R.id.menu_item_light);
+        menuItemDark = viewMenu.findItem(R.id.menu_item_dark);
+        menuItemGrouped = viewMenu.findItem(R.id.menu_item_grouped);
+        menuItemList = viewMenu.findItem(R.id.menu_item_list);
+        menuItemGrid = viewMenu.findItem(R.id.menu_item_grid);
+        menuItemOneLine = viewMenu.findItem(R.id.menu_item_one_line);
+        menuItemTwoLines = viewMenu.findItem(R.id.menu_item_two_lines);
+        menuItemAllInfo = viewMenu.findItem(R.id.menu_item_all_lines);
+        menuItemFlatIcons = viewMenu.findItem(R.id.menu_item_flat_icons);
+        return super.onCreateOptionsMenu(menu);
+    }
+
+    @Override
+    public boolean onPrepareOptionsMenu(Menu menu) {
+        updateViewMenuItems(getListLayout(), window.windowStyle);
+        return super.onPrepareOptionsMenu(menu);
+    }
+
+    @Override
+    public boolean onOptionsItemSelected(MenuItem item) {
+        int itemId = item.getItemId();
+        if (itemId == R.id.menu_item_light) {
+            setTheme(ThemeManager.Theme.LIGHT_DARKACTIONBAR);
+            return true;
+        } else if (itemId == R.id.menu_item_dark) {
+            setTheme(ThemeManager.Theme.DARK);
+            return true;
+        } else if (itemId == R.id.menu_item_list) {
+            setPreferredListLayout(ArtworkListLayout.list);
+            return true;
+        } else if (itemId == R.id.menu_item_grid) {
+            setPreferredListLayout(ArtworkListLayout.grid);
+            return true;
+        } else if (itemId == R.id.menu_item_one_line) {
+            setMaxLines(1);
+            return true;
+        } else if (itemId == R.id.menu_item_two_lines) {
+            setMaxLines(2);
+            return true;
+        } else if (itemId == R.id.menu_item_all_lines) {
+            setMaxLines(0);
+            return true;
+        } else if (itemId == R.id.menu_item_flat_icons) {
+            Squeezer.getPreferences().useFlatIcons(!menuItemFlatIcons.isChecked());
+            getItemAdapter().notifyItemRangeChanged(0, getItemAdapter().getItemCount());
+            return true;
+        }
+        return super.onOptionsItemSelected(item);
+    }
+
+    private void setMaxLines(int maxLines) {
+        Squeezer.getPreferences().setMaxLines(getListLayout(), maxLines);
+        updateViewMenuItems(getListLayout(), window.windowStyle);
+        getListView().setAdapter(getListView().getAdapter());
+    }
+
+    protected void updateViewMenuItems(ArtworkListLayout listLayout, Window.WindowStyle windowStyle) {
+        if (menuItemList != null) {
+            Preferences preferences = Squeezer.getPreferences();
+
+            (getThemeId() ==  R.style.AppTheme ? menuItemDark : menuItemLight).setChecked(true);
+
+            boolean canChangeListLayout = JiveItemView.canChangeListLayout(windowStyle);
+            viewMenu.setGroupVisible(R.id.menu_group_artwork, canChangeListLayout);
+            (listLayout == ArtworkListLayout.list ? menuItemList : menuItemGrid).setChecked(true);
+            menuItemGrouped.setVisible(false);
+
+            (switch (preferences.getMaxLines(listLayout)) {
+                case 1 -> menuItemOneLine;
+                case 2 -> menuItemTwoLines;
+                default -> menuItemAllInfo;
+            }).setChecked(true);
+
+            menuItemFlatIcons.setChecked(preferences.useFlatIcons());
+        }
+    }
+
+
+    /**
+     * Start a new {@link JiveItemListActivity} to perform the supplied <code>action</code>.
+     * <p>
+     * If the action requires input, we initially get the input.
+     * <p>
+     * When input is ready or the action does not require input, items are ordered asynchronously
+     * via {@link ISqueezeService#pluginItems(int, JiveItem, Action, IServiceItemListCallback)}
+     *
+     * @see #orderPage(int)
+     */
+    public static void show(Activity activity, JiveItem parent, Action action) {
+        if (activity instanceof JiveItemListActivity jiveItemListActivity) {
+            Action parentAction = jiveItemListActivity.action;
+            if (parentAction != null && parentAction.isPlayerSpecific() && !action.isPlayerSpecific()) {
+                Player player = jiveItemListActivity.requireService().getActivePlayer();
+                action.action.players = (player != null ? new String[]{player.getId()} : parentAction.action.players);
+            }
+        }
+        final Intent intent = new Intent(activity, JiveItemListActivity.class);
+        intent.putExtra(JiveItem.class.getName(), parent);
+        intent.putExtra(Action.class.getName(), action);
+        activity.startActivityForResult(intent, GO);
+    }
+
+    public static void show(Activity activity, JiveItem item) {
+        final Intent intent = new Intent(activity, JiveItemListActivity.class);
+        intent.putExtra(JiveItem.class.getName(), item);
+        activity.startActivityForResult(intent, GO);
+    }
+
+}
