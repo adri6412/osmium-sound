@@ -90,8 +90,8 @@ android {
 
     buildTypes {
         release {
-            minifyEnabled true
-            shrinkResources true
+            minifyEnabled false
+            shrinkResources false
             signingConfig signingConfigs.release
             // You could use 'proguardFile "proguard.cfg"' here and get the
             // same effect, but this ensures that any changes to
