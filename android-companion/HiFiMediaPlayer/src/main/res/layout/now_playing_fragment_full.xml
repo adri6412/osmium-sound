@@ -159,13 +159,13 @@
             android:paddingTop="12dp"
             android:paddingBottom="8dp">
 
-            <!-- Previous Button - FrameLayout with background -->
+            <!-- Previous Button -->
             <FrameLayout
                 android:id="@+id/prev"
                 android:layout_width="48dp"
                 android:layout_height="48dp"
                 android:layout_marginEnd="24dp"
-                android:background="@drawable/gold_button_bg">
+                android:background="#D4AF37">
                 <ImageView
                     android:layout_width="24dp"
                     android:layout_height="24dp"
@@ -175,14 +175,14 @@
                     android:tint="#ffffff" />
             </FrameLayout>
 
-            <!-- Play/Pause - Large Gold Button like desktop -->
+            <!-- Play/Pause -->
             <FrameLayout
                 android:id="@+id/pause"
                 android:layout_width="64dp"
                 android:layout_height="64dp"
                 android:layout_marginStart="24dp"
                 android:layout_marginEnd="24dp"
-                android:background="@drawable/gold_button_bg">
+                android:background="#D4AF37">
                 <ImageView
                     android:layout_width="32dp"
                     android:layout_height="32dp"
@@ -192,13 +192,13 @@
                     android:tint="#ffffff" />
             </FrameLayout>
 
-            <!-- Next Button - FrameLayout with background -->
+            <!-- Next Button -->
             <FrameLayout
                 android:id="@+id/next"
                 android:layout_width="48dp"
                 android:layout_height="48dp"
                 android:layout_marginStart="24dp"
-                android:background="@drawable/gold_button_bg">
+                android:background="#D4AF37">
                 <ImageView
                     android:layout_width="24dp"
                     android:layout_height="24dp"
