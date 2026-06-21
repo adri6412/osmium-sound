@@ -32,7 +32,7 @@
         android:layout_height="48dp"
         app:icon="@drawable/ic_volume_down"/>
 
-    <uk.org.ngo.squeezer.widget.ContinuousSlider
+    <com.hifi.mediaplayer.widget.ContinuousSlider
         android:id="@+id/volume_slider"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintTop_toTopOf="parent"

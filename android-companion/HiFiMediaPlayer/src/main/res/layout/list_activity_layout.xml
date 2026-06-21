@@ -46,7 +46,7 @@
     <androidx.fragment.app.FragmentContainerView
         android:id="@+id/now_playing_fragment"
         android:visibility="gone"
-        android:name="uk.org.ngo.squeezer.NowPlayingFragment"
+        android:name="com.hifi.mediaplayer.NowPlayingFragment"
         android:layout_width="fill_parent"
         android:layout_height="48dp"
         tools:layout="@layout/now_playing_fragment_mini"/>

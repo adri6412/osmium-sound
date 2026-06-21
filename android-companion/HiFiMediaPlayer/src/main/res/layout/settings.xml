@@ -19,7 +19,7 @@
 
     <androidx.fragment.app.FragmentContainerView
         android:id="@+id/settings_container"
-        android:name="uk.org.ngo.squeezer.SettingsFragment"
+        android:name="com.hifi.mediaplayer.SettingsFragment"
         android:layout_width="match_parent"
         android:layout_height="match_parent" />
 

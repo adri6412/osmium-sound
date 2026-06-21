@@ -34,7 +34,7 @@
              />
     </com.google.android.material.appbar.AppBarLayout>
 
-    <androidx.fragment.app.FragmentContainerView android:name="uk.org.ngo.squeezer.NowPlayingFragment"
+    <androidx.fragment.app.FragmentContainerView android:name="com.hifi.mediaplayer.NowPlayingFragment"
         android:id="@+id/now_playing_fragment"
         android:layout_width="fill_parent"
         android:layout_height="fill_parent"
