@@ -164,13 +164,11 @@
                 android:layout_width="48dp"
                 android:layout_height="48dp"
                 android:layout_marginEnd="24dp"
-                android:scaleType="centerInside"
                 app:icon="@drawable/ic_action_previous"
                 app:iconSize="24dp"
-                style="@style/Widget.MaterialComponents.Button"
-                android:background="@color/gold_button"
-                app:cornerRadius="24dp"
-                app:iconTint="#ffffff" />
+                android:background="@drawable/gold_button_bg"
+                app:iconTint="#ffffff"
+                android:contentDescription="Previous" />
 
             <!-- Play/Pause - Large Gold Button like desktop -->
             <com.google.android.material.button.MaterialButton
@@ -181,24 +179,20 @@
                 android:layout_marginEnd="24dp"
                 app:icon="@drawable/ic_action_play"
                 app:iconSize="32dp"
-                app:cornerRadius="32dp"
-                style="@style/Widget.MaterialComponents.Button"
-                android:background="@color/gold_button"
-                android:textColor="#ffffff"
-                app:iconTint="#ffffff" />
+                android:background="@drawable/gold_button_bg"
+                app:iconTint="#ffffff"
+                android:contentDescription="Play/Pause" />
 
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/next"
                 android:layout_width="48dp"
                 android:layout_height="48dp"
                 android:layout_marginStart="24dp"
-                android:scaleType="centerInside"
                 app:icon="@drawable/ic_action_next"
                 app:iconSize="24dp"
-                style="@style/Widget.MaterialComponents.Button"
-                android:background="@color/gold_button"
-                app:cornerRadius="24dp"
-                app:iconTint="#ffffff" />
+                android:background="@drawable/gold_button_bg"
+                app:iconTint="#ffffff"
+                android:contentDescription="Next" />
         </LinearLayout>
 
         <!-- Volume Control -->
