@@ -2,7 +2,7 @@
 package com.hifi.mediaplayer.test.server;
 
 import android.content.Intent;
-import android.test.ServiceTestCase;
+import androidx.test.ServiceTestCase;
 
 import java.util.ArrayList;
 import java.util.Arrays;

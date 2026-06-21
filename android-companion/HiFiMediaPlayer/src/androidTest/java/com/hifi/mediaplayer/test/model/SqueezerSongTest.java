@@ -2,7 +2,7 @@ package com.hifi.mediaplayer.test.model;
 
 import com.google.common.collect.ImmutableMap;
 
-import android.test.AndroidTestCase;
+import androidx.test.AndroidTestCase;
 
 import java.util.HashMap;
 
