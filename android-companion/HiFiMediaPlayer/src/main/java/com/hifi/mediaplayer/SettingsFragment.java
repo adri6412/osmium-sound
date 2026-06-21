@@ -226,9 +226,10 @@ public class SettingsFragment  extends PreferenceFragmentCompat implements
     }
 
     private void updateLauncherMode(boolean enabled) {
-        ComponentName componentName = new ComponentName(requireContext(), "com.hifi.mediaplayer.HomeLauncherActivity");
-        int setting = enabled ? PackageManager.COMPONENT_ENABLED_STATE_ENABLED : PackageManager.COMPONENT_ENABLED_STATE_DISABLED;
-        requireContext().getPackageManager().setComponentEnabledSetting(componentName, setting, PackageManager.DONT_KILL_APP);
+        // TODO: HomeLauncherActivity not implemented in this companion app
+        // ComponentName componentName = new ComponentName(requireContext(), "com.hifi.mediaplayer.HomeLauncherActivity");
+        // int setting = enabled ? PackageManager.COMPONENT_ENABLED_STATE_ENABLED : PackageManager.COMPONENT_ENABLED_STATE_DISABLED;
+        // requireContext().getPackageManager().setComponentEnabledSetting(componentName, setting, PackageManager.DONT_KILL_APP);
     }
 
     private <T extends Preference> T requirePreference(String key) {
