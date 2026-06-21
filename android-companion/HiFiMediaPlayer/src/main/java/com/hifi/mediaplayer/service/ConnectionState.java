@@ -312,7 +312,7 @@ public class ConnectionState {
             if (rescanned || (this.lastScan == 0)) {
                 Log.i(TAG, "Flush/rebuild client side caches: " + lastScan);
                 rescanned = false;
-                ImageFetcher.getInstance(Squeezer.getInstance()).clearCache();
+                ImageFetcher.getInstance(HiFiMediaPlayer.getInstance()).clearCache();
                 repository.post(new LastscanChanged(lastScan));
             }
             this.lastScan = savedScan = lastScan;
@@ -338,7 +338,7 @@ public class ConnectionState {
     }
 
     private String formatScanningProgress(String progressName, String progressDone, String progressTotal) {
-        if (progressName == null) return Squeezer.getInstance().getString(R.string.RESCANNING_SHORT);
+        if (progressName == null) return HiFiMediaPlayer.getInstance().getString(R.string.RESCANNING_SHORT);
         return progressName + (progressDone != null && progressTotal != null ? String.format(" %s/%s", progressDone, progressTotal) : "");
     }
 

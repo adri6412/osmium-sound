@@ -51,7 +51,7 @@ public class SqueezerHomeScreenWidget extends AppWidgetProvider {
                     Log.i(SqueezerHomeScreenWidget.TAG, "onServiceConnected connected to ISqueezeService");
 
                     // Wait for the PlayersChanged event
-                    Squeezer.getInstance().repository().observeForever((PlayersChanged event) -> {
+                    HiFiMediaPlayer.getInstance().repository().observeForever((PlayersChanged event) -> {
                         Log.i(SqueezerHomeScreenWidget.TAG, "Players ready, perform action");
                         uiThreadHandler.post(() -> {
                             showToastExceptionIfExists(context, runHandlerAndCatchException(handler, squeezeService));
