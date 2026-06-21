@@ -1,0 +1,134 @@
+================================================================================
+    HiFi Media Player - Istruzioni per Salvare il Manuale come PDF
+================================================================================
+
+Il file MANUALE_HIFI_MEDIA_PLAYER.html è un documento professionale pronto per
+essere stampato o salvato come PDF.
+
+METODO 1: Salva come PDF direttamente dal Browser (CONSIGLIATO)
+================================================================================
+
+1. Apri il file MANUALE_HIFI_MEDIA_PLAYER.html nel tuo browser:
+   - Doppio-clic sul file, oppure
+   - Trascina il file nel browser, oppure
+   - Copia il percorso completo e incollalo nella barra degli indirizzi
+
+2. Una volta caricato il manuale nel browser:
+
+   WINDOWS / LINUX:
+   - Premi: Ctrl + P
+
+   macOS:
+   - Premi: Cmd + P
+
+3. Nella finestra di stampa:
+   - Seleziona "Salva come PDF" (o simile) dal dropdown della stampante
+   - Scegli la cartella di destinazione
+   - Dai un nome al file (es. "HiFi_Media_Player_Manuale_v1.5.0")
+   - Fai clic su "Salva"
+
+Il PDF sarà pronto per la distribuzione!
+
+METODO 2: Stampa Fisica
+================================================================================
+
+Se desideri una copia stampata:
+
+1. Apri il manuale nel browser (vedi Metodo 1 punti 1-2)
+
+2. Seleziona una stampante dalla lista (non PDF)
+
+3. Opzioni consigliate:
+   - Orientamento: Verticale (Ritratto)
+   - Formato carta: A4
+   - Margini: Normali
+   - Scala: 100%
+
+4. Fai clic su "Stampa"
+
+METODO 3: Uso di Pandoc (Per Sviluppatori)
+================================================================================
+
+Se hai Pandoc installato nel tuo sistema, puoi convertire il file con:
+
+  pandoc MANUALE_HIFI_MEDIA_PLAYER.md -o MANUALE_HIFI_MEDIA_PLAYER.pdf \
+    --pdf-engine=xelatex \
+    --variable mainfont="Segoe UI" \
+    --top-level-division=chapter
+
+(Nota: Richiede pandoc, xelatex e LaTeX installati)
+
+METODO 4: Python + ReportLab
+================================================================================
+
+Se hai Python 3 installato:
+
+  pip install reportlab markdown
+  python3 convert_to_pdf.py
+
+(Uno script di conversione sarà fornito separatamente)
+
+CARATTERISTICHE DEL MANUALE HTML
+================================================================================
+
+✓ Indice completo con numeri di sezione
+✓ Formatting professionale con colori aziendali
+✓ Tabelle strutturate e facili da leggere
+✓ Box informativi colorati per avvertenze e consigli
+✓ Codice monospaced per comandi e percorsi
+✓ Ottimizzato per la stampa su carta A4
+✓ Numerazione di pagina automatica
+✓ Interruzioni di pagina intelligenti
+
+PERSONALIZZAZIONE
+================================================================================
+
+Se desideri modificare il manuale:
+
+1. Apri il file con un editor di testo (Notepad++, VS Code, etc.)
+
+2. Modifica i contenuti direttamente nel HTML
+
+3. Cambia i colori:
+   - #1a1a2e = Blu scuro (titoli)
+   - #d4af37 = Oro (accenti)
+   - #16213e = Blu more scuro
+
+4. Salva e visualizza di nuovo nel browser
+
+5. Stampa come PDF con Ctrl+P
+
+DISTRIBUZIONE
+================================================================================
+
+Per includere il manuale nel pacchetto di produzione:
+
+1. Salva il PDF con il nome: MANUALE_HIFI_MEDIA_PLAYER_v1.5.0_IT.pdf
+
+2. Metti il PDF nel pacchetto di installazione:
+   - Include nel archivio di rilascio
+   - Carica sul sito web per il download
+   - Stampa copie fisiche per le confezioni
+
+3. Opzionalmente, crea versioni in altre lingue:
+   - Duplica l'HTML
+   - Traduci i contenuti
+   - Rinomina come MANUALE_v1.5.0_[LINGUA].pdf
+
+SUPPORTO E AGGIORNAMENTI
+================================================================================
+
+Il manuale è stato creato per la versione 1.5.0 del HiFi Media Player.
+
+Per aggiornamenti futuri:
+- Mantieni il file MANUALE_HIFI_MEDIA_PLAYER.md come sorgente
+- Aggiorna i numeri di versione e le date
+- Riconverti in HTML/PDF per le nuove release
+
+Email per feedback: support@hifi-media-player.it
+
+================================================================================
+Data creazione: Giugno 2026
+Versione manuale: 1.5.0
+Lingua: Italiano
+================================================================================

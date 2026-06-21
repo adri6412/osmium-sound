@@ -1,0 +1,912 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HiFi Media Player - Manuale Utente</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            background: white;
+            padding: 0;
+        }
+
+        @media print {
+            body { padding: 0; }
+            .page-break { page-break-after: always; }
+            a { text-decoration: none; color: #000; }
+            h1, h2, h3 { page-break-after: avoid; }
+            table { page-break-inside: avoid; }
+        }
+
+        .container {
+            max-width: 850px;
+            margin: 0 auto;
+            padding: 40px 20px;
+        }
+
+        /* Cover Page */
+        .cover-page {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            text-align: center;
+            page-break-after: always;
+            padding: 60px 20px;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            color: white;
+        }
+
+        .cover-page h1 {
+            font-size: 48px;
+            margin-bottom: 20px;
+            font-weight: 700;
+            letter-spacing: 2px;
+        }
+
+        .cover-page .subtitle {
+            font-size: 24px;
+            margin-bottom: 40px;
+            font-weight: 300;
+            opacity: 0.9;
+        }
+
+        .cover-page .version-info {
+            font-size: 14px;
+            margin-top: 60px;
+            opacity: 0.7;
+            border-top: 1px solid rgba(255,255,255,0.3);
+            padding-top: 30px;
+        }
+
+        .logo {
+            font-size: 64px;
+            margin-bottom: 30px;
+        }
+
+        /* Content */
+        h1 {
+            font-size: 32px;
+            color: #1a1a2e;
+            margin: 40px 0 20px;
+            border-bottom: 3px solid #d4af37;
+            padding-bottom: 10px;
+        }
+
+        h2 {
+            font-size: 24px;
+            color: #16213e;
+            margin: 30px 0 15px;
+            border-left: 4px solid #d4af37;
+            padding-left: 15px;
+        }
+
+        h3 {
+            font-size: 18px;
+            color: #333;
+            margin: 20px 0 10px;
+        }
+
+        p {
+            margin-bottom: 12px;
+            text-align: justify;
+        }
+
+        ul, ol {
+            margin: 15px 0 15px 30px;
+        }
+
+        li {
+            margin-bottom: 8px;
+            text-align: justify;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        th {
+            background-color: #16213e;
+            color: white;
+            padding: 12px;
+            text-align: left;
+            font-weight: 600;
+        }
+
+        td {
+            padding: 12px;
+            border-bottom: 1px solid #ddd;
+        }
+
+        tr:hover {
+            background-color: #f5f5f5;
+        }
+
+        tr:last-child td {
+            border-bottom: 2px solid #16213e;
+        }
+
+        .toc {
+            background: #f9f9f9;
+            border: 2px solid #d4af37;
+            padding: 20px;
+            margin: 30px 0;
+            border-radius: 8px;
+        }
+
+        .toc ol {
+            margin-left: 20px;
+        }
+
+        .toc li {
+            margin-bottom: 8px;
+        }
+
+        .info-box {
+            background: #e8f4f8;
+            border-left: 4px solid #0066cc;
+            padding: 15px;
+            margin: 20px 0;
+            border-radius: 4px;
+        }
+
+        .warning-box {
+            background: #fff3cd;
+            border-left: 4px solid #ff9800;
+            padding: 15px;
+            margin: 20px 0;
+            border-radius: 4px;
+        }
+
+        .danger-box {
+            background: #ffe8e8;
+            border-left: 4px solid #ff0000;
+            padding: 15px;
+            margin: 20px 0;
+            border-radius: 4px;
+        }
+
+        .success-box {
+            background: #e8f5e9;
+            border-left: 4px solid #4caf50;
+            padding: 15px;
+            margin: 20px 0;
+            border-radius: 4px;
+        }
+
+        code {
+            background: #f4f4f4;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+        }
+
+        pre {
+            background: #1e1e1e;
+            color: #d4d4d4;
+            padding: 15px;
+            border-radius: 8px;
+            overflow-x: auto;
+            margin: 15px 0;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            line-height: 1.4;
+        }
+
+        pre code {
+            background: none;
+            padding: 0;
+            color: inherit;
+        }
+
+        .specs-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin: 20px 0;
+        }
+
+        .spec-item {
+            background: #f0f0f0;
+            padding: 15px;
+            border-radius: 8px;
+            border-left: 4px solid #d4af37;
+        }
+
+        .spec-item strong {
+            color: #16213e;
+        }
+
+        .command {
+            background: #1e1e1e;
+            color: #d4d4d4;
+            padding: 10px 15px;
+            border-radius: 5px;
+            font-family: monospace;
+            margin: 10px 0;
+            display: inline-block;
+            font-size: 12px;
+        }
+
+        .section {
+            page-break-inside: avoid;
+        }
+
+        .page-break {
+            page-break-after: always;
+        }
+
+        .highlight {
+            background-color: #fffacd;
+            padding: 2px 4px;
+            border-radius: 3px;
+        }
+
+        .footer {
+            margin-top: 60px;
+            padding-top: 20px;
+            border-top: 1px solid #ddd;
+            text-align: center;
+            font-size: 12px;
+            color: #666;
+        }
+
+        .checkmark {
+            color: #4caf50;
+            font-weight: bold;
+        }
+
+        .cross {
+            color: #ff0000;
+            font-weight: bold;
+        }
+
+        em {
+            font-style: italic;
+            color: #555;
+        }
+
+        strong {
+            font-weight: 600;
+            color: #1a1a2e;
+        }
+    </style>
+</head>
+<body>
+
+<!-- COVER PAGE -->
+<div class="cover-page">
+    <div class="logo">🎵</div>
+    <h1>HiFi Media Player</h1>
+    <p class="subtitle">Manuale Utente e Guida all'Installazione</p>
+    <div class="version-info">
+        <p><strong>Versione Manuale:</strong> 1.5.0</p>
+        <p><strong>Compatibilità Firmware:</strong> OS v1.5.0 e successive</p>
+        <p><strong>Data di Pubblicazione:</strong> Giugno 2026</p>
+        <p style="margin-top: 20px; font-size: 12px;">© 2024-2026 HiFi Media Player. Tutti i diritti riservati.</p>
+    </div>
+</div>
+
+<!-- TABLE OF CONTENTS -->
+<div class="container">
+    <div class="toc">
+        <h2 style="margin-top: 0; border: none; padding: 0;">Indice</h2>
+        <ol>
+            <li>Introduzione</li>
+            <li>Contenuto della Confezione</li>
+            <li>Specifiche Tecniche</li>
+            <li>Setup Iniziale</li>
+            <li>Configurazione di Rete</li>
+            <li>Configurazione Audio</li>
+            <li>Utilizzo del Sistema</li>
+            <li>Aggiornamenti di Sistema</li>
+            <li>Troubleshooting</li>
+            <li>Assistenza Tecnica</li>
+        </ol>
+    </div>
+
+    <div class="page-break"></div>
+
+    <!-- SECTION 1 -->
+    <div class="section">
+        <h1>1. Introduzione</h1>
+
+        <p>Benvenuto nel tuo <strong>HiFi Media Player</strong>, un sistema audio digitale di alta qualità progettato per la riproduzione audio professionale e domestica.</p>
+
+        <p>Questo dispositivo combina:</p>
+        <ul>
+            <li><strong>Qualità Audio Superiore</strong>: Supporto per audio ad alta risoluzione e DSD bit-perfect</li>
+            <li><strong>Software Open Source</strong>: Basato su Lyrion Music Server</li>
+            <li><strong>Interfaccia Intuitiva</strong>: Touchscreen responsive e controllabile da qualsiasi dispositivo della rete</li>
+            <li><strong>Autonomo</strong>: Progettato per funzionare in ambienti dedicati senza interventi costanti</li>
+        </ul>
+
+        <h3>Caratteristiche Principali</h3>
+        <div class="success-box">
+            <p><span class="checkmark">✓</span> Supporto DSD over PCM (DoP) per DAC DSD-capable<br>
+            <span class="checkmark">✓</span> FLAC, WAV, ALAC, MP3, OggVorbis e altri formati audio<br>
+            <span class="checkmark">✓</span> Aggiornamenti over-the-air (OTA) firmware e sistema operativo<br>
+            <span class="checkmark">✓</span> Configurazione di rete wireless (WiFi) e via cavo (Ethernet)<br>
+            <span class="checkmark">✓</span> Selezione dinamica di dispositivi audio USB e onboard<br>
+            <span class="checkmark">✓</span> Accesso remoto tramite Lyrion Music Server</p>
+        </div>
+    </div>
+
+    <div class="page-break"></div>
+
+    <!-- SECTION 2 -->
+    <div class="section">
+        <h1>2. Contenuto della Confezione</h1>
+
+        <p>Il tuo HiFi Media Player contiene:</p>
+
+        <table>
+            <thead>
+                <tr>
+                    <th style="width: 30%;">Componente</th>
+                    <th style="width: 70%;">Descrizione</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td><strong>Unità Principale</strong></td>
+                    <td>Streamer audio con hardware dedicato</td>
+                </tr>
+                <tr>
+                    <td><strong>Alimentatore</strong></td>
+                    <td>24V DC, certificato CE</td>
+                </tr>
+                <tr>
+                    <td><strong>Cavo Ethernet</strong></td>
+                    <td>RJ45 Cat6 per connessione LAN</td>
+                </tr>
+                <tr>
+                    <td><strong>Cavo USB</strong> (opzionale)</td>
+                    <td>Per collegamento DAC esterno USB</td>
+                </tr>
+                <tr>
+                    <td><strong>Manuale Utente</strong></td>
+                    <td>Questo documento</td>
+                </tr>
+                <tr>
+                    <td><strong>Garanzia</strong></td>
+                    <td>Certificato di garanzia 2 anni</td>
+                </tr>
+                <tr>
+                    <td><strong>Scheda WiFi</strong> (opzionale)</td>
+                    <td>Se configurato con connettività wireless</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+
+    <div class="page-break"></div>
+
+    <!-- SECTION 3 -->
+    <div class="section">
+        <h1>3. Specifiche Tecniche</h1>
+
+        <h2>Hardware</h2>
+        <div class="specs-grid">
+            <div class="spec-item">
+                <strong>Processore:</strong> ARM Quad-core 64-bit
+            </div>
+            <div class="spec-item">
+                <strong>RAM:</strong> 4GB LPDDR4
+            </div>
+            <div class="spec-item">
+                <strong>Storage:</strong> 64GB eMMC con supporto OTA updates
+            </div>
+            <div class="spec-item">
+                <strong>Alimentazione:</strong> 24V DC, max 15W
+            </div>
+            <div class="spec-item">
+                <strong>Ethernet:</strong> Gigabit 10/100/1000 Mbps
+            </div>
+            <div class="spec-item">
+                <strong>WiFi:</strong> 802.11ac dual-band (opzionale)
+            </div>
+            <div class="spec-item">
+                <strong>USB:</strong> USB 2.0/3.0 per DAC esterni
+            </div>
+            <div class="spec-item">
+                <strong>Peso:</strong> ~800g
+            </div>
+        </div>
+
+        <h2>Audio</h2>
+        <ul>
+            <li><strong>Output Digitale:</strong> S/PDIF Toslink, USB Audio Class 2.0</li>
+            <li><strong>Formati PCM:</strong> 16-384 kHz, fino a 32-bit</li>
+            <li><strong>DSD Support:</strong> DSD64, DSD128 (via DoP)</li>
+            <li><strong>Compresso:</strong> FLAC, WAV, ALAC, MP3, OggVorbis, AAC, WMA</li>
+            <li><strong>Bit-Perfect:</strong> Supporto full bit-perfect con flag -D attivo</li>
+            <li><strong>Latenza:</strong> &lt; 100ms</li>
+        </ul>
+
+        <h2>Ambiente Operativo</h2>
+        <ul>
+            <li><strong>Temperatura:</strong> 0°C - 40°C</li>
+            <li><strong>Umidità:</strong> 10% - 90% (non condensante)</li>
+            <li><strong>Dimensioni:</strong> 150mm × 100mm × 80mm</li>
+        </ul>
+    </div>
+
+    <div class="page-break"></div>
+
+    <!-- SECTION 4 -->
+    <div class="section">
+        <h1>4. Setup Iniziale</h1>
+
+        <h2>Passo 1: Posizionamento e Alimentazione</h2>
+
+        <h3>Posizionare il dispositivo</h3>
+        <p>In un luogo stabile, lontano da:</p>
+        <ul>
+            <li>Fonti di calore (radiatori, forni)</li>
+            <li>Vibrazione e rumore meccanico</li>
+            <li>Campi elettromagnetici forti (antenne, inverter)</li>
+            <li>Luce diretta del sole</li>
+        </ul>
+
+        <h3>Collegare l'alimentatore</h3>
+        <ol>
+            <li>Inserire il connettore DC nel retro del dispositivo (contrassegnato con ⚡)</li>
+            <li>Collegare l'alimentatore a una presa di corrente</li>
+            <li>Il LED frontale diventerà verde quando il sistema è avviato</li>
+            <li><strong>Attendere 2-3 minuti</strong> per il boot completo del sistema</li>
+        </ol>
+
+        <h3>Indicatori LED</h3>
+        <div class="info-box">
+            <p><strong>🟢 Verde fisso:</strong> Sistema pronto e connesso<br>
+            <strong>🟠 Arancione:</strong> Sistema in boot o aggiornamento<br>
+            <strong>🔴 Rosso:</strong> Errore di sistema (contattare assistenza)<br>
+            <strong>⚫ Spento:</strong> Dispositivo non alimentato</p>
+        </div>
+
+        <h2>Passo 2: Connessione di Rete</h2>
+
+        <h3>Via Ethernet (Consigliato)</h3>
+        <ol>
+            <li>Collegare il cavo Ethernet al jack RJ45 etichettato "LAN"</li>
+            <li>L'altro capo al vostro router/switch</li>
+            <li>Il sistema si configurerà automaticamente via DHCP</li>
+            <li>Attendere il LED verde stabile (30 secondi)</li>
+        </ol>
+
+        <h3>Via WiFi</h3>
+        <ol>
+            <li>Sul display touchscreen, toccare <strong>"WiFi Setup"</strong></li>
+            <li>Selezionare la vostra rete SSID</li>
+            <li>Inserire la password (se richiesta)</li>
+            <li>Attendere la connessione (LED verde stabile)</li>
+        </ol>
+    </div>
+
+    <div class="page-break"></div>
+
+    <!-- SECTION 5 -->
+    <div class="section">
+        <h1>5. Configurazione di Rete</h1>
+
+        <h2>Accesso all'Interfaccia Web</h2>
+
+        <p>Una volta connesso alla rete, potete accedere al sistema da qualsiasi browser:</p>
+
+        <div class="command">http://[indirizzo-IP-del-dispositivo]:9000</div>
+
+        <p>Per trovare l'indirizzo IP:</p>
+        <ol>
+            <li>Controllare il vostro router (sezione dispositivi connessi)</li>
+            <li>Oppure sul display del dispositivo (sezione Sistema Info)</li>
+            <li>Oppure tramite SSH: <code>ssh root@hifi-media-player.local</code></li>
+        </ol>
+
+        <h2>Configurazione WiFi Avanzata</h2>
+
+        <p>Se necessitate di IP statico o configurazione avanzata:</p>
+
+        <ol>
+            <li>Accedere all'interfaccia web</li>
+            <li>Menu <strong>"Sistema" → "Rete" → "Configurazione Avanzata"</strong></li>
+            <li>Selezionare <strong>"Static IP"</strong> dal dropdown</li>
+            <li>Inserire:
+                <ul>
+                    <li><strong>Indirizzo IP:</strong> Es. 192.168.1.100</li>
+                    <li><strong>Gateway:</strong> Es. 192.168.1.1</li>
+                    <li><strong>DNS Primario:</strong> Es. 8.8.8.8</li>
+                    <li><strong>DNS Secondario:</strong> Es. 8.8.4.4</li>
+                </ul>
+            </li>
+            <li>Fare clic su <strong>"Applica"</strong></li>
+            <li>Il dispositivo si riavvierà con la nuova configurazione</li>
+        </ol>
+
+        <h2>Risoluzione Problemi di Rete</h2>
+
+        <div class="warning-box">
+            <p><strong>Il dispositivo non si connette a WiFi:</strong><br>
+            • Verificare che la rete WiFi sia visibile e il segnale sia > -70 dBm<br>
+            • Provare a immettere manualmente la password (evitare copia/incolla)<br>
+            • Riavviare il dispositivo (menu Sistema → Riavvia)</p>
+        </div>
+
+        <div class="warning-box">
+            <p><strong>IP non assegnato via DHCP:</strong><br>
+            • Verificare che il router supporti DHCP (solitamente attivo di default)<br>
+            • Controllare se il firewall del router sta bloccando il dispositivo<br>
+            • Usare un IP statico manualmente</p>
+        </div>
+    </div>
+
+    <div class="page-break"></div>
+
+    <!-- SECTION 6 -->
+    <div class="section">
+        <h1>6. Configurazione Audio</h1>
+
+        <h2>Selezione del DAC (Digital-to-Analog Converter)</h2>
+
+        <p>Il sistema supporta:</p>
+        <ul>
+            <li><strong>DAC Onboard:</strong> Uscita stereo integrata (qualità buona)</li>
+            <li><strong>DAC Esterno USB:</strong> Per qualità audio superiore</li>
+        </ul>
+
+        <h3>Scegliere il DAC</h3>
+        <ol>
+            <li>Accedere all'interfaccia web</li>
+            <li>Menu <strong>"Sistema" → "Audio" → "Dispositivi Audio"</strong></li>
+            <li>Vedrete una lista di dispositivi disponibili:
+                <ul>
+                    <li>"Predefinito di sistema"</li>
+                    <li>"Topping D50s" (o il vostro DAC USB)</li>
+                    <li>etc.</li>
+                </ul>
+            </li>
+            <li><strong>Selezionare il vostro DAC preferito</strong></li>
+            <li>Il sistema applicherà la configurazione in tempo reale</li>
+        </ol>
+
+        <h2>Abilitare DSD (Bit-Perfect)</h2>
+
+        <div class="success-box">
+            <p>Il sistema è configurato per <strong>abilitare automaticamente la modalità DSD (DoP)</strong> per ogni DAC:</p>
+            <ol>
+                <li>Nel menu Audio, verificare che il DAC selezionato supporti DoP</li>
+                <li>L'icona 🎵 <strong>DSD</strong> apparirà accanto al nome del DAC se supportato</li>
+                <li>I file DSD verranno riprodotti in modalità bit-perfect (nessuna conversione PCM)</li>
+            </ol>
+        </div>
+
+        <h2>Regolazione del Volume</h2>
+
+        <p><strong>Via Interfaccia Web:</strong></p>
+        <ol>
+            <li>Nel player, usare i bottoni <strong>"−"</strong> e <strong>"+"</strong> per il volume</li>
+            <li>Il volume è memorizzato per il DAC selezionato</li>
+        </ol>
+
+        <p><strong>Via Lyrion Web Controller (da qualsiasi device):</strong></p>
+        <ol>
+            <li>Accedere a: <code>http://[indirizzo-IP]:9000/lyrion</code></li>
+            <li>Controllare il volume centralmente per tutte le zone</li>
+        </ol>
+    </div>
+
+    <div class="page-break"></div>
+
+    <!-- SECTION 7 -->
+    <div class="section">
+        <h1>7. Utilizzo del Sistema</h1>
+
+        <h2>Riproduzione Musicale</h2>
+
+        <h3>Via Interfaccia Locale (Touchscreen)</h3>
+        <ol>
+            <li><strong>Connettere una libreria musicale:</strong>
+                <ul>
+                    <li>Accedere a "Libreria" nel menu principale</li>
+                    <li>Aggiungere una cartella locale (USB, storage esterno)</li>
+                    <li>Oppure connettersi a un server UPnP/Airplay</li>
+                </ul>
+            </li>
+            <li><strong>Navigare e Riprodurre:</strong>
+                <ul>
+                    <li>Selezionare Artista → Album → Canzone</li>
+                    <li>Toccare il nome della canzone per iniziare la riproduzione</li>
+                    <li>I controlli di trasporto (Play/Pausa) sono nel footer</li>
+                </ul>
+            </li>
+            <li><strong>Creare Playlist:</strong>
+                <ul>
+                    <li>Menu "Playlist" → "Nuova Playlist"</li>
+                    <li>Aggiungere canzoni trascinandole o toccando "Aggiungi"</li>
+                </ul>
+            </li>
+        </ol>
+
+        <h3>Via Lyrion Music Server (Remoto)</h3>
+        <p>Accedere dall'app Lyrion su smartphone/tablet:</p>
+        <ol>
+            <li><strong>Download App:</strong>
+                <ul>
+                    <li>iOS: App Store → "Lyrion"</li>
+                    <li>Android: Google Play → "Lyrion"</li>
+                </ul>
+            </li>
+            <li><strong>Configurare il Server:</strong>
+                <ul>
+                    <li>Aprire l'app</li>
+                    <li>Inserire l'indirizzo IP del dispositivo (trovato in Sistema Info)</li>
+                    <li>La porta è normalmente 9000</li>
+                </ul>
+            </li>
+            <li><strong>Controllare da Remoto:</strong>
+                <ul>
+                    <li>Selezionare le canzoni dal vostro smartphone</li>
+                    <li>Controllare volume, pausa, skip dal dispositivo HiFi</li>
+                </ul>
+            </li>
+        </ol>
+
+        <h3>Via AirPlay (da Apple Devices)</h3>
+        <ol>
+            <li>Su iPhone/iPad/Mac: Apri il Control Center (scorrere dall'alto)</li>
+            <li>Tocca "AirPlay Audio"</li>
+            <li>Seleziona il tuo "HiFi Media Player"</li>
+            <li>La musica verrà riprodotta sul DAC configurato</li>
+        </ol>
+
+        <h2>Menu Sistema</h2>
+
+        <p><strong>Sistema Info:</strong></p>
+        <ul>
+            <li>Versione firmware OS</li>
+            <li>Versione Lyrion Music Server</li>
+            <li>Indirizzo IP e configurazione rete</li>
+            <li>Stato memoria e storage</li>
+            <li>Temperatura del processore</li>
+        </ul>
+
+        <p><strong>Audio:</strong></p>
+        <ul>
+            <li>Selezione DAC/dispositivo output</li>
+            <li>Visualizzazione informazioni audio (bitrate, sample rate, formato)</li>
+            <li>Stato DSD (se supportato dal DAC)</li>
+        </ul>
+
+        <p><strong>Rete:</strong></p>
+        <ul>
+            <li>Configurazione WiFi</li>
+            <li>IP statico/DHCP</li>
+            <li>DNS server</li>
+            <li>Informazioni di connettività</li>
+        </ul>
+
+        <p><strong>Sistema:</strong></p>
+        <ul>
+            <li>Accensione/Spegnimento</li>
+            <li>Riavvio</li>
+            <li>Ripristino impostazioni di default</li>
+            <li>Informazioni garanzia</li>
+        </ul>
+    </div>
+
+    <div class="page-break"></div>
+
+    <!-- SECTION 8 -->
+    <div class="section">
+        <h1>8. Aggiornamenti di Sistema</h1>
+
+        <p>Il dispositivo controlla automaticamente gli aggiornamenti OTA (Over-The-Air) ogni 24 ore.</p>
+
+        <h2>Controllare Aggiornamenti Manualmente</h2>
+
+        <ol>
+            <li>Accedere all'interfaccia web</li>
+            <li>Menu <strong>"Sistema" → "Aggiornamenti"</strong></li>
+            <li>Vedrete:
+                <ul>
+                    <li><strong>Versione OS Attuale</strong></li>
+                    <li><strong>Versione Lyrion Attuale</strong></li>
+                    <li><strong>Aggiornamenti Disponibili</strong> (se presenti)</li>
+                </ul>
+            </li>
+        </ol>
+
+        <h2>Installare un Aggiornamento</h2>
+
+        <ol>
+            <li>Se disponibile un aggiornamento, toccate <strong>"Installa Aggiornamento"</strong></li>
+            <li>Il sistema mostrerà:
+                <ul>
+                    <li>Numero versione</li>
+                    <li>Note di rilascio (changelog)</li>
+                </ul>
+            </li>
+            <li>Toccare <strong>"Conferma"</strong></li>
+            <li>L'aggiornamento inizierà (il LED diventerà arancione)</li>
+            <li><strong>NON SPEGNERE IL DISPOSITIVO durante l'aggiornamento</strong> ⚠️</li>
+            <li>Al termine, il dispositivo si riavvierà automaticamente</li>
+            <li>Attendere il LED verde stabile (2-3 minuti)</li>
+        </ol>
+
+        <h2>Sicurezza degli Aggiornamenti</h2>
+
+        <div class="success-box">
+            <p>Tutti gli aggiornamenti sono:</p>
+            <ul>
+                <li><strong>Firmati crittograficamente</strong> con chiave Ed25519</li>
+                <li><strong>Verificati via SHA256</strong> per integrità</li>
+                <li><strong>Solo scaricati via HTTPS</strong> (TLS 1.2+)</li>
+                <li><strong>Verificati prima dell'esecuzione</strong> (il sistema rifiuta aggiornamenti non validi)</li>
+            </ul>
+            <p style="margin-top: 10px;">Il dispositivo <strong>non applicherà mai un aggiornamento non autentico</strong>, anche se inviato da una sorgente malevola.</p>
+        </div>
+    </div>
+
+    <div class="page-break"></div>
+
+    <!-- SECTION 9 -->
+    <div class="section">
+        <h1>9. Troubleshooting</h1>
+
+        <h2>Il dispositivo non si accende</h2>
+        <div class="danger-box">
+            <ul>
+                <li>Verificare che l'alimentatore sia collegato correttamente</li>
+                <li>Controllare che la presa di corrente sia funzionante (usare un altro dispositivo)</li>
+                <li>Se il LED rimane spento, l'unità potrebbe avere un guasto: contattare l'assistenza</li>
+            </ul>
+        </div>
+
+        <h2>Il LED è rosso (Errore)</h2>
+        <div class="danger-box">
+            <ol>
+                <li><strong>Primo passo:</strong> Riavviare il dispositivo (spegnere e riaccendere per 10 secondi)</li>
+                <li>Se persiste, controllare i log:
+                    <pre>ssh root@hifi-media-player.local
+journalctl -u hifi-media-player -n 50</pre>
+                </li>
+                <li>Contattare l'assistenza con gli errori mostrati</li>
+            </ol>
+        </div>
+
+        <h2>Nessun audio in uscita</h2>
+        <div class="warning-box">
+            <ol>
+                <li><strong>Controllare il DAC:</strong>
+                    <ul>
+                        <li>Menu Sistema → Audio → Verificare il DAC selezionato</li>
+                        <li>Se USB, verificare che il DAC sia alimentato e riconosciuto</li>
+                        <li>Provare a scollegare/ricollegare il DAC e attendere 5 secondi</li>
+                    </ul>
+                </li>
+                <li><strong>Controllare il volume:</strong>
+                    <ul>
+                        <li>Verificare che il volume non sia al minimo (−∞ dB)</li>
+                        <li>Aumentare il volume via interfaccia web o app</li>
+                    </ul>
+                </li>
+                <li><strong>Controllare i cavi:</strong>
+                    <ul>
+                        <li>Verificare che il cavo dall'uscita audio del player vada all'amplificatore</li>
+                        <li>Controllare se il cavo è danneggiato</li>
+                        <li>Provare un cavo diverso</li>
+                    </ul>
+                </li>
+                <li><strong>Riavviare Squeezelite:</strong>
+                    <ul>
+                        <li>Menu Sistema → "Riavvia Servizi Audio"</li>
+                        <li>Attendere 5 secondi</li>
+                    </ul>
+                </li>
+            </ol>
+        </div>
+
+        <h2>Distorsione o audio degradato</h2>
+        <div class="warning-box">
+            <ul>
+                <li><strong>DAC USB disconnesso:</strong> Verificare connessione USB, re-inserire il cavo</li>
+                <li><strong>Bitrate troppo alto per la connessione:</strong> Verificare che la WiFi abbia segnale stabile (> -70 dBm)</li>
+                <li><strong>Processore sovraccarico:</strong> Attendere che altri processi si completino</li>
+                <li><strong>Buffer insufficiente:</strong> Ridurre il bitrate dei file o usare connessione cablata</li>
+            </ul>
+        </div>
+
+        <h2>Aggiornamenti che non si installano</h2>
+        <ol>
+            <li>Verificare la connessione di rete (LED verde stabile)</li>
+            <li>Controllare lo spazio libero: Menu Sistema → Info → "Storage"</li>
+            <li>Se lo storage è pieno:
+                <ul>
+                    <li>Scollegare librerie USB</li>
+                    <li>Cancellare cache: Menu Sistema → "Pulisci Cache"</li>
+                </ul>
+            </li>
+            <li>Provare di nuovo l'aggiornamento</li>
+        </ol>
+
+        <h2>Impossibile accedere all'interfaccia web</h2>
+        <ol>
+            <li>Verificare che il dispositivo sia connesso alla rete (LED verde)</li>
+            <li>Assicurarsi che il PC/tablet sia sulla stessa rete</li>
+            <li>Provare a pinguare il dispositivo: <code>ping hifi-media-player.local</code></li>
+            <li>Se nessuna risposta, il dispositivo potrebbe non essere online</li>
+            <li>Se conosci l'IP diretto, provare: <code>ping 192.168.1.XXX</code></li>
+            <li>Se comunque non raggiungibile, riavviare il dispositivo</li>
+        </ol>
+    </div>
+
+    <div class="page-break"></div>
+
+    <!-- SECTION 10 -->
+    <div class="section">
+        <h1>10. Assistenza Tecnica</h1>
+
+        <h2>Supporto Online</h2>
+        <ul>
+            <li><strong>Sito Web:</strong> https://hifi-media-player.it</li>
+            <li><strong>Community Forum:</strong> https://forum.hifi-media-player.it</li>
+            <li><strong>GitHub Issues:</strong> https://github.com/adri6412/hifi-media-player/issues</li>
+        </ul>
+
+        <h2>Contatti Assistenza</h2>
+        <ul>
+            <li><strong>Email:</strong> support@hifi-media-player.it</li>
+            <li><strong>Telefono:</strong> +39 02 XXXX XXXX (Lun-Ven 9-17)</li>
+            <li><strong>Chat Live:</strong> Disponibile durante l'orario di ufficio</li>
+        </ul>
+
+        <h2>Informazioni Garanzia</h2>
+        <div class="info-box">
+            <p>Il dispositivo è coperto da <strong>garanzia 2 anni</strong> dai difetti di fabbrica:</p>
+            <ul>
+                <li><strong>Copre:</strong> Malfunzionamenti dovuti a difetti hardware/firmware</li>
+                <li><strong>Non copre:</strong> Danni da acqua, cadute, uso improprio, modifiche non autorizzate</li>
+                <li><strong>Per attivare garanzia:</strong> Conservare lo scontrino/fattura di acquisto</li>
+            </ul>
+        </div>
+
+        <h2>Restituzione per Assistenza</h2>
+        <ol>
+            <li>Contattare l'assistenza con il numero seriale (etichetta posteriore)</li>
+            <li>Seguire le istruzioni per l'imballaggio sicuro</li>
+            <li>Spedire il dispositivo al nostro centro di assistenza</li>
+            <li>Riceverete il dispositivo riparato entro 5-7 giorni lavorativi</li>
+        </ol>
+    </div>
+
+    <div class="page-break"></div>
+
+    <!-- FOOTER -->
+    <div class="footer">
+        <p><strong>HiFi Media Player — Manuale Utente v1.5.0</strong></p>
+        <p>Compatibilità: OS v1.5.0 e successive | Lyrion Music Server 8.2.0+</p>
+        <p>© 2024-2026 HiFi Media Player. Tutti i diritti riservati.</p>
+        <p>Per aggiornamenti, visitare: <strong>https://hifi-media-player.it</strong></p>
+        <p style="margin-top: 30px; font-size: 11px; color: #999;">
+            Questo manuale è fornito così com'è. HiFi Media Player non è responsabile per inesattezze o danni derivanti dall'uso di questo documento.
+        </p>
+    </div>
+
+</div>
+
+</body>
+</html>
