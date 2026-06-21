@@ -168,6 +168,8 @@
                 app:iconSize="24dp"
                 android:background="@drawable/gold_button_bg"
                 app:iconTint="#ffffff"
+                android:elevation="0dp"
+                app:rippleColor="@android:color/transparent"
                 android:contentDescription="Previous" />
 
             <!-- Play/Pause - Large Gold Button like desktop -->
@@ -181,6 +183,8 @@
                 app:iconSize="32dp"
                 android:background="@drawable/gold_button_bg"
                 app:iconTint="#ffffff"
+                android:elevation="0dp"
+                app:rippleColor="@android:color/transparent"
                 android:contentDescription="Play/Pause" />
 
             <com.google.android.material.button.MaterialButton
@@ -192,6 +196,8 @@
                 app:iconSize="24dp"
                 android:background="@drawable/gold_button_bg"
                 app:iconTint="#ffffff"
+                android:elevation="0dp"
+                app:rippleColor="@android:color/transparent"
                 android:contentDescription="Next" />
         </LinearLayout>
 
