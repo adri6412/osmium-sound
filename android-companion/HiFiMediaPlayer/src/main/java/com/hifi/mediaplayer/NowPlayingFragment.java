@@ -476,8 +476,11 @@ public class NowPlayingFragment extends Fragment  implements CallStateDialog.Cal
 
     @UiThread
     private void updatePlayPauseIcon(@PlayerState.PlayState String playStatus) {
+        int iconResource = (PlayerState.PLAY_STATE_PLAY.equals(playStatus)) ? R.drawable.ic_action_pause : R.drawable.ic_action_play;
         if (pauseIcon != null) {
-            pauseIcon.setImageResource((PlayerState.PLAY_STATE_PLAY.equals(playStatus)) ? R.drawable.ic_action_pause : R.drawable.ic_action_play);
+            pauseIcon.setImageResource(iconResource);
+        } else if (playPauseButton instanceof MaterialButton) {
+            ((MaterialButton) playPauseButton).setIconResource(iconResource);
         }
     }
 
