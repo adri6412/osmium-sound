@@ -13,6 +13,15 @@ import urllib.request
 app = Flask(__name__)
 CORS(app)  # Abilita CORS per tutte le route
 
+# Security headers middleware
+@app.after_request
+def add_security_headers(response):
+    response.headers['X-Content-Type-Options'] = 'nosniff'
+    response.headers['X-Frame-Options'] = 'DENY'
+    response.headers['X-XSS-Protection'] = '1; mode=block'
+    response.headers['Strict-Transport-Security'] = 'max-age=31536000; includeSubDomains'
+    return response
+
 # ──────────────────────────────────────────────────────────────────
 #  OTA update of the Electron UI (whole /opt/hifi-media-player dir).
 #  The actual download/swap/restart is done as root by the helper
@@ -400,6 +409,12 @@ def set_audio_device(device):
     """Rewrite the -o option in /etc/default/squeezelite and restart it."""
     if not device:
         return {'success': False, 'message': 'Device mancante'}
+
+    # Validate device is one of the valid audio device IDs from list_audio_devices()
+    valid_devices = [d['id'] for d in list_audio_devices()['devices']]
+    if device not in valid_devices:
+        return {'success': False, 'message': f'Dispositivo audio non valido: {device}'}
+
     try:
         with open(SQUEEZELITE_DEFAULT) as f:
             content = f.read()
