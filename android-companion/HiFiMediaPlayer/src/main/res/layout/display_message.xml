@@ -1,0 +1,45 @@
+<androidx.constraintlayout.widget.ConstraintLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/display_message_container"
+    android:layout_width="wrap_content"
+    android:layout_height="wrap_content"
+    android:padding="16dp"
+    android:background="@drawable/toast_background">
+
+    <ImageView
+        android:id="@+id/artwork"
+        android:layout_width="@dimen/display_message_icon_size"
+        android:layout_height="@dimen/display_message_icon_size"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        tools:src="@drawable/pending" />
+
+    <ImageView
+        android:id="@+id/icon"
+        android:layout_width="@dimen/album_art_icon_size"
+        android:layout_height="@dimen/album_art_icon_size"
+        app:layout_constraintTop_toBottomOf="@id/artwork"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toStartOf="@id/text"
+        android:layout_marginTop="8dp"
+        android:padding="4dp"
+        tools:src="@drawable/ic_action_play"
+        android:contentDescription="@string/app_name" />
+
+    <TextView
+        android:id="@+id/text"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        style="@style/ToastMessageText"
+        app:layout_constraintTop_toBottomOf="@id/artwork"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toEndOf="@id/icon"
+        android:layout_marginTop="8dp"
+        tools:text="Toast text\nLine 2" />
+
+</androidx.constraintlayout.widget.ConstraintLayout>

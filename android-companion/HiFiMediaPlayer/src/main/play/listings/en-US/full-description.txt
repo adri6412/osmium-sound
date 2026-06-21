@@ -1,0 +1,22 @@
+Control your Lyrion Music Server and players.
+
+Features include:
+
+&bull; Browse the library by album artist, all artists, composers, album, genre, year, playlist, favorites, or new music
+&bull; Playlist control (now playing, shuffle, repeat, save/clear/modify playlists)
+&bull; Manage players (names, synchronisation groups, sleep, alarms)
+&bull; Full library search
+&bull; Internet radio support (browse, staff picks, search)
+&bull; Browse music folders
+&bull; Supports Plugins/Apps
+&bull; Library Views and Remote Music Libraries
+&bull; Download of local music; track, album, artist, genre, year, playlist and music folder
+&bull; Automatic discovery of local servers
+&bull; Support for password protected servers
+&bull; Control playback from your Android Wear device
+&bull; Home Screen Widgets
+&bull; Alarm Clock management
+&bull; Add/remove music from favorites
+&bull; Display lyrics
+
+Squeezer is free, and open source.

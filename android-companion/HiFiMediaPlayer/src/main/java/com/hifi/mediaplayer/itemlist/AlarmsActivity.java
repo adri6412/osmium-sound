@@ -1,0 +1,265 @@
+/*
+ * Copyright (c) 2014 Kurt Aaholst <kaaholst@gmail.com>
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package com.hifi.mediaplayer.itemlist;
+
+import android.app.Activity;
+import android.content.Intent;
+import android.os.Bundle;
+import androidx.annotation.NonNull;
+import androidx.recyclerview.widget.SimpleItemAnimator;
+
+import android.text.format.DateFormat;
+import android.view.View;
+import android.widget.TextView;
+
+import com.google.android.material.timepicker.MaterialTimePicker;
+import com.google.android.material.timepicker.TimeFormat;
+
+import java.util.ArrayList;
+import java.util.Calendar;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+
+import com.hifi.mediaplayer.Preferences;
+import com.hifi.mediaplayer.R;
+import com.hifi.mediaplayer.Squeezer;
+import com.hifi.mediaplayer.framework.ItemAdapter;
+import com.hifi.mediaplayer.framework.ItemListActivity;
+import com.hifi.mediaplayer.itemlist.dialog.AlarmSettingsDialog;
+import com.hifi.mediaplayer.model.Alarm;
+import com.hifi.mediaplayer.model.AlarmPlaylist;
+import com.hifi.mediaplayer.model.Player;
+import com.hifi.mediaplayer.service.ISqueezeService;
+import com.hifi.mediaplayer.service.event.ActivePlayerChanged;
+import com.hifi.mediaplayer.service.event.PlayerStateChanged;
+import com.hifi.mediaplayer.util.CompoundButtonWrapper;
+
+public class AlarmsActivity extends ItemListActivity<AlarmView, Alarm> implements AlarmSettingsDialog.HostActivity {
+    /** The most recent active player. */
+    private Player mActivePlayer;
+
+    /** Toggle/Switch that controls whether all alarms are enabled or disabled. */
+    private CompoundButtonWrapper mAlarmsEnabledButton;
+
+    /** View that contains all_alarms_{on,off}_hint text. */
+    private TextView mAllAlarmsHintView;
+
+    private final List<AlarmPlaylist> alarmPlaylists = new ArrayList<>();
+    private int currentAlarm;
+
+    @Override
+    public void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+
+        ((TextView)findViewById(R.id.all_alarms_text)).setText(R.string.ALARM_ALL_ALARMS);
+        mAllAlarmsHintView = findViewById(R.id.all_alarms_hint);
+
+        mAlarmsEnabledButton = new CompoundButtonWrapper(findViewById(R.id.alarms_enabled));
+        findViewById(R.id.add_alarm).setOnClickListener(v -> showTimePicker(this, DateFormat.is24HourFormat(AlarmsActivity.this)));
+
+        findViewById(R.id.settings).setOnClickListener(view -> new AlarmSettingsDialog().show(getSupportFragmentManager(), "AlarmSettingsDialog"));
+
+        if (savedInstanceState != null) {
+            mActivePlayer = savedInstanceState.getParcelable("activePlayer");
+        }
+
+        ((SimpleItemAnimator) getListView().getItemAnimator()).setSupportsChangeAnimations(false);
+    }
+
+    @Override
+    protected void onServiceConnected(@NonNull ISqueezeService service) {
+        super.onServiceConnected(service);
+        repository().observe(this, this::onPlayerStateChanged);
+        repository().observe(this, (ActivePlayerChanged event) -> mActivePlayer = event.player);
+    }
+
+    @Override
+    protected void onPostCreate(Bundle savedInstanceState) {
+        super.onPostCreate(savedInstanceState);
+        mAlarmsEnabledButton.setOncheckedChangeListener((buttonView, isChecked) -> {
+            mAllAlarmsHintView.setText(isChecked ? R.string.all_alarms_on_hint : R.string.all_alarms_off_hint);
+            if (getService() != null) {
+                getService().playerPref(Player.Pref.ALARMS_ENABLED, isChecked ? "1" : "0");
+            }
+        });
+    }
+
+    void selectAlarmPlaylist(int position) {
+        currentAlarm = position;
+        AlarmPlaylistActivity.show(this, getItemAdapter().getItem(position), getAlarmPlaylists());
+    }
+
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        if (requestCode == AlarmPlaylistActivity.GET_ALARM_PLAYLIST && resultCode == Activity.RESULT_OK) {
+            Alarm item = getItemAdapter().getItem(currentAlarm);
+            AlarmPlaylist alarmPlaylist = Objects.requireNonNull(data.getParcelableExtra(AlarmPlaylistActivity.ALARM_PLAYLIST));
+            item.setPlayListId(alarmPlaylist.getId());
+            requireService().alarmSetPlaylist(item.getId(), alarmPlaylist);
+            getItemAdapter().notifyItemChanged(currentAlarm);
+        }
+    }
+
+    @Override
+    public void onPause() {
+        super.onPause();
+    }
+
+    @Override
+    protected void onSaveInstanceState(Bundle outState) {
+        super.onSaveInstanceState(outState);
+        outState.putParcelable("activePlayer", mActivePlayer);
+    }
+
+    public static void show(Activity context) {
+        final Intent intent = new Intent(context, AlarmsActivity.class)
+                .addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT);
+        context.startActivity(intent);
+    }
+
+    @Override
+    protected int getContentView() {
+        return R.layout.item_list_player_alarms;
+    }
+
+    @Override
+    protected ItemAdapter<AlarmView, Alarm> createItemListAdapter() {
+        return new AlarmsAdapter(this);
+    }
+
+    private static class AlarmsAdapter extends ItemAdapter<AlarmView, Alarm> {
+
+        public AlarmsAdapter(AlarmsActivity activity) {
+            super(activity);
+        }
+
+        @Override
+        public AlarmView createViewHolder(View view, int viewType) {
+            return new AlarmView((AlarmsActivity) getActivity(), view);
+        }
+
+        @Override
+        protected int getItemViewType(Alarm item) {
+            return R.layout.list_item_alarm;
+        }
+    }
+
+    @Override
+    protected void orderPage(int start) {
+        requireService().alarms(start, this);
+        if (start == 0) {
+            mActivePlayer = requireService().getActivePlayer();
+            requireService().alarmPlaylists(alarmPlaylistsCallback);
+            requireService().requestServerStatus();
+            bindPreferences();
+        }
+    }
+
+    private final IServiceItemListCallback<AlarmPlaylist> alarmPlaylistsCallback = new IServiceItemListCallback<>() {
+        private final List<AlarmPlaylist> alarmPlaylists = new ArrayList<>();
+
+        @Override
+        public void onItemsReceived(final int count, final int start, Map<String, Object> parameters, final List<AlarmPlaylist> items, Class<AlarmPlaylist> dataType) {
+            runOnUiThread(() -> {
+                if (start == 0) {
+                    alarmPlaylists.clear();
+                }
+
+                alarmPlaylists.addAll(items);
+                if (start + items.size() >= count) {
+                    setAlarmPlaylists(alarmPlaylists);
+                }
+            });
+        }
+
+        @Override
+        public Object getClient() {
+            return AlarmsActivity.this;
+        }
+    };
+
+    public void setAlarmPlaylists(List<AlarmPlaylist> alarmPlaylists) {
+        this.alarmPlaylists.clear();
+        this.alarmPlaylists.addAll(alarmPlaylists);
+        getItemAdapter().notifyDataSetChanged();
+    }
+
+    private void bindPreferences() {
+        Map<Player.Pref, String> prefs = mActivePlayer.getPlayerState().prefs;
+        boolean alarmsEnabled = "1".equals(prefs.get(Player.Pref.ALARMS_ENABLED));
+        mAlarmsEnabledButton.setChecked(alarmsEnabled);
+        mAllAlarmsHintView.setText(alarmsEnabled ? R.string.all_alarms_on_hint : R.string.all_alarms_off_hint);
+    }
+
+    private void onPlayerStateChanged(PlayerStateChanged event) {
+        mActivePlayer = event.player;
+        bindPreferences();
+    }
+
+    @Override
+    @NonNull
+    public Player getPlayer() {
+        return mActivePlayer;
+    }
+
+    @Override
+    @NonNull
+    public String getPlayerPref(@NonNull Player.Pref playerPref, @NonNull String def) {
+        String ret = mActivePlayer.getPlayerState().prefs.get(playerPref);
+        return (ret == null) ? def : ret;
+    }
+
+    public List<AlarmPlaylist> getAlarmPlaylists() {
+        return alarmPlaylists;
+    }
+
+    @Override
+    public void onPositiveClick(int volume, int snooze, int timeout, boolean fade) {
+        ISqueezeService service = getService();
+        if (service != null) {
+            service.playerPref(Player.Pref.ALARM_DEFAULT_VOLUME, String.valueOf(volume));
+            service.playerPref(Player.Pref.ALARM_SNOOZE_SECONDS, String.valueOf(snooze));
+            service.playerPref(Player.Pref.ALARM_TIMEOUT_SECONDS, String.valueOf(timeout));
+            service.playerPref(Player.Pref.ALARM_FADE_SECONDS, fade ? "1" : "0");
+        }
+    }
+
+    public static void showTimePicker(AlarmsActivity activity, boolean is24HourMode) {
+        Preferences preferences = Squeezer.getPreferences();
+        // Use the current time as the default values for the picker
+        final Calendar c = Calendar.getInstance();
+        MaterialTimePicker picker = new MaterialTimePicker.Builder()
+                .setHour(c.get(Calendar.HOUR_OF_DAY))
+                .setMinute(c.get(Calendar.MINUTE))
+                .setTimeFormat(is24HourMode ? TimeFormat.CLOCK_24H : TimeFormat.CLOCK_12H)
+                .setTitleText(R.string.ALARM_SET_TIME)
+                .setInputMode(preferences.getTimeInputMode())
+                .build();
+        picker.addOnPositiveButtonClickListener(view -> {
+            preferences.setTimeInputMode(picker.getInputMode());
+            if (activity.getService() != null) {
+                activity.getService().alarmAdd((picker.getHour() * 60 + picker.getMinute()) * 60);
+                // TODO add to list and animate the new alarm in
+                activity.clearAndReOrderItems();
+            }
+        });
+        picker.show(activity.getSupportFragmentManager(), AlarmsActivity.class.getSimpleName());
+    }
+
+}

@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <item name="match_parent" format="integer" type="dimen">-1</item>
+    <item name="wrap_content" format="integer" type="dimen">-2</item>
+
+    <item name="peek_height_auto" format="integer" type="dimen">-1</item>
+
+    <!-- Icons in list rows. -->
+    <dimen name="album_art_icon_size">48dp</dimen>
+
+    <!-- Icons in list headers. -->
+    <dimen name="album_art_large_icon_size">64dp</dimen>
+
+    <!-- Icons in grid -->
+    <dimen name="album_art_icon_grid_size">144dp</dimen>
+    <dimen name="grid_column_width">160dp</dimen>
+
+    <!-- Icons in display messages. -->
+    <dimen name="display_message_icon_size">96dp</dimen>
+
+    <!-- Volume panel -->
+    <dimen name="volume_panel_top_margin">8dp</dimen>
+    <dimen name="volume_panel_border_Width">1dp</dimen>
+
+    <!-- Playlist drag -->
+
+    <!-- Padding before the AM/PM label -->
+    <dimen name="ampm_left_padding">6dip</dimen>
+
+    <!-- Inset for current playlist nom playing emblem -->
+    <dimen name="now_playing_emblem_inset">12dip</dimen>
+
+    <!-- Inset for flat_icons as foreground when using legacy icons -->
+    <dimen name="album_art_inset">2dp</dimen>
+
+    <!-- Emblem embedded in artwork -->
+    <dimen name="logo_inset">2dp</dimen>
+    <dimen name="logo_size">14dp</dimen>
+
+    <!-- Width of player drop down -->
+    <dimen name="player_dropdown_width">@dimen/match_parent</dimen>
+
+    <!-- The height of the bottom sheet when it is collapsed -->
+    <dimen name="bottom_sheet_peek_height">@dimen/peek_height_auto</dimen>
+</resources>

@@ -1,0 +1,20 @@
+name: Android CI
+
+on: [push]
+
+jobs:
+  build:
+
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4.2.2
+    - name: Setup Java JDK
+      uses: actions/setup-java@v3.14.1
+      with:
+        java-version: '17'
+        distribution: 'adopt'
+        cache: 'gradle'
+    - name: Build with Gradle
+      run: ./gradlew clean build
+

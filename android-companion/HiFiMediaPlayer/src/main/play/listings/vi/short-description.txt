@@ -1,0 +1,1 @@
+Điều khiển từ xa cho Lyrion Music Server ("Squeezeserver" vv) và các cầu thủ.

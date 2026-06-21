@@ -1,0 +1,1575 @@
+/*
+ * Copyright (c) 2009 Google Inc.  All Rights Reserved.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package com.hifi.mediaplayer.service;
+
+import android.Manifest;
+import android.app.Notification;
+import android.app.PendingIntent;
+import android.app.Service;
+import android.content.Context;
+import android.content.Intent;
+import android.content.pm.PackageManager;
+import android.content.pm.ServiceInfo;
+import android.graphics.Bitmap;
+import android.media.AudioManager;
+import android.media.MediaMetadata;
+import android.net.Uri;
+import android.net.wifi.WifiManager;
+import android.os.Binder;
+import android.os.Build;
+import android.os.Bundle;
+import android.os.IBinder;
+
+import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
+import androidx.annotation.RequiresApi;
+import androidx.core.app.NotificationCompat;
+import androidx.core.app.NotificationManagerCompat;
+import androidx.core.app.ServiceCompat;
+import androidx.core.content.ContextCompat;
+import androidx.media.VolumeProviderCompat;
+import androidx.media.app.NotificationCompat.MediaStyle;
+
+import android.support.v4.media.MediaMetadataCompat;
+import android.support.v4.media.session.MediaSessionCompat;
+import android.support.v4.media.session.PlaybackStateCompat;
+import android.telephony.PhoneStateListener;
+import android.telephony.TelephonyCallback;
+import android.telephony.TelephonyManager;
+import android.util.Log;
+
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
+
+import com.hifi.mediaplayer.NowPlayingActivity;
+import com.hifi.mediaplayer.Preferences;
+import com.hifi.mediaplayer.R;
+import com.hifi.mediaplayer.Squeezer;
+import com.hifi.mediaplayer.SqueezerRepository;
+import com.hifi.mediaplayer.Util;
+import com.hifi.mediaplayer.download.DownloadDatabase;
+import com.hifi.mediaplayer.model.Action;
+import com.hifi.mediaplayer.model.CustomJiveItemHandling;
+import com.hifi.mediaplayer.model.JiveItem;
+import com.hifi.mediaplayer.model.MusicFolderItem;
+import com.hifi.mediaplayer.model.SlimCommand;
+import com.hifi.mediaplayer.itemlist.IServiceItemListCallback;
+import com.hifi.mediaplayer.model.Alarm;
+import com.hifi.mediaplayer.model.AlarmPlaylist;
+import com.hifi.mediaplayer.model.CurrentTrack;
+import com.hifi.mediaplayer.model.Player;
+import com.hifi.mediaplayer.model.PlayerState;
+import com.hifi.mediaplayer.model.Song;
+import com.hifi.mediaplayer.service.event.ActivePlayerChanged;
+import com.hifi.mediaplayer.service.event.ConnectionChanged;
+import com.hifi.mediaplayer.service.event.LastscanChanged;
+import com.hifi.mediaplayer.service.event.MusicChanged;
+import com.hifi.mediaplayer.service.event.PlayStatusChanged;
+import com.hifi.mediaplayer.service.event.PlayerStateChanged;
+import com.hifi.mediaplayer.service.event.PlayerVolume;
+import com.hifi.mediaplayer.service.event.PlayersChanged;
+import com.hifi.mediaplayer.util.ImageFetcher;
+import com.hifi.mediaplayer.util.Intents;
+import com.hifi.mediaplayer.util.NotificationUtil;
+import com.hifi.mediaplayer.util.Scrobble;
+
+/**
+ * Persistent service which acts as an interface to for activities to communicate with LMS.
+ * <p>
+ * The interface is documented here {@link ISqueezeService}
+ * <p>
+ * The service lifecycle is managed as both a bound and a started service. as follows.
+ * <ul>
+ *     <li>On connect to LMS call Context.start[Foreground]Service and Service.startForeground</li>
+ *     <li>On disconnect from LMS call Service.stopForeground and Service.stopSelf</li>
+ *     <li>bind to the SqueezeService in activities in onCreate</li>
+ *     <li>unbind the SqueezeService in activities  onDestroy</li>
+ * </ul>
+ * This means the service will as long as there is a Squeezer or we are connected to LMS activity.
+ * When we are connected to LMS it runs as a foreground service and a notification is displayed.
+ */
+public class SqueezeService extends Service {
+
+    private static final String TAG = "SqueezeService";
+
+    public static final String NOTIFICATION_CHANNEL_ID = "channel_squeezer_1";
+    private static final int PLAYBACKSERVICE_STATUS = 1;
+    public static final int DOWNLOAD_ERROR = 2;
+
+    private SqueezerRepository repository;
+
+    /** Media session to associate with ongoing notifications. */
+    private MediaSessionCompat mediaSession;
+
+    /** Are the service currently in the foregrund */
+    private volatile boolean foreGround;
+
+    private SlimDelegate mDelegate;
+    private HomeMenuHandling homeMenuHandling;
+    private RandomPlayDelegate randomPlayDelegate;
+
+    /**
+     * Is scrobbling enabled?
+     */
+    private boolean scrobblingEnabled;
+
+    /**
+     * Was scrobbling enabled?
+     */
+    private boolean scrobblingPreviouslyEnabled;
+
+    int mFadeInSecs;
+    boolean mGroupVolume;
+
+    private static final String ACTION_NEXT_TRACK = "uk.org.ngo.squeezer.service.ACTION_NEXT_TRACK";
+    private static final String ACTION_PREV_TRACK = "uk.org.ngo.squeezer.service.ACTION_PREV_TRACK";
+    private static final String ACTION_PLAY = "uk.org.ngo.squeezer.service.ACTION_PLAY";
+    private static final String ACTION_PAUSE = "uk.org.ngo.squeezer.service.ACTION_PAUSE";
+    private static final String ACTION_CLOSE = "uk.org.ngo.squeezer.service.ACTION_CLOSE";
+    private static final String ACTION_POWER = "power";
+    private static final String ACTION_DISCONNECT = "disconnect";
+
+    private SqueezerVolumeProvider mVolumeProvider;
+
+    @Override
+    public void onCreate() {
+        super.onCreate();
+
+        // Clear leftover notification in case this service previously got killed while playing
+        NotificationManagerCompat nm = NotificationManagerCompat.from(this);
+        nm.cancel(PLAYBACKSERVICE_STATUS);
+
+        repository = ((Squeezer) getApplicationContext()).repository();
+        mDelegate = new SlimDelegate(repository);
+        homeMenuHandling = mDelegate.getHomeMenuHandling();
+        randomPlayDelegate = new RandomPlayDelegate(mDelegate);
+
+        Squeezer.getPreferences(preferences -> {
+            cachePreferences(preferences);
+            homeMenuHandling.setCustomShortcuts(preferences.homeGroups(), preferences.getCustomShortcuts());
+        });
+
+        WifiManager wifiManager = (WifiManager) getApplicationContext().getSystemService(Context.WIFI_SERVICE);
+        this.wifiLock = wifiManager.createWifiLock(WifiManager.WIFI_MODE_FULL, "Squeezer_WifiLock");
+
+        mediaSession = new MediaSessionCompat(getApplicationContext(), "squeezer");
+
+        repository.observeForever(this::onConnectionChanged);
+        repository.observeForever(this::onPlayerVolume);
+        repository.observeForever(this::onMusicChanged);
+        repository.observeForever(this::onPlayStatusChanged);
+        repository.observeForever(this::onPlayerStateChanged);
+        repository.observeForever(this::onActivePlayerChanged);
+        repository.observeForever(this::onPlayersChanged);
+        repository.observeForever(this::onLastscanChanged);
+        // TODO clean up observers in CometClient (also look for observeForever)
+    }
+
+    @Override
+    public int onStartCommand(Intent intent, int flags, int startId) {
+        try{
+            if(intent != null && intent.getAction()!= null ) {
+                switch (intent.getAction()) {
+                    case ACTION_NEXT_TRACK -> squeezeService.nextTrack();
+                    case ACTION_PREV_TRACK -> squeezeService.previousTrack();
+                    case ACTION_PLAY -> squeezeService.play();
+                    case ACTION_PAUSE -> squeezeService.pause();
+                    case ACTION_CLOSE -> disconnect(true);
+                }
+            }
+        } catch(Exception e) {
+            Log.w(TAG, "Error executing intent: ", e);
+        }
+        return START_STICKY;
+    }
+
+    /**
+     * Cache the value of various preferences.
+     */
+    private void cachePreferences(Preferences preferences) {
+        scrobblingEnabled = preferences.isScrobbleEnabled();
+        mFadeInSecs = preferences.getFadeInSecs();
+        mGroupVolume = preferences.isGroupVolume();
+        mVolumeProvider = new SqueezerVolumeProvider(preferences.getVolumeIncrements());
+        if (squeezeService.isConnected()) {
+            if (preferences.isBackgroundVolume()) {
+                mediaSession.setPlaybackToRemote(mVolumeProvider);
+            } else {
+                mediaSession.setPlaybackToLocal(AudioManager.STREAM_MUSIC);
+            }
+        }
+    }
+
+    @Override
+    public IBinder onBind(Intent intent) {
+        return (IBinder) squeezeService;
+    }
+
+    @Override
+    public boolean onUnbind(Intent intent) {
+        return super.onUnbind(intent);
+    }
+
+    @Override
+    public void onDestroy() {
+        disconnect(false);
+        repository.removeObserver(this::onConnectionChanged);
+        repository.removeObserver(this::onPlayerVolume);
+        repository.removeObserver(this::onMusicChanged);
+        repository.removeObserver(this::onPlayStatusChanged);
+        repository.removeObserver(this::onPlayerStateChanged);
+        repository.removeObserver(this::onActivePlayerChanged);
+        repository.removeObserver(this::onPlayersChanged);
+        repository.removeObserver(this::onLastscanChanged);
+        mediaSession.release();
+        super.onDestroy();
+    }
+
+    @Override
+    public void onTaskRemoved(Intent rootIntent) {
+        disconnect(false);
+        super.onTaskRemoved(rootIntent);
+    }
+
+    private void disconnect(boolean fromUser) {
+        mDelegate.disconnect(fromUser);
+    }
+
+    private boolean isPlaying() {
+        PlayerState playerState = squeezeService.getActivePlayerState();
+        return playerState != null && playerState.isPlaying();
+    }
+
+    /**
+     * Change the player that is controlled by Squeezer (the "active" player).
+     *
+     * @param newActivePlayer The new active player. May be null, in which case no players are controlled.
+     * @param continuePlaying Continue playback on the supplied player
+     */
+    private void changeActivePlayer(@Nullable final Player newActivePlayer, boolean continuePlaying) {
+        Player prevActivePlayer = mDelegate.getActivePlayer();
+
+        // Do nothing if the player hasn't actually changed.
+        if (prevActivePlayer == newActivePlayer) {
+            return;
+        }
+
+        Log.i(TAG, "Active player now: " + newActivePlayer);
+        mDelegate.setActivePlayer(newActivePlayer);
+
+        if (prevActivePlayer != null) {
+            mDelegate.subscribeDisplayStatus(prevActivePlayer, false);
+            mDelegate.subscribeMenuStatus(prevActivePlayer, false);
+        }
+
+        updateAllPlayerSubscriptionStates();
+        requestPlayerData();
+        if (continuePlaying && prevActivePlayer != null) moveCurrentPlaylist(prevActivePlayer, newActivePlayer);
+        Squeezer.getPreferences().setLastPlayer(newActivePlayer);
+    }
+
+    private void moveCurrentPlaylist(Player from, Player to) {
+        squeezeService.syncPlayerToPlayer(to, from.getId());
+        squeezeService.unsyncPlayer(from);
+    }
+
+    class HomeMenuReceiver implements IServiceItemListCallback<JiveItem> {
+        private final List<JiveItem> homeMenu = new ArrayList<>();
+
+        @Override
+        public void onItemsReceived(int count, int start, Map<String, Object> parameters, List<JiveItem> items, Class<JiveItem> dataType) {
+            homeMenu.addAll(items);
+            if (homeMenu.size() == count) {
+                Preferences preferences = Squeezer.getPreferences();
+                boolean useArchive = preferences.getCustomizeHomeMenuMode() != Preferences.CustomizeHomeMenuMode.DISABLED;
+                Set<String> archivedMenuItems = Collections.emptySet();
+                if ((useArchive) && (mDelegate.getActivePlayer() != null)) {
+                    archivedMenuItems = preferences.getArchivedMenuItems(mDelegate.getActivePlayer());
+                }
+                homeMenuHandling.setHomeMenu(homeMenu, archivedMenuItems, preferences.homeGroups());
+            }
+        }
+
+        @Override
+        public Object getClient() {
+            return SqueezeService.this;
+        }
+    }
+
+    public <T> void requestItems(SlimCommand command, IServiceItemListCallback<T> callback) {
+        mDelegate.requestAllItems(callback).params(command.params).cmd(command.cmd()).exec();
+    }
+
+    public void updateShortCut(JiveItem item, Map<String, Object> record) {
+        Preferences preferences = Squeezer.getPreferences();
+        List<JiveItem> shortcuts = homeMenuHandling.updateShortcut(item, record);
+        preferences.saveShortcuts(shortcuts);
+    }
+
+    private void requestPlayerData() {
+        Player activePlayer = mDelegate.getActivePlayer();
+
+        if (activePlayer != null) {
+            mDelegate.subscribeDisplayStatus(activePlayer, true);
+            mDelegate.subscribeMenuStatus(activePlayer, true);
+            mDelegate.requestPlayerStatus(activePlayer);
+            // Start an asynchronous fetch of the slimserver "home menu" items
+            // See http://wiki.slimdevices.com/index.php/SqueezePlayAndSqueezeCenterPlugins
+            mDelegate.requestItems(activePlayer, 0, new HomeMenuReceiver())
+                    .cmd("menu").param("direct", "1").exec();
+        }
+    }
+
+    /**
+     * Adjusts the subscription to players' status updates.
+     */
+    private void updateAllPlayerSubscriptionStates() {
+        for (Player player : mDelegate.getPlayers().values()) {
+            updatePlayerSubscription(player);
+        }
+    }
+
+    /**
+     * Manage subscription to a player's status updates.
+     *
+     * @param player player to manage.
+     */
+    private void updatePlayerSubscription(Player player) {
+        // Do nothing if the player subscription type hasn't changed.
+        if (player.getPlayerState().getSubscriptionType().equals(PlayerState.PlayerSubscriptionType.NOTIFY_ON_CHANGE)) {
+            return;
+        }
+
+        mDelegate.subscribePlayerStatus(player, PlayerState.PlayerSubscriptionType.NOTIFY_ON_CHANGE);
+    }
+
+    /**
+     * Manages the state of any ongoing notification based on the player and connection state.
+     */
+    private void updateMediaSession() {
+        Player player = mDelegate.getActivePlayer();
+        if (player == null) {
+            mediaSession.setMetadata(null);
+            mediaSession.setPlaybackState(null);
+            notify(null);
+            return;
+        }
+
+        // Update scrobble state, if either we're currently scrobbling, or we
+        // were (to catch the case where we started scrobbling a song, and the
+        // user went in to settings to disable scrobbling).
+        if (scrobblingEnabled || scrobblingPreviouslyEnabled) {
+            scrobblingPreviouslyEnabled = scrobblingEnabled;
+            Scrobble.scrobbleFromPlayerState(this, player.getPlayerState());
+        }
+
+        final MediaMetadataCompat.Builder metaBuilder = new MediaMetadataCompat.Builder();
+        CurrentTrack song = player.getPlayerState().getCurrentTrack();
+        if (song != null) {
+            metaBuilder.putString(MediaMetadata.METADATA_KEY_DISPLAY_DESCRIPTION, notificationSubtext(player));
+            metaBuilder.putString(MediaMetadata.METADATA_KEY_ARTIST, song.songInfo.getArtist());
+            metaBuilder.putString(MediaMetadata.METADATA_KEY_ALBUM, song.text2());
+            metaBuilder.putString(MediaMetadata.METADATA_KEY_TITLE, song.songInfo.title);
+            metaBuilder.putLong(MediaMetadata.METADATA_KEY_DURATION, player.getPlayerState().getCurrentTrackDuration()*1000L);
+            metaBuilder.putLong(MediaMetadata.METADATA_KEY_TRACK_NUMBER, player.getPlayerState().getCurrentPlaylistIndex() + 1);
+            metaBuilder.putLong(MediaMetadata.METADATA_KEY_NUM_TRACKS, player.getPlayerState().getCurrentPlaylistTracksNum());
+            mediaSession.setMetadata(metaBuilder.build());
+        }
+
+        int playState = isPlaying() ? PlaybackStateCompat.STATE_PLAYING : PlaybackStateCompat.STATE_STOPPED;
+        PlaybackStateCompat playbackState = new PlaybackStateCompat.Builder()
+                .setState(playState, player.getPlayerState().getPosition(), isPlaying() ? 1.0f : 0)
+                .setActions(
+                        PlaybackStateCompat.ACTION_PLAY |
+                                PlaybackStateCompat.ACTION_PAUSE |
+                                PlaybackStateCompat.ACTION_SKIP_TO_PREVIOUS |
+                                PlaybackStateCompat.ACTION_SKIP_TO_NEXT |
+                                PlaybackStateCompat.ACTION_SEEK_TO
+                )
+                .addCustomAction(ACTION_POWER, getString(player.getPlayerState().isPoweredOn() ? R.string.menu_item_power_off :  R.string.menu_item_power_on), R.drawable.power)
+                .addCustomAction(ACTION_DISCONNECT, getString(R.string.menu_item_disconnect), R.drawable.ic_action_disconnect)
+                .build();
+        mediaSession.setPlaybackState(playbackState);
+
+        ImageFetcher.getInstance(this).loadImage(song != null ? song.getIcon() : null,
+                getResources().getDimensionPixelSize(android.R.dimen.notification_large_icon_width),
+                getResources().getDimensionPixelSize(android.R.dimen.notification_large_icon_height),
+                (data, bitmap) -> {
+                    if (bitmap != null) {
+                        metaBuilder.putBitmap(MediaMetadata.METADATA_KEY_ALBUM_ART, bitmap);
+                        metaBuilder.putBitmap(MediaMetadata.METADATA_KEY_ART, bitmap);
+                        mediaSession.setMetadata(metaBuilder.build());
+                    }
+                    notify(bitmap);
+                });
+    }
+
+    private void notify(Bitmap bitmap) {
+        final NotificationCompat.Builder notificationData = notificationData();
+        notificationData.setLargeIcon(bitmap);
+        final NotificationManagerCompat nm = NotificationManagerCompat.from(this);
+        try {
+            nm.notify(PLAYBACKSERVICE_STATUS, notificationData.build());
+        } catch (SecurityException e) {
+            Log.w(TAG, "Can't update notification:", e);
+        }
+    }
+
+    /**
+     * Prepare a notification builder from the supplied notification state.
+     */
+    private NotificationCompat.Builder notificationData() {
+        Intent showNowPlaying = new Intent(SqueezeService.this, NowPlayingActivity.class)
+                .setFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP | Intent.FLAG_ACTIVITY_REORDER_TO_FRONT);
+        PendingIntent showNowPlayingIntent = PendingIntent.getActivity(SqueezeService.this, 0, showNowPlaying, Intents.immutablePendingIntent());
+
+        NotificationUtil.createNotificationChannel(SqueezeService.this, NOTIFICATION_CHANNEL_ID,
+                "Squeezer ongoing notification",
+                "Notifications of player and connection state",
+                NotificationManagerCompat.IMPORTANCE_LOW, false, NotificationCompat.VISIBILITY_PUBLIC);
+        NotificationCompat.Builder builder = new NotificationCompat.Builder(SqueezeService.this, NOTIFICATION_CHANNEL_ID);
+        builder.setStyle(getMediaStyle());
+        builder.setContentIntent(showNowPlayingIntent);
+        builder.setSmallIcon(R.drawable.squeezer_notification);
+        builder.setVisibility(NotificationCompat.VISIBILITY_PUBLIC);
+        builder.setShowWhen(false);
+
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
+            Player player = mDelegate.getActivePlayer();
+            if (player != null) {
+                CurrentTrack song = player.getPlayerState().getCurrentTrack();
+                if (song != null) {
+                    builder.setContentTitle(song.getName());
+                    builder.setContentText(song.text2());
+                }
+                builder.setSubText(notificationSubtext(player));
+            }
+
+            PendingIntent nextPendingIntent = getPendingIntent(ACTION_NEXT_TRACK);
+            PendingIntent prevPendingIntent = getPendingIntent(ACTION_PREV_TRACK);
+            PendingIntent playPendingIntent = getPendingIntent(ACTION_PLAY);
+            PendingIntent pausePendingIntent = getPendingIntent(ACTION_PAUSE);
+            PendingIntent closePendingIntent = getPendingIntent(ACTION_CLOSE);
+            builder.setDeleteIntent(closePendingIntent);
+            builder.addAction(new NotificationCompat.Action(R.drawable.ic_action_disconnect, "Disconnect", closePendingIntent));
+            builder.addAction(new NotificationCompat.Action(R.drawable.ic_action_previous, "Previous", prevPendingIntent));
+            if (isPlaying()) {
+                builder.addAction(new NotificationCompat.Action(R.drawable.ic_action_pause, "Pause", pausePendingIntent));
+            } else {
+                builder.addAction(new NotificationCompat.Action(R.drawable.ic_action_play, "Play", playPendingIntent));
+            }
+            builder.addAction(new NotificationCompat.Action(R.drawable.ic_action_next, "Next", nextPendingIntent));
+        }
+
+        return builder;
+    }
+
+    private MediaStyle getMediaStyle() {
+        MediaStyle mediaStyle = new MediaStyle();
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) mediaStyle.setShowActionsInCompactView(2, 3);
+        mediaStyle.setMediaSession(mediaSession.getSessionToken());
+        return mediaStyle;
+    }
+
+    public String notificationSubtext(Player player) {
+        PlayerState playerState = player.getPlayerState();
+        return player.getName() + " " + (playerState.getCurrentPlaylistIndex()+1) + "/" + playerState.getCurrentPlaylistTracksNum();
+    }
+
+    /**
+     * @param action The action to be performed.
+     * @return A new {@link PendingIntent} for {@literal action} that will update any existing
+     *     intents that use the same action.
+     */
+    @NonNull
+    private PendingIntent getPendingIntent(@NonNull String action){
+        Intent intent = new Intent(this, SqueezeService.class);
+        intent.setAction(action);
+
+        return PendingIntent.getService(this, 0, intent, PendingIntent.FLAG_UPDATE_CURRENT | Intents.immutablePendingIntent());
+    }
+
+    private void startForeground() {
+        if (!foreGround) {
+            Log.i(TAG, "startForeground");
+            foreGround = true;
+
+            if (!wifiLock.isHeld()) {
+                wifiLock.acquire();
+            }
+
+            mediaSession.setCallback(new SqueezerMediaSessionCallback());
+            if (Squeezer.getPreferences().isBackgroundVolume()) {
+                mediaSession.setPlaybackToRemote(mVolumeProvider);
+            }
+            mediaSession.setActive(true);
+
+            Notification notification = notificationData().build();
+
+            // Start it and have it run forever (until it shuts itself down).
+            // This is required so swapping out the activity (and unbinding the
+            // service connection in onDestroy) doesn't cause the service to be
+            // killed due to zero refcount.
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                startForegroundService(new Intent(this, SqueezeService.class));
+            } else {
+                startService(new Intent(this, SqueezeService.class));
+            }
+
+            // Call startForeground immediately after startForegroundService
+            ServiceCompat.startForeground(this, PLAYBACKSERVICE_STATUS, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK);
+        }
+    }
+
+    private void stopForeground() {
+        Log.i(TAG, "stopForeground");
+        foreGround = false;
+
+        if (wifiLock.isHeld()) {
+            wifiLock.release();
+        }
+
+        mediaSession.setPlaybackToLocal(AudioManager.STREAM_MUSIC);
+        mediaSession.setActive(false);
+
+        stopForeground(true);
+        stopSelf();
+    }
+
+    private void registerCallStateListener() {
+        if (!callStateListenerRegistered) {
+            TelephonyManager telephonyManager = (TelephonyManager) getSystemService(TELEPHONY_SERVICE);
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                if (ContextCompat.checkSelfPermission(this, Manifest.permission.READ_PHONE_STATE) == PackageManager.PERMISSION_GRANTED) {
+                    Log.d(TAG, "calling registerTelephonyCallback");
+                    telephonyManager.registerTelephonyCallback(getMainExecutor(), callStateListener);
+                }
+            } else {
+                telephonyManager.listen(phoneStateListener, PhoneStateListener.LISTEN_CALL_STATE);
+            }
+            callStateListenerRegistered = true;
+        }
+    }
+
+    private void unregisterCallStateListener() {
+        if (callStateListenerRegistered) {
+            TelephonyManager telephonyManager = (TelephonyManager) getSystemService(TELEPHONY_SERVICE);
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                telephonyManager.unregisterTelephonyCallback(callStateListener);
+            } else {
+                telephonyManager.listen(phoneStateListener, PhoneStateListener.LISTEN_NONE);
+            }
+            callStateListenerRegistered = false;
+        }
+    }
+
+    @RequiresApi(api = Build.VERSION_CODES.S)
+    private static abstract class CallStateListener extends TelephonyCallback implements TelephonyCallback.CallStateListener {
+        @Override
+        abstract public void onCallStateChanged(int state);
+    }
+
+    private boolean callStateListenerRegistered = false;
+    private final Set<String> mutedPlayers = new HashSet<>();
+
+    private final CallStateListener callStateListener = (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) ?
+            new CallStateListener() {
+                @Override
+                public void onCallStateChanged(int state) {
+                    SqueezeService.this.onCallStateChanged(state);
+                }
+            }
+            : null;
+
+    private final PhoneStateListener phoneStateListener = (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) ?
+            new PhoneStateListener() {
+                @Override
+                public void onCallStateChanged(int state, String phoneNumber) {
+                    SqueezeService.this.onCallStateChanged(state);
+                }
+            }
+            : null;
+
+    private void onCallStateChanged(int state) {
+        Preferences preferences = Squeezer.getPreferences();
+        Preferences.IncomingCallAction incomingCallAction = preferences.getActionOnIncomingCall();
+        if (incomingCallAction != Preferences.IncomingCallAction.NONE) {
+            PerformAction action = incomingCallAction.isPause() ? squeezeService::pause : squeezeService::mute;
+            if (state == TelephonyManager.CALL_STATE_RINGING || state == TelephonyManager.CALL_STATE_OFFHOOK) {
+                boolean restoreMusic = preferences.restoreMusicAfterCall();
+                if (incomingCallAction.isAll()) {
+                    squeezeService.getPlayers().stream().filter(player -> player.getPlayerState().isPlaying()).forEach(player -> mutePlayer(player, action, restoreMusic));
+                } else {
+                    Player player = squeezeService.getActivePlayer();
+                    if (player != null && player.getPlayerState().isPlaying()) mutePlayer(player, action, restoreMusic);
+                }
+            } else {
+                mutedPlayers.forEach(mutedPlayer -> {
+                    Player player = mDelegate.getPlayer(mutedPlayer);
+                    if (player != null) action.exec(player, false);
+                });
+                mutedPlayers.clear();
+            }
+        }
+    }
+
+    private void mutePlayer(Player player, PerformAction action, boolean restoreMusic) {
+        if (restoreMusic) mutedPlayers.add(player.getId());
+        action.exec(player, true);
+    }
+
+    private interface PerformAction {
+        void exec(Player player, boolean flag);
+    }
+
+    private void onConnectionChanged(ConnectionChanged event) {
+        if (event.connectionState.isConnected() ||
+            event.connectionState.isConnectInProgress() ||
+            event.connectionState.isRehandshaking()
+        ) {
+            startForeground();
+            registerCallStateListener();
+        } else {
+            unregisterCallStateListener();
+            stopForeground();
+        }
+        mutedPlayers.clear();
+    }
+
+    private void onPlayerVolume(PlayerVolume event) {
+        if (event.player == mDelegate.getActivePlayer()) {
+            mVolumeProvider.setCurrentVolume(mDelegate.getVolume(mGroupVolume).volume / mVolumeProvider.step);
+        }
+    }
+
+    private void onActivePlayerChanged(ActivePlayerChanged event) {
+        updateMediaSession();
+    }
+
+    private void onMusicChanged(MusicChanged event) {
+        if (event.player.equals(mDelegate.getActivePlayer())) {
+            updateMediaSession();
+        }
+        if (event.player.getPlayerState().isRandomPlaying()) {
+            handleRandomOnEvent(event.player);
+        }
+    }
+
+    private void onPlayStatusChanged(PlayStatusChanged event) {
+        if (PlayerState.PLAY_STATE_PLAY.equals(event.playStatus)) mutedPlayers.remove(event.player.getId());
+        if (event.player.equals(mDelegate.getActivePlayer())) {
+            updateMediaSession();
+        }
+    }
+
+    private void onPlayerStateChanged(PlayerStateChanged event) {
+        if (event.player.equals(mDelegate.getActivePlayer())) {
+            updateMediaSession();
+        }
+    }
+
+    private void handleRandomOnEvent(Player player) {
+
+        RandomPlay randomPlay = mDelegate.getRandomPlay(player);
+        Preferences preferences = Squeezer.getPreferences();
+        PlayerState playerState = player.getPlayerState();
+
+        int number = playerState.getCurrentPlaylistTracksNum();
+        int index = playerState.getCurrentPlaylistIndex();
+        Log.i(TAG, String.format("Random Play event for %s has number %d with index %d.", player.getName(), number, index));
+        String nextTrack = randomPlay.getNextTrack();
+        if (endRandomPlay(number, index)) {
+            Log.i(TAG, String.format("End Random Play and reset '%s'.", player.getName()));
+            randomPlay.reset(player);
+        } else if (firstTwoTracksLoaded(number, index)) {
+            Log.i(TAG, String.format("Ignore event after Random Play initialization for player '%s'.", player.getName()));
+        } else {
+            Log.i(TAG, String.format("Handle Random Play after event for player '%s'.", player.getName()));
+            String folderID = randomPlay.getActiveFolderID();
+            Set<String> tracks = randomPlay.getTracks(folderID);
+            Set<String> played = preferences.loadRandomPlayed(folderID);
+            played.add(nextTrack);
+            preferences.saveRandomPlayed(folderID, played);
+            Set<String> unplayed = new HashSet<>(tracks);
+            if (played.size() == tracks.size()) {
+                Log.i(TAG, String.format("All Random played from folder %s on player %s. Clear!", folderID, player.getName()));
+                played.clear();
+                preferences.saveRandomPlayed(folderID, played);
+            } else {
+                unplayed.removeAll(played);
+                Log.i(TAG, String.format("Loaded %s unplayed tracks from folder %s for Random Play on player %s.", unplayed.size(), folderID, player.getName()));
+            }
+            if (!unplayed.isEmpty()) {
+                randomPlayDelegate.fillPlaylist(unplayed, player, nextTrack);
+            } else {
+                Log.e(TAG, String.format("No unplayed tracks found for Random Play in folder %s on %s!", folderID, player.getName()));
+            }
+        }
+    }
+
+    private boolean endRandomPlay(int number, int index) {
+        // After a MusicChanged event we have to check if this meant that the last track of random
+        // play is now playing. In this case we load another track. If the track changed but there
+        // are more tracks in the playlist after it, it means that the user might have added tracks
+        // to the end of the playlist. So we deactivate Random Play.
+        // On the other hand the user might have just chosen another track from the already played
+        // random tracks (currently we don't consider this).
+        // TODO endRandomPlay could be better.
+        if ( (number - index == 1) && (number > 1) ) {
+            // last track playing
+            return false;
+        }
+        else return !firstTwoTracksLoaded(number, index);
+    }
+
+    private boolean firstTwoTracksLoaded(int number, int index) {
+        return (number - index == 2) && (number == 2);
+    }
+
+    private void onPlayersChanged(PlayersChanged event) {
+        Player activePlayer = mDelegate.getActivePlayer();
+        if (activePlayer == null) {
+            // Figure out the new active player, let everyone know.
+            changeActivePlayer(getPreferredPlayer(mDelegate.getPlayers().values()), false);
+        } else {
+            activePlayer = mDelegate.getPlayer(activePlayer.getId());
+            mDelegate.setActivePlayer(activePlayer);
+            updateAllPlayerSubscriptionStates();
+            requestPlayerData();
+        }
+    }
+
+    private void onLastscanChanged(LastscanChanged event) {
+        CustomJiveItemHandling.recoverShortcuts(this, homeMenuHandling.getCustomShortcuts());
+    }
+
+    /**
+     * @return The player that should be chosen as the (new) active player. This is either the
+     *     last active player (if known), the first player the server knows about if there are
+     *     connected players, or null if there are no connected players.
+     */
+    private @Nullable Player getPreferredPlayer(Collection<Player> players) {
+        final String lastConnectedPlayer = Squeezer.getPreferences().getLastPlayer();
+        Log.i(TAG, "lastConnectedPlayer was: " + lastConnectedPlayer);
+
+        Log.i(TAG, "players empty?: " + players.isEmpty());
+        for (Player player : players) {
+            if (player.getId().equals(lastConnectedPlayer)) {
+                return player;
+            }
+        }
+        return !players.isEmpty() ? players.iterator().next() : null;
+    }
+
+    /** A download request will be passed to the download manager for each song called back to this */
+    private final IServiceItemListCallback<Song> songDownloadCallback = new IServiceItemListCallback<>() {
+        @Override
+        public void onItemsReceived(int count, int start, Map<String, Object> parameters, List<Song> items, Class<Song> dataType) {
+            final Preferences preferences = Squeezer.getPreferences();
+            for (Song song : items) {
+                Log.i(TAG, "downloadSong(" + song + ")");
+                Uri downloadUrl = Util.getDownloadUrl(mDelegate.getUrlPrefix(), song.id);
+                if (preferences.isDownloadUseServerPath()) {
+                    downloadSong(downloadUrl, song.title, song.album, song.getArtist(), getLocalFile(song.url));
+                } else {
+                    final String lastPathSegment = song.url.getLastPathSegment();
+                    final String fileExtension = Util.getFileExtension(lastPathSegment);
+                    final String localPath = song.getLocalPath(preferences.getDownloadPathStructure(), preferences.getDownloadFilenameStructure());
+                    downloadSong(downloadUrl, song.title, song.album, song.getArtist(), localPath + "." + fileExtension);
+                }
+            }
+        }
+
+        @Override
+        public Object getClient() {
+            return SqueezeService.this;
+        }
+    };
+
+    /**
+     * For each item called to this:
+     * If it is a folder: recursive lookup items in the folder
+     * If is is a track: Enqueue a download request to the download manager
+     */
+    private final IServiceItemListCallback<MusicFolderItem> musicFolderDownloadCallback = new IServiceItemListCallback<>() {
+        @Override
+        public void onItemsReceived(int count, int start, Map<String, Object> parameters, List<MusicFolderItem> items, Class<MusicFolderItem> dataType) {
+            for (MusicFolderItem item : items) {
+                if ("track".equals(item.type)) {
+                    Log.i(TAG, "downloadMusicFolderTrack(" + item + ")");
+                    SlimCommand command = JiveItem.downloadCommand(item.id);
+                    mDelegate.requestAllItems(songDownloadCallback).params(command.params).cmd(command.cmd()).exec();
+                }
+            }
+        }
+
+        @Override
+        public Object getClient() {
+            return SqueezeService.this;
+        }
+    };
+
+    private void downloadSong(@NonNull Uri url, String title, String album, String artist, String localPath) {
+        Log.i(TAG, "downloadSong(" + title + "): " + url);
+        if (url.equals(Uri.EMPTY)) {
+            return;
+        }
+
+        if (localPath == null) {
+            return;
+        }
+
+        // Convert VFAT-unfriendly characters to "_".
+        localPath =  localPath.replaceAll("[?<>\\\\:*|\"]", "_");
+        DownloadDatabase downloadDatabase = new DownloadDatabase(this);
+        String credentials = mDelegate.getUsername() + ":" + mDelegate.getPassword();
+        downloadDatabase.registerDownload(this, credentials, url, localPath, title, album, artist);
+    }
+
+    /**
+     * Tries to get the path relative to the server music library.
+     * <p>
+     * If this is not possible resort to the last path segment of the server path.
+     */
+    @Nullable
+    private String getLocalFile(@NonNull Uri serverUrl) {
+        String serverPath = serverUrl.getPath();
+        String mediaDir = null;
+        String path;
+        for (String dir : mDelegate.getMediaDirs()) {
+            if (serverPath != null && serverPath.startsWith(dir)) {
+                mediaDir = dir;
+                break;
+            }
+        }
+        if (mediaDir != null) {
+            path = serverPath.substring(mediaDir.length());
+        } else {
+            // Note: if serverUrl is the empty string this can return null.
+            path = serverUrl.getLastPathSegment();
+        }
+
+        return path;
+    }
+
+
+    private WifiManager.WifiLock wifiLock;
+
+    private final ISqueezeService squeezeService = new SqueezeServiceBinder();
+    private class SqueezeServiceBinder extends Binder implements ISqueezeService {
+
+        @Override
+        public void toggleMute() {
+            toggleMute(getActivePlayer());
+        }
+
+        @Override
+        public void toggleMute(Player player) {
+            if (player != null) {
+                mute(player, !player.getPlayerState().isMuted());
+            }
+        }
+
+        @Override
+        public void mute(Player player, boolean mute) {
+            if (player != null) {
+                mDelegate.command(player).cmd("mixer", "muting", mute ? "1" : "0").exec();
+            }
+        }
+
+        @Override
+        public void setVolumeTo(Player player, int newVolume) {
+            setPlayerVolume(player, newVolume);
+        }
+
+        @Override
+        public boolean canAdjustVolumeForSyncGroup() {
+            return mDelegate.getVolumeSyncGroup(true).size() > 1;
+        }
+
+        @Override
+        public void setVolumeTo(int percentage) {
+            Set<Player> syncGroup = mDelegate.getVolumeSyncGroup(mGroupVolume);
+
+            int lowestVolume = 100;
+            int higestVolume = 0;
+            for (Player player : syncGroup) {
+                int currentVolume = player.getPlayerState().getCurrentVolume();
+                if (currentVolume < lowestVolume) lowestVolume = currentVolume;
+                if (currentVolume > higestVolume) higestVolume = currentVolume;
+            }
+            int volumeInRange = (int) Math.round(percentage / 100.0 * (100 - (higestVolume - lowestVolume)));
+            for (Player player : syncGroup) {
+                int currentVolume = player.getPlayerState().getCurrentVolume();
+                int volumeOffset = currentVolume - lowestVolume;
+                setPlayerVolume(player, volumeOffset + volumeInRange);
+            }
+        }
+
+        private void setPlayerVolume(Player player, int percentage) {
+            int volume = Math.min(100, Math.max(0, percentage));
+            mDelegate.command(player).cmd("mixer", "volume", String.valueOf(volume)).exec();
+            player.getPlayerState().setCurrentVolume(volume);
+            repository.post(new PlayerVolume(player));
+        }
+
+        @Override
+        public void adjustVolume(int direction) {
+            Set<Player> syncGroup = mDelegate.getVolumeSyncGroup(mGroupVolume);
+            int adjust = direction * mVolumeProvider.step;
+            for (Player player : syncGroup) {
+                int currentVolume = player.getPlayerState().getCurrentVolume();
+                if (currentVolume + adjust < 0) adjust = -currentVolume;
+                if (currentVolume + adjust > 100) adjust = 100 - currentVolume;
+            }
+            if (adjust != 0) {
+                for (Player player : syncGroup) {
+                    if (player.getPlayerState().isMuted()) {
+                        mDelegate.command(player).cmd("mixer", "muting", "0").exec();
+                        try {
+                            Thread.sleep(500);
+                        } catch (InterruptedException e) {
+                            Log.i(TAG, "Interupted while pausing between commands");
+                        }
+                    }
+                    adjustPlayerVolume(player, adjust);
+                }
+            }
+        }
+
+        private void adjustPlayerVolume(Player player, int adjust) {
+            mDelegate.command(player).cmd("mixer", "volume", (adjust > 0 ? "+" : "") + adjust).exec();
+            int currentVolume = player.getPlayerState().getCurrentVolume();
+            player.getPlayerState().setCurrentVolume(currentVolume + adjust);
+            repository.post(new PlayerVolume(player));
+        }
+
+        @Override
+        public boolean isManualDisconnect() {
+            return mDelegate.getConnectionState().isManualDisconnect();
+        }
+
+        @Override
+        public boolean isConnected() {
+            return mDelegate.getConnectionState().isConnected();
+        }
+
+        @Override
+        public boolean isConnectInProgress() {
+            return mDelegate.getConnectionState().isConnectInProgress();
+        }
+
+        @Override
+        public boolean canAutoConnect() {
+            return mDelegate.canAutoConnect();
+        }
+
+        @Override
+        public void startConnect(boolean autoConnect) {
+            mDelegate.startConnect(SqueezeService.this, autoConnect);
+        }
+
+        @Override
+        public void disconnect() {
+            if (!isConnected()) return;
+            SqueezeService.this.disconnect(true);
+        }
+
+        @Override
+        public void stopServer() {
+            if (!isConnected()) return;
+            mDelegate.command().cmd("stopserver").exec();
+        }
+
+        @Override
+        public void restartServer() {
+            if (!isConnected()) return;
+            mDelegate.command().cmd("restartserver").exec();
+        }
+
+        @Override
+        public void requestServerStatus() {
+            mDelegate.requestServerStatus();
+        }
+
+        @Override
+        public void togglePower(Player player) {
+            mDelegate.command(player).cmd("power").exec();
+        }
+
+        @Override
+        public void playerRename(Player player, String newName) {
+            mDelegate.command(player).cmd("name", newName).exec();
+        }
+
+        @Override
+        public void sleep(Player player, int duration) {
+            mDelegate.command(player).cmd("sleep", String.valueOf(duration)).exec();
+        }
+
+        @Override
+        public void syncPlayerToPlayer(@NonNull Player slave, @NonNull String masterId) {
+            Player master = mDelegate.getPlayer(masterId);
+            mDelegate.command(master).cmd("sync", slave.getId()).exec();
+        }
+
+        @Override
+        public void unsyncPlayer(@NonNull Player player) {
+            mDelegate.command(player).cmd("sync", "-").exec();
+        }
+
+
+        @Override
+        @Nullable
+        public PlayerState getActivePlayerState() {
+            Player activePlayer = getActivePlayer();
+            return activePlayer == null ? null : activePlayer.getPlayerState();
+        }
+
+        @Override
+        public void playerPref(Player.Pref playerPref, String value) {
+            mDelegate.activePlayerCommand().cmd("playerpref", playerPref.prefName(), value).exec();
+        }
+
+        @Override
+        public void playerPref(Player player, Player.Pref playerPref, String value) {
+            mDelegate.command(player).cmd("playerpref", playerPref.prefName(), value).exec();
+        }
+
+        @Override
+        public String getServerVersion() {
+            return mDelegate.getServerVersion();
+        }
+
+        private String fadeInSecs() {
+            return mFadeInSecs > 0 ? " " + mFadeInSecs : "";
+        }
+
+        @Override
+        public boolean togglePausePlay() {
+            return togglePausePlay(getActivePlayer());
+        }
+        @Override
+        public boolean togglePausePlay(Player player) {
+            if (!isConnected()) {
+                return false;
+            }
+
+
+            // May be null (e.g., connected to a server with no connected
+            // players. TODO: Handle this better, since it's not obvious in the
+            // UI.
+            if (player == null)
+                return false;
+
+            PlayerState activePlayerState = player.getPlayerState();
+            @PlayerState.PlayState String playStatus = activePlayerState.getPlayStatus();
+
+            // May be null -- race condition when connecting to a server that
+            // has a player. Squeezer knows the player exists, but has not yet
+            // determined its state.
+            if (playStatus == null)
+                return false;
+
+            switch (playStatus) {
+                case PlayerState.PLAY_STATE_PLAY ->
+                    // NOTE: we never send ambiguous "pause" toggle commands (without the '1')
+                    // because then we'd get confused when they came back in to us, not being
+                    // able to differentiate ours coming back on the listen channel vs. those
+                    // of those idiots at the dinner party messing around.
+                        mDelegate.command(player).cmd("pause", "1").exec();
+                case PlayerState.PLAY_STATE_STOP ->
+                        mDelegate.command(player).cmd("play", fadeInSecs()).exec();
+                case PlayerState.PLAY_STATE_PAUSE ->
+                        mDelegate.command(player).cmd("pause", "0", fadeInSecs()).exec();
+            }
+
+            return true;
+        }
+
+        @Override
+        public boolean play() {
+            if (!isConnected()) {
+                return false;
+            }
+
+            Player player = getActivePlayer();
+            if (player != null) {
+                String playStatus = player.getPlayerState().getPlayStatus();
+                mDelegate
+                        .command(player)
+                        .cmd(PlayerState.PLAY_STATE_PAUSE.equals(playStatus) ? List.of("pause", "0") : List.of("play"))
+                        .cmd(fadeInSecs()).exec();
+            }
+
+            return true;
+        }
+
+        @Override
+        public boolean pause() {
+            if(!isConnected()) {
+                return false;
+            }
+            pause(getActivePlayer(), true);
+            return true;
+        }
+
+        @Override
+        public void pause(Player player, boolean pause) {
+            mDelegate.command(player).cmd("pause", pause ? "1" : "0", fadeInSecs()).exec();
+        }
+
+        @Override
+        public boolean stop() {
+            if (!isConnected()) {
+                return false;
+            }
+            mDelegate.activePlayerCommand().cmd("stop").exec();
+            return true;
+        }
+
+        @Override
+        public boolean nextTrack() {
+            return nextTrack(getActivePlayer());
+        }
+        @Override
+        public boolean nextTrack(Player player) {
+            if (!isConnected() || !isPlaying()) {
+                return false;
+            }
+            mDelegate.command(player).cmd("button", "jump_fwd").exec();
+            return true;
+        }
+
+        @Override
+        public boolean previousTrack() {
+            return previousTrack(getActivePlayer());
+        }
+
+        @Override
+        public boolean previousTrack(Player player) {
+            if (!isConnected() || !isPlaying()) {
+                return false;
+            }
+            mDelegate.command(player).cmd("button", "jump_rew").exec();
+            return true;
+        }
+
+        @Override
+        public boolean toggleShuffle() {
+            if (!isConnected()) {
+                return false;
+            }
+            mDelegate.activePlayerCommand().cmd("button", "shuffle").exec();
+            return true;
+        }
+
+        @Override
+        public boolean toggleRepeat() {
+            if (!isConnected()) {
+                return false;
+            }
+            mDelegate.activePlayerCommand().cmd("button", "repeat").exec();
+            return true;
+        }
+
+        /**
+         * Start playing the song in the current playlist at the given index.
+         *
+         * @param index the index to jump to
+         */
+        @Override
+        public boolean playlistIndex(int index) {
+            if (!isConnected()) {
+                return false;
+            }
+            mDelegate.activePlayerCommand().cmd("playlist", "index", String.valueOf(index), fadeInSecs()).exec();
+            return true;
+        }
+
+        @Override
+        public boolean playlistRemove(int index) {
+            if (!isConnected()) {
+                return false;
+            }
+            mDelegate.activePlayerCommand().cmd("playlist" ,"delete", String.valueOf(index)).exec();
+            return true;
+        }
+
+        @Override
+        public boolean playlistMove(int fromIndex, int toIndex) {
+            if (!isConnected()) {
+                return false;
+            }
+            mDelegate.activePlayerCommand().cmd("playlist", "move", String.valueOf(fromIndex), String.valueOf(toIndex)).exec();
+            return true;
+        }
+
+        @Override
+        public boolean playlistClear() {
+            if (!isConnected()) {
+                return false;
+            }
+            mDelegate.activePlayerCommand().cmd("playlist", "clear").exec();
+            return true;
+        }
+
+        @Override
+        public boolean playlistSave(String name) {
+            if (!isConnected()) {
+                return false;
+            }
+            mDelegate.activePlayerCommand().cmd("playlist", "save", name).exec();
+            return true;
+        }
+
+        @Override
+        public boolean button(Player player, IRButton button) {
+            if (!isConnected()) {
+                return false;
+            }
+            mDelegate.command(player).cmd("button", button.getFunction()).exec();
+            return true;
+        }
+
+        @Override
+        public void setActivePlayer(@Nullable final Player newActivePlayer, boolean continuePlaying) {
+            changeActivePlayer(newActivePlayer, continuePlaying);
+        }
+
+        @Override
+        @Nullable
+        public Player getActivePlayer() {
+            return mDelegate.getActivePlayer();
+        }
+
+        @Override
+        public List<Player> getPlayers() {
+            return mDelegate.getPlayers().values().stream().filter(Player::getConnected).sorted().collect(Collectors.toList());
+        }
+
+        @Override
+        public Player getPlayer(String playerId) throws PlayerNotFoundException {
+            Player player = mDelegate.getPlayer(playerId);
+            if (player == null) {
+                throw new PlayerNotFoundException(SqueezeService.this);
+            }
+            return player;
+        }
+
+        @Override
+        public @NonNull VolumeInfo getVolume() {
+            return mDelegate.getVolume(mGroupVolume);
+        }
+
+        /**
+         * @return null if there is no active player, otherwise the name of the current playlist,
+         *     which may be the empty string.
+         */
+        @Override
+        @Nullable
+        public String getCurrentPlaylist() {
+            PlayerState playerState = getActivePlayerState();
+
+            if (playerState == null)
+                return null;
+
+            return playerState.getCurrentPlaylist();
+        }
+
+        @Override
+        public void setSecondsElapsed(int seconds) {
+            if (isConnected() && seconds >= 0) {
+                mDelegate.activePlayerCommand().cmd("time", String.valueOf(seconds)).exec();
+            }
+        }
+
+        @Override
+        public void adjustSecondsElapsed(int seconds) {
+            if (isConnected()) {
+                mDelegate.activePlayerCommand().cmd("time", (seconds > 0 ? "+" : "") + seconds).exec();
+            }
+        }
+
+        @Override
+        public void preferenceChanged(Preferences preferences, String key) {
+            Log.i(TAG, "Preference changed: " + key);
+            if (Preferences.KEY_CUSTOMIZE_HOME_MENU_MODE.equals(key)) {
+                boolean useArchive = preferences.getCustomizeHomeMenuMode() != Preferences.CustomizeHomeMenuMode.DISABLED;
+                Set<String> archivedMenuItems = Collections.emptySet();
+                if ((useArchive) && (getActivePlayer() != null)) {
+                    archivedMenuItems = preferences.getArchivedMenuItems(getActivePlayer());
+                }
+                homeMenuHandling.updateArchivedItems(archivedMenuItems);
+            } else if (Preferences.KEY_CUSTOMIZE_SHORTCUT_MODE.equals(key)) {
+                if (preferences.getCustomizeShortcutsMode() == Preferences.CustomizeShortcutsMode.DISABLED) {
+                    homeMenuHandling.removeAllShortcuts();
+                    preferences.saveShortcuts(homeMenuHandling.getCustomShortcuts());
+                }
+            } else if (Preferences.KEY_ACTION_ON_INCOMING_CALL.equals(key)) {
+                if (preferences.getActionOnIncomingCall() != Preferences.IncomingCallAction.NONE) {
+                    registerCallStateListener();
+                }
+            } else {
+                cachePreferences(preferences);
+            }
+        }
+
+
+        @Override
+        public void cancelItemListRequests(Object client) {
+            mDelegate.cancelClientRequests(client);
+        }
+
+        @Override
+        public void alarms(int start, IServiceItemListCallback<Alarm> callback) {
+            if (!isConnected()) {
+                return;
+            }
+            mDelegate.requestItems(getActivePlayer(), start, callback).cmd("alarms").param("filter", "all").exec();
+        }
+
+        @Override
+        public void alarmPlaylists(IServiceItemListCallback<AlarmPlaylist> callback) {
+            if (!isConnected()) {
+                return;
+            }
+            // The LMS documentation states that
+            // The "alarm playlists" returns all the playlists, sounds, favorites etc. available to alarms.
+            // This will however return only one playlist: the current playlist.
+            // Inspection of the LMS code reveals that the "alarm playlists" command takes the
+            // customary <start> and <itemsPerResponse> parameters, but these are interpreted as
+            // categories (eg. Favorites, Natural Sounds etc.), but the returned list is flattened,
+            // i.e. contains all items of the requested categories.
+            // So we order all playlists without paging.
+            mDelegate.requestItems(callback).cmd("alarm", "playlists").exec();
+        }
+
+        @Override
+        public void alarmAdd(int time) {
+            if (!isConnected()) {
+                return;
+            }
+            mDelegate.activePlayerCommand().cmd("alarm", "add").param("time", time).exec();
+        }
+
+        @Override
+        public void alarmDelete(String id) {
+            if (!isConnected()) {
+                return;
+            }
+            mDelegate.activePlayerCommand().cmd("alarm", "delete").param("id", id).exec();
+        }
+
+        @Override
+        public void alarmSetTime(String id, int time) {
+            if (!isConnected()) {
+                return;
+            }
+            mDelegate.activePlayerCommand().cmd("alarm", "update").param("id", id).param("time", time).exec();
+        }
+
+        @Override
+        public void alarmAddDay(String id, int day) {
+            mDelegate.activePlayerCommand().cmd("alarm", "update").param("id", id).param("dowAdd", day).exec();
+        }
+
+        @Override
+        public void alarmRemoveDay(String id, int day) {
+            mDelegate.activePlayerCommand().cmd("alarm", "update").param("id", id).param("dowDel", day).exec();
+        }
+
+        @Override
+        public void alarmEnable(String id, boolean enabled) {
+            mDelegate.activePlayerCommand().cmd("alarm", "update").param("id", id).param("enabled", enabled ? "1" : "0").exec();
+        }
+
+        @Override
+        public void alarmRepeat(String id, boolean repeat) {
+            mDelegate.activePlayerCommand().cmd("alarm", "update").param("id", id).param("repeat", repeat ? "1" : "0").exec();
+        }
+
+        @Override
+        public void alarmSetPlaylist(String id, AlarmPlaylist playlist) {
+            mDelegate.activePlayerCommand().cmd("alarm", "update").param("id", id)
+                    .param("url", "".equals(playlist.getId()) ? "0" : playlist.getId()).exec();
+        }
+
+        /* Start an asynchronous fetch of the slimserver generic menu items */
+        @Override
+        public void pluginItems(int start, String cmd, IServiceItemListCallback<JiveItem>  callback) {
+            mDelegate.requestItems(getActivePlayer(), start, callback).cmd(cmd).param("menu", "menu").exec();
+        }
+
+        /* Start an asynchronous fetch of the slimserver generic menu items */
+        @Override
+        public void pluginItems(int start, JiveItem item, Action action, IServiceItemListCallback<JiveItem>  callback) {
+            mDelegate.requestItems(getActivePlayer(), start, callback).cmd(action.action.cmd).params(action.action.params(item.inputValue)).exec();
+        }
+
+        @Override
+        public void pluginItems(Action action, IServiceItemListCallback<JiveItem> callback) {
+            // We cant use paging for context menu items as LMS does some "magic"
+            // See XMLBrowser.pm ("xmlBrowseInterimCM" and  "# Cannot do this if we might screw up paging")
+            mDelegate.requestItems(getActivePlayer(), callback).cmd(action.action.cmd).params(action.action.params).exec();
+        }
+
+        @Override
+        public void action(JiveItem item, Action action) {
+            if (!isConnected()) {
+                return;
+            }
+            mDelegate.command(getActivePlayer()).cmd(action.action.cmd).params(action.action.params(item.inputValue)).exec();
+        }
+
+        @Override
+        public void action(Action.JsonAction action) {
+            if (!isConnected()) {
+                return;
+            }
+            mDelegate.command(getActivePlayer()).cmd(action.cmd).params(action.params).exec();
+        }
+
+        @Override
+        public void downloadItem(JiveItem item) {
+            Log.i(TAG, "downloadItem(" + item + ")");
+            SlimCommand command = item.downloadCommand();
+            IServiceItemListCallback<?> callback = ("musicfolder".equals(command.cmd.get(0))) ? musicFolderDownloadCallback : songDownloadCallback;
+            mDelegate.requestAllItems(callback).params(command.params).cmd(command.cmd()).exec();
+        }
+
+        public Boolean randomPlayFolder(JiveItem item) {
+            SlimCommand command = item.randomPlayFolderCommand();
+            String folderID = Util.getString(command.params, "folder_id");
+            if (folderID == null) {
+                Log.e(TAG, "randomPlayFolder: No folder_id");
+                return false;
+            }
+            Set<String> played = Squeezer.getPreferences().loadRandomPlayed(folderID);
+            Player player = mDelegate.getActivePlayer();
+            RandomPlay randomPlay = mDelegate.getRandomPlay(player);
+            randomPlay.reset(player);
+            RandomPlay.RandomPlayCallback randomPlayCallback
+                    = randomPlay.new RandomPlayCallback(randomPlayDelegate, folderID, played);
+            mDelegate.requestAllItems(randomPlayCallback)
+                    .params(command.params)
+                    .cmd(command.cmd())
+                    .exec();
+            return true;
+        }
+
+        public void toggleArchiveItem(JiveItem item) {
+            Set<String> archive = homeMenuHandling.toggleArchiveItem(item);
+            Squeezer.getPreferences().setArchivedMenuItems(archive, getActivePlayer());
+        }
+
+        @Override
+        public boolean isInArchive(JiveItem item) {
+           return homeMenuHandling.isInArchive(item);
+        }
+
+        @Override
+        public HomeMenuHandling getHomeMenuHandling() {
+            return homeMenuHandling;
+        }
+
+        @Override
+        public void setCustomShortcuts() {
+            Preferences preferences = Squeezer.getPreferences();
+            homeMenuHandling.updateShortcuts(preferences.homeGroups(), preferences.getCustomShortcuts());
+        }
+
+        @Override
+        public void removeCustomShortcut(JiveItem item) {
+            homeMenuHandling.removeShortcut(item);
+            Squeezer.getPreferences().saveShortcuts(homeMenuHandling.getCustomShortcuts());
+        }
+
+        @Override
+        public boolean addCustomShortcut(JiveItem item, JiveItem parent, int shortcutWeight) {
+            Preferences preferences = Squeezer.getPreferences();
+            if (homeMenuHandling.addShortcut(item, parent, shortcutWeight)) {
+                preferences.saveShortcuts(homeMenuHandling.getCustomShortcuts());
+                return true;
+            }
+            return false;
+        }
+    }
+
+    private class SqueezerMediaSessionCallback extends MediaSessionCompat.Callback {
+
+        @Override
+        public void onPlay() {
+            squeezeService.play();
+        }
+
+        @Override
+        public void onPause() {
+            squeezeService.pause();
+        }
+
+        @Override
+        public void onSkipToNext() {
+            squeezeService.nextTrack();
+        }
+
+        @Override
+        public void onSkipToPrevious() {
+            squeezeService.previousTrack();
+        }
+
+        @Override
+        public void onSeekTo(long pos) {
+            squeezeService.setSecondsElapsed((int) (pos/1000));
+        }
+
+        @Override
+        public void onCustomAction(String action, Bundle extras) {
+            if (ACTION_DISCONNECT.equals(action)) {
+                disconnect(true);
+            } else
+            if (ACTION_POWER.equals(action)) {
+                squeezeService.togglePower(mDelegate.getActivePlayer());
+            }
+        }
+    }
+
+    private class SqueezerVolumeProvider extends VolumeProviderCompat {
+        private final int step;
+
+        public SqueezerVolumeProvider(int step) {
+            super(VolumeProviderCompat.VOLUME_CONTROL_ABSOLUTE, 100 / step, 1);
+            this.step = step;
+        }
+
+        @Override
+        public void onAdjustVolume(int direction) {
+            squeezeService.adjustVolume(direction);
+        }
+
+        @Override
+        public void onSetVolumeTo(int volume) {
+            squeezeService.setVolumeTo(volume * step);
+        }
+    }
+}

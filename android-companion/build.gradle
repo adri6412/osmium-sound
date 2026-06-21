@@ -1,0 +1,28 @@
+allprojects {
+    repositories {
+        google()
+        mavenCentral()
+    }
+    tasks.withType(Javadoc) {
+        options.addStringOption('encoding', 'UTF-8')
+    }
+}
+
+buildscript {
+    repositories {
+        google()
+        mavenCentral()
+    }
+    dependencies {
+        classpath 'com.android.tools.build:gradle:8.5.1'
+    }
+}
+
+ext {
+    compileSdkVersion = 35
+    minSdkVersion = 26
+    targetSdkVersion = 35
+
+    assert minSdkVersion <= targetSdkVersion : "minSdkVersion too big"
+    assert targetSdkVersion <= compileSdkVersion : "targetSdkVersion too big"
+}

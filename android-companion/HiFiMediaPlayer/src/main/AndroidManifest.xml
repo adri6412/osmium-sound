@@ -1,0 +1,181 @@
+<?xml version="1.0" encoding="utf-8"?>
+
+<!--
+   Copyright (C) 2009 Google Inc.  All Rights Reserved.
+
+   Licensed under the Apache License, Version 2.0 (the "License");
+   you may not use this file except in compliance with the License.
+   You may obtain a copy of the License at
+
+        http://www.apache.org/licenses/LICENSE-2.0
+
+   Unless required by applicable law or agreed to in writing, software
+   distributed under the License is distributed on an "AS IS" BASIS,
+   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+   See the License for the specific language governing permissions and
+   limitations under the License.
+-->
+
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE"/>
+    <uses-permission android:name="android.permission.CHANGE_WIFI_STATE"/>
+    <uses-permission android:name="android.permission.INTERNET"/>
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
+    <uses-permission android:name="android.permission.WAKE_LOCK"/>
+    <uses-permission android:name="android.permission.VIBRATE"/>
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="28"/>
+    <uses-permission android:name="android.permission.REORDER_TASKS"/>
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK"/>
+    <uses-permission android:name="android.permission.READ_PHONE_STATE" android:minSdkVersion="31"/>
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
+
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.MAIN" />
+        </intent>
+    </queries>
+
+    <application
+        android:icon="@mipmap/ic_launcher"
+        android:theme="@style/AppTheme"
+        android:label="@string/app_name"
+        android:name=".HiFiMediaPlayer"
+        android:usesCleartextTraffic="true"
+        android:resizeableActivity="true"
+        android:allowBackup="false"
+        tools:replace="android:allowBackup"
+        android:supportsRtl="true">
+
+        <receiver android:exported="false"
+            android:name=".homescreenwidgets.SqueezerRemoteControl">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/squeezer_remote_control_info" />
+        </receiver>
+
+        <activity android:exported="false"
+            android:name=".homescreenwidgets.SqueezerRemoteControlPlayerSelectActivity">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_CONFIGURE" />
+            </intent-filter>
+        </activity>
+        <activity android:name=".homescreenwidgets.SqueezerRemoteControlButtonSelectActivity">
+        </activity>
+
+        <!-- Newer Android versions no longer include the Apache HTTP library -->
+        <uses-library android:name="org.apache.http.legacy" android:required="false" />
+
+        <activity android:exported="true"
+            android:name=".itemlist.HomeActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN"/>
+                <category android:name="android.intent.category.LAUNCHER"/>
+            </intent-filter>
+        </activity>
+
+        <activity-alias
+            android:name=".HomeLauncherActivity"
+            android:enabled="false"
+            android:exported="true"
+            android:label="@string/app_name"
+            android:targetActivity=".itemlist.HomeActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.HOME" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </activity-alias>
+
+        <activity
+            android:name=".itemlist.HomeMenuActivity"
+            android:parentActivityName=".itemlist.HomeActivity">
+        </activity>
+
+        <activity android:exported="true"
+            android:name=".NowPlayingActivity"
+            android:parentActivityName=".itemlist.HomeActivity">
+        </activity>
+
+        <activity
+            android:name=".SettingsActivity"
+            android:label="@string/activity_settings_name"
+            android:parentActivityName=".itemlist.HomeActivity">
+        </activity>
+
+        <activity
+            android:name=".ConnectActivity"
+            android:label="@string/disconnected_text"
+            android:parentActivityName=".itemlist.HomeActivity">
+        </activity>
+
+        <activity android:exported="true"
+            android:name=".itemlist.PlayerListActivity"
+            android:parentActivityName=".itemlist.HomeActivity">
+        </activity>
+
+        <activity android:exported="true"
+            android:name=".itemlist.AlarmsActivity"
+            android:parentActivityName=".itemlist.HomeActivity">
+        </activity>
+
+        <activity
+            android:name=".itemlist.AlarmPlaylistActivity"
+            android:parentActivityName=".itemlist.AlarmsActivity">
+        </activity>
+
+        <activity android:exported="true"
+            android:name=".itemlist.CurrentPlaylistActivity"
+            android:parentActivityName=".NowPlayingActivity">
+        </activity>
+
+        <activity
+            android:name=".itemlist.JiveItemListActivity"
+            android:parentActivityName=".itemlist.HomeActivity">
+        </activity>
+
+        <activity
+            android:name=".itemlist.GalleryActivity"
+            android:parentActivityName=".itemlist.JiveItemListActivity">
+        </activity>
+
+        <activity
+            android:name=".screensaver.Screensaver"
+            android:theme="@style/Theme.MaterialComponents.NoActionBar">
+        </activity>
+
+        <service android:exported="false" android:label="HiFi Media Player Service"
+            android:foregroundServiceType="mediaPlayback"
+            android:name=".service.SqueezeService">
+            <intent-filter>
+                <action android:name="android.intent.action.MEDIA_BUTTON" />
+            </intent-filter>
+        </service>
+
+        <receiver android:exported="false"
+            android:name="androidx.media.session.MediaButtonReceiver">
+            <intent-filter>
+                <action android:name="android.intent.action.MEDIA_BUTTON" />
+            </intent-filter>
+        </receiver>
+
+        <activity
+            android:name=".download.CancelDownloadsActivity"
+            android:theme="@android:style/Theme.Dialog"/>
+
+        <receiver android:exported="true"
+            android:name=".download.DownloadStatusReceiver">
+            <intent-filter>
+                <action android:name="android.intent.action.DOWNLOAD_COMPLETE" />
+                <action android:name="android.intent.action.DOWNLOAD_NOTIFICATION_CLICKED" />
+            </intent-filter>
+        </receiver>
+    </application>
+</manifest>

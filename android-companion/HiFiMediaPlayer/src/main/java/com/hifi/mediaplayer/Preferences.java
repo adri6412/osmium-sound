@@ -1,0 +1,1002 @@
+/*
+ * Copyright (c) 2009 Google Inc.  All Rights Reserved.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package com.hifi.mediaplayer;
+
+import android.content.Context;
+import android.content.SharedPreferences;
+import android.content.res.Configuration;
+import android.net.wifi.WifiInfo;
+import android.net.wifi.WifiManager;
+import android.text.TextUtils;
+import android.util.Log;
+
+import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
+
+import com.google.android.material.timepicker.MaterialTimePicker;
+
+import org.json.JSONException;
+import org.json.JSONObject;
+import org.eclipse.jetty.util.ajax.JSON;
+
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.EnumSet;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
+
+import com.hifi.mediaplayer.download.DownloadFilenameStructure;
+import com.hifi.mediaplayer.download.DownloadPathStructure;
+import com.hifi.mediaplayer.framework.EnumWithText;
+import com.hifi.mediaplayer.itemlist.dialog.ArtworkListLayout;
+import com.hifi.mediaplayer.model.JiveItem;
+import com.hifi.mediaplayer.model.PlayableItemAction;
+import com.hifi.mediaplayer.model.Player;
+import com.hifi.mediaplayer.util.ThemeManager;
+
+public final class Preferences {
+    private static final String TAG = Preferences.class.getSimpleName();
+
+    public static final String NAME = "Squeezer";
+
+    // Old setting for connect via the CLI protocol
+    private static final String KEY_CLI_SERVER_ADDRESS = "squeezer.serveraddr";
+
+    // Squeezebox server address (host:port)
+    private static final String KEY_SERVER_ADDRESS = "squeezer.server_addr";
+
+    // History of previously conencted servers
+    private static final String KEY_SERVER_HISTORY = "squeezer.server_history";
+
+    // Do we connect to mysqueezebox.com
+    private static final String KEY_SQUEEZE_NETWORK = "squeezer.squeeze_network";
+
+    // Optional Squeezebox Server name
+    private static final String KEY_SERVER_NAME = "squeezer.server_name";
+
+    // Optional Squeezebox Server user name
+    private static final String KEY_USERNAME = "squeezer.username";
+
+    // Optional Squeezebox Server password
+    private static final String KEY_PASSWORD = "squeezer.password";
+
+    // Optional Squeezebox Server password
+    private static final String KEY_WOL = "squeezer.wol";
+
+    // Optional Squeezebox Server password
+    private static final String KEY_MAC = "squeezer.mac";
+
+    // Timestamp when the last scan finished per server
+    private static final String KEY_LAST_SCAN = "lastScan";
+
+    private static final String KEY_LAST_RUN_VERSION_CODE = "lastRunVersionCode";
+
+    // The playerId that we were last connected to. e.g. "00:04:20:17:04:7f"
+    private static final String KEY_LAST_PLAYER = "squeezer.lastplayer";
+
+    // Do we automatically try and connect on WiFi availability?
+    private static final String KEY_AUTO_CONNECT = "squeezer.autoconnect";
+
+    // Pause music on incoming call? (OLD setting use to initialize action on incoming call
+    private static final String KEY_PAUSE_ON_INCOMING_CALL = "squeezer.pause_on_incoming_call";
+
+    // Action on incoming call
+    public static final String KEY_ACTION_ON_INCOMING_CALL = "squeezer.action_on_incoming_call";
+
+    // Restore music on end call if we performed action on incoming call
+    public static final String KEY_RESTORE_MUSIC_AFTER_CALL = "squeezer.restore_after_call";
+
+    // Are we disconnected via the options menu?
+    private static final String KEY_MANUAL_DISCONNECT = "squeezer.manual.disconnect";
+
+    // Type of notification to show. NOT USED ANYMORE
+    private static final String KEY_NOTIFICATION_TYPE = "squeezer.notification_type";
+
+    // Do we scrobble track information?
+    // Deprecated, retained for compatibility when upgrading. Was an int, of
+    // either 0 == No scrobbling, 1 == use ScrobbleDroid API, 2 == use SLS API
+    static final String KEY_SCROBBLE = "squeezer.scrobble";
+
+    // Do we scrobble track information (if a scrobble service is available)?
+    //
+    // Type of underlying preference is bool / CheckBox
+    static final String KEY_SCROBBLE_ENABLED = "squeezer.scrobble.enabled";
+
+    // Do we send anonymous usage statistics?
+    public static final String KEY_ANALYTICS_ENABLED = "squeezer.analytics.enabled";
+
+    // Background Volume Control
+    private static final String KEY_BACKGROUND_VOLUME = "squeezer.backgroundVolume";
+
+    // Volume up/down increments
+    private static final String KEY_VOLUME_INCREMENTS = "squeezer.volumeIncrements";
+
+    // Adjust volume for sync group when applicable
+    private static final String KEY_GROUP_VOLUME = "squeezer.groupVolume";
+
+    // Fade-in period? (0 = disable fade-in)
+    static final String KEY_FADE_IN_SECS = "squeezer.fadeInSecs";
+
+    // What do to when an album is selected in the list view
+    private static final String KEY_ON_SELECT_ALBUM_ACTION = "squeezer.action.onselect.album";
+
+    // What do to when a song is selected in the list view
+    private static final String KEY_ON_SELECT_SONG_ACTION = "squeezer.action.onselect.song";
+
+    // What do to when an item is swiped right in the list view
+    public static final String KEY_ON_SWIPE_RIGHT_ACTION = "squeezer.action.onswipe.right";
+
+    // What do to when an item is swiped left in the list view
+    public static final String KEY_ON_SWIPE_LEFT_ACTION = "squeezer.action.onswipe.left";
+
+    // Preferred album list layout.
+    private static final String KEY_LARGE_ARTWORK = "squeezer.large_artwork";
+
+    // Preferred album list layout.
+    private static final String KEY_ALBUM_LIST_LAYOUT = "squeezer.album.list.layout";
+
+    // Preferred home menu layout.
+    private static final String KEY_HOME_MENU_LAYOUT = "squeezer.home.menu.layout";
+
+    // Preferred home layout.
+    private static final String KEY_HOME_LAYOUT = "squeezer.home.layout";
+
+    // Preferred maximum info per item for a given list layout
+    public static final String KEY_MAX_LINES_FORMAT = "squeezer.%s.maxLines";
+
+    // Show volume control on now playing screen
+    public static final String KEY_NOW_PLAYING_VOLUME = "squeezer.now_playing_volume";
+
+    // Show current track and queue length on now playing screen
+    public static final String KEY_TRACK_COUNT = "squeezer.show_track_count";
+
+    // Show technical info (bitrate, samplerate etc) on now playing screen
+    public static final String KEY_TECHNICAL_INFO = "squeezer.show_technical_info";
+
+    // Add line above track title for showing composer
+    public static final String KEY_COMPOSER_LINE = "squeezer.add_composer_line";
+
+    // Add line below artist line for showing conductor and use album line for band
+    public static final String KEY_CONDUCTOR_LINE = "squeezer.add_conductor_line";
+
+    // Display artists as "soloists", explicitly show "conductor", and
+    // collapse band, soloist and conductor lines if not used
+    public static final String KEY_CLASSICAL_MUSIC_TAGS = "squeezer.display_classical_music_tags";
+    // Use flat icons or legacy LMS icons
+    public static final String KEY_FLAT_ICONS = "squeezer.use_flat_icons";
+
+    // Preferred song list layout.
+    private static final String KEY_SONG_LIST_LAYOUT = "squeezer.song.list.layout";
+
+    // Start SqueezePlayer automatically if installed.
+    public static final String KEY_SQUEEZEPLAYER_ENABLED = "squeezer.squeezeplayer.enabled";
+
+    // Start squeezelite automatically if installed.
+    public static final String KEY_SQUEEZELITE_ENABLED = "squeezer.squeezelite.enabled";
+
+    // Preferred UI theme.
+    static final String KEY_ON_THEME_SELECT_ACTION = "squeezer.theme";
+
+    // Screensaver
+    public static final String KEY_SCREENSAVER = "squeezer.screensaver";
+
+    // Fullscreen Mode
+    public static final String KEY_FULLSCREEN = "squeezer.fullscreen";
+
+    // Which top bar search to use
+    static final String KEY_TOP_BAR_SEARCH = "squeezer.top_bar.search";
+
+    // Use Squeezer as launcher
+    public static final String KEY_LAUNCHER_ENABLED = "squeezer.launcher.enabled";
+
+    // Clear playlist confirmation
+    static final String KEY_CLEAR_PLAYLIST_CONFIRMATION = "squeezer.clear.current_playlist.confirmation";
+
+    // Download enabled
+    static final String KEY_DOWNLOAD_ENABLED = "squeezer.download.enabled";
+
+    // Download confirmation
+    static final String KEY_DOWNLOAD_CONFIRMATION = "squeezer.download.confirmation";
+
+    // Download folder
+    static final String KEY_DOWNLOAD_USE_SERVER_PATH = "squeezer.download.use_server_path";
+
+    // Download path structure
+    static final String KEY_DOWNLOAD_PATH_STRUCTURE = "squeezer.download.path_structure";
+
+    // Download filename structure
+    static final String KEY_DOWNLOAD_FILENAME_STRUCTURE = "squeezer.download.filename_structure";
+
+    // Use SD-card (getExternalMediaDirs)
+    static final String KEY_DOWNLOAD_USE_SD_CARD_SCREEN = "squeezer.download.use_sd_card.screen";
+    static final String KEY_DOWNLOAD_USE_SD_CARD = "squeezer.download.use_sd_card";
+
+    // Store a "mac id" for this app instance.
+    private static final String KEY_MAC_ID = "squeezer.mac_id";
+
+    // Store a unique id for this app instance.
+    private static final String KEY_UUID = "squeezer.uuid";
+
+    // Archive mode
+    public static final String KEY_CUSTOMIZE_HOME_MENU_MODE = "squeezer.customize_home_menu.mode";
+
+    // Custom shortcut mode
+    public static final String KEY_CUSTOMIZE_SHORTCUT_MODE = "squeezer.customize_shortcut.mode";
+
+    // Map JiveItems to archive
+    private static final String KEY_PLAYER_ARCHIVED_ITEMS_FORMAT = "squeezer.archived_menu_items.%s";
+
+    // Map custom shortcut in home menu
+    private static final String CUSTOM_SHORTCUTS = "squeezer.custom_shortcut_items";
+
+    // Preferred time input method.
+    private static final String KEY_TIME_INPUT_MODE = "squeezer.time_input_mode";
+
+    // Show total time or remaining time.
+    private static final String KEY_SHOW_REMAINING_TIME = "squeezer.show_remaining_Time";
+
+    // Store played tracks per folderID for 'Random play folders'
+    private static final String KEY_FOLDERID_RANDOM_PLAYED = "squeezer.random_played_tracks.%s";
+
+    // Number of seconds for the quick jump backward/forward buttons.
+    private static final String KEY_BACKWARD_SECONDS = "squeezer.backword_jump";
+    private static final String KEY_FORWARD_SECONDS = "squeezer.forword_jump";
+
+    // Number of minutes for the custom sleep duration.
+    private static final String KEY_SLEEP_MINUTES = "squeezer.sleep_minutes";
+
+    private final Context context;
+    private final SharedPreferences sharedPreferences;
+    private final int defaultCliPort;
+    private final int defaultHttpPort;
+
+    public Preferences(Context context, SharedPreferences sharedPreferences) {
+        this.context = context;
+        this.sharedPreferences = sharedPreferences;
+        defaultCliPort = context.getResources().getInteger(R.integer.DefaultCliPort);
+        defaultHttpPort = context.getResources().getInteger(R.integer.DefaultHttpPort);
+    }
+
+    public SharedPreferences getSharedPreferences() {
+        return sharedPreferences;
+    }
+
+    private String getStringPreference(String preference) {
+        final String pref = sharedPreferences.getString(preference, null);
+        if (pref == null || pref.length() == 0) {
+            return null;
+        }
+        return pref;
+    }
+
+    public boolean hasServerConfig() {
+        String bssId = getBssId();
+        return (sharedPreferences.contains(prefixed(bssId, KEY_SERVER_ADDRESS)) ||
+                sharedPreferences.contains(KEY_SERVER_ADDRESS));
+    }
+
+    public ServerAddress getServerAddress() {
+        return getSelectedServerAddress(KEY_SERVER_ADDRESS, defaultHttpPort);
+    }
+
+    public ServerAddress getCliServerAddress() {
+        return getSelectedServerAddress(KEY_CLI_SERVER_ADDRESS, defaultCliPort);
+    }
+
+    private ServerAddress getSelectedServerAddress(String setting, int defaultPort) {
+        ServerAddress serverAddress = new ServerAddress(getBssId(), defaultPort);
+
+        String address = null;
+        if (serverAddress.bssId != null) {
+            address = getStringPreference(setting + "_" + serverAddress.bssId);
+        }
+        if (address == null) {
+            address = getStringPreference(setting);
+        }
+
+        readServerAddress(serverAddress, address, defaultPort);
+        return serverAddress;
+    }
+
+    public ServerAddress getServerAddress(String address) {
+        ServerAddress serverAddress = new ServerAddress(getBssId(), defaultHttpPort);
+        serverAddress.setAddress(address);
+        readServerAddress(serverAddress, address, defaultHttpPort);
+        return serverAddress;
+    }
+
+    private void readServerAddress(ServerAddress serverAddress, String address, int defaultPort) {
+        serverAddress.setAddress(address, defaultPort);
+
+        serverAddress.serverName = getStringPreference(prefix(serverAddress) + KEY_SERVER_NAME);
+        serverAddress.userName = getStringPreference(prefix(serverAddress) + KEY_USERNAME);
+        serverAddress.password = getStringPreference(prefix(serverAddress) + KEY_PASSWORD);
+        serverAddress.wakeOnLan = sharedPreferences.getBoolean(prefix(serverAddress) + KEY_WOL, false);
+        serverAddress.mac = Util.parseMac(getStringPreference(prefix(serverAddress) + KEY_MAC));
+        serverAddress.lastScan = sharedPreferences.getLong(prefix(serverAddress) + KEY_LAST_SCAN, 0);
+    }
+
+    private String getBssId() {
+        WifiManager mWifiManager = (WifiManager) context
+                .getApplicationContext().getSystemService(Context.WIFI_SERVICE);
+        WifiInfo connectionInfo = mWifiManager.getConnectionInfo();
+        return  (connectionInfo != null ? connectionInfo.getBSSID() : null);
+    }
+
+    private String prefixed(String bssId, String setting) {
+        return (bssId != null ? setting + "_" + bssId : setting);
+    }
+
+    private String prefix(ServerAddress serverAddress) {
+        return (serverAddress.bssId != null ? serverAddress.bssId + "_ " : "") + serverAddress.localAddress() + "_";
+    }
+
+    public List<String> getServerHistory() {
+        String[] servers = sharedPreferences.getString(KEY_SERVER_HISTORY, "").split("\t");
+        return Arrays.asList(servers).stream().sorted().collect(Collectors.toList());
+    }
+
+    public void saveServer() {
+        String address = getServerAddress().localAddress();
+        Set<String> serverHistory = new HashSet<>(getServerHistory());
+        serverHistory.add(address);
+        sharedPreferences.edit().putString(KEY_SERVER_HISTORY, String.join("\t", serverHistory)).apply();
+    }
+
+    public void saveRandomPlayed(String folderID, Set<String> set) {
+        SharedPreferences.Editor editor = sharedPreferences.edit();
+        editor.putString(String.format(KEY_FOLDERID_RANDOM_PLAYED, folderID),
+                TextUtils.join(";", set));
+        editor.apply();
+    }
+
+    public Set<String> loadRandomPlayed(String folderID) {
+        Set<String> set = new HashSet<>();
+        String string = sharedPreferences.getString(String.format(KEY_FOLDERID_RANDOM_PLAYED, folderID), null);
+        if (TextUtils.isEmpty(string)) {
+            return set;
+        }
+        Collections.addAll(set, string.split(";"));
+        return set;
+    }
+
+    public static class ServerAddress {
+        private final String bssId;
+        private String address; // <host name or ip>:<port>
+        private String host;
+        private int port;
+        private final int defaultPort;
+
+        private String serverName;
+        public String userName;
+        public String password;
+
+        public boolean wakeOnLan;
+        public byte[] mac;
+
+        public long lastScan;
+
+        private ServerAddress(String bssId, int defaultPort) {
+            this.defaultPort = defaultPort;
+            this.bssId = bssId;
+        }
+
+        public void setAddress(String hostPort) {
+            setAddress(hostPort, defaultPort);
+        }
+
+        public void setServerName(String serverName) {
+            this.serverName = serverName;
+        }
+
+        public String address() {
+            return host() + ":" + port();
+        }
+
+        public String localAddress() {
+            if (address == null) {
+                return null;
+            }
+
+            return host + ":" + port;
+        }
+
+        public String host() {
+            return host;
+        }
+
+        public String localHost() {
+            return host;
+        }
+
+        public int port() {
+            return port;
+        }
+
+        public String serverName() {
+            return serverName != null ? serverName : host;
+        }
+
+        private void setAddress(String hostPort, int defaultPort) {
+            // Common mistakes, based on crash reports...
+            if (hostPort != null) {
+                if (hostPort.startsWith("Http://") || hostPort.startsWith("http://")) {
+                    hostPort = hostPort.substring(7);
+                }
+
+                // Ending in whitespace?  From LatinIME, probably?
+                while (hostPort.endsWith(" ")) {
+                    hostPort = hostPort.substring(0, hostPort.length() - 1);
+                }
+            }
+
+            address = hostPort;
+            host = parseHost();
+            port = parsePort(defaultPort);
+        }
+
+        private String parseHost() {
+            if (address == null) {
+                return "";
+            }
+            int colonPos = address.indexOf(":");
+            if (colonPos == -1) {
+                return address;
+            }
+            return address.substring(0, colonPos);
+        }
+
+        private int parsePort(int defaultPort) {
+            if (address == null) {
+                return defaultPort;
+            }
+            int colonPos = address.indexOf(":");
+            if (colonPos == -1) {
+                return defaultPort;
+            }
+            try {
+                return Integer.parseInt(address.substring(colonPos + 1));
+            } catch (NumberFormatException unused) {
+                Log.d(TAG, "Can't parse port out of " + address);
+                return defaultPort;
+            }
+        }
+    }
+
+    public void saveServerAddress(ServerAddress serverAddress) {
+        SharedPreferences.Editor editor = sharedPreferences.edit();
+        editor.putString(prefixed(serverAddress.bssId, KEY_SERVER_ADDRESS), serverAddress.address);
+        editor.putString(prefix(serverAddress) + KEY_SERVER_NAME, serverAddress.serverName);
+        editor.putString(prefix(serverAddress) + KEY_USERNAME, serverAddress.userName);
+        editor.putString(prefix(serverAddress) + KEY_PASSWORD, serverAddress.password);
+        editor.putBoolean(prefix(serverAddress) + KEY_WOL, serverAddress.wakeOnLan);
+        editor.putString(prefix(serverAddress) + KEY_MAC, Util.formatMac(serverAddress.mac));
+        editor.apply();
+    }
+
+    public void saveLastScan(ServerAddress serverAddress, long lastScan) {
+        serverAddress.lastScan = lastScan;
+        SharedPreferences.Editor editor = sharedPreferences.edit();
+        editor.putLong(prefix(serverAddress) + KEY_LAST_SCAN, lastScan);
+        editor.apply();
+    }
+
+    public long getLastRunVersionCode() {
+        return sharedPreferences.getLong(KEY_LAST_RUN_VERSION_CODE, 0);
+    }
+
+    public void setLastRunVersionCode(long lastRunVersionCode) {
+        sharedPreferences.edit().putLong(KEY_LAST_RUN_VERSION_CODE, lastRunVersionCode).apply();
+    }
+
+    public String getLastPlayer() {
+        return getStringPreference(KEY_LAST_PLAYER);
+    }
+
+    public void setLastPlayer(@Nullable Player player) {
+        SharedPreferences.Editor editor = sharedPreferences.edit();
+
+        if (player == null) {
+            Log.v(TAG, "Clearing " + KEY_LAST_PLAYER);
+            editor.remove(KEY_LAST_PLAYER);
+        } else {
+            Log.v(TAG, "Saving " + KEY_LAST_PLAYER + "=" + player.getId());
+            editor.putString(KEY_LAST_PLAYER, player.getId());
+        }
+
+        editor.apply();
+    }
+
+    public PlayableItemAction getSwipeRightAction() {
+        String actionType = sharedPreferences.getString(Preferences.KEY_ON_SWIPE_RIGHT_ACTION, PlayableItemAction.PLAY_NEXT.name());
+        return PlayableItemAction.valueOf(actionType);
+    }
+
+    public PlayableItemAction getSwipeLeftAction() {
+        String actionType = sharedPreferences.getString(Preferences.KEY_ON_SWIPE_LEFT_ACTION, PlayableItemAction.ADD_TO_END.name());
+        return PlayableItemAction.valueOf(actionType);
+    }
+
+    public boolean isLargeArtwork() {
+        return sharedPreferences.getBoolean(KEY_LARGE_ARTWORK, true);
+    }
+
+    public void setLargeArtwork(boolean largeArtwork) {
+        sharedPreferences.edit().putBoolean(Preferences.KEY_LARGE_ARTWORK, largeArtwork).apply();
+    }
+
+    public boolean isBackgroundVolume() {
+        return sharedPreferences.getBoolean(KEY_BACKGROUND_VOLUME, true);
+    }
+
+    public void setBackgroundVolume(boolean backgroundVolume) {
+        sharedPreferences.edit().putBoolean(Preferences.KEY_BACKGROUND_VOLUME, backgroundVolume).apply();
+    }
+
+    public int getVolumeIncrements() {
+        return sharedPreferences.getInt(KEY_VOLUME_INCREMENTS, 5);
+    }
+
+    public void setVolumeIncrements(int step) {
+        sharedPreferences.edit().putInt(Preferences.KEY_VOLUME_INCREMENTS, step).apply();
+    }
+
+    public boolean isGroupVolume() {
+        return sharedPreferences.getBoolean(KEY_GROUP_VOLUME, true);
+    }
+
+    public void setGroupVolume(boolean groupVolume) {
+        sharedPreferences.edit().putBoolean(Preferences.KEY_GROUP_VOLUME, groupVolume).apply();
+    }
+
+    public int getFadeInSecs() {
+        return sharedPreferences.getInt(KEY_FADE_IN_SECS, 0);
+    }
+
+    public ThemeManager.Theme getTheme() {
+        ThemeManager.Theme defaultTheme = ThemeManager.getDefaultTheme();
+        try {
+            return ThemeManager.Theme.valueOf(sharedPreferences.getString(KEY_ON_THEME_SELECT_ACTION, defaultTheme.name()));
+        } catch (Exception e) {
+            return defaultTheme;
+        }
+    }
+
+    public void setTheme(ThemeManager.Theme theme) {
+        sharedPreferences.edit().putString(Preferences.KEY_ON_THEME_SELECT_ACTION, theme.name()).apply();
+    }
+
+    public ScreensaverMode getScreensaverMode() {
+        String string = sharedPreferences.getString(KEY_SCREENSAVER, null);
+        return string == null ? ScreensaverMode.OFF : ScreensaverMode.valueOf(string);
+    }
+    public FullScreenMode getFullScreenMode() {
+        String string = sharedPreferences.getString(KEY_FULLSCREEN, null);
+        return string == null ? FullScreenMode.OFF : FullScreenMode.valueOf(string);
+    }
+    public boolean isScrobbleEnabled() {
+        return sharedPreferences.getBoolean(KEY_SCROBBLE_ENABLED, false);
+    }
+
+    public TopBarSearch getTopBarSearch() {
+        String string = sharedPreferences.getString(KEY_TOP_BAR_SEARCH, null);
+        return string == null ? TopBarSearch.GLOBAL : TopBarSearch.valueOf(string);
+    }
+
+    public boolean isClearPlaylistConfirmation() {
+        return sharedPreferences.getBoolean(KEY_CLEAR_PLAYLIST_CONFIRMATION, true);
+    }
+
+    public void setClearPlaylistConfirmation(boolean b) {
+        sharedPreferences.edit().putBoolean(Preferences.KEY_CLEAR_PLAYLIST_CONFIRMATION, b).apply();
+    }
+
+    public IncomingCallAction getActionOnIncomingCall() {
+        String string = sharedPreferences.getString(KEY_ACTION_ON_INCOMING_CALL, null);
+        if (string == null) {
+            return (sharedPreferences.getBoolean(KEY_PAUSE_ON_INCOMING_CALL, true) ? IncomingCallAction.PAUSE : IncomingCallAction.NONE);
+        }
+        return IncomingCallAction.valueOf(string);
+    }
+
+    public void setActionOnIncomingCall(IncomingCallAction action) {
+        sharedPreferences.edit().putString(KEY_ACTION_ON_INCOMING_CALL, action.name()).apply();
+    }
+
+    public boolean restoreMusicAfterCall() {
+        return sharedPreferences.getBoolean(KEY_RESTORE_MUSIC_AFTER_CALL, false);
+    }
+
+    public boolean controlSqueezePlayer() {
+        return (sharedPreferences.getBoolean(KEY_SQUEEZEPLAYER_ENABLED, true));
+    }
+
+    public boolean controlSqueezelite() {
+        return (sharedPreferences.getBoolean(KEY_SQUEEZELITE_ENABLED, true));
+    }
+
+    /** Get the preferred album list layout. */
+    public ArtworkListLayout getAlbumListLayout() {
+        return getListLayout(KEY_ALBUM_LIST_LAYOUT);
+    }
+
+    public void setAlbumListLayout(ArtworkListLayout artworkListLayout) {
+        setListLayout(KEY_ALBUM_LIST_LAYOUT, artworkListLayout);
+    }
+
+    /** Get the preferred home menu layout. */
+    public ArtworkListLayout getHomeMenuLayout() {
+        return getListLayout(KEY_HOME_MENU_LAYOUT);
+    }
+
+    public void setHomeMenuLayout(ArtworkListLayout artworkListLayout) {
+        setListLayout(KEY_HOME_MENU_LAYOUT, artworkListLayout);
+    }
+
+    public boolean homeGroups() {
+        return getHomeLayout() == ArtworkListLayout.grouped;
+    }
+
+    /** Get the preferred home menu layout. */
+    public ArtworkListLayout getHomeLayout() {
+        String listLayoutString = sharedPreferences.getString(KEY_HOME_LAYOUT, null);
+        return listLayoutString != null ? ArtworkListLayout.valueOf(listLayoutString) : getHomeMenuLayout();
+    }
+
+    public void setHomeLayout(ArtworkListLayout artworkListLayout) {
+        setListLayout(KEY_HOME_LAYOUT, artworkListLayout);
+    }
+
+    /**
+     * Get the preferred layout for the specified preference
+     * <p>
+     * If the list layout is not selected, a default one is chosen, based on the current screen
+     * size, on the assumption that the artwork grid is preferred on larger screens.
+     */
+    private ArtworkListLayout getListLayout(String preference) {
+        String listLayoutString = sharedPreferences.getString(preference, null);
+        if (listLayoutString == null) {
+            int screenSize = context.getResources().getConfiguration().screenLayout
+                    & Configuration.SCREENLAYOUT_SIZE_MASK;
+            return (screenSize >= Configuration.SCREENLAYOUT_SIZE_LARGE)
+                    ? ArtworkListLayout.grid : ArtworkListLayout.list;
+        } else {
+            return ArtworkListLayout.valueOf(listLayoutString);
+        }
+    }
+
+    private void setListLayout(String preference, ArtworkListLayout artworkListLayout) {
+        sharedPreferences.edit().putString(preference, artworkListLayout.name()).apply();
+    }
+
+    /** Get max lines for the supplied list layout. */
+    public int getMaxLines(ArtworkListLayout listLayout) {
+        return sharedPreferences.getInt(String.format(KEY_MAX_LINES_FORMAT, listLayout.name()), 2);
+    }
+
+    public void setMaxLines(ArtworkListLayout listLayout, int maxLines) {
+        sharedPreferences.edit().putInt(String.format(KEY_MAX_LINES_FORMAT, listLayout.name()), maxLines).apply();
+    }
+
+    public boolean nowPlayingVolume() {
+        return sharedPreferences.getBoolean(KEY_NOW_PLAYING_VOLUME, true);
+    }
+
+    public void nowPlayingVolume(boolean b) {
+        sharedPreferences.edit().putBoolean(Preferences.KEY_NOW_PLAYING_VOLUME, b).apply();
+    }
+
+    public boolean showTrackCount() {
+        return sharedPreferences.getBoolean(KEY_TRACK_COUNT, true);
+    }
+
+    public void showTrackCount(boolean b) {
+        sharedPreferences.edit().putBoolean(Preferences.KEY_TRACK_COUNT, b).apply();
+    }
+
+    public boolean showTechnicalInfo() {
+        return sharedPreferences.getBoolean(KEY_TECHNICAL_INFO, false);
+    }
+
+    public void showTechnicalInfo(boolean b) {
+        sharedPreferences.edit().putBoolean(Preferences.KEY_TECHNICAL_INFO, b).apply();
+    }
+
+    public boolean addComposerLine() {
+        return sharedPreferences.getBoolean(KEY_COMPOSER_LINE, false);
+    }
+
+    public void addComposerLine(boolean b) {
+        sharedPreferences.edit().putBoolean(Preferences.KEY_COMPOSER_LINE, b).apply();
+    }
+
+    public boolean addConductorLine() {
+        return sharedPreferences.getBoolean(KEY_CONDUCTOR_LINE, false);
+    }
+
+    public void addConductorLine(boolean b) {
+        sharedPreferences.edit().putBoolean(Preferences.KEY_CONDUCTOR_LINE, b).apply();
+    }
+
+    public boolean displayClassicalMusicTags() {
+        return sharedPreferences.getBoolean(KEY_CLASSICAL_MUSIC_TAGS, false);
+    }
+
+    public void displayClassicalMusicTags(boolean b) {
+        sharedPreferences.edit().putBoolean(Preferences.KEY_CLASSICAL_MUSIC_TAGS, b).apply();
+    }
+
+    public boolean useFlatIcons() {
+        return sharedPreferences.getBoolean(KEY_FLAT_ICONS, true);
+    }
+
+    public void useFlatIcons(boolean b) {
+        sharedPreferences.edit().putBoolean(Preferences.KEY_FLAT_ICONS, b).apply();
+    }
+
+    public CustomizeHomeMenuMode getCustomizeHomeMenuMode() {
+        String string = sharedPreferences.getString(KEY_CUSTOMIZE_HOME_MENU_MODE, null);
+        return string == null ? CustomizeHomeMenuMode.ARCHIVE : CustomizeHomeMenuMode.valueOf(string);
+    }
+
+    public CustomizeShortcutsMode getCustomizeShortcutsMode() {
+        String string = sharedPreferences.getString(KEY_CUSTOMIZE_SHORTCUT_MODE, null);
+        return string == null ? CustomizeShortcutsMode.ENABLED : CustomizeShortcutsMode.valueOf(string);
+    }
+
+    @NonNull
+    public Set<String> getArchivedMenuItems(Player player) {
+        Set<String> items = new HashSet<>();
+        String string = sharedPreferences.getString(String.format(KEY_PLAYER_ARCHIVED_ITEMS_FORMAT, player.getId()), null);
+        if (TextUtils.isEmpty(string)) {
+            return items;
+        }
+        Collections.addAll(items, string.split(";"));
+        return items;
+    }
+
+    public void setArchivedMenuItems(Set<String> items, Player player) {
+        SharedPreferences.Editor editor = sharedPreferences.edit();
+        editor.putString(String.format(KEY_PLAYER_ARCHIVED_ITEMS_FORMAT, player.getId()), TextUtils.join(";", items));
+        editor.apply();
+    }
+
+    public void saveShortcuts(List<JiveItem> shortcuts) {
+        Map<String, Object> map = convertShortcuts(shortcuts);
+        SharedPreferences.Editor editor = sharedPreferences.edit();
+        JSONObject json = new JSONObject(map);
+        editor.putString(CUSTOM_SHORTCUTS, json.toString());
+        editor.apply();
+    }
+
+    private Map<String, Object> convertShortcuts(List<JiveItem> customShortcuts) {
+        Map<String, Object> map = new HashMap<>();
+        for (JiveItem item : customShortcuts) {
+            map.put(item.getName(), item.getRecord());
+        }
+        return map;
+    }
+
+    /**
+     * Return a map of names (keys) of shortcuts with value: Map<String, Object> which is a record
+     * and can be used as such when generating JiveItems
+     */
+    public List<Map<String, Object>> getCustomShortcuts() {
+        List<Map<String, Object>> allShortcutsFromPref = new ArrayList<>();
+        String jsonString = sharedPreferences.getString(CUSTOM_SHORTCUTS, null);
+        if (TextUtils.isEmpty(jsonString)) return allShortcutsFromPref;
+
+        try {
+//          whole String to JSON, then extract name/record pairs
+            JSONObject allShortcuts = new JSONObject(jsonString);
+            Iterator<String> keysItr = allShortcuts.keys();
+            while (keysItr.hasNext()) {
+                String key = keysItr.next();
+                try {
+                    allShortcutsFromPref.add((Map<String, Object>) JSON.parse(allShortcuts.getString(key)));
+                } catch (IllegalStateException e) {
+                    Log.w(TAG, "Can't parse custom shortcut '" + key + "'", e);
+                }
+            }
+        } catch (JSONException e) {
+            Log.w(TAG, "Exception reading shortcuts", e);
+        }
+        return allShortcutsFromPref;
+    }
+
+
+    public boolean isDownloadEnabled() {
+        return sharedPreferences.getBoolean(KEY_DOWNLOAD_ENABLED, true);
+    }
+
+    public void setDownloadEnabled(boolean b) {
+        sharedPreferences.edit().putBoolean(Preferences.KEY_DOWNLOAD_ENABLED, b).apply();
+    }
+
+    public boolean isDownloadConfirmation() {
+        return sharedPreferences.getBoolean(KEY_DOWNLOAD_CONFIRMATION, true);
+    }
+
+    public void setDownloadConfirmation(boolean b) {
+        sharedPreferences.edit().putBoolean(Preferences.KEY_DOWNLOAD_CONFIRMATION, b).apply();
+    }
+
+    public boolean isDownloadUseServerPath() {
+        return sharedPreferences.getBoolean(KEY_DOWNLOAD_USE_SERVER_PATH, true);
+    }
+
+    public DownloadPathStructure getDownloadPathStructure() {
+        final String string = sharedPreferences.getString(KEY_DOWNLOAD_PATH_STRUCTURE, null);
+        return (string == null ? DownloadPathStructure.ARTIST_ALBUM: DownloadPathStructure.valueOf(string));
+    }
+
+    public DownloadFilenameStructure getDownloadFilenameStructure() {
+        final String string = sharedPreferences.getString(KEY_DOWNLOAD_FILENAME_STRUCTURE, null);
+        return (string == null ? DownloadFilenameStructure.NUMBER_TITLE: DownloadFilenameStructure.valueOf(string));
+    }
+
+    public int getTimeInputMode() {
+        return sharedPreferences.getInt(KEY_TIME_INPUT_MODE, MaterialTimePicker.INPUT_MODE_CLOCK);
+    }
+
+    public void setTimeInputMode(int mode) {
+        sharedPreferences.edit().putInt(Preferences.KEY_TIME_INPUT_MODE, mode).apply();
+    }
+
+    public boolean isShowRemainingTime() {
+        return sharedPreferences.getBoolean(KEY_SHOW_REMAINING_TIME, false);
+    }
+
+    public void setShowRemainingTime(boolean showRemainingTime) {
+        sharedPreferences.edit().putBoolean(Preferences.KEY_SHOW_REMAINING_TIME, showRemainingTime).apply();
+    }
+
+    public int getBackwardSeconds() {
+        return sharedPreferences.getInt(KEY_BACKWARD_SECONDS, 10);
+    }
+
+    public void setBackwardSeconds(int seconds) {
+        sharedPreferences.edit().putInt(KEY_BACKWARD_SECONDS, seconds).apply();
+    }
+
+    public int getForwardSeconds() {
+        return sharedPreferences.getInt(KEY_FORWARD_SECONDS, 10);
+    }
+
+    public void setForwardSeconds(int seconds) {
+        sharedPreferences.edit().putInt(KEY_FORWARD_SECONDS, seconds).apply();
+    }
+
+    public int getSleepMinutes() {
+        return sharedPreferences.getInt(KEY_SLEEP_MINUTES, 120);
+    }
+
+    public void setSleepMinutes(int minutes) {
+        sharedPreferences.edit().putInt(KEY_SLEEP_MINUTES, minutes).apply();
+    }
+
+    public enum TopBarSearch implements EnumWithText {
+        GLOBAL(R.string.settings_top_bar_search_global),
+        MY_MUSIC(R.string.settings_top_bar_search_my_music);
+
+        private final int labelId;
+
+        TopBarSearch(int labelId) {
+            this.labelId = labelId;
+        }
+
+        @Override
+        public String getText(Context context) {
+            return context.getString(labelId);
+        }
+    }
+
+    public enum IncomingCallAction implements EnumWithText {
+        NONE(R.string.no_action),
+        PAUSE(R.string.pause_active),
+        PAUSE_ALL(R.string.pause_all),
+        MUTE(R.string.mute_active),
+        MUTE_ALL(R.string.mute_all);
+
+        private final int labelId;
+
+        IncomingCallAction(int labelId) {
+            this.labelId = labelId;
+        }
+
+        @Override
+        public String getText(Context context) {
+            return context.getString(labelId);
+        }
+
+        public boolean isPause() {
+            return EnumSet.of(PAUSE, PAUSE_ALL).contains(this);
+        }
+
+        public boolean isAll() {
+            return EnumSet.of(PAUSE_ALL, MUTE_ALL).contains(this);
+        }
+    }
+
+    public enum ScreensaverMode implements EnumWithText {
+        OFF(R.string.settings_screensaver_off),
+        ON(R.string.settings_screensaver_on),
+        CLOCK(R.string.settings_screensaver_clock);
+
+        private final int labelId;
+
+        ScreensaverMode(int labelId) {
+            this.labelId = labelId;
+        }
+
+        @Override
+        public String getText(Context context) {
+            return context.getString(labelId);
+        }
+    }
+    public enum FullScreenMode implements EnumWithText {
+        OFF(R.string.settings_fullscreen_off),
+        ON(R.string.settings_fullscreen_on);
+        private final int labelId;
+        FullScreenMode(int labelId) {
+            this.labelId = labelId;
+        }
+        @Override
+        public String getText(Context context) {
+            return context.getString(labelId);
+        }
+    }
+    public enum CustomizeHomeMenuMode implements EnumWithText {
+        ARCHIVE(R.string.settings_customize_home_menu_archive),
+        DISABLED(R.string.settings_customize_home_menu_disabled),
+        LOCKED(R.string.settings_customize_home_menu_locked);
+
+        private final int labelId;
+
+        CustomizeHomeMenuMode(int labelId) {
+            this.labelId = labelId;
+        }
+
+        @Override
+        public String getText(Context context) {
+            return context.getString(labelId);
+        }
+    }
+
+    public enum CustomizeShortcutsMode implements EnumWithText {
+        ENABLED(R.string.settings_custom_shortcut_enabled),
+        DISABLED(R.string.settings_custom_shortcut_disabled),
+        LOCKED(R.string.settings_custom_shortcut_locked);
+
+        private final int labelId;
+
+        CustomizeShortcutsMode(int labelId) {
+            this.labelId = labelId;
+        }
+
+        @Override
+        public String getText(Context context) {
+            return context.getString(labelId);
+        }
+    }
+}

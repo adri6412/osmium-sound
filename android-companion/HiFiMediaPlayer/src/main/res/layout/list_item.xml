@@ -1,0 +1,86 @@
+<?xml version="1.0" encoding="utf-8"?>
+
+<!--
+ Copyright (c) 2013 Google Inc.  All Rights Reserved
+
+ Licensed under the Apache License, Version 2.0 (the "License");
+ you may not use this file except in compliance with the License.
+ You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+ Unless required by applicable law or agreed to in writing, software
+ distributed under the License is distributed on an "AS IS" BASIS,
+ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ See the License for the specific language governing permissions and
+ limitations under the License.
+-->
+
+<!--
+General layout for list items.
+
+The layout contains:
+
+ * @id/icon - ImageView, suitable for showing album artwork or other
+   icons.
+
+ * @id/text1 - TextView, main entry text.
+
+ * @id/text2 - TextView, detail entry text.
+
+ * @id/context_menu - ListImageButton, displaying an indicator for a drop
+   down menu.
+
+The individual visibility of the views is controlled by code, see
+BaseItemView#getAdapterView(View, ViewGroup, EnumSet<ViewParams>)
+for the implementation.
+
+-->
+
+<androidx.constraintlayout.widget.ConstraintLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    style="@style/SqueezerWidget.List.Item">
+
+    <ImageView
+        style="@style/SqueezerWidget.List.CoverArt"
+        android:id="@+id/icon"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toStartOf="@id/text1"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintBottom_toBottomOf="parent"
+        android:contentDescription="@string/app_name"
+        tools:src="@drawable/pending" />
+
+    <TextView
+        android:id="@+id/text1"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        app:layout_constraintStart_toEndOf="@id/icon"
+        app:layout_constraintEnd_toStartOf="@id/context_menu"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintBottom_toTopOf="@id/text2"
+        app:layout_constraintVertical_chainStyle="packed"
+        android:textAppearance="@style/SqueezerTextAppearance.ListItem.Primary"
+        tools:text="text1"/>
+
+    <TextView
+        android:id="@+id/text2"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        app:layout_constraintStart_toStartOf="@id/text1"
+        app:layout_constraintEnd_toStartOf="@id/context_menu"
+        app:layout_constraintTop_toBottomOf="@id/text1"
+        app:layout_constraintBottom_toBottomOf="parent"
+        android:textAppearance="@style/SqueezerTextAppearance.ListItem.Secondary"
+        tools:text="text2"/>
+
+    <include layout="@layout/context_menu_image_button"
+        android:layout_width="48dp"
+        android:layout_height="48dp"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintBottom_toBottomOf="parent"/>
+
+</androidx.constraintlayout.widget.ConstraintLayout>
