@@ -25,7 +25,7 @@ public class SqueezerRemoteControl extends SqueezerHomeScreenWidget {
     public static final String UNKNOWN_PLAYER = "UNKNOWN_PLAYER";
     private static final String ACTION_PREFIX = "ngo.squeezer.homescreenwidgets.";
     private static final String TAG = SqueezerRemoteControl.class.getName();
-    static final String PREFS_NAME = "uk.org.ngo.squeezer.homescreenwidgets.SqueezerRemoteControl";
+    static final String PREFS_NAME = "com.hifi.mediaplayer.homescreenwidgets.SqueezerRemoteControl";
     static final String PREF_PREFIX_KEY = "squeezerRemote_";
     static final String PREF_SUFFIX_PLAYER_ID = "playerId";
     static final String PREF_SUFFIX_PLAYER_NAME = "playerName";

@@ -220,13 +220,13 @@ public class SettingsFragment  extends PreferenceFragmentCompat implements
     }
 
     private boolean isLauncherEnabled() {
-        ComponentName componentName = new ComponentName(requireContext(), "uk.org.ngo.squeezer.HomeLauncherActivity");
+        ComponentName componentName = new ComponentName(requireContext(), "com.hifi.mediaplayer.HomeLauncherActivity");
         int setting = requireContext().getPackageManager().getComponentEnabledSetting(componentName);
         return setting == PackageManager.COMPONENT_ENABLED_STATE_ENABLED;
     }
 
     private void updateLauncherMode(boolean enabled) {
-        ComponentName componentName = new ComponentName(requireContext(), "uk.org.ngo.squeezer.HomeLauncherActivity");
+        ComponentName componentName = new ComponentName(requireContext(), "com.hifi.mediaplayer.HomeLauncherActivity");
         int setting = enabled ? PackageManager.COMPONENT_ENABLED_STATE_ENABLED : PackageManager.COMPONENT_ENABLED_STATE_DISABLED;
         requireContext().getPackageManager().setComponentEnabledSetting(componentName, setting, PackageManager.DONT_KILL_APP);
     }

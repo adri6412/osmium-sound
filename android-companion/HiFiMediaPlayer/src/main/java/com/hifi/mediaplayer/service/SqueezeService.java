@@ -141,11 +141,11 @@ public class SqueezeService extends Service {
     int mFadeInSecs;
     boolean mGroupVolume;
 
-    private static final String ACTION_NEXT_TRACK = "uk.org.ngo.squeezer.service.ACTION_NEXT_TRACK";
-    private static final String ACTION_PREV_TRACK = "uk.org.ngo.squeezer.service.ACTION_PREV_TRACK";
-    private static final String ACTION_PLAY = "uk.org.ngo.squeezer.service.ACTION_PLAY";
-    private static final String ACTION_PAUSE = "uk.org.ngo.squeezer.service.ACTION_PAUSE";
-    private static final String ACTION_CLOSE = "uk.org.ngo.squeezer.service.ACTION_CLOSE";
+    private static final String ACTION_NEXT_TRACK = "com.hifi.mediaplayer.service.ACTION_NEXT_TRACK";
+    private static final String ACTION_PREV_TRACK = "com.hifi.mediaplayer.service.ACTION_PREV_TRACK";
+    private static final String ACTION_PLAY = "com.hifi.mediaplayer.service.ACTION_PLAY";
+    private static final String ACTION_PAUSE = "com.hifi.mediaplayer.service.ACTION_PAUSE";
+    private static final String ACTION_CLOSE = "com.hifi.mediaplayer.service.ACTION_CLOSE";
     private static final String ACTION_POWER = "power";
     private static final String ACTION_DISCONNECT = "disconnect";
 

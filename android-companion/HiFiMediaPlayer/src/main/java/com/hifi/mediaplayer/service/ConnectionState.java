@@ -106,7 +106,7 @@ public class ConnectionState {
     /** Duration before we give up rehandshake */
     private static final long REHANDSHAKE_TIMEOUT = 15 * 60_000;
 
-    /** Map Player IDs to the {@link uk.org.ngo.squeezer.model.Player} with that ID. */
+    /** Map Player IDs to the {@link com.hifi.mediaplayer.model.Player} with that ID. */
     private final Map<String, Player> mPlayers = new ConcurrentHashMap<>();
 
     /** The active player (the player to which commands are sent by default). */
@@ -131,7 +131,7 @@ public class ConnectionState {
 
     /**
      * Sets a new connection state, and posts a sticky
-     * {@link uk.org.ngo.squeezer.service.event.ConnectionChanged} event with the new state.
+     * {@link com.hifi.mediaplayer.service.event.ConnectionChanged} event with the new state.
      *
      * @param connectionState The new connection state.
      */

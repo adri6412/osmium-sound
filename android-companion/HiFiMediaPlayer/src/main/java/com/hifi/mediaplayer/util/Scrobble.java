@@ -53,7 +53,7 @@ public class Scrobble {
             i.setAction("com.adam.aslfms.notify.playstatechanged");
             i.putExtra("state", PlayerState.PLAY_STATE_PLAY.equals(playStatus) ? 0 : 2);
             i.putExtra("app-name", context.getText(R.string.app_name));
-            i.putExtra("app-package", "uk.org.ngo.squeezer");
+            i.putExtra("app-package", "com.hifi.mediaplayer");
             i.putExtra("track", currentSong.getName());
             i.putExtra("album", currentSong.songInfo.album);
             i.putExtra("artist", currentSong.songInfo.getArtist());
