@@ -14,14 +14,14 @@ buildscript {
         mavenCentral()
     }
     dependencies {
-        classpath 'com.android.tools.build:gradle:8.5.1'
+        classpath 'com.android.tools.build:gradle:8.13.0'
     }
 }
 
 ext {
-    compileSdkVersion = 35
+    compileSdkVersion = 36
     minSdkVersion = 26
-    targetSdkVersion = 35
+    targetSdkVersion = 36
 
     assert minSdkVersion <= targetSdkVersion : "minSdkVersion too big"
     assert targetSdkVersion <= compileSdkVersion : "targetSdkVersion too big"
