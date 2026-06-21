@@ -162,10 +162,10 @@
             <!-- Previous Button -->
             <FrameLayout
                 android:id="@+id/prev"
+                style="@style/GoldButtonContainer"
                 android:layout_width="48dp"
                 android:layout_height="48dp"
-                android:layout_marginEnd="24dp"
-                android:background="#D4AF37">
+                android:layout_marginEnd="24dp">
                 <ImageView
                     android:layout_width="24dp"
                     android:layout_height="24dp"
@@ -178,11 +178,11 @@
             <!-- Play/Pause -->
             <FrameLayout
                 android:id="@+id/pause"
+                style="@style/GoldButtonContainer"
                 android:layout_width="64dp"
                 android:layout_height="64dp"
                 android:layout_marginStart="24dp"
-                android:layout_marginEnd="24dp"
-                android:background="#D4AF37">
+                android:layout_marginEnd="24dp">
                 <ImageView
                     android:layout_width="32dp"
                     android:layout_height="32dp"
@@ -195,10 +195,10 @@
             <!-- Next Button -->
             <FrameLayout
                 android:id="@+id/next"
+                style="@style/GoldButtonContainer"
                 android:layout_width="48dp"
                 android:layout_height="48dp"
-                android:layout_marginStart="24dp"
-                android:background="#D4AF37">
+                android:layout_marginStart="24dp">
                 <ImageView
                     android:layout_width="24dp"
                     android:layout_height="24dp"
