@@ -8,7 +8,7 @@ import com.google.android.material.timepicker.TimeFormat;
 import java.util.Calendar;
 
 import com.hifi.mediaplayer.Preferences;
-import com.hifi.mediaplayer.Squeezer;
+import com.hifi.mediaplayer.HiFiMediaPlayer;
 import com.hifi.mediaplayer.framework.BaseActivity;
 import com.hifi.mediaplayer.model.JiveItem;
 
@@ -27,7 +27,7 @@ public class InputTimeDialog {
             minute = c.get(Calendar.MINUTE);
         }
 
-        Preferences preferences = Squeezer.getPreferences();
+        Preferences preferences = HiFiMediaPlayer.getPreferences();
         MaterialTimePicker picker = new MaterialTimePicker.Builder()
                 .setHour(hour)
                 .setMinute(minute)

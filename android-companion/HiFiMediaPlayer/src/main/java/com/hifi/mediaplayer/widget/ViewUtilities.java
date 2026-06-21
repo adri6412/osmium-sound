@@ -8,13 +8,13 @@ import androidx.core.view.ViewCompat;
 import androidx.core.view.WindowInsetsCompat;
 
 import com.hifi.mediaplayer.Preferences;
-import com.hifi.mediaplayer.Squeezer;
+import com.hifi.mediaplayer.HiFiMediaPlayer;
 
 public class ViewUtilities {
 
     public static void setInsetsListener(View view, boolean top, boolean bottom, boolean ime) {
         ViewCompat.setOnApplyWindowInsetsListener(view, (v, insets) -> {
-            boolean isFullScreen = Squeezer.getPreferences().getFullScreenMode() == Preferences.FullScreenMode.ON;
+            boolean isFullScreen = HiFiMediaPlayer.getPreferences().getFullScreenMode() == Preferences.FullScreenMode.ON;
 
             // We always want to account for the IME (keyboard) and display cutouts (notches).
             // We only account for system bars (status/nav) if we are NOT in full screen mode.

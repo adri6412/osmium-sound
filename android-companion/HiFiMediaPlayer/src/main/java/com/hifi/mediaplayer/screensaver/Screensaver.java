@@ -20,7 +20,7 @@ import android.widget.TextView;
 import java.util.Random;
 
 import com.hifi.mediaplayer.R;
-import com.hifi.mediaplayer.Squeezer;
+import com.hifi.mediaplayer.HiFiMediaPlayer;
 import com.hifi.mediaplayer.SqueezerRepository;
 import com.hifi.mediaplayer.model.CurrentTrack;
 import com.hifi.mediaplayer.model.Player;
@@ -72,7 +72,7 @@ public class Screensaver extends AppCompatActivity {
         date.setFormat12Hour(pattern);
         date.setFormat24Hour(pattern);
 
-        SqueezerRepository repository = ((Squeezer) getApplicationContext()).repository();
+        SqueezerRepository repository = ((HiFiMediaPlayer) getApplicationContext()).repository();
         repository.observe(this, (ActivePlayerChanged event) -> {
             activePlayer = event.player;
             updateTrack(trackView, activePlayer);

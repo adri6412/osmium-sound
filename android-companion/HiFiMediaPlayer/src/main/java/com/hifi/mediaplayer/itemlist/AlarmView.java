@@ -35,7 +35,7 @@ import com.google.android.material.timepicker.TimeFormat;
 
 import com.hifi.mediaplayer.Preferences;
 import com.hifi.mediaplayer.R;
-import com.hifi.mediaplayer.Squeezer;
+import com.hifi.mediaplayer.HiFiMediaPlayer;
 import com.hifi.mediaplayer.framework.ItemViewHolder;
 import com.hifi.mediaplayer.model.Alarm;
 import com.hifi.mediaplayer.model.AlarmPlaylist;
@@ -162,7 +162,7 @@ public class AlarmView extends ItemViewHolder<Alarm> {
     }
 
     public static void showTimePicker(AlarmsActivity activity, Alarm alarm, int position, boolean is24HourFormat) {
-        Preferences preferences = Squeezer.getPreferences();
+        Preferences preferences = HiFiMediaPlayer.getPreferences();
         long tod = alarm.getTod();
         MaterialTimePicker picker = new MaterialTimePicker.Builder()
                 .setHour((int) (tod / 3600))

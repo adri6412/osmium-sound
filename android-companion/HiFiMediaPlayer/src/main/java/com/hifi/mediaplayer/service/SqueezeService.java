@@ -64,7 +64,7 @@ import java.util.stream.Collectors;
 import com.hifi.mediaplayer.NowPlayingActivity;
 import com.hifi.mediaplayer.Preferences;
 import com.hifi.mediaplayer.R;
-import com.hifi.mediaplayer.Squeezer;
+import com.hifi.mediaplayer.HiFiMediaPlayer;
 import com.hifi.mediaplayer.SqueezerRepository;
 import com.hifi.mediaplayer.Util;
 import com.hifi.mediaplayer.download.DownloadDatabase;
@@ -159,12 +159,12 @@ public class SqueezeService extends Service {
         NotificationManagerCompat nm = NotificationManagerCompat.from(this);
         nm.cancel(PLAYBACKSERVICE_STATUS);
 
-        repository = ((Squeezer) getApplicationContext()).repository();
+        repository = ((HiFiMediaPlayer) getApplicationContext()).repository();
         mDelegate = new SlimDelegate(repository);
         homeMenuHandling = mDelegate.getHomeMenuHandling();
         randomPlayDelegate = new RandomPlayDelegate(mDelegate);
 
-        Squeezer.getPreferences(preferences -> {
+        HiFiMediaPlayer.getPreferences(preferences -> {
             cachePreferences(preferences);
             homeMenuHandling.setCustomShortcuts(preferences.homeGroups(), preferences.getCustomShortcuts());
         });
@@ -285,7 +285,7 @@ public class SqueezeService extends Service {
         updateAllPlayerSubscriptionStates();
         requestPlayerData();
         if (continuePlaying && prevActivePlayer != null) moveCurrentPlaylist(prevActivePlayer, newActivePlayer);
-        Squeezer.getPreferences().setLastPlayer(newActivePlayer);
+        HiFiMediaPlayer.getPreferences().setLastPlayer(newActivePlayer);
     }
 
     private void moveCurrentPlaylist(Player from, Player to) {
@@ -300,7 +300,7 @@ public class SqueezeService extends Service {
         public void onItemsReceived(int count, int start, Map<String, Object> parameters, List<JiveItem> items, Class<JiveItem> dataType) {
             homeMenu.addAll(items);
             if (homeMenu.size() == count) {
-                Preferences preferences = Squeezer.getPreferences();
+                Preferences preferences = HiFiMediaPlayer.getPreferences();
                 boolean useArchive = preferences.getCustomizeHomeMenuMode() != Preferences.CustomizeHomeMenuMode.DISABLED;
                 Set<String> archivedMenuItems = Collections.emptySet();
                 if ((useArchive) && (mDelegate.getActivePlayer() != null)) {
@@ -321,7 +321,7 @@ public class SqueezeService extends Service {
     }
 
     public void updateShortCut(JiveItem item, Map<String, Object> record) {
-        Preferences preferences = Squeezer.getPreferences();
+        Preferences preferences = HiFiMediaPlayer.getPreferences();
         List<JiveItem> shortcuts = homeMenuHandling.updateShortcut(item, record);
         preferences.saveShortcuts(shortcuts);
     }
@@ -519,7 +519,7 @@ public class SqueezeService extends Service {
             }
 
             mediaSession.setCallback(new SqueezerMediaSessionCallback());
-            if (Squeezer.getPreferences().isBackgroundVolume()) {
+            if (HiFiMediaPlayer.getPreferences().isBackgroundVolume()) {
                 mediaSession.setPlaybackToRemote(mVolumeProvider);
             }
             mediaSession.setActive(true);
@@ -611,7 +611,7 @@ public class SqueezeService extends Service {
             : null;
 
     private void onCallStateChanged(int state) {
-        Preferences preferences = Squeezer.getPreferences();
+        Preferences preferences = HiFiMediaPlayer.getPreferences();
         Preferences.IncomingCallAction incomingCallAction = preferences.getActionOnIncomingCall();
         if (incomingCallAction != Preferences.IncomingCallAction.NONE) {
             PerformAction action = incomingCallAction.isPause() ? squeezeService::pause : squeezeService::mute;
@@ -691,7 +691,7 @@ public class SqueezeService extends Service {
     private void handleRandomOnEvent(Player player) {
 
         RandomPlay randomPlay = mDelegate.getRandomPlay(player);
-        Preferences preferences = Squeezer.getPreferences();
+        Preferences preferences = HiFiMediaPlayer.getPreferences();
         PlayerState playerState = player.getPlayerState();
 
         int number = playerState.getCurrentPlaylistTracksNum();
@@ -769,7 +769,7 @@ public class SqueezeService extends Service {
      *     connected players, or null if there are no connected players.
      */
     private @Nullable Player getPreferredPlayer(Collection<Player> players) {
-        final String lastConnectedPlayer = Squeezer.getPreferences().getLastPlayer();
+        final String lastConnectedPlayer = HiFiMediaPlayer.getPreferences().getLastPlayer();
         Log.i(TAG, "lastConnectedPlayer was: " + lastConnectedPlayer);
 
         Log.i(TAG, "players empty?: " + players.isEmpty());
@@ -785,7 +785,7 @@ public class SqueezeService extends Service {
     private final IServiceItemListCallback<Song> songDownloadCallback = new IServiceItemListCallback<>() {
         @Override
         public void onItemsReceived(int count, int start, Map<String, Object> parameters, List<Song> items, Class<Song> dataType) {
-            final Preferences preferences = Squeezer.getPreferences();
+            final Preferences preferences = HiFiMediaPlayer.getPreferences();
             for (Song song : items) {
                 Log.i(TAG, "downloadSong(" + song + ")");
                 Uri downloadUrl = Util.getDownloadUrl(mDelegate.getUrlPrefix(), song.id);
@@ -1465,7 +1465,7 @@ public class SqueezeService extends Service {
                 Log.e(TAG, "randomPlayFolder: No folder_id");
                 return false;
             }
-            Set<String> played = Squeezer.getPreferences().loadRandomPlayed(folderID);
+            Set<String> played = HiFiMediaPlayer.getPreferences().loadRandomPlayed(folderID);
             Player player = mDelegate.getActivePlayer();
             RandomPlay randomPlay = mDelegate.getRandomPlay(player);
             randomPlay.reset(player);
@@ -1480,7 +1480,7 @@ public class SqueezeService extends Service {
 
         public void toggleArchiveItem(JiveItem item) {
             Set<String> archive = homeMenuHandling.toggleArchiveItem(item);
-            Squeezer.getPreferences().setArchivedMenuItems(archive, getActivePlayer());
+            HiFiMediaPlayer.getPreferences().setArchivedMenuItems(archive, getActivePlayer());
         }
 
         @Override
@@ -1495,19 +1495,19 @@ public class SqueezeService extends Service {
 
         @Override
         public void setCustomShortcuts() {
-            Preferences preferences = Squeezer.getPreferences();
+            Preferences preferences = HiFiMediaPlayer.getPreferences();
             homeMenuHandling.updateShortcuts(preferences.homeGroups(), preferences.getCustomShortcuts());
         }
 
         @Override
         public void removeCustomShortcut(JiveItem item) {
             homeMenuHandling.removeShortcut(item);
-            Squeezer.getPreferences().saveShortcuts(homeMenuHandling.getCustomShortcuts());
+            HiFiMediaPlayer.getPreferences().saveShortcuts(homeMenuHandling.getCustomShortcuts());
         }
 
         @Override
         public boolean addCustomShortcut(JiveItem item, JiveItem parent, int shortcutWeight) {
-            Preferences preferences = Squeezer.getPreferences();
+            Preferences preferences = HiFiMediaPlayer.getPreferences();
             if (homeMenuHandling.addShortcut(item, parent, shortcutWeight)) {
                 preferences.saveShortcuts(homeMenuHandling.getCustomShortcuts());
                 return true;

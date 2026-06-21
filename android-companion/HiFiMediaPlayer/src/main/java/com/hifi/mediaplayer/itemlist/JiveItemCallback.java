@@ -12,7 +12,7 @@ import androidx.recyclerview.widget.ItemTouchHelper;
 import androidx.recyclerview.widget.RecyclerView;
 
 import com.hifi.mediaplayer.Preferences;
-import com.hifi.mediaplayer.Squeezer;
+import com.hifi.mediaplayer.HiFiMediaPlayer;
 import com.hifi.mediaplayer.itemlist.dialog.ArtworkListLayout;
 import com.hifi.mediaplayer.model.Action;
 import com.hifi.mediaplayer.model.JiveItem;
@@ -27,7 +27,7 @@ public class JiveItemCallback extends ItemTouchHelper.Callback {
 
     public JiveItemCallback(@NonNull JiveItemListActivity activity) {
         this.activity = activity;
-        Preferences preferences = Squeezer.getPreferences();
+        Preferences preferences = HiFiMediaPlayer.getPreferences();
         swipeRightAction = preferences.getSwipeRightAction();
         swipeLeftAction = preferences.getSwipeLeftAction();
         DisplayMetrics displayMetrics = activity.getResources().getDisplayMetrics();

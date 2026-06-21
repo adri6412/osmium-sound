@@ -38,7 +38,7 @@ import java.util.List;
 import com.hifi.mediaplayer.NowPlayingActivity;
 import com.hifi.mediaplayer.Preferences;
 import com.hifi.mediaplayer.R;
-import com.hifi.mediaplayer.Squeezer;
+import com.hifi.mediaplayer.HiFiMediaPlayer;
 import com.hifi.mediaplayer.dialog.ChangeLogDialog;
 import com.hifi.mediaplayer.dialog.TipsDialog;
 import com.hifi.mediaplayer.framework.ItemAdapter;
@@ -163,7 +163,7 @@ public class HomeActivity extends HomeMenuActivity {
 
     @Override
     public ArtworkListLayout getPreferredListLayout() {
-        return Squeezer.getPreferences().getHomeLayout();
+        return HiFiMediaPlayer.getPreferences().getHomeLayout();
     }
 
     @Override
@@ -174,7 +174,7 @@ public class HomeActivity extends HomeMenuActivity {
 
     @Override
     protected void saveListLayout(ArtworkListLayout listLayout) {
-        Squeezer.getPreferences().setHomeLayout(listLayout);
+        HiFiMediaPlayer.getPreferences().setHomeLayout(listLayout);
     }
 
     @Override
@@ -201,7 +201,7 @@ public class HomeActivity extends HomeMenuActivity {
         // has run. TODO: Add more robust and general 'tips' functionality.
         PackageInfo pInfo;
         try {
-            final Preferences preferences = Squeezer.getPreferences();
+            final Preferences preferences = HiFiMediaPlayer.getPreferences();
 
             pInfo = getPackageManager().getPackageInfo(getPackageName(), PackageManager.GET_META_DATA);
             if (preferences.getLastRunVersionCode() == 0) {

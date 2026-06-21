@@ -40,7 +40,7 @@ import java.util.Map.Entry;
 
 import com.hifi.mediaplayer.Preferences;
 import com.hifi.mediaplayer.R;
-import com.hifi.mediaplayer.Squeezer;
+import com.hifi.mediaplayer.HiFiMediaPlayer;
 import com.hifi.mediaplayer.Util;
 import com.hifi.mediaplayer.util.AfterTextChangedLister;
 import com.hifi.mediaplayer.util.ScanNetworkTask;
@@ -87,7 +87,7 @@ public class ServerAddressView extends LinearLayout implements ScanNetworkTask.S
     private void initialize() {
         inflate(getContext(), R.layout.server_address_view, this);
         if (!isInEditMode()) {
-            Squeezer.getPreferences(prefs -> {
+            HiFiMediaPlayer.getPreferences(prefs -> {
                 preferences = prefs;
                 serverAddress = preferences.getServerAddress();
                 if (serverAddress.localAddress() == null) {

@@ -23,7 +23,7 @@ import java.util.Stack;
 
 import com.hifi.mediaplayer.Preferences;
 import com.hifi.mediaplayer.R;
-import com.hifi.mediaplayer.Squeezer;
+import com.hifi.mediaplayer.HiFiMediaPlayer;
 import com.hifi.mediaplayer.itemlist.IServiceItemListCallback;
 import com.hifi.mediaplayer.itemlist.JiveItemListActivity;
 import com.hifi.mediaplayer.itemlist.JiveItemViewLogic;
@@ -168,7 +168,7 @@ public class ContextMenu extends BottomSheetDialogFragmentWithService implements
 
     @Override
     public void onItemsReceived(int count, int start, Map<String, Object> parameters, List<JiveItem> items, Class<JiveItem> dataType) {
-        Preferences preferences = Squeezer.getPreferences();
+        Preferences preferences = HiFiMediaPlayer.getPreferences();
         JiveItem item = contextStack.peek().first;
         activity().runOnUiThread(() -> {
             progress.setVisibility(View.GONE);

@@ -8,7 +8,7 @@ import androidx.annotation.NonNull;
 
 import com.hifi.mediaplayer.Preferences;
 import com.hifi.mediaplayer.R;
-import com.hifi.mediaplayer.Squeezer;
+import com.hifi.mediaplayer.HiFiMediaPlayer;
 import com.hifi.mediaplayer.Util;
 import com.hifi.mediaplayer.framework.BaseActivity;
 import com.hifi.mediaplayer.model.Player;
@@ -32,7 +32,7 @@ public class PlayerSleepDialog extends BaseEditTextDialog {
         editTextLayout.setHint(R.string.set_sleep_timer);
         editTextLayout.setSuffixText(getString(R.string.minutes));
         editText.setInputType(InputType.TYPE_CLASS_NUMBER);
-        editText.setText(String.valueOf(Squeezer.getPreferences().getSleepMinutes()));
+        editText.setText(String.valueOf(HiFiMediaPlayer.getPreferences().getSleepMinutes()));
 
         return dialog;
     }
@@ -46,7 +46,7 @@ public class PlayerSleepDialog extends BaseEditTextDialog {
         if (minutes <= 0) return false;
 
         service.sleep(player, minutes*60);
-        Squeezer.getPreferences().setSleepMinutes(minutes);
+        HiFiMediaPlayer.getPreferences().setSleepMinutes(minutes);
         return true;
     }
 

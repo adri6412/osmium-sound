@@ -10,7 +10,7 @@ import androidx.core.content.ContextCompat;
 import androidx.fragment.app.Fragment;
 
 import com.hifi.mediaplayer.Preferences;
-import com.hifi.mediaplayer.Squeezer;
+import com.hifi.mediaplayer.HiFiMediaPlayer;
 import com.hifi.mediaplayer.dialog.CallStateDialog;
 
 public class CallStatePermissionLauncher {
@@ -23,9 +23,9 @@ public class CallStatePermissionLauncher {
         requestPermissionLauncher =
                 fragment.registerForActivityResult(new ActivityResultContracts.RequestPermission(), isGranted -> {
                     if (isGranted) {
-                        Squeezer.getPreferences().setActionOnIncomingCall(requestedAction);
+                        HiFiMediaPlayer.getPreferences().setActionOnIncomingCall(requestedAction);
                     } else {
-                        Squeezer.getPreferences().setActionOnIncomingCall(Preferences.IncomingCallAction.NONE);
+                        HiFiMediaPlayer.getPreferences().setActionOnIncomingCall(Preferences.IncomingCallAction.NONE);
                     }
                 });
         this.fragment = fragment;
@@ -38,7 +38,7 @@ public class CallStatePermissionLauncher {
             this.requestedAction = requestedAction;
             new CallStateDialog().show(fragment.getChildFragmentManager(), "CallStatePermissionLauncher");
         } else
-            Squeezer.getPreferences().setActionOnIncomingCall(requestedAction);
+            HiFiMediaPlayer.getPreferences().setActionOnIncomingCall(requestedAction);
 
     }
 

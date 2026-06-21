@@ -25,7 +25,7 @@ import androidx.annotation.StyleRes;
 import androidx.appcompat.app.AppCompatDelegate;
 
 import com.hifi.mediaplayer.R;
-import com.hifi.mediaplayer.Squeezer;
+import com.hifi.mediaplayer.HiFiMediaPlayer;
 import com.hifi.mediaplayer.framework.EnumWithText;
 
 /**
@@ -82,7 +82,7 @@ public class ThemeManager {
      */
     public void onCreate(Activity activity) {
         // Ensure the activity uses the correct theme.
-        currentThemeId = Squeezer.getPreferences().getTheme().themeId;
+        currentThemeId = HiFiMediaPlayer.getPreferences().getTheme().themeId;
         activity.setTheme(currentThemeId);
     }
 
@@ -97,7 +97,7 @@ public class ThemeManager {
         // Themes can only be applied before views are instantiated.  If the current theme
         // changed while this activity was paused (e.g., because the user went to the
         // SettingsActivity and changed it) then restart this activity with the new theme.
-        if (currentThemeId != Squeezer.getPreferences().getTheme().themeId) {
+        if (currentThemeId != HiFiMediaPlayer.getPreferences().getTheme().themeId) {
             activity.recreate();
         }
     }

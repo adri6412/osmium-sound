@@ -29,7 +29,7 @@ import java.util.EnumSet;
 
 import com.hifi.mediaplayer.Preferences;
 import com.hifi.mediaplayer.R;
-import com.hifi.mediaplayer.Squeezer;
+import com.hifi.mediaplayer.HiFiMediaPlayer;
 import com.hifi.mediaplayer.framework.ContextMenu;
 import com.hifi.mediaplayer.framework.ItemAdapter;
 import com.hifi.mediaplayer.framework.ItemViewHolder;
@@ -45,7 +45,7 @@ public class JiveItemView extends ViewParamItemView<JiveItem> {
 
     private final Window.WindowStyle windowStyle;
 
-    Preferences mPreferences = Squeezer.getPreferences();
+    Preferences mPreferences = HiFiMediaPlayer.getPreferences();
     final boolean isShortcutsActive = mPreferences.getCustomizeShortcutsMode() == Preferences.CustomizeShortcutsMode.ENABLED;
     final boolean isArchiveActive = mPreferences.getCustomizeHomeMenuMode() == Preferences.CustomizeHomeMenuMode.ARCHIVE;
 

@@ -37,7 +37,7 @@ import java.util.Objects;
 
 import com.hifi.mediaplayer.Preferences;
 import com.hifi.mediaplayer.R;
-import com.hifi.mediaplayer.Squeezer;
+import com.hifi.mediaplayer.HiFiMediaPlayer;
 import com.hifi.mediaplayer.framework.ItemAdapter;
 import com.hifi.mediaplayer.framework.ItemListActivity;
 import com.hifi.mediaplayer.itemlist.dialog.AlarmSettingsDialog;
@@ -241,7 +241,7 @@ public class AlarmsActivity extends ItemListActivity<AlarmView, Alarm> implement
     }
 
     public static void showTimePicker(AlarmsActivity activity, boolean is24HourMode) {
-        Preferences preferences = Squeezer.getPreferences();
+        Preferences preferences = HiFiMediaPlayer.getPreferences();
         // Use the current time as the default values for the picker
         final Calendar c = Calendar.getInstance();
         MaterialTimePicker picker = new MaterialTimePicker.Builder()

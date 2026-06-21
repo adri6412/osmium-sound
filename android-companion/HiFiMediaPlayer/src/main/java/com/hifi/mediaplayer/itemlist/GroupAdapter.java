@@ -14,7 +14,7 @@ import java.util.List;
 import java.util.Map;
 
 import com.hifi.mediaplayer.R;
-import com.hifi.mediaplayer.Squeezer;
+import com.hifi.mediaplayer.HiFiMediaPlayer;
 import com.hifi.mediaplayer.Util;
 import com.hifi.mediaplayer.framework.ItemAdapter;
 import com.hifi.mediaplayer.framework.ItemViewHolder;
@@ -84,7 +84,7 @@ class GroupAdapter extends ItemAdapter<ItemViewHolder<JiveItem>, JiveItem> {
                 if (adapter instanceof JiveItemAdapter jiveItemAdapter) {
                     final Window window = JiveItem.extractWindow(Util.getRecord(parameters, "window"), null);
                     if (window != null && window.windowStyle != null) {
-                        jiveItemAdapter.setWindowStyle(Squeezer.getPreferences().getAlbumListLayout(), window.windowStyle);
+                        jiveItemAdapter.setWindowStyle(HiFiMediaPlayer.getPreferences().getAlbumListLayout(), window.windowStyle);
                     }
                 }
                 parent.notifyItemChanged(position, SUBLIST_UPDATED);

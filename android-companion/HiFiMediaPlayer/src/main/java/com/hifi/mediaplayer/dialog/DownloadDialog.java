@@ -25,7 +25,7 @@ import androidx.fragment.app.FragmentManager;
 
 import com.hifi.mediaplayer.Preferences;
 import com.hifi.mediaplayer.R;
-import com.hifi.mediaplayer.Squeezer;
+import com.hifi.mediaplayer.HiFiMediaPlayer;
 import com.hifi.mediaplayer.framework.BaseConfirmDialog;
 import com.hifi.mediaplayer.model.JiveItem;
 
@@ -64,7 +64,7 @@ public class DownloadDialog extends BaseConfirmDialog {
     @Override
     protected void ok(boolean persist) {
         if (persist) {
-            Squeezer.getPreferences().setDownloadConfirmation(false);
+            HiFiMediaPlayer.getPreferences().setDownloadConfirmation(false);
         }
         host.doDownload(getArguments().getParcelable(ITEM_KEY));
     }
@@ -72,7 +72,7 @@ public class DownloadDialog extends BaseConfirmDialog {
     @Override
     protected void cancel(boolean persist) {
         if (persist) {
-            Squeezer.getPreferences().setDownloadEnabled(false);
+            HiFiMediaPlayer.getPreferences().setDownloadEnabled(false);
         }
     }
 

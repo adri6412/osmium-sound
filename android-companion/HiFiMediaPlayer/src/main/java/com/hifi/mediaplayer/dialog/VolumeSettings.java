@@ -14,7 +14,7 @@ import com.google.android.material.switchmaterial.SwitchMaterial;
 
 import com.hifi.mediaplayer.Preferences;
 import com.hifi.mediaplayer.R;
-import com.hifi.mediaplayer.Squeezer;
+import com.hifi.mediaplayer.HiFiMediaPlayer;
 import com.hifi.mediaplayer.framework.BaseActivity;
 import com.hifi.mediaplayer.model.Player;
 import com.hifi.mediaplayer.service.ISqueezeService;
@@ -25,7 +25,7 @@ public class VolumeSettings extends DialogFragment {
     public Dialog onCreateDialog(Bundle savedInstanceState) {
         BaseActivity activity = (BaseActivity)requireActivity();
         ISqueezeService service = activity.getService();
-        Preferences preferences = Squeezer.getPreferences();
+        Preferences preferences = HiFiMediaPlayer.getPreferences();
 
         View view = requireActivity().getLayoutInflater().inflate(R.layout.volume_settings, null);
 

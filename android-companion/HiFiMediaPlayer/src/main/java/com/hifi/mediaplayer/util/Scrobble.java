@@ -7,7 +7,7 @@ import androidx.annotation.Nullable;
 import android.util.Log;
 
 import com.hifi.mediaplayer.R;
-import com.hifi.mediaplayer.Squeezer;
+import com.hifi.mediaplayer.HiFiMediaPlayer;
 import com.hifi.mediaplayer.model.CurrentTrack;
 import com.hifi.mediaplayer.model.PlayerState;
 

@@ -58,7 +58,7 @@ import java.util.Objects;
 import com.hifi.mediaplayer.NowPlayingActivity;
 import com.hifi.mediaplayer.Preferences;
 import com.hifi.mediaplayer.R;
-import com.hifi.mediaplayer.Squeezer;
+import com.hifi.mediaplayer.HiFiMediaPlayer;
 import com.hifi.mediaplayer.Util;
 import com.hifi.mediaplayer.dialog.NetworkErrorDialogFragment;
 import com.hifi.mediaplayer.framework.ContextMenu;
@@ -533,7 +533,7 @@ public class JiveItemListActivity extends ItemListActivity<ItemViewHolder<JiveIt
      */
     private void setTheme(ThemeManager.Theme theme) {
         if (getThemeId() != theme.themeId) {
-            Squeezer.getPreferences().setTheme(theme);
+            HiFiMediaPlayer.getPreferences().setTheme(theme);
             recreate();
         }
     }
@@ -549,7 +549,7 @@ public class JiveItemListActivity extends ItemListActivity<ItemViewHolder<JiveIt
     }
 
     protected void saveListLayout(ArtworkListLayout listLayout) {
-        Squeezer.getPreferences().setAlbumListLayout(listLayout);
+        HiFiMediaPlayer.getPreferences().setAlbumListLayout(listLayout);
     }
 
     public int getSelectedIndex() {
@@ -618,7 +618,7 @@ public class JiveItemListActivity extends ItemListActivity<ItemViewHolder<JiveIt
             setMaxLines(0);
             return true;
         } else if (itemId == R.id.menu_item_flat_icons) {
-            Squeezer.getPreferences().useFlatIcons(!menuItemFlatIcons.isChecked());
+            HiFiMediaPlayer.getPreferences().useFlatIcons(!menuItemFlatIcons.isChecked());
             getItemAdapter().notifyItemRangeChanged(0, getItemAdapter().getItemCount());
             return true;
         }
@@ -626,14 +626,14 @@ public class JiveItemListActivity extends ItemListActivity<ItemViewHolder<JiveIt
     }
 
     private void setMaxLines(int maxLines) {
-        Squeezer.getPreferences().setMaxLines(getListLayout(), maxLines);
+        HiFiMediaPlayer.getPreferences().setMaxLines(getListLayout(), maxLines);
         updateViewMenuItems(getListLayout(), window.windowStyle);
         getListView().setAdapter(getListView().getAdapter());
     }
 
     protected void updateViewMenuItems(ArtworkListLayout listLayout, Window.WindowStyle windowStyle) {
         if (menuItemList != null) {
-            Preferences preferences = Squeezer.getPreferences();
+            Preferences preferences = HiFiMediaPlayer.getPreferences();
 
             (getThemeId() ==  R.style.AppTheme ? menuItemDark : menuItemLight).setChecked(true);
 

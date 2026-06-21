@@ -39,7 +39,7 @@ import java.util.Objects;
 import java.util.Set;
 
 import com.hifi.mediaplayer.R;
-import com.hifi.mediaplayer.Squeezer;
+import com.hifi.mediaplayer.HiFiMediaPlayer;
 import com.hifi.mediaplayer.Util;
 import com.hifi.mediaplayer.util.FluentHashMap;
 

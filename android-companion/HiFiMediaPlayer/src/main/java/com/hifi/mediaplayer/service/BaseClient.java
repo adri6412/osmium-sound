@@ -26,7 +26,7 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 
 import com.hifi.mediaplayer.R;
-import com.hifi.mediaplayer.Squeezer;
+import com.hifi.mediaplayer.HiFiMediaPlayer;
 import com.hifi.mediaplayer.SqueezerRepository;
 import com.hifi.mediaplayer.Util;
 import com.hifi.mediaplayer.itemlist.IServiceItemListCallback;

@@ -12,14 +12,14 @@ import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 
 import com.hifi.mediaplayer.Preferences;
 import com.hifi.mediaplayer.R;
-import com.hifi.mediaplayer.Squeezer;
+import com.hifi.mediaplayer.HiFiMediaPlayer;
 import com.hifi.mediaplayer.Util;
 
 public class CuePanelSettings extends DialogFragment {
     @NonNull
     @Override
     public Dialog onCreateDialog(Bundle savedInstanceState) {
-        Preferences preferences = Squeezer.getPreferences();
+        Preferences preferences = HiFiMediaPlayer.getPreferences();
         View view = requireActivity().getLayoutInflater().inflate(R.layout.cue_panel_settings, null);
         TextView backward = (TextView) view.findViewById(R.id.backward_jump);
         TextView forward = (TextView) view.findViewById(R.id.forward_jump);
