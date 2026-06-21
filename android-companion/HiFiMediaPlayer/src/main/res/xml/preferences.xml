@@ -18,7 +18,7 @@
 <PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android"
     android:key="first_preferencescreen">
 
-    <uk.org.ngo.squeezer.IntEditTextPreference
+    <com.hifi.mediaplayer.IntEditTextPreference
         android:key="squeezer.fadeInSecs"
         android:title="@string/settings_fadeinsecs_title"
         android:dialogMessage="@string/settings_fadeinsecs_summary"/>
