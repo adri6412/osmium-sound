@@ -141,4 +141,7 @@
     <color name="colorAppBarDark">@color/hifiDark</color>
     <color name="colorAppBarLight">@color/hifiDarkGray</color>
 
+    <!-- Media button colors -->
+    <color name="gold_button">#D4AF37</color>
+
 </resources>

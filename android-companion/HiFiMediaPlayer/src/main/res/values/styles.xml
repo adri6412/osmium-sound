@@ -250,6 +250,14 @@
         <item name="icon">@drawable/ic_menu_overflow</item>
     </style>
 
+    <!-- Gold media control buttons for NowPlaying -->
+    <style name="GoldMediaButton" parent="Widget.MaterialComponents.Button">
+        <item name="android:textColor">#ffffff</item>
+        <item name="iconTint">#ffffff</item>
+        <item name="backgroundTint">#D4AF37</item>
+        <item name="cornerRadius">24dp</item>
+    </style>
+
     <!-- Toast -->
     <style name="ToastMessageText" parent="TextAppearance.AppCompat.Body1">
         <item name="android:textColor">#fff</item>
