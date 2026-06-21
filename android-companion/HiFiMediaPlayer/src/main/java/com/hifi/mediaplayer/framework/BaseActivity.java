@@ -58,7 +58,7 @@ import java.util.HashSet;
 
 import com.hifi.mediaplayer.Preferences;
 import com.hifi.mediaplayer.R;
-import com.hifi.mediaplayer.Squeezer;
+import com.hifi.mediaplayer.HiFiMediaPlayer;
 import com.hifi.mediaplayer.SqueezerRepository;
 import com.hifi.mediaplayer.dialog.AlertEventDialog;
 import com.hifi.mediaplayer.dialog.DownloadDialog;
@@ -165,7 +165,7 @@ public abstract class BaseActivity extends AppCompatActivity implements Download
             currentDownloadItem = savedInstanceState.getParcelable(CURRENT_DOWNLOAD_ITEM);
         }
 
-        Squeezer.getPreferences(preferences -> {
+        HiFiMediaPlayer.getPreferences(preferences -> {
             if (preferences.getScreensaverMode() != Preferences.ScreensaverMode.OFF) {
                 getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
                 if (preferences.getScreensaverMode() == Preferences.ScreensaverMode.CLOCK) {
@@ -223,7 +223,7 @@ public abstract class BaseActivity extends AppCompatActivity implements Download
         WindowInsetsControllerCompat controller =
                 WindowCompat.getInsetsController(getWindow(), getWindow().getDecorView());
 
-        if (Squeezer.getPreferences().getFullScreenMode() == Preferences.FullScreenMode.ON) {
+        if (HiFiMediaPlayer.getPreferences().getFullScreenMode() == Preferences.FullScreenMode.ON) {
             controller.setSystemBarsBehavior(WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE);
             controller.hide(WindowInsetsCompat.Type.systemBars());
         } else {
@@ -311,7 +311,7 @@ public abstract class BaseActivity extends AppCompatActivity implements Download
     }
 
     public SqueezerRepository repository() {
-        return ((Squeezer)getApplicationContext()).repository();
+        return ((HiFiMediaPlayer)getApplicationContext()).repository();
     }
 
     @Override
@@ -483,7 +483,7 @@ public abstract class BaseActivity extends AppCompatActivity implements Download
      * @see ISqueezeService#downloadItem(JiveItem)
      */
     public void downloadItem(JiveItem item) {
-        if (Squeezer.getPreferences().isDownloadConfirmation()) {
+        if (HiFiMediaPlayer.getPreferences().isDownloadConfirmation()) {
             DownloadDialog.show(item, this);
         } else {
             doDownload(item);
