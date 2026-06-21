@@ -171,7 +171,7 @@
                 android:backgroundTint="#1a1a1a"
                 app:borderWidth="1dp"
                 app:cornerRadius="24dp"
-                app:iconTint="#D4AF37" />
+                app:iconTint="#ffffff" />
 
             <!-- Play/Pause - Large Gold Button like desktop -->
             <com.google.android.material.button.MaterialButton
@@ -185,8 +185,8 @@
                 app:cornerRadius="32dp"
                 style="@style/Widget.MaterialComponents.Button"
                 android:backgroundTint="#D4AF37"
-                android:textColor="#000000"
-                app:iconTint="#000000" />
+                android:textColor="#ffffff"
+                app:iconTint="#ffffff" />
 
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/next"
@@ -200,7 +200,7 @@
                 android:backgroundTint="#1a1a1a"
                 app:borderWidth="1dp"
                 app:cornerRadius="24dp"
-                app:iconTint="#D4AF37" />
+                app:iconTint="#ffffff" />
         </LinearLayout>
 
         <!-- Volume Control -->
