@@ -25,21 +25,16 @@ jobs:
       - name: Grant execute permission to gradle
         run: chmod +x android-companion/gradlew
 
-      - name: Build debug APK (for testing)
+      - name: Build debug APK
         run: |
           cd android-companion
           ./gradlew assembleDebug
 
-      - name: Build release APK
-        run: |
-          cd android-companion
-          ./gradlew assembleRelease
-
-      - name: Sign Release APK
+      - name: Sign APK with custom keystore
         uses: r0adkll/sign-android-release@v1
         id: sign_app
         with:
-          releaseDirectory: android-companion/HiFiMediaPlayer/build/outputs/apk/release
+          releaseDirectory: android-companion/HiFiMediaPlayer/build/outputs/apk/debug
           signingKeyBase64: ${{ secrets.SIGNING_KEY }}
           alias: ${{ secrets.KEY_ALIAS }}
           keyStorePassword: ${{ secrets.KEY_STORE_PASSWORD }}
