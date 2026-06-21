@@ -254,9 +254,14 @@
     <style name="GoldMediaButton" parent="Widget.MaterialComponents.Button">
         <item name="android:textColor">#ffffff</item>
         <item name="iconTint">#ffffff</item>
-        <item name="android:background">@drawable/gold_button_bg</item>
         <item name="elevation">0dp</item>
         <item name="rippleColor">@android:color/transparent</item>
+        <item name="materialThemeOverlay">@style/ThemeOverlay.GoldButton</item>
+    </style>
+
+    <style name="ThemeOverlay.GoldButton" parent="">
+        <item name="colorPrimary">#D4AF37</item>
+        <item name="colorOnPrimary">#ffffff</item>
     </style>
 
     <!-- Toast -->
