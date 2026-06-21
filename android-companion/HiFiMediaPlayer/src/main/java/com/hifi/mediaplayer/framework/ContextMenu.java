@@ -65,7 +65,7 @@ public class ContextMenu extends BottomSheetDialogFragmentWithService implements
     @Override
     protected void onServiceConnected() {
         super.onServiceConnected();
-        Squeezer.getInstance().repository().observe(this, (HandshakeComplete event) -> orderPage(0));
+        HiFiMediaPlayer.getInstance().repository().observe(this, (HandshakeComplete event) -> orderPage(0));
     }
 
     public void show(JiveItem item, Action action) {

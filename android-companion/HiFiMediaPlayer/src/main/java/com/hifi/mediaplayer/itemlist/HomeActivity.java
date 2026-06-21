@@ -66,7 +66,7 @@ public class HomeActivity extends HomeMenuActivity {
         }
 
         // Show the change log if necessary.
-        Squeezer.getInstance().doInBackground(() -> {
+        HiFiMediaPlayer.getInstance().doInBackground(() -> {
             SharedPreferences preferences = PreferenceManager.getDefaultSharedPreferences(HomeActivity.this);
             runOnUiThread(() -> {
                 ChangeLogDialog changeLog = new ChangeLogDialog(this, preferences);

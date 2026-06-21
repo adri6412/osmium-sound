@@ -44,7 +44,7 @@ import com.hifi.mediaplayer.service.event.ShuffleStatusChanged;
 import com.hifi.mediaplayer.service.event.SleepTimeChanged;
 
 abstract class BaseClient implements SlimClient {
-    final static int mPageSize = Squeezer.getInstance().getResources().getInteger(R.integer.PageSize);
+    final static int mPageSize = HiFiMediaPlayer.getInstance().getResources().getInteger(R.integer.PageSize);
 
     final AtomicReference<String> username = new AtomicReference<>();
     final AtomicReference<String> password = new AtomicReference<>();
