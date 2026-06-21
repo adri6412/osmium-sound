@@ -30,8 +30,11 @@ ri  = 2.0
 ro  = ri + t
 lip = 16.0
 fl  = 18.0
-relief = 1.5
+relief = 2.0          # >= t : cava di sfogo piega a norma DFM (storico)
 air = 6.0
+lip_w = 12.0          # risvolto superiore dei fianchi: il coperchio ci si avvita (vite Z)
+bracket_edge = 10.0   # rientro dei fori squadretta dai bordi laterali di front/back
+lid_drop = 12.0       # (storico) non piu' usato: coperchio ora PIATTO, fissato su front/back
 
 # Schermo Waveshare 7" (C)
 screen_w, screen_h = 164.9, 124.27
@@ -95,6 +98,10 @@ xs = [30.0, W / 2.0, W - 30.0]
 ys_lid = [25.0, Dch / 2.0, Dch - 25.0]
 y_front = fl / 2.0
 y_back = Dch - fl / 2.0
+# fissaggi nuovi (front/back PIATTI + coperchio su risvolti)
+bz = [zs[0], zs[2]]                                   # 2 livelli squadrette per lato
+lid_xs = [t + lip_w / 2.0, W - t - lip_w / 2.0]       # assi viti coperchio (sui risvolti)
+lid_ys = [25.0, Dch / 2.0, Dch - 25.0]
 
 print("Esterno LxHxP ~ %.1f x %.1f x %.1f mm" % (W, H, Dch + 2 * t))
 print("Fessura CD centro z = %.1f ; ripiano PC z = %.1f" % (z_cd_c, shelf_z))
@@ -129,30 +136,31 @@ def try_fillet(shape, targets, radius):
 
 # ======================= CORPO =====================================
 def make_body():
+    # U a 2 pieghe + RISVOLTO SUPERIORE su ciascun fianco (piega parallela alla base,
+    # estremi liberi -> nessun angolo chiuso, nessuna saldatura: 4 pieghe tutte
+    # formabili al press-brake). I risvolti reggono il coperchio (vite in Z).
     base  = box(W, Dch, t, (0, 0, 0))
     left  = box(t, Dch, H - t, (0, 0, 0))
     right = box(t, Dch, H - t, (W - t, 0, 0))
-    lipL  = box(lip, Dch, t, (t, 0, H - 2 * t))
-    lipR  = box(lip, Dch, t, (W - t - lip, 0, H - 2 * t))
-    s = base.fuse(left).fuse(right).fuse(lipL).fuse(lipR).removeSplitter()
+    s = base.fuse(left).fuse(right).removeSplitter()
     s = try_fillet(s, [(t, t), (W - t, t)], ri)
     s = try_fillet(s, [(0, 0), (W, 0)], ro)
-    s = try_fillet(s, [(t, H - t), (W - t, H - t)], ri)
-    s = try_fillet(s, [(0, H - t), (W, H - t)], ro)
     s = s.removeSplitter()
+    # risvolti superiori interni (uno per fianco), su tutta la profondita'
+    lipL = box(lip_w, Dch, t, (t,            0, H - 2 * t))
+    lipR = box(lip_w, Dch, t, (W - t - lip_w, 0, H - 2 * t))
+    s = s.fuse(lipL).fuse(lipR).removeSplitter()
 
     holes = []
-    xs_lip = [t + lip / 2.0, W - t - lip / 2.0]
-    for x in xs_lip:
-        for y in ys_lid:
-            holes.append(cyl_z(tap_d, t + 2, x, y, H - 2 * t - 1))
-    for z in zs:
+    # fori squadrette front/back: clearance nei fianchi (vite in X verso la squadretta)
+    for z in bz:
         for y in (y_front, y_back):
             holes.append(cyl_x(clear_d, t + 2, -1, y, z))
             holes.append(cyl_x(clear_d, t + 2, W - t - 1, y, z))
-    for x in xs:
-        for y in (y_front, y_back):
-            holes.append(cyl_z(clear_d, t + 2, x, y, -1))
+    # fori coperchio: tap sui risvolti superiori (vite in Z dal coperchio)
+    for x in lid_xs:
+        for y in lid_ys:
+            holes.append(cyl_z(tap_d, t + 2, x, y, H - 2 * t - 1))
     # CD fissato con biadesivo: nessun foro sul fondo
     # fori per le alette del ripiano (sui fianchi) - passante in X
     for sy in shelf_sy:
@@ -164,47 +172,41 @@ def make_body():
 
 # ======================= COPERCHIO =================================
 def make_lid():
+    # COPERCHIO PIATTO: nessuna piega -> solo taglio laser, zero supplemento bending.
+    # Si avvita (vite in Z) sui RISVOLTI superiori dei fianchi del corpo.
     s = box(W, Dch, t, (0, 0, H - t))
     cuts = []
-    for i in range(7):
-        cuts.append(box(5, Dch * 0.4, t + 2, (W * 0.30 + i * 12, Dch * 0.30, H - t - 1)))
-    xs_lip = [t + lip / 2.0, W - t - lip / 2.0]
-    for x in xs_lip:
-        for y in ys_lid:
-            cuts.append(cyl_z(clear_d, t + 2, x, y, H - t - 1))
-    for x in xs:
-        for y in (y_front, y_back):
+    # ventilazione: 3 asole larghe (meno pierce/tempo laser, no supplemento feature sottili)
+    for i in range(3):
+        cuts.append(box(10, Dch * 0.4, t + 2, (W * 0.30 + i * 20, Dch * 0.30, H - t - 1)))
+    # fissaggio ai risvolti superiori dei fianchi (vite in Z) - fori passanti
+    for x in lid_xs:
+        for y in lid_ys:
             cuts.append(cyl_z(clear_d, t + 2, x, y, H - t - 1))
     for c in cuts:
         s = s.cut(c)
     return s
 
-# ======================= PANNELLO CON RISVOLTI =====================
-def flanged_panel(sgn):
+# ======================= PANNELLO PIATTO ===========================
+def flat_panel(sgn):
+    # Pannello PIATTO: solo taglio laser, ZERO pieghe -> ZERO saldatura.
+    # Fissato ai fianchi del corpo con squadrette ad L interne (vedi BOM):
+    # una vite in Y entra dal pannello nella squadretta, una vite in X la lega al fianco.
     if sgn > 0:
-        plate_y0, fy0 = -t, 0.0
+        plate_y0, yscrew = -t, -t - 1       # front: pannello esterno davanti
     else:
-        plate_y0, fy0 = Dch, Dch - fl
-    plate = box(W, t, H, (0, plate_y0, 0))
-    fL = box(t, fl, H - 2 * (2 * t + relief), (t,         fy0, 2 * t + relief))
-    fR = box(t, fl, H - 2 * (2 * t + relief), (W - 2 * t, fy0, 2 * t + relief))
-    fB = box(W - 2 * (t + relief), fl, t, (t + relief, fy0, t))
-    fT = box(W - 2 * (t + lip + relief), fl, t, (t + lip + relief, fy0, H - 2 * t))
-    s = plate.fuse(fL).fuse(fR).fuse(fB).fuse(fT).removeSplitter()
-    yline = y_front if sgn > 0 else y_back
+        plate_y0, yscrew = Dch, Dch - 1     # back:  pannello esterno dietro
+    s = box(W, t, H, (0, plate_y0, 0))
     holes = []
-    for z in zs:
-        holes.append(cyl_x(tap_d, t + 2, t - 1, yline, z))
-        holes.append(cyl_x(tap_d, t + 2, W - 2 * t - 1, yline, z))
-    for x in xs:
-        holes.append(cyl_z(tap_d, t + 2, x, yline, t - 1))
-        holes.append(cyl_z(tap_d, t + 2, x, yline, H - 2 * t - 1))
+    for z in bz:
+        for x in (bracket_edge, W - bracket_edge):
+            holes.append(cyl_y(tap_d, t + 2, x, yscrew, z))
     for h in holes:
         s = s.cut(h)
     return s
 
 def make_front():
-    s = flanged_panel(+1)
+    s = flat_panel(+1)
     cuts = [
         box(view_w, t + 2, view_h, (W / 2 - view_w / 2, -t - 1, window_cz - view_h / 2)),
         box(cd_slot_w, t + 2, cd_slot_h, (W / 2 - cd_slot_w / 2, -t - 1, z_cd_c - cd_slot_h / 2)),
@@ -218,7 +220,7 @@ def make_front():
     return s
 
 def make_back():
-    s = flanged_panel(-1)
+    s = flat_panel(-1)
     z = H / 2.0
     y0 = Dch - 1
     cx_usb, cx_dc, cx_rj = W * 0.28, W * 0.55, W * 0.78
@@ -256,10 +258,10 @@ def make_shelf():
     cab_w, cab_d = 90.0, 50.0
     cuts.append(box(cab_w, cab_d, t + 2,
                     (W / 2 - cab_w / 2, shelf_y0 + shelf_len - cab_d - 5, shelf_z - 1)))
-    # ventilazione (nella metà anteriore, sopra il PC)
-    for i in range(5):
-        cuts.append(box(4, shelf_len * 0.30, t + 2,
-                        (W * 0.35 + i * 12, shelf_y0 + 8, shelf_z - 1)))
+    # ventilazione (nella meta' anteriore, sopra il PC): asole piu' larghe, meno tagli
+    for i in range(3):
+        cuts.append(box(8, shelf_len * 0.30, t + 2,
+                        (W * 0.35 + i * 16, shelf_y0 + 8, shelf_z - 1)))
     for c in cuts:
         s = s.cut(c)
     return s
