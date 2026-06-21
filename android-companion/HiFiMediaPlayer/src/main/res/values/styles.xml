@@ -255,6 +255,12 @@
         <item name="android:background">#D4AF37</item>
     </style>
 
+    <!-- Gold Material Button Style -->
+    <style name="Widget.MaterialComponents.Button.Gold" parent="Widget.MaterialComponents.Button">
+        <item name="backgroundTint">#D4AF37</item>
+        <item name="android:textColor">#ffffff</item>
+    </style>
+
     <!-- Toast -->
     <style name="ToastMessageText" parent="TextAppearance.AppCompat.Body1">
         <item name="android:textColor">#fff</item>
