@@ -159,40 +159,42 @@
             android:paddingTop="12dp"
             android:paddingBottom="8dp">
 
-            <com.google.android.material.button.MaterialButton
+            <!-- Previous Button -->
+            <ImageButton
                 android:id="@+id/prev"
                 android:layout_width="48dp"
                 android:layout_height="48dp"
                 android:layout_marginEnd="24dp"
-                app:icon="@drawable/ic_action_previous"
-                app:iconSize="24dp"
-                app:backgroundTint="#D4AF37"
-                app:iconTint="#ffffff"
-                android:contentDescription="Previous" />
+                android:src="@drawable/ic_action_previous"
+                android:contentDescription="Previous"
+                android:background="@drawable/gold_button_bg"
+                android:scaleType="centerInside"
+                android:tint="#ffffff" />
 
             <!-- Play/Pause - Large Gold Button like desktop -->
-            <com.google.android.material.button.MaterialButton
+            <ImageButton
                 android:id="@+id/pause"
                 android:layout_width="64dp"
                 android:layout_height="64dp"
                 android:layout_marginStart="24dp"
                 android:layout_marginEnd="24dp"
-                app:icon="@drawable/ic_action_play"
-                app:iconSize="32dp"
-                app:backgroundTint="#D4AF37"
-                app:iconTint="#ffffff"
-                android:contentDescription="Play/Pause" />
+                android:src="@drawable/ic_action_play"
+                android:contentDescription="Play/Pause"
+                android:background="@drawable/gold_button_bg"
+                android:scaleType="centerInside"
+                android:tint="#ffffff" />
 
-            <com.google.android.material.button.MaterialButton
+            <!-- Next Button -->
+            <ImageButton
                 android:id="@+id/next"
                 android:layout_width="48dp"
                 android:layout_height="48dp"
                 android:layout_marginStart="24dp"
-                app:icon="@drawable/ic_action_next"
-                app:iconSize="24dp"
-                app:backgroundTint="#D4AF37"
-                app:iconTint="#ffffff"
-                android:contentDescription="Next" />
+                android:src="@drawable/ic_action_next"
+                android:contentDescription="Next"
+                android:background="@drawable/gold_button_bg"
+                android:scaleType="centerInside"
+                android:tint="#ffffff" />
         </LinearLayout>
 
         <!-- Volume Control -->
