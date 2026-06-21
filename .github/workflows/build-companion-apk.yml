@@ -25,22 +25,20 @@ jobs:
       - name: Grant execute permission to gradle
         run: chmod +x android-companion/gradlew
 
-      - name: Build debug APK
+      - name: Decode and create keystore from secret
+        run: |
+          cd android-companion/HiFiMediaPlayer
+          echo "${{ secrets.SIGNING_KEY }}" | base64 -d > hifi-media-player-local-release-key.keystore
+          ls -lh hifi-media-player-local-release-key.keystore
+
+      - name: Build release APK
         run: |
           cd android-companion
-          ./gradlew assembleDebug
-
-      - name: Sign APK with custom keystore
-        uses: r0adkll/sign-android-release@v1
-        id: sign_app
-        with:
-          releaseDirectory: android-companion/HiFiMediaPlayer/build/outputs/apk/debug
-          signingKeyBase64: ${{ secrets.SIGNING_KEY }}
-          alias: ${{ secrets.KEY_ALIAS }}
-          keyStorePassword: ${{ secrets.KEY_STORE_PASSWORD }}
-          keyPassword: ${{ secrets.KEY_PASSWORD }}
+          ./gradlew assembleRelease
         env:
-          BUILD_TOOLS_VERSION: "35.0.0"
+          KEY_STORE_PASSWORD: ${{ secrets.KEY_STORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
 
       - name: Generate version from tag
         id: version
@@ -52,8 +50,7 @@ jobs:
       - name: Prepare APK files
         run: |
           mkdir -p release-artifacts
-          cp android-companion/HiFiMediaPlayer/build/outputs/apk/release/*-release-unsigned.apk release-artifacts/ 2>/dev/null || true
-          cp ${{ steps.sign_app.outputs.signedReleaseFile }} release-artifacts/HiFiMediaPlayer-${{ steps.version.outputs.version }}-release-signed.apk 2>/dev/null || true
+          cp android-companion/HiFiMediaPlayer/build/outputs/apk/release/*.apk release-artifacts/HiFiMediaPlayer-${{ steps.version.outputs.version }}-release.apk 2>/dev/null || true
           ls -lah release-artifacts/
 
       - name: Create GitHub Release
