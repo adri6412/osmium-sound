@@ -59,6 +59,7 @@ public class HomeActivity extends HomeMenuActivity {
     @Override
     public void onCreate(Bundle savedInstanceState) {
         getIntent().putExtra(JiveItem.class.getName(), JiveItem.HOME);
+        setContentView(R.layout.activity_home);
         super.onCreate(savedInstanceState);
 
         if (getRetainedValue(TAG_FIRST_CONNECTION) == null) {
