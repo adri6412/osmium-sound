@@ -1,6 +1,6 @@
 package com.hifi.mediaplayer.test.framework;
 
-import android.test.ActivityInstrumentationTestCase2;
+import androidx.test.ActivityInstrumentationTestCase2;
 
 import java.util.Arrays;
 import java.util.List;
