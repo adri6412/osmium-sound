@@ -10,13 +10,13 @@
 
 ### Updated Versions
 
-| Component | Before | After | Reason |
-|-----------|--------|-------|--------|
-| Android Gradle Plugin (AGP) | 8.13.0 | 8.5.1 | Latest stable, fully supported |
-| Gradle | 8.13 | 8.8 | Compatible with AGP 8.5.1 |
-| Compile SDK | 36 | 35 | Android 15 Preview → Android 15 Stable |
-| Min SDK | 21 | 26 | Android 5.0 → Android 8.0 (aligns with app requirements) |
-| Target SDK | 36 | 35 | Android 15 Preview → Android 15 Stable |
+| Component | Before | Latest | Reason |
+|-----------|--------|--------|--------|
+| Android Gradle Plugin (AGP) | 8.13.0 | **8.9.1** | Required by androidx dependencies (activity/core 1.11+) |
+| Gradle | 8.13 | **8.11** | Compatible with AGP 8.9.1 |
+| Compile SDK | 36 | **36** | Android 15, required by androidx dependencies |
+| Min SDK | 21 | **26** | Android 8.0 (aligns with app requirements) |
+| Target SDK | 36 | **36** | Android 15 |
 
 ### Files Modified
 
@@ -46,45 +46,45 @@
 
 ## Compatibility Matrix
 
-### Android Gradle Plugin 8.5.1
+### Android Gradle Plugin 8.9.1
 
 | Gradle Version | Status | Notes |
 |---|---|---|
-| 8.0 - 8.3 | ❌ Not Supported | Too old |
-| **8.4 - 8.8** | ✅ **Supported** | **Use 8.8** |
-| 8.9+ | ⚠️ May Work | Not officially tested |
+| 8.0 - 8.7 | ❌ Not Supported | Too old |
+| **8.8 - 8.12** | ✅ **Supported** | **Use 8.11** |
+| 8.13+ | ⚠️ May Work | Not officially tested |
 
 ### Android SDK Levels
 
 | Level | Version | Status |
 |-------|---------|--------|
 | 26 | Android 8.0 (Oreo) | Min SDK (app requirement) |
-| 35 | Android 15 | **Compile & Target** |
-| 36 | Android 15 Preview | ❌ Avoid (preview only) |
+| 36 | Android 15 | **Compile & Target SDK** |
 
 ## Why These Changes
 
-### AGP 8.5.1
-- **Latest stable** Android Gradle Plugin
-- **Fully supported** by Google and Android development tools
-- **Stable** - widely used in production projects
-- **Performance** optimized
-- **Security** patches included
+### AGP 8.9.1
+- **Required by dependencies**: androidx.activity:1.11+ and androidx.core:1.17+ require AGP 8.9.1+
+- **Stable release** - widely used in production projects
+- **Full support** for Android 15 (API 36)
+- **Security** patches and performance improvements
+- **Backward compatible** with older gradle versions 8.8+
 
-### Gradle 8.8
-- **Compatible** with AGP 8.5.1
-- **Stable release** with proven reliability
-- **Performance improvements** over earlier versions
-- **Good balance** between stability and features
+### Gradle 8.11
+- **Compatible** with AGP 8.9.1
+- **Stable release** with proven reliability in production
+- **Performance optimizations** for faster builds
+- **Security improvements** over 8.8
 
-### SDK 35
-- **Android 15 (final release)** - not preview
-- **Stable target** for Play Store submissions
-- **All APIs finalized** - no breaking changes
+### SDK 36 (Android 15)
+- **Latest stable** Android API level
+- **Required by** androidx.activity and androidx.core (v1.11+)
+- **Full API** support for latest Android features
 - **Recommended** by Google for new projects
+- **Play Store** ready for 2025+ policies
 
-### Min SDK 26
-- **Android 8.0 (Oreo)** - aligns with app's stated minimum
+### Min SDK 26 (Android 8.0)
+- **Aligns** with app's stated minimum requirement
 - **90%+ device coverage** on Google Play
 - **Sufficient APIs** for all app features
 - **Security baseline** for modern development
@@ -198,11 +198,13 @@ sdkmanager "platforms;android-26"
 
 ---
 
-**Status**: ✅ **Compatibility Issue Resolved**
+**Status**: ✅ **Compatibility Fully Resolved**
 
-**Date Fixed**: 2026-06-21  
-**AGP Version**: 8.5.1  
-**Gradle Version**: 8.8  
-**Compile SDK**: 35 (Android 15)  
-**Target SDK**: 35 (Android 15)  
+**Date Updated**: 2026-06-21  
+**AGP Version**: 8.9.1 (Latest stable)  
+**Gradle Version**: 8.11 (Stable)  
+**Compile SDK**: 36 (Android 15 - Final)  
+**Target SDK**: 36 (Android 15 - Final)  
 **Min SDK**: 26 (Android 8.0)
+
+**Note**: AGP 8.9.1 is required for androidx.activity:1.11+ and androidx.core:1.17+ dependencies.
