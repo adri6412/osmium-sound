@@ -110,6 +110,13 @@ android {
     buildFeatures {
         buildConfig true
     }
+
+    // Exclude deprecated androidTest folder (uses old androidx.test APIs)
+    sourceSets {
+        androidTest {
+            java.srcDirs = []
+        }
+    }
 }
 
 def publishTrack() {
