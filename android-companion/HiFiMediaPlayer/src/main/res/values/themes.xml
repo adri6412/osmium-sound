@@ -4,7 +4,7 @@
     <style name="AppTheme" parent="Theme.MaterialComponents.NoActionBar">
         <item name="alarm_dow_selected">@android:color/white</item>
 
-        <item name="colorPrimary">@color/colorPrimaryDark</item>
+        <item name="colorPrimary">#D4AF37</item>
         <item name="colorPrimaryVariant">@color/colorPrimaryVariantDark</item>
         <item name="colorSecondary">#D4AF37</item>
         <item name="colorSecondaryVariant">@color/colorSecondaryVariantDark</item>
