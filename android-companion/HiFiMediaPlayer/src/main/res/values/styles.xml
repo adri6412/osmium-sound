@@ -250,18 +250,9 @@
         <item name="icon">@drawable/ic_menu_overflow</item>
     </style>
 
-    <!-- Gold media control buttons for NowPlaying -->
-    <style name="GoldMediaButton" parent="Widget.MaterialComponents.Button">
-        <item name="android:textColor">#ffffff</item>
-        <item name="iconTint">#ffffff</item>
-        <item name="elevation">0dp</item>
-        <item name="rippleColor">@android:color/transparent</item>
-        <item name="materialThemeOverlay">@style/ThemeOverlay.GoldButton</item>
-    </style>
-
-    <style name="ThemeOverlay.GoldButton" parent="">
-        <item name="colorPrimary">#D4AF37</item>
-        <item name="colorOnPrimary">#ffffff</item>
+    <!-- Gold Button Container - Forces gold background -->
+    <style name="GoldButtonContainer" parent="">
+        <item name="android:background">#D4AF37</item>
     </style>
 
     <!-- Toast -->
