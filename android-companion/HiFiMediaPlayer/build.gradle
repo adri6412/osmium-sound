@@ -81,9 +81,9 @@ android {
         } else {
             release {
                 storeFile file("hifi-media-player-local-release-key.keystore")
-                storePassword "hifi-media-player"
-                keyAlias "hifi-media-player"
-                keyPassword "hifi-media-player"
+                storePassword System.getenv("KEY_STORE_PASSWORD") ?: "hifi-media-player"
+                keyAlias System.getenv("KEY_ALIAS") ?: "hifi-media-player"
+                keyPassword System.getenv("KEY_PASSWORD") ?: "hifi-media-player"
             }
         }
     }
