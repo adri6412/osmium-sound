@@ -24,13 +24,14 @@
 
         <item name="colorPrimary">@color/colorPrimaryLight</item>
         <item name="colorPrimaryVariant">@color/colorPrimaryVariantLight</item>
-        <item name="colorSecondary">@color/colorSecondaryLight</item>
+        <item name="colorSecondary">#D4AF37</item>
         <item name="colorSecondaryVariant">@color/colorSecondaryVariantLight</item>
         <item name="colorAppBar">@color/colorAppBarLight</item>
         <item name="appBarLayoutStyle">@style/AppBarStyle</item>
         <item name="actionOverflowMenuStyle">@style/OverflowMenu</item>
         <item name="sliderStyle">@style/Widget.App.Slider</item>
         <item name="bottomSheetDialogTheme">@style/ThemeOverlay.Squeezer.BottomSheetDialog</item>
+        <item name="materialButtonStyle">@style/Widget.MaterialComponents.Button.Gold</item>
 
         <item name="volume_panel_back_circle_color">@color/volume_panel_back_circle_color_light</item>
         <item name="currentTrackBackground">@drawable/current_track_background_light</item>
