@@ -164,9 +164,10 @@
                 android:layout_width="48dp"
                 android:layout_height="48dp"
                 android:layout_marginEnd="24dp"
-                style="@style/GoldMediaButton"
                 app:icon="@drawable/ic_action_previous"
                 app:iconSize="24dp"
+                app:backgroundTint="#D4AF37"
+                app:iconTint="#ffffff"
                 android:contentDescription="Previous" />
 
             <!-- Play/Pause - Large Gold Button like desktop -->
@@ -176,9 +177,10 @@
                 android:layout_height="64dp"
                 android:layout_marginStart="24dp"
                 android:layout_marginEnd="24dp"
-                style="@style/GoldMediaButton"
                 app:icon="@drawable/ic_action_play"
                 app:iconSize="32dp"
+                app:backgroundTint="#D4AF37"
+                app:iconTint="#ffffff"
                 android:contentDescription="Play/Pause" />
 
             <com.google.android.material.button.MaterialButton
@@ -186,9 +188,10 @@
                 android:layout_width="48dp"
                 android:layout_height="48dp"
                 android:layout_marginStart="24dp"
-                style="@style/GoldMediaButton"
                 app:icon="@drawable/ic_action_next"
                 app:iconSize="24dp"
+                app:backgroundTint="#D4AF37"
+                app:iconTint="#ffffff"
                 android:contentDescription="Next" />
         </LinearLayout>
 
