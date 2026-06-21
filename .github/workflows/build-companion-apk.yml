@@ -3,7 +3,7 @@ name: Build HiFi Media Player Companion APK
 on:
   push:
     tags:
-      - 'v*.*.*'  # Trigger on version tags like v2.5.0
+      - 'companion-v*'  # Trigger on companion app release tags (e.g. companion-v2.5.0)
   workflow_dispatch:  # Allow manual trigger
 
 jobs:
