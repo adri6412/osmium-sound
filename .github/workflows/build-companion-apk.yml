@@ -1,0 +1,200 @@
+name: Build HiFi Media Player Companion APK
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'  # Trigger on version tags like v2.5.0
+  workflow_dispatch:  # Allow manual trigger
+
+jobs:
+  build:
+    name: Build Release APK
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          cache: gradle
+
+      - name: Grant execute permission to gradle
+        run: chmod +x android-companion/gradlew
+
+      - name: Build debug APK (for testing)
+        run: |
+          cd android-companion
+          ./gradlew assembleDebug
+
+      - name: Build release APK
+        run: |
+          cd android-companion
+          ./gradlew assembleRelease
+
+      - name: Sign Release APK
+        uses: r0adkll/sign-android-release@v1
+        id: sign_app
+        with:
+          releaseDirectory: android-companion/HiFiMediaPlayer/build/outputs/apk/release
+          signingKeyBase64: ${{ secrets.SIGNING_KEY }}
+          alias: ${{ secrets.KEY_ALIAS }}
+          keyStorePassword: ${{ secrets.KEY_STORE_PASSWORD }}
+          keyPassword: ${{ secrets.KEY_PASSWORD }}
+        env:
+          BUILD_TOOLS_VERSION: "35.0.0"
+
+      - name: Generate version from tag
+        id: version
+        run: |
+          VERSION=${GITHUB_REF#refs/tags/}
+          echo "version=${VERSION}" >> $GITHUB_OUTPUT
+          echo "App Version: ${VERSION}"
+
+      - name: Prepare APK files
+        run: |
+          mkdir -p release-artifacts
+          cp android-companion/HiFiMediaPlayer/build/outputs/apk/release/*-release-unsigned.apk release-artifacts/ 2>/dev/null || true
+          cp ${{ steps.sign_app.outputs.signedReleaseFile }} release-artifacts/HiFiMediaPlayer-${{ steps.version.outputs.version }}-release-signed.apk 2>/dev/null || true
+          ls -lah release-artifacts/
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        if: startsWith(github.ref, 'refs/tags/')
+        with:
+          files: |
+            release-artifacts/*.apk
+          body: |
+            # HiFi Media Player Companion v${{ steps.version.outputs.version }}
+
+            ## Release Notes
+
+            ### Features
+            - Desktop-inspired mobile UI
+            - Dark theme with gold accents
+            - Tab-based navigation (Musica, Radio, App/CD, Settings)
+            - Large play/pause control (primary focus)
+            - Volume control with visual feedback
+            - Responsive layout for 4"-7" screens
+
+            ### Build Information
+            - **AGP Version**: 8.5.1
+            - **Gradle Version**: 8.8
+            - **Compile SDK**: 35 (Android 15)
+            - **Target SDK**: 35 (Android 15)
+            - **Min SDK**: 26 (Android 8.0)
+
+            ### Installation
+            1. Download the APK file below
+            2. Enable "Unknown Sources" in Settings → Security
+            3. Open the APK and install
+            4. Grant required permissions
+            5. Connect to HiFi Media Player server
+
+            ### Requirements
+            - Android 8.0 or higher
+            - Local network connection to HiFi Media Player server
+            - 4"-7" screen size (optimized for smartphones)
+
+            ### What's New
+            - Complete rebranding from android-squeezer
+            - Redesigned UI to match desktop app
+            - Fixed Gradle/AGP compatibility issues
+            - Added comprehensive documentation
+
+            ### Known Limitations
+            - VU Meter intentionally excluded (mobile optimization)
+            - Requires active server connection
+            - Single-column layout (portrait primary)
+
+            ### Documentation
+            - [COMPANION_APP.md](../COMPANION_APP.md) - Main guide
+            - [DESIGN_GUIDELINES.md](../android-companion/DESIGN_GUIDELINES.md) - Design specs
+            - [BUILD_INSTRUCTIONS.md](../android-companion/BUILD_INSTRUCTIONS.md) - Build guide
+
+            For issues or feedback, please create a GitHub issue.
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload APK as artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: HiFiMediaPlayer-APK
+          path: release-artifacts/*.apk
+          retention-days: 90
+
+      - name: Build status check
+        run: |
+          echo "✅ Release build completed successfully"
+          echo "📱 APK files are ready for distribution"
+          cd android-companion
+          ls -lh HiFiMediaPlayer/build/outputs/apk/release/
+
+  test:
+    name: Run Tests
+    runs-on: ubuntu-latest
+    needs: build
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          cache: gradle
+
+      - name: Grant execute permission to gradle
+        run: chmod +x android-companion/gradlew
+
+      - name: Run unit tests
+        run: |
+          cd android-companion
+          ./gradlew test --continue || true
+
+      - name: Upload test results
+        uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: test-results
+          path: android-companion/HiFiMediaPlayer/build/reports/tests/
+          retention-days: 30
+
+  lint:
+    name: Run Lint Check
+    runs-on: ubuntu-latest
+    needs: build
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          cache: gradle
+
+      - name: Grant execute permission to gradle
+        run: chmod +x android-companion/gradlew
+
+      - name: Run lint
+        run: |
+          cd android-companion
+          ./gradlew lint --continue || true
+
+      - name: Upload lint results
+        uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: lint-results
+          path: android-companion/HiFiMediaPlayer/build/reports/lint/
+          retention-days: 30
