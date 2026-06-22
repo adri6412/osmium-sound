@@ -7,6 +7,12 @@ entry (with the **same logo as the Plymouth splash**), and after install the
 machine has a **completely hidden boot** (no GRUB menu, no kernel text, branded
 Plymouth splash) that goes straight into the fullscreen player.
 
+## Compliance Notice
+
+**ISO versions v2.5.7 and earlier:** Include Lyrion Music Server 9.1.0 bundled in the image, licensed under GPL-2.0+. Source code is available from the [LMS-Community GitHub releases](https://github.com/LMS-Community/slimserver/releases/tag/v9.1.0). See [THIRD-PARTY-NOTICES.md](../THIRD-PARTY-NOTICES.md) for full details.
+
+**ISO versions v2.6.0 and later:** Lyrion is downloaded on-demand at first boot and is NOT bundled in the ISO.
+
 > **Why a live filesystem still exists.** The whole appliance (Electron app,
 > Python daemons, Lyrion, helper scripts, the `hifi` user/services) is assembled
 > in the live squashfs, and the install works by **cloning that filesystem**

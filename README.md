@@ -408,5 +408,18 @@ For issues and questions, please open a GitHub issue or consult the documentatio
 
 ---
 
+## 📋 ISO Releases & Compliance History
+
+**Available appliance ISO versions:**
+
+| Version | Release Date | Lyrion Bundled? | Compliance Notes |
+|---------|--------------|-----------------|------------------|
+| **v2.5.7** and earlier | — | ✅ Yes (9.1.0) | ISO includes Lyrion 9.1.0 bundled. Source available from [LMS-Community](https://github.com/LMS-Community/slimserver/releases/tag/v9.1.0). See [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md). |
+| **v2.6.0+** (future) | — | ❌ No (downloaded) | Lyrion downloaded on-demand at first boot. Full licensing in [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md). |
+
+**Download locations:** Contact the project maintainer or check the official distribution channels for ISO availability.
+
+---
+
 **Built with ❤️ for music lovers**
 
