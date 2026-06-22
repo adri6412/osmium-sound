@@ -8,4 +8,4 @@
 #               specific DAC. It uses the stable card *name*, e.g.
 #               -o hw:CARD=D50s,DEV=0  (NOT -o hw:1,0 — card numbers can change
 #               across reboots, the CARD= name does not). Run `aplay -l` to list.
-ARGS='-o default -D -v -C 5 -s 127.0.0.1 -n HiFiPlayer'
+ARGS='-o default -D -v -C 5 -s 127.0.0.1 -n OsmiumSound'

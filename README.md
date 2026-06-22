@@ -1,8 +1,8 @@
-# HiFi Media Player
+# Osmium Sound
 
-A professional touchscreen-friendly hi-fi media player built with Electron, React, and Tailwind CSS. Designed for DietPi x86 systems with 7-10" touchscreen displays.
+A professional touchscreen-friendly hi-fi media player built with Electron, React, and Tailwind CSS. Designed for x86 systems with 7-10" touchscreen displays.
 
-![HiFi Media Player](https://img.shields.io/badge/platform-Electron-blue)
+![Osmium Sound](https://img.shields.io/badge/platform-Electron-blue)
 ![License](https://img.shields.io/badge/license-MIT-green)
 
 > ## ⚠️ APPLIANCE ISO — DESTRUCTIVE, UNATTENDED INSTALL
@@ -267,7 +267,7 @@ Add the following:
 
 ```ini
 [Unit]
-Description=HiFi Media Player
+Description=Osmium Sound
 After=graphical.target
 
 [Service]
@@ -396,7 +396,7 @@ window.electronAPI.setAudioDevice(deviceId)
 
 **This project also includes and redistributes third-party components** under their own licenses (Lyrion Music Server and squeezelite under GPL, Android companion app under Apache-2.0, and npm/Python dependencies under MIT/BSD/ISC). Please see [`THIRD-PARTY-NOTICES.md`](THIRD-PARTY-NOTICES.md) for the complete list, license texts, and source locations.
 
-**Disclaimer of Affiliation:** HiFi Media Player is an independent open-source project and is **NOT affiliated with, sponsored by, endorsed by, or officially associated with** the Lyrion Music Server project or the LMS-Community. The name "Lyrion" is used in a nominative sense only to describe the service that this frontend connects to.
+**Disclaimer of Affiliation:** Osmium Sound is an independent open-source project and is **NOT affiliated with, sponsored by, endorsed by, or officially associated with** the Lyrion Music Server project or the LMS-Community. The name "Lyrion" is used in a nominative sense only to describe the service that this frontend connects to.
 
 ## 🤝 Contributing
 

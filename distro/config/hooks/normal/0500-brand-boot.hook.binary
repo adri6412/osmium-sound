@@ -40,7 +40,7 @@ echo "I: [hifi] installer kernel=$KERNEL initrd=$INITRD"
 if [ -d isolinux ]; then
     # One branded, preseeded install entry with the DETECTED paths.
     cat > isolinux/menu.cfg <<EOF
-menu title HiFi Player
+menu title Osmium Sound
 menu background splash.png
 menu color title       1;37;40   #ffd4af37 #00000000 std
 menu color sel         7;37;40   #ff000000 #ffd4af37 all
@@ -57,7 +57,7 @@ menu rows 4
 menu timeoutrow 14
 
 label install
-    menu label ^Install HiFi Player
+    menu label ^Install Osmium Sound
     menu default
     kernel $KERNEL
     append initrd=$INITRD $APPEND
@@ -96,7 +96,7 @@ set menu_color_highlight=black/yellow
 set timeout=5
 set default=0
 
-menuentry "Install HiFi Player" {
+menuentry "Install Osmium Sound" {
     linux  $KERNEL $APPEND
     initrd $INITRD
 }

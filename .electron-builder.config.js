@@ -4,7 +4,7 @@
  */
 module.exports = {
   appId: 'com.hifi.mediaplayer',
-  productName: 'HiFi Media Player',
+  productName: 'Osmium Sound',
   directories: {
     output: 'dist',
     buildResources: 'assets'

@@ -340,7 +340,7 @@ INDEX_HTML = r"""<!DOCTYPE html>
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>HiFi Player — Sorgenti musicali</title>
+<title>Osmium Sound — Sorgenti musicali</title>
 <style>
   :root { --gold:#d4af37; --bg:#0a0a0a; --surface:#161616; --border:#252525; --silver:#c0c0c0; }
   * { box-sizing:border-box; }

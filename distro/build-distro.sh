@@ -32,7 +32,7 @@ DEBIAN_SUITE="${DEBIAN_SUITE:-bookworm}"
 ARCH="${ARCH:-amd64}"
 ISO_NAME="${ISO_NAME:-hifi-player-installer.iso}"
 LYRION_DEB_URL="${LYRION_DEB_URL:-https://downloads.lms-community.org/LyrionMusicServer_v9.1.0/lyrionmusicserver_9.1.0_all.deb}"
-BRAND_NAME="${BRAND_NAME:-HiFi Player}"
+BRAND_NAME="${BRAND_NAME:-Osmium Sound}"
 
 # ─────────────────────────── Paths ──────────────────────────────────
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -183,15 +183,19 @@ log "Lyrion Music Server will be downloaded on-demand by hook 0050 (during chroo
 # installed, and the .deb file is removed. The installed package (dpkg metadata)
 # survives the installer; hifi-firstboot.sh will re-ensure it on first boot.
 
-log "Generating Plymouth boot logo (ImageMagick)"
+log "Copying Plymouth boot logo from repo root"
 THEME_DIR="$CONFIG/includes.chroot/usr/share/plymouth/themes/hifi"
 mkdir -p "$THEME_DIR"
-convert -size 720x200 xc:black \
-    -gravity center \
-    -fill '#d4af37' -font DejaVu-Sans-Bold -pointsize 72 -annotate +0-10 'HiFi Player' \
-    -fill '#888888' -font DejaVu-Sans -pointsize 22 -annotate +0+55 'network audio streamer' \
-    "$THEME_DIR/logo.png" \
-    || convert -size 720x200 xc:black -gravity center -fill white -pointsize 60 -annotate 0 'HiFi Player' "$THEME_DIR/logo.png"
+if [ -f "$REPO_ROOT/logo.png" ]; then
+    cp -f "$REPO_ROOT/logo.png" "$THEME_DIR/logo.png"
+else
+    convert -size 720x200 xc:black \
+        -gravity center \
+        -fill '#d4af37' -font DejaVu-Sans-Bold -pointsize 72 -annotate +0-10 'Osmium Sound' \
+        -fill '#888888' -font DejaVu-Sans -pointsize 22 -annotate +0+55 'network audio streamer' \
+        "$THEME_DIR/logo.png" \
+        || convert -size 720x200 xc:black -gravity center -fill white -pointsize 60 -annotate 0 'Osmium Sound' "$THEME_DIR/logo.png"
+fi
 
 # Solid-black GRUB background for the installed system, so the (hidden) GRUB
 # graphical terminal shows nothing — no menu, no "Loading Linux…" text.
@@ -223,18 +227,18 @@ mkdir -p "$ISOLINUX_DIR" "$GRUB_DIR"
 # isolinux/BIOS splash — 640x480, logo centred on black.
 convert -size 640x480 xc:black \
     -gravity center \
-    -fill '#d4af37' -font DejaVu-Sans-Bold -pointsize 56 -annotate +0-30 'HiFi Player' \
+    -fill '#d4af37' -font DejaVu-Sans-Bold -pointsize 56 -annotate +0-30 'Osmium Sound' \
     -fill '#888888' -font DejaVu-Sans -pointsize 18 -annotate +0+20 'network audio streamer' \
     "$ISOLINUX_DIR/splash.png" \
-    || convert -size 640x480 xc:black -gravity center -fill white -pointsize 48 -annotate 0 'HiFi Player' "$ISOLINUX_DIR/splash.png"
+    || convert -size 640x480 xc:black -gravity center -fill white -pointsize 48 -annotate 0 'Osmium Sound' "$ISOLINUX_DIR/splash.png"
 
 # grub/UEFI background — 640x480 (works on gfxterm), same look.
 convert -size 640x480 xc:black \
     -gravity center \
-    -fill '#d4af37' -font DejaVu-Sans-Bold -pointsize 56 -annotate +0-30 'HiFi Player' \
+    -fill '#d4af37' -font DejaVu-Sans-Bold -pointsize 56 -annotate +0-30 'Osmium Sound' \
     -fill '#888888' -font DejaVu-Sans -pointsize 18 -annotate +0+20 'network audio streamer' \
     "$GRUB_DIR/splash.png" \
-    || convert -size 640x480 xc:black -gravity center -fill white -pointsize 48 -annotate 0 'HiFi Player' "$GRUB_DIR/splash.png"
+    || convert -size 640x480 xc:black -gravity center -fill white -pointsize 48 -annotate 0 'Osmium Sound' "$GRUB_DIR/splash.png"
 
 # ─────────────────────────── Make hooks executable ─────────────────
 chmod +x "$CONFIG"/hooks/normal/*.hook.chroot
@@ -294,7 +298,7 @@ if [ "$STAGE" != "binary" ]; then
         --bootappend-install "auto=true priority=critical preseed/file=/preseed.cfg ---" \
         --iso-application "$BRAND_NAME" \
         --iso-publisher "$BRAND_NAME" \
-        --iso-volume "HIFI_PLAYER" \
+        --iso-volume "OSMIUM_SOUND" \
         --memtest none \
         --apt-recommends false
 else

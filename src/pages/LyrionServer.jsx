@@ -600,7 +600,7 @@ const LyrionServer = () => {
           <div className="flex items-center space-x-2">
             <div className="w-2 h-2 rounded-full bg-hifi-gold shadow-[0_0_6px_rgba(212,175,55,0.8)]" />
             <span className="text-[11px] font-bold tracking-[0.18em] text-hifi-silver/80 uppercase select-none">
-              HiFi Player
+              Osmium Sound
             </span>
           </div>
           <div className="flex items-center space-x-2">
