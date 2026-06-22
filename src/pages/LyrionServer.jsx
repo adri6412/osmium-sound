@@ -9,15 +9,17 @@ import {
   Settings as SettingsIcon, Maximize2
 } from 'lucide-react';
 import { lyrionApi } from '../utils/lyrionApi';
+import { useI18n } from '../i18n';
 import AnalogVUMeter from '../components/AnalogVUMeter';
 import SettingsPage from './Settings';
 
 // ── Tab definitions ──────────────────────────────────────────
+// `labelKey` is resolved through i18n at render time (null = icon-only tab).
 const TABS = [
-  { id: 'musica',   label: 'Musica',   Icon: Music },
-  { id: 'radio',    label: 'Radio',    Icon: Radio },
-  { id: 'apps',     label: 'App / CD', Icon: AppWindow },
-  { id: 'settings', label: null,       Icon: SettingsIcon },
+  { id: 'musica',   labelKey: 'player.tabs.music', Icon: Music },
+  { id: 'radio',    labelKey: 'player.tabs.radio', Icon: Radio },
+  { id: 'apps',     labelKey: 'player.tabs.apps',  Icon: AppWindow },
+  { id: 'settings', labelKey: null,                Icon: SettingsIcon },
 ];
 
 // ── Artwork with error fallback ───────────────────────────────
@@ -45,6 +47,7 @@ const PlayingBars = () => (
 
 // ── Main component ────────────────────────────────────────────
 const LyrionServer = () => {
+  const { t } = useI18n();
   const [serverUrl] = useState(localStorage.getItem('lyrionUrl') || 'http://localhost:9000');
 
   // LMS state
@@ -62,7 +65,7 @@ const LyrionServer = () => {
   const [currentView, setCurrentView] = useState('home');
   const [libraryData, setLibraryData] = useState([]);
   const [libraryLoading, setLibraryLoading] = useState(false);
-  const [navigationStack, setNavigationStack] = useState([{ view: 'home', title: 'Home', params: null }]);
+  const [navigationStack, setNavigationStack] = useState([{ view: 'home', title: t('player.titles.home'), params: null }]);
   // Search prompt for Lyrion menu items that require text input (e.g. TuneIn / global search)
   const [menuSearch, setMenuSearch] = useState(null); // { action, title }
   const [searchText, setSearchText] = useState('');
@@ -88,7 +91,7 @@ const LyrionServer = () => {
       else { setActivePlayer(null); setPlayerStatus(null); }
     } catch (_) {
       setIsConnected(false);
-      setError("Impossibile connettersi al server. Verifica l'URL nelle Impostazioni.");
+      setError(t('player.connectError'));
     } finally {
       setIsLoading(false);
     }
@@ -173,7 +176,7 @@ const LyrionServer = () => {
 
   const goHome = () => {
     setMenuSearch(null);
-    setNavigationStack([{ view: 'home', title: 'Home', params: null }]);
+    setNavigationStack([{ view: 'home', title: t('player.titles.home'), params: null }]);
     setCurrentView('home');
   };
 
@@ -197,7 +200,7 @@ const LyrionServer = () => {
     const doAct = lyrionApi.resolveMenuAction(base, item, 'do');
     if (item.input && go) {                 // needs text input → search prompt
       setSearchText('');
-      setMenuSearch({ action: go, title: item.text || item.name || 'Cerca' });
+      setMenuSearch({ action: go, title: item.text || item.name || t('player.titles.search') });
     } else if (go) {                        // submenu (or play-on-go leaf) → drill in
       navigateTo('menu', item.text || item.name || '…', { action: go });
     } else if (play) {                      // playable leaf
@@ -222,12 +225,12 @@ const LyrionServer = () => {
     setMenuSearch(null);
     if (tabId === 'radio' || tabId === 'apps') {
       const view = tabId === 'radio' ? 'radios' : 'menu_home';
-      const title = tabId === 'radio' ? 'Radio' : 'App';
+      const title = tabId === 'radio' ? t('player.titles.radio') : t('player.titles.apps');
       setLibraryLoading(true);
       try {
         const data = await fetchViewData(view, null);
         setNavigationStack([
-          { view: 'home', title: 'Home', params: null },
+          { view: 'home', title: t('player.titles.home'), params: null },
           { view, title, params: null }
         ]);
         setCurrentView(view);
@@ -243,8 +246,8 @@ const LyrionServer = () => {
 
   // ── Derived player values ──────────────────────────────────
   const currentTrack = playerStatus?.playlist_loop?.[0] || {};
-  const title        = currentTrack.title  || 'Nessuna traccia';
-  const artist       = currentTrack.artist || 'Artista Sconosciuto';
+  const title        = currentTrack.title  || t('player.noTrack');
+  const artist       = currentTrack.artist || t('player.unknownArtist');
   const album        = currentTrack.album  || '';
   const isPlaying    = playerStatus?.mode === 'play';
   const volume       = playerStatus?.mixer_volume ?? 0;
@@ -272,17 +275,17 @@ const LyrionServer = () => {
             value={searchText}
             onChange={(e) => setSearchText(e.target.value)}
             onKeyDown={(e) => { if (e.key === 'Enter') submitMenuSearch(); }}
-            placeholder="Digita e premi Cerca…"
+            placeholder={t('player.searchPlaceholder')}
             className="w-full bg-hifi-dark border border-hifi-accent rounded-lg px-4 py-3 text-white focus:outline-none focus:border-hifi-gold"
           />
           <div className="flex gap-2">
             <button onClick={() => { setMenuSearch(null); setSearchText(''); }}
               className="flex-1 bg-hifi-light hover:bg-hifi-accent text-white py-2.5 rounded-lg text-sm font-medium transition-colors">
-              Annulla
+              {t('common.cancel')}
             </button>
             <button onClick={submitMenuSearch}
               className="flex-1 bg-hifi-gold hover:bg-yellow-600 text-black py-2.5 rounded-lg text-sm font-semibold transition-colors">
-              Cerca
+              {t('common.search')}
             </button>
           </div>
         </div>
@@ -301,9 +304,9 @@ const LyrionServer = () => {
       return (
         <div className="grid grid-cols-3 gap-3 p-4">
           {[
-            { label: 'Artisti',  Icon: User,   action: () => navigateTo('artists', 'Artisti') },
-            { label: 'Album',    Icon: Disc,   action: () => navigateTo('albums',  'Album') },
-            { label: 'Cartelle', Icon: Folder, action: () => navigateTo('folders', 'Cartelle') },
+            { label: t('player.titles.artists'),  Icon: User,   action: () => navigateTo('artists', t('player.titles.artists')) },
+            { label: t('player.titles.albums'),   Icon: Disc,   action: () => navigateTo('albums',  t('player.titles.albums')) },
+            { label: t('player.titles.folders'),  Icon: Folder, action: () => navigateTo('folders', t('player.titles.folders')) },
           ].map(({ label, Icon, action }) => (
             <button key={label} onClick={action}
               className="flex flex-col items-center justify-center py-7 bg-hifi-surface hover:bg-hifi-light rounded-xl border border-hifi-border hover:border-hifi-accent transition-colors">
@@ -499,32 +502,32 @@ const LyrionServer = () => {
       <div className="flex-1 flex flex-col items-center justify-center">
         <motion.div animate={{ rotate: 360 }} transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
           className="w-12 h-12 border-4 border-hifi-gold border-t-transparent rounded-full mb-4" />
-        <p className="text-hifi-silver text-sm">Connessione a Lyrion in corso…</p>
+        <p className="text-hifi-silver text-sm">{t('player.connecting')}</p>
       </div>
     );
     if (error) return (
       <div className="flex-1 flex flex-col items-center justify-center px-8 text-center">
         <AlertCircle size={40} className="text-red-400 mb-4" />
-        <h2 className="text-base font-bold text-white mb-2">Errore di Connessione</h2>
+        <h2 className="text-base font-bold text-white mb-2">{t('player.connectionErrorTitle')}</h2>
         <p className="text-hifi-silver/70 text-sm mb-6 max-w-xs">{error}</p>
         <button onClick={connectToServer}
           className="flex items-center space-x-2 bg-hifi-surface hover:bg-hifi-light px-5 py-2.5 rounded-lg text-white text-sm transition-colors border border-hifi-border">
           <RefreshCw size={15} />
-          <span>Riprova</span>
+          <span>{t('common.retry')}</span>
         </button>
       </div>
     );
     if (!activePlayer) return (
       <div className="flex-1 flex flex-col items-center justify-center px-8 text-center">
         <Music size={48} className="text-hifi-silver/20 mb-4" />
-        <p className="text-hifi-silver/60 text-sm mb-2">Nessun player Lyrion trovato</p>
+        <p className="text-hifi-silver/60 text-sm mb-2">{t('player.noPlayer')}</p>
         <p className="text-hifi-silver/40 text-xs mb-6 max-w-xs">
-          Il server potrebbe non aver ancora risposto. Riprova a connetterti.
+          {t('player.noPlayerHint')}
         </p>
         <button onClick={connectToServer} disabled={isLoading}
           className="flex items-center space-x-2 bg-hifi-surface hover:bg-hifi-light disabled:opacity-50 px-5 py-2.5 rounded-lg text-white text-sm transition-colors border border-hifi-border">
           <RefreshCw size={15} className={isLoading ? 'animate-spin' : ''} />
-          <span>{isLoading ? 'Connessione…' : 'Riconnetti'}</span>
+          <span>{isLoading ? t('player.connectingShort') : t('player.reconnect')}</span>
         </button>
       </div>
     );
@@ -563,7 +566,7 @@ const LyrionServer = () => {
           {navigationStack.length > 1 && (
             <button onClick={goBack}
               className="text-xs px-3 py-1 bg-white/5 hover:bg-white/10 text-hifi-silver/70 hover:text-white rounded-lg transition-colors ml-2">
-              Indietro
+              {t('common.back')}
             </button>
           )}
         </div>
@@ -597,7 +600,7 @@ const LyrionServer = () => {
             <div className={`w-1.5 h-1.5 rounded-full ${isConnected ? 'bg-emerald-500' : 'bg-red-500/70'}`} />
             {activePlayer && (
               <button onClick={() => setIsPlayerExpanded(true)}
-                className="p-1 text-hifi-silver/40 hover:text-hifi-silver transition-colors rounded" title="Espandi">
+                className="p-1 text-hifi-silver/40 hover:text-hifi-silver transition-colors rounded" title={t('player.expand')}>
                 <Maximize2 size={13} />
               </button>
             )}
@@ -711,14 +714,14 @@ const LyrionServer = () => {
 
         {/* Tab bar */}
         <div className="flex shrink-0 border-b border-hifi-border bg-hifi-panel/50 overflow-x-auto">
-          {TABS.map(({ id, label, Icon }) => {
+          {TABS.map(({ id, labelKey, Icon }) => {
             const active = activeTab === id;
             return (
               <button key={id} onClick={() => handleTabSwitch(id)}
                 className={`relative flex items-center space-x-1.5 px-4 py-3 text-xs font-medium whitespace-nowrap transition-colors flex-shrink-0
                   ${active ? 'text-white' : 'text-hifi-silver/50 hover:text-hifi-silver'}`}>
                 <Icon size={14} />
-                {label && <span>{label}</span>}
+                {labelKey && <span>{t(labelKey)}</span>}
                 {active && (
                   <span className="absolute bottom-0 left-2 right-2 h-[2px] bg-hifi-gold rounded-t-sm" />
                 )}
@@ -760,7 +763,7 @@ const LyrionServer = () => {
                   className="p-2 bg-white/10 hover:bg-white/20 rounded-full text-white transition-colors">
                   <ChevronDown size={22} />
                 </button>
-                <p className="text-[10px] tracking-[0.25em] text-hifi-silver/70 uppercase">In Riproduzione</p>
+                <p className="text-[10px] tracking-[0.25em] text-hifi-silver/70 uppercase">{t('player.nowPlaying')}</p>
                 <div className="w-10" />
               </div>
 

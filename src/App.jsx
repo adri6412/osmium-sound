@@ -5,6 +5,7 @@ import SetupWizard from './pages/SetupWizard';
 import VirtualKeyboard from './components/VirtualKeyboard';
 import Screensaver from './components/Screensaver';
 import { KeyboardProvider, useKeyboard } from './contexts/KeyboardContext';
+import { I18nProvider } from './i18n';
 import { lyrionApi } from './utils/lyrionApi';
 
 const AppContent = () => {
@@ -100,10 +101,12 @@ const AppContent = () => {
 
 function App() {
   return (
-    <KeyboardProvider>
-      <AppContent />
-      <VirtualKeyboard />
-    </KeyboardProvider>
+    <I18nProvider>
+      <KeyboardProvider>
+        <AppContent />
+        <VirtualKeyboard />
+      </KeyboardProvider>
+    </I18nProvider>
   );
 }
 

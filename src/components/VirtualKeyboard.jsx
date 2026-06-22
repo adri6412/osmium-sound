@@ -2,11 +2,13 @@ import React, { useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Delete } from 'lucide-react';
 import { useKeyboard } from '../contexts/KeyboardContext';
+import { useI18n } from '../i18n';
 import SimpleKeyboard from 'simple-keyboard';
 import 'simple-keyboard/build/css/index.css';
 
 const VirtualKeyboard = () => {
   const { isKeyboardVisible, inputValue, updateInputValue, hideKeyboard, confirmInput, activeInput } = useKeyboard();
+  const { t } = useI18n();
   const keyboardRef = useRef(null);
   const containerRef = useRef(null);
   const simpleKeyboardRef = useRef(null);
@@ -15,7 +17,7 @@ const VirtualKeyboard = () => {
   const activeLabel =
     activeInput?.current?.getAttribute?.('aria-label') ||
     activeInput?.current?.placeholder ||
-    'Inserisci testo';
+    t('keyboard.enterText');
 
   // Keep the active input visible above the keyboard. The keyboard occupies the
   // bottom half of the screen, so we add temporary bottom padding to the page and
@@ -56,7 +58,7 @@ const VirtualKeyboard = () => {
           ]
         },
         display: {
-          '{space}': 'SPAZIO',
+          '{space}': t('keyboard.space'),
           '{bksp}': '⌫'
         },
         theme: 'hg-theme-default',
@@ -163,7 +165,7 @@ const VirtualKeyboard = () => {
                 onClick={hideKeyboard}
                 className="p-2 rounded-lg bg-hifi-light hover:bg-hifi-accent text-white transition-colors shrink-0"
                 whileTap={{ scale: 0.95 }}
-                aria-label="Chiudi tastiera"
+                aria-label={t('keyboard.closeKeyboard')}
               >
                 <X size={20} />
               </motion.button>
@@ -182,14 +184,14 @@ const VirtualKeyboard = () => {
                 whileTap={{ scale: 0.95 }}
               >
                 <Delete size={16} />
-                Cancella
+                {t('keyboard.clear')}
               </motion.button>
               <motion.button
                 onClick={confirmInput}
                 className="flex-1 bg-hifi-gold hover:bg-yellow-600 text-black py-2.5 rounded-lg font-semibold text-sm transition-colors"
                 whileTap={{ scale: 0.95 }}
               >
-                Conferma
+                {t('keyboard.confirm')}
               </motion.button>
             </div>
           </motion.div>

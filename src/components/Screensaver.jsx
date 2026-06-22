@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useI18n } from '../i18n';
 
 const Screensaver = ({ isActive, onWake }) => {
+  const { localeTag } = useI18n();
   const [time, setTime] = useState(new Date());
 
   useEffect(() => {
@@ -20,7 +22,7 @@ const Screensaver = ({ isActive, onWake }) => {
       hours: date.getHours().toString().padStart(2, '0'),
       minutes: date.getMinutes().toString().padStart(2, '0'),
       seconds: date.getSeconds().toString().padStart(2, '0'),
-      dateStr: date.toLocaleDateString('it-IT', {
+      dateStr: date.toLocaleDateString(localeTag(), {
         weekday: 'long',
         year: 'numeric',
         month: 'long',

@@ -6,6 +6,8 @@ import {
   Check, ChevronRight, ChevronLeft, RefreshCw, X, Loader2, AlertCircle, Disc3, Speaker
 } from 'lucide-react';
 import { systemAPI } from '../utils/api';
+import { useI18n } from '../i18n';
+import LanguageSelector from '../components/LanguageSelector';
 
 const SOURCES_PORT = 8080;
 const LYRION_PORT = 9000;
@@ -23,6 +25,7 @@ const signalBars = (signal) => {
  * Steps: welcome → network (wired/wifi, DHCP forced) → sources URL → lyrion URL → done
  */
 const SetupWizard = ({ onComplete }) => {
+  const { t } = useI18n();
   const [step, setStep] = useState('welcome');
   const [deviceIp, setDeviceIp] = useState(null);
 
@@ -62,16 +65,16 @@ const SetupWizard = ({ onComplete }) => {
     setNetMode('wired');
     setBusy(true);
     setNetError('');
-    setStatusMsg('Connessione via cavo (DHCP) in corso…');
+    setStatusMsg(t('wizard.network.connectingWired'));
     const res = await systemAPI.useWiredDhcp();
     setBusy(false);
     if (res.success) {
       const ip = res.data?.ip || (await refreshIp());
-      setStatusMsg(ip ? `Connesso · IP ${ip}` : 'Connesso');
+      setStatusMsg(ip ? t('wizard.network.connectedIp', { ip }) : t('wizard.network.connected'));
       setStep('audio');
       await refreshIp();
     } else {
-      setNetError(res.message || 'Connessione cavo non riuscita. Verifica che il cavo sia collegato.');
+      setNetError(res.message || t('wizard.network.wiredFailed'));
       setStatusMsg('');
     }
   };
@@ -97,7 +100,7 @@ const SetupWizard = ({ onComplete }) => {
         .sort((a, b) => (parseInt(b.signal) || 0) - (parseInt(a.signal) || 0));
       setNetworks(list);
     } else {
-      setNetError(res.message || 'Scansione WiFi non disponibile.');
+      setNetError(res.message || t('wizard.wifi.scanUnavailable'));
     }
   };
 
@@ -105,16 +108,18 @@ const SetupWizard = ({ onComplete }) => {
     if (!selectedSsid) return;
     setBusy(true);
     setNetError('');
-    setStatusMsg(`Connessione a ${selectedSsid}…`);
+    setStatusMsg(t('wizard.wifi.connecting', { ssid: selectedSsid }));
     const res = await systemAPI.connectWifi(selectedSsid, wifiPassword);
     setBusy(false);
     if (res.success && res.data?.success !== false) {
       const ip = res.data?.ip || (await refreshIp());
-      setStatusMsg(ip ? `Connesso a ${selectedSsid} · IP ${ip}` : `Connesso a ${selectedSsid}`);
+      setStatusMsg(ip
+        ? t('wizard.wifi.connectedToIp', { ssid: selectedSsid, ip })
+        : t('wizard.wifi.connectedTo', { ssid: selectedSsid }));
       setStep('audio');
       await refreshIp();
     } else {
-      setNetError(res.data?.message || res.message || 'Connessione WiFi non riuscita. Controlla la password.');
+      setNetError(res.data?.message || res.message || t('wizard.wifi.connectFailed'));
       setStatusMsg('');
     }
   };
@@ -131,8 +136,8 @@ const SetupWizard = ({ onComplete }) => {
       const firstHw = res.data.devices.find(d => d.id !== 'default');
       setSelectedAudio(firstHw ? firstHw.id : 'default');
     } else {
-      setAudioError(res.message || 'Elenco dispositivi audio non disponibile.');
-      setAudioDevices([{ id: 'default', name: 'Predefinito di sistema' }]);
+      setAudioError(res.message || t('wizard.audio.unavailable'));
+      setAudioDevices([{ id: 'default', name: t('wizard.audio.defaultDevice') }]);
     }
   };
 
@@ -167,11 +172,14 @@ const SetupWizard = ({ onComplete }) => {
       <div className="flex items-center justify-between px-6 h-12 shrink-0 border-b border-hifi-border/60">
         <div className="flex items-center space-x-2">
           <div className="w-2 h-2 rounded-full bg-hifi-gold shadow-[0_0_6px_rgba(212,175,55,0.8)]" />
-          <span className="text-[11px] font-bold tracking-[0.2em] text-hifi-silver/70 uppercase">HiFi Player · Setup</span>
+          <span className="text-[11px] font-bold tracking-[0.2em] text-hifi-silver/70 uppercase">{t('wizard.brand')}</span>
         </div>
-        <button onClick={finish} className="text-[11px] text-hifi-silver/40 hover:text-hifi-silver/80 transition-colors">
-          Salta
-        </button>
+        <div className="flex items-center space-x-3">
+          <LanguageSelector variant="compact" />
+          <button onClick={finish} className="text-[11px] text-hifi-silver/40 hover:text-hifi-silver/80 transition-colors">
+            {t('wizard.skip')}
+          </button>
+        </div>
       </div>
       <div className="flex-1 min-h-0 flex flex-col items-center justify-center px-8 overflow-y-auto content-scrollbar">
         {children}
@@ -199,16 +207,15 @@ const SetupWizard = ({ onComplete }) => {
         {/* ───────── WELCOME ───────── */}
         {step === 'welcome' && (
           <Shell footer={<><Dots /><button onClick={() => setStep('network')} className="flex items-center space-x-2 bg-hifi-gold text-black font-semibold px-6 py-2.5 rounded-xl hover:brightness-110 transition">
-            <span>Inizia</span><ChevronRight size={18} />
+            <span>{t('wizard.start')}</span><ChevronRight size={18} />
           </button></>}>
             <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} transition={{ delay: 0.1 }} className="flex flex-col items-center text-center max-w-md">
               <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-hifi-gold to-yellow-600 flex items-center justify-center shadow-[0_0_40px_rgba(212,175,55,0.3)] mb-6">
                 <Disc3 size={40} className="text-black" />
               </div>
-              <h1 className="text-3xl font-bold text-white mb-3">Benvenuto</h1>
+              <h1 className="text-3xl font-bold text-white mb-3">{t('wizard.welcome.title')}</h1>
               <p className="text-hifi-silver/70 leading-relaxed">
-                Configuriamo insieme il tuo network streamer. Bastano pochi passaggi:
-                rete, sorgenti musicali e sei pronto all'ascolto.
+                {t('wizard.welcome.subtitle')}
               </p>
             </motion.div>
           </Shell>
@@ -216,22 +223,22 @@ const SetupWizard = ({ onComplete }) => {
 
         {/* ───────── NETWORK CHOICE ───────── */}
         {step === 'network' && (
-          <Shell footer={<><button onClick={() => setStep('welcome')} className="flex items-center space-x-1 text-hifi-silver/60 hover:text-white transition"><ChevronLeft size={18} /><span className="text-sm">Indietro</span></button><Dots /><div className="w-20" /></>}>
+          <Shell footer={<><button onClick={() => setStep('welcome')} className="flex items-center space-x-1 text-hifi-silver/60 hover:text-white transition"><ChevronLeft size={18} /><span className="text-sm">{t('common.back')}</span></button><Dots /><div className="w-20" /></>}>
             <div className="w-full max-w-lg">
-              <h2 className="text-2xl font-bold text-white mb-1 text-center">Connessione di rete</h2>
-              <p className="text-hifi-silver/60 text-sm text-center mb-8">La rete sarà configurata automaticamente (DHCP).</p>
+              <h2 className="text-2xl font-bold text-white mb-1 text-center">{t('wizard.network.title')}</h2>
+              <p className="text-hifi-silver/60 text-sm text-center mb-8">{t('wizard.network.subtitle')}</p>
               <div className="grid grid-cols-2 gap-4">
                 <button onClick={chooseWired} disabled={busy}
                   className="flex flex-col items-center justify-center py-10 bg-hifi-surface hover:bg-hifi-light rounded-2xl border border-hifi-border hover:border-hifi-gold/50 transition disabled:opacity-50">
                   <Network size={40} className="text-hifi-gold mb-4" />
-                  <span className="text-white font-medium">Via cavo</span>
-                  <span className="text-hifi-silver/50 text-xs mt-1">Ethernet</span>
+                  <span className="text-white font-medium">{t('wizard.network.wired')}</span>
+                  <span className="text-hifi-silver/50 text-xs mt-1">{t('wizard.network.wiredSub')}</span>
                 </button>
                 <button onClick={chooseWifi} disabled={busy}
                   className="flex flex-col items-center justify-center py-10 bg-hifi-surface hover:bg-hifi-light rounded-2xl border border-hifi-border hover:border-hifi-gold/50 transition disabled:opacity-50">
                   <Wifi size={40} className="text-hifi-gold mb-4" />
-                  <span className="text-white font-medium">Wi-Fi</span>
-                  <span className="text-hifi-silver/50 text-xs mt-1">Wireless</span>
+                  <span className="text-white font-medium">{t('wizard.network.wifi')}</span>
+                  <span className="text-hifi-silver/50 text-xs mt-1">{t('wizard.network.wifiSub')}</span>
                 </button>
               </div>
               {busy && <p className="text-center text-hifi-silver/60 text-sm mt-6 flex items-center justify-center"><Loader2 size={15} className="animate-spin mr-2" />{statusMsg}</p>}
@@ -243,16 +250,16 @@ const SetupWizard = ({ onComplete }) => {
         {/* ───────── WIFI SCAN ───────── */}
         {step === 'wifi-scan' && (
           <Shell footer={<>
-            <button onClick={() => setStep('network')} className="flex items-center space-x-1 text-hifi-silver/60 hover:text-white transition"><ChevronLeft size={18} /><span className="text-sm">Indietro</span></button>
+            <button onClick={() => setStep('network')} className="flex items-center space-x-1 text-hifi-silver/60 hover:text-white transition"><ChevronLeft size={18} /><span className="text-sm">{t('common.back')}</span></button>
             <Dots />
             <button onClick={connectWifi} disabled={!selectedSsid || busy}
               className="flex items-center space-x-2 bg-hifi-gold text-black font-semibold px-5 py-2.5 rounded-xl hover:brightness-110 transition disabled:opacity-40 disabled:cursor-not-allowed">
-              {busy ? <Loader2 size={16} className="animate-spin" /> : <span>Connetti</span>}
+              {busy ? <Loader2 size={16} className="animate-spin" /> : <span>{t('wizard.connect')}</span>}
             </button>
           </>}>
             <div className="w-full max-w-lg">
               <div className="flex items-center justify-between mb-4">
-                <h2 className="text-2xl font-bold text-white">Reti Wi-Fi</h2>
+                <h2 className="text-2xl font-bold text-white">{t('wizard.wifi.title')}</h2>
                 <button onClick={scanWifi} disabled={busy} className="p-2 text-hifi-silver/60 hover:text-white rounded-lg hover:bg-white/10 transition">
                   <RefreshCw size={16} className={busy ? 'animate-spin' : ''} />
                 </button>
@@ -261,8 +268,8 @@ const SetupWizard = ({ onComplete }) => {
               {netError && <p className="text-red-400 text-sm mb-3 flex items-center"><AlertCircle size={15} className="mr-2" />{netError}</p>}
 
               <div className="space-y-1.5 max-h-[230px] overflow-y-auto content-scrollbar pr-1">
-                {networks.length === 0 && !busy && <p className="text-hifi-silver/40 text-sm text-center py-8">Nessuna rete trovata.</p>}
-                {busy && networks.length === 0 && <p className="text-hifi-silver/40 text-sm text-center py-8 flex items-center justify-center"><Loader2 size={16} className="animate-spin mr-2" />Scansione…</p>}
+                {networks.length === 0 && !busy && <p className="text-hifi-silver/40 text-sm text-center py-8">{t('wizard.wifi.noNetworks')}</p>}
+                {busy && networks.length === 0 && <p className="text-hifi-silver/40 text-sm text-center py-8 flex items-center justify-center"><Loader2 size={16} className="animate-spin mr-2" />{t('wizard.wifi.scanning')}</p>}
                 {networks.map((n) => {
                   const active = selectedSsid === n.ssid;
                   const bars = signalBars(n.signal);
@@ -284,9 +291,9 @@ const SetupWizard = ({ onComplete }) => {
 
               {selectedSsid && (
                 <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} className="mt-4">
-                  <label className="text-hifi-silver/60 text-xs mb-1.5 block">Password per “{selectedSsid}”</label>
+                  <label className="text-hifi-silver/60 text-xs mb-1.5 block">{t('wizard.wifi.passwordLabel', { ssid: selectedSsid })}</label>
                   <input type="password" value={wifiPassword} onChange={(e) => setWifiPassword(e.target.value)}
-                    placeholder="Inserisci la password"
+                    placeholder={t('wizard.wifi.passwordPlaceholder')}
                     className="w-full bg-hifi-dark border border-hifi-border focus:border-hifi-gold rounded-xl px-4 py-3 text-white outline-none transition" />
                 </motion.div>
               )}
@@ -297,11 +304,11 @@ const SetupWizard = ({ onComplete }) => {
         {/* ───────── AUDIO / DAC ───────── */}
         {step === 'audio' && (
           <Shell footer={<>
-            <button onClick={() => setStep('network')} className="flex items-center space-x-1 text-hifi-silver/60 hover:text-white transition"><ChevronLeft size={18} /><span className="text-sm">Indietro</span></button>
+            <button onClick={() => setStep('network')} className="flex items-center space-x-1 text-hifi-silver/60 hover:text-white transition"><ChevronLeft size={18} /><span className="text-sm">{t('common.back')}</span></button>
             <Dots />
             <button onClick={confirmAudio} disabled={audioBusy}
               className="flex items-center space-x-2 bg-hifi-gold text-black font-semibold px-6 py-2.5 rounded-xl hover:brightness-110 transition disabled:opacity-50">
-              {audioBusy ? <Loader2 size={16} className="animate-spin" /> : <><span>Avanti</span><ChevronRight size={18} /></>}
+              {audioBusy ? <Loader2 size={16} className="animate-spin" /> : <><span>{t('common.next')}</span><ChevronRight size={18} /></>}
             </button>
           </>}>
             <div className="w-full max-w-lg">
@@ -309,8 +316,8 @@ const SetupWizard = ({ onComplete }) => {
                 <div className="w-14 h-14 rounded-xl bg-hifi-surface border border-hifi-border flex items-center justify-center mb-4">
                   <Speaker size={26} className="text-hifi-gold" />
                 </div>
-                <h2 className="text-2xl font-bold text-white mb-1">Uscita audio</h2>
-                <p className="text-hifi-silver/60 text-sm max-w-sm">Scegli il DAC o la scheda audio da usare per la riproduzione.</p>
+                <h2 className="text-2xl font-bold text-white mb-1">{t('wizard.audio.title')}</h2>
+                <p className="text-hifi-silver/60 text-sm max-w-sm">{t('wizard.audio.subtitle')}</p>
               </div>
 
               <div className="flex items-center justify-end mb-2">
@@ -323,7 +330,7 @@ const SetupWizard = ({ onComplete }) => {
 
               <div className="space-y-1.5 max-h-[260px] overflow-y-auto content-scrollbar pr-1">
                 {audioBusy && audioDevices.length === 0 && (
-                  <p className="text-hifi-silver/40 text-sm text-center py-8 flex items-center justify-center"><Loader2 size={16} className="animate-spin mr-2" />Ricerca dispositivi…</p>
+                  <p className="text-hifi-silver/40 text-sm text-center py-8 flex items-center justify-center"><Loader2 size={16} className="animate-spin mr-2" />{t('wizard.audio.searching')}</p>
                 )}
                 {audioDevices.map((d) => {
                   const active = selectedAudio === d.id;
@@ -349,29 +356,28 @@ const SetupWizard = ({ onComplete }) => {
         {/* ───────── SOURCES ───────── */}
         {step === 'sources' && (
           <Shell footer={<>
-            <button onClick={() => setStep('audio')} className="flex items-center space-x-1 text-hifi-silver/60 hover:text-white transition"><ChevronLeft size={18} /><span className="text-sm">Indietro</span></button>
+            <button onClick={() => setStep('audio')} className="flex items-center space-x-1 text-hifi-silver/60 hover:text-white transition"><ChevronLeft size={18} /><span className="text-sm">{t('common.back')}</span></button>
             <Dots />
             <button onClick={() => setStep('lyrion')} className="flex items-center space-x-2 bg-hifi-gold text-black font-semibold px-6 py-2.5 rounded-xl hover:brightness-110 transition">
-              <span>Avanti</span><ChevronRight size={18} />
+              <span>{t('common.next')}</span><ChevronRight size={18} />
             </button>
           </>}>
             <div className="w-full max-w-2xl flex flex-col items-center text-center">
               <div className="w-14 h-14 rounded-xl bg-hifi-surface border border-hifi-border flex items-center justify-center mb-4">
                 <FolderTree size={26} className="text-hifi-gold" />
               </div>
-              <h2 className="text-2xl font-bold text-white mb-2">Sorgenti musicali</h2>
+              <h2 className="text-2xl font-bold text-white mb-2">{t('wizard.sources.title')}</h2>
               <p className="text-hifi-silver/70 text-sm max-w-md mb-6">
-                Apri questo indirizzo dal tuo computer o telefono per aggiungere le tue cartelle
-                musicali — locali sul dispositivo o condivise in rete (SMB).
+                {t('wizard.sources.subtitle')}
               </p>
               <div className="flex items-center gap-6 bg-hifi-surface border border-hifi-border rounded-2xl p-5">
                 <div className="bg-white p-2.5 rounded-xl shrink-0">
                   <QRCodeSVG value={sourcesUrl} size={120} level="M" />
                 </div>
                 <div className="text-left">
-                  <p className="text-hifi-silver/50 text-xs uppercase tracking-wide mb-1">Indirizzo configurazione</p>
+                  <p className="text-hifi-silver/50 text-xs uppercase tracking-wide mb-1">{t('wizard.sources.addressLabel')}</p>
                   <p className="text-hifi-gold text-2xl font-mono font-bold">{deviceIp || '—'}<span className="text-hifi-silver/50">:{SOURCES_PORT}</span></p>
-                  <p className="text-hifi-silver/40 text-xs mt-2">Scansiona il QR o digita l'indirizzo nel browser</p>
+                  <p className="text-hifi-silver/40 text-xs mt-2">{t('wizard.sources.scanHint')}</p>
                 </div>
               </div>
             </div>
@@ -381,29 +387,28 @@ const SetupWizard = ({ onComplete }) => {
         {/* ───────── LYRION ───────── */}
         {step === 'lyrion' && (
           <Shell footer={<>
-            <button onClick={() => setStep('sources')} className="flex items-center space-x-1 text-hifi-silver/60 hover:text-white transition"><ChevronLeft size={18} /><span className="text-sm">Indietro</span></button>
+            <button onClick={() => setStep('sources')} className="flex items-center space-x-1 text-hifi-silver/60 hover:text-white transition"><ChevronLeft size={18} /><span className="text-sm">{t('common.back')}</span></button>
             <Dots />
             <button onClick={finish} className="flex items-center space-x-2 bg-hifi-gold text-black font-semibold px-6 py-2.5 rounded-xl hover:brightness-110 transition">
-              <Check size={18} /><span>Termina</span>
+              <Check size={18} /><span>{t('wizard.finish')}</span>
             </button>
           </>}>
             <div className="w-full max-w-2xl flex flex-col items-center text-center">
               <div className="w-14 h-14 rounded-xl bg-hifi-surface border border-hifi-border flex items-center justify-center mb-4">
                 <Server size={26} className="text-hifi-gold" />
               </div>
-              <h2 className="text-2xl font-bold text-white mb-2">Server musicale pronto</h2>
+              <h2 className="text-2xl font-bold text-white mb-2">{t('wizard.lyrion.title')}</h2>
               <p className="text-hifi-silver/70 text-sm max-w-md mb-6">
-                Lyrion Music Server è attivo. Da qui puoi accedere alle impostazioni avanzate
-                della libreria dal tuo computer, quando vuoi.
+                {t('wizard.lyrion.subtitle')}
               </p>
               <div className="flex items-center gap-6 bg-hifi-surface border border-hifi-border rounded-2xl p-5">
                 <div className="bg-white p-2.5 rounded-xl shrink-0">
                   <QRCodeSVG value={lyrionUrl} size={120} level="M" />
                 </div>
                 <div className="text-left">
-                  <p className="text-hifi-silver/50 text-xs uppercase tracking-wide mb-1">Lyrion Music Server</p>
+                  <p className="text-hifi-silver/50 text-xs uppercase tracking-wide mb-1">{t('wizard.lyrion.label')}</p>
                   <p className="text-hifi-gold text-2xl font-mono font-bold">{deviceIp || '—'}<span className="text-hifi-silver/50">:{LYRION_PORT}</span></p>
-                  <p className="text-hifi-silver/40 text-xs mt-2">Interfaccia web completa del server</p>
+                  <p className="text-hifi-silver/40 text-xs mt-2">{t('wizard.lyrion.webHint')}</p>
                 </div>
               </div>
             </div>

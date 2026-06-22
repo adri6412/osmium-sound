@@ -1,0 +1,238 @@
+{
+  "_meta": {
+    "name": "Italiano",
+    "flag": "🇮🇹",
+    "locale": "it-IT"
+  },
+  "common": {
+    "back": "Indietro",
+    "next": "Avanti",
+    "retry": "Riprova",
+    "cancel": "Annulla",
+    "search": "Cerca",
+    "confirm": "Conferma",
+    "clear": "Cancella",
+    "loading": "Caricamento...",
+    "notAvailable": "N/D",
+    "language": "Lingua"
+  },
+  "wizard": {
+    "brand": "HiFi Player · Setup",
+    "skip": "Salta",
+    "start": "Inizia",
+    "connect": "Connetti",
+    "finish": "Termina",
+    "welcome": {
+      "title": "Benvenuto",
+      "subtitle": "Configuriamo insieme il tuo network streamer. Bastano pochi passaggi: rete, sorgenti musicali e sei pronto all'ascolto."
+    },
+    "language": {
+      "title": "Lingua",
+      "subtitle": "Scegli la lingua dell'interfaccia."
+    },
+    "network": {
+      "title": "Connessione di rete",
+      "subtitle": "La rete sarà configurata automaticamente (DHCP).",
+      "wired": "Via cavo",
+      "wiredSub": "Ethernet",
+      "wifi": "Wi-Fi",
+      "wifiSub": "Wireless",
+      "connectingWired": "Connessione via cavo (DHCP) in corso…",
+      "connected": "Connesso",
+      "connectedIp": "Connesso · IP {ip}",
+      "wiredFailed": "Connessione cavo non riuscita. Verifica che il cavo sia collegato."
+    },
+    "wifi": {
+      "title": "Reti Wi-Fi",
+      "scanUnavailable": "Scansione WiFi non disponibile.",
+      "noNetworks": "Nessuna rete trovata.",
+      "scanning": "Scansione…",
+      "passwordLabel": "Password per “{ssid}”",
+      "passwordPlaceholder": "Inserisci la password",
+      "connecting": "Connessione a {ssid}…",
+      "connectedTo": "Connesso a {ssid}",
+      "connectedToIp": "Connesso a {ssid} · IP {ip}",
+      "connectFailed": "Connessione WiFi non riuscita. Controlla la password."
+    },
+    "audio": {
+      "title": "Uscita audio",
+      "subtitle": "Scegli il DAC o la scheda audio da usare per la riproduzione.",
+      "unavailable": "Elenco dispositivi audio non disponibile.",
+      "defaultDevice": "Predefinito di sistema",
+      "searching": "Ricerca dispositivi…"
+    },
+    "sources": {
+      "title": "Sorgenti musicali",
+      "subtitle": "Apri questo indirizzo dal tuo computer o telefono per aggiungere le tue cartelle musicali — locali sul dispositivo o condivise in rete (SMB).",
+      "addressLabel": "Indirizzo configurazione",
+      "scanHint": "Scansiona il QR o digita l'indirizzo nel browser"
+    },
+    "lyrion": {
+      "title": "Server musicale pronto",
+      "subtitle": "Lyrion Music Server è attivo. Da qui puoi accedere alle impostazioni avanzate della libreria dal tuo computer, quando vuoi.",
+      "label": "Lyrion Music Server",
+      "webHint": "Interfaccia web completa del server"
+    }
+  },
+  "sidebar": {
+    "library": "Libreria Locale",
+    "settings": "Impostazioni",
+    "hideKeyboard": "Nascondi Tastiera",
+    "systemKeyboard": "Tastiera di Sistema"
+  },
+  "keyboard": {
+    "enterText": "Inserisci testo",
+    "closeKeyboard": "Chiudi tastiera",
+    "space": "SPAZIO",
+    "clear": "Cancella",
+    "confirm": "Conferma"
+  },
+  "player": {
+    "connectError": "Impossibile connettersi al server. Verifica l'URL nelle Impostazioni.",
+    "tabs": {
+      "music": "Musica",
+      "radio": "Radio",
+      "apps": "App / CD"
+    },
+    "titles": {
+      "home": "Home",
+      "artists": "Artisti",
+      "albums": "Album",
+      "folders": "Cartelle",
+      "radio": "Radio",
+      "apps": "App",
+      "search": "Cerca"
+    },
+    "searchPlaceholder": "Digita e premi Cerca…",
+    "connecting": "Connessione a Lyrion in corso…",
+    "connectionErrorTitle": "Errore di Connessione",
+    "noPlayer": "Nessun player Lyrion trovato",
+    "noPlayerHint": "Il server potrebbe non aver ancora risposto. Riprova a connetterti.",
+    "connectingShort": "Connessione…",
+    "reconnect": "Riconnetti",
+    "nowPlaying": "In Riproduzione",
+    "expand": "Espandi",
+    "noTrack": "Nessuna traccia",
+    "unknownArtist": "Artista Sconosciuto"
+  },
+  "settings": {
+    "title": "Impostazioni",
+    "subtitle": "Configura il tuo HiFi Media Player",
+    "loadingSystem": "Caricamento dati di sistema...",
+    "apiUnavailable": "⚠️ Server API non disponibile",
+    "sections": {
+      "lyrion": "Configurazione Lyrion",
+      "audio": "Uscita Audio (DAC)",
+      "network": "Configurazione Rete",
+      "systemInfo": "Informazioni Sistema",
+      "updates": "Aggiornamenti",
+      "systemControls": "Controlli Sistema",
+      "language": "Lingua"
+    },
+    "language": {
+      "help": "Scegli la lingua dell'interfaccia."
+    },
+    "lyrion": {
+      "urlLabel": "URL Lyrion Server",
+      "urlHelp": "Inserisci l'indirizzo del tuo Lyrion Media Server (es. http://192.168.1.100:9000)"
+    },
+    "audio": {
+      "help": "Scegli il dispositivo di riproduzione (DAC). La selezione viene salvata e mantenuta ai riavvii. La riproduzione DSD è bit-perfect (DoP).",
+      "refreshList": "Aggiorna elenco",
+      "setOutput": "Imposta uscita",
+      "unavailable": "Elenco dispositivi audio non disponibile.",
+      "defaultDevice": "Predefinito di sistema",
+      "updated": "Uscita audio aggiornata.",
+      "setFailed": "Impostazione fallita."
+    },
+    "network": {
+      "interfaceLabel": "Interfaccia di Rete",
+      "ethernet": "Cavo Ethernet",
+      "wifi": "Wi-Fi",
+      "currentIp": "IP Corrente ({name})",
+      "notConnected": "Non connesso",
+      "typeSubnet": "Tipo: {type} | Subnet: {subnet}",
+      "dhcpNotice": "La rete è configurata automaticamente tramite DHCP. Collega il cavo Ethernet o configura il Wi-Fi per ottenere un indirizzo IP.",
+      "reloadData": "Ricarica Dati",
+      "loading": "Caricamento..."
+    },
+    "info": {
+      "hostname": "Hostname",
+      "deviceIp": "IP Dispositivo",
+      "platform": "Platform",
+      "apiStatus": "Stato API",
+      "connected": "Connesso",
+      "disconnected": "Disconnesso",
+      "notAvailable": "Non disponibile"
+    },
+    "updates": {
+      "ui": "Interfaccia (UI)",
+      "system": "Sistema (API/daemon/script)",
+      "os": "Sistema operativo",
+      "signed": "firmato",
+      "available": "Aggiornamento disponibile",
+      "upToDate": "Tutto aggiornato",
+      "checking": "Controllo in corso...",
+      "checkButton": "Controlla aggiornamenti",
+      "updating": "Aggiornamento...",
+      "updateNow": "Aggiorna ora",
+      "orderNote": "Si aggiornano in ordine: sistema, interfaccia e — se presente — il sistema operativo (con riavvio finale).",
+      "autoCheck": "Controlla aggiornamenti all'avvio",
+      "advanced": "Avanzate (Lyrion)",
+      "lyrionInstalled": "Lyrion installato",
+      "latestVersion": "Ultima versione",
+      "installedVersion": "Versione installata",
+      "lyrionAvailable": "Aggiornamento Lyrion disponibile: {version}",
+      "lyrionAvailableShort": "Aggiornamento disponibile: {version}",
+      "lyrionUpToDate": "Lyrion è aggiornato",
+      "checkLyrion": "Controlla aggiornamenti Lyrion",
+      "updateLyrion": "Aggiorna Lyrion ({version})",
+      "lyrionRestartNote": "Il server musicale verrà riavviato al termine.",
+      "msg": {
+        "checkFailed": "Controllo aggiornamenti fallito",
+        "checkLyrionFailed": "Controllo aggiornamenti Lyrion fallito",
+        "checkOsFailed": "Controllo aggiornamenti OS fallito",
+        "starting": "Avvio aggiornamento…",
+        "startingLyrion": "Avvio aggiornamento Lyrion…",
+        "startingOs": "Avvio aggiornamento OS…",
+        "startFailed": "Avvio fallito",
+        "updateError": "Errore durante l'aggiornamento",
+        "updateLyrionError": "Errore durante l'aggiornamento di Lyrion",
+        "updateOsError": "Errore durante l'aggiornamento del sistema operativo",
+        "applyingSystem": "Aggiornamento componenti di sistema…",
+        "systemFailed": "Aggiornamento sistema fallito",
+        "applyingOs": "Verifica e aggiornamento sistema operativo…",
+        "osFailed": "Aggiornamento sistema operativo fallito",
+        "applyingUi": "Aggiornamento interfaccia (riavvio al termine)…",
+        "allDone": "Aggiornamento completato"
+      }
+    },
+    "controls": {
+      "aptUpdate": "Aggiorna Sistema (apt-get update && upgrade)",
+      "reboot": "Riavvia Sistema",
+      "shutdown": "Spegni Sistema"
+    },
+    "restartWizard": "Riavvia configurazione guidata",
+    "about": {
+      "builtWith": "Realizzato con Electron, React e Tailwind CSS"
+    },
+    "msg": {
+      "apiUnavailable": "Errore: Server API non disponibile",
+      "apiUnavailableHint": "Errore: Server API non disponibile. Verificare che api_server.py sia in esecuzione.",
+      "loadDataError": "Errore nel caricamento dei dati di sistema",
+      "systemUpdating": "Aggiornamento del sistema in corso...",
+      "systemUpdated": "Sistema aggiornato con successo!",
+      "updateError": "Errore durante l'aggiornamento",
+      "confirmReboot": "Sei sicuro di voler riavviare il sistema?",
+      "rebooting": "Riavvio del sistema...",
+      "rebootingShort": "Sistema in riavvio...",
+      "rebootError": "Errore durante il riavvio",
+      "rebootSystemError": "Errore durante il riavvio del sistema",
+      "confirmShutdown": "Sei sicuro di voler spegnere il sistema?",
+      "shuttingDown": "Spegnimento del sistema...",
+      "shuttingDownShort": "Sistema in spegnimento...",
+      "shutdownError": "Errore durante lo spegnimento",
+      "shutdownSystemError": "Errore durante lo spegnimento del sistema"
+    }
+  }
+}

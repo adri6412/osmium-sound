@@ -1,12 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { Settings as SettingsIcon, Keyboard, X, Menu, Server } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useI18n } from '../i18n';
 
 /**
  * Sidebar component
  * Replaces NavigationBar and Home grid for a more integrated experience.
  */
 const Sidebar = ({ onNavigate, currentPage, isOpen, setIsOpen }) => {
+  const { t } = useI18n();
   const [isGlobalKeyboardVisible, setIsGlobalKeyboardVisible] = useState(false);
 
   // Show a badge on Settings when a UI/System update is available. The
@@ -21,8 +23,8 @@ const Sidebar = ({ onNavigate, currentPage, isOpen, setIsOpen }) => {
   }, []);
 
   const navItems = [
-    { key: 'lyrion', icon: Server, label: 'Libreria Locale' },
-    { key: 'settings', icon: SettingsIcon, label: 'Impostazioni' },
+    { key: 'lyrion', icon: Server, label: t('sidebar.library') },
+    { key: 'settings', icon: SettingsIcon, label: t('sidebar.settings') },
   ];
 
   const handleGlobalKeyboardToggle = async () => {
@@ -136,7 +138,7 @@ const Sidebar = ({ onNavigate, currentPage, isOpen, setIsOpen }) => {
                   `}
                 >
                   {isGlobalKeyboardVisible ? <X size={20} /> : <Keyboard size={20} />}
-                  <span>{isGlobalKeyboardVisible ? 'Nascondi Tastiera' : 'Tastiera di Sistema'}</span>
+                  <span>{isGlobalKeyboardVisible ? t('sidebar.hideKeyboard') : t('sidebar.systemKeyboard')}</span>
                 </button>
             </div>
           </motion.div>

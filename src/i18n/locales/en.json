@@ -1,0 +1,238 @@
+{
+  "_meta": {
+    "name": "English",
+    "flag": "🇬🇧",
+    "locale": "en-US"
+  },
+  "common": {
+    "back": "Back",
+    "next": "Next",
+    "retry": "Retry",
+    "cancel": "Cancel",
+    "search": "Search",
+    "confirm": "Confirm",
+    "clear": "Clear",
+    "loading": "Loading...",
+    "notAvailable": "N/A",
+    "language": "Language"
+  },
+  "wizard": {
+    "brand": "HiFi Player · Setup",
+    "skip": "Skip",
+    "start": "Start",
+    "connect": "Connect",
+    "finish": "Finish",
+    "welcome": {
+      "title": "Welcome",
+      "subtitle": "Let's set up your network streamer together. Just a few steps: network, music sources, and you're ready to listen."
+    },
+    "language": {
+      "title": "Language",
+      "subtitle": "Choose the interface language."
+    },
+    "network": {
+      "title": "Network connection",
+      "subtitle": "The network will be configured automatically (DHCP).",
+      "wired": "Wired",
+      "wiredSub": "Ethernet",
+      "wifi": "Wi-Fi",
+      "wifiSub": "Wireless",
+      "connectingWired": "Connecting over Ethernet (DHCP)…",
+      "connected": "Connected",
+      "connectedIp": "Connected · IP {ip}",
+      "wiredFailed": "Wired connection failed. Make sure the cable is plugged in."
+    },
+    "wifi": {
+      "title": "Wi-Fi networks",
+      "scanUnavailable": "Wi-Fi scan not available.",
+      "noNetworks": "No networks found.",
+      "scanning": "Scanning…",
+      "passwordLabel": "Password for “{ssid}”",
+      "passwordPlaceholder": "Enter the password",
+      "connecting": "Connecting to {ssid}…",
+      "connectedTo": "Connected to {ssid}",
+      "connectedToIp": "Connected to {ssid} · IP {ip}",
+      "connectFailed": "Wi-Fi connection failed. Check the password."
+    },
+    "audio": {
+      "title": "Audio output",
+      "subtitle": "Choose the DAC or sound card to use for playback.",
+      "unavailable": "Audio device list not available.",
+      "defaultDevice": "System default",
+      "searching": "Searching for devices…"
+    },
+    "sources": {
+      "title": "Music sources",
+      "subtitle": "Open this address from your computer or phone to add your music folders — local on the device or shared over the network (SMB).",
+      "addressLabel": "Configuration address",
+      "scanHint": "Scan the QR code or type the address in your browser"
+    },
+    "lyrion": {
+      "title": "Music server ready",
+      "subtitle": "Lyrion Music Server is running. From here you can access the advanced library settings from your computer, whenever you like.",
+      "label": "Lyrion Music Server",
+      "webHint": "Full web interface of the server"
+    }
+  },
+  "sidebar": {
+    "library": "Local Library",
+    "settings": "Settings",
+    "hideKeyboard": "Hide Keyboard",
+    "systemKeyboard": "System Keyboard"
+  },
+  "keyboard": {
+    "enterText": "Enter text",
+    "closeKeyboard": "Close keyboard",
+    "space": "SPACE",
+    "clear": "Clear",
+    "confirm": "Confirm"
+  },
+  "player": {
+    "connectError": "Unable to connect to the server. Check the URL in Settings.",
+    "tabs": {
+      "music": "Music",
+      "radio": "Radio",
+      "apps": "Apps / CD"
+    },
+    "titles": {
+      "home": "Home",
+      "artists": "Artists",
+      "albums": "Albums",
+      "folders": "Folders",
+      "radio": "Radio",
+      "apps": "Apps",
+      "search": "Search"
+    },
+    "searchPlaceholder": "Type and press Search…",
+    "connecting": "Connecting to Lyrion…",
+    "connectionErrorTitle": "Connection Error",
+    "noPlayer": "No Lyrion player found",
+    "noPlayerHint": "The server may not have responded yet. Try connecting again.",
+    "connectingShort": "Connecting…",
+    "reconnect": "Reconnect",
+    "nowPlaying": "Now Playing",
+    "expand": "Expand",
+    "noTrack": "No track",
+    "unknownArtist": "Unknown Artist"
+  },
+  "settings": {
+    "title": "Settings",
+    "subtitle": "Configure your HiFi Media Player",
+    "loadingSystem": "Loading system data...",
+    "apiUnavailable": "⚠️ API server unavailable",
+    "sections": {
+      "lyrion": "Lyrion Configuration",
+      "audio": "Audio Output (DAC)",
+      "network": "Network Configuration",
+      "systemInfo": "System Information",
+      "updates": "Updates",
+      "systemControls": "System Controls",
+      "language": "Language"
+    },
+    "language": {
+      "help": "Choose the interface language."
+    },
+    "lyrion": {
+      "urlLabel": "Lyrion Server URL",
+      "urlHelp": "Enter the address of your Lyrion Media Server (e.g. http://192.168.1.100:9000)"
+    },
+    "audio": {
+      "help": "Choose the playback device (DAC). The selection is saved and kept across reboots. DSD playback is bit-perfect (DoP).",
+      "refreshList": "Refresh list",
+      "setOutput": "Set output",
+      "unavailable": "Audio device list not available.",
+      "defaultDevice": "System default",
+      "updated": "Audio output updated.",
+      "setFailed": "Setting failed."
+    },
+    "network": {
+      "interfaceLabel": "Network Interface",
+      "ethernet": "Ethernet Cable",
+      "wifi": "Wi-Fi",
+      "currentIp": "Current IP ({name})",
+      "notConnected": "Not connected",
+      "typeSubnet": "Type: {type} | Subnet: {subnet}",
+      "dhcpNotice": "The network is configured automatically via DHCP. Plug in the Ethernet cable or set up Wi-Fi to get an IP address.",
+      "reloadData": "Reload Data",
+      "loading": "Loading..."
+    },
+    "info": {
+      "hostname": "Hostname",
+      "deviceIp": "Device IP",
+      "platform": "Platform",
+      "apiStatus": "API Status",
+      "connected": "Connected",
+      "disconnected": "Disconnected",
+      "notAvailable": "Not available"
+    },
+    "updates": {
+      "ui": "Interface (UI)",
+      "system": "System (API/daemon/script)",
+      "os": "Operating system",
+      "signed": "signed",
+      "available": "Update available",
+      "upToDate": "Everything up to date",
+      "checking": "Checking...",
+      "checkButton": "Check for updates",
+      "updating": "Updating...",
+      "updateNow": "Update now",
+      "orderNote": "Updates are applied in order: system, interface and — if present — the operating system (with a final reboot).",
+      "autoCheck": "Check for updates on startup",
+      "advanced": "Advanced (Lyrion)",
+      "lyrionInstalled": "Lyrion installed",
+      "latestVersion": "Latest version",
+      "installedVersion": "Installed version",
+      "lyrionAvailable": "Lyrion update available: {version}",
+      "lyrionAvailableShort": "Update available: {version}",
+      "lyrionUpToDate": "Lyrion is up to date",
+      "checkLyrion": "Check for Lyrion updates",
+      "updateLyrion": "Update Lyrion ({version})",
+      "lyrionRestartNote": "The music server will be restarted when finished.",
+      "msg": {
+        "checkFailed": "Update check failed",
+        "checkLyrionFailed": "Lyrion update check failed",
+        "checkOsFailed": "OS update check failed",
+        "starting": "Starting update…",
+        "startingLyrion": "Starting Lyrion update…",
+        "startingOs": "Starting OS update…",
+        "startFailed": "Start failed",
+        "updateError": "Error during the update",
+        "updateLyrionError": "Error during the Lyrion update",
+        "updateOsError": "Error during the operating system update",
+        "applyingSystem": "Updating system components…",
+        "systemFailed": "System update failed",
+        "applyingOs": "Verifying and updating operating system…",
+        "osFailed": "Operating system update failed",
+        "applyingUi": "Updating interface (restart when finished)…",
+        "allDone": "Update complete"
+      }
+    },
+    "controls": {
+      "aptUpdate": "Update System (apt-get update && upgrade)",
+      "reboot": "Reboot System",
+      "shutdown": "Shut Down System"
+    },
+    "restartWizard": "Restart setup wizard",
+    "about": {
+      "builtWith": "Built with Electron, React, and Tailwind CSS"
+    },
+    "msg": {
+      "apiUnavailable": "Error: API server unavailable",
+      "apiUnavailableHint": "Error: API server unavailable. Make sure api_server.py is running.",
+      "loadDataError": "Error loading system data",
+      "systemUpdating": "System update in progress...",
+      "systemUpdated": "System updated successfully!",
+      "updateError": "Error during the update",
+      "confirmReboot": "Are you sure you want to reboot the system?",
+      "rebooting": "Rebooting the system...",
+      "rebootingShort": "System rebooting...",
+      "rebootError": "Error during reboot",
+      "rebootSystemError": "Error during system reboot",
+      "confirmShutdown": "Are you sure you want to shut down the system?",
+      "shuttingDown": "Shutting down the system...",
+      "shuttingDownShort": "System shutting down...",
+      "shutdownError": "Error during shutdown",
+      "shutdownSystemError": "Error during system shutdown"
+    }
+  }
+}
