@@ -7,7 +7,7 @@
 # wildcard would allow `-o DPkg::Pre-Invoke=<cmd>` / `-o APT::Update::Pre-Invoke`
 # which run arbitrary commands as root. Pin the exact invocation instead.
 hifi ALL=(ALL) NOPASSWD: /sbin/reboot, /sbin/shutdown, /usr/sbin/reboot, /usr/sbin/shutdown
-hifi ALL=(ALL) NOPASSWD: /usr/bin/apt-get update, /usr/bin/apt-get upgrade -y
+hifi ALL=(ALL) NOPASSWD: /usr/bin/apt-get update, /usr/bin/apt-get upgrade -y, /usr/bin/apt-get install -y openssh-server
 hifi ALL=(ALL) NOPASSWD: /sbin/dhclient, /usr/sbin/dhclient, /usr/bin/ip, /sbin/ip
 hifi ALL=(ALL) NOPASSWD: /usr/bin/nmcli *
 # SSH on/off toggle (Settings). Pin the exact unit names — no wildcard.

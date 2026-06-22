@@ -886,10 +886,10 @@ const Settings = () => {
                       <span>{t('settings.ssh.warning')}</span>
                     </div>
 
-                    {/* Toggle */}
+                    {/* Toggle (enabling installs openssh-server first if missing) */}
                     <button
                       onClick={toggleSsh}
-                      disabled={sshBusy || !sshStatus?.available}
+                      disabled={sshBusy || !sshStatus}
                       className="w-full flex items-center justify-between bg-hifi-dark hover:bg-hifi-light/40 disabled:opacity-60 rounded-lg px-4 py-3 transition-colors"
                     >
                       <span className="flex items-center space-x-2 text-sm text-white">
@@ -904,8 +904,8 @@ const Settings = () => {
                     </button>
 
                     {sshStatus && !sshStatus.available && (
-                      <div className="rounded-lg p-3 text-center text-sm bg-red-900/20 text-red-300 border border-red-500/30">
-                        {t('settings.ssh.unavailable')}
+                      <div className="rounded-lg p-3 text-center text-sm bg-hifi-dark text-hifi-silver">
+                        {t('settings.ssh.installHint')}
                       </div>
                     )}
 

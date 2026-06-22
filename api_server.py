@@ -497,6 +497,29 @@ def _ssh_unit():
             pass
     return 'ssh.service'
 
+def _ssh_available():
+    unit = _ssh_unit()
+    try:
+        r = subprocess.run(['systemctl', 'list-unit-files', unit],
+                           capture_output=True, text=True, timeout=10)
+        return unit in (r.stdout or '')
+    except Exception:
+        return False
+
+def _install_openssh():
+    """Install the openssh-server package (the appliance image may not ship it).
+    Returns True if the SSH unit is present afterwards."""
+    try:
+        # Refresh the index first; a long-running appliance may have a stale one.
+        subprocess.run(['sudo', 'apt-get', 'update'],
+                      capture_output=True, text=True, timeout=120)
+        subprocess.run(['sudo', 'apt-get', 'install', '-y', 'openssh-server'],
+                      capture_output=True, text=True, timeout=180)
+    except Exception:
+        log.exception("openssh-server install failed")
+        return False
+    return _ssh_available()
+
 def get_ssh_status():
     unit = _ssh_unit()
     try:
@@ -517,7 +540,13 @@ def get_ssh_status():
                 'error': 'Stato SSH non disponibile'}
 
 def set_ssh(enable):
-    """Enable+start or disable+stop the SSH server (persists across reboots)."""
+    """Enable+start or disable+stop the SSH server (persists across reboots).
+    When enabling on an image that doesn't ship openssh-server, install it
+    first so the toggle works out of the box."""
+    if enable and not _ssh_available():
+        if not _install_openssh():
+            return {'success': False, 'available': False, 'enabled': False,
+                    'active': False, 'message': 'Installazione di openssh-server fallita'}
     unit = _ssh_unit()
     action = 'enable' if enable else 'disable'
     try:
