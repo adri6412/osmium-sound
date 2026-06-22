@@ -6,7 +6,9 @@ import {
   Volume2, VolumeX, Music, AlertCircle, RefreshCw,
   Folder, User, Disc, Home, ChevronRight, ChevronDown,
   Radio, AppWindow,
-  Settings as SettingsIcon, Maximize2
+  Settings as SettingsIcon, Maximize2,
+  Shuffle, Repeat, Repeat1, ListMusic, Moon,
+  Trash2, X, Save, ArrowUp, ArrowDown
 } from 'lucide-react';
 import { lyrionApi } from '../utils/lyrionApi';
 import { useI18n } from '../i18n';
@@ -73,6 +75,14 @@ const LyrionServer = () => {
   const [isPlayerExpanded, setIsPlayerExpanded] = useState(false);
   const [activeTab, setActiveTab] = useState('musica');
 
+  // Queue / sleep state
+  const [showQueue, setShowQueue] = useState(false);
+  const [queue, setQueue] = useState([]);
+  const [queueIndex, setQueueIndex] = useState(0);
+  const [saveQueueOpen, setSaveQueueOpen] = useState(false);
+  const [queueName, setQueueName] = useState('');
+  const [sleepMenuOpen, setSleepMenuOpen] = useState(false);
+
   // Library state
   const [currentView, setCurrentView] = useState('home');
   const [libraryData, setLibraryData] = useState([]);
@@ -123,6 +133,53 @@ const LyrionServer = () => {
 
   const handleAction = async (fn) => {
     try { await fn(); fetchStatus(); } catch (_) {}
+  };
+
+  // ── Playback modes (shuffle / repeat) ──────────────────────
+  // Optimistic update of the status fields (keys carry a space), like volume.
+  const cycleShuffle = () => {
+    if (!activePlayer) return;
+    const next = (Number(playerStatus?.['playlist shuffle'] ?? 0) + 1) % 3;
+    setPlayerStatus(prev => ({ ...prev, 'playlist shuffle': next }));
+    handleAction(() => lyrionApi.setShuffle(activePlayer.playerid, next));
+  };
+  const cycleRepeat = () => {
+    if (!activePlayer) return;
+    const next = (Number(playerStatus?.['playlist repeat'] ?? 0) + 1) % 3;
+    setPlayerStatus(prev => ({ ...prev, 'playlist repeat': next }));
+    handleAction(() => lyrionApi.setRepeat(activePlayer.playerid, next));
+  };
+
+  // ── Play queue ─────────────────────────────────────────────
+  const loadQueue = async () => {
+    if (!activePlayer) return;
+    try {
+      const r = await lyrionApi.getQueue(activePlayer.playerid);
+      setQueue(r?.playlist_loop || []);
+      setQueueIndex(Number(r?.playlist_cur_index ?? 0));
+    } catch (_) {}
+  };
+  const openQueue = () => { setShowQueue(true); loadQueue(); };
+  const queueJump   = (i) => handleAction(() => lyrionApi.playlistJump(activePlayer.playerid, i)).then(loadQueue);
+  const queueRemove = (i) => handleAction(() => lyrionApi.playlistRemove(activePlayer.playerid, i)).then(loadQueue);
+  const queueMove   = (from, to) => {
+    if (to < 0 || to >= queue.length) return;
+    handleAction(() => lyrionApi.playlistMove(activePlayer.playerid, from, to)).then(loadQueue);
+  };
+  const queueClear  = () => handleAction(() => lyrionApi.playlistClear(activePlayer.playerid)).then(loadQueue);
+  const saveQueue   = () => {
+    const name = queueName.trim();
+    if (!name) return;
+    handleAction(() => lyrionApi.playlistSave(activePlayer.playerid, name));
+    setSaveQueueOpen(false);
+    setQueueName('');
+  };
+
+  // ── Sleep timer ────────────────────────────────────────────
+  const setSleepTimer = (minutes) => {
+    setSleepMenuOpen(false);
+    if (!activePlayer) return;
+    handleAction(() => lyrionApi.setSleep(activePlayer.playerid, minutes * 60));
   };
 
   const formatTime = (s) => {
@@ -263,6 +320,9 @@ const LyrionServer = () => {
   const album        = currentTrack.album  || '';
   const isPlaying    = playerStatus?.mode === 'play';
   const volume       = playerStatus?.mixer_volume ?? 0;
+  const repeatMode   = Number(playerStatus?.['playlist repeat'] ?? 0);   // 0 off / 1 song / 2 all
+  const shuffleMode  = Number(playerStatus?.['playlist shuffle'] ?? 0);  // 0 off / 1 songs / 2 albums
+  const willSleepIn  = Number(playerStatus?.will_sleep_in ?? 0);         // seconds left, 0 = inactive
   const duration     = currentTrack.duration || 0;
   const time         = playerStatus?.time || 0;
   const progress     = duration > 0 ? (time / duration) * 100 : 0;
@@ -697,6 +757,26 @@ const LyrionServer = () => {
           </motion.button>
         </div>
 
+        {/* Secondary controls: shuffle / repeat / queue / sleep */}
+        <div className="flex items-center justify-center space-x-5 px-4 pb-1 shrink-0">
+          <button onClick={cycleShuffle} disabled={!activePlayer} title={t('player.shuffle')}
+            className={`p-1.5 rounded-full transition-colors disabled:opacity-30 ${shuffleMode > 0 ? 'text-hifi-gold' : 'text-hifi-silver/50 hover:text-hifi-silver'}`}>
+            <Shuffle size={16} />
+          </button>
+          <button onClick={cycleRepeat} disabled={!activePlayer} title={t('player.repeat')}
+            className={`p-1.5 rounded-full transition-colors disabled:opacity-30 ${repeatMode > 0 ? 'text-hifi-gold' : 'text-hifi-silver/50 hover:text-hifi-silver'}`}>
+            {repeatMode === 1 ? <Repeat1 size={16} /> : <Repeat size={16} />}
+          </button>
+          <button onClick={openQueue} disabled={!activePlayer} title={t('player.queue')}
+            className="p-1.5 rounded-full text-hifi-silver/50 hover:text-hifi-silver transition-colors disabled:opacity-30">
+            <ListMusic size={16} />
+          </button>
+          <button onClick={() => setSleepMenuOpen(true)} disabled={!activePlayer} title={t('player.sleep')}
+            className={`p-1.5 rounded-full transition-colors disabled:opacity-30 ${willSleepIn > 0 ? 'text-hifi-gold' : 'text-hifi-silver/50 hover:text-hifi-silver'}`}>
+            <Moon size={16} />
+          </button>
+        </div>
+
         {/* Volume */}
         <div className="flex items-center space-x-2 px-4 py-1 shrink-0">
           <button
@@ -830,6 +910,11 @@ const LyrionServer = () => {
 
                   {/* Controls row */}
                   <div className="flex items-center space-x-5 mb-3 shrink-0">
+                    <button onClick={cycleShuffle} title={t('player.shuffle')}
+                      className={`transition-colors ${shuffleMode > 0 ? 'text-hifi-gold' : 'text-hifi-silver/60 hover:text-white'}`}>
+                      <Shuffle size={20} />
+                    </button>
+
                     <motion.button whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }}
                       className="text-hifi-silver hover:text-white transition-colors"
                       onClick={() => handleAction(() => lyrionApi.previous(activePlayer?.playerid))}>
@@ -847,6 +932,21 @@ const LyrionServer = () => {
                       onClick={() => handleAction(() => lyrionApi.next(activePlayer?.playerid))}>
                       <SkipForward size={26} />
                     </motion.button>
+
+                    <button onClick={cycleRepeat} title={t('player.repeat')}
+                      className={`transition-colors ${repeatMode > 0 ? 'text-hifi-gold' : 'text-hifi-silver/60 hover:text-white'}`}>
+                      {repeatMode === 1 ? <Repeat1 size={20} /> : <Repeat size={20} />}
+                    </button>
+
+                    <button onClick={openQueue} title={t('player.queue')}
+                      className="text-hifi-silver/60 hover:text-white transition-colors">
+                      <ListMusic size={20} />
+                    </button>
+
+                    <button onClick={() => setSleepMenuOpen(true)} title={t('player.sleep')}
+                      className={`transition-colors ${willSleepIn > 0 ? 'text-hifi-gold' : 'text-hifi-silver/60 hover:text-white'}`}>
+                      <Moon size={20} />
+                    </button>
 
                     {/* Volume (inline) */}
                     <div className="flex items-center space-x-2 ml-auto">
@@ -870,6 +970,167 @@ const LyrionServer = () => {
                   </div>
                 </motion.div>
               </div>
+            </motion.div>
+          )}
+        </AnimatePresence>,
+        document.body
+      )}
+
+      {/* ══════════════════ QUEUE DRAWER (portal) ══════════════════ */}
+      {createPortal(
+        <AnimatePresence>
+          {showQueue && (
+            <motion.div className="fixed inset-0 z-[60] flex justify-end"
+              initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+              <div className="absolute inset-0 bg-black/60" onClick={() => setShowQueue(false)} />
+              <motion.div
+                initial={{ x: '100%' }} animate={{ x: 0 }} exit={{ x: '100%' }}
+                transition={{ type: 'spring', damping: 28, stiffness: 240 }}
+                className="relative w-[400px] max-w-[85vw] h-full bg-hifi-panel border-l border-hifi-border flex flex-col shadow-2xl">
+
+                {/* Header */}
+                <div className="flex items-center justify-between px-4 h-12 shrink-0 border-b border-hifi-border">
+                  <div className="flex items-center space-x-2">
+                    <ListMusic size={16} className="text-hifi-gold" />
+                    <span className="text-sm font-semibold text-white">{t('player.queue')}</span>
+                    <span className="text-[11px] text-hifi-silver/50">({queue.length})</span>
+                  </div>
+                  <button onClick={() => setShowQueue(false)}
+                    className="p-1.5 text-hifi-silver/60 hover:text-white hover:bg-white/10 rounded-lg transition-colors">
+                    <X size={16} />
+                  </button>
+                </div>
+
+                {/* List */}
+                <div className="flex-1 overflow-y-auto content-scrollbar px-2 py-2">
+                  {queue.length === 0 ? (
+                    <div className="flex items-center justify-center h-full text-hifi-silver/40 text-sm">
+                      {t('player.queueEmpty')}
+                    </div>
+                  ) : (
+                    <ul className="space-y-1">
+                      {queue.map((item, idx) => {
+                        const isCur = idx === queueIndex;
+                        return (
+                          <li key={`${item.id || item.url || idx}-${idx}`}
+                            className={`flex items-center px-2 py-2 rounded-lg group transition-colors ${isCur ? 'bg-hifi-gold/15 border border-hifi-gold/30' : 'bg-hifi-surface hover:bg-hifi-light border border-transparent'}`}>
+                            <button onClick={() => queueJump(idx)}
+                              className="flex items-center min-w-0 flex-1 text-left">
+                              <span className={`w-6 text-center text-[11px] font-mono flex-shrink-0 ${isCur ? 'text-hifi-gold' : 'text-hifi-silver/40'}`}>
+                                {isCur ? '▶' : idx + 1}
+                              </span>
+                              <div className="min-w-0 ml-1">
+                                <p className={`text-sm truncate ${isCur ? 'text-white font-medium' : 'text-white/90'}`}>
+                                  {item.title || item.track || '—'}
+                                </p>
+                                <p className="text-[11px] text-hifi-silver/50 truncate">
+                                  {item.artist || t('player.unknownArtist')}
+                                </p>
+                              </div>
+                            </button>
+                            <div className="flex items-center opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
+                              <button onClick={() => queueMove(idx, idx - 1)} disabled={idx === 0}
+                                className="p-1 text-hifi-silver/50 hover:text-white disabled:opacity-20">
+                                <ArrowUp size={13} />
+                              </button>
+                              <button onClick={() => queueMove(idx, idx + 1)} disabled={idx === queue.length - 1}
+                                className="p-1 text-hifi-silver/50 hover:text-white disabled:opacity-20">
+                                <ArrowDown size={13} />
+                              </button>
+                              <button onClick={() => queueRemove(idx)}
+                                className="p-1 text-hifi-silver/50 hover:text-red-400">
+                                <Trash2 size={13} />
+                              </button>
+                            </div>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  )}
+                </div>
+
+                {/* Footer actions */}
+                <div className="flex items-center gap-2 px-3 py-3 border-t border-hifi-border shrink-0">
+                  <button onClick={() => { setQueueName(''); setSaveQueueOpen(true); }}
+                    disabled={queue.length === 0}
+                    className="flex-1 flex items-center justify-center gap-2 bg-hifi-surface hover:bg-hifi-light disabled:opacity-40 text-white py-2.5 rounded-lg text-sm transition-colors border border-hifi-border">
+                    <Save size={15} /> {t('player.saveAsPlaylist')}
+                  </button>
+                  <button onClick={queueClear} disabled={queue.length === 0}
+                    className="flex items-center justify-center gap-2 bg-red-500/10 hover:bg-red-500/20 disabled:opacity-40 text-red-300 px-4 py-2.5 rounded-lg text-sm transition-colors border border-red-500/20">
+                    <Trash2 size={15} /> {t('player.clearQueue')}
+                  </button>
+                </div>
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>,
+        document.body
+      )}
+
+      {/* ══════════════════ SAVE QUEUE DIALOG (portal) ══════════════════ */}
+      {createPortal(
+        <AnimatePresence>
+          {saveQueueOpen && (
+            <motion.div className="fixed inset-0 z-[70] flex items-center justify-center p-6"
+              initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+              <div className="absolute inset-0 bg-black/70" onClick={() => setSaveQueueOpen(false)} />
+              <motion.div initial={{ scale: 0.92, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.92, opacity: 0 }}
+                className="relative w-full max-w-sm bg-hifi-panel border border-hifi-border rounded-2xl p-5 shadow-2xl">
+                <p className="text-sm font-semibold text-white mb-3">{t('player.saveAsPlaylist')}</p>
+                <input type="text" value={queueName} autoFocus
+                  onChange={(e) => setQueueName(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === 'Enter') saveQueue(); }}
+                  placeholder={t('player.playlistNamePlaceholder')}
+                  className="w-full bg-hifi-dark border border-hifi-accent rounded-lg px-4 py-3 text-white focus:outline-none focus:border-hifi-gold mb-4" />
+                <div className="flex gap-2">
+                  <button onClick={() => setSaveQueueOpen(false)}
+                    className="flex-1 bg-hifi-light hover:bg-hifi-accent text-white py-2.5 rounded-lg text-sm font-medium transition-colors">
+                    {t('common.cancel')}
+                  </button>
+                  <button onClick={saveQueue} disabled={!queueName.trim()}
+                    className="flex-1 bg-hifi-gold hover:bg-yellow-600 disabled:opacity-40 text-black py-2.5 rounded-lg text-sm font-semibold transition-colors">
+                    {t('common.confirm')}
+                  </button>
+                </div>
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>,
+        document.body
+      )}
+
+      {/* ══════════════════ SLEEP TIMER MENU (portal) ══════════════════ */}
+      {createPortal(
+        <AnimatePresence>
+          {sleepMenuOpen && (
+            <motion.div className="fixed inset-0 z-[70] flex items-center justify-center p-6"
+              initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+              <div className="absolute inset-0 bg-black/70" onClick={() => setSleepMenuOpen(false)} />
+              <motion.div initial={{ scale: 0.92, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.92, opacity: 0 }}
+                className="relative w-full max-w-xs bg-hifi-panel border border-hifi-border rounded-2xl p-5 shadow-2xl">
+                <div className="flex items-center space-x-2 mb-3">
+                  <Moon size={16} className="text-hifi-gold" />
+                  <p className="text-sm font-semibold text-white">{t('player.sleep')}</p>
+                </div>
+                {willSleepIn > 0 && (
+                  <p className="text-[12px] text-hifi-gold mb-3">
+                    {t('player.sleepActive', { min: Math.ceil(willSleepIn / 60) })}
+                  </p>
+                )}
+                <div className="grid grid-cols-3 gap-2 mb-3">
+                  {[15, 30, 45, 60, 90, 120].map((m) => (
+                    <button key={m} onClick={() => setSleepTimer(m)}
+                      className="py-2.5 bg-hifi-surface hover:bg-hifi-light text-white rounded-lg text-sm transition-colors border border-hifi-border">
+                      {m}m
+                    </button>
+                  ))}
+                </div>
+                <button onClick={() => setSleepTimer(0)}
+                  className="w-full py-2.5 bg-red-500/10 hover:bg-red-500/20 text-red-300 rounded-lg text-sm transition-colors border border-red-500/20">
+                  {t('player.sleepOff')}
+                </button>
+              </motion.div>
             </motion.div>
           )}
         </AnimatePresence>,
