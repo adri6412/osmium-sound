@@ -139,6 +139,7 @@
       "enabled": "SSH enabled",
       "disabled": "SSH disabled",
       "unavailable": "SSH service is not installed on this device.",
+      "installHint": "SSH is not installed yet: enabling it will install and start it automatically (requires an internet connection).",
       "failed": "SSH operation failed."
     },
     "lyrion": {

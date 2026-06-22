@@ -86,6 +86,7 @@ plymouth-themes
 
 # System / networking
 sudo
+openssh-server
 curl
 ca-certificates
 openssl

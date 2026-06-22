@@ -21,6 +21,9 @@ echo "I: [hifi] enabling first-boot finalisation (re-installs Lyrion after the"
 echo "          installer's remove-live-packages purge; self-disables on success)"
 systemctl enable hifi-firstboot.service || true
 
+echo "I: [hifi] SSH installed but OFF by default (user enables it from Settings)"
+systemctl disable ssh.service || true
+
 echo "I: [hifi] disabling getty on tty1 (no text console flashes)"
 systemctl mask getty@tty1.service || true
 
