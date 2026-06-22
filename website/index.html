@@ -1,0 +1,695 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>HiFi Player — Hi-Fi Media Appliance for Raspberry Pi</title>
+  <meta name="description" content="Touchscreen-friendly hi-fi media player for DietPi / Raspberry Pi. FLAC, DSD, 192kHz, bit-perfect DoP. Streams Deezer, Qobuz, TIDAL & Spotify.">
+  <meta property="og:title" content="HiFi Player">
+  <meta property="og:description" content="Touchscreen-friendly hi-fi media appliance. Bit-perfect audio. Streaming services. No compromise.">
+  <meta property="og:image" content="screen_003.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg:        #0a0a0a;
+      --bg-card:   #141414;
+      --bg-card2:  #1c1c1c;
+      --border:    #2a2a2a;
+      --accent:    #f5b820;
+      --accent-dim: rgba(245,184,32,0.12);
+      --text:      #e8e8e8;
+      --muted:     #888;
+      --radius:    12px;
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html { scroll-behavior: smooth; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Inter', system-ui, -apple-system, sans-serif;
+      line-height: 1.6;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* ── NAV ─────────────────────────────────────────── */
+    nav {
+      position: sticky; top: 0; z-index: 100;
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 0 clamp(1.25rem, 5vw, 4rem);
+      height: 58px;
+      background: rgba(10,10,10,0.88);
+      backdrop-filter: blur(14px);
+      -webkit-backdrop-filter: blur(14px);
+      border-bottom: 1px solid var(--border);
+    }
+    .nav-logo {
+      display: flex; align-items: center; gap: 10px;
+      text-decoration: none;
+    }
+    .nav-logo-mark {
+      width: 28px; height: 28px; border-radius: 6px;
+      background: var(--accent);
+      display: flex; align-items: center; justify-content: center;
+    }
+    .nav-logo-mark svg { width: 16px; height: 16px; }
+    .nav-logo-name {
+      font-size: 0.82rem; font-weight: 700;
+      letter-spacing: 0.14em; color: var(--text);
+      text-transform: uppercase;
+    }
+    .nav-dot {
+      width: 7px; height: 7px; border-radius: 50%;
+      background: #3dcf5f; box-shadow: 0 0 7px #3dcf5f;
+      flex-shrink: 0;
+    }
+    .nav-links { display: flex; gap: 2rem; list-style: none; }
+    .nav-links a {
+      color: var(--muted); text-decoration: none;
+      font-size: 0.88rem; font-weight: 500;
+      transition: color 0.2s;
+    }
+    .nav-links a:hover { color: var(--text); }
+    .btn-nav {
+      background: var(--accent); color: #000;
+      padding: 6px 16px; border-radius: 6px;
+      font-weight: 700; font-size: 0.82rem;
+      text-decoration: none;
+      transition: opacity 0.2s;
+      white-space: nowrap;
+    }
+    .btn-nav:hover { opacity: 0.85; }
+
+    /* ── HERO ────────────────────────────────────────── */
+    .hero {
+      position: relative; overflow: hidden;
+      padding: clamp(5rem, 14vh, 10rem) clamp(1.25rem, 5vw, 4rem) clamp(4rem, 10vh, 8rem);
+      text-align: center;
+    }
+    .hero::before {
+      content: '';
+      position: absolute; inset: 0;
+      background:
+        radial-gradient(ellipse 100% 55% at 50% -5%, rgba(245,184,32,0.09) 0%, transparent 65%),
+        radial-gradient(ellipse 60% 40% at 20% 110%, rgba(245,184,32,0.04) 0%, transparent 60%);
+      pointer-events: none;
+    }
+    .hero-badge {
+      display: inline-flex; align-items: center; gap: 7px;
+      background: var(--accent-dim);
+      border: 1px solid rgba(245,184,32,0.28);
+      color: var(--accent); font-size: 0.78rem; font-weight: 600;
+      padding: 5px 13px; border-radius: 100px;
+      margin-bottom: 1.75rem; letter-spacing: 0.06em;
+    }
+    .badge-dot {
+      width: 6px; height: 6px; border-radius: 50%;
+      background: var(--accent);
+      animation: pulse 2s ease-in-out infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.5; transform: scale(0.8); }
+    }
+    .hero h1 {
+      font-size: clamp(2.8rem, 8vw, 5.5rem);
+      font-weight: 800; line-height: 1.05;
+      letter-spacing: -0.025em;
+      margin-bottom: 1.25rem;
+    }
+    .hero h1 .accent { color: var(--accent); }
+    .hero-sub {
+      font-size: clamp(1rem, 2.2vw, 1.2rem);
+      color: var(--muted); max-width: 580px;
+      margin: 0 auto 2.75rem;
+      line-height: 1.7;
+    }
+    .hero-ctas {
+      display: flex; gap: 1rem;
+      justify-content: center; flex-wrap: wrap;
+      margin-bottom: 3.5rem;
+    }
+    .btn-primary {
+      background: var(--accent); color: #000;
+      padding: 13px 28px; border-radius: 9px;
+      font-weight: 700; font-size: 0.95rem;
+      text-decoration: none;
+      transition: transform 0.15s, box-shadow 0.15s;
+      display: inline-flex; align-items: center; gap: 8px;
+    }
+    .btn-primary:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 28px rgba(245,184,32,0.35);
+    }
+    .btn-secondary {
+      background: transparent; color: var(--text);
+      padding: 13px 28px; border-radius: 9px;
+      font-weight: 600; font-size: 0.95rem;
+      text-decoration: none; border: 1px solid var(--border);
+      transition: border-color 0.2s, background 0.2s;
+      display: inline-flex; align-items: center; gap: 8px;
+    }
+    .btn-secondary:hover {
+      border-color: #555;
+      background: rgba(255,255,255,0.04);
+    }
+    .hero-pills {
+      display: flex; gap: 0.65rem;
+      justify-content: center; flex-wrap: wrap;
+    }
+    .pill {
+      font-size: 0.78rem; font-weight: 500; color: var(--muted);
+      background: var(--bg-card); border: 1px solid var(--border);
+      padding: 4px 12px; border-radius: 100px;
+    }
+    .pill strong { color: var(--text); font-weight: 600; }
+
+    /* ── SECTION COMMON ──────────────────────────────── */
+    section { padding: clamp(3.5rem, 9vw, 7rem) clamp(1.25rem, 5vw, 4rem); }
+    .section-label {
+      font-size: 0.72rem; font-weight: 700;
+      letter-spacing: 0.18em; text-transform: uppercase;
+      color: var(--accent); margin-bottom: 0.65rem;
+    }
+    .section-title {
+      font-size: clamp(1.7rem, 4vw, 2.4rem);
+      font-weight: 700; line-height: 1.2;
+      letter-spacing: -0.015em;
+    }
+    .section-desc {
+      color: var(--muted); font-size: 1.05rem;
+      margin-top: 0.65rem; line-height: 1.7;
+    }
+    .centered { text-align: center; }
+    .centered .section-desc { max-width: 520px; margin-left: auto; margin-right: auto; }
+
+    /* ── FEATURES ────────────────────────────────────── */
+    #features { border-top: 1px solid var(--border); }
+    .features-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(290px, 1fr));
+      gap: 1.25rem;
+      max-width: 1120px; margin: 3rem auto 0;
+    }
+    .feature-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius); padding: 1.75rem;
+      transition: border-color 0.25s, transform 0.25s, box-shadow 0.25s;
+    }
+    .feature-card:hover {
+      border-color: rgba(245,184,32,0.35);
+      transform: translateY(-3px);
+      box-shadow: 0 12px 40px rgba(0,0,0,0.4);
+    }
+    .feature-icon {
+      width: 46px; height: 46px; border-radius: 11px;
+      background: var(--accent-dim);
+      border: 1px solid rgba(245,184,32,0.18);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 1.3rem; margin-bottom: 1.1rem;
+    }
+    .feature-card h3 { font-size: 1rem; font-weight: 600; margin-bottom: 0.45rem; }
+    .feature-card p { font-size: 0.9rem; color: var(--muted); line-height: 1.6; }
+    .feature-tags { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 1rem; }
+    .tag {
+      font-size: 0.7rem; font-weight: 600; letter-spacing: 0.04em;
+      background: var(--bg-card2); border: 1px solid var(--border);
+      color: var(--muted); padding: 2px 8px; border-radius: 4px;
+    }
+
+    /* ── SCREENSHOTS ─────────────────────────────────── */
+    #screenshots {
+      border-top: 1px solid var(--border);
+      background: var(--bg-card);
+    }
+    .carousel-wrap { max-width: 960px; margin: 2.5rem auto 0; }
+    .carousel-main {
+      border-radius: 14px; overflow: hidden;
+      border: 1px solid var(--border);
+      background: #060606;
+      position: relative; cursor: zoom-in;
+      box-shadow: 0 24px 80px rgba(0,0,0,0.6);
+    }
+    .carousel-main img {
+      width: 100%; display: block;
+      max-height: 520px; object-fit: contain;
+      transition: opacity 0.22s ease;
+    }
+    .carousel-nav {
+      position: absolute; top: 50%; transform: translateY(-50%);
+      background: rgba(10,10,10,0.7);
+      border: 1px solid rgba(255,255,255,0.08);
+      color: var(--text); width: 42px; height: 42px;
+      border-radius: 50%; cursor: pointer;
+      font-size: 1.2rem; font-weight: 300;
+      display: flex; align-items: center; justify-content: center;
+      transition: background 0.2s, border-color 0.2s;
+      backdrop-filter: blur(8px);
+      z-index: 2;
+    }
+    .carousel-nav:hover {
+      background: rgba(245,184,32,0.18);
+      border-color: rgba(245,184,32,0.4);
+    }
+    .carousel-nav.prev { left: 14px; }
+    .carousel-nav.next { right: 14px; }
+    .carousel-caption {
+      position: absolute; bottom: 0; left: 0; right: 0;
+      background: linear-gradient(transparent, rgba(0,0,0,0.75));
+      padding: 2rem 1.25rem 1rem;
+      font-size: 0.82rem; color: rgba(255,255,255,0.65);
+      pointer-events: none;
+    }
+    .carousel-counter {
+      position: absolute; top: 14px; right: 14px;
+      font-size: 0.75rem; font-weight: 600;
+      background: rgba(10,10,10,0.7);
+      border: 1px solid rgba(255,255,255,0.08);
+      padding: 3px 10px; border-radius: 100px;
+      backdrop-filter: blur(8px);
+      pointer-events: none;
+    }
+    .carousel-thumbs {
+      display: flex; gap: 8px; margin-top: 12px;
+      overflow-x: auto; padding-bottom: 2px;
+      justify-content: center;
+      scrollbar-width: thin; scrollbar-color: var(--border) transparent;
+    }
+    .carousel-thumbs::-webkit-scrollbar { height: 3px; }
+    .carousel-thumbs::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+    .thumb {
+      flex-shrink: 0; width: 90px; height: 56px;
+      border-radius: 6px; overflow: hidden;
+      border: 2px solid transparent; cursor: pointer;
+      transition: border-color 0.2s, opacity 0.2s, transform 0.2s;
+      opacity: 0.45;
+    }
+    .thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+    .thumb.active { border-color: var(--accent); opacity: 1; transform: scale(1.05); }
+    .thumb:hover:not(.active) { opacity: 0.75; }
+
+    /* ── LIGHTBOX ────────────────────────────────────── */
+    .lightbox {
+      display: none; position: fixed; inset: 0; z-index: 9999;
+      background: rgba(0,0,0,0.93);
+      align-items: center; justify-content: center;
+      padding: 1rem;
+    }
+    .lightbox.open { display: flex; }
+    .lightbox img {
+      max-width: min(90vw, 1200px); max-height: 88vh;
+      border-radius: 10px;
+      box-shadow: 0 0 80px rgba(0,0,0,0.8);
+      display: block;
+    }
+    .lb-close {
+      position: fixed; top: 1.1rem; right: 1.5rem;
+      font-size: 1.8rem; color: var(--muted);
+      cursor: pointer; z-index: 10000;
+      background: none; border: none; line-height: 1;
+      transition: color 0.2s;
+    }
+    .lb-close:hover { color: var(--text); }
+
+    /* ── SPECS ───────────────────────────────────────── */
+    #specs { border-top: 1px solid var(--border); }
+    .specs-inner {
+      display: grid; grid-template-columns: 1fr 1fr;
+      gap: 3.5rem; max-width: 920px; margin: 3rem auto 0;
+    }
+    .specs-group h4 {
+      font-size: 0.75rem; font-weight: 700;
+      letter-spacing: 0.14em; text-transform: uppercase;
+      color: var(--muted); margin-bottom: 1.25rem;
+    }
+    .specs-table { width: 100%; border-collapse: collapse; }
+    .specs-table tr { border-bottom: 1px solid var(--border); }
+    .specs-table tr:last-child { border-bottom: none; }
+    .specs-table td { padding: 0.7rem 0; font-size: 0.88rem; vertical-align: top; }
+    .specs-table td:first-child { color: var(--muted); width: 42%; }
+    .specs-table td:last-child { font-weight: 500; color: var(--text); }
+
+    /* ── INSTALL ─────────────────────────────────────── */
+    #install {
+      border-top: 1px solid var(--border);
+      background: var(--bg-card);
+      text-align: center;
+    }
+    .install-inner { max-width: 700px; margin: 0 auto; }
+    .code-block {
+      background: #060606;
+      border: 1px solid var(--border);
+      border-radius: 10px; padding: 1.5rem 2rem;
+      text-align: left; margin: 2.25rem 0;
+      position: relative;
+    }
+    .code-block pre {
+      font-family: 'Fira Code', 'Consolas', 'SF Mono', monospace;
+      font-size: 0.83rem; color: #d4d4d4;
+      white-space: pre-wrap; word-break: break-all;
+      line-height: 1.75;
+    }
+    .comment { color: #555; }
+    .cmd { color: var(--accent); }
+    .str { color: #8ecf80; }
+    .copy-btn {
+      position: absolute; top: 0.85rem; right: 0.85rem;
+      background: var(--bg-card2); border: 1px solid var(--border);
+      color: var(--muted); font-size: 0.72rem; font-weight: 600;
+      padding: 4px 10px; border-radius: 5px;
+      cursor: pointer; transition: color 0.2s, border-color 0.2s;
+      letter-spacing: 0.04em;
+    }
+    .copy-btn:hover { color: var(--text); border-color: #555; }
+
+    /* ── FOOTER ──────────────────────────────────────── */
+    footer {
+      border-top: 1px solid var(--border);
+      padding: 1.75rem clamp(1.25rem, 5vw, 4rem);
+      display: flex; align-items: center;
+      justify-content: space-between; flex-wrap: wrap;
+      gap: 1rem; color: var(--muted); font-size: 0.83rem;
+    }
+    footer a { color: var(--muted); text-decoration: none; transition: color 0.2s; }
+    footer a:hover { color: var(--text); }
+    .footer-links { display: flex; gap: 1.75rem; }
+
+    /* ── RESPONSIVE ──────────────────────────────────── */
+    @media (max-width: 700px) {
+      .nav-links { display: none; }
+      .specs-inner { grid-template-columns: 1fr; gap: 2rem; }
+    }
+    @media (max-width: 480px) {
+      .code-block { padding: 1.25rem; }
+      .code-block pre { font-size: 0.75rem; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- NAV -->
+<nav>
+  <a class="nav-logo" href="#">
+    <div class="nav-logo-mark">
+      <svg viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <circle cx="8" cy="8" r="5" stroke="#000" stroke-width="2"/>
+        <circle cx="8" cy="8" r="2" fill="#000"/>
+      </svg>
+    </div>
+    <span class="nav-logo-name">HiFi Player</span>
+    <span class="nav-dot"></span>
+  </a>
+  <ul class="nav-links">
+    <li><a href="#features">Features</a></li>
+    <li><a href="#screenshots">Screenshots</a></li>
+    <li><a href="#specs">Specs</a></li>
+    <li><a href="#install">Install</a></li>
+  </ul>
+  <a class="btn-nav" href="https://github.com/adri6412/hifi-media-player/releases" target="_blank">Download</a>
+</nav>
+
+<!-- HERO -->
+<section class="hero">
+  <div class="hero-badge">
+    <span class="badge-dot"></span>
+    v2.5.8 — Dev &amp; Prod OTA channels
+  </div>
+  <h1><span class="accent">HIFI</span> PLAYER</h1>
+  <p class="hero-sub">
+    A touchscreen-first hi-fi media appliance for Raspberry Pi and DietPi.
+    Bit-perfect audio, streaming services, and OTA updates — all in one sleek dark interface.
+  </p>
+  <div class="hero-ctas">
+    <a class="btn-primary" href="https://github.com/adri6412/hifi-media-player/releases" target="_blank">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+      Download v2.5.8
+    </a>
+    <a class="btn-secondary" href="https://github.com/adri6412/hifi-media-player" target="_blank">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0 0 24 12c0-6.63-5.37-12-12-12z"/></svg>
+      View on GitHub
+    </a>
+  </div>
+  <div class="hero-pills">
+    <span class="pill"><strong>Raspberry Pi</strong> 3B+ / 4 / 5</span>
+    <span class="pill"><strong>FLAC · DSD · 192kHz</strong></span>
+    <span class="pill"><strong>Deezer · Qobuz · TIDAL · Spotify</strong></span>
+    <span class="pill"><strong>GPL-3.0</strong> Open Source</span>
+  </div>
+</section>
+
+<!-- FEATURES -->
+<section id="features">
+  <div class="centered">
+    <div class="section-label">What it does</div>
+    <h2 class="section-title">Everything your hi-fi setup needs</h2>
+    <p class="section-desc">Built for audiophiles who want a dedicated, appliance-grade media server without the complexity.</p>
+  </div>
+  <div class="features-grid">
+    <div class="feature-card">
+      <div class="feature-icon">🎵</div>
+      <h3>High-Resolution Audio</h3>
+      <p>Native playback of FLAC, DSD, and PCM up to 192kHz. Bit-perfect DoP output over USB — no resampling, no compromise.</p>
+      <div class="feature-tags">
+        <span class="tag">FLAC</span><span class="tag">DSD64/128/256</span><span class="tag">192kHz</span><span class="tag">DoP</span>
+      </div>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon">🎧</div>
+      <h3>Streaming Services</h3>
+      <p>Integrated access to Deezer, Qobuz, TIDAL, and Spotify — unified in one interface, no app switching.</p>
+      <div class="feature-tags">
+        <span class="tag">Deezer</span><span class="tag">Qobuz</span><span class="tag">TIDAL</span><span class="tag">Spotify</span>
+      </div>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon">📁</div>
+      <h3>Music Library</h3>
+      <p>Browse your local collection by Artist, Album, or Folder. Fast indexing powered by Lyrion Media Server.</p>
+      <div class="feature-tags">
+        <span class="tag">Artists</span><span class="tag">Albums</span><span class="tag">Folders</span><span class="tag">Lyrion</span>
+      </div>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon">📻</div>
+      <h3>Internet Radio</h3>
+      <p>Built-in radio browser with thousands of stations worldwide. Save favourites directly from the touchscreen interface.</p>
+      <div class="feature-tags">
+        <span class="tag">Radio Browser</span><span class="tag">Favourites</span>
+      </div>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon">🔌</div>
+      <h3>DAC Auto-Detection</h3>
+      <p>Automatically detects USB DACs and audio interfaces. Switch outputs on the fly with persistent selection across reboots.</p>
+      <div class="feature-tags">
+        <span class="tag">USB DAC</span><span class="tag">HDMI</span><span class="tag">I²S HAT</span>
+      </div>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon">⬆️</div>
+      <h3>OTA Updates</h3>
+      <p>Signed over-the-air updates for UI, API daemon, and OS. Switch between Production and Development channels from settings.</p>
+      <div class="feature-tags">
+        <span class="tag">Ed25519 signed</span><span class="tag">Prod channel</span><span class="tag">Dev channel</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- SCREENSHOTS -->
+<section id="screenshots">
+  <div class="centered">
+    <div class="section-label">Interface</div>
+    <h2 class="section-title">Designed for the listening room</h2>
+    <p class="section-desc">Optimised for touchscreens and TV remotes. Clean, dark, distraction-free.</p>
+  </div>
+
+  <div class="carousel-wrap">
+    <div class="carousel-main" id="carouselMain">
+      <img id="carouselImg" src="screen_003.png" alt="HiFi Player — Main player view">
+      <button class="carousel-nav prev" id="prevBtn" aria-label="Previous screenshot">&#8249;</button>
+      <button class="carousel-nav next" id="nextBtn" aria-label="Next screenshot">&#8250;</button>
+      <div class="carousel-counter" id="counter">1 / 8</div>
+      <div class="carousel-caption" id="caption">Main player — Now Playing</div>
+    </div>
+    <div class="carousel-thumbs" id="thumbsContainer"></div>
+  </div>
+</section>
+
+<!-- SPECS -->
+<section id="specs">
+  <div class="centered">
+    <div class="section-label">Technical specifications</div>
+    <h2 class="section-title">Built on solid foundations</h2>
+  </div>
+  <div class="specs-inner">
+    <div class="specs-group">
+      <h4>Platform</h4>
+      <table class="specs-table">
+        <tr><td>Hardware</td><td>Raspberry Pi 3B+ / 4 / 5</td></tr>
+        <tr><td>OS</td><td>DietPi (Debian-based)</td></tr>
+        <tr><td>Interface</td><td>Electron + React</td></tr>
+        <tr><td>Backend</td><td>Node.js API daemon</td></tr>
+        <tr><td>Media server</td><td>Lyrion Media Server</td></tr>
+        <tr><td>Update system</td><td>Signed OTA (Ed25519)</td></tr>
+        <tr><td>License</td><td>GPL-3.0</td></tr>
+      </table>
+    </div>
+    <div class="specs-group">
+      <h4>Audio</h4>
+      <table class="specs-table">
+        <tr><td>Formats</td><td>FLAC, DSD, MP3, AAC, WAV, AIFF</td></tr>
+        <tr><td>Max resolution</td><td>32-bit / 192kHz PCM</td></tr>
+        <tr><td>DSD support</td><td>DSD64, DSD128, DSD256 (DoP)</td></tr>
+        <tr><td>Output</td><td>USB DAC, HDMI, I²S (HAT)</td></tr>
+        <tr><td>Playback mode</td><td>Bit-perfect (no resampling)</td></tr>
+        <tr><td>VU meters</td><td>Analog-style real-time display</td></tr>
+        <tr><td>Streaming</td><td>Deezer, Qobuz, TIDAL, Spotify</td></tr>
+      </table>
+    </div>
+  </div>
+</section>
+
+<!-- INSTALL -->
+<section id="install">
+  <div class="install-inner">
+    <div class="section-label">Get started</div>
+    <h2 class="section-title">Deploy in minutes</h2>
+    <p class="section-desc">Flash a DietPi image, run the installer, and your appliance is ready. OTA keeps it up to date automatically.</p>
+
+    <div class="code-block">
+      <button class="copy-btn" id="copyBtn">Copy</button>
+      <pre><span class="comment"># 1. Flash DietPi to your SD card, then SSH in as root
+# 2. Download and run the HiFi Player installer</span>
+<span class="cmd">curl</span> -fsSL <span class="str">https://github.com/adri6412/hifi-media-player/releases/latest/download/install.sh</span> | <span class="cmd">bash</span>
+
+<span class="comment"># The player starts automatically on boot.
+# Connect your USB DAC, open Settings → Audio Output to select it.</span></pre>
+    </div>
+
+    <div style="display:flex; gap:1rem; justify-content:center; flex-wrap:wrap;">
+      <a class="btn-primary" href="https://github.com/adri6412/hifi-media-player/releases" target="_blank">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        Latest Release
+      </a>
+      <a class="btn-secondary" href="https://github.com/adri6412/hifi-media-player" target="_blank">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0 0 24 12c0-6.63-5.37-12-12-12z"/></svg>
+        View on GitHub
+      </a>
+    </div>
+  </div>
+</section>
+
+<!-- FOOTER -->
+<footer>
+  <div>
+    <strong style="color:var(--accent)">HIFI PLAYER</strong>
+    &nbsp;·&nbsp; GPL-3.0
+    &nbsp;·&nbsp; &copy; 2025 Adriano Frongillo
+  </div>
+  <div class="footer-links">
+    <a href="https://github.com/adri6412/hifi-media-player" target="_blank">GitHub</a>
+    <a href="https://github.com/adri6412/hifi-media-player/releases" target="_blank">Releases</a>
+    <a href="https://github.com/adri6412/hifi-media-player/issues" target="_blank">Issues</a>
+  </div>
+</footer>
+
+<!-- LIGHTBOX -->
+<div class="lightbox" id="lightbox">
+  <button class="lb-close" id="lbClose" aria-label="Close">&#215;</button>
+  <img id="lightboxImg" src="" alt="">
+</div>
+
+<script>
+  const screens = [
+    { src: 'screen_003.png', cap: 'Main player — Now Playing' },
+    { src: 'screen_004.png', cap: 'Album grid view' },
+    { src: 'screen_005.png', cap: 'Full-screen Now Playing with analog VU meters' },
+    { src: 'screen_006.png', cap: 'Apps & Streaming services' },
+    { src: 'screen_007.png', cap: 'Settings — Language & Lyrion configuration' },
+    { src: 'screen_008.png', cap: 'Audio Output (DAC) selection' },
+    { src: 'screen_009.png', cap: 'OTA Update channels — Production vs Development' },
+    { src: 'screen_010.png', cap: 'System Controls — Update, Reboot, Shutdown' },
+  ];
+
+  let current = 0;
+  let autoTimer;
+
+  // Build thumbnails
+  const thumbsEl = document.getElementById('thumbsContainer');
+  screens.forEach((s, i) => {
+    const d = document.createElement('div');
+    d.className = 'thumb' + (i === 0 ? ' active' : '');
+    d.innerHTML = `<img src="${s.src}" alt="Screenshot ${i+1}" loading="lazy">`;
+    d.addEventListener('click', () => goTo(i));
+    thumbsEl.appendChild(d);
+  });
+
+  function goTo(i) {
+    current = ((i % screens.length) + screens.length) % screens.length;
+    const img = document.getElementById('carouselImg');
+    img.style.opacity = '0';
+    setTimeout(() => {
+      img.src = screens[current].src;
+      img.alt = screens[current].cap;
+      img.style.opacity = '1';
+      document.getElementById('caption').textContent = screens[current].cap;
+      document.getElementById('counter').textContent = `${current + 1} / ${screens.length}`;
+    }, 180);
+    document.querySelectorAll('.thumb').forEach((t, idx) => {
+      t.classList.toggle('active', idx === current);
+    });
+  }
+
+  document.getElementById('prevBtn').addEventListener('click', (e) => {
+    e.stopPropagation(); goTo(current - 1);
+  });
+  document.getElementById('nextBtn').addEventListener('click', (e) => {
+    e.stopPropagation(); goTo(current + 1);
+  });
+
+  // Click to open lightbox (not on nav buttons)
+  document.getElementById('carouselMain').addEventListener('click', (e) => {
+    if (e.target.closest('.carousel-nav')) return;
+    document.getElementById('lightboxImg').src = screens[current].src;
+    document.getElementById('lightbox').classList.add('open');
+    document.body.style.overflow = 'hidden';
+  });
+
+  function closeLightbox() {
+    document.getElementById('lightbox').classList.remove('open');
+    document.body.style.overflow = '';
+  }
+  document.getElementById('lbClose').addEventListener('click', closeLightbox);
+  document.getElementById('lightbox').addEventListener('click', (e) => {
+    if (e.target === e.currentTarget) closeLightbox();
+  });
+
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') closeLightbox();
+    if (e.key === 'ArrowLeft')  goTo(current - 1);
+    if (e.key === 'ArrowRight') goTo(current + 1);
+  });
+
+  // Auto-advance
+  function startAuto() { autoTimer = setInterval(() => goTo(current + 1), 4800); }
+  function stopAuto()  { clearInterval(autoTimer); }
+  startAuto();
+  const wrap = document.querySelector('.carousel-wrap');
+  wrap.addEventListener('mouseenter', stopAuto);
+  wrap.addEventListener('mouseleave', startAuto);
+
+  // Copy button
+  document.getElementById('copyBtn').addEventListener('click', () => {
+    const code = 'curl -fsSL https://github.com/adri6412/hifi-media-player/releases/latest/download/install.sh | bash';
+    navigator.clipboard.writeText(code).then(() => {
+      const btn = document.getElementById('copyBtn');
+      btn.textContent = 'Copied!';
+      setTimeout(() => btn.textContent = 'Copy', 2200);
+    });
+  });
+</script>
+</body>
+</html>
