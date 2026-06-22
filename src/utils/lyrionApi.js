@@ -214,7 +214,7 @@ export class LyrionAPI {
   // Saved playlists (the ones the user stores from the queue). Each item in
   // `playlists_loop` carries `id` and `playlist` (the name).
   async getPlaylists(limit = 9999, offset = 0) {
-    return this.request('', ['playlists', offset, limit, 'tags:su']);
+    return this.request('', ['playlists', offset, limit]);
   }
 
   // Tracks of a saved playlist → `playlisttracks_loop`.

@@ -122,6 +122,7 @@
     "saveAsPlaylist": "Salva come playlist",
     "clearQueue": "Svuota",
     "playlistNamePlaceholder": "Nome playlist",
+    "saveError": "Impossibile salvare la playlist. Verifica che in Lyrion sia configurata una cartella playlist.",
     "sleep": "Timer di spegnimento",
     "sleepActive": "Si ferma tra circa {min} min",
     "sleepOff": "Disattiva timer"

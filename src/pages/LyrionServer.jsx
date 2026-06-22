@@ -81,6 +81,7 @@ const LyrionServer = () => {
   const [queueIndex, setQueueIndex] = useState(0);
   const [saveQueueOpen, setSaveQueueOpen] = useState(false);
   const [queueName, setQueueName] = useState('');
+  const [saveMsg, setSaveMsg] = useState('');
   const [sleepMenuOpen, setSleepMenuOpen] = useState(false);
 
   // Library state
@@ -167,12 +168,31 @@ const LyrionServer = () => {
     handleAction(() => lyrionApi.playlistMove(activePlayer.playerid, from, to)).then(loadQueue);
   };
   const queueClear  = () => handleAction(() => lyrionApi.playlistClear(activePlayer.playerid)).then(loadQueue);
-  const saveQueue   = () => {
+  // Save the queue, verify Lyrion actually wrote it, then jump to the Playlists
+  // view so the result is immediately visible. `writeError` in the response
+  // means the save failed (e.g. no writable playlist folder configured).
+  const saveQueue   = async () => {
     const name = queueName.trim();
-    if (!name) return;
-    handleAction(() => lyrionApi.playlistSave(activePlayer.playerid, name));
-    setSaveQueueOpen(false);
-    setQueueName('');
+    if (!name || !activePlayer) return;
+    setSaveMsg('');
+    try {
+      const res = await lyrionApi.playlistSave(activePlayer.playerid, name);
+      if (res && (res.writeError || res.error)) {
+        setSaveMsg(t('player.saveError'));
+        return;
+      }
+      setSaveQueueOpen(false);
+      setQueueName('');
+      setShowQueue(false);
+      setIsPlayerExpanded(false);
+      setActiveTab('musica');
+      setMenuSearch(null);
+      setNavigationStack([{ view: 'home', title: t('player.titles.home'), params: null }]);
+      setCurrentView('home');
+      navigateTo('playlists', t('player.titles.playlists'));
+    } catch (_) {
+      setSaveMsg(t('player.saveError'));
+    }
   };
 
   // ── Sleep timer ────────────────────────────────────────────
@@ -1100,12 +1120,15 @@ const LyrionServer = () => {
                 className="relative w-full max-w-sm bg-hifi-panel border border-hifi-border rounded-2xl p-5 shadow-2xl">
                 <p className="text-sm font-semibold text-white mb-3">{t('player.saveAsPlaylist')}</p>
                 <input type="text" value={queueName} autoFocus
-                  onChange={(e) => setQueueName(e.target.value)}
+                  onChange={(e) => { setQueueName(e.target.value); setSaveMsg(''); }}
                   onKeyDown={(e) => { if (e.key === 'Enter') saveQueue(); }}
                   placeholder={t('player.playlistNamePlaceholder')}
                   className="w-full bg-hifi-dark border border-hifi-accent rounded-lg px-4 py-3 text-white focus:outline-none focus:border-hifi-gold mb-4" />
+                {saveMsg && (
+                  <p className="text-sm text-red-300 mb-3 text-center">{saveMsg}</p>
+                )}
                 <div className="flex gap-2">
-                  <button onClick={() => setSaveQueueOpen(false)}
+                  <button onClick={() => { setSaveQueueOpen(false); setSaveMsg(''); }}
                     className="flex-1 bg-hifi-light hover:bg-hifi-accent text-white py-2.5 rounded-lg text-sm font-medium transition-colors">
                     {t('common.cancel')}
                   </button>
