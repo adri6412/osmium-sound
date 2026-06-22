@@ -556,27 +556,17 @@
 <section id="install">
   <div class="install-inner">
     <div class="section-label">Get started</div>
-    <h2 class="section-title">Deploy in minutes</h2>
-    <p class="section-desc">Flash a DietPi image, run the installer, and your appliance is ready. OTA keeps it up to date automatically.</p>
+    <h2 class="section-title">Download &amp; install</h2>
+    <p class="section-desc">Download the latest release from GitHub. Once installed, OTA keeps everything up to date automatically from the Settings screen.</p>
 
-    <div class="code-block">
-      <button class="copy-btn" id="copyBtn">Copy</button>
-      <pre><span class="comment"># 1. Flash DietPi to your SD card, then SSH in as root
-# 2. Download and run the Osmium Sound installer</span>
-<span class="cmd">curl</span> -fsSL <span class="str">https://github.com/adri6412/osmium-sound/releases/latest/download/install.sh</span> | <span class="cmd">bash</span>
-
-<span class="comment"># The player starts automatically on boot.
-# Connect your USB DAC, open Settings → Audio Output to select it.</span></pre>
-    </div>
-
-    <div style="display:flex; gap:1rem; justify-content:center; flex-wrap:wrap;">
-      <a class="btn-primary" href="https://github.com/adri6412/osmium-sound/releases" target="_blank">
+    <div style="display:flex; gap:1rem; justify-content:center; flex-wrap:wrap; margin-top:2.25rem;">
+      <a class="btn-primary" href="https://github.com/adri6412/osmium-sound/releases/latest" target="_blank">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
         Latest Release
       </a>
-      <a class="btn-secondary" href="https://github.com/adri6412/osmium-sound" target="_blank">
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0 0 24 12c0-6.63-5.37-12-12-12z"/></svg>
-        View on GitHub
+      <a class="btn-secondary" href="https://github.com/adri6412/osmium-sound/releases" target="_blank">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 19v-6a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h2a2 2 0 0 0 2-2zm0 0V9a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v10m-6 0a2 2 0 0 0 2 2h2a2 2 0 0 0 2-2m0 0V5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-2a2 2 0 0 1-2-2z"/></svg>
+        All Releases
       </a>
     </div>
   </div>
@@ -680,16 +670,6 @@
   const wrap = document.querySelector('.carousel-wrap');
   wrap.addEventListener('mouseenter', stopAuto);
   wrap.addEventListener('mouseleave', startAuto);
-
-  // Copy button
-  document.getElementById('copyBtn').addEventListener('click', () => {
-    const code = 'curl -fsSL https://github.com/adri6412/osmium-sound/releases/latest/download/install.sh | bash';
-    navigator.clipboard.writeText(code).then(() => {
-      const btn = document.getElementById('copyBtn');
-      btn.textContent = 'Copied!';
-      setTimeout(() => btn.textContent = 'Copy', 2200);
-    });
-  });
 </script>
 </body>
 </html>
