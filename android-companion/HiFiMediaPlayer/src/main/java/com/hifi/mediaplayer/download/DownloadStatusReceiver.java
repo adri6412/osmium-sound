@@ -216,10 +216,15 @@ public class DownloadStatusReceiver extends BroadcastReceiver {
                 // Content intent is required on some API levels even if
                 // https://developer.android.com/guide/topics/ui/notifiers/notifications.html
                 // says it's optional
+                // Dummy Intent that does nothing. Keep it *explicit* (scoped to
+                // this app's package) so it is never delivered to another app —
+                // an implicit Intent inside a PendingIntent is a security risk.
+                Intent emptyIntent = new Intent();
+                emptyIntent.setPackage(context.getPackageName());
                 PendingIntent emptyPendingIntent = PendingIntent.getService(
                         context,
                         0,
-                        new Intent(),  //Dummy Intent do nothing
+                        emptyIntent,
                         Intents.immutablePendingIntent());
 
                 final NotificationCompat.Builder builder = new NotificationCompat.Builder(context, SqueezeService.NOTIFICATION_CHANNEL_ID);

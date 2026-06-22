@@ -13,6 +13,18 @@ import { useI18n } from '../i18n';
 import AnalogVUMeter from '../components/AnalogVUMeter';
 import SettingsPage from './Settings';
 
+// ── Safe image URLs ───────────────────────────────────────────
+// Artwork/icon URLs come from the (untrusted) Lyrion server. Only allow
+// http(s) absolute or same-origin relative URLs as <img src>; reject
+// javascript:, data: and other schemes that can lead to DOM-based XSS.
+const safeUrl = (url) => {
+  if (typeof url !== 'string') return '';
+  const u = url.trim();
+  if (/^https?:\/\//i.test(u)) return u;
+  if (u.startsWith('/') && !u.startsWith('//')) return u;
+  return '';
+};
+
 // ── Tab definitions ──────────────────────────────────────────
 // `labelKey` is resolved through i18n at render time (null = icon-only tab).
 const TABS = [
@@ -33,7 +45,7 @@ const ArtworkImage = ({ src, alt, className, FallbackIcon }) => {
       </div>
     );
   }
-  return <img src={src} alt={alt} className={className} onError={() => setErr(true)} />;
+  return <img src={safeUrl(src)} alt={alt} className={className} onError={() => setErr(true)} />;
 };
 
 // ── Animated playing indicator ────────────────────────────────
@@ -404,7 +416,7 @@ const LyrionServer = () => {
                   onClick={() => navigateTo('plugin_items', item.name, { pluginCmd: item.cmd })}
                   className="flex items-center px-3 py-2.5 bg-hifi-surface hover:bg-hifi-light rounded-lg cursor-pointer border border-transparent hover:border-hifi-border transition-colors">
                   {item.icon
-                    ? <img src={item.icon.startsWith('http') ? item.icon : `${serverUrl}/${item.icon}`}
+                    ? <img src={safeUrl(item.icon.startsWith('http') ? item.icon : `${serverUrl}/${item.icon}`)}
                         className="w-6 h-6 rounded mr-3 flex-shrink-0" alt=""
                         onError={(e) => { e.target.style.display = 'none'; }} />
                     : currentView === 'radios'
@@ -430,7 +442,7 @@ const LyrionServer = () => {
                     className="flex items-center justify-between px-3 py-2.5 bg-hifi-surface hover:bg-hifi-light rounded-lg group cursor-pointer border border-transparent hover:border-hifi-border transition-colors">
                     <div className="flex items-center space-x-3 min-w-0">
                       {iconUrl
-                        ? <img src={iconUrl} className="w-6 h-6 rounded flex-shrink-0 object-cover" alt=""
+                        ? <img src={safeUrl(iconUrl)} className="w-6 h-6 rounded flex-shrink-0 object-cover" alt=""
                             onError={(e) => { e.target.style.display = 'none'; }} />
                         : isNav
                           ? <AppWindow size={15} className="text-hifi-silver/60 flex-shrink-0" />
@@ -464,7 +476,7 @@ const LyrionServer = () => {
                     className="flex items-center justify-between px-3 py-2.5 bg-hifi-surface hover:bg-hifi-light rounded-lg group cursor-pointer border border-transparent hover:border-hifi-border transition-colors">
                     <div className="flex items-center space-x-3 min-w-0">
                       {item.icon
-                        ? <img src={item.icon.startsWith('http') ? item.icon : `${serverUrl}/${item.icon}`}
+                        ? <img src={safeUrl(item.icon.startsWith('http') ? item.icon : `${serverUrl}/${item.icon}`)}
                             className="w-6 h-6 rounded flex-shrink-0" alt=""
                             onError={(e) => { e.target.style.display = 'none'; }} />
                         : hasItems
@@ -775,7 +787,7 @@ const LyrionServer = () => {
                   initial={{ x: -20, opacity: 0 }} animate={{ x: 0, opacity: 1 }} transition={{ delay: 0.08 }}>
                   <div className="relative w-full max-w-[320px] aspect-square rounded-2xl overflow-hidden shadow-[0_20px_60px_rgba(0,0,0,0.7)] border border-white/8 bg-hifi-gray">
                     {artworkUrlLg
-                      ? <img src={artworkUrlLg} alt="Album Art" className="w-full h-full object-cover" />
+                      ? <img src={safeUrl(artworkUrlLg)} alt="Album Art" className="w-full h-full object-cover" />
                       : <div className="w-full h-full flex items-center justify-center text-hifi-silver/20"><Music size={80} /></div>}
                   </div>
                 </motion.div>

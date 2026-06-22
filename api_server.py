@@ -8,10 +8,18 @@ import socket
 import platform
 import re
 import json
+import logging
 import urllib.request
 
 app = Flask(__name__)
 CORS(app)  # Abilita CORS per tutte le route
+
+# Log full diagnostics server-side; never leak exception text / stack traces to
+# HTTP clients (this API runs as root). Use `log.exception(...)` in handlers and
+# return a generic message to the caller instead.
+logging.basicConfig(level=logging.INFO,
+                    format='%(asctime)s %(levelname)s %(name)s: %(message)s')
+log = logging.getLogger('hifi.api')
 
 # Security headers middleware
 @app.after_request
@@ -74,24 +82,27 @@ def update_system():
         process = subprocess.Popen("sudo apt-get update && sudo apt-get upgrade -y", shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         process.wait()
         return "System updated successfully"
-    except Exception as e:
-        return f"Failed to update system: {e}"
+    except Exception:
+        log.exception("update_system failed")
+        return "Failed to update system"
 
 # Funzione per riavviare il dispositivo
 def reboot_device():
     try:
         subprocess.Popen("sudo reboot", shell=True)
         return "Device rebooting"
-    except Exception as e:
-        return f"Failed to reboot device: {e}"
+    except Exception:
+        log.exception("reboot_device failed")
+        return "Failed to reboot device"
 
 # Funzione per spegnere il dispositivo
 def shutdown_device():
     try:
         subprocess.Popen("sudo shutdown now", shell=True)
         return "Device shutting down"
-    except Exception as e:
-        return f"Failed to shutdown device: {e}"
+    except Exception:
+        log.exception("shutdown_device failed")
+        return "Failed to shutdown device"
 
 # Funzione per chiudere tutti i processi di Chromium e rilanciare /app/app_launcher.py
 def close_all_apps_and_restart():
@@ -107,8 +118,9 @@ def close_all_apps_and_restart():
         app_launcher_script = "/app/new/main.py"
         subprocess.Popen(f"python3 {app_launcher_script}", shell=True)
         return "All Chromium processes and app_launcher.py closed and restarted"
-    except Exception as e:
-        return f"Failed to close all apps and restart: {e}"
+    except Exception:
+        log.exception("close_all_apps_and_restart failed")
+        return "Failed to close all apps and restart"
 
 # Funzione per ottenere le informazioni di sistema
 def get_system_info():
@@ -150,7 +162,8 @@ def get_system_info():
             'local_ip': local_ip,
             'network_interfaces': network_interfaces
         }
-    except Exception as e:
+    except Exception:
+        log.exception("get_system_info failed")
         return {
             'hostname': 'Unknown',
             'platform': platform.platform(),
@@ -158,7 +171,7 @@ def get_system_info():
             'version': '1.0.0',
             'local_ip': 'Unknown',
             'network_interfaces': [],
-            'error': str(e)
+            'error': 'Errore nel recupero delle informazioni di sistema'
         }
 
 def _valid_ipv4(addr):
@@ -229,8 +242,9 @@ def configure_network(config):
             
     except subprocess.TimeoutExpired:
         return "Network configuration timed out"
-    except Exception as e:
-        return f"Network configuration failed: {str(e)}"
+    except Exception:
+        log.exception("configure_network failed")
+        return "Network configuration failed"
 
 # ──────────────────────────────────────────────────────────────────
 #  WiFi / network helpers (NetworkManager / nmcli) — used by the
@@ -323,13 +337,20 @@ def wifi_scan():
                 'security': security,
                 'in_use': in_use == '*',
             })
-    except Exception as e:
-        return {'networks': [], 'error': str(e)}
+    except Exception:
+        log.exception("wifi_scan failed")
+        return {'networks': [], 'error': 'Scansione WiFi fallita'}
     return {'networks': networks}
 
 def wifi_connect(ssid, password):
     if not ssid:
         return {'success': False, 'message': 'SSID mancante'}
+    # ssid/password are passed as argv to nmcli (no shell), but a value that
+    # starts with '-' or carries control characters could still be parsed as a
+    # flag or break the command line, so reject those before building argv.
+    for label, value in (('SSID', ssid), ('password', password or '')):
+        if any(c in value for c in ('\x00', '\n', '\r')) or value.startswith('-'):
+            return {'success': False, 'message': f'{label} non valido'}
     cmd = ['nmcli', 'device', 'wifi', 'connect', ssid]
     if password:
         cmd += ['password', password]
@@ -337,8 +358,9 @@ def wifi_connect(ssid, password):
         r = _run(cmd, timeout=45)
     except subprocess.TimeoutExpired:
         return {'success': False, 'message': 'Timeout durante la connessione'}
-    except Exception as e:
-        return {'success': False, 'message': str(e)}
+    except Exception:
+        log.exception("wifi_connect failed")
+        return {'success': False, 'message': 'Connessione fallita'}
     if r.returncode == 0:
         device, _ = _active_device()
         return {'success': True, 'message': f'Connesso a {ssid}', 'ip': _device_ip(device)}
@@ -350,8 +372,9 @@ def wired_dhcp():
         return {'success': False, 'message': 'Nessuna interfaccia Ethernet trovata'}
     try:
         r = _run(['nmcli', 'device', 'connect', eth], timeout=45)
-    except Exception as e:
-        return {'success': False, 'message': str(e)}
+    except Exception:
+        log.exception("wired_dhcp failed")
+        return {'success': False, 'message': 'Connessione via cavo fallita'}
     ip = _device_ip(eth)
     if ip:
         return {'success': True, 'message': 'Connesso via cavo', 'ip': ip}
@@ -387,8 +410,10 @@ def list_audio_devices():
                     'card': card,
                     'device': dev,
                 })
-    except Exception as e:
-        return {'devices': devices, 'current': _current_audio_device(), 'error': str(e)}
+    except Exception:
+        log.exception("list_audio_devices failed")
+        return {'devices': devices, 'current': _current_audio_device(),
+                'error': 'Lettura dispositivi audio fallita'}
     return {'devices': devices, 'current': _current_audio_device()}
 
 def _current_audio_device():
@@ -439,15 +464,17 @@ def set_audio_device(device):
     try:
         with open(SQUEEZELITE_DEFAULT, 'w') as f:
             f.write(content)
-    except Exception as e:
-        return {'success': False, 'message': f'Scrittura configurazione fallita: {e}'}
+    except Exception:
+        log.exception("set_audio_device: write config failed")
+        return {'success': False, 'message': 'Scrittura configurazione fallita'}
 
     try:
         r = _run(['systemctl', 'restart', 'squeezelite'], timeout=30)
         if r.returncode != 0:
             return {'success': True, 'message': f'Device impostato ({device}); riavvio squeezelite: {(r.stderr or "").strip()}'}
-    except Exception as e:
-        return {'success': True, 'message': f'Device impostato ({device}); riavvio non riuscito: {e}'}
+    except Exception:
+        log.exception("set_audio_device: squeezelite restart failed")
+        return {'success': True, 'message': f'Device impostato ({device}); riavvio non riuscito'}
     return {'success': True, 'message': f'Uscita audio impostata su {device}'}
 
 # ──────────────────────────────────────────────────────────────────
@@ -495,8 +522,9 @@ def _check_release_update(current, prefix):
     try:
         with urllib.request.urlopen(req, timeout=15) as resp:
             release = json.load(resp)
-    except Exception as e:
-        return {'error': f'Controllo aggiornamenti fallito: {e}', 'current': current}
+    except Exception:
+        log.exception("update check failed")
+        return {'error': 'Controllo aggiornamenti fallito', 'current': current}
 
     latest = release.get('tag_name') or release.get('name') or ''
     assets = release.get('assets', [])
@@ -543,8 +571,9 @@ def apply_app_update():
 
     try:
         sha = _fetch_sha256(info['sha_url'])
-    except Exception as e:
-        return {'started': False, 'message': f'Lettura checksum fallita: {e}'}
+    except Exception:
+        log.exception("update: checksum fetch failed")
+        return {'started': False, 'message': 'Lettura checksum fallita'}
     if not sha:
         return {'started': False, 'message': 'Checksum vuoto'}
 
@@ -558,10 +587,12 @@ def apply_app_update():
         # systemd-run unavailable → fall back to a detached subprocess
         subprocess.Popen([OTA_SCRIPT, info['asset_url'], sha, info['latest']],
                          start_new_session=True)
-    except subprocess.CalledProcessError as e:
-        return {'started': False, 'message': (e.stderr or str(e)).strip()}
-    except Exception as e:
-        return {'started': False, 'message': str(e)}
+    except subprocess.CalledProcessError:
+        log.exception("update: apply command failed")
+        return {'started': False, 'message': 'Avvio aggiornamento fallito'}
+    except Exception:
+        log.exception("update: apply failed")
+        return {'started': False, 'message': 'Avvio aggiornamento fallito'}
     return {'started': True, 'version': info['latest']}
 
 def app_update_status():
@@ -591,8 +622,9 @@ def apply_system_update():
 
     try:
         sha = _fetch_sha256(info['sha_url'])
-    except Exception as e:
-        return {'started': False, 'message': f'Lettura checksum fallita: {e}'}
+    except Exception:
+        log.exception("update: checksum fetch failed")
+        return {'started': False, 'message': 'Lettura checksum fallita'}
     if not sha:
         return {'started': False, 'message': 'Checksum vuoto'}
 
@@ -606,10 +638,12 @@ def apply_system_update():
         # systemd-run unavailable → fall back to a detached subprocess
         subprocess.Popen([SYS_SCRIPT, info['asset_url'], sha, info['latest']],
                          start_new_session=True)
-    except subprocess.CalledProcessError as e:
-        return {'started': False, 'message': (e.stderr or str(e)).strip()}
-    except Exception as e:
-        return {'started': False, 'message': str(e)}
+    except subprocess.CalledProcessError:
+        log.exception("update: apply command failed")
+        return {'started': False, 'message': 'Avvio aggiornamento fallito'}
+    except Exception:
+        log.exception("update: apply failed")
+        return {'started': False, 'message': 'Avvio aggiornamento fallito'}
     return {'started': True, 'version': info['latest']}
 
 def system_update_status():
@@ -643,8 +677,9 @@ def apply_os_update():
 
     try:
         sha = _fetch_sha256(info['sha_url'])
-    except Exception as e:
-        return {'started': False, 'message': f'Lettura checksum fallita: {e}'}
+    except Exception:
+        log.exception("update: checksum fetch failed")
+        return {'started': False, 'message': 'Lettura checksum fallita'}
     if not sha:
         return {'started': False, 'message': 'Checksum vuoto'}
 
@@ -658,10 +693,12 @@ def apply_os_update():
         # systemd-run unavailable → fall back to a detached subprocess
         subprocess.Popen([OS_SCRIPT, info['asset_url'], sha, info['sig_url'], info['latest']],
                          start_new_session=True)
-    except subprocess.CalledProcessError as e:
-        return {'started': False, 'message': (e.stderr or str(e)).strip()}
-    except Exception as e:
-        return {'started': False, 'message': str(e)}
+    except subprocess.CalledProcessError:
+        log.exception("update: apply command failed")
+        return {'started': False, 'message': 'Avvio aggiornamento fallito'}
+    except Exception:
+        log.exception("update: apply failed")
+        return {'started': False, 'message': 'Avvio aggiornamento fallito'}
     return {'started': True, 'version': info['latest']}
 
 def os_update_status():
@@ -691,8 +728,9 @@ def check_lyrion_update():
     try:
         with urllib.request.urlopen(req, timeout=15) as resp:
             html = resp.read().decode('utf-8', 'replace')
-    except Exception as e:
-        return {'error': f'Controllo aggiornamenti Lyrion fallito: {e}', 'current': current}
+    except Exception:
+        log.exception("lyrion update check failed")
+        return {'error': 'Controllo aggiornamenti Lyrion fallito', 'current': current}
 
     # Stable releases live under LyrionMusicServer_v<X.Y.Z>/lyrionmusicserver_<X.Y.Z>_all.deb
     # (nightlies are under /nightly/ and do not match this pattern → excluded).
@@ -728,10 +766,12 @@ def apply_lyrion_update():
     except FileNotFoundError:
         subprocess.Popen([LYRION_SCRIPT, info['asset_url'], info['latest']],
                          start_new_session=True)
-    except subprocess.CalledProcessError as e:
-        return {'started': False, 'message': (e.stderr or str(e)).strip()}
-    except Exception as e:
-        return {'started': False, 'message': str(e)}
+    except subprocess.CalledProcessError:
+        log.exception("update: apply command failed")
+        return {'started': False, 'message': 'Avvio aggiornamento fallito'}
+    except Exception:
+        log.exception("update: apply failed")
+        return {'started': False, 'message': 'Avvio aggiornamento fallito'}
     return {'started': True, 'version': info['latest']}
 
 def lyrion_update_status():
@@ -765,8 +805,9 @@ def show_global_keyboard():
                 continue
         
         return "Nessuna tastiera virtuale di sistema trovata. Installa onboard, florence, xvkbd o matchbox-keyboard"
-    except Exception as e:
-        return f"Errore nell'avvio della tastiera virtuale: {str(e)}"
+    except Exception:
+        log.exception("show_global_keyboard failed")
+        return "Errore nell'avvio della tastiera virtuale"
 
 # Funzione per nascondere la tastiera virtuale globale
 def hide_global_keyboard():
@@ -777,8 +818,9 @@ def hide_global_keyboard():
         subprocess.run("pkill -f xvkbd", shell=True, capture_output=True)
         subprocess.run("pkill -f matchbox-keyboard", shell=True, capture_output=True)
         return "Tastiera virtuale chiusa"
-    except Exception as e:
-        return f"Errore nella chiusura della tastiera virtuale: {str(e)}"
+    except Exception:
+        log.exception("hide_global_keyboard failed")
+        return "Errore nella chiusura della tastiera virtuale"
 
 @app.route('/check', methods=['GET'])
 def api_check():

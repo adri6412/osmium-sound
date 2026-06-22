@@ -27,6 +27,10 @@ app = Flask(__name__)
 
 STATE_FILE = "/etc/hifi-sources.json"
 MOUNT_ROOT = "/mnt/hifi-sources"
+# Local music folders may only be added from these base directories. This
+# keeps the (root-privileged) service from being pointed at arbitrary paths
+# such as /etc or /root via the add-local-source API.
+ALLOWED_LOCAL_ROOTS = ("/mnt", "/media", "/srv", "/home", MOUNT_ROOT)
 LYRION_SERVICE = "lyrionmusicserver.service"
 PREFS_GLOBS = [
     "/var/lib/squeezeboxserver/prefs/server.prefs",
@@ -61,7 +65,33 @@ def save_state(state):
 
 def _slug(*parts):
     s = "-".join(p for p in parts if p)
-    return re.sub(r"[^A-Za-z0-9._-]+", "_", s).strip("_") or "share"
+    # strip leading/trailing dots too, so a value like ".." can never survive
+    # and turn os.path.join(MOUNT_ROOT, slug) into a path-traversal.
+    return re.sub(r"[^A-Za-z0-9._-]+", "_", s).strip("_.") or "share"
+
+
+def _safe_field(value, *, allow_comma=False):
+    """Reject values that could inject mount options or CLI arguments.
+
+    The SMB fields below are interpolated into mount(8) `-o` options and into
+    the command argv; a comma, newline or a leading '-' would let a malicious
+    value add arbitrary mount options or be parsed as a flag.
+    """
+    v = "" if value is None else str(value)
+    if "\x00" in v or "\n" in v or "\r" in v:
+        raise ValueError("il valore contiene caratteri di controllo non validi")
+    if not allow_comma and "," in v:
+        raise ValueError("la virgola non è ammessa in questo campo")
+    if v.startswith("-"):
+        raise ValueError("il valore non può iniziare con '-'")
+    return v
+
+
+def _under_root(path, root):
+    """True if `path` resolves to `root` or a directory inside it."""
+    real = os.path.realpath(path)
+    root = os.path.realpath(root)
+    return real == root or real.startswith(root + os.sep)
 
 
 def _run(cmd, timeout=30):
@@ -71,9 +101,19 @@ def _run(cmd, timeout=30):
 # ─────────────────────────── SMB mounting ───────────────────────────
 def mount_smb(src):
     """Mount one SMB source. Returns (ok, message)."""
-    server = src["server"].strip().strip("/")
-    share = src["share"].strip().strip("/")
+    try:
+        server = _safe_field(src["server"].strip().strip("/"))
+        share = _safe_field(src["share"].strip().strip("/"))
+        username = _safe_field(src.get("username", ""))
+        password = _safe_field(src.get("password", ""))
+    except ValueError as e:
+        return False, str(e)
+
     mountpoint = src["mountpoint"]
+    # The mountpoint is derived from user-supplied server/share; make sure it
+    # can never escape MOUNT_ROOT before we create or mount onto it.
+    if not _under_root(mountpoint, MOUNT_ROOT):
+        return False, "mountpoint non valido"
     os.makedirs(mountpoint, exist_ok=True)
 
     if os.path.ismount(mountpoint):
@@ -82,8 +122,8 @@ def mount_smb(src):
     unc = f"//{server}/{share}"
     base_opts = f"uid=0,gid=0,iocharset=utf8,ro,file_mode=0644,dir_mode=0755"
     cred = ""
-    if src.get("username"):
-        cred = f",username={src['username']},password={src.get('password','')}"
+    if username:
+        cred = f",username={username},password={password}"
     else:
         cred = ",guest"
 
@@ -225,6 +265,11 @@ def api_add_local():
     path = (data.get("path") or "").strip()
     if not path:
         return jsonify({"success": False, "message": "Percorso mancante"}), 400
+    # Normalise and confine the path to an allow-listed media root before it is
+    # ever touched on disk or stored as a Lyrion media directory.
+    path = os.path.realpath(path)
+    if not any(path == r or path.startswith(r + os.sep) for r in ALLOWED_LOCAL_ROOTS):
+        return jsonify({"success": False, "message": "Percorso non consentito"}), 400
     if not os.path.isdir(path):
         return jsonify({"success": False, "message": f"La cartella {path} non esiste"}), 400
     with _lock:

@@ -1,6 +1,6 @@
 {
   "name": "hifi-media-player",
-  "version": "1.2.1",
+  "version": "2.5.2",
   "description": "Touchscreen-friendly hi-fi media player for DietPi",
   "main": "main/main.js",
   "type": "module",
@@ -34,14 +34,14 @@
     "@vitejs/plugin-react": "^4.2.1",
     "autoprefixer": "^10.4.16",
     "concurrently": "^8.2.2",
-    "electron": "^28.0.0",
-    "electron-builder": "^24.9.1",
+    "electron": "^39.8.5",
+    "electron-builder": "^26.15.3",
     "eslint-plugin-react": "^7.37.5",
     "eslint-plugin-react-hooks": "^7.0.1",
     "playwright": "^1.58.2",
     "postcss": "^8.4.32",
     "tailwindcss": "^3.3.6",
-    "vite": "^5.0.7",
+    "vite": "^6.4.3",
     "wait-on": "^7.2.0"
   },
   "build": {

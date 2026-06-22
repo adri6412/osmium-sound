@@ -14,6 +14,11 @@ on:
       - '!android-companion/**'
   workflow_dispatch:
 
+# Least-privilege: this workflow only checks out the code and uploads a build
+# artifact, so the default read-only token scope is all it needs.
+permissions:
+  contents: read
+
 jobs:
   build-deb:
     runs-on: ubuntu-latest
