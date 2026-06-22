@@ -20,6 +20,11 @@ usermod -aG autologin,nopasswdlogin hifi || true
 gpasswd -d hifi sudo 2>/dev/null || true
 
 echo "I: [hifi] finalising kiosk X session for user 'hifi'"
+# includes.chroot creates /home/hifi before useradd runs, so the directory is
+# initially owned by root. useradd -m leaves existing directories untouched.
+# Fix ownership here so hifi can write .Xauthority/.ICEauthority at login time.
+chown hifi:hifi /home/hifi
+
 # The .xsession is the SINGLE SOURCE OF TRUTH at distro/os-update/files/xsession,
 # injected into this image by build-distro.sh and installed identically by the
 # OS-update OTA (apply.d/0001-selfhealing-xsession.sh). Here we only fix the
