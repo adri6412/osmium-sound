@@ -10,3 +10,5 @@ hifi ALL=(ALL) NOPASSWD: /sbin/reboot, /sbin/shutdown, /usr/sbin/reboot, /usr/sb
 hifi ALL=(ALL) NOPASSWD: /usr/bin/apt-get update, /usr/bin/apt-get upgrade -y
 hifi ALL=(ALL) NOPASSWD: /sbin/dhclient, /usr/sbin/dhclient, /usr/bin/ip, /sbin/ip
 hifi ALL=(ALL) NOPASSWD: /usr/bin/nmcli *
+# SSH on/off toggle (Settings). Pin the exact unit names — no wildcard.
+hifi ALL=(ALL) NOPASSWD: /usr/bin/systemctl enable --now ssh.service, /usr/bin/systemctl disable --now ssh.service, /usr/bin/systemctl enable --now sshd.service, /usr/bin/systemctl disable --now sshd.service

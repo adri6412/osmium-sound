@@ -124,6 +124,7 @@
       "lyrion": "Lyrion Configuration",
       "audio": "Audio Output (DAC)",
       "network": "Network Configuration",
+      "ssh": "SSH Access",
       "systemInfo": "System Information",
       "updates": "Updates",
       "systemControls": "System Controls",
@@ -131,6 +132,14 @@
     },
     "language": {
       "help": "Choose the interface language."
+    },
+    "ssh": {
+      "help": "Enable or disable the SSH server for remote terminal access to the device.",
+      "warning": "For security, SSH is disabled by default. Only enable it if you know what you are doing, and change the default password immediately.",
+      "enabled": "SSH enabled",
+      "disabled": "SSH disabled",
+      "unavailable": "SSH service is not installed on this device.",
+      "failed": "SSH operation failed."
     },
     "lyrion": {
       "urlLabel": "Lyrion Server URL",
