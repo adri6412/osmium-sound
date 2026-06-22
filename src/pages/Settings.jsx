@@ -188,7 +188,8 @@ const Settings = () => {
       if (result.success && !result.data.error) {
         setAppUpdate(result.data);
       } else {
-        setAppUpdate({ error: result.data?.error || result.message });
+        // Keep the installed version visible even when the check itself fails.
+        setAppUpdate({ error: result.data?.error || result.message, current: result.data?.current });
       }
     } catch (error) {
       setAppUpdate({ error: t('settings.updates.msg.checkFailed') });
@@ -243,7 +244,7 @@ const Settings = () => {
       if (result.success && !result.data.error) {
         setSystemUpdate(result.data);
       } else {
-        setSystemUpdate({ error: result.data?.error || result.message });
+        setSystemUpdate({ error: result.data?.error || result.message, current: result.data?.current });
       }
     } catch (error) {
       setSystemUpdate({ error: t('settings.updates.msg.checkFailed') });
@@ -365,7 +366,7 @@ const Settings = () => {
       if (result.success && !result.data.error) {
         setLyrionUpdate(result.data);
       } else {
-        setLyrionUpdate({ error: result.data?.error || result.message });
+        setLyrionUpdate({ error: result.data?.error || result.message, current: result.data?.current });
       }
     } catch (error) {
       setLyrionUpdate({ error: t('settings.updates.msg.checkLyrionFailed') });
@@ -414,7 +415,7 @@ const Settings = () => {
       if (result.success && !result.data.error) {
         setOsUpdate(result.data);
       } else {
-        setOsUpdate({ error: result.data?.error || result.message });
+        setOsUpdate({ error: result.data?.error || result.message, current: result.data?.current });
       }
     } catch (error) {
       setOsUpdate({ error: t('settings.updates.msg.checkOsFailed') });
