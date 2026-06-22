@@ -14,7 +14,7 @@ if [ -f "$GRUB" ]; then
     else
         echo 'GRUB_TIMEOUT_STYLE=hidden' >> "$GRUB"
     fi
-    grep -q '^GRUB_DISTRIBUTOR='       "$GRUB" && sed -i 's/^GRUB_DISTRIBUTOR=.*/GRUB_DISTRIBUTOR="HiFi Player"/' "$GRUB" || echo 'GRUB_DISTRIBUTOR="HiFi Player"' >> "$GRUB"
+    grep -q '^GRUB_DISTRIBUTOR='       "$GRUB" && sed -i 's/^GRUB_DISTRIBUTOR=.*/GRUB_DISTRIBUTOR="Osmium Sound"/' "$GRUB" || echo 'GRUB_DISTRIBUTOR="Osmium Sound"' >> "$GRUB"
     grep -q '^GRUB_DISABLE_OS_PROBER='  "$GRUB" || echo 'GRUB_DISABLE_OS_PROBER=true'  >> "$GRUB"
     grep -q '^GRUB_RECORDFAIL_TIMEOUT=' "$GRUB" || echo 'GRUB_RECORDFAIL_TIMEOUT=0'    >> "$GRUB"
 

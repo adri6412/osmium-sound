@@ -17,7 +17,7 @@
     "language": "Lingua"
   },
   "wizard": {
-    "brand": "HiFi Player · Setup",
+    "brand": "Osmium Sound · Setup",
     "skip": "Salta",
     "start": "Inizia",
     "connect": "Connetti",
@@ -117,7 +117,7 @@
   },
   "settings": {
     "title": "Impostazioni",
-    "subtitle": "Configura il tuo HiFi Media Player",
+    "subtitle": "Configura il tuo Osmium Sound",
     "loadingSystem": "Caricamento dati di sistema...",
     "apiUnavailable": "⚠️ Server API non disponibile",
     "sections": {
