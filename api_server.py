@@ -347,9 +347,11 @@ def wifi_connect(ssid, password):
         return {'success': False, 'message': 'SSID mancante'}
     # ssid/password are passed as argv to nmcli (no shell), but a value that
     # starts with '-' or carries control characters could still be parsed as a
-    # flag or break the command line, so reject those before building argv.
+    # flag or break the command line. Validate with an anchored regexp (no
+    # control chars, no leading dash) before building argv.
+    safe_arg = re.compile(r'(?!-)[^\x00-\x1f]+')
     for label, value in (('SSID', ssid), ('password', password or '')):
-        if any(c in value for c in ('\x00', '\n', '\r')) or value.startswith('-'):
+        if value and not safe_arg.fullmatch(value):
             return {'success': False, 'message': f'{label} non valido'}
     cmd = ['nmcli', 'device', 'wifi', 'connect', ssid]
     if password:

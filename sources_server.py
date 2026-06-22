@@ -70,28 +70,16 @@ def _slug(*parts):
     return re.sub(r"[^A-Za-z0-9._-]+", "_", s).strip("_.") or "share"
 
 
-def _safe_field(value, *, allow_comma=False):
-    """Reject values that could inject mount options or CLI arguments.
+def _field_ok(value):
+    """True if `value` is safe to pass as a mount option / command argument.
 
     The SMB fields below are interpolated into mount(8) `-o` options and into
     the command argv; a comma, newline or a leading '-' would let a malicious
-    value add arbitrary mount options or be parsed as a flag.
+    value add arbitrary mount options or be parsed as a flag, so only allow a
+    conservative character set and reject leading dashes.
     """
     v = "" if value is None else str(value)
-    if "\x00" in v or "\n" in v or "\r" in v:
-        raise ValueError("il valore contiene caratteri di controllo non validi")
-    if not allow_comma and "," in v:
-        raise ValueError("la virgola non è ammessa in questo campo")
-    if v.startswith("-"):
-        raise ValueError("il valore non può iniziare con '-'")
-    return v
-
-
-def _under_root(path, root):
-    """True if `path` resolves to `root` or a directory inside it."""
-    real = os.path.realpath(path)
-    root = os.path.realpath(root)
-    return real == root or real.startswith(root + os.sep)
+    return bool(re.fullmatch(r"[^\x00-\x1f,]*", v)) and not v.startswith("-")
 
 
 def _run(cmd, timeout=30):
@@ -101,18 +89,19 @@ def _run(cmd, timeout=30):
 # ─────────────────────────── SMB mounting ───────────────────────────
 def mount_smb(src):
     """Mount one SMB source. Returns (ok, message)."""
-    try:
-        server = _safe_field(src["server"].strip().strip("/"))
-        share = _safe_field(src["share"].strip().strip("/"))
-        username = _safe_field(src.get("username", ""))
-        password = _safe_field(src.get("password", ""))
-    except ValueError as e:
-        return False, str(e)
+    server = src["server"].strip().strip("/")
+    share = src["share"].strip().strip("/")
+    username = src.get("username", "")
+    password = src.get("password", "")
+    for value in (server, share, username, password):
+        if not _field_ok(value):
+            return False, "Valore non valido in server/condivisione/credenziali"
 
-    mountpoint = src["mountpoint"]
-    # The mountpoint is derived from user-supplied server/share; make sure it
-    # can never escape MOUNT_ROOT before we create or mount onto it.
-    if not _under_root(mountpoint, MOUNT_ROOT):
+    # The mountpoint is derived from user-supplied server/share; resolve it and
+    # make sure it can never escape MOUNT_ROOT before we create or mount onto it.
+    root = os.path.realpath(MOUNT_ROOT)
+    mountpoint = os.path.realpath(src["mountpoint"])
+    if mountpoint != root and not mountpoint.startswith(root + os.sep):
         return False, "mountpoint non valido"
     os.makedirs(mountpoint, exist_ok=True)
 
@@ -268,7 +257,13 @@ def api_add_local():
     # Normalise and confine the path to an allow-listed media root before it is
     # ever touched on disk or stored as a Lyrion media directory.
     path = os.path.realpath(path)
-    if not any(path == r or path.startswith(r + os.sep) for r in ALLOWED_LOCAL_ROOTS):
+    allowed = False
+    for root in ALLOWED_LOCAL_ROOTS:
+        root = os.path.realpath(root)
+        if path == root or path.startswith(root + os.sep):
+            allowed = True
+            break
+    if not allowed:
         return jsonify({"success": False, "message": "Percorso non consentito"}), 400
     if not os.path.isdir(path):
         return jsonify({"success": False, "message": f"La cartella {path} non esiste"}), 400
