@@ -33,7 +33,8 @@
 #                     shipped files from "$HIFI_PAYLOAD_DIR/files/…")
 set -eu
 
-SELF_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+SELF_DIR=$(unset CDPATH; cd -- "$(dirname -- "$0")" && pwd)
+# shellcheck source=/dev/null
 . "$SELF_DIR/lib.sh"
 
 : "${HIFI_OS_VERSION:=unknown}"
@@ -53,6 +54,7 @@ for mig in "$SELF_DIR"/apply.d/[0-9]*.sh; do
     # the runner's own -e around it so we can capture the status and attribute the
     # failure ourselves.
     set +e
+    # shellcheck source=/dev/null
     ( set -eu; . "$mig" )
     rc=$?
     set -e

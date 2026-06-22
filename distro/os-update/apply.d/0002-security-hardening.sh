@@ -19,9 +19,10 @@ fi
 #    reverts on failure, so a bad edit can never lock sudo out.
 SUDOERS=/etc/sudoers.d/hifi
 if [ -f "$SUDOERS" ] && grep -q 'apt-get upgrade \*' "$SUDOERS"; then
-    backup_and_edit "$SUDOERS" "visudo -cf" \
-        's#/usr/bin/apt-get upgrade \*#/usr/bin/apt-get upgrade -y#' \
-        && log_info "pinned apt-get sudoers rule" || true
+    if backup_and_edit "$SUDOERS" "visudo -cf" \
+            's#/usr/bin/apt-get upgrade \*#/usr/bin/apt-get upgrade -y#'; then
+        log_info "pinned apt-get sudoers rule"
+    fi
 fi
 
 # 3) Enable automatic Debian security updates (security archive only, no auto
