@@ -63,20 +63,17 @@ The VU meter works because the Debian `squeezelite` package is built with
 `config/includes.chroot/etc/default/squeezelite`), which exports
 `/dev/shm/squeezelite-*` for the VU daemon.
 
-Lyrion Music Server is downloaded by `build-distro.sh` into
-`includes.chroot/opt/hifi-lyrion/` and installed during the chroot stage by
-`config/hooks/normal/0050-install-lyrion.hook.chroot` (it is **not** placed in
-`packages.chroot`, which current apt/live-build rejects).
+Lyrion Music Server is installed during the chroot stage by
+`config/hooks/normal/0050-install-lyrion.hook.chroot`. The hook downloads the
+`.deb` on-demand, installs it with `apt-get`, and immediately removes the file
+(the installed package metadata remains). It is **not** placed in the ISO itself.
 
-> **Lyrion on the installed system.** The debian-installer step
-> `finish-install.d/14remove-live-packages` (live-installer) runs *after* the
-> preseed `late_command` and **purges packages added via chroot hooks**,
-> including Lyrion — so a fresh install would boot without it. To survive this,
-> the staged `/opt/hifi-lyrion/*.deb` is kept in the image and `hifi-firstboot.service`
-> re-installs Lyrion on the **first boot of the real system**, then self-disables
-> (and removes the staged `.deb`). It runs only outside the live session
-> (`ConditionKernelCommandLine=!boot=live`). If first boot has no network and the
-> staged `.deb` is somehow missing, it retries on the next boot.
+> **Lyrion on the installed system.** The installer clones the live filesystem
+> (including the installed Lyrion package via dpkg metadata), and on first boot
+> of the real system, `hifi-firstboot.service` ensures Lyrion is up-to-date by
+> downloading and re-installing the current stable `.deb`. It then self-disables.
+> It runs only outside the live session (`ConditionKernelCommandLine=!boot=live`).
+> If first boot has no network, it retries on the next boot.
 
 ## Prerequisites (on the build server)
 

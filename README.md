@@ -392,7 +392,11 @@ window.electronAPI.setAudioDevice(deviceId)
 
 ## 📄 License
 
-MIT License - feel free to use and modify for your projects.
+**The application code authored by this project** (Electron/React frontend, Python services, distro packaging, hardware designs) is released under the **MIT License** — see [`LICENSE`](LICENSE) for the full text.
+
+**This project also includes and redistributes third-party components** under their own licenses (Lyrion Music Server and squeezelite under GPL, Android companion app under Apache-2.0, and npm/Python dependencies under MIT/BSD/ISC). Please see [`THIRD-PARTY-NOTICES.md`](THIRD-PARTY-NOTICES.md) for the complete list, license texts, and source locations.
+
+**Disclaimer of Affiliation:** HiFi Media Player is an independent open-source project and is **NOT affiliated with, sponsored by, endorsed by, or officially associated with** the Lyrion Music Server project or the LMS-Community. The name "Lyrion" is used in a nominative sense only to describe the service that this frontend connects to.
 
 ## 🤝 Contributing
 
