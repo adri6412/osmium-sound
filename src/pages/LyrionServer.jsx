@@ -193,6 +193,8 @@ const LyrionServer = () => {
     if (view === 'albums')       { const r = await lyrionApi.getAlbums(9999, 0, params?.artistId); return r?.albums_loop || []; }
     if (view === 'tracks')       { const r = await lyrionApi.getTracks(9999, 0, params?.albumId); return r?.titles_loop || []; }
     if (view === 'folders')      { const r = await lyrionApi.getMusicFolders(params?.folderId); return r?.folder_loop || []; }
+    if (view === 'playlists')    { const r = await lyrionApi.getPlaylists(); return r?.playlists_loop || []; }
+    if (view === 'playlist_tracks') { const r = await lyrionApi.getPlaylistTracks(params?.playlistId); return r?.playlisttracks_loop || []; }
     if (view === 'radios')       { const r = await lyrionApi.getRadios(activePlayer?.playerid); return r?.radios_loop || []; }
     if (view === 'apps')         { const r = await lyrionApi.getApps(activePlayer?.playerid); return r?.appss_loop || r?.apps_loop || []; }
     if (view === 'menu_home') {
@@ -307,7 +309,7 @@ const LyrionServer = () => {
       } catch (_) {}
       finally { setLibraryLoading(false); }
     } else if (tabId === 'musica') {
-      if (!['artists', 'albums', 'tracks', 'folders', 'home'].includes(currentView)) {
+      if (!['artists', 'albums', 'tracks', 'folders', 'playlists', 'playlist_tracks', 'home'].includes(currentView)) {
         goHome();
       }
     }
@@ -376,9 +378,10 @@ const LyrionServer = () => {
       return (
         <div className="grid grid-cols-3 gap-3 p-4">
           {[
-            { label: t('player.titles.artists'),  Icon: User,   action: () => navigateTo('artists', t('player.titles.artists')) },
-            { label: t('player.titles.albums'),   Icon: Disc,   action: () => navigateTo('albums',  t('player.titles.albums')) },
-            { label: t('player.titles.folders'),  Icon: Folder, action: () => navigateTo('folders', t('player.titles.folders')) },
+            { label: t('player.titles.artists'),   Icon: User,      action: () => navigateTo('artists',   t('player.titles.artists')) },
+            { label: t('player.titles.albums'),    Icon: Disc,      action: () => navigateTo('albums',    t('player.titles.albums')) },
+            { label: t('player.titles.folders'),   Icon: Folder,    action: () => navigateTo('folders',   t('player.titles.folders')) },
+            { label: t('player.titles.playlists'), Icon: ListMusic, action: () => navigateTo('playlists', t('player.titles.playlists')) },
           ].map(({ label, Icon, action }) => (
             <button key={label} onClick={action}
               className="flex flex-col items-center justify-center py-7 bg-hifi-surface hover:bg-hifi-light rounded-xl border border-hifi-border hover:border-hifi-accent transition-colors">
@@ -440,12 +443,31 @@ const LyrionServer = () => {
                 </li>
               );
 
-              if (currentView === 'tracks') return (
+              if (currentView === 'tracks' || currentView === 'playlist_tracks') return (
                 <li key={idx}
                   onClick={() => handlePlayItem('track_id', item.id)}
                   className="flex items-center px-3 py-2.5 bg-hifi-surface hover:bg-hifi-light rounded-lg cursor-pointer border border-transparent hover:border-hifi-border transition-colors">
                   <Music size={13} className="text-hifi-silver/60 mr-3 flex-shrink-0" />
                   <span className="text-sm text-white truncate">{item.title}</span>
+                </li>
+              );
+
+              if (currentView === 'playlists') return (
+                <li key={item.id || idx}
+                  onClick={() => navigateTo('playlist_tracks', item.playlist, { playlistId: item.id })}
+                  className="flex items-center justify-between px-3 py-2.5 bg-hifi-surface hover:bg-hifi-light rounded-lg group cursor-pointer border border-transparent hover:border-hifi-border transition-colors">
+                  <div className="flex items-center space-x-3 min-w-0">
+                    <div className="w-7 h-7 rounded-lg bg-hifi-light flex items-center justify-center flex-shrink-0">
+                      <ListMusic size={14} className="text-hifi-silver" />
+                    </div>
+                    <span className="text-sm text-white truncate">{item.playlist}</span>
+                  </div>
+                  <div className="opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
+                    <button onClick={(e) => { e.stopPropagation(); handlePlayItem('playlist_id', item.id); }}
+                      className="p-1.5 bg-hifi-gold/20 text-hifi-gold rounded-full hover:bg-hifi-gold hover:text-black transition-colors">
+                      <Play size={12} fill="currentColor" />
+                    </button>
+                  </div>
                 </li>
               );
 
