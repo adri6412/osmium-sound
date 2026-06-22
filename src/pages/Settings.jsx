@@ -9,7 +9,9 @@ import {
   Loader2,
   Network,
   Volume2,
-  Globe
+  Globe,
+  Terminal,
+  ShieldAlert
 } from 'lucide-react';
 import { systemAPI, checkApiServer } from '../utils/api';
 import { useKeyboardInput } from '../hooks/useKeyboardInput';
@@ -42,6 +44,11 @@ const Settings = () => {
   const [updateMessage, setUpdateMessage] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const [apiConnected, setApiConnected] = useState(false);
+
+  // SSH server toggle
+  const [sshStatus, setSshStatus] = useState(null); // { available, enabled, active }
+  const [sshBusy, setSshBusy] = useState(false);
+  const [sshMessage, setSshMessage] = useState('');
 
   // Audio output (DAC) selection
   const [audioDevices, setAudioDevices] = useState([]);
@@ -99,7 +106,29 @@ const Settings = () => {
   useEffect(() => {
     loadSystemData();
     loadAudioDevices();
+    loadSshStatus();
   }, []);
+
+  // ── SSH server handlers ─────────────────────────────────────────
+  const loadSshStatus = async () => {
+    const res = await systemAPI.getSshStatus();
+    if (res.success) setSshStatus(res.data);
+  };
+
+  const toggleSsh = async () => {
+    if (sshBusy || !sshStatus) return;
+    const enable = !sshStatus.enabled;
+    setSshBusy(true);
+    setSshMessage('');
+    const res = await systemAPI.setSsh(enable);
+    setSshBusy(false);
+    if (res.success && res.data) {
+      setSshStatus({ available: true, enabled: res.data.enabled, active: res.data.active });
+      setSshMessage(res.data.message || '');
+    } else {
+      setSshMessage(res.data?.message || res.message || t('settings.ssh.failed'));
+    }
+  };
 
   // ── Audio output (DAC) handlers ─────────────────────────────────
   const loadAudioDevices = async () => {
@@ -568,6 +597,11 @@ const Settings = () => {
       content: 'custom-network'
     },
     {
+      title: t('settings.sections.ssh'),
+      icon: Terminal,
+      content: 'custom-ssh'
+    },
+    {
       title: t('settings.sections.systemInfo'),
       icon: Info,
       items: [
@@ -835,6 +869,52 @@ const Settings = () => {
                           : 'bg-hifi-dark text-hifi-silver'
                       }`}>
                         {updateMessage}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Custom SSH Section */}
+                {section.content === 'custom-ssh' && (
+                  <div className="space-y-4">
+                    <p className="text-sm text-hifi-silver">{t('settings.ssh.help')}</p>
+
+                    {/* Security warning */}
+                    <div className="flex items-start space-x-2 text-xs text-amber-300 bg-amber-900/20 border border-amber-500/30 rounded-lg p-3">
+                      <ShieldAlert size={14} className="mt-0.5 shrink-0" />
+                      <span>{t('settings.ssh.warning')}</span>
+                    </div>
+
+                    {/* Toggle */}
+                    <button
+                      onClick={toggleSsh}
+                      disabled={sshBusy || !sshStatus?.available}
+                      className="w-full flex items-center justify-between bg-hifi-dark hover:bg-hifi-light/40 disabled:opacity-60 rounded-lg px-4 py-3 transition-colors"
+                    >
+                      <span className="flex items-center space-x-2 text-sm text-white">
+                        {sshBusy && <Loader2 size={16} className="animate-spin" />}
+                        <span>
+                          {sshStatus?.enabled ? t('settings.ssh.enabled') : t('settings.ssh.disabled')}
+                        </span>
+                      </span>
+                      <span className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${sshStatus?.enabled ? 'bg-hifi-gold' : 'bg-hifi-accent'}`}>
+                        <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${sshStatus?.enabled ? 'translate-x-6' : 'translate-x-1'}`} />
+                      </span>
+                    </button>
+
+                    {sshStatus && !sshStatus.available && (
+                      <div className="rounded-lg p-3 text-center text-sm bg-red-900/20 text-red-300 border border-red-500/30">
+                        {t('settings.ssh.unavailable')}
+                      </div>
+                    )}
+
+                    {sshMessage && (
+                      <div className={`rounded-lg p-3 text-center text-sm ${
+                        isErrorMsg(sshMessage)
+                          ? 'bg-red-900/20 text-red-300 border border-red-500/30'
+                          : 'bg-hifi-dark text-hifi-silver'
+                      }`}>
+                        {sshMessage}
                       </div>
                     )}
                   </div>

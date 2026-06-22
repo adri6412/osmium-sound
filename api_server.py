@@ -480,6 +480,64 @@ def set_audio_device(device):
     return {'success': True, 'message': f'Uscita audio impostata su {device}'}
 
 # ──────────────────────────────────────────────────────────────────
+#  SSH service control — the appliance ships with SSH disabled; this lets
+#  the user turn it on/off from Settings. The unit name is resolved from a
+#  fixed allow-list (never user input), so there is no injection surface.
+# ──────────────────────────────────────────────────────────────────
+def _ssh_unit():
+    """Return the systemd unit that provides sshd ('ssh.service' on Debian/
+    DietPi, 'sshd.service' elsewhere). Falls back to 'ssh.service'."""
+    for unit in ('ssh.service', 'sshd.service'):
+        try:
+            r = subprocess.run(['systemctl', 'list-unit-files', unit],
+                               capture_output=True, text=True, timeout=10)
+            if r.returncode == 0 and unit in (r.stdout or ''):
+                return unit
+        except Exception:
+            pass
+    return 'ssh.service'
+
+def get_ssh_status():
+    unit = _ssh_unit()
+    try:
+        avail = subprocess.run(['systemctl', 'list-unit-files', unit],
+                              capture_output=True, text=True, timeout=10)
+        en = subprocess.run(['systemctl', 'is-enabled', unit],
+                           capture_output=True, text=True, timeout=10)
+        ac = subprocess.run(['systemctl', 'is-active', unit],
+                           capture_output=True, text=True, timeout=10)
+        return {
+            'available': unit in (avail.stdout or ''),
+            'enabled': en.stdout.strip() == 'enabled',
+            'active': ac.stdout.strip() == 'active',
+        }
+    except Exception:
+        log.exception("get_ssh_status failed")
+        return {'available': False, 'enabled': False, 'active': False,
+                'error': 'Stato SSH non disponibile'}
+
+def set_ssh(enable):
+    """Enable+start or disable+stop the SSH server (persists across reboots)."""
+    unit = _ssh_unit()
+    action = 'enable' if enable else 'disable'
+    try:
+        r = subprocess.run(['sudo', 'systemctl', action, '--now', unit],
+                          capture_output=True, text=True, timeout=30)
+        if r.returncode != 0:
+            log.error("set_ssh %s failed: %s", action, (r.stderr or '').strip())
+            status = get_ssh_status()
+            status['success'] = False
+            status['message'] = 'Operazione SSH fallita'
+            return status
+    except Exception:
+        log.exception("set_ssh failed")
+        return {'success': False, 'message': 'Operazione SSH fallita'}
+    status = get_ssh_status()
+    status['success'] = True
+    status['message'] = 'SSH abilitato' if enable else 'SSH disabilitato'
+    return status
+
+# ──────────────────────────────────────────────────────────────────
 #  OTA update helpers
 # ──────────────────────────────────────────────────────────────────
 
@@ -931,6 +989,15 @@ def api_wifi_connect():
 @app.route('/wired_dhcp', methods=['POST'])
 def api_wired_dhcp():
     return jsonify(wired_dhcp())
+
+@app.route('/ssh_status', methods=['GET'])
+def api_ssh_status():
+    return jsonify(get_ssh_status())
+
+@app.route('/ssh_set', methods=['POST'])
+def api_ssh_set():
+    data = request.get_json(silent=True) or {}
+    return jsonify(set_ssh(bool(data.get('enable'))))
 
 @app.route('/audio_devices', methods=['GET'])
 def api_audio_devices():
