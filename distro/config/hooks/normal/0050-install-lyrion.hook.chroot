@@ -1,25 +1,34 @@
 #!/bin/sh
-# Install Lyrion Music Server from the .deb staged by build-distro.sh.
-# Done via a hook (not packages.chroot) because current apt/live-build
-# rejects the way packages.chroot passes local .debs ("Unsupported file").
+# Install Lyrion Music Server during chroot build (on-demand download).
+# The .deb is downloaded, installed, and immediately removed (no file staging).
+# The installed package (dpkg metadata) survives the installer and first boot.
 set -e
 
+LYRION_URL="https://downloads.lms-community.org/LyrionMusicServer_v9.1.0/lyrionmusicserver_9.1.0_all.deb"
 LYRION_DIR=/opt/hifi-lyrion
-DEB="$(ls "$LYRION_DIR"/lyrionmusicserver*.deb 2>/dev/null | head -n1)"
+DEB="$LYRION_DIR/lyrionmusicserver.deb"
 
-if [ -z "$DEB" ]; then
-    echo "E: [hifi] Lyrion .deb not found in $LYRION_DIR — was it downloaded?" >&2
+mkdir -p "$LYRION_DIR"
+echo "I: [hifi] Downloading Lyrion Music Server from $LYRION_URL"
+curl -fL --retry 3 -o "$DEB" "$LYRION_URL" || {
+    echo "E: [hifi] Lyrion download failed" >&2
     exit 1
-fi
+}
 
-echo "I: [hifi] installing Lyrion Music Server from $DEB (for the live image)"
+# sanity-check it is really a .deb (download errors often yield HTML)
+head -c2 "$DEB" | grep -q '!<' || {
+    echo "E: [hifi] Downloaded Lyrion file is not a valid .deb" >&2
+    rm -f "$DEB"
+    exit 1
+}
+
+echo "I: [hifi] installing Lyrion Music Server (for the live image)"
 export DEBIAN_FRONTEND=noninteractive
-# apt resolves the perl/runtime dependencies (already in the package list)
 apt-get install -y "$DEB"
 
-# NOTE: do NOT remove $LYRION_DIR here. The Debian installer does not carry
-# packages installed via chroot hooks onto the installed system, so the .deb
-# must survive in the image to be re-installed in-target by the preseed
-# late_command (hifi-finalize-install.sh removes it afterwards).
+# Remove the .deb file (it is NOT needed to survive into the ISO or installer).
+# The installed package metadata (dpkg) stays and will be cloned by the installer.
+rm -f "$DEB"
+rmdir "$LYRION_DIR" 2>/dev/null || true
 
 echo "I: [hifi] Lyrion install hook done"

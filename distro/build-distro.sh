@@ -178,16 +178,10 @@ else
     log "WARNING: $OTA_PUBKEY_SRC missing — OS OTA updates will be refused on this image."
 fi
 
-log "Downloading Lyrion Music Server .deb → includes.chroot/opt/hifi-lyrion"
-# Staged inside the chroot filesystem and installed by hook 0050 (apt-get),
-# NOT in packages.chroot which current apt/live-build rejects.
-LYRION_DEST="$CONFIG/includes.chroot/opt/hifi-lyrion"
-rm -rf "$LYRION_DEST"; mkdir -p "$LYRION_DEST"
-curl -fL --retry 3 -o "$LYRION_DEST/lyrionmusicserver.deb" "$LYRION_DEB_URL" \
-    || die "Failed to download Lyrion .deb from $LYRION_DEB_URL"
-# sanity-check it is really a .deb (download errors often yield HTML)
-head -c2 "$LYRION_DEST/lyrionmusicserver.deb" | grep -q '!<' \
-    || die "Downloaded Lyrion file is not a valid .deb (got HTML/redirect?). Check LYRION_DEB_URL."
+log "Lyrion Music Server will be downloaded on-demand by hook 0050 (during chroot build)"
+# Not staged in includes.chroot — downloaded during the chroot build by hook 0050,
+# installed, and the .deb file is removed. The installed package (dpkg metadata)
+# survives the installer; hifi-firstboot.sh will re-ensure it on first boot.
 
 log "Generating Plymouth boot logo (ImageMagick)"
 THEME_DIR="$CONFIG/includes.chroot/usr/share/plymouth/themes/hifi"

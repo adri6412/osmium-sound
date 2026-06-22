@@ -67,9 +67,15 @@ The UI is designed to mirror the desktop app while being optimized for mobile sc
 
 ## License
 
-MIT License - See original project for details.
+This application is released under the **Apache License, Version 2.0**. See [`docs/LICENSE.md`](docs/LICENSE.md) for the full license text.
+
+### Copyright Notice
+
+This is a derivative work of [android-squeezer](https://github.com/kaaholst/android-squeezer), maintained by Kurt Aaholst and contributors, originally licensed under Apache 2.0. Substantial portions of the original code, architecture, and design patterns are preserved.
+
+**HiFi Media Player Companion is an independent project and is NOT affiliated with, endorsed by, or officially associated with the original Squeezer project or the Lyrion/LMS-Community.**
 
 ## References
 
-- Original Project: https://github.com/kaaholst/android-squeezer
+- Original Project: https://github.com/kaaholst/android-squeezer (Apache-2.0, by Kurt Aaholst and contributors)
 - HiFi Media Player: https://github.com/adriano-frongillo/hifi-media-player
