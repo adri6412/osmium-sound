@@ -856,7 +856,16 @@ const LyrionServer = () => {
                   <ChevronDown size={22} />
                 </button>
                 <p className="text-[10px] tracking-[0.25em] text-hifi-silver/70 uppercase">{t('player.nowPlaying')}</p>
-                <div className="w-10" />
+                <div className="flex items-center space-x-2">
+                  <button onClick={openQueue} title={t('player.queue')}
+                    className="p-2 bg-white/10 hover:bg-white/20 rounded-full text-white transition-colors">
+                    <ListMusic size={18} />
+                  </button>
+                  <button onClick={() => setSleepMenuOpen(true)} title={t('player.sleep')}
+                    className={`p-2 rounded-full transition-colors ${willSleepIn > 0 ? 'bg-hifi-gold/30 text-hifi-gold' : 'bg-white/10 hover:bg-white/20 text-white'}`}>
+                    <Moon size={18} />
+                  </button>
+                </div>
               </div>
 
               {/* Body: artwork (left) | info + controls + VU (right) */}
@@ -909,53 +918,43 @@ const LyrionServer = () => {
                   </div>
 
                   {/* Controls row */}
-                  <div className="flex items-center space-x-5 mb-3 shrink-0">
+                  <div className="flex items-center space-x-3 mb-3 shrink-0 min-w-0">
                     <button onClick={cycleShuffle} title={t('player.shuffle')}
-                      className={`transition-colors ${shuffleMode > 0 ? 'text-hifi-gold' : 'text-hifi-silver/60 hover:text-white'}`}>
-                      <Shuffle size={20} />
+                      className={`shrink-0 transition-colors ${shuffleMode > 0 ? 'text-hifi-gold' : 'text-hifi-silver/60 hover:text-white'}`}>
+                      <Shuffle size={18} />
                     </button>
 
                     <motion.button whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }}
-                      className="text-hifi-silver hover:text-white transition-colors"
+                      className="shrink-0 text-hifi-silver hover:text-white transition-colors"
                       onClick={() => handleAction(() => lyrionApi.previous(activePlayer?.playerid))}>
-                      <SkipBack size={26} />
+                      <SkipBack size={24} />
                     </motion.button>
 
                     <motion.button whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}
-                      className="w-16 h-16 flex items-center justify-center bg-hifi-gold text-black rounded-full shadow-[0_0_24px_rgba(212,175,55,0.4)] hover:shadow-[0_0_36px_rgba(212,175,55,0.65)] transition-all"
+                      className="shrink-0 w-14 h-14 flex items-center justify-center bg-hifi-gold text-black rounded-full shadow-[0_0_24px_rgba(212,175,55,0.4)] hover:shadow-[0_0_36px_rgba(212,175,55,0.65)] transition-all"
                       onClick={() => handleAction(() => lyrionApi.togglePause(activePlayer?.playerid))}>
-                      {isPlaying ? <Pause size={28} fill="currentColor" /> : <Play size={28} fill="currentColor" className="ml-1" />}
+                      {isPlaying ? <Pause size={26} fill="currentColor" /> : <Play size={26} fill="currentColor" className="ml-1" />}
                     </motion.button>
 
                     <motion.button whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }}
-                      className="text-hifi-silver hover:text-white transition-colors"
+                      className="shrink-0 text-hifi-silver hover:text-white transition-colors"
                       onClick={() => handleAction(() => lyrionApi.next(activePlayer?.playerid))}>
-                      <SkipForward size={26} />
+                      <SkipForward size={24} />
                     </motion.button>
 
                     <button onClick={cycleRepeat} title={t('player.repeat')}
-                      className={`transition-colors ${repeatMode > 0 ? 'text-hifi-gold' : 'text-hifi-silver/60 hover:text-white'}`}>
-                      {repeatMode === 1 ? <Repeat1 size={20} /> : <Repeat size={20} />}
+                      className={`shrink-0 transition-colors ${repeatMode > 0 ? 'text-hifi-gold' : 'text-hifi-silver/60 hover:text-white'}`}>
+                      {repeatMode === 1 ? <Repeat1 size={18} /> : <Repeat size={18} />}
                     </button>
 
-                    <button onClick={openQueue} title={t('player.queue')}
-                      className="text-hifi-silver/60 hover:text-white transition-colors">
-                      <ListMusic size={20} />
-                    </button>
-
-                    <button onClick={() => setSleepMenuOpen(true)} title={t('player.sleep')}
-                      className={`transition-colors ${willSleepIn > 0 ? 'text-hifi-gold' : 'text-hifi-silver/60 hover:text-white'}`}>
-                      <Moon size={20} />
-                    </button>
-
-                    {/* Volume (inline) */}
-                    <div className="flex items-center space-x-2 ml-auto">
+                    {/* Volume (inline) — flexible width so it never gets clipped */}
+                    <div className="flex items-center space-x-2 ml-auto min-w-0 flex-1 max-w-[180px]">
                       <button onClick={() => handleAction(() => lyrionApi.setVolume(activePlayer?.playerid, volume === 0 ? 50 : 0))}
-                        className="text-hifi-silver/70 hover:text-hifi-silver transition-colors">
+                        className="shrink-0 text-hifi-silver/70 hover:text-hifi-silver transition-colors">
                         {volume === 0 ? <VolumeX size={17} /> : <Volume2 size={17} />}
                       </button>
                       <input type="range" min="0" max="100" value={volume}
-                        className="w-28 h-1.5 bg-white/10 rounded-full appearance-none cursor-pointer accent-hifi-gold"
+                        className="min-w-0 flex-1 h-1.5 bg-white/10 rounded-full appearance-none cursor-pointer accent-hifi-gold"
                         onChange={(e) => {
                           const v = parseInt(e.target.value);
                           setPlayerStatus(prev => ({ ...prev, mixer_volume: v }));
