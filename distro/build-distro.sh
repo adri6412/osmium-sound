@@ -132,6 +132,20 @@ fi
 printf '%s\n' "$APP_VERSION" > "$APP_DEST/UI_VERSION"
 log "Seeded UI_VERSION = $APP_VERSION"
 
+log "Injecting canonical kiosk X session → includes.chroot/home/hifi/.xsession"
+# Single source of truth: the SAME file the OS-update OTA installs
+# (distro/os-update/files/xsession) is baked into the image here, so the live
+# session and the OTA can never drift (a one-byte drift used to force a reboot
+# on every OS update). Ownership/exec bit are finalised by hook 0100 after the
+# 'hifi' user is created.
+XSESSION_SRC="$SCRIPT_DIR/os-update/files/xsession"
+[ -f "$XSESSION_SRC" ] || die "Missing canonical X session at $XSESSION_SRC"
+XSESSION_DEST_DIR="$CONFIG/includes.chroot/home/hifi"
+mkdir -p "$XSESSION_DEST_DIR"
+cp -f "$XSESSION_SRC" "$XSESSION_DEST_DIR/.xsession"
+sed -i 's/\r$//' "$XSESSION_DEST_DIR/.xsession"
+chmod +x "$XSESSION_DEST_DIR/.xsession"
+
 log "Injecting python daemons → includes.chroot/usr/local/bin"
 BIN_DEST="$CONFIG/includes.chroot/usr/local/bin"
 mkdir -p "$BIN_DEST"

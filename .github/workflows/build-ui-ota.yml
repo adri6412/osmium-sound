@@ -81,6 +81,35 @@ jobs:
           sha256sum "$TAR" > "${TAR}.sha256"
           echo "tarball=$TAR" >> "$GITHUB_OUTPUT"
 
+      - name: Lint + idempotency test for OS update payload
+        # Guards the OS-channel contract automatically: shellcheck the runner +
+        # helpers + migrations, then prove apply.sh is idempotent — a second run
+        # over already-applied state must report changed=0 and request NO reboot
+        # (the payload re-runs on every release, so a spurious reboot would
+        # reboot every device on every update).
+        run: |
+          set -e
+          sudo apt-get update -qq && sudo apt-get install -y shellcheck >/dev/null
+          echo "== shellcheck =="
+          shellcheck -s sh distro/os-update/apply.sh distro/os-update/lib.sh distro/os-update/apply.d/*.sh
+          echo "== idempotency (run apply.sh twice) =="
+          export HIFI_OS_VERSION=ci-test
+          export HIFI_PAYLOAD_DIR="$PWD/distro/os-update"
+          export HIFI_OS_NO_APT=1
+          rm -f "$HIFI_PAYLOAD_DIR/REBOOT"
+          echo "--- first run (applies) ---"
+          sudo -E sh "$HIFI_PAYLOAD_DIR/apply.sh"
+          echo "--- second run (must be a clean no-op) ---"
+          OUT2="$(sudo -E sh "$HIFI_PAYLOAD_DIR/apply.sh")"
+          echo "$OUT2"
+          echo "$OUT2" | grep -q 'SUMMARY: changed=0 failed=0 ' \
+            || { echo "FAIL: second run reported changes/failures (not idempotent)"; exit 1; }
+          echo "$OUT2" | grep -q 'reboot=no' \
+            || { echo "FAIL: second run requested a reboot on a no-op"; exit 1; }
+          [ ! -f "$HIFI_PAYLOAD_DIR/REBOOT" ] \
+            || { echo "FAIL: REBOOT marker present after an idempotent run"; exit 1; }
+          echo "OK: OS update payload is idempotent and reboot-clean."
+
       - name: Package OS OTA bundle (signed tarball + sha256 + signature)
         id: packos
         env:
@@ -91,8 +120,10 @@ jobs:
           # ship the version actually being released, overriding the placeholder
           printf '%s\n' "$VERSION" > "$SRC/OS_VERSION"
           TAR="hifi-os-${VERSION}.tar.gz"
-          # Exclude docs from the runtime payload; keep apply.sh + OS_VERSION + any files/.
-          tar czf "$TAR" -C "$SRC" --exclude=README.md .
+          # Exclude docs + any runtime scratch the idempotency test left behind;
+          # keep apply.sh + lib.sh + apply.d/ + files/ + OS_VERSION.
+          tar czf "$TAR" -C "$SRC" \
+            --exclude=README.md --exclude=.hifi-state --exclude=REBOOT .
           # sha256 sidecar — exact bytes the device reconstructs and verifies.
           DIGEST=$(sha256sum "$TAR" | awk '{print $1}')
           printf '%s  %s\n' "$DIGEST" "$TAR" > "${TAR}.sha256"
