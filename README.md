@@ -368,28 +368,6 @@ window.electronAPI.setAudioDevice(deviceId)
 // deviceId: string
 ```
 
-## 💡 Future Enhancements
-
-### Recommended Additions
-
-1. **More streaming / radio sources**: provided by Lyrion plugins (Spotty,
-   internet radio, UPnP/DLNA, AirPlay, etc.) — install from the Lyrion web UI,
-   no app changes needed.
-
-2. **Bluetooth/USB DAC Support**:
-   - Enumerate audio devices via ALSA/PulseAudio/PipeWire
-   - Add real-time device switching in Settings
-   - Support high-resolution audio output
-
-3. **Advanced Lyrion Integration**:
-   - Direct API communication instead of just embedding
-   - Sync playback state
-
-4. **Kiosk Mode Enhancements**:
-   - Auto-hide cursor after inactivity
-   - Screen saver with album art or visualizations
-   - Power management (display off timer)
-
 ## 🐛 Troubleshooting
 
 ### App doesn't start
@@ -426,5 +404,5 @@ For issues and questions, please open a GitHub issue or consult the documentatio
 
 ---
 
-**Built with ❤️ for audiophiles and music lovers**
+**Built with ❤️ for music lovers**
 
