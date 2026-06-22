@@ -177,6 +177,10 @@
     },
     "updates": {
       "ui": "Interface (UI)",
+      "channel": "Update channel",
+      "channelProd": "Production",
+      "channelDev": "Development",
+      "channelWarning": "Development channel: you will receive prerelease, potentially unstable builds. Switch back to Production when you finish testing.",
       "system": "System (API/daemon/script)",
       "os": "Operating system",
       "signed": "signed",

@@ -28,7 +28,34 @@ This document explains how to use git tags to trigger different GitHub Actions w
 - ✅ `build-companion-apk.yml` - Builds release APK
 - ❌ `build-ui-ota.yml` - NOT triggered
 
+## Branches & OTA channels
+
+- **`main` = production.** Stable tags `vX.Y.Z` are cut from here. They publish a
+  normal GitHub Release, which the appliance sees via `GET /releases/latest`
+  (the **prod** channel).
+- **`svil` = development.** Day-to-day work. Prerelease tags `vX.Y.Z-dev.N` are
+  cut from here. Because the tag has a hyphen, `build-ui-ota.yml` marks the
+  release as a **prerelease**, which `/releases/latest` ignores — so prod
+  devices never receive it. A device set to the **dev** channel
+  (Settings → Updates → Sviluppo) tracks the newest release *including*
+  prereleases.
+
+Promotion: PR `svil` → `main`, then tag a stable `vX.Y.Z` on `main`.
+
+Versioning stays patch-incremental: iterate `v2.5.7-dev.1`, `v2.5.7-dev.2`, …
+on `svil`, then promote to the stable `v2.5.7` on `main`.
+
 ## Release Process
+
+### Development build (prerelease, dev channel)
+
+```bash
+git checkout svil
+# ...commit work...
+git push origin svil
+git tag -a v2.5.7-dev.1 -m "dev build"
+git push origin v2.5.7-dev.1   # → build-ui-ota.yml publishes a PRERELEASE
+```
 
 ### Main App Release (Desktop/Electron)
 

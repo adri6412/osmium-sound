@@ -36,6 +36,11 @@ def add_security_headers(response):
 #  script; here we only check GitHub Releases and kick it off.
 # ──────────────────────────────────────────────────────────────────
 OTA_REPO = os.environ.get('HIFI_OTA_REPO', 'adri6412/hifi-media-player')
+# OTA release channel: 'prod' tracks GitHub's /releases/latest (stable releases
+# only); 'dev' tracks the newest release including prereleases (vX.Y.Z-dev.N).
+# Persisted so the backend's GitHub check and the apply step stay consistent.
+OTA_CHANNEL_FILE = '/etc/hifi-player/ota-channel'
+OTA_CHANNELS = ('prod', 'dev')
 OTA_APPDIR = '/opt/hifi-media-player'
 OTA_VERSION_FILE = os.path.join(OTA_APPDIR, 'UI_VERSION')
 OTA_SCRIPT = '/usr/local/sbin/hifi-ota-update.sh'
@@ -582,16 +587,22 @@ def _version_tuple(v):
     nums = re.findall(r'\d+', v or '')
     return tuple(int(n) for n in nums) if nums else None
 
+def _semver_key(v):
+    """Sort key honouring prereleases: '2.5.7-dev.1' ranks BELOW '2.5.7' but
+    above '2.5.6', so switching dev→prod still upgrades to the stable build."""
+    base, _, pre = (v or '').lstrip('vV').partition('-')
+    base_nums = tuple(int(n) for n in re.findall(r'\d+', base)) or (0,)
+    if pre:  # prerelease: lower than the release with the same base
+        return (base_nums, 0, tuple(int(n) for n in re.findall(r'\d+', pre)) or (0,))
+    return (base_nums, 1, ())  # final release: above any prerelease of same base
+
 def _is_newer(latest, current):
     """True if `latest` should be offered over `current`."""
     if not latest:
         return False
     if current in (None, '', 'unknown'):
         return True
-    lt, ct = _version_tuple(latest), _version_tuple(current)
-    if lt and ct:
-        return lt > ct
-    return latest != current  # fallback: any difference is an update
+    return _semver_key(latest) > _semver_key(current)
 
 def _read_version_file(path):
     try:
@@ -600,20 +611,63 @@ def _read_version_file(path):
     except Exception:
         return 'unknown'
 
-def _check_release_update(current, prefix):
-    """Look at the latest GitHub Release and return update info for the asset
-    whose name starts with `prefix` (e.g. 'hifi-ui-' or 'hifi-system-')."""
-    url = f'https://api.github.com/repos/{OTA_REPO}/releases/latest'
+def get_ota_channel():
+    """Return the persisted OTA channel ('prod' or 'dev'). Defaults to the
+    HIFI_OTA_CHANNEL env var, else 'prod'."""
+    try:
+        with open(OTA_CHANNEL_FILE) as f:
+            ch = f.read().strip()
+        if ch in OTA_CHANNELS:
+            return ch
+    except Exception:
+        pass
+    env = os.environ.get('HIFI_OTA_CHANNEL', 'prod')
+    return env if env in OTA_CHANNELS else 'prod'
+
+def set_ota_channel(channel):
+    if channel not in OTA_CHANNELS:
+        return {'success': False, 'message': 'Canale non valido', 'channel': get_ota_channel()}
+    try:
+        os.makedirs(os.path.dirname(OTA_CHANNEL_FILE), exist_ok=True)
+        tmp = OTA_CHANNEL_FILE + '.tmp'
+        with open(tmp, 'w') as f:
+            f.write(channel + '\n')
+        os.replace(tmp, OTA_CHANNEL_FILE)
+    except Exception:
+        log.exception("set_ota_channel failed")
+        return {'success': False, 'message': 'Impossibile salvare il canale', 'channel': get_ota_channel()}
+    return {'success': True, 'channel': channel}
+
+def _fetch_release(channel):
+    """Fetch the release to offer for the given channel.
+    prod → /releases/latest (stable only); dev → newest release incl. prereleases."""
+    if channel == 'dev':
+        url = f'https://api.github.com/repos/{OTA_REPO}/releases?per_page=10'
+    else:
+        url = f'https://api.github.com/repos/{OTA_REPO}/releases/latest'
     req = urllib.request.Request(url, headers={
         'Accept': 'application/vnd.github+json',
         'User-Agent': 'hifi-player-ota',
     })
+    with urllib.request.urlopen(req, timeout=15) as resp:
+        data = json.load(resp)
+    if channel == 'dev':
+        # GitHub lists releases newest-first; skip drafts, take the first.
+        for rel in data:
+            if not rel.get('draft'):
+                return rel
+        return {}
+    return data
+
+def _check_release_update(current, prefix):
+    """Look at the relevant GitHub Release and return update info for the asset
+    whose name starts with `prefix` (e.g. 'hifi-ui-' or 'hifi-system-')."""
+    channel = get_ota_channel()
     try:
-        with urllib.request.urlopen(req, timeout=15) as resp:
-            release = json.load(resp)
+        release = _fetch_release(channel)
     except Exception:
         log.exception("update check failed")
-        return {'error': 'Controllo aggiornamenti fallito', 'current': current}
+        return {'error': 'Controllo aggiornamenti fallito', 'current': current, 'channel': channel}
 
     latest = release.get('tag_name') or release.get('name') or ''
     assets = release.get('assets', [])
@@ -630,6 +684,7 @@ def _check_release_update(current, prefix):
     return {
         'current': current,
         'latest': latest,
+        'channel': channel,
         'update_available': _is_newer(latest, current) and tarball is not None,
         'notes': release.get('body', ''),
         'asset_url': tarball.get('browser_download_url') if tarball else None,
@@ -1027,6 +1082,15 @@ def api_ssh_status():
 def api_ssh_set():
     data = request.get_json(silent=True) or {}
     return jsonify(set_ssh(bool(data.get('enable'))))
+
+@app.route('/ota_channel', methods=['GET'])
+def api_ota_channel():
+    return jsonify({'channel': get_ota_channel()})
+
+@app.route('/ota_channel', methods=['POST'])
+def api_set_ota_channel():
+    data = request.get_json(silent=True) or {}
+    return jsonify(set_ota_channel(data.get('channel')))
 
 @app.route('/audio_devices', methods=['GET'])
 def api_audio_devices():
