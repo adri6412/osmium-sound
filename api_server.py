@@ -158,7 +158,7 @@ def get_system_info():
             'hostname': hostname,
             'platform': platform.platform(),
             'arch': platform.machine(),
-            'version': '1.0.0',
+            'version': _installed_ui_version(),
             'local_ip': local_ip,
             'network_interfaces': network_interfaces
         }
@@ -168,7 +168,7 @@ def get_system_info():
             'hostname': 'Unknown',
             'platform': platform.platform(),
             'arch': platform.machine(),
-            'version': '1.0.0',
+            'version': _installed_ui_version(),
             'local_ip': 'Unknown',
             'network_interfaces': [],
             'error': 'Errore nel recupero delle informazioni di sistema'
