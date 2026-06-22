@@ -2,26 +2,20 @@ name: Build HiFi Player App (.deb)
 
 on:
   push:
-    branches: [ "main", "svil" ]
-    paths:
-      - 'src/**'
-      - 'main/**'
-      - 'package*.json'
-      - 'vite.config.js'
-      - 'tailwind.config.js'
-      - 'electron-builder.yml'
-      - '.github/workflows/build-deb.yml'
-      - '!android-companion/**'
+    tags:
+      - 'v*'
   workflow_dispatch:
 
-# Least-privilege: this workflow only checks out the code and uploads a build
-# artifact, so the default read-only token scope is all it needs.
+# Publish to GitHub Release when triggered by a tag
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   build-deb:
     runs-on: ubuntu-latest
+
+    # Skip if this is a companion app release tag
+    if: ${{ !contains(github.ref, 'companion') }}
 
     steps:
     - name: Checkout repository
@@ -41,7 +35,16 @@ jobs:
       env:
         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-    - name: Upload .deb Artifact
+    - name: Publish to GitHub Release
+      if: github.ref_type == 'tag'
+      uses: softprops/action-gh-release@v2
+      with:
+        prerelease: ${{ contains(github.ref_name, '-') }}
+        files: |
+          dist/*.deb
+
+    - name: Upload .deb Artifact (manual runs)
+      if: github.ref_type != 'tag'
       uses: actions/upload-artifact@v4
       with:
         name: hifi-media-player-deb

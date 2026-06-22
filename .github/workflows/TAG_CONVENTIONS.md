@@ -111,9 +111,10 @@ git push origin companion-v2.5.1
 ## Workflow Isolation
 
 ### build-deb.yml
-- **Trigger**: Push to `main` branch
-- **Condition**: Only if files in `src/`, `main/`, or config files changed
-- **Skip**: If only `android-companion/` files changed
+- **Trigger**: Push of tag matching `v*`
+- **Condition**: Skip if tag contains `companion`
+- **Result**: Builds .deb package and publishes to GitHub Release
+- **Artifact retention**: Tag releases: published to Release; manual runs: 7 days
 
 ### build-ui-ota.yml
 - **Trigger**: Push of tag matching `v*`
