@@ -102,6 +102,10 @@ export const systemAPI = {
   getSshStatus: () => apiGet('/ssh_status'),
   // Enable/disable the SSH server. Returns { success, enabled, active, message }
   setSsh: (enable) => apiPost('/ssh_set', { enable }),
+  // OTA release channel: { channel: 'prod'|'dev' }
+  getOtaChannel: () => apiGet('/ota_channel'),
+  // Switch channel. Returns { success, channel }
+  setOtaChannel: (channel) => apiPost('/ota_channel', { channel }),
   // List ALSA output devices (DAC): { devices: [{ id, name, card, device }] }
   getAudioDevices: () => apiGet('/audio_devices'),
   // Set squeezelite output device and restart it. Returns { success, message }

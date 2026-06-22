@@ -2,7 +2,7 @@ name: Build HiFi Player App (.deb)
 
 on:
   push:
-    branches: [ "main" ]
+    branches: [ "main", "svil" ]
     paths:
       - 'src/**'
       - 'main/**'

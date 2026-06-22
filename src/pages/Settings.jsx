@@ -96,6 +96,10 @@ const Settings = () => {
     localStorage.getItem('hifiAutoCheckUpdates') !== 'false'
   );
 
+  // OTA release channel ('prod' | 'dev') — persisted server-side
+  const [otaChannel, setOtaChannel] = useState('prod');
+  const [channelBusy, setChannelBusy] = useState(false);
+
   // Refs for input fields with automatic keyboard
   const lyrionUrlRef = useKeyboardInput(lyrionUrl, setLyrionUrl);
   
@@ -107,7 +111,25 @@ const Settings = () => {
     loadSystemData();
     loadAudioDevices();
     loadSshStatus();
+    loadOtaChannel();
   }, []);
+
+  // ── OTA channel handlers ────────────────────────────────────────
+  const loadOtaChannel = async () => {
+    const res = await systemAPI.getOtaChannel();
+    if (res.success && res.data?.channel) setOtaChannel(res.data.channel);
+  };
+
+  const changeOtaChannel = async (channel) => {
+    if (channelBusy || channel === otaChannel) return;
+    setChannelBusy(true);
+    const res = await systemAPI.setOtaChannel(channel);
+    setChannelBusy(false);
+    if (res.success && res.data?.success) {
+      setOtaChannel(res.data.channel);
+      refreshAllChecks(); // re-check against the newly selected channel
+    }
+  };
 
   // ── SSH server handlers ─────────────────────────────────────────
   const loadSshStatus = async () => {
@@ -924,6 +946,34 @@ const Settings = () => {
                 {/* Unified UI + System OTA Update Section */}
                 {section.content === 'custom-updates' && (
                   <div className="space-y-4">
+                    {/* OTA release channel selector */}
+                    <div className="space-y-2">
+                      <span className="text-sm text-white">{t('settings.updates.channel')}</span>
+                      <div className="flex gap-3">
+                        {['prod', 'dev'].map((ch) => (
+                          <motion.button
+                            key={ch}
+                            onClick={() => changeOtaChannel(ch)}
+                            disabled={channelBusy}
+                            className={`flex-1 p-3 rounded-lg text-sm font-medium transition-colors ${
+                              otaChannel === ch
+                                ? 'bg-hifi-gold text-black'
+                                : 'bg-hifi-light text-white hover:bg-hifi-accent'
+                            }`}
+                            whileTap={{ scale: channelBusy ? 1 : 0.95 }}
+                          >
+                            {ch === 'prod' ? t('settings.updates.channelProd') : t('settings.updates.channelDev')}
+                          </motion.button>
+                        ))}
+                      </div>
+                      {otaChannel === 'dev' && (
+                        <div className="flex items-start space-x-2 text-xs text-amber-300 bg-amber-900/20 border border-amber-500/30 rounded-lg p-3">
+                          <ShieldAlert size={14} className="mt-0.5 shrink-0" />
+                          <span>{t('settings.updates.channelWarning')}</span>
+                        </div>
+                      )}
+                    </div>
+
                     {/* Version rows: UI + System + OS */}
                     <div className="bg-hifi-dark rounded-lg p-4 space-y-3">
                       <div className="space-y-1">
