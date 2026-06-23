@@ -1,41 +1,41 @@
 {
-  "tag_name": "v2.5.9-dev.9",
-  "name": "v2.5.9-dev.9",
+  "tag_name": "v2.5.9-dev.10",
+  "name": "v2.5.9-dev.10",
   "body": "",
   "assets": [
     {
-      "name": "hifi-ui-v2.5.9-dev.9.tar.gz",
-      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.9-dev.9/hifi-ui-v2.5.9-dev.9.tar.gz",
-      "size": 118430073
+      "name": "hifi-ui-v2.5.9-dev.10.tar.gz",
+      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.9-dev.10/hifi-ui-v2.5.9-dev.10.tar.gz",
+      "size": 118431657
     },
     {
-      "name": "hifi-ui-v2.5.9-dev.9.tar.gz.sha256",
-      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.9-dev.9/hifi-ui-v2.5.9-dev.9.tar.gz.sha256",
-      "size": 94
+      "name": "hifi-ui-v2.5.9-dev.10.tar.gz.sha256",
+      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.9-dev.10/hifi-ui-v2.5.9-dev.10.tar.gz.sha256",
+      "size": 95
     },
     {
-      "name": "hifi-system-v2.5.9-dev.9.tar.gz",
-      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.9-dev.9/hifi-system-v2.5.9-dev.9.tar.gz",
-      "size": 30907
+      "name": "hifi-system-v2.5.9-dev.10.tar.gz",
+      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.9-dev.10/hifi-system-v2.5.9-dev.10.tar.gz",
+      "size": 30908
     },
     {
-      "name": "hifi-system-v2.5.9-dev.9.tar.gz.sha256",
-      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.9-dev.9/hifi-system-v2.5.9-dev.9.tar.gz.sha256",
-      "size": 98
+      "name": "hifi-system-v2.5.9-dev.10.tar.gz.sha256",
+      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.9-dev.10/hifi-system-v2.5.9-dev.10.tar.gz.sha256",
+      "size": 99
     },
     {
-      "name": "hifi-os-v2.5.9-dev.9.tar.gz",
-      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.9-dev.9/hifi-os-v2.5.9-dev.9.tar.gz",
-      "size": 1163131
+      "name": "hifi-os-v2.5.9-dev.10.tar.gz",
+      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.9-dev.10/hifi-os-v2.5.9-dev.10.tar.gz",
+      "size": 1164367
     },
     {
-      "name": "hifi-os-v2.5.9-dev.9.tar.gz.sha256",
-      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.9-dev.9/hifi-os-v2.5.9-dev.9.tar.gz.sha256",
-      "size": 94
+      "name": "hifi-os-v2.5.9-dev.10.tar.gz.sha256",
+      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.9-dev.10/hifi-os-v2.5.9-dev.10.tar.gz.sha256",
+      "size": 95
     },
     {
-      "name": "hifi-os-v2.5.9-dev.9.tar.gz.sha256.sig",
-      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.9-dev.9/hifi-os-v2.5.9-dev.9.tar.gz.sha256.sig",
+      "name": "hifi-os-v2.5.9-dev.10.tar.gz.sha256.sig",
+      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.9-dev.10/hifi-os-v2.5.9-dev.10.tar.gz.sha256.sig",
       "size": 64
     }
   ]
