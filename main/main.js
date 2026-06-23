@@ -105,6 +105,14 @@ function createWindow() {
 
   mainWindow.webContents.on('did-finish-load', () => {
     console.log('Web contents finished loading');
+    // Cap the compositor at 30 FPS. For this media-player UI that's visually
+    // smooth and roughly halves paint/composite work on the Pi-class hardware.
+    // Reapplied here (not just at creation) so it survives a recovery reload.
+    try {
+      mainWindow.webContents.setFrameRate(30);
+    } catch (err) {
+      console.error('setFrameRate failed:', err);
+    }
     // The page loaded successfully; if it then stays healthy for a while, forget
     // earlier crashes so a future incident gets a fast (non-backed-off) reload.
     setTimeout(() => {

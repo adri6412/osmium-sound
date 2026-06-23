@@ -1,0 +1,7 @@
+# Shell scripts ship to / run on the Linux appliance — keep them LF so a
+# Windows checkout can't introduce CRLF that would break the shebang
+# (`/bin/sh^M: bad interpreter`). Covers the dev-installer template whose
+# output is published as a release asset, and all on-device helper scripts.
+*.sh        text eol=lf
+*.sh.tmpl   text eol=lf
+*.hook.chroot text eol=lf

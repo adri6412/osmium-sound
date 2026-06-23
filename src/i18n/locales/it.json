@@ -99,6 +99,7 @@
       "artists": "Artisti",
       "albums": "Album",
       "folders": "Cartelle",
+      "playlists": "Playlist",
       "radio": "Radio",
       "apps": "App",
       "search": "Cerca"
@@ -113,7 +114,18 @@
     "nowPlaying": "In Riproduzione",
     "expand": "Espandi",
     "noTrack": "Nessuna traccia",
-    "unknownArtist": "Artista Sconosciuto"
+    "unknownArtist": "Artista Sconosciuto",
+    "shuffle": "Casuale",
+    "repeat": "Ripeti",
+    "queue": "Coda",
+    "queueEmpty": "La coda è vuota",
+    "saveAsPlaylist": "Salva come playlist",
+    "clearQueue": "Svuota",
+    "playlistNamePlaceholder": "Nome playlist",
+    "saveError": "Impossibile salvare la playlist. Verifica che in Lyrion sia configurata una cartella playlist.",
+    "sleep": "Timer di spegnimento",
+    "sleepActive": "Si ferma tra circa {min} min",
+    "sleepOff": "Disattiva timer"
   },
   "settings": {
     "title": "Impostazioni",
@@ -123,6 +135,8 @@
     "sections": {
       "lyrion": "Configurazione Lyrion",
       "audio": "Uscita Audio (DAC)",
+      "playback": "Riproduzione",
+      "alarm": "Sveglia",
       "network": "Configurazione Rete",
       "ssh": "Accesso SSH",
       "systemInfo": "Informazioni Sistema",
@@ -132,6 +146,27 @@
     },
     "language": {
       "help": "Scegli la lingua dell'interfaccia."
+    },
+    "playback": {
+      "help": "Opzioni di riproduzione applicate al player attivo: transizioni tra i brani (crossfade/gapless) e normalizzazione del volume (ReplayGain).",
+      "noPlayer": "Nessun player attivo trovato. Avvia la riproduzione o verifica la connessione a Lyrion.",
+      "transition": "Transizione tra brani",
+      "transNone": "Nessuna (gapless)",
+      "transCrossfade": "Dissolvenza incrociata",
+      "transFadeIn": "Dissolvenza in entrata",
+      "transFadeOut": "Dissolvenza in uscita",
+      "transFadeInOut": "Dissolvenza entrata/uscita",
+      "transDuration": "Durata transizione",
+      "replayGain": "Normalizzazione volume (ReplayGain)",
+      "rgOff": "Off",
+      "rgTrack": "Brano",
+      "rgAlbum": "Album",
+      "rgSmart": "Intelligente",
+      "saved": "Impostazione salvata."
+    },
+    "alarm": {
+      "help": "Programma sveglie sul player attivo. All'orario impostato il player si attiva e avvia la riproduzione.",
+      "add": "Aggiungi"
     },
     "ssh": {
       "help": "Abilita o disabilita il server SSH per l'accesso remoto da terminale al dispositivo.",
@@ -144,7 +179,14 @@
     },
     "lyrion": {
       "urlLabel": "URL Lyrion Server",
-      "urlHelp": "Inserisci l'indirizzo del tuo Lyrion Media Server (es. http://192.168.1.100:9000)"
+      "urlHelp": "Inserisci l'indirizzo del tuo Lyrion Media Server (es. http://192.168.1.100:9000)",
+      "rescanLabel": "Libreria musicale",
+      "rescanHelp": "Ricontrolla le cartelle musicali per trovare brani nuovi o modificati.",
+      "rescan": "Scansiona libreria",
+      "rescanning": "Scansione in corso…",
+      "rescanStarted": "Scansione della libreria avviata.",
+      "rescanDone": "Scansione completata.",
+      "rescanFailed": "Avvio della scansione fallito."
     },
     "audio": {
       "help": "Scegli il dispositivo di riproduzione (DAC). La selezione viene salvata e mantenuta ai riavvii. La riproduzione DSD è bit-perfect (DoP).",

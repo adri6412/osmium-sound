@@ -1,0 +1,95 @@
+#!/bin/sh
+# HiFi Player — offline DEV installer for __VERSION__
+#
+# Applies this release's System + UI (+ OS) OTA bundles directly on the
+# appliance, exactly like the in-app "Aggiorna ora" button does — but driven
+# from the shell so it can be run over SSH.
+#
+# Why this exists: the in-app update *check* queries the GitHub REST API
+# (api.github.com), which is rate-limited to 60 requests/hour per IP for
+# unauthenticated clients. During heavy dev iteration that bucket empties and
+# the appliance "can't find" the new release. This installer never touches the
+# REST API — it downloads the release assets straight from GitHub's release
+# CDN (github.com/<repo>/releases/download/...), which is not rate-limited, and
+# reuses the on-device updater scripts to verify + apply each bundle.
+#
+# Usage (on the appliance, as root):
+#     sudo sh hifi-install-__VERSION__.sh
+# Skip the (signed, possibly-rebooting) OS bundle with:
+#     sudo NO_OS=1 sh hifi-install-__VERSION__.sh
+set -u
+
+VERSION="__VERSION__"
+REPO="__REPO__"
+BASE="https://github.com/${REPO}/releases/download/${VERSION}"
+SBIN=/usr/local/sbin
+rc=0
+
+if [ "$(id -u)" -ne 0 ]; then
+    echo "Esegui come root:  sudo sh $0" >&2
+    exit 1
+fi
+command -v curl >/dev/null 2>&1 || { echo "curl non disponibile" >&2; exit 1; }
+
+# Fetch a release .sha256 sidecar and echo just the hex digest.
+digest() {
+    curl -fsSL "${BASE}/$1.sha256" 2>/dev/null | awk '{print $1; exit}'
+}
+
+# step <label> <function…> — run a step, keep going on failure but remember it.
+step() {
+    label="$1"; shift
+    echo "==> ${label}"
+    if "$@"; then
+        echo "    OK"
+    else
+        echo "    ERRORE (continuo con il resto)" >&2
+        rc=1
+    fi
+}
+
+apply_system() {
+    f="hifi-system-${VERSION}.tar.gz"
+    [ -x "$SBIN/hifi-system-update.sh" ] || { echo "    $SBIN/hifi-system-update.sh assente"; return 1; }
+    sha="$(digest "$f")"
+    [ -n "$sha" ] || { echo "    checksum mancante per $f"; return 1; }
+    sh "$SBIN/hifi-system-update.sh" "${BASE}/${f}" "$sha" "$VERSION"
+}
+
+apply_ui() {
+    f="hifi-ui-${VERSION}.tar.gz"
+    [ -x "$SBIN/hifi-ota-update.sh" ] || { echo "    $SBIN/hifi-ota-update.sh assente"; return 1; }
+    sha="$(digest "$f")"
+    [ -n "$sha" ] || { echo "    checksum mancante per $f"; return 1; }
+    sh "$SBIN/hifi-ota-update.sh" "${BASE}/${f}" "$sha" "$VERSION"
+}
+
+apply_os() {
+    f="hifi-os-${VERSION}.tar.gz"
+    [ -x "$SBIN/hifi-os-update.sh" ] || { echo "    $SBIN/hifi-os-update.sh assente"; return 1; }
+    sha="$(digest "$f")"
+    [ -n "$sha" ] || { echo "    checksum mancante per $f"; return 1; }
+    sh "$SBIN/hifi-os-update.sh" "${BASE}/${f}" "$sha" "${BASE}/${f}.sha256.sig" "$VERSION"
+}
+
+echo "HiFi Player — installazione ${VERSION} (${REPO})"
+
+# Order mirrors the in-app combined update, tuned for a one-shot SSH run:
+#  1. System  — Python API/daemons + helper scripts (also drops the newest
+#               updater scripts that the next two steps then use).
+#  2. UI      — Electron app; restarts lightdm (kills the GUI, not this SSH shell).
+#  3. OS      — signed bundle, applied LAST because its apply.sh may reboot.
+step "Componenti di sistema (API / daemon / script)" apply_system
+step "Interfaccia utente (UI Electron)" apply_ui
+if [ "${NO_OS:-0}" = "1" ]; then
+    echo "==> Sistema operativo: saltato (NO_OS=1)"
+else
+    step "Sistema operativo (bundle firmato)" apply_os
+fi
+
+if [ "$rc" -eq 0 ]; then
+    echo "Completato: ${VERSION} applicato."
+else
+    echo "Completato CON ERRORI — rivedi i messaggi sopra." >&2
+fi
+exit "$rc"
