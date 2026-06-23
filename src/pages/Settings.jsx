@@ -82,6 +82,11 @@ const Settings = () => {
   const [lyrionStatus, setLyrionStatus] = useState(null);
   const lyrionPollRef = useRef(null);
 
+  // Library rescan state
+  const [isRescanning, setIsRescanning] = useState(false);
+  const [rescanMessage, setRescanMessage] = useState('');
+  const rescanPollRef = useRef(null);
+
   // OS (signed) update state
   const [osUpdate, setOsUpdate] = useState(null);
   const [isCheckingOs, setIsCheckingOs] = useState(false);
@@ -278,6 +283,7 @@ const Settings = () => {
       if (systemPollRef.current) clearInterval(systemPollRef.current);
       if (lyrionPollRef.current) clearInterval(lyrionPollRef.current);
       if (osPollRef.current) clearInterval(osPollRef.current);
+      if (rescanPollRef.current) clearInterval(rescanPollRef.current);
     };
   }, []);
 
@@ -579,6 +585,45 @@ const Settings = () => {
     localStorage.setItem('lyrionUrl', e.target.value);
   };
 
+  // Trigger an incremental library rescan on the Lyrion server, then poll
+  // serverstatus until the scan finishes so we can show progress / completion.
+  const handleRescanLibrary = async () => {
+    if (rescanPollRef.current) return; // already running
+    setIsRescanning(true);
+    setRescanMessage(t('settings.lyrion.rescanStarted'));
+    try {
+      lyrionApi.setBaseUrl(lyrionUrl);
+      await lyrionApi.rescanLibrary();
+    } catch (_) {
+      setIsRescanning(false);
+      setRescanMessage(t('settings.lyrion.rescanFailed'));
+      return;
+    }
+
+    const startedAt = Date.now();
+    let sawScanning = false;
+    rescanPollRef.current = setInterval(async () => {
+      try {
+        const p = await lyrionApi.getRescanProgress();
+        if (p.scanning) {
+          sawScanning = true;
+          setRescanMessage(
+            p.total > 0
+              ? `${t('settings.lyrion.rescanning')} ${p.done}/${p.total}`
+              : t('settings.lyrion.rescanning')
+          );
+        } else if (sawScanning || Date.now() - startedAt > 5000) {
+          // Either we watched the scan run to completion, or it never reported
+          // as scanning within 5s (nothing to do / instant incremental scan).
+          clearInterval(rescanPollRef.current);
+          rescanPollRef.current = null;
+          setIsRescanning(false);
+          setRescanMessage(t('settings.lyrion.rescanDone'));
+        }
+      } catch (_) {}
+    }, 1500);
+  };
+
   const loadSystemData = async () => {
     setIsLoading(true);
     try {
@@ -820,6 +865,33 @@ const Settings = () => {
                           placeholder="http://localhost:9000"
                         />
                       </div>
+                    </div>
+
+                    {/* Library rescan */}
+                    <div className="space-y-3 pt-2 border-t border-hifi-accent/40">
+                      <label className="text-white font-medium">{t('settings.lyrion.rescanLabel')}</label>
+                      <p className="text-sm text-hifi-silver mb-2">{t('settings.lyrion.rescanHelp')}</p>
+                      <motion.button
+                        onClick={handleRescanLibrary}
+                        disabled={isRescanning}
+                        className="w-full bg-hifi-accent hover:bg-hifi-light disabled:bg-hifi-dark text-white py-3 rounded-lg font-medium flex items-center justify-center space-x-2 transition-colors"
+                        whileTap={{ scale: isRescanning ? 1 : 0.95 }}
+                      >
+                        {isRescanning
+                          ? <Loader2 size={18} className="animate-spin" />
+                          : <RotateCw size={18} />}
+                        <span>{isRescanning ? t('settings.lyrion.rescanning') : t('settings.lyrion.rescan')}</span>
+                      </motion.button>
+
+                      {rescanMessage && (
+                        <div className={`rounded-lg p-3 text-center text-sm ${
+                          isErrorMsg(rescanMessage)
+                            ? 'bg-red-900/20 text-red-300 border border-red-500/30'
+                            : 'bg-hifi-dark text-hifi-silver'
+                        }`}>
+                          {rescanMessage}
+                        </div>
+                      )}
                     </div>
                   </div>
                 )}
