@@ -141,6 +141,23 @@ jobs:
           fi
           echo "tarball=$TAR" >> "$GITHUB_OUTPUT"
 
+      - name: Generate offline dev installer (.sh)
+        id: installer
+        # DEV releases only (tag with a hyphen, e.g. v2.5.9-dev.8). Produces a
+        # self-contained script that applies System + UI (+ OS) for this release
+        # over SSH, pulling assets from the release CDN — no api.github.com, so
+        # it's immune to the unauthenticated REST rate limit that makes the
+        # in-app check intermittently "not find" a new release.
+        if: github.ref_type == 'tag' && contains(github.ref_name, '-')
+        run: |
+          VERSION="${{ steps.ver.outputs.version }}"
+          OUT="hifi-install-${VERSION}.sh"
+          sed -e "s|__VERSION__|${VERSION}|g" \
+              -e "s|__REPO__|${{ github.repository }}|g" \
+              distro/dev-installer/install.sh.tmpl > "$OUT"
+          chmod +x "$OUT"
+          echo "installer=$OUT" >> "$GITHUB_OUTPUT"
+
       - name: Publish to GitHub Release
         if: github.ref_type == 'tag'
         uses: softprops/action-gh-release@v2
@@ -149,6 +166,9 @@ jobs:
           # OTA channel. GitHub's /releases/latest (used by the prod channel)
           # ignores prereleases, so dev builds never reach prod devices.
           prerelease: ${{ contains(github.ref_name, '-') }}
+          # The installer glob matches only on dev tags (built above); on prod
+          # tags it matches nothing and is silently skipped.
+          fail_on_unmatched_files: false
           files: |
             ${{ steps.pack.outputs.tarball }}
             ${{ steps.pack.outputs.tarball }}.sha256
@@ -157,6 +177,7 @@ jobs:
             ${{ steps.packos.outputs.tarball }}
             ${{ steps.packos.outputs.tarball }}.sha256
             ${{ steps.packos.outputs.tarball }}.sha256.sig
+            hifi-install-*.sh
 
       - name: Upload artifact (manual runs)
         if: github.ref_type != 'tag'
