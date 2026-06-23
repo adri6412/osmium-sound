@@ -10,6 +10,7 @@ import re
 import json
 import logging
 import urllib.request
+import time
 
 app = Flask(__name__)
 CORS(app)  # Abilita CORS per tutte le route
@@ -36,6 +37,13 @@ def add_security_headers(response):
 #  script; here we only check GitHub Releases and kick it off.
 # ──────────────────────────────────────────────────────────────────
 OTA_REPO = os.environ.get('HIFI_OTA_REPO', 'adri6412/hifi-media-player')
+# Static release manifest published to GitHub Pages (a CDN, NOT subject to the
+# api.github.com 60-req/hour rate limit). The release workflow writes
+# `ota/latest-<channel>.json` mirroring the GitHub release object. The device
+# reads this first and only falls back to the REST API if it's unreachable, so
+# normal update checks never touch the rate-limited API.
+OTA_MANIFEST_BASE = os.environ.get('HIFI_OTA_MANIFEST_BASE',
+                                   'https://osmiumsound.qd.je/ota')
 # OTA release channel: 'prod' tracks GitHub's /releases/latest (stable releases
 # only); 'dev' tracks the newest release including prereleases (vX.Y.Z-dev.N).
 # Persisted so the backend's GitHub check and the apply step stay consistent.
@@ -638,8 +646,26 @@ def set_ota_channel(channel):
         return {'success': False, 'message': 'Impossibile salvare il canale', 'channel': get_ota_channel()}
     return {'success': True, 'channel': channel}
 
-def _fetch_release(channel):
-    """Fetch the release to offer for the given channel.
+# Short-lived cache of the GitHub Release per channel. A single "check updates"
+# resolves three asset prefixes (UI + System + OS), each of which used to make
+# its own GitHub API request for the *same* release — 3x the calls against the
+# unauthenticated 60-req/hour limit, which is why checks intermittently failed
+# and the version display fell back to "n/a". Caching collapses those into one
+# request and lets repeated checks reuse the result.
+_RELEASE_CACHE = {}        # channel -> (fetched_at, release_dict)
+_RELEASE_CACHE_TTL = 60    # seconds
+
+def _fetch_pages_manifest(channel):
+    """Read the channel's static manifest from GitHub Pages. Returns a release-
+    shaped dict ({tag_name, assets:[…]}) or None if unavailable/empty."""
+    url = f'{OTA_MANIFEST_BASE}/latest-{channel}.json'
+    req = urllib.request.Request(url, headers={'User-Agent': 'hifi-player-ota'})
+    with urllib.request.urlopen(req, timeout=15) as resp:
+        release = json.load(resp)
+    return release if release.get('tag_name') else None
+
+def _fetch_github_api_release(channel):
+    """Fallback: query the (rate-limited) GitHub REST API.
     prod → /releases/latest (stable only); dev → newest release incl. prereleases."""
     if channel == 'dev':
         url = f'https://api.github.com/repos/{OTA_REPO}/releases?per_page=10'
@@ -653,11 +679,45 @@ def _fetch_release(channel):
         data = json.load(resp)
     if channel == 'dev':
         # GitHub lists releases newest-first; skip drafts, take the first.
-        for rel in data:
-            if not rel.get('draft'):
-                return rel
-        return {}
+        return next((rel for rel in data if not rel.get('draft')), {})
     return data
+
+def _fetch_release(channel):
+    """Fetch the release to offer for the given channel.
+
+    Source order: the static GitHub Pages manifest (a CDN, not rate-limited) is
+    tried first; only if it's unreachable do we fall back to the GitHub REST API
+    (60 req/hour/IP unauthenticated). Result is cached briefly, and on a total
+    fetch failure the last good release is reused so a momentary blip doesn't
+    surface as an error."""
+    now = time.time()
+    cached = _RELEASE_CACHE.get(channel)
+    if cached and now - cached[0] < _RELEASE_CACHE_TTL:
+        return cached[1]
+
+    # 1. Preferred: static manifest on Pages.
+    try:
+        release = _fetch_pages_manifest(channel)
+        if release:
+            _RELEASE_CACHE[channel] = (now, release)
+            return release
+        log.warning("Pages manifest for channel %s empty; falling back to API", channel)
+    except Exception:
+        log.warning("Pages manifest fetch failed for channel %s; falling back to API", channel)
+
+    # 2. Fallback: the rate-limited GitHub REST API.
+    try:
+        release = _fetch_github_api_release(channel)
+    except Exception:
+        # Reuse the last good release (even if past the TTL) rather than failing
+        # the whole check on a transient blip / exhausted rate limit.
+        if cached:
+            log.warning("release fetch failed; serving cached release for channel %s", channel)
+            return cached[1]
+        raise
+
+    _RELEASE_CACHE[channel] = (now, release)
+    return release
 
 def _check_release_update(current, prefix):
     """Look at the relevant GitHub Release and return update info for the asset

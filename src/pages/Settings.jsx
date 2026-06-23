@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
-import { 
-  Wifi, 
+import {
+  Wifi,
   Info,
   Power,
   RotateCw,
@@ -11,9 +11,14 @@ import {
   Volume2,
   Globe,
   Terminal,
-  ShieldAlert
+  ShieldAlert,
+  Sliders,
+  AlarmClock,
+  Plus,
+  Trash2
 } from 'lucide-react';
 import { systemAPI, checkApiServer } from '../utils/api';
+import { lyrionApi } from '../utils/lyrionApi';
 import { useKeyboardInput } from '../hooks/useKeyboardInput';
 import { useKeyboard } from '../contexts/KeyboardContext';
 import { useI18n } from '../i18n';
@@ -77,6 +82,11 @@ const Settings = () => {
   const [lyrionStatus, setLyrionStatus] = useState(null);
   const lyrionPollRef = useRef(null);
 
+  // Library rescan state
+  const [isRescanning, setIsRescanning] = useState(false);
+  const [rescanMessage, setRescanMessage] = useState('');
+  const rescanPollRef = useRef(null);
+
   // OS (signed) update state
   const [osUpdate, setOsUpdate] = useState(null);
   const [isCheckingOs, setIsCheckingOs] = useState(false);
@@ -100,6 +110,19 @@ const Settings = () => {
   const [otaChannel, setOtaChannel] = useState('prod');
   const [channelBusy, setChannelBusy] = useState(false);
 
+  // ── Playback preferences (per-player, via Lyrion) ──────────────
+  const [playerMac, setPlayerMac] = useState(null);
+  const [transitionType, setTransitionType] = useState('0');     // 0 none … 4 fade in/out
+  const [transitionDuration, setTransitionDuration] = useState('10'); // seconds
+  const [replayGainMode, setReplayGainMode] = useState('0');     // 0 off / 1 track / 2 album / 3 smart
+  const [playbackMessage, setPlaybackMessage] = useState('');
+
+  // ── Alarms (per-player, via Lyrion) ────────────────────────────
+  const [alarms, setAlarms] = useState([]);
+  const [alarmsBusy, setAlarmsBusy] = useState(false);
+  const [newAlarmHour, setNewAlarmHour] = useState(7);
+  const [newAlarmMin, setNewAlarmMin] = useState(0);
+
   // Refs for input fields with automatic keyboard
   const lyrionUrlRef = useKeyboardInput(lyrionUrl, setLyrionUrl);
   
@@ -112,7 +135,77 @@ const Settings = () => {
     loadAudioDevices();
     loadSshStatus();
     loadOtaChannel();
+    loadPlaybackPrefs();
   }, []);
+
+  // ── Playback preferences handlers ───────────────────────────────
+  // Resolves the active player from the shared Lyrion client (same singleton
+  // the player UI uses) and loads its per-player prefs + alarms.
+  const loadPlaybackPrefs = async () => {
+    try {
+      lyrionApi.setBaseUrl(lyrionUrl);
+      const players = await lyrionApi.getPlayers();
+      const mac = players?.[0]?.playerid;
+      if (!mac) return;
+      setPlayerMac(mac);
+      const [tt, td, rg] = await Promise.all([
+        lyrionApi.getPlayerPref(mac, 'transitionType'),
+        lyrionApi.getPlayerPref(mac, 'transitionDuration'),
+        lyrionApi.getPlayerPref(mac, 'replayGainMode'),
+      ]);
+      if (tt != null) setTransitionType(String(tt));
+      if (td != null) setTransitionDuration(String(td));
+      if (rg != null) setReplayGainMode(String(rg));
+      loadAlarms(mac);
+    } catch (_) {}
+  };
+
+  const changeTransitionType = (v) => {
+    setTransitionType(v);
+    if (playerMac) lyrionApi.setPlayerPref(playerMac, 'transitionType', v);
+    setPlaybackMessage(t('settings.playback.saved'));
+  };
+  const changeTransitionDuration = (v) => {
+    setTransitionDuration(v);
+    if (playerMac) lyrionApi.setPlayerPref(playerMac, 'transitionDuration', v);
+    setPlaybackMessage(t('settings.playback.saved'));
+  };
+  const changeReplayGain = (v) => {
+    setReplayGainMode(v);
+    if (playerMac) lyrionApi.setPlayerPref(playerMac, 'replayGainMode', v);
+    setPlaybackMessage(t('settings.playback.saved'));
+  };
+
+  // ── Alarm handlers ──────────────────────────────────────────────
+  const loadAlarms = async (mac = playerMac) => {
+    if (!mac) return;
+    try {
+      const r = await lyrionApi.getAlarms(mac);
+      setAlarms(r?.alarms_loop || []);
+    } catch (_) {}
+  };
+  const addAlarm = async () => {
+    if (!playerMac) return;
+    const secs = (Number(newAlarmHour) * 3600) + (Number(newAlarmMin) * 60);
+    setAlarmsBusy(true);
+    try { await lyrionApi.addAlarm(playerMac, { time: secs }); } catch (_) {}
+    setAlarmsBusy(false);
+    loadAlarms();
+  };
+  const toggleAlarm = async (alarm) => {
+    try { await lyrionApi.updateAlarm(playerMac, alarm.id, { enabled: alarm.enabled ? 0 : 1 }); } catch (_) {}
+    loadAlarms();
+  };
+  const removeAlarm = async (alarm) => {
+    try { await lyrionApi.deleteAlarm(playerMac, alarm.id); } catch (_) {}
+    loadAlarms();
+  };
+  const formatAlarmTime = (secs) => {
+    const s = Number(secs) || 0;
+    const h = Math.floor(s / 3600) % 24;
+    const m = Math.floor((s % 3600) / 60);
+    return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+  };
 
   // ── OTA channel handlers ────────────────────────────────────────
   const loadOtaChannel = async () => {
@@ -190,6 +283,7 @@ const Settings = () => {
       if (systemPollRef.current) clearInterval(systemPollRef.current);
       if (lyrionPollRef.current) clearInterval(lyrionPollRef.current);
       if (osPollRef.current) clearInterval(osPollRef.current);
+      if (rescanPollRef.current) clearInterval(rescanPollRef.current);
     };
   }, []);
 
@@ -491,6 +585,45 @@ const Settings = () => {
     localStorage.setItem('lyrionUrl', e.target.value);
   };
 
+  // Trigger an incremental library rescan on the Lyrion server, then poll
+  // serverstatus until the scan finishes so we can show progress / completion.
+  const handleRescanLibrary = async () => {
+    if (rescanPollRef.current) return; // already running
+    setIsRescanning(true);
+    setRescanMessage(t('settings.lyrion.rescanStarted'));
+    try {
+      lyrionApi.setBaseUrl(lyrionUrl);
+      await lyrionApi.rescanLibrary();
+    } catch (_) {
+      setIsRescanning(false);
+      setRescanMessage(t('settings.lyrion.rescanFailed'));
+      return;
+    }
+
+    const startedAt = Date.now();
+    let sawScanning = false;
+    rescanPollRef.current = setInterval(async () => {
+      try {
+        const p = await lyrionApi.getRescanProgress();
+        if (p.scanning) {
+          sawScanning = true;
+          setRescanMessage(
+            p.total > 0
+              ? `${t('settings.lyrion.rescanning')} ${p.done}/${p.total}`
+              : t('settings.lyrion.rescanning')
+          );
+        } else if (sawScanning || Date.now() - startedAt > 5000) {
+          // Either we watched the scan run to completion, or it never reported
+          // as scanning within 5s (nothing to do / instant incremental scan).
+          clearInterval(rescanPollRef.current);
+          rescanPollRef.current = null;
+          setIsRescanning(false);
+          setRescanMessage(t('settings.lyrion.rescanDone'));
+        }
+      } catch (_) {}
+    }, 1500);
+  };
+
   const loadSystemData = async () => {
     setIsLoading(true);
     try {
@@ -615,6 +748,16 @@ const Settings = () => {
       content: 'custom-audio'
     },
     {
+      title: t('settings.sections.playback'),
+      icon: Sliders,
+      content: 'custom-playback'
+    },
+    {
+      title: t('settings.sections.alarm'),
+      icon: AlarmClock,
+      content: 'custom-alarm'
+    },
+    {
       title: t('settings.sections.network'),
       icon: Wifi,
       content: 'custom-network'
@@ -723,6 +866,33 @@ const Settings = () => {
                         />
                       </div>
                     </div>
+
+                    {/* Library rescan */}
+                    <div className="space-y-3 pt-2 border-t border-hifi-accent/40">
+                      <label className="text-white font-medium">{t('settings.lyrion.rescanLabel')}</label>
+                      <p className="text-sm text-hifi-silver mb-2">{t('settings.lyrion.rescanHelp')}</p>
+                      <motion.button
+                        onClick={handleRescanLibrary}
+                        disabled={isRescanning}
+                        className="w-full bg-hifi-accent hover:bg-hifi-light disabled:bg-hifi-dark text-white py-3 rounded-lg font-medium flex items-center justify-center space-x-2 transition-colors"
+                        whileTap={{ scale: isRescanning ? 1 : 0.95 }}
+                      >
+                        {isRescanning
+                          ? <Loader2 size={18} className="animate-spin" />
+                          : <RotateCw size={18} />}
+                        <span>{isRescanning ? t('settings.lyrion.rescanning') : t('settings.lyrion.rescan')}</span>
+                      </motion.button>
+
+                      {rescanMessage && (
+                        <div className={`rounded-lg p-3 text-center text-sm ${
+                          isErrorMsg(rescanMessage)
+                            ? 'bg-red-900/20 text-red-300 border border-red-500/30'
+                            : 'bg-hifi-dark text-hifi-silver'
+                        }`}>
+                          {rescanMessage}
+                        </div>
+                      )}
+                    </div>
                   </div>
                 )}
 
@@ -781,6 +951,157 @@ const Settings = () => {
                         {audioMessage}
                       </div>
                     )}
+                  </div>
+                )}
+
+                {/* Custom Playback Preferences Section */}
+                {section.content === 'custom-playback' && (
+                  <div className="space-y-5">
+                    <p className="text-sm text-hifi-silver">{t('settings.playback.help')}</p>
+
+                    {!playerMac && (
+                      <div className="rounded-lg p-3 text-center text-sm bg-hifi-dark text-hifi-silver">
+                        {t('settings.playback.noPlayer')}
+                      </div>
+                    )}
+
+                    {/* Transition (crossfade / gapless) */}
+                    <div className="space-y-2">
+                      <label className="text-white font-medium text-sm">{t('settings.playback.transition')}</label>
+                      <div className="grid grid-cols-2 gap-2">
+                        {[
+                          { v: '0', label: t('settings.playback.transNone') },
+                          { v: '1', label: t('settings.playback.transCrossfade') },
+                          { v: '2', label: t('settings.playback.transFadeIn') },
+                          { v: '3', label: t('settings.playback.transFadeOut') },
+                          { v: '4', label: t('settings.playback.transFadeInOut') },
+                        ].map((opt) => (
+                          <motion.button
+                            key={opt.v}
+                            onClick={() => changeTransitionType(opt.v)}
+                            disabled={!playerMac}
+                            className={`p-3 rounded-lg text-sm font-medium transition-colors disabled:opacity-40 ${
+                              transitionType === opt.v ? 'bg-hifi-gold text-black' : 'bg-hifi-light text-white hover:bg-hifi-accent'
+                            }`}
+                            whileTap={{ scale: 0.95 }}
+                          >
+                            {opt.label}
+                          </motion.button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Transition duration (only relevant when a transition is active) */}
+                    {transitionType !== '0' && (
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between">
+                          <label className="text-white font-medium text-sm">{t('settings.playback.transDuration')}</label>
+                          <span className="text-hifi-gold font-mono text-sm">{transitionDuration}s</span>
+                        </div>
+                        <input
+                          type="range" min="1" max="15" value={transitionDuration}
+                          onChange={(e) => changeTransitionDuration(e.target.value)}
+                          disabled={!playerMac}
+                          className="w-full accent-hifi-gold"
+                        />
+                      </div>
+                    )}
+
+                    {/* ReplayGain / volume normalisation */}
+                    <div className="space-y-2">
+                      <label className="text-white font-medium text-sm">{t('settings.playback.replayGain')}</label>
+                      <div className="grid grid-cols-2 gap-2">
+                        {[
+                          { v: '0', label: t('settings.playback.rgOff') },
+                          { v: '1', label: t('settings.playback.rgTrack') },
+                          { v: '2', label: t('settings.playback.rgAlbum') },
+                          { v: '3', label: t('settings.playback.rgSmart') },
+                        ].map((opt) => (
+                          <motion.button
+                            key={opt.v}
+                            onClick={() => changeReplayGain(opt.v)}
+                            disabled={!playerMac}
+                            className={`p-3 rounded-lg text-sm font-medium transition-colors disabled:opacity-40 ${
+                              replayGainMode === opt.v ? 'bg-hifi-gold text-black' : 'bg-hifi-light text-white hover:bg-hifi-accent'
+                            }`}
+                            whileTap={{ scale: 0.95 }}
+                          >
+                            {opt.label}
+                          </motion.button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {playbackMessage && playerMac && (
+                      <div className="rounded-lg p-3 text-center text-sm bg-hifi-dark text-hifi-silver">
+                        {playbackMessage}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Custom Alarm Clock Section */}
+                {section.content === 'custom-alarm' && (
+                  <div className="space-y-4">
+                    <p className="text-sm text-hifi-silver">{t('settings.alarm.help')}</p>
+
+                    {!playerMac && (
+                      <div className="rounded-lg p-3 text-center text-sm bg-hifi-dark text-hifi-silver">
+                        {t('settings.playback.noPlayer')}
+                      </div>
+                    )}
+
+                    {/* Existing alarms */}
+                    {alarms.length > 0 && (
+                      <div className="space-y-2">
+                        {alarms.map((alarm) => (
+                          <div key={alarm.id}
+                            className="flex items-center justify-between bg-hifi-dark rounded-lg px-4 py-3">
+                            <div className="flex items-center space-x-3">
+                              <AlarmClock size={18} className={alarm.enabled ? 'text-hifi-gold' : 'text-hifi-silver/40'} />
+                              <span className={`font-mono text-lg ${alarm.enabled ? 'text-white' : 'text-hifi-silver/50'}`}>
+                                {formatAlarmTime(alarm.time)}
+                              </span>
+                            </div>
+                            <div className="flex items-center space-x-3">
+                              <button onClick={() => toggleAlarm(alarm)}
+                                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${alarm.enabled ? 'bg-hifi-gold' : 'bg-hifi-accent'}`}>
+                                <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${alarm.enabled ? 'translate-x-6' : 'translate-x-1'}`} />
+                              </button>
+                              <button onClick={() => removeAlarm(alarm)}
+                                className="p-1.5 text-hifi-silver/50 hover:text-red-400 transition-colors">
+                                <Trash2 size={16} />
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Add new alarm */}
+                    <div className="flex items-center gap-3">
+                      <select value={newAlarmHour} onChange={(e) => setNewAlarmHour(e.target.value)}
+                        disabled={!playerMac}
+                        className="flex-1 bg-hifi-dark border border-hifi-accent rounded-lg px-3 py-3 text-white text-center font-mono text-lg focus:outline-none focus:border-hifi-gold disabled:opacity-40">
+                        {Array.from({ length: 24 }, (_, i) => (
+                          <option key={i} value={i}>{String(i).padStart(2, '0')}</option>
+                        ))}
+                      </select>
+                      <span className="text-white font-mono text-lg">:</span>
+                      <select value={newAlarmMin} onChange={(e) => setNewAlarmMin(e.target.value)}
+                        disabled={!playerMac}
+                        className="flex-1 bg-hifi-dark border border-hifi-accent rounded-lg px-3 py-3 text-white text-center font-mono text-lg focus:outline-none focus:border-hifi-gold disabled:opacity-40">
+                        {Array.from({ length: 12 }, (_, i) => i * 5).map((m) => (
+                          <option key={m} value={m}>{String(m).padStart(2, '0')}</option>
+                        ))}
+                      </select>
+                      <motion.button onClick={addAlarm} disabled={!playerMac || alarmsBusy}
+                        className="bg-hifi-gold hover:bg-yellow-600 disabled:bg-hifi-accent text-black px-5 py-3 rounded-lg font-semibold flex items-center space-x-2 transition-colors"
+                        whileTap={{ scale: (!playerMac || alarmsBusy) ? 1 : 0.95 }}>
+                        {alarmsBusy ? <Loader2 size={18} className="animate-spin" /> : <Plus size={18} />}
+                        <span>{t('settings.alarm.add')}</span>
+                      </motion.button>
+                    </div>
                   </div>
                 )}
 
@@ -1001,7 +1322,7 @@ const Settings = () => {
                             <span className="ml-1 text-[10px] uppercase tracking-wide text-hifi-gold/80">{t('settings.updates.signed')}</span>
                           </span>
                           <span className="text-white font-mono text-sm">
-                            {osUpdate?.error ? t('common.notAvailable') : (osUpdate?.current || '...')}
+                            {osUpdate?.current || (osUpdate?.error ? t('common.notAvailable') : '...')}
                             {osUpdate?.update_available && (
                               <span className="text-hifi-gold"> → {osUpdate.latest}</span>
                             )}

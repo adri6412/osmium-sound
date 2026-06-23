@@ -37,6 +37,9 @@ PREFS_GLOBS = [
     "/var/lib/lyrion*/prefs/server.prefs",
     "/var/lib/lyrionmusicserver/prefs/server.prefs",
 ]
+# The appliance skips Lyrion's web setup wizard, so `playlistdir` is never set
+# and "save queue as playlist" silently fails. We provision a writable folder.
+DEFAULT_PLAYLISTDIR = "/var/lib/squeezeboxserver/playlists"
 
 _lock = threading.Lock()
 
@@ -184,6 +187,74 @@ def _ensure_prefs():
     return None
 
 
+def _squeezebox_ids():
+    """(uid, gid) of the squeezeboxserver user, or (None, None)."""
+    try:
+        import pwd
+        ent = pwd.getpwnam("squeezeboxserver")
+        return ent.pw_uid, ent.pw_gid
+    except Exception:
+        return None, None
+
+
+def _provision_playlistdir(data):
+    """Given the loaded prefs dict, make sure `playlistdir` points at an
+    existing, writable folder (creating/chowning it). Returns the (possibly
+    updated) dict and a bool telling whether anything changed."""
+    cur = (data.get("playlistdir") or "").strip()
+    if cur and os.path.isdir(cur) and os.access(cur, os.W_OK):
+        return data, False
+    target = cur or DEFAULT_PLAYLISTDIR
+    uid, gid = _squeezebox_ids()
+    try:
+        os.makedirs(target, exist_ok=True)
+        if uid is not None:
+            os.chown(target, uid, gid)
+    except Exception as e:
+        print(f"[sources] playlistdir mkdir failed: {e}")
+        return data, False
+    data["playlistdir"] = target
+    return data, True
+
+
+def ensure_playlistdir():
+    """Standalone provisioning used at service start (covers devices that were
+    set up before this feature and never re-apply their sources). Idempotent:
+    only stops/edits/starts Lyrion when the folder is missing/unset."""
+    try:
+        import yaml
+    except Exception:
+        return
+    prefs = _find_prefs()
+    if not prefs:
+        return
+    try:
+        with open(prefs) as f:
+            data = yaml.safe_load(f) or {}
+    except Exception:
+        return
+    data, changed = _provision_playlistdir(data)
+    if not changed:
+        return
+    _run(["systemctl", "stop", LYRION_SERVICE], timeout=60)
+    try:
+        tmp = prefs + ".tmp"
+        with open(tmp, "w") as f:
+            yaml.safe_dump(data, f, default_flow_style=False, allow_unicode=True)
+        os.replace(tmp, prefs)
+        uid, gid = _squeezebox_ids()
+        if uid is not None:
+            try:
+                os.chown(prefs, uid, gid)
+            except Exception:
+                pass
+    except Exception as e:
+        print(f"[sources] playlistdir prefs write failed: {e}")
+    finally:
+        _run(["systemctl", "start", LYRION_SERVICE], timeout=60)
+    print(f"[sources] playlistdir set to {data.get('playlistdir')}")
+
+
 def current_paths(state):
     paths = []
     for src in state.get("sources", []):
@@ -214,6 +285,8 @@ def apply_to_lyrion(state):
         data["mediadirs"] = paths
         # keep ignoreInAudioScan in sync (empty list is fine)
         data.setdefault("ignoreInAudioScan", [])
+        # ensure a writable playlist folder so "save as playlist" works
+        data, _ = _provision_playlistdir(data)
         tmp = prefs + ".tmp"
         with open(tmp, "w") as f:
             yaml.safe_dump(data, f, default_flow_style=False, allow_unicode=True)
@@ -455,4 +528,9 @@ if __name__ == "__main__":
         remount_all()
     except Exception as e:
         print(f"[sources] remount_all error: {e}")
+    # Make sure Lyrion has a writable playlist folder ("save as playlist")
+    try:
+        ensure_playlistdir()
+    except Exception as e:
+        print(f"[sources] ensure_playlistdir error: {e}")
     app.run(host="0.0.0.0", port=8080)

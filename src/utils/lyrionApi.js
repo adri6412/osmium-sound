@@ -57,6 +57,27 @@ export class LyrionAPI {
     return status?.players_loop || [];
   }
 
+  // Kick off a library rescan (server-wide, not per-player). `mode`:
+  //  - undefined / 'new'  → scan for new & changed media (incremental, fast)
+  //  - 'full'             → clear the DB and rescan everything
+  //  - 'playlists'        → rescan playlists only
+  async rescanLibrary(mode) {
+    return this.request('', mode ? ['rescan', mode] : ['rescan']);
+  }
+
+  // Rescan progress. While a scan runs, serverstatus carries `rescan:1` plus
+  // `progressdone`/`progresstotal`/`progressname`; when idle `rescan` is absent.
+  // Returns { scanning, done, total, name }.
+  async getRescanProgress() {
+    const s = await this.getServerStatus();
+    return {
+      scanning: Number(s?.rescan ?? 0) === 1,
+      done: Number(s?.progressdone ?? 0),
+      total: Number(s?.progresstotal ?? 0),
+      name: s?.progressname || '',
+    };
+  }
+
   async getPlayerStatus(playerMac) {
     return this.request(playerMac, ['status', '-', 1, 'tags:aAbcCdeEfFgGhHijklLmoOpPqQrRsStTuvVwxXyYz']);
   }
@@ -98,6 +119,89 @@ export class LyrionAPI {
     return this.request(playerMac, ['power', powerState]);
   }
 
+  // --- Playback modes (shuffle / repeat) ---
+
+  // mode: 0 = off, 1 = song, 2 = all
+  async setRepeat(playerMac, mode) {
+    return this.request(playerMac, ['playlist', 'repeat', mode]);
+  }
+
+  // mode: 0 = off, 1 = songs, 2 = albums
+  async setShuffle(playerMac, mode) {
+    return this.request(playerMac, ['playlist', 'shuffle', mode]);
+  }
+
+  // --- Current play queue (the active playlist) ---
+
+  // Returns the full `status` result; the queue is in `playlist_loop`,
+  // current index in `playlist_cur_index`.
+  async getQueue(playerMac, limit = 999) {
+    return this.request(playerMac, ['status', 0, limit, 'tags:acdltK']);
+  }
+
+  // Jump to a queue position and start playing it.
+  async playlistJump(playerMac, index) {
+    return this.request(playerMac, ['playlist', 'index', index]);
+  }
+
+  async playlistMove(playerMac, fromIndex, toIndex) {
+    return this.request(playerMac, ['playlist', 'move', fromIndex, toIndex]);
+  }
+
+  async playlistRemove(playerMac, index) {
+    return this.request(playerMac, ['playlist', 'delete', index]);
+  }
+
+  async playlistClear(playerMac) {
+    return this.request(playerMac, ['playlist', 'clear']);
+  }
+
+  async playlistSave(playerMac, name) {
+    return this.request(playerMac, ['playlist', 'save', name]);
+  }
+
+  // --- Sleep timer ---
+
+  // seconds: 0 cancels the timer. Status exposes `will_sleep_in` while active.
+  async setSleep(playerMac, seconds) {
+    return this.request(playerMac, ['sleep', seconds]);
+  }
+
+  // --- Alarm clock ---
+
+  async getAlarms(playerMac, limit = 99) {
+    return this.request(playerMac, ['alarms', 0, limit, 'filter:all']);
+  }
+
+  // params: { time (seconds since midnight), dow ("0,1,2…" 0=Sun), enabled (0|1) }
+  async addAlarm(playerMac, { time, dow = '0,1,2,3,4,5,6', enabled = 1 } = {}) {
+    return this.request(playerMac, ['alarm', 'add', `time:${time}`, `dow:${dow}`, `enabled:${enabled}`]);
+  }
+
+  // updates: object of key/values (e.g. { enabled: 0, time: 28800 })
+  async updateAlarm(playerMac, alarmId, updates = {}) {
+    const params = Object.entries(updates).map(([k, v]) => `${k}:${v}`);
+    return this.request(playerMac, ['alarm', 'update', `id:${alarmId}`, ...params]);
+  }
+
+  async deleteAlarm(playerMac, alarmId) {
+    return this.request(playerMac, ['alarm', 'delete', `id:${alarmId}`]);
+  }
+
+  // --- Per-player preferences (transition / ReplayGain / …) ---
+
+  // Returns the raw value (string) of a player preference, or null.
+  // Lyrion returns the queried value under `_p2` (and sometimes under the
+  // pref name itself), so fall back across both.
+  async getPlayerPref(playerMac, pref) {
+    const r = await this.request(playerMac, ['playerpref', pref, '?']);
+    return r?._p2 ?? r?.[pref] ?? null;
+  }
+
+  async setPlayerPref(playerMac, pref, value) {
+    return this.request(playerMac, ['playerpref', pref, value]);
+  }
+
   // --- Library Browsing Methods ---
 
   async getArtists(limit = 9999, offset = 0) {
@@ -126,6 +230,17 @@ export class LyrionAPI {
       params.push(`folder_id:${folderId}`);
     }
     return this.request('', params);
+  }
+
+  // Saved playlists (the ones the user stores from the queue). Each item in
+  // `playlists_loop` carries `id` and `playlist` (the name).
+  async getPlaylists(limit = 9999, offset = 0) {
+    return this.request('', ['playlists', offset, limit]);
+  }
+
+  // Tracks of a saved playlist → `playlisttracks_loop`.
+  async getPlaylistTracks(playlistId, limit = 9999, offset = 0) {
+    return this.request('', ['playlists', 'tracks', offset, limit, `playlist_id:${playlistId}`, 'tags:aAlcdtu']);
   }
 
 

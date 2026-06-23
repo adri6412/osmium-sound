@@ -99,6 +99,7 @@
       "artists": "Artists",
       "albums": "Albums",
       "folders": "Folders",
+      "playlists": "Playlists",
       "radio": "Radio",
       "apps": "Apps",
       "search": "Search"
@@ -113,7 +114,18 @@
     "nowPlaying": "Now Playing",
     "expand": "Expand",
     "noTrack": "No track",
-    "unknownArtist": "Unknown Artist"
+    "unknownArtist": "Unknown Artist",
+    "shuffle": "Shuffle",
+    "repeat": "Repeat",
+    "queue": "Queue",
+    "queueEmpty": "The queue is empty",
+    "saveAsPlaylist": "Save as playlist",
+    "clearQueue": "Clear",
+    "playlistNamePlaceholder": "Playlist name",
+    "saveError": "Couldn't save the playlist. Check that a playlist folder is configured in Lyrion.",
+    "sleep": "Sleep timer",
+    "sleepActive": "Stops in about {min} min",
+    "sleepOff": "Turn off timer"
   },
   "settings": {
     "title": "Settings",
@@ -123,6 +135,8 @@
     "sections": {
       "lyrion": "Lyrion Configuration",
       "audio": "Audio Output (DAC)",
+      "playback": "Playback",
+      "alarm": "Alarm Clock",
       "network": "Network Configuration",
       "ssh": "SSH Access",
       "systemInfo": "System Information",
@@ -132,6 +146,27 @@
     },
     "language": {
       "help": "Choose the interface language."
+    },
+    "playback": {
+      "help": "Playback options applied to the active player: track transitions (crossfade/gapless) and volume normalisation (ReplayGain).",
+      "noPlayer": "No active player found. Start playback or check the Lyrion connection.",
+      "transition": "Track transition",
+      "transNone": "None (gapless)",
+      "transCrossfade": "Crossfade",
+      "transFadeIn": "Fade in",
+      "transFadeOut": "Fade out",
+      "transFadeInOut": "Fade in/out",
+      "transDuration": "Transition duration",
+      "replayGain": "Volume normalisation (ReplayGain)",
+      "rgOff": "Off",
+      "rgTrack": "Track",
+      "rgAlbum": "Album",
+      "rgSmart": "Smart",
+      "saved": "Setting saved."
+    },
+    "alarm": {
+      "help": "Schedule alarms on the active player. At the set time the player wakes up and starts playing.",
+      "add": "Add"
     },
     "ssh": {
       "help": "Enable or disable the SSH server for remote terminal access to the device.",
@@ -144,7 +179,14 @@
     },
     "lyrion": {
       "urlLabel": "Lyrion Server URL",
-      "urlHelp": "Enter the address of your Lyrion Media Server (e.g. http://192.168.1.100:9000)"
+      "urlHelp": "Enter the address of your Lyrion Media Server (e.g. http://192.168.1.100:9000)",
+      "rescanLabel": "Music library",
+      "rescanHelp": "Re-check the music folders for new or changed tracks.",
+      "rescan": "Rescan library",
+      "rescanning": "Scanning…",
+      "rescanStarted": "Library scan started.",
+      "rescanDone": "Scan complete.",
+      "rescanFailed": "Failed to start the scan."
     },
     "audio": {
       "help": "Choose the playback device (DAC). The selection is saved and kept across reboots. DSD playback is bit-perfect (DoP).",
