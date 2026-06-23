@@ -22,4 +22,8 @@ jobs:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_dir: ./website
           publish_branch: gh-pages
-          force_orphan: true
+          # keep_files (not force_orphan) so deploying the website preserves the
+          # OTA manifest the release workflow publishes under ota/ on this same
+          # branch. force_orphan would wipe it on every website change.
+          keep_files: true
+          cname: osmiumsound.qd.je

@@ -179,6 +179,34 @@ jobs:
             ${{ steps.packos.outputs.tarball }}.sha256.sig
             hifi-install-*.sh
 
+      # Publish a static release manifest to GitHub Pages so the appliance's
+      # update check reads from a CDN (not rate-limited) instead of the
+      # api.github.com REST API (60 req/hour/IP). Written per channel: a dev tag
+      # updates latest-dev.json, a stable tag updates latest-prod.json.
+      - name: Build OTA Pages manifest
+        id: manifest
+        if: github.ref_type == 'tag'
+        run: |
+          VERSION="${{ steps.ver.outputs.version }}"
+          if printf '%s' "$VERSION" | grep -q '-'; then CH=dev; else CH=prod; fi
+          python3 .github/scripts/make-ota-manifest.py \
+            "$VERSION" "${{ github.repository }}" "$CH" \
+            "${{ steps.pack.outputs.tarball }}" \
+            "${{ steps.packsys.outputs.tarball }}" \
+            "${{ steps.packos.outputs.tarball }}"
+          echo "channel=$CH" >> "$GITHUB_OUTPUT"
+
+      - name: Publish OTA manifest to GitHub Pages
+        if: github.ref_type == 'tag'
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./manifest-out
+          publish_branch: gh-pages
+          destination_dir: ota
+          keep_files: true          # don't wipe the website already on gh-pages
+          cname: osmiumsound.qd.je
+
       - name: Upload artifact (manual runs)
         if: github.ref_type != 'tag'
         uses: actions/upload-artifact@v4
