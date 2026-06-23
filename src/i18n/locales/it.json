@@ -179,7 +179,14 @@
     },
     "lyrion": {
       "urlLabel": "URL Lyrion Server",
-      "urlHelp": "Inserisci l'indirizzo del tuo Lyrion Media Server (es. http://192.168.1.100:9000)"
+      "urlHelp": "Inserisci l'indirizzo del tuo Lyrion Media Server (es. http://192.168.1.100:9000)",
+      "rescanLabel": "Libreria musicale",
+      "rescanHelp": "Ricontrolla le cartelle musicali per trovare brani nuovi o modificati.",
+      "rescan": "Scansiona libreria",
+      "rescanning": "Scansione in corso…",
+      "rescanStarted": "Scansione della libreria avviata.",
+      "rescanDone": "Scansione completata.",
+      "rescanFailed": "Avvio della scansione fallito."
     },
     "audio": {
       "help": "Scegli il dispositivo di riproduzione (DAC). La selezione viene salvata e mantenuta ai riavvii. La riproduzione DSD è bit-perfect (DoP).",

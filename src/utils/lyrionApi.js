@@ -57,6 +57,27 @@ export class LyrionAPI {
     return status?.players_loop || [];
   }
 
+  // Kick off a library rescan (server-wide, not per-player). `mode`:
+  //  - undefined / 'new'  → scan for new & changed media (incremental, fast)
+  //  - 'full'             → clear the DB and rescan everything
+  //  - 'playlists'        → rescan playlists only
+  async rescanLibrary(mode) {
+    return this.request('', mode ? ['rescan', mode] : ['rescan']);
+  }
+
+  // Rescan progress. While a scan runs, serverstatus carries `rescan:1` plus
+  // `progressdone`/`progresstotal`/`progressname`; when idle `rescan` is absent.
+  // Returns { scanning, done, total, name }.
+  async getRescanProgress() {
+    const s = await this.getServerStatus();
+    return {
+      scanning: Number(s?.rescan ?? 0) === 1,
+      done: Number(s?.progressdone ?? 0),
+      total: Number(s?.progresstotal ?? 0),
+      name: s?.progressname || '',
+    };
+  }
+
   async getPlayerStatus(playerMac) {
     return this.request(playerMac, ['status', '-', 1, 'tags:aAbcCdeEfFgGhHijklLmoOpPqQrRsStTuvVwxXyYz']);
   }
