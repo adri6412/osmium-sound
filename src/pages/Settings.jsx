@@ -1322,7 +1322,7 @@ const Settings = () => {
                             <span className="ml-1 text-[10px] uppercase tracking-wide text-hifi-gold/80">{t('settings.updates.signed')}</span>
                           </span>
                           <span className="text-white font-mono text-sm">
-                            {osUpdate?.error ? t('common.notAvailable') : (osUpdate?.current || '...')}
+                            {osUpdate?.current || (osUpdate?.error ? t('common.notAvailable') : '...')}
                             {osUpdate?.update_available && (
                               <span className="text-hifi-gold"> → {osUpdate.latest}</span>
                             )}

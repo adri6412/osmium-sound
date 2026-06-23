@@ -10,6 +10,7 @@ import re
 import json
 import logging
 import urllib.request
+import time
 
 app = Flask(__name__)
 CORS(app)  # Abilita CORS per tutte le route
@@ -638,9 +639,25 @@ def set_ota_channel(channel):
         return {'success': False, 'message': 'Impossibile salvare il canale', 'channel': get_ota_channel()}
     return {'success': True, 'channel': channel}
 
+# Short-lived cache of the GitHub Release per channel. A single "check updates"
+# resolves three asset prefixes (UI + System + OS), each of which used to make
+# its own GitHub API request for the *same* release — 3x the calls against the
+# unauthenticated 60-req/hour limit, which is why checks intermittently failed
+# and the version display fell back to "n/a". Caching collapses those into one
+# request and lets repeated checks reuse the result.
+_RELEASE_CACHE = {}        # channel -> (fetched_at, release_dict)
+_RELEASE_CACHE_TTL = 60    # seconds
+
 def _fetch_release(channel):
     """Fetch the release to offer for the given channel.
-    prod → /releases/latest (stable only); dev → newest release incl. prereleases."""
+    prod → /releases/latest (stable only); dev → newest release incl. prereleases.
+    Result is cached briefly; on a transient fetch failure the last good release
+    is reused so a momentary network/rate-limit blip doesn't surface as an error."""
+    now = time.time()
+    cached = _RELEASE_CACHE.get(channel)
+    if cached and now - cached[0] < _RELEASE_CACHE_TTL:
+        return cached[1]
+
     if channel == 'dev':
         url = f'https://api.github.com/repos/{OTA_REPO}/releases?per_page=10'
     else:
@@ -649,15 +666,24 @@ def _fetch_release(channel):
         'Accept': 'application/vnd.github+json',
         'User-Agent': 'hifi-player-ota',
     })
-    with urllib.request.urlopen(req, timeout=15) as resp:
-        data = json.load(resp)
-    if channel == 'dev':
-        # GitHub lists releases newest-first; skip drafts, take the first.
-        for rel in data:
-            if not rel.get('draft'):
-                return rel
-        return {}
-    return data
+    try:
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            data = json.load(resp)
+        if channel == 'dev':
+            # GitHub lists releases newest-first; skip drafts, take the first.
+            release = next((rel for rel in data if not rel.get('draft')), {})
+        else:
+            release = data
+    except Exception:
+        # Reuse the last good release (even if past the TTL) rather than failing
+        # the whole check on a transient blip.
+        if cached:
+            log.warning("release fetch failed; serving cached release for channel %s", channel)
+            return cached[1]
+        raise
+
+    _RELEASE_CACHE[channel] = (now, release)
+    return release
 
 def _check_release_update(current, prefix):
     """Look at the relevant GitHub Release and return update info for the asset
