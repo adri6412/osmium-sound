@@ -1,23 +1,17 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import useWebSocket, { ReadyState } from 'react-use-websocket';
 import { motion, useSpring, useTransform, useMotionValue } from 'framer-motion';
 
+// `value` is a framer-motion MotionValue (0-100). Driving the needle straight
+// from a MotionValue means level updates never trigger a React re-render — the
+// needle moves purely on the compositor.
 const SingleVUMeter = ({ value, label }) => {
-  // value is between 0 and 100
-  // we want to map this to an angle. Let's say -45 deg to +45 deg
-
-  const motionVal = useMotionValue(value);
-
   // Create a spring for smooth needle movement
-  const springValue = useSpring(motionVal, {
+  const springValue = useSpring(value, {
     stiffness: 150,
     damping: 15,
     mass: 0.5,
   });
-
-  useEffect(() => {
-    motionVal.set(value);
-  }, [value, motionVal]);
 
   const rotate = useTransform(springValue, [0, 100], [-45, 45]);
 
@@ -152,8 +146,13 @@ const SingleVUMeter = ({ value, label }) => {
  * Dual Analog VU Meter component replacing the digital bars
  */
 const AnalogVUMeter = ({ isPlaying, className = "" }) => {
-  const [leftValue, setLeftValue] = useState(0);
-  const [rightValue, setRightValue] = useState(0);
+  // Needle positions are MotionValues, not React state: updating them moves the
+  // needles on the compositor without re-rendering this component. At ~30-60
+  // level messages/sec from the daemon, this turns dozens of React re-renders
+  // per second into zero.
+  const leftValue = useMotionValue(0);
+  const rightValue = useMotionValue(0);
+  const lastUpdateRef = useRef(0);
   const [socketUrl, setSocketUrl] = useState(`ws://${window.location.hostname}:9001`);
 
   const { lastMessage, readyState } = useWebSocket(socketUrl, {
@@ -176,34 +175,26 @@ const AnalogVUMeter = ({ isPlaying, className = "" }) => {
   }, []);
 
   useEffect(() => {
-    if (lastMessage !== null) {
-      try {
-        const data = JSON.parse(lastMessage.data);
-        if (data.levels && Array.isArray(data.levels)) {
-            // We have an array of 32 bars from the python daemon.
-            // Split into left and right channel approx
-            const mid = Math.floor(data.levels.length / 2);
-            const leftBars = data.levels.slice(0, mid);
-            const rightBars = data.levels.slice(mid);
-
-            // Get max or average to drive the needle
-            const getPeak = (arr) => {
-              if (!arr.length) return 0;
-              // After server-side adjustments, we don't need a strict 0.75 multiplier.
-              // We'll use the raw value since the daemon scales it better now.
-              // However, we can use a small smoothing factor if desired.
-              const maxVal = Math.max(...arr);
-              return maxVal;
-            };
-
-            setLeftValue(getPeak(leftBars));
-            setRightValue(getPeak(rightBars));
-        }
-      } catch (error) {
-        console.error("Error parsing VU meter websocket data:", error);
+    if (lastMessage === null) return;
+    // Throttle to ~33 Hz: even if the daemon streams faster, the needles can't
+    // visibly resolve more than this, so we skip the extra work.
+    const now = performance.now();
+    if (now - lastUpdateRef.current < 30) return;
+    lastUpdateRef.current = now;
+    try {
+      const data = JSON.parse(lastMessage.data);
+      if (data.levels && Array.isArray(data.levels)) {
+        const mid = Math.floor(data.levels.length / 2);
+        const leftBars = data.levels.slice(0, mid);
+        const rightBars = data.levels.slice(mid);
+        const getPeak = (arr) => (arr.length ? Math.max(...arr) : 0);
+        leftValue.set(getPeak(leftBars));
+        rightValue.set(getPeak(rightBars));
       }
+    } catch (error) {
+      console.error("Error parsing VU meter websocket data:", error);
     }
-  }, [lastMessage]);
+  }, [lastMessage, leftValue, rightValue]);
 
   // Fallback animation if WS is disconnected but audio is playing
   useEffect(() => {
@@ -215,8 +206,8 @@ const AnalogVUMeter = ({ isPlaying, className = "" }) => {
         if (!isPlaying) {
           // Drop to 0. We let framer-motion's useSpring handle the smooth drop,
           // so we only need to set the value to 0 once here.
-          setLeftValue(0);
-          setRightValue(0);
+          leftValue.set(0);
+          rightValue.set(0);
           return;
         }
 
@@ -224,14 +215,12 @@ const AnalogVUMeter = ({ isPlaying, className = "" }) => {
         const animateFallback = () => {
           if (!isActive) return;
 
-          setLeftValue(() => {
+          const sim = () => {
             const base = Math.random() * 100;
             return base > 80 ? base : Math.random() * 50 + 5;
-          });
-          setRightValue(() => {
-            const base = Math.random() * 100;
-            return base > 80 ? base : Math.random() * 50 + 5;
-          });
+          };
+          leftValue.set(sim());
+          rightValue.set(sim());
 
           timeoutId = setTimeout(() => {
             if (isActive) animationFrameId = requestAnimationFrame(animateFallback);
@@ -246,7 +235,7 @@ const AnalogVUMeter = ({ isPlaying, className = "" }) => {
           if (animationFrameId) cancelAnimationFrame(animationFrameId);
         };
     }
-  }, [isPlaying, readyState]);
+  }, [isPlaying, readyState, leftValue, rightValue]);
 
   return (
     <div className={`flex items-center justify-center bg-[#111] p-2 md:p-3 rounded-lg shadow-[inset_0_0_10px_rgba(0,0,0,1)] border-2 md:border-4 border-[#1a1a1a] w-full max-w-full ${className}`}>
@@ -259,4 +248,6 @@ const AnalogVUMeter = ({ isPlaying, className = "" }) => {
   );
 };
 
-export default AnalogVUMeter;
+// Memoized so LyrionServer's 1 Hz status poll doesn't re-render the meter;
+// only `isPlaying` changes matter here.
+export default React.memo(AnalogVUMeter);
