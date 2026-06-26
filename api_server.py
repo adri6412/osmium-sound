@@ -108,19 +108,11 @@ def reboot_device():
         log.exception("reboot_device failed")
         return "Failed to reboot device"
 
-# Funzione per spegnere il dispositivo.
-# The power button is unreachable (the mini-PC is inside a cabinet), so the user
-# powers off from here and pulls the mains plug; on re-plug the BIOS "restore on AC
-# power loss" boots it back. We therefore HIBERNATE (suspend-to-disk) instead of a
-# plain poweroff: the box writes RAM to the swapfile and powers fully off, so the
-# next power-on RESUMES the saved session (~10s) instead of a ~17s cold boot — and
-# it survives the plug being pulled. If hibernation isn't available/fails (e.g. swap
-# not yet provisioned by apply.d/0012-hibernate.sh), fall back to a clean poweroff
-# so the box never stays running when the user is about to pull the plug.
+# Funzione per spegnere il dispositivo
 def shutdown_device():
     try:
-        subprocess.Popen("systemctl hibernate || systemctl poweroff", shell=True)
-        return "Device hibernating"
+        subprocess.Popen("sudo shutdown now", shell=True)
+        return "Device shutting down"
     except Exception:
         log.exception("shutdown_device failed")
         return "Failed to shutdown device"
