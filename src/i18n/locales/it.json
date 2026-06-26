@@ -134,6 +134,7 @@
     "apiUnavailable": "⚠️ Server API non disponibile",
     "sections": {
       "lyrion": "Configurazione Lyrion",
+      "sources": "Sorgenti musicali",
       "audio": "Uscita Audio (DAC)",
       "playback": "Riproduzione",
       "alarm": "Sveglia",
@@ -187,6 +188,9 @@
       "rescanStarted": "Scansione della libreria avviata.",
       "rescanDone": "Scansione completata.",
       "rescanFailed": "Avvio della scansione fallito."
+    },
+    "sources": {
+      "help": "Aggiungi le cartelle musicali: chiavette/dischi USB (montati in automatico), cartelle di rete (SMB) o locali. Premi «Applica e scansiona» al termine."
     },
     "audio": {
       "help": "Scegli il dispositivo di riproduzione (DAC). La selezione viene salvata e mantenuta ai riavvii. La riproduzione DSD è bit-perfect (DoP).",

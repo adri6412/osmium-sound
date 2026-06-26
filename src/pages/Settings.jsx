@@ -15,7 +15,8 @@ import {
   Sliders,
   AlarmClock,
   Plus,
-  Trash2
+  Trash2,
+  HardDrive
 } from 'lucide-react';
 import { systemAPI, checkApiServer } from '../utils/api';
 import { lyrionApi } from '../utils/lyrionApi';
@@ -752,6 +753,11 @@ const Settings = () => {
       content: 'custom-lyrion'
     },
     {
+      title: t('settings.sections.sources'),
+      icon: HardDrive,
+      content: 'custom-sources'
+    },
+    {
       title: t('settings.sections.audio'),
       icon: Volume2,
       content: 'custom-audio'
@@ -902,6 +908,21 @@ const Settings = () => {
                         </div>
                       )}
                     </div>
+                  </div>
+                )}
+
+                {/* Custom Sources Section — embeds the on-device sources manager
+                    (the :8080 web UI) so USB / SMB / local folders can be added
+                    from the touchscreen, not just from a phone. */}
+                {section.content === 'custom-sources' && (
+                  <div className="space-y-3">
+                    <p className="text-sm text-hifi-silver">{t('settings.sources.help')}</p>
+                    <iframe
+                      src={`http://localhost:8080`}
+                      title={t('settings.sections.sources')}
+                      className="w-full rounded-lg border border-hifi-accent bg-hifi-dark"
+                      style={{ height: '72vh' }}
+                    />
                   </div>
                 )}
 

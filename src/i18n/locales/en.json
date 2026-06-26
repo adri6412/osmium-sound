@@ -134,6 +134,7 @@
     "apiUnavailable": "⚠️ API server unavailable",
     "sections": {
       "lyrion": "Lyrion Configuration",
+      "sources": "Music sources",
       "audio": "Audio Output (DAC)",
       "playback": "Playback",
       "alarm": "Alarm Clock",
@@ -187,6 +188,9 @@
       "rescanStarted": "Library scan started.",
       "rescanDone": "Scan complete.",
       "rescanFailed": "Failed to start the scan."
+    },
+    "sources": {
+      "help": "Add your music folders: USB sticks/drives (auto-mounted), network (SMB) or local folders. Press \"Apply & rescan\" when done."
     },
     "audio": {
       "help": "Choose the playback device (DAC). The selection is saved and kept across reboots. DSD playback is bit-perfect (DoP).",
