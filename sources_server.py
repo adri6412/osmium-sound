@@ -144,6 +144,40 @@ def remount_all():
                 print(f"[sources] remount failed for {src.get('name')}: {e}")
 
 
+def _all_smb_mounted():
+    """True if every configured SMB source is currently mounted (or none exist)."""
+    for src in load_state().get("sources", []):
+        if src.get("type") == "smb":
+            try:
+                if not os.path.ismount(os.path.realpath(src["mountpoint"])):
+                    return False
+            except Exception:
+                return False
+    return True
+
+
+def remount_all_retry(attempts=60, delay=5):
+    """Mount SMB shares, retrying in the background until they all mount.
+
+    Boot no longer waits for the network (NetworkManager-wait-online is masked
+    for speed), so at startup the LAN / NAS may not be reachable yet and a
+    one-shot mount fails with -101 (ENETUNREACH). Keep retrying so the shares
+    come up on their own once the network is available — without ever delaying
+    boot or the UI (this runs in a daemon thread).
+    """
+    for i in range(attempts):
+        try:
+            remount_all()
+        except Exception as e:
+            print(f"[sources] remount attempt {i + 1} error: {e}")
+        if _all_smb_mounted():
+            if i:
+                print(f"[sources] SMB shares mounted after {i + 1} attempt(s)")
+            return
+        time.sleep(delay)
+    print("[sources] gave up mounting SMB shares (network/server unreachable)")
+
+
 # ─────────────────────────── Lyrion mediadirs ───────────────────────
 def _prefs_dir_from_service():
     """Read the real PREFSDIR from the lyrionmusicserver systemd unit."""
@@ -523,11 +557,10 @@ if __name__ == "__main__":
         os.makedirs(MOUNT_ROOT, exist_ok=True)
     except Exception:
         pass
-    # Re-mount known SMB shares on startup (survives reboots)
-    try:
-        remount_all()
-    except Exception as e:
-        print(f"[sources] remount_all error: {e}")
+    # Re-mount known SMB shares on startup (survives reboots). Runs in the
+    # background with retries: boot no longer waits for the network, so the NAS
+    # may not be reachable yet — keep trying instead of failing once.
+    threading.Thread(target=remount_all_retry, daemon=True, name="smb-remount").start()
     # Make sure Lyrion has a writable playlist folder ("save as playlist")
     try:
         ensure_playlistdir()
