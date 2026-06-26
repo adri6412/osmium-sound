@@ -5,6 +5,17 @@
 # Kernel
 linux-image-amd64
 
+# UEFI Secure Boot — the signed boot chain (all in Debian 'main', amd64):
+#   shim-signed (Microsoft-signed) → grub-efi-amd64-signed (Debian-signed) →
+#   the already-signed linux-image-amd64. Shipping these in the live filesystem
+#   means the installer (which clones the live system) lands them on the target,
+#   and grub-installer sets up the shim chain on UEFI installs. The box then
+#   boots with UEFI Secure Boot enabled in firmware — verified at build time, the
+#   ONLY safe place to touch the bootloader (NOT via OTA — see
+#   distro/os-update/apply.d/0010-secure-boot.sh, kept as a no-op).
+grub-efi-amd64-signed
+shim-signed
+
 # Firmware — broad coverage for all mainline-supported WiFi/Ethernet/etc.
 # (requires the non-free-firmware archive area, set in build-distro.sh).
 # MediaTek MT76xx firmware ships inside firmware-misc-nonfree on bookworm.
