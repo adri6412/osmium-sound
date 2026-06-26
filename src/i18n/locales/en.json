@@ -94,7 +94,13 @@
       "title": "Music server ready",
       "subtitle": "Lyrion Music Server is running. From here you can access the advanced library settings from your computer, whenever you like.",
       "label": "Lyrion Music Server",
-      "webHint": "Full web interface of the server"
+      "webHint": "Full web interface of the server",
+      "checking": "Checking Lyrion Music Server…",
+      "notInstalledTitle": "Install the music server",
+      "notInstalledHint": "Lyrion Music Server is not installed on this device. Install it now to manage your music library.",
+      "install": "Install Lyrion",
+      "installing": "Installing Lyrion…",
+      "installFailed": "Lyrion installation failed. Check your connection and try again."
     }
   },
   "sidebar": {

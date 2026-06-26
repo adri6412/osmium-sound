@@ -94,7 +94,13 @@
       "title": "Server musicale pronto",
       "subtitle": "Lyrion Music Server è attivo. Da qui puoi accedere alle impostazioni avanzate della libreria dal tuo computer, quando vuoi.",
       "label": "Lyrion Music Server",
-      "webHint": "Interfaccia web completa del server"
+      "webHint": "Interfaccia web completa del server",
+      "checking": "Verifica di Lyrion Music Server…",
+      "notInstalledTitle": "Installa il server musicale",
+      "notInstalledHint": "Lyrion Music Server non risulta installato su questo dispositivo. Installalo ora per gestire la tua libreria musicale.",
+      "install": "Installa Lyrion",
+      "installing": "Installazione di Lyrion in corso…",
+      "installFailed": "Installazione di Lyrion fallita. Verifica la connessione e riprova."
     }
   },
   "sidebar": {
