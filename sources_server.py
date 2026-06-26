@@ -178,6 +178,99 @@ def remount_all_retry(attempts=60, delay=5):
     print("[sources] gave up mounting SMB shares (network/server unreachable)")
 
 
+# ─────────────────────────── USB drives ─────────────────────────────
+# USB sticks / external drives are auto-mounted read-only under USB_MOUNT_ROOT
+# (inside the allowed /media root) so they show up in the Sources UI and the
+# user can add folders from them as local sources. We poll lsblk rather than
+# wiring udev, so the whole feature stays in this one service.
+USB_MOUNT_ROOT = "/media/hifi-usb"
+_FAT_LIKE = ("vfat", "exfat", "ntfs", "ntfs3", "fuseblk", "msdos")
+
+
+def _usb_mount_type(fstype):
+    if fstype == "ntfs":
+        return "ntfs3"                       # in-kernel NTFS (no ntfs-3g needed)
+    if fstype in ("vfat", "exfat", "ntfs3", "msdos"):
+        return fstype
+    return "auto"
+
+
+def _usb_mount_opts(fstype):
+    base = "ro,noatime,nosuid,nodev,noexec"
+    if fstype in _FAT_LIKE:
+        # These carry no UNIX perms — map everything readable for Lyrion.
+        return base + ",uid=0,gid=0,iocharset=utf8,umask=022"
+    return base
+
+
+def _usb_partitions():
+    """USB block devices carrying a filesystem → [{path,name,fstype,label,size}].
+    Handles partitioned (sdX1) and whole-disk filesystems; skips optical drives
+    (type 'rom') and any non-USB transport (internal SATA/eMMC)."""
+    try:
+        r = _run(["lsblk", "-J", "-o", "PATH,NAME,TYPE,FSTYPE,LABEL,SIZE,TRAN"], timeout=10)
+        data = json.loads(r.stdout or "{}")
+    except Exception:
+        return []
+    out = []
+    for dev in data.get("blockdevices", []):
+        if dev.get("tran") != "usb" or dev.get("type") != "disk":
+            continue
+        kids = dev.get("children") or []
+        if kids:
+            out.extend(p for p in kids if p.get("type") == "part" and p.get("fstype"))
+        elif dev.get("fstype"):
+            out.append(dev)
+    return out
+
+
+def _usb_mountpoint(part):
+    return os.path.join(USB_MOUNT_ROOT, _slug(part.get("label") or part.get("name")))
+
+
+def usb_sync():
+    """Mount newly-appeared USB filesystems (read-only) and unmount ones whose
+    device has gone. Returns {mountpoint: part} for the currently live disks."""
+    with _lock:
+        os.makedirs(USB_MOUNT_ROOT, exist_ok=True)
+        wanted = {}
+        for p in _usb_partitions():
+            mp = _usb_mountpoint(p)
+            wanted[mp] = p
+            if not os.path.ismount(mp):
+                try:
+                    os.makedirs(mp, exist_ok=True)
+                    fs = (p.get("fstype") or "").lower()
+                    _run(["mount", "-t", _usb_mount_type(fs), "-o", _usb_mount_opts(fs),
+                          p["path"], mp], timeout=20)
+                except Exception as e:
+                    print(f"[sources] usb mount failed for {p.get('path')}: {e}")
+        # Reap mountpoints we created that are no longer present (drive removed).
+        try:
+            for name in os.listdir(USB_MOUNT_ROOT):
+                mp = os.path.join(USB_MOUNT_ROOT, name)
+                if mp in wanted:
+                    continue
+                if os.path.ismount(mp):
+                    _run(["umount", "-l", mp], timeout=10)
+                try:
+                    os.rmdir(mp)
+                except OSError:
+                    pass
+        except FileNotFoundError:
+            pass
+        return wanted
+
+
+def usb_monitor(interval=4):
+    while True:
+        try:
+            usb_sync()
+        except Exception as e:
+            print(f"[sources] usb monitor error: {e}")
+        time.sleep(interval)
+
+
 # ─────────────────────────── Lyrion mediadirs ───────────────────────
 def _prefs_dir_from_service():
     """Read the real PREFSDIR from the lyrionmusicserver systemd unit."""
@@ -436,6 +529,36 @@ def api_apply():
     return jsonify({"success": ok, "message": msg}), (200 if ok else 500)
 
 
+@app.route("/api/usb", methods=["GET"])
+def api_usb():
+    """List currently-mounted USB disks and their top-level folders, so the UI
+    can offer to add them as local sources."""
+    try:
+        wanted = usb_sync()
+    except Exception as e:
+        return jsonify({"disks": [], "error": str(e)})
+    disks = []
+    for mp, p in wanted.items():
+        if not os.path.ismount(mp):
+            continue
+        folders = []
+        try:
+            for entry in sorted(os.listdir(mp)):
+                full = os.path.join(mp, entry)
+                if not entry.startswith(".") and os.path.isdir(full):
+                    folders.append({"name": entry, "path": full})
+        except Exception:
+            pass
+        disks.append({
+            "label": p.get("label") or p.get("name"),
+            "fstype": p.get("fstype"),
+            "size": p.get("size"),
+            "mountpoint": mp,
+            "folders": folders,
+        })
+    return jsonify({"disks": disks})
+
+
 # ─────────────────────────── Web UI ─────────────────────────────────
 @app.route("/")
 def index():
@@ -484,6 +607,9 @@ INDEX_HTML = r"""<!DOCTYPE html>
 
   <h2>Sorgenti attive</h2>
   <div class="card" id="list"><div style="color:var(--silver);font-size:14px">Caricamento…</div></div>
+
+  <h2>Dischi USB</h2>
+  <div class="card" id="usbList"><div style="color:var(--silver);font-size:14px">Nessun disco USB collegato. Inserisci una chiavetta o un hard disk USB.</div></div>
 
   <h2>Aggiungi cartella locale</h2>
   <div class="card">
@@ -547,7 +673,39 @@ async function apply(){
   const r=await j('/api/apply',{method:'POST'});
   m.textContent=r.message||(r.success?'Fatto':'Errore'); m.className='msg '+(r.success?'ok':'bad');
 }
+
+// ── USB disks ───────────────────────────────────────────────────────
+// Paths are kept in an array and referenced by index in onclick handlers, so a
+// folder name with quotes/specials can never break the markup.
+let usbPaths=[];
+async function loadUsb(){
+  let d; try{ d=await j('/api/usb'); }catch(e){ return; }
+  const el=document.getElementById('usbList'); usbPaths=[];
+  if(!d.disks || !d.disks.length){
+    el.innerHTML='<div style="color:var(--silver);font-size:14px">Nessun disco USB collegato. Inserisci una chiavetta o un hard disk USB.</div>';
+    return;
+  }
+  el.innerHTML=d.disks.map(dk=>{
+    const di=usbPaths.push(dk.mountpoint)-1;
+    const tag=`USB${dk.fstype?(' '+dk.fstype):''}${dk.size?(' · '+dk.size):''}`;
+    const head=`<div class="name">${dk.label||'USB'}<span class="tag">${tag}</span></div><div class="sub">${dk.mountpoint}</div>`;
+    const all=`<button class="ghost" onclick="addUsb(${di})">Aggiungi tutto il disco</button>`;
+    const fold=(dk.folders||[]).map(f=>{
+      const i=usbPaths.push(f.path)-1;
+      return `<div class="src"><div class="meta"><div class="sub">📁 ${f.name}</div></div><button class="ghost" onclick="addUsb(${i})">Aggiungi</button></div>`;
+    }).join('');
+    return `<div style="margin-bottom:14px">${head}<div style="height:8px"></div>${all}${fold?('<div style="height:8px"></div>'+fold):''}</div>`;
+  }).join('');
+}
+async function addUsb(i){
+  const path=usbPaths[i]; if(!path) return;
+  const r=await j('/api/sources/local',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({path})});
+  if(r.success){ load(); } else { alert(r.message||'Errore'); }
+}
+
 load();
+loadUsb();
+setInterval(loadUsb, 4000);
 </script>
 </body>
 </html>"""
@@ -561,6 +719,9 @@ if __name__ == "__main__":
     # background with retries: boot no longer waits for the network, so the NAS
     # may not be reachable yet — keep trying instead of failing once.
     threading.Thread(target=remount_all_retry, daemon=True, name="smb-remount").start()
+    # Auto-mount USB sticks / external drives (read-only) and keep them in sync,
+    # so they appear in the Sources UI ready to be added as local sources.
+    threading.Thread(target=usb_monitor, daemon=True, name="usb-monitor").start()
     # Make sure Lyrion has a writable playlist folder ("save as playlist")
     try:
         ensure_playlistdir()
