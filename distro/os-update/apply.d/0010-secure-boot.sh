@@ -1,7 +1,7 @@
 # shellcheck shell=sh
 # 0010 — Secure Boot enablement: DISABLED (do nothing).
 #
-# !!! DO NOT re-enable bootloader changes from this OS-update channel. !!!
+# IMPORTANT: do NOT re-enable bootloader changes from this OS-update channel.
 #
 # A previous version of this migration installed Debian's signed boot chain
 # (shim-signed / grub-efi-amd64-signed) and re-ran `grub-install
