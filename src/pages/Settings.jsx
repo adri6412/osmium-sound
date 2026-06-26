@@ -47,6 +47,9 @@ const Settings = () => {
   const [lyrionUrl, setLyrionUrl] = useState(localStorage.getItem('lyrionUrl') || 'http://localhost:9000');
   const [isUpdating, setIsUpdating] = useState(false);
   const [updateMessage, setUpdateMessage] = useState('');
+  // In-app confirmation modal (replaces the native window.confirm, which renders
+  // with the OS/Electron chrome). Shape: { message, confirmLabel, onConfirm }.
+  const [confirmDialog, setConfirmDialog] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [apiConnected, setApiConnected] = useState(false);
 
@@ -684,46 +687,52 @@ const Settings = () => {
     }
   };
 
-  const handleReboot = async () => {
-    if (!apiConnected) {
-      setUpdateMessage(t('settings.msg.apiUnavailable'));
-      return;
-    }
-
-    if (confirm(t('settings.msg.confirmReboot'))) {
-      setUpdateMessage(t('settings.msg.rebooting'));
-      try {
-        const result = await systemAPI.reboot();
-        if (result.success) {
-          setUpdateMessage(result.data.message || t('settings.msg.rebootingShort'));
-        } else {
-          setUpdateMessage(result.message || t('settings.msg.rebootError'));
-        }
-      } catch (error) {
-        setUpdateMessage(t('settings.msg.rebootSystemError'));
-      }
+  const doReboot = async () => {
+    setUpdateMessage(t('settings.msg.rebooting'));
+    try {
+      const result = await systemAPI.reboot();
+      setUpdateMessage(result.success
+        ? (result.data.message || t('settings.msg.rebootingShort'))
+        : (result.message || t('settings.msg.rebootError')));
+    } catch (error) {
+      setUpdateMessage(t('settings.msg.rebootSystemError'));
     }
   };
 
-  const handleShutdown = async () => {
+  const handleReboot = () => {
     if (!apiConnected) {
       setUpdateMessage(t('settings.msg.apiUnavailable'));
       return;
     }
+    setConfirmDialog({
+      message: t('settings.msg.confirmReboot'),
+      confirmLabel: t('settings.controls.reboot'),
+      onConfirm: doReboot,
+    });
+  };
 
-    if (confirm(t('settings.msg.confirmShutdown'))) {
-      setUpdateMessage(t('settings.msg.shuttingDown'));
-      try {
-        const result = await systemAPI.shutdown();
-        if (result.success) {
-          setUpdateMessage(result.data.message || t('settings.msg.shuttingDownShort'));
-        } else {
-          setUpdateMessage(result.message || t('settings.msg.shutdownError'));
-        }
-      } catch (error) {
-        setUpdateMessage(t('settings.msg.shutdownSystemError'));
-      }
+  const doShutdown = async () => {
+    setUpdateMessage(t('settings.msg.shuttingDown'));
+    try {
+      const result = await systemAPI.shutdown();
+      setUpdateMessage(result.success
+        ? (result.data.message || t('settings.msg.shuttingDownShort'))
+        : (result.message || t('settings.msg.shutdownError')));
+    } catch (error) {
+      setUpdateMessage(t('settings.msg.shutdownSystemError'));
     }
+  };
+
+  const handleShutdown = () => {
+    if (!apiConnected) {
+      setUpdateMessage(t('settings.msg.apiUnavailable'));
+      return;
+    }
+    setConfirmDialog({
+      message: t('settings.msg.confirmShutdown'),
+      confirmLabel: t('settings.controls.shutdown'),
+      onConfirm: doShutdown,
+    });
   };
 
   // Get current interface info
@@ -1720,6 +1729,39 @@ const Settings = () => {
           <p className="mt-1">{t('settings.about.builtWith')}</p>
         </motion.div>
       </div>
+
+      {/* In-app confirmation modal (styled, replaces native window.confirm) */}
+      {confirmDialog && (
+        <motion.div
+          className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/70 backdrop-blur-sm p-6"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          onClick={() => setConfirmDialog(null)}
+        >
+          <motion.div
+            className="bg-hifi-light border border-hifi-accent rounded-2xl p-6 max-w-md w-full shadow-2xl"
+            initial={{ scale: 0.92, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <p className="text-white text-lg leading-relaxed mb-6">{confirmDialog.message}</p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setConfirmDialog(null)}
+                className="flex-1 bg-hifi-accent hover:bg-hifi-dark text-white py-3 rounded-lg font-medium transition-colors"
+              >
+                {t('common.cancel')}
+              </button>
+              <button
+                onClick={() => { const fn = confirmDialog.onConfirm; setConfirmDialog(null); if (fn) fn(); }}
+                className="flex-1 bg-red-600 hover:bg-red-700 text-white py-3 rounded-lg font-semibold transition-colors"
+              >
+                {confirmDialog.confirmLabel || t('common.confirm')}
+              </button>
+            </div>
+          </motion.div>
+        </motion.div>
+      )}
     </motion.div>
   );
 };
