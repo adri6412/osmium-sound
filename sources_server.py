@@ -24,6 +24,19 @@ import subprocess
 import threading
 
 app = Flask(__name__)
+# The Electron UI now talks to this service natively (cross-origin from the
+# file:// renderer), so allow CORS like api_server does. Falls back gracefully
+# if flask_cors isn't present.
+try:
+    from flask_cors import CORS
+    CORS(app)
+except Exception:
+    @app.after_request
+    def _cors(resp):
+        resp.headers['Access-Control-Allow-Origin'] = '*'
+        resp.headers['Access-Control-Allow-Methods'] = 'GET, POST, DELETE, OPTIONS'
+        resp.headers['Access-Control-Allow-Headers'] = 'Content-Type'
+        return resp
 
 STATE_FILE = "/etc/hifi-sources.json"
 MOUNT_ROOT = "/mnt/hifi-sources"
