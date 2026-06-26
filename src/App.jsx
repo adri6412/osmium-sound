@@ -14,9 +14,17 @@ const AppContent = () => {
   // faded out to reveal the UI (which mounts/loads underneath meanwhile).
   const [showIntro, setShowIntro] = React.useState(true);
   const [introFading, setIntroFading] = React.useState(false);
+  // Run the compositor at 60 FPS while the intro animates (smooth on the x86
+  // mini-PC), then drop back to the steady-state 30 FPS cap once it's done.
+  React.useEffect(() => {
+    if (showIntro) window.electronAPI?.setFrameRate?.(60);
+  }, [showIntro]);
   const handleIntroDone = React.useCallback(() => {
     setIntroFading(true);
-    setTimeout(() => setShowIntro(false), 600);
+    setTimeout(() => {
+      setShowIntro(false);
+      window.electronAPI?.setFrameRate?.(30);
+    }, 600);
   }, []);
   const [isScreensaverActive, setIsScreensaverActive] = React.useState(false);
   const [showWizard, setShowWizard] = React.useState(

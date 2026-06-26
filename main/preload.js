@@ -8,6 +8,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // System info
   getSystemInfo: () => ipcRenderer.invoke('get-system-info'),
   getNetworkInfo: () => ipcRenderer.invoke('get-network-info'),
+
+  // Renderer frame-rate cap (e.g. 60 during the boot intro, 30 for steady UI)
+  setFrameRate: (fps) => ipcRenderer.invoke('set-frame-rate', fps),
   
   // Playback control (for future use)
   playbackControl: (action, data) => ipcRenderer.invoke('playback-control', action, data),

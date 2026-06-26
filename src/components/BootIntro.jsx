@@ -39,12 +39,28 @@ const useTime = () => React.useContext(TimelineContext).time;
 function Stage({ width, height, duration = 5, background = '#080b10', onDone, children }) {
   const [time, setTime] = React.useState(0);
   const [scale, setScale] = React.useState(1);
+  const [ready, setReady] = React.useState(false);
   const stageRef = React.useRef(null);
   const rafRef = React.useRef(null);
   const startRef = React.useRef(null);
   const doneRef = React.useRef(false);
   const onDoneRef = React.useRef(onDone);
   React.useEffect(() => { onDoneRef.current = onDone; }, [onDone]);
+
+  // Decode the logo up-front so its first paint (when it fades in at ~1.1s)
+  // doesn't hitch the animation mid-flight. The timeline only starts once the
+  // image is ready (black screen until then), so playback runs smoothly.
+  React.useEffect(() => {
+    let cancelled = false;
+    const done = () => { if (!cancelled) setReady(true); };
+    const img = new Image();
+    img.src = introLogo;
+    if (img.decode) img.decode().then(done).catch(done);
+    else { img.onload = done; img.onerror = done; }
+    // Safety: never block the intro for more than 1.2s on a slow decode.
+    const t = setTimeout(done, 1200);
+    return () => { cancelled = true; clearTimeout(t); };
+  }, []);
 
   // Cover-scale the 1920×1080 scene to fill the screen (crop, no letterbox).
   React.useEffect(() => {
@@ -61,8 +77,9 @@ function Stage({ width, height, duration = 5, background = '#080b10', onDone, ch
     return () => { ro.disconnect(); window.removeEventListener('resize', measure); };
   }, [width, height]);
 
-  // Monotonic 0 → duration playback, once.
+  // Monotonic 0 → duration playback, once. Waits for the logo to be decoded.
   React.useEffect(() => {
+    if (!ready) return;
     const step = (ts) => {
       if (startRef.current == null) startRef.current = ts;
       const elapsed = (ts - startRef.current) / 1000;
@@ -75,7 +92,7 @@ function Stage({ width, height, duration = 5, background = '#080b10', onDone, ch
     };
     rafRef.current = requestAnimationFrame(step);
     return () => { if (rafRef.current) cancelAnimationFrame(rafRef.current); };
-  }, [duration]);
+  }, [duration, ready]);
 
   const ctxValue = React.useMemo(() => ({ time, duration }), [time, duration]);
 
@@ -147,7 +164,7 @@ function GlowBurst() {
   const sc = lerp(0.32, 1.75, Easing.easeOutCubic(p));
   const op = (1 - p) * 0.9;
   const size = 1000;
-  return <div style={{ position: 'absolute', left: CX - size / 2, top: CY - size / 2, width: size, height: size, borderRadius: '50%', background: `radial-gradient(circle, ${GOLD_LT}dd 0%, ${GOLD}55 32%, transparent 66%)`, opacity: op, transform: `scale(${sc})`, filter: 'blur(8px)' }} />;
+  return <div style={{ position: 'absolute', left: CX - size / 2, top: CY - size / 2, width: size, height: size, borderRadius: '50%', background: `radial-gradient(circle, ${GOLD_LT}dd 0%, ${GOLD}55 32%, transparent 66%)`, opacity: op, transform: `scale(${sc})`, filter: 'blur(8px)', willChange: 'transform, opacity' }} />;
 }
 
 function LogoLayer() {
@@ -158,10 +175,11 @@ function LogoLayer() {
   const scaleIn = lerp(1.16, 1.0, e);
   const breathe = t > 2.1 ? 0.011 * Math.sin((t - 2.1) * 1.5) : 0;
   const scale = scaleIn * (1 + breathe);
-  const blur = lerp(18, 0, Easing.easeOutCubic(clamp((t - 1.12) / 0.72, 0, 1)));
-  const bright = lerp(0.4, 1, Easing.easeOutCubic(clamp((t - 1.12) / 0.85, 0, 1)));
+  // Only transform + opacity here (both GPU-composited). The original animated
+  // `filter: blur()/brightness()` re-rasterized the whole 1.3 MP logo every
+  // frame — far too heavy on Pi-class hardware and the main source of stutter.
   return (
-    <div style={{ position: 'absolute', inset: 0, opacity, transform: `scale(${scale})`, transformOrigin: '50% 43%', filter: `blur(${blur}px) brightness(${bright})`, willChange: 'transform, opacity, filter' }}>
+    <div style={{ position: 'absolute', inset: 0, opacity, transform: `scale(${scale})`, transformOrigin: '50% 43%', willChange: 'transform, opacity' }}>
       <img src={introLogo} alt="Osmium Sound" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
     </div>
   );

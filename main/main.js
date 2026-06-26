@@ -197,6 +197,22 @@ app.on('will-quit', () => {
 });
 
 /**
+ * Set the renderer compositor frame rate. The renderer asks for 60 FPS while
+ * the boot intro plays (so the animation is smooth on the x86 mini-PC) and 30
+ * FPS for the steady UI (to keep idle CPU/heat down).
+ */
+ipcMain.handle('set-frame-rate', (event, fps) => {
+  const n = Math.max(1, Math.min(120, Number(fps) || 30));
+  try {
+    if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.setFrameRate(n);
+    return { success: true, fps: n };
+  } catch (err) {
+    console.error('set-frame-rate failed:', err);
+    return { success: false };
+  }
+});
+
+/**
  * Get system information
  */
 ipcMain.handle('get-system-info', async () => {
