@@ -14,7 +14,30 @@
     "clear": "Cancella",
     "loading": "Caricamento...",
     "notAvailable": "N/D",
-    "language": "Lingua"
+    "language": "Lingua",
+    "error": "Errore"
+  },
+  "sources": {
+    "active": "Sorgenti attive",
+    "none": "Nessuna sorgente. Aggiungine una qui sotto.",
+    "local": "Locale",
+    "usbTitle": "Dischi USB",
+    "usbNone": "Nessun disco USB collegato. Inserisci una chiavetta o un hard disk USB.",
+    "addWhole": "Aggiungi tutto",
+    "add": "Aggiungi",
+    "addLocal": "Aggiungi cartella locale",
+    "addSmb": "Aggiungi cartella di rete (SMB)",
+    "server": "Server / IP",
+    "share": "Condivisione",
+    "user": "Utente (vuoto = ospite)",
+    "pass": "Password",
+    "mountAndAdd": "Monta e aggiungi",
+    "apply": "Applica e scansiona libreria",
+    "added": "Aggiunta ✓",
+    "mounting": "Montaggio…",
+    "mounted": "Montata ✓",
+    "applying": "Applico…",
+    "applied": "Fatto ✓"
   },
   "wizard": {
     "brand": "Osmium Sound · Setup",
@@ -134,6 +157,7 @@
     "apiUnavailable": "⚠️ Server API non disponibile",
     "sections": {
       "lyrion": "Configurazione Lyrion",
+      "sources": "Sorgenti musicali",
       "audio": "Uscita Audio (DAC)",
       "playback": "Riproduzione",
       "alarm": "Sveglia",
@@ -187,6 +211,9 @@
       "rescanStarted": "Scansione della libreria avviata.",
       "rescanDone": "Scansione completata.",
       "rescanFailed": "Avvio della scansione fallito."
+    },
+    "sources": {
+      "help": "Aggiungi le cartelle musicali: chiavette/dischi USB (montati in automatico), cartelle di rete (SMB) o locali. Premi «Applica e scansiona» al termine."
     },
     "audio": {
       "help": "Scegli il dispositivo di riproduzione (DAC). La selezione viene salvata e mantenuta ai riavvii. La riproduzione DSD è bit-perfect (DoP).",

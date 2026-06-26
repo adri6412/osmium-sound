@@ -14,7 +14,30 @@
     "clear": "Clear",
     "loading": "Loading...",
     "notAvailable": "N/A",
-    "language": "Language"
+    "language": "Language",
+    "error": "Error"
+  },
+  "sources": {
+    "active": "Active sources",
+    "none": "No sources yet. Add one below.",
+    "local": "Local",
+    "usbTitle": "USB disks",
+    "usbNone": "No USB disk connected. Insert a USB stick or drive.",
+    "addWhole": "Add all",
+    "add": "Add",
+    "addLocal": "Add local folder",
+    "addSmb": "Add network folder (SMB)",
+    "server": "Server / IP",
+    "share": "Share",
+    "user": "User (empty = guest)",
+    "pass": "Password",
+    "mountAndAdd": "Mount and add",
+    "apply": "Apply & rescan library",
+    "added": "Added ✓",
+    "mounting": "Mounting…",
+    "mounted": "Mounted ✓",
+    "applying": "Applying…",
+    "applied": "Done ✓"
   },
   "wizard": {
     "brand": "Osmium Sound · Setup",
@@ -134,6 +157,7 @@
     "apiUnavailable": "⚠️ API server unavailable",
     "sections": {
       "lyrion": "Lyrion Configuration",
+      "sources": "Music sources",
       "audio": "Audio Output (DAC)",
       "playback": "Playback",
       "alarm": "Alarm Clock",
@@ -187,6 +211,9 @@
       "rescanStarted": "Library scan started.",
       "rescanDone": "Scan complete.",
       "rescanFailed": "Failed to start the scan."
+    },
+    "sources": {
+      "help": "Add your music folders: USB sticks/drives (auto-mounted), network (SMB) or local folders. Press \"Apply & rescan\" when done."
     },
     "audio": {
       "help": "Choose the playback device (DAC). The selection is saved and kept across reboots. DSD playback is bit-perfect (DoP).",

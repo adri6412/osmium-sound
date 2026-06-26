@@ -4,11 +4,28 @@ import LyrionServer from './pages/LyrionServer';
 import SetupWizard from './pages/SetupWizard';
 import VirtualKeyboard from './components/VirtualKeyboard';
 import Screensaver from './components/Screensaver';
+import BootIntro from './components/BootIntro';
 import { KeyboardProvider, useKeyboard } from './contexts/KeyboardContext';
 import { I18nProvider } from './i18n';
 import { lyrionApi } from './utils/lyrionApi';
 
 const AppContent = () => {
+  // Boot intro: a 5s logo animation shown over everything at startup, then
+  // faded out to reveal the UI (which mounts/loads underneath meanwhile).
+  const [showIntro, setShowIntro] = React.useState(true);
+  const [introFading, setIntroFading] = React.useState(false);
+  // Run the compositor at 60 FPS while the intro animates (smooth on the x86
+  // mini-PC), then drop back to the steady-state 30 FPS cap once it's done.
+  React.useEffect(() => {
+    if (showIntro) window.electronAPI?.setFrameRate?.(60);
+  }, [showIntro]);
+  const handleIntroDone = React.useCallback(() => {
+    setIntroFading(true);
+    setTimeout(() => {
+      setShowIntro(false);
+      window.electronAPI?.setFrameRate?.(30);
+    }, 600);
+  }, []);
   const [isScreensaverActive, setIsScreensaverActive] = React.useState(false);
   const [showWizard, setShowWizard] = React.useState(
     () => localStorage.getItem('firstSetupComplete') !== 'true'
@@ -95,6 +112,14 @@ const AppContent = () => {
       <LyrionServer />
       {showWizard && <SetupWizard onComplete={() => setShowWizard(false)} />}
       <Screensaver isActive={isScreensaverActive && !showWizard} onWake={() => setIsScreensaverActive(false)} />
+      {showIntro && (
+        <div
+          className="fixed inset-0 z-[10000] bg-black"
+          style={{ opacity: introFading ? 0 : 1, transition: 'opacity 600ms ease', pointerEvents: introFading ? 'none' : 'auto' }}
+        >
+          <BootIntro onDone={handleIntroDone} />
+        </div>
+      )}
     </div>
   );
 };

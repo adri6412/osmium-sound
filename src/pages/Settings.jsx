@@ -15,7 +15,10 @@ import {
   Sliders,
   AlarmClock,
   Plus,
-  Trash2
+  Trash2,
+  HardDrive,
+  ChevronRight,
+  ChevronLeft
 } from 'lucide-react';
 import { systemAPI, checkApiServer } from '../utils/api';
 import { lyrionApi } from '../utils/lyrionApi';
@@ -23,6 +26,7 @@ import { useKeyboardInput } from '../hooks/useKeyboardInput';
 import { useKeyboard } from '../contexts/KeyboardContext';
 import { useI18n } from '../i18n';
 import LanguageSelector from '../components/LanguageSelector';
+import SourcesManager from '../components/SourcesManager';
 
 // Language-agnostic check used only to colour a status message red.
 const isErrorMsg = (m) =>
@@ -47,6 +51,12 @@ const Settings = () => {
   const [lyrionUrl, setLyrionUrl] = useState(localStorage.getItem('lyrionUrl') || 'http://localhost:9000');
   const [isUpdating, setIsUpdating] = useState(false);
   const [updateMessage, setUpdateMessage] = useState('');
+  // In-app confirmation modal (replaces the native window.confirm, which renders
+  // with the OS/Electron chrome). Shape: { message, confirmLabel, onConfirm }.
+  const [confirmDialog, setConfirmDialog] = useState(null);
+  // Android-style settings navigation: null = the section menu (list), otherwise
+  // the id of the open section (its `content`, or title for the items section).
+  const [activeSection, setActiveSection] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [apiConnected, setApiConnected] = useState(false);
 
@@ -684,46 +694,52 @@ const Settings = () => {
     }
   };
 
-  const handleReboot = async () => {
-    if (!apiConnected) {
-      setUpdateMessage(t('settings.msg.apiUnavailable'));
-      return;
-    }
-
-    if (confirm(t('settings.msg.confirmReboot'))) {
-      setUpdateMessage(t('settings.msg.rebooting'));
-      try {
-        const result = await systemAPI.reboot();
-        if (result.success) {
-          setUpdateMessage(result.data.message || t('settings.msg.rebootingShort'));
-        } else {
-          setUpdateMessage(result.message || t('settings.msg.rebootError'));
-        }
-      } catch (error) {
-        setUpdateMessage(t('settings.msg.rebootSystemError'));
-      }
+  const doReboot = async () => {
+    setUpdateMessage(t('settings.msg.rebooting'));
+    try {
+      const result = await systemAPI.reboot();
+      setUpdateMessage(result.success
+        ? (result.data.message || t('settings.msg.rebootingShort'))
+        : (result.message || t('settings.msg.rebootError')));
+    } catch (error) {
+      setUpdateMessage(t('settings.msg.rebootSystemError'));
     }
   };
 
-  const handleShutdown = async () => {
+  const handleReboot = () => {
     if (!apiConnected) {
       setUpdateMessage(t('settings.msg.apiUnavailable'));
       return;
     }
+    setConfirmDialog({
+      message: t('settings.msg.confirmReboot'),
+      confirmLabel: t('settings.controls.reboot'),
+      onConfirm: doReboot,
+    });
+  };
 
-    if (confirm(t('settings.msg.confirmShutdown'))) {
-      setUpdateMessage(t('settings.msg.shuttingDown'));
-      try {
-        const result = await systemAPI.shutdown();
-        if (result.success) {
-          setUpdateMessage(result.data.message || t('settings.msg.shuttingDownShort'));
-        } else {
-          setUpdateMessage(result.message || t('settings.msg.shutdownError'));
-        }
-      } catch (error) {
-        setUpdateMessage(t('settings.msg.shutdownSystemError'));
-      }
+  const doShutdown = async () => {
+    setUpdateMessage(t('settings.msg.shuttingDown'));
+    try {
+      const result = await systemAPI.shutdown();
+      setUpdateMessage(result.success
+        ? (result.data.message || t('settings.msg.shuttingDownShort'))
+        : (result.message || t('settings.msg.shutdownError')));
+    } catch (error) {
+      setUpdateMessage(t('settings.msg.shutdownSystemError'));
     }
+  };
+
+  const handleShutdown = () => {
+    if (!apiConnected) {
+      setUpdateMessage(t('settings.msg.apiUnavailable'));
+      return;
+    }
+    setConfirmDialog({
+      message: t('settings.msg.confirmShutdown'),
+      confirmLabel: t('settings.controls.shutdown'),
+      onConfirm: doShutdown,
+    });
   };
 
   // Get current interface info
@@ -741,6 +757,11 @@ const Settings = () => {
       title: t('settings.sections.lyrion'),
       icon: Network,
       content: 'custom-lyrion'
+    },
+    {
+      title: t('settings.sections.sources'),
+      icon: HardDrive,
+      content: 'custom-sources'
     },
     {
       title: t('settings.sections.audio'),
@@ -789,6 +810,9 @@ const Settings = () => {
     }
   ];
 
+  const sectionId = (s) => s.content || s.title;
+  const openSection = settingsSections.find((s) => sectionId(s) === activeSection);
+
   return (
     <motion.div
       initial={{ opacity: 0 }}
@@ -803,8 +827,20 @@ const Settings = () => {
           transition={{ delay: 0.1 }}
           className="mb-8"
         >
-          <h1 className="text-4xl font-bold text-white mb-2">{t('settings.title')}</h1>
-          <p className="text-hifi-silver text-lg">{t('settings.subtitle')}</p>
+          {openSection ? (
+            <button
+              onClick={() => setActiveSection(null)}
+              className="flex items-center space-x-3 text-white group"
+            >
+              <ChevronLeft size={32} className="text-hifi-gold group-hover:-translate-x-1 transition-transform" />
+              <span className="text-3xl font-bold">{openSection.title}</span>
+            </button>
+          ) : (
+            <>
+              <h1 className="text-4xl font-bold text-white mb-2">{t('settings.title')}</h1>
+              <p className="text-hifi-silver text-lg">{t('settings.subtitle')}</p>
+            </>
+          )}
           {isLoading && (
             <div className="flex items-center space-x-2 text-hifi-gold mt-2">
               <Loader2 size={16} className="animate-spin" />
@@ -818,25 +854,44 @@ const Settings = () => {
           )}
         </motion.div>
 
+        {/* Section menu — Android-style list; tap to open a sub-page */}
+        {!openSection && (
+          <div className="space-y-2">
+            {settingsSections.map((section) => {
+              const Icon = section.icon;
+              return (
+                <button
+                  key={section.title}
+                  onClick={() => setActiveSection(sectionId(section))}
+                  className="w-full hifi-panel p-4 flex items-center justify-between hover:bg-hifi-light transition-colors text-left"
+                >
+                  <div className="flex items-center space-x-3">
+                    <div className="p-2 rounded-lg bg-hifi-gold/20">
+                      <Icon size={22} className="text-hifi-gold" />
+                    </div>
+                    <span className="text-white font-medium text-lg">{section.title}</span>
+                  </div>
+                  <ChevronRight size={22} className="text-hifi-silver" />
+                </button>
+              );
+            })}
+          </div>
+        )}
+
+        {/* Open section — only the selected one is rendered */}
+        {openSection && (
         <div className="space-y-6">
           {settingsSections.map((section, sectionIndex) => {
-            const SectionIcon = section.icon;
-            
+            if (sectionId(section) !== activeSection) return null;
+
             return (
               <motion.div
                 key={section.title}
                 initial={{ y: 20, opacity: 0 }}
                 animate={{ y: 0, opacity: 1 }}
-                transition={{ delay: 0.1 * (sectionIndex + 1) }}
+                transition={{ delay: 0.05 }}
                 className="hifi-panel p-6"
               >
-                {/* Section header */}
-                <div className="flex items-center space-x-3 mb-4 pb-4 border-b border-hifi-accent">
-                  <div className="p-2 rounded-lg bg-hifi-gold/20">
-                    <SectionIcon size={24} className="text-hifi-gold" />
-                  </div>
-                  <h2 className="text-xl font-semibold text-white">{section.title}</h2>
-                </div>
 
                 {/* Custom Language Section */}
                 {section.content === 'custom-language' && (
@@ -895,6 +950,11 @@ const Settings = () => {
                     </div>
                   </div>
                 )}
+
+                {/* Custom Sources Section — embeds the on-device sources manager
+                    (the :8080 web UI) so USB / SMB / local folders can be added
+                    from the touchscreen, not just from a phone. */}
+                {section.content === 'custom-sources' && <SourcesManager />}
 
                 {/* Custom Audio Output (DAC) Section */}
                 {section.content === 'custom-audio' && (
@@ -1695,31 +1755,68 @@ const Settings = () => {
             );
           })}
         </div>
+        )}
 
-        {/* First-setup wizard */}
-        <motion.button
-          onClick={() => {
-            localStorage.removeItem('firstSetupComplete');
-            window.dispatchEvent(new Event('hifi-open-wizard'));
-          }}
-          className="w-full mt-6 bg-hifi-light hover:bg-hifi-accent text-white py-4 rounded-lg font-semibold flex items-center justify-center space-x-2 transition-colors"
-          whileTap={{ scale: 0.95 }}
-        >
-          <RotateCw size={20} />
-          <span>{t('settings.restartWizard')}</span>
-        </motion.button>
+        {/* Restart wizard + About — shown only on the section menu */}
+        {!openSection && (
+          <>
+            <motion.button
+              onClick={() => {
+                localStorage.removeItem('firstSetupComplete');
+                window.dispatchEvent(new Event('hifi-open-wizard'));
+              }}
+              className="w-full mt-6 bg-hifi-light hover:bg-hifi-accent text-white py-4 rounded-lg font-semibold flex items-center justify-center space-x-2 transition-colors"
+              whileTap={{ scale: 0.95 }}
+            >
+              <RotateCw size={20} />
+              <span>{t('settings.restartWizard')}</span>
+            </motion.button>
 
-        {/* About section */}
-        <motion.div
-          initial={{ y: 20, opacity: 0 }}
-          animate={{ y: 0, opacity: 1 }}
-          transition={{ delay: 0.6 }}
-          className="mt-8 text-center text-hifi-silver text-sm"
-        >
-          <p>HiFi Media Player v{__APP_VERSION__}</p>
-          <p className="mt-1">{t('settings.about.builtWith')}</p>
-        </motion.div>
+            <motion.div
+              initial={{ y: 20, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              transition={{ delay: 0.6 }}
+              className="mt-8 text-center text-hifi-silver text-sm"
+            >
+              <p>HiFi Media Player v{__APP_VERSION__}</p>
+              <p className="mt-1">{t('settings.about.builtWith')}</p>
+            </motion.div>
+          </>
+        )}
       </div>
+
+      {/* In-app confirmation modal (styled, replaces native window.confirm) */}
+      {confirmDialog && (
+        <motion.div
+          className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/70 backdrop-blur-sm p-6"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          onClick={() => setConfirmDialog(null)}
+        >
+          <motion.div
+            className="bg-hifi-light border border-hifi-accent rounded-2xl p-6 max-w-md w-full shadow-2xl"
+            initial={{ scale: 0.92, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <p className="text-white text-lg leading-relaxed mb-6">{confirmDialog.message}</p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setConfirmDialog(null)}
+                className="flex-1 bg-hifi-accent hover:bg-hifi-dark text-white py-3 rounded-lg font-medium transition-colors"
+              >
+                {t('common.cancel')}
+              </button>
+              <button
+                onClick={() => { const fn = confirmDialog.onConfirm; setConfirmDialog(null); if (fn) fn(); }}
+                className="flex-1 bg-red-600 hover:bg-red-700 text-white py-3 rounded-lg font-semibold transition-colors"
+              >
+                {confirmDialog.confirmLabel || t('common.confirm')}
+              </button>
+            </div>
+          </motion.div>
+        </motion.div>
+      )}
     </motion.div>
   );
 };
