@@ -1,9 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { QRCodeSVG } from 'qrcode.react';
 import {
   Wifi, Network, Lock, Music, Server, FolderTree,
-  Check, ChevronRight, ChevronLeft, RefreshCw, X, Loader2, AlertCircle, Disc3, Speaker
+  Check, ChevronRight, ChevronLeft, RefreshCw, X, Loader2, AlertCircle, Disc3, Speaker, Download
 } from 'lucide-react';
 import { systemAPI } from '../utils/api';
 import { useI18n } from '../i18n';
@@ -43,6 +43,16 @@ const SetupWizard = ({ onComplete }) => {
   const [selectedAudio, setSelectedAudio] = useState('default');
   const [audioBusy, setAudioBusy] = useState(false);
   const [audioError, setAudioError] = useState('');
+
+  // lyrion install fallback sub-state. The installer purges Lyrion and the
+  // first-boot reinstall can fail if the network isn't up yet, so the wizard
+  // (where networking is already configured) checks and, if missing, installs it.
+  const [lyrionState, setLyrionState] = useState('checking'); // 'checking' | 'missing' | 'installed'
+  const [lyrionInstalling, setLyrionInstalling] = useState(false);
+  const [lyrionProgress, setLyrionProgress] = useState(0);
+  const [lyrionMsg, setLyrionMsg] = useState('');
+  const [lyrionError, setLyrionError] = useState('');
+  const lyrionPollRef = useRef(null);
 
   // Resolve the device IP whenever we need to show service URLs
   const refreshIp = async () => {
@@ -150,11 +160,59 @@ const SetupWizard = ({ onComplete }) => {
     setStep('sources');
   };
 
+  // ── Lyrion presence check + install fallback ───────────────────
+  const checkLyrion = async () => {
+    setLyrionError('');
+    setLyrionState('checking');
+    const res = await systemAPI.checkLyrionUpdate();
+    // `current` comes from local dpkg, so it's reliable even if the downloads
+    // server is unreachable (in which case `data.error` is set but current still
+    // tells us whether Lyrion is installed). 'unknown' ⇒ not installed.
+    const cur = res?.data?.current;
+    setLyrionState(cur && cur !== 'unknown' ? 'installed' : 'missing');
+  };
+
+  const installLyrion = async () => {
+    setLyrionInstalling(true);
+    setLyrionError('');
+    setLyrionProgress(5);
+    setLyrionMsg(t('wizard.lyrion.installing'));
+    const res = await systemAPI.applyLyrionUpdate();
+    if (!res.success || res.data?.started === false) {
+      setLyrionInstalling(false);
+      setLyrionError(res.data?.message || res.message || t('wizard.lyrion.installFailed'));
+      return;
+    }
+    // The install runs as a detached systemd unit; poll its status file.
+    lyrionPollRef.current = setInterval(async () => {
+      const s = await systemAPI.getLyrionUpdateStatus();
+      const d = s.data || {};
+      if (typeof d.progress === 'number') setLyrionProgress(d.progress);
+      if (d.message) setLyrionMsg(d.message);
+      if (d.state === 'done' || d.state === 'error') {
+        clearInterval(lyrionPollRef.current);
+        lyrionPollRef.current = null;
+        setLyrionInstalling(false);
+        if (d.state === 'done') {
+          setLyrionProgress(100);
+          setLyrionState('installed');
+        } else {
+          setLyrionError(d.message || t('wizard.lyrion.installFailed'));
+        }
+      }
+    }, 2000);
+  };
+
   useEffect(() => {
     if (step === 'audio' && audioDevices.length === 0) loadAudioDevices();
     if ((step === 'sources' || step === 'lyrion') && !deviceIp) refreshIp();
+    if (step === 'lyrion' && !lyrionInstalling) checkLyrion();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [step]);
+
+  // Stop polling if the wizard unmounts mid-install (the systemd unit finishes
+  // on its own regardless).
+  useEffect(() => () => { if (lyrionPollRef.current) clearInterval(lyrionPollRef.current); }, []);
 
   const finish = () => {
     localStorage.setItem('firstSetupComplete', 'true');
@@ -397,20 +455,60 @@ const SetupWizard = ({ onComplete }) => {
               <div className="w-14 h-14 rounded-xl bg-hifi-surface border border-hifi-border flex items-center justify-center mb-4">
                 <Server size={26} className="text-hifi-gold" />
               </div>
-              <h2 className="text-2xl font-bold text-white mb-2">{t('wizard.lyrion.title')}</h2>
-              <p className="text-hifi-silver/70 text-sm max-w-md mb-6">
-                {t('wizard.lyrion.subtitle')}
-              </p>
-              <div className="flex items-center gap-6 bg-hifi-surface border border-hifi-border rounded-2xl p-5">
-                <div className="bg-white p-2.5 rounded-xl shrink-0">
-                  <QRCodeSVG value={lyrionUrl} size={120} level="M" />
-                </div>
-                <div className="text-left">
-                  <p className="text-hifi-silver/50 text-xs uppercase tracking-wide mb-1">{t('wizard.lyrion.label')}</p>
-                  <p className="text-hifi-gold text-2xl font-mono font-bold">{deviceIp || '—'}<span className="text-hifi-silver/50">:{LYRION_PORT}</span></p>
-                  <p className="text-hifi-silver/40 text-xs mt-2">{t('wizard.lyrion.webHint')}</p>
-                </div>
-              </div>
+
+              {/* Checking whether Lyrion is installed */}
+              {lyrionState === 'checking' && (
+                <>
+                  <h2 className="text-2xl font-bold text-white mb-2">{t('wizard.lyrion.title')}</h2>
+                  <p className="text-hifi-silver/60 text-sm flex items-center justify-center mt-4">
+                    <Loader2 size={16} className="animate-spin mr-2" />{t('wizard.lyrion.checking')}
+                  </p>
+                </>
+              )}
+
+              {/* Fallback: Lyrion missing → offer to install it here */}
+              {lyrionState === 'missing' && (
+                <>
+                  <h2 className="text-2xl font-bold text-white mb-2">{t('wizard.lyrion.notInstalledTitle')}</h2>
+                  <p className="text-hifi-silver/70 text-sm max-w-md mb-6">{t('wizard.lyrion.notInstalledHint')}</p>
+                  {!lyrionInstalling ? (
+                    <>
+                      <button onClick={installLyrion}
+                        className="flex items-center space-x-2 bg-hifi-gold text-black font-semibold px-6 py-3 rounded-xl hover:brightness-110 transition">
+                        <Download size={18} /><span>{t('wizard.lyrion.install')}</span>
+                      </button>
+                      {lyrionError && <p className="text-red-400 text-sm mt-4 flex items-center justify-center"><AlertCircle size={15} className="mr-2" />{lyrionError}</p>}
+                    </>
+                  ) : (
+                    <div className="w-full max-w-sm">
+                      <div className="h-2 bg-hifi-dark rounded-full overflow-hidden border border-hifi-border">
+                        <div className="h-full bg-hifi-gold transition-all duration-500" style={{ width: `${lyrionProgress}%` }} />
+                      </div>
+                      <p className="text-hifi-silver/60 text-sm mt-3 flex items-center justify-center">
+                        <Loader2 size={15} className="animate-spin mr-2" />{lyrionMsg || t('wizard.lyrion.installing')}
+                      </p>
+                    </div>
+                  )}
+                </>
+              )}
+
+              {/* Lyrion installed → show the web-UI address (original behaviour) */}
+              {lyrionState === 'installed' && (
+                <>
+                  <h2 className="text-2xl font-bold text-white mb-2">{t('wizard.lyrion.title')}</h2>
+                  <p className="text-hifi-silver/70 text-sm max-w-md mb-6">{t('wizard.lyrion.subtitle')}</p>
+                  <div className="flex items-center gap-6 bg-hifi-surface border border-hifi-border rounded-2xl p-5">
+                    <div className="bg-white p-2.5 rounded-xl shrink-0">
+                      <QRCodeSVG value={lyrionUrl} size={120} level="M" />
+                    </div>
+                    <div className="text-left">
+                      <p className="text-hifi-silver/50 text-xs uppercase tracking-wide mb-1">{t('wizard.lyrion.label')}</p>
+                      <p className="text-hifi-gold text-2xl font-mono font-bold">{deviceIp || '—'}<span className="text-hifi-silver/50">:{LYRION_PORT}</span></p>
+                      <p className="text-hifi-silver/40 text-xs mt-2">{t('wizard.lyrion.webHint')}</p>
+                    </div>
+                  </div>
+                </>
+              )}
             </div>
           </Shell>
         )}
