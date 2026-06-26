@@ -14,7 +14,30 @@
     "clear": "Cancella",
     "loading": "Caricamento...",
     "notAvailable": "N/D",
-    "language": "Lingua"
+    "language": "Lingua",
+    "error": "Errore"
+  },
+  "sources": {
+    "active": "Sorgenti attive",
+    "none": "Nessuna sorgente. Aggiungine una qui sotto.",
+    "local": "Locale",
+    "usbTitle": "Dischi USB",
+    "usbNone": "Nessun disco USB collegato. Inserisci una chiavetta o un hard disk USB.",
+    "addWhole": "Aggiungi tutto",
+    "add": "Aggiungi",
+    "addLocal": "Aggiungi cartella locale",
+    "addSmb": "Aggiungi cartella di rete (SMB)",
+    "server": "Server / IP",
+    "share": "Condivisione",
+    "user": "Utente (vuoto = ospite)",
+    "pass": "Password",
+    "mountAndAdd": "Monta e aggiungi",
+    "apply": "Applica e scansiona libreria",
+    "added": "Aggiunta ✓",
+    "mounting": "Montaggio…",
+    "mounted": "Montata ✓",
+    "applying": "Applico…",
+    "applied": "Fatto ✓"
   },
   "wizard": {
     "brand": "Osmium Sound · Setup",

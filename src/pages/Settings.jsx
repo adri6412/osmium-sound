@@ -16,7 +16,9 @@ import {
   AlarmClock,
   Plus,
   Trash2,
-  HardDrive
+  HardDrive,
+  ChevronRight,
+  ChevronLeft
 } from 'lucide-react';
 import { systemAPI, checkApiServer } from '../utils/api';
 import { lyrionApi } from '../utils/lyrionApi';
@@ -24,6 +26,7 @@ import { useKeyboardInput } from '../hooks/useKeyboardInput';
 import { useKeyboard } from '../contexts/KeyboardContext';
 import { useI18n } from '../i18n';
 import LanguageSelector from '../components/LanguageSelector';
+import SourcesManager from '../components/SourcesManager';
 
 // Language-agnostic check used only to colour a status message red.
 const isErrorMsg = (m) =>
@@ -51,6 +54,9 @@ const Settings = () => {
   // In-app confirmation modal (replaces the native window.confirm, which renders
   // with the OS/Electron chrome). Shape: { message, confirmLabel, onConfirm }.
   const [confirmDialog, setConfirmDialog] = useState(null);
+  // Android-style settings navigation: null = the section menu (list), otherwise
+  // the id of the open section (its `content`, or title for the items section).
+  const [activeSection, setActiveSection] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [apiConnected, setApiConnected] = useState(false);
 
@@ -804,6 +810,9 @@ const Settings = () => {
     }
   ];
 
+  const sectionId = (s) => s.content || s.title;
+  const openSection = settingsSections.find((s) => sectionId(s) === activeSection);
+
   return (
     <motion.div
       initial={{ opacity: 0 }}
@@ -818,8 +827,20 @@ const Settings = () => {
           transition={{ delay: 0.1 }}
           className="mb-8"
         >
-          <h1 className="text-4xl font-bold text-white mb-2">{t('settings.title')}</h1>
-          <p className="text-hifi-silver text-lg">{t('settings.subtitle')}</p>
+          {openSection ? (
+            <button
+              onClick={() => setActiveSection(null)}
+              className="flex items-center space-x-3 text-white group"
+            >
+              <ChevronLeft size={32} className="text-hifi-gold group-hover:-translate-x-1 transition-transform" />
+              <span className="text-3xl font-bold">{openSection.title}</span>
+            </button>
+          ) : (
+            <>
+              <h1 className="text-4xl font-bold text-white mb-2">{t('settings.title')}</h1>
+              <p className="text-hifi-silver text-lg">{t('settings.subtitle')}</p>
+            </>
+          )}
           {isLoading && (
             <div className="flex items-center space-x-2 text-hifi-gold mt-2">
               <Loader2 size={16} className="animate-spin" />
@@ -833,25 +854,44 @@ const Settings = () => {
           )}
         </motion.div>
 
+        {/* Section menu — Android-style list; tap to open a sub-page */}
+        {!openSection && (
+          <div className="space-y-2">
+            {settingsSections.map((section) => {
+              const Icon = section.icon;
+              return (
+                <button
+                  key={section.title}
+                  onClick={() => setActiveSection(sectionId(section))}
+                  className="w-full hifi-panel p-4 flex items-center justify-between hover:bg-hifi-light transition-colors text-left"
+                >
+                  <div className="flex items-center space-x-3">
+                    <div className="p-2 rounded-lg bg-hifi-gold/20">
+                      <Icon size={22} className="text-hifi-gold" />
+                    </div>
+                    <span className="text-white font-medium text-lg">{section.title}</span>
+                  </div>
+                  <ChevronRight size={22} className="text-hifi-silver" />
+                </button>
+              );
+            })}
+          </div>
+        )}
+
+        {/* Open section — only the selected one is rendered */}
+        {openSection && (
         <div className="space-y-6">
           {settingsSections.map((section, sectionIndex) => {
-            const SectionIcon = section.icon;
-            
+            if (sectionId(section) !== activeSection) return null;
+
             return (
               <motion.div
                 key={section.title}
                 initial={{ y: 20, opacity: 0 }}
                 animate={{ y: 0, opacity: 1 }}
-                transition={{ delay: 0.1 * (sectionIndex + 1) }}
+                transition={{ delay: 0.05 }}
                 className="hifi-panel p-6"
               >
-                {/* Section header */}
-                <div className="flex items-center space-x-3 mb-4 pb-4 border-b border-hifi-accent">
-                  <div className="p-2 rounded-lg bg-hifi-gold/20">
-                    <SectionIcon size={24} className="text-hifi-gold" />
-                  </div>
-                  <h2 className="text-xl font-semibold text-white">{section.title}</h2>
-                </div>
 
                 {/* Custom Language Section */}
                 {section.content === 'custom-language' && (
@@ -914,17 +954,7 @@ const Settings = () => {
                 {/* Custom Sources Section — embeds the on-device sources manager
                     (the :8080 web UI) so USB / SMB / local folders can be added
                     from the touchscreen, not just from a phone. */}
-                {section.content === 'custom-sources' && (
-                  <div className="space-y-3">
-                    <p className="text-sm text-hifi-silver">{t('settings.sources.help')}</p>
-                    <iframe
-                      src={`http://localhost:8080`}
-                      title={t('settings.sections.sources')}
-                      className="w-full rounded-lg border border-hifi-accent bg-hifi-dark"
-                      style={{ height: '72vh' }}
-                    />
-                  </div>
-                )}
+                {section.content === 'custom-sources' && <SourcesManager />}
 
                 {/* Custom Audio Output (DAC) Section */}
                 {section.content === 'custom-audio' && (
@@ -1725,30 +1755,34 @@ const Settings = () => {
             );
           })}
         </div>
+        )}
 
-        {/* First-setup wizard */}
-        <motion.button
-          onClick={() => {
-            localStorage.removeItem('firstSetupComplete');
-            window.dispatchEvent(new Event('hifi-open-wizard'));
-          }}
-          className="w-full mt-6 bg-hifi-light hover:bg-hifi-accent text-white py-4 rounded-lg font-semibold flex items-center justify-center space-x-2 transition-colors"
-          whileTap={{ scale: 0.95 }}
-        >
-          <RotateCw size={20} />
-          <span>{t('settings.restartWizard')}</span>
-        </motion.button>
+        {/* Restart wizard + About — shown only on the section menu */}
+        {!openSection && (
+          <>
+            <motion.button
+              onClick={() => {
+                localStorage.removeItem('firstSetupComplete');
+                window.dispatchEvent(new Event('hifi-open-wizard'));
+              }}
+              className="w-full mt-6 bg-hifi-light hover:bg-hifi-accent text-white py-4 rounded-lg font-semibold flex items-center justify-center space-x-2 transition-colors"
+              whileTap={{ scale: 0.95 }}
+            >
+              <RotateCw size={20} />
+              <span>{t('settings.restartWizard')}</span>
+            </motion.button>
 
-        {/* About section */}
-        <motion.div
-          initial={{ y: 20, opacity: 0 }}
-          animate={{ y: 0, opacity: 1 }}
-          transition={{ delay: 0.6 }}
-          className="mt-8 text-center text-hifi-silver text-sm"
-        >
-          <p>HiFi Media Player v{__APP_VERSION__}</p>
-          <p className="mt-1">{t('settings.about.builtWith')}</p>
-        </motion.div>
+            <motion.div
+              initial={{ y: 20, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              transition={{ delay: 0.6 }}
+              className="mt-8 text-center text-hifi-silver text-sm"
+            >
+              <p>HiFi Media Player v{__APP_VERSION__}</p>
+              <p className="mt-1">{t('settings.about.builtWith')}</p>
+            </motion.div>
+          </>
+        )}
       </div>
 
       {/* In-app confirmation modal (styled, replaces native window.confirm) */}
