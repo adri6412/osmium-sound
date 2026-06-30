@@ -19,8 +19,11 @@ import {
   HardDrive,
   MousePointer2,
   ChevronRight,
-  ChevronLeft
+  ChevronLeft,
+  Smartphone,
+  Speaker
 } from 'lucide-react';
+import { QRCodeSVG } from 'qrcode.react';
 import { systemAPI, checkApiServer } from '../utils/api';
 import { lyrionApi } from '../utils/lyrionApi';
 import { useKeyboardInput } from '../hooks/useKeyboardInput';
@@ -76,6 +79,13 @@ const Settings = () => {
   const [selectedAudio, setSelectedAudio] = useState('default');
   const [audioBusy, setAudioBusy] = useState(false);
   const [audioMessage, setAudioMessage] = useState('');
+
+  // DSP / parametric EQ (optional, off by default — keeps bit-perfect path)
+  const [dspStatus, setDspStatus] = useState(null); // { available, enabled, active, bands, crossfeed }
+  const [dspBands, setDspBands] = useState([]);      // editable [{freq, gain, q}]
+  const [dspCrossfeed, setDspCrossfeed] = useState(false);
+  const [dspBusy, setDspBusy] = useState(false);
+  const [dspMessage, setDspMessage] = useState('');
 
   // OTA UI update state
   const [appUpdate, setAppUpdate] = useState(null); // { current, latest, update_available, ... }
@@ -133,6 +143,14 @@ const Settings = () => {
   const [replayGainMode, setReplayGainMode] = useState('0');     // 0 off / 1 track / 2 album / 3 smart
   const [playbackMessage, setPlaybackMessage] = useState('');
 
+  // ── Multiroom (LMS sync zones) ─────────────────────────────────
+  // Other players seen on the LMS, and the macs currently synced to *this*
+  // appliance (its sync slaves). Grouping is native LMS sync.
+  const [otherPlayers, setOtherPlayers] = useState([]);
+  const [syncSlaves, setSyncSlaves] = useState([]);
+  const [multiroomBusy, setMultiroomBusy] = useState(false);
+  const [multiroomMessage, setMultiroomMessage] = useState('');
+
   // ── Alarms (per-player, via Lyrion) ────────────────────────────
   const [alarms, setAlarms] = useState([]);
   const [alarmsBusy, setAlarmsBusy] = useState(false);
@@ -153,6 +171,7 @@ const Settings = () => {
     loadPointerStatus();
     loadOtaChannel();
     loadPlaybackPrefs();
+    loadDspStatus();
   }, []);
 
   // ── Playback preferences handlers ───────────────────────────────
@@ -174,7 +193,36 @@ const Settings = () => {
       if (td != null) setTransitionDuration(String(td));
       if (rg != null) setReplayGainMode(String(rg));
       loadAlarms(mac);
+      loadMultiroom(mac, players);
     } catch (_) {}
+  };
+
+  // ── Multiroom handlers ──────────────────────────────────────────
+  // The appliance is players[0]; every other player can be grouped with it.
+  // A player synced to the appliance shows up in the appliance's sync_slaves.
+  const loadMultiroom = async (mac = playerMac, players = null) => {
+    if (!mac) return;
+    try {
+      const all = players || await lyrionApi.getPlayers();
+      setOtherPlayers((all || []).filter((p) => p.playerid && p.playerid !== mac));
+      const sync = await lyrionApi.getPlayerSync(mac);
+      setSyncSlaves(sync.slaves || []);
+    } catch (_) {}
+  };
+
+  const toggleSync = async (otherMac, shouldGroup) => {
+    if (!playerMac) return;
+    setMultiroomBusy(true);
+    setMultiroomMessage('');
+    try {
+      if (shouldGroup) await lyrionApi.syncPlayer(otherMac, playerMac);
+      else await lyrionApi.unsyncPlayer(otherMac);
+      await loadMultiroom(playerMac);
+      setMultiroomMessage(t('settings.multiroom.saved'));
+    } catch (_) {
+      setMultiroomMessage(t('settings.multiroom.failed'));
+    }
+    setMultiroomBusy(false);
   };
 
   const changeTransitionType = (v) => {
@@ -318,6 +366,43 @@ const Settings = () => {
     setAudioBusy(false);
     setAudioMessage(res.data?.message || res.message || (res.success ? t('settings.audio.updated') : t('settings.audio.setFailed')));
   };
+
+  // ── DSP / parametric EQ handlers ────────────────────────────────
+  const loadDspStatus = async () => {
+    const res = await systemAPI.getDspStatus();
+    if (res.success && res.data) {
+      setDspStatus(res.data);
+      setDspBands(Array.isArray(res.data.bands) ? res.data.bands : []);
+      setDspCrossfeed(!!res.data.crossfeed);
+    }
+  };
+
+  // Push the current EQ config to the backend. `enabled` defaults to the
+  // current toggle state (used by "Save EQ"); the toggle passes the new state.
+  const applyDsp = async (enabled = dspStatus?.enabled) => {
+    if (dspBusy) return;
+    setDspBusy(true);
+    setDspMessage('');
+    const res = await systemAPI.setDsp({ enabled: !!enabled, bands: dspBands, crossfeed: dspCrossfeed });
+    setDspBusy(false);
+    if (res.success && res.data?.success) {
+      setDspStatus((s) => ({ ...(s || {}), enabled: res.data.enabled, bands: res.data.bands, crossfeed: res.data.crossfeed }));
+      setDspMessage(res.data.message || '');
+    } else {
+      setDspMessage(res.data?.message || res.message || t('settings.dsp.failed'));
+    }
+  };
+
+  const toggleDsp = () => {
+    if (!dspStatus) return;
+    applyDsp(!dspStatus.enabled);
+  };
+
+  const updateBand = (i, key, value) => {
+    setDspBands((bands) => bands.map((b, idx) => idx === i ? { ...b, [key]: value } : b));
+  };
+  const addBand = () => setDspBands((b) => [...b, { freq: 1000, gain: 0, q: 1.0 }]);
+  const removeBand = (i) => setDspBands((b) => b.filter((_, idx) => idx !== i));
 
   // Auto-check for updates on mount (only if the user kept it enabled);
   // clean up any poll on unmount.
@@ -787,6 +872,18 @@ const Settings = () => {
   const wiredInterfaces = networkInfo.filter(net => net.type === 'wired');
   const wirelessInterfaces = networkInfo.filter(net => net.type === 'wireless');
 
+  // Web-remote (Material skin) URL: the LMS Material skin is reachable from any
+  // phone on the LAN. Build it from the device's LAN IP and the Lyrion port.
+  const deviceIp = currentInterface?.address
+    || networkInfo.find((n) => n.address && !/^127\./.test(n.address))?.address
+    || systemInfo.local_ip;
+  const lyrionPort = (() => {
+    const m = /:(\d+)/.exec(lyrionUrl || '');
+    return m ? m[1] : '9000';
+  })();
+  const isUsableIp = deviceIp && !/^127\./.test(deviceIp) && !/loading|caric/i.test(deviceIp);
+  const webRemoteUrl = isUsableIp ? `http://${deviceIp}:${lyrionPort}/material/` : null;
+
   const settingsSections = [
     {
       title: t('settings.sections.language'),
@@ -814,6 +911,16 @@ const Settings = () => {
       content: 'custom-playback'
     },
     {
+      title: t('settings.sections.dsp'),
+      icon: Sliders,
+      content: 'custom-dsp'
+    },
+    {
+      title: t('settings.sections.multiroom'),
+      icon: Speaker,
+      content: 'custom-multiroom'
+    },
+    {
       title: t('settings.sections.alarm'),
       icon: AlarmClock,
       content: 'custom-alarm'
@@ -822,6 +929,11 @@ const Settings = () => {
       title: t('settings.sections.network'),
       icon: Wifi,
       content: 'custom-network'
+    },
+    {
+      title: t('settings.sections.webRemote'),
+      icon: Smartphone,
+      content: 'custom-web-remote'
     },
     {
       title: t('settings.sections.ssh'),
@@ -1145,6 +1257,164 @@ const Settings = () => {
                   </div>
                 )}
 
+                {/* Custom DSP / Parametric EQ Section */}
+                {section.content === 'custom-dsp' && (
+                  <div className="space-y-4">
+                    <p className="text-sm text-hifi-silver">{t('settings.dsp.help')}</p>
+
+                    {/* Bit-perfect warning */}
+                    <div className="flex items-start space-x-2 text-xs text-amber-300 bg-amber-900/20 border border-amber-500/30 rounded-lg p-3">
+                      <ShieldAlert size={14} className="mt-0.5 shrink-0" />
+                      <span>{t('settings.dsp.warning')}</span>
+                    </div>
+
+                    {dspStatus && !dspStatus.available ? (
+                      <div className="rounded-lg p-3 text-center text-sm bg-hifi-dark text-hifi-silver">
+                        {t('settings.dsp.unavailable')}
+                      </div>
+                    ) : (
+                      <>
+                        {/* On/off toggle */}
+                        <button
+                          onClick={toggleDsp}
+                          disabled={dspBusy || !dspStatus}
+                          className="w-full flex items-center justify-between bg-hifi-dark hover:bg-hifi-light/40 disabled:opacity-60 rounded-lg px-4 py-3 transition-colors"
+                        >
+                          <span className="flex items-center space-x-2 text-sm text-white">
+                            {dspBusy && <Loader2 size={16} className="animate-spin" />}
+                            <span>{dspStatus?.enabled ? t('settings.dsp.enabled') : t('settings.dsp.disabled')}</span>
+                          </span>
+                          <span className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${dspStatus?.enabled ? 'bg-hifi-gold' : 'bg-hifi-accent'}`}>
+                            <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${dspStatus?.enabled ? 'translate-x-6' : 'translate-x-1'}`} />
+                          </span>
+                        </button>
+
+                        {/* Parametric EQ bands */}
+                        <div className="space-y-2">
+                          <div className="flex items-center justify-between">
+                            <span className="text-sm text-white">{t('settings.dsp.bands')}</span>
+                            <button
+                              onClick={addBand}
+                              className="flex items-center space-x-1 text-xs text-hifi-gold hover:text-hifi-gold/80"
+                            >
+                              <Plus size={14} /><span>{t('settings.dsp.addBand')}</span>
+                            </button>
+                          </div>
+
+                          {dspBands.length === 0 && (
+                            <p className="text-xs text-hifi-silver">{t('settings.dsp.noBands')}</p>
+                          )}
+
+                          {dspBands.map((b, i) => (
+                            <div key={i} className="flex items-center gap-2 bg-hifi-dark rounded-lg p-2">
+                              <label className="flex flex-col text-[10px] text-hifi-silver">
+                                {t('settings.dsp.freq')}
+                                <input type="number" value={b.freq} min={20} max={20000}
+                                  onChange={(e) => updateBand(i, 'freq', Number(e.target.value))}
+                                  className="w-20 bg-hifi-light text-white text-sm rounded px-2 py-1" />
+                              </label>
+                              <label className="flex flex-col text-[10px] text-hifi-silver">
+                                {t('settings.dsp.gain')}
+                                <input type="number" value={b.gain} min={-24} max={24} step={0.5}
+                                  onChange={(e) => updateBand(i, 'gain', Number(e.target.value))}
+                                  className="w-16 bg-hifi-light text-white text-sm rounded px-2 py-1" />
+                              </label>
+                              <label className="flex flex-col text-[10px] text-hifi-silver">
+                                {t('settings.dsp.q')}
+                                <input type="number" value={b.q} min={0.1} max={10} step={0.1}
+                                  onChange={(e) => updateBand(i, 'q', Number(e.target.value))}
+                                  className="w-16 bg-hifi-light text-white text-sm rounded px-2 py-1" />
+                              </label>
+                              <button onClick={() => removeBand(i)} className="ml-auto text-red-400 hover:text-red-300 p-1">
+                                <Trash2 size={16} />
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+
+                        {/* Crossfeed */}
+                        <button
+                          onClick={() => setDspCrossfeed((v) => !v)}
+                          className="w-full flex items-center justify-between bg-hifi-dark hover:bg-hifi-light/40 rounded-lg px-4 py-3 transition-colors"
+                        >
+                          <span className="text-sm text-white">{t('settings.dsp.crossfeed')}</span>
+                          <span className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${dspCrossfeed ? 'bg-hifi-gold' : 'bg-hifi-accent'}`}>
+                            <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${dspCrossfeed ? 'translate-x-6' : 'translate-x-1'}`} />
+                          </span>
+                        </button>
+
+                        {/* Apply EQ (re-applies live when DSP is on; otherwise just saves) */}
+                        <button
+                          onClick={() => applyDsp()}
+                          disabled={dspBusy}
+                          className="w-full bg-hifi-gold text-black font-medium rounded-lg px-4 py-3 disabled:opacity-60 hover:opacity-90 transition-opacity"
+                        >
+                          {t('settings.dsp.save')}
+                        </button>
+                      </>
+                    )}
+
+                    {dspMessage && (
+                      <div className={`rounded-lg p-3 text-center text-sm ${
+                        isErrorMsg(dspMessage)
+                          ? 'bg-red-900/20 text-red-300 border border-red-500/30'
+                          : 'bg-hifi-dark text-hifi-silver'
+                      }`}>
+                        {dspMessage}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Custom Multiroom Section */}
+                {section.content === 'custom-multiroom' && (
+                  <div className="space-y-4">
+                    <p className="text-sm text-hifi-silver">{t('settings.multiroom.help')}</p>
+
+                    {!playerMac && (
+                      <div className="rounded-lg p-3 text-center text-sm bg-hifi-dark text-hifi-silver">
+                        {t('settings.playback.noPlayer')}
+                      </div>
+                    )}
+
+                    {playerMac && otherPlayers.length === 0 && (
+                      <div className="rounded-lg p-3 text-center text-sm bg-hifi-dark text-hifi-silver">
+                        {t('settings.multiroom.noOthers')}
+                      </div>
+                    )}
+
+                    {playerMac && otherPlayers.map((p) => {
+                      const grouped = syncSlaves.includes(p.playerid);
+                      return (
+                        <button
+                          key={p.playerid}
+                          onClick={() => toggleSync(p.playerid, !grouped)}
+                          disabled={multiroomBusy}
+                          className="w-full flex items-center justify-between bg-hifi-dark hover:bg-hifi-light/40 disabled:opacity-60 rounded-lg px-4 py-3 transition-colors"
+                        >
+                          <span className="flex items-center space-x-2 text-sm text-white">
+                            <Speaker size={16} className="text-hifi-gold shrink-0" />
+                            <span>{p.name || p.playerid}</span>
+                          </span>
+                          <span className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${grouped ? 'bg-hifi-gold' : 'bg-hifi-accent'}`}>
+                            <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${grouped ? 'translate-x-6' : 'translate-x-1'}`} />
+                          </span>
+                        </button>
+                      );
+                    })}
+
+                    {multiroomMessage && (
+                      <div className={`rounded-lg p-3 text-center text-sm ${
+                        isErrorMsg(multiroomMessage)
+                          ? 'bg-red-900/20 text-red-300 border border-red-500/30'
+                          : 'bg-hifi-dark text-hifi-silver'
+                      }`}>
+                        {multiroomMessage}
+                      </div>
+                    )}
+                  </div>
+                )}
+
                 {/* Custom Alarm Clock Section */}
                 {section.content === 'custom-alarm' && (
                   <div className="space-y-4">
@@ -1324,6 +1594,29 @@ const Settings = () => {
                 )}
 
                 {/* Custom SSH Section */}
+                {/* Custom Web-Remote (Material skin) Section */}
+                {section.content === 'custom-web-remote' && (
+                  <div className="space-y-4">
+                    <p className="text-sm text-hifi-silver">{t('settings.webRemote.help')}</p>
+
+                    {webRemoteUrl ? (
+                      <div className="flex flex-col items-center space-y-4">
+                        <div className="bg-white p-4 rounded-xl">
+                          <QRCodeSVG value={webRemoteUrl} size={200} level="M" />
+                        </div>
+                        <div className="text-center">
+                          <p className="text-xs text-hifi-silver mb-1">{t('settings.webRemote.scanHint')}</p>
+                          <code className="text-sm text-hifi-gold break-all">{webRemoteUrl}</code>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="rounded-lg p-3 text-center text-sm bg-hifi-dark text-hifi-silver">
+                        {t('settings.webRemote.noIp')}
+                      </div>
+                    )}
+                  </div>
+                )}
+
                 {section.content === 'custom-ssh' && (
                   <div className="space-y-4">
                     <p className="text-sm text-hifi-silver">{t('settings.ssh.help')}</p>

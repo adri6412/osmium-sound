@@ -174,8 +174,11 @@
       "sources": "Sorgenti musicali",
       "audio": "Uscita Audio (DAC)",
       "playback": "Riproduzione",
+      "dsp": "DSP / Equalizzatore",
+      "multiroom": "Multiroom",
       "alarm": "Sveglia",
       "network": "Configurazione Rete",
+      "webRemote": "Controllo da telefono",
       "ssh": "Accesso SSH",
       "pointer": "Puntatore mouse",
       "systemInfo": "Informazioni Sistema",
@@ -202,6 +205,33 @@
       "rgAlbum": "Album",
       "rgSmart": "Intelligente",
       "saved": "Impostazione salvata."
+    },
+    "dsp": {
+      "help": "Elaborazione digitale del segnale opzionale: equalizzatore parametrico e crossfeed per cuffie applicati a tutta la riproduzione.",
+      "warning": "Attivando il DSP la riproduzione non è più bit-perfect (l'audio viene ricampionato e il passthrough DSD/DoP è bypassato). Lascialo spento per l'ascolto critico con un DAC esterno.",
+      "unavailable": "Motore DSP non ancora installato su questo dispositivo. Viene configurato automaticamente al prossimo aggiornamento di sistema (richiede una connessione a Internet).",
+      "enabled": "DSP attivo",
+      "disabled": "DSP disattivato",
+      "bands": "EQ parametrico",
+      "addBand": "Aggiungi banda",
+      "noBands": "Nessuna banda EQ. Aggiungine una per esaltare o attenuare una frequenza.",
+      "freq": "Freq (Hz)",
+      "gain": "Guadagno (dB)",
+      "q": "Q",
+      "crossfeed": "Crossfeed cuffie",
+      "save": "Applica EQ",
+      "failed": "Operazione DSP fallita."
+    },
+    "multiroom": {
+      "help": "Raggruppa altri player presenti in rete con questo dispositivo per riprodurre la stessa musica in sincrono (sync nativo di Lyrion).",
+      "noOthers": "Nessun altro player trovato in rete. Il multiroom richiede almeno un altro player (es. un altro dispositivo Osmium o un player squeezelite).",
+      "saved": "Gruppo multiroom aggiornato.",
+      "failed": "Impossibile modificare il gruppo multiroom."
+    },
+    "webRemote": {
+      "help": "Controlla questo dispositivo da qualsiasi telefono o tablet sulla stessa rete, usando il browser — nessuna app da installare. Apri l'indirizzo qui sotto o inquadra il QR code.",
+      "scanHint": "Inquadra con la fotocamera del telefono",
+      "noIp": "Nessun indirizzo di rete disponibile. Collega il dispositivo alla rete (Ethernet o Wi-Fi) per ottenere un link di controllo."
     },
     "alarm": {
       "help": "Programma sveglie sul player attivo. All'orario impostato il player si attiva e avvia la riproduzione.",

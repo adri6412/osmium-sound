@@ -193,6 +193,32 @@ export class LyrionAPI {
     return this.request(playerMac, ['alarm', 'delete', `id:${alarmId}`]);
   }
 
+  // --- Multiroom / synchronised zones ---
+  // LMS syncs multiple players natively: a sync group has one master and any
+  // number of slaves that all play the master's queue in lock-step.
+
+  // Make `playerMac` join the group that contains `targetMac` (targetMac stays
+  // master). `<player> sync <other>` is the native LMS command.
+  async syncPlayer(playerMac, targetMac) {
+    return this.request(playerMac, ['sync', targetMac]);
+  }
+
+  // Remove `playerMac` from its sync group.
+  async unsyncPlayer(playerMac) {
+    return this.request(playerMac, ['sync', '-']);
+  }
+
+  // Sync state of a player, read from its `status` (sync_master / sync_slaves are
+  // top-level fields, independent of the requested tags). Returns
+  // { master, slaves: [] } — `slaves` are the macs following this player.
+  async getPlayerSync(playerMac) {
+    const r = await this.request(playerMac, ['status', '-', 1]);
+    return {
+      master: r?.sync_master ?? null,
+      slaves: r?.sync_slaves ? String(r.sync_slaves).split(',').filter(Boolean) : [],
+    };
+  }
+
   // --- Per-player preferences (transition / ReplayGain / …) ---
 
   // Returns the raw value (string) of a player preference, or null.

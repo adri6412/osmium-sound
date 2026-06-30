@@ -421,6 +421,10 @@ def list_audio_devices():
             if m:
                 card, cid, cname, dev, dname = (
                     int(m.group(1)), m.group(2), m.group(3), int(m.group(4)), m.group(5))
+                # Hide the snd-aloop Loopback card: it's the internal bridge to the
+                # DSP engine, not a real output the user should pick directly.
+                if cid == 'Loopback':
+                    continue
                 devices.append({
                     'id': f'hw:CARD={cid},DEV={dev}',
                     'name': f'{cname} — {dname}',
@@ -456,6 +460,18 @@ def set_audio_device(device):
     valid_devices = [d['id'] for d in list_audio_devices()['devices']]
     if device not in valid_devices:
         return {'success': False, 'message': f'Dispositivo audio non valido: {device}'}
+
+    # When the DSP engine is ON, the chosen DAC is CamillaDSP's *playback*
+    # device — squeezelite stays pointed at the Loopback. Re-apply the DSP
+    # path with the new DAC instead of rewriting squeezelite's -o.
+    if _read_dsp_state().get('enabled'):
+        st = _read_dsp_state()
+        try:
+            _apply_dsp_on(device, st['bands'], st['crossfeed'])
+        except Exception:
+            log.exception("set_audio_device (DSP) failed")
+            return {'success': False, 'message': 'Impostazione uscita (DSP) fallita'}
+        return {'success': True, 'message': f'Uscita audio (DSP) impostata su {device}'}
 
     try:
         with open(SQUEEZELITE_DEFAULT) as f:
@@ -646,6 +662,292 @@ def set_pointer(enable):
 
     return {'success': True, 'available': _has_unclutter(), 'enabled': bool(enable),
             'message': ('Puntatore mouse attivato' if enable else 'Puntatore mouse disattivato')}
+
+# ──────────────────────────────────────────────────────────────────
+#  Tidal Connect — optional. Lets the appliance appear as a Tidal Connect
+#  target so the Tidal app can stream directly to it (via mDNS/avahi). The
+#  daemon is an unofficial, reverse-engineered binary that is NOT bundled
+#  (no trusted x86 build ships with the image); the OS-OTA migration only
+#  sets up the prerequisites (avahi) and the systemd unit. The toggle is
+#  therefore only "available" once a tidal-connect binary is actually present.
+#  Unit name comes from a fixed constant (never user input) — no injection.
+# ──────────────────────────────────────────────────────────────────
+TIDAL_UNIT = 'tidal-connect.service'
+TIDAL_BINARY = '/usr/local/bin/tidal_connect'
+
+def _unit_exists(unit):
+    try:
+        r = subprocess.run(['systemctl', 'list-unit-files', unit],
+                           capture_output=True, text=True, timeout=10)
+        return r.returncode == 0 and unit in (r.stdout or '')
+    except Exception:
+        return False
+
+def _tidal_available():
+    # Both the unit AND the (unbundled) binary must be present for the toggle
+    # to do anything useful.
+    return _unit_exists(TIDAL_UNIT) and os.path.exists(TIDAL_BINARY)
+
+def get_tidal_status():
+    try:
+        en = subprocess.run(['systemctl', 'is-enabled', TIDAL_UNIT],
+                           capture_output=True, text=True, timeout=10)
+        ac = subprocess.run(['systemctl', 'is-active', TIDAL_UNIT],
+                           capture_output=True, text=True, timeout=10)
+        return {
+            'available': _tidal_available(),
+            'enabled': en.stdout.strip() == 'enabled',
+            'active': ac.stdout.strip() == 'active',
+        }
+    except Exception:
+        log.exception("get_tidal_status failed")
+        return {'available': False, 'enabled': False, 'active': False,
+                'error': 'Stato Tidal Connect non disponibile'}
+
+def set_tidal(enable):
+    """Enable+start or disable+stop the Tidal Connect daemon (persists)."""
+    if enable and not _tidal_available():
+        return {'success': False, 'available': False, 'enabled': False,
+                'active': False, 'message': 'Tidal Connect non installato su questo dispositivo'}
+    action = 'enable' if enable else 'disable'
+    try:
+        r = subprocess.run(['sudo', 'systemctl', action, '--now', TIDAL_UNIT],
+                          capture_output=True, text=True, timeout=30)
+        if r.returncode != 0:
+            log.error("set_tidal %s failed: %s", action, (r.stderr or '').strip())
+            status = get_tidal_status()
+            status['success'] = False
+            status['message'] = 'Operazione Tidal Connect fallita'
+            return status
+    except Exception:
+        log.exception("set_tidal failed")
+        return {'success': False, 'message': 'Operazione Tidal Connect fallita'}
+    status = get_tidal_status()
+    status['success'] = True
+    status['message'] = 'Tidal Connect abilitato' if enable else 'Tidal Connect disabilitato'
+    return status
+
+# ──────────────────────────────────────────────────────────────────
+#  DSP / CamillaDSP engine — OPTIONAL parametric EQ + crossfeed.
+#
+#  Default OFF: squeezelite plays straight to the DAC (bit-perfect, DoP/DSD).
+#  When ON, squeezelite is redirected to an snd-aloop Loopback; CamillaDSP
+#  captures the loopback, applies the EQ/crossfeed, and outputs to the real
+#  DAC. The DSP path resamples to a fixed rate and is therefore NOT bit-perfect
+#  (DoP/DSD pass-through is disabled) — that's why it's an opt-in toggle.
+#  Turning DSP OFF restores the exact previous bit-perfect squeezelite args.
+# ──────────────────────────────────────────────────────────────────
+CAMILLA_BIN = '/usr/local/bin/camilladsp'
+CAMILLA_CONFIG = '/etc/camilladsp/config.yml'
+DSP_UNIT = 'camilladsp.service'
+DSP_STATE_FILE = '/etc/hifi-player/dsp.json'
+DSP_TARGET_FILE = '/var/lib/hifi-player/dsp-target'
+DSP_RATE = 48000
+LOOPBACK_PLAYBACK = 'hw:CARD=Loopback,DEV=0'   # squeezelite writes here
+LOOPBACK_CAPTURE = 'hw:CARD=Loopback,DEV=1'    # CamillaDSP reads here
+
+def _loopback_present():
+    try:
+        with open('/proc/asound/cards') as f:
+            return 'Loopback' in f.read()
+    except Exception:
+        return False
+
+def _dsp_available():
+    return os.path.exists(CAMILLA_BIN) and _unit_exists(DSP_UNIT) and _loopback_present()
+
+def _read_dsp_state():
+    try:
+        with open(DSP_STATE_FILE) as f:
+            d = json.load(f)
+    except Exception:
+        d = {}
+    return {'enabled': bool(d.get('enabled')),
+            'bands': d.get('bands') or [],
+            'crossfeed': bool(d.get('crossfeed'))}
+
+def _write_dsp_state(state):
+    os.makedirs(os.path.dirname(DSP_STATE_FILE), exist_ok=True)
+    tmp = DSP_STATE_FILE + '.tmp'
+    with open(tmp, 'w') as f:
+        json.dump(state, f)
+    os.replace(tmp, DSP_STATE_FILE)
+
+def _read_dsp_target():
+    try:
+        with open(DSP_TARGET_FILE) as f:
+            return f.read().strip() or 'default'
+    except Exception:
+        return 'default'
+
+def _write_dsp_target(dev):
+    os.makedirs(os.path.dirname(DSP_TARGET_FILE), exist_ok=True)
+    tmp = DSP_TARGET_FILE + '.tmp'
+    with open(tmp, 'w') as f:
+        f.write((dev or 'default') + '\n')
+    os.replace(tmp, DSP_TARGET_FILE)
+
+# ── squeezelite ARGS string editing (shared with set_audio_device) ──
+def _read_sq_args():
+    """Return (full_file_content, args_string) or (content, None) if no ARGS=."""
+    try:
+        with open(SQUEEZELITE_DEFAULT) as f:
+            content = f.read()
+    except Exception:
+        return None, None
+    m = re.search(r"ARGS=(['\"])(.*?)\1", content)
+    return content, (m.group(2) if m else None)
+
+def _write_sq_args(new_args):
+    content, _ = _read_sq_args()
+    if content is None:
+        content = ''
+    m = re.search(r"ARGS=(['\"])(.*?)\1", content)
+    if m:
+        content = content[:m.start()] + f"ARGS='{new_args}'" + content[m.end():]
+    else:
+        content += f"\nARGS='{new_args}'\n"
+    with open(SQUEEZELITE_DEFAULT, 'w') as f:
+        f.write(content)
+
+def _sq_set_o(args, dev):
+    if re.search(r'-o\s+\S+', args):
+        return re.sub(r'-o\s+\S+', f'-o {dev}', args)
+    return f'-o {dev} ' + args
+
+def _sq_remove_flag(args, flag):
+    return re.sub(rf'(^|\s){re.escape(flag)}(?=\s|$)', ' ', args).strip()
+
+def _sq_ensure_D(args):
+    if not re.search(r'(^|\s)-D(\s|$)', args):
+        args = re.sub(r'(-o\s+\S+)', r'\1 -D', args, count=1)
+    return args
+
+def _sq_set_rate(args, rate):
+    if re.search(r'-r\s+\S+', args):
+        return re.sub(r'-r\s+\S+', f'-r {rate}', args)
+    return re.sub(r'(-o\s+\S+)', rf'\1 -r {rate}', args, count=1)
+
+def _sq_ensure_R(args):
+    if not re.search(r'(^|\s)-R(\s|$)', args):
+        args = (args + ' -R').strip()
+    return args
+
+def _camilla_config_dict(playback_dev, bands, crossfeed):
+    """Build a CamillaDSP config (returned as a dict; JSON is valid YAML)."""
+    filters, eq_names = {}, []
+    for i, b in enumerate(bands):
+        nm = f'band_{i}'
+        filters[nm] = {'type': 'Biquad', 'parameters': {
+            'type': 'Peaking',
+            'freq': float(b.get('freq', 1000)),
+            'q': float(b.get('q', 1.0)) or 1.0,
+            'gain': float(b.get('gain', 0)),
+        }}
+        eq_names.append(nm)
+    mixers, pipeline = {}, []
+    if crossfeed:
+        # Basic headphone crossfeed: blend an attenuated copy of the opposite
+        # channel into each ear (no delay — a simple, valid first version).
+        mixers['crossfeed'] = {'channels': {'in': 2, 'out': 2}, 'mapping': [
+            {'dest': 0, 'sources': [
+                {'channel': 0, 'gain': -1.0, 'inverted': False},
+                {'channel': 1, 'gain': -9.0, 'inverted': False}]},
+            {'dest': 1, 'sources': [
+                {'channel': 1, 'gain': -1.0, 'inverted': False},
+                {'channel': 0, 'gain': -9.0, 'inverted': False}]},
+        ]}
+        pipeline.append({'type': 'Mixer', 'name': 'crossfeed'})
+    if eq_names:
+        pipeline.append({'type': 'Filter', 'channels': [0, 1], 'names': eq_names})
+    return {
+        'devices': {
+            'samplerate': DSP_RATE, 'chunksize': 1024,
+            'enable_rate_adjust': True, 'target_level': 512,
+            'capture': {'type': 'Alsa', 'channels': 2, 'device': LOOPBACK_CAPTURE, 'format': 'S32_LE'},
+            'playback': {'type': 'Alsa', 'channels': 2, 'device': playback_dev, 'format': 'S32_LE'},
+        },
+        'filters': filters, 'mixers': mixers, 'pipeline': pipeline,
+    }
+
+def _current_real_dac():
+    """The DAC squeezelite outputs to when DSP is OFF. When DSP is ON the
+    squeezelite -o is the Loopback, so fall back to the stored target."""
+    o = _current_audio_device()
+    return _read_dsp_target() if 'Loopback' in o else o
+
+def _apply_dsp_on(playback_dev, bands, crossfeed):
+    cfg = _camilla_config_dict(playback_dev, bands, crossfeed)
+    os.makedirs(os.path.dirname(CAMILLA_CONFIG), exist_ok=True)
+    with open(CAMILLA_CONFIG, 'w') as f:
+        json.dump(cfg, f, indent=2)
+    _write_dsp_target(playback_dev)
+    _, args = _read_sq_args()
+    if args is not None:
+        args = _sq_set_o(args, LOOPBACK_PLAYBACK)
+        args = _sq_remove_flag(args, '-D')   # no DoP/DSD through the DSP path
+        args = _sq_set_rate(args, DSP_RATE)  # fixed rate into the loopback
+        args = _sq_ensure_R(args)            # soxr resample to that rate
+        _write_sq_args(args)
+    subprocess.run(['sudo', 'systemctl', 'enable', '--now', DSP_UNIT],
+                   capture_output=True, text=True, timeout=30)
+    _run(['systemctl', 'restart', 'squeezelite'], timeout=30)
+
+def _apply_dsp_off():
+    dac = _read_dsp_target()
+    _, args = _read_sq_args()
+    if args is not None:
+        args = _sq_set_o(args, dac or 'default')
+        args = _sq_ensure_D(args)                 # restore DoP/DSD
+        args = re.sub(r'\s*-r\s+\S+', '', args)    # drop the forced rate
+        args = _sq_remove_flag(args, '-R')         # drop resampling
+        _write_sq_args(args.strip())
+    subprocess.run(['sudo', 'systemctl', 'disable', '--now', DSP_UNIT],
+                   capture_output=True, text=True, timeout=30)
+    _run(['systemctl', 'restart', 'squeezelite'], timeout=30)
+
+def get_dsp_status():
+    st = _read_dsp_state()
+    active = False
+    try:
+        ac = subprocess.run(['systemctl', 'is-active', DSP_UNIT],
+                           capture_output=True, text=True, timeout=10)
+        active = ac.stdout.strip() == 'active'
+    except Exception:
+        pass
+    return {'available': _dsp_available(), 'enabled': st['enabled'], 'active': active,
+            'bands': st['bands'], 'crossfeed': st['crossfeed'], 'rate': DSP_RATE}
+
+def set_dsp(config):
+    if not _dsp_available():
+        return {'success': False, 'available': False,
+                'message': 'DSP non disponibile su questo dispositivo'}
+    enabled = bool(config.get('enabled'))
+    crossfeed = bool(config.get('crossfeed'))
+    clean = []
+    for b in (config.get('bands') or [])[:20]:
+        try:
+            clean.append({
+                'freq': max(20.0, min(20000.0, float(b.get('freq')))),
+                'gain': max(-24.0, min(24.0, float(b.get('gain')))),
+                'q': max(0.1, min(10.0, float(b.get('q', 1.0)))),
+            })
+        except Exception:
+            continue
+    try:
+        if enabled:
+            dac = _current_real_dac()
+            if not dac or 'Loopback' in dac:
+                dac = 'default'
+            _apply_dsp_on(dac, clean, crossfeed)
+        else:
+            _apply_dsp_off()
+        _write_dsp_state({'enabled': enabled, 'bands': clean, 'crossfeed': crossfeed})
+    except Exception:
+        log.exception('set_dsp failed')
+        return {'success': False, 'message': 'Operazione DSP fallita'}
+    return {'success': True, 'enabled': enabled, 'bands': clean, 'crossfeed': crossfeed,
+            'message': 'DSP attivato' if enabled else 'DSP disattivato'}
 
 # ──────────────────────────────────────────────────────────────────
 #  OTA update helpers
@@ -1243,6 +1545,24 @@ def api_audio_devices():
 def api_set_audio_device():
     data = request.get_json(silent=True) or {}
     return jsonify(set_audio_device(data.get('device')))
+
+@app.route('/dsp_status', methods=['GET'])
+def api_dsp_status():
+    return jsonify(get_dsp_status())
+
+@app.route('/dsp_set', methods=['POST'])
+def api_dsp_set():
+    data = request.get_json(silent=True) or {}
+    return jsonify(set_dsp(data))
+
+@app.route('/tidal_status', methods=['GET'])
+def api_tidal_status():
+    return jsonify(get_tidal_status())
+
+@app.route('/tidal_set', methods=['POST'])
+def api_tidal_set():
+    data = request.get_json(silent=True) or {}
+    return jsonify(set_tidal(bool(data.get('enable'))))
 
 @app.route('/show_global_keyboard', methods=['POST'])
 def api_show_global_keyboard():

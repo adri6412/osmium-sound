@@ -114,6 +114,14 @@ export const systemAPI = {
   getAudioDevices: () => apiGet('/audio_devices'),
   // Set squeezelite output device and restart it. Returns { success, message }
   setAudioDevice: (device) => apiPost('/set_audio_device', { device }),
+  // Tidal Connect daemon state: { available, enabled, active }
+  getTidalStatus: () => apiGet('/tidal_status'),
+  // Enable/disable the Tidal Connect daemon. Returns { success, enabled, active, message }
+  setTidal: (enable) => apiPost('/tidal_set', { enable }),
+  // DSP/EQ engine state: { available, enabled, bands, crossfeed }
+  getDspStatus: () => apiGet('/dsp_status'),
+  // Apply DSP settings. Returns { success, enabled, message }
+  setDsp: (config) => apiPost('/dsp_set', config),
 
   // ── OTA update of the Electron UI ───────────────────────────────
   // Check GitHub Releases: { current, latest, update_available, notes, asset_url, asset_size }

@@ -174,8 +174,11 @@
       "sources": "Music sources",
       "audio": "Audio Output (DAC)",
       "playback": "Playback",
+      "dsp": "DSP / Equalizer",
+      "multiroom": "Multiroom",
       "alarm": "Alarm Clock",
       "network": "Network Configuration",
+      "webRemote": "Phone control",
       "ssh": "SSH Access",
       "pointer": "Mouse pointer",
       "systemInfo": "System Information",
@@ -202,6 +205,33 @@
       "rgAlbum": "Album",
       "rgSmart": "Smart",
       "saved": "Setting saved."
+    },
+    "dsp": {
+      "help": "Optional digital signal processing: a parametric equalizer and headphone crossfeed applied to all playback.",
+      "warning": "Turning DSP on disables bit-perfect playback (audio is resampled and DSD/DoP pass-through is bypassed). Leave it off for critical listening with an external DAC.",
+      "unavailable": "DSP engine not installed on this device yet. It is set up automatically on the next system update (requires an internet connection).",
+      "enabled": "DSP enabled",
+      "disabled": "DSP disabled",
+      "bands": "Parametric EQ",
+      "addBand": "Add band",
+      "noBands": "No EQ bands. Add one to boost or cut a frequency.",
+      "freq": "Freq (Hz)",
+      "gain": "Gain (dB)",
+      "q": "Q",
+      "crossfeed": "Headphone crossfeed",
+      "save": "Apply EQ",
+      "failed": "DSP operation failed."
+    },
+    "multiroom": {
+      "help": "Group other players on your network with this device so they play the same music in sync (native Lyrion sync).",
+      "noOthers": "No other players found on the network. Multiroom needs at least one more player (e.g. another Osmium device or a squeezelite player).",
+      "saved": "Multiroom group updated.",
+      "failed": "Could not change the multiroom group."
+    },
+    "webRemote": {
+      "help": "Control this device from any phone or tablet on the same network, using your browser — no app to install. Open the address below or scan the QR code.",
+      "scanHint": "Scan with your phone camera",
+      "noIp": "No network address available yet. Connect the device to the network (Ethernet or Wi-Fi) to get a control link."
     },
     "alarm": {
       "help": "Schedule alarms on the active player. At the set time the player wakes up and starts playing.",
