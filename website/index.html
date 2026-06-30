@@ -441,6 +441,15 @@
       border-radius: 10px; padding: 0.9rem 1.2rem; text-align: left;
     }
     .install-note strong { color: var(--accent); }
+    .install-warning {
+      max-width: 760px; margin: 1.1rem auto 0;
+      font-size: 0.86rem; color: var(--text); line-height: 1.6;
+      background: rgba(255,99,71,0.10); border: 1px solid rgba(255,99,71,0.4);
+      border-radius: 10px; padding: 0.9rem 1.2rem; text-align: left;
+      display: flex; gap: 0.7rem; align-items: flex-start;
+    }
+    .install-warning .warn-ico { flex-shrink: 0; font-size: 1.05rem; line-height: 1.5; }
+    .install-warning strong { color: #ff8166; }
     @media (max-width: 760px) { .quickstart { grid-template-columns: 1fr; } }
     .code-block {
       background: #060606;
@@ -851,6 +860,11 @@
         <h4 data-en="Boot &amp; install" data-it="Avvia e installa">Boot &amp; install</h4>
         <p data-en="Boot your x86 mini-PC from the USB stick and follow the on-screen installer. Reboot — you're done." data-it="Avvia il tuo mini-PC x86 dalla chiavetta e segui l'installazione guidata. Riavvia ed è fatta.">Boot your x86 mini-PC from the USB stick and follow the on-screen installer. Reboot — you're done.</p>
       </div>
+    </div>
+
+    <div class="install-warning">
+      <span class="warn-ico" aria-hidden="true">⚠️</span>
+      <span data-en="&lt;strong&gt;Unattended install — it wipes a disk automatically.&lt;/strong&gt; The ISO asks no questions and shows no confirmation: it picks the &lt;strong&gt;first disk it detects&lt;/strong&gt;, erases it completely (new GPT, all partitions and data lost), then reboots on its own. Use a machine with nothing you want to keep." data-it="&lt;strong&gt;Installazione non presidiata — formatta un disco automaticamente.&lt;/strong&gt; La ISO non fa domande e non chiede conferme: sceglie il &lt;strong&gt;primo disco che rileva&lt;/strong&gt;, lo cancella del tutto (nuovo GPT, tutte le partizioni e i dati persi) e si riavvia da sola. Usala su una macchina senza dati da conservare."><strong>Unattended install — it wipes a disk automatically.</strong> The ISO asks no questions and shows no confirmation: it picks the <strong>first disk it detects</strong>, erases it completely (new GPT, all partitions and data lost), then reboots on its own. Use a machine with nothing you want to keep.</span>
     </div>
 
     <p class="install-note" data-en="&lt;strong&gt;Note:&lt;/strong&gt; the ISO is only needed for the first install. Every later version arrives automatically over the air (OTA) from the Settings screen — no reflashing required." data-it="&lt;strong&gt;Nota:&lt;/strong&gt; la ISO serve solo per la prima installazione. Tutte le versioni successive arrivano automaticamente via OTA dalla schermata Impostazioni — senza riflashare nulla.">
