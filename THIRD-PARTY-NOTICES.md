@@ -77,4 +77,4 @@ HiFi Media Player is an **independent open-source project** developed to provide
 
 ---
 
-**For license compliance questions or to request source code, please contact:** `frongillo.adriano@gmail.com`
+**For license compliance questions or to request source code, please contact:** `info@adrianofrongillo.ovh`
