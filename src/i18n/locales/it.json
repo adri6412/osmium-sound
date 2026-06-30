@@ -49,6 +49,14 @@
       "title": "Benvenuto",
       "subtitle": "Configuriamo insieme il tuo network streamer. Bastano pochi passaggi: rete, sorgenti musicali e sei pronto all'ascolto."
     },
+    "input": {
+      "title": "Come usi il dispositivo?",
+      "subtitle": "Lo puoi cambiare in qualsiasi momento dalle Impostazioni.",
+      "touch": "Touchscreen",
+      "touchSub": "Tocco lo schermo",
+      "mouse": "Mouse",
+      "mouseSub": "Mostra il puntatore"
+    },
     "language": {
       "title": "Lingua",
       "subtitle": "Scegli la lingua dell'interfaccia."
@@ -169,6 +177,7 @@
       "alarm": "Sveglia",
       "network": "Configurazione Rete",
       "ssh": "Accesso SSH",
+      "pointer": "Puntatore mouse",
       "systemInfo": "Informazioni Sistema",
       "updates": "Aggiornamenti",
       "systemControls": "Controlli Sistema",
@@ -206,6 +215,13 @@
       "unavailable": "Servizio SSH non installato su questo dispositivo.",
       "installHint": "SSH non è ancora installato: attivandolo verrà installato e avviato automaticamente (richiede connessione internet).",
       "failed": "Operazione SSH fallita."
+    },
+    "pointer": {
+      "help": "Mostra il puntatore del mouse sullo schermo. Utile se usi il dispositivo con un mouse invece del touchscreen. Di default il puntatore è nascosto.",
+      "enabled": "Puntatore mouse attivo",
+      "disabled": "Puntatore mouse nascosto",
+      "unavailable": "Controllo del puntatore non disponibile su questo dispositivo.",
+      "failed": "Impossibile cambiare il puntatore."
     },
     "lyrion": {
       "urlLabel": "URL Lyrion Server",

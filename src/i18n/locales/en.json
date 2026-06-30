@@ -49,6 +49,14 @@
       "title": "Welcome",
       "subtitle": "Let's set up your network streamer together. Just a few steps: network, music sources, and you're ready to listen."
     },
+    "input": {
+      "title": "How do you use the device?",
+      "subtitle": "You can change this any time in Settings.",
+      "touch": "Touchscreen",
+      "touchSub": "I tap the screen",
+      "mouse": "Mouse",
+      "mouseSub": "Show the pointer"
+    },
     "language": {
       "title": "Language",
       "subtitle": "Choose the interface language."
@@ -169,6 +177,7 @@
       "alarm": "Alarm Clock",
       "network": "Network Configuration",
       "ssh": "SSH Access",
+      "pointer": "Mouse pointer",
       "systemInfo": "System Information",
       "updates": "Updates",
       "systemControls": "System Controls",
@@ -206,6 +215,13 @@
       "unavailable": "SSH service is not installed on this device.",
       "installHint": "SSH is not installed yet: enabling it will install and start it automatically (requires an internet connection).",
       "failed": "SSH operation failed."
+    },
+    "pointer": {
+      "help": "Show the mouse pointer on screen. Useful if you use the device with a mouse instead of the touchscreen. The pointer is hidden by default.",
+      "enabled": "Mouse pointer shown",
+      "disabled": "Mouse pointer hidden",
+      "unavailable": "Pointer control is not available on this device.",
+      "failed": "Could not change the pointer."
     },
     "lyrion": {
       "urlLabel": "Lyrion Server URL",

@@ -2,6 +2,7 @@ from flask import Flask, jsonify, request
 from flask_cors import CORS
 import subprocess
 import os
+import shutil
 import signal
 import sys
 import socket
@@ -581,6 +582,72 @@ def set_ssh(enable):
     return status
 
 # ──────────────────────────────────────────────────────────────────
+#  Mouse pointer (cursor) control — the appliance is built for a
+#  touchscreen, so the X cursor is auto-hidden by unclutter. This lets a
+#  user WITHOUT a touchscreen turn the on-screen pointer on from Settings.
+#  The choice is persisted and re-applied at login by ~/.xsession; here we
+#  also apply it live so it takes effect without a reboot.
+#  NOTE: the cursor only ever appears once the X server is no longer started
+#  with `-nocursor` (removed at build time + by OS-OTA migration); on an
+#  un-migrated device a reboot is needed after that update for it to show.
+# ──────────────────────────────────────────────────────────────────
+POINTER_FILE = '/etc/hifi-player/pointer-enabled'
+
+def _has_unclutter():
+    return bool(shutil.which('unclutter'))
+
+def get_pointer_status():
+    """Return { available, enabled }. 'enabled' = pointer shown (cursor not
+    auto-hidden). Defaults to disabled (hidden) — the touchscreen default."""
+    enabled = False
+    try:
+        with open(POINTER_FILE) as f:
+            enabled = f.read().strip() == '1'
+    except Exception:
+        pass
+    return {'available': _has_unclutter(), 'enabled': enabled}
+
+def _kiosk_x_env():
+    """Environment for talking to the kiosk X server (hifi autologin = :0)."""
+    env = dict(os.environ)
+    env['DISPLAY'] = env.get('DISPLAY', ':0')
+    env.setdefault('XAUTHORITY', '/home/hifi/.Xauthority')
+    return env
+
+def set_pointer(enable):
+    """Show (enable) or hide (disable) the mouse pointer — live + persisted.
+    Showing kills the cursor-hider (unclutter); hiding (re)starts it. The
+    persisted flag is read by ~/.xsession so the choice survives a reboot."""
+    try:
+        os.makedirs(os.path.dirname(POINTER_FILE), exist_ok=True)
+        tmp = POINTER_FILE + '.tmp'
+        with open(tmp, 'w') as f:
+            f.write(('1' if enable else '0') + '\n')
+        os.replace(tmp, POINTER_FILE)
+    except Exception:
+        log.exception("set_pointer: persist failed")
+        return {'success': False, 'available': _has_unclutter(),
+                'enabled': get_pointer_status()['enabled'],
+                'message': 'Impossibile salvare la preferenza'}
+
+    # Apply live to the running session (best-effort; the persisted flag covers
+    # the next login regardless of whether this succeeds).
+    try:
+        # Either way, stop any running cursor-hider first.
+        subprocess.run(['pkill', '-x', 'unclutter'], capture_output=True, timeout=10)
+        if not enable and _has_unclutter():
+            # Re-hide: relaunch unclutter in the kiosk X session, detached.
+            subprocess.Popen(['unclutter', '-idle', '1', '-root'],
+                             env=_kiosk_x_env(),
+                             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                             start_new_session=True)
+    except Exception:
+        log.exception("set_pointer: live apply failed")
+
+    return {'success': True, 'available': _has_unclutter(), 'enabled': bool(enable),
+            'message': ('Puntatore mouse attivato' if enable else 'Puntatore mouse disattivato')}
+
+# ──────────────────────────────────────────────────────────────────
 #  OTA update helpers
 # ──────────────────────────────────────────────────────────────────
 
@@ -1149,6 +1216,15 @@ def api_ssh_status():
 def api_ssh_set():
     data = request.get_json(silent=True) or {}
     return jsonify(set_ssh(bool(data.get('enable'))))
+
+@app.route('/pointer_status', methods=['GET'])
+def api_pointer_status():
+    return jsonify(get_pointer_status())
+
+@app.route('/pointer_set', methods=['POST'])
+def api_pointer_set():
+    data = request.get_json(silent=True) or {}
+    return jsonify(set_pointer(bool(data.get('enable'))))
 
 @app.route('/ota_channel', methods=['GET'])
 def api_ota_channel():

@@ -4,8 +4,14 @@ xset s off
 xset -dpms
 xset s noblank
 
-# Hide the mouse cursor when idle
-unclutter -idle 1 -root &
+# Hide the mouse cursor when idle — unless the user enabled the on-screen
+# pointer (Settings → Mouse pointer), persisted by the API at the path below.
+# A non-touchscreen user can thus keep a visible mouse pointer across reboots.
+if [ "$(cat /etc/hifi-player/pointer-enabled 2>/dev/null)" = "1" ]; then
+    : # pointer enabled — leave the cursor visible (don't start unclutter)
+else
+    unclutter -idle 1 -root &
+fi
 
 # Make sure audio is unmuted
 amixer -q sset Master unmute 2>/dev/null || true
