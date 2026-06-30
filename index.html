@@ -409,6 +409,64 @@
     }
     .copy-btn:hover { color: var(--text); border-color: #555; }
 
+    /* ── CHANGELOG ───────────────────────────────────── */
+    #changelog { border-top: 1px solid var(--border); }
+    .changelog-list {
+      max-width: 760px; margin: 3rem auto 0;
+      position: relative;
+    }
+    .release {
+      position: relative;
+      padding: 0 0 2.25rem 1.75rem;
+      border-left: 2px solid var(--border);
+    }
+    .release:last-child { padding-bottom: 0; }
+    .release::before {
+      content: ''; position: absolute;
+      left: -7px; top: 4px;
+      width: 12px; height: 12px; border-radius: 50%;
+      background: var(--bg); border: 2px solid var(--border);
+    }
+    .release.latest::before {
+      background: var(--accent); border-color: var(--accent);
+      box-shadow: 0 0 10px rgba(245,184,32,0.6);
+    }
+    .release-head {
+      display: flex; align-items: center; flex-wrap: wrap;
+      gap: 0.6rem; margin-bottom: 0.9rem;
+    }
+    .release-version { font-size: 1.15rem; font-weight: 700; letter-spacing: -0.01em; }
+    .release-date { font-size: 0.8rem; color: var(--muted); }
+    .release-latest-tag {
+      font-size: 0.66rem; font-weight: 700; letter-spacing: 0.06em;
+      text-transform: uppercase; color: var(--accent);
+      background: var(--accent-dim); border: 1px solid rgba(245,184,32,0.28);
+      padding: 2px 9px; border-radius: 100px;
+    }
+    .release ul { list-style: none; display: grid; gap: 0.55rem; }
+    .release li {
+      display: flex; gap: 0.7rem; align-items: baseline;
+      font-size: 0.9rem; color: var(--text); line-height: 1.55;
+    }
+    .ctag {
+      flex-shrink: 0; min-width: 64px;
+      font-size: 0.62rem; font-weight: 700; letter-spacing: 0.05em;
+      text-transform: uppercase; text-align: center;
+      padding: 2px 7px; border-radius: 4px; margin-top: 2px;
+      border: 1px solid var(--border); background: var(--bg-card2);
+    }
+    .ctag.feat { color: #6cc6ff; border-color: rgba(108,198,255,0.3); }
+    .ctag.fix  { color: #ff9b8a; border-color: rgba(255,155,138,0.3); }
+    .ctag.perf { color: #8ecf80; border-color: rgba(142,207,128,0.3); }
+    .release li span:last-child { color: var(--muted); }
+    .release li strong { color: var(--text); font-weight: 600; }
+    .changelog-foot {
+      max-width: 760px; margin: 0.5rem auto 0;
+      padding-left: 1.75rem; font-size: 0.85rem;
+    }
+    .changelog-foot a { color: var(--accent); text-decoration: none; }
+    .changelog-foot a:hover { text-decoration: underline; }
+
     /* ── FOOTER ──────────────────────────────────────── */
     footer {
       border-top: 1px solid var(--border);
@@ -450,6 +508,7 @@
     <li><a href="#features">Features</a></li>
     <li><a href="#screenshots">Screenshots</a></li>
     <li><a href="#specs">Specs</a></li>
+    <li><a href="#changelog">Changelog</a></li>
     <li><a href="#install">Install</a></li>
   </ul>
   <a class="btn-nav" href="https://github.com/adri6412/osmium-sound/releases" target="_blank">Download</a>
@@ -608,6 +667,71 @@
       </table>
     </div>
   </div>
+</section>
+
+<!-- CHANGELOG -->
+<section id="changelog">
+  <div class="centered">
+    <div class="section-label">Release history</div>
+    <h2 class="section-title">Changelog</h2>
+    <p class="section-desc">What's new in each stable release. Development builds ship more often on the Dev OTA channel.</p>
+  </div>
+
+  <div class="changelog-list">
+    <article class="release latest">
+      <div class="release-head">
+        <span class="release-version">v2.5.11</span>
+        <span class="release-latest-tag">Latest</span>
+        <span class="release-date">26 Jun 2026</span>
+      </div>
+      <ul>
+        <li><span class="ctag feat">New</span><span><strong>Setup wizard</strong> can now install Lyrion Media Server automatically if it's missing.</span></li>
+        <li><span class="ctag feat">New</span><span>UEFI <strong>Secure Boot</strong> support, applied at image-build time.</span></li>
+      </ul>
+    </article>
+
+    <article class="release">
+      <div class="release-head">
+        <span class="release-version">v2.5.10</span>
+        <span class="release-date">26 Jun 2026</span>
+      </div>
+      <ul>
+        <li><span class="ctag feat">New</span><span>Native <strong>Sources manager</strong> — add and manage USB, SMB and local music sources straight from the touchscreen.</span></li>
+        <li><span class="ctag feat">New</span><span>Automatic <strong>USB drive mounting</strong>; SMB mounts retry in the background so they survive a fast boot.</span></li>
+        <li><span class="ctag feat">New</span><span>Android-style submenu navigation in Settings, with styled in-app confirm dialogs for reboot/shutdown.</span></li>
+        <li><span class="ctag perf">Faster</span><span>Quicker boot — slimmer initramfs, masked boot-delaying services, and unused Bluetooth dropped at startup.</span></li>
+      </ul>
+    </article>
+
+    <article class="release">
+      <div class="release-head">
+        <span class="release-version">v2.5.9</span>
+        <span class="release-date">23 Jun 2026</span>
+      </div>
+      <ul>
+        <li><span class="ctag feat">New</span><span>Full playback controls — <strong>shuffle / repeat</strong>, play queue, sleep timer, playback preferences and alarms.</span></li>
+        <li><span class="ctag feat">New</span><span>Browse and save <strong>playlists</strong> in the Music tab, plus a "Rescan library" button.</span></li>
+        <li><span class="ctag fix">Fixed</span><span>OS version stays visible when an update check fails; OTA manifest now served from GitHub Pages to dodge API rate limits.</span></li>
+        <li><span class="ctag perf">Faster</span><span>Lower renderer CPU usage from the analog VU meter, and a smoother boot intro on the x86 mini-PC.</span></li>
+      </ul>
+    </article>
+
+    <article class="release">
+      <div class="release-head">
+        <span class="release-version">v2.5.8</span>
+        <span class="release-date">22 Jun 2026</span>
+      </div>
+      <ul>
+        <li><span class="ctag feat">New</span><span>Rebrand to <strong>Osmium Sound</strong>, with a brand-new presentation site.</span></li>
+        <li><span class="ctag feat">New</span><span>Signed <strong>OS OTA</strong> pipeline — update runner, apply.d migrations and idempotency checks in CI.</span></li>
+      </ul>
+    </article>
+  </div>
+
+  <p class="changelog-foot">
+    See every build, including development pre-releases, on
+    <a href="https://github.com/adri6412/osmium-sound/releases" target="_blank">GitHub Releases →</a>
+  </p>
 </section>
 
 <!-- INSTALL -->
