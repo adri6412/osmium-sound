@@ -21,7 +21,12 @@ if [ "${HIFI_OS_NO_APT:-0}" != 1 ]; then
     DEBIAN_FRONTEND=noninteractive apt-get update >/dev/null 2>&1 || true
 fi
 
-if ensure_pkg fonts-noto-cjk; then
+ensure_pkg fonts-noto-cjk || true
+
+# Reboot ONLY if the font is now genuinely installed. ensure_pkg returns 0 even
+# when it skipped (HIFI_OS_NO_APT, e.g. the CI idempotency test) or could not
+# install (no network) — neither case changed anything, so it must not reboot.
+if dpkg -s fonts-noto-cjk >/dev/null 2>&1; then
     # Refresh the fontconfig cache and reboot once so the kiosk session reloads
     # with the new font available (Chromium reads fonts at startup).
     fc-cache -f >/dev/null 2>&1 || true
