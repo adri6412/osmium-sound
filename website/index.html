@@ -402,7 +402,46 @@
       background: var(--bg-card);
       text-align: center;
     }
-    .install-inner { max-width: 700px; margin: 0 auto; }
+    .install-inner { max-width: 760px; margin: 0 auto; }
+    .iso-badge {
+      display: inline-flex; align-items: baseline; gap: 6px;
+    }
+    .iso-badge small { font-size: 0.78em; font-weight: 600; opacity: 0.8; }
+    .quickstart {
+      display: grid; grid-template-columns: repeat(3, 1fr);
+      gap: 1.1rem; max-width: 860px; margin: 2.75rem auto 0;
+      text-align: left;
+    }
+    .qs-step {
+      background: var(--bg); border: 1px solid var(--border);
+      border-radius: var(--radius); padding: 1.5rem 1.4rem;
+      position: relative;
+    }
+    .qs-num {
+      width: 30px; height: 30px; border-radius: 8px;
+      background: var(--accent-dim); border: 1px solid rgba(245,184,32,0.28);
+      color: var(--accent); font-weight: 700; font-size: 0.85rem;
+      display: flex; align-items: center; justify-content: center;
+      margin-bottom: 0.9rem;
+    }
+    .qs-step h4 { font-size: 0.98rem; font-weight: 600; margin-bottom: 0.4rem; }
+    .qs-step p { font-size: 0.86rem; color: var(--muted); line-height: 1.6; }
+    .qs-step a { color: var(--accent); text-decoration: none; }
+    .qs-step a:hover { text-decoration: underline; }
+    .qs-step code {
+      font-family: 'Fira Code', 'Consolas', monospace;
+      font-size: 0.82em; color: var(--accent);
+      background: var(--bg-card2); border: 1px solid var(--border);
+      padding: 1px 5px; border-radius: 4px;
+    }
+    .install-note {
+      max-width: 760px; margin: 2rem auto 0;
+      font-size: 0.86rem; color: var(--text); line-height: 1.6;
+      background: var(--accent-dim); border: 1px solid rgba(245,184,32,0.2);
+      border-radius: 10px; padding: 0.9rem 1.2rem; text-align: left;
+    }
+    .install-note strong { color: var(--accent); }
+    @media (max-width: 760px) { .quickstart { grid-template-columns: 1fr; } }
     .code-block {
       background: #060606;
       border: 1px solid var(--border);
@@ -783,18 +822,40 @@
   <div class="install-inner">
     <div class="section-label" data-en="Get started" data-it="Per iniziare">Get started</div>
     <h2 class="section-title" data-en="Download &amp; install" data-it="Scarica e installa">Download &amp; install</h2>
-    <p class="section-desc" data-en="Download the latest release from GitHub. Once installed, OTA keeps everything up to date automatically from the Settings screen." data-it="Scarica l'ultima versione da GitHub. Una volta installato, l'OTA mantiene tutto aggiornato automaticamente dalla schermata Impostazioni.">Download the latest release from GitHub. Once installed, OTA keeps everything up to date automatically from the Settings screen.</p>
+    <p class="section-desc" data-en="Flash one ISO image to a USB stick for the first install. From then on, every update — UI, system and OS — is delivered automatically over the air." data-it="Flasha una sola immagine ISO su una chiavetta USB per la prima installazione. Da lì in poi, ogni aggiornamento — interfaccia, sistema e OS — arriva automaticamente via OTA.">Flash one ISO image to a USB stick for the first install. From then on, every update — UI, system and OS — is delivered automatically over the air.</p>
 
     <div style="display:flex; gap:1rem; justify-content:center; flex-wrap:wrap; margin-top:2.25rem;">
-      <a class="btn-primary" href="https://github.com/adri6412/osmium-sound/releases/latest" target="_blank">
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-        <span data-en="Latest Release" data-it="Ultima versione">Latest Release</span>
+      <a class="btn-primary" href="https://github.com/adri6412/osmium-sound/releases/download/v2.5.11/hifi-player-v2.5.11.iso">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        <span class="iso-badge"><span data-en="Download install ISO" data-it="Scarica la ISO di installazione">Download install ISO</span><small>v2.5.11</small></span>
       </a>
       <a class="btn-secondary" href="https://github.com/adri6412/osmium-sound/releases" target="_blank">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 19v-6a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h2a2 2 0 0 0 2-2zm0 0V9a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v10m-6 0a2 2 0 0 0 2 2h2a2 2 0 0 0 2-2m0 0V5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-2a2 2 0 0 1-2-2z"/></svg>
         <span data-en="All Releases" data-it="Tutte le versioni">All Releases</span>
       </a>
     </div>
+
+    <div class="quickstart">
+      <div class="qs-step">
+        <div class="qs-num">1</div>
+        <h4 data-en="Download the ISO" data-it="Scarica la ISO">Download the ISO</h4>
+        <p data-en="Grab the install image &lt;strong&gt;hifi-player-v2.5.11.iso&lt;/strong&gt; using the button above." data-it="Prendi l'immagine di installazione &lt;strong&gt;hifi-player-v2.5.11.iso&lt;/strong&gt; con il pulsante qui sopra.">Grab the install image <strong>hifi-player-v2.5.11.iso</strong> using the button above.</p>
+      </div>
+      <div class="qs-step">
+        <div class="qs-num">2</div>
+        <h4 data-en="Flash a USB stick" data-it="Flasha una chiavetta USB">Flash a USB stick</h4>
+        <p data-en="Write the ISO to an 8&nbsp;GB+ USB stick with &lt;a href=&quot;https://etcher.balena.io/&quot; target=&quot;_blank&quot; rel=&quot;noopener&quot;&gt;balenaEtcher&lt;/a&gt;, Rufus or &lt;code&gt;dd&lt;/code&gt;." data-it="Scrivi la ISO su una chiavetta USB da 8&nbsp;GB+ con &lt;a href=&quot;https://etcher.balena.io/&quot; target=&quot;_blank&quot; rel=&quot;noopener&quot;&gt;balenaEtcher&lt;/a&gt;, Rufus o &lt;code&gt;dd&lt;/code&gt;.">Write the ISO to an 8&nbsp;GB+ USB stick with <a href="https://etcher.balena.io/" target="_blank" rel="noopener">balenaEtcher</a>, Rufus or <code>dd</code>.</p>
+      </div>
+      <div class="qs-step">
+        <div class="qs-num">3</div>
+        <h4 data-en="Boot &amp; install" data-it="Avvia e installa">Boot &amp; install</h4>
+        <p data-en="Boot your x86 mini-PC from the USB stick and follow the on-screen installer. Reboot — you're done." data-it="Avvia il tuo mini-PC x86 dalla chiavetta e segui l'installazione guidata. Riavvia ed è fatta.">Boot your x86 mini-PC from the USB stick and follow the on-screen installer. Reboot — you're done.</p>
+      </div>
+    </div>
+
+    <p class="install-note" data-en="&lt;strong&gt;Note:&lt;/strong&gt; the ISO is only needed for the first install. Every later version arrives automatically over the air (OTA) from the Settings screen — no reflashing required." data-it="&lt;strong&gt;Nota:&lt;/strong&gt; la ISO serve solo per la prima installazione. Tutte le versioni successive arrivano automaticamente via OTA dalla schermata Impostazioni — senza riflashare nulla.">
+      <strong>Note:</strong> the ISO is only needed for the first install. Every later version arrives automatically over the air (OTA) from the Settings screen — no reflashing required.
+    </p>
   </div>
 </section>
 
