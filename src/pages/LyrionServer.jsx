@@ -651,6 +651,17 @@ const LyrionServer = () => {
     );
   };
 
+  // Memoise the library list so it is NOT rebuilt on every status poll (1s while
+  // playing). The list only depends on the values below — notably NOT on
+  // playerStatus — so excluding it stops the per-second re-render that made
+  // scrolling a big album grid stutter. activePlayer is keyed by playerid so the
+  // item click handlers (which capture it) refresh when the player changes.
+  const libraryContent = React.useMemo(
+    renderLibraryContent,
+    [menuSearch, searchText, libraryLoading, currentView, libraryData,
+     visibleCount, navigationStack, activePlayer?.playerid, serverUrl, t]
+  );
+
   // ── Right-panel content ────────────────────────────────────
   const renderTabContent = () => {
     if (activeTab === 'settings') return <SettingsPage />;
@@ -729,7 +740,7 @@ const LyrionServer = () => {
           )}
         </div>
 
-        {renderLibraryContent()}
+        {libraryContent}
       </div>
     );
   };
