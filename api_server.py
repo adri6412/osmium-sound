@@ -11,6 +11,7 @@ import json
 import logging
 import urllib.request
 import time
+import threading
 
 app = Flask(__name__)
 CORS(app)  # Abilita CORS per tutte le route
@@ -654,6 +655,11 @@ def set_ota_channel(channel):
 # request and lets repeated checks reuse the result.
 _RELEASE_CACHE = {}        # channel -> (fetched_at, release_dict)
 _RELEASE_CACHE_TTL = 60    # seconds
+# The server now runs threaded (app.run(threaded=True)), so a single "check
+# updates" — which calls _fetch_release 3× concurrently for UI/system/OS — can
+# race on this dict. Serialise access; the cache makes all but the first call
+# cheap anyway.
+_RELEASE_CACHE_LOCK = threading.Lock()
 
 def _fetch_pages_manifest(channel):
     """Read the channel's static manifest from GitHub Pages. Returns a release-
@@ -690,34 +696,35 @@ def _fetch_release(channel):
     (60 req/hour/IP unauthenticated). Result is cached briefly, and on a total
     fetch failure the last good release is reused so a momentary blip doesn't
     surface as an error."""
-    now = time.time()
-    cached = _RELEASE_CACHE.get(channel)
-    if cached and now - cached[0] < _RELEASE_CACHE_TTL:
-        return cached[1]
-
-    # 1. Preferred: static manifest on Pages.
-    try:
-        release = _fetch_pages_manifest(channel)
-        if release:
-            _RELEASE_CACHE[channel] = (now, release)
-            return release
-        log.warning("Pages manifest for channel %s empty; falling back to API", channel)
-    except Exception:
-        log.warning("Pages manifest fetch failed for channel %s; falling back to API", channel)
-
-    # 2. Fallback: the rate-limited GitHub REST API.
-    try:
-        release = _fetch_github_api_release(channel)
-    except Exception:
-        # Reuse the last good release (even if past the TTL) rather than failing
-        # the whole check on a transient blip / exhausted rate limit.
-        if cached:
-            log.warning("release fetch failed; serving cached release for channel %s", channel)
+    with _RELEASE_CACHE_LOCK:
+        now = time.time()
+        cached = _RELEASE_CACHE.get(channel)
+        if cached and now - cached[0] < _RELEASE_CACHE_TTL:
             return cached[1]
-        raise
 
-    _RELEASE_CACHE[channel] = (now, release)
-    return release
+        # 1. Preferred: static manifest on Pages.
+        try:
+            release = _fetch_pages_manifest(channel)
+            if release:
+                _RELEASE_CACHE[channel] = (now, release)
+                return release
+            log.warning("Pages manifest for channel %s empty; falling back to API", channel)
+        except Exception:
+            log.warning("Pages manifest fetch failed for channel %s; falling back to API", channel)
+
+        # 2. Fallback: the rate-limited GitHub REST API.
+        try:
+            release = _fetch_github_api_release(channel)
+        except Exception:
+            # Reuse the last good release (even if past the TTL) rather than failing
+            # the whole check on a transient blip / exhausted rate limit.
+            if cached:
+                log.warning("release fetch failed; serving cached release for channel %s", channel)
+                return cached[1]
+            raise
+
+        _RELEASE_CACHE[channel] = (now, release)
+        return release
 
 def _check_release_update(current, prefix):
     """Look at the relevant GitHub Release and return update info for the asset
@@ -1177,4 +1184,6 @@ if __name__ == '__main__':
     # consumed solely by the local kiosk UI (src/utils/api.js → http://localhost:8000).
     # Listening on 0.0.0.0 would hand every device on the LAN root-equivalent
     # control of the appliance.
-    app.run(host='127.0.0.1', port=8000)
+    # threaded=True so a slow handler (apt/systemctl/network reconfig, or a
+    # 15s OTA fetch) doesn't block the kiosk UI's other requests behind it.
+    app.run(host='127.0.0.1', port=8000, threaded=True)

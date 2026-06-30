@@ -79,7 +79,12 @@ export class LyrionAPI {
   }
 
   async getPlayerStatus(playerMac) {
-    return this.request(playerMac, ['status', '-', 1, 'tags:aAbcCdeEfFgGhHijklLmoOpPqQrRsStTuvVwxXyYz']);
+    // Only request the song tags the player UI actually renders:
+    //   a=artist  l=album  d=duration  o=type  T=samplerate  I=samplesize
+    //   N=remote stream title (radio). title/id come back without a tag.
+    // (The old request asked for every available tag every poll — wasted work
+    // on the server for fields the UI never reads.)
+    return this.request(playerMac, ['status', '-', 1, 'tags:aldoTIN']);
   }
 
   async play(playerMac) {

@@ -9,3 +9,12 @@ renderer-dist/
 __pycache__/
 *.pyc
 
+# Build / release artifacts — these are published via GitHub Releases, never
+# committed (they bloat the repo: a single appliance ISO is ~1.8 GB).
+*.iso
+*.deb
+hifi-install-*.sh
+hifi-os-*.tar.gz
+hifi-system-*.tar.gz
+hifi-ui-*.tar.gz
+

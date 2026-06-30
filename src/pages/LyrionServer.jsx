@@ -36,6 +36,12 @@ const TABS = [
   { id: 'settings', labelKey: null,                Icon: SettingsIcon },
 ];
 
+// How many library rows/cards to mount initially and add per scroll step. The
+// full result set is kept in state (search/counts stay correct); we just grow
+// the rendered slice as the user scrolls, so a 5000-album grid never tries to
+// mount 5000 nodes at once on the mini-PC.
+const LIST_PAGE = 120;
+
 // ── Artwork with error fallback ───────────────────────────────
 const ArtworkImage = ({ src, alt, className, FallbackIcon }) => {
   const [err, setErr] = useState(false);
@@ -47,7 +53,9 @@ const ArtworkImage = ({ src, alt, className, FallbackIcon }) => {
       </div>
     );
   }
-  return <img src={safeUrl(src)} alt={alt} className={className} onError={() => setErr(true)} />;
+  // loading="lazy" so an album grid with hundreds of covers only fetches the
+  // ones scrolled into view (decoding off the main thread keeps scroll smooth).
+  return <img src={safeUrl(src)} alt={alt} className={className} loading="lazy" decoding="async" onError={() => setErr(true)} />;
 };
 
 // ── Animated playing indicator ────────────────────────────────
@@ -88,6 +96,9 @@ const LyrionServer = () => {
   const [currentView, setCurrentView] = useState('home');
   const [libraryData, setLibraryData] = useState([]);
   const [libraryLoading, setLibraryLoading] = useState(false);
+  // How many of libraryData to actually render (progressive rendering, grows on
+  // scroll). Reset back to the first page whenever the list contents change.
+  const [visibleCount, setVisibleCount] = useState(LIST_PAGE);
   const [navigationStack, setNavigationStack] = useState([{ view: 'home', title: t('player.titles.home'), params: null }]);
   // Search prompt for Lyrion menu items that require text input (e.g. TuneIn / global search)
   const [menuSearch, setMenuSearch] = useState(null); // { action, title }
@@ -125,12 +136,43 @@ const LyrionServer = () => {
     try { setPlayerStatus(await lyrionApi.getPlayerStatus(activePlayer.playerid)); } catch (_) {}
   };
 
+  // Poll the player status, but adaptively:
+  //  • 1s while playing (so the progress bar / time stay smooth);
+  //  • 5s when paused/stopped (nothing is moving — cut idle CPU & server load);
+  //  • not at all while the window is hidden (re-syncs immediately on return).
+  // The effect re-runs only when playback actually starts/stops (isPlaying
+  // flips), not on every poll, so the cadence switches without churn.
+  const playing = playerStatus?.mode === 'play';
   useEffect(() => {
     if (!activePlayer) return;
     fetchStatus();
-    const id = setInterval(fetchStatus, 1000);
-    return () => clearInterval(id);
-  }, [activePlayer]);
+    const period = playing ? 1000 : 5000;
+    const id = setInterval(() => {
+      if (document.visibilityState === 'visible') fetchStatus();
+    }, period);
+    const onVisible = () => { if (document.visibilityState === 'visible') fetchStatus(); };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      clearInterval(id);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
+  }, [activePlayer, playing]);
+
+  // New list contents (navigated to a different view / went back) → render from
+  // the top again. Also keep the scroll container reset to the top.
+  const listScrollRef = useRef(null);
+  useEffect(() => {
+    setVisibleCount(LIST_PAGE);
+    if (listScrollRef.current) listScrollRef.current.scrollTop = 0;
+  }, [libraryData]);
+
+  // Grow the rendered slice as the user nears the bottom of the list.
+  const handleLibraryScroll = (e) => {
+    const el = e.currentTarget;
+    if (el.scrollHeight - el.scrollTop - el.clientHeight < 400) {
+      setVisibleCount(c => (c < libraryData.length ? c + LIST_PAGE : c));
+    }
+  };
 
   const handleAction = async (fn) => {
     try { await fn(); fetchStatus(); } catch (_) {}
@@ -413,11 +455,13 @@ const LyrionServer = () => {
       );
     }
 
+    const visibleItems = libraryData.slice(0, visibleCount);
     return (
-      <div className="flex-1 overflow-y-auto content-scrollbar px-3 pb-3">
+      <div ref={listScrollRef} onScroll={handleLibraryScroll}
+        className="flex-1 overflow-y-auto content-scrollbar px-3 pb-3">
         {currentView === 'albums' ? (
           <div className="grid grid-cols-3 gap-3 pt-1">
-            {libraryData.map((item, idx) => {
+            {visibleItems.map((item, idx) => {
               const aId  = item.artwork_track_id || item.id;
               const aUrl = aId ? lyrionApi.getArtworkUrl(aId, 200) : null;
               return (
@@ -443,7 +487,7 @@ const LyrionServer = () => {
           </div>
         ) : (
           <ul className="space-y-1 pt-1">
-            {libraryData.map((item, idx) => {
+            {visibleItems.map((item, idx) => {
               if (currentView === 'artists') return (
                 <li key={idx}
                   onClick={() => navigateTo('albums', item.artist, { artistId: item.id })}
@@ -519,7 +563,7 @@ const LyrionServer = () => {
                   className="flex items-center px-3 py-2.5 bg-hifi-surface hover:bg-hifi-light rounded-lg cursor-pointer border border-transparent hover:border-hifi-border transition-colors">
                   {item.icon
                     ? <img src={safeUrl(item.icon.startsWith('http') ? item.icon : `${serverUrl}/${item.icon}`)}
-                        className="w-6 h-6 rounded mr-3 flex-shrink-0" alt=""
+                        className="w-6 h-6 rounded mr-3 flex-shrink-0" alt="" loading="lazy" decoding="async"
                         onError={(e) => { e.target.style.display = 'none'; }} />
                     : currentView === 'radios'
                       ? <Radio size={15} className="text-hifi-silver/60 mr-3 flex-shrink-0" />
@@ -544,7 +588,7 @@ const LyrionServer = () => {
                     className="flex items-center justify-between px-3 py-2.5 bg-hifi-surface hover:bg-hifi-light rounded-lg group cursor-pointer border border-transparent hover:border-hifi-border transition-colors">
                     <div className="flex items-center space-x-3 min-w-0">
                       {iconUrl
-                        ? <img src={safeUrl(iconUrl)} className="w-6 h-6 rounded flex-shrink-0 object-cover" alt=""
+                        ? <img src={safeUrl(iconUrl)} className="w-6 h-6 rounded flex-shrink-0 object-cover" alt="" loading="lazy" decoding="async"
                             onError={(e) => { e.target.style.display = 'none'; }} />
                         : isNav
                           ? <AppWindow size={15} className="text-hifi-silver/60 flex-shrink-0" />
@@ -579,7 +623,7 @@ const LyrionServer = () => {
                     <div className="flex items-center space-x-3 min-w-0">
                       {item.icon
                         ? <img src={safeUrl(item.icon.startsWith('http') ? item.icon : `${serverUrl}/${item.icon}`)}
-                            className="w-6 h-6 rounded flex-shrink-0" alt=""
+                            className="w-6 h-6 rounded flex-shrink-0" alt="" loading="lazy" decoding="async"
                             onError={(e) => { e.target.style.display = 'none'; }} />
                         : hasItems
                           ? <Folder size={15} className="text-hifi-silver/60 flex-shrink-0" />

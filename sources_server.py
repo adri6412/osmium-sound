@@ -198,6 +198,11 @@ def remount_all_retry(attempts=60, delay=5):
 # wiring udev, so the whole feature stays in this one service.
 USB_MOUNT_ROOT = "/media/hifi-usb"
 _FAT_LIKE = ("vfat", "exfat", "ntfs", "ntfs3", "fuseblk", "msdos")
+# Latest snapshot from usb_sync(), refreshed by the background usb_monitor thread
+# every few seconds. /api/usb serves this instead of running the full lsblk +
+# mount scan on every poll (the web UI polls /api/usb every 4s and the monitor
+# already scans that often). None = no scan has completed yet.
+_usb_state = None
 
 
 def _usb_mount_type(fstype):
@@ -243,7 +248,9 @@ def _usb_mountpoint(part):
 
 def usb_sync():
     """Mount newly-appeared USB filesystems (read-only) and unmount ones whose
-    device has gone. Returns {mountpoint: part} for the currently live disks."""
+    device has gone. Returns {mountpoint: part} for the currently live disks.
+    Also publishes the result to _usb_state for /api/usb to read cheaply."""
+    global _usb_state
     with _lock:
         os.makedirs(USB_MOUNT_ROOT, exist_ok=True)
         wanted = {}
@@ -272,6 +279,7 @@ def usb_sync():
                     pass
         except FileNotFoundError:
             pass
+        _usb_state = dict(wanted)
         return wanted
 
 
@@ -546,11 +554,15 @@ def api_apply():
 def api_usb():
     """List currently-mounted USB disks and their top-level folders, so the UI
     can offer to add them as local sources."""
-    try:
-        wanted = usb_sync()
-    except Exception:
-        app.logger.exception("Failed to enumerate USB disks")
-        return jsonify({"disks": [], "error": "Unable to enumerate USB disks."}), 500
+    # Serve the snapshot kept fresh by the background usb_monitor thread instead
+    # of re-scanning on every poll. Only force a scan if none has run yet.
+    wanted = _usb_state
+    if wanted is None:
+        try:
+            wanted = usb_sync()
+        except Exception:
+            app.logger.exception("Failed to enumerate USB disks")
+            return jsonify({"disks": [], "error": "Unable to enumerate USB disks."}), 500
     disks = []
     for mp, p in wanted.items():
         if not os.path.ismount(mp):
@@ -741,4 +753,6 @@ if __name__ == "__main__":
         ensure_playlistdir()
     except Exception as e:
         print(f"[sources] ensure_playlistdir error: {e}")
-    app.run(host="0.0.0.0", port=8080)
+    # threaded=True so the USB/SMB mount scans and a slow Lyrion restart don't
+    # serialise behind each other and block the phone/PC web UI.
+    app.run(host="0.0.0.0", port=8080, threaded=True)

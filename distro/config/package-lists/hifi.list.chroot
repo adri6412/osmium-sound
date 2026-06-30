@@ -80,6 +80,10 @@ python3-flask-cors
 python3-psutil
 python3-websockets
 python3-yaml
+# numpy: vectorised RMS for the VU meter (vu_meter_daemon.py). The daemon falls
+# back to pure Python if it's ever missing, but installing it keeps playback CPU
+# low on the mini-PC.
+python3-numpy
 
 # Network shares (SMB mounting for music sources)
 cifs-utils

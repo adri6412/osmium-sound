@@ -9,6 +9,14 @@ import math
 import time
 import glob
 
+# numpy makes the per-frame RMS bucketing ~an order of magnitude cheaper than the
+# pure-Python loop (this runs 30×/s during playback). Optional: if it isn't
+# installed the daemon falls back to the original pure-Python path below.
+try:
+    import numpy as np
+except Exception:
+    np = None
+
 class SqueezeliteVisualizer:
     def __init__(self):
         self.shm_file = self.find_shm_file()
@@ -155,47 +163,43 @@ class SqueezeliteVisualizer:
             if num_samples == 0:
                 return [0] * self.num_bars
 
-            samples = struct.unpack(f'<{num_samples}h', raw_samples)
-
-            # Simple downsampling/bucketing to num_bars
-            levels = []
+            # Downsample/bucket into num_bars groups and take the RMS of each.
             samples_per_bar = max(1, num_samples // self.num_bars)
 
+            # dB→percent mapping (unchanged): map -50 dBFS → 0% and -5 dBFS →
+            # 100%, then a slight gamma so the top end compresses like an analog
+            # VU meter. 0 VU is typically around -18..-14 dBFS depending on calib.
+            min_db, max_db = -50.0, -5.0
+
+            if np is not None:
+                # Vectorised RMS — ~10× cheaper than the Python loop at 30 fps.
+                usable = samples_per_bar * self.num_bars
+                buf = np.frombuffer(raw_samples, dtype='<i2', count=num_samples)
+                buckets = buf[:usable].astype(np.float64).reshape(self.num_bars, samples_per_bar)
+                rms = np.sqrt(np.mean(buckets * buckets, axis=1))
+                with np.errstate(divide='ignore'):
+                    db = 20.0 * np.log10(rms / 32767.0)
+                percent = np.clip((db - min_db) / (max_db - min_db) * 100.0, 0.0, 100.0)
+                percent = np.power(percent / 100.0, 1.2) * 100.0
+                return [int(x) for x in percent]
+
+            # Pure-Python fallback (numpy not installed).
+            samples = struct.unpack(f'<{num_samples}h', raw_samples)
+            levels = []
             for i in range(self.num_bars):
                 start_idx = i * samples_per_bar
-                end_idx = start_idx + samples_per_bar
-
-                # Calculate RMS (Root Mean Square) for the chunk
-                chunk = samples[start_idx:end_idx]
+                chunk = samples[start_idx:start_idx + samples_per_bar]
                 if not chunk:
                     levels.append(0)
                     continue
-
-                sum_sq = sum(float(x)**2 for x in chunk)
-                rms = math.sqrt(sum_sq / len(chunk))
-
+                rms = math.sqrt(sum(float(x) * x for x in chunk) / len(chunk))
                 if rms <= 0:
-                    percent = 0
-                else:
-                    # Adjust dB calculation to match real-world VU meter dynamics
-                    # 0 VU is typically around -18dBFS to -14dBFS depending on calibration
-                    # Let's map -50dB to 0% and -10dB to 100%
-                    db = 20 * math.log10(rms / 32767.0)
-
-                    # map -50dB -> 0%, -5dB -> 100%
-                    min_db = -50
-                    max_db = -5
-
-                    percent = ((db - min_db) / (max_db - min_db)) * 100
-                    percent = max(0, min(100, percent))
-
-                    # Apply a slight non-linear curve to make it behave more like an analog meter
-                    # where the higher ranges are compressed
-                    if percent > 0:
-                        percent = math.pow(percent / 100.0, 1.2) * 100.0
-
+                    levels.append(0)
+                    continue
+                db = 20 * math.log10(rms / 32767.0)
+                percent = max(0.0, min(100.0, ((db - min_db) / (max_db - min_db)) * 100.0))
+                percent = math.pow(percent / 100.0, 1.2) * 100.0
                 levels.append(int(percent))
-
             return levels
 
         except Exception as e:
