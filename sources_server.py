@@ -548,8 +548,9 @@ def api_usb():
     can offer to add them as local sources."""
     try:
         wanted = usb_sync()
-    except Exception as e:
-        return jsonify({"disks": [], "error": str(e)})
+    except Exception:
+        app.logger.exception("Failed to enumerate USB disks")
+        return jsonify({"disks": [], "error": "Unable to enumerate USB disks."}), 500
     disks = []
     for mp, p in wanted.items():
         if not os.path.ismount(mp):
