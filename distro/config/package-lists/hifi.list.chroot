@@ -41,6 +41,12 @@ xinit
 lightdm
 unclutter
 
+# Fonts — the base image shipped none, so album/track names in Japanese (and
+# Chinese/Korean) rendered as tofu boxes. Noto CJK supplies those glyphs;
+# DejaVu is a reliable Latin/Cyrillic/Greek base for the UI font stack.
+fonts-noto-cjk
+fonts-dejavu-core
+
 # Electron runtime libraries
 libgtk-3-0
 libnss3
