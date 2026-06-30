@@ -21,10 +21,21 @@ import SettingsPage from './Settings';
 // javascript:, data: and other schemes that can lead to DOM-based XSS.
 const safeUrl = (url) => {
   if (typeof url !== 'string') return '';
-  const u = url.trim();
-  if (/^https?:\/\//i.test(u)) return u;
-  if (u.startsWith('/') && !u.startsWith('//')) return u;
-  return '';
+  const raw = url.trim();
+  if (!raw) return '';
+  // Same-origin relative path (e.g. "/music/123/cover"): rebuild it from the
+  // parsed URL so no scheme/host/meta-characters can ride along.
+  if (raw[0] === '/' && raw[1] !== '/') {
+    try { const u = new URL(raw, 'http://localhost'); return u.pathname + u.search; }
+    catch { return ''; }
+  }
+  // Absolute URL: allow ONLY http/https (blocks javascript:/data:/…) and return
+  // the parser's serialized href — a freshly built, well-formed string rather
+  // than the raw input, so nothing unescaped flows through to <img src>.
+  try {
+    const u = new URL(raw);
+    return (u.protocol === 'http:' || u.protocol === 'https:') ? u.href : '';
+  } catch { return ''; }
 };
 
 // ── Tab definitions ──────────────────────────────────────────
