@@ -26,15 +26,17 @@ const safeUrl = (url) => {
   // Same-origin relative path (e.g. "/music/123/cover"): rebuild it from the
   // parsed URL so no scheme/host/meta-characters can ride along.
   if (raw[0] === '/' && raw[1] !== '/') {
-    try { const u = new URL(raw, 'http://localhost'); return u.pathname + u.search; }
+    try { const u = new URL(raw, 'http://localhost'); return encodeURI(u.pathname + u.search); }
     catch { return ''; }
   }
   // Absolute URL: allow ONLY http/https (blocks javascript:/data:/…) and return
   // the parser's serialized href — a freshly built, well-formed string rather
-  // than the raw input, so nothing unescaped flows through to <img src>.
+  // than the raw input. encodeURI() escapes any residual HTML meta-characters
+  // (< > ") while keeping the URL valid, so nothing unescaped flows through to
+  // <img src> (and it's a sanitizer the static analyser recognises).
   try {
     const u = new URL(raw);
-    return (u.protocol === 'http:' || u.protocol === 'https:') ? u.href : '';
+    return (u.protocol === 'http:' || u.protocol === 'https:') ? encodeURI(u.href) : '';
   } catch { return ''; }
 };
 
