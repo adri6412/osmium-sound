@@ -17,6 +17,7 @@ import {
   Plus,
   Trash2,
   HardDrive,
+  MousePointer2,
   ChevronRight,
   ChevronLeft
 } from 'lucide-react';
@@ -64,6 +65,11 @@ const Settings = () => {
   const [sshStatus, setSshStatus] = useState(null); // { available, enabled, active }
   const [sshBusy, setSshBusy] = useState(false);
   const [sshMessage, setSshMessage] = useState('');
+
+  // Mouse pointer toggle (for users without a touchscreen)
+  const [pointerStatus, setPointerStatus] = useState(null); // { available, enabled }
+  const [pointerBusy, setPointerBusy] = useState(false);
+  const [pointerMessage, setPointerMessage] = useState('');
 
   // Audio output (DAC) selection
   const [audioDevices, setAudioDevices] = useState([]);
@@ -144,6 +150,7 @@ const Settings = () => {
     loadSystemData();
     loadAudioDevices();
     loadSshStatus();
+    loadPointerStatus();
     loadOtaChannel();
     loadPlaybackPrefs();
   }, []);
@@ -252,6 +259,39 @@ const Settings = () => {
       setSshMessage(res.data.message || '');
     } else {
       setSshMessage(res.data?.message || res.message || t('settings.ssh.failed'));
+    }
+  };
+
+  // ── Mouse pointer handlers ──────────────────────────────────────
+  // Mirrors the persisted state into an <html> class so the in-app cursor
+  // matches the OS-level cursor (hidden by default for the touchscreen).
+  const applyPointerClass = (show) => {
+    document.documentElement.classList.toggle('hifi-hide-cursor', !show);
+  };
+
+  const loadPointerStatus = async () => {
+    const res = await systemAPI.getPointerStatus();
+    if (res.success) {
+      setPointerStatus(res.data);
+      applyPointerClass(!!res.data.enabled);
+      localStorage.setItem('hifiShowPointer', res.data.enabled ? '1' : '0');
+    }
+  };
+
+  const togglePointer = async () => {
+    if (pointerBusy || !pointerStatus) return;
+    const enable = !pointerStatus.enabled;
+    setPointerBusy(true);
+    setPointerMessage('');
+    const res = await systemAPI.setPointer(enable);
+    setPointerBusy(false);
+    if (res.success && res.data?.success) {
+      setPointerStatus({ available: res.data.available, enabled: res.data.enabled });
+      applyPointerClass(!!res.data.enabled);
+      localStorage.setItem('hifiShowPointer', res.data.enabled ? '1' : '0');
+      setPointerMessage(res.data.message || '');
+    } else {
+      setPointerMessage(res.data?.message || res.message || t('settings.pointer.failed'));
     }
   };
 
@@ -789,6 +829,11 @@ const Settings = () => {
       content: 'custom-ssh'
     },
     {
+      title: t('settings.sections.pointer'),
+      icon: MousePointer2,
+      content: 'custom-pointer'
+    },
+    {
       title: t('settings.sections.systemInfo'),
       icon: Info,
       items: [
@@ -1319,6 +1364,45 @@ const Settings = () => {
                           : 'bg-hifi-dark text-hifi-silver'
                       }`}>
                         {sshMessage}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Custom Mouse Pointer Section */}
+                {section.content === 'custom-pointer' && (
+                  <div className="space-y-4">
+                    <p className="text-sm text-hifi-silver">{t('settings.pointer.help')}</p>
+
+                    <button
+                      onClick={togglePointer}
+                      disabled={pointerBusy || !pointerStatus}
+                      className="w-full flex items-center justify-between bg-hifi-dark hover:bg-hifi-light/40 disabled:opacity-60 rounded-lg px-4 py-3 transition-colors"
+                    >
+                      <span className="flex items-center space-x-2 text-sm text-white">
+                        {pointerBusy && <Loader2 size={16} className="animate-spin" />}
+                        <span>
+                          {pointerStatus?.enabled ? t('settings.pointer.enabled') : t('settings.pointer.disabled')}
+                        </span>
+                      </span>
+                      <span className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${pointerStatus?.enabled ? 'bg-hifi-gold' : 'bg-hifi-accent'}`}>
+                        <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${pointerStatus?.enabled ? 'translate-x-6' : 'translate-x-1'}`} />
+                      </span>
+                    </button>
+
+                    {pointerStatus && !pointerStatus.available && (
+                      <div className="rounded-lg p-3 text-center text-sm bg-hifi-dark text-hifi-silver">
+                        {t('settings.pointer.unavailable')}
+                      </div>
+                    )}
+
+                    {pointerMessage && (
+                      <div className={`rounded-lg p-3 text-center text-sm ${
+                        isErrorMsg(pointerMessage)
+                          ? 'bg-red-900/20 text-red-300 border border-red-500/30'
+                          : 'bg-hifi-dark text-hifi-silver'
+                      }`}>
+                        {pointerMessage}
                       </div>
                     )}
                   </div>

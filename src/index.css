@@ -9,6 +9,13 @@
   -webkit-user-select: none;
 }
 
+/* Touchscreen default: hide the mouse pointer in-app. Toggled off via Settings →
+   Mouse pointer (the OS-level cursor is controlled separately by the API). */
+html.hifi-hide-cursor,
+html.hifi-hide-cursor * {
+  cursor: none !important;
+}
+
 body {
   margin: 0;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
