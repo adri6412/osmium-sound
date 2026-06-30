@@ -460,7 +460,7 @@ const LyrionServer = () => {
       <div ref={listScrollRef} onScroll={handleLibraryScroll}
         className="flex-1 overflow-y-auto content-scrollbar px-3 pb-3">
         {currentView === 'albums' ? (
-          <div className="grid grid-cols-3 gap-3 pt-1">
+          <div className="album-grid grid grid-cols-3 gap-3 pt-1">
             {visibleItems.map((item, idx) => {
               const aId  = item.artwork_track_id || item.id;
               const aUrl = aId ? lyrionApi.getArtworkUrl(aId, 200) : null;
@@ -486,7 +486,7 @@ const LyrionServer = () => {
             })}
           </div>
         ) : (
-          <ul className="space-y-1 pt-1">
+          <ul className="lib-list space-y-1 pt-1">
             {visibleItems.map((item, idx) => {
               if (currentView === 'artists') return (
                 <li key={idx}

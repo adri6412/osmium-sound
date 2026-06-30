@@ -233,6 +233,20 @@ body {
   pointer-events: none;
 }
 
+/* Long library lists: let Chromium skip layout + paint for off-screen cards/rows
+   so scrolling a big album grid stays smooth even with hundreds mounted.
+   contain-intrinsic-size is a placeholder so scroll height/position stay stable;
+   the `auto` keyword makes the browser remember each item's real size after it
+   has been rendered once. */
+.album-grid > * {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 280px;
+}
+.lib-list > * {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 48px;
+}
+
 .content-scrollbar::-webkit-scrollbar { width: 3px; }
 .content-scrollbar::-webkit-scrollbar-track { background: transparent; }
 .content-scrollbar::-webkit-scrollbar-thumb { background: #333; border-radius: 2px; }
