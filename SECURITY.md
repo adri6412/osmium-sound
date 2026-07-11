@@ -30,7 +30,7 @@ Please include as much of the following as you can:
 
 - **Acknowledgement:** within 5 business days.
 - **Status updates:** at least every 2 weeks while the report is triaged and fixed.
-- **If accepted:** a fix will be prepared and released as a patch version. Given the OTA distribution model, updates are pushed to the `main`/stable channel and devices receive them automatically (or on next manual check). Credit will be offered in the release notes unless you prefer to stay anonymous.
+- **If accepted:** a fix will be prepared and released as a patch version. Given the OTA distribution model, updates are pushed to the `main`/stable channel and devices receive them automatically (or on next manual check).
 - **If declined:** you'll receive an explanation of why the report was not considered a valid security issue.
 
 ### Scope
