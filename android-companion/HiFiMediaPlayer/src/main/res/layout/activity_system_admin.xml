@@ -14,11 +14,11 @@
             android:layout_height="wrap_content"
             android:minHeight="?attr/actionBarSize"
             app:navigationIcon="@drawable/ic_keyboard_arrow_left"
-            app:title="@string/settings_dsp_title" />
+            app:title="@string/settings_system_admin_title" />
     </com.google.android.material.appbar.AppBarLayout>
 
     <ScrollView
-        android:id="@+id/dsp_settings_container"
+        android:id="@+id/system_admin_container"
         android:layout_width="match_parent"
         android:layout_height="match_parent">
 
@@ -29,63 +29,33 @@
             android:padding="16dp">
 
             <TextView
-                android:id="@+id/dsp_unavailable_message"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="@string/settings_dsp_unavailable"
+                android:text="@string/settings_ssh_title"
                 android:textColor="@android:color/white"
-                android:visibility="gone" />
+                android:textStyle="bold"
+                android:layout_marginBottom="4dp" />
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/settings_ssh_warning"
+                android:textColor="@color/hifiSilver"
+                android:layout_marginBottom="8dp" />
 
             <LinearLayout
-                android:id="@+id/dsp_row_enabled"
+                android:id="@+id/ssh_row"
                 android:orientation="horizontal"
                 android:gravity="center_vertical"
                 android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginBottom="8dp">
+                android:layout_height="wrap_content">
                 <TextView
                     android:layout_width="0dp"
                     android:layout_weight="1"
                     android:layout_height="wrap_content"
-                    android:text="@string/settings_dsp_enabled_title" />
+                    android:text="@string/settings_ssh_title" />
                 <com.google.android.material.switchmaterial.SwitchMaterial
-                    android:id="@+id/switch_dsp_enabled"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content" />
-            </LinearLayout>
-
-            <LinearLayout
-                android:id="@+id/dsp_row_room_correction"
-                android:orientation="horizontal"
-                android:gravity="center_vertical"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginBottom="8dp">
-                <TextView
-                    android:layout_width="0dp"
-                    android:layout_weight="1"
-                    android:layout_height="wrap_content"
-                    android:text="@string/settings_dsp_room_correction_title" />
-                <com.google.android.material.switchmaterial.SwitchMaterial
-                    android:id="@+id/switch_room_correction"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content" />
-            </LinearLayout>
-
-            <LinearLayout
-                android:id="@+id/dsp_row_crossfeed"
-                android:orientation="horizontal"
-                android:gravity="center_vertical"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginBottom="8dp">
-                <TextView
-                    android:layout_width="0dp"
-                    android:layout_weight="1"
-                    android:layout_height="wrap_content"
-                    android:text="@string/settings_dsp_crossfeed_title" />
-                <com.google.android.material.switchmaterial.SwitchMaterial
-                    android:id="@+id/switch_crossfeed"
+                    android:id="@+id/switch_ssh"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content" />
             </LinearLayout>
@@ -100,35 +70,50 @@
             <TextView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="@string/settings_dsp_filter_title"
+                android:text="@string/settings_system_info_title"
                 android:textColor="@android:color/white"
                 android:textStyle="bold"
-                android:layout_marginBottom="4dp" />
+                android:layout_marginBottom="8dp" />
 
             <TextView
-                android:id="@+id/dsp_filter_status"
+                android:id="@+id/system_info_text"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="@string/settings_dsp_filter_none"
                 android:textColor="@color/hifiSilver"
-                android:layout_marginBottom="12dp" />
+                android:textIsSelectable="true" />
 
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/button_upload_filter"
+            <View
+                android:layout_width="match_parent"
+                android:layout_height="1dp"
+                android:background="?android:attr/listDivider"
+                android:layout_marginTop="16dp"
+                android:layout_marginBottom="16dp" />
+
+            <TextView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="@string/settings_dsp_filter_upload"
+                android:text="@string/settings_system_controls_title"
+                android:textColor="@android:color/white"
+                android:textStyle="bold"
                 android:layout_marginBottom="8dp" />
 
             <com.google.android.material.button.MaterialButton
-                android:id="@+id/button_remove_filter"
+                android:id="@+id/button_reboot"
                 style="@style/Widget.MaterialComponents.Button.OutlinedButton"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="@string/settings_dsp_filter_remove" />
+                android:text="@string/settings_reboot_button"
+                android:layout_marginBottom="8dp" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/button_shutdown"
+                style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/settings_shutdown_button" />
 
             <ProgressBar
-                android:id="@+id/dsp_progress"
+                android:id="@+id/system_admin_progress"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_gravity="center"
@@ -136,7 +121,7 @@
                 android:visibility="gone" />
 
             <TextView
-                android:id="@+id/dsp_message"
+                android:id="@+id/system_admin_message"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="16dp"

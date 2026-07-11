@@ -1008,6 +1008,12 @@ public class SqueezeService extends Service {
         }
 
         @Override
+        public void rescanLibrary() {
+            if (!isConnected()) return;
+            mDelegate.command().cmd("rescan").exec();
+        }
+
+        @Override
         public void requestServerStatus() {
             mDelegate.requestServerStatus();
         }

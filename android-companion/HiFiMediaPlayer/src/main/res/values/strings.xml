@@ -291,6 +291,56 @@
     <string name="settings_backup_restore_confirm_message">This overwrites the appliance\'s current configuration and restarts Squeezelite/CamillaDSP/SMB. This cannot be undone.</string>
     <string name="settings_backup_restore_failed">Restore failed</string>
 
+    <string name="settings_category_audio_output">Audio Output</string>
+    <string name="settings_audio_output_title">Audio Output</string>
+    <string name="settings_audio_output_summary">Choose the appliance\'s DAC / output device</string>
+    <string name="settings_audio_output_applied">Output device changed.</string>
+    <string name="settings_audio_output_failed">Could not change the output device</string>
+
+    <string name="settings_category_playback">Playback</string>
+    <string name="settings_playback_transition_title">Transition</string>
+    <string name="settings_playback_transition_duration_title">Transition duration (seconds)</string>
+    <string name="settings_playback_replaygain_title">ReplayGain</string>
+    <string name="settings_playback_no_player">No active player</string>
+
+    <string name="settings_category_lyrion_server">Lyrion Server</string>
+    <string name="settings_lyrion_rescan_title">Rescan library</string>
+    <string name="settings_lyrion_rescan_summary">Ask the server to scan for new or changed music</string>
+    <string name="settings_lyrion_rescan_started">Library rescan started.</string>
+
+    <string name="settings_category_system_admin">System Administration</string>
+    <string name="settings_system_admin_title">System Administration</string>
+    <string name="settings_system_admin_summary">SSH access, system info, reboot and shutdown</string>
+    <string name="settings_ssh_title">SSH access</string>
+    <string name="settings_ssh_warning">Enabling SSH allows remote command-line access to the appliance. Only enable this if you understand the risk.</string>
+    <string name="settings_ssh_unavailable">SSH server is not available on this appliance.</string>
+    <string name="settings_system_info_title">System info</string>
+    <string name="settings_system_info_hostname">Hostname</string>
+    <string name="settings_system_info_ip">IP address</string>
+    <string name="settings_system_info_platform">Platform</string>
+    <string name="settings_system_controls_title">System controls</string>
+    <string name="settings_reboot_button">Reboot</string>
+    <string name="settings_reboot_confirm">Reboot the appliance now? Playback will stop.</string>
+    <string name="settings_shutdown_button">Shutdown</string>
+    <string name="settings_shutdown_confirm">Shut down the appliance now? You\'ll need physical access to turn it back on.</string>
+    <string name="settings_system_admin_failed">Request failed</string>
+
+    <string name="settings_category_updates">Updates</string>
+    <string name="settings_updates_title">Updates</string>
+    <string name="settings_updates_summary">Check and apply UI, System, OS and Lyrion updates</string>
+    <string name="settings_updates_channel_title">Update channel</string>
+    <string name="settings_updates_channel_prod">Stable</string>
+    <string name="settings_updates_channel_dev">Development</string>
+    <string name="settings_updates_check_button">Check</string>
+    <string name="settings_updates_apply_button">Update</string>
+    <string name="settings_updates_up_to_date">Up to date</string>
+    <string name="settings_updates_available">Update available: %s</string>
+    <string name="settings_updates_applying">Applying update…</string>
+    <string name="settings_updates_ui">UI</string>
+    <string name="settings_updates_system">System</string>
+    <string name="settings_updates_os">OS</string>
+    <string name="settings_updates_lyrion">Lyrion Music Server</string>
+
     <string name="about_team" translatable="false">Team</string>
     <string name="about_authors" translatable="false">Benjamin Viertel\nKurt Aaholst\nNik Clayton\nBrad Fitzpatrick</string>
     <string name="about_website" translatable="false"><a href="https://github.com/adri6412/osmium-sound">Website</a>\n<a href="https://kaaholst.github.io/android-squeezer/">Original Squeezer Website</a></string>

@@ -37,6 +37,8 @@ public interface ISqueezeService {
     void disconnect();
     void stopServer();
     void restartServer();
+    /** Server-wide (not per-player) library rescan, mirroring the Electron UI's "Rescan library" button. */
+    void rescanLibrary();
     boolean isManualDisconnect();
     boolean isConnected();
     boolean isConnectInProgress();

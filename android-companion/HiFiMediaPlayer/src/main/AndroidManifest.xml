@@ -127,6 +127,24 @@
         </activity>
 
         <activity
+            android:name=".AudioOutputActivity"
+            android:label="@string/settings_audio_output_title"
+            android:parentActivityName=".SettingsActivity">
+        </activity>
+
+        <activity
+            android:name=".UpdatesActivity"
+            android:label="@string/settings_updates_title"
+            android:parentActivityName=".SettingsActivity">
+        </activity>
+
+        <activity
+            android:name=".SystemAdminActivity"
+            android:label="@string/settings_system_admin_title"
+            android:parentActivityName=".SettingsActivity">
+        </activity>
+
+        <activity
             android:name=".ConnectActivity"
             android:label="@string/disconnected_text"
             android:parentActivityName=".itemlist.HomeActivity">

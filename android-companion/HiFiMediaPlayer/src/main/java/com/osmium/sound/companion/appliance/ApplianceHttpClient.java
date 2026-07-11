@@ -105,6 +105,17 @@ public final class ApplianceHttpClient {
         });
     }
 
+    /** Generic GET against one of sources_server.py's /api/system/* proxy routes. */
+    public static void getJson(String path, JsonCallback callback) {
+        enqueueJson(authedRequest(path).get().build(), callback);
+    }
+
+    /** Generic POST (optionally with a JSON body) against a /api/system/* proxy route. */
+    public static void postJson(String path, @androidx.annotation.Nullable JSONObject payload, JsonCallback callback) {
+        RequestBody body = RequestBody.create(payload != null ? payload.toString() : "{}", JSON);
+        enqueueJson(authedRequest(path).post(body).build(), callback);
+    }
+
     public static void dspStatus(JsonCallback callback) {
         enqueueJson(authedRequest("/api/dsp/status").get().build(), callback);
     }

@@ -10,7 +10,9 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:text="@string/menu_item_lyrics"
-        android:textAppearance="?attr/textAppearanceTitleMedium"
+        android:textColor="@android:color/white"
+        android:textStyle="bold"
+        android:textSize="18sp"
         android:layout_marginBottom="12dp" />
 
     <ProgressBar
@@ -31,7 +33,7 @@
             android:id="@+id/lyrics_text"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:textAppearance="?attr/textAppearanceBodyMedium"
+            android:textColor="@android:color/white"
             android:textIsSelectable="true" />
     </ScrollView>
 
