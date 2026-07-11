@@ -12,3 +12,5 @@ hifi ALL=(ALL) NOPASSWD: /sbin/dhclient, /usr/sbin/dhclient, /usr/bin/ip, /sbin/
 hifi ALL=(ALL) NOPASSWD: /usr/bin/nmcli *
 # SSH on/off toggle (Settings). Pin the exact unit names — no wildcard.
 hifi ALL=(ALL) NOPASSWD: /usr/bin/systemctl enable --now ssh.service, /usr/bin/systemctl disable --now ssh.service, /usr/bin/systemctl enable --now sshd.service, /usr/bin/systemctl disable --now sshd.service
+# DSP engine on/off toggle (Settings → DSP). Pin the exact unit name.
+hifi ALL=(ALL) NOPASSWD: /usr/bin/systemctl enable --now camilladsp.service, /usr/bin/systemctl disable --now camilladsp.service

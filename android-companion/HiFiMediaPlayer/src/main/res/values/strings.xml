@@ -34,6 +34,10 @@
     <string name="activity_settings_name">Settings</string>
     <string name="settings_serveraddr_hint">Name or IP address of server</string>
     <string name="settings_manual_server_addr">Manually enter address</string>
+    <string name="settings_scan_qr">Scan QR code</string>
+    <string name="settings_scan_qr_prompt">Scan the QR code shown in Osmium Sound → Settings → Phone control</string>
+    <string name="settings_scan_qr_failed">Couldn\'t read a server address from that QR code</string>
+    <string name="settings_camera_permission_required">Camera permission is required to scan a QR code</string>
     <string name="settings_server_prompt">Choose a server</string>
     <string name="settings_theme_title">Theme</string>
     <string name="settings_theme_dark">Dark</string>

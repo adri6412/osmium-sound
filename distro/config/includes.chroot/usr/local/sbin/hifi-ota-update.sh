@@ -55,9 +55,37 @@ if [ "$ACTUAL" != "$SHA" ]; then
 fi
 
 # ── extract ──────────────────────────────────────────────────────────
-write_status applying 60 "Estrazione…"
+write_status applying 55 "Estrazione…"
 rm -rf "$NEWDIR"; mkdir -p "$NEWDIR"
+
+# Free-space guard (root cause of the "file too short" brick): a full disk lets
+# tar write a truncated file — any file, not just libffmpeg.so — and the kiosk
+# then fails to start. Refuse to extract unless the target FS can hold the
+# uncompressed tree plus a safety margin. The uncompressed size comes from the
+# gzip footer (fast, no full read); fall back to ~4× the compressed size.
+need_kb=$(gzip -l "$TARBALL" 2>/dev/null | awk 'NR==2 && $2 ~ /^[0-9]+$/ {print int($2/1024)}')
+[ -n "${need_kb:-}" ] && [ "$need_kb" -gt 0 ] 2>/dev/null \
+    || need_kb=$(( ($(wc -c < "$TARBALL") / 1024) * 4 ))
+free_kb=$(df -Pk "$NEWDIR" | awk 'NR==2 {print $4}')
+if [ -n "${free_kb:-}" ] && [ "$free_kb" -lt $(( need_kb + 51200 )) ]; then
+    fail "Spazio insufficiente per l'aggiornamento: servono ~$((need_kb/1024)) MB, liberi ~$((free_kb/1024)) MB"
+fi
+
 tar xzf "$TARBALL" -C "$NEWDIR" || fail "Estrazione del tarball fallita"
+
+# ── integrity: verify EVERY extracted file against the archive ───────
+# Not just the main binary. `tar --compare` re-reads the archive and flags a
+# size/content mismatch for ANY member, so a single truncated file (a .so, a
+# resource, an asar) can no longer slip through and brick the kiosk. Filter to
+# real corruption ("Size differs"/"Contents differ") — ownership/mode/time
+# lines are expected (archive stores the CI runner's uid, we extract as root).
+write_status verifying 70 "Verifica integrità dei file estratti…"
+corrupt=$(tar dzf "$TARBALL" -C "$NEWDIR" 2>&1 \
+    | grep -iE 'Size differs|Contents differ' | head -n 1 || true)
+if [ -n "$corrupt" ]; then
+    rm -rf "$NEWDIR"
+    fail "Bundle estratto corrotto: $corrupt"
+fi
 
 # sanity-check the new payload before swapping
 [ -x "$NEWDIR/hifi-media-player" ] \
