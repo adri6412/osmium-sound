@@ -1,0 +1,7 @@
+package com.osmium.sound.companion.volume;
+
+import com.osmium.sound.companion.service.ISqueezeService;
+
+public interface VolumeUpdater {
+    void update(ISqueezeService.VolumeInfo volumeInfo);
+}

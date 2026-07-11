@@ -1,0 +1,11 @@
+package com.osmium.sound.companion.service;
+
+import android.content.Context;
+
+import com.osmium.sound.companion.R;
+
+public class PlayerNotFoundException extends Exception {
+    public PlayerNotFoundException(Context context) {
+        super(context.getString(R.string.NO_PLAYER_FOUND));
+    }
+}
