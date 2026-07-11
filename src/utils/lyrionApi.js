@@ -193,6 +193,28 @@ export class LyrionAPI {
     return this.request(playerMac, ['alarm', 'delete', `id:${alarmId}`]);
   }
 
+  // --- Lyrics (via the MusicArtistInfo plugin) ---
+
+  // Returns the lyrics text, or null if the plugin isn't installed, the track
+  // has none, or the request fails. `trackId` is preferred (exact match); falls
+  // back to artist/title when unavailable (e.g. radio streams).
+  async getLyrics(playerMac, { trackId, artist, title } = {}) {
+    const params = [];
+    if (trackId) params.push(`track_id:${trackId}`);
+    else {
+      if (artist) params.push(`artist:${artist}`);
+      if (title) params.push(`title:${title}`);
+    }
+    if (!params.length) return null;
+    try {
+      const r = await this.request(playerMac, ['musicartistinfo', 'lyrics', ...params]);
+      const text = r?.lyrics;
+      return typeof text === 'string' && text.trim() ? text : null;
+    } catch (_) {
+      return null;
+    }
+  }
+
   // --- Multiroom / synchronised zones ---
   // LMS syncs multiple players natively: a sync group has one master and any
   // number of slaves that all play the master's queue in lock-step.

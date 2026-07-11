@@ -149,6 +149,9 @@
     "connectingShort": "Connessione…",
     "reconnect": "Riconnetti",
     "nowPlaying": "In Riproduzione",
+    "lyrics": "Testi",
+    "vuMeters": "VU meter",
+    "lyricsNone": "Nessun testo trovato per questo brano.",
     "expand": "Espandi",
     "noTrack": "Nessuna traccia",
     "unknownArtist": "Artista Sconosciuto",
@@ -179,6 +182,7 @@
       "alarm": "Sveglia",
       "network": "Configurazione Rete",
       "webRemote": "Controllo da telefono",
+      "backup": "Backup e ripristino",
       "ssh": "Accesso SSH",
       "pointer": "Puntatore mouse",
       "systemInfo": "Informazioni Sistema",
@@ -219,6 +223,9 @@
       "gain": "Guadagno (dB)",
       "q": "Q",
       "crossfeed": "Crossfeed cuffie",
+      "roomCorrection": "Correzione ambientale (FIR)",
+      "roomCorrectionPresent": "Filtro caricato: {filename}. Puoi caricarne uno nuovo in qualsiasi momento da Backup e ripristino / controllo da telefono.",
+      "roomCorrectionMissing": "Nessun filtro caricato. Apri l'indirizzo delle sorgenti (sezione Backup e ripristino) da un browser su telefono o PC per caricare un filtro di convoluzione WAV/TXT (REW/rePhase).",
       "save": "Applica EQ",
       "failed": "Operazione DSP fallita."
     },
@@ -232,6 +239,10 @@
       "help": "Controlla questo dispositivo da qualsiasi telefono o tablet sulla stessa rete, usando il browser — nessuna app da installare. Apri l'indirizzo qui sotto o inquadra il QR code.",
       "scanHint": "Inquadra con la fotocamera del telefono",
       "noIp": "Nessun indirizzo di rete disponibile. Collega il dispositivo alla rete (Ethernet o Wi-Fi) per ottenere un link di controllo."
+    },
+    "backup": {
+      "help": "Esporta o ripristina la configurazione del dispositivo (DAC, DSP/EQ, sorgenti musicali, puntatore, canale aggiornamenti) da un browser sul telefono o PC. Apri l'indirizzo qui sotto o inquadra il QR code, poi usa \"Scarica backup\" o \"Ripristina da file\".",
+      "scanHint": "Inquadra con la fotocamera del telefono"
     },
     "alarm": {
       "help": "Programma sveglie sul player attivo. All'orario impostato il player si attiva e avvia la riproduzione.",

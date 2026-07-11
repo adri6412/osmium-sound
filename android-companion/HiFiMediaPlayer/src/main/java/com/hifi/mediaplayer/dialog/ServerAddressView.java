@@ -16,7 +16,9 @@
 
 package com.hifi.mediaplayer.dialog;
 
+import android.app.Activity;
 import android.content.Context;
+import android.content.Intent;
 import android.os.CountDownTimer;
 import android.text.Editable;
 import android.util.AttributeSet;
@@ -26,13 +28,17 @@ import android.widget.EditText;
 import android.widget.LinearLayout;
 import android.widget.ProgressBar;
 import android.widget.TextView;
+import android.widget.Toast;
 
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.fragment.app.FragmentManager;
 
 import com.google.android.material.checkbox.MaterialCheckBox;
 import com.google.android.material.textfield.TextInputLayout;
+import com.google.zxing.integration.android.IntentIntegrator;
+import com.google.zxing.integration.android.IntentResult;
 
+import java.net.URI;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -99,6 +105,8 @@ public class ServerAddressView extends LinearLayout implements ScanNetworkTask.S
 
                 serverAddressEditText = findViewById(R.id.server_address);
                 serverAddressEditText.setAdapter(new ArrayAdapter<>(getContext(), R.layout.dropdown_item, preferences.getServerHistory()));
+                TextInputLayout serverAddressTil = findViewById(R.id.server_address_til);
+                serverAddressTil.setEndIconOnClickListener(view -> startQrScan());
                 userNameEditText = findViewById(R.id.username);
                 passwordEditText = findViewById(R.id.password);
 
@@ -168,6 +176,81 @@ public class ServerAddressView extends LinearLayout implements ScanNetworkTask.S
         preferences.saveServerAddress(serverAddress);
 
         return true;
+    }
+
+    /**
+     * Launches the ZXing scanner activity to read the QR code shown on the appliance
+     * (Settings -> Phone control). Camera permission is requested by the scanner
+     * activity itself if needed. Uses the classic startActivityForResult-based
+     * IntentIntegrator (not the newer Activity Result API) because ServerAddressView
+     * is a plain View inflated asynchronously — it has no safe point to register an
+     * ActivityResultLauncher before the host Activity leaves the STARTED state.
+     */
+    private void startQrScan() {
+        if (!(getContext() instanceof Activity)) {
+            return;
+        }
+        IntentIntegrator integrator = new IntentIntegrator((Activity) getContext());
+        integrator.setDesiredBarcodeFormats(IntentIntegrator.QR_CODE);
+        integrator.setPrompt(getResources().getString(R.string.settings_scan_qr_prompt));
+        integrator.setBeepEnabled(false);
+        integrator.setOrientationLocked(true);
+        integrator.initiateScan();
+    }
+
+    /**
+     * Forwards the host Activity's onActivityResult here so a completed QR scan can
+     * fill in the server address field. Returns true if the result was consumed
+     * (i.e. it was a scan result at all, scanned or cancelled).
+     */
+    public boolean handleActivityResult(int requestCode, int resultCode, Intent data) {
+        IntentResult result = IntentIntegrator.parseActivityResult(requestCode, resultCode, data);
+        if (result == null) {
+            return false;
+        }
+        String contents = result.getContents();
+        if (contents == null) {
+            return true; // user cancelled the scan
+        }
+        String hostPort = parseHostPortFromQr(contents);
+        if (hostPort == null) {
+            Toast.makeText(getContext(), R.string.settings_scan_qr_failed, Toast.LENGTH_LONG).show();
+            return true;
+        }
+        isManual = true;
+        setEditServerAddressAvailability();
+        setServerAddress(hostPort);
+        return true;
+    }
+
+    /**
+     * Extracts a "host:port" (or bare host) string from scanned QR content. The
+     * appliance's own QR codes (e.g. Settings -> Phone control) encode a full URL
+     * like "http://192.168.1.50:9000/material/"; a plain "host" or "host:port" QR
+     * is also accepted as-is.
+     */
+    private static String parseHostPortFromQr(String content) {
+        if (content == null) {
+            return null;
+        }
+        content = content.trim();
+        if (content.isEmpty()) {
+            return null;
+        }
+        if (content.matches("(?i)^[a-z][a-z0-9+.-]*://.*")) {
+            try {
+                URI uri = URI.create(content);
+                String host = uri.getHost();
+                if (host == null) {
+                    return null;
+                }
+                int port = uri.getPort();
+                return port > 0 ? (host + ":" + port) : host;
+            } catch (Exception e) {
+                return null;
+            }
+        }
+        return content;
     }
 
     @Override

@@ -8,7 +8,8 @@ import {
   Radio, AppWindow,
   Settings as SettingsIcon, Maximize2,
   Shuffle, Repeat, Repeat1, ListMusic, Moon,
-  Trash2, X, Save, ArrowUp, ArrowDown
+  Trash2, X, Save, ArrowUp, ArrowDown,
+  Mic2, AudioLines
 } from 'lucide-react';
 import { lyrionApi } from '../utils/lyrionApi';
 import { useI18n } from '../i18n';
@@ -412,6 +413,30 @@ const LyrionServer = () => {
   const formatLabel = codecType
     ? `${String(codecType).toUpperCase()}${samplesize ? ` · ${samplesize}bit` : ''}${samplerate ? ` · ${Math.round(samplerate / 1000)}kHz` : ''}`
     : null;
+
+  // ── Now-playing panel: VU meters ⇄ lyrics toggle ────────────
+  // 'vu' | 'lyrics'; persisted so the choice survives navigation/reloads.
+  const [nowPlayingView, setNowPlayingView] = useState(
+    localStorage.getItem('hifiNowPlayingView') === 'lyrics' ? 'lyrics' : 'vu'
+  );
+  // undefined = not fetched yet, null = no lyrics found, string = lyrics text
+  const [lyricsText, setLyricsText] = useState(undefined);
+  const toggleNowPlayingView = () => {
+    setNowPlayingView((v) => {
+      const next = v === 'vu' ? 'lyrics' : 'vu';
+      localStorage.setItem('hifiNowPlayingView', next);
+      return next;
+    });
+  };
+  useEffect(() => {
+    if (nowPlayingView !== 'lyrics' || !isPlayerExpanded) return;
+    if (!currentTrack.id && !(artist && title)) { setLyricsText(null); return; }
+    let cancelled = false;
+    setLyricsText(undefined);
+    lyrionApi.getLyrics(activePlayer?.playerid, { trackId: currentTrack.id, artist, title })
+      .then((text) => { if (!cancelled) setLyricsText(text); });
+    return () => { cancelled = true; };
+  }, [nowPlayingView, isPlayerExpanded, currentTrack.id]);
 
   // ── Library content renderer ───────────────────────────────
   const renderLibraryContent = () => {
@@ -967,6 +992,11 @@ const LyrionServer = () => {
                 </button>
                 <p className="text-[10px] tracking-[0.25em] text-hifi-silver/70 uppercase">{t('player.nowPlaying')}</p>
                 <div className="flex items-center space-x-2">
+                  <button onClick={toggleNowPlayingView}
+                    title={nowPlayingView === 'vu' ? t('player.lyrics') : t('player.vuMeters')}
+                    className="p-2 bg-white/10 hover:bg-white/20 rounded-full text-white transition-colors">
+                    {nowPlayingView === 'vu' ? <Mic2 size={18} /> : <AudioLines size={18} />}
+                  </button>
                   <button onClick={openQueue} title={t('player.queue')}
                     className="p-2 bg-white/10 hover:bg-white/20 rounded-full text-white transition-colors">
                     <ListMusic size={18} />
@@ -1073,9 +1103,23 @@ const LyrionServer = () => {
                     </div>
                   </div>
 
-                  {/* VU Meters — large, fills remaining vertical space */}
+                  {/* VU Meters (default) or Lyrics — fills remaining vertical space */}
                   <div className="flex-1 min-h-0">
-                    <AnalogVUMeter isPlaying={isPlaying} className="w-full h-full" />
+                    {nowPlayingView === 'vu' ? (
+                      <AnalogVUMeter isPlaying={isPlaying} className="w-full h-full" />
+                    ) : (
+                      <div className="w-full h-full overflow-y-auto rounded-xl bg-black/20 px-4 py-3">
+                        {lyricsText === undefined && (
+                          <p className="text-sm text-hifi-silver/50 text-center mt-4">{t('common.loading')}</p>
+                        )}
+                        {lyricsText === null && (
+                          <p className="text-sm text-hifi-silver/50 text-center mt-4">{t('player.lyricsNone')}</p>
+                        )}
+                        {typeof lyricsText === 'string' && (
+                          <p className="text-sm text-white/90 whitespace-pre-line leading-relaxed">{lyricsText}</p>
+                        )}
+                      </div>
+                    )}
                   </div>
                 </motion.div>
               </div>

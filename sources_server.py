@@ -22,6 +22,9 @@ import glob
 import time
 import subprocess
 import threading
+import io
+import tarfile
+from datetime import datetime, timezone
 
 app = Flask(__name__)
 # The Electron UI now talks to this service natively (cross-origin from the
@@ -453,6 +456,227 @@ def apply_to_lyrion(state):
     return True, f"{len(paths)} sorgenti applicate. Lyrion riavviato e in scansione."
 
 
+# ─────────────────────────── Backup / restore ────────────────────────
+# Exports/imports the appliance's USER configuration: DAC selection, DSP/EQ
+# state, pointer preference, OTA channel choice, music sources and any room-
+# correction FIR filter. Deliberately excludes OS_VERSION/SYSTEM_VERSION (those
+# are OTA bookkeeping, not user config — restoring them would desync the
+# updater's view of what's installed) and anything network/credential-related
+# beyond the SMB share passwords already stored in hifi-sources.json.
+#
+# Both directions use a fixed allow-list of exact paths (+ the FIR filters
+# directory) — never the tar member's own path verbatim — so a malicious or
+# corrupt archive can't write outside these locations (no path traversal, no
+# symlinks, no device/special files: only regular files are ever opened).
+BACKUP_FILES = [
+    "/etc/hifi-player/pointer-enabled",
+    "/etc/hifi-player/dsp.json",
+    "/etc/hifi-player/ota-channel",
+    "/etc/default/squeezelite",
+    "/etc/camilladsp/config.yml",
+    "/etc/hifi-sources.json",
+    "/var/lib/hifi-player/dsp-target",
+]
+BACKUP_DIRS = [
+    "/etc/camilladsp/filters",  # room-correction FIR file(s), if any
+]
+MAX_RESTORE_MEMBER_SIZE = 32 * 1024 * 1024  # 32MB per file is generous for config + a FIR filter
+MAX_RESTORE_MEMBERS = 200
+
+
+def _backup_build():
+    buf = io.BytesIO()
+    with tarfile.open(fileobj=buf, mode="w:gz") as tar:
+        for path in BACKUP_FILES:
+            if os.path.isfile(path):
+                tar.add(path, arcname=path.lstrip("/"))
+        for d in BACKUP_DIRS:
+            if os.path.isdir(d):
+                tar.add(d, arcname=d.lstrip("/"))
+    return buf.getvalue()
+
+
+def _restore_dest_for_member(name):
+    """Map a tar member name to an allowed absolute destination path, or None
+    if it doesn't match the allow-list (exact file or under an allowed dir)."""
+    normalized = os.path.normpath("/" + name.lstrip("/"))
+    if normalized in BACKUP_FILES:
+        return normalized
+    for d in BACKUP_DIRS:
+        prefix = d.rstrip("/") + "/"
+        if normalized.startswith(prefix) and normalized != d:
+            return normalized
+    return None
+
+
+def _restore_apply(archive_bytes):
+    """Extract only allow-listed regular files from the archive. Returns
+    (restored_paths, errors)."""
+    restored, errors = [], []
+    try:
+        tar = tarfile.open(fileobj=io.BytesIO(archive_bytes), mode="r:gz")
+    except Exception:
+        return [], ["Archivio non valido o corrotto"]
+
+    with tar:
+        members = tar.getmembers()
+        if len(members) > MAX_RESTORE_MEMBERS:
+            return [], ["Archivio non valido (troppi file)"]
+        for member in members:
+            if not member.isfile():
+                continue  # skip dirs, symlinks, devices, etc.
+            if member.size > MAX_RESTORE_MEMBER_SIZE:
+                errors.append(f"{member.name}: troppo grande, saltato")
+                continue
+            dest = _restore_dest_for_member(member.name)
+            if not dest:
+                continue  # silently ignore anything outside the allow-list
+            try:
+                src = tar.extractfile(member)
+                if src is None:
+                    continue
+                data = src.read()
+                os.makedirs(os.path.dirname(dest), exist_ok=True)
+                tmp = dest + ".restore.tmp"
+                with open(tmp, "wb") as f:
+                    f.write(data)
+                os.replace(tmp, dest)
+                restored.append(dest)
+            except Exception as e:
+                errors.append(f"{dest}: {e}")
+    return restored, errors
+
+
+def _restore_apply_side_effects(restored):
+    """Re-apply the config that was just restored (best-effort, non-fatal)."""
+    notes = []
+    if "/etc/hifi-sources.json" in restored:
+        try:
+            remount_all()
+            ok, msg = apply_to_lyrion(load_state())
+            notes.append(msg if ok else f"Sorgenti: {msg}")
+        except Exception as e:
+            notes.append(f"Sorgenti non riapplicate: {e}")
+    if any(p in restored for p in ("/etc/default/squeezelite", "/var/lib/hifi-player/dsp-target")):
+        _run(["systemctl", "restart", "squeezelite"], timeout=30)
+        notes.append("squeezelite riavviato")
+    if any(p in restored for p in ("/etc/camilladsp/config.yml", "/etc/hifi-player/dsp.json")) \
+            or any(p.startswith("/etc/camilladsp/filters/") for p in restored):
+        # Only restart CamillaDSP if it was already running — restoring a
+        # backup must never turn DSP on by itself.
+        try:
+            active = _run(["systemctl", "is-active", "camilladsp.service"], timeout=10)
+            if (active.stdout or "").strip() == "active":
+                _run(["systemctl", "restart", "camilladsp.service"], timeout=30)
+                notes.append("CamillaDSP riavviato")
+        except Exception:
+            pass
+    return notes
+
+
+@app.route("/api/backup", methods=["GET"])
+def api_backup():
+    data = _backup_build()
+    stamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
+    resp = Response(data, mimetype="application/gzip")
+    resp.headers["Content-Disposition"] = f'attachment; filename="osmium-backup-{stamp}.tar.gz"'
+    return resp
+
+
+@app.route("/api/restore", methods=["POST"])
+def api_restore():
+    f = request.files.get("file")
+    if not f:
+        return jsonify({"success": False, "message": "Nessun file caricato"}), 400
+    archive_bytes = f.read()
+    if len(archive_bytes) > MAX_RESTORE_MEMBERS * MAX_RESTORE_MEMBER_SIZE:
+        return jsonify({"success": False, "message": "File troppo grande"}), 400
+    restored, errors = _restore_apply(archive_bytes)
+    if not restored and errors:
+        return jsonify({"success": False, "message": "; ".join(errors)}), 400
+    notes = _restore_apply_side_effects(restored)
+    msg = f"{len(restored)} file ripristinati." + ((" " + " ".join(notes)) if notes else "")
+    if errors:
+        msg += " Avvisi: " + "; ".join(errors)
+    return jsonify({"success": True, "message": msg, "restored": len(restored)})
+
+
+# ─────────────────────────── Room correction (FIR filter) ────────────
+# Lets the user upload a convolution filter (impulse response) generated on a
+# PC with REW/rePhase, for the optional DSP engine's room-correction toggle
+# (Settings → DSP, api_server.py). Only ONE filter is kept at a time, always
+# under the fixed name "room.<ext>" — never a user-supplied filename — so
+# there is no path-traversal surface. The file is applied identically to both
+# channels; api_server.py's _camilla_config_dict() picks it up if present and
+# room_correction is enabled.
+FIR_DIR = "/etc/camilladsp/filters"
+# Extension -> CamillaDSP Conv "type" (both are officially documented formats,
+# not guessed): a WAV impulse response, or a plain text file with one
+# coefficient per line (CamillaDSP's Raw/TEXT format).
+FIR_KINDS = {".wav": "Wav", ".txt": "Raw"}
+FIR_MAX_SIZE = 20 * 1024 * 1024
+
+
+def _fir_current():
+    """Return (path, ext) of the currently stored filter, or (None, None)."""
+    if os.path.isdir(FIR_DIR):
+        for ext in FIR_KINDS:
+            p = os.path.join(FIR_DIR, "room" + ext)
+            if os.path.isfile(p):
+                return p, ext
+    return None, None
+
+
+@app.route("/api/dsp/fir", methods=["GET"])
+def api_dsp_fir_status():
+    path, ext = _fir_current()
+    if not path:
+        return jsonify({"present": False})
+    return jsonify({"present": True, "filename": os.path.basename(path),
+                     "kind": FIR_KINDS[ext], "size": os.path.getsize(path)})
+
+
+@app.route("/api/dsp/fir", methods=["POST"])
+def api_dsp_fir_upload():
+    f = request.files.get("file")
+    if not f or not f.filename:
+        return jsonify({"success": False, "message": "Nessun file caricato"}), 400
+    ext = os.path.splitext(f.filename)[1].lower()
+    if ext not in FIR_KINDS:
+        return jsonify({"success": False, "message": "Formato non supportato (usa .wav o .txt)"}), 400
+    data = f.read(FIR_MAX_SIZE + 1)
+    if len(data) > FIR_MAX_SIZE:
+        return jsonify({"success": False, "message": "File troppo grande (max 20MB)"}), 400
+    if not data:
+        return jsonify({"success": False, "message": "File vuoto"}), 400
+    try:
+        os.makedirs(FIR_DIR, exist_ok=True)
+        # Only one filter at a time: clear any previous room.* before writing.
+        for other_ext in FIR_KINDS:
+            other = os.path.join(FIR_DIR, "room" + other_ext)
+            if os.path.isfile(other):
+                os.remove(other)
+        dest = os.path.join(FIR_DIR, "room" + ext)
+        tmp = dest + ".tmp"
+        with open(tmp, "wb") as out:
+            out.write(data)
+        os.replace(tmp, dest)
+    except Exception as e:
+        return jsonify({"success": False, "message": f"Salvataggio fallito: {e}"}), 500
+    return jsonify({"success": True, "message": "Filtro caricato. Attivalo da Impostazioni → DSP."})
+
+
+@app.route("/api/dsp/fir", methods=["DELETE"])
+def api_dsp_fir_delete():
+    removed = False
+    for ext in FIR_KINDS:
+        p = os.path.join(FIR_DIR, "room" + ext)
+        if os.path.isfile(p):
+            os.remove(p)
+            removed = True
+    return jsonify({"success": True, "removed": removed})
+
+
 # ─────────────────────────── HTTP API ───────────────────────────────
 @app.route("/api/sources", methods=["GET"])
 def api_list():
@@ -656,6 +880,29 @@ INDEX_HTML = r"""<!DOCTYPE html>
     <button class="ghost" onclick="addSmb()">Monta e aggiungi</button>
     <div class="msg" id="smbMsg"></div>
   </div>
+
+  <h2>Correzione ambientale (filtro FIR)</h2>
+  <div class="card">
+    <p style="color:var(--silver);font-size:13px;margin:0 0 10px">Carica un filtro di convoluzione (risposta all'impulso) generato con REW o rePhase — formato WAV o testo (.txt, un coefficiente per riga). Verrà applicato identicamente a entrambi i canali. Attivalo poi da Impostazioni → DSP sul dispositivo.</p>
+    <div id="firStatus" style="font-size:13px;color:var(--silver);margin-bottom:10px">Caricamento…</div>
+    <div class="row">
+      <label class="ghost" style="text-align:center;flex:1;cursor:pointer" for="firFile">⬆ Carica filtro</label>
+      <button class="danger" style="flex:1" onclick="removeFir()">Rimuovi filtro</button>
+    </div>
+    <input type="file" id="firFile" accept=".wav,.txt" style="display:none" onchange="uploadFir(this)">
+    <div class="msg" id="firMsg"></div>
+  </div>
+
+  <h2>Backup e ripristino</h2>
+  <div class="card">
+    <p style="color:var(--silver);font-size:13px;margin:0 0 10px">Esporta la configurazione del dispositivo (DAC, DSP/EQ, sorgenti, puntatore, canale aggiornamenti) in un file, o ripristinala da un backup precedente.</p>
+    <div class="row">
+      <a class="ghost" style="text-decoration:none;display:inline-block;text-align:center;flex:1" href="/api/backup">⬇ Scarica backup</a>
+      <label class="ghost" style="text-align:center;flex:1;cursor:pointer" for="restoreFile">⬆ Ripristina da file</label>
+    </div>
+    <input type="file" id="restoreFile" accept=".gz,.tar.gz,application/gzip" style="display:none" onchange="doRestore(this)">
+    <div class="msg" id="restoreMsg"></div>
+  </div>
 </div>
 
 <div class="applybar"><div class="inner">
@@ -694,6 +941,45 @@ async function addSmb(){
   if(r.success){smbPass.value='';load();}
 }
 async function rm(id){ await j('/api/sources/'+id,{method:'DELETE'}); load(); }
+
+// ── Room correction (FIR filter) ────────────────────────────────────
+async function loadFir(){
+  let d; try{ d=await j('/api/dsp/fir'); }catch(e){ return; }
+  const el=document.getElementById('firStatus');
+  el.textContent=d.present ? ('Filtro attivo: '+d.filename+' ('+Math.round(d.size/1024)+' KB)') : 'Nessun filtro caricato.';
+}
+async function uploadFir(input){
+  const file=input.files && input.files[0]; if(!file) return;
+  const m=document.getElementById('firMsg'); m.textContent='Caricamento…'; m.className='msg';
+  const body=new FormData(); body.append('file', file);
+  try{
+    const r=await fetch('/api/dsp/fir',{method:'POST',body});
+    const d=await r.json();
+    m.textContent=d.message||(d.success?'Fatto':'Errore'); m.className='msg '+(d.success?'ok':'bad');
+    if(d.success) loadFir();
+  }catch(e){ m.textContent='Errore di rete'; m.className='msg bad'; }
+  input.value='';
+}
+async function removeFir(){
+  const m=document.getElementById('firMsg'); m.textContent='Rimozione…'; m.className='msg';
+  const r=await j('/api/dsp/fir',{method:'DELETE'});
+  m.textContent=r.removed?'Rimosso ✓':'Nessun filtro da rimuovere'; m.className='msg '+(r.removed?'ok':'');
+  loadFir();
+}
+loadFir();
+
+// ── Backup / restore ───────────────────────────────────────────────
+async function doRestore(input){
+  const file=input.files && input.files[0]; if(!file) return;
+  const m=document.getElementById('restoreMsg'); m.textContent='Ripristino…'; m.className='msg';
+  const body=new FormData(); body.append('file', file);
+  try{
+    const r=await fetch('/api/restore',{method:'POST',body});
+    const d=await r.json();
+    m.textContent=d.message||(d.success?'Fatto':'Errore'); m.className='msg '+(d.success?'ok':'bad');
+  }catch(e){ m.textContent='Errore di rete'; m.className='msg bad'; }
+  input.value='';
+}
 async function apply(){
   const m=document.getElementById('applyMsg'); m.textContent='Applico…'; m.className='msg';
   const r=await j('/api/apply',{method:'POST'});
