@@ -19,7 +19,7 @@
 
     <androidx.fragment.app.FragmentContainerView
         android:id="@+id/settings_container"
-        android:name="com.hifi.mediaplayer.SettingsFragment"
+        android:name="com.osmium.sound.companion.SettingsFragment"
         android:layout_width="match_parent"
         android:layout_height="match_parent" />
 

@@ -34,7 +34,7 @@
              />
     </com.google.android.material.appbar.AppBarLayout>
 
-    <androidx.fragment.app.FragmentContainerView android:name="com.hifi.mediaplayer.NowPlayingFragment"
+    <androidx.fragment.app.FragmentContainerView android:name="com.osmium.sound.companion.NowPlayingFragment"
         android:id="@+id/now_playing_fragment"
         android:layout_width="fill_parent"
         android:layout_height="fill_parent"
