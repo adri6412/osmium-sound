@@ -194,7 +194,11 @@ document.addEventListener('DOMContentLoaded', async function() {
       // onload for src scripts to preserve ordering (React before ReactDOM
       // before Babel before text/babel).
       var template = pages[entryId];
-      const doc = new DOMParser().parseFromString(template, 'text/html');
+      // template comes from the __bundler/template JSON island embedded in
+      // this very document by the trusted build-time packer (own app pages
+      // only, never remote/user input), so re-parsing it as HTML here is not
+      // an XSS vector despite the generic DOM-XSS shape of this call.
+      const doc = new DOMParser().parseFromString(template, 'text/html'); // lgtm[js/xss-through-dom]
       document.documentElement.replaceWith(doc.documentElement);
       const dead = Array.from(document.scripts);
       for (const old of dead) {

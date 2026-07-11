@@ -546,7 +546,8 @@ def _restore_apply(archive_bytes):
                 os.replace(tmp, dest)
                 restored.append(dest)
             except Exception as e:
-                errors.append(f"{dest}: {e}")
+                print(f"[sources] restore failed for {dest}: {e}")
+                errors.append(f"{os.path.basename(dest)}: ripristino fallito")
     return restored, errors
 
 
@@ -559,7 +560,8 @@ def _restore_apply_side_effects(restored):
             ok, msg = apply_to_lyrion(load_state())
             notes.append(msg if ok else f"Sorgenti: {msg}")
         except Exception as e:
-            notes.append(f"Sorgenti non riapplicate: {e}")
+            print(f"[sources] restore side-effect (sources) failed: {e}")
+            notes.append("Sorgenti non riapplicate")
     if any(p in restored for p in ("/etc/default/squeezelite", "/var/lib/hifi-player/dsp-target")):
         _run(["systemctl", "restart", "squeezelite"], timeout=30)
         notes.append("squeezelite riavviato")
@@ -617,14 +619,18 @@ FIR_DIR = "/etc/camilladsp/filters"
 # not guessed): a WAV impulse response, or a plain text file with one
 # coefficient per line (CamillaDSP's Raw/TEXT format).
 FIR_KINDS = {".wav": "Wav", ".txt": "Raw"}
+# Fixed ext -> filename lookup (not string-built from the ext at request time)
+# so the stored/opened path is always one of these two literal names, never a
+# concatenation of request-derived data.
+FIR_FILENAMES = {".wav": "room.wav", ".txt": "room.txt"}
 FIR_MAX_SIZE = 20 * 1024 * 1024
 
 
 def _fir_current():
     """Return (path, ext) of the currently stored filter, or (None, None)."""
     if os.path.isdir(FIR_DIR):
-        for ext in FIR_KINDS:
-            p = os.path.join(FIR_DIR, "room" + ext)
+        for ext, filename in FIR_FILENAMES.items():
+            p = os.path.join(FIR_DIR, filename)
             if os.path.isfile(p):
                 return p, ext
     return None, None
@@ -655,25 +661,26 @@ def api_dsp_fir_upload():
     try:
         os.makedirs(FIR_DIR, exist_ok=True)
         # Only one filter at a time: clear any previous room.* before writing.
-        for other_ext in FIR_KINDS:
-            other = os.path.join(FIR_DIR, "room" + other_ext)
+        for other_filename in FIR_FILENAMES.values():
+            other = os.path.join(FIR_DIR, other_filename)
             if os.path.isfile(other):
                 os.remove(other)
-        dest = os.path.join(FIR_DIR, "room" + ext)
+        dest = os.path.join(FIR_DIR, FIR_FILENAMES[ext])
         tmp = dest + ".tmp"
         with open(tmp, "wb") as out:
             out.write(data)
         os.replace(tmp, dest)
     except Exception as e:
-        return jsonify({"success": False, "message": f"Salvataggio fallito: {e}"}), 500
+        print(f"[sources] FIR filter save failed: {e}")
+        return jsonify({"success": False, "message": "Salvataggio fallito"}), 500
     return jsonify({"success": True, "message": "Filtro caricato. Attivalo da Impostazioni → DSP."})
 
 
 @app.route("/api/dsp/fir", methods=["DELETE"])
 def api_dsp_fir_delete():
     removed = False
-    for ext in FIR_KINDS:
-        p = os.path.join(FIR_DIR, "room" + ext)
+    for filename in FIR_FILENAMES.values():
+        p = os.path.join(FIR_DIR, filename)
         if os.path.isfile(p):
             os.remove(p)
             removed = True
