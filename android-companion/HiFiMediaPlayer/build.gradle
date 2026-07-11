@@ -54,8 +54,8 @@ android {
         minSdkVersion rootProject.minSdkVersion
         targetSdkVersion rootProject.targetSdkVersion
 
-        versionCode 7
-        versionName "1.0.6"
+        versionCode 8
+        versionName "1.0.7"
 
         vectorDrawables.useSupportLibrary = true
         multiDexEnabled true
@@ -109,7 +109,7 @@ android {
     lint {
         lintConfig file('lint.xml')
     }
-    namespace 'com.hifi.mediaplayer'
+    namespace 'com.osmium.sound.companion'
     buildFeatures {
         buildConfig true
     }
