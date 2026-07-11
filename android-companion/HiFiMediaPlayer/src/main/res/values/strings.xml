@@ -32,13 +32,11 @@
     <string name="menu_item_view">View</string>
     <string name="menu_nowplaying_trackinfo">Track infos</string>
     <string name="activity_settings_name">Settings</string>
-    <string name="settings_serveraddr_hint">Name or IP address of server</string>
-    <string name="settings_manual_server_addr">Manually enter address</string>
+    <string name="settings_serveraddr_hint">Paired appliance</string>
     <string name="settings_scan_qr">Scan QR code</string>
     <string name="settings_scan_qr_prompt">Scan the QR code shown in Osmium Sound → Settings → Phone control</string>
     <string name="settings_scan_qr_failed">Couldn\'t read a server address from that QR code</string>
     <string name="settings_camera_permission_required">Camera permission is required to scan a QR code</string>
-    <string name="settings_server_prompt">Choose a server</string>
     <string name="settings_theme_title">Theme</string>
     <string name="settings_theme_dark">Dark</string>
     <string name="settings_theme_light">Light</string>
@@ -75,7 +73,6 @@
         <p>Wake-on-LAN is a networking standard that allows a computer to be turned on or awakened by a network message.</p>
         <p>This requires the computer running the Squeezebox Server to be configured to use Wake-on-LAN.</p>]]>
     </string>
-    <string name="settings_server_scan_progress">Scanning for servers…</string>
     <string name="settings_volume_title">Settings for Volume Control</string>
     <string name="settings_background_volume_title">Background Volume Control</string>
     <string name="settings_background_volume_off">Control player volume only when the app is visible.</string>

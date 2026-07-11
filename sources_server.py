@@ -715,9 +715,14 @@ def _save_pair_tokens(tokens):
 @app.route("/api/pair/token", methods=["POST"])
 def api_pair_token():
     """Mint a new pairing token, shown to the user only via the appliance's
-    own QR code (Settings → Phone control) — safe to leave unauthenticated
-    like the rest of this port, since minting a token requires physical
-    access to the appliance's screen, not just LAN access."""
+    own QR code (Settings → Phone control). Restricted to localhost: the
+    Electron kiosk UI is the only caller (it runs on the appliance itself),
+    so a token can only ever be minted by someone with physical access to
+    the appliance's screen. Without this check, any device on the LAN could
+    just POST here directly and self-mint a valid token, defeating the whole
+    point of gating DSP control behind pairing."""
+    if request.remote_addr not in ("127.0.0.1", "::1"):
+        return jsonify({"success": False, "message": "Non consentito da remoto"}), 403
     token = secrets.token_urlsafe(24)
     tokens = _load_pair_tokens()
     tokens.append({"token": token, "created": datetime.now(timezone.utc).isoformat()})

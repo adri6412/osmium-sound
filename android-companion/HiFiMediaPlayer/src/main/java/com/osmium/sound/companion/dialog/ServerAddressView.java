@@ -19,15 +19,11 @@ package com.osmium.sound.companion.dialog;
 import android.app.Activity;
 import android.content.Context;
 import android.content.Intent;
-import android.os.CountDownTimer;
 import android.text.Editable;
 import android.util.AttributeSet;
-import android.widget.ArrayAdapter;
 import android.widget.AutoCompleteTextView;
 import android.widget.EditText;
 import android.widget.LinearLayout;
-import android.widget.ProgressBar;
-import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.appcompat.app.AppCompatActivity;
@@ -39,46 +35,35 @@ import com.google.zxing.integration.android.IntentIntegrator;
 import com.google.zxing.integration.android.IntentResult;
 
 import java.net.URI;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
-import java.util.Map.Entry;
 
 import com.osmium.sound.companion.Preferences;
 import com.osmium.sound.companion.R;
 import com.osmium.sound.companion.HiFiMediaPlayer;
 import com.osmium.sound.companion.Util;
 import com.osmium.sound.companion.util.AfterTextChangedLister;
-import com.osmium.sound.companion.util.ScanNetworkTask;
 
 /**
- * Scans the local network for servers, allow the user to choose one, set it as the preferred server
- * for this network, and optionally enter authentication information.
+ * Lets the user pair with an appliance by scanning its "Phone control" QR code
+ * and optionally enter LMS authentication (username/password/wake-on-LAN).
  * <p>
- * A new network scan can be initiated manually if desired.
+ * The server address can ONLY be set by scanning the QR code — there is
+ * deliberately no manual host:port entry or network-discovery fallback.
+ * Both of those would let the app connect to a server without ever going
+ * through the appliance's pairing flow, so the app would end up "connected"
+ * but without the pairing token that gates the appliance's DSP control API
+ * (see sources_server.py's /api/pair/token and Preferences#setAppliancePairing).
  */
-public class ServerAddressView extends LinearLayout implements ScanNetworkTask.ScanNetworkCallback {
+public class ServerAddressView extends LinearLayout {
     private Preferences preferences;
     private Preferences.ServerAddress serverAddress;
 
     private AutoCompleteTextView serverAddressEditText;
-    private TextInputLayout serversSpinner_til;
-    private AutoCompleteTextView serversSpinner;
     private EditText userNameEditText;
     private EditText passwordEditText;
     private MaterialCheckBox wakeOnLan;
     private TextInputLayout macLayout;
     private boolean macDirty;
     private EditText macEditText;
-    private ProgressBar scanProgress;
-
-    private ScanNetworkTask scanNetworkTask;
-
-    /** Map server names to IP addresses. */
-    private Map<String, String> discoveredServers;
-
-    private boolean isManual;
-    private OnClickListener startNetWorkScan;
 
     public ServerAddressView(final Context context) {
         super(context);
@@ -104,7 +89,12 @@ public class ServerAddressView extends LinearLayout implements ScanNetworkTask.S
                 }
 
                 serverAddressEditText = findViewById(R.id.server_address);
-                serverAddressEditText.setAdapter(new ArrayAdapter<>(getContext(), R.layout.dropdown_item, preferences.getServerHistory()));
+                // Read-only: the only way to set the server address is scanning the
+                // appliance's pairing QR (see class doc). Tapping the field itself
+                // also starts a scan, same as the end icon.
+                serverAddressEditText.setFocusable(false);
+                serverAddressEditText.setLongClickable(false);
+                serverAddressEditText.setOnClickListener(view -> startQrScan());
                 TextInputLayout serverAddressTil = findViewById(R.id.server_address_til);
                 serverAddressTil.setEndIconOnClickListener(view -> startQrScan());
                 userNameEditText = findViewById(R.id.username);
@@ -136,19 +126,7 @@ public class ServerAddressView extends LinearLayout implements ScanNetworkTask.S
                     }
                 });
 
-                scanProgress = findViewById(R.id.scan_progress);
-
-                // Set up the servers spinner.
-                serversSpinner_til = findViewById(R.id.found_servers_til);
-                serversSpinner = findViewById(R.id.found_servers);
-                serversSpinner.setAdapter(new ArrayAdapter<>(getContext(), R.layout.dropdown_item));
-
-                setEditServerAddressAvailability();
                 setServerAddress(serverAddress.localAddress());
-
-                startNetworkScan();
-                startNetWorkScan = v -> startNetworkScan();
-                serversSpinner_til.setStartIconOnClickListener(startNetWorkScan);
             });
         }
     }
@@ -168,7 +146,6 @@ public class ServerAddressView extends LinearLayout implements ScanNetworkTask.S
 
         String address = serverAddressEditText.getText().toString();
         serverAddress.setAddress(address);
-        serverAddress.setServerName(getServerName(address));
         serverAddress.userName = userNameEditText.getText().toString();
         serverAddress.password = passwordEditText.getText().toString();
         serverAddress.wakeOnLan = wakeOnLan.isChecked();
@@ -231,8 +208,6 @@ public class ServerAddressView extends LinearLayout implements ScanNetworkTask.S
         if (api != null && token != null && preferences != null) {
             preferences.setAppliancePairing(api, token);
         }
-        isManual = true;
-        setEditServerAddressAvailability();
         setServerAddress(hostPort);
         return true;
     }
@@ -289,81 +264,6 @@ public class ServerAddressView extends LinearLayout implements ScanNetworkTask.S
         return content;
     }
 
-    @Override
-    protected void onDetachedFromWindow() {
-        // Stop scanning
-        if (scanNetworkTask != null) {
-            scanNetworkTask.cancel();
-        }
-
-        super.onDetachedFromWindow();
-    }
-
-    /**
-     * Starts scanning for servers.
-     */
-    private void startNetworkScan() {
-        scanProgress.setVisibility(VISIBLE);
-        serversSpinner_til.setStartIconDrawable(android.R.color.transparent);
-        serversSpinner_til.setStartIconOnClickListener(null);
-        serversSpinner.setText(R.string.settings_server_scan_progress);
-        scanNetworkTask = new ScanNetworkTask(getContext(), this);
-        new Thread(scanNetworkTask).start();
-
-        scanProgress.setProgress(0);
-        new CountDownTimer(ScanNetworkTask.DISCOVERY_ATTEMPT_TIMEOUT, 50) {
-            @Override
-            public void onTick(long millisUntilFinished) {
-                scanProgress.setProgress((int) (100 * (ScanNetworkTask.DISCOVERY_ATTEMPT_TIMEOUT - millisUntilFinished) / ScanNetworkTask.DISCOVERY_ATTEMPT_TIMEOUT));
-            }
-
-            @Override
-            public void onFinish() {
-            }
-        }.start();
-    }
-
-    /**
-     * Called when server scanning has finished.
-     * @param serverMap Discovered servers, key is the server name, value is the IP address.
-     */
-    public void onScanFinished(Map<String, String> serverMap) {
-        scanNetworkTask = null;
-
-        scanProgress.setVisibility(INVISIBLE);
-        serversSpinner_til.setStartIconDrawable(R.drawable.ic_refresh);
-        serversSpinner_til.setStartIconOnClickListener(startNetWorkScan);
-
-        discoveredServers = serverMap;
-
-        List<String> keys = new ArrayList<>(discoveredServers.keySet());
-        keys.add(getContext().getString(R.string.settings_manual_server_addr));
-        serversSpinner.setAdapter(new ArrayAdapter<>(getContext(), R.layout.dropdown_item, keys));
-
-        // First look for the stored server name in the list of found servers
-        String addressOfStoredServerName = discoveredServers.get(serverAddress.serverName());
-        int position = getServerPosition(addressOfStoredServerName);
-
-        // If that fails, look for the stored server address in the list of found servers
-        if (position < 0) {
-            position = getServerPosition(serverAddress.localAddress());
-        }
-
-        // This shouldn't happen, but crash reports say that it does
-        if (keys.size() > 0) {
-            serversSpinner.setText(keys.get(position < 0 ? keys.size() - 1 : position), false);
-        }
-        isManual = (position < 0);
-        setEditServerAddressAvailability();
-
-        serversSpinner.setOnItemClickListener((parent, view, pos, id) -> {
-            String serverAddress = discoveredServers.get((String) ((TextView)view).getText());
-            isManual = (pos == parent.getCount() - 1);
-            setEditServerAddressAvailability();
-            setServerAddress(serverAddress);
-        });
-    }
-
     private void setServerAddress(String address) {
         serverAddress = preferences.getServerAddress(address);
 
@@ -373,34 +273,6 @@ public class ServerAddressView extends LinearLayout implements ScanNetworkTask.S
         wakeOnLan.setChecked(serverAddress.wakeOnLan);
         macLayout.setVisibility(serverAddress.wakeOnLan ? VISIBLE : GONE);
         macEditText.setText(Util.formatMac(serverAddress.mac));
-    }
-
-    private void setEditServerAddressAvailability() {
-        if (discoveredServers == null || discoveredServers.isEmpty()) {
-            serverAddressEditText.setEnabled(true);
-        } else {
-            serverAddressEditText.setEnabled(isManual);
-        }
-    }
-
-    private String getServerName(String ipPort) {
-        if (discoveredServers != null)
-            for (Entry<String, String> entry : discoveredServers.entrySet())
-                if (ipPort.equals(entry.getValue()))
-                    return entry.getKey();
-        return null;
-    }
-
-    private int getServerPosition(String host) {
-        if (host != null && discoveredServers != null) {
-            int position = 0;
-            for (Entry<String, String> entry : discoveredServers.entrySet()) {
-                if (host.equals(entry.getValue()))
-                    return position;
-                position++;
-            }
-        }
-        return -1;
     }
 
 }
