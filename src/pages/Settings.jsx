@@ -21,7 +21,9 @@ import {
   ChevronRight,
   ChevronLeft,
   Smartphone,
-  Speaker
+  Speaker,
+  CheckCircle2,
+  AlertTriangle
 } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import { systemAPI, checkApiServer } from '../utils/api';
@@ -969,6 +971,52 @@ const Settings = () => {
 
   const sectionId = (s) => s.content || s.title;
   const openSection = settingsSections.find((s) => sectionId(s) === activeSection);
+
+  // ── Fullscreen OTA progress overlay ─────────────────────────────
+  // A single overlay surfaces whichever update is running. Each single update
+  // writes {state, progress, message}; the "apply all" run writes allStatus.phase
+  // and delegates the live progress to the current phase's sub-status. We map all
+  // of that to one shape { title, message, progress, state } the overlay renders.
+  const activeOta = (() => {
+    if (isApplyingAll) {
+      const sub = allStatus?.phase === 'ui' ? otaStatus
+        : allStatus?.phase === 'system' ? systemStatus
+        : allStatus?.phase === 'os' ? osStatus
+        : null;
+      return {
+        title: t('settings.updates.overlay.titleAll'),
+        message: sub?.message || allStatus?.message || t('settings.updates.msg.starting'),
+        progress: typeof sub?.progress === 'number' ? sub.progress : null,
+        state: allStatus?.phase === 'error' ? 'error' : (sub?.state || 'applying'),
+      };
+    }
+    if (isApplyingUpdate) return { title: t('settings.updates.overlay.titleUi'), ...otaStatus };
+    if (isApplyingSystem) return { title: t('settings.updates.overlay.titleSystem'), ...systemStatus };
+    if (isApplyingOs) return { title: t('settings.updates.overlay.titleOs'), ...osStatus };
+    if (isApplyingLyrion) return { title: t('settings.updates.overlay.titleLyrion'), ...lyrionStatus };
+    // Polling clears the applying flags on a terminal error too, so keep the
+    // failure on screen (with a dismiss button) until the user acknowledges it.
+    const err = [[otaStatus, 'titleUi'], [systemStatus, 'titleSystem'],
+      [osStatus, 'titleOs'], [lyrionStatus, 'titleLyrion']]
+      .find(([s]) => s?.state === 'error');
+    if (err) return { title: t(`settings.updates.overlay.${err[1]}`), ...err[0] };
+    if (allStatus?.phase === 'error') {
+      return { title: t('settings.updates.overlay.titleAll'), message: allStatus.message, state: 'error', progress: null };
+    }
+    return null;
+  })();
+
+  // Tear down every poll + applying flag so the overlay can be dismissed after an
+  // error (on success the UI/API restarts, so no dismiss is needed there).
+  const dismissOta = () => {
+    [otaPollRef, systemPollRef, osPollRef, lyrionPollRef].forEach((r) => {
+      if (r.current) { clearInterval(r.current); r.current = null; }
+    });
+    setIsApplyingAll(false); setIsApplyingUpdate(false); setIsApplyingSystem(false);
+    setIsApplyingOs(false); setIsApplyingLyrion(false);
+    setAllStatus(null); setOtaStatus(null); setSystemStatus(null);
+    setOsStatus(null); setLyrionStatus(null);
+  };
 
   return (
     <motion.div
@@ -2194,6 +2242,63 @@ const Settings = () => {
           </motion.div>
         </motion.div>
       )}
+
+      {/* Fullscreen OTA progress overlay — blocks the UI while an update runs and
+          shows a live progress bar + the current step's message. */}
+      {activeOta && (() => {
+        const isErr = activeOta.state === 'error';
+        const isDone = activeOta.state === 'done';
+        const hasPct = typeof activeOta.progress === 'number';
+        const pct = hasPct ? Math.max(0, Math.min(100, Math.round(activeOta.progress))) : 0;
+        return (
+          <motion.div
+            className="fixed inset-0 z-[10050] flex flex-col items-center justify-center bg-black/90 backdrop-blur-md p-10 text-center"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+          >
+            <div className="mb-8">
+              {isErr ? (
+                <AlertTriangle className="w-16 h-16 text-red-500" />
+              ) : isDone ? (
+                <CheckCircle2 className="w-16 h-16 text-green-500" />
+              ) : (
+                <Loader2 className="w-16 h-16 text-hifi-accent animate-spin" />
+              )}
+            </div>
+
+            <h2 className="text-white text-3xl font-semibold mb-3">{activeOta.title}</h2>
+            <p className="text-white/70 text-lg mb-8 max-w-xl min-h-[1.75rem]">
+              {activeOta.message || t('settings.updates.msg.starting')}
+            </p>
+
+            <div className="w-full max-w-md h-3 bg-hifi-gray rounded-full overflow-hidden">
+              <motion.div
+                className={`h-full rounded-full ${isErr ? 'bg-red-500' : isDone ? 'bg-green-500' : 'bg-hifi-accent'} ${!hasPct && !isErr && !isDone ? 'animate-pulse' : ''}`}
+                initial={{ width: 0 }}
+                animate={{ width: hasPct ? `${pct}%` : '100%' }}
+                transition={{ ease: 'easeOut', duration: 0.4 }}
+              />
+            </div>
+
+            <div className="mt-4 h-8 text-2xl font-semibold tabular-nums text-hifi-accent">
+              {hasPct && !isErr ? `${pct}%` : ''}
+            </div>
+
+            {isErr ? (
+              <button
+                onClick={dismissOta}
+                className="mt-6 bg-hifi-accent hover:bg-hifi-dark text-white px-8 py-3 rounded-lg font-medium transition-colors"
+              >
+                {t('settings.updates.overlay.dismiss')}
+              </button>
+            ) : (
+              <p className="mt-6 text-white/50 text-sm">
+                {t('settings.updates.overlay.keepPowered')}
+              </p>
+            )}
+          </motion.div>
+        );
+      })()}
     </motion.div>
   );
 };
