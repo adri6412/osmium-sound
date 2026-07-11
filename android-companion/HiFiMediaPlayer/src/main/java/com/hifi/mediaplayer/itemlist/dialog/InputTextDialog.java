@@ -23,8 +23,8 @@ import android.text.InputType;
 import androidx.annotation.NonNull;
 import androidx.fragment.app.DialogFragment;
 
-import com.hifi.mediaplayer.framework.BaseActivity;
-import com.hifi.mediaplayer.model.JiveItem;
+import com.osmium.sound.companion.framework.BaseActivity;
+import com.osmium.sound.companion.model.JiveItem;
 
 public class InputTextDialog extends BaseEditTextDialog {
     private BaseActivity activity;

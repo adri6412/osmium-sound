@@ -33,21 +33,21 @@ import androidx.recyclerview.widget.RecyclerView;
 import java.util.List;
 import java.util.Map;
 
-import com.hifi.mediaplayer.R;
-import com.hifi.mediaplayer.HiFiMediaPlayer;
-import com.hifi.mediaplayer.dialog.VolumeSettings;
-import com.hifi.mediaplayer.itemlist.IServiceItemListCallback;
-import com.hifi.mediaplayer.itemlist.dialog.ArtworkListLayout;
-import com.hifi.mediaplayer.model.Item;
-import com.hifi.mediaplayer.model.Player;
-import com.hifi.mediaplayer.service.ISqueezeService;
-import com.hifi.mediaplayer.service.event.ActivePlayerChanged;
-import com.hifi.mediaplayer.service.event.HandshakeComplete;
-import com.hifi.mediaplayer.service.event.PlayerVolume;
-import com.hifi.mediaplayer.service.event.RefreshEvent;
-import com.hifi.mediaplayer.util.ImageFetcher;
-import com.hifi.mediaplayer.volume.VolumeBar;
-import com.hifi.mediaplayer.widget.ViewUtilities;
+import com.osmium.sound.companion.R;
+import com.osmium.sound.companion.HiFiMediaPlayer;
+import com.osmium.sound.companion.dialog.VolumeSettings;
+import com.osmium.sound.companion.itemlist.IServiceItemListCallback;
+import com.osmium.sound.companion.itemlist.dialog.ArtworkListLayout;
+import com.osmium.sound.companion.model.Item;
+import com.osmium.sound.companion.model.Player;
+import com.osmium.sound.companion.service.ISqueezeService;
+import com.osmium.sound.companion.service.event.ActivePlayerChanged;
+import com.osmium.sound.companion.service.event.HandshakeComplete;
+import com.osmium.sound.companion.service.event.PlayerVolume;
+import com.osmium.sound.companion.service.event.RefreshEvent;
+import com.osmium.sound.companion.util.ImageFetcher;
+import com.osmium.sound.companion.volume.VolumeBar;
+import com.osmium.sound.companion.widget.ViewUtilities;
 
 /**
  * A generic base class for an activity to list items of a particular slimserver data type. The

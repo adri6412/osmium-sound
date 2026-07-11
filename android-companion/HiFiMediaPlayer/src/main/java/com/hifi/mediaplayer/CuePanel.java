@@ -15,7 +15,7 @@
  */
 
 
-package com.hifi.mediaplayer;
+package com.osmium.sound.companion;
 
 import android.animation.ObjectAnimator;
 import android.animation.PropertyValuesHolder;
@@ -32,8 +32,8 @@ import android.widget.Button;
 import androidx.annotation.NonNull;
 import androidx.fragment.app.FragmentActivity;
 
-import com.hifi.mediaplayer.dialog.CuePanelSettings;
-import com.hifi.mediaplayer.service.ISqueezeService;
+import com.osmium.sound.companion.dialog.CuePanelSettings;
+import com.osmium.sound.companion.service.ISqueezeService;
 
 
 /**

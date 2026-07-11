@@ -23,8 +23,8 @@ import androidx.annotation.NonNull;
 import java.util.Comparator;
 import java.util.Map;
 
-import com.hifi.mediaplayer.Util;
-import com.hifi.mediaplayer.service.event.SongTimeChanged;
+import com.osmium.sound.companion.Util;
+import com.osmium.sound.companion.service.event.SongTimeChanged;
 
 
 public class Player extends Item implements Comparable<Player> {

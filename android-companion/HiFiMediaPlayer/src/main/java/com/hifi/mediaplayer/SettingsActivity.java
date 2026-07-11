@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package com.hifi.mediaplayer;
+package com.osmium.sound.companion;
 
 import android.content.Context;
 import android.content.Intent;
@@ -25,8 +25,8 @@ import android.view.MenuItem;
 import androidx.activity.EdgeToEdge;
 import androidx.appcompat.app.AppCompatActivity;
 
-import com.hifi.mediaplayer.util.ThemeManager;
-import com.hifi.mediaplayer.widget.ViewUtilities;
+import com.osmium.sound.companion.util.ThemeManager;
+import com.osmium.sound.companion.widget.ViewUtilities;
 
 public class SettingsActivity extends AppCompatActivity {
     private final ThemeManager mThemeManager = new ThemeManager();

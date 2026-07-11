@@ -26,7 +26,7 @@ import androidx.appcompat.content.res.AppCompatResources;
 import java.util.HashMap;
 import java.util.Map;
 
-import com.hifi.mediaplayer.R;
+import com.osmium.sound.companion.R;
 
 
 public class ServiceLogoUtils {

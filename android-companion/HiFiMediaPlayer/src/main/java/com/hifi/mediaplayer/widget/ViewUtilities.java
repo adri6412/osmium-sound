@@ -7,8 +7,8 @@ import androidx.core.graphics.Insets;
 import androidx.core.view.ViewCompat;
 import androidx.core.view.WindowInsetsCompat;
 
-import com.hifi.mediaplayer.Preferences;
-import com.hifi.mediaplayer.HiFiMediaPlayer;
+import com.osmium.sound.companion.Preferences;
+import com.osmium.sound.companion.HiFiMediaPlayer;
 
 public class ViewUtilities {
 

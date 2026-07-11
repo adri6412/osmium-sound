@@ -4,15 +4,15 @@ import android.view.View;
 
 import androidx.annotation.NonNull;
 
-import com.hifi.mediaplayer.R;
-import com.hifi.mediaplayer.framework.ItemAdapter;
-import com.hifi.mediaplayer.framework.ItemViewHolder;
-import com.hifi.mediaplayer.itemlist.dialog.ArtworkListLayout;
-import com.hifi.mediaplayer.model.JiveItem;
-import com.hifi.mediaplayer.model.Window;
-import com.hifi.mediaplayer.service.HomeMenuHandling;
-import com.hifi.mediaplayer.service.ISqueezeService;
-import com.hifi.mediaplayer.widget.UndoBarController;
+import com.osmium.sound.companion.R;
+import com.osmium.sound.companion.framework.ItemAdapter;
+import com.osmium.sound.companion.framework.ItemViewHolder;
+import com.osmium.sound.companion.itemlist.dialog.ArtworkListLayout;
+import com.osmium.sound.companion.model.JiveItem;
+import com.osmium.sound.companion.model.Window;
+import com.osmium.sound.companion.service.HomeMenuHandling;
+import com.osmium.sound.companion.service.ISqueezeService;
+import com.osmium.sound.companion.widget.UndoBarController;
 
 
 /*

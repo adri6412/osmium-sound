@@ -23,12 +23,12 @@ import android.view.MenuItem;
 
 import androidx.fragment.app.FragmentManager;
 
-import com.hifi.mediaplayer.R;
-import com.hifi.mediaplayer.itemlist.dialog.PlayerSleepDialog;
-import com.hifi.mediaplayer.model.Player;
-import com.hifi.mediaplayer.model.PlayerState;
-import com.hifi.mediaplayer.service.ISqueezeService;
-import com.hifi.mediaplayer.service.event.SongTimeChanged;
+import com.osmium.sound.companion.R;
+import com.osmium.sound.companion.itemlist.dialog.PlayerSleepDialog;
+import com.osmium.sound.companion.model.Player;
+import com.osmium.sound.companion.model.PlayerState;
+import com.osmium.sound.companion.service.ISqueezeService;
+import com.osmium.sound.companion.service.event.SongTimeChanged;
 
 public class PlayerViewLogic {
 

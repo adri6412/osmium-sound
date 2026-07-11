@@ -6,12 +6,12 @@ import android.provider.Settings;
 import androidx.annotation.DrawableRes;
 import androidx.annotation.StringRes;
 
-import com.hifi.mediaplayer.NowPlayingActivity;
-import com.hifi.mediaplayer.R;
-import com.hifi.mediaplayer.itemlist.CurrentPlaylistActivity;
-import com.hifi.mediaplayer.itemlist.HomeActivity;
-import com.hifi.mediaplayer.service.IRButton;
-import com.hifi.mediaplayer.service.ISqueezeService;
+import com.osmium.sound.companion.NowPlayingActivity;
+import com.osmium.sound.companion.R;
+import com.osmium.sound.companion.itemlist.CurrentPlaylistActivity;
+import com.osmium.sound.companion.itemlist.HomeActivity;
+import com.osmium.sound.companion.service.IRButton;
+import com.osmium.sound.companion.service.ISqueezeService;
 
 public enum RemoteButton {
     OPEN((context, service, player) -> {

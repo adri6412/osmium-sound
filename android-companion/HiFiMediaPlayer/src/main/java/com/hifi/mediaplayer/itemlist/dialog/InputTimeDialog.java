@@ -7,10 +7,10 @@ import com.google.android.material.timepicker.TimeFormat;
 
 import java.util.Calendar;
 
-import com.hifi.mediaplayer.Preferences;
-import com.hifi.mediaplayer.HiFiMediaPlayer;
-import com.hifi.mediaplayer.framework.BaseActivity;
-import com.hifi.mediaplayer.model.JiveItem;
+import com.osmium.sound.companion.Preferences;
+import com.osmium.sound.companion.HiFiMediaPlayer;
+import com.osmium.sound.companion.framework.BaseActivity;
+import com.osmium.sound.companion.model.JiveItem;
 
 public class InputTimeDialog {
     public static void show(BaseActivity activity, JiveItem item, int alreadyPopped) {

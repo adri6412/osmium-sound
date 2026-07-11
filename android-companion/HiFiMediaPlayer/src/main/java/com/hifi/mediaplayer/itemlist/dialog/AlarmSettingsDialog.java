@@ -29,8 +29,8 @@ import android.widget.TextView;
 import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 import com.google.android.material.slider.Slider;
 
-import com.hifi.mediaplayer.R;
-import com.hifi.mediaplayer.model.Player;
+import com.osmium.sound.companion.R;
+import com.osmium.sound.companion.model.Player;
 
 /**
  * A dialog with controls to manage a player's default alarm preferences (volume, snooze duration,

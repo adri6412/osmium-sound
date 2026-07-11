@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package com.hifi.mediaplayer;
+package com.osmium.sound.companion;
 
 
 import android.annotation.SuppressLint;
@@ -31,12 +31,12 @@ import com.google.android.material.textfield.TextInputLayout;
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 
-import com.hifi.mediaplayer.dialog.ServerAddressView;
-import com.hifi.mediaplayer.framework.BaseActivity;
-import com.hifi.mediaplayer.itemlist.HomeActivity;
-import com.hifi.mediaplayer.service.ISqueezeService;
-import com.hifi.mediaplayer.service.event.HandshakeComplete;
-import com.hifi.mediaplayer.widget.ViewUtilities;
+import com.osmium.sound.companion.dialog.ServerAddressView;
+import com.osmium.sound.companion.framework.BaseActivity;
+import com.osmium.sound.companion.itemlist.HomeActivity;
+import com.osmium.sound.companion.service.ISqueezeService;
+import com.osmium.sound.companion.service.event.HandshakeComplete;
+import com.osmium.sound.companion.widget.ViewUtilities;
 
 /**
  * An activity for when the user is not connected to a slimserver.

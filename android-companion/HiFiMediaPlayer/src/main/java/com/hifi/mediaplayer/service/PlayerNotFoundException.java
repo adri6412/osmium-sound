@@ -2,7 +2,7 @@ package com.hifi.mediaplayer.service;
 
 import android.content.Context;
 
-import com.hifi.mediaplayer.R;
+import com.osmium.sound.companion.R;
 
 public class PlayerNotFoundException extends Exception {
     public PlayerNotFoundException(Context context) {

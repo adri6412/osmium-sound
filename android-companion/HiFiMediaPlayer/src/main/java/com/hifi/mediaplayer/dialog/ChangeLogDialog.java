@@ -8,7 +8,7 @@ import android.webkit.WebView;
 
 import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 
-import com.hifi.mediaplayer.R;
+import com.osmium.sound.companion.R;
 
 /**
  * Extends ChangeLog to use the v7 support AlertDialog which follows the application theme.

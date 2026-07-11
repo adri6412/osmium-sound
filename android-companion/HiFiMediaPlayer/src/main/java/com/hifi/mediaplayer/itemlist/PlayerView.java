@@ -27,15 +27,15 @@ import androidx.annotation.NonNull;
 import com.google.android.material.button.MaterialButton;
 import com.google.android.material.slider.Slider;
 
-import com.hifi.mediaplayer.R;
-import com.hifi.mediaplayer.Util;
-import com.hifi.mediaplayer.itemlist.dialog.DefeatDestructiveTouchToPlayDialog;
-import com.hifi.mediaplayer.itemlist.dialog.PlayTrackAlbumDialog;
-import com.hifi.mediaplayer.itemlist.dialog.PlayerRenameDialog;
-import com.hifi.mediaplayer.itemlist.dialog.PlayerSyncDialog;
-import com.hifi.mediaplayer.model.Player;
-import com.hifi.mediaplayer.model.PlayerState;
-import com.hifi.mediaplayer.service.ISqueezeService;
+import com.osmium.sound.companion.R;
+import com.osmium.sound.companion.Util;
+import com.osmium.sound.companion.itemlist.dialog.DefeatDestructiveTouchToPlayDialog;
+import com.osmium.sound.companion.itemlist.dialog.PlayTrackAlbumDialog;
+import com.osmium.sound.companion.itemlist.dialog.PlayerRenameDialog;
+import com.osmium.sound.companion.itemlist.dialog.PlayerSyncDialog;
+import com.osmium.sound.companion.model.Player;
+import com.osmium.sound.companion.model.PlayerState;
+import com.osmium.sound.companion.service.ISqueezeService;
 
 public class PlayerView extends PlayerBaseView {
     private final PlayerListActivity activity;

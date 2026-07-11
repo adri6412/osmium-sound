@@ -12,12 +12,12 @@ import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 import com.google.android.material.slider.Slider;
 import com.google.android.material.switchmaterial.SwitchMaterial;
 
-import com.hifi.mediaplayer.Preferences;
-import com.hifi.mediaplayer.R;
-import com.hifi.mediaplayer.HiFiMediaPlayer;
-import com.hifi.mediaplayer.framework.BaseActivity;
-import com.hifi.mediaplayer.model.Player;
-import com.hifi.mediaplayer.service.ISqueezeService;
+import com.osmium.sound.companion.Preferences;
+import com.osmium.sound.companion.R;
+import com.osmium.sound.companion.HiFiMediaPlayer;
+import com.osmium.sound.companion.framework.BaseActivity;
+import com.osmium.sound.companion.model.Player;
+import com.osmium.sound.companion.service.ISqueezeService;
 
 public class VolumeSettings extends DialogFragment {
     @NonNull

@@ -35,19 +35,19 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 
-import com.hifi.mediaplayer.Preferences;
-import com.hifi.mediaplayer.R;
-import com.hifi.mediaplayer.HiFiMediaPlayer;
-import com.hifi.mediaplayer.framework.ItemAdapter;
-import com.hifi.mediaplayer.framework.ItemListActivity;
-import com.hifi.mediaplayer.itemlist.dialog.AlarmSettingsDialog;
-import com.hifi.mediaplayer.model.Alarm;
-import com.hifi.mediaplayer.model.AlarmPlaylist;
-import com.hifi.mediaplayer.model.Player;
-import com.hifi.mediaplayer.service.ISqueezeService;
-import com.hifi.mediaplayer.service.event.ActivePlayerChanged;
-import com.hifi.mediaplayer.service.event.PlayerStateChanged;
-import com.hifi.mediaplayer.util.CompoundButtonWrapper;
+import com.osmium.sound.companion.Preferences;
+import com.osmium.sound.companion.R;
+import com.osmium.sound.companion.HiFiMediaPlayer;
+import com.osmium.sound.companion.framework.ItemAdapter;
+import com.osmium.sound.companion.framework.ItemListActivity;
+import com.osmium.sound.companion.itemlist.dialog.AlarmSettingsDialog;
+import com.osmium.sound.companion.model.Alarm;
+import com.osmium.sound.companion.model.AlarmPlaylist;
+import com.osmium.sound.companion.model.Player;
+import com.osmium.sound.companion.service.ISqueezeService;
+import com.osmium.sound.companion.service.event.ActivePlayerChanged;
+import com.osmium.sound.companion.service.event.PlayerStateChanged;
+import com.osmium.sound.companion.util.CompoundButtonWrapper;
 
 public class AlarmsActivity extends ItemListActivity<AlarmView, Alarm> implements AlarmSettingsDialog.HostActivity {
     /** The most recent active player. */

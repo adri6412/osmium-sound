@@ -38,10 +38,10 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 
-import com.hifi.mediaplayer.R;
-import com.hifi.mediaplayer.HiFiMediaPlayer;
-import com.hifi.mediaplayer.Util;
-import com.hifi.mediaplayer.util.FluentHashMap;
+import com.osmium.sound.companion.R;
+import com.osmium.sound.companion.HiFiMediaPlayer;
+import com.osmium.sound.companion.Util;
+import com.osmium.sound.companion.util.FluentHashMap;
 
 
 public class JiveItem extends Item {

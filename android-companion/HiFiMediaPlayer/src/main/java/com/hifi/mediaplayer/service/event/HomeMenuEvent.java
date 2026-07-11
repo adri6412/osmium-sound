@@ -22,7 +22,7 @@ import androidx.annotation.NonNull;
 
 import java.util.List;
 
-import com.hifi.mediaplayer.model.JiveItem;
+import com.osmium.sound.companion.model.JiveItem;
 
 /** Event sent when the home menu has changed. */
 public class HomeMenuEvent {

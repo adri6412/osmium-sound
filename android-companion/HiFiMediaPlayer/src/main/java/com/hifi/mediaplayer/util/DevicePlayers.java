@@ -2,8 +2,8 @@ package com.hifi.mediaplayer.util;
 
 import android.content.Context;
 
-import com.hifi.mediaplayer.Preferences;
-import com.hifi.mediaplayer.HiFiMediaPlayer;
+import com.osmium.sound.companion.Preferences;
+import com.osmium.sound.companion.HiFiMediaPlayer;
 
 public class DevicePlayers {
 

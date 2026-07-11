@@ -36,8 +36,8 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
-import com.hifi.mediaplayer.R;
-import com.hifi.mediaplayer.model.Player;
+import com.osmium.sound.companion.R;
+import com.osmium.sound.companion.model.Player;
 
 /**
  * A dialog that shows sync group options -- either joining an existing group, or

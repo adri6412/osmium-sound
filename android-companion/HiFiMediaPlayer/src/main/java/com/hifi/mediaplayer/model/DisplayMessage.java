@@ -24,9 +24,9 @@ import android.text.TextUtils;
 import java.util.HashMap;
 import java.util.Map;
 
-import com.hifi.mediaplayer.R;
-import com.hifi.mediaplayer.Util;
-import com.hifi.mediaplayer.util.FluentHashMap;
+import com.osmium.sound.companion.R;
+import com.osmium.sound.companion.Util;
+import com.osmium.sound.companion.util.FluentHashMap;
 
 /**
  * The purpose of the showBriefly is (typically) to show a brief popup message on the display to

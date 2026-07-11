@@ -7,7 +7,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
-import com.hifi.mediaplayer.util.Reflection;
+import com.osmium.sound.companion.util.Reflection;
 
 /**
  * Base class that constructs a list of model objects based on CLI results from

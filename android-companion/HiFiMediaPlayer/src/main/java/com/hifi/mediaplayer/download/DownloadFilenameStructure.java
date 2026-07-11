@@ -2,9 +2,9 @@ package com.hifi.mediaplayer.download;
 
 import android.content.Context;
 
-import com.hifi.mediaplayer.R;
-import com.hifi.mediaplayer.framework.EnumWithText;
-import com.hifi.mediaplayer.model.Song;
+import com.osmium.sound.companion.R;
+import com.osmium.sound.companion.framework.EnumWithText;
+import com.osmium.sound.companion.model.Song;
 
 public enum DownloadFilenameStructure implements EnumWithText{
     NUMBER_TITLE(R.string.download_filename_structure_number_title) {

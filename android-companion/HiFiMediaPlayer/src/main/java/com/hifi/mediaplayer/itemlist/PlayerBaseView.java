@@ -7,11 +7,11 @@ import androidx.annotation.NonNull;
 import java.util.HashMap;
 import java.util.Map;
 
-import com.hifi.mediaplayer.R;
-import com.hifi.mediaplayer.framework.BaseActivity;
-import com.hifi.mediaplayer.framework.ViewParamItemView;
-import com.hifi.mediaplayer.model.Player;
-import com.hifi.mediaplayer.model.PlayerState;
+import com.osmium.sound.companion.R;
+import com.osmium.sound.companion.framework.BaseActivity;
+import com.osmium.sound.companion.framework.ViewParamItemView;
+import com.osmium.sound.companion.model.Player;
+import com.osmium.sound.companion.model.PlayerState;
 
 public abstract class PlayerBaseView extends ViewParamItemView<Player> {
     private static final Map<String, Integer> modelIcons = PlayerBaseView.initializeModelIcons();

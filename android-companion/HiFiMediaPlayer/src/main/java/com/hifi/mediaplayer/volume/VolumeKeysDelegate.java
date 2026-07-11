@@ -2,7 +2,7 @@ package com.hifi.mediaplayer.volume;
 
 import android.view.KeyEvent;
 
-import com.hifi.mediaplayer.service.ISqueezeService;
+import com.osmium.sound.companion.service.ISqueezeService;
 
 /**
  * Intercept hardware volume control keys to control slimserver

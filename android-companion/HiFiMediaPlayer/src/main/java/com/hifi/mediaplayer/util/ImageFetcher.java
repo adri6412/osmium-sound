@@ -29,8 +29,8 @@ import java.net.URLDecoder;
 import java.util.HashMap;
 import java.util.Map;
 
-import com.hifi.mediaplayer.R;
-import com.hifi.mediaplayer.Util;
+import com.osmium.sound.companion.R;
+import com.osmium.sound.companion.Util;
 
 /**
  * A subclass of {@link ImageWorker} that fetches images from a URL.

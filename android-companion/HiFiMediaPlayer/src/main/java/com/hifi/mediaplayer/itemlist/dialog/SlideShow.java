@@ -32,15 +32,15 @@ import androidx.fragment.app.DialogFragment;
 import java.util.List;
 import java.util.Map;
 
-import com.hifi.mediaplayer.R;
-import com.hifi.mediaplayer.model.Action;
-import com.hifi.mediaplayer.framework.BaseActivity;
-import com.hifi.mediaplayer.itemlist.IServiceItemListCallback;
-import com.hifi.mediaplayer.model.Image;
-import com.hifi.mediaplayer.model.JiveItem;
-import com.hifi.mediaplayer.service.ISqueezeService;
-import com.hifi.mediaplayer.util.ImageFetcher;
-import com.hifi.mediaplayer.widget.OnSwipeListener;
+import com.osmium.sound.companion.R;
+import com.osmium.sound.companion.model.Action;
+import com.osmium.sound.companion.framework.BaseActivity;
+import com.osmium.sound.companion.itemlist.IServiceItemListCallback;
+import com.osmium.sound.companion.model.Image;
+import com.osmium.sound.companion.model.JiveItem;
+import com.osmium.sound.companion.service.ISqueezeService;
+import com.osmium.sound.companion.util.ImageFetcher;
+import com.osmium.sound.companion.widget.OnSwipeListener;
 
 public class SlideShow extends DialogFragment implements IServiceItemListCallback<JiveItem> {
     private static final String TAG = SlideShow.class.getSimpleName();

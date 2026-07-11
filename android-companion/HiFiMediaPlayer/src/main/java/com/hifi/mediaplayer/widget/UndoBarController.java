@@ -34,7 +34,7 @@ import android.view.animation.Animation;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 
-import com.hifi.mediaplayer.R;
+import com.osmium.sound.companion.R;
 
 /**
  *

@@ -6,12 +6,12 @@ import androidx.annotation.NonNull;
 
 import com.qtalk.recyclerviewfastscroller.RecyclerViewFastScroller;
 
-import com.hifi.mediaplayer.R;
-import com.hifi.mediaplayer.framework.ItemAdapter;
-import com.hifi.mediaplayer.framework.ItemViewHolder;
-import com.hifi.mediaplayer.itemlist.dialog.ArtworkListLayout;
-import com.hifi.mediaplayer.model.JiveItem;
-import com.hifi.mediaplayer.model.Window;
+import com.osmium.sound.companion.R;
+import com.osmium.sound.companion.framework.ItemAdapter;
+import com.osmium.sound.companion.framework.ItemViewHolder;
+import com.osmium.sound.companion.itemlist.dialog.ArtworkListLayout;
+import com.osmium.sound.companion.model.JiveItem;
+import com.osmium.sound.companion.model.Window;
 
 class JiveItemAdapter extends ItemAdapter<ItemViewHolder<JiveItem>, JiveItem> implements RecyclerViewFastScroller.OnPopupTextUpdate {
     private Window.WindowStyle windowStyle = Window.WindowStyle.TEXT_ONLY;

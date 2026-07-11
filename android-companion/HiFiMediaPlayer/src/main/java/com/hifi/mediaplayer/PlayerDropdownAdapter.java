@@ -1,4 +1,4 @@
-package com.hifi.mediaplayer;
+package com.osmium.sound.companion;
 
 import android.content.Context;
 import android.view.LayoutInflater;
@@ -12,7 +12,7 @@ import androidx.annotation.NonNull;
 
 import java.util.List;
 
-import com.hifi.mediaplayer.model.Player;
+import com.osmium.sound.companion.model.Player;
 
 class PlayerDropdownAdapter extends ArrayAdapter<Player> {
     private final Player activePlayer;

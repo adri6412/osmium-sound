@@ -11,8 +11,8 @@ import android.os.Message;
 import android.util.Log;
 import android.widget.Toast;
 
-import com.hifi.mediaplayer.Preferences;
-import com.hifi.mediaplayer.HiFiMediaPlayer;
+import com.osmium.sound.companion.Preferences;
+import com.osmium.sound.companion.HiFiMediaPlayer;
 
 public class SqueezePlayer extends Handler {
     private static final int MSG_STOP = 0;

@@ -20,11 +20,11 @@ import androidx.recyclerview.widget.RecyclerView;
 import java.util.Arrays;
 import java.util.function.Consumer;
 
-import com.hifi.mediaplayer.R;
-import com.hifi.mediaplayer.Util;
-import com.hifi.mediaplayer.framework.BaseActivity;
-import com.hifi.mediaplayer.model.Player;
-import com.hifi.mediaplayer.widget.ViewUtilities;
+import com.osmium.sound.companion.R;
+import com.osmium.sound.companion.Util;
+import com.osmium.sound.companion.framework.BaseActivity;
+import com.osmium.sound.companion.model.Player;
+import com.osmium.sound.companion.widget.ViewUtilities;
 
 public class SqueezerRemoteControlButtonSelectActivity extends BaseActivity {
 

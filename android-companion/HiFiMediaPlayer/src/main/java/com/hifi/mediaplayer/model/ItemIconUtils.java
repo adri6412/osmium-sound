@@ -32,9 +32,9 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.function.BiPredicate;
 
-import com.hifi.mediaplayer.R;
-import com.hifi.mediaplayer.HiFiMediaPlayer;
-import com.hifi.mediaplayer.util.FluentHashMap;
+import com.osmium.sound.companion.R;
+import com.osmium.sound.companion.HiFiMediaPlayer;
+import com.osmium.sound.companion.util.FluentHashMap;
 
 
 public class ItemIconUtils {

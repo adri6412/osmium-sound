@@ -30,22 +30,22 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 
-import com.hifi.mediaplayer.R;
-import com.hifi.mediaplayer.Util;
-import com.hifi.mediaplayer.framework.BaseActivity;
-import com.hifi.mediaplayer.itemlist.dialog.DefeatDestructiveTouchToPlayDialog;
-import com.hifi.mediaplayer.itemlist.dialog.PlayTrackAlbumDialog;
-import com.hifi.mediaplayer.itemlist.dialog.PlayerSyncDialog;
-import com.hifi.mediaplayer.itemlist.dialog.SyncPowerDialog;
-import com.hifi.mediaplayer.itemlist.dialog.SyncVolumeDialog;
-import com.hifi.mediaplayer.model.Player;
-import com.hifi.mediaplayer.model.PlayerState;
-import com.hifi.mediaplayer.service.ISqueezeService;
-import com.hifi.mediaplayer.service.event.HandshakeComplete;
-import com.hifi.mediaplayer.service.event.PlayerStateChanged;
-import com.hifi.mediaplayer.service.event.PlayerVolume;
-import com.hifi.mediaplayer.service.event.SleepTimeChanged;
-import com.hifi.mediaplayer.widget.ViewUtilities;
+import com.osmium.sound.companion.R;
+import com.osmium.sound.companion.Util;
+import com.osmium.sound.companion.framework.BaseActivity;
+import com.osmium.sound.companion.itemlist.dialog.DefeatDestructiveTouchToPlayDialog;
+import com.osmium.sound.companion.itemlist.dialog.PlayTrackAlbumDialog;
+import com.osmium.sound.companion.itemlist.dialog.PlayerSyncDialog;
+import com.osmium.sound.companion.itemlist.dialog.SyncPowerDialog;
+import com.osmium.sound.companion.itemlist.dialog.SyncVolumeDialog;
+import com.osmium.sound.companion.model.Player;
+import com.osmium.sound.companion.model.PlayerState;
+import com.osmium.sound.companion.service.ISqueezeService;
+import com.osmium.sound.companion.service.event.HandshakeComplete;
+import com.osmium.sound.companion.service.event.PlayerStateChanged;
+import com.osmium.sound.companion.service.event.PlayerVolume;
+import com.osmium.sound.companion.service.event.SleepTimeChanged;
+import com.osmium.sound.companion.widget.ViewUtilities;
 
 
 public class PlayerListActivity extends BaseActivity implements

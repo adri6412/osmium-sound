@@ -9,9 +9,9 @@ import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.core.content.ContextCompat;
 import androidx.fragment.app.Fragment;
 
-import com.hifi.mediaplayer.Preferences;
-import com.hifi.mediaplayer.HiFiMediaPlayer;
-import com.hifi.mediaplayer.dialog.CallStateDialog;
+import com.osmium.sound.companion.Preferences;
+import com.osmium.sound.companion.HiFiMediaPlayer;
+import com.osmium.sound.companion.dialog.CallStateDialog;
 
 public class CallStatePermissionLauncher {
     private final ActivityResultLauncher<String> requestPermissionLauncher;

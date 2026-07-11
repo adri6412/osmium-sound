@@ -43,10 +43,10 @@ import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 
-import com.hifi.mediaplayer.R;
-import com.hifi.mediaplayer.Util;
-import com.hifi.mediaplayer.service.SqueezeService;
-import com.hifi.mediaplayer.util.Intents;
+import com.osmium.sound.companion.R;
+import com.osmium.sound.companion.Util;
+import com.osmium.sound.companion.service.SqueezeService;
+import com.osmium.sound.companion.util.Intents;
 
 
 /**

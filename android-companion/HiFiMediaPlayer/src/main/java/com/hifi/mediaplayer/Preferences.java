@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package com.hifi.mediaplayer;
+package com.osmium.sound.companion;
 
 import android.content.Context;
 import android.content.SharedPreferences;
@@ -45,14 +45,14 @@ import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
-import com.hifi.mediaplayer.download.DownloadFilenameStructure;
-import com.hifi.mediaplayer.download.DownloadPathStructure;
-import com.hifi.mediaplayer.framework.EnumWithText;
-import com.hifi.mediaplayer.itemlist.dialog.ArtworkListLayout;
-import com.hifi.mediaplayer.model.JiveItem;
-import com.hifi.mediaplayer.model.PlayableItemAction;
-import com.hifi.mediaplayer.model.Player;
-import com.hifi.mediaplayer.util.ThemeManager;
+import com.osmium.sound.companion.download.DownloadFilenameStructure;
+import com.osmium.sound.companion.download.DownloadPathStructure;
+import com.osmium.sound.companion.framework.EnumWithText;
+import com.osmium.sound.companion.itemlist.dialog.ArtworkListLayout;
+import com.osmium.sound.companion.model.JiveItem;
+import com.osmium.sound.companion.model.PlayableItemAction;
+import com.osmium.sound.companion.model.Player;
+import com.osmium.sound.companion.util.ThemeManager;
 
 public final class Preferences {
     private static final String TAG = Preferences.class.getSimpleName();

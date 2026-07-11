@@ -16,7 +16,7 @@
 
 package com.hifi.mediaplayer.itemlist;
 
-import com.hifi.mediaplayer.service.ServiceCallback;
+import com.osmium.sound.companion.service.ServiceCallback;
 
 public interface IServiceItemListCallback<T> extends ItemReceiver<T>, ServiceCallback {
 }

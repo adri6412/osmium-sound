@@ -14,7 +14,7 @@ import android.widget.EditText;
 import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 import com.google.android.material.textfield.TextInputLayout;
 
-import com.hifi.mediaplayer.R;
+import com.osmium.sound.companion.R;
 
 public abstract class BaseEditTextDialog extends DialogFragment {
 

@@ -21,14 +21,14 @@ import androidx.annotation.Nullable;
 
 import java.util.List;
 
-import com.hifi.mediaplayer.Preferences;
-import com.hifi.mediaplayer.itemlist.IServiceItemListCallback;
-import com.hifi.mediaplayer.model.Action;
-import com.hifi.mediaplayer.model.Alarm;
-import com.hifi.mediaplayer.model.AlarmPlaylist;
-import com.hifi.mediaplayer.model.JiveItem;
-import com.hifi.mediaplayer.model.Player;
-import com.hifi.mediaplayer.model.PlayerState;
+import com.osmium.sound.companion.Preferences;
+import com.osmium.sound.companion.itemlist.IServiceItemListCallback;
+import com.osmium.sound.companion.model.Action;
+import com.osmium.sound.companion.model.Alarm;
+import com.osmium.sound.companion.model.AlarmPlaylist;
+import com.osmium.sound.companion.model.JiveItem;
+import com.osmium.sound.companion.model.Player;
+import com.osmium.sound.companion.model.PlayerState;
 
 public interface ISqueezeService {
     // Instructing the service to connect to the Lyrion Music Server

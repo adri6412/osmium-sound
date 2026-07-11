@@ -50,8 +50,8 @@ import java.lang.annotation.RetentionPolicy;
 import java.lang.ref.WeakReference;
 import java.util.Arrays;
 
-import com.hifi.mediaplayer.BuildConfig;
-import com.hifi.mediaplayer.Util;
+import com.osmium.sound.companion.BuildConfig;
+import com.osmium.sound.companion.Util;
 
 /**
  * This class wraps up completing some arbitrary long running work when loading a bitmap to an

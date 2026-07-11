@@ -21,16 +21,16 @@ import java.util.List;
 import java.util.Map;
 import java.util.Stack;
 
-import com.hifi.mediaplayer.Preferences;
-import com.hifi.mediaplayer.R;
-import com.hifi.mediaplayer.HiFiMediaPlayer;
-import com.hifi.mediaplayer.itemlist.IServiceItemListCallback;
-import com.hifi.mediaplayer.itemlist.JiveItemListActivity;
-import com.hifi.mediaplayer.itemlist.JiveItemViewLogic;
-import com.hifi.mediaplayer.itemlist.JiveItemViewPending;
-import com.hifi.mediaplayer.model.Action;
-import com.hifi.mediaplayer.model.JiveItem;
-import com.hifi.mediaplayer.service.event.HandshakeComplete;
+import com.osmium.sound.companion.Preferences;
+import com.osmium.sound.companion.R;
+import com.osmium.sound.companion.HiFiMediaPlayer;
+import com.osmium.sound.companion.itemlist.IServiceItemListCallback;
+import com.osmium.sound.companion.itemlist.JiveItemListActivity;
+import com.osmium.sound.companion.itemlist.JiveItemViewLogic;
+import com.osmium.sound.companion.itemlist.JiveItemViewPending;
+import com.osmium.sound.companion.model.Action;
+import com.osmium.sound.companion.model.JiveItem;
+import com.osmium.sound.companion.service.event.HandshakeComplete;
 
 public class ContextMenu extends BottomSheetDialogFragmentWithService implements IServiceItemListCallback<JiveItem> {
     public static final String TAG = ContextMenu.class.getSimpleName();

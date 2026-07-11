@@ -35,8 +35,8 @@ import java.io.OutputStream;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 
-import com.hifi.mediaplayer.BuildConfig;
-import com.hifi.mediaplayer.Util;
+import com.osmium.sound.companion.BuildConfig;
+import com.osmium.sound.companion.Util;
 
 /**
  * This class holds our bitmap caches (memory and disk).

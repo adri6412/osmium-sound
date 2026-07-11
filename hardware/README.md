@@ -27,7 +27,7 @@ che generano i file STEP da ordinare.
 
 | Pezzo | File STEP | Descrizione |
 |---|---|---|
-| Corpo | `streamer-body.step` | profilo a U (fondo + 2 fianchi + 2 risvolti per il coperchio) |
+| Corpo | `streamer-body.step` | profilo a U (fondo + 2 fianchi, nessun risvolto) |
 | Frontale | `streamer-front.step` | vaschetta con finestra schermo + fessura CD + 4 fori schermo |
 | Retro | `streamer-back.step` | vaschetta con fori USB doppia / DC / RJ45 |
 | Coperchio | `streamer-lid.step` | piano con feritoie di ventilazione |
@@ -96,9 +96,20 @@ grezzo il segno è poco contrastato).
 
 ## 5. Hardware da acquistare
 
-- **Viti M3** (autofilettanti per lamiera, oppure viti + **inserti/rivetti filettati M3**)
-  — su 2 mm il filetto diretto non tiene, meglio inserti PEM o autofilettanti
-- **Rondelle M3** (per i fori schermo maggiorati)
+- **Viti M3 autofilettanti per lamiera** (oppure viti normali + **inserti/rivetti filettati
+  M3** — su 2 mm il filetto diretto non tiene, meglio inserti PEM o viti autofilettanti)
+  — **32 pz totali**, due lunghezze:
+  - **M3×10 mm** — **4 pz** (schermo: attraversano rondella + foro maggiorato Ø5.5 e si
+    avvitano nel frontale)
+  - **M3×8 mm** — **28 pz** (24 squadrette front/back + 4 ripiano: spessore lamiera 2mm
+    + presa nella squadretta/aletta, 8mm basta e non sfonda l'altra faccia)
+- **Squadrette a L interne** (staffa piccola **15×15×1.5 mm**, es. alluminio o acciaio
+  zincato) — **12 pz**: fissano frontale e retro (pannelli piatti, senza risvolti) ai
+  fianchi del corpo, **3 livelli per lato**
+- **Barre filettate M3, Ø3mm, tagliate a ~168 mm** (tiranti fondo↔coperchio) — **6 pz**
+  (si tagliano da una barra filettata M3 da 1 m con seghetto) — tengono insieme fondo e
+  coperchio (il coperchio **non** si avvita ai fianchi, non ci sono risvolti)
+- **Dadi M3** — **12 pz** (2 per tirante) + **Rondelle M3** — **16 pz** (2 per tirante + 4 schermo)
 - **Jack DC**: barrel panel-mount **"DC-022"** (foro 8 mm), barrel adatto al PC (es. 5.5×2.5)
 - **Doppia USB-A** panel-mount, viti a **interasse 28 mm**
 - **RJ45** panel-mount, viti a **interasse 27.1 mm**
@@ -139,18 +150,32 @@ grezzo il segno è poco contrastato).
 3. Porta i cavi dei **connettori posteriori** alle rispettive porte del PC
    (rete, USB esterne, alimentazione DC). Usa lo spazio dietro al PC (~70 mm).
 
-### Passo 6 — Chiusura della scocca
-1. Inserisci il **frontale** (`front`) nel corpo: i risvolti laterali entrano contro i
-   fianchi, quelli alto/basso contro coperchio/fondo. Avvita:
-   - risvolti laterali → **fianchi** (viti in orizzontale, 3 per lato)
-   - risvolto basso → **fondo** (viti dal basso)
-2. Stessa cosa per il **retro** (`back`).
-3. Appoggia il **coperchio** (`lid`) e avvitalo:
-   - sui **risvolti** del corpo (lungo i due lati)
-   - sui **risvolti alti** di frontale e retro
+### Passo 6 — Frontale e retro sui fianchi
+> Frontale e retro sono pannelli **piatti** (nessun risvolto): si fissano ai fianchi del
+> corpo tramite **6 squadrette a L interne per pannello** (3 livelli per lato, ai livelli
+> `bz` = basso / metà / alto — 12 squadrette totali, 6 per frontale + 6 per retro). Ogni
+> squadretta prende **2 viti**: una in orizzontale-profondità (dal pannello nella
+> squadretta) e una in orizzontale-larghezza (dal fianco nella squadretta).
+1. Inserisci **3 squadrette** nel fianco sinistro e **3** nel fianco destro (ai 3 livelli
+   già forati), per il frontale.
+2. Accosta il **frontale** (`front`) e avvita: **6 viti** dal pannello (una per squadretta)
+   + **6 viti** dai fianchi (una per squadretta) = **12 viti**.
+3. Ripeti per il **retro** (`back`): altre 6 squadrette + **12 viti**.
 
-A questo punto la scocca è chiusa. Il coperchio è l'ultimo pezzo, così resta accessibile
-per la manutenzione.
+### Passo 7 — Tiranti fondo↔coperchio e chiusura
+> Il coperchio **non si avvita ai fianchi** (non ci sono risvolti): fondo e coperchio sono
+> tenuti insieme da **6 tiranti filettati M3** (~168 mm) che attraversano l'interno,
+> allineati verticalmente (stesse X/Y sia nel fondo che nel coperchio).
+1. Avvita un **dado + rondella** su ogni tirante, infilalo dal **fondo** (dall'esterno,
+   sotto il corpo) nei 6 fori corrispondenti, e blocca con un secondo dado dall'interno
+   (o lascialo sporgere se preferisci bloccare tutto solo alla fine).
+2. Appoggia il **coperchio** sopra, infilando i 6 tiranti nei fori corrispondenti
+   (stessa griglia X/Y del fondo).
+3. Blocca ogni tirante dall'alto con **rondella + dado**, serrando fondo e coperchio
+   l'uno verso l'altro.
+
+A questo punto la scocca è chiusa. Consiglio: non serrare a fondo i dadi finché non hai
+richiuso tutti e 6 i tiranti, per poter correggere l'allineamento.
 
 ---
 

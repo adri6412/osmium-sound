@@ -18,7 +18,7 @@ package com.hifi.mediaplayer.service.event;
 
 import androidx.annotation.NonNull;
 
-import com.hifi.mediaplayer.model.DisplayMessage;
+import com.osmium.sound.companion.model.DisplayMessage;
 
 /** Event sent when a display status message is received. */
 public class DisplayEvent {

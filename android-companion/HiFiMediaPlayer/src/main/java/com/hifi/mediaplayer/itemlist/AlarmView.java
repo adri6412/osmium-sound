@@ -33,15 +33,15 @@ import com.google.android.material.timepicker.MaterialTimePicker;
 import com.google.android.material.timepicker.TimeFormat;
 
 
-import com.hifi.mediaplayer.Preferences;
-import com.hifi.mediaplayer.R;
-import com.hifi.mediaplayer.HiFiMediaPlayer;
-import com.hifi.mediaplayer.framework.ItemViewHolder;
-import com.hifi.mediaplayer.model.Alarm;
-import com.hifi.mediaplayer.model.AlarmPlaylist;
-import com.hifi.mediaplayer.util.CompoundButtonWrapper;
-import com.hifi.mediaplayer.util.TimeUtil;
-import com.hifi.mediaplayer.widget.UndoBarController;
+import com.osmium.sound.companion.Preferences;
+import com.osmium.sound.companion.R;
+import com.osmium.sound.companion.HiFiMediaPlayer;
+import com.osmium.sound.companion.framework.ItemViewHolder;
+import com.osmium.sound.companion.model.Alarm;
+import com.osmium.sound.companion.model.AlarmPlaylist;
+import com.osmium.sound.companion.util.CompoundButtonWrapper;
+import com.osmium.sound.companion.util.TimeUtil;
+import com.osmium.sound.companion.widget.UndoBarController;
 
 public class AlarmView extends ItemViewHolder<Alarm> {
     private static final int[] DAY_TEXT_IDS = {

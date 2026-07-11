@@ -13,8 +13,8 @@ import androidx.annotation.NonNull;
 import com.google.android.material.bottomsheet.BottomSheetBehavior;
 import com.google.android.material.bottomsheet.BottomSheetDialogFragment;
 
-import com.hifi.mediaplayer.service.ISqueezeService;
-import com.hifi.mediaplayer.service.SqueezeService;
+import com.osmium.sound.companion.service.ISqueezeService;
+import com.osmium.sound.companion.service.SqueezeService;
 
 public abstract class BottomSheetDialogFragmentWithService extends BottomSheetDialogFragment {
 

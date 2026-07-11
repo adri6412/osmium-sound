@@ -17,7 +17,7 @@ import android.view.View;
 import androidx.annotation.NonNull;
 import androidx.core.graphics.ColorUtils;
 
-import com.hifi.mediaplayer.R;
+import com.osmium.sound.companion.R;
 
 public class RadialSeekBar extends View {
 

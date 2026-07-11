@@ -18,9 +18,9 @@ package com.hifi.mediaplayer.service;
 
 import java.util.Map;
 
-import com.hifi.mediaplayer.itemlist.IServiceItemListCallback;
-import com.hifi.mediaplayer.model.Player;
-import com.hifi.mediaplayer.model.PlayerState;
+import com.osmium.sound.companion.itemlist.IServiceItemListCallback;
+import com.osmium.sound.companion.model.Player;
+import com.osmium.sound.companion.model.PlayerState;
 
 /**
  * Interface implemented by all network clients of the server.

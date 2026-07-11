@@ -29,7 +29,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentMap;
 
-import com.hifi.mediaplayer.BuildConfig;
+import com.osmium.sound.companion.BuildConfig;
 
 /**
  * {@link BayeuxClient} implementation for the Squeezer App.

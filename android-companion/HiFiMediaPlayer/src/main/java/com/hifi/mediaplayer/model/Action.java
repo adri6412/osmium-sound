@@ -25,7 +25,7 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
 
-import com.hifi.mediaplayer.Util;
+import com.osmium.sound.companion.Util;
 
 /**
  * Implements <code>action_fields</code> of the LMS SqueezePlay interface.

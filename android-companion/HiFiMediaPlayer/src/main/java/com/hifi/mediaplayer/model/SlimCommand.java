@@ -27,7 +27,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import com.hifi.mediaplayer.Util;
+import com.osmium.sound.companion.Util;
 
 /**
  * Data for a command to LMS

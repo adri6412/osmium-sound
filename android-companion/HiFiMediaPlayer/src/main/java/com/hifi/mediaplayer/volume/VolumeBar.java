@@ -11,8 +11,8 @@ import com.google.android.material.button.MaterialButton;
 
 import java.util.function.Supplier;
 
-import com.hifi.mediaplayer.R;
-import com.hifi.mediaplayer.service.ISqueezeService;
+import com.osmium.sound.companion.R;
+import com.osmium.sound.companion.service.ISqueezeService;
 
 public class VolumeBar implements VolumeUpdater {
     private final MaterialButton muteButton;
