@@ -340,6 +340,17 @@
         "osFailed": "Aggiornamento sistema operativo fallito",
         "applyingUi": "Aggiornamento interfaccia (riavvio al termine)…",
         "allDone": "Aggiornamento completato"
+      },
+      "overlay": {
+        "titleAll": "Aggiornamento in corso",
+        "titleUi": "Aggiornamento interfaccia",
+        "titleSystem": "Aggiornamento componenti di sistema",
+        "titleOs": "Aggiornamento sistema operativo",
+        "titleLyrion": "Aggiornamento Lyrion",
+        "done": "Completato",
+        "keepPowered": "Non spegnere il dispositivo durante l'aggiornamento.",
+        "restarting": "Riavvio dell'interfaccia…",
+        "dismiss": "Chiudi"
       }
     },
     "controls": {
