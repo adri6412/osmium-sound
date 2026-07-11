@@ -180,4 +180,22 @@
             android:summary="%s"/>
 
     </PreferenceCategory>
+
+    <PreferenceCategory
+        android:title="@string/settings_category_dsp">
+
+        <Preference
+            android:key="squeezer.dsp.open"
+            android:title="@string/settings_dsp_title"
+            android:summary="@string/settings_dsp_summary"/>
+    </PreferenceCategory>
+
+    <PreferenceCategory
+        android:title="@string/settings_category_backup">
+
+        <Preference
+            android:key="squeezer.backup.open"
+            android:title="@string/settings_backup_title"
+            android:summary="@string/settings_backup_summary"/>
+    </PreferenceCategory>
 </PreferenceScreen>

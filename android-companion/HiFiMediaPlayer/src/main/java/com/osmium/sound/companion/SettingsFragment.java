@@ -93,6 +93,25 @@ public class SettingsFragment  extends PreferenceFragmentCompat implements
         fillDevicePlayerPreferences(preferences);
 
         fillDownloadPreferences(preferences);
+
+        fillDspPreferences();
+        fillBackupPreferences();
+    }
+
+    private void fillDspPreferences() {
+        Preference pref = requirePreference("squeezer.dsp.open");
+        pref.setOnPreferenceClickListener(preference -> {
+            DspSettingsActivity.show(requireActivity());
+            return true;
+        });
+    }
+
+    private void fillBackupPreferences() {
+        Preference pref = requirePreference("squeezer.backup.open");
+        pref.setOnPreferenceClickListener(preference -> {
+            BackupRestoreActivity.show(requireActivity());
+            return true;
+        });
     }
 
     private void fillScrobblePreferences(SharedPreferences preferences) {

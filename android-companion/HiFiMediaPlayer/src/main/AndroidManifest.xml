@@ -115,6 +115,18 @@
         </activity>
 
         <activity
+            android:name=".DspSettingsActivity"
+            android:label="@string/settings_dsp_title"
+            android:parentActivityName=".SettingsActivity">
+        </activity>
+
+        <activity
+            android:name=".BackupRestoreActivity"
+            android:label="@string/settings_backup_title"
+            android:parentActivityName=".SettingsActivity">
+        </activity>
+
+        <activity
             android:name=".ConnectActivity"
             android:label="@string/disconnected_text"
             android:parentActivityName=".itemlist.HomeActivity">

@@ -212,15 +212,51 @@ public class ServerAddressView extends LinearLayout implements ScanNetworkTask.S
         if (contents == null) {
             return true; // user cancelled the scan
         }
-        String hostPort = parseHostPortFromQr(contents);
+
+        String lms = contents;
+        String api = null;
+        String token = null;
+        org.json.JSONObject pairing = parsePairingJson(contents);
+        if (pairing != null) {
+            lms = pairing.optString("lms", null);
+            api = pairing.optString("api", null);
+            token = pairing.optString("token", null);
+        }
+
+        String hostPort = parseHostPortFromQr(lms);
         if (hostPort == null) {
             Toast.makeText(getContext(), R.string.settings_scan_qr_failed, Toast.LENGTH_LONG).show();
             return true;
+        }
+        if (api != null && token != null && preferences != null) {
+            preferences.setAppliancePairing(api, token);
         }
         isManual = true;
         setEditServerAddressAvailability();
         setServerAddress(hostPort);
         return true;
+    }
+
+    /**
+     * The appliance's "Phone control" QR encodes a JSON object
+     * {"lms": "<url or host:port>", "api": "<host:port>", "token": "<pairing token>"}
+     * (see sources_server.py's /api/pair/token and Settings.jsx). Returns null for
+     * older/plain QR content (a bare URL or host:port), which callers should treat
+     * as the LMS address directly.
+     */
+    private static org.json.JSONObject parsePairingJson(String content) {
+        if (content == null) {
+            return null;
+        }
+        content = content.trim();
+        if (!content.startsWith("{")) {
+            return null;
+        }
+        try {
+            return new org.json.JSONObject(content);
+        } catch (org.json.JSONException e) {
+            return null;
+        }
     }
 
     /**

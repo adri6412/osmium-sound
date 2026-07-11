@@ -262,6 +262,38 @@
     <string name="download_item">Download %s</string>
     <string name="disable_downloads">Disable downloads</string>
 
+    <string name="menu_item_lyrics">Lyrics</string>
+    <string name="menu_item_lyrics_unavailable">Lyrics not available for this track.</string>
+
+    <string name="settings_category_dsp">Room Correction (DSP)</string>
+    <string name="settings_dsp_title">Room Correction (DSP)</string>
+    <string name="settings_dsp_summary">Enable DSP, room correction, crossfeed, and manage the convolution filter</string>
+    <string name="settings_dsp_unavailable">DSP is not available on this appliance.</string>
+    <string name="settings_dsp_enabled_title">DSP enabled</string>
+    <string name="settings_dsp_room_correction_title">Room correction</string>
+    <string name="settings_dsp_crossfeed_title">Crossfeed</string>
+    <string name="settings_dsp_filter_title">Convolution filter</string>
+    <string name="settings_dsp_filter_none">No filter uploaded</string>
+    <string name="settings_dsp_filter_present">%1$s (%2$d KB)</string>
+    <string name="settings_dsp_filter_upload">Upload filter…</string>
+    <string name="settings_dsp_filter_remove">Remove filter</string>
+    <string name="settings_dsp_filter_remove_confirm">Remove the room-correction filter from the appliance?</string>
+    <string name="settings_dsp_filter_upload_failed">Filter operation failed</string>
+    <string name="settings_dsp_status_failed">Could not reach the appliance\'s DSP service</string>
+
+    <string name="settings_category_backup">Backup &amp; Restore</string>
+    <string name="settings_backup_title">Backup &amp; Restore</string>
+    <string name="settings_backup_summary">Export or restore the appliance\'s configuration</string>
+    <string name="settings_backup_export_help">Download a copy of the appliance\'s configuration (DAC, DSP/EQ, room-correction filter, music sources, update channel).</string>
+    <string name="settings_backup_export_button">Export backup</string>
+    <string name="settings_backup_export_success">Backup exported.</string>
+    <string name="settings_backup_export_failed">Backup export failed</string>
+    <string name="settings_backup_restore_help">Restore the appliance\'s configuration from a previously exported backup file.</string>
+    <string name="settings_backup_restore_button">Restore from file</string>
+    <string name="settings_backup_restore_confirm_title">Restore configuration?</string>
+    <string name="settings_backup_restore_confirm_message">This overwrites the appliance\'s current configuration and restarts Squeezelite/CamillaDSP/SMB. This cannot be undone.</string>
+    <string name="settings_backup_restore_failed">Restore failed</string>
+
     <string name="about_team" translatable="false">Team</string>
     <string name="about_authors" translatable="false">Benjamin Viertel\nKurt Aaholst\nNik Clayton\nBrad Fitzpatrick</string>
     <string name="about_website" translatable="false"><a href="https://github.com/adri6412/osmium-sound">Website</a>\n<a href="https://kaaholst.github.io/android-squeezer/">Original Squeezer Website</a></string>
