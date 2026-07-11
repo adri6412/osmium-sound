@@ -793,6 +793,59 @@ def api_dsp_set_proxy():
     return jsonify(body), status
 
 
+# ─────────────────────────── System / admin proxy ─────────────────────
+# Same rationale as the DSP proxy above: these all live on api_server.py's
+# loopback-only port (system info, SSH toggle, OTA channel + update
+# check/apply/status for each of the 4 update kinds, reboot/shutdown, audio
+# device selection). All require a pairing token except from localhost (the
+# kiosk UI) — see _require_pair_token(). Table-driven to avoid 20 near-
+# identical view functions; each entry is (our path, method, api_server.py
+# path).
+_SYSTEM_PROXY_ROUTES = [
+    ("/api/system/info", "GET", "/system_info"),
+    ("/api/system/ssh", "GET", "/ssh_status"),
+    ("/api/system/ssh", "POST", "/ssh_set"),
+    ("/api/system/ota_channel", "GET", "/ota_channel"),
+    ("/api/system/ota_channel", "POST", "/ota_channel"),
+    ("/api/system/audio_devices", "GET", "/audio_devices"),
+    ("/api/system/audio_device", "POST", "/set_audio_device"),
+    ("/api/system/updates/app/check", "GET", "/app_update/check"),
+    ("/api/system/updates/app/apply", "POST", "/app_update/apply"),
+    ("/api/system/updates/app/status", "GET", "/app_update/status"),
+    ("/api/system/updates/system/check", "GET", "/system_update/check"),
+    ("/api/system/updates/system/apply", "POST", "/system_update/apply"),
+    ("/api/system/updates/system/status", "GET", "/system_update/status"),
+    ("/api/system/updates/os/check", "GET", "/os_update/check"),
+    ("/api/system/updates/os/apply", "POST", "/os_update/apply"),
+    ("/api/system/updates/os/status", "GET", "/os_update/status"),
+    ("/api/system/updates/lyrion/check", "GET", "/lyrion_update/check"),
+    ("/api/system/updates/lyrion/apply", "POST", "/lyrion_update/apply"),
+    ("/api/system/updates/lyrion/status", "GET", "/lyrion_update/status"),
+    ("/api/system/reboot", "POST", "/reboot"),
+    ("/api/system/shutdown", "POST", "/shutdown"),
+]
+
+
+def _make_system_proxy_view(remote_path, method):
+    def view():
+        denied = _require_pair_token()
+        if denied:
+            return denied
+        data = request.get_json(silent=True) if method == "POST" else None
+        body, status = _proxy_to_api_server(remote_path, method=method, body=data)
+        return jsonify(body), status
+    return view
+
+
+for _local_path, _method, _remote_path in _SYSTEM_PROXY_ROUTES:
+    app.add_url_rule(
+        _local_path,
+        endpoint=f"system_proxy_{_method}_{_local_path}",
+        view_func=_make_system_proxy_view(_remote_path, _method),
+        methods=[_method],
+    )
+
+
 # ─────────────────────────── HTTP API ───────────────────────────────
 @app.route("/api/sources", methods=["GET"])
 def api_list():
