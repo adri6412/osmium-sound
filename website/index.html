@@ -477,6 +477,13 @@
     }
     .copy-btn:hover { color: var(--text); border-color: #555; }
 
+    /* ── ANDROID APP ─────────────────────────────────── */
+    #android {
+      border-top: 1px solid var(--border);
+      text-align: center;
+    }
+    #android .install-inner, #android .quickstart { margin-left: auto; margin-right: auto; }
+
     /* ── CHANGELOG ───────────────────────────────────── */
     #changelog { border-top: 1px solid var(--border); }
     .changelog-list {
@@ -576,6 +583,7 @@
     <li><a href="#features" data-en="Features" data-it="Funzioni">Features</a></li>
     <li><a href="#screenshots" data-en="Screenshots" data-it="Screenshot">Screenshots</a></li>
     <li><a href="#specs" data-en="Specs" data-it="Specifiche">Specs</a></li>
+    <li><a href="#android" data-en="Android app" data-it="App Android">Android app</a></li>
     <li><a href="#changelog" data-en="Changelog" data-it="Novità">Changelog</a></li>
     <li><a href="#install" data-en="Install" data-it="Installazione">Install</a></li>
   </ul>
@@ -745,6 +753,48 @@
         <tr><td data-en="Streaming" data-it="Streaming">Streaming</td><td>Deezer, Qobuz, TIDAL, Spotify</td></tr>
       </table>
     </div>
+  </div>
+</section>
+
+<!-- ANDROID COMPANION APP -->
+<section id="android">
+  <div class="centered">
+    <div class="section-label" data-en="Mobile companion" data-it="Companion mobile">Mobile companion</div>
+    <h2 class="section-title" data-en="Android companion app" data-it="App companion per Android">Android companion app</h2>
+    <p class="section-desc" data-en="Control Osmium Sound from your phone. Browse your library, drive playback and the queue, and adjust volume — pair in seconds by scanning the QR code on the device's Settings screen." data-it="Controlla Osmium Sound dal telefono. Sfoglia la libreria, gestisci la riproduzione e la coda, regola il volume — abbina in pochi secondi scansionando il QR code nella schermata Impostazioni del dispositivo.">Control Osmium Sound from your phone. Browse your library, drive playback and the queue, and adjust volume — pair in seconds by scanning the QR code on the device's Settings screen.</p>
+
+    <div style="display:flex; gap:1rem; justify-content:center; flex-wrap:wrap; margin-top:2.25rem;">
+      <a class="btn-primary" href="https://github.com/adri6412/osmium-sound/releases/download/companion-v1.0.0/HiFiMediaPlayer-companion-v1.0.0-release.apk">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        <span class="iso-badge"><span data-en="Download APK" data-it="Scarica l'APK">Download APK</span><small>v1.0.0</small></span>
+      </a>
+      <a class="btn-secondary" href="https://github.com/adri6412/osmium-sound/releases/tag/companion-v1.0.0" target="_blank">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0 0 24 12c0-6.63-5.37-12-12-12z"/></svg>
+        <span data-en="Release notes" data-it="Note di rilascio">Release notes</span>
+      </a>
+    </div>
+
+    <div class="quickstart">
+      <div class="qs-step">
+        <div class="qs-num">1</div>
+        <h4 data-en="Download the APK" data-it="Scarica l'APK">Download the APK</h4>
+        <p data-en="Grab &lt;strong&gt;HiFiMediaPlayer-companion-v1.0.0-release.apk&lt;/strong&gt; using the button above." data-it="Prendi &lt;strong&gt;HiFiMediaPlayer-companion-v1.0.0-release.apk&lt;/strong&gt; con il pulsante qui sopra.">Grab <strong>HiFiMediaPlayer-companion-v1.0.0-release.apk</strong> using the button above.</p>
+      </div>
+      <div class="qs-step">
+        <div class="qs-num">2</div>
+        <h4 data-en="Install it" data-it="Installala">Install it</h4>
+        <p data-en="Open the APK on your phone and allow install from &lt;strong&gt;unknown sources&lt;/strong&gt; when prompted. Requires Android 8.0 or newer." data-it="Apri l'APK sul telefono e consenti l'installazione da &lt;strong&gt;origini sconosciute&lt;/strong&gt; quando richiesto. Richiede Android 8.0 o superiore.">Open the APK on your phone and allow install from <strong>unknown sources</strong> when prompted. Requires Android 8.0 or newer.</p>
+      </div>
+      <div class="qs-step">
+        <div class="qs-num">3</div>
+        <h4 data-en="Pair by QR" data-it="Abbina con QR">Pair by QR</h4>
+        <p data-en="On the same Wi-Fi, open the app and scan the &lt;strong&gt;pairing QR code&lt;/strong&gt; from the device's Settings → Phone control." data-it="Sulla stessa rete Wi-Fi, apri l'app e scansiona il &lt;strong&gt;QR code di abbinamento&lt;/strong&gt; da Impostazioni → Controllo da telefono del dispositivo.">On the same Wi-Fi, open the app and scan the <strong>pairing QR code</strong> from the device's Settings → Phone control.</p>
+      </div>
+    </div>
+
+    <p class="install-note" data-en="&lt;strong&gt;Note:&lt;/strong&gt; the companion app is distributed as a signed APK (sideload) — it is not on the Play Store. Your phone and the appliance must be on the same local network." data-it="&lt;strong&gt;Nota:&lt;/strong&gt; l'app companion è distribuita come APK firmato (sideload) — non è sul Play Store. Il telefono e il dispositivo devono essere sulla stessa rete locale.">
+      <strong>Note:</strong> the companion app is distributed as a signed APK (sideload) — it is not on the Play Store. Your phone and the appliance must be on the same local network.
+    </p>
   </div>
 </section>
 
