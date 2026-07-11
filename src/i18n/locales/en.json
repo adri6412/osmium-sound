@@ -149,6 +149,9 @@
     "connectingShort": "Connecting…",
     "reconnect": "Reconnect",
     "nowPlaying": "Now Playing",
+    "lyrics": "Lyrics",
+    "vuMeters": "VU meters",
+    "lyricsNone": "No lyrics found for this track.",
     "expand": "Expand",
     "noTrack": "No track",
     "unknownArtist": "Unknown Artist",
@@ -179,6 +182,7 @@
       "alarm": "Alarm Clock",
       "network": "Network Configuration",
       "webRemote": "Phone control",
+      "backup": "Backup & restore",
       "ssh": "SSH Access",
       "pointer": "Mouse pointer",
       "systemInfo": "System Information",
@@ -219,6 +223,9 @@
       "gain": "Gain (dB)",
       "q": "Q",
       "crossfeed": "Headphone crossfeed",
+      "roomCorrection": "Room correction (FIR)",
+      "roomCorrectionPresent": "Filter loaded: {filename}. Upload a new one any time from Backup & restore / phone control.",
+      "roomCorrectionMissing": "No filter uploaded yet. Open the sources address (Backup & restore section) from a phone or PC browser to upload a WAV/TXT convolution filter (REW/rePhase).",
       "save": "Apply EQ",
       "failed": "DSP operation failed."
     },
@@ -232,6 +239,10 @@
       "help": "Control this device from any phone or tablet on the same network, using your browser — no app to install. Open the address below or scan the QR code.",
       "scanHint": "Scan with your phone camera",
       "noIp": "No network address available yet. Connect the device to the network (Ethernet or Wi-Fi) to get a control link."
+    },
+    "backup": {
+      "help": "Export or restore this device's configuration (DAC, DSP/EQ, music sources, mouse pointer, update channel) from a browser on your phone or PC. Open the address below or scan the QR code, then use \"Download backup\" or \"Restore from file\".",
+      "scanHint": "Scan with your phone camera"
     },
     "alarm": {
       "help": "Schedule alarms on the active player. At the set time the player wakes up and starts playing.",

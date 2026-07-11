@@ -23,7 +23,8 @@ import {
   Smartphone,
   Speaker,
   CheckCircle2,
-  AlertTriangle
+  AlertTriangle,
+  HardDriveDownload
 } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import { systemAPI, checkApiServer } from '../utils/api';
@@ -86,6 +87,8 @@ const Settings = () => {
   const [dspStatus, setDspStatus] = useState(null); // { available, enabled, active, bands, crossfeed }
   const [dspBands, setDspBands] = useState([]);      // editable [{freq, gain, q}]
   const [dspCrossfeed, setDspCrossfeed] = useState(false);
+  const [dspRoomCorrection, setDspRoomCorrection] = useState(false);
+  const [firStatus, setFirStatus] = useState(null); // { present, filename, size } from the :8080 sources service
   const [dspBusy, setDspBusy] = useState(false);
   const [dspMessage, setDspMessage] = useState('');
 
@@ -376,7 +379,18 @@ const Settings = () => {
       setDspStatus(res.data);
       setDspBands(Array.isArray(res.data.bands) ? res.data.bands : []);
       setDspCrossfeed(!!res.data.crossfeed);
+      setDspRoomCorrection(!!res.data.room_correction);
     }
+    loadFirStatus();
+  };
+
+  // FIR filter status lives on the :8080 sources service (that's where it's
+  // uploaded from a phone/PC browser — see sources_server.py /api/dsp/fir).
+  const loadFirStatus = async () => {
+    try {
+      const r = await fetch('http://localhost:8080/api/dsp/fir');
+      if (r.ok) setFirStatus(await r.json());
+    } catch (_) {}
   };
 
   // Push the current EQ config to the backend. `enabled` defaults to the
@@ -385,10 +399,16 @@ const Settings = () => {
     if (dspBusy) return;
     setDspBusy(true);
     setDspMessage('');
-    const res = await systemAPI.setDsp({ enabled: !!enabled, bands: dspBands, crossfeed: dspCrossfeed });
+    const res = await systemAPI.setDsp({
+      enabled: !!enabled, bands: dspBands, crossfeed: dspCrossfeed,
+      room_correction: dspRoomCorrection,
+    });
     setDspBusy(false);
     if (res.success && res.data?.success) {
-      setDspStatus((s) => ({ ...(s || {}), enabled: res.data.enabled, bands: res.data.bands, crossfeed: res.data.crossfeed }));
+      setDspStatus((s) => ({
+        ...(s || {}), enabled: res.data.enabled, bands: res.data.bands,
+        crossfeed: res.data.crossfeed, room_correction: res.data.room_correction,
+      }));
       setDspMessage(res.data.message || '');
     } else {
       setDspMessage(res.data?.message || res.message || t('settings.dsp.failed'));
@@ -885,6 +905,8 @@ const Settings = () => {
   })();
   const isUsableIp = deviceIp && !/^127\./.test(deviceIp) && !/loading|caric/i.test(deviceIp);
   const webRemoteUrl = isUsableIp ? `http://${deviceIp}:${lyrionPort}/material/` : null;
+  // Sources web service (:8080) — also hosts the Backup/restore page.
+  const sourcesUrl = isUsableIp ? `http://${deviceIp}:8080` : null;
 
   const settingsSections = [
     {
@@ -936,6 +958,11 @@ const Settings = () => {
       title: t('settings.sections.webRemote'),
       icon: Smartphone,
       content: 'custom-web-remote'
+    },
+    {
+      title: t('settings.sections.backup'),
+      icon: HardDriveDownload,
+      content: 'custom-backup'
     },
     {
       title: t('settings.sections.ssh'),
@@ -1391,6 +1418,25 @@ const Settings = () => {
                           </span>
                         </button>
 
+                        {/* Room correction (FIR convolution) */}
+                        <div className="bg-hifi-dark rounded-lg px-4 py-3 space-y-2">
+                          <button
+                            onClick={() => firStatus?.present && setDspRoomCorrection((v) => !v)}
+                            disabled={!firStatus?.present}
+                            className="w-full flex items-center justify-between disabled:opacity-50"
+                          >
+                            <span className="text-sm text-white">{t('settings.dsp.roomCorrection')}</span>
+                            <span className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${dspRoomCorrection ? 'bg-hifi-gold' : 'bg-hifi-accent'}`}>
+                              <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${dspRoomCorrection ? 'translate-x-6' : 'translate-x-1'}`} />
+                            </span>
+                          </button>
+                          <p className="text-xs text-hifi-silver">
+                            {firStatus?.present
+                              ? t('settings.dsp.roomCorrectionPresent', { filename: firStatus.filename })
+                              : t('settings.dsp.roomCorrectionMissing')}
+                          </p>
+                        </div>
+
                         {/* Apply EQ (re-applies live when DSP is on; otherwise just saves) */}
                         <button
                           onClick={() => applyDsp()}
@@ -1655,6 +1701,29 @@ const Settings = () => {
                         <div className="text-center">
                           <p className="text-xs text-hifi-silver mb-1">{t('settings.webRemote.scanHint')}</p>
                           <code className="text-sm text-hifi-gold break-all">{webRemoteUrl}</code>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="rounded-lg p-3 text-center text-sm bg-hifi-dark text-hifi-silver">
+                        {t('settings.webRemote.noIp')}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Custom Backup/Restore Section */}
+                {section.content === 'custom-backup' && (
+                  <div className="space-y-4">
+                    <p className="text-sm text-hifi-silver">{t('settings.backup.help')}</p>
+
+                    {sourcesUrl ? (
+                      <div className="flex flex-col items-center space-y-4">
+                        <div className="bg-white p-4 rounded-xl">
+                          <QRCodeSVG value={sourcesUrl} size={200} level="M" />
+                        </div>
+                        <div className="text-center">
+                          <p className="text-xs text-hifi-silver mb-1">{t('settings.backup.scanHint')}</p>
+                          <code className="text-sm text-hifi-gold break-all">{sourcesUrl}</code>
                         </div>
                       </div>
                     ) : (

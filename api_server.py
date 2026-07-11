@@ -467,7 +467,7 @@ def set_audio_device(device):
     if _read_dsp_state().get('enabled'):
         st = _read_dsp_state()
         try:
-            _apply_dsp_on(device, st['bands'], st['crossfeed'])
+            _apply_dsp_on(device, st['bands'], st['crossfeed'], st['room_correction'])
         except Exception:
             log.exception("set_audio_device (DSP) failed")
             return {'success': False, 'message': 'Impostazione uscita (DSP) fallita'}
@@ -746,6 +746,20 @@ DSP_RATE = 48000
 LOOPBACK_PLAYBACK = 'hw:CARD=Loopback,DEV=0'   # squeezelite writes here
 LOOPBACK_CAPTURE = 'hw:CARD=Loopback,DEV=1'    # CamillaDSP reads here
 
+# Room-correction FIR filter — uploaded via the sources web service (:8080,
+# see sources_server.py's /api/dsp/fir) and picked up here. Fixed dir/name
+# (never a user-supplied filename), one filter at a time.
+FIR_DIR = '/etc/camilladsp/filters'
+FIR_KINDS = {'.wav': 'Wav', '.txt': 'Raw'}  # ext -> CamillaDSP Conv "type"
+
+def _fir_current():
+    """Return (path, camilla_type) of the stored FIR filter, or (None, None)."""
+    for ext, kind in FIR_KINDS.items():
+        p = os.path.join(FIR_DIR, 'room' + ext)
+        if os.path.isfile(p):
+            return p, kind
+    return None, None
+
 def _loopback_present():
     try:
         with open('/proc/asound/cards') as f:
@@ -764,7 +778,8 @@ def _read_dsp_state():
         d = {}
     return {'enabled': bool(d.get('enabled')),
             'bands': d.get('bands') or [],
-            'crossfeed': bool(d.get('crossfeed'))}
+            'crossfeed': bool(d.get('crossfeed')),
+            'room_correction': bool(d.get('room_correction'))}
 
 def _write_dsp_state(state):
     os.makedirs(os.path.dirname(DSP_STATE_FILE), exist_ok=True)
@@ -833,7 +848,7 @@ def _sq_ensure_R(args):
         args = (args + ' -R').strip()
     return args
 
-def _camilla_config_dict(playback_dev, bands, crossfeed):
+def _camilla_config_dict(playback_dev, bands, crossfeed, room_correction=False):
     """Build a CamillaDSP config (returned as a dict; JSON is valid YAML)."""
     filters, eq_names = {}, []
     for i, b in enumerate(bands):
@@ -845,6 +860,15 @@ def _camilla_config_dict(playback_dev, bands, crossfeed):
             'gain': float(b.get('gain', 0)),
         }}
         eq_names.append(nm)
+    conv_names = []
+    if room_correction:
+        fir_path, fir_kind = _fir_current()
+        if fir_path:
+            filters['room_correction'] = {'type': 'Conv', 'parameters': {
+                'type': fir_kind, 'filename': fir_path,
+                **({'format': 'TEXT'} if fir_kind == 'Raw' else {}),
+            }}
+            conv_names.append('room_correction')
     mixers, pipeline = {}, []
     if crossfeed:
         # Basic headphone crossfeed: blend an attenuated copy of the opposite
@@ -858,6 +882,10 @@ def _camilla_config_dict(playback_dev, bands, crossfeed):
                 {'channel': 0, 'gain': -9.0, 'inverted': False}]},
         ]}
         pipeline.append({'type': 'Mixer', 'name': 'crossfeed'})
+    # Room correction (convolution) runs before the parametric EQ, so manual EQ
+    # tweaks are applied on top of the already-corrected response.
+    if conv_names:
+        pipeline.append({'type': 'Filter', 'channels': [0, 1], 'names': conv_names})
     if eq_names:
         pipeline.append({'type': 'Filter', 'channels': [0, 1], 'names': eq_names})
     return {
@@ -876,8 +904,8 @@ def _current_real_dac():
     o = _current_audio_device()
     return _read_dsp_target() if 'Loopback' in o else o
 
-def _apply_dsp_on(playback_dev, bands, crossfeed):
-    cfg = _camilla_config_dict(playback_dev, bands, crossfeed)
+def _apply_dsp_on(playback_dev, bands, crossfeed, room_correction=False):
+    cfg = _camilla_config_dict(playback_dev, bands, crossfeed, room_correction)
     os.makedirs(os.path.dirname(CAMILLA_CONFIG), exist_ok=True)
     with open(CAMILLA_CONFIG, 'w') as f:
         json.dump(cfg, f, indent=2)
@@ -915,8 +943,10 @@ def get_dsp_status():
         active = ac.stdout.strip() == 'active'
     except Exception:
         pass
+    fir_path, _ = _fir_current()
     return {'available': _dsp_available(), 'enabled': st['enabled'], 'active': active,
-            'bands': st['bands'], 'crossfeed': st['crossfeed'], 'rate': DSP_RATE}
+            'bands': st['bands'], 'crossfeed': st['crossfeed'], 'rate': DSP_RATE,
+            'room_correction': st['room_correction'], 'fir_present': bool(fir_path)}
 
 def set_dsp(config):
     if not _dsp_available():
@@ -924,6 +954,7 @@ def set_dsp(config):
                 'message': 'DSP non disponibile su questo dispositivo'}
     enabled = bool(config.get('enabled'))
     crossfeed = bool(config.get('crossfeed'))
+    room_correction = bool(config.get('room_correction'))
     clean = []
     for b in (config.get('bands') or [])[:20]:
         try:
@@ -939,14 +970,16 @@ def set_dsp(config):
             dac = _current_real_dac()
             if not dac or 'Loopback' in dac:
                 dac = 'default'
-            _apply_dsp_on(dac, clean, crossfeed)
+            _apply_dsp_on(dac, clean, crossfeed, room_correction)
         else:
             _apply_dsp_off()
-        _write_dsp_state({'enabled': enabled, 'bands': clean, 'crossfeed': crossfeed})
+        _write_dsp_state({'enabled': enabled, 'bands': clean, 'crossfeed': crossfeed,
+                          'room_correction': room_correction})
     except Exception:
         log.exception('set_dsp failed')
         return {'success': False, 'message': 'Operazione DSP fallita'}
     return {'success': True, 'enabled': enabled, 'bands': clean, 'crossfeed': crossfeed,
+            'room_correction': room_correction,
             'message': 'DSP attivato' if enabled else 'DSP disattivato'}
 
 # ──────────────────────────────────────────────────────────────────

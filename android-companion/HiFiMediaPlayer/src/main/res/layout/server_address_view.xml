@@ -69,6 +69,9 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:hint="@string/settings_serveraddr_hint"
+                app:endIconDrawable="@drawable/ic_qr_code_scanner"
+                app:endIconMode="custom"
+                app:endIconContentDescription="@string/settings_scan_qr"
                 style="@style/Widget.MaterialComponents.TextInputLayout.FilledBox.ExposedDropdownMenu">
 
                 <AutoCompleteTextView

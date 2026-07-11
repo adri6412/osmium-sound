@@ -87,6 +87,16 @@ public class ConnectActivity extends BaseActivity {
         repository().observe(this, this::onHandshakeComplete);
     }
 
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        // Forward to the QR scanner started by ServerAddressView (pairing via the
+        // appliance's Settings -> Phone control QR code); ServerAddressView ignores
+        // anything that isn't one of its own scan results.
+        if (serverAddressView == null || !serverAddressView.handleActivityResult(requestCode, resultCode, data)) {
+            super.onActivityResult(requestCode, resultCode, data);
+        }
+    }
+
     /**
      * Show this activity.
      * <p>
