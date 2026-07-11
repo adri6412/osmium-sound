@@ -581,6 +581,9 @@ def _restore_apply_side_effects(restored):
 
 @app.route("/api/backup", methods=["GET"])
 def api_backup():
+    denied = _require_pair_token()
+    if denied:
+        return denied
     data = _backup_build()
     stamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
     resp = Response(data, mimetype="application/gzip")
@@ -590,6 +593,9 @@ def api_backup():
 
 @app.route("/api/restore", methods=["POST"])
 def api_restore():
+    denied = _require_pair_token()
+    if denied:
+        return denied
     f = request.files.get("file")
     if not f:
         return jsonify({"success": False, "message": "Nessun file caricato"}), 400
@@ -647,6 +653,9 @@ def api_dsp_fir_status():
 
 @app.route("/api/dsp/fir", methods=["POST"])
 def api_dsp_fir_upload():
+    denied = _require_pair_token()
+    if denied:
+        return denied
     f = request.files.get("file")
     if not f or not f.filename:
         return jsonify({"success": False, "message": "Nessun file caricato"}), 400
@@ -678,6 +687,9 @@ def api_dsp_fir_upload():
 
 @app.route("/api/dsp/fir", methods=["DELETE"])
 def api_dsp_fir_delete():
+    denied = _require_pair_token()
+    if denied:
+        return denied
     removed = False
     for filename in FIR_FILENAMES.values():
         p = os.path.join(FIR_DIR, filename)
@@ -716,6 +728,7 @@ def _save_pair_tokens(tokens):
     tmp = PAIR_TOKENS_FILE + ".tmp"
     with open(tmp, "w") as f:
         json.dump(tokens, f)
+    os.chmod(tmp, 0o600)
     os.replace(tmp, PAIR_TOKENS_FILE)
 
 
@@ -737,6 +750,43 @@ def api_pair_token():
     return jsonify({"token": token})
 
 
+@app.route("/api/pair/tokens/revoke_all", methods=["POST"])
+def api_pair_tokens_revoke_all():
+    """Invalidate every paired phone at once. Restricted to localhost for the
+    same reason as minting above: only someone standing at the appliance can
+    nuke every token, so a leaked/stolen token can always be neutralised by
+    walking up to the device and re-pairing, without needing per-token
+    expiry (which would otherwise log out every legitimately paired phone
+    just to bound a theft that may never have happened)."""
+    if request.remote_addr not in ("127.0.0.1", "::1"):
+        return jsonify({"success": False, "message": "Non consentito da remoto"}), 403
+    _save_pair_tokens([])
+    return jsonify({"success": True})
+
+
+# Per-IP failed-auth throttle for _require_pair_token(). In-memory only (the
+# service runs single-process/multi-threaded via `threaded=True`, so a
+# lock-guarded dict is enough — no cross-process state needed, and losing it
+# on restart is fine since it exists purely to slow down online guessing).
+_auth_fail_lock = threading.Lock()
+_auth_fail_log = {}  # ip -> list of failure timestamps (monotonic)
+_AUTH_FAIL_WINDOW = 60.0
+_AUTH_FAIL_MAX = 20
+
+
+def _auth_rate_limited(ip):
+    now = time.monotonic()
+    with _auth_fail_lock:
+        fails = [t for t in _auth_fail_log.get(ip, []) if now - t < _AUTH_FAIL_WINDOW]
+        _auth_fail_log[ip] = fails
+        return len(fails) >= _AUTH_FAIL_MAX
+
+
+def _auth_record_failure(ip):
+    with _auth_fail_lock:
+        _auth_fail_log.setdefault(ip, []).append(time.monotonic())
+
+
 def _require_pair_token():
     """Returns None if the request is exempt (local kiosk UI) or carries a
     valid pairing token, otherwise a (jsonify(...), status) tuple to return
@@ -745,9 +795,16 @@ def _require_pair_token():
     requests arriving over the LAN (the phone app) need a token."""
     if request.remote_addr in ("127.0.0.1", "::1"):
         return None
+    ip = request.remote_addr
+    if _auth_rate_limited(ip):
+        return jsonify({"success": False, "message": "Troppi tentativi, riprova tra qualche minuto"}), 429
     auth = request.headers.get("Authorization", "")
     token = auth[len("Bearer "):] if auth.startswith("Bearer ") else None
-    if not token or not any(t.get("token") == token for t in _load_pair_tokens()):
+    valid = bool(token) and any(
+        secrets.compare_digest(t.get("token", ""), token) for t in _load_pair_tokens()
+    )
+    if not valid:
+        _auth_record_failure(ip)
         return jsonify({"success": False, "message": "Token di pairing mancante o non valido"}), 401
     return None
 
@@ -899,6 +956,9 @@ def api_add_local():
 
 @app.route("/api/sources/smb", methods=["POST"])
 def api_add_smb():
+    denied = _require_pair_token()
+    if denied:
+        return denied
     data = request.get_json(silent=True) or {}
     server = (data.get("server") or "").strip().strip("/")
     share = (data.get("share") or "").strip().strip("/")
@@ -929,6 +989,9 @@ def api_add_smb():
 
 @app.route("/api/sources/<sid>", methods=["DELETE"])
 def api_remove(sid):
+    denied = _require_pair_token()
+    if denied:
+        return denied
     with _lock:
         state = load_state()
         keep = []
@@ -945,6 +1008,9 @@ def api_remove(sid):
 
 @app.route("/api/apply", methods=["POST"])
 def api_apply():
+    denied = _require_pair_token()
+    if denied:
+        return denied
     state = load_state()
     ok, msg = apply_to_lyrion(state)
     return jsonify({"success": ok, "message": msg}), (200 if ok else 500)
@@ -1088,6 +1154,7 @@ INDEX_HTML = r"""<!DOCTYPE html>
 
 <script>
 async function j(url, opts){ const r=await fetch(url,opts); return r.json(); }
+function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 async function load(){
   const d=await j('/api/sources');
   const el=document.getElementById('list');
@@ -1096,8 +1163,8 @@ async function load(){
     const isSmb=s.type==='smb';
     const status=isSmb?(s.mounted?'<span class="ok">montato</span>':'<span class="bad">non montato</span>')
                       :(s.exists?'<span class="ok">ok</span>':'<span class="bad">mancante</span>');
-    const sub=isSmb?('//'+s.server+'/'+s.share+' → '+s.mountpoint):s.path;
-    return `<div class="src"><div class="meta"><div class="name">${s.name}<span class="tag">${isSmb?'SMB':'LOCALE'}</span></div>
+    const sub=isSmb?('//'+esc(s.server)+'/'+esc(s.share)+' → '+esc(s.mountpoint)):esc(s.path);
+    return `<div class="src"><div class="meta"><div class="name">${esc(s.name)}<span class="tag">${isSmb?'SMB':'LOCALE'}</span></div>
       <div class="sub">${sub} · ${status}</div></div>
       <button class="danger" onclick="rm('${s.id}')">Rimuovi</button></div>`;
   }).join('');

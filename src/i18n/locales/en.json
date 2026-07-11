@@ -239,7 +239,12 @@
       "help": "Pair the Osmium Sound Companion app with this device by scanning the QR code (it also carries a one-time pairing token). To control this device from a plain browser instead, open the address shown below the code.",
       "scanHint": "Scan with the companion app",
       "generatingToken": "Generating pairing code…",
-      "noIp": "No network address available yet. Connect the device to the network (Ethernet or Wi-Fi) to get a control link."
+      "noIp": "No network address available yet. Connect the device to the network (Ethernet or Wi-Fi) to get a control link.",
+      "revokeAll": "Revoke all paired phones",
+      "revokeAllHelp": "If you've lost a phone that was paired, or think a pairing code may have been copied, revoke all pairings — phones will need to be paired again by scanning a new QR code.",
+      "revokeAllConfirm": "Revoke all paired phones? They will need to be paired again.",
+      "revokeAllSuccess": "All pairings have been revoked.",
+      "revokeAllFailed": "Revoke failed, please try again."
     },
     "backup": {
       "help": "Export or restore this device's configuration (DAC, DSP/EQ, music sources, mouse pointer, update channel) from a browser on your phone or PC. Open the address below or scan the QR code, then use \"Download backup\" or \"Restore from file\".",

@@ -312,7 +312,7 @@
     <string name="settings_system_admin_title">System Administration</string>
     <string name="settings_system_admin_summary">SSH access, system info, reboot and shutdown</string>
     <string name="settings_ssh_title">SSH access</string>
-    <string name="settings_ssh_warning">Enabling SSH allows remote command-line access to the appliance. Only enable this if you understand the risk.</string>
+    <string name="settings_ssh_warning">Enabling SSH allows remote command-line access to the appliance. Only enable this if you understand the risk, and change the default password immediately after enabling it.</string>
     <string name="settings_ssh_unavailable">SSH server is not available on this appliance.</string>
     <string name="settings_system_info_title">System info</string>
     <string name="settings_system_info_hostname">Hostname</string>

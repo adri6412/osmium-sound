@@ -71,6 +71,8 @@ const Settings = () => {
   // QR is opened, so the QR always carries a currently-valid token (scanning
   // it again just adds another valid token — see sources_server.py /api/pair/token).
   const [pairToken, setPairToken] = useState(null);
+  const [revokeBusy, setRevokeBusy] = useState(false);
+  const [revokeMessage, setRevokeMessage] = useState('');
 
   // SSH server toggle
   const [sshStatus, setSshStatus] = useState(null); // { available, enabled, active }
@@ -452,6 +454,33 @@ const Settings = () => {
     })();
     return () => { cancelled = true; };
   }, [activeSection]);
+
+  // Invalidates every previously-paired phone (see sources_server.py's
+  // /api/pair/tokens/revoke_all — also localhost-only). Re-mints a fresh
+  // token right after so the QR on screen keeps working for a new pairing.
+  const revokeAllPairings = async () => {
+    if (!window.confirm(t('settings.webRemote.revokeAllConfirm'))) return;
+    setRevokeBusy(true);
+    setRevokeMessage('');
+    try {
+      const r = await fetch('http://localhost:8080/api/pair/tokens/revoke_all', { method: 'POST' });
+      const data = await r.json();
+      if (data.success) {
+        setRevokeMessage(t('settings.webRemote.revokeAllSuccess'));
+        const r2 = await fetch('http://localhost:8080/api/pair/token', { method: 'POST' });
+        if (r2.ok) {
+          const data2 = await r2.json();
+          setPairToken(data2.token || null);
+        }
+      } else {
+        setRevokeMessage(t('settings.webRemote.revokeAllFailed'));
+      }
+    } catch (_) {
+      setRevokeMessage(t('settings.webRemote.revokeAllFailed'));
+    } finally {
+      setRevokeBusy(false);
+    }
+  };
 
   // Auto-check for updates on mount (only if the user kept it enabled);
   // clean up any poll on unmount.
@@ -1747,6 +1776,23 @@ const Settings = () => {
                         {t('settings.webRemote.noIp')}
                       </div>
                     )}
+
+                    <div className="pt-2 border-t border-hifi-light/10 space-y-2">
+                      <p className="text-xs text-hifi-silver">{t('settings.webRemote.revokeAllHelp')}</p>
+                      <button
+                        onClick={revokeAllPairings}
+                        disabled={revokeBusy}
+                        className="w-full flex items-center justify-center space-x-2 bg-hifi-dark hover:bg-red-900/30 disabled:opacity-60 text-red-300 rounded-lg px-4 py-3 transition-colors text-sm"
+                      >
+                        {revokeBusy ? <Loader2 size={16} className="animate-spin" /> : <Trash2 size={16} />}
+                        <span>{t('settings.webRemote.revokeAll')}</span>
+                      </button>
+                      {revokeMessage && (
+                        <div className="rounded-lg p-3 text-center text-sm bg-hifi-dark text-hifi-silver">
+                          {revokeMessage}
+                        </div>
+                      )}
+                    </div>
                   </div>
                 )}
 

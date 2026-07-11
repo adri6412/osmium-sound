@@ -551,6 +551,32 @@ def _install_openssh():
         return False
     return _ssh_available()
 
+SSH_NO_ROOT_LOGIN_DROPIN = '/etc/ssh/sshd_config.d/99-hifi-no-root-login.conf'
+SSH_NO_ROOT_LOGIN_CONTENT = ("# Managed by HiFi Player — do not edit by hand (overwritten on update).\n"
+                              "PermitRootLogin no\n")
+
+def _harden_ssh_no_root_login():
+    """Make sure root can never log in over the SSH server this endpoint just
+    enabled — the kiosk account has a well-known default password, so an
+    attacker who guesses/leaks it must land as the unprivileged 'hifi' user,
+    never root. Baked into the image and carried by the OS-update channel
+    (distro/os-update/apply.d/0017-ssh-no-root-login.sh) too; this call makes
+    it take effect immediately instead of waiting for the next OTA/reboot."""
+    try:
+        os.makedirs(os.path.dirname(SSH_NO_ROOT_LOGIN_DROPIN), exist_ok=True)
+        existing = None
+        if os.path.isfile(SSH_NO_ROOT_LOGIN_DROPIN):
+            with open(SSH_NO_ROOT_LOGIN_DROPIN) as f:
+                existing = f.read()
+        if existing != SSH_NO_ROOT_LOGIN_CONTENT:
+            tmp = SSH_NO_ROOT_LOGIN_DROPIN + '.tmp'
+            with open(tmp, 'w') as f:
+                f.write(SSH_NO_ROOT_LOGIN_CONTENT)
+            os.chmod(tmp, 0o644)
+            os.replace(tmp, SSH_NO_ROOT_LOGIN_DROPIN)
+    except Exception:
+        log.exception("failed to write sshd no-root-login drop-in")
+
 def get_ssh_status():
     unit = _ssh_unit()
     try:
@@ -578,6 +604,10 @@ def set_ssh(enable):
         if not _install_openssh():
             return {'success': False, 'available': False, 'enabled': False,
                     'active': False, 'message': 'Installazione di openssh-server fallita'}
+    if enable:
+        # Written before the unit (re)starts, so root-login is blocked from
+        # sshd's very first start.
+        _harden_ssh_no_root_login()
     unit = _ssh_unit()
     action = 'enable' if enable else 'disable'
     try:
@@ -592,9 +622,20 @@ def set_ssh(enable):
     except Exception:
         log.exception("set_ssh failed")
         return {'success': False, 'message': 'Operazione SSH fallita'}
+    if enable:
+        # If sshd was already active (e.g. re-toggling on without an
+        # intervening stop), `enable --now` above doesn't restart it — reload
+        # so the drop-in written above takes effect on this run too, not just
+        # on the next fresh start.
+        try:
+            subprocess.run(['sudo', 'systemctl', 'reload', unit],
+                          capture_output=True, text=True, timeout=15)
+        except Exception:
+            log.exception("sshd reload after hardening failed")
     status = get_ssh_status()
     status['success'] = True
-    status['message'] = 'SSH abilitato' if enable else 'SSH disabilitato'
+    status['message'] = ("SSH abilitato. Cambia subito la password predefinita dell'utente \"hifi\" "
+                          "(via terminale: passwd hifi)." if enable else 'SSH disabilitato')
     return status
 
 # ──────────────────────────────────────────────────────────────────

@@ -239,7 +239,12 @@
       "help": "Abbina l'app Osmium Sound Companion a questo dispositivo inquadrando il QR code (contiene anche un token di pairing monouso). Per controllare il dispositivo da un normale browser, apri invece l'indirizzo mostrato sotto il codice.",
       "scanHint": "Inquadra con l'app companion",
       "generatingToken": "Generazione codice di pairing…",
-      "noIp": "Nessun indirizzo di rete disponibile. Collega il dispositivo alla rete (Ethernet o Wi-Fi) per ottenere un link di controllo."
+      "noIp": "Nessun indirizzo di rete disponibile. Collega il dispositivo alla rete (Ethernet o Wi-Fi) per ottenere un link di controllo.",
+      "revokeAll": "Revoca tutti i telefoni abbinati",
+      "revokeAllHelp": "Se hai perso un telefono già abbinato o pensi che qualcuno abbia copiato un codice di pairing, revoca tutti gli abbinamenti: i telefoni dovranno essere abbinati di nuovo inquadrando un nuovo QR code.",
+      "revokeAllConfirm": "Revocare tutti i telefoni abbinati? Dovrai abbinarli di nuovo.",
+      "revokeAllSuccess": "Tutti gli abbinamenti sono stati revocati.",
+      "revokeAllFailed": "Revoca fallita, riprova."
     },
     "backup": {
       "help": "Esporta o ripristina la configurazione del dispositivo (DAC, DSP/EQ, sorgenti musicali, puntatore, canale aggiornamenti) da un browser sul telefono o PC. Apri l'indirizzo qui sotto o inquadra il QR code, poi usa \"Scarica backup\" o \"Ripristina da file\".",

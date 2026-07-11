@@ -241,9 +241,12 @@ async def vu_meter_server(websocket, path):
 
 
 async def main():
-    print("Starting Squeezelite VU Meter Daemon on ws://0.0.0.0:9001")
-    # Bind to all interfaces on port 9001
-    server = await websockets.serve(vu_meter_server, "0.0.0.0", 9001)
+    print("Starting Squeezelite VU Meter Daemon on ws://127.0.0.1:9001")
+    # Loopback only: the only consumer is the Electron kiosk UI running on the
+    # appliance itself (AnalogVUMeter.jsx always connects to 'localhost'/the
+    # file:// origin's hostname, never a LAN address), so there is no
+    # legitimate reason for this stream to be reachable from other LAN hosts.
+    server = await websockets.serve(vu_meter_server, "127.0.0.1", 9001)
     await server.wait_closed()
 
 if __name__ == "__main__":

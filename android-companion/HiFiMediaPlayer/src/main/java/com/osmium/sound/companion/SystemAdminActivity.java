@@ -111,8 +111,14 @@ public class SystemAdminActivity extends AppCompatActivity {
                 suppressSshEvent = true;
                 sshSwitch.setChecked(body.optBoolean("enabled", enable));
                 suppressSshEvent = false;
+                // Always surface the message, not just on failure: when enabling,
+                // the appliance's response carries the default-password warning
+                // (mirrors the Electron kiosk UI's behavior in Settings.jsx).
                 if (!body.optBoolean("success", true)) {
                     showMessage(body.optString("message", getString(R.string.settings_system_admin_failed)));
+                } else {
+                    String message = body.optString("message", "");
+                    if (!message.isEmpty()) showMessage(message);
                 }
             }
 
