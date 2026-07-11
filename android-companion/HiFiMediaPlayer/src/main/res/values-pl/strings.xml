@@ -59,8 +59,6 @@
     <string name="menu_nowplaying_trackinfo">Informajcje o utworze</string>
     <string name="activity_settings_name">Ustawienia</string>
     <string name="settings_serveraddr_hint">Nazwa lub adres IP serwera</string>
-    <string name="settings_manual_server_addr">Wpisz adres ręcznie</string>
-    <string name="settings_server_prompt">Wybierz serwer</string>
     <string name="server_error">%1$s zgłosił błąd: \"%2$s\".</string>
     <string name="menu_item_power_off">Wyłącz</string>
     <string name="menu_item_power_on">Włącz</string>
@@ -119,7 +117,6 @@
     <string name="settings_invalid_MAC">Niepoprawny adres MAC, format: 01:23:45:67:89:AB</string>
     <string name="settings_MAC_help">Przykład: 01:23:45:67:89:AB</string>
     <string name="settings_MAC_info">"<![CDATA[Jeśli zaznaczone, pakiet Wake-on-LAN (WoL) jest wysyłany przed połączeniem.         <p>Wake-on-LAN to standard sieciowy umożliwiający uruchomienie lub wybudzenie komputera przez sieć.</p>         <p>Wymagane jest skonfigurowanie serwera na którym działa Squeezebox Server by obsługiwał Wake-on-LAN.</p>]]>     "</string>
-    <string name="settings_server_scan_progress">Szukanie serwerów...</string>
     <string name="settings_volume_title">Ustawienia kontroli głośności</string>
     <string name="settings_background_volume_title">Kontrola głośności w tle</string>
     <string name="MENU_ITEM_MOVED">Element menu z/de-archiwizowany</string>

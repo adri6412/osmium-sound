@@ -24,37 +24,20 @@
     android:layout_height="wrap_content"
     android:paddingHorizontal="16dp">
 
-    <com.google.android.material.textfield.TextInputLayout
-        android:id="@+id/found_servers_til"
+    <TextView
+        android:id="@+id/server_address_help"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
+        android:text="@string/settings_scan_qr_prompt"
+        android:textAppearance="?attr/textAppearanceBodyMedium"
         app:layout_constraintTop_toTopOf="parent"
-        app:layout_constraintStart_toStartOf="parent"
-        android:hint="@string/settings_server_prompt"
-        android:labelFor="@id/found_servers"
-        app:startIconDrawable="@drawable/ic_refresh"
-        style="@style/Widget.MaterialComponents.TextInputLayout.FilledBox.ExposedDropdownMenu">
-        <AutoCompleteTextView
-            android:id="@+id/found_servers"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:inputType="none"
-            />
-    </com.google.android.material.textfield.TextInputLayout>
-
-    <com.google.android.material.progressindicator.LinearProgressIndicator
-        android:id="@+id/scan_progress"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        app:layout_constraintTop_toBottomOf="@id/found_servers_til"
-        app:layout_constraintStart_toStartOf="parent"
-        android:max="100"/>
+        app:layout_constraintStart_toStartOf="parent" />
 
     <com.google.android.material.card.MaterialCardView
         android:id="@+id/server_info"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        app:layout_constraintTop_toBottomOf="@id/scan_progress"
+        app:layout_constraintTop_toBottomOf="@id/server_address_help"
         app:layout_constraintStart_toStartOf="parent"
         android:layout_marginTop="8dp"
         app:cardCornerRadius="4dp">

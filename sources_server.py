@@ -24,6 +24,9 @@ import subprocess
 import threading
 import io
 import tarfile
+import secrets
+import urllib.request
+import urllib.error
 from datetime import datetime, timezone
 
 app = Flask(__name__)
@@ -543,7 +546,8 @@ def _restore_apply(archive_bytes):
                 os.replace(tmp, dest)
                 restored.append(dest)
             except Exception as e:
-                errors.append(f"{dest}: {e}")
+                print(f"[sources] restore failed for {dest}: {e}")
+                errors.append(f"{os.path.basename(dest)}: ripristino fallito")
     return restored, errors
 
 
@@ -556,7 +560,8 @@ def _restore_apply_side_effects(restored):
             ok, msg = apply_to_lyrion(load_state())
             notes.append(msg if ok else f"Sorgenti: {msg}")
         except Exception as e:
-            notes.append(f"Sorgenti non riapplicate: {e}")
+            print(f"[sources] restore side-effect (sources) failed: {e}")
+            notes.append("Sorgenti non riapplicate")
     if any(p in restored for p in ("/etc/default/squeezelite", "/var/lib/hifi-player/dsp-target")):
         _run(["systemctl", "restart", "squeezelite"], timeout=30)
         notes.append("squeezelite riavviato")
@@ -614,14 +619,18 @@ FIR_DIR = "/etc/camilladsp/filters"
 # not guessed): a WAV impulse response, or a plain text file with one
 # coefficient per line (CamillaDSP's Raw/TEXT format).
 FIR_KINDS = {".wav": "Wav", ".txt": "Raw"}
+# Fixed ext -> filename lookup (not string-built from the ext at request time)
+# so the stored/opened path is always one of these two literal names, never a
+# concatenation of request-derived data.
+FIR_FILENAMES = {".wav": "room.wav", ".txt": "room.txt"}
 FIR_MAX_SIZE = 20 * 1024 * 1024
 
 
 def _fir_current():
     """Return (path, ext) of the currently stored filter, or (None, None)."""
     if os.path.isdir(FIR_DIR):
-        for ext in FIR_KINDS:
-            p = os.path.join(FIR_DIR, "room" + ext)
+        for ext, filename in FIR_FILENAMES.items():
+            p = os.path.join(FIR_DIR, filename)
             if os.path.isfile(p):
                 return p, ext
     return None, None
@@ -652,29 +661,196 @@ def api_dsp_fir_upload():
     try:
         os.makedirs(FIR_DIR, exist_ok=True)
         # Only one filter at a time: clear any previous room.* before writing.
-        for other_ext in FIR_KINDS:
-            other = os.path.join(FIR_DIR, "room" + other_ext)
+        for other_filename in FIR_FILENAMES.values():
+            other = os.path.join(FIR_DIR, other_filename)
             if os.path.isfile(other):
                 os.remove(other)
-        dest = os.path.join(FIR_DIR, "room" + ext)
+        dest = os.path.join(FIR_DIR, FIR_FILENAMES[ext])
         tmp = dest + ".tmp"
         with open(tmp, "wb") as out:
             out.write(data)
         os.replace(tmp, dest)
     except Exception as e:
-        return jsonify({"success": False, "message": f"Salvataggio fallito: {e}"}), 500
+        print(f"[sources] FIR filter save failed: {e}")
+        return jsonify({"success": False, "message": "Salvataggio fallito"}), 500
     return jsonify({"success": True, "message": "Filtro caricato. Attivalo da Impostazioni → DSP."})
 
 
 @app.route("/api/dsp/fir", methods=["DELETE"])
 def api_dsp_fir_delete():
     removed = False
-    for ext in FIR_KINDS:
-        p = os.path.join(FIR_DIR, "room" + ext)
+    for filename in FIR_FILENAMES.values():
+        p = os.path.join(FIR_DIR, filename)
         if os.path.isfile(p):
             os.remove(p)
             removed = True
     return jsonify({"success": True, "removed": removed})
+
+
+# ─────────────────────────── App pairing token ────────────────────────
+# The companion app's DSP controls are a live "control" surface (unlike the
+# FIR/backup/restore endpoints above, which are also reachable from a plain
+# phone browser via the separate sourcesUrl QR and must stay usable from a
+# bare <a href>). To scope DSP control to phones the user has actually
+# paired, the appliance UI (Settings → Phone control) mints a fresh token
+# each time the pairing QR is (re)generated and embeds it in the QR
+# alongside the LMS/API host:port; the app stores it and sends it back as
+# `Authorization: Bearer <token>` on every DSP call. Tokens are persisted
+# (survive a service restart) and never expire/rotate out on their own —
+# re-scanning the QR just adds another valid token, so multiple paired
+# phones can coexist.
+PAIR_TOKENS_FILE = "/etc/hifi-pairing-tokens.json"
+
+
+def _load_pair_tokens():
+    try:
+        with open(PAIR_TOKENS_FILE) as f:
+            data = json.load(f)
+            return data if isinstance(data, list) else []
+    except Exception:
+        return []
+
+
+def _save_pair_tokens(tokens):
+    os.makedirs(os.path.dirname(PAIR_TOKENS_FILE), exist_ok=True)
+    tmp = PAIR_TOKENS_FILE + ".tmp"
+    with open(tmp, "w") as f:
+        json.dump(tokens, f)
+    os.replace(tmp, PAIR_TOKENS_FILE)
+
+
+@app.route("/api/pair/token", methods=["POST"])
+def api_pair_token():
+    """Mint a new pairing token, shown to the user only via the appliance's
+    own QR code (Settings → Phone control). Restricted to localhost: the
+    Electron kiosk UI is the only caller (it runs on the appliance itself),
+    so a token can only ever be minted by someone with physical access to
+    the appliance's screen. Without this check, any device on the LAN could
+    just POST here directly and self-mint a valid token, defeating the whole
+    point of gating DSP control behind pairing."""
+    if request.remote_addr not in ("127.0.0.1", "::1"):
+        return jsonify({"success": False, "message": "Non consentito da remoto"}), 403
+    token = secrets.token_urlsafe(24)
+    tokens = _load_pair_tokens()
+    tokens.append({"token": token, "created": datetime.now(timezone.utc).isoformat()})
+    _save_pair_tokens(tokens)
+    return jsonify({"token": token})
+
+
+def _require_pair_token():
+    """Returns None if the request is exempt (local kiosk UI) or carries a
+    valid pairing token, otherwise a (jsonify(...), status) tuple to return
+    immediately. The Electron kiosk UI on the appliance itself already calls
+    these endpoints from 127.0.0.1 (same machine, no network hop) — only
+    requests arriving over the LAN (the phone app) need a token."""
+    if request.remote_addr in ("127.0.0.1", "::1"):
+        return None
+    auth = request.headers.get("Authorization", "")
+    token = auth[len("Bearer "):] if auth.startswith("Bearer ") else None
+    if not token or not any(t.get("token") == token for t in _load_pair_tokens()):
+        return jsonify({"success": False, "message": "Token di pairing mancante o non valido"}), 401
+    return None
+
+
+# ─────────────────────────── DSP status/control proxy ────────────────
+# api_server.py:8000 (root, unauthenticated, exposes reboot/shutdown/network
+# reconfig) is deliberately loopback-only — see the bind comment at the
+# bottom of that file. dsp_status/dsp_set are the one piece of that API the
+# phone companion app needs, so we relay just those two calls through this
+# already-LAN-exposed, already-root service instead of widening api_server's
+# bind address. Unlike the FIR/backup endpoints above, these two require a
+# valid pairing token (see above) since they're control, not just data.
+_API_SERVER_BASE = "http://127.0.0.1:8000"
+
+
+def _proxy_to_api_server(path, method="GET", body=None):
+    req = urllib.request.Request(f"{_API_SERVER_BASE}{path}", method=method)
+    data = None
+    if body is not None:
+        data = json.dumps(body).encode("utf-8")
+        req.add_header("Content-Type", "application/json")
+    try:
+        with urllib.request.urlopen(req, data=data, timeout=10) as resp:
+            return json.loads(resp.read().decode("utf-8")), resp.status
+    except urllib.error.HTTPError as e:
+        try:
+            return json.loads(e.read().decode("utf-8")), e.code
+        except Exception:
+            return {"success": False, "message": str(e)}, e.code
+    except Exception as e:
+        return {"success": False, "message": f"DSP service non raggiungibile: {e}"}, 502
+
+
+@app.route("/api/dsp/status", methods=["GET"])
+def api_dsp_status_proxy():
+    denied = _require_pair_token()
+    if denied:
+        return denied
+    body, status = _proxy_to_api_server("/dsp_status")
+    return jsonify(body), status
+
+
+@app.route("/api/dsp/set", methods=["POST"])
+def api_dsp_set_proxy():
+    denied = _require_pair_token()
+    if denied:
+        return denied
+    data = request.get_json(silent=True) or {}
+    body, status = _proxy_to_api_server("/dsp_set", method="POST", body=data)
+    return jsonify(body), status
+
+
+# ─────────────────────────── System / admin proxy ─────────────────────
+# Same rationale as the DSP proxy above: these all live on api_server.py's
+# loopback-only port (system info, SSH toggle, OTA channel + update
+# check/apply/status for each of the 4 update kinds, reboot/shutdown, audio
+# device selection). All require a pairing token except from localhost (the
+# kiosk UI) — see _require_pair_token(). Table-driven to avoid 20 near-
+# identical view functions; each entry is (our path, method, api_server.py
+# path).
+_SYSTEM_PROXY_ROUTES = [
+    ("/api/system/info", "GET", "/system_info"),
+    ("/api/system/ssh", "GET", "/ssh_status"),
+    ("/api/system/ssh", "POST", "/ssh_set"),
+    ("/api/system/ota_channel", "GET", "/ota_channel"),
+    ("/api/system/ota_channel", "POST", "/ota_channel"),
+    ("/api/system/audio_devices", "GET", "/audio_devices"),
+    ("/api/system/audio_device", "POST", "/set_audio_device"),
+    ("/api/system/updates/app/check", "GET", "/app_update/check"),
+    ("/api/system/updates/app/apply", "POST", "/app_update/apply"),
+    ("/api/system/updates/app/status", "GET", "/app_update/status"),
+    ("/api/system/updates/system/check", "GET", "/system_update/check"),
+    ("/api/system/updates/system/apply", "POST", "/system_update/apply"),
+    ("/api/system/updates/system/status", "GET", "/system_update/status"),
+    ("/api/system/updates/os/check", "GET", "/os_update/check"),
+    ("/api/system/updates/os/apply", "POST", "/os_update/apply"),
+    ("/api/system/updates/os/status", "GET", "/os_update/status"),
+    ("/api/system/updates/lyrion/check", "GET", "/lyrion_update/check"),
+    ("/api/system/updates/lyrion/apply", "POST", "/lyrion_update/apply"),
+    ("/api/system/updates/lyrion/status", "GET", "/lyrion_update/status"),
+    ("/api/system/reboot", "POST", "/reboot"),
+    ("/api/system/shutdown", "POST", "/shutdown"),
+]
+
+
+def _make_system_proxy_view(remote_path, method):
+    def view():
+        denied = _require_pair_token()
+        if denied:
+            return denied
+        data = request.get_json(silent=True) if method == "POST" else None
+        body, status = _proxy_to_api_server(remote_path, method=method, body=data)
+        return jsonify(body), status
+    return view
+
+
+for _local_path, _method, _remote_path in _SYSTEM_PROXY_ROUTES:
+    app.add_url_rule(
+        _local_path,
+        endpoint=f"system_proxy_{_method}_{_local_path}",
+        view_func=_make_system_proxy_view(_remote_path, _method),
+        methods=[_method],
+    )
 
 
 # ─────────────────────────── HTTP API ───────────────────────────────

@@ -32,13 +32,11 @@
     <string name="menu_item_view">View</string>
     <string name="menu_nowplaying_trackinfo">Track infos</string>
     <string name="activity_settings_name">Settings</string>
-    <string name="settings_serveraddr_hint">Name or IP address of server</string>
-    <string name="settings_manual_server_addr">Manually enter address</string>
+    <string name="settings_serveraddr_hint">Paired appliance</string>
     <string name="settings_scan_qr">Scan QR code</string>
     <string name="settings_scan_qr_prompt">Scan the QR code shown in Osmium Sound → Settings → Phone control</string>
     <string name="settings_scan_qr_failed">Couldn\'t read a server address from that QR code</string>
     <string name="settings_camera_permission_required">Camera permission is required to scan a QR code</string>
-    <string name="settings_server_prompt">Choose a server</string>
     <string name="settings_theme_title">Theme</string>
     <string name="settings_theme_dark">Dark</string>
     <string name="settings_theme_light">Light</string>
@@ -75,7 +73,6 @@
         <p>Wake-on-LAN is a networking standard that allows a computer to be turned on or awakened by a network message.</p>
         <p>This requires the computer running the Squeezebox Server to be configured to use Wake-on-LAN.</p>]]>
     </string>
-    <string name="settings_server_scan_progress">Scanning for servers…</string>
     <string name="settings_volume_title">Settings for Volume Control</string>
     <string name="settings_background_volume_title">Background Volume Control</string>
     <string name="settings_background_volume_off">Control player volume only when the app is visible.</string>
@@ -261,6 +258,88 @@
     <!-- Download dialog -->
     <string name="download_item">Download %s</string>
     <string name="disable_downloads">Disable downloads</string>
+
+    <string name="menu_item_lyrics">Lyrics</string>
+    <string name="menu_item_lyrics_unavailable">Lyrics not available for this track.</string>
+
+    <string name="settings_category_dsp">Room Correction (DSP)</string>
+    <string name="settings_dsp_title">Room Correction (DSP)</string>
+    <string name="settings_dsp_summary">Enable DSP, room correction, crossfeed, and manage the convolution filter</string>
+    <string name="settings_dsp_unavailable">DSP is not available on this appliance.</string>
+    <string name="settings_dsp_enabled_title">DSP enabled</string>
+    <string name="settings_dsp_room_correction_title">Room correction</string>
+    <string name="settings_dsp_crossfeed_title">Crossfeed</string>
+    <string name="settings_dsp_filter_title">Convolution filter</string>
+    <string name="settings_dsp_filter_none">No filter uploaded</string>
+    <string name="settings_dsp_filter_present">%1$s (%2$d KB)</string>
+    <string name="settings_dsp_filter_upload">Upload filter…</string>
+    <string name="settings_dsp_filter_remove">Remove filter</string>
+    <string name="settings_dsp_filter_remove_confirm">Remove the room-correction filter from the appliance?</string>
+    <string name="settings_dsp_filter_upload_failed">Filter operation failed</string>
+    <string name="settings_dsp_status_failed">Could not reach the appliance\'s DSP service</string>
+
+    <string name="settings_category_backup">Backup &amp; Restore</string>
+    <string name="settings_backup_title">Backup &amp; Restore</string>
+    <string name="settings_backup_summary">Export or restore the appliance\'s configuration</string>
+    <string name="settings_backup_export_help">Download a copy of the appliance\'s configuration (DAC, DSP/EQ, room-correction filter, music sources, update channel).</string>
+    <string name="settings_backup_export_button">Export backup</string>
+    <string name="settings_backup_export_success">Backup exported.</string>
+    <string name="settings_backup_export_failed">Backup export failed</string>
+    <string name="settings_backup_restore_help">Restore the appliance\'s configuration from a previously exported backup file.</string>
+    <string name="settings_backup_restore_button">Restore from file</string>
+    <string name="settings_backup_restore_confirm_title">Restore configuration?</string>
+    <string name="settings_backup_restore_confirm_message">This overwrites the appliance\'s current configuration and restarts Squeezelite/CamillaDSP/SMB. This cannot be undone.</string>
+    <string name="settings_backup_restore_failed">Restore failed</string>
+
+    <string name="settings_category_audio_output">Audio Output</string>
+    <string name="settings_audio_output_title">Audio Output</string>
+    <string name="settings_audio_output_summary">Choose the appliance\'s DAC / output device</string>
+    <string name="settings_audio_output_applied">Output device changed.</string>
+    <string name="settings_audio_output_failed">Could not change the output device</string>
+
+    <string name="settings_category_playback">Playback</string>
+    <string name="settings_playback_transition_title">Transition</string>
+    <string name="settings_playback_transition_duration_title">Transition duration (seconds)</string>
+    <string name="settings_playback_replaygain_title">ReplayGain</string>
+    <string name="settings_playback_no_player">No active player</string>
+
+    <string name="settings_category_lyrion_server">Lyrion Server</string>
+    <string name="settings_lyrion_rescan_title">Rescan library</string>
+    <string name="settings_lyrion_rescan_summary">Ask the server to scan for new or changed music</string>
+    <string name="settings_lyrion_rescan_started">Library rescan started.</string>
+
+    <string name="settings_category_system_admin">System Administration</string>
+    <string name="settings_system_admin_title">System Administration</string>
+    <string name="settings_system_admin_summary">SSH access, system info, reboot and shutdown</string>
+    <string name="settings_ssh_title">SSH access</string>
+    <string name="settings_ssh_warning">Enabling SSH allows remote command-line access to the appliance. Only enable this if you understand the risk.</string>
+    <string name="settings_ssh_unavailable">SSH server is not available on this appliance.</string>
+    <string name="settings_system_info_title">System info</string>
+    <string name="settings_system_info_hostname">Hostname</string>
+    <string name="settings_system_info_ip">IP address</string>
+    <string name="settings_system_info_platform">Platform</string>
+    <string name="settings_system_controls_title">System controls</string>
+    <string name="settings_reboot_button">Reboot</string>
+    <string name="settings_reboot_confirm">Reboot the appliance now? Playback will stop.</string>
+    <string name="settings_shutdown_button">Shutdown</string>
+    <string name="settings_shutdown_confirm">Shut down the appliance now? You\'ll need physical access to turn it back on.</string>
+    <string name="settings_system_admin_failed">Request failed</string>
+
+    <string name="settings_category_updates">Updates</string>
+    <string name="settings_updates_title">Updates</string>
+    <string name="settings_updates_summary">Check and apply UI, System, OS and Lyrion updates</string>
+    <string name="settings_updates_channel_title">Update channel</string>
+    <string name="settings_updates_channel_prod">Stable</string>
+    <string name="settings_updates_channel_dev">Development</string>
+    <string name="settings_updates_check_button">Check</string>
+    <string name="settings_updates_apply_button">Update</string>
+    <string name="settings_updates_up_to_date">Up to date</string>
+    <string name="settings_updates_available">Update available: %s</string>
+    <string name="settings_updates_applying">Applying update…</string>
+    <string name="settings_updates_ui">UI</string>
+    <string name="settings_updates_system">System</string>
+    <string name="settings_updates_os">OS</string>
+    <string name="settings_updates_lyrion">Lyrion Music Server</string>
 
     <string name="about_team" translatable="false">Team</string>
     <string name="about_authors" translatable="false">Benjamin Viertel\nKurt Aaholst\nNik Clayton\nBrad Fitzpatrick</string>

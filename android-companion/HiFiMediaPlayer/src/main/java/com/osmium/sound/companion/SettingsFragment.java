@@ -93,6 +93,75 @@ public class SettingsFragment  extends PreferenceFragmentCompat implements
         fillDevicePlayerPreferences(preferences);
 
         fillDownloadPreferences(preferences);
+
+        fillDspPreferences();
+        fillBackupPreferences();
+        fillAudioOutputPreferences();
+        fillPlaybackPreferences();
+        fillLyrionRescanPreferences();
+        fillUpdatesPreferences();
+        fillSystemAdminPreferences();
+    }
+
+    private void fillDspPreferences() {
+        Preference pref = requirePreference("squeezer.dsp.open");
+        pref.setOnPreferenceClickListener(preference -> {
+            DspSettingsActivity.show(requireActivity());
+            return true;
+        });
+    }
+
+    private void fillBackupPreferences() {
+        Preference pref = requirePreference("squeezer.backup.open");
+        pref.setOnPreferenceClickListener(preference -> {
+            BackupRestoreActivity.show(requireActivity());
+            return true;
+        });
+    }
+
+    private void fillAudioOutputPreferences() {
+        Preference pref = requirePreference("squeezer.audio_output.open");
+        pref.setOnPreferenceClickListener(preference -> {
+            AudioOutputActivity.show(requireActivity());
+            return true;
+        });
+    }
+
+    private void fillPlaybackPreferences() {
+        Preference pref = requirePreference("squeezer.playback.open");
+        pref.setOnPreferenceClickListener(preference -> {
+            if (service != null) {
+                com.osmium.sound.companion.dialog.PlaybackPrefsDialog.show(getParentFragmentManager(), service);
+            }
+            return true;
+        });
+    }
+
+    private void fillLyrionRescanPreferences() {
+        Preference pref = requirePreference("squeezer.lyrion_rescan.open");
+        pref.setOnPreferenceClickListener(preference -> {
+            if (service != null) {
+                service.rescanLibrary();
+                Toast.makeText(getContext(), R.string.settings_lyrion_rescan_started, Toast.LENGTH_SHORT).show();
+            }
+            return true;
+        });
+    }
+
+    private void fillUpdatesPreferences() {
+        Preference pref = requirePreference("squeezer.updates.open");
+        pref.setOnPreferenceClickListener(preference -> {
+            UpdatesActivity.show(requireActivity());
+            return true;
+        });
+    }
+
+    private void fillSystemAdminPreferences() {
+        Preference pref = requirePreference("squeezer.system_admin.open");
+        pref.setOnPreferenceClickListener(preference -> {
+            SystemAdminActivity.show(requireActivity());
+            return true;
+        });
     }
 
     private void fillScrobblePreferences(SharedPreferences preferences) {

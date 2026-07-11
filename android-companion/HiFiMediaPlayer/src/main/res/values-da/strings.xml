@@ -33,8 +33,6 @@
     <string name="menu_nowplaying_trackinfo">Oplysninger om nummer der spiller</string>
     <string name="activity_settings_name">Indstillinger</string>
     <string name="settings_serveraddr_hint">Navn eller IP addresse på server</string>
-    <string name="settings_manual_server_addr">Angiv adressen manuelt</string>
-    <string name="settings_server_prompt">Vælg en server</string>
     <string name="settings_theme_title">Tema</string>
     <string name="settings_theme_dark">Mørk</string>
     <string name="settings_theme_light">Lys</string>
@@ -67,7 +65,6 @@
         <p>Wake-on-LAN er en netværksstandard, der gør det muligt at tænde eller vække en computer ved hjælp af en netværksmeddelelse.</p>
         <p>Dette kræver, at computeren, der kører Squeezebox Server, skal konfigureres til at bruge Wake-on-LAN.</p>]]>
     </string>
-    <string name="settings_server_scan_progress">Scanner efter servere…</string>
     <string name="settings_volume_title">Indstillinger for lydstyrkekontrol</string>
     <string name="settings_background_volume_title">Skift lydstyrke i bagrunden</string>
     <string name="settings_background_volume_off">Skift afspillerens lydstyrke er kun muligt når Squeezer vises</string>

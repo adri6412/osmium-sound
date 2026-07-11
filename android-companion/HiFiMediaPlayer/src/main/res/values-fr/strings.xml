@@ -29,8 +29,6 @@
     <string name="menu_nowplaying_trackinfo">Information sur la piste</string>
     <string name="activity_settings_name">Paramètres</string>
     <string name="settings_serveraddr_hint">Nom ou adresse IP du serveur</string>
-    <string name="settings_manual_server_addr">Entrez l\'adresse manuellement</string>
-    <string name="settings_server_prompt">Choisissez un serveur</string>
     <string name="settings_theme_title">Thème</string>
     <string name="settings_theme_dark">Sombre</string>
     <string name="settings_theme_light">Clair</string>
@@ -45,7 +43,6 @@
     <string name="settings_MAC_info">"<![CDATA[Si activé, envoie un message Wake-on-LAN (WoL) avant de se connecter.
          <p>Wake-on-LAN est un standard réseau qui permet d'allumer ou de réveiller une machine par un message réseau.</p>
          <p>Cela nécessite que le serveur Lyrion soit configuré pour utiliser le Wake-on-LAN.</p>]]>     "</string>
-    <string name="settings_server_scan_progress">Recherche de serveurs…</string>
     <string name="settings_volume_increment_summary">Régler les incréments de volume par les boutons du téléphone</string>
     <string name="settings_fadeinsecs_title">Temps d\'ouverture en fondu</string>
     <string name="settings_fadeinsecs_summary">Entrez la durée d\'ouverture en fondu, en secondes, quand en pause. Entrez 0 pour désactiver l\'ouverture en fondu.</string>

@@ -26,8 +26,6 @@
     <string name="menu_nowplaying_trackinfo">Titel-Informationen</string>
     <string name="activity_settings_name">Einstellungen</string>
     <string name="settings_serveraddr_hint">Name oder IP-Adresse des Servers</string>
-    <string name="settings_manual_server_addr">Manuelle Eingabe der IP-Adresse</string>
-    <string name="settings_server_prompt">Wählen Sie einen Server</string>
     <string name="settings_theme_title">Erscheinungsbild</string>
     <string name="settings_theme_dark">Dunkel</string>
     <string name="settings_theme_light">Hell</string>
@@ -51,7 +49,6 @@
         <p>Dazu muss der Computer, auf dem der Squeezebox Server läuft, Wake-on-LAN unterstützen.</p>]]>
     </string>
 
-    <string name="settings_server_scan_progress">Suche nach Servern…</string>
     <string name="settings_background_volume_title">Lautstärkeregelung im Hintergrund</string>
     <string name="settings_background_volume_off">Die Lautstärke nur regeln, wenn die App sichtbar ist.</string>
     <string name="settings_background_volume_on">Die Lautstärke auch dann regeln, wenn die App nicht sichtbar ist.</string>

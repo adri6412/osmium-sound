@@ -18,4 +18,19 @@
 
 <resources>
 
+    <string-array name="settings_playback_transition_labels">
+        <item>None</item>
+        <item>Crossfade</item>
+        <item>Fade in</item>
+        <item>Fade out</item>
+        <item>Fade in + out</item>
+    </string-array>
+
+    <string-array name="settings_playback_replaygain_labels">
+        <item>Off</item>
+        <item>Track</item>
+        <item>Album</item>
+        <item>Smart</item>
+    </string-array>
+
 </resources>

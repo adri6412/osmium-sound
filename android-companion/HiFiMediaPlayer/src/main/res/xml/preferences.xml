@@ -180,4 +180,66 @@
             android:summary="%s"/>
 
     </PreferenceCategory>
+
+    <PreferenceCategory
+        android:title="@string/settings_category_dsp">
+
+        <Preference
+            android:key="squeezer.dsp.open"
+            android:title="@string/settings_dsp_title"
+            android:summary="@string/settings_dsp_summary"/>
+    </PreferenceCategory>
+
+    <PreferenceCategory
+        android:title="@string/settings_category_backup">
+
+        <Preference
+            android:key="squeezer.backup.open"
+            android:title="@string/settings_backup_title"
+            android:summary="@string/settings_backup_summary"/>
+    </PreferenceCategory>
+
+    <PreferenceCategory
+        android:title="@string/settings_category_audio_output">
+
+        <Preference
+            android:key="squeezer.audio_output.open"
+            android:title="@string/settings_audio_output_title"
+            android:summary="@string/settings_audio_output_summary"/>
+    </PreferenceCategory>
+
+    <PreferenceCategory
+        android:title="@string/settings_category_playback">
+
+        <Preference
+            android:key="squeezer.playback.open"
+            android:title="@string/settings_category_playback"/>
+    </PreferenceCategory>
+
+    <PreferenceCategory
+        android:title="@string/settings_category_lyrion_server">
+
+        <Preference
+            android:key="squeezer.lyrion_rescan.open"
+            android:title="@string/settings_lyrion_rescan_title"
+            android:summary="@string/settings_lyrion_rescan_summary"/>
+    </PreferenceCategory>
+
+    <PreferenceCategory
+        android:title="@string/settings_category_updates">
+
+        <Preference
+            android:key="squeezer.updates.open"
+            android:title="@string/settings_updates_title"
+            android:summary="@string/settings_updates_summary"/>
+    </PreferenceCategory>
+
+    <PreferenceCategory
+        android:title="@string/settings_category_system_admin">
+
+        <Preference
+            android:key="squeezer.system_admin.open"
+            android:title="@string/settings_system_admin_title"
+            android:summary="@string/settings_system_admin_summary"/>
+    </PreferenceCategory>
 </PreferenceScreen>

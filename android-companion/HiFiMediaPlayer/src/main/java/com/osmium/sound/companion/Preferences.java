@@ -68,6 +68,14 @@ public final class Preferences {
     // History of previously conencted servers
     private static final String KEY_SERVER_HISTORY = "squeezer.server_history";
 
+    // Appliance HTTP API (sources_server.py, DSP/backup/restore) "host:port",
+    // and the pairing token to send as "Authorization: Bearer <token>". Both
+    // come from the appliance's "Phone control" QR code (Settings.jsx mints
+    // the token and JSON-encodes it alongside the LMS/API host:port) — see
+    // ServerAddressView's QR-scan handling.
+    private static final String KEY_APPLIANCE_API_ADDRESS = "squeezer.appliance_api_addr";
+    private static final String KEY_APPLIANCE_PAIR_TOKEN = "squeezer.appliance_pair_token";
+
     // Do we connect to mysqueezebox.com
     private static final String KEY_SQUEEZE_NETWORK = "squeezer.squeeze_network";
 
@@ -525,6 +533,23 @@ public final class Preferences {
         }
 
         editor.apply();
+    }
+
+    @Nullable
+    public String getApplianceApiAddress() {
+        return getStringPreference(KEY_APPLIANCE_API_ADDRESS);
+    }
+
+    @Nullable
+    public String getAppliancePairToken() {
+        return getStringPreference(KEY_APPLIANCE_PAIR_TOKEN);
+    }
+
+    public void setAppliancePairing(String apiAddress, String pairToken) {
+        sharedPreferences.edit()
+                .putString(KEY_APPLIANCE_API_ADDRESS, apiAddress)
+                .putString(KEY_APPLIANCE_PAIR_TOKEN, pairToken)
+                .apply();
     }
 
     public PlayableItemAction getSwipeRightAction() {

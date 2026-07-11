@@ -128,6 +128,12 @@
     <color name="hifiLightGray">#3a3a3a</color>
     <color name="hifiGold">#D4AF37</color>
     <color name="hifiGoldLight">#FFD700</color>
+    <!-- Secondary/help text on the dark hifi screens (activity_dsp_settings.xml,
+         activity_backup_restore.xml, etc). Plain `?attr/textAppearance*` styles
+         resolve through AppTheme's MaterialComponents.NoActionBar (a LIGHT base
+         theme) to a near-black color, which is why those screens must set this
+         explicitly rather than relying on textAppearance alone. -->
+    <color name="hifiSilver">#B8B8B8</color>
 
     <color name="colorPrimaryDark">@color/hifiDarkGray</color>
     <color name="colorPrimaryVariantDark">@color/hifiMediumGray</color>

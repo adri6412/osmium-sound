@@ -58,7 +58,10 @@ public class Player extends Item implements Comparable<Player> {
         DEFEAT_DESTRUCTIVE_TTP("defeatDestructiveTouchToPlay"),
         SYNC_VOLUME("syncVolume"),
         SYNC_POWER("syncPower"),
-        DIGITAL_VOLUME_CONTROL("digitalVolumeControl");
+        DIGITAL_VOLUME_CONTROL("digitalVolumeControl"),
+        TRANSITION_TYPE("transitionType"),
+        TRANSITION_DURATION("transitionDuration"),
+        REPLAY_GAIN_MODE("replayGainMode");
 
         private final String prefName;
 

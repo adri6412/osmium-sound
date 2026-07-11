@@ -65,6 +65,7 @@ import java.util.Map;
 import com.osmium.sound.companion.dialog.AboutDialog;
 import com.osmium.sound.companion.dialog.CallStateDialog;
 import com.osmium.sound.companion.dialog.ConfirmDialog;
+import com.osmium.sound.companion.dialog.LyricsDialog;
 import com.osmium.sound.companion.dialog.VolumeSettings;
 import com.osmium.sound.companion.framework.BaseActivity;
 import com.osmium.sound.companion.framework.ContextMenu;
@@ -1026,6 +1027,10 @@ public class NowPlayingFragment extends Fragment  implements CallStateDialog.Cal
             return true;
         } else if (itemId == R.id.menu_item_alarm) {
             AlarmsActivity.show(mActivity);
+            return true;
+        } else if (itemId == R.id.menu_item_lyrics) {
+            CurrentTrack track = getCurrentTrack();
+            LyricsDialog.show(getParentFragmentManager(), track != null ? track.moreAction : null);
             return true;
         } else if (itemId == R.id.menu_item_about) {
             new AboutDialog().show(getParentFragmentManager(), "AboutDialog");
