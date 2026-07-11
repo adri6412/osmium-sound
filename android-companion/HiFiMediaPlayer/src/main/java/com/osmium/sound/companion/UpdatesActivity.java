@@ -6,8 +6,6 @@ import android.os.Build;
 import android.os.Bundle;
 import android.view.MenuItem;
 import android.view.View;
-import android.view.ViewGroup;
-import android.widget.LinearLayout;
 import android.widget.ProgressBar;
 import android.widget.RadioGroup;
 import android.widget.TextView;
@@ -25,35 +23,24 @@ import com.osmium.sound.companion.util.ThemeManager;
 import com.osmium.sound.companion.widget.ViewUtilities;
 
 /**
- * OTA channel (stable/dev) + check/apply for each of the appliance's 4
- * update kinds (UI, System, OS, Lyrion Music Server) — mirrors the Electron
- * UI's "Updates" section, simplified (no live progress bar polling; a
- * "Applying…" state plus a final success/failure message is enough for a
- * phone screen the user isn't expected to watch continuously).
+ * OTA channel (stable/dev) + updates, mirroring the Electron UI's "Updates"
+ * section: UI + System + OS are checked/applied together as a single group
+ * (one "Check" / one "Update now" button, applied in sequence System → UI →
+ * OS — see applyAllUpdates() in Settings.jsx), while Lyrion Music Server has
+ * its own separate check/apply (Electron's "Advanced" sub-section). Each
+ * shows its currently installed version, not just update availability.
  */
 public class UpdatesActivity extends AppCompatActivity {
     private final ThemeManager mThemeManager = new ThemeManager();
 
     private RadioGroup channelGroup;
-    private ProgressBar progressBar;
     private boolean suppressChannelEvent;
 
-    private static final class UpdateKind {
-        final String pathSegment;
-        final int labelRes;
+    private TextView versionUi, versionSystem, versionOs, versionLyrion;
+    private MaterialButton applyCoreButton, applyLyrionButton;
+    private ProgressBar coreProgress, lyrionProgress;
 
-        UpdateKind(String pathSegment, int labelRes) {
-            this.pathSegment = pathSegment;
-            this.labelRes = labelRes;
-        }
-    }
-
-    private static final UpdateKind[] KINDS = {
-            new UpdateKind("app", R.string.settings_updates_ui),
-            new UpdateKind("system", R.string.settings_updates_system),
-            new UpdateKind("os", R.string.settings_updates_os),
-            new UpdateKind("lyrion", R.string.settings_updates_lyrion),
-    };
+    private boolean uiUpdateAvailable, systemUpdateAvailable, osUpdateAvailable;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -69,20 +56,28 @@ public class UpdatesActivity extends AppCompatActivity {
         ViewUtilities.setInsetsListener(findViewById(R.id.updates_container), false, true, false);
 
         channelGroup = findViewById(R.id.updates_channel_group);
-        progressBar = findViewById(R.id.updates_progress);
+        versionUi = findViewById(R.id.version_ui);
+        versionSystem = findViewById(R.id.version_system);
+        versionOs = findViewById(R.id.version_os);
+        versionLyrion = findViewById(R.id.version_lyrion);
+        applyCoreButton = findViewById(R.id.button_apply_core);
+        applyLyrionButton = findViewById(R.id.button_apply_lyrion);
+        coreProgress = findViewById(R.id.core_progress);
+        lyrionProgress = findViewById(R.id.lyrion_progress);
 
         channelGroup.setOnCheckedChangeListener((group, checkedId) -> {
             if (suppressChannelEvent) return;
-            String channel = checkedId == R.id.channel_dev ? "dev" : "prod";
-            setChannel(channel);
+            setChannel(checkedId == R.id.channel_dev ? "dev" : "prod");
         });
 
-        LinearLayout list = findViewById(R.id.updates_list);
-        for (UpdateKind kind : KINDS) {
-            list.addView(buildRow(kind));
-        }
+        findViewById(R.id.button_check_core).setOnClickListener(v -> checkCore());
+        applyCoreButton.setOnClickListener(v -> applyCore());
+        findViewById(R.id.button_check_lyrion).setOnClickListener(v -> checkLyrion());
+        applyLyrionButton.setOnClickListener(v -> applyLyrion());
 
         loadChannel();
+        checkCore();
+        checkLyrion();
     }
 
     private void loadChannel() {
@@ -120,102 +115,115 @@ public class UpdatesActivity extends AppCompatActivity {
         });
     }
 
-    private View buildRow(UpdateKind kind) {
-        LinearLayout row = new LinearLayout(this);
-        row.setOrientation(LinearLayout.VERTICAL);
-        LinearLayout.LayoutParams rowParams = new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        rowParams.bottomMargin = dp(20);
-        row.setLayoutParams(rowParams);
-
-        TextView title = new TextView(this);
-        title.setText(kind.labelRes);
-        title.setTextColor(getColor(android.R.color.white));
-        title.setTypeface(null, android.graphics.Typeface.BOLD);
-        row.addView(title);
-
-        TextView status = new TextView(this);
-        status.setText(R.string.settings_updates_up_to_date);
-        status.setTextColor(getColor(R.color.hifiSilver));
-        LinearLayout.LayoutParams statusParams = new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        statusParams.bottomMargin = dp(6);
-        status.setLayoutParams(statusParams);
-        row.addView(status);
-
-        LinearLayout buttons = new LinearLayout(this);
-        buttons.setOrientation(LinearLayout.HORIZONTAL);
-        row.addView(buttons);
-
-        MaterialButton checkButton = new MaterialButton(
-                new android.view.ContextThemeWrapper(this, com.google.android.material.R.style.Widget_MaterialComponents_Button_OutlinedButton));
-        checkButton.setText(R.string.settings_updates_check_button);
-        buttons.addView(checkButton);
-
-        MaterialButton applyButton = new MaterialButton(this);
-        applyButton.setText(R.string.settings_updates_apply_button);
-        applyButton.setVisibility(View.GONE);
-        LinearLayout.LayoutParams applyParams = new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        applyParams.leftMargin = dp(8);
-        applyButton.setLayoutParams(applyParams);
-        buttons.addView(applyButton);
-
-        checkButton.setOnClickListener(v -> check(kind, status, applyButton));
-        applyButton.setOnClickListener(v -> apply(kind, status, applyButton));
-
-        return row;
+    private void checkCore() {
+        setCoreBusy(true);
+        checkOne("app", getString(R.string.settings_updates_ui), versionUi, available -> uiUpdateAvailable = available, () -> {
+            checkOne("system", getString(R.string.settings_updates_system), versionSystem, available -> systemUpdateAvailable = available, () -> {
+                checkOne("os", getString(R.string.settings_updates_os), versionOs, available -> osUpdateAvailable = available, () -> {
+                    setCoreBusy(false);
+                    applyCoreButton.setVisibility(uiUpdateAvailable || systemUpdateAvailable || osUpdateAvailable ? View.VISIBLE : View.GONE);
+                });
+            });
+        });
     }
 
-    private void check(UpdateKind kind, TextView status, MaterialButton applyButton) {
-        setBusy(true);
-        ApplianceHttpClient.getJson("/api/system/updates/" + kind.pathSegment + "/check", new ApplianceHttpClient.JsonCallback() {
+    private interface AvailabilityConsumer {
+        void accept(boolean available);
+    }
+
+    private void checkOne(String kind, String label, TextView versionText, AvailabilityConsumer onResult, Runnable then) {
+        ApplianceHttpClient.getJson("/api/system/updates/" + kind + "/check", new ApplianceHttpClient.JsonCallback() {
             @Override
             public void onSuccess(JSONObject body) {
-                setBusy(false);
                 boolean available = body.optBoolean("update_available", false);
+                String current = body.optString("current", "?");
+                String line = label + ": " + current;
                 if (available) {
-                    status.setText(getString(R.string.settings_updates_available, body.optString("latest", "?")));
-                    applyButton.setVisibility(View.VISIBLE);
+                    line += " → " + body.optString("latest", "?");
                 } else {
-                    status.setText(R.string.settings_updates_up_to_date);
-                    applyButton.setVisibility(View.GONE);
+                    line += " (" + getString(R.string.settings_updates_up_to_date) + ")";
                 }
+                versionText.setText(line);
+                onResult.accept(available);
+                then.run();
             }
 
             @Override
             public void onFailure(String message) {
-                setBusy(false);
-                status.setText(message);
+                versionText.setText(label + ": " + message);
+                onResult.accept(false);
+                then.run();
             }
         });
     }
 
-    private void apply(UpdateKind kind, TextView status, MaterialButton applyButton) {
-        setBusy(true);
-        status.setText(R.string.settings_updates_applying);
-        ApplianceHttpClient.postJson("/api/system/updates/" + kind.pathSegment + "/apply", null, new ApplianceHttpClient.JsonCallback() {
+    /** Applies in the same order as the Electron UI's applyAllUpdates(): System → UI → OS. */
+    private void applyCore() {
+        setCoreBusy(true);
+        applyCoreButton.setVisibility(View.GONE);
+        applyOne("system", () -> applyOne("app", () -> applyOne("os", () -> setCoreBusy(false))));
+    }
+
+    private void applyOne(String kind, Runnable then) {
+        ApplianceHttpClient.postJson("/api/system/updates/" + kind + "/apply", null, new ApplianceHttpClient.JsonCallback() {
             @Override
             public void onSuccess(JSONObject body) {
-                setBusy(false);
-                status.setText(body.optString("message", getString(R.string.settings_updates_up_to_date)));
-                applyButton.setVisibility(View.GONE);
+                then.run();
             }
 
             @Override
             public void onFailure(String message) {
-                setBusy(false);
-                status.setText(message);
+                Toast.makeText(UpdatesActivity.this, message, Toast.LENGTH_SHORT).show();
+                then.run();
             }
         });
     }
 
-    private void setBusy(boolean busy) {
-        progressBar.setVisibility(busy ? View.VISIBLE : View.GONE);
+    private void checkLyrion() {
+        lyrionProgress.setVisibility(View.VISIBLE);
+        ApplianceHttpClient.getJson("/api/system/updates/lyrion/check", new ApplianceHttpClient.JsonCallback() {
+            @Override
+            public void onSuccess(JSONObject body) {
+                lyrionProgress.setVisibility(View.GONE);
+                boolean available = body.optBoolean("update_available", false);
+                String line = body.optString("current", "?");
+                if (available) {
+                    line += " → " + body.optString("latest", "?");
+                } else {
+                    line += " (" + getString(R.string.settings_updates_up_to_date) + ")";
+                }
+                versionLyrion.setText(line);
+                applyLyrionButton.setVisibility(available ? View.VISIBLE : View.GONE);
+            }
+
+            @Override
+            public void onFailure(String message) {
+                lyrionProgress.setVisibility(View.GONE);
+                versionLyrion.setText(message);
+            }
+        });
     }
 
-    private int dp(int value) {
-        return Math.round(value * getResources().getDisplayMetrics().density);
+    private void applyLyrion() {
+        lyrionProgress.setVisibility(View.VISIBLE);
+        applyLyrionButton.setVisibility(View.GONE);
+        ApplianceHttpClient.postJson("/api/system/updates/lyrion/apply", null, new ApplianceHttpClient.JsonCallback() {
+            @Override
+            public void onSuccess(JSONObject body) {
+                lyrionProgress.setVisibility(View.GONE);
+                checkLyrion();
+            }
+
+            @Override
+            public void onFailure(String message) {
+                lyrionProgress.setVisibility(View.GONE);
+                Toast.makeText(UpdatesActivity.this, message, Toast.LENGTH_SHORT).show();
+            }
+        });
+    }
+
+    private void setCoreBusy(boolean busy) {
+        coreProgress.setVisibility(busy ? View.VISIBLE : View.GONE);
     }
 
     @Override

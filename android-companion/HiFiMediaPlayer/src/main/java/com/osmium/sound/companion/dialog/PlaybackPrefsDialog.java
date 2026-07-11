@@ -13,7 +13,6 @@ import androidx.fragment.app.DialogFragment;
 import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 
 import com.osmium.sound.companion.R;
-import com.osmium.sound.companion.framework.BaseActivity;
 import com.osmium.sound.companion.model.Player;
 import com.osmium.sound.companion.model.PlayerState;
 import com.osmium.sound.companion.service.ISqueezeService;
@@ -25,16 +24,37 @@ import com.osmium.sound.companion.service.ISqueezeService;
  * ISqueezeService#playerPref), not the appliance HTTP API: these are LMS
  * server prefs, already tracked for the active player by the periodic
  * status poll (see CometClient's serverStatusRequest()).
+ * <p>
+ * The caller must supply the {@link ISqueezeService} via {@link #show}: this
+ * dialog can be opened from screens that are not a {@code BaseActivity}
+ * (e.g. SettingsFragment, hosted in the plain-AppCompatActivity
+ * SettingsActivity), so it can't get the service by casting the host
+ * Activity the way BottomSheetDialogFragmentWithService-based dialogs do.
  */
 public class PlaybackPrefsDialog extends DialogFragment {
     private static final String[] TRANSITION_VALUES = {"0", "1", "2", "3", "4"};
     private static final String[] REPLAYGAIN_VALUES = {"0", "1", "2", "3"};
 
+    private ISqueezeService service;
+
+    public static void show(androidx.fragment.app.FragmentManager fragmentManager, ISqueezeService service) {
+        PlaybackPrefsDialog dialog = new PlaybackPrefsDialog();
+        dialog.service = service;
+        dialog.show(fragmentManager, "PlaybackPrefsDialog");
+    }
+
     @NonNull
     @Override
     public Dialog onCreateDialog(Bundle savedInstanceState) {
-        BaseActivity activity = (BaseActivity) requireActivity();
-        ISqueezeService service = activity.getService();
+        if (service == null) {
+            // Can happen if the dialog is recreated after process death without
+            // going through show(); nothing useful to show without a service.
+            return new MaterialAlertDialogBuilder(requireActivity())
+                    .setTitle(R.string.settings_category_playback)
+                    .setMessage(R.string.settings_playback_no_player)
+                    .setPositiveButton(android.R.string.ok, null)
+                    .create();
+        }
         Player player = service.getActivePlayer();
         PlayerState playerState = service.getActivePlayerState();
 

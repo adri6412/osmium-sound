@@ -130,7 +130,9 @@ public class SettingsFragment  extends PreferenceFragmentCompat implements
     private void fillPlaybackPreferences() {
         Preference pref = requirePreference("squeezer.playback.open");
         pref.setOnPreferenceClickListener(preference -> {
-            new com.osmium.sound.companion.dialog.PlaybackPrefsDialog().show(getParentFragmentManager(), "PlaybackPrefsDialog");
+            if (service != null) {
+                com.osmium.sound.companion.dialog.PlaybackPrefsDialog.show(getParentFragmentManager(), service);
+            }
             return true;
         });
     }
