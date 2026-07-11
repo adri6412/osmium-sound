@@ -1,0 +1,53 @@
+name: Cleanup Actions Storage
+
+on:
+  workflow_dispatch:
+    inputs:
+      delete_caches:
+        description: 'Delete all Actions caches'
+        type: boolean
+        default: true
+      delete_artifacts:
+        description: 'Delete all workflow artifacts'
+        type: boolean
+        default: true
+
+permissions:
+  actions: write
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Report current cache usage
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh api "repos/${{ github.repository }}/actions/cache/usage"
+
+      - name: Delete Actions caches
+        if: ${{ inputs.delete_caches }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          REPO=${{ github.repository }}
+          gh api "repos/$REPO/actions/caches?per_page=100" --paginate --jq '.actions_caches[].id' | while read -r id; do
+            echo "Deleting cache $id"
+            gh api -X DELETE "repos/$REPO/actions/caches/$id" || true
+          done
+
+      - name: Delete workflow artifacts
+        if: ${{ inputs.delete_artifacts }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          REPO=${{ github.repository }}
+          gh api "repos/$REPO/actions/artifacts?per_page=100" --paginate --jq '.artifacts[].id' | while read -r id; do
+            echo "Deleting artifact $id"
+            gh api -X DELETE "repos/$REPO/actions/artifacts/$id" || true
+          done
+
+      - name: Report cache usage after cleanup
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh api "repos/${{ github.repository }}/actions/cache/usage"
