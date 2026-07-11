@@ -3,7 +3,8 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { QRCodeSVG } from 'qrcode.react';
 import {
   Wifi, Network, Lock, Music, Server, FolderTree,
-  Check, ChevronRight, ChevronLeft, RefreshCw, X, Loader2, AlertCircle, Disc3, Speaker, Download
+  Check, ChevronRight, ChevronLeft, RefreshCw, X, Loader2, AlertCircle, Disc3, Speaker, Download,
+  Hand, MousePointer2
 } from 'lucide-react';
 import { systemAPI } from '../utils/api';
 import { useI18n } from '../i18n';
@@ -68,6 +69,17 @@ const SetupWizard = ({ onComplete }) => {
       return info.data.local_ip;
     }
     return null;
+  };
+
+  // ── Input method (touchscreen vs mouse) ────────────────────────
+  // Sets the on-screen pointer flag up-front so the rest of the wizard (and the
+  // app) already matches how the user drives the device. Best-effort: persists
+  // the in-app class + localStorage even if the API call fails.
+  const chooseInput = async (useMouse) => {
+    document.documentElement.classList.toggle('hifi-hide-cursor', !useMouse);
+    localStorage.setItem('hifiShowPointer', useMouse ? '1' : '0');
+    try { await systemAPI.setPointer(useMouse); } catch (_) {}
+    setStep('network');
   };
 
   // ── Wired ──────────────────────────────────────────────────────
@@ -252,7 +264,7 @@ const SetupWizard = ({ onComplete }) => {
   const Dots = () => (
     <div className="flex items-center space-x-2">
       {['welcome', 'network', 'audio', 'sources', 'lyrion'].map((s, i) => {
-        const order = { welcome: 0, network: 1, 'wifi-scan': 1, audio: 2, sources: 3, lyrion: 4 }[step];
+        const order = { welcome: 0, input: 0, network: 1, 'wifi-scan': 1, audio: 2, sources: 3, lyrion: 4 }[step];
         return <div key={s} className={`h-1.5 rounded-full transition-all ${i === order ? 'w-6 bg-hifi-gold' : 'w-1.5 bg-hifi-border'}`} />;
       })}
     </div>
@@ -264,7 +276,7 @@ const SetupWizard = ({ onComplete }) => {
 
         {/* ───────── WELCOME ───────── */}
         {step === 'welcome' && (
-          <Shell footer={<><Dots /><button onClick={() => setStep('network')} className="flex items-center space-x-2 bg-hifi-gold text-black font-semibold px-6 py-2.5 rounded-xl hover:brightness-110 transition">
+          <Shell footer={<><Dots /><button onClick={() => setStep('input')} className="flex items-center space-x-2 bg-hifi-gold text-black font-semibold px-6 py-2.5 rounded-xl hover:brightness-110 transition">
             <span>{t('wizard.start')}</span><ChevronRight size={18} />
           </button></>}>
             <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} transition={{ delay: 0.1 }} className="flex flex-col items-center text-center max-w-md">
@@ -279,9 +291,33 @@ const SetupWizard = ({ onComplete }) => {
           </Shell>
         )}
 
+        {/* ───────── INPUT METHOD (touchscreen vs mouse) ───────── */}
+        {step === 'input' && (
+          <Shell footer={<><button onClick={() => setStep('welcome')} className="flex items-center space-x-1 text-hifi-silver/60 hover:text-white transition"><ChevronLeft size={18} /><span className="text-sm">{t('common.back')}</span></button><Dots /><div className="w-20" /></>}>
+            <div className="w-full max-w-lg">
+              <h2 className="text-2xl font-bold text-white mb-1 text-center">{t('wizard.input.title')}</h2>
+              <p className="text-hifi-silver/60 text-sm text-center mb-8">{t('wizard.input.subtitle')}</p>
+              <div className="grid grid-cols-2 gap-4">
+                <button onClick={() => chooseInput(false)}
+                  className="flex flex-col items-center justify-center py-10 bg-hifi-surface hover:bg-hifi-light rounded-2xl border border-hifi-border hover:border-hifi-gold/50 transition">
+                  <Hand size={40} className="text-hifi-gold mb-4" />
+                  <span className="text-white font-medium">{t('wizard.input.touch')}</span>
+                  <span className="text-hifi-silver/50 text-xs mt-1">{t('wizard.input.touchSub')}</span>
+                </button>
+                <button onClick={() => chooseInput(true)}
+                  className="flex flex-col items-center justify-center py-10 bg-hifi-surface hover:bg-hifi-light rounded-2xl border border-hifi-border hover:border-hifi-gold/50 transition">
+                  <MousePointer2 size={40} className="text-hifi-gold mb-4" />
+                  <span className="text-white font-medium">{t('wizard.input.mouse')}</span>
+                  <span className="text-hifi-silver/50 text-xs mt-1">{t('wizard.input.mouseSub')}</span>
+                </button>
+              </div>
+            </div>
+          </Shell>
+        )}
+
         {/* ───────── NETWORK CHOICE ───────── */}
         {step === 'network' && (
-          <Shell footer={<><button onClick={() => setStep('welcome')} className="flex items-center space-x-1 text-hifi-silver/60 hover:text-white transition"><ChevronLeft size={18} /><span className="text-sm">{t('common.back')}</span></button><Dots /><div className="w-20" /></>}>
+          <Shell footer={<><button onClick={() => setStep('input')} className="flex items-center space-x-1 text-hifi-silver/60 hover:text-white transition"><ChevronLeft size={18} /><span className="text-sm">{t('common.back')}</span></button><Dots /><div className="w-20" /></>}>
             <div className="w-full max-w-lg">
               <h2 className="text-2xl font-bold text-white mb-1 text-center">{t('wizard.network.title')}</h2>
               <p className="text-hifi-silver/60 text-sm text-center mb-8">{t('wizard.network.subtitle')}</p>

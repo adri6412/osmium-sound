@@ -49,6 +49,14 @@
       "title": "Benvenuto",
       "subtitle": "Configuriamo insieme il tuo network streamer. Bastano pochi passaggi: rete, sorgenti musicali e sei pronto all'ascolto."
     },
+    "input": {
+      "title": "Come usi il dispositivo?",
+      "subtitle": "Lo puoi cambiare in qualsiasi momento dalle Impostazioni.",
+      "touch": "Touchscreen",
+      "touchSub": "Tocco lo schermo",
+      "mouse": "Mouse",
+      "mouseSub": "Mostra il puntatore"
+    },
     "language": {
       "title": "Lingua",
       "subtitle": "Scegli la lingua dell'interfaccia."
@@ -141,6 +149,9 @@
     "connectingShort": "Connessione…",
     "reconnect": "Riconnetti",
     "nowPlaying": "In Riproduzione",
+    "lyrics": "Testi",
+    "vuMeters": "VU meter",
+    "lyricsNone": "Nessun testo trovato per questo brano.",
     "expand": "Espandi",
     "noTrack": "Nessuna traccia",
     "unknownArtist": "Artista Sconosciuto",
@@ -166,9 +177,14 @@
       "sources": "Sorgenti musicali",
       "audio": "Uscita Audio (DAC)",
       "playback": "Riproduzione",
+      "dsp": "DSP / Equalizzatore",
+      "multiroom": "Multiroom",
       "alarm": "Sveglia",
       "network": "Configurazione Rete",
+      "webRemote": "Controllo da telefono",
+      "backup": "Backup e ripristino",
       "ssh": "Accesso SSH",
+      "pointer": "Puntatore mouse",
       "systemInfo": "Informazioni Sistema",
       "updates": "Aggiornamenti",
       "systemControls": "Controlli Sistema",
@@ -194,6 +210,40 @@
       "rgSmart": "Intelligente",
       "saved": "Impostazione salvata."
     },
+    "dsp": {
+      "help": "Elaborazione digitale del segnale opzionale: equalizzatore parametrico e crossfeed per cuffie applicati a tutta la riproduzione.",
+      "warning": "Attivando il DSP la riproduzione non è più bit-perfect (l'audio viene ricampionato e il passthrough DSD/DoP è bypassato). Lascialo spento per l'ascolto critico con un DAC esterno.",
+      "unavailable": "Motore DSP non ancora installato su questo dispositivo. Viene configurato automaticamente al prossimo aggiornamento di sistema (richiede una connessione a Internet).",
+      "enabled": "DSP attivo",
+      "disabled": "DSP disattivato",
+      "bands": "EQ parametrico",
+      "addBand": "Aggiungi banda",
+      "noBands": "Nessuna banda EQ. Aggiungine una per esaltare o attenuare una frequenza.",
+      "freq": "Freq (Hz)",
+      "gain": "Guadagno (dB)",
+      "q": "Q",
+      "crossfeed": "Crossfeed cuffie",
+      "roomCorrection": "Correzione ambientale (FIR)",
+      "roomCorrectionPresent": "Filtro caricato: {filename}. Puoi caricarne uno nuovo in qualsiasi momento da Backup e ripristino / controllo da telefono.",
+      "roomCorrectionMissing": "Nessun filtro caricato. Apri l'indirizzo delle sorgenti (sezione Backup e ripristino) da un browser su telefono o PC per caricare un filtro di convoluzione WAV/TXT (REW/rePhase).",
+      "save": "Applica EQ",
+      "failed": "Operazione DSP fallita."
+    },
+    "multiroom": {
+      "help": "Raggruppa altri player presenti in rete con questo dispositivo per riprodurre la stessa musica in sincrono (sync nativo di Lyrion).",
+      "noOthers": "Nessun altro player trovato in rete. Il multiroom richiede almeno un altro player (es. un altro dispositivo Osmium o un player squeezelite).",
+      "saved": "Gruppo multiroom aggiornato.",
+      "failed": "Impossibile modificare il gruppo multiroom."
+    },
+    "webRemote": {
+      "help": "Controlla questo dispositivo da qualsiasi telefono o tablet sulla stessa rete, usando il browser — nessuna app da installare. Apri l'indirizzo qui sotto o inquadra il QR code.",
+      "scanHint": "Inquadra con la fotocamera del telefono",
+      "noIp": "Nessun indirizzo di rete disponibile. Collega il dispositivo alla rete (Ethernet o Wi-Fi) per ottenere un link di controllo."
+    },
+    "backup": {
+      "help": "Esporta o ripristina la configurazione del dispositivo (DAC, DSP/EQ, sorgenti musicali, puntatore, canale aggiornamenti) da un browser sul telefono o PC. Apri l'indirizzo qui sotto o inquadra il QR code, poi usa \"Scarica backup\" o \"Ripristina da file\".",
+      "scanHint": "Inquadra con la fotocamera del telefono"
+    },
     "alarm": {
       "help": "Programma sveglie sul player attivo. All'orario impostato il player si attiva e avvia la riproduzione.",
       "add": "Aggiungi"
@@ -206,6 +256,13 @@
       "unavailable": "Servizio SSH non installato su questo dispositivo.",
       "installHint": "SSH non è ancora installato: attivandolo verrà installato e avviato automaticamente (richiede connessione internet).",
       "failed": "Operazione SSH fallita."
+    },
+    "pointer": {
+      "help": "Mostra il puntatore del mouse sullo schermo. Utile se usi il dispositivo con un mouse invece del touchscreen. Di default il puntatore è nascosto.",
+      "enabled": "Puntatore mouse attivo",
+      "disabled": "Puntatore mouse nascosto",
+      "unavailable": "Controllo del puntatore non disponibile su questo dispositivo.",
+      "failed": "Impossibile cambiare il puntatore."
     },
     "lyrion": {
       "urlLabel": "URL Lyrion Server",
@@ -294,6 +351,17 @@
         "osFailed": "Aggiornamento sistema operativo fallito",
         "applyingUi": "Aggiornamento interfaccia (riavvio al termine)…",
         "allDone": "Aggiornamento completato"
+      },
+      "overlay": {
+        "titleAll": "Aggiornamento in corso",
+        "titleUi": "Aggiornamento interfaccia",
+        "titleSystem": "Aggiornamento componenti di sistema",
+        "titleOs": "Aggiornamento sistema operativo",
+        "titleLyrion": "Aggiornamento Lyrion",
+        "done": "Completato",
+        "keepPowered": "Non spegnere il dispositivo durante l'aggiornamento.",
+        "restarting": "Riavvio dell'interfaccia…",
+        "dismiss": "Chiudi"
       }
     },
     "controls": {

@@ -102,6 +102,10 @@ export const systemAPI = {
   getSshStatus: () => apiGet('/ssh_status'),
   // Enable/disable the SSH server. Returns { success, enabled, active, message }
   setSsh: (enable) => apiPost('/ssh_set', { enable }),
+  // Mouse pointer (cursor) state: { available, enabled }
+  getPointerStatus: () => apiGet('/pointer_status'),
+  // Show/hide the on-screen mouse pointer. Returns { success, available, enabled, message }
+  setPointer: (enable) => apiPost('/pointer_set', { enable }),
   // OTA release channel: { channel: 'prod'|'dev' }
   getOtaChannel: () => apiGet('/ota_channel'),
   // Switch channel. Returns { success, channel }
@@ -110,6 +114,14 @@ export const systemAPI = {
   getAudioDevices: () => apiGet('/audio_devices'),
   // Set squeezelite output device and restart it. Returns { success, message }
   setAudioDevice: (device) => apiPost('/set_audio_device', { device }),
+  // Tidal Connect daemon state: { available, enabled, active }
+  getTidalStatus: () => apiGet('/tidal_status'),
+  // Enable/disable the Tidal Connect daemon. Returns { success, enabled, active, message }
+  setTidal: (enable) => apiPost('/tidal_set', { enable }),
+  // DSP/EQ engine state: { available, enabled, bands, crossfeed }
+  getDspStatus: () => apiGet('/dsp_status'),
+  // Apply DSP settings. Returns { success, enabled, message }
+  setDsp: (config) => apiPost('/dsp_set', config),
 
   // ── OTA update of the Electron UI ───────────────────────────────
   // Check GitHub Releases: { current, latest, update_available, notes, asset_url, asset_size }

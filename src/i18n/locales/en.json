@@ -49,6 +49,14 @@
       "title": "Welcome",
       "subtitle": "Let's set up your network streamer together. Just a few steps: network, music sources, and you're ready to listen."
     },
+    "input": {
+      "title": "How do you use the device?",
+      "subtitle": "You can change this any time in Settings.",
+      "touch": "Touchscreen",
+      "touchSub": "I tap the screen",
+      "mouse": "Mouse",
+      "mouseSub": "Show the pointer"
+    },
     "language": {
       "title": "Language",
       "subtitle": "Choose the interface language."
@@ -141,6 +149,9 @@
     "connectingShort": "Connecting…",
     "reconnect": "Reconnect",
     "nowPlaying": "Now Playing",
+    "lyrics": "Lyrics",
+    "vuMeters": "VU meters",
+    "lyricsNone": "No lyrics found for this track.",
     "expand": "Expand",
     "noTrack": "No track",
     "unknownArtist": "Unknown Artist",
@@ -166,9 +177,14 @@
       "sources": "Music sources",
       "audio": "Audio Output (DAC)",
       "playback": "Playback",
+      "dsp": "DSP / Equalizer",
+      "multiroom": "Multiroom",
       "alarm": "Alarm Clock",
       "network": "Network Configuration",
+      "webRemote": "Phone control",
+      "backup": "Backup & restore",
       "ssh": "SSH Access",
+      "pointer": "Mouse pointer",
       "systemInfo": "System Information",
       "updates": "Updates",
       "systemControls": "System Controls",
@@ -194,6 +210,40 @@
       "rgSmart": "Smart",
       "saved": "Setting saved."
     },
+    "dsp": {
+      "help": "Optional digital signal processing: a parametric equalizer and headphone crossfeed applied to all playback.",
+      "warning": "Turning DSP on disables bit-perfect playback (audio is resampled and DSD/DoP pass-through is bypassed). Leave it off for critical listening with an external DAC.",
+      "unavailable": "DSP engine not installed on this device yet. It is set up automatically on the next system update (requires an internet connection).",
+      "enabled": "DSP enabled",
+      "disabled": "DSP disabled",
+      "bands": "Parametric EQ",
+      "addBand": "Add band",
+      "noBands": "No EQ bands. Add one to boost or cut a frequency.",
+      "freq": "Freq (Hz)",
+      "gain": "Gain (dB)",
+      "q": "Q",
+      "crossfeed": "Headphone crossfeed",
+      "roomCorrection": "Room correction (FIR)",
+      "roomCorrectionPresent": "Filter loaded: {filename}. Upload a new one any time from Backup & restore / phone control.",
+      "roomCorrectionMissing": "No filter uploaded yet. Open the sources address (Backup & restore section) from a phone or PC browser to upload a WAV/TXT convolution filter (REW/rePhase).",
+      "save": "Apply EQ",
+      "failed": "DSP operation failed."
+    },
+    "multiroom": {
+      "help": "Group other players on your network with this device so they play the same music in sync (native Lyrion sync).",
+      "noOthers": "No other players found on the network. Multiroom needs at least one more player (e.g. another Osmium device or a squeezelite player).",
+      "saved": "Multiroom group updated.",
+      "failed": "Could not change the multiroom group."
+    },
+    "webRemote": {
+      "help": "Control this device from any phone or tablet on the same network, using your browser — no app to install. Open the address below or scan the QR code.",
+      "scanHint": "Scan with your phone camera",
+      "noIp": "No network address available yet. Connect the device to the network (Ethernet or Wi-Fi) to get a control link."
+    },
+    "backup": {
+      "help": "Export or restore this device's configuration (DAC, DSP/EQ, music sources, mouse pointer, update channel) from a browser on your phone or PC. Open the address below or scan the QR code, then use \"Download backup\" or \"Restore from file\".",
+      "scanHint": "Scan with your phone camera"
+    },
     "alarm": {
       "help": "Schedule alarms on the active player. At the set time the player wakes up and starts playing.",
       "add": "Add"
@@ -206,6 +256,13 @@
       "unavailable": "SSH service is not installed on this device.",
       "installHint": "SSH is not installed yet: enabling it will install and start it automatically (requires an internet connection).",
       "failed": "SSH operation failed."
+    },
+    "pointer": {
+      "help": "Show the mouse pointer on screen. Useful if you use the device with a mouse instead of the touchscreen. The pointer is hidden by default.",
+      "enabled": "Mouse pointer shown",
+      "disabled": "Mouse pointer hidden",
+      "unavailable": "Pointer control is not available on this device.",
+      "failed": "Could not change the pointer."
     },
     "lyrion": {
       "urlLabel": "Lyrion Server URL",
@@ -294,6 +351,17 @@
         "osFailed": "Operating system update failed",
         "applyingUi": "Updating interface (restart when finished)…",
         "allDone": "Update complete"
+      },
+      "overlay": {
+        "titleAll": "Update in progress",
+        "titleUi": "Updating interface",
+        "titleSystem": "Updating system components",
+        "titleOs": "Updating operating system",
+        "titleLyrion": "Updating Lyrion",
+        "done": "Complete",
+        "keepPowered": "Do not power off the device during the update.",
+        "restarting": "Restarting the interface…",
+        "dismiss": "Close"
       }
     },
     "controls": {

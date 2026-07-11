@@ -100,6 +100,13 @@ const AppContent = () => {
     };
   }, [showKeyboard]);
 
+  // Apply the saved mouse-pointer preference app-wide on startup. Default is
+  // hidden (touchscreen); Settings → Mouse pointer flips it for mouse users.
+  React.useEffect(() => {
+    const show = localStorage.getItem('hifiShowPointer') === '1';
+    document.documentElement.classList.toggle('hifi-hide-cursor', !show);
+  }, []);
+
   // Allow re-opening the setup wizard from Settings
   React.useEffect(() => {
     const open = () => setShowWizard(true);
