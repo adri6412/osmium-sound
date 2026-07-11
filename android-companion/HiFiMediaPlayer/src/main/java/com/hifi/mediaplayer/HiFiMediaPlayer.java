@@ -1,4 +1,4 @@
-package com.hifi.mediaplayer;
+package com.osmium.sound.companion;
 
 
 import android.app.Application;
@@ -18,7 +18,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.function.Consumer;
 
-import com.hifi.mediaplayer.util.ImageFetcher;
+import com.osmium.sound.companion.util.ImageFetcher;
 
 // Trick to make the app context useful available everywhere.
 // See http://stackoverflow.com/questions/987072/using-application-context-everywhere

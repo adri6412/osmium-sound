@@ -22,7 +22,7 @@ import androidx.annotation.NonNull;
 
 import java.util.Map;
 
-import com.hifi.mediaplayer.Util;
+import com.osmium.sound.companion.Util;
 
 /**
  * Encapsulate a music folder item on the slimserver.

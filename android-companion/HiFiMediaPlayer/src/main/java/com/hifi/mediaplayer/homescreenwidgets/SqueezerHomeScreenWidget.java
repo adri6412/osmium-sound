@@ -13,10 +13,10 @@ import android.widget.Toast;
 
 import androidx.annotation.Nullable;
 
-import com.hifi.mediaplayer.HiFiMediaPlayer;
-import com.hifi.mediaplayer.service.ISqueezeService;
-import com.hifi.mediaplayer.service.SqueezeService;
-import com.hifi.mediaplayer.service.event.PlayersChanged;
+import com.osmium.sound.companion.HiFiMediaPlayer;
+import com.osmium.sound.companion.service.ISqueezeService;
+import com.osmium.sound.companion.service.SqueezeService;
+import com.osmium.sound.companion.service.event.PlayersChanged;
 
 public class SqueezerHomeScreenWidget extends AppWidgetProvider {
 

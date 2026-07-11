@@ -10,10 +10,10 @@ import androidx.appcompat.content.res.AppCompatResources;
 import androidx.recyclerview.widget.ItemTouchHelper;
 import androidx.recyclerview.widget.RecyclerView;
 
-import com.hifi.mediaplayer.R;
-import com.hifi.mediaplayer.model.JiveItem;
-import com.hifi.mediaplayer.service.ISqueezeService;
-import com.hifi.mediaplayer.widget.UndoBarController;
+import com.osmium.sound.companion.R;
+import com.osmium.sound.companion.model.JiveItem;
+import com.osmium.sound.companion.service.ISqueezeService;
+import com.osmium.sound.companion.widget.UndoBarController;
 
 public class CurrentPlaylistItemCallback extends ItemTouchHelper.SimpleCallback {
     private final CurrentPlaylistActivity activity;

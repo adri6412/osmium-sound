@@ -22,11 +22,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-import com.hifi.mediaplayer.SqueezerRepository;
-import com.hifi.mediaplayer.itemlist.IServiceItemListCallback;
-import com.hifi.mediaplayer.model.Player;
-import com.hifi.mediaplayer.model.PlayerState;
-import com.hifi.mediaplayer.model.SlimCommand;
+import com.osmium.sound.companion.SqueezerRepository;
+import com.osmium.sound.companion.itemlist.IServiceItemListCallback;
+import com.osmium.sound.companion.model.Player;
+import com.osmium.sound.companion.model.PlayerState;
+import com.osmium.sound.companion.model.SlimCommand;
 
 class SlimDelegate {
 

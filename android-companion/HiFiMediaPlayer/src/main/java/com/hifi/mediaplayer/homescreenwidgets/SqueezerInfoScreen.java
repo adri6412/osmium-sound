@@ -10,8 +10,8 @@ import android.provider.Settings;
 import android.util.Log;
 import android.widget.RemoteViews;
 
-import com.hifi.mediaplayer.R;
-import com.hifi.mediaplayer.itemlist.HomeActivity;
+import com.osmium.sound.companion.R;
+import com.osmium.sound.companion.itemlist.HomeActivity;
 
 /**
  * TODO this will eventually be a player status widget but is currently WIP

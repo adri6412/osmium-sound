@@ -23,7 +23,7 @@ import android.os.Bundle;
 import androidx.annotation.NonNull;
 import androidx.fragment.app.FragmentManager;
 
-import com.hifi.mediaplayer.R;
+import com.osmium.sound.companion.R;
 
 public class SyncPowerDialog extends BaseChoicesDialog {
     /**

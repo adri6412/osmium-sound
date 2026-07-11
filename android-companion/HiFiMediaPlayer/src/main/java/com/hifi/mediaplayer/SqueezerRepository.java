@@ -1,4 +1,4 @@
-package com.hifi.mediaplayer;
+package com.osmium.sound.companion;
 
 import android.os.Looper;
 

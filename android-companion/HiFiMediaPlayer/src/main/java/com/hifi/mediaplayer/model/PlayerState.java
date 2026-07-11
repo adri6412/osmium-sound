@@ -33,10 +33,10 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import com.hifi.mediaplayer.R;
-import com.hifi.mediaplayer.Util;
-import com.hifi.mediaplayer.framework.EnumIdLookup;
-import com.hifi.mediaplayer.framework.EnumWithId;
+import com.osmium.sound.companion.R;
+import com.osmium.sound.companion.Util;
+import com.osmium.sound.companion.framework.EnumIdLookup;
+import com.osmium.sound.companion.framework.EnumWithId;
 
 
 public class PlayerState implements Parcelable {

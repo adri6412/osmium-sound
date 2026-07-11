@@ -23,11 +23,11 @@ import android.widget.ImageView;
 
 import androidx.annotation.NonNull;
 
-import com.hifi.mediaplayer.R;
-import com.hifi.mediaplayer.framework.ItemViewHolder;
-import com.hifi.mediaplayer.homescreenwidgets.TextDrawable;
-import com.hifi.mediaplayer.model.JiveItem;
-import com.hifi.mediaplayer.model.Slider;
+import com.osmium.sound.companion.R;
+import com.osmium.sound.companion.framework.ItemViewHolder;
+import com.osmium.sound.companion.homescreenwidgets.TextDrawable;
+import com.osmium.sound.companion.model.JiveItem;
+import com.osmium.sound.companion.model.Slider;
 
 public class SliderView extends ItemViewHolder<JiveItem> {
 

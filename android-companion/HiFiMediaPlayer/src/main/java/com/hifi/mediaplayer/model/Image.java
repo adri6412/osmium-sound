@@ -6,7 +6,7 @@ import android.os.Parcelable;
 
 import java.util.Map;
 
-import com.hifi.mediaplayer.Util;
+import com.osmium.sound.companion.Util;
 
 public class Image implements Parcelable {
     public final Uri artworkId;

@@ -11,12 +11,12 @@ import androidx.annotation.NonNull;
 import androidx.recyclerview.widget.ItemTouchHelper;
 import androidx.recyclerview.widget.RecyclerView;
 
-import com.hifi.mediaplayer.Preferences;
-import com.hifi.mediaplayer.HiFiMediaPlayer;
-import com.hifi.mediaplayer.itemlist.dialog.ArtworkListLayout;
-import com.hifi.mediaplayer.model.Action;
-import com.hifi.mediaplayer.model.JiveItem;
-import com.hifi.mediaplayer.model.PlayableItemAction;
+import com.osmium.sound.companion.Preferences;
+import com.osmium.sound.companion.HiFiMediaPlayer;
+import com.osmium.sound.companion.itemlist.dialog.ArtworkListLayout;
+import com.osmium.sound.companion.model.Action;
+import com.osmium.sound.companion.model.JiveItem;
+import com.osmium.sound.companion.model.PlayableItemAction;
 
 public class JiveItemCallback extends ItemTouchHelper.Callback {
     private final JiveItemListActivity activity;

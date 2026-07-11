@@ -18,7 +18,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.TreeMap;
 
-import com.hifi.mediaplayer.R;
+import com.osmium.sound.companion.R;
 
 /**
  * Scans the local network for servers.

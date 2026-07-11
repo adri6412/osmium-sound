@@ -6,9 +6,9 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import android.text.InputType;
 
-import com.hifi.mediaplayer.R;
-import com.hifi.mediaplayer.framework.BaseActivity;
-import com.hifi.mediaplayer.service.ISqueezeService;
+import com.osmium.sound.companion.R;
+import com.osmium.sound.companion.framework.BaseActivity;
+import com.osmium.sound.companion.service.ISqueezeService;
 
 public class PlaylistSaveDialog extends BaseEditTextDialog {
 

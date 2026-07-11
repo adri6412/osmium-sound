@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<title>HIFI Streamer — Istruzioni di montaggio</title>
+<style>
+  :root{
+    --blue:#0058a3; --ink:#111; --paper:#fafaf8; --line:#d8d6ce; --badge:#ffdb00;
+  }
+  *{box-sizing:border-box}
+  body{
+    font-family:"Segoe UI",Arial,sans-serif; background:var(--paper); color:var(--ink);
+    max-width:900px; margin:0 auto; padding:24px;
+  }
+  .disclaimer{
+    background:#fff8e1; border:1px solid #e0c34a; border-radius:6px;
+    padding:12px 16px; font-size:13px; margin-bottom:28px;
+  }
+  h1{font-size:28px; margin-bottom:4px}
+  .subtitle{color:#555; margin-top:0; margin-bottom:24px}
+  .hero{
+    display:flex; gap:16px; align-items:center; background:#fff;
+    border:1px solid var(--line); border-radius:8px; padding:16px; margin-bottom:32px;
+  }
+  .hero img{width:260px; border-radius:4px}
+  .hero-meta{font-size:14px; line-height:1.8}
+  section{margin-bottom:40px}
+  h2{
+    border-bottom:3px solid var(--blue); padding-bottom:6px; font-size:20px;
+  }
+  .parts-grid, .hw-grid{
+    display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:14px;
+  }
+  .card{
+    background:#fff; border:1px solid var(--line); border-radius:8px; padding:10px;
+    text-align:center; font-size:13px;
+  }
+  .card img{width:100%; max-height:140px; object-fit:contain; background:#fff}
+  .card .letter{
+    display:inline-block; width:24px; height:24px; line-height:24px; border-radius:50%;
+    background:var(--blue); color:#fff; font-weight:bold; margin-bottom:6px;
+  }
+  .card .caption{color:#777; font-size:11px; margin-top:4px}
+  .hw-icon{
+    width:100%; height:90px; display:flex; align-items:center; justify-content:center;
+  }
+  .step{
+    display:flex; gap:20px; background:#fff; border:1px solid var(--line);
+    border-radius:8px; padding:16px; margin-bottom:18px; align-items:flex-start;
+  }
+  .step-num{
+    flex:0 0 40px; height:40px; border-radius:50%; background:var(--ink); color:#fff;
+    display:flex; align-items:center; justify-content:center; font-weight:bold; font-size:18px;
+  }
+  .step-img{flex:0 0 260px}
+  .step-img img{width:100%; border:1px solid var(--line); border-radius:4px; background:#fff}
+  .step-img .caption{font-size:11px; color:#888; margin-top:4px}
+  .step-body{flex:1}
+  .step-body h3{margin:0 0 8px 0; font-size:16px}
+  .step-body ol{margin:0; padding-left:18px}
+  .badges{margin-top:10px}
+  .badge{
+    display:inline-block; background:var(--badge); border-radius:4px; padding:3px 8px;
+    font-size:12px; font-weight:bold; margin-right:6px;
+  }
+  .no-photo{
+    flex:0 0 260px; height:150px; border:1px dashed var(--line); border-radius:4px;
+    display:flex; align-items:center; justify-content:center; color:#999; font-size:12px;
+    text-align:center; padding:8px;
+  }
+  table{width:100%; border-collapse:collapse; font-size:13px}
+  th,td{border:1px solid var(--line); padding:6px 10px; text-align:left}
+  th{background:#f0efe9}
+</style>
+</head>
+<body>
+
+<h1>HIFI Streamer</h1>
+<p class="subtitle">Manuale di montaggio scocca — lamiera alluminio piegata, 5 pezzi</p>
+
+<div class="disclaimer">
+  ⚠ <strong>Nota sulle immagini:</strong> non esistono ancora foto del box fisico (il pezzo
+  non è stato prodotto). Le immagini qui sotto sono <strong>render generati dagli STL
+  esportati dal modello CAD parametrico reale</strong> (<code>streamer_sheetmetal.py</code>
+  → STL → <code>render_parts.py</code>), un'immagine isolata per ciascun pezzo — la stessa
+  geometria che va in produzione JLCPCB, non illustrazioni di fantasia. Viti, squadrette
+  e rondelle sono componenti standard acquistati a parte: per quelle uso icone schematiche,
+  non essendoci un render dedicato.
+</div>
+
+<div class="hero">
+  <img src="freecad/out/part-assembly.png" alt="Vista assieme 3D">
+  <div class="hero-meta">
+    <strong>Tempo stimato:</strong> 30–40 min<br>
+    <strong>Persone:</strong> 1<br>
+    <strong>Utensili:</strong> cacciavite a croce PH1<br>
+    <strong>Dimensioni esterne:</strong> 180.9 × 172.3 × 220.0 mm<br>
+    <strong>Materiale:</strong> Alluminio 5052, 2 mm
+  </div>
+</div>
+
+<section>
+<h2>A · Pezzi</h2>
+<div class="parts-grid">
+  <div class="card">
+    <div class="letter">A</div><br>
+    <img src="freecad/out/part-body.png" alt="Corpo">
+    <div>Corpo (fondo + fianchi)</div>
+    <div class="caption">render isolato dallo STL — 180.9 × 216.0 × 170.3 mm</div>
+  </div>
+  <div class="card">
+    <div class="letter">B</div><br>
+    <img src="freecad/out/part-lid.png" alt="Coperchio">
+    <div>Coperchio</div>
+    <div class="caption">render isolato dallo STL — 180.9 × 216.0 × 2.0 mm</div>
+  </div>
+  <div class="card">
+    <div class="letter">C</div><br>
+    <img src="freecad/out/part-front.png" alt="Frontale">
+    <div>Frontale</div>
+    <div class="caption">render isolato dallo STL — finestra schermo + fessura CD</div>
+  </div>
+  <div class="card">
+    <div class="letter">D</div><br>
+    <img src="freecad/out/part-back.png" alt="Retro">
+    <div>Retro</div>
+    <div class="caption">render isolato dallo STL — fori USB / DC / RJ45</div>
+  </div>
+  <div class="card">
+    <div class="letter">E</div><br>
+    <img src="freecad/out/part-shelf.png" alt="Ripiano">
+    <div>Ripiano</div>
+    <div class="caption">render isolato dallo STL — passacavi + feritoie</div>
+  </div>
+</div>
+</section>
+
+<section>
+<h2>B · Minuteria</h2>
+<div class="hw-grid">
+  <div class="card">
+    <div class="hw-icon"><svg width="30" height="80"><rect x="12" y="0" width="6" height="70" fill="#888"/><rect x="6" y="70" width="18" height="8" fill="#555"/></svg></div>
+    <strong>①a</strong> Vite M3×10<br>4 pz (schermo)
+  </div>
+  <div class="card">
+    <div class="hw-icon"><svg width="30" height="70"><rect x="12" y="0" width="6" height="60" fill="#888"/><rect x="6" y="60" width="18" height="8" fill="#555"/></svg></div>
+    <strong>①b</strong> Vite M3×8<br>28 pz (squadrette + ripiano)
+  </div>
+  <div class="card">
+    <div class="hw-icon"><svg width="60" height="60"><polygon points="10,10 10,50 20,50 20,20 50,20 50,10" fill="none" stroke="#555" stroke-width="6"/></svg></div>
+    <strong>②</strong> Squadretta a L 15×15×1.5mm<br>12 pz
+  </div>
+  <div class="card">
+    <div class="hw-icon"><svg width="40" height="40"><circle cx="20" cy="20" r="18" fill="none" stroke="#555" stroke-width="5"/><circle cx="20" cy="20" r="6" fill="#fff" stroke="#555" stroke-width="2"/></svg></div>
+    <strong>③</strong> Rondella M3<br>16 pz
+  </div>
+  <div class="card">
+    <div class="hw-icon"><svg width="40" height="40"><polygon points="20,4 34,12 34,28 20,36 6,28 6,12" fill="none" stroke="#555" stroke-width="4"/><circle cx="20" cy="20" r="6" fill="#fff" stroke="#555" stroke-width="2"/></svg></div>
+    <strong>④</strong> Dado jack DC<br>1 pz
+  </div>
+  <div class="card">
+    <div class="hw-icon" style="font-size:28px">🔌</div>
+    <strong>⑤</strong> Viti proprie USB/RJ45<br>incluse coi connettori
+  </div>
+  <div class="card">
+    <div class="hw-icon"><svg width="16" height="70"><rect x="4" y="0" width="8" height="70" fill="#888"/><rect x="0" y="0" width="16" height="6" fill="#555"/><rect x="0" y="64" width="16" height="6" fill="#555"/></svg></div>
+    <strong>⑥</strong> Barra filettata M3 ~168mm<br>6 pz
+  </div>
+  <div class="card">
+    <div class="hw-icon"><svg width="40" height="40"><polygon points="20,4 34,12 34,28 20,36 6,28 6,12" fill="none" stroke="#555" stroke-width="4"/><circle cx="20" cy="20" r="6" fill="#fff" stroke="#555" stroke-width="2"/></svg></div>
+    <strong>⑦</strong> Dado M3 (tiranti)<br>12 pz
+  </div>
+</div>
+</section>
+
+<section>
+<h2>Passi di montaggio</h2>
+
+<div class="step">
+  <div class="step-num">1</div>
+  <div class="step-img">
+    <img src="freecad/out/part-front.png" alt="Frontale con fori schermo">
+    <div class="caption">render isolato del frontale (C) — 4 fori Ø5.5 attorno alla finestra</div>
+  </div>
+  <div class="step-body">
+    <h3>Schermo → Frontale (C)</h3>
+    <ol>
+      <li>Appoggia lo schermo dietro al pannello C, area visibile centrata nella finestra.</li>
+      <li>Allinea i 4 fori scheda ai 4 fori Ø5.5 del pannello.</li>
+      <li>Fissa con vite + rondella su ognuno dei 4 fori.</li>
+    </ol>
+    <div class="badges"><span class="badge">①a × 4 (M3×10)</span><span class="badge">③ × 4</span></div>
+  </div>
+</div>
+
+<div class="step">
+  <div class="step-num">2</div>
+  <div class="step-img">
+    <img src="freecad/out/part-back.png" alt="Retro con connettori">
+    <div class="caption">render isolato del retro (D) — cutout USB doppia / DC / RJ45</div>
+  </div>
+  <div class="step-body">
+    <h3>Connettori → Retro (D)</h3>
+    <ol>
+      <li>Monta la doppia USB-A (interasse 28 mm) con le sue viti.</li>
+      <li>Monta il jack DC nel foro da 8 mm, fissa con il dado.</li>
+      <li>Monta il RJ45 (interasse 27.1 mm) con le sue viti.</li>
+    </ol>
+    <div class="badges"><span class="badge">⑤ (proprie)</span><span class="badge">④ × 1</span></div>
+  </div>
+</div>
+
+<div class="step">
+  <div class="step-num">3</div>
+  <div class="no-photo">Nessun render disponibile:<br>il lettore CD non fa parte del modello CAD della scocca</div>
+  <div class="step-body">
+    <h3>Lettore CD → Corpo (A)</h3>
+    <ol>
+      <li>Incolla il lettore CD sul fondo del corpo con biadesivo.</li>
+      <li>Allinea il cassetto con la fessura del pannello C (tienilo accostato, senza avvitarlo, per verificare).</li>
+    </ol>
+    <div class="badges"><span class="badge">solo biadesivo</span></div>
+  </div>
+</div>
+
+<div class="step">
+  <div class="step-num">4</div>
+  <div class="step-img">
+    <img src="freecad/out/part-shelf.png" alt="Ripiano">
+    <div class="caption">ripiano (E) isolato — passacavi + feritoie ventilazione</div>
+  </div>
+  <div class="step-body">
+    <h3>Ripiano (E) → Corpo (A)</h3>
+    <ol>
+      <li>Inserisci le alette del ripiano E contro l'interno dei fianchi di A.</li>
+      <li>Avvita 2 viti per lato (4 totali), orizzontali dall'esterno dei fianchi.</li>
+      <li>Incolla il mini PC su E con biadesivo, verso il lato anteriore.</li>
+    </ol>
+    <div class="badges"><span class="badge">①b × 4 (M3×8)</span></div>
+  </div>
+</div>
+
+<div class="step">
+  <div class="step-num">5</div>
+  <div class="no-photo">Nessun render disponibile:<br>cablaggio interno non modellato in CAD</div>
+  <div class="step-body">
+    <h3>Cablaggio (prima di chiudere!)</h3>
+    <ol>
+      <li>Collega schermo → mini PC (HDMI + USB touch/alimentazione).</li>
+      <li>Collega lettore CD → mini PC (USB).</li>
+      <li>Porta i cavi dei connettori di D alle rispettive porte del PC.</li>
+    </ol>
+    <div class="badges"><span class="badge">nessuna vite in questo step</span></div>
+  </div>
+</div>
+
+<div class="step">
+  <div class="step-num">6</div>
+  <div class="step-img">
+    <img src="freecad/out/part-body.png" alt="Fianchi con fori squadrette">
+    <div class="caption">render isolato del corpo (A) — nessun risvolto: solo fori squadrette (3 livelli per lato)</div>
+  </div>
+  <div class="step-body">
+    <h3>Frontale (C) e Retro (D) → Corpo (A)</h3>
+    <p style="font-size:13px;color:#555">Frontale e retro sono pannelli <strong>piatti</strong> (nessun risvolto): si fissano
+    ai fianchi solo tramite le squadrette interne, <strong>3 livelli per lato</strong>
+    (basso / metà / alto).</p>
+    <ol>
+      <li>Inserisci 3 squadrette nel fianco sinistro e 3 nel fianco destro, ai 3 livelli già forati.</li>
+      <li>Accosta il Frontale: avvita 6 viti dal pannello nelle squadrette + 6 viti dai fianchi nelle squadrette.</li>
+      <li>Ripeti per il Retro: altre 6 + 6 viti.</li>
+    </ol>
+    <div class="badges"><span class="badge">①b × 24 (M3×8)</span><span class="badge">② × 12</span></div>
+  </div>
+</div>
+
+<div class="step">
+  <div class="step-num">7</div>
+  <div class="step-img">
+    <img src="freecad/out/part-lid.png" alt="Coperchio con fori tiranti">
+    <div class="caption">render isolato del coperchio (B) — 6 fori tiranti, niente più fori risvolto</div>
+  </div>
+  <div class="step-body">
+    <h3>Tiranti: Coperchio (B) ↔ Corpo (A)</h3>
+    <p style="font-size:13px;color:#555">Il coperchio <strong>non si avvita ai fianchi</strong> (A non ha risvolti): B e A
+    restano uniti da <strong>6 tiranti filettati M3</strong> (~168mm) verticali, allineati
+    (stesse X/Y) tra il fondo e il coperchio.</p>
+    <ol>
+      <li>Avvita dado + rondella su un'estremità di ogni tirante, infilalo dai 6 fori del fondo (dall'esterno).</li>
+      <li>Appoggia il coperchio, infilando i tiranti nei 6 fori corrispondenti.</li>
+      <li>Blocca dall'alto con rondella + dado, serrando fondo e coperchio.</li>
+    </ol>
+    <div class="badges"><span class="badge">⑥ × 6</span><span class="badge">⑦ × 12</span><span class="badge">③ × 12</span></div>
+  </div>
+</div>
+
+<div class="step">
+  <div class="step-num">8</div>
+  <div class="step-img">
+    <img src="freecad/out/part-assembly.png" alt="Assieme finale">
+    <div class="caption">render finale dell'assieme completo (dallo STL corrente)</div>
+  </div>
+  <div class="step-body">
+    <h3>Serraggio finale</h3>
+    <ol>
+      <li>Ricontrolla l'allineamento di schermo, fessura CD e connettori posteriori.</li>
+      <li>Stringi tutto in ordine: Frontale/Retro (Step 6) → Tiranti (Step 7) → Ripiano → Schermo.</li>
+    </ol>
+    <p><strong>✔ Scocca completata.</strong></p>
+  </div>
+</div>
+
+</section>
+
+<section>
+<h2>Riepilogo minuteria</h2>
+<table>
+<tr><th>Step</th><th>①a M3×10</th><th>①b M3×8</th><th>② Squadretta</th><th>③ Rondella</th><th>④ Dado DC</th><th>⑥ Tirante</th><th>⑦ Dado M3</th></tr>
+<tr><td>1 — Schermo</td><td>4</td><td>—</td><td>—</td><td>4</td><td>—</td><td>—</td><td>—</td></tr>
+<tr><td>2 — Connettori</td><td>—</td><td>proprie</td><td>—</td><td>—</td><td>1</td><td>—</td><td>—</td></tr>
+<tr><td>4 — Ripiano</td><td>—</td><td>4</td><td>—</td><td>—</td><td>—</td><td>—</td><td>—</td></tr>
+<tr><td>6 — Frontale/Retro</td><td>—</td><td>24</td><td>12</td><td>—</td><td>—</td><td>—</td><td>—</td></tr>
+<tr><td>7 — Tiranti</td><td>—</td><td>—</td><td>—</td><td>12</td><td>—</td><td>6</td><td>12</td></tr>
+<tr><th>Totale</th><th>4</th><th>28</th><th>12</th><th>16</th><th>1</th><th>6</th><th>12</th></tr>
+</table>
+</section>
+
+</body>
+</html>

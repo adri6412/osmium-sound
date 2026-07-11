@@ -31,11 +31,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-import com.hifi.mediaplayer.R;
-import com.hifi.mediaplayer.itemlist.IServiceItemListCallback;
-import com.hifi.mediaplayer.itemlist.ItemReceiver;
-import com.hifi.mediaplayer.model.Item;
-import com.hifi.mediaplayer.util.Reflection;
+import com.osmium.sound.companion.R;
+import com.osmium.sound.companion.itemlist.IServiceItemListCallback;
+import com.osmium.sound.companion.itemlist.ItemReceiver;
+import com.osmium.sound.companion.model.Item;
+import com.osmium.sound.companion.util.Reflection;
 
 
 /**

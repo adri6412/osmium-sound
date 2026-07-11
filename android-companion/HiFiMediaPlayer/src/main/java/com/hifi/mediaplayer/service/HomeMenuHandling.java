@@ -10,10 +10,10 @@ import java.util.Set;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.function.Function;
 
-import com.hifi.mediaplayer.SqueezerRepository;
-import com.hifi.mediaplayer.model.JiveItem;
-import com.hifi.mediaplayer.model.MenuStatusMessage;
-import com.hifi.mediaplayer.service.event.HomeMenuEvent;
+import com.osmium.sound.companion.SqueezerRepository;
+import com.osmium.sound.companion.model.JiveItem;
+import com.osmium.sound.companion.model.MenuStatusMessage;
+import com.osmium.sound.companion.service.event.HomeMenuEvent;
 
 public class HomeMenuHandling {
     private static final List<JiveItem> SPECIAL_NODES = List.of(JiveItem.EXTRAS, JiveItem.ARCHIVE, JiveItem.SHORTCUTS, JiveItem.SETTINGS, JiveItem.ADVANCED_SETTINGS);

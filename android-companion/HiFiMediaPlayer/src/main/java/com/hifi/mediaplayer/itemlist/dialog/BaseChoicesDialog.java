@@ -29,7 +29,7 @@ import androidx.fragment.app.DialogFragment;
 
 import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 
-import com.hifi.mediaplayer.R;
+import com.osmium.sound.companion.R;
 
 public abstract class BaseChoicesDialog extends DialogFragment {
 

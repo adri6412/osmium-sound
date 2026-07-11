@@ -32,7 +32,6 @@ lip = 16.0
 fl  = 18.0
 relief = 2.0          # >= t : cava di sfogo piega a norma DFM (storico)
 air = 6.0
-lip_w = 12.0          # risvolto superiore dei fianchi: il coperchio ci si avvita (vite Z)
 bracket_edge = 10.0   # rientro dei fori squadretta dai bordi laterali di front/back
 lid_drop = 12.0       # (storico) non piu' usato: coperchio ora PIATTO, fissato su front/back
 
@@ -95,13 +94,12 @@ shelf_sy = [shelf_y0 + 25, shelf_y0 + shelf_len - 25]
 # posizioni viti condivise
 zs = [30.0, H / 2.0, H - 30.0]
 xs = [30.0, W / 2.0, W - 30.0]
-ys_lid = [25.0, Dch / 2.0, Dch - 25.0]
 y_front = fl / 2.0
 y_back = Dch - fl / 2.0
-# fissaggi nuovi (front/back PIATTI + coperchio su risvolti)
-bz = [zs[0], zs[2]]                                   # 2 livelli squadrette per lato
-lid_xs = [t + lip_w / 2.0, W - t - lip_w / 2.0]       # assi viti coperchio (sui risvolti)
-lid_ys = [25.0, Dch / 2.0, Dch - 25.0]
+# fissaggi: front/back PIATTI su squadrette (3 livelli per lato) + coperchio
+# tenuto da 6 tiranti filettati M3 che passano dal fondo al coperchio
+bz = zs                                               # 3 livelli squadrette per lato
+tie_xy = [(x, y) for x in xs for y in (y_front, y_back)]  # 6 tiranti fondo<->coperchio
 
 print("Esterno LxHxP ~ %.1f x %.1f x %.1f mm" % (W, H, Dch + 2 * t))
 print("Fessura CD centro z = %.1f ; ripiano PC z = %.1f" % (z_cd_c, shelf_z))
@@ -136,9 +134,10 @@ def try_fillet(shape, targets, radius):
 
 # ======================= CORPO =====================================
 def make_body():
-    # U a 2 pieghe + RISVOLTO SUPERIORE su ciascun fianco (piega parallela alla base,
-    # estremi liberi -> nessun angolo chiuso, nessuna saldatura: 4 pieghe tutte
-    # formabili al press-brake). I risvolti reggono il coperchio (vite in Z).
+    # U a 2 pieghe (piega parallela alla base, estremi liberi -> nessun angolo
+    # chiuso, nessuna saldatura: 2 pieghe formabili al press-brake).
+    # Il coperchio NON si avvita ai fianchi: e' tenuto da 6 tiranti filettati
+    # M3 che passano dal fondo (qui) fino al coperchio (vedi make_lid).
     base  = box(W, Dch, t, (0, 0, 0))
     left  = box(t, Dch, H - t, (0, 0, 0))
     right = box(t, Dch, H - t, (W - t, 0, 0))
@@ -146,22 +145,18 @@ def make_body():
     s = try_fillet(s, [(t, t), (W - t, t)], ri)
     s = try_fillet(s, [(0, 0), (W, 0)], ro)
     s = s.removeSplitter()
-    # risvolti superiori interni (uno per fianco), su tutta la profondita'
-    lipL = box(lip_w, Dch, t, (t,            0, H - 2 * t))
-    lipR = box(lip_w, Dch, t, (W - t - lip_w, 0, H - 2 * t))
-    s = s.fuse(lipL).fuse(lipR).removeSplitter()
 
     holes = []
     # fori squadrette front/back: clearance nei fianchi (vite in X verso la squadretta)
+    # 3 livelli per lato (bz)
     for z in bz:
         for y in (y_front, y_back):
             holes.append(cyl_x(clear_d, t + 2, -1, y, z))
             holes.append(cyl_x(clear_d, t + 2, W - t - 1, y, z))
-    # fori coperchio: tap sui risvolti superiori (vite in Z dal coperchio)
-    for x in lid_xs:
-        for y in lid_ys:
-            holes.append(cyl_z(tap_d, t + 2, x, y, H - 2 * t - 1))
-    # CD fissato con biadesivo: nessun foro sul fondo
+    # fori tiranti fondo<->coperchio (clearance, dado+rondella sotto il fondo)
+    for x, y in tie_xy:
+        holes.append(cyl_z(clear_d, t + 2, x, y, -1))
+    # CD fissato con biadesivo: nessun altro foro sul fondo
     # fori per le alette del ripiano (sui fianchi) - passante in X
     for sy in shelf_sy:
         holes.append(cyl_x(clear_d, t + 2, -1, sy, shelf_z - 8))
@@ -173,16 +168,16 @@ def make_body():
 # ======================= COPERCHIO =================================
 def make_lid():
     # COPERCHIO PIATTO: nessuna piega -> solo taglio laser, zero supplemento bending.
-    # Si avvita (vite in Z) sui RISVOLTI superiori dei fianchi del corpo.
+    # Tenuto dai 6 tiranti filettati M3 che salgono dal fondo (vedi make_body):
+    # dado + rondella sopra il coperchio.
     s = box(W, Dch, t, (0, 0, H - t))
     cuts = []
     # ventilazione: 3 asole larghe (meno pierce/tempo laser, no supplemento feature sottili)
     for i in range(3):
         cuts.append(box(10, Dch * 0.4, t + 2, (W * 0.30 + i * 20, Dch * 0.30, H - t - 1)))
-    # fissaggio ai risvolti superiori dei fianchi (vite in Z) - fori passanti
-    for x in lid_xs:
-        for y in lid_ys:
-            cuts.append(cyl_z(clear_d, t + 2, x, y, H - t - 1))
+    # fori tiranti fondo<->coperchio (clearance, dado+rondella sopra il coperchio)
+    for x, y in tie_xy:
+        cuts.append(cyl_z(clear_d, t + 2, x, y, H - t - 1))
     for c in cuts:
         s = s.cut(c)
     return s

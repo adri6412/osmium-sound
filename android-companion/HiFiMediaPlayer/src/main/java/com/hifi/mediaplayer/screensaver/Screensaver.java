@@ -19,16 +19,16 @@ import android.widget.TextView;
 
 import java.util.Random;
 
-import com.hifi.mediaplayer.R;
-import com.hifi.mediaplayer.HiFiMediaPlayer;
-import com.hifi.mediaplayer.SqueezerRepository;
-import com.hifi.mediaplayer.model.CurrentTrack;
-import com.hifi.mediaplayer.model.Player;
-import com.hifi.mediaplayer.model.PlayerState;
-import com.hifi.mediaplayer.service.event.ActivePlayerChanged;
-import com.hifi.mediaplayer.service.event.MusicChanged;
-import com.hifi.mediaplayer.service.event.PlayStatusChanged;
-import com.hifi.mediaplayer.service.event.PowerStatusChanged;
+import com.osmium.sound.companion.R;
+import com.osmium.sound.companion.HiFiMediaPlayer;
+import com.osmium.sound.companion.SqueezerRepository;
+import com.osmium.sound.companion.model.CurrentTrack;
+import com.osmium.sound.companion.model.Player;
+import com.osmium.sound.companion.model.PlayerState;
+import com.osmium.sound.companion.service.event.ActivePlayerChanged;
+import com.osmium.sound.companion.service.event.MusicChanged;
+import com.osmium.sound.companion.service.event.PlayStatusChanged;
+import com.osmium.sound.companion.service.event.PowerStatusChanged;
 
 public class Screensaver extends AppCompatActivity {
     private static final long MOVE_INTERVAL = 10 * 60 * 1000; // 10 minutes

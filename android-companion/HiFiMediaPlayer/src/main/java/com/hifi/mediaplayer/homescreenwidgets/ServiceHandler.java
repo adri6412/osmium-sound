@@ -1,6 +1,6 @@
 package com.hifi.mediaplayer.homescreenwidgets;
 
-import com.hifi.mediaplayer.service.ISqueezeService;
+import com.osmium.sound.companion.service.ISqueezeService;
 
 @FunctionalInterface
 interface ServiceHandler {

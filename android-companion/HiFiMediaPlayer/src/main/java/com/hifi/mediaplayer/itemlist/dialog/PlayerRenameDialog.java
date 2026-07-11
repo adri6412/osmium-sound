@@ -5,8 +5,8 @@ import android.os.Bundle;
 import androidx.annotation.NonNull;
 import android.text.InputType;
 
-import com.hifi.mediaplayer.R;
-import com.hifi.mediaplayer.itemlist.PlayerListActivity;
+import com.osmium.sound.companion.R;
+import com.osmium.sound.companion.itemlist.PlayerListActivity;
 
 public class PlayerRenameDialog extends BaseEditTextDialog {
 

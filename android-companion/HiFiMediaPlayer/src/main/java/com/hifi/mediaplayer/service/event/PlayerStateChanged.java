@@ -19,7 +19,7 @@ package com.hifi.mediaplayer.service.event;
 
 import androidx.annotation.NonNull;
 
-import com.hifi.mediaplayer.model.Player;
+import com.osmium.sound.companion.model.Player;
 
 /** Event sent when a player's state has changed. */
 public class PlayerStateChanged {

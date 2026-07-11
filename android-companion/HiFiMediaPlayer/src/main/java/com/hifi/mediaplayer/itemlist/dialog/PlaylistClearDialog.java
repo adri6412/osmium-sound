@@ -21,10 +21,10 @@ import android.content.Context;
 import androidx.annotation.NonNull;
 import androidx.fragment.app.FragmentManager;
 
-import com.hifi.mediaplayer.Preferences;
-import com.hifi.mediaplayer.R;
-import com.hifi.mediaplayer.HiFiMediaPlayer;
-import com.hifi.mediaplayer.framework.BaseConfirmDialog;
+import com.osmium.sound.companion.Preferences;
+import com.osmium.sound.companion.R;
+import com.osmium.sound.companion.HiFiMediaPlayer;
+import com.osmium.sound.companion.framework.BaseConfirmDialog;
 
 public class PlaylistClearDialog extends BaseConfirmDialog {
     private static final String TAG = PlaylistClearDialog.class.getSimpleName();

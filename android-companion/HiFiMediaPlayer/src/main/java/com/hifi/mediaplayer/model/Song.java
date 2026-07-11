@@ -13,9 +13,9 @@ import java.util.Arrays;
 import java.util.Map;
 import java.util.Objects;
 
-import com.hifi.mediaplayer.Util;
-import com.hifi.mediaplayer.download.DownloadFilenameStructure;
-import com.hifi.mediaplayer.download.DownloadPathStructure;
+import com.osmium.sound.companion.Util;
+import com.osmium.sound.companion.download.DownloadFilenameStructure;
+import com.osmium.sound.companion.download.DownloadPathStructure;
 
 public class Song  implements Parcelable {
     public String id;

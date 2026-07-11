@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package com.hifi.mediaplayer;
+package com.osmium.sound.companion;
 
 import android.app.Activity;
 import android.view.View;

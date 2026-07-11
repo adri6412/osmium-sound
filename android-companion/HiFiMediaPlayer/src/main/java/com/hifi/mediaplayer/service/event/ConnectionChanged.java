@@ -16,8 +16,8 @@
 
 package com.hifi.mediaplayer.service.event;
 
-import com.hifi.mediaplayer.service.ConnectionError;
-import com.hifi.mediaplayer.service.ConnectionState;
+import com.osmium.sound.companion.service.ConnectionError;
+import com.osmium.sound.companion.service.ConnectionState;
 
 /**
  * Event posted whenever the connection state to the server changes.

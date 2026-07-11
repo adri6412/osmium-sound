@@ -5,9 +5,9 @@ import android.widget.CheckBox;
 
 import java.util.function.Supplier;
 
-import com.hifi.mediaplayer.R;
-import com.hifi.mediaplayer.service.ISqueezeService;
-import com.hifi.mediaplayer.widget.RadialSeekBar;
+import com.osmium.sound.companion.R;
+import com.osmium.sound.companion.service.ISqueezeService;
+import com.osmium.sound.companion.widget.RadialSeekBar;
 
 public class VolumeWheel implements VolumeUpdater{
     private final CheckBox muteToggle;

@@ -18,7 +18,7 @@ package com.hifi.mediaplayer.service.event;
 
 import androidx.annotation.NonNull;
 
-import com.hifi.mediaplayer.model.AlertWindow;
+import com.osmium.sound.companion.model.AlertWindow;
 
 /** Event sent when a alert window message is received. */
 public class AlertEvent {

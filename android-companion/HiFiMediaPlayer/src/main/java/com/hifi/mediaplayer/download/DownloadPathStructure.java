@@ -4,9 +4,9 @@ import android.content.Context;
 
 import java.io.File;
 
-import com.hifi.mediaplayer.R;
-import com.hifi.mediaplayer.framework.EnumWithText;
-import com.hifi.mediaplayer.model.Song;
+import com.osmium.sound.companion.R;
+import com.osmium.sound.companion.framework.EnumWithText;
+import com.osmium.sound.companion.model.Song;
 
 public enum DownloadPathStructure implements EnumWithText{
     ARTIST_ARTISTALBUM(R.string.download_path_structure_artist_artistalbum) {

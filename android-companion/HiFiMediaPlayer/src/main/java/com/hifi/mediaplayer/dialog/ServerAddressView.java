@@ -44,12 +44,12 @@ import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 
-import com.hifi.mediaplayer.Preferences;
-import com.hifi.mediaplayer.R;
-import com.hifi.mediaplayer.HiFiMediaPlayer;
-import com.hifi.mediaplayer.Util;
-import com.hifi.mediaplayer.util.AfterTextChangedLister;
-import com.hifi.mediaplayer.util.ScanNetworkTask;
+import com.osmium.sound.companion.Preferences;
+import com.osmium.sound.companion.R;
+import com.osmium.sound.companion.HiFiMediaPlayer;
+import com.osmium.sound.companion.Util;
+import com.osmium.sound.companion.util.AfterTextChangedLister;
+import com.osmium.sound.companion.util.ScanNetworkTask;
 
 /**
  * Scans the local network for servers, allow the user to choose one, set it as the preferred server

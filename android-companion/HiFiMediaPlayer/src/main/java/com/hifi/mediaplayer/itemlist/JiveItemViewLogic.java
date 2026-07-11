@@ -24,19 +24,19 @@ import android.graphics.Paint;
 import android.graphics.drawable.Drawable;
 import android.widget.ImageView;
 
-import com.hifi.mediaplayer.R;
-import com.hifi.mediaplayer.Util;
-import com.hifi.mediaplayer.framework.ContextMenu;
-import com.hifi.mediaplayer.model.Action;
-import com.hifi.mediaplayer.framework.BaseActivity;
-import com.hifi.mediaplayer.itemlist.dialog.ArtworkDialog;
-import com.hifi.mediaplayer.itemlist.dialog.ChoicesDialog;
-import com.hifi.mediaplayer.itemlist.dialog.InputTextDialog;
-import com.hifi.mediaplayer.itemlist.dialog.InputTimeDialog;
-import com.hifi.mediaplayer.itemlist.dialog.SlideShow;
-import com.hifi.mediaplayer.model.JiveItem;
-import com.hifi.mediaplayer.util.ImageFetcher;
-import com.hifi.mediaplayer.util.ImageWorker;
+import com.osmium.sound.companion.R;
+import com.osmium.sound.companion.Util;
+import com.osmium.sound.companion.framework.ContextMenu;
+import com.osmium.sound.companion.model.Action;
+import com.osmium.sound.companion.framework.BaseActivity;
+import com.osmium.sound.companion.itemlist.dialog.ArtworkDialog;
+import com.osmium.sound.companion.itemlist.dialog.ChoicesDialog;
+import com.osmium.sound.companion.itemlist.dialog.InputTextDialog;
+import com.osmium.sound.companion.itemlist.dialog.InputTimeDialog;
+import com.osmium.sound.companion.itemlist.dialog.SlideShow;
+import com.osmium.sound.companion.model.JiveItem;
+import com.osmium.sound.companion.util.ImageFetcher;
+import com.osmium.sound.companion.util.ImageWorker;
 
 /**
  * Delegate with view logic for {@link JiveItem} which can be used from any {@link BaseActivity}

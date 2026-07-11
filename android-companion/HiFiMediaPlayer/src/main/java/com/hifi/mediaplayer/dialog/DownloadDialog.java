@@ -23,11 +23,11 @@ import android.os.Bundle;
 import androidx.annotation.NonNull;
 import androidx.fragment.app.FragmentManager;
 
-import com.hifi.mediaplayer.Preferences;
-import com.hifi.mediaplayer.R;
-import com.hifi.mediaplayer.HiFiMediaPlayer;
-import com.hifi.mediaplayer.framework.BaseConfirmDialog;
-import com.hifi.mediaplayer.model.JiveItem;
+import com.osmium.sound.companion.Preferences;
+import com.osmium.sound.companion.R;
+import com.osmium.sound.companion.HiFiMediaPlayer;
+import com.osmium.sound.companion.framework.BaseConfirmDialog;
+import com.osmium.sound.companion.model.JiveItem;
 
 public class DownloadDialog extends BaseConfirmDialog {
     private static final String TAG = DownloadDialog.class.getSimpleName();

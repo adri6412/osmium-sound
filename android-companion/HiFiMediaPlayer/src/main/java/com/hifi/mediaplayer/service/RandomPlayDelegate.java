@@ -5,7 +5,7 @@ import android.util.Log;
 import java.util.Random;
 import java.util.Set;
 
-import com.hifi.mediaplayer.model.Player;
+import com.osmium.sound.companion.model.Player;
 
 public class RandomPlayDelegate {
 

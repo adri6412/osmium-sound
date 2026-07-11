@@ -18,8 +18,8 @@ package com.hifi.mediaplayer.service.event;
 
 import androidx.annotation.NonNull;
 
-import com.hifi.mediaplayer.model.Player;
-import com.hifi.mediaplayer.model.PlayerState;
+import com.osmium.sound.companion.model.Player;
+import com.osmium.sound.companion.model.PlayerState;
 
 /** Event sent when the repeat status of the player has changed. */
 public class RepeatStatusChanged {

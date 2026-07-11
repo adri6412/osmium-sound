@@ -35,21 +35,21 @@ import androidx.recyclerview.widget.RecyclerView;
 import java.util.ArrayList;
 import java.util.List;
 
-import com.hifi.mediaplayer.NowPlayingActivity;
-import com.hifi.mediaplayer.Preferences;
-import com.hifi.mediaplayer.R;
-import com.hifi.mediaplayer.HiFiMediaPlayer;
-import com.hifi.mediaplayer.dialog.ChangeLogDialog;
-import com.hifi.mediaplayer.dialog.TipsDialog;
-import com.hifi.mediaplayer.framework.ItemAdapter;
-import com.hifi.mediaplayer.framework.ItemViewHolder;
-import com.hifi.mediaplayer.itemlist.dialog.ArtworkListLayout;
-import com.hifi.mediaplayer.model.JiveItem;
-import com.hifi.mediaplayer.model.PlayerState;
-import com.hifi.mediaplayer.model.Window;
-import com.hifi.mediaplayer.service.ISqueezeService;
-import com.hifi.mediaplayer.service.event.HandshakeComplete;
-import com.hifi.mediaplayer.service.event.PlayerStateChanged;
+import com.osmium.sound.companion.NowPlayingActivity;
+import com.osmium.sound.companion.Preferences;
+import com.osmium.sound.companion.R;
+import com.osmium.sound.companion.HiFiMediaPlayer;
+import com.osmium.sound.companion.dialog.ChangeLogDialog;
+import com.osmium.sound.companion.dialog.TipsDialog;
+import com.osmium.sound.companion.framework.ItemAdapter;
+import com.osmium.sound.companion.framework.ItemViewHolder;
+import com.osmium.sound.companion.itemlist.dialog.ArtworkListLayout;
+import com.osmium.sound.companion.model.JiveItem;
+import com.osmium.sound.companion.model.PlayerState;
+import com.osmium.sound.companion.model.Window;
+import com.osmium.sound.companion.service.ISqueezeService;
+import com.osmium.sound.companion.service.event.HandshakeComplete;
+import com.osmium.sound.companion.service.event.PlayerStateChanged;
 
 public class HomeActivity extends HomeMenuActivity {
     public static final String TAG = "HomeActivity";

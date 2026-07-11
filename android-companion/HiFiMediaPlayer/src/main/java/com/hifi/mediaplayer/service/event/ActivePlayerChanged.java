@@ -18,7 +18,7 @@ package com.hifi.mediaplayer.service.event;
 
 import java.util.Map;
 
-import com.hifi.mediaplayer.model.Player;
+import com.osmium.sound.companion.model.Player;
 
 /**
  * Event sent when the player that is controlled by Squeezer (the "active" player) has changed.

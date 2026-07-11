@@ -22,7 +22,7 @@ import androidx.annotation.NonNull;
 
 import java.util.Map;
 
-import com.hifi.mediaplayer.Util;
+import com.osmium.sound.companion.Util;
 
 /**
  * The alertWindow is meant for messages that should not leave the screen without the user

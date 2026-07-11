@@ -35,18 +35,18 @@ import androidx.recyclerview.widget.ItemTouchHelper;
 
 import java.util.Map;
 
-import com.hifi.mediaplayer.R;
-import com.hifi.mediaplayer.HiFiMediaPlayer;
-import com.hifi.mediaplayer.framework.ItemAdapter;
-import com.hifi.mediaplayer.framework.ItemViewHolder;
-import com.hifi.mediaplayer.itemlist.dialog.PlaylistClearDialog;
-import com.hifi.mediaplayer.itemlist.dialog.PlaylistSaveDialog;
-import com.hifi.mediaplayer.model.JiveItem;
-import com.hifi.mediaplayer.service.ISqueezeService;
-import com.hifi.mediaplayer.service.event.MusicChanged;
-import com.hifi.mediaplayer.service.event.PlaylistChanged;
-import com.hifi.mediaplayer.widget.OnSwipeListener;
-import com.hifi.mediaplayer.widget.UndoBarController;
+import com.osmium.sound.companion.R;
+import com.osmium.sound.companion.HiFiMediaPlayer;
+import com.osmium.sound.companion.framework.ItemAdapter;
+import com.osmium.sound.companion.framework.ItemViewHolder;
+import com.osmium.sound.companion.itemlist.dialog.PlaylistClearDialog;
+import com.osmium.sound.companion.itemlist.dialog.PlaylistSaveDialog;
+import com.osmium.sound.companion.model.JiveItem;
+import com.osmium.sound.companion.service.ISqueezeService;
+import com.osmium.sound.companion.service.event.MusicChanged;
+import com.osmium.sound.companion.service.event.PlaylistChanged;
+import com.osmium.sound.companion.widget.OnSwipeListener;
+import com.osmium.sound.companion.widget.UndoBarController;
 
 /**
  * Activity that shows the songs in the current playlist.

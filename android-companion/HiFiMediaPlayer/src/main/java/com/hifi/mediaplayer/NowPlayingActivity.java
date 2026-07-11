@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package com.hifi.mediaplayer;
+package com.osmium.sound.companion;
 
 import android.app.Activity;
 import android.content.Context;
@@ -25,10 +25,10 @@ import android.view.MenuItem;
 
 import androidx.core.view.MenuCompat;
 
-import com.hifi.mediaplayer.framework.BaseActivity;
-import com.hifi.mediaplayer.model.Player;
-import com.hifi.mediaplayer.service.event.MusicChanged;
-import com.hifi.mediaplayer.widget.ViewUtilities;
+import com.osmium.sound.companion.framework.BaseActivity;
+import com.osmium.sound.companion.model.Player;
+import com.osmium.sound.companion.service.event.MusicChanged;
+import com.osmium.sound.companion.widget.ViewUtilities;
 
 public class NowPlayingActivity extends BaseActivity {
 

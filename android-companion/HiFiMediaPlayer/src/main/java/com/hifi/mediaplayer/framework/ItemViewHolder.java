@@ -23,7 +23,7 @@ import androidx.annotation.NonNull;
 import androidx.recyclerview.widget.RecyclerView;
 
 
-import com.hifi.mediaplayer.model.Item;
+import com.osmium.sound.companion.model.Item;
 
 /**
  * Defines a view holder for a {@link Item}

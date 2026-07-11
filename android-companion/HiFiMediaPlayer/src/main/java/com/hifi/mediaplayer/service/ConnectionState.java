@@ -31,19 +31,19 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicReference;
 
-import com.hifi.mediaplayer.R;
-import com.hifi.mediaplayer.HiFiMediaPlayer;
-import com.hifi.mediaplayer.SqueezerRepository;
-import com.hifi.mediaplayer.Util;
-import com.hifi.mediaplayer.model.MenuStatusMessage;
-import com.hifi.mediaplayer.model.Player;
-import com.hifi.mediaplayer.service.event.ActivePlayerChanged;
-import com.hifi.mediaplayer.service.event.ConnectionChanged;
-import com.hifi.mediaplayer.service.event.HandshakeComplete;
-import com.hifi.mediaplayer.service.event.LastscanChanged;
-import com.hifi.mediaplayer.service.event.PlayersChanged;
-import com.hifi.mediaplayer.service.event.RefreshEvent;
-import com.hifi.mediaplayer.util.ImageFetcher;
+import com.osmium.sound.companion.R;
+import com.osmium.sound.companion.HiFiMediaPlayer;
+import com.osmium.sound.companion.SqueezerRepository;
+import com.osmium.sound.companion.Util;
+import com.osmium.sound.companion.model.MenuStatusMessage;
+import com.osmium.sound.companion.model.Player;
+import com.osmium.sound.companion.service.event.ActivePlayerChanged;
+import com.osmium.sound.companion.service.event.ConnectionChanged;
+import com.osmium.sound.companion.service.event.HandshakeComplete;
+import com.osmium.sound.companion.service.event.LastscanChanged;
+import com.osmium.sound.companion.service.event.PlayersChanged;
+import com.osmium.sound.companion.service.event.RefreshEvent;
+import com.osmium.sound.companion.util.ImageFetcher;
 
 public class ConnectionState {
 

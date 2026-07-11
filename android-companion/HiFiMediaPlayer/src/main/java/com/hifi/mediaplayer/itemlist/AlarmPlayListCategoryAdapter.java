@@ -15,12 +15,12 @@ import androidx.recyclerview.widget.RecyclerView;
 import java.util.ArrayList;
 import java.util.List;
 
-import com.hifi.mediaplayer.R;
-import com.hifi.mediaplayer.framework.BaseActivity;
-import com.hifi.mediaplayer.framework.ItemViewHolder;
-import com.hifi.mediaplayer.model.Alarm;
-import com.hifi.mediaplayer.model.AlarmPlaylist;
-import com.hifi.mediaplayer.model.Item;
+import com.osmium.sound.companion.R;
+import com.osmium.sound.companion.framework.BaseActivity;
+import com.osmium.sound.companion.framework.ItemViewHolder;
+import com.osmium.sound.companion.model.Alarm;
+import com.osmium.sound.companion.model.AlarmPlaylist;
+import com.osmium.sound.companion.model.Item;
 
 public class AlarmPlayListCategoryAdapter extends RecyclerView.Adapter<AlarmPlayListCategoryAdapter.ViewHolder> {
     private final BaseActivity activity;

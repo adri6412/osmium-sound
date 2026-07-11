@@ -20,11 +20,11 @@ import android.view.View;
 
 import androidx.annotation.NonNull;
 
-import com.hifi.mediaplayer.R;
-import com.hifi.mediaplayer.framework.BaseActivity;
-import com.hifi.mediaplayer.framework.ItemViewHolder;
-import com.hifi.mediaplayer.model.JiveItem;
-import com.hifi.mediaplayer.model.Window;
+import com.osmium.sound.companion.R;
+import com.osmium.sound.companion.framework.BaseActivity;
+import com.osmium.sound.companion.framework.ItemViewHolder;
+import com.osmium.sound.companion.model.JiveItem;
+import com.osmium.sound.companion.model.Window;
 
 public class JiveItemViewPending extends ItemViewHolder<JiveItem> {
 

@@ -4,8 +4,8 @@ import android.content.Context;
 
 import androidx.annotation.StringRes;
 
-import com.hifi.mediaplayer.R;
-import com.hifi.mediaplayer.framework.EnumWithText;
+import com.osmium.sound.companion.R;
+import com.osmium.sound.companion.framework.EnumWithText;
 
 /**
  * Supported list layouts.

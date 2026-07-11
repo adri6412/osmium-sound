@@ -18,14 +18,14 @@ import androidx.recyclerview.widget.RecyclerView;
 import java.util.Collections;
 import java.util.List;
 
-import com.hifi.mediaplayer.R;
-import com.hifi.mediaplayer.framework.BaseActivity;
-import com.hifi.mediaplayer.itemlist.PlayerBaseView;
-import com.hifi.mediaplayer.model.Player;
-import com.hifi.mediaplayer.service.ISqueezeService;
-import com.hifi.mediaplayer.service.event.HandshakeComplete;
-import com.hifi.mediaplayer.service.event.PlayerStateChanged;
-import com.hifi.mediaplayer.widget.ViewUtilities;
+import com.osmium.sound.companion.R;
+import com.osmium.sound.companion.framework.BaseActivity;
+import com.osmium.sound.companion.itemlist.PlayerBaseView;
+import com.osmium.sound.companion.model.Player;
+import com.osmium.sound.companion.service.ISqueezeService;
+import com.osmium.sound.companion.service.event.HandshakeComplete;
+import com.osmium.sound.companion.service.event.PlayerStateChanged;
+import com.osmium.sound.companion.widget.ViewUtilities;
 
 /**
  * The configuration screen for the {@link SqueezerRemoteControl SqueezerRemoteControl} AppWidget.

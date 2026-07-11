@@ -39,13 +39,13 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import com.hifi.mediaplayer.R;
-import com.hifi.mediaplayer.Util;
-import com.hifi.mediaplayer.itemlist.dialog.SyncPowerDialog;
-import com.hifi.mediaplayer.itemlist.dialog.SyncVolumeDialog;
-import com.hifi.mediaplayer.model.CurrentTrack;
-import com.hifi.mediaplayer.model.Player;
-import com.hifi.mediaplayer.service.ISqueezeService;
+import com.osmium.sound.companion.R;
+import com.osmium.sound.companion.Util;
+import com.osmium.sound.companion.itemlist.dialog.SyncPowerDialog;
+import com.osmium.sound.companion.itemlist.dialog.SyncVolumeDialog;
+import com.osmium.sound.companion.model.CurrentTrack;
+import com.osmium.sound.companion.model.Player;
+import com.osmium.sound.companion.service.ISqueezeService;
 
 public class PlayerListAdapter extends RecyclerView.Adapter<PlayerListAdapter.PlayerGroupViewHolder> {
     private static final int UPDATE_VOLUME = 1;

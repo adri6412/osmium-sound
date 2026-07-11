@@ -21,9 +21,9 @@ import android.os.Bundle;
 
 import androidx.annotation.NonNull;
 
-import com.hifi.mediaplayer.framework.BaseActivity;
-import com.hifi.mediaplayer.itemlist.JiveItemListActivity;
-import com.hifi.mediaplayer.model.JiveItem;
+import com.osmium.sound.companion.framework.BaseActivity;
+import com.osmium.sound.companion.itemlist.JiveItemListActivity;
+import com.osmium.sound.companion.model.JiveItem;
 
 public class ChoicesDialog extends BaseChoicesDialog {
 

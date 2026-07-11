@@ -1,4 +1,4 @@
-package com.hifi.mediaplayer;
+package com.osmium.sound.companion;
 
 import android.content.ActivityNotFoundException;
 import android.content.ComponentName;
@@ -29,18 +29,18 @@ import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 
 import java.util.ArrayList;
 
-import com.hifi.mediaplayer.dialog.CallStateDialog;
-import com.hifi.mediaplayer.download.DownloadFilenameStructure;
-import com.hifi.mediaplayer.download.DownloadPathStructure;
-import com.hifi.mediaplayer.framework.EnumWithText;
-import com.hifi.mediaplayer.model.PlayableItemAction;
-import com.hifi.mediaplayer.service.ISqueezeService;
-import com.hifi.mediaplayer.service.SqueezeService;
-import com.hifi.mediaplayer.util.Scrobble;
-import com.hifi.mediaplayer.util.SqueezeLite;
-import com.hifi.mediaplayer.util.SqueezePlayer;
-import com.hifi.mediaplayer.util.ThemeManager;
-import com.hifi.mediaplayer.widget.CallStatePermissionLauncher;
+import com.osmium.sound.companion.dialog.CallStateDialog;
+import com.osmium.sound.companion.download.DownloadFilenameStructure;
+import com.osmium.sound.companion.download.DownloadPathStructure;
+import com.osmium.sound.companion.framework.EnumWithText;
+import com.osmium.sound.companion.model.PlayableItemAction;
+import com.osmium.sound.companion.service.ISqueezeService;
+import com.osmium.sound.companion.service.SqueezeService;
+import com.osmium.sound.companion.util.Scrobble;
+import com.osmium.sound.companion.util.SqueezeLite;
+import com.osmium.sound.companion.util.SqueezePlayer;
+import com.osmium.sound.companion.util.ThemeManager;
+import com.osmium.sound.companion.widget.CallStatePermissionLauncher;
 
 public class SettingsFragment  extends PreferenceFragmentCompat implements
         Preference.OnPreferenceChangeListener, SharedPreferences.OnSharedPreferenceChangeListener,

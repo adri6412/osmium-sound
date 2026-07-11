@@ -6,10 +6,10 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import android.util.Log;
 
-import com.hifi.mediaplayer.R;
-import com.hifi.mediaplayer.HiFiMediaPlayer;
-import com.hifi.mediaplayer.model.CurrentTrack;
-import com.hifi.mediaplayer.model.PlayerState;
+import com.osmium.sound.companion.R;
+import com.osmium.sound.companion.HiFiMediaPlayer;
+import com.osmium.sound.companion.model.CurrentTrack;
+import com.osmium.sound.companion.model.PlayerState;
 
 public class Scrobble {
 

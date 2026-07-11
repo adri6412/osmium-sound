@@ -29,8 +29,8 @@ import androidx.annotation.NonNull;
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 
-import com.hifi.mediaplayer.R;
-import com.hifi.mediaplayer.model.Item;
+import com.osmium.sound.companion.R;
+import com.osmium.sound.companion.model.Item;
 
 /**
  * Represents the view hierarchy for a single {@link Item} subclass, suitable for displaying in a

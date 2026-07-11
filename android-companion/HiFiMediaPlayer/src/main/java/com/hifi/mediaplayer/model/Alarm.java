@@ -24,7 +24,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.TreeSet;
 
-import com.hifi.mediaplayer.Util;
+import com.osmium.sound.companion.Util;
 
 
 public class Alarm extends Item {

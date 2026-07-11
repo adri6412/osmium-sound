@@ -34,17 +34,17 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 
-import com.hifi.mediaplayer.R;
-import com.hifi.mediaplayer.framework.BaseActivity;
-import com.hifi.mediaplayer.itemlist.dialog.SlideShow;
-import com.hifi.mediaplayer.model.Action;
-import com.hifi.mediaplayer.model.Image;
-import com.hifi.mediaplayer.model.JiveItem;
-import com.hifi.mediaplayer.service.ISqueezeService;
-import com.hifi.mediaplayer.service.event.HandshakeComplete;
-import com.hifi.mediaplayer.util.ImageFetcher;
-import com.hifi.mediaplayer.widget.GridAutofitLayoutManager;
-import com.hifi.mediaplayer.widget.ViewUtilities;
+import com.osmium.sound.companion.R;
+import com.osmium.sound.companion.framework.BaseActivity;
+import com.osmium.sound.companion.itemlist.dialog.SlideShow;
+import com.osmium.sound.companion.model.Action;
+import com.osmium.sound.companion.model.Image;
+import com.osmium.sound.companion.model.JiveItem;
+import com.osmium.sound.companion.service.ISqueezeService;
+import com.osmium.sound.companion.service.event.HandshakeComplete;
+import com.osmium.sound.companion.util.ImageFetcher;
+import com.osmium.sound.companion.widget.GridAutofitLayoutManager;
+import com.osmium.sound.companion.widget.ViewUtilities;
 
 public class GalleryActivity extends BaseActivity implements IServiceItemListCallback<JiveItem> {
 

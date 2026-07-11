@@ -56,27 +56,27 @@ import androidx.lifecycle.ViewModelProvider;
 import java.util.Arrays;
 import java.util.HashSet;
 
-import com.hifi.mediaplayer.Preferences;
-import com.hifi.mediaplayer.R;
-import com.hifi.mediaplayer.HiFiMediaPlayer;
-import com.hifi.mediaplayer.SqueezerRepository;
-import com.hifi.mediaplayer.dialog.AlertEventDialog;
-import com.hifi.mediaplayer.dialog.DownloadDialog;
-import com.hifi.mediaplayer.itemlist.HomeActivity;
-import com.hifi.mediaplayer.model.Action;
-import com.hifi.mediaplayer.model.DisplayMessage;
-import com.hifi.mediaplayer.model.JiveItem;
-import com.hifi.mediaplayer.model.Player;
-import com.hifi.mediaplayer.screensaver.Screensaver;
-import com.hifi.mediaplayer.service.ISqueezeService;
-import com.hifi.mediaplayer.service.SqueezeService;
-import com.hifi.mediaplayer.service.event.AlertEvent;
-import com.hifi.mediaplayer.service.event.DisplayEvent;
-import com.hifi.mediaplayer.util.ImageFetcher;
-import com.hifi.mediaplayer.util.DevicePlayers;
-import com.hifi.mediaplayer.util.ThemeManager;
-import com.hifi.mediaplayer.widget.UndoBarController;
-import com.hifi.mediaplayer.volume.VolumeKeysDelegate;
+import com.osmium.sound.companion.Preferences;
+import com.osmium.sound.companion.R;
+import com.osmium.sound.companion.HiFiMediaPlayer;
+import com.osmium.sound.companion.SqueezerRepository;
+import com.osmium.sound.companion.dialog.AlertEventDialog;
+import com.osmium.sound.companion.dialog.DownloadDialog;
+import com.osmium.sound.companion.itemlist.HomeActivity;
+import com.osmium.sound.companion.model.Action;
+import com.osmium.sound.companion.model.DisplayMessage;
+import com.osmium.sound.companion.model.JiveItem;
+import com.osmium.sound.companion.model.Player;
+import com.osmium.sound.companion.screensaver.Screensaver;
+import com.osmium.sound.companion.service.ISqueezeService;
+import com.osmium.sound.companion.service.SqueezeService;
+import com.osmium.sound.companion.service.event.AlertEvent;
+import com.osmium.sound.companion.service.event.DisplayEvent;
+import com.osmium.sound.companion.util.ImageFetcher;
+import com.osmium.sound.companion.util.DevicePlayers;
+import com.osmium.sound.companion.util.ThemeManager;
+import com.osmium.sound.companion.widget.UndoBarController;
+import com.osmium.sound.companion.volume.VolumeKeysDelegate;
 
 /**
  * Common base class for all activities in Squeezer.

@@ -10,10 +10,10 @@ import android.util.Log;
 import android.view.View;
 import android.widget.RemoteViews;
 
-import com.hifi.mediaplayer.R;
-import com.hifi.mediaplayer.Util;
-import com.hifi.mediaplayer.model.Player;
-import com.hifi.mediaplayer.util.Intents;
+import com.osmium.sound.companion.R;
+import com.osmium.sound.companion.Util;
+import com.osmium.sound.companion.model.Player;
+import com.osmium.sound.companion.util.Intents;
 
 
 /**

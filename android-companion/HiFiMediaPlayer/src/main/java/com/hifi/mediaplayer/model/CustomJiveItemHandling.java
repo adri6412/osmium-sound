@@ -7,8 +7,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
-import com.hifi.mediaplayer.itemlist.IServiceItemListCallback;
-import com.hifi.mediaplayer.service.SqueezeService;
+import com.osmium.sound.companion.itemlist.IServiceItemListCallback;
+import com.osmium.sound.companion.service.SqueezeService;
 
 public class CustomJiveItemHandling {
     private static final String TAG = CustomJiveItemHandling.class.getSimpleName();

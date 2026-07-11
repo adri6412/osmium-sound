@@ -21,7 +21,7 @@ import androidx.annotation.NonNull;
 
 import java.util.Map;
 
-import com.hifi.mediaplayer.Util;
+import com.osmium.sound.companion.Util;
 
 
 public class CurrentTrack extends JiveItem {

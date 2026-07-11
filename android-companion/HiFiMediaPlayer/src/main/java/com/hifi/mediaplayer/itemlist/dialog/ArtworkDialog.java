@@ -28,15 +28,15 @@ import android.widget.ImageView;
 import java.util.List;
 import java.util.Map;
 
-import com.hifi.mediaplayer.R;
-import com.hifi.mediaplayer.Util;
-import com.hifi.mediaplayer.itemlist.JiveItemViewLogic;
-import com.hifi.mediaplayer.model.Action;
-import com.hifi.mediaplayer.framework.BaseActivity;
-import com.hifi.mediaplayer.itemlist.IServiceItemListCallback;
-import com.hifi.mediaplayer.model.JiveItem;
-import com.hifi.mediaplayer.service.ISqueezeService;
-import com.hifi.mediaplayer.util.ImageFetcher;
+import com.osmium.sound.companion.R;
+import com.osmium.sound.companion.Util;
+import com.osmium.sound.companion.itemlist.JiveItemViewLogic;
+import com.osmium.sound.companion.model.Action;
+import com.osmium.sound.companion.framework.BaseActivity;
+import com.osmium.sound.companion.itemlist.IServiceItemListCallback;
+import com.osmium.sound.companion.model.JiveItem;
+import com.osmium.sound.companion.service.ISqueezeService;
+import com.osmium.sound.companion.util.ImageFetcher;
 
 public class ArtworkDialog extends DialogFragment implements IServiceItemListCallback<JiveItem> {
     private static final String TAG = DialogFragment.class.getSimpleName();

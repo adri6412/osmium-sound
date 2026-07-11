@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package com.hifi.mediaplayer;
+package com.osmium.sound.companion;
 
 import android.annotation.SuppressLint;
 import android.app.Dialog;
@@ -62,46 +62,46 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import com.hifi.mediaplayer.dialog.AboutDialog;
-import com.hifi.mediaplayer.dialog.CallStateDialog;
-import com.hifi.mediaplayer.dialog.ConfirmDialog;
-import com.hifi.mediaplayer.dialog.VolumeSettings;
-import com.hifi.mediaplayer.framework.BaseActivity;
-import com.hifi.mediaplayer.framework.ContextMenu;
-import com.hifi.mediaplayer.framework.ViewParamItemView;
-import com.hifi.mediaplayer.itemlist.AlarmsActivity;
-import com.hifi.mediaplayer.itemlist.CurrentPlaylistActivity;
-import com.hifi.mediaplayer.itemlist.IServiceItemListCallback;
-import com.hifi.mediaplayer.itemlist.JiveItemListActivity;
-import com.hifi.mediaplayer.itemlist.PlayerListActivity;
-import com.hifi.mediaplayer.itemlist.PlayerViewLogic;
-import com.hifi.mediaplayer.model.CurrentTrack;
-import com.hifi.mediaplayer.model.Input;
-import com.hifi.mediaplayer.model.JiveItem;
-import com.hifi.mediaplayer.model.Player;
-import com.hifi.mediaplayer.model.PlayerState;
-import com.hifi.mediaplayer.model.PlayerState.RepeatStatus;
-import com.hifi.mediaplayer.model.PlayerState.ShuffleStatus;
-import com.hifi.mediaplayer.service.ISqueezeService;
-import com.hifi.mediaplayer.service.SqueezeService;
-import com.hifi.mediaplayer.service.event.ActivePlayerChanged;
-import com.hifi.mediaplayer.service.event.ConnectionChanged;
-import com.hifi.mediaplayer.service.event.HandshakeComplete;
-import com.hifi.mediaplayer.service.event.HomeMenuEvent;
-import com.hifi.mediaplayer.service.event.MusicChanged;
-import com.hifi.mediaplayer.service.event.PlayStatusChanged;
-import com.hifi.mediaplayer.service.event.PlayerVolume;
-import com.hifi.mediaplayer.service.event.PlayersChanged;
-import com.hifi.mediaplayer.service.event.PowerStatusChanged;
-import com.hifi.mediaplayer.service.event.RepeatStatusChanged;
-import com.hifi.mediaplayer.service.event.ShuffleStatusChanged;
-import com.hifi.mediaplayer.service.event.SongTimeChanged;
-import com.hifi.mediaplayer.util.ImageFetcher;
-import com.hifi.mediaplayer.volume.VolumeBar;
-import com.hifi.mediaplayer.volume.VolumeUpdater;
-import com.hifi.mediaplayer.volume.VolumeWheel;
-import com.hifi.mediaplayer.widget.CallStatePermissionLauncher;
-import com.hifi.mediaplayer.widget.OnSwipeListener;
+import com.osmium.sound.companion.dialog.AboutDialog;
+import com.osmium.sound.companion.dialog.CallStateDialog;
+import com.osmium.sound.companion.dialog.ConfirmDialog;
+import com.osmium.sound.companion.dialog.VolumeSettings;
+import com.osmium.sound.companion.framework.BaseActivity;
+import com.osmium.sound.companion.framework.ContextMenu;
+import com.osmium.sound.companion.framework.ViewParamItemView;
+import com.osmium.sound.companion.itemlist.AlarmsActivity;
+import com.osmium.sound.companion.itemlist.CurrentPlaylistActivity;
+import com.osmium.sound.companion.itemlist.IServiceItemListCallback;
+import com.osmium.sound.companion.itemlist.JiveItemListActivity;
+import com.osmium.sound.companion.itemlist.PlayerListActivity;
+import com.osmium.sound.companion.itemlist.PlayerViewLogic;
+import com.osmium.sound.companion.model.CurrentTrack;
+import com.osmium.sound.companion.model.Input;
+import com.osmium.sound.companion.model.JiveItem;
+import com.osmium.sound.companion.model.Player;
+import com.osmium.sound.companion.model.PlayerState;
+import com.osmium.sound.companion.model.PlayerState.RepeatStatus;
+import com.osmium.sound.companion.model.PlayerState.ShuffleStatus;
+import com.osmium.sound.companion.service.ISqueezeService;
+import com.osmium.sound.companion.service.SqueezeService;
+import com.osmium.sound.companion.service.event.ActivePlayerChanged;
+import com.osmium.sound.companion.service.event.ConnectionChanged;
+import com.osmium.sound.companion.service.event.HandshakeComplete;
+import com.osmium.sound.companion.service.event.HomeMenuEvent;
+import com.osmium.sound.companion.service.event.MusicChanged;
+import com.osmium.sound.companion.service.event.PlayStatusChanged;
+import com.osmium.sound.companion.service.event.PlayerVolume;
+import com.osmium.sound.companion.service.event.PlayersChanged;
+import com.osmium.sound.companion.service.event.PowerStatusChanged;
+import com.osmium.sound.companion.service.event.RepeatStatusChanged;
+import com.osmium.sound.companion.service.event.ShuffleStatusChanged;
+import com.osmium.sound.companion.service.event.SongTimeChanged;
+import com.osmium.sound.companion.util.ImageFetcher;
+import com.osmium.sound.companion.volume.VolumeBar;
+import com.osmium.sound.companion.volume.VolumeUpdater;
+import com.osmium.sound.companion.volume.VolumeWheel;
+import com.osmium.sound.companion.widget.CallStatePermissionLauncher;
+import com.osmium.sound.companion.widget.OnSwipeListener;
 
 public class NowPlayingFragment extends Fragment  implements CallStateDialog.CallStateDialogHost {
 

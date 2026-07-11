@@ -28,7 +28,7 @@ import android.view.View;
 
 import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 
-import com.hifi.mediaplayer.R;
+import com.osmium.sound.companion.R;
 
 public class TipsDialog extends DialogFragment implements OnKeyListener {
 
