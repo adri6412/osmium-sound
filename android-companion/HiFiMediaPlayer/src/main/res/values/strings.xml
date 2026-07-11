@@ -219,7 +219,7 @@
     <string name="dialog_license">License</string>
 
     <string name="copyright_text">Copyright © 2009 Google Inc. All Rights Reserved\nCopyright
-        © 2011 Kurt Aaholst. All Rights Reserved.
+        © 2011 Kurt Aaholst. All Rights Reserved.\nCopyright © 2026 Adriano Frongillo. All Rights Reserved.
     </string>
 
     <string name="PLAY_NOW">Play</string>
@@ -264,10 +264,10 @@
 
     <string name="about_team" translatable="false">Team</string>
     <string name="about_authors" translatable="false">Benjamin Viertel\nKurt Aaholst\nNik Clayton\nBrad Fitzpatrick</string>
-    <string name="about_website" translatable="false"><a href="https://kaaholst.github.io/android-squeezer/">Website</a></string>
-    <string name="about_issues" translatable="false"><a href="https://github.com/kaaholst/android-squeezer/issues">Issues</a></string>
-    <string name="about_privacy_policy" translatable="false"><a href="https://kaaholst.github.io/android-squeezer/privacy">Privacy policy</a></string>
-    <string name="license" translatable="false">https://kaaholst.github.io/android-squeezer/license</string>
+    <string name="about_website" translatable="false"><a href="https://github.com/adri6412/osmium-sound">Website</a>\n<a href="https://kaaholst.github.io/android-squeezer/">Original Squeezer Website</a></string>
+    <string name="about_issues" translatable="false"><a href="https://github.com/adri6412/osmium-sound/issues">Issues</a>\n<a href="https://github.com/kaaholst/android-squeezer/issues">Original Squeezer Issues</a></string>
+    <string name="about_privacy_policy" translatable="false"><a href="https://github.com/adri6412/osmium-sound">Privacy policy</a>\n<a href="https://kaaholst.github.io/android-squeezer/privacy">Original Squeezer Privacy policy</a></string>
+    <string name="license" translatable="false"><a href="https://github.com/adri6412/osmium-sound/blob/main/LICENSE">License</a>\n<a href="https://kaaholst.github.io/android-squeezer/license">Original Squeezer License</a></string>
     <string name="configure_select_player">Select player to control</string>
     <string name="configure_select_button">Widget action</string>
     <string name="remote_unknownDescription">Unknown</string>
