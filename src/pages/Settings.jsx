@@ -67,6 +67,11 @@ const Settings = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [apiConnected, setApiConnected] = useState(false);
 
+  // Companion-app pairing token: minted fresh each time the "Phone control"
+  // QR is opened, so the QR always carries a currently-valid token (scanning
+  // it again just adds another valid token — see sources_server.py /api/pair/token).
+  const [pairToken, setPairToken] = useState(null);
+
   // SSH server toggle
   const [sshStatus, setSshStatus] = useState(null); // { available, enabled, active }
   const [sshBusy, setSshBusy] = useState(false);
@@ -425,6 +430,28 @@ const Settings = () => {
   };
   const addBand = () => setDspBands((b) => [...b, { freq: 1000, gain: 0, q: 1.0 }]);
   const removeBand = (i) => setDspBands((b) => b.filter((_, idx) => idx !== i));
+
+  // Mint a fresh pairing token whenever the "Phone control" QR section is
+  // opened, so the QR always embeds a token the companion app can use to
+  // authenticate its DSP calls (see sources_server.py's /api/pair/token and
+  // _require_pair_token()). Minting is safe to leave unauthenticated itself:
+  // seeing the token requires physical access to the appliance's screen.
+  useEffect(() => {
+    if (activeSection !== 'custom-web-remote') return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const r = await fetch('http://localhost:8080/api/pair/token', { method: 'POST' });
+        if (r.ok) {
+          const data = await r.json();
+          if (!cancelled) setPairToken(data.token || null);
+        }
+      } catch (_) {
+        if (!cancelled) setPairToken(null);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [activeSection]);
 
   // Auto-check for updates on mount (only if the user kept it enabled);
   // clean up any poll on unmount.
@@ -907,6 +934,13 @@ const Settings = () => {
   const webRemoteUrl = isUsableIp ? `http://${deviceIp}:${lyrionPort}/material/` : null;
   // Sources web service (:8080) — also hosts the Backup/restore page.
   const sourcesUrl = isUsableIp ? `http://${deviceIp}:8080` : null;
+  // Companion-app pairing QR payload: JSON (not a bare URL) so the app can pick
+  // out the LMS address, the :8080 API address, and the pairing token in one
+  // scan. `pairToken` is minted fresh each time this section is opened (see the
+  // useEffect above) — the QR isn't shown/usable until it arrives.
+  const pairingQrValue = (isUsableIp && pairToken)
+    ? JSON.stringify({ lms: webRemoteUrl, api: `${deviceIp}:8080`, token: pairToken })
+    : null;
 
   const settingsSections = [
     {
@@ -1693,15 +1727,20 @@ const Settings = () => {
                   <div className="space-y-4">
                     <p className="text-sm text-hifi-silver">{t('settings.webRemote.help')}</p>
 
-                    {webRemoteUrl ? (
+                    {pairingQrValue ? (
                       <div className="flex flex-col items-center space-y-4">
                         <div className="bg-white p-4 rounded-xl">
-                          <QRCodeSVG value={webRemoteUrl} size={200} level="M" />
+                          <QRCodeSVG value={pairingQrValue} size={200} level="M" />
                         </div>
                         <div className="text-center">
                           <p className="text-xs text-hifi-silver mb-1">{t('settings.webRemote.scanHint')}</p>
                           <code className="text-sm text-hifi-gold break-all">{webRemoteUrl}</code>
                         </div>
+                      </div>
+                    ) : webRemoteUrl ? (
+                      <div className="flex flex-col items-center space-y-3 text-hifi-silver text-sm">
+                        <Loader2 size={24} className="animate-spin" />
+                        <span>{t('settings.webRemote.generatingToken')}</span>
                       </div>
                     ) : (
                       <div className="rounded-lg p-3 text-center text-sm bg-hifi-dark text-hifi-silver">

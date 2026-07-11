@@ -24,6 +24,9 @@ import subprocess
 import threading
 import io
 import tarfile
+import secrets
+import urllib.request
+import urllib.error
 from datetime import datetime, timezone
 
 app = Flask(__name__)
@@ -675,6 +678,114 @@ def api_dsp_fir_delete():
             os.remove(p)
             removed = True
     return jsonify({"success": True, "removed": removed})
+
+
+# ─────────────────────────── App pairing token ────────────────────────
+# The companion app's DSP controls are a live "control" surface (unlike the
+# FIR/backup/restore endpoints above, which are also reachable from a plain
+# phone browser via the separate sourcesUrl QR and must stay usable from a
+# bare <a href>). To scope DSP control to phones the user has actually
+# paired, the appliance UI (Settings → Phone control) mints a fresh token
+# each time the pairing QR is (re)generated and embeds it in the QR
+# alongside the LMS/API host:port; the app stores it and sends it back as
+# `Authorization: Bearer <token>` on every DSP call. Tokens are persisted
+# (survive a service restart) and never expire/rotate out on their own —
+# re-scanning the QR just adds another valid token, so multiple paired
+# phones can coexist.
+PAIR_TOKENS_FILE = "/etc/hifi-pairing-tokens.json"
+
+
+def _load_pair_tokens():
+    try:
+        with open(PAIR_TOKENS_FILE) as f:
+            data = json.load(f)
+            return data if isinstance(data, list) else []
+    except Exception:
+        return []
+
+
+def _save_pair_tokens(tokens):
+    os.makedirs(os.path.dirname(PAIR_TOKENS_FILE), exist_ok=True)
+    tmp = PAIR_TOKENS_FILE + ".tmp"
+    with open(tmp, "w") as f:
+        json.dump(tokens, f)
+    os.replace(tmp, PAIR_TOKENS_FILE)
+
+
+@app.route("/api/pair/token", methods=["POST"])
+def api_pair_token():
+    """Mint a new pairing token, shown to the user only via the appliance's
+    own QR code (Settings → Phone control) — safe to leave unauthenticated
+    like the rest of this port, since minting a token requires physical
+    access to the appliance's screen, not just LAN access."""
+    token = secrets.token_urlsafe(24)
+    tokens = _load_pair_tokens()
+    tokens.append({"token": token, "created": datetime.now(timezone.utc).isoformat()})
+    _save_pair_tokens(tokens)
+    return jsonify({"token": token})
+
+
+def _require_pair_token():
+    """Returns None if the request is exempt (local kiosk UI) or carries a
+    valid pairing token, otherwise a (jsonify(...), status) tuple to return
+    immediately. The Electron kiosk UI on the appliance itself already calls
+    these endpoints from 127.0.0.1 (same machine, no network hop) — only
+    requests arriving over the LAN (the phone app) need a token."""
+    if request.remote_addr in ("127.0.0.1", "::1"):
+        return None
+    auth = request.headers.get("Authorization", "")
+    token = auth[len("Bearer "):] if auth.startswith("Bearer ") else None
+    if not token or not any(t.get("token") == token for t in _load_pair_tokens()):
+        return jsonify({"success": False, "message": "Token di pairing mancante o non valido"}), 401
+    return None
+
+
+# ─────────────────────────── DSP status/control proxy ────────────────
+# api_server.py:8000 (root, unauthenticated, exposes reboot/shutdown/network
+# reconfig) is deliberately loopback-only — see the bind comment at the
+# bottom of that file. dsp_status/dsp_set are the one piece of that API the
+# phone companion app needs, so we relay just those two calls through this
+# already-LAN-exposed, already-root service instead of widening api_server's
+# bind address. Unlike the FIR/backup endpoints above, these two require a
+# valid pairing token (see above) since they're control, not just data.
+_API_SERVER_BASE = "http://127.0.0.1:8000"
+
+
+def _proxy_to_api_server(path, method="GET", body=None):
+    req = urllib.request.Request(f"{_API_SERVER_BASE}{path}", method=method)
+    data = None
+    if body is not None:
+        data = json.dumps(body).encode("utf-8")
+        req.add_header("Content-Type", "application/json")
+    try:
+        with urllib.request.urlopen(req, data=data, timeout=10) as resp:
+            return json.loads(resp.read().decode("utf-8")), resp.status
+    except urllib.error.HTTPError as e:
+        try:
+            return json.loads(e.read().decode("utf-8")), e.code
+        except Exception:
+            return {"success": False, "message": str(e)}, e.code
+    except Exception as e:
+        return {"success": False, "message": f"DSP service non raggiungibile: {e}"}, 502
+
+
+@app.route("/api/dsp/status", methods=["GET"])
+def api_dsp_status_proxy():
+    denied = _require_pair_token()
+    if denied:
+        return denied
+    body, status = _proxy_to_api_server("/dsp_status")
+    return jsonify(body), status
+
+
+@app.route("/api/dsp/set", methods=["POST"])
+def api_dsp_set_proxy():
+    denied = _require_pair_token()
+    if denied:
+        return denied
+    data = request.get_json(silent=True) or {}
+    body, status = _proxy_to_api_server("/dsp_set", method="POST", body=data)
+    return jsonify(body), status
 
 
 # ─────────────────────────── HTTP API ───────────────────────────────

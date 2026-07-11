@@ -236,8 +236,9 @@
       "failed": "Impossibile modificare il gruppo multiroom."
     },
     "webRemote": {
-      "help": "Controlla questo dispositivo da qualsiasi telefono o tablet sulla stessa rete, usando il browser — nessuna app da installare. Apri l'indirizzo qui sotto o inquadra il QR code.",
-      "scanHint": "Inquadra con la fotocamera del telefono",
+      "help": "Abbina l'app Osmium Sound Companion a questo dispositivo inquadrando il QR code (contiene anche un token di pairing monouso). Per controllare il dispositivo da un normale browser, apri invece l'indirizzo mostrato sotto il codice.",
+      "scanHint": "Inquadra con l'app companion",
+      "generatingToken": "Generazione codice di pairing…",
       "noIp": "Nessun indirizzo di rete disponibile. Collega il dispositivo alla rete (Ethernet o Wi-Fi) per ottenere un link di controllo."
     },
     "backup": {
