@@ -46,7 +46,6 @@ public class AboutDialog extends DialogFragment {
         final TextView versionText = view.findViewById(R.id.version_text);
         view.<TextView>findViewById(R.id.website).setMovementMethod(LinkMovementMethod.getInstance());
         view.<TextView>findViewById(R.id.issues).setMovementMethod(LinkMovementMethod.getInstance());
-        view.<TextView>findViewById(R.id.privacy).setMovementMethod(LinkMovementMethod.getInstance());
 
         PackageManager pm = getActivity().getPackageManager();
         PackageInfo info;
