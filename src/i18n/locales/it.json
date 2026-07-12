@@ -94,9 +94,9 @@
     },
     "sources": {
       "title": "Sorgenti musicali",
-      "subtitle": "Apri questo indirizzo dal tuo computer o telefono per aggiungere le tue cartelle musicali — locali sul dispositivo o condivise in rete (SMB).",
+      "subtitle": "Inquadra il QR con il telefono per aprire la pagina di configurazione e aggiungere le tue cartelle musicali — locali sul dispositivo o condivise in rete (SMB).",
       "addressLabel": "Indirizzo configurazione",
-      "scanHint": "Scansiona il QR o digita l'indirizzo nel browser"
+      "scanHint": "Scansiona il QR con la fotocamera del telefono"
     },
     "lyrion": {
       "title": "Server musicale pronto",
