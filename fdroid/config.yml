@@ -10,9 +10,13 @@ archive_older: 3
 # Repo signing keystore is generated once locally (PKCS12, alias
 # osmium-sound-fdroid) and is NEVER committed here. In CI it is written to
 # this path from the FDROID_REPO_KEYSTORE secret (base64-encoded) before
-# `fdroid update` runs. PKCS12 requires keypass == keystorepass, so both are
-# sourced from the same FDROID_REPO_KEYSTORE_PASSWORD secret.
+# `fdroid update` runs.
+#
+# Passwords are intentionally NOT set here (YAML has no $VAR interpolation —
+# a literal "$FOO" string here would be used as the actual password and
+# fail). fdroidserver reads them from the FDROID_KEY_STORE_PASS and
+# FDROID_KEY_PASS environment variables when keystorepass/keypass are
+# absent from this file; CI sets both to the same secret since PKCS12
+# requires keypass == keystorepass.
 keystore: "keystore.p12"
 repo_keyalias: "osmium-sound-fdroid"
-keystorepass: "$FDROID_REPO_KEYSTORE_PASSWORD"
-keypass: "$FDROID_REPO_KEYSTORE_PASSWORD"

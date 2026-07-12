@@ -239,7 +239,10 @@ jobs:
       - name: Update F-Droid index
         working-directory: fdroid
         env:
-          FDROID_REPO_KEYSTORE_PASSWORD: ${{ secrets.FDROID_REPO_KEYSTORE_PASSWORD }}
+          # fdroidserver's own env var names for keystorepass/keypass (see
+          # comment in fdroid/config.yml) — PKCS12 requires both to match.
+          FDROID_KEY_STORE_PASS: ${{ secrets.FDROID_REPO_KEYSTORE_PASSWORD }}
+          FDROID_KEY_PASS: ${{ secrets.FDROID_REPO_KEYSTORE_PASSWORD }}
         run: fdroid update --create-metadata --verbose
 
       - name: Remove keystore before publishing
