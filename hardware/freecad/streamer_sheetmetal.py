@@ -57,8 +57,8 @@ tap_d   = 2.6
 
 # CD e mini PC: fissati con biadesivo (nessun foro)
 # Schermo: interasse dei 4 fori di fissaggio
-screen_mnt_dx, screen_mnt_dy = 152.1, 113.1
-screen_hole_d = 5.5     # foro schermo maggiorato -> tolleranza +/-1mm (usa rondelle)
+screen_mnt_dx, screen_mnt_dy = 156.0, 115.0   # misurati sullo schermo reale (il datasheet/1a misura 152.1x113.1 era sbagliata)
+screen_hole_d = 6.5     # foro schermo maggiorato -> tolleranza +/-1.75mm (usa rondelle larghe)
 
 # Profondita' esterna totale richiesta (22 cm)
 ext_depth = 220.0

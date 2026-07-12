@@ -29,8 +29,8 @@ screen_w, screen_h = 164.9, 124.27
 view_w, view_h     = 154.21, 85.92
 view_offy          = 0.0
 screen_gap         = 6.6
-screen_mnt_dx, screen_mnt_dy = 152.1, 113.1
-screen_hole_d = 5.5
+screen_mnt_dx, screen_mnt_dy = 156.0, 115.0   # misurati sullo schermo reale (prima: 152.1x113.1, errati)
+screen_hole_d = 6.5
 
 # Lettore CD slim
 cd_w, cd_d, cd_h = 137.2, 137.2, 15.0

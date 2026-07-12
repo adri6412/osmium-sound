@@ -6,7 +6,7 @@ Riadattamento per **stampa 3D FDM** del progetto in lamiera
 pannelli piatti imbullonati** + ripiano interno.
 
 Le **misure funzionali sono identiche** alla versione in alluminio
-(finestra schermo, 4 fori schermo a interasse 152.1 × 113.1, fessura CD,
+(finestra schermo, 4 fori schermo a interasse 156 × 115, fessura CD,
 fori connettori, quota ripiano). Cambiano **solo spessori e giunzioni**.
 
 ---

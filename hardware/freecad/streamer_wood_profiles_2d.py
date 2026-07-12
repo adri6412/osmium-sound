@@ -19,10 +19,10 @@ H   = 178.3            # altezza totale
 Dch = 210.0            # profondità totale (Dch - t)
 
 # Schermo
-screen_mnt_dx, screen_mnt_dy = 152.1, 113.1
+screen_mnt_dx, screen_mnt_dy = 156.0, 115.0   # misurati sullo schermo reale (prima: 152.1x113.1, errati)
 screen_cz = 89.15 + 0.0  # centro schermo in Z
 view_w, view_h = 154.21, 85.92
-screen_hole_d = 5.5
+screen_hole_d = 6.5
 
 # CD
 z_cd_c = 16.0

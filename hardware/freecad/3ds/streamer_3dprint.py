@@ -14,7 +14,7 @@
 #    - ogni pezzo e' un pannello piatto -> stampa facile sul piano
 #
 #  Le MISURE FUNZIONALI sono identiche al progetto lamiera:
-#    finestra schermo, 4 fori schermo (interasse 152.1 x 113.1),
+#    finestra schermo, 4 fori schermo (interasse 156 x 115),
 #    fessura CD, fori connettori posteriori, quota ripiano mini PC.
 #  Cambiano solo spessori e sistema di fissaggio.
 #
@@ -35,7 +35,7 @@ ins_d   = 4.0     # foro per inserto M3 a caldo (knurled). Tipico 4.0-4.6:
                   #   PLA/PETG 4.0, ABS 4.2. Regola qui se l'inserto e' diverso.
 ins_dep = 7.0     # profondita' foro inserto
 clr_d   = 3.4     # foro passante vite M3
-screen_hole_d = 5.5   # fori schermo maggiorati (come lamiera, +/-1mm tolleranza)
+screen_hole_d = 6.5   # fori schermo maggiorati (come lamiera, +/-1.75mm tolleranza)
 
 # ===================== COMPONENTI (invariati) =======================
 # Schermo Waveshare 7" (C)
@@ -54,7 +54,7 @@ top_margin = 8.0
 ext_depth  = 220.0
 
 # Interasse fori schermo
-screen_mnt_dx, screen_mnt_dy = 152.1, 113.1
+screen_mnt_dx, screen_mnt_dy = 156.0, 115.0   # misurati sullo schermo reale (prima: 152.1x113.1, errati)
 
 # Connettori posteriori (dai datasheet reali)
 usb_cut_w, usb_cut_h = 14.0, 16.0
