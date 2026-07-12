@@ -1,5 +1,10 @@
 # Scocca Network Streamer HiFi
 
+> ⚠️ **BETA — non ancora testata.** Il progetto della scocca è in fase di prima
+> validazione: i pezzi sono stati prodotti ma il **montaggio completo non è ancora
+> stato eseguito**. Misure, fori e istruzioni potrebbero contenere errori non ancora
+> emersi. Non ordinare pezzi basandoti su questi file senza una verifica propria.
+
 Cabinet in **lamiera di alluminio piegata** (JLCPCB Sheet Metal) per il network
 streamer HiFi, con schermo touch da 7", lettore CD slim e mini PC.
 
