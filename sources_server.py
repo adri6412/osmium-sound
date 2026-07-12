@@ -887,9 +887,14 @@ def _proxy_to_api_server(path, method="GET", body=None):
         try:
             return json.loads(e.read().decode("utf-8")), e.code
         except Exception:
-            return {"success": False, "message": str(e)}, e.code
+            # api_server.py didn't return JSON for this error — don't forward
+            # the raw exception text (may contain internal paths/details) to
+            # the caller; log it server-side instead.
+            print(f"[sources] proxy to {path} failed: {e}")
+            return {"success": False, "message": "Servizio DSP non disponibile"}, e.code
     except Exception as e:
-        return {"success": False, "message": f"DSP service non raggiungibile: {e}"}, 502
+        print(f"[sources] proxy to {path} unreachable: {e}")
+        return {"success": False, "message": "Servizio DSP non raggiungibile"}, 502
 
 
 @app.route("/api/dsp/status", methods=["GET"])
