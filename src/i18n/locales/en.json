@@ -243,7 +243,16 @@
         "hostRequired": "Enter the IP address of the device to follow.",
         "apply": "Apply",
         "saved": "Lyrion server updated.",
-        "failed": "Could not update the Lyrion server."
+        "failed": "Could not update the Lyrion server.",
+        "discoveredLabel": "Devices found on the network",
+        "scan": "Scan",
+        "noneFound": "No Lyrion server found automatically. Enter the IP address by hand below."
+      },
+      "name": {
+        "title": "This player's name",
+        "help": "Every Osmium Sound device is named \"OsmiumSound\" by default — group two of them and you can't tell them apart. Give it a unique name (e.g. \"LivingRoom\", no spaces).",
+        "saved": "Player name updated.",
+        "failed": "Could not update the player name."
       }
     },
     "webRemote": {

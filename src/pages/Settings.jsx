@@ -175,6 +175,18 @@ const Settings = () => {
   const [followHostInput, setFollowHostInput] = useState('');
   const [lmsRoleBusy, setLmsRoleBusy] = useState(false);
   const [lmsRoleMessage, setLmsRoleMessage] = useState('');
+  // LAN broadcast discovery of other Lyrion servers, so the host above can
+  // usually be picked instead of typed in by hand (kept as fallback).
+  const [discoveredServers, setDiscoveredServers] = useState([]);
+  const [discoveryBusy, setDiscoveryBusy] = useState(false);
+  const [discoveryAttempted, setDiscoveryAttempted] = useState(false);
+
+  // This device's squeezelite display name — defaults to "OsmiumSound" on
+  // every unit, which makes them indistinguishable once grouped.
+  const [playerName, setPlayerName] = useState('OsmiumSound');
+  const [playerNameInput, setPlayerNameInput] = useState('');
+  const [playerNameBusy, setPlayerNameBusy] = useState(false);
+  const [playerNameMessage, setPlayerNameMessage] = useState('');
 
   // ── Alarms (per-player, via Lyrion) ────────────────────────────
   const [alarms, setAlarms] = useState([]);
@@ -185,6 +197,7 @@ const Settings = () => {
   // Refs for input fields with automatic keyboard
   const lyrionUrlRef = useKeyboardInput(lyrionUrl, setLyrionUrl);
   const followHostRef = useKeyboardInput(followHostInput, setFollowHostInput);
+  const playerNameRef = useKeyboardInput(playerNameInput, setPlayerNameInput);
   
   // Test keyboard context
   const { showKeyboard } = useKeyboard();
@@ -199,6 +212,7 @@ const Settings = () => {
     loadPlaybackPrefs();
     loadDspStatus();
     loadLmsRole();
+    loadPlayerName();
   }, []);
 
   // ── Playback preferences handlers ───────────────────────────────
@@ -228,14 +242,17 @@ const Settings = () => {
   // The appliance is players[0]; every other player can be grouped with it.
   // A player synced to the appliance shows up in the appliance's sync_slaves.
   const loadMultiroom = async (mac = playerMac, players = null) => {
-    if (!mac) return;
+    if (!mac) return null;
     try {
       const all = players || await lyrionApi.getPlayers();
       setOtherPlayers((all || []).filter((p) => p.playerid && p.playerid !== mac));
       const sync = await lyrionApi.getPlayerSync(mac);
       setSyncSlaves(sync.slaves || []);
-    } catch (_) {}
+      return sync.slaves || [];
+    } catch (_) { return null; }
   };
+
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
   const toggleSync = async (otherMac, shouldGroup) => {
     if (!playerMac) return;
@@ -244,7 +261,15 @@ const Settings = () => {
     try {
       if (shouldGroup) await lyrionApi.syncPlayer(otherMac, playerMac);
       else await lyrionApi.unsyncPlayer(otherMac);
-      await loadMultiroom(playerMac);
+      // LMS applies sync/unsync internally with a short delay (more so across
+      // two separate devices than for two players on the same local LMS), so
+      // reading status right away can race ahead of it and still show the old
+      // state. Retry briefly until the change is actually reflected.
+      let slaves = await loadMultiroom(playerMac);
+      for (let i = 0; i < 5 && slaves != null && slaves.includes(otherMac) !== shouldGroup; i++) {
+        await sleep(400);
+        slaves = await loadMultiroom(playerMac);
+      }
       setMultiroomMessage(t('settings.multiroom.saved'));
     } catch (_) {
       setMultiroomMessage(t('settings.multiroom.failed'));
@@ -286,6 +311,40 @@ const Settings = () => {
       await loadPlaybackPrefs(newLyrionUrl);
     } else {
       setLmsRoleMessage(res.data?.message || res.message || t('settings.multiroom.role.failed'));
+    }
+  };
+
+  const scanLmsServers = async () => {
+    setDiscoveryBusy(true);
+    setDiscoveryAttempted(true);
+    const res = await systemAPI.discoverLmsServers();
+    setDiscoveryBusy(false);
+    if (res.success && Array.isArray(res.data?.servers)) {
+      setDiscoveredServers(res.data.servers.filter((s) => s.ip !== deviceIp));
+    }
+  };
+
+  // ── Player name (squeezelite -n) ─────────────────────────────────
+  const loadPlayerName = async () => {
+    const res = await systemAPI.getPlayerName();
+    if (res.success && res.data?.name) {
+      setPlayerName(res.data.name);
+      setPlayerNameInput(res.data.name);
+    }
+  };
+
+  const applyPlayerName = async () => {
+    const name = playerNameInput.trim();
+    if (!name || name === playerName) return;
+    setPlayerNameBusy(true);
+    setPlayerNameMessage('');
+    const res = await systemAPI.setPlayerName(name);
+    setPlayerNameBusy(false);
+    if (res.success && res.data?.success) {
+      setPlayerName(name);
+      setPlayerNameMessage(res.data.message || t('settings.multiroom.name.saved'));
+    } else {
+      setPlayerNameMessage(res.data?.message || res.message || t('settings.multiroom.name.failed'));
     }
   };
 
@@ -1608,6 +1667,39 @@ const Settings = () => {
                   <div className="space-y-4">
                     <p className="text-sm text-hifi-silver">{t('settings.multiroom.help')}</p>
 
+                    {/* Player name — every device defaults to "OsmiumSound", rename to
+                        tell them apart once two show up in the same server's list. */}
+                    <div className="space-y-3 bg-hifi-dark rounded-lg p-4 border border-hifi-accent/40">
+                      <label className="text-white font-medium">{t('settings.multiroom.name.title')}</label>
+                      <p className="text-xs text-hifi-silver">{t('settings.multiroom.name.help')}</p>
+                      <div onClick={() => showKeyboard(playerNameRef, playerNameInput)} className="cursor-pointer">
+                        <input
+                          ref={playerNameRef}
+                          type="text"
+                          value={playerNameInput}
+                          onChange={(e) => setPlayerNameInput(e.target.value)}
+                          placeholder={playerName}
+                          className="w-full bg-hifi-surface border border-hifi-accent rounded-lg px-4 py-3 text-white focus:outline-none focus:border-hifi-gold cursor-pointer"
+                        />
+                      </div>
+                      <button
+                        onClick={applyPlayerName}
+                        disabled={playerNameBusy || !playerNameInput.trim() || playerNameInput.trim() === playerName}
+                        className="w-full bg-hifi-gold text-black font-semibold py-2.5 rounded-lg hover:brightness-110 disabled:opacity-50 transition"
+                      >
+                        {t('settings.multiroom.role.apply')}
+                      </button>
+                      {playerNameMessage && (
+                        <div className={`rounded-lg p-3 text-center text-sm ${
+                          isErrorMsg(playerNameMessage)
+                            ? 'bg-red-900/20 text-red-300 border border-red-500/30'
+                            : 'bg-hifi-surface text-hifi-silver'
+                        }`}>
+                          {playerNameMessage}
+                        </div>
+                      )}
+                    </div>
+
                     {/* LMS role: standalone (own server) vs. following another device's */}
                     <div className="space-y-3 bg-hifi-dark rounded-lg p-4 border border-hifi-accent/40">
                       <label className="text-white font-medium">{t('settings.multiroom.role.title')}</label>
@@ -1629,15 +1721,52 @@ const Settings = () => {
                       </div>
 
                       {lmsRoleMode === 'follow' && (
-                        <div onClick={() => showKeyboard(followHostRef, followHostInput)} className="cursor-pointer">
-                          <input
-                            ref={followHostRef}
-                            type="text"
-                            value={followHostInput}
-                            onChange={(e) => setFollowHostInput(e.target.value)}
-                            placeholder={t('settings.multiroom.role.hostPlaceholder')}
-                            className="w-full bg-hifi-surface border border-hifi-accent rounded-lg px-4 py-3 text-white focus:outline-none focus:border-hifi-gold cursor-pointer"
-                          />
+                        <div className="space-y-2">
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs text-hifi-silver">{t('settings.multiroom.role.discoveredLabel')}</span>
+                            <button
+                              onClick={scanLmsServers}
+                              disabled={discoveryBusy}
+                              className="flex items-center gap-1.5 text-xs text-hifi-gold hover:brightness-110 disabled:opacity-50 transition"
+                            >
+                              {discoveryBusy ? <Loader2 size={12} className="animate-spin" /> : <RotateCw size={12} />}
+                              {t('settings.multiroom.role.scan')}
+                            </button>
+                          </div>
+
+                          {discoveredServers.length > 0 && (
+                            <div className="space-y-1.5">
+                              {discoveredServers.map((s) => (
+                                <button
+                                  key={s.ip}
+                                  onClick={() => setFollowHostInput(s.ip)}
+                                  className={`w-full flex items-center justify-between rounded-lg px-3 py-2 text-sm transition-colors ${
+                                    followHostInput === s.ip
+                                      ? 'bg-hifi-gold text-black font-semibold'
+                                      : 'bg-hifi-surface text-white hover:bg-hifi-light/40'
+                                  }`}
+                                >
+                                  <span>{s.name}</span>
+                                  <span className="opacity-70 font-mono text-xs">{s.ip}</span>
+                                </button>
+                              ))}
+                            </div>
+                          )}
+
+                          {!discoveryBusy && discoveryAttempted && discoveredServers.length === 0 && (
+                            <p className="text-xs text-hifi-silver">{t('settings.multiroom.role.noneFound')}</p>
+                          )}
+
+                          <div onClick={() => showKeyboard(followHostRef, followHostInput)} className="cursor-pointer">
+                            <input
+                              ref={followHostRef}
+                              type="text"
+                              value={followHostInput}
+                              onChange={(e) => setFollowHostInput(e.target.value)}
+                              placeholder={t('settings.multiroom.role.hostPlaceholder')}
+                              className="w-full bg-hifi-surface border border-hifi-accent rounded-lg px-4 py-3 text-white focus:outline-none focus:border-hifi-gold cursor-pointer"
+                            />
+                          </div>
                         </div>
                       )}
 

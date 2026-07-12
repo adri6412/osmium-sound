@@ -580,6 +580,88 @@ def set_lms_role(mode, host):
     msg = 'Ripristinato il server Lyrion locale' if mode == 'local' else f'Server Lyrion impostato su {target}'
     return {'success': True, 'host': target if mode == 'follow' else None, 'message': msg}
 
+# ── Player name (-n) — every device ships as "OsmiumSound" by default, which
+# makes them indistinguishable once two are grouped for multiroom. Letting an
+# owner rename this is the fix. No spaces: systemd's `ExecStart=... $ARGS`
+# splits on whitespace with no shell-style quoting, so a space would be seen
+# by squeezelite as the start of a new argument instead of part of -n's value.
+_PLAYER_NAME_RE = re.compile(r'^[A-Za-z0-9_.\-]{1,24}$')
+
+def _valid_player_name(name):
+    return bool(isinstance(name, str) and _PLAYER_NAME_RE.match(name))
+
+def _current_player_name():
+    _, args = _read_sq_args()
+    if args:
+        m = re.search(r'-n\s+(\S+)', args)
+        if m:
+            return m.group(1)
+    return 'OsmiumSound'
+
+def get_player_name():
+    return {'name': _current_player_name()}
+
+def set_player_name(name):
+    if not _valid_player_name(name):
+        return {'success': False, 'message': 'Nome non valido: solo lettere, numeri, punto, trattino e underscore, senza spazi (max 24 caratteri)'}
+    _, args = _read_sq_args()
+    if args is None:
+        return {'success': False, 'message': 'Configurazione squeezelite non trovata'}
+    if re.search(r'-n\s+\S+', args):
+        args = re.sub(r'-n\s+\S+', f'-n {name}', args)
+    else:
+        args = (args + f' -n {name}').strip()
+    _write_sq_args(args)
+
+    try:
+        r = _run(['systemctl', 'restart', 'squeezelite'], timeout=30)
+        if r.returncode != 0:
+            return {'success': True, 'name': name, 'message': f'Nome impostato ({name}); riavvio squeezelite: {(r.stderr or "").strip()}'}
+    except Exception:
+        log.exception("set_player_name: squeezelite restart failed")
+        return {'success': True, 'name': name, 'message': f'Nome impostato ({name}); riavvio non riuscito'}
+    return {'success': True, 'name': name, 'message': f'Nome player impostato su {name}'}
+
+# ── LAN discovery of other Lyrion/LMS servers ──────────────────────
+# Native Slim/Squeezebox discovery protocol (UDP 3483): broadcast a single
+# 'e' probe, any Lyrion/LMS instance on the same broadcast domain answers
+# with an 'E'-prefixed TLV packet (NAME/JSON tags = server name / web+API
+# port). This is the exact zero-config mechanism official Squeezebox
+# controllers use to find servers, so no IP has to be typed in by hand.
+def discover_lms_servers(timeout=1.5):
+    found = {}
+    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
+    sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    sock.settimeout(0.3)
+    try:
+        sock.sendto(b'e', ('255.255.255.255', 3483))
+        end = time.time() + timeout
+        while time.time() < end:
+            try:
+                data, addr = sock.recvfrom(1024)
+            except socket.timeout:
+                continue
+            if not data or data[:1] != b'E':
+                continue
+            name, port = None, '9000'
+            body, i = data[1:], 0
+            while i + 5 <= len(body):
+                tag = body[i:i + 4]
+                ln = body[i + 4]
+                val = body[i + 5:i + 5 + ln]
+                if tag == b'NAME':
+                    name = val.decode('utf-8', 'replace')
+                elif tag == b'JSON':
+                    port = val.decode('ascii', 'replace') or '9000'
+                i += 5 + ln
+            found[addr[0]] = {'ip': addr[0], 'name': name or addr[0], 'port': port}
+    except Exception:
+        log.exception("discover_lms_servers failed")
+    finally:
+        sock.close()
+    return sorted(found.values(), key=lambda s: s['ip'])
+
 # ──────────────────────────────────────────────────────────────────
 #  SSH service control — the appliance ships with SSH disabled; this lets
 #  the user turn it on/off from Settings. The unit name is resolved from a
@@ -1703,6 +1785,19 @@ def api_lms_role():
 def api_set_lms_role():
     data = request.get_json(silent=True) or {}
     return jsonify(set_lms_role(data.get('mode'), data.get('host')))
+
+@app.route('/player_name', methods=['GET'])
+def api_player_name():
+    return jsonify(get_player_name())
+
+@app.route('/player_name', methods=['POST'])
+def api_set_player_name():
+    data = request.get_json(silent=True) or {}
+    return jsonify(set_player_name(data.get('name')))
+
+@app.route('/discover_lms', methods=['GET'])
+def api_discover_lms():
+    return jsonify({'servers': discover_lms_servers()})
 
 @app.route('/dsp_status', methods=['GET'])
 def api_dsp_status():

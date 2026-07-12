@@ -120,6 +120,13 @@ export const systemAPI = {
   // device's LMS on the LAN ('follow', host required, IPv4). Restarts
   // squeezelite. Returns { success, host, message }
   setLmsRole: (mode, host) => apiPost('/lms_role', { mode, host }),
+  // This device's squeezelite display name (default "OsmiumSound"). Returns { name }
+  getPlayerName: () => apiGet('/player_name'),
+  // Rename this device's player and restart squeezelite. Returns { success, name, message }
+  setPlayerName: (name) => apiPost('/player_name', { name }),
+  // Broadcast-discover other Lyrion/LMS servers on the LAN (no IP typing needed).
+  // Returns { servers: [{ ip, name, port }] }
+  discoverLmsServers: () => apiGet('/discover_lms'),
   // Tidal Connect daemon state: { available, enabled, active }
   getTidalStatus: () => apiGet('/tidal_status'),
   // Enable/disable the Tidal Connect daemon. Returns { success, enabled, active, message }
