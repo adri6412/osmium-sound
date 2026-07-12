@@ -300,6 +300,30 @@
     <string name="settings_audio_output_applied">Output device changed.</string>
     <string name="settings_audio_output_failed">Could not change the output device</string>
 
+    <string name="settings_category_multiroom">Multiroom</string>
+    <string name="settings_multiroom_title">Multiroom</string>
+    <string name="settings_multiroom_summary">Rename this player or group it with another Osmium Sound device</string>
+
+    <string name="settings_multiroom_name_title">This player\'s name</string>
+    <string name="settings_multiroom_name_help">Every Osmium Sound device is named \"OsmiumSound\" by default — group two of them and you can\'t tell them apart. Give it a unique name (no spaces).</string>
+    <string name="settings_multiroom_name_hint">Player name</string>
+    <string name="settings_multiroom_name_save">Save name</string>
+    <string name="settings_multiroom_name_saved">Player name updated.</string>
+    <string name="settings_multiroom_name_failed">Could not update the player name</string>
+
+    <string name="settings_multiroom_role_title">This device\'s Lyrion server</string>
+    <string name="settings_multiroom_role_help">For two devices to be grouped they must point at the same Lyrion server — each Osmium Sound runs its own and they can\'t see each other until they share one. Choose whether this device should use its own server or follow another device\'s.</string>
+    <string name="settings_multiroom_role_local">This device</string>
+    <string name="settings_multiroom_role_follow">Another device</string>
+    <string name="settings_multiroom_role_host_hint">IP address, e.g. 192.168.1.50</string>
+    <string name="settings_multiroom_role_apply">Apply</string>
+    <string name="settings_multiroom_role_scan">Scan network</string>
+    <string name="settings_multiroom_role_discovered_label">Devices found on the network</string>
+    <string name="settings_multiroom_role_none_found">No Lyrion server found automatically. Enter the IP address by hand below.</string>
+    <string name="settings_multiroom_role_host_required">Enter the IP address of the device to follow.</string>
+    <string name="settings_multiroom_role_saved">Lyrion server updated.</string>
+    <string name="settings_multiroom_role_failed">Could not update the Lyrion server</string>
+
     <string name="settings_category_playback">Playback</string>
     <string name="settings_playback_transition_title">Transition</string>
     <string name="settings_playback_transition_duration_title">Transition duration (seconds)</string>

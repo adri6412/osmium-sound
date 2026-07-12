@@ -125,6 +125,52 @@ public final class ApplianceHttpClient {
         enqueueJson(authedRequest("/api/dsp/set").post(body).build(), callback);
     }
 
+    /** This device's squeezelite display name (default "OsmiumSound"). Response: { name }. */
+    public static void playerName(JsonCallback callback) {
+        enqueueJson(authedRequest("/api/system/player_name").get().build(), callback);
+    }
+
+    /** Renames this device's player and restarts squeezelite. Response: { success, name, message }. */
+    public static void setPlayerName(String name, JsonCallback callback) {
+        JSONObject payload = new JSONObject();
+        try {
+            payload.put("name", name);
+        } catch (JSONException e) {
+            callback.onFailure(e.getMessage());
+            return;
+        }
+        RequestBody body = RequestBody.create(payload.toString(), JSON);
+        enqueueJson(authedRequest("/api/system/player_name").post(body).build(), callback);
+    }
+
+    /** Which Lyrion server this device's squeezelite points at. Response: { mode: "local"|"follow", host }. */
+    public static void lmsRole(JsonCallback callback) {
+        enqueueJson(authedRequest("/api/system/lms_role").get().build(), callback);
+    }
+
+    /**
+     * Points squeezelite at its own local Lyrion server ("local") or another
+     * device's LMS on the LAN ("follow", host required, IPv4). Restarts
+     * squeezelite. Response: { success, host, message }.
+     */
+    public static void setLmsRole(String mode, @androidx.annotation.Nullable String host, JsonCallback callback) {
+        JSONObject payload = new JSONObject();
+        try {
+            payload.put("mode", mode);
+            if (host != null) payload.put("host", host);
+        } catch (JSONException e) {
+            callback.onFailure(e.getMessage());
+            return;
+        }
+        RequestBody body = RequestBody.create(payload.toString(), JSON);
+        enqueueJson(authedRequest("/api/system/lms_role").post(body).build(), callback);
+    }
+
+    /** Broadcast-discovers other Lyrion/LMS servers on the LAN. Response: { servers: [{ ip, name, port }] }. */
+    public static void discoverLmsServers(JsonCallback callback) {
+        enqueueJson(authedRequest("/api/system/discover_lms").get().build(), callback);
+    }
+
     public static void firStatus(JsonCallback callback) {
         enqueueJson(authedRequest("/api/dsp/fir").get().build(), callback);
     }

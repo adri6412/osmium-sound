@@ -101,6 +101,7 @@ public class SettingsFragment  extends PreferenceFragmentCompat implements
         fillLyrionRescanPreferences();
         fillUpdatesPreferences();
         fillSystemAdminPreferences();
+        fillMultiroomPreferences();
     }
 
     private void fillDspPreferences() {
@@ -160,6 +161,14 @@ public class SettingsFragment  extends PreferenceFragmentCompat implements
         Preference pref = requirePreference("squeezer.system_admin.open");
         pref.setOnPreferenceClickListener(preference -> {
             SystemAdminActivity.show(requireActivity());
+            return true;
+        });
+    }
+
+    private void fillMultiroomPreferences() {
+        Preference pref = requirePreference("squeezer.multiroom.open");
+        pref.setOnPreferenceClickListener(preference -> {
+            MultiroomActivity.show(requireActivity());
             return true;
         });
     }

@@ -242,4 +242,13 @@
             android:title="@string/settings_system_admin_title"
             android:summary="@string/settings_system_admin_summary"/>
     </PreferenceCategory>
+
+    <PreferenceCategory
+        android:title="@string/settings_category_multiroom">
+
+        <Preference
+            android:key="squeezer.multiroom.open"
+            android:title="@string/settings_multiroom_title"
+            android:summary="@string/settings_multiroom_summary"/>
+    </PreferenceCategory>
 </PreferenceScreen>
