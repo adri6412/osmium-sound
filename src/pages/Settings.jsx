@@ -308,6 +308,22 @@ const Settings = () => {
       setLyrionUrl(newLyrionUrl);
       localStorage.setItem('lyrionUrl', newLyrionUrl);
       setPlayerMac(null);
+      if (mode === 'follow') {
+        // `systemctl restart squeezelite` returns before squeezelite has
+        // actually reconnected to the new server (TCP + slimproto handshake
+        // takes a moment), so an immediate player-list read can still show
+        // just the target LMS's own pre-existing player(s) — this device's
+        // own entry hasn't registered yet. Without this, the grouping toggle
+        // for the other player doesn't appear until a second "Applica".
+        // Poll briefly until at least 2 players are visible (this device +
+        // the one it's joining) before loading playback prefs.
+        lyrionApi.setBaseUrl(newLyrionUrl);
+        for (let i = 0; i < 8; i++) {
+          const players = await lyrionApi.getPlayers();
+          if (players && players.length >= 2) break;
+          await sleep(500);
+        }
+      }
       await loadPlaybackPrefs(newLyrionUrl);
     } else {
       setLmsRoleMessage(res.data?.message || res.message || t('settings.multiroom.role.failed'));
