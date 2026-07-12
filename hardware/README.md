@@ -101,20 +101,23 @@ grezzo il segno è poco contrastato).
 
 ## 5. Hardware da acquistare
 
-- **Viti M3 autofilettanti per lamiera** (oppure viti normali + **inserti/rivetti filettati
+- **Viti M3×8 autofilettanti per lamiera** (oppure viti normali + **inserti/rivetti filettati
   M3** — su 2 mm il filetto diretto non tiene, meglio inserti PEM o viti autofilettanti)
-  — **32 pz totali**, due lunghezze:
-  - **M3×10 mm** — **4 pz** (schermo: attraversano rondella + foro maggiorato Ø5.5 e si
-    avvitano nel frontale)
-  - **M3×8 mm** — **28 pz** (24 squadrette front/back + 4 ripiano: spessore lamiera 2mm
-    + presa nella squadretta/aletta, 8mm basta e non sfonda l'altra faccia)
+  — **20 pz** (16 squadrette front/back + 4 ripiano: spessore lamiera 2mm
+  + presa nella squadretta/aletta, 8mm basta e non sfonda l'altra faccia)
+- **Viti M3×10 a macchina**, testa cilindrica/bombata — **4 pz** (schermo: attraversano
+  rondella larga + foro maggiorato Ø5.5 e si serrano con **dado dietro la scheda**;
+  nel pannello NON fanno presa, il foro è maggiorato apposta)
 - **Squadrette a L interne** (staffa piccola **15×15×1.5 mm**, es. alluminio o acciaio
-  zincato) — **12 pz**: fissano frontale e retro (pannelli piatti, senza risvolti) ai
-  fianchi del corpo, **3 livelli per lato**
+  zincato; meglio con **fori ad asola**) — **8 pz**: 6 per il retro (3 livelli per lato)
+  + 2 per il frontale (**solo livello basso**: a metà e in alto c'è il modulo schermo,
+  z ≈ 38–162 mm, e non c'è spazio per squadrette o teste di vite — quei fori restano vuoti)
 - **Barre filettate M3, Ø3mm, tagliate a ~168 mm** (tiranti fondo↔coperchio) — **6 pz**
-  (si tagliano da una barra filettata M3 da 1 m con seghetto) — tengono insieme fondo e
-  coperchio (il coperchio **non** si avvita ai fianchi, non ci sono risvolti)
-- **Dadi M3** — **12 pz** (2 per tirante) + **Rondelle M3** — **16 pz** (2 per tirante + 4 schermo)
+  (servono **2 barre da 1 m**: 6×168 mm più il taglio non ci sta in una sola) — tengono
+  insieme fondo e coperchio (il coperchio **non** si avvita ai fianchi, non ci sono risvolti)
+- **Dadi M3** — **16 pz** (2 per tirante + 4 dietro la scheda schermo) + **Rondelle M3** —
+  **16 pz** (2 per tirante + 4 schermo; quelle schermo **larghe**, Ø esterno 9–12 mm,
+  per coprire il gioco del foro Ø5.5)
 - **Jack DC**: barrel panel-mount **"DC-022"** (foro 8 mm), barrel adatto al PC (es. 5.5×2.5)
 - **Doppia USB-A** panel-mount, viti a **interasse 28 mm**
 - **RJ45** panel-mount, viti a **interasse 27.1 mm**
@@ -130,7 +133,8 @@ grezzo il segno è poco contrastato).
 ### Passo 1 — Schermo sul frontale
 1. Appoggia lo schermo **dietro** al pannello `front`, area visibile centrata nella finestra.
 2. Allinea i 4 fori della scheda ai 4 fori Ø5.5 del frontale.
-3. Avvita con **4 viti M3 + rondelle** (le rondelle coprono il gioco dei fori maggiorati).
+3. Avvita con **4 viti M3×10 a macchina + rondelle larghe**, serrate con **dado M3
+   dietro la scheda** (le rondelle coprono il gioco dei fori maggiorati).
    - Se l'allineamento è leggermente fuori, i fori Ø5.5 danno ±1 mm di gioco.
 
 ### Passo 2 — Connettori sul retro
@@ -157,15 +161,18 @@ grezzo il segno è poco contrastato).
 
 ### Passo 6 — Frontale e retro sui fianchi
 > Frontale e retro sono pannelli **piatti** (nessun risvolto): si fissano ai fianchi del
-> corpo tramite **6 squadrette a L interne per pannello** (3 livelli per lato, ai livelli
-> `bz` = basso / metà / alto — 12 squadrette totali, 6 per frontale + 6 per retro). Ogni
+> corpo con **squadrette a L interne** ai livelli `bz` = basso / metà / alto. Ogni
 > squadretta prende **2 viti**: una in orizzontale-profondità (dal pannello nella
 > squadretta) e una in orizzontale-larghezza (dal fianco nella squadretta).
-1. Inserisci **3 squadrette** nel fianco sinistro e **3** nel fianco destro (ai 3 livelli
-   già forati), per il frontale.
-2. Accosta il **frontale** (`front`) e avvita: **6 viti** dal pannello (una per squadretta)
-   + **6 viti** dai fianchi (una per squadretta) = **12 viti**.
-3. Ripeti per il **retro** (`back`): altre 6 squadrette + **12 viti**.
+>
+> ⚠ **Frontale: solo il livello basso.** I fori a metà e in alto (z ≈ 86 / 142 mm)
+> cadono dietro il modulo schermo (z ≈ 38–162 mm): non c'è spazio per squadrette né
+> teste di vite. Restano inutilizzati. Il frontale è comunque tenuto anche dai
+> 3 tiranti anteriori (a 9 mm dal pannello) e irrigidito dallo schermo avvitato.
+1. **Frontale** (`front`): 1 squadretta per fianco al **livello basso**; avvita
+   **2 viti** dal pannello + **2 viti** dai fianchi = **4 viti**.
+2. **Retro** (`back`): 3 squadrette per fianco (3 livelli); avvita **6 viti** dal
+   pannello + **6 viti** dai fianchi = **12 viti**.
 
 ### Passo 7 — Tiranti fondo↔coperchio e chiusura
 > Il coperchio **non si avvita ai fianchi** (non ci sono risvolti): fondo e coperchio sono

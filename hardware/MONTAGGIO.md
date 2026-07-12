@@ -46,14 +46,20 @@ con le squadrette **③**, non incastrandoli nel Corpo.
 
 | # | Nome | Q.tà | Usato in |
 |---|------|------|----------|
-| **①a** | Vite M3×10 autofilettante | **4** | schermo (attraversa rondella + foro Ø5.5, si avvita nel frontale) |
-| **①b** | Vite M3×8 autofilettante | **28** | squadrette front/back→fianchi (24), ripiano→fianchi (4) |
-| **②** | Squadretta a L (staffa 15×15×1.5 mm) | **12** | fissaggio C↔A e D↔A (6 ciascuno, 3 livelli per lato) |
-| **③** | Rondella M3 | **16** | schermo (4) + tiranti fondo↔coperchio (12, 2 per tirante) |
+| **①a** | Vite M3×10 **a macchina** (testa cilindrica/bombata) | **4** | schermo: attraversa rondella larga + foro Ø5.5 e si serra con dado **⑦** dietro la scheda |
+| **①b** | Vite M3×8 autofilettante | **20** | squadrette front/back→fianchi (16), ripiano→fianchi (4) |
+| **②** | Squadretta a L (staffa 15×15×1.5 mm, meglio con fori ad asola) | **8** | fissaggio D↔A (6, 3 livelli per lato) + C↔A (2, **solo livello basso** — vedi nota) |
+| **③** | Rondella M3 | **16** | schermo (4, **larghe** Ø9–12 per coprire il foro Ø5.5) + tiranti fondo↔coperchio (12, 2 per tirante) |
 | **④** | Dado passante (jack DC) | **1** | fissaggio jack barrel DC-022 |
 | **⑤** | Viti proprie dei connettori | — | incluse con USB-A doppia e RJ45 panel-mount |
 | **⑥** | Barra filettata M3 Ø3mm, tagliata a ~168 mm | **6** | tiranti che tengono insieme Corpo (A) e Coperchio (B) — niente più risvolti |
-| **⑦** | Dado M3 | **12** | 2 per tirante (uno sotto il fondo, uno sopra il coperchio) |
+| **⑦** | Dado M3 | **16** | 2 per tirante (12) + 4 dietro la scheda dello schermo |
+
+> ⚠ **Squadrette del Frontale — solo livello basso.** I fori a metà e in alto
+> (z ≈ 86 / 142 mm) cadono **dietro il modulo schermo** (che copre la fascia
+> z ≈ 38–162 mm): lì non c'è spazio né per la squadretta né per la testa della vite.
+> Sul Frontale monta solo le 2 squadrette basse; i fori centrali e alti del frontale
+> e dei fianchi lato front restano inutilizzati. Sul Retro tutti e 3 i livelli sono ok.
 
 Componenti da procurarsi a parte (non inclusi nella scocca):
 schermo Waveshare 7" (C) Rev2.1 · lettore CD slim USB · mini PC BMAX N100 ·
@@ -95,9 +101,11 @@ biadesivo forte per CD e mini PC.
 
 1. Appoggia lo **schermo** dietro al pannello **C**, area visibile centrata nella finestra.
 2. Allinea i 4 fori scheda ai 4 fori Ø5.5 del pannello.
-3. Fissa con **①a×4 + ③×4** (vite + rondella su ognuna).
+3. Fissa con **①a×4 + ③×4 + ⑦×4**: vite + rondella larga dal davanti,
+   dado **⑦** serrato dietro la scheda (la vite NON fa presa nel pannello:
+   il foro Ø5.5 è maggiorato apposta per dare ±1 mm di gioco).
 
-`①a ×4  ③ ×4`
+`①a ×4  ③ ×4  ⑦ ×4`
 
 ---
 
@@ -188,13 +196,13 @@ biadesivo forte per CD e mini PC.
           vite ①b(orizz. larg.)  vite ①b(orizz. prof.)
 ```
 
-1. Inserisci **3 squadrette ②** nel fianco sinistro di **A** e **3** nel fianco destro
-   (livelli basso / metà / alto), usando i fori già presenti nei fianchi.
-2. Accosta il **Frontale (C)**: avvita **①b ×6** dal pannello nelle squadrette,
-   poi **①b ×6** dai fianchi nelle squadrette.
-3. Ripeti per il **Retro (D)**: altre **①b ×6 + ①b ×6**.
+1. **Frontale (C)**: inserisci **1 squadretta ②** per fianco, **solo al livello basso**
+   (⚠ a metà e in alto c'è lo schermo: quei fori restano vuoti).
+   Accosta **C** e avvita **①b ×2** dal pannello + **①b ×2** dai fianchi.
+2. **Retro (D)**: inserisci **3 squadrette ②** per fianco (basso / metà / alto).
+   Accosta **D** e avvita **①b ×6** dal pannello + **①b ×6** dai fianchi.
 
-`①b ×24  (12 per C, 12 per D)   ② ×12`
+`①b ×16  (4 per C, 12 per D)   ② ×8`
 
 > Non stringere ancora a fondo: prosegui allo Step 7, poi torna a serrare tutto.
 
@@ -240,9 +248,9 @@ biadesivo forte per CD e mini PC.
 
 | Step | ①a M3×10 | ①b M3×8 | ② Squadretta | ③ Rondella | ④ Dado (DC) | ⑥ Tirante | ⑦ Dado M3 |
 |---|---|---|---|---|---|---|---|
-| 1 — Schermo | 4 | — | — | 4 | — | — | — |
+| 1 — Schermo | 4 | — | — | 4 | — | — | 4 |
 | 2 — Connettori | — | (proprie) | — | — | 1 | — | — |
 | 4 — Ripiano | — | 4 | — | — | — | — | — |
-| 6 — Frontale/Retro | — | 24 | 12 | — | — | — | — |
+| 6 — Frontale/Retro | — | 16 | 8 | — | — | — | — |
 | 7 — Tiranti | — | — | — | 12 | — | 6 | 12 |
-| **Totale** | **4** | **28** | **12** | **16** | **1** | **6** | **12** |
+| **Totale** | **4** | **20** | **8** | **16** | **1** | **6** | **16** |
