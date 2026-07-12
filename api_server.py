@@ -531,6 +531,55 @@ def set_audio_device(device):
         return {'success': True, 'message': f'Device impostato ({device}); riavvio non riuscito'}
     return {'success': True, 'message': f'Uscita audio impostata su {device}'}
 
+# ── Multiroom: which Lyrion server this device's squeezelite follows ──
+# Standalone (default) is squeezelite's own local LMS (-s 127.0.0.1). "Follow"
+# points -s at another Osmium device's LMS on the LAN, so this device's player
+# shows up there and can be grouped via that server's native sync (see
+# lyrionApi.syncPlayer/unsyncPlayer) — LMS instances don't discover each other,
+# so both devices must point at the same one for multiroom to work between them.
+def _current_lms_host():
+    _, args = _read_sq_args()
+    if args:
+        m = re.search(r'-s\s+(\S+)', args)
+        if m:
+            return m.group(1)
+    return '127.0.0.1'
+
+def get_lms_role():
+    host = _current_lms_host()
+    if host == '127.0.0.1':
+        return {'mode': 'local', 'host': None}
+    return {'mode': 'follow', 'host': host}
+
+def set_lms_role(mode, host):
+    if mode == 'local':
+        target = '127.0.0.1'
+    elif mode == 'follow':
+        if not _valid_ipv4(host):
+            return {'success': False, 'message': f'Indirizzo IP non valido: {host}'}
+        if host == '127.0.0.1':
+            return {'success': False, 'message': 'Usa la modalità "Questo dispositivo" per il server locale'}
+        target = host
+    else:
+        return {'success': False, 'message': f'Modalità non valida: {mode}'}
+
+    _, args = _read_sq_args()
+    if args is None:
+        return {'success': False, 'message': 'Configurazione squeezelite non trovata'}
+    _write_sq_args(_sq_set_s(args, target))
+
+    try:
+        r = _run(['systemctl', 'restart', 'squeezelite'], timeout=30)
+        if r.returncode != 0:
+            return {'success': True, 'host': target if mode == 'follow' else None,
+                    'message': f'Server impostato ({target}); riavvio squeezelite: {(r.stderr or "").strip()}'}
+    except Exception:
+        log.exception("set_lms_role: squeezelite restart failed")
+        return {'success': True, 'host': target if mode == 'follow' else None,
+                'message': f'Server impostato ({target}); riavvio non riuscito'}
+    msg = 'Ripristinato il server Lyrion locale' if mode == 'local' else f'Server Lyrion impostato su {target}'
+    return {'success': True, 'host': target if mode == 'follow' else None, 'message': msg}
+
 # ──────────────────────────────────────────────────────────────────
 #  SSH service control — the appliance ships with SSH disabled; this lets
 #  the user turn it on/off from Settings. The unit name is resolved from a
@@ -891,6 +940,11 @@ def _sq_set_o(args, dev):
     if re.search(r'-o\s+\S+', args):
         return re.sub(r'-o\s+\S+', f'-o {dev}', args)
     return f'-o {dev} ' + args
+
+def _sq_set_s(args, host):
+    if re.search(r'-s\s+\S+', args):
+        return re.sub(r'-s\s+\S+', f'-s {host}', args)
+    return (args + f' -s {host}').strip()
 
 def _sq_remove_flag(args, flag):
     return re.sub(rf'(^|\s){re.escape(flag)}(?=\s|$)', ' ', args).strip()
@@ -1640,6 +1694,15 @@ def api_audio_devices():
 def api_set_audio_device():
     data = request.get_json(silent=True) or {}
     return jsonify(set_audio_device(data.get('device')))
+
+@app.route('/lms_role', methods=['GET'])
+def api_lms_role():
+    return jsonify(get_lms_role())
+
+@app.route('/lms_role', methods=['POST'])
+def api_set_lms_role():
+    data = request.get_json(silent=True) or {}
+    return jsonify(set_lms_role(data.get('mode'), data.get('host')))
 
 @app.route('/dsp_status', methods=['GET'])
 def api_dsp_status():

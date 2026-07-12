@@ -3,7 +3,10 @@
 #     which the VU-meter daemon reads. DO NOT remove -v or the VU meter stops working.
 # -D  enables DSD playback. Without it squeezelite downconverts DSD to PCM; with it
 #     DSD is passed bit-perfect to a DSD-capable DAC via DoP (DSD over PCM).
-# -s 127.0.0.1  points to the local Lyrion Music Server.
+# -s 127.0.0.1  points to the local Lyrion Music Server. Settings → Multiroom
+#               can rewrite this to another Osmium device's IP ("follow" mode)
+#               so this player joins that device's LMS for multiroom grouping
+#               (api_server.py set_lms_role / GET+POST /lms_role).
 # -o default    uses the ALSA default device. The UI wizard rewrites this to a
 #               specific DAC. It uses the stable card *name*, e.g.
 #               -o hw:CARD=D50s,DEV=0  (NOT -o hw:1,0 — card numbers can change

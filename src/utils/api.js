@@ -114,6 +114,12 @@ export const systemAPI = {
   getAudioDevices: () => apiGet('/audio_devices'),
   // Set squeezelite output device and restart it. Returns { success, message }
   setAudioDevice: (device) => apiPost('/set_audio_device', { device }),
+  // Which Lyrion server this device's squeezelite points at: { mode: 'local'|'follow', host: string|null }
+  getLmsRole: () => apiGet('/lms_role'),
+  // Point squeezelite at its own local Lyrion server ('local') or another
+  // device's LMS on the LAN ('follow', host required, IPv4). Restarts
+  // squeezelite. Returns { success, host, message }
+  setLmsRole: (mode, host) => apiPost('/lms_role', { mode, host }),
   // Tidal Connect daemon state: { available, enabled, active }
   getTidalStatus: () => apiGet('/tidal_status'),
   // Enable/disable the Tidal Connect daemon. Returns { success, enabled, active, message }

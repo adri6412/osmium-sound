@@ -167,6 +167,15 @@ const Settings = () => {
   const [multiroomBusy, setMultiroomBusy] = useState(false);
   const [multiroomMessage, setMultiroomMessage] = useState('');
 
+  // Which Lyrion server THIS device's squeezelite/UI follow — 'local' (own
+  // server, default/standalone) or 'follow' another Osmium device's server,
+  // required before that device's player can even appear here for grouping.
+  const [lmsRole, setLmsRole] = useState({ mode: 'local', host: null });
+  const [lmsRoleMode, setLmsRoleMode] = useState('local'); // pending selection, applied on demand
+  const [followHostInput, setFollowHostInput] = useState('');
+  const [lmsRoleBusy, setLmsRoleBusy] = useState(false);
+  const [lmsRoleMessage, setLmsRoleMessage] = useState('');
+
   // ── Alarms (per-player, via Lyrion) ────────────────────────────
   const [alarms, setAlarms] = useState([]);
   const [alarmsBusy, setAlarmsBusy] = useState(false);
@@ -175,6 +184,7 @@ const Settings = () => {
 
   // Refs for input fields with automatic keyboard
   const lyrionUrlRef = useKeyboardInput(lyrionUrl, setLyrionUrl);
+  const followHostRef = useKeyboardInput(followHostInput, setFollowHostInput);
   
   // Test keyboard context
   const { showKeyboard } = useKeyboard();
@@ -188,14 +198,15 @@ const Settings = () => {
     loadOtaChannel();
     loadPlaybackPrefs();
     loadDspStatus();
+    loadLmsRole();
   }, []);
 
   // ── Playback preferences handlers ───────────────────────────────
   // Resolves the active player from the shared Lyrion client (same singleton
   // the player UI uses) and loads its per-player prefs + alarms.
-  const loadPlaybackPrefs = async () => {
+  const loadPlaybackPrefs = async (baseUrl = lyrionUrl) => {
     try {
-      lyrionApi.setBaseUrl(lyrionUrl);
+      lyrionApi.setBaseUrl(baseUrl);
       const players = await lyrionApi.getPlayers();
       const mac = players?.[0]?.playerid;
       if (!mac) return;
@@ -239,6 +250,43 @@ const Settings = () => {
       setMultiroomMessage(t('settings.multiroom.failed'));
     }
     setMultiroomBusy(false);
+  };
+
+  // ── LMS role (standalone vs. following another device's Lyrion) ─
+  const loadLmsRole = async () => {
+    const res = await systemAPI.getLmsRole();
+    if (res.success && res.data) {
+      const mode = res.data.mode === 'follow' ? 'follow' : 'local';
+      setLmsRole({ mode, host: res.data.host || null });
+      setLmsRoleMode(mode);
+      setFollowHostInput(res.data.host || '');
+    }
+  };
+
+  const applyLmsRole = async (mode) => {
+    const host = mode === 'follow' ? followHostInput.trim() : null;
+    if (mode === 'follow' && !host) {
+      setLmsRoleMessage(t('settings.multiroom.role.hostRequired'));
+      return;
+    }
+    setLmsRoleBusy(true);
+    setLmsRoleMessage('');
+    const res = await systemAPI.setLmsRole(mode, host);
+    setLmsRoleBusy(false);
+    if (res.success && res.data?.success) {
+      setLmsRole({ mode, host: mode === 'follow' ? host : null });
+      setLmsRoleMessage(res.data.message || t('settings.multiroom.role.saved'));
+      // The UI's own Lyrion pointer is a separate setting (lyrionUrl) from
+      // squeezelite's -s — keep them in sync so this device's browse/sync
+      // controls immediately hit the same LMS its player just joined.
+      const newLyrionUrl = mode === 'follow' ? `http://${host}:9000` : 'http://localhost:9000';
+      setLyrionUrl(newLyrionUrl);
+      localStorage.setItem('lyrionUrl', newLyrionUrl);
+      setPlayerMac(null);
+      await loadPlaybackPrefs(newLyrionUrl);
+    } else {
+      setLmsRoleMessage(res.data?.message || res.message || t('settings.multiroom.role.failed'));
+    }
   };
 
   const changeTransitionType = (v) => {
@@ -1559,6 +1607,58 @@ const Settings = () => {
                 {section.content === 'custom-multiroom' && (
                   <div className="space-y-4">
                     <p className="text-sm text-hifi-silver">{t('settings.multiroom.help')}</p>
+
+                    {/* LMS role: standalone (own server) vs. following another device's */}
+                    <div className="space-y-3 bg-hifi-dark rounded-lg p-4 border border-hifi-accent/40">
+                      <label className="text-white font-medium">{t('settings.multiroom.role.title')}</label>
+                      <p className="text-xs text-hifi-silver">{t('settings.multiroom.role.help')}</p>
+
+                      <div className="flex bg-hifi-surface rounded-lg p-1">
+                        <button
+                          onClick={() => setLmsRoleMode('local')}
+                          className={`flex-1 py-2 rounded-md text-sm transition-colors ${lmsRoleMode === 'local' ? 'bg-hifi-gold text-black font-semibold' : 'text-hifi-silver'}`}
+                        >
+                          {t('settings.multiroom.role.local')}
+                        </button>
+                        <button
+                          onClick={() => setLmsRoleMode('follow')}
+                          className={`flex-1 py-2 rounded-md text-sm transition-colors ${lmsRoleMode === 'follow' ? 'bg-hifi-gold text-black font-semibold' : 'text-hifi-silver'}`}
+                        >
+                          {t('settings.multiroom.role.follow')}
+                        </button>
+                      </div>
+
+                      {lmsRoleMode === 'follow' && (
+                        <div onClick={() => showKeyboard(followHostRef, followHostInput)} className="cursor-pointer">
+                          <input
+                            ref={followHostRef}
+                            type="text"
+                            value={followHostInput}
+                            onChange={(e) => setFollowHostInput(e.target.value)}
+                            placeholder={t('settings.multiroom.role.hostPlaceholder')}
+                            className="w-full bg-hifi-surface border border-hifi-accent rounded-lg px-4 py-3 text-white focus:outline-none focus:border-hifi-gold cursor-pointer"
+                          />
+                        </div>
+                      )}
+
+                      <button
+                        onClick={() => applyLmsRole(lmsRoleMode)}
+                        disabled={lmsRoleBusy || (lmsRoleMode === 'follow' && !followHostInput.trim())}
+                        className="w-full bg-hifi-gold text-black font-semibold py-2.5 rounded-lg hover:brightness-110 disabled:opacity-50 transition"
+                      >
+                        {t('settings.multiroom.role.apply')}
+                      </button>
+
+                      {lmsRoleMessage && (
+                        <div className={`rounded-lg p-3 text-center text-sm ${
+                          isErrorMsg(lmsRoleMessage)
+                            ? 'bg-red-900/20 text-red-300 border border-red-500/30'
+                            : 'bg-hifi-surface text-hifi-silver'
+                        }`}>
+                          {lmsRoleMessage}
+                        </div>
+                      )}
+                    </div>
 
                     {!playerMac && (
                       <div className="rounded-lg p-3 text-center text-sm bg-hifi-dark text-hifi-silver">

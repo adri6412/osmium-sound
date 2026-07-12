@@ -233,7 +233,18 @@
       "help": "Raggruppa altri player presenti in rete con questo dispositivo per riprodurre la stessa musica in sincrono (sync nativo di Lyrion).",
       "noOthers": "Nessun altro player trovato in rete. Il multiroom richiede almeno un altro player (es. un altro dispositivo Osmium o un player squeezelite).",
       "saved": "Gruppo multiroom aggiornato.",
-      "failed": "Impossibile modificare il gruppo multiroom."
+      "failed": "Impossibile modificare il gruppo multiroom.",
+      "role": {
+        "title": "Server Lyrion di questo dispositivo",
+        "help": "Perché due dispositivi possano essere raggruppati devono puntare allo stesso server Lyrion: ogni Osmium Sound ne gestisce uno proprio e non si vedono tra loro finché non condividono lo stesso. Scegli se questo dispositivo deve usare il proprio server (predefinito, standalone) oppure seguire il server di un altro dispositivo Osmium sulla rete.",
+        "local": "Questo dispositivo",
+        "follow": "Un altro dispositivo",
+        "hostPlaceholder": "Indirizzo IP, es. 192.168.1.50",
+        "hostRequired": "Inserisci l'indirizzo IP del dispositivo da seguire.",
+        "apply": "Applica",
+        "saved": "Server Lyrion aggiornato.",
+        "failed": "Impossibile aggiornare il server Lyrion."
+      }
     },
     "webRemote": {
       "help": "Abbina l'app Osmium Sound Companion a questo dispositivo inquadrando il QR code (contiene anche un token di pairing monouso). Per controllare il dispositivo da un normale browser, apri invece l'indirizzo mostrato sotto il codice.",
