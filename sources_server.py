@@ -30,6 +30,21 @@ import urllib.error
 from datetime import datetime, timezone
 
 app = Flask(__name__)
+# Hard ceiling on any request body (restore archive, FIR filter upload) BEFORE
+# Werkzeug buffers it into request.files/request.form. Without this, a client
+# can stream an unbounded body and it gets fully received/spooled to disk
+# before any of this file's own per-route size checks ever run — those checks
+# are still kept below as the real business-logic limits, this is just the
+# outer backstop. 80MB comfortably covers a couple of FIR filters + tiny
+# config files in one restore archive.
+app.config['MAX_CONTENT_LENGTH'] = 80 * 1024 * 1024
+
+
+@app.errorhandler(413)
+def _request_too_large(_e):
+    return jsonify({"success": False, "message": "File troppo grande"}), 413
+
+
 # The Electron UI now talks to this service natively (cross-origin from the
 # file:// renderer), so allow CORS like api_server does. Falls back gracefully
 # if flask_cors isn't present.
@@ -410,9 +425,27 @@ def ensure_playlistdir():
 
 
 def current_paths(state):
+    """Media directories to hand to Lyrion. Re-validates every path against the
+    same confinement each source type is supposed to already satisfy (MOUNT_ROOT
+    for SMB mountpoints, ALLOWED_LOCAL_ROOTS for local paths) rather than
+    trusting the stored state verbatim — state can come from a restored
+    /etc/hifi-sources.json (see /api/restore), which is untrusted archive
+    content that never goes through api_add_smb()/api_add_local()'s own
+    validation. Without this, a crafted backup with e.g. {"type":"local",
+    "path":"/"} would get handed straight to Lyrion as a media directory."""
+    root = os.path.realpath(MOUNT_ROOT)
     paths = []
     for src in state.get("sources", []):
-        p = src["mountpoint"] if src.get("type") == "smb" else src.get("path")
+        if src.get("type") == "smb":
+            mp = src.get("mountpoint")
+            if not mp:
+                continue
+            p = os.path.realpath(mp)
+            if p != root and not p.startswith(root + os.sep):
+                continue
+        else:
+            raw = src.get("path")
+            p = _local_path_allowed(raw) if raw else None
         if p and p not in paths:
             paths.append(p)
     return paths
@@ -485,6 +518,16 @@ BACKUP_DIRS = [
 ]
 MAX_RESTORE_MEMBER_SIZE = 32 * 1024 * 1024  # 32MB per file is generous for config + a FIR filter
 MAX_RESTORE_MEMBERS = 200
+# Compressed-upload ceiling, checked BEFORE tarfile.open()/getmembers() ever
+# runs. This is deliberately far tighter than MAX_RESTORE_MEMBERS *
+# MAX_RESTORE_MEMBER_SIZE (6.4GB) — a real backup (see _backup_build) is only
+# ever a handful of small config files plus at most a couple of FIR filters,
+# so it's never anywhere near this size. Bounds how much a maliciously
+# highly-compressed small archive can force tarfile to decompress while
+# walking members, since getmembers() has to decompress the whole stream to
+# enumerate entries before per-member size checks below ever get a chance to
+# run.
+MAX_RESTORE_ARCHIVE_SIZE = 64 * 1024 * 1024
 
 
 def _backup_build():
@@ -599,8 +642,8 @@ def api_restore():
     f = request.files.get("file")
     if not f:
         return jsonify({"success": False, "message": "Nessun file caricato"}), 400
-    archive_bytes = f.read()
-    if len(archive_bytes) > MAX_RESTORE_MEMBERS * MAX_RESTORE_MEMBER_SIZE:
+    archive_bytes = f.read(MAX_RESTORE_ARCHIVE_SIZE + 1)
+    if len(archive_bytes) > MAX_RESTORE_ARCHIVE_SIZE:
         return jsonify({"success": False, "message": "File troppo grande"}), 400
     restored, errors = _restore_apply(archive_bytes)
     if not restored and errors:
@@ -644,6 +687,9 @@ def _fir_current():
 
 @app.route("/api/dsp/fir", methods=["GET"])
 def api_dsp_fir_status():
+    denied = _require_pair_token()
+    if denied:
+        return denied
     path, ext = _fir_current()
     if not path:
         return jsonify({"present": False})
@@ -800,6 +846,14 @@ def _require_pair_token():
         return jsonify({"success": False, "message": "Troppi tentativi, riprova tra qualche minuto"}), 429
     auth = request.headers.get("Authorization", "")
     token = auth[len("Bearer "):] if auth.startswith("Bearer ") else None
+    if not token:
+        # Fallback for the embedded SPA's plain browser-navigation flows (the
+        # backup download link, restore file input) which can't attach a
+        # custom Authorization header. The SPA embeds the token minted for it
+        # in the QR-carried URL (?token=...) and forwards it here — same
+        # secret, just a different transport, since a plain <a href> click
+        # can't set headers.
+        token = request.args.get("token") or None
     valid = bool(token) and any(
         secrets.compare_digest(t.get("token", ""), token) for t in _load_pair_tokens()
     )
@@ -926,22 +980,32 @@ def api_list():
     return jsonify({"sources": out, "paths": current_paths(state)})
 
 
+def _local_path_allowed(path):
+    """Resolve `path` and confine it to an allow-listed media root. Returns the
+    resolved realpath if allowed, otherwise None. Shared by api_add_local
+    (fresh user input) and the restore-time re-validation of a restored
+    hifi-sources.json (untrusted archive content) — both must apply the exact
+    same confinement before the path is ever touched on disk or handed to
+    Lyrion as a media directory."""
+    path = os.path.realpath(path)
+    for root in ALLOWED_LOCAL_ROOTS:
+        root = os.path.realpath(root)
+        if path == root or path.startswith(root + os.sep):
+            return path
+    return None
+
+
 @app.route("/api/sources/local", methods=["POST"])
 def api_add_local():
+    denied = _require_pair_token()
+    if denied:
+        return denied
     data = request.get_json(silent=True) or {}
     path = (data.get("path") or "").strip()
     if not path:
         return jsonify({"success": False, "message": "Percorso mancante"}), 400
-    # Normalise and confine the path to an allow-listed media root before it is
-    # ever touched on disk or stored as a Lyrion media directory.
-    path = os.path.realpath(path)
-    allowed = False
-    for root in ALLOWED_LOCAL_ROOTS:
-        root = os.path.realpath(root)
-        if path == root or path.startswith(root + os.sep):
-            allowed = True
-            break
-    if not allowed:
+    path = _local_path_allowed(path)
+    if not path:
         return jsonify({"success": False, "message": "Percorso non consentito"}), 400
     if not os.path.isdir(path):
         return jsonify({"success": False, "message": f"La cartella {path} non esiste"}), 400
@@ -1020,6 +1084,9 @@ def api_apply():
 def api_usb():
     """List currently-mounted USB disks and their top-level folders, so the UI
     can offer to add them as local sources."""
+    denied = _require_pair_token()
+    if denied:
+        return denied
     # Serve the snapshot kept fresh by the background usb_monitor thread instead
     # of re-scanning on every poll. Only force a scan if none has run yet.
     wanted = _usb_state
@@ -1139,7 +1206,7 @@ INDEX_HTML = r"""<!DOCTYPE html>
   <div class="card">
     <p style="color:var(--silver);font-size:13px;margin:0 0 10px">Esporta la configurazione del dispositivo (DAC, DSP/EQ, sorgenti, puntatore, canale aggiornamenti) in un file, o ripristinala da un backup precedente.</p>
     <div class="row">
-      <a class="ghost" style="text-decoration:none;display:inline-block;text-align:center;flex:1" href="/api/backup">⬇ Scarica backup</a>
+      <a id="backupLink" class="ghost" style="text-decoration:none;display:inline-block;text-align:center;flex:1" href="/api/backup">⬇ Scarica backup</a>
       <label class="ghost" style="text-align:center;flex:1;cursor:pointer" for="restoreFile">⬆ Ripristina da file</label>
     </div>
     <input type="file" id="restoreFile" accept=".gz,.tar.gz,application/gzip" style="display:none" onchange="doRestore(this)">
@@ -1153,8 +1220,24 @@ INDEX_HTML = r"""<!DOCTYPE html>
 </div></div>
 
 <script>
-async function j(url, opts){ const r=await fetch(url,opts); return r.json(); }
+// A remote (non-localhost) visit — the "scan the QR from Settings → Backup e
+// ripristino, no companion app needed" flow — carries a pairing token in the
+// URL (?token=...), minted server-side when that QR was generated. Attach it
+// to every call this page makes so /api/* routes that now require pairing
+// (see _require_pair_token()) keep working from a plain phone/PC browser,
+// not just from the Electron kiosk (which is exempt via 127.0.0.1).
+const PAIR_TOKEN = new URLSearchParams(location.search).get('token') || '';
+async function j(url, opts){
+  opts = opts || {};
+  if (PAIR_TOKEN) {
+    opts.headers = Object.assign({}, opts.headers, {'Authorization': 'Bearer ' + PAIR_TOKEN});
+  }
+  const r=await fetch(url,opts); return r.json();
+}
 function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+if (PAIR_TOKEN) {
+  document.getElementById('backupLink').href = '/api/backup?token=' + encodeURIComponent(PAIR_TOKEN);
+}
 async function load(){
   const d=await j('/api/sources');
   const el=document.getElementById('list');
@@ -1196,8 +1279,7 @@ async function uploadFir(input){
   const m=document.getElementById('firMsg'); m.textContent='Caricamento…'; m.className='msg';
   const body=new FormData(); body.append('file', file);
   try{
-    const r=await fetch('/api/dsp/fir',{method:'POST',body});
-    const d=await r.json();
+    const d=await j('/api/dsp/fir',{method:'POST',body});
     m.textContent=d.message||(d.success?'Fatto':'Errore'); m.className='msg '+(d.success?'ok':'bad');
     if(d.success) loadFir();
   }catch(e){ m.textContent='Errore di rete'; m.className='msg bad'; }
@@ -1217,8 +1299,7 @@ async function doRestore(input){
   const m=document.getElementById('restoreMsg'); m.textContent='Ripristino…'; m.className='msg';
   const body=new FormData(); body.append('file', file);
   try{
-    const r=await fetch('/api/restore',{method:'POST',body});
-    const d=await r.json();
+    const d=await j('/api/restore',{method:'POST',body});
     m.textContent=d.message||(d.success?'Fatto':'Errore'); m.className='msg '+(d.success?'ok':'bad');
   }catch(e){ m.textContent='Errore di rete'; m.className='msg bad'; }
   input.value='';
@@ -1242,12 +1323,12 @@ async function loadUsb(){
   }
   el.innerHTML=d.disks.map(dk=>{
     const di=usbPaths.push(dk.mountpoint)-1;
-    const tag=`USB${dk.fstype?(' '+dk.fstype):''}${dk.size?(' · '+dk.size):''}`;
-    const head=`<div class="name">${dk.label||'USB'}<span class="tag">${tag}</span></div><div class="sub">${dk.mountpoint}</div>`;
+    const tag=`USB${dk.fstype?(' '+esc(dk.fstype)):''}${dk.size?(' · '+esc(dk.size)):''}`;
+    const head=`<div class="name">${esc(dk.label)||'USB'}<span class="tag">${tag}</span></div><div class="sub">${esc(dk.mountpoint)}</div>`;
     const all=`<button class="ghost" onclick="addUsb(${di})">Aggiungi tutto il disco</button>`;
     const fold=(dk.folders||[]).map(f=>{
       const i=usbPaths.push(f.path)-1;
-      return `<div class="src"><div class="meta"><div class="sub">📁 ${f.name}</div></div><button class="ghost" onclick="addUsb(${i})">Aggiungi</button></div>`;
+      return `<div class="src"><div class="meta"><div class="sub">📁 ${esc(f.name)}</div></div><button class="ghost" onclick="addUsb(${i})">Aggiungi</button></div>`;
     }).join('');
     return `<div style="margin-bottom:14px">${head}<div style="height:8px"></div>${all}${fold?('<div style="height:8px"></div>'+fold):''}</div>`;
   }).join('');

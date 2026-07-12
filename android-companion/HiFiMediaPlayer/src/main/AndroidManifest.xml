@@ -103,7 +103,7 @@
             android:parentActivityName=".itemlist.HomeActivity">
         </activity>
 
-        <activity android:exported="true"
+        <activity android:exported="false"
             android:name=".NowPlayingActivity"
             android:parentActivityName=".itemlist.HomeActivity">
         </activity>
@@ -150,12 +150,12 @@
             android:parentActivityName=".itemlist.HomeActivity">
         </activity>
 
-        <activity android:exported="true"
+        <activity android:exported="false"
             android:name=".itemlist.PlayerListActivity"
             android:parentActivityName=".itemlist.HomeActivity">
         </activity>
 
-        <activity android:exported="true"
+        <activity android:exported="false"
             android:name=".itemlist.AlarmsActivity"
             android:parentActivityName=".itemlist.HomeActivity">
         </activity>
@@ -165,7 +165,7 @@
             android:parentActivityName=".itemlist.AlarmsActivity">
         </activity>
 
-        <activity android:exported="true"
+        <activity android:exported="false"
             android:name=".itemlist.CurrentPlaylistActivity"
             android:parentActivityName=".NowPlayingActivity">
         </activity>

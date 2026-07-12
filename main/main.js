@@ -47,13 +47,19 @@ function recoverRenderer(reason) {
  * Optimized for 1024x600 touchscreen displays
  */
 function createWindow() {
-  // Relax framing/CSP ONLY for the local Lyrion Music Server (port 9000), whose
-  // pages we embed in the UI. Previously these headers were stripped from EVERY
-  // response, globally disabling X-Frame-Options/CSP for any site the app loads
-  // (remote radio/plugin content, etc.) — keep every other origin's own defenses.
+  // Relax framing/CSP ONLY for the local Lyrion Music Server (localhost:9000 —
+  // Lyrion always runs on the appliance itself, see lyrionApi.js's default
+  // baseUrl), whose pages we embed in the UI. Matching on port alone would
+  // strip these headers for ANY device on the LAN that happens to answer on
+  // 9000 too (rogue host, DNS-rebinding); host+port together pin this to the
+  // one server it's actually meant for. Keep every other origin's own
+  // defenses (remote radio/plugin content, etc.) untouched.
   session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
     let isLyrion = false;
-    try { isLyrion = new URL(details.url).port === '9000'; } catch (_) {}
+    try {
+      const url = new URL(details.url);
+      isLyrion = (url.hostname === 'localhost' || url.hostname === '127.0.0.1') && url.port === '9000';
+    } catch (_) {}
     if (isLyrion && details.responseHeaders) {
       delete details.responseHeaders['x-frame-options'];
       delete details.responseHeaders['X-Frame-Options'];

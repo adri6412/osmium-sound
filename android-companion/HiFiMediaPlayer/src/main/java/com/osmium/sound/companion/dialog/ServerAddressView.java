@@ -30,6 +30,7 @@ import androidx.appcompat.app.AppCompatActivity;
 import androidx.fragment.app.FragmentManager;
 
 import com.google.android.material.checkbox.MaterialCheckBox;
+import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 import com.google.android.material.textfield.TextInputLayout;
 import com.google.zxing.integration.android.IntentIntegrator;
 import com.google.zxing.integration.android.IntentResult;
@@ -206,10 +207,35 @@ public class ServerAddressView extends LinearLayout {
             return true;
         }
         if (api != null && token != null && preferences != null) {
-            preferences.setAppliancePairing(api, token);
+            confirmAndApplyPairing(hostPort, api, token);
+        } else {
+            setServerAddress(hostPort);
         }
-        setServerAddress(hostPort);
         return true;
+    }
+
+    /**
+     * A scanned pairing QR silently repointing the app's Bearer-token-authenticated
+     * control channel (reboot/shutdown/SSH/backup-restore) at a new host is a
+     * meaningful trust decision — e.g. a substituted/stickered-over malicious QR
+     * code would otherwise be indistinguishable from the real one. Show the
+     * resolved host and require explicit confirmation before persisting it,
+     * rather than pairing silently the instant a QR is scanned.
+     */
+    private void confirmAndApplyPairing(String hostPort, String api, String token) {
+        if (!(getContext() instanceof Activity)) {
+            setServerAddress(hostPort);
+            return;
+        }
+        new MaterialAlertDialogBuilder(getContext())
+                .setTitle(R.string.settings_pair_confirm_title)
+                .setMessage(getResources().getString(R.string.settings_pair_confirm_message, api))
+                .setPositiveButton(R.string.settings_pair_confirm_button, (dialog, which) -> {
+                    preferences.setAppliancePairing(api, token);
+                    setServerAddress(hostPort);
+                })
+                .setNegativeButton(android.R.string.cancel, null)
+                .show();
     }
 
     /**

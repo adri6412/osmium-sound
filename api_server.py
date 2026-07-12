@@ -15,7 +15,15 @@ import time
 import threading
 
 app = Flask(__name__)
-CORS(app)  # Abilita CORS per tutte le route
+# This API is bound to 127.0.0.1 only (see the bottom of this file) and has no
+# request-level authentication of its own — it relies entirely on that bind to
+# keep it unreachable from the LAN. An unrestricted CORS(app) undermines that:
+# it removes the browser's CORS preflight/response-blocking, so ANY web content
+# the Electron kiosk's Chromium ever renders (now or in a future feature) could
+# fetch() straight to reboot/shutdown/ssh_set/configure_network etc. Restrict
+# to the origins the kiosk itself actually uses: the Vite dev server, and
+# 'null' (the Origin Chromium sends for the packaged app's file:// renderer).
+CORS(app, origins=["http://localhost:5173", "null"])
 
 # Log full diagnostics server-side; never leak exception text / stack traces to
 # HTTP clients (this API runs as root). Use `log.exception(...)` in handlers and
@@ -206,8 +214,15 @@ def configure_network(config):
         mode = config.get('mode', 'dhcp')
         
         if mode == 'dhcp':
+            # Same validation as the 'static' branch below: interface_name is one
+            # argv token to a root-privileged dhclient call (no shell involved,
+            # so no metacharacter injection) but an unvalidated value could still
+            # be parsed as a dhclient flag (e.g. '-sf <script>') instead of an
+            # interface name.
+            if not re.match(r'^[A-Za-z0-9._-]+$', interface_name or ''):
+                return f"Invalid interface: {interface_name}"
             # Configura DHCP
-            result = subprocess.run(['sudo', 'dhclient', interface_name], 
+            result = subprocess.run(['sudo', 'dhclient', interface_name],
                                   capture_output=True, text=True, timeout=30)
             if result.returncode == 0:
                 return f"Interface {interface_name} configured for DHCP"
