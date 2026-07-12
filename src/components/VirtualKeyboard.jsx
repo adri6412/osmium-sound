@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Delete } from 'lucide-react';
 import { useKeyboard } from '../contexts/KeyboardContext';
@@ -12,6 +12,7 @@ const VirtualKeyboard = () => {
   const keyboardRef = useRef(null);
   const containerRef = useRef(null);
   const simpleKeyboardRef = useRef(null);
+  const [isShifted, setIsShifted] = useState(false);
 
   // Label shown above the preview (placeholder of the field being edited)
   const activeLabel =
@@ -53,13 +54,21 @@ const VirtualKeyboard = () => {
             '1 2 3 4 5 6 7 8 9 0',
             'q w e r t y u i o p',
             'a s d f g h j k l',
-            'z x c v b n m . -',
-            '{space} {bksp}'
+            '{shift} z x c v b n m . - {bksp}',
+            '{space}'
+          ],
+          shift: [
+            '1 2 3 4 5 6 7 8 9 0',
+            'Q W E R T Y U I O P',
+            'A S D F G H J K L',
+            '{shift} Z X C V B N M . - {bksp}',
+            '{space}'
           ]
         },
         display: {
           '{space}': t('keyboard.space'),
-          '{bksp}': '⌫'
+          '{bksp}': '⌫',
+          '{shift}': '⇧'
         },
         theme: 'hg-theme-default',
         physicalKeyboardHighlight: false,
@@ -69,9 +78,22 @@ const VirtualKeyboard = () => {
         buttonTheme: [
           {
             class: "hg-button-custom",
-            buttons: "1 2 3 4 5 6 7 8 9 0 q w e r t y u i o p a s d f g h j k l z x c v b n m . - {space} {bksp}"
+            buttons: "1 2 3 4 5 6 7 8 9 0 q w e r t y u i o p a s d f g h j k l z x c v b n m . - {space} {bksp} Q W E R T Y U I O P A S D F G H J K L Z X C V B N M"
+          },
+          {
+            class: "hg-button-shift",
+            buttons: "{shift}"
           }
         ],
+        onKeyPress: (button) => {
+          if (button === '{shift}') {
+            setIsShifted((prev) => {
+              const next = !prev;
+              simpleKeyboardRef.current?.setOptions({ layoutName: next ? 'shift' : 'default' });
+              return next;
+            });
+          }
+        },
         onChange: (input) => {
           updateInputValue(input);
         }
@@ -82,6 +104,7 @@ const VirtualKeyboard = () => {
     if (!isKeyboardVisible && simpleKeyboardRef.current) {
       simpleKeyboardRef.current.destroy();
       simpleKeyboardRef.current = null;
+      setIsShifted(false);
     }
 
     return () => {
@@ -172,7 +195,7 @@ const VirtualKeyboard = () => {
             </div>
 
             {/* Keyboard */}
-            <div className="simple-keyboard-container-compact">
+            <div className={`simple-keyboard-container-compact${isShifted ? ' shift-active' : ''}`}>
               <div ref={keyboardRef} className="simple-keyboard"></div>
             </div>
 

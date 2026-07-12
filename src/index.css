@@ -157,6 +157,16 @@ body {
   min-width: 100px !important;
 }
 
+.simple-keyboard .hg-button[data-skbtn="{shift}"] {
+  min-width: 70px !important;
+}
+
+.shift-active .simple-keyboard .hg-button[data-skbtn="{shift}"] {
+  background: #d4af37 !important;
+  color: #000000 !important;
+  border-color: #d4af37 !important;
+}
+
 /* Override default simple-keyboard styles */
 .hg-theme-default {
   background: #1a1a1a !important;
