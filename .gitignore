@@ -18,4 +18,15 @@ hifi-os-*.tar.gz
 hifi-system-*.tar.gz
 hifi-ui-*.tar.gz
 
-.abacusai/ 
+.abacusai/
+
+# F-Droid self-hosted repo: signing keystore and generated index/APKs are
+# never committed. The keystore only exists as a GitHub Actions secret; the
+# repo/ dir + index are built in CI and published straight to gh-pages.
+fdroid/keystore.p12
+fdroid/repo/
+fdroid/archive/
+fdroid/tmp/
+fdroid/logs/
+fdroid/stats/
+fdroid/unsigned/

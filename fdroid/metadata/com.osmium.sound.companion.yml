@@ -1,0 +1,17 @@
+# fdroidserver metadata for this self-hosted repo.
+#
+# APKs are NOT built by fdroidserver: they arrive already built and signed by
+# the existing GitHub Actions pipeline (.github/workflows/build-companion-apk.yml)
+# and are dropped into fdroid/repo/ before `fdroid update` runs. There is
+# intentionally no Builds: section — `fdroid update` indexes whatever signed
+# APK it finds there.
+
+Categories:
+  - Multimedia
+License: Apache-2.0
+WebSite: https://osmiumsound.qd.je
+SourceCode: https://github.com/adri6412/osmium-sound
+IssueTracker: https://github.com/adri6412/osmium-sound/issues
+
+AutoUpdateMode: None
+UpdateCheckMode: Static

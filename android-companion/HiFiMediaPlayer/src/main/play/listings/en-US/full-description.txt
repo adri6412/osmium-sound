@@ -1,4 +1,4 @@
-Control your Lyrion Music Server and players.
+Osmium Sound Companion is the official remote control app for your Osmium Sound hi-fi appliance. Pair instantly by scanning the QR code shown in Osmium Sound → Settings → Phone control, then control playback from anywhere on your local network.
 
 Features include:
 
@@ -8,15 +8,13 @@ Features include:
 &bull; Full library search
 &bull; Internet radio support (browse, staff picks, search)
 &bull; Browse music folders
-&bull; Supports Plugins/Apps
 &bull; Library Views and Remote Music Libraries
-&bull; Download of local music; track, album, artist, genre, year, playlist and music folder
-&bull; Automatic discovery of local servers
-&bull; Support for password protected servers
-&bull; Control playback from your Android Wear device
+&bull; Automatic discovery of Osmium Sound appliances on the local network
+&bull; QR code pairing
+&bull; DSP settings and system administration controls
 &bull; Home Screen Widgets
 &bull; Alarm Clock management
 &bull; Add/remove music from favorites
 &bull; Display lyrics
 
-Squeezer is free, and open source.
+Osmium Sound Companion is free and open source (Apache License 2.0), built on the android-squeezer project. It only talks to your own Osmium Sound appliance over your local network — no cloud service, no tracking, no ads.

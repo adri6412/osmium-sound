@@ -1,0 +1,20 @@
+Osmium Sound Companion is the official remote control app for your Osmium Sound hi-fi appliance. Pair instantly by scanning the QR code shown in Osmium Sound → Settings → Phone control, then control playback from anywhere on your local network.
+
+Features include:
+
+* Browse the library by album artist, all artists, composers, album, genre, year, playlist, favorites, or new music
+* Playlist control (now playing, shuffle, repeat, save/clear/modify playlists)
+* Manage players (names, synchronisation groups, sleep, alarms)
+* Full library search
+* Internet radio support (browse, staff picks, search)
+* Browse music folders
+* Library Views and Remote Music Libraries
+* Automatic discovery of Osmium Sound appliances on the local network
+* QR code pairing
+* DSP settings and system administration controls
+* Home Screen Widgets
+* Alarm Clock management
+* Add/remove music from favorites
+* Display lyrics
+
+Osmium Sound Companion is free and open source (Apache License 2.0), built on the android-squeezer project. It only talks to your own Osmium Sound appliance over your local network — no cloud service, no tracking, no ads.

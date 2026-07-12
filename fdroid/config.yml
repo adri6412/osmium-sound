@@ -1,0 +1,18 @@
+repo_url: "https://osmiumsound.qd.je/fdroid/repo"
+repo_name: "Osmium Sound"
+repo_description: >
+  Official self-hosted F-Droid repository for Osmium Sound Companion, the
+  Android remote control app for the Osmium Sound hi-fi appliance
+  (https://github.com/adri6412/osmium-sound).
+
+archive_older: 3
+
+# Repo signing keystore is generated once locally (PKCS12, alias
+# osmium-sound-fdroid) and is NEVER committed here. In CI it is written to
+# this path from the FDROID_REPO_KEYSTORE secret (base64-encoded) before
+# `fdroid update` runs. PKCS12 requires keypass == keystorepass, so both are
+# sourced from the same FDROID_REPO_KEYSTORE_PASSWORD secret.
+keystore: "keystore.p12"
+repo_keyalias: "osmium-sound-fdroid"
+keystorepass: "$FDROID_REPO_KEYSTORE_PASSWORD"
+keypass: "$FDROID_REPO_KEYSTORE_PASSWORD"
