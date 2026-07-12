@@ -307,6 +307,11 @@ const Settings = () => {
       const newLyrionUrl = mode === 'follow' ? `http://${host}:9000` : 'http://localhost:9000';
       setLyrionUrl(newLyrionUrl);
       localStorage.setItem('lyrionUrl', newLyrionUrl);
+      // Tell the main player page (LyrionServer.jsx, always mounted) to
+      // reconnect too — it reads lyrionUrl only once at app launch, so
+      // without this its status polling keeps silently hitting the old
+      // server's now-stale playerid (dead progress bar) until app restart.
+      window.dispatchEvent(new CustomEvent('osmium:lyrion-url-changed', { detail: newLyrionUrl }));
       setPlayerMac(null);
       if (mode === 'follow') {
         // `systemctl restart squeezelite` returns before squeezelite has

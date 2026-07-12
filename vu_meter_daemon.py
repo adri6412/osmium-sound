@@ -112,6 +112,20 @@ class SqueezeliteVisualizer:
             self.disconnect()
             return False
 
+    def shm_changed(self):
+        """True if the file at self.shm_file now has a different inode than
+        the one we have open (or is gone). Squeezelite unlinks and recreates
+        its shm segment on every restart (e.g. a DAC change, player rename,
+        or multiroom "follow another device" switch all restart it), so an
+        already-open fd/mmap silently keeps reading an orphaned, frozen
+        copy — buf_index never advances again, so the meter looks dead."""
+        if not self.shm_file or self.fd is None:
+            return False
+        try:
+            return os.stat(self.shm_file).st_ino != os.fstat(self.fd).st_ino
+        except OSError:
+            return True
+
     def disconnect(self):
         if self.mmap_obj:
             self.mmap_obj.close()
@@ -123,6 +137,11 @@ class SqueezeliteVisualizer:
     def read_audio_data(self):
         """Read current PCM data and calculate visualizer levels"""
         if not self.mmap_obj:
+            if not self.connect():
+                return None
+        elif self.shm_changed():
+            self.disconnect()
+            self.shm_file = None  # force a fresh glob in case the name itself changed too
             if not self.connect():
                 return None
 

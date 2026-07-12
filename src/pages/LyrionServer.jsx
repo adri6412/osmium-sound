@@ -84,7 +84,7 @@ const PlayingBars = () => (
 // ── Main component ────────────────────────────────────────────
 const LyrionServer = () => {
   const { t } = useI18n();
-  const [serverUrl] = useState(localStorage.getItem('lyrionUrl') || 'http://localhost:9000');
+  const [serverUrl, setServerUrl] = useState(localStorage.getItem('lyrionUrl') || 'http://localhost:9000');
 
   // LMS state
   const [isConnected, setIsConnected] = useState(false);
@@ -121,11 +121,38 @@ const LyrionServer = () => {
   const menuBaseRef = useRef(null);
 
   // ── Server connection ──────────────────────────────────────
+  // Delayed 10s on first mount to give the appliance's own Lyrion server
+  // (or, if this device already follows another Osmium unit for multiroom,
+  // that device's server) time to finish starting up during boot.
   useEffect(() => {
     lyrionApi.setBaseUrl(serverUrl);
     const t = setTimeout(connectToServer, 10000);
     return () => clearTimeout(t);
-  }, [serverUrl]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // `lyrionApi` is a shared singleton (utils/lyrionApi.js) — Settings.jsx can
+  // repoint it live to a different Lyrion server (multiroom "follow another
+  // device") while this page stays mounted for the app's entire lifetime.
+  // Without this listener, activePlayer/playerStatus polling below would
+  // keep silently querying the OLD server's now-stale playerid forever (the
+  // symptom: progress bar/VU meter go dead on the follower and never
+  // recover). Settings.jsx's applyLmsRole dispatches this event right after
+  // it repoints lyrionApi's own baseUrl.
+  useEffect(() => {
+    const onUrlChanged = (e) => {
+      const url = e.detail;
+      if (!url) return;
+      setServerUrl(url);
+      setActivePlayer(null);
+      setPlayerStatus(null);
+      lyrionApi.setBaseUrl(url);
+      connectToServer();
+    };
+    window.addEventListener('osmium:lyrion-url-changed', onUrlChanged);
+    return () => window.removeEventListener('osmium:lyrion-url-changed', onUrlChanged);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const connectToServer = async () => {
     setIsLoading(true);
