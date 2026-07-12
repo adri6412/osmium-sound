@@ -17,7 +17,7 @@ che generano i file STEP da ordinare.
 
 | Componente | Modello | Ingombro (mm) | Fissaggio |
 |---|---|---|---|
-| Schermo | Waveshare 7" HDMI LCD (C) Rev2.1 | scheda 164.9 × 124.27 × 15; area visibile 154.21 × 85.92 | 4 viti M3 (interasse **156 × 115**, misurato sul pezzo reale) |
+| Schermo | Waveshare 7" HDMI LCD (C) Rev2.1 | scheda 164.9 × 124.27 × 15; area visibile 154.21 × 85.92 | 4 viti M3 (interasse **157 × 115**, dal modello STEP del produttore) |
 | Lettore CD | slim USB a cassetto frontale | 137.2 × 137.2 × 15 | biadesivo sul fondo |
 | Mini PC | BMAX N100 16GB/512GB | 121 × 141.1 × 27.1 | biadesivo sul ripiano |
 | Connettori retro | doppia USB-A, jack DC, RJ45 | — | a vite / dado |
@@ -197,8 +197,9 @@ richiuso tutti e 6 i tiranti, per poter correggere l'allineamento.
 - I fori schermo (ora Ø6.5) sono volutamente maggiorati: c'è gioco per recuperare
   piccoli errori di interasse. In alluminio grezzo è comunque facile riforare/limare.
   - **Lotto 1 (prodotto con interasse 152.1 × 113.1 e fori Ø5.5)**: l'interasse reale
-    dello schermo è **156 × 115** → allargare a lima i 4 fori di ~2 mm verso l'esterno
-    in orizzontale (e ~1 mm in verticale); le rondelle larghe coprono l'occhiello.
+    dello schermo è **157 × 115** (fori simmetrici, dal modello STEP del produttore) →
+    allargare a lima/trapano i 4 fori di ~2.5 mm verso l'esterno in orizzontale
+    (e ~1 mm in verticale); le rondelle larghe coprono l'occhiello.
 - Centratura finestra schermo: `view_offy = 0` (area attiva centrata sui fori).
   Regolabile ±5 mm in `streamer_sheetmetal.py` se vedi un bordo nero asimmetrico.
 - Diametri/interassi connettori sono quelli dei componenti acquistati: se cambi

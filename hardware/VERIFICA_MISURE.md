@@ -10,7 +10,7 @@
 ### Schermo Waveshare 7" (C)
 - **Dimensioni**: 164.9 W × 124.27 H mm
 - **Area visiva**: 154.21 W × 85.92 H mm
-- **Fori montaggio**: interasse **156 × 115 mm** (misurato sullo schermo reale; il valore iniziale 152.1 × 113.1 era errato)
+- **Fori montaggio**: interasse **157 × 115 mm** (dal modello STEP del produttore, fori simmetrici al centro; il valore iniziale 152.1 × 113.1 era errato)
 - **Spazio disponibile frontale**: 186.9 - 2×6 = 174.9 mm (OK, 174.9 > 164.9) ✓
 - **Posizione Y schermo**: z0 = 7 + 18 = 25, centro a 25 + 62 = 87.1 mm
 - **Finestra DXF**: view_w=154.21, view_h=85.92, centro a 89.15 mm (OK) ✓

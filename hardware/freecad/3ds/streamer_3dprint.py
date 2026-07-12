@@ -14,7 +14,7 @@
 #    - ogni pezzo e' un pannello piatto -> stampa facile sul piano
 #
 #  Le MISURE FUNZIONALI sono identiche al progetto lamiera:
-#    finestra schermo, 4 fori schermo (interasse 156 x 115),
+#    finestra schermo, 4 fori schermo (interasse 157 x 115),
 #    fessura CD, fori connettori posteriori, quota ripiano mini PC.
 #  Cambiano solo spessori e sistema di fissaggio.
 #
@@ -54,7 +54,7 @@ top_margin = 8.0
 ext_depth  = 220.0
 
 # Interasse fori schermo
-screen_mnt_dx, screen_mnt_dy = 156.0, 115.0   # misurati sullo schermo reale (prima: 152.1x113.1, errati)
+screen_mnt_dx, screen_mnt_dy = 157.0, 115.0   # dal modello STEP del produttore (prima: 152.1x113.1, errati)
 
 # Connettori posteriori (dai datasheet reali)
 usb_cut_w, usb_cut_h = 14.0, 16.0

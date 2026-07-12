@@ -93,7 +93,7 @@ biadesivo forte per CD e mini PC.
    ┌───────────────────────┐
    │  ○               ○    │
    │      ┌─────────┐      │   ○ = 4 fori Ø5.5
-   │      │ SCHERMO │      │   interasse 156 × 115 (reale, misurato)
+   │      │ SCHERMO │      │   interasse 157 × 115 (da modello del produttore)
    │      └─────────┘      │
    │  ○               ○    │
    └───────────────────────┘
@@ -108,8 +108,8 @@ biadesivo forte per CD e mini PC.
 `①a ×4  ③ ×4  ⑦ ×4`
 
 > ⚠ **Pezzi del lotto 1** (prodotti con interasse 152.1 × 113.1): l'interasse reale
-> dei fori dello schermo è **156 × 115** → prima di montare, allarga a lima i 4 fori
-> del frontale di ~2 mm verso l'esterno in orizzontale (e ~1 mm in verticale).
+> dei fori dello schermo è **157 × 115** → prima di montare, allarga a lima/trapano i
+> 4 fori del frontale di ~2.5 mm verso l'esterno in orizzontale (e ~1 mm in verticale).
 > Le rondelle larghe coprono l'occhiello. Il CAD è già stato corretto per i lotti futuri.
 
 ---
