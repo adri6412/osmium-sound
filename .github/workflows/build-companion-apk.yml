@@ -236,13 +236,18 @@ jobs:
       - name: Copy new APK into repo
         run: cp release-artifacts/*.apk fdroid/repo/
 
-      - name: Update F-Droid index
+      - name: Write repo signing password into config.yml
         working-directory: fdroid
         env:
-          # fdroidserver's own env var names for keystorepass/keypass (see
-          # comment in fdroid/config.yml) — PKCS12 requires both to match.
-          FDROID_KEY_STORE_PASS: ${{ secrets.FDROID_REPO_KEYSTORE_PASSWORD }}
-          FDROID_KEY_PASS: ${{ secrets.FDROID_REPO_KEYSTORE_PASSWORD }}
+          FDROID_REPO_KEYSTORE_PASSWORD: ${{ secrets.FDROID_REPO_KEYSTORE_PASSWORD }}
+        run: |
+          {
+            echo "keystorepass: \"$FDROID_REPO_KEYSTORE_PASSWORD\""
+            echo "keypass: \"$FDROID_REPO_KEYSTORE_PASSWORD\""
+          } >> config.yml
+
+      - name: Update F-Droid index
+        working-directory: fdroid
         run: fdroid update --create-metadata --verbose
 
       - name: Remove keystore before publishing

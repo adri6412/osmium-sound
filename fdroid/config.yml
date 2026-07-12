@@ -12,11 +12,13 @@ archive_older: 3
 # this path from the FDROID_REPO_KEYSTORE secret (base64-encoded) before
 # `fdroid update` runs.
 #
-# Passwords are intentionally NOT set here (YAML has no $VAR interpolation —
-# a literal "$FOO" string here would be used as the actual password and
-# fail). fdroidserver reads them from the FDROID_KEY_STORE_PASS and
-# FDROID_KEY_PASS environment variables when keystorepass/keypass are
-# absent from this file; CI sets both to the same secret since PKCS12
-# requires keypass == keystorepass.
+# fdroidserver requires config['keystorepass']/['keypass'] to be actual
+# dict keys with real values (it uses them to populate the
+# FDROID_KEY_STORE_PASS/FDROID_KEY_PASS env vars it passes to keytool
+# itself — it does NOT read those env vars as input, and YAML has no
+# $VAR interpolation to fake it). So this file intentionally has no
+# keystorepass/keypass — CI appends both lines to a throwaway copy of
+# this file at runtime, from the FDROID_REPO_KEYSTORE_PASSWORD secret,
+# right before running `fdroid update`. Never commit real values here.
 keystore: "keystore.p12"
 repo_keyalias: "osmium-sound-fdroid"
