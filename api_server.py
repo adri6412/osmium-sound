@@ -197,6 +197,17 @@ def get_system_info():
             'error': 'Errore nel recupero delle informazioni di sistema'
         }
 
+_IFACE_RE = re.compile(r'^[A-Za-z0-9][A-Za-z0-9._-]*$')
+
+def _valid_iface_name(name):
+    """True only for a plausible network interface name passed as a single argv
+    token to a root-privileged dhclient/ip call (no shell involved, so no
+    metacharacter injection risk) — but a value starting with '-' would still
+    be parsed as a FLAG by dhclient/ip instead of an interface name (e.g.
+    '-x'/'-nw'/'-sf <script>'), so the leading character must be alphanumeric,
+    not just drawn from the same allowed character set as the rest."""
+    return bool(isinstance(name, str) and name and _IFACE_RE.match(name))
+
 def _valid_ipv4(addr):
     """True only for a well-formed dotted-quad IPv4 address (no shell metachars)."""
     if not isinstance(addr, str):
@@ -214,12 +225,7 @@ def configure_network(config):
         mode = config.get('mode', 'dhcp')
         
         if mode == 'dhcp':
-            # Same validation as the 'static' branch below: interface_name is one
-            # argv token to a root-privileged dhclient call (no shell involved,
-            # so no metacharacter injection) but an unvalidated value could still
-            # be parsed as a dhclient flag (e.g. '-sf <script>') instead of an
-            # interface name.
-            if not re.match(r'^[A-Za-z0-9._-]+$', interface_name or ''):
+            if not _valid_iface_name(interface_name):
                 return f"Invalid interface: {interface_name}"
             # Configura DHCP
             result = subprocess.run(['sudo', 'dhclient', interface_name],
@@ -244,7 +250,7 @@ def configure_network(config):
                 return f"Invalid gateway: {gateway}"
             if not _valid_ipv4(dns):
                 return f"Invalid DNS address: {dns}"
-            if not re.match(r'^[A-Za-z0-9._-]+$', interface_name or ''):
+            if not _valid_iface_name(interface_name):
                 return f"Invalid interface: {interface_name}"
 
             # Rimuovi l'IP esistente
