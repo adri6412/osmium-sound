@@ -2,3 +2,5 @@
 freecad/out/_*
 freecad/out/*.echo
 *.echo
+# DXF generati dagli script (rigenerabili, non versionati)
+*.dxf
