@@ -226,8 +226,14 @@ jobs:
           git fetch origin gh-pages:refs/remotes/origin/gh-pages
           git worktree add /tmp/gh-pages origin/gh-pages
           mkdir -p fdroid/repo
+          # Only restore previous APKs (needed so `fdroid update` keeps
+          # older versions in the index/archive). Everything else —
+          # per-app graphics, index files — must NOT be restored: fdroid
+          # update only regenerates what's missing, so a stale copy of
+          # e.g. icon.png here would silently keep overriding freshly
+          # updated listing metadata/images forever.
           if [ -d /tmp/gh-pages/fdroid/repo ]; then
-            cp -a /tmp/gh-pages/fdroid/repo/. fdroid/repo/
+            find /tmp/gh-pages/fdroid/repo -maxdepth 1 -name '*.apk' -exec cp -a {} fdroid/repo/ \;
           fi
 
       - name: Decode repo signing keystore
