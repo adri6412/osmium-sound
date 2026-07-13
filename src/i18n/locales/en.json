@@ -70,7 +70,9 @@
       "smbTitle": "Network share",
       "smbHelp": "Copy music from a PC by connecting to this path with the credentials below.",
       "smbUser": "Username",
-      "smbPass": "Password"
+      "smbPass": "Password",
+      "smbRegenerate": "Regenerate password",
+      "smbRegenerateHint": "If Windows keeps rejecting the credentials, remove the saved entry for this device in Windows Credential Manager, then try again."
     }
   },
   "wizard": {

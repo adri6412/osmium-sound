@@ -205,9 +205,10 @@ function FormatWizard({ disk, t, onClose, onDone }) {
   );
 }
 
-function SmbCard({ smb, t }) {
+function SmbCard({ smb, t, onRegenerated }) {
   const [showPass, setShowPass] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [regenBusy, setRegenBusy] = useState(false);
 
   const copyPass = async () => {
     try {
@@ -215,6 +216,14 @@ function SmbCard({ smb, t }) {
       setCopied(true);
       setTimeout(() => setCopied(false), 1500);
     } catch (_) { /* clipboard unavailable, ignore */ }
+  };
+
+  const regenerate = async () => {
+    setRegenBusy(true);
+    try {
+      await fetch(SRC + '/api/internal/smb/regenerate', { method: 'POST' });
+      if (onRegenerated) onRegenerated();
+    } catch (_) { /* transient network hiccup, user can retry */ } finally { setRegenBusy(false); }
   };
 
   if (!smb.installed) {
@@ -254,6 +263,16 @@ function SmbCard({ smb, t }) {
             </button>
           </div>
         </div>
+      </div>
+      <div className="flex items-center justify-between pt-1">
+        <p className="text-hifi-silver/50 text-xs">{t('sources.internal.smbRegenerateHint')}</p>
+        <button
+          onClick={regenerate}
+          disabled={regenBusy}
+          className="text-xs text-hifi-silver/70 hover:text-white underline disabled:opacity-50 shrink-0 ml-3"
+        >
+          {t('sources.internal.smbRegenerate')}
+        </button>
       </div>
     </div>
   );
@@ -396,7 +415,7 @@ export default function InternalDisks({ onSourcesChanged }) {
         <div className="mt-3 rounded-lg p-3 text-center text-sm bg-hifi-dark text-hifi-silver">{msg}</div>
       )}
 
-      {hasAdoptedShares && <SmbCard smb={smb} t={t} />}
+      {hasAdoptedShares && <SmbCard smb={smb} t={t} onRegenerated={loadSmb} />}
 
       {wizardDisk && (
         <FormatWizard

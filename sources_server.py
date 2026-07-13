@@ -360,7 +360,15 @@ def _ensure_samba_uid_gid():
         return 0, 0
 
 
-def _create_samba_user():
+def _samba_account_exists():
+    try:
+        r = subprocess.run(["pdbedit", "-L", "-u", SAMBA_USER], capture_output=True, text=True, timeout=10)
+        return r.returncode == 0
+    except Exception:
+        return False
+
+
+def _create_samba_user(force_new_password=False):
     """Ensure a dedicated local + Samba user exists; return its password."""
     _ensure_samba_uid_gid()
     cred = {}
@@ -370,7 +378,7 @@ def _create_samba_user():
                 cred = json.load(f)
         except Exception:
             pass
-    password = cred.get("password")
+    password = None if force_new_password else cred.get("password")
     if not password:
         password = secrets.token_urlsafe(9)
         cred = {"username": SAMBA_USER, "password": password, "synced": False}
@@ -381,14 +389,20 @@ def _create_samba_user():
     # the smbpasswd call's result was discarded, so a failure was silent).
     if not cred.get("synced"):
         try:
+            # `-a` (add) fails on some Samba versions if the account already
+            # exists — use it only for the very first creation, otherwise
+            # just reset the existing account's password.
+            args = ["smbpasswd", "-s"] + ([] if _samba_account_exists() else ["-a"]) + [SAMBA_USER]
             r = subprocess.run(
-                ["smbpasswd", "-s", "-a", SAMBA_USER],
-                input=f"{password}\n{password}\n", text=True,
+                args, input=f"{password}\n{password}\n", text=True,
                 capture_output=True, timeout=10,
             )
-            cred["synced"] = r.returncode == 0
-            if r.returncode != 0:
-                print(f"[sources] smbpasswd failed for {SAMBA_USER}: {(r.stderr or r.stdout).strip()}")
+            # Don't trust the exit code alone — confirm the account is
+            # actually present in the passdb afterwards.
+            cred["synced"] = r.returncode == 0 and _samba_account_exists()
+            if not cred["synced"]:
+                print(f"[sources] smbpasswd did not take effect for {SAMBA_USER} "
+                      f"(rc={r.returncode}): {(r.stderr or r.stdout).strip()}")
         except Exception as e:
             cred["synced"] = False
             print(f"[sources] smbpasswd error for {SAMBA_USER}: {e}")
@@ -1722,6 +1736,18 @@ def api_internal_smb():
         "host": "hifiplayer.local",
         "ip": ips[0] if ips else "",
     })
+
+
+@app.route("/api/internal/smb/regenerate", methods=["POST"])
+def api_internal_smb_regenerate():
+    denied = _require_pair_token()
+    if denied:
+        return denied
+    if _run(["which", "smbd"], timeout=5).returncode != 0:
+        return jsonify({"success": False, "message": "Samba non installato"}), 424
+    with _lock:
+        password = _create_samba_user(force_new_password=True)
+    return jsonify({"success": True, "username": SAMBA_USER, "password": password})
 
 
 @app.route("/api/usb", methods=["GET"])

@@ -70,7 +70,9 @@
       "smbTitle": "Condivisione di rete",
       "smbHelp": "Copia la musica da un PC collegandoti a questo percorso con le credenziali qui sotto.",
       "smbUser": "Utente",
-      "smbPass": "Password"
+      "smbPass": "Password",
+      "smbRegenerate": "Rigenera password",
+      "smbRegenerateHint": "Se Windows continua a rifiutare le credenziali, rimuovi la voce salvata per questo dispositivo in Gestione credenziali di Windows e riprova."
     }
   },
   "wizard": {
