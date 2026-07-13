@@ -37,7 +37,43 @@
     "mounting": "Montaggio…",
     "mounted": "Montata ✓",
     "applying": "Applico…",
-    "applied": "Fatto ✓"
+    "applied": "Fatto ✓",
+    "internal": {
+      "tag": "INTERNO",
+      "title": "Dischi interni",
+      "none": "Nessun disco interno aggiuntivo rilevato.",
+      "adoptedBadge": "Adottato",
+      "hasData": "Contiene dati",
+      "adopt": "Usa come sorgente",
+      "format": "Formatta…",
+      "adopting": "Montaggio…",
+      "adopted": "Sorgente aggiunta ✓",
+      "remove": "Rimuovi",
+      "removed": "Rimossa ✓",
+      "wizardTitle": "Formatta disco",
+      "fsLabel": "Filesystem",
+      "fsExt4": "ext4 (consigliato)",
+      "fsExt4Hint": "Scelta migliore per lo storage interno dell'appliance.",
+      "fsExfat": "exFAT",
+      "fsExfatHint": "Leggibile da Windows/macOS se il disco viene estratto.",
+      "labelField": "Etichetta disco",
+      "warnTitle": "Questa operazione cancella tutti i dati",
+      "warnBody": "Tutti i dati su {model} ({size}, {path}) verranno cancellati in modo permanente. L'operazione non può essere annullata.",
+      "typeToConfirm": "Digita \"{label}\" per confermare",
+      "formatNow": "Formatta ora",
+      "phasePreparing": "Preparazione disco…",
+      "keepPowered": "Tieni acceso l'apparecchio finché l'operazione non termina.",
+      "doneAdopted": "Disco formattato e aggiunto come sorgente ✓",
+      "doneHint": "Copia la musica nella condivisione di rete qui sotto, poi applica e riscansiona la libreria.",
+      "close": "Chiudi",
+      "needOsUpdate": "È necessario un aggiornamento di sistema per abilitare la condivisione di rete (Samba) dei dischi interni.",
+      "smbTitle": "Condivisione di rete",
+      "smbHelp": "Copia la musica da un PC collegandoti a questo percorso con le credenziali qui sotto.",
+      "smbUser": "Utente",
+      "smbPass": "Password",
+      "smbRegenerate": "Rigenera password",
+      "smbRegenerateHint": "Se Windows continua a rifiutare le credenziali, rimuovi la voce salvata per questo dispositivo in Gestione credenziali di Windows e riprova."
+    }
   },
   "wizard": {
     "brand": "Osmium Sound · Setup",
@@ -181,7 +217,8 @@
       "multiroom": "Multiroom",
       "alarm": "Sveglia",
       "network": "Configurazione Rete",
-      "webRemote": "Controllo da telefono",
+      "webRemote": "Companion Android",
+      "webRemoteIos": "iPhone / iPad",
       "backup": "Backup e ripristino",
       "ssh": "Accesso SSH",
       "pointer": "Puntatore mouse",
@@ -256,7 +293,7 @@
       }
     },
     "webRemote": {
-      "help": "Abbina l'app Osmium Sound Companion a questo dispositivo inquadrando il QR code (contiene anche un token di pairing monouso). Per controllare il dispositivo da un normale browser, apri invece l'indirizzo mostrato sotto il codice.",
+      "help": "Abbina l'app Osmium Sound Companion (Android) a questo dispositivo inquadrando il QR code (contiene anche un token di pairing monouso). Per controllare il dispositivo da un normale browser, apri invece l'indirizzo mostrato sotto il codice.",
       "scanHint": "Inquadra con l'app companion",
       "generatingToken": "Generazione codice di pairing…",
       "noIp": "Nessun indirizzo di rete disponibile. Collega il dispositivo alla rete (Ethernet o Wi-Fi) per ottenere un link di controllo.",
@@ -265,6 +302,11 @@
       "revokeAllConfirm": "Revocare tutti i telefoni abbinati? Dovrai abbinarli di nuovo.",
       "revokeAllSuccess": "Tutti gli abbinamenti sono stati revocati.",
       "revokeAllFailed": "Revoca fallita, riprova."
+    },
+    "webRemoteIos": {
+      "help": "Su iPhone/iPad usa LyrPlay, un'app gratuita già disponibile su App Store per controllare Lyrion/Squeezebox: decodifica nativa FLAC/Opus, riproduzione in background, controlli da lock screen, CarPlay e Siri. Inquadra il QR per scaricarla. Nota: DSP, aggiornamenti, riavvio e ruolo multiroom restano gestibili solo dal kiosk.",
+      "scanHint": "Inquadra per aprire LyrPlay su App Store",
+      "disclaimer": "LyrPlay è un'app di terze parti, non sviluppata né affiliata a questo progetto. Segnalata solo come client compatibile con Lyrion/Squeezebox."
     },
     "backup": {
       "help": "Esporta o ripristina la configurazione del dispositivo (DAC, DSP/EQ, sorgenti musicali, puntatore, canale aggiornamenti) da un browser sul telefono o PC. Apri l'indirizzo qui sotto o inquadra il QR code, poi usa \"Scarica backup\" o \"Ripristina da file\".",
@@ -391,7 +433,6 @@
       }
     },
     "controls": {
-      "aptUpdate": "Aggiorna Sistema (apt-get update && upgrade)",
       "reboot": "Riavvia Sistema",
       "shutdown": "Spegni Sistema"
     },
@@ -403,9 +444,6 @@
       "apiUnavailable": "Errore: Server API non disponibile",
       "apiUnavailableHint": "Errore: Server API non disponibile. Verificare che api_server.py sia in esecuzione.",
       "loadDataError": "Errore nel caricamento dei dati di sistema",
-      "systemUpdating": "Aggiornamento del sistema in corso...",
-      "systemUpdated": "Sistema aggiornato con successo!",
-      "updateError": "Errore durante l'aggiornamento",
       "confirmReboot": "Sei sicuro di voler riavviare il sistema?",
       "rebooting": "Riavvio del sistema...",
       "rebootingShort": "Sistema in riavvio...",

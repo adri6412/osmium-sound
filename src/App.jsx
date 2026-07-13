@@ -61,6 +61,25 @@ const AppContent = () => {
     };
   }, [resetInactivityTimer]);
 
+  // Playback can start remotely (companion app, Lyrion web UI, another
+  // controller) with no touch/mouse activity on the kiosk itself. Once the
+  // screensaver is up, poll for that case and wake it — otherwise it would
+  // keep covering the screen for the whole track.
+  React.useEffect(() => {
+    if (!isScreensaverActive) return;
+    const poll = setInterval(async () => {
+      try {
+        const status = await lyrionApi.getServerStatus();
+        const players = status?.players_loop || [];
+        if (players.length > 0) {
+          const ps = await lyrionApi.getPlayerStatus(players[0].playerid);
+          if (ps?.mode === 'play') resetInactivityTimer();
+        }
+      } catch (_) {}
+    }, 10 * 1000);
+    return () => clearInterval(poll);
+  }, [isScreensaverActive, resetInactivityTimer]);
+
   // Auto-show virtual keyboard on text input focus
   React.useEffect(() => {
     const textTypes = ['text', 'password', 'email', 'number', 'search', 'tel', 'url'];

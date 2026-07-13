@@ -37,7 +37,43 @@
     "mounting": "Mounting…",
     "mounted": "Mounted ✓",
     "applying": "Applying…",
-    "applied": "Done ✓"
+    "applied": "Done ✓",
+    "internal": {
+      "tag": "INTERNAL",
+      "title": "Internal disks",
+      "none": "No additional internal disk detected.",
+      "adoptedBadge": "Adopted",
+      "hasData": "Contains data",
+      "adopt": "Use as source",
+      "format": "Format…",
+      "adopting": "Mounting…",
+      "adopted": "Source added ✓",
+      "remove": "Remove",
+      "removed": "Removed ✓",
+      "wizardTitle": "Format disk",
+      "fsLabel": "Filesystem",
+      "fsExt4": "ext4 (recommended)",
+      "fsExt4Hint": "Best choice for internal appliance storage.",
+      "fsExfat": "exFAT",
+      "fsExfatHint": "Readable from Windows/macOS if the disk is removed.",
+      "labelField": "Disk label",
+      "warnTitle": "This will erase all data",
+      "warnBody": "All data on {model} ({size}, {path}) will be permanently erased. This cannot be undone.",
+      "typeToConfirm": "Type \"{label}\" to confirm",
+      "formatNow": "Format now",
+      "phasePreparing": "Preparing disk…",
+      "keepPowered": "Keep the appliance powered on until this finishes.",
+      "doneAdopted": "Disk formatted and added as a source ✓",
+      "doneHint": "Copy your music to the network share below, then apply & rescan the library.",
+      "close": "Close",
+      "needOsUpdate": "A system update is required to enable network sharing (Samba) for internal disks.",
+      "smbTitle": "Network share",
+      "smbHelp": "Copy music from a PC by connecting to this path with the credentials below.",
+      "smbUser": "Username",
+      "smbPass": "Password",
+      "smbRegenerate": "Regenerate password",
+      "smbRegenerateHint": "If Windows keeps rejecting the credentials, remove the saved entry for this device in Windows Credential Manager, then try again."
+    }
   },
   "wizard": {
     "brand": "Osmium Sound · Setup",
@@ -181,7 +217,8 @@
       "multiroom": "Multiroom",
       "alarm": "Alarm Clock",
       "network": "Network Configuration",
-      "webRemote": "Phone control",
+      "webRemote": "Android Companion",
+      "webRemoteIos": "iPhone / iPad",
       "backup": "Backup & restore",
       "ssh": "SSH Access",
       "pointer": "Mouse pointer",
@@ -256,7 +293,7 @@
       }
     },
     "webRemote": {
-      "help": "Pair the Osmium Sound Companion app with this device by scanning the QR code (it also carries a one-time pairing token). To control this device from a plain browser instead, open the address shown below the code.",
+      "help": "Pair the Osmium Sound Companion app (Android) with this device by scanning the QR code (it also carries a one-time pairing token). To control this device from a plain browser instead, open the address shown below the code.",
       "scanHint": "Scan with the companion app",
       "generatingToken": "Generating pairing code…",
       "noIp": "No network address available yet. Connect the device to the network (Ethernet or Wi-Fi) to get a control link.",
@@ -265,6 +302,11 @@
       "revokeAllConfirm": "Revoke all paired phones? They will need to be paired again.",
       "revokeAllSuccess": "All pairings have been revoked.",
       "revokeAllFailed": "Revoke failed, please try again."
+    },
+    "webRemoteIos": {
+      "help": "On iPhone/iPad, use LyrPlay — a free app already on the App Store for controlling Lyrion/Squeezebox: native FLAC/Opus decoding, real background playback, lock-screen controls, CarPlay and Siri. Scan the QR to download it. Note: DSP, updates, reboot and multiroom role stay kiosk-only.",
+      "scanHint": "Scan to open LyrPlay on the App Store",
+      "disclaimer": "LyrPlay is a third-party app, not developed by or affiliated with this project. Listed only as a compatible Lyrion/Squeezebox client."
     },
     "backup": {
       "help": "Export or restore this device's configuration (DAC, DSP/EQ, music sources, mouse pointer, update channel) from a browser on your phone or PC. Open the address below or scan the QR code, then use \"Download backup\" or \"Restore from file\".",
@@ -391,7 +433,6 @@
       }
     },
     "controls": {
-      "aptUpdate": "Update System (apt-get update && upgrade)",
       "reboot": "Reboot System",
       "shutdown": "Shut Down System"
     },
@@ -403,9 +444,6 @@
       "apiUnavailable": "Error: API server unavailable",
       "apiUnavailableHint": "Error: API server unavailable. Make sure api_server.py is running.",
       "loadDataError": "Error loading system data",
-      "systemUpdating": "System update in progress...",
-      "systemUpdated": "System updated successfully!",
-      "updateError": "Error during the update",
       "confirmReboot": "Are you sure you want to reboot the system?",
       "rebooting": "Rebooting the system...",
       "rebootingShort": "System rebooting...",

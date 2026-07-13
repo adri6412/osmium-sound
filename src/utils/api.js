@@ -79,7 +79,6 @@ export const checkApiServer = async () => {
  * System control API calls
  */
 export const systemAPI = {
-  update: () => apiPost('/update_system'),
   reboot: () => apiPost('/reboot'),
   shutdown: () => apiPost('/shutdown'),
   closeAndRestart: () => apiPost('/close_and_restart'),

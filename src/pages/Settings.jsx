@@ -21,6 +21,7 @@ import {
   ChevronRight,
   ChevronLeft,
   Smartphone,
+  Tablet,
   Speaker,
   CheckCircle2,
   AlertTriangle,
@@ -56,7 +57,6 @@ const Settings = () => {
   const [networkInfo, setNetworkInfo] = useState([]);
   const [selectedInterface, setSelectedInterface] = useState('');
   const [lyrionUrl, setLyrionUrl] = useState(localStorage.getItem('lyrionUrl') || 'http://localhost:9000');
-  const [isUpdating, setIsUpdating] = useState(false);
   const [updateMessage, setUpdateMessage] = useState('');
   // In-app confirmation modal (replaces the native window.confirm, which renders
   // with the OS/Electron chrome). Shape: { message, confirmLabel, onConfirm }.
@@ -222,7 +222,13 @@ const Settings = () => {
     try {
       lyrionApi.setBaseUrl(baseUrl);
       const players = await lyrionApi.getPlayers();
-      const mac = players?.[0]?.playerid;
+      // Don't assume players[0] is this appliance — the companion app can
+      // auto-launch a phone-side Squeezelite/SqueezePlayer that also shows up
+      // in the list. Prefer the one matching this device's own player name.
+      const nameRes = await systemAPI.getPlayerName();
+      const localName = nameRes.success ? nameRes.data?.name : null;
+      const local = localName && players?.find((p) => p.name === localName);
+      const mac = (local || players?.[0])?.playerid;
       if (!mac) return;
       setPlayerMac(mac);
       const [tt, td, rg] = await Promise.all([
@@ -239,8 +245,9 @@ const Settings = () => {
   };
 
   // ── Multiroom handlers ──────────────────────────────────────────
-  // The appliance is players[0]; every other player can be grouped with it.
-  // A player synced to the appliance shows up in the appliance's sync_slaves.
+  // `mac` is this appliance's own player (resolved by name in loadPlaybackPrefs,
+  // not just players[0] — see the comment there); every other player can be
+  // grouped with it. A player synced to the appliance shows up in its sync_slaves.
   const loadMultiroom = async (mac = playerMac, players = null) => {
     if (!mac) return null;
     try {
@@ -656,8 +663,8 @@ const Settings = () => {
   }, []);
 
   // Publish "update available" so the Sidebar can show a badge. We consider the
-  // core channels behind the single button (UI + System + OS); Lyrion and the
-  // apt upgrade live on their own buttons.
+  // core channels behind the single button (UI + System + OS); Lyrion lives on
+  // its own button.
   useEffect(() => {
     const available = !!(appUpdate?.update_available || systemUpdate?.update_available || osUpdate?.update_available);
     localStorage.setItem('hifiUpdateAvailable', available ? '1' : '0');
@@ -783,7 +790,7 @@ const Settings = () => {
   //      no-op when the system already matches (so this step usually just falls
   //      through); only a real OS change reboots, which is rare and ends here.
   //   3. UI — restarts the Electron front-end, so it goes last (terminal).
-  // (apt system upgrade and Lyrion stay on their own buttons.)
+  // (Lyrion stays on its own button.)
   const applyAllUpdates = async () => {
     if (!apiConnected) {
       setUpdateMessage(t('settings.msg.apiUnavailable'));
@@ -1029,29 +1036,6 @@ const Settings = () => {
   };
 
   // System actions
-  const handleSystemUpdate = async () => {
-    if (!apiConnected) {
-      setUpdateMessage(t('settings.msg.apiUnavailable'));
-      return;
-    }
-
-    setIsUpdating(true);
-    setUpdateMessage(t('settings.msg.systemUpdating'));
-
-    try {
-      const result = await systemAPI.update();
-      if (result.success) {
-        setUpdateMessage(result.data.message || t('settings.msg.systemUpdated'));
-      } else {
-        setUpdateMessage(result.message || t('settings.msg.updateError'));
-      }
-    } catch (error) {
-      setUpdateMessage(t('settings.msg.updateError'));
-    } finally {
-      setIsUpdating(false);
-    }
-  };
-
   const doReboot = async () => {
     setUpdateMessage(t('settings.msg.rebooting'));
     try {
@@ -1130,6 +1114,13 @@ const Settings = () => {
   const pairingQrValue = (isUsableIp && pairToken)
     ? JSON.stringify({ lms: webRemoteUrl, api: `${deviceIp}:8080`, token: pairToken })
     : null;
+  // iOS: no custom PWA/companion app — LyrPlay is an existing, actively
+  // maintained App Store client (native FLAC/Opus decode, real background
+  // playback, lock-screen/CarPlay/Siri, LMS player sync) that a bespoke web
+  // app could never match. DSP/OTA/reboot/multiroom-role management stays
+  // kiosk-only; LyrPlay only speaks the standard LMS protocol. Static URL,
+  // no device IP/token involved.
+  const LYRPLAY_APP_STORE_URL = 'https://apps.apple.com/app/lyrplay/id6746776736';
 
   const settingsSections = [
     {
@@ -1181,6 +1172,11 @@ const Settings = () => {
       title: t('settings.sections.webRemote'),
       icon: Smartphone,
       content: 'custom-web-remote'
+    },
+    {
+      title: t('settings.sections.webRemoteIos'),
+      icon: Tablet,
+      content: 'custom-web-remote-ios'
     },
     {
       title: t('settings.sections.backup'),
@@ -2033,7 +2029,7 @@ const Settings = () => {
                 )}
 
                 {/* Custom SSH Section */}
-                {/* Custom Web-Remote (Material skin) Section */}
+                {/* Custom Web-Remote (Android companion app + pairing token) Section */}
                 {section.content === 'custom-web-remote' && (
                   <div className="space-y-4">
                     <p className="text-sm text-hifi-silver">{t('settings.webRemote.help')}</p>
@@ -2074,6 +2070,26 @@ const Settings = () => {
                           {revokeMessage}
                         </div>
                       )}
+                    </div>
+                  </div>
+                )}
+
+                {/* Custom Web-Remote (iPhone/iPad → LyrPlay on the App Store) Section */}
+                {section.content === 'custom-web-remote-ios' && (
+                  <div className="space-y-4">
+                    <p className="text-sm text-hifi-silver">{t('settings.webRemoteIos.help')}</p>
+
+                    <div className="flex flex-col items-center space-y-3">
+                      <div className="bg-white p-4 rounded-xl">
+                        <QRCodeSVG value={LYRPLAY_APP_STORE_URL} size={200} level="M" />
+                      </div>
+                      <div className="text-center">
+                        <p className="text-xs text-hifi-silver mb-1">{t('settings.webRemoteIos.scanHint')}</p>
+                        <code className="text-sm text-hifi-gold break-all">{LYRPLAY_APP_STORE_URL}</code>
+                      </div>
+                      <p className="text-[11px] text-hifi-silver/50 text-center max-w-xs">
+                        {t('settings.webRemoteIos.disclaimer')}
+                      </p>
                     </div>
                   </div>
                 )}
@@ -2551,26 +2567,6 @@ const Settings = () => {
                 {/* Custom System Controls Section */}
                 {section.content === 'custom-system-controls' && (
                   <div className="space-y-4">
-                    {/* System Update */}
-                    <motion.button
-                      onClick={handleSystemUpdate}
-                      disabled={isUpdating}
-                      className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-hifi-accent text-white py-4 rounded-lg font-semibold flex items-center justify-center space-x-2 transition-colors"
-                      whileTap={{ scale: isUpdating ? 1 : 0.95 }}
-                    >
-                      {isUpdating ? (
-                        <>
-                          <Loader2 size={20} className="animate-spin" />
-                          <span>{t('settings.updates.updating')}</span>
-                        </>
-                      ) : (
-                        <>
-                          <Download size={20} />
-                          <span>{t('settings.controls.aptUpdate')}</span>
-                        </>
-                      )}
-                    </motion.button>
-                    
                     {updateMessage && (
                       <div className={`rounded-lg p-3 text-center text-sm ${
                         isErrorMsg(updateMessage)

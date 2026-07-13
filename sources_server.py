@@ -24,6 +24,7 @@ import subprocess
 import threading
 import io
 import tarfile
+import hashlib
 import secrets
 import urllib.request
 import urllib.error
@@ -61,11 +62,18 @@ except Exception:
 
 STATE_FILE = "/etc/hifi-sources.json"
 MOUNT_ROOT = "/mnt/hifi-sources"
+INTERNAL_MOUNT_ROOT = "/mnt/hifi-internal"
 # Local music folders may only be added from these base directories. This
 # keeps the (root-privileged) service from being pointed at arbitrary paths
 # such as /etc or /root via the add-local-source API.
-ALLOWED_LOCAL_ROOTS = ("/mnt", "/media", "/srv", "/home", MOUNT_ROOT)
+ALLOWED_LOCAL_ROOTS = ("/mnt", "/media", "/srv", "/home", MOUNT_ROOT, INTERNAL_MOUNT_ROOT)
 LYRION_SERVICE = "lyrionmusicserver.service"
+SAMBA_SHARES_FILE = "/etc/samba/hifi-shares.conf"
+SAMBA_CRED_FILE = "/etc/hifi-player/samba-cred.json"
+SAMBA_USER = "hifimusic"
+FORMAT_STATUS = "/run/hifi-format-status.json"
+FORMAT_UNIT = "hifi-format-disk"
+FORMAT_SCRIPT = "/usr/local/sbin/hifi-format-disk.sh"
 PREFS_GLOBS = [
     "/var/lib/squeezeboxserver/prefs/server.prefs",
     "/var/lib/lyrion*/prefs/server.prefs",
@@ -119,8 +127,30 @@ def _field_ok(value):
     return bool(re.fullmatch(r"[^\x00-\x1f,]*", v)) and not v.startswith("-")
 
 
+def _label_ok(value):
+    """Safe volume label: alphanumerics, space, underscore, dot, hyphen."""
+    v = "" if value is None else str(value)
+    return bool(re.fullmatch(r"[A-Za-z0-9 _.-]{1,16}", v))
+
+
+def _path_ok(value):
+    """Safe block-device path: must start with /dev/ and contain no shell metas."""
+    v = "" if value is None else str(value)
+    return bool(re.fullmatch(r"/dev/[A-Za-z0-9/_-]+", v))
+
+
 def _run(cmd, timeout=30):
     return subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
+
+
+def _run_json(cmd, timeout=30):
+    r = _run(cmd, timeout=timeout)
+    if r.returncode != 0:
+        return None
+    try:
+        return json.loads(r.stdout or "{}")
+    except Exception:
+        return None
 
 
 # ─────────────────────────── SMB mounting ───────────────────────────
@@ -168,14 +198,323 @@ def umount(mountpoint):
         _run(["umount", "-l", mountpoint])
 
 
+def _system_disk_paths():
+    """Return a set of disk paths that are part of the running system and must
+    never be offered for adoption or formatting."""
+    system = set()
+    for target in ("/", "/boot/efi"):
+        try:
+            r = _run(["findmnt", "-no", "SOURCE", target], timeout=5)
+            if r.returncode != 0 or not r.stdout.strip():
+                continue
+            src = r.stdout.strip()
+            # findmnt returns the partition; resolve to the parent disk via lsblk.
+            if src.startswith("/dev/"):
+                pr = _run(["lsblk", "-no", "PKNAME", src], timeout=5)
+                if pr.returncode == 0 and pr.stdout.strip():
+                    system.add("/dev/" + pr.stdout.strip().split()[0])
+            elif src.startswith("UUID=") or src.startswith("PARTUUID="):
+                # resolve to a device node
+                pr = _run(["findfs", src], timeout=5)
+                if pr.returncode == 0 and pr.stdout.strip().startswith("/dev/"):
+                    dev = pr.stdout.strip()
+                    pr2 = _run(["lsblk", "-no", "PKNAME", dev], timeout=5)
+                    if pr2.returncode == 0 and pr2.stdout.strip():
+                        system.add("/dev/" + pr2.stdout.strip().split()[0])
+        except Exception:
+            pass
+    return system
+
+
+def _lsblk_full():
+    return _run_json(["lsblk", "-J", "-b", "-o",
+                        "PATH,NAME,TYPE,SIZE,MODEL,SERIAL,TRAN,ROTA,RM,FSTYPE,LABEL,UUID,PARTUUID,PKNAME,MOUNTPOINT"],
+                       timeout=10)
+
+
+def _internal_disks():
+    """Enumerate internal (non-USB, non-optical, non-system) block devices.
+    Returns a list of dicts with partitions and adoption state."""
+    data = _lsblk_full() or {}
+    system_disks = _system_disk_paths()
+
+    # Build a map of mounted partitions outside allowed roots.
+    mounted_outside = set()
+    for dev in data.get("blockdevices", []):
+        for part in dev.get("children") or []:
+            mp = part.get("mountpoint")
+            if mp:
+                try:
+                    rp = os.path.realpath(mp)
+                    allowed = False
+                    for root in ("/mnt", "/media", INTERNAL_MOUNT_ROOT, USB_MOUNT_ROOT):
+                        if rp == root or rp.startswith(root + os.sep):
+                            allowed = True
+                            break
+                    if not allowed:
+                        mounted_outside.add(dev.get("path"))
+                except Exception:
+                    mounted_outside.add(dev.get("path"))
+            if part.get("fstype") == "swap":
+                system_disks.add(dev.get("path"))
+
+    state = load_state()
+    by_partuuid = {}
+    by_uuid = {}
+    for s in state.get("sources", []):
+        if s.get("type") == "internal":
+            if s.get("partuuid"):
+                by_partuuid[s["partuuid"].lower()] = s
+            if s.get("fsuuid"):
+                by_uuid[s["fsuuid"].lower()] = s
+
+    out = []
+    for dev in data.get("blockdevices", []):
+        if dev.get("type") != "disk":
+            continue
+        if dev.get("tran") == "usb" or dev.get("rm") or dev.get("type") == "rom":
+            continue
+        path = dev.get("path")
+        if not path or path in system_disks or path in mounted_outside:
+            continue
+        if dev.get("size", 0) <= 0:
+            continue
+
+        partitions = []
+        has_data = False
+        adopted = False
+        source_id = None
+        for part in dev.get("children") or []:
+            if part.get("type") != "part":
+                continue
+            p = {
+                "path": part.get("path"),
+                "name": part.get("name"),
+                "fstype": part.get("fstype"),
+                "label": part.get("label"),
+                "uuid": part.get("uuid"),
+                "partuuid": part.get("partuuid"),
+                "size": part.get("size"),
+                "mountpoint": part.get("mountpoint"),
+            }
+            partitions.append(p)
+            if part.get("fstype"):
+                has_data = True
+            pu = (part.get("partuuid") or "").lower()
+            uu = (part.get("uuid") or "").lower()
+            if pu in by_partuuid or uu in by_uuid:
+                adopted = True
+                source_id = (by_partuuid.get(pu) or by_uuid.get(uu) or {}).get("id")
+
+        serial = dev.get("serial") or ""
+        size = dev.get("size") or 0
+        confirm = hashlib.sha256(f"{path}:{serial}:{size}".encode()).hexdigest()[:12]
+        out.append({
+            "path": path,
+            "model": (dev.get("model") or "").strip(),
+            "serial": serial,
+            "size": size,
+            "fstype": dev.get("fstype"),
+            "label": dev.get("label"),
+            "has_data": has_data,
+            "adopted": adopted,
+            "source_id": source_id,
+            "confirm": confirm,
+            "partitions": partitions,
+        })
+    return out
+
+
+def _adopted_internal_sources():
+    return [s for s in load_state().get("sources", []) if s.get("type") == "internal"]
+
+
+def _share_name(label):
+    base = _slug(label or "Musica")
+    if not base:
+        base = "Musica"
+    names = set()
+    for s in _adopted_internal_sources():
+        names.add(s.get("share") or "Musica")
+    if base not in names:
+        return base
+    n = 2
+    while f"{base}-{n}" in names:
+        n += 1
+    return f"{base}-{n}"
+
+
+def _ensure_samba_uid_gid():
+    """Ensure the dedicated music/Samba user exists; return its (uid, gid).
+    exFAT/vfat mount options require numeric ids, not a username."""
+    import pwd
+    try:
+        ent = pwd.getpwnam(SAMBA_USER)
+        return ent.pw_uid, ent.pw_gid
+    except KeyError:
+        _run(["useradd", "-r", "-M", "-s", "/usr/sbin/nologin", "-N", SAMBA_USER], timeout=10)
+    try:
+        ent = pwd.getpwnam(SAMBA_USER)
+        return ent.pw_uid, ent.pw_gid
+    except KeyError:
+        return 0, 0
+
+
+def _samba_account_exists():
+    try:
+        r = subprocess.run(["pdbedit", "-L", "-u", SAMBA_USER], capture_output=True, text=True, timeout=10)
+        return r.returncode == 0
+    except Exception:
+        return False
+
+
+def _create_samba_user(force_new_password=False):
+    """Ensure a dedicated local + Samba user exists; return its password."""
+    _ensure_samba_uid_gid()
+    cred = {}
+    if os.path.exists(SAMBA_CRED_FILE):
+        try:
+            with open(SAMBA_CRED_FILE) as f:
+                cred = json.load(f)
+        except Exception:
+            pass
+    password = None if force_new_password else cred.get("password")
+    if not password:
+        password = secrets.token_urlsafe(9)
+        cred = {"username": SAMBA_USER, "password": password, "synced": False}
+
+    # Only re-run smbpasswd when we haven't confirmed it actually took — a
+    # transient failure here must not leave the credential file showing a
+    # password Samba never accepted (which is exactly what happened before:
+    # the smbpasswd call's result was discarded, so a failure was silent).
+    if not cred.get("synced"):
+        try:
+            # `-a` (add) fails on some Samba versions if the account already
+            # exists — use it only for the very first creation, otherwise
+            # just reset the existing account's password.
+            args = ["smbpasswd", "-s"] + ([] if _samba_account_exists() else ["-a"]) + [SAMBA_USER]
+            r = subprocess.run(
+                args, input=f"{password}\n{password}\n", text=True,
+                capture_output=True, timeout=10,
+            )
+            # Don't trust the exit code alone — confirm the account is
+            # actually present in the passdb afterwards.
+            cred["synced"] = r.returncode == 0 and _samba_account_exists()
+            if not cred["synced"]:
+                print(f"[sources] smbpasswd did not take effect for {SAMBA_USER} "
+                      f"(rc={r.returncode}): {(r.stderr or r.stdout).strip()}")
+        except Exception as e:
+            cred["synced"] = False
+            print(f"[sources] smbpasswd error for {SAMBA_USER}: {e}")
+
+    os.makedirs(os.path.dirname(SAMBA_CRED_FILE), exist_ok=True)
+    tmp = SAMBA_CRED_FILE + ".tmp"
+    with open(tmp, "w") as f:
+        json.dump(cred, f)
+    os.chmod(tmp, 0o600)
+    os.replace(tmp, SAMBA_CRED_FILE)
+    return password
+
+
+def regen_samba_shares():
+    """Rewrite the included shares file and start/stop smbd accordingly."""
+    internal = _adopted_internal_sources()
+    lines = []
+    for src in internal:
+        share = src.get("share") or "Musica"
+        mp = src.get("mountpoint")
+        if not mp:
+            continue
+        lines.append(f"\n[{share}]")
+        lines.append(f"   path = {mp}")
+        lines.append("   read only = no")
+        lines.append("   browseable = yes")
+        lines.append(f"   valid users = {SAMBA_USER}")
+        lines.append(f"   force user = {SAMBA_USER}")
+        lines.append("   create mask = 0664")
+        lines.append("   directory mask = 0775")
+
+    os.makedirs(os.path.dirname(SAMBA_SHARES_FILE), exist_ok=True)
+    tmp = SAMBA_SHARES_FILE + ".tmp"
+    with open(tmp, "w") as f:
+        f.write("\n".join(lines) + "\n")
+    os.replace(tmp, SAMBA_SHARES_FILE)
+
+    smbd = _run(["which", "smbd"], timeout=5).returncode == 0
+    if not internal:
+        if smbd:
+            _run(["systemctl", "disable", "--now", "smbd"], timeout=30)
+        return
+    if smbd:
+        _create_samba_user()
+        _run(["systemctl", "enable", "--now", "smbd"], timeout=30)
+        _run(["systemctl", "reload", "smbd"], timeout=10)
+
+
+def _ip_addresses():
+    addrs = []
+    try:
+        r = _run(["hostname", "-I"], timeout=5)
+        if r.returncode == 0:
+            addrs = r.stdout.strip().split()
+    except Exception:
+        pass
+    return addrs
+
+
+def mount_internal(src):
+    """Mount one internal source by PARTUUID. Returns (ok, message)."""
+    partuuid = src.get("partuuid")
+    fstype = (src.get("fstype") or "").lower()
+    mountpoint = src.get("mountpoint")
+    if not partuuid or not mountpoint:
+        return False, "partuuid o mountpoint mancante"
+    root = os.path.realpath(INTERNAL_MOUNT_ROOT)
+    p = os.path.realpath(mountpoint)
+    if p != root and not p.startswith(root + os.sep):
+        return False, "mountpoint non valido"
+    os.makedirs(mountpoint, exist_ok=True)
+    if os.path.ismount(mountpoint):
+        return True, "già montato"
+
+    if fstype == "ext4":
+        opts = "rw,noatime,nosuid,nodev"
+    elif fstype in ("exfat", "vfat"):
+        # The in-kernel exfat/vfat driver requires numeric ids, not a username.
+        uid, gid = _ensure_samba_uid_gid()
+        opts = f"rw,noatime,nosuid,nodev,uid={uid},gid={gid},fmask=0113,dmask=0002,iocharset=utf8"
+    else:
+        opts = "rw,noatime,nosuid,nodev"
+
+    r = _run(["mount", "-o", opts, f"PARTUUID={partuuid}", mountpoint], timeout=30)
+    if r.returncode != 0:
+        return False, (r.stderr or r.stdout or "mount fallito").strip()
+
+    if fstype == "ext4":
+        # mkfs.ext4 leaves the root dir owned by root:root, which the Samba
+        # forced user (hifimusic) cannot write into. exFAT/vfat get this via
+        # the uid/gid mount options above instead.
+        try:
+            uid, gid = _ensure_samba_uid_gid()
+            os.chown(mountpoint, uid, gid)
+            os.chmod(mountpoint, 0o2775)
+        except Exception:
+            pass
+    return True, "montato"
+
+
 def remount_all():
     state = load_state()
     for src in state.get("sources", []):
-        if src.get("type") == "smb":
-            try:
+        t = src.get("type")
+        try:
+            if t == "smb":
                 mount_smb(src)
-            except Exception as e:
-                print(f"[sources] remount failed for {src.get('name')}: {e}")
+            elif t == "internal":
+                mount_internal(src)
+        except Exception as e:
+            print(f"[sources] remount failed for {src.get('name')}: {e}")
+    regen_samba_shares()
 
 
 def _all_smb_mounted():
@@ -427,21 +766,31 @@ def ensure_playlistdir():
 def current_paths(state):
     """Media directories to hand to Lyrion. Re-validates every path against the
     same confinement each source type is supposed to already satisfy (MOUNT_ROOT
-    for SMB mountpoints, ALLOWED_LOCAL_ROOTS for local paths) rather than
-    trusting the stored state verbatim — state can come from a restored
-    /etc/hifi-sources.json (see /api/restore), which is untrusted archive
-    content that never goes through api_add_smb()/api_add_local()'s own
-    validation. Without this, a crafted backup with e.g. {"type":"local",
-    "path":"/"} would get handed straight to Lyrion as a media directory."""
-    root = os.path.realpath(MOUNT_ROOT)
+    for SMB mountpoints, INTERNAL_MOUNT_ROOT for internal disks,
+    ALLOWED_LOCAL_ROOTS for local paths) rather than trusting the stored state
+    verbatim — state can come from a restored /etc/hifi-sources.json (see
+    /api/restore), which is untrusted archive content that never goes through
+    api_add_smb()/api_add_local()'s own validation. Without this, a crafted
+    backup with e.g. {"type":"local", "path":"/"} would get handed straight to
+    Lyrion as a media directory."""
+    smb_root = os.path.realpath(MOUNT_ROOT)
+    internal_root = os.path.realpath(INTERNAL_MOUNT_ROOT)
     paths = []
     for src in state.get("sources", []):
-        if src.get("type") == "smb":
+        t = src.get("type")
+        if t == "smb":
             mp = src.get("mountpoint")
             if not mp:
                 continue
             p = os.path.realpath(mp)
-            if p != root and not p.startswith(root + os.sep):
+            if p != smb_root and not p.startswith(smb_root + os.sep):
+                continue
+        elif t == "internal":
+            mp = src.get("mountpoint")
+            if not mp:
+                continue
+            p = os.path.realpath(mp)
+            if p != internal_root and not p.startswith(internal_root + os.sep):
                 continue
         else:
             raw = src.get("path")
@@ -463,6 +812,18 @@ def apply_to_lyrion(state):
         return False, "File prefs di Lyrion non trovato. Verifica che Lyrion sia avviato (systemctl status lyrionmusicserver)."
 
     paths = current_paths(state)
+
+    # Warn if an internal source is not mounted: applying would hand an empty
+    # mountpoint to Lyrion and clear the library. The user must re-attach the
+    # disk or remove the source.
+    unmounted_internal = []
+    for src in state.get("sources", []):
+        if src.get("type") == "internal":
+            mp = src.get("mountpoint")
+            if not mp or not os.path.ismount(mp):
+                unmounted_internal.append(src.get("name") or "interno")
+    if unmounted_internal:
+        return False, "Disco interno non montato: " + ", ".join(unmounted_internal) + ". Verifica il collegamento prima di applicare."
 
     # Stop Lyrion so it does not overwrite the prefs file under us.
     _run(["systemctl", "stop", LYRION_SERVICE], timeout=60)
@@ -982,12 +1343,99 @@ def api_list():
     for s in state.get("sources", []):
         item = dict(s)
         item.pop("password", None)
-        if s.get("type") == "smb":
+        item.pop("smbpassword", None)
+        t = s.get("type")
+        if t == "smb":
             item["mounted"] = os.path.ismount(s["mountpoint"])
+        elif t == "internal":
+            item["mounted"] = os.path.ismount(s.get("mountpoint", ""))
+            item["share"] = s.get("share")
         else:
             item["exists"] = os.path.isdir(s.get("path", ""))
         out.append(item)
     return jsonify({"sources": out, "paths": current_paths(state)})
+
+
+def _format_watcher():
+    """Background thread: when the format job finishes, adopt the new partition."""
+    deadline = time.monotonic() + 15 * 60
+    while time.monotonic() < deadline:
+        try:
+            if not os.path.exists(FORMAT_STATUS):
+                time.sleep(2)
+                continue
+            with open(FORMAT_STATUS) as f:
+                st = json.load(f)
+            state = st.get("state")
+            if state in ("done", "error", "idle"):
+                if state == "done":
+                    _auto_adopt_formatted(st)
+                break
+        except Exception as e:
+            print(f"[sources] format watcher error: {e}")
+        time.sleep(2)
+
+
+def _auto_adopt_formatted(st):
+    device = st.get("partition")
+    partuuid = st.get("partuuid")
+    fstype = (st.get("fstype") or "").lower()
+    label = st.get("label") or "Musica"
+    if not device or not partuuid or fstype not in ("ext4", "exfat"):
+        return
+    # Re-read lsblk to get the fresh partition details.
+    data = _lsblk_full() or {}
+    part = None
+    for dev in data.get("blockdevices", []):
+        for p in dev.get("children") or []:
+            if p.get("partuuid") == partuuid or p.get("path") == device:
+                part = p
+                break
+        if part:
+            break
+    if not part:
+        return
+
+    share = _share_name(label)
+    mountpoint = os.path.join(INTERNAL_MOUNT_ROOT,
+                              _slug(label) + "-" + partuuid[:8])
+    src = {
+        "id": _slug("internal", share),
+        "type": "internal",
+        "name": f"{label} (interno)",
+        "partuuid": partuuid,
+        "fsuuid": part.get("uuid"),
+        "fstype": fstype,
+        "label": label,
+        "model": (part.get("model") or "").strip(),
+        "mountpoint": mountpoint,
+        "share": share,
+    }
+    ok, msg = mount_internal(src)
+    if not ok:
+        print(f"[sources] auto-adopt mount failed: {msg}")
+        return
+    with _lock:
+        state = load_state()
+        state["sources"] = [s for s in state["sources"] if s.get("id") != src["id"]]
+        state["sources"].append(src)
+        save_state(state)
+        regen_samba_shares()
+    # Mark status as adopted so the UI can show success.
+    try:
+        with open(FORMAT_STATUS) as f:
+            st = json.load(f)
+        st["adopted"] = True
+        st["source_id"] = src["id"]
+        st["share"] = share
+        with open(FORMAT_STATUS, "w") as f:
+            json.dump(st, f)
+    except Exception:
+        pass
+    try:
+        apply_to_lyrion(load_state())
+    except Exception as e:
+        print(f"[sources] auto-adopt apply_to_lyrion failed: {e}")
 
 
 def _local_path_allowed(path):
@@ -1071,12 +1519,16 @@ def api_remove(sid):
         keep = []
         for s in state["sources"]:
             if s.get("id") == sid:
-                if s.get("type") == "smb":
+                t = s.get("type")
+                if t == "smb":
                     umount(s["mountpoint"])
+                elif t == "internal":
+                    umount(s.get("mountpoint"))
             else:
                 keep.append(s)
         state["sources"] = keep
         save_state(state)
+        regen_samba_shares()
     return jsonify({"success": True})
 
 
@@ -1088,6 +1540,214 @@ def api_apply():
     state = load_state()
     ok, msg = apply_to_lyrion(state)
     return jsonify({"success": ok, "message": msg}), (200 if ok else 500)
+
+
+@app.route("/api/internal/disks", methods=["GET"])
+def api_internal_disks():
+    denied = _require_pair_token()
+    if denied:
+        return denied
+    return jsonify({"disks": _internal_disks()})
+
+
+@app.route("/api/internal/adopt", methods=["POST"])
+def api_internal_adopt():
+    denied = _require_pair_token()
+    if denied:
+        return denied
+    data = request.get_json(silent=True) or {}
+    device = (data.get("device") or "").strip()
+    if not _path_ok(device):
+        return jsonify({"success": False, "message": "Device non valido"}), 400
+
+    disks = _internal_disks()
+    disk = None
+    part = None
+    for d in disks:
+        if d["path"] == device:
+            disk = d
+            break
+        for p in d.get("partitions") or []:
+            if p["path"] == device:
+                disk = d
+                part = p
+                break
+    if not disk:
+        return jsonify({"success": False, "message": "Disco non trovato o di sistema"}), 400
+    if not part:
+        # Whole disk with no partitions: reject.
+        return jsonify({"success": False, "message": "Seleziona una partizione con filesystem"}), 400
+    if not part.get("fstype"):
+        return jsonify({"success": False, "message": "Partizione senza filesystem"}), 400
+
+    partuuid = part.get("partuuid")
+    fsuuid = part.get("uuid")
+    fstype = (part.get("fstype") or "").lower()
+    label = part.get("label") or disk.get("label") or "Musica"
+    model = disk.get("model") or ""
+    share = _share_name(label)
+    mountpoint = os.path.join(INTERNAL_MOUNT_ROOT,
+                              _slug(label) + "-" + (partuuid or fsuuid or "adopt")[:8])
+
+    src = {
+        "id": _slug("internal", share),
+        "type": "internal",
+        "name": f"{label or 'Musica'} (interno)",
+        "partuuid": partuuid,
+        "fsuuid": fsuuid,
+        "fstype": fstype,
+        "label": label,
+        "model": model,
+        "mountpoint": mountpoint,
+        "share": share,
+    }
+    ok, msg = mount_internal(src)
+    if not ok:
+        return jsonify({"success": False, "message": f"Mount fallito: {msg}"}), 400
+
+    with _lock:
+        state = load_state()
+        state["sources"] = [s for s in state["sources"] if s.get("id") != src["id"]]
+        state["sources"].append(src)
+        save_state(state)
+        regen_samba_shares()
+    apply_to_lyrion(state)
+    return jsonify({"success": True, "source_id": src["id"], "share": share})
+
+
+@app.route("/api/internal/format", methods=["POST"])
+def api_internal_format():
+    denied = _require_pair_token()
+    if denied:
+        return denied
+    data = request.get_json(silent=True) or {}
+    device = (data.get("device") or "").strip()
+    fs = (data.get("fs") or "").strip().lower()
+    label = (data.get("label") or "").strip()
+    confirm = (data.get("confirm") or "").strip()
+
+    if not _path_ok(device):
+        return jsonify({"success": False, "message": "Device non valido"}), 400
+    if fs not in ("ext4", "exfat"):
+        return jsonify({"success": False, "message": "Filesystem non supportato"}), 400
+    if not _label_ok(label):
+        return jsonify({"success": False, "message": "Etichetta non valida"}), 400
+    if fs == "exfat" and len(label) > 11:
+        return jsonify({"success": False, "message": "Etichetta troppo lunga per exFAT (max 11)"}), 400
+
+    disks = _internal_disks()
+    disk = next((d for d in disks if d["path"] == device), None)
+    if not disk:
+        return jsonify({"success": False, "message": "Disco non trovato o di sistema"}), 400
+    if disk.get("confirm") != confirm:
+        return jsonify({"success": False, "message": "Conferma non corrispondente"}), 400
+    if disk.get("adopted"):
+        return jsonify({"success": False, "message": "Disco già adottato come sorgente"}), 400
+
+    # Check no partitions are mounted.
+    for p in disk.get("partitions") or []:
+        if p.get("mountpoint"):
+            return jsonify({"success": False, "message": "Disco montato, smontalo prima"}), 400
+
+    # Check mkfs.exfat is available when requested.
+    if fs == "exfat":
+        if _run(["which", "mkfs.exfat"], timeout=5).returncode != 0:
+            return jsonify({"success": False, "message": "Aggiornamento OS richiesto per formattare exFAT"}), 424
+
+    # Interlock: no concurrent format job.
+    if os.path.exists(FORMAT_STATUS):
+        try:
+            with open(FORMAT_STATUS) as f:
+                st = json.load(f)
+            if st.get("state") not in ("done", "error", "idle"):
+                return jsonify({"success": False, "message": "Formattazione già in corso"}), 409
+        except Exception:
+            pass
+
+    # Reset status file.
+    with open(FORMAT_STATUS, "w") as f:
+        json.dump({"state": "idle", "progress": 0, "message": "Avvio…"}, f)
+
+    _run(["systemd-run", "--no-block", "--collect", "--unit=" + FORMAT_UNIT,
+          FORMAT_SCRIPT, device, fs, label], timeout=10)
+    return jsonify({"success": True}), 202
+
+
+@app.route("/api/internal/format/status", methods=["GET"])
+def api_internal_format_status():
+    denied = _require_pair_token()
+    if denied:
+        return denied
+    status = {"state": "idle"}
+    if os.path.exists(FORMAT_STATUS):
+        try:
+            with open(FORMAT_STATUS) as f:
+                status = json.load(f)
+        except Exception:
+            pass
+    # Enrich with adoption info if done.
+    if status.get("state") == "done":
+        partuuid = status.get("partuuid")
+        if partuuid:
+            for s in _adopted_internal_sources():
+                if s.get("partuuid") == partuuid:
+                    status["adopted"] = True
+                    status["source_id"] = s.get("id")
+                    status["share"] = s.get("share")
+                    break
+    return jsonify(status)
+
+
+@app.route("/api/internal/smb", methods=["GET"])
+def api_internal_smb():
+    denied = _require_pair_token()
+    if denied:
+        return denied
+    installed = _run(["which", "smbd"], timeout=5).returncode == 0
+    enabled = False
+    if installed:
+        try:
+            r = _run(["systemctl", "is-enabled", "smbd"], timeout=5)
+            enabled = r.returncode == 0 or (r.stdout or "").strip() == "enabled"
+        except Exception:
+            pass
+    shares = []
+    for s in _adopted_internal_sources():
+        shares.append({
+            "name": s.get("share") or "Musica",
+            "mountpoint": s.get("mountpoint"),
+            "source_id": s.get("id"),
+        })
+    password = ""
+    if os.path.exists(SAMBA_CRED_FILE):
+        try:
+            with open(SAMBA_CRED_FILE) as f:
+                cred = json.load(f)
+            password = cred.get("password", "")
+        except Exception:
+            pass
+    ips = _ip_addresses()
+    return jsonify({
+        "installed": installed,
+        "enabled": enabled,
+        "shares": shares,
+        "username": SAMBA_USER,
+        "password": password,
+        "host": "hifiplayer.local",
+        "ip": ips[0] if ips else "",
+    })
+
+
+@app.route("/api/internal/smb/regenerate", methods=["POST"])
+def api_internal_smb_regenerate():
+    denied = _require_pair_token()
+    if denied:
+        return denied
+    if _run(["which", "smbd"], timeout=5).returncode != 0:
+        return jsonify({"success": False, "message": "Samba non installato"}), 424
+    with _lock:
+        password = _create_samba_user(force_new_password=True)
+    return jsonify({"success": True, "username": SAMBA_USER, "password": password})
 
 
 @app.route("/api/usb", methods=["GET"])
@@ -1253,11 +1913,16 @@ async function load(){
   const el=document.getElementById('list');
   if(!d.sources.length){ el.innerHTML='<div style="color:var(--silver);font-size:14px">Nessuna sorgente. Aggiungine una qui sotto.</div>'; return; }
   el.innerHTML=d.sources.map(s=>{
-    const isSmb=s.type==='smb';
+            const isSmb=s.type==='smb';
+    const isInternal=s.type==='internal';
     const status=isSmb?(s.mounted?'<span class="ok">montato</span>':'<span class="bad">non montato</span>')
+                      :isInternal?(s.mounted?'<span class="ok">montato</span>':'<span class="bad">non montato</span>')
                       :(s.exists?'<span class="ok">ok</span>':'<span class="bad">mancante</span>');
-    const sub=isSmb?('//'+esc(s.server)+'/'+esc(s.share)+' → '+esc(s.mountpoint)):esc(s.path);
-    return `<div class="src"><div class="meta"><div class="name">${esc(s.name)}<span class="tag">${isSmb?'SMB':'LOCALE'}</span></div>
+    const sub=isSmb?('//'+esc(s.server)+'/'+esc(s.share)+' → '+esc(s.mountpoint))
+              :isInternal?(esc(s.mountpoint||s.path||''))
+              :esc(s.path);
+    const tag=isSmb?'SMB':isInternal?'INTERNO':'LOCALE';
+    return `<div class="src"><div class="meta"><div class="name">${esc(s.name)}<span class="tag">${tag}</span></div>
       <div class="sub">${sub} · ${status}</div></div>
       <button class="danger" onclick="rm('${s.id}')">Rimuovi</button></div>`;
   }).join('');
@@ -1368,11 +2033,24 @@ if __name__ == "__main__":
     # Auto-mount USB sticks / external drives (read-only) and keep them in sync,
     # so they appear in the Sources UI ready to be added as local sources.
     threading.Thread(target=usb_monitor, daemon=True, name="usb-monitor").start()
+    # Watch for completed disk-format jobs and adopt the resulting partition.
+    threading.Thread(target=_format_watcher, daemon=True, name="format-watcher").start()
     # Make sure Lyrion has a writable playlist folder ("save as playlist")
     try:
         ensure_playlistdir()
     except Exception as e:
         print(f"[sources] ensure_playlistdir error: {e}")
+    # Ensure the internal-storage mount root exists.
+    try:
+        os.makedirs(INTERNAL_MOUNT_ROOT, exist_ok=True)
+    except Exception:
+        pass
+    # Re-generate Samba shares on startup so adopted disks are reachable even if
+    # the service was restarted.
+    try:
+        regen_samba_shares()
+    except Exception as e:
+        print(f"[sources] regen_samba_shares error: {e}")
     # threaded=True so the USB/SMB mount scans and a slow Lyrion restart don't
     # serialise behind each other and block the phone/PC web UI.
     app.run(host="0.0.0.0", port=8080, threaded=True)
