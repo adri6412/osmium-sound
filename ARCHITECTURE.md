@@ -29,11 +29,11 @@ flowchart TB
     Preload --> Main
     Renderer -- "fetch (src/utils/api.js)" --> Flask
     Renderer -- "fetch (src/utils/lyrionApi.js)" --> Lyrion
-    Renderer -- iframe embed --> Lyrion
     Flask -- systemd-run / systemctl --> Squeezelite
     Flask -- manages --> Camilla
     Lyrion -- controls --> Squeezelite
-    Squeezelite --> Camilla --> DAC
+    Squeezelite -- "if CamillaDSP on" --> Camilla --> DAC
+    Squeezelite -- "if CamillaDSP off" --> DAC
     Phone -- HTTP --> Flask
     Phone -- HTTP --> Sources
 ```
@@ -42,7 +42,7 @@ flowchart TB
 
 | Component | Path | Role |
 |---|---|---|
-| Electron main | `main/main.js` | Window/kiosk management, renderer crash recovery, relaxes CSP only for the local Lyrion origin so it can be embedded |
+| Electron main | `main/main.js` | Window/kiosk management, renderer crash recovery, relaxes CSP only for the local Lyrion origin so the renderer can call its JSON-RPC API |
 | Preload | `main/preload.js` | Minimal `contextBridge` surface — only UI-local concerns (frame-rate cap, global on-screen keyboard). **System control does not go through IPC.** |
 | React renderer | `src/` | The touchscreen UI (Now Playing, Music/Radio/Apps via Lyrion, Settings, Setup Wizard) |
 | Flask API | `api_server.py` | Runs as root on the appliance; system info/control, network/Wi-Fi, OTA channels, DSP, multiroom (LMS role), pairing tokens. Port `8000`. |
