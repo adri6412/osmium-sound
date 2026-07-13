@@ -61,7 +61,7 @@ see the [website](https://osmiumsound.qd.je/#android) for details.
 ## License
 
 Apache License 2.0 — see [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).
-Based on [android-squeezer](https://github.com/kaaholst/android-squeezer) by Kristian Höstebo.
+Based on [android-squeezer](https://github.com/kaaholst/android-squeezer) by Kurt Aaholst.
 
 ## Support
 
