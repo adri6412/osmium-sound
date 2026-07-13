@@ -206,21 +206,19 @@ contact needs either ethernet or the on-screen Wi-Fi scan.
 
 ## OTA update system
 
-Four independent channels, all served from GitHub Releases:
+Four independent channels, all served from GitHub Releases and applied as
+root by helper scripts in `/usr/local/sbin/` (invoked from `api_server.py`
+via `systemd-run --no-block --collect`, so the updater survives any service
+restart — e.g. lightdm — its own payload triggers). Each channel writes live
+progress to `/run/hifi-*-status.json`, polled by the UI via
+`GET /{app,system,os,lyrion}_update/status`.
 
-| Channel | Asset prefix | Updates | Verification |
-|---|---|---|---|
-| UI | `hifi-ui-` | `/opt/hifi-media-player` (Electron) | sha256 |
-| System | `hifi-system-` | Python API/daemons, helper scripts, systemd units | sha256 |
-| OS | `hifi-os-` | arbitrary root `apply.sh` | sha256 **+ Ed25519 signature** |
-| Lyrion | — | Lyrion Music Server `.deb` | version match |
-
-The OS channel is signed because its payload runs an arbitrary root script;
-the signature is checked against a public key baked into the image
-(`/etc/hifi-player/ota-pubkey.pem`) before the sha256-verified tarball is
-applied. `distro/os-update/apply.sh` is **cumulative** — every OS change ever
-shipped lives there as an idempotent block, since a device jumping straight to
-the latest release only ever runs the latest `apply.sh` once.
+| Channel | Asset prefix | Updates | Verification | Script |
+|---|---|---|---|---|
+| UI | `hifi-ui-` | `/opt/hifi-media-player` (Electron) | sha256 | `hifi-ota-update.sh` |
+| System | `hifi-system-` | Python API/daemons, helper scripts, systemd units | sha256 | `hifi-system-update.sh` |
+| OS | `hifi-os-` | arbitrary root `apply.sh` | sha256 **+ Ed25519 signature** | `hifi-os-update.sh` |
+| Lyrion | — | Lyrion Music Server `.deb` | version match | `hifi-lyrion-update.sh` |
 
 Devices also pick a **Dev** or **Prod** release channel (Settings → Updates):
 `main` tags (`vX.Y.Z`) are the Prod channel; `svil` prerelease tags
@@ -230,6 +228,144 @@ Devices also pick a **Dev** or **Prod** release channel (Settings → Updates):
 Note that not every stable release ships a new install ISO — most releases
 are OTA-only (OS/System/UI tarballs); a fresh ISO is only cut occasionally.
 Check the release's assets on GitHub to see what shipped with it.
+
+### OS channel — why it's signed
+
+The OS payload runs an arbitrary root script (`apply.sh`), unlike UI/System
+which just drop verified files in place. For that payload, a plain sha256 is
+integrity-only — it proves the download wasn't corrupted, but proves nothing
+about *who* produced it, so anyone able to publish a release or MITM the
+download could ship arbitrary root code. `hifi-os-update.sh` therefore
+requires a detached **Ed25519** signature over the `.sha256` sidecar,
+verified against a public key baked into the image at
+`/etc/hifi-player/ota-pubkey.pem`:
+
+1. **Authenticity** — the Ed25519 signature of the `.sha256` sidecar verifies
+   against the embedded pubkey (`openssl pkeyutl -verify`). The pubkey's
+   algorithm is itself checked (`grep -qi ED25519`) so a swapped-in weaker
+   key type can't silently downgrade the trust model.
+2. **Integrity** — the downloaded tarball's sha256 matches that signed
+   digest.
+
+Only if *both* pass does `apply.sh` get extracted and run. Missing key,
+missing `openssl`, missing/malformed signature, or a checksum mismatch ⇒ the
+update is **refused outright** and nothing is touched
+(`distro/config/includes.chroot/usr/local/sbin/hifi-os-update.sh`). The
+private signing key never touches the appliance: it's generated offline
+(`distro/ota-keys/gen-ota-key.sh`) and lives only as the `OTA_SIGNING_KEY`
+GitHub Actions secret used to sign releases in CI; devices only ever hold the
+public half.
+
+### OS channel — hardening against a malicious or broken network path
+
+Because a device fetches its own update payload unattended over the internet,
+`hifi-os-update.sh` treats every network input as hostile before it's ever
+trusted:
+
+- **TLS pinned, no downgrade**: both the tarball and signature URLs must be
+  `https://`, and curl is forced to `--proto '=https' --proto-redir '=https'
+  --tlsv1.2` — a redirect or malicious release can't quietly point the
+  updater at plain HTTP.
+- **Bounded downloads**: `--max-filesize` caps the tarball at 500 MiB and the
+  signature at 4 KiB, so a hostile or broken URL can't fill the disk (DoS via
+  update).
+- **Input validation on untrusted arguments**: the sha256 must be exactly 64
+  hex chars, and the version string is restricted to a safe charset — both
+  are interpolated into filenames/sidecar text, so this blocks injection or
+  path traversal via a crafted release.
+- **Private, unpredictable workdir**: downloads land in a fresh
+  `mktemp -d /var/tmp/hifi-os-ota.XXXXXX` (not a fixed path), avoiding
+  symlink/preplaced-file races in the world-writable `/var/tmp`, and `umask
+  077` keeps the bytes unreadable to other local users while staged.
+- **Sanitized extraction**: `tar --no-same-owner --no-same-permissions` — even
+  though the bundle is already signature-verified, this stops a buggy or
+  tampered archive from dropping a root-owned setuid file outside `apply.sh`'s
+  own control.
+- **Scrubbed execution environment**: `apply.sh` runs under `env -i` with a
+  fixed `PATH`, receiving only `HIFI_OS_VERSION`/`HIFI_PAYLOAD_DIR` — nothing
+  inherited from the API/systemd context can influence the root script.
+
+### OS channel — why an interrupted or corrupted update can't brick the device
+
+There's no A/B partition swap on this appliance — resilience instead comes
+from the update being **cumulative, idempotent, and fail-fast**, with the
+"this version is installed" marker written only after everything succeeded:
+
+- **Nothing production is touched until both signature and checksum verify.**
+  Download and extraction happen entirely in the private temp workdir; a
+  corrupted or truncated download simply fails verification and is discarded
+  — `apply.sh` never even starts.
+- **`distro/os-update/apply.sh` is a thin runner** that sources
+  `distro/os-update/lib.sh` and executes every migration in
+  `apply.d/NNNN-*.sh` **in order, each in its own isolated subshell**, so one
+  migration's failure can't corrupt the runner's own state or leak partial
+  shell state into the next migration.
+- **Fail-fast, no partial "done" state**: if a migration exits non-zero, the
+  runner stops immediately and `hifi-os-update.sh` never writes
+  `/etc/hifi-player/OS_VERSION`. The device therefore still reports the old
+  version installed, `check_os_update` still sees the same release as
+  "available", and the *next* attempt (manual retry, or the next time the
+  user hits "Aggiorna ora") re-downloads and re-runs the **same** payload from
+  the top — including the migrations that already succeeded.
+- **That retry is safe because every migration is idempotent by
+  construction**, via `lib.sh` helpers rather than by author discipline:
+  - `ensure_file_content` only writes a file if its content actually differs,
+    so re-running a migration that already applied is a byte-for-byte no-op.
+  - `backup_and_edit` copies the file before a `sed` edit, then runs a
+    validator against the result; if validation fails it **automatically
+    restores the backup**, so a bad in-place edit (e.g. to `/etc/sudoers`)
+    can never leave the file broken.
+  - `ensure_pkg` only installs a package if it's not already present.
+  - Each of these calls `mark_changed` **only on a real diff**, which is also
+    how the runner knows whether to request a reboot — so a fully re-run
+    payload that has nothing left to do reports `changed=0` and reboots
+    nothing.
+- **A power loss or crash mid-`apply.sh` self-heals the same way**: whatever
+  migrations completed before the interruption are durable (they already
+  wrote their files); `OS_VERSION` still isn't bumped; the next run walks the
+  full migration list again, no-ops everything already done, and continues
+  from where it was actually interrupted.
+- **Because the payload always fetches only `releases/latest`** (no replay of
+  intermediate versions), `apply.d/` must contain **every OS change ever
+  shipped** as append-only, idempotent migrations — never edit or delete an
+  old one. This is what lets a device jump from a very old version straight
+  to the newest release safely in one pass.
+- **CI enforces the idempotency contract before publishing**: `apply.sh` is
+  shellchecked and run **twice** in `build-ui-ota.yml`; the second run must
+  report `changed=0` and request no reboot, catching a non-idempotent
+  migration before it ever reaches a device.
+- **Audit trail**: every migration run appends a row (timestamp, version, id,
+  result) to `/var/lib/hifi-player/os-migrations` — under `/var/lib`, not
+  `/opt`, so a later UI OTA (which wipes `/opt`) can't erase the OS history.
+- **Reboot happens last, and only if actually needed**: a migration opts in
+  via `request_reboot` (writes a `REBOOT` marker) only after a real change
+  that needs one — since the payload re-runs on every release, an
+  unconditional reboot would otherwise reboot the box on every single update.
+  `hifi-os-update.sh` honours that marker only after the version file is
+  already written and status is already `done`, so a crash right at reboot
+  time still leaves the device in a consistent, fully-applied state.
+
+### UI/System channels — atomic swap, not in-place overwrite
+
+The UI channel (`hifi-ota-update.sh`) protects against the classic
+full-disk-corruption brick a different way, since it isn't idempotent
+migrations but a wholesale file replacement:
+
+- Extracts into a fresh `/opt/hifi-media-player.new`, never into the live
+  `/opt/hifi-media-player`.
+- **Free-space guard**: computes the uncompressed size from the gzip footer
+  and refuses to extract unless the filesystem has enough headroom — a full
+  disk during `tar` silently truncates whatever file it was writing, which
+  was the root cause of a past brick.
+- **Per-file integrity check**: `tar --compare` re-reads the archive against
+  every extracted file (not just the main binary) and aborts on any
+  size/content mismatch, so a single corrupted `.so`/asar can't slip through.
+- **Atomic swap with rollback**: only after both checks pass does it `mv` the
+  old app dir aside and the new one into place; if the final `mv` into
+  `/opt/hifi-media-player` fails, it restores the previous directory from the
+  backup rather than leaving the app dir half-written.
+- The kiosk restart (`systemctl restart lightdm`) is the very last step, once
+  `UI_VERSION` is already committed.
 
 ## Project structure
 
