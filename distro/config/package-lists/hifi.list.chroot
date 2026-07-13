@@ -15,6 +15,7 @@ linux-image-amd64
 #   distro/os-update/apply.d/0010-secure-boot.sh, kept as a no-op).
 grub-efi-amd64-signed
 shim-signed
+efibootmgr
 
 # Firmware — broad coverage for all mainline-supported WiFi/Ethernet/etc.
 # (requires the non-free-firmware archive area, set in build-distro.sh).

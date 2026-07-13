@@ -146,6 +146,18 @@ cp -f "$XSESSION_SRC" "$XSESSION_DEST_DIR/.xsession"
 sed -i 's/\r$//' "$XSESSION_DEST_DIR/.xsession"
 chmod +x "$XSESSION_DEST_DIR/.xsession"
 
+log "Injecting EFI-boot-entry-fix kernel hook → includes.chroot/etc/kernel/postinst.d"
+# Single source of truth: the SAME script the OS-update OTA installs
+# (distro/os-update/files/hifi-fix-efi-boot.sh) is baked into the image here,
+# so a fresh install and an OTA-updated device run identical logic.
+EFI_HOOK_SRC="$SCRIPT_DIR/os-update/files/hifi-fix-efi-boot.sh"
+[ -f "$EFI_HOOK_SRC" ] || die "Missing canonical EFI boot hook at $EFI_HOOK_SRC"
+EFI_HOOK_DEST_DIR="$CONFIG/includes.chroot/etc/kernel/postinst.d"
+mkdir -p "$EFI_HOOK_DEST_DIR"
+cp -f "$EFI_HOOK_SRC" "$EFI_HOOK_DEST_DIR/zzz-hifi-fix-efi-boot"
+sed -i 's/\r$//' "$EFI_HOOK_DEST_DIR/zzz-hifi-fix-efi-boot"
+chmod +x "$EFI_HOOK_DEST_DIR/zzz-hifi-fix-efi-boot"
+
 log "Injecting python daemons → includes.chroot/usr/local/bin"
 BIN_DEST="$CONFIG/includes.chroot/usr/local/bin"
 mkdir -p "$BIN_DEST"
