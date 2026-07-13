@@ -136,20 +136,31 @@ require the pairing bearer token (or `?token=`) — see
 [Pairing & security](#pairing--security). Selected routes:
 
 ```
-GET    /api/sources                     list configured sources
-DELETE /api/sources/<id>                remove a source (a.k.a. "un-adopt")
-GET    /api/internal/disks              internal disks/partitions
+GET    /api/sources                     list configured sources (unauthenticated: read-only, no secrets)
+POST   /api/sources/local          🔒   add a local-folder source
+POST   /api/sources/smb            🔒   add an SMB source
+DELETE /api/sources/<id>           🔒   remove a source (a.k.a. "un-adopt")
+POST   /api/apply                  🔒   push current source config to Lyrion
+GET    /api/internal/disks         🔒   internal disks/partitions
 POST   /api/internal/adopt         🔒   adopt an existing partition as a source
 POST   /api/internal/format        🔒   wipe + mkfs (sfdisk, async systemd-run job)
-GET    /api/internal/format/status      poll a format job
-GET/POST /api/internal/smb              Samba share config
-POST   /api/internal/smb/regenerate     rotate the Samba account password
+GET    /api/internal/format/status 🔒   poll a format job
+GET/POST /api/internal/smb         🔒   Samba share config
+POST   /api/internal/smb/regenerate 🔒  rotate the Samba account password
+GET    /api/usb                    🔒   list mounted USB disks for the add-source UI
 POST   /api/pair/token                  mint a companion pairing token (localhost only)
 POST   /api/pair/tokens/revoke_all      revoke all tokens (localhost only)
 GET/POST /api/dsp/status, /api/dsp/set  🔒   proxy to the loopback-only Flask DSP routes
 POST   /api/dsp/fir                🔒   upload a FIR filter for CamillaDSP
 GET/POST /api/backup, /api/restore 🔒   full-config backup/restore
 ```
+
+`_require_pair_token()` exempts calls from `127.0.0.1`/`::1` (the on-device
+Electron kiosk needs no token — no network hop), so 🔒 above means "required
+for LAN callers (the phone app), waived for the local kiosk." The two
+`/api/pair/token*` routes use a stricter, different check (`remote_addr`
+must literally be localhost, full stop) since they mint/revoke the very
+token the others check — a LAN caller can never satisfy it, kiosk or not.
 
 ### Lyrion JSON-RPC — `src/utils/lyrionApi.js` (port 9000)
 

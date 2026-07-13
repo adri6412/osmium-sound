@@ -65,7 +65,7 @@ Control Osmium Sound from your phone — browse the library, drive playback and 
 ## 📖 Documentation
 
 - **[ARCHITECTURE.md](ARCHITECTURE.md)** — components, ports, backend API reference, OTA internals, project layout, local dev setup
-- **[GUIDA-RAPIDA.md](GUIDA-RAPIDA.md)** — guida rapida in italiano
+- **[QUICKSTART.md](QUICKSTART.md)** — quick start guide (also in [Italian](GUIDA-RAPIDA.md))
 - **[SECURITY.md](SECURITY.md)** — security policy
 - Release notes: [website changelog](https://osmiumsound.qd.je/#changelog)
 

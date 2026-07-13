@@ -1,5 +1,7 @@
 # 🎵 Osmium Sound — Guida Rapida
 
+*[Read in English](QUICKSTART.md)*
+
 Come installare e iniziare a usare Osmium Sound sul tuo mini-PC x86.
 
 ## 🚀 Installazione
