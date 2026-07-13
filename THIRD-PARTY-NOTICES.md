@@ -24,6 +24,8 @@ The above GPL-licensed components (Lyrion, squeezelite, CD tools) are unmodified
 
 A complete source code archive matching this ISO can be provided upon written request to `frongillo.adriano@gmail.com`.
 
+**Historical note:** install ISOs **v2.5.7 and earlier** bundled Lyrion 9.1.0 directly as a file in the image, rather than downloading it on-demand at first boot (the model described above, used from v2.6.0 onward). The source offer above covers those bundled ISOs too.
+
 ---
 
 ## Android Companion App (`android-companion/`)

@@ -1,425 +1,90 @@
+<div align="center">
+
+<img src="logo.png" alt="Osmium Sound" width="96" />
+
 # Osmium Sound
 
-A professional touchscreen-friendly hi-fi media player built with Electron, React, and Tailwind CSS. Designed for x86 systems with 7-10" touchscreen displays.
+**A touchscreen-first hi-fi media appliance for x86, built on Debian.**
+Bit-perfect audio, streaming services, and signed OTA updates — one sleek dark interface.
 
-![Osmium Sound](https://img.shields.io/badge/platform-Electron-blue)
+![Platform](https://img.shields.io/badge/platform-Electron-blue)
 ![License](https://img.shields.io/badge/license-MIT-green)
+![Node](https://img.shields.io/badge/node-18%2B-brightgreen)
 
-> ## ⚠️ APPLIANCE ISO — DESTRUCTIVE, UNATTENDED INSTALL
->
-> The appliance ISO (built under `distro/`) installs **fully unattended**. It does
-> **NOT** ask where to install and does **NOT** ask for confirmation before
-> formatting.
->
-> - It automatically picks the **first disk it detects** (`list-devices disk | head -n1`)
->   and **wipes it entirely** (new GPT label, all existing partitions/data erased).
-> - It then **reboots automatically** with no final prompt.
-> - The installed system has root login enabled with a **default password (`hifi`)** —
->   change it on first boot.
->
-> **Before booting the ISO on any machine, physically disconnect every drive you
-> don't want erased.** "First detected disk" is not necessarily the one you expect
-> (USB enumeration order, NVMe vs SATA, etc.). There is no undo and no confirmation
-> screen. See [`distro/config/includes.installer/preseed.cfg`](distro/config/includes.installer/preseed.cfg).
+[**🌐 Website**](https://osmiumsound.qd.je) · [**⬇️ Download**](https://github.com/adri6412/osmium-sound/releases) · [**📱 Android companion**](https://github.com/adri6412/osmium-sound/releases?q=companion) · [**📖 Architecture**](ARCHITECTURE.md)
+
+<img src="website/01.png" alt="Osmium Sound — Now Playing" width="640" />
+
+</div>
+
+---
 
 ## ✨ Features
 
-- **Modern Hi-Fi Aesthetic**: Dark metallic theme with golden accents
-- **Touch-Optimized UI**: Large buttons and intuitive gestures for 1024x600 displays
-- **Lyrion Music Server front-end**: native browser for the local library, plus
-  **Radio** and **Apps** tabs driven by Lyrion's own menus
-- **Compatible with Lyrion plugins**: streaming and radio sources are provided by
-  Lyrion plugins (e.g. Spotty for Spotify Connect, internet radio, YouTube,
-  UPnP/DLNA, AirPlay) — install them from the Lyrion web UI and they appear in the
-  Radio/Apps tabs. No separate per-service screens to maintain.
-- **Simple Navigation**: home screen for source selection, each view loads independently
-- **System Settings**: Network info, display controls, audio device selection
-- **Clean Design**: Each source uses its native interface and controls
-
-## 📋 Requirements
-
-### System Requirements
-- **OS**: DietPi x86, Debian 11+, or any modern Linux distribution
-- **CPU**: x86_64 processor with good performance
-- **RAM**: 2GB minimum, 4GB recommended
-- **Display**: 1024x600 touchscreen (optimized for this resolution)
-
-### Software Dependencies
-- Node.js 18.x or higher
-- npm 9.x or higher
-
-## 🚀 Installation
-
-### On Windows (for Development/Testing)
-
-1. **Install Node.js**:
-   - Download from [nodejs.org](https://nodejs.org/)
-   - Install version 18.x LTS or higher
-   - Verify installation:
-   ```powershell
-   node --version
-   npm --version
-   ```
-
-2. **Navigate to project folder**:
-   ```powershell
-   cd path\to\hifi-media-player
-   ```
-
-3. **Run installation script**:
-   ```powershell
-   .\install-windows.bat
-   ```
-   
-   Or manually:
-   ```powershell
-   npm install
-   npm run build
-   ```
-
-4. **Start the application**:
-   - Development mode: `.\start-dev.bat` or `npm run electron:dev`
-   - Production mode: `.\start-prod.bat` or `npm run electron`
-
-### On DietPi / Debian (Production Environment)
-
-1. **Install Node.js and npm**:
-```bash
-# Update package list
-sudo apt update
-
-# Install Node.js and npm
-curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
-sudo apt install -y nodejs
-
-# Verify installation
-node --version
-npm --version
-```
-
-2. **Install additional dependencies**:
-```bash
-# Install required system libraries for Electron
-sudo apt install -y \
-    libgtk-3-0 \
-    libnotify4 \
-    libnss3 \
-    libxss1 \
-    libxtst6 \
-    xdg-utils \
-    libatspi2.0-0 \
-    libdrm2 \
-    libgbm1 \
-    libxcb-dri3-0
-```
-
-3. **Clone or download this project**:
-```bash
-cd ~
-# If using git:
-git clone <repository-url> hifi-media-player
-# Or extract from archive
-cd hifi-media-player
-```
-
-4. **Run installation script**:
-```bash
-chmod +x install-dietpi.sh
-./install-dietpi.sh
-```
-
-Or manually:
-```bash
-npm install
-npm run build
-```
+- 🎵 **High-resolution audio** — FLAC, DSD (DoP), PCM up to 192kHz, bit-perfect (no resampling)
+- 🎧 **Streaming services** — Deezer, Qobuz, TIDAL, Spotify and more, via Lyrion plugins
+- 📁 **Music library** — browse by artist, album, folder or playlist, fast indexing
+- 📻 **Internet radio** — thousands of stations, save favourites from the touchscreen
+- 🔌 **DAC auto-detection** — persistent output selection across reboots
+- 🎚️ **Optional DSP** — parametric EQ, headphone crossfeed, room correction (off by default)
+- 🔊 **Multiroom** — group Osmium Sound devices to play in sync
+- 📱 **Android companion app** — browse, control playback/queue, adjust volume, pair by QR code
+- ⬆️ **Signed OTA updates** — Ed25519-signed, Dev and Prod release channels
 
-## 🎮 Running the Application
+## 📋 Specs
 
-### On Windows
+| | |
+|---|---|
+| **Hardware** | x86 / x86-64 mini-PC |
+| **Display** | 1024×600 touchscreen (optimized for this resolution) |
+| **OS** | Custom Debian appliance distro |
+| **Interface** | Electron + React |
+| **Media server** | Lyrion Music Server |
+| **Audio formats** | FLAC, DSD (64/128/256), MP3, AAC, WAV, AIFF |
+| **Max resolution** | 32-bit / 192kHz PCM |
+| **Output** | USB DAC, HDMI |
+| **Update system** | Signed OTA (Ed25519), Dev/Prod channels |
+| **License** | MIT (app code) — see [Licensing](#-licensing) |
 
-**Development Mode** (with hot-reload):
-```powershell
-# Using batch script
-.\start-dev.bat
+## 🚀 Get started
 
-# Or directly
-npm run electron:dev
-```
+1. **Download** the latest install ISO from [Releases](https://github.com/adri6412/osmium-sound/releases).
+2. **Flash** it to an 8GB+ USB stick with [balenaEtcher](https://etcher.balena.io/), Rufus, or `dd`.
+3. **Boot** your x86 mini-PC from the stick and follow the on-screen installer. Reboot — done.
 
-**Production Mode**:
-```powershell
-# Using batch script
-.\start-prod.bat
+Every later version — UI, system, OS, and Lyrion — arrives automatically over the air from the Settings screen. No reflashing required.
 
-# Or manually
-npm run build
-npm run electron
-```
+> ⚠️ **Unattended install — it wipes a disk automatically.** The ISO asks no questions: it picks the **first disk it detects**, erases it completely (new GPT, all data lost), then reboots on its own. Use a machine with nothing you want to keep, and disconnect any drive you don't want touched. See [`distro/config/includes.installer/preseed.cfg`](distro/config/includes.installer/preseed.cfg).
 
-### On Linux/DietPi
+Want to run the UI locally for development instead of flashing an appliance? See [ARCHITECTURE.md](ARCHITECTURE.md#local-development).
 
-**Development Mode** (with hot-reload):
-```bash
-# Start Vite dev server and Electron
-npm run electron:dev
+## 📱 Android companion
 
-# Or use the script
-./start-fullscreen.sh
-```
+Control Osmium Sound from your phone — browse the library, drive playback and the queue, adjust volume. Pair in seconds by scanning the QR code on the device's Settings screen. Distributed as a signed APK or via our self-hosted F-Droid repo (not on the Play Store) — see the [website](https://osmiumsound.qd.je/#android) for details.
 
-**Production Mode**:
-```bash
-# Build first
-npm run build
+## 📖 Documentation
 
-# Then run
-npm run electron
-```
+- **[ARCHITECTURE.md](ARCHITECTURE.md)** — components, ports, backend API reference, OTA internals, project layout, local dev setup
+- **[GUIDA-RAPIDA.md](GUIDA-RAPIDA.md)** — guida rapida in italiano
+- **[SECURITY.md](SECURITY.md)** — security policy
+- Release notes: [website changelog](https://osmiumsound.qd.je/#changelog)
 
-### Testing on Windows (1024x600 simulation)
+## 📄 Licensing
 
-To test the touchscreen interface on Windows:
+**The application code authored by this project** (Electron/React frontend, Python services, distro packaging, hardware designs) is released under the **MIT License** — see [`LICENSE`](LICENSE).
 
-1. **Resize the window** to 1024x600 manually, or
-2. **Use browser DevTools**:
-   - Open DevTools in Electron (automatically opened in dev mode)
-   - Press `Ctrl+Shift+M` for responsive design mode
-   - Set custom resolution: 1024 x 600
-   - Enable touch simulation
-3. **External monitor**: If you have a secondary monitor, set it to 1024x600 in Windows Display Settings
+**This project also includes and redistributes third-party components** under their own licenses (Lyrion Music Server and squeezelite under GPL, Android companion app under Apache-2.0, npm/Python dependencies under MIT/BSD/ISC). See [`THIRD-PARTY-NOTICES.md`](THIRD-PARTY-NOTICES.md) for the complete list, license texts, and source locations.
 
-## 📦 Building for Distribution
+**Disclaimer of affiliation:** Osmium Sound is an independent open-source project and is **NOT affiliated with, sponsored by, endorsed by, or officially associated with** the Lyrion Music Server project or the LMS-Community. "Lyrion" is used in a nominative sense only, to describe the service this frontend connects to.
 
-To create a distributable package:
+## 🤝 Contributing & support
 
-```bash
-npm run package
-```
-
-The built application will be in the `dist/` directory.
-
-## 🔧 Configuration
-
-### Audio Backend Integration
-The app includes IPC hooks for audio playback. To integrate with a media backend:
-
-1. **Using MPV**:
-```bash
-sudo apt install mpv
-# Integrate via IPC in main/main.js
-```
-
-2. **Using VLC**:
-```bash
-sudo apt install vlc
-# Use VLC's HTTP interface or node-vlc
-```
-
-3. **Using PipeWire**:
-```bash
-sudo apt install pipewire pipewire-pulse
-# Configure audio routing
-```
-
-### Lyrion Server Setup
-1. Install Lyrion Music Server:
-```bash
-# Download from lyrion.org or use package manager
-sudo apt install lyrionmusicserver
-```
-
-2. Configure server URL in app (default: `http://localhost:9000/material/`)
-
-### Display Configuration for 1024x600
-
-The app is optimized for 1024x600 resolution. To set your display:
-
-```bash
-# Check current resolution
-xrandr
-
-# Set resolution (replace HDMI-1 with your display)
-xrandr --output HDMI-1 --mode 1024x600
-
-# Make it permanent in /boot/config.txt or X11 config
-```
-
-### Fullscreen/Kiosk Mode
-
-To run in fullscreen mode, edit `main/main.js` and change:
-
-```javascript
-fullscreen: true,  // Enable fullscreen
-// or
-kiosk: true,      // Enable kiosk mode (harder to exit)
-```
-
-### Auto-start on Boot
-
-Create a systemd service:
-
-```bash
-sudo nano /etc/systemd/system/hifi-player.service
-```
-
-Add the following:
-
-```ini
-[Unit]
-Description=Osmium Sound
-After=graphical.target
-
-[Service]
-Type=simple
-User=dietpi
-Environment=DISPLAY=:0
-WorkingDirectory=/home/dietpi/hifi-media-player
-ExecStart=/usr/bin/npm run electron
-Restart=always
-
-[Install]
-WantedBy=graphical.target
-```
-
-Enable and start:
-
-```bash
-sudo systemctl enable hifi-player
-sudo systemctl start hifi-player
-```
-
-## 📁 Project Structure
-
-```
-hifi-media-player/
-├── main/                   # Electron main process
-│   ├── main.js            # Main window and IPC handlers
-│   └── preload.js         # Context bridge for security
-├── src/                   # React application
-│   ├── components/        # Reusable components
-│   │   └── NavigationBar.jsx
-│   ├── pages/            # Page components
-│   │   ├── Settings.jsx   # System settings + OTA updates
-│   │   ├── SetupWizard.jsx # First-run setup
-│   │   └── LyrionServer.jsx # Lyrion front-end (Music / Radio / Apps)
-│   ├── App.jsx           # Main app component
-│   ├── main.jsx          # React entry point
-│   └── index.css         # Global styles
-├── index.html            # HTML template
-├── package.json          # Dependencies and scripts
-├── vite.config.js        # Vite configuration
-├── tailwind.config.js    # Tailwind CSS configuration
-├── postcss.config.js     # PostCSS configuration
-├── install-windows.bat   # Windows installation script
-├── start-dev.bat         # Windows dev mode script
-├── start-prod.bat        # Windows production script
-├── install-dietpi.sh     # DietPi installation script
-├── start-fullscreen.sh   # Linux fullscreen startup script
-├── README.md             # Full documentation (English)
-└── GUIDA-RAPIDA.md       # Quick guide (Italian)
-```
-
-## 🎨 Customization
-
-### Changing Theme Colors
-Edit `tailwind.config.js`:
-
-```javascript
-colors: {
-  'hifi-dark': '#0a0a0a',    // Main background
-  'hifi-gray': '#1a1a1a',    // Secondary background
-  'hifi-light': '#2a2a2a',   // Elevated elements
-  'hifi-accent': '#3a3a3a',  // Borders
-  'hifi-gold': '#d4af37',    // Primary accent
-  'hifi-silver': '#c0c0c0',  // Secondary text
-}
-```
-
-### Adding New Sources
-
-Sources are not coded into the app — they come from **Lyrion plugins**. To add a
-streaming service or radio source, install the matching plugin from the Lyrion
-web UI (Settings → Plugins); it then shows up automatically under the **Radio**
-or **Apps** tab of the Lyrion front-end. No UI changes or rebuilds required.
-
-## 🔌 IPC API Reference
-
-The app exposes these IPC methods for backend integration:
-
-### System Info
-```javascript
-window.electronAPI.getSystemInfo()
-// Returns: { hostname, platform, arch, version, electronVersion }
-
-window.electronAPI.getNetworkInfo()
-// Returns: [{ name, address, netmask }, ...]
-```
-
-### Playback Control
-```javascript
-window.electronAPI.playbackControl(action, data)
-// Actions: 'play', 'pause', 'next', 'previous', 'seek'
-
-window.electronAPI.setVolume(volume)
-// volume: 0-100
-
-window.electronAPI.setAudioDevice(deviceId)
-// deviceId: string
-```
-
-## 🐛 Troubleshooting
-
-### App doesn't start
-- Check Node.js version: `node --version` (should be 18+)
-- Reinstall dependencies: `rm -rf node_modules && npm install`
-- Check Electron dependencies: `sudo apt install libgtk-3-0 libnss3`
-
-### Lyrion front-end not loading
-- Check the Lyrion server URL in Settings (default `http://localhost:9000`)
-- Verify the Lyrion service is running and reachable on the network
-- For missing streaming/radio sources, install the matching plugin in the Lyrion web UI
-
-### Touch screen not responding
-- Calibrate touch screen in DietPi settings
-- Check if X11 touch drivers are installed
-- Verify display configuration
-
-### Audio not working
-- Check ALSA/PulseAudio/PipeWire status
-- Test with: `speaker-test -t wav -c 2`
-- Verify audio device in Settings
-
-## 📄 License
-
-**The application code authored by this project** (Electron/React frontend, Python services, distro packaging, hardware designs) is released under the **MIT License** — see [`LICENSE`](LICENSE) for the full text.
-
-**This project also includes and redistributes third-party components** under their own licenses (Lyrion Music Server and squeezelite under GPL, Android companion app under Apache-2.0, and npm/Python dependencies under MIT/BSD/ISC). Please see [`THIRD-PARTY-NOTICES.md`](THIRD-PARTY-NOTICES.md) for the complete list, license texts, and source locations.
-
-**Disclaimer of Affiliation:** Osmium Sound is an independent open-source project and is **NOT affiliated with, sponsored by, endorsed by, or officially associated with** the Lyrion Music Server project or the LMS-Community. The name "Lyrion" is used in a nominative sense only to describe the service that this frontend connects to.
-
-## 🤝 Contributing
-
-Contributions are welcome! Please feel free to submit pull requests or open issues.
-
-## 📧 Support
-
-For issues and questions, please open a GitHub issue or consult the documentation.
+Contributions are welcome — pull requests and issues are open on [GitHub](https://github.com/adri6412/osmium-sound). For questions, open an issue or check the docs above.
 
 ---
 
-## 📋 ISO Releases & Compliance History
-
-**Available appliance ISO versions:**
-
-| Version | Release Date | Lyrion Bundled? | Compliance Notes |
-|---------|--------------|-----------------|------------------|
-| **v2.5.7** and earlier | — | ✅ Yes (9.1.0) | ISO includes Lyrion 9.1.0 bundled. Source available from [LMS-Community](https://github.com/LMS-Community/slimserver/releases/tag/v9.1.0). See [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md). |
-| **v2.6.0+** (future) | — | ❌ No (downloaded) | Lyrion downloaded on-demand at first boot. Full licensing in [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md). |
-
-**Download locations:** Contact the project maintainer or check the official distribution channels for ISO availability.
-
----
+<div align="center">
 
 **Built with ❤️ for music lovers**
 
+</div>
