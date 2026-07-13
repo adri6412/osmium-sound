@@ -222,7 +222,13 @@ const Settings = () => {
     try {
       lyrionApi.setBaseUrl(baseUrl);
       const players = await lyrionApi.getPlayers();
-      const mac = players?.[0]?.playerid;
+      // Don't assume players[0] is this appliance — the companion app can
+      // auto-launch a phone-side Squeezelite/SqueezePlayer that also shows up
+      // in the list. Prefer the one matching this device's own player name.
+      const nameRes = await systemAPI.getPlayerName();
+      const localName = nameRes.success ? nameRes.data?.name : null;
+      const local = localName && players?.find((p) => p.name === localName);
+      const mac = (local || players?.[0])?.playerid;
       if (!mac) return;
       setPlayerMac(mac);
       const [tt, td, rg] = await Promise.all([
@@ -239,8 +245,9 @@ const Settings = () => {
   };
 
   // ── Multiroom handlers ──────────────────────────────────────────
-  // The appliance is players[0]; every other player can be grouped with it.
-  // A player synced to the appliance shows up in the appliance's sync_slaves.
+  // `mac` is this appliance's own player (resolved by name in loadPlaybackPrefs,
+  // not just players[0] — see the comment there); every other player can be
+  // grouped with it. A player synced to the appliance shows up in its sync_slaves.
   const loadMultiroom = async (mac = playerMac, players = null) => {
     if (!mac) return null;
     try {

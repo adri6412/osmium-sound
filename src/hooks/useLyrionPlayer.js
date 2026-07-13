@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { lyrionApi } from '../utils/lyrionApi';
+import { systemAPI } from '../utils/api';
 import { useI18n } from '../i18n';
 
 // ── Safe image URLs ───────────────────────────────────────────
@@ -112,8 +113,18 @@ export function useLyrionPlayer() {
       const ss = await lyrionApi.getServerStatus();
       setIsConnected(true);
       const avail = ss?.players_loop || [];
-      if (avail.length > 0)
-        setActivePlayer(p => p && avail.find(x => x.playerid === p.playerid) ? p : avail[0]);
+      if (avail.length > 0) {
+        // `players_loop` isn't necessarily "this appliance first": the companion
+        // app auto-launches Squeezelite/SqueezePlayer on the phone as a second
+        // LMS player (radios/apps browsing is capability-filtered per-player, so
+        // landing on that one leaves tabs like Radio empty). Prefer the player
+        // matching this device's own squeezelite name (-n, from the Flask API)
+        // over just taking the first entry in the list.
+        const nameRes = await systemAPI.getPlayerName().catch(() => null);
+        const localName = nameRes?.success ? nameRes.data?.name : null;
+        const local = localName && avail.find(x => x.name === localName);
+        setActivePlayer(p => (p && avail.find(x => x.playerid === p.playerid)) ? p : (local || avail[0]));
+      }
       else { setActivePlayer(null); setPlayerStatus(null); }
     } catch (_) {
       setIsConnected(false);
