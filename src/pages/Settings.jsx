@@ -21,6 +21,7 @@ import {
   ChevronRight,
   ChevronLeft,
   Smartphone,
+  Tablet,
   Speaker,
   CheckCircle2,
   AlertTriangle,
@@ -1130,12 +1131,16 @@ const Settings = () => {
   const pairingQrValue = (isUsableIp && pairToken)
     ? JSON.stringify({ lms: webRemoteUrl, api: `${deviceIp}:8080`, token: pairToken })
     : null;
-  // PWA entry-point QR: a bare URL (not JSON), so the phone's stock Camera
-  // app opens it straight in Safari — no in-app scanner needed to just reach
-  // the page (the in-app scanner in ServerConnect.jsx is for pairing once
-  // the PWA is already open, a separate step). Served by sources_server.py's
-  // /app/ route. Doesn't need pairToken: opening the page is not pairing.
-  const pwaAppUrl = isUsableIp ? `http://${deviceIp}:8080/app/` : null;
+  // PWA entry-point QR: a bare URL (not JSON) carrying the same lms/api/token
+  // triple as pairingQrValue above, as query params — the iOS Camera app (a
+  // native system app, not a web page) opens it straight in Safari with no
+  // getUserMedia/secure-context concerns, and src/main.pwa.jsx's
+  // seedFromQueryString() picks the params up so the PWA boots already
+  // paired in one scan. Gated on pairToken like the Android QR — no point
+  // showing it before the token exists. Served by sources_server.py's /app/.
+  const pwaAppUrl = (isUsableIp && pairToken)
+    ? `http://${deviceIp}:8080/app/?lms=${encodeURIComponent(webRemoteUrl)}&api=${encodeURIComponent(`${deviceIp}:8080`)}&token=${encodeURIComponent(pairToken)}`
+    : null;
 
   const settingsSections = [
     {
@@ -1187,6 +1192,11 @@ const Settings = () => {
       title: t('settings.sections.webRemote'),
       icon: Smartphone,
       content: 'custom-web-remote'
+    },
+    {
+      title: t('settings.sections.webRemoteIos'),
+      icon: Tablet,
+      content: 'custom-web-remote-ios'
     },
     {
       title: t('settings.sections.backup'),
@@ -2039,22 +2049,10 @@ const Settings = () => {
                 )}
 
                 {/* Custom SSH Section */}
-                {/* Custom Web-Remote (Material skin) Section */}
+                {/* Custom Web-Remote (Android companion app + pairing token) Section */}
                 {section.content === 'custom-web-remote' && (
                   <div className="space-y-4">
                     <p className="text-sm text-hifi-silver">{t('settings.webRemote.help')}</p>
-
-                    {pwaAppUrl && (
-                      <div className="flex flex-col items-center space-y-3 pb-4 border-b border-hifi-light/10">
-                        <div className="bg-white p-4 rounded-xl">
-                          <QRCodeSVG value={pwaAppUrl} size={180} level="M" />
-                        </div>
-                        <div className="text-center">
-                          <p className="text-xs text-hifi-silver mb-1">{t('settings.webRemote.pwaScanHint')}</p>
-                          <code className="text-sm text-hifi-gold break-all">{pwaAppUrl}</code>
-                        </div>
-                      </div>
-                    )}
 
                     {pairingQrValue ? (
                       <div className="flex flex-col items-center space-y-4">
@@ -2093,6 +2091,34 @@ const Settings = () => {
                         </div>
                       )}
                     </div>
+                  </div>
+                )}
+
+                {/* Custom Web-Remote (iPhone/iPad PWA) Section */}
+                {section.content === 'custom-web-remote-ios' && (
+                  <div className="space-y-4">
+                    <p className="text-sm text-hifi-silver">{t('settings.webRemoteIos.help')}</p>
+
+                    {pwaAppUrl ? (
+                      <div className="flex flex-col items-center space-y-3">
+                        <div className="bg-white p-4 rounded-xl">
+                          <QRCodeSVG value={pwaAppUrl} size={200} level="M" />
+                        </div>
+                        <div className="text-center">
+                          <p className="text-xs text-hifi-silver mb-1">{t('settings.webRemoteIos.scanHint')}</p>
+                          <code className="text-sm text-hifi-gold break-all">{pwaAppUrl}</code>
+                        </div>
+                      </div>
+                    ) : webRemoteUrl ? (
+                      <div className="flex flex-col items-center space-y-3 text-hifi-silver text-sm">
+                        <Loader2 size={24} className="animate-spin" />
+                        <span>{t('settings.webRemote.generatingToken')}</span>
+                      </div>
+                    ) : (
+                      <div className="rounded-lg p-3 text-center text-sm bg-hifi-dark text-hifi-silver">
+                        {t('settings.webRemote.noIp')}
+                      </div>
+                    )}
                   </div>
                 )}
 

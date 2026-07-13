@@ -181,7 +181,8 @@
       "multiroom": "Multiroom",
       "alarm": "Sveglia",
       "network": "Configurazione Rete",
-      "webRemote": "Controllo da telefono",
+      "webRemote": "Companion Android",
+      "webRemoteIos": "iPhone / iPad",
       "backup": "Backup e ripristino",
       "ssh": "Accesso SSH",
       "pointer": "Puntatore mouse",
@@ -256,8 +257,7 @@
       }
     },
     "webRemote": {
-      "help": "Abbina l'app Osmium Sound Companion a questo dispositivo inquadrando il QR code (contiene anche un token di pairing monouso). Per controllare il dispositivo da un normale browser, apri invece l'indirizzo mostrato sotto il codice.",
-      "pwaScanHint": "iPhone/iPad: inquadra con la Fotocamera per aprire l'app web, poi Condividi → Aggiungi a Home",
+      "help": "Abbina l'app Osmium Sound Companion (Android) a questo dispositivo inquadrando il QR code (contiene anche un token di pairing monouso). Per controllare il dispositivo da un normale browser, apri invece l'indirizzo mostrato sotto il codice.",
       "scanHint": "Inquadra con l'app companion",
       "generatingToken": "Generazione codice di pairing…",
       "noIp": "Nessun indirizzo di rete disponibile. Collega il dispositivo alla rete (Ethernet o Wi-Fi) per ottenere un link di controllo.",
@@ -266,6 +266,10 @@
       "revokeAllConfirm": "Revocare tutti i telefoni abbinati? Dovrai abbinarli di nuovo.",
       "revokeAllSuccess": "Tutti gli abbinamenti sono stati revocati.",
       "revokeAllFailed": "Revoca fallita, riprova."
+    },
+    "webRemoteIos": {
+      "help": "Inquadra questo QR con la Fotocamera di iPhone/iPad per aprire l'app web Osmium Sound in Safari, poi tocca Condividi → Aggiungi a Home per installarne l'icona. Al primo avvio dell'app potrai abbinarla scansionando il QR \"Companion Android\" qui sopra.",
+      "scanHint": "Inquadra con la Fotocamera (non serve l'app companion)"
     },
     "backup": {
       "help": "Esporta o ripristina la configurazione del dispositivo (DAC, DSP/EQ, sorgenti musicali, puntatore, canale aggiornamenti) da un browser sul telefono o PC. Apri l'indirizzo qui sotto o inquadra il QR code, poi usa \"Scarica backup\" o \"Ripristina da file\".",
@@ -432,7 +436,8 @@
   },
   "qrScanner": {
     "title": "Inquadra il QR sul kiosk",
-    "cameraDenied": "Accesso alla fotocamera negato"
+    "cameraDenied": "Accesso alla fotocamera negato",
+    "insecureContext": "Fotocamera non disponibile su questa connessione. Usa il QR \"iPhone/iPad\" in Impostazioni sul kiosk (si apre con la Fotocamera di sistema) oppure inserisci l'indirizzo a mano."
   },
   "addToHome": {
     "hint": "Tocca Condividi poi \"Aggiungi a Home\" per installare l'icona"

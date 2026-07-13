@@ -181,7 +181,8 @@
       "multiroom": "Multiroom",
       "alarm": "Alarm Clock",
       "network": "Network Configuration",
-      "webRemote": "Phone control",
+      "webRemote": "Android Companion",
+      "webRemoteIos": "iPhone / iPad",
       "backup": "Backup & restore",
       "ssh": "SSH Access",
       "pointer": "Mouse pointer",
@@ -256,8 +257,7 @@
       }
     },
     "webRemote": {
-      "help": "Pair the Osmium Sound Companion app with this device by scanning the QR code (it also carries a one-time pairing token). To control this device from a plain browser instead, open the address shown below the code.",
-      "pwaScanHint": "iPhone/iPad: scan with the Camera app to open the web app, then Share → Add to Home Screen",
+      "help": "Pair the Osmium Sound Companion app (Android) with this device by scanning the QR code (it also carries a one-time pairing token). To control this device from a plain browser instead, open the address shown below the code.",
       "scanHint": "Scan with the companion app",
       "generatingToken": "Generating pairing code…",
       "noIp": "No network address available yet. Connect the device to the network (Ethernet or Wi-Fi) to get a control link.",
@@ -266,6 +266,10 @@
       "revokeAllConfirm": "Revoke all paired phones? They will need to be paired again.",
       "revokeAllSuccess": "All pairings have been revoked.",
       "revokeAllFailed": "Revoke failed, please try again."
+    },
+    "webRemoteIos": {
+      "help": "Scan this QR with your iPhone/iPad Camera to open the Osmium Sound web app in Safari, then tap Share → Add to Home Screen to install its icon. On first launch, pair it by scanning the \"Android Companion\" QR above.",
+      "scanHint": "Scan with the Camera app (no companion app needed)"
     },
     "backup": {
       "help": "Export or restore this device's configuration (DAC, DSP/EQ, music sources, mouse pointer, update channel) from a browser on your phone or PC. Open the address below or scan the QR code, then use \"Download backup\" or \"Restore from file\".",
@@ -432,7 +436,8 @@
   },
   "qrScanner": {
     "title": "Scan the QR on the kiosk",
-    "cameraDenied": "Camera access denied"
+    "cameraDenied": "Camera access denied",
+    "insecureContext": "Camera unavailable on this connection. Use the \"iPhone/iPad\" QR in Settings on the kiosk (opens with the system Camera app) or enter the address manually."
   },
   "addToHome": {
     "hint": "Tap Share then \"Add to Home Screen\" to install the icon"

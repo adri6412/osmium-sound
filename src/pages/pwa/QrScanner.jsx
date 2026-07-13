@@ -18,7 +18,19 @@ const QrScanner = ({ onDecode, onClose }) => {
   useEffect(() => {
     let cancelled = false;
 
-    navigator.mediaDevices?.getUserMedia?.({ video: { facingMode: 'environment' } })
+    // getUserMedia only exists in a secure context (HTTPS or localhost) — on
+    // this appliance's plain http://<lan-ip> hosting, navigator.mediaDevices
+    // is simply undefined, not a permission prompt. Report that distinctly
+    // instead of calling .then() on undefined, which used to throw silently
+    // and look like "nothing happens" with no visible error. The primary
+    // pairing path (Settings' "iPhone/iPad" QR, scanned by the system Camera
+    // app) doesn't depend on this — this scanner is only a manual fallback.
+    if (!window.isSecureContext || !navigator.mediaDevices?.getUserMedia) {
+      setError(t('qrScanner.insecureContext'));
+      return undefined;
+    }
+
+    navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } })
       .then((stream) => {
         if (cancelled) { stream.getTracks().forEach((t) => t.stop()); return; }
         streamRef.current = stream;
