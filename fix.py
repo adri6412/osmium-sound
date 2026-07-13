@@ -1,1 +1,0 @@
-# The plugin documentation explicitly states that apps and radios may return empty if you don't supply a playerid, because some plugins are tied to specific player capabilities (e.g. Spotify only on players that support it).

@@ -1,196 +1,69 @@
-# 🎵 HiFi Media Player - Guida Rapida
+# 🎵 Osmium Sound — Guida Rapida
 
-## 🚀 Avvio Rapido su Windows
+Come installare e iniziare a usare Osmium Sound sul tuo mini-PC x86.
 
-### Prima Installazione
+## 🚀 Installazione
 
-1. **Assicurati di avere Node.js installato**
-   - Scarica da [nodejs.org](https://nodejs.org/) (versione 18 LTS)
-   - Verifica con: `node --version`
+1. **Scarica la ISO** dell'ultima release da
+   [github.com/adri6412/osmium-sound/releases](https://github.com/adri6412/osmium-sound/releases).
+2. **Scrivi la ISO** su una chiavetta USB da 8&nbsp;GB o più, con
+   [balenaEtcher](https://etcher.balena.io/), Rufus o `dd`.
+3. **Avvia il mini-PC dalla chiavetta** e segui l'installazione guidata a schermo.
+   Al riavvio, l'appliance è pronta.
 
-2. **Installa le dipendenze** (solo la prima volta):
-   ```powershell
-   npm install
-   ```
+> ⚠️ **Installazione non presidiata — formatta un disco automaticamente.**
+> La ISO non fa domande e non chiede conferme: sceglie il **primo disco che
+> rileva**, lo cancella del tutto (nuovo GPT, tutte le partizioni e i dati
+> persi) e si riavvia da sola. Usala solo su una macchina senza dati da
+> conservare, e scollega prima ogni disco che non vuoi toccare.
 
-3. **Avvia l'applicazione**:
-   ```powershell
-   # Modalità sviluppo (consigliata per test)
-   npm run electron:dev
-   
-   # Oppure usa il batch
-   .\start-dev.bat
-   ```
+**Nota:** la ISO serve solo per la prima installazione. Tutti gli aggiornamenti
+successivi (interfaccia, sistema, OS, Lyrion) arrivano automaticamente via
+**OTA** dalla schermata Impostazioni — non serve riflashare nulla.
 
-### Avvii Successivi
+## 🧙 Primo avvio
 
-Basta eseguire:
-```powershell
-.\start-dev.bat
-```
-oppure
-```powershell
-npm run electron:dev
-```
+Al primo avvio parte la **procedura guidata di configurazione**: rete,
+libreria musicale, DAC/uscita audio e (se manca) l'installazione automatica
+di Lyrion Music Server. Da lì in poi l'app si apre direttamente sulla
+schermata principale.
 
-## 🎮 Come Usare l'Applicazione
+## 🎮 Come si usa
 
-### Front-end Lyrion
-- Interfaccia per il server Lyrion Music Server (default `http://localhost:9000`),
-  con i tab **Musica**, **Radio** e **App**.
-- **Compatibile con i plugin di Lyrion**: streaming e radio (es. Spotty per
-  Spotify Connect, radio internet, YouTube, UPnP/DLNA, AirPlay) si installano dalla
-  web UI di Lyrion (Impostazioni → Plugin) e compaiono automaticamente nei tab
-  Radio/App. Nessuna schermata dedicata da gestire nell'app.
+- **Musica / Radio / App**: interfaccia per Lyrion Music Server — libreria
+  locale, radio internet e servizi di streaming (Deezer, Qobuz, TIDAL,
+  Spotify e altri) tramite i **plugin di Lyrion**. Installa il plugin che ti
+  serve dalla web UI di Lyrion (Impostazioni → Plugin): compare da solo nei
+  tab Radio/App, senza bisogno di aggiornare l'app.
+- **Impostazioni**: info di sistema e rete, scelta del DAC/uscita audio, DSP
+  opzionale (EQ, crossfeed, correzione ambientale), Multiroom, aggiornamenti
+  OTA (canale Dev/Prod), abbinamento dell'app companion Android.
 
-### Impostazioni
-- Info di sistema (hostname, IP, versione)
-- Configurazione rete
-- Selezione dispositivo audio (placeholder)
-- Tema chiaro/scuro
+## 📱 App companion Android
 
-## 🧪 Test su Windows (risoluzione 1024x600)
+Controlla Osmium Sound dal telefono — sfoglia la libreria, gestisci
+riproduzione e coda, regola il volume. Abbina scansionando il QR code da
+Impostazioni sul dispositivo. Distribuita come APK firmato o tramite il
+nostro repo F-Droid self-hosted — non è sul Play Store. Dettagli su
+[osmiumsound.qd.je](https://osmiumsound.qd.je/#android).
 
-### Metodo 1: DevTools (consigliato)
-1. L'app si aprirà automaticamente con DevTools in modalità sviluppo
-2. Premi `F12` se non sono visibili
-3. Premi `Ctrl+Shift+M` per modalità responsive
-4. Imposta risoluzione personalizzata: **1024 x 600**
-5. Attiva simulazione touch (icona del mouse/touch in alto)
+## 🔧 Problemi comuni
 
-### Metodo 2: Finestra Manuale
-1. Ridimensiona manualmente la finestra a 1024x600
-2. La finestra è configurata per aprirsi già a questa dimensione
+- **Il front-end Lyrion non carica**: verifica l'URL del server Lyrion nelle
+  Impostazioni (default `http://localhost:9000`) e che il servizio sia attivo.
+- **Sorgenti streaming/radio mancanti**: installa il plugin corrispondente
+  dalla web UI di Lyrion.
+- **Touch screen non risponde**: ricalibra il touch screen dalle Impostazioni
+  di sistema dell'appliance.
+- **Audio non funziona**: controlla il dispositivo audio selezionato in
+  Impostazioni e che il DAC sia riconosciuto.
 
-### Metodo 3: Monitor Secondario
-Se hai un secondo monitor:
-1. Vai in Impostazioni Display di Windows
-2. Imposta risoluzione 1024x600 sul secondo monitor
-3. Sposta l'app su quel monitor
+## 📚 Altre risorse
 
-## 📝 Comandi Utili
-
-```powershell
-# Installazione dipendenze
-npm install
-
-# Modalità sviluppo (hot reload)
-npm run electron:dev
-
-# Build per produzione
-npm run build
-
-# Avvio produzione (dopo build)
-npm run electron
-
-# Pulizia cache node_modules
-Remove-Item -Recurse -Force node_modules
-npm install
-```
-
-## 🔧 Risoluzione Problemi
-
-### L'app non si avvia
-```powershell
-# Reinstalla dipendenze
-Remove-Item -Recurse -Force node_modules
-npm install
-```
-
-### Porta 5173 già in uso
-- Chiudi altre istanze di Vite/applicazioni sulla porta 5173
-- Oppure modifica la porta in `vite.config.js`
-
-### Il front-end Lyrion non carica
-- Verifica l'URL del server Lyrion nelle Impostazioni (default `http://localhost:9000`)
-- Controlla che il servizio Lyrion sia attivo e raggiungibile
-- Per sorgenti streaming/radio mancanti, installa il plugin corrispondente dalla web UI di Lyrion
-
-### DevTools non si aprono
-- Premi `F12` o `Ctrl+Shift+I`
-- Verifica che sia modalità sviluppo (`npm run electron:dev`)
-
-## 🎨 Personalizzazione
-
-### Cambio Colori Tema
-Modifica `tailwind.config.js`:
-```javascript
-colors: {
-  'hifi-gold': '#d4af37',  // Cambia questo per l'accento principale
-  // ... altri colori
-}
-```
-
-### Modalità Fullscreen
-Modifica `main/main.js`:
-```javascript
-fullscreen: true,  // Per fullscreen
-// o
-kiosk: true,       // Per modalità kiosk
-```
-
-### Rimuovi DevTools in Produzione
-In `main/main.js`, commenta:
-```javascript
-// mainWindow.webContents.openDevTools();
-```
-
-## 📱 Deploy su DietPi
-
-Quando sei pronto per il deploy sul dispositivo finale:
-
-1. **Copia il progetto su DietPi**
-2. **Esegui lo script di installazione**:
-   ```bash
-   chmod +x install-dietpi.sh
-   ./install-dietpi.sh
-   ```
-
-3. **Avvia in fullscreen**:
-   ```bash
-   chmod +x start-fullscreen.sh
-   ./start-fullscreen.sh
-   ```
-
-4. **Configura auto-avvio** (vedi README.md sezione Auto-start)
-
-## 🔌 Configurazione Sorgenti
-
-### Lyrion Music Server
-1. Lyrion è già installato sull'appliance e si avvia su `http://localhost:9000`
-   (in sviluppo: `sudo apt install lyrionmusicserver` o scarica da lyrion.org).
-2. Configura la tua libreria musicale in Lyrion.
-3. L'app carica automaticamente il front-end (tab Musica / Radio / App).
-
-### Sorgenti streaming e radio (plugin Lyrion)
-- Streaming e radio **non** sono codificati nell'app: arrivano dai **plugin di Lyrion**.
-- Installa il plugin desiderato dalla web UI di Lyrion (Impostazioni → Plugin),
-  es. **Spotty** (Spotify Connect), radio internet, **YouTube**, UPnP/DLNA, AirPlay.
-- Una volta installato, compare da solo nei tab **Radio**/**App** — nessuna modifica all'app.
-
-## 📚 Risorse
-
-- **README.md**: Documentazione completa
-- **main/main.js**: Processo principale Electron
-- **src/App.jsx**: Applicazione React principale
-- **src/pages/**: Componenti delle pagine
-- **tailwind.config.js**: Configurazione stile
-
-## 💡 Suggerimenti
-
-1. **Sviluppo**: Usa sempre `npm run electron:dev` per vedere modifiche in tempo reale
-2. **Test Touch**: Simula touch in DevTools per testare l'UI
-3. **Performance**: Su DietPi, compila con `npm run build` per miglior performance
-4. **Debug**: Console di Chrome in DevTools (F12) per debug
-
-## ❓ Supporto
-
-Per problemi o domande:
-- Controlla la console DevTools (F12)
-- Verifica i log nel terminale
-- Consulta README.md per documentazione dettagliata
+- **[README.md](README.md)**: panoramica, funzioni e specifiche
+- **[ARCHITECTURE.md](ARCHITECTURE.md)**: dettagli tecnici, API, sviluppo locale
+- Note di rilascio: [changelog sul sito](https://osmiumsound.qd.je/#changelog)
 
 ---
 
-**Buon divertimento con il tuo HiFi Media Player! 🎶**
-
+**Buon ascolto con Osmium Sound! 🎶**
