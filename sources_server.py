@@ -14,7 +14,7 @@ this service starts (so they survive reboots without touching /etc/fstab).
 
 Runs as root (needs mount.cifs and to restart Lyrion).
 """
-from flask import Flask, jsonify, request, Response
+from flask import Flask, jsonify, request, Response, send_from_directory
 import json
 import os
 import re
@@ -1132,6 +1132,27 @@ def api_usb():
 @app.route("/")
 def index():
     return Response(INDEX_HTML, mimetype="text/html")
+
+
+# ─────────────────────────── PWA static hosting ──────────────────────
+# `npm run build:pwa` outputs pwa-dist/ (see vite.config.pwa.js). The
+# install/update scripts copy that directory next to this script (both live
+# under /usr/local/bin on the appliance — see hifi-sources.service's
+# WorkingDirectory) so the PWA can be served from the same already-LAN-
+# exposed, already-authenticated-proxy service, with no new port/unit.
+# Static assets only — the PWA talks to LMS/appliance APIs via plain fetch()
+# from the browser, this route never touches app logic.
+PWA_DIST_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "pwa-dist")
+
+
+@app.route("/app/")
+@app.route("/app/<path:path>")
+def serve_pwa(path="pwa.html"):
+    if not os.path.isdir(PWA_DIST_DIR):
+        return jsonify({"success": False, "message": "PWA non installata su questo dispositivo"}), 404
+    if not os.path.exists(os.path.join(PWA_DIST_DIR, path)):
+        path = "pwa.html"  # SPA fallback for any unknown sub-path
+    return send_from_directory(PWA_DIST_DIR, path)
 
 
 INDEX_HTML = r"""<!DOCTYPE html>

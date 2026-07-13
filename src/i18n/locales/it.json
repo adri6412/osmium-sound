@@ -417,5 +417,77 @@
       "shutdownError": "Errore durante lo spegnimento",
       "shutdownSystemError": "Errore durante lo spegnimento del sistema"
     }
+  },
+  "serverConnect": {
+    "subtitle": "Inquadra il QR mostrato dal kiosk (Impostazioni → Telefono)",
+    "scanQr": "Scansiona QR",
+    "orManual": "oppure inserisci l'indirizzo manualmente",
+    "connect": "Connetti",
+    "checking": "Verifica in corso...",
+    "connected": "Connesso",
+    "paired": "Associato — DSP, aggiornamenti e multiroom disponibili",
+    "error": "Server non raggiungibile",
+    "invalidQr": "QR non valido"
+  },
+  "qrScanner": {
+    "title": "Inquadra il QR sul kiosk",
+    "cameraDenied": "Accesso alla fotocamera negato"
+  },
+  "pwaSettings": {
+    "title": "Impostazioni",
+    "server": "Server",
+    "forgetServer": "Dimentica server",
+    "about": "Informazioni",
+    "language": "Lingua",
+    "appliance": "Dispositivo",
+    "paired": "Associato",
+    "notPaired": "Non associato",
+    "requiresPairing": "Richiede associazione (scansiona il QR dal kiosk)",
+    "updates": "Aggiornamenti",
+    "multiroom": "Multiroom",
+    "systemAdmin": "Sistema"
+  },
+  "applianceScreens": {
+    "systemAdmin": "Sistema",
+    "systemInfo": "Informazioni sistema",
+    "hostname": "Nome host",
+    "uptime": "Uptime",
+    "power": "Alimentazione",
+    "reboot": "Riavvia",
+    "shutdown": "Spegni",
+    "confirmReboot": "Riavviare il sistema?",
+    "rebooting": "Riavvio in corso...",
+    "confirmShutdown": "Spegnere il sistema?",
+    "shuttingDown": "Spegnimento in corso...",
+    "updates": "Aggiornamenti",
+    "channel": "Canale",
+    "channelProd": "Stabile",
+    "channelDev": "Sviluppo",
+    "components": "Componenti",
+    "kind": {
+      "app": "App",
+      "system": "Sistema",
+      "os": "Sistema operativo",
+      "lyrion": "Lyrion"
+    },
+    "update": "Aggiorna",
+    "applying": "Aggiornamento in corso...",
+    "updateAvailable": "Nuova versione disponibile: {version}",
+    "upToDate": "Aggiornato ({version})",
+    "dspEnabled": "DSP attivo",
+    "roomCorrection": "Correzione ambientale",
+    "crossfeed": "Crossfeed",
+    "filter": "Filtro",
+    "filterPresent": "Filtro FIR caricato",
+    "filterAbsent": "Nessun filtro FIR caricato",
+    "removeFilter": "Rimuovi filtro",
+    "filterRemoved": "Filtro rimosso",
+    "multiroom": "Multiroom",
+    "playerName": "Nome player",
+    "role": "Ruolo",
+    "roleLocal": "Questo dispositivo",
+    "roleFollow": "Segui un altro server",
+    "scan": "Cerca server",
+    "saved": "Salvato"
   }
 }

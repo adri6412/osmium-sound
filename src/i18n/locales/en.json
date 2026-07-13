@@ -417,5 +417,77 @@
       "shutdownError": "Error during shutdown",
       "shutdownSystemError": "Error during system shutdown"
     }
+  },
+  "serverConnect": {
+    "subtitle": "Scan the QR shown by the kiosk (Settings → Phone)",
+    "scanQr": "Scan QR",
+    "orManual": "or enter the address manually",
+    "connect": "Connect",
+    "checking": "Checking...",
+    "connected": "Connected",
+    "paired": "Paired — DSP, updates and multiroom available",
+    "error": "Server unreachable",
+    "invalidQr": "Invalid QR code"
+  },
+  "qrScanner": {
+    "title": "Scan the QR on the kiosk",
+    "cameraDenied": "Camera access denied"
+  },
+  "pwaSettings": {
+    "title": "Settings",
+    "server": "Server",
+    "forgetServer": "Forget server",
+    "about": "About",
+    "language": "Language",
+    "appliance": "Appliance",
+    "paired": "Paired",
+    "notPaired": "Not paired",
+    "requiresPairing": "Requires pairing (scan the QR from the kiosk)",
+    "updates": "Updates",
+    "multiroom": "Multiroom",
+    "systemAdmin": "System"
+  },
+  "applianceScreens": {
+    "systemAdmin": "System",
+    "systemInfo": "System info",
+    "hostname": "Hostname",
+    "uptime": "Uptime",
+    "power": "Power",
+    "reboot": "Reboot",
+    "shutdown": "Shut down",
+    "confirmReboot": "Reboot the system?",
+    "rebooting": "Rebooting...",
+    "confirmShutdown": "Shut down the system?",
+    "shuttingDown": "Shutting down...",
+    "updates": "Updates",
+    "channel": "Channel",
+    "channelProd": "Stable",
+    "channelDev": "Development",
+    "components": "Components",
+    "kind": {
+      "app": "App",
+      "system": "System",
+      "os": "Operating system",
+      "lyrion": "Lyrion"
+    },
+    "update": "Update",
+    "applying": "Updating...",
+    "updateAvailable": "New version available: {version}",
+    "upToDate": "Up to date ({version})",
+    "dspEnabled": "DSP enabled",
+    "roomCorrection": "Room correction",
+    "crossfeed": "Crossfeed",
+    "filter": "Filter",
+    "filterPresent": "FIR filter loaded",
+    "filterAbsent": "No FIR filter loaded",
+    "removeFilter": "Remove filter",
+    "filterRemoved": "Filter removed",
+    "multiroom": "Multiroom",
+    "playerName": "Player name",
+    "role": "Role",
+    "roleLocal": "This device",
+    "roleFollow": "Follow another server",
+    "scan": "Scan for servers",
+    "saved": "Saved"
   }
 }
