@@ -2104,6 +2104,9 @@ const Settings = () => {
                         <p className="text-xs text-hifi-silver mb-1">{t('settings.webRemoteIos.scanHint')}</p>
                         <code className="text-sm text-hifi-gold break-all">{LYRPLAY_APP_STORE_URL}</code>
                       </div>
+                      <p className="text-[11px] text-hifi-silver/50 text-center max-w-xs">
+                        {t('settings.webRemoteIos.disclaimer')}
+                      </p>
                     </div>
                   </div>
                 )}

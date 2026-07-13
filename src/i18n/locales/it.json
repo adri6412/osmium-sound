@@ -269,7 +269,8 @@
     },
     "webRemoteIos": {
       "help": "Su iPhone/iPad usa LyrPlay, un'app gratuita già disponibile su App Store per controllare Lyrion/Squeezebox: decodifica nativa FLAC/Opus, riproduzione in background, controlli da lock screen, CarPlay e Siri. Inquadra il QR per scaricarla. Nota: DSP, aggiornamenti, riavvio e ruolo multiroom restano gestibili solo dal kiosk.",
-      "scanHint": "Inquadra per aprire LyrPlay su App Store"
+      "scanHint": "Inquadra per aprire LyrPlay su App Store",
+      "disclaimer": "LyrPlay è un'app di terze parti, non sviluppata né affiliata a questo progetto. Segnalata solo come client compatibile con Lyrion/Squeezebox."
     },
     "backup": {
       "help": "Esporta o ripristina la configurazione del dispositivo (DAC, DSP/EQ, sorgenti musicali, puntatore, canale aggiornamenti) da un browser sul telefono o PC. Apri l'indirizzo qui sotto o inquadra il QR code, poi usa \"Scarica backup\" o \"Ripristina da file\".",
