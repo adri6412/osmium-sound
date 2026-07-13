@@ -164,9 +164,8 @@ npm run electron        # run the built app
 npm run package         # electron-builder distributable
 ```
 
-`install-windows.bat` / `start-dev.bat` / `start-prod.bat` wrap the same
-commands for Windows. `install-dietpi.sh` / `start-fullscreen.sh` are
-developer conveniences for testing on a bare DietPi/Debian box by hand — they
-are **not** how the appliance ships. The real production path is: flash the
-install ISO once, then let the OTA system above keep the device (UI, System,
-OS, Lyrion) up to date.
+`install-dietpi.sh` / `start-fullscreen.sh` are developer conveniences for
+testing on a bare DietPi/Debian box by hand — they are **not** how the
+appliance ships. The real production path is: flash the install ISO once,
+then let the OTA system above keep the device (UI, System, OS, Lyrion) up to
+date.
