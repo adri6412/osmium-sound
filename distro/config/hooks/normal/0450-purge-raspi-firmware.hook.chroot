@@ -1,0 +1,27 @@
+#!/bin/sh
+# HiFi Player appliance — purge stray raspi-firmware from the image.
+#
+# The appliance is an x86 mini PC: raspi-firmware (pulled in as a side effect
+# of the firmware package set) is useless here and actively harmful — its
+# /etc/kernel/postinst.d/z50-raspi-firmware hook aborts with "missing
+# /boot/firmware" during kernel upgrades, leaving linux-image half-configured
+# and breaking every later apt/dpkg run. Devices already in the field get the
+# same fix via the OS OTA (distro/os-update/apply.d/0018-purge-raspi-firmware.sh).
+#
+# Hooks are removed BEFORE the purge: purging can trigger `dpkg --configure`
+# of a pending linux-image, which re-runs /etc/kernel/postinst.d/* and would
+# fail on the very hook we are removing.
+set -e
+
+echo "I: [hifi] removing raspi-firmware kernel/initramfs hooks (if any)"
+rm -f /etc/kernel/postinst.d/z50-raspi-firmware \
+      /etc/initramfs/post-update.d/z50-raspi-firmware
+
+if dpkg -s raspi-firmware >/dev/null 2>&1; then
+    echo "I: [hifi] purging raspi-firmware"
+    DEBIAN_FRONTEND=noninteractive apt-get purge -y raspi-firmware
+else
+    echo "I: [hifi] raspi-firmware not installed — nothing to purge"
+fi
+
+echo "I: [hifi] purge-raspi-firmware hook done"

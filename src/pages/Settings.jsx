@@ -57,7 +57,6 @@ const Settings = () => {
   const [networkInfo, setNetworkInfo] = useState([]);
   const [selectedInterface, setSelectedInterface] = useState('');
   const [lyrionUrl, setLyrionUrl] = useState(localStorage.getItem('lyrionUrl') || 'http://localhost:9000');
-  const [isUpdating, setIsUpdating] = useState(false);
   const [updateMessage, setUpdateMessage] = useState('');
   // In-app confirmation modal (replaces the native window.confirm, which renders
   // with the OS/Electron chrome). Shape: { message, confirmLabel, onConfirm }.
@@ -657,8 +656,8 @@ const Settings = () => {
   }, []);
 
   // Publish "update available" so the Sidebar can show a badge. We consider the
-  // core channels behind the single button (UI + System + OS); Lyrion and the
-  // apt upgrade live on their own buttons.
+  // core channels behind the single button (UI + System + OS); Lyrion lives on
+  // its own button.
   useEffect(() => {
     const available = !!(appUpdate?.update_available || systemUpdate?.update_available || osUpdate?.update_available);
     localStorage.setItem('hifiUpdateAvailable', available ? '1' : '0');
@@ -784,7 +783,7 @@ const Settings = () => {
   //      no-op when the system already matches (so this step usually just falls
   //      through); only a real OS change reboots, which is rare and ends here.
   //   3. UI — restarts the Electron front-end, so it goes last (terminal).
-  // (apt system upgrade and Lyrion stay on their own buttons.)
+  // (Lyrion stays on its own button.)
   const applyAllUpdates = async () => {
     if (!apiConnected) {
       setUpdateMessage(t('settings.msg.apiUnavailable'));
@@ -1030,29 +1029,6 @@ const Settings = () => {
   };
 
   // System actions
-  const handleSystemUpdate = async () => {
-    if (!apiConnected) {
-      setUpdateMessage(t('settings.msg.apiUnavailable'));
-      return;
-    }
-
-    setIsUpdating(true);
-    setUpdateMessage(t('settings.msg.systemUpdating'));
-
-    try {
-      const result = await systemAPI.update();
-      if (result.success) {
-        setUpdateMessage(result.data.message || t('settings.msg.systemUpdated'));
-      } else {
-        setUpdateMessage(result.message || t('settings.msg.updateError'));
-      }
-    } catch (error) {
-      setUpdateMessage(t('settings.msg.updateError'));
-    } finally {
-      setIsUpdating(false);
-    }
-  };
-
   const doReboot = async () => {
     setUpdateMessage(t('settings.msg.rebooting'));
     try {
@@ -2584,26 +2560,6 @@ const Settings = () => {
                 {/* Custom System Controls Section */}
                 {section.content === 'custom-system-controls' && (
                   <div className="space-y-4">
-                    {/* System Update */}
-                    <motion.button
-                      onClick={handleSystemUpdate}
-                      disabled={isUpdating}
-                      className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-hifi-accent text-white py-4 rounded-lg font-semibold flex items-center justify-center space-x-2 transition-colors"
-                      whileTap={{ scale: isUpdating ? 1 : 0.95 }}
-                    >
-                      {isUpdating ? (
-                        <>
-                          <Loader2 size={20} className="animate-spin" />
-                          <span>{t('settings.updates.updating')}</span>
-                        </>
-                      ) : (
-                        <>
-                          <Download size={20} />
-                          <span>{t('settings.controls.aptUpdate')}</span>
-                        </>
-                      )}
-                    </motion.button>
-                    
                     {updateMessage && (
                       <div className={`rounded-lg p-3 text-center text-sm ${
                         isErrorMsg(updateMessage)

@@ -397,7 +397,6 @@
       }
     },
     "controls": {
-      "aptUpdate": "Aggiorna Sistema (apt-get update && upgrade)",
       "reboot": "Riavvia Sistema",
       "shutdown": "Spegni Sistema"
     },
@@ -409,9 +408,6 @@
       "apiUnavailable": "Errore: Server API non disponibile",
       "apiUnavailableHint": "Errore: Server API non disponibile. Verificare che api_server.py sia in esecuzione.",
       "loadDataError": "Errore nel caricamento dei dati di sistema",
-      "systemUpdating": "Aggiornamento del sistema in corso...",
-      "systemUpdated": "Sistema aggiornato con successo!",
-      "updateError": "Errore durante l'aggiornamento",
       "confirmReboot": "Sei sicuro di voler riavviare il sistema?",
       "rebooting": "Riavvio del sistema...",
       "rebootingShort": "Sistema in riavvio...",

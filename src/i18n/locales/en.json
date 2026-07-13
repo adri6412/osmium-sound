@@ -397,7 +397,6 @@
       }
     },
     "controls": {
-      "aptUpdate": "Update System (apt-get update && upgrade)",
       "reboot": "Reboot System",
       "shutdown": "Shut Down System"
     },
@@ -409,9 +408,6 @@
       "apiUnavailable": "Error: API server unavailable",
       "apiUnavailableHint": "Error: API server unavailable. Make sure api_server.py is running.",
       "loadDataError": "Error loading system data",
-      "systemUpdating": "System update in progress...",
-      "systemUpdated": "System updated successfully!",
-      "updateError": "Error during the update",
       "confirmReboot": "Are you sure you want to reboot the system?",
       "rebooting": "Rebooting the system...",
       "rebootingShort": "System rebooting...",

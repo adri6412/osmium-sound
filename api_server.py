@@ -99,16 +99,6 @@ LYRION_PKG = 'lyrionmusicserver'
 LYRION_SCRIPT = '/usr/local/sbin/hifi-lyrion-update.sh'
 LYRION_STATUS_FILE = '/run/hifi-lyrion-status.json'
 
-# Funzione per aggiornare il sistema
-def update_system():
-    try:
-        process = subprocess.Popen("sudo apt-get update && sudo apt-get upgrade -y", shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        process.wait()
-        return "System updated successfully"
-    except Exception:
-        log.exception("update_system failed")
-        return "Failed to update system"
-
 # Funzione per riavviare il dispositivo
 def reboot_device():
     try:
@@ -1636,11 +1626,6 @@ def hide_global_keyboard():
 @app.route('/check', methods=['GET'])
 def api_check():
     return jsonify({"message": "ok"})
-
-@app.route('/update_system', methods=['POST'])
-def api_update_system():
-    result = update_system()
-    return jsonify({"message": result})
 
 @app.route('/app_update/check', methods=['GET'])
 def api_app_update_check():
