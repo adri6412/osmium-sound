@@ -67,13 +67,12 @@ if [ -f "$STATE" ] && [ "$(cat "$STATE" 2>/dev/null)" = "$FINGERPRINT" ]; then
     exit 0
 fi
 
-# -t vfat: on devices where /boot/efi is set up with x-systemd.automount
+# --real: on devices where /boot/efi is set up with x-systemd.automount
 # (common — seen in the field), `findmnt -o SOURCE /boot/efi` returns TWO
-# lines (the "systemd-1" autofs trigger AND the real block device stacked at
-# the same mountpoint). Filtering by the ESP's known filesystem type (always
-# vfat/FAT32 on this fleet's own partition layout) skips the autofs entry and
-# leaves exactly the real device.
-ESP_DEV=$(findmnt -n -o SOURCE -t vfat "$ESP" 2>/dev/null | head -n1) || exit 0
+# lines for the one mountpoint — the "systemd-1" autofs trigger AND the real
+# block device stacked underneath it. --real excludes pseudo filesystems
+# (autofs, proc, sysfs, ...) and leaves just the real one, whatever its type.
+ESP_DEV=$(findmnt -n -o SOURCE --real "$ESP" 2>/dev/null | head -n1) || exit 0
 [ -n "$ESP_DEV" ] || exit 0
 ESP_PART=$(cat "/sys/class/block/$(basename "$ESP_DEV")/partition" 2>/dev/null) || exit 0
 DISK_DEV=$(lsblk -no PKNAME "$ESP_DEV" 2>/dev/null) || exit 0
