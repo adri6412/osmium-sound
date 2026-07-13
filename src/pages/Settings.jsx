@@ -1130,6 +1130,12 @@ const Settings = () => {
   const pairingQrValue = (isUsableIp && pairToken)
     ? JSON.stringify({ lms: webRemoteUrl, api: `${deviceIp}:8080`, token: pairToken })
     : null;
+  // PWA entry-point QR: a bare URL (not JSON), so the phone's stock Camera
+  // app opens it straight in Safari — no in-app scanner needed to just reach
+  // the page (the in-app scanner in ServerConnect.jsx is for pairing once
+  // the PWA is already open, a separate step). Served by sources_server.py's
+  // /app/ route. Doesn't need pairToken: opening the page is not pairing.
+  const pwaAppUrl = isUsableIp ? `http://${deviceIp}:8080/app/` : null;
 
   const settingsSections = [
     {
@@ -2037,6 +2043,18 @@ const Settings = () => {
                 {section.content === 'custom-web-remote' && (
                   <div className="space-y-4">
                     <p className="text-sm text-hifi-silver">{t('settings.webRemote.help')}</p>
+
+                    {pwaAppUrl && (
+                      <div className="flex flex-col items-center space-y-3 pb-4 border-b border-hifi-light/10">
+                        <div className="bg-white p-4 rounded-xl">
+                          <QRCodeSVG value={pwaAppUrl} size={180} level="M" />
+                        </div>
+                        <div className="text-center">
+                          <p className="text-xs text-hifi-silver mb-1">{t('settings.webRemote.pwaScanHint')}</p>
+                          <code className="text-sm text-hifi-gold break-all">{pwaAppUrl}</code>
+                        </div>
+                      </div>
+                    )}
 
                     {pairingQrValue ? (
                       <div className="flex flex-col items-center space-y-4">

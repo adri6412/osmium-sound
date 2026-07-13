@@ -257,6 +257,7 @@
     },
     "webRemote": {
       "help": "Pair the Osmium Sound Companion app with this device by scanning the QR code (it also carries a one-time pairing token). To control this device from a plain browser instead, open the address shown below the code.",
+      "pwaScanHint": "iPhone/iPad: scan with the Camera app to open the web app, then Share → Add to Home Screen",
       "scanHint": "Scan with the companion app",
       "generatingToken": "Generating pairing code…",
       "noIp": "No network address available yet. Connect the device to the network (Ethernet or Wi-Fi) to get a control link.",
@@ -432,6 +433,9 @@
   "qrScanner": {
     "title": "Scan the QR on the kiosk",
     "cameraDenied": "Camera access denied"
+  },
+  "addToHome": {
+    "hint": "Tap Share then \"Add to Home Screen\" to install the icon"
   },
   "pwaSettings": {
     "title": "Settings",

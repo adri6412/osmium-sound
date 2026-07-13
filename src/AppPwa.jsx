@@ -1,6 +1,7 @@
 import React, { useState, useCallback } from 'react';
 
 import ServerConnect from './pages/ServerConnect';
+import AddToHomeBanner from './pages/pwa/AddToHomeBanner';
 import HomeScreen from './pages/pwa/HomeScreen';
 import NowPlayingScreen from './pages/pwa/NowPlayingScreen';
 import MiniPlayer from './pages/pwa/MiniPlayer';
@@ -33,13 +34,19 @@ const AppPwaContent = () => {
   const player = useLyrionPlayer();
 
   if (!configured) {
-    return <ServerConnect onConnected={handleConnected} />;
+    return (
+      <div className="h-screen w-full flex flex-col bg-hifi-dark overflow-hidden">
+        <AddToHomeBanner />
+        <div className="flex-1 min-h-0"><ServerConnect onConnected={handleConnected} /></div>
+      </div>
+    );
   }
 
   const backToSettings = () => setScreen(SCREENS.SETTINGS);
 
   return (
     <div className="h-screen w-full flex flex-col bg-hifi-dark relative overflow-hidden">
+      <AddToHomeBanner />
       {screen === SCREENS.SETTINGS && (
         <SettingsHub
           onClose={() => setScreen(SCREENS.HOME)}
