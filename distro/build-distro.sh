@@ -146,17 +146,34 @@ cp -f "$XSESSION_SRC" "$XSESSION_DEST_DIR/.xsession"
 sed -i 's/\r$//' "$XSESSION_DEST_DIR/.xsession"
 chmod +x "$XSESSION_DEST_DIR/.xsession"
 
-log "Injecting EFI-boot-entry-fix kernel hook → includes.chroot/etc/kernel/postinst.d"
+log "Injecting EFI-boot-entry-fix → kernel postinst.d hook + apt Post-Invoke hook"
 # Single source of truth: the SAME script the OS-update OTA installs
 # (distro/os-update/files/hifi-fix-efi-boot.sh) is baked into the image here,
-# so a fresh install and an OTA-updated device run identical logic.
+# at BOTH locations, so a fresh install and an OTA-updated device converge to
+# the identical end state. The apt Post-Invoke hook is the one that reliably
+# runs after grub-efi-amd64-signed/shim-signed are configured (see
+# distro/os-update/apply.d/0021-efi-boot-apt-hook.sh for why the kernel
+# postinst.d copy alone isn't enough).
 EFI_HOOK_SRC="$SCRIPT_DIR/os-update/files/hifi-fix-efi-boot.sh"
 [ -f "$EFI_HOOK_SRC" ] || die "Missing canonical EFI boot hook at $EFI_HOOK_SRC"
+
 EFI_HOOK_DEST_DIR="$CONFIG/includes.chroot/etc/kernel/postinst.d"
 mkdir -p "$EFI_HOOK_DEST_DIR"
 cp -f "$EFI_HOOK_SRC" "$EFI_HOOK_DEST_DIR/zzz-hifi-fix-efi-boot"
 sed -i 's/\r$//' "$EFI_HOOK_DEST_DIR/zzz-hifi-fix-efi-boot"
 chmod +x "$EFI_HOOK_DEST_DIR/zzz-hifi-fix-efi-boot"
+
+EFI_HOOK_SBIN_DIR="$CONFIG/includes.chroot/usr/local/sbin"
+mkdir -p "$EFI_HOOK_SBIN_DIR"
+cp -f "$EFI_HOOK_SRC" "$EFI_HOOK_SBIN_DIR/hifi-fix-efi-boot.sh"
+sed -i 's/\r$//' "$EFI_HOOK_SBIN_DIR/hifi-fix-efi-boot.sh"
+chmod +x "$EFI_HOOK_SBIN_DIR/hifi-fix-efi-boot.sh"
+
+EFI_APT_HOOK_DIR="$CONFIG/includes.chroot/etc/apt/apt.conf.d"
+mkdir -p "$EFI_APT_HOOK_DIR"
+cat > "$EFI_APT_HOOK_DIR/99-hifi-fix-efi-boot" <<'EOF'
+DPkg::Post-Invoke { "test -x /usr/local/sbin/hifi-fix-efi-boot.sh && /usr/local/sbin/hifi-fix-efi-boot.sh; true"; };
+EOF
 
 log "Injecting python daemons → includes.chroot/usr/local/bin"
 BIN_DEST="$CONFIG/includes.chroot/usr/local/bin"
