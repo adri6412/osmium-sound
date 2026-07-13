@@ -268,8 +268,8 @@
       "revokeAllFailed": "Revoke failed, please try again."
     },
     "webRemoteIos": {
-      "help": "Scan this QR with your iPhone/iPad Camera to open the Osmium Sound web app in Safari, then tap Share → Add to Home Screen to install its icon. On first launch, pair it by scanning the \"Android Companion\" QR above.",
-      "scanHint": "Scan with the Camera app (no companion app needed)"
+      "help": "On iPhone/iPad, use LyrPlay — a free app already on the App Store for controlling Lyrion/Squeezebox: native FLAC/Opus decoding, real background playback, lock-screen controls, CarPlay and Siri. Scan the QR to download it. Note: DSP, updates, reboot and multiroom role stay kiosk-only.",
+      "scanHint": "Scan to open LyrPlay on the App Store"
     },
     "backup": {
       "help": "Export or restore this device's configuration (DAC, DSP/EQ, music sources, mouse pointer, update channel) from a browser on your phone or PC. Open the address below or scan the QR code, then use \"Download backup\" or \"Restore from file\".",
@@ -422,81 +422,5 @@
       "shutdownError": "Error during shutdown",
       "shutdownSystemError": "Error during system shutdown"
     }
-  },
-  "serverConnect": {
-    "subtitle": "Scan the QR shown by the kiosk (Settings → Phone)",
-    "scanQr": "Scan QR",
-    "orManual": "or enter the address manually",
-    "connect": "Connect",
-    "checking": "Checking...",
-    "connected": "Connected",
-    "paired": "Paired — DSP, updates and multiroom available",
-    "error": "Server unreachable",
-    "invalidQr": "Invalid QR code"
-  },
-  "qrScanner": {
-    "title": "Scan the QR on the kiosk",
-    "cameraDenied": "Camera access denied",
-    "insecureContext": "Camera unavailable on this connection. Use the \"iPhone/iPad\" QR in Settings on the kiosk (opens with the system Camera app) or enter the address manually."
-  },
-  "addToHome": {
-    "hint": "Tap Share then \"Add to Home Screen\" to install the icon"
-  },
-  "pwaSettings": {
-    "title": "Settings",
-    "server": "Server",
-    "forgetServer": "Forget server",
-    "about": "About",
-    "language": "Language",
-    "appliance": "Appliance",
-    "paired": "Paired",
-    "notPaired": "Not paired",
-    "requiresPairing": "Requires pairing (scan the QR from the kiosk)",
-    "updates": "Updates",
-    "multiroom": "Multiroom",
-    "systemAdmin": "System"
-  },
-  "applianceScreens": {
-    "systemAdmin": "System",
-    "systemInfo": "System info",
-    "hostname": "Hostname",
-    "uptime": "Uptime",
-    "power": "Power",
-    "reboot": "Reboot",
-    "shutdown": "Shut down",
-    "confirmReboot": "Reboot the system?",
-    "rebooting": "Rebooting...",
-    "confirmShutdown": "Shut down the system?",
-    "shuttingDown": "Shutting down...",
-    "updates": "Updates",
-    "channel": "Channel",
-    "channelProd": "Stable",
-    "channelDev": "Development",
-    "components": "Components",
-    "kind": {
-      "app": "App",
-      "system": "System",
-      "os": "Operating system",
-      "lyrion": "Lyrion"
-    },
-    "update": "Update",
-    "applying": "Updating...",
-    "updateAvailable": "New version available: {version}",
-    "upToDate": "Up to date ({version})",
-    "dspEnabled": "DSP enabled",
-    "roomCorrection": "Room correction",
-    "crossfeed": "Crossfeed",
-    "filter": "Filter",
-    "filterPresent": "FIR filter loaded",
-    "filterAbsent": "No FIR filter loaded",
-    "removeFilter": "Remove filter",
-    "filterRemoved": "Filter removed",
-    "multiroom": "Multiroom",
-    "playerName": "Player name",
-    "role": "Role",
-    "roleLocal": "This device",
-    "roleFollow": "Follow another server",
-    "scan": "Scan for servers",
-    "saved": "Saved"
   }
 }

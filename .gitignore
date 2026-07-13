@@ -1,7 +1,6 @@
 node_modules/
 dist/
 renderer-dist/
-pwa-dist/
 *.log
 .DS_Store
 .vscode/

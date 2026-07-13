@@ -268,8 +268,8 @@
       "revokeAllFailed": "Revoca fallita, riprova."
     },
     "webRemoteIos": {
-      "help": "Inquadra questo QR con la Fotocamera di iPhone/iPad per aprire l'app web Osmium Sound in Safari, poi tocca Condividi → Aggiungi a Home per installarne l'icona. Al primo avvio dell'app potrai abbinarla scansionando il QR \"Companion Android\" qui sopra.",
-      "scanHint": "Inquadra con la Fotocamera (non serve l'app companion)"
+      "help": "Su iPhone/iPad usa LyrPlay, un'app gratuita già disponibile su App Store per controllare Lyrion/Squeezebox: decodifica nativa FLAC/Opus, riproduzione in background, controlli da lock screen, CarPlay e Siri. Inquadra il QR per scaricarla. Nota: DSP, aggiornamenti, riavvio e ruolo multiroom restano gestibili solo dal kiosk.",
+      "scanHint": "Inquadra per aprire LyrPlay su App Store"
     },
     "backup": {
       "help": "Esporta o ripristina la configurazione del dispositivo (DAC, DSP/EQ, sorgenti musicali, puntatore, canale aggiornamenti) da un browser sul telefono o PC. Apri l'indirizzo qui sotto o inquadra il QR code, poi usa \"Scarica backup\" o \"Ripristina da file\".",
@@ -422,81 +422,5 @@
       "shutdownError": "Errore durante lo spegnimento",
       "shutdownSystemError": "Errore durante lo spegnimento del sistema"
     }
-  },
-  "serverConnect": {
-    "subtitle": "Inquadra il QR mostrato dal kiosk (Impostazioni → Telefono)",
-    "scanQr": "Scansiona QR",
-    "orManual": "oppure inserisci l'indirizzo manualmente",
-    "connect": "Connetti",
-    "checking": "Verifica in corso...",
-    "connected": "Connesso",
-    "paired": "Associato — DSP, aggiornamenti e multiroom disponibili",
-    "error": "Server non raggiungibile",
-    "invalidQr": "QR non valido"
-  },
-  "qrScanner": {
-    "title": "Inquadra il QR sul kiosk",
-    "cameraDenied": "Accesso alla fotocamera negato",
-    "insecureContext": "Fotocamera non disponibile su questa connessione. Usa il QR \"iPhone/iPad\" in Impostazioni sul kiosk (si apre con la Fotocamera di sistema) oppure inserisci l'indirizzo a mano."
-  },
-  "addToHome": {
-    "hint": "Tocca Condividi poi \"Aggiungi a Home\" per installare l'icona"
-  },
-  "pwaSettings": {
-    "title": "Impostazioni",
-    "server": "Server",
-    "forgetServer": "Dimentica server",
-    "about": "Informazioni",
-    "language": "Lingua",
-    "appliance": "Dispositivo",
-    "paired": "Associato",
-    "notPaired": "Non associato",
-    "requiresPairing": "Richiede associazione (scansiona il QR dal kiosk)",
-    "updates": "Aggiornamenti",
-    "multiroom": "Multiroom",
-    "systemAdmin": "Sistema"
-  },
-  "applianceScreens": {
-    "systemAdmin": "Sistema",
-    "systemInfo": "Informazioni sistema",
-    "hostname": "Nome host",
-    "uptime": "Uptime",
-    "power": "Alimentazione",
-    "reboot": "Riavvia",
-    "shutdown": "Spegni",
-    "confirmReboot": "Riavviare il sistema?",
-    "rebooting": "Riavvio in corso...",
-    "confirmShutdown": "Spegnere il sistema?",
-    "shuttingDown": "Spegnimento in corso...",
-    "updates": "Aggiornamenti",
-    "channel": "Canale",
-    "channelProd": "Stabile",
-    "channelDev": "Sviluppo",
-    "components": "Componenti",
-    "kind": {
-      "app": "App",
-      "system": "Sistema",
-      "os": "Sistema operativo",
-      "lyrion": "Lyrion"
-    },
-    "update": "Aggiorna",
-    "applying": "Aggiornamento in corso...",
-    "updateAvailable": "Nuova versione disponibile: {version}",
-    "upToDate": "Aggiornato ({version})",
-    "dspEnabled": "DSP attivo",
-    "roomCorrection": "Correzione ambientale",
-    "crossfeed": "Crossfeed",
-    "filter": "Filtro",
-    "filterPresent": "Filtro FIR caricato",
-    "filterAbsent": "Nessun filtro FIR caricato",
-    "removeFilter": "Rimuovi filtro",
-    "filterRemoved": "Filtro rimosso",
-    "multiroom": "Multiroom",
-    "playerName": "Nome player",
-    "role": "Ruolo",
-    "roleLocal": "Questo dispositivo",
-    "roleFollow": "Segui un altro server",
-    "scan": "Cerca server",
-    "saved": "Salvato"
   }
 }

@@ -42,9 +42,6 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build PWA bundle
-        run: npm run build:pwa
-
       - name: Resolve version
         id: ver
         run: |
@@ -74,10 +71,6 @@ jobs:
           mkdir -p "$ROOT/usr/local/bin" "$ROOT/usr/local/sbin" "$ROOT/etc/systemd/system"
           # Python API + daemons
           cp api_server.py vu_meter_daemon.py sources_server.py "$ROOT/usr/local/bin/"
-          # PWA static bundle — served by sources_server.py's /app/ route from
-          # usr/local/bin/pwa-dist (sibling of the script, see hifi-system-update.sh's
-          # recursive `cp -af .../usr/local/bin/. /usr/local/bin/`).
-          cp -r pwa-dist "$ROOT/usr/local/bin/pwa-dist"
           # Helper / OTA scripts
           cp distro/config/includes.chroot/usr/local/sbin/*.sh "$ROOT/usr/local/sbin/"
           # systemd units

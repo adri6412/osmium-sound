@@ -1131,16 +1131,13 @@ const Settings = () => {
   const pairingQrValue = (isUsableIp && pairToken)
     ? JSON.stringify({ lms: webRemoteUrl, api: `${deviceIp}:8080`, token: pairToken })
     : null;
-  // PWA entry-point QR: a bare URL (not JSON) carrying the same lms/api/token
-  // triple as pairingQrValue above, as query params — the iOS Camera app (a
-  // native system app, not a web page) opens it straight in Safari with no
-  // getUserMedia/secure-context concerns, and src/main.pwa.jsx's
-  // seedFromQueryString() picks the params up so the PWA boots already
-  // paired in one scan. Gated on pairToken like the Android QR — no point
-  // showing it before the token exists. Served by sources_server.py's /app/.
-  const pwaAppUrl = (isUsableIp && pairToken)
-    ? `http://${deviceIp}:8080/app/?lms=${encodeURIComponent(webRemoteUrl)}&api=${encodeURIComponent(`${deviceIp}:8080`)}&token=${encodeURIComponent(pairToken)}`
-    : null;
+  // iOS: no custom PWA/companion app — LyrPlay is an existing, actively
+  // maintained App Store client (native FLAC/Opus decode, real background
+  // playback, lock-screen/CarPlay/Siri, LMS player sync) that a bespoke web
+  // app could never match. DSP/OTA/reboot/multiroom-role management stays
+  // kiosk-only; LyrPlay only speaks the standard LMS protocol. Static URL,
+  // no device IP/token involved.
+  const LYRPLAY_APP_STORE_URL = 'https://apps.apple.com/app/lyrplay/id6746776736';
 
   const settingsSections = [
     {
@@ -2094,31 +2091,20 @@ const Settings = () => {
                   </div>
                 )}
 
-                {/* Custom Web-Remote (iPhone/iPad PWA) Section */}
+                {/* Custom Web-Remote (iPhone/iPad → LyrPlay on the App Store) Section */}
                 {section.content === 'custom-web-remote-ios' && (
                   <div className="space-y-4">
                     <p className="text-sm text-hifi-silver">{t('settings.webRemoteIos.help')}</p>
 
-                    {pwaAppUrl ? (
-                      <div className="flex flex-col items-center space-y-3">
-                        <div className="bg-white p-4 rounded-xl">
-                          <QRCodeSVG value={pwaAppUrl} size={200} level="M" />
-                        </div>
-                        <div className="text-center">
-                          <p className="text-xs text-hifi-silver mb-1">{t('settings.webRemoteIos.scanHint')}</p>
-                          <code className="text-sm text-hifi-gold break-all">{pwaAppUrl}</code>
-                        </div>
+                    <div className="flex flex-col items-center space-y-3">
+                      <div className="bg-white p-4 rounded-xl">
+                        <QRCodeSVG value={LYRPLAY_APP_STORE_URL} size={200} level="M" />
                       </div>
-                    ) : webRemoteUrl ? (
-                      <div className="flex flex-col items-center space-y-3 text-hifi-silver text-sm">
-                        <Loader2 size={24} className="animate-spin" />
-                        <span>{t('settings.webRemote.generatingToken')}</span>
+                      <div className="text-center">
+                        <p className="text-xs text-hifi-silver mb-1">{t('settings.webRemoteIos.scanHint')}</p>
+                        <code className="text-sm text-hifi-gold break-all">{LYRPLAY_APP_STORE_URL}</code>
                       </div>
-                    ) : (
-                      <div className="rounded-lg p-3 text-center text-sm bg-hifi-dark text-hifi-silver">
-                        {t('settings.webRemote.noIp')}
-                      </div>
-                    )}
+                    </div>
                   </div>
                 )}
 
