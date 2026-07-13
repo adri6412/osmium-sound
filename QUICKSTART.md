@@ -54,8 +54,6 @@ not on the Play Store. Details at
   (default `http://localhost:9000`) and that the service is running.
 - **Missing streaming/radio sources**: install the corresponding plugin from
   Lyrion's web UI.
-- **Touch screen not responding**: recalibrate the touch screen from the
-  appliance's system Settings.
 - **No audio**: check the selected audio device in Settings and that the
   DAC is recognized.
 

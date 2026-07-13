@@ -55,8 +55,6 @@ nostro repo F-Droid self-hosted — non è sul Play Store. Dettagli su
   Impostazioni (default `http://localhost:9000`) e che il servizio sia attivo.
 - **Sorgenti streaming/radio mancanti**: installa il plugin corrispondente
   dalla web UI di Lyrion.
-- **Touch screen non risponde**: ricalibra il touch screen dalle Impostazioni
-  di sistema dell'appliance.
 - **Audio non funziona**: controlla il dispositivo audio selezionato in
   Impostazioni e che il DAC sia riconosciuto.
 
