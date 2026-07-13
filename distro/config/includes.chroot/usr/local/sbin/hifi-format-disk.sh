@@ -49,20 +49,50 @@ done
 mkdir -p "$(dirname "$STATUS")"
 write_status running 5 "Preparazione disco…"
 
-# Wipe old partition table and create one primary partition.
-write_status running 15 "Cancellazione partizioni…"
-parted -s "$DEVICE" mklabel gpt 2>/dev/null || true
+# Make sure nothing on this disk is mounted or active as swap first — the
+# kernel refuses to let a busy partition table be rewritten.
+for part in $(lsblk -no PATH "$DEVICE" 2>/dev/null | grep -v "^${DEVICE}$"); do
+    mp=$(lsblk -no MOUNTPOINT "$part" 2>/dev/null | head -n1)
+    if [ -n "$mp" ]; then
+        umount -l "$part" 2>/dev/null || true
+    fi
+    swapoff "$part" 2>/dev/null || true
+done
+
+write_status running 10 "Rimozione firme precedenti…"
+# Wipe old filesystem/RAID/LVM signatures on every existing partition and the
+# disk itself. Stale signatures are the usual reason the kernel refuses to
+# re-read a rewritten partition table, which otherwise surfaces as a generic
+# partitioning failure below.
+for part in $(lsblk -no PATH "$DEVICE" 2>/dev/null | grep -v "^${DEVICE}$"); do
+    wipefs -a "$part" >/dev/null 2>&1 || true
+done
+wipefs -a "$DEVICE" >/dev/null 2>&1 || true
 sync
 
-write_status running 30 "Creazione partizione…"
-# Use 100% of the disk; align optimally.
-parted -a optimal -s "$DEVICE" mkpart primary 0% 100% || fail "partition creation failed"
+# Create a fresh GPT label with a single partition spanning the whole disk.
+# Uses sfdisk (util-linux, always present) rather than parted, which is not
+# part of this appliance's package set.
+write_status running 20 "Creazione tabella partizioni…"
+SFDISK_ERR=$(printf 'label: gpt\n,,\n' | sfdisk --wipe always --quiet "$DEVICE" 2>&1) \
+    || fail "creazione partizione fallita: $(printf '%s' "$SFDISK_ERR" | tr '\n' ' ' | cut -c1-200)"
+# blockdev/udevadm are util-linux/systemd — no dependency on the parted package.
+blockdev --rereadpt "$DEVICE" 2>/dev/null || true
+udevadm settle --timeout=10 2>/dev/null || true
 sync
 
-# Find the newly created partition.
-PART=$(lsblk -no PATH "$DEVICE" | grep -v "^${DEVICE}$" | head -n1)
-[ -n "$PART" ] || fail "could not find created partition"
-[ -b "$PART" ] || fail "partition is not a block device: $PART"
+# Find the newly created partition (udev can lag briefly behind sfdisk).
+PART=""
+i=0
+while [ "$i" -lt 10 ]; do
+    PART=$(lsblk -no PATH "$DEVICE" 2>/dev/null | grep -v "^${DEVICE}$" | head -n1)
+    if [ -n "$PART" ] && [ -b "$PART" ]; then
+        break
+    fi
+    i=$((i + 1))
+    sleep 1
+done
+[ -n "$PART" ] && [ -b "$PART" ] || fail "could not find created partition"
 
 write_status running 50 "Formattazione $FS…"
 case "$FS" in
