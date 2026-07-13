@@ -282,7 +282,9 @@ export function useLyrionPlayer() {
     }
     if (view === 'plugin_items') {
       const r = await lyrionApi.getPluginItems(activePlayer?.playerid, params.pluginCmd, 9999, 0, params.itemId);
-      return r?.item_loop || r?.[`${params.pluginCmd}_loop`] || [];
+      // Radio/Apps plugin sub-menus (xmlbrowser "<cmd> items") reply under
+      // "loop_loop" regardless of cmd — same LMS naming quirk as radioss_loop.
+      return r?.loop_loop || r?.item_loop || r?.[`${params.pluginCmd}_loop`] || [];
     }
     return [];
   };
