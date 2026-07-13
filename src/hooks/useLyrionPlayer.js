@@ -258,7 +258,9 @@ export function useLyrionPlayer() {
     if (view === 'folders')      { const r = await lyrionApi.getMusicFolders(params?.folderId); return r?.folder_loop || []; }
     if (view === 'playlists')    { const r = await lyrionApi.getPlaylists(); return r?.playlists_loop || []; }
     if (view === 'playlist_tracks') { const r = await lyrionApi.getPlaylistTracks(params?.playlistId); return r?.playlisttracks_loop || []; }
-    if (view === 'radios')       { const r = await lyrionApi.getRadios(activePlayer?.playerid); return r?.radios_loop || []; }
+    // LMS's `radios` command replies under "radioss_loop" (double s, an
+    // upstream quirk) rather than "radios_loop" — same story as appss_loop below.
+    if (view === 'radios')       { const r = await lyrionApi.getRadios(activePlayer?.playerid); return r?.radioss_loop || r?.radios_loop || []; }
     if (view === 'apps')         { const r = await lyrionApi.getApps(activePlayer?.playerid); return r?.appss_loop || r?.apps_loop || []; }
     if (view === 'menu_home') {
       // The full Lyrion home menu, filtered to the top-level "app"-like entries
