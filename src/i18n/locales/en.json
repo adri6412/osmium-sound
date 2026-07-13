@@ -48,6 +48,8 @@
       "format": "Format…",
       "adopting": "Mounting…",
       "adopted": "Source added ✓",
+      "remove": "Remove",
+      "removed": "Removed ✓",
       "wizardTitle": "Format disk",
       "fsLabel": "Filesystem",
       "fsExt4": "ext4 (recommended)",

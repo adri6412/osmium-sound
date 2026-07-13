@@ -300,6 +300,16 @@ export default function InternalDisks({ onSourcesChanged }) {
     } catch (_) { setMsg(t('common.error')); } finally { setBusy(false); }
   };
 
+  const removeSource = async (sourceId) => {
+    if (!sourceId) return;
+    setBusy(true);
+    try {
+      await j('/api/sources/' + sourceId, { method: 'DELETE' });
+      setMsg(t('sources.internal.removed'));
+      notifyChanged();
+    } catch (_) { setMsg(t('common.error')); } finally { setBusy(false); }
+  };
+
   const hasAdoptedShares = smb && Array.isArray(smb.shares) && smb.shares.length > 0;
 
   return (
@@ -330,7 +340,17 @@ export default function InternalDisks({ onSourcesChanged }) {
                     {d.path}{d.fstype ? ` · ${d.fstype}` : ''}{d.label ? ` · ${d.label}` : ''}
                   </div>
                 </div>
-                {!d.adopted && (
+                {d.adopted ? (
+                  <div className="flex gap-2 shrink-0">
+                    <button
+                      onClick={() => removeSource(d.source_id)}
+                      disabled={busy}
+                      className="text-xs bg-red-900/30 hover:bg-red-900/60 text-red-300 py-1.5 px-3 rounded-md"
+                    >
+                      {t('sources.internal.remove')}
+                    </button>
+                  </div>
+                ) : (
                   <div className="flex gap-2 shrink-0">
                     {fsPartitions.length === 1 && (
                       <button

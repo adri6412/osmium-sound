@@ -48,6 +48,8 @@
       "format": "Formatta…",
       "adopting": "Montaggio…",
       "adopted": "Sorgente aggiunta ✓",
+      "remove": "Rimuovi",
+      "removed": "Rimossa ✓",
       "wizardTitle": "Formatta disco",
       "fsLabel": "Filesystem",
       "fsExt4": "ext4 (consigliato)",

@@ -373,15 +373,32 @@ def _create_samba_user():
     password = cred.get("password")
     if not password:
         password = secrets.token_urlsafe(9)
-        os.makedirs(os.path.dirname(SAMBA_CRED_FILE), exist_ok=True)
-        tmp = SAMBA_CRED_FILE + ".tmp"
-        with open(tmp, "w") as f:
-            json.dump({"username": SAMBA_USER, "password": password}, f)
-        os.chmod(tmp, 0o600)
-        os.replace(tmp, SAMBA_CRED_FILE)
-    # Ensure the Samba password record matches.
-    _run(["bash", "-c", f'printf "%s\\n%s\\n" "{password}" "{password}" | smbpasswd -s -a {SAMBA_USER}'],
-         timeout=10)
+        cred = {"username": SAMBA_USER, "password": password, "synced": False}
+
+    # Only re-run smbpasswd when we haven't confirmed it actually took — a
+    # transient failure here must not leave the credential file showing a
+    # password Samba never accepted (which is exactly what happened before:
+    # the smbpasswd call's result was discarded, so a failure was silent).
+    if not cred.get("synced"):
+        try:
+            r = subprocess.run(
+                ["smbpasswd", "-s", "-a", SAMBA_USER],
+                input=f"{password}\n{password}\n", text=True,
+                capture_output=True, timeout=10,
+            )
+            cred["synced"] = r.returncode == 0
+            if r.returncode != 0:
+                print(f"[sources] smbpasswd failed for {SAMBA_USER}: {(r.stderr or r.stdout).strip()}")
+        except Exception as e:
+            cred["synced"] = False
+            print(f"[sources] smbpasswd error for {SAMBA_USER}: {e}")
+
+    os.makedirs(os.path.dirname(SAMBA_CRED_FILE), exist_ok=True)
+    tmp = SAMBA_CRED_FILE + ".tmp"
+    with open(tmp, "w") as f:
+        json.dump(cred, f)
+    os.chmod(tmp, 0o600)
+    os.replace(tmp, SAMBA_CRED_FILE)
     return password
 
 

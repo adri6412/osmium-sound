@@ -40,10 +40,6 @@ if [ -d /etc/samba ]; then
    max log size = 1000
    socket options = TCP_NODELAY IPTOS_LOWDELAY
    min protocol = SMB2
-   vfs objects = recycle
-   recycle:repository = .recycle
-   recycle:keeptree = yes
-   recycle:versions = yes
 
 include = /etc/samba/hifi-shares.conf
 EOF
@@ -58,5 +54,9 @@ EOF
 
     if migration_changed; then
         systemctl daemon-reload 2>/dev/null || true
+        # Pick up smb.conf changes on an already-provisioned appliance
+        # (e.g. this migration correcting a bad global option) without
+        # requiring a manual reload or reboot.
+        systemctl reload smbd 2>/dev/null || true
     fi
 fi
