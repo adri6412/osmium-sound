@@ -175,6 +175,15 @@ cat > "$EFI_APT_HOOK_DIR/99-hifi-fix-efi-boot" <<'EOF'
 DPkg::Post-Invoke { "test -x /usr/local/sbin/hifi-fix-efi-boot.sh && /usr/local/sbin/hifi-fix-efi-boot.sh; true"; };
 EOF
 
+log "Injecting Samba base config → includes.chroot/etc/samba/smb.conf"
+SAMBA_DEST_DIR="$CONFIG/includes.chroot/etc/samba"
+mkdir -p "$SAMBA_DEST_DIR"
+cp -f "$REPO_ROOT/distro/config/includes.chroot/etc/samba/smb.conf" "$SAMBA_DEST_DIR/smb.conf"
+sed -i 's/\r$//' "$SAMBA_DEST_DIR/smb.conf"
+chmod 644 "$SAMBA_DEST_DIR/smb.conf"
+: > "$SAMBA_DEST_DIR/hifi-shares.conf"
+chmod 644 "$SAMBA_DEST_DIR/hifi-shares.conf"
+
 log "Injecting python daemons → includes.chroot/usr/local/bin"
 BIN_DEST="$CONFIG/includes.chroot/usr/local/bin"
 mkdir -p "$BIN_DEST"
@@ -183,6 +192,13 @@ cp -f "$REPO_ROOT/vu_meter_daemon.py" "$BIN_DEST/"
 cp -f "$REPO_ROOT/sources_server.py"  "$BIN_DEST/"
 sed -i 's/\r$//' "$BIN_DEST/api_server.py" "$BIN_DEST/vu_meter_daemon.py" "$BIN_DEST/sources_server.py"
 chmod +x "$BIN_DEST/api_server.py" "$BIN_DEST/vu_meter_daemon.py" "$BIN_DEST/sources_server.py"
+
+log "Injecting helper scripts → includes.chroot/usr/local/sbin"
+SBIN_DEST="$CONFIG/includes.chroot/usr/local/sbin"
+mkdir -p "$SBIN_DEST"
+cp -f "$REPO_ROOT/distro/config/includes.chroot/usr/local/sbin/hifi-format-disk.sh" "$SBIN_DEST/"
+sed -i 's/\r$//' "$SBIN_DEST/hifi-format-disk.sh"
+chmod +x "$SBIN_DEST/hifi-format-disk.sh"
 
 # Seed the installed system-components version (baseline for OTA comparison),
 # matching the UI version so a fresh image reports a real baseline.

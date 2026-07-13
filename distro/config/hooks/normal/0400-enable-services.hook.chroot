@@ -24,6 +24,9 @@ systemctl enable hifi-firstboot.service || true
 echo "I: [hifi] SSH installed but OFF by default (user enables it from Settings)"
 systemctl disable ssh.service || true
 
+echo "I: [hifi] Samba installed but OFF by default (enabled when an internal disk is adopted)"
+systemctl disable smbd.service nmbd.service || true
+
 echo "I: [hifi] disabling getty on tty1 (no text console flashes)"
 systemctl mask getty@tty1.service || true
 

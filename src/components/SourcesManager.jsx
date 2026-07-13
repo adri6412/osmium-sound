@@ -3,6 +3,7 @@ import { motion } from 'framer-motion';
 import { Usb, FolderPlus, Network, Trash2, Loader2, Plus, FolderOpen } from 'lucide-react';
 import { useI18n } from '../i18n';
 import { useKeyboardInput } from '../hooks/useKeyboardInput';
+import InternalDisks from './InternalDisks';
 
 // The on-device sources manager (mount/list SMB + USB + local folders) runs as a
 // small HTTP service on the appliance itself. Talk to it natively so the UI
@@ -111,14 +112,16 @@ export default function SourcesManager() {
           )}
           {sources.map((s) => {
             const smbType = s.type === 'smb';
-            const sub = smbType ? `//${s.server}/${s.share} → ${s.mountpoint}` : s.path;
-            const ok = smbType ? s.mounted : s.exists;
+            const internalType = s.type === 'internal';
+            const sub = smbType ? `//${s.server}/${s.share} → ${s.mountpoint}` : internalType ? s.mountpoint : s.path;
+            const ok = smbType || internalType ? s.mounted : s.exists;
+            const tag = smbType ? 'SMB' : internalType ? t('sources.internal.tag') : t('sources.local');
             return (
               <div key={s.id} className="flex items-center justify-between bg-hifi-dark rounded-lg p-3">
                 <div className="min-w-0">
                   <div className="text-white text-sm truncate">
                     {s.name}
-                    <span className="ml-2 text-[10px] uppercase tracking-wide text-hifi-gold/80">{smbType ? 'SMB' : t('sources.local')}</span>
+                    <span className="ml-2 text-[10px] uppercase tracking-wide text-hifi-gold/80">{tag}</span>
                   </div>
                   <div className={`text-xs truncate ${ok ? 'text-hifi-silver/70' : 'text-red-400'}`}>{sub}</div>
                 </div>
@@ -168,6 +171,9 @@ export default function SourcesManager() {
           ))}
         </div>
       </div>
+
+      {/* Internal disks (adopt existing / format) */}
+      <InternalDisks onSourcesChanged={loadSources} />
 
       {/* Add local folder */}
       <div>

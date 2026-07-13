@@ -92,8 +92,14 @@ python3-yaml
 # low on the mini-PC.
 python3-numpy
 
-# Network shares (SMB mounting for music sources)
+# Network shares (SMB mounting for music sources + serving internal disks)
 cifs-utils
+samba
+exfatprogs
+
+# mDNS/Bonjour discovery (also installed via OTA 0016 on existing systems, but
+# fresh ISOs should ship it too so \\hifiplayer.local resolves out of the box)
+avahi-daemon
 
 # Lyrion Music Server runtime dependencies (the .deb is installed via hook 0050)
 perl
