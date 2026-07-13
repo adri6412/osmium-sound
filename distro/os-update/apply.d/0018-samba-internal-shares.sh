@@ -5,12 +5,18 @@
 # from a PC. sources_server.py writes the per-disk share definitions to
 # /etc/samba/hifi-shares.conf and reloads smbd. This migration only installs the
 # package and the static base config once.
+#
+# Both file writes are gated on /etc/samba actually existing: if ensure_pkg
+# couldn't install samba this run (no network, HIFI_OS_NO_APT in the CI
+# idempotency test, ...), there is nothing to configure yet — skip cleanly and
+# let the next OTA run retry the install and the config seeding together.
 
 ensure_pkg samba || true
 ensure_pkg exfatprogs || true
 
-UNIT=/etc/samba/smb.conf
-ensure_file_content "$UNIT" 644 root:root <<'EOF'
+if [ -d /etc/samba ]; then
+    UNIT=/etc/samba/smb.conf
+    ensure_file_content "$UNIT" 644 root:root <<'EOF'
 # HiFi Player — Samba configuration.
 # Shares are added dynamically by sources_server.py via the included file
 # /etc/samba/hifi-shares.conf. Do not edit by hand.
@@ -42,14 +48,15 @@ ensure_file_content "$UNIT" 644 root:root <<'EOF'
 include = /etc/samba/hifi-shares.conf
 EOF
 
-SHARES=/etc/samba/hifi-shares.conf
-if [ ! -f "$SHARES" ]; then
-    : > "$SHARES"
-    chmod 644 "$SHARES"
-    chown root:root "$SHARES"
-    mark_changed "created $SHARES"
-fi
+    SHARES=/etc/samba/hifi-shares.conf
+    if [ ! -f "$SHARES" ]; then
+        : > "$SHARES"
+        chmod 644 "$SHARES"
+        chown root:root "$SHARES"
+        mark_changed "created $SHARES"
+    fi
 
-if migration_changed; then
-    systemctl daemon-reload 2>/dev/null || true
+    if migration_changed; then
+        systemctl daemon-reload 2>/dev/null || true
+    fi
 fi
