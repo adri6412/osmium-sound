@@ -178,8 +178,12 @@ EOF
 log "Injecting Samba base config → includes.chroot/etc/samba/smb.conf"
 SAMBA_DEST_DIR="$CONFIG/includes.chroot/etc/samba"
 mkdir -p "$SAMBA_DEST_DIR"
-cp -f "$REPO_ROOT/distro/config/includes.chroot/etc/samba/smb.conf" "$SAMBA_DEST_DIR/smb.conf"
-sed -i 's/\r$//' "$SAMBA_DEST_DIR/smb.conf"
+# SAMBA_DEST_DIR already IS $REPO_ROOT/distro/config/includes.chroot/etc/samba
+# (CONFIG = $SCRIPT_DIR/config = $REPO_ROOT/distro/config) — the file is
+# already in place via includes.chroot, so there is nothing to copy; a
+# self-copy here makes `cp` fail ("same file"). Line-ending normalization for
+# every config text file (this one included) already runs earlier in this
+# script, so only permissions need setting.
 chmod 644 "$SAMBA_DEST_DIR/smb.conf"
 : > "$SAMBA_DEST_DIR/hifi-shares.conf"
 chmod 644 "$SAMBA_DEST_DIR/hifi-shares.conf"
