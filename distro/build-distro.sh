@@ -200,8 +200,10 @@ chmod +x "$BIN_DEST/api_server.py" "$BIN_DEST/vu_meter_daemon.py" "$BIN_DEST/sou
 log "Injecting helper scripts → includes.chroot/usr/local/sbin"
 SBIN_DEST="$CONFIG/includes.chroot/usr/local/sbin"
 mkdir -p "$SBIN_DEST"
-cp -f "$REPO_ROOT/distro/config/includes.chroot/usr/local/sbin/hifi-format-disk.sh" "$SBIN_DEST/"
-sed -i 's/\r$//' "$SBIN_DEST/hifi-format-disk.sh"
+# SBIN_DEST already IS $REPO_ROOT/distro/config/includes.chroot/usr/local/sbin
+# — same self-copy pitfall as the smb.conf injection above. The file is
+# already in place and already CRLF-normalized by the earlier repo-wide sed
+# pass; only the exec bit needs setting.
 chmod +x "$SBIN_DEST/hifi-format-disk.sh"
 
 # Seed the installed system-components version (baseline for OTA comparison),
