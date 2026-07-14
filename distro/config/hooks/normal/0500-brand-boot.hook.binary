@@ -36,7 +36,14 @@ KERNEL="$(printf '%s' "$KPATH" | sed 's|^\.||')"
 INITRD="$(printf '%s' "$IPATH" | sed 's|^\.||')"
 [ -n "$INITRD" ] || INITRD="${KERNEL%/*}/initrd.gz"
 
-APPEND="vga=788 auto=true priority=critical preseed/file=/preseed.cfg --- quiet"
+# priority=critical would suppress EVERY debconf question below "critical",
+# including partman-auto/disk (the disk-selection prompt, priority "high") —
+# so the installer picked a disk silently instead of ever asking, even with
+# partman-auto/disk left unset in preseed.cfg for exactly that purpose.
+# priority=high still auto-answers everything else in preseed.cfg (all of
+# it has an explicit preseeded value at those priorities) and only leaves
+# the deliberately-unanswered disk question to actually prompt.
+APPEND="vga=788 auto=true priority=high preseed/file=/preseed.cfg --- quiet"
 echo "I: [hifi] installer kernel=$KERNEL initrd=$INITRD"
 
 # ─────────── locate the LIVE kernel + initrd on the ISO (optional) ─
