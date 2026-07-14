@@ -7,7 +7,10 @@
 # The actual debian-installer directory on the ISO varies by version/arch
 # (e.g. /install, /install.amd, /d-i/...). Hardcoding it broke booting with
 # "vmlinuz not found". So we AUTODETECT where vmlinuz/initrd.gz really live and
-# write a single, branded, preseeded "Install HiFi Player" entry for both
+# write a branded, preseeded "Install Osmium Sound" entry (default) plus a
+# "Try Osmium Sound (no install)" entry that just boots the live squashfs
+# already on the ISO (built in because --debian-installer live is required —
+# see the comment above the `lb config` call in build-distro.sh), for both
 # isolinux (BIOS) and grub (UEFI), plus apply the gold-on-black look.
 set -e
 
@@ -36,9 +39,30 @@ INITRD="$(printf '%s' "$IPATH" | sed 's|^\.||')"
 APPEND="vga=788 auto=true priority=critical preseed/file=/preseed.cfg --- quiet"
 echo "I: [hifi] installer kernel=$KERNEL initrd=$INITRD"
 
+# ─────────── locate the LIVE kernel + initrd on the ISO (optional) ─
+# Standard live-build layout puts these under /live/. Same autodetect
+# approach as the installer above: if not found, we just skip the live
+# menu entry instead of failing the whole build.
+LKPATH="$(find . -maxdepth 2 -type f \( -name 'vmlinuz' -o -name 'vmlinuz.*' -o -name 'linux' \) \
+            -path '*live*' 2>/dev/null | head -n1 || true)"
+if [ -n "$LKPATH" ]; then
+    LKDIR="$(dirname "$LKPATH")"
+    LIPATH="$(find "$LKDIR" -maxdepth 1 -type f \( -name 'initrd.img' -o -name 'initrd.gz' -o -name 'initrd' \) 2>/dev/null | head -n1 || true)"
+    LIVE_KERNEL="$(printf '%s' "$LKPATH" | sed 's|^\.||')"
+    LIVE_INITRD="$(printf '%s' "$LIPATH" | sed 's|^\.||')"
+    [ -n "$LIVE_INITRD" ] || LIVE_KERNEL=""   # need both or neither
+fi
+# NOTE: keep this in sync with --bootappend-live in build-distro.sh's lb config.
+LIVE_APPEND="boot=live components quiet splash loglevel=0 vt.global_cursor_default=0 hostname=hifiplayer"
+if [ -n "$LIVE_KERNEL" ]; then
+    echo "I: [hifi] live kernel=$LIVE_KERNEL initrd=$LIVE_INITRD"
+else
+    echo "W: [hifi] no live vmlinuz found — 'Try without installing' entry will be omitted"
+fi
+
 # ─────────────────────────── isolinux / BIOS ───────────────────────
 if [ -d isolinux ]; then
-    # One branded, preseeded install entry with the DETECTED paths.
+    # Branded, preseeded install entry (default) with the DETECTED paths.
     cat > isolinux/menu.cfg <<EOF
 menu title Osmium Sound
 menu background splash.png
@@ -62,6 +86,16 @@ label install
     kernel $KERNEL
     append initrd=$INITRD $APPEND
 EOF
+
+    if [ -n "$LIVE_KERNEL" ]; then
+        cat >> isolinux/menu.cfg <<EOF
+
+label live
+    menu label ^Try Osmium Sound (no install)
+    kernel $LIVE_KERNEL
+    append initrd=$LIVE_INITRD $LIVE_APPEND
+EOF
+    fi
 
     cat > isolinux/isolinux.cfg <<'EOF'
 include menu.cfg
@@ -101,6 +135,15 @@ menuentry "Install Osmium Sound" {
     initrd $INITRD
 }
 EOF
+    if [ -n "$LIVE_KERNEL" ]; then
+        cat >> "$gcfg" <<EOF
+
+menuentry "Try Osmium Sound (no install)" {
+    linux  $LIVE_KERNEL $LIVE_APPEND
+    initrd $LIVE_INITRD
+}
+EOF
+    fi
 done
 
 echo "I: [hifi] installer boot branding done"
