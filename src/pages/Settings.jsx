@@ -45,6 +45,13 @@ const isErrorMsg = (m) =>
 const DSP_BAND_TYPES = ['Peaking', 'Lowshelf', 'Highshelf', 'Highpass', 'Lowpass'];
 const DSP_BAND_TYPES_NO_GAIN = new Set(['Highpass', 'Lowpass']);
 
+// 10-band graphic EQ (default, touch-friendly view) — each slider is a fixed
+// Peaking band at one of these centers/Q. "Avanzate" swaps in the full
+// parametric editor (arbitrary freq/gain/Q, shelf/highpass/lowpass) below.
+const GRAPHIC_EQ_BANDS = [31, 62, 125, 250, 500, 1000, 2000, 4000, 8000, 16000];
+const GRAPHIC_EQ_LABELS = { 31: '31', 62: '62', 125: '125', 250: '250', 500: '500', 1000: '1k', 2000: '2k', 4000: '4k', 8000: '8k', 16000: '16k' };
+const GRAPHIC_EQ_Q = 1.41;
+
 // Maps the built-in preset names api_server.py returns (stable API identifiers)
 // to i18n keys for their display label — keeps the wire name English/stable
 // while showing a localized label.
@@ -118,6 +125,7 @@ const Settings = () => {
   const [firStatus, setFirStatus] = useState(null); // { present, filename, size } from the :8080 sources service
   const [dspBusy, setDspBusy] = useState(false);
   const [dspMessage, setDspMessage] = useState('');
+  const [dspEqView, setDspEqView] = useState('graphic'); // 'graphic' (default) | 'advanced'
 
   // DSP presets (named snapshots of bands/crossfeed/room_correction/balance)
   const [dspPresets, setDspPresets] = useState([]); // [{name, builtin, active, bands, crossfeed, room_correction, balance}]
@@ -622,6 +630,25 @@ const Settings = () => {
   };
   const addBand = () => setDspBands((b) => [...b, { type: 'Peaking', freq: 1000, gain: 0, q: 1.0 }]);
   const removeBand = (i) => setDspBands((b) => b.filter((_, idx) => idx !== i));
+
+  // Graphic EQ: read/write a fixed-frequency Peaking band's gain within
+  // dspBands without disturbing any other band (e.g. shelf filters loaded
+  // from a preset, or bands added in the advanced editor) — those just don't
+  // get a slider here, they stay untouched and keep applying.
+  const graphicBandGain = (freq) => {
+    const b = dspBands.find((x) => x.type === 'Peaking' && x.freq === freq);
+    return b ? (b.gain ?? 0) : 0;
+  };
+  const setGraphicBandGain = (freq, gain) => {
+    setDspBands((bands) => {
+      const idx = bands.findIndex((b) => b.type === 'Peaking' && b.freq === freq);
+      if (idx === -1) {
+        if (gain === 0) return bands; // untouched slider at 0dB — no band needed
+        return [...bands, { type: 'Peaking', freq, gain, q: GRAPHIC_EQ_Q }];
+      }
+      return bands.map((b, i) => (i === idx ? { ...b, gain } : b));
+    });
+  };
 
   // ── DSP preset handlers ─────────────────────────────────────────
   const applyPreset = async (name) => {
@@ -1754,63 +1781,103 @@ const Settings = () => {
                           </div>
                         )}
 
-                        {/* Parametric EQ bands */}
+                        {/* EQ — graphic (default, touch-friendly) or parametric ("Avanzate") */}
                         <div className="space-y-2">
                           <div className="flex items-center justify-between">
                             <span className="text-sm text-white">{t('settings.dsp.bands')}</span>
-                            <button
-                              onClick={addBand}
-                              className="flex items-center space-x-1 text-xs text-hifi-gold hover:text-hifi-gold/80"
-                            >
-                              <Plus size={14} /><span>{t('settings.dsp.addBand')}</span>
-                            </button>
+                            <div className="flex items-center gap-2">
+                              {dspEqView === 'advanced' && (
+                                <button
+                                  onClick={addBand}
+                                  className="flex items-center space-x-1 text-xs text-hifi-gold hover:text-hifi-gold/80"
+                                >
+                                  <Plus size={14} /><span>{t('settings.dsp.addBand')}</span>
+                                </button>
+                              )}
+                              <div className="flex bg-hifi-dark rounded-full p-0.5">
+                                {['graphic', 'advanced'].map((v) => (
+                                  <button
+                                    key={v}
+                                    onClick={() => setDspEqView(v)}
+                                    className={`text-xs px-3 py-1 rounded-full transition-colors ${
+                                      dspEqView === v ? 'bg-hifi-gold text-black' : 'text-hifi-silver hover:text-white'
+                                    }`}
+                                  >
+                                    {t(v === 'graphic' ? 'settings.dsp.eqGraphic' : 'settings.dsp.eqAdvanced')}
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
                           </div>
 
-                          {dspBands.length === 0 && (
-                            <p className="text-xs text-hifi-silver">{t('settings.dsp.noBands')}</p>
-                          )}
-
-                          {dspBands.map((b, i) => {
-                            const btype = b.type || 'Peaking';
-                            const hasGain = !DSP_BAND_TYPES_NO_GAIN.has(btype);
-                            return (
-                            <div key={i} className="flex items-center gap-2 bg-hifi-dark rounded-lg p-2 flex-wrap">
-                              <label className="flex flex-col text-[10px] text-hifi-silver">
-                                {t('settings.dsp.type')}
-                                <select value={btype}
-                                  onChange={(e) => updateBandType(i, e.target.value)}
-                                  className="w-28 bg-hifi-light text-white text-sm rounded px-2 py-1">
-                                  {DSP_BAND_TYPES.map((tp) => (
-                                    <option key={tp} value={tp}>{t(`settings.dsp.type${tp}`)}</option>
-                                  ))}
-                                </select>
-                              </label>
-                              <label className="flex flex-col text-[10px] text-hifi-silver">
-                                {t('settings.dsp.freq')}
-                                <input type="number" value={b.freq} min={20} max={20000}
-                                  onChange={(e) => updateBand(i, 'freq', Number(e.target.value))}
-                                  className="w-20 bg-hifi-light text-white text-sm rounded px-2 py-1" />
-                              </label>
-                              {hasGain && (
-                                <label className="flex flex-col text-[10px] text-hifi-silver">
-                                  {t('settings.dsp.gain')}
-                                  <input type="number" value={b.gain ?? 0} min={-24} max={24} step={0.5}
-                                    onChange={(e) => updateBand(i, 'gain', Number(e.target.value))}
-                                    className="w-16 bg-hifi-light text-white text-sm rounded px-2 py-1" />
-                                </label>
-                              )}
-                              <label className="flex flex-col text-[10px] text-hifi-silver">
-                                {t('settings.dsp.q')}
-                                <input type="number" value={b.q} min={0.1} max={10} step={0.1}
-                                  onChange={(e) => updateBand(i, 'q', Number(e.target.value))}
-                                  className="w-16 bg-hifi-light text-white text-sm rounded px-2 py-1" />
-                              </label>
-                              <button onClick={() => removeBand(i)} className="ml-auto text-red-400 hover:text-red-300 p-1">
-                                <Trash2 size={16} />
-                              </button>
+                          {dspEqView === 'graphic' ? (
+                            <div className="flex items-end justify-between gap-1 bg-hifi-dark rounded-lg p-3">
+                              {GRAPHIC_EQ_BANDS.map((freq) => {
+                                const gain = graphicBandGain(freq);
+                                return (
+                                  <div key={freq} className="flex flex-col items-center gap-1 flex-1">
+                                    <span className="text-[10px] text-hifi-silver tabular-nums">
+                                      {gain > 0 ? `+${gain}` : gain}
+                                    </span>
+                                    <input
+                                      type="range" className="eq-slider" min={-12} max={12} step={0.5}
+                                      value={gain}
+                                      onChange={(e) => setGraphicBandGain(freq, Number(e.target.value))}
+                                    />
+                                    <span className="text-[10px] text-hifi-silver">{GRAPHIC_EQ_LABELS[freq]}</span>
+                                  </div>
+                                );
+                              })}
                             </div>
-                            );
-                          })}
+                          ) : (
+                            <>
+                              {dspBands.length === 0 && (
+                                <p className="text-xs text-hifi-silver">{t('settings.dsp.noBands')}</p>
+                              )}
+
+                              {dspBands.map((b, i) => {
+                                const btype = b.type || 'Peaking';
+                                const hasGain = !DSP_BAND_TYPES_NO_GAIN.has(btype);
+                                return (
+                                <div key={i} className="flex items-center gap-2 bg-hifi-dark rounded-lg p-2 flex-wrap">
+                                  <label className="flex flex-col text-[10px] text-hifi-silver">
+                                    {t('settings.dsp.type')}
+                                    <select value={btype}
+                                      onChange={(e) => updateBandType(i, e.target.value)}
+                                      className="w-28 bg-hifi-light text-white text-sm rounded px-2 py-1">
+                                      {DSP_BAND_TYPES.map((tp) => (
+                                        <option key={tp} value={tp}>{t(`settings.dsp.type${tp}`)}</option>
+                                      ))}
+                                    </select>
+                                  </label>
+                                  <label className="flex flex-col text-[10px] text-hifi-silver">
+                                    {t('settings.dsp.freq')}
+                                    <input type="number" value={b.freq} min={20} max={20000}
+                                      onChange={(e) => updateBand(i, 'freq', Number(e.target.value))}
+                                      className="w-20 bg-hifi-light text-white text-sm rounded px-2 py-1" />
+                                  </label>
+                                  {hasGain && (
+                                    <label className="flex flex-col text-[10px] text-hifi-silver">
+                                      {t('settings.dsp.gain')}
+                                      <input type="number" value={b.gain ?? 0} min={-24} max={24} step={0.5}
+                                        onChange={(e) => updateBand(i, 'gain', Number(e.target.value))}
+                                        className="w-16 bg-hifi-light text-white text-sm rounded px-2 py-1" />
+                                    </label>
+                                  )}
+                                  <label className="flex flex-col text-[10px] text-hifi-silver">
+                                    {t('settings.dsp.q')}
+                                    <input type="number" value={b.q} min={0.1} max={10} step={0.1}
+                                      onChange={(e) => updateBand(i, 'q', Number(e.target.value))}
+                                      className="w-16 bg-hifi-light text-white text-sm rounded px-2 py-1" />
+                                  </label>
+                                  <button onClick={() => removeBand(i)} className="ml-auto text-red-400 hover:text-red-300 p-1">
+                                    <Trash2 size={16} />
+                                  </button>
+                                </div>
+                                );
+                              })}
+                            </>
+                          )}
                         </div>
 
                         {/* Crossfeed */}

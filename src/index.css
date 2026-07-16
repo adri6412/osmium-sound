@@ -305,6 +305,31 @@ input[type=range].vol-slider::-webkit-slider-thumb {
   box-shadow: 0 0 5px rgba(212,175,55,0.5);
 }
 
+/* Graphic EQ — vertical gain sliders, one per fixed band (Settings → DSP).
+   -webkit-appearance: slider-vertical is Chromium-only, which is fine: this
+   app only ever runs inside the Electron kiosk. */
+input[type=range].eq-slider {
+  -webkit-appearance: slider-vertical;
+  width: 22px;
+  height: 110px;
+  background: transparent;
+  cursor: pointer;
+}
+input[type=range].eq-slider::-webkit-slider-runnable-track {
+  width: 3px;
+  border-radius: 2px;
+  background: #252525;
+}
+input[type=range].eq-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #d4af37;
+  cursor: pointer;
+  box-shadow: 0 0 5px rgba(212,175,55,0.5);
+}
+
 /* Optimize touch targets for 1024x600 resolution */
 @media (max-width: 1024px) and (max-height: 600px) {
   /* Ensure buttons are at least 44px for touch */
