@@ -306,17 +306,21 @@ input[type=range].vol-slider::-webkit-slider-thumb {
 }
 
 /* Graphic EQ — vertical gain sliders, one per fixed band (Settings → DSP).
-   -webkit-appearance: slider-vertical is Chromium-only, which is fine: this
-   app only ever runs inside the Electron kiosk. */
+   writing-mode + direction is the standards-track way to get a vertical
+   range input (the older -webkit-appearance: slider-vertical is
+   non-standard and Chromium warns it may be removed). */
 input[type=range].eq-slider {
-  -webkit-appearance: slider-vertical;
+  writing-mode: vertical-lr;
+  direction: rtl;
+  appearance: none;
+  -webkit-appearance: none;
   width: 22px;
   height: 110px;
   background: transparent;
   cursor: pointer;
 }
 input[type=range].eq-slider::-webkit-slider-runnable-track {
-  width: 3px;
+  height: 3px;
   border-radius: 2px;
   background: #252525;
 }

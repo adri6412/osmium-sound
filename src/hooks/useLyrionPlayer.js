@@ -347,7 +347,15 @@ export function useLyrionPlayer() {
   };
 
   const handlePlayItem = (type, id) => {
-    if (!activePlayer) return;
+    // Diagnostic: this used to bail out silently with no visible trace when
+    // activePlayer was stale/null, which was indistinguishable in the logs
+    // from "nothing was clicked". Log both branches so a failed Play attempt
+    // always leaves a trace in renderer-console.log.
+    if (!activePlayer) {
+      console.warn('handlePlayItem: no activePlayer, ignoring', { type, id });
+      return;
+    }
+    console.warn('handlePlayItem: sending playItem', { type, id, playerid: activePlayer.playerid });
     handleAction(() => lyrionApi.playItem(activePlayer.playerid, type, id));
   };
 
