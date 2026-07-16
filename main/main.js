@@ -12,6 +12,18 @@ const __dirname = dirname(__filename);
 
 let mainWindow;
 
+// Same sink the renderer's console-message listener writes to (see below) —
+// main-process events (recovery reloads, load failures) land in the same
+// file/timeline so the two can be correlated over SSH without a screen.
+function logToFile(prefix, message) {
+  try {
+    appendFileSync(
+      join(app.getPath('logs'), 'renderer-console.log'),
+      `${new Date().toISOString()} [${prefix}] ${message}\n`
+    );
+  } catch (_) {}
+}
+
 // Renderer-crash recovery: how many times we've auto-reloaded, and when we last
 // did. After long uptime the Chromium renderer/GPU process can die (OOM, GPU
 // driver fault) leaving the window alive but blank — a white screen the user
@@ -33,6 +45,7 @@ function recoverRenderer(reason) {
   recoveryReloads += 1;
   const delay = tightLoop ? Math.min(30000, 2000 * recoveryReloads) : 1000;
   console.error(`Renderer recovery (${reason}); reload #${recoveryReloads} in ${delay}ms`);
+  logToFile('MAIN', `Renderer recovery (${reason}); reload #${recoveryReloads} in ${delay}ms, tightLoop=${tightLoop}`);
   setTimeout(() => {
     if (!mainWindow || mainWindow.isDestroyed()) return;
     try {
