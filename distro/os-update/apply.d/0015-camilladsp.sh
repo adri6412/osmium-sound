@@ -89,6 +89,15 @@ Type=simple
 ExecStart=$CDSP_BIN /etc/camilladsp/config.yml
 Restart=on-failure
 RestartSec=3
+# If DSP was left on across a reboot and the saved DAC target isn't there yet
+# (USB enumeration race) or no longer exists (unplugged, renamed), this would
+# otherwise retry forever every 3s — on the mini-PC that's enough sustained
+# CPU/journal I/O to visibly slow the rest of boot, including the kiosk.
+# Give up after 5 failures within 60s instead of crash-looping indefinitely;
+# the toggle in Settings -> DSP re-enables it cleanly once the real problem
+# (DAC not present, bad config) is sorted out.
+StartLimitIntervalSec=60
+StartLimitBurst=5
 
 [Install]
 WantedBy=multi-user.target
