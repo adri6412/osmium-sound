@@ -91,7 +91,12 @@ function createWindow() {
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
-      preload: join(__dirname, 'preload.js')
+      // .cjs, not .js: package.json's "type": "module" makes .js ESM by
+      // default, but Electron loads preload scripts in a sandboxed context
+      // that only understands CommonJS ("Cannot use import statement outside
+      // a module" otherwise, on every single launch — window.electronAPI was
+      // never actually available in the renderer).
+      preload: join(__dirname, 'preload.cjs')
     },
     icon: join(__dirname, '../assets/icon.png'),
     titleBarStyle: 'hidden',
@@ -204,9 +209,18 @@ app.whenReady().then(() => {
   registerGlobalShortcuts();
 });
 
+// This kiosk has exactly one window and no way for the user to close it (no
+// frame, no close button) — window-all-closed here means the window itself
+// died, most likely a GPU/renderer crash severe enough that recoverRenderer's
+// reload couldn't save it (e.g. under the CPU load of the DSP engine), not a
+// deliberate quit. Recreate the window instead of quitting: app.quit() hands
+// recovery off to the xsession relaunch loop, a full process restart (cold
+// JS state, the preload script re-running, the 10s Lyrion reconnect delay)
+// that's far slower and more disruptive than just opening a fresh window in
+// the same still-running process.
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {
-    app.quit();
+    createWindow();
   }
 });
 
