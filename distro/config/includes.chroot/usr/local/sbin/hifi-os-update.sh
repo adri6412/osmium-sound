@@ -156,6 +156,15 @@ printf '%s\n' "$VERSION" > "$VERSION_FILE"
 # that by leaving a REBOOT marker in its dir; we honour it last.
 if [ -f "$PAYLOAD/REBOOT" ]; then
     write_status restarting 95 "Riavvio del sistema…"
+    # Mitigates a kernel panic in the DesignWare DMA driver (dw_dmac_core)
+    # hit during device_shutdown() when reboot() runs while a DMA channel is
+    # actively streaming audio — reproduced with the DSP engine on. Not a fix
+    # for the kernel bug itself; just gives the hardware a moment to go idle
+    # first (same mitigation as api_server.py's reboot/shutdown endpoints).
+    if [ "$(systemctl is-active camilladsp.service 2>/dev/null)" = "active" ]; then
+        systemctl stop camilladsp.service squeezelite.service 2>/dev/null || true
+        sleep 2
+    fi
     sync
     rm -rf "$WORKDIR"
     systemctl reboot

@@ -99,9 +99,33 @@ LYRION_PKG = 'lyrionmusicserver'
 LYRION_SCRIPT = '/usr/local/sbin/hifi-lyrion-update.sh'
 LYRION_STATUS_FILE = '/run/hifi-lyrion-status.json'
 
+# Mitigation for a kernel panic seen in the DesignWare DMA driver
+# (dw_dmac_core: dw_shutdown -> do_dw_dma_disable) during device_shutdown()
+# when reboot()/shutdown() runs while a DMA channel is actively streaming
+# audio — reliably reproduced with the DSP engine on (continuous stream
+# through that path), never with it off. This isn't a fix for the kernel bug
+# itself (that needs an upstream/kernel fix), just a best-effort way to avoid
+# the race: stop the audio path and give the hardware a moment to go idle
+# before actually asking the kernel to restart/power off. DSP_UNIT is defined
+# further down in this file; that's fine, it's resolved at call time.
+def _quiesce_audio_before_power_action():
+    try:
+        ac = subprocess.run(['systemctl', 'is-active', DSP_UNIT],
+                            capture_output=True, text=True, timeout=10)
+        if ac.stdout.strip() != 'active':
+            return
+        subprocess.run(['sudo', 'systemctl', 'stop', DSP_UNIT],
+                       capture_output=True, text=True, timeout=15)
+        subprocess.run(['sudo', 'systemctl', 'stop', 'squeezelite'],
+                       capture_output=True, text=True, timeout=15)
+        time.sleep(2)
+    except Exception:
+        log.exception('_quiesce_audio_before_power_action failed')
+
 # Funzione per riavviare il dispositivo
 def reboot_device():
     try:
+        _quiesce_audio_before_power_action()
         subprocess.Popen("sudo reboot", shell=True)
         return "Device rebooting"
     except Exception:
@@ -111,6 +135,7 @@ def reboot_device():
 # Funzione per spegnere il dispositivo
 def shutdown_device():
     try:
+        _quiesce_audio_before_power_action()
         subprocess.Popen("sudo shutdown now", shell=True)
         return "Device shutting down"
     except Exception:
