@@ -134,9 +134,28 @@ export function useLyrionPlayer() {
     }
   };
 
+  // connectToServer() only ever resolves activePlayer once (10s after mount,
+  // or on a multiroom server-URL change) — there was no path back if the
+  // squeezelite process behind it ever bounced (e.g. Settings → DSP restarts
+  // it to redirect through the loopback). The kiosk would then poll a player
+  // that never again reports a valid status, staying "stuck" until the whole
+  // UI was reloaded. Recover automatically instead: after a few consecutive
+  // bad polls, re-run connectToServer() to re-resolve everything from scratch.
+  const statusFailCountRef = useRef(0);
   const fetchStatus = async () => {
     if (!activePlayer) return;
-    try { setPlayerStatus(await lyrionApi.getPlayerStatus(activePlayer.playerid)); } catch (_) {}
+    try {
+      const st = await lyrionApi.getPlayerStatus(activePlayer.playerid);
+      if (st && typeof st === 'object' && 'mode' in st) {
+        statusFailCountRef.current = 0;
+        setPlayerStatus(st);
+        return;
+      }
+    } catch (_) { /* fall through to failure counting below */ }
+    if (++statusFailCountRef.current >= 3) {
+      statusFailCountRef.current = 0;
+      connectToServer();
+    }
   };
 
   // Poll the player status, but adaptively:
