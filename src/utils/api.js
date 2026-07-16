@@ -134,6 +134,11 @@ export const systemAPI = {
   getDspStatus: () => apiGet('/dsp_status'),
   // Apply DSP settings. Returns { success, enabled, message }
   setDsp: (config) => apiPost('/dsp_set', config),
+  // DSP presets: { presets: [{name, builtin, active, bands, crossfeed, room_correction, balance}], active }
+  getDspPresets: () => apiGet('/dsp_presets'),
+  saveDspPreset: (name) => apiPost('/dsp_preset_save', { name }),
+  loadDspPreset: (name) => apiPost('/dsp_preset_load', { name }),
+  deleteDspPreset: (name) => apiPost('/dsp_preset_delete', { name }),
 
   // ── OTA update of the Electron UI ───────────────────────────────
   // Check GitHub Releases: { current, latest, update_available, notes, asset_url, asset_size }

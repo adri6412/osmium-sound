@@ -280,6 +280,22 @@
     <string name="settings_dsp_filter_remove_confirm">Remove the room-correction filter from the appliance?</string>
     <string name="settings_dsp_filter_upload_failed">Filter operation failed</string>
     <string name="settings_dsp_status_failed">Could not reach the appliance\'s DSP service</string>
+    <string name="settings_dsp_balance_title">Balance</string>
+    <string name="settings_dsp_balance_center">Centered</string>
+    <string name="settings_dsp_balance_left">Left %1$.1f dB</string>
+    <string name="settings_dsp_balance_right">Right %1$.1f dB</string>
+    <string name="settings_dsp_presets_title">Presets</string>
+    <string name="settings_dsp_preset_custom">Custom</string>
+    <string name="settings_dsp_preset_name_hint">Preset name</string>
+    <string name="settings_dsp_preset_save">Save as preset</string>
+    <string name="settings_dsp_preset_saved">Preset saved</string>
+    <string name="settings_dsp_preset_loaded">Preset loaded</string>
+    <string name="settings_dsp_preset_delete_confirm">Delete preset \"%1$s\"?</string>
+    <string name="settings_dsp_preset_failed">Preset operation failed</string>
+    <string name="settings_dsp_preset_flat">Flat</string>
+    <string name="settings_dsp_preset_warm">Warm</string>
+    <string name="settings_dsp_preset_bright">Bright</string>
+    <string name="settings_dsp_preset_loudness">Loudness (low volume)</string>
 
     <string name="settings_category_backup">Backup &amp; Restore</string>
     <string name="settings_backup_title">Backup &amp; Restore</string>

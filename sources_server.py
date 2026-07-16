@@ -868,6 +868,7 @@ def apply_to_lyrion(state):
 BACKUP_FILES = [
     "/etc/hifi-player/pointer-enabled",
     "/etc/hifi-player/dsp.json",
+    "/etc/hifi-player/dsp-presets.json",
     "/etc/hifi-player/ota-channel",
     "/etc/default/squeezelite",
     "/etc/camilladsp/config.yml",
@@ -1274,6 +1275,55 @@ def api_dsp_set_proxy():
         return denied
     data = request.get_json(silent=True) or {}
     body, status = _proxy_to_api_server("/dsp_set", method="POST", body=data)
+    return jsonify(body), status
+
+
+@app.route("/api/dsp/presets", methods=["GET"])
+def api_dsp_presets_proxy():
+    denied = _require_pair_token()
+    if denied:
+        return denied
+    body, status = _proxy_to_api_server("/dsp_presets")
+    return jsonify(body), status
+
+
+@app.route("/api/dsp/preset/save", methods=["POST"])
+def api_dsp_preset_save_proxy():
+    denied = _require_pair_token()
+    if denied:
+        return denied
+    data = request.get_json(silent=True) or {}
+    body, status = _proxy_to_api_server("/dsp_preset_save", method="POST", body=data)
+    return jsonify(body), status
+
+
+@app.route("/api/dsp/preset/load", methods=["POST"])
+def api_dsp_preset_load_proxy():
+    denied = _require_pair_token()
+    if denied:
+        return denied
+    data = request.get_json(silent=True) or {}
+    body, status = _proxy_to_api_server("/dsp_preset_load", method="POST", body=data)
+    return jsonify(body), status
+
+
+@app.route("/api/dsp/preset/rename", methods=["POST"])
+def api_dsp_preset_rename_proxy():
+    denied = _require_pair_token()
+    if denied:
+        return denied
+    data = request.get_json(silent=True) or {}
+    body, status = _proxy_to_api_server("/dsp_preset_rename", method="POST", body=data)
+    return jsonify(body), status
+
+
+@app.route("/api/dsp/preset/delete", methods=["POST"])
+def api_dsp_preset_delete_proxy():
+    denied = _require_pair_token()
+    if denied:
+        return denied
+    data = request.get_json(silent=True) or {}
+    body, status = _proxy_to_api_server("/dsp_preset_delete", method="POST", body=data)
     return jsonify(body), status
 
 

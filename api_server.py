@@ -922,12 +922,38 @@ def set_tidal(enable):
 # ──────────────────────────────────────────────────────────────────
 CAMILLA_BIN = '/usr/local/bin/camilladsp'
 CAMILLA_CONFIG = '/etc/camilladsp/config.yml'
+CAMILLA_CONFIG_TMP = '/etc/camilladsp/config.yml.check'
 DSP_UNIT = 'camilladsp.service'
 DSP_STATE_FILE = '/etc/hifi-player/dsp.json'
+DSP_PRESETS_FILE = '/etc/hifi-player/dsp-presets.json'
 DSP_TARGET_FILE = '/var/lib/hifi-player/dsp-target'
 DSP_RATE = 48000
 LOOPBACK_PLAYBACK = 'hw:CARD=Loopback,DEV=0'   # squeezelite writes here
 LOOPBACK_CAPTURE = 'hw:CARD=Loopback,DEV=1'    # CamillaDSP reads here
+
+# Biquad filter types a band may take. Highpass/Lowpass have no gain
+# parameter in CamillaDSP — emitting one is a config validation error.
+DSP_BAND_TYPES = {'Peaking', 'Lowshelf', 'Highshelf', 'Highpass', 'Lowpass'}
+DSP_BAND_TYPES_NO_GAIN = {'Highpass', 'Lowpass'}
+DSP_BALANCE_MAX = 12.0
+
+# Built-in read-only presets. Never persisted; 'balance'/'crossfeed'/
+# 'room_correction' stay neutral so loading one only touches tone.
+DSP_BUILTIN_PRESETS = {
+    'Flat': {'bands': [], 'crossfeed': False, 'room_correction': False, 'balance': 0.0},
+    'Warm': {'bands': [
+        {'type': 'Lowshelf', 'freq': 150, 'gain': 2.0, 'q': 0.707},
+        {'type': 'Highshelf', 'freq': 7500, 'gain': -1.5, 'q': 0.707},
+    ], 'crossfeed': False, 'room_correction': False, 'balance': 0.0},
+    'Bright': {'bands': [
+        {'type': 'Highshelf', 'freq': 6000, 'gain': 2.5, 'q': 0.707},
+    ], 'crossfeed': False, 'room_correction': False, 'balance': 0.0},
+    'Loudness (low volume)': {'bands': [
+        {'type': 'Lowshelf', 'freq': 120, 'gain': 4.0, 'q': 0.707},
+        {'type': 'Highshelf', 'freq': 8000, 'gain': 2.0, 'q': 0.707},
+    ], 'crossfeed': False, 'room_correction': False, 'balance': 0.0},
+}
+DSP_MAX_USER_PRESETS = 24
 
 # Room-correction FIR filter — uploaded via the sources web service (:8080,
 # see sources_server.py's /api/dsp/fir) and picked up here. Fixed dir/name
@@ -953,6 +979,36 @@ def _loopback_present():
 def _dsp_available():
     return os.path.exists(CAMILLA_BIN) and _unit_exists(DSP_UNIT) and _loopback_present()
 
+def _clean_band(b):
+    """Validate/normalize one EQ band. Raises on a bad freq/gain/q (caller
+    skips it), same as the pre-existing inline validation in set_dsp."""
+    btype = b.get('type', 'Peaking')
+    if btype not in DSP_BAND_TYPES:
+        btype = 'Peaking'
+    out = {
+        'type': btype,
+        'freq': max(20.0, min(20000.0, float(b.get('freq')))),
+        'q': max(0.1, min(10.0, float(b.get('q', 1.0)) or 1.0)),
+    }
+    if btype not in DSP_BAND_TYPES_NO_GAIN:
+        out['gain'] = max(-24.0, min(24.0, float(b.get('gain', 0))))
+    return out
+
+def _clean_bands(bands):
+    clean = []
+    for b in (bands or [])[:20]:
+        try:
+            clean.append(_clean_band(b))
+        except Exception:
+            continue
+    return clean
+
+def _clean_balance(v):
+    try:
+        return max(-DSP_BALANCE_MAX, min(DSP_BALANCE_MAX, float(v)))
+    except Exception:
+        return 0.0
+
 def _read_dsp_state():
     try:
         with open(DSP_STATE_FILE) as f:
@@ -960,9 +1016,11 @@ def _read_dsp_state():
     except Exception:
         d = {}
     return {'enabled': bool(d.get('enabled')),
-            'bands': d.get('bands') or [],
+            'bands': _clean_bands(d.get('bands')),
             'crossfeed': bool(d.get('crossfeed')),
-            'room_correction': bool(d.get('room_correction'))}
+            'room_correction': bool(d.get('room_correction')),
+            'balance': _clean_balance(d.get('balance') or 0.0),
+            'preset': d.get('preset') or None}
 
 def _write_dsp_state(state):
     os.makedirs(os.path.dirname(DSP_STATE_FILE), exist_ok=True)
@@ -1036,17 +1094,22 @@ def _sq_ensure_R(args):
         args = (args + ' -R').strip()
     return args
 
-def _camilla_config_dict(playback_dev, bands, crossfeed, room_correction=False):
+def _camilla_config_dict(playback_dev, bands, crossfeed, room_correction=False, balance=0.0):
     """Build a CamillaDSP config (returned as a dict; JSON is valid YAML)."""
     filters, eq_names = {}, []
     for i, b in enumerate(bands):
         nm = f'band_{i}'
-        filters[nm] = {'type': 'Biquad', 'parameters': {
-            'type': 'Peaking',
+        btype = b.get('type', 'Peaking')
+        if btype not in DSP_BAND_TYPES:
+            btype = 'Peaking'
+        params = {
+            'type': btype,
             'freq': float(b.get('freq', 1000)),
             'q': float(b.get('q', 1.0)) or 1.0,
-            'gain': float(b.get('gain', 0)),
-        }}
+        }
+        if btype not in DSP_BAND_TYPES_NO_GAIN:
+            params['gain'] = float(b.get('gain', 0))
+        filters[nm] = {'type': 'Biquad', 'parameters': params}
         eq_names.append(nm)
     conv_names = []
     if room_correction:
@@ -1076,6 +1139,19 @@ def _camilla_config_dict(playback_dev, bands, crossfeed, room_correction=False):
         pipeline.append({'type': 'Filter', 'channels': [0, 1], 'names': conv_names})
     if eq_names:
         pipeline.append({'type': 'Filter', 'channels': [0, 1], 'names': eq_names})
+    # Balance: attenuate-only (never boost, so no clipping risk). Positive
+    # balance shifts toward the right ear by attenuating the left channel,
+    # and vice-versa. Applied last, after tone shaping.
+    bal = max(-DSP_BALANCE_MAX, min(DSP_BALANCE_MAX, float(balance or 0.0)))
+    if abs(bal) >= 0.05:
+        gain_l = -max(0.0, bal)
+        gain_r = min(0.0, bal)
+        if gain_l:
+            filters['balance_l'] = {'type': 'Gain', 'parameters': {'gain': gain_l}}
+            pipeline.append({'type': 'Filter', 'channels': [0], 'names': ['balance_l']})
+        if gain_r:
+            filters['balance_r'] = {'type': 'Gain', 'parameters': {'gain': gain_r}}
+            pipeline.append({'type': 'Filter', 'channels': [1], 'names': ['balance_r']})
     return {
         'devices': {
             'samplerate': DSP_RATE, 'chunksize': 1024,
@@ -1092,8 +1168,29 @@ def _current_real_dac():
     o = _current_audio_device()
     return _read_dsp_target() if 'Loopback' in o else o
 
-def _apply_dsp_on(playback_dev, bands, crossfeed, room_correction=False):
-    cfg = _camilla_config_dict(playback_dev, bands, crossfeed, room_correction)
+def _camilla_config_valid(cfg):
+    """Write cfg to a scratch file and ask CamillaDSP itself to validate it,
+    so a bad EQ/balance/FIR combination can never leave squeezelite pointed
+    at a Loopback with a dead (or silently-rejecting) CamillaDSP behind it."""
+    try:
+        with open(CAMILLA_CONFIG_TMP, 'w') as f:
+            json.dump(cfg, f, indent=2)
+        r = subprocess.run([CAMILLA_BIN, '--check', CAMILLA_CONFIG_TMP],
+                           capture_output=True, text=True, timeout=15)
+        return r.returncode == 0
+    except Exception:
+        log.exception('camilladsp --check failed')
+        return False
+    finally:
+        try:
+            os.remove(CAMILLA_CONFIG_TMP)
+        except OSError:
+            pass
+
+def _apply_dsp_on(playback_dev, bands, crossfeed, room_correction=False, balance=0.0):
+    cfg = _camilla_config_dict(playback_dev, bands, crossfeed, room_correction, balance)
+    if not _camilla_config_valid(cfg):
+        raise ValueError('Configurazione DSP non valida')
     os.makedirs(os.path.dirname(CAMILLA_CONFIG), exist_ok=True)
     with open(CAMILLA_CONFIG, 'w') as f:
         json.dump(cfg, f, indent=2)
@@ -1134,41 +1231,154 @@ def get_dsp_status():
     fir_path, _ = _fir_current()
     return {'available': _dsp_available(), 'enabled': st['enabled'], 'active': active,
             'bands': st['bands'], 'crossfeed': st['crossfeed'], 'rate': DSP_RATE,
-            'room_correction': st['room_correction'], 'fir_present': bool(fir_path)}
+            'room_correction': st['room_correction'], 'fir_present': bool(fir_path),
+            'balance': st['balance'], 'preset': st['preset']}
 
 def set_dsp(config):
+    """Apply/persist DSP settings. Any key ABSENT from `config` keeps its
+    previously stored value (merge semantics) — this protects fields an
+    older UI/companion build never sends (e.g. 'balance') from being wiped
+    by a client that only knows about the older keys."""
     if not _dsp_available():
         return {'success': False, 'available': False,
                 'message': 'DSP non disponibile su questo dispositivo'}
-    enabled = bool(config.get('enabled'))
-    crossfeed = bool(config.get('crossfeed'))
-    room_correction = bool(config.get('room_correction'))
-    clean = []
-    for b in (config.get('bands') or [])[:20]:
-        try:
-            clean.append({
-                'freq': max(20.0, min(20000.0, float(b.get('freq')))),
-                'gain': max(-24.0, min(24.0, float(b.get('gain')))),
-                'q': max(0.1, min(10.0, float(b.get('q', 1.0)))),
-            })
-        except Exception:
-            continue
+    st = _read_dsp_state()
+    enabled = bool(config['enabled']) if 'enabled' in config else st['enabled']
+    crossfeed = bool(config['crossfeed']) if 'crossfeed' in config else st['crossfeed']
+    room_correction = bool(config['room_correction']) if 'room_correction' in config else st['room_correction']
+    bands = _clean_bands(config['bands']) if 'bands' in config else st['bands']
+    balance = _clean_balance(config['balance']) if 'balance' in config else st['balance']
+    # Any explicit tone/level edit (vs. e.g. just an enabled toggle) clears
+    # the active-preset name unless the caller names one itself (preset
+    # load/save pass 'preset' explicitly).
+    preset = st['preset']
+    if 'preset' in config:
+        preset = config.get('preset') or None
+    elif any(k in config for k in ('bands', 'crossfeed', 'room_correction', 'balance')):
+        preset = None
     try:
         if enabled:
             dac = _current_real_dac()
             if not dac or 'Loopback' in dac:
                 dac = 'default'
-            _apply_dsp_on(dac, clean, crossfeed, room_correction)
+            _apply_dsp_on(dac, bands, crossfeed, room_correction, balance)
         else:
             _apply_dsp_off()
-        _write_dsp_state({'enabled': enabled, 'bands': clean, 'crossfeed': crossfeed,
-                          'room_correction': room_correction})
+        _write_dsp_state({'enabled': enabled, 'bands': bands, 'crossfeed': crossfeed,
+                          'room_correction': room_correction, 'balance': balance,
+                          'preset': preset})
     except Exception:
         log.exception('set_dsp failed')
         return {'success': False, 'message': 'Operazione DSP fallita'}
-    return {'success': True, 'enabled': enabled, 'bands': clean, 'crossfeed': crossfeed,
-            'room_correction': room_correction,
+    return {'success': True, 'enabled': enabled, 'bands': bands, 'crossfeed': crossfeed,
+            'room_correction': room_correction, 'balance': balance, 'preset': preset,
             'message': 'DSP attivato' if enabled else 'DSP disattivato'}
+
+# ── DSP presets (named snapshots of bands/crossfeed/room_correction/balance) ──
+
+def _read_dsp_presets():
+    try:
+        with open(DSP_PRESETS_FILE) as f:
+            d = json.load(f)
+        presets = d.get('presets') or {}
+        return presets if isinstance(presets, dict) else {}
+    except Exception:
+        return {}
+
+def _write_dsp_presets(presets):
+    os.makedirs(os.path.dirname(DSP_PRESETS_FILE), exist_ok=True)
+    tmp = DSP_PRESETS_FILE + '.tmp'
+    with open(tmp, 'w') as f:
+        json.dump({'version': 1, 'presets': presets}, f, indent=2)
+    os.replace(tmp, DSP_PRESETS_FILE)
+
+def _dsp_preset_public(name, p, builtin, active_name):
+    return {'name': name, 'builtin': builtin, 'active': name == active_name,
+            'bands': p.get('bands') or [], 'crossfeed': bool(p.get('crossfeed')),
+            'room_correction': bool(p.get('room_correction')),
+            'balance': _clean_balance(p.get('balance') or 0.0)}
+
+def _valid_preset_name(name):
+    name = (name or '').strip()
+    if not name or len(name) > 40:
+        return None
+    if name.lower() in (k.lower() for k in DSP_BUILTIN_PRESETS):
+        return None
+    return name
+
+def get_dsp_presets():
+    st = _read_dsp_state()
+    user = _read_dsp_presets()
+    out = [_dsp_preset_public(n, p, True, st['preset']) for n, p in DSP_BUILTIN_PRESETS.items()]
+    out += [_dsp_preset_public(n, p, False, st['preset']) for n, p in sorted(user.items())]
+    return {'presets': out, 'active': st['preset']}
+
+def save_dsp_preset(name):
+    clean_name = _valid_preset_name(name)
+    if not clean_name:
+        return {'success': False, 'message': 'Nome preset non valido'}
+    user = _read_dsp_presets()
+    if clean_name not in user and len(user) >= DSP_MAX_USER_PRESETS:
+        return {'success': False, 'message': 'Numero massimo di preset raggiunto'}
+    st = _read_dsp_state()
+    user[clean_name] = {'bands': st['bands'], 'crossfeed': st['crossfeed'],
+                        'room_correction': st['room_correction'], 'balance': st['balance']}
+    try:
+        _write_dsp_presets(user)
+        _write_dsp_state({**st, 'preset': clean_name})
+    except Exception:
+        log.exception('save_dsp_preset failed')
+        return {'success': False, 'message': 'Salvataggio preset fallito'}
+    return {'success': True, **get_dsp_presets(), 'message': 'Preset salvato'}
+
+def load_dsp_preset(name):
+    name = (name or '').strip()
+    p = DSP_BUILTIN_PRESETS.get(name) or _read_dsp_presets().get(name)
+    if not p:
+        return {'success': False, 'message': 'Preset non trovato'}
+    # Bands + balance + crossfeed only — 'room_correction' and 'enabled' are
+    # deliberately preserved (they depend on a physically-uploaded FIR filter
+    # and on the bit-perfect on/off choice, not on the tonal preset).
+    result = set_dsp({'bands': p.get('bands') or [], 'balance': p.get('balance') or 0.0,
+                      'crossfeed': bool(p.get('crossfeed')), 'preset': name})
+    if result.get('success'):
+        result['message'] = 'Preset caricato'
+    return result
+
+def rename_dsp_preset(name, new_name):
+    user = _read_dsp_presets()
+    if name not in user:
+        return {'success': False, 'message': 'Preset non trovato'}
+    clean_new = _valid_preset_name(new_name)
+    if not clean_new:
+        return {'success': False, 'message': 'Nome preset non valido'}
+    if clean_new in user and clean_new != name:
+        return {'success': False, 'message': 'Esiste già un preset con questo nome'}
+    user[clean_new] = user.pop(name)
+    try:
+        _write_dsp_presets(user)
+        st = _read_dsp_state()
+        if st['preset'] == name:
+            _write_dsp_state({**st, 'preset': clean_new})
+    except Exception:
+        log.exception('rename_dsp_preset failed')
+        return {'success': False, 'message': 'Rinomina preset fallita'}
+    return {'success': True, **get_dsp_presets(), 'message': 'Preset rinominato'}
+
+def delete_dsp_preset(name):
+    user = _read_dsp_presets()
+    if name not in user:
+        return {'success': False, 'message': 'Preset non trovato'}
+    del user[name]
+    try:
+        _write_dsp_presets(user)
+        st = _read_dsp_state()
+        if st['preset'] == name:
+            _write_dsp_state({**st, 'preset': None})
+    except Exception:
+        log.exception('delete_dsp_preset failed')
+        return {'success': False, 'message': 'Eliminazione preset fallita'}
+    return {'success': True, **get_dsp_presets(), 'message': 'Preset eliminato'}
 
 # ──────────────────────────────────────────────────────────────────
 #  OTA update helpers
@@ -1792,6 +2002,30 @@ def api_dsp_status():
 def api_dsp_set():
     data = request.get_json(silent=True) or {}
     return jsonify(set_dsp(data))
+
+@app.route('/dsp_presets', methods=['GET'])
+def api_dsp_presets():
+    return jsonify(get_dsp_presets())
+
+@app.route('/dsp_preset_save', methods=['POST'])
+def api_dsp_preset_save():
+    data = request.get_json(silent=True) or {}
+    return jsonify(save_dsp_preset(data.get('name')))
+
+@app.route('/dsp_preset_load', methods=['POST'])
+def api_dsp_preset_load():
+    data = request.get_json(silent=True) or {}
+    return jsonify(load_dsp_preset(data.get('name')))
+
+@app.route('/dsp_preset_rename', methods=['POST'])
+def api_dsp_preset_rename():
+    data = request.get_json(silent=True) or {}
+    return jsonify(rename_dsp_preset(data.get('name'), data.get('new_name')))
+
+@app.route('/dsp_preset_delete', methods=['POST'])
+def api_dsp_preset_delete():
+    data = request.get_json(silent=True) or {}
+    return jsonify(delete_dsp_preset(data.get('name')))
 
 @app.route('/tidal_status', methods=['GET'])
 def api_tidal_status():

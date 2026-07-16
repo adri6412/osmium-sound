@@ -125,6 +125,50 @@ public final class ApplianceHttpClient {
         enqueueJson(authedRequest("/api/dsp/set").post(body).build(), callback);
     }
 
+    /** Named DSP presets (built-in + user-saved). Response: { presets: [...], active }. */
+    public static void dspPresets(JsonCallback callback) {
+        enqueueJson(authedRequest("/api/dsp/presets").get().build(), callback);
+    }
+
+    /** Snapshot the currently-applied DSP config under `name`. */
+    public static void dspPresetSave(String name, JsonCallback callback) {
+        JSONObject payload = new JSONObject();
+        try {
+            payload.put("name", name);
+        } catch (JSONException e) {
+            callback.onFailure(e.getMessage());
+            return;
+        }
+        RequestBody body = RequestBody.create(payload.toString(), JSON);
+        enqueueJson(authedRequest("/api/dsp/preset/save").post(body).build(), callback);
+    }
+
+    /** Apply a built-in or user preset (bands + balance + crossfeed; leaves room_correction/enabled untouched). */
+    public static void dspPresetLoad(String name, JsonCallback callback) {
+        JSONObject payload = new JSONObject();
+        try {
+            payload.put("name", name);
+        } catch (JSONException e) {
+            callback.onFailure(e.getMessage());
+            return;
+        }
+        RequestBody body = RequestBody.create(payload.toString(), JSON);
+        enqueueJson(authedRequest("/api/dsp/preset/load").post(body).build(), callback);
+    }
+
+    /** Delete a user preset (built-ins can't be deleted). */
+    public static void dspPresetDelete(String name, JsonCallback callback) {
+        JSONObject payload = new JSONObject();
+        try {
+            payload.put("name", name);
+        } catch (JSONException e) {
+            callback.onFailure(e.getMessage());
+            return;
+        }
+        RequestBody body = RequestBody.create(payload.toString(), JSON);
+        enqueueJson(authedRequest("/api/dsp/preset/delete").post(body).build(), callback);
+    }
+
     /** This device's squeezelite display name (default "OsmiumSound"). Response: { name }. */
     public static void playerName(JsonCallback callback) {
         enqueueJson(authedRequest("/api/system/player_name").get().build(), callback);

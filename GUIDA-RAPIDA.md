@@ -13,11 +13,15 @@ Come installare e iniziare a usare Osmium Sound sul tuo mini-PC x86.
 3. **Avvia il mini-PC dalla chiavetta** e segui l'installazione guidata a schermo.
    Al riavvio, l'appliance è pronta.
 
-> ⚠️ **Installazione non presidiata — formatta un disco automaticamente.**
-> La ISO non fa domande e non chiede conferme: sceglie il **primo disco che
-> rileva**, lo cancella del tutto (nuovo GPT, tutte le partizioni e i dati
-> persi) e si riavvia da sola. Usala solo su una macchina senza dati da
-> conservare, e scollega prima ogni disco che non vuoi toccare.
+> **Selezione del disco.** L'installer chiede su quale disco installare e
+> formatta solo quello scelto — nulla viene cancellato senza conferma.
+> Testato finora solo su UEFI (avvio BIOS/legacy non ancora verificato con
+> questo flusso).
+
+> **Provala in modalità live.** Scegli **Try Osmium Sound (no install)** nel
+> menu di avvio per far partire il kiosk direttamente dalla chiavetta USB —
+> senza scrivere nulla sul disco. Se non fa l'accesso automatico, usa
+> `hifi` / `hifi` alla schermata di login.
 
 **Nota:** la ISO serve solo per la prima installazione. Tutti gli aggiornamenti
 successivi (interfaccia, sistema, OS, Lyrion) arrivano automaticamente via

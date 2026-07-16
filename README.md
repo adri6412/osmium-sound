@@ -54,7 +54,9 @@ Bit-perfect audio, streaming services, and signed OTA updates — one sleek dark
 
 Every later version — UI, system, OS, and Lyrion — arrives automatically over the air from the Settings screen. No reflashing required.
 
-> ⚠️ **Unattended install — it wipes a disk automatically.** The ISO asks no questions: it picks the **first disk it detects**, erases it completely (new GPT, all data lost), then reboots on its own. Use a machine with nothing you want to keep, and disconnect any drive you don't want touched. See [`distro/config/includes.installer/preseed.cfg`](distro/config/includes.installer/preseed.cfg).
+> **Disk selection.** The installer now asks which disk to install on and formats only the one you pick — nothing is wiped without confirmation. Tested on UEFI only so far (BIOS/legacy boot not yet verified with this flow). See [`distro/config/includes.installer/preseed.cfg`](distro/config/includes.installer/preseed.cfg).
+
+> **Try it live.** Pick **Try Osmium Sound (no install)** at the boot menu to run the kiosk straight from the USB stick, nothing is written to disk. If it doesn't log in automatically, use `hifi` / `hifi` at the login screen.
 
 Want to run the UI locally for development instead of flashing an appliance? See [ARCHITECTURE.md](ARCHITECTURE.md#local-development).
 
