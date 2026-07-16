@@ -1209,8 +1209,14 @@ def _apply_dsp_on(playback_dev, bands, crossfeed, room_correction=False, balance
     # _apply_dsp_off(), just mirrored: release the old holder before starting
     # the new one.
     _run(['systemctl', 'restart', 'squeezelite'], timeout=30)
-    subprocess.run(['sudo', 'systemctl', 'enable', '--now', DSP_UNIT],
+    # `enable --now` is a no-op on an already-running unit — it would NOT pick
+    # up the config.yml we just wrote (CamillaDSP only reads it at startup, no
+    # hot reload). Enable separately for boot persistence, then always
+    # restart so a preset/EQ change while DSP is already on actually takes
+    # effect instead of silently no-op'ing.
+    subprocess.run(['sudo', 'systemctl', 'enable', DSP_UNIT],
                    capture_output=True, text=True, timeout=30)
+    _run(['systemctl', 'restart', DSP_UNIT], timeout=30)
 
 def _apply_dsp_off():
     dac = _read_dsp_target()
