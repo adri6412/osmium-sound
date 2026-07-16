@@ -1202,9 +1202,15 @@ def _apply_dsp_on(playback_dev, bands, crossfeed, room_correction=False, balance
         args = _sq_set_rate(args, DSP_RATE)  # fixed rate into the loopback
         args = _sq_ensure_R(args)            # soxr resample to that rate
         _write_sq_args(args)
+    # squeezelite must release the real DAC (by restarting onto the loopback)
+    # BEFORE CamillaDSP tries to open that same hw: device — otherwise the two
+    # processes fight over an exclusive-access device and CamillaDSP's open
+    # can fail or wedge the DAC until a reboot. Same reasoning as
+    # _apply_dsp_off(), just mirrored: release the old holder before starting
+    # the new one.
+    _run(['systemctl', 'restart', 'squeezelite'], timeout=30)
     subprocess.run(['sudo', 'systemctl', 'enable', '--now', DSP_UNIT],
                    capture_output=True, text=True, timeout=30)
-    _run(['systemctl', 'restart', 'squeezelite'], timeout=30)
 
 def _apply_dsp_off():
     dac = _read_dsp_target()
