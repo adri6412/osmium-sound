@@ -3,6 +3,7 @@ import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import { exec } from 'child_process';
 import { promisify } from 'util';
+import { appendFileSync } from 'fs';
 
 const execAsync = promisify(exec);
 
@@ -146,6 +147,21 @@ function createWindow() {
   // rather than leaving the user staring at a frozen screen.
   mainWindow.on('unresponsive', () => {
     recoverRenderer('unresponsive');
+  });
+
+  // The kiosk has no DevTools and no captured stdout (the X session doesn't
+  // redirect it anywhere) — a renderer bug is otherwise invisible without a
+  // screen/keyboard physically on the appliance. Mirror warnings/errors
+  // (console-message level 2/3) to a plain file so `ssh` + `tail` can see
+  // what the UI actually logged.
+  mainWindow.webContents.on('console-message', (event, level, message, line, sourceId) => {
+    if (level < 2) return;
+    try {
+      appendFileSync(
+        join(app.getPath('logs'), 'renderer-console.log'),
+        `${new Date().toISOString()} [${level === 3 ? 'ERROR' : 'WARN'}] ${message} (${sourceId}:${line})\n`
+      );
+    } catch (_) {}
   });
 
   // Handle window closed
