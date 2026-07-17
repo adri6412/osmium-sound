@@ -1811,23 +1811,38 @@ const Settings = () => {
                           </div>
 
                           {dspEqView === 'graphic' ? (
-                            <div className="flex items-end justify-between gap-1 bg-hifi-dark rounded-lg p-3">
-                              {GRAPHIC_EQ_BANDS.map((freq) => {
-                                const gain = graphicBandGain(freq);
-                                return (
-                                  <div key={freq} className="flex flex-col items-center gap-1 flex-1">
-                                    <span className="text-[10px] text-hifi-silver tabular-nums">
-                                      {gain > 0 ? `+${gain}` : gain}
-                                    </span>
-                                    <input
-                                      type="range" className="eq-slider" min={-12} max={12} step={0.5}
-                                      value={gain}
-                                      onChange={(e) => setGraphicBandGain(freq, Number(e.target.value))}
-                                    />
-                                    <span className="text-[10px] text-hifi-silver">{GRAPHIC_EQ_LABELS[freq]}</span>
+                            <div className="eq-panel rounded-lg p-3">
+                              <div className="flex items-end justify-between gap-1">
+                                {/* dB scale, aligned with the fader travel (not the
+                                    LED row above it or the frequency label below) */}
+                                <div className="flex flex-col items-end" aria-hidden="true">
+                                  <span className="eq-led">&nbsp;</span>
+                                  <div className="eq-scale">
+                                    <span>+12</span>
+                                    <span>0</span>
+                                    <span>−12</span>
                                   </div>
-                                );
-                              })}
+                                  <span className="eq-freq">&nbsp;</span>
+                                </div>
+                                {GRAPHIC_EQ_BANDS.map((freq) => {
+                                  const gain = graphicBandGain(freq);
+                                  return (
+                                    <div key={freq} className="flex flex-col items-center flex-1 min-w-0">
+                                      <span className="eq-led tabular-nums">
+                                        {gain > 0 ? `+${gain}` : gain}
+                                      </span>
+                                      <div className="eq-fader-slot">
+                                        <input
+                                          type="range" className="eq-slider" min={-12} max={12} step={0.5}
+                                          value={gain}
+                                          onChange={(e) => setGraphicBandGain(freq, Number(e.target.value))}
+                                        />
+                                      </div>
+                                      <span className="eq-freq">{GRAPHIC_EQ_LABELS[freq]}</span>
+                                    </div>
+                                  );
+                                })}
+                              </div>
                             </div>
                           ) : (
                             <>

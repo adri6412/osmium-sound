@@ -305,10 +305,71 @@ input[type=range].vol-slider::-webkit-slider-thumb {
   box-shadow: 0 0 5px rgba(212,175,55,0.5);
 }
 
-/* Graphic EQ — vertical gain sliders, one per fixed band (Settings → DSP).
-   writing-mode + direction is the standards-track way to get a vertical
-   range input (the older -webkit-appearance: slider-vertical is
+/* Graphic EQ — vintage analog console styling (Settings → DSP).
+   Vertical faders in a brushed dark faceplate: tick marks along the fader
+   travel, amber LED-style dB readouts, metal fader caps with a center
+   indicator line. writing-mode + direction is the standards-track way to get
+   a vertical range input (the older -webkit-appearance: slider-vertical is
    non-standard and Chromium warns it may be removed). */
+.eq-panel {
+  background:
+    linear-gradient(180deg, rgba(255,255,255,0.05), rgba(255,255,255,0) 14%),
+    repeating-linear-gradient(90deg, rgba(255,255,255,0.015) 0 2px, rgba(0,0,0,0) 2px 4px),
+    linear-gradient(180deg, #262624, #17171a 70%, #101013);
+  border: 1px solid #3a3a36;
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.06),
+    inset 0 -2px 6px rgba(0,0,0,0.55),
+    0 2px 8px rgba(0,0,0,0.35);
+}
+.eq-scale {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  align-items: flex-end;
+  height: 110px;
+  padding-right: 3px;
+}
+.eq-scale span {
+  font-size: 8px;
+  color: #8f8b7e;
+  letter-spacing: 0.06em;
+  line-height: 1;
+}
+.eq-led {
+  font-family: ui-monospace, 'Cascadia Mono', monospace;
+  font-size: 10px;
+  line-height: 1.2;
+  min-height: 12px;
+  color: #f5b942;
+  text-shadow: 0 0 6px rgba(245,185,66,0.55);
+}
+.eq-freq {
+  font-size: 9px;
+  color: #b3ac98;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  margin-top: 2px;
+}
+/* Tick marks along the fader travel, behind the input. */
+.eq-fader-slot {
+  position: relative;
+  padding: 0 4px;
+}
+.eq-fader-slot::before {
+  content: '';
+  position: absolute;
+  left: 2px;
+  right: 2px;
+  top: 8px;
+  bottom: 8px;
+  background: repeating-linear-gradient(180deg,
+    rgba(255,255,255,0.13) 0 1px, transparent 1px 11.6px);
+  pointer-events: none;
+}
+.eq-fader-slot > input {
+  position: relative;
+}
 input[type=range].eq-slider {
   writing-mode: vertical-lr;
   direction: rtl;
@@ -319,19 +380,25 @@ input[type=range].eq-slider {
   background: transparent;
   cursor: pointer;
 }
+/* Narrow dark slot the fader rides in, like a console fader groove. */
 input[type=range].eq-slider::-webkit-slider-runnable-track {
-  height: 3px;
+  height: 4px;
   border-radius: 2px;
-  background: #252525;
+  background: #0a0a0a;
+  box-shadow: inset 0 1px 2px rgba(0,0,0,0.9), 0 1px 0 rgba(255,255,255,0.05);
 }
+/* Metal fader cap: brushed gradient + horizontal center indicator line. */
 input[type=range].eq-slider::-webkit-slider-thumb {
   -webkit-appearance: none;
-  width: 16px;
-  height: 16px;
-  border-radius: 50%;
-  background: #d4af37;
+  width: 18px;
+  height: 26px;
+  border-radius: 3px;
+  background:
+    linear-gradient(0deg, transparent 0 46%, #e8524a 46% 54%, transparent 54% 100%),
+    linear-gradient(180deg, #6a6a66, #3c3c3a 45%, #2c2c2a 55%, #4a4a46);
+  border: 1px solid #1c1c1a;
+  box-shadow: 0 2px 5px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.25);
   cursor: pointer;
-  box-shadow: 0 0 5px rgba(212,175,55,0.5);
 }
 
 /* Optimize touch targets for 1024x600 resolution */
