@@ -1203,6 +1203,48 @@ def _current_real_dac():
     o = _current_audio_device()
     return _read_dsp_target() if 'Loopback' in o else o
 
+# ── Pause playback around a DSP apply ───────────────────────────────
+# Applying a DSP change restarts squeezelite and/or CamillaDSP, which means
+# closing and reopening an ALSA device — abandoning a LIVE, actively-streaming
+# transfer mid-flight is a much rougher transition than restarting an idle
+# device (more in-flight state to unwind), and is suspected to be behind
+# sporadic silence/lockups after a DSP toggle during playback (same class of
+# problem as the DMA kernel panic mitigated for reboot/shutdown). Minimal
+# local LMS JSON-RPC client so the backend can pause the local player itself
+# before applying, and resume it after, regardless of which client (kiosk,
+# companion app) triggered the change.
+LMS_RPC_URL = 'http://127.0.0.1:9000/jsonrpc.js'
+
+def _lms_request(playerid, command, timeout=5):
+    payload = json.dumps({'id': 1, 'method': 'slim.request', 'params': [playerid, command]}).encode()
+    req = urllib.request.Request(LMS_RPC_URL, data=payload, headers={'Content-Type': 'application/json'})
+    with urllib.request.urlopen(req, timeout=timeout) as resp:
+        return json.loads(resp.read()).get('result')
+
+def _local_playing_player():
+    """playerid of THIS device's own squeezelite instance if it's currently
+    playing, else None — only its stream is affected by a DSP apply (other
+    multiroom members elsewhere are untouched). Best-effort: any failure
+    (LMS not reachable, unexpected shape) just means we don't pause, not a
+    reason to fail the DSP apply itself."""
+    try:
+        result = _lms_request('-', ['serverstatus', 0, 999]) or {}
+        for p in result.get('players_loop', []):
+            if str(p.get('ip', '')).startswith('127.0.0.1:'):
+                playerid = p.get('playerid')
+                st = _lms_request(playerid, ['status', '-', 1]) or {}
+                if st.get('mode') == 'play':
+                    return playerid
+    except Exception:
+        log.exception('_local_playing_player failed')
+    return None
+
+def _lms_pause(playerid, pause):
+    try:
+        _lms_request(playerid, ['pause', '1' if pause else '0'])
+    except Exception:
+        log.exception('_lms_pause(%s) failed', pause)
+
 def _camilla_config_valid(cfg):
     """Write cfg to a scratch file and ask CamillaDSP itself to validate it,
     so a bad EQ/balance/FIR combination can never leave squeezelite pointed
@@ -1226,6 +1268,20 @@ def _apply_dsp_on(playback_dev, bands, crossfeed, room_correction=False, balance
     cfg = _camilla_config_dict(playback_dev, bands, crossfeed, room_correction, balance)
     if not _camilla_config_valid(cfg):
         raise ValueError('Configurazione DSP non valida')
+    # Pause first: about to restart squeezelite and/or CamillaDSP, i.e. close
+    # and reopen an ALSA device — doing that while it's actively mid-stream
+    # is what was leaving things silent/stuck after a DSP toggle during
+    # playback. Always resume afterward, success or failure.
+    playing_player = _local_playing_player()
+    if playing_player:
+        _lms_pause(playing_player, True)
+    try:
+        _apply_dsp_on_locked(playback_dev, bands, crossfeed, room_correction, balance, cfg)
+    finally:
+        if playing_player:
+            _lms_pause(playing_player, False)
+
+def _apply_dsp_on_locked(playback_dev, bands, crossfeed, room_correction, balance, cfg):
     os.makedirs(os.path.dirname(CAMILLA_CONFIG), exist_ok=True)
     with open(CAMILLA_CONFIG, 'w') as f:
         json.dump(cfg, f, indent=2)
@@ -1267,17 +1323,27 @@ def _apply_dsp_on(playback_dev, bands, crossfeed, room_correction=False, balance
     _run(['systemctl', 'restart', DSP_UNIT], timeout=30)
 
 def _apply_dsp_off():
-    dac = _read_dsp_target()
-    _, args = _read_sq_args()
-    if args is not None:
-        args = _sq_set_o(args, dac or 'default')
-        args = _sq_ensure_D(args)                 # restore DoP/DSD
-        args = re.sub(r'\s*-r\s+\S+', '', args)    # drop the forced rate
-        args = _sq_remove_flag(args, '-R')         # drop resampling
-        _write_sq_args(re.sub(r'\s+', ' ', args).strip())
-    subprocess.run(['sudo', 'systemctl', 'disable', '--now', DSP_UNIT],
-                   capture_output=True, text=True, timeout=30)
-    _run(['systemctl', 'restart', 'squeezelite'], timeout=30)
+    # See _apply_dsp_on's matching comment: pause around the restart so an
+    # actively-streaming device is never yanked out from under a live
+    # transfer.
+    playing_player = _local_playing_player()
+    if playing_player:
+        _lms_pause(playing_player, True)
+    try:
+        dac = _read_dsp_target()
+        _, args = _read_sq_args()
+        if args is not None:
+            args = _sq_set_o(args, dac or 'default')
+            args = _sq_ensure_D(args)                 # restore DoP/DSD
+            args = re.sub(r'\s*-r\s+\S+', '', args)    # drop the forced rate
+            args = _sq_remove_flag(args, '-R')         # drop resampling
+            _write_sq_args(re.sub(r'\s+', ' ', args).strip())
+        subprocess.run(['sudo', 'systemctl', 'disable', '--now', DSP_UNIT],
+                       capture_output=True, text=True, timeout=30)
+        _run(['systemctl', 'restart', 'squeezelite'], timeout=30)
+    finally:
+        if playing_player:
+            _lms_pause(playing_player, False)
 
 def get_dsp_status():
     st = _read_dsp_state()
