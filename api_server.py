@@ -1241,7 +1241,17 @@ def _local_playing_player():
 
 def _lms_pause(playerid, pause):
     try:
-        _lms_request(playerid, ['pause', '1' if pause else '0'])
+        if pause:
+            _lms_request(playerid, ['pause', '1'])
+        else:
+            # Not `pause 0`: the apply we just ran killed and restarted
+            # squeezelite (and/or CamillaDSP), so there is no live paused
+            # stream on the player to simply unpause -- the new squeezelite
+            # process has nothing buffered. Give it a moment to reconnect to
+            # Lyrion (slimproto handshake after the restart), then explicitly
+            # (re)start playback from the current queue position.
+            time.sleep(1.5)
+            _lms_request(playerid, ['play'])
     except Exception:
         log.exception('_lms_pause(%s) failed', pause)
 
