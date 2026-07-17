@@ -1232,22 +1232,31 @@ def _apply_dsp_on(playback_dev, bands, crossfeed, room_correction=False, balance
     _write_dsp_target(playback_dev)
     _, args = _read_sq_args()
     if args is not None:
-        args = _sq_set_o(args, LOOPBACK_PLAYBACK)
-        args = _sq_remove_flag(args, '-D')   # no DoP/DSD through the DSP path
-        args = _sq_set_rate(args, DSP_RATE)  # fixed rate into the loopback
-        args = _sq_ensure_R(args)            # soxr resample to that rate
+        new_args = _sq_set_o(args, LOOPBACK_PLAYBACK)
+        new_args = _sq_remove_flag(new_args, '-D')   # no DoP/DSD through the DSP path
+        new_args = _sq_set_rate(new_args, DSP_RATE)  # fixed rate into the loopback
+        new_args = _sq_ensure_R(new_args)            # soxr resample to that rate
         # Collapse whitespace left behind by flag removal/insertion — belt and
         # braces against a messy starting string (e.g. an external migration
         # like 0003-audio-dsd-device.sh touching the same line) leaving runs
         # of spaces that would otherwise just accumulate on every apply.
-        _write_sq_args(re.sub(r'\s+', ' ', args).strip())
-    # squeezelite must release the real DAC (by restarting onto the loopback)
-    # BEFORE CamillaDSP tries to open that same hw: device — otherwise the two
-    # processes fight over an exclusive-access device and CamillaDSP's open
-    # can fail or wedge the DAC until a reboot. Same reasoning as
-    # _apply_dsp_off(), just mirrored: release the old holder before starting
-    # the new one.
-    _run(['systemctl', 'restart', 'squeezelite'], timeout=30)
+        new_args = re.sub(r'\s+', ' ', new_args).strip()
+        # squeezelite only needs restarting when its own args actually change
+        # (DSP was off, or a preset/balance apply just merged in from an older
+        # client that still sent 'enabled' — see set_dsp). A plain EQ/preset
+        # switch while already on leaves squeezelite's args identical, so
+        # skip the restart: it would otherwise drop squeezelite's connection
+        # to Lyrion and interrupt whatever's currently playing for no reason
+        # — only CamillaDSP needs to reload to pick up the new EQ.
+        if new_args != re.sub(r'\s+', ' ', args).strip():
+            _write_sq_args(new_args)
+            # squeezelite must release the real DAC (by restarting onto the
+            # loopback) BEFORE CamillaDSP tries to open that same hw: device —
+            # otherwise the two processes fight over an exclusive-access
+            # device and CamillaDSP's open can fail or wedge the DAC until a
+            # reboot. Same reasoning as _apply_dsp_off(), just mirrored:
+            # release the old holder before starting the new one.
+            _run(['systemctl', 'restart', 'squeezelite'], timeout=30)
     # `enable --now` is a no-op on an already-running unit — it would NOT pick
     # up the config.yml we just wrote (CamillaDSP only reads it at startup, no
     # hot reload). Enable separately for boot persistence, then always
