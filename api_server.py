@@ -1236,7 +1236,11 @@ def _apply_dsp_on(playback_dev, bands, crossfeed, room_correction=False, balance
         args = _sq_remove_flag(args, '-D')   # no DoP/DSD through the DSP path
         args = _sq_set_rate(args, DSP_RATE)  # fixed rate into the loopback
         args = _sq_ensure_R(args)            # soxr resample to that rate
-        _write_sq_args(args)
+        # Collapse whitespace left behind by flag removal/insertion — belt and
+        # braces against a messy starting string (e.g. an external migration
+        # like 0003-audio-dsd-device.sh touching the same line) leaving runs
+        # of spaces that would otherwise just accumulate on every apply.
+        _write_sq_args(re.sub(r'\s+', ' ', args).strip())
     # squeezelite must release the real DAC (by restarting onto the loopback)
     # BEFORE CamillaDSP tries to open that same hw: device — otherwise the two
     # processes fight over an exclusive-access device and CamillaDSP's open
@@ -1261,7 +1265,7 @@ def _apply_dsp_off():
         args = _sq_ensure_D(args)                 # restore DoP/DSD
         args = re.sub(r'\s*-r\s+\S+', '', args)    # drop the forced rate
         args = _sq_remove_flag(args, '-R')         # drop resampling
-        _write_sq_args(args.strip())
+        _write_sq_args(re.sub(r'\s+', ' ', args).strip())
     subprocess.run(['sudo', 'systemctl', 'disable', '--now', DSP_UNIT],
                    capture_output=True, text=True, timeout=30)
     _run(['systemctl', 'restart', 'squeezelite'], timeout=30)

@@ -11,7 +11,15 @@ if [ -f "$SQ" ] && grep -q '^ARGS=' "$SQ"; then
 
     # a) Enable bit-perfect DSD (DoP). Without -D squeezelite downconverts DSD to
     #    PCM. Insert it right after the -o device token if not already present.
-    if ! grep '^ARGS=' "$SQ" | grep -q -- ' -D'; then
+    #    Skip entirely when squeezelite is currently redirected to the DSP
+    #    engine's Loopback (api_server.py's _apply_dsp_on() deliberately
+    #    removes -D there -- DSD passthrough doesn't make sense on the
+    #    resampled DSP path). Blindly re-adding it here on every OS update
+    #    fought with that, corrupting the ARGS line back to a contradictory
+    #    half-DSP/half-bit-perfect state (-D together with -o Loopback/-r/-R)
+    #    every time an OS update landed while DSP happened to be on.
+    if ! grep '^ARGS=' "$SQ" | grep -q -- '-o[[:space:]]*hw:CARD=Loopback' \
+       && ! grep '^ARGS=' "$SQ" | grep -q -- ' -D'; then
         sed -i "/^ARGS=/ s/\(-o[[:space:]]\{1,\}[^ ']\{1,\}\)/\1 -D/" "$SQ"
         mark_changed "enabled DSD (-D) in $SQ"
         sq_changed=1
