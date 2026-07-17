@@ -247,6 +247,26 @@ const Settings = () => {
     loadPlayerName();
   }, []);
 
+  // The DSP state can change out from under this page — the companion app
+  // drives the same backend from the phone. Poll it so toggles/presets made
+  // there show up here without reopening Settings. Guarded twice: never
+  // mid-apply (dsp/presetBusy), and never while the user has local unsaved
+  // edits (dirty), which a refresh would silently clobber.
+  const dspSyncBlockedRef = useRef(false);
+  dspSyncBlockedRef.current = dspBusy || presetBusy;
+  const dspDirtyRef = useRef(false);
+  const markDspDirty = () => { dspDirtyRef.current = true; };
+  useEffect(() => {
+    const id = setInterval(() => {
+      if (document.visibilityState === 'visible'
+          && !dspSyncBlockedRef.current && !dspDirtyRef.current) {
+        loadDspStatus();
+      }
+    }, 10000);
+    return () => clearInterval(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // ── Playback preferences handlers ───────────────────────────────
   // Resolves the active player from the shared Lyrion client (same singleton
   // the player UI uses) and loads its per-player prefs + alarms.
@@ -560,6 +580,7 @@ const Settings = () => {
       setDspRoomCorrection(!!res.data.room_correction);
       setDspBalance(typeof res.data.balance === 'number' ? res.data.balance : 0);
       setDspActivePreset(res.data.preset || null);
+      dspDirtyRef.current = false;   // editors now mirror the appliance state
     }
     loadFirStatus();
     loadDspPresets();
@@ -606,6 +627,7 @@ const Settings = () => {
       // just loaded one — reflect that in the chip row immediately.
       setDspActivePreset(res.data.preset ?? null);
       setDspMessage(res.data.message || '');
+      dspDirtyRef.current = false;   // local edits are now the applied state
     } else {
       setDspMessage(res.data?.message || res.message || t('settings.dsp.failed'));
     }
@@ -617,9 +639,11 @@ const Settings = () => {
   };
 
   const updateBand = (i, key, value) => {
+    markDspDirty();
     setDspBands((bands) => bands.map((b, idx) => idx === i ? { ...b, [key]: value } : b));
   };
   const updateBandType = (i, type) => {
+    markDspDirty();
     setDspBands((bands) => bands.map((b, idx) => {
       if (idx !== i) return b;
       const next = { ...b, type };
@@ -628,8 +652,8 @@ const Settings = () => {
       return next;
     }));
   };
-  const addBand = () => setDspBands((b) => [...b, { type: 'Peaking', freq: 1000, gain: 0, q: 1.0 }]);
-  const removeBand = (i) => setDspBands((b) => b.filter((_, idx) => idx !== i));
+  const addBand = () => { markDspDirty(); setDspBands((b) => [...b, { type: 'Peaking', freq: 1000, gain: 0, q: 1.0 }]); };
+  const removeBand = (i) => { markDspDirty(); setDspBands((b) => b.filter((_, idx) => idx !== i)); };
 
   // Graphic EQ: read/write a fixed-frequency Peaking band's gain within
   // dspBands without disturbing any other band (e.g. shelf filters loaded
@@ -640,6 +664,7 @@ const Settings = () => {
     return b ? (b.gain ?? 0) : 0;
   };
   const setGraphicBandGain = (freq, gain) => {
+    markDspDirty();
     setDspBands((bands) => {
       const idx = bands.findIndex((b) => b.type === 'Peaking' && b.freq === freq);
       if (idx === -1) {
@@ -1897,7 +1922,7 @@ const Settings = () => {
 
                         {/* Crossfeed */}
                         <button
-                          onClick={() => setDspCrossfeed((v) => !v)}
+                          onClick={() => { markDspDirty(); setDspCrossfeed((v) => !v); }}
                           className="w-full flex items-center justify-between bg-hifi-dark hover:bg-hifi-light/40 rounded-lg px-4 py-3 transition-colors"
                         >
                           <span className="text-sm text-white">{t('settings.dsp.crossfeed')}</span>
@@ -1917,11 +1942,11 @@ const Settings = () => {
                             </span>
                           </div>
                           <input type="range" min={-12} max={12} step={0.5} value={dspBalance}
-                            onChange={(e) => setDspBalance(Number(e.target.value))}
+                            onChange={(e) => { markDspDirty(); setDspBalance(Number(e.target.value)); }}
                             className="w-full accent-hifi-gold" />
                           <div className="flex items-center justify-between text-[10px] text-hifi-silver">
                             <span>L</span>
-                            <button onClick={() => setDspBalance(0)} className="text-hifi-gold hover:text-hifi-gold/80">
+                            <button onClick={() => { markDspDirty(); setDspBalance(0); }} className="text-hifi-gold hover:text-hifi-gold/80">
                               {t('settings.dsp.balanceCenter')}
                             </button>
                             <span>R</span>
@@ -1931,7 +1956,7 @@ const Settings = () => {
                         {/* Room correction (FIR convolution) */}
                         <div className="bg-hifi-dark rounded-lg px-4 py-3 space-y-2">
                           <button
-                            onClick={() => firStatus?.present && setDspRoomCorrection((v) => !v)}
+                            onClick={() => { if (firStatus?.present) { markDspDirty(); setDspRoomCorrection((v) => !v); } }}
                             disabled={!firStatus?.present}
                             className="w-full flex items-center justify-between disabled:opacity-50"
                           >
