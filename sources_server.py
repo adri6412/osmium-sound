@@ -1236,14 +1236,19 @@ def _require_pair_token():
 _API_SERVER_BASE = "http://127.0.0.1:8000"
 
 
-def _proxy_to_api_server(path, method="GET", body=None):
+def _proxy_to_api_server(path, method="GET", body=None, timeout=10):
+    # Callers that trigger a full DSP apply pass a longer timeout: applying
+    # now pauses playback, restarts squeezelite/CamillaDSP, waits for the
+    # player to re-register with Lyrion (up to ~10s) and seeks back — easily
+    # past the default 10s, and timing out here made the phone report
+    # "Servizio DSP non raggiungibile" while the apply was in fact succeeding.
     req = urllib.request.Request(f"{_API_SERVER_BASE}{path}", method=method)
     data = None
     if body is not None:
         data = json.dumps(body).encode("utf-8")
         req.add_header("Content-Type", "application/json")
     try:
-        with urllib.request.urlopen(req, data=data, timeout=10) as resp:
+        with urllib.request.urlopen(req, data=data, timeout=timeout) as resp:
             return json.loads(resp.read().decode("utf-8")), resp.status
     except urllib.error.HTTPError as e:
         try:
@@ -1274,7 +1279,7 @@ def api_dsp_set_proxy():
     if denied:
         return denied
     data = request.get_json(silent=True) or {}
-    body, status = _proxy_to_api_server("/dsp_set", method="POST", body=data)
+    body, status = _proxy_to_api_server("/dsp_set", method="POST", body=data, timeout=60)
     return jsonify(body), status
 
 
@@ -1303,7 +1308,9 @@ def api_dsp_preset_load_proxy():
     if denied:
         return denied
     data = request.get_json(silent=True) or {}
-    body, status = _proxy_to_api_server("/dsp_preset_load", method="POST", body=data)
+    # Preset load runs a full set_dsp() apply on the appliance — long timeout,
+    # same reasoning as /api/dsp/set above.
+    body, status = _proxy_to_api_server("/dsp_preset_load", method="POST", body=data, timeout=60)
     return jsonify(body), status
 
 

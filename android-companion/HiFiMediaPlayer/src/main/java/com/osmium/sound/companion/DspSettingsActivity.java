@@ -102,9 +102,9 @@ public class DspSettingsActivity extends AppCompatActivity {
         pickFilterLauncher = registerForActivityResult(
                 new ActivityResultContracts.OpenDocument(), this::onFilterChosen);
 
-        switchEnabled.setOnCheckedChangeListener((btn, checked) -> { if (!suppressToggleEvents) applyDsp(checked); });
-        switchRoomCorrection.setOnCheckedChangeListener((btn, checked) -> { if (!suppressToggleEvents) { roomCorrection = checked; applyDsp(switchEnabled.isChecked()); } });
-        switchCrossfeed.setOnCheckedChangeListener((btn, checked) -> { if (!suppressToggleEvents) { crossfeed = checked; applyDsp(switchEnabled.isChecked()); } });
+        switchEnabled.setOnCheckedChangeListener((btn, checked) -> { if (!suppressToggleEvents) applyDspPatch(singleKeyPatch("enabled", checked)); });
+        switchRoomCorrection.setOnCheckedChangeListener((btn, checked) -> { if (!suppressToggleEvents) { roomCorrection = checked; applyDspPatch(singleKeyPatch("room_correction", checked)); } });
+        switchCrossfeed.setOnCheckedChangeListener((btn, checked) -> { if (!suppressToggleEvents) { crossfeed = checked; applyDspPatch(singleKeyPatch("crossfeed", checked)); } });
 
         balanceSeekBar.setMax(BALANCE_STEPS);
         balanceSeekBar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
@@ -119,7 +119,14 @@ public class DspSettingsActivity extends AppCompatActivity {
 
             @Override
             public void onStopTrackingTouch(SeekBar seekBar) {
-                if (!suppressToggleEvents) applyDsp(switchEnabled.isChecked());
+                if (!suppressToggleEvents) {
+                    JSONObject patch = new JSONObject();
+                    try {
+                        patch.put("balance", balance);
+                    } catch (Exception ignored) {
+                    }
+                    applyDspPatch(patch);
+                }
             }
         });
 
@@ -212,21 +219,26 @@ public class DspSettingsActivity extends AppCompatActivity {
         });
     }
 
-    // Sends enabled/crossfeed/room_correction/balance only — NOT 'bands'.
-    // The appliance's set_dsp() applies merge semantics: any key omitted
-    // here keeps its last stored value, so this screen (which doesn't edit
-    // EQ bands) can never wipe the parametric EQ configured from the
-    // appliance's own touchscreen Settings.
-    private void applyDsp(boolean enabled) {
-        setBusy(true);
-        JSONObject config = new JSONObject();
+    private JSONObject singleKeyPatch(String key, boolean value) {
+        JSONObject patch = new JSONObject();
         try {
-            config.put("enabled", enabled);
-            config.put("crossfeed", crossfeed);
-            config.put("room_correction", roomCorrection);
-            config.put("balance", balance);
+            patch.put(key, value);
         } catch (Exception ignored) {
         }
+        return patch;
+    }
+
+    // Sends ONLY the key(s) the user just changed. The appliance's set_dsp()
+    // applies merge semantics — any key omitted keeps its last stored value —
+    // so this screen (which doesn't edit EQ bands) can never wipe the
+    // parametric EQ configured from the appliance's own touchscreen Settings.
+    // Single-key patches also matter for the active-preset name: the backend
+    // clears it whenever a tone key (crossfeed/balance/…) appears in the
+    // payload, so bundling the full state with every change (as this screen
+    // used to) made a plain DSP on/off toggle silently deselect the active
+    // preset chip.
+    private void applyDspPatch(JSONObject config) {
+        setBusy(true);
         ApplianceHttpClient.dspSet(config, new ApplianceHttpClient.JsonCallback() {
             @Override
             public void onSuccess(JSONObject body) {
