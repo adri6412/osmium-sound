@@ -1638,21 +1638,27 @@ def _fetch_pages_manifest(channel):
 
 def _fetch_github_api_release(channel):
     """Fallback: query the (rate-limited) GitHub REST API.
-    prod → /releases/latest (stable only); dev → newest release incl. prereleases."""
-    if channel == 'dev':
-        url = f'https://api.github.com/repos/{OTA_REPO}/releases?per_page=10'
-    else:
-        url = f'https://api.github.com/repos/{OTA_REPO}/releases/latest'
+    prod → newest stable; dev → newest release incl. prereleases.
+
+    The repo also hosts the Android companion app's releases (tags
+    "companion-v*", APK-only assets) — those must never be offered to the
+    appliance, so both channels list releases and filter them out. That's
+    also why prod can't just use /releases/latest: a stable companion
+    release can claim "latest" (belt-and-braces with the workflow-side
+    make_latest: false) and it can't be filtered from that endpoint."""
+    url = f'https://api.github.com/repos/{OTA_REPO}/releases?per_page=30'
     req = urllib.request.Request(url, headers={
         'Accept': 'application/vnd.github+json',
         'User-Agent': 'hifi-player-ota',
     })
     with urllib.request.urlopen(req, timeout=15) as resp:
         data = json.load(resp)
+    # GitHub lists releases newest-first; skip drafts and companion releases.
+    rels = [rel for rel in data if not rel.get('draft')
+            and not str(rel.get('tag_name', '')).startswith('companion-')]
     if channel == 'dev':
-        # GitHub lists releases newest-first; skip drafts, take the first.
-        return next((rel for rel in data if not rel.get('draft')), {})
-    return data
+        return next(iter(rels), {})
+    return next((rel for rel in rels if not rel.get('prerelease')), {})
 
 def _fetch_release(channel):
     """Fetch the release to offer for the given channel.
