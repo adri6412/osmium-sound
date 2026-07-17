@@ -261,12 +261,29 @@ public class SqueezeService extends Service {
     }
 
     /**
+     * The id of an active player that vanished from the server's player list
+     * out from under us — the appliance restarts its squeezelite whenever the
+     * DSP engine is toggled on/off, and for a few seconds the player is gone
+     * from LMS. We re-adopt this player automatically the moment it
+     * reappears; a fallback player auto-picked in the meantime (typically
+     * this phone's own local squeezelite — showing "unknown track") is only
+     * ever a stand-in and must not steal the stored last-player preference.
+     * Cleared when the user explicitly picks a player themselves.
+     */
+    @Nullable
+    private volatile String vanishedActivePlayerId;
+
+    /**
      * Change the player that is controlled by Squeezer (the "active" player).
      *
      * @param newActivePlayer The new active player. May be null, in which case no players are controlled.
      * @param continuePlaying Continue playback on the supplied player
      */
     private void changeActivePlayer(@Nullable final Player newActivePlayer, boolean continuePlaying) {
+        changeActivePlayer(newActivePlayer, continuePlaying, true);
+    }
+
+    private void changeActivePlayer(@Nullable final Player newActivePlayer, boolean continuePlaying, boolean persistChoice) {
         Player prevActivePlayer = mDelegate.getActivePlayer();
 
         // Do nothing if the player hasn't actually changed.
@@ -285,7 +302,12 @@ public class SqueezeService extends Service {
         updateAllPlayerSubscriptionStates();
         requestPlayerData();
         if (continuePlaying && prevActivePlayer != null) moveCurrentPlaylist(prevActivePlayer, newActivePlayer);
-        HiFiMediaPlayer.getPreferences().setLastPlayer(newActivePlayer);
+        // Transient auto-fallbacks (persistChoice == false) must not
+        // overwrite the stored preference: it's what getPreferredPlayer()
+        // uses to find our way back to the real player when it returns.
+        if (persistChoice) {
+            HiFiMediaPlayer.getPreferences().setLastPlayer(newActivePlayer);
+        }
     }
 
     private void moveCurrentPlaylist(Player from, Player to) {
@@ -747,13 +769,36 @@ public class SqueezeService extends Service {
     }
 
     private void onPlayersChanged(PlayersChanged event) {
+        // A previously-vanished active player takes precedence the moment it
+        // reappears: switch back to it, even if a stand-in was auto-picked in
+        // the meantime (see vanishedActivePlayerId).
+        if (vanishedActivePlayerId != null) {
+            Player returned = mDelegate.getPlayer(vanishedActivePlayerId);
+            if (returned != null) {
+                vanishedActivePlayerId = null;
+                changeActivePlayer(returned, false);
+                return;
+            }
+        }
         Player activePlayer = mDelegate.getActivePlayer();
         if (activePlayer == null) {
-            // Figure out the new active player, let everyone know.
-            changeActivePlayer(getPreferredPlayer(mDelegate.getPlayers().values()), false);
+            // Figure out the new active player, let everyone know. Not
+            // persisted: if this pick is a stand-in while the real player is
+            // briefly gone, it must not overwrite the last-player preference.
+            changeActivePlayer(getPreferredPlayer(mDelegate.getPlayers().values()), false,
+                    vanishedActivePlayerId == null);
         } else {
-            activePlayer = mDelegate.getPlayer(activePlayer.getId());
-            mDelegate.setActivePlayer(activePlayer);
+            Player refreshed = mDelegate.getPlayer(activePlayer.getId());
+            if (refreshed == null) {
+                // Active player dropped out of the list (e.g. the appliance's
+                // squeezelite restarting for a DSP toggle). Remember it so we
+                // can re-adopt it when it comes back, and pick a stand-in
+                // (without persisting) in the meantime.
+                vanishedActivePlayerId = activePlayer.getId();
+                changeActivePlayer(getPreferredPlayer(mDelegate.getPlayers().values()), false, false);
+                return;
+            }
+            mDelegate.setActivePlayer(refreshed);
             updateAllPlayerSubscriptionStates();
             requestPlayerData();
         }
@@ -1260,6 +1305,9 @@ public class SqueezeService extends Service {
 
         @Override
         public void setActivePlayer(@Nullable final Player newActivePlayer, boolean continuePlaying) {
+            // An explicit user choice overrides any pending re-adoption of a
+            // player that vanished and hasn't come back yet.
+            vanishedActivePlayerId = null;
             changeActivePlayer(newActivePlayer, continuePlaying);
         }
 
