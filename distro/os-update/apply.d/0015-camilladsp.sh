@@ -83,24 +83,31 @@ ensure_file_content "$UNIT" 644 root:root <<EOF
 [Unit]
 Description=CamillaDSP engine (optional DSP/EQ)
 After=sound.target
+# StartLimit* belong in [Unit], not [Service] (a previous cut of this file had
+# them under [Service], where systemd silently ignores them — visible as
+# "Unknown key 'StartLimitIntervalSec' in section [Service], ignoring" in the
+# journal; the cap was never actually in effect). If DSP was left on across a
+# reboot and the saved DAC target isn't there yet (USB enumeration race) or no
+# longer exists (unplugged, renamed), retrying forever every RestartSec would
+# be enough sustained CPU/journal I/O on the mini-PC to visibly slow the rest
+# of boot, including the kiosk. Give up eventually instead — but generously: a
+# USB DAC can legitimately take a while to enumerate after cold power-on, and
+# giving up too early leaves DSP silently non-functional for the rest of the
+# session. ~2 minutes of retries comfortably covers that.
+StartLimitIntervalSec=180
+StartLimitBurst=40
 
 [Service]
 Type=simple
 ExecStart=$CDSP_BIN /etc/camilladsp/config.yml
-Restart=on-failure
+# NOT on-failure: CamillaDSP exits 0 even when it fails to open its ALSA
+# device (observed: "No such device" logged, then "Deactivated successfully"
+# -- a clean exit as far as systemd is concerned), so on-failure never
+# restarted it after a lost race with DAC enumeration at boot -- it just
+# stayed dead until something else (e.g. re-selecting the DAC in Settings)
+# happened to restart it. always covers that "successful" failure exit too.
+Restart=always
 RestartSec=3
-# If DSP was left on across a reboot and the saved DAC target isn't there yet
-# (USB enumeration race) or no longer exists (unplugged, renamed), this would
-# otherwise retry forever every 3s — on the mini-PC that's enough sustained
-# CPU/journal I/O to visibly slow the rest of boot, including the kiosk.
-# Give up eventually instead of crash-looping indefinitely — but generously:
-# a USB DAC can legitimately take a while to enumerate after cold power-on,
-# and giving up too early (5 tries / 60s, the first cut of this fix) meant a
-# slow-to-enumerate DAC never got a working CamillaDSP after reboot at all,
-# needing a manual re-select in Settings -> Audio to kick it into a fresh,
-# working start. ~2 minutes of retries comfortably covers that.
-StartLimitIntervalSec=180
-StartLimitBurst=40
 
 [Install]
 WantedBy=multi-user.target
