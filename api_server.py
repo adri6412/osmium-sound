@@ -503,7 +503,8 @@ def set_audio_device(device):
     if _read_dsp_state().get('enabled'):
         st = _read_dsp_state()
         try:
-            _apply_dsp_on(device, st['bands'], st['crossfeed'], st['room_correction'])
+            with _dsp_apply_lock:
+                _apply_dsp_on(device, st['bands'], st['crossfeed'], st['room_correction'], st['balance'])
         except Exception:
             log.exception("set_audio_device (DSP) failed")
             return {'success': False, 'message': 'Impostazione uscita (DSP) fallita'}
@@ -949,6 +950,15 @@ CAMILLA_BIN = '/usr/local/bin/camilladsp'
 CAMILLA_CONFIG = '/etc/camilladsp/config.yml'
 CAMILLA_CONFIG_TMP = '/etc/camilladsp/config.yml.check'
 DSP_UNIT = 'camilladsp.service'
+# Flask runs threaded (see app.run below), so rapid-fire requests (e.g.
+# switching EQ presets a few times in a row while a track is playing) can
+# reach set_dsp()/set_audio_device() concurrently in separate threads.
+# _apply_dsp_on/_off each do a restart of squeezelite AND camilladsp — two of
+# those interleaving is the same DAC-contention race fixed for the on/off
+# ordering earlier, just self-inflicted between two overlapping requests
+# instead of a single misordered one. Serialize the whole apply so requests
+# queue instead of racing each other for the ALSA device.
+_dsp_apply_lock = threading.Lock()
 DSP_STATE_FILE = '/etc/hifi-player/dsp.json'
 DSP_PRESETS_FILE = '/etc/hifi-player/dsp-presets.json'
 DSP_TARGET_FILE = '/var/lib/hifi-player/dsp-target'
@@ -1294,16 +1304,17 @@ def set_dsp(config):
     elif any(k in config for k in ('bands', 'crossfeed', 'room_correction', 'balance')):
         preset = None
     try:
-        if enabled:
-            dac = _current_real_dac()
-            if not dac or 'Loopback' in dac:
-                dac = 'default'
-            _apply_dsp_on(dac, bands, crossfeed, room_correction, balance)
-        else:
-            _apply_dsp_off()
-        _write_dsp_state({'enabled': enabled, 'bands': bands, 'crossfeed': crossfeed,
-                          'room_correction': room_correction, 'balance': balance,
-                          'preset': preset})
+        with _dsp_apply_lock:
+            if enabled:
+                dac = _current_real_dac()
+                if not dac or 'Loopback' in dac:
+                    dac = 'default'
+                _apply_dsp_on(dac, bands, crossfeed, room_correction, balance)
+            else:
+                _apply_dsp_off()
+            _write_dsp_state({'enabled': enabled, 'bands': bands, 'crossfeed': crossfeed,
+                              'room_correction': room_correction, 'balance': balance,
+                              'preset': preset})
     except Exception:
         log.exception('set_dsp failed')
         return {'success': False, 'message': 'Operazione DSP fallita'}
