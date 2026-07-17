@@ -122,7 +122,6 @@ jobs:
 
             For issues or feedback, please create a GitHub issue.
           draft: false
-          prerelease: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
