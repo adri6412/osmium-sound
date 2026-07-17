@@ -1222,11 +1222,14 @@ def _lms_request(playerid, command, timeout=5):
         return json.loads(resp.read()).get('result')
 
 def _local_playing_player():
-    """playerid of THIS device's own squeezelite instance if it's currently
-    playing, else None — only its stream is affected by a DSP apply (other
-    multiroom members elsewhere are untouched). Best-effort: any failure
-    (LMS not reachable, unexpected shape) just means we don't pause, not a
-    reason to fail the DSP apply itself."""
+    """(playerid, elapsed_seconds) of THIS device's own squeezelite instance
+    if it's currently playing, else (None, 0.0) — only its stream is affected
+    by a DSP apply (other multiroom members elsewhere are untouched). The
+    elapsed position is captured here, BEFORE the pause/restart, so the
+    resume can seek back to it — LMS does not reliably keep the position
+    across the player's disconnect, so a bare `play` sometimes restarted the
+    track from 0:00. Best-effort: any failure (LMS not reachable, unexpected
+    shape) just means we don't pause, not a reason to fail the DSP apply."""
     try:
         result = _lms_request('-', ['serverstatus', 0, 999]) or {}
         for p in result.get('players_loop', []):
@@ -1234,36 +1237,52 @@ def _local_playing_player():
                 playerid = p.get('playerid')
                 st = _lms_request(playerid, ['status', '-', 1]) or {}
                 if st.get('mode') == 'play':
-                    return playerid
+                    try:
+                        elapsed = float(st.get('time') or 0.0)
+                    except (TypeError, ValueError):
+                        elapsed = 0.0
+                    return playerid, elapsed
     except Exception:
         log.exception('_local_playing_player failed')
-    return None
+    return None, 0.0
 
-def _lms_pause(playerid, pause):
+def _lms_pause(playerid):
     try:
-        if pause:
-            _lms_request(playerid, ['pause', '1'])
-        else:
-            # Not `pause 0`: the apply we just ran killed and restarted
-            # squeezelite (and/or CamillaDSP), so there is no live paused
-            # stream on the player to simply unpause -- the new squeezelite
-            # process has nothing buffered. Wait until the player has
-            # actually re-registered with Lyrion (a fixed sleep proved too
-            # short: the slimproto handshake after a restart can take several
-            # seconds, and a `play` sent to a not-yet-connected player is
-            # silently dropped), then explicitly (re)start playback from the
-            # current queue position.
-            for _ in range(20):  # up to ~10s
-                try:
-                    st = _lms_request(playerid, ['status', '-', 1]) or {}
-                    if st.get('player_connected'):
-                        break
-                except Exception:
-                    pass
-                time.sleep(0.5)
-            _lms_request(playerid, ['play'])
+        _lms_request(playerid, ['pause', '1'])
     except Exception:
-        log.exception('_lms_pause(%s) failed', pause)
+        log.exception('_lms_pause failed')
+
+def _lms_resume(playerid, resume_at=0.0):
+    """Restart playback after a DSP apply. Not `pause 0`: the apply killed
+    and restarted squeezelite (and/or CamillaDSP), so there is no live paused
+    stream on the player to simply unpause -- the new squeezelite process has
+    nothing buffered. Wait until the player has actually re-registered with
+    Lyrion (a fixed sleep proved too short: the slimproto handshake after a
+    restart can take several seconds, and a `play` sent to a not-yet-connected
+    player is silently dropped), start playback, then seek back to where the
+    track was — `play` alone starts the current queue item from 0:00 whenever
+    LMS lost the position across the disconnect."""
+    try:
+        for _ in range(20):  # up to ~10s
+            try:
+                st = _lms_request(playerid, ['status', '-', 1]) or {}
+                if st.get('player_connected'):
+                    break
+            except Exception:
+                pass
+            time.sleep(0.5)
+        _lms_request(playerid, ['play'])
+        if resume_at and resume_at > 1.0:
+            # Give the fresh stream a beat to actually start before seeking;
+            # an unseekable source (radio stream) just ignores/fails this,
+            # which is fine — it has no meaningful position to restore.
+            time.sleep(0.5)
+            try:
+                _lms_request(playerid, ['time', round(resume_at, 1)])
+            except Exception:
+                pass
+    except Exception:
+        log.exception('_lms_resume failed')
 
 def _camilla_config_valid(cfg):
     """Write cfg to a scratch file and ask CamillaDSP itself to validate it,
@@ -1292,14 +1311,14 @@ def _apply_dsp_on(playback_dev, bands, crossfeed, room_correction=False, balance
     # and reopen an ALSA device — doing that while it's actively mid-stream
     # is what was leaving things silent/stuck after a DSP toggle during
     # playback. Always resume afterward, success or failure.
-    playing_player = _local_playing_player()
+    playing_player, elapsed = _local_playing_player()
     if playing_player:
-        _lms_pause(playing_player, True)
+        _lms_pause(playing_player)
     try:
         _apply_dsp_on_locked(playback_dev, bands, crossfeed, room_correction, balance, cfg)
     finally:
         if playing_player:
-            _lms_pause(playing_player, False)
+            _lms_resume(playing_player, elapsed)
 
 def _apply_dsp_on_locked(playback_dev, bands, crossfeed, room_correction, balance, cfg):
     os.makedirs(os.path.dirname(CAMILLA_CONFIG), exist_ok=True)
@@ -1346,9 +1365,9 @@ def _apply_dsp_off():
     # See _apply_dsp_on's matching comment: pause around the restart so an
     # actively-streaming device is never yanked out from under a live
     # transfer.
-    playing_player = _local_playing_player()
+    playing_player, elapsed = _local_playing_player()
     if playing_player:
-        _lms_pause(playing_player, True)
+        _lms_pause(playing_player)
     try:
         dac = _read_dsp_target()
         _, args = _read_sq_args()
@@ -1363,7 +1382,7 @@ def _apply_dsp_off():
         _run(['systemctl', 'restart', 'squeezelite'], timeout=30)
     finally:
         if playing_player:
-            _lms_pause(playing_player, False)
+            _lms_resume(playing_player, elapsed)
 
 def get_dsp_status():
     st = _read_dsp_state()
