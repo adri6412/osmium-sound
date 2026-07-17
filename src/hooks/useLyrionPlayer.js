@@ -134,6 +134,23 @@ export function useLyrionPlayer() {
     }
   };
 
+  // The one dead-end in this hook's recovery story: the bad-poll self-heal
+  // below only runs while an activePlayer is set. If connectToServer() lands
+  // in the exact window where the local squeezelite is disconnected from LMS
+  // (it bounces whenever DSP toggles on/off — that's a systemctl restart),
+  // players_loop comes back empty, activePlayer is nulled, and from then on
+  // NOTHING retried: the status poll early-returns, the fail counter never
+  // moves, and the kiosk sat dead until a manual reload. Close the loop by
+  // retrying the connect itself for as long as we have no player.
+  useEffect(() => {
+    if (activePlayer || isLoading) return;
+    const id = setInterval(() => {
+      if (document.visibilityState === 'visible') connectToServer();
+    }, 5000);
+    return () => clearInterval(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activePlayer, isLoading]);
+
   // connectToServer() only ever resolves activePlayer once (10s after mount,
   // or on a multiroom server-URL change) — there was no path back if the
   // squeezelite process behind it ever bounced (e.g. Settings → DSP restarts

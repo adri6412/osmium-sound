@@ -1239,20 +1239,6 @@ def _local_playing_player():
         log.exception('_local_playing_player failed')
     return None
 
-def _restart_kiosk():
-    """Force the kiosk (Electron/X session) to reload from scratch after a
-    real DSP on/off transition. The kiosk's own reconnect-to-Lyrion logic has
-    proven unreliable at picking back up cleanly on its own after squeezelite
-    bounces (stale activePlayer, connection not re-synced) — a fresh session
-    re-resolves everything from zero instead of relying on that. Same
-    mechanism the UI OTA updater already uses to apply a new build. Not used
-    for a plain preset/EQ switch (squeezelite isn't touched there, so the
-    kiosk's connection is never disturbed in the first place)."""
-    try:
-        subprocess.run(['systemctl', 'restart', 'lightdm'], capture_output=True, text=True, timeout=30)
-    except Exception:
-        log.exception('_restart_kiosk failed')
-
 def _lms_pause(playerid, pause):
     try:
         if pause:
@@ -1261,10 +1247,20 @@ def _lms_pause(playerid, pause):
             # Not `pause 0`: the apply we just ran killed and restarted
             # squeezelite (and/or CamillaDSP), so there is no live paused
             # stream on the player to simply unpause -- the new squeezelite
-            # process has nothing buffered. Give it a moment to reconnect to
-            # Lyrion (slimproto handshake after the restart), then explicitly
-            # (re)start playback from the current queue position.
-            time.sleep(1.5)
+            # process has nothing buffered. Wait until the player has
+            # actually re-registered with Lyrion (a fixed sleep proved too
+            # short: the slimproto handshake after a restart can take several
+            # seconds, and a `play` sent to a not-yet-connected player is
+            # silently dropped), then explicitly (re)start playback from the
+            # current queue position.
+            for _ in range(20):  # up to ~10s
+                try:
+                    st = _lms_request(playerid, ['status', '-', 1]) or {}
+                    if st.get('player_connected'):
+                        break
+                except Exception:
+                    pass
+                time.sleep(0.5)
             _lms_request(playerid, ['play'])
     except Exception:
         log.exception('_lms_pause(%s) failed', pause)
@@ -1337,7 +1333,6 @@ def _apply_dsp_on_locked(playback_dev, bands, crossfeed, room_correction, balanc
             # reboot. Same reasoning as _apply_dsp_off(), just mirrored:
             # release the old holder before starting the new one.
             _run(['systemctl', 'restart', 'squeezelite'], timeout=30)
-            _restart_kiosk()
     # `enable --now` is a no-op on an already-running unit — it would NOT pick
     # up the config.yml we just wrote (CamillaDSP only reads it at startup, no
     # hot reload). Enable separately for boot persistence, then always
@@ -1366,7 +1361,6 @@ def _apply_dsp_off():
         subprocess.run(['sudo', 'systemctl', 'disable', '--now', DSP_UNIT],
                        capture_output=True, text=True, timeout=30)
         _run(['systemctl', 'restart', 'squeezelite'], timeout=30)
-        _restart_kiosk()
     finally:
         if playing_player:
             _lms_pause(playing_player, False)
