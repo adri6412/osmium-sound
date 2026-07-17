@@ -7,10 +7,18 @@ import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.provider.OpenableColumns;
+import android.text.InputType;
+import android.util.TypedValue;
+import android.view.Gravity;
 import android.view.MenuItem;
 import android.view.View;
+import android.widget.AdapterView;
+import android.widget.ArrayAdapter;
+import android.widget.EditText;
+import android.widget.LinearLayout;
 import android.widget.ProgressBar;
 import android.widget.SeekBar;
+import android.widget.Spinner;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -45,6 +53,12 @@ public class DspSettingsActivity extends AppCompatActivity {
     private static final double BALANCE_MAX = 12.0;
     private static final int BALANCE_STEPS = 48; // 0.5 dB per SeekBar step, -12..+12
 
+    // Biquad types set_dsp accepts, in the order shown by each band's type
+    // spinner. Highpass/Lowpass take no gain (the backend rejects one).
+    private static final String[] BAND_TYPES = {"Peaking", "Lowshelf", "Highshelf", "Highpass", "Lowpass"};
+    private static final int BAND_TYPE_HIGHPASS = 3;
+    private static final int BAND_TYPE_LOWPASS = 4;
+
     private final ThemeManager mThemeManager = new ThemeManager();
 
     private View unavailableMessage;
@@ -55,6 +69,9 @@ public class DspSettingsActivity extends AppCompatActivity {
     private ChipGroup presetsChipGroup;
     private TextInputEditText presetNameInput;
     private View buttonSavePreset;
+    private View eqSection;
+    private TextView eqNoBands;
+    private LinearLayout eqBandsContainer;
     private TextView filterStatus;
     private View buttonUpload, buttonRemove;
     private ProgressBar progressBar;
@@ -93,6 +110,9 @@ public class DspSettingsActivity extends AppCompatActivity {
         presetsChipGroup = findViewById(R.id.dsp_presets_chip_group);
         presetNameInput = findViewById(R.id.dsp_preset_name_input);
         buttonSavePreset = findViewById(R.id.button_save_preset);
+        eqSection = findViewById(R.id.dsp_eq_section);
+        eqNoBands = findViewById(R.id.dsp_eq_no_bands);
+        eqBandsContainer = findViewById(R.id.dsp_eq_bands_container);
         filterStatus = findViewById(R.id.dsp_filter_status);
         buttonUpload = findViewById(R.id.button_upload_filter);
         buttonRemove = findViewById(R.id.button_remove_filter);
@@ -131,6 +151,29 @@ public class DspSettingsActivity extends AppCompatActivity {
         });
 
         buttonSavePreset.setOnClickListener(v -> saveCurrentAsPreset());
+
+        findViewById(R.id.button_add_band).setOnClickListener(v -> {
+            JSONObject band = new JSONObject();
+            try {
+                band.put("type", "Peaking");
+                band.put("freq", 1000);
+                band.put("gain", 0);
+                band.put("q", 1.0);
+            } catch (Exception ignored) {
+            }
+            eqBandsContainer.addView(buildBandRow(band));
+            updateEqEmptyVisibility();
+        });
+        findViewById(R.id.button_apply_eq).setOnClickListener(v -> {
+            JSONObject patch = new JSONObject();
+            try {
+                patch.put("bands", harvestBands());
+            } catch (Exception ignored) {
+            }
+            // A bands edit clears the active preset server-side — refresh the
+            // chip row afterwards so the UI reflects that.
+            applyDspPatch(patch, this::loadPresets);
+        });
 
         buttonUpload.setOnClickListener(v -> pickFilterLauncher.launch(new String[]{"audio/x-wav", "audio/wav", "text/plain", "*/*"}));
         buttonRemove.setOnClickListener(v -> new MaterialAlertDialogBuilder(this)
@@ -172,12 +215,15 @@ public class DspSettingsActivity extends AppCompatActivity {
         balanceSeekBar.setVisibility(rowVisibility);
         buttonUpload.setVisibility(rowVisibility);
         buttonRemove.setVisibility(rowVisibility);
+        eqSection.setVisibility(rowVisibility);
         if (!available) return;
 
         roomCorrection = status.optBoolean("room_correction", false);
         crossfeed = status.optBoolean("crossfeed", false);
         balance = status.optDouble("balance", 0.0);
         if (Double.isNaN(balance)) balance = 0.0;
+
+        renderEqBands(status.optJSONArray("bands"));
 
         suppressToggleEvents = true;
         switchEnabled.setChecked(status.optBoolean("enabled", false));
@@ -238,6 +284,10 @@ public class DspSettingsActivity extends AppCompatActivity {
     // used to) made a plain DSP on/off toggle silently deselect the active
     // preset chip.
     private void applyDspPatch(JSONObject config) {
+        applyDspPatch(config, null);
+    }
+
+    private void applyDspPatch(JSONObject config, @androidx.annotation.Nullable Runnable onSuccess) {
         setBusy(true);
         ApplianceHttpClient.dspSet(config, new ApplianceHttpClient.JsonCallback() {
             @Override
@@ -245,6 +295,8 @@ public class DspSettingsActivity extends AppCompatActivity {
                 setBusy(false);
                 if (!body.optBoolean("success", true)) {
                     showMessage(body.optString("message", getString(R.string.settings_dsp_status_failed)));
+                } else if (onSuccess != null) {
+                    onSuccess.run();
                 }
             }
 
@@ -254,6 +306,153 @@ public class DspSettingsActivity extends AppCompatActivity {
                 showMessage(getString(R.string.settings_dsp_status_failed) + ": " + message);
             }
         });
+    }
+
+    // ── Parametric EQ bands ──────────────────────────────────────────
+    // Rows are plain programmatic views (≤20 bands, no recycler needed);
+    // values live in the row widgets themselves and are harvested into JSON
+    // on Apply — the backend's _clean_bands() clamps/validates server-side.
+
+    /** Per-row widget references, stashed in the row view's tag. */
+    private static class BandRowHolder {
+        final Spinner type;
+        final EditText freq, gain, q;
+        BandRowHolder(Spinner type, EditText freq, EditText gain, EditText q) {
+            this.type = type; this.freq = freq; this.gain = gain; this.q = q;
+        }
+    }
+
+    private void renderEqBands(JSONArray bands) {
+        eqBandsContainer.removeAllViews();
+        if (bands != null) {
+            for (int i = 0; i < bands.length(); i++) {
+                JSONObject band = bands.optJSONObject(i);
+                if (band != null) eqBandsContainer.addView(buildBandRow(band));
+            }
+        }
+        updateEqEmptyVisibility();
+    }
+
+    private void updateEqEmptyVisibility() {
+        eqNoBands.setVisibility(eqBandsContainer.getChildCount() == 0 ? View.VISIBLE : View.GONE);
+    }
+
+    private int dp(int value) {
+        return (int) TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, value,
+                getResources().getDisplayMetrics());
+    }
+
+    private EditText makeNumberField(String initial, String hint, boolean signed) {
+        EditText field = new EditText(this);
+        field.setInputType(InputType.TYPE_CLASS_NUMBER | InputType.TYPE_NUMBER_FLAG_DECIMAL
+                | (signed ? InputType.TYPE_NUMBER_FLAG_SIGNED : 0));
+        field.setHint(hint);
+        field.setText(initial);
+        field.setMaxLines(1);
+        return field;
+    }
+
+    /** Render a number dropping a trailing ".0" (freq 1000.0 → "1000"). */
+    private static String formatNumber(double v) {
+        return v == Math.rint(v) ? String.valueOf((long) v) : String.valueOf(v);
+    }
+
+    private View buildBandRow(JSONObject band) {
+        LinearLayout row = new LinearLayout(this);
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        row.setGravity(Gravity.CENTER_VERTICAL);
+        LinearLayout.LayoutParams rowLp = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        rowLp.bottomMargin = dp(4);
+        row.setLayoutParams(rowLp);
+
+        Spinner type = new Spinner(this);
+        ArrayAdapter<String> adapter = new ArrayAdapter<>(this,
+                android.R.layout.simple_spinner_item, new String[]{
+                getString(R.string.settings_dsp_band_type_peaking),
+                getString(R.string.settings_dsp_band_type_lowshelf),
+                getString(R.string.settings_dsp_band_type_highshelf),
+                getString(R.string.settings_dsp_band_type_highpass),
+                getString(R.string.settings_dsp_band_type_lowpass)});
+        adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
+        type.setAdapter(adapter);
+        String bandType = band.optString("type", "Peaking");
+        for (int i = 0; i < BAND_TYPES.length; i++) {
+            if (BAND_TYPES[i].equals(bandType)) {
+                type.setSelection(i);
+                break;
+            }
+        }
+
+        EditText freq = makeNumberField(formatNumber(band.optDouble("freq", 1000)),
+                getString(R.string.settings_dsp_eq_freq_hint), false);
+        EditText gain = makeNumberField(formatNumber(band.optDouble("gain", 0)),
+                getString(R.string.settings_dsp_eq_gain_hint), true);
+        EditText q = makeNumberField(formatNumber(band.optDouble("q", 1.0)),
+                getString(R.string.settings_dsp_eq_q_hint), false);
+
+        type.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
+            @Override
+            public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
+                boolean hasGain = position != BAND_TYPE_HIGHPASS && position != BAND_TYPE_LOWPASS;
+                gain.setEnabled(hasGain);
+                gain.setAlpha(hasGain ? 1f : 0.4f);
+            }
+
+            @Override
+            public void onNothingSelected(AdapterView<?> parent) { }
+        });
+
+        com.google.android.material.button.MaterialButton remove =
+                new com.google.android.material.button.MaterialButton(this, null,
+                        com.google.android.material.R.attr.materialButtonOutlinedStyle);
+        remove.setText("✕");
+        remove.setMinWidth(dp(40));
+        remove.setMinimumWidth(dp(40));
+        remove.setOnClickListener(v -> {
+            eqBandsContainer.removeView(row);
+            updateEqEmptyVisibility();
+        });
+
+        row.addView(type, new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1.4f));
+        row.addView(freq, new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
+        row.addView(gain, new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 0.8f));
+        row.addView(q, new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 0.8f));
+        row.addView(remove, new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT));
+        row.setTag(new BandRowHolder(type, freq, gain, q));
+        return row;
+    }
+
+    private static double parseOr(EditText field, double fallback) {
+        try {
+            return Double.parseDouble(field.getText().toString().trim());
+        } catch (Exception e) {
+            return fallback;
+        }
+    }
+
+    private JSONArray harvestBands() {
+        JSONArray bands = new JSONArray();
+        for (int i = 0; i < eqBandsContainer.getChildCount(); i++) {
+            Object tag = eqBandsContainer.getChildAt(i).getTag();
+            if (!(tag instanceof BandRowHolder)) continue;
+            BandRowHolder holder = (BandRowHolder) tag;
+            int typeIdx = holder.type.getSelectedItemPosition();
+            if (typeIdx < 0 || typeIdx >= BAND_TYPES.length) typeIdx = 0;
+            try {
+                JSONObject band = new JSONObject();
+                band.put("type", BAND_TYPES[typeIdx]);
+                band.put("freq", parseOr(holder.freq, 1000));
+                if (typeIdx != BAND_TYPE_HIGHPASS && typeIdx != BAND_TYPE_LOWPASS) {
+                    band.put("gain", parseOr(holder.gain, 0));
+                }
+                band.put("q", parseOr(holder.q, 1.0));
+                bands.put(band);
+            } catch (Exception ignored) {
+            }
+        }
+        return bands;
     }
 
     // ── Presets ──────────────────────────────────────────────────────
