@@ -24,6 +24,12 @@ export class LyrionAPI {
       params: [playerMac, command]
     };
 
+    // Abort after 10s: without a timeout a request that hangs (e.g. LMS
+    // momentarily overloaded while CamillaDSP/squeezelite restart on this
+    // same small box) never settles, so the caller's failure-counting and
+    // reconnect logic in useLyrionPlayer never gets a chance to kick in.
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 10000);
     try {
       const response = await fetch(this.rpcUrl, {
         method: 'POST',
@@ -31,7 +37,8 @@ export class LyrionAPI {
           'Content-Type': 'application/json',
           'Accept': 'application/json'
         },
-        body: JSON.stringify(payload)
+        body: JSON.stringify(payload),
+        signal: controller.signal
       });
 
       if (!response.ok) {
@@ -43,6 +50,8 @@ export class LyrionAPI {
     } catch (error) {
       console.error('Lyrion API Error:', error);
       throw error;
+    } finally {
+      clearTimeout(timer);
     }
   }
 

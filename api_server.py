@@ -99,9 +99,33 @@ LYRION_PKG = 'lyrionmusicserver'
 LYRION_SCRIPT = '/usr/local/sbin/hifi-lyrion-update.sh'
 LYRION_STATUS_FILE = '/run/hifi-lyrion-status.json'
 
+# Mitigation for a kernel panic seen in the DesignWare DMA driver
+# (dw_dmac_core: dw_shutdown -> do_dw_dma_disable) during device_shutdown()
+# when reboot()/shutdown() runs while a DMA channel is actively streaming
+# audio — reliably reproduced with the DSP engine on (continuous stream
+# through that path), never with it off. This isn't a fix for the kernel bug
+# itself (that needs an upstream/kernel fix), just a best-effort way to avoid
+# the race: stop the audio path and give the hardware a moment to go idle
+# before actually asking the kernel to restart/power off. DSP_UNIT is defined
+# further down in this file; that's fine, it's resolved at call time.
+def _quiesce_audio_before_power_action():
+    try:
+        ac = subprocess.run(['systemctl', 'is-active', DSP_UNIT],
+                            capture_output=True, text=True, timeout=10)
+        if ac.stdout.strip() != 'active':
+            return
+        subprocess.run(['sudo', 'systemctl', 'stop', DSP_UNIT],
+                       capture_output=True, text=True, timeout=15)
+        subprocess.run(['sudo', 'systemctl', 'stop', 'squeezelite'],
+                       capture_output=True, text=True, timeout=15)
+        time.sleep(2)
+    except Exception:
+        log.exception('_quiesce_audio_before_power_action failed')
+
 # Funzione per riavviare il dispositivo
 def reboot_device():
     try:
+        _quiesce_audio_before_power_action()
         subprocess.Popen("sudo reboot", shell=True)
         return "Device rebooting"
     except Exception:
@@ -111,6 +135,7 @@ def reboot_device():
 # Funzione per spegnere il dispositivo
 def shutdown_device():
     try:
+        _quiesce_audio_before_power_action()
         subprocess.Popen("sudo shutdown now", shell=True)
         return "Device shutting down"
     except Exception:
@@ -444,9 +469,9 @@ def list_audio_devices():
                 })
     except Exception:
         log.exception("list_audio_devices failed")
-        return {'devices': devices, 'current': _current_audio_device(),
+        return {'devices': devices, 'current': _current_real_dac(),
                 'error': 'Lettura dispositivi audio fallita'}
-    return {'devices': devices, 'current': _current_audio_device()}
+    return {'devices': devices, 'current': _current_real_dac()}
 
 def _current_audio_device():
     """Return the -o output device currently configured in /etc/default/squeezelite."""
@@ -478,7 +503,8 @@ def set_audio_device(device):
     if _read_dsp_state().get('enabled'):
         st = _read_dsp_state()
         try:
-            _apply_dsp_on(device, st['bands'], st['crossfeed'], st['room_correction'])
+            with _dsp_apply_lock:
+                _apply_dsp_on(device, st['bands'], st['crossfeed'], st['room_correction'], st['balance'])
         except Exception:
             log.exception("set_audio_device (DSP) failed")
             return {'success': False, 'message': 'Impostazione uscita (DSP) fallita'}
@@ -922,12 +948,47 @@ def set_tidal(enable):
 # ──────────────────────────────────────────────────────────────────
 CAMILLA_BIN = '/usr/local/bin/camilladsp'
 CAMILLA_CONFIG = '/etc/camilladsp/config.yml'
+CAMILLA_CONFIG_TMP = '/etc/camilladsp/config.yml.check'
 DSP_UNIT = 'camilladsp.service'
+# Flask runs threaded (see app.run below), so rapid-fire requests (e.g.
+# switching EQ presets a few times in a row while a track is playing) can
+# reach set_dsp()/set_audio_device() concurrently in separate threads.
+# _apply_dsp_on/_off each do a restart of squeezelite AND camilladsp — two of
+# those interleaving is the same DAC-contention race fixed for the on/off
+# ordering earlier, just self-inflicted between two overlapping requests
+# instead of a single misordered one. Serialize the whole apply so requests
+# queue instead of racing each other for the ALSA device.
+_dsp_apply_lock = threading.Lock()
 DSP_STATE_FILE = '/etc/hifi-player/dsp.json'
+DSP_PRESETS_FILE = '/etc/hifi-player/dsp-presets.json'
 DSP_TARGET_FILE = '/var/lib/hifi-player/dsp-target'
 DSP_RATE = 48000
 LOOPBACK_PLAYBACK = 'hw:CARD=Loopback,DEV=0'   # squeezelite writes here
 LOOPBACK_CAPTURE = 'hw:CARD=Loopback,DEV=1'    # CamillaDSP reads here
+
+# Biquad filter types a band may take. Highpass/Lowpass have no gain
+# parameter in CamillaDSP — emitting one is a config validation error.
+DSP_BAND_TYPES = {'Peaking', 'Lowshelf', 'Highshelf', 'Highpass', 'Lowpass'}
+DSP_BAND_TYPES_NO_GAIN = {'Highpass', 'Lowpass'}
+DSP_BALANCE_MAX = 12.0
+
+# Built-in read-only presets. Never persisted; 'balance'/'crossfeed'/
+# 'room_correction' stay neutral so loading one only touches tone.
+DSP_BUILTIN_PRESETS = {
+    'Flat': {'bands': [], 'crossfeed': False, 'room_correction': False, 'balance': 0.0},
+    'Warm': {'bands': [
+        {'type': 'Lowshelf', 'freq': 150, 'gain': 2.0, 'q': 0.707},
+        {'type': 'Highshelf', 'freq': 7500, 'gain': -1.5, 'q': 0.707},
+    ], 'crossfeed': False, 'room_correction': False, 'balance': 0.0},
+    'Bright': {'bands': [
+        {'type': 'Highshelf', 'freq': 6000, 'gain': 2.5, 'q': 0.707},
+    ], 'crossfeed': False, 'room_correction': False, 'balance': 0.0},
+    'Loudness (low volume)': {'bands': [
+        {'type': 'Lowshelf', 'freq': 120, 'gain': 4.0, 'q': 0.707},
+        {'type': 'Highshelf', 'freq': 8000, 'gain': 2.0, 'q': 0.707},
+    ], 'crossfeed': False, 'room_correction': False, 'balance': 0.0},
+}
+DSP_MAX_USER_PRESETS = 24
 
 # Room-correction FIR filter — uploaded via the sources web service (:8080,
 # see sources_server.py's /api/dsp/fir) and picked up here. Fixed dir/name
@@ -953,6 +1014,36 @@ def _loopback_present():
 def _dsp_available():
     return os.path.exists(CAMILLA_BIN) and _unit_exists(DSP_UNIT) and _loopback_present()
 
+def _clean_band(b):
+    """Validate/normalize one EQ band. Raises on a bad freq/gain/q (caller
+    skips it), same as the pre-existing inline validation in set_dsp."""
+    btype = b.get('type', 'Peaking')
+    if btype not in DSP_BAND_TYPES:
+        btype = 'Peaking'
+    out = {
+        'type': btype,
+        'freq': max(20.0, min(20000.0, float(b.get('freq')))),
+        'q': max(0.1, min(10.0, float(b.get('q', 1.0)) or 1.0)),
+    }
+    if btype not in DSP_BAND_TYPES_NO_GAIN:
+        out['gain'] = max(-24.0, min(24.0, float(b.get('gain', 0))))
+    return out
+
+def _clean_bands(bands):
+    clean = []
+    for b in (bands or [])[:20]:
+        try:
+            clean.append(_clean_band(b))
+        except Exception:
+            continue
+    return clean
+
+def _clean_balance(v):
+    try:
+        return max(-DSP_BALANCE_MAX, min(DSP_BALANCE_MAX, float(v)))
+    except Exception:
+        return 0.0
+
 def _read_dsp_state():
     try:
         with open(DSP_STATE_FILE) as f:
@@ -960,9 +1051,11 @@ def _read_dsp_state():
     except Exception:
         d = {}
     return {'enabled': bool(d.get('enabled')),
-            'bands': d.get('bands') or [],
+            'bands': _clean_bands(d.get('bands')),
             'crossfeed': bool(d.get('crossfeed')),
-            'room_correction': bool(d.get('room_correction'))}
+            'room_correction': bool(d.get('room_correction')),
+            'balance': _clean_balance(d.get('balance') or 0.0),
+            'preset': d.get('preset') or None}
 
 def _write_dsp_state(state):
     os.makedirs(os.path.dirname(DSP_STATE_FILE), exist_ok=True)
@@ -1036,17 +1129,22 @@ def _sq_ensure_R(args):
         args = (args + ' -R').strip()
     return args
 
-def _camilla_config_dict(playback_dev, bands, crossfeed, room_correction=False):
+def _camilla_config_dict(playback_dev, bands, crossfeed, room_correction=False, balance=0.0):
     """Build a CamillaDSP config (returned as a dict; JSON is valid YAML)."""
     filters, eq_names = {}, []
     for i, b in enumerate(bands):
         nm = f'band_{i}'
-        filters[nm] = {'type': 'Biquad', 'parameters': {
-            'type': 'Peaking',
+        btype = b.get('type', 'Peaking')
+        if btype not in DSP_BAND_TYPES:
+            btype = 'Peaking'
+        params = {
+            'type': btype,
             'freq': float(b.get('freq', 1000)),
             'q': float(b.get('q', 1.0)) or 1.0,
-            'gain': float(b.get('gain', 0)),
-        }}
+        }
+        if btype not in DSP_BAND_TYPES_NO_GAIN:
+            params['gain'] = float(b.get('gain', 0))
+        filters[nm] = {'type': 'Biquad', 'parameters': params}
         eq_names.append(nm)
     conv_names = []
     if room_correction:
@@ -1076,6 +1174,19 @@ def _camilla_config_dict(playback_dev, bands, crossfeed, room_correction=False):
         pipeline.append({'type': 'Filter', 'channels': [0, 1], 'names': conv_names})
     if eq_names:
         pipeline.append({'type': 'Filter', 'channels': [0, 1], 'names': eq_names})
+    # Balance: attenuate-only (never boost, so no clipping risk). Positive
+    # balance shifts toward the right ear by attenuating the left channel,
+    # and vice-versa. Applied last, after tone shaping.
+    bal = max(-DSP_BALANCE_MAX, min(DSP_BALANCE_MAX, float(balance or 0.0)))
+    if abs(bal) >= 0.05:
+        gain_l = -max(0.0, bal)
+        gain_r = min(0.0, bal)
+        if gain_l:
+            filters['balance_l'] = {'type': 'Gain', 'parameters': {'gain': gain_l}}
+            pipeline.append({'type': 'Filter', 'channels': [0], 'names': ['balance_l']})
+        if gain_r:
+            filters['balance_r'] = {'type': 'Gain', 'parameters': {'gain': gain_r}}
+            pipeline.append({'type': 'Filter', 'channels': [1], 'names': ['balance_r']})
     return {
         'devices': {
             'samplerate': DSP_RATE, 'chunksize': 1024,
@@ -1092,35 +1203,186 @@ def _current_real_dac():
     o = _current_audio_device()
     return _read_dsp_target() if 'Loopback' in o else o
 
-def _apply_dsp_on(playback_dev, bands, crossfeed, room_correction=False):
-    cfg = _camilla_config_dict(playback_dev, bands, crossfeed, room_correction)
+# ── Pause playback around a DSP apply ───────────────────────────────
+# Applying a DSP change restarts squeezelite and/or CamillaDSP, which means
+# closing and reopening an ALSA device — abandoning a LIVE, actively-streaming
+# transfer mid-flight is a much rougher transition than restarting an idle
+# device (more in-flight state to unwind), and is suspected to be behind
+# sporadic silence/lockups after a DSP toggle during playback (same class of
+# problem as the DMA kernel panic mitigated for reboot/shutdown). Minimal
+# local LMS JSON-RPC client so the backend can pause the local player itself
+# before applying, and resume it after, regardless of which client (kiosk,
+# companion app) triggered the change.
+LMS_RPC_URL = 'http://127.0.0.1:9000/jsonrpc.js'
+
+def _lms_request(playerid, command, timeout=5):
+    payload = json.dumps({'id': 1, 'method': 'slim.request', 'params': [playerid, command]}).encode()
+    req = urllib.request.Request(LMS_RPC_URL, data=payload, headers={'Content-Type': 'application/json'})
+    with urllib.request.urlopen(req, timeout=timeout) as resp:
+        return json.loads(resp.read()).get('result')
+
+def _local_playing_player():
+    """(playerid, elapsed_seconds) of THIS device's own squeezelite instance
+    if it's currently playing, else (None, 0.0) — only its stream is affected
+    by a DSP apply (other multiroom members elsewhere are untouched). The
+    elapsed position is captured here, BEFORE the pause/restart, so the
+    resume can seek back to it — LMS does not reliably keep the position
+    across the player's disconnect, so a bare `play` sometimes restarted the
+    track from 0:00. Best-effort: any failure (LMS not reachable, unexpected
+    shape) just means we don't pause, not a reason to fail the DSP apply."""
+    try:
+        result = _lms_request('-', ['serverstatus', 0, 999]) or {}
+        for p in result.get('players_loop', []):
+            if str(p.get('ip', '')).startswith('127.0.0.1:'):
+                playerid = p.get('playerid')
+                st = _lms_request(playerid, ['status', '-', 1]) or {}
+                if st.get('mode') == 'play':
+                    try:
+                        elapsed = float(st.get('time') or 0.0)
+                    except (TypeError, ValueError):
+                        elapsed = 0.0
+                    return playerid, elapsed
+    except Exception:
+        log.exception('_local_playing_player failed')
+    return None, 0.0
+
+def _lms_pause(playerid):
+    try:
+        _lms_request(playerid, ['pause', '1'])
+    except Exception:
+        log.exception('_lms_pause failed')
+
+def _lms_resume(playerid, resume_at=0.0):
+    """Restart playback after a DSP apply. Not `pause 0`: the apply killed
+    and restarted squeezelite (and/or CamillaDSP), so there is no live paused
+    stream on the player to simply unpause -- the new squeezelite process has
+    nothing buffered. Wait until the player has actually re-registered with
+    Lyrion (a fixed sleep proved too short: the slimproto handshake after a
+    restart can take several seconds, and a `play` sent to a not-yet-connected
+    player is silently dropped), start playback, then seek back to where the
+    track was — `play` alone starts the current queue item from 0:00 whenever
+    LMS lost the position across the disconnect."""
+    try:
+        for _ in range(20):  # up to ~10s
+            try:
+                st = _lms_request(playerid, ['status', '-', 1]) or {}
+                if st.get('player_connected'):
+                    break
+            except Exception:
+                pass
+            time.sleep(0.5)
+        _lms_request(playerid, ['play'])
+        if resume_at and resume_at > 1.0:
+            # Give the fresh stream a beat to actually start before seeking;
+            # an unseekable source (radio stream) just ignores/fails this,
+            # which is fine — it has no meaningful position to restore.
+            time.sleep(0.5)
+            try:
+                _lms_request(playerid, ['time', round(resume_at, 1)])
+            except Exception:
+                pass
+    except Exception:
+        log.exception('_lms_resume failed')
+
+def _camilla_config_valid(cfg):
+    """Write cfg to a scratch file and ask CamillaDSP itself to validate it,
+    so a bad EQ/balance/FIR combination can never leave squeezelite pointed
+    at a Loopback with a dead (or silently-rejecting) CamillaDSP behind it."""
+    try:
+        with open(CAMILLA_CONFIG_TMP, 'w') as f:
+            json.dump(cfg, f, indent=2)
+        r = subprocess.run([CAMILLA_BIN, '--check', CAMILLA_CONFIG_TMP],
+                           capture_output=True, text=True, timeout=15)
+        return r.returncode == 0
+    except Exception:
+        log.exception('camilladsp --check failed')
+        return False
+    finally:
+        try:
+            os.remove(CAMILLA_CONFIG_TMP)
+        except OSError:
+            pass
+
+def _apply_dsp_on(playback_dev, bands, crossfeed, room_correction=False, balance=0.0):
+    cfg = _camilla_config_dict(playback_dev, bands, crossfeed, room_correction, balance)
+    if not _camilla_config_valid(cfg):
+        raise ValueError('Configurazione DSP non valida')
+    # Pause first: about to restart squeezelite and/or CamillaDSP, i.e. close
+    # and reopen an ALSA device — doing that while it's actively mid-stream
+    # is what was leaving things silent/stuck after a DSP toggle during
+    # playback. Always resume afterward, success or failure.
+    playing_player, elapsed = _local_playing_player()
+    if playing_player:
+        _lms_pause(playing_player)
+    try:
+        _apply_dsp_on_locked(playback_dev, bands, crossfeed, room_correction, balance, cfg)
+    finally:
+        if playing_player:
+            _lms_resume(playing_player, elapsed)
+
+def _apply_dsp_on_locked(playback_dev, bands, crossfeed, room_correction, balance, cfg):
     os.makedirs(os.path.dirname(CAMILLA_CONFIG), exist_ok=True)
     with open(CAMILLA_CONFIG, 'w') as f:
         json.dump(cfg, f, indent=2)
     _write_dsp_target(playback_dev)
     _, args = _read_sq_args()
     if args is not None:
-        args = _sq_set_o(args, LOOPBACK_PLAYBACK)
-        args = _sq_remove_flag(args, '-D')   # no DoP/DSD through the DSP path
-        args = _sq_set_rate(args, DSP_RATE)  # fixed rate into the loopback
-        args = _sq_ensure_R(args)            # soxr resample to that rate
-        _write_sq_args(args)
-    subprocess.run(['sudo', 'systemctl', 'enable', '--now', DSP_UNIT],
+        new_args = _sq_set_o(args, LOOPBACK_PLAYBACK)
+        new_args = _sq_remove_flag(new_args, '-D')   # no DoP/DSD through the DSP path
+        new_args = _sq_set_rate(new_args, DSP_RATE)  # fixed rate into the loopback
+        new_args = _sq_ensure_R(new_args)            # soxr resample to that rate
+        # Collapse whitespace left behind by flag removal/insertion — belt and
+        # braces against a messy starting string (e.g. an external migration
+        # like 0003-audio-dsd-device.sh touching the same line) leaving runs
+        # of spaces that would otherwise just accumulate on every apply.
+        new_args = re.sub(r'\s+', ' ', new_args).strip()
+        # squeezelite only needs restarting when its own args actually change
+        # (DSP was off, or a preset/balance apply just merged in from an older
+        # client that still sent 'enabled' — see set_dsp). A plain EQ/preset
+        # switch while already on leaves squeezelite's args identical, so
+        # skip the restart: it would otherwise drop squeezelite's connection
+        # to Lyrion and interrupt whatever's currently playing for no reason
+        # — only CamillaDSP needs to reload to pick up the new EQ.
+        if new_args != re.sub(r'\s+', ' ', args).strip():
+            _write_sq_args(new_args)
+            # squeezelite must release the real DAC (by restarting onto the
+            # loopback) BEFORE CamillaDSP tries to open that same hw: device —
+            # otherwise the two processes fight over an exclusive-access
+            # device and CamillaDSP's open can fail or wedge the DAC until a
+            # reboot. Same reasoning as _apply_dsp_off(), just mirrored:
+            # release the old holder before starting the new one.
+            _run(['systemctl', 'restart', 'squeezelite'], timeout=30)
+    # `enable --now` is a no-op on an already-running unit — it would NOT pick
+    # up the config.yml we just wrote (CamillaDSP only reads it at startup, no
+    # hot reload). Enable separately for boot persistence, then always
+    # restart so a preset/EQ change while DSP is already on actually takes
+    # effect instead of silently no-op'ing.
+    subprocess.run(['sudo', 'systemctl', 'enable', DSP_UNIT],
                    capture_output=True, text=True, timeout=30)
-    _run(['systemctl', 'restart', 'squeezelite'], timeout=30)
+    _run(['systemctl', 'restart', DSP_UNIT], timeout=30)
 
 def _apply_dsp_off():
-    dac = _read_dsp_target()
-    _, args = _read_sq_args()
-    if args is not None:
-        args = _sq_set_o(args, dac or 'default')
-        args = _sq_ensure_D(args)                 # restore DoP/DSD
-        args = re.sub(r'\s*-r\s+\S+', '', args)    # drop the forced rate
-        args = _sq_remove_flag(args, '-R')         # drop resampling
-        _write_sq_args(args.strip())
-    subprocess.run(['sudo', 'systemctl', 'disable', '--now', DSP_UNIT],
-                   capture_output=True, text=True, timeout=30)
-    _run(['systemctl', 'restart', 'squeezelite'], timeout=30)
+    # See _apply_dsp_on's matching comment: pause around the restart so an
+    # actively-streaming device is never yanked out from under a live
+    # transfer.
+    playing_player, elapsed = _local_playing_player()
+    if playing_player:
+        _lms_pause(playing_player)
+    try:
+        dac = _read_dsp_target()
+        _, args = _read_sq_args()
+        if args is not None:
+            args = _sq_set_o(args, dac or 'default')
+            args = _sq_ensure_D(args)                 # restore DoP/DSD
+            args = re.sub(r'\s*-r\s+\S+', '', args)    # drop the forced rate
+            args = _sq_remove_flag(args, '-R')         # drop resampling
+            _write_sq_args(re.sub(r'\s+', ' ', args).strip())
+        subprocess.run(['sudo', 'systemctl', 'disable', '--now', DSP_UNIT],
+                       capture_output=True, text=True, timeout=30)
+        _run(['systemctl', 'restart', 'squeezelite'], timeout=30)
+    finally:
+        if playing_player:
+            _lms_resume(playing_player, elapsed)
 
 def get_dsp_status():
     st = _read_dsp_state()
@@ -1134,41 +1396,155 @@ def get_dsp_status():
     fir_path, _ = _fir_current()
     return {'available': _dsp_available(), 'enabled': st['enabled'], 'active': active,
             'bands': st['bands'], 'crossfeed': st['crossfeed'], 'rate': DSP_RATE,
-            'room_correction': st['room_correction'], 'fir_present': bool(fir_path)}
+            'room_correction': st['room_correction'], 'fir_present': bool(fir_path),
+            'balance': st['balance'], 'preset': st['preset']}
 
 def set_dsp(config):
+    """Apply/persist DSP settings. Any key ABSENT from `config` keeps its
+    previously stored value (merge semantics) — this protects fields an
+    older UI/companion build never sends (e.g. 'balance') from being wiped
+    by a client that only knows about the older keys."""
     if not _dsp_available():
         return {'success': False, 'available': False,
                 'message': 'DSP non disponibile su questo dispositivo'}
-    enabled = bool(config.get('enabled'))
-    crossfeed = bool(config.get('crossfeed'))
-    room_correction = bool(config.get('room_correction'))
-    clean = []
-    for b in (config.get('bands') or [])[:20]:
-        try:
-            clean.append({
-                'freq': max(20.0, min(20000.0, float(b.get('freq')))),
-                'gain': max(-24.0, min(24.0, float(b.get('gain')))),
-                'q': max(0.1, min(10.0, float(b.get('q', 1.0)))),
-            })
-        except Exception:
-            continue
+    st = _read_dsp_state()
+    enabled = bool(config['enabled']) if 'enabled' in config else st['enabled']
+    crossfeed = bool(config['crossfeed']) if 'crossfeed' in config else st['crossfeed']
+    room_correction = bool(config['room_correction']) if 'room_correction' in config else st['room_correction']
+    bands = _clean_bands(config['bands']) if 'bands' in config else st['bands']
+    balance = _clean_balance(config['balance']) if 'balance' in config else st['balance']
+    # Any explicit tone/level edit (vs. e.g. just an enabled toggle) clears
+    # the active-preset name unless the caller names one itself (preset
+    # load/save pass 'preset' explicitly).
+    preset = st['preset']
+    if 'preset' in config:
+        preset = config.get('preset') or None
+    elif any(k in config for k in ('bands', 'crossfeed', 'room_correction', 'balance')):
+        preset = None
     try:
-        if enabled:
-            dac = _current_real_dac()
-            if not dac or 'Loopback' in dac:
-                dac = 'default'
-            _apply_dsp_on(dac, clean, crossfeed, room_correction)
-        else:
-            _apply_dsp_off()
-        _write_dsp_state({'enabled': enabled, 'bands': clean, 'crossfeed': crossfeed,
-                          'room_correction': room_correction})
+        with _dsp_apply_lock:
+            if enabled:
+                dac = _current_real_dac()
+                if not dac or 'Loopback' in dac:
+                    dac = 'default'
+                _apply_dsp_on(dac, bands, crossfeed, room_correction, balance)
+            else:
+                _apply_dsp_off()
+            _write_dsp_state({'enabled': enabled, 'bands': bands, 'crossfeed': crossfeed,
+                              'room_correction': room_correction, 'balance': balance,
+                              'preset': preset})
     except Exception:
         log.exception('set_dsp failed')
         return {'success': False, 'message': 'Operazione DSP fallita'}
-    return {'success': True, 'enabled': enabled, 'bands': clean, 'crossfeed': crossfeed,
-            'room_correction': room_correction,
+    return {'success': True, 'enabled': enabled, 'bands': bands, 'crossfeed': crossfeed,
+            'room_correction': room_correction, 'balance': balance, 'preset': preset,
             'message': 'DSP attivato' if enabled else 'DSP disattivato'}
+
+# ── DSP presets (named snapshots of bands/crossfeed/room_correction/balance) ──
+
+def _read_dsp_presets():
+    try:
+        with open(DSP_PRESETS_FILE) as f:
+            d = json.load(f)
+        presets = d.get('presets') or {}
+        return presets if isinstance(presets, dict) else {}
+    except Exception:
+        return {}
+
+def _write_dsp_presets(presets):
+    os.makedirs(os.path.dirname(DSP_PRESETS_FILE), exist_ok=True)
+    tmp = DSP_PRESETS_FILE + '.tmp'
+    with open(tmp, 'w') as f:
+        json.dump({'version': 1, 'presets': presets}, f, indent=2)
+    os.replace(tmp, DSP_PRESETS_FILE)
+
+def _dsp_preset_public(name, p, builtin, active_name):
+    return {'name': name, 'builtin': builtin, 'active': name == active_name,
+            'bands': p.get('bands') or [], 'crossfeed': bool(p.get('crossfeed')),
+            'room_correction': bool(p.get('room_correction')),
+            'balance': _clean_balance(p.get('balance') or 0.0)}
+
+def _valid_preset_name(name):
+    name = (name or '').strip()
+    if not name or len(name) > 40:
+        return None
+    if name.lower() in (k.lower() for k in DSP_BUILTIN_PRESETS):
+        return None
+    return name
+
+def get_dsp_presets():
+    st = _read_dsp_state()
+    user = _read_dsp_presets()
+    out = [_dsp_preset_public(n, p, True, st['preset']) for n, p in DSP_BUILTIN_PRESETS.items()]
+    out += [_dsp_preset_public(n, p, False, st['preset']) for n, p in sorted(user.items())]
+    return {'presets': out, 'active': st['preset']}
+
+def save_dsp_preset(name):
+    clean_name = _valid_preset_name(name)
+    if not clean_name:
+        return {'success': False, 'message': 'Nome preset non valido'}
+    user = _read_dsp_presets()
+    if clean_name not in user and len(user) >= DSP_MAX_USER_PRESETS:
+        return {'success': False, 'message': 'Numero massimo di preset raggiunto'}
+    st = _read_dsp_state()
+    user[clean_name] = {'bands': st['bands'], 'crossfeed': st['crossfeed'],
+                        'room_correction': st['room_correction'], 'balance': st['balance']}
+    try:
+        _write_dsp_presets(user)
+        _write_dsp_state({**st, 'preset': clean_name})
+    except Exception:
+        log.exception('save_dsp_preset failed')
+        return {'success': False, 'message': 'Salvataggio preset fallito'}
+    return {'success': True, **get_dsp_presets(), 'message': 'Preset salvato'}
+
+def load_dsp_preset(name):
+    name = (name or '').strip()
+    p = DSP_BUILTIN_PRESETS.get(name) or _read_dsp_presets().get(name)
+    if not p:
+        return {'success': False, 'message': 'Preset non trovato'}
+    # Bands + balance + crossfeed only — 'room_correction' and 'enabled' are
+    # deliberately preserved (they depend on a physically-uploaded FIR filter
+    # and on the bit-perfect on/off choice, not on the tonal preset).
+    result = set_dsp({'bands': p.get('bands') or [], 'balance': p.get('balance') or 0.0,
+                      'crossfeed': bool(p.get('crossfeed')), 'preset': name})
+    if result.get('success'):
+        result['message'] = 'Preset caricato'
+    return result
+
+def rename_dsp_preset(name, new_name):
+    user = _read_dsp_presets()
+    if name not in user:
+        return {'success': False, 'message': 'Preset non trovato'}
+    clean_new = _valid_preset_name(new_name)
+    if not clean_new:
+        return {'success': False, 'message': 'Nome preset non valido'}
+    if clean_new in user and clean_new != name:
+        return {'success': False, 'message': 'Esiste già un preset con questo nome'}
+    user[clean_new] = user.pop(name)
+    try:
+        _write_dsp_presets(user)
+        st = _read_dsp_state()
+        if st['preset'] == name:
+            _write_dsp_state({**st, 'preset': clean_new})
+    except Exception:
+        log.exception('rename_dsp_preset failed')
+        return {'success': False, 'message': 'Rinomina preset fallita'}
+    return {'success': True, **get_dsp_presets(), 'message': 'Preset rinominato'}
+
+def delete_dsp_preset(name):
+    user = _read_dsp_presets()
+    if name not in user:
+        return {'success': False, 'message': 'Preset non trovato'}
+    del user[name]
+    try:
+        _write_dsp_presets(user)
+        st = _read_dsp_state()
+        if st['preset'] == name:
+            _write_dsp_state({**st, 'preset': None})
+    except Exception:
+        log.exception('delete_dsp_preset failed')
+        return {'success': False, 'message': 'Eliminazione preset fallita'}
+    return {'success': True, **get_dsp_presets(), 'message': 'Preset eliminato'}
 
 # ──────────────────────────────────────────────────────────────────
 #  OTA update helpers
@@ -1262,21 +1638,27 @@ def _fetch_pages_manifest(channel):
 
 def _fetch_github_api_release(channel):
     """Fallback: query the (rate-limited) GitHub REST API.
-    prod → /releases/latest (stable only); dev → newest release incl. prereleases."""
-    if channel == 'dev':
-        url = f'https://api.github.com/repos/{OTA_REPO}/releases?per_page=10'
-    else:
-        url = f'https://api.github.com/repos/{OTA_REPO}/releases/latest'
+    prod → newest stable; dev → newest release incl. prereleases.
+
+    The repo also hosts the Android companion app's releases (tags
+    "companion-v*", APK-only assets) — those must never be offered to the
+    appliance, so both channels list releases and filter them out. That's
+    also why prod can't just use /releases/latest: a stable companion
+    release can claim "latest" (belt-and-braces with the workflow-side
+    make_latest: false) and it can't be filtered from that endpoint."""
+    url = f'https://api.github.com/repos/{OTA_REPO}/releases?per_page=30'
     req = urllib.request.Request(url, headers={
         'Accept': 'application/vnd.github+json',
         'User-Agent': 'hifi-player-ota',
     })
     with urllib.request.urlopen(req, timeout=15) as resp:
         data = json.load(resp)
+    # GitHub lists releases newest-first; skip drafts and companion releases.
+    rels = [rel for rel in data if not rel.get('draft')
+            and not str(rel.get('tag_name', '')).startswith('companion-')]
     if channel == 'dev':
-        # GitHub lists releases newest-first; skip drafts, take the first.
-        return next((rel for rel in data if not rel.get('draft')), {})
-    return data
+        return next(iter(rels), {})
+    return next((rel for rel in rels if not rel.get('prerelease')), {})
 
 def _fetch_release(channel):
     """Fetch the release to offer for the given channel.
@@ -1792,6 +2174,30 @@ def api_dsp_status():
 def api_dsp_set():
     data = request.get_json(silent=True) or {}
     return jsonify(set_dsp(data))
+
+@app.route('/dsp_presets', methods=['GET'])
+def api_dsp_presets():
+    return jsonify(get_dsp_presets())
+
+@app.route('/dsp_preset_save', methods=['POST'])
+def api_dsp_preset_save():
+    data = request.get_json(silent=True) or {}
+    return jsonify(save_dsp_preset(data.get('name')))
+
+@app.route('/dsp_preset_load', methods=['POST'])
+def api_dsp_preset_load():
+    data = request.get_json(silent=True) or {}
+    return jsonify(load_dsp_preset(data.get('name')))
+
+@app.route('/dsp_preset_rename', methods=['POST'])
+def api_dsp_preset_rename():
+    data = request.get_json(silent=True) or {}
+    return jsonify(rename_dsp_preset(data.get('name'), data.get('new_name')))
+
+@app.route('/dsp_preset_delete', methods=['POST'])
+def api_dsp_preset_delete():
+    data = request.get_json(silent=True) or {}
+    return jsonify(delete_dsp_preset(data.get('name')))
 
 @app.route('/tidal_status', methods=['GET'])
 def api_tidal_status():

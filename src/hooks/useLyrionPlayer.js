@@ -134,9 +134,45 @@ export function useLyrionPlayer() {
     }
   };
 
+  // The one dead-end in this hook's recovery story: the bad-poll self-heal
+  // below only runs while an activePlayer is set. If connectToServer() lands
+  // in the exact window where the local squeezelite is disconnected from LMS
+  // (it bounces whenever DSP toggles on/off — that's a systemctl restart),
+  // players_loop comes back empty, activePlayer is nulled, and from then on
+  // NOTHING retried: the status poll early-returns, the fail counter never
+  // moves, and the kiosk sat dead until a manual reload. Close the loop by
+  // retrying the connect itself for as long as we have no player.
+  useEffect(() => {
+    if (activePlayer || isLoading) return;
+    const id = setInterval(() => {
+      if (document.visibilityState === 'visible') connectToServer();
+    }, 5000);
+    return () => clearInterval(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activePlayer, isLoading]);
+
+  // connectToServer() only ever resolves activePlayer once (10s after mount,
+  // or on a multiroom server-URL change) — there was no path back if the
+  // squeezelite process behind it ever bounced (e.g. Settings → DSP restarts
+  // it to redirect through the loopback). The kiosk would then poll a player
+  // that never again reports a valid status, staying "stuck" until the whole
+  // UI was reloaded. Recover automatically instead: after a few consecutive
+  // bad polls, re-run connectToServer() to re-resolve everything from scratch.
+  const statusFailCountRef = useRef(0);
   const fetchStatus = async () => {
     if (!activePlayer) return;
-    try { setPlayerStatus(await lyrionApi.getPlayerStatus(activePlayer.playerid)); } catch (_) {}
+    try {
+      const st = await lyrionApi.getPlayerStatus(activePlayer.playerid);
+      if (st && typeof st === 'object' && 'mode' in st) {
+        statusFailCountRef.current = 0;
+        setPlayerStatus(st);
+        return;
+      }
+    } catch (_) { /* fall through to failure counting below */ }
+    if (++statusFailCountRef.current >= 3) {
+      statusFailCountRef.current = 0;
+      connectToServer();
+    }
   };
 
   // Poll the player status, but adaptively:
@@ -328,7 +364,15 @@ export function useLyrionPlayer() {
   };
 
   const handlePlayItem = (type, id) => {
-    if (!activePlayer) return;
+    // Diagnostic: this used to bail out silently with no visible trace when
+    // activePlayer was stale/null, which was indistinguishable in the logs
+    // from "nothing was clicked". Log both branches so a failed Play attempt
+    // always leaves a trace in renderer-console.log.
+    if (!activePlayer) {
+      console.warn('handlePlayItem: no activePlayer, ignoring', { type, id });
+      return;
+    }
+    console.warn('handlePlayItem: sending playItem', { type, id, playerid: activePlayer.playerid });
     handleAction(() => lyrionApi.playItem(activePlayer.playerid, type, id));
   };
 

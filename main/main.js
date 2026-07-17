@@ -3,6 +3,7 @@ import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import { exec } from 'child_process';
 import { promisify } from 'util';
+import { appendFileSync } from 'fs';
 
 const execAsync = promisify(exec);
 
@@ -10,6 +11,18 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 let mainWindow;
+
+// Same sink the renderer's console-message listener writes to (see below) —
+// main-process events (recovery reloads, load failures) land in the same
+// file/timeline so the two can be correlated over SSH without a screen.
+function logToFile(prefix, message) {
+  try {
+    appendFileSync(
+      join(app.getPath('logs'), 'renderer-console.log'),
+      `${new Date().toISOString()} [${prefix}] ${message}\n`
+    );
+  } catch (_) {}
+}
 
 // Renderer-crash recovery: how many times we've auto-reloaded, and when we last
 // did. After long uptime the Chromium renderer/GPU process can die (OOM, GPU
@@ -32,6 +45,7 @@ function recoverRenderer(reason) {
   recoveryReloads += 1;
   const delay = tightLoop ? Math.min(30000, 2000 * recoveryReloads) : 1000;
   console.error(`Renderer recovery (${reason}); reload #${recoveryReloads} in ${delay}ms`);
+  logToFile('MAIN', `Renderer recovery (${reason}); reload #${recoveryReloads} in ${delay}ms, tightLoop=${tightLoop}`);
   setTimeout(() => {
     if (!mainWindow || mainWindow.isDestroyed()) return;
     try {
@@ -77,7 +91,12 @@ function createWindow() {
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
-      preload: join(__dirname, 'preload.js')
+      // .cjs, not .js: package.json's "type": "module" makes .js ESM by
+      // default, but Electron loads preload scripts in a sandboxed context
+      // that only understands CommonJS ("Cannot use import statement outside
+      // a module" otherwise, on every single launch — window.electronAPI was
+      // never actually available in the renderer).
+      preload: join(__dirname, 'preload.cjs')
     },
     icon: join(__dirname, '../assets/icon.png'),
     titleBarStyle: 'hidden',
@@ -148,6 +167,21 @@ function createWindow() {
     recoverRenderer('unresponsive');
   });
 
+  // The kiosk has no DevTools and no captured stdout (the X session doesn't
+  // redirect it anywhere) — a renderer bug is otherwise invisible without a
+  // screen/keyboard physically on the appliance. Mirror warnings/errors
+  // (console-message level 2/3) to a plain file so `ssh` + `tail` can see
+  // what the UI actually logged.
+  mainWindow.webContents.on('console-message', (event, level, message, line, sourceId) => {
+    if (level < 2) return;
+    try {
+      appendFileSync(
+        join(app.getPath('logs'), 'renderer-console.log'),
+        `${new Date().toISOString()} [${level === 3 ? 'ERROR' : 'WARN'}] ${message} (${sourceId}:${line})\n`
+      );
+    } catch (_) {}
+  });
+
   // Handle window closed
   mainWindow.on('closed', () => {
     mainWindow = null;
@@ -175,9 +209,18 @@ app.whenReady().then(() => {
   registerGlobalShortcuts();
 });
 
+// This kiosk has exactly one window and no way for the user to close it (no
+// frame, no close button) — window-all-closed here means the window itself
+// died, most likely a GPU/renderer crash severe enough that recoverRenderer's
+// reload couldn't save it (e.g. under the CPU load of the DSP engine), not a
+// deliberate quit. Recreate the window instead of quitting: app.quit() hands
+// recovery off to the xsession relaunch loop, a full process restart (cold
+// JS state, the preload script re-running, the 10s Lyrion reconnect delay)
+// that's far slower and more disruptive than just opening a fresh window in
+// the same still-running process.
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {
-    app.quit();
+    createWindow();
   }
 });
 

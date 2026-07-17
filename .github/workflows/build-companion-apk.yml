@@ -57,9 +57,19 @@ jobs:
           ls -lah release-artifacts/
 
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v1
+        # v2: make_latest isn't a valid input on v1 (build-ui-ota.yml is
+        # already on v2 for the same reason).
+        uses: softprops/action-gh-release@v2
         if: startsWith(github.ref, 'refs/tags/')
         with:
+          # Companion releases must NEVER become the repo's "latest"
+          # release (make_latest: false), and dev/beta tags are additionally
+          # prereleases: the appliance's prod OTA channel reads
+          # /releases/latest, and a companion APK release surfacing there
+          # shadows the real latest stable vX.Y.Z bundle release. Same
+          # dev/stable split as the fdroid-repo job below.
+          prerelease: ${{ contains(github.ref_name, '-svil') || contains(github.ref_name, '-beta') }}
+          make_latest: false
           files: |
             release-artifacts/*.apk
           body: |
@@ -112,7 +122,6 @@ jobs:
 
             For issues or feedback, please create a GitHub issue.
           draft: false
-          prerelease: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 

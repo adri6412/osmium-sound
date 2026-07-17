@@ -12,6 +12,7 @@ import org.json.JSONObject;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.util.concurrent.TimeUnit;
 
 import okhttp3.Call;
 import okhttp3.Callback;
@@ -46,7 +47,17 @@ public final class ApplianceHttpClient {
     private static final int DEFAULT_API_PORT = 8080;
     private static final MediaType JSON = MediaType.get("application/json; charset=utf-8");
 
-    private static final OkHttpClient client = new OkHttpClient.Builder().build();
+    // Read/write raised well past OkHttp's 10s default: a DSP apply on the
+    // appliance (/api/dsp/set, /api/dsp/preset/load) now pauses playback,
+    // restarts squeezelite/CamillaDSP, waits for the player to re-register
+    // with Lyrion (up to ~10s) and seeks back before responding — and a
+    // backup restore (/api/restore) similarly restarts services server-side.
+    // With the 10s default the app reported a failure while the appliance
+    // was in fact still applying successfully.
+    private static final OkHttpClient client = new OkHttpClient.Builder()
+            .readTimeout(60, TimeUnit.SECONDS)
+            .writeTimeout(60, TimeUnit.SECONDS)
+            .build();
     private static final Handler mainHandler = new Handler(Looper.getMainLooper());
 
     public interface JsonCallback {
@@ -123,6 +134,50 @@ public final class ApplianceHttpClient {
     public static void dspSet(JSONObject dspConfig, JsonCallback callback) {
         RequestBody body = RequestBody.create(dspConfig.toString(), JSON);
         enqueueJson(authedRequest("/api/dsp/set").post(body).build(), callback);
+    }
+
+    /** Named DSP presets (built-in + user-saved). Response: { presets: [...], active }. */
+    public static void dspPresets(JsonCallback callback) {
+        enqueueJson(authedRequest("/api/dsp/presets").get().build(), callback);
+    }
+
+    /** Snapshot the currently-applied DSP config under `name`. */
+    public static void dspPresetSave(String name, JsonCallback callback) {
+        JSONObject payload = new JSONObject();
+        try {
+            payload.put("name", name);
+        } catch (JSONException e) {
+            callback.onFailure(e.getMessage());
+            return;
+        }
+        RequestBody body = RequestBody.create(payload.toString(), JSON);
+        enqueueJson(authedRequest("/api/dsp/preset/save").post(body).build(), callback);
+    }
+
+    /** Apply a built-in or user preset (bands + balance + crossfeed; leaves room_correction/enabled untouched). */
+    public static void dspPresetLoad(String name, JsonCallback callback) {
+        JSONObject payload = new JSONObject();
+        try {
+            payload.put("name", name);
+        } catch (JSONException e) {
+            callback.onFailure(e.getMessage());
+            return;
+        }
+        RequestBody body = RequestBody.create(payload.toString(), JSON);
+        enqueueJson(authedRequest("/api/dsp/preset/load").post(body).build(), callback);
+    }
+
+    /** Delete a user preset (built-ins can't be deleted). */
+    public static void dspPresetDelete(String name, JsonCallback callback) {
+        JSONObject payload = new JSONObject();
+        try {
+            payload.put("name", name);
+        } catch (JSONException e) {
+            callback.onFailure(e.getMessage());
+            return;
+        }
+        RequestBody body = RequestBody.create(payload.toString(), JSON);
+        enqueueJson(authedRequest("/api/dsp/preset/delete").post(body).build(), callback);
     }
 
     /** This device's squeezelite display name (default "OsmiumSound"). Response: { name }. */

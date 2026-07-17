@@ -25,7 +25,8 @@ import {
   Speaker,
   CheckCircle2,
   AlertTriangle,
-  HardDriveDownload
+  HardDriveDownload,
+  Lock
 } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import { systemAPI, checkApiServer } from '../utils/api';
@@ -39,6 +40,27 @@ import SourcesManager from '../components/SourcesManager';
 // Language-agnostic check used only to colour a status message red.
 const isErrorMsg = (m) =>
   /error|errore|fallit|fail|non disponibile|unavailable/i.test(m || '');
+
+// EQ band filter types CamillaDSP supports (Highpass/Lowpass take no gain).
+const DSP_BAND_TYPES = ['Peaking', 'Lowshelf', 'Highshelf', 'Highpass', 'Lowpass'];
+const DSP_BAND_TYPES_NO_GAIN = new Set(['Highpass', 'Lowpass']);
+
+// 10-band graphic EQ (default, touch-friendly view) — each slider is a fixed
+// Peaking band at one of these centers/Q. "Avanzate" swaps in the full
+// parametric editor (arbitrary freq/gain/Q, shelf/highpass/lowpass) below.
+const GRAPHIC_EQ_BANDS = [31, 62, 125, 250, 500, 1000, 2000, 4000, 8000, 16000];
+const GRAPHIC_EQ_LABELS = { 31: '31', 62: '62', 125: '125', 250: '250', 500: '500', 1000: '1k', 2000: '2k', 4000: '4k', 8000: '8k', 16000: '16k' };
+const GRAPHIC_EQ_Q = 1.41;
+
+// Maps the built-in preset names api_server.py returns (stable API identifiers)
+// to i18n keys for their display label — keeps the wire name English/stable
+// while showing a localized label.
+const DSP_BUILTIN_PRESET_LABEL_KEYS = {
+  Flat: 'settings.dsp.presetFlat',
+  Warm: 'settings.dsp.presetWarm',
+  Bright: 'settings.dsp.presetBright',
+  'Loudness (low volume)': 'settings.dsp.presetLoudness',
+};
 
 /**
  * Settings screen component - Simplified version for debugging
@@ -96,12 +118,22 @@ const Settings = () => {
 
   // DSP / parametric EQ (optional, off by default — keeps bit-perfect path)
   const [dspStatus, setDspStatus] = useState(null); // { available, enabled, active, bands, crossfeed }
-  const [dspBands, setDspBands] = useState([]);      // editable [{freq, gain, q}]
+  const [dspBands, setDspBands] = useState([]);      // editable [{type, freq, gain, q}]
   const [dspCrossfeed, setDspCrossfeed] = useState(false);
   const [dspRoomCorrection, setDspRoomCorrection] = useState(false);
+  const [dspBalance, setDspBalance] = useState(0);   // dB, -12..+12, positive = toward right
   const [firStatus, setFirStatus] = useState(null); // { present, filename, size } from the :8080 sources service
   const [dspBusy, setDspBusy] = useState(false);
   const [dspMessage, setDspMessage] = useState('');
+  const [dspEqView, setDspEqView] = useState('graphic'); // 'graphic' (default) | 'advanced'
+
+  // DSP presets (named snapshots of bands/crossfeed/room_correction/balance)
+  const [dspPresets, setDspPresets] = useState([]); // [{name, builtin, active, bands, crossfeed, room_correction, balance}]
+  const [dspActivePreset, setDspActivePreset] = useState(null);
+  const [presetNameInput, setPresetNameInput] = useState('');
+  const presetNameInputRef = useRef(null);
+  const [presetBusy, setPresetBusy] = useState(false);
+  const [presetToDelete, setPresetToDelete] = useState(null);
 
   // OTA UI update state
   const [appUpdate, setAppUpdate] = useState(null); // { current, latest, update_available, ... }
@@ -213,6 +245,26 @@ const Settings = () => {
     loadDspStatus();
     loadLmsRole();
     loadPlayerName();
+  }, []);
+
+  // The DSP state can change out from under this page — the companion app
+  // drives the same backend from the phone. Poll it so toggles/presets made
+  // there show up here without reopening Settings. Guarded twice: never
+  // mid-apply (dsp/presetBusy), and never while the user has local unsaved
+  // edits (dirty), which a refresh would silently clobber.
+  const dspSyncBlockedRef = useRef(false);
+  dspSyncBlockedRef.current = dspBusy || presetBusy;
+  const dspDirtyRef = useRef(false);
+  const markDspDirty = () => { dspDirtyRef.current = true; };
+  useEffect(() => {
+    const id = setInterval(() => {
+      if (document.visibilityState === 'visible'
+          && !dspSyncBlockedRef.current && !dspDirtyRef.current) {
+        loadDspStatus();
+      }
+    }, 10000);
+    return () => clearInterval(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // ── Playback preferences handlers ───────────────────────────────
@@ -526,8 +578,23 @@ const Settings = () => {
       setDspBands(Array.isArray(res.data.bands) ? res.data.bands : []);
       setDspCrossfeed(!!res.data.crossfeed);
       setDspRoomCorrection(!!res.data.room_correction);
+      setDspBalance(typeof res.data.balance === 'number' ? res.data.balance : 0);
+      setDspActivePreset(res.data.preset || null);
+      dspDirtyRef.current = false;   // editors now mirror the appliance state
     }
     loadFirStatus();
+    loadDspPresets();
+  };
+
+  // Preset list — degrades gracefully (hides itself) if the appliance's
+  // System-channel bundle predates the presets endpoint (404/network error).
+  const loadDspPresets = async () => {
+    const res = await systemAPI.getDspPresets();
+    if (res.success && res.data && Array.isArray(res.data.presets)) {
+      setDspPresets(res.data.presets);
+    } else {
+      setDspPresets([]);
+    }
   };
 
   // FIR filter status lives on the :8080 sources service (that's where it's
@@ -547,15 +614,20 @@ const Settings = () => {
     setDspMessage('');
     const res = await systemAPI.setDsp({
       enabled: !!enabled, bands: dspBands, crossfeed: dspCrossfeed,
-      room_correction: dspRoomCorrection,
+      room_correction: dspRoomCorrection, balance: dspBalance,
     });
     setDspBusy(false);
     if (res.success && res.data?.success) {
       setDspStatus((s) => ({
         ...(s || {}), enabled: res.data.enabled, bands: res.data.bands,
         crossfeed: res.data.crossfeed, room_correction: res.data.room_correction,
+        balance: res.data.balance, preset: res.data.preset,
       }));
+      // An explicit tone edit clears the active preset server-side unless we
+      // just loaded one — reflect that in the chip row immediately.
+      setDspActivePreset(res.data.preset ?? null);
       setDspMessage(res.data.message || '');
+      dspDirtyRef.current = false;   // local edits are now the applied state
     } else {
       setDspMessage(res.data?.message || res.message || t('settings.dsp.failed'));
     }
@@ -567,10 +639,90 @@ const Settings = () => {
   };
 
   const updateBand = (i, key, value) => {
+    markDspDirty();
     setDspBands((bands) => bands.map((b, idx) => idx === i ? { ...b, [key]: value } : b));
   };
-  const addBand = () => setDspBands((b) => [...b, { freq: 1000, gain: 0, q: 1.0 }]);
-  const removeBand = (i) => setDspBands((b) => b.filter((_, idx) => idx !== i));
+  const updateBandType = (i, type) => {
+    markDspDirty();
+    setDspBands((bands) => bands.map((b, idx) => {
+      if (idx !== i) return b;
+      const next = { ...b, type };
+      if (type === 'Highpass' || type === 'Lowpass') delete next.gain;
+      else if (next.gain === undefined) next.gain = 0;
+      return next;
+    }));
+  };
+  const addBand = () => { markDspDirty(); setDspBands((b) => [...b, { type: 'Peaking', freq: 1000, gain: 0, q: 1.0 }]); };
+  const removeBand = (i) => { markDspDirty(); setDspBands((b) => b.filter((_, idx) => idx !== i)); };
+
+  // Graphic EQ: read/write a fixed-frequency Peaking band's gain within
+  // dspBands without disturbing any other band (e.g. shelf filters loaded
+  // from a preset, or bands added in the advanced editor) — those just don't
+  // get a slider here, they stay untouched and keep applying.
+  const graphicBandGain = (freq) => {
+    const b = dspBands.find((x) => x.type === 'Peaking' && x.freq === freq);
+    return b ? (b.gain ?? 0) : 0;
+  };
+  const setGraphicBandGain = (freq, gain) => {
+    markDspDirty();
+    setDspBands((bands) => {
+      const idx = bands.findIndex((b) => b.type === 'Peaking' && b.freq === freq);
+      if (idx === -1) {
+        if (gain === 0) return bands; // untouched slider at 0dB — no band needed
+        return [...bands, { type: 'Peaking', freq, gain, q: GRAPHIC_EQ_Q }];
+      }
+      return bands.map((b, i) => (i === idx ? { ...b, gain } : b));
+    });
+  };
+
+  // ── DSP preset handlers ─────────────────────────────────────────
+  const applyPreset = async (name) => {
+    if (presetBusy) return;
+    setPresetBusy(true);
+    setDspMessage('');
+    const res = await systemAPI.loadDspPreset(name);
+    setPresetBusy(false);
+    if (res.success && res.data?.success) {
+      setDspMessage(res.data.message || '');
+      await loadDspStatus(); // re-sync bands/balance/crossfeed editors + preset list
+    } else {
+      setDspMessage(res.data?.message || res.message || t('settings.dsp.presetFailed'));
+    }
+  };
+
+  const saveCurrentAsPreset = async () => {
+    const name = presetNameInput.trim();
+    if (!name || presetBusy) return;
+    setPresetBusy(true);
+    setDspMessage('');
+    // Persist the currently-edited config first, then snapshot it as a preset.
+    await applyDsp();
+    const res = await systemAPI.saveDspPreset(name);
+    setPresetBusy(false);
+    if (res.success && res.data?.success) {
+      setDspPresets(res.data.presets || []);
+      setDspActivePreset(name);
+      setPresetNameInput('');
+      setDspMessage(res.data.message || '');
+    } else {
+      setDspMessage(res.data?.message || res.message || t('settings.dsp.presetFailed'));
+    }
+  };
+
+  const deletePreset = async (name) => {
+    if (presetBusy) return;
+    setPresetBusy(true);
+    const res = await systemAPI.deleteDspPreset(name);
+    setPresetBusy(false);
+    setPresetToDelete(null);
+    if (res.success && res.data?.success) {
+      setDspPresets(res.data.presets || []);
+      if (dspActivePreset === name) setDspActivePreset(null);
+      setDspMessage(res.data.message || '');
+    } else {
+      setDspMessage(res.data?.message || res.message || t('settings.dsp.presetFailed'));
+    }
+  };
 
   // Mint a fresh pairing token whenever the "Phone control" QR section is
   // opened, so the QR always embeds a token the companion app can use to
@@ -1583,52 +1735,194 @@ const Settings = () => {
                           </span>
                         </button>
 
-                        {/* Parametric EQ bands */}
+                        {/* Presets — quick recall of a named bands+crossfeed+balance
+                            snapshot. Hidden entirely if the appliance's System bundle
+                            predates this endpoint (loadDspPresets leaves the list empty). */}
+                        {dspPresets.length > 0 && (
+                          <div className="space-y-2">
+                            <span className="text-sm text-white">{t('settings.dsp.presets')}</span>
+                            <div className="flex flex-wrap gap-2">
+                              <button
+                                onClick={() => setDspActivePreset(null)}
+                                className={`flex items-center gap-1 text-xs px-3 py-1.5 rounded-full transition-colors ${
+                                  !dspActivePreset ? 'bg-hifi-gold text-black' : 'bg-hifi-dark text-hifi-silver hover:bg-hifi-light/40'
+                                }`}
+                              >
+                                {t('settings.dsp.presetCustom')}
+                              </button>
+                              {dspPresets.map((p) => (
+                                <button
+                                  key={p.name}
+                                  onClick={() => applyPreset(p.name)}
+                                  disabled={presetBusy}
+                                  className={`flex items-center gap-1 text-xs px-3 py-1.5 rounded-full transition-colors disabled:opacity-50 ${
+                                    dspActivePreset === p.name ? 'bg-hifi-gold text-black' : 'bg-hifi-dark text-hifi-silver hover:bg-hifi-light/40'
+                                  }`}
+                                >
+                                  {p.builtin && <Lock size={11} />}
+                                  <span>{p.builtin ? t(DSP_BUILTIN_PRESET_LABEL_KEYS[p.name] || '') || p.name : p.name}</span>
+                                  {!p.builtin && (
+                                    <Trash2
+                                      size={12}
+                                      className="ml-1 hover:text-red-400"
+                                      onClick={(e) => { e.stopPropagation(); setPresetToDelete(p.name); }}
+                                    />
+                                  )}
+                                </button>
+                              ))}
+                            </div>
+
+                            {presetToDelete && (
+                              <div className="flex items-center justify-between bg-hifi-dark rounded-lg p-3 text-sm text-white">
+                                <span>{t('settings.dsp.presetDeleteConfirm', { name: presetToDelete })}</span>
+                                <div className="flex gap-2">
+                                  <button onClick={() => deletePreset(presetToDelete)} className="text-red-400 hover:text-red-300 px-2">
+                                    {t('settings.dsp.presetDelete')}
+                                  </button>
+                                  <button onClick={() => setPresetToDelete(null)} className="text-hifi-silver px-2">
+                                    ×
+                                  </button>
+                                </div>
+                              </div>
+                            )}
+
+                            <div onClick={() => showKeyboard(presetNameInputRef, presetNameInput)} className="flex items-center gap-2">
+                              <input
+                                ref={presetNameInputRef}
+                                type="text"
+                                value={presetNameInput}
+                                onChange={(e) => setPresetNameInput(e.target.value)}
+                                placeholder={t('settings.dsp.presetNamePlaceholder')}
+                                className="flex-1 bg-hifi-surface border border-hifi-accent rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-hifi-gold cursor-pointer"
+                              />
+                              <button
+                                onClick={saveCurrentAsPreset}
+                                disabled={presetBusy || !presetNameInput.trim()}
+                                className="text-xs bg-hifi-light text-white px-3 py-2 rounded-lg disabled:opacity-50 hover:bg-hifi-accent transition-colors"
+                              >
+                                {t('settings.dsp.presetSaveAs')}
+                              </button>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* EQ — graphic (default, touch-friendly) or parametric ("Avanzate") */}
                         <div className="space-y-2">
                           <div className="flex items-center justify-between">
                             <span className="text-sm text-white">{t('settings.dsp.bands')}</span>
-                            <button
-                              onClick={addBand}
-                              className="flex items-center space-x-1 text-xs text-hifi-gold hover:text-hifi-gold/80"
-                            >
-                              <Plus size={14} /><span>{t('settings.dsp.addBand')}</span>
-                            </button>
+                            <div className="flex items-center gap-2">
+                              {dspEqView === 'advanced' && (
+                                <button
+                                  onClick={addBand}
+                                  className="flex items-center space-x-1 text-xs text-hifi-gold hover:text-hifi-gold/80"
+                                >
+                                  <Plus size={14} /><span>{t('settings.dsp.addBand')}</span>
+                                </button>
+                              )}
+                              <div className="flex bg-hifi-dark rounded-full p-0.5">
+                                {['graphic', 'advanced'].map((v) => (
+                                  <button
+                                    key={v}
+                                    onClick={() => setDspEqView(v)}
+                                    className={`text-xs px-3 py-1 rounded-full transition-colors ${
+                                      dspEqView === v ? 'bg-hifi-gold text-black' : 'text-hifi-silver hover:text-white'
+                                    }`}
+                                  >
+                                    {t(v === 'graphic' ? 'settings.dsp.eqGraphic' : 'settings.dsp.eqAdvanced')}
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
                           </div>
 
-                          {dspBands.length === 0 && (
-                            <p className="text-xs text-hifi-silver">{t('settings.dsp.noBands')}</p>
-                          )}
-
-                          {dspBands.map((b, i) => (
-                            <div key={i} className="flex items-center gap-2 bg-hifi-dark rounded-lg p-2">
-                              <label className="flex flex-col text-[10px] text-hifi-silver">
-                                {t('settings.dsp.freq')}
-                                <input type="number" value={b.freq} min={20} max={20000}
-                                  onChange={(e) => updateBand(i, 'freq', Number(e.target.value))}
-                                  className="w-20 bg-hifi-light text-white text-sm rounded px-2 py-1" />
-                              </label>
-                              <label className="flex flex-col text-[10px] text-hifi-silver">
-                                {t('settings.dsp.gain')}
-                                <input type="number" value={b.gain} min={-24} max={24} step={0.5}
-                                  onChange={(e) => updateBand(i, 'gain', Number(e.target.value))}
-                                  className="w-16 bg-hifi-light text-white text-sm rounded px-2 py-1" />
-                              </label>
-                              <label className="flex flex-col text-[10px] text-hifi-silver">
-                                {t('settings.dsp.q')}
-                                <input type="number" value={b.q} min={0.1} max={10} step={0.1}
-                                  onChange={(e) => updateBand(i, 'q', Number(e.target.value))}
-                                  className="w-16 bg-hifi-light text-white text-sm rounded px-2 py-1" />
-                              </label>
-                              <button onClick={() => removeBand(i)} className="ml-auto text-red-400 hover:text-red-300 p-1">
-                                <Trash2 size={16} />
-                              </button>
+                          {dspEqView === 'graphic' ? (
+                            <div className="eq-panel rounded-lg p-3">
+                              <div className="flex items-end justify-between gap-1">
+                                {/* dB scale, aligned with the fader travel (not the
+                                    LED row above it or the frequency label below) */}
+                                <div className="flex flex-col items-end" aria-hidden="true">
+                                  <span className="eq-led">&nbsp;</span>
+                                  <div className="eq-scale">
+                                    <span>+12</span>
+                                    <span>0</span>
+                                    <span>−12</span>
+                                  </div>
+                                  <span className="eq-freq">&nbsp;</span>
+                                </div>
+                                {GRAPHIC_EQ_BANDS.map((freq) => {
+                                  const gain = graphicBandGain(freq);
+                                  return (
+                                    <div key={freq} className="flex flex-col items-center flex-1 min-w-0">
+                                      <span className="eq-led tabular-nums">
+                                        {gain > 0 ? `+${gain}` : gain}
+                                      </span>
+                                      <div className="eq-fader-slot">
+                                        <input
+                                          type="range" className="eq-slider" min={-12} max={12} step={0.5}
+                                          value={gain}
+                                          onChange={(e) => setGraphicBandGain(freq, Number(e.target.value))}
+                                        />
+                                      </div>
+                                      <span className="eq-freq">{GRAPHIC_EQ_LABELS[freq]}</span>
+                                    </div>
+                                  );
+                                })}
+                              </div>
                             </div>
-                          ))}
+                          ) : (
+                            <>
+                              {dspBands.length === 0 && (
+                                <p className="text-xs text-hifi-silver">{t('settings.dsp.noBands')}</p>
+                              )}
+
+                              {dspBands.map((b, i) => {
+                                const btype = b.type || 'Peaking';
+                                const hasGain = !DSP_BAND_TYPES_NO_GAIN.has(btype);
+                                return (
+                                <div key={i} className="flex items-center gap-2 bg-hifi-dark rounded-lg p-2 flex-wrap">
+                                  <label className="flex flex-col text-[10px] text-hifi-silver">
+                                    {t('settings.dsp.type')}
+                                    <select value={btype}
+                                      onChange={(e) => updateBandType(i, e.target.value)}
+                                      className="w-28 bg-hifi-light text-white text-sm rounded px-2 py-1">
+                                      {DSP_BAND_TYPES.map((tp) => (
+                                        <option key={tp} value={tp}>{t(`settings.dsp.type${tp}`)}</option>
+                                      ))}
+                                    </select>
+                                  </label>
+                                  <label className="flex flex-col text-[10px] text-hifi-silver">
+                                    {t('settings.dsp.freq')}
+                                    <input type="number" value={b.freq} min={20} max={20000}
+                                      onChange={(e) => updateBand(i, 'freq', Number(e.target.value))}
+                                      className="w-20 bg-hifi-light text-white text-sm rounded px-2 py-1" />
+                                  </label>
+                                  {hasGain && (
+                                    <label className="flex flex-col text-[10px] text-hifi-silver">
+                                      {t('settings.dsp.gain')}
+                                      <input type="number" value={b.gain ?? 0} min={-24} max={24} step={0.5}
+                                        onChange={(e) => updateBand(i, 'gain', Number(e.target.value))}
+                                        className="w-16 bg-hifi-light text-white text-sm rounded px-2 py-1" />
+                                    </label>
+                                  )}
+                                  <label className="flex flex-col text-[10px] text-hifi-silver">
+                                    {t('settings.dsp.q')}
+                                    <input type="number" value={b.q} min={0.1} max={10} step={0.1}
+                                      onChange={(e) => updateBand(i, 'q', Number(e.target.value))}
+                                      className="w-16 bg-hifi-light text-white text-sm rounded px-2 py-1" />
+                                  </label>
+                                  <button onClick={() => removeBand(i)} className="ml-auto text-red-400 hover:text-red-300 p-1">
+                                    <Trash2 size={16} />
+                                  </button>
+                                </div>
+                                );
+                              })}
+                            </>
+                          )}
                         </div>
 
                         {/* Crossfeed */}
                         <button
-                          onClick={() => setDspCrossfeed((v) => !v)}
+                          onClick={() => { markDspDirty(); setDspCrossfeed((v) => !v); }}
                           className="w-full flex items-center justify-between bg-hifi-dark hover:bg-hifi-light/40 rounded-lg px-4 py-3 transition-colors"
                         >
                           <span className="text-sm text-white">{t('settings.dsp.crossfeed')}</span>
@@ -1637,10 +1931,32 @@ const Settings = () => {
                           </span>
                         </button>
 
+                        {/* Balance (L/R) — attenuate-only, applied last in the DSP chain */}
+                        <div className="bg-hifi-dark rounded-lg px-4 py-3 space-y-2">
+                          <div className="flex items-center justify-between">
+                            <span className="text-sm text-white">{t('settings.dsp.balance')}</span>
+                            <span className="text-xs text-hifi-silver">
+                              {Math.abs(dspBalance) < 0.05
+                                ? t('settings.dsp.balanceCenter')
+                                : `${dspBalance < 0 ? t('settings.dsp.balanceLeft') : t('settings.dsp.balanceRight')} ${Math.abs(dspBalance).toFixed(1)} dB`}
+                            </span>
+                          </div>
+                          <input type="range" min={-12} max={12} step={0.5} value={dspBalance}
+                            onChange={(e) => { markDspDirty(); setDspBalance(Number(e.target.value)); }}
+                            className="w-full accent-hifi-gold" />
+                          <div className="flex items-center justify-between text-[10px] text-hifi-silver">
+                            <span>L</span>
+                            <button onClick={() => { markDspDirty(); setDspBalance(0); }} className="text-hifi-gold hover:text-hifi-gold/80">
+                              {t('settings.dsp.balanceCenter')}
+                            </button>
+                            <span>R</span>
+                          </div>
+                        </div>
+
                         {/* Room correction (FIR convolution) */}
                         <div className="bg-hifi-dark rounded-lg px-4 py-3 space-y-2">
                           <button
-                            onClick={() => firStatus?.present && setDspRoomCorrection((v) => !v)}
+                            onClick={() => { if (firStatus?.present) { markDspDirty(); setDspRoomCorrection((v) => !v); } }}
                             disabled={!firStatus?.present}
                             className="w-full flex items-center justify-between disabled:opacity-50"
                           >

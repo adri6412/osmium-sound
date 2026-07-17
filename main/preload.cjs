@@ -1,4 +1,4 @@
-import { contextBridge, ipcRenderer } from 'electron';
+const { contextBridge, ipcRenderer } = require('electron');
 
 /**
  * Preload script to expose safe IPC methods to the renderer process
@@ -24,4 +24,3 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.removeListener('toggle-simple-keyboard', callback);
   }
 });
-
