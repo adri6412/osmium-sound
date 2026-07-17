@@ -93,11 +93,14 @@ RestartSec=3
 # (USB enumeration race) or no longer exists (unplugged, renamed), this would
 # otherwise retry forever every 3s — on the mini-PC that's enough sustained
 # CPU/journal I/O to visibly slow the rest of boot, including the kiosk.
-# Give up after 5 failures within 60s instead of crash-looping indefinitely;
-# the toggle in Settings -> DSP re-enables it cleanly once the real problem
-# (DAC not present, bad config) is sorted out.
-StartLimitIntervalSec=60
-StartLimitBurst=5
+# Give up eventually instead of crash-looping indefinitely — but generously:
+# a USB DAC can legitimately take a while to enumerate after cold power-on,
+# and giving up too early (5 tries / 60s, the first cut of this fix) meant a
+# slow-to-enumerate DAC never got a working CamillaDSP after reboot at all,
+# needing a manual re-select in Settings -> Audio to kick it into a fresh,
+# working start. ~2 minutes of retries comfortably covers that.
+StartLimitIntervalSec=180
+StartLimitBurst=40
 
 [Install]
 WantedBy=multi-user.target

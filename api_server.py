@@ -469,9 +469,9 @@ def list_audio_devices():
                 })
     except Exception:
         log.exception("list_audio_devices failed")
-        return {'devices': devices, 'current': _current_audio_device(),
+        return {'devices': devices, 'current': _current_real_dac(),
                 'error': 'Lettura dispositivi audio fallita'}
-    return {'devices': devices, 'current': _current_audio_device()}
+    return {'devices': devices, 'current': _current_real_dac()}
 
 def _current_audio_device():
     """Return the -o output device currently configured in /etc/default/squeezelite."""
