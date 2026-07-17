@@ -122,7 +122,9 @@ public class DspSettingsActivity extends AppCompatActivity {
         pickFilterLauncher = registerForActivityResult(
                 new ActivityResultContracts.OpenDocument(), this::onFilterChosen);
 
-        switchEnabled.setOnCheckedChangeListener((btn, checked) -> { if (!suppressToggleEvents) applyDspPatch(singleKeyPatch("enabled", checked)); });
+        // Re-sync the whole screen from the appliance after an on/off toggle
+        // completes, so the switch always reflects the actually-applied state.
+        switchEnabled.setOnCheckedChangeListener((btn, checked) -> { if (!suppressToggleEvents) applyDspPatch(singleKeyPatch("enabled", checked), this::loadStatus); });
         switchRoomCorrection.setOnCheckedChangeListener((btn, checked) -> { if (!suppressToggleEvents) { roomCorrection = checked; applyDspPatch(singleKeyPatch("room_correction", checked)); } });
         switchCrossfeed.setOnCheckedChangeListener((btn, checked) -> { if (!suppressToggleEvents) { crossfeed = checked; applyDspPatch(singleKeyPatch("crossfeed", checked)); } });
 
@@ -644,6 +646,29 @@ public class DspSettingsActivity extends AppCompatActivity {
 
     private void setBusy(boolean busy) {
         progressBar.setVisibility(busy ? View.VISIBLE : View.GONE);
+        // Lock every DSP control while an apply is in flight, exactly like
+        // the kiosk does (its dspBusy guard). A DSP apply takes ~15s
+        // (pause playback -> restart squeezelite/CamillaDSP -> wait for the
+        // player to re-register -> resume): letting the user fire a second
+        // toggle mid-apply queues overlapping pause/restart/resume cycles
+        // whose interleaving reliably ended in silence. The kiosk never
+        // allowed this, which is why the same toggles were fine from there.
+        boolean enable = !busy;
+        switchEnabled.setEnabled(enable);
+        switchRoomCorrection.setEnabled(enable);
+        switchCrossfeed.setEnabled(enable);
+        balanceSeekBar.setEnabled(enable);
+        buttonSavePreset.setEnabled(enable);
+        buttonUpload.setEnabled(enable);
+        buttonRemove.setEnabled(enable);
+        findViewById(R.id.button_add_band).setEnabled(enable);
+        findViewById(R.id.button_apply_eq).setEnabled(enable);
+        for (int i = 0; i < presetsChipGroup.getChildCount(); i++) {
+            presetsChipGroup.getChildAt(i).setEnabled(enable);
+        }
+        for (int i = 0; i < eqBandsContainer.getChildCount(); i++) {
+            eqBandsContainer.getChildAt(i).setEnabled(enable);
+        }
     }
 
     private void showMessage(String message) {
