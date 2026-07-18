@@ -17,6 +17,25 @@ try:
 except Exception:
     np = None
 
+# DoP (DSD-over-PCM) marker bytes, alternated by squeezelite every output
+# frame. Squeezelite's _vis_export always copies the *top* 16 bits of each
+# 32-bit output sample into the vis buffer regardless of format; for DoP that
+# top half is [marker: 0x05/0xFA][first DSD data byte]. So during DSD
+# playback the vis buffer's high bytes carry this marker instead of real PCM
+# — that's what lets us tell DoP apart from PCM below.
+_DOP_MARKERS = (0x05, 0xFA)
+# Calibration knob: a DSD bitstream is 1-bit delta-sigma, so its decimated
+# bit-density (see _decode_dop below) tracks the analog waveform but isn't
+# naturally on the same 0..32767 scale as PCM. DSD's "0 dB" reference sits
+# around 50% modulation depth, so 2.0 is a reasonable starting point — tune
+# on real hardware if the DSD needle reads noticeably hotter/cooler than PCM
+# at the same perceived loudness.
+_DSD_FS_GAIN = 2.0
+# Moving-average window (in PDM bits) used to low-pass the DSD bitstream back
+# into a coarse PCM-like envelope.
+_DSD_DECIMATE_BLOCK = 16
+
+
 class SqueezeliteVisualizer:
     def __init__(self):
         self.shm_file = self.find_shm_file()
@@ -182,49 +201,122 @@ class SqueezeliteVisualizer:
             if num_samples == 0:
                 return [0] * self.num_bars
 
-            # Downsample/bucket into num_bars groups and take the RMS of each.
-            samples_per_bar = max(1, num_samples // self.num_bars)
-
-            # dB→percent mapping (unchanged): map -50 dBFS → 0% and -5 dBFS →
-            # 100%, then a slight gamma so the top end compresses like an analog
-            # VU meter. 0 VU is typically around -18..-14 dBFS depending on calib.
-            min_db, max_db = -50.0, -5.0
-
             if np is not None:
-                # Vectorised RMS — ~10× cheaper than the Python loop at 30 fps.
-                usable = samples_per_bar * self.num_bars
+                dop_values = self._decode_dop(raw_samples, num_samples)
+                if dop_values is not None:
+                    return self._levels_from_values(dop_values)
+
+                # Vectorised RMS — ~10x cheaper than the Python loop at 30 fps.
                 buf = np.frombuffer(raw_samples, dtype='<i2', count=num_samples)
-                buckets = buf[:usable].astype(np.float64).reshape(self.num_bars, samples_per_bar)
-                rms = np.sqrt(np.mean(buckets * buckets, axis=1))
-                with np.errstate(divide='ignore'):
-                    db = 20.0 * np.log10(rms / 32767.0)
-                percent = np.clip((db - min_db) / (max_db - min_db) * 100.0, 0.0, 100.0)
-                percent = np.power(percent / 100.0, 1.2) * 100.0
-                return [int(x) for x in percent]
+                return self._levels_from_values(buf.astype(np.float64))
 
             # Pure-Python fallback (numpy not installed).
             samples = struct.unpack(f'<{num_samples}h', raw_samples)
-            levels = []
-            for i in range(self.num_bars):
-                start_idx = i * samples_per_bar
-                chunk = samples[start_idx:start_idx + samples_per_bar]
-                if not chunk:
-                    levels.append(0)
-                    continue
-                rms = math.sqrt(sum(float(x) * x for x in chunk) / len(chunk))
-                if rms <= 0:
-                    levels.append(0)
-                    continue
-                db = 20 * math.log10(rms / 32767.0)
-                percent = max(0.0, min(100.0, ((db - min_db) / (max_db - min_db)) * 100.0))
-                percent = math.pow(percent / 100.0, 1.2) * 100.0
-                levels.append(int(percent))
-            return levels
+            dop_values = self._decode_dop_py(samples)
+            values = dop_values if dop_values is not None else samples
+            return self._levels_from_values_py(values)
 
         except Exception as e:
             print(f"Error reading shared memory: {e}")
             self.disconnect()
             return None
+
+    # dB→percent mapping (shared by PCM and decoded-DSD paths): map -50 dBFS
+    # → 0% and -5 dBFS → 100%, then a slight gamma so the top end compresses
+    # like an analog VU meter. 0 VU is typically around -18..-14 dBFS
+    # depending on calibration.
+    _MIN_DB = -50.0
+    _MAX_DB = -5.0
+
+    def _levels_from_values(self, values):
+        """values: 1-D numpy float64 array on the same +/-32767 full-scale as
+        PCM (real PCM samples, or the decimated DSD envelope from
+        _decode_dop). Buckets into num_bars and computes RMS->dB->percent."""
+        n = values.size
+        samples_per_bar = max(1, n // self.num_bars)
+        usable = samples_per_bar * self.num_bars
+        buckets = values[:usable].reshape(self.num_bars, samples_per_bar)
+        rms = np.sqrt(np.mean(buckets * buckets, axis=1))
+        with np.errstate(divide='ignore'):
+            db = 20.0 * np.log10(rms / 32767.0)
+        percent = np.clip((db - self._MIN_DB) / (self._MAX_DB - self._MIN_DB) * 100.0, 0.0, 100.0)
+        percent = np.power(percent / 100.0, 1.2) * 100.0
+        return [int(x) for x in percent]
+
+    def _levels_from_values_py(self, values):
+        """Pure-Python equivalent of _levels_from_values."""
+        n = len(values)
+        samples_per_bar = max(1, n // self.num_bars)
+        levels = []
+        for i in range(self.num_bars):
+            start_idx = i * samples_per_bar
+            chunk = values[start_idx:start_idx + samples_per_bar]
+            if not chunk:
+                levels.append(0)
+                continue
+            rms = math.sqrt(sum(float(x) * x for x in chunk) / len(chunk))
+            if rms <= 0:
+                levels.append(0)
+                continue
+            db = 20 * math.log10(rms / 32767.0)
+            percent = max(0.0, min(100.0, ((db - self._MIN_DB) / (self._MAX_DB - self._MIN_DB)) * 100.0))
+            percent = math.pow(percent / 100.0, 1.2) * 100.0
+            levels.append(int(percent))
+        return levels
+
+    def _decode_dop(self, raw_samples, num_samples):
+        """Detect a DoP (DSD-over-PCM) stream in the vis buffer and turn it
+        into an approximate PCM envelope so the existing RMS meter pipeline
+        can read DSD playback too, without touching the bit-perfect playback
+        path at all.
+
+        Each vis-buffer entry here is the truncated top 16 bits of a 32-bit
+        DoP output frame: high byte = alternating 0x05/0xFA marker, low byte
+        = one byte (8 sequential PDM bits) of the native DSD bitstream for
+        that channel. A delta-sigma (DSD) bitstream's short-window bit
+        average tracks the analog waveform, so decimating those bits with a
+        small moving average recovers a coarse but real amplitude envelope.
+
+        Returns None if the buffer doesn't look like DoP (plain PCM path
+        stays untouched then).
+        """
+        buf_u16 = np.frombuffer(raw_samples, dtype='<i2', count=num_samples).view(np.uint16)
+        high_bytes = (buf_u16 >> 8) & 0xFF
+        if np.isin(high_bytes, _DOP_MARKERS).mean() < 0.9:
+            return None
+
+        data_bytes = (buf_u16 & 0xFF).astype(np.uint8)
+        bits = np.unpackbits(data_bytes).astype(np.float64) * 2.0 - 1.0
+
+        usable_bits = (bits.size // _DSD_DECIMATE_BLOCK) * _DSD_DECIMATE_BLOCK
+        if usable_bits == 0:
+            return None
+        decimated = bits[:usable_bits].reshape(-1, _DSD_DECIMATE_BLOCK).mean(axis=1)
+        return np.clip(decimated * _DSD_FS_GAIN * 32767.0, -32767.0, 32767.0)
+
+    def _decode_dop_py(self, samples):
+        """Pure-Python equivalent of _decode_dop (numpy not installed)."""
+        if not samples:
+            return None
+        marker_hits = sum(1 for s in samples if ((s >> 8) & 0xFF) in _DOP_MARKERS)
+        if marker_hits / len(samples) < 0.9:
+            return None
+
+        bits = []
+        for s in samples:
+            byte = s & 0xFF
+            for shift in range(7, -1, -1):
+                bits.append(1.0 if (byte >> shift) & 1 else -1.0)
+
+        usable = (len(bits) // _DSD_DECIMATE_BLOCK) * _DSD_DECIMATE_BLOCK
+        if usable == 0:
+            return None
+        decimated = []
+        for i in range(0, usable, _DSD_DECIMATE_BLOCK):
+            chunk = bits[i:i + _DSD_DECIMATE_BLOCK]
+            avg = sum(chunk) / _DSD_DECIMATE_BLOCK
+            decimated.append(max(-32767.0, min(32767.0, avg * _DSD_FS_GAIN * 32767.0)))
+        return decimated
 
 
 async def vu_meter_server(websocket, path):
