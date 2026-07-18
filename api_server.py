@@ -2005,6 +2005,114 @@ def hide_global_keyboard():
         log.exception("hide_global_keyboard failed")
         return "Errore nella chiusura della tastiera virtuale"
 
+# ──────────────────────────────────────────────────────────────────
+#  Guided room correction — measure the room with a USB mic and generate
+#  the CamillaDSP FIR automatically (no external REW workflow needed).
+#  Async job, same systemd-run + /run status-file shape as the OTA/format
+#  jobs; the worker writes the same /etc/camilladsp/filters/room.wav the
+#  manual upload flow uses, so the existing room_correction toggle applies it.
+# ──────────────────────────────────────────────────────────────────
+ROOMCORR_STATUS = '/run/hifi-roomcorr-status.json'
+ROOMCORR_CFG = '/run/hifi-roomcorr-config.json'
+ROOMCORR_RESULT = '/var/lib/hifi-player/roomcorr-result.json'
+ROOMCORR_UNIT = 'hifi-room-measure'
+ROOMCORR_SCRIPT = '/usr/local/sbin/hifi-room-measure.py'
+
+def get_roomcorr_mics():
+    """Capture devices from `arecord -l` (the measurement mic candidates).
+    Loopback is the DSP plumbing, never a mic."""
+    mics = []
+    try:
+        r = _run(['arecord', '-l'], timeout=10)
+        for m in re.finditer(r'card (\d+): (\S+) \[(.*?)\], device (\d+): (.*?) \[',
+                             r.stdout or ''):
+            card, cid, cname, dev, dname = m.groups()
+            if 'Loopback' in cid or 'Loopback' in cname:
+                continue
+            mics.append({
+                'device': f'plughw:{card},{dev}',
+                'name': (cname or cid).strip() or f'Card {card}',
+                'detail': dname.strip(),
+            })
+    except Exception:
+        log.exception('get_roomcorr_mics failed')
+    return {'mics': mics, 'available': os.path.exists(ROOMCORR_SCRIPT)}
+
+def _roomcorr_state():
+    try:
+        with open(ROOMCORR_STATUS) as f:
+            return json.load(f)
+    except Exception:
+        return {'state': 'idle'}
+
+def start_roomcorr_measure(data):
+    if not os.path.exists(ROOMCORR_SCRIPT):
+        return {'success': False, 'message': 'Aggiornamento di sistema richiesto'}, 424
+    mic = str(data.get('mic_device') or '').strip()
+    known = [m['device'] for m in get_roomcorr_mics()['mics']]
+    if mic not in known:
+        return {'success': False, 'message': 'Microfono non trovato: collega un mic USB'}, 400
+    try:
+        level = float(data.get('level_db') or -12.0)
+    except (TypeError, ValueError):
+        level = -12.0
+    level = max(-30.0, min(-6.0, level))
+    if _roomcorr_state().get('state') in ('preparing', 'sweep', 'analyzing'):
+        return {'success': False, 'message': 'Misura già in corso'}, 409
+
+    cfg = {'mic_device': mic, 'out_device': _current_real_dac(), 'level_db': level}
+    with open(ROOMCORR_CFG, 'w') as f:
+        json.dump(cfg, f)
+    os.chmod(ROOMCORR_CFG, 0o600)
+    with open(ROOMCORR_STATUS, 'w') as f:
+        json.dump({'state': 'preparing', 'progress': 0, 'message': 'Avvio…'}, f)
+    subprocess.run(['systemd-run', '--no-block', '--collect',
+                    '--unit=' + ROOMCORR_UNIT, ROOMCORR_SCRIPT, ROOMCORR_CFG],
+                   capture_output=True, text=True, timeout=10)
+    return {'success': True}, 202
+
+def get_roomcorr_status():
+    st = _roomcorr_state()
+    if st.get('state') == 'done':
+        try:
+            with open(ROOMCORR_RESULT) as f:
+                st['result'] = json.load(f)
+        except Exception:
+            pass
+        fir_path, _ = _fir_current()
+        dsp = _read_dsp_state()
+        st['fir_present'] = bool(fir_path)
+        st['applied'] = bool(dsp['enabled'] and dsp['room_correction'])
+    return st
+
+def roomcorr_apply():
+    """Turn the freshly measured filter on via the normal DSP apply path."""
+    fir_path, _ = _fir_current()
+    if not fir_path:
+        return {'success': False, 'message': 'Nessun filtro presente: esegui prima la misura'}
+    return set_dsp({'enabled': True, 'room_correction': True})
+
+def roomcorr_discard():
+    """Delete the generated filter (and switch the room-correction flag off
+    if it was using it)."""
+    removed = False
+    for ext in FIR_KINDS:
+        p = os.path.join(FIR_DIR, 'room' + ext)
+        try:
+            os.remove(p)
+            removed = True
+        except OSError:
+            pass
+    try:
+        os.remove(ROOMCORR_RESULT)
+    except OSError:
+        pass
+    st = _read_dsp_state()
+    if st['room_correction']:
+        set_dsp({'room_correction': False})
+    return {'success': True, 'removed': removed}
+
+
 @app.route('/check', methods=['GET'])
 def api_check():
     return jsonify({"message": "ok"})
@@ -2165,6 +2273,28 @@ def api_set_player_name():
 @app.route('/discover_lms', methods=['GET'])
 def api_discover_lms():
     return jsonify({'servers': discover_lms_servers()})
+
+@app.route('/roomcorr/mics', methods=['GET'])
+def api_roomcorr_mics():
+    return jsonify(get_roomcorr_mics())
+
+@app.route('/roomcorr/measure', methods=['POST'])
+def api_roomcorr_measure():
+    data = request.get_json(silent=True) or {}
+    body, status = start_roomcorr_measure(data)
+    return jsonify(body), status
+
+@app.route('/roomcorr/status', methods=['GET'])
+def api_roomcorr_status():
+    return jsonify(get_roomcorr_status())
+
+@app.route('/roomcorr/apply', methods=['POST'])
+def api_roomcorr_apply():
+    return jsonify(roomcorr_apply())
+
+@app.route('/roomcorr/discard', methods=['POST'])
+def api_roomcorr_discard():
+    return jsonify(roomcorr_discard())
 
 @app.route('/dsp_status', methods=['GET'])
 def api_dsp_status():

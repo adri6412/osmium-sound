@@ -5,7 +5,7 @@ import {
   Play, Pause, SkipBack, SkipForward,
   Volume2, VolumeX, Music, AlertCircle, RefreshCw,
   Folder, User, Disc, Home, ChevronRight, ChevronDown,
-  Radio, AppWindow,
+  Radio, AppWindow, Compass,
   Settings as SettingsIcon, Maximize2,
   Shuffle, Repeat, Repeat1, ListMusic, Moon,
   Trash2, X, Save, ArrowUp, ArrowDown,
@@ -14,16 +14,19 @@ import {
 import { lyrionApi } from '../utils/lyrionApi';
 import { useI18n } from '../i18n';
 import AnalogVUMeter from '../components/AnalogVUMeter';
+import CdRip from '../components/CdRip';
+import Discover from '../components/Discover';
 import SettingsPage from './Settings';
 import { useLyrionPlayer, safeUrl, formatTime } from '../hooks/useLyrionPlayer';
 
 // ── Tab definitions ──────────────────────────────────────────
 // `labelKey` is resolved through i18n at render time (null = icon-only tab).
 const TABS = [
-  { id: 'musica',   labelKey: 'player.tabs.music', Icon: Music },
-  { id: 'radio',    labelKey: 'player.tabs.radio', Icon: Radio },
-  { id: 'apps',     labelKey: 'player.tabs.apps',  Icon: AppWindow },
-  { id: 'settings', labelKey: null,                Icon: SettingsIcon },
+  { id: 'musica',   labelKey: 'player.tabs.music',    Icon: Music },
+  { id: 'radio',    labelKey: 'player.tabs.radio',    Icon: Radio },
+  { id: 'apps',     labelKey: 'player.tabs.apps',     Icon: AppWindow },
+  { id: 'scopri',   labelKey: 'player.tabs.discover', Icon: Compass },
+  { id: 'settings', labelKey: null,                   Icon: SettingsIcon },
 ];
 
 // ── Artwork with error fallback ───────────────────────────────
@@ -396,6 +399,10 @@ const LyrionServer = () => {
   // ── Right-panel content ────────────────────────────────────
   const renderTabContent = () => {
     if (activeTab === 'settings') return <SettingsPage />;
+    if (activeTab === 'scopri') return (
+      <Discover playerMac={activePlayer?.playerid} artist={currentTrack.artist}
+        onPlayArtist={(id) => handlePlayItem('artist_id', id)} />
+    );
 
     // musica / radio / apps — library browser
     if (isLoading && !isConnected) return (
@@ -434,6 +441,7 @@ const LyrionServer = () => {
 
     return (
       <div className="flex-1 flex flex-col overflow-hidden">
+        {activeTab === 'musica' && <CdRip />}
         {/* Breadcrumb */}
         <div className="flex items-center px-3 py-2 border-b border-hifi-border/50 shrink-0 bg-hifi-panel/40">
           <button onClick={goHome}

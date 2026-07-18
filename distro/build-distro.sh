@@ -178,8 +178,12 @@ EOF
 log "Injecting Samba base config → includes.chroot/etc/samba/smb.conf"
 SAMBA_DEST_DIR="$CONFIG/includes.chroot/etc/samba"
 mkdir -p "$SAMBA_DEST_DIR"
-cp -f "$REPO_ROOT/distro/config/includes.chroot/etc/samba/smb.conf" "$SAMBA_DEST_DIR/smb.conf"
-sed -i 's/\r$//' "$SAMBA_DEST_DIR/smb.conf"
+# SAMBA_DEST_DIR already IS $REPO_ROOT/distro/config/includes.chroot/etc/samba
+# (CONFIG = $SCRIPT_DIR/config = $REPO_ROOT/distro/config) — the file is
+# already in place via includes.chroot, so there is nothing to copy; a
+# self-copy here makes `cp` fail ("same file"). Line-ending normalization for
+# every config text file (this one included) already runs earlier in this
+# script, so only permissions need setting.
 chmod 644 "$SAMBA_DEST_DIR/smb.conf"
 : > "$SAMBA_DEST_DIR/hifi-shares.conf"
 chmod 644 "$SAMBA_DEST_DIR/hifi-shares.conf"
@@ -196,8 +200,10 @@ chmod +x "$BIN_DEST/api_server.py" "$BIN_DEST/vu_meter_daemon.py" "$BIN_DEST/sou
 log "Injecting helper scripts → includes.chroot/usr/local/sbin"
 SBIN_DEST="$CONFIG/includes.chroot/usr/local/sbin"
 mkdir -p "$SBIN_DEST"
-cp -f "$REPO_ROOT/distro/config/includes.chroot/usr/local/sbin/hifi-format-disk.sh" "$SBIN_DEST/"
-sed -i 's/\r$//' "$SBIN_DEST/hifi-format-disk.sh"
+# SBIN_DEST already IS $REPO_ROOT/distro/config/includes.chroot/usr/local/sbin
+# — same self-copy pitfall as the smb.conf injection above. The file is
+# already in place and already CRLF-normalized by the earlier repo-wide sed
+# pass; only the exec bit needs setting.
 chmod +x "$SBIN_DEST/hifi-format-disk.sh"
 
 # Seed the installed system-components version (baseline for OTA comparison),

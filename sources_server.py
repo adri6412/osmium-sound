@@ -74,6 +74,13 @@ SAMBA_USER = "hifimusic"
 FORMAT_STATUS = "/run/hifi-format-status.json"
 FORMAT_UNIT = "hifi-format-disk"
 FORMAT_SCRIPT = "/usr/local/sbin/hifi-format-disk.sh"
+CD_DEVICE = "/dev/cdrom"
+RIP_STATUS = "/run/hifi-rip-status.json"
+RIP_PLAN = "/run/hifi-rip-plan.json"
+RIP_COVER = "/run/hifi-rip-cover.jpg"
+RIP_UNIT = "hifi-rip-cd"
+RIP_SCRIPT = "/usr/local/sbin/hifi-rip-cd.py"
+LYRION_RPC = "http://127.0.0.1:9000/jsonrpc.js"
 PREFS_GLOBS = [
     "/var/lib/squeezeboxserver/prefs/server.prefs",
     "/var/lib/lyrion*/prefs/server.prefs",
@@ -1753,6 +1760,291 @@ def api_internal_format_status():
                     status["share"] = s.get("share")
                     break
     return jsonify(status)
+
+
+# ─────────────────────────── CD ripping ─────────────────────────────
+# Same async-job shape as the disk format above: kick off a detached worker
+# via systemd-run, poll a status file on /run, then a watcher thread finishes
+# the job (ownership fix + Lyrion rescan). The Lyrion CD Player plugin only
+# *plays* discs; this archives them into the library as tagged FLAC.
+
+_cd_info_cache = {}  # discid -> metadata dict from MusicBrainz
+
+
+def _cd_toc():
+    """Read the audio-CD TOC via cd-discid. Returns None when there is no
+    readable audio disc. Output format: `discid ntracks off1 ... offN seconds`
+    (offsets in CD frames, 75/s, lead-in included)."""
+    try:
+        r = _run(["cd-discid", CD_DEVICE], timeout=20)
+    except Exception:
+        return None
+    if r.returncode != 0:
+        return None
+    parts = (r.stdout or "").split()
+    if len(parts) < 4:
+        return None
+    try:
+        ntracks = int(parts[1])
+        offsets = [int(x) for x in parts[2:2 + ntracks]]
+        total_sec = int(parts[2 + ntracks])
+    except (ValueError, IndexError):
+        return None
+    if ntracks < 1 or len(offsets) != ntracks:
+        return None
+    lengths = []
+    for i in range(ntracks):
+        if i + 1 < ntracks:
+            lengths.append(max(0, (offsets[i + 1] - offsets[i]) // 75))
+        else:
+            lengths.append(max(0, total_sec - offsets[i] // 75))
+    return {"discid": parts[0], "ntracks": ntracks, "offsets": offsets,
+            "total_sec": total_sec, "lengths": lengths}
+
+
+def _mb_lookup(toc):
+    """Look the disc up on MusicBrainz by fuzzy TOC. Returns a metadata dict
+    or None (offline, unknown disc, malformed response...)."""
+    leadout = toc["total_sec"] * 75 + 150
+    toc_str = "+".join(str(x) for x in
+                       [1, toc["ntracks"], leadout] + toc["offsets"])
+    url = ("https://musicbrainz.org/ws/2/discid/-"
+           f"?toc={toc_str}&fmt=json&inc=artist-credits+recordings")
+    req = urllib.request.Request(url, headers={
+        "User-Agent": "OsmiumSound/1.0 (https://osmiumsound.qd.je)"})
+    try:
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+    except Exception as e:
+        print(f"[sources] musicbrainz lookup failed: {e}")
+        return None
+    releases = data.get("releases") or []
+    if not releases:
+        return None
+    rel = releases[0]
+    artist = "".join(
+        (c.get("name") or "") + (c.get("joinphrase") or "")
+        for c in rel.get("artist-credit") or []
+    ) or "Unknown Artist"
+    titles = []
+    for medium in rel.get("media") or []:
+        for tr in medium.get("tracks") or []:
+            titles.append(tr.get("title") or "")
+        if titles:
+            break  # first medium only: one physical disc in the drive
+    return {
+        "mbid": rel.get("id"),
+        "artist": artist,
+        "album": rel.get("title") or "Unknown Album",
+        "year": (rel.get("date") or "")[:4],
+        "titles": titles,
+    }
+
+
+def _cd_metadata(toc):
+    """MusicBrainz metadata for `toc` (cached), padded with offline fallbacks
+    so callers always get artist/album and one title per track."""
+    meta = _cd_info_cache.get(toc["discid"])
+    if meta is None:
+        meta = _mb_lookup(toc) or {}
+        if meta:
+            _cd_info_cache[toc["discid"]] = meta
+    titles = list(meta.get("titles") or [])
+    tracks = []
+    for i in range(toc["ntracks"]):
+        title = titles[i] if i < len(titles) and titles[i] else f"Track {i + 1:02d}"
+        tracks.append({"num": i + 1, "title": title, "length": toc["lengths"][i]})
+    return {
+        "mbid": meta.get("mbid"),
+        "artist": meta.get("artist") or "Unknown Artist",
+        "album": meta.get("album") or "Unknown Album",
+        "year": meta.get("year") or "",
+        "tracks": tracks,
+    }
+
+
+def _rip_state():
+    if os.path.exists(RIP_STATUS):
+        try:
+            with open(RIP_STATUS) as f:
+                return json.load(f)
+        except Exception:
+            pass
+    return {"state": "idle"}
+
+
+def _rip_running():
+    return _rip_state().get("state") not in ("idle", "done", "error")
+
+
+def _lyrion_rescan():
+    payload = {"id": 1, "method": "slim.request", "params": ["", ["rescan"]]}
+    req = urllib.request.Request(
+        LYRION_RPC, data=json.dumps(payload).encode("utf-8"),
+        headers={"Content-Type": "application/json"})
+    urllib.request.urlopen(req, timeout=10)
+
+
+def _rip_watcher():
+    """Background thread (spawned per rip): when the worker reports done, fix
+    ownership for Samba access and ask Lyrion for a rescan — a plain rescan,
+    not apply_to_lyrion(), so LMS is not restarted mid-listen."""
+    deadline = time.monotonic() + 3 * 60 * 60
+    while time.monotonic() < deadline:
+        time.sleep(3)
+        try:
+            st = _rip_state()
+            state = st.get("state")
+            if state in ("done", "error", "idle"):
+                if state == "done":
+                    dest = st.get("dest") or ""
+                    uid, gid = _ensure_samba_uid_gid()
+                    if dest.startswith(INTERNAL_MOUNT_ROOT + "/") and os.path.isdir(dest):
+                        for root, dirs, files in os.walk(dest):
+                            for name in dirs + files:
+                                try:
+                                    os.chown(os.path.join(root, name), uid, gid)
+                                except OSError:
+                                    pass
+                        try:
+                            os.chown(dest, uid, gid)
+                        except OSError:
+                            pass
+                    try:
+                        _lyrion_rescan()
+                    except Exception as e:
+                        print(f"[sources] rip rescan failed: {e}")
+                return
+        except Exception as e:
+            print(f"[sources] rip watcher error: {e}")
+
+
+def _rip_writable_sources():
+    """Internal (rw, hifimusic-owned) sources the rip can write into. USB
+    drives are auto-mounted read-only, so they never qualify."""
+    out = []
+    for s in _adopted_internal_sources():
+        mp = s.get("mountpoint") or ""
+        if os.path.ismount(mp) and os.access(mp, os.W_OK):
+            out.append(s)
+    return out
+
+
+@app.route("/api/cd/info", methods=["GET"])
+def api_cd_info():
+    denied = _require_pair_token()
+    if denied:
+        return denied
+    toc = _cd_toc()
+    if not toc:
+        return jsonify({"no_disc": True})
+    meta = _cd_metadata(toc)
+    return jsonify({
+        "no_disc": False,
+        "discid": toc["discid"],
+        "artist": meta["artist"],
+        "album": meta["album"],
+        "year": meta["year"],
+        "tracks": meta["tracks"],
+        "destinations": [
+            {"source_id": s.get("id"), "name": s.get("name") or s.get("label")}
+            for s in _rip_writable_sources()
+        ],
+        "ripping": _rip_running(),
+    })
+
+
+@app.route("/api/cd/rip", methods=["POST"])
+def api_cd_rip():
+    denied = _require_pair_token()
+    if denied:
+        return denied
+    data = request.get_json(silent=True) or {}
+    toc = _cd_toc()
+    if not toc:
+        return jsonify({"success": False, "message": "Nessun CD audio nel lettore"}), 400
+    if _rip_running():
+        return jsonify({"success": False, "message": "Rip già in corso"}), 409
+
+    sources = _rip_writable_sources()
+    source_id = (data.get("source_id") or "").strip()
+    src = next((s for s in sources if s.get("id") == source_id), None)
+    if src is None:
+        if len(sources) == 1 and not source_id:
+            src = sources[0]
+        else:
+            return jsonify({"success": False,
+                            "message": "Nessuna destinazione scrivibile: adotta un disco interno"}), 400
+
+    meta = _cd_metadata(toc)
+    artist = str(data.get("artist") or meta["artist"]).strip() or "Unknown Artist"
+    album = str(data.get("album") or meta["album"]).strip() or "Unknown Album"
+    year = str(data.get("year") or meta["year"]).strip()[:4]
+    tracks = meta["tracks"]
+    override = data.get("tracks")
+    if isinstance(override, list) and len(override) == len(tracks):
+        for i, t in enumerate(override):
+            title = str(t or "").strip()
+            if title:
+                tracks[i]["title"] = title
+
+    # Cover art (best effort, embedded by the worker if present).
+    try:
+        os.remove(RIP_COVER)
+    except OSError:
+        pass
+    if meta.get("mbid"):
+        try:
+            req = urllib.request.Request(
+                f"https://coverartarchive.org/release/{meta['mbid']}/front-500",
+                headers={"User-Agent": "OsmiumSound/1.0 (https://osmiumsound.qd.je)"})
+            with urllib.request.urlopen(req, timeout=10) as resp:
+                cover = resp.read(5 * 1024 * 1024)
+            with open(RIP_COVER, "wb") as f:
+                f.write(cover)
+        except Exception:
+            pass
+
+    plan = {
+        "device": CD_DEVICE,
+        "root": src["mountpoint"],
+        "artist": artist,
+        "album": album,
+        "year": year,
+        "discid": toc["discid"],
+        "cover": RIP_COVER if os.path.exists(RIP_COVER) else "",
+        "tracks": tracks,
+    }
+    with open(RIP_PLAN, "w") as f:
+        json.dump(plan, f)
+    os.chmod(RIP_PLAN, 0o600)
+    with open(RIP_STATUS, "w") as f:
+        json.dump({"state": "starting", "track": 0, "total": len(tracks),
+                   "progress": 0, "message": "Avvio…"}, f)
+
+    _run(["systemd-run", "--no-block", "--collect", "--unit=" + RIP_UNIT,
+          RIP_SCRIPT, RIP_PLAN], timeout=10)
+    threading.Thread(target=_rip_watcher, daemon=True, name="rip-watcher").start()
+    return jsonify({"success": True, "total": len(tracks)}), 202
+
+
+@app.route("/api/cd/rip/status", methods=["GET"])
+def api_cd_rip_status():
+    denied = _require_pair_token()
+    if denied:
+        return denied
+    return jsonify(_rip_state())
+
+
+@app.route("/api/cd/eject", methods=["POST"])
+def api_cd_eject():
+    denied = _require_pair_token()
+    if denied:
+        return denied
+    if _rip_running():
+        return jsonify({"success": False, "message": "Rip in corso"}), 409
+    r = _run(["eject", CD_DEVICE], timeout=20)
+    return jsonify({"success": r.returncode == 0})
 
 
 @app.route("/api/internal/smb", methods=["GET"])

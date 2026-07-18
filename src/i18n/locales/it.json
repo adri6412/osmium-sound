@@ -165,7 +165,24 @@
     "tabs": {
       "music": "Musica",
       "radio": "Radio",
-      "apps": "App / CD"
+      "apps": "App / CD",
+      "discover": "Scopri"
+    },
+    "discover": {
+      "mixes": "Mix infiniti",
+      "mixTracks": "Mix casuale",
+      "mixAlbums": "Album casuale",
+      "mixArtists": "Artista casuale",
+      "mixStarted": "Mix avviato: la coda si riempie da sola.",
+      "mixError": "Impossibile avviare il mix (plugin Random Mix non attivo?).",
+      "dstm": "Continua con musica simile",
+      "dstmOn": "Attivo ({provider}): a fine coda la musica continua.",
+      "dstmOff": "Disattivato: la riproduzione si ferma a fine coda.",
+      "dstmSetupHint": "Scegli una volta il provider in Lyrion → Impostazioni → Don't Stop The Music, poi il toggle apparirà qui.",
+      "similarTo": "Artisti simili a {artist}",
+      "similarHint": "Gli artisti con ▶ sono nella tua libreria: tocca per riprodurli.",
+      "bio": "Chi è {artist}",
+      "hint": "Metti in riproduzione un brano per vedere artisti simili e biografia. I suggerimenti usano i plugin Lyrion \"MusicArtistInfo\" e \"Don't Stop The Music\"."
     },
     "titles": {
       "home": "Home",
@@ -201,7 +218,21 @@
     "saveError": "Impossibile salvare la playlist. Verifica che in Lyrion sia configurata una cartella playlist.",
     "sleep": "Timer di spegnimento",
     "sleepActive": "Si ferma tra circa {min} min",
-    "sleepOff": "Disattiva timer"
+    "sleepOff": "Disattiva timer",
+    "cd": {
+      "detected": "CD audio rilevato",
+      "rip": "Rippa",
+      "ripTitle": "Rippa CD in libreria",
+      "ripProgress": "Traccia {track} di {total}",
+      "ripProgressShort": "In corso…",
+      "ripDone": "Rip completato! L'album è in libreria.",
+      "ripError": "Rip fallito. Controlla il disco e riprova.",
+      "artist": "Artista",
+      "album": "Album",
+      "start": "Avvia rip",
+      "eject": "Espelli",
+      "noDestination": "Nessuna destinazione scrivibile: adotta un disco interno da Impostazioni → Sorgenti musicali."
+    }
   },
   "settings": {
     "title": "Impostazioni",
@@ -288,6 +319,25 @@
       "presetDelete": "Elimina",
       "presetDeleteConfirm": "Eliminare il preset \"{name}\"?",
       "presetFailed": "Operazione sui preset fallita."
+    },
+    "roomcorr": {
+      "title": "Correzione ambientale guidata",
+      "start": "Misura la stanza",
+      "intro": "L'appliance riproduce uno sweep di prova, lo registra con un microfono di misura USB e genera automaticamente il filtro di correzione per questa stanza.",
+      "req1": "Collega un microfono di misura USB (es. miniDSP UMIK-1).",
+      "req2": "Posiziona il microfono nel punto di ascolto, all'altezza delle orecchie.",
+      "req3": "Imposta un volume di ascolto normale e fai silenzio durante la misura.",
+      "pickMic": "Microfono di misura:",
+      "position": "Quando sei pronto, avvia: sentirai uno sweep di circa 10 secondi.",
+      "noMic": "Nessun microfono USB rilevato. Collegane uno e riapri il wizard.",
+      "measure": "Avvia misura",
+      "measuring": "Misura in corso…",
+      "keepQuiet": "Non fare rumore fino al termine della misura.",
+      "measured": "Risposta misurata",
+      "corrected": "Con correzione",
+      "apply": "Applica correzione",
+      "discard": "Scarta",
+      "error": "Misura fallita. Controlla microfono e volume, poi riprova."
     },
     "multiroom": {
       "help": "Raggruppa altri player presenti in rete con questo dispositivo per riprodurre la stessa musica in sincrono (sync nativo di Lyrion).",
