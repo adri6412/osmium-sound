@@ -115,6 +115,14 @@
                 android:layout_marginTop="16dp"
                 android:visibility="gone" />
 
+            <TextView
+                android:id="@+id/core_status"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:textColor="@color/hifiSilver"
+                android:layout_marginTop="8dp"
+                android:visibility="gone" />
+
             <View
                 android:layout_width="match_parent"
                 android:layout_height="1dp"
@@ -167,6 +175,14 @@
                 android:layout_height="wrap_content"
                 android:layout_gravity="center"
                 android:layout_marginTop="16dp"
+                android:visibility="gone" />
+
+            <TextView
+                android:id="@+id/lyrion_status"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:textColor="@color/hifiSilver"
+                android:layout_marginTop="8dp"
                 android:visibility="gone" />
 
         </LinearLayout>

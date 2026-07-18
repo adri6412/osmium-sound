@@ -391,6 +391,12 @@
     <string name="settings_updates_up_to_date">Up to date</string>
     <string name="settings_updates_available">Update available: %s</string>
     <string name="settings_updates_applying">Applying update…</string>
+    <string name="settings_updates_starting">starting…</string>
+    <string name="settings_updates_reconnecting">reconnecting…</string>
+    <string name="settings_updates_start_failed">could not start the update</string>
+    <string name="settings_updates_update_error">update failed</string>
+    <string name="settings_updates_timeout">timed out waiting for the appliance to confirm the update; check its status once it\'s back online</string>
+    <string name="settings_updates_all_done">All updates applied</string>
     <string name="settings_updates_ui">UI</string>
     <string name="settings_updates_system">System</string>
     <string name="settings_updates_os">OS</string>
