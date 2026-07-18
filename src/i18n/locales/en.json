@@ -320,6 +320,25 @@
       "presetDeleteConfirm": "Delete preset \"{name}\"?",
       "presetFailed": "Preset operation failed."
     },
+    "roomcorr": {
+      "title": "Guided room correction",
+      "start": "Measure the room",
+      "intro": "The appliance plays a test sweep, records it with a USB measurement microphone and automatically generates the correction filter for this room.",
+      "req1": "Connect a USB measurement microphone (e.g. miniDSP UMIK-1).",
+      "req2": "Place the microphone at the listening position, at ear height.",
+      "req3": "Set a normal listening volume and keep the room quiet during the measurement.",
+      "pickMic": "Measurement microphone:",
+      "position": "When you're ready, start: you'll hear a sweep of about 10 seconds.",
+      "noMic": "No USB microphone detected. Connect one and reopen the wizard.",
+      "measure": "Start measurement",
+      "measuring": "Measuring…",
+      "keepQuiet": "Keep the room quiet until the measurement is done.",
+      "measured": "Measured response",
+      "corrected": "With correction",
+      "apply": "Apply correction",
+      "discard": "Discard",
+      "error": "Measurement failed. Check the microphone and volume, then try again."
+    },
     "multiroom": {
       "help": "Group other players on your network with this device so they play the same music in sync (native Lyrion sync).",
       "noOthers": "No other players found on the network. Multiroom needs at least one more player (e.g. another Osmium device or a squeezelite player).",

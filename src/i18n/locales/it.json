@@ -320,6 +320,25 @@
       "presetDeleteConfirm": "Eliminare il preset \"{name}\"?",
       "presetFailed": "Operazione sui preset fallita."
     },
+    "roomcorr": {
+      "title": "Correzione ambientale guidata",
+      "start": "Misura la stanza",
+      "intro": "L'appliance riproduce uno sweep di prova, lo registra con un microfono di misura USB e genera automaticamente il filtro di correzione per questa stanza.",
+      "req1": "Collega un microfono di misura USB (es. miniDSP UMIK-1).",
+      "req2": "Posiziona il microfono nel punto di ascolto, all'altezza delle orecchie.",
+      "req3": "Imposta un volume di ascolto normale e fai silenzio durante la misura.",
+      "pickMic": "Microfono di misura:",
+      "position": "Quando sei pronto, avvia: sentirai uno sweep di circa 10 secondi.",
+      "noMic": "Nessun microfono USB rilevato. Collegane uno e riapri il wizard.",
+      "measure": "Avvia misura",
+      "measuring": "Misura in corso…",
+      "keepQuiet": "Non fare rumore fino al termine della misura.",
+      "measured": "Risposta misurata",
+      "corrected": "Con correzione",
+      "apply": "Applica correzione",
+      "discard": "Scarta",
+      "error": "Misura fallita. Controlla microfono e volume, poi riprova."
+    },
     "multiroom": {
       "help": "Raggruppa altri player presenti in rete con questo dispositivo per riprodurre la stessa musica in sincrono (sync nativo di Lyrion).",
       "noOthers": "Nessun altro player trovato in rete. Il multiroom richiede almeno un altro player (es. un altro dispositivo Osmium o un player squeezelite).",

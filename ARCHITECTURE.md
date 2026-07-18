@@ -124,6 +124,10 @@ GET/POST /player_name
 GET  /discover_lms            LAN auto-discovery for multiroom
 GET/POST /ssh_status, /ssh_set
 GET/POST /pointer_status, /pointer_set
+GET  /roomcorr/mics           USB measurement-mic candidates (arecord -l)
+POST /roomcorr/measure        guided room measurement (async systemd-run job)
+GET  /roomcorr/status         poll the measurement; carries the result curves
+POST /roomcorr/apply|discard  activate or delete the generated FIR
 ```
 
 The full route table is the source of truth — see the `@app.route` decorators
@@ -148,6 +152,10 @@ GET    /api/internal/format/status 🔒   poll a format job
 GET/POST /api/internal/smb         🔒   Samba share config
 POST   /api/internal/smb/regenerate 🔒  rotate the Samba account password
 GET    /api/usb                    🔒   list mounted USB disks for the add-source UI
+GET    /api/cd/info                🔒   audio-CD TOC + MusicBrainz metadata
+POST   /api/cd/rip                 🔒   rip to FLAC (async systemd-run job)
+GET    /api/cd/rip/status          🔒   poll a rip job
+POST   /api/cd/eject               🔒   open the tray
 POST   /api/pair/token                  mint a companion pairing token (localhost only)
 POST   /api/pair/tokens/revoke_all      revoke all tokens (localhost only)
 GET/POST /api/dsp/status, /api/dsp/set  🔒   proxy to the loopback-only Flask DSP routes

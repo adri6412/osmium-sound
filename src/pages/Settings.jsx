@@ -36,6 +36,7 @@ import { useKeyboard } from '../contexts/KeyboardContext';
 import { useI18n } from '../i18n';
 import LanguageSelector from '../components/LanguageSelector';
 import SourcesManager from '../components/SourcesManager';
+import RoomCorrectionWizard from '../components/RoomCorrectionWizard';
 
 // Language-agnostic check used only to colour a status message red.
 const isErrorMsg = (m) =>
@@ -1970,6 +1971,8 @@ const Settings = () => {
                               ? t('settings.dsp.roomCorrectionPresent', { filename: firStatus.filename })
                               : t('settings.dsp.roomCorrectionMissing')}
                           </p>
+                          {/* Guided measurement: generates the FIR on-device with a USB mic */}
+                          <RoomCorrectionWizard onDone={() => { loadFirStatus(); loadDspStatus(); }} />
                         </div>
 
                         {/* Apply EQ (re-applies live when DSP is on; otherwise just saves) */}

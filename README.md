@@ -24,9 +24,12 @@ Bit-perfect audio, streaming services, and signed OTA updates — one sleek dark
 - 🎵 **High-resolution audio** — FLAC, DSD (DoP), PCM up to 192kHz, bit-perfect (no resampling)
 - 🎧 **Streaming services** — Deezer, Qobuz, TIDAL, Spotify and more, via Lyrion plugins
 - 📁 **Music library** — browse by artist, album, folder or playlist, fast indexing
+- 💿 **CD playback & ripping** — insert a disc, play it or rip it to tagged FLAC (MusicBrainz metadata + cover art) straight into your library
+- 🧭 **Discover** — endless random mixes, "keep playing similar music", similar artists and artist bios on the touchscreen
 - 📻 **Internet radio** — thousands of stations, save favourites from the touchscreen
 - 🔌 **DAC auto-detection** — persistent output selection across reboots
 - 🎚️ **Optional DSP** — parametric EQ, headphone crossfeed, room correction (off by default)
+- 🎤 **Guided room correction** — measure the room with a USB mic (e.g. UMIK-1) right from the touchscreen; the correction FIR is generated on-device, no PC needed
 - 🔊 **Multiroom** — group Osmium Sound devices to play in sync
 - 📱 **Android companion app** — browse, control playback/queue, adjust volume, pair by QR code
 - ⬆️ **Signed OTA updates** — Ed25519-signed, Dev and Prod release channels
