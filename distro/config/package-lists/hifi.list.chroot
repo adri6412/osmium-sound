@@ -71,6 +71,11 @@ cdparanoia
 libcdio-utils
 icedax
 
+# CD ripping to library (hifi-rip-cd.py: encode + tag + TOC lookup + eject)
+flac
+cd-discid
+eject
+
 # Squeezelite (Debian build has VISEXPORT; -v exports /dev/shm/squeezelite-*)
 squeezelite
 

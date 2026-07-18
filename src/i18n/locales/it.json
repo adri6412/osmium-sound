@@ -201,7 +201,21 @@
     "saveError": "Impossibile salvare la playlist. Verifica che in Lyrion sia configurata una cartella playlist.",
     "sleep": "Timer di spegnimento",
     "sleepActive": "Si ferma tra circa {min} min",
-    "sleepOff": "Disattiva timer"
+    "sleepOff": "Disattiva timer",
+    "cd": {
+      "detected": "CD audio rilevato",
+      "rip": "Rippa",
+      "ripTitle": "Rippa CD in libreria",
+      "ripProgress": "Traccia {track} di {total}",
+      "ripProgressShort": "In corso…",
+      "ripDone": "Rip completato! L'album è in libreria.",
+      "ripError": "Rip fallito. Controlla il disco e riprova.",
+      "artist": "Artista",
+      "album": "Album",
+      "start": "Avvia rip",
+      "eject": "Espelli",
+      "noDestination": "Nessuna destinazione scrivibile: adotta un disco interno da Impostazioni → Sorgenti musicali."
+    }
   },
   "settings": {
     "title": "Impostazioni",

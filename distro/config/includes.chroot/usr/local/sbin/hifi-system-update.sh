@@ -76,7 +76,7 @@ for f in /usr/local/bin/api_server.py /usr/local/bin/vu_meter_daemon.py \
          /usr/local/bin/sources_server.py; do
     [ -f "$f" ] && { sed -i 's/\r$//' "$f"; chmod +x "$f"; }
 done
-chmod +x /usr/local/sbin/hifi-*.sh 2>/dev/null || true
+chmod +x /usr/local/sbin/hifi-*.sh /usr/local/sbin/hifi-*.py 2>/dev/null || true
 
 # record the new version (outside /opt so a UI OTA can't wipe it)
 mkdir -p "$(dirname "$VERSION_FILE")"

@@ -201,7 +201,21 @@
     "saveError": "Couldn't save the playlist. Check that a playlist folder is configured in Lyrion.",
     "sleep": "Sleep timer",
     "sleepActive": "Stops in about {min} min",
-    "sleepOff": "Turn off timer"
+    "sleepOff": "Turn off timer",
+    "cd": {
+      "detected": "Audio CD detected",
+      "rip": "Rip",
+      "ripTitle": "Rip CD to library",
+      "ripProgress": "Track {track} of {total}",
+      "ripProgressShort": "In progress…",
+      "ripDone": "Rip complete! The album is in your library.",
+      "ripError": "Rip failed. Check the disc and try again.",
+      "artist": "Artist",
+      "album": "Album",
+      "start": "Start rip",
+      "eject": "Eject",
+      "noDestination": "No writable destination: adopt an internal disk from Settings → Music sources."
+    }
   },
   "settings": {
     "title": "Settings",

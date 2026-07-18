@@ -71,8 +71,9 @@ jobs:
           mkdir -p "$ROOT/usr/local/bin" "$ROOT/usr/local/sbin" "$ROOT/etc/systemd/system"
           # Python API + daemons
           cp api_server.py vu_meter_daemon.py sources_server.py "$ROOT/usr/local/bin/"
-          # Helper / OTA scripts
-          cp distro/config/includes.chroot/usr/local/sbin/*.sh "$ROOT/usr/local/sbin/"
+          # Helper / OTA scripts (sh + python workers)
+          cp distro/config/includes.chroot/usr/local/sbin/*.sh \
+             distro/config/includes.chroot/usr/local/sbin/*.py "$ROOT/usr/local/sbin/"
           # systemd units
           cp distro/config/includes.chroot/etc/systemd/system/*.service "$ROOT/etc/systemd/system/"
           printf '%s\n' "$VERSION" > "$ROOT/SYSTEM_VERSION"
