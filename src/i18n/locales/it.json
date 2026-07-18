@@ -165,7 +165,24 @@
     "tabs": {
       "music": "Musica",
       "radio": "Radio",
-      "apps": "App / CD"
+      "apps": "App / CD",
+      "discover": "Scopri"
+    },
+    "discover": {
+      "mixes": "Mix infiniti",
+      "mixTracks": "Mix casuale",
+      "mixAlbums": "Album casuale",
+      "mixArtists": "Artista casuale",
+      "mixStarted": "Mix avviato: la coda si riempie da sola.",
+      "mixError": "Impossibile avviare il mix (plugin Random Mix non attivo?).",
+      "dstm": "Continua con musica simile",
+      "dstmOn": "Attivo ({provider}): a fine coda la musica continua.",
+      "dstmOff": "Disattivato: la riproduzione si ferma a fine coda.",
+      "dstmSetupHint": "Scegli una volta il provider in Lyrion → Impostazioni → Don't Stop The Music, poi il toggle apparirà qui.",
+      "similarTo": "Artisti simili a {artist}",
+      "similarHint": "Gli artisti con ▶ sono nella tua libreria: tocca per riprodurli.",
+      "bio": "Chi è {artist}",
+      "hint": "Metti in riproduzione un brano per vedere artisti simili e biografia. I suggerimenti usano i plugin Lyrion \"MusicArtistInfo\" e \"Don't Stop The Music\"."
     },
     "titles": {
       "home": "Home",

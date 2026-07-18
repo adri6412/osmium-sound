@@ -165,7 +165,24 @@
     "tabs": {
       "music": "Music",
       "radio": "Radio",
-      "apps": "Apps / CD"
+      "apps": "Apps / CD",
+      "discover": "Discover"
+    },
+    "discover": {
+      "mixes": "Endless mixes",
+      "mixTracks": "Random mix",
+      "mixAlbums": "Random album",
+      "mixArtists": "Random artist",
+      "mixStarted": "Mix started: the queue keeps itself topped up.",
+      "mixError": "Couldn't start the mix (Random Mix plugin not enabled?).",
+      "dstm": "Keep playing similar music",
+      "dstmOn": "On ({provider}): music continues when the queue ends.",
+      "dstmOff": "Off: playback stops at the end of the queue.",
+      "dstmSetupHint": "Pick a provider once in Lyrion → Settings → Don't Stop The Music, then the toggle will appear here.",
+      "similarTo": "Artists similar to {artist}",
+      "similarHint": "Artists with ▶ are in your library: tap to play them.",
+      "bio": "About {artist}",
+      "hint": "Play a track to see similar artists and a biography. Suggestions use the Lyrion \"MusicArtistInfo\" and \"Don't Stop The Music\" plugins."
     },
     "titles": {
       "home": "Home",

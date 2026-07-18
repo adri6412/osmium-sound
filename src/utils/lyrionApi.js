@@ -224,6 +224,56 @@ export class LyrionAPI {
     }
   }
 
+  // --- Discovery (Don't Stop The Music / Random Mix / MusicArtistInfo) ---
+
+  // DSTM per-player provider ('' = off). Returns null when the plugin isn't
+  // installed (pref unreadable) so the UI can hide the toggle entirely.
+  async getDstmProvider(playerMac) {
+    try {
+      return await this.getPlayerPref(playerMac, 'plugin.dontstopthemusic:provider');
+    } catch (_) {
+      return null;
+    }
+  }
+
+  async setDstmProvider(playerMac, provider) {
+    return this.setPlayerPref(playerMac, 'plugin.dontstopthemusic:provider', provider || '');
+  }
+
+  // Random Mix (bundled LMS plugin): start an endless random mix.
+  // mode: 'tracks' | 'albums' | 'contributors' | 'year'
+  async randomPlay(playerMac, mode = 'tracks') {
+    return this.request(playerMac, ['randomplay', mode]);
+  }
+
+  // Artist biography via MusicArtistInfo (same plugin the lyrics use).
+  // Returns text or null (plugin missing / nothing found).
+  async getArtistBio(playerMac, artist) {
+    if (!artist) return null;
+    try {
+      const r = await this.request(playerMac, ['musicartistinfo', 'biography', `artist:${artist}`]);
+      const text = r?.biography;
+      return typeof text === 'string' && text.trim() ? text : null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  // Similar artists via MusicArtistInfo. Not every MAI version exposes this
+  // command — degrade to an empty list so the UI hides the section.
+  async getSimilarArtists(playerMac, artist) {
+    if (!artist) return [];
+    try {
+      const r = await this.request(playerMac, ['musicartistinfo', 'similarartists', `artist:${artist}`]);
+      const loop = r?.item_loop || r?.similarartists_loop || [];
+      return loop
+        .map((it) => (typeof it === 'string' ? it : (it.artist || it.name || it.text || '')))
+        .filter(Boolean);
+    } catch (_) {
+      return [];
+    }
+  }
+
   // --- Multiroom / synchronised zones ---
   // LMS syncs multiple players natively: a sync group has one master and any
   // number of slaves that all play the master's queue in lock-step.
