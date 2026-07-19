@@ -11,6 +11,7 @@ import re
 import json
 import logging
 import urllib.request
+import urllib.parse
 import time
 import threading
 
@@ -636,6 +637,15 @@ def set_player_name(name):
     except Exception:
         log.exception("set_player_name: squeezelite restart failed")
         return {'success': True, 'name': name, 'message': f'Nome impostato ({name}); riavvio non riuscito'}
+    if _read_bt_state():
+        # Best-effort: keep the Bluetooth alias in sync so a renamed player
+        # doesn't leave phones seeing the old "OsmiumSound" in their picker.
+        # hifi-bt-watcher.py sets this too on its own startup; this just
+        # applies it live without waiting for a watcher restart.
+        try:
+            subprocess.run(['bluetoothctl', 'system-alias', name], capture_output=True, timeout=10)
+        except Exception:
+            pass
     return {'success': True, 'name': name, 'message': f'Nome player impostato su {name}'}
 
 # ── LAN discovery of other Lyrion/LMS servers ──────────────────────
@@ -1547,6 +1557,227 @@ def delete_dsp_preset(name):
     return {'success': True, **get_dsp_presets(), 'message': 'Preset eliminato'}
 
 # ──────────────────────────────────────────────────────────────────
+#  Bluetooth audio (A2DP sink) — OPTIONAL, OFF by default. Lets the
+#  appliance appear as a Bluetooth speaker: a phone connects and streams
+#  straight to the DAC, no app/account needed (guest-friendly input, the
+#  same idea as Volumio/WiiM/Bluesound/Eversolo). See OS migration
+#  0024-bluetooth.sh for the systemd units/prerequisites, and
+#  distro/config/includes.chroot/usr/local/sbin/hifi-bt-{aplay-run,
+#  watcher.py} (delivered by the system OTA channel) for the runtime DAC
+#  handover + Now Playing metadata.
+#
+#  Concurrency with squeezelite/CamillaDSP: Bluetooth "wins". When a phone
+#  starts actively streaming, hifi-bt-watcher.py pauses the local Lyrion
+#  player (and stops CamillaDSP if it was running, same release-before-open
+#  ordering as the DSP toggle above) so the real DAC is free, then restarts
+#  hifi-bt-aplay.service to open it. That handover reacts to live BlueZ
+#  D-Bus signals from the watcher daemon; this section only turns the whole
+#  subsystem on/off, reports status, and — since Bluetooth carries no cover
+#  art worth trusting (BlueZ's AVRCP art support is unreliable) — resolves
+#  one from an online lookup for the UI's Now Playing overlay.
+# ──────────────────────────────────────────────────────────────────
+BT_UNITS = ('bluetooth.service', 'hifi-bluealsa.service', 'hifi-bt-agent.service',
+            'hifi-bt-aplay.service', 'hifi-bt-watcher.service')
+BT_STATE_FILE = '/etc/hifi-player/bluetooth.json'
+BT_NOW_PLAYING_FILE = '/run/hifi-bt/now-playing.json'
+BT_CAMILLA_STOPPED_FLAG = '/run/hifi-bt/camilla-stopped'
+BT_APLAY_SCRIPT = '/usr/local/sbin/hifi-bt-aplay-run'
+_BT_MAC_RE = re.compile(r'^[0-9A-Fa-f]{2}(:[0-9A-Fa-f]{2}){5}$')
+_bt_apply_lock = threading.Lock()
+
+def _bt_available():
+    return (_unit_exists('hifi-bluealsa.service')
+            and shutil.which('bluetoothctl') is not None
+            and os.path.exists(BT_APLAY_SCRIPT))
+
+def _read_bt_state():
+    try:
+        with open(BT_STATE_FILE) as f:
+            return bool(json.load(f).get('enabled'))
+    except Exception:
+        return False
+
+def _write_bt_state(enabled):
+    os.makedirs(os.path.dirname(BT_STATE_FILE), exist_ok=True)
+    tmp = BT_STATE_FILE + '.tmp'
+    with open(tmp, 'w') as f:
+        json.dump({'enabled': bool(enabled)}, f)
+    os.replace(tmp, BT_STATE_FILE)
+
+def _bt_paired_devices():
+    """[{mac, name, connected}], best-effort — empty on any failure so a
+    flaky bluetoothctl call never breaks the whole status response."""
+    devices = []
+    try:
+        r = subprocess.run(['bluetoothctl', 'devices', 'Paired'],
+                           capture_output=True, text=True, timeout=10)
+        lines = (r.stdout or '').splitlines()
+        if r.returncode != 0 or not lines:
+            # Older bluez CLIs don't support the "Paired" filter argument.
+            r = subprocess.run(['bluetoothctl', 'paired-devices'],
+                               capture_output=True, text=True, timeout=10)
+            lines = (r.stdout or '').splitlines()
+        for line in lines:
+            m = re.match(r'Device\s+([0-9A-Fa-f:]{17})\s+(.*)', line.strip())
+            if not m:
+                continue
+            mac, name = m.group(1), m.group(2)
+            info = subprocess.run(['bluetoothctl', 'info', mac],
+                                  capture_output=True, text=True, timeout=10)
+            devices.append({'mac': mac, 'name': name,
+                            'connected': 'Connected: yes' in (info.stdout or '')})
+    except Exception:
+        log.exception("_bt_paired_devices failed")
+    return devices
+
+def get_bluetooth_status():
+    try:
+        ac = subprocess.run(['systemctl', 'is-active', 'bluetooth.service'],
+                           capture_output=True, text=True, timeout=10)
+        active = ac.stdout.strip() == 'active'
+        discoverable = False
+        if active:
+            show = subprocess.run(['bluetoothctl', 'show'],
+                                  capture_output=True, text=True, timeout=10)
+            discoverable = 'Discoverable: yes' in (show.stdout or '')
+        return {'available': _bt_available(), 'enabled': _read_bt_state(), 'active': active,
+                'discoverable': discoverable, 'devices': _bt_paired_devices() if active else []}
+    except Exception:
+        log.exception("get_bluetooth_status failed")
+        return {'available': False, 'enabled': False, 'active': False, 'discoverable': False,
+                'devices': [], 'error': 'Stato Bluetooth non disponibile'}
+
+def set_bluetooth(enable):
+    """Enable or disable the whole Bluetooth subsystem (persists). Serialized
+    so an enable/disable double-click can't interleave with itself."""
+    if enable and not _bt_available():
+        return {'success': False, 'available': False, 'enabled': False, 'active': False,
+                'discoverable': False, 'devices': [],
+                'message': 'Bluetooth non disponibile: aggiorna il sistema'}
+    with _bt_apply_lock:
+        _write_bt_state(enable)
+        try:
+            if enable:
+                subprocess.run(['modprobe', 'btusb'], capture_output=True, timeout=15)
+                subprocess.run(['modprobe', 'bluetooth'], capture_output=True, timeout=15)
+                subprocess.run(['sudo', 'systemctl', 'unmask', 'bluetooth.service'],
+                               capture_output=True, text=True, timeout=15)
+                for unit in BT_UNITS:
+                    r = subprocess.run(['sudo', 'systemctl', 'enable', '--now', unit],
+                                       capture_output=True, text=True, timeout=30)
+                    if r.returncode != 0:
+                        log.error("set_bluetooth enable %s failed: %s", unit, (r.stderr or '').strip())
+                # hifi-bt-watcher.py sets power/pairable/alias once the adapter
+                # comes up — give it a moment before the UI's first status poll.
+                for _ in range(10):
+                    r = subprocess.run(['bluetoothctl', 'list'],
+                                       capture_output=True, text=True, timeout=5)
+                    if (r.stdout or '').strip():
+                        break
+                    time.sleep(1)
+            else:
+                for unit in reversed(BT_UNITS):
+                    subprocess.run(['sudo', 'systemctl', 'disable', '--now', unit],
+                                   capture_output=True, text=True, timeout=30)
+                subprocess.run(['sudo', 'systemctl', 'mask', 'bluetooth.service'],
+                               capture_output=True, text=True, timeout=15)
+                # Never leave DSP off just because Bluetooth is being turned off.
+                if os.path.exists(BT_CAMILLA_STOPPED_FLAG):
+                    _run(['systemctl', 'start', DSP_UNIT], timeout=30)
+                    try:
+                        os.remove(BT_CAMILLA_STOPPED_FLAG)
+                    except OSError:
+                        pass
+                subprocess.run(['modprobe', '-r', 'btusb'], capture_output=True, timeout=15)
+        except Exception:
+            log.exception("set_bluetooth failed")
+            status = get_bluetooth_status()
+            status['success'] = False
+            status['message'] = 'Operazione Bluetooth fallita'
+            return status
+    status = get_bluetooth_status()
+    status['success'] = True
+    status['message'] = 'Bluetooth abilitato' if enable else 'Bluetooth disabilitato'
+    return status
+
+def set_bt_discoverable():
+    if not _bt_available():
+        return {'success': False, 'message': 'Bluetooth non disponibile'}
+    try:
+        subprocess.run(['bluetoothctl', 'discoverable-timeout', '120'],
+                       capture_output=True, text=True, timeout=10)
+        r = subprocess.run(['bluetoothctl', 'discoverable', 'on'],
+                           capture_output=True, text=True, timeout=10)
+        if r.returncode != 0:
+            return {'success': False, 'message': 'Impossibile rendere visibile il dispositivo'}
+    except Exception:
+        log.exception("set_bt_discoverable failed")
+        return {'success': False, 'message': 'Impossibile rendere visibile il dispositivo'}
+    return {'success': True, 'seconds': 120, 'message': 'Dispositivo visibile per 2 minuti'}
+
+def bt_forget(mac):
+    """Unpair/remove a device. MAC comes straight from a network request, so
+    it's validated against a strict address pattern before ever reaching a
+    shell-adjacent subprocess argument."""
+    if not mac or not _BT_MAC_RE.match(mac):
+        return {'success': False, 'message': 'Indirizzo Bluetooth non valido'}
+    try:
+        r = subprocess.run(['bluetoothctl', 'remove', mac],
+                           capture_output=True, text=True, timeout=10)
+        if r.returncode != 0:
+            return {'success': False, 'message': 'Dispositivo non trovato'}
+    except Exception:
+        log.exception("bt_forget failed")
+        return {'success': False, 'message': 'Operazione fallita'}
+    return {'success': True, 'devices': _bt_paired_devices(), 'message': 'Dispositivo dimenticato'}
+
+# Cover art never arrives over Bluetooth (AVRCP art support in BlueZ is
+# experimental/unreliable, and cars/phones mostly rely on their own
+# proprietary stacks for it) — best-effort online lookup by title+artist
+# instead. Tiny in-memory cache so repeated Now Playing polls during the
+# same track don't refetch; capped so a long BT listening session (many
+# different tracks) can't grow it unbounded.
+_bt_cover_cache = {}
+_BT_COVER_CACHE_MAX = 200
+
+def _bt_cover_lookup(title, artist):
+    key = (title or '', artist or '')
+    if key == ('', ''):
+        return None
+    if key in _bt_cover_cache:
+        return _bt_cover_cache[key]
+    cover = None
+    try:
+        term = urllib.parse.quote(f'{artist} {title}'.strip())
+        url = f'https://itunes.apple.com/search?term={term}&media=music&entity=song&limit=1'
+        req = urllib.request.Request(url, headers={'User-Agent': 'OsmiumSound/1.0'})
+        with urllib.request.urlopen(req, timeout=3) as resp:
+            data = json.loads(resp.read())
+        results = data.get('results') or []
+        if results:
+            # ...100x100bb.jpg -> a larger cover; still tiny/fast over LAN.
+            art = results[0].get('artworkUrl100')
+            if art:
+                cover = art.replace('100x100bb', '600x600bb')
+    except Exception:
+        cover = None  # offline / no match / rate-limited — fine, just no art
+    if len(_bt_cover_cache) >= _BT_COVER_CACHE_MAX:
+        _bt_cover_cache.clear()
+    _bt_cover_cache[key] = cover
+    return cover
+
+def get_bluetooth_now_playing():
+    try:
+        with open(BT_NOW_PLAYING_FILE) as f:
+            np = json.load(f)
+    except Exception:
+        np = {}
+    if not np.get('active'):
+        return {'active': False}
+    np['cover_url'] = _bt_cover_lookup(np.get('title'), np.get('artist'))
+    return np
+
+# ──────────────────────────────────────────────────────────────────
 #  OTA update helpers
 # ──────────────────────────────────────────────────────────────────
 
@@ -2337,6 +2568,28 @@ def api_tidal_status():
 def api_tidal_set():
     data = request.get_json(silent=True) or {}
     return jsonify(set_tidal(bool(data.get('enable'))))
+
+@app.route('/bluetooth_status', methods=['GET'])
+def api_bluetooth_status():
+    return jsonify(get_bluetooth_status())
+
+@app.route('/bluetooth_set', methods=['POST'])
+def api_bluetooth_set():
+    data = request.get_json(silent=True) or {}
+    return jsonify(set_bluetooth(bool(data.get('enable'))))
+
+@app.route('/bluetooth_discoverable', methods=['POST'])
+def api_bluetooth_discoverable():
+    return jsonify(set_bt_discoverable())
+
+@app.route('/bluetooth_forget', methods=['POST'])
+def api_bluetooth_forget():
+    data = request.get_json(silent=True) or {}
+    return jsonify(bt_forget(data.get('mac')))
+
+@app.route('/bluetooth_now_playing', methods=['GET'])
+def api_bluetooth_now_playing():
+    return jsonify(get_bluetooth_now_playing())
 
 @app.route('/show_global_keyboard', methods=['POST'])
 def api_show_global_keyboard():

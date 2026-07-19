@@ -16,6 +16,7 @@ import { useI18n } from '../i18n';
 import AnalogVUMeter from '../components/AnalogVUMeter';
 import CdRip from '../components/CdRip';
 import Discover from '../components/Discover';
+import BluetoothNowPlaying from '../components/BluetoothNowPlaying';
 import SettingsPage from './Settings';
 import { useLyrionPlayer, safeUrl, formatTime } from '../hooks/useLyrionPlayer';
 
@@ -483,6 +484,7 @@ const LyrionServer = () => {
   // ─────────────────────────────────────────────────────────────────────────────
   return (
     <div className="h-screen w-screen flex overflow-hidden bg-hifi-dark font-display">
+      <BluetoothNowPlaying />
 
       {/* ══════════════════ LEFT — NOW PLAYING (340px) ══════════════════ */}
       <div className="w-[340px] flex-shrink-0 flex flex-col bg-hifi-panel overflow-hidden">

@@ -26,7 +26,9 @@ import {
   CheckCircle2,
   AlertTriangle,
   HardDriveDownload,
-  Lock
+  Lock,
+  Bluetooth,
+  BluetoothConnected
 } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import { systemAPI, checkApiServer } from '../utils/api';
@@ -105,6 +107,13 @@ const Settings = () => {
   const [sshStatus, setSshStatus] = useState(null); // { available, enabled, active }
   const [sshBusy, setSshBusy] = useState(false);
   const [sshMessage, setSshMessage] = useState('');
+
+  // Bluetooth audio (A2DP sink) toggle
+  const [btStatus, setBtStatus] = useState(null); // { available, enabled, active, discoverable, devices }
+  const [btBusy, setBtBusy] = useState(false);
+  const [btMessage, setBtMessage] = useState('');
+  const [btPairing, setBtPairing] = useState(false);
+  const [btPairingSecondsLeft, setBtPairingSecondsLeft] = useState(0);
 
   // Mouse pointer toggle (for users without a touchscreen)
   const [pointerStatus, setPointerStatus] = useState(null); // { available, enabled }
@@ -240,6 +249,7 @@ const Settings = () => {
     loadSystemData();
     loadAudioDevices();
     loadSshStatus();
+    loadBluetoothStatus();
     loadPointerStatus();
     loadOtaChannel();
     loadPlaybackPrefs();
@@ -513,6 +523,70 @@ const Settings = () => {
       setSshMessage(res.data?.message || res.message || t('settings.ssh.failed'));
     }
   };
+
+  // ── Bluetooth handlers ──────────────────────────────────────────
+  const loadBluetoothStatus = async () => {
+    const res = await systemAPI.getBluetoothStatus();
+    if (res.success) setBtStatus(res.data);
+  };
+
+  const toggleBluetooth = async () => {
+    if (btBusy || !btStatus) return;
+    const enable = !btStatus.enabled;
+    setBtBusy(true);
+    setBtMessage('');
+    const res = await systemAPI.setBluetooth(enable);
+    setBtBusy(false);
+    if (res.success && res.data) {
+      setBtStatus(res.data);
+      setBtMessage(res.data.message || '');
+    } else {
+      setBtMessage(res.data?.message || res.message || t('settings.bluetooth.failed'));
+    }
+  };
+
+  const startBluetoothPairing = async () => {
+    if (btBusy || !btStatus?.active) return;
+    setBtBusy(true);
+    setBtMessage('');
+    const res = await systemAPI.setBluetoothDiscoverable();
+    setBtBusy(false);
+    if (res.success && res.data?.success) {
+      setBtPairing(true);
+      setBtPairingSecondsLeft(res.data.seconds || 120);
+    } else {
+      setBtMessage(res.data?.message || res.message || t('settings.bluetooth.failed'));
+    }
+  };
+
+  const forgetBtDevice = async (mac) => {
+    if (btBusy) return;
+    setBtBusy(true);
+    const res = await systemAPI.forgetBluetoothDevice(mac);
+    setBtBusy(false);
+    if (res.success && res.data?.success) {
+      setBtStatus((s) => (s ? { ...s, devices: res.data.devices || [] } : s));
+    } else {
+      setBtMessage(res.data?.message || res.message || t('settings.bluetooth.failed'));
+    }
+  };
+
+  // Countdown for the "visible for pairing" window opened above.
+  useEffect(() => {
+    if (!btPairing) return;
+    if (btPairingSecondsLeft <= 0) { setBtPairing(false); return; }
+    const id = setTimeout(() => setBtPairingSecondsLeft((s) => s - 1), 1000);
+    return () => clearTimeout(id);
+  }, [btPairing, btPairingSecondsLeft]);
+
+  // Poll status while the Bluetooth section is open, so a phone
+  // connecting/disconnecting shows up without leaving the page.
+  useEffect(() => {
+    if (activeSection !== 'custom-bluetooth') return;
+    loadBluetoothStatus();
+    const id = setInterval(loadBluetoothStatus, 5000);
+    return () => clearInterval(id);
+  }, [activeSection]);
 
   // ── Mouse pointer handlers ──────────────────────────────────────
   // Mirrors the persisted state into an <html> class so the in-app cursor
@@ -1305,6 +1379,11 @@ const Settings = () => {
       title: t('settings.sections.dsp'),
       icon: Sliders,
       content: 'custom-dsp'
+    },
+    {
+      title: t('settings.sections.bluetooth'),
+      icon: Bluetooth,
+      content: 'custom-bluetooth'
     },
     {
       title: t('settings.sections.multiroom'),
@@ -2481,6 +2560,104 @@ const Settings = () => {
                           : 'bg-hifi-dark text-hifi-silver'
                       }`}>
                         {sshMessage}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {section.content === 'custom-bluetooth' && (
+                  <div className="space-y-4">
+                    <p className="text-sm text-hifi-silver">{t('settings.bluetooth.help')}</p>
+
+                    <div className="flex items-start space-x-2 text-xs text-hifi-silver/70 bg-hifi-dark rounded-lg p-3">
+                      <Bluetooth size={14} className="mt-0.5 shrink-0 text-hifi-gold" />
+                      <span>{t('settings.bluetooth.pauseWarning')}</span>
+                    </div>
+
+                    {/* Toggle */}
+                    <button
+                      onClick={toggleBluetooth}
+                      disabled={btBusy || !btStatus}
+                      className="w-full flex items-center justify-between bg-hifi-dark hover:bg-hifi-light/40 disabled:opacity-60 rounded-lg px-4 py-3 transition-colors"
+                    >
+                      <span className="flex items-center space-x-2 text-sm text-white">
+                        {btBusy && <Loader2 size={16} className="animate-spin" />}
+                        <span>
+                          {btStatus?.enabled ? t('settings.bluetooth.enabled') : t('settings.bluetooth.disabled')}
+                        </span>
+                      </span>
+                      <span className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${btStatus?.enabled ? 'bg-hifi-gold' : 'bg-hifi-accent'}`}>
+                        <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${btStatus?.enabled ? 'translate-x-6' : 'translate-x-1'}`} />
+                      </span>
+                    </button>
+
+                    {btStatus && !btStatus.available && (
+                      <div className="rounded-lg p-3 text-center text-sm bg-hifi-dark text-hifi-silver">
+                        {t('settings.bluetooth.unavailable')}
+                      </div>
+                    )}
+
+                    {btStatus?.enabled && btStatus?.active && (
+                      <>
+                        {/* Pair a new device */}
+                        <button
+                          onClick={startBluetoothPairing}
+                          disabled={btBusy || btPairing}
+                          className="w-full flex items-center justify-center space-x-2 bg-hifi-gold/10 hover:bg-hifi-gold/20 disabled:opacity-60 text-hifi-gold rounded-lg px-4 py-3 text-sm font-medium transition-colors"
+                        >
+                          <Bluetooth size={16} />
+                          <span>
+                            {btPairing
+                              ? t('settings.bluetooth.pairingActive', { seconds: btPairingSecondsLeft, name: playerName })
+                              : t('settings.bluetooth.pairBtn')}
+                          </span>
+                        </button>
+
+                        {/* Paired devices */}
+                        <div className="space-y-2">
+                          <span className="text-xs text-hifi-silver/60 uppercase tracking-wide">
+                            {t('settings.bluetooth.pairedDevices')}
+                          </span>
+                          {(!btStatus.devices || btStatus.devices.length === 0) ? (
+                            <div className="rounded-lg p-3 text-center text-sm bg-hifi-dark text-hifi-silver">
+                              {t('settings.bluetooth.noDevices')}
+                            </div>
+                          ) : (
+                            <div className="space-y-1.5">
+                              {btStatus.devices.map((d) => (
+                                <div key={d.mac} className="flex items-center justify-between bg-hifi-dark rounded-lg px-3 py-2">
+                                  <span className="flex items-center space-x-2 min-w-0">
+                                    {d.connected
+                                      ? <BluetoothConnected size={15} className="text-hifi-gold shrink-0" />
+                                      : <Bluetooth size={15} className="text-hifi-silver/50 shrink-0" />}
+                                    <span className="text-sm text-white truncate">{d.name || d.mac}</span>
+                                    {d.connected && (
+                                      <span className="text-[10px] text-hifi-gold shrink-0">{t('settings.bluetooth.connected')}</span>
+                                    )}
+                                  </span>
+                                  <button
+                                    onClick={() => forgetBtDevice(d.mac)}
+                                    disabled={btBusy}
+                                    title={t('settings.bluetooth.forget')}
+                                    className="p-1.5 text-hifi-silver/50 hover:text-red-400 disabled:opacity-60 transition-colors shrink-0"
+                                  >
+                                    <Trash2 size={14} />
+                                  </button>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      </>
+                    )}
+
+                    {btMessage && (
+                      <div className={`rounded-lg p-3 text-center text-sm ${
+                        isErrorMsg(btMessage)
+                          ? 'bg-red-900/20 text-red-300 border border-red-500/30'
+                          : 'bg-hifi-dark text-hifi-silver'
+                      }`}>
+                        {btMessage}
                       </div>
                     )}
                   </div>

@@ -8,6 +8,8 @@ import websockets
 import math
 import time
 import glob
+import subprocess
+import threading
 
 # numpy makes the per-frame RMS bucketing ~an order of magnitude cheaper than the
 # pure-Python loop (this runs 30×/s during playback). Optional: if it isn't
@@ -319,10 +321,111 @@ class SqueezeliteVisualizer:
         return decimated
 
 
+class BluetoothTapReader:
+    """Fallback VU source for Bluetooth playback.
+
+    hifi-bt-aplay-run fans its A2DP audio out to an unused CamillaDSP
+    Loopback subdevice pair (DEV=0/1, SUBDEV=1 — DSP itself only ever uses
+    SUBDEV=0) whenever that's possible; this class captures from the read
+    side of that pair with `arecord` and runs the samples through the exact
+    same RMS->dB->percent mapping as the squeezelite shm path
+    (_levels_from_values/_levels_from_values_py on the SqueezeliteVisualizer
+    passed in), so the VU meters look identical regardless of source.
+    Lower priority than squeezelite — see vu_meter_server, which only calls
+    this once squeezelite itself has nothing playing.
+    """
+    DEVICE = 'hw:CARD=Loopback,DEV=1,SUBDEV=1'
+    NOW_PLAYING_FILE = '/run/hifi-bt/now-playing.json'
+    RATE = 44100
+    WINDOW_SAMPLES = 1024  # interleaved L/R samples, matches the shm reader's window
+
+    def __init__(self):
+        self.proc = None
+        self.thread = None
+        self.running = False
+        self.buf = bytearray()
+        self.lock = threading.Lock()
+
+    def _bt_active(self):
+        try:
+            with open(self.NOW_PLAYING_FILE) as f:
+                return bool(json.load(f).get('active'))
+        except Exception:
+            return False
+
+    def _reader_loop(self):
+        max_bytes = self.WINDOW_SAMPLES * 2  # 2 bytes/sample (S16_LE)
+        try:
+            while self.running and self.proc and self.proc.poll() is None:
+                chunk = self.proc.stdout.read(4096)
+                if not chunk:
+                    break
+                with self.lock:
+                    self.buf.extend(chunk)
+                    if len(self.buf) > max_bytes:
+                        del self.buf[:len(self.buf) - max_bytes]
+        except Exception:
+            pass
+
+    def _start(self):
+        if self.proc is not None:
+            return
+        try:
+            self.proc = subprocess.Popen(
+                ['arecord', '-D', self.DEVICE, '-f', 'S16_LE', '-c', '2',
+                 '-r', str(self.RATE), '-t', 'raw'],
+                stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
+            self.running = True
+            self.thread = threading.Thread(target=self._reader_loop, daemon=True)
+            self.thread.start()
+            print(f"BT VU tap: capturing {self.DEVICE}")
+        except Exception as e:
+            print(f"BT VU tap: could not start arecord: {e}")
+            self.proc = None
+
+    def _stop(self):
+        self.running = False
+        if self.proc is not None:
+            try:
+                self.proc.terminate()
+                self.proc.wait(timeout=2)
+            except Exception:
+                try:
+                    self.proc.kill()
+                except Exception:
+                    pass
+            self.proc = None
+        with self.lock:
+            self.buf = bytearray()
+
+    def read_levels(self, visualizer):
+        """Levels list while Bluetooth is actively streaming, else None (so
+        the caller falls through to plain silence handling)."""
+        if not self._bt_active():
+            if self.proc is not None:
+                self._stop()
+            return None
+        self._start()
+        if self.proc is None:
+            return None
+        with self.lock:
+            raw = bytes(self.buf)
+        num_samples = len(raw) // 2
+        if num_samples < 64:
+            # Capture just (re)started — not enough buffered yet this tick.
+            return [0] * visualizer.num_bars
+        if np is not None:
+            values = np.frombuffer(raw, dtype='<i2', count=num_samples).astype(np.float64)
+            return visualizer._levels_from_values(values)
+        samples = struct.unpack(f'<{num_samples}h', raw)
+        return visualizer._levels_from_values_py(list(samples))
+
+
 async def vu_meter_server(websocket, path):
     """WebSocket handler to stream VU meter data"""
     print(f"Client connected to VU meter stream")
     viz = SqueezeliteVisualizer()
+    bt_tap = BluetoothTapReader()
 
     # Send empty data initially
     empty_data = [0] * viz.num_bars
@@ -333,22 +436,36 @@ async def vu_meter_server(websocket, path):
             await asyncio.sleep(0.033)
 
             levels = viz.read_audio_data()
+            # same_index_count > 10 means squeezelite's buffer isn't moving
+            # (paused/stopped), same threshold read_audio_data itself uses to
+            # force levels to zero — treat that as "nothing playing here" and
+            # give the Bluetooth tap a chance instead of just showing zeros.
+            sq_active = levels is not None and viz.same_index_count <= 10
+
+            if sq_active:
+                payload = json.dumps({"levels": levels, "active": any(l > 0 for l in levels)})
+                await websocket.send(payload)
+                continue
+
+            bt_levels = bt_tap.read_levels(viz)
+            if bt_levels is not None:
+                payload = json.dumps({"levels": bt_levels, "active": any(l > 0 for l in bt_levels)})
+                await websocket.send(payload)
+                continue
 
             if levels is None:
                 # Shared memory not found or error, send zeros
                 await websocket.send(json.dumps({"levels": empty_data, "active": False}))
                 # Poll slower if not active
                 await asyncio.sleep(1.0)
-                continue
-
-            # Send real data
-            payload = json.dumps({"levels": levels, "active": any(l > 0 for l in levels)})
-            await websocket.send(payload)
+            else:
+                await websocket.send(json.dumps({"levels": levels, "active": False}))
 
     except websockets.exceptions.ConnectionClosed:
         print("Client disconnected")
     finally:
         viz.disconnect()
+        bt_tap._stop()
 
 
 async def main():

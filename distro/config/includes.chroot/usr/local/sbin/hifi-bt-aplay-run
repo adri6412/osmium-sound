@@ -1,0 +1,87 @@
+#!/bin/sh
+# HiFi Player — Bluetooth A2DP playback wrapper.
+#
+# Started by hifi-bt-aplay.service (After=hifi-bluealsa.service), and
+# restarted by hifi-bt-watcher.py every time it hands the DAC over for a new
+# Bluetooth streaming session. Resolves the CURRENT real DAC the same way the
+# DSP toggle does (_current_real_dac in api_server.py: squeezelite's -o, or
+# the saved dsp-target if squeezelite is pointed at the CamillaDSP loopback),
+# then plays there.
+#
+# When the CamillaDSP loopback card is present (snd-aloop is loaded
+# unconditionally by OS migration 0015, regardless of whether DSP itself is
+# ON), also fans the audio out to an unused Loopback subdevice pair (DEV=0/1,
+# SUBDEV=1 — DSP only ever uses SUBDEV=0) via a route+multi ALSA config, so
+# vu_meter_daemon.py can read it and the VU meters keep working during
+# Bluetooth playback (see its BT tap source). Falls back to the DAC alone
+# (no VU meter) if that config can't be set up — audio must never depend on
+# the VU tap succeeding.
+#
+# NOTE: -D/--profile-a2dp and the "any device" address are the bluez-alsa
+# bluealsa-aplay CLI as of Debian 12's bluez-alsa-utils; verify against the
+# actual shipped version on real hardware.
+set -eu
+
+SQ_DEFAULT=/etc/default/squeezelite
+DSP_TARGET=/var/lib/hifi-player/dsp-target
+RUNDIR=/run/hifi-bt
+ASOUND_CONF="$RUNDIR/asound.conf"
+
+mkdir -p "$RUNDIR"
+
+ARGS=$(sed -n "s/^ARGS=['\"]\\(.*\\)['\"].*/\\1/p" "$SQ_DEFAULT" 2>/dev/null | head -n1)
+DEV=$(printf '%s' "$ARGS" | sed -n 's/.*-o[[:space:]]\{1,\}\([^[:space:]]\{1,\}\).*/\1/p')
+
+case "$DEV" in
+    *Loopback*|'')
+        DEV=$(cat "$DSP_TARGET" 2>/dev/null || echo default)
+        ;;
+esac
+case "$DEV" in
+    hw:*) DEV="plughw:${DEV#hw:}" ;;
+esac
+[ -n "$DEV" ] || DEV=default
+
+TARGET_PCM="$DEV"
+
+if grep -q Loopback /proc/asound/cards 2>/dev/null; then
+    if cat > "$ASOUND_CONF.tmp" <<EOF
+pcm.hifi_bt_dac {
+    type plug
+    slave.pcm "$DEV"
+}
+pcm.hifi_bt_multi {
+    type multi
+    slaves.a.pcm "hifi_bt_dac"
+    slaves.a.channels 2
+    slaves.b.pcm "hw:CARD=Loopback,DEV=0,SUBDEV=1"
+    slaves.b.channels 2
+    bindings.0.slave a
+    bindings.0.channel 0
+    bindings.1.slave a
+    bindings.1.channel 1
+    bindings.2.slave b
+    bindings.2.channel 0
+    bindings.3.slave b
+    bindings.3.channel 1
+}
+pcm.hifi_bt {
+    type route
+    slave.pcm "hifi_bt_multi"
+    slave.channels 4
+    ttable.0.0 1
+    ttable.1.1 1
+    ttable.0.2 1
+    ttable.1.3 1
+}
+EOF
+    then
+        mv -f "$ASOUND_CONF.tmp" "$ASOUND_CONF"
+        export ALSA_CONFIG_PATH="/usr/share/alsa/alsa.conf:$ASOUND_CONF"
+        TARGET_PCM="hifi_bt"
+    else
+        rm -f "$ASOUND_CONF.tmp"
+    fi
+fi
+
+exec /usr/bin/bluealsa-aplay -D "$TARGET_PCM" --profile-a2dp 00:00:00:00:00:00

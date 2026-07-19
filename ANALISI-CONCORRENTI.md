@@ -25,11 +25,11 @@ Player + regole udev già nell'immagine), Samba/SMB/USB come sorgenti, VU meter
 analogico. Tutto gratuito e open source — che di per sé è il principale
 vantaggio competitivo rispetto a Volumio Premium e Roon.
 
-### Gap reali individuati
+### Gap reali individuati (stato: tutte e 3 implementate — vedi §2)
 
-1. **Bluetooth assente** (né ricezione dal telefono né uscita verso cuffie/casse BT) — Volumio 4 e moOde 9 lo hanno; è tra le feature più richieste in assoluto su questa categoria di prodotti.
-2. **CD ripping assente** — il CD si può *riprodurre* ma non archiviare in libreria. Daphile (il concorrente più simile, x86+LMS) lo ha integrato; Volumio lo offre solo in Premium. Su hardware x86 con lettori USB economici è un differenziatore naturale.
-3. **Nessuna discovery/mix intelligenti** — Roon vince quasi solo su questo (Valence, Roon Radio); Volumio Premium spinge la "AI search". L'ecosistema LMS offre già i mattoni (Don't Stop The Music, MusicArtistInfo, randomplay) ma non sono esposti nella UI touchscreen.
+1. ✅ **Bluetooth assente** (né ricezione dal telefono né uscita verso cuffie/casse BT) — Volumio 4 e moOde 9 lo hanno; è tra le feature più richieste in assoluto su questa categoria di prodotti. *Implementata la ricezione (fase 1, sink A2DP); l'uscita verso cuffie/casse BT resta una fase 2 separata.*
+2. ✅ **CD ripping assente** — il CD si può *riprodurre* ma non archiviare in libreria. Daphile (il concorrente più simile, x86+LMS) lo ha integrato; Volumio lo offre solo in Premium. Su hardware x86 con lettori USB economici è un differenziatore naturale.
+3. ✅ **Nessuna discovery/mix intelligenti** — Roon vince quasi solo su questo (Valence, Roon Radio); Volumio Premium spinge la "AI search". L'ecosistema LMS offre già i mattoni (Don't Stop The Music, MusicArtistInfo, randomplay) ma non sono esposti nella UI touchscreen.
 
 Gap minori (non selezionati, possibili follow-up): hotspot Wi-Fi di fallback per
 il primo setup senza ethernet (moOde), accesso remoto fuori casa stile Roon ARC
@@ -41,6 +41,18 @@ scrobbling Last.fm on-device.
 ## 2. Piano di implementazione — 3 feature
 
 ### Feature A — Audio Bluetooth (ricezione A2DP + uscita verso cuffie/casse BT)
+
+✅ **Fase 1 (ricezione A2DP) implementata.** Migrazione OS
+`distro/os-update/apply.d/0024-bluetooth.sh` (BlueZ + BlueALSA, unit systemd
+dedicate `hifi-bluealsa`/`hifi-bt-agent`/`hifi-bt-aplay`/`hifi-bt-watcher`,
+riconciliazione con la blacklist boot-veloce di `0009-faster-boot-2.sh`),
+handover del DAC + metadata AVRCP in
+`distro/config/includes.chroot/usr/local/sbin/hifi-bt-{aplay-run,watcher.py}`,
+sezione Bluetooth in `api_server.py`/`Settings.jsx`, overlay Now Playing
+(`BluetoothNowPlaying.jsx`) con copertina (lookup online, non via AVRCP) e
+VU meter funzionanti anche durante lo streaming BT (tap sul loopback
+CamillaDSP, `vu_meter_daemon.py`). **Fase 2 (uscita verso cuffie/casse BT)
+non ancora implementata** — resta il seguito naturale di questa feature.
 
 **Obiettivo:** il telefono può riprodurre musica sull'appliance via Bluetooth; in
 alternativa l'appliance può usare cuffie/speaker BT come uscita.
@@ -75,6 +87,8 @@ dalla pausa coordinata); variabilità dei dongle USB BT (documentare chipset con
 
 ### Feature B — CD ripping in libreria
 
+✅ **Implementata** (`sources_server.py` `/api/cd/*`, `distro/os-update/apply.d/0022-cd-rip.sh`, UI `CdRip.jsx`).
+
 **Obiettivo:** inserisci un CD, tocchi "Rippa", e l'album finisce taggato in
 libreria con copertina. Parità con Daphile, gratis dove Volumio chiede il Premium.
 
@@ -102,6 +116,8 @@ per traccia); lookup metadata senza rete (fallback + possibilità di ritaggare d
 **Stima:** ~1 settimana. **Priorità: media-alta** (differenziatore su x86).
 
 ### Feature C — Discovery e "Mix intelligenti" (risposta a Roon Radio / Volumio AI)
+
+✅ **Implementata** (tab "Scopri", `Discover.jsx`, DSTM/similar-artists/bio in `lyrionApi.js`).
 
 **Obiettivo:** la musica non si ferma a fine coda e la UI aiuta a scoprire:
 "continua con musica simile", artisti simili, mix casuali, bio artista.

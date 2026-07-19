@@ -50,7 +50,8 @@ flowchart TB
 | Lyrion Music Server | external (Debian package / on-demand download) | Library indexing, playback engine, plugin ecosystem (Spotty, TIDAL Connect, radio, UPnP/DLNA, AirPlay). Port `9000`. |
 | squeezelite | systemd service | Lyrion's player client; `-D` flag enables bit-perfect DSD via DoP; `-v` exports a shared-memory buffer the VU meter reads |
 | CamillaDSP | systemd-managed, optional | Parametric EQ, headphone crossfeed, room correction from an uploaded filter. Off by default — bit-perfect path is untouched unless enabled. |
-| VU meter daemon | `vu_meter_daemon.py` | Reads squeezelite's shared-memory visualizer segment (`/dev/shm/squeezelite-*`) via mmap, auto-detecting the header layout, computes 32-bar RMS and streams it over WebSocket to `AnalogVUMeter.jsx`. Re-attaches on shm inode changes (DAC switch, restart, multiroom follow-switch). |
+| VU meter daemon | `vu_meter_daemon.py` | Reads squeezelite's shared-memory visualizer segment (`/dev/shm/squeezelite-*`) via mmap, auto-detecting the header layout, computes 32-bar RMS and streams it over WebSocket to `AnalogVUMeter.jsx`. Re-attaches on shm inode changes (DAC switch, restart, multiroom follow-switch); falls back to a Bluetooth loopback tap (see [Bluetooth audio](#bluetooth-audio-a2dp-sink)) when squeezelite has nothing playing. |
+| Bluetooth watcher | `hifi-bt-watcher.py` (system OTA channel) | Watches BlueZ over D-Bus; on the first active A2DP transport, pauses the local Lyrion player and CamillaDSP (if running) and restarts `hifi-bt-aplay`; publishes AVRCP Now Playing metadata to `/run/hifi-bt/now-playing.json`. Optional, off by default. |
 | Android companion | `android-companion/` | Native Android app; talks to the Flask API and Lyrion over HTTP/LAN after QR-code pairing |
 
 ### Appliance systemd services
@@ -62,6 +63,10 @@ flowchart TB
 | `hifi-vumeter` | `vu_meter_daemon.py` | VU meter shared-memory reader |
 | `hifi-firstboot` | `hifi-firstboot.sh` | One-shot: re-installs Lyrion (purged by the live-installer), then deletes its own unit — see [First boot & setup](#first-boot--setup) |
 | `squeezelite` | — | Lyrion's player client |
+| `hifi-bluealsa` | BlueALSA daemon (`-p a2dp-sink`) | Bluetooth A2DP sink backend. Disabled by default — see [Bluetooth audio](#bluetooth-audio-a2dp-sink) |
+| `hifi-bt-agent` | `bt-agent -c NoInputNoOutput` | Headless pairing agent (no PIN prompt) |
+| `hifi-bt-aplay` | `hifi-bt-aplay-run` | Plays the A2DP stream to the current DAC (+ a VU-meter tap when possible); restarted by the watcher on every handover |
+| `hifi-bt-watcher` | `hifi-bt-watcher.py` | DAC handover + Now Playing metadata (see table above) |
 
 `camilladsp.service` is enabled/controlled at runtime (`DSP_UNIT` in
 `api_server.py`, binary `/usr/local/bin/camilladsp`, config
@@ -79,6 +84,57 @@ finds candidate servers on the LAN using the real Slim/Squeezebox discovery
 protocol (UDP broadcast, port 3483) — no manual IP entry needed.
 `GET/POST /player_name` names each device so grouped players are easy to
 tell apart in the Lyrion UI.
+
+## Bluetooth audio (A2DP sink)
+
+Optional, off by default (`GET/POST /bluetooth_status`, `/bluetooth_set` in
+`api_server.py`, persisted to `/etc/hifi-player/bluetooth.json`). Lets a
+phone connect and stream straight to the DAC, like a Bluetooth speaker — no
+app or account. Stack is BlueZ + BlueALSA (not PulseAudio/PipeWire), so the
+bit-perfect ALSA path used when Bluetooth is off/idle is untouched.
+
+**Prerequisites & reconciliation** — `distro/os-update/apply.d/0024-bluetooth.sh`
+installs `bluez`/`bluez-tools`/`bluez-alsa-utils` and four disabled systemd
+units (table above). `0009-faster-boot-2.sh` blacklists `btusb`/`bluetooth`
+and masks `bluetooth.service` on *every* OS update (cumulative migration, for
+fast boot on the common case); `0024` always runs after it and re-applies the
+user's persisted choice on top, so Bluetooth enabled from Settings survives
+the next OS update instead of being silently reverted.
+
+**DAC handover** — squeezelite (`-C 5` idle timeout) and CamillaDSP (when
+DSP is on) are the two things that can hold the real DAC. `hifi-bt-watcher.py`
+watches BlueZ D-Bus signals directly (via `dbus-monitor`, not python3-dbus —
+consistent with the rest of the appliance shelling out to CLI tools for
+D-Bus-backed services like NetworkManager): when the first A2DP transport
+goes active, it pauses the local Lyrion player over JSON-RPC and stops
+CamillaDSP if it was running (flag file `/run/hifi-bt/camilla-stopped` so it
+knows whether to restart it afterward), then restarts `hifi-bt-aplay.service`
+so it can open the now-free DAC. Local playback is never auto-resumed. This
+mirrors the release-before-open ordering `api_server.py`'s DSP toggle already
+uses between squeezelite and CamillaDSP.
+
+**VU meter tap** — `hifi-bt-aplay-run` fans the A2DP audio out (ALSA `route`
++ `multi`) to an unused CamillaDSP Loopback subdevice pair (DEV=0/1,
+SUBDEV=1 — DSP itself only ever uses SUBDEV=0, so this doesn't collide with
+it) whenever the Loopback card is present, which it unconditionally is since
+migration `0015-camilladsp.sh`. `vu_meter_daemon.py` captures that tap with
+`arecord` and reuses its existing RMS→dB→percent mapping, so the analog VU
+meters keep moving during Bluetooth playback; falls back to the DAC alone
+(no VU) if the tap config can't be set up.
+
+**Now Playing metadata** — the watcher also follows `org.bluez.MediaPlayer1`
+AVRCP properties (Title/Artist/Album/Position) and writes them to
+`/run/hifi-bt/now-playing.json`. `GET /bluetooth_now_playing` in
+`api_server.py` adds a `cover_url` on top via a best-effort online lookup
+(iTunes Search API, in-memory cache) — Bluetooth never carries reliable cover
+art (BlueZ's own AVRCP art support is experimental). The renderer's
+`BluetoothNowPlaying.jsx` polls this and renders a small top banner (title,
+artist, cover, device name) whenever Bluetooth is actively streaming,
+independent of the regular Lyrion-driven Now Playing panel (which has
+nothing to show while the local player is paused for a BT session).
+
+Not yet implemented: Bluetooth as an *output* (appliance → BT
+headphones/speakers) — a natural fase 2, tracked in `ANALISI-CONCORRENTI.md`.
 
 ## Pairing & security
 
@@ -128,6 +184,10 @@ GET  /roomcorr/mics           USB measurement-mic candidates (arecord -l)
 POST /roomcorr/measure        guided room measurement (async systemd-run job)
 GET  /roomcorr/status         poll the measurement; carries the result curves
 POST /roomcorr/apply|discard  activate or delete the generated FIR
+GET/POST /bluetooth_status, /bluetooth_set    Bluetooth A2DP sink on/off + paired devices
+POST /bluetooth_discoverable  make the device visible for pairing (2 min)
+POST /bluetooth_forget        unpair a device
+GET  /bluetooth_now_playing   current Bluetooth track (AVRCP + online cover lookup)
 ```
 
 The full route table is the source of truth — see the `@app.route` decorators
