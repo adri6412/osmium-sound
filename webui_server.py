@@ -654,11 +654,19 @@ def _guard():
 
     # 3) CSRF: double-submit token on every mutation. The token lives in a
     # non-HttpOnly cookie the SPA echoes back in X-CSRF-Token; a cross-site page
-    # can send the cookie but cannot read it to set the header. Localhost is
-    # exempt: api_server.py makes server-to-server provisioning calls from
-    # 127.0.0.1 (no browser, no cookie) — same loopback-trust as elsewhere.
+    # can send the cookie but cannot read it to set the header.
+    # Exempt:
+    #   * localhost — api_server.py makes server-to-server provisioning calls
+    #     from 127.0.0.1 (no browser, no cookie), same loopback-trust as
+    #     elsewhere.
+    #   * /api/provision/* — the first-boot captive flow runs over PLAIN HTTP
+    #     (:80 / http://10.42.0.1), where the Secure CSRF cookie is unavailable
+    #     by design. These endpoints are pre-auth and gated by physical/RF
+    #     proximity + the provisioning marker; CSRF protects the authenticated
+    #     HTTPS admin session, which is a separate surface.
     if request.method in ('POST', 'PUT', 'DELETE', 'PATCH') \
-            and request.remote_addr not in ('127.0.0.1', '::1'):
+            and request.remote_addr not in ('127.0.0.1', '::1') \
+            and not request.path.startswith('/api/provision/'):
         cookie = request.cookies.get('csrf')
         header = request.headers.get('X-CSRF-Token')
         if not cookie or not header or not secrets.compare_digest(cookie, header):
