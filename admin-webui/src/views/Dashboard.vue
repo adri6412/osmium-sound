@@ -30,10 +30,6 @@ onMounted(async () => {
       <span class="t gold">Impostazioni</span>
       <span class="muted">Rete, audio, DSP, Bluetooth, aggiornamenti…</span>
     </RouterLink>
-    <RouterLink class="tile" to="/settings?open=sources">
-      <span class="t gold">Sorgenti musicali</span>
-      <span class="muted">Cartelle e condivisioni di rete</span>
-    </RouterLink>
   </div>
 
   <div class="card">
