@@ -1357,6 +1357,12 @@ _SYSTEM_PROXY_ROUTES = [
     ("/api/system/ota_channel", "POST", "/ota_channel"),
     ("/api/system/audio_devices", "GET", "/audio_devices"),
     ("/api/system/audio_device", "POST", "/set_audio_device"),
+    # Display mode (GUI kiosk <-> headless). Lets a paired companion bring a
+    # headless unit back to the on-screen GUI remotely — the only way back when
+    # there is no screen. Non-destructive, so the pairing token alone is enough
+    # (factory reset, which IS destructive, is deliberately NOT proxied here).
+    ("/api/system/display_mode", "GET", "/display_mode"),
+    ("/api/system/display_mode", "POST", "/display_mode"),
     ("/api/system/player_name", "GET", "/player_name"),
     ("/api/system/player_name", "POST", "/player_name"),
     ("/api/system/lms_role", "GET", "/lms_role"),

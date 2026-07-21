@@ -883,6 +883,76 @@ def set_pointer(enable):
             'message': ('Puntatore mouse attivato' if enable else 'Puntatore mouse disattivato')}
 
 # ──────────────────────────────────────────────────────────────────
+#  Display mode — GUI touchscreen kiosk vs headless. The appliance ships
+#  GUI-first (graphical.target -> LightDM -> Electron kiosk). Headless is a
+#  real persisted mode: multi-user.target, no X, controlled remotely
+#  (companion app / Lyrion :9000 / sources :8080). All hifi-* daemons +
+#  squeezelite + Lyrion run in BOTH modes, so switching only adds/removes the
+#  on-screen GUI stack — nothing about playback or control changes.
+#
+#  The actual switch is done by /usr/local/sbin/hifi-display-mode.sh (flips the
+#  default systemd target; --live also isolates the target now, after a short
+#  delay so this HTTP response is flushed before the GUI that issued it dies).
+#  api_server runs as root, so no sudoers entry is needed.
+#
+#  Persisted state ABSENT means gui — the fleet-safety default (an existing
+#  configured unit must never drift into headless on an OS update).
+# ──────────────────────────────────────────────────────────────────
+DISPLAY_MODE_FILE = '/etc/hifi-player/display-mode'
+DISPLAY_MODE_SCRIPT = '/usr/local/sbin/hifi-display-mode.sh'
+DISPLAY_MODES = ('gui', 'headless')
+# Update states that mean "an OTA is actively working"; switching the systemd
+# target mid-update could interrupt it or collide with an update reboot, so we
+# refuse the switch while any of these is in progress.
+_UPDATE_BUSY_STATES = ('downloading', 'verifying', 'applying', 'installing', 'running', 'rebooting')
+
+def _update_in_progress():
+    for status_fn in (os_update_status, system_update_status):
+        try:
+            if (status_fn() or {}).get('state') in _UPDATE_BUSY_STATES:
+                return True
+        except Exception:
+            pass
+    return False
+
+def get_display_mode():
+    """Return { mode }. 'gui' (default when the file is absent) or 'headless'."""
+    mode = 'gui'
+    try:
+        with open(DISPLAY_MODE_FILE) as f:
+            if f.read().strip() == 'headless':
+                mode = 'headless'
+    except Exception:
+        pass
+    return {'mode': mode}
+
+def set_display_mode(mode):
+    """Switch GUI <-> headless, live + persisted. Refused while an OTA is
+    applying (a target switch mid-update could interrupt it)."""
+    if mode not in DISPLAY_MODES:
+        return {'success': False, 'mode': get_display_mode()['mode'],
+                'message': 'Modalità non valida'}
+    if _update_in_progress():
+        return {'success': False, 'mode': get_display_mode()['mode'],
+                'message': 'Aggiornamento in corso — riprova a fine aggiornamento'}
+    try:
+        r = subprocess.run([DISPLAY_MODE_SCRIPT, 'set', mode, '--live'],
+                           capture_output=True, text=True, timeout=30)
+        if r.returncode != 0:
+            log.error("set_display_mode failed: %s", (r.stderr or '').strip())
+            return {'success': False, 'mode': get_display_mode()['mode'],
+                    'message': 'Cambio modalità fallito'}
+    except Exception:
+        log.exception("set_display_mode failed")
+        return {'success': False, 'mode': get_display_mode()['mode'],
+                'message': 'Cambio modalità fallito'}
+    # In gui mode the switch is instant (LightDM already up); in headless the X
+    # session is torn down a moment after this response is sent.
+    msg = ('Modalità con schermo attivata' if mode == 'gui'
+           else 'Modalità headless attivata — lo schermo verrà spento')
+    return {'success': True, 'mode': mode, 'message': msg}
+
+# ──────────────────────────────────────────────────────────────────
 #  Tidal Connect — optional. Lets the appliance appear as a Tidal Connect
 #  target so the Tidal app can stream directly to it (via mDNS/avahi). The
 #  daemon is an unofficial, reverse-engineered binary that is NOT bundled
@@ -2464,6 +2534,15 @@ def api_pointer_status():
 def api_pointer_set():
     data = request.get_json(silent=True) or {}
     return jsonify(set_pointer(bool(data.get('enable'))))
+
+@app.route('/display_mode', methods=['GET'])
+def api_display_mode():
+    return jsonify(get_display_mode())
+
+@app.route('/display_mode', methods=['POST'])
+def api_set_display_mode():
+    data = request.get_json(silent=True) or {}
+    return jsonify(set_display_mode((data.get('mode') or '').strip()))
 
 @app.route('/ota_channel', methods=['GET'])
 def api_ota_channel():

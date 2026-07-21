@@ -258,6 +258,7 @@
       "backup": "Backup e ripristino",
       "ssh": "Accesso SSH",
       "pointer": "Puntatore mouse",
+      "displayMode": "Modalità schermo",
       "systemInfo": "Informazioni Sistema",
       "updates": "Aggiornamenti",
       "systemControls": "Controlli Sistema",
@@ -423,6 +424,17 @@
       "disabled": "Puntatore mouse nascosto",
       "unavailable": "Controllo del puntatore non disponibile su questo dispositivo.",
       "failed": "Impossibile cambiare il puntatore."
+    },
+    "displayMode": {
+      "help": "Scegli se questo dispositivo funziona con l'interfaccia touchscreen sullo schermo oppure in modalità headless (senza schermo), controllato da remoto tramite l'app companion Android, l'interfaccia web di Lyrion (porta 9000) o la pagina delle sorgenti musicali (porta 8080).",
+      "currentGui": "Interfaccia sullo schermo (touchscreen)",
+      "currentHeadless": "Headless (senza schermo)",
+      "switchToHeadless": "Passa a headless",
+      "switchToGui": "Passa all'interfaccia su schermo",
+      "headlessWarning": "Lo schermo si spegnerà subito. Da quel momento controllerai il dispositivo solo dall'app companion, da http://hifiplayer.local:9000 (Lyrion) e :8080 (sorgenti). Per riportare l'interfaccia, usa l'app companion → Impostazioni → Modalità schermo.",
+      "confirmHeadless": "Spegni lo schermo",
+      "cancel": "Annulla",
+      "failed": "Impossibile cambiare la modalità schermo."
     },
     "lyrion": {
       "urlLabel": "URL Lyrion Server",

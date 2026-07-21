@@ -258,6 +258,7 @@
       "backup": "Backup & restore",
       "ssh": "SSH Access",
       "pointer": "Mouse pointer",
+      "displayMode": "Display mode",
       "systemInfo": "System Information",
       "updates": "Updates",
       "systemControls": "System Controls",
@@ -423,6 +424,17 @@
       "disabled": "Mouse pointer hidden",
       "unavailable": "Pointer control is not available on this device.",
       "failed": "Could not change the pointer."
+    },
+    "displayMode": {
+      "help": "Choose whether this device runs with the on-screen touchscreen interface or headless (no screen), controlled remotely from the Android companion app, the Lyrion web interface (port 9000) or the music sources page (port 8080).",
+      "currentGui": "On-screen interface (touchscreen)",
+      "currentHeadless": "Headless (no screen)",
+      "switchToHeadless": "Switch to headless",
+      "switchToGui": "Switch to on-screen interface",
+      "headlessWarning": "The screen will turn off immediately. You will then control this device only from the companion app, http://hifiplayer.local:9000 (Lyrion) and :8080 (sources). To bring the interface back, use the companion app → Settings → Display mode.",
+      "confirmHeadless": "Turn off screen",
+      "cancel": "Cancel",
+      "failed": "Could not change the display mode."
     },
     "lyrion": {
       "urlLabel": "Lyrion Server URL",

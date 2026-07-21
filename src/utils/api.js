@@ -105,6 +105,12 @@ export const systemAPI = {
   getPointerStatus: () => apiGet('/pointer_status'),
   // Show/hide the on-screen mouse pointer. Returns { success, available, enabled, message }
   setPointer: (enable) => apiPost('/pointer_set', { enable }),
+  // Display mode: { mode: 'gui'|'headless' }. 'headless' runs the box with no
+  // on-screen GUI (control via companion / Lyrion :9000 / sources :8080).
+  getDisplayMode: () => apiGet('/display_mode'),
+  // Switch GUI <-> headless (live + persisted). In headless the on-screen UI is
+  // torn down shortly after this returns. Returns { success, mode, message }
+  setDisplayMode: (mode) => apiPost('/display_mode', { mode }),
   // OTA release channel: { channel: 'prod'|'dev' }
   getOtaChannel: () => apiGet('/ota_channel'),
   // Switch channel. Returns { success, channel }

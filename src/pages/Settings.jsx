@@ -18,6 +18,8 @@ import {
   Trash2,
   HardDrive,
   MousePointer2,
+  Monitor,
+  MonitorOff,
   ChevronRight,
   ChevronLeft,
   Smartphone,
@@ -119,6 +121,12 @@ const Settings = () => {
   const [pointerStatus, setPointerStatus] = useState(null); // { available, enabled }
   const [pointerBusy, setPointerBusy] = useState(false);
   const [pointerMessage, setPointerMessage] = useState('');
+
+  // Display mode (GUI touchscreen kiosk <-> headless)
+  const [displayMode, setDisplayMode] = useState(null); // 'gui' | 'headless'
+  const [displayModeBusy, setDisplayModeBusy] = useState(false);
+  const [displayModeMessage, setDisplayModeMessage] = useState('');
+  const [displayModeConfirm, setDisplayModeConfirm] = useState(false); // headless confirm step
 
   // Audio output (DAC) selection
   const [audioDevices, setAudioDevices] = useState([]);
@@ -251,6 +259,7 @@ const Settings = () => {
     loadSshStatus();
     loadBluetoothStatus();
     loadPointerStatus();
+    loadDisplayMode();
     loadOtaChannel();
     loadPlaybackPrefs();
     loadDspStatus();
@@ -618,6 +627,31 @@ const Settings = () => {
       setPointerMessage(res.data.message || '');
     } else {
       setPointerMessage(res.data?.message || res.message || t('settings.pointer.failed'));
+    }
+  };
+
+  // ── Display mode (GUI kiosk <-> headless) handlers ──────────────
+  const loadDisplayMode = async () => {
+    const res = await systemAPI.getDisplayMode();
+    if (res.success && res.data?.mode) {
+      setDisplayMode(res.data.mode);
+    }
+  };
+
+  const switchDisplayMode = async (mode) => {
+    if (displayModeBusy) return;
+    setDisplayModeBusy(true);
+    setDisplayModeMessage('');
+    setDisplayModeConfirm(false);
+    const res = await systemAPI.setDisplayMode(mode);
+    setDisplayModeBusy(false);
+    if (res.success && res.data?.success) {
+      setDisplayMode(res.data.mode);
+      setDisplayModeMessage(res.data.message || '');
+      // Switching to headless tears down this very UI a moment later; nothing
+      // more to do here — the X session is about to end.
+    } else {
+      setDisplayModeMessage(res.data?.message || res.message || t('settings.displayMode.failed'));
     }
   };
 
@@ -1424,6 +1458,11 @@ const Settings = () => {
       title: t('settings.sections.pointer'),
       icon: MousePointer2,
       content: 'custom-pointer'
+    },
+    {
+      title: t('settings.sections.displayMode'),
+      icon: displayMode === 'headless' ? MonitorOff : Monitor,
+      content: 'custom-display-mode'
     },
     {
       title: t('settings.sections.systemInfo'),
@@ -2697,6 +2736,86 @@ const Settings = () => {
                           : 'bg-hifi-dark text-hifi-silver'
                       }`}>
                         {pointerMessage}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Display mode (GUI touchscreen kiosk <-> headless) */}
+                {section.content === 'custom-display-mode' && (
+                  <div className="space-y-4">
+                    <p className="text-sm text-hifi-silver">{t('settings.displayMode.help')}</p>
+
+                    <div className="flex items-center justify-between bg-hifi-dark rounded-lg px-4 py-3">
+                      <span className="flex items-center space-x-2 text-sm text-white">
+                        {displayMode === 'headless'
+                          ? <MonitorOff size={16} className="text-hifi-silver" />
+                          : <Monitor size={16} className="text-hifi-gold" />}
+                        <span>
+                          {displayMode === 'headless'
+                            ? t('settings.displayMode.currentHeadless')
+                            : t('settings.displayMode.currentGui')}
+                        </span>
+                      </span>
+                    </div>
+
+                    {/* GUI mode: offer switching to headless (guarded). */}
+                    {displayMode === 'gui' && !displayModeConfirm && (
+                      <button
+                        onClick={() => setDisplayModeConfirm(true)}
+                        disabled={displayModeBusy || !displayMode}
+                        className="w-full flex items-center justify-center space-x-2 bg-hifi-dark hover:bg-hifi-light/40 disabled:opacity-60 rounded-lg px-4 py-3 text-sm text-white transition-colors"
+                      >
+                        <MonitorOff size={16} />
+                        <span>{t('settings.displayMode.switchToHeadless')}</span>
+                      </button>
+                    )}
+
+                    {/* Headless is a footgun on a screen (you lose this UI), so
+                        require an explicit second confirmation with a warning. */}
+                    {displayMode === 'gui' && displayModeConfirm && (
+                      <div className="space-y-3 rounded-lg border border-amber-500/30 bg-amber-900/10 p-4">
+                        <p className="text-sm text-amber-200">{t('settings.displayMode.headlessWarning')}</p>
+                        <div className="flex space-x-3">
+                          <button
+                            onClick={() => setDisplayModeConfirm(false)}
+                            disabled={displayModeBusy}
+                            className="flex-1 rounded-lg bg-hifi-dark hover:bg-hifi-light/40 disabled:opacity-60 px-4 py-2 text-sm text-white transition-colors"
+                          >
+                            {t('settings.displayMode.cancel')}
+                          </button>
+                          <button
+                            onClick={() => switchDisplayMode('headless')}
+                            disabled={displayModeBusy}
+                            className="flex-1 flex items-center justify-center space-x-2 rounded-lg bg-amber-600 hover:bg-amber-500 disabled:opacity-60 px-4 py-2 text-sm text-white transition-colors"
+                          >
+                            {displayModeBusy && <Loader2 size={16} className="animate-spin" />}
+                            <span>{t('settings.displayMode.confirmHeadless')}</span>
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Headless mode: offer switching back to GUI. */}
+                    {displayMode === 'headless' && (
+                      <button
+                        onClick={() => switchDisplayMode('gui')}
+                        disabled={displayModeBusy}
+                        className="w-full flex items-center justify-center space-x-2 bg-hifi-dark hover:bg-hifi-light/40 disabled:opacity-60 rounded-lg px-4 py-3 text-sm text-white transition-colors"
+                      >
+                        {displayModeBusy && <Loader2 size={16} className="animate-spin" />}
+                        <Monitor size={16} />
+                        <span>{t('settings.displayMode.switchToGui')}</span>
+                      </button>
+                    )}
+
+                    {displayModeMessage && (
+                      <div className={`rounded-lg p-3 text-center text-sm ${
+                        isErrorMsg(displayModeMessage)
+                          ? 'bg-red-900/20 text-red-300 border border-red-500/30'
+                          : 'bg-hifi-dark text-hifi-silver'
+                      }`}>
+                        {displayModeMessage}
                       </div>
                     )}
                   </div>

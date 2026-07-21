@@ -205,6 +205,7 @@ mkdir -p "$SBIN_DEST"
 # already in place and already CRLF-normalized by the earlier repo-wide sed
 # pass; only the exec bit needs setting.
 chmod +x "$SBIN_DEST/hifi-format-disk.sh"
+chmod +x "$SBIN_DEST/hifi-display-mode.sh"
 
 # Seed the installed system-components version (baseline for OTA comparison),
 # matching the UI version so a fresh image reports a real baseline.
