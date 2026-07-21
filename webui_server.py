@@ -779,7 +779,14 @@ def auth_change_password():
 @app.route('/api/provision/status', methods=['GET'])
 def provision_status():
     if not _provisioning():
-        return jsonify({'pending': False})
+        # `completed` tells the kiosk that setup ran through the provisioning
+        # flow (possibly entirely from the web, where the Electron localStorage
+        # flag was never written), so it must NOT show its first-run wizard —
+        # e.g. headless setup finished on the phone, then GUI re-enabled later.
+        done = _load_prov_state()
+        return jsonify({'pending': False,
+                        'completed': bool(done.get('finalized')),
+                        'mode': done.get('mode')})
     state = _load_prov_state()
     return jsonify({
         'pending': True,

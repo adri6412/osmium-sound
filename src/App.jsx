@@ -8,6 +8,7 @@ import BootIntro from './components/BootIntro';
 import { KeyboardProvider, useKeyboard } from './contexts/KeyboardContext';
 import { I18nProvider } from './i18n';
 import { lyrionApi } from './utils/lyrionApi';
+import { systemAPI } from './utils/api';
 
 const AppContent = () => {
   // Boot intro: a 5s logo animation shown over everything at startup, then
@@ -30,6 +31,27 @@ const AppContent = () => {
   const [showWizard, setShowWizard] = React.useState(
     () => localStorage.getItem('firstSetupComplete') !== 'true'
   );
+
+  // The localStorage flag only records a wizard completed ON THIS SCREEN. If
+  // setup ran through the provisioning flow from the web instead (headless
+  // first, GUI re-enabled later), the flag was never written here — ask the
+  // system whether setup is already done and skip the wizard if so. Feature-
+  // detected: on older systems the endpoint is missing and nothing changes.
+  React.useEffect(() => {
+    if (!showWizard) return;
+    let alive = true;
+    (async () => {
+      try {
+        const res = await systemAPI.getProvisionStatus();
+        if (alive && res.success && res.data?.pending === false && res.data?.completed === true) {
+          localStorage.setItem('firstSetupComplete', 'true');
+          setShowWizard(false);
+        }
+      } catch (_) {}
+    })();
+    return () => { alive = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const inactivityTimer = React.useRef(null);
   const { showKeyboard } = useKeyboard();
 
