@@ -296,6 +296,8 @@ _SSID_RE = re.compile(r'^[\x20-\x7e]{1,32}$')
 
 
 def _wifi_device():
+    if FAKE:
+        return 'wlan0'
     rc, out, _ = _nmcli(['-t', '-f', 'DEVICE,TYPE', 'device', 'status'])
     if rc == 0:
         for line in out.splitlines():
@@ -303,6 +305,41 @@ def _wifi_device():
             if len(parts) >= 2 and parts[1] == 'wifi':
                 return parts[0]
     return None
+
+
+# dnsmasq-base is required by NetworkManager's ipv4.method=shared (the hotspot).
+# It ships in the ISO package-list and is installed by OS migration 0026, but on
+# an OTA-upgraded unit that hadn't applied the OS bundle it can be missing — in
+# which case `nmcli connection up` for the AP fails. Ensure it at runtime,
+# best-effort, once, with a clear log line.
+_dnsmasq_attempted = False
+
+
+def _dnsmasq_present():
+    if FAKE:
+        return True
+    try:
+        return subprocess.run(['dpkg', '-s', 'dnsmasq-base'],
+                              capture_output=True, timeout=10).returncode == 0
+    except Exception:
+        return False
+
+
+def _ensure_dnsmasq():
+    global _dnsmasq_attempted
+    if _dnsmasq_present():
+        return True
+    if _dnsmasq_attempted:
+        return False
+    _dnsmasq_attempted = True
+    print('[webui] dnsmasq-base missing — installing (required for the setup hotspot)')
+    try:
+        subprocess.run(['apt-get', 'install', '-y', 'dnsmasq-base'],
+                       capture_output=True, timeout=180,
+                       env=dict(os.environ, DEBIAN_FRONTEND='noninteractive'))
+    except Exception as e:
+        print(f'[webui] dnsmasq-base install failed: {e}')
+    return _dnsmasq_present()
 
 
 def _ap_supported(dev):
@@ -333,20 +370,6 @@ def _scan_wifi():
             nets.append({'ssid': ssid, 'signal': int(parts[2] or 0),
                          'security': parts[3] or '', 'in_use': parts[0].strip() == '*'})
     return nets
-
-
-def _current_ip_connected():
-    """True if there is an active non-AP connection with an IP (ethernet or STA)."""
-    if FAKE:
-        return False
-    rc, out, _ = _nmcli(['-t', '-f', 'NAME,DEVICE,STATE', 'connection', 'show', '--active'])
-    if rc != 0:
-        return False
-    for line in out.splitlines():
-        parts = line.split(':')
-        if len(parts) >= 3 and parts[0] != AP_CON_NAME and parts[2] == 'activated' and parts[1]:
-            return True
-    return False
 
 
 def _raise_ap(dev):
@@ -409,8 +432,16 @@ def _connect_wifi(ssid, password):
 
 
 # ── provisioning state machine ───────────────────────────────────────
-def _init_provisioning():
+def _evaluate_provisioning():
     """Called at startup and on demand. Decides AP vs LAN-only vs finalize."""
+    """Bring the setup hotspot up (or reconcile it) during the provisioning
+    window. Called repeatedly by _provisioning_loop, so it must be idempotent
+    and cheap when there is nothing to do.
+
+    Policy: the hotspot is raised at first setup ALWAYS (Volumio-style) — even
+    when Ethernet is connected — so a phone can always discover the box during
+    setup. It is only skipped while a Wi-Fi connect is mid-flight, after the
+    network step succeeded, or once the AP is already up."""
     if not _provisioning():
         return
     with _prov_lock:
@@ -418,24 +449,57 @@ def _init_provisioning():
         if state.get('finalized'):
             _do_finalize()
             return
-        if _current_ip_connected():
-            state['stage'] = state.get('stage', 'network-ok')
-            state.setdefault('ap', {'active': False, 'supported': None})
-            _save_prov_state(state)
+        stage = state.get('stage')
+        ap = state.get('ap') or {}
+        # Leave the AP alone mid-connect, after a successful network step, or
+        # when it's already up (incl. the 'failed' state, where _connect_wifi
+        # already re-raised it so the phone can see the error).
+        if stage in ('connecting', 'network-ok') or ap.get('active'):
             return
         dev = _wifi_device()
-        if not dev or not _ap_supported(dev):
-            state['ap'] = {'active': False, 'supported': False, 'ssid': None}
+        if not dev:
+            # NetworkManager not ready yet (or no Wi-Fi radio): stay retryable —
+            # the loop will try again shortly (fixes the startup race).
+            state['ap'] = {'active': False, 'supported': None}
+            state['stage'] = state.get('stage') or 'init'
+            _save_prov_state(state)
+            return
+        if not _ap_supported(dev):
+            state['ap'] = {'active': False, 'supported': False, 'ssid': None,
+                           'error': 'La scheda Wi-Fi non supporta la modalità hotspot'}
             state['stage'] = 'waiting-lan'
             _save_prov_state(state)
             return
+        dnsmasq_ok = _ensure_dnsmasq()
         # Cache a scan BEFORE raising the AP (single radio can't scan while AP).
         state['networks'] = _scan_wifi()
         state['networks_cached_at'] = time.time()
         ok, ssid = _raise_ap(dev)
-        state['ap'] = {'active': ok, 'supported': True, 'ssid': ssid, 'psk': AP_PSK if ok else None}
+        if ok:
+            err = None
+        elif not dnsmasq_ok:
+            err = 'dnsmasq-base mancante — hotspot non disponibile'
+        else:
+            err = 'Attivazione hotspot fallita'
+        state['ap'] = {'active': ok, 'supported': True, 'ssid': ssid,
+                       'psk': AP_PSK if ok else None, 'error': err}
         state['stage'] = 'waiting-ap' if ok else 'waiting-lan'
         _save_prov_state(state)
+
+
+def _provisioning_loop():
+    """Re-evaluate the hotspot every ~20s until the box leaves provisioning
+    (finalize removes the marker). This makes the AP resilient to a slow
+    NetworkManager start, a transient nmcli failure, or the Ethernet cable being
+    unplugged after boot — none of which the old one-shot startup handled."""
+    while True:
+        try:
+            if not _provisioning():
+                return
+            _evaluate_provisioning()
+        except Exception as e:
+            print(f'[webui] provisioning loop error: {e}')
+        time.sleep(20)
 
 
 def _do_finalize():
@@ -927,14 +991,16 @@ def _bootstrap():
         PERMANENT_SESSION_LIFETIME=7 * 24 * 3600,
     )
     _init_db()
-    try:
-        _init_provisioning()
-    except Exception as e:
-        print(f'[webui] provisioning init failed: {e}')
+
+
+def _start_provisioning_loop():
+    # Background thread: keeps the setup hotspot reconciled during provisioning.
+    threading.Thread(target=_provisioning_loop, daemon=True).start()
 
 
 def main():
     _bootstrap()
+    _start_provisioning_loop()
     from werkzeug.serving import make_server
 
     if HTTP_ONLY:
