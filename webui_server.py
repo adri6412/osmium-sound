@@ -792,19 +792,26 @@ def provision_status():
 
 @app.route('/api/provision/use_wired', methods=['POST'])
 def provision_use_wired():
-    """Skip the Wi-Fi step: the box is on Ethernet. Verified server-side so we
-    never mark the network done when there's actually no uplink (which would
-    leave the box unreachable after the hotspot drops)."""
+    """Use the wired connection for the box. ACTIVELY brings the Ethernet
+    interface up via DHCP (a fresh unit may not have auto-connected it yet — the
+    on-screen wizard's 'Wired' button does the same), then marks the network step
+    done. Verified so we never mark it done with no real uplink (which would
+    strand the box after the hotspot drops)."""
     if not _provisioning():
         return jsonify({'success': False, 'message': 'Non in provisioning'}), 409
-    if not _wired_connected():
-        return jsonify({'success': False, 'message': 'Nessuna connessione via cavo rilevata'}), 409
+    # api_server.wired_dhcp() runs `nmcli device connect <eth>` and returns the IP.
+    body, _ = _proxy(API_BASE, '/wired_dhcp', method='POST', body={}, timeout=50)
+    body = body or {}
+    ok = bool(body.get('success') and body.get('ip')) or _wired_connected()
+    if not ok:
+        return jsonify({'success': False,
+                        'message': body.get('message') or 'Nessuna connessione via cavo rilevata'}), 409
     with _prov_lock:
         state = _load_prov_state()
         state['stage'] = 'network-ok'
         state['error'] = None
         _save_prov_state(state)
-    return jsonify({'success': True})
+    return jsonify({'success': True, 'ip': body.get('ip')})
 
 
 @app.route('/api/provision/wifi_connect', methods=['POST'])
@@ -943,6 +950,28 @@ def factory_reset():
     if not _verify_password(data.get('password') or ''):
         return jsonify({'success': False, 'message': 'Password non valida'}), 403
     body, status = _proxy(API_BASE, '/factory_reset', method='POST', body={})
+    return jsonify(body), status
+
+
+# ── companion pairing (mint via loopback :8080, session-gated) ───────
+@app.route('/api/system/pair_token', methods=['POST'])
+def pair_token():
+    # sources_server only mints tokens from localhost (physical-trust). The
+    # daemon IS localhost, so it can mint on behalf of an authenticated web
+    # admin — the session is the equivalent trust anchor here.
+    denied = _require_session()
+    if denied:
+        return denied
+    body, status = _proxy(SOURCES_BASE, '/api/pair/token', method='POST', body={})
+    return jsonify(body), status
+
+
+@app.route('/api/system/pair_revoke_all', methods=['POST'])
+def pair_revoke_all():
+    denied = _require_session()
+    if denied:
+        return denied
+    body, status = _proxy(SOURCES_BASE, '/api/pair/tokens/revoke_all', method='POST', body={})
     return jsonify(body), status
 
 

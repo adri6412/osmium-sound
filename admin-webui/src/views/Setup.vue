@@ -33,11 +33,10 @@ async function createAccount() {
   const { ok, data } = await api.setup(username.value, password.value);
   busy.value = false;
   if (ok && data.success) await afterAuth();
-  else error.value = data.message || 'Could not create the account';
+  else error.value = data.message || 'Creazione account fallita';
 }
 
 async function afterAuth() {
-  // Pull DAC list so the user can pick an output during setup.
   const res = await api.sys('audio_devices');
   if (res.ok) {
     devices.value = res.data.devices || [];
@@ -60,42 +59,44 @@ async function finish() {
 </script>
 
 <template>
-  <div class="card" v-if="stage === 'account'">
-    <h3>Create the admin account</h3>
-    <p class="muted">This account controls the web interface. Keep it safe — the
-      only way to recover a lost password is a factory reset.</p>
-    <label>Username</label>
+  <div class="card" v-if="stage === 'account'" style="max-width: 420px; margin: 40px auto;">
+    <h3><span class="dot"></span>Crea l'account amministratore</h3>
+    <p class="sub">Questo account controlla l'interfaccia web. Conservalo con cura:
+      una password persa si recupera solo dallo schermo del dispositivo o con un
+      ripristino di fabbrica.</p>
+    <label>Nome utente (min 3 caratteri)</label>
     <input v-model="username" autocomplete="username" />
-    <label>Password (min 8 characters)</label>
+    <label>Password (min 8 caratteri)</label>
     <input v-model="password" type="password" autocomplete="new-password" />
-    <div style="margin-top: 14px;">
-      <button :disabled="busy" @click="createAccount">{{ busy ? '…' : 'Create account' }}</button>
+    <div style="margin-top: 16px;">
+      <button :disabled="busy" @click="createAccount" style="width: 100%;">{{ busy ? '…' : 'Crea account' }}</button>
     </div>
     <div v-if="error" class="msg err">{{ error }}</div>
   </div>
 
   <div v-else-if="stage === 'configure'">
+    <h2 class="page">Completa la configurazione</h2>
     <div class="card">
-      <h3>Audio output</h3>
-      <p class="muted">Choose the DAC / output device.</p>
-      <div v-for="d in devices" :key="d.id" class="net" @click="pickDevice(d.id)">
+      <h3><span class="dot"></span>Uscita audio</h3>
+      <p class="sub">Scegli il DAC / dispositivo di riproduzione.</p>
+      <div v-for="d in devices" :key="d.id" class="net between" @click="pickDevice(d.id)">
         <span>{{ d.name || d.id }}</span>
-        <span v-if="d.id === currentDevice"> ✓</span>
+        <span class="check" v-if="d.id === currentDevice">✓</span>
       </div>
-      <p v-if="!devices.length" class="muted">No output devices reported.</p>
+      <p v-if="!devices.length" class="muted">Nessun dispositivo audio rilevato.</p>
     </div>
     <div class="card">
-      <h3>Music &amp; sources</h3>
-      <p><a :href="`http://${host}:9000`" target="_blank">Open Lyrion (music library) →</a></p>
-      <p><a :href="`http://${host}:8080`" target="_blank">Add music sources →</a></p>
+      <h3><span class="dot"></span>Musica e sorgenti</h3>
+      <p class="item"><a :href="`http://${host}:9000`" target="_blank">Apri Lyrion (libreria musicale) →</a></p>
+      <p class="item"><a :href="`http://${host}:8080`" target="_blank">Aggiungi sorgenti musicali →</a></p>
     </div>
-    <button :disabled="busy" @click="finish">{{ busy ? '…' : 'Finish setup' }}</button>
+    <button :disabled="busy" @click="finish">{{ busy ? '…' : 'Completa il setup' }}</button>
   </div>
 
-  <div v-else-if="stage === 'done'" class="card">
-    <h3>All set</h3>
-    <button @click="router.push('/')">Go to dashboard</button>
+  <div v-else-if="stage === 'done'" class="card" style="max-width: 420px; margin: 40px auto; text-align: center;">
+    <h3>Tutto pronto</h3>
+    <button @click="router.push('/')">Vai alla dashboard</button>
   </div>
 
-  <div v-else class="muted">Loading…</div>
+  <div v-else class="center"><span class="muted">Caricamento…</span></div>
 </template>

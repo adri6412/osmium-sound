@@ -10,8 +10,8 @@ async function logout() {
 
 <template>
   <div class="topbar">
-    <div class="brand">OSMIUM SOUND</div>
-    <button class="secondary" @click="logout">Logout</button>
+    <div class="brand">OSMIUM <span class="gold">SOUND</span></div>
+    <button class="ghost" @click="logout">Esci</button>
   </div>
   <div class="wrap">
     <RouterView />

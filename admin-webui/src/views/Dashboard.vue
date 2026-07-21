@@ -4,37 +4,47 @@ import { api } from '../api.js';
 
 const host = location.hostname;
 const info = ref({});
+const net = ref({});
 const mode = ref('');
 
 onMounted(async () => {
   const s = await api.sys('info');
   if (s.ok) info.value = s.data;
+  // network_status has the real LAN IP (system_info.local_ip can resolve to
+  // 127.0.1.1 via /etc/hosts on Debian).
+  const n = await api.sys('network_status');
+  if (n.ok) net.value = n.data;
   const m = await api.sys('display_mode');
   if (m.ok) mode.value = m.data.mode;
 });
 </script>
 
 <template>
+  <h2 class="page">Dashboard</h2>
   <div class="grid">
     <a class="tile" :href="`http://${host}:9000`" target="_blank">
-      <span class="t">Music</span>
-      <span class="muted">Library &amp; playback (Lyrion)</span>
+      <span class="t gold">Musica</span>
+      <span class="muted">Libreria e riproduzione (Lyrion)</span>
     </a>
     <RouterLink class="tile" to="/settings">
-      <span class="t">Settings</span>
-      <span class="muted">Network, audio, updates, account…</span>
+      <span class="t gold">Impostazioni</span>
+      <span class="muted">Rete, audio, DSP, Bluetooth, aggiornamenti…</span>
     </RouterLink>
     <a class="tile" :href="`http://${host}:8080`" target="_blank">
-      <span class="t">Music sources</span>
-      <span class="muted">Add folders &amp; network shares</span>
+      <span class="t gold">Sorgenti musicali</span>
+      <span class="muted">Cartelle e condivisioni di rete</span>
     </a>
   </div>
 
   <div class="card">
-    <h3>Status</h3>
-    <div class="between"><span class="muted">Player</span><span>{{ info.hostname || '—' }}</span></div>
-    <div class="between"><span class="muted">IP</span><span>{{ info.local_ip || '—' }}</span></div>
-    <div class="between"><span class="muted">Platform</span><span>{{ info.platform || '—' }}</span></div>
-    <div class="between"><span class="muted">Display mode</span><span>{{ mode || '—' }}</span></div>
+    <h3><span class="dot"></span>Stato</h3>
+    <div class="between item"><span class="muted">Player</span><span class="silver">{{ info.hostname || '—' }}</span></div>
+    <div class="between item"><span class="muted">Rete</span>
+      <span class="silver">{{ net.type === 'wireless' ? 'Wi-Fi' : net.type === 'wired' ? 'Cavo' : '—' }}<template v-if="net.ip"> · {{ net.ip }}</template></span>
+    </div>
+    <div class="between item"><span class="muted">Piattaforma</span><span class="silver">{{ info.platform || '—' }}</span></div>
+    <div class="between item"><span class="muted">Modalità schermo</span>
+      <span class="silver">{{ mode === 'headless' ? 'Headless' : mode === 'gui' ? 'Su schermo' : '—' }}</span>
+    </div>
   </div>
 </template>
