@@ -23,7 +23,7 @@ log() { echo "I: [hifi-factory-reset] $*"; }
 # ── 1) stop services that hold user state ────────────────────────────
 log "stopping user-state services"
 for unit in smbd nmbd hifi-bluealsa hifi-bt-agent hifi-bt-aplay hifi-bt-watcher \
-            bluetooth camilladsp; do
+            bluetooth camilladsp lyrionmusicserver; do
     systemctl stop "$unit" 2>/dev/null || true
 done
 
@@ -64,6 +64,18 @@ done
 
 # Bluetooth pairings.
 rm -rf /var/lib/bluetooth/* 2>/dev/null || true
+
+# Lyrion Music Server state: preferences (incl. mediadirs written by the
+# sources service), library database/cache and user playlists. The server
+# binaries stay installed; on next start Lyrion recreates everything from
+# scratch, exactly like a fresh install. Both state roots are covered
+# (squeezeboxserver = Debian package layout, lyrionmusicserver = newer .debs);
+# the service was stopped above so nothing rewrites prefs behind us.
+for lyriondir in /var/lib/squeezeboxserver /var/lib/lyrionmusicserver; do
+    for sub in prefs cache playlists; do
+        rm -rf "${lyriondir:?}/${sub}" 2>/dev/null || true
+    done
+done
 
 # Electron kiosk localStorage (clears firstSetupComplete so the on-screen wizard
 # reappears). userData dir = Electron productName ("Osmium Sound"); wipe a legacy
