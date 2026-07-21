@@ -673,9 +673,14 @@ def _guard():
     #     by design. These endpoints are pre-auth and gated by physical/RF
     #     proximity + the provisioning marker; CSRF protects the authenticated
     #     HTTPS admin session, which is a separate surface.
+    #   * forwarded sources paths — authenticated by the pairing bearer token
+    #     (not cookies), so they're CSRF-immune by construction; requiring our
+    #     cookie-bound header would just break the embedded :8080 SPA.
     if request.method in ('POST', 'PUT', 'DELETE', 'PATCH') \
             and request.remote_addr not in ('127.0.0.1', '::1') \
-            and not request.path.startswith('/api/provision/'):
+            and not request.path.startswith('/api/provision/') \
+            and not any(request.path == p or request.path.startswith(p + '/')
+                        for p in _SOURCES_FWD_PREFIXES):
         cookie = request.cookies.get('csrf')
         header = request.headers.get('X-CSRF-Token')
         if not cookie or not header or not secrets.compare_digest(cookie, header):
@@ -951,6 +956,91 @@ def factory_reset():
         return jsonify({'success': False, 'message': 'Password non valida'}), 403
     body, status = _proxy(API_BASE, '/factory_reset', method='POST', body={})
     return jsonify(body), status
+
+
+# ── sources app (:8080 SPA) embedded over HTTPS ──────────────────────
+# The webui is HTTPS; an <iframe> pointing at http://host:8080 would be blocked
+# as mixed content. So we reverse-proxy the sources SPA through this daemon:
+#   GET /sources-app            (session) → mint a pairing token, redirect with it
+#   GET /sources-app?token=T    (token)   → proxied SPA HTML from loopback :8080
+#   /api/<sources paths>        (token)   → transparently forwarded to :8080
+#
+# SECURITY: sources_server exempts 127.0.0.1 from its own token check, and our
+# forwards originate from loopback — so WE must enforce the token here, exactly
+# mirroring sources' own auth (bearer/?token=, constant-time compare). Token
+# auth (not cookies) also means these routes are CSRF-immune by design.
+_SOURCES_FWD_PREFIXES = ('/api/sources', '/api/usb', '/api/internal', '/api/apply',
+                         '/api/backup', '/api/restore', '/api/cd', '/api/dsp')
+_PAIR_TOKENS_FILE = '/etc/hifi-pairing-tokens.json'
+
+
+def _sources_token_ok():
+    auth = request.headers.get('Authorization', '')
+    token = auth[len('Bearer '):] if auth.startswith('Bearer ') else None
+    if not token:
+        token = request.args.get('token') or None
+    if not token:
+        return False
+    try:
+        with open(_PAIR_TOKENS_FILE) as f:
+            tokens = json.load(f)
+    except Exception:
+        return False
+    return any(secrets.compare_digest(t.get('token', ''), token) for t in tokens)
+
+
+def _forward_to_sources(path):
+    """Transparent forward (method, query, body, auth, content-type) to the
+    loopback sources server; streams the raw response back (may be a file)."""
+    qs = request.query_string.decode('utf-8')
+    url = f'{SOURCES_BASE}{path}' + (f'?{qs}' if qs else '')
+    req = urllib.request.Request(url, method=request.method)
+    for h in ('Authorization', 'Content-Type'):
+        v = request.headers.get(h)
+        if v:
+            req.add_header(h, v)
+    body = request.get_data() if request.method in ('POST', 'PUT', 'PATCH') else None
+    try:
+        with urllib.request.urlopen(req, data=body, timeout=120) as resp:
+            return Response(resp.read(), status=resp.status,
+                            content_type=resp.headers.get('Content-Type', 'application/octet-stream'))
+    except urllib.error.HTTPError as e:
+        return Response(e.read(), status=e.code,
+                        content_type=e.headers.get('Content-Type', 'application/json'))
+    except Exception as e:
+        print(f'[webui] sources forward {path} failed: {e}')
+        return jsonify({'success': False, 'message': 'Servizio sorgenti non raggiungibile'}), 502
+
+
+@app.route('/sources-app', methods=['GET'])
+def sources_app():
+    # Entry point for the Settings iframe. With a valid token → serve the SPA
+    # HTML; otherwise require the admin session, mint a fresh token via
+    # loopback (minting is localhost-only in sources_server; the session is the
+    # equivalent trust anchor), and redirect so the SPA finds ?token= in its URL.
+    if _sources_token_ok():
+        return _forward_to_sources('/')
+    denied = _require_session()
+    if denied:
+        return denied
+    body, status = _proxy(SOURCES_BASE, '/api/pair/token', method='POST', body={})
+    token = (body or {}).get('token')
+    if not token:
+        return jsonify({'success': False, 'message': 'Pairing non disponibile'}), 502
+    return redirect(f'/sources-app?token={token}', code=302)
+
+
+@app.route('/api/<path:rest>', methods=['GET', 'POST', 'PUT', 'DELETE'])
+def sources_forward(rest):
+    # Catch-all under /api/ — Werkzeug matches our explicit /api/system|auth|
+    # provision|lyrion rules first, so only unclaimed paths land here. Forward
+    # the known sources prefixes, token-gated; everything else is a 404.
+    path = '/api/' + rest
+    if not any(path == p or path.startswith(p + '/') for p in _SOURCES_FWD_PREFIXES):
+        return jsonify({'success': False, 'message': 'Endpoint sconosciuto'}), 404
+    if not _sources_token_ok():
+        return jsonify({'success': False, 'message': 'Token di pairing mancante o non valido'}), 401
+    return _forward_to_sources(path)
 
 
 # ── companion pairing (mint via loopback :8080, session-gated) ───────

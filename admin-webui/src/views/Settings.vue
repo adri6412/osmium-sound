@@ -1,10 +1,34 @@
 <script setup>
-import { ref, reactive, onMounted, onUnmounted } from 'vue';
+import { ref, reactive, watch, onMounted, onUnmounted } from 'vue';
+import { useRoute, useRouter } from 'vue-router';
 import QRCode from 'qrcode';
 import { api } from '../api.js';
 import Toggle from '../components/Toggle.vue';
 
 const host = location.hostname;
+const route = useRoute();
+const router = useRouter();
+
+// ── kiosk-like submenu navigation ────────────────────────────────
+const sections = [
+  { key: 'network',   label: 'Rete',                     desc: 'Wi-Fi, cavo, indirizzo IP' },
+  { key: 'audio',     label: 'Uscita audio',             desc: 'DAC e nome del player' },
+  { key: 'sources',   label: 'Sorgenti musicali',        desc: 'Cartelle, USB, condivisioni di rete, CD' },
+  { key: 'dsp',       label: 'DSP / Equalizzatore',      desc: 'Motore DSP, crossfeed, preset' },
+  { key: 'bluetooth', label: 'Bluetooth',                desc: 'Ricezione audio dal telefono' },
+  { key: 'services',  label: 'Servizi',                  desc: 'Tidal Connect, accesso SSH' },
+  { key: 'multiroom', label: 'Multiroom / Server',       desc: 'Server proprio o segui un altro Lyrion' },
+  { key: 'display',   label: 'Modalità schermo',         desc: 'Interfaccia su schermo o headless' },
+  { key: 'updates',   label: 'Aggiornamenti',            desc: 'Canale stabile/sviluppo, 4 componenti' },
+  { key: 'companion', label: 'App companion',            desc: 'Associa un telefono Android (QR)' },
+  { key: 'account',   label: 'Account interfaccia web',  desc: 'Nome utente e password' },
+  { key: 'system',    label: 'Sistema',                  desc: 'Riavvio, spegnimento, ripristino di fabbrica' },
+];
+const open = ref(route.query.open || '');
+watch(() => route.query.open, (v) => { open.value = v || ''; });
+function goto(k) { router.replace({ query: k ? { open: k } : {} }); }
+function title(k) { const s = sections.find(x => x.key === k); return s ? s.label : ''; }
+
 const msg = ref(''); const err = ref(false);
 function say(m, isErr = false) { msg.value = m; err.value = isErr; if (m) setTimeout(() => { if (msg.value === m) msg.value = ''; }, 6000); }
 function bodyMsg(r, fallback) { return (r.data && r.data.message) || fallback; }
@@ -78,7 +102,7 @@ async function deletePreset(name) {
 }
 
 // ── Bluetooth ────────────────────────────────────────────────────
-const bt = reactive({ available: false, enabled: false, discoverable: false, devices: [], countdown: 0 });
+const bt = reactive({ available: false, enabled: false, devices: [], countdown: 0 });
 let btTimer = null;
 async function loadBt() {
   const r = await api.sys('bluetooth');
@@ -144,7 +168,7 @@ async function setMode(m) {
   else say(bodyMsg(r, 'Cambio modalità fallito'), true);
 }
 
-// ── updates (with prod/dev channel) ──────────────────────────────
+// ── updates (prod/dev channel) ───────────────────────────────────
 const channel = ref('prod');
 const upd = reactive({ ui: null, system: null, os: null, lyrion: null });
 const updBusy = ref(false);
@@ -188,9 +212,16 @@ async function revokePairs() {
   pairQr.value = null;
 }
 
-// ── system: reboot/shutdown ──────────────────────────────────────
+// ── system: reboot/shutdown/reset ────────────────────────────────
 async function reboot() { if (confirm('Riavviare il dispositivo?')) { await api.sysPost('reboot', {}); say('Riavvio in corso…'); } }
 async function shutdown() { if (confirm('Spegnere il dispositivo?')) { await api.sysPost('shutdown', {}); say('Spegnimento…'); } }
+const resetPw = ref('');
+async function factoryReset() {
+  if (!confirm('Cancella TUTTE le impostazioni e questo account, poi riavvia nel setup. Continuare?')) return;
+  const r = await api.post('/api/system/factory_reset', { password: resetPw.value });
+  if (r.ok && r.data.success !== false) say('Ripristino di fabbrica avviato — il dispositivo si riavvierà');
+  else say(bodyMsg(r, 'Ripristino fallito'), true);
+}
 
 // ── account ──────────────────────────────────────────────────────
 const acc = reactive({ username: '', current: '', next: '' });
@@ -200,15 +231,6 @@ async function changePw() {
   else say(bodyMsg(r, 'Aggiornamento fallito'), true);
 }
 
-// ── factory reset ────────────────────────────────────────────────
-const resetPw = ref('');
-async function factoryReset() {
-  if (!confirm('Cancella TUTTE le impostazioni e questo account, poi riavvia nel setup. Continuare?')) return;
-  const r = await api.post('/api/system/factory_reset', { password: resetPw.value });
-  if (r.ok && r.data.success !== false) say('Ripristino di fabbrica avviato — il dispositivo si riavvierà');
-  else say(bodyMsg(r, 'Ripristino fallito'), true);
-}
-
 onMounted(async () => {
   loadNet(); loadAudio(); loadDsp(); loadBt(); loadToggles(); loadLms(); loadMode(); loadChannel(); checkAll();
 });
@@ -216,177 +238,192 @@ onUnmounted(() => clearInterval(btTimer));
 </script>
 
 <template>
-  <RouterLink class="backlink" to="/">← Dashboard</RouterLink>
-  <h2 class="page">Impostazioni</h2>
-  <div v-if="msg" class="msg" :class="{ err }">{{ msg }}</div>
-
-  <!-- Network -->
-  <div class="card">
-    <h3><span class="dot"></span>Rete</h3>
-    <p class="sub">Attiva: {{ net.type === 'wireless' ? 'Wi-Fi' : net.type === 'wired' ? 'Cavo (Ethernet)' : '—' }}
-      <span v-if="net.ssid"> · {{ net.ssid }}</span><span v-if="net.ip"> · {{ net.ip }}</span></p>
-    <div class="row">
-      <button class="secondary" :disabled="netBusy" @click="scanWifi">Cerca reti Wi-Fi</button>
-      <button class="secondary" :disabled="netBusy" @click="wired">Usa cavo (DHCP)</button>
-    </div>
-    <div v-for="n in wifi" :key="n.ssid" class="net between" @click="ssid = n.ssid">
-      <span>{{ n.ssid }} <span class="check" v-if="n.in_use">✓</span></span>
-      <span class="muted">{{ n.signal }}%</span>
-    </div>
-    <template v-if="wifi.length || ssid">
-      <label>Rete (SSID)</label><input v-model="ssid" />
-      <label>Password</label><input v-model="wifiPass" type="password" />
-      <div style="margin-top: 12px;"><button :disabled="netBusy" @click="connectWifi">Connetti</button></div>
-    </template>
-  </div>
-
-  <!-- Audio -->
-  <div class="card">
-    <h3><span class="dot"></span>Uscita audio</h3>
-    <p class="sub">DAC / dispositivo di riproduzione usato da squeezelite.</p>
-    <div v-for="d in devices" :key="d.id" class="net between" @click="pickDevice(d.id)">
-      <span>{{ d.name || d.id }}</span><span class="check" v-if="d.id === currentDevice">✓</span>
-    </div>
-    <label>Nome del player</label>
-    <div class="row"><input v-model="playerName" /><button class="secondary fit" @click="saveName">Salva</button></div>
-  </div>
-
-  <!-- DSP -->
-  <div class="card">
-    <h3><span class="dot"></span>DSP / Equalizzatore</h3>
-    <p class="sub" v-if="!dsp.available">DSP non disponibile su questo dispositivo.</p>
-    <template v-else>
-      <div class="between item"><span>Motore DSP</span><Toggle :model-value="dsp.enabled" @update:model-value="setDspEnabled" /></div>
-      <div class="between item"><span>Crossfeed (cuffie)</span><Toggle :model-value="dsp.crossfeed" @update:model-value="setCrossfeed" /></div>
-      <label v-if="dsp.presets.length">Preset</label>
-      <div v-for="p in dsp.presets" :key="p.name" class="net between">
-        <span @click="loadPreset(p.name)" style="cursor: pointer;">{{ p.name }}
-          <span class="pill gold" v-if="p.active">attivo</span>
-          <span class="pill" v-else-if="p.builtin">integrato</span>
+  <!-- section menu (kiosk-like) -->
+  <template v-if="!open">
+    <RouterLink class="backlink" to="/">← Dashboard</RouterLink>
+    <h2 class="page">Impostazioni</h2>
+    <div v-if="msg" class="msg" :class="{ err }">{{ msg }}</div>
+    <div class="card" style="padding: 6px 16px;">
+      <div v-for="s in sections" :key="s.key" class="net between" @click="goto(s.key)">
+        <span>
+          <span style="display:block;">{{ s.label }}</span>
+          <span class="muted">{{ s.desc }}</span>
         </span>
-        <button v-if="!p.builtin" class="ghost fit" @click="deletePreset(p.name)">Elimina</button>
+        <span class="silver" style="font-size: 18px;">›</span>
       </div>
-      <p class="sub" style="margin-top: 10px;">L'editor completo delle bande è disponibile sullo schermo del dispositivo e dall'app companion.</p>
-    </template>
-  </div>
+    </div>
+  </template>
 
-  <!-- Bluetooth -->
-  <div class="card">
-    <h3><span class="dot"></span>Bluetooth</h3>
-    <p class="sub" v-if="!bt.available && !bt.enabled">Ricevi musica dal telefono come se fosse una cassa Bluetooth.</p>
-    <div class="between item"><span>Bluetooth</span><Toggle :model-value="bt.enabled" @update:model-value="setBt" /></div>
-    <template v-if="bt.enabled">
+  <!-- single open section -->
+  <template v-else>
+    <a class="backlink" href="#" @click.prevent="goto('')">← Impostazioni</a>
+    <h2 class="page">{{ title(open) }}</h2>
+    <div v-if="msg" class="msg" :class="{ err }">{{ msg }}</div>
+
+    <!-- Network -->
+    <div class="card" v-if="open === 'network'">
+      <p class="sub">Attiva: {{ net.type === 'wireless' ? 'Wi-Fi' : net.type === 'wired' ? 'Cavo (Ethernet)' : '—' }}
+        <span v-if="net.ssid"> · {{ net.ssid }}</span><span v-if="net.ip"> · {{ net.ip }}</span></p>
+      <div class="row">
+        <button class="secondary" :disabled="netBusy" @click="scanWifi">Cerca reti Wi-Fi</button>
+        <button class="secondary" :disabled="netBusy" @click="wired">Usa cavo (DHCP)</button>
+      </div>
+      <div v-for="n in wifi" :key="n.ssid" class="net between" @click="ssid = n.ssid">
+        <span>{{ n.ssid }} <span class="check" v-if="n.in_use">✓</span></span>
+        <span class="muted">{{ n.signal }}%</span>
+      </div>
+      <template v-if="wifi.length || ssid">
+        <label>Rete (SSID)</label><input v-model="ssid" />
+        <label>Password</label><input v-model="wifiPass" type="password" />
+        <div style="margin-top: 12px;"><button :disabled="netBusy" @click="connectWifi">Connetti</button></div>
+      </template>
+    </div>
+
+    <!-- Audio -->
+    <div class="card" v-if="open === 'audio'">
+      <p class="sub">DAC / dispositivo di riproduzione usato da squeezelite.</p>
+      <div v-for="d in devices" :key="d.id" class="net between" @click="pickDevice(d.id)">
+        <span>{{ d.name || d.id }}</span><span class="check" v-if="d.id === currentDevice">✓</span>
+      </div>
+      <label>Nome del player</label>
+      <div class="row"><input v-model="playerName" /><button class="secondary fit" @click="saveName">Salva</button></div>
+    </div>
+
+    <!-- Sources (embedded :8080 SPA over HTTPS proxy) -->
+    <div v-if="open === 'sources'">
+      <p class="sub" style="margin: 0 0 10px;">Gestisci cartelle locali, dischi USB/interni, condivisioni SMB e rip dei CD.</p>
+      <iframe src="/sources-app"
+              style="width: 100%; height: 74vh; border: 1px solid var(--border); border-radius: 14px; background: #0f0f0f;"></iframe>
+    </div>
+
+    <!-- DSP -->
+    <div class="card" v-if="open === 'dsp'">
+      <p class="sub" v-if="!dsp.available">DSP non disponibile su questo dispositivo.</p>
+      <template v-else>
+        <div class="between item"><span>Motore DSP</span><Toggle :model-value="dsp.enabled" @update:model-value="setDspEnabled" /></div>
+        <div class="between item"><span>Crossfeed (cuffie)</span><Toggle :model-value="dsp.crossfeed" @update:model-value="setCrossfeed" /></div>
+        <label v-if="dsp.presets.length">Preset</label>
+        <div v-for="p in dsp.presets" :key="p.name" class="net between">
+          <span @click="loadPreset(p.name)" style="cursor: pointer;">{{ p.name }}
+            <span class="pill gold" v-if="p.active">attivo</span>
+            <span class="pill" v-else-if="p.builtin">integrato</span>
+          </span>
+          <button v-if="!p.builtin" class="ghost fit" @click="deletePreset(p.name)">Elimina</button>
+        </div>
+        <p class="sub" style="margin-top: 10px;">L'editor completo delle bande è disponibile sullo schermo del dispositivo e dall'app companion.</p>
+      </template>
+    </div>
+
+    <!-- Bluetooth -->
+    <div class="card" v-if="open === 'bluetooth'">
+      <p class="sub">Ricevi musica dal telefono come se fosse una cassa Bluetooth.</p>
+      <div class="between item"><span>Bluetooth</span><Toggle :model-value="bt.enabled" @update:model-value="setBt" /></div>
+      <template v-if="bt.enabled">
+        <div class="between item">
+          <span>Visibile per associazione <span class="pill gold" v-if="bt.countdown > 0">{{ bt.countdown }}s</span></span>
+          <button class="secondary fit" @click="btDiscoverable">Rendi visibile</button>
+        </div>
+        <label v-if="bt.devices.length">Dispositivi associati</label>
+        <div v-for="d in bt.devices" :key="d.mac" class="net between">
+          <span>{{ d.name || d.mac }} <span class="pill gold" v-if="d.connected">connesso</span></span>
+          <button class="ghost fit" @click="btForget(d.mac)">Dimentica</button>
+        </div>
+      </template>
+    </div>
+
+    <!-- Services -->
+    <div class="card" v-if="open === 'services'">
       <div class="between item">
-        <span>Visibile per associazione <span class="pill gold" v-if="bt.countdown > 0">{{ bt.countdown }}s</span></span>
-        <button class="secondary fit" @click="btDiscoverable">Rendi visibile</button>
+        <span>Tidal Connect <span class="pill" v-if="!tidal.available">non installato</span></span>
+        <Toggle :model-value="tidal.enabled" :disabled="!tidal.available" @update:model-value="setTidal" />
       </div>
-      <label v-if="bt.devices.length">Dispositivi associati</label>
-      <div v-for="d in bt.devices" :key="d.mac" class="net between">
-        <span>{{ d.name || d.mac }} <span class="pill gold" v-if="d.connected">connesso</span></span>
-        <button class="ghost fit" @click="btForget(d.mac)">Dimentica</button>
+      <div class="between item">
+        <span>Accesso SSH <span class="muted">(solo per assistenza)</span></span>
+        <Toggle :model-value="sshState.enabled" @update:model-value="setSsh" />
       </div>
-    </template>
-  </div>
+    </div>
 
-  <!-- Tidal + SSH -->
-  <div class="card">
-    <h3><span class="dot"></span>Servizi</h3>
-    <div class="between item">
-      <span>Tidal Connect <span class="pill" v-if="!tidal.available">non installato</span></span>
-      <Toggle :model-value="tidal.enabled" :disabled="!tidal.available" @update:model-value="setTidal" />
-    </div>
-    <div class="between item">
-      <span>Accesso SSH <span class="muted">(solo per assistenza)</span></span>
-      <Toggle :model-value="sshState.enabled" @update:model-value="setSsh" />
-    </div>
-  </div>
-
-  <!-- Multiroom -->
-  <div class="card">
-    <h3><span class="dot"></span>Multiroom / Server</h3>
-    <p class="sub">Questo dispositivo può usare il proprio server musicale oppure seguire il Lyrion di un altro dispositivo sulla rete.</p>
-    <div class="seg">
-      <button :class="{ active: lms.mode === 'local' }" @click="applyLmsRole('local')">Server proprio</button>
-      <button :class="{ active: lms.mode === 'follow' }" @click="lms.mode = 'follow'">Segui un altro</button>
-    </div>
-    <template v-if="lms.mode === 'follow'">
-      <div class="row" style="margin-top: 12px;">
-        <input v-model="lms.host" placeholder="IP del server (es. 192.168.1.50)" />
-        <button class="secondary fit" @click="discoverLms">Cerca</button>
-        <button class="fit" @click="applyLmsRole('follow', lms.host)">Applica</button>
+    <!-- Multiroom -->
+    <div class="card" v-if="open === 'multiroom'">
+      <p class="sub">Questo dispositivo può usare il proprio server musicale oppure seguire il Lyrion di un altro dispositivo sulla rete.</p>
+      <div class="seg">
+        <button :class="{ active: lms.mode === 'local' }" @click="applyLmsRole('local')">Server proprio</button>
+        <button :class="{ active: lms.mode === 'follow' }" @click="lms.mode = 'follow'">Segui un altro</button>
       </div>
-      <div v-for="s in lms.servers" :key="s.ip" class="net between" @click="lms.host = s.ip">
-        <span>{{ s.name || s.ip }}</span><span class="muted">{{ s.ip }}</span>
+      <template v-if="lms.mode === 'follow'">
+        <div class="row" style="margin-top: 12px;">
+          <input v-model="lms.host" placeholder="IP del server (es. 192.168.1.50)" />
+          <button class="secondary fit" @click="discoverLms">Cerca</button>
+          <button class="fit" @click="applyLmsRole('follow', lms.host)">Applica</button>
+        </div>
+        <div v-for="s in lms.servers" :key="s.ip" class="net between" @click="lms.host = s.ip">
+          <span>{{ s.name || s.ip }}</span><span class="muted">{{ s.ip }}</span>
+        </div>
+      </template>
+    </div>
+
+    <!-- Display mode -->
+    <div class="card" v-if="open === 'display'">
+      <p class="sub">Attuale: <span class="silver">{{ mode === 'headless' ? 'Headless (senza schermo)' : 'Interfaccia su schermo' }}</span></p>
+      <div class="row">
+        <button v-if="mode === 'headless'" @click="setMode('gui')">Riaccendi l'interfaccia su schermo</button>
+        <button v-else class="secondary" @click="setMode('headless')">Passa a headless</button>
       </div>
-    </template>
-  </div>
-
-  <!-- Display mode -->
-  <div class="card">
-    <h3><span class="dot"></span>Modalità schermo</h3>
-    <p class="sub">Attuale: <span class="silver">{{ mode === 'headless' ? 'Headless (senza schermo)' : 'Interfaccia su schermo' }}</span></p>
-    <div class="row">
-      <button v-if="mode === 'headless'" @click="setMode('gui')">Riaccendi l'interfaccia su schermo</button>
-      <button v-else class="secondary" @click="setMode('headless')">Passa a headless</button>
     </div>
-  </div>
 
-  <!-- Updates -->
-  <div class="card">
-    <h3><span class="dot"></span>Aggiornamenti</h3>
-    <div class="between item">
-      <span>Canale
-        <span class="pill" :class="{ gold: channel === 'dev' }">{{ channel === 'dev' ? 'sviluppo (dev)' : 'stabile (prod)' }}</span>
-      </span>
-      <span class="seg fit">
-        <button :class="{ active: channel === 'prod' }" @click="setChannel('prod')">Stabile</button>
-        <button :class="{ active: channel === 'dev' }" @click="setChannel('dev')">Sviluppo</button>
-      </span>
-    </div>
-    <div v-for="k in Object.keys(kinds)" :key="k" class="between item">
-      <span>{{ kindLabels[k] }}
-        <span class="muted" v-if="upd[k]">
-          {{ upd[k].current || '—' }}<template v-if="upd[k].update_available"> → <span class="gold">{{ upd[k].latest }}</span></template>
-          <template v-else> · aggiornato</template>
+    <!-- Updates -->
+    <div class="card" v-if="open === 'updates'">
+      <div class="between item">
+        <span>Canale
+          <span class="pill" :class="{ gold: channel === 'dev' }">{{ channel === 'dev' ? 'sviluppo (dev)' : 'stabile (prod)' }}</span>
         </span>
-        <span class="muted" v-else> · —</span>
-      </span>
-      <button class="fit" v-if="upd[k] && upd[k].update_available" @click="applyUpd(k)">Aggiorna</button>
+        <span class="seg fit">
+          <button :class="{ active: channel === 'prod' }" @click="setChannel('prod')">Stabile</button>
+          <button :class="{ active: channel === 'dev' }" @click="setChannel('dev')">Sviluppo</button>
+        </span>
+      </div>
+      <div v-for="k in Object.keys(kinds)" :key="k" class="between item">
+        <span>{{ kindLabels[k] }}
+          <span class="muted" v-if="upd[k]">
+            {{ upd[k].current || '—' }}<template v-if="upd[k].update_available"> → <span class="gold">{{ upd[k].latest }}</span></template>
+            <template v-else> · aggiornato</template>
+          </span>
+          <span class="muted" v-else> · —</span>
+        </span>
+        <button class="fit" v-if="upd[k] && upd[k].update_available" @click="applyUpd(k)">Aggiorna</button>
+      </div>
+      <div style="margin-top: 12px;"><button class="secondary" :disabled="updBusy" @click="checkAll">{{ updBusy ? 'Controllo…' : 'Controlla di nuovo' }}</button></div>
     </div>
-    <div style="margin-top: 12px;"><button class="secondary" :disabled="updBusy" @click="checkAll">{{ updBusy ? 'Controllo…' : 'Controlla di nuovo' }}</button></div>
-  </div>
 
-  <!-- Companion pairing -->
-  <div class="card">
-    <h3><span class="dot"></span>App companion (Android)</h3>
-    <p class="sub">Inquadra il QR dall'app Osmium Sound Companion per associare il telefono.</p>
-    <div class="row">
-      <button class="secondary" :disabled="pairBusy" @click="mintPair">{{ pairBusy ? '…' : 'Genera QR di associazione' }}</button>
-      <button class="ghost" @click="revokePairs">Scollega tutti i telefoni</button>
+    <!-- Companion -->
+    <div class="card" v-if="open === 'companion'">
+      <p class="sub">Inquadra il QR dall'app Osmium Sound Companion per associare il telefono.</p>
+      <div class="row">
+        <button class="secondary" :disabled="pairBusy" @click="mintPair">{{ pairBusy ? '…' : 'Genera QR di associazione' }}</button>
+        <button class="ghost" @click="revokePairs">Scollega tutti i telefoni</button>
+      </div>
+      <div v-if="pairQr" style="margin-top: 14px;"><span class="qrbox"><img :src="pairQr" alt="QR pairing" /></span></div>
     </div>
-    <div v-if="pairQr" style="margin-top: 14px;"><span class="qrbox"><img :src="pairQr" alt="QR pairing" /></span></div>
-  </div>
 
-  <!-- Account -->
-  <div class="card">
-    <h3><span class="dot"></span>Account interfaccia web</h3>
-    <label>Nuovo nome utente</label><input v-model="acc.username" autocomplete="username" />
-    <label>Password attuale</label><input v-model="acc.current" type="password" autocomplete="current-password" />
-    <label>Nuova password (min 8 caratteri)</label><input v-model="acc.next" type="password" autocomplete="new-password" />
-    <div style="margin-top: 12px;"><button @click="changePw">Cambia credenziali</button></div>
-  </div>
+    <!-- Account -->
+    <div class="card" v-if="open === 'account'">
+      <label>Nuovo nome utente</label><input v-model="acc.username" autocomplete="username" />
+      <label>Password attuale</label><input v-model="acc.current" type="password" autocomplete="current-password" />
+      <label>Nuova password (min 8 caratteri)</label><input v-model="acc.next" type="password" autocomplete="new-password" />
+      <div style="margin-top: 12px;"><button @click="changePw">Cambia credenziali</button></div>
+    </div>
 
-  <!-- System -->
-  <div class="card">
-    <h3><span class="dot"></span>Sistema</h3>
-    <div class="row">
-      <button class="secondary" @click="reboot">Riavvia</button>
-      <button class="secondary" @click="shutdown">Spegni</button>
+    <!-- System -->
+    <div class="card" v-if="open === 'system'">
+      <div class="row">
+        <button class="secondary" @click="reboot">Riavvia</button>
+        <button class="secondary" @click="shutdown">Spegni</button>
+      </div>
+      <div style="margin-top: 18px; padding-top: 16px; border-top: 1px solid rgba(224,90,90,0.25);">
+        <p class="sub">Il ripristino di fabbrica cancella tutte le impostazioni (reti, sorgenti, DSP, Bluetooth, pairing) e questo account, poi riavvia nella configurazione iniziale. Conferma con la password admin.</p>
+        <label>Password admin</label><input v-model="resetPw" type="password" />
+        <div style="margin-top: 12px;"><button class="danger" @click="factoryReset">Ripristino di fabbrica</button></div>
+      </div>
     </div>
-    <div style="margin-top: 18px; padding-top: 16px; border-top: 1px solid rgba(224,90,90,0.25);">
-      <p class="sub">Il ripristino di fabbrica cancella tutte le impostazioni (reti, sorgenti, DSP, Bluetooth, pairing) e questo account, poi riavvia nella configurazione iniziale. Conferma con la password admin.</p>
-      <label>Password admin</label><input v-model="resetPw" type="password" />
-      <div style="margin-top: 12px;"><button class="danger" @click="factoryReset">Ripristino di fabbrica</button></div>
-    </div>
-  </div>
+  </template>
 </template>

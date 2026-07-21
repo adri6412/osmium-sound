@@ -88,7 +88,7 @@ async function finish() {
     <div class="card">
       <h3><span class="dot"></span>Musica e sorgenti</h3>
       <p class="item"><a :href="`http://${host}:9000`" target="_blank">Apri Lyrion (libreria musicale) →</a></p>
-      <p class="item"><a :href="`http://${host}:8080`" target="_blank">Aggiungi sorgenti musicali →</a></p>
+      <p class="item"><a href="/sources-app" target="_blank">Aggiungi sorgenti musicali →</a></p>
     </div>
     <button :disabled="busy" @click="finish">{{ busy ? '…' : 'Completa il setup' }}</button>
   </div>
