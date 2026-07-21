@@ -124,5 +124,18 @@ button:disabled { opacity: 0.55; cursor: default; filter: none; }
 .qrbox img { display: block; width: 190px; height: 190px; }
 
 .center { min-height: 72vh; display: flex; align-items: center; justify-content: center; }
+
+/* Forced blocking modal (updates) */
+.overlay {
+  position: fixed; inset: 0; z-index: 100;
+  background: rgba(0, 0, 0, 0.75); backdrop-filter: blur(3px);
+  display: flex; align-items: center; justify-content: center;
+}
+.spinner {
+  width: 38px; height: 38px; margin: 6px auto 14px;
+  border: 3px solid var(--light); border-top-color: var(--gold);
+  border-radius: 50%; animation: spin 0.9s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
 .backlink { display: inline-flex; align-items: center; gap: 6px; margin-bottom: 4px; font-size: 14px; }
 h2.page { font-size: 20px; margin: 10px 0 4px; }

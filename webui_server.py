@@ -1009,14 +1009,19 @@ def _forward_to_sources(path):
     body = request.get_data() if request.method in ('POST', 'PUT', 'PATCH') else None
     try:
         with urllib.request.urlopen(req, data=body, timeout=120) as resp:
-            return Response(resp.read(), status=resp.status,
-                            content_type=resp.headers.get('Content-Type', 'application/octet-stream'))
+            out = Response(resp.read(), status=resp.status,
+                           content_type=resp.headers.get('Content-Type', 'application/octet-stream'))
     except urllib.error.HTTPError as e:
-        return Response(e.read(), status=e.code,
-                        content_type=e.headers.get('Content-Type', 'application/json'))
+        out = Response(e.read(), status=e.code,
+                       content_type=e.headers.get('Content-Type', 'application/json'))
     except Exception as e:
         print(f'[webui] sources forward {path} failed: {e}')
         return jsonify({'success': False, 'message': 'Servizio sorgenti non raggiungibile'}), 502
+    # Explicitly allow embedding by our own Settings page (some browsers — Brave
+    # in particular — are aggressive about frames that don't declare a policy).
+    out.headers['Content-Security-Policy'] = "frame-ancestors 'self'"
+    out.headers['X-Frame-Options'] = 'SAMEORIGIN'
+    return out
 
 
 @app.route('/sources-app', methods=['GET'])

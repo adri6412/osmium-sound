@@ -29,6 +29,19 @@ watch(() => route.query.open, (v) => { open.value = v || ''; });
 function goto(k) { router.replace({ query: k ? { open: k } : {} }); }
 function title(k) { const s = sections.find(x => x.key === k); return s ? s.label : ''; }
 
+// Sources iframe: mint the pairing token first and mount the frame with
+// ?token= already in the src — no redirect/cookie dance inside the iframe
+// (some browsers refuse framed redirects; Brave is especially strict).
+const sourcesSrc = ref('');
+const sourcesErr = ref('');
+watch(open, async (v) => {
+  if (v !== 'sources' || sourcesSrc.value) return;
+  sourcesErr.value = '';
+  const r = await api.post('/api/system/pair_token', {});
+  if (r.ok && r.data.token) sourcesSrc.value = `/sources-app?token=${encodeURIComponent(r.data.token)}`;
+  else sourcesErr.value = (r.data && r.data.message) || 'Impossibile aprire le sorgenti';
+}, { immediate: true });
+
 const msg = ref(''); const err = ref(false);
 function say(m, isErr = false) { msg.value = m; err.value = isErr; if (m) setTimeout(() => { if (msg.value === m) msg.value = ''; }, 6000); }
 function bodyMsg(r, fallback) { return (r.data && r.data.message) || fallback; }
@@ -168,14 +181,18 @@ async function setMode(m) {
   else say(bodyMsg(r, 'Cambio modalità fallito'), true);
 }
 
-// ── updates (prod/dev channel) ───────────────────────────────────
+// ── updates (prod/dev channel; single "update all" + blocking modal) ─
 const channel = ref('prod');
 const upd = reactive({ ui: null, system: null, os: null, lyrion: null });
 const updBusy = ref(false);
 const kinds = { ui: 'app', system: 'system', os: 'os', lyrion: 'lyrion' };
 const kindLabels = { ui: 'Interfaccia', system: 'Sistema', os: 'Sistema operativo', lyrion: 'Lyrion' };
+// Blocking overlay state — mirrors the kiosk's forced update modal: while an
+// apply is running nothing else is clickable, so double-applies can't happen.
+const applying = reactive({ active: false, kind: '', label: '', state: '', progress: null, message: '', error: false, doneList: [] });
 async function loadChannel() { const r = await api.sys('ota_channel'); if (r.ok) channel.value = r.data.channel || 'prod'; }
 async function setChannel(c) {
+  if (applying.active) return;
   channel.value = c;
   const r = await api.sysPost('ota_channel', { channel: c });
   say(r.ok && r.data.success !== false ? (c === 'dev' ? 'Canale sviluppo attivo' : 'Canale stabile attivo') : bodyMsg(r, 'Cambio canale fallito'), !(r.ok && r.data.success !== false));
@@ -189,9 +206,53 @@ async function checkAll() {
   }
   updBusy.value = false;
 }
-async function applyUpd(k) {
-  say(`Aggiornamento ${kindLabels[k]} avviato…`);
-  await api.sysPost(`updates/${kinds[k]}/apply`, {});
+const hasUpdates = () => Object.keys(kinds).some(k => upd[k] && upd[k].update_available);
+const sleep = (ms) => new Promise(res => setTimeout(res, ms));
+
+async function pollUntilDone(k, timeoutMs = 15 * 60 * 1000) {
+  const t0 = Date.now();
+  // Network errors are EXPECTED mid-way: the system bundle restarts this very
+  // daemon, and an OS update may reboot — keep polling, the status file
+  // written by the updater script survives the restart.
+  while (Date.now() - t0 < timeoutMs) {
+    await sleep(2000);
+    const r = await api.sys(`updates/${kinds[k]}/status`);
+    if (!r.ok) continue;
+    const s = r.data || {};
+    applying.state = s.state || '';
+    applying.progress = (typeof s.progress === 'number') ? s.progress : null;
+    applying.message = s.message || '';
+    if (s.state === 'done') return true;
+    if (s.state === 'error') return false;
+  }
+  applying.message = 'Timeout — controlla lo stato del dispositivo';
+  return false;
+}
+
+async function applyAll() {
+  if (applying.active || !hasUpdates()) return;
+  applying.active = true; applying.error = false; applying.doneList = [];
+  // System last: applying it restarts this daemon (brief connection blip the
+  // polling rides out). UI/OS/Lyrion first.
+  const order = ['ui', 'os', 'lyrion', 'system'].filter(k => upd[k] && upd[k].update_available);
+  for (const k of order) {
+    applying.kind = k; applying.label = kindLabels[k];
+    applying.state = 'starting'; applying.progress = null; applying.message = '';
+    const r = await api.sysPost(`updates/${kinds[k]}/apply`, {});
+    if (!(r.ok && (r.data.started || r.data.success !== false))) {
+      applying.error = true; applying.message = bodyMsg(r, 'Avvio aggiornamento fallito'); break;
+    }
+    const ok = await pollUntilDone(k);
+    if (!ok) { applying.error = true; break; }
+    applying.doneList.push(kindLabels[k]);
+  }
+  applying.state = applying.error ? 'error' : 'finished';
+  if (!applying.error) { applying.message = 'Aggiornamenti completati'; }
+  // Keep the modal up until the user closes it (shows the outcome).
+}
+function closeApplyModal() {
+  applying.active = false; applying.kind = ''; applying.state = '';
+  checkAll();
 }
 
 // ── companion pairing ────────────────────────────────────────────
@@ -292,7 +353,9 @@ onUnmounted(() => clearInterval(btTimer));
     <!-- Sources (embedded :8080 SPA over HTTPS proxy) -->
     <div v-if="open === 'sources'">
       <p class="sub" style="margin: 0 0 10px;">Gestisci cartelle locali, dischi USB/interni, condivisioni SMB e rip dei CD.</p>
-      <iframe src="/sources-app"
+      <div v-if="sourcesErr" class="msg err">{{ sourcesErr }}</div>
+      <p v-else-if="!sourcesSrc" class="muted">Apertura sorgenti…</p>
+      <iframe v-if="sourcesSrc" :src="sourcesSrc"
               style="width: 100%; height: 74vh; border: 1px solid var(--border); border-radius: 14px; background: #0f0f0f;"></iframe>
     </div>
 
@@ -333,9 +396,9 @@ onUnmounted(() => clearInterval(btTimer));
 
     <!-- Services -->
     <div class="card" v-if="open === 'services'">
-      <div class="between item">
-        <span>Tidal Connect <span class="pill" v-if="!tidal.available">non installato</span></span>
-        <Toggle :model-value="tidal.enabled" :disabled="!tidal.available" @update:model-value="setTidal" />
+      <div class="between item" v-if="tidal.available">
+        <span>Tidal Connect</span>
+        <Toggle :model-value="tidal.enabled" @update:model-value="setTidal" />
       </div>
       <div class="between item">
         <span>Accesso SSH <span class="muted">(solo per assistenza)</span></span>
@@ -390,9 +453,11 @@ onUnmounted(() => clearInterval(btTimer));
           </span>
           <span class="muted" v-else> · —</span>
         </span>
-        <button class="fit" v-if="upd[k] && upd[k].update_available" @click="applyUpd(k)">Aggiorna</button>
       </div>
-      <div style="margin-top: 12px;"><button class="secondary" :disabled="updBusy" @click="checkAll">{{ updBusy ? 'Controllo…' : 'Controlla di nuovo' }}</button></div>
+      <div class="row" style="margin-top: 12px;">
+        <button v-if="hasUpdates()" :disabled="applying.active" @click="applyAll">Aggiorna tutto</button>
+        <button class="secondary" :disabled="updBusy || applying.active" @click="checkAll">{{ updBusy ? 'Controllo…' : 'Controlla di nuovo' }}</button>
+      </div>
     </div>
 
     <!-- Companion -->
@@ -411,6 +476,27 @@ onUnmounted(() => clearInterval(btTimer));
       <label>Password attuale</label><input v-model="acc.current" type="password" autocomplete="current-password" />
       <label>Nuova password (min 8 caratteri)</label><input v-model="acc.next" type="password" autocomplete="new-password" />
       <div style="margin-top: 12px;"><button @click="changePw">Cambia credenziali</button></div>
+    </div>
+
+    <!-- forced blocking update modal (kiosk-style) -->
+    <div v-if="applying.active" class="overlay">
+      <div class="card" style="width: 340px; text-align: center;">
+        <template v-if="applying.state !== 'finished' && applying.state !== 'error'">
+          <div class="spinner"></div>
+          <h3 style="justify-content: center;">Aggiornamento {{ applying.label }}</h3>
+          <p class="sub" style="margin-bottom: 6px;">
+            {{ applying.message || applying.state || 'In corso…' }}
+            <template v-if="applying.progress !== null"> · {{ applying.progress }}%</template>
+          </p>
+          <p class="muted">Non chiudere questa pagina e non spegnere il dispositivo.</p>
+        </template>
+        <template v-else>
+          <h3 style="justify-content: center;">{{ applying.error ? 'Aggiornamento interrotto' : 'Completato' }}</h3>
+          <p class="sub">{{ applying.message || (applying.error ? 'Si è verificato un errore.' : '') }}</p>
+          <p class="muted" v-if="applying.doneList.length">Aggiornati: {{ applying.doneList.join(', ') }}</p>
+          <button style="margin-top: 10px;" @click="closeApplyModal">Chiudi</button>
+        </template>
+      </div>
     </div>
 
     <!-- System -->
