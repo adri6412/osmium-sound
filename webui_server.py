@@ -349,6 +349,22 @@ def _ap_supported(dev):
     return rc == 0 and 'yes' in out.lower()
 
 
+def _wired_connected():
+    """True if a non-AP connection is active with a device (ethernet uplink).
+    Used to let the user skip the Wi-Fi step when they're on a cable."""
+    if FAKE:
+        return False
+    rc, out, _ = _nmcli(['-t', '-f', 'NAME,DEVICE,STATE,TYPE', 'connection', 'show', '--active'])
+    if rc != 0:
+        return False
+    for line in out.splitlines():
+        parts = line.split(':')
+        if len(parts) >= 4 and parts[0] != AP_CON_NAME and parts[2] == 'activated' \
+                and parts[1] and parts[3] == '802-3-ethernet':
+            return True
+    return False
+
+
 def _scan_wifi():
     """Return a cached-friendly list of {ssid, signal, security, in_use}."""
     if FAKE:
@@ -752,8 +768,26 @@ def provision_status():
         'networks': state.get('networks', []),
         'networks_cached_at': state.get('networks_cached_at'),
         'error': state.get('error'),
+        'wired': _wired_connected(),
         'has_account': _get_user() is not None,
     })
+
+
+@app.route('/api/provision/use_wired', methods=['POST'])
+def provision_use_wired():
+    """Skip the Wi-Fi step: the box is on Ethernet. Verified server-side so we
+    never mark the network done when there's actually no uplink (which would
+    leave the box unreachable after the hotspot drops)."""
+    if not _provisioning():
+        return jsonify({'success': False, 'message': 'Non in provisioning'}), 409
+    if not _wired_connected():
+        return jsonify({'success': False, 'message': 'Nessuna connessione via cavo rilevata'}), 409
+    with _prov_lock:
+        state = _load_prov_state()
+        state['stage'] = 'network-ok'
+        state['error'] = None
+        _save_prov_state(state)
+    return jsonify({'success': True})
 
 
 @app.route('/api/provision/wifi_connect', methods=['POST'])
@@ -808,11 +842,23 @@ def provision_claim_mode():
         state['mode'] = mode
         state['claimed_by'] = source
         _save_prov_state(state)
-    # Persist the mode; live-switch only when going headless from the web (the
-    # screen, if any, is torn down so the user continues on the phone).
     if mode == 'gui':
+        # GUI = the on-screen path is chosen, so the setup hotspot is no longer
+        # needed: finalize (drop the AP + remove the marker). This is what stops
+        # the hotspot the moment the user picks "with a screen". Deferred a beat
+        # so THIS response flushes to a phone that's on the hotspot before the AP
+        # disappears under it; harmless for the kiosk (not on the AP).
         _set_display_mode('gui', live=False)
+
+        def _deferred_finalize():
+            time.sleep(1.5)
+            with _prov_lock:
+                _do_finalize()
+        threading.Thread(target=_deferred_finalize, daemon=True).start()
     else:
+        # Headless: switch the running session off-screen (live only from the
+        # web/phone, where the user continues) but KEEP the hotspot up until the
+        # web setup calls finalize.
         _set_display_mode('headless', live=(source == 'web'))
     return jsonify({'success': True, 'mode': mode})
 
@@ -934,11 +980,12 @@ CAPTIVE_HTML = """<!doctype html><html lang="it"><head><meta charset="utf-8">
  body{font-family:system-ui,sans-serif;background:#0f1115;color:#eee;margin:0;padding:24px;max-width:520px;margin:auto}
  h1{font-size:20px} .card{background:#1a1e26;border-radius:12px;padding:16px;margin:14px 0}
  label{display:block;font-size:13px;color:#aab;margin:8px 0 4px} input,select,button{width:100%;padding:12px;border-radius:8px;border:1px solid #333;background:#12151b;color:#eee;font-size:15px;box-sizing:border-box}
- button{background:#c8a24a;color:#111;font-weight:600;border:0;margin-top:12px} .muted{color:#889;font-size:13px}
+ button{background:#c8a24a;color:#111;font-weight:600;border:0;margin-top:12px} button.sec{background:#12151b;color:#eee;border:1px solid #333;font-weight:500}
+ .muted{color:#889;font-size:13px}
  .net{padding:10px;border-bottom:1px solid #262b35;cursor:pointer} .row{display:flex;justify-content:space-between}
 </style></head><body>
 <h1>Osmium Sound — Configurazione</h1>
-<p class="muted" id="lead">Scegli la rete Wi-Fi e la modalità del dispositivo.</p>
+<p class="muted" id="lead">Collega il dispositivo a internet e scegli la modalità.</p>
 <div class="card" id="step-net">
  <label>Rete Wi-Fi</label>
  <div id="nets"></div>
@@ -946,31 +993,55 @@ CAPTIVE_HTML = """<!doctype html><html lang="it"><head><meta charset="utf-8">
  <input id="ssid" placeholder="Nome rete">
  <label>Password Wi-Fi</label>
  <input id="pass" type="password" placeholder="Password">
- <button onclick="connect()">Connetti</button>
+ <button onclick="connect()">Connetti via Wi-Fi</button>
+ <button class="sec" id="btn-wired" onclick="useWired()">Sono connesso via cavo (Ethernet)</button>
  <p class="muted" id="netmsg"></p>
 </div>
 <div class="card" id="step-mode" style="display:none">
  <label>Modalità dispositivo</label>
  <button onclick="claim('gui')">Con schermo (touchscreen)</button>
- <button onclick="claim('headless')" style="background:#555;color:#fff">Headless (senza schermo)</button>
+ <button class="sec" onclick="claim('headless')">Headless (senza schermo)</button>
  <p class="muted">In headless gestisci tutto da questa interfaccia web dopo il setup.</p>
 </div>
+<div class="card" id="step-finish" style="display:none">
+ <p id="finishmsg" class="muted"></p>
+ <button id="btn-finish" onclick="finish()" style="display:none">Completa setup</button>
+</div>
 <script>
+var done=false;
 function h(){return {'X-CSRF-Token':(document.cookie.match(/csrf=([^;]+)/)||[])[1]||''}}
-function load(){fetch('/api/provision/status').then(r=>r.json()).then(s=>{
-  if(!s.pending){location.href='/';return}
+function show(id){['step-net','step-mode','step-finish'].forEach(function(s){document.getElementById(s).style.display=(s===id?'block':'none')})}
+function jpost(p,b){return fetch(p,{method:'POST',headers:Object.assign({'Content-Type':'application/json'},h()),body:JSON.stringify(b||{})}).then(function(r){return r.json()})}
+function load(){if(done)return;fetch('/api/provision/status').then(function(r){return r.json()}).then(function(s){
+  if(!s.pending){return}
   var n=document.getElementById('nets');n.innerHTML='';
   (s.networks||[]).forEach(function(net){var d=document.createElement('div');d.className='net';
     d.innerHTML='<div class="row"><span>'+net.ssid+'</span><span class="muted">'+net.signal+'%</span></div>';
     d.onclick=function(){document.getElementById('ssid').value=net.ssid};n.appendChild(d)});
+  document.getElementById('btn-wired').style.display=(s.wired?'block':'block');
   if(s.error){document.getElementById('netmsg').textContent='Errore: '+s.error}
-  if(s.stage==='network-ok'){document.getElementById('step-net').style.display='none';document.getElementById('step-mode').style.display='block'}
+  if(s.stage==='network-ok'){show('step-mode')}
 })}
 function connect(){var b={ssid:document.getElementById('ssid').value,password:document.getElementById('pass').value};
-  document.getElementById('netmsg').textContent='Connessione in corso… il Wi-Fi di setup si disconnetterà, riconnettiti alla tua rete e ricarica.';
-  fetch('/api/provision/wifi_connect',{method:'POST',headers:Object.assign({'Content-Type':'application/json'},h()),body:JSON.stringify(b)})}
-function claim(m){fetch('/api/provision/claim_mode',{method:'POST',headers:Object.assign({'Content-Type':'application/json'},h()),body:JSON.stringify({mode:m,source:'web'})})
-  .then(r=>r.json()).then(function(){location.href='/'})}
+  document.getElementById('netmsg').textContent='Connessione in corso… il Wi-Fi di setup si disconnetterà, riconnettiti alla tua rete e ricarica la pagina.';
+  jpost('/api/provision/wifi_connect',b)}
+function useWired(){jpost('/api/provision/use_wired',{}).then(function(res){
+  if(res.success){show('step-mode')}else{document.getElementById('netmsg').textContent=res.message||'Nessun cavo rilevato'}})}
+function claim(m){jpost('/api/provision/claim_mode',{mode:m,source:'web'}).then(function(){
+  done=true;
+  if(m==='gui'){
+    show('step-finish');
+    document.getElementById('finishmsg').textContent='Modalità con schermo attivata. Continua la configurazione sullo schermo del dispositivo. Puoi chiudere questa pagina.';
+  }else{
+    show('step-finish');
+    document.getElementById('finishmsg').textContent='Modalità headless attivata. Premi "Completa setup" per terminare: l\\'hotspot si spegnerà, riconnetti il telefono alla tua rete e apri https://hifiplayer.local';
+    document.getElementById('btn-finish').style.display='block';
+  }
+})}
+function finish(){jpost('/api/provision/finalize',{}).then(function(){
+  document.getElementById('finishmsg').textContent='Setup completato. Hotspot spento — apri https://hifiplayer.local dalla tua rete.';
+  document.getElementById('btn-finish').style.display='none';
+})}
 setInterval(load,3000);load();
 </script></body></html>"""
 
