@@ -350,17 +350,26 @@ def _ap_supported(dev):
 
 
 def _wired_connected():
-    """True if a non-AP connection is active with a device (ethernet uplink).
-    Used to let the user skip the Wi-Fi step when they're on a cable."""
+    """True if there is an active non-Wi-Fi, non-loopback uplink (ethernet).
+    Used to let the user skip the Wi-Fi step when they're on a cable.
+
+    Device-based rather than TYPE-string based: nmcli reports the connection
+    type as either 'ethernet' or '802-3-ethernet' depending on the version, so
+    we instead accept any active connection on a device that isn't the Wi-Fi
+    radio, isn't 'lo', and isn't our own hotspot."""
     if FAKE:
         return False
-    rc, out, _ = _nmcli(['-t', '-f', 'NAME,DEVICE,STATE,TYPE', 'connection', 'show', '--active'])
+    wdev = _wifi_device()
+    rc, out, _ = _nmcli(['-t', '-f', 'NAME,DEVICE', 'connection', 'show', '--active'])
     if rc != 0:
         return False
     for line in out.splitlines():
-        parts = line.split(':')
-        if len(parts) >= 4 and parts[0] != AP_CON_NAME and parts[2] == 'activated' \
-                and parts[1] and parts[3] == '802-3-ethernet':
+        parts = re.split(r'(?<!\\):', line)
+        if len(parts) < 2:
+            continue
+        name = parts[0].replace('\\:', ':')
+        device = parts[1]
+        if name != AP_CON_NAME and device and device != 'lo' and device != wdev:
             return True
     return False
 
