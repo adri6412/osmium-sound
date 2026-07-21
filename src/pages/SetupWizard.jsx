@@ -45,6 +45,13 @@ const SetupWizard = ({ onComplete }) => {
   const [wifiPassword, setWifiPassword] = useState('');
   const [netError, setNetError] = useState('');
 
+  // Display-mode step (GUI kiosk vs headless). Feature-detected: the step only
+  // appears if the system API exposes /display_mode (a UI OTA can land before
+  // the system OTA — on a 404/failure the wizard behaves exactly as before).
+  const [modeAvailable, setModeAvailable] = useState(false);
+  const [headlessConfirm, setHeadlessConfirm] = useState(false);
+  const [apInfo, setApInfo] = useState(null); // { ssid, psk } from provision status
+
   // audio (DAC) sub-state
   const [audioDevices, setAudioDevices] = useState([]);
   const [selectedAudio, setSelectedAudio] = useState('default');
@@ -86,6 +93,38 @@ const SetupWizard = ({ onComplete }) => {
     localStorage.setItem('hifiShowPointer', useMouse ? '1' : '0');
     try { await systemAPI.setPointer(useMouse); } catch (_) {}
     setStep('network');
+  };
+
+  // ── Display mode (GUI kiosk vs headless) ───────────────────────
+  // Feature-detect once so the welcome "start" button knows whether to route
+  // through the mode step. Also grab the hotspot info for the headless-wait QR.
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        const res = await systemAPI.getDisplayMode();
+        if (alive && res.success && res.data?.mode) setModeAvailable(true);
+      } catch (_) {}
+      try {
+        const ps = await systemAPI.getProvisionStatus();
+        if (alive && ps.success && ps.data?.ap) setApInfo(ps.data.ap);
+      } catch (_) {}
+    })();
+    return () => { alive = false; };
+  }, []);
+
+  const chooseMode = async (mode) => {
+    if (mode === 'headless' && !headlessConfirm) { setHeadlessConfirm(true); return; }
+    // Claim the mode for the on-screen path (first-writer-wins with the phone).
+    try { await systemAPI.setProvisionMode(mode, 'screen'); } catch (_) {}
+    if (mode === 'gui') {
+      // GUI: keep going on-screen exactly as before (LightDM stays up).
+      setStep('input');
+    } else {
+      // Headless: the screen will be torn down shortly by the daemon; show the
+      // "continue from your phone" panel until then.
+      setStep('headless-wait');
+    }
   };
 
   // ── Wired ──────────────────────────────────────────────────────
@@ -302,7 +341,7 @@ const SetupWizard = ({ onComplete }) => {
 
         {/* ───────── WELCOME ───────── */}
         {step === 'welcome' && (
-          <Shell footer={<><Dots /><button onClick={() => setStep('input')} className="flex items-center space-x-2 bg-hifi-gold text-black font-semibold px-6 py-2.5 rounded-xl hover:brightness-110 transition">
+          <Shell footer={<><Dots /><button onClick={() => setStep(modeAvailable ? 'mode' : 'input')} className="flex items-center space-x-2 bg-hifi-gold text-black font-semibold px-6 py-2.5 rounded-xl hover:brightness-110 transition">
             <span>{t('wizard.start')}</span><ChevronRight size={18} />
           </button></>}>
             <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} transition={{ delay: 0.1 }} className="flex flex-col items-center text-center max-w-md">
@@ -314,6 +353,65 @@ const SetupWizard = ({ onComplete }) => {
                 {t('wizard.welcome.subtitle')}
               </p>
             </motion.div>
+          </Shell>
+        )}
+
+        {/* ───────── DISPLAY MODE (on-screen kiosk vs headless) ───────── */}
+        {step === 'mode' && (
+          <Shell footer={<><button onClick={() => { setHeadlessConfirm(false); setStep('welcome'); }} className="flex items-center space-x-1 text-hifi-silver/60 hover:text-white transition"><ChevronLeft size={18} /><span className="text-sm">{t('common.back')}</span></button><Dots /><div className="w-20" /></>}>
+            <div className="w-full max-w-lg">
+              <h2 className="text-2xl font-bold text-white mb-1 text-center">{t('wizard.mode.title')}</h2>
+              <p className="text-hifi-silver/60 text-sm text-center mb-8">{t('wizard.mode.subtitle')}</p>
+              {!headlessConfirm ? (
+                <div className="grid grid-cols-2 gap-4">
+                  <button onClick={() => chooseMode('gui')}
+                    className="flex flex-col items-center justify-center py-10 bg-hifi-surface hover:bg-hifi-light rounded-2xl border border-hifi-border hover:border-hifi-gold/50 transition">
+                    <Speaker size={40} className="text-hifi-gold mb-4" />
+                    <span className="text-white font-medium">{t('wizard.mode.gui')}</span>
+                    <span className="text-hifi-silver/50 text-xs mt-1 text-center px-2">{t('wizard.mode.guiSub')}</span>
+                  </button>
+                  <button onClick={() => chooseMode('headless')}
+                    className="flex flex-col items-center justify-center py-10 bg-hifi-surface hover:bg-hifi-light rounded-2xl border border-hifi-border hover:border-hifi-gold/50 transition">
+                    <Server size={40} className="text-hifi-gold mb-4" />
+                    <span className="text-white font-medium">{t('wizard.mode.headless')}</span>
+                    <span className="text-hifi-silver/50 text-xs mt-1 text-center px-2">{t('wizard.mode.headlessSub')}</span>
+                  </button>
+                </div>
+              ) : (
+                <div className="space-y-4 rounded-2xl border border-amber-500/30 bg-amber-900/10 p-5">
+                  <p className="text-sm text-amber-200">{t('wizard.mode.headlessWarning')}</p>
+                  <div className="flex space-x-3">
+                    <button onClick={() => setHeadlessConfirm(false)}
+                      className="flex-1 rounded-xl bg-hifi-surface hover:bg-hifi-light px-4 py-3 text-sm text-white transition">
+                      {t('common.cancel')}
+                    </button>
+                    <button onClick={() => chooseMode('headless')}
+                      className="flex-1 rounded-xl bg-amber-600 hover:bg-amber-500 px-4 py-3 text-sm text-white transition">
+                      {t('wizard.mode.confirmHeadless')}
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          </Shell>
+        )}
+
+        {/* ───────── HEADLESS WAIT (continue from phone/browser) ───────── */}
+        {step === 'headless-wait' && (
+          <Shell footer={<><Dots /><div className="w-20" /></>}>
+            <div className="w-full max-w-lg text-center">
+              <Server size={40} className="text-hifi-gold mb-4 mx-auto" />
+              <h2 className="text-2xl font-bold text-white mb-1">{t('wizard.mode.waitTitle')}</h2>
+              <p className="text-hifi-silver/60 text-sm mb-6">{t('wizard.mode.waitSubtitle')}</p>
+              {apInfo?.ssid ? (
+                <div className="inline-flex flex-col items-center bg-white rounded-2xl p-4">
+                  <QRCodeSVG value={`WIFI:T:WPA;S:${apInfo.ssid};P:${apInfo.psk || ''};;`} size={160} />
+                  <span className="text-black text-xs mt-2">{apInfo.ssid}</span>
+                </div>
+              ) : (
+                <p className="text-hifi-silver/70 text-sm">http://hifiplayer.local</p>
+              )}
+            </div>
           </Shell>
         )}
 

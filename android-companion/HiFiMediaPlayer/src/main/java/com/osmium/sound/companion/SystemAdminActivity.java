@@ -32,10 +32,12 @@ public class SystemAdminActivity extends AppCompatActivity {
     private final ThemeManager mThemeManager = new ThemeManager();
 
     private SwitchMaterial sshSwitch;
+    private SwitchMaterial displayModeSwitch;
     private TextView systemInfoText;
     private ProgressBar progressBar;
     private TextView messageView;
     private boolean suppressSshEvent;
+    private boolean suppressDisplayModeEvent;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -51,12 +53,20 @@ public class SystemAdminActivity extends AppCompatActivity {
         ViewUtilities.setInsetsListener(findViewById(R.id.system_admin_container), false, true, false);
 
         sshSwitch = findViewById(R.id.switch_ssh);
+        displayModeSwitch = findViewById(R.id.switch_display_mode);
         systemInfoText = findViewById(R.id.system_info_text);
         progressBar = findViewById(R.id.system_admin_progress);
         messageView = findViewById(R.id.system_admin_message);
 
         sshSwitch.setOnCheckedChangeListener((btn, checked) -> {
             if (!suppressSshEvent) setSsh(checked);
+        });
+
+        // Display mode: switch ON = on-screen interface (gui), OFF = headless.
+        // This is the only remote way to bring the screen back on a headless
+        // unit, so it lives here next to the other appliance system controls.
+        displayModeSwitch.setOnCheckedChangeListener((btn, checked) -> {
+            if (!suppressDisplayModeEvent) setDisplayMode(checked ? "gui" : "headless");
         });
 
         findViewById(R.id.button_reboot).setOnClickListener(v -> new MaterialAlertDialogBuilder(this)
@@ -74,7 +84,47 @@ public class SystemAdminActivity extends AppCompatActivity {
                 .show());
 
         loadSshStatus();
+        loadDisplayMode();
         loadSystemInfo();
+    }
+
+    private void loadDisplayMode() {
+        ApplianceHttpClient.getJson("/api/system/display_mode", new ApplianceHttpClient.JsonCallback() {
+            @Override
+            public void onSuccess(JSONObject body) {
+                suppressDisplayModeEvent = true;
+                displayModeSwitch.setChecked(!"headless".equals(body.optString("mode", "gui")));
+                suppressDisplayModeEvent = false;
+            }
+
+            @Override
+            public void onFailure(String message) {
+                // Older appliance without the display_mode endpoint — hide the row.
+                displayModeSwitch.setEnabled(false);
+            }
+        });
+    }
+
+    private void setDisplayMode(String mode) {
+        setBusy(true);
+        JSONObject payload = new JSONObject();
+        try {
+            payload.put("mode", mode);
+        } catch (Exception ignored) {
+        }
+        ApplianceHttpClient.postJson("/api/system/display_mode", payload, new ApplianceHttpClient.JsonCallback() {
+            @Override
+            public void onSuccess(JSONObject body) {
+                setBusy(false);
+                showMessage(body.optString("message", getString(R.string.settings_display_mode_changed)));
+            }
+
+            @Override
+            public void onFailure(String message) {
+                setBusy(false);
+                showMessage(getString(R.string.settings_system_admin_failed) + ": " + message);
+            }
+        });
     }
 
     private void loadSshStatus() {

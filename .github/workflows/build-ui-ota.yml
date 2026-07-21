@@ -42,6 +42,16 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Build web-admin (Vue) — shipped in the system bundle
+        # Separate, self-contained Vue project (does not touch the Electron
+        # kiosk build). Served by webui_server.py from /opt/hifi-webui/dist.
+        run: |
+          if [ -f admin-webui/package.json ]; then
+            (cd admin-webui && npm ci && npm run build)
+          else
+            echo "admin-webui/ missing — skipping (daemon serves fallback page)"
+          fi
+
       - name: Resolve version
         id: ver
         run: |
@@ -70,7 +80,12 @@ jobs:
           rm -rf "$ROOT"
           mkdir -p "$ROOT/usr/local/bin" "$ROOT/usr/local/sbin" "$ROOT/etc/systemd/system"
           # Python API + daemons
-          cp api_server.py vu_meter_daemon.py sources_server.py "$ROOT/usr/local/bin/"
+          cp api_server.py vu_meter_daemon.py sources_server.py webui_server.py "$ROOT/usr/local/bin/"
+          # Web-admin Vue build (served by webui_server.py from /opt/hifi-webui/dist)
+          if [ -d admin-webui/dist ]; then
+            mkdir -p "$ROOT/opt/hifi-webui/dist"
+            cp -r admin-webui/dist/. "$ROOT/opt/hifi-webui/dist/"
+          fi
           # Helper / OTA scripts (sh + python workers)
           cp distro/config/includes.chroot/usr/local/sbin/*.sh \
              distro/config/includes.chroot/usr/local/sbin/*.py "$ROOT/usr/local/sbin/"

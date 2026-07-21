@@ -93,6 +93,18 @@
       "mouse": "Mouse",
       "mouseSub": "Show the pointer"
     },
+    "mode": {
+      "title": "How will you use this device?",
+      "subtitle": "You can change this any time in Settings.",
+      "gui": "With a screen",
+      "guiSub": "Use the touchscreen interface on this device",
+      "headless": "Headless",
+      "headlessSub": "No screen — control from your phone or browser",
+      "headlessWarning": "The screen will turn off. You will control this device from the companion app, from http://hifiplayer.local, and from the Lyrion web interface (:9000). Continue?",
+      "confirmHeadless": "Turn off screen",
+      "waitTitle": "Continue from your phone",
+      "waitSubtitle": "This device is now headless. Connect to the setup hotspot or open http://hifiplayer.local to finish."
+    },
     "language": {
       "title": "Language",
       "subtitle": "Choose the interface language."
@@ -539,6 +551,19 @@
     "controls": {
       "reboot": "Reboot System",
       "shutdown": "Shut Down System"
+    },
+    "factory": {
+      "help": "Erase all settings and return the device to its initial state (Wi-Fi networks, music sources, DSP/room correction, Bluetooth, companion pairing and the web-admin account are all cleared). The device restarts into the setup wizard.",
+      "button": "Factory reset",
+      "confirm": "This erases ALL settings and the web-admin account, then restarts into the setup wizard. This cannot be undone. Continue?",
+      "running": "Factory reset started — the device will restart…",
+      "failed": "Could not start the factory reset."
+    },
+    "webuiReset": {
+      "button": "Reset web interface password",
+      "confirm": "This clears the web admin account so it can be recreated on the next web login. Other settings are unaffected. Continue?",
+      "done": "Web interface credentials cleared.",
+      "failed": "Could not reset the web interface credentials."
     },
     "restartWizard": "Restart setup wizard",
     "about": {

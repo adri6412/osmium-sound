@@ -111,6 +111,18 @@ export const systemAPI = {
   // Switch GUI <-> headless (live + persisted). In headless the on-screen UI is
   // torn down shortly after this returns. Returns { success, mode, message }
   setDisplayMode: (mode) => apiPost('/display_mode', { mode }),
+  // First-boot provisioning status (proxied from webui_server): { pending,
+  // stage, mode, claimed_by, ap: { active, ssid, psk }, ... }
+  getProvisionStatus: () => apiGet('/provision_status'),
+  // Claim the display mode during provisioning (first writer wins). source is
+  // 'screen' from the kiosk wizard. Returns { success, mode }
+  setProvisionMode: (mode, source) => apiPost('/provision_mode', { mode, source }),
+  // Factory reset: wipe user settings + web-admin account, re-arm the first-boot
+  // setup flow, reboot. Returns { success, message }
+  factoryReset: () => apiPost('/factory_reset'),
+  // Wipe only the web-admin account (kiosk recovery when the web password is
+  // forgotten). Returns { success, message }
+  resetWebuiCredentials: () => apiPost('/webui_reset_credentials'),
   // OTA release channel: { channel: 'prod'|'dev' }
   getOtaChannel: () => apiGet('/ota_channel'),
   // Switch channel. Returns { success, channel }

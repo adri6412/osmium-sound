@@ -953,6 +953,87 @@ def set_display_mode(mode):
     return {'success': True, 'mode': mode, 'message': msg}
 
 # ──────────────────────────────────────────────────────────────────
+#  Provisioning + factory reset. The first-boot hotspot/captive flow and
+#  the web-admin account live in webui_server.py (bound 0.0.0.0:443/:80).
+#  api_server stays loopback-only; these endpoints are thin bridges the
+#  Electron kiosk uses locally:
+#   - /provision_status / /provision_mode proxy to webui on 127.0.0.1:80
+#     (the provisioning API is always served there, even in LAN-only mode).
+#   - /factory_reset runs the reset script detached (callers are the kiosk
+#     [physical access] or webui [after its own admin-password check]).
+#   - /webui_reset_credentials wipes the web-admin account from the kiosk
+#     (physical-access recovery when the web password is forgotten).
+# ──────────────────────────────────────────────────────────────────
+WEBUI_BASE = 'http://127.0.0.1:80'
+WEBUI_DB = '/etc/hifi-player/webui.db'
+FACTORY_RESET_SCRIPT = '/usr/local/sbin/hifi-factory-reset.sh'
+
+def _proxy_webui(path, method='GET', body=None, timeout=10):
+    req = urllib.request.Request(f'{WEBUI_BASE}{path}', method=method)
+    data = None
+    if body is not None:
+        data = json.dumps(body).encode('utf-8')
+        req.add_header('Content-Type', 'application/json')
+    try:
+        with urllib.request.urlopen(req, data=data, timeout=timeout) as resp:
+            return json.loads(resp.read().decode('utf-8')), resp.status
+    except urllib.error.HTTPError as e:
+        try:
+            return json.loads(e.read().decode('utf-8')), e.code
+        except Exception:
+            return {'success': False}, e.code
+    except Exception:
+        # webui not running / not in provisioning — treat as "nothing pending".
+        return None, 0
+
+def get_provision_status():
+    body, _ = _proxy_webui('/api/provision/status')
+    if body is None:
+        return {'pending': False}
+    return body
+
+def set_provision_mode(mode, source='screen'):
+    body, status = _proxy_webui('/api/provision/claim_mode', method='POST',
+                                body={'mode': mode, 'source': source})
+    if body is None:
+        return {'success': False, 'message': 'Provisioning non attivo'}
+    return body
+
+def factory_reset():
+    if _update_in_progress():
+        return {'success': False, 'message': 'Aggiornamento in corso — riprova a fine aggiornamento'}
+    if not os.path.exists(FACTORY_RESET_SCRIPT):
+        return {'success': False, 'message': 'Script di ripristino non disponibile'}
+    try:
+        # Detached transient unit so the reboot at the end doesn't kill us mid
+        # HTTP response.
+        subprocess.Popen(['systemd-run', '--collect', '--',
+                          '/bin/sh', FACTORY_RESET_SCRIPT],
+                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        return {'success': True, 'message': 'Ripristino di fabbrica avviato — il dispositivo si riavvierà'}
+    except Exception:
+        log.exception("factory_reset failed")
+        return {'success': False, 'message': 'Avvio ripristino fallito'}
+
+def webui_reset_credentials():
+    """Wipe the web-admin account (kiosk-only recovery). Direct sqlite so it
+    works even if webui_server isn't running."""
+    try:
+        import sqlite3
+        if os.path.exists(WEBUI_DB):
+            conn = sqlite3.connect(WEBUI_DB)
+            conn.execute('DELETE FROM admin_user')
+            # Invalidate any open web sessions too.
+            conn.execute("UPDATE meta SET value = CAST(CAST(value AS INTEGER)+1 AS TEXT) "
+                         "WHERE key = 'session_version'")
+            conn.commit()
+            conn.close()
+        return {'success': True, 'message': 'Credenziali interfaccia web azzerate'}
+    except Exception:
+        log.exception("webui_reset_credentials failed")
+        return {'success': False, 'message': 'Reset credenziali fallito'}
+
+# ──────────────────────────────────────────────────────────────────
 #  Tidal Connect — optional. Lets the appliance appear as a Tidal Connect
 #  target so the Tidal app can stream directly to it (via mDNS/avahi). The
 #  daemon is an unofficial, reverse-engineered binary that is NOT bundled
@@ -2543,6 +2624,24 @@ def api_display_mode():
 def api_set_display_mode():
     data = request.get_json(silent=True) or {}
     return jsonify(set_display_mode((data.get('mode') or '').strip()))
+
+@app.route('/provision_status', methods=['GET'])
+def api_provision_status():
+    return jsonify(get_provision_status())
+
+@app.route('/provision_mode', methods=['POST'])
+def api_provision_mode():
+    data = request.get_json(silent=True) or {}
+    return jsonify(set_provision_mode((data.get('mode') or '').strip(),
+                                      (data.get('source') or 'screen').strip()))
+
+@app.route('/factory_reset', methods=['POST'])
+def api_factory_reset():
+    return jsonify(factory_reset())
+
+@app.route('/webui_reset_credentials', methods=['POST'])
+def api_webui_reset_credentials():
+    return jsonify(webui_reset_credentials())
 
 @app.route('/ota_channel', methods=['GET'])
 def api_ota_channel():

@@ -194,8 +194,21 @@ mkdir -p "$BIN_DEST"
 cp -f "$REPO_ROOT/api_server.py"      "$BIN_DEST/"
 cp -f "$REPO_ROOT/vu_meter_daemon.py" "$BIN_DEST/"
 cp -f "$REPO_ROOT/sources_server.py"  "$BIN_DEST/"
-sed -i 's/\r$//' "$BIN_DEST/api_server.py" "$BIN_DEST/vu_meter_daemon.py" "$BIN_DEST/sources_server.py"
-chmod +x "$BIN_DEST/api_server.py" "$BIN_DEST/vu_meter_daemon.py" "$BIN_DEST/sources_server.py"
+cp -f "$REPO_ROOT/webui_server.py"    "$BIN_DEST/"
+sed -i 's/\r$//' "$BIN_DEST/api_server.py" "$BIN_DEST/vu_meter_daemon.py" "$BIN_DEST/sources_server.py" "$BIN_DEST/webui_server.py"
+chmod +x "$BIN_DEST/api_server.py" "$BIN_DEST/vu_meter_daemon.py" "$BIN_DEST/sources_server.py" "$BIN_DEST/webui_server.py"
+
+# Web-admin Vue build (built by CI before this script runs). Optional: on a
+# local build without the Vue dist the daemon serves a minimal fallback page.
+WEBUI_DIST_SRC="$REPO_ROOT/admin-webui/dist"
+WEBUI_DIST_DEST="$CONFIG/includes.chroot/opt/hifi-webui/dist"
+if [ -d "$WEBUI_DIST_SRC" ]; then
+    mkdir -p "$WEBUI_DIST_DEST"
+    cp -a "$WEBUI_DIST_SRC/." "$WEBUI_DIST_DEST/"
+    log "Injected web-admin build → /opt/hifi-webui/dist"
+else
+    log "NOTE: admin-webui/dist missing — web-admin will serve the fallback page"
+fi
 
 log "Injecting helper scripts → includes.chroot/usr/local/sbin"
 SBIN_DEST="$CONFIG/includes.chroot/usr/local/sbin"
@@ -206,6 +219,7 @@ mkdir -p "$SBIN_DEST"
 # pass; only the exec bit needs setting.
 chmod +x "$SBIN_DEST/hifi-format-disk.sh"
 chmod +x "$SBIN_DEST/hifi-display-mode.sh"
+chmod +x "$SBIN_DEST/hifi-factory-reset.sh"
 
 # Seed the installed system-components version (baseline for OTA comparison),
 # matching the UI version so a fresh image reports a real baseline.
@@ -217,6 +231,14 @@ log "Seeded SYSTEM_VERSION = $APP_VERSION"
 # Seed the OS OTA baseline version (so hifi-os-* comparisons have a baseline).
 printf '%s\n' "$APP_VERSION" > "$SYS_VERSION_DEST/OS_VERSION"
 log "Seeded OS_VERSION = $APP_VERSION"
+
+# Seed the first-boot provisioning marker. This is the ONLY place (besides
+# hifi-factory-reset.sh) that creates it: a freshly installed unit boots into
+# the hotspot/captive setup flow (webui_server.py picks it up). It is consumed
+# and removed at finalize, and an OS-OTA migration must NEVER recreate it (that
+# would drop configured fleet units back into setup mode).
+printf 'pending\n' > "$SYS_VERSION_DEST/provisioning-pending"
+log "Seeded provisioning-pending marker (fresh-install setup flow)"
 
 # Bake the OTA public key so the device can verify signed OS bundles. Without
 # it, the OS updater safely refuses every update. Generate it once with

@@ -1,0 +1,20 @@
+{
+  "name": "osmium-admin-webui",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Osmium Sound — web admin UI (served by webui_server.py, separate from the Electron kiosk)",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "vue": "^3.5.13",
+    "vue-router": "^4.5.0"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "^5.2.1",
+    "vite": "^6.0.7"
+  }
+}

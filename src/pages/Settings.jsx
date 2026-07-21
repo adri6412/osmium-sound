@@ -1345,6 +1345,53 @@ const Settings = () => {
     });
   };
 
+  const doFactoryReset = async () => {
+    setUpdateMessage(t('settings.factory.running'));
+    try {
+      const result = await systemAPI.factoryReset();
+      setUpdateMessage(result.success && result.data?.success
+        ? (result.data.message || t('settings.factory.running'))
+        : (result.data?.message || result.message || t('settings.factory.failed')));
+    } catch (error) {
+      setUpdateMessage(t('settings.factory.failed'));
+    }
+  };
+
+  const handleFactoryReset = () => {
+    if (!apiConnected) {
+      setUpdateMessage(t('settings.msg.apiUnavailable'));
+      return;
+    }
+    setConfirmDialog({
+      message: t('settings.factory.confirm'),
+      confirmLabel: t('settings.factory.button'),
+      onConfirm: doFactoryReset,
+    });
+  };
+
+  const doWebuiReset = async () => {
+    try {
+      const result = await systemAPI.resetWebuiCredentials();
+      setUpdateMessage(result.success && result.data?.success
+        ? (result.data.message || t('settings.webuiReset.done'))
+        : (result.data?.message || result.message || t('settings.webuiReset.failed')));
+    } catch (error) {
+      setUpdateMessage(t('settings.webuiReset.failed'));
+    }
+  };
+
+  const handleWebuiReset = () => {
+    if (!apiConnected) {
+      setUpdateMessage(t('settings.msg.apiUnavailable'));
+      return;
+    }
+    setConfirmDialog({
+      message: t('settings.webuiReset.confirm'),
+      confirmLabel: t('settings.webuiReset.button'),
+      onConfirm: doWebuiReset,
+    });
+  };
+
   // Get current interface info
   const currentInterface = networkInfo.find(net => net.name === selectedInterface);
   const wiredInterfaces = networkInfo.filter(net => net.type === 'wired');
@@ -3211,6 +3258,29 @@ const Settings = () => {
                       <Power size={20} />
                       <span>{t('settings.controls.shutdown')}</span>
                     </motion.button>
+
+                    {/* Reset web-admin password (kiosk recovery) */}
+                    <motion.button
+                      onClick={handleWebuiReset}
+                      className="w-full bg-hifi-dark hover:bg-hifi-light/40 text-white py-4 rounded-lg font-semibold flex items-center justify-center space-x-2 transition-colors"
+                      whileTap={{ scale: 0.95 }}
+                    >
+                      <Lock size={20} />
+                      <span>{t('settings.webuiReset.button')}</span>
+                    </motion.button>
+
+                    {/* Factory reset (destructive — separated + confirmed) */}
+                    <div className="pt-3 mt-3 border-t border-red-500/20">
+                      <p className="text-xs text-hifi-silver/60 mb-2">{t('settings.factory.help')}</p>
+                      <motion.button
+                        onClick={handleFactoryReset}
+                        className="w-full bg-red-900/40 hover:bg-red-800/60 border border-red-500/40 text-red-200 py-4 rounded-lg font-semibold flex items-center justify-center space-x-2 transition-colors"
+                        whileTap={{ scale: 0.95 }}
+                      >
+                        <AlertTriangle size={20} />
+                        <span>{t('settings.factory.button')}</span>
+                      </motion.button>
+                    </div>
                   </div>
                 )}
 

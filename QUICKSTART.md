@@ -61,6 +61,35 @@ not on the Play Store. Details at
 - **No audio**: check the selected audio device in Settings and that the
   DAC is recognized.
 
+## 🖥️ Headless mode & web administration
+
+Osmium Sound can run **with a screen** (touchscreen kiosk) or **headless** (no
+screen, managed from a browser or the companion app).
+
+**First boot (fresh install):**
+1. The device raises a Wi-Fi hotspot **`Osmium-Setup-XXXX`** (WPA2, passphrase
+   `osmiumsetup`). Connect your phone to it — the setup page opens automatically
+   (captive portal). If it doesn't, open **http://10.42.0.1**.
+2. Pick your home Wi-Fi and choose **With a screen** or **Headless**. The setup
+   hotspot then drops; reconnect your phone to your home network.
+3. Open **https://hifiplayer.local** and create the web admin account (username +
+   password). Your browser will warn that the certificate is "not trusted" — that
+   is expected on a local device (there is no public certificate authority); the
+   connection is still encrypted. Accept and continue.
+
+**Managing a headless device:** open **https://hifiplayer.local** (web admin —
+network, audio, updates, display mode, account, factory reset), the **companion
+app**, or the Lyrion library at **http://hifiplayer.local:9000**.
+
+**Switching modes:** on-screen, go to Settings → *Display mode*. Remotely, use
+the companion app (System → *On-screen interface*) — this is the way to bring the
+screen back on a headless unit.
+
+**Factory reset:** Settings → *Factory reset* (on screen), or the web admin
+(with your password). It erases all settings **and the web admin account**, then
+reboots into this setup flow. If you forget the web password, reset it from the
+on-screen Settings, or factory reset.
+
 ## 📚 More resources
 
 - **[README.md](README.md)**: overview, features, and specs

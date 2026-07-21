@@ -83,6 +83,14 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Build web-admin (Vue) — injected into the ISO by build-distro.sh
+        run: |
+          if [ -f admin-webui/package.json ]; then
+            (cd admin-webui && npm ci && npm run build)
+          else
+            echo "admin-webui/ missing — ISO web-admin will serve the fallback page"
+          fi
+
       - name: Build installer ISO (live-build, as root)
         run: |
           set -euo pipefail

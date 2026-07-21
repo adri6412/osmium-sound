@@ -10,6 +10,11 @@ echo "I: [hifi] enabling HiFi services"
 systemctl enable hifi-api.service     || true
 systemctl enable hifi-vumeter.service || true
 systemctl enable hifi-sources.service || true
+# Web admin + first-boot provisioning gateway (HTTPS :443 / :80). Serves the web
+# UI and, when the provisioning-pending marker is present (fresh install), the
+# setup hotspot + captive portal. Safe everywhere: it's a no-op portwise on a
+# configured unit and the marker gates the hotspot behaviour.
+systemctl enable hifi-webui.service   || true
 
 echo "I: [hifi] enabling audio backend (squeezelite + Lyrion Music Server)"
 systemctl enable squeezelite.service        || true

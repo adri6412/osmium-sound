@@ -1,0 +1,19 @@
+[Unit]
+Description=HiFi Player - Web admin + first-boot provisioning gateway (HTTPS :443 / :80)
+# Never in the live ISO session (no point running the web admin/hotspot there).
+ConditionKernelCommandLine=!boot=live
+After=network.target NetworkManager.service hifi-api.service
+Wants=NetworkManager.service
+
+[Service]
+Type=simple
+# Runs as root: manages NetworkManager (hotspot), generates the per-device TLS
+# cert + cookie key under /etc/hifi-player, and proxies to the loopback API.
+User=root
+WorkingDirectory=/usr/local/bin
+ExecStart=/usr/bin/python3 /usr/local/bin/webui_server.py
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target

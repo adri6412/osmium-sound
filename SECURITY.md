@@ -11,6 +11,43 @@ Osmium Sound (formerly HiFi Media Player) ships as a full appliance image (OS + 
 
 Pre-release/dev builds (`-dev.N` suffix, `svil` branch) are not covered by this policy — they exist for internal testing only.
 
+## Web administration & first-boot provisioning (security model)
+
+The appliance can run **headless** (no screen) and is then managed from a web
+admin UI served by `webui_server.py`. Its security model, and the deliberate
+trade-offs:
+
+- **Two independent auth systems, by design.** The web admin has its **own
+  username/password account** (created at first setup, stored hashed in
+  `/etc/hifi-player/webui.db`). The Android companion keeps its separate
+  **pairing-token** system on port 8080. They never share credentials. The
+  companion can only toggle display mode (non-destructive); it cannot factory
+  reset (that needs the web admin password).
+- **The system API stays loopback-only.** `api_server.py` remains bound to
+  `127.0.0.1` and unauthenticated. `webui_server.py` is the only bridge and
+  proxies a **whitelisted** set of calls to it, gated by the session. The
+  whitelist is **partitioned**: during first-boot setup only a minimal pre-auth
+  set is reachable (Wi-Fi, DAC, Lyrion install, mode choice, account creation) —
+  never reboot/shutdown/SSH/OTA-apply/DSP/factory-reset.
+- **TLS is self-signed and per-device.** The cert + the cookie-signing key are
+  generated on the device at first start and never shipped in the image, so no
+  two units share key material. Because there is no public CA for a local
+  appliance, **browsers show a one-time "not trusted" warning — this is
+  expected**; the connection is still encrypted.
+- **CSRF + Host allowlist.** Every mutation requires a double-submit CSRF token;
+  every request's `Host` header must be in an allowlist (anti DNS-rebinding).
+- **Destructive actions re-validate the password.** Factory reset (and the web
+  password change) require re-entering the admin password, so a stolen session
+  cookie alone cannot wipe the box.
+- **Setup hotspot.** During first boot an unconfigured unit raises a WPA2 Wi-Fi
+  hotspot (`Osmium-Setup-XXXX`) with a **fixed, documented passphrase**. Accepted
+  residual risk: someone in RF range who knows the passphrase can reach the
+  minimal pre-auth set on an *unconfigured* unit during the short setup window.
+  WPA2 still encrypts the home Wi-Fi password in transit, the pre-auth set has no
+  destructive endpoint, and the window closes when setup finishes.
+- **Password recovery.** If the web admin password is lost: reset it from the
+  on-screen kiosk (physical access), or factory reset (which also clears it).
+
 ## Reporting a Vulnerability
 
 **Please do not open a public GitHub issue for security vulnerabilities.**

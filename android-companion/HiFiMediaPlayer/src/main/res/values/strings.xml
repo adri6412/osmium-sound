@@ -369,6 +369,9 @@
     <string name="settings_ssh_title">SSH access</string>
     <string name="settings_ssh_warning">Enabling SSH allows remote command-line access to the appliance. Only enable this if you understand the risk, and change the default password immediately after enabling it.</string>
     <string name="settings_ssh_unavailable">SSH server is not available on this appliance.</string>
+    <string name="settings_display_mode_title">On-screen interface</string>
+    <string name="settings_display_mode_summary">Turn off to run headless; turn on to bring the touchscreen interface back</string>
+    <string name="settings_display_mode_changed">Display mode changed.</string>
     <string name="settings_system_info_title">System info</string>
     <string name="settings_system_info_hostname">Hostname</string>
     <string name="settings_system_info_ip">IP address</string>

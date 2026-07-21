@@ -93,6 +93,18 @@
       "mouse": "Mouse",
       "mouseSub": "Mostra il puntatore"
     },
+    "mode": {
+      "title": "Come userai questo dispositivo?",
+      "subtitle": "Lo puoi cambiare in qualsiasi momento dalle Impostazioni.",
+      "gui": "Con schermo",
+      "guiSub": "Usa l'interfaccia touchscreen su questo dispositivo",
+      "headless": "Headless",
+      "headlessSub": "Senza schermo — controlla da telefono o browser",
+      "headlessWarning": "Lo schermo si spegnerà. Controllerai il dispositivo dall'app companion, da http://hifiplayer.local e dall'interfaccia web di Lyrion (:9000). Continuare?",
+      "confirmHeadless": "Spegni lo schermo",
+      "waitTitle": "Continua dal telefono",
+      "waitSubtitle": "Il dispositivo è ora headless. Connettiti all'hotspot di setup oppure apri http://hifiplayer.local per completare."
+    },
     "language": {
       "title": "Lingua",
       "subtitle": "Scegli la lingua dell'interfaccia."
@@ -539,6 +551,19 @@
     "controls": {
       "reboot": "Riavvia Sistema",
       "shutdown": "Spegni Sistema"
+    },
+    "factory": {
+      "help": "Cancella tutte le impostazioni e riporta il dispositivo allo stato iniziale (reti Wi-Fi, sorgenti musicali, DSP/room correction, Bluetooth, pairing companion e account interfaccia web vengono azzerati). Il dispositivo si riavvia nella configurazione guidata.",
+      "button": "Ripristino di fabbrica",
+      "confirm": "Questa operazione cancella TUTTE le impostazioni e l'account dell'interfaccia web, poi riavvia nella configurazione guidata. Non può essere annullata. Continuare?",
+      "running": "Ripristino di fabbrica avviato — il dispositivo si riavvierà…",
+      "failed": "Impossibile avviare il ripristino di fabbrica."
+    },
+    "webuiReset": {
+      "button": "Reset password interfaccia web",
+      "confirm": "Azzera l'account amministratore web, che potrà essere ricreato al prossimo accesso web. Le altre impostazioni non vengono toccate. Continuare?",
+      "done": "Credenziali interfaccia web azzerate.",
+      "failed": "Impossibile azzerare le credenziali dell'interfaccia web."
     },
     "restartWizard": "Riavvia configurazione guidata",
     "about": {

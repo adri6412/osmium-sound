@@ -126,6 +126,10 @@ openssl
 isc-dhcp-client
 iproute2
 network-manager
+# dnsmasq-base is required by NetworkManager's ipv4.method=shared (the first-boot
+# setup Wi-Fi hotspot / captive portal). Not pulled in automatically because the
+# image is built --apt-recommends false.
+dnsmasq-base
 locales
 
 # Automatic security updates (config in /etc/apt/apt.conf.d/52hifi-unattended).

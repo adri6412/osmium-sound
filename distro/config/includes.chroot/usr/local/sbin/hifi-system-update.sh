@@ -70,10 +70,12 @@ write_status applying 75 "Installazione file…"
 [ -d "$NEWROOT/usr/local/bin" ]      && cp -af "$NEWROOT/usr/local/bin/."      /usr/local/bin/
 [ -d "$NEWROOT/usr/local/sbin" ]     && cp -af "$NEWROOT/usr/local/sbin/."     /usr/local/sbin/
 [ -d "$NEWROOT/etc/systemd/system" ] && cp -af "$NEWROOT/etc/systemd/system/." /etc/systemd/system/
+# Web-admin Vue build ships under /opt (outside the three dirs above).
+[ -d "$NEWROOT/opt/hifi-webui" ]     && { mkdir -p /opt/hifi-webui; cp -af "$NEWROOT/opt/hifi-webui/." /opt/hifi-webui/; }
 
 # normalise CRLF + perms for the things we just shipped
 for f in /usr/local/bin/api_server.py /usr/local/bin/vu_meter_daemon.py \
-         /usr/local/bin/sources_server.py; do
+         /usr/local/bin/sources_server.py /usr/local/bin/webui_server.py; do
     [ -f "$f" ] && { sed -i 's/\r$//' "$f"; chmod +x "$f"; }
 done
 chmod +x /usr/local/sbin/hifi-*.sh /usr/local/sbin/hifi-*.py 2>/dev/null || true
@@ -91,6 +93,12 @@ systemctl daemon-reload || true
 for svc in hifi-vumeter hifi-sources squeezelite; do
     systemctl restart "$svc" 2>/dev/null || true
 done
+# Web-admin gateway: enable (first time it lands on an existing unit) + restart.
+# Guarded so a bundle without the unit is a clean no-op.
+if [ -f /etc/systemd/system/hifi-webui.service ]; then
+    systemctl enable hifi-webui.service 2>/dev/null || true
+    systemctl restart hifi-webui.service 2>/dev/null || true
+fi
 
 rm -rf "$WORKDIR"
 write_status done 100 "Componenti aggiornati a $VERSION"
