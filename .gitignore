@@ -20,6 +20,12 @@ hifi-ui-*.tar.gz
 
 .abacusai/
 
+# Device GitHub PAT for the remote-support key-mint workflow — materialized
+# here only during the release build (build-ui-ota.yml, from the
+# HIFI_DEVICE_PAT secret), never committed. See
+# distro/os-update/apply.d/0030-remote-support-github.sh.
+distro/os-update/files/github-support-pat.txt
+
 # F-Droid self-hosted repo: signing keystore and generated index/APKs are
 # never committed. The keystore only exists as a GitHub Actions secret; the
 # repo/ dir + index are built in CI and published straight to gh-pages.

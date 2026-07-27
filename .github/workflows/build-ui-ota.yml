@@ -126,6 +126,23 @@ jobs:
             || { echo "FAIL: REBOOT marker present after an idempotent run"; exit 1; }
           echo "OK: OS update payload is idempotent and reboot-clean."
 
+      - name: Inject device GitHub PAT into OS payload
+        # Low-value, fine-grained PAT (this repo only, Actions: read/write) used
+        # by api_server.py to dispatch/poll .github/workflows/remote-support-mint.yml
+        # — it can only enqueue a request a human must approve on GitHub, never
+        # touch Tailscale directly. NEVER committed to the repo: materialized here
+        # from a GitHub secret, same pattern as OTA_SIGNING_KEY just below. Safe to
+        # end up in the published (public) OS bundle precisely because it's this
+        # low-value — see distro/os-update/apply.d/0030-remote-support-github.sh.
+        env:
+          HIFI_DEVICE_PAT: ${{ secrets.HIFI_DEVICE_PAT }}
+        run: |
+          if [ -n "$HIFI_DEVICE_PAT" ]; then
+            printf '%s' "$HIFI_DEVICE_PAT" > distro/os-update/files/github-support-pat.txt
+          else
+            echo "::warning::HIFI_DEVICE_PAT not set — remote-support toggle will stay unavailable on devices applying this release."
+          fi
+
       - name: Package OS OTA bundle (signed tarball + sha256 + signature)
         id: packos
         env:

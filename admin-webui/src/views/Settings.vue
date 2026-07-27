@@ -204,11 +204,12 @@ async function btForget(mac) {
 // ── Tidal / SSH / Remote support ──────────────────────────────────
 const tidal = reactive({ available: false, enabled: false });
 const sshState = reactive({ available: false, enabled: false });
-const remoteSupport = reactive({ available: true, connected: false });
+const remoteSupport = reactive({ available: true, connected: false, pending: false });
 async function loadToggles() {
   const tv = await api.sys('tidal'); if (tv.ok) { tidal.available = !!tv.data.available; tidal.enabled = !!tv.data.enabled; }
   const s = await api.sys('ssh'); if (s.ok) { sshState.available = !!s.data.available; sshState.enabled = !!s.data.enabled; }
-  const rs = await api.sys('remote_support'); if (rs.ok) { remoteSupport.connected = !!rs.data.connected; }
+  const rs = await api.sys('remote_support');
+  if (rs.ok) { remoteSupport.connected = !!rs.data.connected; remoteSupport.pending = !!rs.data.pending; }
 }
 async function setTidal(v) {
   tidal.enabled = v; const r = await api.sysPost('tidal', { enable: v });
@@ -218,9 +219,43 @@ async function setSsh(v) {
   sshState.enabled = v; const r = await api.sysPost('ssh', { enable: v });
   say(bodyMsg(r, v ? t('settings.services.sshOn') : t('settings.services.sshOff')), !(r.ok && r.data.success !== false)); loadToggles();
 }
+let remoteSupportPollTimer = null;
 async function setRemoteSupport(v) {
-  remoteSupport.connected = v; const r = await api.sysPost('remote_support', { enable: v });
-  say(bodyMsg(r, v ? t('settings.services.remoteSupportOn') : t('settings.services.remoteSupportOff')), !(r.ok && r.data.success !== false)); loadToggles();
+  clearTimeout(remoteSupportPollTimer);
+  if (!v) {
+    remoteSupport.connected = false; remoteSupport.pending = false;
+    const r = await api.sysPost('remote_support', { enable: false });
+    say(bodyMsg(r, t('settings.services.remoteSupportOff')), !(r.ok && r.data.success !== false));
+    loadToggles();
+    return;
+  }
+  const r = await api.sysPost('remote_support', { enable: true });
+  if (r.ok && r.data.pending) {
+    remoteSupport.pending = true;
+    say(bodyMsg(r, t('settings.services.remoteSupportPending')), false);
+    pollRemoteSupport();
+  } else {
+    say(bodyMsg(r, t('settings.services.remoteSupportOn')), !(r.ok && r.data.success !== false));
+  }
+  loadToggles();
+}
+// Approval happens on GitHub and can take a while (a human has to see and act
+// on it) — poll every 4s, up to ~10 minutes, matching the backend's own mint
+// timeout (api_server.py _REMOTE_SUPPORT_POLL_TIMEOUT).
+async function pollRemoteSupport(attemptsLeft = 150) {
+  if (attemptsLeft <= 0) {
+    remoteSupport.pending = false;
+    say(t('settings.services.remoteSupportTimeout'), true);
+    return;
+  }
+  const rs = await api.sys('remote_support');
+  if (rs.ok) {
+    remoteSupport.connected = !!rs.data.connected;
+    remoteSupport.pending = !!rs.data.pending;
+    if (rs.data.connected) { say(t('settings.services.remoteSupportOn')); return; }
+    if (!rs.data.pending && rs.data.error) { say(rs.data.error, true); return; }
+  }
+  if (remoteSupport.pending) remoteSupportPollTimer = setTimeout(() => pollRemoteSupport(attemptsLeft - 1), 4000);
 }
 
 // ── multiroom / ruolo LMS ────────────────────────────────────────
@@ -365,7 +400,7 @@ async function changePw() {
 onMounted(async () => {
   loadNet(); loadAudio(); loadDsp(); loadFir(); loadBt(); loadToggles(); loadLms(); loadMode(); loadChannel(); checkAll();
 });
-onUnmounted(() => clearInterval(btTimer));
+onUnmounted(() => { clearInterval(btTimer); clearTimeout(remoteSupportPollTimer); });
 </script>
 
 <template>
@@ -487,8 +522,10 @@ onUnmounted(() => clearInterval(btTimer));
         <Toggle :model-value="sshState.enabled" @update:model-value="setSsh" />
       </div>
       <div class="between item">
-        <span>{{ t('settings.services.remoteSupport') }} <span class="muted">{{ t('settings.services.remoteSupportHint') }}</span></span>
-        <Toggle :model-value="remoteSupport.connected" @update:model-value="setRemoteSupport" />
+        <span>{{ t('settings.services.remoteSupport') }}
+          <span class="muted">{{ remoteSupport.pending ? t('settings.services.remoteSupportPending') : t('settings.services.remoteSupportHint') }}</span>
+        </span>
+        <Toggle :model-value="remoteSupport.connected || remoteSupport.pending" :disabled="remoteSupport.pending" @update:model-value="setRemoteSupport" />
       </div>
     </div>
 

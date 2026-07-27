@@ -162,9 +162,11 @@
       "sshOn": "SSH enabled",
       "sshOff": "SSH disabled",
       "remoteSupport": "Remote support",
-      "remoteSupportHint": "Lets the support team connect to the device over a private network (Tailscale), not a public link. Stays on until you turn it off.",
+      "remoteSupportHint": "Lets the support team connect to the device over a private network (Tailscale), not a public link. Each request needs a human to approve it on the support team's side. Stays on until you turn it off.",
       "remoteSupportOn": "Remote support enabled",
       "remoteSupportOff": "Remote support disabled",
+      "remoteSupportPending": "Request sent — waiting for the support team to approve it",
+      "remoteSupportTimeout": "Remote support request timed out without approval",
       "tidalUpdated": "Tidal Connect updated"
     },
     "multiroom": {

@@ -44,9 +44,13 @@ done
 log "removing user settings"
 # /etc/hifi-player: keep the OTA baseline + public key + channel; drop the rest,
 # INCLUDING the web-admin account DB + its per-device cookie/TLS material.
+# github-support-pat is re-provisioned automatically by the next OS-update
+# apply run (0030-remote-support-github.sh is idempotent) — dropping it here
+# just returns remote-support to its pre-OTA "not yet provisioned" state,
+# same as a fresh, never-updated install.
 for f in display-mode pointer-enabled dsp.json dsp-presets.json bluetooth.json \
          samba-cred.json provisioning-state.json webui.db webui-secret.key \
-         webui-cert.pem webui-key.pem; do
+         webui-cert.pem webui-key.pem github-support-pat; do
     rm -f "/etc/hifi-player/$f" 2>/dev/null || true
 done
 # Reset the OTA channel to the stable default (factory semantics).

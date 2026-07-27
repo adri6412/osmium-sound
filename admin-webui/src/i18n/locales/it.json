@@ -163,9 +163,11 @@
       "sshOff": "SSH disattivato",
       "tidalUpdated": "Tidal Connect aggiornato",
       "remoteSupport": "Supporto remoto",
-      "remoteSupportHint": "Consente al team di supporto di collegarsi al dispositivo tramite una rete privata (Tailscale), non un link pubblico. Resta attivo finché non lo disattivi.",
+      "remoteSupportHint": "Consente al team di supporto di collegarsi al dispositivo tramite una rete privata (Tailscale), non un link pubblico. Ogni richiesta deve essere approvata da una persona del team di supporto. Resta attivo finché non lo disattivi.",
       "remoteSupportOn": "Supporto remoto attivato",
-      "remoteSupportOff": "Supporto remoto disattivato"
+      "remoteSupportOff": "Supporto remoto disattivato",
+      "remoteSupportPending": "Richiesta inviata — in attesa di approvazione da parte del team di supporto",
+      "remoteSupportTimeout": "Richiesta di supporto remoto scaduta senza approvazione"
     },
     "multiroom": {
       "hint": "Questo dispositivo può usare il proprio server musicale oppure seguire il Lyrion di un altro dispositivo sulla rete.",
