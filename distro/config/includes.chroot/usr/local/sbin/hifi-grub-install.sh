@@ -18,19 +18,34 @@
 # package that refuses removal outright — aborting the whole step, on
 # EITHER firmware (confirmed on real hardware and in a BIOS-mode VM: both
 # failed identically with "dpkg: error processing package
-# grub-efi-amd64-signed (--purge): this is a protected package").
+# grub-efi-amd64-signed (--purge): this is a protected package"). Standard
+# Debian's grub-installer normally distinguishes EFI vs BIOS just fine on its
+# own — that logic isn't broken; it's the cross-family purge (an artifact of
+# THIS image shipping both families side by side) that is.
 #
-# THE FIX: skip grub-installer's broken purge-then-install logic entirely,
-# and instead re-trigger the postinst of whichever ONE already-installed
-# package family actually matches this machine's real firmware — that is
-# each package's own authoritative, tested setup logic (copying the signed
-# EFI binaries, registering the NVRAM boot entry, embedding BIOS boot code),
-# not a hand-rolled reimplementation of it. The messages that failed were
-# emitted by `grub-installer` itself (the d-i component), NOT by grub-pc's or
-# grub-efi-amd64-signed's own postinst — neither individual package's
-# postinst has any business touching the other's files, so going straight to
-# `dpkg-reconfigure` on the one we actually want never touches the sibling
-# family at all.
+# ATTEMPT 1 (superseded): skip grub-installer, dpkg-reconfigure the matching
+# package. On BIOS this reported success but left the disk with NO bootloader
+# at all — dpkg-reconfigure grub-pc's postinst apparently did not actually
+# perform (or silently no-op'd) the MBR write on real hardware, and the
+# caller swallowed the exit status anyway (see hifi-finalize-install.sh),
+# so the installer reported success on an unbootable disk.
+#
+# THE FIX (this version): for BIOS, install GRUB directly with the same
+# `grub-install` command a human would type by hand — the actual, certain,
+# directly-verifiable primitive that grub-pc's own postinst wraps internally
+# — instead of trusting the indirect dpkg-reconfigure path. Its exit status
+# is checked and fatal on failure (see set -eu / die below); the caller no
+# longer swallows this. dpkg-reconfigure grub-pc still runs afterward,
+# best-effort, purely to keep its debconf/device-map bookkeeping consistent
+# for future kernel-postinst-triggered updates — its failure is NOT fatal
+# once the real MBR write has already succeeded.
+#
+# For UEFI, the signed boot chain has no equivalent plain "grub-install"
+# substitute (the whole point of grub-efi-amd64-signed/shim-signed is that
+# their own postinst copies the pre-signed binaries and registers the NVRAM
+# entry), so dpkg-reconfigure remains the primary mechanism there — but its
+# result is now verified against the actual files it's supposed to produce,
+# fatal if they're missing, instead of trusting a zero exit status alone.
 set -eu
 
 log() { echo "I: [hifi-grub-install] $*"; }
@@ -51,8 +66,12 @@ grub2 grub2/force_efi_extra_removable boolean true
 EOF
     export DEBIAN_FRONTEND=noninteractive
     dpkg-reconfigure grub-efi-amd64-signed
+    if [ ! -e /boot/efi/EFI/debian/grubx64.efi ] && [ ! -e /boot/efi/EFI/debian/shimx64.efi ]; then
+        die "dpkg-reconfigure grub-efi-amd64-signed completed but no boot files were found under /boot/efi/EFI/debian — UEFI boot chain was NOT installed"
+    fi
+    log "UEFI boot chain present under /boot/efi/EFI/debian"
 else
-    log "BIOS/legacy firmware detected — configuring GRUB for the MBR"
+    log "BIOS/legacy firmware detected — installing GRUB directly to the MBR"
     # Target disk: derive from the mounted root (grub-installer/bootdev is
     # unused now that grub-installer itself is skipped). Strips the trailing
     # partition suffix (sda3 -> sda, nvme0n1p3 -> nvme0n1, mmcblk0p1 ->
@@ -62,19 +81,32 @@ else
     [ -n "$DISK" ] || die "cannot resolve parent disk for $ROOT_DEV"
     DISK="/dev/$DISK"
     log "target disk: $DISK (root: $ROOT_DEV)"
-    # The live chroot's build-time preseed (config/preseed.cfg) intentionally
-    # answered grub-pc/install_devices as empty, so its postinst wouldn't try
-    # to grub-install against a fake disk while building the image — that
-    # same (now stale) answer got cloned onto this target along with the rest
-    # of the debconf database. Override it with the real disk before
-    # reconfiguring, or grub-pc's postinst would see "no devices" and skip
-    # the actual install.
+
+    # Keep grub-pc's own debconf record consistent (read by e.g. kernel
+    # postinst hooks and future `apt upgrade`s) — the live chroot's build-time
+    # preseed (config/preseed.cfg) intentionally answered install_devices as
+    # empty (no real disk existed at build time), and that stale answer got
+    # cloned onto this target along with the rest of the debconf database.
     debconf-set-selections <<EOF
 grub-pc grub-pc/install_devices multiselect $DISK
 grub-pc grub-pc/install_devices_empty boolean false
 EOF
+
+    # The actual, certain MBR write — the same command a human runs by hand.
+    # Checked directly rather than trusting dpkg-reconfigure's indirect
+    # postinst path (which reported success but wrote nothing on real BIOS
+    # hardware — see ATTEMPT 1 above).
+    grub-install --target=i386-pc --recheck "$DISK" \
+        || die "grub-install --target=i386-pc $DISK failed — BIOS boot code was NOT written"
+    log "grub-install (BIOS) succeeded for $DISK"
+
+    # Best-effort only from here: the disk is already bootable at this point,
+    # so a hiccup in the package's own bookkeeping must not be treated as a
+    # bootloader failure.
     export DEBIAN_FRONTEND=noninteractive
-    dpkg-reconfigure grub-pc
+    if ! dpkg-reconfigure grub-pc; then
+        log "WARNING: dpkg-reconfigure grub-pc reported an error after the direct grub-install already succeeded — debconf/device-map bookkeeping may be stale, but the MBR boot code is installed"
+    fi
 fi
 
 log "done"
