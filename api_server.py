@@ -962,6 +962,23 @@ def _tailscale_available():
     return bool(shutil.which('tailscale'))
 
 
+def _device_label():
+    """Human-recognizable, per-device identifier for the reviewer approving a
+    remote-support request: every appliance ships with the SAME hostname
+    (preseed.cfg fixes it to 'hifiplayer'), so socket.gethostname() alone is
+    indistinguishable across the fleet. Combine the customer-chosen player
+    name (may also collide — it defaults to 'OsmiumSound') with a short,
+    genuinely unique-per-install suffix from /etc/machine-id."""
+    try:
+        with open('/etc/machine-id') as f:
+            machine_id = f.read().strip()
+    except Exception:
+        machine_id = ''
+    suffix = machine_id[-6:] if machine_id else socket.gethostname()
+    name = re.sub(r'[^a-z0-9-]+', '-', _current_player_name().lower()).strip('-') or 'device'
+    return f'{name}-{suffix}'
+
+
 def _age_available():
     return bool(shutil.which('age')) and bool(shutil.which('age-keygen'))
 
@@ -1206,7 +1223,7 @@ def set_remote_support(enable):
             return {'success': False, 'available': True, 'connected': False,
                     'message': 'Impossibile preparare la richiesta di supporto remoto'}
 
-        hostname = f'{TAILSCALE_HOSTNAME_PREFIX}-{socket.gethostname()}'
+        hostname = f'{TAILSCALE_HOSTNAME_PREFIX}-{_device_label()}'
         run_id = _dispatch_mint_workflow(token, recipient, hostname)
         if not run_id:
             shutil.rmtree(identity_dir, ignore_errors=True)
