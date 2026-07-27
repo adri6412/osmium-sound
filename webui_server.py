@@ -1319,7 +1319,10 @@ def support_bundle_proxy():
     denied = _require_session()
     if denied:
         return denied
-    return _forward_to_api('/support_bundle')
+    # Support bundles can take a while to assemble because they read journal
+    # logs and system state. A short timeout causes the browser to surface a
+    # misleading network error even though the backend is still working.
+    return _forward_to_api('/support_bundle', timeout=600)
 
 
 # ── companion pairing (mint via loopback :8080, session-gated) ───────

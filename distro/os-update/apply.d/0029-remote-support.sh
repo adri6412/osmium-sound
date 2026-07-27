@@ -10,9 +10,9 @@
 # identity/ACL, not a local password, so this account is created locked, no
 # password ever set).
 #
-# The package itself is NOT installed here (on-demand only, same pattern as
-# openssh-server for Settings → SSH), so this migration is a no-op audio/
-# network-wise until the button is actually pressed for the first time.
+# The package is installed here during OS updates so the Settings toggle can
+# work immediately once the device has been updated, without relying on a
+# runtime apt install from the web UI.
 #
 # Idempotent + CI-safe: the keyring is fetched only once (skipped entirely
 # under HIFI_OS_NO_APT=1, same guard as 0015-camilladsp.sh); ensure_file_content
@@ -38,6 +38,14 @@ EOF
 
 if migration_changed && [ "${HIFI_OS_NO_APT:-0}" != 1 ]; then
     apt-get update 2>/dev/null || true
+fi
+
+if [ "${HIFI_OS_NO_APT:-0}" != 1 ] && ! command -v tailscale >/dev/null 2>&1; then
+    if DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends tailscale 2>/dev/null; then
+        mark_changed "installed tailscale"
+    else
+        log_warn "could not install tailscale (will retry next update)"
+    fi
 fi
 
 if ! id support >/dev/null 2>&1; then

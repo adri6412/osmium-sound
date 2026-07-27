@@ -939,21 +939,6 @@ def _tailscale_available():
     return bool(shutil.which('tailscale'))
 
 
-def _install_tailscale():
-    """Install the tailscale package. The apt repo itself is provisioned at
-    build/OS-update time (see distro/os-update/apply.d), so this is a plain
-    package install — no external repo setup needed at request time."""
-    try:
-        subprocess.run(['sudo', 'apt-get', 'update'],
-                       capture_output=True, text=True, timeout=120)
-        subprocess.run(['sudo', 'apt-get', 'install', '-y', 'tailscale'],
-                       capture_output=True, text=True, timeout=180)
-    except Exception:
-        log.exception("tailscale install failed")
-        return False
-    return _tailscale_available()
-
-
 def _fetch_tailscale_authkey():
     try:
         with urllib.request.urlopen(TAILSCALE_AUTHKEY_URL, timeout=15) as resp:
@@ -983,9 +968,8 @@ def set_remote_support(enable):
     support access. No auto-expiry: stays active until explicitly disabled."""
     if enable:
         if not _tailscale_available():
-            if not _install_tailscale():
-                return {'success': False, 'available': False, 'connected': False,
-                        'message': 'Installazione di Tailscale fallita'}
+            return {'success': False, 'available': False, 'connected': False,
+                    'message': 'Tailscale non è ancora installato sul dispositivo. Completa l\'aggiornamento di sistema e riprova.'}
         authkey = _fetch_tailscale_authkey()
         if not authkey:
             status = get_remote_support_status()
