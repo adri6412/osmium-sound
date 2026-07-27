@@ -62,8 +62,15 @@ async function finish() {
 </script>
 
 <template>
-  <div v-if="stage === 'account'" style="max-width: 420px; margin: 40px auto;">
+  <!-- Persistent language selector across every setup stage (mirrors the
+       kiosk wizard's shared top-bar LanguageSelector, not just the first
+       screen) — the language choice must stay available for the whole flow,
+       not just at account creation. -->
+  <div class="row" style="justify-content: flex-end; margin-bottom: 10px;">
     <LanguageSelector variant="compact" />
+  </div>
+
+  <div v-if="stage === 'account'" style="max-width: 420px; margin: 0 auto;">
     <div class="card">
       <h3><span class="dot"></span>{{ t('setup.accountTitle') }}</h3>
       <p class="sub">{{ t('setup.accountHint') }}</p>
@@ -97,7 +104,7 @@ async function finish() {
     <button :disabled="busy" @click="finish">{{ busy ? t('setup.finishing') : t('setup.finishSetup') }}</button>
   </div>
 
-  <div v-else-if="stage === 'done'" class="card" style="max-width: 420px; margin: 40px auto; text-align: center;">
+  <div v-else-if="stage === 'done'" class="card" style="max-width: 420px; margin: 0 auto; text-align: center;">
     <h3>{{ t('setup.doneTitle') }}</h3>
     <button @click="router.push('/')">{{ t('setup.goDashboard') }}</button>
   </div>
