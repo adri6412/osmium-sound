@@ -21,7 +21,6 @@ linux-image-amd64
 # grub-installer can run grub-install --target=i386-pc fully offline. Debian
 # permits grub-pc and grub-efi-amd64-signed installed side by side; d-i's
 # grub-installer picks the right one for the machine's actual boot mode.
-grub-pc
 grub-efi-amd64-signed
 shim-signed
 efibootmgr

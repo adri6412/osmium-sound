@@ -941,8 +941,11 @@ def _tailscale_available():
 
 def _fetch_tailscale_authkey():
     try:
-        with urllib.request.urlopen(TAILSCALE_AUTHKEY_URL, timeout=15) as resp:
-            return resp.read().decode('utf-8').strip()
+        with urllib.request.urlopen(TAILSCALE_AUTHKEY_URL, timeout=20) as resp:
+            body = resp.read().decode('utf-8', 'replace').strip()
+            if body and not body.startswith('http'):
+                return body
+            return None
     except Exception:
         log.exception("tailscale authkey fetch failed")
         return None
