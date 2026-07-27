@@ -906,7 +906,14 @@ def provision_finalize():
     with _prov_lock:
         state = _load_prov_state()
         mode = state.get('mode', 'gui')
-        _set_display_mode(mode, live=False)
+        # live=True: this is the deferred half of the screen+headless path (see
+        # provision_claim_mode) — the on-screen kiosk was left running the
+        # 'headless-wait' step on purpose so it could show the hotspot/URL, but
+        # once the web side finishes setup here, that screen must actually go
+        # away, not just have the persisted target changed for next boot. This
+        # daemon (hifi-webui.service, WantedBy=multi-user.target) survives the
+        # isolate either way, so the HTTP response still returns normally.
+        _set_display_mode(mode, live=True)
         _do_finalize()
     return jsonify({'success': True})
 
