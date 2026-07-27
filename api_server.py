@@ -1024,22 +1024,42 @@ def _dispatch_mint_workflow(token, recipient, hostname):
     return None
 
 
+class _NoRedirectHandler(urllib.request.HTTPRedirectHandler):
+    """Stops urllib from auto-following the artifact download redirect. GitHub's
+    archive_download_url 302s to a pre-signed Azure Blob Storage URL (auth is in
+    its query string) — if our GitHub Bearer token is forwarded along with it
+    (urllib's default behaviour), Azure rejects the request with 401 instead of
+    honouring the signed URL. So we catch the redirect ourselves and issue the
+    second hop as a plain, header-less request."""
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        return None
+
+
 def _fetch_minted_key(run_id, identity_path, token):
     status, artifacts = _github_api(
         'GET', f'/repos/{GITHUB_REPO}/actions/runs/{run_id}/artifacts', token)
     if status != 200 or not artifacts:
+        log.error("listing run %s artifacts failed: HTTP %s", run_id, status)
         return None
     match = next((a for a in artifacts.get('artifacts', [])
                   if a.get('name', '').startswith('support-key-')), None)
     if not match:
+        log.error("no support-key-* artifact on run %s", run_id)
         return None
     req = urllib.request.Request(match['archive_download_url'], headers={
         'Authorization': f'Bearer {token}',
         'Accept': 'application/vnd.github+json',
     })
     try:
-        with urllib.request.urlopen(req, timeout=20) as resp:
-            zip_bytes = resp.read()
+        opener = urllib.request.build_opener(_NoRedirectHandler)
+        try:
+            with opener.open(req, timeout=20) as resp:
+                zip_bytes = resp.read()
+        except urllib.error.HTTPError as e:
+            if e.code not in (301, 302, 303, 307, 308) or not e.headers.get('Location'):
+                raise
+            with urllib.request.urlopen(e.headers['Location'], timeout=20) as resp:
+                zip_bytes = resp.read()
     except Exception:
         log.exception("artifact download failed")
         return None
