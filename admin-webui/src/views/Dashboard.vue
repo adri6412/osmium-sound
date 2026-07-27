@@ -1,7 +1,9 @@
 <script setup>
 import { ref, onMounted } from 'vue';
 import { api } from '../api.js';
+import { useI18n } from '../i18n';
 
+const { t } = useI18n();
 const host = location.hostname;
 const info = ref({});
 const net = ref({});
@@ -20,27 +22,27 @@ onMounted(async () => {
 </script>
 
 <template>
-  <h2 class="page">Dashboard</h2>
+  <h2 class="page">{{ t('dashboard.title') }}</h2>
   <div class="grid">
     <a class="tile" :href="`http://${host}:9000`" target="_blank">
-      <span class="t gold">Musica</span>
-      <span class="muted">Libreria e riproduzione (Lyrion)</span>
+      <span class="t gold">{{ t('dashboard.music') }}</span>
+      <span class="muted">{{ t('dashboard.musicDesc') }}</span>
     </a>
     <RouterLink class="tile" to="/settings">
-      <span class="t gold">Impostazioni</span>
-      <span class="muted">Rete, audio, DSP, Bluetooth, aggiornamenti…</span>
+      <span class="t gold">{{ t('dashboard.settings') }}</span>
+      <span class="muted">{{ t('dashboard.settingsDesc') }}</span>
     </RouterLink>
   </div>
 
   <div class="card">
-    <h3><span class="dot"></span>Stato</h3>
-    <div class="between item"><span class="muted">Player</span><span class="silver">{{ info.hostname || '—' }}</span></div>
-    <div class="between item"><span class="muted">Rete</span>
-      <span class="silver">{{ net.type === 'wireless' ? 'Wi-Fi' : net.type === 'wired' ? 'Cavo' : '—' }}<template v-if="net.ip"> · {{ net.ip }}</template></span>
+    <h3><span class="dot"></span>{{ t('dashboard.status') }}</h3>
+    <div class="between item"><span class="muted">{{ t('dashboard.player') }}</span><span class="silver">{{ info.hostname || '—' }}</span></div>
+    <div class="between item"><span class="muted">{{ t('dashboard.network') }}</span>
+      <span class="silver">{{ net.type === 'wireless' ? t('dashboard.wifi') : net.type === 'wired' ? t('dashboard.wired') : '—' }}<template v-if="net.ip"> · {{ net.ip }}</template></span>
     </div>
-    <div class="between item"><span class="muted">Piattaforma</span><span class="silver">{{ info.platform || '—' }}</span></div>
-    <div class="between item"><span class="muted">Modalità schermo</span>
-      <span class="silver">{{ mode === 'headless' ? 'Headless' : mode === 'gui' ? 'Su schermo' : '—' }}</span>
+    <div class="between item"><span class="muted">{{ t('dashboard.platform') }}</span><span class="silver">{{ info.platform || '—' }}</span></div>
+    <div class="between item"><span class="muted">{{ t('dashboard.displayMode') }}</span>
+      <span class="silver">{{ mode === 'headless' ? t('dashboard.headless') : mode === 'gui' ? t('dashboard.onscreen') : '—' }}</span>
     </div>
   </div>
 </template>

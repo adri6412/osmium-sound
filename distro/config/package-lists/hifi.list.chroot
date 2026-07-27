@@ -13,6 +13,15 @@ linux-image-amd64
 #   boots with UEFI Secure Boot enabled in firmware — verified at build time, the
 #   ONLY safe place to touch the bootloader (NOT via OTA — see
 #   distro/os-update/apply.d/0010-secure-boot.sh, kept as a no-op).
+# BIOS/legacy boot — the partition layout (see includes.installer/preseed.cfg)
+# always carved out a 1MB bios_grub partition for this, but the package that
+# actually populates it was missing, so grub-installer had nothing to install
+# on a BIOS-booted target and the install failed. Shipping it here (like the
+# UEFI chain above) lands it on the target via the live-clone install, so
+# grub-installer can run grub-install --target=i386-pc fully offline. Debian
+# permits grub-pc and grub-efi-amd64-signed installed side by side; d-i's
+# grub-installer picks the right one for the machine's actual boot mode.
+grub-pc
 grub-efi-amd64-signed
 shim-signed
 efibootmgr

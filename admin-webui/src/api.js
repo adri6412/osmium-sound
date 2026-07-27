@@ -2,6 +2,10 @@
 // session cookie rides along automatically. Mutations carry the double-submit
 // CSRF token (read from the non-HttpOnly `csrf` cookie the server sets).
 
+import { useI18n } from './i18n';
+
+const { t } = useI18n();
+
 function csrfToken() {
   const m = document.cookie.match(/(?:^|;\s*)csrf=([^;]+)/);
   return m ? decodeURIComponent(m[1]) : '';
@@ -19,7 +23,7 @@ async function req(path, { method = 'GET', body } = {}) {
   try {
     res = await fetch(path, opts);
   } catch (e) {
-    return { ok: false, status: 0, data: { message: 'Network error' } };
+    return { ok: false, status: 0, data: { message: t('common.networkError') } };
   }
   try {
     data = await res.json();
@@ -64,7 +68,7 @@ export const api = {
     try {
       res = await fetch('/api/system/dsp_fir', { method: 'POST', body, headers, credentials: 'same-origin' });
     } catch (e) {
-      return { ok: false, status: 0, data: { message: 'Network error' } };
+      return { ok: false, status: 0, data: { message: t('common.networkError') } };
     }
     try { data = await res.json(); } catch (_) { data = {}; }
     return { ok: res.ok, status: res.status, data };

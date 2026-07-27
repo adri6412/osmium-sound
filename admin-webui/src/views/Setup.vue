@@ -2,8 +2,11 @@
 import { ref, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
 import { api } from '../api.js';
+import { useI18n } from '../i18n';
+import LanguageSelector from '../components/LanguageSelector.vue';
 
 const router = useRouter();
+const { t } = useI18n();
 const stage = ref('loading');   // loading | account | configure | done
 const provisioning = ref(false);
 const error = ref('');
@@ -33,7 +36,7 @@ async function createAccount() {
   const { ok, data } = await api.setup(username.value, password.value);
   busy.value = false;
   if (ok && data.success) await afterAuth();
-  else error.value = data.message || 'Creazione account fallita';
+  else error.value = data.message || t('setup.createFailed');
 }
 
 async function afterAuth() {
@@ -59,44 +62,45 @@ async function finish() {
 </script>
 
 <template>
-  <div class="card" v-if="stage === 'account'" style="max-width: 420px; margin: 40px auto;">
-    <h3><span class="dot"></span>Crea l'account amministratore</h3>
-    <p class="sub">Questo account controlla l'interfaccia web. Conservalo con cura:
-      una password persa si recupera solo dallo schermo del dispositivo o con un
-      ripristino di fabbrica.</p>
-    <label>Nome utente (min 3 caratteri)</label>
-    <input v-model="username" autocomplete="username" />
-    <label>Password (min 8 caratteri)</label>
-    <input v-model="password" type="password" autocomplete="new-password" />
-    <div style="margin-top: 16px;">
-      <button :disabled="busy" @click="createAccount" style="width: 100%;">{{ busy ? '…' : 'Crea account' }}</button>
+  <div v-if="stage === 'account'" style="max-width: 420px; margin: 40px auto;">
+    <LanguageSelector variant="compact" />
+    <div class="card">
+      <h3><span class="dot"></span>{{ t('setup.accountTitle') }}</h3>
+      <p class="sub">{{ t('setup.accountHint') }}</p>
+      <label>{{ t('setup.username') }}</label>
+      <input v-model="username" autocomplete="username" />
+      <label>{{ t('setup.password') }}</label>
+      <input v-model="password" type="password" autocomplete="new-password" />
+      <div style="margin-top: 16px;">
+        <button :disabled="busy" @click="createAccount" style="width: 100%;">{{ busy ? t('setup.creating') : t('setup.createAccount') }}</button>
+      </div>
+      <div v-if="error" class="msg err">{{ error }}</div>
     </div>
-    <div v-if="error" class="msg err">{{ error }}</div>
   </div>
 
   <div v-else-if="stage === 'configure'">
-    <h2 class="page">Completa la configurazione</h2>
+    <h2 class="page">{{ t('setup.configureTitle') }}</h2>
     <div class="card">
-      <h3><span class="dot"></span>Uscita audio</h3>
-      <p class="sub">Scegli il DAC / dispositivo di riproduzione.</p>
+      <h3><span class="dot"></span>{{ t('setup.audioTitle') }}</h3>
+      <p class="sub">{{ t('setup.audioHint') }}</p>
       <div v-for="d in devices" :key="d.id" class="net between" @click="pickDevice(d.id)">
         <span>{{ d.name || d.id }}</span>
         <span class="check" v-if="d.id === currentDevice">✓</span>
       </div>
-      <p v-if="!devices.length" class="muted">Nessun dispositivo audio rilevato.</p>
+      <p v-if="!devices.length" class="muted">{{ t('setup.noDevices') }}</p>
     </div>
     <div class="card">
-      <h3><span class="dot"></span>Musica e sorgenti</h3>
-      <p class="item"><a :href="`http://${host}:9000`" target="_blank">Apri Lyrion (libreria musicale) →</a></p>
-      <p class="item"><a href="/sources-app" target="_blank">Aggiungi sorgenti musicali →</a></p>
+      <h3><span class="dot"></span>{{ t('setup.musicTitle') }}</h3>
+      <p class="item"><a :href="`http://${host}:9000`" target="_blank">{{ t('setup.openLyrion') }}</a></p>
+      <p class="item"><a href="/sources-app" target="_blank">{{ t('setup.openSources') }}</a></p>
     </div>
-    <button :disabled="busy" @click="finish">{{ busy ? '…' : 'Completa il setup' }}</button>
+    <button :disabled="busy" @click="finish">{{ busy ? t('setup.finishing') : t('setup.finishSetup') }}</button>
   </div>
 
   <div v-else-if="stage === 'done'" class="card" style="max-width: 420px; margin: 40px auto; text-align: center;">
-    <h3>Tutto pronto</h3>
-    <button @click="router.push('/')">Vai alla dashboard</button>
+    <h3>{{ t('setup.doneTitle') }}</h3>
+    <button @click="router.push('/')">{{ t('setup.goDashboard') }}</button>
   </div>
 
-  <div v-else class="center"><span class="muted">Caricamento…</span></div>
+  <div v-else class="center"><span class="muted">{{ t('setup.loading') }}</span></div>
 </template>

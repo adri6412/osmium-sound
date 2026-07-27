@@ -73,6 +73,7 @@ button:hover { filter: brightness(1.1); }
 button.secondary { background: var(--light); color: var(--text); border: 1px solid var(--border); font-weight: 500; }
 button.ghost { background: transparent; color: var(--silver); border: 1px solid var(--border); font-weight: 500; }
 button.danger { background: rgba(224, 90, 90, 0.12); color: #f0b4b4; border: 1px solid rgba(224, 90, 90, 0.4); }
+button.ghost.active { border-color: var(--gold); color: var(--gold); background: var(--gold-dim); }
 button:disabled { opacity: 0.55; cursor: default; filter: none; }
 
 /* File-picker trigger styled like a secondary button (native <input type=file>
