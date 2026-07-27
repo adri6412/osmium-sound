@@ -1319,10 +1319,12 @@ def support_bundle_proxy():
     denied = _require_session()
     if denied:
         return denied
-    # Support bundles can take a while to assemble because they read journal
-    # logs and system state. A short timeout causes the browser to surface a
-    # misleading network error even though the backend is still working.
-    return _forward_to_api('/support_bundle', timeout=600)
+    # The support bundle is a binary response, so use the same raw forwarder
+    # that preserves download headers instead of the JSON-oriented proxy path.
+    out = _forward_to(API_BASE, '/support_bundle', timeout=600, service_label='sistema')
+    out.headers['Cache-Control'] = 'no-store'
+    out.headers['X-Content-Type-Options'] = 'nosniff'
+    return out
 
 
 # ── companion pairing (mint via loopback :8080, session-gated) ───────
