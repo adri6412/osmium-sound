@@ -456,6 +456,159 @@ def _connect_wifi(ssid, password):
     return False, (err.strip() or 'Connessione Wi-Fi fallita')
 
 
+# ── network resilience (runs always, independent of provisioning) ───
+# Two problems reported on real hardware, both addressed here:
+#   1. A wired connection profile can go bad (corrupted/stale config) or never
+#      get created in the first place, leaving a physically-connected cable
+#      with no IP and no automatic recovery — NetworkManager here has
+#      no-auto-default set, so it never recreates a profile on its own.
+#   2. If NEITHER wired nor Wi-Fi has connectivity on an already-configured
+#      (post-provisioning) unit, there is no way back in short of physical
+#      access — this raises the SAME setup hotspot, but scoped to network
+#      reconfiguration ONLY (no account/mode/wizard concepts touched).
+#
+# Both run from a single background loop, skipped entirely while first-boot
+# provisioning owns the AP/network transitions.
+_eth_fail_since = {}  # device -> monotonic timestamp first seen "carrier but no IP"
+_ETH_HARD_REPAIR_AFTER = 90  # seconds of continuous failure before nuking the profile
+
+
+def _eth_devices():
+    if FAKE:
+        return []
+    rc, out, _ = _nmcli(['-t', '-f', 'DEVICE,TYPE', 'device', 'status'])
+    devs = []
+    if rc == 0:
+        for line in out.splitlines():
+            parts = line.split(':')
+            if len(parts) >= 2 and parts[1] == 'ethernet':
+                devs.append(parts[0])
+    return devs
+
+
+def _has_carrier(dev):
+    """Kernel-level 'is a cable physically plugged in', independent of any
+    NetworkManager profile/connection state."""
+    try:
+        with open(f'/sys/class/net/{dev}/carrier') as f:
+            return f.read().strip() == '1'
+    except Exception:
+        return False
+
+
+def _device_has_ip(dev):
+    rc, out, _ = _nmcli(['-g', 'IP4.ADDRESS', 'device', 'show', dev])
+    return rc == 0 and bool(out.strip())
+
+
+def _wired_self_heal():
+    """An Ethernet cable plugged in (carrier=1) with no IP means either no
+    connection profile exists yet, or the existing one is broken/stale. First
+    response is always just `nmcli device connect` (activates an existing
+    profile or auto-creates a fresh DHCP one if none exists — same mechanism
+    as api_server.py's wired_dhcp()). If that keeps failing for a while, the
+    profile itself is probably corrupted: delete every Ethernet connection
+    profile and retry once more with a clean slate. Never touches Wi-Fi or
+    anything else."""
+    if FAKE:
+        return
+    now = time.monotonic()
+    seen = set()
+    for dev in _eth_devices():
+        seen.add(dev)
+        if not _has_carrier(dev):
+            _eth_fail_since.pop(dev, None)
+            continue
+        if _device_has_ip(dev):
+            _eth_fail_since.pop(dev, None)
+            continue
+        since = _eth_fail_since.setdefault(dev, now)
+        if now - since >= _ETH_HARD_REPAIR_AFTER:
+            print(f'[webui] {dev}: cable in, no IP for {int(now - since)}s — '
+                  f'deleting Ethernet profile(s) and retrying fresh (possible corrupted profile)')
+            rc, out, _ = _nmcli(['-t', '-f', 'NAME,TYPE', 'connection', 'show'])
+            if rc == 0:
+                for line in out.splitlines():
+                    parts = re.split(r'(?<!\\):', line)
+                    if len(parts) >= 2 and parts[1] == '802-3-ethernet':
+                        _nmcli(['connection', 'delete', 'id', parts[0].replace('\\:', ':')])
+            _eth_fail_since[dev] = now  # fresh grace window for the just-recreated profile
+        _nmcli(['device', 'connect', dev], timeout=30)
+    for dev in list(_eth_fail_since.keys()):
+        if dev not in seen:
+            _eth_fail_since.pop(dev, None)  # device unplugged/removed
+
+
+# ── network-loss fallback hotspot (post-provisioning, network-only) ──
+_net_lock = threading.Lock()
+_net_recovery = {'active': False, 'ssid': None, 'psk': None,
+                 'networks': [], 'networks_cached_at': None, 'error': None}
+_monitor_start = time.monotonic()
+_NET_MONITOR_GRACE = 90  # seconds after daemon start before raising a recovery AP
+
+
+def _has_any_connectivity():
+    """True if a real (non-AP) wired or Wi-Fi connection is up. Excludes our
+    own setup/recovery hotspot, which shows up as an active 'wifi' device too."""
+    if FAKE:
+        return True
+    rc, out, _ = _nmcli(['-t', '-f', 'DEVICE,TYPE,STATE,CONNECTION', 'device', 'status'])
+    if rc != 0:
+        return False
+    for line in out.splitlines():
+        parts = re.split(r'(?<!\\):', line)
+        if len(parts) >= 4 and parts[1] in ('ethernet', 'wifi') \
+                and parts[2] == 'connected' and parts[3] != AP_CON_NAME:
+            return True
+    return False
+
+
+def _raise_net_recovery_ap():
+    dev = _wifi_device()
+    if not dev or not _ap_supported(dev):
+        _net_recovery['error'] = 'Nessuna scheda Wi-Fi disponibile per l\'hotspot di recupero'
+        return False
+    _net_recovery['networks'] = _scan_wifi()
+    _net_recovery['networks_cached_at'] = time.time()
+    ok, ssid = _raise_ap(dev)
+    if ok:
+        _net_recovery.update({'active': True, 'ssid': ssid, 'psk': AP_PSK, 'error': None})
+        print(f'[webui] network lost — raised recovery hotspot {ssid}')
+    else:
+        _net_recovery['error'] = 'Attivazione hotspot di recupero fallita'
+    return ok
+
+
+def _teardown_net_recovery():
+    if _net_recovery['active']:
+        _teardown_ap()
+        print('[webui] network restored — recovery hotspot dropped')
+    _net_recovery.update({'active': False, 'ssid': None, 'psk': None, 'error': None})
+
+
+def _network_monitor_tick():
+    if _provisioning():
+        return  # first-boot flow owns the AP/network transitions
+    _wired_self_heal()
+    if time.monotonic() - _monitor_start < _NET_MONITOR_GRACE:
+        return  # boot grace window — give normal autoconnect/DHCP time to settle
+    with _net_lock:
+        if _has_any_connectivity():
+            if _net_recovery['active']:
+                _teardown_net_recovery()
+        elif not _net_recovery['active']:
+            _raise_net_recovery_ap()
+
+
+def _network_monitor_loop():
+    while True:
+        try:
+            _network_monitor_tick()
+        except Exception as e:
+            print(f'[webui] network monitor error: {e}')
+        time.sleep(20)
+
+
 # ── provisioning state machine ───────────────────────────────────────
 def _evaluate_provisioning():
     """Called at startup and on demand. Decides AP vs LAN-only vs finalize."""
@@ -645,20 +798,30 @@ def _allowed_hosts():
     return hosts
 
 
+def _any_ap_active():
+    """True while EITHER the first-boot setup AP or the post-provisioning
+    network-loss recovery AP is up — the two are mutually exclusive in
+    practice (the monitor skips entirely during provisioning) but share the
+    same captive-probe/Host-allowlist/CSRF carve-outs below."""
+    if _provisioning():
+        return _load_prov_state().get('ap', {}).get('active', False)
+    return _net_recovery['active']
+
+
 @app.before_request
 def _guard():
     # 1) Host allowlist (anti DNS-rebinding). Host header minus any :port.
     host = (request.host or '').split(':')[0]
-    ap_up = _load_prov_state().get('ap', {}).get('active') if _provisioning() else False
+    ap_up = _any_ap_active()
     if host not in _allowed_hosts():
-        # During the captive window an unknown Host is a probe/redirect target,
+        # During a captive window an unknown Host is a probe/redirect target,
         # not an attack — send it to the portal. Otherwise reject outright.
-        if _provisioning() and ap_up:
+        if ap_up:
             return redirect(f'http://{AP_ADDR}/', code=302)
         return Response('Forbidden host', status=403)
 
-    # 2) Captive probes → portal (only while the AP is actually up).
-    if _provisioning() and ap_up and request.path in _CAPTIVE_PROBES:
+    # 2) Captive probes → portal (only while an AP is actually up).
+    if ap_up and request.path in _CAPTIVE_PROBES:
         return redirect(f'http://{AP_ADDR}/', code=302)
 
     # 3) CSRF: double-submit token on every mutation. The token lives in a
@@ -668,17 +831,18 @@ def _guard():
     #   * localhost — api_server.py makes server-to-server provisioning calls
     #     from 127.0.0.1 (no browser, no cookie), same loopback-trust as
     #     elsewhere.
-    #   * /api/provision/* — the first-boot captive flow runs over PLAIN HTTP
-    #     (:80 / http://10.42.0.1), where the Secure CSRF cookie is unavailable
-    #     by design. These endpoints are pre-auth and gated by physical/RF
-    #     proximity + the provisioning marker; CSRF protects the authenticated
-    #     HTTPS admin session, which is a separate surface.
+    #   * /api/provision/* and /api/netrecovery/* — both captive flows run over
+    #     PLAIN HTTP (:80 / http://10.42.0.1), where the Secure CSRF cookie is
+    #     unavailable by design. Both are pre-auth and gated by physical/RF
+    #     proximity + PSK; CSRF protects the authenticated HTTPS admin session,
+    #     a separate surface.
     #   * forwarded sources paths — authenticated by the pairing bearer token
     #     (not cookies), so they're CSRF-immune by construction; requiring our
     #     cookie-bound header would just break the embedded :8080 SPA.
     if request.method in ('POST', 'PUT', 'DELETE', 'PATCH') \
             and request.remote_addr not in ('127.0.0.1', '::1') \
             and not request.path.startswith('/api/provision/') \
+            and not request.path.startswith('/api/netrecovery/') \
             and not any(request.path == p or request.path.startswith(p + '/')
                         for p in _SOURCES_FWD_PREFIXES):
         cookie = request.cookies.get('csrf')
@@ -918,6 +1082,49 @@ def provision_finalize():
     return jsonify({'success': True})
 
 
+# ── network-loss recovery endpoints (pre-auth: same RF/PSK trust as setup) ──
+# Deliberately separate from /api/provision/*: this is for an ALREADY
+# configured unit that lost connectivity, not first-boot setup — no account,
+# mode or wizard concept exists here, only "get the network working again".
+@app.route('/api/netrecovery/status', methods=['GET'])
+def netrecovery_status():
+    with _net_lock:
+        return jsonify({
+            'active': _net_recovery['active'],
+            'ssid': _net_recovery['ssid'],
+            'networks': _net_recovery['networks'],
+            'networks_cached_at': _net_recovery['networks_cached_at'],
+            'error': _net_recovery['error'],
+        })
+
+
+@app.route('/api/netrecovery/wifi_connect', methods=['POST'])
+def netrecovery_wifi_connect():
+    if not _net_recovery['active']:
+        return jsonify({'success': False, 'message': 'Nessun recupero rete in corso'}), 409
+    data = request.get_json(silent=True) or {}
+    ssid = (data.get('ssid') or '').strip()
+    password = data.get('password') or ''
+    # Reply first (the AP is about to drop; the phone must know to expect it).
+    threading.Thread(target=_bg_netrecovery_connect, args=(ssid, password), daemon=True).start()
+    return jsonify({'success': True, 'dropping_ap': True})
+
+
+def _bg_netrecovery_connect(ssid, password):
+    ok, err = _connect_wifi(ssid, password)
+    with _net_lock:
+        if ok:
+            # Connected: _connect_wifi already tore the AP down; the network
+            # monitor's next tick confirms connectivity and would reach the
+            # same state, but clearing it here immediately is more responsive.
+            _net_recovery.update({'active': False, 'ssid': None, 'psk': None, 'error': None})
+        else:
+            # _connect_wifi already re-raised the AP itself on failure — reflect
+            # that (SSID is deterministic from the MAC, so it hasn't changed).
+            _net_recovery['error'] = err
+            _net_recovery['active'] = True
+
+
 # ── generic system proxy (partitioned) ───────────────────────────────
 def _handle_proxy(local_path, method):
     key = (local_path, method)
@@ -1122,9 +1329,14 @@ def _captive_html():
 
 @app.route('/', methods=['GET'])
 def root():
-    # During the captive window with the AP up, serve the minimal portal.
+    # During the first-boot captive window with the AP up, serve the minimal
+    # setup portal. During a post-provisioning network-loss recovery, serve
+    # the equally minimal network-only portal (no account/mode/wizard steps —
+    # this box is already configured, it just needs its network back).
     if _provisioning() and _load_prov_state().get('ap', {}).get('active'):
         return Response(_captive_html(), mimetype='text/html')
+    if _net_recovery['active']:
+        return Response(NET_RECOVERY_HTML, mimetype='text/html')
     return _serve_spa('index.html')
 
 
@@ -1217,6 +1429,49 @@ function finish(){jpost('/api/provision/finalize',{}).then(function(){
 setInterval(load,3000);load();
 </script></body></html>"""
 
+# Network-loss recovery portal: an already-configured unit that lost BOTH
+# wired and Wi-Fi connectivity raises this same-styled but much smaller page —
+# just re-enter Wi-Fi credentials, nothing else. It self-resolves: once the
+# network monitor confirms connectivity again it tears the AP down on its own,
+# no "finish" step needed here.
+NET_RECOVERY_HTML = """<!doctype html><html lang="it"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Osmium Sound — Rete</title>
+<style>
+ body{font-family:system-ui,sans-serif;background:#0f1115;color:#eee;margin:0;padding:24px;max-width:520px;margin:auto}
+ h1{font-size:20px} .card{background:#1a1e26;border-radius:12px;padding:16px;margin:14px 0}
+ label{display:block;font-size:13px;color:#aab;margin:8px 0 4px} input,button{width:100%;padding:12px;border-radius:8px;border:1px solid #333;background:#12151b;color:#eee;font-size:15px;box-sizing:border-box}
+ button{background:#c8a24a;color:#111;font-weight:600;border:0;margin-top:12px} .muted{color:#889;font-size:13px}
+ .net{padding:10px;border-bottom:1px solid #262b35;cursor:pointer} .row{display:flex;justify-content:space-between}
+</style></head><body>
+<h1>Osmium Sound — Rete non raggiungibile</h1>
+<p class="muted">Il dispositivo è già configurato e ha perso la connessione (né cavo né Wi-Fi funzionanti). Ricollegalo scegliendo una rete Wi-Fi qui sotto — nessun'altra impostazione verrà modificata.</p>
+<div class="card">
+ <label>Rete Wi-Fi</label>
+ <div id="nets"></div>
+ <label>Oppure inserisci il nome (SSID)</label>
+ <input id="ssid" placeholder="Nome rete">
+ <label>Password Wi-Fi</label>
+ <input id="pass" type="password" placeholder="Password">
+ <button onclick="connect()">Connetti</button>
+ <p class="muted" id="netmsg"></p>
+</div>
+<script>
+function h(){return {'X-CSRF-Token':(document.cookie.match(/csrf=([^;]+)/)||[])[1]||''}}
+function load(){fetch('/api/netrecovery/status').then(function(r){return r.json()}).then(function(s){
+  if(!s.active){location.href='/';return}
+  var n=document.getElementById('nets');n.innerHTML='';
+  (s.networks||[]).forEach(function(net){var d=document.createElement('div');d.className='net';
+    d.innerHTML='<div class="row"><span>'+net.ssid+'</span><span class="muted">'+net.signal+'%</span></div>';
+    d.onclick=function(){document.getElementById('ssid').value=net.ssid};n.appendChild(d)});
+  if(s.error){document.getElementById('netmsg').textContent='Errore: '+s.error}
+})}
+function connect(){var b={ssid:document.getElementById('ssid').value,password:document.getElementById('pass').value};
+  document.getElementById('netmsg').textContent='Connessione in corso… se torni sulla tua rete questa pagina non sarà più raggiungibile qui — riapri http://hifiplayer.local';
+  fetch('/api/netrecovery/wifi_connect',{method:'POST',headers:Object.assign({'Content-Type':'application/json'},h()),body:JSON.stringify(b)})}
+setInterval(load,3000);load();
+</script></body></html>"""
+
 FALLBACK_HTML = """<!doctype html><html><head><meta charset="utf-8">
 <title>Osmium Sound</title><style>body{font-family:system-ui;background:#0f1115;color:#eee;padding:40px;text-align:center}</style>
 </head><body><h1>Osmium Sound — Web Admin</h1>
@@ -1241,9 +1496,16 @@ def _start_provisioning_loop():
     threading.Thread(target=_provisioning_loop, daemon=True).start()
 
 
+def _start_network_monitor():
+    # Background thread: wired self-heal + network-loss recovery AP. Runs
+    # unconditionally (it skips its own work while provisioning is active).
+    threading.Thread(target=_network_monitor_loop, daemon=True).start()
+
+
 def main():
     _bootstrap()
     _start_provisioning_loop()
+    _start_network_monitor()
     from werkzeug.serving import make_server
 
     if HTTP_ONLY:
@@ -1276,8 +1538,7 @@ def _redirect_app(environ, start_response):
     regardless of AP state) and for captive traffic while the AP is up;
     everything else 301s to HTTPS so admin traffic is always encrypted."""
     path = environ.get('PATH_INFO', '/')
-    ap_up = _provisioning() and _load_prov_state().get('ap', {}).get('active')
-    if path.startswith('/api/provision/') or ap_up:
+    if path.startswith('/api/provision/') or path.startswith('/api/netrecovery/') or _any_ap_active():
         return app(environ, start_response)
     host = environ.get('HTTP_HOST', 'hifiplayer.local').split(':')[0]
     start_response('301 Moved Permanently', [('Location', f'https://{host}{path}')])
