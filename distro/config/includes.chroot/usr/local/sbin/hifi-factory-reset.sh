@@ -55,11 +55,33 @@ rm -f /etc/hifi-sources.json /etc/hifi-pairing-tokens.json \
 # /var/lib/hifi-player: keep the os-migrations ledger; drop per-user artefacts.
 rm -f /var/lib/hifi-player/dsp-target /var/lib/hifi-player/roomcorr-result 2>/dev/null || true
 
-# Saved Wi-Fi / Ethernet NetworkManager profiles (forget every network).
+# Saved Wi-Fi networks (forget every SSID/password — the only network
+# credential worth resetting; a Wi-Fi profile carries the home network's PSK,
+# which the next owner/reinstaller should never be able to recover).
+#
+# Deliberately NOT touching Ethernet profiles: a wired connection carries no
+# secret, just "get an IP via DHCP over this cable" — and this appliance's
+# NetworkManager has no-auto-default set, so it never recreates a profile on
+# its own once one is deleted. Wiping it here used to strand the box with no
+# IP at all after a reset (no path back in except the setup hotspot, which
+# isn't always available/wanted). Left alone, the box stays reachable over
+# Ethernet immediately after reboot, exactly like it was before the reset.
 nmcli -t -f UUID,TYPE connection show 2>/dev/null | while IFS=: read -r uuid type; do
     case "$type" in
-        802-11-wireless|802-3-ethernet) nmcli connection delete uuid "$uuid" 2>/dev/null || true ;;
+        802-11-wireless) nmcli connection delete uuid "$uuid" 2>/dev/null || true ;;
     esac
+done
+
+# Defensive: if there is genuinely no Ethernet connection profile (e.g. this
+# unit was originally set up over Wi-Fi only, or a profile is missing for any
+# other reason), bring one up now so a cable, if plugged in, still gets an IP
+# — same mechanism as api_server.py's wired_dhcp(): `nmcli device connect`
+# activates the existing profile or auto-creates a fresh DHCP one if none
+# exists, for every Ethernet device present.
+nmcli -t -f DEVICE,TYPE device status 2>/dev/null | while IFS=: read -r dev dtype; do
+    if [ "$dtype" = "ethernet" ]; then
+        nmcli device connect "$dev" 2>/dev/null || true
+    fi
 done
 
 # Bluetooth pairings.
