@@ -43,6 +43,9 @@ jobs:
     environment: remote-support
     timeout-minutes: 5
     steps:
+      - name: Install age
+        run: sudo apt-get update -qq && sudo apt-get install -y age >/dev/null
+
       - name: Get Tailscale OAuth access token
         env:
           TS_OAUTH_CLIENT_ID: ${{ secrets.TS_OAUTH_CLIENT_ID }}
