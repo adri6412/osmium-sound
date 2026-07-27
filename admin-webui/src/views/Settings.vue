@@ -49,6 +49,38 @@ watch(open, async (v) => {
 const msg = ref(''); const err = ref(false);
 function say(m, isErr = false) { msg.value = m; err.value = isErr; if (m) setTimeout(() => { if (msg.value === m) msg.value = ''; }, 6000); }
 function bodyMsg(r, fallback) { return (r.data && r.data.message) || fallback; }
+async function downloadSupportBundle() {
+  say(t('settings.system.supportBundlePreparing') || 'Preparazione download del support bundle...');
+  try {
+    const resp = await fetch('/api/system/support_bundle', {
+      credentials: 'same-origin',
+    });
+    if (!resp.ok) {
+      const text = await resp.text();
+      throw new Error(text || resp.statusText);
+    }
+    const blob = await resp.blob();
+    let filename = 'support-bundle.zip';
+    const cd = resp.headers.get('Content-Disposition');
+    if (cd) {
+      const m = /filename\*=[^']*'[^']*'([^;]+)|filename="([^"]+)"|filename=([^;\n]+)/i.exec(cd);
+      const name = m && decodeURIComponent(m[1] || m[2] || m[3] || '');
+      if (name) filename = name;
+    }
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+    say(t('settings.system.supportBundleDownloaded') || 'Download avviato');
+  } catch (err) {
+    say(t('settings.system.supportBundleFailed') || 'Download support bundle fallito', true);
+    console.error('support bundle download failed', err);
+  }
+}
 
 // ── network ──────────────────────────────────────────────────────
 const net = ref({}); const wifi = ref([]); const ssid = ref(''); const wifiPass = ref('');
@@ -567,8 +599,7 @@ onUnmounted(() => clearInterval(btTimer));
       </div>
       <div style="margin-top: 18px; padding-top: 16px; border-top: 1px solid rgba(255,255,255,0.1);">
         <p class="sub">{{ t('settings.system.supportBundleHint') }}</p>
-        <a class="secondary" style="display: inline-block; text-decoration: none;"
-           href="/api/system/support_bundle" download>{{ t('settings.system.supportBundle') }}</a>
+        <button class="secondary" style="display: inline-block;" @click="downloadSupportBundle">{{ t('settings.system.supportBundle') }}</button>
       </div>
       <div style="margin-top: 18px; padding-top: 16px; border-top: 1px solid rgba(224,90,90,0.25);">
         <p class="sub">{{ t('settings.system.factoryHint') }}</p>

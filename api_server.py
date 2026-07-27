@@ -847,12 +847,15 @@ SUPPORT_CONFIG_FILES = [
 
 
 def _support_journal_dump(unit, since='7 days ago'):
-    """Bounded window per unit so a device with months of uptime doesn't
-    produce a huge/slow bundle."""
+    """Bounded window + line cap per unit — a device with months of uptime (or
+    a degraded journald) must never make the whole bundle stall: with only
+    --since, journalctl has to scan the entire matching range before
+    returning; -n also lets it seek from the end and stop early once it has
+    enough lines, which is what actually keeps this fast in practice."""
     try:
         r = subprocess.run(['journalctl', '-u', unit, '--since', since,
-                            '-o', 'short-iso', '--no-pager'],
-                           capture_output=True, text=True, timeout=20)
+                            '-n', '2000', '-o', 'short-iso', '--no-pager'],
+                           capture_output=True, text=True, timeout=12)
         return r.stdout or ''
     except Exception as e:
         return f'(journalctl fallito: {e})\n'

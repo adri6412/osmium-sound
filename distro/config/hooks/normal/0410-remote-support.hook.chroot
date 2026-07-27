@@ -1,22 +1,15 @@
 #!/bin/sh
-# HiFi Player appliance — provision the Tailscale APT repo + a dedicated
-# 'support' system user, so the "remote support" button in Settings
-# (webui_server.py → api_server.py's set_remote_support) can `apt-get install
-# tailscale` on demand without configuring an external repo at request time.
-# The package itself is intentionally NOT installed here — same on-demand
-# pattern already used for openssh-server (Settings → SSH access), to keep the
-# base image lean. See distro/os-update/apply.d/0029-remote-support.sh for the
-# equivalent migration on already-installed devices.
+# HiFi Player appliance — install Tailscale (via the official install script,
+# which sets up its own repo/signing key) + a dedicated 'support' system user,
+# so the "remote support" toggle in Settings (webui_server.py →
+# api_server.py's set_remote_support) works immediately on a fresh install,
+# without relying on a runtime apt install from the web UI. See
+# distro/os-update/apply.d/0029-remote-support.sh for the equivalent migration
+# on already-installed devices — keep both in sync.
 set -e
 
-echo "I: [hifi] provisioning Tailscale APT repo"
-mkdir -p /usr/share/keyrings
-curl -fsSL https://pkgs.tailscale.com/stable/debian/bookworm.noarmor.gpg \
-    -o /usr/share/keyrings/tailscale-archive-keyring.gpg
-cat > /etc/apt/sources.list.d/tailscale.list <<'EOF'
-deb [signed-by=/usr/share/keyrings/tailscale-archive-keyring.gpg] https://pkgs.tailscale.com/stable/debian bookworm main
-EOF
-apt-get update
+echo "I: [hifi] installing Tailscale"
+curl -fsSL https://tailscale.com/install.sh | sh
 
 echo "I: [hifi] creating dedicated 'support' system user for remote-support SSH sessions"
 if ! id support >/dev/null 2>&1; then
