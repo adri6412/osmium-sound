@@ -30,6 +30,12 @@ import urllib.request
 import urllib.error
 from datetime import datetime, timezone
 
+from hifi_logging import tee_stdio_to_file
+# Every print() below keeps reaching the console/journald unchanged AND now also
+# lands in a size-rotated file at /var/log/hifi/sources.log (journald alone is
+# volatile on this image) — picked up by the support-bundle endpoint.
+tee_stdio_to_file('sources')
+
 app = Flask(__name__)
 # Hard ceiling on any request body (restore archive, FIR filter upload) BEFORE
 # Werkzeug buffers it into request.files/request.form. Without this, a client

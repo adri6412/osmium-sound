@@ -37,6 +37,16 @@ import sys
 import time
 import urllib.request
 
+try:
+    # hifi_logging.py ships in /usr/local/bin alongside the Python daemons;
+    # this script lives in /usr/local/sbin, so it isn't found without this.
+    # Best-effort: a missing module must never stop Bluetooth handover.
+    sys.path.insert(0, '/usr/local/bin')
+    from hifi_logging import tee_stdio_to_file
+    tee_stdio_to_file('bt-watcher')
+except Exception:
+    pass
+
 RUNDIR = "/run/hifi-bt"
 NOW_PLAYING_FILE = os.path.join(RUNDIR, "now-playing.json")
 CAMILLA_STOPPED_FLAG = os.path.join(RUNDIR, "camilla-stopped")

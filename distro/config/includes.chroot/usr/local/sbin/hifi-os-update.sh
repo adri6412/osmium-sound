@@ -58,6 +58,20 @@ fail() {
     exit 1
 }
 
+# apply.sh's own log ($WORKDIR/apply.log, see below) lives in a workdir that
+# gets rm -rf'd once this run is done — persist a copy under /var/log/hifi/
+# first so OS-update history survives across runs/reboots, for the
+# support-bundle endpoint (api_server.py) to pick up.
+persist_apply_log() {
+    [ -f "${LOG:-}" ] || return 0
+    mkdir -p /var/log/hifi 2>/dev/null || true
+    {
+        printf '\n===== hifi-os-update: apply.sh run %s (version %s) =====\n' \
+            "$(date -Is 2>/dev/null || date)" "$VERSION"
+        cat "$LOG"
+    } >> /var/log/hifi/os-update.log 2>/dev/null || true
+}
+
 [ -n "$URL" ]     || fail "URL di download mancante"
 [ -n "$SHA" ]     || fail "Checksum sha256 mancante"
 [ -n "$SIG_URL" ] || fail "Firma mancante: aggiornamento OS rifiutato"
@@ -143,9 +157,11 @@ LOG="$WORKDIR/apply.log"
 if ! env -i PATH=/usr/sbin:/usr/bin:/sbin:/bin \
         HIFI_OS_VERSION="$VERSION" HIFI_PAYLOAD_DIR="$PAYLOAD" \
         sh "$PAYLOAD/apply.sh" >"$LOG" 2>&1; then
+    persist_apply_log
     tail=$(tail -n 3 "$LOG" 2>/dev/null | tr '\n' ' ')
     fail "apply.sh fallito: ${tail:-errore sconosciuto}"
 fi
+persist_apply_log
 
 # record the new version (outside /opt so a UI OTA can't wipe it)
 mkdir -p "$(dirname "$VERSION_FILE")"

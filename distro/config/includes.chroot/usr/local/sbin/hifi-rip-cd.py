@@ -18,6 +18,16 @@ import shutil
 import subprocess
 import sys
 
+try:
+    # hifi_logging.py ships in /usr/local/bin alongside the Python daemons;
+    # this script lives in /usr/local/sbin, so it isn't found without this.
+    # Best-effort: a missing module must never stop a CD rip.
+    sys.path.insert(0, '/usr/local/bin')
+    from hifi_logging import tee_stdio_to_file
+    tee_stdio_to_file('rip-cd')
+except Exception:
+    pass
+
 STATUS = "/run/hifi-rip-status.json"
 
 

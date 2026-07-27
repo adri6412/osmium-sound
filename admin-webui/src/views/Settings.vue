@@ -169,12 +169,14 @@ async function btForget(mac) {
   if (r.ok) bt.devices = r.data.devices || []; loadBt();
 }
 
-// ── Tidal / SSH ──────────────────────────────────────────────────
+// ── Tidal / SSH / Remote support ──────────────────────────────────
 const tidal = reactive({ available: false, enabled: false });
 const sshState = reactive({ available: false, enabled: false });
+const remoteSupport = reactive({ available: true, connected: false });
 async function loadToggles() {
   const tv = await api.sys('tidal'); if (tv.ok) { tidal.available = !!tv.data.available; tidal.enabled = !!tv.data.enabled; }
   const s = await api.sys('ssh'); if (s.ok) { sshState.available = !!s.data.available; sshState.enabled = !!s.data.enabled; }
+  const rs = await api.sys('remote_support'); if (rs.ok) { remoteSupport.connected = !!rs.data.connected; }
 }
 async function setTidal(v) {
   tidal.enabled = v; const r = await api.sysPost('tidal', { enable: v });
@@ -183,6 +185,10 @@ async function setTidal(v) {
 async function setSsh(v) {
   sshState.enabled = v; const r = await api.sysPost('ssh', { enable: v });
   say(bodyMsg(r, v ? t('settings.services.sshOn') : t('settings.services.sshOff')), !(r.ok && r.data.success !== false)); loadToggles();
+}
+async function setRemoteSupport(v) {
+  remoteSupport.connected = v; const r = await api.sysPost('remote_support', { enable: v });
+  say(bodyMsg(r, v ? t('settings.services.remoteSupportOn') : t('settings.services.remoteSupportOff')), !(r.ok && r.data.success !== false)); loadToggles();
 }
 
 // ── multiroom / ruolo LMS ────────────────────────────────────────
@@ -448,6 +454,10 @@ onUnmounted(() => clearInterval(btTimer));
         <span>{{ t('settings.services.ssh') }} <span class="muted">{{ t('settings.services.sshHint') }}</span></span>
         <Toggle :model-value="sshState.enabled" @update:model-value="setSsh" />
       </div>
+      <div class="between item">
+        <span>{{ t('settings.services.remoteSupport') }} <span class="muted">{{ t('settings.services.remoteSupportHint') }}</span></span>
+        <Toggle :model-value="remoteSupport.connected" @update:model-value="setRemoteSupport" />
+      </div>
     </div>
 
     <!-- Multiroom -->
@@ -554,6 +564,11 @@ onUnmounted(() => clearInterval(btTimer));
       <div class="row">
         <button class="secondary" @click="reboot">{{ t('settings.system.reboot') }}</button>
         <button class="secondary" @click="shutdown">{{ t('settings.system.shutdown') }}</button>
+      </div>
+      <div style="margin-top: 18px; padding-top: 16px; border-top: 1px solid rgba(255,255,255,0.1);">
+        <p class="sub">{{ t('settings.system.supportBundleHint') }}</p>
+        <a class="secondary" style="display: inline-block; text-decoration: none;"
+           href="/api/system/support_bundle" download>{{ t('settings.system.supportBundle') }}</a>
       </div>
       <div style="margin-top: 18px; padding-top: 16px; border-top: 1px solid rgba(224,90,90,0.25);">
         <p class="sub">{{ t('settings.system.factoryHint') }}</p>

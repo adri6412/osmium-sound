@@ -11,6 +11,10 @@
 #     hifi-ota-update.sh <download_url> <sha256> <version>
 set -eu
 
+# shellcheck source=distro/config/includes.chroot/usr/local/sbin/hifi-log.sh
+. /usr/local/sbin/hifi-log.sh
+hifi_log_init hifi-ota-update
+
 URL="${1:-}"
 SHA="${2:-}"
 VERSION="${3:-unknown}"

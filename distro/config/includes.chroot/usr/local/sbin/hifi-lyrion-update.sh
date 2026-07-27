@@ -7,6 +7,10 @@
 #     hifi-lyrion-update.sh <download_url> <version>
 set -eu
 
+# shellcheck source=distro/config/includes.chroot/usr/local/sbin/hifi-log.sh
+. /usr/local/sbin/hifi-log.sh
+hifi_log_init hifi-lyrion-update
+
 URL="${1:-}"
 VERSION="${2:-unknown}"
 

@@ -80,7 +80,7 @@ jobs:
           rm -rf "$ROOT"
           mkdir -p "$ROOT/usr/local/bin" "$ROOT/usr/local/sbin" "$ROOT/etc/systemd/system"
           # Python API + daemons
-          cp api_server.py vu_meter_daemon.py sources_server.py webui_server.py "$ROOT/usr/local/bin/"
+          cp api_server.py vu_meter_daemon.py sources_server.py webui_server.py hifi_logging.py "$ROOT/usr/local/bin/"
           # Web-admin Vue build (served by webui_server.py from /opt/hifi-webui/dist)
           if [ -d admin-webui/dist ]; then
             mkdir -p "$ROOT/opt/hifi-webui/dist"

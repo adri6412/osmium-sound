@@ -54,6 +54,12 @@ import urllib.request
 from flask import Flask, jsonify, request, session, redirect, send_from_directory, Response
 from werkzeug.security import generate_password_hash, check_password_hash
 
+from hifi_logging import tee_stdio_to_file
+# Every print() below keeps reaching the console/journald unchanged AND now also
+# lands in a size-rotated file at /var/log/hifi/webui.log (journald alone is
+# volatile on this image) — picked up by the support-bundle endpoint.
+tee_stdio_to_file('webui')
+
 # ── paths / config ───────────────────────────────────────────────────
 STATE_DIR = os.environ.get('HIFI_WEBUI_STATE_DIR', '/etc/hifi-player')
 DIST_DIR = os.environ.get('HIFI_WEBUI_DIST', '/opt/hifi-webui/dist')
@@ -734,6 +740,8 @@ _AUTH_ROUTES = {
     ('/api/system/wired_dhcp', 'POST'): '/wired_dhcp',
     ('/api/system/ssh', 'GET'): '/ssh_status',
     ('/api/system/ssh', 'POST'): '/ssh_set',
+    ('/api/system/remote_support', 'GET'): '/remote_support_status',
+    ('/api/system/remote_support', 'POST'): '/remote_support_set',
     ('/api/system/ota_channel', 'GET'): '/ota_channel',
     ('/api/system/ota_channel', 'POST'): '/ota_channel',
     ('/api/system/audio_devices', 'GET'): '/audio_devices',
@@ -1141,7 +1149,8 @@ def _handle_proxy(local_path, method):
         return jsonify({'success': False, 'message': 'Endpoint non consentito'}), 403
     body = request.get_json(silent=True) if method != 'GET' else None
     data, status = _proxy(API_BASE, api_path, method=method, body=body,
-                          timeout=90 if 'apply' in api_path or 'dsp' in api_path else 15)
+                          timeout=90 if 'apply' in api_path or 'dsp' in api_path
+                          or 'remote_support' in api_path else 15)
     return jsonify(data), status
 
 
@@ -1210,11 +1219,13 @@ def _sources_token_ok():
     return any(secrets.compare_digest(t.get('token', ''), token) for t in tokens)
 
 
-def _forward_to_sources(path):
-    """Transparent forward (method, query, body, auth, content-type) to the
-    loopback sources server; streams the raw response back (may be a file)."""
+def _forward_to(base, path, timeout=120, service_label='servizio'):
+    """Transparent forward (method, query, body, auth, content-type) to a
+    loopback service (sources_server or api_server); streams the raw response
+    back as-is (may be a file — Content-Disposition is preserved so a download
+    keeps its filename)."""
     qs = request.query_string.decode('utf-8')
-    url = f'{SOURCES_BASE}{path}' + (f'?{qs}' if qs else '')
+    url = f'{base}{path}' + (f'?{qs}' if qs else '')
     req = urllib.request.Request(url, method=request.method)
     for h in ('Authorization', 'Content-Type'):
         v = request.headers.get(h)
@@ -1222,20 +1233,32 @@ def _forward_to_sources(path):
             req.add_header(h, v)
     body = request.get_data() if request.method in ('POST', 'PUT', 'PATCH') else None
     try:
-        with urllib.request.urlopen(req, data=body, timeout=120) as resp:
+        with urllib.request.urlopen(req, data=body, timeout=timeout) as resp:
             out = Response(resp.read(), status=resp.status,
                            content_type=resp.headers.get('Content-Type', 'application/octet-stream'))
+            disposition = resp.headers.get('Content-Disposition')
     except urllib.error.HTTPError as e:
         out = Response(e.read(), status=e.code,
                        content_type=e.headers.get('Content-Type', 'application/json'))
+        disposition = None
     except Exception as e:
-        print(f'[webui] sources forward {path} failed: {e}')
-        return jsonify({'success': False, 'message': 'Servizio sorgenti non raggiungibile'}), 502
+        print(f'[webui] {service_label} forward {path} failed: {e}')
+        return jsonify({'success': False, 'message': f'Servizio {service_label} non raggiungibile'}), 502
+    if disposition:
+        out.headers['Content-Disposition'] = disposition
     # Explicitly allow embedding by our own Settings page (some browsers — Brave
     # in particular — are aggressive about frames that don't declare a policy).
     out.headers['Content-Security-Policy'] = "frame-ancestors 'self'"
     out.headers['X-Frame-Options'] = 'SAMEORIGIN'
     return out
+
+
+def _forward_to_sources(path):
+    return _forward_to(SOURCES_BASE, path, timeout=120, service_label='sorgenti')
+
+
+def _forward_to_api(path, timeout=60):
+    return _forward_to(API_BASE, path, timeout=timeout, service_label='sistema')
 
 
 @app.route('/sources-app', methods=['GET'])
@@ -1284,6 +1307,19 @@ def dsp_fir_proxy():
     if denied:
         return denied
     return _forward_to_sources('/api/dsp/fir')
+
+
+# ── support bundle (zip) — session-gated, forwarded raw ──────────────
+# Binary download, so it can't go through the generic JSON proxy table
+# (_handle_proxy always wraps the response in jsonify()). Same trust level as
+# every other read in Settings — the bundle is diagnostic-only and never
+# changes device state, so no extra password reauth (unlike factory_reset).
+@app.route('/api/system/support_bundle', methods=['GET'])
+def support_bundle_proxy():
+    denied = _require_session()
+    if denied:
+        return denied
+    return _forward_to_api('/support_bundle')
 
 
 # ── companion pairing (mint via loopback :8080, session-gated) ───────

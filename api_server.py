@@ -1,4 +1,4 @@
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify, request, Response
 from flask_cors import CORS
 import subprocess
 import os
@@ -14,6 +14,9 @@ import urllib.request
 import urllib.parse
 import time
 import threading
+import zipfile
+import io
+from hifi_logging import get_logger
 
 app = Flask(__name__)
 # This API is bound to 127.0.0.1 only (see the bottom of this file) and has no
@@ -28,10 +31,11 @@ CORS(app, origins=["http://localhost:5173", "null"])
 
 # Log full diagnostics server-side; never leak exception text / stack traces to
 # HTTP clients (this API runs as root). Use `log.exception(...)` in handlers and
-# return a generic message to the caller instead.
-logging.basicConfig(level=logging.INFO,
-                    format='%(asctime)s %(levelname)s %(name)s: %(message)s')
-log = logging.getLogger('hifi.api')
+# return a generic message to the caller instead. get_logger() also persists this
+# to a size-rotated file under /var/log/hifi/ (journald alone doesn't survive a
+# reboot on this image) — see the support-bundle endpoint further down, which
+# reads it back for remote diagnostics.
+log = get_logger('api')
 
 # Security headers middleware
 @app.after_request
@@ -814,6 +818,206 @@ def set_ssh(enable):
     status['success'] = True
     status['message'] = ("SSH abilitato. Cambia subito la password predefinita dell'utente \"hifi\" "
                           "(via terminale: passwd hifi)." if enable else 'SSH disabilitato')
+    return status
+
+# ──────────────────────────────────────────────────────────────────
+#  Support bundle — a downloadable zip with logs + system diagnostics, so a
+#  remote issue can be triaged without asking the user for SSH access (which
+#  ships OFF by default, see the SSH section above). Read-only: never touches
+#  system state. Loopback-only like every other route here; webui_server.py
+#  gates it behind an authenticated admin session before proxying.
+# ──────────────────────────────────────────────────────────────────
+SUPPORT_LOG_DIR = '/var/log/hifi'
+SUPPORT_JOURNAL_UNITS = [
+    'hifi-api', 'hifi-webui', 'hifi-sources', 'hifi-vumeter', 'hifi-firstboot',
+    'hifi-quiesce-audio-shutdown', 'squeezelite', 'lyrionmusicserver',
+    'bluetooth', 'NetworkManager',
+]
+# Config worth including — never secrets/keys. Mirrors the allow-list spirit of
+# sources_server.py's BACKUP_FILES, but deliberately excludes everything under
+# /etc/hifi-player (webui.db, TLS key, OTA pubkey/signing material) and
+# /etc/NetworkManager/system-connections (plaintext Wi-Fi PSKs).
+SUPPORT_CONFIG_FILES = [
+    '/etc/hifi-sources.json',
+    '/etc/hifi-player/display-mode',
+    '/etc/hifi-player/ota-channel',
+    '/etc/hifi-player/SYSTEM_VERSION',
+    '/etc/hifi-player/OS_VERSION',
+]
+
+
+def _support_journal_dump(unit, since='7 days ago'):
+    """Bounded window per unit so a device with months of uptime doesn't
+    produce a huge/slow bundle."""
+    try:
+        r = subprocess.run(['journalctl', '-u', unit, '--since', since,
+                            '-o', 'short-iso', '--no-pager'],
+                           capture_output=True, text=True, timeout=20)
+        return r.stdout or ''
+    except Exception as e:
+        return f'(journalctl fallito: {e})\n'
+
+
+def _support_services_snapshot():
+    lines = ['== systemctl list-units --failed ==']
+    try:
+        r = subprocess.run(['systemctl', 'list-units', '--failed', '--no-pager'],
+                           capture_output=True, text=True, timeout=15)
+        lines.append(r.stdout or '')
+    except Exception as e:
+        lines.append(f'(list-units --failed fallito: {e})')
+    lines.append('== stato unit hifi ==')
+    for unit in SUPPORT_JOURNAL_UNITS:
+        try:
+            en = subprocess.run(['systemctl', 'is-enabled', unit],
+                                capture_output=True, text=True, timeout=10)
+            ac = subprocess.run(['systemctl', 'is-active', unit],
+                                capture_output=True, text=True, timeout=10)
+            lines.append(f'{unit}: enabled={en.stdout.strip() or "?"} active={ac.stdout.strip() or "?"}')
+        except Exception as e:
+            lines.append(f'{unit}: errore ({e})')
+    return '\n'.join(lines) + '\n'
+
+
+def _support_bundle_build():
+    """Build the support zip in memory. Every section is best-effort: one
+    failing piece (e.g. journalctl unavailable) must never abort the rest."""
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, 'w', zipfile.ZIP_DEFLATED) as z:
+        # logs/ — the rotated files every daemon now writes (see hifi_logging.py)
+        try:
+            if os.path.isdir(SUPPORT_LOG_DIR):
+                for fname in sorted(os.listdir(SUPPORT_LOG_DIR)):
+                    fpath = os.path.join(SUPPORT_LOG_DIR, fname)
+                    if os.path.isfile(fpath):
+                        z.write(fpath, arcname=f'logs/{fname}')
+        except Exception:
+            log.exception("support bundle: logs/ collection failed")
+
+        for unit in SUPPORT_JOURNAL_UNITS:
+            z.writestr(f'journal/{unit}.log', _support_journal_dump(unit))
+
+        z.writestr('system_info.json', json.dumps(get_system_info(), indent=2))
+        z.writestr('services.txt', _support_services_snapshot())
+
+        for fpath in SUPPORT_CONFIG_FILES:
+            try:
+                if os.path.isfile(fpath):
+                    z.write(fpath, arcname='config' + fpath)
+            except Exception:
+                log.exception("support bundle: config file %s failed", fpath)
+
+        try:
+            r = subprocess.run(['dmesg', '--ctime'], capture_output=True, text=True, timeout=15)
+            tail = '\n'.join((r.stdout or '').splitlines()[-500:])
+            z.writestr('dmesg_tail.txt', tail)
+        except Exception as e:
+            z.writestr('dmesg_tail.txt', f'(dmesg fallito: {e})\n')
+
+    return buf.getvalue()
+
+# ──────────────────────────────────────────────────────────────────
+#  Remote support (Tailscale) — lets the user grant/revoke a private,
+#  developer-only SSH tunnel on demand, for cases the support bundle above
+#  isn't enough to diagnose. NOT a public link: joining the tailnet only makes
+#  this box reachable from the developer's own Tailscale identity (ACL-
+#  restricted "hifi-support" tag), never from the internet at large. Depends
+#  on one-time, out-of-band setup on the Tailscale side (ACL + tagged auth
+#  key) — see the plan/runbook, not automatable from here.
+# ──────────────────────────────────────────────────────────────────
+# Fetched on demand (never baked into the image/System channel): a box may not
+# press "enable" for months, and a baked-in key can expire (Tailscale caps
+# reusable-key life at ~90 days) long before that. Rotating the key only means
+# updating this one static file — no OTA release needed.
+TAILSCALE_AUTHKEY_URL = os.environ.get(
+    'HIFI_TAILSCALE_AUTHKEY_URL',
+    'https://osmiumsound.qd.je/ota/tailscale-authkey.txt')
+TAILSCALE_HOSTNAME_PREFIX = 'hifi-support'
+
+
+def _tailscale_available():
+    return bool(shutil.which('tailscale'))
+
+
+def _install_tailscale():
+    """Install the tailscale package. The apt repo itself is provisioned at
+    build/OS-update time (see distro/os-update/apply.d), so this is a plain
+    package install — no external repo setup needed at request time."""
+    try:
+        subprocess.run(['sudo', 'apt-get', 'update'],
+                       capture_output=True, text=True, timeout=120)
+        subprocess.run(['sudo', 'apt-get', 'install', '-y', 'tailscale'],
+                       capture_output=True, text=True, timeout=180)
+    except Exception:
+        log.exception("tailscale install failed")
+        return False
+    return _tailscale_available()
+
+
+def _fetch_tailscale_authkey():
+    try:
+        with urllib.request.urlopen(TAILSCALE_AUTHKEY_URL, timeout=15) as resp:
+            return resp.read().decode('utf-8').strip()
+    except Exception:
+        log.exception("tailscale authkey fetch failed")
+        return None
+
+
+def get_remote_support_status():
+    if not _tailscale_available():
+        return {'available': False, 'connected': False}
+    try:
+        r = subprocess.run(['tailscale', 'status', '--json'],
+                           capture_output=True, text=True, timeout=10)
+        st = json.loads(r.stdout or '{}')
+        backend = st.get('BackendState', '')
+        return {'available': True, 'connected': backend == 'Running', 'backend_state': backend}
+    except Exception:
+        log.exception("get_remote_support_status failed")
+        return {'available': True, 'connected': False, 'error': 'Stato non disponibile'}
+
+
+def set_remote_support(enable):
+    """Grant (join the tailnet + Tailscale SSH) or revoke (logout — the auth
+    key is ephemeral, so the node also disappears from the tailnet) remote
+    support access. No auto-expiry: stays active until explicitly disabled."""
+    if enable:
+        if not _tailscale_available():
+            if not _install_tailscale():
+                return {'success': False, 'available': False, 'connected': False,
+                        'message': 'Installazione di Tailscale fallita'}
+        authkey = _fetch_tailscale_authkey()
+        if not authkey:
+            status = get_remote_support_status()
+            status['success'] = False
+            status['message'] = 'Impossibile ottenere la chiave di accesso — riprova più tardi'
+            return status
+        hostname = f'{TAILSCALE_HOSTNAME_PREFIX}-{socket.gethostname()}'
+        try:
+            r = subprocess.run(['sudo', 'tailscale', 'up',
+                                f'--authkey={authkey}', '--ssh',
+                                f'--hostname={hostname}', '--accept-risk=lose-ssh'],
+                               capture_output=True, text=True, timeout=60)
+            if r.returncode != 0:
+                log.error("tailscale up failed: %s", (r.stderr or '').strip())
+                status = get_remote_support_status()
+                status['success'] = False
+                status['message'] = 'Attivazione supporto remoto fallita'
+                return status
+        except Exception:
+            log.exception("set_remote_support(enable) failed")
+            return {'success': False, 'available': _tailscale_available(), 'connected': False,
+                    'message': 'Attivazione supporto remoto fallita'}
+    elif _tailscale_available():
+        try:
+            subprocess.run(['sudo', 'tailscale', 'logout'],
+                           capture_output=True, text=True, timeout=30)
+        except Exception:
+            log.exception("set_remote_support(disable) failed")
+            return {'success': False, 'message': 'Disattivazione supporto remoto fallita'}
+    status = get_remote_support_status()
+    status['success'] = True
+    status['message'] = 'Supporto remoto attivo' if enable else 'Supporto remoto disattivato'
     return status
 
 # ──────────────────────────────────────────────────────────────────
@@ -2606,6 +2810,24 @@ def api_ssh_status():
 def api_ssh_set():
     data = request.get_json(silent=True) or {}
     return jsonify(set_ssh(bool(data.get('enable'))))
+
+@app.route('/support_bundle', methods=['GET'])
+def api_support_bundle():
+    data = _support_bundle_build()
+    stamp = time.strftime('%Y%m%d-%H%M')
+    resp = Response(data, mimetype='application/zip')
+    resp.headers['Content-Disposition'] = \
+        f'attachment; filename="hifi-support-{socket.gethostname()}-{stamp}.zip"'
+    return resp
+
+@app.route('/remote_support_status', methods=['GET'])
+def api_remote_support_status():
+    return jsonify(get_remote_support_status())
+
+@app.route('/remote_support_set', methods=['POST'])
+def api_remote_support_set():
+    data = request.get_json(silent=True) or {}
+    return jsonify(set_remote_support(bool(data.get('enable'))))
 
 @app.route('/pointer_status', methods=['GET'])
 def api_pointer_status():

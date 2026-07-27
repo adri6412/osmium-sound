@@ -161,7 +161,11 @@
       "sshHint": "(solo per assistenza)",
       "sshOn": "SSH attivato",
       "sshOff": "SSH disattivato",
-      "tidalUpdated": "Tidal Connect aggiornato"
+      "tidalUpdated": "Tidal Connect aggiornato",
+      "remoteSupport": "Supporto remoto",
+      "remoteSupportHint": "Consente al team di supporto di collegarsi al dispositivo tramite una rete privata (Tailscale), non un link pubblico. Resta attivo finché non lo disattivi.",
+      "remoteSupportOn": "Supporto remoto attivato",
+      "remoteSupportOff": "Supporto remoto disattivato"
     },
     "multiroom": {
       "hint": "Questo dispositivo può usare il proprio server musicale oppure seguire il Lyrion di un altro dispositivo sulla rete.",
@@ -237,6 +241,8 @@
       "confirmShutdown": "Spegnere il dispositivo?",
       "rebooting": "Riavvio in corso…",
       "shuttingDown": "Spegnimento…",
+      "supportBundle": "Genera archivio di supporto",
+      "supportBundleHint": "Scarica uno zip con i log del dispositivo e le informazioni di sistema, utile per diagnosticare un problema da remoto.",
       "factoryHint": "Il ripristino di fabbrica cancella tutte le impostazioni (reti, sorgenti, DSP, Bluetooth, pairing) e questo account, poi riavvia nella configurazione iniziale. Conferma con la password admin.",
       "adminPassword": "Password admin",
       "factoryReset": "Ripristino di fabbrica",

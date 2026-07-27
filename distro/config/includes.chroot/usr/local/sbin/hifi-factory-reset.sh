@@ -18,6 +18,10 @@
 # Idempotent enough to re-run safely; ends in `reboot`.
 set -u
 
+# shellcheck source=distro/config/includes.chroot/usr/local/sbin/hifi-log.sh
+. /usr/local/sbin/hifi-log.sh
+hifi_log_init hifi-factory-reset
+
 log() { echo "I: [hifi-factory-reset] $*"; }
 
 # ── 1) stop services that hold user state ────────────────────────────

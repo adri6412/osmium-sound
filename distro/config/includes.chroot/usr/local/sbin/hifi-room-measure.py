@@ -28,6 +28,16 @@ import urllib.request
 
 import numpy as np
 
+try:
+    # hifi_logging.py ships in /usr/local/bin alongside the Python daemons;
+    # this script lives in /usr/local/sbin, so it isn't found without this.
+    # Best-effort: a missing module must never stop a measurement.
+    sys.path.insert(0, '/usr/local/bin')
+    from hifi_logging import tee_stdio_to_file
+    tee_stdio_to_file('room-measure')
+except Exception:
+    pass
+
 STATUS = "/run/hifi-roomcorr-status.json"
 RESULT = "/var/lib/hifi-player/roomcorr-result.json"
 FIR_OUT = "/etc/camilladsp/filters/room.wav"

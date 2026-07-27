@@ -145,3 +145,8 @@ locales
 # The appliance is internet-connected, so unpatched Debian security holes are a
 # real risk; this keeps the base OS patched without manual intervention.
 unattended-upgrades
+
+# Rotates /var/log/hifi/*.log (config in /etc/logrotate.d/hifi) — the custom
+# daemons/scripts write there now (see hifi_logging.py / hifi-log.sh) so the
+# support-bundle endpoint has persistent history, without ever growing unbounded.
+logrotate

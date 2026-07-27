@@ -161,6 +161,10 @@
       "sshHint": "(for support use only)",
       "sshOn": "SSH enabled",
       "sshOff": "SSH disabled",
+      "remoteSupport": "Remote support",
+      "remoteSupportHint": "Lets the support team connect to the device over a private network (Tailscale), not a public link. Stays on until you turn it off.",
+      "remoteSupportOn": "Remote support enabled",
+      "remoteSupportOff": "Remote support disabled",
       "tidalUpdated": "Tidal Connect updated"
     },
     "multiroom": {
@@ -237,6 +241,8 @@
       "confirmShutdown": "Shut down the device?",
       "rebooting": "Rebooting…",
       "shuttingDown": "Shutting down…",
+      "supportBundle": "Generate support bundle",
+      "supportBundleHint": "Downloads a zip with device logs and system information, useful for diagnosing an issue remotely.",
       "factoryHint": "Factory reset erases all settings (networks, sources, DSP, Bluetooth, pairings) and this account, then restarts into initial setup. Confirm with the admin password.",
       "adminPassword": "Admin password",
       "factoryReset": "Factory reset",

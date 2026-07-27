@@ -38,4 +38,13 @@ systemctl disable smbd.service nmbd.service || true
 echo "I: [hifi] disabling getty on tty1 (no text console flashes)"
 systemctl mask getty@tty1.service || true
 
+echo "I: [hifi] creating /var/log/hifi (persistent, rotated logs for support bundle)"
+mkdir -p /var/log/hifi
+chmod 0750 /var/log/hifi
+chown root:root /var/log/hifi
+
+echo "I: [hifi] making journald persistent across reboots"
+mkdir -p /var/log/journal
+systemd-tmpfiles --create --prefix /var/log/journal || true
+
 echo "I: [hifi] enable-services hook done"

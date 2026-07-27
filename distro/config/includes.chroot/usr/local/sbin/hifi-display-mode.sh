@@ -28,6 +28,11 @@
 
 set -eu
 
+# NOTE: deliberately NOT redirected to /var/log/hifi via hifi-log.sh — this
+# script's stdout IS its data channel (api_server.py's get_display_mode()
+# captures and parses the "gui"/"headless" line straight from subprocess
+# stdout), not just diagnostic chatter. Redirecting it would silently break
+# the display-mode toggle.
 MODE_FILE=/etc/hifi-player/display-mode
 
 die() { echo "$1" >&2; exit 1; }

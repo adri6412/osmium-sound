@@ -64,13 +64,16 @@ input, select {
 }
 input:focus, select:focus { border-color: rgba(212, 175, 55, 0.5); }
 
-button {
+button, a.secondary {
   cursor: pointer; padding: 11px 16px; border-radius: 10px; border: 0;
   background: var(--gold); color: #111; font-weight: 600; font-size: 14px;
   transition: filter 0.15s ease;
 }
-button:hover { filter: brightness(1.1); }
-button.secondary { background: var(--light); color: var(--text); border: 1px solid var(--border); font-weight: 500; }
+button:hover, a.secondary:hover { filter: brightness(1.1); }
+button.secondary, a.secondary {
+  background: var(--light); color: var(--text); border: 1px solid var(--border);
+  font-weight: 500; text-decoration: none; display: inline-block;
+}
 button.ghost { background: transparent; color: var(--silver); border: 1px solid var(--border); font-weight: 500; }
 button.danger { background: rgba(224, 90, 90, 0.12); color: #f0b4b4; border: 1px solid rgba(224, 90, 90, 0.4); }
 button.ghost.active { border-color: var(--gold); color: var(--gold); background: var(--gold-dim); }

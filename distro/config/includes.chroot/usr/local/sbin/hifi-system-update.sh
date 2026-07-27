@@ -17,6 +17,10 @@
 #     hifi-system-update.sh <download_url> <sha256> <version>
 set -eu
 
+# shellcheck source=distro/config/includes.chroot/usr/local/sbin/hifi-log.sh
+. /usr/local/sbin/hifi-log.sh
+hifi_log_init hifi-system-update
+
 URL="${1:-}"
 SHA="${2:-}"
 VERSION="${3:-unknown}"
@@ -75,7 +79,8 @@ write_status applying 75 "Installazione file…"
 
 # normalise CRLF + perms for the things we just shipped
 for f in /usr/local/bin/api_server.py /usr/local/bin/vu_meter_daemon.py \
-         /usr/local/bin/sources_server.py /usr/local/bin/webui_server.py; do
+         /usr/local/bin/sources_server.py /usr/local/bin/webui_server.py \
+         /usr/local/bin/hifi_logging.py; do
     [ -f "$f" ] && { sed -i 's/\r$//' "$f"; chmod +x "$f"; }
 done
 chmod +x /usr/local/sbin/hifi-*.sh /usr/local/sbin/hifi-*.py 2>/dev/null || true

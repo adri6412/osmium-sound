@@ -19,6 +19,12 @@ try:
 except Exception:
     np = None
 
+from hifi_logging import tee_stdio_to_file
+# Every print() below keeps reaching the console/journald unchanged AND now also
+# lands in a size-rotated file at /var/log/hifi/vumeter.log (journald alone is
+# volatile on this image) — picked up by the support-bundle endpoint.
+tee_stdio_to_file('vumeter')
+
 # DoP (DSD-over-PCM) marker bytes, alternated by squeezelite every output
 # frame. Squeezelite's _vis_export always copies the *top* 16 bits of each
 # 32-bit output sample into the vis buffer regardless of format; for DoP that
