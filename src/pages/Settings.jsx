@@ -141,6 +141,8 @@ const Settings = () => {
   const [dspRoomCorrection, setDspRoomCorrection] = useState(false);
   const [dspBalance, setDspBalance] = useState(0);   // dB, -12..+12, positive = toward right
   const [firStatus, setFirStatus] = useState(null); // { present, filename, size } from the :8080 sources service
+  const [firBusy, setFirBusy] = useState(false);
+  const [firMessage, setFirMessage] = useState('');
   const [dspBusy, setDspBusy] = useState(false);
   const [dspMessage, setDspMessage] = useState('');
   const [dspEqView, setDspEqView] = useState('graphic'); // 'graphic' (default) | 'advanced'
@@ -706,13 +708,47 @@ const Settings = () => {
     }
   };
 
-  // FIR filter status lives on the :8080 sources service (that's where it's
-  // uploaded from a phone/PC browser — see sources_server.py /api/dsp/fir).
+  // FIR filter status/upload/removal live on the :8080 sources service (kiosk
+  // is exempt from its pairing-token check via 127.0.0.1) — the file itself is
+  // colocated there with the rest of the sources/mount storage.
   const loadFirStatus = async () => {
     try {
       const r = await fetch('http://localhost:8080/api/dsp/fir');
       if (r.ok) setFirStatus(await r.json());
     } catch (_) {}
+  };
+
+  const uploadFir = async (file) => {
+    if (!file) return;
+    setFirBusy(true);
+    setFirMessage(t('settings.dsp.firUploading'));
+    try {
+      const body = new FormData();
+      body.append('file', file);
+      const r = await fetch('http://localhost:8080/api/dsp/fir', { method: 'POST', body });
+      const d = await r.json();
+      setFirMessage(d.message || (d.success ? t('common.done') : t('common.error')));
+      if (d.success) loadFirStatus();
+    } catch (_) {
+      setFirMessage(t('common.error'));
+    } finally {
+      setFirBusy(false);
+    }
+  };
+
+  const removeFir = async () => {
+    setFirBusy(true);
+    try {
+      const r = await fetch('http://localhost:8080/api/dsp/fir', { method: 'DELETE' });
+      const d = await r.json();
+      setFirMessage(d.removed ? t('settings.dsp.firRemoved') : '');
+      setDspRoomCorrection(false);
+      loadFirStatus();
+    } catch (_) {
+      setFirMessage(t('common.error'));
+    } finally {
+      setFirBusy(false);
+    }
   };
 
   // Push the current EQ config to the backend. `enabled` defaults to the
@@ -2138,6 +2174,22 @@ const Settings = () => {
                           </p>
                           {/* Guided measurement: generates the FIR on-device with a USB mic */}
                           <RoomCorrectionWizard onDone={() => { loadFirStatus(); loadDspStatus(); }} />
+
+                          {/* Manual upload: a filter already generated with REW/rePhase (.wav/.txt) */}
+                          <div className="flex space-x-2 pt-1">
+                            <label className="flex-1 text-center text-sm bg-hifi-accent hover:bg-hifi-light text-white py-2 rounded-lg cursor-pointer transition-colors">
+                              {firBusy ? <Loader2 size={14} className="inline animate-spin" /> : t('settings.dsp.firUpload')}
+                              <input type="file" accept=".wav,.txt" disabled={firBusy} className="hidden"
+                                onChange={(e) => { uploadFir(e.target.files?.[0]); e.target.value = ''; }} />
+                            </label>
+                            {firStatus?.present && (
+                              <button onClick={removeFir} disabled={firBusy}
+                                className="flex-1 text-sm bg-red-900/30 hover:bg-red-900/60 disabled:opacity-50 text-red-300 py-2 rounded-lg transition-colors">
+                                {t('settings.dsp.firRemove')}
+                              </button>
+                            )}
+                          </div>
+                          {firMessage && <p className="text-xs text-hifi-silver">{firMessage}</p>}
                         </div>
 
                         {/* Apply EQ (re-applies live when DSP is on; otherwise just saves) */}

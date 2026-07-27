@@ -15,7 +15,8 @@
     "loading": "Caricamento...",
     "notAvailable": "N/D",
     "language": "Lingua",
-    "error": "Errore"
+    "error": "Errore",
+    "done": "Fatto"
   },
   "sources": {
     "active": "Sorgenti attive",
@@ -322,8 +323,12 @@
       "balanceRight": "Destra",
       "balanceCenter": "Centrato",
       "roomCorrection": "Correzione ambientale (FIR)",
-      "roomCorrectionPresent": "Filtro caricato: {filename}. Puoi caricarne uno nuovo in qualsiasi momento da Backup e ripristino / controllo da telefono.",
-      "roomCorrectionMissing": "Nessun filtro caricato. Apri l'indirizzo delle sorgenti (sezione Backup e ripristino) da un browser su telefono o PC per caricare un filtro di convoluzione WAV/TXT (REW/rePhase).",
+      "roomCorrectionPresent": "Filtro caricato: {filename}. Puoi caricarne uno nuovo qui sotto in qualsiasi momento, oppure avviare la misurazione guidata.",
+      "roomCorrectionMissing": "Nessun filtro caricato. Carica un filtro di convoluzione WAV/TXT (REW/rePhase) qui sotto, oppure avvia la misurazione guidata.",
+      "firUpload": "Carica filtro",
+      "firUploading": "Caricamento…",
+      "firRemove": "Rimuovi filtro",
+      "firRemoved": "Filtro rimosso",
       "save": "Applica EQ",
       "failed": "Operazione DSP fallita.",
       "presets": "Preset",

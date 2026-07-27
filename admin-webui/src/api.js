@@ -52,4 +52,22 @@ export const api = {
   // system (proxied to api_server through webui_server)
   sys: (p) => req('/api/system/' + p),
   sysPost: (p, body) => req('/api/system/' + p, { method: 'POST', body }),
+
+  // DSP room-correction filter (FIR) — file lives on sources_server, forwarded
+  // raw through webui_server; upload takes multipart/form-data.
+  dspFirStatus: () => req('/api/system/dsp_fir'),
+  dspFirUpload: async (file) => {
+    const body = new FormData();
+    body.append('file', file);
+    const headers = { 'X-CSRF-Token': csrfToken() };
+    let res, data;
+    try {
+      res = await fetch('/api/system/dsp_fir', { method: 'POST', body, headers, credentials: 'same-origin' });
+    } catch (e) {
+      return { ok: false, status: 0, data: { message: 'Network error' } };
+    }
+    try { data = await res.json(); } catch (_) { data = {}; }
+    return { ok: res.ok, status: res.status, data };
+  },
+  dspFirRemove: () => req('/api/system/dsp_fir', { method: 'DELETE' }),
 };

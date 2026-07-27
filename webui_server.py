@@ -1055,6 +1055,23 @@ def sources_forward(rest):
     return _forward_to_sources(path)
 
 
+# ── DSP room-correction filter (FIR) — session-gated, forwarded raw ──
+# The FIR file itself (status/upload/delete) lives on sources_server.py (:8080),
+# not api_server, so it can't go through the ordinary /api/system JSON proxy.
+# Unlike the embedded sources SPA (/sources-app, token-gated for a bare
+# browser), this route is reached from OUR authenticated Settings page, so we
+# gate it with the webui session instead: _forward_to_sources() then relays the
+# raw request (incl. the multipart upload body) to loopback :8080, where
+# sources_server's own pairing check is exempted for 127.0.0.1 exactly like our
+# other loopback calls — no token needed for this one.
+@app.route('/api/system/dsp_fir', methods=['GET', 'POST', 'DELETE'])
+def dsp_fir_proxy():
+    denied = _require_session()
+    if denied:
+        return denied
+    return _forward_to_sources('/api/dsp/fir')
+
+
 # ── companion pairing (mint via loopback :8080, session-gated) ───────
 @app.route('/api/system/pair_token', methods=['POST'])
 def pair_token():

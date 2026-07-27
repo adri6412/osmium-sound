@@ -114,6 +114,31 @@ async function deletePreset(name) {
   await api.sysPost('dsp_preset_delete', { name }); loadDsp();
 }
 
+// ── DSP: room-correction filter (FIR) ─────────────────────────────
+const fir = reactive({ present: false, filename: '', size: 0 });
+const firBusy = ref(false);
+async function loadFir() {
+  const r = await api.dspFirStatus();
+  if (r.ok) { fir.present = !!r.data.present; fir.filename = r.data.filename || ''; fir.size = r.data.size || 0; }
+}
+async function uploadFir(e) {
+  const file = e.target.files && e.target.files[0];
+  e.target.value = '';
+  if (!file) return;
+  firBusy.value = true; say('Caricamento filtro…');
+  const r = await api.dspFirUpload(file);
+  firBusy.value = false;
+  say(bodyMsg(r, r.ok && r.data.success !== false ? 'Filtro caricato' : 'Caricamento fallito'), !(r.ok && r.data.success !== false));
+  loadFir();
+}
+async function removeFir() {
+  firBusy.value = true;
+  const r = await api.dspFirRemove();
+  firBusy.value = false;
+  say(r.ok && r.data.removed ? 'Filtro rimosso' : bodyMsg(r, 'Nessun filtro da rimuovere'));
+  loadFir();
+}
+
 // ── Bluetooth ────────────────────────────────────────────────────
 const bt = reactive({ available: false, enabled: false, devices: [], countdown: 0 });
 let btTimer = null;
@@ -293,7 +318,7 @@ async function changePw() {
 }
 
 onMounted(async () => {
-  loadNet(); loadAudio(); loadDsp(); loadBt(); loadToggles(); loadLms(); loadMode(); loadChannel(); checkAll();
+  loadNet(); loadAudio(); loadDsp(); loadFir(); loadBt(); loadToggles(); loadLms(); loadMode(); loadChannel(); checkAll();
 });
 onUnmounted(() => clearInterval(btTimer));
 </script>
@@ -374,6 +399,18 @@ onUnmounted(() => clearInterval(btTimer));
           <button v-if="!p.builtin" class="ghost fit" @click="deletePreset(p.name)">Elimina</button>
         </div>
         <p class="sub" style="margin-top: 10px;">L'editor completo delle bande è disponibile sullo schermo del dispositivo e dall'app companion.</p>
+
+        <label>Correzione ambientale (filtro FIR)</label>
+        <p class="sub" style="margin: 0 0 10px;">
+          {{ fir.present ? `Filtro attivo: ${fir.filename} (${Math.round(fir.size / 1024)} KB)` : 'Nessun filtro caricato. Carica un file WAV/TXT generato con REW o rePhase.' }}
+        </p>
+        <div class="row">
+          <label class="upload-btn fit">
+            {{ firBusy ? '…' : 'Carica filtro' }}
+            <input type="file" accept=".wav,.txt" :disabled="firBusy" style="display: none;" @change="uploadFir" />
+          </label>
+          <button v-if="fir.present" class="danger fit" :disabled="firBusy" @click="removeFir">Rimuovi filtro</button>
+        </div>
       </template>
     </div>
 

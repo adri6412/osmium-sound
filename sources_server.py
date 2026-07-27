@@ -2195,6 +2195,10 @@ INDEX_HTML = r"""<!DOCTYPE html>
   <h2>Dischi USB</h2>
   <div class="card" id="usbList"><div style="color:var(--silver);font-size:14px">Nessun disco USB collegato. Inserisci una chiavetta o un hard disk USB.</div></div>
 
+  <h2>Dischi interni</h2>
+  <div class="card" id="internalList"><div style="color:var(--silver);font-size:14px">Caricamento…</div></div>
+  <div class="msg" id="internalMsg"></div>
+
   <h2>Aggiungi cartella locale</h2>
   <div class="card">
     <label>Percorso sul dispositivo</label>
@@ -2213,18 +2217,6 @@ INDEX_HTML = r"""<!DOCTYPE html>
     <div style="height:12px"></div>
     <button class="ghost" onclick="addSmb()">Monta e aggiungi</button>
     <div class="msg" id="smbMsg"></div>
-  </div>
-
-  <h2>Correzione ambientale (filtro FIR)</h2>
-  <div class="card">
-    <p style="color:var(--silver);font-size:13px;margin:0 0 10px">Carica un filtro di convoluzione (risposta all'impulso) generato con REW o rePhase — formato WAV o testo (.txt, un coefficiente per riga). Verrà applicato identicamente a entrambi i canali. Attivalo poi da Impostazioni → DSP sul dispositivo.</p>
-    <div id="firStatus" style="font-size:13px;color:var(--silver);margin-bottom:10px">Caricamento…</div>
-    <div class="row">
-      <label class="ghost" style="text-align:center;flex:1;cursor:pointer" for="firFile">⬆ Carica filtro</label>
-      <button class="danger" style="flex:1" onclick="removeFir()">Rimuovi filtro</button>
-    </div>
-    <input type="file" id="firFile" accept=".wav,.txt" style="display:none" onchange="uploadFir(this)">
-    <div class="msg" id="firMsg"></div>
   </div>
 
   <h2>Backup e ripristino</h2>
@@ -2298,31 +2290,6 @@ async function addSmb(){
 }
 async function rm(id){ await j('/api/sources/'+id,{method:'DELETE'}); load(); }
 
-// ── Room correction (FIR filter) ────────────────────────────────────
-async function loadFir(){
-  let d; try{ d=await j('/api/dsp/fir'); }catch(e){ return; }
-  const el=document.getElementById('firStatus');
-  el.textContent=d.present ? ('Filtro attivo: '+d.filename+' ('+Math.round(d.size/1024)+' KB)') : 'Nessun filtro caricato.';
-}
-async function uploadFir(input){
-  const file=input.files && input.files[0]; if(!file) return;
-  const m=document.getElementById('firMsg'); m.textContent='Caricamento…'; m.className='msg';
-  const body=new FormData(); body.append('file', file);
-  try{
-    const d=await j('/api/dsp/fir',{method:'POST',body});
-    m.textContent=d.message||(d.success?'Fatto':'Errore'); m.className='msg '+(d.success?'ok':'bad');
-    if(d.success) loadFir();
-  }catch(e){ m.textContent='Errore di rete'; m.className='msg bad'; }
-  input.value='';
-}
-async function removeFir(){
-  const m=document.getElementById('firMsg'); m.textContent='Rimozione…'; m.className='msg';
-  const r=await j('/api/dsp/fir',{method:'DELETE'});
-  m.textContent=r.removed?'Rimosso ✓':'Nessun filtro da rimuovere'; m.className='msg '+(r.removed?'ok':'');
-  loadFir();
-}
-loadFir();
-
 // ── Backup / restore ───────────────────────────────────────────────
 async function doRestore(input){
   const file=input.files && input.files[0]; if(!file) return;
@@ -2369,9 +2336,172 @@ async function addUsb(i){
   if(r.success){ load(); } else { alert(r.message||'Errore'); }
 }
 
+// ── Internal disks (adopt existing filesystem / format) ─────────────
+// Mirrors the kiosk's InternalDisks.jsx: enumerate non-USB/non-system block
+// devices, adopt an existing filesystem as a source, or run the guided format
+// wizard (choose fs + label, type-to-confirm the destructive wipe, poll
+// progress). Disk objects are kept in an array and referenced by index in
+// onclick handlers so a model/label with quotes can never break the markup.
+let internalDisks=[];
+const fmtSize=(bytes)=>{ const n=Number(bytes)||0; const gb=n/1024**3; if(gb<=0) return ''; return gb>=1000?((gb/1024).toFixed(1)+' TB'):(Math.round(gb)+' GB'); };
+function internalMsg(t,cls){ const el=document.getElementById('internalMsg'); el.textContent=t||''; el.className='msg'+(cls?(' '+cls):''); }
+async function loadInternal(){
+  let d; try{ d=await j('/api/internal/disks'); }catch(e){ return; }
+  internalDisks=d.disks||[];
+  const el=document.getElementById('internalList');
+  if(!internalDisks.length){ el.innerHTML='<div style="color:var(--silver);font-size:14px">Nessun disco interno aggiuntivo rilevato.</div>'; return; }
+  el.innerHTML=internalDisks.map((dk,di)=>{
+    const fsParts=(dk.partitions||[]).filter(p=>p.fstype);
+    const badges=`${esc(fmtSize(dk.size))}`+(dk.adopted?' · <span style="color:#5fce8f">adottato</span>':(dk.has_data?' · dati presenti':''));
+    const sub=`${esc(dk.path)}${dk.fstype?(' · '+esc(dk.fstype)):''}${dk.label?(' · '+esc(dk.label)):''}`;
+    const head=`<div class="name">${esc(dk.model||dk.path)}<span class="tag">${badges}</span></div><div class="sub">${sub}</div>`;
+    let actions;
+    if(dk.adopted){
+      actions=`<button class="danger" onclick="removeInternal('${esc(dk.source_id||'')}')">Rimuovi</button>`;
+    } else {
+      const adoptBtn=fsParts.length===1?`<button class="ghost" onclick="adoptInternal(${di},'${esc(fsParts[0].path)}')">Usa come sorgente</button>`:'';
+      actions=`${adoptBtn}<button class="danger" onclick="openFormatWizard(${di})">Formatta…</button>`;
+    }
+    const multi=(!dk.adopted && fsParts.length>1)?('<div style="height:8px"></div>'+fsParts.map(p=>
+      `<div class="src"><div class="meta"><div class="sub">${esc(p.path)} · ${esc(p.fstype)}${p.label?(' · '+esc(p.label)):''}</div></div><button class="ghost" onclick="adoptInternal(-1,'${esc(p.path)}')">Usa</button></div>`
+    ).join(''))+'':'';
+    return `<div style="margin-bottom:14px"><div class="row">${head}<div style="display:flex;gap:8px;flex-shrink:0">${actions}</div></div>${multi}</div>`;
+  }).join('');
+}
+async function adoptInternal(_di,device){
+  internalMsg('Montaggio…');
+  const r=await j('/api/internal/adopt',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({device})});
+  internalMsg(r.success?'Sorgente aggiunta ✓':(r.message||'Errore'), r.success?'ok':'bad');
+  if(r.success){ loadInternal(); load(); }
+}
+async function removeInternal(sourceId){
+  if(!sourceId) return;
+  await j('/api/sources/'+sourceId,{method:'DELETE'});
+  internalMsg('Rimossa ✓','ok');
+  loadInternal(); load();
+}
+
+// Format wizard state (single instance — one disk formatted at a time).
+let fmtDisk=null, fmtStep='choose', fmtFs='ext4', fmtLabel='Musica', fmtPollTimer=null;
+function openFormatWizard(di){
+  fmtDisk=internalDisks[di]; if(!fmtDisk) return;
+  fmtStep='choose'; fmtFs='ext4'; fmtLabel='Musica'; window.fmtTypedVal='';
+  renderFormatWizard();
+}
+function closeFormatWizard(){
+  if(fmtPollTimer){ clearInterval(fmtPollTimer); fmtPollTimer=null; }
+  fmtDisk=null;
+  document.getElementById('fmtOverlay')?.remove();
+}
+function renderFormatWizard(){
+  document.getElementById('fmtOverlay')?.remove();
+  if(!fmtDisk) return;
+  const ov=document.createElement('div');
+  ov.id='fmtOverlay';
+  ov.style.cssText='position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.8);display:flex;align-items:center;justify-content:center;padding:20px';
+  let inner='';
+  if(fmtStep==='choose'){
+    inner=`<h3 style="margin:0 0 4px">Formatta disco</h3>
+      <p style="color:var(--silver);font-size:13px;margin:0 0 16px">${esc(fmtDisk.model||fmtDisk.path)} · ${esc(fmtSize(fmtDisk.size))}</p>
+      <label>Filesystem</label>
+      <div class="row" style="gap:10px;margin-bottom:10px">
+        <button class="${fmtFs==='ext4'?'primary':'ghost'}" style="flex:1" onclick="fmtFs='ext4';renderFormatWizard()">ext4 (consigliato)</button>
+        <button class="${fmtFs==='exfat'?'primary':'ghost'}" style="flex:1" onclick="fmtFs='exfat';renderFormatWizard()">exFAT</button>
+      </div>
+      <label>Etichetta disco</label>
+      <input id="fmtLabelInput" value="${esc(fmtLabel)}" maxlength="${fmtFs==='exfat'?11:16}" oninput="fmtLabel=this.value">
+      <div style="height:16px"></div>
+      <div class="row" style="gap:10px">
+        <button class="ghost" style="flex:1" onclick="closeFormatWizard()">Annulla</button>
+        <button class="primary" style="flex:1" onclick="window.fmtTypedVal='';fmtStep='confirm';renderFormatWizard()">Avanti</button>
+      </div>`;
+  } else if(fmtStep==='confirm'){
+    inner=`<h3 style="margin:0 0 4px;color:#e66">⚠ Questa operazione cancella tutti i dati</h3>
+      <p style="color:var(--silver);font-size:13px;margin:0 0 16px">Tutti i dati su ${esc(fmtDisk.model||fmtDisk.path)} (${esc(fmtSize(fmtDisk.size))}, ${esc(fmtDisk.path)}) verranno cancellati in modo permanente. L'operazione non può essere annullata.</p>
+      <label>Digita "${esc(fmtLabel.trim())}" per confermare</label>
+      <input id="fmtTypedInput" oninput="window.fmtTypedVal=this.value;document.getElementById('fmtConfirmBtn').disabled=(this.value.trim()!==fmtLabel.trim())">
+      <div style="height:16px"></div>
+      <div class="row" style="gap:10px">
+        <button class="ghost" style="flex:1" onclick="fmtStep='choose';renderFormatWizard()">Indietro</button>
+        <button id="fmtConfirmBtn" class="danger" style="flex:1;border-color:#e66" ${(!window.fmtTypedVal||window.fmtTypedVal.trim()!==fmtLabel.trim())?'disabled':''} onclick="startFormat()">Formatta ora</button>
+      </div>`;
+  } else if(fmtStep==='progress'){
+    inner=`<div style="text-align:center;padding:10px 0">
+      <p id="fmtProgressMsg" style="color:#fff">Preparazione disco…</p>
+      <div style="width:100%;height:8px;background:var(--bg);border-radius:99px;overflow:hidden;margin:14px 0">
+        <div id="fmtProgressBar" style="height:100%;width:0%;background:var(--gold);transition:width .4s"></div>
+      </div>
+      <p style="color:var(--silver);font-size:12px">Tieni acceso l'apparecchio finché l'operazione non termina.</p>
+    </div>`;
+  } else if(fmtStep==='done'){
+    inner=`<div style="text-align:center;padding:10px 0">
+      <p style="color:#5fce8f;font-size:18px;margin:0 0 8px">✓ Disco formattato e aggiunto come sorgente</p>
+      <p style="color:var(--silver);font-size:13px;margin:0 0 16px">Copia la musica nella condivisione di rete qui sotto, poi applica e riscansiona la libreria.</p>
+      <button class="primary" style="width:100%" onclick="closeFormatWizard();loadInternal();load();loadSmbCard();">Chiudi</button>
+    </div>`;
+  } else if(fmtStep==='error'){
+    inner=`<div style="text-align:center;padding:10px 0">
+      <p style="color:#e66;font-size:16px;margin:0 0 8px">Errore</p>
+      <p style="color:var(--silver);font-size:13px;margin:0 0 16px">${esc(window.fmtErrorMsg||'')}</p>
+      <button class="ghost" style="width:100%" onclick="closeFormatWizard()">Chiudi</button>
+    </div>`;
+  }
+  ov.innerHTML=`<div class="card" style="max-width:420px;width:100%;margin:0">${inner}</div>`;
+  document.body.appendChild(ov);
+}
+async function startFormat(){
+  fmtStep='progress'; renderFormatWizard();
+  let d;
+  try{
+    const r=await j('/api/internal/format',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({device:fmtDisk.path, fs:fmtFs, label:fmtLabel, confirm:fmtDisk.confirm})});
+    d=r;
+  }catch(e){ window.fmtErrorMsg='Errore di rete'; fmtStep='error'; renderFormatWizard(); return; }
+  if(d && d.success===false){ window.fmtErrorMsg=d.message||'Errore'; fmtStep='error'; renderFormatWizard(); return; }
+  fmtPollTimer=setInterval(async()=>{
+    let s; try{ s=await j('/api/internal/format/status'); }catch(e){ return; }
+    const pct=Math.max(0,Math.min(100,Math.round(s.progress||0)));
+    const bar=document.getElementById('fmtProgressBar'); if(bar) bar.style.width=pct+'%';
+    const msg=document.getElementById('fmtProgressMsg'); if(msg) msg.textContent=s.message||'In corso…';
+    if(s.state==='done'){ clearInterval(fmtPollTimer); fmtPollTimer=null; fmtStep='done'; renderFormatWizard(); }
+    else if(s.state==='error'){ clearInterval(fmtPollTimer); fmtPollTimer=null; window.fmtErrorMsg=s.message||'Errore'; fmtStep='error'; renderFormatWizard(); }
+  },2000);
+}
+
+// SMB share credentials card for adopted internal disks (installed check +
+// username/password + regenerate), appended below the internal disks list.
+async function loadSmbCard(){
+  let d; try{ d=await j('/api/internal/smb'); }catch(e){ return; }
+  document.getElementById('smbCardWrap')?.remove();
+  if(!d.shares || !d.shares.length) return;
+  const wrap=document.createElement('div');
+  wrap.id='smbCardWrap';
+  if(!d.installed){
+    wrap.innerHTML='<div class="card" style="border-color:#a86;color:#dba"><p style="margin:0;font-size:13px">È necessario un aggiornamento di sistema per abilitare la condivisione di rete (Samba) dei dischi interni.</p></div>';
+  } else {
+    const rows=d.shares.map(s=>`<div style="font-size:13px;color:var(--silver)">\\\\${esc(d.ip||d.host)}\\${esc(s.name)}</div>`).join('');
+    wrap.innerHTML=`<div class="card">
+      <div style="font-weight:600;margin-bottom:6px">Condivisione di rete</div>
+      <p style="color:var(--silver);font-size:13px;margin:0 0 10px">Copia la musica da un PC collegandoti a questo percorso con le credenziali qui sotto.</p>
+      ${rows}
+      <div class="row" style="margin-top:10px">
+        <div><div style="font-size:11px;color:var(--silver)">Utente</div><div>${esc(d.username)}</div></div>
+        <div><div style="font-size:11px;color:var(--silver)">Password</div><div>${esc(d.password)}</div></div>
+      </div>
+      <div style="height:10px"></div>
+      <button class="ghost" onclick="regenSmb()">Rigenera password</button>
+    </div>`;
+  }
+  document.getElementById('internalList').insertAdjacentElement('afterend', wrap);
+}
+async function regenSmb(){ await j('/api/internal/smb/regenerate',{method:'POST'}); loadSmbCard(); }
+
 load();
 loadUsb();
+loadInternal();
+loadSmbCard();
 setInterval(loadUsb, 4000);
+setInterval(loadInternal, 5000);
 </script>
 </body>
 </html>"""

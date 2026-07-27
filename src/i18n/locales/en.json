@@ -15,7 +15,8 @@
     "loading": "Loading...",
     "notAvailable": "N/A",
     "language": "Language",
-    "error": "Error"
+    "error": "Error",
+    "done": "Done"
   },
   "sources": {
     "active": "Active sources",
@@ -322,8 +323,12 @@
       "balanceRight": "Right",
       "balanceCenter": "Centered",
       "roomCorrection": "Room correction (FIR)",
-      "roomCorrectionPresent": "Filter loaded: {filename}. Upload a new one any time from Backup & restore / phone control.",
-      "roomCorrectionMissing": "No filter uploaded yet. Open the sources address (Backup & restore section) from a phone or PC browser to upload a WAV/TXT convolution filter (REW/rePhase).",
+      "roomCorrectionPresent": "Filter loaded: {filename}. Upload a new one any time below, or run the guided measurement.",
+      "roomCorrectionMissing": "No filter loaded yet. Upload a WAV/TXT convolution filter (REW/rePhase) below, or run the guided measurement.",
+      "firUpload": "Upload filter",
+      "firUploading": "Uploading…",
+      "firRemove": "Remove filter",
+      "firRemoved": "Filter removed",
       "save": "Apply EQ",
       "failed": "DSP operation failed.",
       "presets": "Presets",
