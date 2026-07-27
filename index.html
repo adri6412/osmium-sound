@@ -3,11 +3,11 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Osmium Sound — Hi-Fi Media Appliance for x86 / Debian</title>
+  <title data-en="Osmium Sound — Hi-Fi Media Appliance for x86 / Debian" data-it="Osmium Sound — Media player Hi-Fi per x86 / Debian">Osmium Sound — Hi-Fi Media Appliance for x86 / Debian</title>
   <meta name="description" content="Touchscreen-friendly hi-fi media player for x86 on Debian. FLAC, DSD, 192kHz, bit-perfect DoP. Streams Deezer, Qobuz, TIDAL & Spotify.">
   <meta property="og:title" content="Osmium Sound">
   <meta property="og:description" content="Touchscreen-friendly hi-fi media appliance. Bit-perfect audio. Streaming services. No compromise.">
-  <meta property="og:image" content="screen_003.png">
+  <meta property="og:image" content="01.png">
   <link rel="icon" type="image/svg+xml" href="favicon.svg">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -81,6 +81,21 @@
       white-space: nowrap;
     }
     .btn-nav:hover { opacity: 0.85; }
+    .nav-right { display: flex; align-items: center; gap: 1rem; }
+    .lang-switch {
+      display: inline-flex; align-items: center;
+      border: 1px solid var(--border); border-radius: 6px;
+      overflow: hidden; background: var(--bg-card);
+    }
+    .lang-switch button {
+      background: none; border: none; cursor: pointer;
+      color: var(--muted); font-family: inherit;
+      font-size: 0.74rem; font-weight: 700; letter-spacing: 0.06em;
+      padding: 5px 9px; transition: color 0.2s, background 0.2s;
+    }
+    .lang-switch button + button { border-left: 1px solid var(--border); }
+    .lang-switch button:hover { color: var(--text); }
+    .lang-switch button.active { color: #000; background: var(--accent); }
 
     /* ── HERO ────────────────────────────────────────── */
     .hero {
@@ -316,6 +331,11 @@
       backdrop-filter: blur(8px);
       pointer-events: none;
     }
+    .carousel-disclaimer {
+      margin-top: 14px; text-align: center;
+      font-size: 0.74rem; color: rgba(255,255,255,0.38);
+      font-style: italic;
+    }
     .carousel-thumbs {
       display: flex; gap: 8px; margin-top: 12px;
       overflow-x: auto; padding-bottom: 2px;
@@ -382,7 +402,55 @@
       background: var(--bg-card);
       text-align: center;
     }
-    .install-inner { max-width: 700px; margin: 0 auto; }
+    .install-inner { max-width: 760px; margin: 0 auto; }
+    .iso-badge {
+      display: inline-flex; align-items: baseline; gap: 6px;
+    }
+    .iso-badge small { font-size: 0.78em; font-weight: 600; opacity: 0.8; }
+    .quickstart {
+      display: grid; grid-template-columns: repeat(3, 1fr);
+      gap: 1.1rem; max-width: 860px; margin: 2.75rem auto 0;
+      text-align: left;
+    }
+    .qs-step {
+      background: var(--bg); border: 1px solid var(--border);
+      border-radius: var(--radius); padding: 1.5rem 1.4rem;
+      position: relative;
+    }
+    .qs-num {
+      width: 30px; height: 30px; border-radius: 8px;
+      background: var(--accent-dim); border: 1px solid rgba(245,184,32,0.28);
+      color: var(--accent); font-weight: 700; font-size: 0.85rem;
+      display: flex; align-items: center; justify-content: center;
+      margin-bottom: 0.9rem;
+    }
+    .qs-step h4 { font-size: 0.98rem; font-weight: 600; margin-bottom: 0.4rem; }
+    .qs-step p { font-size: 0.86rem; color: var(--muted); line-height: 1.6; }
+    .qs-step a { color: var(--accent); text-decoration: none; }
+    .qs-step a:hover { text-decoration: underline; }
+    .qs-step code {
+      font-family: 'Fira Code', 'Consolas', monospace;
+      font-size: 0.82em; color: var(--accent);
+      background: var(--bg-card2); border: 1px solid var(--border);
+      padding: 1px 5px; border-radius: 4px;
+    }
+    .install-note {
+      max-width: 760px; margin: 2rem auto 0;
+      font-size: 0.86rem; color: var(--text); line-height: 1.6;
+      background: var(--accent-dim); border: 1px solid rgba(245,184,32,0.2);
+      border-radius: 10px; padding: 0.9rem 1.2rem; text-align: left;
+    }
+    .install-note strong { color: var(--accent); }
+    .install-warning {
+      max-width: 760px; margin: 1.1rem auto 0;
+      font-size: 0.86rem; color: var(--text); line-height: 1.6;
+      background: rgba(255,99,71,0.10); border: 1px solid rgba(255,99,71,0.4);
+      border-radius: 10px; padding: 0.9rem 1.2rem; text-align: left;
+      display: flex; gap: 0.7rem; align-items: flex-start;
+    }
+    .install-warning .warn-ico { flex-shrink: 0; font-size: 1.05rem; line-height: 1.5; }
+    .install-warning strong { color: #ff8166; }
+    @media (max-width: 760px) { .quickstart { grid-template-columns: 1fr; } }
     .code-block {
       background: #060606;
       border: 1px solid var(--border);
@@ -408,6 +476,13 @@
       letter-spacing: 0.04em;
     }
     .copy-btn:hover { color: var(--text); border-color: #555; }
+
+    /* ── ANDROID APP ─────────────────────────────────── */
+    #android {
+      border-top: 1px solid var(--border);
+      text-align: center;
+    }
+    #android .install-inner, #android .quickstart { margin-left: auto; margin-right: auto; }
 
     /* ── CHANGELOG ───────────────────────────────────── */
     #changelog { border-top: 1px solid var(--border); }
@@ -505,34 +580,43 @@
     <span class="nav-dot"></span>
   </a>
   <ul class="nav-links">
-    <li><a href="#features">Features</a></li>
-    <li><a href="#screenshots">Screenshots</a></li>
-    <li><a href="#specs">Specs</a></li>
-    <li><a href="#changelog">Changelog</a></li>
-    <li><a href="#install">Install</a></li>
+    <li><a href="#install" data-en="Install" data-it="Installazione">Install</a></li>
+    <li><a href="#features" data-en="Features" data-it="Funzioni">Features</a></li>
+    <li><a href="#screenshots" data-en="Screenshots" data-it="Screenshot">Screenshots</a></li>
+    <li><a href="#specs" data-en="Specs" data-it="Specifiche">Specs</a></li>
+    <li><a href="#android" data-en="Android app" data-it="App Android">Android app</a></li>
+    <li><a href="#changelog" data-en="Changelog" data-it="Novità">Changelog</a></li>
   </ul>
-  <a class="btn-nav" href="https://github.com/adri6412/osmium-sound/releases" target="_blank">Download</a>
+  <div class="nav-right">
+    <div class="lang-switch" role="group" aria-label="Language">
+      <button type="button" data-lang="en">EN</button>
+      <button type="button" data-lang="it">IT</button>
+    </div>
+    <a class="btn-nav" href="https://github.com/adri6412/osmium-sound/releases/download/v2.5.19/hifi-player-v2.5.19.iso" data-en="Download" data-it="Scarica">Download</a>
+  </div>
 </nav>
 
 <!-- HERO -->
 <section class="hero">
   <div class="hero-badge">
     <span class="badge-dot"></span>
-    v2.5.8 — Dev &amp; Prod OTA channels
+    <span data-en="Dev &amp; Prod OTA channels" data-it="Canali OTA Dev e Prod">Dev &amp; Prod OTA channels</span>
   </div>
   <h1><span class="accent">OSMIUM</span> SOUND</h1>
-  <p class="hero-sub">
+  <p class="hero-sub"
+     data-en="A touchscreen-first hi-fi media appliance built on Debian for x86 hardware. Bit-perfect audio, streaming services, and OTA updates — all in one sleek dark interface."
+     data-it="Un media player hi-fi pensato per il touchscreen, basato su Debian per hardware x86. Audio bit-perfect, servizi di streaming e aggiornamenti OTA — tutto in un'unica elegante interfaccia scura.">
     A touchscreen-first hi-fi media appliance built on Debian for x86 hardware.
     Bit-perfect audio, streaming services, and OTA updates — all in one sleek dark interface.
   </p>
   <div class="hero-ctas">
-    <a class="btn-primary" href="https://github.com/adri6412/osmium-sound/releases" target="_blank">
+    <a class="btn-primary" href="#install">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-      Download v2.5.8
+      <span data-en="Get started" data-it="Per iniziare">Get started</span>
     </a>
     <a class="btn-secondary" href="https://github.com/adri6412/osmium-sound" target="_blank">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0 0 24 12c0-6.63-5.37-12-12-12z"/></svg>
-      View on GitHub
+      <span data-en="View on GitHub" data-it="Guarda su GitHub">View on GitHub</span>
     </a>
   </div>
   <div class="hero-pills">
@@ -543,60 +627,106 @@
   </div>
 </section>
 
+<!-- INSTALL -->
+<section id="install">
+  <div class="install-inner">
+    <div class="section-label" data-en="Get started" data-it="Per iniziare">Get started</div>
+    <h2 class="section-title" data-en="Download &amp; install" data-it="Scarica e installa">Download &amp; install</h2>
+    <p class="section-desc" data-en="Flash one ISO image to a USB stick for the first install. From then on, every update — UI, system and OS — is delivered automatically over the air." data-it="Flasha una sola immagine ISO su una chiavetta USB per la prima installazione. Da lì in poi, ogni aggiornamento — interfaccia, sistema e OS — arriva automaticamente via OTA.">Flash one ISO image to a USB stick for the first install. From then on, every update — UI, system and OS — is delivered automatically over the air.</p>
+
+    <div style="display:flex; gap:1rem; justify-content:center; flex-wrap:wrap; margin-top:2.25rem;">
+      <a class="btn-primary" href="https://github.com/adri6412/osmium-sound/releases/download/v2.5.19/hifi-player-v2.5.19.iso">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        <span class="iso-badge"><span data-en="Download install ISO" data-it="Scarica la ISO di installazione">Download install ISO</span><small>v2.5.19</small></span>
+      </a>
+      <a class="btn-secondary" href="https://github.com/adri6412/osmium-sound" target="_blank">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0 0 24 12c0-6.63-5.37-12-12-12z"/></svg>
+        <span data-en="View on GitHub" data-it="Guarda su GitHub">View on GitHub</span>
+      </a>
+    </div>
+
+    <div class="quickstart">
+      <div class="qs-step">
+        <div class="qs-num">1</div>
+        <h4 data-en="Download the ISO" data-it="Scarica la ISO">Download the ISO</h4>
+        <p data-en="Grab the install image &lt;strong&gt;hifi-player-v2.5.19.iso&lt;/strong&gt; using the button above." data-it="Prendi l'immagine di installazione &lt;strong&gt;hifi-player-v2.5.19.iso&lt;/strong&gt; con il pulsante qui sopra.">Grab the install image <strong>hifi-player-v2.5.19.iso</strong> using the button above.</p>
+      </div>
+      <div class="qs-step">
+        <div class="qs-num">2</div>
+        <h4 data-en="Flash a USB stick" data-it="Flasha una chiavetta USB">Flash a USB stick</h4>
+        <p data-en="Write the ISO to an 8&nbsp;GB+ USB stick with &lt;a href=&quot;https://etcher.balena.io/&quot; target=&quot;_blank&quot; rel=&quot;noopener&quot;&gt;balenaEtcher&lt;/a&gt;, Rufus or &lt;code&gt;dd&lt;/code&gt;." data-it="Scrivi la ISO su una chiavetta USB da 8&nbsp;GB+ con &lt;a href=&quot;https://etcher.balena.io/&quot; target=&quot;_blank&quot; rel=&quot;noopener&quot;&gt;balenaEtcher&lt;/a&gt;, Rufus o &lt;code&gt;dd&lt;/code&gt;.">Write the ISO to an 8&nbsp;GB+ USB stick with <a href="https://etcher.balena.io/" target="_blank" rel="noopener">balenaEtcher</a>, Rufus or <code>dd</code>.</p>
+      </div>
+      <div class="qs-step">
+        <div class="qs-num">3</div>
+        <h4 data-en="Boot &amp; install" data-it="Avvia e installa">Boot &amp; install</h4>
+        <p data-en="Boot your x86 mini-PC from the USB stick and follow the on-screen installer. Reboot — you're done." data-it="Avvia il tuo mini-PC x86 dalla chiavetta e segui l'installazione guidata. Riavvia ed è fatta.">Boot your x86 mini-PC from the USB stick and follow the on-screen installer. Reboot — you're done.</p>
+      </div>
+    </div>
+
+    <p class="install-note" data-en="&lt;strong&gt;Note:&lt;/strong&gt; the installer asks which disk to install on before formatting it — nothing is wiped without confirmation (tested on UEFI; the ISO is only needed for the first install, every later version arrives automatically over the air)." data-it="&lt;strong&gt;Nota:&lt;/strong&gt; l'installer chiede su quale disco installare prima di formattarlo — nulla viene cancellato senza conferma (testato su UEFI; la ISO serve solo per la prima installazione, tutte le versioni successive arrivano automaticamente via OTA).">
+      <strong>Note:</strong> the installer asks which disk to install on before formatting it — nothing is wiped without confirmation (tested on UEFI; the ISO is only needed for the first install, every later version arrives automatically over the air).
+    </p>
+
+    <p class="install-note" data-en="&lt;strong&gt;Try it live:&lt;/strong&gt; pick &lt;strong&gt;Try Osmium Sound (no install)&lt;/strong&gt; at the boot menu to run the kiosk straight from the USB stick, nothing written to disk. If it doesn't log in automatically, use &lt;code&gt;hifi&lt;/code&gt; / &lt;code&gt;hifi&lt;/code&gt; at the login screen." data-it="&lt;strong&gt;Provala in live:&lt;/strong&gt; scegli &lt;strong&gt;Try Osmium Sound (no install)&lt;/strong&gt; nel menu di avvio per far partire il kiosk direttamente dalla chiavetta, senza scrivere nulla sul disco. Se non fa l'accesso automatico, usa &lt;code&gt;hifi&lt;/code&gt; / &lt;code&gt;hifi&lt;/code&gt; alla schermata di login.">
+      <strong>Try it live:</strong> pick <strong>Try Osmium Sound (no install)</strong> at the boot menu to run the kiosk straight from the USB stick, nothing written to disk. If it doesn't log in automatically, use <code>hifi</code> / <code>hifi</code> at the login screen.
+    </p>
+  </div>
+</section>
+
 <!-- FEATURES -->
 <section id="features">
   <div class="centered">
-    <div class="section-label">What it does</div>
-    <h2 class="section-title">Everything your hi-fi setup needs</h2>
-    <p class="section-desc">Built for audiophiles who want a dedicated, appliance-grade media server without the complexity.</p>
+    <div class="section-label" data-en="What it does" data-it="Cosa fa">What it does</div>
+    <h2 class="section-title" data-en="Everything your hi-fi setup needs" data-it="Tutto ciò che serve al tuo impianto hi-fi">Everything your hi-fi setup needs</h2>
+    <p class="section-desc" data-en="Built for audiophiles who want a dedicated, appliance-grade media server without the complexity." data-it="Pensato per gli audiofili che vogliono un media server dedicato, di livello appliance, senza complicazioni.">Built for audiophiles who want a dedicated, appliance-grade media server without the complexity.</p>
   </div>
   <div class="features-grid">
     <div class="feature-card">
       <div class="feature-icon">🎵</div>
-      <h3>High-Resolution Audio</h3>
-      <p>Native playback of FLAC, DSD, and PCM up to 192kHz. Bit-perfect DoP output over USB — no resampling, no compromise.</p>
+      <h3 data-en="High-Resolution Audio" data-it="Audio ad alta risoluzione">High-Resolution Audio</h3>
+      <p data-en="Native playback of FLAC, DSD, and PCM up to 192kHz. Bit-perfect DoP output over USB — no resampling, no compromise." data-it="Riproduzione nativa di FLAC, DSD e PCM fino a 192kHz. Uscita DoP bit-perfect via USB — nessun ricampionamento, nessun compromesso.">Native playback of FLAC, DSD, and PCM up to 192kHz. Bit-perfect DoP output over USB — no resampling, no compromise.</p>
       <div class="feature-tags">
         <span class="tag">FLAC</span><span class="tag">DSD64/128/256</span><span class="tag">192kHz</span><span class="tag">DoP</span>
       </div>
     </div>
     <div class="feature-card">
       <div class="feature-icon">🎧</div>
-      <h3>Streaming Services</h3>
-      <p>Integrated access to Deezer, Qobuz, TIDAL, and Spotify — unified in one interface, no app switching.</p>
+      <h3 data-en="Streaming Services" data-it="Servizi di streaming">Streaming Services</h3>
+      <p data-en="Deezer, Qobuz, TIDAL, Spotify and more — unified in one interface via Lyrion plugins, installed in one click from the web UI. No app switching." data-it="Deezer, Qobuz, TIDAL, Spotify e altri — riuniti in un'unica interfaccia tramite plugin Lyrion, installabili in un clic dalla web UI. Senza cambiare app.">Deezer, Qobuz, TIDAL, Spotify and more — unified in one interface via Lyrion plugins, installed in one click from the web UI. No app switching.</p>
       <div class="feature-tags">
         <span class="tag">Deezer</span><span class="tag">Qobuz</span><span class="tag">TIDAL</span><span class="tag">Spotify</span>
       </div>
     </div>
     <div class="feature-card">
       <div class="feature-icon">📁</div>
-      <h3>Music Library</h3>
-      <p>Browse your local collection by Artist, Album, or Folder. Fast indexing powered by Lyrion Media Server.</p>
+      <h3 data-en="Music Library" data-it="Libreria musicale">Music Library</h3>
+      <p data-en="Browse your local collection by Artist, Album, or Folder. Fast indexing powered by Lyrion Media Server." data-it="Sfoglia la tua collezione locale per artista, album o cartella. Indicizzazione rapida grazie a Lyrion Media Server.">Browse your local collection by Artist, Album, or Folder. Fast indexing powered by Lyrion Media Server.</p>
       <div class="feature-tags">
         <span class="tag">Artists</span><span class="tag">Albums</span><span class="tag">Folders</span><span class="tag">Lyrion</span>
       </div>
     </div>
     <div class="feature-card">
       <div class="feature-icon">📻</div>
-      <h3>Internet Radio</h3>
-      <p>Built-in radio browser with thousands of stations worldwide. Save favourites directly from the touchscreen interface.</p>
+      <h3 data-en="Internet Radio" data-it="Radio internet">Internet Radio</h3>
+      <p data-en="Built-in radio browser with thousands of stations worldwide. Save favourites directly from the touchscreen interface." data-it="Browser radio integrato con migliaia di stazioni da tutto il mondo. Salva i preferiti direttamente dall'interfaccia touchscreen.">Built-in radio browser with thousands of stations worldwide. Save favourites directly from the touchscreen interface.</p>
       <div class="feature-tags">
         <span class="tag">Radio Browser</span><span class="tag">Favourites</span>
       </div>
     </div>
     <div class="feature-card">
       <div class="feature-icon">🔌</div>
-      <h3>DAC Auto-Detection</h3>
-      <p>Automatically detects USB DACs and audio interfaces. Switch outputs on the fly with persistent selection across reboots.</p>
+      <h3 data-en="DAC Auto-Detection" data-it="Rilevamento automatico del DAC">DAC Auto-Detection</h3>
+      <p data-en="Automatically detects USB DACs and audio interfaces. Switch outputs on the fly with persistent selection across reboots." data-it="Rileva automaticamente DAC USB e interfacce audio. Cambia uscita al volo con selezione mantenuta tra un riavvio e l'altro.">Automatically detects USB DACs and audio interfaces. Switch outputs on the fly with persistent selection across reboots.</p>
       <div class="feature-tags">
         <span class="tag">USB DAC</span><span class="tag">HDMI</span>
       </div>
     </div>
     <div class="feature-card">
       <div class="feature-icon">⬆️</div>
-      <h3>OTA Updates</h3>
-      <p>Signed over-the-air updates for UI, API daemon, and OS. Switch between Production and Development channels from settings.</p>
+      <h3 data-en="OTA Updates" data-it="Aggiornamenti OTA">OTA Updates</h3>
+      <p data-en="Signed over-the-air updates for UI, API daemon, and OS. Switch between Production and Development channels from settings." data-it="Aggiornamenti over-the-air firmati per interfaccia, daemon API e sistema operativo. Passa tra canale di Produzione e Sviluppo dalle impostazioni.">Signed over-the-air updates for UI, API daemon, and OS. Switch between Production and Development channels from settings.</p>
       <div class="feature-tags">
-        <span class="tag">Ed25519 signed</span><span class="tag">Prod channel</span><span class="tag">Dev channel</span>
+        <span class="tag">Ed25519 signed</span><span class="tag" data-en="Prod channel" data-it="Canale Prod">Prod channel</span><span class="tag" data-en="Dev channel" data-it="Canale Dev">Dev channel</span>
       </div>
     </div>
   </div>
@@ -605,16 +735,16 @@
 <!-- SCREENSHOTS -->
 <section id="screenshots">
   <div class="centered">
-    <div class="section-label">Interface</div>
-    <h2 class="section-title">Designed for the listening room</h2>
-    <p class="section-desc">Optimised for touchscreens. Clean, dark, distraction-free.</p>
+    <div class="section-label" data-en="Interface" data-it="Interfaccia">Interface</div>
+    <h2 class="section-title" data-en="Designed for the listening room" data-it="Progettata per la sala d'ascolto">Designed for the listening room</h2>
+    <p class="section-desc" data-en="Optimised for touchscreens. Clean, dark, distraction-free." data-it="Ottimizzata per i touchscreen. Pulita, scura, senza distrazioni.">Optimised for touchscreens. Clean, dark, distraction-free.</p>
   </div>
 
   <div class="video-wrap">
     <div class="video-frame">
       <button class="video-facade" id="videoFacade" aria-label="Play demo video">
-        <img src="https://i.ytimg.com/vi/ENq9AvrcfM0/maxresdefault.jpg"
-             onerror="this.onerror=null;this.src='https://i.ytimg.com/vi/ENq9AvrcfM0/hqdefault.jpg';"
+        <img src="https://i.ytimg.com/vi/7Dw9oanIkuM/sddefault.jpg"
+             onerror="this.onerror=null;this.src='https://i.ytimg.com/vi/7Dw9oanIkuM/hqdefault.jpg';"
              alt="" loading="lazy">
         <span class="video-play" aria-hidden="true">
           <svg width="26" height="26" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
@@ -625,133 +755,269 @@
 
   <div class="carousel-wrap">
     <div class="carousel-main" id="carouselMain">
-      <img id="carouselImg" src="screen_003.png" alt="Osmium Sound — Main player view">
+      <img id="carouselImg" src="01.png" alt="Osmium Sound — Main player view">
       <button class="carousel-nav prev" id="prevBtn" aria-label="Previous screenshot">&#8249;</button>
       <button class="carousel-nav next" id="nextBtn" aria-label="Next screenshot">&#8250;</button>
-      <div class="carousel-counter" id="counter">1 / 8</div>
+      <div class="carousel-counter" id="counter">1 / 7</div>
       <div class="carousel-caption" id="caption">Main player — Now Playing</div>
     </div>
     <div class="carousel-thumbs" id="thumbsContainer"></div>
+    <p class="carousel-disclaimer" id="carouselDisclaimer"
+       data-en="Images are indicative and may differ from the current version as the interface evolves."
+       data-it="Le immagini sono indicative e possono differire dalla versione attuale, poiché l'interfaccia evolve nel tempo.">Images are indicative and may differ from the current version as the interface evolves.</p>
   </div>
 </section>
 
 <!-- SPECS -->
 <section id="specs">
   <div class="centered">
-    <div class="section-label">Technical specifications</div>
-    <h2 class="section-title">Built on solid foundations</h2>
+    <div class="section-label" data-en="Technical specifications" data-it="Specifiche tecniche">Technical specifications</div>
+    <h2 class="section-title" data-en="Built on solid foundations" data-it="Costruito su basi solide">Built on solid foundations</h2>
   </div>
   <div class="specs-inner">
     <div class="specs-group">
-      <h4>Platform</h4>
+      <h4 data-en="Platform" data-it="Piattaforma">Platform</h4>
       <table class="specs-table">
-        <tr><td>Hardware</td><td>x86 / x86-64</td></tr>
-        <tr><td>OS</td><td>Custom Debian distro</td></tr>
-        <tr><td>Interface</td><td>Electron + React</td></tr>
-        <tr><td>Backend</td><td>Node.js API daemon</td></tr>
-        <tr><td>Media server</td><td>Lyrion Media Server</td></tr>
-        <tr><td>Update system</td><td>Signed OTA (Ed25519)</td></tr>
-        <tr><td>License</td><td>MIT</td></tr>
+        <tr><td data-en="Hardware" data-it="Hardware">Hardware</td><td>x86 / x86-64</td></tr>
+        <tr><td data-en="OS" data-it="OS">OS</td><td data-en="Custom Debian distro" data-it="Distro Debian personalizzata">Custom Debian distro</td></tr>
+        <tr><td data-en="Interface" data-it="Interfaccia">Interface</td><td>Electron + React</td></tr>
+        <tr><td data-en="Backend" data-it="Backend">Backend</td><td>Node.js API daemon</td></tr>
+        <tr><td data-en="Media server" data-it="Media server">Media server</td><td>Lyrion Media Server</td></tr>
+        <tr><td data-en="Update system" data-it="Sistema di aggiornamento">Update system</td><td data-en="Signed OTA (Ed25519)" data-it="OTA firmato (Ed25519)">Signed OTA (Ed25519)</td></tr>
+        <tr><td data-en="License" data-it="Licenza">License</td><td>MIT</td></tr>
       </table>
     </div>
     <div class="specs-group">
-      <h4>Audio</h4>
+      <h4 data-en="Audio" data-it="Audio">Audio</h4>
       <table class="specs-table">
-        <tr><td>Formats</td><td>FLAC, DSD, MP3, AAC, WAV, AIFF</td></tr>
-        <tr><td>Max resolution</td><td>32-bit / 192kHz PCM</td></tr>
-        <tr><td>DSD support</td><td>DSD64, DSD128, DSD256 (DoP)</td></tr>
-        <tr><td>Output</td><td>USB DAC, HDMI</td></tr>
-        <tr><td>Playback mode</td><td>Bit-perfect (no resampling)</td></tr>
-        <tr><td>VU meters</td><td>Analog-style real-time display</td></tr>
-        <tr><td>Streaming</td><td>Deezer, Qobuz, TIDAL, Spotify</td></tr>
+        <tr><td data-en="Formats" data-it="Formati">Formats</td><td>FLAC, DSD, MP3, AAC, WAV, AIFF</td></tr>
+        <tr><td data-en="Max resolution" data-it="Risoluzione massima">Max resolution</td><td>32-bit / 192kHz PCM</td></tr>
+        <tr><td data-en="DSD support" data-it="Supporto DSD">DSD support</td><td>DSD64, DSD128, DSD256 (DoP)</td></tr>
+        <tr><td data-en="Output" data-it="Uscita">Output</td><td>USB DAC, HDMI</td></tr>
+        <tr><td data-en="Playback mode" data-it="Modalità di riproduzione">Playback mode</td><td data-en="Bit-perfect (no resampling)" data-it="Bit-perfect (nessun ricampionamento)">Bit-perfect (no resampling)</td></tr>
+        <tr><td data-en="VU meters" data-it="VU meter">VU meters</td><td data-en="Analog-style real-time display" data-it="Display analogico in tempo reale">Analog-style real-time display</td></tr>
+        <tr><td data-en="Streaming" data-it="Streaming">Streaming</td><td data-en="Deezer, Qobuz, TIDAL, Spotify (via Lyrion plugins)" data-it="Deezer, Qobuz, TIDAL, Spotify (tramite plugin Lyrion)">Deezer, Qobuz, TIDAL, Spotify (via Lyrion plugins)</td></tr>
       </table>
     </div>
+  </div>
+</section>
+
+<!-- ANDROID COMPANION APP -->
+<section id="android">
+  <div class="centered">
+    <div class="section-label" data-en="Mobile companion" data-it="Companion mobile">Mobile companion</div>
+    <h2 class="section-title" data-en="Android companion app" data-it="App companion per Android">Android companion app</h2>
+    <p class="section-desc" data-en="Control Osmium Sound from your phone. Browse your library, drive playback and the queue, and adjust volume — pair in seconds by scanning the QR code on the device's Settings screen." data-it="Controlla Osmium Sound dal telefono. Sfoglia la libreria, gestisci la riproduzione e la coda, regola il volume — abbina in pochi secondi scansionando il QR code nella schermata Impostazioni del dispositivo.">Control Osmium Sound from your phone. Browse your library, drive playback and the queue, and adjust volume — pair in seconds by scanning the QR code on the device's Settings screen.</p>
+
+    <div style="display:flex; gap:1rem; justify-content:center; flex-wrap:wrap; margin-top:2.25rem;">
+      <a class="btn-primary" href="https://github.com/adri6412/osmium-sound/releases/download/companion-v1.0.6/HiFiMediaPlayer-companion-v1.0.6-release.apk">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        <span class="iso-badge"><span data-en="Download APK" data-it="Scarica l'APK">Download APK</span><small>v1.0.6</small></span>
+      </a>
+      <a class="btn-secondary" href="https://github.com/adri6412/osmium-sound/releases/tag/companion-v1.0.6" target="_blank">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0 0 24 12c0-6.63-5.37-12-12-12z"/></svg>
+        <span data-en="Release notes" data-it="Note di rilascio">Release notes</span>
+      </a>
+      <a class="btn-secondary" href="fdroidrepos://osmiumsound.qd.je/fdroid/repo?fingerprint=B45A4EF8CDA78DB906BB6027D82C8E0795179CA701466699EB657A0798C2385F">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+        <span data-en="Add F-Droid repo" data-it="Aggiungi repo F-Droid">Add F-Droid repo</span>
+      </a>
+    </div>
+
+    <div class="quickstart">
+      <div class="qs-step">
+        <div class="qs-num">1</div>
+        <h4 data-en="Download the APK" data-it="Scarica l'APK">Download the APK</h4>
+        <p data-en="Grab &lt;strong&gt;HiFiMediaPlayer-companion-v1.0.6-release.apk&lt;/strong&gt; using the button above." data-it="Prendi &lt;strong&gt;HiFiMediaPlayer-companion-v1.0.6-release.apk&lt;/strong&gt; con il pulsante qui sopra.">Grab <strong>HiFiMediaPlayer-companion-v1.0.6-release.apk</strong> using the button above.</p>
+      </div>
+      <div class="qs-step">
+        <div class="qs-num">2</div>
+        <h4 data-en="Install it" data-it="Installala">Install it</h4>
+        <p data-en="Open the APK on your phone and allow install from &lt;strong&gt;unknown sources&lt;/strong&gt; when prompted. Requires Android 8.0 or newer." data-it="Apri l'APK sul telefono e consenti l'installazione da &lt;strong&gt;origini sconosciute&lt;/strong&gt; quando richiesto. Richiede Android 8.0 o superiore.">Open the APK on your phone and allow install from <strong>unknown sources</strong> when prompted. Requires Android 8.0 or newer.</p>
+      </div>
+      <div class="qs-step">
+        <div class="qs-num">3</div>
+        <h4 data-en="Pair by QR" data-it="Abbina con QR">Pair by QR</h4>
+        <p data-en="On the same Wi-Fi, open the app and scan the &lt;strong&gt;pairing QR code&lt;/strong&gt; from the device's Settings → Phone control." data-it="Sulla stessa rete Wi-Fi, apri l'app e scansiona il &lt;strong&gt;QR code di abbinamento&lt;/strong&gt; da Impostazioni → Controllo da telefono del dispositivo.">On the same Wi-Fi, open the app and scan the <strong>pairing QR code</strong> from the device's Settings → Phone control.</p>
+      </div>
+    </div>
+
+    <p class="install-note" data-en="&lt;strong&gt;Note:&lt;/strong&gt; the companion app is distributed as a signed APK (sideload) or via our self-hosted F-Droid repo — it is not on the Play Store. Prefer F-Droid if you want automatic updates: tap &lt;strong&gt;Add F-Droid repo&lt;/strong&gt; above (F-Droid app required), or add &lt;code&gt;https://osmiumsound.qd.je/fdroid/repo&lt;/code&gt; manually under Settings → Repositories. Your phone and the appliance must be on the same local network." data-it="&lt;strong&gt;Nota:&lt;/strong&gt; l'app companion è distribuita come APK firmato (sideload) oppure tramite il nostro repo F-Droid self-hosted — non è sul Play Store. Se vuoi gli aggiornamenti automatici usa F-Droid: tocca &lt;strong&gt;Aggiungi repo F-Droid&lt;/strong&gt; qui sopra (serve l'app F-Droid), oppure aggiungi manualmente &lt;code&gt;https://osmiumsound.qd.je/fdroid/repo&lt;/code&gt; in Impostazioni → Repository. Il telefono e il dispositivo devono essere sulla stessa rete locale.">
+      <strong>Note:</strong> the companion app is distributed as a signed APK (sideload) or via our self-hosted F-Droid repo — it is not on the Play Store. Prefer F-Droid if you want automatic updates: tap <strong>Add F-Droid repo</strong> above (F-Droid app required), or add <code>https://osmiumsound.qd.je/fdroid/repo</code> manually under Settings → Repositories. Your phone and the appliance must be on the same local network.
+    </p>
   </div>
 </section>
 
 <!-- CHANGELOG -->
 <section id="changelog">
   <div class="centered">
-    <div class="section-label">Release history</div>
-    <h2 class="section-title">Changelog</h2>
-    <p class="section-desc">What's new in each stable release. Development builds ship more often on the Dev OTA channel.</p>
+    <div class="section-label" data-en="Release history" data-it="Cronologia versioni">Release history</div>
+    <h2 class="section-title" data-en="Changelog" data-it="Novità">Changelog</h2>
+    <p class="section-desc" data-en="What's new in each stable release. Development builds ship more often on the Dev OTA channel." data-it="Le novità di ogni versione stabile. Le build di sviluppo escono più spesso sul canale OTA Dev.">What's new in each stable release. Development builds ship more often on the Dev OTA channel.</p>
   </div>
 
   <div class="changelog-list">
     <article class="release latest">
       <div class="release-head">
-        <span class="release-version">v2.5.11</span>
-        <span class="release-latest-tag">Latest</span>
-        <span class="release-date">26 Jun 2026</span>
+        <span class="release-version">v2.5.20</span>
+        <span class="release-latest-tag" data-en="Latest" data-it="Ultima">Latest</span>
+        <span class="release-date" data-en="17 Jul 2026" data-it="17 lug 2026">17 Jul 2026</span>
       </div>
       <ul>
-        <li><span class="ctag feat">New</span><span><strong>Setup wizard</strong> can now install Lyrion Media Server automatically if it's missing.</span></li>
-        <li><span class="ctag feat">New</span><span>UEFI <strong>Secure Boot</strong> support, applied at image-build time.</span></li>
+        <li><span class="ctag feat" data-en="New" data-it="Novità">New</span><span data-en="DSP: named EQ presets (Flat, Warm, Bright, Loudness plus your own saved ones), advanced filter types (shelf, high-pass, low-pass) and a left/right balance control." data-it="DSP: preset EQ con nome (Piatto, Caldo, Brillante, Loudness più i tuoi salvati), tipi di filtro avanzati (shelf, passa-alto, passa-basso) e controllo del bilanciamento sinistra/destra.">DSP: named EQ presets (Flat, Warm, Bright, Loudness plus your own saved ones), advanced filter types (shelf, high-pass, low-pass) and a left/right balance control.</span></li>
+        <li><span class="ctag feat" data-en="New" data-it="Novità">New</span><span data-en="A 10-band graphic equalizer with a vintage analog console look is now the default EQ view on the touchscreen — the full parametric editor stays one tap away under &quot;Advanced&quot;." data-it="Un equalizzatore grafico a 10 bande in stile console analogica vintage è ora la vista EQ predefinita sul touchscreen — l'editor parametrico completo resta a un tocco sotto «Avanzate».">A 10-band graphic equalizer with a vintage analog console look is now the default EQ view on the touchscreen — the full parametric editor stays one tap away under "Advanced".</span></li>
+        <li><span class="ctag feat" data-en="New" data-it="Novità">New</span><span data-en="Companion app 1.0.6: full DSP control from the phone — presets, balance and parametric EQ editing, kept in sync with the touchscreen in both directions." data-it="App companion 1.0.6: controllo DSP completo dal telefono — preset, bilanciamento ed editing dell'EQ parametrico, sincronizzati col touchscreen in entrambe le direzioni.">Companion app 1.0.6: full DSP control from the phone — presets, balance and parametric EQ editing, kept in sync with the touchscreen in both directions.</span></li>
+        <li><span class="ctag feat" data-en="New" data-it="Novità">New</span><span data-en="Changing DSP settings during playback now briefly pauses and resumes at the same position instead of cutting the music off." data-it="Cambiare le impostazioni DSP durante la riproduzione ora mette in pausa per un attimo e riprende dalla stessa posizione invece di interrompere la musica.">Changing DSP settings during playback now briefly pauses and resumes at the same position instead of cutting the music off.</span></li>
+        <li><span class="ctag fix" data-en="Fixed" data-it="Corretto">Fixed</span><span data-en="Major DSP reliability work: no more device conflicts with the DAC when toggling, presets actually apply when switched while DSP is on, DSP survives reboots with slow USB DACs, and a rare kernel panic on reboot with DSP active is avoided." data-it="Grande lavoro di affidabilità DSP: niente più conflitti col DAC all'attivazione, i preset si applicano davvero anche a DSP già acceso, il DSP sopravvive ai riavvii con DAC USB lenti, ed evitato un raro kernel panic al riavvio con DSP attivo.">Major DSP reliability work: no more device conflicts with the DAC when toggling, presets actually apply when switched while DSP is on, DSP survives reboots with slow USB DACs, and a rare kernel panic on reboot with DSP active is avoided.</span></li>
+        <li><span class="ctag fix" data-en="Fixed" data-it="Corretto">Fixed</span><span data-en="The touchscreen UI now recovers on its own when the player briefly disconnects (e.g. during a DSP change) instead of freezing until a reload." data-it="L'interfaccia touchscreen ora si riprende da sola quando il player si disconnette per qualche istante (es. durante una modifica DSP) invece di bloccarsi fino a un ricaricamento.">The touchscreen UI now recovers on its own when the player briefly disconnects (e.g. during a DSP change) instead of freezing until a reload.</span></li>
+        <li><span class="ctag fix" data-en="Fixed" data-it="Corretto">Fixed</span><span data-en="Companion app: stays bound to the appliance's player when it briefly drops off the server (no more &quot;unknown track&quot;), and DSP controls lock while a change is applying so commands can't overlap." data-it="App companion: resta agganciata al player del dispositivo quando questo sparisce per qualche istante dal server (niente più «unknown track»), e i controlli DSP si bloccano mentre una modifica è in corso così i comandi non si sovrappongono.">Companion app: stays bound to the appliance's player when it briefly drops off the server (no more "unknown track"), and DSP controls lock while a change is applying so commands can't overlap.</span></li>
+      </ul>
+    </article>
+
+    <article class="release">
+      <div class="release-head">
+        <span class="release-version">v2.5.19</span>
+        <span class="release-date" data-en="14 Jul 2026" data-it="14 lug 2026">14 Jul 2026</span>
+      </div>
+      <ul>
+        <li><span class="ctag feat" data-en="New" data-it="Novità">New</span><span data-en="Internal disks can now be adopted as music storage right from the touchscreen — formatted, mounted and shared over Samba automatically, no manual setup required." data-it="I dischi interni possono ora essere adottati come storage musicale direttamente dal touchscreen — formattati, montati e condivisi via Samba automaticamente, senza configurazione manuale.">Internal disks can now be adopted as music storage right from the touchscreen — formatted, mounted and shared over Samba automatically, no manual setup required.</span></li>
+        <li><span class="ctag feat" data-en="New" data-it="Novità">New</span><span data-en="The install ISO now asks which disk to install on instead of always wiping the first one it detects, and adds a &quot;Try Osmium Sound (no install)&quot; live boot option to try the kiosk straight from the USB stick." data-it="La ISO di installazione ora chiede su quale disco installare invece di formattare sempre il primo che trova, e aggiunge un'opzione di avvio live «Try Osmium Sound (no install)» per provare il kiosk direttamente dalla chiavetta USB.">The install ISO now asks which disk to install on instead of always wiping the first one it detects, and adds a "Try Osmium Sound (no install)" live boot option to try the kiosk straight from the USB stick.</span></li>
+        <li><span class="ctag fix" data-en="Fixed" data-it="Corretto">Fixed</span><span data-en="Radio and plugin sub-menus (Qobuz, TIDAL, and others) weren't loading correctly because the app was reading the wrong keys in Lyrion's response." data-it="I sotto-menu radio e plugin (Qobuz, TIDAL e altri) non si caricavano correttamente perché l'app leggeva le chiavi sbagliate nella risposta di Lyrion.">Radio and plugin sub-menus (Qobuz, TIDAL, and others) weren't loading correctly because the app was reading the wrong keys in Lyrion's response.</span></li>
+        <li><span class="ctag fix" data-en="Fixed" data-it="Corretto">Fixed</span><span data-en="The screensaver didn't wake up when playback started remotely (e.g. from the companion app or another synced device)." data-it="Lo screensaver non si disattivava quando la riproduzione partiva da remoto (es. dall'app companion o da un altro dispositivo sincronizzato).">The screensaver didn't wake up when playback started remotely (e.g. from the companion app or another synced device).</span></li>
+        <li><span class="ctag fix" data-en="Fixed" data-it="Corretto">Fixed</span><span data-en="Several UEFI boot reliability issues: duplicate boot entries created on every kernel update, and incorrect detection of the EFI boot partition on some setups." data-it="Diversi problemi di affidabilità del boot UEFI: voci di avvio duplicate create a ogni aggiornamento del kernel e rilevamento errato della partizione di boot EFI su alcune configurazioni.">Several UEFI boot reliability issues: duplicate boot entries created on every kernel update, and incorrect detection of the EFI boot partition on some setups.</span></li>
+      </ul>
+    </article>
+
+    <article class="release">
+      <div class="release-head">
+        <span class="release-version">v2.5.18</span>
+        <span class="release-date" data-en="12 Jul 2026" data-it="12 lug 2026">12 Jul 2026</span>
+      </div>
+      <ul>
+        <li><span class="ctag feat" data-en="New" data-it="Novità">New</span><span data-en="Multiroom: a device can now follow another Osmium Sound's Lyrion server (with LAN auto-discovery) so both show up in the same sync group and can be grouped together, right from Settings → Multiroom — on the appliance and in the Android companion app." data-it="Multiroom: un dispositivo può ora seguire il server Lyrion di un altro Osmium Sound (con scoperta automatica in rete) così entrambi compaiono nello stesso gruppo sync e possono essere raggruppati, direttamente da Impostazioni → Multiroom — sull'appliance e nell'app Android companion.">Multiroom: a device can now follow another Osmium Sound's Lyrion server (with LAN auto-discovery) so both show up in the same sync group and can be grouped together, right from Settings → Multiroom — on the appliance and in the Android companion app.</span></li>
+        <li><span class="ctag feat" data-en="New" data-it="Novità">New</span><span data-en="Every device can be given its own player name (instead of the default &quot;OsmiumSound&quot; on all of them), so grouped devices are easy to tell apart." data-it="Ogni dispositivo può avere un proprio nome player (invece del predefinito «OsmiumSound» su tutti), così i dispositivi raggruppati si distinguono facilmente.">Every device can be given its own player name (instead of the default "OsmiumSound" on all of them), so grouped devices are easy to tell apart.</span></li>
+        <li><span class="ctag feat" data-en="New" data-it="Novità">New</span><span data-en="On-screen keyboard: added a Shift key for uppercase letters." data-it="Tastiera a schermo: aggiunto il tasto Shift per le lettere maiuscole.">On-screen keyboard: added a Shift key for uppercase letters.</span></li>
+        <li><span class="ctag fix" data-en="Fixed" data-it="Corretto">Fixed</span><span data-en="Multiroom grouping, the playback progress bar and the VU meter could get stuck after switching a device's Lyrion server or renaming a player (a squeezelite-restart timing race and a stale visualizer buffer)." data-it="Il raggruppamento multiroom, la barra di avanzamento e il VU meter potevano bloccarsi dopo aver cambiato il server Lyrion di un dispositivo o rinominato un player (una corsa critica al riavvio di squeezelite e un buffer del visualizzatore non aggiornato).">Multiroom grouping, the playback progress bar and the VU meter could get stuck after switching a device's Lyrion server or renaming a player (a squeezelite-restart timing race and a stale visualizer buffer).</span></li>
+        <li><span class="ctag fix" data-en="Fixed" data-it="Corretto">Fixed</span><span data-en="Setup wizard: the music-sources QR code now carries the pairing token, so the sources page opens authenticated instead of being rejected by the new token protection." data-it="Wizard di configurazione: il QR code delle sorgenti musicali ora include il token di abbinamento, quindi la pagina sorgenti si apre autenticata invece di essere rifiutata dalla nuova protezione a token.">Setup wizard: the music-sources QR code now carries the pairing token, so the sources page opens authenticated instead of being rejected by the new token protection.</span></li>
+      </ul>
+    </article>
+
+    <article class="release">
+      <div class="release-head">
+        <span class="release-version">v2.5.17</span>
+        <span class="release-date" data-en="12 Jul 2026" data-it="12 lug 2026">12 Jul 2026</span>
+      </div>
+      <ul>
+        <li><span class="ctag fix" data-en="Fixed" data-it="Corretto">Fixed</span><span data-en="Setup wizard: the music-sources QR code now carries the pairing token, so the sources page opens authenticated instead of being rejected by the new token protection." data-it="Wizard di configurazione: il QR code delle sorgenti musicali ora include il token di abbinamento, quindi la pagina sorgenti si apre autenticata invece di essere rifiutata dalla nuova protezione a token.">Setup wizard: the music-sources QR code now carries the pairing token, so the sources page opens authenticated instead of being rejected by the new token protection.</span></li>
+      </ul>
+    </article>
+
+    <article class="release">
+      <div class="release-head">
+        <span class="release-version">v2.5.16</span>
+        <span class="release-date" data-en="12 Jul 2026" data-it="12 lug 2026">12 Jul 2026</span>
+      </div>
+      <ul>
+        <li><span class="ctag fix" data-en="Fixed" data-it="Corretto">Fixed</span><span data-en="Closed a broader set of unauthenticated endpoints (backup/restore, SMB and USB sources, room-correction filter) and two stored-XSS issues in the Sources web page (security fixes)." data-it="Chiusi ulteriori endpoint non autenticati (backup/ripristino, sorgenti SMB e USB, filtro di correzione ambientale) e due vulnerabilità XSS nella pagina web Sorgenti (fix di sicurezza).">Closed a broader set of unauthenticated endpoints (backup/restore, SMB and USB sources, room-correction filter) and two stored-XSS issues in the Sources web page (security fixes).</span></li>
+        <li><span class="ctag fix" data-en="Fixed" data-it="Corretto">Fixed</span><span data-en="SSH now disables root login by default, and the pairing-token system is hardened (rate limiting, one-tap revocation, tighter file permissions)." data-it="SSH ora disattiva l'accesso root di default, ed è stato rafforzato il sistema dei token di abbinamento (limite dei tentativi, revoca con un tocco, permessi dei file più restrittivi).">SSH now disables root login by default, and the pairing-token system is hardened (rate limiting, one-tap revocation, tighter file permissions).</span></li>
+        <li><span class="ctag fix" data-en="Fixed" data-it="Corretto">Fixed</span><span data-en="Restoring a backup no longer trusts its file paths without re-validating them first." data-it="Il ripristino di un backup non si fida più dei percorsi dei file senza prima ricontrollarli.">Restoring a backup no longer trusts its file paths without re-validating them first.</span></li>
+        <li><span class="ctag fix" data-en="Fixed" data-it="Corretto">Fixed</span><span data-en="Android companion app: confirms the appliance's address before applying a scanned pairing QR code." data-it="App Android companion: conferma l'indirizzo del dispositivo prima di applicare un QR code di abbinamento scansionato.">Android companion app: confirms the appliance's address before applying a scanned pairing QR code.</span></li>
+        <li><span class="ctag feat" data-en="New" data-it="Novità">New</span><span data-en="Android companion app (v1.0.4) is now also available via our self-hosted &lt;strong&gt;F-Droid repo&lt;/strong&gt; — no Play Store needed." data-it="L'app Android companion (v1.0.4) è ora disponibile anche tramite il nostro &lt;strong&gt;repo F-Droid&lt;/strong&gt; self-hosted — senza bisogno del Play Store.">Android companion app (v1.0.4) is now also available via our self-hosted <strong>F-Droid repo</strong> — no Play Store needed.</span></li>
+        <li><span class="ctag fix" data-en="Fixed" data-it="Corretto">Fixed</span><span data-en="Android companion app: removed a stale, non-functional &quot;Privacy policy&quot; link from the About screen." data-it="App Android companion: rimosso dalla schermata About un link &quot;Privacy policy&quot; obsoleto e non funzionante.">Android companion app: removed a stale, non-functional "Privacy policy" link from the About screen.</span></li>
+      </ul>
+    </article>
+
+    <article class="release">
+      <div class="release-head">
+        <span class="release-version">v2.5.15</span>
+        <span class="release-date" data-en="11 Jul 2026" data-it="11 lug 2026">11 Jul 2026</span>
+      </div>
+      <ul>
+        <li><span class="ctag feat" data-en="New" data-it="Novità">New</span><span data-en="The paired &lt;strong&gt;Android companion app&lt;/strong&gt; can now drive DSP settings and system admin actions (SSH, updates, reboot/shutdown, audio device) straight from the phone." data-it="L'&lt;strong&gt;app Android companion&lt;/strong&gt; abbinata ora può gestire le impostazioni DSP e le azioni di amministrazione (SSH, aggiornamenti, riavvio/spegnimento, dispositivo audio) direttamente dal telefono.">The paired <strong>Android companion app</strong> can now drive DSP settings and system admin actions (SSH, updates, reboot/shutdown, audio device) straight from the phone.</span></li>
+        <li><span class="ctag fix" data-en="Fixed" data-it="Corretto">Fixed</span><span data-en="Closed two pairing-token bypass gaps and hardened the backup/restore and room-correction filter endpoints (security fixes)." data-it="Chiusi due bug di bypass del token di abbinamento e rafforzati gli endpoint di backup/ripristino e del filtro di correzione ambientale (fix di sicurezza).">Closed two pairing-token bypass gaps and hardened the backup/restore and room-correction filter endpoints (security fixes).</span></li>
+      </ul>
+    </article>
+
+    <article class="release">
+      <div class="release-head">
+        <span class="release-version">v2.5.14</span>
+        <span class="release-date" data-en="11 Jul 2026" data-it="11 lug 2026">11 Jul 2026</span>
+      </div>
+      <ul>
+        <li><span class="ctag feat" data-en="New" data-it="Novità">New</span><span data-en="Optional &lt;strong&gt;DSP&lt;/strong&gt; — parametric EQ, headphone crossfeed and room correction from an uploaded filter. Off by default, so bit-perfect playback is untouched." data-it="DSP &lt;strong&gt;opzionale&lt;/strong&gt; — equalizzatore parametrico, crossfeed per cuffie e correzione ambientale da un filtro caricato. Disattivato di default, per non toccare la riproduzione bit-perfect.">Optional <strong>DSP</strong> — parametric EQ, headphone crossfeed and room correction from an uploaded filter. Off by default, so bit-perfect playback is untouched.</span></li>
+        <li><span class="ctag feat" data-en="New" data-it="Novità">New</span><span data-en="&lt;strong&gt;Multiroom&lt;/strong&gt; — group other players on the network to play in sync." data-it="&lt;strong&gt;Multiroom&lt;/strong&gt; — raggruppa altri player in rete per riprodurre in sincrono."><strong>Multiroom</strong> — group other players on the network to play in sync.</span></li>
+        <li><span class="ctag feat" data-en="New" data-it="Novità">New</span><span data-en="Control the player from &lt;strong&gt;any phone browser&lt;/strong&gt; via a QR code — no app to install." data-it="Controlla il player da &lt;strong&gt;qualsiasi browser del telefono&lt;/strong&gt; tramite QR code — nessuna app da installare.">Control the player from <strong>any phone browser</strong> via a QR code — no app to install.</span></li>
+        <li><span class="ctag feat" data-en="New" data-it="Novità">New</span><span data-en="&lt;strong&gt;Backup and restore&lt;/strong&gt; the device configuration (DAC, DSP/EQ, sources) from a browser." data-it="&lt;strong&gt;Backup e ripristino&lt;/strong&gt; della configurazione del dispositivo (DAC, DSP/EQ, sorgenti) dal browser."><strong>Backup and restore</strong> the device configuration (DAC, DSP/EQ, sources) from a browser.</span></li>
+        <li><span class="ctag feat" data-en="New" data-it="Novità">New</span><span data-en="&lt;strong&gt;Lyrics&lt;/strong&gt; view in Now Playing, alongside the VU meters." data-it="Vista &lt;strong&gt;testi&lt;/strong&gt; nella schermata In Riproduzione, accanto ai VU meter."><strong>Lyrics</strong> view in Now Playing, alongside the VU meters.</span></li>
+        <li><span class="ctag feat" data-en="New" data-it="Novità">New</span><span data-en="&lt;strong&gt;Mouse-pointer&lt;/strong&gt; toggle for setups without a touchscreen." data-it="Interruttore per il &lt;strong&gt;puntatore del mouse&lt;/strong&gt; per configurazioni senza touchscreen."><strong>Mouse-pointer</strong> toggle for setups without a touchscreen.</span></li>
+        <li><span class="ctag fix" data-en="Fixed" data-it="Corretto">Fixed</span><span data-en="OTA updates now verify every extracted file and check free space before applying, with a fullscreen progress view." data-it="Gli aggiornamenti OTA ora verificano ogni file estratto e controllano lo spazio libero prima di applicarsi, con una schermata di avanzamento a schermo intero.">OTA updates now verify every extracted file and check free space before applying, with a fullscreen progress view.</span></li>
+        <li><span class="ctag fix" data-en="Fixed" data-it="Corretto">Fixed</span><span data-en="Hardened URL handling in the interface (security fix)." data-it="Rafforzata la gestione degli URL nell'interfaccia (fix di sicurezza).">Hardened URL handling in the interface (security fix).</span></li>
+        <li><span class="ctag feat" data-en="New" data-it="Novità">New</span><span data-en="The &lt;strong&gt;Android companion app&lt;/strong&gt; can now pair with the device by scanning a QR code." data-it="L'&lt;strong&gt;app Android companion&lt;/strong&gt; ora può abbinarsi al dispositivo scansionando un QR code.">The <strong>Android companion app</strong> can now pair with the device by scanning a QR code.</span></li>
+      </ul>
+    </article>
+
+    <article class="release">
+      <div class="release-head">
+        <span class="release-version">v2.5.13</span>
+        <span class="release-date" data-en="30 Jun 2026" data-it="30 giu 2026">30 Jun 2026</span>
+      </div>
+      <ul>
+        <li><span class="ctag feat" data-en="New" data-it="Novità">New</span><span data-en="&lt;strong&gt;Japanese, Chinese &amp;amp; Korean&lt;/strong&gt; album and track names now display correctly (CJK fonts bundled)." data-it="I nomi di album e brani in &lt;strong&gt;giapponese, cinese e coreano&lt;/strong&gt; ora si visualizzano correttamente (font CJK inclusi)."><strong>Japanese, Chinese &amp; Korean</strong> album and track names now display correctly (CJK fonts bundled).</span></li>
+        <li><span class="ctag perf" data-en="Faster" data-it="Più veloce">Faster</span><span data-en="Much &lt;strong&gt;smoother music library&lt;/strong&gt; — lighter &quot;now playing&quot; updates and fluid scrolling even through thousands of albums." data-it="Libreria musicale &lt;strong&gt;molto più fluida&lt;/strong&gt; — aggiornamenti &quot;in riproduzione&quot; più leggeri e scorrimento scorrevole anche tra migliaia di album.">Much <strong>smoother music library</strong> — lighter "now playing" updates and fluid scrolling even through thousands of albums.</span></li>
+        <li><span class="ctag perf" data-en="Faster" data-it="Più veloce">Faster</span><span data-en="More responsive Settings: background services no longer block the screen during updates, scans or network changes." data-it="Impostazioni più reattive: i servizi in background non bloccano più lo schermo durante aggiornamenti, scansioni o cambi di rete.">More responsive Settings: background services no longer block the screen during updates, scans or network changes.</span></li>
+        <li><span class="ctag fix" data-en="Fixed" data-it="Corretto">Fixed</span><span data-en="Hardened the Sources web service and removed dead/duplicate system code." data-it="Rafforzato il servizio web Sorgenti e rimosso codice di sistema morto/duplicato.">Hardened the Sources web service and removed dead/duplicate system code.</span></li>
+      </ul>
+    </article>
+
+    <article class="release">
+      <div class="release-head">
+        <span class="release-version">v2.5.11</span>
+        <span class="release-date" data-en="26 Jun 2026" data-it="26 giu 2026">26 Jun 2026</span>
+      </div>
+      <ul>
+        <li><span class="ctag feat" data-en="New" data-it="Novità">New</span><span data-en="&lt;strong&gt;Setup wizard&lt;/strong&gt; can now install Lyrion Media Server automatically if it's missing." data-it="La &lt;strong&gt;procedura guidata&lt;/strong&gt; ora può installare automaticamente Lyrion Media Server se mancante."><strong>Setup wizard</strong> can now install Lyrion Media Server automatically if it's missing.</span></li>
+        <li><span class="ctag feat" data-en="New" data-it="Novità">New</span><span data-en="UEFI &lt;strong&gt;Secure Boot&lt;/strong&gt; support, applied at image-build time." data-it="Supporto a &lt;strong&gt;Secure Boot&lt;/strong&gt; UEFI, applicato in fase di creazione dell'immagine.">UEFI <strong>Secure Boot</strong> support, applied at image-build time.</span></li>
       </ul>
     </article>
 
     <article class="release">
       <div class="release-head">
         <span class="release-version">v2.5.10</span>
-        <span class="release-date">26 Jun 2026</span>
+        <span class="release-date" data-en="26 Jun 2026" data-it="26 giu 2026">26 Jun 2026</span>
       </div>
       <ul>
-        <li><span class="ctag feat">New</span><span>Native <strong>Sources manager</strong> — add and manage USB, SMB and local music sources straight from the touchscreen.</span></li>
-        <li><span class="ctag feat">New</span><span>Automatic <strong>USB drive mounting</strong>; SMB mounts retry in the background so they survive a fast boot.</span></li>
-        <li><span class="ctag feat">New</span><span>Android-style submenu navigation in Settings, with styled in-app confirm dialogs for reboot/shutdown.</span></li>
-        <li><span class="ctag perf">Faster</span><span>Quicker boot — slimmer initramfs, masked boot-delaying services, and unused Bluetooth dropped at startup.</span></li>
+        <li><span class="ctag feat" data-en="New" data-it="Novità">New</span><span data-en="Native &lt;strong&gt;Sources manager&lt;/strong&gt; — add and manage USB, SMB and local music sources straight from the touchscreen." data-it="&lt;strong&gt;Gestore sorgenti&lt;/strong&gt; nativo — aggiungi e gestisci sorgenti musicali USB, SMB e locali direttamente dal touchscreen.">Native <strong>Sources manager</strong> — add and manage USB, SMB and local music sources straight from the touchscreen.</span></li>
+        <li><span class="ctag feat" data-en="New" data-it="Novità">New</span><span data-en="Automatic &lt;strong&gt;USB drive mounting&lt;/strong&gt;; SMB mounts retry in the background so they survive a fast boot." data-it="&lt;strong&gt;Montaggio automatico&lt;/strong&gt; delle chiavette USB; i montaggi SMB riprovano in background per sopravvivere a un avvio rapido.">Automatic <strong>USB drive mounting</strong>; SMB mounts retry in the background so they survive a fast boot.</span></li>
+        <li><span class="ctag feat" data-en="New" data-it="Novità">New</span><span data-en="Android-style submenu navigation in Settings, with styled in-app confirm dialogs for reboot/shutdown." data-it="Navigazione a sottomenu in stile Android nelle Impostazioni, con finestre di conferma in-app per riavvio/spegnimento.">Android-style submenu navigation in Settings, with styled in-app confirm dialogs for reboot/shutdown.</span></li>
+        <li><span class="ctag perf" data-en="Faster" data-it="Più veloce">Faster</span><span data-en="Quicker boot — slimmer initramfs, masked boot-delaying services, and unused Bluetooth dropped at startup." data-it="Avvio più rapido — initramfs più snello, servizi che rallentano il boot mascherati e Bluetooth inutilizzato disattivato all'avvio.">Quicker boot — slimmer initramfs, masked boot-delaying services, and unused Bluetooth dropped at startup.</span></li>
       </ul>
     </article>
 
     <article class="release">
       <div class="release-head">
         <span class="release-version">v2.5.9</span>
-        <span class="release-date">23 Jun 2026</span>
+        <span class="release-date" data-en="23 Jun 2026" data-it="23 giu 2026">23 Jun 2026</span>
       </div>
       <ul>
-        <li><span class="ctag feat">New</span><span>Full playback controls — <strong>shuffle / repeat</strong>, play queue, sleep timer, playback preferences and alarms.</span></li>
-        <li><span class="ctag feat">New</span><span>Browse and save <strong>playlists</strong> in the Music tab, plus a "Rescan library" button.</span></li>
-        <li><span class="ctag fix">Fixed</span><span>OS version stays visible when an update check fails; OTA manifest now served from GitHub Pages to dodge API rate limits.</span></li>
-        <li><span class="ctag perf">Faster</span><span>Lower renderer CPU usage from the analog VU meter, and a smoother boot intro on the x86 mini-PC.</span></li>
+        <li><span class="ctag feat" data-en="New" data-it="Novità">New</span><span data-en="Full playback controls — &lt;strong&gt;shuffle / repeat&lt;/strong&gt;, play queue, sleep timer, playback preferences and alarms." data-it="Controlli di riproduzione completi — &lt;strong&gt;casuale / ripeti&lt;/strong&gt;, coda di riproduzione, timer di spegnimento, preferenze di riproduzione e sveglie.">Full playback controls — <strong>shuffle / repeat</strong>, play queue, sleep timer, playback preferences and alarms.</span></li>
+        <li><span class="ctag feat" data-en="New" data-it="Novità">New</span><span data-en="Browse and save &lt;strong&gt;playlists&lt;/strong&gt; in the Music tab, plus a &quot;Rescan library&quot; button." data-it="Sfoglia e salva &lt;strong&gt;playlist&lt;/strong&gt; nella scheda Musica, più un pulsante &quot;Riscansiona libreria&quot;.">Browse and save <strong>playlists</strong> in the Music tab, plus a "Rescan library" button.</span></li>
+        <li><span class="ctag fix" data-en="Fixed" data-it="Corretto">Fixed</span><span data-en="OS version stays visible when an update check fails; OTA manifest now served from GitHub Pages to dodge API rate limits." data-it="La versione dell'OS resta visibile quando un controllo aggiornamenti fallisce; il manifest OTA ora è servito da GitHub Pages per evitare i limiti dell'API.">OS version stays visible when an update check fails; OTA manifest now served from GitHub Pages to dodge API rate limits.</span></li>
+        <li><span class="ctag perf" data-en="Faster" data-it="Più veloce">Faster</span><span data-en="Lower renderer CPU usage from the analog VU meter, and a smoother boot intro on the x86 mini-PC." data-it="Minore uso di CPU del renderer per il VU meter analogico e un'intro d'avvio più fluida sul mini-PC x86.">Lower renderer CPU usage from the analog VU meter, and a smoother boot intro on the x86 mini-PC.</span></li>
       </ul>
     </article>
 
     <article class="release">
       <div class="release-head">
         <span class="release-version">v2.5.8</span>
-        <span class="release-date">22 Jun 2026</span>
+        <span class="release-date" data-en="22 Jun 2026" data-it="22 giu 2026">22 Jun 2026</span>
       </div>
       <ul>
-        <li><span class="ctag feat">New</span><span>Rebrand to <strong>Osmium Sound</strong>, with a brand-new presentation site.</span></li>
-        <li><span class="ctag feat">New</span><span>Signed <strong>OS OTA</strong> pipeline — update runner, apply.d migrations and idempotency checks in CI.</span></li>
+        <li><span class="ctag feat" data-en="New" data-it="Novità">New</span><span data-en="Rebrand to &lt;strong&gt;Osmium Sound&lt;/strong&gt;, with a brand-new presentation site." data-it="Rinominato in &lt;strong&gt;Osmium Sound&lt;/strong&gt;, con un sito di presentazione del tutto nuovo.">Rebrand to <strong>Osmium Sound</strong>, with a brand-new presentation site.</span></li>
+        <li><span class="ctag feat" data-en="New" data-it="Novità">New</span><span data-en="Signed &lt;strong&gt;OS OTA&lt;/strong&gt; pipeline — update runner, apply.d migrations and idempotency checks in CI." data-it="Pipeline &lt;strong&gt;OTA del sistema operativo&lt;/strong&gt; firmata — runner di aggiornamento, migrazioni apply.d e controlli di idempotenza in CI.">Signed <strong>OS OTA</strong> pipeline — update runner, apply.d migrations and idempotency checks in CI.</span></li>
       </ul>
     </article>
   </div>
 
-  <p class="changelog-foot">
-    See every build, including development pre-releases, on
-    <a href="https://github.com/adri6412/osmium-sound/releases" target="_blank">GitHub Releases →</a>
-  </p>
-</section>
-
-<!-- INSTALL -->
-<section id="install">
-  <div class="install-inner">
-    <div class="section-label">Get started</div>
-    <h2 class="section-title">Download &amp; install</h2>
-    <p class="section-desc">Download the latest release from GitHub. Once installed, OTA keeps everything up to date automatically from the Settings screen.</p>
-
-    <div style="display:flex; gap:1rem; justify-content:center; flex-wrap:wrap; margin-top:2.25rem;">
-      <a class="btn-primary" href="https://github.com/adri6412/osmium-sound/releases/latest" target="_blank">
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-        Latest Release
-      </a>
-      <a class="btn-secondary" href="https://github.com/adri6412/osmium-sound/releases" target="_blank">
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 19v-6a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h2a2 2 0 0 0 2-2zm0 0V9a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v10m-6 0a2 2 0 0 0 2 2h2a2 2 0 0 0 2-2m0 0V5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-2a2 2 0 0 1-2-2z"/></svg>
-        All Releases
-      </a>
-    </div>
-  </div>
 </section>
 
 <!-- FOOTER -->
@@ -763,8 +1029,7 @@
   </div>
   <div class="footer-links">
     <a href="https://github.com/adri6412/osmium-sound" target="_blank">GitHub</a>
-    <a href="https://github.com/adri6412/osmium-sound/releases" target="_blank">Releases</a>
-    <a href="https://github.com/adri6412/osmium-sound/issues" target="_blank">Issues</a>
+    <a href="https://github.com/adri6412/osmium-sound/issues" target="_blank" data-en="Issues" data-it="Problemi">Issues</a>
   </div>
 </footer>
 
@@ -775,23 +1040,57 @@
 </div>
 
 <script>
+  // ── Bilingual EN / IT support ────────────────────────────────
   const screens = [
-    { src: 'screen_003.png', cap: 'Main player — Now Playing' },
-    { src: 'screen_004.png', cap: 'Album grid view' },
-    { src: 'screen_005.png', cap: 'Full-screen Now Playing with analog VU meters' },
-    { src: 'screen_006.png', cap: 'Apps & Streaming services' },
-    { src: 'screen_007.png', cap: 'Settings — Language & Lyrion configuration' },
-    { src: 'screen_008.png', cap: 'Audio Output (DAC) selection' },
-    { src: 'screen_009.png', cap: 'OTA Update channels — Production vs Development' },
-    { src: 'screen_010.png', cap: 'System Controls — Update, Reboot, Shutdown' },
+    { src: '01.png', cap: { en: 'Main player — Now Playing',                         it: 'Player principale — In riproduzione' } },
+    { src: '02.png', cap: { en: 'Full-screen Now Playing with analog VU meters',      it: 'In riproduzione a schermo intero con VU meter analogici' } },
+    { src: '03.png', cap: { en: 'Album grid view',                                    it: 'Vista a griglia degli album' } },
+    { src: '04.png', cap: { en: 'Apps & Streaming services',                          it: 'App e servizi di streaming' } },
+    { src: '05.png', cap: { en: 'Audio output — pick your DAC',                       it: 'Uscita audio — scegli il tuo DAC' } },
+    { src: '06.png', cap: { en: 'Multiroom — group players in sync',                  it: 'Multiroom — raggruppa i player in sincronia' } },
+    { src: '07.png', cap: { en: 'Updates — dev/production OTA channel',               it: 'Aggiornamenti — canale OTA dev/produzione' } },
   ];
+
+  let lang = 'en';
+  let current = 0;
+
+  function applyLang(l) {
+    lang = (l === 'it') ? 'it' : 'en';
+    document.documentElement.lang = lang;
+    document.querySelectorAll('[data-en]').forEach(el => {
+      const val = el.dataset[lang];
+      if (val != null) el.innerHTML = val;
+    });
+    document.querySelectorAll('.lang-switch button').forEach(b => {
+      b.classList.toggle('active', b.dataset.lang === lang);
+    });
+    try { localStorage.setItem('lang', lang); } catch (e) {}
+    // Refresh the caption shown in the carousel for the new language
+    if (typeof current === 'number') {
+      const cap = document.getElementById('caption');
+      if (cap) cap.textContent = screens[current].cap[lang];
+    }
+  }
+
+  document.querySelectorAll('.lang-switch button').forEach(b => {
+    b.addEventListener('click', () => applyLang(b.dataset.lang));
+  });
+
+  // Initial language: saved preference → browser language → English
+  (function () {
+    let saved = null;
+    try { saved = localStorage.getItem('lang'); } catch (e) {}
+    const browserIt = (navigator.languages || [navigator.language || ''])
+      .some(l => l.toLowerCase().startsWith('it'));
+    applyLang(saved || (browserIt ? 'it' : 'en'));
+  })();
 
   // Click-to-play YouTube facade — keeps the title/channel hidden at rest
   const videoFacade = document.getElementById('videoFacade');
   if (videoFacade) {
     videoFacade.addEventListener('click', () => {
       const iframe = document.createElement('iframe');
-      iframe.src = 'https://www.youtube-nocookie.com/embed/ENq9AvrcfM0?autoplay=1&modestbranding=1&rel=0&playsinline=1';
+      iframe.src = 'https://www.youtube-nocookie.com/embed/7Dw9oanIkuM?autoplay=1&modestbranding=1&rel=0&playsinline=1';
       iframe.title = 'Osmium Sound — Demo video';
       iframe.allow = 'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share';
       iframe.allowFullscreen = true;
@@ -800,7 +1099,6 @@
     });
   }
 
-  let current = 0;
   let autoTimer;
 
   // Build thumbnails
@@ -819,9 +1117,9 @@
     img.style.opacity = '0';
     setTimeout(() => {
       img.src = screens[current].src;
-      img.alt = screens[current].cap;
+      img.alt = screens[current].cap[lang];
       img.style.opacity = '1';
-      document.getElementById('caption').textContent = screens[current].cap;
+      document.getElementById('caption').textContent = screens[current].cap[lang];
       document.getElementById('counter').textContent = `${current + 1} / ${screens.length}`;
     }, 180);
     document.querySelectorAll('.thumb').forEach((t, idx) => {
