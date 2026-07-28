@@ -26,6 +26,7 @@ import io
 import tarfile
 import hashlib
 import secrets
+import tempfile
 import urllib.request
 import urllib.error
 from datetime import datetime, timezone
@@ -189,21 +190,35 @@ def mount_smb(src):
         return True, "già montato"
 
     unc = f"//{server}/{share}"
-    base_opts = f"uid=0,gid=0,iocharset=utf8,ro,file_mode=0644,dir_mode=0755"
-    cred = ""
-    if username:
-        cred = f",username={username},password={password}"
-    else:
-        cred = ",guest"
+    base_opts = "uid=0,gid=0,iocharset=utf8,ro,file_mode=0644,dir_mode=0755"
 
-    last = ""
-    for vers in ("3.1.1", "3.0", "2.1", "1.0"):
-        opts = f"{base_opts}{cred},vers={vers}"
-        r = _run(["mount", "-t", "cifs", unc, mountpoint, "-o", opts])
-        if r.returncode == 0:
-            return True, f"montato (SMB {vers})"
-        last = (r.stderr or r.stdout).strip()
-    return False, last or "mount fallito"
+    cred_path = None
+    try:
+        if username:
+            # Credentials go in a private temp file rather than the -o string,
+            # so the password never shows up in argv / `ps aux` output.
+            fd, cred_path = tempfile.mkstemp(prefix="hifi-smb-cred-")
+            with os.fdopen(fd, "w") as f:
+                f.write(f"username={username}\npassword={password}\n")
+            os.chmod(cred_path, 0o600)
+            cred_opt = f",credentials={cred_path}"
+        else:
+            cred_opt = ",guest"
+
+        last = ""
+        for vers in ("3.1.1", "3.0", "2.1", "1.0"):
+            opts = f"{base_opts}{cred_opt},vers={vers}"
+            r = _run(["mount", "-t", "cifs", unc, mountpoint, "-o", opts])
+            if r.returncode == 0:
+                return True, f"montato (SMB {vers})"
+            last = (r.stderr or r.stdout).strip()
+        return False, last or "mount fallito"
+    finally:
+        if cred_path:
+            try:
+                os.remove(cred_path)
+            except OSError:
+                pass
 
 
 def umount(mountpoint):
