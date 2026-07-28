@@ -18,7 +18,6 @@ const sections = computed(() => [
   { key: 'audio',     label: t('settings.sections.audio.label'),     desc: t('settings.sections.audio.desc') },
   { key: 'sources',   label: t('settings.sections.sources.label'),   desc: t('settings.sections.sources.desc') },
   { key: 'dsp',       label: t('settings.sections.dsp.label'),       desc: t('settings.sections.dsp.desc') },
-  { key: 'bluetooth', label: t('settings.sections.bluetooth.label'), desc: t('settings.sections.bluetooth.desc') },
   { key: 'services',  label: t('settings.sections.services.label'),  desc: t('settings.sections.services.desc') },
   { key: 'multiroom', label: t('settings.sections.multiroom.label'), desc: t('settings.sections.multiroom.desc') },
   { key: 'display',   label: t('settings.sections.display.label'),   desc: t('settings.sections.display.desc') },
@@ -173,32 +172,6 @@ async function removeFir() {
   firBusy.value = false;
   say(r.ok && r.data.removed ? t('settings.dsp.firRemoved') : bodyMsg(r, t('settings.dsp.firNoneToRemove')));
   loadFir();
-}
-
-// ── Bluetooth ────────────────────────────────────────────────────
-const bt = reactive({ available: false, enabled: false, devices: [], countdown: 0 });
-let btTimer = null;
-async function loadBt() {
-  const r = await api.sys('bluetooth');
-  if (r.ok) { bt.available = !!r.data.available; bt.enabled = !!r.data.enabled; bt.devices = r.data.devices || []; }
-}
-async function setBt(v) {
-  bt.enabled = v; say(v ? t('settings.bluetooth.enabling') : t('settings.bluetooth.disabling'));
-  const r = await api.sysPost('bluetooth', { enable: v });
-  say(bodyMsg(r, t('settings.bluetooth.updated')), !(r.ok && r.data.success !== false));
-  loadBt();
-}
-async function btDiscoverable() {
-  const r = await api.sysPost('bluetooth_discoverable', {});
-  if (r.ok && r.data.success !== false) {
-    bt.countdown = r.data.seconds || 120;
-    clearInterval(btTimer);
-    btTimer = setInterval(() => { if (--bt.countdown <= 0) clearInterval(btTimer); }, 1000);
-  } else say(bodyMsg(r, t('settings.bluetooth.operationFailed')), true);
-}
-async function btForget(mac) {
-  const r = await api.sysPost('bluetooth_forget', { mac });
-  if (r.ok) bt.devices = r.data.devices || []; loadBt();
 }
 
 // ── Tidal / SSH / Remote support ──────────────────────────────────
@@ -398,9 +371,9 @@ async function changePw() {
 }
 
 onMounted(async () => {
-  loadNet(); loadAudio(); loadDsp(); loadFir(); loadBt(); loadToggles(); loadLms(); loadMode(); loadChannel(); checkAll();
+  loadNet(); loadAudio(); loadDsp(); loadFir(); loadToggles(); loadLms(); loadMode(); loadChannel(); checkAll();
 });
-onUnmounted(() => { clearInterval(btTimer); clearTimeout(remoteSupportPollTimer); });
+onUnmounted(() => { clearTimeout(remoteSupportPollTimer); });
 </script>
 
 <template>
@@ -490,23 +463,6 @@ onUnmounted(() => { clearInterval(btTimer); clearTimeout(remoteSupportPollTimer)
             <input type="file" accept=".wav,.txt" :disabled="firBusy" style="display: none;" @change="uploadFir" />
           </label>
           <button v-if="fir.present" class="danger fit" :disabled="firBusy" @click="removeFir">{{ t('settings.dsp.firRemove') }}</button>
-        </div>
-      </template>
-    </div>
-
-    <!-- Bluetooth -->
-    <div class="card" v-if="open === 'bluetooth'">
-      <p class="sub">{{ t('settings.bluetooth.hint') }}</p>
-      <div class="between item"><span>{{ t('settings.bluetooth.toggleLabel') }}</span><Toggle :model-value="bt.enabled" @update:model-value="setBt" /></div>
-      <template v-if="bt.enabled">
-        <div class="between item">
-          <span>{{ t('settings.bluetooth.discoverableLabel') }} <span class="pill gold" v-if="bt.countdown > 0">{{ bt.countdown }}s</span></span>
-          <button class="secondary fit" @click="btDiscoverable">{{ t('settings.bluetooth.makeDiscoverable') }}</button>
-        </div>
-        <label v-if="bt.devices.length">{{ t('settings.bluetooth.pairedDevices') }}</label>
-        <div v-for="d in bt.devices" :key="d.mac" class="net between">
-          <span>{{ d.name || d.mac }} <span class="pill gold" v-if="d.connected">{{ t('settings.bluetooth.connected') }}</span></span>
-          <button class="ghost fit" @click="btForget(d.mac)">{{ t('settings.bluetooth.forget') }}</button>
         </div>
       </template>
     </div>

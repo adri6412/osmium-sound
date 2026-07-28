@@ -262,7 +262,6 @@
       "audio": "Uscita Audio (DAC)",
       "playback": "Riproduzione",
       "dsp": "DSP / Equalizzatore",
-      "bluetooth": "Bluetooth",
       "multiroom": "Multiroom",
       "alarm": "Sveglia",
       "network": "Configurazione Rete",
@@ -420,20 +419,6 @@
       "unavailable": "Servizio SSH non installato su questo dispositivo.",
       "installHint": "SSH non è ancora installato: attivandolo verrà installato e avviato automaticamente (richiede connessione internet).",
       "failed": "Operazione SSH fallita."
-    },
-    "bluetooth": {
-      "help": "Permetti a un telefono di collegarsi via Bluetooth e riprodurre direttamente su questo dispositivo, come su una cassa Bluetooth — senza app né account.",
-      "pauseWarning": "Mentre un telefono trasmette via Bluetooth, la riproduzione dalla libreria va in pausa. Riprendila manualmente al termine.",
-      "enabled": "Bluetooth attivo",
-      "disabled": "Bluetooth disattivato",
-      "unavailable": "Il Bluetooth non è ancora disponibile su questo dispositivo: aggiorna il sistema per attivarlo.",
-      "pairBtn": "Associa un dispositivo",
-      "pairingActive": "Visibile come \"{name}\" per {seconds}s…",
-      "pairedDevices": "Dispositivi associati",
-      "noDevices": "Nessun dispositivo associato.",
-      "connected": "connesso",
-      "forget": "Dimentica questo dispositivo",
-      "failed": "Operazione Bluetooth fallita."
     },
     "pointer": {
       "help": "Mostra il puntatore del mouse sullo schermo. Utile se usi il dispositivo con un mouse invece del touchscreen. Di default il puntatore è nascosto.",

@@ -58,7 +58,7 @@
     "music": "Musica",
     "musicDesc": "Libreria e riproduzione (Lyrion)",
     "settings": "Impostazioni",
-    "settingsDesc": "Rete, audio, DSP, Bluetooth, aggiornamenti…",
+    "settingsDesc": "Rete, audio, DSP, aggiornamenti…",
     "status": "Stato",
     "player": "Player",
     "network": "Rete",
@@ -77,7 +77,6 @@
       "audio": { "label": "Uscita audio", "desc": "DAC e nome del player" },
       "sources": { "label": "Sorgenti musicali", "desc": "Cartelle, USB, condivisioni di rete, CD" },
       "dsp": { "label": "DSP / Equalizzatore", "desc": "Motore DSP, crossfeed, preset" },
-      "bluetooth": { "label": "Bluetooth", "desc": "Ricezione audio dal telefono" },
       "services": { "label": "Servizi", "desc": "Tidal Connect, accesso SSH" },
       "multiroom": { "label": "Multiroom / Server", "desc": "Server proprio o segui un altro Lyrion" },
       "display": { "label": "Modalità schermo", "desc": "Interfaccia su schermo o headless" },
@@ -141,19 +140,6 @@
       "firRemove": "Rimuovi filtro",
       "firRemoved": "Filtro rimosso",
       "firNoneToRemove": "Nessun filtro da rimuovere"
-    },
-    "bluetooth": {
-      "hint": "Ricevi musica dal telefono come se fosse una cassa Bluetooth.",
-      "toggleLabel": "Bluetooth",
-      "enabling": "Attivo il Bluetooth…",
-      "disabling": "Disattivo il Bluetooth…",
-      "updated": "Bluetooth aggiornato",
-      "discoverableLabel": "Visibile per associazione",
-      "makeDiscoverable": "Rendi visibile",
-      "operationFailed": "Operazione fallita",
-      "pairedDevices": "Dispositivi associati",
-      "connected": "connesso",
-      "forget": "Dimentica"
     },
     "services": {
       "tidal": "Tidal Connect",

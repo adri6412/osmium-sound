@@ -149,14 +149,6 @@ export const systemAPI = {
   // Enable/disable the Tidal Connect daemon. Returns { success, enabled, active, message }
   setTidal: (enable) => apiPost('/tidal_set', { enable }),
 
-  // Bluetooth audio (A2DP sink) state: { available, enabled, active, discoverable, devices: [{mac, name, connected}] }
-  getBluetoothStatus: () => apiGet('/bluetooth_status'),
-  // Enable/disable the whole Bluetooth subsystem. Returns { success, ...status, message }
-  setBluetooth: (enable) => apiPost('/bluetooth_set', { enable }),
-  // Make the device visible for pairing for 2 minutes. Returns { success, seconds, message }
-  setBluetoothDiscoverable: () => apiPost('/bluetooth_discoverable'),
-  // Unpair a device. Returns { success, devices, message }
-  forgetBluetoothDevice: (mac) => apiPost('/bluetooth_forget', { mac }),
   // Currently-streaming Bluetooth track (AVRCP metadata + online cover lookup):
   // { active, title, artist, album, duration, position, device_name, cover_url }
   getBluetoothNowPlaying: () => apiGet('/bluetooth_now_playing'),

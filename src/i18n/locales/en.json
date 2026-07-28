@@ -262,7 +262,6 @@
       "audio": "Audio Output (DAC)",
       "playback": "Playback",
       "dsp": "DSP / Equalizer",
-      "bluetooth": "Bluetooth",
       "multiroom": "Multiroom",
       "alarm": "Alarm Clock",
       "network": "Network Configuration",
@@ -420,20 +419,6 @@
       "unavailable": "SSH service is not installed on this device.",
       "installHint": "SSH is not installed yet: enabling it will install and start it automatically (requires an internet connection).",
       "failed": "SSH operation failed."
-    },
-    "bluetooth": {
-      "help": "Let a phone connect over Bluetooth and stream straight to this device, like a Bluetooth speaker — no app or account needed.",
-      "pauseWarning": "While a phone is streaming over Bluetooth, playback from the library is paused. Resume it manually when you're done.",
-      "enabled": "Bluetooth enabled",
-      "disabled": "Bluetooth disabled",
-      "unavailable": "Bluetooth is not available yet on this device: update the system to enable it.",
-      "pairBtn": "Pair a device",
-      "pairingActive": "Visible as \"{name}\" for {seconds}s…",
-      "pairedDevices": "Paired devices",
-      "noDevices": "No paired devices yet.",
-      "connected": "connected",
-      "forget": "Forget this device",
-      "failed": "Bluetooth operation failed."
     },
     "pointer": {
       "help": "Show the mouse pointer on screen. Useful if you use the device with a mouse instead of the touchscreen. The pointer is hidden by default.",
