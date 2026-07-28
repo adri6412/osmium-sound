@@ -378,7 +378,8 @@ if [ "$STAGE" != "binary" ]; then
         --iso-publisher "$BRAND_NAME" \
         --iso-volume "OSMIUM_SOUND" \
         --memtest none \
-        --apt-recommends false
+        --apt-recommends false \
+        --compression xz
 else
     [ -d config/bootstrap ] \
         || die "--stage binary but no live-build config found. Run '--stage all' first."
