@@ -29,9 +29,12 @@ import com.osmium.sound.companion.widget.ViewUtilities;
  * section: UI + System + OS are checked/applied together as a single group
  * (one "Check" / one "Update now" button, applied in sequence System → OS →
  * UI — see applyAllUpdates() in Settings.jsx — System doesn't tear down the
- * live session, UI restarts the kiosk so it goes last), while Lyrion Music
- * Server has its own separate check/apply (Electron's "Advanced" sub-section).
- * Each shows its currently installed version, not just update availability.
+ * live session, UI restarts the kiosk so it goes last). Each shows its
+ * currently installed version, not just update availability.
+ * <p>
+ * Lyrion Music Server is deliberately NOT here: it is third-party software
+ * with its own release cadence, managed from Settings → Lyrion Music Server
+ * (MultiroomActivity) together with the internal/external choice.
  * <p>
  * Applying System/OS makes the appliance restart hifi-api (System) or reboot
  * outright (OS, when apply.sh leaves a REBOOT marker) — a dropped connection
@@ -50,10 +53,10 @@ public class UpdatesActivity extends AppCompatActivity {
     private RadioGroup channelGroup;
     private boolean suppressChannelEvent;
 
-    private TextView versionUi, versionSystem, versionOs, versionLyrion;
-    private TextView coreStatus, lyrionStatus;
-    private MaterialButton applyCoreButton, applyLyrionButton;
-    private ProgressBar coreProgress, lyrionProgress;
+    private TextView versionUi, versionSystem, versionOs;
+    private TextView coreStatus;
+    private MaterialButton applyCoreButton;
+    private ProgressBar coreProgress;
 
     private boolean uiUpdateAvailable, systemUpdateAvailable, osUpdateAvailable;
 
@@ -74,13 +77,9 @@ public class UpdatesActivity extends AppCompatActivity {
         versionUi = findViewById(R.id.version_ui);
         versionSystem = findViewById(R.id.version_system);
         versionOs = findViewById(R.id.version_os);
-        versionLyrion = findViewById(R.id.version_lyrion);
         coreStatus = findViewById(R.id.core_status);
-        lyrionStatus = findViewById(R.id.lyrion_status);
         applyCoreButton = findViewById(R.id.button_apply_core);
-        applyLyrionButton = findViewById(R.id.button_apply_lyrion);
         coreProgress = findViewById(R.id.core_progress);
-        lyrionProgress = findViewById(R.id.lyrion_progress);
 
         channelGroup.setOnCheckedChangeListener((group, checkedId) -> {
             if (suppressChannelEvent) return;
@@ -89,12 +88,9 @@ public class UpdatesActivity extends AppCompatActivity {
 
         findViewById(R.id.button_check_core).setOnClickListener(v -> checkCore());
         applyCoreButton.setOnClickListener(v -> applyCore());
-        findViewById(R.id.button_check_lyrion).setOnClickListener(v -> checkLyrion());
-        applyLyrionButton.setOnClickListener(v -> applyLyrion());
 
         loadChannel();
         checkCore();
-        checkLyrion();
     }
 
     private void loadChannel() {
@@ -305,57 +301,6 @@ public class UpdatesActivity extends AppCompatActivity {
         }, POLL_INTERVAL_MS);
     }
 
-    private void checkLyrion() {
-        lyrionProgress.setVisibility(View.VISIBLE);
-        ApplianceHttpClient.getJson("/api/system/updates/lyrion/check", new ApplianceHttpClient.JsonCallback() {
-            @Override
-            public void onSuccess(JSONObject body) {
-                lyrionProgress.setVisibility(View.GONE);
-                boolean available = body.optBoolean("update_available", false);
-                String line = body.optString("current", "?");
-                if (available) {
-                    line += " → " + body.optString("latest", "?");
-                } else {
-                    line += " (" + getString(R.string.settings_updates_up_to_date) + ")";
-                }
-                versionLyrion.setText(line);
-                applyLyrionButton.setVisibility(available ? View.VISIBLE : View.GONE);
-            }
-
-            @Override
-            public void onFailure(String message) {
-                lyrionProgress.setVisibility(View.GONE);
-                versionLyrion.setText(message);
-            }
-        });
-    }
-
-    private void applyLyrion() {
-        lyrionProgress.setVisibility(View.VISIBLE);
-        applyLyrionButton.setVisibility(View.GONE);
-        setLyrionStatus(getString(R.string.settings_updates_applying));
-        startApply("lyrion", getString(R.string.settings_updates_lyrion), 90_000, false, new UpdatePhase() {
-            @Override
-            public void onStatus(String text) {
-                setLyrionStatus(text);
-            }
-
-            @Override
-            public void onDone() {
-                lyrionProgress.setVisibility(View.GONE);
-                setLyrionStatus(getString(R.string.settings_updates_all_done));
-                checkLyrion();
-            }
-
-            @Override
-            public void onFailed(String message) {
-                Toast.makeText(UpdatesActivity.this, message, Toast.LENGTH_LONG).show();
-                setLyrionStatus(message);
-                lyrionProgress.setVisibility(View.GONE);
-                checkLyrion();
-            }
-        });
-    }
 
     private void setCoreBusy(boolean busy) {
         coreProgress.setVisibility(busy ? View.VISIBLE : View.GONE);
@@ -364,11 +309,6 @@ public class UpdatesActivity extends AppCompatActivity {
     private void setCoreStatus(String text) {
         coreStatus.setText(text);
         coreStatus.setVisibility(View.VISIBLE);
-    }
-
-    private void setLyrionStatus(String text) {
-        lyrionStatus.setText(text);
-        lyrionStatus.setVisibility(View.VISIBLE);
     }
 
     @Override

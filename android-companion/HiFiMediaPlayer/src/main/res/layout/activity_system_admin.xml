@@ -60,6 +60,18 @@
                     android:layout_height="wrap_content" />
             </LinearLayout>
 
+            <!-- Which Linux login SSH accepts. Read-only on purpose: creating
+                 it mints a user with full sudo, and a pairing token is all that
+                 authenticates this app — that operation stays on the appliance's
+                 own screen or the web admin. -->
+            <TextView
+                android:id="@+id/ssh_login"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:textColor="@color/hifiSilver"
+                android:layout_marginTop="4dp"
+                android:visibility="gone" />
+
             <LinearLayout
                 android:id="@+id/display_mode_row"
                 android:orientation="horizontal"

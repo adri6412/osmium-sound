@@ -41,6 +41,11 @@
             android:summary="%s"/>
 
         <ListPreference
+            android:key="squeezer.language"
+            android:title="@string/settings_language_title"
+            android:summary="%s"/>
+
+        <ListPreference
             android:key="squeezer.screensaver"
             android:title="@string/settings_screensaver_title"
             android:summary="%s"/>

@@ -1401,6 +1401,14 @@ _SYSTEM_PROXY_ROUTES = [
     ("/api/system/updates/lyrion/check", "GET", "/lyrion_update/check"),
     ("/api/system/updates/lyrion/apply", "POST", "/lyrion_update/apply"),
     ("/api/system/updates/lyrion/status", "GET", "/lyrion_update/status"),
+    ("/api/system/lyrion_channel", "GET", "/lyrion_channel"),
+    ("/api/system/lyrion_channel", "POST", "/lyrion_channel"),
+    # Deliberately NOT exposed here: /shell_account. It mints a Linux user with
+    # full sudo, and the only thing authenticating a companion request is the
+    # pairing token — a stolen one must not be able to create a root-capable
+    # login. The companion reads the SSH login name from /ssh_status (which
+    # carries `account`) and sends the user to the touchscreen or web admin to
+    # create or change it.
     ("/api/system/reboot", "POST", "/reboot"),
     ("/api/system/shutdown", "POST", "/shutdown"),
 ]
@@ -2613,12 +2621,18 @@ applyI18n();
 
 // ── navigation back to whatever embedded/linked us ──────────────────
 const BACK_TO = QS.get('back') || '';
+// When embedded (web admin Settings/Setup) the surrounding page already owns
+// navigation, and history.length reflects the whole tab's joint session
+// history — so it would light up a back bar that both looks wrong inside the
+// frame and would navigate somewhere unexpected. Only an embedder that asks
+// for it explicitly, via ?back=, gets one.
+const FRAMED = window.self !== window.top;
 function goBack(){
   if (BACK_TO) { location.href = BACK_TO; return; }
   if (history.length > 1) { history.back(); return; }
   location.href = '/';
 }
-if (BACK_TO || history.length > 1) {
+if (BACK_TO || (!FRAMED && history.length > 1)) {
   document.getElementById('topbar').style.display = '';
   document.getElementById('doneBtn').style.display = '';
   if (BACK_TO) document.getElementById('backLink').href = BACK_TO;

@@ -328,9 +328,9 @@
     <string name="settings_audio_output_applied">Output device changed.</string>
     <string name="settings_audio_output_failed">Could not change the output device</string>
 
-    <string name="settings_category_multiroom">Multiroom</string>
-    <string name="settings_multiroom_title">Multiroom</string>
-    <string name="settings_multiroom_summary">Rename this player or group it with another Osmium Sound device</string>
+    <string name="settings_category_multiroom">Lyrion Music Server</string>
+    <string name="settings_multiroom_title">Lyrion Music Server</string>
+    <string name="settings_multiroom_summary">Internal or external music server, its version, and this player\'s name</string>
 
     <string name="settings_multiroom_name_title">This player\'s name</string>
     <string name="settings_multiroom_name_help">Every Osmium Sound device is named \"OsmiumSound\" by default — group two of them and you can\'t tell them apart. Give it a unique name (no spaces).</string>
@@ -339,10 +339,10 @@
     <string name="settings_multiroom_name_saved">Player name updated.</string>
     <string name="settings_multiroom_name_failed">Could not update the player name</string>
 
-    <string name="settings_multiroom_role_title">This device\'s Lyrion server</string>
-    <string name="settings_multiroom_role_help">For two devices to be grouped they must point at the same Lyrion server — each Osmium Sound runs its own and they can\'t see each other until they share one. Choose whether this device should use its own server or follow another device\'s.</string>
-    <string name="settings_multiroom_role_local">This device</string>
-    <string name="settings_multiroom_role_follow">Another device</string>
+    <string name="settings_multiroom_role_title">Music server</string>
+    <string name="settings_multiroom_role_help">This device can run its own Lyrion Music Server, or use one that is already running on your network. Two devices can only be grouped when they point at the same server.</string>
+    <string name="settings_multiroom_role_local">Internal (this device)</string>
+    <string name="settings_multiroom_role_follow">External (on my network)</string>
     <string name="settings_multiroom_role_host_hint">IP address, e.g. 192.168.1.50</string>
     <string name="settings_multiroom_role_apply">Apply</string>
     <string name="settings_multiroom_role_scan">Scan network</string>
@@ -358,7 +358,7 @@
     <string name="settings_playback_replaygain_title">ReplayGain</string>
     <string name="settings_playback_no_player">No active player</string>
 
-    <string name="settings_category_lyrion_server">Lyrion Server</string>
+    <string name="settings_category_lyrion_server">Music library</string>
     <string name="settings_lyrion_rescan_title">Rescan library</string>
     <string name="settings_lyrion_rescan_summary">Ask the server to scan for new or changed music</string>
     <string name="settings_lyrion_rescan_started">Library rescan started.</string>
@@ -367,7 +367,7 @@
     <string name="settings_system_admin_title">System Administration</string>
     <string name="settings_system_admin_summary">SSH access, system info, reboot and shutdown</string>
     <string name="settings_ssh_title">SSH access</string>
-    <string name="settings_ssh_warning">Enabling SSH allows remote command-line access to the appliance. Only enable this if you understand the risk, and change the default password immediately after enabling it.</string>
+    <string name="settings_ssh_warning">SSH gives remote command-line access to the appliance, with full administrator rights. Turn it on only if you understand the risk.</string>
     <string name="settings_ssh_unavailable">SSH server is not available on this appliance.</string>
     <string name="settings_display_mode_title">On-screen interface</string>
     <string name="settings_display_mode_summary">Turn off to run headless; turn on to bring the touchscreen interface back</string>
@@ -385,7 +385,7 @@
 
     <string name="settings_category_updates">Updates</string>
     <string name="settings_updates_title">Updates</string>
-    <string name="settings_updates_summary">Check and apply UI, System, OS and Lyrion updates</string>
+    <string name="settings_updates_summary">Check and apply UI, System and OS updates</string>
     <string name="settings_updates_channel_title">Update channel</string>
     <string name="settings_updates_channel_prod">Stable</string>
     <string name="settings_updates_channel_dev">Development</string>
@@ -403,7 +403,6 @@
     <string name="settings_updates_ui">UI</string>
     <string name="settings_updates_system">System</string>
     <string name="settings_updates_os">OS</string>
-    <string name="settings_updates_lyrion">Lyrion Music Server</string>
 
     <string name="about_team" translatable="false">Team</string>
     <string name="about_authors" translatable="false">Benjamin Viertel\nKurt Aaholst\nNik Clayton\nBrad Fitzpatrick</string>
@@ -455,4 +454,29 @@
     <string name="don_t_show_volume_control">Don\'t show volume slider</string>
     <string name="show_volume_control">Show volume slider</string>
     <string name="fullscreen_mode">Fullscreen mode</string>
+
+    <!-- Lyrion Music Server build: which stream the appliance installs when it
+         runs its own server. Lives with the internal/external choice, not on
+         the Updates screen — Lyrion is third-party software. -->
+    <string name="settings_lyrion_installed">Installed version: %1$s</string>
+    <string name="settings_lyrion_not_installed">not installed</string>
+    <string name="settings_lyrion_channel">Version channel</string>
+    <string name="settings_lyrion_channel_release">Release</string>
+    <string name="settings_lyrion_channel_nightly">Stable nightly</string>
+    <string name="settings_lyrion_channel_dev">Development</string>
+    <string name="settings_lyrion_channel_warning">Nightly and development builds are pre-release: expect the occasional bug. You can switch back to Release at any time.</string>
+    <string name="settings_lyrion_install">Install Lyrion</string>
+    <string name="settings_lyrion_update">Install / update</string>
+    <string name="settings_lyrion_installing">Installing Lyrion…</string>
+    <string name="settings_lyrion_install_failed">The Lyrion installation failed.</string>
+
+    <!-- SSH login (read-only here: creating it mints a sudo user, and a pairing
+         token is all that authenticates this app). -->
+    <string name="settings_ssh_login_is">Connect with: ssh %1$s@</string>
+    <string name="settings_ssh_no_login_app">No SSH login has been created yet. Create one on the appliance\'s screen or in the web admin.</string>
+
+    <!-- In-app language, mirroring the kiosk and web admin language selectors. -->
+    <string name="settings_language_title">Language</string>
+    <string name="settings_language_summary">Language used by this app</string>
+    <string name="settings_language_system">System default</string>
 </resources>

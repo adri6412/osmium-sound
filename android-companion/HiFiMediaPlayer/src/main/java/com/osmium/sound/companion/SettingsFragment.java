@@ -18,6 +18,8 @@ import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.AlertDialog;
+import androidx.appcompat.app.AppCompatDelegate;
+import androidx.core.os.LocaleListCompat;
 import androidx.fragment.app.DialogFragment;
 import androidx.preference.CheckBoxPreference;
 import androidx.preference.ListPreference;
@@ -28,6 +30,7 @@ import androidx.preference.SwitchPreferenceCompat;
 import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 
 import com.osmium.sound.companion.dialog.CallStateDialog;
 import com.osmium.sound.companion.download.DownloadFilenameStructure;
@@ -270,8 +273,48 @@ public class SettingsFragment  extends PreferenceFragmentCompat implements
         }
         onSelectThemePref.setOnPreferenceChangeListener(this);
 
+        fillLanguagePreference();
+
         fillEnumPreference(requirePreference(Preferences.KEY_SCREENSAVER), Preferences.ScreensaverMode.class, preferences.getScreensaverMode());
         fillEnumPreference(requirePreference(Preferences.KEY_FULLSCREEN), Preferences.FullScreenMode.class,preferences.getFullScreenMode());
+    }
+
+    /**
+     * In-app language picker, mirroring the kiosk's and web admin's language
+     * selectors so all three UIs of the product can be switched the same way.
+     * <p>
+     * The list is intentionally short: only the languages in
+     * res/xml/locales_config.xml, i.e. the ones the app is actually fully
+     * translated into. Empty value = follow the system.
+     * <p>
+     * The current value is read back from AppCompatDelegate rather than from
+     * SharedPreferences, so the picker still shows the truth when the user
+     * changed the language from Android 13+'s own per-app language screen.
+     */
+    private void fillLanguagePreference() {
+        ListPreference languagePref = requirePreference(Preferences.KEY_LANGUAGE);
+        String[] tags = {"", "it", "en"};
+        String[] labels = {
+                getString(R.string.settings_language_system),
+                "Italiano",
+                "English",
+        };
+        languagePref.setEntryValues(tags);
+        languagePref.setEntries(labels);
+
+        LocaleListCompat current = AppCompatDelegate.getApplicationLocales();
+        String tag = current.isEmpty() ? "" : current.get(0).getLanguage();
+        // A locale we don't offer (e.g. an inherited Squeezer translation still
+        // active from an older install) reads as "follow the system".
+        languagePref.setValue(Arrays.asList(tags).contains(tag) ? tag : "");
+
+        languagePref.setOnPreferenceChangeListener((preference, newValue) -> {
+            String value = String.valueOf(newValue);
+            AppCompatDelegate.setApplicationLocales(value.isEmpty()
+                    ? LocaleListCompat.getEmptyLocaleList()
+                    : LocaleListCompat.forLanguageTags(value));
+            return true;
+        });
     }
 
     private void fillNowPlayingPreferences(Preferences preferences) {

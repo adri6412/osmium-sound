@@ -205,6 +205,14 @@ public final class Preferences {
     // Preferred UI theme.
     static final String KEY_ON_THEME_SELECT_ACTION = "squeezer.theme";
 
+    /**
+     * In-app UI language as a BCP-47 tag ("it", "en") or empty to follow the
+     * system. Written by the picker in SettingsFragment; the value that
+     * actually applies lives in AppCompatDelegate.getApplicationLocales(),
+     * which is also where it is read back from.
+     */
+    static final String KEY_LANGUAGE = "squeezer.language";
+
     // Screensaver
     public static final String KEY_SCREENSAVER = "squeezer.screensaver";
 

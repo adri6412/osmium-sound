@@ -149,7 +149,11 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ inputs.tag }}
-          name: HiFi Player ${{ inputs.tag }}
+          # No `name:` on purpose. A release is named after its tag and nothing
+          # else — "v2.5.21-dev.37", never "HiFi Player v2.5.21-dev.37". This
+          # job usually attaches an ISO to a release the tag push already
+          # created, but when it runs first it creates the release itself, and
+          # a name here would stick.
           fail_on_unmatched_files: true
           files: |
             ${{ steps.iso.outputs.iso }}

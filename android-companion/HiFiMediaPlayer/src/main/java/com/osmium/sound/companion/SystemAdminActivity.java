@@ -32,6 +32,7 @@ public class SystemAdminActivity extends AppCompatActivity {
     private final ThemeManager mThemeManager = new ThemeManager();
 
     private SwitchMaterial sshSwitch;
+    private TextView sshLogin;
     private SwitchMaterial displayModeSwitch;
     private TextView systemInfoText;
     private ProgressBar progressBar;
@@ -53,6 +54,7 @@ public class SystemAdminActivity extends AppCompatActivity {
         ViewUtilities.setInsetsListener(findViewById(R.id.system_admin_container), false, true, false);
 
         sshSwitch = findViewById(R.id.switch_ssh);
+        sshLogin = findViewById(R.id.ssh_login);
         displayModeSwitch = findViewById(R.id.switch_display_mode);
         systemInfoText = findViewById(R.id.system_info_text);
         progressBar = findViewById(R.id.system_admin_progress);
@@ -138,6 +140,7 @@ public class SystemAdminActivity extends AppCompatActivity {
                 if (!body.optBoolean("available", true)) {
                     showMessage(getString(R.string.settings_ssh_unavailable));
                 }
+                renderSshLogin(body.optJSONObject("account"));
             }
 
             @Override
@@ -145,6 +148,28 @@ public class SystemAdminActivity extends AppCompatActivity {
                 showMessage(getString(R.string.settings_system_admin_failed) + ": " + message);
             }
         });
+    }
+
+    /**
+     * Shows which Linux login SSH accepts, or says none exists yet. Read-only:
+     * creating that login mints a user with full sudo and a pairing token is
+     * all that authenticates this app, so the form lives on the appliance's own
+     * screen and in the web admin (see sources_server.py's proxy list, where
+     * /shell_account is deliberately absent).
+     * <p>
+     * `account` is absent on an appliance older than 2.5.21-dev.37 — then the
+     * row simply stays hidden.
+     */
+    private void renderSshLogin(JSONObject account) {
+        if (account == null) {
+            sshLogin.setVisibility(View.GONE);
+            return;
+        }
+        sshLogin.setVisibility(View.VISIBLE);
+        String username = account.optString("username", "");
+        sshLogin.setText(account.optBoolean("exists", false) && !username.isEmpty()
+                ? getString(R.string.settings_ssh_login_is, username)
+                : getString(R.string.settings_ssh_no_login_app));
     }
 
     private void setSsh(boolean enable) {
@@ -161,6 +186,7 @@ public class SystemAdminActivity extends AppCompatActivity {
                 suppressSshEvent = true;
                 sshSwitch.setChecked(body.optBoolean("enabled", enable));
                 suppressSshEvent = false;
+                renderSshLogin(body.optJSONObject("account"));
                 // Always surface the message, not just on failure: when enabling,
                 // the appliance's response carries the default-password warning
                 // (mirrors the Electron kiosk UI's behavior in Settings.jsx).
