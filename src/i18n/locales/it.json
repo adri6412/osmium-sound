@@ -142,9 +142,9 @@
       "searching": "Ricerca dispositivi…"
     },
     "sources": {
-      "title": "Sorgenti musicali",
-      "subtitle": "Inquadra il QR con il telefono per aprire la pagina di configurazione e aggiungere le tue cartelle musicali — locali sul dispositivo o condivise in rete (SMB).",
-      "addressLabel": "Indirizzo configurazione",
+      "title": "Configura via smartphone",
+      "subtitle": "Inquadra il QR con il telefono per aprire il setup completo del box e completare la configurazione dal tuo smartphone.",
+      "addressLabel": "Indirizzo setup completo",
       "scanHint": "Scansiona il QR con la fotocamera del telefono"
     },
     "lyrion": {

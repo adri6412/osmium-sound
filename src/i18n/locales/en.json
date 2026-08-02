@@ -142,9 +142,9 @@
       "searching": "Searching for devices…"
     },
     "sources": {
-      "title": "Music sources",
-      "subtitle": "Scan the QR with your phone to open the configuration page and add your music folders — local on the device or shared over the network (SMB).",
-      "addressLabel": "Configuration address",
+      "title": "Configure from your phone",
+      "subtitle": "Scan the QR with your phone to open the full box setup and complete configuration from your smartphone.",
+      "addressLabel": "Full setup address",
       "scanHint": "Scan the QR code with your phone camera"
     },
     "lyrion": {

@@ -30,12 +30,6 @@ const SetupWizard = ({ onComplete }) => {
   const [step, setStep] = useState('welcome');
   const [deviceIp, setDeviceIp] = useState(null);
 
-  // Pairing token for the sources QR: every route on :8080 now requires a
-  // pairing token (see sources_server.py's _require_pair_token()), so the
-  // QR-carried URL must embed one (?token=...) or the page 401s on every
-  // action. Minting is localhost-only, which the kiosk wizard is.
-  const [sourcesToken, setSourcesToken] = useState(null);
-
   // network sub-state
   const [netMode, setNetMode] = useState(null); // 'wired' | 'wifi'
   const [busy, setBusy] = useState(false);
@@ -314,24 +308,6 @@ const SetupWizard = ({ onComplete }) => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [step]);
 
-  // Mint the sources-page pairing token when the sources step is shown
-  // (mirrors Settings.jsx's custom-backup section).
-  useEffect(() => {
-    if (step !== 'sources' || sourcesToken) return;
-    let cancelled = false;
-    (async () => {
-      try {
-        const r = await fetch('http://localhost:8080/api/pair/token', { method: 'POST' });
-        if (r.ok) {
-          const data = await r.json();
-          if (!cancelled) setSourcesToken(data.token || null);
-        }
-      } catch (_) {}
-    })();
-    return () => { cancelled = true; };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [step]);
-
   // Stop polling if the wizard unmounts mid-install (the systemd unit finishes
   // on its own regardless).
   useEffect(() => () => { if (lyrionPollRef.current) clearInterval(lyrionPollRef.current); }, []);
@@ -341,11 +317,7 @@ const SetupWizard = ({ onComplete }) => {
     onComplete?.();
   };
 
-  // &lang= renders that page in the language chosen in this wizard, instead of
-  // handing an English user an Italian page.
-  const sourcesUrl = sourcesToken
-    ? `http://${deviceIp || 'localhost'}:${SOURCES_PORT}/?token=${encodeURIComponent(sourcesToken)}&lang=${encodeURIComponent(lang)}`
-    : null;
+  const genericSetupUrl = `https://${deviceIp || 'localhost'}:443`;
   const lyrionUrl = `http://${deviceIp || 'localhost'}:${LYRION_PORT}`;
 
   // ── Shared chrome ──────────────────────────────────────────────
@@ -640,13 +612,13 @@ const SetupWizard = ({ onComplete }) => {
               </p>
               <div className="flex items-center gap-6 bg-hifi-surface border border-hifi-border rounded-2xl p-5">
                 <div className="bg-white p-2.5 rounded-xl shrink-0 w-[140px] h-[140px] flex items-center justify-center">
-                  {sourcesUrl
-                    ? <QRCodeSVG value={sourcesUrl} size={120} level="M" />
+                  {genericSetupUrl
+                    ? <QRCodeSVG value={genericSetupUrl} size={120} level="M" />
                     : <Loader2 size={28} className="animate-spin text-black/60" />}
                 </div>
                 <div className="text-left">
                   <p className="text-hifi-silver/50 text-xs uppercase tracking-wide mb-1">{t('wizard.sources.addressLabel')}</p>
-                  <p className="text-hifi-gold text-2xl font-mono font-bold">{deviceIp || '—'}<span className="text-hifi-silver/50">:{SOURCES_PORT}</span></p>
+                  <p className="text-hifi-gold text-2xl font-mono font-bold">{genericSetupUrl}</p>
                   <p className="text-hifi-silver/40 text-xs mt-2">{t('wizard.sources.scanHint')}</p>
                 </div>
               </div>
