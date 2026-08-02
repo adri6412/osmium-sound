@@ -127,6 +127,10 @@
         "label": "Web interface account",
         "desc": "Username and password"
       },
+      "backup": {
+        "label": "Backup & restore",
+        "desc": "Save and restore device configuration"
+      },
       "language": {
         "label": "Language",
         "desc": "Interface language"
@@ -268,7 +272,7 @@
       "interrupted": "Update interrupted",
       "genericError": "Something went wrong.",
       "updatedList": "Updated",
-      "dontClose": "Don't close this page or turn off the device.",
+      "keepPowered": "The update continues on the device even if you close this page. Just keep it powered on.",
       "kindUi": "Interface",
       "kindSystem": "System",
       "kindOs": "Operating system",
@@ -291,6 +295,31 @@
       "change": "Change credentials",
       "updated": "Password updated",
       "updateFailed": "Could not update"
+    },
+    "backup": {
+      "hint": "Save the device's configuration, Lyrion preferences and playlists. Set a passphrase to also include credentials (Wi-Fi, SMB shares, this web-admin account) in an encrypted, restorable file — without one, only non-secret settings are saved.",
+      "passphrase": "Passphrase (optional)",
+      "passphraseHint": "Leave empty for a plain backup with no credentials. Set one to also save Wi-Fi networks, SMB passwords and this account, encrypted.",
+      "create": "Create backup",
+      "downloadNow": "Download now",
+      "restoreFromFile": "Restore from file",
+      "working": "Working…",
+      "created": "Backup completed",
+      "createFailed": "Backup failed",
+      "downloaded": "Download started",
+      "downloadFailed": "Download failed",
+      "restoring": "Restoring…",
+      "restored": "Restore completed",
+      "restoreFailed": "Restore failed",
+      "restoreConfirm": "Restore this backup? A safety copy of the current configuration is taken first.",
+      "restoreThis": "Restore",
+      "deleteConfirm": "Delete this backup? This cannot be undone.",
+      "settingsFailed": "Could not save the setting",
+      "scheduled": "Automatic weekly backup",
+      "scheduledHint": "Runs unattended, so it never includes credentials — only device settings, sources and Lyrion preferences/playlists.",
+      "stored": "Backups on this device",
+      "none": "No backup yet.",
+      "encrypted": "encrypted"
     },
     "language": {
       "hint": "Choose the interface language."

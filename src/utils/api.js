@@ -11,6 +11,10 @@ const API_BASE_URL = 'http://localhost:8000';
  * @returns {Promise<Object>} - The response data
  */
 export const apiPost = async (endpoint, data = {}) => {
+  // 0 when the request never reached the API at all (it restarts during an
+  // update). Callers use it to tell "endpoint not in this api_server build"
+  // (404) apart from a transient blip.
+  let status = 0;
   try {
     const response = await fetch(`${API_BASE_URL}${endpoint}`, {
       method: 'POST',
@@ -19,17 +23,19 @@ export const apiPost = async (endpoint, data = {}) => {
       },
       body: JSON.stringify(data),
     });
+    status = response.status;
 
     if (!response.ok) {
       throw new Error(`HTTP error! status: ${response.status}`);
     }
 
     const result = await response.json();
-    return { success: true, data: result };
+    return { success: true, status, data: result };
   } catch (error) {
     console.error(`API POST ${endpoint} error:`, error);
-    return { 
-      success: false, 
+    return {
+      success: false,
+      status,
       error: error.message,
       message: `Errore di connessione: ${error.message}`
     };
@@ -42,6 +48,7 @@ export const apiPost = async (endpoint, data = {}) => {
  * @returns {Promise<Object>} - The response data
  */
 export const apiGet = async (endpoint) => {
+  let status = 0;
   try {
     const response = await fetch(`${API_BASE_URL}${endpoint}`, {
       method: 'GET',
@@ -49,17 +56,19 @@ export const apiGet = async (endpoint) => {
         'Content-Type': 'application/json',
       },
     });
+    status = response.status;
 
     if (!response.ok) {
       throw new Error(`HTTP error! status: ${response.status}`);
     }
 
     const result = await response.json();
-    return { success: true, data: result };
+    return { success: true, status, data: result };
   } catch (error) {
     console.error(`API GET ${endpoint} error:`, error);
-    return { 
-      success: false, 
+    return {
+      success: false,
+      status,
       error: error.message,
       message: `Errore di connessione: ${error.message}`
     };
@@ -185,6 +194,21 @@ export const systemAPI = {
   applyOsUpdate: () => apiPost('/os_update/apply'),
   // Poll OS update progress: { state, progress, version, message }
   getOsUpdateStatus: () => apiGet('/os_update/status'),
+
+  // ── Sequenced multi-component update ────────────────────────────
+  // Applies every component that has an update, in the order the appliance
+  // knows is safe (system → os → ui), driven entirely on the device by
+  // hifi-update-runner.sh from a plan persisted under /var/lib. Preferred over
+  // chaining the three apply calls from here: this page is torn down by the UI
+  // step (lightdm restart) and by an OS payload that reboots, which used to
+  // abandon the rest of the sequence.
+  // { started, plan_id, steps: [{kind, version}] } | { started: false, message }
+  applyAllUpdates: () => apiPost('/update/apply_all'),
+  // { state: idle|running|finished|error|interrupted, kind, version, step_state,
+  //   progress, message, overall_progress, steps: [{kind, version, state, installed}] }
+  getUpdatePlanStatus: () => apiGet('/update/status'),
+  // Drop a finished plan once its outcome has been shown.
+  dismissUpdatePlan: () => apiPost('/update/dismiss'),
 
   // ── Lyrion Music Server install / update ────────────────────────
   // Managed from Settings → Lyrion Music Server, not from the appliance's own

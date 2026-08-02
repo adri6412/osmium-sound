@@ -29,6 +29,10 @@ systemctl enable hifi-firstboot.service || true
 echo "I: [hifi] enabling audio quiesce before any shutdown/reboot (DMA panic workaround)"
 systemctl enable hifi-quiesce-audio-shutdown.service || true
 
+echo "I: [hifi] enabling OTA resume (finishes an update plan interrupted by a reboot;"
+echo "          no-op on every boot without a pending plan)"
+systemctl enable hifi-update-resume.service || true
+
 echo "I: [hifi] SSH installed but OFF by default (user enables it from Settings)"
 systemctl disable ssh.service || true
 

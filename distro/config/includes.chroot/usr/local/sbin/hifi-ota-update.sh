@@ -6,14 +6,21 @@
 # the chrome-sandbox SUID + /usr/bin symlink, writes the new version, and
 # restarts the kiosk session (lightdm).
 #
-# Invoked as root by api_server.py, normally via systemd-run so it survives the
-# lightdm restart:
+# Invoked as root by hifi-update-runner.sh, or directly by api_server.py via
+# systemd-run for a single-component update — either way from a unit that
+# survives the lightdm restart below:
 #     hifi-ota-update.sh <download_url> <sha256> <version>
 set -eu
 
-# shellcheck source=distro/config/includes.chroot/usr/local/sbin/hifi-log.sh
-. /usr/local/sbin/hifi-log.sh
-hifi_log_init hifi-ota-update
+# Sourced defensively: under `set -e` a missing/unreadable helper would abort
+# this script before write_status/fail exist, leaving the status file on its
+# previous contents with nothing to explain the silence.
+if [ -r /usr/local/sbin/hifi-log.sh ]; then
+    # shellcheck source=distro/config/includes.chroot/usr/local/sbin/hifi-log.sh
+    # shellcheck disable=SC1091  # absolute target, only present on the appliance
+    . /usr/local/sbin/hifi-log.sh
+    hifi_log_init hifi-ota-update
+fi
 
 URL="${1:-}"
 SHA="${2:-}"
@@ -118,7 +125,7 @@ printf '%s\n' "$VERSION" > "$APPDIR/UI_VERSION"
 # ── restart kiosk session ────────────────────────────────────────────
 write_status restarting 95 "Riavvio interfaccia…"
 rm -f "$TARBALL"
-write_status done 100 "Aggiornamento a $VERSION completato"
+write_status 'done' 100 "Aggiornamento a $VERSION completato"
 
 # Restarting lightdm kills the running Electron app (and any HTTP client still
 # polling). Do it last; systemd-run keeps this script alive across the restart.

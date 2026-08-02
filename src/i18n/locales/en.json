@@ -527,7 +527,7 @@
       "checkButton": "Check for updates",
       "updating": "Updating...",
       "updateNow": "Update now",
-      "orderNote": "Updates are applied in order: system, interface and — if present — the operating system (with a final reboot).",
+      "orderNote": "Updates are applied by the player itself, in order: system, operating system (with a reboot if needed) and interface. The update carries on even if this screen closes.",
       "autoCheck": "Check for updates on startup",
       "latestVersion": "Latest version",
       "installedVersion": "Installed version",

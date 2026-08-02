@@ -100,6 +100,7 @@ if [ "$STAGE" != "binary" ]; then
     [ -f "$REPO_ROOT/vu_meter_daemon.py" ] || die "Missing $REPO_ROOT/vu_meter_daemon.py"
     [ -f "$REPO_ROOT/sources_server.py" ]  || die "Missing $REPO_ROOT/sources_server.py"
     [ -f "$REPO_ROOT/hifi_logging.py" ]    || die "Missing $REPO_ROOT/hifi_logging.py"
+    [ -f "$REPO_ROOT/hifi_backup.py" ]     || die "Missing $REPO_ROOT/hifi_backup.py"
 fi
 
 # ─────────────────────────── Normalise text files ──────────────────
@@ -197,7 +198,8 @@ cp -f "$REPO_ROOT/vu_meter_daemon.py" "$BIN_DEST/"
 cp -f "$REPO_ROOT/sources_server.py"  "$BIN_DEST/"
 cp -f "$REPO_ROOT/webui_server.py"    "$BIN_DEST/"
 cp -f "$REPO_ROOT/hifi_logging.py"    "$BIN_DEST/"
-sed -i 's/\r$//' "$BIN_DEST/api_server.py" "$BIN_DEST/vu_meter_daemon.py" "$BIN_DEST/sources_server.py" "$BIN_DEST/webui_server.py" "$BIN_DEST/hifi_logging.py"
+cp -f "$REPO_ROOT/hifi_backup.py"     "$BIN_DEST/"
+sed -i 's/\r$//' "$BIN_DEST/api_server.py" "$BIN_DEST/vu_meter_daemon.py" "$BIN_DEST/sources_server.py" "$BIN_DEST/webui_server.py" "$BIN_DEST/hifi_logging.py" "$BIN_DEST/hifi_backup.py"
 chmod +x "$BIN_DEST/api_server.py" "$BIN_DEST/vu_meter_daemon.py" "$BIN_DEST/sources_server.py" "$BIN_DEST/webui_server.py"
 
 # Web-admin Vue build (built by CI before this script runs). Optional: on a

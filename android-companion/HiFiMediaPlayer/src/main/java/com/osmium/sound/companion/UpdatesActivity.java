@@ -27,24 +27,32 @@ import com.osmium.sound.companion.widget.ViewUtilities;
 /**
  * OTA channel (stable/dev) + updates, mirroring the Electron UI's "Updates"
  * section: UI + System + OS are checked/applied together as a single group
- * (one "Check" / one "Update now" button, applied in sequence System → OS →
- * UI — see applyAllUpdates() in Settings.jsx — System doesn't tear down the
- * live session, UI restarts the kiosk so it goes last). Each shows its
- * currently installed version, not just update availability.
+ * (one "Check" / one "Update now" button). Each shows its currently installed
+ * version, not just update availability.
  * <p>
  * Lyrion Music Server is deliberately NOT here: it is third-party software
  * with its own release cadence, managed from Settings → Lyrion Music Server
  * (MultiroomActivity) together with the internal/external choice.
  * <p>
- * Applying System/OS makes the appliance restart hifi-api (System) or reboot
- * outright (OS, when apply.sh leaves a REBOOT marker) — a dropped connection
- * partway through is expected, not a failure, so each step polls
- * /api/system/updates/{kind}/status until it reports "done"/"error" instead
- * of treating the single apply POST (or a transient poll failure) as the
- * final word.
+ * "Update now" POSTs /api/system/updates/apply_all and then only *watches*:
+ * the appliance writes a plan to persistent storage and walks it to the end
+ * itself (System → OS → UI, see hifi-update-runner.sh). This used to be a
+ * chain of per-component applies driven from here, which broke whenever the
+ * update dropped the connection — and it always does: System restarts
+ * hifi-api, OS may reboot the box, UI restarts the kiosk. Losing the
+ * connection now costs nothing; {@link #resumePlan()} re-attaches to a run
+ * still in progress when the screen is reopened. An appliance too old to know
+ * the endpoint falls back to {@link #applyCoreLegacy()}.
  */
 public class UpdatesActivity extends AppCompatActivity {
     private static final long POLL_INTERVAL_MS = 2500;
+    /**
+     * Budget for a whole sequenced plan: up to three bundles to download,
+     * verify and apply, plus the reboot an OS payload may ask for. Generous on
+     * purpose — giving up early is what used to make a run that was still
+     * progressing look failed.
+     */
+    private static final long PLAN_TIMEOUT_MS = 1_200_000;
 
     private final ThemeManager mThemeManager = new ThemeManager();
     private final Handler pollHandler = new Handler(Looper.getMainLooper());
@@ -91,6 +99,7 @@ public class UpdatesActivity extends AppCompatActivity {
 
         loadChannel();
         checkCore();
+        resumePlan();
     }
 
     private void loadChannel() {
@@ -178,11 +187,168 @@ public class UpdatesActivity extends AppCompatActivity {
     }
 
     /**
-     * Applies in the same order as the Electron UI's applyAllUpdates(): System
-     * → OS → UI (System doesn't tear down a live session; OS reboots only on a
-     * real change; UI restarts the kiosk so it's last/terminal).
+     * Hands the whole update to the appliance, which sequences it itself
+     * (System → OS → UI) from a plan it persists to disk. That matters most
+     * here: of the three clients this is the one furthest from the appliance,
+     * and every step of an update drops the connection — System restarts
+     * hifi-api, OS may reboot the box, UI restarts the kiosk. When the phone
+     * drove the sequence, any of those could end it early and leave components
+     * stale. Now losing the connection (or closing the app) costs nothing: the
+     * appliance finishes on its own and we just re-attach to the progress.
      */
     private void applyCore() {
+        setCoreBusy(true);
+        applyCoreButton.setVisibility(View.GONE);
+        setCoreStatus(getString(R.string.settings_updates_applying));
+        ApplianceHttpClient.postJson("/api/system/updates/apply_all", null, new ApplianceHttpClient.JsonCallback() {
+            @Override
+            public void onSuccess(JSONObject body) {
+                if (destroyed) return;
+                if (body.optBoolean("started", false)) {
+                    pollPlan(System.currentTimeMillis());
+                } else {
+                    setCoreStatus(body.optString("message", getString(R.string.settings_updates_start_failed)));
+                    setCoreBusy(false);
+                    checkCore();
+                }
+            }
+
+            @Override
+            public void onFailure(String message) {
+                if (destroyed) return;
+                // Either there is no such endpoint (an appliance still running
+                // an api_server without the sequencer) or we simply lost the
+                // answer to a request that did go through. Ask before assuming:
+                // falling back to the per-component chain on top of a plan that
+                // is already running would have two updaters racing.
+                ApplianceHttpClient.getJson("/api/system/updates/status", new ApplianceHttpClient.JsonCallback() {
+                    @Override
+                    public void onSuccess(JSONObject body) {
+                        if (destroyed) return;
+                        if ("running".equals(body.optString("state", "idle"))) {
+                            pollPlan(System.currentTimeMillis());
+                        } else {
+                            applyCoreLegacy();
+                        }
+                    }
+
+                    @Override
+                    public void onFailure(String m) {
+                        if (destroyed) return;
+                        applyCoreLegacy();
+                    }
+                });
+            }
+        });
+    }
+
+    /**
+     * Follows the appliance-side plan to its end. A failed request is expected
+     * mid-plan — the API restarts and the box may reboot — so failures are
+     * retried rather than treated as the final word; the plan is on persistent
+     * storage and the appliance resumes it after a reboot on its own.
+     */
+    private void pollPlan(long startTime) {
+        if (destroyed) return;
+        pollHandler.postDelayed(() -> {
+            if (destroyed) return;
+            ApplianceHttpClient.getJson("/api/system/updates/status", new ApplianceHttpClient.JsonCallback() {
+                @Override
+                public void onSuccess(JSONObject body) {
+                    if (destroyed) return;
+                    String state = body.optString("state", "idle");
+                    String message = body.optString("message", "");
+                    int progress = body.optInt("overall_progress", -1);
+
+                    if ("finished".equals(state)) {
+                        setCoreStatus(getString(R.string.settings_updates_all_done));
+                        setCoreBusy(false);
+                        dismissPlan();
+                        checkCore();
+                        return;
+                    }
+                    if ("error".equals(state) || "interrupted".equals(state)) {
+                        String text = message.isEmpty()
+                                ? getString(R.string.settings_updates_update_error) : message;
+                        Toast.makeText(UpdatesActivity.this, text, Toast.LENGTH_LONG).show();
+                        setCoreStatus(text);
+                        setCoreBusy(false);
+                        dismissPlan();
+                        checkCore();
+                        return;
+                    }
+                    if (!"idle".equals(state)) {
+                        setCoreStatus((message.isEmpty() ? state : message)
+                                + (progress >= 0 ? " (" + progress + "%)" : ""));
+                    }
+                    if (System.currentTimeMillis() - startTime > PLAN_TIMEOUT_MS) {
+                        setCoreStatus(getString(R.string.settings_updates_timeout));
+                        setCoreBusy(false);
+                        checkCore();
+                        return;
+                    }
+                    pollPlan(startTime);
+                }
+
+                @Override
+                public void onFailure(String message) {
+                    if (destroyed) return;
+                    setCoreStatus(getString(R.string.settings_updates_reconnecting));
+                    if (System.currentTimeMillis() - startTime > PLAN_TIMEOUT_MS) {
+                        setCoreStatus(getString(R.string.settings_updates_timeout));
+                        setCoreBusy(false);
+                        checkCore();
+                        return;
+                    }
+                    pollPlan(startTime);
+                }
+            });
+        }, POLL_INTERVAL_MS);
+    }
+
+    /** Lets the appliance drop a plan whose outcome we've already shown. */
+    private void dismissPlan() {
+        ApplianceHttpClient.postJson("/api/system/updates/dismiss", null, new ApplianceHttpClient.JsonCallback() {
+            @Override
+            public void onSuccess(JSONObject body) {
+            }
+
+            @Override
+            public void onFailure(String message) {
+            }
+        });
+    }
+
+    /**
+     * Re-attaches to a plan that is already running (or that finished while the
+     * app was closed) — called when the screen opens. Without it, an update
+     * started from here and interrupted by a reboot would look like nothing
+     * had ever happened.
+     */
+    private void resumePlan() {
+        ApplianceHttpClient.getJson("/api/system/updates/status", new ApplianceHttpClient.JsonCallback() {
+            @Override
+            public void onSuccess(JSONObject body) {
+                if (destroyed) return;
+                if (!"running".equals(body.optString("state", "idle"))) return;
+                setCoreBusy(true);
+                applyCoreButton.setVisibility(View.GONE);
+                setCoreStatus(getString(R.string.settings_updates_applying));
+                pollPlan(System.currentTimeMillis());
+            }
+
+            @Override
+            public void onFailure(String message) {
+            }
+        });
+    }
+
+    /**
+     * Pre-sequencer fallback, in the same order the appliance uses: System →
+     * OS → UI. Carries the limitation the sequencer removes — if the OS step
+     * reboots, the UI step is never applied.
+     */
+    private void applyCoreLegacy() {
         setCoreBusy(true);
         applyCoreButton.setVisibility(View.GONE);
         setCoreStatus(getString(R.string.settings_updates_applying));

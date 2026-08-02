@@ -97,6 +97,44 @@ OS_STATUS_FILE = '/run/hifi-os-status.json'
 OS_PREFIX = 'hifi-os-'
 
 # ──────────────────────────────────────────────────────────────────
+#  Multi-component update sequencer.
+#
+#  Applying "everything" used to be sequenced by the client that started
+#  it: apply one component, poll its /run status file, apply the next.
+#  Anything that killed the client killed the rest of the sequence, and
+#  the three most common events in an update are exactly that — the
+#  system bundle restarts hifi-api and hifi-webui, the UI bundle
+#  restarts lightdm, and an OS payload may reboot the box. The result
+#  was a run that stopped half-way with some components still stale.
+#
+#  So the plan is now persisted here and executed to the end by
+#  hifi-update-runner.sh under its own transient systemd unit. This
+#  module only builds the plan, starts the runner, and reports progress
+#  by merging the persisted plan with the running step's /run status
+#  file. See hifi-update-runner.sh for the file format.
+#
+#  The per-component endpoints below stay: they are still the right
+#  thing for updating a single component, and older clients use them.
+# ──────────────────────────────────────────────────────────────────
+UPDATE_PLAN_FILE = '/var/lib/hifi-player/update-plan'
+UPDATE_RUNNER_SCRIPT = '/usr/local/sbin/hifi-update-runner.sh'
+UPDATE_RUNNER_UNIT = 'hifi-update-runner'
+# Canonical order. system first (it delivers the API, daemons, helper
+# scripts and units everything else relies on), os second (it may reboot,
+# and hifi-update-resume.service picks the plan back up), ui last (it
+# restarts lightdm, tearing down the kiosk).
+UPDATE_PLAN_ORDER = ('system', 'os', 'ui')
+# How long a finished plan stays readable so clients can show the outcome
+# — including a kiosk that was itself restarted by the UI step. After
+# this it is cleared automatically, so a plan nobody dismissed cannot
+# keep re-opening the "update complete" overlay forever.
+UPDATE_PLAN_TTL = 900
+# The plan file is whitespace-separated and parsed by /bin/sh, so every
+# field must be whitespace-free. Versions also land in a file name.
+_SAFE_VERSION_RE = re.compile(r'^[0-9A-Za-z._-]+$')
+_SAFE_SHA_RE = re.compile(r'^[0-9a-fA-F]{64}$')
+
+# ──────────────────────────────────────────────────────────────────
 #  Install/update of Lyrion Music Server (.deb from the community
 #  downloads server). The page publishes three streams and we let the
 #  owner pick: the release, the bugfix nightly for that release, and
@@ -374,6 +412,37 @@ def _active_ssid():
         pass
     return None
 
+
+def _ensure_networkmanager_state(device=None):
+    """Recover from NetworkManager states where the interface is unmanaged or networking is globally off."""
+    try:
+        _run(['nmcli', 'networking', 'on'], timeout=15)
+    except Exception:
+        pass
+    if device:
+        try:
+            _run(['nmcli', 'device', 'set', device, 'managed', 'yes'], timeout=15)
+        except Exception:
+            pass
+
+
+def _startup_network_recovery():
+    device = _first_device_of_type('ethernet') or _first_device_of_type('wifi')
+    _ensure_networkmanager_state(device)
+
+
+def _ensure_dhcp_ip(device, timeout=15):
+    """Wait briefly for a DHCP lease to appear after enabling the device."""
+    _ensure_networkmanager_state(device)
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        ip = _device_ip(device)
+        if ip:
+            return ip
+        time.sleep(1)
+    return _device_ip(device)
+
+
 def get_network_status():
     device, dtype = _active_device()
     ip = _device_ip(device) if device else None
@@ -431,8 +500,11 @@ def wifi_connect(ssid, password):
         log.exception("wifi_connect failed")
         return {'success': False, 'message': 'Connessione fallita'}
     if r.returncode == 0:
-        device, _ = _active_device()
-        return {'success': True, 'message': f'Connesso a {ssid}', 'ip': _device_ip(device)}
+        device, _ = _active_device() or (None, None)
+        if device:
+            ip = _ensure_dhcp_ip(device)
+            return {'success': True, 'message': f'Connesso a {ssid}', 'ip': ip}
+        return {'success': True, 'message': f'Connesso a {ssid}', 'ip': None}
     return {'success': False, 'message': (r.stderr or r.stdout).strip() or 'Connessione fallita'}
 
 def wired_dhcp():
@@ -444,10 +516,10 @@ def wired_dhcp():
     except Exception:
         log.exception("wired_dhcp failed")
         return {'success': False, 'message': 'Connessione via cavo fallita'}
-    ip = _device_ip(eth)
+    ip = _ensure_dhcp_ip(eth)
     if ip:
         return {'success': True, 'message': 'Connesso via cavo', 'ip': ip}
-    return {'success': r.returncode == 0, 'message': (r.stderr or r.stdout).strip() or 'Cavo non connesso', 'ip': ip}
+    return {'success': False, 'message': (r.stderr or r.stdout).strip() or 'Cavo non connesso', 'ip': ip}
 
 # ──────────────────────────────────────────────────────────────────
 #  Audio output (DAC) selection for squeezelite — used by the wizard.
@@ -1518,6 +1590,15 @@ DISPLAY_MODES = ('gui', 'headless')
 _UPDATE_BUSY_STATES = ('downloading', 'verifying', 'applying', 'installing', 'running', 'rebooting')
 
 def _update_in_progress():
+    # A sequenced plan is authoritative: it is persistent, so unlike the /run
+    # status files it still reads "running" across the reboot an OS payload
+    # asked for — which is exactly when a display-mode switch or a factory
+    # reset would do the most damage.
+    try:
+        if update_plan_status().get('state') == 'running':
+            return True
+    except Exception:
+        pass
     for status_fn in (os_update_status, system_update_status):
         try:
             if (status_fn() or {}).get('state') in _UPDATE_BUSY_STATES:
@@ -2891,6 +2972,277 @@ def os_update_status():
         return {'state': 'idle'}
 
 # ──────────────────────────────────────────────────────────────────
+#  Multi-component update sequencer (see the constants block above)
+# ──────────────────────────────────────────────────────────────────
+_UPDATE_PLAN_LOCK = threading.Lock()
+
+# Per-kind wiring: how to check it, where its live status is written, and how
+# to read the version actually installed right now.
+_PLAN_KINDS = {
+    'system': (lambda: check_system_update(), SYS_STATUS_FILE, lambda: _installed_system_version()),
+    'os':     (lambda: check_os_update(),     OS_STATUS_FILE,  lambda: _installed_os_version()),
+    'ui':     (lambda: check_app_update(),    OTA_STATUS_FILE, lambda: _installed_ui_version()),
+}
+
+def _read_update_plan():
+    """Parse the persisted plan, or None when there isn't one."""
+    try:
+        with open(UPDATE_PLAN_FILE) as f:
+            lines = f.read().splitlines()
+    except Exception:
+        return None
+
+    plan = {'plan_id': '', 'channel': '', 'created': 0, 'steps': [],
+            'finished': None, 'overall': None}
+    for line in lines:
+        parts = line.split()
+        if not parts:
+            continue
+        if parts[0] == 'plan' and len(parts) >= 4:
+            plan['plan_id'] = parts[1]
+            plan['channel'] = parts[2]
+            try:
+                plan['created'] = int(parts[3])
+            except ValueError:
+                pass
+        elif parts[0] == 'step' and len(parts) >= 8:
+            try:
+                attempts = int(parts[3])
+            except ValueError:
+                attempts = 0
+            plan['steps'].append({
+                'kind': parts[1], 'state': parts[2], 'attempts': attempts,
+                'version': parts[4], 'url': parts[5], 'sha': parts[6],
+                'sig': None if parts[7] == '-' else parts[7],
+            })
+        elif parts[0] == 'finished' and len(parts) >= 3:
+            try:
+                plan['finished'] = int(parts[1])
+            except ValueError:
+                plan['finished'] = 0
+            plan['overall'] = parts[2]
+    return plan if plan['steps'] else None
+
+def _write_update_plan(plan):
+    """Serialise the plan atomically (tmp + os.replace) — it is the only record
+    of what is still pending, and it has to survive a power cut mid-write."""
+    lines = ['v 1',
+             'plan %s %s %d' % (plan['plan_id'], plan['channel'], plan['created'])]
+    for s in plan['steps']:
+        lines.append('step %s %s %d %s %s %s %s' % (
+            s['kind'], s['state'], s.get('attempts', 0), s['version'],
+            s['url'], s['sha'], s['sig'] or '-'))
+    os.makedirs(os.path.dirname(UPDATE_PLAN_FILE), exist_ok=True)
+    tmp = UPDATE_PLAN_FILE + '.tmp'
+    with open(tmp, 'w') as f:
+        f.write('\n'.join(lines) + '\n')
+    os.chmod(tmp, 0o644)
+    os.replace(tmp, UPDATE_PLAN_FILE)
+
+def _clear_update_plan():
+    try:
+        os.remove(UPDATE_PLAN_FILE)
+    except FileNotFoundError:
+        pass
+    except Exception:
+        log.exception("could not remove the update plan")
+
+def _plan_step_from_info(kind, info):
+    """Turn a check result into a plan step, or None when there's nothing to do.
+
+    Every field is validated here rather than in the runner: the plan file is
+    parsed by /bin/sh on whitespace, and the OS step's arguments end up as
+    arguments to a root script."""
+    if not info or info.get('error') or not info.get('update_available'):
+        return None
+    version = (info.get('latest') or '').strip()
+    url = (info.get('asset_url') or '').strip()
+    sha = (info.get('sha_url') or '').strip()
+    sig = (info.get('sig_url') or '').strip()
+    if not _SAFE_VERSION_RE.match(version):
+        log.warning("update plan: refusing %s, unsafe version %r", kind, version)
+        return None
+    if not url.startswith('https://') or not sha.startswith('https://'):
+        log.warning("update plan: refusing %s, non-TLS asset URL", kind)
+        return None
+    # The OS bundle runs root code from its payload, so its signature is not
+    # optional — mirrors apply_os_update().
+    if kind == 'os' and not sig.startswith('https://'):
+        log.warning("update plan: refusing os step, missing signature")
+        return None
+    try:
+        digest = _fetch_sha256(sha)
+    except Exception:
+        log.exception("update plan: checksum fetch failed for %s", kind)
+        return None
+    if not _SAFE_SHA_RE.match(digest or ''):
+        log.warning("update plan: refusing %s, malformed checksum", kind)
+        return None
+    if any(c.isspace() for c in url + sig):
+        return None
+    return {'kind': kind, 'state': 'pending', 'attempts': 0, 'version': version,
+            'url': url, 'sha': digest, 'sig': sig or None}
+
+def build_update_plan():
+    """Check all three components and return the steps that need applying, in
+    canonical order. One release fetch serves all three (60s cache)."""
+    steps = []
+    errors = []
+    for kind in UPDATE_PLAN_ORDER:
+        check_fn = _PLAN_KINDS[kind][0]
+        try:
+            info = check_fn()
+        except Exception:
+            log.exception("update plan: check failed for %s", kind)
+            errors.append(kind)
+            continue
+        if info.get('error'):
+            errors.append(kind)
+            continue
+        step = _plan_step_from_info(kind, info)
+        if step:
+            steps.append(step)
+    return steps, errors
+
+def _runner_active():
+    """True while the sequencer is running (either the transient unit started by
+    apply_all_updates, or the boot-time resume unit)."""
+    for unit in (UPDATE_RUNNER_UNIT + '.service', 'hifi-update-resume.service'):
+        try:
+            r = _run(['systemctl', 'is-active', unit])
+            if (r.stdout or '').strip() in ('active', 'activating', 'reloading'):
+                return True
+        except Exception:
+            pass
+    return False
+
+def _plan_overall_state(plan):
+    """Derive the plan-level state from its steps."""
+    if plan.get('finished'):
+        return 'error' if plan.get('overall') == 'error' else 'finished'
+    states = [s['state'] for s in plan['steps']]
+    if 'error' in states:
+        return 'error'
+    if 'running' in states:
+        # A step marked running with no live runner means we were killed between
+        # steps (power cut, or a reboot on a box where the resume unit isn't
+        # enabled yet). Say so rather than spinning forever on a dead plan.
+        return 'running' if _runner_active() else 'interrupted'
+    if 'pending' in states:
+        return 'running' if _runner_active() else 'interrupted'
+    return 'finished'
+
+def apply_all_updates():
+    """Build a plan for every component that has an update and hand it to the
+    sequencer. Returns immediately; poll update_plan_status()."""
+    with _UPDATE_PLAN_LOCK:
+        existing = _read_update_plan()
+        if existing and _plan_overall_state(existing) == 'running':
+            return {'started': False, 'message': 'Aggiornamento già in corso'}
+
+        steps, errors = build_update_plan()
+        if not steps:
+            if errors:
+                return {'started': False, 'message': 'Controllo aggiornamenti fallito'}
+            return {'started': False, 'message': 'Nessun aggiornamento disponibile'}
+
+        plan = {
+            'plan_id': '%d-%d' % (int(time.time()), os.getpid()),
+            'channel': get_ota_channel(),
+            'created': int(time.time()),
+            'steps': steps,
+            'finished': None, 'overall': None,
+        }
+        try:
+            _write_update_plan(plan)
+        except Exception:
+            log.exception("update plan: could not write %s", UPDATE_PLAN_FILE)
+            return {'started': False, 'message': 'Salvataggio del piano fallito'}
+
+        cmd = ['systemd-run', '--no-block', '--collect',
+               '--unit=' + UPDATE_RUNNER_UNIT, UPDATE_RUNNER_SCRIPT]
+        try:
+            subprocess.run(cmd, capture_output=True, text=True, timeout=15, check=True)
+        except FileNotFoundError:
+            # systemd-run unavailable → detached subprocess. It no longer
+            # survives a reboot, but the plan on disk does, so the resume unit
+            # (or the next apply) finishes the job.
+            subprocess.Popen([UPDATE_RUNNER_SCRIPT], start_new_session=True)
+        except Exception:
+            log.exception("update plan: could not start the runner")
+            _clear_update_plan()
+            return {'started': False, 'message': 'Avvio aggiornamento fallito'}
+
+        return {'started': True, 'plan_id': plan['plan_id'],
+                'steps': [{'kind': s['kind'], 'version': s['version']} for s in steps]}
+
+def update_plan_status():
+    """Progress of the current plan: the persisted step list plus the live
+    progress of whichever step is running."""
+    plan = _read_update_plan()
+    if not plan:
+        return {'state': 'idle'}
+
+    state = _plan_overall_state(plan)
+
+    # Retire a finished plan once everyone has had a chance to see the outcome,
+    # so it stops re-opening the completion overlay on every client start.
+    if plan.get('finished') and time.time() - plan['finished'] > UPDATE_PLAN_TTL:
+        _clear_update_plan()
+        return {'state': 'idle'}
+
+    current = (next((s for s in plan['steps'] if s['state'] == 'running'), None)
+               or next((s for s in plan['steps'] if s['state'] == 'pending'), None)
+               or (plan['steps'][-1] if plan['steps'] else None))
+
+    step_state, progress, message = '', None, ''
+    if current and state in ('running', 'interrupted'):
+        try:
+            with open(_PLAN_KINDS[current['kind']][1]) as f:
+                live = json.load(f)
+        except Exception:
+            live = {}
+        # Only trust the /run status file when it is talking about *this* step.
+        # It is not reset between runs, so it can still hold the previous
+        # update's `done` — which is precisely what used to make a client skip
+        # ahead and start the next component on top of a running one.
+        if live.get('version') == current['version']:
+            step_state = live.get('state') or ''
+            progress = live.get('progress') if isinstance(live.get('progress'), (int, float)) else None
+            message = live.get('message') or ''
+        else:
+            step_state = 'starting'
+
+    done = sum(1 for s in plan['steps'] if s['state'] == 'done')
+    total = len(plan['steps']) or 1
+    overall_progress = int(100.0 * (done + (progress or 0) / 100.0) / total)
+
+    return {
+        'state': state,
+        'plan_id': plan['plan_id'],
+        'channel': plan['channel'],
+        'kind': current['kind'] if current else '',
+        'version': current['version'] if current else '',
+        'step_state': step_state,
+        'progress': progress,
+        'message': message,
+        'overall_progress': min(overall_progress, 100),
+        'finished': plan.get('finished'),
+        'steps': [{'kind': s['kind'], 'version': s['version'], 'state': s['state'],
+                   'installed': _PLAN_KINDS[s['kind']][2]()} for s in plan['steps']],
+    }
+
+def dismiss_update_plan():
+    """Drop a plan that is no longer running (the client has shown the outcome).
+    Refuses while the sequencer is still working."""
+    with _UPDATE_PLAN_LOCK:
+        plan = _read_update_plan()
+        if plan and _plan_overall_state(plan) == 'running':
+            return {'success': False, 'message': 'Aggiornamento in corso'}
+        _clear_update_plan()
+        return {'success': True}
+
+# ──────────────────────────────────────────────────────────────────
 #  Lyrion Music Server update helpers
 # ──────────────────────────────────────────────────────────────────
 
@@ -3239,6 +3591,22 @@ def api_os_update_apply():
 def api_os_update_status():
     return jsonify(os_update_status())
 
+# Sequenced multi-component update. Preferred over calling the three
+# */apply endpoints in turn: the whole plan is persisted and driven to the
+# end server-side, so a service restart, a kiosk teardown or the reboot an
+# OS payload asks for can no longer leave components half-updated.
+@app.route('/update/apply_all', methods=['POST'])
+def api_update_apply_all():
+    return jsonify(apply_all_updates())
+
+@app.route('/update/status', methods=['GET'])
+def api_update_status():
+    return jsonify(update_plan_status())
+
+@app.route('/update/dismiss', methods=['POST'])
+def api_update_dismiss():
+    return jsonify(dismiss_update_plan())
+
 @app.route('/lyrion_update/check', methods=['GET'])
 def api_lyrion_update_check():
     return jsonify(check_lyrion_update(request.args.get('channel')))
@@ -3528,4 +3896,5 @@ if __name__ == '__main__':
     # control of the appliance.
     # threaded=True so a slow handler (apt/systemctl/network reconfig, or a
     # 15s OTA fetch) doesn't block the kiosk UI's other requests behind it.
+    _startup_network_recovery()
     app.run(host='127.0.0.1', port=8000, threaded=True)

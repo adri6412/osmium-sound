@@ -527,7 +527,7 @@
       "checkButton": "Controlla aggiornamenti",
       "updating": "Aggiornamento...",
       "updateNow": "Aggiorna ora",
-      "orderNote": "Si aggiornano in ordine: sistema, interfaccia e — se presente — il sistema operativo (con riavvio finale).",
+      "orderNote": "Se ne occupa il player, in ordine: sistema, sistema operativo (con riavvio se serve) e interfaccia. L'aggiornamento prosegue anche se questa schermata si chiude.",
       "autoCheck": "Controlla aggiornamenti all'avvio",
       "latestVersion": "Ultima versione",
       "installedVersion": "Versione installata",

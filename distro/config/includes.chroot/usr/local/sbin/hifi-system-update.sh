@@ -12,14 +12,46 @@
 #     ./etc/systemd/system/hifi-api.service
 #     ./SYSTEM_VERSION
 #
-# Invoked as root by api_server.py, normally via systemd-run so it survives
-# the api restart:
+# Invoked as root by hifi-update-runner.sh (which runs under its own transient
+# systemd unit, so it survives the api restart below), or directly by
+# api_server.py via systemd-run for a single-component update:
 #     hifi-system-update.sh <download_url> <sha256> <version>
 set -eu
 
-# shellcheck source=distro/config/includes.chroot/usr/local/sbin/hifi-log.sh
-. /usr/local/sbin/hifi-log.sh
-hifi_log_init hifi-system-update
+# Sourced defensively: under `set -e` a missing/unreadable helper would abort
+# this script before write_status/fail exist, i.e. before it could report
+# anything — the status file would just stay on its previous contents and the
+# caller would wait for a step that already died.
+if [ -r /usr/local/sbin/hifi-log.sh ]; then
+    # shellcheck source=distro/config/includes.chroot/usr/local/sbin/hifi-log.sh
+    # shellcheck disable=SC1091  # absolute target, only present on the appliance
+    . /usr/local/sbin/hifi-log.sh
+    hifi_log_init hifi-system-update
+fi
+
+# ── run from a private copy ──────────────────────────────────────────
+# This script installs /usr/local/sbin/*.sh with `cp -af`, which rewrites files
+# IN PLACE — including this one. /bin/sh reads a script incrementally, by byte
+# offset, so from the copy onwards we would be executing whatever happens to sit
+# at our old offset inside the NEW file: a truncated run that silently skips the
+# service restarts (or worse). Re-exec from a copy under /var/tmp first, which
+# nothing in the bundle touches.
+if [ "${HIFI_SYSUPD_PRIVATE:-}" != "1" ]; then
+    _self=$(readlink -f "$0" 2>/dev/null || echo "$0")
+    _dir=$(mktemp -d /var/tmp/hifi-system-update.XXXXXX) || _dir=""
+    if [ -n "$_dir" ] && cp -f "$_self" "$_dir/update.sh"; then
+        chmod +x "$_dir/update.sh"
+        HIFI_SYSUPD_PRIVATE=1
+        HIFI_SYSUPD_TMPDIR="$_dir"
+        export HIFI_SYSUPD_PRIVATE HIFI_SYSUPD_TMPDIR
+        exec /bin/sh "$_dir/update.sh" "$@"
+    fi
+    [ -n "$_dir" ] && rm -rf "$_dir"
+fi
+# The `: ` keeps the trap's exit status at 0: a trap whose last command fails can
+# replace the script's exit status, and the sequencer reads that status to
+# decide whether this step succeeded.
+trap '{ [ -n "${HIFI_SYSUPD_TMPDIR:-}" ] && rm -rf "$HIFI_SYSUPD_TMPDIR"; }; :' EXIT INT TERM
 
 URL="${1:-}"
 SHA="${2:-}"
@@ -104,8 +136,21 @@ if [ -f /etc/systemd/system/hifi-webui.service ]; then
     systemctl enable hifi-webui.service 2>/dev/null || true
     systemctl restart hifi-webui.service 2>/dev/null || true
 fi
+# Resume unit for interrupted OTA plans. Enabled here as well as from the OS
+# payload (apply.d/0033) so a device that only ever receives system bundles
+# still gets it; both are idempotent. Never *started* — it is a boot-time unit
+# and its ConditionPathExists guard makes it a no-op without a pending plan.
+if [ -f /etc/systemd/system/hifi-update-resume.service ]; then
+    systemctl enable hifi-update-resume.service 2>/dev/null || true
+fi
 
 rm -rf "$WORKDIR"
-write_status done 100 "Componenti aggiornati a $VERSION"
+write_status 'done' 100 "Componenti aggiornati a $VERSION"
 
+# Restarting hifi-api kills any client that was polling us. That used to abort
+# the multi-component update, because the client itself was driving the
+# sequence and its next apply POST landed on a restarting API. The sequence is
+# now driven by hifi-update-runner.sh under its own transient unit, which
+# judges this step by our exit code — not by the status file above — so the
+# restart is safe. Keep it last regardless.
 systemctl restart hifi-api 2>/dev/null || true

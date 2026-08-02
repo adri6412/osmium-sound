@@ -46,7 +46,7 @@ flowchart TB
 | Preload | `main/preload.js` | Minimal `contextBridge` surface — only UI-local concerns (frame-rate cap, global on-screen keyboard). **System control does not go through IPC.** |
 | React renderer | `src/` | The touchscreen UI (Now Playing, Music/Radio/Apps via Lyrion, Settings, Setup Wizard) |
 | Flask API | `api_server.py` | Runs as root on the appliance; system info/control, network/Wi-Fi, OTA channels, DSP, multiroom (LMS role), pairing tokens. Port `8000`. |
-| Sources service | `sources_server.py` | USB/SMB/local source management, internal-disk adoption/formatting, backup/restore, FIR filter upload, and a DSP control proxy to the loopback-only Flask API. Port `8080`. |
+| Sources service | `sources_server.py` | USB/SMB/local source management, internal-disk adoption/formatting, backup/restore (core logic shared via `hifi_backup.py`), FIR filter upload, and a DSP control proxy to the loopback-only Flask API. Port `8080`. |
 | Lyrion Music Server | external (Debian package / on-demand download) | Library indexing, playback engine, plugin ecosystem (Spotty, TIDAL Connect, radio, UPnP/DLNA, AirPlay). Port `9000`. |
 | squeezelite | systemd service | Lyrion's player client; `-D` flag enables bit-perfect DSD via DoP; `-v` exports a shared-memory buffer the VU meter reads |
 | CamillaDSP | systemd-managed, optional | Parametric EQ, headphone crossfeed, room correction from an uploaded filter. Off by default — bit-perfect path is untouched unless enabled. |
@@ -136,6 +136,64 @@ nothing to show while the local player is paused for a BT session).
 Not yet implemented: Bluetooth as an *output* (appliance → BT
 headphones/speakers) — a natural fase 2, tracked in `ANALISI-CONCORRENTI.md`.
 
+## Backup & restore
+
+`hifi_backup.py` is the shared core (imported by both `sources_server.py`,
+which exposes the HTTP routes, and the worker below), so the set of paths a
+backup can read and the set a restore may write are always the same table.
+
+**Deliberately a profile backup, not a rootfs image.** The OS is already
+reproducible from the install ISO plus the cumulative OS-update migrations
+(see [OTA update system](#ota-update-system)), so this never touches
+`OS_VERSION`/`SYSTEM_VERSION`, the OTA signing pubkey, or per-device identity
+(`webui-secret.key`, TLS cert, `/etc/machine-id`) — a hard deny-list enforced
+on both the archiving and the restoring side. Restoring those would only ever
+fight the updater or clone one device's session identity onto another.
+
+**Categories**: `core` (DAC/DSP/EQ/pointer/OTA channel), `sources` (the music
+source list — kept in every backup, but with SMB passwords redacted unless
+encrypted), `lyrion` (prefs + playlists, *not* the scanned library cache,
+which Lyrion rebuilds on its own), `network` (Wi-Fi profiles only — Ethernet
+carries no secret and recreates itself), `accounts` (web-admin DB via
+SQLite's own backup API for a consistent snapshot, Samba credentials, pairing
+tokens) and `bluetooth` (link keys). The last three are flagged *secret* and
+only ever enter an archive when a passphrase is supplied — a scheduled
+(unattended) backup therefore always sticks to the non-secret half.
+
+**Integrity, not DietPi's rsync-mirror model.** A generation on
+`/var/lib/hifi-player/backups/<timestamp>/` is a `.tar.gz` (or `.tar.gz.enc`)
+plus a `manifest.json` written **last**; a directory without one is an
+interrupted build, is invisible to the listing, and is pruned on the next
+run — an interrupted backup can never be mistaken for a good one. Every
+member's sha256 is checked before it's written back during a restore.
+Encryption is optional (openssl AES-256-CTR, PBKDF2, encrypt-then-HMAC so a
+wrong passphrase or a tampered file is rejected before anything is decrypted).
+
+**Building** a generation runs via `hifi-backup-run.py`, the same
+`systemd-run --no-block` + `/run/hifi-backup-status.json` poll shape as the
+disk-format and CD-rip jobs — nothing is stopped while it runs, because each
+format that can't be safely byte-copied has its own consistent-snapshot path
+(SQLite backup API, a YAML re-parse-and-retry for Lyrion's live prefs).
+**Restoring** does stop `lyrionmusicserver` around the prefs it's about to
+overwrite (an explicit, rare action, unlike backup), takes an automatic
+"pre-restore" safety generation first, and restarts only the services whose
+files actually changed — CamillaDSP is never turned on by a restore that
+finds it off.
+
+Scheduling (`hifi-backup.timer`, weekly, `Persistent=false`) ships via
+`distro/os-update/apply.d/0033-backup-scheduler.sh`, same pattern as the
+Bluetooth units above: installed disabled, reconciled against the user's
+choice in `/etc/hifi-player/backup.json` on every OS update. A factory reset
+wipes `/var/lib/hifi-player/backups` — otherwise a device handed to someone
+else would carry the previous owner's Wi-Fi/SMB/admin credentials in an
+encrypted backup they never asked to keep.
+
+Both the sources SPA (`:8080`, phone/QR flow — `GET/POST /api/backup*`,
+`/api/restore`) and the web-admin (`/api/system/backup*`, `/api/system/restore`,
+session-gated forward in `webui_server.py`) expose the same feature; the plain
+`GET /api/backup` link (no passphrase — an `<a href>` can't send one) stays
+the always-available "just get me a file" path used by both UIs.
+
 ## Pairing & security
 
 The Android companion pairs via a bearer token, not a password. Minting a
@@ -220,7 +278,14 @@ POST   /api/pair/token                  mint a companion pairing token (localhos
 POST   /api/pair/tokens/revoke_all      revoke all tokens (localhost only)
 GET/POST /api/dsp/status, /api/dsp/set  🔒   proxy to the loopback-only Flask DSP routes
 POST   /api/dsp/fir                🔒   upload a FIR filter for CamillaDSP
-GET/POST /api/backup, /api/restore 🔒   full-config backup/restore
+GET    /api/backup                 🔒   build + download a plain (non-secret) backup immediately
+POST   /api/backup/create          🔒   start an async backup generation (systemd-run job)
+GET    /api/backup/status          🔒   poll the running backup job
+GET    /api/backup/list            🔒   generations stored on-device
+GET/DELETE /api/backup/<id>        🔒   download / delete one generation
+POST   /api/backup/<id>/restore    🔒   restore a stored generation
+GET/POST /api/backup/settings      🔒   scheduled-backup on/off + retention
+POST   /api/restore                🔒   restore from an uploaded archive
 ```
 
 `_require_pair_token()` exempts calls from `127.0.0.1`/`::1` (the on-device
@@ -449,6 +514,7 @@ hifi-media-player/
 │   └── i18n/                 # en/it locale strings
 ├── api_server.py            # Flask API (system/network/OTA/DSP/multiroom)
 ├── sources_server.py         # USB/SMB/local music sources
+├── hifi_backup.py            # Backup/restore core (shared with the sbin worker)
 ├── android-companion/       # Android companion app (Kotlin/Java)
 ├── distro/                  # Custom Debian appliance build (live-build)
 │   ├── config/               # live-build includes, hooks, systemd units

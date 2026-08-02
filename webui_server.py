@@ -508,6 +508,23 @@ def _device_has_ip(dev):
     return rc == 0 and bool(out.strip())
 
 
+def _ensure_networkmanager_state(device=None):
+    """Recover from NetworkManager states where the interface is unmanaged or networking is globally off."""
+    _nmcli(['networking', 'on'], timeout=15)
+    if device:
+        _nmcli(['device', 'set', device, 'managed', 'yes'], timeout=15)
+
+
+def _wait_for_dhcp_ip(dev, timeout=15):
+    """Wait briefly for NetworkManager to hand a lease to a just-connected dev."""
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        if _device_has_ip(dev):
+            return True
+        time.sleep(1)
+    return False
+
+
 def _wired_self_heal():
     """An Ethernet cable plugged in (carrier=1) with no IP means either no
     connection profile exists yet, or the existing one is broken/stale. First
@@ -540,7 +557,9 @@ def _wired_self_heal():
                     if len(parts) >= 2 and parts[1] == '802-3-ethernet':
                         _nmcli(['connection', 'delete', 'id', parts[0].replace('\\:', ':')])
             _eth_fail_since[dev] = now  # fresh grace window for the just-recreated profile
+        _ensure_networkmanager_state(dev)
         _nmcli(['device', 'connect', dev], timeout=30)
+        _wait_for_dhcp_ip(dev)
     for dev in list(_eth_fail_since.keys()):
         if dev not in seen:
             _eth_fail_since.pop(dev, None)  # device unplugged/removed
@@ -796,6 +815,12 @@ _AUTH_ROUTES = {
     ('/api/system/updates/os/check', 'GET'): '/os_update/check',
     ('/api/system/updates/os/apply', 'POST'): '/os_update/apply',
     ('/api/system/updates/os/status', 'GET'): '/os_update/status',
+    # Sequenced multi-component update (server-side plan). Preferred over
+    # applying the three components one by one from here: restarting hifi-api /
+    # hifi-webui mid-run used to abort the sequence.
+    ('/api/system/updates/apply_all', 'POST'): '/update/apply_all',
+    ('/api/system/updates/status', 'GET'): '/update/status',
+    ('/api/system/updates/dismiss', 'POST'): '/update/dismiss',
     ('/api/system/updates/lyrion/check', 'GET'): '/lyrion_update/check',
     ('/api/system/updates/lyrion/apply', 'POST'): '/lyrion_update/apply',
     ('/api/system/updates/lyrion/status', 'GET'): '/lyrion_update/status',
@@ -1348,6 +1373,38 @@ def dsp_fir_proxy():
     return _forward_to_sources('/api/dsp/fir')
 
 
+# ── Backup / restore — session-gated forward to sources_server ───────
+# The archive lives on sources_server.py (:8080) — same story as the FIR
+# filter above: this is OUR authenticated Settings page, so the webui session
+# is the gate, and the raw request (including the multipart restore upload,
+# and binary download responses) is relayed as-is via _forward_to_sources().
+# /api/backup is already in _SOURCES_FWD_PREFIXES, but only reachable there
+# under the pairing TOKEN (phone/QR flow) — these routes are the session-gated
+# equivalent for the web-admin UI, which has no token to offer.
+@app.route('/api/system/backup', methods=['GET'])
+def backup_download_now_proxy():
+    denied = _require_session()
+    if denied:
+        return denied
+    return _forward_to_sources('/api/backup')
+
+
+@app.route('/api/system/backup/<path:rest>', methods=['GET', 'POST', 'DELETE'])
+def backup_proxy(rest):
+    denied = _require_session()
+    if denied:
+        return denied
+    return _forward_to_sources('/api/backup/' + rest)
+
+
+@app.route('/api/system/restore', methods=['POST'])
+def restore_proxy():
+    denied = _require_session()
+    if denied:
+        return denied
+    return _forward_to_sources('/api/restore')
+
+
 # ── support bundle (zip) — session-gated, forwarded raw ──────────────
 # Binary download, so it can't go through the generic JSON proxy table
 # (_handle_proxy always wraps the response in jsonify()). Same trust level as
@@ -1569,6 +1626,8 @@ def _bootstrap():
         PERMANENT_SESSION_LIFETIME=7 * 24 * 3600,
     )
     _init_db()
+    device = _eth_devices()[0] if _eth_devices() else _wifi_device()
+    _ensure_networkmanager_state(device)
 
 
 def _start_provisioning_loop():

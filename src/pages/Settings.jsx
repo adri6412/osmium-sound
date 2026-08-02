@@ -187,9 +187,13 @@ const Settings = () => {
   const [osStatus, setOsStatus] = useState(null);
   const osPollRef = useRef(null);
 
-  // Combined UI+System OTA (single-button) state
+  // Combined UI+System+OS OTA (single-button) state
   const [isApplyingAll, setIsApplyingAll] = useState(false);
   const [allStatus, setAllStatus] = useState(null); // { phase, message } combined progress
+  // Live view of the server-side plan: { state, kind, message, progress, doneKinds }.
+  // Null while the legacy client-driven fallback is in charge.
+  const [planStatus, setPlanStatus] = useState(null);
+  const planPollRef = useRef(null);
 
   // Check-for-updates-on-startup preference (persisted)
   const [autoCheck, setAutoCheck] = useState(
@@ -920,14 +924,40 @@ const Settings = () => {
       checkSystemUpdate();
       checkOsUpdate();
     }
+    // Rejoin an update plan that is still running (or that finished while we
+    // were gone). The UI step restarts this very app and an OS step reboots the
+    // box, so the kiosk that started an update is rarely the one that sees it
+    // end — without this the run would silently disappear from the screen.
+    resumeUpdatePlan();
     return () => {
       if (otaPollRef.current) clearInterval(otaPollRef.current);
       if (systemPollRef.current) clearInterval(systemPollRef.current);
       if (lyrionPollRef.current) clearInterval(lyrionPollRef.current);
       if (osPollRef.current) clearInterval(osPollRef.current);
       if (rescanPollRef.current) clearInterval(rescanPollRef.current);
+      if (planPollRef.current) clearInterval(planPollRef.current);
     };
   }, []);
+
+  const resumeUpdatePlan = async () => {
+    const r = await systemAPI.getUpdatePlanStatus();
+    // A 404 just means this appliance predates the sequencer.
+    if (!r.success || !r.data || r.data.state === 'idle') return;
+    const s = r.data;
+    setPlanStatus({
+      state: s.state,
+      kind: s.kind || '',
+      message: s.message || '',
+      progress: typeof s.overall_progress === 'number' ? s.overall_progress : null,
+      doneKinds: (s.steps || []).filter((x) => x.state === 'done').map((x) => x.kind),
+    });
+    if (s.state === 'running') {
+      setIsApplyingAll(true);
+      await followUpdatePlan();
+      setIsApplyingAll(false);
+      refreshAllChecks();
+    }
+  };
 
   // Publish "update available" so the Sidebar can show a badge. We consider the
   // core channels behind the single button (UI + System + OS); Lyrion lives on
@@ -1051,22 +1081,76 @@ const Settings = () => {
   };
 
   // ── Combined UI + System + OS OTA (single button) ───────────────
-  // One button applies every core update, in the order that survives:
-  //   1. System components (API/daemons/scripts) — doesn't tear down the page.
-  //   2. OS — verifies the signature and runs apply.sh. apply.sh is a clean
-  //      no-op when the system already matches (so this step usually just falls
-  //      through); only a real OS change reboots, which is rare and ends here.
-  //   3. UI — restarts the Electron front-end, so it goes last (terminal).
-  // (Lyrion stays on its own button.)
+  // The sequence runs on the appliance: /update/apply_all writes a plan to
+  // persistent storage and hifi-update-runner.sh walks it to the end under its
+  // own systemd unit. That matters because every step of an update tears
+  // something down — the system bundle restarts hifi-api, the UI bundle
+  // restarts lightdm (this very page), and an OS payload may reboot the box —
+  // and when this page owned the sequence, each of those aborted it and left
+  // components behind. Here we only start the plan and render its progress.
+  const followUpdatePlan = () => new Promise((resolve) => {
+    if (planPollRef.current) clearInterval(planPollRef.current);
+    planPollRef.current = setInterval(async () => {
+      const r = await systemAPI.getUpdatePlanStatus();
+      // A failed request is expected mid-plan (the API is restarting, or the
+      // box is rebooting). The plan is on disk — just keep polling.
+      if (!r.success) return;
+      const s = r.data || {};
+      if (s.state === 'idle') return;
+      setPlanStatus({
+        state: s.state,
+        kind: s.kind || '',
+        message: s.message || '',
+        progress: typeof s.overall_progress === 'number' ? s.overall_progress : null,
+        doneKinds: (s.steps || []).filter((x) => x.state === 'done').map((x) => x.kind),
+      });
+      if (s.state === 'finished' || s.state === 'error' || s.state === 'interrupted') {
+        clearInterval(planPollRef.current);
+        planPollRef.current = null;
+        resolve(s.state === 'finished');
+      }
+    }, 2000);
+  });
+
   const applyAllUpdates = async () => {
     if (!apiConnected) {
       setUpdateMessage(t('settings.msg.apiUnavailable'));
       return;
     }
+    if (!(systemUpdate?.update_available || appUpdate?.update_available || osUpdate?.update_available)) return;
+
+    setIsApplyingAll(true);
+    setPlanStatus({ state: 'starting', kind: '', message: t('settings.updates.msg.starting'), progress: null, doneKinds: [] });
+    const started = await systemAPI.applyAllUpdates();
+    if (started.success && started.data?.started) {
+      const ok = await followUpdatePlan();
+      if (!ok) setAllStatus({ phase: 'error', message: t('settings.updates.msg.updateError') });
+      setIsApplyingAll(false);
+      refreshAllChecks();
+      return;
+    }
+    // 404 = this appliance still runs an api_server without the sequencer (the
+    // UI bundle can land before the system bundle). Drive the sequence from
+    // here the way we used to, so the update still goes through.
+    if (started.status !== 404) {
+      setPlanStatus(null);
+      setIsApplyingAll(false);
+      setAllStatus({ phase: 'error', message: started.data?.message || t('settings.updates.msg.startFailed') });
+      return;
+    }
+    setPlanStatus(null);
+    await applyAllUpdatesLegacy();
+  };
+
+  // Pre-sequencer fallback. Same order the runner uses (system → os → ui), with
+  // the known limitation this whole change exists to remove: if the OS step
+  // reboots, or the API restart lands between two steps, the remaining
+  // components are not applied.
+  const applyAllUpdatesLegacy = async () => {
     const hasSystem = !!systemUpdate?.update_available;
     const hasUI = !!appUpdate?.update_available;
     const hasOS = !!osUpdate?.update_available;
-    if (!hasSystem && !hasUI && !hasOS) return;
+    if (!hasSystem && !hasUI && !hasOS) { setIsApplyingAll(false); return; }
 
     setIsApplyingAll(true);
     try {
@@ -1571,6 +1655,21 @@ const Settings = () => {
   // and delegates the live progress to the current phase's sub-status. We map all
   // of that to one shape { title, message, progress, state } the overlay renders.
   const activeOta = (() => {
+    // A server-side plan wins over everything: it is the only source that stays
+    // accurate across the restarts and the reboot an update performs.
+    if (planStatus) {
+      const terminal = planStatus.state === 'error' || planStatus.state === 'interrupted';
+      return {
+        title: t('settings.updates.overlay.titleAll'),
+        // Fall back to naming the component being applied ('ui'/'system'/'os'
+        // are all keys under settings.updates) before the generic "starting".
+        message: planStatus.message
+          || (planStatus.kind ? t(`settings.updates.${planStatus.kind}`) : '')
+          || t('settings.updates.msg.starting'),
+        progress: typeof planStatus.progress === 'number' ? planStatus.progress : null,
+        state: terminal ? 'error' : (planStatus.state === 'finished' ? 'done' : 'applying'),
+      };
+    }
     if (isApplyingAll) {
       const sub = allStatus?.phase === 'ui' ? otaStatus
         : allStatus?.phase === 'system' ? systemStatus
@@ -1602,13 +1701,20 @@ const Settings = () => {
   // Tear down every poll + applying flag so the overlay can be dismissed after an
   // error (on success the UI/API restarts, so no dismiss is needed there).
   const dismissOta = () => {
-    [otaPollRef, systemPollRef, osPollRef, lyrionPollRef].forEach((r) => {
+    [otaPollRef, systemPollRef, osPollRef, lyrionPollRef, planPollRef].forEach((r) => {
       if (r.current) { clearInterval(r.current); r.current = null; }
     });
     setIsApplyingAll(false); setIsApplyingUpdate(false); setIsApplyingSystem(false);
     setIsApplyingOs(false); setIsApplyingLyrion(false);
     setAllStatus(null); setOtaStatus(null); setSystemStatus(null);
     setOsStatus(null); setLyrionStatus(null);
+    if (planStatus) {
+      setPlanStatus(null);
+      // Retire the plan server-side too, or it re-opens this overlay every time
+      // the kiosk starts until it expires.
+      systemAPI.dismissUpdatePlan();
+      refreshAllChecks();
+    }
   };
 
   return (
@@ -3312,7 +3418,10 @@ const Settings = () => {
               {hasPct && !isErr ? `${pct}%` : ''}
             </div>
 
-            {isErr ? (
+            {/* `done` is reachable now that a sequenced plan can finish with the
+                kiosk still up (the UI step is skipped when only the system/OS
+                had an update) — it needs a way out too, not just errors. */}
+            {isErr || isDone ? (
               <button
                 onClick={dismissOta}
                 className="mt-6 bg-hifi-accent hover:bg-hifi-dark text-white px-8 py-3 rounded-lg font-medium transition-colors"

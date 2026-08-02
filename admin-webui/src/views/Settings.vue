@@ -25,6 +25,7 @@ const sections = computed(() => [
   { key: 'updates',   label: t('settings.sections.updates.label'),   desc: t('settings.sections.updates.desc') },
   { key: 'companion', label: t('settings.sections.companion.label'), desc: t('settings.sections.companion.desc') },
   { key: 'account',   label: t('settings.sections.account.label'),   desc: t('settings.sections.account.desc') },
+  { key: 'backup',    label: t('settings.sections.backup.label'),    desc: t('settings.sections.backup.desc') },
   { key: 'language',  label: t('settings.sections.language.label'),  desc: t('settings.sections.language.desc') },
   { key: 'system',    label: t('settings.sections.system.label'),    desc: t('settings.sections.system.desc') },
 ]);
@@ -377,21 +378,34 @@ async function checkAll() {
 const hasUpdates = () => Object.keys(kinds).some(k => upd[k] && upd[k].update_available);
 const sleep = (ms) => new Promise(res => setTimeout(res, ms));
 
-async function pollUntilDone(k, timeoutMs = 15 * 60 * 1000) {
+// The whole sequence runs on the appliance (hifi-update-runner.sh, driven by a
+// plan persisted under /var/lib). This page only starts it and renders its
+// progress, so losing the browser — or this very daemon, which the system
+// bundle restarts — no longer interrupts anything.
+function renderPlan(s) {
+  applying.kind = s.kind || '';
+  applying.label = kindLabels.value[s.kind] || '';
+  applying.state = s.step_state || s.state || '';
+  applying.progress = (typeof s.overall_progress === 'number') ? s.overall_progress : null;
+  applying.message = s.message || '';
+  applying.doneList = (s.steps || []).filter(x => x.state === 'done')
+    .map(x => kindLabels.value[x.kind] || x.kind);
+}
+
+async function pollPlan(timeoutMs = 30 * 60 * 1000) {
   const t0 = Date.now();
-  // Network errors are EXPECTED mid-way: the system bundle restarts this very
-  // daemon, and an OS update may reboot — keep polling, the status file
-  // written by the updater script survives the restart.
+  // Request failures are EXPECTED mid-way: the system bundle restarts this
+  // daemon and an OS payload may reboot the appliance. Keep polling — the plan
+  // is on persistent storage and the sequencer resumes on its own.
   while (Date.now() - t0 < timeoutMs) {
     await sleep(2000);
-    const r = await api.sys(`updates/${kinds[k]}/status`);
+    const r = await api.sys('updates/status');
     if (!r.ok) continue;
     const s = r.data || {};
-    applying.state = s.state || '';
-    applying.progress = (typeof s.progress === 'number') ? s.progress : null;
-    applying.message = s.message || '';
-    if (s.state === 'done') return true;
-    if (s.state === 'error') return false;
+    if (s.state === 'idle') continue;
+    renderPlan(s);
+    if (s.state === 'finished') return true;
+    if (s.state === 'error' || s.state === 'interrupted') return false;
   }
   applying.message = t('settings.updates.timeout');
   return false;
@@ -400,26 +414,48 @@ async function pollUntilDone(k, timeoutMs = 15 * 60 * 1000) {
 async function applyAll() {
   if (applying.active || !hasUpdates()) return;
   applying.active = true; applying.error = false; applying.doneList = [];
-  // System last: applying it restarts this daemon (brief connection blip the
-  // polling rides out). UI/OS first.
-  const order = ['ui', 'os', 'system'].filter(k => upd[k] && upd[k].update_available);
-  for (const k of order) {
-    applying.kind = k; applying.label = kindLabels.value[k];
-    applying.state = 'starting'; applying.progress = null; applying.message = '';
-    const r = await api.sysPost(`updates/${kinds[k]}/apply`, {});
-    if (!(r.ok && (r.data.started || r.data.success !== false))) {
-      applying.error = true; applying.message = bodyMsg(r, t('settings.updates.startFailed')); break;
-    }
-    const ok = await pollUntilDone(k);
-    if (!ok) { applying.error = true; break; }
-    applying.doneList.push(kindLabels.value[k]);
+  applying.kind = ''; applying.label = ''; applying.state = 'starting';
+  applying.progress = null; applying.message = '';
+  const r = await api.sysPost('updates/apply_all', {});
+  if (!(r.ok && r.data.started)) {
+    applying.error = true;
+    applying.state = 'error';
+    applying.message = bodyMsg(r, t('settings.updates.startFailed'));
+    return;
   }
-  applying.state = applying.error ? 'error' : 'finished';
-  if (!applying.error) { applying.message = t('settings.updates.allCompleted'); }
+  const ok = await pollPlan();
+  applying.error = !ok;
+  applying.state = ok ? 'finished' : 'error';
+  if (ok) applying.message = t('settings.updates.allCompleted');
   // Keep the modal up until the user closes it (shows the outcome).
 }
-function closeApplyModal() {
+
+// If the page is opened (or reloaded) while the appliance is mid-plan, join the
+// run in progress instead of showing a stale "up to date".
+async function resumePlanIfRunning() {
+  const r = await api.sys('updates/status');
+  if (!r.ok) return;
+  const s = r.data || {};
+  if (s.state === 'idle') return;
+  applying.active = true;
+  renderPlan(s);
+  if (s.state === 'running') {
+    const ok = await pollPlan();
+    applying.error = !ok;
+    applying.state = ok ? 'finished' : 'error';
+    if (ok) applying.message = t('settings.updates.allCompleted');
+  } else {
+    applying.error = s.state !== 'finished';
+    applying.state = applying.error ? 'error' : 'finished';
+    if (!applying.error) applying.message = t('settings.updates.allCompleted');
+  }
+}
+
+async function closeApplyModal() {
   applying.active = false; applying.kind = ''; applying.state = '';
+  // Let the appliance drop the finished plan, so it doesn't re-open this modal
+  // on the next page load.
+  await api.sysPost('updates/dismiss', {});
   checkAll();
 }
 
@@ -460,9 +496,126 @@ async function changePw() {
   else say(bodyMsg(r, t('settings.account.updateFailed')), true);
 }
 
+// ── backup / restore ──────────────────────────────────────────────
+// The passphrase is the single switch deciding whether credentials (Wi-Fi
+// PSKs, SMB passwords, this very account) go into the archive at all: filled
+// in means encrypted-and-complete, empty means plain-and-non-secret. It is
+// held only in this component's state, sent with the one request that needs
+// it, and never written anywhere.
+const backupPass = ref('');
+const backupGens = ref([]);
+const backupSecretCats = ref([]);
+const backupScheduled = ref(false);
+const backupBusy = ref(false);
+const restoreFileInput = ref(null);
+
+function fmtBackupSize(n) {
+  if (!n) return '';
+  return n >= 1048576 ? (n / 1048576).toFixed(1) + ' MB' : Math.max(1, Math.round(n / 1024)) + ' kB';
+}
+function fmtBackupStamp(id) {
+  // Generation ids are YYYYMMDD-HHMMSS.
+  if (!id || id.length < 15) return id || '';
+  return `${id.slice(6, 8)}/${id.slice(4, 6)}/${id.slice(0, 4)} ${id.slice(9, 11)}:${id.slice(11, 13)}`;
+}
+
+async function loadBackups() {
+  const r = await api.backupList();
+  if (!r.ok) return;
+  backupGens.value = r.data.generations || [];
+  backupSecretCats.value = r.data.secret || [];
+  backupScheduled.value = !!(r.data.settings && r.data.settings.scheduled);
+}
+
+async function pollBackupStatus() {
+  for (let i = 0; i < 600; i++) {
+    await new Promise((resolve) => setTimeout(resolve, 1500));
+    const r = await api.backupStatus();
+    if (!r.ok) continue;
+    const s = r.data;
+    if (s.state === 'done') { say(s.message || t('settings.backup.created')); break; }
+    if (s.state === 'error') { say(s.message || t('settings.backup.createFailed'), true); break; }
+    say((s.message || t('settings.backup.working')) + ' ' + (s.progress || 0) + '%');
+  }
+  backupBusy.value = false;
+  loadBackups();
+}
+
+async function createBackup() {
+  backupBusy.value = true;
+  say(t('settings.backup.working'));
+  const r = await api.backupCreate(backupPass.value, null);
+  if (r.data && r.data.success === false) {
+    backupBusy.value = false;
+    say(bodyMsg(r, t('settings.backup.createFailed')), true);
+    return;
+  }
+  pollBackupStatus();
+}
+
+async function downloadBackup(id) {
+  // Same fetch→blob→filename dance as downloadSupportBundle: same-origin
+  // session cookie rides along, and this preserves the server-set filename.
+  say(t('settings.backup.working'));
+  try {
+    const resp = await fetch(api.backupDownloadUrl(id), { credentials: 'same-origin' });
+    if (!resp.ok) throw new Error(await resp.text() || resp.statusText);
+    const blob = await resp.blob();
+    let filename = 'osmium-backup.tar.gz';
+    const cd = resp.headers.get('Content-Disposition');
+    if (cd) {
+      const m = /filename\*=[^']*'[^']*'([^;]+)|filename="([^"]+)"|filename=([^;\n]+)/i.exec(cd);
+      const name = m && decodeURIComponent(m[1] || m[2] || m[3] || '');
+      if (name) filename = name;
+    }
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = filename;
+    document.body.appendChild(a); a.click(); a.remove();
+    URL.revokeObjectURL(url);
+    say(t('settings.backup.downloaded'));
+    if (!id) loadBackups(); // an immediate download may also have started a fresh listing-worthy state
+  } catch (e) {
+    say(t('settings.backup.downloadFailed'), true);
+  }
+}
+
+async function restoreGen(gen) {
+  if (!confirm(t('settings.backup.restoreConfirm'))) return;
+  say(t('settings.backup.restoring'));
+  const r = await api.backupRestore(gen.id, backupPass.value, null);
+  say(bodyMsg(r, r.ok && r.data.success !== false ? t('settings.backup.restored') : t('settings.backup.restoreFailed')),
+      !(r.ok && r.data.success !== false));
+  loadBackups();
+}
+
+async function deleteGen(gen) {
+  if (!confirm(t('settings.backup.deleteConfirm'))) return;
+  await api.backupDelete(gen.id);
+  loadBackups();
+}
+
+async function uploadRestore(e) {
+  const file = e.target.files && e.target.files[0];
+  e.target.value = '';
+  if (!file) return;
+  if (!confirm(t('settings.backup.restoreConfirm'))) return;
+  say(t('settings.backup.restoring'));
+  const r = await api.restoreUpload(file, backupPass.value, null);
+  say(bodyMsg(r, r.ok && r.data.success !== false ? t('settings.backup.restored') : t('settings.backup.restoreFailed')),
+      !(r.ok && r.data.success !== false));
+  loadBackups();
+}
+
+async function saveBackupScheduled(v) {
+  backupScheduled.value = v;
+  const r = await api.backupSettingsSave({ scheduled: v });
+  if (r.data && r.data.success === false) say(bodyMsg(r, t('settings.backup.settingsFailed')), true);
+}
+
 onMounted(async () => {
   loadNet(); loadAudio(); loadDsp(); loadFir(); loadToggles(); loadShell(); loadLms(); loadLyrion();
-  loadMode(); loadChannel(); checkAll();
+  loadMode(); loadChannel(); checkAll(); resumePlanIfRunning(); loadBackups();
 });
 onUnmounted(() => { clearTimeout(remoteSupportPollTimer); if (lyrionPoll) clearInterval(lyrionPoll); });
 </script>
@@ -705,6 +858,50 @@ onUnmounted(() => { clearTimeout(remoteSupportPollTimer); if (lyrionPoll) clearI
       <div style="margin-top: 12px;"><button @click="changePw">{{ t('settings.account.change') }}</button></div>
     </div>
 
+    <!-- Backup / restore -->
+    <div class="card" v-if="open === 'backup'">
+      <p class="sub">{{ t('settings.backup.hint') }}</p>
+
+      <label>{{ t('settings.backup.passphrase') }}</label>
+      <input v-model="backupPass" type="password" autocomplete="new-password" />
+      <p class="muted" style="margin-top: 4px;">{{ t('settings.backup.passphraseHint') }}</p>
+
+      <div class="row" style="margin-top: 12px;">
+        <button :disabled="backupBusy" @click="createBackup">{{ t('settings.backup.create') }}</button>
+        <button class="secondary" :disabled="backupBusy" @click="downloadBackup()">{{ t('settings.backup.downloadNow') }}</button>
+        <button class="secondary" @click="restoreFileInput.click()">{{ t('settings.backup.restoreFromFile') }}</button>
+        <input ref="restoreFileInput" type="file" accept=".gz,.tar.gz,application/gzip" style="display: none;" @change="uploadRestore" />
+      </div>
+
+      <div style="margin-top: 18px; padding-top: 16px; border-top: 1px solid rgba(255,255,255,0.1);">
+        <div class="net between">
+          <span>{{ t('settings.backup.scheduled') }}</span>
+          <Toggle :model-value="backupScheduled" @update:model-value="saveBackupScheduled" />
+        </div>
+        <p class="muted">{{ t('settings.backup.scheduledHint') }}</p>
+      </div>
+
+      <div style="margin-top: 18px; padding-top: 16px; border-top: 1px solid rgba(255,255,255,0.1);">
+        <label>{{ t('settings.backup.stored') }}</label>
+        <p v-if="!backupGens.length" class="sub">{{ t('settings.backup.none') }}</p>
+        <div v-for="g in backupGens" :key="g.id" class="net between" style="align-items: flex-start;">
+          <div>
+            <div>
+              {{ fmtBackupStamp(g.id) }}
+              <span v-if="g.encrypted" class="muted" style="font-size: 11px; margin-left: 6px;">🔒 {{ t('settings.backup.encrypted') }}</span>
+              <span v-if="g.trigger && g.trigger !== 'manual'" class="muted" style="font-size: 11px; margin-left: 6px;">{{ g.trigger }}</span>
+            </div>
+            <div class="muted">{{ (g.categories || []).join(', ') }} · {{ fmtBackupSize(g.size) }}</div>
+          </div>
+          <div class="row">
+            <button class="secondary fit" @click="downloadBackup(g.id)">⬇</button>
+            <button class="secondary fit" @click="restoreGen(g)">{{ t('settings.backup.restoreThis') }}</button>
+            <button class="danger fit" @click="deleteGen(g)">✕</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- Language -->
     <div class="card" v-if="open === 'language'">
       <p class="sub">{{ t('settings.language.hint') }}</p>
@@ -721,7 +918,11 @@ onUnmounted(() => { clearTimeout(remoteSupportPollTimer); if (lyrionPoll) clearI
             {{ applying.message || applying.state || t('common.loading') }}
             <template v-if="applying.progress !== null"> · {{ applying.progress }}%</template>
           </p>
-          <p class="muted">{{ t('settings.updates.dontClose') }}</p>
+          <p class="muted" v-if="applying.doneList.length">
+            {{ t('settings.updates.updatedList') }}: {{ applying.doneList.join(', ') }}
+          </p>
+          <!-- The appliance owns the sequence now, so leaving is safe. -->
+          <p class="muted">{{ t('settings.updates.keepPowered') }}</p>
         </template>
         <template v-else>
           <h3 style="justify-content: center;">{{ applying.error ? t('settings.updates.interrupted') : t('settings.updates.completed') }}</h3>

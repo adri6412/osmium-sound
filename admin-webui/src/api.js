@@ -74,4 +74,32 @@ export const api = {
     return { ok: res.ok, status: res.status, data };
   },
   dspFirRemove: () => req('/api/system/dsp_fir', { method: 'DELETE' }),
+
+  // Backup/restore — files live on sources_server.py, forwarded raw through
+  // webui_server (session-gated: see /api/system/backup* in webui_server.py).
+  backupList: () => req('/api/system/backup/list'),
+  backupStatus: () => req('/api/system/backup/status'),
+  backupSettings: () => req('/api/system/backup/settings'),
+  backupSettingsSave: (settings) => req('/api/system/backup/settings', { method: 'POST', body: settings }),
+  backupCreate: (passphrase, categories) =>
+    req('/api/system/backup/create', { method: 'POST', body: { passphrase, categories } }),
+  backupDelete: (id) => req('/api/system/backup/' + id, { method: 'DELETE' }),
+  backupRestore: (id, passphrase, categories) =>
+    req('/api/system/backup/' + id + '/restore', { method: 'POST', body: { passphrase, categories } }),
+  backupDownloadUrl: (id) => (id ? '/api/system/backup/' + id : '/api/system/backup'),
+  restoreUpload: async (file, passphrase, categories) => {
+    const body = new FormData();
+    body.append('file', file);
+    if (passphrase) body.append('passphrase', passphrase);
+    if (categories) body.append('categories', categories.join(','));
+    const headers = { 'X-CSRF-Token': csrfToken() };
+    let res, data;
+    try {
+      res = await fetch('/api/system/restore', { method: 'POST', body, headers, credentials: 'same-origin' });
+    } catch (e) {
+      return { ok: false, status: 0, data: { message: t('common.networkError') } };
+    }
+    try { data = await res.json(); } catch (_) { data = {}; }
+    return { ok: res.ok, status: res.status, data };
+  },
 };

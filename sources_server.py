@@ -26,11 +26,13 @@ import io
 import tarfile
 import hashlib
 import secrets
+import shutil
 import tempfile
 import urllib.request
 import urllib.error
 from datetime import datetime, timezone
 
+import hifi_backup as hb
 from hifi_logging import tee_stdio_to_file
 # Every print() below keeps reaching the console/journald unchanged AND now also
 # lands in a size-rotated file at /var/log/hifi/sources.log (journald alone is
@@ -882,112 +884,148 @@ def apply_to_lyrion(state):
 
 
 # ─────────────────────────── Backup / restore ────────────────────────
-# Exports/imports the appliance's USER configuration: DAC selection, DSP/EQ
-# state, pointer preference, OTA channel choice, music sources and any room-
-# correction FIR filter. Deliberately excludes OS_VERSION/SYSTEM_VERSION (those
-# are OTA bookkeeping, not user config — restoring them would desync the
-# updater's view of what's installed) and anything network/credential-related
-# beyond the SMB share passwords already stored in hifi-sources.json.
+# HTTP layer only. What may be archived and what may be written back both come
+# from hifi_backup.py — one table, so the two directions can never drift apart.
+# See that module for the reasoning behind the category split, the deny-list,
+# and why this is a profile backup rather than a rootfs image.
 #
-# Both directions use a fixed allow-list of exact paths (+ the FIR filters
-# directory) — never the tar member's own path verbatim — so a malicious or
-# corrupt archive can't write outside these locations (no path traversal, no
-# symlinks, no device/special files: only regular files are ever opened).
-BACKUP_FILES = [
-    "/etc/hifi-player/pointer-enabled",
-    "/etc/hifi-player/dsp.json",
-    "/etc/hifi-player/dsp-presets.json",
-    "/etc/hifi-player/ota-channel",
-    "/etc/default/squeezelite",
-    "/etc/camilladsp/config.yml",
-    "/etc/hifi-sources.json",
-    "/var/lib/hifi-player/dsp-target",
-]
-BACKUP_DIRS = [
-    "/etc/camilladsp/filters",  # room-correction FIR file(s), if any
-]
-MAX_RESTORE_MEMBER_SIZE = 32 * 1024 * 1024  # 32MB per file is generous for config + a FIR filter
-MAX_RESTORE_MEMBERS = 200
-# Compressed-upload ceiling, checked BEFORE tarfile.open()/getmembers() ever
-# runs. This is deliberately far tighter than MAX_RESTORE_MEMBERS *
-# MAX_RESTORE_MEMBER_SIZE (6.4GB) — a real backup (see _backup_build) is only
-# ever a handful of small config files plus at most a couple of FIR filters,
-# so it's never anywhere near this size. Bounds how much a maliciously
-# highly-compressed small archive can force tarfile to decompress while
-# walking members, since getmembers() has to decompress the whole stream to
-# enumerate entries before per-member size checks below ever get a chance to
-# run.
+# Building an archive is delegated to /usr/local/sbin/hifi-backup-run.py via
+# systemd-run (same detached-worker + /run status-file shape as the disk format
+# and CD rip jobs), because it walks the whole Lyrion prefs tree and can take
+# long enough to hold an HTTP worker hostage. Restoring stays synchronous: it
+# is a handful of small files plus, at worst, a Lyrion stop/start.
+#
+# The archive itself is still an allow-list on BOTH sides — a restore never
+# uses the tar member's own path verbatim, only regular files are ever opened,
+# and every member is checked against the manifest's sha256 before it is
+# written. A malicious or corrupt archive therefore has nowhere to aim.
+BACKUP_UNIT = "hifi-backup"
+BACKUP_JOB = "/run/hifi-backup-job.json"
+BACKUP_SCRIPT = "/usr/local/sbin/hifi-backup-run.py"
+# 32MB per file is generous for config, a FIR filter or the web-admin database.
+MAX_RESTORE_MEMBER_SIZE = 32 * 1024 * 1024
+# Lyrion keeps one .prefs file per plugin and per player, and /var/lib/bluetooth
+# one directory per pairing, so a full profile is thousands of tiny files — not
+# the handful the config-only backup this replaces used to hold.
+MAX_RESTORE_MEMBERS = 20000
+# Compressed-upload ceiling, checked BEFORE tarfile ever walks the archive.
+# Deliberately far tighter than MAX_RESTORE_MEMBERS * MAX_RESTORE_MEMBER_SIZE:
+# a real backup is small (the Lyrion library cache, the only genuinely large
+# thing on the box, is excluded by the manifest). Bounds how much a maliciously
+# well-compressed small upload can force us to decompress while enumerating
+# members, since that has to happen before any per-member size check can run.
 MAX_RESTORE_ARCHIVE_SIZE = 64 * 1024 * 1024
 
 
-def _backup_build():
-    buf = io.BytesIO()
-    with tarfile.open(fileobj=buf, mode="w:gz") as tar:
-        for path in BACKUP_FILES:
-            if os.path.isfile(path):
-                tar.add(path, arcname=path.lstrip("/"))
-        for d in BACKUP_DIRS:
-            if os.path.isdir(d):
-                tar.add(d, arcname=d.lstrip("/"))
-    return buf.getvalue()
-
-
-def _restore_dest_for_member(name):
-    """Map a tar member name to an allowed absolute destination path, or None
-    if it doesn't match the allow-list (exact file or under an allowed dir)."""
-    normalized = os.path.normpath("/" + name.lstrip("/"))
-    if normalized in BACKUP_FILES:
-        return normalized
-    for d in BACKUP_DIRS:
-        prefix = d.rstrip("/") + "/"
-        if normalized.startswith(prefix) and normalized != d:
-            return normalized
-    return None
-
-
-def _restore_apply(archive_bytes):
-    """Extract only allow-listed regular files from the archive. Returns
-    (restored_paths, errors)."""
-    restored, errors = [], []
+def _backup_status():
     try:
-        tar = tarfile.open(fileobj=io.BytesIO(archive_bytes), mode="r:gz")
+        with open(hb.STATUS_FILE) as f:
+            return json.load(f)
     except Exception:
-        return [], ["Archivio non valido o corrotto"]
+        return {"state": "idle"}
 
-    with tar:
-        members = tar.getmembers()
-        if len(members) > MAX_RESTORE_MEMBERS:
-            return [], ["Archivio non valido (troppi file)"]
-        for member in members:
-            if not member.isfile():
-                continue  # skip dirs, symlinks, devices, etc.
-            if member.size > MAX_RESTORE_MEMBER_SIZE:
-                errors.append(f"{member.name}: troppo grande, saltato")
+
+def _passphrase_ok(value):
+    """A passphrase is handed to openssl through stdin, never a shell, so the
+    only real constraints are that it is printable and bounded."""
+    if not value:
+        return True
+    return len(value) <= 256 and "\n" not in value and "\r" not in value
+
+
+# ── restore ──────────────────────────────────────────────────────────
+def _restore_members(tar, manifest, categories):
+    """Write back every member that the selected categories allow.
+
+    Returns (restored_paths, errors). Integrity is checked per member against
+    the manifest before anything touches the filesystem — the failure mode a
+    checksum-free backup tool has (a silently corrupted file restored over a
+    good one) is the whole reason this is here.
+    """
+    restored, errors = [], []
+    digests = (manifest or {}).get("members") or {}
+    members = tar.getmembers()
+    if len(members) > MAX_RESTORE_MEMBERS:
+        return [], ["Archivio non valido (troppi file)"]
+
+    current_sources = None
+    if os.path.isfile(STATE_FILE):
+        try:
+            with open(STATE_FILE, "rb") as f:
+                current_sources = f.read()
+        except OSError:
+            pass
+
+    for member in members:
+        if not member.isfile():
+            continue  # dirs, symlinks, devices: never followed, never created
+        if member.size > MAX_RESTORE_MEMBER_SIZE:
+            errors.append(f"{member.name}: troppo grande, saltato")
+            continue
+        dest = hb.restore_dest_for_member(member.name, categories)
+        if not dest:
+            continue  # outside the allow-list, or a category not selected
+        try:
+            src = tar.extractfile(member)
+            if src is None:
                 continue
-            dest = _restore_dest_for_member(member.name)
-            if not dest:
-                continue  # silently ignore anything outside the allow-list
-            try:
-                src = tar.extractfile(member)
-                if src is None:
-                    continue
-                data = src.read()
-                os.makedirs(os.path.dirname(dest), exist_ok=True)
-                tmp = dest + ".restore.tmp"
-                with open(tmp, "wb") as f:
-                    f.write(data)
-                os.replace(tmp, dest)
-                restored.append(dest)
-            except Exception as e:
-                print(f"[sources] restore failed for {dest}: {e}")
-                errors.append(f"{os.path.basename(dest)}: ripristino fallito")
+            data = src.read()
+
+            expected = digests.get(member.name)
+            if expected and hashlib.sha256(data).hexdigest() != expected:
+                errors.append(f"{os.path.basename(dest)}: checksum non valido")
+                continue
+
+            if dest == STATE_FILE and current_sources:
+                # An unencrypted backup has its SMB passwords blanked; keep the
+                # ones this device already knows so the shares still mount.
+                data = hb.merge_sources_state(data, current_sources)
+
+            os.makedirs(os.path.dirname(dest), exist_ok=True)
+            tmp = dest + ".restore.tmp"
+            with open(tmp, "wb") as f:
+                f.write(data)
+            os.chmod(tmp, 0o600)
+            os.replace(tmp, dest)
+            restored.append(dest)
+        except Exception as e:
+            print(f"[sources] restore failed for {dest}: {e}")
+            errors.append(f"{os.path.basename(dest)}: ripristino fallito")
     return restored, errors
+
+
+def _lyrion_paths_touched(restored):
+    return [p for p in restored if "/prefs/" in p or "/playlists/" in p]
+
+
+def _stop_lyrion():
+    """Lyrion caches its prefs in memory and rewrites them on exit, so writing
+    prefs underneath a running server would simply be overwritten. Unlike the
+    backup path — which never stops anything — a restore is an explicit, rare
+    action where a short pause is the right trade."""
+    _run(["systemctl", "stop", "lyrionmusicserver"], timeout=60)
+
+
+def _start_lyrion():
+    _run(["systemctl", "start", "lyrionmusicserver"], timeout=60)
+
+
+def _chown_lyrion(paths):
+    uid, gid = _squeezebox_ids()
+    if uid is None:
+        return
+    for path in paths:
+        try:
+            os.chown(path, uid, gid)
+            os.chmod(path, 0o640)
+        except OSError:
+            pass
 
 
 def _restore_apply_side_effects(restored):
     """Re-apply the config that was just restored (best-effort, non-fatal)."""
     notes = []
-    if "/etc/hifi-sources.json" in restored:
+    if STATE_FILE in restored:
         try:
             remount_all()
             ok, msg = apply_to_lyrion(load_state())
@@ -1009,19 +1047,322 @@ def _restore_apply_side_effects(restored):
                 notes.append("CamillaDSP riavviato")
         except Exception:
             pass
+    if any(p.startswith("/etc/NetworkManager/system-connections/") for p in restored):
+        # The profiles are on disk but NetworkManager only reads them on
+        # demand; reload so the restored Wi-Fi networks are actually known.
+        for path in restored:
+            if path.startswith("/etc/NetworkManager/system-connections/"):
+                try:
+                    os.chmod(path, 0o600)
+                except OSError:
+                    pass
+        _run(["nmcli", "connection", "reload"], timeout=30)
+        notes.append("Reti Wi-Fi ricaricate")
+    if "/etc/hifi-player/webui.db" in restored:
+        # The admin account changed underneath the running daemon; restart so
+        # it reopens the database, and expect the operator to log in again.
+        _run(["systemctl", "restart", "hifi-webui"], timeout=30)
+        notes.append("Web admin riavviato (nuovo login necessario)")
+    if "/etc/hifi-player/samba-cred.json" in restored:
+        _run(["systemctl", "try-restart", "smbd"], timeout=30)
     return notes
 
 
+def _restore_from_path(path, passphrase, requested_categories):
+    """Open a backup file (either shape), apply it, return (payload, status)."""
+    workdir = tempfile.mkdtemp(prefix="hifi-restore-", dir="/run")
+    os.chmod(workdir, 0o700)
+    tar = None
+    try:
+        try:
+            tar, manifest = hb.open_backup(path, workdir, passphrase)
+        except hb.BackupError as e:
+            return {"success": False, "message": str(e)}, 400
+
+        # A backup written by a newer build may use members or semantics this
+        # code does not understand; refuse rather than half-apply it.
+        if manifest and int(manifest.get("schema") or 1) > hb.SCHEMA:
+            return {"success": False,
+                    "message": "Backup creato da una versione più recente: "
+                               "aggiorna il dispositivo prima di ripristinarlo"}, 409
+
+        available = hb.categories_in_manifest(manifest)
+        wanted = set(requested_categories or available)
+        categories = [c for c in available if c in wanted]
+        if not categories:
+            return {"success": False,
+                    "message": "Nessuna categoria da ripristinare"}, 400
+
+        lyrion_stopped = False
+        if "lyrion" in categories:
+            _stop_lyrion()
+            lyrion_stopped = True
+        try:
+            restored, errors = _restore_members(tar, manifest, categories)
+        finally:
+            if lyrion_stopped:
+                _chown_lyrion(_lyrion_paths_touched(restored if restored else []))
+                _start_lyrion()
+
+        if not restored and errors:
+            return {"success": False, "message": "; ".join(errors)}, 400
+
+        notes = _restore_apply_side_effects(restored)
+        msg = f"{len(restored)} file ripristinati."
+        if notes:
+            msg += " " + " ".join(notes)
+        if errors:
+            msg += " Avvisi: " + "; ".join(errors)
+        hb.record_history(hb.STORE_DIR,
+                          f"restore\tcompleted\t{len(restored)} file\t"
+                          f"{','.join(categories)}")
+        return {"success": True, "message": msg, "restored": len(restored),
+                "categories": categories}, 200
+    finally:
+        if tar is not None:
+            try:
+                tar.close()
+            except Exception:
+                pass
+        shutil.rmtree(workdir, ignore_errors=True)
+
+
+def _snapshot_before_restore():
+    """Take a restore point first.
+
+    Restoring is the one operation here that overwrites live configuration, and
+    it is exactly when the user is least able to reconstruct what they had. The
+    snapshot is built inline (not via the worker) so it is guaranteed to be on
+    disk before the first file is overwritten — an async job could still be
+    running when the restore starts.
+    """
+    try:
+        os.makedirs(hb.STORE_DIR, exist_ok=True)
+        os.chmod(hb.STORE_DIR, 0o700)
+        hb.prune_incomplete(hb.STORE_DIR)
+        gen_id = hb.new_gen_id()
+        gen_dir = os.path.join(hb.STORE_DIR, gen_id)
+        os.makedirs(gen_dir, exist_ok=True)
+        os.chmod(gen_dir, 0o700)
+        cats = list(hb.UNATTENDED_CATEGORIES)
+        manifest = hb.build_archive(os.path.join(gen_dir, hb.ARCHIVE_NAME),
+                                    cats, "/", encrypted=False,
+                                    extra={"created": gen_id,
+                                           "trigger": "pre-restore",
+                                           "versions": hb.device_versions()})
+        tmp = os.path.join(gen_dir, hb.MANIFEST_NAME + ".tmp")
+        with open(tmp, "w") as f:
+            json.dump(manifest, f, indent=2)
+        os.replace(tmp, os.path.join(gen_dir, hb.MANIFEST_NAME))
+        hb.rotate(hb.STORE_DIR, hb.read_settings()["keep"])
+        hb.record_history(hb.STORE_DIR, f"backup\tcompleted\t{gen_id}\tpre-restore")
+        return gen_id
+    except Exception as e:
+        print(f"[sources] pre-restore snapshot failed: {e}")
+        return None
+
+
+# ── routes ───────────────────────────────────────────────────────────
 @app.route("/api/backup", methods=["GET"])
 def api_backup():
+    """Build and stream a backup immediately.
+
+    Kept as-is (same URL, same behaviour) because it is what the plain download
+    link in the UI points at, and an <a href> cannot send a passphrase — so this
+    one is always the non-secret half of the profile. Encrypted backups go
+    through /api/backup/create.
+    """
     denied = _require_pair_token()
     if denied:
         return denied
-    data = _backup_build()
-    stamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
+    workdir = tempfile.mkdtemp(prefix="hifi-backup-dl-", dir="/run")
+    try:
+        path = os.path.join(workdir, hb.ARCHIVE_NAME)
+        stamp = hb.new_gen_id()
+        hb.build_archive(path, list(hb.UNATTENDED_CATEGORIES), "/",
+                         encrypted=False,
+                         extra={"created": stamp, "trigger": "download",
+                                "versions": hb.device_versions()})
+        with open(path, "rb") as f:
+            data = f.read()
+    except Exception as e:
+        print(f"[sources] backup build failed: {e}")
+        return jsonify({"success": False, "message": "Creazione backup fallita"}), 500
+    finally:
+        shutil.rmtree(workdir, ignore_errors=True)
     resp = Response(data, mimetype="application/gzip")
     resp.headers["Content-Disposition"] = f'attachment; filename="osmium-backup-{stamp}.tar.gz"'
     return resp
+
+
+@app.route("/api/backup/create", methods=["POST"])
+def api_backup_create():
+    """Start a stored-generation build (async, so a big Lyrion prefs tree
+    doesn't hold an HTTP worker)."""
+    denied = _require_pair_token()
+    if denied:
+        return denied
+    if not os.path.exists(BACKUP_SCRIPT):
+        return jsonify({"success": False,
+                        "message": "Aggiornamento di sistema richiesto"}), 424
+    if _backup_status().get("state") in ("preparing", "checking", "archiving",
+                                         "encrypting", "finishing"):
+        return jsonify({"success": False, "message": "Backup già in corso"}), 409
+
+    data = request.get_json(silent=True) or {}
+    passphrase = data.get("passphrase") or ""
+    if not _passphrase_ok(passphrase):
+        return jsonify({"success": False, "message": "Passphrase non valida"}), 400
+    categories = hb.selected_categories(data.get("categories"), bool(passphrase))
+    if not categories:
+        return jsonify({"success": False,
+                        "message": "Nessuna categoria selezionata"}), 400
+
+    job = {"categories": categories, "passphrase": passphrase,
+           "trigger": "manual", "keep": hb.read_settings()["keep"]}
+    # /run is tmpfs and this may carry the passphrase: write it 0600, and the
+    # worker deletes it the moment it has been read.
+    fd = os.open(BACKUP_JOB, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, "w") as f:
+        json.dump(job, f)
+    with open(hb.STATUS_FILE, "w") as f:
+        json.dump({"state": "preparing", "progress": 0, "message": "Avvio…"}, f)
+    _run(["systemd-run", "--no-block", "--collect", "--unit=" + BACKUP_UNIT,
+          BACKUP_SCRIPT, BACKUP_JOB], timeout=15)
+    return jsonify({"success": True, "categories": categories,
+                    "encrypted": bool(passphrase)}), 202
+
+
+@app.route("/api/backup/status", methods=["GET"])
+def api_backup_status():
+    denied = _require_pair_token()
+    if denied:
+        return denied
+    return jsonify(_backup_status())
+
+
+@app.route("/api/backup/list", methods=["GET"])
+def api_backup_list():
+    denied = _require_pair_token()
+    if denied:
+        return denied
+    hb.prune_incomplete(hb.STORE_DIR)
+    return jsonify({"generations": hb.list_generations(hb.STORE_DIR),
+                    "categories": list(hb.ALL_CATEGORIES),
+                    "secret": list(hb.SECRET_CATEGORIES),
+                    "settings": hb.read_settings(),
+                    "scheduled_categories": list(hb.UNATTENDED_CATEGORIES)})
+
+
+@app.route("/api/backup/<gen_id>", methods=["GET"])
+def api_backup_download(gen_id):
+    """Download a stored generation as one self-contained file."""
+    denied = _require_pair_token()
+    if denied:
+        return denied
+    if not hb.valid_gen_id(gen_id):
+        return jsonify({"success": False, "message": "Backup non trovato"}), 404
+    manifest = hb.read_manifest(hb.STORE_DIR, gen_id)
+    if not manifest:
+        return jsonify({"success": False, "message": "Backup non trovato"}), 404
+
+    src = hb.archive_path(hb.STORE_DIR, gen_id, manifest)
+    workdir = None
+    try:
+        if manifest.get("enc"):
+            # Wrap manifest + ciphertext so the download can be restored
+            # anywhere, not just from the directory it was produced in.
+            workdir = tempfile.mkdtemp(prefix="hifi-backup-dl-", dir="/run")
+            wrapper = os.path.join(workdir, "wrapper.tar.gz")
+            hb.wrap_encrypted(wrapper, manifest, src)
+            src = wrapper
+        with open(src, "rb") as f:
+            data = f.read()
+    except OSError:
+        return jsonify({"success": False, "message": "Backup non leggibile"}), 500
+    finally:
+        if workdir:
+            shutil.rmtree(workdir, ignore_errors=True)
+
+    resp = Response(data, mimetype="application/gzip")
+    resp.headers["Content-Disposition"] = f'attachment; filename="osmium-backup-{gen_id}.tar.gz"'
+    return resp
+
+
+@app.route("/api/backup/<gen_id>", methods=["DELETE"])
+def api_backup_delete(gen_id):
+    denied = _require_pair_token()
+    if denied:
+        return denied
+    if not hb.valid_gen_id(gen_id):
+        return jsonify({"success": False, "message": "Backup non trovato"}), 404
+    path = os.path.join(hb.STORE_DIR, gen_id)
+    if not os.path.isdir(path):
+        return jsonify({"success": False, "message": "Backup non trovato"}), 404
+    shutil.rmtree(path, ignore_errors=True)
+    hb.record_history(hb.STORE_DIR, f"delete\t{gen_id}")
+    return jsonify({"success": True, "message": "Backup eliminato"})
+
+
+@app.route("/api/backup/<gen_id>/restore", methods=["POST"])
+def api_backup_restore(gen_id):
+    denied = _require_pair_token()
+    if denied:
+        return denied
+    if not hb.valid_gen_id(gen_id):
+        return jsonify({"success": False, "message": "Backup non trovato"}), 404
+    manifest = hb.read_manifest(hb.STORE_DIR, gen_id)
+    if not manifest:
+        return jsonify({"success": False, "message": "Backup non trovato"}), 404
+    data = request.get_json(silent=True) or {}
+    passphrase = data.get("passphrase") or ""
+    if not _passphrase_ok(passphrase):
+        return jsonify({"success": False, "message": "Passphrase non valida"}), 400
+
+    path = hb.archive_path(hb.STORE_DIR, gen_id, manifest)
+    if manifest.get("enc"):
+        # The stored ciphertext has no wrapper; hand open_backup the manifest
+        # by building one on the fly, so both entry points take the same road.
+        workdir = tempfile.mkdtemp(prefix="hifi-restore-src-", dir="/run")
+        try:
+            wrapper = os.path.join(workdir, "wrapper.tar.gz")
+            hb.wrap_encrypted(wrapper, manifest, path)
+            _snapshot_before_restore()
+            payload, status = _restore_from_path(wrapper, passphrase,
+                                                 data.get("categories"))
+        finally:
+            shutil.rmtree(workdir, ignore_errors=True)
+        return jsonify(payload), status
+
+    _snapshot_before_restore()
+    payload, status = _restore_from_path(path, passphrase, data.get("categories"))
+    return jsonify(payload), status
+
+
+@app.route("/api/backup/settings", methods=["GET", "POST"])
+def api_backup_settings():
+    denied = _require_pair_token()
+    if denied:
+        return denied
+    if request.method == "GET":
+        return jsonify(hb.read_settings())
+    data = request.get_json(silent=True) or {}
+    settings = {"scheduled": bool(data.get("scheduled")),
+                "keep": max(1, min(20, int(data.get("keep") or hb.DEFAULT_KEEP)))}
+    try:
+        os.makedirs(os.path.dirname(hb.SETTINGS_FILE), exist_ok=True)
+        tmp = hb.SETTINGS_FILE + ".tmp"
+        with open(tmp, "w") as f:
+            json.dump(settings, f, indent=2)
+        os.replace(tmp, hb.SETTINGS_FILE)
+    except OSError as e:
+        return jsonify({"success": False, "message": f"Salvataggio fallito: {e}"}), 500
+    # The timer unit itself ships from the OS channel; this only flips it,
+    # and 0033-backup-scheduler.sh re-applies the same choice on every OS
+    # update so it survives one.
+    action = "enable" if settings["scheduled"] else "disable"
+    _run(["systemctl", action, "--now", "hifi-backup.timer"], timeout=30)
+    return jsonify({"success": True, **settings})
 
 
 @app.route("/api/restore", methods=["POST"])
@@ -1035,14 +1376,23 @@ def api_restore():
     archive_bytes = f.read(MAX_RESTORE_ARCHIVE_SIZE + 1)
     if len(archive_bytes) > MAX_RESTORE_ARCHIVE_SIZE:
         return _err("msg.fileTooLarge", 400)
-    restored, errors = _restore_apply(archive_bytes)
-    if not restored and errors:
-        return jsonify({"success": False, "message": "; ".join(errors)}), 400
-    notes = _restore_apply_side_effects(restored)
-    msg = f"{len(restored)} file ripristinati." + ((" " + " ".join(notes)) if notes else "")
-    if errors:
-        msg += " Avvisi: " + "; ".join(errors)
-    return jsonify({"success": True, "message": msg, "restored": len(restored)})
+    passphrase = request.form.get("passphrase") or ""
+    if not _passphrase_ok(passphrase):
+        return jsonify({"success": False, "message": "Passphrase non valida"}), 400
+    requested = request.form.get("categories") or ""
+    categories = [c for c in requested.split(",") if c] or None
+
+    workdir = tempfile.mkdtemp(prefix="hifi-upload-", dir="/run")
+    os.chmod(workdir, 0o700)
+    try:
+        upload = os.path.join(workdir, "upload.tar.gz")
+        with open(upload, "wb") as out:
+            out.write(archive_bytes)
+        _snapshot_before_restore()
+        payload, status = _restore_from_path(upload, passphrase, categories)
+    finally:
+        shutil.rmtree(workdir, ignore_errors=True)
+    return jsonify(payload), status
 
 
 # ─────────────────────────── Room correction (FIR filter) ────────────
@@ -1398,6 +1748,13 @@ _SYSTEM_PROXY_ROUTES = [
     ("/api/system/updates/os/check", "GET", "/os_update/check"),
     ("/api/system/updates/os/apply", "POST", "/os_update/apply"),
     ("/api/system/updates/os/status", "GET", "/os_update/status"),
+    # Sequenced multi-component update (server-side plan). The companion used to
+    # chain the three components itself over the network, which made it the most
+    # fragile of the three clients — every restart the update performs dropped
+    # its connection mid-sequence.
+    ("/api/system/updates/apply_all", "POST", "/update/apply_all"),
+    ("/api/system/updates/status", "GET", "/update/status"),
+    ("/api/system/updates/dismiss", "POST", "/update/dismiss"),
     ("/api/system/updates/lyrion/check", "GET", "/lyrion_update/check"),
     ("/api/system/updates/lyrion/apply", "POST", "/lyrion_update/apply"),
     ("/api/system/updates/lyrion/status", "GET", "/lyrion_update/status"),
@@ -1415,12 +1772,19 @@ _SYSTEM_PROXY_ROUTES = [
 
 
 def _make_system_proxy_view(remote_path, method):
+    # Starting an update is slower than the default budget: api_server resolves
+    # the release and downloads a checksum sidecar per component before it can
+    # write the plan. Timing out here would tell the phone the update failed
+    # while the appliance was in fact about to start it — and the phone would
+    # then fall back to driving the sequence itself, on top of a running plan.
+    timeout = 90 if "apply" in remote_path else 10
     def view():
         denied = _require_pair_token()
         if denied:
             return denied
         data = request.get_json(silent=True) if method == "POST" else None
-        body, status = _proxy_to_api_server(remote_path, method=method, body=data)
+        body, status = _proxy_to_api_server(remote_path, method=method, body=data,
+                                            timeout=timeout)
         return jsonify(body), status
     return view
 
@@ -2223,9 +2587,21 @@ SOURCES_I18N = {
         "sources.applying": "Applying…",
         "sources.applied": "Done ✓",
         "sources.backupTitle": "Backup & restore",
-        "sources.backupHint": "Export the device configuration (DAC, DSP/EQ, sources, pointer, update channel) to a file, or restore it from an earlier backup.",
-        "sources.backupDownload": "⬇ Download backup",
+        "sources.backupHint": "Save the device's configuration, Lyrion preferences and playlists. Set a passphrase to also include credentials (Wi-Fi, SMB shares, web-admin account) in an encrypted, restorable file — without one, only non-secret settings are saved.",
+        "sources.backupPassphrase": "Passphrase (optional)",
+        "sources.backupPassphraseHint": "Leave empty for a plain backup with no credentials. Set one to also save Wi-Fi networks, SMB passwords and the web-admin account, encrypted.",
+        "sources.backupCreate": "Create backup",
+        "sources.backupDownload": "⬇ Download now",
         "sources.backupRestore": "⬆ Restore from file",
+        "sources.backupWorking": "Working…",
+        "sources.backupStored": "Backups on this device",
+        "sources.backupNone": "No backup yet.",
+        "sources.backupEncrypted": "encrypted",
+        "sources.backupRestoreThis": "Restore",
+        "sources.backupRestoreConfirm": "Restore this backup? A safety copy of the current configuration is taken first.",
+        "sources.backupDeleteConfirm": "Delete this backup? This cannot be undone.",
+        "sources.backupScheduled": "Automatic weekly backup",
+        "sources.backupScheduledHint": "Runs unattended, so it never includes credentials — only device settings, sources and Lyrion preferences/playlists.",
         "sources.restoring": "Restoring…",
         "sources.internal.title": "Internal disks",
         "sources.internal.none": "No additional internal disk detected.",
@@ -2344,9 +2720,21 @@ SOURCES_I18N = {
         "sources.applying": "Applico…",
         "sources.applied": "Fatto ✓",
         "sources.backupTitle": "Backup e ripristino",
-        "sources.backupHint": "Esporta la configurazione del dispositivo (DAC, DSP/EQ, sorgenti, puntatore, canale aggiornamenti) in un file, o ripristinala da un backup precedente.",
-        "sources.backupDownload": "⬇ Scarica backup",
+        "sources.backupHint": "Salva la configurazione del dispositivo, le preferenze e le playlist di Lyrion. Imposta una passphrase per includere anche le credenziali (Wi-Fi, condivisioni SMB, account web-admin) in un file cifrato e ripristinabile — senza, viene salvato solo ciò che non è segreto.",
+        "sources.backupPassphrase": "Passphrase (opzionale)",
+        "sources.backupPassphraseHint": "Lascia vuoto per un backup semplice senza credenziali. Impostane una per salvare anche reti Wi-Fi, password SMB e account web-admin, cifrati.",
+        "sources.backupCreate": "Crea backup",
+        "sources.backupDownload": "⬇ Scarica ora",
         "sources.backupRestore": "⬆ Ripristina da file",
+        "sources.backupWorking": "In corso…",
+        "sources.backupStored": "Backup su questo dispositivo",
+        "sources.backupNone": "Nessun backup ancora.",
+        "sources.backupEncrypted": "cifrato",
+        "sources.backupRestoreThis": "Ripristina",
+        "sources.backupRestoreConfirm": "Ripristinare questo backup? Verrà creata prima una copia di sicurezza della configurazione attuale.",
+        "sources.backupDeleteConfirm": "Eliminare questo backup? L'operazione non è reversibile.",
+        "sources.backupScheduled": "Backup automatico settimanale",
+        "sources.backupScheduledHint": "Viene eseguito senza supervisione, quindi non include mai credenziali — solo impostazioni del dispositivo, sorgenti e preferenze/playlist di Lyrion.",
         "sources.restoring": "Ripristino…",
         "sources.internal.title": "Dischi interni",
         "sources.internal.none": "Nessun disco interno aggiuntivo rilevato.",
@@ -2568,12 +2956,29 @@ INDEX_HTML = r"""<!DOCTYPE html>
   <h2 data-i18n="sources.backupTitle"></h2>
   <div class="card">
     <p style="color:var(--silver);font-size:13px;margin:0 0 10px" data-i18n="sources.backupHint"></p>
+
+    <label data-i18n="sources.backupPassphrase"></label>
+    <input id="backupPass" type="password" placeholder="••••••">
+    <p style="color:var(--silver);font-size:12px;margin:6px 0 12px" data-i18n="sources.backupPassphraseHint"></p>
+
     <div class="row">
+      <button class="ghost" style="flex:1" onclick="createBackup()" data-i18n="sources.backupCreate"></button>
       <a id="backupLink" class="ghost" style="text-decoration:none;display:inline-block;text-align:center;flex:1" href="/api/backup" data-i18n="sources.backupDownload"></a>
       <label class="ghost" style="text-align:center;flex:1;cursor:pointer" for="restoreFile" data-i18n="sources.backupRestore"></label>
     </div>
     <input type="file" id="restoreFile" accept=".gz,.tar.gz,application/gzip" style="display:none" onchange="doRestore(this)">
     <div class="msg" id="restoreMsg"></div>
+
+    <div style="height:14px"></div>
+    <label data-i18n="sources.backupStored"></label>
+    <div id="backupList" style="font-size:13px;color:var(--silver)" data-i18n="sources.loading"></div>
+
+    <div style="height:14px"></div>
+    <div class="row">
+      <span style="font-size:13px" data-i18n="sources.backupScheduled"></span>
+      <input type="checkbox" id="backupSched" style="width:auto" onchange="saveBackupSettings()">
+    </div>
+    <p style="color:var(--silver);font-size:12px;margin:6px 0 0" data-i18n="sources.backupScheduledHint"></p>
   </div>
 </div>
 
@@ -2649,8 +3054,14 @@ async function j(url, opts){
   const r=await fetch(url + sep + 'lang=' + encodeURIComponent(LANG), opts); return r.json();
 }
 function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+// Plain <a href> navigation cannot set an Authorization header, so download
+// links carry the pairing token in the query string instead — same fallback
+// _require_pair_token() accepts for exactly this reason.
+function withToken(url){
+  return PAIR_TOKEN ? (url + (url.indexOf('?')>=0?'&':'?') + 'token=' + encodeURIComponent(PAIR_TOKEN)) : url;
+}
 if (PAIR_TOKEN) {
-  document.getElementById('backupLink').href = '/api/backup?token=' + encodeURIComponent(PAIR_TOKEN);
+  document.getElementById('backupLink').href = withToken('/api/backup');
 }
 async function load(){
   const d=await j('/api/sources');
@@ -2690,15 +3101,108 @@ async function addSmb(){
 async function rm(id){ await j('/api/sources/'+id,{method:'DELETE'}); load(); }
 
 // ── Backup / restore ───────────────────────────────────────────────
+// The passphrase field is the single switch that decides whether credentials
+// (Wi-Fi PSKs, SMB passwords, the admin account) are in the archive at all —
+// filled in means encrypted and complete, empty means plain and non-secret.
+// It is never stored anywhere: it is sent with the request that needs it and
+// forgotten.
+let backupGens=[];
+function backupPass(){ return document.getElementById('backupPass').value||''; }
+
 async function doRestore(input){
   const file=input.files && input.files[0]; if(!file) return;
   const m=document.getElementById('restoreMsg'); m.textContent=T('sources.restoring'); m.className='msg';
   const body=new FormData(); body.append('file', file);
+  if(backupPass()) body.append('passphrase', backupPass());
   try{
     const d=await j('/api/restore',{method:'POST',body});
     m.textContent=d.message||(d.success?T('sources.applied'):T('sources.error')); m.className='msg '+(d.success?'ok':'bad');
+    loadBackups();
   }catch(e){ m.textContent=T('sources.networkError'); m.className='msg bad'; }
   input.value='';
+}
+
+async function createBackup(){
+  const m=document.getElementById('restoreMsg'); m.textContent=T('sources.backupWorking'); m.className='msg';
+  try{
+    const d=await j('/api/backup/create',{method:'POST',headers:{'Content-Type':'application/json'},
+                                          body:JSON.stringify({passphrase:backupPass()})});
+    if(d.success===false){ m.textContent=d.message||T('sources.error'); m.className='msg bad'; return; }
+    pollBackup();
+  }catch(e){ m.textContent=T('sources.networkError'); m.className='msg bad'; }
+}
+
+// Same poll-a-status-file shape as the disk format and CD rip jobs.
+async function pollBackup(){
+  const m=document.getElementById('restoreMsg');
+  for(let i=0;i<600;i++){
+    await new Promise(r=>setTimeout(r,1500));
+    let s; try{ s=await j('/api/backup/status'); }catch(e){ continue; }
+    if(s.state==='done'){ m.textContent=s.message||T('sources.applied'); m.className='msg ok'; loadBackups(); return; }
+    if(s.state==='error'){ m.textContent=s.message||T('sources.error'); m.className='msg bad'; loadBackups(); return; }
+    m.textContent=(s.message||T('sources.backupWorking'))+' '+(s.progress||0)+'%';
+  }
+}
+
+function fmtBackupSize(n){
+  if(!n) return '';
+  return n>=1048576 ? (n/1048576).toFixed(1)+' MB' : Math.max(1,Math.round(n/1024))+' kB';
+}
+function fmtStamp(id){
+  // Generation ids are YYYYMMDD-HHMMSS, which is unreadable as-is.
+  if(!id||id.length<15) return id||'';
+  return id.slice(6,8)+'/'+id.slice(4,6)+'/'+id.slice(0,4)+' '+id.slice(9,11)+':'+id.slice(11,13);
+}
+
+async function loadBackups(){
+  const el=document.getElementById('backupList');
+  let d; try{ d=await j('/api/backup/list'); }catch(e){ el.textContent=T('sources.networkError'); return; }
+  backupGens=d.generations||[];
+  document.getElementById('backupSched').checked=!!(d.settings&&d.settings.scheduled);
+  if(!backupGens.length){ el.textContent=T('sources.backupNone'); return; }
+  el.innerHTML=backupGens.map((g,i)=>{
+    const tags=[];
+    if(g.encrypted) tags.push(`<span class="tag">${esc(T('sources.backupEncrypted'))}</span>`);
+    if(g.trigger&&g.trigger!=='manual') tags.push(`<span class="tag">${esc(g.trigger)}</span>`);
+    return `<div class="src"><div class="meta">`+
+      `<div class="name">${esc(fmtStamp(g.id))}${tags.join('')}</div>`+
+      `<div class="sub">${esc((g.categories||[]).join(', '))} · ${esc(fmtBackupSize(g.size))}</div>`+
+      `</div><div style="display:flex;gap:6px">`+
+      `<a class="ghost" style="text-decoration:none" href="${esc(withToken('/api/backup/'+g.id))}">⬇</a>`+
+      `<button class="ghost" onclick="restoreGen(${i})">${esc(T('sources.backupRestoreThis'))}</button>`+
+      `<button class="ghost" onclick="deleteGen(${i})">✕</button>`+
+      `</div></div>`;
+  }).join('');
+}
+
+async function restoreGen(i){
+  const g=backupGens[i]; if(!g) return;
+  if(!confirm(T('sources.backupRestoreConfirm'))) return;
+  const m=document.getElementById('restoreMsg'); m.textContent=T('sources.restoring'); m.className='msg';
+  try{
+    const d=await j('/api/backup/'+g.id+'/restore',{method:'POST',headers:{'Content-Type':'application/json'},
+                                                    body:JSON.stringify({passphrase:backupPass()})});
+    m.textContent=d.message||(d.success?T('sources.applied'):T('sources.error')); m.className='msg '+(d.success?'ok':'bad');
+    load(); loadBackups();
+  }catch(e){ m.textContent=T('sources.networkError'); m.className='msg bad'; }
+}
+
+async function deleteGen(i){
+  const g=backupGens[i]; if(!g) return;
+  if(!confirm(T('sources.backupDeleteConfirm'))) return;
+  await j('/api/backup/'+g.id,{method:'DELETE'});
+  loadBackups();
+}
+
+async function saveBackupSettings(){
+  const on=document.getElementById('backupSched').checked;
+  const m=document.getElementById('restoreMsg');
+  try{
+    const d=await j('/api/backup/settings',{method:'POST',headers:{'Content-Type':'application/json'},
+                                            body:JSON.stringify({scheduled:on})});
+    m.textContent=d.success===false?(d.message||T('sources.error')):T('sources.applied');
+    m.className='msg '+(d.success===false?'bad':'ok');
+  }catch(e){ m.textContent=T('sources.networkError'); m.className='msg bad'; }
 }
 async function apply(){
   const m=document.getElementById('applyMsg'); m.textContent=T('sources.applying'); m.className='msg';
@@ -2899,6 +3403,7 @@ load();
 loadUsb();
 loadInternal();
 loadSmbCard();
+loadBackups();
 setInterval(loadUsb, 4000);
 setInterval(loadInternal, 5000);
 </script>

@@ -127,6 +127,10 @@
         "label": "Account interfaccia web",
         "desc": "Nome utente e password"
       },
+      "backup": {
+        "label": "Backup e ripristino",
+        "desc": "Salva e ripristina la configurazione del dispositivo"
+      },
       "language": {
         "label": "Lingua",
         "desc": "Lingua dell'interfaccia"
@@ -268,7 +272,7 @@
       "interrupted": "Aggiornamento interrotto",
       "genericError": "Si è verificato un errore.",
       "updatedList": "Aggiornati",
-      "dontClose": "Non chiudere questa pagina e non spegnere il dispositivo.",
+      "keepPowered": "L'aggiornamento prosegue sul dispositivo anche se chiudi questa pagina. Lascialo solo acceso.",
       "kindUi": "Interfaccia",
       "kindSystem": "Sistema",
       "kindOs": "Sistema operativo",
@@ -291,6 +295,31 @@
       "change": "Cambia credenziali",
       "updated": "Password aggiornata",
       "updateFailed": "Aggiornamento fallito"
+    },
+    "backup": {
+      "hint": "Salva la configurazione del dispositivo, le preferenze e le playlist di Lyrion. Imposta una passphrase per includere anche le credenziali (Wi-Fi, condivisioni SMB, questo account web-admin) in un file cifrato e ripristinabile — senza, viene salvato solo ciò che non è segreto.",
+      "passphrase": "Passphrase (opzionale)",
+      "passphraseHint": "Lascia vuoto per un backup semplice senza credenziali. Impostane una per salvare anche reti Wi-Fi, password SMB e questo account, cifrati.",
+      "create": "Crea backup",
+      "downloadNow": "Scarica ora",
+      "restoreFromFile": "Ripristina da file",
+      "working": "In corso…",
+      "created": "Backup completato",
+      "createFailed": "Backup fallito",
+      "downloaded": "Download avviato",
+      "downloadFailed": "Download fallito",
+      "restoring": "Ripristino…",
+      "restored": "Ripristino completato",
+      "restoreFailed": "Ripristino fallito",
+      "restoreConfirm": "Ripristinare questo backup? Verrà creata prima una copia di sicurezza della configurazione attuale.",
+      "restoreThis": "Ripristina",
+      "deleteConfirm": "Eliminare questo backup? L'operazione non è reversibile.",
+      "settingsFailed": "Salvataggio dell'impostazione fallito",
+      "scheduled": "Backup automatico settimanale",
+      "scheduledHint": "Viene eseguito senza supervisione, quindi non include mai credenziali — solo impostazioni del dispositivo, sorgenti e preferenze/playlist di Lyrion.",
+      "stored": "Backup su questo dispositivo",
+      "none": "Nessun backup ancora.",
+      "encrypted": "cifrato"
     },
     "language": {
       "hint": "Scegli la lingua dell'interfaccia."

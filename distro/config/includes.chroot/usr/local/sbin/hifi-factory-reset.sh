@@ -27,7 +27,7 @@ log() { echo "I: [hifi-factory-reset] $*"; }
 # ── 1) stop services that hold user state ────────────────────────────
 log "stopping user-state services"
 for unit in smbd nmbd hifi-bluealsa hifi-bt-agent hifi-bt-aplay hifi-bt-watcher \
-            bluetooth camilladsp lyrionmusicserver; do
+            bluetooth camilladsp lyrionmusicserver hifi-backup; do
     systemctl stop "$unit" 2>/dev/null || true
 done
 
@@ -84,7 +84,18 @@ rm -f /etc/hifi-sources.json /etc/hifi-pairing-tokens.json \
       /etc/samba/hifi-shares.conf /etc/camilladsp/config.yml 2>/dev/null || true
 
 # /var/lib/hifi-player: keep the os-migrations ledger; drop per-user artefacts.
-rm -f /var/lib/hifi-player/dsp-target /var/lib/hifi-player/roomcorr-result 2>/dev/null || true
+# update-plan goes too: a half-finished OTA plan must not resume itself on the
+# next boot of a box the owner has just reset.
+rm -f /var/lib/hifi-player/dsp-target /var/lib/hifi-player/roomcorr-result \
+      /var/lib/hifi-player/update-plan 2>/dev/null || true
+
+# Stored backup generations (Settings -> Backup e ripristino). These can carry
+# the previous owner's Wi-Fi PSK, SMB passwords and web-admin account when
+# encrypted — a factory reset that left them in place would hand all of that
+# to whoever provisions the device next.
+rm -rf /var/lib/hifi-player/backups 2>/dev/null || true
+rm -f /etc/hifi-player/backup.json 2>/dev/null || true
+systemctl disable --now hifi-backup.timer 2>/dev/null || true
 
 # Saved Wi-Fi networks (forget every SSID/password — the only network
 # credential worth resetting; a Wi-Fi profile carries the home network's PSK,
