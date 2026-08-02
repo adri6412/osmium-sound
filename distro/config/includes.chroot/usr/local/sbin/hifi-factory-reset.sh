@@ -50,11 +50,34 @@ log "removing user settings"
 # same as a fresh, never-updated install.
 for f in display-mode pointer-enabled dsp.json dsp-presets.json bluetooth.json \
          samba-cred.json provisioning-state.json webui.db webui-secret.key \
-         webui-cert.pem webui-key.pem github-support-pat; do
+         webui-cert.pem webui-key.pem github-support-pat lyrion-channel; do
     rm -f "/etc/hifi-player/$f" 2>/dev/null || true
 done
 # Reset the OTA channel to the stable default (factory semantics).
 printf 'prod\n' > /etc/hifi-player/ota-channel 2>/dev/null || true
+
+# ── SSH/console login ────────────────────────────────────────────────
+# The web-admin account is mirrored into a Linux user with full sudo
+# (api_server.py set_shell_account). Wiping webui.db above without removing
+# that user would leave the previous owner's root-capable login on a device
+# that is about to be re-provisioned by someone else. The account name is
+# recorded in /etc/hifi-player/shell-account (name only, never a secret).
+SHELL_ACCOUNT_FILE=/etc/hifi-player/shell-account
+if [ -f "$SHELL_ACCOUNT_FILE" ]; then
+    shell_user=$(cat "$SHELL_ACCOUNT_FILE" 2>/dev/null | tr -d '\n\r ')
+    case "$shell_user" in
+        ''|root|hifi|support|hifimusic) : ;;   # never touch system accounts
+        *)
+            log "removing SSH login '$shell_user'"
+            pkill -KILL -u "$shell_user" 2>/dev/null || true
+            userdel -r "$shell_user" 2>/dev/null || true
+            ;;
+    esac
+    rm -f "$SHELL_ACCOUNT_FILE" 2>/dev/null || true
+fi
+# Back to factory state for the kiosk user: NO password, not the historical
+# 'hifi' default — a reset must not reintroduce a known credential.
+usermod -p '*' hifi 2>/dev/null || true
 
 # Other config files owned by the appliance.
 rm -f /etc/hifi-sources.json /etc/hifi-pairing-tokens.json \

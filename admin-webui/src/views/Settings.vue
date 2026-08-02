@@ -6,6 +6,7 @@ import { api } from '../api.js';
 import { useI18n } from '../i18n';
 import Toggle from '../components/Toggle.vue';
 import LanguageSelector from '../components/LanguageSelector.vue';
+import SourcesFrame from '../components/SourcesFrame.vue';
 
 const host = location.hostname;
 const route = useRoute();
@@ -19,7 +20,7 @@ const sections = computed(() => [
   { key: 'sources',   label: t('settings.sections.sources.label'),   desc: t('settings.sections.sources.desc') },
   { key: 'dsp',       label: t('settings.sections.dsp.label'),       desc: t('settings.sections.dsp.desc') },
   { key: 'services',  label: t('settings.sections.services.label'),  desc: t('settings.sections.services.desc') },
-  { key: 'multiroom', label: t('settings.sections.multiroom.label'), desc: t('settings.sections.multiroom.desc') },
+  { key: 'lyrion',    label: t('settings.sections.lyrion.label'),    desc: t('settings.sections.lyrion.desc') },
   { key: 'display',   label: t('settings.sections.display.label'),   desc: t('settings.sections.display.desc') },
   { key: 'updates',   label: t('settings.sections.updates.label'),   desc: t('settings.sections.updates.desc') },
   { key: 'companion', label: t('settings.sections.companion.label'), desc: t('settings.sections.companion.desc') },
@@ -27,23 +28,13 @@ const sections = computed(() => [
   { key: 'language',  label: t('settings.sections.language.label'),  desc: t('settings.sections.language.desc') },
   { key: 'system',    label: t('settings.sections.system.label'),    desc: t('settings.sections.system.desc') },
 ]);
-const open = ref(route.query.open || '');
-watch(() => route.query.open, (v) => { open.value = v || ''; });
+// 'multiroom' was this section's key before it became "Lyrion Music Server";
+// keep old bookmarks and the kiosk's deep links working.
+const normalizeSection = (k) => (k === 'multiroom' ? 'lyrion' : (k || ''));
+const open = ref(normalizeSection(route.query.open));
+watch(() => route.query.open, (v) => { open.value = normalizeSection(v); });
 function goto(k) { router.replace({ query: k ? { open: k } : {} }); }
 function title(k) { const s = sections.value.find(x => x.key === k); return s ? s.label : ''; }
-
-// Sources iframe: mint the pairing token first and mount the frame with
-// ?token= already in the src — no redirect/cookie dance inside the iframe
-// (some browsers refuse framed redirects; Brave is especially strict).
-const sourcesSrc = ref('');
-const sourcesErr = ref('');
-watch(open, async (v) => {
-  if (v !== 'sources' || sourcesSrc.value) return;
-  sourcesErr.value = '';
-  const r = await api.post('/api/system/pair_token', {});
-  if (r.ok && r.data.token) sourcesSrc.value = `/sources-app?token=${encodeURIComponent(r.data.token)}`;
-  else sourcesErr.value = (r.data && r.data.message) || t('settings.sources.openFailed');
-}, { immediate: true });
 
 const msg = ref(''); const err = ref(false);
 function say(m, isErr = false) { msg.value = m; err.value = isErr; if (m) setTimeout(() => { if (msg.value === m) msg.value = ''; }, 6000); }
@@ -190,7 +181,34 @@ async function setTidal(v) {
 }
 async function setSsh(v) {
   sshState.enabled = v; const r = await api.sysPost('ssh', { enable: v });
-  say(bodyMsg(r, v ? t('settings.services.sshOn') : t('settings.services.sshOff')), !(r.ok && r.data.success !== false)); loadToggles();
+  say(bodyMsg(r, v ? t('settings.services.sshOn') : t('settings.services.sshOff')), !(r.ok && r.data.success !== false));
+  loadToggles(); loadShell();
+}
+
+// ── SSH login (Linux account) ────────────────────────────────────────
+// The appliance used to ship user 'hifi' with the documented password 'hifi'
+// and no sudo, which made SSH both unsafe and useless. The login is now the
+// admin account, mirrored into a real Linux user with sudo at account creation
+// and at every password change. Devices provisioned before that shipped have no
+// such user yet, so this panel can create one on demand.
+const shell = reactive({ supported: true, exists: false, username: '', form: '', password: '', busy: false });
+async function loadShell() {
+  const r = await api.sys('shell_account');
+  // Older api_server has no such endpoint — hide the whole block rather than
+  // showing a broken form (the UI bundle can land before the system bundle).
+  shell.supported = r.ok && r.data && typeof r.data.exists === 'boolean';
+  if (!shell.supported) return;
+  shell.exists = !!r.data.exists;
+  shell.username = r.data.username || '';
+  if (!shell.form) shell.form = r.data.username || acc.username || '';
+}
+async function saveShellAccount() {
+  shell.busy = true;
+  const r = await api.sysPost('shell_account', { username: shell.form, password: shell.password });
+  shell.busy = false;
+  const ok = r.ok && r.data.success !== false;
+  say(bodyMsg(r, ok ? t('settings.services.sshLoginSaved') : t('settings.services.sshLoginFailed')), !ok);
+  if (ok) { shell.password = ''; loadShell(); }
 }
 let remoteSupportPollTimer = null;
 async function setRemoteSupport(v) {
@@ -231,19 +249,88 @@ async function pollRemoteSupport(attemptsLeft = 150) {
   if (remoteSupport.pending) remoteSupportPollTimer = setTimeout(() => pollRemoteSupport(attemptsLeft - 1), 4000);
 }
 
-// ── multiroom / ruolo LMS ────────────────────────────────────────
+// ── Lyrion Music Server: internal vs external, plus install/update ─────
+// 'internal'/'external' is the user-facing vocabulary (forum feedback: "own /
+// follow another" read as jargon). The wire protocol keeps the original
+// 'local'/'follow' role names — squeezelite's -s argument is what actually
+// changes, see api_server.set_lms_role.
 const lms = reactive({ mode: 'local', host: '', servers: [] });
 async function loadLms() {
   const r = await api.sys('lms_role');
   if (r.ok) { lms.mode = r.data.mode || 'local'; lms.host = r.data.host || ''; }
 }
 async function discoverLms() {
-  say(t('settings.multiroom.searching'));
+  say(t('settings.lyrion.searching'));
   const r = await api.sys('discover_lms'); if (r.ok) { lms.servers = r.data.servers || []; say(''); }
 }
 async function applyLmsRole(mode, hostArg) {
   const r = await api.sysPost('lms_role', { mode, host: hostArg || lms.host || null });
-  say(bodyMsg(r, t('settings.multiroom.roleUpdated')), !(r.ok && r.data.success !== false)); loadLms();
+  say(bodyMsg(r, t('settings.lyrion.roleUpdated')), !(r.ok && r.data.success !== false)); loadLms();
+}
+
+// Install/update of Lyrion itself. This used to sit on the Updates page next to
+// the appliance's own components; it belongs with the internal/external choice,
+// because "which server do I use" and "which build of it do I run" are one
+// decision. The Updates page is now only about the appliance's own software.
+const lyrion = reactive({
+  supported: true,       // false on an older api_server (no /lyrion_channel yet)
+  channel: 'release',
+  current: '',
+  channels: {},          // { release|nightly|dev: { version, url } }
+  busy: false, installing: false, progress: 0, message: '', error: '',
+});
+const LYRION_CHANNELS = ['release', 'nightly', 'dev'];
+const lyrionChannelLabel = (c) => t(`settings.lyrion.channel_${c}`);
+
+async function loadLyrion() {
+  lyrion.busy = true;
+  // Feature-detect: the UI bundle can land before the system bundle that ships
+  // these endpoints (apply order is ui → os → system), so a 403/404 here must
+  // degrade to "no channel picker" rather than an empty section.
+  const ch = await api.sys('lyrion_channel');
+  lyrion.supported = ch.ok && !!ch.data.channel;
+  if (lyrion.supported) lyrion.channel = ch.data.channel;
+  const r = await api.sys('updates/lyrion/check');
+  if (r.ok) {
+    lyrion.current = r.data.current && r.data.current !== 'unknown' ? r.data.current : '';
+    lyrion.channels = r.data.channels || {};
+    if (r.data.channel) lyrion.channel = r.data.channel;
+    lyrion.error = r.data.error || '';
+  }
+  lyrion.busy = false;
+}
+
+async function pickLyrionChannel(c) {
+  if (lyrion.installing || c === lyrion.channel) return;
+  lyrion.channel = c;
+  const r = await api.sysPost('lyrion_channel', { channel: c });
+  say(bodyMsg(r, t('settings.lyrion.channelChanged')), !(r.ok && r.data.success !== false));
+  loadLyrion();
+}
+
+let lyrionPoll = null;
+async function installLyrion() {
+  lyrion.installing = true; lyrion.error = ''; lyrion.progress = 5;
+  lyrion.message = t('settings.lyrion.installing');
+  const r = await api.sysPost('updates/lyrion/apply', { channel: lyrion.channel });
+  if (!(r.ok && r.data.started !== false)) {
+    lyrion.installing = false;
+    lyrion.error = bodyMsg(r, t('settings.lyrion.installFailed'));
+    return;
+  }
+  // Runs as a detached systemd unit; poll its status file.
+  lyrionPoll = setInterval(async () => {
+    const s = await api.sys('updates/lyrion/status');
+    const d = s.data || {};
+    if (typeof d.progress === 'number') lyrion.progress = d.progress;
+    if (d.message) lyrion.message = d.message;
+    if (d.state === 'done' || d.state === 'error') {
+      clearInterval(lyrionPoll); lyrionPoll = null;
+      lyrion.installing = false;
+      if (d.state === 'done') { lyrion.progress = 100; loadLyrion(); }
+      else lyrion.error = d.message || t('settings.lyrion.installFailed');
+    }
+  }, 2000);
 }
 
 // ── display mode ─────────────────────────────────────────────────
@@ -258,12 +345,15 @@ async function setMode(m) {
 
 // ── updates (prod/dev channel; single "update all" + blocking modal) ─
 const channel = ref('prod');
-const upd = reactive({ ui: null, system: null, os: null, lyrion: null });
+const upd = reactive({ ui: null, system: null, os: null });
 const updBusy = ref(false);
-const kinds = { ui: 'app', system: 'system', os: 'os', lyrion: 'lyrion' };
+// Lyrion is deliberately NOT here: it is third-party software with its own
+// release cadence, managed from Settings → Lyrion Music Server. This page is
+// only about the appliance's own components.
+const kinds = { ui: 'app', system: 'system', os: 'os' };
 const kindLabels = computed(() => ({
   ui: t('settings.updates.kindUi'), system: t('settings.updates.kindSystem'),
-  os: t('settings.updates.kindOs'), lyrion: t('settings.updates.kindLyrion'),
+  os: t('settings.updates.kindOs'),
 }));
 // Blocking overlay state — mirrors the kiosk's forced update modal: while an
 // apply is running nothing else is clickable, so double-applies can't happen.
@@ -311,8 +401,8 @@ async function applyAll() {
   if (applying.active || !hasUpdates()) return;
   applying.active = true; applying.error = false; applying.doneList = [];
   // System last: applying it restarts this daemon (brief connection blip the
-  // polling rides out). UI/OS/Lyrion first.
-  const order = ['ui', 'os', 'lyrion', 'system'].filter(k => upd[k] && upd[k].update_available);
+  // polling rides out). UI/OS first.
+  const order = ['ui', 'os', 'system'].filter(k => upd[k] && upd[k].update_available);
   for (const k of order) {
     applying.kind = k; applying.label = kindLabels.value[k];
     applying.state = 'starting'; applying.progress = null; applying.message = '';
@@ -371,9 +461,10 @@ async function changePw() {
 }
 
 onMounted(async () => {
-  loadNet(); loadAudio(); loadDsp(); loadFir(); loadToggles(); loadLms(); loadMode(); loadChannel(); checkAll();
+  loadNet(); loadAudio(); loadDsp(); loadFir(); loadToggles(); loadShell(); loadLms(); loadLyrion();
+  loadMode(); loadChannel(); checkAll();
 });
-onUnmounted(() => { clearTimeout(remoteSupportPollTimer); });
+onUnmounted(() => { clearTimeout(remoteSupportPollTimer); if (lyrionPoll) clearInterval(lyrionPoll); });
 </script>
 
 <template>
@@ -431,10 +522,7 @@ onUnmounted(() => { clearTimeout(remoteSupportPollTimer); });
     <!-- Sources (embedded :8080 SPA over HTTPS proxy) -->
     <div v-if="open === 'sources'">
       <p class="sub" style="margin: 0 0 10px;">{{ t('settings.sources.hint') }}</p>
-      <div v-if="sourcesErr" class="msg err">{{ sourcesErr }}</div>
-      <p v-else-if="!sourcesSrc" class="muted">{{ t('settings.sources.opening') }}</p>
-      <iframe v-if="sourcesSrc" :src="sourcesSrc"
-              style="width: 100%; height: 74vh; border: 1px solid var(--border); border-radius: 14px; background: #0f0f0f;"></iframe>
+      <SourcesFrame />
     </div>
 
     <!-- DSP -->
@@ -477,6 +565,25 @@ onUnmounted(() => { clearTimeout(remoteSupportPollTimer); });
         <span>{{ t('settings.services.ssh') }} <span class="muted">{{ t('settings.services.sshHint') }}</span></span>
         <Toggle :model-value="sshState.enabled" @update:model-value="setSsh" />
       </div>
+      <!-- SSH login. Shown once SSH is on (or a login already exists), because
+           that is the only context in which it means anything. -->
+      <template v-if="shell.supported && (sshState.enabled || shell.exists)">
+        <p class="sub" v-if="shell.exists">
+          {{ t('settings.services.sshLoginIs') }}
+          <span class="silver">ssh {{ shell.username }}@{{ host }}</span>
+        </p>
+        <p class="sub" v-else>{{ t('settings.services.sshNoLogin') }}</p>
+        <p class="sub">{{ t('settings.services.sshSudoWarning') }}</p>
+        <label>{{ t('settings.services.sshUsername') }}</label>
+        <input v-model="shell.form" autocomplete="username" />
+        <label>{{ t('settings.services.sshPassword') }}</label>
+        <input v-model="shell.password" type="password" autocomplete="new-password" />
+        <div class="row" style="margin-top: 10px;">
+          <button class="secondary" :disabled="shell.busy || !shell.form || shell.password.length < 8" @click="saveShellAccount">
+            {{ shell.busy ? '…' : (shell.exists ? t('settings.services.sshLoginUpdate') : t('settings.services.sshLoginCreate')) }}
+          </button>
+        </div>
+      </template>
       <div class="between item">
         <span>{{ t('settings.services.remoteSupport') }}
           <span class="muted">{{ remoteSupport.pending ? t('settings.services.remoteSupportPending') : t('settings.services.remoteSupportHint') }}</span>
@@ -485,17 +592,58 @@ onUnmounted(() => { clearTimeout(remoteSupportPollTimer); });
       </div>
     </div>
 
-    <!-- Multiroom -->
-    <div class="card" v-if="open === 'multiroom'">
-      <p class="sub">{{ t('settings.multiroom.hint') }}</p>
+    <!-- Lyrion Music Server: internal vs external, and which build to run -->
+    <div class="card" v-if="open === 'lyrion'">
+      <p class="sub">{{ t('settings.lyrion.hint') }}</p>
       <div class="seg">
-        <button :class="{ active: lms.mode === 'local' }" @click="applyLmsRole('local')">{{ t('settings.multiroom.ownServer') }}</button>
-        <button :class="{ active: lms.mode === 'follow' }" @click="lms.mode = 'follow'">{{ t('settings.multiroom.followAnother') }}</button>
+        <button :class="{ active: lms.mode === 'local' }" @click="applyLmsRole('local')">{{ t('settings.lyrion.internal') }}</button>
+        <button :class="{ active: lms.mode === 'follow' }" @click="lms.mode = 'follow'">{{ t('settings.lyrion.external') }}</button>
       </div>
-      <template v-if="lms.mode === 'follow'">
-        <div class="row" style="margin-top: 12px;">
-          <input v-model="lms.host" :placeholder="t('settings.multiroom.serverIpPlaceholder')" />
-          <button class="secondary fit" @click="discoverLms">{{ t('settings.multiroom.search') }}</button>
+
+      <!-- Internal: this device runs the server, so it also owns its version. -->
+      <template v-if="lms.mode === 'local'">
+        <p class="sub" style="margin-top: 12px;">{{ t('settings.lyrion.internalHint') }}</p>
+        <div class="between item">
+          <span>{{ t('settings.lyrion.installed') }}
+            <span class="muted">{{ lyrion.current || t('settings.lyrion.notInstalled') }}</span>
+          </span>
+          <a v-if="lyrion.current" :href="`http://${host}:9000`" target="_blank">{{ t('settings.lyrion.open') }}</a>
+        </div>
+
+        <template v-if="lyrion.supported">
+          <label>{{ t('settings.lyrion.channel') }}</label>
+          <div v-for="c in LYRION_CHANNELS" :key="c" class="net between" @click="pickLyrionChannel(c)">
+            <span>{{ lyrionChannelLabel(c) }}
+              <span class="muted" v-if="lyrion.channels[c]"> · {{ lyrion.channels[c].version }}</span>
+            </span>
+            <span class="check" v-if="lyrion.channel === c">✓</span>
+          </div>
+          <p class="sub" v-if="lyrion.channel !== 'release'">{{ t('settings.lyrion.channelWarning') }}</p>
+        </template>
+
+        <template v-if="!lyrion.installing">
+          <div class="row" style="margin-top: 12px;">
+            <button :disabled="lyrion.busy" @click="installLyrion">
+              {{ lyrion.current ? t('settings.lyrion.update') : t('settings.lyrion.install') }}
+            </button>
+            <button class="secondary fit" :disabled="lyrion.busy" @click="loadLyrion">{{ t('settings.updates.checkAgain') }}</button>
+          </div>
+          <div v-if="lyrion.error" class="msg err">{{ lyrion.error }}</div>
+        </template>
+        <template v-else>
+          <div style="width: 100%; height: 8px; background: var(--panel); border-radius: 99px; overflow: hidden; margin: 12px 0;">
+            <div style="height: 100%; background: var(--gold); transition: width .4s;" :style="{ width: lyrion.progress + '%' }"></div>
+          </div>
+          <p class="muted">{{ lyrion.message || t('settings.lyrion.installing') }}</p>
+        </template>
+      </template>
+
+      <!-- External: point squeezelite at someone else's server. -->
+      <template v-else>
+        <p class="sub" style="margin-top: 12px;">{{ t('settings.lyrion.externalHint') }}</p>
+        <div class="row">
+          <input v-model="lms.host" :placeholder="t('settings.lyrion.serverIpPlaceholder')" />
+          <button class="secondary fit" @click="discoverLms">{{ t('settings.lyrion.search') }}</button>
           <button class="fit" @click="applyLmsRole('follow', lms.host)">{{ t('common.apply') }}</button>
         </div>
         <div v-for="s in lms.servers" :key="s.ip" class="net between" @click="lms.host = s.ip">

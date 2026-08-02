@@ -26,7 +26,7 @@ const signalBars = (signal) => {
  * Steps: welcome → network (wired/wifi, DHCP forced) → sources URL → lyrion URL → done
  */
 const SetupWizard = ({ onComplete }) => {
-  const { t } = useI18n();
+  const { t, lang } = useI18n();
   const [step, setStep] = useState('welcome');
   const [deviceIp, setDeviceIp] = useState(null);
 
@@ -67,6 +67,15 @@ const SetupWizard = ({ onComplete }) => {
   const [lyrionMsg, setLyrionMsg] = useState('');
   const [lyrionError, setLyrionError] = useState('');
   const lyrionPollRef = useRef(null);
+
+  // Internal (this device runs the server) vs external (one already on the LAN).
+  const [lmsMode, setLmsMode] = useState('local'); // 'local' | 'follow'
+  const [lmsServers, setLmsServers] = useState([]);
+  const [lmsHostInput, setLmsHostInput] = useState('');
+  const [lmsScanning, setLmsScanning] = useState(false);
+  const [lmsScanned, setLmsScanned] = useState(false);
+  const [lmsBusy, setLmsBusy] = useState(false);
+  const [lmsApplied, setLmsApplied] = useState(false);
 
   // Resolve the device IP whenever we need to show service URLs
   const refreshIp = async () => {
@@ -217,6 +226,44 @@ const SetupWizard = ({ onComplete }) => {
     setStep('sources');
   };
 
+  // ── Internal vs external music server ──────────────────────────
+  // Offered before the presence check: someone adding a player to a house that
+  // already runs Lyrion should not have to install a second server first and
+  // then go hunting through Settings to turn it off again.
+  const scanForServers = async () => {
+    setLmsScanning(true);
+    const res = await systemAPI.discoverLmsServers();
+    setLmsScanning(false);
+    if (res.success && Array.isArray(res.data?.servers)) {
+      setLmsServers(res.data.servers.filter((s) => s.ip !== deviceIp));
+    }
+    setLmsScanned(true);
+  };
+
+  const chooseLmsMode = (mode) => {
+    setLmsMode(mode);
+    setLyrionError('');
+    if (mode === 'follow') { if (!lmsScanned) scanForServers(); }
+    else systemAPI.setLmsRole('local').catch(() => {});
+  };
+
+  const useExternalServer = async () => {
+    const host = lmsHostInput.trim();
+    if (!host) return;
+    setLmsBusy(true);
+    const res = await systemAPI.setLmsRole('follow', host);
+    setLmsBusy(false);
+    if (res.success && res.data?.success !== false) {
+      // Point the kiosk's own player at it too, exactly like Settings does.
+      const url = `http://${host}:${LYRION_PORT}`;
+      localStorage.setItem('lyrionUrl', url);
+      window.dispatchEvent(new CustomEvent('osmium:lyrion-url-changed', { detail: url }));
+      setLmsApplied(true);
+    } else {
+      setLyrionError(res.data?.message || res.message || t('wizard.lyrion.externalFailed'));
+    }
+  };
+
   // ── Lyrion presence check + install fallback ───────────────────
   const checkLyrion = async () => {
     setLyrionError('');
@@ -263,7 +310,7 @@ const SetupWizard = ({ onComplete }) => {
   useEffect(() => {
     if (step === 'audio' && audioDevices.length === 0) loadAudioDevices();
     if ((step === 'sources' || step === 'lyrion') && !deviceIp) refreshIp();
-    if (step === 'lyrion' && !lyrionInstalling) checkLyrion();
+    if (step === 'lyrion' && lmsMode === 'local' && !lyrionInstalling) checkLyrion();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [step]);
 
@@ -294,9 +341,10 @@ const SetupWizard = ({ onComplete }) => {
     onComplete?.();
   };
 
-  const ipDisplay = deviceIp || 'questo dispositivo';
+  // &lang= renders that page in the language chosen in this wizard, instead of
+  // handing an English user an Italian page.
   const sourcesUrl = sourcesToken
-    ? `http://${deviceIp || 'localhost'}:${SOURCES_PORT}/?token=${encodeURIComponent(sourcesToken)}`
+    ? `http://${deviceIp || 'localhost'}:${SOURCES_PORT}/?token=${encodeURIComponent(sourcesToken)}&lang=${encodeURIComponent(lang)}`
     : null;
   const lyrionUrl = `http://${deviceIp || 'localhost'}:${LYRION_PORT}`;
 
@@ -522,7 +570,9 @@ const SetupWizard = ({ onComplete }) => {
         {/* ───────── AUDIO / DAC ───────── */}
         {step === 'audio' && (
           <Shell footer={<>
-            <button onClick={() => setStep('network')} className="flex items-center space-x-1 text-hifi-silver/60 hover:text-white transition"><ChevronLeft size={18} /><span className="text-sm">{t('common.back')}</span></button>
+            {/* Back to where the user actually came from: the Wi-Fi list, not
+                the network chooser, when they arrived via 'wifi-scan'. */}
+            <button onClick={() => setStep(netMode === 'wifi' ? 'wifi-scan' : 'network')} className="flex items-center space-x-1 text-hifi-silver/60 hover:text-white transition"><ChevronLeft size={18} /><span className="text-sm">{t('common.back')}</span></button>
             <Dots />
             <button onClick={confirmAudio} disabled={audioBusy}
               className="flex items-center space-x-2 bg-hifi-gold text-black font-semibold px-6 py-2.5 rounded-xl hover:brightness-110 transition disabled:opacity-50">
@@ -618,8 +668,78 @@ const SetupWizard = ({ onComplete }) => {
                 <Server size={26} className="text-hifi-gold" />
               </div>
 
+              {/* Internal or external: asked first, because choosing "external"
+                  makes the whole install question moot. */}
+              <p className="text-hifi-silver/70 text-sm max-w-md mb-3">{t('wizard.lyrion.modeHint')}</p>
+              <div className="flex bg-hifi-surface rounded-xl p-1 mb-6 w-full max-w-md">
+                <button
+                  onClick={() => chooseLmsMode('local')}
+                  className={`flex-1 py-2 rounded-lg text-sm transition-colors ${lmsMode === 'local' ? 'bg-hifi-gold text-black font-semibold' : 'text-hifi-silver'}`}
+                >
+                  {t('wizard.lyrion.internal')}
+                </button>
+                <button
+                  onClick={() => chooseLmsMode('follow')}
+                  className={`flex-1 py-2 rounded-lg text-sm transition-colors ${lmsMode === 'follow' ? 'bg-hifi-gold text-black font-semibold' : 'text-hifi-silver'}`}
+                >
+                  {t('wizard.lyrion.external')}
+                </button>
+              </div>
+
+              {/* External: pick a server that is already on the network. */}
+              {lmsMode === 'follow' && (
+                <div className="w-full max-w-md text-left space-y-3">
+                  <p className="text-hifi-silver/70 text-sm">{t('wizard.lyrion.externalHint')}</p>
+                  {lmsServers.map((s) => (
+                    <button
+                      key={s.ip}
+                      onClick={() => setLmsHostInput(s.ip)}
+                      className={`w-full flex items-center justify-between rounded-xl px-4 py-3 text-sm transition-colors ${
+                        lmsHostInput === s.ip ? 'bg-hifi-gold text-black font-semibold' : 'bg-hifi-surface text-white'
+                      }`}
+                    >
+                      <span>{s.name || s.ip}</span>
+                      <span className="opacity-70 font-mono text-xs">{s.ip}</span>
+                    </button>
+                  ))}
+                  {!lmsScanning && lmsScanned && lmsServers.length === 0 && (
+                    <p className="text-hifi-silver/60 text-sm">{t('wizard.lyrion.noneFound')}</p>
+                  )}
+                  <input
+                    type="text"
+                    value={lmsHostInput}
+                    onChange={(e) => setLmsHostInput(e.target.value)}
+                    placeholder={t('wizard.lyrion.hostPlaceholder')}
+                    className="w-full bg-hifi-surface border border-hifi-border rounded-xl px-4 py-3 text-white focus:outline-none focus:border-hifi-gold"
+                  />
+                  <div className="flex gap-3">
+                    <button
+                      onClick={scanForServers}
+                      disabled={lmsScanning}
+                      className="flex items-center justify-center space-x-2 bg-hifi-surface border border-hifi-border text-white px-4 py-2.5 rounded-xl disabled:opacity-50 transition"
+                    >
+                      {lmsScanning ? <Loader2 size={16} className="animate-spin" /> : <RefreshCw size={16} />}
+                      <span className="text-sm">{t('wizard.lyrion.search')}</span>
+                    </button>
+                    <button
+                      onClick={useExternalServer}
+                      disabled={lmsBusy || !lmsHostInput.trim()}
+                      className="flex-1 bg-hifi-gold text-black font-semibold px-4 py-2.5 rounded-xl hover:brightness-110 disabled:opacity-50 transition"
+                    >
+                      {t('wizard.lyrion.useExternal')}
+                    </button>
+                  </div>
+                  {lmsApplied && (
+                    <p className="text-hifi-gold text-sm flex items-center"><Check size={15} className="mr-2" />{t('wizard.lyrion.externalApplied')}</p>
+                  )}
+                  {lyrionError && (
+                    <p className="text-red-400 text-sm flex items-center"><AlertCircle size={15} className="mr-2" />{lyrionError}</p>
+                  )}
+                </div>
+              )}
+
               {/* Checking whether Lyrion is installed */}
-              {lyrionState === 'checking' && (
+              {lmsMode === 'local' && lyrionState === 'checking' && (
                 <>
                   <h2 className="text-2xl font-bold text-white mb-2">{t('wizard.lyrion.title')}</h2>
                   <p className="text-hifi-silver/60 text-sm flex items-center justify-center mt-4">
@@ -629,7 +749,7 @@ const SetupWizard = ({ onComplete }) => {
               )}
 
               {/* Fallback: Lyrion missing → offer to install it here */}
-              {lyrionState === 'missing' && (
+              {lmsMode === 'local' && lyrionState === 'missing' && (
                 <>
                   <h2 className="text-2xl font-bold text-white mb-2">{t('wizard.lyrion.notInstalledTitle')}</h2>
                   <p className="text-hifi-silver/70 text-sm max-w-md mb-6">{t('wizard.lyrion.notInstalledHint')}</p>
@@ -655,7 +775,7 @@ const SetupWizard = ({ onComplete }) => {
               )}
 
               {/* Lyrion installed → show the web-UI address (original behaviour) */}
-              {lyrionState === 'installed' && (
+              {lmsMode === 'local' && lyrionState === 'installed' && (
                 <>
                   <h2 className="text-2xl font-bold text-white mb-2">{t('wizard.lyrion.title')}</h2>
                   <p className="text-hifi-silver/70 text-sm max-w-md mb-6">{t('wizard.lyrion.subtitle')}</p>

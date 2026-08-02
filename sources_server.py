@@ -50,7 +50,7 @@ app.config['MAX_CONTENT_LENGTH'] = 80 * 1024 * 1024
 
 @app.errorhandler(413)
 def _request_too_large(_e):
-    return jsonify({"success": False, "message": "File troppo grande"}), 413
+    return _err("msg.fileTooLarge", 413)
 
 
 # The Electron UI now talks to this service natively (cross-origin from the
@@ -1031,10 +1031,10 @@ def api_restore():
         return denied
     f = request.files.get("file")
     if not f:
-        return jsonify({"success": False, "message": "Nessun file caricato"}), 400
+        return _err("msg.noFile", 400)
     archive_bytes = f.read(MAX_RESTORE_ARCHIVE_SIZE + 1)
     if len(archive_bytes) > MAX_RESTORE_ARCHIVE_SIZE:
-        return jsonify({"success": False, "message": "File troppo grande"}), 400
+        return _err("msg.fileTooLarge", 400)
     restored, errors = _restore_apply(archive_bytes)
     if not restored and errors:
         return jsonify({"success": False, "message": "; ".join(errors)}), 400
@@ -1094,15 +1094,15 @@ def api_dsp_fir_upload():
         return denied
     f = request.files.get("file")
     if not f or not f.filename:
-        return jsonify({"success": False, "message": "Nessun file caricato"}), 400
+        return _err("msg.noFile", 400)
     ext = os.path.splitext(f.filename)[1].lower()
     if ext not in FIR_KINDS:
-        return jsonify({"success": False, "message": "Formato non supportato (usa .wav o .txt)"}), 400
+        return _err("msg.badFilterFormat", 400)
     data = f.read(FIR_MAX_SIZE + 1)
     if len(data) > FIR_MAX_SIZE:
-        return jsonify({"success": False, "message": "File troppo grande (max 20MB)"}), 400
+        return _err("msg.fileTooLarge20", 400)
     if not data:
-        return jsonify({"success": False, "message": "File vuoto"}), 400
+        return _err("msg.fileEmpty", 400)
     try:
         os.makedirs(FIR_DIR, exist_ok=True)
         # Only one filter at a time: clear any previous room.* before writing.
@@ -1117,8 +1117,8 @@ def api_dsp_fir_upload():
         os.replace(tmp, dest)
     except Exception as e:
         print(f"[sources] FIR filter save failed: {e}")
-        return jsonify({"success": False, "message": "Salvataggio fallito"}), 500
-    return jsonify({"success": True, "message": "Filtro caricato. Attivalo da Impostazioni → DSP."})
+        return _err("msg.saveFailed", 500)
+    return jsonify({"success": True, "code": "msg.filterUploaded", "message": _m("msg.filterUploaded")})
 
 
 @app.route("/api/dsp/fir", methods=["DELETE"])
@@ -1178,7 +1178,7 @@ def api_pair_token():
     just POST here directly and self-mint a valid token, defeating the whole
     point of gating DSP control behind pairing."""
     if request.remote_addr not in ("127.0.0.1", "::1"):
-        return jsonify({"success": False, "message": "Non consentito da remoto"}), 403
+        return _err("msg.notAllowedRemotely", 403)
     token = secrets.token_urlsafe(24)
     tokens = _load_pair_tokens()
     tokens.append({"token": token, "created": datetime.now(timezone.utc).isoformat()})
@@ -1195,7 +1195,7 @@ def api_pair_tokens_revoke_all():
     expiry (which would otherwise log out every legitimately paired phone
     just to bound a theft that may never have happened)."""
     if request.remote_addr not in ("127.0.0.1", "::1"):
-        return jsonify({"success": False, "message": "Non consentito da remoto"}), 403
+        return _err("msg.notAllowedRemotely", 403)
     _save_pair_tokens([])
     return jsonify({"success": True})
 
@@ -1233,7 +1233,7 @@ def _require_pair_token():
         return None
     ip = request.remote_addr
     if _auth_rate_limited(ip):
-        return jsonify({"success": False, "message": "Troppi tentativi, riprova tra qualche minuto"}), 429
+        return _err("msg.tooManyAttempts", 429)
     auth = request.headers.get("Authorization", "")
     token = auth[len("Bearer "):] if auth.startswith("Bearer ") else None
     if not token:
@@ -1249,7 +1249,7 @@ def _require_pair_token():
     )
     if not valid:
         _auth_record_failure(ip)
-        return jsonify({"success": False, "message": "Token di pairing mancante o non valido"}), 401
+        return _err("msg.badPairToken", 401)
     return None
 
 
@@ -1286,10 +1286,10 @@ def _proxy_to_api_server(path, method="GET", body=None, timeout=10):
             # the raw exception text (may contain internal paths/details) to
             # the caller; log it server-side instead.
             print(f"[sources] proxy to {path} failed: {e}")
-            return {"success": False, "message": "Servizio DSP non disponibile"}, e.code
+            return {"success": False, "code": "msg.dspUnavailable", "message": _m("msg.dspUnavailable")}, e.code
     except Exception as e:
         print(f"[sources] proxy to {path} unreachable: {e}")
-        return {"success": False, "message": "Servizio DSP non raggiungibile"}, 502
+        return {"success": False, "code": "msg.dspUnreachable", "message": _m("msg.dspUnreachable")}, 502
 
 
 @app.route("/api/dsp/status", methods=["GET"])
@@ -1552,12 +1552,12 @@ def api_add_local():
     data = request.get_json(silent=True) or {}
     path = (data.get("path") or "").strip()
     if not path:
-        return jsonify({"success": False, "message": "Percorso mancante"}), 400
+        return _err("msg.pathMissing", 400)
     path = _local_path_allowed(path)
     if not path:
-        return jsonify({"success": False, "message": "Percorso non consentito"}), 400
+        return _err("msg.pathNotAllowed", 400)
     if not os.path.isdir(path):
-        return jsonify({"success": False, "message": f"La cartella {path} non esiste"}), 400
+        return _err("msg.folderMissing", 400, path=path)
     with _lock:
         state = load_state()
         sid = _slug("local", os.path.basename(path.rstrip("/")))
@@ -1576,7 +1576,7 @@ def api_add_smb():
     server = (data.get("server") or "").strip().strip("/")
     share = (data.get("share") or "").strip().strip("/")
     if not server or not share:
-        return jsonify({"success": False, "message": "Server e nome condivisione obbligatori"}), 400
+        return _err("msg.smbFieldsRequired", 400)
     name = data.get("name") or f"{server}/{share}"
     sid = _slug("smb", server, share)
     src = {
@@ -1591,7 +1591,7 @@ def api_add_smb():
     }
     ok, msg = mount_smb(src)
     if not ok:
-        return jsonify({"success": False, "message": f"Mount fallito: {msg}"}), 400
+        return _err("msg.mountFailed", 400, detail=msg)
     with _lock:
         state = load_state()
         state["sources"] = [s for s in state["sources"] if s.get("id") != sid]
@@ -1649,7 +1649,7 @@ def api_internal_adopt():
     data = request.get_json(silent=True) or {}
     device = (data.get("device") or "").strip()
     if not _path_ok(device):
-        return jsonify({"success": False, "message": "Device non valido"}), 400
+        return _err("msg.badDevice", 400)
 
     disks = _internal_disks()
     disk = None
@@ -1664,12 +1664,12 @@ def api_internal_adopt():
                 part = p
                 break
     if not disk:
-        return jsonify({"success": False, "message": "Disco non trovato o di sistema"}), 400
+        return _err("msg.diskNotFound", 400)
     if not part:
         # Whole disk with no partitions: reject.
-        return jsonify({"success": False, "message": "Seleziona una partizione con filesystem"}), 400
+        return _err("msg.pickPartition", 400)
     if not part.get("fstype"):
-        return jsonify({"success": False, "message": "Partizione senza filesystem"}), 400
+        return _err("msg.partitionNoFs", 400)
 
     partuuid = part.get("partuuid")
     fsuuid = part.get("uuid")
@@ -1694,7 +1694,7 @@ def api_internal_adopt():
     }
     ok, msg = mount_internal(src)
     if not ok:
-        return jsonify({"success": False, "message": f"Mount fallito: {msg}"}), 400
+        return _err("msg.mountFailed", 400, detail=msg)
 
     with _lock:
         state = load_state()
@@ -1718,32 +1718,32 @@ def api_internal_format():
     confirm = (data.get("confirm") or "").strip()
 
     if not _path_ok(device):
-        return jsonify({"success": False, "message": "Device non valido"}), 400
+        return _err("msg.badDevice", 400)
     if fs not in ("ext4", "exfat"):
-        return jsonify({"success": False, "message": "Filesystem non supportato"}), 400
+        return _err("msg.unsupportedFs", 400)
     if not _label_ok(label):
-        return jsonify({"success": False, "message": "Etichetta non valida"}), 400
+        return _err("msg.badLabel", 400)
     if fs == "exfat" and len(label) > 11:
-        return jsonify({"success": False, "message": "Etichetta troppo lunga per exFAT (max 11)"}), 400
+        return _err("msg.labelTooLongExfat", 400)
 
     disks = _internal_disks()
     disk = next((d for d in disks if d["path"] == device), None)
     if not disk:
-        return jsonify({"success": False, "message": "Disco non trovato o di sistema"}), 400
+        return _err("msg.diskNotFound", 400)
     if disk.get("confirm") != confirm:
-        return jsonify({"success": False, "message": "Conferma non corrispondente"}), 400
+        return _err("msg.confirmMismatch", 400)
     if disk.get("adopted"):
-        return jsonify({"success": False, "message": "Disco già adottato come sorgente"}), 400
+        return _err("msg.alreadyAdopted", 400)
 
     # Check no partitions are mounted.
     for p in disk.get("partitions") or []:
         if p.get("mountpoint"):
-            return jsonify({"success": False, "message": "Disco montato, smontalo prima"}), 400
+            return _err("msg.unmountFirst", 400)
 
     # Check mkfs.exfat is available when requested.
     if fs == "exfat":
         if _run(["which", "mkfs.exfat"], timeout=5).returncode != 0:
-            return jsonify({"success": False, "message": "Aggiornamento OS richiesto per formattare exFAT"}), 424
+            return _err("msg.osUpdateForExfat", 424)
 
     # Interlock: no concurrent format job.
     if os.path.exists(FORMAT_STATUS):
@@ -1751,7 +1751,7 @@ def api_internal_format():
             with open(FORMAT_STATUS) as f:
                 st = json.load(f)
             if st.get("state") not in ("done", "error", "idle"):
-                return jsonify({"success": False, "message": "Formattazione già in corso"}), 409
+                return _err("msg.formatInProgress", 409)
         except Exception:
             pass
 
@@ -1989,9 +1989,9 @@ def api_cd_rip():
     data = request.get_json(silent=True) or {}
     toc = _cd_toc()
     if not toc:
-        return jsonify({"success": False, "message": "Nessun CD audio nel lettore"}), 400
+        return _err("msg.noAudioCd", 400)
     if _rip_running():
-        return jsonify({"success": False, "message": "Rip già in corso"}), 409
+        return _err("msg.ripInProgress", 409)
 
     sources = _rip_writable_sources()
     source_id = (data.get("source_id") or "").strip()
@@ -2069,7 +2069,7 @@ def api_cd_eject():
     if denied:
         return denied
     if _rip_running():
-        return jsonify({"success": False, "message": "Rip in corso"}), 409
+        return _err("msg.ripInProgress", 409)
     r = _run(["eject", CD_DEVICE], timeout=20)
     return jsonify({"success": r.returncode == 0})
 
@@ -2120,7 +2120,7 @@ def api_internal_smb_regenerate():
     if denied:
         return denied
     if _run(["which", "smbd"], timeout=5).returncode != 0:
-        return jsonify({"success": False, "message": "Samba non installato"}), 424
+        return _err("msg.sambaMissing", 424)
     with _lock:
         password = _create_samba_user(force_new_password=True)
     return jsonify({"success": True, "username": SAMBA_USER, "password": password})
@@ -2165,17 +2165,320 @@ def api_usb():
 
 
 # ─────────────────────────── Web UI ─────────────────────────────────
+# This page is the functional twin of the kiosk's SourcesManager.jsx +
+# InternalDisks.jsx, and it is what the web admin embeds and what the setup
+# wizard's QR code points a phone at. It used to be hardcoded Italian, so an
+# English user got an Italian page in the middle of an otherwise translated
+# setup. The catalog below deliberately reuses the *same key names and English
+# wording* as src/i18n/locales/{en,it}.json (`sources.*`) — those JSONs are
+# bundled into the Electron app by Vite and are not readable from here at
+# runtime, so they are mirrored rather than shared. Keep the two in sync when
+# either side changes wording.
+SOURCES_I18N = {
+    "en": {
+        "sources.title": "Music sources",
+        "sources.intro": "Add the folders that contain your music. When you are done, press Apply to update the library.",
+        "sources.back": "Back",
+        "sources.done": "Done",
+        "sources.loading": "Loading…",
+        "sources.active": "Active sources",
+        "sources.none": "No sources yet. Add one below.",
+        "sources.usbTitle": "USB disks",
+        "sources.usbNone": "No USB disk connected. Insert a USB stick or drive.",
+        "sources.usbAddWhole": "Add whole disk",
+        "sources.add": "Add",
+        "sources.addLocal": "Add local folder",
+        "sources.localPath": "Path on the device",
+        "sources.localPathPlaceholder": "/media/music",
+        "sources.addSmb": "Add network folder (SMB)",
+        "sources.server": "Server / IP",
+        "sources.share": "Share",
+        "sources.sharePlaceholder": "Music",
+        "sources.user": "User (empty = guest)",
+        "sources.userPlaceholder": "user",
+        "sources.pass": "Password",
+        "sources.mountAndAdd": "Mount and add",
+        "sources.mounting": "Mounting…",
+        "sources.mounted": "Mounted ✓",
+        "sources.added": "Added ✓",
+        "sources.remove": "Remove",
+        "sources.local": "LOCAL",
+        "sources.smbTag": "SMB",
+        "sources.mountedShort": "mounted",
+        "sources.notMounted": "not mounted",
+        "sources.ok": "ok",
+        "sources.missing": "missing",
+        "sources.error": "Error",
+        "sources.networkError": "Network error",
+        "sources.apply": "Apply & rescan library",
+        "sources.applyHint": "Saves the sources above and rescans the music library.",
+        "sources.applying": "Applying…",
+        "sources.applied": "Done ✓",
+        "sources.backupTitle": "Backup & restore",
+        "sources.backupHint": "Export the device configuration (DAC, DSP/EQ, sources, pointer, update channel) to a file, or restore it from an earlier backup.",
+        "sources.backupDownload": "⬇ Download backup",
+        "sources.backupRestore": "⬆ Restore from file",
+        "sources.restoring": "Restoring…",
+        "sources.internal.title": "Internal disks",
+        "sources.internal.none": "No additional internal disk detected.",
+        "sources.internal.tag": "INTERNAL",
+        "sources.internal.adopt": "Use as source",
+        "sources.internal.use": "Use",
+        "sources.internal.adopted": "Source added ✓",
+        "sources.internal.adoptedBadge": "adopted",
+        "sources.internal.adopting": "Mounting…",
+        "sources.internal.hasData": "contains data",
+        "sources.internal.remove": "Remove",
+        "sources.internal.removed": "Removed ✓",
+        "sources.internal.format": "Format…",
+        "sources.internal.wizardTitle": "Format disk",
+        "sources.internal.fsLabel": "Filesystem",
+        "sources.internal.fsExt4": "ext4 (recommended)",
+        "sources.internal.fsExfat": "exFAT",
+        "sources.internal.labelField": "Disk label",
+        "sources.internal.defaultLabel": "Music",
+        "sources.internal.cancel": "Cancel",
+        "sources.internal.next": "Next",
+        "sources.internal.backStep": "Back",
+        "sources.internal.warnTitle": "This will erase all data",
+        "sources.internal.warnBody": "All data on {model} ({size}, {path}) will be permanently erased. This cannot be undone.",
+        "sources.internal.typeToConfirm": "Type \"{label}\" to confirm",
+        "sources.internal.formatNow": "Format now",
+        "sources.internal.phasePreparing": "Preparing disk…",
+        "sources.internal.inProgress": "In progress…",
+        "sources.internal.keepPowered": "Keep the appliance powered on until this finishes.",
+        "sources.internal.doneAdopted": "Disk formatted and added as a source ✓",
+        "sources.internal.doneHint": "Copy your music to the network share below, then apply & rescan the library.",
+        "sources.internal.errorTitle": "Error",
+        "sources.internal.close": "Close",
+        "sources.internal.needOsUpdate": "A system update is required to enable network sharing (Samba) for internal disks.",
+        "sources.internal.smbTitle": "Network share",
+        "sources.internal.smbHelp": "Copy music from a PC by connecting to this path with the credentials below.",
+        "sources.internal.smbUser": "Username",
+        "sources.internal.smbPass": "Password",
+        "sources.internal.smbRegenerate": "Regenerate password",
+        # ── API messages ────────────────────────────────────────────
+        # Rendered verbatim by the kiosk's SourcesManager/InternalDisks, so an
+        # Italian string here showed up in the middle of the English UI. Every
+        # response also carries a stable `code`, so a client can translate on
+        # its own side later without another backend change.
+        "msg.noFile": "No file uploaded.",
+        "msg.fileTooLarge": "File too large.",
+        "msg.fileTooLarge20": "File too large (max 20 MB).",
+        "msg.fileEmpty": "The file is empty.",
+        "msg.saveFailed": "Could not save the file.",
+        "msg.badFilterFormat": "Unsupported format (use .wav or .txt).",
+        "msg.filterUploaded": "Filter uploaded. Enable it in Settings → DSP.",
+        "msg.notAllowedRemotely": "Not allowed from a remote connection.",
+        "msg.tooManyAttempts": "Too many attempts, try again in a few minutes.",
+        "msg.badPairToken": "Missing or invalid pairing token.",
+        "msg.dspUnavailable": "The DSP service is unavailable.",
+        "msg.dspUnreachable": "The DSP service is unreachable.",
+        "msg.pathMissing": "Path missing.",
+        "msg.pathNotAllowed": "This path is not allowed.",
+        "msg.folderMissing": "The folder {path} does not exist.",
+        "msg.smbFieldsRequired": "Server and share name are required.",
+        "msg.mountFailed": "Mount failed: {detail}",
+        "msg.badDevice": "Invalid device.",
+        "msg.diskNotFound": "Disk not found, or it is a system disk.",
+        "msg.pickPartition": "Select a partition that has a filesystem.",
+        "msg.partitionNoFs": "That partition has no filesystem.",
+        "msg.unsupportedFs": "Unsupported filesystem.",
+        "msg.badLabel": "Invalid disk label.",
+        "msg.labelTooLongExfat": "Label too long for exFAT (max 11 characters).",
+        "msg.confirmMismatch": "The confirmation does not match.",
+        "msg.alreadyAdopted": "This disk is already used as a source.",
+        "msg.unmountFirst": "The disk is mounted — unmount it first.",
+        "msg.osUpdateForExfat": "An OS update is required to format as exFAT.",
+        "msg.formatInProgress": "A format is already running.",
+        "msg.noAudioCd": "No audio CD in the drive.",
+        "msg.ripInProgress": "A rip is already running.",
+        "msg.noWritableTarget": "No writable destination: adopt an internal disk first.",
+        "msg.sambaMissing": "Samba is not installed.",
+    },
+    "it": {
+        "sources.title": "Sorgenti musicali",
+        "sources.intro": "Aggiungi le cartelle che contengono la tua musica. Al termine premi Applica per aggiornare la libreria.",
+        "sources.back": "Indietro",
+        "sources.done": "Fatto",
+        "sources.loading": "Caricamento…",
+        "sources.active": "Sorgenti attive",
+        "sources.none": "Nessuna sorgente. Aggiungine una qui sotto.",
+        "sources.usbTitle": "Dischi USB",
+        "sources.usbNone": "Nessun disco USB collegato. Inserisci una chiavetta o un hard disk USB.",
+        "sources.usbAddWhole": "Aggiungi tutto il disco",
+        "sources.add": "Aggiungi",
+        "sources.addLocal": "Aggiungi cartella locale",
+        "sources.localPath": "Percorso sul dispositivo",
+        "sources.localPathPlaceholder": "/media/musica",
+        "sources.addSmb": "Aggiungi cartella di rete (SMB)",
+        "sources.server": "Server / IP",
+        "sources.share": "Condivisione",
+        "sources.sharePlaceholder": "Musica",
+        "sources.user": "Utente (vuoto = ospite)",
+        "sources.userPlaceholder": "utente",
+        "sources.pass": "Password",
+        "sources.mountAndAdd": "Monta e aggiungi",
+        "sources.mounting": "Montaggio…",
+        "sources.mounted": "Montata ✓",
+        "sources.added": "Aggiunta ✓",
+        "sources.remove": "Rimuovi",
+        "sources.local": "LOCALE",
+        "sources.smbTag": "SMB",
+        "sources.mountedShort": "montato",
+        "sources.notMounted": "non montato",
+        "sources.ok": "ok",
+        "sources.missing": "mancante",
+        "sources.error": "Errore",
+        "sources.networkError": "Errore di rete",
+        "sources.apply": "Applica e scansiona libreria",
+        "sources.applyHint": "Salva le sorgenti qui sopra e riscansiona la libreria musicale.",
+        "sources.applying": "Applico…",
+        "sources.applied": "Fatto ✓",
+        "sources.backupTitle": "Backup e ripristino",
+        "sources.backupHint": "Esporta la configurazione del dispositivo (DAC, DSP/EQ, sorgenti, puntatore, canale aggiornamenti) in un file, o ripristinala da un backup precedente.",
+        "sources.backupDownload": "⬇ Scarica backup",
+        "sources.backupRestore": "⬆ Ripristina da file",
+        "sources.restoring": "Ripristino…",
+        "sources.internal.title": "Dischi interni",
+        "sources.internal.none": "Nessun disco interno aggiuntivo rilevato.",
+        "sources.internal.tag": "INTERNO",
+        "sources.internal.adopt": "Usa come sorgente",
+        "sources.internal.use": "Usa",
+        "sources.internal.adopted": "Sorgente aggiunta ✓",
+        "sources.internal.adoptedBadge": "adottato",
+        "sources.internal.adopting": "Montaggio…",
+        "sources.internal.hasData": "dati presenti",
+        "sources.internal.remove": "Rimuovi",
+        "sources.internal.removed": "Rimossa ✓",
+        "sources.internal.format": "Formatta…",
+        "sources.internal.wizardTitle": "Formatta disco",
+        "sources.internal.fsLabel": "Filesystem",
+        "sources.internal.fsExt4": "ext4 (consigliato)",
+        "sources.internal.fsExfat": "exFAT",
+        "sources.internal.labelField": "Etichetta disco",
+        "sources.internal.defaultLabel": "Musica",
+        "sources.internal.cancel": "Annulla",
+        "sources.internal.next": "Avanti",
+        "sources.internal.backStep": "Indietro",
+        "sources.internal.warnTitle": "Questa operazione cancella tutti i dati",
+        "sources.internal.warnBody": "Tutti i dati su {model} ({size}, {path}) verranno cancellati in modo permanente. L'operazione non può essere annullata.",
+        "sources.internal.typeToConfirm": "Digita \"{label}\" per confermare",
+        "sources.internal.formatNow": "Formatta ora",
+        "sources.internal.phasePreparing": "Preparazione disco…",
+        "sources.internal.inProgress": "In corso…",
+        "sources.internal.keepPowered": "Tieni acceso l'apparecchio finché l'operazione non termina.",
+        "sources.internal.doneAdopted": "Disco formattato e aggiunto come sorgente ✓",
+        "sources.internal.doneHint": "Copia la musica nella condivisione di rete qui sotto, poi applica e riscansiona la libreria.",
+        "sources.internal.errorTitle": "Errore",
+        "sources.internal.close": "Chiudi",
+        "sources.internal.needOsUpdate": "È necessario un aggiornamento di sistema per abilitare la condivisione di rete (Samba) dei dischi interni.",
+        "sources.internal.smbTitle": "Condivisione di rete",
+        "sources.internal.smbHelp": "Copia la musica da un PC collegandoti a questo percorso con le credenziali qui sotto.",
+        "sources.internal.smbUser": "Utente",
+        "sources.internal.smbPass": "Password",
+        "sources.internal.smbRegenerate": "Rigenera password",
+        # ── Messaggi API (vedi il blocco inglese) ───────────────────
+        "msg.noFile": "Nessun file caricato.",
+        "msg.fileTooLarge": "File troppo grande.",
+        "msg.fileTooLarge20": "File troppo grande (max 20 MB).",
+        "msg.fileEmpty": "Il file è vuoto.",
+        "msg.saveFailed": "Salvataggio fallito.",
+        "msg.badFilterFormat": "Formato non supportato (usa .wav o .txt).",
+        "msg.filterUploaded": "Filtro caricato. Attivalo da Impostazioni → DSP.",
+        "msg.notAllowedRemotely": "Non consentito da remoto.",
+        "msg.tooManyAttempts": "Troppi tentativi, riprova tra qualche minuto.",
+        "msg.badPairToken": "Token di pairing mancante o non valido.",
+        "msg.dspUnavailable": "Servizio DSP non disponibile.",
+        "msg.dspUnreachable": "Servizio DSP non raggiungibile.",
+        "msg.pathMissing": "Percorso mancante.",
+        "msg.pathNotAllowed": "Percorso non consentito.",
+        "msg.folderMissing": "La cartella {path} non esiste.",
+        "msg.smbFieldsRequired": "Server e nome condivisione obbligatori.",
+        "msg.mountFailed": "Mount fallito: {detail}",
+        "msg.badDevice": "Device non valido.",
+        "msg.diskNotFound": "Disco non trovato o di sistema.",
+        "msg.pickPartition": "Seleziona una partizione con filesystem.",
+        "msg.partitionNoFs": "Partizione senza filesystem.",
+        "msg.unsupportedFs": "Filesystem non supportato.",
+        "msg.badLabel": "Etichetta non valida.",
+        "msg.labelTooLongExfat": "Etichetta troppo lunga per exFAT (max 11 caratteri).",
+        "msg.confirmMismatch": "Conferma non corrispondente.",
+        "msg.alreadyAdopted": "Disco già adottato come sorgente.",
+        "msg.unmountFirst": "Disco montato, smontalo prima.",
+        "msg.osUpdateForExfat": "Aggiornamento OS richiesto per formattare exFAT.",
+        "msg.formatInProgress": "Formattazione già in corso.",
+        "msg.noAudioCd": "Nessun CD audio nel lettore.",
+        "msg.ripInProgress": "Rip già in corso.",
+        "msg.noWritableTarget": "Nessuna destinazione scrivibile: adotta un disco interno.",
+        "msg.sambaMissing": "Samba non installato.",
+    },
+}
+DEFAULT_LANG = "it"
+
+
+def _req_lang():
+    """Language for this request: explicit ?lang= wins (the web admin and the
+    kiosk QR both pass their own), then the browser's Accept-Language, then the
+    appliance default. Mirrors how src/i18n/index.jsx picks a locale."""
+    lang = (request.args.get("lang") or "").strip().lower()[:2]
+    if lang in SOURCES_I18N:
+        return lang
+    header = request.headers.get("Accept-Language", "")
+    for part in header.split(","):
+        code = part.split(";")[0].strip().lower()[:2]
+        if code in SOURCES_I18N:
+            return code
+    return DEFAULT_LANG
+
+
+def _t(key, lang=None, **vars):
+    """Translate `key`, falling back to the default language and then to the key
+    itself, with {placeholder} interpolation."""
+    lang = lang or DEFAULT_LANG
+    table = SOURCES_I18N.get(lang) or SOURCES_I18N[DEFAULT_LANG]
+    text = table.get(key) or SOURCES_I18N[DEFAULT_LANG].get(key) or key
+    for k, v in vars.items():
+        text = text.replace("{" + k + "}", str(v))
+    return text
+
+
+def _m(key, **vars):
+    """Translate an API message in the caller's language. Safe to call from a
+    worker thread with no request context, where it falls back to the default."""
+    try:
+        lang = _req_lang()
+    except Exception:
+        lang = DEFAULT_LANG
+    return _t(key, lang, **vars)
+
+
+def _err(key, status, **vars):
+    """Standard failure body: a stable `code` for clients that translate on
+    their own, plus a `message` already in the caller's language for those
+    (the kiosk, the companion app) that render it verbatim."""
+    return jsonify({"success": False, "code": key, "message": _m(key, **vars)}), status
+
+
 @app.route("/")
 def index():
-    return Response(INDEX_HTML, mimetype="text/html")
+    lang = _req_lang()
+    # Only the page's own strings are shipped to the browser; the msg.* half of
+    # the catalog is server-side only.
+    strings = {k: v for k, v in SOURCES_I18N[lang].items() if k.startswith("sources.")}
+    html = (INDEX_HTML
+            .replace("__LANG__", lang)
+            .replace("__PAGE_TITLE__", _t("sources.title", lang))
+            .replace("__I18N__", json.dumps(strings, ensure_ascii=False)))
+    return Response(html, mimetype="text/html")
 
 
 INDEX_HTML = r"""<!DOCTYPE html>
-<html lang="it">
+<html lang="__LANG__">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Osmium Sound — Sorgenti musicali</title>
+<title>Osmium Sound — __PAGE_TITLE__</title>
 <style>
   :root { --gold:#d4af37; --bg:#0a0a0a; --surface:#161616; --border:#252525; --silver:#c0c0c0; }
   * { box-sizing:border-box; }
@@ -2201,60 +2504,81 @@ INDEX_HTML = r"""<!DOCTYPE html>
   .tag { font-size:10px; padding:2px 7px; border-radius:6px; background:rgba(212,175,55,.15); color:var(--gold); margin-left:6px; }
   .ok { color:#5fce8f; } .bad { color:#e66; }
   .msg { margin-top:10px; font-size:13px; min-height:18px; }
-  .applybar { position:fixed; left:0; right:0; bottom:0; background:#0d0d0dee; backdrop-filter:blur(8px); border-top:1px solid var(--border); padding:12px 16px; }
-  .applybar .inner { max-width:640px; margin:0 auto; display:flex; gap:10px; align-items:center; }
+  .applybar { position:fixed; left:0; right:0; bottom:0; background:#0d0d0dee; backdrop-filter:blur(8px); border-top:1px solid var(--border); padding:10px 16px 12px; }
+  .applybar .inner { max-width:640px; margin:0 auto; }
+  .applybar .hint { font-size:12px; color:var(--silver); margin:0 0 8px; }
+  .applybar .actions { display:flex; gap:10px; align-items:center; }
+  .topbar { position:sticky; top:0; z-index:50; background:#0d0d0dee; backdrop-filter:blur(8px); border-bottom:1px solid var(--border); padding:10px 16px; }
+  .topbar .inner { max-width:640px; margin:0 auto; display:flex; gap:12px; align-items:center; }
+  .topbar a { color:var(--gold); text-decoration:none; font-size:14px; font-weight:600; }
+  .topbar .ttl { font-size:14px; color:var(--silver); }
 </style>
 </head>
 <body>
+<!-- Shown only when there is somewhere to go back TO: a ?back= target passed by
+     the embedder, or ordinary browser history (a phone that scanned the setup
+     wizard's QR lands here with neither, and gets no dead-end button). -->
+<div class="topbar" id="topbar" style="display:none"><div class="inner">
+  <a href="#" id="backLink" onclick="goBack();return false">← <span data-i18n="sources.back"></span></a>
+  <span class="ttl" data-i18n="sources.title"></span>
+</div></div>
+
 <div class="wrap">
-  <h1><span class="dot"></span> Sorgenti musicali</h1>
-  <p style="color:var(--silver);font-size:14px">Aggiungi le cartelle che contengono la tua musica. Al termine premi <b>Applica</b> per aggiornare la libreria.</p>
+  <h1><span class="dot"></span> <span data-i18n="sources.title"></span></h1>
+  <p style="color:var(--silver);font-size:14px" data-i18n="sources.intro"></p>
 
-  <h2>Sorgenti attive</h2>
-  <div class="card" id="list"><div style="color:var(--silver);font-size:14px">Caricamento…</div></div>
+  <h2 data-i18n="sources.active"></h2>
+  <div class="card" id="list"><div style="color:var(--silver);font-size:14px" data-i18n="sources.loading"></div></div>
 
-  <h2>Dischi USB</h2>
-  <div class="card" id="usbList"><div style="color:var(--silver);font-size:14px">Nessun disco USB collegato. Inserisci una chiavetta o un hard disk USB.</div></div>
+  <h2 data-i18n="sources.usbTitle"></h2>
+  <div class="card" id="usbList"><div style="color:var(--silver);font-size:14px" data-i18n="sources.usbNone"></div></div>
 
-  <h2>Dischi interni</h2>
-  <div class="card" id="internalList"><div style="color:var(--silver);font-size:14px">Caricamento…</div></div>
+  <h2 data-i18n="sources.internal.title"></h2>
+  <div class="card" id="internalList"><div style="color:var(--silver);font-size:14px" data-i18n="sources.loading"></div></div>
   <div class="msg" id="internalMsg"></div>
 
-  <h2>Aggiungi cartella locale</h2>
+  <h2 data-i18n="sources.addLocal"></h2>
   <div class="card">
-    <label>Percorso sul dispositivo</label>
-    <input id="localPath" placeholder="/media/musica">
+    <label data-i18n="sources.localPath"></label>
+    <input id="localPath" data-i18n-ph="sources.localPathPlaceholder">
     <div style="height:10px"></div>
-    <button class="ghost" onclick="addLocal()">Aggiungi cartella locale</button>
+    <button class="ghost" onclick="addLocal()" data-i18n="sources.addLocal"></button>
     <div class="msg" id="localMsg"></div>
   </div>
 
-  <h2>Aggiungi cartella di rete (SMB)</h2>
+  <h2 data-i18n="sources.addSmb"></h2>
   <div class="card">
-    <div class="row"><div style="flex:1"><label>Server / IP</label><input id="smbServer" placeholder="192.168.0.20"></div>
-    <div style="flex:1"><label>Condivisione</label><input id="smbShare" placeholder="Musica"></div></div>
-    <div class="row"><div style="flex:1"><label>Utente (vuoto = ospite)</label><input id="smbUser" placeholder="utente"></div>
-    <div style="flex:1"><label>Password</label><input id="smbPass" type="password" placeholder="••••••"></div></div>
+    <div class="row"><div style="flex:1"><label data-i18n="sources.server"></label><input id="smbServer" placeholder="192.168.0.20"></div>
+    <div style="flex:1"><label data-i18n="sources.share"></label><input id="smbShare" data-i18n-ph="sources.sharePlaceholder"></div></div>
+    <div class="row"><div style="flex:1"><label data-i18n="sources.user"></label><input id="smbUser" data-i18n-ph="sources.userPlaceholder"></div>
+    <div style="flex:1"><label data-i18n="sources.pass"></label><input id="smbPass" type="password" placeholder="••••••"></div></div>
     <div style="height:12px"></div>
-    <button class="ghost" onclick="addSmb()">Monta e aggiungi</button>
+    <button class="ghost" onclick="addSmb()" data-i18n="sources.mountAndAdd"></button>
     <div class="msg" id="smbMsg"></div>
   </div>
 
-  <h2>Backup e ripristino</h2>
+  <h2 data-i18n="sources.backupTitle"></h2>
   <div class="card">
-    <p style="color:var(--silver);font-size:13px;margin:0 0 10px">Esporta la configurazione del dispositivo (DAC, DSP/EQ, sorgenti, puntatore, canale aggiornamenti) in un file, o ripristinala da un backup precedente.</p>
+    <p style="color:var(--silver);font-size:13px;margin:0 0 10px" data-i18n="sources.backupHint"></p>
     <div class="row">
-      <a id="backupLink" class="ghost" style="text-decoration:none;display:inline-block;text-align:center;flex:1" href="/api/backup">⬇ Scarica backup</a>
-      <label class="ghost" style="text-align:center;flex:1;cursor:pointer" for="restoreFile">⬆ Ripristina da file</label>
+      <a id="backupLink" class="ghost" style="text-decoration:none;display:inline-block;text-align:center;flex:1" href="/api/backup" data-i18n="sources.backupDownload"></a>
+      <label class="ghost" style="text-align:center;flex:1;cursor:pointer" for="restoreFile" data-i18n="sources.backupRestore"></label>
     </div>
     <input type="file" id="restoreFile" accept=".gz,.tar.gz,application/gzip" style="display:none" onchange="doRestore(this)">
     <div class="msg" id="restoreMsg"></div>
   </div>
 </div>
 
+<!-- The gold button is an ACTION, not a counter: the caption says what it does,
+     and when there is a way back a second button makes the bar read as a pair
+     of choices rather than a status readout. -->
 <div class="applybar"><div class="inner">
-  <button class="primary" style="flex:1" onclick="apply()">Applica e scansiona libreria</button>
-  <span class="msg" id="applyMsg" style="margin:0"></span>
+  <p class="hint" data-i18n="sources.applyHint"></p>
+  <div class="actions">
+    <button class="primary" style="flex:1" onclick="apply()" data-i18n="sources.apply"></button>
+    <button class="ghost" id="doneBtn" style="display:none" onclick="goBack()" data-i18n="sources.done"></button>
+    <span class="msg" id="applyMsg" style="margin:0"></span>
+  </div>
 </div></div>
 
 <script>
@@ -2264,13 +2588,51 @@ INDEX_HTML = r"""<!DOCTYPE html>
 // to every call this page makes so /api/* routes that now require pairing
 // (see _require_pair_token()) keep working from a plain phone/PC browser,
 // not just from the Electron kiosk (which is exempt via 127.0.0.1).
-const PAIR_TOKEN = new URLSearchParams(location.search).get('token') || '';
+const QS = new URLSearchParams(location.search);
+const PAIR_TOKEN = QS.get('token') || '';
+const LANG = document.documentElement.lang || 'it';
+
+// ── i18n ────────────────────────────────────────────────────────────
+// Strings for the selected language are injected server-side (see _req_lang);
+// T() mirrors the {placeholder} interpolation of src/i18n/index.jsx.
+const I18N = __I18N__;
+function T(key, vars){
+  let s = I18N[key] != null ? I18N[key] : key;
+  if (vars) for (const k in vars) s = s.split('{'+k+'}').join(vars[k]);
+  return s;
+}
+function applyI18n(root){
+  (root||document).querySelectorAll('[data-i18n]').forEach(el=>{
+    el.textContent = T(el.getAttribute('data-i18n'));
+  });
+  (root||document).querySelectorAll('[data-i18n-ph]').forEach(el=>{
+    el.setAttribute('placeholder', T(el.getAttribute('data-i18n-ph')));
+  });
+}
+applyI18n();
+
+// ── navigation back to whatever embedded/linked us ──────────────────
+const BACK_TO = QS.get('back') || '';
+function goBack(){
+  if (BACK_TO) { location.href = BACK_TO; return; }
+  if (history.length > 1) { history.back(); return; }
+  location.href = '/';
+}
+if (BACK_TO || history.length > 1) {
+  document.getElementById('topbar').style.display = '';
+  document.getElementById('doneBtn').style.display = '';
+  if (BACK_TO) document.getElementById('backLink').href = BACK_TO;
+}
+
 async function j(url, opts){
   opts = opts || {};
   if (PAIR_TOKEN) {
     opts.headers = Object.assign({}, opts.headers, {'Authorization': 'Bearer ' + PAIR_TOKEN});
   }
-  const r=await fetch(url,opts); return r.json();
+  // Backend messages are translated per request, so every call carries the
+  // language this page is rendered in.
+  const sep = url.indexOf('?') >= 0 ? '&' : '?';
+  const r=await fetch(url + sep + 'lang=' + encodeURIComponent(LANG), opts); return r.json();
 }
 function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 if (PAIR_TOKEN) {
@@ -2279,34 +2641,36 @@ if (PAIR_TOKEN) {
 async function load(){
   const d=await j('/api/sources');
   const el=document.getElementById('list');
-  if(!d.sources.length){ el.innerHTML='<div style="color:var(--silver);font-size:14px">Nessuna sorgente. Aggiungine una qui sotto.</div>'; return; }
+  if(!d.sources.length){ el.innerHTML=`<div style="color:var(--silver);font-size:14px">${esc(T('sources.none'))}</div>`; return; }
   el.innerHTML=d.sources.map(s=>{
             const isSmb=s.type==='smb';
     const isInternal=s.type==='internal';
-    const status=isSmb?(s.mounted?'<span class="ok">montato</span>':'<span class="bad">non montato</span>')
-                      :isInternal?(s.mounted?'<span class="ok">montato</span>':'<span class="bad">non montato</span>')
-                      :(s.exists?'<span class="ok">ok</span>':'<span class="bad">mancante</span>');
+    const mountState=s.mounted?`<span class="ok">${esc(T('sources.mountedShort'))}</span>`
+                              :`<span class="bad">${esc(T('sources.notMounted'))}</span>`;
+    const status=(isSmb||isInternal)?mountState
+                      :(s.exists?`<span class="ok">${esc(T('sources.ok'))}</span>`
+                                :`<span class="bad">${esc(T('sources.missing'))}</span>`);
     const sub=isSmb?('//'+esc(s.server)+'/'+esc(s.share)+' → '+esc(s.mountpoint))
               :isInternal?(esc(s.mountpoint||s.path||''))
               :esc(s.path);
-    const tag=isSmb?'SMB':isInternal?'INTERNO':'LOCALE';
-    return `<div class="src"><div class="meta"><div class="name">${esc(s.name)}<span class="tag">${tag}</span></div>
+    const tag=isSmb?T('sources.smbTag'):isInternal?T('sources.internal.tag'):T('sources.local');
+    return `<div class="src"><div class="meta"><div class="name">${esc(s.name)}<span class="tag">${esc(tag)}</span></div>
       <div class="sub">${sub} · ${status}</div></div>
-      <button class="danger" onclick="rm('${s.id}')">Rimuovi</button></div>`;
+      <button class="danger" onclick="rm('${s.id}')">${esc(T('sources.remove'))}</button></div>`;
   }).join('');
 }
 async function addLocal(){
   const path=document.getElementById('localPath').value.trim();
   const m=document.getElementById('localMsg'); m.textContent='…';
   const r=await j('/api/sources/local',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({path})});
-  m.textContent=r.success?'Aggiunta ✓':(r.message||'Errore'); m.className='msg '+(r.success?'ok':'bad');
+  m.textContent=r.success?T('sources.added'):(r.message||T('sources.error')); m.className='msg '+(r.success?'ok':'bad');
   if(r.success){document.getElementById('localPath').value='';load();}
 }
 async function addSmb(){
   const body={server:smbServer.value,share:smbShare.value,username:smbUser.value,password:smbPass.value};
-  const m=document.getElementById('smbMsg'); m.textContent='Montaggio…';
+  const m=document.getElementById('smbMsg'); m.textContent=T('sources.mounting');
   const r=await j('/api/sources/smb',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
-  m.textContent=r.success?('Montata ✓ '+(r.message||'')):(r.message||'Errore'); m.className='msg '+(r.success?'ok':'bad');
+  m.textContent=r.success?(T('sources.mounted')+' '+(r.message||'')):(r.message||T('sources.error')); m.className='msg '+(r.success?'ok':'bad');
   if(r.success){smbPass.value='';load();}
 }
 async function rm(id){ await j('/api/sources/'+id,{method:'DELETE'}); load(); }
@@ -2314,18 +2678,18 @@ async function rm(id){ await j('/api/sources/'+id,{method:'DELETE'}); load(); }
 // ── Backup / restore ───────────────────────────────────────────────
 async function doRestore(input){
   const file=input.files && input.files[0]; if(!file) return;
-  const m=document.getElementById('restoreMsg'); m.textContent='Ripristino…'; m.className='msg';
+  const m=document.getElementById('restoreMsg'); m.textContent=T('sources.restoring'); m.className='msg';
   const body=new FormData(); body.append('file', file);
   try{
     const d=await j('/api/restore',{method:'POST',body});
-    m.textContent=d.message||(d.success?'Fatto':'Errore'); m.className='msg '+(d.success?'ok':'bad');
-  }catch(e){ m.textContent='Errore di rete'; m.className='msg bad'; }
+    m.textContent=d.message||(d.success?T('sources.applied'):T('sources.error')); m.className='msg '+(d.success?'ok':'bad');
+  }catch(e){ m.textContent=T('sources.networkError'); m.className='msg bad'; }
   input.value='';
 }
 async function apply(){
-  const m=document.getElementById('applyMsg'); m.textContent='Applico…'; m.className='msg';
+  const m=document.getElementById('applyMsg'); m.textContent=T('sources.applying'); m.className='msg';
   const r=await j('/api/apply',{method:'POST'});
-  m.textContent=r.message||(r.success?'Fatto':'Errore'); m.className='msg '+(r.success?'ok':'bad');
+  m.textContent=r.message||(r.success?T('sources.applied'):T('sources.error')); m.className='msg '+(r.success?'ok':'bad');
 }
 
 // ── USB disks ───────────────────────────────────────────────────────
@@ -2336,17 +2700,17 @@ async function loadUsb(){
   let d; try{ d=await j('/api/usb'); }catch(e){ return; }
   const el=document.getElementById('usbList'); usbPaths=[];
   if(!d.disks || !d.disks.length){
-    el.innerHTML='<div style="color:var(--silver);font-size:14px">Nessun disco USB collegato. Inserisci una chiavetta o un hard disk USB.</div>';
+    el.innerHTML=`<div style="color:var(--silver);font-size:14px">${esc(T('sources.usbNone'))}</div>`;
     return;
   }
   el.innerHTML=d.disks.map(dk=>{
     const di=usbPaths.push(dk.mountpoint)-1;
     const tag=`USB${dk.fstype?(' '+esc(dk.fstype)):''}${dk.size?(' · '+esc(dk.size)):''}`;
     const head=`<div class="name">${esc(dk.label)||'USB'}<span class="tag">${tag}</span></div><div class="sub">${esc(dk.mountpoint)}</div>`;
-    const all=`<button class="ghost" onclick="addUsb(${di})">Aggiungi tutto il disco</button>`;
+    const all=`<button class="ghost" onclick="addUsb(${di})">${esc(T('sources.usbAddWhole'))}</button>`;
     const fold=(dk.folders||[]).map(f=>{
       const i=usbPaths.push(f.path)-1;
-      return `<div class="src"><div class="meta"><div class="sub">📁 ${esc(f.name)}</div></div><button class="ghost" onclick="addUsb(${i})">Aggiungi</button></div>`;
+      return `<div class="src"><div class="meta"><div class="sub">📁 ${esc(f.name)}</div></div><button class="ghost" onclick="addUsb(${i})">${esc(T('sources.add'))}</button></div>`;
     }).join('');
     return `<div style="margin-bottom:14px">${head}<div style="height:8px"></div>${all}${fold?('<div style="height:8px"></div>'+fold):''}</div>`;
   }).join('');
@@ -2354,7 +2718,7 @@ async function loadUsb(){
 async function addUsb(i){
   const path=usbPaths[i]; if(!path) return;
   const r=await j('/api/sources/local',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({path})});
-  if(r.success){ load(); } else { alert(r.message||'Errore'); }
+  if(r.success){ load(); } else { alert(r.message||T('sources.error')); }
 }
 
 // ── Internal disks (adopt existing filesystem / format) ─────────────
@@ -2370,43 +2734,43 @@ async function loadInternal(){
   let d; try{ d=await j('/api/internal/disks'); }catch(e){ return; }
   internalDisks=d.disks||[];
   const el=document.getElementById('internalList');
-  if(!internalDisks.length){ el.innerHTML='<div style="color:var(--silver);font-size:14px">Nessun disco interno aggiuntivo rilevato.</div>'; return; }
+  if(!internalDisks.length){ el.innerHTML=`<div style="color:var(--silver);font-size:14px">${esc(T('sources.internal.none'))}</div>`; return; }
   el.innerHTML=internalDisks.map((dk,di)=>{
     const fsParts=(dk.partitions||[]).filter(p=>p.fstype);
-    const badges=`${esc(fmtSize(dk.size))}`+(dk.adopted?' · <span style="color:#5fce8f">adottato</span>':(dk.has_data?' · dati presenti':''));
+    const badges=`${esc(fmtSize(dk.size))}`+(dk.adopted?` · <span style="color:#5fce8f">${esc(T('sources.internal.adoptedBadge'))}</span>`:(dk.has_data?(' · '+esc(T('sources.internal.hasData'))):''));
     const sub=`${esc(dk.path)}${dk.fstype?(' · '+esc(dk.fstype)):''}${dk.label?(' · '+esc(dk.label)):''}`;
     const head=`<div class="name">${esc(dk.model||dk.path)}<span class="tag">${badges}</span></div><div class="sub">${sub}</div>`;
     let actions;
     if(dk.adopted){
-      actions=`<button class="danger" onclick="removeInternal('${esc(dk.source_id||'')}')">Rimuovi</button>`;
+      actions=`<button class="danger" onclick="removeInternal('${esc(dk.source_id||'')}')">${esc(T('sources.internal.remove'))}</button>`;
     } else {
-      const adoptBtn=fsParts.length===1?`<button class="ghost" onclick="adoptInternal(${di},'${esc(fsParts[0].path)}')">Usa come sorgente</button>`:'';
-      actions=`${adoptBtn}<button class="danger" onclick="openFormatWizard(${di})">Formatta…</button>`;
+      const adoptBtn=fsParts.length===1?`<button class="ghost" onclick="adoptInternal(${di},'${esc(fsParts[0].path)}')">${esc(T('sources.internal.adopt'))}</button>`:'';
+      actions=`${adoptBtn}<button class="danger" onclick="openFormatWizard(${di})">${esc(T('sources.internal.format'))}</button>`;
     }
     const multi=(!dk.adopted && fsParts.length>1)?('<div style="height:8px"></div>'+fsParts.map(p=>
-      `<div class="src"><div class="meta"><div class="sub">${esc(p.path)} · ${esc(p.fstype)}${p.label?(' · '+esc(p.label)):''}</div></div><button class="ghost" onclick="adoptInternal(-1,'${esc(p.path)}')">Usa</button></div>`
+      `<div class="src"><div class="meta"><div class="sub">${esc(p.path)} · ${esc(p.fstype)}${p.label?(' · '+esc(p.label)):''}</div></div><button class="ghost" onclick="adoptInternal(-1,'${esc(p.path)}')">${esc(T('sources.internal.use'))}</button></div>`
     ).join(''))+'':'';
     return `<div style="margin-bottom:14px"><div class="row">${head}<div style="display:flex;gap:8px;flex-shrink:0">${actions}</div></div>${multi}</div>`;
   }).join('');
 }
 async function adoptInternal(_di,device){
-  internalMsg('Montaggio…');
+  internalMsg(T('sources.internal.adopting'));
   const r=await j('/api/internal/adopt',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({device})});
-  internalMsg(r.success?'Sorgente aggiunta ✓':(r.message||'Errore'), r.success?'ok':'bad');
+  internalMsg(r.success?T('sources.internal.adopted'):(r.message||T('sources.error')), r.success?'ok':'bad');
   if(r.success){ loadInternal(); load(); }
 }
 async function removeInternal(sourceId){
   if(!sourceId) return;
   await j('/api/sources/'+sourceId,{method:'DELETE'});
-  internalMsg('Rimossa ✓','ok');
+  internalMsg(T('sources.internal.removed'),'ok');
   loadInternal(); load();
 }
 
 // Format wizard state (single instance — one disk formatted at a time).
-let fmtDisk=null, fmtStep='choose', fmtFs='ext4', fmtLabel='Musica', fmtPollTimer=null;
+let fmtDisk=null, fmtStep='choose', fmtFs='ext4', fmtLabel=T('sources.internal.defaultLabel'), fmtPollTimer=null;
 function openFormatWizard(di){
   fmtDisk=internalDisks[di]; if(!fmtDisk) return;
-  fmtStep='choose'; fmtFs='ext4'; fmtLabel='Musica'; window.fmtTypedVal='';
+  fmtStep='choose'; fmtFs='ext4'; fmtLabel=T('sources.internal.defaultLabel'); window.fmtTypedVal='';
   renderFormatWizard();
 }
 function closeFormatWizard(){
@@ -2422,49 +2786,49 @@ function renderFormatWizard(){
   ov.style.cssText='position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.8);display:flex;align-items:center;justify-content:center;padding:20px';
   let inner='';
   if(fmtStep==='choose'){
-    inner=`<h3 style="margin:0 0 4px">Formatta disco</h3>
+    inner=`<h3 style="margin:0 0 4px">${esc(T('sources.internal.wizardTitle'))}</h3>
       <p style="color:var(--silver);font-size:13px;margin:0 0 16px">${esc(fmtDisk.model||fmtDisk.path)} · ${esc(fmtSize(fmtDisk.size))}</p>
-      <label>Filesystem</label>
+      <label>${esc(T('sources.internal.fsLabel'))}</label>
       <div class="row" style="gap:10px;margin-bottom:10px">
-        <button class="${fmtFs==='ext4'?'primary':'ghost'}" style="flex:1" onclick="fmtFs='ext4';renderFormatWizard()">ext4 (consigliato)</button>
-        <button class="${fmtFs==='exfat'?'primary':'ghost'}" style="flex:1" onclick="fmtFs='exfat';renderFormatWizard()">exFAT</button>
+        <button class="${fmtFs==='ext4'?'primary':'ghost'}" style="flex:1" onclick="fmtFs='ext4';renderFormatWizard()">${esc(T('sources.internal.fsExt4'))}</button>
+        <button class="${fmtFs==='exfat'?'primary':'ghost'}" style="flex:1" onclick="fmtFs='exfat';renderFormatWizard()">${esc(T('sources.internal.fsExfat'))}</button>
       </div>
-      <label>Etichetta disco</label>
+      <label>${esc(T('sources.internal.labelField'))}</label>
       <input id="fmtLabelInput" value="${esc(fmtLabel)}" maxlength="${fmtFs==='exfat'?11:16}" oninput="fmtLabel=this.value">
       <div style="height:16px"></div>
       <div class="row" style="gap:10px">
-        <button class="ghost" style="flex:1" onclick="closeFormatWizard()">Annulla</button>
-        <button class="primary" style="flex:1" onclick="window.fmtTypedVal='';fmtStep='confirm';renderFormatWizard()">Avanti</button>
+        <button class="ghost" style="flex:1" onclick="closeFormatWizard()">${esc(T('sources.internal.cancel'))}</button>
+        <button class="primary" style="flex:1" onclick="window.fmtTypedVal='';fmtStep='confirm';renderFormatWizard()">${esc(T('sources.internal.next'))}</button>
       </div>`;
   } else if(fmtStep==='confirm'){
-    inner=`<h3 style="margin:0 0 4px;color:#e66">⚠ Questa operazione cancella tutti i dati</h3>
-      <p style="color:var(--silver);font-size:13px;margin:0 0 16px">Tutti i dati su ${esc(fmtDisk.model||fmtDisk.path)} (${esc(fmtSize(fmtDisk.size))}, ${esc(fmtDisk.path)}) verranno cancellati in modo permanente. L'operazione non può essere annullata.</p>
-      <label>Digita "${esc(fmtLabel.trim())}" per confermare</label>
+    inner=`<h3 style="margin:0 0 4px;color:#e66">⚠ ${esc(T('sources.internal.warnTitle'))}</h3>
+      <p style="color:var(--silver);font-size:13px;margin:0 0 16px">${esc(T('sources.internal.warnBody',{model:(fmtDisk.model||fmtDisk.path),size:fmtSize(fmtDisk.size),path:fmtDisk.path}))}</p>
+      <label>${esc(T('sources.internal.typeToConfirm',{label:fmtLabel.trim()}))}</label>
       <input id="fmtTypedInput" oninput="window.fmtTypedVal=this.value;document.getElementById('fmtConfirmBtn').disabled=(this.value.trim()!==fmtLabel.trim())">
       <div style="height:16px"></div>
       <div class="row" style="gap:10px">
-        <button class="ghost" style="flex:1" onclick="fmtStep='choose';renderFormatWizard()">Indietro</button>
-        <button id="fmtConfirmBtn" class="danger" style="flex:1;border-color:#e66" ${(!window.fmtTypedVal||window.fmtTypedVal.trim()!==fmtLabel.trim())?'disabled':''} onclick="startFormat()">Formatta ora</button>
+        <button class="ghost" style="flex:1" onclick="fmtStep='choose';renderFormatWizard()">${esc(T('sources.internal.backStep'))}</button>
+        <button id="fmtConfirmBtn" class="danger" style="flex:1;border-color:#e66" ${(!window.fmtTypedVal||window.fmtTypedVal.trim()!==fmtLabel.trim())?'disabled':''} onclick="startFormat()">${esc(T('sources.internal.formatNow'))}</button>
       </div>`;
   } else if(fmtStep==='progress'){
     inner=`<div style="text-align:center;padding:10px 0">
-      <p id="fmtProgressMsg" style="color:#fff">Preparazione disco…</p>
+      <p id="fmtProgressMsg" style="color:#fff">${esc(T('sources.internal.phasePreparing'))}</p>
       <div style="width:100%;height:8px;background:var(--bg);border-radius:99px;overflow:hidden;margin:14px 0">
         <div id="fmtProgressBar" style="height:100%;width:0%;background:var(--gold);transition:width .4s"></div>
       </div>
-      <p style="color:var(--silver);font-size:12px">Tieni acceso l'apparecchio finché l'operazione non termina.</p>
+      <p style="color:var(--silver);font-size:12px">${esc(T('sources.internal.keepPowered'))}</p>
     </div>`;
   } else if(fmtStep==='done'){
     inner=`<div style="text-align:center;padding:10px 0">
-      <p style="color:#5fce8f;font-size:18px;margin:0 0 8px">✓ Disco formattato e aggiunto come sorgente</p>
-      <p style="color:var(--silver);font-size:13px;margin:0 0 16px">Copia la musica nella condivisione di rete qui sotto, poi applica e riscansiona la libreria.</p>
-      <button class="primary" style="width:100%" onclick="closeFormatWizard();loadInternal();load();loadSmbCard();">Chiudi</button>
+      <p style="color:#5fce8f;font-size:18px;margin:0 0 8px">${esc(T('sources.internal.doneAdopted'))}</p>
+      <p style="color:var(--silver);font-size:13px;margin:0 0 16px">${esc(T('sources.internal.doneHint'))}</p>
+      <button class="primary" style="width:100%" onclick="closeFormatWizard();loadInternal();load();loadSmbCard();">${esc(T('sources.internal.close'))}</button>
     </div>`;
   } else if(fmtStep==='error'){
     inner=`<div style="text-align:center;padding:10px 0">
-      <p style="color:#e66;font-size:16px;margin:0 0 8px">Errore</p>
+      <p style="color:#e66;font-size:16px;margin:0 0 8px">${esc(T('sources.internal.errorTitle'))}</p>
       <p style="color:var(--silver);font-size:13px;margin:0 0 16px">${esc(window.fmtErrorMsg||'')}</p>
-      <button class="ghost" style="width:100%" onclick="closeFormatWizard()">Chiudi</button>
+      <button class="ghost" style="width:100%" onclick="closeFormatWizard()">${esc(T('sources.internal.close'))}</button>
     </div>`;
   }
   ov.innerHTML=`<div class="card" style="max-width:420px;width:100%;margin:0">${inner}</div>`;
@@ -2477,15 +2841,15 @@ async function startFormat(){
     const r=await j('/api/internal/format',{method:'POST',headers:{'Content-Type':'application/json'},
       body:JSON.stringify({device:fmtDisk.path, fs:fmtFs, label:fmtLabel, confirm:fmtDisk.confirm})});
     d=r;
-  }catch(e){ window.fmtErrorMsg='Errore di rete'; fmtStep='error'; renderFormatWizard(); return; }
-  if(d && d.success===false){ window.fmtErrorMsg=d.message||'Errore'; fmtStep='error'; renderFormatWizard(); return; }
+  }catch(e){ window.fmtErrorMsg=T('sources.networkError'); fmtStep='error'; renderFormatWizard(); return; }
+  if(d && d.success===false){ window.fmtErrorMsg=d.message||T('sources.error'); fmtStep='error'; renderFormatWizard(); return; }
   fmtPollTimer=setInterval(async()=>{
     let s; try{ s=await j('/api/internal/format/status'); }catch(e){ return; }
     const pct=Math.max(0,Math.min(100,Math.round(s.progress||0)));
     const bar=document.getElementById('fmtProgressBar'); if(bar) bar.style.width=pct+'%';
-    const msg=document.getElementById('fmtProgressMsg'); if(msg) msg.textContent=s.message||'In corso…';
+    const msg=document.getElementById('fmtProgressMsg'); if(msg) msg.textContent=s.message||T('sources.internal.inProgress');
     if(s.state==='done'){ clearInterval(fmtPollTimer); fmtPollTimer=null; fmtStep='done'; renderFormatWizard(); }
-    else if(s.state==='error'){ clearInterval(fmtPollTimer); fmtPollTimer=null; window.fmtErrorMsg=s.message||'Errore'; fmtStep='error'; renderFormatWizard(); }
+    else if(s.state==='error'){ clearInterval(fmtPollTimer); fmtPollTimer=null; window.fmtErrorMsg=s.message||T('sources.error'); fmtStep='error'; renderFormatWizard(); }
   },2000);
 }
 
@@ -2498,19 +2862,19 @@ async function loadSmbCard(){
   const wrap=document.createElement('div');
   wrap.id='smbCardWrap';
   if(!d.installed){
-    wrap.innerHTML='<div class="card" style="border-color:#a86;color:#dba"><p style="margin:0;font-size:13px">È necessario un aggiornamento di sistema per abilitare la condivisione di rete (Samba) dei dischi interni.</p></div>';
+    wrap.innerHTML=`<div class="card" style="border-color:#a86;color:#dba"><p style="margin:0;font-size:13px">${esc(T('sources.internal.needOsUpdate'))}</p></div>`;
   } else {
     const rows=d.shares.map(s=>`<div style="font-size:13px;color:var(--silver)">\\\\${esc(d.ip||d.host)}\\${esc(s.name)}</div>`).join('');
     wrap.innerHTML=`<div class="card">
-      <div style="font-weight:600;margin-bottom:6px">Condivisione di rete</div>
-      <p style="color:var(--silver);font-size:13px;margin:0 0 10px">Copia la musica da un PC collegandoti a questo percorso con le credenziali qui sotto.</p>
+      <div style="font-weight:600;margin-bottom:6px">${esc(T('sources.internal.smbTitle'))}</div>
+      <p style="color:var(--silver);font-size:13px;margin:0 0 10px">${esc(T('sources.internal.smbHelp'))}</p>
       ${rows}
       <div class="row" style="margin-top:10px">
-        <div><div style="font-size:11px;color:var(--silver)">Utente</div><div>${esc(d.username)}</div></div>
-        <div><div style="font-size:11px;color:var(--silver)">Password</div><div>${esc(d.password)}</div></div>
+        <div><div style="font-size:11px;color:var(--silver)">${esc(T('sources.internal.smbUser'))}</div><div>${esc(d.username)}</div></div>
+        <div><div style="font-size:11px;color:var(--silver)">${esc(T('sources.internal.smbPass'))}</div><div>${esc(d.password)}</div></div>
       </div>
       <div style="height:10px"></div>
-      <button class="ghost" onclick="regenSmb()">Rigenera password</button>
+      <button class="ghost" onclick="regenSmb()">${esc(T('sources.internal.smbRegenerate'))}</button>
     </div>`;
   }
   document.getElementById('internalList').insertAdjacentElement('afterend', wrap);

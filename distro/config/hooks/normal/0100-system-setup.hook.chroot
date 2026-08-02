@@ -6,14 +6,22 @@ echo "I: [hifi] creating kiosk user 'hifi'"
 # Groups required for LightDM passwordless autologin on Debian
 groupadd -f autologin
 groupadd -f nopasswdlogin
-# NOTE: 'hifi' is deliberately NOT in the 'sudo' group. The appliance only needs
-# the few specific commands whitelisted in /etc/sudoers.d/hifi (reboot/shutdown,
-# apt, network). Full 'sudo' membership would turn the well-known default
-# password (hifi) into trivial full-root — keep the kiosk account least-privilege.
+# NOTE: 'hifi' is deliberately NOT in the 'sudo' group, and ships with NO
+# password at all. Nothing on this image authenticates it by password: LightDM
+# autologins via the autologin/nopasswdlogin groups, and the appliance's own
+# privileged calls go through the specific NOPASSWD commands whitelisted in
+# /etc/sudoers.d/hifi. The image therefore carries no known credential — the
+# SSH/console login is created from the admin account in the provisioning
+# wizard (api_server.py set_shell_account), which gives it real sudo.
+# This also covers the installed system: the preseed clones the live filesystem
+# (live-installer/enable), so this shadow entry is what lands on disk.
 if ! id hifi >/dev/null 2>&1; then
     useradd -m -G audio,video,plugdev,netdev,autologin,nopasswdlogin -s /bin/bash hifi
-    echo "hifi:hifi" | chpasswd
 fi
+# '*' means "no valid hash", unlike `passwd -l`, which only prefixes '!' to an
+# existing (guessable) one. Applied unconditionally so a rebuild over an older
+# chroot cache can't leave the historical hifi:hifi default in place.
+usermod -p '*' hifi
 # Ensure autologin groups even if the user already existed, and make sure the
 # account is not left in 'sudo' from an earlier build.
 usermod -aG autologin,nopasswdlogin hifi || true

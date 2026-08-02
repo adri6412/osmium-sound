@@ -97,14 +97,23 @@ OS_STATUS_FILE = '/run/hifi-os-status.json'
 OS_PREFIX = 'hifi-os-'
 
 # ──────────────────────────────────────────────────────────────────
-#  OTA update of Lyrion Music Server (stable .deb from the community
-#  downloads server). We parse the downloads page for the latest
-#  stable release and install it as root.
+#  Install/update of Lyrion Music Server (.deb from the community
+#  downloads server). The page publishes three streams and we let the
+#  owner pick: the release, the bugfix nightly for that release, and
+#  the development branch. Managed from Settings → Lyrion Music Server
+#  (NOT from the appliance's own update page — this is third-party
+#  software with its own release cadence).
+#
+#  downloads.lms-community.org/ now 301s here; the .deb files still
+#  live on the old host, which is what the parser matches.
 # ──────────────────────────────────────────────────────────────────
-LYRION_DOWNLOADS_PAGE = os.environ.get('HIFI_LYRION_PAGE', 'https://downloads.lms-community.org/')
+LYRION_DOWNLOADS_PAGE = os.environ.get('HIFI_LYRION_PAGE', 'https://lyrion.org/downloads')
 LYRION_PKG = 'lyrionmusicserver'
 LYRION_SCRIPT = '/usr/local/sbin/hifi-lyrion-update.sh'
 LYRION_STATUS_FILE = '/run/hifi-lyrion-status.json'
+LYRION_CHANNEL_FILE = '/etc/hifi-player/lyrion-channel'
+LYRION_CHANNELS = ('release', 'nightly', 'dev')
+LYRION_DEFAULT_CHANNEL = 'release'
 
 # Mitigation for a kernel panic seen in the DesignWare DMA driver
 # (dw_dmac_core: dw_shutdown -> do_dw_dma_disable) during device_shutdown()
@@ -778,7 +787,7 @@ def get_ssh_status():
     except Exception:
         log.exception("get_ssh_status failed")
         return {'available': False, 'enabled': False, 'active': False,
-                'error': 'Stato SSH non disponibile'}
+                'code': 'ssh.statusUnavailable', 'error': 'SSH status unavailable.'}
 
 def set_ssh(enable):
     """Enable+start or disable+stop the SSH server (persists across reboots).
@@ -787,7 +796,8 @@ def set_ssh(enable):
     if enable and not _ssh_available():
         if not _install_openssh():
             return {'success': False, 'available': False, 'enabled': False,
-                    'active': False, 'message': 'Installazione di openssh-server fallita'}
+                    'active': False, 'code': 'ssh.installFailed',
+                    'message': 'Could not install openssh-server.'}
     if enable:
         # Written before the unit (re)starts, so root-login is blocked from
         # sshd's very first start.
@@ -801,11 +811,13 @@ def set_ssh(enable):
             log.error("set_ssh %s failed: %s", action, (r.stderr or '').strip())
             status = get_ssh_status()
             status['success'] = False
-            status['message'] = 'Operazione SSH fallita'
+            status['code'] = 'ssh.toggleFailed'
+            status['message'] = 'The SSH operation failed.'
             return status
     except Exception:
         log.exception("set_ssh failed")
-        return {'success': False, 'message': 'Operazione SSH fallita'}
+        return {'success': False, 'code': 'ssh.toggleFailed',
+                'message': 'The SSH operation failed.'}
     if enable:
         # If sshd was already active (e.g. re-toggling on without an
         # intervening stop), `enable --now` above doesn't restart it — reload
@@ -818,9 +830,171 @@ def set_ssh(enable):
             log.exception("sshd reload after hardening failed")
     status = get_ssh_status()
     status['success'] = True
-    status['message'] = ("SSH abilitato. Cambia subito la password predefinita dell'utente \"hifi\" "
-                          "(via terminale: passwd hifi)." if enable else 'SSH disabilitato')
+    # The UI translates by `code`; `message` is an English fallback for older
+    # clients (it used to be Italian, which leaked into the English kiosk).
+    status['code'] = 'ssh.enabled' if enable else 'ssh.disabled'
+    status['message'] = 'SSH enabled.' if enable else 'SSH disabled.'
+    # Tell the caller whether a login even exists, so the panel can prompt for
+    # one instead of repeating the old "change the default hifi password" advice.
+    status['account'] = get_shell_account()
     return status
+
+# ──────────────────────────────────────────────────────────────────
+#  Shell (SSH/console) account.
+#
+#  The appliance used to ship a single kiosk user with the documented
+#  default password 'hifi' and no sudo, which made SSH both insecure and
+#  useless (you had to `su root`, whose password was also documented).
+#  Instead, the admin account the owner creates in the provisioning
+#  wizard is mirrored into a real Linux user with full sudo — a
+#  per-device credential, nothing known shipped in the image.
+#
+#  The plaintext password only exists at account creation and password
+#  change, so webui_server.py calls in at exactly those two moments;
+#  nothing extra is persisted here beyond the account *name*, which the
+#  factory reset needs in order to remove it again.
+# ──────────────────────────────────────────────────────────────────
+SHELL_ACCOUNT_FILE = '/etc/hifi-player/shell-account'
+SHELL_ACCOUNT_RE = re.compile(r'^[a-z_][a-z0-9_-]{2,31}$')
+# Never let the web admin take over an account that already means something.
+SHELL_ACCOUNT_RESERVED = {
+    'root', 'hifi', 'support', 'hifimusic', 'daemon', 'bin', 'sys', 'sync',
+    'games', 'man', 'lp', 'mail', 'news', 'uucp', 'proxy', 'www-data',
+    'backup', 'list', 'irc', 'nobody', 'systemd-network', 'messagebus',
+    'sshd', 'lightdm', 'squeezelite', 'admin',
+}
+KIOSK_USER = 'hifi'
+
+def _user_exists(name):
+    try:
+        subprocess.run(['id', '-u', name], capture_output=True, timeout=10, check=True)
+        return True
+    except Exception:
+        return False
+
+def _user_in_group(name, group):
+    try:
+        r = subprocess.run(['id', '-nG', name], capture_output=True, text=True, timeout=10)
+        return group in (r.stdout or '').split()
+    except Exception:
+        return False
+
+def _kiosk_password_disabled():
+    """True when the kiosk user has no usable password (`passwd -S` reports L
+    for locked or NP for none). Best-effort: unknown ⇒ report False."""
+    try:
+        r = subprocess.run(['passwd', '-S', KIOSK_USER],
+                           capture_output=True, text=True, timeout=10)
+        parts = (r.stdout or '').split()
+        return len(parts) > 1 and parts[1] in ('L', 'NP')
+    except Exception:
+        return False
+
+def get_shell_account():
+    """Report the shell login, if any. Falls back to scanning for a non-system
+    sudo user so a device stays correct even if the marker file is lost (e.g.
+    a system-channel rollback)."""
+    name = ''
+    try:
+        with open(SHELL_ACCOUNT_FILE) as f:
+            name = f.read().strip()
+    except Exception:
+        pass
+    if name and _user_exists(name):
+        return {'exists': True, 'username': name,
+                'kiosk_password_disabled': _kiosk_password_disabled()}
+    # No marker (or it points at a deleted user) — look for one ourselves.
+    try:
+        r = subprocess.run(['getent', 'group', 'sudo'],
+                           capture_output=True, text=True, timeout=10)
+        members = (r.stdout or '').strip().split(':')[-1]
+        for m in [x.strip() for x in members.split(',') if x.strip()]:
+            if m not in SHELL_ACCOUNT_RESERVED:
+                return {'exists': True, 'username': m,
+                        'kiosk_password_disabled': _kiosk_password_disabled()}
+    except Exception:
+        log.exception("shell account lookup failed")
+    return {'exists': False, 'username': '',
+            'kiosk_password_disabled': _kiosk_password_disabled()}
+
+def _disable_kiosk_password():
+    """Retire the documented 'hifi'/'hifi' default once a real login exists.
+    `usermod -p '*'` leaves no hash at all, unlike `passwd -l`, which only
+    prefixes '!' to the (trivially guessed) original. The kiosk is unaffected:
+    LightDM autologin authenticates via the autologin/nopasswdlogin groups, and
+    every privileged call goes through the NOPASSWD rules in sudoers.d/hifi."""
+    if not _user_exists(KIOSK_USER) or _kiosk_password_disabled():
+        return
+    try:
+        subprocess.run(['usermod', '-p', '*', KIOSK_USER],
+                       capture_output=True, text=True, timeout=15, check=True)
+        log.info("kiosk user password disabled (shell account present)")
+    except Exception:
+        log.exception("could not disable kiosk user password")
+
+def set_shell_account(username, password):
+    """Create (or update the password of) the Linux login used for SSH and the
+    console. Full sudo, via 'sudo' group membership — sudoers.d/hifi stays as
+    tight as it is, because it serves the kiosk user, not this one."""
+    username = (username or '').strip().lower()
+    password = password or ''
+    if not SHELL_ACCOUNT_RE.match(username):
+        return {'success': False, 'code': 'shell.badUsername',
+                'message': 'Invalid username: use 3-32 lowercase letters, digits, - or _.'}
+    if username in SHELL_ACCOUNT_RESERVED:
+        return {'success': False, 'code': 'shell.reservedUsername',
+                'message': f'The name "{username}" is reserved by the system.'}
+    if len(password) < 8:
+        return {'success': False, 'code': 'shell.shortPassword',
+                'message': 'The password must be at least 8 characters long.'}
+    # chpasswd reads "user:password" lines, so either character would let a
+    # crafted password rewrite a different account's entry.
+    if '\n' in password or ':' in password:
+        return {'success': False, 'code': 'shell.badPassword',
+                'message': 'The password cannot contain ":" or a line break.'}
+
+    existed = _user_exists(username)
+    try:
+        if not existed:
+            subprocess.run(['useradd', '-m', '-s', '/bin/bash', '-G', 'sudo', username],
+                           capture_output=True, text=True, timeout=30, check=True)
+        elif not _user_in_group(username, 'sudo'):
+            subprocess.run(['usermod', '-aG', 'sudo', username],
+                           capture_output=True, text=True, timeout=20, check=True)
+        # Read the journal without sudo, like the remote-support account.
+        subprocess.run(['usermod', '-aG', 'adm,systemd-journal', username],
+                       capture_output=True, text=True, timeout=20)
+        # Password on stdin — never on the command line, where it would be
+        # visible in /proc to every local process.
+        subprocess.run(['chpasswd'], input=f'{username}:{password}\n', text=True,
+                       capture_output=True, timeout=30, check=True)
+    except subprocess.CalledProcessError as e:
+        log.error("shell account provisioning failed: %s", (e.stderr or '').strip())
+        return {'success': False, 'code': 'shell.createFailed',
+                'message': 'Could not create the login. See the system log for details.'}
+    except Exception:
+        log.exception("shell account provisioning failed")
+        return {'success': False, 'code': 'shell.createFailed',
+                'message': 'Could not create the login. See the system log for details.'}
+
+    # Only now, with a verified working login in place, retire the old default.
+    if _user_exists(username) and _user_in_group(username, 'sudo'):
+        try:
+            os.makedirs(os.path.dirname(SHELL_ACCOUNT_FILE), exist_ok=True)
+            tmp = SHELL_ACCOUNT_FILE + '.tmp'
+            with open(tmp, 'w') as f:
+                f.write(username + '\n')
+            os.chmod(tmp, 0o644)
+            os.replace(tmp, SHELL_ACCOUNT_FILE)
+        except Exception:
+            log.exception("could not record shell account name")
+        _disable_kiosk_password()
+
+    out = get_shell_account()
+    out['success'] = True
+    out['code'] = 'shell.updated' if existed else 'shell.created'
+    out['message'] = 'SSH login updated.' if existed else 'SSH login created.'
+    return out
 
 # ──────────────────────────────────────────────────────────────────
 #  Support bundle — a downloadable zip with logs + system diagnostics, so a
@@ -2383,8 +2557,14 @@ def _version_tuple(v):
 
 def _semver_key(v):
     """Sort key honouring prereleases: '2.5.7-dev.1' ranks BELOW '2.5.7' but
-    above '2.5.6', so switching dev→prod still upgrades to the stable build."""
-    base, _, pre = (v or '').lstrip('vV').partition('-')
+    above '2.5.6', so switching dev→prod still upgrades to the stable build.
+
+    Debian's '~' separator means the same thing and is what the Lyrion nightly
+    builds use ('9.1.2~1781881406' precedes the 9.1.2 release), so treat the two
+    separators alike — whichever comes first wins."""
+    raw = (v or '').lstrip('vV')
+    sep = min((raw.index(c) for c in '-~' if c in raw), default=-1)
+    base, pre = (raw, '') if sep < 0 else (raw[:sep], raw[sep + 1:])
     base_nums = tuple(int(n) for n in re.findall(r'\d+', base)) or (0,)
     if pre:  # prerelease: lower than the release with the same base
         return (base_nums, 0, tuple(int(n) for n in re.findall(r'\d+', pre)) or (0,))
@@ -2723,8 +2903,81 @@ def _lyrion_installed_version():
         pass
     return 'unknown'
 
-def check_lyrion_update():
+def get_lyrion_channel():
+    """Return the persisted Lyrion channel. Mirrors get_ota_channel(), but this
+    is a *separate* setting: the appliance's own dev channel says nothing about
+    which music-server build the owner wants."""
+    try:
+        with open(LYRION_CHANNEL_FILE) as f:
+            ch = f.read().strip()
+        if ch in LYRION_CHANNELS:
+            return ch
+    except Exception:
+        pass
+    return LYRION_DEFAULT_CHANNEL
+
+def set_lyrion_channel(channel):
+    if channel not in LYRION_CHANNELS:
+        return {'success': False, 'code': 'lyrion.badChannel',
+                'message': 'Unknown channel.', 'channel': get_lyrion_channel()}
+    try:
+        os.makedirs(os.path.dirname(LYRION_CHANNEL_FILE), exist_ok=True)
+        tmp = LYRION_CHANNEL_FILE + '.tmp'
+        with open(tmp, 'w') as f:
+            f.write(channel + '\n')
+        os.replace(tmp, LYRION_CHANNEL_FILE)
+    except Exception:
+        log.exception("set_lyrion_channel failed")
+        return {'success': False, 'code': 'lyrion.channelSaveFailed',
+                'message': 'Could not save the channel.', 'channel': get_lyrion_channel()}
+    return {'success': True, 'channel': channel}
+
+def _parse_lyrion_channels(html):
+    """Pull one .deb per channel out of the downloads page.
+
+    Release builds live under /LyrionMusicServer_v<X.Y.Z>/, both the stable
+    nightly and the development build under /nightly/ with a '~<timestamp>'
+    suffix. The two nightly streams are told apart by version: the higher
+    minor is the development branch, the lower one the bugfix stream for the
+    current release. We keep the '_all.deb' flavour, which is what the image
+    installs today — switching to _amd64 would be an arch change, not an
+    update."""
+    out = {}
+    releases = re.findall(
+        r'https://downloads\.lms-community\.org/LyrionMusicServer_v(\d+\.\d+\.\d+)/'
+        r'lyrionmusicserver_\1_all\.deb', html)
+    if releases:
+        latest = max(set(releases), key=_semver_key)
+        out['release'] = {
+            'version': latest,
+            'url': (f'https://downloads.lms-community.org/LyrionMusicServer_v{latest}/'
+                    f'lyrionmusicserver_{latest}_all.deb'),
+        }
+
+    nightlies = sorted(
+        set(re.findall(
+            r'https://downloads\.lms-community\.org/nightly/'
+            r'lyrionmusicserver_(\d+\.\d+\.\d+~\d+)_all\.deb', html)),
+        key=_semver_key)
+    if nightlies:
+        # Highest = development branch; the next one down = stable nightly.
+        # With only one nightly published, treat it as the development build.
+        out['dev'] = {
+            'version': nightlies[-1],
+            'url': ('https://downloads.lms-community.org/nightly/'
+                    f'lyrionmusicserver_{nightlies[-1]}_all.deb'),
+        }
+        if len(nightlies) > 1:
+            out['nightly'] = {
+                'version': nightlies[-2],
+                'url': ('https://downloads.lms-community.org/nightly/'
+                        f'lyrionmusicserver_{nightlies[-2]}_all.deb'),
+            }
+    return out
+
+def check_lyrion_update(channel=None):
     current = _lyrion_installed_version()
+    channel = channel if channel in LYRION_CHANNELS else get_lyrion_channel()
     req = urllib.request.Request(LYRION_DOWNLOADS_PAGE,
                                  headers={'User-Agent': 'hifi-player-ota'})
     try:
@@ -2732,32 +2985,44 @@ def check_lyrion_update():
             html = resp.read().decode('utf-8', 'replace')
     except Exception:
         log.exception("lyrion update check failed")
-        return {'error': 'Controllo aggiornamenti Lyrion fallito', 'current': current}
+        return {'code': 'lyrion.checkFailed',
+                'error': 'Could not check for Lyrion updates.',
+                'current': current, 'channel': channel, 'channels': {}}
 
-    # Stable releases live under LyrionMusicServer_v<X.Y.Z>/lyrionmusicserver_<X.Y.Z>_all.deb
-    # (nightlies are under /nightly/ and do not match this pattern → excluded).
-    matches = re.findall(
-        r'https://downloads\.lms-community\.org/LyrionMusicServer_v(\d+\.\d+\.\d+)/'
-        r'lyrionmusicserver_\1_all\.deb', html)
-    if not matches:
-        return {'error': 'Nessuna release stabile trovata sul server download', 'current': current}
+    channels = _parse_lyrion_channels(html)
+    if not channels:
+        return {'code': 'lyrion.noBuildFound',
+                'error': 'No Lyrion build found on the download server.',
+                'current': current, 'channel': channel, 'channels': {}}
 
-    latest = max(set(matches), key=_version_tuple)
-    asset_url = (f'https://downloads.lms-community.org/LyrionMusicServer_v{latest}/'
-                 f'lyrionmusicserver_{latest}_all.deb')
+    # An unavailable channel falls back to the release build rather than
+    # reporting nothing — the page is the only source we have.
+    sel = channels.get(channel) or channels.get('release') or next(iter(channels.values()))
     return {
         'current': current,
-        'latest': latest,
-        'update_available': _is_newer(latest, current),
-        'asset_url': asset_url,
+        'channel': channel,
+        'channels': channels,
+        'latest': sel['version'],
+        'update_available': _is_newer(sel['version'], current),
+        'asset_url': sel['url'],
     }
 
-def apply_lyrion_update():
-    info = check_lyrion_update()
+def apply_lyrion_update(channel=None):
+    """Install the selected channel's build.
+
+    A channel *switch* is applied even when it is a downgrade (moving from the
+    development build back to the release is exactly that); only a no-op within
+    the same channel is refused. hifi-lyrion-update.sh already passes
+    --allow-downgrades to apt."""
+    switching = channel in LYRION_CHANNELS and channel != get_lyrion_channel()
+    info = check_lyrion_update(channel)
     if info.get('error'):
-        return {'started': False, 'message': info['error']}
-    if not info.get('update_available'):
-        return {'started': False, 'message': 'Nessun aggiornamento Lyrion disponibile'}
+        return {'started': False, 'code': info.get('code'), 'message': info['error']}
+    if not info.get('update_available') and not switching:
+        return {'started': False, 'code': 'lyrion.upToDate',
+                'message': 'Lyrion Music Server is already up to date.'}
+    if switching:
+        set_lyrion_channel(channel)
 
     cmd = [
         'systemd-run', '--no-block', '--collect', '--unit=hifi-lyrion-update',
@@ -2770,11 +3035,13 @@ def apply_lyrion_update():
                          start_new_session=True)
     except subprocess.CalledProcessError:
         log.exception("update: apply command failed")
-        return {'started': False, 'message': 'Avvio aggiornamento fallito'}
+        return {'started': False, 'code': 'lyrion.startFailed',
+                'message': 'Could not start the update.'}
     except Exception:
         log.exception("update: apply failed")
-        return {'started': False, 'message': 'Avvio aggiornamento fallito'}
-    return {'started': True, 'version': info['latest']}
+        return {'started': False, 'code': 'lyrion.startFailed',
+                'message': 'Could not start the update.'}
+    return {'started': True, 'version': info['latest'], 'channel': info['channel']}
 
 def lyrion_update_status():
     try:
@@ -2974,11 +3241,21 @@ def api_os_update_status():
 
 @app.route('/lyrion_update/check', methods=['GET'])
 def api_lyrion_update_check():
-    return jsonify(check_lyrion_update())
+    return jsonify(check_lyrion_update(request.args.get('channel')))
 
 @app.route('/lyrion_update/apply', methods=['POST'])
 def api_lyrion_update_apply():
-    return jsonify(apply_lyrion_update())
+    data = request.get_json(silent=True) or {}
+    return jsonify(apply_lyrion_update(data.get('channel')))
+
+@app.route('/lyrion_channel', methods=['GET'])
+def api_lyrion_channel():
+    return jsonify({'channel': get_lyrion_channel(), 'channels': list(LYRION_CHANNELS)})
+
+@app.route('/lyrion_channel', methods=['POST'])
+def api_set_lyrion_channel():
+    data = request.get_json(silent=True) or {}
+    return jsonify(set_lyrion_channel((data.get('channel') or '').strip()))
 
 @app.route('/lyrion_update/status', methods=['GET'])
 def api_lyrion_update_status():
@@ -3043,6 +3320,15 @@ def api_ssh_status():
 def api_ssh_set():
     data = request.get_json(silent=True) or {}
     return jsonify(set_ssh(bool(data.get('enable'))))
+
+@app.route('/shell_account', methods=['GET'])
+def api_shell_account():
+    return jsonify(get_shell_account())
+
+@app.route('/shell_account', methods=['POST'])
+def api_set_shell_account():
+    data = request.get_json(silent=True) or {}
+    return jsonify(set_shell_account(data.get('username'), data.get('password')))
 
 @app.route('/support_bundle', methods=['GET'])
 def api_support_bundle():

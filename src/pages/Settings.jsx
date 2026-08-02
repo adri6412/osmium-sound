@@ -70,7 +70,7 @@ const DSP_BUILTIN_PRESET_LABEL_KEYS = {
  * System configuration and information
  */
 const Settings = () => {
-  const { t } = useI18n();
+  const { t, lang } = useI18n();
   const [systemInfo, setSystemInfo] = useState({
     hostname: t('common.loading'),
     platform: 'linux',
@@ -107,6 +107,14 @@ const Settings = () => {
   const [sshStatus, setSshStatus] = useState(null); // { available, enabled, active }
   const [sshBusy, setSshBusy] = useState(false);
   const [sshMessage, setSshMessage] = useState('');
+
+  // The Linux login SSH actually uses, mirrored from the web-admin account.
+  // null until (and unless) /shell_account answers — see loadShellAccount.
+  const [shellAccount, setShellAccount] = useState(null); // { exists, username }
+  const [shellUser, setShellUser] = useState('');
+  const [shellPass, setShellPass] = useState('');
+  const [shellBusy, setShellBusy] = useState(false);
+  const [shellMessage, setShellMessage] = useState('');
 
   // Mouse pointer toggle (for users without a touchscreen)
   const [pointerStatus, setPointerStatus] = useState(null); // { available, enabled }
@@ -183,9 +191,6 @@ const Settings = () => {
   const [isApplyingAll, setIsApplyingAll] = useState(false);
   const [allStatus, setAllStatus] = useState(null); // { phase, message } combined progress
 
-  // "Advanced" updates (Lyrion) collapsible
-  const [showAdvanced, setShowAdvanced] = useState(false);
-
   // Check-for-updates-on-startup preference (persisted)
   const [autoCheck, setAutoCheck] = useState(
     localStorage.getItem('hifiAutoCheckUpdates') !== 'false'
@@ -224,6 +229,14 @@ const Settings = () => {
   const [discoveryBusy, setDiscoveryBusy] = useState(false);
   const [discoveryAttempted, setDiscoveryAttempted] = useState(false);
 
+  // Which build of Lyrion runs on this device, when it runs its own. Lives
+  // beside the internal/external choice rather than on the Updates page:
+  // "which server do I use" and "which build of it" are one decision.
+  // null ⇒ the endpoint is missing (older api_server), so hide the picker.
+  const [lyrionChannel, setLyrionChannel] = useState(null);
+  const [lyrionChannelBusy, setLyrionChannelBusy] = useState(false);
+  const LYRION_CHANNELS = ['release', 'nightly', 'dev'];
+
   // This device's squeezelite display name — defaults to "OsmiumSound" on
   // every unit, which makes them indistinguishable once grouped.
   const [playerName, setPlayerName] = useState('OsmiumSound');
@@ -241,6 +254,8 @@ const Settings = () => {
   const lyrionUrlRef = useKeyboardInput(lyrionUrl, setLyrionUrl);
   const followHostRef = useKeyboardInput(followHostInput, setFollowHostInput);
   const playerNameRef = useKeyboardInput(playerNameInput, setPlayerNameInput);
+  const shellUserRef = useKeyboardInput(shellUser, setShellUser);
+  const shellPassRef = useKeyboardInput(shellPass, setShellPass);
   
   // Test keyboard context
   const { showKeyboard } = useKeyboard();
@@ -250,6 +265,7 @@ const Settings = () => {
     loadSystemData();
     loadAudioDevices();
     loadSshStatus();
+    loadShellAccount();
     loadPointerStatus();
     loadDisplayMode();
     loadOtaChannel();
@@ -508,6 +524,30 @@ const Settings = () => {
   const loadSshStatus = async () => {
     const res = await systemAPI.getSshStatus();
     if (res.success) setSshStatus(res.data);
+  };
+
+  // The Linux login used for SSH and the console. Feature-detected: an older
+  // api_server has no /shell_account, and the UI bundle can land before the
+  // system bundle — leave the block hidden rather than showing a dead form.
+  const loadShellAccount = async () => {
+    try {
+      const res = await systemAPI.getShellAccount();
+      if (res.success && typeof res.data?.exists === 'boolean') {
+        setShellAccount(res.data);
+        if (res.data.username && !shellUser) setShellUser(res.data.username);
+      }
+    } catch (_) { /* endpoint not present yet */ }
+  };
+
+  const saveShellAccount = async () => {
+    if (shellBusy) return;
+    setShellBusy(true);
+    setShellMessage('');
+    const res = await systemAPI.setShellAccount(shellUser.trim(), shellPass);
+    setShellBusy(false);
+    const ok = res.success && res.data?.success !== false;
+    setShellMessage(res.data?.message || (ok ? t('settings.ssh.loginSaved') : t('settings.ssh.loginFailed')));
+    if (ok) { setShellPass(''); loadShellAccount(); }
   };
 
   const toggleSsh = async () => {
@@ -870,10 +910,14 @@ const Settings = () => {
   // Auto-check for updates on mount (only if the user kept it enabled);
   // clean up any poll on unmount.
   useEffect(() => {
+    // Lyrion is checked unconditionally: it now drives the Lyrion Music Server
+    // section (installed version + channel), not the appliance update page, so
+    // the "auto-check for updates" preference doesn't apply to it.
+    checkLyrionUpdate();
+    loadLyrionChannel();
     if (autoCheck) {
       checkAppUpdate();
       checkSystemUpdate();
-      checkLyrionUpdate();
       checkOsUpdate();
     }
     return () => {
@@ -1089,6 +1133,32 @@ const Settings = () => {
     }
   };
 
+  // Feature-detected: the UI bundle can land before the system bundle that
+  // ships /lyrion_channel (apply order is ui → os → system), so a failure here
+  // must leave the section working without a channel picker, not broken.
+  const loadLyrionChannel = async () => {
+    try {
+      const r = await systemAPI.getLyrionChannel();
+      if (r.success && r.data?.channel) setLyrionChannel(r.data.channel);
+    } catch (_) { /* older api_server — picker stays hidden */ }
+  };
+
+  const changeLyrionChannel = async (channel) => {
+    if (channel === lyrionChannel || isApplyingLyrion) return;
+    setLyrionChannelBusy(true);
+    const previous = lyrionChannel;
+    setLyrionChannel(channel);
+    try {
+      const r = await systemAPI.setLyrionChannel(channel);
+      if (!r.success || r.data?.success === false) setLyrionChannel(previous);
+      else await checkLyrionUpdate();
+    } catch (_) {
+      setLyrionChannel(previous);
+    } finally {
+      setLyrionChannelBusy(false);
+    }
+  };
+
   const applyLyrionUpdate = async () => {
     if (!apiConnected) {
       setUpdateMessage(t('settings.msg.apiUnavailable'));
@@ -1097,7 +1167,7 @@ const Settings = () => {
     setIsApplyingLyrion(true);
     setLyrionStatus({ state: 'starting', message: t('settings.updates.msg.startingLyrion') });
     try {
-      const result = await systemAPI.applyLyrionUpdate();
+      const result = await systemAPI.applyLyrionUpdate(lyrionChannel);
       if (!result.success || !result.data.started) {
         setLyrionStatus({ state: 'error', message: result.data?.message || result.message || t('settings.updates.msg.startFailed') });
         setIsApplyingLyrion(false);
@@ -1374,8 +1444,10 @@ const Settings = () => {
   // shown/usable until sourcesToken arrives (mirrors pairingQrValue below):
   // every route on that page now requires pairing, so the URL must carry the
   // token or the page would 401 on every action.
+  // &lang= renders that page in the language the kiosk is set to, instead of
+  // always Italian.
   const sourcesUrl = (isUsableIp && sourcesToken)
-    ? `http://${deviceIp}:8080/?token=${encodeURIComponent(sourcesToken)}`
+    ? `http://${deviceIp}:8080/?token=${encodeURIComponent(sourcesToken)}&lang=${encodeURIComponent(lang)}`
     : null;
   // Companion-app pairing QR payload: JSON (not a bare URL) so the app can pick
   // out the LMS address, the :8080 API address, and the pairing token in one
@@ -2174,7 +2246,10 @@ const Settings = () => {
                       )}
                     </div>
 
-                    {/* LMS role: standalone (own server) vs. following another device's */}
+                    {/* Which Lyrion server: internal (this device runs it) or
+                        external (one already on the network). Same wire values
+                        as before — 'local'/'follow' — only the wording changed,
+                        after forum feedback that "own / follow" read as jargon. */}
                     <div className="space-y-3 bg-hifi-dark rounded-lg p-4 border border-hifi-accent/40">
                       <label className="text-white font-medium">{t('settings.multiroom.role.title')}</label>
                       <p className="text-xs text-hifi-silver">{t('settings.multiroom.role.help')}</p>
@@ -2193,6 +2268,104 @@ const Settings = () => {
                           {t('settings.multiroom.role.follow')}
                         </button>
                       </div>
+
+                      {/* Internal: this device owns the server, so it also owns
+                          which build of it runs. */}
+                      {lmsRoleMode === 'local' && (
+                        <div className="space-y-2 border-t border-hifi-accent/40 pt-3">
+                          <div className="flex items-center justify-between">
+                            <span className="text-sm text-hifi-silver">{t('settings.multiroom.server.installed')}</span>
+                            <span className="text-white font-mono text-sm">
+                              {lyrionUpdate?.current && lyrionUpdate.current !== 'unknown'
+                                ? lyrionUpdate.current
+                                : t('settings.multiroom.server.notInstalled')}
+                            </span>
+                          </div>
+
+                          {lyrionChannel && (
+                            <>
+                              <span className="text-xs text-hifi-silver">{t('settings.multiroom.server.channel')}</span>
+                              <div className="space-y-1.5">
+                                {LYRION_CHANNELS.map((c) => (
+                                  <button
+                                    key={c}
+                                    onClick={() => changeLyrionChannel(c)}
+                                    disabled={lyrionChannelBusy || isApplyingLyrion}
+                                    className={`w-full flex items-center justify-between rounded-lg px-3 py-2 text-sm transition-colors disabled:opacity-50 ${
+                                      lyrionChannel === c
+                                        ? 'bg-hifi-gold text-black font-semibold'
+                                        : 'bg-hifi-surface text-white hover:bg-hifi-light/40'
+                                    }`}
+                                  >
+                                    <span>{t(`settings.multiroom.server.channel_${c}`)}</span>
+                                    <span className="opacity-70 font-mono text-xs">
+                                      {lyrionUpdate?.channels?.[c]?.version || ''}
+                                    </span>
+                                  </button>
+                                ))}
+                              </div>
+                              {lyrionChannel !== 'release' && (
+                                <p className="text-xs text-hifi-silver">{t('settings.multiroom.server.channelWarning')}</p>
+                              )}
+                            </>
+                          )}
+
+                          {lyrionUpdate?.error && (
+                            <div className="rounded-lg p-3 text-center text-sm bg-red-900/20 text-red-300 border border-red-500/30">
+                              {lyrionUpdate.error}
+                            </div>
+                          )}
+
+                          <div className="flex gap-2">
+                            <motion.button
+                              onClick={applyLyrionUpdate}
+                              disabled={isApplyingLyrion || isCheckingLyrion}
+                              className="flex-1 bg-hifi-gold hover:brightness-110 disabled:bg-hifi-accent text-black py-2.5 rounded-lg font-semibold flex items-center justify-center space-x-2 transition"
+                              whileTap={{ scale: isApplyingLyrion ? 1 : 0.95 }}
+                            >
+                              {isApplyingLyrion
+                                ? <Loader2 size={18} className="animate-spin" />
+                                : <Download size={18} />}
+                              <span>
+                                {isApplyingLyrion
+                                  ? t('settings.updates.updating')
+                                  : (lyrionUpdate?.current && lyrionUpdate.current !== 'unknown'
+                                      ? t('settings.multiroom.server.update')
+                                      : t('settings.multiroom.server.install'))}
+                              </span>
+                            </motion.button>
+                            <motion.button
+                              onClick={checkLyrionUpdate}
+                              disabled={isCheckingLyrion || isApplyingLyrion}
+                              className="bg-hifi-accent hover:bg-hifi-light disabled:bg-hifi-dark text-white px-4 rounded-lg transition-colors"
+                              whileTap={{ scale: isCheckingLyrion ? 1 : 0.95 }}
+                            >
+                              {isCheckingLyrion
+                                ? <Loader2 size={18} className="animate-spin" />
+                                : <RotateCw size={18} />}
+                            </motion.button>
+                          </div>
+
+                          {isApplyingLyrion && (
+                            <p className="text-xs text-hifi-silver text-center">
+                              {t('settings.updates.lyrionRestartNote')}
+                            </p>
+                          )}
+
+                          {lyrionStatus && (
+                            <div className={`rounded-lg p-3 text-center text-sm ${
+                              lyrionStatus.state === 'error'
+                                ? 'bg-red-900/20 text-red-300 border border-red-500/30'
+                                : 'bg-hifi-surface text-hifi-silver'
+                            }`}>
+                              {lyrionStatus.message || lyrionStatus.state}
+                              {typeof lyrionStatus.progress === 'number' && lyrionStatus.state !== 'error' && (
+                                <span className="ml-1">({lyrionStatus.progress}%)</span>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      )}
 
                       {lmsRoleMode === 'follow' && (
                         <div className="space-y-2">
@@ -2612,6 +2785,64 @@ const Settings = () => {
                       </div>
                     )}
 
+                    {/* The SSH login itself. The appliance used to ship user
+                        'hifi' with the documented password 'hifi' and no sudo,
+                        which made SSH both unsafe and useless. It is now the
+                        admin account, mirrored into a real Linux user with
+                        sudo; devices provisioned before that shipped can
+                        create one here. */}
+                    {shellAccount && (
+                      <div className="space-y-3 bg-hifi-dark rounded-lg p-4 border border-hifi-accent/40">
+                        <label className="text-white font-medium">{t('settings.ssh.loginTitle')}</label>
+                        {shellAccount.exists ? (
+                          <p className="text-xs text-hifi-silver">
+                            {t('settings.ssh.loginIs')}{' '}
+                            <code className="text-hifi-gold">ssh {shellAccount.username}@{deviceIp || 'hifiplayer.local'}</code>
+                          </p>
+                        ) : (
+                          <p className="text-xs text-hifi-silver">{t('settings.ssh.noLogin')}</p>
+                        )}
+                        <p className="text-xs text-hifi-silver">{t('settings.ssh.sudoWarning')}</p>
+
+                        <div onClick={() => showKeyboard(shellUserRef, shellUser)} className="cursor-pointer">
+                          <input
+                            ref={shellUserRef}
+                            type="text"
+                            value={shellUser}
+                            onChange={(e) => setShellUser(e.target.value)}
+                            placeholder={t('settings.ssh.usernamePlaceholder')}
+                            className="w-full bg-hifi-surface border border-hifi-accent rounded-lg px-4 py-3 text-white focus:outline-none focus:border-hifi-gold cursor-pointer"
+                          />
+                        </div>
+                        <div onClick={() => showKeyboard(shellPassRef, shellPass)} className="cursor-pointer">
+                          <input
+                            ref={shellPassRef}
+                            type="password"
+                            value={shellPass}
+                            onChange={(e) => setShellPass(e.target.value)}
+                            placeholder={t('settings.ssh.passwordPlaceholder')}
+                            className="w-full bg-hifi-surface border border-hifi-accent rounded-lg px-4 py-3 text-white focus:outline-none focus:border-hifi-gold cursor-pointer"
+                          />
+                        </div>
+                        <button
+                          onClick={saveShellAccount}
+                          disabled={shellBusy || !shellUser.trim() || shellPass.length < 8}
+                          className="w-full bg-hifi-gold text-black font-semibold py-2.5 rounded-lg hover:brightness-110 disabled:opacity-50 transition"
+                        >
+                          {shellAccount.exists ? t('settings.ssh.loginUpdate') : t('settings.ssh.loginCreate')}
+                        </button>
+                        {shellMessage && (
+                          <div className={`rounded-lg p-3 text-center text-sm ${
+                            isErrorMsg(shellMessage)
+                              ? 'bg-red-900/20 text-red-300 border border-red-500/30'
+                              : 'bg-hifi-surface text-hifi-silver'
+                          }`}>
+                            {shellMessage}
+                          </div>
+                        )}
+                      </div>
+                    )}
+
                     {sshMessage && (
                       <div className={`rounded-lg p-3 text-center text-sm ${
                         isErrorMsg(sshMessage)
@@ -2898,206 +3129,6 @@ const Settings = () => {
                         <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${autoCheck ? 'translate-x-6' : 'translate-x-1'}`} />
                       </span>
                     </button>
-
-                    {/* Advanced (Lyrion) collapsible — the OS channel is now part
-                        of the single "Aggiorna ora" button above. */}
-                    <button
-                      onClick={() => setShowAdvanced((v) => !v)}
-                      className="w-full text-left text-sm text-hifi-silver hover:text-white pt-2 transition-colors"
-                    >
-                      {showAdvanced ? '▾' : '▸'} {t('settings.updates.advanced')}
-                    </button>
-
-                    {showAdvanced && (
-                      <div className="space-y-3 border-t border-hifi-accent pt-4">
-                        <div className="bg-hifi-dark rounded-lg p-4 space-y-2">
-                          <div className="flex items-center justify-between">
-                            <span className="text-hifi-silver text-sm">{t('settings.updates.lyrionInstalled')}</span>
-                            <span className="text-white font-mono text-sm">{lyrionUpdate?.current || '...'}</span>
-                          </div>
-                          <div className="flex items-center justify-between">
-                            <span className="text-hifi-silver text-sm">{t('settings.updates.latestVersion')}</span>
-                            <span className="text-white font-mono text-sm">
-                              {lyrionUpdate?.error ? t('common.notAvailable') : (lyrionUpdate?.latest || '...')}
-                            </span>
-                          </div>
-                        </div>
-
-                        {lyrionUpdate?.update_available && (
-                          <div className="rounded-lg p-3 text-center text-sm bg-hifi-gold/20 text-hifi-gold border border-hifi-gold/40">
-                            {t('settings.updates.lyrionAvailable', { version: lyrionUpdate.latest })}
-                          </div>
-                        )}
-                        {lyrionUpdate && !lyrionUpdate.error && !lyrionUpdate.update_available && (
-                          <div className="rounded-lg p-3 text-center text-sm bg-hifi-dark text-hifi-silver">
-                            {t('settings.updates.lyrionUpToDate')}
-                          </div>
-                        )}
-                        {lyrionUpdate?.error && (
-                          <div className="rounded-lg p-3 text-center text-sm bg-red-900/20 text-red-300 border border-red-500/30">
-                            {lyrionUpdate.error}
-                          </div>
-                        )}
-
-                        <motion.button
-                          onClick={checkLyrionUpdate}
-                          disabled={isCheckingLyrion || isApplyingLyrion}
-                          className="w-full bg-hifi-accent hover:bg-hifi-light disabled:bg-hifi-dark text-white py-3 rounded-lg font-medium flex items-center justify-center space-x-2 transition-colors"
-                          whileTap={{ scale: isCheckingLyrion ? 1 : 0.95 }}
-                        >
-                          {isCheckingLyrion ? (
-                            <>
-                              <Loader2 size={18} className="animate-spin" />
-                              <span>{t('settings.updates.checking')}</span>
-                            </>
-                          ) : (
-                            <>
-                              <RotateCw size={18} />
-                              <span>{t('settings.updates.checkLyrion')}</span>
-                            </>
-                          )}
-                        </motion.button>
-
-                        {lyrionUpdate?.update_available && (
-                          <motion.button
-                            onClick={applyLyrionUpdate}
-                            disabled={isApplyingLyrion}
-                            className="w-full bg-hifi-gold hover:bg-yellow-600 disabled:bg-hifi-accent text-black py-4 rounded-lg font-semibold flex items-center justify-center space-x-2 transition-colors"
-                            whileTap={{ scale: isApplyingLyrion ? 1 : 0.95 }}
-                          >
-                            {isApplyingLyrion ? (
-                              <>
-                                <Loader2 size={20} className="animate-spin" />
-                                <span>{t('settings.updates.updating')}</span>
-                              </>
-                            ) : (
-                              <>
-                                <Download size={20} />
-                                <span>{t('settings.updates.updateLyrion', { version: lyrionUpdate.latest })}</span>
-                              </>
-                            )}
-                          </motion.button>
-                        )}
-
-                        {isApplyingLyrion && (
-                          <p className="text-xs text-hifi-silver text-center">
-                            {t('settings.updates.lyrionRestartNote')}
-                          </p>
-                        )}
-
-                        {lyrionStatus && (
-                          <div className={`rounded-lg p-3 text-center text-sm ${
-                            lyrionStatus.state === 'error'
-                              ? 'bg-red-900/20 text-red-300 border border-red-500/30'
-                              : 'bg-hifi-dark text-hifi-silver'
-                          }`}>
-                            {lyrionStatus.message || lyrionStatus.state}
-                            {typeof lyrionStatus.progress === 'number' && lyrionStatus.state !== 'error' && (
-                              <span className="ml-1">({lyrionStatus.progress}%)</span>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                {/* Legacy standalone Lyrion section (now under Advanced) */}
-                {section.content === 'custom-lyrion-update' && (
-                  <div className="space-y-4">
-                    {/* Version info */}
-                    <div className="bg-hifi-dark rounded-lg p-4 space-y-2">
-                      <div className="flex items-center justify-between">
-                        <span className="text-hifi-silver text-sm">{t('settings.updates.installedVersion')}</span>
-                        <span className="text-white font-mono text-sm">
-                          {lyrionUpdate?.current || '...'}
-                        </span>
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <span className="text-hifi-silver text-sm">{t('settings.updates.latestVersion')}</span>
-                        <span className="text-white font-mono text-sm">
-                          {lyrionUpdate?.error ? t('common.notAvailable') : (lyrionUpdate?.latest || '...')}
-                        </span>
-                      </div>
-                    </div>
-
-                    {lyrionUpdate?.update_available && (
-                      <div className="rounded-lg p-3 text-center text-sm bg-hifi-gold/20 text-hifi-gold border border-hifi-gold/40">
-                        {t('settings.updates.lyrionAvailableShort', { version: lyrionUpdate.latest })}
-                      </div>
-                    )}
-                    {lyrionUpdate && !lyrionUpdate.error && !lyrionUpdate.update_available && (
-                      <div className="rounded-lg p-3 text-center text-sm bg-hifi-dark text-hifi-silver">
-                        {t('settings.updates.lyrionUpToDate')}
-                      </div>
-                    )}
-                    {lyrionUpdate?.error && (
-                      <div className="rounded-lg p-3 text-center text-sm bg-red-900/20 text-red-300 border border-red-500/30">
-                        {lyrionUpdate.error}
-                      </div>
-                    )}
-
-                    {/* Check for updates */}
-                    <motion.button
-                      onClick={checkLyrionUpdate}
-                      disabled={isCheckingLyrion || isApplyingLyrion}
-                      className="w-full bg-hifi-accent hover:bg-hifi-light disabled:bg-hifi-dark text-white py-3 rounded-lg font-medium flex items-center justify-center space-x-2 transition-colors"
-                      whileTap={{ scale: isCheckingLyrion ? 1 : 0.95 }}
-                    >
-                      {isCheckingLyrion ? (
-                        <>
-                          <Loader2 size={18} className="animate-spin" />
-                          <span>{t('settings.updates.checking')}</span>
-                        </>
-                      ) : (
-                        <>
-                          <RotateCw size={18} />
-                          <span>{t('settings.updates.checkButton')}</span>
-                        </>
-                      )}
-                    </motion.button>
-
-                    {/* Apply update */}
-                    {lyrionUpdate?.update_available && (
-                      <motion.button
-                        onClick={applyLyrionUpdate}
-                        disabled={isApplyingLyrion}
-                        className="w-full bg-hifi-gold hover:bg-yellow-600 disabled:bg-hifi-accent text-black py-4 rounded-lg font-semibold flex items-center justify-center space-x-2 transition-colors"
-                        whileTap={{ scale: isApplyingLyrion ? 1 : 0.95 }}
-                      >
-                        {isApplyingLyrion ? (
-                          <>
-                            <Loader2 size={20} className="animate-spin" />
-                            <span>{t('settings.updates.updating')}</span>
-                          </>
-                        ) : (
-                          <>
-                            <Download size={20} />
-                            <span>{t('settings.updates.updateLyrion', { version: lyrionUpdate.latest })}</span>
-                          </>
-                        )}
-                      </motion.button>
-                    )}
-
-                    {isApplyingLyrion && (
-                      <p className="text-xs text-hifi-silver text-center">
-                        Il server musicale verrà riavviato al termine.
-                      </p>
-                    )}
-
-                    {/* Lyrion update progress */}
-                    {lyrionStatus && (
-                      <div className={`rounded-lg p-3 text-center text-sm ${
-                        lyrionStatus.state === 'error'
-                          ? 'bg-red-900/20 text-red-300 border border-red-500/30'
-                          : 'bg-hifi-dark text-hifi-silver'
-                      }`}>
-                        {lyrionStatus.message || lyrionStatus.state}
-                        {typeof lyrionStatus.progress === 'number' && lyrionStatus.state !== 'error' && (
-                          <span className="ml-1">({lyrionStatus.progress}%)</span>
-                        )}
-                      </div>
-                    )}
                   </div>
                 )}
 

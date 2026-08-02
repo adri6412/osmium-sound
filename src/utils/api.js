@@ -186,11 +186,25 @@ export const systemAPI = {
   // Poll OS update progress: { state, progress, version, message }
   getOsUpdateStatus: () => apiGet('/os_update/status'),
 
-  // ── Lyrion Music Server update ──────────────────────────────────
-  // Check downloads server: { current, latest, update_available, asset_url }
+  // ── Lyrion Music Server install / update ────────────────────────
+  // Managed from Settings → Lyrion Music Server, not from the appliance's own
+  // update page: Lyrion is third-party software with its own release cadence.
+  // Check downloads server:
+  //   { current, channel, channels: { release|nightly|dev: {version, url} },
+  //     latest, update_available, asset_url }
   checkLyrionUpdate: () => apiGet('/lyrion_update/check'),
-  // Start the Lyrion update (download + apt install + restart). { started, version|message }
-  applyLyrionUpdate: () => apiPost('/lyrion_update/apply'),
+  // Start the install/update for a channel (download + apt install + restart).
+  // A channel switch is applied even when it is a downgrade. { started, version|message }
+  applyLyrionUpdate: (channel) => apiPost('/lyrion_update/apply', channel ? { channel } : {}),
   // Poll Lyrion update progress: { state, progress, version, message }
   getLyrionUpdateStatus: () => apiGet('/lyrion_update/status'),
+  // Persisted channel: { channel, channels: [...] }
+  getLyrionChannel: () => apiGet('/lyrion_channel'),
+  setLyrionChannel: (channel) => apiPost('/lyrion_channel', { channel }),
+
+  // ── Shell (SSH/console) login mirrored from the admin account ───
+  // { exists, username, kiosk_password_disabled }
+  getShellAccount: () => apiGet('/shell_account'),
+  // Create or re-password the Linux login (full sudo). { success, code, message }
+  setShellAccount: (username, password) => apiPost('/shell_account', { username, password }),
 };

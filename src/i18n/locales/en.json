@@ -157,7 +157,17 @@
       "notInstalledHint": "Lyrion Music Server is not installed on this device. Install it now to manage your music library.",
       "install": "Install Lyrion",
       "installing": "Installing Lyrion…",
-      "installFailed": "Lyrion installation failed. Check your connection and try again."
+      "installFailed": "Lyrion installation failed. Check your connection and try again.",
+      "modeHint": "Does this device run the music server, or do you already have one on your network?",
+      "internal": "Internal",
+      "external": "External",
+      "externalHint": "Pick the server found on your network, or type its address.",
+      "noneFound": "No Lyrion server found on the network yet.",
+      "hostPlaceholder": "IP address, e.g. 192.168.1.50",
+      "search": "Search again",
+      "useExternal": "Use this server",
+      "externalApplied": "This device now uses that server.",
+      "externalFailed": "Could not switch to that server. Check the address and try again."
     }
   },
   "sidebar": {
@@ -262,7 +272,7 @@
       "audio": "Audio Output (DAC)",
       "playback": "Playback",
       "dsp": "DSP / Equalizer",
-      "multiroom": "Multiroom",
+      "multiroom": "Lyrion Music Server",
       "alarm": "Alarm Clock",
       "network": "Network Configuration",
       "webRemote": "Android Companion",
@@ -367,10 +377,10 @@
       "saved": "Multiroom group updated.",
       "failed": "Could not change the multiroom group.",
       "role": {
-        "title": "This device's Lyrion server",
-        "help": "For two devices to be grouped they must point at the same Lyrion server — each Osmium Sound runs its own and they can't see each other until they share one. Choose whether this device should use its own server (default, standalone) or follow another Osmium device's server on the network.",
-        "local": "This device",
-        "follow": "Another device",
+        "title": "Music server",
+        "help": "This device can run its own Lyrion Music Server, or use one that is already running on your network. Two devices can only be grouped when they point at the same server.",
+        "local": "Internal (this device)",
+        "follow": "External (on my network)",
         "hostPlaceholder": "IP address, e.g. 192.168.1.50",
         "hostRequired": "Enter the IP address of the device to follow.",
         "apply": "Apply",
@@ -385,6 +395,17 @@
         "help": "Every Osmium Sound device is named \"OsmiumSound\" by default — group two of them and you can't tell them apart. Give it a unique name (e.g. \"LivingRoom\", no spaces).",
         "saved": "Player name updated.",
         "failed": "Could not update the player name."
+      },
+      "server": {
+        "installed": "Installed version",
+        "notInstalled": "not installed",
+        "channel": "Version channel",
+        "channel_release": "Release",
+        "channel_nightly": "Stable nightly",
+        "channel_dev": "Development",
+        "channelWarning": "Nightly and development builds are pre-release: expect the occasional bug. You can switch back to Release at any time.",
+        "install": "Install Lyrion",
+        "update": "Install / update"
       }
     },
     "webRemote": {
@@ -413,12 +434,22 @@
     },
     "ssh": {
       "help": "Enable or disable the SSH server for remote terminal access to the device.",
-      "warning": "For security, SSH is disabled by default. Only enable it if you know what you are doing, and change the default password immediately.",
+      "warning": "SSH is disabled by default. Turn it on only if you know what you are doing — the login below has full administrator rights on the appliance.",
       "enabled": "SSH enabled",
       "disabled": "SSH disabled",
       "unavailable": "SSH service is not installed on this device.",
       "installHint": "SSH is not installed yet: enabling it will install and start it automatically (requires an internet connection).",
-      "failed": "SSH operation failed."
+      "failed": "SSH operation failed.",
+      "loginTitle": "SSH login",
+      "loginIs": "Connect with:",
+      "noLogin": "No SSH login has been created on this device yet.",
+      "sudoWarning": "This login has full administrator rights (sudo). SSH is for advanced users — use at your own risk.",
+      "usernamePlaceholder": "Username (lowercase, no spaces)",
+      "passwordPlaceholder": "Password (at least 8 characters)",
+      "loginCreate": "Create SSH login",
+      "loginUpdate": "Change SSH password",
+      "loginSaved": "SSH login updated.",
+      "loginFailed": "Could not update the SSH login."
     },
     "pointer": {
       "help": "Show the mouse pointer on screen. Useful if you use the device with a mouse instead of the touchscreen. The pointer is hidden by default.",
@@ -498,15 +529,8 @@
       "updateNow": "Update now",
       "orderNote": "Updates are applied in order: system, interface and — if present — the operating system (with a final reboot).",
       "autoCheck": "Check for updates on startup",
-      "advanced": "Advanced (Lyrion)",
-      "lyrionInstalled": "Lyrion installed",
       "latestVersion": "Latest version",
       "installedVersion": "Installed version",
-      "lyrionAvailable": "Lyrion update available: {version}",
-      "lyrionAvailableShort": "Update available: {version}",
-      "lyrionUpToDate": "Lyrion is up to date",
-      "checkLyrion": "Check for Lyrion updates",
-      "updateLyrion": "Update Lyrion ({version})",
       "lyrionRestartNote": "The music server will be restarted when finished.",
       "msg": {
         "checkFailed": "Update check failed",

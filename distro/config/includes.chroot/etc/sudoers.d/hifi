@@ -1,11 +1,18 @@
 # HiFi Player - allow the kiosk user to run the system-control commands
 # used by api_server.py without a password prompt.
 #
-# Keep these as TIGHT as possible: every entry here is reachable with the kiosk
-# user's well-known default password, so a loose wildcard is a privilege-
-# escalation path. In particular `apt-get upgrade *` is NOT used — the trailing
-# wildcard would allow `-o DPkg::Pre-Invoke=<cmd>` / `-o APT::Update::Pre-Invoke`
-# which run arbitrary commands as root. Pin the exact invocation instead.
+# Keep these as TIGHT as possible: this file is the kiosk user's entire
+# privilege surface, and anything reachable from a compromised kiosk session is
+# reachable through it. In particular `apt-get upgrade *` is NOT used — the
+# trailing wildcard would allow `-o DPkg::Pre-Invoke=<cmd>` /
+# `-o APT::Update::Pre-Invoke` which run arbitrary commands as root. Pin the
+# exact invocation instead.
+#
+# The human SSH/console login is a DIFFERENT account: created from the admin
+# credential in the provisioning wizard (api_server.py set_shell_account) and
+# given real sudo via 'sudo' group membership, so it never needs an entry here.
+# 'hifi' stays out of the 'sudo' group — see 0002-security-hardening.sh, which
+# re-asserts that on every OS update.
 hifi ALL=(ALL) NOPASSWD: /sbin/reboot, /sbin/shutdown, /usr/sbin/reboot, /usr/sbin/shutdown
 hifi ALL=(ALL) NOPASSWD: /usr/bin/apt-get update, /usr/bin/apt-get upgrade -y, /usr/bin/apt-get install -y openssh-server
 hifi ALL=(ALL) NOPASSWD: /sbin/dhclient, /usr/sbin/dhclient, /usr/bin/ip, /sbin/ip

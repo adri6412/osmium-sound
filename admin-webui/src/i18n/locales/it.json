@@ -1,5 +1,9 @@
 {
-  "_meta": { "name": "Italiano", "flag": "🇮🇹", "locale": "it-IT" },
+  "_meta": {
+    "name": "Italiano",
+    "flag": "🇮🇹",
+    "locale": "it-IT"
+  },
   "common": {
     "back": "Indietro",
     "cancel": "Annulla",
@@ -39,7 +43,6 @@
     "noDevices": "Nessun dispositivo audio rilevato.",
     "musicTitle": "Musica e sorgenti",
     "openLyrion": "Apri Lyrion (libreria musicale) →",
-    "openSources": "Aggiungi sorgenti musicali →",
     "lyrionTitle": "Server musicale",
     "lyrionChecking": "Verifica di Lyrion Music Server…",
     "lyrionMissingHint": "Lyrion Music Server non risulta installato su questo dispositivo. Installalo ora per gestire la tua libreria musicale.",
@@ -51,7 +54,18 @@
     "finishing": "…",
     "doneTitle": "Tutto pronto",
     "goDashboard": "Vai alla dashboard",
-    "loading": "Caricamento…"
+    "loading": "Caricamento…",
+    "lyrionModeHint": "Il server musicale gira su questo dispositivo o ne usi uno che hai già?",
+    "lyrionInternal": "Interno (questo dispositivo)",
+    "lyrionExternal": "Esterno (già sulla mia rete)",
+    "lyrionExternalHint": "Scegli il server trovato sulla rete, oppure digita il suo indirizzo.",
+    "lyrionServerIp": "Indirizzo del server",
+    "lyrionSearch": "Cerca di nuovo",
+    "lyrionSearching": "Cerco sulla rete…",
+    "lyrionNoneFound": "Nessun server Lyrion trovato sulla rete al momento.",
+    "lyrionUseExternal": "Usa questo server",
+    "lyrionExternalFailed": "Impossibile passare a quel server. Controlla l'indirizzo e riprova.",
+    "musicHint": "Aggiungi le cartelle che contengono la tua musica. Puoi farlo anche più tardi da Impostazioni."
   },
   "dashboard": {
     "title": "Dashboard",
@@ -73,18 +87,54 @@
     "title": "Impostazioni",
     "backToSettings": "Impostazioni",
     "sections": {
-      "network": { "label": "Rete", "desc": "Wi-Fi, cavo, indirizzo IP" },
-      "audio": { "label": "Uscita audio", "desc": "DAC e nome del player" },
-      "sources": { "label": "Sorgenti musicali", "desc": "Cartelle, USB, condivisioni di rete, CD" },
-      "dsp": { "label": "DSP / Equalizzatore", "desc": "Motore DSP, crossfeed, preset" },
-      "services": { "label": "Servizi", "desc": "Tidal Connect, accesso SSH" },
-      "multiroom": { "label": "Multiroom / Server", "desc": "Server proprio o segui un altro Lyrion" },
-      "display": { "label": "Modalità schermo", "desc": "Interfaccia su schermo o headless" },
-      "updates": { "label": "Aggiornamenti", "desc": "Canale stabile/sviluppo, 4 componenti" },
-      "companion": { "label": "App companion", "desc": "Associa un telefono Android (QR)" },
-      "account": { "label": "Account interfaccia web", "desc": "Nome utente e password" },
-      "language": { "label": "Lingua", "desc": "Lingua dell'interfaccia" },
-      "system": { "label": "Sistema", "desc": "Riavvio, spegnimento, ripristino di fabbrica" }
+      "network": {
+        "label": "Rete",
+        "desc": "Wi-Fi, cavo, indirizzo IP"
+      },
+      "audio": {
+        "label": "Uscita audio",
+        "desc": "DAC e nome del player"
+      },
+      "sources": {
+        "label": "Sorgenti musicali",
+        "desc": "Cartelle, USB, condivisioni di rete, CD"
+      },
+      "dsp": {
+        "label": "DSP / Equalizzatore",
+        "desc": "Motore DSP, crossfeed, preset"
+      },
+      "services": {
+        "label": "Servizi",
+        "desc": "Tidal Connect, accesso SSH"
+      },
+      "lyrion": {
+        "label": "Lyrion Music Server",
+        "desc": "Server musicale interno o esterno, e la sua versione"
+      },
+      "display": {
+        "label": "Modalità schermo",
+        "desc": "Interfaccia su schermo o headless"
+      },
+      "updates": {
+        "label": "Aggiornamenti",
+        "desc": "Canale stabile/sviluppo, 4 componenti"
+      },
+      "companion": {
+        "label": "App companion",
+        "desc": "Associa un telefono Android (QR)"
+      },
+      "account": {
+        "label": "Account interfaccia web",
+        "desc": "Nome utente e password"
+      },
+      "language": {
+        "label": "Lingua",
+        "desc": "Lingua dell'interfaccia"
+      },
+      "system": {
+        "label": "Sistema",
+        "desc": "Riavvio, spegnimento, ripristino di fabbrica"
+      }
     },
     "network": {
       "activeLabel": "Attiva",
@@ -153,16 +203,40 @@
       "remoteSupportOn": "Supporto remoto attivato",
       "remoteSupportOff": "Supporto remoto disattivato",
       "remoteSupportPending": "Richiesta inviata — in attesa di approvazione da parte del team di supporto",
-      "remoteSupportTimeout": "Richiesta di supporto remoto scaduta senza approvazione"
+      "remoteSupportTimeout": "Richiesta di supporto remoto scaduta senza approvazione",
+      "sshLoginIs": "Accesso SSH:",
+      "sshNoLogin": "Su questo dispositivo non è ancora stato creato un accesso SSH.",
+      "sshSudoWarning": "Questo accesso ha pieni diritti di amministratore (sudo) sull'apparecchio. SSH è per utenti esperti: usalo a tuo rischio.",
+      "sshUsername": "Nome utente SSH",
+      "sshPassword": "Password SSH (almeno 8 caratteri)",
+      "sshLoginCreate": "Crea accesso SSH",
+      "sshLoginUpdate": "Cambia password SSH",
+      "sshLoginSaved": "Accesso SSH aggiornato",
+      "sshLoginFailed": "Impossibile aggiornare l'accesso SSH"
     },
-    "multiroom": {
-      "hint": "Questo dispositivo può usare il proprio server musicale oppure seguire il Lyrion di un altro dispositivo sulla rete.",
-      "ownServer": "Server proprio",
-      "followAnother": "Segui un altro",
+    "lyrion": {
+      "hint": "Questo dispositivo può eseguire il proprio Lyrion Music Server oppure usarne uno già presente sulla rete.",
+      "internal": "Interno",
+      "external": "Esterno",
+      "internalHint": "Lyrion Music Server è in esecuzione su questo dispositivo e gestisce la tua libreria.",
+      "externalHint": "Scegli un server Lyrion già presente sulla rete, oppure digita il suo indirizzo.",
+      "installed": "Versione installata",
+      "notInstalled": "non installato",
+      "open": "Apri Lyrion →",
+      "channel": "Canale versione",
+      "channel_release": "Release",
+      "channel_nightly": "Nightly stabile",
+      "channel_dev": "Sviluppo",
+      "channelWarning": "Le build nightly e di sviluppo sono pre-release: qualche problema è possibile. Puoi tornare a Release in qualsiasi momento.",
+      "channelChanged": "Canale aggiornato",
+      "install": "Installa Lyrion",
+      "update": "Installa / aggiorna",
+      "installing": "Installazione di Lyrion…",
+      "installFailed": "Installazione di Lyrion fallita. Controlla la connessione e riprova.",
       "serverIpPlaceholder": "IP del server (es. 192.168.1.50)",
       "search": "Cerca",
       "searching": "Cerco server sulla rete…",
-      "roleUpdated": "Ruolo aggiornato"
+      "roleUpdated": "Server musicale aggiornato"
     },
     "display": {
       "currentLabel": "Attuale",
@@ -198,7 +272,6 @@
       "kindUi": "Interfaccia",
       "kindSystem": "Sistema",
       "kindOs": "Sistema operativo",
-      "kindLyrion": "Lyrion",
       "updating": "Aggiornamento {label}"
     },
     "companion": {

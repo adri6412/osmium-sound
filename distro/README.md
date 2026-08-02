@@ -191,7 +191,16 @@ sudo dd if=hifi-player-installer.iso of=/dev/sdX bs=4M status=progress conv=fsyn
 After reboot the machine boots **silently** straight into the fullscreen player:
 no desktop, no login screen, no visible GRUB.
 
-Default credentials (for SSH/maintenance): user `hifi` / password `hifi`.
+**No default credentials ship in the image.** The kiosk user `hifi` has no
+password at all and `root` is locked, so a freshly installed appliance carries
+nothing guessable. The SSH/console login is created from the admin account you
+set in the provisioning wizard: that same username/password becomes a Linux user
+with full sudo (`api_server.py` `set_shell_account`), and SSH itself stays
+disabled until you turn it on in Settings. On a device provisioned before this
+change, Settings → SSH offers a "create SSH login" form.
+
+Without such a login, recovery is physical: GRUB `init=/bin/bash`, or the
+kiosk's own "reset web-admin password" button on the touchscreen.
 
 ### Choosing automatic vs interactive install
 

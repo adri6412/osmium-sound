@@ -49,6 +49,7 @@ import subprocess
 import threading
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 
 from flask import Flask, jsonify, request, session, redirect, send_from_directory, Response
@@ -700,6 +701,27 @@ def _do_finalize():
     _save_prov_state(state)
 
 
+def _sync_shell_account(username, password):
+    """Mirror the admin credential into the Linux login used for SSH/console.
+
+    This is the only moment the plaintext password exists on the device, so it
+    is also the only moment the Linux account can be (re)provisioned. Failure is
+    deliberately non-fatal: the admin account must be created even on an image
+    where api_server is old or useradd is unavailable — the Settings → SSH panel
+    can provision the login later from the same endpoint."""
+    try:
+        body, status = _proxy(API_BASE, '/shell_account', method='POST',
+                              body={'username': username, 'password': password},
+                              timeout=60)
+        if status != 200 or not (body or {}).get('success'):
+            print(f'[webui] shell account sync refused: {(body or {}).get("message")}')
+            return False
+        return True
+    except Exception as e:
+        print(f'[webui] shell account sync failed: {e}')
+        return False
+
+
 def _set_display_mode(mode, live):
     args = ['/usr/local/sbin/hifi-display-mode.sh', 'set', mode]
     if live:
@@ -740,6 +762,10 @@ _AUTH_ROUTES = {
     ('/api/system/wired_dhcp', 'POST'): '/wired_dhcp',
     ('/api/system/ssh', 'GET'): '/ssh_status',
     ('/api/system/ssh', 'POST'): '/ssh_set',
+    # Deliberately NOT in _PROVISION_ROUTES: during first setup the Linux login
+    # is created server-side by _sync_shell_account(), over loopback.
+    ('/api/system/shell_account', 'GET'): '/shell_account',
+    ('/api/system/shell_account', 'POST'): '/shell_account',
     ('/api/system/remote_support', 'GET'): '/remote_support_status',
     ('/api/system/remote_support', 'POST'): '/remote_support_set',
     ('/api/system/ota_channel', 'GET'): '/ota_channel',
@@ -773,6 +799,8 @@ _AUTH_ROUTES = {
     ('/api/system/updates/lyrion/check', 'GET'): '/lyrion_update/check',
     ('/api/system/updates/lyrion/apply', 'POST'): '/lyrion_update/apply',
     ('/api/system/updates/lyrion/status', 'GET'): '/lyrion_update/status',
+    ('/api/system/lyrion_channel', 'GET'): '/lyrion_channel',
+    ('/api/system/lyrion_channel', 'POST'): '/lyrion_channel',
     ('/api/system/reboot', 'POST'): '/reboot',
     ('/api/system/shutdown', 'POST'): '/shutdown',
 }
@@ -784,6 +812,13 @@ _PROVISION_ROUTES = {
     ('/api/system/updates/lyrion/check', 'GET'): '/lyrion_update/check',
     ('/api/system/updates/lyrion/apply', 'POST'): '/lyrion_update/apply',
     ('/api/system/updates/lyrion/status', 'GET'): '/lyrion_update/status',
+    ('/api/system/lyrion_channel', 'GET'): '/lyrion_channel',
+    ('/api/system/lyrion_channel', 'POST'): '/lyrion_channel',
+    # The wizard offers "use a server already on my network" before the account
+    # exists, so the role switch and its discovery must be reachable pre-auth.
+    ('/api/system/lms_role', 'GET'): '/lms_role',
+    ('/api/system/lms_role', 'POST'): '/lms_role',
+    ('/api/system/discover_lms', 'GET'): '/discover_lms',
 }
 
 # CAPTIVE probe endpoints answered with a redirect to the portal while the AP
@@ -892,11 +927,12 @@ def auth_setup():
     if len(username) < 3 or len(password) < 8:
         return jsonify({'success': False, 'message': 'Utente ≥3 e password ≥8 caratteri'}), 400
     _create_user(username, password)
+    shell_ok = _sync_shell_account(username, password)
     session.clear()
     session['auth'] = True
     session['sv'] = _session_version()
     session.permanent = True
-    return jsonify({'success': True})
+    return jsonify({'success': True, 'shell_account': shell_ok})
 
 
 @app.route('/api/auth/login', methods=['POST'])
@@ -938,9 +974,10 @@ def auth_change_password():
     if len(username) < 3 or len(new) < 8:
         return jsonify({'success': False, 'message': 'Utente ≥3 e password ≥8 caratteri'}), 400
     _create_user(username, new)
+    shell_ok = _sync_shell_account(username, new)
     _bump_session_version()  # log every other session out
     session['sv'] = _session_version()  # keep THIS session valid
-    return jsonify({'success': True})
+    return jsonify({'success': True, 'shell_account': shell_ok})
 
 
 # ── provisioning endpoints (pre-auth: physical/RF proximity is the trust) ──
@@ -1271,8 +1308,14 @@ def sources_app():
     body, status = _proxy(SOURCES_BASE, '/api/pair/token', method='POST', body={})
     token = (body or {}).get('token')
     if not token:
-        return jsonify({'success': False, 'message': 'Pairing non disponibile'}), 502
-    return redirect(f'/sources-app?token={token}', code=302)
+        return jsonify({'success': False, 'code': 'sources.pairUnavailable',
+                        'message': 'Pairing is unavailable.'}), 502
+    # Keep the caller's other params (lang= picks the page language, back= gives
+    # it a way home) — dropping them here would send the user to an Italian
+    # dead-end page.
+    extra = ''.join(f'&{k}={urllib.parse.quote(v)}'
+                    for k, v in request.args.items() if k != 'token')
+    return redirect(f'/sources-app?token={token}{extra}', code=302)
 
 
 @app.route('/api/<path:rest>', methods=['GET', 'POST', 'PUT', 'DELETE'])
