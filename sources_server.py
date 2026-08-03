@@ -1124,8 +1124,27 @@ def _restore_apply_side_effects(restored):
         # it reopens the database, and expect the operator to log in again.
         _run(["systemctl", "restart", "hifi-webui"], timeout=30)
         notes.append("Web admin riavviato (nuovo login necessario)")
-    if "/etc/hifi-player/samba-cred.json" in restored:
+    if SAMBA_CRED_FILE in restored:
+        # The restored file's `synced` flag describes whichever machine's
+        # Samba passdb it was written on, not this one's — _create_samba_user
+        # would trust a stale "true" and skip pushing the password into
+        # smbpasswd, leaving smbd still authenticating with its OWN old
+        # password while the UI shows the one that was just restored. Force
+        # the resync so the restored password is what smbd actually accepts.
+        try:
+            with open(SAMBA_CRED_FILE) as f:
+                cred = json.load(f)
+            cred["synced"] = False
+            tmp = SAMBA_CRED_FILE + ".tmp"
+            with open(tmp, "w") as f:
+                json.dump(cred, f)
+            os.chmod(tmp, 0o600)
+            os.replace(tmp, SAMBA_CRED_FILE)
+        except Exception as e:
+            print(f"[sources] samba-cred resync flag reset failed: {e}")
+        _create_samba_user()
         _run(["systemctl", "try-restart", "smbd"], timeout=30)
+        notes.append("Credenziali SMB risincronizzate")
     return notes
 
 

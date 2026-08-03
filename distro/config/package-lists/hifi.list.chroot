@@ -84,6 +84,15 @@ flac
 cd-discid
 eject
 
+# Lyrion Music Server transcoding helpers (convert.conf shells out to these;
+# it does NOT reuse squeezelite's playback libraries). Without them, Lyrion
+# can only pass formats through untouched — in practice only FLAC played.
+lame
+faad
+sox
+wavpack
+ffmpeg
+
 # Squeezelite (Debian build has VISEXPORT; -v exports /dev/shm/squeezelite-*)
 squeezelite
 
