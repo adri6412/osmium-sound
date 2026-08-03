@@ -448,8 +448,13 @@ export function useLyrionPlayer() {
   const duration     = currentTrack.duration || 0;
   const time         = playerStatus?.time || 0;
   const progress     = duration > 0 ? (time / duration) * 100 : 0;
-  const artworkUrl   = currentTrack.id ? lyrionApi.getArtworkUrl(currentTrack.id, 300) : null;
-  const artworkUrlLg = currentTrack.id ? lyrionApi.getArtworkUrl(currentTrack.id, 600) : null;
+  // Internet radio stations often push their own cover art via ICY metadata;
+  // LMS exposes it as an absolute `artwork_url` on the playlist entry. Prefer
+  // that over the local /music/{id}/cover endpoint (which for a radio stream
+  // just serves LMS's generic station-icon placeholder).
+  const remoteArtworkUrl = currentTrack.artwork_url ? safeUrl(currentTrack.artwork_url) : '';
+  const artworkUrl   = remoteArtworkUrl || (currentTrack.id ? lyrionApi.getArtworkUrl(currentTrack.id, 300) : null);
+  const artworkUrlLg = remoteArtworkUrl || (currentTrack.id ? lyrionApi.getArtworkUrl(currentTrack.id, 600) : null);
 
   const samplerate = currentTrack.samplerate;
   const samplesize = currentTrack.samplesize;
