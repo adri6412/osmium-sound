@@ -134,9 +134,6 @@ openssl
 isc-dhcp-client
 iproute2
 network-manager
-# age: decrypts the on-demand remote-support key minted via GitHub Actions
-# (see distro/os-update/apply.d/0030-remote-support-github.sh)
-age
 # dnsmasq-base is required by NetworkManager's ipv4.method=shared (the first-boot
 # setup Wi-Fi hotspot / captive portal). Not pulled in automatically because the
 # image is built --apt-recommends false.

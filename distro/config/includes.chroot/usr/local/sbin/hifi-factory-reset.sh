@@ -44,10 +44,12 @@ done
 log "removing user settings"
 # /etc/hifi-player: keep the OTA baseline + public key + channel; drop the rest,
 # INCLUDING the web-admin account DB + its per-device cookie/TLS material.
-# github-support-pat is re-provisioned automatically by the next OS-update
-# apply run (0030-remote-support-github.sh is idempotent) — dropping it here
-# just returns remote-support to its pre-OTA "not yet provisioned" state,
-# same as a fresh, never-updated install.
+# github-support-pat is a leftover of the retired vendor remote-support flow
+# (nothing re-provisions it any more); wiping it here is just cleanup on
+# devices that still have one from an older release. Tailscale's own node
+# state (the owner's tailnet membership) lives under /var/lib/tailscale, not
+# here, so a factory reset does NOT disconnect it — the owner disconnects
+# from Settings → Tailscale (or the Tailscale admin console) if they want to.
 for f in display-mode pointer-enabled dsp.json dsp-presets.json bluetooth.json \
          samba-cred.json provisioning-state.json webui.db webui-secret.key \
          webui-cert.pem webui-key.pem github-support-pat lyrion-channel; do

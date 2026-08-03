@@ -107,6 +107,10 @@
         "label": "Servizi",
         "desc": "Tidal Connect, accesso SSH"
       },
+      "tailscale": {
+        "label": "Tailscale",
+        "desc": "Raggiungi l'apparecchio dalla tua tailnet"
+      },
       "lyrion": {
         "label": "Lyrion Music Server",
         "desc": "Server musicale interno o esterno, e la sua versione"
@@ -202,12 +206,6 @@
       "sshOn": "SSH attivato",
       "sshOff": "SSH disattivato",
       "tidalUpdated": "Tidal Connect aggiornato",
-      "remoteSupport": "Supporto remoto",
-      "remoteSupportHint": "Consente al team di supporto di collegarsi al dispositivo tramite una rete privata (Tailscale), non un link pubblico. Ogni richiesta deve essere approvata da una persona del team di supporto. Resta attivo finché non lo disattivi.",
-      "remoteSupportOn": "Supporto remoto attivato",
-      "remoteSupportOff": "Supporto remoto disattivato",
-      "remoteSupportPending": "Richiesta inviata — in attesa di approvazione da parte del team di supporto",
-      "remoteSupportTimeout": "Richiesta di supporto remoto scaduta senza approvazione",
       "sshLoginIs": "Accesso SSH:",
       "sshNoLogin": "Su questo dispositivo non è ancora stato creato un accesso SSH.",
       "sshSudoWarning": "Questo accesso ha pieni diritti di amministratore (sudo) sull'apparecchio. SSH è per utenti esperti: usalo a tuo rischio.",
@@ -217,6 +215,18 @@
       "sshLoginUpdate": "Cambia password SSH",
       "sshLoginSaved": "Accesso SSH aggiornato",
       "sshLoginFailed": "Impossibile aggiornare l'accesso SSH"
+    },
+    "tailscale": {
+      "hint": "Collega questo apparecchio alla tua rete Tailscale personale (tailnet) per raggiungerlo — interfaccia web, Lyrion Music Server, condivisioni di rete, tutto — da ovunque arrivi la tua tailnet, ad esempio per accedere alla libreria musicale fuori casa. Non è un link pubblico: solo i dispositivi della tua tailnet possono raggiungerlo.",
+      "unavailable": "Tailscale non è ancora installato su questo dispositivo. Completa un aggiornamento di sistema e riprova.",
+      "toggle": "Tailscale",
+      "connectedHint": "Connesso — raggiungibile su {ip}",
+      "disconnectedHint": "Non connesso",
+      "authkeyLabel": "Chiave di accesso",
+      "authkeyHint": "Generane una su login.tailscale.com/admin/settings/keys (il tuo account Tailscale) e incollala qui. Serve solo la prima volta: da quel momento il dispositivo resta autenticato.",
+      "on": "Tailscale connesso",
+      "off": "Tailscale disconnesso",
+      "failed": "Impossibile aggiornare Tailscale"
     },
     "lyrion": {
       "hint": "Questo dispositivo può eseguire il proprio Lyrion Music Server oppure usarne uno già presente sulla rete.",

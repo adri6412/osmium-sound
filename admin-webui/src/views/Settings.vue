@@ -20,6 +20,7 @@ const sections = computed(() => [
   { key: 'sources',   label: t('settings.sections.sources.label'),   desc: t('settings.sections.sources.desc') },
   { key: 'dsp',       label: t('settings.sections.dsp.label'),       desc: t('settings.sections.dsp.desc') },
   { key: 'services',  label: t('settings.sections.services.label'),  desc: t('settings.sections.services.desc') },
+  { key: 'tailscale', label: t('settings.sections.tailscale.label'), desc: t('settings.sections.tailscale.desc') },
   { key: 'lyrion',    label: t('settings.sections.lyrion.label'),    desc: t('settings.sections.lyrion.desc') },
   { key: 'display',   label: t('settings.sections.display.label'),   desc: t('settings.sections.display.desc') },
   { key: 'updates',   label: t('settings.sections.updates.label'),   desc: t('settings.sections.updates.desc') },
@@ -166,15 +167,12 @@ async function removeFir() {
   loadFir();
 }
 
-// ── Tidal / SSH / Remote support ──────────────────────────────────
+// ── Tidal / SSH ─────────────────────────────────────────────────
 const tidal = reactive({ available: false, enabled: false });
 const sshState = reactive({ available: false, enabled: false });
-const remoteSupport = reactive({ available: true, connected: false, pending: false });
 async function loadToggles() {
   const tv = await api.sys('tidal'); if (tv.ok) { tidal.available = !!tv.data.available; tidal.enabled = !!tv.data.enabled; }
   const s = await api.sys('ssh'); if (s.ok) { sshState.available = !!s.data.available; sshState.enabled = !!s.data.enabled; }
-  const rs = await api.sys('remote_support');
-  if (rs.ok) { remoteSupport.connected = !!rs.data.connected; remoteSupport.pending = !!rs.data.pending; }
 }
 async function setTidal(v) {
   tidal.enabled = v; const r = await api.sysPost('tidal', { enable: v });
@@ -211,43 +209,27 @@ async function saveShellAccount() {
   say(bodyMsg(r, ok ? t('settings.services.sshLoginSaved') : t('settings.services.sshLoginFailed')), !ok);
   if (ok) { shell.password = ''; loadShell(); }
 }
-let remoteSupportPollTimer = null;
-async function setRemoteSupport(v) {
-  clearTimeout(remoteSupportPollTimer);
-  if (!v) {
-    remoteSupport.connected = false; remoteSupport.pending = false;
-    const r = await api.sysPost('remote_support', { enable: false });
-    say(bodyMsg(r, t('settings.services.remoteSupportOff')), !(r.ok && r.data.success !== false));
-    loadToggles();
-    return;
+// ── Tailscale — join the owner's own tailnet, exposing every port on this
+// appliance (web UI, Lyrion, SMB, ...) from anywhere that tailnet reaches, so
+// the music library stays reachable away from home. Not the old remote-support
+// flow: no vendor infra, no approval step — just the owner's own auth key.
+const tailscale = reactive({ available: true, connected: false, ip: '', authkey: '', busy: false });
+async function loadTailscale() {
+  const r = await api.sys('tailscale');
+  if (r.ok) {
+    tailscale.available = !!r.data.available;
+    tailscale.connected = !!r.data.connected;
+    tailscale.ip = r.data.ip || '';
   }
-  const r = await api.sysPost('remote_support', { enable: true });
-  if (r.ok && r.data.pending) {
-    remoteSupport.pending = true;
-    say(bodyMsg(r, t('settings.services.remoteSupportPending')), false);
-    pollRemoteSupport();
-  } else {
-    say(bodyMsg(r, t('settings.services.remoteSupportOn')), !(r.ok && r.data.success !== false));
-  }
-  loadToggles();
 }
-// Approval happens on GitHub and can take a while (a human has to see and act
-// on it) — poll every 4s, up to ~10 minutes, matching the backend's own mint
-// timeout (api_server.py _REMOTE_SUPPORT_POLL_TIMEOUT).
-async function pollRemoteSupport(attemptsLeft = 150) {
-  if (attemptsLeft <= 0) {
-    remoteSupport.pending = false;
-    say(t('settings.services.remoteSupportTimeout'), true);
-    return;
-  }
-  const rs = await api.sys('remote_support');
-  if (rs.ok) {
-    remoteSupport.connected = !!rs.data.connected;
-    remoteSupport.pending = !!rs.data.pending;
-    if (rs.data.connected) { say(t('settings.services.remoteSupportOn')); return; }
-    if (!rs.data.pending && rs.data.error) { say(rs.data.error, true); return; }
-  }
-  if (remoteSupport.pending) remoteSupportPollTimer = setTimeout(() => pollRemoteSupport(attemptsLeft - 1), 4000);
+async function setTailscale(v) {
+  tailscale.busy = true;
+  const r = await api.sysPost('tailscale', v ? { enable: true, authkey: tailscale.authkey } : { enable: false });
+  tailscale.busy = false;
+  const ok = r.ok && r.data.success !== false;
+  say(bodyMsg(r, ok ? (v ? t('settings.tailscale.on') : t('settings.tailscale.off')) : t('settings.tailscale.failed')), !ok);
+  if (ok && v) tailscale.authkey = '';
+  loadTailscale();
 }
 
 // ── Lyrion Music Server: internal vs external, plus install/update ─────
@@ -615,9 +597,9 @@ async function saveBackupScheduled(v) {
 
 onMounted(async () => {
   loadNet(); loadAudio(); loadDsp(); loadFir(); loadToggles(); loadShell(); loadLms(); loadLyrion();
-  loadMode(); loadChannel(); checkAll(); resumePlanIfRunning(); loadBackups();
+  loadMode(); loadChannel(); checkAll(); resumePlanIfRunning(); loadBackups(); loadTailscale();
 });
-onUnmounted(() => { clearTimeout(remoteSupportPollTimer); if (lyrionPoll) clearInterval(lyrionPoll); });
+onUnmounted(() => { if (lyrionPoll) clearInterval(lyrionPoll); });
 </script>
 
 <template>
@@ -737,12 +719,28 @@ onUnmounted(() => { clearTimeout(remoteSupportPollTimer); if (lyrionPoll) clearI
           </button>
         </div>
       </template>
-      <div class="between item">
-        <span>{{ t('settings.services.remoteSupport') }}
-          <span class="muted">{{ remoteSupport.pending ? t('settings.services.remoteSupportPending') : t('settings.services.remoteSupportHint') }}</span>
-        </span>
-        <Toggle :model-value="remoteSupport.connected || remoteSupport.pending" :disabled="remoteSupport.pending" @update:model-value="setRemoteSupport" />
-      </div>
+    </div>
+
+    <!-- Tailscale: join the owner's OWN tailnet, exposing every port on the
+         appliance so the music library is reachable away from home. -->
+    <div class="card" v-if="open === 'tailscale'">
+      <p class="sub">{{ t('settings.tailscale.hint') }}</p>
+      <template v-if="!tailscale.available">
+        <p class="sub">{{ t('settings.tailscale.unavailable') }}</p>
+      </template>
+      <template v-else>
+        <div class="between item">
+          <span>{{ t('settings.tailscale.toggle') }}
+            <span class="muted">{{ tailscale.connected ? t('settings.tailscale.connectedHint', { ip: tailscale.ip }) : t('settings.tailscale.disconnectedHint') }}</span>
+          </span>
+          <Toggle :model-value="tailscale.connected" :disabled="tailscale.busy" @update:model-value="setTailscale" />
+        </div>
+        <template v-if="!tailscale.connected">
+          <label>{{ t('settings.tailscale.authkeyLabel') }}</label>
+          <input v-model="tailscale.authkey" autocomplete="off" placeholder="tskey-auth-..." />
+          <p class="sub">{{ t('settings.tailscale.authkeyHint') }}</p>
+        </template>
+      </template>
     </div>
 
     <!-- Lyrion Music Server: internal vs external, and which build to run -->

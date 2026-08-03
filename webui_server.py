@@ -785,8 +785,8 @@ _AUTH_ROUTES = {
     # is created server-side by _sync_shell_account(), over loopback.
     ('/api/system/shell_account', 'GET'): '/shell_account',
     ('/api/system/shell_account', 'POST'): '/shell_account',
-    ('/api/system/remote_support', 'GET'): '/remote_support_status',
-    ('/api/system/remote_support', 'POST'): '/remote_support_set',
+    ('/api/system/tailscale', 'GET'): '/tailscale_status',
+    ('/api/system/tailscale', 'POST'): '/tailscale_set',
     ('/api/system/ota_channel', 'GET'): '/ota_channel',
     ('/api/system/ota_channel', 'POST'): '/ota_channel',
     ('/api/system/audio_devices', 'GET'): '/audio_devices',
@@ -1208,7 +1208,7 @@ def _handle_proxy(local_path, method):
     body = request.get_json(silent=True) if method != 'GET' else None
     data, status = _proxy(API_BASE, api_path, method=method, body=body,
                           timeout=90 if 'apply' in api_path or 'dsp' in api_path
-                          or 'remote_support' in api_path else 15)
+                          or 'tailscale' in api_path else 15)
     return jsonify(data), status
 
 

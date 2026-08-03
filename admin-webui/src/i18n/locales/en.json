@@ -107,6 +107,10 @@
         "label": "Services",
         "desc": "Tidal Connect, SSH access"
       },
+      "tailscale": {
+        "label": "Tailscale",
+        "desc": "Reach this appliance from your own tailnet"
+      },
       "lyrion": {
         "label": "Lyrion Music Server",
         "desc": "Internal or external music server, and its version"
@@ -201,12 +205,6 @@
       "sshHint": "(for support use only)",
       "sshOn": "SSH enabled",
       "sshOff": "SSH disabled",
-      "remoteSupport": "Remote support",
-      "remoteSupportHint": "Lets the support team connect to the device over a private network (Tailscale), not a public link. Each request needs a human to approve it on the support team's side. Stays on until you turn it off.",
-      "remoteSupportOn": "Remote support enabled",
-      "remoteSupportOff": "Remote support disabled",
-      "remoteSupportPending": "Request sent — waiting for the support team to approve it",
-      "remoteSupportTimeout": "Remote support request timed out without approval",
       "tidalUpdated": "Tidal Connect updated",
       "sshLoginIs": "SSH login:",
       "sshNoLogin": "No SSH login has been created on this device yet.",
@@ -217,6 +215,18 @@
       "sshLoginUpdate": "Change SSH password",
       "sshLoginSaved": "SSH login updated",
       "sshLoginFailed": "Could not update the SSH login"
+    },
+    "tailscale": {
+      "hint": "Join this appliance to your own Tailscale network (tailnet) so you can reach it — web UI, Lyrion Music Server, network shares, everything — from anywhere your tailnet reaches, e.g. to get at your music library away from home. This is not a public link: only devices on your own tailnet can reach it.",
+      "unavailable": "Tailscale isn't installed on this device yet. Complete a system update and try again.",
+      "toggle": "Tailscale",
+      "connectedHint": "Connected — reachable at {ip}",
+      "disconnectedHint": "Not connected",
+      "authkeyLabel": "Auth key",
+      "authkeyHint": "Generate one at login.tailscale.com/admin/settings/keys (your own Tailscale account) and paste it here. Only needed the first time — the device stays authenticated after that.",
+      "on": "Tailscale connected",
+      "off": "Tailscale disconnected",
+      "failed": "Could not update Tailscale"
     },
     "lyrion": {
       "hint": "This device can run its own Lyrion Music Server, or use one that is already running on your network.",

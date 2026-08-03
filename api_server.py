@@ -17,7 +17,6 @@ import time
 import threading
 import zipfile
 import io
-import tempfile
 from hifi_logging import get_logger
 
 app = Flask(__name__)
@@ -1033,7 +1032,7 @@ def set_shell_account(username, password):
         elif not _user_in_group(username, 'sudo'):
             subprocess.run(['usermod', '-aG', 'sudo', username],
                            capture_output=True, text=True, timeout=20, check=True)
-        # Read the journal without sudo, like the remote-support account.
+        # Read the journal without needing sudo for it.
         subprocess.run(['usermod', '-aG', 'adm,systemd-journal', username],
                        capture_output=True, text=True, timeout=20)
         # Password on stdin — never on the command line, where it would be
@@ -1168,53 +1167,26 @@ def _support_bundle_build():
     return buf.getvalue()
 
 # ──────────────────────────────────────────────────────────────────
-#  Remote support (Tailscale) — lets the user grant/revoke a private,
-#  developer-only SSH tunnel on demand, for cases the support bundle above
-#  isn't enough to diagnose. NOT a public link: joining the tailnet only makes
-#  this box reachable from the developer's own Tailscale identity (ACL-
-#  restricted "hifi-support" tag), never from the internet at large.
-#
-#  Every key is minted on demand by a GitHub Actions workflow
-#  (.github/workflows/remote-support-mint.yml) gated behind a required
-#  reviewer on its "remote-support" Environment: a human (the developer) has
-#  to approve each request before the Tailscale OAuth credentials — which
-#  never leave GitHub — are used to mint a fresh, single-use, 5-minute key
-#  scoped to tag:hifi-support. The key is delivered back to this device
-#  encrypted (age) to a one-time public key generated for that one request,
-#  so even though this repo (and the resulting build artifact) is public,
-#  the ciphertext is useless to anyone without the matching private key,
-#  which never leaves the device. This replaces the old design (a single
-#  static, reusable key published at a public URL) which leaked publicly
-#  and is why this feature used to be able to "just work" without a human
-#  in the loop — see the security-fix plan for the full rationale.
-#
-#  Approval can take anywhere from seconds to hours, so minting runs in a
-#  background thread: the HTTP request only kicks it off and returns
-#  immediately ("pending"); the UI polls get_remote_support_status() for
-#  progress, same pattern as webui_server.py's _net_recovery.
+#  Tailscale — join the OWNER's OWN existing tailnet (their own Tailscale
+#  account), so the appliance and all of its ports (web UI, Lyrion, SMB,
+#  etc.) become reachable from anywhere that tailnet reaches — e.g. to get
+#  at the music library while away from home — without opening anything to
+#  the public internet. This talks only to Tailscale's own service, using
+#  an auth key the owner generates themselves at
+#  https://login.tailscale.com/admin/settings/keys and pastes into Settings;
+#  no vendor infrastructure or approval step is involved.
 # ──────────────────────────────────────────────────────────────────
-GITHUB_REPO = os.environ.get('HIFI_SUPPORT_GH_REPO', 'adri6412/osmium-sound')
-GITHUB_WORKFLOW = os.environ.get('HIFI_SUPPORT_GH_WORKFLOW', 'remote-support-mint.yml')
-GITHUB_API_BASE = 'https://api.github.com'
-GITHUB_PAT_FILE = '/etc/hifi-player/github-support-pat'
-TAILSCALE_HOSTNAME_PREFIX = 'hifi-support'
-_REMOTE_SUPPORT_POLL_TIMEOUT = 600  # seconds to wait for approval + minting
-_REMOTE_SUPPORT_POLL_INTERVAL = 5
-
-_remote_support_inflight = {'active': False, 'phase': None, 'error': None, 'cancelled': False}
-
-
 def _tailscale_available():
     return bool(shutil.which('tailscale'))
 
 
 def _device_label():
-    """Human-recognizable, per-device identifier for the reviewer approving a
-    remote-support request: every appliance ships with the SAME hostname
-    (preseed.cfg fixes it to 'hifiplayer'), so socket.gethostname() alone is
-    indistinguishable across the fleet. Combine the customer-chosen player
-    name (may also collide — it defaults to 'OsmiumSound') with a short,
-    genuinely unique-per-install suffix from /etc/machine-id."""
+    """Human-recognizable, per-device Tailscale hostname: every appliance
+    ships with the SAME hostname (preseed.cfg fixes it to 'hifiplayer'), so
+    socket.gethostname() alone would collide across a tailnet with more than
+    one unit. Combine the customer-chosen player name (may also collide — it
+    defaults to 'OsmiumSound') with a short, genuinely unique-per-install
+    suffix from /etc/machine-id."""
     try:
         with open('/etc/machine-id') as f:
             machine_id = f.read().strip()
@@ -1225,187 +1197,7 @@ def _device_label():
     return f'{name}-{suffix}'
 
 
-def _age_available():
-    return bool(shutil.which('age')) and bool(shutil.which('age-keygen'))
-
-
-def _load_github_pat():
-    try:
-        with open(GITHUB_PAT_FILE, 'r') as f:
-            return f.read().strip() or None
-    except Exception:
-        return None
-
-
-def _github_api(method, url_or_path, token, body=None, timeout=20):
-    url = url_or_path if url_or_path.startswith('http') else f'{GITHUB_API_BASE}{url_or_path}'
-    data = json.dumps(body).encode() if body is not None else None
-    req = urllib.request.Request(url, method=method, data=data, headers={
-        'Authorization': f'Bearer {token}',
-        'Accept': 'application/vnd.github+json',
-        'Content-Type': 'application/json',
-    })
-    try:
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
-            raw = resp.read()
-            return resp.status, (json.loads(raw) if raw else None)
-    except urllib.error.HTTPError as e:
-        raw = e.read()
-        try:
-            return e.code, json.loads(raw)
-        except Exception:
-            return e.code, None
-    except Exception:
-        log.exception("GitHub API request failed: %s %s", method, url_or_path)
-        return None, None
-
-
-def _dispatch_mint_workflow(token, recipient, hostname):
-    """Kicks off remote-support-mint.yml; returns the new run id, or None."""
-    status, body = _github_api(
-        'POST', f'/repos/{GITHUB_REPO}/actions/workflows/{GITHUB_WORKFLOW}/dispatches', token,
-        {'ref': 'main', 'inputs': {'recipient': recipient, 'hostname': hostname},
-         'return_run_details': True})
-    if status in (200, 201) and body and body.get('workflow_run_id'):
-        return body['workflow_run_id']
-    if status != 204:
-        log.error("workflow dispatch failed: HTTP %s %r", status, body)
-        return None
-    # Older API behaviour (no run id in the dispatch response): find it by
-    # listing the most recent workflow_dispatch runs and matching the
-    # run-name we set in the workflow (it embeds the hostname we just sent).
-    for _ in range(6):
-        time.sleep(2)
-        status, body = _github_api(
-            'GET', f'/repos/{GITHUB_REPO}/actions/workflows/{GITHUB_WORKFLOW}/runs'
-                   f'?event=workflow_dispatch&per_page=5', token)
-        if status == 200 and body:
-            for run in body.get('workflow_runs', []):
-                if hostname in (run.get('display_title') or run.get('name') or ''):
-                    return run['id']
-    log.error("could not find dispatched run for %s", hostname)
-    return None
-
-
-class _NoRedirectHandler(urllib.request.HTTPRedirectHandler):
-    """Stops urllib from auto-following the artifact download redirect. GitHub's
-    archive_download_url 302s to a pre-signed Azure Blob Storage URL (auth is in
-    its query string) — if our GitHub Bearer token is forwarded along with it
-    (urllib's default behaviour), Azure rejects the request with 401 instead of
-    honouring the signed URL. So we catch the redirect ourselves and issue the
-    second hop as a plain, header-less request."""
-    def redirect_request(self, req, fp, code, msg, headers, newurl):
-        return None
-
-
-def _fetch_minted_key(run_id, identity_path, token):
-    status, artifacts = _github_api(
-        'GET', f'/repos/{GITHUB_REPO}/actions/runs/{run_id}/artifacts', token)
-    if status != 200 or not artifacts:
-        log.error("listing run %s artifacts failed: HTTP %s", run_id, status)
-        return None
-    match = next((a for a in artifacts.get('artifacts', [])
-                  if a.get('name', '').startswith('support-key-')), None)
-    if not match:
-        log.error("no support-key-* artifact on run %s", run_id)
-        return None
-    req = urllib.request.Request(match['archive_download_url'], headers={
-        'Authorization': f'Bearer {token}',
-        'Accept': 'application/vnd.github+json',
-    })
-    try:
-        opener = urllib.request.build_opener(_NoRedirectHandler)
-        try:
-            with opener.open(req, timeout=20) as resp:
-                zip_bytes = resp.read()
-        except urllib.error.HTTPError as e:
-            if e.code not in (301, 302, 303, 307, 308) or not e.headers.get('Location'):
-                raise
-            with urllib.request.urlopen(e.headers['Location'], timeout=20) as resp:
-                zip_bytes = resp.read()
-    except Exception:
-        log.exception("artifact download failed")
-        return None
-    try:
-        with zipfile.ZipFile(io.BytesIO(zip_bytes)) as z:
-            age_name = next(n for n in z.namelist() if n.endswith('.age'))
-            ciphertext = z.read(age_name)
-    except Exception:
-        log.exception("artifact unpack failed")
-        return None
-    try:
-        r = subprocess.run(['age', '-d', '-i', identity_path], input=ciphertext,
-                           capture_output=True, timeout=15)
-        if r.returncode != 0:
-            log.error("age decrypt failed: %s", (r.stderr or b'').decode('utf-8', 'replace'))
-            return None
-        return r.stdout.decode('utf-8', 'replace').strip() or None
-    except Exception:
-        log.exception("age decrypt failed")
-        return None
-
-
-def _apply_tailscale_authkey(authkey, hostname):
-    try:
-        r = subprocess.run(['sudo', 'tailscale', 'up', f'--authkey={authkey}', '--ssh',
-                            f'--hostname={hostname}', '--accept-risk=lose-ssh'],
-                           capture_output=True, text=True, timeout=60)
-        if r.returncode != 0:
-            log.error("tailscale up failed: %s", (r.stderr or '').strip())
-            return False
-        return True
-    except Exception:
-        log.exception("tailscale up failed")
-        return False
-
-
-def _remote_support_worker(run_id, identity_path, hostname):
-    token = _load_github_pat()
-    deadline = time.time() + _REMOTE_SUPPORT_POLL_TIMEOUT
-    try:
-        while time.time() < deadline:
-            if _remote_support_inflight.get('cancelled'):
-                return
-            time.sleep(_REMOTE_SUPPORT_POLL_INTERVAL)
-            status, run = _github_api('GET', f'/repos/{GITHUB_REPO}/actions/runs/{run_id}', token)
-            if status != 200 or not run:
-                continue
-            run_status = run.get('status')
-            _remote_support_inflight['phase'] = (
-                'pending_approval' if run_status == 'waiting' else 'minting')
-            if run_status != 'completed':
-                continue
-            if run.get('conclusion') != 'success':
-                _remote_support_inflight.update(
-                    active=False, phase='error',
-                    error='Richiesta di supporto remoto non approvata o fallita')
-                return
-            authkey = _fetch_minted_key(run_id, identity_path, token)
-            if not authkey or _remote_support_inflight.get('cancelled'):
-                if not authkey:
-                    _remote_support_inflight.update(
-                        active=False, phase='error',
-                        error='Impossibile recuperare la chiave di accesso')
-                return
-            if _apply_tailscale_authkey(authkey, hostname):
-                _remote_support_inflight.update(active=False, phase='connected', error=None)
-            else:
-                _remote_support_inflight.update(
-                    active=False, phase='error',
-                    error='Attivazione supporto remoto fallita')
-            return
-        _remote_support_inflight.update(
-            active=False, phase='error',
-            error='Richiesta di supporto remoto scaduta senza approvazione')
-    except Exception:
-        log.exception("remote support mint worker failed")
-        _remote_support_inflight.update(
-            active=False, phase='error', error='Attivazione supporto remoto fallita')
-    finally:
-        shutil.rmtree(os.path.dirname(identity_path), ignore_errors=True)
-
-
-def get_remote_support_status():
+def get_tailscale_status():
     if not _tailscale_available():
         return {'available': False, 'connected': False}
     try:
@@ -1414,89 +1206,55 @@ def get_remote_support_status():
         st = json.loads(r.stdout or '{}')
         backend = st.get('BackendState', '')
         connected = backend == 'Running'
+        self_node = st.get('Self') or {}
+        ips = self_node.get('TailscaleIPs') or []
     except Exception:
-        log.exception("get_remote_support_status failed")
+        log.exception("get_tailscale_status failed")
         return {'available': True, 'connected': False, 'error': 'Stato non disponibile'}
-    out = {'available': True, 'connected': connected, 'backend_state': backend}
-    if _remote_support_inflight.get('active'):
-        out['pending'] = True
-        out['phase'] = _remote_support_inflight.get('phase')
-    elif _remote_support_inflight.get('phase') == 'error':
-        out['error'] = _remote_support_inflight.get('error')
-    return out
+    return {'available': True, 'connected': connected, 'backend_state': backend,
+            'ip': ips[0] if ips else '', 'hostname': self_node.get('HostName') or ''}
 
 
-def set_remote_support(enable):
-    """Grant (request a fresh, human-approved Tailscale key and join the
-    tailnet) or revoke (logout) remote support access. Granting is
-    asynchronous: this kicks off the request and returns immediately — the
-    caller polls get_remote_support_status() while a human approves it on
-    GitHub. No auto-expiry once connected: stays active until explicitly
-    disabled."""
+def set_tailscale(enable, authkey=None):
+    """Join (or leave) the owner's own tailnet. Joining needs an auth key the
+    first time (or after a full logout); once the node is authenticated,
+    Tailscale itself remembers it across reboots, so re-enabling later needs
+    no key. Leaving uses 'down' (disconnect, keep the node's identity) rather
+    than 'logout' (which would deregister it), so a later toggle-on doesn't
+    force the owner to paste a fresh key again."""
+    if not _tailscale_available():
+        return {'success': False, 'available': False, 'connected': False,
+                'message': 'Tailscale non è installato sul dispositivo. Completa l\'aggiornamento di sistema e riprova.'}
     if enable:
-        if not _tailscale_available():
-            return {'success': False, 'available': False, 'connected': False,
-                    'message': 'Tailscale non è ancora installato sul dispositivo. Completa l\'aggiornamento di sistema e riprova.'}
-        if not _age_available():
-            return {'success': False, 'available': True, 'connected': False,
-                    'message': 'Componente di cifratura mancante sul dispositivo. Completa l\'aggiornamento di sistema e riprova.'}
-        token = _load_github_pat()
-        if not token:
-            return {'success': False, 'available': True, 'connected': False,
-                    'message': 'Dispositivo non ancora predisposto per il supporto remoto — completa l\'aggiornamento di sistema e riprova.'}
-        if _remote_support_inflight.get('active'):
-            return {'success': True, 'available': True, 'connected': False, 'pending': True,
-                    'message': 'Richiesta di supporto remoto già in corso — in attesa di approvazione.'}
-
-        # age-keygen -o refuses to write to a file that already exists, so we
-        # only reserve a unique path here (mkdtemp creates the dir, not the
-        # file) and let age-keygen create the identity file itself.
-        identity_dir = tempfile.mkdtemp(prefix='hifi-support-age-')
-        identity_path = os.path.join(identity_dir, 'identity')
+        authkey = (authkey or '').strip()
+        cmd = ['sudo', 'tailscale', 'up', f'--hostname={_device_label()}']
+        if authkey:
+            cmd.append(f'--authkey={authkey}')
         try:
-            r = subprocess.run(['age-keygen', '-o', identity_path],
-                               capture_output=True, text=True, timeout=10)
+            r = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
             if r.returncode != 0:
-                raise RuntimeError((r.stderr or '').strip())
-            r = subprocess.run(['age-keygen', '-y', identity_path],
-                               capture_output=True, text=True, timeout=10)
-            recipient = (r.stdout or '').strip()
-            if r.returncode != 0 or not recipient:
-                raise RuntimeError((r.stderr or '').strip())
+                err = (r.stderr or '').strip()
+                log.error("tailscale up failed: %s", err)
+                message = ('Chiave di accesso Tailscale mancante o non valida' if not authkey
+                           else 'Attivazione Tailscale fallita — controlla la chiave di accesso')
+                return {'success': False, 'available': True, 'connected': False, 'message': message}
         except Exception:
-            log.exception("age keypair generation failed")
-            shutil.rmtree(identity_dir, ignore_errors=True)
+            log.exception("tailscale up failed")
             return {'success': False, 'available': True, 'connected': False,
-                    'message': 'Impossibile preparare la richiesta di supporto remoto'}
+                    'message': 'Attivazione Tailscale fallita'}
+        status = get_tailscale_status()
+        status['success'] = True
+        status['message'] = 'Tailscale attivato'
+        return status
 
-        hostname = f'{TAILSCALE_HOSTNAME_PREFIX}-{_device_label()}'
-        run_id = _dispatch_mint_workflow(token, recipient, hostname)
-        if not run_id:
-            shutil.rmtree(identity_dir, ignore_errors=True)
-            return {'success': False, 'available': True, 'connected': False,
-                    'message': 'Impossibile inviare la richiesta di supporto remoto — riprova più tardi'}
-
-        _remote_support_inflight.update(active=True, phase='pending_approval',
-                                        error=None, cancelled=False)
-        threading.Thread(target=_remote_support_worker,
-                         args=(run_id, identity_path, hostname), daemon=True).start()
-        return {'success': True, 'available': True, 'connected': False, 'pending': True,
-                'message': 'Richiesta inviata: in attesa di approvazione da parte del team di supporto.'}
-
-    # disable — also cancels an in-flight request, if any
-    _remote_support_inflight['cancelled'] = True
-    if _remote_support_inflight.get('active'):
-        _remote_support_inflight.update(active=False, phase=None, error=None)
-    if _tailscale_available():
-        try:
-            subprocess.run(['sudo', 'tailscale', 'logout'],
-                           capture_output=True, text=True, timeout=30)
-        except Exception:
-            log.exception("set_remote_support(disable) failed")
-            return {'success': False, 'message': 'Disattivazione supporto remoto fallita'}
-    status = get_remote_support_status()
+    try:
+        subprocess.run(['sudo', 'tailscale', 'down'], capture_output=True, text=True, timeout=30)
+    except Exception:
+        log.exception("set_tailscale(disable) failed")
+        return {'success': False, 'message': 'Disattivazione Tailscale fallita'}
+    status = get_tailscale_status()
     status['success'] = True
-    status['message'] = 'Supporto remoto disattivato'
+    status['message'] = 'Tailscale disattivato'
     return status
 
 # ──────────────────────────────────────────────────────────────────
@@ -3707,14 +3465,14 @@ def api_support_bundle():
         f'attachment; filename="hifi-support-{socket.gethostname()}-{stamp}.zip"'
     return resp
 
-@app.route('/remote_support_status', methods=['GET'])
-def api_remote_support_status():
-    return jsonify(get_remote_support_status())
+@app.route('/tailscale_status', methods=['GET'])
+def api_tailscale_status():
+    return jsonify(get_tailscale_status())
 
-@app.route('/remote_support_set', methods=['POST'])
-def api_remote_support_set():
+@app.route('/tailscale_set', methods=['POST'])
+def api_tailscale_set():
     data = request.get_json(silent=True) or {}
-    return jsonify(set_remote_support(bool(data.get('enable'))))
+    return jsonify(set_tailscale(bool(data.get('enable')), data.get('authkey')))
 
 @app.route('/pointer_status', methods=['GET'])
 def api_pointer_status():

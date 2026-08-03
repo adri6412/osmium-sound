@@ -8,7 +8,7 @@
 # gets an implicit `Before=multi-user.target`, so the target (and graphical.
 # target, which Requires it) isn't "reached" until every such unit has started
 # — even ones the kiosk UI never actually waits on in practice (file sharing,
-# the Tailscale remote-support tunnel, SSH).
+# the owner's own Tailscale tailnet, SSH).
 #
 # This is the same pattern commercial appliances use: the UI comes up as soon
 # as its own real prerequisites (display, network) are ready; slower
