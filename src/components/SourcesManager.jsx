@@ -52,6 +52,13 @@ export default function SourcesManager() {
     return () => clearInterval(id);
   }, [loadSources, loadUsb]);
 
+  // Tell App.jsx's global "USB detected" prompt to stay quiet while this
+  // screen is already open — the user can see and adopt the drive right here.
+  useEffect(() => {
+    window.dispatchEvent(new CustomEvent('hifi-sources-page-active', { detail: true }));
+    return () => window.dispatchEvent(new CustomEvent('hifi-sources-page-active', { detail: false }));
+  }, []);
+
   const addLocal = async () => {
     const path = localPath.trim();
     if (!path) return;
@@ -69,6 +76,16 @@ export default function SourcesManager() {
       const r = await post('/api/sources/local', { path });
       setMsg(r.success ? t('sources.added') : (r.message || t('common.error')));
       if (r.success) loadSources();
+    } catch (_) { setMsg(t('common.error')); } finally { setBusy(false); }
+  };
+
+  const adoptUsb = async (device) => {
+    setBusy(true);
+    setMsg(t('sources.internal.adopting'));
+    try {
+      const r = await post('/api/usb/adopt', { device });
+      setMsg(r.success ? t('sources.internal.adopted') : (r.message || t('common.error')));
+      if (r.success) { loadUsb(); loadSources(); }
     } catch (_) { setMsg(t('common.error')); } finally { setBusy(false); }
   };
 
@@ -113,9 +130,10 @@ export default function SourcesManager() {
           {sources.map((s) => {
             const smbType = s.type === 'smb';
             const internalType = s.type === 'internal';
-            const sub = smbType ? `//${s.server}/${s.share} → ${s.mountpoint}` : internalType ? s.mountpoint : s.path;
-            const ok = smbType || internalType ? s.mounted : s.exists;
-            const tag = smbType ? 'SMB' : internalType ? t('sources.internal.tag') : t('sources.local');
+            const usbType = s.type === 'usb';
+            const sub = smbType ? `//${s.server}/${s.share} → ${s.mountpoint}` : (internalType || usbType) ? s.mountpoint : s.path;
+            const ok = smbType || internalType || usbType ? s.mounted : s.exists;
+            const tag = smbType ? 'SMB' : internalType ? t('sources.internal.tag') : usbType ? 'USB' : t('sources.local');
             return (
               <div key={s.id} className="flex items-center justify-between bg-hifi-dark rounded-lg p-3">
                 <div className="min-w-0">
@@ -141,16 +159,24 @@ export default function SourcesManager() {
           {usb.length === 0 && (
             <p className="text-sm text-hifi-silver/70">{t('sources.usbNone')}</p>
           )}
+          {usb.length > 0 && (
+            <p className="text-xs text-hifi-silver/60">{t('sources.usbFullHint')}</p>
+          )}
           {usb.map((dk) => (
             <div key={dk.mountpoint} className="bg-hifi-dark rounded-lg p-3">
-              <div className="flex items-center justify-between">
-                <div className="text-white text-sm">
+              <div className="flex items-center justify-between gap-2">
+                <div className="text-white text-sm min-w-0">
                   {dk.label || 'USB'}
                   <span className="ml-2 text-[10px] uppercase tracking-wide text-hifi-gold/80">USB{dk.fstype ? ` ${dk.fstype}` : ''}{dk.size ? ` · ${dk.size}` : ''}</span>
                 </div>
-                <button onClick={() => addUsbPath(dk.mountpoint)} disabled={busy} className="text-xs bg-hifi-accent hover:bg-hifi-light text-white py-1.5 px-3 rounded-md">
-                  {t('sources.addWhole')}
-                </button>
+                <div className="flex gap-2 shrink-0">
+                  <button onClick={() => addUsbPath(dk.mountpoint)} disabled={busy} className="text-xs bg-hifi-accent hover:bg-hifi-light text-white py-1.5 px-3 rounded-md">
+                    {t('sources.addWhole')}
+                  </button>
+                  <button onClick={() => adoptUsb(dk.path)} disabled={busy || !dk.path} className="text-xs bg-hifi-gold/20 hover:bg-hifi-gold/30 text-hifi-gold py-1.5 px-3 rounded-md">
+                    {t('sources.internal.adopt')}
+                  </button>
+                </div>
               </div>
               {(dk.folders || []).length > 0 && (
                 <div className="mt-2 space-y-1">

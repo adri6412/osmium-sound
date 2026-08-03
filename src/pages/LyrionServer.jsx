@@ -81,6 +81,17 @@ const LyrionServer = () => {
   // ── Kiosk-only UI state (not part of the shared hook) ──────
   const [isPlayerExpanded, setIsPlayerExpanded] = useState(false);
   const [activeTab, setActiveTab] = useState('musica');
+  // Lets something outside Settings (the global "USB detected" prompt in
+  // App.jsx) jump straight to a Settings sub-section — Settings.jsx has no
+  // props/route otherwise, since this app has no router. Consumed once by
+  // SettingsPage on mount, then cleared here so re-entering Settings later
+  // (without a fresh event) lands back on the section list as normal.
+  const [pendingSettingsSection, setPendingSettingsSection] = useState(null);
+  useEffect(() => {
+    const handler = (e) => { setActiveTab('settings'); setPendingSettingsSection(e.detail || null); };
+    window.addEventListener('hifi-open-settings-section', handler);
+    return () => window.removeEventListener('hifi-open-settings-section', handler);
+  }, []);
   const [showQueue, setShowQueue] = useState(false);
   const [saveQueueOpen, setSaveQueueOpen] = useState(false);
   const [queueName, setQueueName] = useState('');
@@ -399,7 +410,14 @@ const LyrionServer = () => {
 
   // ── Right-panel content ────────────────────────────────────
   const renderTabContent = () => {
-    if (activeTab === 'settings') return <SettingsPage />;
+    if (activeTab === 'settings') {
+      return (
+        <SettingsPage
+          initialSection={pendingSettingsSection}
+          onSectionConsumed={() => setPendingSettingsSection(null)}
+        />
+      );
+    }
     if (activeTab === 'scopri') return (
       <Discover playerMac={activePlayer?.playerid} artist={currentTrack.artist}
         onPlayArtist={(id) => handlePlayItem('artist_id', id)} />
@@ -483,7 +501,7 @@ const LyrionServer = () => {
 
   // ─────────────────────────────────────────────────────────────────────────────
   return (
-    <div className="h-screen w-screen flex overflow-hidden bg-hifi-dark font-display">
+    <div className="h-full w-full flex overflow-hidden bg-hifi-dark font-display">
       <BluetoothNowPlaying />
 
       {/* ══════════════════ LEFT — NOW PLAYING (340px) ══════════════════ */}

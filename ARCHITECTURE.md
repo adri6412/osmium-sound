@@ -203,9 +203,12 @@ persisted to `/etc/hifi-pairing-tokens.json`) and revoking all tokens are
 (Settings shows the token as a QR code). After pairing, the companion app
 sends `Authorization: Bearer <token>`; a second flow appends `?token=` to
 plain URLs (backup/restore, the sources web UI) since `<a href>` navigation
-can't set headers. `_require_pair_token()` gates `/api/dsp/*`,
-`/api/internal/*`, and `/api/usb`, with per-IP rate limiting
-(20 failures / 60s).
+can't set headers. `_require_pair_token()` gates every `sources_server.py`
+route that isn't localhost-only for minting — including the sources page
+itself (`GET /`) and the source listing (`GET /api/sources`), so a device on
+the LAN that isn't paired and isn't going through the webui:443 proxy or the
+Electron kiosk (both loopback) can't reach the Sources UI or its data at all
+— with per-IP rate limiting (20 failures / 60s).
 
 SSH ships **disabled**. `GET/POST /ssh_status` / `/ssh_set` in
 `api_server.py` installs `openssh-server` on demand and, before starting
@@ -258,7 +261,8 @@ require the pairing bearer token (or `?token=`) — see
 [Pairing & security](#pairing--security). Selected routes:
 
 ```
-GET    /api/sources                     list configured sources (unauthenticated: read-only, no secrets)
+GET    /                           🔒   the sources SPA page itself
+GET    /api/sources                🔒   list configured sources
 POST   /api/sources/local          🔒   add a local-folder source
 POST   /api/sources/smb            🔒   add an SMB source
 DELETE /api/sources/<id>           🔒   remove a source (a.k.a. "un-adopt")
@@ -267,9 +271,10 @@ GET    /api/internal/disks         🔒   internal disks/partitions
 POST   /api/internal/adopt         🔒   adopt an existing partition as a source
 POST   /api/internal/format        🔒   wipe + mkfs (sfdisk, async systemd-run job)
 GET    /api/internal/format/status 🔒   poll a format job
-GET/POST /api/internal/smb         🔒   Samba share config
+GET/POST /api/internal/smb         🔒   Samba share config (now also lists adopted USB shares)
 POST   /api/internal/smb/regenerate 🔒  rotate the Samba account password
-GET    /api/usb                    🔒   list mounted USB disks for the add-source UI
+GET    /api/usb                    🔒   list mounted (not-yet-adopted) USB disks for the add-source UI
+POST   /api/usb/adopt              🔒   adopt a USB partition read-write (Samba-shared, like an internal disk)
 GET    /api/cd/info                🔒   audio-CD TOC + MusicBrainz metadata
 POST   /api/cd/rip                 🔒   rip to FLAC (async systemd-run job)
 GET    /api/cd/rip/status          🔒   poll a rip job

@@ -24,6 +24,7 @@
     "local": "Locale",
     "usbTitle": "Dischi USB",
     "usbNone": "Nessun disco USB collegato. Inserisci una chiavetta o un hard disk USB.",
+    "usbFullHint": "\"Aggiungi tutto\"/\"Aggiungi\" copiano una cartella una sola volta, in sola lettura. \"Usa come sorgente\" dà accesso in lettura/scrittura e una condivisione di rete (Samba), come un disco interno — senza bisogno di formattare il disco.",
     "addWhole": "Aggiungi tutto",
     "add": "Aggiungi",
     "addLocal": "Aggiungi cartella locale",
@@ -75,6 +76,11 @@
       "smbRegenerate": "Rigenera password",
       "smbRegenerateHint": "Se Windows continua a rifiutare le credenziali, rimuovi la voce salvata per questo dispositivo in Gestione credenziali di Windows e riprova."
     }
+  },
+  "usbPrompt": {
+    "title": "Chiavetta USB rilevata",
+    "body": "È stata collegata \"{label}\". Montarla come sorgente musicale (accesso in lettura/scrittura + condivisione di rete), come un disco interno?",
+    "mount": "Monta"
   },
   "wizard": {
     "brand": "Osmium Sound · Setup",
@@ -426,7 +432,8 @@
     },
     "backup": {
       "help": "Esporta o ripristina la configurazione del dispositivo (DAC, DSP/EQ, sorgenti musicali, puntatore, canale aggiornamenti) da un browser sul telefono o PC. Apri l'indirizzo qui sotto o inquadra il QR code, poi usa \"Scarica backup\" o \"Ripristina da file\".",
-      "scanHint": "Inquadra con la fotocamera del telefono"
+      "scanHint": "Inquadra con la fotocamera del telefono",
+      "certHint": "Il telefono avviserà che la connessione non è privata — è il certificato del dispositivo stesso, non un problema di sicurezza reale. Tocca \"Mostra dettagli\" / \"Avanzate\" e prosegui."
     },
     "alarm": {
       "help": "Programma sveglie sul player attivo. All'orario impostato il player si attiva e avvia la riproduzione.",

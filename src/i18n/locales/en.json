@@ -24,6 +24,7 @@
     "local": "Local",
     "usbTitle": "USB disks",
     "usbNone": "No USB disk connected. Insert a USB stick or drive.",
+    "usbFullHint": "\"Add all\"/\"Add\" copy a folder once, read-only. \"Use as source\" gives read-write access and a network share (Samba), like an internal disk — no need to reformat the drive.",
     "addWhole": "Add all",
     "add": "Add",
     "addLocal": "Add local folder",
@@ -75,6 +76,11 @@
       "smbRegenerate": "Regenerate password",
       "smbRegenerateHint": "If Windows keeps rejecting the credentials, remove the saved entry for this device in Windows Credential Manager, then try again."
     }
+  },
+  "usbPrompt": {
+    "title": "USB drive detected",
+    "body": "\"{label}\" was just plugged in. Mount it as a music source (read-write access + network share), like an internal disk?",
+    "mount": "Mount"
   },
   "wizard": {
     "brand": "Osmium Sound · Setup",
@@ -426,7 +432,8 @@
     },
     "backup": {
       "help": "Export or restore this device's configuration (DAC, DSP/EQ, music sources, mouse pointer, update channel) from a browser on your phone or PC. Open the address below or scan the QR code, then use \"Download backup\" or \"Restore from file\".",
-      "scanHint": "Scan with your phone camera"
+      "scanHint": "Scan with your phone camera",
+      "certHint": "Your phone will warn that the connection isn't private — that's this device's own certificate, not a real security issue. Tap \"Show Details\" / \"Advanced\" and continue."
     },
     "alarm": {
       "help": "Schedule alarms on the active player. At the set time the player wakes up and starts playing.",

@@ -69,7 +69,7 @@ const DSP_BUILTIN_PRESET_LABEL_KEYS = {
  * Settings screen component - Simplified version for debugging
  * System configuration and information
  */
-const Settings = () => {
+const Settings = ({ initialSection, onSectionConsumed } = {}) => {
   const { t, lang } = useI18n();
   const [systemInfo, setSystemInfo] = useState({
     hostname: t('common.loading'),
@@ -93,6 +93,18 @@ const Settings = () => {
   const [activeSection, setActiveSection] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [apiConnected, setApiConnected] = useState(false);
+
+  // Deep-link into a section on mount (e.g. the global "USB detected" prompt
+  // sends the user straight to Music sources) — consumed once, so navigating
+  // away and back to Settings later (without a fresh event) lands on the
+  // section list as usual, not stuck on this section forever.
+  useEffect(() => {
+    if (initialSection) {
+      setActiveSection(initialSection);
+      onSectionConsumed?.();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Companion-app pairing token: minted fresh each time the "Phone control"
   // QR is opened, so the QR always carries a currently-valid token (scanning
@@ -1541,8 +1553,15 @@ const Settings = () => {
   // token or the page would 401 on every action.
   // &lang= renders that page in the language the kiosk is set to, instead of
   // always Italian.
+  // Routed through webui's HTTPS reverse proxy (:443 /sources-app, see
+  // webui_server.py) rather than straight to :8080 over plain HTTP: iOS
+  // Safari's "HTTPS-Only" setting hard-refuses to even navigate to a bare
+  // http:// URL (reported by a user scanning this QR), producing a dead-end
+  // error page instead of the usual "connection not private" click-through.
+  // The self-signed cert still triggers that click-through warning here —
+  // unavoidable without a CA-trusted cert — but at least the page loads.
   const sourcesUrl = (isUsableIp && sourcesToken)
-    ? `http://${deviceIp}:8080/?token=${encodeURIComponent(sourcesToken)}&lang=${encodeURIComponent(lang)}`
+    ? `https://${deviceIp}/sources-app?token=${encodeURIComponent(sourcesToken)}&lang=${encodeURIComponent(lang)}`
     : null;
   // Companion-app pairing QR payload: JSON (not a bare URL) so the app can pick
   // out the LMS address, the :8080 API address, and the pairing token in one
@@ -2855,6 +2874,9 @@ const Settings = () => {
                           <p className="text-xs text-hifi-silver mb-1">{t('settings.backup.scanHint')}</p>
                           <code className="text-sm text-hifi-gold break-all">{sourcesUrl}</code>
                         </div>
+                        <p className="text-[11px] text-hifi-silver/50 text-center max-w-xs">
+                          {t('settings.backup.certHint')}
+                        </p>
                       </div>
                     ) : isUsableIp ? (
                       <div className="flex flex-col items-center space-y-3 text-hifi-silver text-sm">

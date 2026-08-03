@@ -72,10 +72,14 @@ except Exception:
 STATE_FILE = "/etc/hifi-sources.json"
 MOUNT_ROOT = "/mnt/hifi-sources"
 INTERNAL_MOUNT_ROOT = "/mnt/hifi-internal"
+# Adopted USB disks (type "usb") mount here, read-write, keyed by stable
+# PARTUUID/UUID — distinct from USB_MOUNT_ROOT below, which is the ephemeral
+# read-only browse mount for USB sticks that haven't been adopted.
+USB_ADOPTED_ROOT = "/mnt/hifi-usb"
 # Local music folders may only be added from these base directories. This
 # keeps the (root-privileged) service from being pointed at arbitrary paths
 # such as /etc or /root via the add-local-source API.
-ALLOWED_LOCAL_ROOTS = ("/mnt", "/media", "/srv", "/home", MOUNT_ROOT, INTERNAL_MOUNT_ROOT)
+ALLOWED_LOCAL_ROOTS = ("/mnt", "/media", "/srv", "/home", MOUNT_ROOT, INTERNAL_MOUNT_ROOT, USB_ADOPTED_ROOT)
 LYRION_SERVICE = "lyrionmusicserver.service"
 SAMBA_SHARES_FILE = "/etc/samba/hifi-shares.conf"
 SAMBA_CRED_FILE = "/etc/hifi-player/samba-cred.json"
@@ -355,8 +359,11 @@ def _internal_disks():
     return out
 
 
-def _adopted_internal_sources():
-    return [s for s in load_state().get("sources", []) if s.get("type") == "internal"]
+def _adopted_disk_sources():
+    """Adopted internal disks AND adopted (read-write) USB disks — the two
+    source types that get a stable mountpoint, a Samba share, and can be a CD
+    rip destination. Ephemeral read-only USB browse mounts are not included."""
+    return [s for s in load_state().get("sources", []) if s.get("type") in ("internal", "usb")]
 
 
 def _share_name(label):
@@ -364,7 +371,7 @@ def _share_name(label):
     if not base:
         base = "Musica"
     names = set()
-    for s in _adopted_internal_sources():
+    for s in _adopted_disk_sources():
         names.add(s.get("share") or "Musica")
     if base not in names:
         return base
@@ -448,9 +455,9 @@ def _create_samba_user(force_new_password=False):
 
 def regen_samba_shares():
     """Rewrite the included shares file and start/stop smbd accordingly."""
-    internal = _adopted_internal_sources()
+    disks = _adopted_disk_sources()
     lines = []
-    for src in internal:
+    for src in disks:
         share = src.get("share") or "Musica"
         mp = src.get("mountpoint")
         if not mp:
@@ -471,7 +478,7 @@ def regen_samba_shares():
     os.replace(tmp, SAMBA_SHARES_FILE)
 
     smbd = _run(["which", "smbd"], timeout=5).returncode == 0
-    if not internal:
+    if not disks:
         if smbd:
             _run(["systemctl", "disable", "--now", "smbd"], timeout=30)
         return
@@ -492,14 +499,18 @@ def _ip_addresses():
     return addrs
 
 
-def mount_internal(src):
-    """Mount one internal source by PARTUUID. Returns (ok, message)."""
+def _mount_adopted_disk(src, root):
+    """Mount one adopted (internal or USB) source by stable PARTUUID — or, for
+    a "superfloppy" USB stick with no partition table (common on cheap USB
+    flash drives), by filesystem UUID instead. Always read-write. Returns
+    (ok, message)."""
     partuuid = src.get("partuuid")
+    fsuuid = src.get("fsuuid")
     fstype = (src.get("fstype") or "").lower()
     mountpoint = src.get("mountpoint")
-    if not partuuid or not mountpoint:
-        return False, "partuuid o mountpoint mancante"
-    root = os.path.realpath(INTERNAL_MOUNT_ROOT)
+    if (not partuuid and not fsuuid) or not mountpoint:
+        return False, "partuuid/uuid o mountpoint mancante"
+    root = os.path.realpath(root)
     p = os.path.realpath(mountpoint)
     if p != root and not p.startswith(root + os.sep):
         return False, "mountpoint non valido"
@@ -509,21 +520,23 @@ def mount_internal(src):
 
     if fstype == "ext4":
         opts = "rw,noatime,nosuid,nodev"
-    elif fstype in ("exfat", "vfat"):
-        # The in-kernel exfat/vfat driver requires numeric ids, not a username.
+    elif fstype in _FAT_LIKE:
+        # These filesystems (exFAT/vFAT/NTFS via the in-kernel ntfs3 driver)
+        # require numeric ids, not a username, and carry no POSIX perms.
         uid, gid = _ensure_samba_uid_gid()
         opts = f"rw,noatime,nosuid,nodev,uid={uid},gid={gid},fmask=0113,dmask=0002,iocharset=utf8"
     else:
         opts = "rw,noatime,nosuid,nodev"
 
-    r = _run(["mount", "-o", opts, f"PARTUUID={partuuid}", mountpoint], timeout=30)
+    spec = f"PARTUUID={partuuid}" if partuuid else f"UUID={fsuuid}"
+    r = _run(["mount", "-t", _fs_mount_type(fstype), "-o", opts, spec, mountpoint], timeout=30)
     if r.returncode != 0:
         return False, (r.stderr or r.stdout or "mount fallito").strip()
 
     if fstype == "ext4":
         # mkfs.ext4 leaves the root dir owned by root:root, which the Samba
-        # forced user (hifimusic) cannot write into. exFAT/vfat get this via
-        # the uid/gid mount options above instead.
+        # forced user (hifimusic) cannot write into. exFAT/vfat/ntfs get this
+        # via the uid/gid mount options above instead.
         try:
             uid, gid = _ensure_samba_uid_gid()
             os.chown(mountpoint, uid, gid)
@@ -531,6 +544,14 @@ def mount_internal(src):
         except Exception:
             pass
     return True, "montato"
+
+
+def mount_internal(src):
+    return _mount_adopted_disk(src, INTERNAL_MOUNT_ROOT)
+
+
+def mount_usb_adopted(src):
+    return _mount_adopted_disk(src, USB_ADOPTED_ROOT)
 
 
 def remount_all():
@@ -542,6 +563,8 @@ def remount_all():
                 mount_smb(src)
             elif t == "internal":
                 mount_internal(src)
+            elif t == "usb":
+                mount_usb_adopted(src)
         except Exception as e:
             print(f"[sources] remount failed for {src.get('name')}: {e}")
     regen_samba_shares()
@@ -595,7 +618,11 @@ _FAT_LIKE = ("vfat", "exfat", "ntfs", "ntfs3", "fuseblk", "msdos")
 _usb_state = None
 
 
-def _usb_mount_type(fstype):
+def _fs_mount_type(fstype):
+    """Explicit `mount -t` type for a given fstype — shared by the ephemeral
+    read-only USB browse mount and the adopted (internal/USB) read-write
+    mount, so both get the same kernel-driver mapping rather than relying on
+    autodetection."""
     if fstype == "ntfs":
         return "ntfs3"                       # in-kernel NTFS (no ntfs-3g needed)
     if fstype in ("vfat", "exfat", "ntfs3", "msdos"):
@@ -611,15 +638,31 @@ def _usb_mount_opts(fstype):
     return base
 
 
+def _adopted_usb_ids():
+    """(partuuid, fsuuid) lowercased sets of already-adopted "usb" sources —
+    used to keep the ephemeral browse mount from fighting over a disk that's
+    now mounted read-write under USB_ADOPTED_ROOT."""
+    partuuids, fsuuids = set(), set()
+    for s in load_state().get("sources", []):
+        if s.get("type") == "usb":
+            if s.get("partuuid"):
+                partuuids.add(s["partuuid"].lower())
+            if s.get("fsuuid"):
+                fsuuids.add(s["fsuuid"].lower())
+    return partuuids, fsuuids
+
+
 def _usb_partitions():
-    """USB block devices carrying a filesystem → [{path,name,fstype,label,size}].
-    Handles partitioned (sdX1) and whole-disk filesystems; skips optical drives
-    (type 'rom') and any non-USB transport (internal SATA/eMMC)."""
+    """USB block devices carrying a filesystem, excluding already-adopted ones
+    → [{path,name,fstype,label,size,uuid,partuuid}]. Handles partitioned
+    (sdX1) and whole-disk filesystems; skips optical drives (type 'rom') and
+    any non-USB transport (internal SATA/eMMC)."""
     try:
-        r = _run(["lsblk", "-J", "-o", "PATH,NAME,TYPE,FSTYPE,LABEL,SIZE,TRAN"], timeout=10)
+        r = _run(["lsblk", "-J", "-o", "PATH,NAME,TYPE,FSTYPE,LABEL,SIZE,TRAN,UUID,PARTUUID"], timeout=10)
         data = json.loads(r.stdout or "{}")
     except Exception:
         return []
+    adopted_partuuids, adopted_fsuuids = _adopted_usb_ids()
     out = []
     for dev in data.get("blockdevices", []):
         if dev.get("tran") != "usb" or dev.get("type") != "disk":
@@ -629,7 +672,11 @@ def _usb_partitions():
             out.extend(p for p in kids if p.get("type") == "part" and p.get("fstype"))
         elif dev.get("fstype"):
             out.append(dev)
-    return out
+    return [
+        p for p in out
+        if (p.get("partuuid") or "").lower() not in adopted_partuuids
+        and (p.get("uuid") or "").lower() not in adopted_fsuuids
+    ]
 
 
 def _usb_mountpoint(part):
@@ -651,7 +698,7 @@ def usb_sync():
                 try:
                     os.makedirs(mp, exist_ok=True)
                     fs = (p.get("fstype") or "").lower()
-                    _run(["mount", "-t", _usb_mount_type(fs), "-o", _usb_mount_opts(fs),
+                    _run(["mount", "-t", _fs_mount_type(fs), "-o", _usb_mount_opts(fs),
                           p["path"], mp], timeout=20)
                 except Exception as e:
                     print(f"[sources] usb mount failed for {p.get('path')}: {e}")
@@ -797,14 +844,16 @@ def current_paths(state):
     """Media directories to hand to Lyrion. Re-validates every path against the
     same confinement each source type is supposed to already satisfy (MOUNT_ROOT
     for SMB mountpoints, INTERNAL_MOUNT_ROOT for internal disks,
-    ALLOWED_LOCAL_ROOTS for local paths) rather than trusting the stored state
-    verbatim — state can come from a restored /etc/hifi-sources.json (see
-    /api/restore), which is untrusted archive content that never goes through
-    api_add_smb()/api_add_local()'s own validation. Without this, a crafted
-    backup with e.g. {"type":"local", "path":"/"} would get handed straight to
-    Lyrion as a media directory."""
+    USB_ADOPTED_ROOT for adopted USB disks, ALLOWED_LOCAL_ROOTS for local
+    paths) rather than trusting the stored state verbatim — state can come
+    from a restored /etc/hifi-sources.json (see /api/restore), which is
+    untrusted archive content that never goes through api_add_smb()/
+    api_add_local()'s own validation. Without this, a crafted backup with
+    e.g. {"type":"local", "path":"/"} would get handed straight to Lyrion as
+    a media directory."""
     smb_root = os.path.realpath(MOUNT_ROOT)
     internal_root = os.path.realpath(INTERNAL_MOUNT_ROOT)
+    usb_root = os.path.realpath(USB_ADOPTED_ROOT)
     paths = []
     for src in state.get("sources", []):
         t = src.get("type")
@@ -821,6 +870,13 @@ def current_paths(state):
                 continue
             p = os.path.realpath(mp)
             if p != internal_root and not p.startswith(internal_root + os.sep):
+                continue
+        elif t == "usb":
+            mp = src.get("mountpoint")
+            if not mp:
+                continue
+            p = os.path.realpath(mp)
+            if p != usb_root and not p.startswith(usb_root + os.sep):
                 continue
         else:
             raw = src.get("path")
@@ -843,17 +899,17 @@ def apply_to_lyrion(state):
 
     paths = current_paths(state)
 
-    # Warn if an internal source is not mounted: applying would hand an empty
-    # mountpoint to Lyrion and clear the library. The user must re-attach the
-    # disk or remove the source.
-    unmounted_internal = []
+    # Warn if an adopted internal/USB source is not mounted: applying would
+    # hand an empty mountpoint to Lyrion and clear the library. The user must
+    # re-attach the disk or remove the source.
+    unmounted_disks = []
     for src in state.get("sources", []):
-        if src.get("type") == "internal":
+        if src.get("type") in ("internal", "usb"):
             mp = src.get("mountpoint")
             if not mp or not os.path.ismount(mp):
-                unmounted_internal.append(src.get("name") or "interno")
-    if unmounted_internal:
-        return False, "Disco interno non montato: " + ", ".join(unmounted_internal) + ". Verifica il collegamento prima di applicare."
+                unmounted_disks.append(src.get("name") or "disco")
+    if unmounted_disks:
+        return False, "Disco non montato: " + ", ".join(unmounted_disks) + ". Verifica il collegamento prima di applicare."
 
     # Stop Lyrion so it does not overwrite the prefs file under us.
     _run(["systemctl", "stop", LYRION_SERVICE], timeout=60)
@@ -1823,6 +1879,16 @@ for _local_path, _method, _remote_path in _SYSTEM_PROXY_ROUTES:
 # ─────────────────────────── HTTP API ───────────────────────────────
 @app.route("/api/sources", methods=["GET"])
 def api_list():
+    # Previously exempt ("read-only, no secrets") — but source names/paths/SMB
+    # server+username are still information disclosure to any device that can
+    # merely reach port 8080 on the LAN, so this now requires the same pairing
+    # token as everything else. Loopback (Electron kiosk, and the webui:443
+    # proxy's own forwarded requests — see webui_server.py's SECURITY comment
+    # on _forward_to()) and a valid ?token=/companion app remain exempt/allowed
+    # via _require_pair_token() itself.
+    denied = _require_pair_token()
+    if denied:
+        return denied
     state = load_state()
     out = []
     for s in state.get("sources", []):
@@ -1832,7 +1898,7 @@ def api_list():
         t = s.get("type")
         if t == "smb":
             item["mounted"] = os.path.ismount(s["mountpoint"])
-        elif t == "internal":
+        elif t in ("internal", "usb"):
             item["mounted"] = os.path.ismount(s.get("mountpoint", ""))
             item["share"] = s.get("share")
         else:
@@ -2007,7 +2073,7 @@ def api_remove(sid):
                 t = s.get("type")
                 if t == "smb":
                     umount(s["mountpoint"])
-                elif t == "internal":
+                elif t in ("internal", "usb"):
                     umount(s.get("mountpoint"))
             else:
                 keep.append(s)
@@ -2100,6 +2166,82 @@ def api_internal_adopt():
     return jsonify({"success": True, "source_id": src["id"], "share": share})
 
 
+@app.route("/api/usb/adopt", methods=["POST"])
+def api_usb_adopt():
+    """Adopt a currently-connected USB partition as a persistent, read-write,
+    Samba-shared source — the USB equivalent of /api/internal/adopt. No
+    reformat: mounts whatever filesystem is already on it (ext4/exfat/vfat, or
+    NTFS via the in-kernel ntfs3 driver)."""
+    denied = _require_pair_token()
+    if denied:
+        return denied
+    data = request.get_json(silent=True) or {}
+    device = (data.get("device") or "").strip()
+    if not _path_ok(device):
+        return _err("msg.badDevice", 400)
+
+    part = next((p for p in _usb_partitions() if p.get("path") == device), None)
+    if not part:
+        return _err("msg.diskNotFound", 400)
+    if not part.get("fstype"):
+        return _err("msg.partitionNoFs", 400)
+
+    partuuid = part.get("partuuid")
+    fsuuid = part.get("uuid")
+    fstype = (part.get("fstype") or "").lower()
+    label = part.get("label") or part.get("name") or "USB"
+    share = _share_name(label)
+    mountpoint = os.path.join(USB_ADOPTED_ROOT,
+                              _slug(label) + "-" + (partuuid or fsuuid or "adopt")[:8])
+
+    # Drop the ephemeral read-only browse mount for this device (if any),
+    # guarded by the same lock usb_sync() uses, so the background monitor
+    # can't recreate it out from under us mid-adopt. Any "local" source that
+    # was pointed into it would otherwise dangle once it's gone.
+    ephemeral_mp = _usb_mountpoint(part)
+    with _lock:
+        if os.path.ismount(ephemeral_mp):
+            umount(ephemeral_mp)
+        try:
+            os.rmdir(ephemeral_mp)
+        except OSError:
+            pass
+
+    src = {
+        "id": _slug("usb", share),
+        "type": "usb",
+        "name": f"{label or 'USB'} (USB)",
+        "partuuid": partuuid,
+        "fsuuid": fsuuid,
+        "fstype": fstype,
+        "label": label,
+        "model": "",
+        "mountpoint": mountpoint,
+        "share": share,
+    }
+    ok, msg = mount_usb_adopted(src)
+    if not ok:
+        return _err("msg.mountFailed", 400, detail=msg)
+
+    def _stale_local(s):
+        if s.get("type") != "local":
+            return False
+        p = s.get("path") or ""
+        return p == ephemeral_mp or p.startswith(ephemeral_mp + os.sep)
+
+    with _lock:
+        state = load_state()
+        state["sources"] = [
+            s for s in state["sources"]
+            if s.get("id") != src["id"] and not _stale_local(s)
+        ]
+        state["sources"].append(src)
+        save_state(state)
+        regen_samba_shares()
+    apply_to_lyrion(state)
+    return jsonify({"success": True, "source_id": src["id"], "share": share})
+
+
 @app.route("/api/internal/format", methods=["POST"])
 def api_internal_format():
     denied = _require_pair_token()
@@ -2174,7 +2316,7 @@ def api_internal_format_status():
     if status.get("state") == "done":
         partuuid = status.get("partuuid")
         if partuuid:
-            for s in _adopted_internal_sources():
+            for s in _adopted_disk_sources():
                 if s.get("partuuid") == partuuid:
                     status["adopted"] = True
                     status["source_id"] = s.get("id")
@@ -2341,10 +2483,10 @@ def _rip_watcher():
 
 
 def _rip_writable_sources():
-    """Internal (rw, hifimusic-owned) sources the rip can write into. USB
-    drives are auto-mounted read-only, so they never qualify."""
+    """Adopted (rw, hifimusic-owned) internal or USB sources the rip can write
+    into. Ephemeral read-only USB browse mounts never qualify."""
     out = []
-    for s in _adopted_internal_sources():
+    for s in _adopted_disk_sources():
         mp = s.get("mountpoint") or ""
         if os.path.ismount(mp) and os.access(mp, os.W_OK):
             out.append(s)
@@ -2482,7 +2624,7 @@ def api_internal_smb():
         except Exception:
             pass
     shares = []
-    for s in _adopted_internal_sources():
+    for s in _adopted_disk_sources():
         shares.append({
             "name": s.get("share") or "Musica",
             "mountpoint": s.get("mountpoint"),
@@ -2554,6 +2696,9 @@ def api_usb():
             "size": p.get("size"),
             "mountpoint": mp,
             "folders": folders,
+            # Raw device node, used by the "use as source" (adopt) action —
+            # already-adopted disks never appear here (see _usb_partitions()).
+            "path": p.get("path"),
         })
     return jsonify({"disks": disks})
 
@@ -2580,6 +2725,7 @@ SOURCES_I18N = {
         "sources.usbTitle": "USB disks",
         "sources.usbNone": "No USB disk connected. Insert a USB stick or drive.",
         "sources.usbAddWhole": "Add whole disk",
+        "sources.usbFullHint": "\"Add whole disk\"/\"Add\" copy a folder once, read-only. \"Use as source\" gives read-write access and a network share (Samba), like an internal disk — no need to reformat the drive.",
         "sources.add": "Add",
         "sources.addLocal": "Add local folder",
         "sources.localPath": "Path on the device",
@@ -2713,6 +2859,7 @@ SOURCES_I18N = {
         "sources.usbTitle": "Dischi USB",
         "sources.usbNone": "Nessun disco USB collegato. Inserisci una chiavetta o un hard disk USB.",
         "sources.usbAddWhole": "Aggiungi tutto il disco",
+        "sources.usbFullHint": "\"Aggiungi tutto il disco\"/\"Aggiungi\" copiano una cartella una sola volta, in sola lettura. \"Usa come sorgente\" dà accesso in lettura/scrittura e una condivisione di rete (Samba), come un disco interno — senza bisogno di formattare il disco.",
         "sources.add": "Aggiungi",
         "sources.addLocal": "Aggiungi cartella locale",
         "sources.localPath": "Percorso sul dispositivo",
@@ -2880,6 +3027,16 @@ def _err(key, status, **vars):
 
 @app.route("/")
 def index():
+    # Gate the page itself, not just the API calls it makes: without this, any
+    # device on the LAN could load this page directly (bypassing the webui:443
+    # session and the companion app's pairing flow entirely) and get the full
+    # Sources UI. Loopback (Electron kiosk, webui's own proxied requests) and
+    # a valid ?token= (the QR-carried phone flow, and webui's minted token —
+    # see sources_app() in webui_server.py) still get through, matching
+    # _require_pair_token()'s existing exemptions.
+    denied = _require_pair_token()
+    if denied:
+        return denied
     lang = _req_lang()
     # Only the page's own strings are shipped to the browser; the msg.* half of
     # the catalog is server-side only.
@@ -3092,15 +3249,16 @@ async function load(){
   el.innerHTML=d.sources.map(s=>{
             const isSmb=s.type==='smb';
     const isInternal=s.type==='internal';
+    const isUsb=s.type==='usb';
     const mountState=s.mounted?`<span class="ok">${esc(T('sources.mountedShort'))}</span>`
                               :`<span class="bad">${esc(T('sources.notMounted'))}</span>`;
-    const status=(isSmb||isInternal)?mountState
+    const status=(isSmb||isInternal||isUsb)?mountState
                       :(s.exists?`<span class="ok">${esc(T('sources.ok'))}</span>`
                                 :`<span class="bad">${esc(T('sources.missing'))}</span>`);
     const sub=isSmb?('//'+esc(s.server)+'/'+esc(s.share)+' → '+esc(s.mountpoint))
-              :isInternal?(esc(s.mountpoint||s.path||''))
+              :(isInternal||isUsb)?(esc(s.mountpoint||s.path||''))
               :esc(s.path);
-    const tag=isSmb?T('sources.smbTag'):isInternal?T('sources.internal.tag'):T('sources.local');
+    const tag=isSmb?T('sources.smbTag'):isInternal?T('sources.internal.tag'):isUsb?'USB':T('sources.local');
     return `<div class="src"><div class="meta"><div class="name">${esc(s.name)}<span class="tag">${esc(tag)}</span></div>
       <div class="sub">${sub} · ${status}</div></div>
       <button class="danger" onclick="rm('${s.id}')">${esc(T('sources.remove'))}</button></div>`;
@@ -3236,29 +3394,38 @@ async function apply(){
 // Paths are kept in an array and referenced by index in onclick handlers, so a
 // folder name with quotes/specials can never break the markup.
 let usbPaths=[];
+let usbDevices=[];
 async function loadUsb(){
   let d; try{ d=await j('/api/usb'); }catch(e){ return; }
-  const el=document.getElementById('usbList'); usbPaths=[];
+  const el=document.getElementById('usbList'); usbPaths=[]; usbDevices=[];
   if(!d.disks || !d.disks.length){
     el.innerHTML=`<div style="color:var(--silver);font-size:14px">${esc(T('sources.usbNone'))}</div>`;
     return;
   }
-  el.innerHTML=d.disks.map(dk=>{
+  const hint=`<p style="color:var(--silver);opacity:.7;font-size:12px;margin:0 0 10px">${esc(T('sources.usbFullHint'))}</p>`;
+  el.innerHTML=hint+d.disks.map(dk=>{
     const di=usbPaths.push(dk.mountpoint)-1;
+    const devi=usbDevices.push(dk.path||'')-1;
     const tag=`USB${dk.fstype?(' '+esc(dk.fstype)):''}${dk.size?(' · '+esc(dk.size)):''}`;
     const head=`<div class="name">${esc(dk.label)||'USB'}<span class="tag">${tag}</span></div><div class="sub">${esc(dk.mountpoint)}</div>`;
     const all=`<button class="ghost" onclick="addUsb(${di})">${esc(T('sources.usbAddWhole'))}</button>`;
+    const adopt=dk.path?`<button class="ghost" onclick="adoptUsb(${devi})">${esc(T('sources.internal.adopt'))}</button>`:'';
     const fold=(dk.folders||[]).map(f=>{
       const i=usbPaths.push(f.path)-1;
       return `<div class="src"><div class="meta"><div class="sub">📁 ${esc(f.name)}</div></div><button class="ghost" onclick="addUsb(${i})">${esc(T('sources.add'))}</button></div>`;
     }).join('');
-    return `<div style="margin-bottom:14px">${head}<div style="height:8px"></div>${all}${fold?('<div style="height:8px"></div>'+fold):''}</div>`;
+    return `<div style="margin-bottom:14px">${head}<div style="height:8px"></div><div class="row" style="gap:8px">${all}${adopt}</div>${fold?('<div style="height:8px"></div>'+fold):''}</div>`;
   }).join('');
 }
 async function addUsb(i){
   const path=usbPaths[i]; if(!path) return;
   const r=await j('/api/sources/local',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({path})});
   if(r.success){ load(); } else { alert(r.message||T('sources.error')); }
+}
+async function adoptUsb(i){
+  const device=usbDevices[i]; if(!device) return;
+  const r=await j('/api/usb/adopt',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({device})});
+  if(r.success){ loadUsb(); load(); } else { alert(r.message||T('sources.error')); }
 }
 
 // ── Internal disks (adopt existing filesystem / format) ─────────────

@@ -5,6 +5,7 @@ import SetupWizard from './pages/SetupWizard';
 import VirtualKeyboard from './components/VirtualKeyboard';
 import Screensaver from './components/Screensaver';
 import BootIntro from './components/BootIntro';
+import UsbDetectedModal from './components/UsbDetectedModal';
 import { KeyboardProvider, useKeyboard } from './contexts/KeyboardContext';
 import { I18nProvider } from './i18n';
 import { lyrionApi } from './utils/lyrionApi';
@@ -155,11 +156,74 @@ const AppContent = () => {
     return () => window.removeEventListener('hifi-open-wizard', open);
   }, []);
 
+  // Global "USB drive just plugged in" prompt (offers to jump to Settings →
+  // Music sources to adopt it). Runs regardless of which screen is showing —
+  // SourcesManager.jsx's own poll only runs while that screen is open. Polls
+  // sources_server.py directly (not through api.js) to match the pattern
+  // SourcesManager/InternalDisks already use for that service.
+  const [usbPrompt, setUsbPrompt] = React.useState(null);
+  const seenUsbRef = React.useRef(new Set());
+  const dismissedUsbRef = React.useRef(new Set());
+  // The very first poll just establishes the baseline (whatever's already
+  // plugged in at that point) — only insertions seen on a *later* poll are
+  // "new", so a stick left in the appliance across a reboot doesn't prompt.
+  const usbBaselineDoneRef = React.useRef(false);
+  // Suppressed while the user is already on Settings → Music sources (they
+  // can see and adopt the drive right there — a popup on top would be
+  // redundant) — SourcesManager.jsx dispatches this on mount/unmount.
+  const [sourcesPageActive, setSourcesPageActive] = React.useState(false);
+  React.useEffect(() => {
+    const handler = (e) => setSourcesPageActive(!!e.detail);
+    window.addEventListener('hifi-sources-page-active', handler);
+    return () => window.removeEventListener('hifi-sources-page-active', handler);
+  }, []);
+  React.useEffect(() => {
+    // Don't start prompting mid-setup or during the boot animation.
+    if (showWizard || showIntro) return undefined;
+    const poll = async () => {
+      let disks = [];
+      try {
+        const r = await fetch('http://localhost:8080/api/usb');
+        const d = await r.json();
+        disks = d.disks || [];
+      } catch (_) { return; }
+      const currentIds = new Set(disks.map((dk) => dk.path || dk.mountpoint));
+      // Forget dismissals for drives that are no longer connected, so
+      // unplugging and reinserting the same stick prompts again.
+      for (const id of dismissedUsbRef.current) {
+        if (!currentIds.has(id)) dismissedUsbRef.current.delete(id);
+      }
+      if (!usbBaselineDoneRef.current) {
+        usbBaselineDoneRef.current = true;
+      } else if (!sourcesPageActive) {
+        const fresh = disks.find((dk) => {
+          const id = dk.path || dk.mountpoint;
+          return id && !seenUsbRef.current.has(id) && !dismissedUsbRef.current.has(id);
+        });
+        if (fresh) setUsbPrompt(fresh);
+      }
+      seenUsbRef.current = currentIds;
+    };
+    poll();
+    const id = setInterval(poll, 4000);
+    return () => clearInterval(id);
+  }, [showWizard, showIntro, sourcesPageActive]);
+
+  const dismissUsbPrompt = () => {
+    if (usbPrompt) dismissedUsbRef.current.add(usbPrompt.path || usbPrompt.mountpoint);
+    setUsbPrompt(null);
+  };
+  const mountUsbPrompt = () => {
+    setUsbPrompt(null);
+    window.dispatchEvent(new CustomEvent('hifi-open-settings-section', { detail: 'custom-sources' }));
+  };
+
   return (
-    <div className="h-screen w-screen overflow-hidden bg-hifi-dark relative">
+    <div className="h-full w-full overflow-hidden bg-hifi-dark relative">
       <LyrionServer />
       {showWizard && <SetupWizard onComplete={() => setShowWizard(false)} />}
       <Screensaver isActive={isScreensaverActive && !showWizard} onWake={() => setIsScreensaverActive(false)} />
+      {usbPrompt && <UsbDetectedModal disk={usbPrompt} onMount={mountUsbPrompt} onCancel={dismissUsbPrompt} />}
       {showIntro && (
         <div
           className="fixed inset-0 z-[10000] bg-black"
