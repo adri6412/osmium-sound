@@ -29,8 +29,12 @@
 ensure_file_content /etc/systemd/system/hifi-backup.service 644 root:root <<'EOF'
 [Unit]
 Description=HiFi Player scheduled backup
-# If a manual backup is already running (systemd-run --unit=hifi-backup, same
-# name sources_server.py uses), let it finish rather than colliding with it.
+# If a manual backup is already running (sources_server.py's
+# systemd-run --unit=hifi-backup-manual, tracked via the job file below), let
+# it finish rather than colliding with it. Deliberately a different unit name
+# than the transient one: systemd-run refuses to create a transient unit that
+# shares a name with a unit that already has a fragment file on disk, so this
+# unit's own name ("hifi-backup") can never be reused for that purpose.
 ConditionPathExists=!/run/hifi-backup-job.json
 
 [Service]

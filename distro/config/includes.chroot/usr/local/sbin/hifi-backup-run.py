@@ -30,6 +30,13 @@ import json
 import os
 import sys
 
+# Mirrors hb.STATUS_FILE. Needed as a literal here because if the hifi_backup
+# import below fails, there is no hb.STATUS_FILE to read it from — and that is
+# exactly the case this constant exists to report: without it, a broken/missing
+# hifi_backup.py leaves sources_server.py's "Avvio…"/0% placeholder in place
+# forever, since nothing ever gets the chance to overwrite it.
+STATUS_FILE_FALLBACK = "/run/hifi-backup-status.json"
+
 try:
     # hifi_backup.py and hifi_logging.py ship in /usr/local/bin alongside the
     # Python daemons; this script lives in /usr/local/sbin, so they are not
@@ -41,7 +48,20 @@ except Exception:
     pass
 
 sys.path.insert(0, '/usr/local/bin')
-import hifi_backup as hb                                     # noqa: E402
+try:
+    import hifi_backup as hb                                     # noqa: E402
+except Exception as e:
+    try:
+        tmp = STATUS_FILE_FALLBACK + ".tmp"
+        with open(tmp, "w") as f:
+            json.dump({"state": "error", "progress": 0,
+                       "message": f"hifi_backup non disponibile: {e}"}, f)
+        os.replace(tmp, STATUS_FILE_FALLBACK)
+    except OSError:
+        pass
+    print(f"E: [hifi-backup] impossibile importare hifi_backup: {e}",
+          file=sys.stderr)
+    sys.exit(1)
 
 STATUS = hb.STATUS_FILE
 

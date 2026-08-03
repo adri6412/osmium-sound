@@ -899,7 +899,12 @@ def apply_to_lyrion(state):
 # uses the tar member's own path verbatim, only regular files are ever opened,
 # and every member is checked against the manifest's sha256 before it is
 # written. A malicious or corrupt archive therefore has nowhere to aim.
-BACKUP_UNIT = "hifi-backup"
+# Distinct from the "hifi-backup" name used by the scheduled hifi-backup.service
+# (see 0033-backup-scheduler.sh): systemd-run refuses to create a transient unit
+# that shares a name with one that already has a fragment file on disk — that
+# collision made every manual backup fail with "already loaded or has a
+# fragment file", unconditionally, the moment the scheduler shipped.
+BACKUP_UNIT = "hifi-backup-manual"
 BACKUP_JOB = "/run/hifi-backup-job.json"
 BACKUP_SCRIPT = "/usr/local/sbin/hifi-backup-run.py"
 # 32MB per file is generous for config, a FIR filter or the web-admin database.
@@ -1227,8 +1232,25 @@ def api_backup_create():
         json.dump(job, f)
     with open(hb.STATUS_FILE, "w") as f:
         json.dump({"state": "preparing", "progress": 0, "message": "Avvio…"}, f)
-    _run(["systemd-run", "--no-block", "--collect", "--unit=" + BACKUP_UNIT,
-          BACKUP_SCRIPT, BACKUP_JOB], timeout=15)
+    try:
+        r = _run(["systemd-run", "--no-block", "--collect", "--unit=" + BACKUP_UNIT,
+                  BACKUP_SCRIPT, BACKUP_JOB], timeout=15)
+        launch_err = None if r.returncode == 0 else (r.stderr or r.stdout or "").strip()
+    except subprocess.TimeoutExpired:
+        launch_err = "systemd-run non ha risposto"
+    if launch_err:
+        # Without this, a systemd-run failure (unit già attivo, dbus, ecc.)
+        # leaves the "Avvio…"/0% placeholder above in place forever, since
+        # nothing ever starts to overwrite it — the UI just polls a frozen
+        # status and looks hung.
+        with open(hb.STATUS_FILE, "w") as f:
+            json.dump({"state": "error", "progress": 0,
+                       "message": f"Avvio del backup fallito: {launch_err}"[:300]}, f)
+        try:
+            os.unlink(BACKUP_JOB)
+        except OSError:
+            pass
+        return jsonify({"success": False, "message": "Avvio del backup fallito"}), 500
     return jsonify({"success": True, "categories": categories,
                     "encrypted": bool(passphrase)}), 202
 
