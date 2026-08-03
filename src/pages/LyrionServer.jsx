@@ -692,8 +692,14 @@ const LyrionServer = () => {
               transition={{ type: 'spring', damping: 26, stiffness: 200 }}
               className="absolute inset-0 z-50 flex flex-col bg-hifi-dark overflow-hidden">
 
-              {/* Blurred art background */}
-              <div className="absolute inset-0 opacity-20 bg-cover bg-center blur-3xl scale-125 pointer-events-none transition-all duration-1000"
+              {/* Blurred art background. Kept as a cheap-ish `blur-lg` (not the
+                  original blur-3xl): this div covers the whole canvas, and
+                  since the canvas is zoomed to fill the real screen, a large
+                  blur radius here means a much bigger Gaussian kernel over a
+                  much bigger painted area — costly to rasterize on the
+                  slide-up entrance transition (translateY), especially on
+                  weak/virtualized GPUs (e.g. VMware SVGA in the test VM). */}
+              <div className="absolute inset-0 opacity-20 bg-cover bg-center blur-lg scale-125 pointer-events-none transition-all duration-1000"
                 style={{ backgroundImage: artworkUrlLg ? `url(${artworkUrlLg})` : 'none' }} />
               <div className="absolute inset-0 bg-gradient-to-t from-black/95 via-black/60 to-transparent pointer-events-none" />
 
