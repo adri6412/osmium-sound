@@ -1,4 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
+import { SCALED_CANVAS_ID } from '../components/ScaledCanvas';
 import { motion } from 'framer-motion';
 import {
   Wifi,
@@ -3387,9 +3389,9 @@ const Settings = ({ initialSection, onSectionConsumed } = {}) => {
       </div>
 
       {/* In-app confirmation modal (styled, replaces native window.confirm) */}
-      {confirmDialog && (
+      {confirmDialog && createPortal(
         <motion.div
-          className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/70 backdrop-blur-sm p-6"
+          className="absolute inset-0 z-[10000] flex items-center justify-center bg-black/70 backdrop-blur-sm p-6"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           onClick={() => setConfirmDialog(null)}
@@ -3416,14 +3418,15 @@ const Settings = ({ initialSection, onSectionConsumed } = {}) => {
               </button>
             </div>
           </motion.div>
-        </motion.div>
+        </motion.div>,
+        document.getElementById(SCALED_CANVAS_ID) || document.body
       )}
 
       {/* "What's new" changelog popup — dismissible, unlike the confirm modal
           above (no destructive action to confirm here). */}
-      {changelogDialog && (
+      {changelogDialog && createPortal(
         <motion.div
-          className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/70 backdrop-blur-sm p-6"
+          className="absolute inset-0 z-[10000] flex items-center justify-center bg-black/70 backdrop-blur-sm p-6"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           onClick={() => setChangelogDialog(null)}
@@ -3447,7 +3450,8 @@ const Settings = ({ initialSection, onSectionConsumed } = {}) => {
               {t('common.close')}
             </button>
           </motion.div>
-        </motion.div>
+        </motion.div>,
+        document.getElementById(SCALED_CANVAS_ID) || document.body
       )}
 
       {/* Fullscreen OTA progress overlay — blocks the UI while an update runs and
@@ -3457,9 +3461,9 @@ const Settings = ({ initialSection, onSectionConsumed } = {}) => {
         const isDone = activeOta.state === 'done';
         const hasPct = typeof activeOta.progress === 'number';
         const pct = hasPct ? Math.max(0, Math.min(100, Math.round(activeOta.progress))) : 0;
-        return (
+        return createPortal(
           <motion.div
-            className="fixed inset-0 z-[10050] flex flex-col items-center justify-center bg-black/90 backdrop-blur-md p-10 text-center"
+            className="absolute inset-0 z-[10050] flex flex-col items-center justify-center bg-black/90 backdrop-blur-md p-10 text-center"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
           >
@@ -3506,7 +3510,8 @@ const Settings = ({ initialSection, onSectionConsumed } = {}) => {
                 {t('settings.updates.overlay.keepPowered')}
               </p>
             )}
-          </motion.div>
+          </motion.div>,
+          document.getElementById(SCALED_CANVAS_ID) || document.body
         );
       })()}
     </motion.div>

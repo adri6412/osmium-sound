@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Bluetooth } from 'lucide-react';
 import { systemAPI } from '../utils/api';
 import { useI18n } from '../i18n';
+import { SCALED_CANVAS_ID } from './ScaledCanvas';
 
 // Bluetooth playback pauses the local Lyrion player (see hifi-bt-watcher.py),
 // so the regular Lyrion-driven Now Playing panel has nothing to show while a
@@ -35,13 +37,13 @@ const BluetoothNowPlaying = () => {
   const active = !!np?.active;
   const progress = active && np.duration > 0 ? Math.min(100, (np.position / np.duration) * 100) : 0;
 
-  return (
+  return createPortal(
     <AnimatePresence>
       {active && (
         <motion.div
           initial={{ y: -60, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: -60, opacity: 0 }}
           transition={{ type: 'spring', damping: 24, stiffness: 220 }}
-          className="fixed top-0 left-0 right-0 z-[60] flex items-center gap-3 px-4 py-2 bg-black/85 backdrop-blur-md border-b border-hifi-gold/20 shadow-[0_4px_20px_rgba(0,0,0,0.5)]"
+          className="absolute top-0 left-0 right-0 z-[60] flex items-center gap-3 px-4 py-2 bg-black/85 backdrop-blur-md border-b border-hifi-gold/20 shadow-[0_4px_20px_rgba(0,0,0,0.5)]"
         >
           <div className="w-9 h-9 rounded-lg overflow-hidden bg-hifi-gray flex items-center justify-center shrink-0">
             {np.cover_url && !imgError ? (
@@ -64,7 +66,8 @@ const BluetoothNowPlaying = () => {
           )}
         </motion.div>
       )}
-    </AnimatePresence>
+    </AnimatePresence>,
+    document.getElementById(SCALED_CANVAS_ID) || document.body
   );
 };
 

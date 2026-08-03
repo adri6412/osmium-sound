@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useI18n } from '../i18n';
+import { SCALED_CANVAS_ID } from './ScaledCanvas';
 
 const Screensaver = ({ isActive, onWake }) => {
   const { localeTag } = useI18n();
@@ -33,7 +35,7 @@ const Screensaver = ({ isActive, onWake }) => {
 
   const { hours, minutes, seconds, dateStr } = formatTime(time);
 
-  return (
+  return createPortal(
     <AnimatePresence>
       {isActive && (
         <motion.div
@@ -41,7 +43,7 @@ const Screensaver = ({ isActive, onWake }) => {
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           transition={{ duration: 1 }} // Slow fade in/out
-          className="fixed inset-0 z-[100] bg-black flex flex-col items-center justify-center cursor-none"
+          className="absolute inset-0 z-[100] bg-black flex flex-col items-center justify-center cursor-none"
           onClick={onWake}
         >
           {/* Subtle slow-moving gradient background for avoiding pure black static burn-in */}
@@ -82,7 +84,8 @@ const Screensaver = ({ isActive, onWake }) => {
           <div className="absolute inset-0" onMouseMove={onWake} onTouchStart={onWake} />
         </motion.div>
       )}
-    </AnimatePresence>
+    </AnimatePresence>,
+    document.getElementById(SCALED_CANVAS_ID) || document.body
   );
 };
 

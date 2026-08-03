@@ -1,10 +1,12 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Delete } from 'lucide-react';
 import { useKeyboard } from '../contexts/KeyboardContext';
 import { useI18n } from '../i18n';
 import SimpleKeyboard from 'simple-keyboard';
 import 'simple-keyboard/build/css/index.css';
+import { SCALED_CANVAS_ID } from './ScaledCanvas';
 
 const VirtualKeyboard = () => {
   const { isKeyboardVisible, inputValue, updateInputValue, hideKeyboard, confirmInput, activeInput } = useKeyboard();
@@ -147,16 +149,16 @@ const VirtualKeyboard = () => {
     };
   }, [isKeyboardVisible, hideKeyboard, activeInput]);
 
-  return (
+  return createPortal(
     <AnimatePresence>
       {isKeyboardVisible && (
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          className="fixed inset-0 flex items-end justify-center pointer-events-none"
+          className="absolute inset-0 flex items-end justify-center pointer-events-none"
           style={{
-            position: 'fixed',
+            position: 'absolute',
             top: 0,
             left: 0,
             right: 0,
@@ -220,7 +222,8 @@ const VirtualKeyboard = () => {
           </motion.div>
         </motion.div>
       )}
-    </AnimatePresence>
+    </AnimatePresence>,
+    document.getElementById(SCALED_CANVAS_ID) || document.body
   );
 };
 

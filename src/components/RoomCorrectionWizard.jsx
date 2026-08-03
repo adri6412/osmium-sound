@@ -130,7 +130,7 @@ const RoomCorrectionWizard = ({ onDone }) => {
       {createPortal(
         <AnimatePresence>
           {open && (
-            <motion.div className="fixed inset-0 z-[70] flex items-center justify-center p-6"
+            <motion.div className="absolute inset-0 z-[70] flex items-center justify-center p-6"
               initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
               <div className="absolute inset-0 bg-black/70" onClick={() => !busy && setOpen(false)} />
               <motion.div initial={{ scale: 0.94, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.94, opacity: 0 }}

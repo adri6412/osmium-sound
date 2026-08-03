@@ -1,4 +1,5 @@
 import React from 'react';
+import { createPortal } from 'react-dom';
 
 import LyrionServer from './pages/LyrionServer';
 import SetupWizard from './pages/SetupWizard';
@@ -6,6 +7,7 @@ import VirtualKeyboard from './components/VirtualKeyboard';
 import Screensaver from './components/Screensaver';
 import BootIntro from './components/BootIntro';
 import UsbDetectedModal from './components/UsbDetectedModal';
+import { SCALED_CANVAS_ID } from './components/ScaledCanvas';
 import { KeyboardProvider, useKeyboard } from './contexts/KeyboardContext';
 import { I18nProvider } from './i18n';
 import { lyrionApi } from './utils/lyrionApi';
@@ -224,13 +226,14 @@ const AppContent = () => {
       {showWizard && <SetupWizard onComplete={() => setShowWizard(false)} />}
       <Screensaver isActive={isScreensaverActive && !showWizard} onWake={() => setIsScreensaverActive(false)} />
       {usbPrompt && <UsbDetectedModal disk={usbPrompt} onMount={mountUsbPrompt} onCancel={dismissUsbPrompt} />}
-      {showIntro && (
+      {showIntro && createPortal(
         <div
-          className="fixed inset-0 z-[10000] bg-black"
+          className="absolute inset-0 z-[10000] bg-black"
           style={{ opacity: introFading ? 0 : 1, transition: 'opacity 600ms ease', pointerEvents: introFading ? 'none' : 'auto' }}
         >
           <BootIntro onDone={handleIntroDone} />
-        </div>
+        </div>,
+        document.getElementById(SCALED_CANVAS_ID) || document.body
       )}
     </div>
   );

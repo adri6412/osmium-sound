@@ -1,8 +1,10 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { motion } from 'framer-motion';
 import { HardDrive, AlertTriangle, Loader2, CheckCircle2, Eye, EyeOff, Copy, Check } from 'lucide-react';
 import { useI18n } from '../i18n';
 import { useKeyboardInput } from '../hooks/useKeyboardInput';
+import { SCALED_CANVAS_ID } from './ScaledCanvas';
 
 // Talks to the same on-device sources service as SourcesManager (plain fetch,
 // no auth needed from loopback).
@@ -69,9 +71,9 @@ function FormatWizard({ disk, t, onClose, onDone }) {
   const canFormat = typed.trim() === label.trim() && label.trim().length > 0;
   const pct = status && typeof status.progress === 'number' ? Math.max(0, Math.min(100, Math.round(status.progress))) : 0;
 
-  return (
+  return createPortal(
     <motion.div
-      className="fixed inset-0 z-[10050] flex items-center justify-center bg-black/80 backdrop-blur-sm p-6"
+      className="absolute inset-0 z-[10050] flex items-center justify-center bg-black/80 backdrop-blur-sm p-6"
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       onClick={() => { if (step === 'choose' || step === 'confirm') onClose(); }}
@@ -201,7 +203,8 @@ function FormatWizard({ disk, t, onClose, onDone }) {
           </div>
         )}
       </motion.div>
-    </motion.div>
+    </motion.div>,
+    document.getElementById(SCALED_CANVAS_ID) || document.body
   );
 }
 

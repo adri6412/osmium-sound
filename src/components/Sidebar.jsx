@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { Settings as SettingsIcon, Keyboard, X, Menu, Server } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useI18n } from '../i18n';
+import { SCALED_CANVAS_ID } from './ScaledCanvas';
 
 /**
  * Sidebar component
@@ -53,7 +55,7 @@ const Sidebar = ({ onNavigate, currentPage, isOpen, setIsOpen }) => {
     }
   };
 
-  return (
+  return createPortal(
     <>
       {/* Backdrop */}
       <AnimatePresence>
@@ -63,7 +65,7 @@ const Sidebar = ({ onNavigate, currentPage, isOpen, setIsOpen }) => {
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             onClick={() => setIsOpen(false)}
-            className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40"
+            className="absolute inset-0 bg-black/60 backdrop-blur-sm z-40"
           />
         )}
       </AnimatePresence>
@@ -76,7 +78,7 @@ const Sidebar = ({ onNavigate, currentPage, isOpen, setIsOpen }) => {
             animate={{ x: 0 }}
             exit={{ x: '-100%' }}
             transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-            className="fixed top-0 left-0 bottom-0 w-80 bg-hifi-dark border-r border-hifi-accent shadow-2xl z-50 flex flex-col"
+            className="absolute top-0 left-0 bottom-0 w-80 bg-hifi-dark border-r border-hifi-accent shadow-2xl z-50 flex flex-col"
           >
             {/* Header */}
             <div className="p-6 border-b border-white/10 flex items-center justify-between">
@@ -149,12 +151,13 @@ const Sidebar = ({ onNavigate, currentPage, isOpen, setIsOpen }) => {
       {!isOpen && (
         <button
           onClick={() => setIsOpen(true)}
-          className="fixed top-4 left-4 z-30 p-3 bg-hifi-dark/80 backdrop-blur-md border border-white/10 rounded-full text-white shadow-lg hover:bg-hifi-light transition-colors"
+          className="absolute top-4 left-4 z-30 p-3 bg-hifi-dark/80 backdrop-blur-md border border-white/10 rounded-full text-white shadow-lg hover:bg-hifi-light transition-colors"
         >
           <Menu size={24} />
         </button>
       )}
-    </>
+    </>,
+    document.getElementById(SCALED_CANVAS_ID) || document.body
   );
 };
 

@@ -690,7 +690,7 @@ const LyrionServer = () => {
             <motion.div
               initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }}
               transition={{ type: 'spring', damping: 26, stiffness: 200 }}
-              className="fixed inset-0 z-50 flex flex-col bg-hifi-dark overflow-hidden">
+              className="absolute inset-0 z-50 flex flex-col bg-hifi-dark overflow-hidden">
 
               {/* Blurred art background */}
               <div className="absolute inset-0 opacity-20 bg-cover bg-center blur-3xl scale-125 pointer-events-none transition-all duration-1000"
@@ -841,7 +841,7 @@ const LyrionServer = () => {
       {createPortal(
         <AnimatePresence>
           {showQueue && (
-            <motion.div className="fixed inset-0 z-[60] flex justify-end"
+            <motion.div className="absolute inset-0 z-[60] flex justify-end"
               initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
               <div className="absolute inset-0 bg-black/60" onClick={() => setShowQueue(false)} />
               <motion.div
@@ -933,7 +933,7 @@ const LyrionServer = () => {
       {createPortal(
         <AnimatePresence>
           {saveQueueOpen && (
-            <motion.div className="fixed inset-0 z-[70] flex items-center justify-center p-6"
+            <motion.div className="absolute inset-0 z-[70] flex items-center justify-center p-6"
               initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
               <div className="absolute inset-0 bg-black/70" onClick={() => setSaveQueueOpen(false)} />
               <motion.div initial={{ scale: 0.92, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.92, opacity: 0 }}
@@ -968,7 +968,7 @@ const LyrionServer = () => {
       {createPortal(
         <AnimatePresence>
           {sleepMenuOpen && (
-            <motion.div className="fixed inset-0 z-[70] flex items-center justify-center p-6"
+            <motion.div className="absolute inset-0 z-[70] flex items-center justify-center p-6"
               initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
               <div className="absolute inset-0 bg-black/70" onClick={() => setSleepMenuOpen(false)} />
               <motion.div initial={{ scale: 0.92, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.92, opacity: 0 }}
