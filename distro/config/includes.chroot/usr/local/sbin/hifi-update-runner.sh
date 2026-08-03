@@ -116,7 +116,7 @@ fi
 # Must end on a success: an EXIT trap whose last command fails can replace this
 # script's exit status, and our exit status is how the caller (and the tests)
 # tell a completed plan from a broken one.
-# shellcheck disable=SC2329  # invoked indirectly, by the trap below
+# shellcheck disable=SC2317,SC2329  # invoked indirectly, by the trap below
 cleanup() {
     [ -n "${HIFI_RUNNER_TMPDIR:-}" ] && rm -rf "$HIFI_RUNNER_TMPDIR"
     return 0
