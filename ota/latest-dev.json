@@ -1,41 +1,41 @@
 {
-  "tag_name": "v2.5.21-dev.48",
-  "name": "v2.5.21-dev.48",
-  "body": "## What's new in v2.5.21-dev.48\n\n- fix(lyrion): install codec CLI helpers so Lyrion can transcode mp3/aac; fix(backup): force samba-cred resync on restore\n",
+  "tag_name": "v2.5.21-dev.49",
+  "name": "v2.5.21-dev.49",
+  "body": "## What's new in v2.5.21-dev.49\n\n- fix(kiosk): switch canvas scaling from CSS transform to zoom (GPU)\n",
   "assets": [
     {
-      "name": "hifi-ui-v2.5.21-dev.48.tar.gz",
-      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.48/hifi-ui-v2.5.21-dev.48.tar.gz",
-      "size": 118528636
+      "name": "hifi-ui-v2.5.21-dev.49.tar.gz",
+      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.49/hifi-ui-v2.5.21-dev.49.tar.gz",
+      "size": 118527780
     },
     {
-      "name": "hifi-ui-v2.5.21-dev.48.tar.gz.sha256",
-      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.48/hifi-ui-v2.5.21-dev.48.tar.gz.sha256",
+      "name": "hifi-ui-v2.5.21-dev.49.tar.gz.sha256",
+      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.49/hifi-ui-v2.5.21-dev.49.tar.gz.sha256",
       "size": 96
     },
     {
-      "name": "hifi-system-v2.5.21-dev.48.tar.gz",
-      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.48/hifi-system-v2.5.21-dev.48.tar.gz",
-      "size": 237699
+      "name": "hifi-system-v2.5.21-dev.49.tar.gz",
+      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.49/hifi-system-v2.5.21-dev.49.tar.gz",
+      "size": 237693
     },
     {
-      "name": "hifi-system-v2.5.21-dev.48.tar.gz.sha256",
-      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.48/hifi-system-v2.5.21-dev.48.tar.gz.sha256",
+      "name": "hifi-system-v2.5.21-dev.49.tar.gz.sha256",
+      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.49/hifi-system-v2.5.21-dev.49.tar.gz.sha256",
       "size": 100
     },
     {
-      "name": "hifi-os-v2.5.21-dev.48.tar.gz",
-      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.48/hifi-os-v2.5.21-dev.48.tar.gz",
-      "size": 1192909
+      "name": "hifi-os-v2.5.21-dev.49.tar.gz",
+      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.49/hifi-os-v2.5.21-dev.49.tar.gz",
+      "size": 1192910
     },
     {
-      "name": "hifi-os-v2.5.21-dev.48.tar.gz.sha256",
-      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.48/hifi-os-v2.5.21-dev.48.tar.gz.sha256",
+      "name": "hifi-os-v2.5.21-dev.49.tar.gz.sha256",
+      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.49/hifi-os-v2.5.21-dev.49.tar.gz.sha256",
       "size": 96
     },
     {
-      "name": "hifi-os-v2.5.21-dev.48.tar.gz.sha256.sig",
-      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.48/hifi-os-v2.5.21-dev.48.tar.gz.sha256.sig",
+      "name": "hifi-os-v2.5.21-dev.49.tar.gz.sha256.sig",
+      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.49/hifi-os-v2.5.21-dev.49.tar.gz.sha256.sig",
       "size": 64
     }
   ]
