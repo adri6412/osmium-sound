@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, session, globalShortcut } from 'electron';
+import { app, BrowserWindow, ipcMain, session, globalShortcut, screen } from 'electron';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import { exec } from 'child_process';
@@ -57,8 +57,9 @@ function recoverRenderer(reason) {
 }
 
 /**
- * Create the main application window
- * Optimized for 1024x600 touchscreen displays
+ * Create the main application window, sized to fill the actual display
+ * (7" touchscreen, 1080p/4K TV, ...). The renderer's ScaledCanvas then scales
+ * the fixed 1024x600 design canvas to fit whatever size that turns out to be.
  */
 function createWindow() {
   // Relax framing/CSP ONLY for the local Lyrion Music Server (localhost:9000 —
@@ -83,9 +84,18 @@ function createWindow() {
     callback({ responseHeaders: details.responseHeaders });
   });
 
+  // The xsession runs Chromium bare (no window manager), so the
+  // `--start-fullscreen` CLI flag has nothing to make it fullscreen with —
+  // that flag is a Chrome *browser* switch, not something Electron's
+  // BrowserWindow reads from argv. Without a WM to honor the EWMH fullscreen
+  // hint either, the only reliable way to cover the whole panel (7"
+  // touchscreen, 1080p/4K TV over HDMI, ...) is to size the window to the
+  // display's actual resolution ourselves, up front.
+  const { width: screenWidth, height: screenHeight } = screen.getPrimaryDisplay().size;
+
   mainWindow = new BrowserWindow({
-    width: 1024,
-    height: 600,
+    width: screenWidth,
+    height: screenHeight,
     minWidth: 1024,
     minHeight: 600,
     webPreferences: {
