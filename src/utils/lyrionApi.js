@@ -3,6 +3,22 @@
  * Uses JSON-RPC over HTTP
  */
 
+// MusicArtistInfo's `biography` command returns an HTML fragment (it's the
+// same markup MAI's own web/Jive popup renders), not plain text — a <link>
+// tag plus <p>/<b>/<i>/<span> wrapping the prose. We only want the words, and
+// parsing it as HTML (rather than executing it) also means we never have to
+// trust that markup: DOMParser-produced documents aren't inserted into a
+// browsing context, so embedded <script>/<img onerror> etc. never run.
+const htmlToText = (html) => {
+  const doc = new DOMParser().parseFromString(html, 'text/html');
+  doc.querySelectorAll('script, style, link').forEach((el) => el.remove());
+  doc.querySelectorAll('p, br, div').forEach((el) => el.append('\n\n'));
+  return (doc.body.textContent || '')
+    .replace(/[ \t]+/g, ' ')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+};
+
 export class LyrionAPI {
   constructor(baseUrl = 'http://localhost:9000') {
     // Strip trailing slashes and /material/ if present
@@ -252,8 +268,10 @@ export class LyrionAPI {
     if (!artist) return null;
     try {
       const r = await this.request(playerMac, ['musicartistinfo', 'biography', `artist:${artist}`]);
-      const text = r?.biography;
-      return typeof text === 'string' && text.trim() ? text : null;
+      const raw = r?.biography;
+      if (typeof raw !== 'string' || !raw.trim()) return null;
+      const text = htmlToText(raw);
+      return text || null;
     } catch (_) {
       return null;
     }
