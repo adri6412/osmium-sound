@@ -383,6 +383,8 @@
     <string name="settings_updates_ui">Interfaccia</string>
     <string name="settings_updates_system">Sistema</string>
     <string name="settings_updates_os">OS</string>
+    <string name="settings_updates_whats_new">Novità</string>
+    <string name="settings_updates_changelog_title">Novità in %s</string>
 
     <string name="settings_language_title">Lingua</string>
     <string name="settings_language_summary">Lingua usata da questa app</string>

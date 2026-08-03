@@ -528,6 +528,8 @@
       "updating": "Aggiornamento...",
       "updateNow": "Aggiorna ora",
       "orderNote": "Se ne occupa il player, in ordine: sistema, sistema operativo (con riavvio se serve) e interfaccia. L'aggiornamento prosegue anche se questa schermata si chiude.",
+      "whatsNew": "Novità",
+      "changelogTitle": "Novità in {version}",
       "autoCheck": "Controlla aggiornamenti all'avvio",
       "latestVersion": "Ultima versione",
       "installedVersion": "Versione installata",

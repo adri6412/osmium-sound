@@ -25,6 +25,11 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          # Full history + all tags, not the default single-commit shallow
+          # clone — the changelog step below needs to walk back to the
+          # previous release's tag.
+          fetch-depth: 0
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -61,6 +66,40 @@ jobs:
             VERSION="$(node -p "require('./package.json').version")"
           fi
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Generate changelog
+        # Powers the "what's new" popup in the Updates screen on web-admin,
+        # kiosk, and the Android companion app (see _check_release_update's
+        # `notes` field in api_server.py). Built from the actual commit log
+        # since the previous published release, not hand-authored — this repo
+        # ships small dev builds often (see release-versioning-rules), so a
+        # manual changelog file would rot immediately. `chore(release)`
+        # version-bump-only commits are filtered out as noise.
+        id: changelog
+        if: github.ref_type == 'tag'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -e
+          CUR="${{ steps.ver.outputs.version }}"
+          PREV="$(gh release list --repo "${{ github.repository }}" --limit 1 \
+                    --json tagName --jq '.[0].tagName' 2>/dev/null || true)"
+          if [ -n "$PREV" ] && git rev-parse -q --verify "refs/tags/$PREV" >/dev/null; then
+            RANGE="refs/tags/$PREV..HEAD"
+          else
+            RANGE="HEAD"
+          fi
+          {
+            echo "## What's new in $CUR"
+            echo
+            git log --no-merges --format='- %s' "$RANGE" \
+              | grep -vE '^- chore\(release\)' || true
+          } > CHANGELOG_RELEASE.md
+          if ! grep -q '^- ' CHANGELOG_RELEASE.md; then
+            echo "- Minor fixes and internal improvements." >> CHANGELOG_RELEASE.md
+          fi
+          cat CHANGELOG_RELEASE.md
+          echo "file=CHANGELOG_RELEASE.md" >> "$GITHUB_OUTPUT"
 
       - name: Package UI OTA bundle (tarball + sha256)
         id: pack
@@ -200,6 +239,7 @@ jobs:
           # OTA channel. GitHub's /releases/latest (used by the prod channel)
           # ignores prereleases, so dev builds never reach prod devices.
           prerelease: ${{ contains(github.ref_name, '-') }}
+          body_path: ${{ steps.changelog.outputs.file }}
           # The installer glob matches only on dev tags (built above); on prod
           # tags it matches nothing and is silently skipped.
           fail_on_unmatched_files: false
@@ -227,7 +267,8 @@ jobs:
             "$VERSION" "${{ github.repository }}" "$CH" \
             "${{ steps.pack.outputs.tarball }}" \
             "${{ steps.packsys.outputs.tarball }}" \
-            "${{ steps.packos.outputs.tarball }}"
+            "${{ steps.packos.outputs.tarball }}" \
+            "${{ steps.changelog.outputs.file }}"
           echo "channel=$CH" >> "$GITHUB_OUTPUT"
 
       - name: Publish OTA manifest to GitHub Pages

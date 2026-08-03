@@ -84,6 +84,15 @@
                 android:textColor="@color/hifiSilver"
                 android:layout_marginBottom="12dp" />
 
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/button_whats_new"
+                style="@style/Widget.MaterialComponents.Button.TextButton"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:visibility="gone"
+                android:layout_marginBottom="8dp"
+                android:text="@string/settings_updates_whats_new" />
+
             <LinearLayout
                 android:orientation="horizontal"
                 android:layout_width="match_parent"

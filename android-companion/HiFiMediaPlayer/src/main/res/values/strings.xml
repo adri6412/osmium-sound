@@ -403,6 +403,8 @@
     <string name="settings_updates_ui">UI</string>
     <string name="settings_updates_system">System</string>
     <string name="settings_updates_os">OS</string>
+    <string name="settings_updates_whats_new">What\'s new</string>
+    <string name="settings_updates_changelog_title">What\'s new in %s</string>
 
     <string name="about_team" translatable="false">Team</string>
     <string name="about_authors" translatable="false">Benjamin Viertel\nKurt Aaholst\nNik Clayton\nBrad Fitzpatrick</string>

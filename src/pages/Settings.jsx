@@ -86,6 +86,8 @@ const Settings = () => {
   // In-app confirmation modal (replaces the native window.confirm, which renders
   // with the OS/Electron chrome). Shape: { message, confirmLabel, onConfirm }.
   const [confirmDialog, setConfirmDialog] = useState(null);
+  // "What's new" changelog popup for the Updates section. Shape: { version, notes }.
+  const [changelogDialog, setChangelogDialog] = useState(null);
   // Android-style settings navigation: null = the section menu (list), otherwise
   // the id of the open section (its `content`, or title for the items section).
   const [activeSection, setActiveSection] = useState(null);
@@ -1199,6 +1201,15 @@ const Settings = () => {
   };
 
   const coreUpdateAvailable = !!(appUpdate?.update_available || systemUpdate?.update_available || osUpdate?.update_available);
+
+  // ui/system/os ship from the same tagged release, so their `notes` are
+  // normally identical — take whichever check response has one.
+  const availableChangelog = [appUpdate, systemUpdate, osUpdate]
+    .find((u) => u?.update_available && u?.notes);
+  const showChangelog = () => {
+    if (!availableChangelog) return;
+    setChangelogDialog({ version: availableChangelog.latest || '', notes: availableChangelog.notes });
+  };
 
   // ── Lyrion update handlers ──────────────────────────────────────
   const checkLyrionUpdate = async () => {
@@ -3163,6 +3174,15 @@ const Settings = () => {
                       </div>
                     )}
 
+                    {availableChangelog && (
+                      <button
+                        onClick={showChangelog}
+                        className="w-full bg-hifi-dark hover:bg-hifi-accent text-hifi-silver hover:text-white py-2.5 rounded-lg text-sm font-medium transition-colors"
+                      >
+                        {t('settings.updates.whatsNew')}
+                      </button>
+                    )}
+
                     {/* Check for updates */}
                     <motion.button
                       onClick={refreshAllChecks}
@@ -3373,6 +3393,37 @@ const Settings = () => {
                 {confirmDialog.confirmLabel || t('common.confirm')}
               </button>
             </div>
+          </motion.div>
+        </motion.div>
+      )}
+
+      {/* "What's new" changelog popup — dismissible, unlike the confirm modal
+          above (no destructive action to confirm here). */}
+      {changelogDialog && (
+        <motion.div
+          className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/70 backdrop-blur-sm p-6"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          onClick={() => setChangelogDialog(null)}
+        >
+          <motion.div
+            className="bg-hifi-light border border-hifi-accent rounded-2xl p-6 max-w-md w-full shadow-2xl"
+            initial={{ scale: 0.92, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 className="text-white text-lg font-semibold mb-3">
+              {t('settings.updates.changelogTitle', { version: changelogDialog.version })}
+            </h3>
+            <p className="text-hifi-silver text-sm leading-relaxed mb-6 max-h-[50vh] overflow-y-auto whitespace-pre-wrap break-words">
+              {changelogDialog.notes}
+            </p>
+            <button
+              onClick={() => setChangelogDialog(null)}
+              className="w-full bg-hifi-accent hover:bg-hifi-dark text-white py-3 rounded-lg font-medium transition-colors"
+            >
+              {t('common.close')}
+            </button>
           </motion.div>
         </motion.div>
       )}

@@ -286,7 +286,9 @@
       "kindUi": "Interfaccia",
       "kindSystem": "Sistema",
       "kindOs": "Sistema operativo",
-      "updating": "Aggiornamento {label}"
+      "updating": "Aggiornamento {label}",
+      "whatsNew": "Novità",
+      "changelogTitle": "Novità in {version}"
     },
     "companion": {
       "hint": "Inquadra il QR dall'app Osmium Sound Companion per associare il telefono.",

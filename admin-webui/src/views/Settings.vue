@@ -360,6 +360,21 @@ async function checkAll() {
 const hasUpdates = () => Object.keys(kinds).some(k => upd[k] && upd[k].update_available);
 const sleep = (ms) => new Promise(res => setTimeout(res, ms));
 
+// "What's new" popup — ui/system/os all ship from the same tagged release, so
+// their `notes` are normally identical; take whichever check response has one.
+const changelog = reactive({ open: false, version: '', notes: '' });
+function changelogAvailable() {
+  return Object.keys(kinds).some(k => upd[k] && upd[k].update_available && upd[k].notes);
+}
+function showChangelog() {
+  const withNotes = Object.keys(kinds).map(k => upd[k]).find(u => u && u.update_available && u.notes);
+  if (!withNotes) return;
+  changelog.version = withNotes.latest || '';
+  changelog.notes = withNotes.notes;
+  changelog.open = true;
+}
+function closeChangelog() { changelog.open = false; }
+
 // The whole sequence runs on the appliance (hifi-update-runner.sh, driven by a
 // plan persisted under /var/lib). This page only starts it and renders its
 // progress, so losing the browser — or this very daemon, which the system
@@ -836,6 +851,9 @@ onUnmounted(() => { if (lyrionPoll) clearInterval(lyrionPoll); });
         <button v-if="hasUpdates()" :disabled="applying.active" @click="applyAll">{{ t('settings.updates.updateAll') }}</button>
         <button class="secondary" :disabled="updBusy || applying.active" @click="checkAll">{{ updBusy ? t('settings.updates.checking') : t('settings.updates.checkAgain') }}</button>
       </div>
+      <div class="row" style="margin-top: 10px;" v-if="changelogAvailable()">
+        <button class="ghost" @click="showChangelog">{{ t('settings.updates.whatsNew') }}</button>
+      </div>
     </div>
 
     <!-- Companion -->
@@ -928,6 +946,15 @@ onUnmounted(() => { if (lyrionPoll) clearInterval(lyrionPoll); });
           <p class="muted" v-if="applying.doneList.length">{{ t('settings.updates.updatedList') }}: {{ applying.doneList.join(', ') }}</p>
           <button style="margin-top: 10px;" @click="closeApplyModal">{{ t('common.close') }}</button>
         </template>
+      </div>
+    </div>
+
+    <!-- dismissible "what's new" changelog popup -->
+    <div v-if="changelog.open" class="overlay" @click.self="closeChangelog">
+      <div class="card" style="width: 420px; max-width: 92vw;">
+        <h3>{{ t('settings.updates.changelogTitle', { version: changelog.version }) }}</h3>
+        <p class="sub" style="white-space: pre-wrap; word-break: break-word; max-height: 50vh; overflow-y: auto; margin-bottom: 16px;">{{ changelog.notes }}</p>
+        <button @click="closeChangelog">{{ t('common.close') }}</button>
       </div>
     </div>
 

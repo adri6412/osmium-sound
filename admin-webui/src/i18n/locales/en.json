@@ -286,7 +286,9 @@
       "kindUi": "Interface",
       "kindSystem": "System",
       "kindOs": "Operating system",
-      "updating": "Updating {label}"
+      "updating": "Updating {label}",
+      "whatsNew": "What's new",
+      "changelogTitle": "What's new in {version}"
     },
     "companion": {
       "hint": "Scan the QR code from the Osmium Sound Companion app to pair your phone.",

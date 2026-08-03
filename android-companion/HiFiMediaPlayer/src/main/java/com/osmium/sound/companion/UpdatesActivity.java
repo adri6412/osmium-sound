@@ -17,6 +17,7 @@ import androidx.activity.EdgeToEdge;
 import androidx.appcompat.app.AppCompatActivity;
 
 import com.google.android.material.button.MaterialButton;
+import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 
 import org.json.JSONObject;
 
@@ -64,9 +65,13 @@ public class UpdatesActivity extends AppCompatActivity {
     private TextView versionUi, versionSystem, versionOs;
     private TextView coreStatus;
     private MaterialButton applyCoreButton;
+    private MaterialButton whatsNewButton;
     private ProgressBar coreProgress;
 
     private boolean uiUpdateAvailable, systemUpdateAvailable, osUpdateAvailable;
+    // ui/system/os ship from the same tagged release, so their `notes` are
+    // normally identical — whichever check response has one wins.
+    private String changelogVersion, changelogNotes;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -87,6 +92,7 @@ public class UpdatesActivity extends AppCompatActivity {
         versionOs = findViewById(R.id.version_os);
         coreStatus = findViewById(R.id.core_status);
         applyCoreButton = findViewById(R.id.button_apply_core);
+        whatsNewButton = findViewById(R.id.button_whats_new);
         coreProgress = findViewById(R.id.core_progress);
 
         channelGroup.setOnCheckedChangeListener((group, checkedId) -> {
@@ -96,6 +102,7 @@ public class UpdatesActivity extends AppCompatActivity {
 
         findViewById(R.id.button_check_core).setOnClickListener(v -> checkCore());
         applyCoreButton.setOnClickListener(v -> applyCore());
+        whatsNewButton.setOnClickListener(v -> showChangelog());
 
         loadChannel();
         checkCore();
@@ -139,14 +146,28 @@ public class UpdatesActivity extends AppCompatActivity {
 
     private void checkCore() {
         setCoreBusy(true);
+        changelogVersion = null;
+        changelogNotes = null;
         checkOne("app", getString(R.string.settings_updates_ui), versionUi, available -> uiUpdateAvailable = available, () -> {
             checkOne("system", getString(R.string.settings_updates_system), versionSystem, available -> systemUpdateAvailable = available, () -> {
                 checkOne("os", getString(R.string.settings_updates_os), versionOs, available -> osUpdateAvailable = available, () -> {
                     setCoreBusy(false);
                     applyCoreButton.setVisibility(uiUpdateAvailable || systemUpdateAvailable || osUpdateAvailable ? View.VISIBLE : View.GONE);
+                    whatsNewButton.setVisibility(changelogNotes != null && !changelogNotes.isEmpty() ? View.VISIBLE : View.GONE);
                 });
             });
         });
+    }
+
+    private void showChangelog() {
+        if (changelogNotes == null || changelogNotes.isEmpty()) return;
+        String title = String.format(getString(R.string.settings_updates_changelog_title),
+                changelogVersion == null ? "" : changelogVersion);
+        new MaterialAlertDialogBuilder(this)
+                .setTitle(title)
+                .setMessage(changelogNotes)
+                .setPositiveButton(android.R.string.ok, null)
+                .show();
     }
 
     private interface AvailabilityConsumer {
@@ -166,6 +187,11 @@ public class UpdatesActivity extends AppCompatActivity {
                     line += " (" + getString(R.string.settings_updates_up_to_date) + ")";
                 }
                 versionText.setText(line);
+                String notes = body.optString("notes", "");
+                if (available && !notes.isEmpty()) {
+                    changelogVersion = body.optString("latest", "");
+                    changelogNotes = notes;
+                }
                 onResult.accept(available);
                 then.run();
             }
@@ -199,6 +225,7 @@ public class UpdatesActivity extends AppCompatActivity {
     private void applyCore() {
         setCoreBusy(true);
         applyCoreButton.setVisibility(View.GONE);
+        whatsNewButton.setVisibility(View.GONE);
         setCoreStatus(getString(R.string.settings_updates_applying));
         ApplianceHttpClient.postJson("/api/system/updates/apply_all", null, new ApplianceHttpClient.JsonCallback() {
             @Override
@@ -333,6 +360,7 @@ public class UpdatesActivity extends AppCompatActivity {
                 if (!"running".equals(body.optString("state", "idle"))) return;
                 setCoreBusy(true);
                 applyCoreButton.setVisibility(View.GONE);
+        whatsNewButton.setVisibility(View.GONE);
                 setCoreStatus(getString(R.string.settings_updates_applying));
                 pollPlan(System.currentTimeMillis());
             }
@@ -351,6 +379,7 @@ public class UpdatesActivity extends AppCompatActivity {
     private void applyCoreLegacy() {
         setCoreBusy(true);
         applyCoreButton.setVisibility(View.GONE);
+        whatsNewButton.setVisibility(View.GONE);
         setCoreStatus(getString(R.string.settings_updates_applying));
         runCoreStep("system", getString(R.string.settings_updates_system), 90_000, false, () ->
                 runCoreStep("os", getString(R.string.settings_updates_os), 180_000, true, () ->

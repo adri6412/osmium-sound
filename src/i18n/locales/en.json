@@ -528,6 +528,8 @@
       "updating": "Updating...",
       "updateNow": "Update now",
       "orderNote": "Updates are applied by the player itself, in order: system, operating system (with a reboot if needed) and interface. The update carries on even if this screen closes.",
+      "whatsNew": "What's new",
+      "changelogTitle": "What's new in {version}",
       "autoCheck": "Check for updates on startup",
       "latestVersion": "Latest version",
       "installedVersion": "Installed version",
