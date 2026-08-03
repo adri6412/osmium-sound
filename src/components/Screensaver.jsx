@@ -46,12 +46,18 @@ const Screensaver = ({ isActive, onWake }) => {
           className="absolute inset-0 z-[100] bg-black flex flex-col items-center justify-center cursor-none"
           onClick={onWake}
         >
-          {/* Subtle slow-moving gradient background for avoiding pure black static burn-in */}
+          {/* Subtle slow-moving gradient background for avoiding pure black static
+              burn-in. Animates `transform` (GPU-composited, no repaint) instead of
+              `background-position` — the previous version animated
+              background-position on a box sized to its default 100%/100%
+              background-size, which repainted this full-canvas layer every frame,
+              forever, for zero visible pan (there was no extra gradient area to
+              move across). Oversized via `inset: -50%` (200% of the container,
+              centered) so the transform-driven drift has room to move. */}
           <motion.div
-            className="absolute inset-0 opacity-20 bg-gradient-to-br from-hifi-dark via-black to-hifi-gray"
-            animate={{
-              backgroundPosition: ['0% 0%', '100% 100%', '0% 0%'],
-            }}
+            className="absolute opacity-20 bg-gradient-to-br from-hifi-dark via-black to-hifi-gray"
+            style={{ inset: '-50%' }}
+            animate={{ x: ['0%', '10%', '0%'], y: ['0%', '10%', '0%'] }}
             transition={{ duration: 30, repeat: Infinity, ease: 'linear' }}
           />
 
