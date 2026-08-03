@@ -17,6 +17,7 @@ import AnalogVUMeter from '../components/AnalogVUMeter';
 import CdRip from '../components/CdRip';
 import Discover from '../components/Discover';
 import BluetoothNowPlaying from '../components/BluetoothNowPlaying';
+import { SCALED_CANVAS_ID } from '../components/ScaledCanvas';
 import SettingsPage from './Settings';
 import { useLyrionPlayer, safeUrl, formatTime } from '../hooks/useLyrionPlayer';
 
@@ -833,7 +834,7 @@ const LyrionServer = () => {
             </motion.div>
           )}
         </AnimatePresence>,
-        document.body
+        document.getElementById(SCALED_CANVAS_ID) || document.body
       )}
 
       {/* ══════════════════ QUEUE DRAWER (portal) ══════════════════ */}
@@ -925,7 +926,7 @@ const LyrionServer = () => {
             </motion.div>
           )}
         </AnimatePresence>,
-        document.body
+        document.getElementById(SCALED_CANVAS_ID) || document.body
       )}
 
       {/* ══════════════════ SAVE QUEUE DIALOG (portal) ══════════════════ */}
@@ -960,7 +961,7 @@ const LyrionServer = () => {
             </motion.div>
           )}
         </AnimatePresence>,
-        document.body
+        document.getElementById(SCALED_CANVAS_ID) || document.body
       )}
 
       {/* ══════════════════ SLEEP TIMER MENU (portal) ══════════════════ */}
@@ -997,7 +998,7 @@ const LyrionServer = () => {
             </motion.div>
           )}
         </AnimatePresence>,
-        document.body
+        document.getElementById(SCALED_CANVAS_ID) || document.body
       )}
     </div>
   );

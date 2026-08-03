@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Mic, X, Ruler, RefreshCw } from 'lucide-react';
 import { useI18n } from '../i18n';
+import { SCALED_CANVAS_ID } from './ScaledCanvas';
 
 // Guided room-correction wizard: pick the USB measurement mic, play the sweep,
 // show measured vs corrected response, then apply the generated FIR through
@@ -254,7 +255,7 @@ const RoomCorrectionWizard = ({ onDone }) => {
             </motion.div>
           )}
         </AnimatePresence>,
-        document.body
+        document.getElementById(SCALED_CANVAS_ID) || document.body
       )}
     </>
   );

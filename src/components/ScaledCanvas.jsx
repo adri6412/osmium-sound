@@ -9,6 +9,16 @@ import React from 'react';
 const DESIGN_WIDTH = 1024;
 const DESIGN_HEIGHT = 600;
 
+// Portal target id: several fullscreen overlays (LyrionServer's expanded
+// player/queue/modals, RoomCorrectionWizard, CdRip) use createPortal to
+// escape ancestor overflow:hidden/stacking contexts. If they portal to
+// document.body they land OUTSIDE this transformed canvas — body isn't a
+// descendant of it — so they render at native physical size instead of
+// scaling with everything else. Portaling into this div instead keeps them
+// inside the transform's containing block, so `position:fixed` in those
+// overlays still resolves against the 1024x600 canvas, not the real screen.
+export const SCALED_CANVAS_ID = 'hifi-scaled-canvas';
+
 export default function ScaledCanvas({ children }) {
   const outerRef = React.useRef(null);
   const [scale, setScale] = React.useState(1);
@@ -36,6 +46,7 @@ export default function ScaledCanvas({ children }) {
       }}
     >
       <div
+        id={SCALED_CANVAS_ID}
         style={{
           width: DESIGN_WIDTH, height: DESIGN_HEIGHT, position: 'relative',
           transform: `scale(${scale})`, transformOrigin: 'center', flexShrink: 0,

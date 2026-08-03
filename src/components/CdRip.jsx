@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Disc, X, HardDrive } from 'lucide-react';
 import { useI18n } from '../i18n';
+import { SCALED_CANVAS_ID } from './ScaledCanvas';
 
 // CD rip: disc-detect banner + rip dialog. Talks to sources_server.py (:8080)
 // directly, like the FIR/pairing bits in Settings — the kiosk is loopback so
@@ -228,7 +229,7 @@ const CdRip = () => {
             </motion.div>
           )}
         </AnimatePresence>,
-        document.body
+        document.getElementById(SCALED_CANVAS_ID) || document.body
       )}
     </>
   );
