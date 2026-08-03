@@ -24,7 +24,7 @@
     "local": "Locale",
     "usbTitle": "Dischi USB",
     "usbNone": "Nessun disco USB collegato. Inserisci una chiavetta o un hard disk USB.",
-    "usbFullHint": "\"Aggiungi tutto\"/\"Aggiungi\" copiano una cartella una sola volta, in sola lettura. \"Usa come sorgente\" dà accesso in lettura/scrittura e una condivisione di rete (Samba), come un disco interno — senza bisogno di formattare il disco.",
+    "usbFullHint": "\"Aggiungi tutto\"/\"Aggiungi\" copiano una cartella una sola volta, in sola lettura. \"Usa come sorgente\" dà accesso in lettura/scrittura e una condivisione di rete (Samba), come un disco interno — senza bisogno di formattare il disco. Non interrompe la riproduzione, ma la nuova cartella entra nella libreria musicale solo dopo aver premuto \"Applica e scansiona libreria\" qui sotto.",
     "addWhole": "Aggiungi tutto",
     "add": "Aggiungi",
     "addLocal": "Aggiungi cartella locale",

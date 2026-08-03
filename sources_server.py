@@ -2238,7 +2238,16 @@ def api_usb_adopt():
         state["sources"].append(src)
         save_state(state)
         regen_samba_shares()
-    apply_to_lyrion(state)
+    # Deliberately does NOT call apply_to_lyrion() — that does a full
+    # systemctl stop/start of lyrionmusicserver, which drops the squeezelite
+    # connection and kills any music currently playing. The Samba share is
+    # already live at this point (regen_samba_shares() above) without it, so
+    # there's no need to force that disruption automatically on every USB
+    # plug-in-and-adopt; the user applies it to the library explicitly via
+    # "Apply & rescan library" when ready — matching how adding a local
+    # folder or SMB source already behaves (api_add_local/api_add_smb below
+    # don't auto-apply either; only the rarer, one-time internal-disk-adopt
+    # flow does).
     return jsonify({"success": True, "source_id": src["id"], "share": share})
 
 
@@ -2725,7 +2734,7 @@ SOURCES_I18N = {
         "sources.usbTitle": "USB disks",
         "sources.usbNone": "No USB disk connected. Insert a USB stick or drive.",
         "sources.usbAddWhole": "Add whole disk",
-        "sources.usbFullHint": "\"Add whole disk\"/\"Add\" copy a folder once, read-only. \"Use as source\" gives read-write access and a network share (Samba), like an internal disk — no need to reformat the drive.",
+        "sources.usbFullHint": "\"Add whole disk\"/\"Add\" copy a folder once, read-only. \"Use as source\" gives read-write access and a network share (Samba), like an internal disk — no need to reformat the drive. It won't interrupt playback, but the new folder only joins the music library once you press \"Apply & rescan library\" below.",
         "sources.add": "Add",
         "sources.addLocal": "Add local folder",
         "sources.localPath": "Path on the device",
@@ -2859,7 +2868,7 @@ SOURCES_I18N = {
         "sources.usbTitle": "Dischi USB",
         "sources.usbNone": "Nessun disco USB collegato. Inserisci una chiavetta o un hard disk USB.",
         "sources.usbAddWhole": "Aggiungi tutto il disco",
-        "sources.usbFullHint": "\"Aggiungi tutto il disco\"/\"Aggiungi\" copiano una cartella una sola volta, in sola lettura. \"Usa come sorgente\" dà accesso in lettura/scrittura e una condivisione di rete (Samba), come un disco interno — senza bisogno di formattare il disco.",
+        "sources.usbFullHint": "\"Aggiungi tutto il disco\"/\"Aggiungi\" copiano una cartella una sola volta, in sola lettura. \"Usa come sorgente\" dà accesso in lettura/scrittura e una condivisione di rete (Samba), come un disco interno — senza bisogno di formattare il disco. Non interrompe la riproduzione, ma la nuova cartella entra nella libreria musicale solo dopo aver premuto \"Applica e scansiona libreria\" qui sotto.",
         "sources.add": "Aggiungi",
         "sources.addLocal": "Aggiungi cartella locale",
         "sources.localPath": "Percorso sul dispositivo",

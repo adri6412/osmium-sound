@@ -24,7 +24,7 @@
     "local": "Local",
     "usbTitle": "USB disks",
     "usbNone": "No USB disk connected. Insert a USB stick or drive.",
-    "usbFullHint": "\"Add all\"/\"Add\" copy a folder once, read-only. \"Use as source\" gives read-write access and a network share (Samba), like an internal disk — no need to reformat the drive.",
+    "usbFullHint": "\"Add all\"/\"Add\" copy a folder once, read-only. \"Use as source\" gives read-write access and a network share (Samba), like an internal disk — no need to reformat the drive. It won't interrupt playback, but the new folder only joins the music library once you press \"Apply & rescan library\" below.",
     "addWhole": "Add all",
     "add": "Add",
     "addLocal": "Add local folder",
