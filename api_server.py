@@ -62,9 +62,17 @@ OTA_MANIFEST_BASE = os.environ.get('HIFI_OTA_MANIFEST_BASE',
                                    'https://osmiumsound.qd.je/ota')
 # OTA release channel: 'prod' tracks GitHub's /releases/latest (stable releases
 # only); 'dev' tracks the newest release including prereleases (vX.Y.Z-dev.N).
+# 'alpha' tracks the newest release of ANY kind, including private test tags cut
+# from the 'alpha' branch (vX.Y.Z-dev.N-alphaM) — those are excluded from what
+# 'dev' sees, so they never reach a device that isn't specifically testing them.
 # Persisted so the backend's GitHub check and the apply step stay consistent.
 OTA_CHANNEL_FILE = '/etc/hifi-player/ota-channel'
-OTA_CHANNELS = ('prod', 'dev')
+OTA_CHANNELS = ('prod', 'dev', 'alpha')
+# 'alpha' only appears as a selectable channel when this marker file has been
+# placed by hand (root, out-of-band — see hifi-ota-alpha-toggle.sh). It is NOT
+# a security boundary (the repo/releases are public) — it just keeps the option
+# out of the UI/API for every device except the owner's own, on purpose.
+OTA_ALPHA_MARKER_FILE = '/etc/hifi-player/ota-alpha-unlocked'
 OTA_APPDIR = '/opt/hifi-media-player'
 OTA_VERSION_FILE = os.path.join(OTA_APPDIR, 'UI_VERSION')
 OTA_SCRIPT = '/usr/local/sbin/hifi-ota-update.sh'
@@ -2424,21 +2432,28 @@ def _read_version_file(path):
     except Exception:
         return 'unknown'
 
+def _alpha_unlocked():
+    return os.path.exists(OTA_ALPHA_MARKER_FILE)
+
 def get_ota_channel():
-    """Return the persisted OTA channel ('prod' or 'dev'). Defaults to the
-    HIFI_OTA_CHANNEL env var, else 'prod'."""
+    """Return the persisted OTA channel ('prod', 'dev' or 'alpha'). Defaults to
+    the HIFI_OTA_CHANNEL env var, else 'prod'. Falls back to 'prod' if the
+    resolved channel is 'alpha' but the marker file has since been removed, so
+    a device doesn't keep chasing alpha releases after being locked back out."""
     try:
         with open(OTA_CHANNEL_FILE) as f:
             ch = f.read().strip()
-        if ch in OTA_CHANNELS:
+        if ch in OTA_CHANNELS and (ch != 'alpha' or _alpha_unlocked()):
             return ch
     except Exception:
         pass
     env = os.environ.get('HIFI_OTA_CHANNEL', 'prod')
-    return env if env in OTA_CHANNELS else 'prod'
+    if env in OTA_CHANNELS and (env != 'alpha' or _alpha_unlocked()):
+        return env
+    return 'prod'
 
 def set_ota_channel(channel):
-    if channel not in OTA_CHANNELS:
+    if channel not in OTA_CHANNELS or (channel == 'alpha' and not _alpha_unlocked()):
         return {'success': False, 'message': 'Canale non valido', 'channel': get_ota_channel()}
     try:
         os.makedirs(os.path.dirname(OTA_CHANNEL_FILE), exist_ok=True)
@@ -2474,9 +2489,12 @@ def _fetch_pages_manifest(channel):
         release = json.load(resp)
     return release if release.get('tag_name') else None
 
+_ALPHA_TAG_RE = re.compile(r'-alpha\d+$')
+
 def _fetch_github_api_release(channel):
     """Fallback: query the (rate-limited) GitHub REST API.
-    prod → newest stable; dev → newest release incl. prereleases.
+    prod → newest stable; dev → newest release incl. prereleases, EXCLUDING
+    alpha-tagged ones; alpha → newest release of any kind (incl. alpha tags).
 
     The repo also hosts the Android companion app's releases (tags
     "companion-v*", APK-only assets) — those must never be offered to the
@@ -2494,8 +2512,11 @@ def _fetch_github_api_release(channel):
     # GitHub lists releases newest-first; skip drafts and companion releases.
     rels = [rel for rel in data if not rel.get('draft')
             and not str(rel.get('tag_name', '')).startswith('companion-')]
-    if channel == 'dev':
+    if channel == 'alpha':
         return next(iter(rels), {})
+    if channel == 'dev':
+        return next((rel for rel in rels
+                      if not _ALPHA_TAG_RE.search(str(rel.get('tag_name', '')))), {})
     return next((rel for rel in rels if not rel.get('prerelease')), {})
 
 def _fetch_release(channel):
@@ -3512,7 +3533,8 @@ def api_webui_reset_credentials():
 
 @app.route('/ota_channel', methods=['GET'])
 def api_ota_channel():
-    return jsonify({'channel': get_ota_channel()})
+    channels = [c for c in OTA_CHANNELS if c != 'alpha' or _alpha_unlocked()]
+    return jsonify({'channel': get_ota_channel(), 'channels': channels})
 
 @app.route('/ota_channel', methods=['POST'])
 def api_set_ota_channel():

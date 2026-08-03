@@ -216,8 +216,12 @@ const Settings = ({ initialSection, onSectionConsumed } = {}) => {
     localStorage.getItem('hifiAutoCheckUpdates') !== 'false'
   );
 
-  // OTA release channel ('prod' | 'dev') — persisted server-side
+  // OTA release channel ('prod' | 'dev' | 'alpha') — persisted server-side.
+  // 'alpha' only ever appears in otaChannels when the server reports it
+  // (i.e. the device has the private-channel marker file), so this default
+  // renders identically to the old two-button UI until then.
   const [otaChannel, setOtaChannel] = useState('prod');
+  const [otaChannels, setOtaChannels] = useState(['prod', 'dev']);
   const [channelBusy, setChannelBusy] = useState(false);
 
   // ── Playback preferences (per-player, via Lyrion) ──────────────
@@ -527,6 +531,9 @@ const Settings = ({ initialSection, onSectionConsumed } = {}) => {
   const loadOtaChannel = async () => {
     const res = await systemAPI.getOtaChannel();
     if (res.success && res.data?.channel) setOtaChannel(res.data.channel);
+    if (res.success && Array.isArray(res.data?.channels) && res.data.channels.length) {
+      setOtaChannels(res.data.channels);
+    }
   };
 
   const changeOtaChannel = async (channel) => {
@@ -3122,7 +3129,7 @@ const Settings = ({ initialSection, onSectionConsumed } = {}) => {
                     <div className="space-y-2">
                       <span className="text-sm text-white">{t('settings.updates.channel')}</span>
                       <div className="flex gap-3">
-                        {['prod', 'dev'].map((ch) => (
+                        {otaChannels.map((ch) => (
                           <motion.button
                             key={ch}
                             onClick={() => changeOtaChannel(ch)}
@@ -3134,11 +3141,11 @@ const Settings = ({ initialSection, onSectionConsumed } = {}) => {
                             }`}
                             whileTap={{ scale: channelBusy ? 1 : 0.95 }}
                           >
-                            {ch === 'prod' ? t('settings.updates.channelProd') : t('settings.updates.channelDev')}
+                            {t(`settings.updates.${{ prod: 'channelProd', dev: 'channelDev', alpha: 'channelAlpha' }[ch] || 'channelDev'}`)}
                           </motion.button>
                         ))}
                       </div>
-                      {otaChannel === 'dev' && (
+                      {otaChannel !== 'prod' && (
                         <div className="flex items-start space-x-2 text-xs text-amber-300 bg-amber-900/20 border border-amber-500/30 rounded-lg p-3">
                           <ShieldAlert size={14} className="mt-0.5 shrink-0" />
                           <span>{t('settings.updates.channelWarning')}</span>

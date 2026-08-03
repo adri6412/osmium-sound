@@ -527,6 +527,7 @@
       "channel": "Canale aggiornamenti",
       "channelProd": "Produzione",
       "channelDev": "Sviluppo",
+      "channelAlpha": "Alpha (privato)",
       "channelWarning": "Canale di sviluppo: riceverai build prerelease, potenzialmente instabili. Rimetti su Produzione al termine dei test.",
       "available": "Aggiornamento disponibile",
       "upToDate": "Tutto aggiornato",

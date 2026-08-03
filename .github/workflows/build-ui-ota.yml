@@ -164,6 +164,8 @@ jobs:
             distro/config/includes.chroot/usr/local/sbin/hifi-update-runner.sh \
             distro/config/includes.chroot/usr/local/sbin/hifi-system-update.sh \
             distro/config/includes.chroot/usr/local/sbin/hifi-ota-update.sh \
+            distro/config/includes.chroot/usr/local/sbin/hifi-ota-enroll-key.sh \
+            distro/config/includes.chroot/usr/local/sbin/hifi-ota-alpha-toggle.sh \
             tests/test-update-runner.sh
           echo "== idempotency (run apply.sh twice) =="
           export HIFI_OS_VERSION=ci-test
@@ -262,7 +264,10 @@ jobs:
         if: github.ref_type == 'tag'
         run: |
           VERSION="${{ steps.ver.outputs.version }}"
-          if printf '%s' "$VERSION" | grep -q '-'; then CH=dev; else CH=prod; fi
+          if printf '%s' "$VERSION" | grep -qE -- '-alpha[0-9]+$'; then CH=alpha
+          elif printf '%s' "$VERSION" | grep -q '-'; then CH=dev
+          else CH=prod
+          fi
           python3 .github/scripts/make-ota-manifest.py \
             "$VERSION" "${{ github.repository }}" "$CH" \
             "${{ steps.pack.outputs.tarball }}" \
