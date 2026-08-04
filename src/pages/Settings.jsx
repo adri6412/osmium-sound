@@ -238,6 +238,20 @@ const Settings = ({ initialSection, onSectionConsumed } = {}) => {
   const [replayGainMode, setReplayGainMode] = useState('0');     // 0 off / 1 track / 2 album / 3 smart
   const [playbackMessage, setPlaybackMessage] = useState('');
 
+  // Animated VU meter in the expanded now-playing view (persisted, frontend-only —
+  // no backend dependency, unlike the display-mode/ui-resolution toggles below).
+  const [vuMeterEnabled, setVuMeterEnabled] = useState(
+    localStorage.getItem('hifiVuMeterEnabled') !== 'false'
+  );
+  const toggleVuMeter = () => {
+    setVuMeterEnabled((prev) => {
+      const next = !prev;
+      localStorage.setItem('hifiVuMeterEnabled', next ? 'true' : 'false');
+      window.dispatchEvent(new CustomEvent('hifi-vu-meter-enabled', { detail: next }));
+      return next;
+    });
+  };
+
   // ── Multiroom (LMS sync zones) ─────────────────────────────────
   // Other players seen on the LMS, and the macs currently synced to *this*
   // appliance (its sync slaves). Grouping is native LMS sync.
@@ -2078,6 +2092,20 @@ const Settings = ({ initialSection, onSectionConsumed } = {}) => {
                         {playbackMessage}
                       </div>
                     )}
+
+                    {/* Animated VU meter toggle */}
+                    <button
+                      onClick={toggleVuMeter}
+                      className="w-full flex items-center justify-between bg-hifi-dark hover:bg-hifi-light/40 rounded-lg px-4 py-3 transition-colors"
+                    >
+                      <span className="text-left">
+                        <span className="block text-sm text-white">{t('settings.playback.vuMeter')}</span>
+                        <span className="block text-xs text-hifi-silver mt-0.5">{t('settings.playback.vuMeterHelp')}</span>
+                      </span>
+                      <span className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors ml-4 ${vuMeterEnabled ? 'bg-hifi-gold' : 'bg-hifi-accent'}`}>
+                        <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${vuMeterEnabled ? 'translate-x-6' : 'translate-x-1'}`} />
+                      </span>
+                    </button>
                   </div>
                 )}
 

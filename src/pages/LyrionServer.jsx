@@ -48,13 +48,32 @@ const ArtworkImage = ({ src, alt, className, FallbackIcon }) => {
 };
 
 // ── Animated playing indicator ────────────────────────────────
-const PlayingBars = () => (
-  <div className="flex items-end space-x-[2px] h-4 ml-1.5 shrink-0 self-center">
-    <div className="playing-bar h-3" />
-    <div className="playing-bar h-4" />
-    <div className="playing-bar h-2.5" />
-  </div>
-);
+// A CSS `animation: infinite` here would keep Chromium's compositor
+// requesting a new frame every vsync (60/s) for as long as playback runs —
+// on a weak iGPU that alone is enough to pin the render engine, even though
+// this is 3 tiny bars. Stepping the heights from JS every 220ms instead means
+// the compositor only has to do work ~4-5 times/sec and can idle in between;
+// the bounded `transition` (index.css) still gives each step a soft ease.
+const BAR_PATTERNS = [
+  [0.35, 1.0, 0.55],
+  [0.7, 0.4, 1.0],
+  [1.0, 0.65, 0.3],
+  [0.5, 1.0, 0.7],
+];
+const PlayingBars = () => {
+  const [step, setStep] = useState(0);
+  useEffect(() => {
+    const id = setInterval(() => setStep((s) => (s + 1) % BAR_PATTERNS.length), 220);
+    return () => clearInterval(id);
+  }, []);
+  return (
+    <div className="flex items-end space-x-[2px] h-4 ml-1.5 shrink-0 self-center">
+      {BAR_PATTERNS[step].map((scale, i) => (
+        <div key={i} className="playing-bar" style={{ transform: `scaleY(${scale})` }} />
+      ))}
+    </div>
+  );
+};
 
 // ── Main component ────────────────────────────────────────────
 // Kiosk-only: the PWA build has its own screens (src/pages/pwa/) and does not
@@ -125,9 +144,20 @@ const LyrionServer = () => {
 
   // ── Now-playing panel: VU meters ⇄ lyrics toggle ────────────
   // 'vu' | 'lyrics'; persisted so the choice survives navigation/reloads.
+  // The VU meter itself can be disabled from Settings (GPU cost on weak
+  // iGPUs) — in that case this view always resolves to lyrics.
+  const [vuMeterEnabled, setVuMeterEnabled] = useState(
+    localStorage.getItem('hifiVuMeterEnabled') !== 'false'
+  );
+  useEffect(() => {
+    const onChange = (e) => setVuMeterEnabled(!!e.detail);
+    window.addEventListener('hifi-vu-meter-enabled', onChange);
+    return () => window.removeEventListener('hifi-vu-meter-enabled', onChange);
+  }, []);
   const [nowPlayingView, setNowPlayingView] = useState(
     localStorage.getItem('hifiNowPlayingView') === 'lyrics' ? 'lyrics' : 'vu'
   );
+  const effectiveNowPlayingView = vuMeterEnabled ? nowPlayingView : 'lyrics';
   // undefined = not fetched yet, null = no lyrics found, string = lyrics text
   const [lyricsText, setLyricsText] = useState(undefined);
   const toggleNowPlayingView = () => {
@@ -138,14 +168,14 @@ const LyrionServer = () => {
     });
   };
   useEffect(() => {
-    if (nowPlayingView !== 'lyrics' || !isPlayerExpanded) return;
+    if (effectiveNowPlayingView !== 'lyrics' || !isPlayerExpanded) return;
     if (!currentTrack.id && !(artist && title)) { setLyricsText(null); return; }
     let cancelled = false;
     setLyricsText(undefined);
     lyrionApi.getLyrics(activePlayer?.playerid, { trackId: currentTrack.id, artist, title })
       .then((text) => { if (!cancelled) setLyricsText(text); });
     return () => { cancelled = true; };
-  }, [nowPlayingView, isPlayerExpanded, currentTrack.id]);
+  }, [effectiveNowPlayingView, isPlayerExpanded, currentTrack.id]);
 
   // ── Library content renderer ───────────────────────────────
   const renderLibraryContent = () => {
@@ -711,11 +741,13 @@ const LyrionServer = () => {
                 </button>
                 <p className="text-[10px] tracking-[0.25em] text-hifi-silver/70 uppercase">{t('player.nowPlaying')}</p>
                 <div className="flex items-center space-x-2">
-                  <button onClick={toggleNowPlayingView}
-                    title={nowPlayingView === 'vu' ? t('player.lyrics') : t('player.vuMeters')}
-                    className="p-2 bg-white/10 hover:bg-white/20 rounded-full text-white transition-colors">
-                    {nowPlayingView === 'vu' ? <Mic2 size={18} /> : <AudioLines size={18} />}
-                  </button>
+                  {vuMeterEnabled && (
+                    <button onClick={toggleNowPlayingView}
+                      title={nowPlayingView === 'vu' ? t('player.lyrics') : t('player.vuMeters')}
+                      className="p-2 bg-white/10 hover:bg-white/20 rounded-full text-white transition-colors">
+                      {nowPlayingView === 'vu' ? <Mic2 size={18} /> : <AudioLines size={18} />}
+                    </button>
+                  )}
                   <button onClick={openQueue} title={t('player.queue')}
                     className="p-2 bg-white/10 hover:bg-white/20 rounded-full text-white transition-colors">
                     <ListMusic size={18} />
@@ -819,7 +851,7 @@ const LyrionServer = () => {
 
                   {/* VU Meters (default) or Lyrics — fills remaining vertical space */}
                   <div className="flex-1 min-h-0">
-                    {nowPlayingView === 'vu' ? (
+                    {effectiveNowPlayingView === 'vu' ? (
                       <AnalogVUMeter isPlaying={isPlaying} className="w-full h-full" />
                     ) : (
                       <div className="w-full h-full overflow-y-auto rounded-xl bg-black/20 px-4 py-3">
