@@ -238,18 +238,34 @@ const Settings = ({ initialSection, onSectionConsumed } = {}) => {
   const [replayGainMode, setReplayGainMode] = useState('0');     // 0 off / 1 track / 2 album / 3 smart
   const [playbackMessage, setPlaybackMessage] = useState('');
 
-  // Animated VU meter in the expanded now-playing view (persisted, frontend-only —
-  // no backend dependency, unlike the display-mode/ui-resolution toggles below).
+  // Animated VU meter in the expanded now-playing view. Persisted server-side
+  // (like display-mode/ui-resolution below), not just in localStorage: a
+  // headless unit can never open this on-screen Settings page, so the only
+  // way to flip it there is remotely (companion app / web admin), which needs
+  // api_server to be the source of truth. localStorage is kept as a same-tab
+  // cache so LyrionServer.jsx has an instant value before its own fetch lands.
   const [vuMeterEnabled, setVuMeterEnabled] = useState(
     localStorage.getItem('hifiVuMeterEnabled') !== 'false'
   );
-  const toggleVuMeter = () => {
-    setVuMeterEnabled((prev) => {
-      const next = !prev;
-      localStorage.setItem('hifiVuMeterEnabled', next ? 'true' : 'false');
-      window.dispatchEvent(new CustomEvent('hifi-vu-meter-enabled', { detail: next }));
-      return next;
-    });
+  const [vuMeterBusy, setVuMeterBusy] = useState(false);
+  const loadVuMeter = async () => {
+    const res = await systemAPI.getVuMeter();
+    if (res.success && typeof res.data?.enabled === 'boolean') {
+      setVuMeterEnabled(res.data.enabled);
+      localStorage.setItem('hifiVuMeterEnabled', res.data.enabled ? 'true' : 'false');
+    }
+  };
+  const toggleVuMeter = async () => {
+    if (vuMeterBusy) return;
+    const next = !vuMeterEnabled;
+    setVuMeterBusy(true);
+    const res = await systemAPI.setVuMeter(next);
+    setVuMeterBusy(false);
+    if (res.success && res.data?.success) {
+      setVuMeterEnabled(res.data.enabled);
+      localStorage.setItem('hifiVuMeterEnabled', res.data.enabled ? 'true' : 'false');
+      window.dispatchEvent(new CustomEvent('hifi-vu-meter-enabled', { detail: res.data.enabled }));
+    }
   };
 
   // ── Multiroom (LMS sync zones) ─────────────────────────────────
@@ -314,6 +330,7 @@ const Settings = ({ initialSection, onSectionConsumed } = {}) => {
     loadPointerStatus();
     loadDisplayMode();
     loadUiResolution();
+    loadVuMeter();
     loadOtaChannel();
     loadPlaybackPrefs();
     loadDspStatus();
@@ -2096,7 +2113,8 @@ const Settings = ({ initialSection, onSectionConsumed } = {}) => {
                     {/* Animated VU meter toggle */}
                     <button
                       onClick={toggleVuMeter}
-                      className="w-full flex items-center justify-between bg-hifi-dark hover:bg-hifi-light/40 rounded-lg px-4 py-3 transition-colors"
+                      disabled={vuMeterBusy}
+                      className="w-full flex items-center justify-between bg-hifi-dark hover:bg-hifi-light/40 rounded-lg px-4 py-3 transition-colors disabled:opacity-60"
                     >
                       <span className="text-left">
                         <span className="block text-sm text-white">{t('settings.playback.vuMeter')}</span>

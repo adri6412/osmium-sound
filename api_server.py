@@ -1476,6 +1476,40 @@ def set_ui_resolution(mode):
             'message': 'Risoluzione aggiornata — l’interfaccia si riavvia'}
 
 # ──────────────────────────────────────────────────────────────────
+#  Animated VU meter (expanded now-playing view). Pure rendering choice, no OS
+#  action — but it needs to live here (not just localStorage in the Electron
+#  renderer) so it's reachable from the companion app / web admin on a
+#  headless unit, where nobody can ever open the on-screen Settings to flip
+#  it. Persisted state ABSENT means enabled (the shipped default).
+# ──────────────────────────────────────────────────────────────────
+VU_METER_FILE = '/etc/hifi-player/vu-meter-enabled'
+
+def get_vu_meter():
+    """Return { enabled }. Defaults to True (file absent or unreadable)."""
+    enabled = True
+    try:
+        with open(VU_METER_FILE) as f:
+            enabled = f.read().strip() != '0'
+    except Exception:
+        pass
+    return {'enabled': enabled}
+
+def set_vu_meter(enable):
+    """Persist the VU meter preference. No live session action needed — the
+    kiosk UI reads this on load and reacts immediately within its own tab."""
+    try:
+        os.makedirs(os.path.dirname(VU_METER_FILE), exist_ok=True)
+        tmp = VU_METER_FILE + '.tmp'
+        with open(tmp, 'w') as f:
+            f.write(('1' if enable else '0') + '\n')
+        os.replace(tmp, VU_METER_FILE)
+    except Exception:
+        log.exception("set_vu_meter: persist failed")
+        return {'success': False, 'enabled': get_vu_meter()['enabled'],
+                'message': 'Impossibile salvare la preferenza'}
+    return {'success': True, 'enabled': enable}
+
+# ──────────────────────────────────────────────────────────────────
 #  Provisioning + factory reset. The first-boot hotspot/captive flow and
 #  the web-admin account live in webui_server.py (bound 0.0.0.0:443/:80).
 #  api_server stays loopback-only; these endpoints are thin bridges the
@@ -3598,6 +3632,15 @@ def api_ui_resolution():
 def api_set_ui_resolution():
     data = request.get_json(silent=True) or {}
     return jsonify(set_ui_resolution((data.get('mode') or '').strip()))
+
+@app.route('/vu_meter', methods=['GET'])
+def api_vu_meter():
+    return jsonify(get_vu_meter())
+
+@app.route('/vu_meter', methods=['POST'])
+def api_set_vu_meter():
+    data = request.get_json(silent=True) or {}
+    return jsonify(set_vu_meter(bool(data.get('enable'))))
 
 @app.route('/provision_status', methods=['GET'])
 def api_provision_status():

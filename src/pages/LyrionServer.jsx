@@ -12,6 +12,7 @@ import {
   Mic2, AudioLines
 } from 'lucide-react';
 import { lyrionApi } from '../utils/lyrionApi';
+import { systemAPI } from '../utils/api';
 import { useI18n } from '../i18n';
 import AnalogVUMeter from '../components/AnalogVUMeter';
 import CdRip from '../components/CdRip';
@@ -150,6 +151,17 @@ const LyrionServer = () => {
     localStorage.getItem('hifiVuMeterEnabled') !== 'false'
   );
   useEffect(() => {
+    // The localStorage value above is just a same-device cache — it can be
+    // stale if the preference was last changed remotely (companion app / web
+    // admin on a headless unit) rather than from this Settings page. Refresh
+    // from api_server on mount so a remote change is picked up without
+    // needing the user to open Settings here first.
+    systemAPI.getVuMeter().then((res) => {
+      if (res.success && typeof res.data?.enabled === 'boolean') {
+        setVuMeterEnabled(res.data.enabled);
+        localStorage.setItem('hifiVuMeterEnabled', res.data.enabled ? 'true' : 'false');
+      }
+    });
     const onChange = (e) => setVuMeterEnabled(!!e.detail);
     window.addEventListener('hifi-vu-meter-enabled', onChange);
     return () => window.removeEventListener('hifi-vu-meter-enabled', onChange);
