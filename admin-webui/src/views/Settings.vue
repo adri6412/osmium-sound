@@ -326,6 +326,20 @@ async function setMode(m) {
   else say(bodyMsg(r, t('settings.display.changeFailed')), true);
 }
 
+// ── UI render resolution ─────────────────────────────────────────
+// Shrinks the X framebuffer on big panels (the GPU upscales it during
+// scanout) so the appliance stops rasterizing 2..8 Mpixel per repaint.
+// Applying restarts the device's graphical session, not this web page.
+const uiRes = ref('');
+async function loadUiRes() { const r = await api.sys('ui_resolution'); if (r.ok) uiRes.value = r.data.mode; }
+async function setUiRes(m) {
+  if (m === uiRes.value) return;
+  if (!confirm(t('settings.display.confirmResolution'))) return;
+  const r = await api.sysPost('ui_resolution', { mode: m });
+  if (r.ok && r.data.success !== false) { uiRes.value = r.data.mode || m; say(bodyMsg(r, t('settings.display.resolutionChanged'))); }
+  else say(bodyMsg(r, t('settings.display.resolutionFailed')), true);
+}
+
 // ── updates (prod/dev channel; single "update all" + blocking modal) ─
 const channel = ref('prod');
 const upd = reactive({ ui: null, system: null, os: null });
@@ -612,7 +626,7 @@ async function saveBackupScheduled(v) {
 
 onMounted(async () => {
   loadNet(); loadAudio(); loadDsp(); loadFir(); loadToggles(); loadShell(); loadLms(); loadLyrion();
-  loadMode(); loadChannel(); checkAll(); resumePlanIfRunning(); loadBackups(); loadTailscale();
+  loadMode(); loadUiRes(); loadChannel(); checkAll(); resumePlanIfRunning(); loadBackups(); loadTailscale();
 });
 onUnmounted(() => { if (lyrionPoll) clearInterval(lyrionPoll); });
 </script>
@@ -825,6 +839,16 @@ onUnmounted(() => { if (lyrionPoll) clearInterval(lyrionPoll); });
         <button v-if="mode === 'headless'" @click="setMode('gui')">{{ t('settings.display.switchToOnscreen') }}</button>
         <button v-else class="secondary" @click="setMode('headless')">{{ t('settings.display.switchToHeadless') }}</button>
       </div>
+      <template v-if="mode !== 'headless'">
+        <p class="sub">{{ t('settings.display.resolutionLabel') }}</p>
+        <p class="muted">{{ t('settings.display.resolutionHelp') }}</p>
+        <span class="seg">
+          <button v-for="opt in ['auto', '720', '1080', 'native']" :key="opt"
+                  :class="{ active: uiRes === opt }" @click="setUiRes(opt)">
+            {{ t('settings.display.resolution.' + opt) }}
+          </button>
+        </span>
+      </template>
     </div>
 
     <!-- Updates -->

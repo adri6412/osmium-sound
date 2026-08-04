@@ -286,6 +286,7 @@
       "backup": "Backup e ripristino",
       "ssh": "Accesso SSH",
       "pointer": "Puntatore mouse",
+      "uiResolution": "Risoluzione interfaccia",
       "displayMode": "Modalità schermo",
       "systemInfo": "Informazioni Sistema",
       "updates": "Aggiornamenti",
@@ -464,6 +465,25 @@
       "disabled": "Puntatore mouse nascosto",
       "unavailable": "Controllo del puntatore non disponibile su questo dispositivo.",
       "failed": "Impossibile cambiare il puntatore."
+    },
+    "uiResolution": {
+      "help": "Sugli schermi grandi l'interfaccia viene disegnata alla risoluzione piena del pannello, e questo tiene il chip grafico molto impegnato. Disegnarla più in basso e lasciare che sia lo schermo a ingrandirla rende tutto molto più fluido, a costo di un po' di nitidezza.",
+      "option": {
+        "auto": "Automatica",
+        "720": "1280 × 720",
+        "1080": "1920 × 1080",
+        "native": "Nativa"
+      },
+      "optionHelp": {
+        "auto": "Consigliata — abbassa la risoluzione solo sugli schermi che ne hanno bisogno",
+        "720": "Massima fluidità",
+        "1080": "Via di mezzo, utile sugli schermi 4K",
+        "native": "Immagine più nitida, chip grafico al massimo"
+      },
+      "restartWarning": "L'interfaccia si chiude e si riapre dopo qualche secondo. La riproduzione non viene interrotta.",
+      "confirm": "Applica",
+      "cancel": "Annulla",
+      "failed": "Impossibile cambiare la risoluzione."
     },
     "displayMode": {
       "help": "Scegli se questo dispositivo funziona con l'interfaccia touchscreen sullo schermo oppure in modalità headless (senza schermo), controllato da remoto tramite l'app companion Android, l'interfaccia web di Lyrion (porta 9000) o la pagina delle sorgenti musicali (porta 8080).",

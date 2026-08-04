@@ -50,7 +50,7 @@ log "removing user settings"
 # state (the owner's tailnet membership) lives under /var/lib/tailscale, not
 # here, so a factory reset does NOT disconnect it — the owner disconnects
 # from Settings → Tailscale (or the Tailscale admin console) if they want to.
-for f in display-mode pointer-enabled dsp.json dsp-presets.json bluetooth.json \
+for f in display-mode ui-resolution pointer-enabled dsp.json dsp-presets.json bluetooth.json \
          samba-cred.json provisioning-state.json webui.db webui-secret.key \
          webui-cert.pem webui-key.pem github-support-pat lyrion-channel; do
     rm -f "/etc/hifi-player/$f" 2>/dev/null || true

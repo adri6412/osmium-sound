@@ -260,7 +260,18 @@
       "switchToHeadless": "Passa a headless",
       "confirmHeadless": "Lo schermo del dispositivo si spegnerà subito. Continuare?",
       "changed": "Modalità cambiata",
-      "changeFailed": "Cambio modalità fallito"
+      "changeFailed": "Cambio modalità fallito",
+      "resolutionLabel": "Risoluzione interfaccia",
+      "resolutionHelp": "Sugli schermi grandi l'interfaccia viene disegnata alla risoluzione piena del pannello, e questo tiene il chip grafico molto impegnato. Disegnarla più in basso e lasciare che sia lo schermo a ingrandirla rende tutto molto più fluido, a costo di un po' di nitidezza.",
+      "resolution": {
+        "auto": "Automatica",
+        "720": "1280 × 720",
+        "1080": "1920 × 1080",
+        "native": "Nativa"
+      },
+      "confirmResolution": "L'interfaccia del dispositivo si chiude e si riapre dopo qualche secondo. La riproduzione non viene interrotta. Continuare?",
+      "resolutionChanged": "Risoluzione interfaccia cambiata",
+      "resolutionFailed": "Cambio risoluzione fallito"
     },
     "updates": {
       "channel": "Canale",

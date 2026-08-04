@@ -1831,6 +1831,11 @@ _SYSTEM_PROXY_ROUTES = [
     # (factory reset, which IS destructive, is deliberately NOT proxied here).
     ("/api/system/display_mode", "GET", "/display_mode"),
     ("/api/system/display_mode", "POST", "/display_mode"),
+    # UI render resolution (framebuffer downscale + GPU upscale). Same
+    # rationale as above: non-destructive, and worth reaching remotely because
+    # the unit it helps most is the one driving a big TV.
+    ("/api/system/ui_resolution", "GET", "/ui_resolution"),
+    ("/api/system/ui_resolution", "POST", "/ui_resolution"),
     ("/api/system/player_name", "GET", "/player_name"),
     ("/api/system/player_name", "POST", "/player_name"),
     ("/api/system/lms_role", "GET", "/lms_role"),

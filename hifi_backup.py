@@ -146,6 +146,7 @@ CATEGORIES = {
             ("file", "/etc/hifi-player/dsp-presets.json"),
             ("file", "/etc/hifi-player/ota-channel"),
             ("file", "/etc/hifi-player/display-mode"),
+            ("file", "/etc/hifi-player/ui-resolution"),
             ("file", "/etc/hifi-player/lyrion-channel"),
             ("file", "/etc/default/squeezelite"),
             ("file", "/etc/camilladsp/config.yml"),

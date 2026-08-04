@@ -1095,6 +1095,7 @@ SUPPORT_JOURNAL_UNITS = [
 SUPPORT_CONFIG_FILES = [
     '/etc/hifi-sources.json',
     '/etc/hifi-player/display-mode',
+    '/etc/hifi-player/ui-resolution',
     '/etc/hifi-player/ota-channel',
     '/etc/hifi-player/SYSTEM_VERSION',
     '/etc/hifi-player/OS_VERSION',
@@ -1409,6 +1410,70 @@ def set_display_mode(mode):
     msg = ('Modalità con schermo attivata' if mode == 'gui'
            else 'Modalità headless attivata — lo schermo verrà spento')
     return {'success': True, 'mode': mode, 'message': msg}
+
+# ──────────────────────────────────────────────────────────────────
+#  UI render resolution. The interface is a fixed 1024x600 canvas CSS-zoomed
+#  to the panel, and the Electron window is created as large as the panel —
+#  so on a 1080p/4K screen Chromium really rasterizes 2..8 Mpixel per repaint
+#  (every blur radius scales with the zoom too), pinning weak kiosk iGPUs near
+#  100%. Nothing inside Chromium reduces that pixel count; the only real lever
+#  is below it, in the X framebuffer.
+#
+#  /usr/local/sbin/hifi-ui-resolution.sh shrinks the framebuffer area mapped to
+#  the output (xrandr --scale-from), keeping the native video mode, and the GPU
+#  upscales it during scanout. api_server runs as root, so no sudoers entry is
+#  needed.
+#
+#  Persisted state ABSENT means "auto" — unlike display-mode, the default here
+#  is deliberately meant to reach the already-installed fleet: a unit that has
+#  never written the file is exactly the one suffering from this, and it will
+#  never open Settings.
+# ──────────────────────────────────────────────────────────────────
+UI_RESOLUTION_FILE = '/etc/hifi-player/ui-resolution'
+UI_RESOLUTION_SCRIPT = '/usr/local/sbin/hifi-ui-resolution.sh'
+UI_RESOLUTIONS = ('auto', '720', '1080', 'native')
+
+def get_ui_resolution():
+    """Return { mode }. One of UI_RESOLUTIONS; 'auto' when the file is absent
+    or holds anything unrecognised."""
+    mode = 'auto'
+    try:
+        with open(UI_RESOLUTION_FILE) as f:
+            val = f.read().strip()
+        if val in UI_RESOLUTIONS:
+            mode = val
+    except Exception:
+        pass
+    return {'mode': mode}
+
+def set_ui_resolution(mode):
+    """Persist the render resolution and restart the graphical session so it
+    takes effect. Refused while an OTA is applying — this tears the kiosk down
+    and back up, which must not race an update reboot."""
+    if mode not in UI_RESOLUTIONS:
+        return {'success': False, 'mode': get_ui_resolution()['mode'],
+                'message': 'Risoluzione non valida'}
+    if _update_in_progress():
+        return {'success': False, 'mode': get_ui_resolution()['mode'],
+                'message': 'Aggiornamento in corso — riprova a fine aggiornamento'}
+    if not os.path.exists(UI_RESOLUTION_SCRIPT):
+        return {'success': False, 'mode': get_ui_resolution()['mode'],
+                'message': 'Funzione non disponibile su questa versione di sistema'}
+    try:
+        r = subprocess.run([UI_RESOLUTION_SCRIPT, 'set', mode, '--live'],
+                           capture_output=True, text=True, timeout=30)
+        if r.returncode != 0:
+            log.error("set_ui_resolution failed: %s", (r.stderr or '').strip())
+            return {'success': False, 'mode': get_ui_resolution()['mode'],
+                    'message': 'Cambio risoluzione fallito'}
+    except Exception:
+        log.exception("set_ui_resolution failed")
+        return {'success': False, 'mode': get_ui_resolution()['mode'],
+                'message': 'Cambio risoluzione fallito'}
+    # The X session is restarted a moment after this response is flushed, so
+    # the kiosk UI issuing the request is about to disappear and come back.
+    return {'success': True, 'mode': mode,
+            'message': 'Risoluzione aggiornata — l’interfaccia si riavvia'}
 
 # ──────────────────────────────────────────────────────────────────
 #  Provisioning + factory reset. The first-boot hotspot/captive flow and
@@ -3512,6 +3577,15 @@ def api_display_mode():
 def api_set_display_mode():
     data = request.get_json(silent=True) or {}
     return jsonify(set_display_mode((data.get('mode') or '').strip()))
+
+@app.route('/ui_resolution', methods=['GET'])
+def api_ui_resolution():
+    return jsonify(get_ui_resolution())
+
+@app.route('/ui_resolution', methods=['POST'])
+def api_set_ui_resolution():
+    data = request.get_json(silent=True) or {}
+    return jsonify(set_ui_resolution((data.get('mode') or '').strip()))
 
 @app.route('/provision_status', methods=['GET'])
 def api_provision_status():
