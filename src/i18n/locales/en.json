@@ -286,6 +286,7 @@
       "backup": "Backup & restore",
       "ssh": "SSH Access",
       "pointer": "Mouse pointer",
+      "uiResolution": "Interface resolution",
       "displayMode": "Display mode",
       "systemInfo": "System Information",
       "updates": "Updates",
@@ -464,6 +465,25 @@
       "disabled": "Mouse pointer hidden",
       "unavailable": "Pointer control is not available on this device.",
       "failed": "Could not change the pointer."
+    },
+    "uiResolution": {
+      "help": "On large screens the interface is drawn at full panel resolution, which keeps the graphics chip busy. Rendering it lower and letting the screen enlarge it makes everything much smoother, at the cost of some sharpness.",
+      "option": {
+        "auto": "Automatic",
+        "720": "1280 × 720",
+        "1080": "1920 × 1080",
+        "native": "Native"
+      },
+      "optionHelp": {
+        "auto": "Recommended — lowers the resolution only on screens that need it",
+        "720": "Best performance",
+        "1080": "Middle ground, useful on 4K screens",
+        "native": "Sharpest picture, heaviest on the graphics chip"
+      },
+      "restartWarning": "The interface will close and reopen after a few seconds. Playback is not interrupted.",
+      "confirm": "Apply",
+      "cancel": "Cancel",
+      "failed": "Could not change the resolution."
     },
     "displayMode": {
       "help": "Choose whether this device runs with the on-screen touchscreen interface or headless (no screen), controlled remotely from the Android companion app, the Lyrion web interface (port 9000) or the music sources page (port 8080).",

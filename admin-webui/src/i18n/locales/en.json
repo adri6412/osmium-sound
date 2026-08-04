@@ -260,7 +260,18 @@
       "switchToHeadless": "Switch to headless",
       "confirmHeadless": "The device screen will turn off immediately. Continue?",
       "changed": "Display mode changed",
-      "changeFailed": "Could not change the display mode"
+      "changeFailed": "Could not change the display mode",
+      "resolutionLabel": "Interface resolution",
+      "resolutionHelp": "On large screens the interface is drawn at full panel resolution, which keeps the graphics chip busy. Rendering it lower and letting the screen enlarge it makes everything much smoother, at the cost of some sharpness.",
+      "resolution": {
+        "auto": "Automatic",
+        "720": "1280 × 720",
+        "1080": "1920 × 1080",
+        "native": "Native"
+      },
+      "confirmResolution": "The device's interface will close and reopen after a few seconds. Playback is not interrupted. Continue?",
+      "resolutionChanged": "Interface resolution changed",
+      "resolutionFailed": "Could not change the resolution"
     },
     "updates": {
       "channel": "Channel",

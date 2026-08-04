@@ -22,6 +22,7 @@ import {
   MousePointer2,
   Monitor,
   MonitorOff,
+  Gauge,
   ChevronRight,
   ChevronLeft,
   Smartphone,
@@ -142,6 +143,12 @@ const Settings = ({ initialSection, onSectionConsumed } = {}) => {
   const [displayModeBusy, setDisplayModeBusy] = useState(false);
   const [displayModeMessage, setDisplayModeMessage] = useState('');
   const [displayModeConfirm, setDisplayModeConfirm] = useState(false); // headless confirm step
+
+  // UI render resolution (framebuffer downscale + GPU upscale)
+  const [uiResolution, setUiResolution] = useState(null); // 'auto'|'720'|'1080'|'native'
+  const [uiResolutionBusy, setUiResolutionBusy] = useState(false);
+  const [uiResolutionMessage, setUiResolutionMessage] = useState('');
+  const [uiResolutionPending, setUiResolutionPending] = useState(null); // choice awaiting confirm
 
   // Audio output (DAC) selection
   const [audioDevices, setAudioDevices] = useState([]);
@@ -292,6 +299,7 @@ const Settings = ({ initialSection, onSectionConsumed } = {}) => {
     loadShellAccount();
     loadPointerStatus();
     loadDisplayMode();
+    loadUiResolution();
     loadOtaChannel();
     loadPlaybackPrefs();
     loadDspStatus();
@@ -647,6 +655,31 @@ const Settings = ({ initialSection, onSectionConsumed } = {}) => {
       // more to do here — the X session is about to end.
     } else {
       setDisplayModeMessage(res.data?.message || res.message || t('settings.displayMode.failed'));
+    }
+  };
+
+  // ── UI render resolution handlers ───────────────────────────────
+  const loadUiResolution = async () => {
+    const res = await systemAPI.getUiResolution();
+    if (res.success && res.data?.mode) {
+      setUiResolution(res.data.mode);
+    }
+  };
+
+  const changeUiResolution = async (mode) => {
+    if (uiResolutionBusy) return;
+    setUiResolutionBusy(true);
+    setUiResolutionMessage('');
+    setUiResolutionPending(null);
+    const res = await systemAPI.setUiResolution(mode);
+    setUiResolutionBusy(false);
+    if (res.success && res.data?.success) {
+      setUiResolution(res.data.mode);
+      setUiResolutionMessage(res.data.message || '');
+      // The X session restarts a moment later; this UI is about to be replaced
+      // by a freshly-launched one, so there is nothing else to do here.
+    } else {
+      setUiResolutionMessage(res.data?.message || res.message || t('settings.uiResolution.failed'));
     }
   };
 
@@ -1657,6 +1690,11 @@ const Settings = ({ initialSection, onSectionConsumed } = {}) => {
       title: t('settings.sections.pointer'),
       icon: MousePointer2,
       content: 'custom-pointer'
+    },
+    {
+      title: t('settings.sections.uiResolution'),
+      icon: Gauge,
+      content: 'custom-ui-resolution'
     },
     {
       title: t('settings.sections.displayMode'),
@@ -3037,6 +3075,76 @@ const Settings = ({ initialSection, onSectionConsumed } = {}) => {
                           : 'bg-hifi-dark text-hifi-silver'
                       }`}>
                         {pointerMessage}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* UI render resolution (framebuffer downscale + GPU upscale) */}
+                {section.content === 'custom-ui-resolution' && (
+                  <div className="space-y-4">
+                    <p className="text-sm text-hifi-silver">{t('settings.uiResolution.help')}</p>
+
+                    <div className="space-y-2">
+                      {['auto', '720', '1080', 'native'].map((opt) => {
+                        const active = uiResolution === opt;
+                        return (
+                          <button
+                            key={opt}
+                            onClick={() => setUiResolutionPending(active ? null : opt)}
+                            disabled={uiResolutionBusy || !uiResolution}
+                            className={`w-full flex items-center justify-between rounded-lg px-4 py-3 text-left transition-colors disabled:opacity-60 ${
+                              active
+                                ? 'bg-hifi-dark border border-hifi-gold'
+                                : 'bg-hifi-dark border border-transparent hover:bg-hifi-light/40'
+                            }`}
+                          >
+                            <span>
+                              <span className={`block text-sm ${active ? 'text-hifi-gold' : 'text-white'}`}>
+                                {t(`settings.uiResolution.option.${opt}`)}
+                              </span>
+                              <span className="block text-xs text-hifi-silver">
+                                {t(`settings.uiResolution.optionHelp.${opt}`)}
+                              </span>
+                            </span>
+                            {active && <CheckCircle2 size={16} className="text-hifi-gold shrink-0" />}
+                          </button>
+                        );
+                      })}
+                    </div>
+
+                    {/* Applying restarts the graphical session — this very UI
+                        disappears for a few seconds — so ask before doing it. */}
+                    {uiResolutionPending && (
+                      <div className="space-y-3 rounded-lg border border-amber-500/30 bg-amber-900/10 p-4">
+                        <p className="text-sm text-amber-200">{t('settings.uiResolution.restartWarning')}</p>
+                        <div className="flex space-x-3">
+                          <button
+                            onClick={() => setUiResolutionPending(null)}
+                            disabled={uiResolutionBusy}
+                            className="flex-1 rounded-lg bg-hifi-dark hover:bg-hifi-light/40 disabled:opacity-60 px-4 py-2 text-sm text-white transition-colors"
+                          >
+                            {t('settings.uiResolution.cancel')}
+                          </button>
+                          <button
+                            onClick={() => changeUiResolution(uiResolutionPending)}
+                            disabled={uiResolutionBusy}
+                            className="flex-1 flex items-center justify-center space-x-2 rounded-lg bg-amber-600 hover:bg-amber-500 disabled:opacity-60 px-4 py-2 text-sm text-white transition-colors"
+                          >
+                            {uiResolutionBusy && <Loader2 size={16} className="animate-spin" />}
+                            <span>{t('settings.uiResolution.confirm')}</span>
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
+                    {uiResolutionMessage && (
+                      <div className={`rounded-lg p-3 text-center text-sm ${
+                        isErrorMsg(uiResolutionMessage)
+                          ? 'bg-red-900/20 text-red-300 border border-red-500/30'
+                          : 'bg-hifi-dark text-hifi-silver'
+                      }`}>
+                        {uiResolutionMessage}
                       </div>
                     )}
                   </div>

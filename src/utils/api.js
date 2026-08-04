@@ -120,6 +120,13 @@ export const systemAPI = {
   // Switch GUI <-> headless (live + persisted). In headless the on-screen UI is
   // torn down shortly after this returns. Returns { success, mode, message }
   setDisplayMode: (mode) => apiPost('/display_mode', { mode }),
+  // UI render resolution: { mode: 'auto'|'720'|'1080'|'native' }. Shrinks the X
+  // framebuffer on big panels (the GPU upscales it during scanout) so Chromium
+  // stops rasterizing 2..8 Mpixel per repaint.
+  getUiResolution: () => apiGet('/ui_resolution'),
+  // Change it (persisted). The graphical session restarts shortly after this
+  // returns, so this UI goes away and comes back. Returns { success, mode, message }
+  setUiResolution: (mode) => apiPost('/ui_resolution', { mode }),
   // First-boot provisioning status (proxied from webui_server): { pending,
   // stage, mode, claimed_by, ap: { active, ssid, psk }, ... }
   getProvisionStatus: () => apiGet('/provision_status'),
