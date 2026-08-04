@@ -269,19 +269,6 @@ body {
 .content-scrollbar::-webkit-scrollbar-thumb { background: #333; border-radius: 2px; }
 .content-scrollbar::-webkit-scrollbar-thumb:hover { background: #444; }
 
-/* Heights are stepped from JS (see PlayingBars in LyrionServer.jsx) rather
-   than an infinite CSS animation — this transition only runs for ~200ms
-   after each step, so the compositor can idle between updates instead of
-   being kept awake at 60fps for the whole time a track is playing. */
-.playing-bar {
-  width: 3px;
-  height: 16px;
-  border-radius: 2px;
-  background: #d4af37;
-  transform-origin: bottom;
-  transition: transform 200ms ease-in-out;
-}
-
 input[type=range].vol-slider {
   -webkit-appearance: none;
   height: 24px;

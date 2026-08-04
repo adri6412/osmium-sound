@@ -48,34 +48,6 @@ const ArtworkImage = ({ src, alt, className, FallbackIcon }) => {
   return <img src={safeUrl(src)} alt={alt} className={className} loading="lazy" decoding="async" onError={() => setErr(true)} />;
 };
 
-// ── Animated playing indicator ────────────────────────────────
-// A CSS `animation: infinite` here would keep Chromium's compositor
-// requesting a new frame every vsync (60/s) for as long as playback runs —
-// on a weak iGPU that alone is enough to pin the render engine, even though
-// this is 3 tiny bars. Stepping the heights from JS every 220ms instead means
-// the compositor only has to do work ~4-5 times/sec and can idle in between;
-// the bounded `transition` (index.css) still gives each step a soft ease.
-const BAR_PATTERNS = [
-  [0.35, 1.0, 0.55],
-  [0.7, 0.4, 1.0],
-  [1.0, 0.65, 0.3],
-  [0.5, 1.0, 0.7],
-];
-const PlayingBars = () => {
-  const [step, setStep] = useState(0);
-  useEffect(() => {
-    const id = setInterval(() => setStep((s) => (s + 1) % BAR_PATTERNS.length), 220);
-    return () => clearInterval(id);
-  }, []);
-  return (
-    <div className="flex items-end space-x-[2px] h-4 ml-1.5 shrink-0 self-center">
-      {BAR_PATTERNS[step].map((scale, i) => (
-        <div key={i} className="playing-bar" style={{ transform: `scaleY(${scale})` }} />
-      ))}
-    </div>
-  );
-};
-
 // ── Main component ────────────────────────────────────────────
 // Kiosk-only: the PWA build has its own screens (src/pages/pwa/) and does not
 // mount this component. All LMS control state/logic lives in useLyrionPlayer
@@ -600,7 +572,6 @@ const LyrionServer = () => {
             <h2 className="text-[15px] font-bold text-white line-clamp-2 leading-tight flex-1">
               {title}
             </h2>
-            {isPlaying && <PlayingBars />}
           </div>
           <p className="text-[13px] text-hifi-gold truncate mt-0.5 font-medium">{artist}</p>
           {album && <p className="text-[12px] text-hifi-silver/60 truncate">{album}</p>}
@@ -792,7 +763,6 @@ const LyrionServer = () => {
                   <div className="mb-2 shrink-0">
                     <div className="flex items-start">
                       <h2 className="text-2xl font-bold text-white leading-tight line-clamp-2 flex-1">{title}</h2>
-                      {isPlaying && <PlayingBars />}
                     </div>
                     <p className="text-lg text-hifi-gold truncate mt-0.5 font-medium">{artist}</p>
                     <p className="text-sm text-hifi-silver/70 truncate">{album}</p>
