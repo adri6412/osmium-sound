@@ -806,6 +806,8 @@ _AUTH_ROUTES = {
     ('/api/system/dsp_preset_delete', 'POST'): '/dsp_preset_delete',
     ('/api/system/display_mode', 'GET'): '/display_mode',
     ('/api/system/display_mode', 'POST'): '/display_mode',
+    ('/api/system/ui_resolution', 'GET'): '/ui_resolution',
+    ('/api/system/ui_resolution', 'POST'): '/ui_resolution',
     ('/api/system/updates/app/check', 'GET'): '/app_update/check',
     ('/api/system/updates/app/apply', 'POST'): '/app_update/apply',
     ('/api/system/updates/app/status', 'GET'): '/app_update/status',
