@@ -311,7 +311,9 @@
       "rgTrack": "Track",
       "rgAlbum": "Album",
       "rgSmart": "Smart",
-      "saved": "Setting saved."
+      "saved": "Setting saved.",
+      "vuMeter": "Animated VU meters",
+      "vuMeterHelp": "The VU dial in the \"now playing\" screen updates live with the audio level. Turn it off to reduce GPU load on more limited hardware."
     },
     "dsp": {
       "help": "Optional digital signal processing: a parametric equalizer and headphone crossfeed applied to all playback.",

@@ -340,6 +340,19 @@ async function setUiRes(m) {
   else say(bodyMsg(r, t('settings.display.resolutionFailed')), true);
 }
 
+// ── Animated VU meter ──────────────────────────────────────────────
+// Pure rendering choice, no restart — but reachable from here (not just the
+// on-screen Settings) because that's the only way to reach it on a headless
+// unit, or without walking up to the screen at all.
+const vuMeter = ref(true);
+async function loadVuMeter() { const r = await api.sys('vu_meter'); if (r.ok) vuMeter.value = r.data.enabled !== false; }
+async function setVuMeter(enable) {
+  if (enable === vuMeter.value) return;
+  const r = await api.sysPost('vu_meter', { enable });
+  if (r.ok && r.data.success !== false) { vuMeter.value = r.data.enabled; say(bodyMsg(r, t('settings.display.vuMeterChanged'))); }
+  else say(bodyMsg(r, t('settings.display.vuMeterFailed')), true);
+}
+
 // ── updates (prod/dev channel; single "update all" + blocking modal) ─
 const channel = ref('prod');
 const upd = reactive({ ui: null, system: null, os: null });
@@ -626,7 +639,7 @@ async function saveBackupScheduled(v) {
 
 onMounted(async () => {
   loadNet(); loadAudio(); loadDsp(); loadFir(); loadToggles(); loadShell(); loadLms(); loadLyrion();
-  loadMode(); loadUiRes(); loadChannel(); checkAll(); resumePlanIfRunning(); loadBackups(); loadTailscale();
+  loadMode(); loadUiRes(); loadVuMeter(); loadChannel(); checkAll(); resumePlanIfRunning(); loadBackups(); loadTailscale();
 });
 onUnmounted(() => { if (lyrionPoll) clearInterval(lyrionPoll); });
 </script>
@@ -849,6 +862,12 @@ onUnmounted(() => { if (lyrionPoll) clearInterval(lyrionPoll); });
           </button>
         </span>
       </template>
+      <p class="sub">{{ t('settings.display.vuMeterLabel') }}</p>
+      <p class="muted">{{ t('settings.display.vuMeterHelp') }}</p>
+      <span class="seg">
+        <button :class="{ active: vuMeter }" @click="setVuMeter(true)">{{ t('settings.display.vuMeterOn') }}</button>
+        <button :class="{ active: !vuMeter }" @click="setVuMeter(false)">{{ t('settings.display.vuMeterOff') }}</button>
+      </span>
     </div>
 
     <!-- Updates -->

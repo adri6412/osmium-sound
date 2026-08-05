@@ -238,6 +238,36 @@ const Settings = ({ initialSection, onSectionConsumed } = {}) => {
   const [replayGainMode, setReplayGainMode] = useState('0');     // 0 off / 1 track / 2 album / 3 smart
   const [playbackMessage, setPlaybackMessage] = useState('');
 
+  // Animated VU meter in the expanded now-playing view. Persisted server-side
+  // (like display-mode/ui-resolution below), not just in localStorage: a
+  // headless unit can never open this on-screen Settings page, so the only
+  // way to flip it there is remotely (companion app / web admin), which needs
+  // api_server to be the source of truth. localStorage is kept as a same-tab
+  // cache so LyrionServer.jsx has an instant value before its own fetch lands.
+  const [vuMeterEnabled, setVuMeterEnabled] = useState(
+    localStorage.getItem('hifiVuMeterEnabled') !== 'false'
+  );
+  const [vuMeterBusy, setVuMeterBusy] = useState(false);
+  const loadVuMeter = async () => {
+    const res = await systemAPI.getVuMeter();
+    if (res.success && typeof res.data?.enabled === 'boolean') {
+      setVuMeterEnabled(res.data.enabled);
+      localStorage.setItem('hifiVuMeterEnabled', res.data.enabled ? 'true' : 'false');
+    }
+  };
+  const toggleVuMeter = async () => {
+    if (vuMeterBusy) return;
+    const next = !vuMeterEnabled;
+    setVuMeterBusy(true);
+    const res = await systemAPI.setVuMeter(next);
+    setVuMeterBusy(false);
+    if (res.success && res.data?.success) {
+      setVuMeterEnabled(res.data.enabled);
+      localStorage.setItem('hifiVuMeterEnabled', res.data.enabled ? 'true' : 'false');
+      window.dispatchEvent(new CustomEvent('hifi-vu-meter-enabled', { detail: res.data.enabled }));
+    }
+  };
+
   // ── Multiroom (LMS sync zones) ─────────────────────────────────
   // Other players seen on the LMS, and the macs currently synced to *this*
   // appliance (its sync slaves). Grouping is native LMS sync.
@@ -300,6 +330,7 @@ const Settings = ({ initialSection, onSectionConsumed } = {}) => {
     loadPointerStatus();
     loadDisplayMode();
     loadUiResolution();
+    loadVuMeter();
     loadOtaChannel();
     loadPlaybackPrefs();
     loadDspStatus();
@@ -2078,6 +2109,21 @@ const Settings = ({ initialSection, onSectionConsumed } = {}) => {
                         {playbackMessage}
                       </div>
                     )}
+
+                    {/* Animated VU meter toggle */}
+                    <button
+                      onClick={toggleVuMeter}
+                      disabled={vuMeterBusy}
+                      className="w-full flex items-center justify-between bg-hifi-dark hover:bg-hifi-light/40 rounded-lg px-4 py-3 transition-colors disabled:opacity-60"
+                    >
+                      <span className="text-left">
+                        <span className="block text-sm text-white">{t('settings.playback.vuMeter')}</span>
+                        <span className="block text-xs text-hifi-silver mt-0.5">{t('settings.playback.vuMeterHelp')}</span>
+                      </span>
+                      <span className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors ml-4 ${vuMeterEnabled ? 'bg-hifi-gold' : 'bg-hifi-accent'}`}>
+                        <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${vuMeterEnabled ? 'translate-x-6' : 'translate-x-1'}`} />
+                      </span>
+                    </button>
                   </div>
                 )}
 

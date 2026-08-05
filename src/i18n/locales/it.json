@@ -311,7 +311,9 @@
       "rgTrack": "Brano",
       "rgAlbum": "Album",
       "rgSmart": "Intelligente",
-      "saved": "Impostazione salvata."
+      "saved": "Impostazione salvata.",
+      "vuMeter": "VU meter animati",
+      "vuMeterHelp": "Il quadrante VU nella schermata \"in riproduzione\" si aggiorna in tempo reale con il livello audio. Disattivalo per ridurre il carico sulla GPU su hardware più limitato."
     },
     "dsp": {
       "help": "Elaborazione digitale del segnale opzionale: equalizzatore parametrico e crossfeed per cuffie applicati a tutta la riproduzione.",

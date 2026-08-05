@@ -1836,6 +1836,11 @@ _SYSTEM_PROXY_ROUTES = [
     # the unit it helps most is the one driving a big TV.
     ("/api/system/ui_resolution", "GET", "/ui_resolution"),
     ("/api/system/ui_resolution", "POST", "/ui_resolution"),
+    # Animated VU meter toggle. Same rationale as ui_resolution: no OS action,
+    # but worth reaching remotely because a headless unit can never open the
+    # on-screen Settings to flip it locally.
+    ("/api/system/vu_meter", "GET", "/vu_meter"),
+    ("/api/system/vu_meter", "POST", "/vu_meter"),
     ("/api/system/player_name", "GET", "/player_name"),
     ("/api/system/player_name", "POST", "/player_name"),
     ("/api/system/lms_role", "GET", "/lms_role"),

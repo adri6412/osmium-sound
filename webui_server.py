@@ -808,6 +808,8 @@ _AUTH_ROUTES = {
     ('/api/system/display_mode', 'POST'): '/display_mode',
     ('/api/system/ui_resolution', 'GET'): '/ui_resolution',
     ('/api/system/ui_resolution', 'POST'): '/ui_resolution',
+    ('/api/system/vu_meter', 'GET'): '/vu_meter',
+    ('/api/system/vu_meter', 'POST'): '/vu_meter',
     ('/api/system/updates/app/check', 'GET'): '/app_update/check',
     ('/api/system/updates/app/apply', 'POST'): '/app_update/apply',
     ('/api/system/updates/app/status', 'GET'): '/app_update/status',

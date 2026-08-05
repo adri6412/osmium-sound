@@ -271,7 +271,13 @@
       },
       "confirmResolution": "L'interfaccia del dispositivo si chiude e si riapre dopo qualche secondo. La riproduzione non viene interrotta. Continuare?",
       "resolutionChanged": "Risoluzione interfaccia cambiata",
-      "resolutionFailed": "Cambio risoluzione fallito"
+      "resolutionFailed": "Cambio risoluzione fallito",
+      "vuMeterLabel": "VU meter animati",
+      "vuMeterHelp": "Il quadrante VU nella schermata \"in riproduzione\" si aggiorna in tempo reale con il livello audio. Disattivalo per ridurre il carico sulla GPU. Utile da qui perché è raggiungibile anche su un'unità headless, dove le impostazioni a schermo non sono aperte da nessuno.",
+      "vuMeterOn": "Attivo",
+      "vuMeterOff": "Disattivo",
+      "vuMeterChanged": "Preferenza VU meter salvata",
+      "vuMeterFailed": "Salvataggio preferenza fallito"
     },
     "updates": {
       "channel": "Canale",

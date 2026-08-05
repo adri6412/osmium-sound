@@ -127,6 +127,10 @@ export const systemAPI = {
   // Change it (persisted). The graphical session restarts shortly after this
   // returns, so this UI goes away and comes back. Returns { success, mode, message }
   setUiResolution: (mode) => apiPost('/ui_resolution', { mode }),
+  // Animated VU meter (expanded now-playing view): { enabled }. No restart —
+  // persisted only, so it's reachable remotely on a headless unit.
+  getVuMeter: () => apiGet('/vu_meter'),
+  setVuMeter: (enable) => apiPost('/vu_meter', { enable }),
   // First-boot provisioning status (proxied from webui_server): { pending,
   // stage, mode, claimed_by, ap: { active, ssid, psk }, ... }
   getProvisionStatus: () => apiGet('/provision_status'),
