@@ -449,10 +449,18 @@ export function useLyrionPlayer() {
   const time         = playerStatus?.time || 0;
   const progress     = duration > 0 ? (time / duration) * 100 : 0;
   // Internet radio stations often push their own cover art via ICY metadata;
-  // LMS exposes it as an absolute `artwork_url` on the playlist entry. Prefer
-  // that over the local /music/{id}/cover endpoint (which for a radio stream
-  // just serves LMS's generic station-icon placeholder).
-  const remoteArtworkUrl = currentTrack.artwork_url ? safeUrl(currentTrack.artwork_url) : '';
+  // LMS exposes it as `artwork_url` on the playlist entry. Prefer that over
+  // the local /music/{id}/cover endpoint (which for a radio stream just
+  // serves LMS's generic station-icon placeholder). LMS frequently returns
+  // this as a path relative to *itself* (e.g. via its /imageproxy/... image
+  // proxy), not an absolute URL — resolve it against the LMS server's own
+  // origin before sanitizing, otherwise the browser resolves it against the
+  // Electron app's own origin and the image 404s.
+  const rawArtworkUrl = currentTrack.artwork_url || '';
+  const resolvedArtworkUrl = rawArtworkUrl && rawArtworkUrl[0] === '/'
+    ? `${lyrionApi.baseUrl}${rawArtworkUrl}`
+    : rawArtworkUrl;
+  const remoteArtworkUrl = resolvedArtworkUrl ? safeUrl(resolvedArtworkUrl) : '';
   const artworkUrl   = remoteArtworkUrl || (currentTrack.id ? lyrionApi.getArtworkUrl(currentTrack.id, 300) : null);
   const artworkUrlLg = remoteArtworkUrl || (currentTrack.id ? lyrionApi.getArtworkUrl(currentTrack.id, 600) : null);
 
