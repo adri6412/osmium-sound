@@ -749,9 +749,7 @@ const LyrionServer = () => {
                 <motion.div className="w-[44%] flex items-center justify-center flex-shrink-0"
                   initial={{ x: -20, opacity: 0 }} animate={{ x: 0, opacity: 1 }} transition={{ delay: 0.08 }}>
                   <div className="relative w-full max-w-[320px] aspect-square rounded-2xl overflow-hidden shadow-[0_20px_60px_rgba(0,0,0,0.7)] border border-white/8 bg-hifi-gray">
-                    {artworkUrlLg
-                      ? <img src={safeUrl(artworkUrlLg)} alt="Album Art" className="w-full h-full object-cover" />
-                      : <div className="w-full h-full flex items-center justify-center text-hifi-silver/20"><Music size={80} /></div>}
+                    <ArtworkImage src={artworkUrlLg} alt="Album Art" className="w-full h-full object-cover" FallbackIcon={Music} />
                   </div>
                 </motion.div>
 
