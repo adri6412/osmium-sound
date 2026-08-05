@@ -107,9 +107,13 @@ export class LyrionAPI {
     // Only request the song tags the player UI actually renders:
     //   a=artist  l=album  d=duration  o=type  T=samplerate  I=samplesize
     //   N=remote stream title (radio). title/id come back without a tag.
+    //   K=artwork_url — remote artwork (radio/Qobuz/Spotify/etc.) is only
+    //   included in LMS's response when this tag is requested; without it
+    //   currentTrack.artwork_url is always undefined and the UI silently
+    //   falls back to the local /music/{id}/cover placeholder for streams.
     // (The old request asked for every available tag every poll — wasted work
     // on the server for fields the UI never reads.)
-    return this.request(playerMac, ['status', '-', 1, 'tags:aldoTIN']);
+    return this.request(playerMac, ['status', '-', 1, 'tags:aldoTINK']);
   }
 
   async play(playerMac) {
