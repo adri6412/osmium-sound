@@ -175,10 +175,19 @@ export function useLyrionPlayer() {
       const st = await lyrionApi.getPlayerStatus(activePlayer.playerid);
       if (st && typeof st === 'object' && 'mode' in st) {
         statusFailCountRef.current = 0;
+        // LMS reports volume under the key "mixer volume" (space, like
+        // "playlist shuffle"/"playlist repeat" below) — there is no
+        // "mixer_volume" in the real status payload. Normalize it into the
+        // "mixer_volume" key the rest of this hook (and setVolume's
+        // optimistic update) reads/writes; otherwise every unguarded refetch
+        // wipes it to undefined and the `?? 0` fallback further down shows 0
+        // — the actual cause of the slider settling back to zero after the
+        // guard window above elapses.
+        const normalized = { ...st, mixer_volume: Math.abs(Number(st['mixer volume'])) || 0 };
         if (Date.now() - lastVolumeChangeRef.current < VOLUME_GUARD_MS) {
-          setPlayerStatus(prev => ({ ...st, mixer_volume: prev?.mixer_volume ?? st.mixer_volume }));
+          setPlayerStatus(prev => ({ ...normalized, mixer_volume: prev?.mixer_volume ?? normalized.mixer_volume }));
         } else {
-          setPlayerStatus(st);
+          setPlayerStatus(normalized);
         }
         return;
       }
