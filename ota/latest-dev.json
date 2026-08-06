@@ -6,7 +6,7 @@
     {
       "name": "hifi-ui-v2.5.21-dev.58.tar.gz",
       "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.58/hifi-ui-v2.5.21-dev.58.tar.gz",
-      "size": 118533410
+      "size": 118528360
     },
     {
       "name": "hifi-ui-v2.5.21-dev.58.tar.gz.sha256",
@@ -16,7 +16,7 @@
     {
       "name": "hifi-system-v2.5.21-dev.58.tar.gz",
       "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.58/hifi-system-v2.5.21-dev.58.tar.gz",
-      "size": 246796
+      "size": 247295
     },
     {
       "name": "hifi-system-v2.5.21-dev.58.tar.gz.sha256",
@@ -26,7 +26,7 @@
     {
       "name": "hifi-os-v2.5.21-dev.58.tar.gz",
       "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.58/hifi-os-v2.5.21-dev.58.tar.gz",
-      "size": 1191256
+      "size": 1193270
     },
     {
       "name": "hifi-os-v2.5.21-dev.58.tar.gz.sha256",
