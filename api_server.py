@@ -3126,6 +3126,19 @@ def apply_all_updates():
             log.exception("update plan: could not write %s", UPDATE_PLAN_FILE)
             return {'started': False, 'message': 'Salvataggio del piano fallito'}
 
+        # Belt and braces: a device imaged before hifi-update-runner.sh was
+        # added to the ISO's chmod-list (0300-app-install.hook.chroot) ships it
+        # non-executable. `systemd-run --no-block` below still returns success
+        # in that case — it only queues the transient unit, it doesn't wait for
+        # the exec to actually happen — so the permission error is invisible
+        # here and only shows up later as a plan stuck forever in 'pending'
+        # (nothing ever marks it 'running'). Fix it unconditionally so this
+        # class of bug can't silently strand a plan again.
+        try:
+            os.chmod(UPDATE_RUNNER_SCRIPT, 0o755)
+        except OSError:
+            log.exception("update plan: could not chmod +x %s", UPDATE_RUNNER_SCRIPT)
+
         cmd = ['systemd-run', '--no-block', '--collect',
                '--unit=' + UPDATE_RUNNER_UNIT, UPDATE_RUNNER_SCRIPT]
         try:
@@ -3158,12 +3171,22 @@ def update_plan_status():
         _clear_update_plan()
         return {'state': 'idle'}
 
+    # 'error' ranks above 'pending': the runner (hifi-update-runner.sh) always
+    # stops at the first failed step, so any steps still 'pending' after that
+    # were simply never reached — picking one of those as `current` would
+    # attribute the failure to the wrong component and its version wouldn't
+    # match the (unwritten) live status file below, silently losing the message.
     current = (next((s for s in plan['steps'] if s['state'] == 'running'), None)
+               or next((s for s in plan['steps'] if s['state'] == 'error'), None)
                or next((s for s in plan['steps'] if s['state'] == 'pending'), None)
                or (plan['steps'][-1] if plan['steps'] else None))
 
     step_state, progress, message = '', None, ''
-    if current and state in ('running', 'interrupted'):
+    # 'error' must be included here too — otherwise a failed step's real
+    # failure reason (written by the updater script's fail() into
+    # /run/hifi-*-status.json, e.g. "Download fallito da ...") is never read,
+    # and the client falls back to showing just the generic component name.
+    if current and state in ('running', 'interrupted', 'error'):
         try:
             with open(_PLAN_KINDS[current['kind']][1]) as f:
                 live = json.load(f)
