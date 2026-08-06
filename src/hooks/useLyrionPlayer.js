@@ -459,13 +459,19 @@ export function useLyrionPlayer() {
   // that instead of duplicating LMS's own resolution logic on the client.
   // `k=` is a pure cache-buster: the URL itself never changes as tracks
   // advance, so without it the browser would keep showing a stale image.
-  // For internet radio the playlist entry's `id`/`title` are often the
-  // *station*, not the song — LMS updates the actual now-playing info (and,
-  // per-station, its cover) via ICY/plugin metadata into artist/album/title
-  // as those get polled, but not necessarily all of them at once. Key on
-  // everything that can change per-song so any of them updating forces a
-  // fresh fetch instead of silently keeping the previous song's cover.
-  const trackKey = `${currentTrack.id || ''}-${currentTrack.title || ''}-${currentTrack.artist || ''}-${currentTrack.album || ''}`;
+  // For internet radio the playlist_loop entry's `id`/`title`/`artist`/
+  // `album` are the *station*'s, set once when the stream started, and
+  // don't change as the station's own now-playing song changes — LMS never
+  // rewrites the playlist entry's DB fields from ICY/plugin metadata.
+  // The one field that *does* update live per song is the top-level
+  // `current_title` the status query adds for any playing remote track
+  // (Slim::Control::Queries::statusQuery, via Slim::Music::Info::
+  // getCurrentTitle) — and it's exactly what the /music/current/cover.jpg
+  // endpoint re-resolves through the stream's protocol handler on every
+  // request (Slim::Web::Graphics, the `id eq 'current'` + `->remote` case).
+  // Without it in the key, the URL stays identical across songs and the
+  // browser just keeps showing the first song's (or the station's) cover.
+  const trackKey = `${currentTrack.id || ''}-${currentTrack.title || ''}-${currentTrack.artist || ''}-${currentTrack.album || ''}-${playerStatus?.current_title || ''}`;
   const nowPlayingCoverBase = activePlayer?.playerid
     ? `${lyrionApi.baseUrl}/music/current/cover.jpg?player=${encodeURIComponent(activePlayer.playerid)}&k=${encodeURIComponent(trackKey)}`
     : null;
