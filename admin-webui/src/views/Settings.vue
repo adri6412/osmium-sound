@@ -212,23 +212,47 @@ async function saveShellAccount() {
 // ── Tailscale — join the owner's own tailnet, exposing every port on this
 // appliance (web UI, Lyrion, SMB, ...) from anywhere that tailnet reaches, so
 // the music library stays reachable away from home. Not the old remote-support
-// flow: no vendor infra, no approval step — just the owner's own auth key.
-const tailscale = reactive({ available: true, connected: false, ip: '', authkey: '', busy: false });
+// flow: no vendor infra, no approval step — `tailscale up` prints a one-time
+// login URL the owner opens on ANY device to approve this node from their own
+// account, no auth key to generate/paste. If Tailscale isn't installed yet
+// (device missed the build-time/OTA install), a button installs it on demand.
+const tailscale = reactive({ available: true, connected: false, ip: '', busy: false, installing: false, loginUrl: '' });
+let tailscalePoll = null;
 async function loadTailscale() {
   const r = await api.sys('tailscale');
   if (r.ok) {
     tailscale.available = !!r.data.available;
     tailscale.connected = !!r.data.connected;
     tailscale.ip = r.data.ip || '';
+    if (tailscale.connected) tailscale.loginUrl = '';
   }
+}
+async function installTailscaleNow() {
+  tailscale.installing = true;
+  const r = await api.sysPost('tailscale_install', {});
+  tailscale.installing = false;
+  const ok = r.ok && r.data.success !== false;
+  say(bodyMsg(r, ok ? t('settings.tailscale.installed') : t('settings.tailscale.installFailed')), !ok);
+  if (ok) loadTailscale();
 }
 async function setTailscale(v) {
   tailscale.busy = true;
-  const r = await api.sysPost('tailscale', v ? { enable: true, authkey: tailscale.authkey } : { enable: false });
+  if (!v) tailscale.loginUrl = '';
+  const r = await api.sysPost('tailscale', { enable: v });
   tailscale.busy = false;
   const ok = r.ok && r.data.success !== false;
-  say(bodyMsg(r, ok ? (v ? t('settings.tailscale.on') : t('settings.tailscale.off')) : t('settings.tailscale.failed')), !ok);
-  if (ok && v) tailscale.authkey = '';
+  if (ok && v) {
+    tailscale.loginUrl = r.data.login_url || '';
+    if (!tailscalePoll) {
+      tailscalePoll = setInterval(async () => {
+        await loadTailscale();
+        if (tailscale.connected) { clearInterval(tailscalePoll); tailscalePoll = null; }
+      }, 3000);
+    }
+  }
+  say(bodyMsg(r, ok
+    ? (v ? (r.data.login_url ? t('settings.tailscale.openLink') : t('settings.tailscale.on')) : t('settings.tailscale.off'))
+    : t('settings.tailscale.failed')), !ok);
   loadTailscale();
 }
 
@@ -653,7 +677,7 @@ onMounted(async () => {
   loadNet(); loadAudio(); loadDsp(); loadFir(); loadToggles(); loadShell(); loadLms(); loadLyrion();
   loadMode(); loadUiRes(); loadVuMeter(); loadChannel(); checkAll(); resumePlanIfRunning(); loadBackups(); loadTailscale();
 });
-onUnmounted(() => { if (lyrionPoll) clearInterval(lyrionPoll); });
+onUnmounted(() => { if (lyrionPoll) clearInterval(lyrionPoll); if (tailscalePoll) clearInterval(tailscalePoll); });
 </script>
 
 <template>
@@ -781,6 +805,9 @@ onUnmounted(() => { if (lyrionPoll) clearInterval(lyrionPoll); });
       <p class="sub">{{ t('settings.tailscale.hint') }}</p>
       <template v-if="!tailscale.available">
         <p class="sub">{{ t('settings.tailscale.unavailable') }}</p>
+        <button @click="installTailscaleNow" :disabled="tailscale.installing">
+          {{ tailscale.installing ? '…' : t('settings.tailscale.install') }}
+        </button>
       </template>
       <template v-else>
         <div class="between item">
@@ -789,10 +816,9 @@ onUnmounted(() => { if (lyrionPoll) clearInterval(lyrionPoll); });
           </span>
           <Toggle :model-value="tailscale.connected" :disabled="tailscale.busy" @update:model-value="setTailscale" />
         </div>
-        <template v-if="!tailscale.connected">
-          <label>{{ t('settings.tailscale.authkeyLabel') }}</label>
-          <input v-model="tailscale.authkey" autocomplete="off" placeholder="tskey-auth-..." />
-          <p class="sub">{{ t('settings.tailscale.authkeyHint') }}</p>
+        <template v-if="!tailscale.connected && tailscale.loginUrl">
+          <p class="sub">{{ t('settings.tailscale.loginHint') }}</p>
+          <a :href="tailscale.loginUrl" target="_blank" rel="noopener">{{ tailscale.loginUrl }}</a>
         </template>
       </template>
     </div>
