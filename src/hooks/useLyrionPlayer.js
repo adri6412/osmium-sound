@@ -448,21 +448,23 @@ export function useLyrionPlayer() {
   const duration     = currentTrack.duration || 0;
   const time         = playerStatus?.time || 0;
   const progress     = duration > 0 ? (time / duration) * 100 : 0;
-  // Internet radio stations often push their own cover art via ICY metadata;
-  // LMS exposes it as `artwork_url` on the playlist entry. Prefer that over
-  // the local /music/{id}/cover endpoint (which for a radio stream just
-  // serves LMS's generic station-icon placeholder). LMS frequently returns
-  // this as a path relative to *itself* (e.g. via its /imageproxy/... image
-  // proxy), not an absolute URL — resolve it against the LMS server's own
-  // origin before sanitizing, otherwise the browser resolves it against the
-  // Electron app's own origin and the image 404s.
-  const rawArtworkUrl = currentTrack.artwork_url || '';
-  const resolvedArtworkUrl = rawArtworkUrl && rawArtworkUrl[0] === '/'
-    ? `${lyrionApi.baseUrl}${rawArtworkUrl}`
-    : rawArtworkUrl;
-  const remoteArtworkUrl = resolvedArtworkUrl ? safeUrl(resolvedArtworkUrl) : '';
-  const artworkUrl   = remoteArtworkUrl || (currentTrack.id ? lyrionApi.getArtworkUrl(currentTrack.id, 300) : null);
-  const artworkUrlLg = remoteArtworkUrl || (currentTrack.id ? lyrionApi.getArtworkUrl(currentTrack.id, 600) : null);
+  // Don't try to rebuild the cover URL ourselves from artwork_url/coverid —
+  // for remote streams (radio/Qobuz/Spotify/etc.) that field can be a path
+  // relative to LMS itself (its /imageproxy/... proxy), a protocol-handler-
+  // specific format, or simply absent depending on the plugin. LMS already
+  // has to solve this exact problem for its own web skins, via a special
+  // `/music/current/cover.jpg?player=<mac>` URL that it resolves server-side
+  // for whatever is actually playing — local track or remote stream alike
+  // (see Slim::Web::Graphics::artworkRequest's `id eq 'current'` case). Reuse
+  // that instead of duplicating LMS's own resolution logic on the client.
+  // `k=` is a pure cache-buster: the URL itself never changes as tracks
+  // advance, so without it the browser would keep showing a stale image.
+  const trackKey = `${currentTrack.id || ''}-${currentTrack.title || ''}`;
+  const nowPlayingCoverBase = activePlayer?.playerid
+    ? `${lyrionApi.baseUrl}/music/current/cover.jpg?player=${encodeURIComponent(activePlayer.playerid)}&k=${encodeURIComponent(trackKey)}`
+    : null;
+  const artworkUrl   = nowPlayingCoverBase ? safeUrl(`${nowPlayingCoverBase}&size=300`) : null;
+  const artworkUrlLg = nowPlayingCoverBase ? safeUrl(`${nowPlayingCoverBase}&size=600`) : null;
 
   const samplerate = currentTrack.samplerate;
   const samplesize = currentTrack.samplesize;
