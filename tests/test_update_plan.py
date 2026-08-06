@@ -178,6 +178,34 @@ class TestLiveProgress(PlanTestCase):
         self.assertEqual(by_kind['system']['installed'], 'v2')
         self.assertEqual(by_kind['ui']['installed'], 'old')
 
+    def test_failed_steps_real_error_message_is_surfaced(self):
+        # THE bug this test guards against: the runner marks a failed step
+        # 'error' and stops (hifi-update-runner.sh), leaving the updater's own
+        # /run/hifi-*-status.json — written by its fail() helper, e.g. "Download
+        # fallito da ..." — as the only record of *why*. If update_plan_status()
+        # doesn't read that file for state=='error', the client falls back to
+        # showing just the generic component name, with no explanation.
+        self.write_plan([self.step('system', 'error', attempts=1)])
+        self.write_status('system', {'state': 'error', 'progress': 0,
+                                     'version': 'v2', 'message': 'Download fallito da https://e/x'})
+        s = api_server.update_plan_status()
+        self.assertEqual(s['state'], 'error')
+        self.assertEqual(s['kind'], 'system')
+        self.assertEqual(s['message'], 'Download fallito da https://e/x')
+
+    def test_error_step_is_current_even_with_later_pending_steps(self):
+        # The runner always stops at the first failure (system -> os -> ui
+        # order), so any step still 'pending' after an 'error' one was simply
+        # never reached. `current` must point at the step that actually failed,
+        # not at one of the untouched ones after it.
+        self.write_plan([self.step('system', 'done'), self.step('os', 'error'),
+                         self.step('ui', 'pending')])
+        self.write_status('os', {'state': 'error', 'progress': 0,
+                                 'version': 'v2', 'message': 'Checksum non valido'})
+        s = api_server.update_plan_status()
+        self.assertEqual(s['kind'], 'os')
+        self.assertEqual(s['message'], 'Checksum non valido')
+
 
 class TestStepValidation(PlanTestCase):
     """The plan is parsed by /bin/sh and its fields become arguments to a root
