@@ -15,6 +15,7 @@ import urllib.parse
 import urllib.error
 import time
 import threading
+import queue
 import zipfile
 import io
 from hifi_logging import get_logger
@@ -1180,13 +1181,37 @@ def _support_bundle_build():
 #  account), so the appliance and all of its ports (web UI, Lyrion, SMB,
 #  etc.) become reachable from anywhere that tailnet reaches — e.g. to get
 #  at the music library while away from home — without opening anything to
-#  the public internet. This talks only to Tailscale's own service, using
-#  an auth key the owner generates themselves at
-#  https://login.tailscale.com/admin/settings/keys and pastes into Settings;
-#  no vendor infrastructure or approval step is involved.
+#  the public internet. This talks only to Tailscale's own service. Login
+#  uses plain `tailscale up` (interactive): it prints a one-time
+#  https://login.tailscale.com/... URL that the owner opens on ANY device
+#  (phone, laptop...) to approve this node from their own account — no auth
+#  key to generate/paste, no vendor infrastructure or approval step.
 # ──────────────────────────────────────────────────────────────────
 def _tailscale_available():
     return bool(shutil.which('tailscale'))
+
+
+def install_tailscale():
+    """Runtime fallback for devices that missed the build-time hook / OTA
+    migration that normally installs Tailscale (0410-tailscale.hook.chroot,
+    distro/os-update/apply.d/0029-remote-support.sh) — same official
+    installer both of those use, which sets up Tailscale's own apt repo +
+    signing key before installing the package via apt (a plain
+    `apt-get install tailscale` fails on a stock Debian repo list)."""
+    if _tailscale_available():
+        return {'success': True, 'available': True, 'message': 'Tailscale è già installato'}
+    try:
+        r = subprocess.run(
+            ['sh', '-c', 'curl -fsSL https://tailscale.com/install.sh | sh'],
+            capture_output=True, text=True, timeout=180)
+        if r.returncode != 0 or not _tailscale_available():
+            log.error("tailscale install failed: %s", (r.stderr or '').strip())
+            return {'success': False, 'available': False,
+                    'message': "Installazione di Tailscale fallita — controlla la connessione a Internet e riprova"}
+    except Exception:
+        log.exception("tailscale install failed")
+        return {'success': False, 'available': False, 'message': 'Installazione di Tailscale fallita'}
+    return {'success': True, 'available': True, 'message': 'Tailscale installato'}
 
 
 def _device_label():
@@ -1224,36 +1249,88 @@ def get_tailscale_status():
             'ip': ips[0] if ips else '', 'hostname': self_node.get('HostName') or ''}
 
 
-def set_tailscale(enable, authkey=None):
-    """Join (or leave) the owner's own tailnet. Joining needs an auth key the
-    first time (or after a full logout); once the node is authenticated,
-    Tailscale itself remembers it across reboots, so re-enabling later needs
-    no key. Leaving uses 'down' (disconnect, keep the node's identity) rather
-    than 'logout' (which would deregister it), so a later toggle-on doesn't
-    force the owner to paste a fresh key again."""
+_TAILSCALE_URL_RE = re.compile(r'https://\S+')
+
+
+def set_tailscale(enable):
+    """Join (or leave) the owner's own tailnet. Joining runs plain
+    `tailscale up`, which — the first time, or after a full logout — prints a
+    one-time login URL and then blocks until the node is approved from that
+    URL (opened on any device, not necessarily this one) or a session-scoped
+    timeout tailscaled applies on its own; once authenticated, Tailscale
+    remembers it across reboots, so re-enabling later reconnects instantly
+    with no URL. We don't wait for that: read `up`'s output just long enough
+    to grab the URL (or notice it connected immediately with no URL needed)
+    and hand it back to the caller, leaving the process running in the
+    background — the frontend polls get_tailscale_status() to notice when
+    the owner finishes approving it elsewhere.
+    Leaving uses 'down' (disconnect, keep the node's identity) rather than
+    'logout' (which would deregister it), so a later toggle-on reconnects
+    without a fresh login."""
     if not _tailscale_available():
         return {'success': False, 'available': False, 'connected': False,
                 'message': 'Tailscale non è installato sul dispositivo. Completa l\'aggiornamento di sistema e riprova.'}
     if enable:
-        authkey = (authkey or '').strip()
         cmd = ['sudo', 'tailscale', 'up', f'--hostname={_device_label()}']
-        if authkey:
-            cmd.append(f'--authkey={authkey}')
         try:
-            r = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
-            if r.returncode != 0:
-                err = (r.stderr or '').strip()
-                log.error("tailscale up failed: %s", err)
-                message = ('Chiave di accesso Tailscale mancante o non valida' if not authkey
-                           else 'Attivazione Tailscale fallita — controlla la chiave di accesso')
-                return {'success': False, 'available': True, 'connected': False, 'message': message}
+            proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1)
         except Exception:
-            log.exception("tailscale up failed")
+            log.exception("tailscale up failed to start")
             return {'success': False, 'available': True, 'connected': False,
                     'message': 'Attivazione Tailscale fallita'}
+
+        lines = queue.Queue()
+
+        def _pump():
+            try:
+                for line in proc.stdout:
+                    lines.put(line)
+            except Exception:
+                pass
+
+        threading.Thread(target=_pump, daemon=True).start()
+
+        login_url = None
+        output = []
+        deadline = time.monotonic() + 15
+        while time.monotonic() < deadline:
+            try:
+                line = lines.get(timeout=max(0.1, deadline - time.monotonic()))
+            except queue.Empty:
+                break
+            output.append(line)
+            m = _TAILSCALE_URL_RE.search(line)
+            if m:
+                login_url = m.group(0).strip()
+                break
+            if proc.poll() is not None:
+                break
+
+        if login_url:
+            status = get_tailscale_status()
+            status['success'] = True
+            status['login_url'] = login_url
+            status['message'] = 'Apri il link per autorizzare questo dispositivo'
+            return status
+
+        exit_code = proc.poll()
+        if exit_code == 0:
+            # Already authenticated (e.g. re-enabling after 'down') — no URL needed.
+            status = get_tailscale_status()
+            status['success'] = True
+            status['message'] = 'Tailscale attivato'
+            return status
+        if exit_code not in (None, 0):
+            err = ''.join(output).strip()
+            log.error("tailscale up failed: %s", err)
+            return {'success': False, 'available': True, 'connected': False,
+                    'message': 'Attivazione Tailscale fallita'}
+
+        # Still running with no URL yet (slow network) — leave it in the
+        # background, the frontend will keep polling status.
         status = get_tailscale_status()
         status['success'] = True
-        status['message'] = 'Tailscale attivato'
+        status['message'] = 'Attivazione Tailscale in corso…'
         return status
 
     try:
@@ -3601,10 +3678,14 @@ def api_support_bundle():
 def api_tailscale_status():
     return jsonify(get_tailscale_status())
 
+@app.route('/tailscale_install', methods=['POST'])
+def api_tailscale_install():
+    return jsonify(install_tailscale())
+
 @app.route('/tailscale_set', methods=['POST'])
 def api_tailscale_set():
     data = request.get_json(silent=True) or {}
-    return jsonify(set_tailscale(bool(data.get('enable')), data.get('authkey')))
+    return jsonify(set_tailscale(bool(data.get('enable'))))
 
 @app.route('/pointer_status', methods=['GET'])
 def api_pointer_status():

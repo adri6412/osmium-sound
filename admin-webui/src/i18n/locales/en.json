@@ -218,12 +218,15 @@
     },
     "tailscale": {
       "hint": "Join this appliance to your own Tailscale network (tailnet) so you can reach it — web UI, Lyrion Music Server, network shares, everything — from anywhere your tailnet reaches, e.g. to get at your music library away from home. This is not a public link: only devices on your own tailnet can reach it.",
-      "unavailable": "Tailscale isn't installed on this device yet. Complete a system update and try again.",
+      "unavailable": "Tailscale isn't installed on this device yet.",
+      "install": "Install Tailscale",
+      "installed": "Tailscale installed",
+      "installFailed": "Failed to install Tailscale",
       "toggle": "Tailscale",
       "connectedHint": "Connected — reachable at {ip}",
       "disconnectedHint": "Not connected",
-      "authkeyLabel": "Auth key",
-      "authkeyHint": "Generate one at login.tailscale.com/admin/settings/keys (your own Tailscale account) and paste it here. Only needed the first time — the device stays authenticated after that.",
+      "loginHint": "Open this link on any device (even your phone) to approve this appliance from your own Tailscale account. Only needed the first time — the device stays authenticated after that.",
+      "openLink": "Open the link to approve this device",
       "on": "Tailscale connected",
       "off": "Tailscale disconnected",
       "failed": "Could not update Tailscale"
