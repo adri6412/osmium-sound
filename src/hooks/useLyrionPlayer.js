@@ -474,7 +474,13 @@ export function useLyrionPlayer() {
   // that instead of duplicating LMS's own resolution logic on the client.
   // `k=` is a pure cache-buster: the URL itself never changes as tracks
   // advance, so without it the browser would keep showing a stale image.
-  const trackKey = `${currentTrack.id || ''}-${currentTrack.title || ''}`;
+  // For internet radio the playlist entry's `id`/`title` are often the
+  // *station*, not the song — LMS updates the actual now-playing info (and,
+  // per-station, its cover) via ICY/plugin metadata into artist/album/title
+  // as those get polled, but not necessarily all of them at once. Key on
+  // everything that can change per-song so any of them updating forces a
+  // fresh fetch instead of silently keeping the previous song's cover.
+  const trackKey = `${currentTrack.id || ''}-${currentTrack.title || ''}-${currentTrack.artist || ''}-${currentTrack.album || ''}`;
   const nowPlayingCoverBase = activePlayer?.playerid
     ? `${lyrionApi.baseUrl}/music/current/cover.jpg?player=${encodeURIComponent(activePlayer.playerid)}&k=${encodeURIComponent(trackKey)}`
     : null;
