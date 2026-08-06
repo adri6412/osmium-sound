@@ -202,16 +202,19 @@ cp -f "$REPO_ROOT/hifi_backup.py"     "$BIN_DEST/"
 sed -i 's/\r$//' "$BIN_DEST/api_server.py" "$BIN_DEST/vu_meter_daemon.py" "$BIN_DEST/sources_server.py" "$BIN_DEST/webui_server.py" "$BIN_DEST/hifi_logging.py" "$BIN_DEST/hifi_backup.py"
 chmod +x "$BIN_DEST/api_server.py" "$BIN_DEST/vu_meter_daemon.py" "$BIN_DEST/sources_server.py" "$BIN_DEST/webui_server.py"
 
-# Web-admin Vue build (built by CI before this script runs). Optional: on a
-# local build without the Vue dist the daemon serves a minimal fallback page.
+# Web-admin Vue build (built by CI before this script runs). REQUIRED: a
+# missing/empty dist here means every device installed from this ISO gets the
+# daemon's built-in fallback page instead of the real web-admin, silently and
+# with nothing in the ISO itself to show for it. Fail the build instead of
+# shipping that — build it first with (cd admin-webui && npm ci && npm run build).
 WEBUI_DIST_SRC="$REPO_ROOT/admin-webui/dist"
 WEBUI_DIST_DEST="$CONFIG/includes.chroot/opt/hifi-webui/dist"
-if [ -d "$WEBUI_DIST_SRC" ]; then
+if [ -f "$WEBUI_DIST_SRC/index.html" ]; then
     mkdir -p "$WEBUI_DIST_DEST"
     cp -a "$WEBUI_DIST_SRC/." "$WEBUI_DIST_DEST/"
     log "Injected web-admin build → /opt/hifi-webui/dist"
 else
-    log "NOTE: admin-webui/dist missing — web-admin will serve the fallback page"
+    die "admin-webui/dist missing or empty (no index.html) — build it first: (cd admin-webui && npm ci && npm run build). Refusing to ship an ISO without the web-admin UI."
 fi
 
 log "Injecting helper scripts → includes.chroot/usr/local/sbin"
