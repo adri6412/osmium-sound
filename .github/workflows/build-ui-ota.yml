@@ -50,11 +50,15 @@ jobs:
       - name: Build web-admin (Vue) — shipped in the system bundle
         # Separate, self-contained Vue project (does not touch the Electron
         # kiosk build). Served by webui_server.py from /opt/hifi-webui/dist.
+        # Fail loud rather than silently shipping a system bundle without it —
+        # see the "Package system-components OTA bundle" step below, which
+        # also refuses to package without a real build.
         run: |
           if [ -f admin-webui/package.json ]; then
             (cd admin-webui && npm ci && npm run build)
           else
-            echo "admin-webui/ missing — skipping (daemon serves fallback page)"
+            echo "::error::admin-webui/package.json missing — cannot build the web-admin UI" >&2
+            exit 1
           fi
 
       - name: Resolve version
@@ -120,10 +124,15 @@ jobs:
           mkdir -p "$ROOT/usr/local/bin" "$ROOT/usr/local/sbin" "$ROOT/etc/systemd/system"
           # Python API + daemons
           cp api_server.py vu_meter_daemon.py sources_server.py webui_server.py hifi_logging.py hifi_backup.py "$ROOT/usr/local/bin/"
-          # Web-admin Vue build (served by webui_server.py from /opt/hifi-webui/dist)
-          if [ -d admin-webui/dist ]; then
+          # Web-admin Vue build (served by webui_server.py from /opt/hifi-webui/dist).
+          # REQUIRED: a missing/empty dist here means every device that applies
+          # this system bundle loses the web-admin UI, silently. Fail instead.
+          if [ -f admin-webui/dist/index.html ]; then
             mkdir -p "$ROOT/opt/hifi-webui/dist"
             cp -r admin-webui/dist/. "$ROOT/opt/hifi-webui/dist/"
+          else
+            echo "::error::admin-webui/dist missing or empty (no index.html) — refusing to package a system bundle without the web-admin UI" >&2
+            exit 1
           fi
           # Helper / OTA scripts (sh + python workers)
           cp distro/config/includes.chroot/usr/local/sbin/*.sh \
