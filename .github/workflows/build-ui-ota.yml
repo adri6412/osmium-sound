@@ -14,10 +14,15 @@ on:
 
 permissions:
   contents: write
+  pages: write
+  id-token: write
 
 jobs:
   build-ui-ota:
     runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.pages-deployment.outputs.page_url }}
 
     # Skip if this is a companion app release tag
     if: ${{ !contains(github.ref, 'companion') }}
@@ -295,6 +300,34 @@ jobs:
           destination_dir: ota
           keep_files: true          # don't wipe the website already on gh-pages
           cname: osmiumsound.qd.je
+
+      # Pages' "legacy" build_type auto-deploys on every push to gh-pages via
+      # GitHub's own Jekyll-era builder — deploy-pages.yml, build-ui-ota.yml
+      # and build-companion-apk.yml all just push their slice of the site
+      # there and relied on that. That builder can get stuck (seen 2026-08-06:
+      # a site sat "errored"/"building" for 30+ min across every push, with no
+      # incident on githubstatus.com), so the repo's Pages source is now
+      # build_type "workflow": nothing deploys until an Actions-based
+      # deploy-pages run says so. This step is that explicit deploy — it
+      # re-checks-out the branch this job just pushed to and publishes it via
+      # the same mechanism in each of the three gh-pages-publishing workflows.
+      - name: Checkout updated gh-pages for Actions-based Pages deploy
+        if: github.ref_type == 'tag'
+        uses: actions/checkout@v4
+        with:
+          ref: gh-pages
+          path: gh-pages-deploy
+
+      - name: Upload Pages artifact
+        if: github.ref_type == 'tag'
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: gh-pages-deploy
+
+      - name: Deploy to GitHub Pages
+        if: github.ref_type == 'tag'
+        id: pages-deployment
+        uses: actions/deploy-pages@v4
 
       - name: Upload artifact (manual runs)
         if: github.ref_type != 'tag'
