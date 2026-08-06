@@ -8,6 +8,8 @@ on:
 
 permissions:
   contents: write
+  pages: write
+  id-token: write
 
 jobs:
   build:
@@ -211,6 +213,9 @@ jobs:
     # same production/beta split as publishTrack() in build.gradle. Dev
     # builds on svil stay off the F-Droid repo.
     if: startsWith(github.ref, 'refs/tags/companion-v') && !contains(github.ref, '-svil') && !contains(github.ref, '-beta')
+    environment:
+      name: github-pages
+      url: ${{ steps.pages-deployment.outputs.page_url }}
 
     steps:
       - name: Checkout code
@@ -280,3 +285,21 @@ jobs:
           # same branch (see deploy-pages.yml).
           keep_files: true
           cname: osmiumsound.qd.je
+
+      # Pages source is build_type "workflow" (see build-ui-ota.yml for why) —
+      # the push above no longer triggers a deploy on its own. Re-checkout
+      # what was just pushed and publish it explicitly via Actions.
+      - name: Checkout updated gh-pages for Actions-based Pages deploy
+        uses: actions/checkout@v4
+        with:
+          ref: gh-pages
+          path: gh-pages-deploy
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: gh-pages-deploy
+
+      - name: Deploy to GitHub Pages
+        id: pages-deployment
+        uses: actions/deploy-pages@v4
