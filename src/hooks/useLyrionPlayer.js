@@ -159,13 +159,36 @@ export function useLyrionPlayer() {
   // UI was reloaded. Recover automatically instead: after a few consecutive
   // bad polls, re-run connectToServer() to re-resolve everything from scratch.
   const statusFailCountRef = useRef(0);
+  // Volume drags fire many onChange ticks in quick succession, each kicking
+  // off its own optimistic update + setVolume request + status refetch. Those
+  // refetches can resolve out of order (or the periodic poll below can land
+  // mid-drag), and a plain setPlayerStatus(st) would stomp the just-set
+  // optimistic mixer_volume with a stale snapshot — the slider visibly snaps
+  // back even though the server did receive the right value. Guard by
+  // preserving the locally-set volume for a short window after the user's
+  // last change, giving in-flight requests time to actually land server-side.
+  const lastVolumeChangeRef = useRef(0);
+  const VOLUME_GUARD_MS = 1200;
   const fetchStatus = async () => {
     if (!activePlayer) return;
     try {
       const st = await lyrionApi.getPlayerStatus(activePlayer.playerid);
       if (st && typeof st === 'object' && 'mode' in st) {
         statusFailCountRef.current = 0;
-        setPlayerStatus(st);
+        // LMS reports volume under the key "mixer volume" (space, like
+        // "playlist shuffle"/"playlist repeat" below) — there is no
+        // "mixer_volume" in the real status payload. Normalize it into the
+        // "mixer_volume" key the rest of this hook (and setVolume's
+        // optimistic update) reads/writes; otherwise every unguarded refetch
+        // wipes it to undefined and the `?? 0` fallback further down shows 0
+        // — the actual cause of the slider settling back to zero after the
+        // guard window above elapses.
+        const normalized = { ...st, mixer_volume: Math.abs(Number(st['mixer volume'])) || 0 };
+        if (Date.now() - lastVolumeChangeRef.current < VOLUME_GUARD_MS) {
+          setPlayerStatus(prev => ({ ...normalized, mixer_volume: prev?.mixer_volume ?? normalized.mixer_volume }));
+        } else {
+          setPlayerStatus(normalized);
+        }
         return;
       }
     } catch (_) { /* fall through to failure counting below */ }
@@ -234,6 +257,7 @@ export function useLyrionPlayer() {
   };
 
   const setVolume = (v) => {
+    lastVolumeChangeRef.current = Date.now();
     setPlayerStatus(prev => ({ ...prev, mixer_volume: v }));
     handleAction(() => lyrionApi.setVolume(activePlayer?.playerid, v));
   };
