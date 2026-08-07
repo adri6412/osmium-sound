@@ -3286,8 +3286,16 @@ def set_lyrion_channel(channel):
 
 def get_lyrion_installed_channel():
     """Which channel actually produced the build currently installed (or
-    being installed). Falls back to the preference file on a device that
-    hasn't gone through apply_lyrion_update() since this was split out."""
+    being installed). None if never tracked yet — every device is in this
+    state the first time it runs code that knows about this file, since it
+    didn't exist before. Deliberately does NOT fall back to the preference
+    file (get_lyrion_channel()): that file is what the Settings UI already
+    overwrites the instant the owner picks a channel, before Install is even
+    pressed, which is the exact bug this split was meant to fix — falling
+    back to it here would silently reintroduce it on every device's first
+    switch after upgrading. None compares unequal to any real channel, so
+    apply_lyrion_update() treats an untracked device as "always switching",
+    which is the safe default (worst case: one redundant reinstall)."""
     try:
         with open(LYRION_INSTALLED_CHANNEL_FILE) as f:
             ch = f.read().strip()
@@ -3295,7 +3303,7 @@ def get_lyrion_installed_channel():
             return ch
     except Exception:
         pass
-    return get_lyrion_channel()
+    return None
 
 def _set_lyrion_installed_channel(channel):
     try:
