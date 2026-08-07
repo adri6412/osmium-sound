@@ -471,7 +471,20 @@ export function useLyrionPlayer() {
   // request (Slim::Web::Graphics, the `id eq 'current'` + `->remote` case).
   // Without it in the key, the URL stays identical across songs and the
   // browser just keeps showing the first song's (or the station's) cover.
-  const trackKey = `${currentTrack.id || ''}-${currentTrack.title || ''}-${currentTrack.artist || ''}-${currentTrack.album || ''}-${playerStatus?.current_title || ''}`;
+  //
+  // current_title alone isn't enough, though: it's populated via ICY-style
+  // metadata, which classic internet radio sends but on-demand streaming
+  // plugins (Qobuz, Tidal, ...) generally don't — their "radio"/mix features
+  // can advance to a new song while leaving id/title/artist/album/current_title
+  // all exactly as they were (whatever the plugin set when the stream started),
+  // so the key never changes and the cover sticks on the first song. There's
+  // no single field these plugins reliably update, so for any remote source
+  // add a coarse heartbeat (`time` is the one field guaranteed to keep moving
+  // during playback) — it re-fetches the cover at most every ~10s, which
+  // bounds how stale it can get without refetching on every 1s poll.
+  const isRemoteTrack = !!currentTrack.remote;
+  const remoteHeartbeat = isRemoteTrack ? Math.floor((playerStatus?.time || 0) / 10) : '';
+  const trackKey = `${currentTrack.id || ''}-${currentTrack.title || ''}-${currentTrack.artist || ''}-${currentTrack.album || ''}-${playerStatus?.current_title || ''}-${remoteHeartbeat}`;
   const nowPlayingCoverBase = activePlayer?.playerid
     ? `${lyrionApi.baseUrl}/music/current/cover.jpg?player=${encodeURIComponent(activePlayer.playerid)}&k=${encodeURIComponent(trackKey)}`
     : null;

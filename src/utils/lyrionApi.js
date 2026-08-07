@@ -107,13 +107,17 @@ export class LyrionAPI {
     // Only request the song tags the player UI actually renders:
     //   a=artist  l=album  d=duration  o=type  T=samplerate  I=samplesize
     //   N=remote stream title (radio). title/id come back without a tag.
+    //   x=remote flag (1 for any non-local source) — needed by useLyrionPlayer
+    //   to know when to apply its cover-art cache-busting heartbeat, since
+    //   streaming-service "radio" features (Qobuz, Tidal, ...) don't reliably
+    //   update N/current_title per song the way classic ICY radio does.
     // Cover art for the now-playing view doesn't need a tag at all — it's
     // fetched via LMS's own /music/current/cover.jpg?player=... endpoint,
     // which resolves local vs. remote artwork server-side (see
     // useLyrionPlayer's artworkUrl/artworkUrlLg).
     // (The old request asked for every available tag every poll — wasted work
     // on the server for fields the UI never reads.)
-    return this.request(playerMac, ['status', '-', 1, 'tags:aldoTIN']);
+    return this.request(playerMac, ['status', '-', 1, 'tags:aldoTINx']);
   }
 
   async play(playerMac) {
