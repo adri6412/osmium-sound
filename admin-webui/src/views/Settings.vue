@@ -377,8 +377,14 @@ async function setVuMeter(enable) {
   else say(bodyMsg(r, t('settings.display.vuMeterFailed')), true);
 }
 
-// ── updates (prod/dev channel; single "update all" + blocking modal) ─
+// ── updates (prod/dev/alpha channel; single "update all" + blocking modal) ─
 const channel = ref('prod');
+// 'alpha' only ever appears here when the server reports it (device unlocked
+// via the out-of-band marker file) — mirrors the kiosk React app's otaChannels.
+const channels = ref(['prod', 'dev']);
+const CHANNEL_LABEL_KEY = { prod: 'channelProd', dev: 'channelDev', alpha: 'channelAlpha' };
+const CHANNEL_SHORT_KEY = { prod: 'stable', dev: 'dev', alpha: 'alpha' };
+const CHANNEL_CHANGED_KEY = { prod: 'channelChangedProd', dev: 'channelChangedDev', alpha: 'channelChangedAlpha' };
 const upd = reactive({ ui: null, system: null, os: null });
 const updBusy = ref(false);
 // Lyrion is deliberately NOT here: it is third-party software with its own
@@ -392,12 +398,17 @@ const kindLabels = computed(() => ({
 // Blocking overlay state — mirrors the kiosk's forced update modal: while an
 // apply is running nothing else is clickable, so double-applies can't happen.
 const applying = reactive({ active: false, kind: '', label: '', state: '', progress: null, message: '', error: false, doneList: [] });
-async function loadChannel() { const r = await api.sys('ota_channel'); if (r.ok) channel.value = r.data.channel || 'prod'; }
+async function loadChannel() {
+  const r = await api.sys('ota_channel');
+  if (!r.ok) return;
+  channel.value = r.data.channel || 'prod';
+  if (Array.isArray(r.data.channels) && r.data.channels.length) channels.value = r.data.channels;
+}
 async function setChannel(c) {
   if (applying.active) return;
   channel.value = c;
   const r = await api.sysPost('ota_channel', { channel: c });
-  say(r.ok && r.data.success !== false ? (c === 'dev' ? t('settings.updates.channelChangedDev') : t('settings.updates.channelChangedProd')) : bodyMsg(r, t('settings.updates.channelFailed')), !(r.ok && r.data.success !== false));
+  say(r.ok && r.data.success !== false ? t(`settings.updates.${CHANNEL_CHANGED_KEY[c] || 'channelChangedDev'}`) : bodyMsg(r, t('settings.updates.channelFailed')), !(r.ok && r.data.success !== false));
   checkAll();
 }
 async function checkAll() {
@@ -900,13 +911,13 @@ onUnmounted(() => { if (lyrionPoll) clearInterval(lyrionPoll); if (tailscalePoll
     <div class="card" v-if="open === 'updates'">
       <div class="between item">
         <span>{{ t('settings.updates.channel') }}
-          <span class="pill" :class="{ gold: channel === 'dev' }">{{ channel === 'dev' ? t('settings.updates.channelDev') : t('settings.updates.channelProd') }}</span>
+          <span class="pill" :class="{ gold: channel !== 'prod' }">{{ t(`settings.updates.${CHANNEL_LABEL_KEY[channel] || 'channelDev'}`) }}</span>
         </span>
         <span class="seg fit">
-          <button :class="{ active: channel === 'prod' }" @click="setChannel('prod')">{{ t('settings.updates.stable') }}</button>
-          <button :class="{ active: channel === 'dev' }" @click="setChannel('dev')">{{ t('settings.updates.dev') }}</button>
+          <button v-for="c in channels" :key="c" :class="{ active: channel === c }" @click="setChannel(c)">{{ t(`settings.updates.${CHANNEL_SHORT_KEY[c] || 'dev'}`) }}</button>
         </span>
       </div>
+      <p class="sub" v-if="channel !== 'prod'">{{ t('settings.updates.channelWarning') }}</p>
       <div v-for="k in Object.keys(kinds)" :key="k" class="between item">
         <span>{{ kindLabels[k] }}
           <span class="muted" v-if="upd[k]">
