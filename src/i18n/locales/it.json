@@ -16,7 +16,8 @@
     "notAvailable": "N/D",
     "language": "Lingua",
     "error": "Errore",
-    "done": "Fatto"
+    "done": "Fatto",
+    "noResults": "Nessun risultato"
   },
   "sources": {
     "active": "Sorgenti attive",
@@ -221,9 +222,12 @@
       "playlists": "Playlist",
       "radio": "Radio",
       "apps": "App",
+      "favorites": "Preferiti",
       "search": "Cerca"
     },
     "searchPlaceholder": "Digita e premi Cerca…",
+    "filterArtistsPlaceholder": "Cerca artista…",
+    "filterAlbumsPlaceholder": "Cerca album…",
     "connecting": "Connessione a Lyrion in corso…",
     "connectionErrorTitle": "Errore di Connessione",
     "noPlayer": "Nessun player Lyrion trovato",

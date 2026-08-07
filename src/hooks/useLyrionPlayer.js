@@ -329,10 +329,17 @@ export function useLyrionPlayer() {
       const all = await lyrionApi.getHomeMenu(activePlayer?.playerid);
       menuBaseRef.current = null; // home items carry their own complete actions
       const EXCLUDE = new Set(['myMusic', 'radios', 'playerpower']);
+      // Favorites now has its own tile in the Musica tab (see LyrionServer.jsx),
+      // so drop it from the generic Apps list here. Match on the resolved `go`
+      // action's base command rather than `id`/label text — those vary across
+      // LMS versions/locales, but the command a Favorites node drills into is
+      // always ['favorites', 'items', ...].
+      const isFavorites = (it) => it.actions?.go?.cmd?.[0] === 'favorites';
       return all
         .filter(it => it.actions && (it.actions.go || it.actions.do || it.input)
           && ['home', '', 'extras'].includes(it.node)
-          && !EXCLUDE.has(it.id))
+          && !EXCLUDE.has(it.id)
+          && !isFavorites(it))
         .sort((a, b) => (Number(a.weight) || 0) - (Number(b.weight) || 0));
     }
     if (view === 'menu') {
@@ -533,7 +540,7 @@ export function useLyrionPlayer() {
     // queue
     queue, queueIndex, loadQueue, queueJump, queueRemove, queueMove, queueClear, saveQueue,
     // library navigation
-    currentView, libraryData, libraryLoading, visibleCount, navigationStack,
+    currentView, libraryData, libraryLoading, visibleCount, setVisibleCount, navigationStack,
     menuSearch, setMenuSearch, searchText, setSearchText,
     // Jive base+item action model for the current menu view (see resolveMenuIcon/
     // handleMenuItem) — row renderers need this to resolve a leaf's play action.
