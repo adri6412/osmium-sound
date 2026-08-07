@@ -158,6 +158,16 @@ LYRION_PKG = 'lyrionmusicserver'
 LYRION_SCRIPT = '/usr/local/sbin/hifi-lyrion-update.sh'
 LYRION_STATUS_FILE = '/run/hifi-lyrion-status.json'
 LYRION_CHANNEL_FILE = '/etc/hifi-player/lyrion-channel'
+# Separate from LYRION_CHANNEL_FILE on purpose: the Settings UI persists the
+# *picked* channel the moment the owner taps it (so the choice survives a page
+# reload before they hit Install), well before apply_lyrion_update() runs. If
+# "switching" were detected by diffing against that same file, it would always
+# read as "no change" by the time apply runs and a same-version channel swap
+# (e.g. nightly -> release when release is not newer than what's installed)
+# would be refused as "already up to date" instead of reinstalling. This file
+# is only written once a build actually starts installing, so it always
+# reflects what's actually running (or about to run).
+LYRION_INSTALLED_CHANNEL_FILE = '/etc/hifi-player/lyrion-installed-channel'
 LYRION_CHANNELS = ('release', 'nightly', 'dev')
 LYRION_DEFAULT_CHANNEL = 'release'
 
@@ -3274,6 +3284,29 @@ def set_lyrion_channel(channel):
                 'message': 'Could not save the channel.', 'channel': get_lyrion_channel()}
     return {'success': True, 'channel': channel}
 
+def get_lyrion_installed_channel():
+    """Which channel actually produced the build currently installed (or
+    being installed). Falls back to the preference file on a device that
+    hasn't gone through apply_lyrion_update() since this was split out."""
+    try:
+        with open(LYRION_INSTALLED_CHANNEL_FILE) as f:
+            ch = f.read().strip()
+        if ch in LYRION_CHANNELS:
+            return ch
+    except Exception:
+        pass
+    return get_lyrion_channel()
+
+def _set_lyrion_installed_channel(channel):
+    try:
+        os.makedirs(os.path.dirname(LYRION_INSTALLED_CHANNEL_FILE), exist_ok=True)
+        tmp = LYRION_INSTALLED_CHANNEL_FILE + '.tmp'
+        with open(tmp, 'w') as f:
+            f.write(channel + '\n')
+        os.replace(tmp, LYRION_INSTALLED_CHANNEL_FILE)
+    except Exception:
+        log.exception("set_lyrion_installed_channel failed")
+
 def _parse_lyrion_channels(html):
     """Pull one .deb per channel out of the downloads page.
 
@@ -3355,8 +3388,14 @@ def apply_lyrion_update(channel=None):
     A channel *switch* is applied even when it is a downgrade (moving from the
     development build back to the release is exactly that); only a no-op within
     the same channel is refused. hifi-lyrion-update.sh already passes
-    --allow-downgrades to apt."""
-    switching = channel in LYRION_CHANNELS and channel != get_lyrion_channel()
+    --allow-downgrades to apt.
+
+    "Switch" is detected against the *installed* channel, not the preference
+    file the Settings UI writes the instant the owner taps a channel option
+    (well before Install is pressed) — otherwise this always sees "no change"
+    and a same-or-older-version channel swap gets wrongly refused as up to
+    date. See LYRION_INSTALLED_CHANNEL_FILE."""
+    switching = channel in LYRION_CHANNELS and channel != get_lyrion_installed_channel()
     info = check_lyrion_update(channel)
     if info.get('error'):
         return {'started': False, 'code': info.get('code'), 'message': info['error']}
@@ -3383,6 +3422,7 @@ def apply_lyrion_update(channel=None):
         log.exception("update: apply failed")
         return {'started': False, 'code': 'lyrion.startFailed',
                 'message': 'Could not start the update.'}
+    _set_lyrion_installed_channel(channel)
     return {'started': True, 'version': info['latest'], 'channel': info['channel']}
 
 def lyrion_update_status():
