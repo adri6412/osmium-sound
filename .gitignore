@@ -30,3 +30,7 @@ fdroid/tmp/
 fdroid/logs/
 fdroid/stats/
 fdroid/unsigned/
+
+# Local-only copy of Lyrion Media Server sources, kept for reference/analysis
+# — not part of this repo, never committed.
+lyrion/
