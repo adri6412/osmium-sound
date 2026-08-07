@@ -74,29 +74,52 @@ const AzIndex = ({ items, keyField, onJump }) => {
 
   const stripRef = React.useRef(null);
   const lastLetterRef = React.useRef(null);
+  // Which letter the finger/pointer is currently over, and its vertical
+  // position (0-1) — drives the big magnified callout below. 27 discrete
+  // targets in ~450px of a 1024x600 panel are individually finger-sized no
+  // matter the font (~16px each), so precision comes from continuously
+  // dragging while watching a large readout, not from landing exactly on a
+  // tiny label — the same trick iOS Contacts uses for the same reason.
+  const [activeLetter, setActiveLetter] = React.useState(null);
+  const [activeRatio, setActiveRatio] = React.useState(0);
+
   const handlePoint = (clientY) => {
     const el = stripRef.current;
     if (!el) return;
     const r = el.getBoundingClientRect();
     const ratio = Math.min(1, Math.max(0, (clientY - r.top) / r.height));
-    const letter = AZ_LETTERS[Math.min(AZ_LETTERS.length - 1, Math.floor(ratio * AZ_LETTERS.length))];
+    const idx = Math.min(AZ_LETTERS.length - 1, Math.floor(ratio * AZ_LETTERS.length));
+    const letter = AZ_LETTERS[idx];
+    setActiveLetter(letter);
+    setActiveRatio((idx + 0.5) / AZ_LETTERS.length);
     if (letter === lastLetterRef.current) return; // avoid re-jumping every pixel of a drag
     lastLetterRef.current = letter;
     if (letter in letterIndex) onJump(letterIndex[letter]);
   };
+  const endTouch = () => { setActiveLetter(null); lastLetterRef.current = null; };
 
   return (
     <div ref={stripRef}
-      className="flex flex-col items-center justify-center w-6 shrink-0 select-none py-2"
+      className="relative flex flex-col items-center justify-between w-8 shrink-0 select-none py-1"
       style={{ touchAction: 'none' }}
       onPointerDown={(e) => { e.currentTarget.setPointerCapture(e.pointerId); handlePoint(e.clientY); }}
-      onPointerMove={(e) => { if (e.buttons === 1 || e.pointerType === 'touch') handlePoint(e.clientY); }}>
+      onPointerMove={(e) => { if (e.buttons === 1 || e.pointerType === 'touch') handlePoint(e.clientY); }}
+      onPointerUp={endTouch}
+      onPointerCancel={endTouch}
+      onLostPointerCapture={endTouch}>
       {AZ_LETTERS.map((letter) => (
         <span key={letter}
-          className={`text-[9px] leading-[1.15] font-semibold ${letter in letterIndex ? 'text-hifi-silver/70' : 'text-hifi-silver/20'}`}>
+          className={`text-[10px] font-bold leading-none transition-colors ${
+            letter === activeLetter ? 'text-hifi-gold' : letter in letterIndex ? 'text-hifi-silver/70' : 'text-hifi-silver/20'}`}>
           {letter}
         </span>
       ))}
+      {activeLetter && (
+        <div className="absolute right-full mr-2 -translate-y-1/2 w-12 h-12 flex items-center justify-center rounded-full bg-hifi-gold text-black text-xl font-bold shadow-lg pointer-events-none"
+          style={{ top: `${activeRatio * 100}%` }}>
+          {activeLetter}
+        </div>
+      )}
     </div>
   );
 };
