@@ -330,8 +330,8 @@ const LyrionServer = () => {
               <div className="relative aspect-square bg-hifi-gray">
                 <ArtworkImage src={aUrl} alt={item.album} className="w-full h-full object-cover" FallbackIcon={Disc} />
                 <button onClick={(e) => { e.stopPropagation(); handlePlayItem('album_id', item.id); }}
-                  className="absolute bottom-1.5 right-1.5 p-2 bg-black/60 active:bg-hifi-gold active:text-black text-white rounded-full shadow-lg transition-colors">
-                  <Play size={14} fill="currentColor" />
+                  className="absolute bottom-1.5 right-1.5 p-2 flex items-center justify-center bg-black/60 active:bg-hifi-gold active:text-black text-white rounded-full shadow-lg transition-colors">
+                  <Play size={14} fill="currentColor" className="ml-0.5" />
                 </button>
               </div>
               <div className="p-2">
@@ -353,8 +353,8 @@ const LyrionServer = () => {
             </div>
             <div className="opacity-70 active:opacity-100 transition-opacity">
               <button onClick={(e) => { e.stopPropagation(); handlePlayItem('artist_id', item.id); }}
-                className="p-2 bg-hifi-gold/20 text-hifi-gold rounded-full hover:bg-hifi-gold hover:text-black transition-colors">
-                <Play size={12} fill="currentColor" />
+                className="p-2 flex items-center justify-center bg-hifi-gold/20 text-hifi-gold rounded-full hover:bg-hifi-gold hover:text-black transition-colors">
+                <Play size={12} fill="currentColor" className="ml-0.5" />
               </button>
             </div>
           </li>
@@ -428,8 +428,8 @@ const LyrionServer = () => {
                 </div>
                 <div className="opacity-70 active:opacity-100 transition-opacity flex-shrink-0">
                   <button onClick={(e) => { e.stopPropagation(); handlePlayItem('playlist_id', item.id); }}
-                    className="p-2 bg-hifi-gold/20 text-hifi-gold rounded-full hover:bg-hifi-gold hover:text-black transition-colors">
-                    <Play size={12} fill="currentColor" />
+                    className="p-2 flex items-center justify-center bg-hifi-gold/20 text-hifi-gold rounded-full hover:bg-hifi-gold hover:text-black transition-colors">
+                    <Play size={12} fill="currentColor" className="ml-0.5" />
                   </button>
                 </div>
               </li>
@@ -449,8 +449,8 @@ const LyrionServer = () => {
                   </div>
                   <div className="opacity-70 active:opacity-100 transition-opacity flex-shrink-0">
                     <button onClick={(e) => { e.stopPropagation(); handlePlayItem(isDir ? 'folder_id' : 'track_id', item.id); }}
-                      className="p-2 bg-hifi-gold/20 text-hifi-gold rounded-full hover:bg-hifi-gold hover:text-black transition-colors">
-                      <Play size={12} fill="currentColor" />
+                      className="p-2 flex items-center justify-center bg-hifi-gold/20 text-hifi-gold rounded-full hover:bg-hifi-gold hover:text-black transition-colors">
+                      <Play size={12} fill="currentColor" className="ml-0.5" />
                     </button>
                   </div>
                 </li>
@@ -499,8 +499,8 @@ const LyrionServer = () => {
                   {play && (
                     <div className="opacity-70 active:opacity-100 transition-opacity flex-shrink-0">
                       <button onClick={(e) => { e.stopPropagation(); handleAction(() => lyrionApi.menuDo(activePlayer.playerid, play)); }}
-                        className="p-2 bg-hifi-gold/20 text-hifi-gold rounded-full hover:bg-hifi-gold hover:text-black transition-colors">
-                        <Play size={12} fill="currentColor" />
+                        className="p-2 flex items-center justify-center bg-hifi-gold/20 text-hifi-gold rounded-full hover:bg-hifi-gold hover:text-black transition-colors">
+                        <Play size={12} fill="currentColor" className="ml-0.5" />
                       </button>
                     </div>
                   )}
@@ -534,8 +534,8 @@ const LyrionServer = () => {
                   {(isAudio || item.play) && (
                     <div className="opacity-70 active:opacity-100 transition-opacity flex-shrink-0">
                       <button onClick={(e) => { e.stopPropagation(); handleAction(() => lyrionApi.playPluginItem(activePlayer.playerid, pluginCmd, item.id || item.play)); }}
-                        className="p-2 bg-hifi-gold/20 text-hifi-gold rounded-full hover:bg-hifi-gold hover:text-black transition-colors">
-                        <Play size={12} fill="currentColor" />
+                        className="p-2 flex items-center justify-center bg-hifi-gold/20 text-hifi-gold rounded-full hover:bg-hifi-gold hover:text-black transition-colors">
+                        <Play size={12} fill="currentColor" className="ml-0.5" />
                       </button>
                     </div>
                   )}
