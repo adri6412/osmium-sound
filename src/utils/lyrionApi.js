@@ -460,9 +460,11 @@ export class LyrionAPI {
 
   // --- Playback Commands ---
 
-  async playItem(playerMac, itemType, itemId) {
+  // mode: 'load' (default, replaces the queue and plays), 'add' (append to
+  // queue), 'insert' (play next).
+  async playItem(playerMac, itemType, itemId, mode = 'load') {
     // itemType can be 'artist_id', 'album_id', 'track_id', or 'folder_id'
-    return this.request(playerMac, ['playlistcontrol', 'cmd:load', `${itemType}:${itemId}`]);
+    return this.request(playerMac, ['playlistcontrol', `cmd:${mode}`, `${itemType}:${itemId}`]);
   }
 
   getArtworkUrl(trackId, size = 300) {

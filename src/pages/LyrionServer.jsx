@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -8,7 +8,7 @@ import {
   Radio, AppWindow, Compass,
   Settings as SettingsIcon, Maximize2,
   Shuffle, Repeat, Repeat1, ListMusic, Moon,
-  Trash2, X, Save, ArrowUp, ArrowDown,
+  Trash2, X, Save, GripVertical, ListPlus, ListStart,
   Mic2, AudioLines, Heart
 } from 'lucide-react';
 import { lyrionApi } from '../utils/lyrionApi';
@@ -18,6 +18,8 @@ import AnalogVUMeter from '../components/AnalogVUMeter';
 import CdRip from '../components/CdRip';
 import Discover from '../components/Discover';
 import BluetoothNowPlaying from '../components/BluetoothNowPlaying';
+import ContextMenu from '../components/ContextMenu';
+import { useLongPress } from '../hooks/useLongPress';
 import { SCALED_CANVAS_ID } from '../components/ScaledCanvas';
 import SettingsPage from './Settings';
 import { useLyrionPlayer, safeUrl, formatTime, LIST_PAGE } from '../hooks/useLyrionPlayer';
@@ -124,6 +126,110 @@ const AzIndex = ({ items, keyField, onJump }) => {
   );
 };
 
+// ── Track row with long-press context menu (Musica tab track lists) ────
+// A dedicated component (not inline in the .map()) because useLongPress is a
+// hook — it needs one call per mounted row instance, which only works if
+// each row is its own component (a hook call inside the parent's .map()
+// callback would violate the rules of hooks as the list length changes).
+const TrackRow = ({ item, onPlay, onOpenMenu }) => {
+  const { handlers, didLongPress } = useLongPress((x, y) => onOpenMenu(x, y, item));
+  return (
+    <li {...handlers}
+      onClick={() => { if (didLongPress()) return; onPlay(); }}
+      className="flex items-center px-3 py-3 bg-hifi-surface hover:bg-hifi-light active:bg-hifi-light rounded-lg cursor-pointer border border-transparent hover:border-hifi-border transition-colors select-none">
+      <Music size={13} className="text-hifi-silver/60 mr-3 flex-shrink-0" />
+      <span className="text-sm text-white truncate">{item.title}</span>
+    </li>
+  );
+};
+
+// ── Queue drawer row: drag handle to reorder, swipe-left to remove ─────
+// Reordering needs to shuffle SIBLING rows too, so the drag handle reports
+// start/move/end up to the parent (which owns `queue`/`queueOverride`) via
+// props rather than managing array order itself. Swipe-to-remove only ever
+// affects this one row, so that gesture stays fully local. Pointer capture on
+// the handle keeps routing move/up events to it for the whole drag even as
+// the finger crosses over other rows — exactly the behavior a reorder needs.
+const QueueRow = ({ item, idx, isCurrent, unknownArtistLabel, onJump, onRemove, onDragStart, onDragMove, onDragEnd }) => {
+  const rowRef = useRef(null);
+  const [swipeX, setSwipeX] = useState(0);
+  const swipeStartRef = useRef(null); // {x,y} while a candidate gesture is being watched
+  const swipingRef = useRef(false);   // true once horizontal intent is confirmed
+  const didSwipeRef = useRef(false);  // suppresses the tap-to-jump click after a swipe
+
+  const onRowPointerDown = (e) => {
+    if (e.target.closest('[data-drag-handle]')) return;
+    swipeStartRef.current = { x: e.clientX, y: e.clientY };
+    swipingRef.current = false;
+    didSwipeRef.current = false;
+  };
+  const onRowPointerMove = (e) => {
+    const start = swipeStartRef.current;
+    if (!start) return;
+    const dx = e.clientX - start.x;
+    const dy = e.clientY - start.y;
+    if (!swipingRef.current) {
+      if (Math.abs(dx) < 10 && Math.abs(dy) < 10) return;
+      if (Math.abs(dx) <= Math.abs(dy)) { swipeStartRef.current = null; return; } // vertical → leave it to native scroll
+      swipingRef.current = true;
+      e.currentTarget.setPointerCapture(e.pointerId);
+    }
+    didSwipeRef.current = true;
+    setSwipeX(Math.min(0, dx)); // left-only swipe to reveal/commit remove
+  };
+  const endSwipe = (e) => {
+    if (!swipingRef.current) { swipeStartRef.current = null; return; }
+    swipingRef.current = false;
+    swipeStartRef.current = null;
+    if (swipeX < -96) onRemove();
+    else setSwipeX(0);
+  };
+
+  return (
+    <li className="relative overflow-hidden rounded-lg">
+      <div className="absolute inset-0 flex items-center justify-end pr-4 bg-red-500/20">
+        <Trash2 size={16} className="text-red-300" />
+      </div>
+      <motion.div
+        ref={rowRef}
+        layout="position"
+        transition={{ type: 'tween', duration: 0.18 }}
+        onPointerDown={onRowPointerDown}
+        onPointerMove={onRowPointerMove}
+        onPointerUp={endSwipe}
+        onPointerCancel={endSwipe}
+        style={{ touchAction: 'pan-y', transform: `translateX(${swipeX}px)` }}
+        onClick={() => { if (!didSwipeRef.current) onJump(); }}
+        className={`relative flex items-center px-2 py-2 rounded-lg transition-colors ${isCurrent ? 'bg-hifi-gold/15 border border-hifi-gold/30' : 'bg-hifi-surface border border-transparent'}`}>
+        <span data-drag-handle
+          onPointerDown={(e) => {
+            e.stopPropagation();
+            e.currentTarget.setPointerCapture(e.pointerId);
+            onDragStart(idx, e.clientY);
+          }}
+          onPointerMove={(e) => { e.stopPropagation(); onDragMove(e.clientY, rowRef.current); }}
+          onPointerUp={(e) => { e.stopPropagation(); onDragEnd(rowRef.current); }}
+          onPointerCancel={(e) => { e.stopPropagation(); onDragEnd(rowRef.current); }}
+          style={{ touchAction: 'none' }}
+          className="p-2 -ml-1 mr-0.5 text-hifi-silver/40 active:text-white cursor-grab flex-shrink-0">
+          <GripVertical size={15} />
+        </span>
+        <span className={`w-6 text-center text-[11px] font-mono flex-shrink-0 ${isCurrent ? 'text-hifi-gold' : 'text-hifi-silver/40'}`}>
+          {isCurrent ? '▶' : idx + 1}
+        </span>
+        <div className="min-w-0 ml-1 flex-1">
+          <p className={`text-sm truncate ${isCurrent ? 'text-white font-medium' : 'text-white/90'}`}>
+            {item.title || item.track || '—'}
+          </p>
+          <p className="text-[11px] text-hifi-silver/50 truncate">
+            {item.artist || unknownArtistLabel}
+          </p>
+        </div>
+      </motion.div>
+    </li>
+  );
+};
+
 // ── Main component ────────────────────────────────────────────
 // Kiosk-only: the PWA build has its own screens (src/pages/pwa/) and does not
 // mount this component. All LMS control state/logic lives in useLyrionPlayer
@@ -139,6 +245,7 @@ const LyrionServer = () => {
     setVolume: setPlayerVolume, toggleMute, seek, cycleShuffle, cycleRepeat,
     setSleepTimer: applySleepTimer,
     queue, queueIndex, loadQueue, queueJump, queueRemove, queueMove, queueClear,
+    queueAddTrack, queuePlayNext,
     saveQueue: saveQueueToLms,
     currentView, libraryData, libraryLoading, visibleCount, setVisibleCount, navigationStack,
     menuSearch, setMenuSearch, searchText, setSearchText, menuBase,
@@ -165,6 +272,64 @@ const LyrionServer = () => {
   const [saveQueueOpen, setSaveQueueOpen] = useState(false);
   const [queueName, setQueueName] = useState('');
   const [saveMsg, setSaveMsg] = useState('');
+
+  // ── Queue drawer: drag-to-reorder + swipe-to-remove (kiosk-only) ──
+  // `queueOverride`, when set, is the optimistic local order shown instead of
+  // `queue` while a drag/swipe is in flight — avoids a rubber-band snap-back
+  // while waiting for the LMS round-trip that `queueMove`/`queueRemove`
+  // trigger. `dragRef` tracks the in-progress drag without re-rendering on
+  // every pointermove; only crossing into a new target slot touches state.
+  const [queueOverride, setQueueOverride] = useState(null);
+  const displayQueue = queueOverride || queue;
+  const dragRef = useRef({ uid: null, originalIdx: null, lastTarget: null });
+
+  const startQueueDrag = (idx, clientY) => {
+    const list = queueOverride || queue;
+    dragRef.current = { uid: list[idx]?._uid, originalIdx: idx, lastTarget: idx, startY: clientY };
+    if (!queueOverride) setQueueOverride(list);
+  };
+  const moveQueueDrag = (clientY, rowEl) => {
+    const d = dragRef.current;
+    if (d.uid == null) return;
+    const deltaY = clientY - d.startY;
+    if (rowEl) rowEl.style.transform = `translateY(${deltaY}px)`;
+    const rowH = rowEl?.offsetHeight || 56;
+    const rawTarget = d.originalIdx + Math.round(deltaY / rowH);
+    setQueueOverride((prev) => {
+      const list = prev || queue;
+      const target = Math.min(Math.max(rawTarget, 0), list.length - 1);
+      if (target === d.lastTarget) return prev;
+      const from = list.findIndex((it) => it._uid === d.uid);
+      if (from === -1 || from === target) { d.lastTarget = target; return prev; }
+      const next = list.slice();
+      const [moved] = next.splice(from, 1);
+      next.splice(target, 0, moved);
+      d.lastTarget = target;
+      return next;
+    });
+  };
+  const endQueueDrag = (rowEl) => {
+    const d = dragRef.current;
+    if (rowEl) rowEl.style.transform = '';
+    const from = d.originalIdx;
+    dragRef.current = { uid: null, originalIdx: null, lastTarget: null };
+    if (from == null) { setQueueOverride(null); return; }
+    const list = queueOverride || queue;
+    const to = list.findIndex((it) => it._uid === d.uid);
+    if (to === -1 || to === from) { setQueueOverride(null); return; }
+    queueMove(from, to).then(() => setQueueOverride(null));
+  };
+  const removeQueueItem = (uid) => {
+    const list = queueOverride || queue;
+    const idx = list.findIndex((it) => it._uid === uid);
+    if (idx === -1) return;
+    setQueueOverride(list.filter((it) => it._uid !== uid));
+    queueRemove(idx).then(() => setQueueOverride(null));
+  };
+
+  // ── Track long-press context menu (kiosk-only) ─────────────────
+  const [contextMenu, setContextMenu] = useState(null); // { x, y, item } | null
+  const openTrackContextMenu = (x, y, item) => setContextMenu({ x, y, item });
 
   // ── Artists/Albums search + A-Z jump (kiosk-only, presentation state) ──
   const [libFilter, setLibFilter] = useState('');
@@ -408,12 +573,9 @@ const LyrionServer = () => {
         <ul className="lib-list space-y-1 pt-1">
           {visibleItems.map((item, idx) => {
             if (currentView === 'tracks' || currentView === 'playlist_tracks') return (
-              <li key={idx}
-                onClick={() => handlePlayItem('track_id', item.id)}
-                className="flex items-center px-3 py-3 bg-hifi-surface hover:bg-hifi-light rounded-lg cursor-pointer border border-transparent hover:border-hifi-border transition-colors">
-                <Music size={13} className="text-hifi-silver/60 mr-3 flex-shrink-0" />
-                <span className="text-sm text-white truncate">{item.title}</span>
-              </li>
+              <TrackRow key={idx} item={item}
+                onPlay={() => handlePlayItem('track_id', item.id)}
+                onOpenMenu={openTrackContextMenu} />
             );
 
             if (currentView === 'playlists') return (
@@ -1010,7 +1172,7 @@ const LyrionServer = () => {
                   <div className="flex items-center space-x-2">
                     <ListMusic size={16} className="text-hifi-gold" />
                     <span className="text-sm font-semibold text-white">{t('player.queue')}</span>
-                    <span className="text-[11px] text-hifi-silver/50">({queue.length})</span>
+                    <span className="text-[11px] text-hifi-silver/50">({displayQueue.length})</span>
                   </div>
                   <button onClick={() => setShowQueue(false)}
                     className="p-1.5 text-hifi-silver/60 hover:text-white hover:bg-white/10 rounded-lg transition-colors">
@@ -1020,48 +1182,19 @@ const LyrionServer = () => {
 
                 {/* List */}
                 <div className="flex-1 overflow-y-auto content-scrollbar px-2 py-2">
-                  {queue.length === 0 ? (
+                  {displayQueue.length === 0 ? (
                     <div className="flex items-center justify-center h-full text-hifi-silver/40 text-sm">
                       {t('player.queueEmpty')}
                     </div>
                   ) : (
                     <ul className="space-y-1">
-                      {queue.map((item, idx) => {
-                        const isCur = idx === queueIndex;
-                        return (
-                          <li key={`${item.id || item.url || idx}-${idx}`}
-                            className={`flex items-center px-2 py-2 rounded-lg group transition-colors ${isCur ? 'bg-hifi-gold/15 border border-hifi-gold/30' : 'bg-hifi-surface hover:bg-hifi-light border border-transparent'}`}>
-                            <button onClick={() => queueJump(idx)}
-                              className="flex items-center min-w-0 flex-1 text-left">
-                              <span className={`w-6 text-center text-[11px] font-mono flex-shrink-0 ${isCur ? 'text-hifi-gold' : 'text-hifi-silver/40'}`}>
-                                {isCur ? '▶' : idx + 1}
-                              </span>
-                              <div className="min-w-0 ml-1">
-                                <p className={`text-sm truncate ${isCur ? 'text-white font-medium' : 'text-white/90'}`}>
-                                  {item.title || item.track || '—'}
-                                </p>
-                                <p className="text-[11px] text-hifi-silver/50 truncate">
-                                  {item.artist || t('player.unknownArtist')}
-                                </p>
-                              </div>
-                            </button>
-                            <div className="flex items-center opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
-                              <button onClick={() => queueMove(idx, idx - 1)} disabled={idx === 0}
-                                className="p-1 text-hifi-silver/50 hover:text-white disabled:opacity-20">
-                                <ArrowUp size={13} />
-                              </button>
-                              <button onClick={() => queueMove(idx, idx + 1)} disabled={idx === queue.length - 1}
-                                className="p-1 text-hifi-silver/50 hover:text-white disabled:opacity-20">
-                                <ArrowDown size={13} />
-                              </button>
-                              <button onClick={() => queueRemove(idx)}
-                                className="p-1 text-hifi-silver/50 hover:text-red-400">
-                                <Trash2 size={13} />
-                              </button>
-                            </div>
-                          </li>
-                        );
-                      })}
+                      {displayQueue.map((item, idx) => (
+                        <QueueRow key={item._uid} item={item} idx={idx} isCurrent={idx === queueIndex}
+                          unknownArtistLabel={t('player.unknownArtist')}
+                          onJump={() => queueJump(idx)}
+                          onRemove={() => removeQueueItem(item._uid)}
+                          onDragStart={startQueueDrag} onDragMove={moveQueueDrag} onDragEnd={endQueueDrag} />
+                      ))}
                     </ul>
                   )}
                 </div>
@@ -1069,11 +1202,11 @@ const LyrionServer = () => {
                 {/* Footer actions */}
                 <div className="flex items-center gap-2 px-3 py-3 border-t border-hifi-border shrink-0">
                   <button onClick={() => { setQueueName(''); setSaveQueueOpen(true); }}
-                    disabled={queue.length === 0}
+                    disabled={displayQueue.length === 0}
                     className="flex-1 flex items-center justify-center gap-2 bg-hifi-surface hover:bg-hifi-light disabled:opacity-40 text-white py-2.5 rounded-lg text-sm transition-colors border border-hifi-border">
                     <Save size={15} /> {t('player.saveAsPlaylist')}
                   </button>
-                  <button onClick={queueClear} disabled={queue.length === 0}
+                  <button onClick={() => { setQueueOverride(null); queueClear(); }} disabled={displayQueue.length === 0}
                     className="flex items-center justify-center gap-2 bg-red-500/10 hover:bg-red-500/20 disabled:opacity-40 text-red-300 px-4 py-2.5 rounded-lg text-sm transition-colors border border-red-500/20">
                     <Trash2 size={15} /> {t('player.clearQueue')}
                   </button>
@@ -1156,6 +1289,17 @@ const LyrionServer = () => {
         </AnimatePresence>,
         document.getElementById(SCALED_CANVAS_ID) || document.body
       )}
+
+      {/* ══════════════════ TRACK LONG-PRESS CONTEXT MENU ══════════════════ */}
+      <ContextMenu
+        open={!!contextMenu}
+        anchor={contextMenu}
+        onClose={() => setContextMenu(null)}
+        items={contextMenu ? [
+          { key: 'add', label: t('player.addToQueue'), Icon: ListPlus, onSelect: () => queueAddTrack(contextMenu.item.id) },
+          { key: 'next', label: t('player.playNext'), Icon: ListStart, onSelect: () => queuePlayNext(contextMenu.item.id) },
+        ] : []}
+      />
     </div>
   );
 };

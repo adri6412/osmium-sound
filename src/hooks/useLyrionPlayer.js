@@ -269,11 +269,16 @@ export function useLyrionPlayer() {
   };
 
   // ── Play queue ─────────────────────────────────────────────
+  // Queue entries carry no stable id of their own (id/url can repeat when the
+  // same track appears twice in a queue), so React would key drag-reordered
+  // rows by position and remount them instead of sliding them. Stamp a
+  // synthetic per-fetch `_uid` here, once, so row components can key off it.
+  const queueUidRef = useRef(0);
   const loadQueue = async () => {
     if (!activePlayer) return;
     try {
       const r = await lyrionApi.getQueue(activePlayer.playerid);
-      setQueue(r?.playlist_loop || []);
+      setQueue((r?.playlist_loop || []).map((item) => ({ ...item, _uid: ++queueUidRef.current })));
       setQueueIndex(Number(r?.playlist_cur_index ?? 0));
     } catch (_) {}
   };
@@ -284,6 +289,11 @@ export function useLyrionPlayer() {
     handleAction(() => lyrionApi.playlistMove(activePlayer.playerid, from, to)).then(loadQueue);
   };
   const queueClear  = () => handleAction(() => lyrionApi.playlistClear(activePlayer.playerid)).then(loadQueue);
+  // Append to / insert-next-in the queue without replacing it (unlike
+  // handlePlayItem's playlistcontrol cmd:load) — backs the long-press
+  // context menu's "add to queue" / "play next" actions.
+  const queueAddTrack  = (id) => handleAction(() => lyrionApi.playItem(activePlayer.playerid, 'track_id', id, 'add'));
+  const queuePlayNext  = (id) => handleAction(() => lyrionApi.playItem(activePlayer.playerid, 'track_id', id, 'insert'));
 
   // Save the queue, verify Lyrion actually wrote it, then jump to the Playlists
   // view so the result is immediately visible. Returns { success, error } —
@@ -539,6 +549,7 @@ export function useLyrionPlayer() {
     setVolume, toggleMute, seek, cycleShuffle, cycleRepeat, setSleepTimer,
     // queue
     queue, queueIndex, loadQueue, queueJump, queueRemove, queueMove, queueClear, saveQueue,
+    queueAddTrack, queuePlayNext,
     // library navigation
     currentView, libraryData, libraryLoading, visibleCount, setVisibleCount, navigationStack,
     menuSearch, setMenuSearch, searchText, setSearchText,

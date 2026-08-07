@@ -245,6 +245,8 @@
     "repeat": "Ripeti",
     "queue": "Coda",
     "queueEmpty": "La coda è vuota",
+    "addToQueue": "Aggiungi a coda",
+    "playNext": "Riproduci dopo",
     "saveAsPlaylist": "Salva come playlist",
     "clearQueue": "Svuota",
     "playlistNamePlaceholder": "Nome playlist",
