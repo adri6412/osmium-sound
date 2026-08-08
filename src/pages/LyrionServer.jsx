@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   Play, Pause, SkipBack, SkipForward,
   Volume2, VolumeX, Music, AlertCircle, RefreshCw,
-  Folder, User, Disc, Home, ChevronRight, ChevronDown,
+  Folder, User, Disc, Home, ChevronRight, ChevronDown, ChevronUp,
   Radio, AppWindow, Compass,
   Settings as SettingsIcon, Maximize2,
   Shuffle, Repeat, Repeat1, ListMusic, Moon,
@@ -90,6 +90,76 @@ const ArtworkImage = ({ src, alt, className, FallbackIcon }) => {
   // ones scrolled into view; harmless here since displayedSrc is only ever
   // set once already loaded (served from cache on the actual <img> mount).
   return <img src={displayedSrc} alt={alt} className={className} loading="lazy" decoding="async" />;
+};
+
+// Fast non-cryptographic hash (FNV-1a) over raw bytes — only needs to detect
+// "same content as last time", not resist tampering.
+const fnv1aHash = (bytes) => {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < bytes.length; i++) {
+    h ^= bytes[i];
+    h = Math.imul(h, 0x01000193);
+  }
+  return h >>> 0;
+};
+
+// For the "now playing" cover (mini-player + fullscreen): the URL's
+// cache-buster changes every ~10s for a remote/radio track (the trackKey
+// heartbeat in useLyrionPlayer.js) even though the artwork itself is usually
+// byte-identical — the preload-before-swap approach still swapped the <img>
+// src (or backgroundImage) to a freshly-fetched-but-identical resource every
+// cycle, and that swap alone was still enough to cause a visible flash on
+// this hardware. So instead of trusting the URL, actually fetch the bytes,
+// hash them, and only touch the DOM (create a new object URL, swap it in)
+// when the hash genuinely differs from what's already showing — if the
+// cover hasn't changed, this is a complete no-op, nothing re-renders/repaints.
+// Deliberately NOT used for the browse-grid ArtworkImage usage: those URLs
+// are static per album (not re-polled), so they never hit this problem, and
+// eagerly `fetch()`-ing hundreds of grid covers would defeat their
+// `loading="lazy"` viewport-based deferral.
+const usePolledArtwork = (url) => {
+  const safeSrc = url ? safeUrl(url) : null;
+  const [objectUrl, setObjectUrl] = useState(null);
+  const [failed, setFailed] = useState(!safeSrc);
+  const hashRef = useRef(null);
+  const objectUrlRef = useRef(null);
+  const requestIdRef = useRef(0);
+
+  useEffect(() => {
+    if (!safeSrc) {
+      requestIdRef.current += 1;
+      setFailed(true);
+      return;
+    }
+    const myRequestId = ++requestIdRef.current;
+    const attempt = async (isRetry) => {
+      try {
+        const res = await fetch(safeSrc);
+        if (!res.ok) throw new Error(`http ${res.status}`);
+        const buf = await res.arrayBuffer();
+        if (requestIdRef.current !== myRequestId) return; // superseded by a newer poll
+        const hash = fnv1aHash(new Uint8Array(buf));
+        setFailed(false);
+        if (hash === hashRef.current) return; // identical cover — no DOM change at all
+        const nextObjectUrl = URL.createObjectURL(new Blob([buf]));
+        const prevObjectUrl = objectUrlRef.current;
+        hashRef.current = hash;
+        objectUrlRef.current = nextObjectUrl;
+        setObjectUrl(nextObjectUrl);
+        if (prevObjectUrl) URL.revokeObjectURL(prevObjectUrl);
+      } catch {
+        if (requestIdRef.current !== myRequestId) return;
+        if (!isRetry) setTimeout(() => { if (requestIdRef.current === myRequestId) attempt(true); }, ARTWORK_RETRY_MS);
+        else setFailed(true);
+      }
+    };
+    attempt(false);
+  }, [safeSrc]);
+
+  // Release the last object URL when this instance goes away entirely.
+  useEffect(() => () => { if (objectUrlRef.current) URL.revokeObjectURL(objectUrlRef.current); }, []);
+
+  return { objectUrl, failed: failed && !objectUrl };
 };
 
 // Accent/case-insensitive normalization, shared by the artist/album search
@@ -304,6 +374,13 @@ const LyrionServer = () => {
     navigateTo, goBack, goHome, goToBreadcrumb, handlePlayItem,
     resolveMenuIcon, handleMenuItem, submitMenuSearch, openTabView,
   } = useLyrionPlayer();
+
+  // Hash-deduped "now playing" cover, shared by the mini-player's <img> +
+  // glow background and the fullscreen <img> + blurred backdrop below — see
+  // usePolledArtwork's own comment. One fetch per poll tick per size, reused
+  // for both the image and its background twin instead of fetching twice.
+  const npArtwork = usePolledArtwork(artworkUrl);
+  const npArtworkLg = usePolledArtwork(artworkUrlLg);
 
   // `handlePlayItem` is a plain function redefined on every useLyrionPlayer()
   // call (every 1s playback-poll tick, not wrapped in useCallback there), so
@@ -945,9 +1022,9 @@ const LyrionServer = () => {
             )}
             <div className={`w-1.5 h-1.5 rounded-full ${isConnected ? 'bg-emerald-500' : 'bg-red-500/70'}`} />
             {activePlayer && (
-              <button onClick={() => setIsPlayerExpanded(true)}
-                className="p-1 text-hifi-silver/40 hover:text-hifi-silver transition-colors rounded" title={t('player.expand')}>
-                <Maximize2 size={13} />
+              <button onClick={() => setIsPlayerExpanded(true)} title={t('player.expand')}
+                className="p-2 bg-white/10 hover:bg-white/20 rounded-full text-white transition-colors">
+                <ChevronUp size={22} />
               </button>
             )}
           </div>
@@ -961,10 +1038,16 @@ const LyrionServer = () => {
           <div
             className="relative w-[250px] h-[250px] rounded-2xl overflow-hidden shadow-[0_8px_40px_rgba(0,0,0,0.7)] border border-white/5 cursor-pointer group bg-hifi-gray flex-shrink-0"
             onClick={() => activePlayer && setIsPlayerExpanded(true)}>
-            {artworkUrl && (
-              <div className="artwork-glow" style={{ backgroundImage: `url(${artworkUrl})` }} />
+            {npArtwork.objectUrl && (
+              <div className="artwork-glow" style={{ backgroundImage: `url(${npArtwork.objectUrl})` }} />
             )}
-            <ArtworkImage src={artworkUrl} alt="Album Art" className="w-full h-full object-cover relative z-10" FallbackIcon={Music} />
+            {npArtwork.failed || !npArtwork.objectUrl ? (
+              <div className="absolute inset-0 flex items-center justify-center text-hifi-silver/20 bg-gradient-to-br from-hifi-gray to-hifi-dark">
+                <Music size={40} />
+              </div>
+            ) : (
+              <img src={npArtwork.objectUrl} alt="Album Art" className="w-full h-full object-cover relative z-10" decoding="async" />
+            )}
             {activePlayer && (
               <div className="absolute inset-0 z-20 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity rounded-2xl">
                 <Maximize2 size={26} className="text-white drop-shadow-lg" />
@@ -1120,7 +1203,7 @@ const LyrionServer = () => {
                   slide-up entrance transition (translateY), especially on
                   weak/virtualized GPUs (e.g. VMware SVGA in the test VM). */}
               <div className="absolute inset-0 opacity-20 bg-cover bg-center blur-lg scale-125 pointer-events-none transition-all duration-1000"
-                style={{ backgroundImage: artworkUrlLg ? `url(${artworkUrlLg})` : 'none' }} />
+                style={{ backgroundImage: npArtworkLg.objectUrl ? `url(${npArtworkLg.objectUrl})` : 'none' }} />
               <div className="absolute inset-0 bg-gradient-to-t from-black/95 via-black/60 to-transparent pointer-events-none" />
 
               {/* Close button row */}
@@ -1156,7 +1239,13 @@ const LyrionServer = () => {
                 <motion.div className="w-[44%] flex items-center justify-center flex-shrink-0"
                   initial={{ x: -20, opacity: 0 }} animate={{ x: 0, opacity: 1 }} transition={{ delay: 0.08 }}>
                   <div className="relative w-full max-w-[320px] aspect-square rounded-2xl overflow-hidden shadow-[0_20px_60px_rgba(0,0,0,0.7)] border border-white/8 bg-hifi-gray">
-                    <ArtworkImage src={artworkUrlLg} alt="Album Art" className="w-full h-full object-cover" FallbackIcon={Music} />
+                    {npArtworkLg.failed || !npArtworkLg.objectUrl ? (
+                      <div className="absolute inset-0 flex items-center justify-center text-hifi-silver/20 bg-gradient-to-br from-hifi-gray to-hifi-dark">
+                        <Music size={40} />
+                      </div>
+                    ) : (
+                      <img src={npArtworkLg.objectUrl} alt="Album Art" className="w-full h-full object-cover" decoding="async" />
+                    )}
                   </div>
                 </motion.div>
 
