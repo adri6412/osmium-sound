@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 
 import LyrionServer from './pages/LyrionServer';
 import SetupWizard from './pages/SetupWizard';
+import InstallWizard from './pages/InstallWizard';
 import VirtualKeyboard from './components/VirtualKeyboard';
 import Screensaver from './components/Screensaver';
 import BootIntro from './components/BootIntro';
@@ -34,6 +35,24 @@ const AppContent = () => {
   const [showWizard, setShowWizard] = React.useState(
     () => localStorage.getItem('firstSetupComplete') !== 'true'
   );
+
+  // Boot mode: this live session may have started from the "Install Osmium
+  // Sound" boot entry (kernel param hifi.installer=1) instead of "Try Osmium
+  // Sound" — see api_server.py get_boot_mode(). null = not resolved yet
+  // (render nothing rather than flash the normal kiosk UI first).
+  const [bootMode, setBootMode] = React.useState(null);
+  React.useEffect(() => {
+    let alive = true;
+    (async () => {
+      let mode = 'live';
+      try {
+        const res = await systemAPI.getBootMode();
+        if (res.success && res.data?.mode) mode = res.data.mode;
+      } catch (_) {}
+      if (alive) setBootMode(mode);
+    })();
+    return () => { alive = false; };
+  }, []);
 
   // The localStorage flag only records a wizard completed ON THIS SCREEN. If
   // setup ran through the provisioning flow from the web instead (headless
@@ -219,6 +238,21 @@ const AppContent = () => {
     setUsbPrompt(null);
     window.dispatchEvent(new CustomEvent('hifi-open-settings-section', { detail: 'custom-sources' }));
   };
+
+  // Boot mode not resolved yet: render nothing rather than flash the normal
+  // kiosk UI before we know whether this is an installer session.
+  if (bootMode === null) {
+    return <div className="h-full w-full overflow-hidden bg-hifi-dark relative" />;
+  }
+  // Installer session: replace the whole app tree — there's no player/
+  // sources content to show underneath while installing to disk.
+  if (bootMode === 'installer') {
+    return (
+      <div className="h-full w-full overflow-hidden bg-hifi-dark relative">
+        <InstallWizard />
+      </div>
+    );
+  }
 
   return (
     <div className="h-full w-full overflow-hidden bg-hifi-dark relative">

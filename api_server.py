@@ -105,6 +105,15 @@ OS_STATUS_FILE = '/run/hifi-os-status.json'
 OS_PREFIX = 'hifi-os-'
 
 # ──────────────────────────────────────────────────────────────────
+#  Installer (src/pages/InstallWizard.jsx): backend for the "Install
+#  Osmium Sound" boot entry. Same systemd-run + /run status-file shape
+#  as the OS/system/UI updates above. See hifi-disk-install.sh and
+#  distro/README.md for the full flow — this replaces Debian Installer.
+# ──────────────────────────────────────────────────────────────────
+INSTALL_SCRIPT = '/usr/local/sbin/hifi-disk-install.sh'
+INSTALL_STATUS_FILE = '/run/hifi-install-status.json'
+
+# ──────────────────────────────────────────────────────────────────
 #  Multi-component update sequencer.
 #
 #  Applying "everything" used to be sequenced by the client that started
@@ -2949,6 +2958,98 @@ def os_update_status():
         return {'state': 'idle'}
 
 # ──────────────────────────────────────────────────────────────────
+#  Installer: boot-mode detection + disk-to-disk installation
+# ──────────────────────────────────────────────────────────────────
+def get_boot_mode():
+    """Read from /proc/cmdline whether this live session was booted from the
+    'Install Osmium Sound' menu entry (hifi.installer=1) or the plain 'Try'
+    entry. The Electron app (src/App.jsx) uses this to decide whether to show
+    InstallWizard or the normal kiosk UI."""
+    try:
+        with open('/proc/cmdline') as f:
+            cmdline = f.read()
+    except Exception:
+        cmdline = ''
+    mode = 'installer' if 'hifi.installer=1' in cmdline.split() else 'live'
+    return {'mode': mode}
+
+def _boot_medium_disk():
+    """Resolve the physical disk backing the live boot medium itself, so it
+    can be excluded from the installer's disk picker (hifi-disk-install.sh
+    refuses it independently too, as a second line of defense)."""
+    for mp in ('/run/live/medium', '/lib/live/mount/medium'):
+        try:
+            r = _run(['findmnt', '-no', 'SOURCE', mp], timeout=5)
+        except Exception:
+            continue
+        src = (r.stdout or '').strip()
+        if not src:
+            continue
+        try:
+            pr = _run(['lsblk', '-no', 'PKNAME', src], timeout=5)
+            pk = (pr.stdout or '').strip().split()
+            if pk:
+                return '/dev/' + pk[0]
+        except Exception:
+            pass
+    return None
+
+def list_install_disks():
+    medium_disk = _boot_medium_disk()
+    try:
+        r = _run(['lsblk', '-J', '-b', '-o', 'PATH,TYPE,SIZE,MODEL,TRAN,ROTA'], timeout=10)
+        data = json.loads(r.stdout or '{}')
+    except Exception:
+        log.exception("install: disk enumeration failed")
+        return {'success': False, 'message': 'Enumerazione dischi fallita', 'disks': []}
+    disks = []
+    for dev in data.get('blockdevices', []):
+        if dev.get('type') != 'disk':
+            continue
+        path = dev.get('path')
+        if not path or path == medium_disk:
+            continue
+        disks.append({
+            'path': path,
+            'size': dev.get('size'),
+            'model': (dev.get('model') or '').strip(),
+            'transport': dev.get('tran'),
+            'rotational': bool(dev.get('rota')),
+        })
+    return {'success': True, 'disks': disks}
+
+def start_disk_install(device):
+    if not device or not isinstance(device, str) or not re.match(r'^/dev/[A-Za-z0-9/_]+$', device):
+        return {'success': False, 'message': 'Disco non valido'}
+    medium_disk = _boot_medium_disk()
+    if medium_disk and device == medium_disk:
+        return {'success': False, 'message': 'Non è possibile installare sul supporto di avvio'}
+
+    with open(INSTALL_STATUS_FILE, 'w') as f:
+        json.dump({'state': 'running', 'progress': 0, 'message': 'Avvio…'}, f)
+
+    cmd = ['systemd-run', '--no-block', '--collect', '--unit=hifi-disk-install',
+           INSTALL_SCRIPT, device]
+    try:
+        r = _run(cmd, timeout=15)
+        launch_err = None if r.returncode == 0 else (r.stderr or r.stdout or '').strip()
+    except Exception:
+        log.exception("install: failed to launch")
+        launch_err = 'systemd-run non ha risposto'
+    if launch_err:
+        with open(INSTALL_STATUS_FILE, 'w') as f:
+            json.dump({'state': 'error', 'progress': 0, 'message': launch_err}, f)
+        return {'success': False, 'message': launch_err}
+    return {'success': True}
+
+def disk_install_status():
+    try:
+        with open(INSTALL_STATUS_FILE) as f:
+            return json.load(f)
+    except Exception:
+        return {'state': 'idle', 'progress': 0, 'message': ''}
+
+# ──────────────────────────────────────────────────────────────────
 #  Multi-component update sequencer (see the constants block above)
 # ──────────────────────────────────────────────────────────────────
 _UPDATE_PLAN_LOCK = threading.Lock()
@@ -3628,6 +3729,23 @@ def api_os_update_apply():
 @app.route('/os_update/status', methods=['GET'])
 def api_os_update_status():
     return jsonify(os_update_status())
+
+@app.route('/boot_mode', methods=['GET'])
+def api_boot_mode():
+    return jsonify(get_boot_mode())
+
+@app.route('/install/disks', methods=['GET'])
+def api_install_disks():
+    return jsonify(list_install_disks())
+
+@app.route('/install/start', methods=['POST'])
+def api_install_start():
+    data = request.get_json(silent=True) or {}
+    return jsonify(start_disk_install((data.get('device') or '').strip()))
+
+@app.route('/install/status', methods=['GET'])
+def api_install_status():
+    return jsonify(disk_install_status())
 
 # Sequenced multi-component update. Preferred over calling the three
 # */apply endpoints in turn: the whole plan is persisted and driven to the

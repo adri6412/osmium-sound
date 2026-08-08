@@ -636,5 +636,37 @@
       "shutdownError": "Errore durante lo spegnimento",
       "shutdownSystemError": "Errore durante lo spegnimento del sistema"
     }
+  },
+  "installer": {
+    "welcome": {
+      "title": "Installa Osmium Sound",
+      "subtitle": "Questa procedura installa Osmium Sound sul disco di questo computer. Tutti i dati presenti sul disco scelto verranno cancellati."
+    },
+    "start": "Scegli il disco",
+    "disk": {
+      "title": "Scegli il disco di installazione",
+      "subtitle": "Il disco selezionato verrà cancellato e sostituito interamente da Osmium Sound.",
+      "loading": "Ricerca dischi…",
+      "none": "Nessun disco disponibile.",
+      "refresh": "Aggiorna elenco"
+    },
+    "confirm": {
+      "title": "Confermi l'installazione?",
+      "warning": "TUTTI I DATI su {disk} verranno cancellati in modo permanente. L'operazione non è reversibile.",
+      "button": "Cancella e installa"
+    },
+    "progress": {
+      "title": "Installazione in corso…",
+      "subtitle": "Non spegnere e non rimuovere il supporto di avvio."
+    },
+    "done": {
+      "title": "Installazione completata",
+      "subtitle": "Rimuovi il supporto di avvio (USB/DVD) e riavvia per iniziare a usare Osmium Sound.",
+      "reboot": "Riavvia ora"
+    },
+    "error": {
+      "title": "Installazione non riuscita",
+      "retry": "Riprova"
+    }
   }
 }

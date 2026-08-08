@@ -636,5 +636,37 @@
       "shutdownError": "Error during shutdown",
       "shutdownSystemError": "Error during system shutdown"
     }
+  },
+  "installer": {
+    "welcome": {
+      "title": "Install Osmium Sound",
+      "subtitle": "This will install Osmium Sound onto this computer's disk. All data on the chosen disk will be erased."
+    },
+    "start": "Choose disk",
+    "disk": {
+      "title": "Choose the installation disk",
+      "subtitle": "The selected disk will be wiped and fully replaced by Osmium Sound.",
+      "loading": "Looking for disks…",
+      "none": "No disks available.",
+      "refresh": "Refresh list"
+    },
+    "confirm": {
+      "title": "Confirm installation?",
+      "warning": "ALL DATA on {disk} will be permanently erased. This cannot be undone.",
+      "button": "Erase and install"
+    },
+    "progress": {
+      "title": "Installing…",
+      "subtitle": "Do not power off or remove the boot media."
+    },
+    "done": {
+      "title": "Installation complete",
+      "subtitle": "Remove the boot media (USB/DVD) and reboot to start using Osmium Sound.",
+      "reboot": "Reboot now"
+    },
+    "error": {
+      "title": "Installation failed",
+      "retry": "Retry"
+    }
   }
 }

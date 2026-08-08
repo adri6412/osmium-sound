@@ -1,11 +1,12 @@
 #!/bin/sh
 # HiFi Player appliance — completely hidden/branded boot (Plymouth + GRUB).
 # The actual work lives in /usr/local/sbin/hifi-finalize-boot.sh so the very
-# same logic can be re-run on the installed system via preseed late_command
-# (the installer otherwise regenerates GRUB and overwrites these settings).
+# same logic can be re-run on the installed system by hifi-disk-install.sh
+# (grub-install/dpkg-reconfigure otherwise regenerates GRUB and overwrites
+# these settings).
 set -e
 
-chmod +x /usr/local/sbin/hifi-finalize-boot.sh /usr/local/sbin/hifi-finalize-install.sh 2>/dev/null || true
+chmod +x /usr/local/sbin/hifi-finalize-boot.sh /usr/local/sbin/hifi-disk-install.sh /usr/local/sbin/hifi-grub-install.sh 2>/dev/null || true
 
 echo "I: [hifi] applying silent/branded boot config (chroot)"
 /usr/local/sbin/hifi-finalize-boot.sh || true

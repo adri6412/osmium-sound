@@ -61,7 +61,7 @@ flowchart TB
 | `hifi-api` | `api_server.py` | Flask API, port 8000 |
 | `hifi-sources` | `sources_server.py` | Sources/disk/pairing API, port 8080 |
 | `hifi-vumeter` | `vu_meter_daemon.py` | VU meter shared-memory reader |
-| `hifi-firstboot` | `hifi-firstboot.sh` | One-shot: re-installs Lyrion (purged by the live-installer), then deletes its own unit — see [First boot & setup](#first-boot--setup) |
+| `hifi-firstboot` | `hifi-firstboot.sh` | One-shot: self-healing (re)install of Lyrion, then deletes its own unit — see [First boot & setup](#first-boot--setup) |
 | `squeezelite` | — | Lyrion's player client |
 | `hifi-bluealsa` | BlueALSA daemon (`-p a2dp-sink`) | Bluetooth A2DP sink backend. Disabled by default — see [Bluetooth audio](#bluetooth-audio-a2dp-sink) |
 | `hifi-bt-agent` | `bt-agent -c NoInputNoOutput` | Headless pairing agent (no PIN prompt) |
@@ -323,13 +323,15 @@ window.electronAPI.onToggleSimpleKeyboard(callback)
 
 ## First boot & setup
 
-`hifi-firstboot.service` runs exactly once. Debian's live-installer
-(`14remove-live-packages`) purges anything staged into the live image via
-chroot hooks — including the Lyrion `.deb` — so first boot re-installs it
-from `/opt/hifi-lyrion/*.deb` (falling back to downloading from
-`downloads.lms-community.org`), `apt-mark manual`s it, adds the Lyrion
-service user to the `cdrom` group (needed for the CD Player plugin), enables
-the service, then deletes its own unit file.
+`hifi-firstboot.service` runs exactly once. There is no Debian Installer
+purging staged packages anymore (see `distro/README.md` — installs now go
+through `hifi-disk-install.sh`, which `unsquashfs`'s the live filesystem
+verbatim onto the target disk, Lyrion included), but first boot still
+(re)installs Lyrion from `/opt/hifi-lyrion/*.deb` (falling back to
+downloading from `downloads.lms-community.org`) as a self-healing step —
+harmless/idempotent if it's already there — `apt-mark manual`s it, adds the
+Lyrion service user to the `cdrom` group (needed for the CD Player plugin),
+enables the service, then deletes its own unit file.
 
 The touchscreen Setup Wizard (`src/pages/SetupWizard.jsx`) then walks:
 `welcome → network → wifi-scan (optional) → audio → sources → lyrion` —

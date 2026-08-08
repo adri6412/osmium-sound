@@ -2,10 +2,26 @@
 
 Builds a self-contained, **installable Debian ISO** that turns any x86 PC into a
 commercial-style network streamer running the HiFi Player UI on top of Lyrion
-Music Server. The boot menu shows a single, branded **Install HiFi Player**
-entry (with the **same logo as the Plymouth splash**), and after install the
-machine has a **completely hidden boot** (no GRUB menu, no kernel text, branded
-Plymouth splash) that goes straight into the fullscreen player.
+Music Server. The boot menu shows two branded entries — **Install Osmium
+Sound** (default) and **Try Osmium Sound (no install)** — both booting the
+same live system; after install the machine has a **completely hidden boot**
+(no GRUB menu, no kernel text, branded Plymouth splash) that goes straight
+into the fullscreen player.
+
+> **No Debian Installer.** The installer is the Electron app itself, in a
+> different mode. There is no separate d-i environment: the "Install"
+> boot entry passes an extra kernel parameter (`hifi.installer=1`) that tells
+> the Electron app (`src/App.jsx`) to show `InstallWizard` — pick a target
+> disk, confirm, done — instead of the normal kiosk UI. The actual disk work
+> (partition/format/copy/bootloader) is done by
+> `config/includes.chroot/usr/local/sbin/hifi-disk-install.sh`, driven from
+> the installer UI via `api_server.py`'s `/install/*` endpoints (same
+> systemd-run + `/run` status-file pattern as every other long-running job in
+> this codebase, e.g. `hifi-format-disk.sh`). It `unsquashfs`'s the live
+> filesystem's own `filesystem.squashfs` straight onto the target disk (GPT:
+> 1MiB bios_grub + 512MiB EFI + rest ext4), then chroots in and runs
+> `hifi-grub-install.sh` + `hifi-finalize-boot.sh` — both unchanged from
+> before.
 
 ## Compliance Notice
 
@@ -14,14 +30,13 @@ Plymouth splash) that goes straight into the fullscreen player.
 **ISO versions v2.6.0 and later:** Lyrion is downloaded on-demand at first boot and is NOT bundled in the ISO.
 
 > **Why a live filesystem still exists.** The whole appliance (Electron app,
-> Python daemons, Lyrion, helper scripts, the `hifi` user/services) is assembled
-> in the live squashfs, and the install works by **cloning that filesystem**
-> onto the disk (`live-installer/enable=true`). That's why `build-distro.sh`
-> keeps `--debian-installer live`. The user never sees a "live" boot entry —
-> the boot menu is rewritten to a single "Install" item by the binary hook
-> `config/hooks/normal/0500-brand-boot.hook.binary`. Using
-> `--debian-installer true` would drop the live squashfs and install a plain
-> Debian without our files, making the preseed `late_command` fail.
+> Python daemons, Lyrion, helper scripts, the `hifi` user/services) is
+> assembled in the live squashfs. Booting "Try Osmium Sound" just runs that
+> squashfs live, same as any live-build ISO. Booting "Install Osmium Sound"
+> boots the *same* squashfs, then `hifi-disk-install.sh` `unsquashfs`'s the
+> squashfs image straight onto the target disk — a real copy, not a live
+> overlay clone, so the target ends up pristine regardless of anything
+> written during the live/install session itself.
 
 ## What the image contains
 
@@ -173,20 +188,26 @@ Write the ISO to a USB stick and boot the target:
 sudo dd if=hifi-player-installer.iso of=/dev/sdX bs=4M status=progress conv=fsync
 ```
 
-> The boot menu shows a single **Install HiFi Player** entry, branded with the
-> **same logo as the Plymouth splash** (gold "HiFi Player" on black), preseeded
-> to auto-start. The installation is **fully automatic**
-(preseeded — see `config/includes.installer/preseed.cfg`):
+> The boot menu shows two branded entries (gold "Osmium Sound" on black,
+> **same logo as the Plymouth splash**): **Install Osmium Sound** (default,
+> auto-starts on timeout) and **Try Osmium Sound (no install)**.
 
-- It **clones** the live system, so the `hifi` user, services and app already
-  exist → the installer **does not ask for a username/password**, language,
-  keyboard or timezone.
-- It auto-detects the **first disk** and wipes it (single partition), installs
-  GRUB, then reboots — no questions.
+Booting "Install Osmium Sound" starts the normal live session, but the
+Electron app opens straight into `InstallWizard` instead of the kiosk UI:
 
-> ⚠️ **The installer wipes the first detected disk without confirmation.** Boot
-> it only on the target appliance. To require manual disk selection instead,
-> remove the `partman/*` confirm lines from `preseed.cfg`.
+- Welcome → pick the target disk from a list (the disk backing the boot
+  medium itself is excluded) → confirm (clear "all data will be erased"
+  warning) → progress → done.
+- No username/password/language/keyboard/timezone questions — the `hifi`
+  user, services and app are already part of the squashfs being copied.
+- The target disk is wiped and repartitioned (GPT: bios_grub + EFI + ext4),
+  GRUB is installed for the machine's actual firmware mode (BIOS or UEFI,
+  detected from the live session's own boot mode), then the wizard offers a
+  reboot button.
+
+> ⚠️ **Confirming the install wipes the selected disk.** There's no "guided
+> vs manual partitioning" choice — a device is picked, and it's wiped and
+> replaced entirely (see `hifi-disk-install.sh`).
 
 After reboot the machine boots **silently** straight into the fullscreen player:
 no desktop, no login screen, no visible GRUB.
@@ -202,19 +223,25 @@ change, Settings → SSH offers a "create SSH login" form.
 Without such a login, recovery is physical: GRUB `init=/bin/bash`, or the
 kiosk's own "reset web-admin password" button on the touchscreen.
 
-### Choosing automatic vs interactive install
+### How the boot menu picks installer vs kiosk
 
 The boot menus are written by the binary hook
 `config/hooks/normal/0500-brand-boot.hook.binary`, which **autodetects** the
-real `vmlinuz`/`initrd.gz` location on the ISO (the d-i directory varies by
-version/arch — e.g. `/install` vs `/install.amd`; hardcoding it broke booting
-with "vmlinuz not found") and writes a single branded **Install HiFi Player**
-entry for both isolinux (BIOS) and grub (UEFI). It passes
-`auto=true priority=critical preseed/file=/preseed.cfg`, and the gold-on-black
-splash comes from `config/includes.binary/{isolinux,boot/grub}/splash.png`. For
-a one-off interactive install, edit the kernel line at the boot prompt (press
-`Tab` on BIOS / `e` on UEFI) and remove the
-`auto=true priority=critical preseed/file=...` part.
+live kernel/initrd location on the ISO (the exact path varies by live-build
+version/arch; hardcoding it previously broke booting with "vmlinuz not
+found") and writes two entries, for both isolinux (BIOS) and grub (UEFI),
+pointing at the **same** kernel/initrd/squashfs:
+
+- **Install Osmium Sound** (default): `... hifi.installer=1`
+- **Try Osmium Sound (no install)**: same append, without that parameter
+
+`api_server.py`'s `/boot_mode` endpoint reads `/proc/cmdline` for
+`hifi.installer=1` and `src/App.jsx` uses it to decide which UI to show. The
+gold-on-black splash comes from
+`config/includes.binary/{isolinux,boot/grub}/splash.png`. To boot into the
+kiosk UI instead of the installer for a one-off test, edit the kernel line at
+the boot prompt (press `Tab` on BIOS / `e` on UEFI) and remove
+`hifi.installer=1`, or just pick "Try Osmium Sound" from the menu.
 
 ## Audio output
 

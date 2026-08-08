@@ -66,13 +66,12 @@ update-initramfs -u 2>/dev/null || true
 update-grub 2>/dev/null || true
 
 # ── Lock the root account ────────────────────────────────────────────
-# The preseed sets a root password only because user-setup refuses "no root AND
-# no normal user" (see includes.installer/preseed.cfg) — feeding it a locked
-# value there risks turning the automated install into an interactive prompt,
-# so undo it here instead. This script runs in-target from preseed/late_command
-# (after user-setup) and in the live chroot at build time; both are places where
-# a locked root is what we want, and NO os-update apply.d invokes it, so this
-# can never fire on an already-deployed device behind the owner's back.
+# Belt-and-braces: root should already be locked, since this same script ran
+# during the live chroot build (below) and hifi-disk-install.sh just copies
+# that chroot verbatim onto the target disk. Kept here so this script stays a
+# complete, idempotent "apply the finalized boot state" step on its own — safe
+# to call from either place — and NO os-update apply.d invokes it, so this can
+# never fire on an already-deployed device behind the owner's back.
 #
 # Combined with the password-less 'hifi' from 0100-system-setup.hook.chroot, a
 # freshly installed appliance carries NO known credential; the SSH/console login

@@ -134,6 +134,16 @@ export const systemAPI = {
   // First-boot provisioning status (proxied from webui_server): { pending,
   // stage, mode, claimed_by, ap: { active, ssid, psk }, ... }
   getProvisionStatus: () => apiGet('/provision_status'),
+  // Which boot menu entry this live session started from: { mode: 'installer'|'live' }.
+  // 'installer' means App.jsx should show InstallWizard instead of the kiosk UI.
+  getBootMode: () => apiGet('/boot_mode'),
+  // Installer (InstallWizard): candidate target disks, excluding the boot medium.
+  // { success, disks: [{ path, size, model, transport, rotational }] }
+  getInstallDisks: () => apiGet('/install/disks'),
+  // Kick off hifi-disk-install.sh on the given device. { success, message? }
+  startInstall: (device) => apiPost('/install/start', { device }),
+  // Poll install progress: { state: 'running'|'done'|'error', progress, message }
+  getInstallStatus: () => apiGet('/install/status'),
   // Claim the display mode during provisioning (first writer wins). source is
   // 'screen' from the kiosk wizard. Returns { success, mode }
   setProvisionMode: (mode, source) => apiPost('/provision_mode', { mode, source }),

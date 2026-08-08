@@ -13,8 +13,9 @@ groupadd -f nopasswdlogin
 # /etc/sudoers.d/hifi. The image therefore carries no known credential — the
 # SSH/console login is created from the admin account in the provisioning
 # wizard (api_server.py set_shell_account), which gives it real sudo.
-# This also covers the installed system: the preseed clones the live filesystem
-# (live-installer/enable), so this shadow entry is what lands on disk.
+# This also covers the installed system: hifi-disk-install.sh copies the
+# live filesystem onto the target disk (unsquashfs), so this shadow entry is
+# what lands on disk.
 if ! id hifi >/dev/null 2>&1; then
     useradd -m -G audio,video,plugdev,netdev,autologin,nopasswdlogin -s /bin/bash hifi
 fi

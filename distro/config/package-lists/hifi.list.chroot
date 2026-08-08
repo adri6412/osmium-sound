@@ -119,6 +119,13 @@ cifs-utils
 samba
 exfatprogs
 
+# hifi-disk-install.sh (the Electron installer's backend): unsquashfs
+# copies the live filesystem onto the target disk, mkfs.vfat formats the
+# EFI System Partition. sfdisk/mkfs.ext4 come from util-linux/e2fsprogs,
+# already part of the base system.
+squashfs-tools
+dosfstools
+
 # mDNS/Bonjour discovery (also installed via OTA 0016 on existing systems, but
 # fresh ISOs should ship it too so \\hifiplayer.local resolves out of the box)
 avahi-daemon

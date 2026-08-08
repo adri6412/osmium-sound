@@ -1,75 +1,43 @@
 #!/bin/sh
-# HiFi Player — brand the installer boot menus and fix kernel/initrd paths.
+# HiFi Player — brand the ISO boot menus and fix kernel/initrd paths.
 #
 # Runs during live-build's *binary* stage (cwd = binary/), AFTER isolinux and
 # grub menus have been generated.
 #
-# The actual debian-installer directory on the ISO varies by version/arch
-# (e.g. /install, /install.amd, /d-i/...). Hardcoding it broke booting with
-# "vmlinuz not found". So we AUTODETECT where vmlinuz/initrd.gz really live and
-# write a branded, preseeded "Install Osmium Sound" entry (default) plus a
-# "Try Osmium Sound (no install)" entry that just boots the live squashfs
-# already on the ISO (built in because --debian-installer live is required —
-# see the comment above the `lb config` call in build-distro.sh), for both
-# isolinux (BIOS) and grub (UEFI), plus apply the gold-on-black look.
+# There is no debian-installer on this image — it's a live-only ISO. Both
+# boot menu entries below boot the SAME live kernel/initrd/squashfs; they
+# differ only by a kernel parameter (hifi.installer=1) that the Electron app
+# reads at startup (see src/App.jsx) to decide whether to show the installer
+# UI (disk picker → hifi-disk-install.sh) or the normal kiosk UI. The
+# actual live kernel/initrd path varies by live-build version/arch, so we
+# autodetect it rather than hardcoding (hardcoding it previously broke
+# booting with "vmlinuz not found").
 set -e
 
-echo "I: [hifi] branding installer boot menus (binary hook)"
+echo "I: [hifi] branding boot menus (binary hook)"
 
-# ─────────── locate the installer kernel + initrd on the ISO ───────
-# Search the binary tree for the d-i kernel; derive ISO-absolute paths.
-KPATH="$(find . -type f \( -name 'vmlinuz' -o -name 'vmlinuz.*' -o -name 'linux' \) \
-            -path '*install*' 2>/dev/null | head -n1 || true)"
-[ -n "$KPATH" ] || KPATH="$(find . -type f -name 'vmlinuz' 2>/dev/null | head -n1 || true)"
-
-if [ -z "$KPATH" ]; then
-    echo "W: [hifi] no installer vmlinuz found — leaving boot menus untouched"
-    exit 0
-fi
-
-KDIR="$(dirname "$KPATH")"                      # e.g. ./install
-IPATH="$(find "$KDIR" -maxdepth 1 -type f \( -name 'initrd.gz' -o -name 'initrd.img' -o -name 'initrd' \) 2>/dev/null | head -n1 || true)"
-[ -n "$IPATH" ] || IPATH="$(find . -type f \( -name 'initrd.gz' -o -name 'initrd.img' \) -path '*install*' 2>/dev/null | head -n1 || true)"
-
-# Convert "./install/vmlinuz" → "/install/vmlinuz" (ISO-absolute).
-KERNEL="$(printf '%s' "$KPATH" | sed 's|^\.||')"
-INITRD="$(printf '%s' "$IPATH" | sed 's|^\.||')"
-[ -n "$INITRD" ] || INITRD="${KERNEL%/*}/initrd.gz"
-
-# priority=critical, not high: the two screens we deliberately leave
-# interactive (Guided-partitioning method, and which disk) are BOTH
-# hardcoded to critical priority by their own d-i components regardless of
-# this threshold, so critical alone already gets us exactly those two
-# prompts. Anything lower would also risk exposing some other, unrelated
-# high-priority question that isn't preseeded — critical is the tightest
-# threshold that still shows the two screens we want.
-APPEND="vga=788 auto=true priority=critical preseed/file=/preseed.cfg --- quiet"
-echo "I: [hifi] installer kernel=$KERNEL initrd=$INITRD"
-
-# ─────────── locate the LIVE kernel + initrd on the ISO (optional) ─
-# Standard live-build layout puts these under /live/. Same autodetect
-# approach as the installer above: if not found, we just skip the live
-# menu entry instead of failing the whole build.
+# ─────────── locate the live kernel + initrd on the ISO ────────────
 LKPATH="$(find . -maxdepth 2 -type f \( -name 'vmlinuz' -o -name 'vmlinuz.*' -o -name 'linux' \) \
             -path '*live*' 2>/dev/null | head -n1 || true)"
-if [ -n "$LKPATH" ]; then
-    LKDIR="$(dirname "$LKPATH")"
-    LIPATH="$(find "$LKDIR" -maxdepth 1 -type f \( -name 'initrd.img' -o -name 'initrd.gz' -o -name 'initrd' \) 2>/dev/null | head -n1 || true)"
-    LIVE_KERNEL="$(printf '%s' "$LKPATH" | sed 's|^\.||')"
-    LIVE_INITRD="$(printf '%s' "$LIPATH" | sed 's|^\.||')"
-    [ -n "$LIVE_INITRD" ] || LIVE_KERNEL=""   # need both or neither
+if [ -z "$LKPATH" ]; then
+    echo "E: [hifi] no live vmlinuz found — leaving boot menus untouched" >&2
+    exit 0
 fi
-# NOTE: keep this in sync with --bootappend-live in build-distro.sh's lb config.
+LKDIR="$(dirname "$LKPATH")"
+LIPATH="$(find "$LKDIR" -maxdepth 1 -type f \( -name 'initrd.img' -o -name 'initrd.gz' -o -name 'initrd' \) 2>/dev/null | head -n1 || true)"
+[ -n "$LIPATH" ] || { echo "E: [hifi] no live initrd found next to $LKPATH" >&2; exit 0; }
+
+LIVE_KERNEL="$(printf '%s' "$LKPATH" | sed 's|^\.||')"
+LIVE_INITRD="$(printf '%s' "$LIPATH" | sed 's|^\.||')"
+echo "I: [hifi] live kernel=$LIVE_KERNEL initrd=$LIVE_INITRD"
+
+# NOTE: keep LIVE_APPEND in sync with --bootappend-live in build-distro.sh's
+# lb config call. INSTALL_APPEND is the same plus hifi.installer=1.
 LIVE_APPEND="boot=live components quiet splash loglevel=0 vt.global_cursor_default=0 hostname=hifiplayer"
-if [ -n "$LIVE_KERNEL" ]; then
-    echo "I: [hifi] live kernel=$LIVE_KERNEL initrd=$LIVE_INITRD"
-else
-    echo "W: [hifi] no live vmlinuz found — 'Try without installing' entry will be omitted"
-fi
+INSTALL_APPEND="$LIVE_APPEND hifi.installer=1"
 
 # ─────────────────────────── isolinux / BIOS ───────────────────────
 if [ -d isolinux ]; then
-    # Branded, preseeded install entry (default) with the DETECTED paths.
     cat > isolinux/menu.cfg <<EOF
 menu title Osmium Sound
 menu background splash.png
@@ -90,19 +58,14 @@ menu timeoutrow 14
 label install
     menu label ^Install Osmium Sound
     menu default
-    kernel $KERNEL
-    append initrd=$INITRD $APPEND
-EOF
-
-    if [ -n "$LIVE_KERNEL" ]; then
-        cat >> isolinux/menu.cfg <<EOF
+    kernel $LIVE_KERNEL
+    append initrd=$LIVE_INITRD $INSTALL_APPEND
 
 label live
     menu label ^Try Osmium Sound (no install)
     kernel $LIVE_KERNEL
     append initrd=$LIVE_INITRD $LIVE_APPEND
 EOF
-    fi
 
     cat > isolinux/isolinux.cfg <<'EOF'
 include menu.cfg
@@ -112,7 +75,7 @@ ui vesamenu.c32
 default install
 EOF
     # Some live-build layouts read stdmenu.cfg; neutralise it so only our
-    # single entry shows.
+    # two entries show.
     : > isolinux/stdmenu.cfg 2>/dev/null || true
 fi
 
@@ -138,19 +101,15 @@ set timeout=5
 set default=0
 
 menuentry "Install Osmium Sound" {
-    linux  $KERNEL $APPEND
-    initrd $INITRD
+    linux  $LIVE_KERNEL $INSTALL_APPEND
+    initrd $LIVE_INITRD
 }
-EOF
-    if [ -n "$LIVE_KERNEL" ]; then
-        cat >> "$gcfg" <<EOF
 
 menuentry "Try Osmium Sound (no install)" {
     linux  $LIVE_KERNEL $LIVE_APPEND
     initrd $LIVE_INITRD
 }
 EOF
-    fi
 done
 
-echo "I: [hifi] installer boot branding done"
+echo "I: [hifi] boot branding done"

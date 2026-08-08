@@ -229,6 +229,7 @@ chmod +x "$SBIN_DEST/hifi-display-mode.sh"
 chmod +x "$SBIN_DEST/hifi-factory-reset.sh"
 chmod +x "$SBIN_DEST/hifi-quiesce-audio-shutdown.sh"
 chmod +x "$SBIN_DEST/hifi-grub-install.sh"
+chmod +x "$SBIN_DEST/hifi-disk-install.sh"
 
 # Seed the installed system-components version (baseline for OTA comparison),
 # matching the UI version so a fresh image reports a real baseline.
@@ -359,26 +360,21 @@ fi
 # don't disturb the chroot we're about to reuse.
 if [ "$STAGE" != "binary" ]; then
     log "Configuring live-build (suite=$DEBIAN_SUITE arch=$ARCH)…"
-    # IMPORTANT: keep --debian-installer LIVE. The whole appliance (Electron
-    # app, python daemons, Lyrion, helper scripts, the hifi user/services) is
-    # assembled in the live filesystem (squashfs), and the install works by
-    # CLONING that filesystem onto the target (preseed: live-installer/enable=
-    # true). With --debian-installer=true there is NO live squashfs to clone,
-    # so the target gets a plain Debian without our files → the preseed
-    # late_command (hifi-finalize-install.sh) then fails with "file not found".
-    #
-    # The ISO still behaves as "installer only" because the binary hook
-    # 0500-brand-boot.hook.binary rewrites the boot menus to a SINGLE branded
-    # "Install HiFi Player" entry (no live entry is shown to the user).
+    # No debian-installer at all: this is a live-only ISO. Both boot menu
+    # entries ("Install Osmium Sound" and "Try Osmium Sound") boot the SAME
+    # live kernel/initrd/squashfs — they differ only by a kernel parameter
+    # (hifi.installer=1) that the Electron app reads at startup to decide
+    # whether to show the installer UI or the normal kiosk UI. The actual
+    # disk installation (partition/format/copy/bootloader) is driven by
+    # hifi-disk-install.sh from inside that live session, not by d-i.
+    # See config/hooks/normal/0500-brand-boot.hook.binary for the boot menu
+    # generation and distro/README.md for the full flow.
     lb config \
         --distribution "$DEBIAN_SUITE" \
         --architectures "$ARCH" \
         --archive-areas "main contrib non-free non-free-firmware" \
-        --debian-installer live \
-        --debian-installer-gui false \
         --bootloaders "syslinux,grub-efi" \
         --bootappend-live "boot=live components quiet splash loglevel=0 vt.global_cursor_default=0 hostname=hifiplayer" \
-        --bootappend-install "auto=true priority=critical preseed/file=/preseed.cfg ---" \
         --iso-application "$BRAND_NAME" \
         --iso-publisher "$BRAND_NAME" \
         --iso-volume "OSMIUM_SOUND" \
