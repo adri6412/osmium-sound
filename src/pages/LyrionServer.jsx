@@ -35,38 +35,61 @@ const TABS = [
 ];
 
 // ── Artwork with error fallback ───────────────────────────────
-// Radio/remote covers are resolved server-side by LMS on every request (see
-// the trackKey/heartbeat comment in useLyrionPlayer.js) — a single transient
-// failure (slow LMS-side resolution, flaky station art host) shouldn't be
-// enough to show the generic icon for the whole heartbeat window (up to 10s)
-// or the whole song. Retry once, shortly after, with a fresh cache-buster,
-// before giving up — a station that genuinely has no art still ends up on
-// the fallback icon, just one retry later.
+// For a remote/radio track, the cover URL gets a fresh cache-buster every
+// ~10s (see the trackKey/heartbeat comment in useLyrionPlayer.js) even
+// though the artwork itself is usually unchanged — swapping the visible
+// <img>'s src straight to the new URL forced the browser to blank it out
+// for the fetch+decode gap, a real one-frame-per-heartbeat white flash
+// confirmed on camera during steady playback. Preload the new URL in a
+// background Image() and only swap the visible <img> once it's actually
+// ready, so the old (still valid) artwork keeps showing with zero gap.
+// A load failure gets one retry, shortly after, before falling back to the
+// generic icon — a station that genuinely has no art still ends up there,
+// just one retry later.
 const ARTWORK_RETRY_MS = 1500;
 const ArtworkImage = ({ src, alt, className, FallbackIcon }) => {
-  const [err, setErr] = useState(false);
-  const [retryToken, setRetryToken] = useState(0);
-  const retriedRef = useRef(false);
-  useEffect(() => { setErr(false); retriedRef.current = false; }, [src]);
-  const handleError = () => {
-    if (!retriedRef.current) {
-      retriedRef.current = true;
-      setTimeout(() => setRetryToken((n) => n + 1), ARTWORK_RETRY_MS);
-    } else {
+  const safeSrc = src ? safeUrl(src) : null;
+  const [displayedSrc, setDisplayedSrc] = useState(safeSrc);
+  const [err, setErr] = useState(!safeSrc);
+  const loaderRef = useRef(null); // in-flight preloader; guards stale onload/onerror from an abandoned load
+
+  useEffect(() => {
+    if (!safeSrc) {
+      loaderRef.current = null;
+      setDisplayedSrc(null);
       setErr(true);
+      return;
     }
-  };
-  if (!src || err) {
+    const attemptLoad = (isRetry) => {
+      const img = new Image();
+      loaderRef.current = img;
+      img.onload = () => {
+        if (loaderRef.current !== img) return;
+        setDisplayedSrc(safeSrc);
+        setErr(false);
+      };
+      img.onerror = () => {
+        if (loaderRef.current !== img) return;
+        if (!isRetry) setTimeout(() => { if (loaderRef.current === img) attemptLoad(true); }, ARTWORK_RETRY_MS);
+        else setErr(true);
+      };
+      img.src = safeSrc;
+    };
+    attemptLoad(false);
+    return () => { loaderRef.current = null; };
+  }, [safeSrc]);
+
+  if (err || !displayedSrc) {
     return (
       <div className="absolute inset-0 flex items-center justify-center text-hifi-silver/20 bg-gradient-to-br from-hifi-gray to-hifi-dark">
         <FallbackIcon size={40} />
       </div>
     );
   }
-  const resolvedSrc = safeUrl(retryToken > 0 ? `${src}${src.includes('?') ? '&' : '?'}retry=${retryToken}` : src);
   // loading="lazy" so an album grid with hundreds of covers only fetches the
-  // ones scrolled into view (decoding off the main thread keeps scroll smooth).
-  return <img src={resolvedSrc} alt={alt} className={className} loading="lazy" decoding="async" onError={handleError} />;
+  // ones scrolled into view; harmless here since displayedSrc is only ever
+  // set once already loaded (served from cache on the actual <img> mount).
+  return <img src={displayedSrc} alt={alt} className={className} loading="lazy" decoding="async" />;
 };
 
 // Accent/case-insensitive normalization, shared by the artist/album search
