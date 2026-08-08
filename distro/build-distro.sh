@@ -369,12 +369,21 @@ if [ "$STAGE" != "binary" ]; then
     # hifi-disk-install.sh from inside that live session, not by d-i.
     # See config/hooks/normal/0500-brand-boot.hook.binary for the boot menu
     # generation and distro/README.md for the full flow.
+    #
+    # noautologin: live-config (pulled in automatically by live-build) writes
+    # its OWN lightdm autologin fragment at boot for the generic Debian-Live
+    # default account ("user"), which lands AFTER our baked-in
+    # includes.chroot/etc/lightdm/lightdm.conf.d/99-hifi-autologin.conf and
+    # wins — lightdm then tries "Can't login unknown user 'user'" and falls
+    # back to the greeter instead of autologging in as 'hifi'. This boot
+    # parameter tells live-config to leave autologin alone entirely, so our
+    # own config is the only one lightdm ever sees.
     lb config \
         --distribution "$DEBIAN_SUITE" \
         --architectures "$ARCH" \
         --archive-areas "main contrib non-free non-free-firmware" \
         --bootloaders "syslinux,grub-efi" \
-        --bootappend-live "boot=live components quiet splash loglevel=0 vt.global_cursor_default=0 hostname=hifiplayer" \
+        --bootappend-live "boot=live components quiet splash loglevel=0 vt.global_cursor_default=0 hostname=hifiplayer noautologin" \
         --iso-application "$BRAND_NAME" \
         --iso-publisher "$BRAND_NAME" \
         --iso-volume "OSMIUM_SOUND" \

@@ -33,7 +33,7 @@ echo "I: [hifi] live kernel=$LIVE_KERNEL initrd=$LIVE_INITRD"
 
 # NOTE: keep LIVE_APPEND in sync with --bootappend-live in build-distro.sh's
 # lb config call. INSTALL_APPEND is the same plus hifi.installer=1.
-LIVE_APPEND="boot=live components quiet splash loglevel=0 vt.global_cursor_default=0 hostname=hifiplayer"
+LIVE_APPEND="boot=live components quiet splash loglevel=0 vt.global_cursor_default=0 hostname=hifiplayer noautologin"
 INSTALL_APPEND="$LIVE_APPEND hifi.installer=1"
 
 # ─────────────────────────── isolinux / BIOS ───────────────────────
