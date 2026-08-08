@@ -50,6 +50,16 @@ const setNativeValue = (el, value) => {
   el.dispatchEvent(new Event('input', { bubbles: true }));
 };
 
+// How long to wait, after the last keystroke, before pushing the typed value
+// into the real underlying <input>/<textarea>. That real field usually lives
+// in some other big screen (Settings, the WiFi setup wizard, ...) whose own
+// onChange/setState re-renders that whole screen — syncing on every single
+// keystroke meant every character typed anywhere re-rendered its entire host
+// screen. The virtual keyboard already shows its own live preview of what's
+// typed (VirtualKeyboard.jsx), so the real field doesn't need to track every
+// keystroke in real time — only closely enough that it feels instant.
+const DOM_SYNC_DEBOUNCE_MS = 150;
+
 export const KeyboardProvider = ({ children }) => {
   const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
   const [activeInput, setActiveInput] = useState(null);
@@ -66,28 +76,47 @@ export const KeyboardProvider = ({ children }) => {
   activeInputRef.current = activeInput;
   inputValueRef.current = inputValue;
 
-  const showKeyboard = useCallback((inputRef, currentValue = '') => {
-    setActiveInput(inputRef);
-    setInputValue(currentValue);
-    setIsKeyboardVisible(true);
+  const syncTimerRef = useRef(null);
+  // Immediately pushes whatever's currently typed into the real field and
+  // cancels any pending debounced sync — used whenever the keyboard is about
+  // to close or switch fields, so a value never gets lost mid-debounce.
+  const flushSync = useCallback(() => {
+    clearTimeout(syncTimerRef.current);
+    const el = activeInputRef.current?.current;
+    if (el) setNativeValue(el, inputValueRef.current);
   }, []);
 
+  const showKeyboard = useCallback((inputRef, currentValue = '') => {
+    // Re-focusing the SAME field mid-debounce (e.g. tapping it again to move
+    // the caret while typing) can hand us a stale `currentValue` — it's read
+    // from the DOM before this call, which may not have caught up with the
+    // last few keystrokes yet. In that case keep our own (fresher) in-flight
+    // value instead of clobbering it; only adopt `currentValue` when this is
+    // genuinely a different field.
+    const sameField = inputRef?.current && inputRef.current === activeInputRef.current?.current;
+    if (!sameField) {
+      flushSync(); // commit whatever was pending on the previously active field
+      setInputValue(currentValue);
+    }
+    setActiveInput(inputRef);
+    setIsKeyboardVisible(true);
+  }, [flushSync]);
+
   const hideKeyboard = useCallback(() => {
+    flushSync();
     setIsKeyboardVisible(false);
     setActiveInput(null);
     setInputValue('');
-  }, []);
+  }, [flushSync]);
 
   const updateInputValue = useCallback((value) => {
-    setInputValue(value);
-    const el = activeInputRef.current?.current;
-    if (el) setNativeValue(el, value);
-  }, []);
+    setInputValue(value); // drives the virtual keyboard's own live preview
+    clearTimeout(syncTimerRef.current);
+    syncTimerRef.current = setTimeout(flushSync, DOM_SYNC_DEBOUNCE_MS);
+  }, [flushSync]);
 
   const confirmInput = useCallback(() => {
-    const el = activeInputRef.current?.current;
-    if (el) setNativeValue(el, inputValueRef.current);
-    hideKeyboard();
+    hideKeyboard(); // flushes the pending value and closes
   }, [hideKeyboard]);
 
   const toggleKeyboard = useCallback(() => {

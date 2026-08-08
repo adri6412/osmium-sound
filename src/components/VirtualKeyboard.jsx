@@ -16,6 +16,16 @@ const VirtualKeyboard = () => {
   const simpleKeyboardRef = useRef(null);
   const [isShifted, setIsShifted] = useState(false);
 
+  // Blinking preview caret, driven at a low discrete frequency instead of an
+  // infinite CSS `animation` (kept the compositor busy the entire time the
+  // keyboard was open, regardless of whether the user was actively typing).
+  const [caretOn, setCaretOn] = useState(true);
+  useEffect(() => {
+    if (!isKeyboardVisible) return;
+    const id = setInterval(() => setCaretOn((v) => !v), 500);
+    return () => clearInterval(id);
+  }, [isKeyboardVisible]);
+
   // Label shown above the preview (placeholder of the field being edited)
   const activeLabel =
     activeInput?.current?.getAttribute?.('aria-label') ||
@@ -200,7 +210,7 @@ const VirtualKeyboard = () => {
                   <span className="text-white font-mono text-lg break-all">
                     {inputValue || <span className="text-hifi-silver/40">…</span>}
                   </span>
-                  <span className="kb-caret ml-0.5 text-hifi-gold font-mono text-lg">|</span>
+                  <span className={`ml-0.5 text-hifi-gold font-mono text-lg ${caretOn ? 'opacity-100' : 'opacity-0'}`}>|</span>
                 </div>
               </div>
               <motion.button
