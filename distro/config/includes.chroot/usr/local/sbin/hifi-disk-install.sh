@@ -178,10 +178,17 @@ done
 
 chroot "$TARGET" /bin/sh -c 'systemd-machine-id-setup' >/dev/null 2>&1 || true
 
-if ! chroot "$TARGET" /bin/sh /usr/local/sbin/hifi-grub-install.sh >>/var/log/hifi/hifi-install-grub.log 2>&1; then
-    fail "installazione bootloader fallita — vedi /var/log/hifi/hifi-install-grub.log"
+# Log INSIDE the target (not the outer live session's own /var/log/hifi/,
+# which is what a plain ">>/var/log/hifi/..." redirect here would hit — the
+# redirect is opened by THIS shell, running on the live root, before chroot
+# ever switches the child process's filesystem view). Writing into $TARGET
+# means these logs survive onto the installed disk and are readable after
+# reboot, instead of vanishing with the ephemeral live session.
+mkdir -p "$TARGET/var/log/hifi"
+if ! chroot "$TARGET" /bin/sh /usr/local/sbin/hifi-grub-install.sh >>"$TARGET/var/log/hifi/hifi-install-grub.log" 2>&1; then
+    fail "installazione bootloader fallita — vedi /var/log/hifi/hifi-install-grub.log sul disco installato"
 fi
-chroot "$TARGET" /bin/sh /usr/local/sbin/hifi-finalize-boot.sh >>/var/log/hifi/hifi-install-finalize-boot.log 2>&1 || true
+chroot "$TARGET" /bin/sh /usr/local/sbin/hifi-finalize-boot.sh >>"$TARGET/var/log/hifi/hifi-install-finalize-boot.log" 2>&1 || true
 
 write_status done 100 "Installazione completata"
 log "done"
