@@ -41,11 +41,15 @@
 # once the real MBR write has already succeeded.
 #
 # For UEFI, the signed boot chain has no equivalent plain "grub-install"
-# substitute (the whole point of grub-efi-amd64-signed/shim-signed is that
-# their own postinst copies the pre-signed binaries and registers the NVRAM
-# entry), so dpkg-reconfigure remains the primary mechanism there — but its
-# result is now verified against the actual files it's supposed to produce,
-# fatal if they're missing, instead of trusting a zero exit status alone.
+# substitute — the whole point of the shim-signed/grub-efi-amd64-signed pair
+# is that shim-signed's OWN postinst copies the pre-signed binaries (shipped
+# as data-only by grub-efi-amd64-signed, which itself has no maintainer
+# script) and registers the NVRAM entry — so dpkg-reconfigure of shim-signed
+# remains the primary mechanism there. Its result is verified against the
+# actual files it's supposed to produce, fatal if they're missing, instead of
+# trusting a zero exit status alone (confirmed live: reconfiguring the wrong
+# package of the pair — grub-efi-amd64-signed — exits 0 and writes nothing,
+# since it has no postinst to run at all).
 set -eu
 
 log() { echo "I: [hifi-grub-install] $*"; }
@@ -65,9 +69,17 @@ if [ -d /sys/firmware/efi ]; then
 grub2 grub2/force_efi_extra_removable boolean true
 EOF
     export DEBIAN_FRONTEND=noninteractive
-    dpkg-reconfigure grub-efi-amd64-signed
+    # grub-efi-amd64-signed ships ONLY the raw *.efi.signed blobs under
+    # /usr/lib/grub/x86_64-efi-signed/ — confirmed via `dpkg -L`, it has no
+    # postinst/maintainer script at all (`/var/lib/dpkg/info/grub-efi-amd64-
+    # signed.postinst` doesn't exist). Reconfiguring it is a complete no-op,
+    # which is why it always "succeeded" while writing nothing. shim-signed is
+    # the package whose postinst actually copies those blobs into
+    # /boot/efi/EFI/debian/, runs grub-install for the module set, and
+    # registers the NVRAM entry — that's the one to reconfigure.
+    dpkg-reconfigure shim-signed
     if [ ! -e /boot/efi/EFI/debian/grubx64.efi ] && [ ! -e /boot/efi/EFI/debian/shimx64.efi ]; then
-        die "dpkg-reconfigure grub-efi-amd64-signed completed but no boot files were found under /boot/efi/EFI/debian — UEFI boot chain was NOT installed"
+        die "dpkg-reconfigure shim-signed completed but no boot files were found under /boot/efi/EFI/debian — UEFI boot chain was NOT installed"
     fi
     log "UEFI boot chain present under /boot/efi/EFI/debian"
 else
