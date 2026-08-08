@@ -40,46 +40,39 @@
 # for future kernel-postinst-triggered updates — its failure is NOT fatal
 # once the real MBR write has already succeeded.
 #
-# For UEFI, the signed boot chain has no equivalent plain "grub-install"
-# substitute — the whole point of the shim-signed/grub-efi-amd64-signed pair
-# is that shim-signed's OWN postinst copies the pre-signed binaries (shipped
-# as data-only by grub-efi-amd64-signed, which itself has no maintainer
-# script) and registers the NVRAM entry — so dpkg-reconfigure of shim-signed
-# remains the primary mechanism there. Its result is verified against the
-# actual files it's supposed to produce, fatal if they're missing, instead of
-# trusting a zero exit status alone (confirmed live: reconfiguring the wrong
-# package of the pair — grub-efi-amd64-signed — exits 0 and writes nothing,
-# since it has no postinst to run at all).
+# For UEFI, install the signed boot chain with a direct `grub-install`
+# invocation — the same philosophy as the BIOS branch below (the actual,
+# certain, directly-verifiable primitive, instead of trusting a package's
+# postinst). Confirmed live on the test VM that neither package in the
+# shim-signed/grub-efi-amd64-signed pair does this via dpkg-reconfigure:
+# grub-efi-amd64-signed has NO postinst at all (dpkg -L: ships only the raw
+# *.efi.signed blobs under /usr/lib/grub/x86_64-efi-signed/), and
+# shim-signed's postinst only runs its SecureBoot/DKMS safety checks and
+# stops — confirmed even with a full `apt-get install --reinstall` (not just
+# dpkg-reconfigure), still nothing written. Plain `grub-install
+# --target=x86_64-efi` DOES work — Debian's grub-install auto-detects and
+# copies the pre-signed shim/grub images when shim-signed/grub-efi-amd64-
+# signed are installed, no special flag needed — confirmed live: produced
+# grubx64.efi/shimx64.efi/BOOTX64.CSV/etc. under /boot/efi/EFI/debian/ and
+# exited 0 with "Installation finished. No error reported."
 set -eu
 
 log() { echo "I: [hifi-grub-install] $*"; }
 die() { echo "E: [hifi-grub-install] $*" >&2; exit 1; }
 
 if [ -d /sys/firmware/efi ]; then
-    log "UEFI firmware detected — configuring the signed EFI GRUB chain"
+    log "UEFI firmware detected — installing the signed EFI GRUB chain"
     findmnt -n /boot/efi >/dev/null 2>&1 || die "/boot/efi is not mounted"
-    # Also force the fallback removable-media path (\EFI\BOOT\BOOTX64.EFI), not
-    # just the NVRAM "debian" boot entry — some firmwares ignore/lose NVRAM
-    # entries. d-i's grub-installer used to do this via
-    # grub-installer/force-efi-extra-removable; that d-i component is skipped
-    # now, but the underlying grub2 debconf template is the same one its
-    # postinst reads, so setting it here reproduces the same behavior. Inert
-    # (ignored) if this package build never queries the key.
-    debconf-set-selections <<EOF
-grub2 grub2/force_efi_extra_removable boolean true
-EOF
-    export DEBIAN_FRONTEND=noninteractive
-    # grub-efi-amd64-signed ships ONLY the raw *.efi.signed blobs under
-    # /usr/lib/grub/x86_64-efi-signed/ — confirmed via `dpkg -L`, it has no
-    # postinst/maintainer script at all (`/var/lib/dpkg/info/grub-efi-amd64-
-    # signed.postinst` doesn't exist). Reconfiguring it is a complete no-op,
-    # which is why it always "succeeded" while writing nothing. shim-signed is
-    # the package whose postinst actually copies those blobs into
-    # /boot/efi/EFI/debian/, runs grub-install for the module set, and
-    # registers the NVRAM entry — that's the one to reconfigure.
-    dpkg-reconfigure shim-signed
+    grub-install --target=x86_64-efi --efi-directory=/boot/efi --bootloader-id=debian --recheck \
+        || die "grub-install (UEFI) failed"
+    # Also install to the fallback removable-media path (\EFI\BOOT\BOOTX64.EFI),
+    # not just the NVRAM "debian" boot entry — some firmwares ignore/lose NVRAM
+    # entries. Best-effort: the primary install above is what matters, this is
+    # belt-and-braces.
+    grub-install --target=x86_64-efi --efi-directory=/boot/efi --bootloader-id=debian --recheck --removable \
+        || log "WARNING: fallback removable-media GRUB install failed (non-fatal, primary install already succeeded)"
     if [ ! -e /boot/efi/EFI/debian/grubx64.efi ] && [ ! -e /boot/efi/EFI/debian/shimx64.efi ]; then
-        die "dpkg-reconfigure shim-signed completed but no boot files were found under /boot/efi/EFI/debian — UEFI boot chain was NOT installed"
+        die "grub-install completed but no boot files were found under /boot/efi/EFI/debian — UEFI boot chain was NOT installed"
     fi
     log "UEFI boot chain present under /boot/efi/EFI/debian"
 else
@@ -120,5 +113,17 @@ EOF
         log "WARNING: dpkg-reconfigure grub-pc reported an error after the direct grub-install already succeeded — debconf/device-map bookkeeping may be stale, but the MBR boot code is installed"
     fi
 fi
+
+# Regenerate the real boot menu (kernel/initrd entries) at /boot/grub/grub.cfg.
+# grub-install (UEFI) only writes a small stub in the ESP that chainloads
+# this; grub-pc's own postinst (best-effort above) normally does it too on
+# BIOS — but "the bootloader binary is in place" and "the system actually
+# boots into a kernel" are two different claims, and only update-grub proves
+# the second one. Explicit and fatal here, unlike everything after the direct
+# grub-install call above, which is genuinely cosmetic/best-effort.
+export DEBIAN_FRONTEND=noninteractive
+update-grub || die "update-grub failed — /boot/grub/grub.cfg was NOT (re)generated"
+[ -s /boot/grub/grub.cfg ] || die "update-grub completed but /boot/grub/grub.cfg is missing or empty"
+log "grub.cfg regenerated"
 
 log "done"

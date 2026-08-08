@@ -181,7 +181,7 @@ chroot "$TARGET" /bin/sh -c 'systemd-machine-id-setup' >/dev/null 2>&1 || true
 if ! chroot "$TARGET" /bin/sh /usr/local/sbin/hifi-grub-install.sh >>/var/log/hifi/hifi-install-grub.log 2>&1; then
     fail "installazione bootloader fallita — vedi /var/log/hifi/hifi-install-grub.log"
 fi
-chroot "$TARGET" /bin/sh /usr/local/sbin/hifi-finalize-boot.sh >/dev/null 2>&1 || true
+chroot "$TARGET" /bin/sh /usr/local/sbin/hifi-finalize-boot.sh >>/var/log/hifi/hifi-install-finalize-boot.log 2>&1 || true
 
 write_status done 100 "Installazione completata"
 log "done"
