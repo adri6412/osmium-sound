@@ -182,4 +182,6 @@ const Discover = ({ playerMac, artist, onPlayArtist }) => {
   );
 };
 
-export default Discover;
+// Memoized for the same reason as Settings (see that file's export comment):
+// isolates this tab from LyrionServer's 1s playback-poll re-render.
+export default React.memo(Discover);

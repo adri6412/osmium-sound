@@ -235,4 +235,6 @@ const CdRip = () => {
   );
 };
 
-export default CdRip;
+// Memoized: takes no props, so this purely stops LyrionServer's 1s
+// playback-poll re-render (musica tab) from re-rendering this subtree too.
+export default React.memo(CdRip);

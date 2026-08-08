@@ -71,4 +71,7 @@ const BluetoothNowPlaying = () => {
   );
 };
 
-export default BluetoothNowPlaying;
+// Memoized: takes no props and is mounted unconditionally at the top of
+// LyrionServer, so this purely stops the 1s playback-poll re-render from
+// reaching this subtree regardless of which tab is active.
+export default React.memo(BluetoothNowPlaying);

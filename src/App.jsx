@@ -8,7 +8,7 @@ import Screensaver from './components/Screensaver';
 import BootIntro from './components/BootIntro';
 import UsbDetectedModal from './components/UsbDetectedModal';
 import { SCALED_CANVAS_ID } from './components/ScaledCanvas';
-import { KeyboardProvider, useKeyboard } from './contexts/KeyboardContext';
+import { KeyboardProvider, useKeyboardActions } from './contexts/KeyboardContext';
 import { I18nProvider } from './i18n';
 import { lyrionApi } from './utils/lyrionApi';
 import { systemAPI } from './utils/api';
@@ -56,7 +56,7 @@ const AppContent = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   const inactivityTimer = React.useRef(null);
-  const { showKeyboard } = useKeyboard();
+  const { showKeyboard } = useKeyboardActions();
 
   const resetInactivityTimer = React.useCallback(() => {
     setIsScreensaverActive(false);

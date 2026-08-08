@@ -37,7 +37,7 @@ import { QRCodeSVG } from 'qrcode.react';
 import { systemAPI, checkApiServer } from '../utils/api';
 import { lyrionApi } from '../utils/lyrionApi';
 import { useKeyboardInput } from '../hooks/useKeyboardInput';
-import { useKeyboard } from '../contexts/KeyboardContext';
+import { useKeyboardActions } from '../contexts/KeyboardContext';
 import { useI18n } from '../i18n';
 import LanguageSelector from '../components/LanguageSelector';
 import SourcesManager from '../components/SourcesManager';
@@ -319,7 +319,7 @@ const Settings = ({ initialSection, onSectionConsumed } = {}) => {
   const shellPassRef = useKeyboardInput(shellPass, setShellPass);
   
   // Test keyboard context
-  const { showKeyboard } = useKeyboard();
+  const { showKeyboard } = useKeyboardActions();
 
   // Load system and network data on component mount
   useEffect(() => {
@@ -3679,4 +3679,8 @@ const Settings = ({ initialSection, onSectionConsumed } = {}) => {
   );
 };
 
-export default Settings;
+// Memoized: while this tab is open, LyrionServer's "now playing" state
+// (time/progress) still ticks every 1s during playback and re-renders the
+// parent. Without memo, that tick rebuilt this entire ~3700-line settings
+// tree every second even though nothing here depends on playback progress.
+export default React.memo(Settings);

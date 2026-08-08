@@ -150,17 +150,21 @@ const AzIndex = ({ items, keyField, onJump }) => {
 // hook — it needs one call per mounted row instance, which only works if
 // each row is its own component (a hook call inside the parent's .map()
 // callback would violate the rules of hooks as the list length changes).
-const TrackRow = ({ item, onPlay, onOpenMenu }) => {
+// Memoized, and takes onPlay/onOpenMenu called with the track id/coords from
+// inside rather than pre-bound per-row closures, so a stable function
+// reference can be shared across all rows (see call site) instead of a fresh
+// closure being created for every row on every rebuild of the library list.
+const TrackRow = React.memo(({ item, onPlay, onOpenMenu }) => {
   const { handlers, didLongPress } = useLongPress((x, y) => onOpenMenu(x, y, item));
   return (
     <li {...handlers}
-      onClick={() => { if (didLongPress()) return; onPlay(); }}
+      onClick={() => { if (didLongPress()) return; onPlay(item.id); }}
       className="flex items-center px-3 py-3 bg-hifi-surface hover:bg-hifi-light active:bg-hifi-light rounded-lg cursor-pointer border border-transparent hover:border-hifi-border transition-colors select-none">
       <Music size={13} className="text-hifi-silver/60 mr-3 flex-shrink-0" />
       <span className="text-sm text-white truncate">{item.title}</span>
     </li>
   );
-};
+});
 
 // ── Queue drawer row: drag handle to reorder, swipe-left to remove ─────
 // Reordering needs to shuffle SIBLING rows too, so the drag handle reports
@@ -169,7 +173,12 @@ const TrackRow = ({ item, onPlay, onOpenMenu }) => {
 // affects this one row, so that gesture stays fully local. Pointer capture on
 // the handle keeps routing move/up events to it for the whole drag even as
 // the finger crosses over other rows — exactly the behavior a reorder needs.
-const QueueRow = ({ item, idx, isCurrent, unknownArtistLabel, onJump, onRemove, onDragStart, onDragMove, onDragEnd }) => {
+// Memoized + takes the stable, non-curried actions (onJump/onRemove called
+// with idx/uid from inside, rather than pre-bound closures per row) so the
+// parent can pass the SAME function reference to every row across renders —
+// letting React.memo actually skip re-rendering rows the 1s playback-poll
+// tick (or an unrelated row's drag) doesn't affect.
+const QueueRow = React.memo(({ item, idx, isCurrent, unknownArtistLabel, onJump, onRemove, onDragStart, onDragMove, onDragEnd }) => {
   const rowRef = useRef(null);
   const [swipeX, setSwipeX] = useState(0);
   const swipeStartRef = useRef(null); // {x,y} while a candidate gesture is being watched
@@ -200,7 +209,7 @@ const QueueRow = ({ item, idx, isCurrent, unknownArtistLabel, onJump, onRemove, 
     if (!swipingRef.current) { swipeStartRef.current = null; return; }
     swipingRef.current = false;
     swipeStartRef.current = null;
-    if (swipeX < -96) onRemove();
+    if (swipeX < -96) onRemove(item._uid);
     else setSwipeX(0);
   };
 
@@ -218,7 +227,7 @@ const QueueRow = ({ item, idx, isCurrent, unknownArtistLabel, onJump, onRemove, 
         onPointerUp={endSwipe}
         onPointerCancel={endSwipe}
         style={{ touchAction: 'pan-y', transform: `translateX(${swipeX}px)` }}
-        onClick={() => { if (!didSwipeRef.current) onJump(); }}
+        onClick={() => { if (!didSwipeRef.current) onJump(idx); }}
         className={`relative flex items-center px-2 py-2 rounded-lg transition-colors ${isCurrent ? 'bg-hifi-gold/15 border border-hifi-gold/30' : 'bg-hifi-surface border border-transparent'}`}>
         <span data-drag-handle
           onPointerDown={(e) => {
@@ -247,7 +256,7 @@ const QueueRow = ({ item, idx, isCurrent, unknownArtistLabel, onJump, onRemove, 
       </motion.div>
     </li>
   );
-};
+});
 
 // ── Main component ────────────────────────────────────────────
 // Kiosk-only: the PWA build has its own screens (src/pages/pwa/) and does not
@@ -272,6 +281,15 @@ const LyrionServer = () => {
     navigateTo, goBack, goHome, goToBreadcrumb, handlePlayItem,
     resolveMenuIcon, handleMenuItem, submitMenuSearch, openTabView,
   } = useLyrionPlayer();
+
+  // `handlePlayItem` is a plain function redefined on every useLyrionPlayer()
+  // call (every 1s playback-poll tick, not wrapped in useCallback there), so
+  // anything that needs a PERMANENTLY stable "play this id" callback (to let
+  // React.memo'd rows like TrackRow actually skip re-rendering) routes
+  // through this ref instead of closing over handlePlayItem directly.
+  const handlePlayItemRef = useRef(handlePlayItem);
+  handlePlayItemRef.current = handlePlayItem;
+  const playTrackById = React.useCallback((id) => handlePlayItemRef.current('track_id', id), []);
 
   // ── Kiosk-only UI state (not part of the shared hook) ──────
   const [isPlayerExpanded, setIsPlayerExpanded] = useState(false);
@@ -302,12 +320,29 @@ const LyrionServer = () => {
   const displayQueue = queueOverride || queue;
   const dragRef = useRef({ uid: null, originalIdx: null, lastTarget: null });
 
-  const startQueueDrag = (idx, clientY) => {
+  // queueMove/queueJump/queueRemove come from useLyrionPlayer() and, like
+  // handlePlayItem above, are recreated every 1s poll tick — routed through
+  // refs so the useCallback-wrapped functions below (and jumpToQueueIndex)
+  // can stay permanently stable without depending on them directly.
+  const queueMoveRef = useRef(queueMove);
+  queueMoveRef.current = queueMove;
+  const queueRemoveRef = useRef(queueRemove);
+  queueRemoveRef.current = queueRemove;
+  const queueJumpRef = useRef(queueJump);
+  queueJumpRef.current = queueJump;
+  const jumpToQueueIndex = React.useCallback((idx) => queueJumpRef.current(idx), []);
+
+  const startQueueDrag = React.useCallback((idx, clientY) => {
     const list = queueOverride || queue;
     dragRef.current = { uid: list[idx]?._uid, originalIdx: idx, lastTarget: idx, startY: clientY };
     if (!queueOverride) setQueueOverride(list);
-  };
-  const moveQueueDrag = (clientY, rowEl) => {
+  }, [queue, queueOverride]);
+  // Only depends on `queue` (the fallback) — the in-progress override is read
+  // via the functional setQueueOverride updater's `prev`, not closed over
+  // directly, so this stays referentially stable for the whole drag gesture
+  // (called on every pointermove) instead of changing every time the
+  // override itself changes.
+  const moveQueueDrag = React.useCallback((clientY, rowEl) => {
     const d = dragRef.current;
     if (d.uid == null) return;
     const deltaY = clientY - d.startY;
@@ -326,8 +361,8 @@ const LyrionServer = () => {
       d.lastTarget = target;
       return next;
     });
-  };
-  const endQueueDrag = (rowEl) => {
+  }, [queue]);
+  const endQueueDrag = React.useCallback((rowEl) => {
     const d = dragRef.current;
     if (rowEl) rowEl.style.transform = '';
     const from = d.originalIdx;
@@ -336,23 +371,46 @@ const LyrionServer = () => {
     const list = queueOverride || queue;
     const to = list.findIndex((it) => it._uid === d.uid);
     if (to === -1 || to === from) { setQueueOverride(null); return; }
-    queueMove(from, to).then(() => setQueueOverride(null));
-  };
-  const removeQueueItem = (uid) => {
+    queueMoveRef.current(from, to).then(() => setQueueOverride(null));
+  }, [queue, queueOverride]);
+  const removeQueueItem = React.useCallback((uid) => {
     const list = queueOverride || queue;
     const idx = list.findIndex((it) => it._uid === uid);
     if (idx === -1) return;
     setQueueOverride(list.filter((it) => it._uid !== uid));
-    queueRemove(idx).then(() => setQueueOverride(null));
-  };
+    queueRemoveRef.current(idx).then(() => setQueueOverride(null));
+  }, [queue, queueOverride]);
 
   // ── Track long-press context menu (kiosk-only) ─────────────────
   const [contextMenu, setContextMenu] = useState(null); // { x, y, item } | null
-  const openTrackContextMenu = (x, y, item) => setContextMenu({ x, y, item });
+  const openTrackContextMenu = React.useCallback((x, y, item) => setContextMenu({ x, y, item }), []);
 
   // ── Artists/Albums search + A-Z jump (kiosk-only, presentation state) ──
-  const [libFilter, setLibFilter] = useState('');
-  useEffect(() => { setLibFilter(''); }, [currentView, navigationStack.length]);
+  // The search box is deliberately UNCONTROLLED (defaultValue + a ref, not
+  // value={...}): filtering re-sorts/re-filters the FULL library (up to 9999
+  // items, see fetchViewData) and rebuilds every visible row, and that
+  // rebuild is gated behind the `libraryContent` useMemo below. If the input
+  // were a controlled field feeding that same memoized tree, every keystroke
+  // would have to bust the memo just to reflect the typed character — which
+  // defeats the memo (full re-sort/re-render per keystroke, the single most
+  // expensive re-render path in this screen on weaker iGPUs). Uncontrolled
+  // means the browser owns the visible text natively; only the debounced
+  // value (committed ~200ms after typing pauses) feeds the memo/filtering.
+  const libFilterInputRef = useRef(null);
+  const libFilterTimerRef = useRef(null);
+  const [libFilterDebounced, setLibFilterDebounced] = useState('');
+  const onLibFilterChange = (e) => {
+    const val = e.target.value;
+    clearTimeout(libFilterTimerRef.current);
+    libFilterTimerRef.current = setTimeout(() => setLibFilterDebounced(val), 200);
+  };
+  const clearLibFilter = () => {
+    if (libFilterInputRef.current) libFilterInputRef.current.value = '';
+    clearTimeout(libFilterTimerRef.current);
+    setLibFilterDebounced('');
+  };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { clearLibFilter(); }, [currentView, navigationStack.length]);
   // Jump the progressive-render window past `idx` so the target row is
   // actually mounted, then scroll it into view once the DOM reflects that.
   const jumpToIndex = (idx) => {
@@ -497,7 +555,7 @@ const LyrionServer = () => {
       const field = currentView === 'artists' ? 'artist' : 'album';
       const sorted = [...libraryData].sort((a, b) =>
         (a[field] || '').localeCompare(b[field] || '', undefined, { sensitivity: 'base' }));
-      const norm = normalize(libFilter);
+      const norm = normalize(libFilterDebounced);
       const filtered = norm
         ? sorted.filter((item) => normalize(currentView === 'artists' ? item.artist : `${item.album} ${item.artist || ''}`).includes(norm))
         : sorted;
@@ -526,7 +584,7 @@ const LyrionServer = () => {
           );
         }
         return (
-          <li key={idx} data-az-index={idx}
+          <li key={item.id ?? idx} data-az-index={idx}
             onClick={() => navigateTo('albums', item.artist, { artistId: item.id })}
             className="flex items-center justify-between px-3 py-3 bg-hifi-surface hover:bg-hifi-light rounded-lg group cursor-pointer border border-transparent hover:border-hifi-border transition-colors">
             <div className="flex items-center space-x-3">
@@ -551,13 +609,14 @@ const LyrionServer = () => {
             <div className="relative">
               <input
                 type="text"
-                value={libFilter}
-                onChange={(e) => setLibFilter(e.target.value)}
+                ref={libFilterInputRef}
+                defaultValue=""
+                onChange={onLibFilterChange}
                 placeholder={t(currentView === 'artists' ? 'player.filterArtistsPlaceholder' : 'player.filterAlbumsPlaceholder')}
                 className="hifi-input w-full text-sm py-2 pr-9"
               />
-              {libFilter && (
-                <button onClick={() => setLibFilter('')}
+              {libFilterDebounced && (
+                <button onClick={clearLibFilter}
                   className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-hifi-silver/50 hover:text-white active:text-white transition-colors">
                   <X size={14} />
                 </button>
@@ -592,8 +651,8 @@ const LyrionServer = () => {
         <ul className="lib-list space-y-1 pt-1">
           {visibleItems.map((item, idx) => {
             if (currentView === 'tracks' || currentView === 'playlist_tracks') return (
-              <TrackRow key={idx} item={item}
-                onPlay={() => handlePlayItem('track_id', item.id)}
+              <TrackRow key={item.id ?? idx} item={item}
+                onPlay={playTrackById}
                 onOpenMenu={openTrackContextMenu} />
             );
 
@@ -739,22 +798,28 @@ const LyrionServer = () => {
   const libraryContent = React.useMemo(
     renderLibraryContent,
     [menuSearch, searchText, libraryLoading, currentView, libraryData,
-     visibleCount, navigationStack, activePlayer?.playerid, serverUrl, t, libFilter]
+     visibleCount, navigationStack, activePlayer?.playerid, serverUrl, t, libFilterDebounced]
   );
 
   // ── Right-panel content ────────────────────────────────────
+  // Settings/Discover are wrapped in React.memo (see their own files) so the
+  // 1s playback-poll re-render doesn't reach them — that only works if the
+  // props handed to them don't change identity every render too, hence the
+  // stable callbacks below (handlePlayItemRef declared up top, near the hook).
+  const handleSettingsSectionConsumed = React.useCallback(() => setPendingSettingsSection(null), []);
+  const handleDiscoverPlayArtist = React.useCallback((id) => handlePlayItemRef.current('artist_id', id), []);
   const renderTabContent = () => {
     if (activeTab === 'settings') {
       return (
         <SettingsPage
           initialSection={pendingSettingsSection}
-          onSectionConsumed={() => setPendingSettingsSection(null)}
+          onSectionConsumed={handleSettingsSectionConsumed}
         />
       );
     }
     if (activeTab === 'scopri') return (
       <Discover playerMac={activePlayer?.playerid} artist={currentTrack.artist}
-        onPlayArtist={(id) => handlePlayItem('artist_id', id)} />
+        onPlayArtist={handleDiscoverPlayArtist} />
     );
 
     // musica / radio / apps — library browser
@@ -1210,8 +1275,8 @@ const LyrionServer = () => {
                       {displayQueue.map((item, idx) => (
                         <QueueRow key={item._uid} item={item} idx={idx} isCurrent={idx === queueIndex}
                           unknownArtistLabel={t('player.unknownArtist')}
-                          onJump={() => queueJump(idx)}
-                          onRemove={() => removeQueueItem(item._uid)}
+                          onJump={jumpToQueueIndex}
+                          onRemove={removeQueueItem}
                           onDragStart={startQueueDrag} onDragMove={moveQueueDrag} onDragEnd={endQueueDrag} />
                       ))}
                     </ul>

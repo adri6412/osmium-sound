@@ -1,9 +1,9 @@
 import { useRef, useEffect } from 'react';
-import { useKeyboard } from '../contexts/KeyboardContext';
+import { useKeyboardActions } from '../contexts/KeyboardContext';
 
 export const useKeyboardInput = (value, onChange) => {
   const inputRef = useRef(null);
-  const { showKeyboard } = useKeyboard();
+  const { showKeyboard } = useKeyboardActions();
 
   useEffect(() => {
     const input = inputRef.current;
