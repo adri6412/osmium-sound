@@ -35,9 +35,27 @@ const TABS = [
 ];
 
 // ── Artwork with error fallback ───────────────────────────────
+// Radio/remote covers are resolved server-side by LMS on every request (see
+// the trackKey/heartbeat comment in useLyrionPlayer.js) — a single transient
+// failure (slow LMS-side resolution, flaky station art host) shouldn't be
+// enough to show the generic icon for the whole heartbeat window (up to 10s)
+// or the whole song. Retry once, shortly after, with a fresh cache-buster,
+// before giving up — a station that genuinely has no art still ends up on
+// the fallback icon, just one retry later.
+const ARTWORK_RETRY_MS = 1500;
 const ArtworkImage = ({ src, alt, className, FallbackIcon }) => {
   const [err, setErr] = useState(false);
-  useEffect(() => { setErr(false); }, [src]);
+  const [retryToken, setRetryToken] = useState(0);
+  const retriedRef = useRef(false);
+  useEffect(() => { setErr(false); retriedRef.current = false; }, [src]);
+  const handleError = () => {
+    if (!retriedRef.current) {
+      retriedRef.current = true;
+      setTimeout(() => setRetryToken((n) => n + 1), ARTWORK_RETRY_MS);
+    } else {
+      setErr(true);
+    }
+  };
   if (!src || err) {
     return (
       <div className="absolute inset-0 flex items-center justify-center text-hifi-silver/20 bg-gradient-to-br from-hifi-gray to-hifi-dark">
@@ -45,9 +63,10 @@ const ArtworkImage = ({ src, alt, className, FallbackIcon }) => {
       </div>
     );
   }
+  const resolvedSrc = safeUrl(retryToken > 0 ? `${src}${src.includes('?') ? '&' : '?'}retry=${retryToken}` : src);
   // loading="lazy" so an album grid with hundreds of covers only fetches the
   // ones scrolled into view (decoding off the main thread keeps scroll smooth).
-  return <img src={safeUrl(src)} alt={alt} className={className} loading="lazy" decoding="async" onError={() => setErr(true)} />;
+  return <img src={resolvedSrc} alt={alt} className={className} loading="lazy" decoding="async" onError={handleError} />;
 };
 
 // Accent/case-insensitive normalization, shared by the artist/album search

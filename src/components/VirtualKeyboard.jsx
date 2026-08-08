@@ -47,10 +47,21 @@ const VirtualKeyboard = () => {
     };
   }, [isKeyboardVisible]);
 
-  // Initialize SimpleKeyboard when component mounts and keyboard is visible
+  // Initialize SimpleKeyboard when component mounts and keyboard is visible.
+  //
+  // IMPORTANT: this effect must NOT depend on `inputValue`/`updateInputValue`.
+  // simple-keyboard drives key-repeat (holding a key down) via an internal
+  // setTimeout chain that isn't cancelled by destroy() — if this effect were
+  // re-run (destroying the live instance and creating a new one) while a key
+  // is still physically held, the orphaned old instance's repeat loop keeps
+  // firing onChange forever (observed as a single key, e.g. the first one
+  // touched, spamming itself). `inputValue` changes on every keystroke via
+  // onChange below, so keeping it in the deps array recreated the instance
+  // on every keystroke and made that race trivial to hit. Syncing `inputValue`
+  // back into the keyboard is already handled by the separate effect below.
   useEffect(() => {
     if (isKeyboardVisible && keyboardRef.current && !simpleKeyboardRef.current) {
-      simpleKeyboardRef.current = new SimpleKeyboard(keyboardRef.current, {
+      const instance = new SimpleKeyboard(keyboardRef.current, {
         layout: {
           default: [
             '1 2 3 4 5 6 7 8 9 0',
@@ -88,6 +99,9 @@ const VirtualKeyboard = () => {
           }
         ],
         onKeyPress: (button) => {
+          // Guard against a stale/orphaned instance (see comment above) still
+          // calling back after a newer instance has replaced it.
+          if (simpleKeyboardRef.current !== instance) return;
           if (button === '{shift}') {
             setIsShifted((prev) => {
               const next = !prev;
@@ -97,9 +111,11 @@ const VirtualKeyboard = () => {
           }
         },
         onChange: (input) => {
+          if (simpleKeyboardRef.current !== instance) return;
           updateInputValue(input);
         }
       });
+      simpleKeyboardRef.current = instance;
     }
 
     // Cleanup when keyboard is hidden
@@ -115,7 +131,8 @@ const VirtualKeyboard = () => {
         simpleKeyboardRef.current = null;
       }
     };
-  }, [isKeyboardVisible, inputValue, updateInputValue]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isKeyboardVisible]);
 
   // Update keyboard input when inputValue changes
   useEffect(() => {
