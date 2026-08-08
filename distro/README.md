@@ -84,17 +84,15 @@ The VU meter works because the Debian `squeezelite` package is built with
 `config/includes.chroot/etc/default/squeezelite`), which exports
 `/dev/shm/squeezelite-*` for the VU daemon.
 
-Lyrion Music Server is installed during the chroot stage by
-`config/hooks/normal/0050-install-lyrion.hook.chroot`. The hook downloads the
-`.deb` on-demand, installs it with `apt-get`, and immediately removes the file
-(the installed package metadata remains). It is **not** placed in the ISO itself.
+Lyrion Music Server is **not** installed at image-build time at all — it's
+absent from both the live squashfs and every disk install (a live/"Try Osmium
+Sound" session has no Lyrion, by design; see the Compliance Notice above).
 
-> **Lyrion on the installed system.** The installer clones the live filesystem
-> (including the installed Lyrion package via dpkg metadata), and on first boot
-> of the real system, `hifi-firstboot.service` ensures Lyrion is up-to-date by
-> downloading and re-installing the current stable `.deb`. It then self-disables.
-> It runs only outside the live session (`ConditionKernelCommandLine=!boot=live`).
-> If first boot has no network, it retries on the next boot.
+> **Lyrion on the installed system.** On first boot of the real (installed)
+> system, `hifi-firstboot.service` downloads and installs the current stable
+> `.deb`, enables the service, then self-disables. It runs only outside the
+> live session (`ConditionKernelCommandLine=!boot=live`). If first boot has no
+> network, it retries on the next boot.
 
 ## Prerequisites (on the build server)
 

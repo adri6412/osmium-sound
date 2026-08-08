@@ -1,15 +1,16 @@
 #!/bin/sh
 # HiFi Player appliance — first-boot finalisation on the INSTALLED system.
 #
-# The debian-installer step /usr/lib/finish-install.d/14remove-live-packages
-# (live-installer) runs AFTER preseed/late_command and PURGES packages that were
-# added in the live image via chroot hooks — including Lyrion Music Server. So we
-# cannot rely on the install carrying Lyrion over; instead we (re)install it here,
-# on the first boot of the real system, then self-disable.
+# Lyrion Music Server is deliberately NOT installed at image-build time (see
+# distro/README.md's Compliance Notice) — it's downloaded fresh and installed
+# here, on the first boot of the real system, then this unit self-disables.
+# $LYRION_DIR is checked first only in case some future build stages a .deb
+# there; today nothing does, so this always falls through to the curl
+# download below.
 #
-# Invoked by hifi-firstboot.service (oneshot). Runs only on the installed system
-# (the unit has ConditionKernelCommandLine=!boot=live), so it never touches the
-# staged .deb while still in the live session (which the installer needs to clone).
+# Invoked by hifi-firstboot.service (oneshot). Runs only on the installed
+# system (ConditionKernelCommandLine=!boot=live) — a live/"Try Osmium Sound"
+# session never has Lyrion at all, by design.
 set +e
 
 LYRION_DIR=/opt/hifi-lyrion
