@@ -165,7 +165,15 @@ rm -f "$TARGET/etc/machine-id" "$TARGET/var/lib/dbus/machine-id" 2>/dev/null || 
 # ─────────────────────────── bootloader ───────────────────────────────
 write_status running 88 "Installazione bootloader…"
 for fs in dev proc sys; do
-    mount --bind "/$fs" "$TARGET/$fs" || fail "bind mount /$fs fallito"
+    # --rbind, not --bind: a plain bind of /sys does NOT carry through the
+    # efivarfs mounted at /sys/firmware/efi/efivars (a separate mount nested
+    # inside sysfs), so the chroot would see an empty efivars dir. That's
+    # enough for the "[ -d /sys/firmware/efi ]" UEFI detection in
+    # hifi-grub-install.sh to pass, but not enough for dpkg-reconfigure
+    # grub-efi-amd64-signed to actually write the signed boot chain — it
+    # reports success while writing nothing. --rbind carries every nested
+    # mount (efivars, devpts, ...) through instead.
+    mount --rbind "/$fs" "$TARGET/$fs" || fail "bind mount /$fs fallito"
 done
 
 chroot "$TARGET" /bin/sh -c 'systemd-machine-id-setup' >/dev/null 2>&1 || true
