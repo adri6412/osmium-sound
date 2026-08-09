@@ -39,12 +39,13 @@ echo "          System lets the user pick their real one)"
 ln -sf /usr/share/zoneinfo/UTC /etc/localtime
 echo 'Etc/UTC' > /etc/timezone
 
-echo "I: [hifi] enabling NTP time sync (systemd-timesyncd, ships with systemd already —"
-echo "          no extra package needed). This appliance has no on-screen clock/timezone"
-echo "          setup step, and units built from old/refurbished hardware can have a dead"
-echo "          CMOS battery, so without this the clock (and any TLS/OTA signature checks"
-echo "          that depend on it) silently drifts. live-build's policy-rc.d blocks the"
-echo "          package-postinst auto-enable during the chroot build, so this must be explicit."
+echo "I: [hifi] enabling NTP time sync (systemd-timesyncd — a separate package on Debian"
+echo "          12, NOT bundled into systemd itself; see the package list). This appliance"
+echo "          has no on-screen clock/timezone setup step, and units built from"
+echo "          old/refurbished hardware can have a dead CMOS battery, so without this the"
+echo "          clock (and any TLS/OTA signature checks that depend on it) silently drifts."
+echo "          live-build's policy-rc.d blocks the package-postinst auto-enable during the"
+echo "          chroot build, so this must be explicit even with the package present."
 systemctl enable systemd-timesyncd.service || true
 
 echo "I: [hifi] SSH installed but OFF by default (user enables it from Settings)"
