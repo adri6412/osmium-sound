@@ -23,6 +23,7 @@ const sections = computed(() => [
   { key: 'tailscale', label: t('settings.sections.tailscale.label'), desc: t('settings.sections.tailscale.desc') },
   { key: 'lyrion',    label: t('settings.sections.lyrion.label'),    desc: t('settings.sections.lyrion.desc') },
   { key: 'display',   label: t('settings.sections.display.label'),   desc: t('settings.sections.display.desc') },
+  { key: 'timezone',  label: t('settings.sections.timezone.label'),  desc: t('settings.sections.timezone.desc') },
   { key: 'updates',   label: t('settings.sections.updates.label'),   desc: t('settings.sections.updates.desc') },
   { key: 'companion', label: t('settings.sections.companion.label'), desc: t('settings.sections.companion.desc') },
   { key: 'account',   label: t('settings.sections.account.label'),   desc: t('settings.sections.account.desc') },
@@ -284,6 +285,7 @@ const lyrion = reactive({
   channel: 'release',
   current: '',
   channels: {},          // { release|nightly|dev: { version, url } }
+  updateAvailable: false, // is channels[channel].version newer than `current`?
   busy: false, installing: false, progress: 0, message: '', error: '',
 });
 const LYRION_CHANNELS = ['release', 'nightly', 'dev'];
@@ -303,6 +305,7 @@ async function loadLyrion() {
     lyrion.channels = r.data.channels || {};
     if (r.data.channel) lyrion.channel = r.data.channel;
     lyrion.error = r.data.error || '';
+    lyrion.updateAvailable = !!r.data.update_available;
   }
   lyrion.busy = false;
 }
@@ -330,7 +333,7 @@ async function installLyrion() {
     const s = await api.sys('updates/lyrion/status');
     const d = s.data || {};
     if (typeof d.progress === 'number') lyrion.progress = d.progress;
-    if (d.message) lyrion.message = d.message;
+    if (d.state) lyrion.message = progressStateMessage(d.state, d.message || '');
     if (d.state === 'done' || d.state === 'error') {
       clearInterval(lyrionPoll); lyrionPoll = null;
       lyrion.installing = false;
@@ -362,6 +365,26 @@ async function setUiRes(m) {
   const r = await api.sysPost('ui_resolution', { mode: m });
   if (r.ok && r.data.success !== false) { uiRes.value = r.data.mode || m; say(bodyMsg(r, t('settings.display.resolutionChanged'))); }
   else say(bodyMsg(r, t('settings.display.resolutionFailed')), true);
+}
+
+// ── Timezone ────────────────────────────────────────────────────────
+// Fresh installs default to UTC (no timezone question in the installer —
+// see distro/README.md), so this is the only place to actually correct it.
+const timezone = ref('');
+const timezoneList = ref([]);
+const timezoneBusy = ref(false);
+async function loadTimezone() {
+  const [tz, list] = await Promise.all([api.sys('timezone'), api.sys('timezones')]);
+  if (tz.ok) timezone.value = tz.data.timezone;
+  if (list.ok && Array.isArray(list.data.timezones)) timezoneList.value = list.data.timezones;
+}
+async function setTimezone(tz) {
+  if (!tz || tz === timezone.value) return;
+  timezoneBusy.value = true;
+  const r = await api.sysPost('timezone', { timezone: tz });
+  timezoneBusy.value = false;
+  if (r.ok && r.data.success !== false) { timezone.value = r.data.timezone || tz; say(bodyMsg(r, t('settings.timezone.changed'))); }
+  else say(bodyMsg(r, t('settings.timezone.changeFailed')), true);
 }
 
 // ── Animated VU meter ──────────────────────────────────────────────
@@ -442,12 +465,23 @@ function closeChangelog() { changelog.open = false; }
 // plan persisted under /var/lib). This page only starts it and renders its
 // progress, so losing the browser — or this very daemon, which the system
 // bundle restarts — no longer interrupts anything.
+// The shell scripts driving each step (hifi-os-update.sh, hifi-system-update.sh)
+// write free-text `message` in Italian only — not locale-aware. `state` is the
+// one locale-neutral field they emit, so that's what drives the UI text; the
+// raw message is kept only for 'error' (a diagnostic reason, not meant to be
+// pretty) and as a last-resort fallback for an unrecognized state.
+function progressStateMessage(state, rawMessage) {
+  if (state === 'error') return rawMessage || t('settings.updates.genericError');
+  const known = ['starting', 'downloading', 'verifying', 'applying', 'restarting', 'done'];
+  return known.includes(state) ? t(`settings.updates.progressState.${state}`) : rawMessage;
+}
+
 function renderPlan(s) {
   applying.kind = s.kind || '';
   applying.label = kindLabels.value[s.kind] || '';
   applying.state = s.step_state || s.state || '';
   applying.progress = (typeof s.overall_progress === 'number') ? s.overall_progress : null;
-  applying.message = s.message || '';
+  applying.message = progressStateMessage(applying.state, s.message || '');
   applying.doneList = (s.steps || []).filter(x => x.state === 'done')
     .map(x => kindLabels.value[x.kind] || x.kind);
 }
@@ -675,7 +709,7 @@ async function saveBackupScheduled(v) {
 
 onMounted(async () => {
   loadNet(); loadAudio(); loadDsp(); loadFir(); loadToggles(); loadShell(); loadLms(); loadLyrion();
-  loadMode(); loadUiRes(); loadVuMeter(); loadChannel(); checkAll(); resumePlanIfRunning(); loadBackups(); loadTailscale();
+  loadMode(); loadUiRes(); loadTimezone(); loadVuMeter(); loadChannel(); checkAll(); resumePlanIfRunning(); loadBackups(); loadTailscale();
 });
 onUnmounted(() => { if (lyrionPoll) clearInterval(lyrionPoll); if (tailscalePoll) clearInterval(tailscalePoll); });
 </script>
@@ -836,7 +870,7 @@ onUnmounted(() => { if (lyrionPoll) clearInterval(lyrionPoll); if (tailscalePoll
         <p class="sub" style="margin-top: 12px;">{{ t('settings.lyrion.internalHint') }}</p>
         <div class="between item">
           <span>{{ t('settings.lyrion.installed') }}
-            <span class="muted">{{ lyrion.current || t('settings.lyrion.notInstalled') }}</span>
+            <span class="muted">{{ lyrion.current || t('settings.lyrion.notInstalled') }}<template v-if="lyrion.current && lyrion.updateAvailable"> → <span class="gold">{{ lyrion.channels[lyrion.channel] && lyrion.channels[lyrion.channel].version }}</span></template><template v-else-if="lyrion.current"> · {{ t('settings.updates.upToDate') }}</template></span>
           </span>
           <a v-if="lyrion.current" :href="`http://${host}:9000`" target="_blank">{{ t('settings.lyrion.open') }}</a>
         </div>
@@ -906,6 +940,20 @@ onUnmounted(() => { if (lyrionPoll) clearInterval(lyrionPoll); if (tailscalePoll
         <button :class="{ active: vuMeter }" @click="setVuMeter(true)">{{ t('settings.display.vuMeterOn') }}</button>
         <button :class="{ active: !vuMeter }" @click="setVuMeter(false)">{{ t('settings.display.vuMeterOff') }}</button>
       </span>
+    </div>
+
+    <!-- Timezone -->
+    <div class="card" v-if="open === 'timezone'">
+      <p class="sub">{{ t('settings.timezone.hint') }}</p>
+      <div class="between item">
+        <span>{{ t('settings.timezone.current') }}
+          <span class="muted">{{ timezone }}</span>
+        </span>
+      </div>
+      <label>{{ t('settings.timezone.pick') }}</label>
+      <select :value="timezone" :disabled="timezoneBusy" @change="setTimezone($event.target.value)">
+        <option v-for="tz in timezoneList" :key="tz" :value="tz">{{ tz }}</option>
+      </select>
     </div>
 
     <!-- Updates -->

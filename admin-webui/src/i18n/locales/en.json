@@ -119,6 +119,10 @@
         "label": "Display mode",
         "desc": "On-screen interface or headless"
       },
+      "timezone": {
+        "label": "Timezone",
+        "desc": "The device's clock"
+      },
       "updates": {
         "label": "Updates",
         "desc": "Stable/dev channel, 4 components"
@@ -282,6 +286,13 @@
       "vuMeterChanged": "VU meter preference saved",
       "vuMeterFailed": "Could not save the preference"
     },
+    "timezone": {
+      "hint": "A fresh install has no way to ask for this, so it defaults to UTC — pick the device's real one here.",
+      "current": "Current",
+      "pick": "Change timezone",
+      "changed": "Timezone changed",
+      "changeFailed": "Could not change the timezone"
+    },
     "updates": {
       "channel": "Channel",
       "channelDev": "development (dev)",
@@ -310,7 +321,15 @@
       "kindOs": "Operating system",
       "updating": "Updating {label}",
       "whatsNew": "What's new",
-      "changelogTitle": "What's new in {version}"
+      "changelogTitle": "What's new in {version}",
+      "progressState": {
+        "starting": "Starting…",
+        "downloading": "Downloading update…",
+        "verifying": "Verifying…",
+        "applying": "Applying changes…",
+        "restarting": "Restarting…",
+        "done": "Done"
+      }
     },
     "companion": {
       "hint": "Scan the QR code from the Osmium Sound Companion app to pair your phone.",

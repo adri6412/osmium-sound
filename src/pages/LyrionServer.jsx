@@ -132,7 +132,20 @@ const usePolledArtwork = (url) => {
       return;
     }
     const myRequestId = ++requestIdRef.current;
-    const attempt = async (isRetry) => {
+    // A local track's safeSrc/trackKey doesn't change again until the *next*
+    // song (unlike a remote/radio one, re-keyed every ~10s by the heartbeat in
+    // useLyrionPlayer.js) — so a single fetch failure here used to be
+    // permanent: one retry, then give up, leaving the *previous* track's art
+    // (still sitting in objectUrl/hashRef from the last successful fetch)
+    // displayed as if it were current for the rest of the song, with no
+    // visible failure state (see the old `failed && !objectUrl` below, which
+    // suppressed `failed` entirely once anything had ever succeeded once).
+    // Retrying several times over a few seconds instead of once means a
+    // transient blip (the kind of thing that tends to line up with the
+    // display waking from the in-app screensaver) self-heals instead of
+    // freezing the cover for an entire song.
+    const MAX_ATTEMPTS = 5;
+    const attempt = async (attemptNum) => {
       try {
         const res = await fetch(safeSrc);
         if (!res.ok) throw new Error(`http ${res.status}`);
@@ -149,17 +162,30 @@ const usePolledArtwork = (url) => {
         if (prevObjectUrl) URL.revokeObjectURL(prevObjectUrl);
       } catch {
         if (requestIdRef.current !== myRequestId) return;
-        if (!isRetry) setTimeout(() => { if (requestIdRef.current === myRequestId) attempt(true); }, ARTWORK_RETRY_MS);
-        else setFailed(true);
+        if (attemptNum < MAX_ATTEMPTS) {
+          setTimeout(() => { if (requestIdRef.current === myRequestId) attempt(attemptNum + 1); }, ARTWORK_RETRY_MS);
+        } else {
+          // Every retry failed — this isn't a one-off blip. Stop displaying the
+          // previous track's cover as if it were current: drop it and fall
+          // back to the placeholder icon instead of a confidently wrong image.
+          hashRef.current = null;
+          if (objectUrlRef.current) { URL.revokeObjectURL(objectUrlRef.current); objectUrlRef.current = null; }
+          setObjectUrl(null);
+          setFailed(true);
+        }
       }
     };
-    attempt(false);
+    attempt(1);
   }, [safeSrc]);
 
   // Release the last object URL when this instance goes away entirely.
   useEffect(() => () => { if (objectUrlRef.current) URL.revokeObjectURL(objectUrlRef.current); }, []);
 
-  return { objectUrl, failed: failed && !objectUrl };
+  // `failed` now genuinely means "gave up after MAX_ATTEMPTS" (objectUrl is
+  // already cleared in that case above) — no need to re-derive/mask it here
+  // the way the old `failed && !objectUrl` did, which is what let a stale
+  // objectUrl suppress the failure state and keep showing the wrong cover.
+  return { objectUrl, failed };
 };
 
 // Accent/case-insensitive normalization, shared by the artist/album search

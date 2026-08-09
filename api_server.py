@@ -19,6 +19,7 @@ import queue
 import zipfile
 import io
 from hifi_logging import get_logger
+from hifi_i18n import t as _t
 
 app = Flask(__name__)
 # This API is bound to 127.0.0.1 only (see the bottom of this file) and has no
@@ -47,6 +48,22 @@ def add_security_headers(response):
     response.headers['X-XSS-Protection'] = '1; mode=block'
     response.headers['Strict-Transport-Security'] = 'max-age=31536000; includeSubDomains'
     return response
+
+def _lang():
+    """Caller's UI language, sent as a header by both frontends (admin-webui's
+    api.js, the kiosk's src/utils/api.js) on every request so responses built
+    here — see hifi_i18n.py — come back in whichever language the owner
+    picked, instead of always Italian.
+
+    Some of the functions that call this are also invoked outside a Flask
+    request (the update sequencer, unit tests calling handlers directly) —
+    there's no caller language to read there, so fall back to the default
+    rather than blow up with a "working outside of request context" error."""
+    try:
+        v = request.headers.get('X-UI-Lang')
+    except RuntimeError:
+        return 'it'
+    return v if v in ('en', 'it') else 'it'
 
 # ──────────────────────────────────────────────────────────────────
 #  OTA update of the Electron UI (whole /opt/hifi-media-player dir).
@@ -502,12 +519,12 @@ def wifi_scan():
             })
     except Exception:
         log.exception("wifi_scan failed")
-        return {'networks': [], 'error': 'Scansione WiFi fallita'}
+        return {'networks': [], 'error': _t('network.scanFailed', _lang())}
     return {'networks': networks}
 
 def wifi_connect(ssid, password):
     if not ssid:
-        return {'success': False, 'message': 'SSID mancante'}
+        return {'success': False, 'code': 'network.ssidMissing', 'message': _t('network.ssidMissing', _lang())}
     # ssid/password are passed as argv to nmcli (no shell), but a value that
     # starts with '-' or carries control characters could still be parsed as a
     # flag or break the command line. Validate with an anchored regexp (no
@@ -515,38 +532,45 @@ def wifi_connect(ssid, password):
     safe_arg = re.compile(r'(?!-)[^\x00-\x1f]+')
     for label, value in (('SSID', ssid), ('password', password or '')):
         if value and not safe_arg.fullmatch(value):
-            return {'success': False, 'message': f'{label} non valido'}
+            return {'success': False, 'code': 'network.invalidField',
+                    'message': _t('network.invalidField', _lang(), label=label)}
     cmd = ['nmcli', 'device', 'wifi', 'connect', ssid]
     if password:
         cmd += ['password', password]
     try:
         r = _run(cmd, timeout=45)
     except subprocess.TimeoutExpired:
-        return {'success': False, 'message': 'Timeout durante la connessione'}
+        return {'success': False, 'code': 'network.connectTimeout',
+                'message': _t('network.connectTimeout', _lang())}
     except Exception:
         log.exception("wifi_connect failed")
-        return {'success': False, 'message': 'Connessione fallita'}
+        return {'success': False, 'code': 'network.connectFailed',
+                'message': _t('network.connectFailed', _lang())}
     if r.returncode == 0:
         device, _ = _active_device() or (None, None)
+        msg = _t('network.connected', _lang(), ssid=ssid)
         if device:
             ip = _ensure_dhcp_ip(device)
-            return {'success': True, 'message': f'Connesso a {ssid}', 'ip': ip}
-        return {'success': True, 'message': f'Connesso a {ssid}', 'ip': None}
-    return {'success': False, 'message': (r.stderr or r.stdout).strip() or 'Connessione fallita'}
+            return {'success': True, 'message': msg, 'ip': ip}
+        return {'success': True, 'message': msg, 'ip': None}
+    return {'success': False, 'code': 'network.connectFailed',
+            'message': (r.stderr or r.stdout).strip() or _t('network.connectFailed', _lang())}
 
 def wired_dhcp():
     eth = _first_device_of_type('ethernet')
     if not eth:
-        return {'success': False, 'message': 'Nessuna interfaccia Ethernet trovata'}
+        return {'success': False, 'code': 'network.noEthernet', 'message': _t('network.noEthernet', _lang())}
     try:
         r = _run(['nmcli', 'device', 'connect', eth], timeout=45)
     except Exception:
         log.exception("wired_dhcp failed")
-        return {'success': False, 'message': 'Connessione via cavo fallita'}
+        return {'success': False, 'code': 'network.wiredFailed', 'message': _t('network.wiredFailed', _lang())}
     ip = _ensure_dhcp_ip(eth)
     if ip:
-        return {'success': True, 'message': 'Connesso via cavo', 'ip': ip}
-    return {'success': False, 'message': (r.stderr or r.stdout).strip() or 'Cavo non connesso', 'ip': ip}
+        return {'success': True, 'code': 'network.wiredConnected',
+                'message': _t('network.wiredConnected', _lang()), 'ip': ip}
+    return {'success': False, 'code': 'network.cableNotConnected',
+            'message': (r.stderr or r.stdout).strip() or _t('network.cableNotConnected', _lang()), 'ip': ip}
 
 # ──────────────────────────────────────────────────────────────────
 #  Audio output (DAC) selection for squeezelite — used by the wizard.
@@ -585,7 +609,7 @@ def list_audio_devices():
     except Exception:
         log.exception("list_audio_devices failed")
         return {'devices': devices, 'current': _current_real_dac(),
-                'error': 'Lettura dispositivi audio fallita'}
+                'error': _t('audio.listDevicesFailed', _lang())}
     return {'devices': devices, 'current': _current_real_dac()}
 
 def _current_audio_device():
@@ -605,12 +629,13 @@ def _current_audio_device():
 def set_audio_device(device):
     """Rewrite the -o option in /etc/default/squeezelite and restart it."""
     if not device:
-        return {'success': False, 'message': 'Device mancante'}
+        return {'success': False, 'code': 'audio.deviceMissing', 'message': _t('audio.deviceMissing', _lang())}
 
     # Validate device is one of the valid audio device IDs from list_audio_devices()
     valid_devices = [d['id'] for d in list_audio_devices()['devices']]
     if device not in valid_devices:
-        return {'success': False, 'message': f'Dispositivo audio non valido: {device}'}
+        return {'success': False, 'code': 'audio.invalidDevice',
+                'message': _t('audio.invalidDevice', _lang(), device=device)}
 
     # When the DSP engine is ON, the chosen DAC is CamillaDSP's *playback*
     # device — squeezelite stays pointed at the Loopback. Re-apply the DSP
@@ -622,8 +647,9 @@ def set_audio_device(device):
                 _apply_dsp_on(device, st['bands'], st['crossfeed'], st['room_correction'], st['balance'])
         except Exception:
             log.exception("set_audio_device (DSP) failed")
-            return {'success': False, 'message': 'Impostazione uscita (DSP) fallita'}
-        return {'success': True, 'message': f'Uscita audio (DSP) impostata su {device}'}
+            return {'success': False, 'code': 'audio.dspOutputFailed',
+                    'message': _t('audio.dspOutputFailed', _lang())}
+        return {'success': True, 'message': _t('audio.dspOutputSet', _lang(), device=device)}
 
     try:
         with open(SQUEEZELITE_DEFAULT) as f:
@@ -651,16 +677,18 @@ def set_audio_device(device):
             f.write(content)
     except Exception:
         log.exception("set_audio_device: write config failed")
-        return {'success': False, 'message': 'Scrittura configurazione fallita'}
+        return {'success': False, 'code': 'audio.writeConfigFailed',
+                'message': _t('audio.writeConfigFailed', _lang())}
 
     try:
         r = _run(['systemctl', 'restart', 'squeezelite'], timeout=30)
         if r.returncode != 0:
-            return {'success': True, 'message': f'Device impostato ({device}); riavvio squeezelite: {(r.stderr or "").strip()}'}
+            return {'success': True, 'message': _t('audio.deviceSetRestartWarn', _lang(),
+                    device=device, err=(r.stderr or '').strip())}
     except Exception:
         log.exception("set_audio_device: squeezelite restart failed")
-        return {'success': True, 'message': f'Device impostato ({device}); riavvio non riuscito'}
-    return {'success': True, 'message': f'Uscita audio impostata su {device}'}
+        return {'success': True, 'message': _t('audio.deviceSetRestartFailed', _lang(), device=device)}
+    return {'success': True, 'message': _t('audio.outputSet', _lang(), device=device)}
 
 # ── Multiroom: which Lyrion server this device's squeezelite follows ──
 # Standalone (default) is squeezelite's own local LMS (-s 127.0.0.1). "Follow"
@@ -687,28 +715,34 @@ def set_lms_role(mode, host):
         target = '127.0.0.1'
     elif mode == 'follow':
         if not _valid_ipv4(host):
-            return {'success': False, 'message': f'Indirizzo IP non valido: {host}'}
+            return {'success': False, 'code': 'lms.invalidIp',
+                    'message': _t('lms.invalidIp', _lang(), host=host)}
         if host == '127.0.0.1':
-            return {'success': False, 'message': 'Usa la modalità "Questo dispositivo" per il server locale'}
+            return {'success': False, 'code': 'lms.useLocalMode',
+                    'message': _t('lms.useLocalMode', _lang())}
         target = host
     else:
-        return {'success': False, 'message': f'Modalità non valida: {mode}'}
+        return {'success': False, 'code': 'lms.invalidMode',
+                'message': _t('lms.invalidMode', _lang(), mode=mode)}
 
     _, args = _read_sq_args()
     if args is None:
-        return {'success': False, 'message': 'Configurazione squeezelite non trovata'}
+        return {'success': False, 'code': 'lms.sqConfigMissing',
+                'message': _t('lms.sqConfigMissing', _lang())}
     _write_sq_args(_sq_set_s(args, target))
 
     try:
         r = _run(['systemctl', 'restart', 'squeezelite'], timeout=30)
         if r.returncode != 0:
             return {'success': True, 'host': target if mode == 'follow' else None,
-                    'message': f'Server impostato ({target}); riavvio squeezelite: {(r.stderr or "").strip()}'}
+                    'message': _t('lms.serverSetRestartWarn', _lang(),
+                                  target=target, err=(r.stderr or '').strip())}
     except Exception:
         log.exception("set_lms_role: squeezelite restart failed")
         return {'success': True, 'host': target if mode == 'follow' else None,
-                'message': f'Server impostato ({target}); riavvio non riuscito'}
-    msg = 'Ripristinato il server Lyrion locale' if mode == 'local' else f'Server Lyrion impostato su {target}'
+                'message': _t('lms.serverSetRestartFailed', _lang(), target=target)}
+    msg = (_t('lms.localRestored', _lang()) if mode == 'local'
+           else _t('lms.serverSet', _lang(), target=target))
     return {'success': True, 'host': target if mode == 'follow' else None, 'message': msg}
 
 # ── Player name (-n) — every device ships as "OsmiumSound" by default, which
@@ -734,10 +768,12 @@ def get_player_name():
 
 def set_player_name(name):
     if not _valid_player_name(name):
-        return {'success': False, 'message': 'Nome non valido: solo lettere, numeri, punto, trattino e underscore, senza spazi (max 24 caratteri)'}
+        return {'success': False, 'code': 'player.invalidName',
+                'message': _t('player.invalidName', _lang())}
     _, args = _read_sq_args()
     if args is None:
-        return {'success': False, 'message': 'Configurazione squeezelite non trovata'}
+        return {'success': False, 'code': 'lms.sqConfigMissing',
+                'message': _t('lms.sqConfigMissing', _lang())}
     if re.search(r'-n\s+\S+', args):
         args = re.sub(r'-n\s+\S+', f'-n {name}', args)
     else:
@@ -747,10 +783,13 @@ def set_player_name(name):
     try:
         r = _run(['systemctl', 'restart', 'squeezelite'], timeout=30)
         if r.returncode != 0:
-            return {'success': True, 'name': name, 'message': f'Nome impostato ({name}); riavvio squeezelite: {(r.stderr or "").strip()}'}
+            return {'success': True, 'name': name,
+                    'message': _t('player.nameSetRestartWarn', _lang(),
+                                  name=name, err=(r.stderr or '').strip())}
     except Exception:
         log.exception("set_player_name: squeezelite restart failed")
-        return {'success': True, 'name': name, 'message': f'Nome impostato ({name}); riavvio non riuscito'}
+        return {'success': True, 'name': name,
+                'message': _t('player.nameSetRestartFailed', _lang(), name=name)}
     if _read_bt_state():
         # Best-effort: keep the Bluetooth alias in sync so a renamed player
         # doesn't leave phones seeing the old "OsmiumSound" in their picker.
@@ -760,7 +799,7 @@ def set_player_name(name):
             subprocess.run(['bluetoothctl', 'system-alias', name], capture_output=True, timeout=10)
         except Exception:
             pass
-    return {'success': True, 'name': name, 'message': f'Nome player impostato su {name}'}
+    return {'success': True, 'name': name, 'message': _t('player.nameSet', _lang(), name=name)}
 
 # ── LAN discovery of other Lyrion/LMS servers ──────────────────────
 # Native Slim/Squeezebox discovery protocol (UDP 3483): broadcast a single
@@ -896,7 +935,7 @@ def set_ssh(enable):
         if not _install_openssh():
             return {'success': False, 'available': False, 'enabled': False,
                     'active': False, 'code': 'ssh.installFailed',
-                    'message': 'Could not install openssh-server.'}
+                    'message': _t('ssh.installFailed', _lang())}
     if enable:
         # Written before the unit (re)starts, so root-login is blocked from
         # sshd's very first start.
@@ -911,12 +950,12 @@ def set_ssh(enable):
             status = get_ssh_status()
             status['success'] = False
             status['code'] = 'ssh.toggleFailed'
-            status['message'] = 'The SSH operation failed.'
+            status['message'] = _t('ssh.toggleFailed', _lang())
             return status
     except Exception:
         log.exception("set_ssh failed")
         return {'success': False, 'code': 'ssh.toggleFailed',
-                'message': 'The SSH operation failed.'}
+                'message': _t('ssh.toggleFailed', _lang())}
     if enable:
         # If sshd was already active (e.g. re-toggling on without an
         # intervening stop), `enable --now` above doesn't restart it — reload
@@ -929,10 +968,10 @@ def set_ssh(enable):
             log.exception("sshd reload after hardening failed")
     status = get_ssh_status()
     status['success'] = True
-    # The UI translates by `code`; `message` is an English fallback for older
-    # clients (it used to be Italian, which leaked into the English kiosk).
+    # The UI translates by `code`; `message` is a language-appropriate fallback
+    # for older clients (it used to be hardcoded Italian regardless of locale).
     status['code'] = 'ssh.enabled' if enable else 'ssh.disabled'
-    status['message'] = 'SSH enabled.' if enable else 'SSH disabled.'
+    status['message'] = _t(status['code'], _lang())
     # Tell the caller whether a login even exists, so the panel can prompt for
     # one instead of repeating the old "change the default hifi password" advice.
     status['account'] = get_shell_account()
@@ -1039,18 +1078,18 @@ def set_shell_account(username, password):
     password = password or ''
     if not SHELL_ACCOUNT_RE.match(username):
         return {'success': False, 'code': 'shell.badUsername',
-                'message': 'Invalid username: use 3-32 lowercase letters, digits, - or _.'}
+                'message': _t('shell.badUsername', _lang())}
     if username in SHELL_ACCOUNT_RESERVED:
         return {'success': False, 'code': 'shell.reservedUsername',
-                'message': f'The name "{username}" is reserved by the system.'}
+                'message': _t('shell.reservedUsername', _lang(), username=username)}
     if len(password) < 8:
         return {'success': False, 'code': 'shell.shortPassword',
-                'message': 'The password must be at least 8 characters long.'}
+                'message': _t('shell.shortPassword', _lang())}
     # chpasswd reads "user:password" lines, so either character would let a
     # crafted password rewrite a different account's entry.
     if '\n' in password or ':' in password:
         return {'success': False, 'code': 'shell.badPassword',
-                'message': 'The password cannot contain ":" or a line break.'}
+                'message': _t('shell.badPassword', _lang())}
 
     existed = _user_exists(username)
     try:
@@ -1070,11 +1109,11 @@ def set_shell_account(username, password):
     except subprocess.CalledProcessError as e:
         log.error("shell account provisioning failed: %s", (e.stderr or '').strip())
         return {'success': False, 'code': 'shell.createFailed',
-                'message': 'Could not create the login. See the system log for details.'}
+                'message': _t('shell.createFailed', _lang())}
     except Exception:
         log.exception("shell account provisioning failed")
         return {'success': False, 'code': 'shell.createFailed',
-                'message': 'Could not create the login. See the system log for details.'}
+                'message': _t('shell.createFailed', _lang())}
 
     # Only now, with a verified working login in place, retire the old default.
     if _user_exists(username) and _user_in_group(username, 'sudo'):
@@ -1218,19 +1257,22 @@ def install_tailscale():
     signing key before installing the package via apt (a plain
     `apt-get install tailscale` fails on a stock Debian repo list)."""
     if _tailscale_available():
-        return {'success': True, 'available': True, 'message': 'Tailscale è già installato'}
+        return {'success': True, 'available': True, 'code': 'tailscale.alreadyInstalled',
+                'message': _t('tailscale.alreadyInstalled', _lang())}
     try:
         r = subprocess.run(
             ['sh', '-c', 'curl -fsSL https://tailscale.com/install.sh | sh'],
             capture_output=True, text=True, timeout=180)
         if r.returncode != 0 or not _tailscale_available():
             log.error("tailscale install failed: %s", (r.stderr or '').strip())
-            return {'success': False, 'available': False,
-                    'message': "Installazione di Tailscale fallita — controlla la connessione a Internet e riprova"}
+            return {'success': False, 'available': False, 'code': 'tailscale.installFailedNetwork',
+                    'message': _t('tailscale.installFailedNetwork', _lang())}
     except Exception:
         log.exception("tailscale install failed")
-        return {'success': False, 'available': False, 'message': 'Installazione di Tailscale fallita'}
-    return {'success': True, 'available': True, 'message': 'Tailscale installato'}
+        return {'success': False, 'available': False, 'code': 'tailscale.installFailed',
+                'message': _t('tailscale.installFailed', _lang())}
+    return {'success': True, 'available': True, 'code': 'tailscale.installed',
+            'message': _t('tailscale.installed', _lang())}
 
 
 def _device_label():
@@ -1263,7 +1305,7 @@ def get_tailscale_status():
         ips = self_node.get('TailscaleIPs') or []
     except Exception:
         log.exception("get_tailscale_status failed")
-        return {'available': True, 'connected': False, 'error': 'Stato non disponibile'}
+        return {'available': True, 'connected': False, 'error': _t('tailscale.statusUnavailable', _lang())}
     return {'available': True, 'connected': connected, 'backend_state': backend,
             'ip': ips[0] if ips else '', 'hostname': self_node.get('HostName') or ''}
 
@@ -1288,7 +1330,7 @@ def set_tailscale(enable):
     without a fresh login."""
     if not _tailscale_available():
         return {'success': False, 'available': False, 'connected': False,
-                'message': 'Tailscale non è installato sul dispositivo. Completa l\'aggiornamento di sistema e riprova.'}
+                'code': 'tailscale.notInstalled', 'message': _t('tailscale.notInstalled', _lang())}
     if enable:
         cmd = ['sudo', 'tailscale', 'up', f'--hostname={_device_label()}']
         try:
@@ -1296,7 +1338,7 @@ def set_tailscale(enable):
         except Exception:
             log.exception("tailscale up failed to start")
             return {'success': False, 'available': True, 'connected': False,
-                    'message': 'Attivazione Tailscale fallita'}
+                    'code': 'tailscale.enableFailed', 'message': _t('tailscale.enableFailed', _lang())}
 
         lines = queue.Queue()
 
@@ -1329,7 +1371,7 @@ def set_tailscale(enable):
             status = get_tailscale_status()
             status['success'] = True
             status['login_url'] = login_url
-            status['message'] = 'Apri il link per autorizzare questo dispositivo'
+            status['message'] = _t('tailscale.openLink', _lang())
             return status
 
         exit_code = proc.poll()
@@ -1337,29 +1379,30 @@ def set_tailscale(enable):
             # Already authenticated (e.g. re-enabling after 'down') — no URL needed.
             status = get_tailscale_status()
             status['success'] = True
-            status['message'] = 'Tailscale attivato'
+            status['message'] = _t('tailscale.enabled', _lang())
             return status
         if exit_code not in (None, 0):
             err = ''.join(output).strip()
             log.error("tailscale up failed: %s", err)
             return {'success': False, 'available': True, 'connected': False,
-                    'message': 'Attivazione Tailscale fallita'}
+                    'code': 'tailscale.enableFailed', 'message': _t('tailscale.enableFailed', _lang())}
 
         # Still running with no URL yet (slow network) — leave it in the
         # background, the frontend will keep polling status.
         status = get_tailscale_status()
         status['success'] = True
-        status['message'] = 'Attivazione Tailscale in corso…'
+        status['message'] = _t('tailscale.enabling', _lang())
         return status
 
     try:
         subprocess.run(['sudo', 'tailscale', 'down'], capture_output=True, text=True, timeout=30)
     except Exception:
         log.exception("set_tailscale(disable) failed")
-        return {'success': False, 'message': 'Disattivazione Tailscale fallita'}
+        return {'success': False, 'code': 'tailscale.disableFailed',
+                'message': _t('tailscale.disableFailed', _lang())}
     status = get_tailscale_status()
     status['success'] = True
-    status['message'] = 'Tailscale disattivato'
+    status['message'] = _t('tailscale.disabled', _lang())
     return status
 
 # ──────────────────────────────────────────────────────────────────
@@ -1409,7 +1452,7 @@ def set_pointer(enable):
         log.exception("set_pointer: persist failed")
         return {'success': False, 'available': _has_unclutter(),
                 'enabled': get_pointer_status()['enabled'],
-                'message': 'Impossibile salvare la preferenza'}
+                'code': 'prefs.saveFailed', 'message': _t('prefs.saveFailed', _lang())}
 
     # Apply live to the running session (best-effort; the persisted flag covers
     # the next login regardless of whether this succeeds).
@@ -1426,7 +1469,7 @@ def set_pointer(enable):
         log.exception("set_pointer: live apply failed")
 
     return {'success': True, 'available': _has_unclutter(), 'enabled': bool(enable),
-            'message': ('Puntatore mouse attivato' if enable else 'Puntatore mouse disattivato')}
+            'message': _t('pointer.shown' if enable else 'pointer.hidden', _lang())}
 
 # ──────────────────────────────────────────────────────────────────
 #  Display mode — GUI touchscreen kiosk vs headless. The appliance ships
@@ -1486,25 +1529,24 @@ def set_display_mode(mode):
     applying (a target switch mid-update could interrupt it)."""
     if mode not in DISPLAY_MODES:
         return {'success': False, 'mode': get_display_mode()['mode'],
-                'message': 'Modalità non valida'}
+                'code': 'displayMode.invalid', 'message': _t('displayMode.invalid', _lang())}
     if _update_in_progress():
         return {'success': False, 'mode': get_display_mode()['mode'],
-                'message': 'Aggiornamento in corso — riprova a fine aggiornamento'}
+                'code': 'update.inProgressRetry', 'message': _t('update.inProgressRetry', _lang())}
     try:
         r = subprocess.run([DISPLAY_MODE_SCRIPT, 'set', mode, '--live'],
                            capture_output=True, text=True, timeout=30)
         if r.returncode != 0:
             log.error("set_display_mode failed: %s", (r.stderr or '').strip())
             return {'success': False, 'mode': get_display_mode()['mode'],
-                    'message': 'Cambio modalità fallito'}
+                    'code': 'displayMode.changeFailed', 'message': _t('displayMode.changeFailed', _lang())}
     except Exception:
         log.exception("set_display_mode failed")
         return {'success': False, 'mode': get_display_mode()['mode'],
-                'message': 'Cambio modalità fallito'}
+                'code': 'displayMode.changeFailed', 'message': _t('displayMode.changeFailed', _lang())}
     # In gui mode the switch is instant (LightDM already up); in headless the X
     # session is torn down a moment after this response is sent.
-    msg = ('Modalità con schermo attivata' if mode == 'gui'
-           else 'Modalità headless attivata — lo schermo verrà spento')
+    msg = _t('displayMode.guiEnabled' if mode == 'gui' else 'displayMode.headlessEnabled', _lang())
     return {'success': True, 'mode': mode, 'message': msg}
 
 # ──────────────────────────────────────────────────────────────────
@@ -1548,28 +1590,93 @@ def set_ui_resolution(mode):
     and back up, which must not race an update reboot."""
     if mode not in UI_RESOLUTIONS:
         return {'success': False, 'mode': get_ui_resolution()['mode'],
-                'message': 'Risoluzione non valida'}
+                'code': 'uiResolution.invalid', 'message': _t('uiResolution.invalid', _lang())}
     if _update_in_progress():
         return {'success': False, 'mode': get_ui_resolution()['mode'],
-                'message': 'Aggiornamento in corso — riprova a fine aggiornamento'}
+                'code': 'update.inProgressRetry', 'message': _t('update.inProgressRetry', _lang())}
     if not os.path.exists(UI_RESOLUTION_SCRIPT):
         return {'success': False, 'mode': get_ui_resolution()['mode'],
-                'message': 'Funzione non disponibile su questa versione di sistema'}
+                'code': 'uiResolution.unavailable', 'message': _t('uiResolution.unavailable', _lang())}
     try:
         r = subprocess.run([UI_RESOLUTION_SCRIPT, 'set', mode, '--live'],
                            capture_output=True, text=True, timeout=30)
         if r.returncode != 0:
             log.error("set_ui_resolution failed: %s", (r.stderr or '').strip())
             return {'success': False, 'mode': get_ui_resolution()['mode'],
-                    'message': 'Cambio risoluzione fallito'}
+                    'code': 'uiResolution.changeFailed', 'message': _t('uiResolution.changeFailed', _lang())}
     except Exception:
         log.exception("set_ui_resolution failed")
         return {'success': False, 'mode': get_ui_resolution()['mode'],
-                'message': 'Cambio risoluzione fallito'}
+                'code': 'uiResolution.changeFailed', 'message': _t('uiResolution.changeFailed', _lang())}
     # The X session is restarted a moment after this response is flushed, so
     # the kiosk UI issuing the request is about to disappear and come back.
     return {'success': True, 'mode': mode,
-            'message': 'Risoluzione aggiornata — l’interfaccia si riavvia'}
+            'message': _t('uiResolution.updated', _lang())}
+
+# ──────────────────────────────────────────────────────────────────
+#  Timezone. The installer asks nothing about it (see distro/README.md) and
+#  the build defaults every fresh image to UTC (0400-enable-services.hook.chroot)
+#  — deterministic, but wrong for anyone who isn't in it, and units built from
+#  old/refurbished hardware can drift further still without a working RTC
+#  battery (systemd-timesyncd is now enabled by default to correct for that,
+#  but it can't fix which zone the clock is displayed in). `timedatectl
+#  set-timezone` is the whole mechanism: it updates /etc/localtime and
+#  /etc/timezone itself and both survive a reboot on their own, so there is no
+#  separate /etc/hifi-player/* marker file to keep in sync here.
+# ──────────────────────────────────────────────────────────────────
+ZONEINFO_DIR = '/usr/share/zoneinfo'
+
+def get_timezone():
+    """Return { timezone }. 'UTC' if it can't be determined."""
+    try:
+        with open('/etc/timezone') as f:
+            tz = f.read().strip()
+            if tz:
+                return {'timezone': tz}
+    except Exception:
+        pass
+    return {'timezone': 'UTC'}
+
+def list_timezones():
+    """All IANA zone names the installed tzdata knows about, e.g. 'Europe/Rome'."""
+    names = []
+    for dirpath, _dirnames, filenames in os.walk(ZONEINFO_DIR):
+        for name in filenames:
+            real = os.path.join(dirpath, name)
+            rel = os.path.relpath(real, ZONEINFO_DIR)
+            # tzdata ships a few non-zone files (posixrules, localtime itself if
+            # present, leap seconds tables, the iso3166 country table, etc.) —
+            # this is the same "does it look like Area/Location" heuristic
+            # `timedatectl list-timezones` effectively applies.
+            if rel.startswith('.') or rel in ('posixrules',) or '.' in name:
+                continue
+            names.append(rel.replace(os.sep, '/'))
+    return sorted(names)
+
+def set_timezone(tz):
+    """Switch the system timezone, live + persisted, via timedatectl."""
+    tz = (tz or '').strip()
+    # timedatectl itself would refuse a bad name, but validate against
+    # zoneinfo directly first: tz flows into a filesystem path below and this
+    # is the chokepoint that keeps a "../../etc/passwd"-shaped value from ever
+    # reaching a shell-adjacent API.
+    real = os.path.normpath(os.path.join(ZONEINFO_DIR, tz))
+    if not tz or not real.startswith(ZONEINFO_DIR + os.sep) or not os.path.isfile(real):
+        return {'success': False, 'timezone': get_timezone()['timezone'],
+                'code': 'timezone.invalid', 'message': _t('timezone.invalid', _lang())}
+    try:
+        r = subprocess.run(['timedatectl', 'set-timezone', tz],
+                           capture_output=True, text=True, timeout=15)
+        if r.returncode != 0:
+            log.error("set_timezone failed: %s", (r.stderr or '').strip())
+            return {'success': False, 'timezone': get_timezone()['timezone'],
+                    'code': 'timezone.changeFailed', 'message': _t('timezone.changeFailed', _lang())}
+    except Exception:
+        log.exception("set_timezone failed")
+        return {'success': False, 'timezone': get_timezone()['timezone'],
+                'code': 'timezone.changeFailed', 'message': _t('timezone.changeFailed', _lang())}
+    return {'success': True, 'timezone': tz,
+            'message': _t('timezone.updated', _lang(), tz=tz)}
 
 # ──────────────────────────────────────────────────────────────────
 #  Animated VU meter (expanded now-playing view). Pure rendering choice, no OS
@@ -1602,7 +1709,7 @@ def set_vu_meter(enable):
     except Exception:
         log.exception("set_vu_meter: persist failed")
         return {'success': False, 'enabled': get_vu_meter()['enabled'],
-                'message': 'Impossibile salvare la preferenza'}
+                'code': 'prefs.saveFailed', 'message': _t('prefs.saveFailed', _lang())}
     return {'success': True, 'enabled': enable}
 
 # ──────────────────────────────────────────────────────────────────
@@ -1649,24 +1756,28 @@ def set_provision_mode(mode, source='screen'):
     body, status = _proxy_webui('/api/provision/claim_mode', method='POST',
                                 body={'mode': mode, 'source': source})
     if body is None:
-        return {'success': False, 'message': 'Provisioning non attivo'}
+        return {'success': False, 'code': 'provisioning.notActive',
+                'message': _t('provisioning.notActive', _lang())}
     return body
 
 def factory_reset():
     if _update_in_progress():
-        return {'success': False, 'message': 'Aggiornamento in corso — riprova a fine aggiornamento'}
+        return {'success': False, 'code': 'update.inProgressRetry',
+                'message': _t('update.inProgressRetry', _lang())}
     if not os.path.exists(FACTORY_RESET_SCRIPT):
-        return {'success': False, 'message': 'Script di ripristino non disponibile'}
+        return {'success': False, 'code': 'factoryReset.scriptMissing',
+                'message': _t('factoryReset.scriptMissing', _lang())}
     try:
         # Detached transient unit so the reboot at the end doesn't kill us mid
         # HTTP response.
         subprocess.Popen(['systemd-run', '--collect', '--',
                           '/bin/sh', FACTORY_RESET_SCRIPT],
                          stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        return {'success': True, 'message': 'Ripristino di fabbrica avviato — il dispositivo si riavvierà'}
+        return {'success': True, 'message': _t('factoryReset.started', _lang())}
     except Exception:
         log.exception("factory_reset failed")
-        return {'success': False, 'message': 'Avvio ripristino fallito'}
+        return {'success': False, 'code': 'factoryReset.startFailed',
+                'message': _t('factoryReset.startFailed', _lang())}
 
 def webui_reset_credentials():
     """Wipe the web-admin account (kiosk-only recovery). Direct sqlite so it
@@ -1681,10 +1792,11 @@ def webui_reset_credentials():
                          "WHERE key = 'session_version'")
             conn.commit()
             conn.close()
-        return {'success': True, 'message': 'Credenziali interfaccia web azzerate'}
+        return {'success': True, 'message': _t('webui.credsReset', _lang())}
     except Exception:
         log.exception("webui_reset_credentials failed")
-        return {'success': False, 'message': 'Reset credenziali fallito'}
+        return {'success': False, 'code': 'webui.credsResetFailed',
+                'message': _t('webui.credsResetFailed', _lang())}
 
 # ──────────────────────────────────────────────────────────────────
 #  Tidal Connect — optional. Lets the appliance appear as a Tidal Connect
@@ -1725,13 +1837,14 @@ def get_tidal_status():
     except Exception:
         log.exception("get_tidal_status failed")
         return {'available': False, 'enabled': False, 'active': False,
-                'error': 'Stato Tidal Connect non disponibile'}
+                'error': _t('tidal.statusUnavailable', _lang())}
 
 def set_tidal(enable):
     """Enable+start or disable+stop the Tidal Connect daemon (persists)."""
     if enable and not _tidal_available():
         return {'success': False, 'available': False, 'enabled': False,
-                'active': False, 'message': 'Tidal Connect non installato su questo dispositivo'}
+                'active': False, 'code': 'tidal.notInstalled',
+                'message': _t('tidal.notInstalled', _lang())}
     action = 'enable' if enable else 'disable'
     try:
         r = subprocess.run(['sudo', 'systemctl', action, '--now', TIDAL_UNIT],
@@ -1740,14 +1853,15 @@ def set_tidal(enable):
             log.error("set_tidal %s failed: %s", action, (r.stderr or '').strip())
             status = get_tidal_status()
             status['success'] = False
-            status['message'] = 'Operazione Tidal Connect fallita'
+            status['code'] = 'tidal.opFailed'
+            status['message'] = _t('tidal.opFailed', _lang())
             return status
     except Exception:
         log.exception("set_tidal failed")
-        return {'success': False, 'message': 'Operazione Tidal Connect fallita'}
+        return {'success': False, 'code': 'tidal.opFailed', 'message': _t('tidal.opFailed', _lang())}
     status = get_tidal_status()
     status['success'] = True
-    status['message'] = 'Tidal Connect abilitato' if enable else 'Tidal Connect disabilitato'
+    status['message'] = _t('tidal.enabled' if enable else 'tidal.disabled', _lang())
     return status
 
 # ──────────────────────────────────────────────────────────────────
@@ -2220,7 +2334,7 @@ def set_dsp(config):
     by a client that only knows about the older keys."""
     if not _dsp_available():
         return {'success': False, 'available': False,
-                'message': 'DSP non disponibile su questo dispositivo'}
+                'code': 'dsp.unavailable', 'message': _t('dsp.unavailable', _lang())}
     st = _read_dsp_state()
     enabled = bool(config['enabled']) if 'enabled' in config else st['enabled']
     crossfeed = bool(config['crossfeed']) if 'crossfeed' in config else st['crossfeed']
@@ -2249,10 +2363,10 @@ def set_dsp(config):
                               'preset': preset})
     except Exception:
         log.exception('set_dsp failed')
-        return {'success': False, 'message': 'Operazione DSP fallita'}
+        return {'success': False, 'code': 'dsp.opFailed', 'message': _t('dsp.opFailed', _lang())}
     return {'success': True, 'enabled': enabled, 'bands': bands, 'crossfeed': crossfeed,
             'room_correction': room_correction, 'balance': balance, 'preset': preset,
-            'message': 'DSP attivato' if enabled else 'DSP disattivato'}
+            'message': _t('dsp.enabled' if enabled else 'dsp.disabled', _lang())}
 
 # ── DSP presets (named snapshots of bands/crossfeed/room_correction/balance) ──
 
@@ -2296,10 +2410,12 @@ def get_dsp_presets():
 def save_dsp_preset(name):
     clean_name = _valid_preset_name(name)
     if not clean_name:
-        return {'success': False, 'message': 'Nome preset non valido'}
+        return {'success': False, 'code': 'dspPreset.invalidName',
+                'message': _t('dspPreset.invalidName', _lang())}
     user = _read_dsp_presets()
     if clean_name not in user and len(user) >= DSP_MAX_USER_PRESETS:
-        return {'success': False, 'message': 'Numero massimo di preset raggiunto'}
+        return {'success': False, 'code': 'dspPreset.maxReached',
+                'message': _t('dspPreset.maxReached', _lang())}
     st = _read_dsp_state()
     user[clean_name] = {'bands': st['bands'], 'crossfeed': st['crossfeed'],
                         'room_correction': st['room_correction'], 'balance': st['balance']}
@@ -2308,32 +2424,37 @@ def save_dsp_preset(name):
         _write_dsp_state({**st, 'preset': clean_name})
     except Exception:
         log.exception('save_dsp_preset failed')
-        return {'success': False, 'message': 'Salvataggio preset fallito'}
-    return {'success': True, **get_dsp_presets(), 'message': 'Preset salvato'}
+        return {'success': False, 'code': 'dspPreset.saveFailed',
+                'message': _t('dspPreset.saveFailed', _lang())}
+    return {'success': True, **get_dsp_presets(), 'message': _t('dspPreset.saved', _lang())}
 
 def load_dsp_preset(name):
     name = (name or '').strip()
     p = DSP_BUILTIN_PRESETS.get(name) or _read_dsp_presets().get(name)
     if not p:
-        return {'success': False, 'message': 'Preset non trovato'}
+        return {'success': False, 'code': 'dspPreset.notFound',
+                'message': _t('dspPreset.notFound', _lang())}
     # Bands + balance + crossfeed only — 'room_correction' and 'enabled' are
     # deliberately preserved (they depend on a physically-uploaded FIR filter
     # and on the bit-perfect on/off choice, not on the tonal preset).
     result = set_dsp({'bands': p.get('bands') or [], 'balance': p.get('balance') or 0.0,
                       'crossfeed': bool(p.get('crossfeed')), 'preset': name})
     if result.get('success'):
-        result['message'] = 'Preset caricato'
+        result['message'] = _t('dspPreset.loaded', _lang())
     return result
 
 def rename_dsp_preset(name, new_name):
     user = _read_dsp_presets()
     if name not in user:
-        return {'success': False, 'message': 'Preset non trovato'}
+        return {'success': False, 'code': 'dspPreset.notFound',
+                'message': _t('dspPreset.notFound', _lang())}
     clean_new = _valid_preset_name(new_name)
     if not clean_new:
-        return {'success': False, 'message': 'Nome preset non valido'}
+        return {'success': False, 'code': 'dspPreset.invalidName',
+                'message': _t('dspPreset.invalidName', _lang())}
     if clean_new in user and clean_new != name:
-        return {'success': False, 'message': 'Esiste già un preset con questo nome'}
+        return {'success': False, 'code': 'dspPreset.nameExists',
+                'message': _t('dspPreset.nameExists', _lang())}
     user[clean_new] = user.pop(name)
     try:
         _write_dsp_presets(user)
@@ -2342,13 +2463,15 @@ def rename_dsp_preset(name, new_name):
             _write_dsp_state({**st, 'preset': clean_new})
     except Exception:
         log.exception('rename_dsp_preset failed')
-        return {'success': False, 'message': 'Rinomina preset fallita'}
-    return {'success': True, **get_dsp_presets(), 'message': 'Preset rinominato'}
+        return {'success': False, 'code': 'dspPreset.renameFailed',
+                'message': _t('dspPreset.renameFailed', _lang())}
+    return {'success': True, **get_dsp_presets(), 'message': _t('dspPreset.renamed', _lang())}
 
 def delete_dsp_preset(name):
     user = _read_dsp_presets()
     if name not in user:
-        return {'success': False, 'message': 'Preset non trovato'}
+        return {'success': False, 'code': 'dspPreset.notFound',
+                'message': _t('dspPreset.notFound', _lang())}
     del user[name]
     try:
         _write_dsp_presets(user)
@@ -2357,8 +2480,9 @@ def delete_dsp_preset(name):
             _write_dsp_state({**st, 'preset': None})
     except Exception:
         log.exception('delete_dsp_preset failed')
-        return {'success': False, 'message': 'Eliminazione preset fallita'}
-    return {'success': True, **get_dsp_presets(), 'message': 'Preset eliminato'}
+        return {'success': False, 'code': 'dspPreset.deleteFailed',
+                'message': _t('dspPreset.deleteFailed', _lang())}
+    return {'success': True, **get_dsp_presets(), 'message': _t('dspPreset.deleted', _lang())}
 
 # ──────────────────────────────────────────────────────────────────
 #  Bluetooth audio (A2DP sink) — OPTIONAL, OFF by default. Lets the
@@ -2449,7 +2573,7 @@ def get_bluetooth_status():
     except Exception:
         log.exception("get_bluetooth_status failed")
         return {'available': False, 'enabled': False, 'active': False, 'discoverable': False,
-                'devices': [], 'error': 'Stato Bluetooth non disponibile'}
+                'devices': [], 'error': _t('bluetooth.statusUnavailable', _lang())}
 
 def set_bluetooth(enable):
     """Enable or disable the whole Bluetooth subsystem (persists). Serialized
@@ -2457,7 +2581,7 @@ def set_bluetooth(enable):
     if enable and not _bt_available():
         return {'success': False, 'available': False, 'enabled': False, 'active': False,
                 'discoverable': False, 'devices': [],
-                'message': 'Bluetooth non disponibile: aggiorna il sistema'}
+                'code': 'bluetooth.unavailableUpdate', 'message': _t('bluetooth.unavailableUpdate', _lang())}
     with _bt_apply_lock:
         _write_bt_state(enable)
         try:
@@ -2497,43 +2621,50 @@ def set_bluetooth(enable):
             log.exception("set_bluetooth failed")
             status = get_bluetooth_status()
             status['success'] = False
-            status['message'] = 'Operazione Bluetooth fallita'
+            status['code'] = 'bluetooth.opFailed'
+            status['message'] = _t('bluetooth.opFailed', _lang())
             return status
     status = get_bluetooth_status()
     status['success'] = True
-    status['message'] = 'Bluetooth abilitato' if enable else 'Bluetooth disabilitato'
+    status['message'] = _t('bluetooth.enabled' if enable else 'bluetooth.disabled', _lang())
     return status
 
 def set_bt_discoverable():
     if not _bt_available():
-        return {'success': False, 'message': 'Bluetooth non disponibile'}
+        return {'success': False, 'code': 'bluetooth.unavailable',
+                'message': _t('bluetooth.unavailable', _lang())}
     try:
         subprocess.run(['bluetoothctl', 'discoverable-timeout', '120'],
                        capture_output=True, text=True, timeout=10)
         r = subprocess.run(['bluetoothctl', 'discoverable', 'on'],
                            capture_output=True, text=True, timeout=10)
         if r.returncode != 0:
-            return {'success': False, 'message': 'Impossibile rendere visibile il dispositivo'}
+            return {'success': False, 'code': 'bluetooth.cannotMakeVisible',
+                    'message': _t('bluetooth.cannotMakeVisible', _lang())}
     except Exception:
         log.exception("set_bt_discoverable failed")
-        return {'success': False, 'message': 'Impossibile rendere visibile il dispositivo'}
-    return {'success': True, 'seconds': 120, 'message': 'Dispositivo visibile per 2 minuti'}
+        return {'success': False, 'code': 'bluetooth.cannotMakeVisible',
+                'message': _t('bluetooth.cannotMakeVisible', _lang())}
+    return {'success': True, 'seconds': 120, 'message': _t('bluetooth.visibleFor2Min', _lang())}
 
 def bt_forget(mac):
     """Unpair/remove a device. MAC comes straight from a network request, so
     it's validated against a strict address pattern before ever reaching a
     shell-adjacent subprocess argument."""
     if not mac or not _BT_MAC_RE.match(mac):
-        return {'success': False, 'message': 'Indirizzo Bluetooth non valido'}
+        return {'success': False, 'code': 'bluetooth.invalidAddress',
+                'message': _t('bluetooth.invalidAddress', _lang())}
     try:
         r = subprocess.run(['bluetoothctl', 'remove', mac],
                            capture_output=True, text=True, timeout=10)
         if r.returncode != 0:
-            return {'success': False, 'message': 'Dispositivo non trovato'}
+            return {'success': False, 'code': 'bluetooth.deviceNotFound',
+                    'message': _t('bluetooth.deviceNotFound', _lang())}
     except Exception:
         log.exception("bt_forget failed")
-        return {'success': False, 'message': 'Operazione fallita'}
-    return {'success': True, 'devices': _bt_paired_devices(), 'message': 'Dispositivo dimenticato'}
+        return {'success': False, 'code': 'bluetooth.forgetFailed',
+                'message': _t('bluetooth.forgetFailed', _lang())}
+    return {'success': True, 'devices': _bt_paired_devices(), 'message': _t('bluetooth.forgotten', _lang())}
 
 # Cover art never arrives over Bluetooth (AVRCP art support in BlueZ is
 # experimental/unreliable, and cars/phones mostly rely on their own
@@ -2663,7 +2794,8 @@ def get_ota_channel():
 
 def set_ota_channel(channel):
     if channel not in OTA_CHANNELS or (channel == 'alpha' and not _alpha_unlocked()):
-        return {'success': False, 'message': 'Canale non valido', 'channel': get_ota_channel()}
+        return {'success': False, 'code': 'ota.invalidChannel',
+                'message': _t('ota.invalidChannel', _lang()), 'channel': get_ota_channel()}
     try:
         os.makedirs(os.path.dirname(OTA_CHANNEL_FILE), exist_ok=True)
         tmp = OTA_CHANNEL_FILE + '.tmp'
@@ -2672,7 +2804,8 @@ def set_ota_channel(channel):
         os.replace(tmp, OTA_CHANNEL_FILE)
     except Exception:
         log.exception("set_ota_channel failed")
-        return {'success': False, 'message': 'Impossibile salvare il canale', 'channel': get_ota_channel()}
+        return {'success': False, 'code': 'ota.channelSaveFailed',
+                'message': _t('ota.channelSaveFailed', _lang()), 'channel': get_ota_channel()}
     return {'success': True, 'channel': channel}
 
 # Short-lived cache of the GitHub Release per channel. A single "check updates"
@@ -2772,7 +2905,7 @@ def _check_release_update(current, prefix):
         release = _fetch_release(channel)
     except Exception:
         log.exception("update check failed")
-        return {'error': 'Controllo aggiornamenti fallito', 'current': current, 'channel': channel}
+        return {'error': _t('update.checkFailed', _lang()), 'current': current, 'channel': channel}
 
     latest = release.get('tag_name') or release.get('name') or ''
     assets = release.get('assets', [])
@@ -2814,17 +2947,21 @@ def apply_app_update():
     if info.get('error'):
         return {'started': False, 'message': info['error']}
     if not info.get('update_available'):
-        return {'started': False, 'message': 'Nessun aggiornamento disponibile'}
+        return {'started': False, 'code': 'update.noneAvailable',
+                'message': _t('update.noneAvailable', _lang())}
     if not info.get('sha_url'):
-        return {'started': False, 'message': 'Checksum (.sha256) mancante nella release'}
+        return {'started': False, 'code': 'update.checksumMissing',
+                'message': _t('update.checksumMissing', _lang())}
 
     try:
         sha = _fetch_sha256(info['sha_url'])
     except Exception:
         log.exception("update: checksum fetch failed")
-        return {'started': False, 'message': 'Lettura checksum fallita'}
+        return {'started': False, 'code': 'update.checksumReadFailed',
+                'message': _t('update.checksumReadFailed', _lang())}
     if not sha:
-        return {'started': False, 'message': 'Checksum vuoto'}
+        return {'started': False, 'code': 'update.checksumEmpty',
+                'message': _t('update.checksumEmpty', _lang())}
 
     cmd = [
         'systemd-run', '--no-block', '--collect', '--unit=hifi-ota',
@@ -2838,10 +2975,12 @@ def apply_app_update():
                          start_new_session=True)
     except subprocess.CalledProcessError:
         log.exception("update: apply command failed")
-        return {'started': False, 'message': 'Avvio aggiornamento fallito'}
+        return {'started': False, 'code': 'update.startFailed',
+                'message': _t('update.startFailed', _lang())}
     except Exception:
         log.exception("update: apply failed")
-        return {'started': False, 'message': 'Avvio aggiornamento fallito'}
+        return {'started': False, 'code': 'update.startFailed',
+                'message': _t('update.startFailed', _lang())}
     return {'started': True, 'version': info['latest']}
 
 def app_update_status():
@@ -2865,17 +3004,21 @@ def apply_system_update():
     if info.get('error'):
         return {'started': False, 'message': info['error']}
     if not info.get('update_available'):
-        return {'started': False, 'message': 'Nessun aggiornamento disponibile'}
+        return {'started': False, 'code': 'update.noneAvailable',
+                'message': _t('update.noneAvailable', _lang())}
     if not info.get('sha_url'):
-        return {'started': False, 'message': 'Checksum (.sha256) mancante nella release'}
+        return {'started': False, 'code': 'update.checksumMissing',
+                'message': _t('update.checksumMissing', _lang())}
 
     try:
         sha = _fetch_sha256(info['sha_url'])
     except Exception:
         log.exception("update: checksum fetch failed")
-        return {'started': False, 'message': 'Lettura checksum fallita'}
+        return {'started': False, 'code': 'update.checksumReadFailed',
+                'message': _t('update.checksumReadFailed', _lang())}
     if not sha:
-        return {'started': False, 'message': 'Checksum vuoto'}
+        return {'started': False, 'code': 'update.checksumEmpty',
+                'message': _t('update.checksumEmpty', _lang())}
 
     cmd = [
         'systemd-run', '--no-block', '--collect', '--unit=hifi-system-update',
@@ -2889,10 +3032,12 @@ def apply_system_update():
                          start_new_session=True)
     except subprocess.CalledProcessError:
         log.exception("update: apply command failed")
-        return {'started': False, 'message': 'Avvio aggiornamento fallito'}
+        return {'started': False, 'code': 'update.startFailed',
+                'message': _t('update.startFailed', _lang())}
     except Exception:
         log.exception("update: apply failed")
-        return {'started': False, 'message': 'Avvio aggiornamento fallito'}
+        return {'started': False, 'code': 'update.startFailed',
+                'message': _t('update.startFailed', _lang())}
     return {'started': True, 'version': info['latest']}
 
 def system_update_status():
@@ -2916,21 +3061,25 @@ def apply_os_update():
     if info.get('error'):
         return {'started': False, 'message': info['error']}
     if not info.get('update_available'):
-        return {'started': False, 'message': 'Nessun aggiornamento OS disponibile'}
+        return {'started': False, 'code': 'update.noneAvailableOs',
+                'message': _t('update.noneAvailableOs', _lang())}
     if not info.get('sha_url'):
-        return {'started': False, 'message': 'Checksum (.sha256) mancante nella release'}
+        return {'started': False, 'code': 'update.checksumMissing',
+                'message': _t('update.checksumMissing', _lang())}
     # The OS bundle runs root scripts, so a valid signature is mandatory.
     if not info.get('sig_url'):
-        return {'started': False,
-                'message': 'Firma (.sha256.sig) mancante: aggiornamento OS rifiutato'}
+        return {'started': False, 'code': 'update.sigMissing',
+                'message': _t('update.sigMissing', _lang())}
 
     try:
         sha = _fetch_sha256(info['sha_url'])
     except Exception:
         log.exception("update: checksum fetch failed")
-        return {'started': False, 'message': 'Lettura checksum fallita'}
+        return {'started': False, 'code': 'update.checksumReadFailed',
+                'message': _t('update.checksumReadFailed', _lang())}
     if not sha:
-        return {'started': False, 'message': 'Checksum vuoto'}
+        return {'started': False, 'code': 'update.checksumEmpty',
+                'message': _t('update.checksumEmpty', _lang())}
 
     cmd = [
         'systemd-run', '--no-block', '--collect', '--unit=hifi-os-update',
@@ -2944,10 +3093,12 @@ def apply_os_update():
                          start_new_session=True)
     except subprocess.CalledProcessError:
         log.exception("update: apply command failed")
-        return {'started': False, 'message': 'Avvio aggiornamento fallito'}
+        return {'started': False, 'code': 'update.startFailed',
+                'message': _t('update.startFailed', _lang())}
     except Exception:
         log.exception("update: apply failed")
-        return {'started': False, 'message': 'Avvio aggiornamento fallito'}
+        return {'started': False, 'code': 'update.startFailed',
+                'message': _t('update.startFailed', _lang())}
     return {'started': True, 'version': info['latest']}
 
 def os_update_status():
@@ -3001,7 +3152,8 @@ def list_install_disks():
         data = json.loads(r.stdout or '{}')
     except Exception:
         log.exception("install: disk enumeration failed")
-        return {'success': False, 'message': 'Enumerazione dischi fallita', 'disks': []}
+        return {'success': False, 'code': 'install.enumFailed',
+                'message': _t('install.enumFailed', _lang()), 'disks': []}
     disks = []
     for dev in data.get('blockdevices', []):
         if dev.get('type') != 'disk':
@@ -3020,13 +3172,15 @@ def list_install_disks():
 
 def start_disk_install(device):
     if not device or not isinstance(device, str) or not re.match(r'^/dev/[A-Za-z0-9/_]+$', device):
-        return {'success': False, 'message': 'Disco non valido'}
+        return {'success': False, 'code': 'install.invalidDisk',
+                'message': _t('install.invalidDisk', _lang())}
     medium_disk = _boot_medium_disk()
     if medium_disk and device == medium_disk:
-        return {'success': False, 'message': 'Non è possibile installare sul supporto di avvio'}
+        return {'success': False, 'code': 'install.cannotInstallOnBootMedia',
+                'message': _t('install.cannotInstallOnBootMedia', _lang())}
 
     with open(INSTALL_STATUS_FILE, 'w') as f:
-        json.dump({'state': 'running', 'progress': 0, 'message': 'Avvio…'}, f)
+        json.dump({'state': 'running', 'progress': 0, 'message': _t('common.starting', _lang())}, f)
 
     cmd = ['systemd-run', '--no-block', '--collect', '--unit=hifi-disk-install',
            INSTALL_SCRIPT, device]
@@ -3035,7 +3189,7 @@ def start_disk_install(device):
         launch_err = None if r.returncode == 0 else (r.stderr or r.stdout or '').strip()
     except Exception:
         log.exception("install: failed to launch")
-        launch_err = 'systemd-run non ha risposto'
+        launch_err = _t('install.systemdRunNoResponse', _lang())
     if launch_err:
         with open(INSTALL_STATUS_FILE, 'w') as f:
             json.dump({'state': 'error', 'progress': 0, 'message': launch_err}, f)
@@ -3216,13 +3370,16 @@ def apply_all_updates():
     with _UPDATE_PLAN_LOCK:
         existing = _read_update_plan()
         if existing and _plan_overall_state(existing) == 'running':
-            return {'started': False, 'message': 'Aggiornamento già in corso'}
+            return {'started': False, 'code': 'update.alreadyInProgress',
+                    'message': _t('update.alreadyInProgress', _lang())}
 
         steps, errors = build_update_plan()
         if not steps:
             if errors:
-                return {'started': False, 'message': 'Controllo aggiornamenti fallito'}
-            return {'started': False, 'message': 'Nessun aggiornamento disponibile'}
+                return {'started': False, 'code': 'update.checkFailed',
+                        'message': _t('update.checkFailed', _lang())}
+            return {'started': False, 'code': 'update.noneAvailable',
+                    'message': _t('update.noneAvailable', _lang())}
 
         plan = {
             'plan_id': '%d-%d' % (int(time.time()), os.getpid()),
@@ -3235,7 +3392,8 @@ def apply_all_updates():
             _write_update_plan(plan)
         except Exception:
             log.exception("update plan: could not write %s", UPDATE_PLAN_FILE)
-            return {'started': False, 'message': 'Salvataggio del piano fallito'}
+            return {'started': False, 'code': 'update.planSaveFailed',
+                    'message': _t('update.planSaveFailed', _lang())}
 
         # Belt and braces: a device imaged before hifi-update-runner.sh was
         # added to the ISO's chmod-list (0300-app-install.hook.chroot) ships it
@@ -3262,7 +3420,8 @@ def apply_all_updates():
         except Exception:
             log.exception("update plan: could not start the runner")
             _clear_update_plan()
-            return {'started': False, 'message': 'Avvio aggiornamento fallito'}
+            return {'started': False, 'code': 'update.startFailed',
+                    'message': _t('update.startFailed', _lang())}
 
         return {'started': True, 'plan_id': plan['plan_id'],
                 'steps': [{'kind': s['kind'], 'version': s['version']} for s in steps]}
@@ -3339,7 +3498,8 @@ def dismiss_update_plan():
     with _UPDATE_PLAN_LOCK:
         plan = _read_update_plan()
         if plan and _plan_overall_state(plan) == 'running':
-            return {'success': False, 'message': 'Aggiornamento in corso'}
+            return {'success': False, 'code': 'update.inProgress',
+                    'message': _t('update.inProgress', _lang())}
         _clear_update_plan()
         return {'success': True}
 
@@ -3372,7 +3532,7 @@ def get_lyrion_channel():
 def set_lyrion_channel(channel):
     if channel not in LYRION_CHANNELS:
         return {'success': False, 'code': 'lyrion.badChannel',
-                'message': 'Unknown channel.', 'channel': get_lyrion_channel()}
+                'message': _t('lyrion.badChannel', _lang()), 'channel': get_lyrion_channel()}
     try:
         os.makedirs(os.path.dirname(LYRION_CHANNEL_FILE), exist_ok=True)
         tmp = LYRION_CHANNEL_FILE + '.tmp'
@@ -3382,7 +3542,7 @@ def set_lyrion_channel(channel):
     except Exception:
         log.exception("set_lyrion_channel failed")
         return {'success': False, 'code': 'lyrion.channelSaveFailed',
-                'message': 'Could not save the channel.', 'channel': get_lyrion_channel()}
+                'message': _t('lyrion.channelSaveFailed', _lang()), 'channel': get_lyrion_channel()}
     return {'success': True, 'channel': channel}
 
 def get_lyrion_installed_channel():
@@ -3470,13 +3630,13 @@ def check_lyrion_update(channel=None):
     except Exception:
         log.exception("lyrion update check failed")
         return {'code': 'lyrion.checkFailed',
-                'error': 'Could not check for Lyrion updates.',
+                'error': _t('lyrion.checkFailed', _lang()),
                 'current': current, 'channel': channel, 'channels': {}}
 
     channels = _parse_lyrion_channels(html)
     if not channels:
         return {'code': 'lyrion.noBuildFound',
-                'error': 'No Lyrion build found on the download server.',
+                'error': _t('lyrion.noBuildFound', _lang()),
                 'current': current, 'channel': channel, 'channels': {}}
 
     # An unavailable channel falls back to the release build rather than
@@ -3510,7 +3670,7 @@ def apply_lyrion_update(channel=None):
         return {'started': False, 'code': info.get('code'), 'message': info['error']}
     if not info.get('update_available') and not switching:
         return {'started': False, 'code': 'lyrion.upToDate',
-                'message': 'Lyrion Music Server is already up to date.'}
+                'message': _t('lyrion.upToDate', _lang())}
     if switching:
         set_lyrion_channel(channel)
 
@@ -3526,11 +3686,11 @@ def apply_lyrion_update(channel=None):
     except subprocess.CalledProcessError:
         log.exception("update: apply command failed")
         return {'started': False, 'code': 'lyrion.startFailed',
-                'message': 'Could not start the update.'}
+                'message': _t('lyrion.startFailed', _lang())}
     except Exception:
         log.exception("update: apply failed")
         return {'started': False, 'code': 'lyrion.startFailed',
-                'message': 'Could not start the update.'}
+                'message': _t('lyrion.startFailed', _lang())}
     _set_lyrion_installed_channel(channel)
     return {'started': True, 'version': info['latest'], 'channel': info['channel']}
 
@@ -3559,15 +3719,15 @@ def show_global_keyboard():
                 print(f"Found {cmd}, launching...")
                 # Launch in background
                 subprocess.Popen(f"{cmd} &", shell=True)
-                return f"Tastiera virtuale {cmd} avviata"
+                return _t('keyboard.started', _lang(), cmd=cmd)
             except subprocess.CalledProcessError:
                 print(f"{cmd} not found, trying next...")
                 continue
-        
-        return "Nessuna tastiera virtuale di sistema trovata. Installa onboard, florence, xvkbd o matchbox-keyboard"
+
+        return _t('keyboard.noneFound', _lang())
     except Exception:
         log.exception("show_global_keyboard failed")
-        return "Errore nell'avvio della tastiera virtuale"
+        return _t('keyboard.startFailed', _lang())
 
 # Funzione per nascondere la tastiera virtuale globale
 def hide_global_keyboard():
@@ -3577,10 +3737,10 @@ def hide_global_keyboard():
         subprocess.run("pkill -f florence", shell=True, capture_output=True)
         subprocess.run("pkill -f xvkbd", shell=True, capture_output=True)
         subprocess.run("pkill -f matchbox-keyboard", shell=True, capture_output=True)
-        return "Tastiera virtuale chiusa"
+        return _t('keyboard.closed', _lang())
     except Exception:
         log.exception("hide_global_keyboard failed")
-        return "Errore nella chiusura della tastiera virtuale"
+        return _t('keyboard.closeFailed', _lang())
 
 # ──────────────────────────────────────────────────────────────────
 #  Guided room correction — measure the room with a USB mic and generate
@@ -3624,25 +3784,28 @@ def _roomcorr_state():
 
 def start_roomcorr_measure(data):
     if not os.path.exists(ROOMCORR_SCRIPT):
-        return {'success': False, 'message': 'Aggiornamento di sistema richiesto'}, 424
+        return {'success': False, 'code': 'roomcorr.updateRequired',
+                'message': _t('roomcorr.updateRequired', _lang())}, 424
     mic = str(data.get('mic_device') or '').strip()
     known = [m['device'] for m in get_roomcorr_mics()['mics']]
     if mic not in known:
-        return {'success': False, 'message': 'Microfono non trovato: collega un mic USB'}, 400
+        return {'success': False, 'code': 'roomcorr.micNotFound',
+                'message': _t('roomcorr.micNotFound', _lang())}, 400
     try:
         level = float(data.get('level_db') or -12.0)
     except (TypeError, ValueError):
         level = -12.0
     level = max(-30.0, min(-6.0, level))
     if _roomcorr_state().get('state') in ('preparing', 'sweep', 'analyzing'):
-        return {'success': False, 'message': 'Misura già in corso'}, 409
+        return {'success': False, 'code': 'roomcorr.alreadyMeasuring',
+                'message': _t('roomcorr.alreadyMeasuring', _lang())}, 409
 
     cfg = {'mic_device': mic, 'out_device': _current_real_dac(), 'level_db': level}
     with open(ROOMCORR_CFG, 'w') as f:
         json.dump(cfg, f)
     os.chmod(ROOMCORR_CFG, 0o600)
     with open(ROOMCORR_STATUS, 'w') as f:
-        json.dump({'state': 'preparing', 'progress': 0, 'message': 'Avvio…'}, f)
+        json.dump({'state': 'preparing', 'progress': 0, 'message': _t('common.starting', _lang())}, f)
     subprocess.run(['systemd-run', '--no-block', '--collect',
                     '--unit=' + ROOMCORR_UNIT, ROOMCORR_SCRIPT, ROOMCORR_CFG],
                    capture_output=True, text=True, timeout=10)
@@ -3666,7 +3829,8 @@ def roomcorr_apply():
     """Turn the freshly measured filter on via the normal DSP apply path."""
     fir_path, _ = _fir_current()
     if not fir_path:
-        return {'success': False, 'message': 'Nessun filtro presente: esegui prima la misura'}
+        return {'success': False, 'code': 'roomcorr.noFilter',
+                'message': _t('roomcorr.noFilter', _lang())}
     return set_dsp({'enabled': True, 'room_correction': True})
 
 def roomcorr_discard():
@@ -3902,6 +4066,19 @@ def api_ui_resolution():
 def api_set_ui_resolution():
     data = request.get_json(silent=True) or {}
     return jsonify(set_ui_resolution((data.get('mode') or '').strip()))
+
+@app.route('/timezone', methods=['GET'])
+def api_timezone():
+    return jsonify(get_timezone())
+
+@app.route('/timezone', methods=['POST'])
+def api_set_timezone():
+    data = request.get_json(silent=True) or {}
+    return jsonify(set_timezone(data.get('timezone') or ''))
+
+@app.route('/timezones', methods=['GET'])
+def api_list_timezones():
+    return jsonify({'timezones': list_timezones()})
 
 @app.route('/vu_meter', methods=['GET'])
 def api_vu_meter():

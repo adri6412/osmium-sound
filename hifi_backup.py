@@ -148,6 +148,11 @@ CATEGORIES = {
             ("file", "/etc/hifi-player/display-mode"),
             ("file", "/etc/hifi-player/ui-resolution"),
             ("file", "/etc/hifi-player/lyrion-channel"),
+            # The standard Debian file (not a custom /etc/hifi-player/ one):
+            # `timedatectl set-timezone` already keeps this and the
+            # /etc/localtime symlink it points at in sync and durable across
+            # reboots on its own, so there's nothing bespoke to reconcile here.
+            ("file", "/etc/timezone"),
             ("file", "/etc/default/squeezelite"),
             ("file", "/etc/camilladsp/config.yml"),
             ("file", "/var/lib/hifi-player/dsp-target"),
@@ -173,10 +178,18 @@ CATEGORIES = {
             ("dir", "/var/lib/squeezeboxserver/playlists", ()),
             ("dir", "/var/lib/lyrionmusicserver/prefs", ()),
             ("dir", "/var/lib/lyrionmusicserver/playlists", ()),
-            # cache/ is deliberately absent: it is the scanned library
-            # database, it is large, and Lyrion rebuilds it from the music
-            # itself. Backing it up would dominate the archive size while
-            # restoring nothing the user would miss.
+            # cache/ as a whole is deliberately absent: it is the scanned
+            # library database, it is large, and Lyrion rebuilds it from the
+            # music itself. Backing it up would dominate the archive size
+            # while restoring nothing the user would miss. InstalledPlugins/
+            # is the one exception carved out of it below: it is small (just
+            # which plugins are installed/enabled, not any scanned data) and
+            # losing it means every plugin — including a non-default default
+            # skin like Material — has to be reinstalled by hand after a
+            # restore, which is a much worse first impression than the extra
+            # few KB cost.
+            ("dir", "/var/lib/squeezeboxserver/cache/InstalledPlugins/Plugins", ()),
+            ("dir", "/var/lib/lyrionmusicserver/cache/InstalledPlugins/Plugins", ()),
         ],
     },
     "network": {
@@ -296,19 +309,32 @@ def _transform_lyrion_prefs(src, ctx):
     half-written file. Rather than stopping the music to avoid that (which is
     what a whole-system backup tool has to do), read it and check it parses —
     retry once, and if it still does not, skip that one file and say so in the
-    manifest. Nothing is silently archived broken."""
+    manifest. Nothing is silently archived broken.
+
+    server.prefs also gets its server_uuid dropped: it identifies this
+    specific Lyrion instance on the LAN (SqueezeCenter/SB discovery), so a
+    backup that still carried it would hand a second server — set up from
+    this same backup, e.g. a spare box — a duplicate UUID and confuse
+    discovery for both. Lyrion just mints a fresh one on next start if the
+    key is missing, so dropping it costs nothing on a normal same-device
+    restore either."""
     for attempt in (1, 2):
         with open(src, "rb") as f:
             raw = f.read()
         if yaml is None:
             return raw
         try:
-            yaml.safe_load(raw.decode("utf-8", "replace"))
-            return raw
+            data = yaml.safe_load(raw.decode("utf-8", "replace"))
         except Exception:
             if attempt == 2:
                 ctx.setdefault("notes", []).append(f"skipped-unparsable:{src}")
                 return None
+            continue
+        if os.path.basename(src) == "server.prefs" and isinstance(data, dict) and "server_uuid" in data:
+            del data["server_uuid"]
+            ctx.setdefault("notes", []).append(f"stripped-server-uuid:{src}")
+            return yaml.safe_dump(data, default_flow_style=False, allow_unicode=True).encode("utf-8")
+        return raw
     return None
 
 

@@ -17,7 +17,8 @@
     "language": "Language",
     "error": "Error",
     "done": "Done",
-    "noResults": "No results"
+    "noResults": "No results",
+    "networkError": "Connection error"
   },
   "sources": {
     "active": "Active sources",
@@ -587,6 +588,14 @@
         "osFailed": "Operating system update failed",
         "applyingUi": "Updating interface (restart when finished)…",
         "allDone": "Update complete"
+      },
+      "progressState": {
+        "starting": "Starting…",
+        "downloading": "Downloading update…",
+        "verifying": "Verifying…",
+        "applying": "Applying changes…",
+        "restarting": "Restarting…",
+        "done": "Done"
       },
       "overlay": {
         "titleAll": "Update in progress",

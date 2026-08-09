@@ -17,7 +17,8 @@
     "language": "Lingua",
     "error": "Errore",
     "done": "Fatto",
-    "noResults": "Nessun risultato"
+    "noResults": "Nessun risultato",
+    "networkError": "Errore di connessione"
   },
   "sources": {
     "active": "Sorgenti attive",
@@ -587,6 +588,14 @@
         "osFailed": "Aggiornamento sistema operativo fallito",
         "applyingUi": "Aggiornamento interfaccia (riavvio al termine)…",
         "allDone": "Aggiornamento completato"
+      },
+      "progressState": {
+        "starting": "Avvio…",
+        "downloading": "Scaricamento aggiornamento…",
+        "verifying": "Verifica…",
+        "applying": "Applicazione modifiche…",
+        "restarting": "Riavvio…",
+        "done": "Completato"
       },
       "overlay": {
         "titleAll": "Aggiornamento in corso",

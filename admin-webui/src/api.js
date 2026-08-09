@@ -4,7 +4,7 @@
 
 import { useI18n } from './i18n';
 
-const { t } = useI18n();
+const { t, lang } = useI18n();
 
 function csrfToken() {
   const m = document.cookie.match(/(?:^|;\s*)csrf=([^;]+)/);
@@ -18,6 +18,10 @@ async function req(path, { method = 'GET', body } = {}) {
     headers['Content-Type'] = 'application/json';
     opts.body = JSON.stringify(body);
   }
+  // So api_server/sources_server (behind webui_server's proxy — see _proxy()
+  // there) return `message` text in the language the owner actually picked,
+  // instead of always Italian.
+  headers['X-UI-Lang'] = lang.value;
   if (method !== 'GET') headers['X-CSRF-Token'] = csrfToken();
   let res, data;
   try {

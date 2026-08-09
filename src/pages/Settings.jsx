@@ -1034,7 +1034,7 @@ const Settings = ({ initialSection, onSectionConsumed } = {}) => {
     setPlanStatus({
       state: s.state,
       kind: s.kind || '',
-      message: s.message || '',
+      message: progressStateMessage(s.step_state, s.message || ''),
       progress: typeof s.overall_progress === 'number' ? s.overall_progress : null,
       doneKinds: (s.steps || []).filter((x) => x.state === 'done').map((x) => x.kind),
     });
@@ -1054,6 +1054,18 @@ const Settings = ({ initialSection, onSectionConsumed } = {}) => {
     localStorage.setItem('hifiUpdateAvailable', available ? '1' : '0');
     window.dispatchEvent(new CustomEvent('hifi-update-available', { detail: available }));
   }, [appUpdate, systemUpdate, osUpdate]);
+
+  // The updater scripts on the device (hifi-os-update.sh, hifi-system-update.sh,
+  // hifi-lyrion-update.sh, hifi-ota-update.sh) write free-text progress
+  // `message`s in Italian only — not locale-aware. `state` is the one
+  // locale-neutral field they emit, so that drives the displayed text; the raw
+  // message is kept only for 'error' (a diagnostic reason) and as a
+  // last-resort fallback for a state this list doesn't know about.
+  const progressStateMessage = (state, rawMessage) => {
+    if (state === 'error') return rawMessage || t('settings.updates.msg.updateError');
+    const known = ['starting', 'downloading', 'verifying', 'applying', 'restarting', 'done'];
+    return known.includes(state) ? t(`settings.updates.progressState.${state}`) : rawMessage;
+  };
 
   // ── OTA UI update handlers ──────────────────────────────────────
   const checkAppUpdate = async () => {
@@ -1094,7 +1106,7 @@ const Settings = ({ initialSection, onSectionConsumed } = {}) => {
         otaPollRef.current = setInterval(async () => {
           const s = await systemAPI.getAppUpdateStatus();
           if (s.success) {
-            setOtaStatus(s.data);
+            setOtaStatus({ ...s.data, message: progressStateMessage(s.data.state, s.data.message) });
             if (s.data.state === 'done' || s.data.state === 'error') {
               clearInterval(otaPollRef.current);
               otaPollRef.current = null;
@@ -1149,7 +1161,7 @@ const Settings = ({ initialSection, onSectionConsumed } = {}) => {
         systemPollRef.current = setInterval(async () => {
           const s = await systemAPI.getSystemUpdateStatus();
           if (s.success) {
-            setSystemStatus(s.data);
+            setSystemStatus({ ...s.data, message: progressStateMessage(s.data.state, s.data.message) });
             if (s.data.state === 'done' || s.data.state === 'error') {
               clearInterval(systemPollRef.current);
               systemPollRef.current = null;
@@ -1187,7 +1199,7 @@ const Settings = ({ initialSection, onSectionConsumed } = {}) => {
       setPlanStatus({
         state: s.state,
         kind: s.kind || '',
-        message: s.message || '',
+        message: progressStateMessage(s.step_state, s.message || ''),
         progress: typeof s.overall_progress === 'number' ? s.overall_progress : null,
         doneKinds: (s.steps || []).filter((x) => x.state === 'done').map((x) => x.kind),
       });
@@ -1356,7 +1368,7 @@ const Settings = ({ initialSection, onSectionConsumed } = {}) => {
       lyrionPollRef.current = setInterval(async () => {
         const s = await systemAPI.getLyrionUpdateStatus();
         if (s.success) {
-          setLyrionStatus(s.data);
+          setLyrionStatus({ ...s.data, message: progressStateMessage(s.data.state, s.data.message) });
           if (s.data.state === 'done' || s.data.state === 'error') {
             clearInterval(lyrionPollRef.current);
             lyrionPollRef.current = null;
@@ -1409,7 +1421,7 @@ const Settings = ({ initialSection, onSectionConsumed } = {}) => {
         osPollRef.current = setInterval(async () => {
           const s = await systemAPI.getOsUpdateStatus();
           if (s.success) {
-            setOsStatus(s.data);
+            setOsStatus({ ...s.data, message: progressStateMessage(s.data.state, s.data.message) });
             if (s.data.state === 'done' || s.data.state === 'error') {
               clearInterval(osPollRef.current);
               osPollRef.current = null;

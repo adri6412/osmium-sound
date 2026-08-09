@@ -34,6 +34,7 @@ from datetime import datetime, timezone
 
 import hifi_backup as hb
 from hifi_logging import tee_stdio_to_file
+from hifi_i18n import t as _ht
 # Every print() below keeps reaching the console/journald unchanged AND now also
 # lands in a size-rotated file at /var/log/hifi/sources.log (journald alone is
 # volatile on this image) — picked up by the support-bundle endpoint.
@@ -886,16 +887,30 @@ def current_paths(state):
     return paths
 
 
+def _hlang():
+    """Caller's UI language for hifi_i18n-backed messages (X-UI-Lang header,
+    same convention as api_server.py/webui_server.py) — distinct from
+    _req_lang()/_m() below, which serve the self-contained Sources web page via
+    ?lang=/Accept-Language. Wrapped in try/except because apply_to_lyrion() (the
+    only caller today) also runs from the format-watcher background thread,
+    outside any request context."""
+    try:
+        v = request.headers.get('X-UI-Lang')
+    except RuntimeError:
+        return 'it'
+    return v if v in ('en', 'it') else 'it'
+
+
 def apply_to_lyrion(state):
     """Write mediadirs into Lyrion prefs and restart + rescan."""
     try:
         import yaml
     except Exception:
-        return False, "python3-yaml non installato"
+        return False, _ht('lyrion.yamlMissing', _hlang())
 
     prefs = _ensure_prefs()
     if not prefs:
-        return False, "File prefs di Lyrion non trovato. Verifica che Lyrion sia avviato (systemctl status lyrionmusicserver)."
+        return False, _ht('lyrion.prefsNotFound', _hlang())
 
     paths = current_paths(state)
 
@@ -909,7 +924,7 @@ def apply_to_lyrion(state):
             if not mp or not os.path.ismount(mp):
                 unmounted_disks.append(src.get("name") or "disco")
     if unmounted_disks:
-        return False, "Disco non montato: " + ", ".join(unmounted_disks) + ". Verifica il collegamento prima di applicare."
+        return False, _ht('lyrion.diskNotMounted', _hlang(), disks=", ".join(unmounted_disks))
 
     # Stop Lyrion so it does not overwrite the prefs file under us.
     _run(["systemctl", "stop", LYRION_SERVICE], timeout=60)
@@ -1283,11 +1298,12 @@ def api_backup_create():
     if denied:
         return denied
     if not os.path.exists(BACKUP_SCRIPT):
-        return jsonify({"success": False,
-                        "message": "Aggiornamento di sistema richiesto"}), 424
+        return jsonify({"success": False, "code": "backup.systemUpdateRequired",
+                        "message": _ht('backup.systemUpdateRequired', _hlang())}), 424
     if _backup_status().get("state") in ("preparing", "checking", "archiving",
                                          "encrypting", "finishing"):
-        return jsonify({"success": False, "message": "Backup già in corso"}), 409
+        return jsonify({"success": False, "code": "backup.alreadyInProgress",
+                        "message": _ht('backup.alreadyInProgress', _hlang())}), 409
 
     data = request.get_json(silent=True) or {}
     passphrase = data.get("passphrase") or ""

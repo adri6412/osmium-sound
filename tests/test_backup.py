@@ -13,6 +13,8 @@ import tarfile
 import tempfile
 import unittest
 
+import yaml
+
 import hifi_backup as hb
 
 
@@ -183,7 +185,32 @@ class BuildArchiveTests(FakeRootTestCase):
         _write(self.root, "/var/lib/squeezeboxserver/cache/library.db", b"HUGE")
         logicals = [lg for lg, _ in hb.iter_members(["lyrion"], self.root)]
         self.assertIn("/var/lib/squeezeboxserver/prefs/server.prefs", logicals)
-        self.assertFalse([lg for lg in logicals if "/cache/" in lg])
+        self.assertFalse([lg for lg in logicals
+                          if "/cache/" in lg and "InstalledPlugins" not in lg])
+
+    def test_lyrion_installed_plugins_are_kept(self):
+        _write(self.root,
+               "/var/lib/squeezeboxserver/cache/InstalledPlugins/Plugins/Material.zip",
+               b"plugin data")
+        _write(self.root, "/var/lib/squeezeboxserver/cache/library.db", b"HUGE")
+        logicals = [lg for lg, _ in hb.iter_members(["lyrion"], self.root)]
+        self.assertIn(
+            "/var/lib/squeezeboxserver/cache/InstalledPlugins/Plugins/Material.zip",
+            logicals)
+        self.assertNotIn("/var/lib/squeezeboxserver/cache/library.db", logicals)
+
+    def test_server_uuid_is_stripped(self):
+        _write(self.root, "/var/lib/squeezeboxserver/prefs/server.prefs",
+               b"server_uuid: 8f14e45f-ceea-4e58-a1b2-abcdef123456\nplaylistdir: /music\n")
+        dest = os.path.join(self.root, "out.tar.gz")
+        notes = hb.build_archive(dest, ["lyrion"], self.root)["notes"]
+        with tarfile.open(dest) as tar:
+            raw = tar.extractfile(
+                "var/lib/squeezeboxserver/prefs/server.prefs").read()
+        data = yaml.safe_load(raw)
+        self.assertNotIn("server_uuid", data)
+        self.assertEqual(data["playlistdir"], "/music")
+        self.assertTrue(any("stripped-server-uuid" in n for n in notes))
 
 
 class SourcesRedactionTests(FakeRootTestCase):

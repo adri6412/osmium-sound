@@ -119,6 +119,10 @@
         "label": "Modalità schermo",
         "desc": "Interfaccia su schermo o headless"
       },
+      "timezone": {
+        "label": "Fuso orario",
+        "desc": "L'orologio del dispositivo"
+      },
       "updates": {
         "label": "Aggiornamenti",
         "desc": "Canale stabile/sviluppo, 4 componenti"
@@ -282,6 +286,13 @@
       "vuMeterChanged": "Preferenza VU meter salvata",
       "vuMeterFailed": "Salvataggio preferenza fallito"
     },
+    "timezone": {
+      "hint": "Un'installazione pulita non ha modo di chiederlo, quindi parte da UTC — scegli qui quello reale del dispositivo.",
+      "current": "Attuale",
+      "pick": "Cambia fuso orario",
+      "changed": "Fuso orario cambiato",
+      "changeFailed": "Cambio fuso orario fallito"
+    },
     "updates": {
       "channel": "Canale",
       "channelDev": "sviluppo (dev)",
@@ -310,7 +321,15 @@
       "kindOs": "Sistema operativo",
       "updating": "Aggiornamento {label}",
       "whatsNew": "Novità",
-      "changelogTitle": "Novità in {version}"
+      "changelogTitle": "Novità in {version}",
+      "progressState": {
+        "starting": "Avvio…",
+        "downloading": "Scaricamento aggiornamento…",
+        "verifying": "Verifica…",
+        "applying": "Applicazione modifiche…",
+        "restarting": "Riavvio…",
+        "done": "Completato"
+      }
     },
     "companion": {
       "hint": "Inquadra il QR dall'app Osmium Sound Companion per associare il telefono.",

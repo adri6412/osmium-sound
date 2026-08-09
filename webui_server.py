@@ -56,6 +56,7 @@ from flask import Flask, jsonify, request, session, redirect, send_from_director
 from werkzeug.security import generate_password_hash, check_password_hash
 
 from hifi_logging import tee_stdio_to_file
+from hifi_i18n import t as _wt
 # Every print() below keeps reaching the console/journald unchanged AND now also
 # lands in a size-rotated file at /var/log/hifi/webui.log (journald alone is
 # volatile on this image) — picked up by the support-bundle endpoint.
@@ -111,6 +112,19 @@ def _rate_limited(ip):
 def _record_fail(ip):
     with _auth_fail_lock:
         _auth_fail_log.setdefault(ip, []).append(time.monotonic())
+
+
+def _lang():
+    """Caller's UI language, sent by admin-webui's api.js as a header on every
+    request (same convention as api_server.py's own _lang()). Used both for
+    the couple of messages generated directly here (_proxy()'s own
+    unreachable-backend fallbacks) and to forward the caller's choice on to
+    api_server/sources_server, which otherwise have no way to see it."""
+    try:
+        v = request.headers.get('X-UI-Lang')
+    except RuntimeError:
+        return 'it'
+    return v if v in ('en', 'it') else 'it'
 
 
 # ── local IP discovery (for Host allowlist + cert SAN) ───────────────
@@ -670,7 +684,7 @@ def _evaluate_provisioning():
             return
         if not _ap_supported(dev):
             state['ap'] = {'active': False, 'supported': False, 'ssid': None,
-                           'error': 'La scheda Wi-Fi non supporta la modalità hotspot'}
+                           'error': _wt('network.hotspotUnsupported', _lang())}
             state['stage'] = 'waiting-lan'
             _save_prov_state(state)
             return
@@ -758,6 +772,10 @@ def _proxy(base, path, method='GET', body=None, timeout=15):
     if body is not None:
         data = json.dumps(body).encode('utf-8')
         req.add_header('Content-Type', 'application/json')
+    # Forward the caller's UI language so api_server/sources_server (which sit
+    # behind this proxy and never see the browser's own request directly) can
+    # translate their own responses instead of always defaulting to Italian.
+    req.add_header('X-UI-Lang', _lang())
     try:
         with urllib.request.urlopen(req, data=data, timeout=timeout) as resp:
             return json.loads(resp.read().decode('utf-8')), resp.status
@@ -765,10 +783,12 @@ def _proxy(base, path, method='GET', body=None, timeout=15):
         try:
             return json.loads(e.read().decode('utf-8')), e.code
         except Exception:
-            return {'success': False, 'message': 'Servizio non disponibile'}, e.code
+            return {'success': False, 'code': 'proxy.serviceUnavailable',
+                    'message': _wt('proxy.serviceUnavailable', _lang())}, e.code
     except Exception as e:
         print(f'[webui] proxy {path} unreachable: {e}')
-        return {'success': False, 'message': 'Servizio non raggiungibile'}, 502
+        return {'success': False, 'code': 'proxy.serviceUnreachable',
+                'message': _wt('proxy.serviceUnreachable', _lang())}, 502
 
 
 # Full admin whitelist (session required). (local_path, method) -> api path.
@@ -809,6 +829,9 @@ _AUTH_ROUTES = {
     ('/api/system/display_mode', 'POST'): '/display_mode',
     ('/api/system/ui_resolution', 'GET'): '/ui_resolution',
     ('/api/system/ui_resolution', 'POST'): '/ui_resolution',
+    ('/api/system/timezone', 'GET'): '/timezone',
+    ('/api/system/timezone', 'POST'): '/timezone',
+    ('/api/system/timezones', 'GET'): '/timezones',
     ('/api/system/vu_meter', 'GET'): '/vu_meter',
     ('/api/system/vu_meter', 'POST'): '/vu_meter',
     ('/api/system/updates/app/check', 'GET'): '/app_update/check',
@@ -917,7 +940,8 @@ def _guard():
         cookie = request.cookies.get('csrf')
         header = request.headers.get('X-CSRF-Token')
         if not cookie or not header or not secrets.compare_digest(cookie, header):
-            return jsonify({'success': False, 'message': 'CSRF token mancante o non valido'}), 403
+            return jsonify({'success': False, 'code': 'auth.csrfInvalid',
+                            'message': _wt('auth.csrfInvalid', _lang())}), 403
 
 
 @app.after_request
@@ -932,7 +956,8 @@ def _set_csrf_cookie(resp):
 
 def _require_session():
     if not _logged_in():
-        return jsonify({'success': False, 'message': 'Autenticazione richiesta'}), 401
+        return jsonify({'success': False, 'code': 'auth.required',
+                        'message': _wt('auth.required', _lang())}), 401
     return None
 
 
@@ -950,7 +975,8 @@ def auth_status():
 def auth_setup():
     # Create the admin account — allowed ONLY when none exists yet (first setup).
     if _get_user() is not None:
-        return jsonify({'success': False, 'message': 'Account già esistente'}), 409
+        return jsonify({'success': False, 'code': 'auth.accountExists',
+                        'message': _wt('auth.accountExists', _lang())}), 409
     data = request.get_json(silent=True) or {}
     username = (data.get('username') or '').strip()
     password = data.get('password') or ''
@@ -976,7 +1002,8 @@ def auth_login():
     row = _get_user()
     if not row or row['username'] != username or not check_password_hash(row['password_hash'], password):
         _record_fail(ip)
-        return jsonify({'success': False, 'message': 'Credenziali non valide'}), 401
+        return jsonify({'success': False, 'code': 'auth.invalidCredentials',
+                        'message': _wt('auth.invalidCredentials', _lang())}), 401
     session.clear()
     session['auth'] = True
     session['sv'] = _session_version()
@@ -1045,7 +1072,8 @@ def provision_use_wired():
     done. Verified so we never mark it done with no real uplink (which would
     strand the box after the hotspot drops)."""
     if not _provisioning():
-        return jsonify({'success': False, 'message': 'Non in provisioning'}), 409
+        return jsonify({'success': False, 'code': 'provision.notInProgress',
+                        'message': _wt('provision.notInProgress', _lang())}), 409
     # api_server.wired_dhcp() runs `nmcli device connect <eth>` and returns the IP.
     body, _ = _proxy(API_BASE, '/wired_dhcp', method='POST', body={}, timeout=50)
     body = body or {}
@@ -1064,7 +1092,8 @@ def provision_use_wired():
 @app.route('/api/provision/wifi_connect', methods=['POST'])
 def provision_wifi_connect():
     if not _provisioning():
-        return jsonify({'success': False, 'message': 'Non in provisioning'}), 409
+        return jsonify({'success': False, 'code': 'provision.notInProgress',
+                        'message': _wt('provision.notInProgress', _lang())}), 409
     data = request.get_json(silent=True) or {}
     ssid = (data.get('ssid') or '').strip()
     password = data.get('password') or ''
@@ -1098,17 +1127,20 @@ def _bg_connect(ssid, password):
 @app.route('/api/provision/claim_mode', methods=['POST'])
 def provision_claim_mode():
     if not _provisioning():
-        return jsonify({'success': False, 'message': 'Non in provisioning'}), 409
+        return jsonify({'success': False, 'code': 'provision.notInProgress',
+                        'message': _wt('provision.notInProgress', _lang())}), 409
     data = request.get_json(silent=True) or {}
     mode = (data.get('mode') or '').strip()
     source = (data.get('source') or 'web').strip()
     if mode not in ('gui', 'headless'):
-        return jsonify({'success': False, 'message': 'Modalità non valida'}), 400
+        return jsonify({'success': False, 'code': 'provision.invalidMode',
+                        'message': _wt('provision.invalidMode', _lang())}), 400
     with _prov_lock:
         state = _load_prov_state()
         if state.get('mode') and state.get('claimed_by') and state.get('claimed_by') != source:
             # Someone already claimed (first wins).
-            return jsonify({'success': False, 'message': 'Modalità già scelta',
+            return jsonify({'success': False, 'code': 'provision.modeAlreadyClaimed',
+                            'message': _wt('provision.modeAlreadyClaimed', _lang()),
                             'mode': state.get('mode'), 'claimed_by': state.get('claimed_by')}), 409
         state['mode'] = mode
         state['claimed_by'] = source
@@ -1209,7 +1241,8 @@ def _handle_proxy(local_path, method):
         table = _AUTH_ROUTES
     api_path = table.get(key)
     if not api_path:
-        return jsonify({'success': False, 'message': 'Endpoint non consentito'}), 403
+        return jsonify({'success': False, 'code': 'proxy.endpointNotAllowed',
+                        'message': _wt('proxy.endpointNotAllowed', _lang())}), 403
     body = request.get_json(silent=True) if method != 'GET' else None
     data, status = _proxy(API_BASE, api_path, method=method, body=body,
                           timeout=200 if 'tailscale_install' in api_path
@@ -1247,7 +1280,8 @@ def factory_reset():
         return denied
     data = request.get_json(silent=True) or {}
     if not _verify_password(data.get('password') or ''):
-        return jsonify({'success': False, 'message': 'Password non valida'}), 403
+        return jsonify({'success': False, 'code': 'auth.wrongPassword',
+                        'message': _wt('auth.wrongPassword', _lang())}), 403
     body, status = _proxy(API_BASE, '/factory_reset', method='POST', body={})
     return jsonify(body), status
 
@@ -1356,9 +1390,11 @@ def sources_forward(rest):
     # the known sources prefixes, token-gated; everything else is a 404.
     path = '/api/' + rest
     if not any(path == p or path.startswith(p + '/') for p in _SOURCES_FWD_PREFIXES):
-        return jsonify({'success': False, 'message': 'Endpoint sconosciuto'}), 404
+        return jsonify({'success': False, 'code': 'proxy.unknownEndpoint',
+                        'message': _wt('proxy.unknownEndpoint', _lang())}), 404
     if not _sources_token_ok():
-        return jsonify({'success': False, 'message': 'Token di pairing mancante o non valido'}), 401
+        return jsonify({'success': False, 'code': 'pairing.tokenInvalid',
+                        'message': _wt('pairing.tokenInvalid', _lang())}), 401
     return _forward_to_sources(path)
 
 

@@ -1,8 +1,19 @@
 /**
  * API utility functions for communicating with the Flask backend
  */
+import en from '../i18n/locales/en.json';
+import it from '../i18n/locales/it.json';
 
 const API_BASE_URL = 'http://localhost:8000';
+
+// This module runs outside React (no access to the I18nProvider context), so
+// the connection-error fallback reads the UI language straight from the same
+// localStorage key I18nProvider persists to (src/i18n/index.jsx), instead of
+// being hardcoded to one language regardless of the user's setting.
+const networkErrorMessage = () => {
+  const lang = localStorage.getItem('appLanguage');
+  return (lang === 'en' ? en : it).common.networkError;
+};
 
 /**
  * Make a POST request to the API
@@ -20,6 +31,7 @@ export const apiPost = async (endpoint, data = {}) => {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        'X-UI-Lang': (localStorage.getItem('appLanguage') === 'en' ? 'en' : 'it'),
       },
       body: JSON.stringify(data),
     });
@@ -37,7 +49,7 @@ export const apiPost = async (endpoint, data = {}) => {
       success: false,
       status,
       error: error.message,
-      message: `Errore di connessione: ${error.message}`
+      message: `${networkErrorMessage()}: ${error.message}`
     };
   }
 };
@@ -54,6 +66,7 @@ export const apiGet = async (endpoint) => {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',
+        'X-UI-Lang': (localStorage.getItem('appLanguage') === 'en' ? 'en' : 'it'),
       },
     });
     status = response.status;
@@ -70,7 +83,7 @@ export const apiGet = async (endpoint) => {
       success: false,
       status,
       error: error.message,
-      message: `Errore di connessione: ${error.message}`
+      message: `${networkErrorMessage()}: ${error.message}`
     };
   }
 };
