@@ -29,7 +29,7 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           # Full history + all tags, not the default single-commit shallow
           # clone — the changelog step below needs to walk back to the
@@ -313,7 +313,7 @@ jobs:
       # the same mechanism in each of the three gh-pages-publishing workflows.
       - name: Checkout updated gh-pages for Actions-based Pages deploy
         if: github.ref_type == 'tag'
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           ref: gh-pages
           path: gh-pages-deploy
