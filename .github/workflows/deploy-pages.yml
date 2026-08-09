@@ -19,7 +19,7 @@ jobs:
       name: github-pages
       url: ${{ steps.pages-deployment.outputs.page_url }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Deploy to gh-pages branch
         uses: peaceiris/actions-gh-pages@v4
@@ -37,7 +37,7 @@ jobs:
       # the push above no longer triggers a deploy on its own. Re-checkout
       # what was just pushed and publish it explicitly via Actions.
       - name: Checkout updated gh-pages for Actions-based Pages deploy
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           ref: gh-pages
           path: gh-pages-deploy
