@@ -15,6 +15,28 @@ import { I18nProvider } from './i18n';
 import { lyrionApi } from './utils/lyrionApi';
 import { systemAPI } from './utils/api';
 
+// Mirrors useLyrionPlayer's connectToServer player-selection logic (see
+// src/hooks/useLyrionPlayer.js): `players_loop` isn't necessarily "this
+// appliance first" — the companion app auto-launches Squeezelite/
+// SqueezePlayer on the phone as a second LMS player, and LMS can list it
+// ahead of this kiosk's own player. The screensaver wake/sleep checks below
+// used to just take `players_loop[0]` — on a setup with a second player,
+// that's a coinflip on whether it lands on the kiosk's own player or the
+// phone's, and if it lands on the phone's (stopped) player, playback started
+// remotely on the *kiosk* keeps reading as "not playing" and the screensaver
+// never wakes. Resolve the same way the rest of the app does: prefer the
+// player matching this device's own squeezelite name.
+const isLocalPlayerPlaying = async () => {
+  const status = await lyrionApi.getServerStatus();
+  const players = status?.players_loop || [];
+  if (players.length === 0) return false;
+  const nameRes = await systemAPI.getPlayerName().catch(() => null);
+  const localName = nameRes?.success ? nameRes.data?.name : null;
+  const player = (localName && players.find(p => p.name === localName)) || players[0];
+  const ps = await lyrionApi.getPlayerStatus(player.playerid);
+  return ps?.mode === 'play';
+};
+
 const AppContent = () => {
   // Boot intro: a 5s logo animation shown over everything at startup, then
   // faded out to reveal the UI (which mounts/loads underneath meanwhile).
@@ -99,12 +121,7 @@ const AppContent = () => {
     inactivityTimer.current = setTimeout(async () => {
       let isPlaying = false;
       try {
-        const status = await lyrionApi.getServerStatus();
-        const players = status?.players_loop || [];
-        if (players.length > 0) {
-          const ps = await lyrionApi.getPlayerStatus(players[0].playerid);
-          isPlaying = ps?.mode === 'play';
-        }
+        isPlaying = await isLocalPlayerPlaying();
       } catch (_) {}
       if (inactivityTokenRef.current !== myToken) return; // superseded — discard this stale read
       if (!isPlaying) setIsScreensaverActive(true);
@@ -130,12 +147,7 @@ const AppContent = () => {
     if (!isScreensaverActive) return;
     const poll = setInterval(async () => {
       try {
-        const status = await lyrionApi.getServerStatus();
-        const players = status?.players_loop || [];
-        if (players.length > 0) {
-          const ps = await lyrionApi.getPlayerStatus(players[0].playerid);
-          if (ps?.mode === 'play') resetInactivityTimer();
-        }
+        if (await isLocalPlayerPlaying()) resetInactivityTimer();
       } catch (_) {}
     }, 10 * 1000);
     return () => clearInterval(poll);
