@@ -42,8 +42,15 @@ APP="$(command -v hifi-media-player || true)"
 # if the app ever exits or is killed (full crash after long uptime), relaunch it
 # instead of dropping to a dead/blank screen. A short sleep avoids a hot loop if
 # it fails to start at all.
+#
+# `nice -n -5`: second-highest CPU priority on the box (after squeezelite's
+# Nice=-10, see squeezelite.service) so background work — OTA/log/samba —
+# doesn't steal cycles mid-animation and make window open/close feel laggy.
+# The "hifi" user's PAM nice ceiling is raised for this in
+# /etc/security/limits.d/10-hifi-kiosk-nice.conf; without it this silently
+# runs at nice 0 (nice(1) warns to stderr but still execs the app).
 while true; do
-    "$APP" \
+    nice -n -5 "$APP" \
         --no-sandbox \
         --disable-dev-shm-usage \
         --enable-features=UseOzonePlatform \
