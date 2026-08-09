@@ -18,7 +18,11 @@ const sections = computed(() => [
   { key: 'network',   label: t('settings.sections.network.label'),   desc: t('settings.sections.network.desc') },
   { key: 'audio',     label: t('settings.sections.audio.label'),     desc: t('settings.sections.audio.desc') },
   { key: 'sources',   label: t('settings.sections.sources.label'),   desc: t('settings.sections.sources.desc') },
-  { key: 'dsp',       label: t('settings.sections.dsp.label'),       desc: t('settings.sections.dsp.desc') },
+  // 'dsp' is deliberately NOT listed here — the feature (and its room-correction
+  // sub-flow) is being held back for a future paid tier. The card markup below
+  // (v-if="open === 'dsp'") and all its backing code/API endpoints are left
+  // fully intact on purpose, just unreachable: normalizeSection() below also
+  // strips a hand-typed ?open=dsp so there's no direct-URL bypass either.
   { key: 'services',  label: t('settings.sections.services.label'),  desc: t('settings.sections.services.desc') },
   { key: 'tailscale', label: t('settings.sections.tailscale.label'), desc: t('settings.sections.tailscale.desc') },
   { key: 'lyrion',    label: t('settings.sections.lyrion.label'),    desc: t('settings.sections.lyrion.desc') },
@@ -32,8 +36,10 @@ const sections = computed(() => [
   { key: 'system',    label: t('settings.sections.system.label'),    desc: t('settings.sections.system.desc') },
 ]);
 // 'multiroom' was this section's key before it became "Lyrion Music Server";
-// keep old bookmarks and the kiosk's deep links working.
-const normalizeSection = (k) => (k === 'multiroom' ? 'lyrion' : (k || ''));
+// keep old bookmarks and the kiosk's deep links working. 'dsp' is held back
+// (see the sections list above) — redirect a hand-typed ?open=dsp back to the
+// section list instead of rendering the card.
+const normalizeSection = (k) => (k === 'multiroom' ? 'lyrion' : k === 'dsp' ? '' : (k || ''));
 const open = ref(normalizeSection(route.query.open));
 watch(() => route.query.open, (v) => { open.value = normalizeSection(v); });
 function goto(k) { router.replace({ query: k ? { open: k } : {} }); }

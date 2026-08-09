@@ -1719,11 +1719,13 @@ const Settings = ({ initialSection, onSectionConsumed } = {}) => {
       icon: Sliders,
       content: 'custom-playback'
     },
-    {
-      title: t('settings.sections.dsp'),
-      icon: Sliders,
-      content: 'custom-dsp'
-    },
+    // 'custom-dsp' is deliberately NOT listed here — the feature (and its
+    // room-correction wizard, RoomCorrectionWizard) is being held back for a
+    // future paid tier. The JSX block below (section.content === 'custom-dsp')
+    // and all backing code/API endpoints are left fully intact on purpose,
+    // just unreachable: activeSection is plain React state set only by
+    // clicking an entry in this array, so removing the entry alone closes off
+    // every path to it (no URL/query-string deep-link exists in this app).
     {
       title: t('settings.sections.multiroom'),
       icon: Speaker,
