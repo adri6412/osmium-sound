@@ -327,7 +327,7 @@ jobs:
       - name: Deploy to GitHub Pages
         if: github.ref_type == 'tag'
         id: pages-deployment
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@v5
 
       - name: Upload artifact (manual runs)
         if: github.ref_type != 'tag'
