@@ -103,57 +103,74 @@ const fnv1aHash = (bytes) => {
   return h >>> 0;
 };
 
-// For the "now playing" cover (mini-player + fullscreen): the URL's
-// cache-buster changes every ~10s for a remote/radio track (the trackKey
-// heartbeat in useLyrionPlayer.js) even though the artwork itself is usually
-// byte-identical — the preload-before-swap approach still swapped the <img>
-// src (or backgroundImage) to a freshly-fetched-but-identical resource every
-// cycle, and that swap alone was still enough to cause a visible flash on
-// this hardware. So instead of trusting the URL, actually fetch the bytes,
-// hash them, and only touch the DOM (create a new object URL, swap it in)
-// when the hash genuinely differs from what's already showing — if the
-// cover hasn't changed, this is a complete no-op, nothing re-renders/repaints.
-// Deliberately NOT used for the browse-grid ArtworkImage usage: those URLs
-// are static per album (not re-polled), so they never hit this problem, and
-// eagerly `fetch()`-ing hundreds of grid covers would defeat their
-// `loading="lazy"` viewport-based deferral.
-const usePolledArtwork = (url) => {
+// Cover art for the "now playing" view (mini-player + fullscreen), for
+// *remote* tracks only (radio/Qobuz/Tidal/on-demand plugins) — local tracks
+// have a stable DB id and just use <ArtworkImage> directly with the static,
+// race-free /music/{id}/cover URL (see useLyrionPlayer's artworkUrl), the
+// same one the library browse grid already uses without this class of bug.
+//
+// Remote tracks have no such id: the URL is LMS's stateful
+// /music/current/cover.jpg, re-keyed by useLyrionPlayer's trackKey, which
+// bundles two very different kinds of change:
+//   - `identityKey` changes: LMS told us something concrete changed
+//     (id/title/artist/album/current_title) — a *confirmed* track change.
+//   - heartbeat-only changes: a coarse ~10s poll to catch on-demand plugins
+//     (Qobuz/Tidal "radio" mixes) that silently advance to a new song
+//     without updating any of the above — a *probe*, not a confirmation.
+// Those two need different handling: on a confirmed change, the art on
+// screen is now known-stale and must not linger — hold a loading state
+// instead. On a probe, there's no evidence anything's actually wrong, so the
+// current art stays up and only gets swapped if the refetched bytes hash
+// differently (still fetch+hash+dedupe here rather than trusting the URL:
+// the cache-buster changes every heartbeat even when the art is
+// byte-identical, and swapping the <img>/backgroundImage to a
+// freshly-fetched-but-identical resource was still enough to cause a
+// visible flash on this hardware).
+const usePolledArtwork = (url, identityKey) => {
   const safeSrc = url ? safeUrl(url) : null;
   const [objectUrl, setObjectUrl] = useState(null);
   const [failed, setFailed] = useState(!safeSrc);
   const hashRef = useRef(null);
   const objectUrlRef = useRef(null);
   const requestIdRef = useRef(0);
+  // Sentinel (not a value identityKey can ever equal) so the very first
+  // fetch after mount is always treated as a confirmed change — it gets the
+  // full retry budget, same as any other genuine track change, rather than
+  // being mistaken for a probe on an already-showing (nonexistent) cover.
+  const lastIdentityRef = useRef(Symbol('initial'));
 
   useEffect(() => {
+    const isConfirmedChange = identityKey !== lastIdentityRef.current;
+    lastIdentityRef.current = identityKey;
+
     if (!safeSrc) {
       requestIdRef.current += 1;
+      hashRef.current = null;
+      if (objectUrlRef.current) { URL.revokeObjectURL(objectUrlRef.current); objectUrlRef.current = null; }
+      setObjectUrl(null);
       setFailed(true);
       return;
     }
     const myRequestId = ++requestIdRef.current;
-    // A local track's safeSrc/trackKey doesn't change again until the *next*
-    // song (unlike a remote/radio one, re-keyed every ~10s by the heartbeat in
-    // useLyrionPlayer.js) — so a single fetch failure here used to be
-    // permanent: one retry, then give up, leaving the *previous* track's art
-    // (still sitting in objectUrl/hashRef from the last successful fetch)
-    // displayed as if it were current for the rest of the song, with no
-    // visible failure state (see the old `failed && !objectUrl` below, which
-    // suppressed `failed` entirely once anything had ever succeeded once).
-    // Retrying several times over a few seconds instead of once means a
-    // transient blip (the kind of thing that tends to line up with the
-    // display waking from the in-app screensaver) self-heals instead of
-    // freezing the cover for an entire song.
-    //
-    // 10 attempts (was 5): LMS resizes cover art itself (Image::Scale, a
-    // native Perl module) on demand — on a slower/different CPU than the dev
-    // box that resize can genuinely take longer than the old ~7.5s budget,
-    // especially while squeezelite/CamillaDSP are also active on the same
-    // box. That made this box fall back to the generic icon on nearly every
-    // track instead of the occasional transient blip this was designed for.
-    // ~18s (plus per-attempt fetch time) gives a loaded LMS a real chance to
-    // finish before giving up.
-    const MAX_ATTEMPTS = 10;
+
+    if (isConfirmedChange) {
+      // LMS told us this is a different track than what's on screen — that
+      // art is now known-wrong. Drop it immediately instead of leaving a
+      // confidently-wrong image up while the replacement loads.
+      hashRef.current = null;
+      if (objectUrlRef.current) { URL.revokeObjectURL(objectUrlRef.current); objectUrlRef.current = null; }
+      setObjectUrl(null);
+      setFailed(false); // loading, not failed yet
+    }
+
+    // Confirmed changes retry harder: LMS resizes cover art itself
+    // (Image::Scale, a native Perl module) on demand, which can genuinely
+    // take several seconds on a loaded/slower box (squeezelite/CamillaDSP
+    // sharing the CPU) — worth waiting out before giving up to the
+    // placeholder. A heartbeat probe has no evidence anything changed, so it
+    // isn't worth hammering retries over — one retry and move on to the next
+    // probe cycle.
+    const MAX_ATTEMPTS = isConfirmedChange ? 6 : 2;
     const attempt = async (attemptNum) => {
       try {
         const res = await fetch(safeSrc);
@@ -173,27 +190,26 @@ const usePolledArtwork = (url) => {
         if (requestIdRef.current !== myRequestId) return;
         if (attemptNum < MAX_ATTEMPTS) {
           setTimeout(() => { if (requestIdRef.current === myRequestId) attempt(attemptNum + 1); }, ARTWORK_RETRY_MS);
-        } else {
-          // Every retry failed — this isn't a one-off blip. Stop displaying the
-          // previous track's cover as if it were current: drop it and fall
-          // back to the placeholder icon instead of a confidently wrong image.
+        } else if (isConfirmedChange) {
+          // Every retry failed on a track we know changed — this isn't a
+          // one-off blip. Fall back to the placeholder icon instead of
+          // leaving a stale (or already-cleared) image up indefinitely.
           hashRef.current = null;
           if (objectUrlRef.current) { URL.revokeObjectURL(objectUrlRef.current); objectUrlRef.current = null; }
           setObjectUrl(null);
           setFailed(true);
         }
+        // A failed probe (not a confirmed change) leaves the current art
+        // exactly as-is — there's no evidence it's wrong, so there's nothing
+        // to correct until the next probe or a confirmed change.
       }
     };
     attempt(1);
-  }, [safeSrc]);
+  }, [safeSrc, identityKey]);
 
   // Release the last object URL when this instance goes away entirely.
   useEffect(() => () => { if (objectUrlRef.current) URL.revokeObjectURL(objectUrlRef.current); }, []);
 
-  // `failed` now genuinely means "gave up after MAX_ATTEMPTS" (objectUrl is
-  // already cleared in that case above) — no need to re-derive/mask it here
-  // the way the old `failed && !objectUrl` did, which is what let a stale
-  // objectUrl suppress the failure state and keep showing the wrong cover.
   return { objectUrl, failed };
 };
 
@@ -398,6 +414,7 @@ const LyrionServer = () => {
     connectToServer, handleAction,
     currentTrack, title, artist, album, isPlaying, volume, repeatMode, shuffleMode,
     willSleepIn, duration, time, progress, artworkUrl, artworkUrlLg, formatLabel,
+    isRemoteTrack, artworkIdentityKey,
     setVolume: setPlayerVolume, toggleMute, seek, cycleShuffle, cycleRepeat,
     setSleepTimer: applySleepTimer,
     queue, queueIndex, loadQueue, queueJump, queueRemove, queueMove, queueClear,
@@ -410,12 +427,14 @@ const LyrionServer = () => {
     resolveMenuIcon, handleMenuItem, submitMenuSearch, openTabView,
   } = useLyrionPlayer();
 
-  // Hash-deduped "now playing" cover, shared by the mini-player's <img> +
-  // glow background and the fullscreen <img> + blurred backdrop below — see
-  // usePolledArtwork's own comment. One fetch per poll tick per size, reused
-  // for both the image and its background twin instead of fetching twice.
-  const npArtwork = usePolledArtwork(artworkUrl);
-  const npArtworkLg = usePolledArtwork(artworkUrlLg);
+  // Now-playing cover, remote-track case only: hash-deduped, shared by the
+  // mini-player's <img> + glow background and the fullscreen <img> + blurred
+  // backdrop below — see usePolledArtwork's own comment. One fetch per poll
+  // tick per size, reused for both the image and its background twin instead
+  // of fetching twice. Local tracks skip this hook entirely and render
+  // <ArtworkImage> directly off the static per-id URL further down.
+  const npArtwork = usePolledArtwork(isRemoteTrack ? artworkUrl : null, artworkIdentityKey);
+  const npArtworkLg = usePolledArtwork(isRemoteTrack ? artworkUrlLg : null, artworkIdentityKey);
 
   // `handlePlayItem` is a plain function redefined on every useLyrionPlayer()
   // call (every 1s playback-poll tick, not wrapped in useCallback there), so
@@ -1079,15 +1098,26 @@ const LyrionServer = () => {
           <div
             className="relative w-[250px] h-[250px] rounded-2xl overflow-hidden shadow-[0_8px_40px_rgba(0,0,0,0.7)] border border-white/5 cursor-pointer group bg-hifi-gray flex-shrink-0"
             onClick={() => activePlayer && setIsPlayerExpanded(true)}>
-            {npArtwork.objectUrl && (
-              <div className="artwork-glow" style={{ backgroundImage: `url(${npArtwork.objectUrl})` }} />
-            )}
-            {npArtwork.failed || !npArtwork.objectUrl ? (
-              <div className="absolute inset-0 flex items-center justify-center text-hifi-silver/20 bg-gradient-to-br from-hifi-gray to-hifi-dark">
-                <Music size={40} />
-              </div>
+            {isRemoteTrack ? (
+              <>
+                {npArtwork.objectUrl && (
+                  <div className="artwork-glow" style={{ backgroundImage: `url(${npArtwork.objectUrl})` }} />
+                )}
+                {npArtwork.failed || !npArtwork.objectUrl ? (
+                  <div className="absolute inset-0 flex items-center justify-center text-hifi-silver/20 bg-gradient-to-br from-hifi-gray to-hifi-dark">
+                    <Music size={40} />
+                  </div>
+                ) : (
+                  <img src={npArtwork.objectUrl} alt="Album Art" className="w-full h-full object-cover relative z-10" decoding="async" />
+                )}
+              </>
             ) : (
-              <img src={npArtwork.objectUrl} alt="Album Art" className="w-full h-full object-cover relative z-10" decoding="async" />
+              <>
+                {artworkUrl && (
+                  <div className="artwork-glow" style={{ backgroundImage: `url(${artworkUrl})` }} />
+                )}
+                <ArtworkImage src={artworkUrl} alt="Album Art" className="w-full h-full object-cover relative z-10" FallbackIcon={Music} />
+              </>
             )}
             {activePlayer && (
               <div className="absolute inset-0 z-20 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity rounded-2xl">
@@ -1244,7 +1274,7 @@ const LyrionServer = () => {
                   slide-up entrance transition (translateY), especially on
                   weak/virtualized GPUs (e.g. VMware SVGA in the test VM). */}
               <div className="absolute inset-0 opacity-20 bg-cover bg-center blur-lg scale-125 pointer-events-none transition-all duration-1000"
-                style={{ backgroundImage: npArtworkLg.objectUrl ? `url(${npArtworkLg.objectUrl})` : 'none' }} />
+                style={{ backgroundImage: (isRemoteTrack ? npArtworkLg.objectUrl : artworkUrlLg) ? `url(${isRemoteTrack ? npArtworkLg.objectUrl : artworkUrlLg})` : 'none' }} />
               <div className="absolute inset-0 bg-gradient-to-t from-black/95 via-black/60 to-transparent pointer-events-none" />
 
               {/* Close button row */}
@@ -1280,12 +1310,16 @@ const LyrionServer = () => {
                 <motion.div className="w-[44%] flex items-center justify-center flex-shrink-0"
                   initial={{ x: -20, opacity: 0 }} animate={{ x: 0, opacity: 1 }} transition={{ delay: 0.08 }}>
                   <div className="relative w-full max-w-[320px] aspect-square rounded-2xl overflow-hidden shadow-[0_20px_60px_rgba(0,0,0,0.7)] border border-white/8 bg-hifi-gray">
-                    {npArtworkLg.failed || !npArtworkLg.objectUrl ? (
-                      <div className="absolute inset-0 flex items-center justify-center text-hifi-silver/20 bg-gradient-to-br from-hifi-gray to-hifi-dark">
-                        <Music size={40} />
-                      </div>
+                    {isRemoteTrack ? (
+                      npArtworkLg.failed || !npArtworkLg.objectUrl ? (
+                        <div className="absolute inset-0 flex items-center justify-center text-hifi-silver/20 bg-gradient-to-br from-hifi-gray to-hifi-dark">
+                          <Music size={40} />
+                        </div>
+                      ) : (
+                        <img src={npArtworkLg.objectUrl} alt="Album Art" className="w-full h-full object-cover" decoding="async" />
+                      )
                     ) : (
-                      <img src={npArtworkLg.objectUrl} alt="Album Art" className="w-full h-full object-cover" decoding="async" />
+                      <ArtworkImage src={artworkUrlLg} alt="Album Art" className="w-full h-full object-cover" FallbackIcon={Music} />
                     )}
                   </div>
                 </motion.div>

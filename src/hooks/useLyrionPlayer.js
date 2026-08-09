@@ -489,17 +489,23 @@ export function useLyrionPlayer() {
   const duration     = currentTrack.duration || 0;
   const time         = playerStatus?.time || 0;
   const progress     = duration > 0 ? (time / duration) * 100 : 0;
-  // Don't try to rebuild the cover URL ourselves from artwork_url/coverid —
-  // for remote streams (radio/Qobuz/Spotify/etc.) that field can be a path
-  // relative to LMS itself (its /imageproxy/... proxy), a protocol-handler-
-  // specific format, or simply absent depending on the plugin. LMS already
-  // has to solve this exact problem for its own web skins, via a special
+  // Local tracks have a stable DB id, so they use the exact same static,
+  // race-free per-ID endpoint the library browse grid already relies on
+  // (lyrionApi.getArtworkUrl → /music/{id}/cover) — no cache-buster needed,
+  // the URL itself changes when (and only when) the track does, and there's
+  // no server-side "what's playing right now" state to race against.
+  //
+  // Remote streams (radio/Qobuz/Spotify/on-demand plugins/...) don't have a
+  // resolvable id/coverid on the client — that field can be a path relative
+  // to LMS itself (its /imageproxy/... proxy), a protocol-handler-specific
+  // format, or simply absent depending on the plugin. LMS already has to
+  // solve this exact problem for its own web skins, via a special
   // `/music/current/cover.jpg?player=<mac>` URL that it resolves server-side
-  // for whatever is actually playing — local track or remote stream alike
-  // (see Slim::Web::Graphics::artworkRequest's `id eq 'current'` case). Reuse
-  // that instead of duplicating LMS's own resolution logic on the client.
-  // `k=` is a pure cache-buster: the URL itself never changes as tracks
-  // advance, so without it the browser would keep showing a stale image.
+  // for whatever is actually playing (see Slim::Web::Graphics::
+  // artworkRequest's `id eq 'current'` case) — reuse that instead of
+  // duplicating LMS's own resolution logic on the client. `k=` is a pure
+  // cache-buster: the URL itself never changes as tracks advance, so without
+  // it the browser would keep showing a stale image.
   // For internet radio the playlist_loop entry's `id`/`title`/`artist`/
   // `album` are the *station*'s, set once when the stream started, and
   // don't change as the station's own now-playing song changes — LMS never
@@ -523,14 +529,28 @@ export function useLyrionPlayer() {
   // add a coarse heartbeat (`time` is the one field guaranteed to keep moving
   // during playback) — it re-fetches the cover at most every ~10s, which
   // bounds how stale it can get without refetching on every 1s poll.
+  //
+  // `artworkIdentityKey` mirrors trackKey but *without* the heartbeat: it
+  // only changes when LMS has actually told us something changed (id/title/
+  // artist/album/current_title), never on a routine heartbeat tick. The
+  // consumer (usePolledArtwork in LyrionServer.jsx) uses this to tell a
+  // confirmed track change — where the art on screen is now known-stale and
+  // must not linger — apart from a periodic "maybe it changed, maybe it
+  // didn't" probe, where keeping the current art visible until proven
+  // otherwise is the right call.
   const isRemoteTrack = !!currentTrack.remote;
   const remoteHeartbeat = isRemoteTrack ? Math.floor((playerStatus?.time || 0) / 10) : '';
-  const trackKey = `${currentTrack.id || ''}-${currentTrack.title || ''}-${currentTrack.artist || ''}-${currentTrack.album || ''}-${playerStatus?.current_title || ''}-${remoteHeartbeat}`;
+  const artworkIdentityKey = `${currentTrack.id || ''}-${currentTrack.title || ''}-${currentTrack.artist || ''}-${currentTrack.album || ''}-${playerStatus?.current_title || ''}`;
+  const trackKey = `${artworkIdentityKey}-${remoteHeartbeat}`;
   const nowPlayingCoverBase = activePlayer?.playerid
     ? `${lyrionApi.baseUrl}/music/current/cover.jpg?player=${encodeURIComponent(activePlayer.playerid)}&k=${encodeURIComponent(trackKey)}`
     : null;
-  const artworkUrl   = nowPlayingCoverBase ? safeUrl(`${nowPlayingCoverBase}&size=300`) : null;
-  const artworkUrlLg = nowPlayingCoverBase ? safeUrl(`${nowPlayingCoverBase}&size=600`) : null;
+  const artworkUrl   = isRemoteTrack
+    ? (nowPlayingCoverBase ? safeUrl(`${nowPlayingCoverBase}&size=300`) : null)
+    : (currentTrack.id ? safeUrl(lyrionApi.getArtworkUrl(currentTrack.id, 300)) : null);
+  const artworkUrlLg = isRemoteTrack
+    ? (nowPlayingCoverBase ? safeUrl(`${nowPlayingCoverBase}&size=600`) : null)
+    : (currentTrack.id ? safeUrl(lyrionApi.getArtworkUrl(currentTrack.id, 600)) : null);
 
   const samplerate = currentTrack.samplerate;
   const samplesize = currentTrack.samplesize;
@@ -546,6 +566,7 @@ export function useLyrionPlayer() {
     // now playing (derived)
     currentTrack, title, artist, album, isPlaying, volume, repeatMode, shuffleMode,
     willSleepIn, duration, time, progress, artworkUrl, artworkUrlLg, formatLabel,
+    isRemoteTrack, artworkIdentityKey,
     setVolume, toggleMute, seek, cycleShuffle, cycleRepeat, setSleepTimer,
     // queue
     queue, queueIndex, loadQueue, queueJump, queueRemove, queueMove, queueClear, saveQueue,

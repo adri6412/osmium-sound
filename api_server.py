@@ -2675,9 +2675,9 @@ def bt_forget(mac):
 _bt_cover_cache = {}
 _BT_COVER_CACHE_MAX = 200
 
-def _bt_cover_lookup(title, artist):
-    key = (title or '', artist or '')
-    if key == ('', ''):
+def _bt_cover_lookup(title, artist, album):
+    key = (title or '', artist or '', album or '')
+    if key == ('', '', ''):
         return None
     if key in _bt_cover_cache:
         return _bt_cover_cache[key]
@@ -2709,7 +2709,7 @@ def get_bluetooth_now_playing():
         np = {}
     if not np.get('active'):
         return {'active': False}
-    np['cover_url'] = _bt_cover_lookup(np.get('title'), np.get('artist'))
+    np['cover_url'] = _bt_cover_lookup(np.get('title'), np.get('artist'), np.get('album'))
     return np
 
 # ──────────────────────────────────────────────────────────────────
