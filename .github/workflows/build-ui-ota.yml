@@ -128,7 +128,7 @@ jobs:
           rm -rf "$ROOT"
           mkdir -p "$ROOT/usr/local/bin" "$ROOT/usr/local/sbin" "$ROOT/etc/systemd/system"
           # Python API + daemons
-          cp api_server.py vu_meter_daemon.py sources_server.py webui_server.py hifi_logging.py hifi_backup.py "$ROOT/usr/local/bin/"
+          cp api_server.py vu_meter_daemon.py sources_server.py webui_server.py hifi_logging.py hifi_backup.py hifi_i18n.py "$ROOT/usr/local/bin/"
           # Web-admin Vue build (served by webui_server.py from /opt/hifi-webui/dist).
           # REQUIRED: a missing/empty dist here means every device that applies
           # this system bundle loses the web-admin UI, silently. Fail instead.
