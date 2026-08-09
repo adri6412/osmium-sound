@@ -8,6 +8,7 @@ import VirtualKeyboard from './components/VirtualKeyboard';
 import Screensaver from './components/Screensaver';
 import BootIntro from './components/BootIntro';
 import UsbDetectedModal from './components/UsbDetectedModal';
+import UpdatePlanOverlay from './components/UpdatePlanOverlay';
 import { SCALED_CANVAS_ID } from './components/ScaledCanvas';
 import { KeyboardProvider, useKeyboardActions } from './contexts/KeyboardContext';
 import { I18nProvider } from './i18n';
@@ -277,6 +278,7 @@ const AppContent = () => {
       {showWizard && <SetupWizard onComplete={() => setShowWizard(false)} />}
       <Screensaver isActive={isScreensaverActive && !showWizard} onWake={() => setIsScreensaverActive(false)} />
       {usbPrompt && <UsbDetectedModal disk={usbPrompt} onMount={mountUsbPrompt} onCancel={dismissUsbPrompt} />}
+      <UpdatePlanOverlay />
       {showIntro && createPortal(
         <div
           className="absolute inset-0 z-[10000] bg-black"

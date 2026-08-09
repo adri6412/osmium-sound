@@ -98,6 +98,15 @@ const Settings = ({ initialSection, onSectionConsumed } = {}) => {
   const [isLoading, setIsLoading] = useState(true);
   const [apiConnected, setApiConnected] = useState(false);
 
+  // Tell the global UpdatePlanOverlay (mounted at the app root, see App.jsx)
+  // that this page owns the OTA progress overlay while it's open, so the two
+  // never render on top of each other. The global one takes back over the
+  // instant this page unmounts (tab switch, or the UI-step restart itself).
+  useEffect(() => {
+    window.dispatchEvent(new CustomEvent('hifi-settings-mounted', { detail: true }));
+    return () => window.dispatchEvent(new CustomEvent('hifi-settings-mounted', { detail: false }));
+  }, []);
+
   // Deep-link into a section on mount (e.g. the global "USB detected" prompt
   // sends the user straight to Music sources) — consumed once, so navigating
   // away and back to Settings later (without a fresh event) lands on the

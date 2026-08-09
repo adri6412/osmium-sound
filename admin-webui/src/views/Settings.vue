@@ -716,8 +716,15 @@ async function saveBackupScheduled(v) {
 onMounted(async () => {
   loadNet(); loadAudio(); loadDsp(); loadFir(); loadToggles(); loadShell(); loadLms(); loadLyrion();
   loadMode(); loadUiRes(); loadTimezone(); loadVuMeter(); loadChannel(); checkAll(); resumePlanIfRunning(); loadBackups(); loadTailscale();
+  // Tell the global UpdateProgressOverlay (mounted in App.vue) that this page
+  // owns the OTA modal while it's open, so the two never render on top of
+  // each other. The global one takes back over as soon as this page unmounts.
+  window.dispatchEvent(new CustomEvent('hifi-settings-active', { detail: true }));
 });
-onUnmounted(() => { if (lyrionPoll) clearInterval(lyrionPoll); if (tailscalePoll) clearInterval(tailscalePoll); });
+onUnmounted(() => {
+  if (lyrionPoll) clearInterval(lyrionPoll); if (tailscalePoll) clearInterval(tailscalePoll);
+  window.dispatchEvent(new CustomEvent('hifi-settings-active', { detail: false }));
+});
 </script>
 
 <template>

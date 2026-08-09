@@ -2,6 +2,7 @@
 import { RouterView, useRouter } from 'vue-router';
 import { api } from './api.js';
 import { useI18n } from './i18n';
+import UpdateProgressOverlay from './components/UpdateProgressOverlay.vue';
 
 const router = useRouter();
 const { t } = useI18n();
@@ -20,4 +21,5 @@ async function logout() {
   <div class="wrap">
     <RouterView />
   </div>
+  <UpdateProgressOverlay />
 </template>
