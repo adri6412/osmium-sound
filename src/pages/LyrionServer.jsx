@@ -591,17 +591,23 @@ const LyrionServer = () => {
     // The localStorage value above is just a same-device cache — it can be
     // stale if the preference was last changed remotely (companion app / web
     // admin on a headless unit) rather than from this Settings page. Refresh
-    // from api_server on mount so a remote change is picked up without
-    // needing the user to open Settings here first.
-    systemAPI.getVuMeter().then((res) => {
-      if (res.success && typeof res.data?.enabled === 'boolean') {
+    // from api_server on mount, then keep polling: this view normally stays
+    // mounted for the whole kiosk session, so without polling a remote
+    // toggle would never reach the on-screen display until next reboot —
+    // the 'hifi-vu-meter-enabled' event below only fires for a toggle made
+    // from this same Electron process's own Settings page.
+    let alive = true;
+    const refresh = () => systemAPI.getVuMeter().then((res) => {
+      if (alive && res.success && typeof res.data?.enabled === 'boolean') {
         setVuMeterEnabled(res.data.enabled);
         localStorage.setItem('hifiVuMeterEnabled', res.data.enabled ? 'true' : 'false');
       }
     });
+    refresh();
+    const poll = setInterval(refresh, 5000);
     const onChange = (e) => setVuMeterEnabled(!!e.detail);
     window.addEventListener('hifi-vu-meter-enabled', onChange);
-    return () => window.removeEventListener('hifi-vu-meter-enabled', onChange);
+    return () => { alive = false; clearInterval(poll); window.removeEventListener('hifi-vu-meter-enabled', onChange); };
   }, []);
   const [nowPlayingView, setNowPlayingView] = useState(
     localStorage.getItem('hifiNowPlayingView') === 'lyrics' ? 'lyrics' : 'vu'
