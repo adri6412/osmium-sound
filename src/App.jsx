@@ -45,11 +45,17 @@ const AppContent = () => {
   React.useEffect(() => {
     let alive = true;
     (async () => {
+      // hifi-api.service isn't ordered before the X session, so on a cold
+      // live boot this can race Flask still starting up — a single failed
+      // fetch here used to silently fall back to 'live' and drop straight
+      // into the kiosk UI instead of the installer. Retry for a few seconds
+      // instead of giving up after one attempt.
       let mode = 'live';
-      try {
+      for (let attempt = 0; attempt < 20 && alive; attempt++) {
         const res = await systemAPI.getBootMode();
-        if (res.success && res.data?.mode) mode = res.data.mode;
-      } catch (_) {}
+        if (res.success && res.data?.mode) { mode = res.data.mode; break; }
+        await new Promise((r) => setTimeout(r, 500));
+      }
       if (alive) setBootMode(mode);
     })();
     return () => { alive = false; };
