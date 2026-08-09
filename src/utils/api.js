@@ -140,6 +140,13 @@ export const systemAPI = {
   // Change it (persisted). The graphical session restarts shortly after this
   // returns, so this UI goes away and comes back. Returns { success, mode, message }
   setUiResolution: (mode) => apiPost('/ui_resolution', { mode }),
+  // Timezone: { timezone: 'Europe/Rome' }. Fresh installs default to UTC (the
+  // installer asks nothing about it — see distro/README.md).
+  getTimezone: () => apiGet('/timezone'),
+  // All IANA zone names the installed tzdata knows about: { timezones: [...] }
+  getTimezones: () => apiGet('/timezones'),
+  // Change it (live, via timedatectl). Returns { success, timezone, message }
+  setTimezone: (timezone) => apiPost('/timezone', { timezone }),
   // Animated VU meter (expanded now-playing view): { enabled }. No restart —
   // persisted only, so it's reachable remotely on a headless unit.
   getVuMeter: () => apiGet('/vu_meter'),

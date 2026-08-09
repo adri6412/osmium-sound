@@ -23,6 +23,7 @@ import {
   Monitor,
   MonitorOff,
   Gauge,
+  Clock,
   ChevronRight,
   ChevronLeft,
   Smartphone,
@@ -149,6 +150,13 @@ const Settings = ({ initialSection, onSectionConsumed } = {}) => {
   const [uiResolutionBusy, setUiResolutionBusy] = useState(false);
   const [uiResolutionMessage, setUiResolutionMessage] = useState('');
   const [uiResolutionPending, setUiResolutionPending] = useState(null); // choice awaiting confirm
+
+  // Timezone (fresh installs default to UTC — the installer asks nothing
+  // about it, see distro/README.md)
+  const [timezone, setTimezone] = useState(null); // e.g. 'Europe/Rome'
+  const [timezoneList, setTimezoneList] = useState([]);
+  const [timezoneBusy, setTimezoneBusy] = useState(false);
+  const [timezoneMessage, setTimezoneMessage] = useState('');
 
   // Audio output (DAC) selection
   const [audioDevices, setAudioDevices] = useState([]);
@@ -330,6 +338,7 @@ const Settings = ({ initialSection, onSectionConsumed } = {}) => {
     loadPointerStatus();
     loadDisplayMode();
     loadUiResolution();
+    loadTimezone();
     loadVuMeter();
     loadOtaChannel();
     loadPlaybackPrefs();
@@ -711,6 +720,27 @@ const Settings = ({ initialSection, onSectionConsumed } = {}) => {
       // by a freshly-launched one, so there is nothing else to do here.
     } else {
       setUiResolutionMessage(res.data?.message || res.message || t('settings.uiResolution.failed'));
+    }
+  };
+
+  // ── Timezone handlers ────────────────────────────────────────────
+  const loadTimezone = async () => {
+    const [tzRes, listRes] = await Promise.all([systemAPI.getTimezone(), systemAPI.getTimezones()]);
+    if (tzRes.success && tzRes.data?.timezone) setTimezone(tzRes.data.timezone);
+    if (listRes.success && Array.isArray(listRes.data?.timezones)) setTimezoneList(listRes.data.timezones);
+  };
+
+  const changeTimezone = async (tz) => {
+    if (timezoneBusy || !tz || tz === timezone) return;
+    setTimezoneBusy(true);
+    setTimezoneMessage('');
+    const res = await systemAPI.setTimezone(tz);
+    setTimezoneBusy(false);
+    if (res.success && res.data?.success) {
+      setTimezone(res.data.timezone || tz);
+      setTimezoneMessage(res.data.message || '');
+    } else {
+      setTimezoneMessage(res.data?.message || res.message || t('settings.timezone.failed'));
     }
   };
 
@@ -1743,6 +1773,11 @@ const Settings = ({ initialSection, onSectionConsumed } = {}) => {
       title: t('settings.sections.displayMode'),
       icon: displayMode === 'headless' ? MonitorOff : Monitor,
       content: 'custom-display-mode'
+    },
+    {
+      title: t('settings.sections.timezone'),
+      icon: Clock,
+      content: 'custom-timezone'
     },
     {
       title: t('settings.sections.systemInfo'),
@@ -3283,6 +3318,44 @@ const Settings = ({ initialSection, onSectionConsumed } = {}) => {
                           : 'bg-hifi-dark text-hifi-silver'
                       }`}>
                         {displayModeMessage}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Timezone (fresh installs default to UTC — no install-time question) */}
+                {section.content === 'custom-timezone' && (
+                  <div className="space-y-4">
+                    <p className="text-sm text-hifi-silver">{t('settings.timezone.help')}</p>
+
+                    <div className="flex items-center justify-between bg-hifi-dark rounded-lg px-4 py-3">
+                      <span className="flex items-center space-x-2 text-sm text-white">
+                        <Clock size={16} className="text-hifi-gold" />
+                        <span>{timezone || t('common.loading')}</span>
+                      </span>
+                    </div>
+
+                    <select
+                      value={timezone || ''}
+                      onChange={(e) => changeTimezone(e.target.value)}
+                      disabled={timezoneBusy || !timezoneList.length}
+                      className="w-full bg-hifi-dark border border-hifi-accent rounded-lg px-3 py-3 text-white text-sm focus:outline-none focus:border-hifi-gold disabled:opacity-40"
+                    >
+                      {!timezoneList.includes(timezone) && timezone && (
+                        <option value={timezone}>{timezone}</option>
+                      )}
+                      {timezoneList.map((tz) => (
+                        <option key={tz} value={tz}>{tz}</option>
+                      ))}
+                    </select>
+
+                    {timezoneMessage && (
+                      <div className={`rounded-lg p-3 text-center text-sm ${
+                        isErrorMsg(timezoneMessage)
+                          ? 'bg-red-900/20 text-red-300 border border-red-500/30'
+                          : 'bg-hifi-dark text-hifi-silver'
+                      }`}>
+                        {timezoneMessage}
                       </div>
                     )}
                   </div>

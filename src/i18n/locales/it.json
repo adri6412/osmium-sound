@@ -295,6 +295,7 @@
       "pointer": "Puntatore mouse",
       "uiResolution": "Risoluzione interfaccia",
       "displayMode": "Modalità schermo",
+      "timezone": "Fuso orario",
       "systemInfo": "Informazioni Sistema",
       "updates": "Aggiornamenti",
       "systemControls": "Controlli Sistema",
@@ -504,6 +505,10 @@
       "confirmHeadless": "Spegni lo schermo",
       "cancel": "Annulla",
       "failed": "Impossibile cambiare la modalità schermo."
+    },
+    "timezone": {
+      "help": "Un'installazione pulita non ha modo di chiederlo, quindi parte da UTC — scegli qui quello reale del dispositivo.",
+      "failed": "Impossibile cambiare il fuso orario."
     },
     "lyrion": {
       "urlLabel": "URL Lyrion Server",

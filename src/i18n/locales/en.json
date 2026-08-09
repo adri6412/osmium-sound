@@ -295,6 +295,7 @@
       "pointer": "Mouse pointer",
       "uiResolution": "Interface resolution",
       "displayMode": "Display mode",
+      "timezone": "Timezone",
       "systemInfo": "System Information",
       "updates": "Updates",
       "systemControls": "System Controls",
@@ -504,6 +505,10 @@
       "confirmHeadless": "Turn off screen",
       "cancel": "Cancel",
       "failed": "Could not change the display mode."
+    },
+    "timezone": {
+      "help": "A fresh install has no way to ask for this, so it defaults to UTC — pick the device's real one here.",
+      "failed": "Could not change the timezone."
     },
     "lyrion": {
       "urlLabel": "Lyrion Server URL",
