@@ -165,10 +165,17 @@ const AppContent = () => {
 
   // Apply the saved mouse-pointer preference app-wide on startup. Default is
   // hidden (touchscreen); Settings → Mouse pointer flips it for mouse users.
+  // Installer sessions always show the cursor (no touchscreen yet, no saved
+  // preference to read either) — this CSS-level hide is independent of, and
+  // otherwise overrides, the X11/unclutter check in .xsession.
   React.useEffect(() => {
+    if (bootMode === 'installer') {
+      document.documentElement.classList.remove('hifi-hide-cursor');
+      return;
+    }
     const show = localStorage.getItem('hifiShowPointer') === '1';
     document.documentElement.classList.toggle('hifi-hide-cursor', !show);
-  }, []);
+  }, [bootMode]);
 
   // Allow re-opening the setup wizard from Settings
   React.useEffect(() => {
