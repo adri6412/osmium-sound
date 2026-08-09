@@ -41,7 +41,7 @@ dependencies {
     // HTTP client for the appliance's plain REST API (DSP control, FIR filter
     // upload, backup/restore) on sources_server.py:8080 — separate from the
     // CometD/LMS protocol above. Used for multipart file upload/download.
-    implementation 'com.squareup.okhttp3:okhttp:4.12.0'
+    implementation 'com.squareup.okhttp3:okhttp:5.4.0'
 
     // JVM tests
     testImplementation 'junit:junit:4.13.2'
