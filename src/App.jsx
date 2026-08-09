@@ -75,11 +75,20 @@ const AppContent = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   const inactivityTimer = React.useRef(null);
+  // Bumped on every resetInactivityTimer() call (any activity, or the timer
+  // re-arming itself). The 5-minute callback below is async — clearTimeout
+  // can't cancel it once it has started running — so without this token a
+  // callback started right before playback began could resolve `isPlaying`
+  // from a stale read and pop the screensaver over active audio. Any call
+  // that supersedes this one bumps the token, and the callback checks it's
+  // still current before acting on what it found.
+  const inactivityTokenRef = React.useRef(0);
   const { showKeyboard } = useKeyboardActions();
 
   const resetInactivityTimer = React.useCallback(() => {
     setIsScreensaverActive(false);
     if (inactivityTimer.current) clearTimeout(inactivityTimer.current);
+    const myToken = ++inactivityTokenRef.current;
     inactivityTimer.current = setTimeout(async () => {
       let isPlaying = false;
       try {
@@ -90,6 +99,7 @@ const AppContent = () => {
           isPlaying = ps?.mode === 'play';
         }
       } catch (_) {}
+      if (inactivityTokenRef.current !== myToken) return; // superseded — discard this stale read
       if (!isPlaying) setIsScreensaverActive(true);
       else resetInactivityTimer();
     }, 5 * 60 * 1000);

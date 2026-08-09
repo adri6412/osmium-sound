@@ -46,7 +46,7 @@ const TABS = [
 // A load failure gets one retry, shortly after, before falling back to the
 // generic icon — a station that genuinely has no art still ends up there,
 // just one retry later.
-const ARTWORK_RETRY_MS = 1500;
+const ARTWORK_RETRY_MS = 2000;
 const ArtworkImage = ({ src, alt, className, FallbackIcon }) => {
   const safeSrc = src ? safeUrl(src) : null;
   const [displayedSrc, setDisplayedSrc] = useState(safeSrc);
@@ -144,7 +144,16 @@ const usePolledArtwork = (url) => {
     // transient blip (the kind of thing that tends to line up with the
     // display waking from the in-app screensaver) self-heals instead of
     // freezing the cover for an entire song.
-    const MAX_ATTEMPTS = 5;
+    //
+    // 10 attempts (was 5): LMS resizes cover art itself (Image::Scale, a
+    // native Perl module) on demand — on a slower/different CPU than the dev
+    // box that resize can genuinely take longer than the old ~7.5s budget,
+    // especially while squeezelite/CamillaDSP are also active on the same
+    // box. That made this box fall back to the generic icon on nearly every
+    // track instead of the occasional transient blip this was designed for.
+    // ~18s (plus per-attempt fetch time) gives a loaded LMS a real chance to
+    // finish before giving up.
+    const MAX_ATTEMPTS = 10;
     const attempt = async (attemptNum) => {
       try {
         const res = await fetch(safeSrc);
