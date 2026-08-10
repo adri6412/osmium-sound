@@ -17,6 +17,18 @@ const route = useRoute();
 const applying = reactive({ active: false, kind: '', state: '', progress: null, message: '', error: false });
 const settingsActive = ref(false);
 let pollTimer = null;
+// 'interrupted' means "a step was left running with nobody currently resuming
+// it" — which is also exactly what the plan looks like for the first stretch
+// after an OS-step reboot, before hifi-update-resume.service has come up (it
+// waits on network-online.target). Showing the error card (with its "Chiudi"
+// button, which calls updates/dismiss and DELETES the on-disk plan) on the
+// very first 'interrupted' read let an impatient close wipe out a plan the
+// resume unit hadn't gotten to yet — the remaining steps (typically the UI)
+// would then never apply. Require several consecutive 'interrupted' polls —
+// long enough for the resume unit to have started if it's going to — before
+// treating it as a real, dismissable failure.
+let interruptedStreak = 0;
+const MAX_INTERRUPTED_POLLS = 60; // ~2 minutes at 2s/poll
 
 const kindLabels = { ui: () => t('settings.updates.kindUi'), system: () => t('settings.updates.kindSystem'), os: () => t('settings.updates.kindOs') };
 
@@ -35,7 +47,23 @@ async function poll() {
   const r = await api.sys('updates/status');
   if (!r.ok) return; // expected mid-plan: hifi-api restarting, or a reboot
   const s = r.data || {};
-  if (s.state === 'idle') { applying.active = false; return; }
+  if (s.state === 'idle') { applying.active = false; interruptedStreak = 0; return; }
+  if (s.state === 'interrupted') {
+    interruptedStreak += 1;
+    if (interruptedStreak < MAX_INTERRUPTED_POLLS) {
+      // Still plausibly waiting on hifi-update-resume.service — show it as
+      // in-progress rather than failed, and don't offer the destructive close.
+      applying.active = true;
+      applying.kind = s.kind || '';
+      applying.state = 'restarting';
+      applying.progress = (typeof s.overall_progress === 'number') ? s.overall_progress : null;
+      applying.message = t('settings.updates.progressState.restarting');
+      applying.error = false;
+      return;
+    }
+  } else {
+    interruptedStreak = 0;
+  }
   applying.active = true;
   applying.kind = s.kind || '';
   applying.state = s.state;

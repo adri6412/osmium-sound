@@ -520,6 +520,15 @@ function renderPlan(s) {
 
 async function pollPlan(timeoutMs = 30 * 60 * 1000) {
   const t0 = Date.now();
+  // 'interrupted' means "a step was left running with nobody currently
+  // resuming it" — which is also exactly what the plan looks like for the
+  // first stretch after an OS-step reboot, before hifi-update-resume.service
+  // has come up (it waits on network-online.target). Treating the very first
+  // 'interrupted' read as a final failure gave up on updates that were about
+  // to continue on their own; require several consecutive reads before
+  // believing it's a real, dead plan.
+  let interruptedStreak = 0;
+  const MAX_INTERRUPTED_POLLS = 60; // ~2 minutes at 2s/poll
   // Request failures are EXPECTED mid-way: the system bundle restarts this
   // daemon and an OS payload may reboot the appliance. Keep polling — the plan
   // is on persistent storage and the sequencer resumes on its own.
@@ -529,6 +538,15 @@ async function pollPlan(timeoutMs = 30 * 60 * 1000) {
     if (!r.ok) continue;
     const s = r.data || {};
     if (s.state === 'idle') continue;
+    if (s.state === 'interrupted') {
+      interruptedStreak += 1;
+      if (interruptedStreak < MAX_INTERRUPTED_POLLS) {
+        renderPlan({ ...s, step_state: 'restarting' });
+        continue;
+      }
+    } else {
+      interruptedStreak = 0;
+    }
     renderPlan(s);
     if (s.state === 'finished') return true;
     if (s.state === 'error' || s.state === 'interrupted') return false;
@@ -565,7 +583,11 @@ async function resumePlanIfRunning() {
   if (s.state === 'idle') return;
   applying.active = true;
   renderPlan(s);
-  if (s.state === 'running') {
+  if (s.state === 'running' || s.state === 'interrupted') {
+    // 'interrupted' here just means the page (re)loaded during the gap
+    // before hifi-update-resume.service comes up after a reboot — give
+    // pollPlan its own grace period instead of declaring failure on this
+    // single snapshot.
     const ok = await pollPlan();
     applying.error = !ok;
     applying.state = ok ? 'finished' : 'error';

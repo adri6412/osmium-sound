@@ -1275,6 +1275,16 @@ const Settings = ({ initialSection, onSectionConsumed } = {}) => {
   // components behind. Here we only start the plan and render its progress.
   const followUpdatePlan = () => new Promise((resolve) => {
     if (planPollRef.current) clearInterval(planPollRef.current);
+    // 'interrupted' means "a step was left running with nobody currently
+    // resuming it" — which is also exactly what the plan looks like for the
+    // first few seconds after an OS-step reboot, before hifi-update-resume.service
+    // has come up (it waits on network-online.target). Treating a single
+    // 'interrupted' read as final made this page give up on updates that were
+    // about to continue on their own, which is why it now only stops after the
+    // status is 'interrupted' on MANY consecutive polls — long enough for the
+    // resume unit to have started if it ever will (~2 minutes), not just one.
+    let interruptedStreak = 0;
+    const MAX_INTERRUPTED_POLLS = 60; // ~2 minutes at 2s/poll
     planPollRef.current = setInterval(async () => {
       const r = await systemAPI.getUpdatePlanStatus();
       // A failed request is expected mid-plan (the API is restarting, or the
@@ -1282,13 +1292,27 @@ const Settings = ({ initialSection, onSectionConsumed } = {}) => {
       if (!r.success) return;
       const s = r.data || {};
       if (s.state === 'idle') return;
+      // While still inside the grace window, render 'interrupted' as if it
+      // were just another in-progress step ('restarting' matches the message
+      // shown for an OS reboot in flight) — NOT as the terminal 'error' state,
+      // which would put the dismiss button on screen and let it delete the
+      // on-disk plan before the resume unit ever got to it.
+      const stillWaiting = s.state === 'interrupted' && interruptedStreak < MAX_INTERRUPTED_POLLS;
       setPlanStatus({
-        state: s.state,
+        state: stillWaiting ? 'restarting' : s.state,
         kind: s.kind || '',
-        message: progressStateMessage(s.step_state, s.message || ''),
+        message: stillWaiting
+          ? t('settings.updates.progressState.restarting')
+          : progressStateMessage(s.step_state, s.message || ''),
         progress: typeof s.overall_progress === 'number' ? s.overall_progress : null,
         doneKinds: (s.steps || []).filter((x) => x.state === 'done').map((x) => x.kind),
       });
+      if (s.state === 'interrupted') {
+        interruptedStreak += 1;
+        if (interruptedStreak < MAX_INTERRUPTED_POLLS) return;
+      } else {
+        interruptedStreak = 0;
+      }
       if (s.state === 'finished' || s.state === 'error' || s.state === 'interrupted') {
         clearInterval(planPollRef.current);
         planPollRef.current = null;
