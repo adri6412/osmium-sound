@@ -3095,6 +3095,18 @@ def index():
     # Only the page's own strings are shipped to the browser; the msg.* half of
     # the catalog is server-side only.
     strings = {k: v for k, v in SOURCES_I18N[lang].items() if k.startswith("sources.")}
+    # Reached mid first-boot setup (webui_server.py's captive page links here
+    # with ?setup=1): Lyrion's own setup wizard performs the real first scan
+    # right after, so "Apply & rescan library" is misleading/redundant here —
+    # swap in setup-appropriate copy for just these two strings, in whichever
+    # language is active. Overriding this local dict (not SOURCES_I18N itself)
+    # leaves the normal Settings -> Sources page's wording untouched.
+    if request.args.get("setup") == "1":
+        strings["sources.apply"] = {"en": "Save sources", "it": "Salva sorgenti"}.get(lang, "Save sources")
+        strings["sources.applyHint"] = {
+            "en": "Saves the sources above. Lyrion's own setup wizard scans your library once you finish setup.",
+            "it": "Salva le sorgenti qui sopra. La scansione della libreria la esegue il setup wizard di Lyrion una volta terminata la configurazione.",
+        }.get(lang, strings["sources.applyHint"])
     html = (INDEX_HTML
             .replace("__LANG__", lang)
             .replace("__PAGE_TITLE__", _t("sources.title", lang))
