@@ -48,12 +48,18 @@ fi
 
 echo "I: [hifi] setting hostname"
 echo "hifiplayer" > /etc/hostname
-# /etc/hosts needs a matching entry (Debian convention: 127.0.1.1, distinct
-# from the 127.0.0.1 localhost line already there) or every sudo invocation
-# on the box prints "unable to resolve host hifiplayer" — cosmetic on its
-# own, but noisy in every log and every error message that surfaces a
-# command's stderr to the UI (e.g. Settings -> SSH). grep-guarded so this
-# hook stays idempotent if it's ever re-run against the same /etc/hosts.
+# /etc/hosts needs a matching entry (Debian convention: 127.0.1.1) or every
+# sudo invocation on the box prints "unable to resolve host hifiplayer" —
+# cosmetic on its own, but noisy in every log and every error message that
+# surfaces a command's stderr to the UI (e.g. Settings -> SSH). Observed on
+# real devices with a COMPLETELY EMPTY /etc/hosts (not even 127.0.0.1
+# localhost) — live-build's own chroot/binary pipeline appears to leave the
+# file empty at build time because bootappend-live carries `hostname=`, which
+# is meant for live-config's runtime hostname component; that component never
+# runs on a disk-installed boot (no `boot=live`), so nothing ever fills the
+# file in on a real device. Don't assume either line pre-exists — grep-guard
+# each independently, so this hook stays idempotent if it's ever re-run.
+grep -q '^127\.0\.0\.1[[:space:]]' /etc/hosts 2>/dev/null || echo "127.0.0.1	localhost" >> /etc/hosts
 grep -q '^127\.0\.1\.1[[:space:]]' /etc/hosts 2>/dev/null || echo "127.0.1.1	hifiplayer" >> /etc/hosts
 
 echo "I: [hifi] system setup hook done"
