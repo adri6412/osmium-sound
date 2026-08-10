@@ -1268,6 +1268,13 @@ def _restore_from_path(path, passphrase, requested_categories, report=None):
 
         report("applying", 90, "Applicazione modifiche (rete, DSP, servizi)…")
         notes = _restore_apply_side_effects(restored)
+        if lyrion_stopped:
+            # Restoring prefs/playlists makes Lyrion treat them as changed on
+            # its own next start, so it runs its own library rescan — nothing
+            # this code drives or can see the end of, and the LMS web UI's
+            # "please wait" banner during that looks a lot like something
+            # stuck. Say so up front instead of leaving the user to wonder.
+            notes.append("Lyrion sta terminando la scansione della libreria in background.")
         msg = f"{len(restored)} file ripristinati."
         if notes:
             msg += " " + " ".join(notes)
