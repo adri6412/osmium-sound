@@ -1,0 +1,941 @@
+<!doctype html>
+<html lang="en" data-lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title id="pageTitle">Osmium Sound — Installation & configuration manual</title>
+<meta id="pageDesc" name="description" content="Complete Osmium Sound installation and configuration manual: QR-code installer, first boot, device modes, web administration, music sources, backup, OTA updates.">
+<style>
+  :root{
+    --bg:#0a0a0a; --surface:#161616; --surface-2:#1b1b1b; --border:#252525;
+    --gold:#d4af37; --gold-soft:rgba(212,175,55,.12);
+    --text:#f0f0f0; --silver:#c0c0c0; --muted:#8a8a8a;
+    --amber:#f5b820; --amber-bg:rgba(245,184,32,.10); --amber-border:rgba(245,184,32,.35);
+    --green:#3dcf5f; --green-bg:rgba(61,207,95,.10);
+    --red:#ff8166; --red-bg:rgba(255,129,102,.10);
+    --code-bg:#111; --radius:12px;
+    --maxw:880px;
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{
+    margin:0; background:var(--bg); color:var(--text);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    line-height:1.65;
+  }
+  a{color:var(--gold); text-decoration:none}
+  a:hover{text-decoration:underline}
+  img{max-width:100%; border-radius:var(--radius)}
+
+  /* ── language toggling ──────────────────────────────────
+     <html> itself carries [data-lang] as the active-language switch, so the
+     "hide" rule below is deliberately scoped to nav.toc/.content only — a
+     bare [data-lang] selector would also match <html data-lang="..."> and
+     collapse the entire document to display:none.
+     Every duplicated block (the two nav.toc, the two .content divs) also
+     carries [data-lang="it"|"en"]. The default rule hides both; the two
+     qualified rules below re-show only the block whose data-lang matches
+     <html data-lang="...">. Because a mismatched pair (e.g. html[data-lang=
+     "en"] with a data-lang="it" block) never matches either qualified rule,
+     it always falls back to the hidden default — this also makes the
+     mobile menu toggle below safe even if it ever touched both language
+     copies at once. Chrome (buttons, aria labels, <title>) has only one
+     copy and is swapped directly in JS. */
+  nav.toc[data-lang], .content[data-lang]{display:none}
+  html[data-lang="en"] nav.toc[data-lang="en"],
+  html[data-lang="en"] .content[data-lang="en"]{display:block}
+  html[data-lang="it"] nav.toc[data-lang="it"],
+  html[data-lang="it"] .content[data-lang="it"]{display:block}
+
+  /* ── top bar ─────────────────────────────────────────── */
+  header.top{
+    position:sticky; top:0; z-index:50;
+    display:flex; align-items:center; gap:12px;
+    padding:14px 20px; background:rgba(10,10,10,.92); backdrop-filter:blur(8px);
+    border-bottom:1px solid var(--border);
+  }
+  header.top .dot{width:10px;height:10px;border-radius:50%;background:var(--gold);box-shadow:0 0 10px rgba(212,175,55,.7)}
+  header.top .brand{font-weight:700; letter-spacing:.04em}
+  header.top .brand small{display:block; font-weight:400; color:var(--muted); font-size:12px; letter-spacing:normal}
+  .langswitch{margin-left:auto; display:flex; gap:4px; background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:3px}
+  .langswitch button{
+    background:transparent; border:0; color:var(--muted); font-size:12.5px; font-weight:600;
+    padding:5px 10px; border-radius:6px; cursor:pointer; letter-spacing:.02em;
+  }
+  .langswitch button.active{background:var(--gold); color:#111}
+  #menuBtn{
+    display:none; background:var(--surface); border:1px solid var(--border);
+    color:var(--text); border-radius:8px; padding:8px 12px; font-size:14px; cursor:pointer;
+  }
+
+  /* ── layout ──────────────────────────────────────────── */
+  .layout{display:flex; max-width:1200px; margin:0 auto}
+  nav.toc{
+    width:260px; flex:none; padding:28px 16px 60px; position:sticky; top:57px;
+    height:calc(100vh - 57px); overflow-y:auto;
+  }
+  nav.toc a{
+    display:block; padding:6px 10px; border-radius:8px; font-size:13.5px; color:var(--silver);
+  }
+  nav.toc a:hover{background:var(--surface); text-decoration:none; color:var(--text)}
+  nav.toc .grp{margin-top:18px; padding:0 10px; font-size:11px; text-transform:uppercase; letter-spacing:.08em; color:var(--muted)}
+  nav.toc .grp:first-child{margin-top:0}
+
+  main{flex:1; min-width:0; padding:28px 24px 90px}
+  .content{max-width:var(--maxw)}
+
+  /* ── hero ────────────────────────────────────────────── */
+  .hero{
+    padding:38px 32px; border-radius:20px; margin-bottom:36px;
+    background:radial-gradient(120% 140% at 15% 0%, rgba(212,175,55,.14), transparent 60%), var(--surface);
+    border:1px solid var(--border);
+  }
+  .hero h1{font-size:30px; margin:0 0 8px}
+  .hero p{color:var(--silver); margin:0; max-width:640px}
+  .hero .badges{margin-top:18px; display:flex; gap:8px; flex-wrap:wrap}
+  .badge{font-size:12px; padding:5px 10px; border-radius:999px; background:var(--gold-soft); color:var(--gold); border:1px solid rgba(212,175,55,.3)}
+
+  /* ── typography ──────────────────────────────────────── */
+  h2{
+    font-size:22px; margin:52px 0 14px; padding-top:8px; scroll-margin-top:72px;
+    border-top:1px solid var(--border); padding-top:24px;
+  }
+  section:first-of-type h2{border-top:0; padding-top:0}
+  h3{font-size:17px; margin:26px 0 10px; scroll-margin-top:72px; color:var(--text)}
+  p{color:var(--silver)}
+  ul,ol{color:var(--silver); padding-left:22px}
+  li{margin:6px 0}
+  strong{color:var(--text)}
+  code{
+    background:var(--code-bg); border:1px solid var(--border); border-radius:5px;
+    padding:1px 6px; font-size:13px; font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; color:#f2d98a;
+  }
+  pre{
+    background:var(--code-bg); border:1px solid var(--border); border-radius:var(--radius);
+    padding:14px 16px; overflow-x:auto; font-size:13px;
+  }
+  pre code{background:none; border:0; padding:0; color:var(--silver)}
+
+  /* ── callouts ────────────────────────────────────────── */
+  .box{border-radius:var(--radius); padding:14px 16px; margin:16px 0; border:1px solid var(--border); background:var(--surface)}
+  .box.tip{border-color:rgba(212,175,55,.3); background:var(--gold-soft)}
+  .box.warn{border-color:var(--amber-border); background:var(--amber-bg)}
+  .box.ok{border-color:rgba(61,207,95,.3); background:var(--green-bg)}
+  .box.err{border-color:rgba(255,129,102,.3); background:var(--red-bg)}
+  .box p:last-child{margin-bottom:0}
+  .box .label{font-weight:700; font-size:12px; text-transform:uppercase; letter-spacing:.06em; margin-bottom:6px; display:block}
+  .box.tip .label{color:var(--gold)} .box.warn .label{color:var(--amber)}
+  .box.ok .label{color:var(--green)} .box.err .label{color:var(--red)}
+
+  /* ── steps ───────────────────────────────────────────── */
+  ol.steps{list-style:none; padding:0; counter-reset:step}
+  ol.steps > li{
+    counter-increment:step; position:relative; padding:4px 0 4px 46px; margin:16px 0;
+  }
+  ol.steps > li::before{
+    content:counter(step); position:absolute; left:0; top:0;
+    width:30px; height:30px; border-radius:50%; background:var(--surface-2);
+    border:1px solid var(--gold); color:var(--gold); font-weight:700; font-size:13px;
+    display:flex; align-items:center; justify-content:center;
+  }
+  ol.steps > li > strong{display:block; color:var(--text); margin-bottom:2px}
+
+  /* ── tables ──────────────────────────────────────────── */
+  table{width:100%; border-collapse:collapse; margin:14px 0; font-size:13.5px}
+  th,td{text-align:left; padding:9px 12px; border-bottom:1px solid var(--border)}
+  th{color:var(--muted); font-weight:600; font-size:12px; text-transform:uppercase; letter-spacing:.04em}
+  td{color:var(--silver)}
+  td code{white-space:nowrap}
+
+  /* ── mode cards ──────────────────────────────────────── */
+  .modes{display:grid; grid-template-columns:repeat(3,1fr); gap:12px; margin:18px 0}
+  .modecard{background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:16px}
+  .modecard h4{margin:0 0 6px; font-size:14.5px; color:var(--gold)}
+  .modecard p{margin:0; font-size:13px}
+
+  /* ── qr mock ─────────────────────────────────────────── */
+  .qrmock{
+    display:flex; align-items:center; gap:18px; background:var(--surface);
+    border:1px solid var(--border); border-radius:var(--radius); padding:18px; margin:18px 0;
+  }
+  .qrmock .sq{
+    flex:none; width:88px; height:88px; border-radius:10px; background:#fff;
+    background-image:
+      linear-gradient(90deg,#000 0 14%,transparent 0 20%,#000 0 34%,transparent 0 42%,#000 0 58%,transparent 0 66%,#000 0 80%,transparent 0 100%),
+      linear-gradient(0deg,#000 0 14%,transparent 0 20%,#000 0 34%,transparent 0 42%,#000 0 58%,transparent 0 66%,#000 0 80%,transparent 0 100%);
+    background-blend-mode:multiply;
+  }
+  .qrmock p{margin:0; font-size:13.5px}
+
+  footer{max-width:var(--maxw); padding:30px 0 70px; color:var(--muted); font-size:13px; border-top:1px solid var(--border); margin-top:60px}
+  footer a{color:var(--silver)}
+
+  #toTop{
+    position:fixed; right:20px; bottom:20px; width:40px; height:40px; border-radius:50%;
+    background:var(--gold); color:#111; border:0; font-weight:700; cursor:pointer;
+    box-shadow:0 4px 14px rgba(0,0,0,.4); display:none; align-items:center; justify-content:center;
+  }
+
+  @media (max-width: 880px){
+    nav.toc{
+      position:fixed; top:57px; left:0; right:0; bottom:0; width:auto; height:auto;
+      background:var(--bg); z-index:40; padding:16px 20px 40px; overflow-y:auto;
+    }
+    /* On mobile the sidebar is collapsed by default even for the active
+       language — these re-assert display:none (same specificity as the
+       "show the active language" rules above, but declared later, so they
+       win) and only .open brings it back. */
+    html[data-lang="en"] nav.toc[data-lang="en"]{display:none}
+    html[data-lang="it"] nav.toc[data-lang="it"]{display:none}
+    html[data-lang="en"] nav.toc[data-lang="en"].open{display:block}
+    html[data-lang="it"] nav.toc[data-lang="it"].open{display:block}
+    #menuBtn{display:block}
+    main{padding:20px 16px 80px}
+    .hero{padding:26px 20px}
+    .modes{grid-template-columns:1fr}
+  }
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div class="dot"></div>
+  <div class="brand">Osmium Sound<small id="brandSub">Installation & configuration manual</small></div>
+  <div class="langswitch">
+    <button id="btnEn" onclick="setLang('en')">EN</button>
+    <button id="btnIt" onclick="setLang('it')">IT</button>
+  </div>
+  <button id="menuBtn" onclick="toggleMenu()">☰</button>
+</header>
+
+<div class="layout">
+
+  <nav class="toc" data-lang="en">
+    <div class="grp">Introduction</div>
+    <a href="#en-requirements">Hardware requirements</a>
+    <a href="#en-installation">Installation</a>
+    <a href="#en-first-boot">First boot and setup</a>
+
+    <div class="grp">Modes & usage</div>
+    <a href="#en-modes">Device modes</a>
+    <a href="#en-web-admin">Web administration</a>
+    <a href="#en-companion">Android companion app</a>
+    <a href="#en-daily-use">Daily use</a>
+
+    <div class="grp">Advanced configuration</div>
+    <a href="#en-sources">Music sources</a>
+    <a href="#en-streaming">Streaming & Lyrion plugins</a>
+    <a href="#en-dsp">DSP & room correction</a>
+    <a href="#en-multiroom">Multiroom</a>
+    <a href="#en-backup">Backup & restore</a>
+    <a href="#en-updates">OTA updates</a>
+    <a href="#en-ssh">SSH & advanced access</a>
+    <a href="#en-reset">Factory reset</a>
+
+    <div class="grp">Support</div>
+    <a href="#en-troubleshooting">Troubleshooting</a>
+    <a href="#en-resources">Resources & links</a>
+  </nav>
+
+  <nav class="toc" data-lang="it">
+    <div class="grp">Introduzione</div>
+    <a href="#it-requisiti">Requisiti hardware</a>
+    <a href="#it-installazione">Installazione</a>
+    <a href="#it-primo-avvio">Primo avvio e configurazione</a>
+
+    <div class="grp">Modalità e utilizzo</div>
+    <a href="#it-modalita">Modalità del dispositivo</a>
+    <a href="#it-amministrazione-web">Amministrazione web</a>
+    <a href="#it-app-companion">App companion Android</a>
+    <a href="#it-uso-quotidiano">Uso quotidiano</a>
+
+    <div class="grp">Configurazione avanzata</div>
+    <a href="#it-sorgenti">Sorgenti musicali</a>
+    <a href="#it-streaming">Streaming e plugin Lyrion</a>
+    <a href="#it-dsp">DSP e correzione ambientale</a>
+    <a href="#it-multiroom">Multiroom</a>
+    <a href="#it-backup">Backup e ripristino</a>
+    <a href="#it-aggiornamenti">Aggiornamenti OTA</a>
+    <a href="#it-ssh">SSH e accesso avanzato</a>
+    <a href="#it-reset">Reset di fabbrica</a>
+
+    <div class="grp">Assistenza</div>
+    <a href="#it-risoluzione-problemi">Risoluzione dei problemi</a>
+    <a href="#it-risorse">Risorse e link utili</a>
+  </nav>
+
+  <main>
+
+    <!-- ══════════════════════════════ ENGLISH ══════════════════════════════ -->
+    <div class="content" data-lang="en">
+
+      <div class="hero">
+        <h1>Osmium Sound</h1>
+        <p>Complete installation and configuration manual. A bit-perfect hi-fi network streamer built on Debian, with Lyrion Music Server, optional DSP, and web administration — designed to be installed and configured entirely from your phone, without ever plugging in a mouse or keyboard.</p>
+        <div class="badges">
+          <span class="badge">QR-code setup</span>
+          <span class="badge">No mouse/keyboard required</span>
+          <span class="badge">Signed OTA updates</span>
+          <span class="badge">With screen · Headless · Server-only</span>
+        </div>
+      </div>
+
+      <section id="en-requirements">
+        <h2>Hardware requirements</h2>
+        <table>
+          <tr><th>Component</th><th>Requirement</th></tr>
+          <tr><td>Computer</td><td>x86/x86-64 mini-PC (a recycled/used one works fine)</td></tr>
+          <tr><td>Storage</td><td>Internal disk/SSD to install onto (any reasonable size)</td></tr>
+          <tr><td>USB stick</td><td>8&nbsp;GB or larger, needed only for the initial install</td></tr>
+          <tr><td>Screen (optional)</td><td>1024×600 touchscreen recommended for "with screen" mode — not needed in headless or server-only mode</td></tr>
+          <tr><td>Audio output</td><td>USB DAC or HDMI output</td></tr>
+          <tr><td>Network</td><td>Ethernet or Wi-Fi</td></tr>
+          <tr><td>Phone</td><td>Required for installation and first setup — any smartphone with a camera and a browser</td></tr>
+        </table>
+        <div class="box tip">
+          <span class="label">Note</span>
+          <p>No high-end hardware needed: Osmium Sound runs well on inexpensive or recycled mini-PCs. The most common bottleneck is the integrated GPU when using the screen — avoiding heavy animations isn't something you need to worry about, it's already handled in software.</p>
+        </div>
+      </section>
+
+      <section id="en-installation">
+        <h2>Installation</h2>
+        <p>Installation happens entirely from a USB stick and, importantly, <strong>never requires touching the mini-PC's screen</strong>: after boot, the screen shows only a QR code, and the whole process — choosing the disk, confirming, starting the install — happens on your phone.</p>
+
+        <ol class="steps">
+          <li><strong>Download the ISO</strong>
+            Go to <a href="https://github.com/adri6412/osmium-sound/releases" target="_blank" rel="noopener">github.com/adri6412/osmium-sound/releases</a> and download the latest install image.</li>
+          <li><strong>Write the ISO to a USB stick</strong>
+            Use <a href="https://etcher.balena.io/" target="_blank" rel="noopener">balenaEtcher</a>, Rufus, or the <code>dd</code> command, onto a stick of at least 8&nbsp;GB.</li>
+          <li><strong>Boot the mini-PC from the stick</strong>
+            Plug in the stick, power on the mini-PC, and pick USB boot from the boot menu (usually <kbd>F11</kbd>/<kbd>F12</kbd>/<kbd>Esc</kbd> depending on the motherboard). Choose <strong>Install Osmium Sound</strong> from the menu.</li>
+          <li><strong>Scan the QR code</strong>
+            The screen shows a QR code with the credentials of a temporary Wi-Fi hotspot. Scan it with your phone's camera: the phone connects to the hotspot automatically and the install page opens.</li>
+          <li><strong>Choose the disk and confirm</strong>
+            From your phone, pick which disk to install Osmium Sound onto. A clear warning is shown: <em>all data on the chosen disk will be erased</em>. Confirm to proceed.</li>
+          <li><strong>Wait for it to finish</strong>
+            The mini-PC's screen mirrors install progress in real time, read-only. When it's done, the device reboots on its own — remove the USB stick during the on-screen countdown.</li>
+        </ol>
+
+        <div class="box warn">
+          <span class="label">Warning</span>
+          <p>Choosing a disk permanently erases <strong>all data</strong> on it. Double-check you picked the right disk before confirming, especially if the mini-PC has more than one disk attached.</p>
+        </div>
+
+        <div class="box tip">
+          <span class="label">Try it without installing</span>
+          <p>From the USB stick's boot menu you can pick <strong>Try Osmium Sound (no install)</strong> to run the interface straight from the stick, without writing anything to disk — handy for a quick look. If it doesn't log in automatically, use <code>hifi</code> / <code>hifi</code> as username/password.</p>
+        </div>
+
+        <div class="box ok">
+          <span class="label">Only needed for the first install</span>
+          <p>The ISO is only needed to install Osmium Sound the first time. Every later update (interface, operating system, Lyrion Music Server) arrives automatically via <strong>OTA</strong> from the Settings screen — no need to ever reflash the stick again.</p>
+        </div>
+      </section>
+
+      <section id="en-first-boot">
+        <h2>First boot and setup</h2>
+        <p>After installation, on first boot the screen again shows <strong>only a QR code</strong> — setup, just like installation, is completed from your phone. The device picks up on its own as soon as setup finishes: there's no button to press on the screen.</p>
+
+        <div class="qrmock">
+          <div class="sq"></div>
+          <p>What you actually see on first boot: the Osmium Sound logo, the setup hotspot's QR code <code>Osmium-Setup-XXXX</code>, and nothing else interactive.</p>
+        </div>
+
+        <h3>Guided setup steps (on your phone)</h3>
+        <ol class="steps">
+          <li><strong>Language</strong>
+            Choose between English (default) and Italian — change the setup page's language at any time.</li>
+          <li><strong>Restore from backup, or start fresh</strong>
+            If you've used Osmium Sound before and have a backup file, you can upload it here (with its passphrase, if encrypted): network, audio output, Lyrion, music sources and time zone are all restored automatically and the device reboots on its own. Otherwise, choose to start fresh and continue with the steps below.</li>
+          <li><strong>Network</strong>
+            Connect the device to your home Wi-Fi, or confirm the Ethernet cable if already plugged in.
+            <div class="box tip" style="margin-top:10px">
+              <span class="label">If you chose Wi-Fi</span>
+              <p>The setup hotspot turns off as soon as the device joins your home Wi-Fi (a single Wi-Fi radio can't do both at once). Your phone will lose its connection to the setup page — reconnect it to your own home Wi-Fi, then open <a href="https://hifiplayer.local">https://hifiplayer.local</a> to pick up exactly where you left off. If you used the Ethernet cable instead, the setup hotspot stays on and nothing needs reconnecting.</p>
+            </div>
+          </li>
+          <li><strong>Device mode</strong>
+            Choose between <em>With screen</em>, <em>Headless</em>, and <em>Server-only</em> — see <a href="#en-modes">Device modes</a> for details.</li>
+          <li><strong>Audio output</strong>
+            Select the detected USB DAC or HDMI output. You can change this at any time later from Settings.</li>
+          <li><strong>Music server (Lyrion)</strong>
+            Choose whether this device should run its own Lyrion Music Server (recommended for the first device in your home), or follow a Lyrion server already on your network (for an additional device in a home that already has an Osmium Sound or another Lyrion server).</li>
+          <li><strong>Music sources</strong>
+            Only if you chose a local Lyrion in the previous step: add a network share (SMB) where your music library lives. By this point the device is already on your home network (see the Network step above), so it can actually reach the share — this step wouldn't work while still on the setup hotspot. You can add more later from Settings — the actual first library scan is performed by Lyrion's own setup wizard right after.</li>
+          <li><strong>Time zone</strong>
+            Set the correct time zone for the clock, alarms, and scheduling.</li>
+          <li><strong>Finish setup</strong>
+            Press "Complete setup" on your phone. If you're still on the setup hotspot (wired connection), it turns off now and the device switches to the chosen mode — reconnect your phone to your home network. If you already reconnected earlier (Wi-Fi connection), nothing more to do here.</li>
+        </ol>
+
+        <div class="box tip">
+          <span class="label">Hotspot page doesn't open by itself?</span>
+          <p>If the setup page doesn't open automatically after connecting to the <code>Osmium-Setup-XXXX</code> network (passphrase <code>osmiumsetup</code>), open <a href="http://10.42.0.1">http://10.42.0.1</a> manually in your phone's browser.</p>
+        </div>
+
+        <h3>Create the web administration account</h3>
+        <p>After finishing setup and reconnecting your phone to your home network, open <a href="https://hifiplayer.local">https://hifiplayer.local</a> to create the web administration account (username + password).</p>
+        <div class="box warn">
+          <span class="label">Certificate warning</span>
+          <p>Your browser will warn that the certificate is "not trusted". This is expected: Osmium Sound generates a unique HTTPS certificate per device, and there's no public certification authority for a local address like <code>hifiplayer.local</code>. The connection is still encrypted. It's safe to continue (usually "Advanced" → "Proceed anyway").</p>
+        </div>
+      </section>
+
+      <section id="en-modes">
+        <h2>Device modes</h2>
+        <p>Osmium Sound supports three operating modes, chosen during setup and changeable at any time from Settings:</p>
+
+        <div class="modes">
+          <div class="modecard">
+            <h4>With screen</h4>
+            <p>The touchscreen kiosk interface is always visible. Ideal for a player sitting next to your hi-fi system, with a screen available.</p>
+          </div>
+          <div class="modecard">
+            <h4>Headless</h4>
+            <p>No on-screen interface, but the player still plays audio locally. Managed from web administration, the companion app, or Lyrion.</p>
+          </div>
+          <div class="modecard">
+            <h4>Server-only</h4>
+            <p>No screen <em>and</em> no local audio playback. Lyrion Music Server keeps running to serve other Osmium Sound devices in your home — ideal for a "server" unit tucked away in a closet.</p>
+          </div>
+        </div>
+
+        <p>The two underlying settings are independent of each other:</p>
+        <table>
+          <tr><th>Setting</th><th>Where</th><th>What it controls</th></tr>
+          <tr><td>Display mode</td><td>Settings → <em>Display mode</em></td><td>With screen (touchscreen kiosk) ⇄ Headless (no screen)</td></tr>
+          <tr><td>Player</td><td>Settings → <em>Player</em></td><td>On ⇄ Off (no local audio playback, still serves other devices)</td></tr>
+        </table>
+        <p><em>Server-only</em> = Display mode set to Headless + Player set to Off, applied together.</p>
+
+        <div class="box tip">
+          <span class="label">Bringing "with screen" mode back</span>
+          <p>If a device is in headless or server-only mode and you want to turn the screen back on, open web administration (<a href="https://hifiplayer.local">https://hifiplayer.local</a>) or the companion app and go to Settings → Display mode.</p>
+        </div>
+      </section>
+
+      <section id="en-web-admin">
+        <h2>Web administration</h2>
+        <p>Every Osmium Sound device exposes a web administration page reachable from any browser on the same network — especially useful for headless or server-only devices, but always available.</p>
+        <table>
+          <tr><th>Address</th><th>What's there</th></tr>
+          <tr><td><a href="https://hifiplayer.local">https://hifiplayer.local</a></td><td>Web administration: network, audio output, updates, display mode, player on/off, account, backup, factory reset</td></tr>
+          <tr><td><code>http://hifiplayer.local:9000</code></td><td>Lyrion Music Server's own web interface (library, playlists, server settings)</td></tr>
+        </table>
+        <p>If you have several devices on your network and <code>hifiplayer.local</code> is ambiguous, use the device's IP address directly (visible in system Settings, or from your router).</p>
+      </section>
+
+      <section id="en-companion">
+        <h2>Android companion app</h2>
+        <p>Control Osmium Sound from your phone: browse the library, control playback and the queue, adjust volume. Not available on Google Play — distributed as a signed APK or via the project's self-hosted F-Droid repository.</p>
+        <ol class="steps">
+          <li><strong>Install the app</strong>
+            Download the APK from the project's <a href="https://github.com/adri6412/osmium-sound/releases" target="_blank" rel="noopener">Releases</a>, or add the F-Droid repository — details on the <a href="https://osmiumsound.qd.je/#android" target="_blank" rel="noopener">official website</a>.</li>
+          <li><strong>Pair the device</strong>
+            From the device's screen (if in "with screen" mode), go to Settings and show the pairing QR code; or, for a headless/server-only device, generate the QR from web administration. Scan it from the app.</li>
+          <li><strong>Use the app</strong>
+            Once paired, the app talks directly to Lyrion and the device's API on the local network.</li>
+        </ol>
+      </section>
+
+      <section id="en-daily-use">
+        <h2>Daily use</h2>
+        <ul>
+          <li><strong>Music / Radio / Apps</strong> — Lyrion Music Server's interface: local library, internet radio, and streaming services (Deezer, Qobuz, TIDAL, Spotify and others) via Lyrion plugins.</li>
+          <li><strong>CD</strong> — insert a disc to play it, or rip it to FLAC with automatic tags and cover art (MusicBrainz), straight into your library.</li>
+          <li><strong>Discover</strong> — random mixes, "keep playing similar music", related artists and bios, right on the touchscreen.</li>
+          <li><strong>Settings</strong> — system and network info, audio output, optional DSP, multiroom, OTA updates, companion app pairing, backup, factory reset.</li>
+        </ul>
+      </section>
+
+      <section id="en-sources">
+        <h2>Music sources</h2>
+        <p>Osmium Sound reads your music library from one or more sources, configurable from Settings (or during initial setup, if Lyrion is local):</p>
+        <ul>
+          <li><strong>Network share (SMB)</strong> — a NAS or a shared folder on another computer.</li>
+          <li><strong>USB disk</strong> — a USB disk plugged into the device, "adopted" (Samba-shared, read/write).</li>
+          <li><strong>Internal disk</strong> — a partition of the device's own internal disk dedicated to music.</li>
+        </ul>
+        <p>After adding or editing a source, apply the change: Lyrion restarts and picks up the new configuration. The actual first library scan is performed by Lyrion's own setup wizard.</p>
+        <div class="box tip">
+          <span class="label">External Lyrion server</span>
+          <p>If the device follows a Lyrion Music Server already running elsewhere on your network (chosen during setup, or in Settings → Lyrion), the Music Sources section doesn't appear at all: sources are configured on that other device, not this one.</p>
+        </div>
+      </section>
+
+      <section id="en-streaming">
+        <h2>Streaming & Lyrion plugins</h2>
+        <p>Streaming services (Deezer, Qobuz, TIDAL, Spotify and others) and extra features (UPnP/DLNA, AirPlay, radio) are Lyrion Music Server plugins, not part of the Osmium Sound app itself.</p>
+        <ol class="steps">
+          <li><strong>Open Lyrion's web UI</strong>
+            <code>http://hifiplayer.local:9000</code> (or the device's IP address, port 9000).</li>
+          <li><strong>Go to Settings → Plugins</strong>
+            Find and enable the plugin for the service you want.</li>
+          <li><strong>Log in with your credentials</strong>
+            Follow the plugin's instructions to log into the service.</li>
+          <li><strong>Go back to the Osmium Sound interface</strong>
+            The new service shows up on its own in the Radio/Apps tabs — no app update needed.</li>
+        </ol>
+      </section>
+
+      <section id="en-dsp">
+        <h2>DSP & room correction</h2>
+        <p>The audio path is bit-perfect by default (no resampling). The optional DSP (parametric EQ, headphone crossfeed, room correction) is <strong>off by default</strong> and doesn't touch the bit-perfect path in any way until enabled.</p>
+        <p>Guided room correction can be run directly from the screen with a USB measurement microphone (e.g. UMIK-1): the correction FIR filter is generated on the device itself, no PC needed.</p>
+      </section>
+
+      <section id="en-multiroom">
+        <h2>Multiroom</h2>
+        <p>Multiple Osmium Sound devices can be grouped to play in sync. Each device always runs its own local player (squeezelite); "follow" mode (in Settings → Lyrion) points the player at another Osmium Sound device's Lyrion server already on your network, auto-discoverable via a local-network search — no need to type in an IP address by hand, though you still can.</p>
+        <p>Give each device a name (Settings → Player name) so grouped players are easy to tell apart in Lyrion's interface.</p>
+      </section>
+
+      <section id="en-backup">
+        <h2>Backup & restore</h2>
+        <p>From Settings you can create a full backup of the device's configuration: audio/DSP output, the music source list, Lyrion preferences and playlists, Wi-Fi network profiles, account and pairing tokens. Sensitive data (network, account, Bluetooth) only enters the backup if you choose to protect it with a passphrase.</p>
+        <ul>
+          <li><strong>Manual backup</strong> — Settings → Backup → Create backup now, with or without a passphrase.</li>
+          <li><strong>Scheduled backup</strong> — enable it in Settings; runs a weekly backup automatically (non-sensitive data only, since there's nobody to ask for a passphrase).</li>
+          <li><strong>Restore</strong> — from Settings on an already-configured device, or directly during first-boot setup (see <a href="#en-first-boot">First boot and setup</a>) to quickly bring a replaced or reset device back up.</li>
+        </ul>
+        <div class="box tip">
+          <span class="label">Before a restore</span>
+          <p>The device automatically creates a safety backup of the current state right before applying a restore, so a bad restore is still reversible.</p>
+        </div>
+      </section>
+
+      <section id="en-updates">
+        <h2>OTA updates</h2>
+        <p>The interface, operating system, and Lyrion Music Server all update automatically via OTA (over-the-air) from the Settings screen — no need to ever reflash the USB stick after the initial install. Operating-system updates are digitally signed (Ed25519): a device refuses a package that isn't signed correctly, even if someone managed to tamper with the download.</p>
+        <p>Each device can pick a release channel in Settings → Updates:</p>
+        <table>
+          <tr><th>Channel</th><th>Description</th></tr>
+          <tr><td><strong>Prod</strong> (default)</td><td>Stable releases, recommended for everyday use</td></tr>
+          <tr><td><strong>Dev</strong></td><td>More frequent development builds, for trying new things early</td></tr>
+        </table>
+      </section>
+
+      <section id="en-ssh">
+        <h2>SSH & advanced access</h2>
+        <p>SSH access is <strong>off by default</strong>. It can be turned on from Settings (on-screen or from web administration) for advanced maintenance or debugging.</p>
+        <div class="box warn">
+          <span class="label">Security</span>
+          <p>When SSH is enabled, logging in as <code>root</code> stays blocked regardless: even knowing the kiosk user's default password, it's not possible to gain system-administrator access over SSH.</p>
+        </div>
+      </section>
+
+      <section id="en-reset">
+        <h2>Factory reset</h2>
+        <p>Factory reset erases every setting, the web administration account, and configured sources, then reboots the device straight back into the QR-code setup flow described in <a href="#en-first-boot">First boot and setup</a> — as if it had just been installed.</p>
+        <p>Available from:</p>
+        <ul>
+          <li>On-screen, in Settings → Factory reset (if the device is in "with screen" mode).</li>
+          <li>Web administration, by entering the administrator account's password.</li>
+        </ul>
+        <div class="box tip">
+          <span class="label">Forgot the password?</span>
+          <p>If you forget the web administration password, you can reset it from on-screen Settings (if available), or proceed with a factory reset.</p>
+        </div>
+      </section>
+
+      <section id="en-troubleshooting">
+        <h2>Troubleshooting</h2>
+        <table>
+          <tr><th>Problem</th><th>What to check</th></tr>
+          <tr><td>The Lyrion interface won't load</td><td>Check the Lyrion server address in Settings (default <code>http://localhost:9000</code>) and that the service is running.</td></tr>
+          <tr><td>Missing streaming/radio sources</td><td>Install the corresponding plugin from Lyrion's web UI (Settings → Plugins) — see <a href="#en-streaming">Streaming & Lyrion plugins</a>.</td></tr>
+          <tr><td>No audio</td><td>Check the selected audio device in Settings and that the DAC is recognized and connected.</td></tr>
+          <tr><td>The first-boot QR code doesn't lead anywhere</td><td>Confirm you're connected to the <code>Osmium-Setup-XXXX</code> network (passphrase <code>osmiumsetup</code>) and try opening <a href="http://10.42.0.1">http://10.42.0.1</a> manually.</td></tr>
+          <tr><td><code>https://hifiplayer.local</code> is unreachable</td><td>Make sure your phone and the device are on the same network; otherwise use the device's IP address directly.</td></tr>
+          <tr><td>A headless device isn't responding</td><td>Use the companion app or web administration to check its status; if needed, temporarily switch it back to "with screen" mode from there.</td></tr>
+        </table>
+      </section>
+
+      <section id="en-resources">
+        <h2>Resources & links</h2>
+        <ul>
+          <li><a href="README.md">README.md</a> — project overview, features, and specs</li>
+          <li><a href="QUICKSTART.md">QUICKSTART.md</a> / <a href="GUIDA-RAPIDA.md">GUIDA-RAPIDA.md</a> — quick-start guide in English/Italian</li>
+          <li><a href="ARCHITECTURE.md">ARCHITECTURE.md</a> — technical/architectural documentation for developers</li>
+          <li><a href="SECURITY.md">SECURITY.md</a> — security policy</li>
+          <li><a href="https://github.com/adri6412/osmium-sound" target="_blank" rel="noopener">GitHub repository</a> — source code, issues, releases</li>
+          <li><a href="https://osmiumsound.qd.je" target="_blank" rel="noopener">Official website</a> — changelog, downloads, companion app</li>
+        </ul>
+      </section>
+
+      <footer>
+        Osmium Sound is an independent open-source project and is <strong>not affiliated with, sponsored by, or endorsed by</strong> the Lyrion Music Server project or the LMS-Community. "Lyrion" is used in a nominative sense only, to describe the service this interface connects to.
+        <br><br>
+        Application code released under the MIT license — see <a href="LICENSE">LICENSE</a> and <a href="THIRD-PARTY-NOTICES.md">THIRD-PARTY-NOTICES.md</a> for third-party components.
+      </footer>
+
+    </div>
+
+    <!-- ══════════════════════════════ ITALIANO ══════════════════════════════ -->
+    <div class="content" data-lang="it">
+
+      <div class="hero">
+        <h1>Osmium Sound</h1>
+        <p>Manuale completo di installazione e configurazione. Un network streamer hi-fi bit-perfect basato su Debian, con Lyrion Music Server, DSP opzionale e amministrazione via web — pensato per essere installato e configurato interamente dal telefono, senza mai dover collegare mouse o tastiera.</p>
+        <div class="badges">
+          <span class="badge">Setup via QR code</span>
+          <span class="badge">Nessun mouse/tastiera richiesto</span>
+          <span class="badge">Aggiornamenti OTA firmati</span>
+          <span class="badge">Con schermo · Headless · Solo server</span>
+        </div>
+      </div>
+
+      <section id="it-requisiti">
+        <h2>Requisiti hardware</h2>
+        <table>
+          <tr><th>Componente</th><th>Requisito</th></tr>
+          <tr><td>Computer</td><td>Mini-PC x86/x86-64 (anche riciclato/usato)</td></tr>
+          <tr><td>Storage</td><td>Disco/SSD interno per l'installazione (qualsiasi dimensione ragionevole)</td></tr>
+          <tr><td>Chiavetta USB</td><td>8&nbsp;GB o superiore, solo per l'installazione iniziale</td></tr>
+          <tr><td>Schermo (opzionale)</td><td>Touchscreen 1024×600 consigliato per la modalità "con schermo" — non necessario in modalità headless o solo server</td></tr>
+          <tr><td>Uscita audio</td><td>DAC USB oppure uscita HDMI</td></tr>
+          <tr><td>Rete</td><td>Ethernet oppure Wi-Fi</td></tr>
+          <tr><td>Telefono</td><td>Necessario per l'installazione e la prima configurazione — qualunque smartphone con fotocamera e browser</td></tr>
+        </table>
+        <div class="box tip">
+          <span class="label">Nota</span>
+          <p>Non serve un dispositivo di fascia alta: Osmium Sound gira bene su mini-PC economici o riciclati. Il collo di bottiglia più comune è la GPU integrata quando si usa lo schermo — evitare animazioni pesanti non è un problema lato utente, è già gestito dal software.</p>
+        </div>
+      </section>
+
+      <section id="it-installazione">
+        <h2>Installazione</h2>
+        <p>L'installazione avviene interamente da chiavetta USB e, novità importante, <strong>non richiede mai di toccare lo schermo del mini-PC</strong>: dopo il boot, lo schermo mostra solo un QR code e tutta la procedura — scelta del disco, conferma, avvio dell'installazione — si fa dal telefono.</p>
+
+        <ol class="steps">
+          <li><strong>Scarica la ISO</strong>
+            Vai su <a href="https://github.com/adri6412/osmium-sound/releases" target="_blank" rel="noopener">github.com/adri6412/osmium-sound/releases</a> e scarica l'ultima immagine ISO disponibile.</li>
+          <li><strong>Scrivi la ISO su una chiavetta USB</strong>
+            Usa <a href="https://etcher.balena.io/" target="_blank" rel="noopener">balenaEtcher</a>, Rufus oppure il comando <code>dd</code> su una chiavetta da almeno 8&nbsp;GB.</li>
+          <li><strong>Avvia il mini-PC dalla chiavetta</strong>
+            Collega la chiavetta, accendi il mini-PC e seleziona l'avvio da USB dal menu di boot (di solito <kbd>F11</kbd>/<kbd>F12</kbd>/<kbd>Esc</kbd> a seconda della scheda madre). Scegli <strong>Install Osmium Sound</strong> dal menu.</li>
+          <li><strong>Scansiona il QR code</strong>
+            Lo schermo mostra un QR code con le credenziali di un hotspot Wi-Fi temporaneo. Scansionalo con la fotocamera del telefono: il telefono si connette automaticamente all'hotspot e si apre la pagina di installazione.</li>
+          <li><strong>Scegli il disco e conferma</strong>
+            Dal telefono, scegli il disco su cui installare Osmium Sound. Viene mostrato un avviso chiaro: <em>tutti i dati sul disco scelto verranno cancellati</em>. Conferma per procedere.</li>
+          <li><strong>Attendi il completamento</strong>
+            Lo schermo del mini-PC mostra l'avanzamento dell'installazione in tempo reale (sola lettura). Al termine, il dispositivo si riavvia automaticamente — rimuovi la chiavetta USB durante il conto alla rovescia mostrato a schermo.</li>
+        </ol>
+
+        <div class="box warn">
+          <span class="label">Attenzione</span>
+          <p>La scelta del disco cancella <strong>tutti i dati</strong> presenti su quel disco, in modo permanente. Verifica di aver selezionato il disco giusto prima di confermare, specialmente se il mini-PC ha più di un disco collegato.</p>
+        </div>
+
+        <div class="box tip">
+          <span class="label">Provarlo senza installare</span>
+          <p>Dal menu di avvio della chiavetta puoi scegliere <strong>Try Osmium Sound (no install)</strong> per far partire l'interfaccia direttamente dalla USB, senza scrivere nulla sul disco — utile per una prova rapida. Se non effettua l'accesso automaticamente, usa <code>hifi</code> / <code>hifi</code> come utente/password.</p>
+        </div>
+
+        <div class="box ok">
+          <span class="label">Solo per la prima installazione</span>
+          <p>La ISO serve solo per installare Osmium Sound la prima volta. Tutti gli aggiornamenti successivi (interfaccia, sistema operativo, Lyrion Music Server) arrivano automaticamente via <strong>OTA</strong> dalla schermata Impostazioni — non serve mai riflashare la chiavetta.</p>
+        </div>
+      </section>
+
+      <section id="it-primo-avvio">
+        <h2>Primo avvio e configurazione</h2>
+        <p>Dopo l'installazione, al primo avvio lo schermo mostra di nuovo <strong>solo un QR code</strong> — la configurazione, esattamente come l'installazione, si completa dal telefono. Il dispositivo prosegue da solo non appena la configurazione viene completata: non c'è nessun pulsante da premere sullo schermo.</p>
+
+        <div class="qrmock">
+          <div class="sq"></div>
+          <p>Schermata reale al primo avvio: logo Osmium Sound, QR code dell'hotspot di configurazione <code>Osmium-Setup-XXXX</code>, nessun altro elemento interattivo.</p>
+        </div>
+
+        <h3>Passaggi della configurazione guidata (dal telefono)</h3>
+        <ol class="steps">
+          <li><strong>Lingua</strong>
+            Scegli tra Inglese (predefinita) e Italiano — cambia in ogni momento la lingua della pagina di configurazione.</li>
+          <li><strong>Ripristina da backup, oppure inizia da zero</strong>
+            Se hai già usato Osmium Sound in passato e hai un file di backup, puoi caricarlo qui (con la relativa passphrase, se cifrato): rete, uscita audio, Lyrion, sorgenti musicali e fuso orario vengono ripristinati automaticamente e il dispositivo si riavvia da solo. Altrimenti, scegli di iniziare da zero e prosegui con i passaggi seguenti.</li>
+          <li><strong>Rete</strong>
+            Collega il dispositivo alla tua rete Wi-Fi di casa, oppure conferma il cavo Ethernet se già collegato.
+            <div class="box tip" style="margin-top:10px">
+              <span class="label">Se scegli il Wi-Fi</span>
+              <p>L'hotspot di configurazione si spegne non appena il dispositivo si collega alla tua rete Wi-Fi di casa (una singola scheda Wi-Fi non può fare entrambe le cose insieme). Il telefono perderà la connessione alla pagina di configurazione — riconnettilo alla tua rete Wi-Fi di casa, poi apri <a href="https://hifiplayer.local">https://hifiplayer.local</a> per riprendere esattamente da dove avevi lasciato. Se invece usi il cavo Ethernet, l'hotspot di configurazione resta acceso e non c'è nulla da riconnettere.</p>
+            </div>
+          </li>
+          <li><strong>Modalità del dispositivo</strong>
+            Scegli tra <em>Con schermo</em>, <em>Headless</em> e <em>Solo server</em> — vedi la sezione <a href="#it-modalita">Modalità del dispositivo</a> per i dettagli.</li>
+          <li><strong>Uscita audio</strong>
+            Seleziona il DAC USB o l'uscita HDMI rilevata. Si può cambiare in ogni momento più avanti dalle Impostazioni.</li>
+          <li><strong>Server musicale (Lyrion)</strong>
+            Scegli se questo dispositivo deve eseguire il proprio Lyrion Music Server (impostazione consigliata per il primo dispositivo in casa), oppure seguire un server Lyrion già presente sulla rete (per un dispositivo aggiuntivo in una casa che ha già un Osmium Sound o un altro server Lyrion).</li>
+          <li><strong>Sorgenti musicali</strong>
+            Solo se hai scelto un Lyrion locale al passaggio precedente: aggiungi una condivisione di rete (SMB) dove si trova la tua libreria musicale. A questo punto il dispositivo è già sulla tua rete di casa (vedi il passaggio Rete sopra), quindi riesce davvero a raggiungere la condivisione — questo passaggio non funzionerebbe restando sull'hotspot di configurazione. Puoi aggiungerne altre in seguito dalle Impostazioni — la scansione vera e propria della libreria la esegue il setup guidato di Lyrion subito dopo.</li>
+          <li><strong>Fuso orario</strong>
+            Imposta il fuso orario corretto per orologio, allarmi e programmazioni.</li>
+          <li><strong>Completa il setup</strong>
+            Premi "Completa setup" sul telefono. Se sei ancora sull'hotspot di configurazione (connessione via cavo), si spegne adesso e il dispositivo passa alla modalità scelta — riconnetti il telefono alla tua rete di casa. Se ti sei già riconnesso in precedenza (connessione Wi-Fi), non c'è altro da fare qui.</li>
+        </ol>
+
+        <div class="box tip">
+          <span class="label">L'hotspot non si apre da solo?</span>
+          <p>Se la pagina di configurazione non si apre automaticamente dopo esserti connesso alla rete <code>Osmium-Setup-XXXX</code> (passphrase <code>osmiumsetup</code>), apri manualmente <a href="http://10.42.0.1">http://10.42.0.1</a> nel browser del telefono.</p>
+        </div>
+
+        <h3>Crea l'account di amministrazione web</h3>
+        <p>Dopo aver completato il setup e riconnesso il telefono alla rete di casa, apri <a href="https://hifiplayer.local">https://hifiplayer.local</a> per creare l'account (nome utente + password) dell'amministrazione web.</p>
+        <div class="box warn">
+          <span class="label">Avviso del certificato</span>
+          <p>Il browser mostrerà un avviso che il certificato "non è attendibile". È normale: Osmium Sound genera un certificato HTTPS univoco per ogni dispositivo, e non esiste un'autorità di certificazione pubblica per un dominio locale come <code>hifiplayer.local</code>. La connessione resta comunque cifrata. Puoi procedere in sicurezza (di solito "Avanzate" → "Procedi comunque").</p>
+        </div>
+      </section>
+
+      <section id="it-modalita">
+        <h2>Modalità del dispositivo</h2>
+        <p>Osmium Sound supporta tre modalità operative, scelte durante il setup e modificabili in ogni momento dalle Impostazioni:</p>
+
+        <div class="modes">
+          <div class="modecard">
+            <h4>Con schermo</h4>
+            <p>Interfaccia touchscreen kiosk sempre visibile. Ideale per un lettore vicino all'impianto hi-fi, con schermo a disposizione.</p>
+          </div>
+          <div class="modecard">
+            <h4>Headless</h4>
+            <p>Nessuna interfaccia a schermo, ma il player riproduce comunque audio in locale. Si gestisce da amministrazione web, app companion o Lyrion.</p>
+          </div>
+          <div class="modecard">
+            <h4>Solo server</h4>
+            <p>Nessuno schermo <em>e</em> nessuna riproduzione audio locale. Lyrion Music Server continua a funzionare per servire altri dispositivi Osmium Sound in casa — ideale per un'unità "server" in un ripostiglio/armadio tecnico.</p>
+          </div>
+        </div>
+
+        <p>Le due impostazioni sono indipendenti tra loro:</p>
+        <table>
+          <tr><th>Impostazione</th><th>Dove</th><th>Cosa controlla</th></tr>
+          <tr><td>Modalità schermo</td><td>Impostazioni → <em>Modalità schermo</em></td><td>Con schermo (kiosk touchscreen) ⇄ Headless (nessuno schermo)</td></tr>
+          <tr><td>Player</td><td>Impostazioni → <em>Player</em></td><td>Acceso ⇄ Spento (nessuna riproduzione audio locale, resta un server per altri dispositivi)</td></tr>
+        </table>
+        <p><em>Solo server</em> = Modalità schermo su Headless + Player su Spento, applicati insieme.</p>
+
+        <div class="box tip">
+          <span class="label">Come tornare a "Con schermo"</span>
+          <p>Se un dispositivo è in modalità headless o solo server e vuoi riaccendere lo schermo, apri l'amministrazione web (<a href="https://hifiplayer.local">https://hifiplayer.local</a>) o l'app companion e vai su Impostazioni → Modalità schermo.</p>
+        </div>
+      </section>
+
+      <section id="it-amministrazione-web">
+        <h2>Amministrazione web</h2>
+        <p>Ogni dispositivo Osmium Sound espone una pagina di amministrazione web raggiungibile da qualsiasi browser sulla stessa rete, utile in particolare per i dispositivi in modalità headless o solo server, ma disponibile sempre.</p>
+        <table>
+          <tr><th>Indirizzo</th><th>Cosa trovi</th></tr>
+          <tr><td><a href="https://hifiplayer.local">https://hifiplayer.local</a></td><td>Amministrazione web: rete, uscita audio, aggiornamenti, modalità schermo, player on/off, account, backup, reset di fabbrica</td></tr>
+          <tr><td><code>http://hifiplayer.local:9000</code></td><td>Interfaccia web di Lyrion Music Server (libreria, playlist, impostazioni server)</td></tr>
+        </table>
+        <p>Se hai più dispositivi in rete e <code>hifiplayer.local</code> è ambiguo, usa direttamente l'indirizzo IP del dispositivo (visibile nelle Impostazioni di sistema, oppure dal router).</p>
+      </section>
+
+      <section id="it-app-companion">
+        <h2>App companion Android</h2>
+        <p>Controlla Osmium Sound dal telefono: sfoglia la libreria, gestisci riproduzione e coda, regola il volume. Non è disponibile su Google Play — è distribuita come APK firmato oppure tramite il repository F-Droid self-hosted del progetto.</p>
+        <ol class="steps">
+          <li><strong>Installa l'app</strong>
+            Scarica l'APK dalle <a href="https://github.com/adri6412/osmium-sound/releases" target="_blank" rel="noopener">Releases</a> del progetto, oppure aggiungi il repository F-Droid — dettagli sul <a href="https://osmiumsound.qd.je/#android" target="_blank" rel="noopener">sito ufficiale</a>.</li>
+          <li><strong>Abbina il dispositivo</strong>
+            Dallo schermo del dispositivo (se in modalità "con schermo") vai su Impostazioni e mostra il QR code di abbinamento; oppure, per un dispositivo headless/solo server, genera il QR dall'amministrazione web. Scansionalo dall'app.</li>
+          <li><strong>Usa l'app</strong>
+            Una volta abbinata, l'app parla direttamente con Lyrion e con l'API del dispositivo sulla rete locale.</li>
+        </ol>
+      </section>
+
+      <section id="it-uso-quotidiano">
+        <h2>Uso quotidiano</h2>
+        <ul>
+          <li><strong>Musica / Radio / App</strong> — l'interfaccia di Lyrion Music Server: libreria locale, radio internet e servizi di streaming (Deezer, Qobuz, TIDAL, Spotify e altri) tramite i plugin di Lyrion.</li>
+          <li><strong>CD</strong> — inserisci un disco per riprodurlo oppure rippare in FLAC con tag e copertina automatici (MusicBrainz), direttamente nella libreria.</li>
+          <li><strong>Discover</strong> — mix casuali, "continua ad ascoltare musica simile", artisti correlati e biografie direttamente a schermo.</li>
+          <li><strong>Impostazioni</strong> — info di sistema e rete, uscita audio, DSP opzionale, multiroom, aggiornamenti OTA, abbinamento app companion, backup, reset di fabbrica.</li>
+        </ul>
+      </section>
+
+      <section id="it-sorgenti">
+        <h2>Sorgenti musicali</h2>
+        <p>Osmium Sound legge la libreria musicale da una o più sorgenti, configurabili dalle Impostazioni (o durante il setup iniziale, se il Lyrion è locale):</p>
+        <ul>
+          <li><strong>Condivisione di rete (SMB)</strong> — un NAS o una cartella condivisa su un altro computer.</li>
+          <li><strong>Disco USB</strong> — un disco USB collegato al dispositivo, "adottato" (condiviso via Samba, leggibile/scrivibile).</li>
+          <li><strong>Disco interno</strong> — una partizione del disco interno del dispositivo dedicata alla musica.</li>
+        </ul>
+        <p>Dopo aver aggiunto o modificato una sorgente, applica le modifiche: Lyrion viene riavviato e la nuova configurazione presa in carico. La prima scansione vera e propria della libreria avviene tramite il setup guidato di Lyrion stesso.</p>
+        <div class="box tip">
+          <span class="label">Server Lyrion esterno</span>
+          <p>Se il dispositivo segue un Lyrion Music Server già presente altrove in rete (scelto durante il setup, o in Impostazioni → Lyrion), la sezione Sorgenti musicali non compare: le sorgenti si configurano su quell'altro dispositivo, non su questo.</p>
+        </div>
+      </section>
+
+      <section id="it-streaming">
+        <h2>Streaming e plugin Lyrion</h2>
+        <p>I servizi di streaming (Deezer, Qobuz, TIDAL, Spotify e altri) e le funzioni aggiuntive (UPnP/DLNA, AirPlay, radio) sono plugin di Lyrion Music Server, non parte dell'app Osmium Sound stessa.</p>
+        <ol class="steps">
+          <li><strong>Apri la web UI di Lyrion</strong>
+            <code>http://hifiplayer.local:9000</code> (oppure l'indirizzo IP del dispositivo, porta 9000).</li>
+          <li><strong>Vai su Impostazioni → Plugin</strong>
+            Cerca e attiva il plugin del servizio che vuoi usare.</li>
+          <li><strong>Accedi con le tue credenziali</strong>
+            Segui le istruzioni del plugin per il login al servizio.</li>
+          <li><strong>Torna sull'interfaccia Osmium Sound</strong>
+            Il nuovo servizio compare da solo nei tab Radio/App — non serve nessun aggiornamento dell'app.</li>
+        </ol>
+      </section>
+
+      <section id="it-dsp">
+        <h2>DSP e correzione ambientale</h2>
+        <p>Il percorso audio è bit-perfect per impostazione predefinita (nessun ricampionamento). Il DSP opzionale (equalizzatore parametrico, crossfeed per cuffie, correzione ambientale) è <strong>disattivato di default</strong> e non tocca in alcun modo il percorso bit-perfect finché non viene attivato.</p>
+        <p>La correzione ambientale guidata può essere eseguita direttamente dallo schermo con un microfono di misura USB (es. UMIK-1): il filtro FIR di correzione viene generato sul dispositivo stesso, senza bisogno di un PC.</p>
+      </section>
+
+      <section id="it-multiroom">
+        <h2>Multiroom</h2>
+        <p>Più dispositivi Osmium Sound possono essere raggruppati per suonare in sincronia. Ogni dispositivo esegue sempre il proprio player locale (squeezelite); la modalità "segui" (in Impostazioni → Lyrion) punta il player verso il server Lyrion di un altro dispositivo Osmium Sound già presente sulla rete, individuabile automaticamente tramite ricerca sulla rete locale — non serve inserire l'indirizzo IP a mano, anche se è comunque possibile farlo.</p>
+        <p>Assegna un nome a ogni dispositivo (Impostazioni → Nome player) per distinguerli facilmente nell'interfaccia di Lyrion quando sono raggruppati.</p>
+      </section>
+
+      <section id="it-backup">
+        <h2>Backup e ripristino</h2>
+        <p>Dalle Impostazioni puoi creare un backup completo della configurazione del dispositivo: uscita audio/DSP, elenco delle sorgenti musicali, preferenze e playlist di Lyrion, profili di rete Wi-Fi, account e token di abbinamento. I dati sensibili (rete, account, Bluetooth) entrano nel backup solo se scegli di proteggerlo con una passphrase.</p>
+        <ul>
+          <li><strong>Backup manuale</strong> — Impostazioni → Backup → Crea backup adesso, con o senza passphrase.</li>
+          <li><strong>Backup programmato</strong> — attivabile in Impostazioni; esegue automaticamente un backup settimanale (solo dati non sensibili, dato che non c'è nessuno a cui chiedere una passphrase).</li>
+          <li><strong>Ripristino</strong> — dalle Impostazioni di un dispositivo già configurato, oppure direttamente durante il setup guidato del primo avvio (vedi <a href="#it-primo-avvio">Primo avvio e configurazione</a>) per rimettere in piedi rapidamente un dispositivo sostituito o reimpostato.</li>
+        </ul>
+        <div class="box tip">
+          <span class="label">Prima di un ripristino</span>
+          <p>Il dispositivo crea automaticamente un backup di sicurezza dello stato corrente subito prima di applicare un ripristino, così un ripristino sbagliato è comunque reversibile.</p>
+        </div>
+      </section>
+
+      <section id="it-aggiornamenti">
+        <h2>Aggiornamenti OTA</h2>
+        <p>Interfaccia, sistema operativo e Lyrion Music Server si aggiornano automaticamente via OTA (over-the-air) dalla schermata Impostazioni — non serve mai riflashare la chiavetta USB dopo l'installazione iniziale. Gli aggiornamenti del sistema operativo sono firmati digitalmente (Ed25519): un dispositivo rifiuta un pacchetto non firmato correttamente, anche se qualcuno riuscisse a manometterne il download.</p>
+        <p>Ogni dispositivo può scegliere un canale di rilascio in Impostazioni → Aggiornamenti:</p>
+        <table>
+          <tr><th>Canale</th><th>Descrizione</th></tr>
+          <tr><td><strong>Prod</strong> (predefinito)</td><td>Versioni stabili, consigliato per l'uso quotidiano</td></tr>
+          <tr><td><strong>Dev</strong></td><td>Versioni di sviluppo più frequenti, per chi vuole provare le novità in anteprima</td></tr>
+        </table>
+      </section>
+
+      <section id="it-ssh">
+        <h2>SSH e accesso avanzato</h2>
+        <p>L'accesso SSH è <strong>disattivato per impostazione predefinita</strong>. Può essere attivato dalle Impostazioni (a schermo o da amministrazione web) per manutenzione avanzata o debug.</p>
+        <div class="box warn">
+          <span class="label">Sicurezza</span>
+          <p>Quando SSH viene attivato, l'accesso come utente <code>root</code> resta comunque sempre bloccato: anche conoscendo la password predefinita dell'utente kiosk, non è possibile ottenere accesso come amministratore di sistema via SSH.</p>
+        </div>
+      </section>
+
+      <section id="it-reset">
+        <h2>Reset di fabbrica</h2>
+        <p>Il reset di fabbrica cancella tutte le impostazioni, l'account di amministrazione web e le sorgenti configurate, poi riavvia il dispositivo direttamente nel flusso di configurazione via QR code descritto in <a href="#it-primo-avvio">Primo avvio e configurazione</a> — come se fosse appena stato installato.</p>
+        <p>È disponibile:</p>
+        <ul>
+          <li>A schermo, in Impostazioni → Reset di fabbrica (se il dispositivo è in modalità "con schermo").</li>
+          <li>Dall'amministrazione web, inserendo la password dell'account amministratore.</li>
+        </ul>
+        <div class="box tip">
+          <span class="label">Password dimenticata?</span>
+          <p>Se dimentichi la password dell'amministrazione web, puoi reimpostarla dalle Impostazioni a schermo (se disponibile) oppure procedere con un reset di fabbrica.</p>
+        </div>
+      </section>
+
+      <section id="it-risoluzione-problemi">
+        <h2>Risoluzione dei problemi</h2>
+        <table>
+          <tr><th>Problema</th><th>Cosa verificare</th></tr>
+          <tr><td>L'interfaccia Lyrion non carica</td><td>Verifica l'indirizzo del server Lyrion in Impostazioni (predefinito <code>http://localhost:9000</code>) e che il servizio sia attivo.</td></tr>
+          <tr><td>Mancano sorgenti streaming/radio</td><td>Installa il plugin corrispondente dalla web UI di Lyrion (Impostazioni → Plugin) — vedi <a href="#it-streaming">Streaming e plugin Lyrion</a>.</td></tr>
+          <tr><td>Nessun audio</td><td>Controlla il dispositivo audio selezionato in Impostazioni e che il DAC sia riconosciuto e collegato.</td></tr>
+          <tr><td>Il QR code al primo avvio non porta a nulla</td><td>Verifica di esserti connesso alla rete <code>Osmium-Setup-XXXX</code> (passphrase <code>osmiumsetup</code>) e prova ad aprire manualmente <a href="http://10.42.0.1">http://10.42.0.1</a>.</td></tr>
+          <tr><td><code>https://hifiplayer.local</code> non è raggiungibile</td><td>Verifica che telefono e dispositivo siano sulla stessa rete; in alternativa usa direttamente l'indirizzo IP del dispositivo.</td></tr>
+          <tr><td>Il dispositivo headless non risponde</td><td>Usa l'app companion o l'amministrazione web per verificarne lo stato; se necessario, riporta temporaneamente il dispositivo in modalità "con schermo" da lì.</td></tr>
+        </table>
+      </section>
+
+      <section id="it-risorse">
+        <h2>Risorse e link utili</h2>
+        <ul>
+          <li><a href="README.md">README.md</a> — panoramica del progetto, funzionalità e specifiche</li>
+          <li><a href="QUICKSTART.md">QUICKSTART.md</a> / <a href="GUIDA-RAPIDA.md">GUIDA-RAPIDA.md</a> — guida rapida in inglese/italiano</li>
+          <li><a href="ARCHITECTURE.md">ARCHITECTURE.md</a> — documentazione tecnica/architetturale per sviluppatori</li>
+          <li><a href="SECURITY.md">SECURITY.md</a> — policy di sicurezza</li>
+          <li><a href="https://github.com/adri6412/osmium-sound" target="_blank" rel="noopener">Repository GitHub</a> — codice sorgente, issue, release</li>
+          <li><a href="https://osmiumsound.qd.je" target="_blank" rel="noopener">Sito ufficiale</a> — changelog, download, app companion</li>
+        </ul>
+      </section>
+
+      <footer>
+        Osmium Sound è un progetto open-source indipendente e <strong>non è affiliato, sponsorizzato o approvato</strong> dal progetto Lyrion Music Server o dalla LMS-Community. "Lyrion" è citato solo in senso descrittivo, per indicare il servizio a cui questa interfaccia si collega.
+        <br><br>
+        Codice applicativo rilasciato sotto licenza MIT — vedi <a href="LICENSE">LICENSE</a> e <a href="THIRD-PARTY-NOTICES.md">THIRD-PARTY-NOTICES.md</a> per i componenti di terze parti.
+      </footer>
+
+    </div>
+
+  </main>
+</div>
+
+<button id="toTop" onclick="window.scrollTo({top:0,behavior:'smooth'})" aria-label="Back to top">↑</button>
+
+<script>
+  var CHROME = {
+    en: { title: 'Osmium Sound — Installation & configuration manual',
+          desc: 'Complete Osmium Sound installation and configuration manual: QR-code installer, first boot, device modes, web administration, music sources, backup, OTA updates.',
+          brandSub: 'Installation & configuration manual',
+          toTop: 'Back to top' },
+    it: { title: 'Osmium Sound — Manuale di installazione e configurazione',
+          desc: 'Manuale completo di installazione e configurazione di Osmium Sound: installer via QR, primo avvio, modalità dispositivo, amministrazione web, sorgenti musicali, backup, aggiornamenti OTA.',
+          brandSub: 'Manuale di installazione e configurazione',
+          toTop: 'Torna in cima' }
+  };
+
+  function toggleMenu(){
+    var lang = document.documentElement.getAttribute('data-lang');
+    var active = document.querySelector('nav.toc[data-lang="' + lang + '"]');
+    if (active) active.classList.toggle('open');
+  }
+
+  function setLang(lang){
+    if (CHROME[lang] === undefined) lang = 'en';
+    document.documentElement.setAttribute('lang', lang);
+    document.documentElement.setAttribute('data-lang', lang);
+    document.getElementById('pageTitle').textContent = CHROME[lang].title;
+    document.getElementById('pageDesc').setAttribute('content', CHROME[lang].desc);
+    document.getElementById('brandSub').textContent = CHROME[lang].brandSub;
+    document.getElementById('toTop').setAttribute('aria-label', CHROME[lang].toTop);
+    document.getElementById('btnEn').className = lang === 'en' ? 'active' : '';
+    document.getElementById('btnIt').className = lang === 'it' ? 'active' : '';
+    document.querySelectorAll('nav.toc').forEach(function(n){ n.classList.remove('open'); });
+    try { localStorage.setItem('osmiumManualLang', lang); } catch (_) {}
+  }
+
+  (function initLang(){
+    var saved = null;
+    try { saved = localStorage.getItem('osmiumManualLang'); } catch (_) {}
+    if (!saved) {
+      saved = (navigator.language || '').toLowerCase().indexOf('it') === 0 ? 'it' : 'en';
+    }
+    setLang(saved);
+  })();
+
+  // Close the mobile TOC after tapping a link.
+  document.querySelectorAll('nav.toc a').forEach(function(a){
+    a.addEventListener('click', function(){
+      document.querySelectorAll('nav.toc').forEach(function(n){ n.classList.remove('open'); });
+    });
+  });
+  // Show/hide the "back to top" button.
+  var toTop = document.getElementById('toTop');
+  window.addEventListener('scroll', function(){
+    toTop.style.display = window.scrollY > 500 ? 'flex' : 'none';
+  });
+</script>
+
+</body>
+</html>

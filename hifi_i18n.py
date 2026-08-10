@@ -41,6 +41,7 @@ MESSAGES = {
     'audio.deviceSetRestartFailed': {'en': 'Device set ({device}); restart failed',
                                      'it': 'Device impostato ({device}); riavvio non riuscito'},
     'audio.outputSet': {'en': 'Audio output set to {device}', 'it': 'Uscita audio impostata su {device}'},
+    'audio.defaultDeviceName': {'en': 'System default', 'it': 'Predefinito di sistema'},
 
     # ── Multiroom / Lyrion server role ──────────────────────────────
     'lms.invalidIp': {'en': 'Invalid IP address: {host}', 'it': 'Indirizzo IP non valido: {host}'},
@@ -65,6 +66,10 @@ MESSAGES = {
     'player.nameSetRestartFailed': {'en': 'Name set ({name}); restart failed',
                                     'it': 'Nome impostato ({name}); riavvio non riuscito'},
     'player.nameSet': {'en': 'Player name set to {name}', 'it': 'Nome player impostato su {name}'},
+    'player.toggleFailed': {'en': 'The player on/off operation failed.',
+                            'it': "L'operazione di accensione/spegnimento del player non è riuscita."},
+    'player.enabled': {'en': 'Player enabled.', 'it': 'Player abilitato.'},
+    'player.disabled': {'en': 'Player disabled.', 'it': 'Player disabilitato.'},
 
     # ── SSH ──────────────────────────────────────────────────────────
     'ssh.installFailed': {'en': 'Could not install openssh-server.',
@@ -234,6 +239,8 @@ MESSAGES = {
                                    '(systemctl status lyrionmusicserver).'},
     'lyrion.diskNotMounted': {'en': 'Disk not mounted: {disks}. Check the connection before applying.',
                               'it': 'Disco non montato: {disks}. Verifica il collegamento prima di applicare.'},
+    'lyrion.applied': {'en': '{count} source(s) applied. Lyrion restarted and scanning.',
+                       'it': '{count} sorgenti applicate. Lyrion riavviato e in scansione.'},
 
     # ── sources_server.py: backup creation ──────────────────────────
     'backup.systemUpdateRequired': {'en': 'A system update is required',
@@ -258,6 +265,7 @@ MESSAGES = {
     'auth.csrfInvalid': {'en': 'Missing or invalid CSRF token', 'it': 'CSRF token mancante o non valido'},
     'auth.invalidCredentials': {'en': 'Invalid credentials', 'it': 'Credenziali non valide'},
     'provision.notInProgress': {'en': 'Not in provisioning', 'it': 'Non in provisioning'},
+    'provision.notInstaller': {'en': 'Not booted from the installer', 'it': "Non avviato dall'installer"},
     'proxy.endpointNotAllowed': {'en': 'Endpoint not allowed', 'it': 'Endpoint non consentito'},
     'proxy.unknownEndpoint': {'en': 'Unknown endpoint', 'it': 'Endpoint sconosciuto'},
     'pairing.tokenInvalid': {'en': 'Missing or invalid pairing token', 'it': 'Token di pairing mancante o non valido'},

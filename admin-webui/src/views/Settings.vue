@@ -359,6 +359,22 @@ async function setMode(m) {
   else say(bodyMsg(r, t('settings.display.changeFailed')), true);
 }
 
+// ── Player enabled/disabled ─────────────────────────────────────────
+// Orthogonal to display mode above: whether this device plays audio at all
+// (squeezelite), for a "server only" unit that keeps Lyrion running but
+// never plays audio locally.
+const playerEnabled = ref(true);
+async function loadPlayerEnabled() {
+  const r = await api.sys('player_enabled');
+  if (r.ok && typeof r.data.enabled === 'boolean') playerEnabled.value = r.data.enabled;
+}
+async function setPlayerEnabled(enabled) {
+  if (!enabled && !confirm(t('settings.display.confirmPlayerOff'))) return;
+  const r = await api.sysPost('player_enabled', { enabled });
+  if (r.ok && r.data.success !== false) { playerEnabled.value = r.data.enabled; say(bodyMsg(r, t('settings.display.playerChanged'))); }
+  else say(bodyMsg(r, t('settings.display.playerChangeFailed')), true);
+}
+
 // ── UI render resolution ─────────────────────────────────────────
 // Shrinks the X framebuffer on big panels (the GPU upscales it during
 // scanout) so the appliance stops rasterizing 2..8 Mpixel per repaint.
@@ -391,6 +407,16 @@ async function setTimezone(tz) {
   timezoneBusy.value = false;
   if (r.ok && r.data.success !== false) { timezone.value = r.data.timezone || tz; say(bodyMsg(r, t('settings.timezone.changed'))); }
   else say(bodyMsg(r, t('settings.timezone.changeFailed')), true);
+}
+// Timezone can also change out from under this page — set from the on-device
+// player UI, or vice versa. Poll it while the tab is visible, same pattern as
+// the other status polls on this page, guarded against clobbering a change
+// this page just made itself.
+let timezonePoll = null;
+async function pollTimezone() {
+  if (document.visibilityState !== 'visible' || timezoneBusy.value) return;
+  const tz = await api.sys('timezone');
+  if (tz.ok && tz.data.timezone) timezone.value = tz.data.timezone;
 }
 
 // ── Animated VU meter ──────────────────────────────────────────────
@@ -715,7 +741,8 @@ async function saveBackupScheduled(v) {
 
 onMounted(async () => {
   loadNet(); loadAudio(); loadDsp(); loadFir(); loadToggles(); loadShell(); loadLms(); loadLyrion();
-  loadMode(); loadUiRes(); loadTimezone(); loadVuMeter(); loadChannel(); checkAll(); resumePlanIfRunning(); loadBackups(); loadTailscale();
+  loadMode(); loadPlayerEnabled(); loadUiRes(); loadTimezone(); loadVuMeter(); loadChannel(); checkAll(); resumePlanIfRunning(); loadBackups(); loadTailscale();
+  timezonePoll = setInterval(pollTimezone, 10000);
   // Tell the global UpdateProgressOverlay (mounted in App.vue) that this page
   // owns the OTA modal while it's open, so the two never render on top of
   // each other. The global one takes back over as soon as this page unmounts.
@@ -723,6 +750,7 @@ onMounted(async () => {
 });
 onUnmounted(() => {
   if (lyrionPoll) clearInterval(lyrionPoll); if (tailscalePoll) clearInterval(tailscalePoll);
+  if (timezonePoll) clearInterval(timezonePoll);
   window.dispatchEvent(new CustomEvent('hifi-settings-active', { detail: false }));
 });
 </script>
@@ -952,6 +980,12 @@ onUnmounted(() => {
       <span class="seg">
         <button :class="{ active: vuMeter }" @click="setVuMeter(true)">{{ t('settings.display.vuMeterOn') }}</button>
         <button :class="{ active: !vuMeter }" @click="setVuMeter(false)">{{ t('settings.display.vuMeterOff') }}</button>
+      </span>
+      <p class="sub">{{ t('settings.display.playerLabel') }}</p>
+      <p class="muted">{{ t('settings.display.playerHelp') }}</p>
+      <span class="seg">
+        <button :class="{ active: playerEnabled }" @click="setPlayerEnabled(true)">{{ t('settings.display.playerOn') }}</button>
+        <button :class="{ active: !playerEnabled }" @click="setPlayerEnabled(false)">{{ t('settings.display.playerOff') }}</button>
       </span>
     </div>
 

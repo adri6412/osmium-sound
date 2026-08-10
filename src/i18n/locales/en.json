@@ -94,6 +94,10 @@
       "title": "Welcome",
       "subtitle": "Let's set up your network streamer together. Just a few steps: network, music sources, and you're ready to listen."
     },
+    "qr": {
+      "title": "Scan to set up",
+      "subtitle": "Connect your phone to this Wi-Fi network to finish setup — no need to touch this screen."
+    },
     "input": {
       "title": "How do you use the device?",
       "subtitle": "You can change this any time in Settings.",
@@ -506,6 +510,17 @@
       "cancel": "Cancel",
       "failed": "Could not change the display mode."
     },
+    "playerEnabled": {
+      "help": "Turn the player itself off for a server-only unit — Lyrion Music Server and everything else keeps running, this device just never plays audio locally. Useful for a box in a closet driving other players elsewhere.",
+      "currentOn": "Player on",
+      "currentOff": "Player off (server only)",
+      "switchOff": "Turn player off",
+      "switchOn": "Turn player on",
+      "offWarning": "This device will stop playing audio locally. Lyrion Music Server and remote control keep working.",
+      "confirmOff": "Turn off player",
+      "cancel": "Cancel",
+      "failed": "Could not change the player on/off state."
+    },
     "timezone": {
       "help": "A fresh install has no way to ask for this, so it defaults to UTC — pick the device's real one here.",
       "failed": "Could not change the timezone."
@@ -652,6 +667,10 @@
     }
   },
   "installer": {
+    "qr": {
+      "title": "Scan to install",
+      "subtitle": "Connect your phone to this Wi-Fi network to choose a disk and start the install — no need to touch this screen."
+    },
     "welcome": {
       "title": "Install Osmium Sound",
       "subtitle": "This will install Osmium Sound onto this computer's disk. All data on the chosen disk will be erased."
@@ -675,8 +694,9 @@
     },
     "done": {
       "title": "Installation complete",
-      "subtitle": "Remove the boot media (USB/DVD) and reboot to start using Osmium Sound.",
-      "reboot": "Reboot now"
+      "subtitle": "Remove the boot media (USB/DVD) now — rebooting automatically.",
+      "reboot": "Reboot now",
+      "rebootIn": "Rebooting in {n}s…"
     },
     "error": {
       "title": "Installation failed",

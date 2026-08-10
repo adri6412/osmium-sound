@@ -146,9 +146,17 @@ function createWindow() {
   });
 
   mainWindow.webContents.on('did-finish-load', () => {
-    // Cap the compositor at 30 FPS. For this media-player UI that's visually
-    // smooth and roughly halves paint/composite work on the Pi-class hardware.
-    // Reapplied here (not just at creation) so it survives a recovery reload.
+    // NOTE: webContents.setFrameRate() is a no-op here. Electron only honors
+    // it for BrowserWindows created with webPreferences.offscreen — this
+    // window isn't one (it's the real on-screen kiosk surface), so this call
+    // has never actually capped anything, on any Electron version; it fails
+    // silently (no exception) rather than throwing, which is why nobody
+    // noticed. Left in place in case a future Electron version widens
+    // support, but don't rely on it — see ipcMain 'set-frame-rate' below for
+    // the same caveat, and AnalogVUMeter.jsx for where real frame-rate
+    // mitigation actually lives now (throttling how often continuous
+    // animations get re-targeted, since the compositor itself can't be
+    // capped below the display's vsync rate from here).
     try {
       mainWindow.webContents.setFrameRate(30);
     } catch (err) {
@@ -246,9 +254,15 @@ app.on('will-quit', () => {
 });
 
 /**
- * Set the renderer compositor frame rate. The renderer asks for 60 FPS while
- * the boot intro plays (so the animation is smooth on the x86 mini-PC) and 30
- * FPS for the steady UI (to keep idle CPU/heat down).
+ * The renderer asks for 60 FPS while the boot intro plays and 30 FPS for the
+ * steady UI, intending to cap idle CPU/GPU compositor work — but
+ * webContents.setFrameRate() only takes effect on offscreen-rendered
+ * BrowserWindows (see the did-finish-load comment above), which this kiosk
+ * window is not. The call below is kept because it's harmless (silently
+ * ignored, doesn't throw), not because it works; treat this handler as
+ * legacy/inert until the window is actually converted to offscreen
+ * rendering, and look to per-component throttling (AnalogVUMeter.jsx) for
+ * real mitigation in the meantime.
  */
 ipcMain.handle('set-frame-rate', (event, fps) => {
   const n = Math.max(1, Math.min(120, Number(fps) || 30));

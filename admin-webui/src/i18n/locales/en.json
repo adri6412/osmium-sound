@@ -284,7 +284,14 @@
       "vuMeterOn": "On",
       "vuMeterOff": "Off",
       "vuMeterChanged": "VU meter preference saved",
-      "vuMeterFailed": "Could not save the preference"
+      "vuMeterFailed": "Could not save the preference",
+      "playerLabel": "Player",
+      "playerHelp": "Turn the player itself off for a server-only unit — Lyrion Music Server and everything else keeps running, this device just never plays audio locally. Useful for a box in a closet driving other players elsewhere.",
+      "playerOn": "On",
+      "playerOff": "Off (server only)",
+      "confirmPlayerOff": "This device will stop playing audio locally. Lyrion Music Server and remote control keep working. Continue?",
+      "playerChanged": "Player on/off state changed",
+      "playerChangeFailed": "Could not change the player on/off state"
     },
     "timezone": {
       "hint": "A fresh install has no way to ask for this, so it defaults to UTC — pick the device's real one here.",

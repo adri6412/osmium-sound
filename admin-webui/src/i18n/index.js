@@ -19,7 +19,7 @@ for (const path in modules) {
   if (code) locales[code] = modules[path].default || modules[path];
 }
 
-export const DEFAULT_LANG = 'it';
+export const DEFAULT_LANG = 'en';
 const STORAGE_KEY = 'webuiLanguage';
 
 export const availableLanguages = Object.keys(locales)

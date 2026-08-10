@@ -123,8 +123,8 @@ def _lang():
     try:
         v = request.headers.get('X-UI-Lang')
     except RuntimeError:
-        return 'it'
-    return v if v in ('en', 'it') else 'it'
+        return 'en'
+    return v if v in ('en', 'it') else 'en'
 
 
 # ── local IP discovery (for Host allowlist + cert SAN) ───────────────
@@ -827,6 +827,8 @@ _AUTH_ROUTES = {
     ('/api/system/dsp_preset_delete', 'POST'): '/dsp_preset_delete',
     ('/api/system/display_mode', 'GET'): '/display_mode',
     ('/api/system/display_mode', 'POST'): '/display_mode',
+    ('/api/system/player_enabled', 'GET'): '/player_enabled',
+    ('/api/system/player_enabled', 'POST'): '/player_enabled',
     ('/api/system/ui_resolution', 'GET'): '/ui_resolution',
     ('/api/system/ui_resolution', 'POST'): '/ui_resolution',
     ('/api/system/timezone', 'GET'): '/timezone',
@@ -1132,7 +1134,10 @@ def provision_claim_mode():
     data = request.get_json(silent=True) or {}
     mode = (data.get('mode') or '').strip()
     source = (data.get('source') or 'web').strip()
-    if mode not in ('gui', 'headless'):
+    # Three-way: 'gui' (screen), 'headless' (no screen, player on — remote
+    # control only), 'off' (no screen AND the player itself never plays audio
+    # locally — a server-only unit; see api_server.py's player_enabled).
+    if mode not in ('gui', 'headless', 'off'):
         return jsonify({'success': False, 'code': 'provision.invalidMode',
                         'message': _wt('provision.invalidMode', _lang())}), 400
     with _prov_lock:
@@ -1145,24 +1150,18 @@ def provision_claim_mode():
         state['mode'] = mode
         state['claimed_by'] = source
         _save_prov_state(state)
-    if mode == 'gui':
-        # GUI = the on-screen path is chosen, so the setup hotspot is no longer
-        # needed: finalize (drop the AP + remove the marker). This is what stops
-        # the hotspot the moment the user picks "with a screen". Deferred a beat
-        # so THIS response flushes to a phone that's on the hotspot before the AP
-        # disappears under it; harmless for the kiosk (not on the AP).
-        _set_display_mode('gui', live=False)
-
-        def _deferred_finalize():
-            time.sleep(1.5)
-            with _prov_lock:
-                _do_finalize()
-        threading.Thread(target=_deferred_finalize, daemon=True).start()
-    else:
-        # Headless: switch the running session off-screen (live only from the
-        # web/phone, where the user continues) but KEEP the hotspot up until the
-        # web setup calls finalize.
-        _set_display_mode('headless', live=(source == 'web'))
+    # Persist only — never live or finalize here. The on-screen kiosk has no
+    # setup steps of its own any more (it just shows the AP/QR until finalize
+    # lands), so the phone always keeps driving the rest of setup (audio,
+    # lyrion, sources, timezone) after mode is picked, whichever mode it was.
+    # The hotspot therefore stays up, and the display-mode switch only goes
+    # live at the explicit "finish" step (provision_finalize below).
+    _set_display_mode('gui' if mode == 'gui' else 'headless', live=False)
+    if mode == 'off':
+        try:
+            _proxy(API_BASE, '/player_enabled', method='POST', body={'enabled': False})
+        except Exception as e:
+            print(f'[webui] provision claim_mode: player disable failed: {e}')
     return jsonify({'success': True, 'mode': mode})
 
 
@@ -1183,6 +1182,201 @@ def provision_finalize():
         _set_display_mode(mode, live=True)
         _do_finalize()
     return jsonify({'success': True})
+
+
+def _boot_mode():
+    """Mirrors api_server.py's get_boot_mode(): 'installer' if this live
+    session was booted from the 'Install Osmium Sound' menu entry
+    (hifi.installer=1), else 'live'. Read directly from /proc/cmdline rather
+    than proxied — this is checked on every captive page load, and it's the
+    same machine, so there's no reason to pay an HTTP round-trip for it."""
+    try:
+        with open('/proc/cmdline') as f:
+            cmdline = f.read()
+    except Exception:
+        cmdline = ''
+    return 'installer' if 'hifi.installer=1' in cmdline.split() else 'live'
+
+
+# ── provisioning endpoints: setup-flow branch (audio / lyrion / sources /
+#    timezone / restore) — all pre-auth, same physical/RF trust as the
+#    network + mode endpoints above. Each simply forwards to the already-
+#    authenticated-by-loopback api_server/sources_server endpoint the regular
+#    Settings UI uses, gated here by _provisioning() instead of a session. ──
+@app.route('/api/provision/audio_devices', methods=['GET'])
+def provision_audio_devices():
+    if not _provisioning():
+        return jsonify({'success': False, 'code': 'provision.notInProgress',
+                        'message': _wt('provision.notInProgress', _lang())}), 409
+    body, status = _proxy(API_BASE, '/audio_devices', method='GET')
+    return jsonify(body), status
+
+
+@app.route('/api/provision/set_audio_device', methods=['POST'])
+def provision_set_audio_device():
+    if not _provisioning():
+        return jsonify({'success': False, 'code': 'provision.notInProgress',
+                        'message': _wt('provision.notInProgress', _lang())}), 409
+    data = request.get_json(silent=True) or {}
+    body, status = _proxy(API_BASE, '/set_audio_device', method='POST',
+                          body={'device': data.get('device')}, timeout=30)
+    return jsonify(body), status
+
+
+@app.route('/api/provision/lyrion_mode', methods=['GET'])
+def provision_lyrion_mode_get():
+    if not _provisioning():
+        return jsonify({'success': False, 'code': 'provision.notInProgress',
+                        'message': _wt('provision.notInProgress', _lang())}), 409
+    body, status = _proxy(API_BASE, '/lms_role', method='GET')
+    return jsonify(body), status
+
+
+@app.route('/api/provision/lyrion_mode', methods=['POST'])
+def provision_lyrion_mode_set():
+    if not _provisioning():
+        return jsonify({'success': False, 'code': 'provision.notInProgress',
+                        'message': _wt('provision.notInProgress', _lang())}), 409
+    data = request.get_json(silent=True) or {}
+    body, status = _proxy(API_BASE, '/lms_role', method='POST',
+                          body={'mode': data.get('mode'), 'host': data.get('host')}, timeout=30)
+    return jsonify(body), status
+
+
+@app.route('/api/provision/discover_lms', methods=['GET'])
+def provision_discover_lms():
+    if not _provisioning():
+        return jsonify({'success': False, 'code': 'provision.notInProgress',
+                        'message': _wt('provision.notInProgress', _lang())}), 409
+    body, status = _proxy(API_BASE, '/discover_lms', method='GET', timeout=20)
+    return jsonify(body), status
+
+
+@app.route('/api/provision/sources', methods=['GET'])
+def provision_sources_list():
+    if not _provisioning():
+        return jsonify({'success': False, 'code': 'provision.notInProgress',
+                        'message': _wt('provision.notInProgress', _lang())}), 409
+    body, status = _proxy(SOURCES_BASE, '/api/sources', method='GET')
+    return jsonify(body), status
+
+
+@app.route('/api/provision/sources/local', methods=['POST'])
+def provision_sources_local():
+    if not _provisioning():
+        return jsonify({'success': False, 'code': 'provision.notInProgress',
+                        'message': _wt('provision.notInProgress', _lang())}), 409
+    body, status = _proxy(SOURCES_BASE, '/api/sources/local', method='POST',
+                          body=request.get_json(silent=True) or {})
+    return jsonify(body), status
+
+
+@app.route('/api/provision/sources/smb', methods=['POST'])
+def provision_sources_smb():
+    if not _provisioning():
+        return jsonify({'success': False, 'code': 'provision.notInProgress',
+                        'message': _wt('provision.notInProgress', _lang())}), 409
+    body, status = _proxy(SOURCES_BASE, '/api/sources/smb', method='POST',
+                          body=request.get_json(silent=True) or {})
+    return jsonify(body), status
+
+
+@app.route('/api/provision/sources/<sid>', methods=['DELETE'])
+def provision_sources_delete(sid):
+    if not _provisioning():
+        return jsonify({'success': False, 'code': 'provision.notInProgress',
+                        'message': _wt('provision.notInProgress', _lang())}), 409
+    body, status = _proxy(SOURCES_BASE, f'/api/sources/{urllib.parse.quote(sid)}', method='DELETE')
+    return jsonify(body), status
+
+
+@app.route('/api/provision/apply_sources', methods=['POST'])
+def provision_apply_sources():
+    if not _provisioning():
+        return jsonify({'success': False, 'code': 'provision.notInProgress',
+                        'message': _wt('provision.notInProgress', _lang())}), 409
+    body, status = _proxy(SOURCES_BASE, '/api/apply', method='POST', body={}, timeout=90)
+    return jsonify(body), status
+
+
+@app.route('/api/provision/timezone', methods=['GET'])
+def provision_timezone_get():
+    if not _provisioning():
+        return jsonify({'success': False, 'code': 'provision.notInProgress',
+                        'message': _wt('provision.notInProgress', _lang())}), 409
+    tz, _ = _proxy(API_BASE, '/timezone', method='GET')
+    tzs, _ = _proxy(API_BASE, '/timezones', method='GET')
+    return jsonify({'timezone': (tz or {}).get('timezone'),
+                    'timezones': (tzs or {}).get('timezones', [])})
+
+
+@app.route('/api/provision/set_timezone', methods=['POST'])
+def provision_set_timezone():
+    if not _provisioning():
+        return jsonify({'success': False, 'code': 'provision.notInProgress',
+                        'message': _wt('provision.notInProgress', _lang())}), 409
+    data = request.get_json(silent=True) or {}
+    body, status = _proxy(API_BASE, '/timezone', method='POST',
+                          body={'timezone': data.get('timezone')}, timeout=20)
+    return jsonify(body), status
+
+
+@app.route('/api/provision/reboot', methods=['POST'])
+def provision_reboot():
+    # Used after a restore: the restored archive can include NetworkManager
+    # profiles, timezone, DSP/audio config and Lyrion prefs written straight
+    # to disk — a reboot is the simple, robust way to have every affected
+    # service pick all of that up cleanly, instead of trying to hot-reload
+    # each one individually here.
+    if not _provisioning():
+        return jsonify({'success': False, 'code': 'provision.notInProgress',
+                        'message': _wt('provision.notInProgress', _lang())}), 409
+    body, status = _proxy(API_BASE, '/reboot', method='POST', body={}, timeout=15)
+    return jsonify(body), status
+
+
+@app.route('/api/provision/restore', methods=['POST'])
+def provision_restore():
+    # Multipart (archive file + passphrase), relayed raw — same shape as the
+    # authenticated Settings restore, just gated by provisioning instead of a
+    # session. sources_server exempts our loopback origin from its own token
+    # check exactly like every other loopback forward in this file.
+    if not _provisioning():
+        return jsonify({'success': False, 'code': 'provision.notInProgress',
+                        'message': _wt('provision.notInProgress', _lang())}), 409
+    return _forward_to_sources('/api/restore')
+
+
+# ── provisioning endpoints: installer branch (disk-imaging, no OS on disk
+#    yet — booted with hifi.installer=1). Pre-auth for the same reason as
+#    everything above: a fresh live session has no account/session concept. ──
+@app.route('/api/provision/install_disks', methods=['GET'])
+def provision_install_disks():
+    if _boot_mode() != 'installer':
+        return jsonify({'success': False, 'code': 'provision.notInstaller',
+                        'message': _wt('provision.notInstaller', _lang())}), 409
+    body, status = _proxy(API_BASE, '/install/disks', method='GET')
+    return jsonify(body), status
+
+
+@app.route('/api/provision/install_start', methods=['POST'])
+def provision_install_start():
+    if _boot_mode() != 'installer':
+        return jsonify({'success': False, 'code': 'provision.notInstaller',
+                        'message': _wt('provision.notInstaller', _lang())}), 409
+    data = request.get_json(silent=True) or {}
+    body, status = _proxy(API_BASE, '/install/start', method='POST',
+                          body={'device': data.get('device')}, timeout=20)
+    return jsonify(body), status
+
+
+@app.route('/api/provision/install_status', methods=['GET'])
+def provision_install_status():
+    if _boot_mode() != 'installer':
+        return jsonify({'success': False, 'code': 'provision.notInstaller',
+                        'message': _wt('provision.notInstaller', _lang())}), 409
+    body, status = _proxy(API_BASE, '/install/status', method='GET')
+    return jsonify(body), status
 
 
 # ── network-loss recovery endpoints (pre-auth: same RF/PSK trust as setup) ──
@@ -1247,7 +1441,7 @@ def _handle_proxy(local_path, method):
     data, status = _proxy(API_BASE, api_path, method=method, body=body,
                           timeout=200 if 'tailscale_install' in api_path
                           else 90 if 'apply' in api_path or 'dsp' in api_path
-                          or 'tailscale' in api_path else 15)
+                          or 'tailscale' in api_path or 'ssh' in api_path else 15)
     return jsonify(data), status
 
 
@@ -1502,17 +1696,31 @@ def lyrion_proxy():
 def _captive_html():
     # Minimal, dependency-free, bilingual. This is the ONLY page the sandboxed
     # OS captive browsers ever see; the Vue app takes over once there's real
-    # connectivity (redirect to '/').
-    return CAPTIVE_HTML
+    # connectivity (redirect to '/'). Forks entirely on boot mode: a session
+    # booted from the installer (no OS on disk yet) gets the disk-imaging
+    # flow; everything else (an already-installed disk still in provisioning,
+    # or a live "Try" session) gets the normal first-boot setup flow.
+    return INSTALL_CAPTIVE_HTML if _boot_mode() == 'installer' else SETUP_CAPTIVE_HTML
 
 
 @app.route('/', methods=['GET'])
 def root():
-    # During the first-boot captive window with the AP up, serve the minimal
-    # setup portal. During a post-provisioning network-loss recovery, serve
-    # the equally minimal network-only portal (no account/mode/wizard steps —
-    # this box is already configured, it just needs its network back).
-    if _provisioning() and _load_prov_state().get('ap', {}).get('active'):
+    # Serve the minimal setup portal for the entire provisioning window, not
+    # just while the AP is up. This matters for Wi-Fi specifically: a single
+    # radio can't stay an AP and join the home network at the same time, so
+    # once Wi-Fi connects the hotspot drops on purpose (_evaluate_provisioning
+    # above) and the phone loses its link to this device's captive IP — the
+    # remaining setup steps (mode, audio, Lyrion, sources, timezone) only
+    # exist in this captive page, so the phone must be able to pick the exact
+    # same flow back up once it rejoins the real LAN and browses to
+    # https://hifiplayer.local or the device's new address. A wired
+    # connection never has this problem — the AP stays up throughout (see
+    # the "raised ALWAYS" policy above), so this branch is a no-op there.
+    #
+    # During a post-provisioning network-loss recovery, serve the equally
+    # minimal network-only portal (no account/mode/wizard steps — this box
+    # is already configured, it just needs its network back).
+    if _provisioning():
         return Response(_captive_html(), mimetype='text/html')
     if _net_recovery['active']:
         return Response(NET_RECOVERY_HTML, mimetype='text/html')
@@ -1536,76 +1744,370 @@ def _serve_spa(subpath):
     return Response(FALLBACK_HTML, mimetype='text/html')
 
 
-CAPTIVE_HTML = """<!doctype html><html lang="it"><head><meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Osmium Sound — Setup</title>
-<style>
+# Shared CSS for both captive templates below.
+_CAPTIVE_CSS = """
  body{font-family:system-ui,sans-serif;background:#0f1115;color:#eee;margin:0;padding:24px;max-width:520px;margin:auto}
  h1{font-size:20px} .card{background:#1a1e26;border-radius:12px;padding:16px;margin:14px 0}
  label{display:block;font-size:13px;color:#aab;margin:8px 0 4px} input,select,button{width:100%;padding:12px;border-radius:8px;border:1px solid #333;background:#12151b;color:#eee;font-size:15px;box-sizing:border-box}
  button{background:#c8a24a;color:#111;font-weight:600;border:0;margin-top:12px} button.sec{background:#12151b;color:#eee;border:1px solid #333;font-weight:500}
+ button:disabled{opacity:.5}
  .muted{color:#889;font-size:13px}
  .net{padding:10px;border-bottom:1px solid #262b35;cursor:pointer} .row{display:flex;justify-content:space-between}
-</style></head><body>
-<h1>Osmium Sound — Configurazione</h1>
-<p class="muted" id="lead">Collega il dispositivo a internet e scegli la modalità.</p>
-<div class="card" id="step-net">
- <label>Rete Wi-Fi</label>
+ .langbar{text-align:right;margin-bottom:8px} .langbar a{color:#889;font-size:13px;text-decoration:none;margin-left:10px}
+ .langbar a.active{color:#c8a24a;font-weight:600}
+ .bar{height:8px;border-radius:4px;background:#12151b;overflow:hidden;margin:10px 0}
+ .bar > div{height:100%;background:#c8a24a}
+ .disk{padding:12px;border:1px solid #333;border-radius:8px;margin:8px 0;cursor:pointer}
+ .disk.sel{border-color:#c8a24a;background:#1f1a10}
+"""
+
+# ─────────────────────────────────────────────────────────────────────────
+#  SETUP flow: language -> restore-or-fresh -> network -> mode (screen /
+#  headless / off) -> audio -> lyrion (internal/external) -> sources (only
+#  when internal) -> timezone -> finish. Reached on any boot that is NOT the
+#  disk installer (an already-installed unit still in provisioning, or a live
+#  "Try" session). Minimal, dependency-free, bilingual (EN default).
+# ─────────────────────────────────────────────────────────────────────────
+SETUP_CAPTIVE_HTML = """<!doctype html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Osmium Sound — Setup</title>
+<style>""" + _CAPTIVE_CSS + """</style></head><body>
+<div class="langbar">
+ <a href="?lang=en" id="lang-en">English</a><a href="?lang=it" id="lang-it">Italiano</a>
+</div>
+<h1 id="h1title">Osmium Sound — Setup</h1>
+
+<div class="card" id="step-restore">
+ <p class="muted" id="restore-intro">Setting up a new device? Restore a previous backup, or start fresh.</p>
+ <button class="sec" onclick="startFresh()" id="btn-fresh">Start fresh</button>
+ <label id="lbl-restorefile">Backup file</label>
+ <input id="restorefile" type="file">
+ <label id="lbl-restorepass">Passphrase (if the backup is encrypted)</label>
+ <input id="restorepass" type="password">
+ <button onclick="restore()" id="btn-restore">Restore from backup</button>
+ <p class="muted" id="restoremsg"></p>
+</div>
+
+<div class="card" id="step-net" style="display:none">
+ <label id="lbl-wifi">Wi-Fi network</label>
  <div id="nets"></div>
- <label>Oppure inserisci il nome (SSID)</label>
- <input id="ssid" placeholder="Nome rete">
- <label>Password Wi-Fi</label>
+ <label id="lbl-ssid">Or enter the network name (SSID)</label>
+ <input id="ssid" placeholder="Network name">
+ <label id="lbl-pass">Wi-Fi password</label>
  <input id="pass" type="password" placeholder="Password">
- <button onclick="connect()">Connetti via Wi-Fi</button>
- <button class="sec" id="btn-wired" onclick="useWired()">Sono connesso via cavo (Ethernet)</button>
+ <button onclick="connect()" id="btn-connect">Connect via Wi-Fi</button>
+ <button class="sec" id="btn-wired" onclick="useWired()">I'm connected via cable (Ethernet)</button>
  <p class="muted" id="netmsg"></p>
 </div>
+
 <div class="card" id="step-mode" style="display:none">
- <label>Modalità dispositivo</label>
- <button onclick="claim('gui')">Con schermo (touchscreen)</button>
- <button class="sec" onclick="claim('headless')">Headless (senza schermo)</button>
- <p class="muted">In headless gestisci tutto da questa interfaccia web dopo il setup.</p>
+ <label id="lbl-mode">Device mode</label>
+ <button onclick="claim('gui')" id="btn-mode-gui">With screen (touchscreen)</button>
+ <button class="sec" onclick="claim('headless')" id="btn-mode-headless">Headless (no screen)</button>
+ <button class="sec" onclick="claim('off')" id="btn-mode-off">Server only (player off)</button>
+ <p class="muted" id="modehelp">In headless/server-only you manage everything from this web interface.</p>
 </div>
+
+<div class="card" id="step-audio" style="display:none">
+ <label id="lbl-audio">Audio output</label>
+ <div id="audiodevs"></div>
+ <p class="muted" id="audiomsg"></p>
+ <button class="sec" onclick="skipAudio()" id="btn-audio-skip">Continue</button>
+</div>
+
+<div class="card" id="step-lyrion" style="display:none">
+ <label id="lbl-lyrion">Music server (Lyrion)</label>
+ <button onclick="setLyrion('local')" id="btn-lyrion-local">Use this device as the server</button>
+ <button class="sec" onclick="showLyrionFollow()" id="btn-lyrion-follow">Use a server already on my network</button>
+ <div id="lyrionfollow" style="display:none">
+   <div id="lyrionservers"></div>
+   <label id="lbl-lyrionhost">Server address</label>
+   <input id="lyrionhost" placeholder="192.168.1.50">
+   <button onclick="setLyrion('follow')" id="btn-lyrion-follow-go">Use this server</button>
+ </div>
+ <p class="muted" id="lyrionmsg"></p>
+</div>
+
+<div class="card" id="step-sources" style="display:none">
+ <label id="lbl-sources">Music sources (network share)</label>
+ <p class="muted" id="sources-intro">Optional — you can also add this later from Settings. Lyrion's own setup wizard scans the library once you finish here.</p>
+ <label id="lbl-smbhost">Server</label>
+ <input id="smbhost" placeholder="192.168.1.10">
+ <label id="lbl-smbshare">Share name</label>
+ <input id="smbshare" placeholder="Music">
+ <label id="lbl-smbuser">Username (optional)</label>
+ <input id="smbuser">
+ <label id="lbl-smbpass">Password (optional)</label>
+ <input id="smbpass" type="password">
+ <button onclick="addSmbSource()" id="btn-sources-add">Add share</button>
+ <button class="sec" onclick="applySourcesAndContinue()" id="btn-sources-continue">Continue</button>
+ <p class="muted" id="sourcesmsg"></p>
+</div>
+
+<div class="card" id="step-timezone" style="display:none">
+ <label id="lbl-timezone">Time zone</label>
+ <select id="tzselect"></select>
+ <button onclick="saveTimezone()" id="btn-tz-save">Save and continue</button>
+ <p class="muted" id="tzmsg"></p>
+</div>
+
 <div class="card" id="step-finish" style="display:none">
  <p id="finishmsg" class="muted"></p>
- <button id="btn-finish" onclick="finish()" style="display:none">Completa setup</button>
+ <button id="btn-finish" onclick="finish()" style="display:none">Complete setup</button>
 </div>
+
 <script>
-var done=false;
-function h(){return {'X-CSRF-Token':(document.cookie.match(/csrf=([^;]+)/)||[])[1]||''}}
-function show(id){['step-net','step-mode','step-finish'].forEach(function(s){document.getElementById(s).style.display=(s===id?'block':'none')})}
+var STRINGS={
+ en:{restoreIntro:'Setting up a new device? Restore a previous backup, or start fresh.',fresh:'Start fresh',restoreFile:'Backup file',restorePass:'Passphrase (if the backup is encrypted)',restore:'Restore from backup',restoring:'Restoring…',restoreDone:'Restore complete. Rebooting to apply it — reconnect in about a minute.',restoreFailed:'Restore failed.',restoreNoFile:'Choose a backup file first.',wifi:'Wi-Fi network',ssid:'Or enter the network name (SSID)',pass:'Wi-Fi password',connect:'Connect via Wi-Fi',wired:"I'm connected via cable (Ethernet)",connecting:'Connecting… the setup Wi-Fi will turn off. Reconnect your phone to your home network, then open https://hifiplayer.local to continue setup where you left off.',noCable:'No cable detected',mode:'Device mode',modeGui:'With screen (touchscreen)',modeHeadless:'Headless (no screen)',modeOff:'Server only (player off)',modeHelp:'In headless/server-only you manage everything from this web interface.',audio:'Audio output',audioContinue:'Continue',lyrion:'Music server (Lyrion)',lyrionLocal:'Use this device as the server',lyrionFollow:'Use a server already on my network',lyrionHost:'Server address',lyrionUse:'Use this server',sources:'Music sources (network share)',sourcesIntro:"Optional — you can also add this later from Settings. Lyrion's own setup wizard scans the library once you finish here.",smbHost:'Server',smbShare:'Share name',smbUser:'Username (optional)',smbPass:'Password (optional)',addShare:'Add share',continueBtn:'Continue',timezone:'Time zone',tzSave:'Save and continue',finishGui:'Screen mode set. Setup is complete — press "Complete setup" below: the hotspot will turn off, reconnect your phone to your network. The device will then start its normal on-screen interface.',finishHeadless:'Headless mode set. Press "Complete setup" below: the hotspot will turn off, reconnect your phone to your network and open https://hifiplayer.local',finishOff:'Server-only mode set — this device will not play audio locally. Press "Complete setup" below: the hotspot will turn off, reconnect your phone to your network and open https://hifiplayer.local',finishBtn:'Complete setup',finishDone:'Setup complete — hotspot off. Open https://hifiplayer.local from your network.',error:'Error: '},
+ it:{restoreIntro:'Stai configurando un nuovo dispositivo? Ripristina un backup precedente, oppure inizia da zero.',fresh:'Inizia da zero',restoreFile:'File di backup',restorePass:'Passphrase (se il backup è cifrato)',restore:'Ripristina da backup',restoring:'Ripristino in corso…',restoreDone:'Ripristino completato. Riavvio in corso per applicarlo — riconnettiti tra circa un minuto.',restoreFailed:'Ripristino non riuscito.',restoreNoFile:'Scegli prima un file di backup.',wifi:'Rete Wi-Fi',ssid:'Oppure inserisci il nome (SSID)',pass:'Password Wi-Fi',connect:'Connetti via Wi-Fi',wired:'Sono connesso via cavo (Ethernet)',connecting:'Connessione in corso… il Wi-Fi di setup si spegnerà. Riconnetti il telefono alla tua rete di casa, poi apri https://hifiplayer.local per continuare la configurazione da dove l\\'hai lasciata.',noCable:'Nessun cavo rilevato',mode:'Modalità dispositivo',modeGui:'Con schermo (touchscreen)',modeHeadless:'Headless (senza schermo)',modeOff:'Solo server (player spento)',modeHelp:'In headless/solo server gestisci tutto da questa interfaccia web.',audio:'Uscita audio',audioContinue:'Continua',lyrion:'Server musicale (Lyrion)',lyrionLocal:'Usa questo dispositivo come server',lyrionFollow:'Usa un server già presente sulla rete',lyrionHost:'Indirizzo del server',lyrionUse:'Usa questo server',sources:'Sorgenti musicali (condivisione di rete)',sourcesIntro:'Facoltativo — puoi aggiungerlo anche più tardi dalle Impostazioni. La scansione della libreria la fa il setup wizard di Lyrion una volta terminato qui.',smbHost:'Server',smbShare:'Nome condivisione',smbUser:'Utente (opzionale)',smbPass:'Password (opzionale)',addShare:'Aggiungi condivisione',continueBtn:'Continua',timezone:'Fuso orario',tzSave:'Salva e continua',finishGui:'Modalità con schermo impostata. Il setup è completo — premi "Completa setup" qui sotto: l\\'hotspot si spegnerà, riconnetti il telefono alla tua rete. Il dispositivo avvierà poi la sua normale interfaccia a schermo.',finishHeadless:'Modalità headless impostata. Premi "Completa setup" qui sotto: l\\'hotspot si spegnerà, riconnetti il telefono alla tua rete e apri https://hifiplayer.local',finishOff:'Modalità solo server impostata — questo dispositivo non riprodurrà audio in locale. Premi "Completa setup" qui sotto: l\\'hotspot si spegnerà, riconnetti il telefono alla tua rete e apri https://hifiplayer.local',finishBtn:'Completa setup',finishDone:'Setup completato — hotspot spento. Apri https://hifiplayer.local dalla tua rete.',error:'Errore: '}
+};
+var LANG=(new URLSearchParams(location.search).get('lang')||'en');
+if(STRINGS[LANG]===undefined)LANG='en';
+var S=STRINGS[LANG];
+document.getElementById('lang-'+LANG).className='active';
+document.getElementById('restore-intro').textContent=S.restoreIntro;
+document.getElementById('btn-fresh').textContent=S.fresh;
+document.getElementById('lbl-restorefile').textContent=S.restoreFile;
+document.getElementById('lbl-restorepass').textContent=S.restorePass;
+document.getElementById('btn-restore').textContent=S.restore;
+document.getElementById('lbl-wifi').textContent=S.wifi;
+document.getElementById('lbl-ssid').textContent=S.ssid;
+document.getElementById('lbl-pass').textContent=S.pass;
+document.getElementById('btn-connect').textContent=S.connect;
+document.getElementById('btn-wired').textContent=S.wired;
+document.getElementById('lbl-mode').textContent=S.mode;
+document.getElementById('btn-mode-gui').textContent=S.modeGui;
+document.getElementById('btn-mode-headless').textContent=S.modeHeadless;
+document.getElementById('btn-mode-off').textContent=S.modeOff;
+document.getElementById('modehelp').textContent=S.modeHelp;
+document.getElementById('lbl-audio').textContent=S.audio;
+document.getElementById('btn-audio-skip').textContent=S.audioContinue;
+document.getElementById('lbl-lyrion').textContent=S.lyrion;
+document.getElementById('btn-lyrion-local').textContent=S.lyrionLocal;
+document.getElementById('btn-lyrion-follow').textContent=S.lyrionFollow;
+document.getElementById('lbl-lyrionhost').textContent=S.lyrionHost;
+document.getElementById('btn-lyrion-follow-go').textContent=S.lyrionUse;
+document.getElementById('lbl-sources').textContent=S.sources;
+document.getElementById('sources-intro').textContent=S.sourcesIntro;
+document.getElementById('lbl-smbhost').textContent=S.smbHost;
+document.getElementById('lbl-smbshare').textContent=S.smbShare;
+document.getElementById('lbl-smbuser').textContent=S.smbUser;
+document.getElementById('lbl-smbpass').textContent=S.smbPass;
+document.getElementById('btn-sources-add').textContent=S.addShare;
+document.getElementById('btn-sources-continue').textContent=S.continueBtn;
+document.getElementById('lbl-timezone').textContent=S.timezone;
+document.getElementById('btn-tz-save').textContent=S.tzSave;
+
+var STEPS=['step-restore','step-net','step-mode','step-audio','step-lyrion','step-sources','step-timezone','step-finish'];
+var lyrionMode='local';
+var netPhaseDone=false;
+function h(){return {'X-CSRF-Token':(document.cookie.match(/csrf=([^;]+)/)||[])[1]||'','X-UI-Lang':LANG}}
+function show(id){STEPS.forEach(function(s){document.getElementById(s).style.display=(s===id?'block':'none')})}
 function jpost(p,b){return fetch(p,{method:'POST',headers:Object.assign({'Content-Type':'application/json'},h()),body:JSON.stringify(b||{})}).then(function(r){return r.json()})}
-function load(){if(done)return;fetch('/api/provision/status').then(function(r){return r.json()}).then(function(s){
+function jget(p){return fetch(p,{headers:h()}).then(function(r){return r.json()})}
+
+function load(){if(netPhaseDone)return;fetch('/api/provision/status').then(function(r){return r.json()}).then(function(s){
   if(!s.pending){return}
   var n=document.getElementById('nets');n.innerHTML='';
   (s.networks||[]).forEach(function(net){var d=document.createElement('div');d.className='net';
     d.innerHTML='<div class="row"><span>'+net.ssid+'</span><span class="muted">'+net.signal+'%</span></div>';
     d.onclick=function(){document.getElementById('ssid').value=net.ssid};n.appendChild(d)});
-  document.getElementById('btn-wired').style.display=(s.wired?'block':'block');
-  if(s.error){document.getElementById('netmsg').textContent='Errore: '+s.error}
-  if(s.stage==='network-ok'){show('step-mode')}
+  if(s.error){document.getElementById('netmsg').textContent=S.error+s.error}
+  if(s.stage==='network-ok'){netPhaseDone=true;show('step-mode')}
 })}
+
+function startFresh(){show('step-net')}
+
+function restore(){
+  var f=document.getElementById('restorefile').files[0];
+  if(!f){document.getElementById('restoremsg').textContent=S.restoreNoFile;return}
+  var fd=new FormData();fd.append('file',f);fd.append('passphrase',document.getElementById('restorepass').value);
+  document.getElementById('restoremsg').textContent=S.restoring;
+  fetch('/api/provision/restore',{method:'POST',headers:h(),body:fd}).then(function(r){return r.json()}).then(function(res){
+    if(res.success){
+      netPhaseDone=true;
+      document.getElementById('restoremsg').textContent=S.restoreDone;
+      jpost('/api/provision/finalize',{}).then(function(){jpost('/api/provision/reboot',{})});
+    }else{
+      document.getElementById('restoremsg').textContent=res.message||S.restoreFailed;
+    }
+  });
+}
+
 function connect(){var b={ssid:document.getElementById('ssid').value,password:document.getElementById('pass').value};
-  document.getElementById('netmsg').textContent='Connessione in corso… il Wi-Fi di setup si disconnetterà, riconnettiti alla tua rete e ricarica la pagina.';
+  document.getElementById('netmsg').textContent=S.connecting;
   jpost('/api/provision/wifi_connect',b)}
 function useWired(){jpost('/api/provision/use_wired',{}).then(function(res){
-  if(res.success){show('step-mode')}else{document.getElementById('netmsg').textContent=res.message||'Nessun cavo rilevato'}})}
-function claim(m){jpost('/api/provision/claim_mode',{mode:m,source:'web'}).then(function(){
-  done=true;
-  if(m==='gui'){
-    show('step-finish');
-    document.getElementById('finishmsg').textContent='Modalità con schermo attivata. Continua la configurazione sullo schermo del dispositivo. Puoi chiudere questa pagina.';
-  }else{
-    show('step-finish');
-    document.getElementById('finishmsg').textContent='Modalità headless attivata. Premi "Completa setup" per terminare: l\\'hotspot si spegnerà, riconnetti il telefono alla tua rete e apri https://hifiplayer.local';
-    document.getElementById('btn-finish').style.display='block';
-  }
+  if(res.success){netPhaseDone=true;show('step-mode')}else{document.getElementById('netmsg').textContent=res.message||S.noCable}})}
+
+function claim(m){jpost('/api/provision/claim_mode',{mode:m,source:'web'}).then(function(res){
+  if(!res.success){return}
+  window._chosenMode=m;
+  loadAudio();
+  show('step-audio');
 })}
+
+function loadAudio(){
+  jget('/api/provision/audio_devices').then(function(res){
+    var box=document.getElementById('audiodevs');box.innerHTML='';
+    ((res&&res.devices)||[]).forEach(function(d){var b=document.createElement('button');b.className='sec';b.textContent=d.name||d.id;
+      b.onclick=function(){jpost('/api/provision/set_audio_device',{device:d.id}).then(function(){show('step-lyrion')})};
+      box.appendChild(b)});
+  });
+}
+function skipAudio(){show('step-lyrion')}
+
+function showLyrionFollow(){
+  document.getElementById('lyrionfollow').style.display='block';
+  jget('/api/provision/discover_lms').then(function(res){
+    var box=document.getElementById('lyrionservers');box.innerHTML='';
+    ((res&&res.servers)||[]).forEach(function(s){var b=document.createElement('button');b.className='sec';b.textContent=(s.name||s.ip)+' — '+s.ip;
+      b.onclick=function(){document.getElementById('lyrionhost').value=s.ip};box.appendChild(b)});
+  });
+}
+function setLyrion(mode){
+  var host=mode==='follow'?document.getElementById('lyrionhost').value.trim():null;
+  jpost('/api/provision/lyrion_mode',{mode:mode,host:host}).then(function(res){
+    if(!res.success){document.getElementById('lyrionmsg').textContent=res.message||S.error;return}
+    lyrionMode=mode;
+    if(mode==='local'){show('step-sources')}else{show('step-timezone');loadTimezone()}
+  });
+}
+
+function addSmbSource(){
+  var b={host:document.getElementById('smbhost').value.trim(),share:document.getElementById('smbshare').value.trim(),
+    username:document.getElementById('smbuser').value,password:document.getElementById('smbpass').value};
+  jpost('/api/provision/sources/smb',b).then(function(res){
+    document.getElementById('sourcesmsg').textContent=(res&&res.success)?'✓':(res.message||S.error);
+  });
+}
+function applySourcesAndContinue(){
+  jpost('/api/provision/apply_sources',{}).then(function(){show('step-timezone');loadTimezone()});
+}
+
+function loadTimezone(){
+  jget('/api/provision/timezone').then(function(res){
+    var sel=document.getElementById('tzselect');sel.innerHTML='';
+    (res.timezones||[]).forEach(function(z){var o=document.createElement('option');o.value=z;o.textContent=z;
+      if(z===res.timezone)o.selected=true;sel.appendChild(o)});
+  });
+}
+function saveTimezone(){
+  var tz=document.getElementById('tzselect').value;
+  jpost('/api/provision/set_timezone',{timezone:tz}).then(function(){
+    show('step-finish');
+    var m=window._chosenMode||'headless';
+    document.getElementById('finishmsg').textContent=(m==='gui'?S.finishGui:(m==='off'?S.finishOff:S.finishHeadless));
+    document.getElementById('btn-finish').style.display='block';
+  });
+}
+
 function finish(){jpost('/api/provision/finalize',{}).then(function(){
-  document.getElementById('finishmsg').textContent='Setup completato. Hotspot spento — apri https://hifiplayer.local dalla tua rete.';
+  document.getElementById('finishmsg').textContent=S.finishDone;
   document.getElementById('btn-finish').style.display='none';
 })}
 setInterval(load,3000);load();
+</script></body></html>"""
+
+# ─────────────────────────────────────────────────────────────────────────
+#  INSTALLER flow: pick a target disk, confirm the erase, start the install,
+#  mirror progress read-only, then auto-reboot. Reached only when this live
+#  session was booted from the "Install Osmium Sound" menu entry
+#  (hifi.installer=1) — no OS on disk yet, so no provisioning marker/account
+#  concept applies; _boot_mode() alone gates these endpoints.
+# ─────────────────────────────────────────────────────────────────────────
+INSTALL_CAPTIVE_HTML = """<!doctype html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Osmium Sound — Install</title>
+<style>""" + _CAPTIVE_CSS + """</style></head><body>
+<div class="langbar">
+ <a href="?lang=en" id="lang-en">English</a><a href="?lang=it" id="lang-it">Italiano</a>
+</div>
+<h1 id="h1title">Osmium Sound — Install</h1>
+
+<div class="card" id="step-disks">
+ <p class="muted" id="disks-intro">Choose the disk to install onto. Everything on it will be erased.</p>
+ <div id="disklist"></div>
+ <p class="muted" id="disksmsg"></p>
+</div>
+
+<div class="card" id="step-confirm" style="display:none">
+ <p id="confirmtext" class="muted"></p>
+ <button class="sec" onclick="show('step-disks')" id="btn-cancel">Cancel</button>
+ <button onclick="startInstall()" id="btn-confirm">Erase and install</button>
+</div>
+
+<div class="card" id="step-progress" style="display:none">
+ <p class="muted" id="progressmsg"></p>
+ <div class="bar"><div id="progressbar" style="width:0%"></div></div>
+</div>
+
+<div class="card" id="step-done" style="display:none">
+ <p class="muted" id="donemsg"></p>
+</div>
+
+<script>
+var STRINGS={
+ en:{intro:'Choose the disk to install onto. Everything on it will be erased.',cancel:'Cancel',confirm:'Erase and install',confirmText:'This will ERASE ALL DATA on {disk} and install Osmium Sound. This cannot be undone.',starting:'Starting install…',rebootIn:'Install complete. Rebooting in {n}…',error:'Error: ',noDisks:'No usable disks found.'},
+ it:{intro:'Scegli il disco su cui installare. Tutto il contenuto verrà cancellato.',cancel:'Annulla',confirm:'Cancella e installa',confirmText:'Questo CANCELLERÀ TUTTI I DATI su {disk} e installerà Osmium Sound. L\\'operazione è irreversibile.',starting:'Avvio installazione…',rebootIn:'Installazione completata. Riavvio tra {n}…',error:'Errore: ',noDisks:'Nessun disco utilizzabile trovato.'}
+};
+var LANG=(new URLSearchParams(location.search).get('lang')||'en');
+if(STRINGS[LANG]===undefined)LANG='en';
+var S=STRINGS[LANG];
+document.getElementById('lang-'+LANG).className='active';
+document.getElementById('disks-intro').textContent=S.intro;
+document.getElementById('btn-cancel').textContent=S.cancel;
+document.getElementById('btn-confirm').textContent=S.confirm;
+
+function h(){return {'X-CSRF-Token':(document.cookie.match(/csrf=([^;]+)/)||[])[1]||'','X-UI-Lang':LANG}}
+function jpost(p,b){return fetch(p,{method:'POST',headers:Object.assign({'Content-Type':'application/json'},h()),body:JSON.stringify(b||{})}).then(function(r){return r.json()})}
+function jget(p){return fetch(p,{headers:h()}).then(function(r){return r.json()})}
+function show(id){['step-disks','step-confirm','step-progress','step-done'].forEach(function(s){document.getElementById(s).style.display=(s===id?'block':'none')})}
+
+var selectedDisk=null;
+function loadDisks(){
+  jget('/api/provision/install_disks').then(function(res){
+    var box=document.getElementById('disklist');box.innerHTML='';
+    var disks=(res&&res.disks)||[];
+    if(!disks.length){document.getElementById('disksmsg').textContent=S.noDisks;return}
+    disks.forEach(function(d){var el=document.createElement('div');el.className='disk';
+      var gb=d.size?Math.round(d.size/1e9)+' GB':'';
+      el.textContent=(d.model||d.path)+' — '+d.path+(gb?' ('+gb+')':'');
+      el.onclick=function(){selectedDisk=d.path;
+        document.querySelectorAll('.disk').forEach(function(x){x.className='disk'});el.className='disk sel';
+        document.getElementById('confirmtext').textContent=S.confirmText.replace('{disk}',d.path);
+        show('step-confirm')};
+      box.appendChild(el)});
+  });
+}
+function startInstall(){
+  if(!selectedDisk)return;
+  show('step-progress');
+  document.getElementById('progressmsg').textContent=S.starting;
+  jpost('/api/provision/install_start',{device:selectedDisk}).then(function(res){
+    if(!res.success){document.getElementById('progressmsg').textContent=res.message||S.error;return}
+    pollStatus();
+  });
+}
+function pollStatus(){
+  jget('/api/provision/install_status').then(function(st){
+    if(typeof st.progress==='number'){document.getElementById('progressbar').style.width=st.progress+'%'}
+    if(st.message){document.getElementById('progressmsg').textContent=st.message}
+    if(st.state==='done'){
+      show('step-done');
+      var n=5;
+      var tick=function(){document.getElementById('donemsg').textContent=S.rebootIn.replace('{n}',n+'s');
+        if(n<=0){jpost('/api/provision/reboot',{});return}
+        n--;setTimeout(tick,1000)};
+      tick();
+    }else if(st.state==='error'){
+      document.getElementById('progressmsg').textContent=S.error+(st.message||'');
+    }else{
+      setTimeout(pollStatus,1000);
+    }
+  });
+}
+loadDisks();
 </script></body></html>"""
 
 # Network-loss recovery portal: an already-configured unit that lost BOTH

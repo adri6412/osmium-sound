@@ -154,6 +154,13 @@ const Settings = ({ initialSection, onSectionConsumed } = {}) => {
   const [displayModeMessage, setDisplayModeMessage] = useState('');
   const [displayModeConfirm, setDisplayModeConfirm] = useState(false); // headless confirm step
 
+  // Player enabled/disabled (squeezelite) — orthogonal to display mode: does
+  // this device play audio at all, for "server only" units.
+  const [playerEnabled, setPlayerEnabled] = useState(null);
+  const [playerEnabledBusy, setPlayerEnabledBusy] = useState(false);
+  const [playerEnabledMessage, setPlayerEnabledMessage] = useState('');
+  const [playerDisableConfirm, setPlayerDisableConfirm] = useState(false);
+
   // UI render resolution (framebuffer downscale + GPU upscale)
   const [uiResolution, setUiResolution] = useState(null); // 'auto'|'720'|'1080'|'native'
   const [uiResolutionBusy, setUiResolutionBusy] = useState(false);
@@ -346,6 +353,7 @@ const Settings = ({ initialSection, onSectionConsumed } = {}) => {
     loadShellAccount();
     loadPointerStatus();
     loadDisplayMode();
+    loadPlayerEnabled();
     loadUiResolution();
     loadTimezone();
     loadVuMeter();
@@ -370,6 +378,22 @@ const Settings = ({ initialSection, onSectionConsumed } = {}) => {
       if (document.visibilityState === 'visible'
           && !dspSyncBlockedRef.current && !dspDirtyRef.current) {
         loadDspStatus();
+      }
+    }, 10000);
+    return () => clearInterval(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Timezone can also change out from under this page — set from the admin
+  // webui, or vice versa. Same visibility-aware polling as DSP state above,
+  // guarded against clobbering a change this page just made itself.
+  const timezoneSyncBlockedRef = useRef(false);
+  timezoneSyncBlockedRef.current = timezoneBusy;
+  useEffect(() => {
+    const id = setInterval(async () => {
+      if (document.visibilityState === 'visible' && !timezoneSyncBlockedRef.current) {
+        const tzRes = await systemAPI.getTimezone();
+        if (tzRes.success && tzRes.data?.timezone) setTimezone(tzRes.data.timezone);
       }
     }, 10000);
     return () => clearInterval(id);
@@ -704,6 +728,29 @@ const Settings = ({ initialSection, onSectionConsumed } = {}) => {
       // more to do here — the X session is about to end.
     } else {
       setDisplayModeMessage(res.data?.message || res.message || t('settings.displayMode.failed'));
+    }
+  };
+
+  // ── Player enabled/disabled handlers ─────────────────────────────
+  const loadPlayerEnabled = async () => {
+    const res = await systemAPI.getPlayerEnabled();
+    if (res.success && typeof res.data?.enabled === 'boolean') {
+      setPlayerEnabled(res.data.enabled);
+    }
+  };
+
+  const togglePlayerEnabled = async (enabled) => {
+    if (playerEnabledBusy) return;
+    setPlayerEnabledBusy(true);
+    setPlayerEnabledMessage('');
+    setPlayerDisableConfirm(false);
+    const res = await systemAPI.setPlayerEnabled(enabled);
+    setPlayerEnabledBusy(false);
+    if (res.success && res.data?.success) {
+      setPlayerEnabled(res.data.enabled);
+      setPlayerEnabledMessage(res.data.message || '');
+    } else {
+      setPlayerEnabledMessage(res.data?.message || res.message || t('settings.playerEnabled.failed'));
     }
   };
 
@@ -1810,7 +1857,12 @@ const Settings = ({ initialSection, onSectionConsumed } = {}) => {
       icon: Power,
       content: 'custom-system-controls'
     }
-  ];
+  ].filter((s) =>
+    // Music Sources only matters for a locally-served library — when this
+    // unit follows an external Lyrion server, its sources are configured on
+    // that other device, not here.
+    s.content !== 'custom-sources' || lmsRole.mode !== 'follow'
+  );
 
   const sectionId = (s) => s.content || s.title;
   const openSection = settingsSections.find((s) => sectionId(s) === activeSection);
@@ -3331,6 +3383,74 @@ const Settings = ({ initialSection, onSectionConsumed } = {}) => {
                         {displayModeMessage}
                       </div>
                     )}
+
+                    {/* Player on/off — orthogonal to display mode above; a
+                        server-only unit keeps Lyrion running but never plays
+                        audio locally. */}
+                    <div className="pt-2 border-t border-hifi-border space-y-3">
+                      <p className="text-sm text-hifi-silver">{t('settings.playerEnabled.help')}</p>
+                      <div className="flex items-center justify-between bg-hifi-dark rounded-lg px-4 py-3">
+                        <span className="text-sm text-white">
+                          {playerEnabled === false
+                            ? t('settings.playerEnabled.currentOff')
+                            : t('settings.playerEnabled.currentOn')}
+                        </span>
+                      </div>
+
+                      {playerEnabled !== false && !playerDisableConfirm && (
+                        <button
+                          onClick={() => setPlayerDisableConfirm(true)}
+                          disabled={playerEnabledBusy || playerEnabled === null}
+                          className="w-full flex items-center justify-center space-x-2 bg-hifi-dark hover:bg-hifi-light/40 disabled:opacity-60 rounded-lg px-4 py-3 text-sm text-white transition-colors"
+                        >
+                          <span>{t('settings.playerEnabled.switchOff')}</span>
+                        </button>
+                      )}
+
+                      {playerEnabled !== false && playerDisableConfirm && (
+                        <div className="space-y-3 rounded-lg border border-amber-500/30 bg-amber-900/10 p-4">
+                          <p className="text-sm text-amber-200">{t('settings.playerEnabled.offWarning')}</p>
+                          <div className="flex space-x-3">
+                            <button
+                              onClick={() => setPlayerDisableConfirm(false)}
+                              disabled={playerEnabledBusy}
+                              className="flex-1 rounded-lg bg-hifi-dark hover:bg-hifi-light/40 disabled:opacity-60 px-4 py-2 text-sm text-white transition-colors"
+                            >
+                              {t('settings.playerEnabled.cancel')}
+                            </button>
+                            <button
+                              onClick={() => togglePlayerEnabled(false)}
+                              disabled={playerEnabledBusy}
+                              className="flex-1 flex items-center justify-center space-x-2 rounded-lg bg-amber-600 hover:bg-amber-500 disabled:opacity-60 px-4 py-2 text-sm text-white transition-colors"
+                            >
+                              {playerEnabledBusy && <Loader2 size={16} className="animate-spin" />}
+                              <span>{t('settings.playerEnabled.confirmOff')}</span>
+                            </button>
+                          </div>
+                        </div>
+                      )}
+
+                      {playerEnabled === false && (
+                        <button
+                          onClick={() => togglePlayerEnabled(true)}
+                          disabled={playerEnabledBusy}
+                          className="w-full flex items-center justify-center space-x-2 bg-hifi-dark hover:bg-hifi-light/40 disabled:opacity-60 rounded-lg px-4 py-3 text-sm text-white transition-colors"
+                        >
+                          {playerEnabledBusy && <Loader2 size={16} className="animate-spin" />}
+                          <span>{t('settings.playerEnabled.switchOn')}</span>
+                        </button>
+                      )}
+
+                      {playerEnabledMessage && (
+                        <div className={`rounded-lg p-3 text-center text-sm ${
+                          isErrorMsg(playerEnabledMessage)
+                            ? 'bg-red-900/20 text-red-300 border border-red-500/30'
+                            : 'bg-hifi-dark text-hifi-silver'
+                        }`}>
+                          {playerEnabledMessage}
+                        </div>
+                      )}
+                    </div>
                   </div>
                 )}
 

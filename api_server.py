@@ -62,8 +62,8 @@ def _lang():
     try:
         v = request.headers.get('X-UI-Lang')
     except RuntimeError:
-        return 'it'
-    return v if v in ('en', 'it') else 'it'
+        return 'en'
+    return v if v in ('en', 'it') else 'en'
 
 # ──────────────────────────────────────────────────────────────────
 #  OTA update of the Electron UI (whole /opt/hifi-media-player dir).
@@ -587,7 +587,7 @@ def list_audio_devices():
     numbers across reboots and the saved "-o hw:1,0" would then point at the PC's
     sound card. The CARD= name is stable, so the selection survives reboots.
     """
-    devices = [{'id': 'default', 'name': 'Predefinito di sistema', 'card': None, 'device': None}]
+    devices = [{'id': 'default', 'name': _t('audio.defaultDeviceName', _lang()), 'card': None, 'device': None}]
     try:
         r = _run(['aplay', '-l'])
         for line in r.stdout.split('\n'):
@@ -870,17 +870,27 @@ def _ssh_available():
 
 def _install_openssh():
     """Install the openssh-server package (the appliance image may not ship it).
-    Returns True if the SSH unit is present afterwards."""
+    Returns (available, detail) — detail is stderr from whichever apt-get step
+    failed, or '' on success, so the caller can surface something more useful
+    than a flat "failed" to the UI."""
     try:
         # Refresh the index first; a long-running appliance may have a stale one.
-        subprocess.run(['sudo', 'apt-get', 'update'],
+        r_update = subprocess.run(['sudo', 'apt-get', 'update'],
                       capture_output=True, text=True, timeout=120)
-        subprocess.run(['sudo', 'apt-get', 'install', '-y', 'openssh-server'],
+        if r_update.returncode != 0:
+            log.error("apt-get update failed (rc=%s): %s", r_update.returncode,
+                      (r_update.stderr or '').strip())
+        r_install = subprocess.run(['sudo', 'apt-get', 'install', '-y', 'openssh-server'],
                       capture_output=True, text=True, timeout=180)
+        if r_install.returncode != 0:
+            log.error("apt-get install openssh-server failed (rc=%s): %s",
+                      r_install.returncode, (r_install.stderr or '').strip())
+            if not _ssh_available():
+                return False, (r_install.stderr or '').strip()
     except Exception:
         log.exception("openssh-server install failed")
-        return False
-    return _ssh_available()
+        return False, ''
+    return _ssh_available(), ''
 
 SSH_NO_ROOT_LOGIN_DROPIN = '/etc/ssh/sshd_config.d/99-hifi-no-root-login.conf'
 SSH_NO_ROOT_LOGIN_CONTENT = ("# Managed by HiFi Player — do not edit by hand (overwritten on update).\n"
@@ -932,10 +942,12 @@ def set_ssh(enable):
     When enabling on an image that doesn't ship openssh-server, install it
     first so the toggle works out of the box."""
     if enable and not _ssh_available():
-        if not _install_openssh():
+        installed, detail = _install_openssh()
+        if not installed:
+            msg = _t('ssh.installFailed', _lang())
             return {'success': False, 'available': False, 'enabled': False,
                     'active': False, 'code': 'ssh.installFailed',
-                    'message': _t('ssh.installFailed', _lang())}
+                    'message': f'{msg}: {detail}' if detail else msg}
     if enable:
         # Written before the unit (re)starts, so root-login is blocked from
         # sshd's very first start.
@@ -946,11 +958,13 @@ def set_ssh(enable):
         r = subprocess.run(['sudo', 'systemctl', action, '--now', unit],
                           capture_output=True, text=True, timeout=30)
         if r.returncode != 0:
-            log.error("set_ssh %s failed: %s", action, (r.stderr or '').strip())
+            detail = (r.stderr or '').strip()
+            log.error("set_ssh %s failed: %s", action, detail)
             status = get_ssh_status()
             status['success'] = False
             status['code'] = 'ssh.toggleFailed'
-            status['message'] = _t('ssh.toggleFailed', _lang())
+            msg = _t('ssh.toggleFailed', _lang())
+            status['message'] = f'{msg}: {detail}' if detail else msg
             return status
     except Exception:
         log.exception("set_ssh failed")
@@ -1548,6 +1562,57 @@ def set_display_mode(mode):
     # session is torn down a moment after this response is sent.
     msg = _t('displayMode.guiEnabled' if mode == 'gui' else 'displayMode.headlessEnabled', _lang())
     return {'success': True, 'mode': mode, 'message': msg}
+
+# ──────────────────────────────────────────────────────────────────
+#  Player enabled/disabled — whether this device plays audio at all
+#  (squeezelite), orthogonal to display mode above (which only controls the
+#  on-screen kiosk). A "server only" unit keeps Lyrion + every hifi-* daemon
+#  running but never launches squeezelite here — e.g. a box in a closet whose
+#  only job is serving satellite players elsewhere.
+#
+#  Persisted state ABSENT means enabled — same fleet-safety default as
+#  display mode (an existing configured unit must never drift into "no
+#  player" on an OS update).
+# ──────────────────────────────────────────────────────────────────
+PLAYER_ENABLED_FILE = '/etc/hifi-player/player-enabled'
+
+def get_player_enabled():
+    """Return { enabled }. True (default when the file is absent) or False."""
+    enabled = True
+    try:
+        with open(PLAYER_ENABLED_FILE) as f:
+            if f.read().strip() == '0':
+                enabled = False
+    except Exception:
+        pass
+    return {'enabled': enabled}
+
+def set_player_enabled(enabled):
+    """Enable/disable squeezelite, live + persisted. Refused while an OTA is
+    applying, same guard as display mode (set_display_mode above)."""
+    if _update_in_progress():
+        return {'success': False, 'enabled': get_player_enabled()['enabled'],
+                'code': 'update.inProgressRetry', 'message': _t('update.inProgressRetry', _lang())}
+    action = 'enable' if enabled else 'disable'
+    try:
+        r = subprocess.run(['systemctl', action, '--now', 'squeezelite'],
+                           capture_output=True, text=True, timeout=30)
+        if r.returncode != 0:
+            log.error("set_player_enabled %s failed: %s", action, (r.stderr or '').strip())
+            return {'success': False, 'enabled': get_player_enabled()['enabled'],
+                    'code': 'player.toggleFailed', 'message': _t('player.toggleFailed', _lang())}
+    except Exception:
+        log.exception("set_player_enabled failed")
+        return {'success': False, 'enabled': get_player_enabled()['enabled'],
+                'code': 'player.toggleFailed', 'message': _t('player.toggleFailed', _lang())}
+    try:
+        os.makedirs(os.path.dirname(PLAYER_ENABLED_FILE), exist_ok=True)
+        with open(PLAYER_ENABLED_FILE, 'w') as f:
+            f.write('1' if enabled else '0')
+    except Exception:
+        log.exception("set_player_enabled: failed to persist state")
+    msg = _t('player.enabled' if enabled else 'player.disabled', _lang())
+    return {'success': True, 'enabled': enabled, 'message': msg}
 
 # ──────────────────────────────────────────────────────────────────
 #  UI render resolution. The interface is a fixed 1024x600 canvas CSS-zoomed
@@ -4057,6 +4122,15 @@ def api_display_mode():
 def api_set_display_mode():
     data = request.get_json(silent=True) or {}
     return jsonify(set_display_mode((data.get('mode') or '').strip()))
+
+@app.route('/player_enabled', methods=['GET'])
+def api_player_enabled():
+    return jsonify(get_player_enabled())
+
+@app.route('/player_enabled', methods=['POST'])
+def api_set_player_enabled():
+    data = request.get_json(silent=True) or {}
+    return jsonify(set_player_enabled(bool(data.get('enabled'))))
 
 @app.route('/ui_resolution', methods=['GET'])
 def api_ui_resolution():

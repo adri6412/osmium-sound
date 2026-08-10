@@ -94,6 +94,10 @@
       "title": "Benvenuto",
       "subtitle": "Configuriamo insieme il tuo network streamer. Bastano pochi passaggi: rete, sorgenti musicali e sei pronto all'ascolto."
     },
+    "qr": {
+      "title": "Scansiona per configurare",
+      "subtitle": "Collega il telefono a questa rete Wi-Fi per completare la configurazione — non serve toccare questo schermo."
+    },
     "input": {
       "title": "Come usi il dispositivo?",
       "subtitle": "Lo puoi cambiare in qualsiasi momento dalle Impostazioni.",
@@ -506,6 +510,17 @@
       "cancel": "Annulla",
       "failed": "Impossibile cambiare la modalità schermo."
     },
+    "playerEnabled": {
+      "help": "Spegni il player stesso per un'unità solo-server — Lyrion Music Server e tutto il resto continuano a funzionare, questo dispositivo semplicemente non riproduce più audio in locale. Utile per un dispositivo in un ripostiglio che pilota altri player altrove.",
+      "currentOn": "Player acceso",
+      "currentOff": "Player spento (solo server)",
+      "switchOff": "Spegni il player",
+      "switchOn": "Accendi il player",
+      "offWarning": "Questo dispositivo smetterà di riprodurre audio in locale. Lyrion Music Server e il controllo remoto continuano a funzionare.",
+      "confirmOff": "Spegni il player",
+      "cancel": "Annulla",
+      "failed": "Impossibile cambiare lo stato di accensione del player."
+    },
     "timezone": {
       "help": "Un'installazione pulita non ha modo di chiederlo, quindi parte da UTC — scegli qui quello reale del dispositivo.",
       "failed": "Impossibile cambiare il fuso orario."
@@ -652,6 +667,10 @@
     }
   },
   "installer": {
+    "qr": {
+      "title": "Scansiona per installare",
+      "subtitle": "Collega il telefono a questa rete Wi-Fi per scegliere un disco e avviare l'installazione — non serve toccare questo schermo."
+    },
     "welcome": {
       "title": "Installa Osmium Sound",
       "subtitle": "Questa procedura installa Osmium Sound sul disco di questo computer. Tutti i dati presenti sul disco scelto verranno cancellati."
@@ -675,8 +694,9 @@
     },
     "done": {
       "title": "Installazione completata",
-      "subtitle": "Rimuovi il supporto di avvio (USB/DVD) e riavvia per iniziare a usare Osmium Sound.",
-      "reboot": "Riavvia ora"
+      "subtitle": "Rimuovi ora il supporto di avvio (USB/DVD) — riavvio automatico in corso.",
+      "reboot": "Riavvia ora",
+      "rebootIn": "Riavvio tra {n}s…"
     },
     "error": {
       "title": "Installazione non riuscita",

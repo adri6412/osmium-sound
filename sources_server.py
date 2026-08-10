@@ -897,8 +897,8 @@ def _hlang():
     try:
         v = request.headers.get('X-UI-Lang')
     except RuntimeError:
-        return 'it'
-    return v if v in ('en', 'it') else 'it'
+        return 'en'
+    return v if v in ('en', 'it') else 'en'
 
 
 def apply_to_lyrion(state):
@@ -951,7 +951,7 @@ def apply_to_lyrion(state):
     finally:
         _run(["systemctl", "start", LYRION_SERVICE], timeout=60)
 
-    return True, f"{len(paths)} sorgenti applicate. Lyrion riavviato e in scansione."
+    return True, _ht('lyrion.applied', _hlang(), count=len(paths))
 
 
 # ─────────────────────────── Backup / restore ────────────────────────
@@ -3033,7 +3033,7 @@ SOURCES_I18N = {
         "msg.sambaMissing": "Samba non installato.",
     },
 }
-DEFAULT_LANG = "it"
+DEFAULT_LANG = "en"
 
 
 def _req_lang():

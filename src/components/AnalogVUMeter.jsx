@@ -98,10 +98,20 @@ const AnalogVUMeter = ({ isPlaying, className = "" }) => {
 
   useEffect(() => {
     if (lastMessage === null) return;
-    // Throttle to ~33 Hz: even if the daemon streams faster, the needles can't
-    // visibly resolve more than this, so we skip the extra work.
+    // Throttle target updates to 20 Hz (was ~33 Hz). This does NOT make the
+    // needle motion choppy: useSpring below keeps interpolating every
+    // compositor frame regardless of how often we redirect it, exactly like
+    // a real VU meter's mechanical inertia smooths over individual samples —
+    // only the *reaction time* to brand-new peaks is very slightly longer,
+    // not the smoothness of the sweep itself. What it does cut is how often
+    // the spring gets re-targeted while mid-flight during continuous
+    // playback (see main.js's did-finish-load comment — Electron's
+    // setFrameRate() doesn't actually cap this window's frame rate, so nothing
+    // else limits how often that redirection happens), which is the one
+    // animation running non-stop for the entire duration of playback, unlike
+    // the app's other, transient page-transition/loading animations.
     const now = performance.now();
-    if (now - lastUpdateRef.current < 30) return;
+    if (now - lastUpdateRef.current < 50) return;
     lastUpdateRef.current = now;
     try {
       const data = JSON.parse(lastMessage.data);

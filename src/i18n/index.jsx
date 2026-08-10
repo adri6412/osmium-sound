@@ -21,7 +21,7 @@ for (const path in modules) {
   if (code) locales[code] = modules[path].default || modules[path];
 }
 
-export const DEFAULT_LANG = 'it';
+export const DEFAULT_LANG = 'en';
 
 // List of selectable languages, derived from the loaded files.
 export const availableLanguages = Object.keys(locales)

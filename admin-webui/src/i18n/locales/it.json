@@ -284,7 +284,14 @@
       "vuMeterOn": "Attivo",
       "vuMeterOff": "Disattivo",
       "vuMeterChanged": "Preferenza VU meter salvata",
-      "vuMeterFailed": "Salvataggio preferenza fallito"
+      "vuMeterFailed": "Salvataggio preferenza fallito",
+      "playerLabel": "Player",
+      "playerHelp": "Spegni il player stesso per un'unità solo-server — Lyrion Music Server e tutto il resto continuano a funzionare, questo dispositivo semplicemente non riproduce più audio in locale. Utile per un dispositivo in un ripostiglio che pilota altri player altrove.",
+      "playerOn": "Acceso",
+      "playerOff": "Spento (solo server)",
+      "confirmPlayerOff": "Questo dispositivo smetterà di riprodurre audio in locale. Lyrion Music Server e il controllo remoto continuano a funzionare. Continuare?",
+      "playerChanged": "Stato di accensione del player modificato",
+      "playerChangeFailed": "Impossibile cambiare lo stato di accensione del player"
     },
     "timezone": {
       "hint": "Un'installazione pulita non ha modo di chiederlo, quindi parte da UTC — scegli qui quello reale del dispositivo.",

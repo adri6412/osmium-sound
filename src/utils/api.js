@@ -133,6 +133,11 @@ export const systemAPI = {
   // Switch GUI <-> headless (live + persisted). In headless the on-screen UI is
   // torn down shortly after this returns. Returns { success, mode, message }
   setDisplayMode: (mode) => apiPost('/display_mode', { mode }),
+  // Player (squeezelite) on/off — orthogonal to display mode: whether this
+  // device plays audio at all, for "server only" units. { enabled: bool }
+  getPlayerEnabled: () => apiGet('/player_enabled'),
+  // Enable/disable the player (live + persisted). Returns { success, enabled, message }
+  setPlayerEnabled: (enabled) => apiPost('/player_enabled', { enabled }),
   // UI render resolution: { mode: 'auto'|'720'|'1080'|'native' }. Shrinks the X
   // framebuffer on big panels (the GPU upscales it during scanout) so Chromium
   // stops rasterizing 2..8 Mpixel per repaint.

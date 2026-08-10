@@ -15,8 +15,9 @@ flowchart TB
     end
 
     subgraph Local["Local services on the appliance"]
-        Flask["api_server.py\nFlask API — :8000"]
+        Flask["api_server.py\nFlask API — :8000 (loopback only)"]
         Sources["sources_server.py\nUSB/SMB/local sources — :8080"]
+        WebUI["webui_server.py\nweb admin + provisioning — :443/:80"]
         Lyrion["Lyrion Music Server\nJSON-RPC + web UI — :9000"]
         Squeezelite["squeezelite\nplayer client (ALSA)"]
         Camilla["CamillaDSP\n(optional DSP: EQ, crossfeed, room correction)"]
@@ -24,6 +25,7 @@ flowchart TB
 
     DAC["USB DAC / HDMI output"]
     Phone["Android companion app\n(HTTP, LAN)"]
+    Browser["Browser on a phone/laptop\n(setup QR / admin UI)"]
 
     Renderer -- IPC --> Preload
     Preload --> Main
@@ -36,6 +38,9 @@ flowchart TB
     Squeezelite -- "if CamillaDSP off" --> DAC
     Phone -- HTTP --> Flask
     Phone -- HTTP --> Sources
+    Browser -- "HTTPS (LAN-facing)" --> WebUI
+    WebUI -- "proxy, loopback" --> Flask
+    WebUI -- "proxy, loopback" --> Sources
 ```
 
 ## Components
@@ -45,8 +50,9 @@ flowchart TB
 | Electron main | `main/main.js` | Window/kiosk management, renderer crash recovery, relaxes CSP only for the local Lyrion origin so the renderer can call its JSON-RPC API |
 | Preload | `main/preload.js` | Minimal `contextBridge` surface — only UI-local concerns (frame-rate cap, global on-screen keyboard). **System control does not go through IPC.** |
 | React renderer | `src/` | The touchscreen UI (Now Playing, Music/Radio/Apps via Lyrion, Settings, Setup Wizard) |
-| Flask API | `api_server.py` | Runs as root on the appliance; system info/control, network/Wi-Fi, OTA channels, DSP, multiroom (LMS role), pairing tokens. Port `8000`. |
+| Flask API | `api_server.py` | Runs as root on the appliance; system info/control, network/Wi-Fi, OTA channels, DSP, multiroom (LMS role), pairing tokens, display mode, player on/off, disk installer. Loopback-only, port `8000`. |
 | Sources service | `sources_server.py` | USB/SMB/local source management, internal-disk adoption/formatting, backup/restore (core logic shared via `hifi_backup.py`), FIR filter upload, and a DSP control proxy to the loopback-only Flask API. Port `8080`. |
+| Web admin / provisioning gateway | `webui_server.py` | The only LAN-facing service: serves the Vue admin app (`admin-webui/`) behind a session, reverse-proxies a whitelisted subset of `api_server.py`/`sources_server.py` calls, and — while `/etc/hifi-player/provisioning-pending` exists — raises a Wi-Fi hotspot and serves the QR-only captive setup/install portal. HTTPS `:443` (+ `:80` redirect), self-signed per-device cert. See [Provisioning & first boot](#provisioning--first-boot). |
 | Lyrion Music Server | external (Debian package / on-demand download) | Library indexing, playback engine, plugin ecosystem (Spotty, TIDAL Connect, radio, UPnP/DLNA, AirPlay). Port `9000`. |
 | squeezelite | systemd service | Lyrion's player client; `-D` flag enables bit-perfect DSD via DoP; `-v` exports a shared-memory buffer the VU meter reads |
 | CamillaDSP | systemd-managed, optional | Parametric EQ, headphone crossfeed, room correction from an uploaded filter. Off by default — bit-perfect path is untouched unless enabled. |
@@ -60,8 +66,9 @@ flowchart TB
 |---|---|---|
 | `hifi-api` | `api_server.py` | Flask API, port 8000 |
 | `hifi-sources` | `sources_server.py` | Sources/disk/pairing API, port 8080 |
+| `hifi-webui` | `webui_server.py` | Web admin + provisioning gateway, port 443/80. Enabled at image-build time (no-op portwise on a fully configured unit; the provisioning marker gates the hotspot/captive behaviour) — see [Provisioning & first boot](#provisioning--first-boot) |
 | `hifi-vumeter` | `vu_meter_daemon.py` | VU meter shared-memory reader |
-| `hifi-firstboot` | `hifi-firstboot.sh` | One-shot: installs Lyrion (absent from the image by design), then deletes its own unit — see [First boot & setup](#first-boot--setup) |
+| `hifi-firstboot` | `hifi-firstboot.sh` | One-shot: installs Lyrion (absent from the image by design), then deletes its own unit — see [Provisioning & first boot](#provisioning--first-boot) |
 | `squeezelite` | — | Lyrion's player client |
 | `hifi-bluealsa` | BlueALSA daemon (`-p a2dp-sink`) | Bluetooth A2DP sink backend. Disabled by default — see [Bluetooth audio](#bluetooth-audio-a2dp-sink) |
 | `hifi-bt-agent` | `bt-agent -c NoInputNoOutput` | Headless pairing agent (no PIN prompt) |
@@ -241,6 +248,12 @@ GET/POST /player_name
 GET  /discover_lms            LAN auto-discovery for multiroom
 GET/POST /ssh_status, /ssh_set
 GET/POST /pointer_status, /pointer_set
+GET/POST /display_mode        screen (gui) vs headless
+GET/POST /player_enabled      player on/off — independent of display_mode, makes a unit "server-only"
+GET  /boot_mode                'installer' (hifi.installer=1) vs 'live', read from /proc/cmdline
+GET  /install/disks            candidate target disks for the disk installer
+POST /install/start            launch hifi-disk-install.sh (async systemd-run job)
+GET  /install/status           poll the running/finished install job
 GET  /roomcorr/mics           USB measurement-mic candidates (arecord -l)
 POST /roomcorr/measure        guided room measurement (async systemd-run job)
 GET  /roomcorr/status         poll the measurement; carries the result curves
@@ -253,6 +266,40 @@ GET  /bluetooth_now_playing   current Bluetooth track (AVRCP + online cover look
 
 The full route table is the source of truth — see the `@app.route` decorators
 in `api_server.py`.
+
+### Web admin & provisioning API — `webui_server.py` (port 443/80)
+
+The only LAN-facing surface. Three route families:
+
+- **`/api/system/*`** — session-gated proxy to a whitelisted subset of the
+  Flask API above, called by the admin webui (`admin-webui/src/api.js`,
+  `api.sys`/`api.sysPost`). A small subset (`display_mode`, `lms_role`,
+  `discover_lms`, `audio_devices`, …) is additionally reachable *before*
+  login while provisioning is in progress, so the pre-account setup flow can
+  use the exact same session-app code path once the Vue app itself is
+  reachable.
+- **`/api/provision/*`** — pre-auth, gated only by the provisioning marker
+  (`_provisioning()`), used exclusively by the captive setup page (see
+  [Provisioning & first boot](#provisioning--first-boot)):
+
+  ```
+  GET  /api/provision/status              hotspot/stage/mode/AP info; poll target for both on-screen QR shells
+  POST /api/provision/use_wired, /wifi_connect, /claim_mode, /finalize, /reboot
+  GET/POST /api/provision/audio_devices, /set_audio_device
+  GET/POST /api/provision/lyrion_mode
+  GET  /api/provision/discover_lms
+  GET/POST /api/provision/sources, /sources/local, /sources/smb, /apply_sources
+  DELETE /api/provision/sources/<id>
+  GET/POST /api/provision/timezone, /set_timezone
+  POST /api/provision/restore              forwarded raw (multipart) to sources_server's /api/restore
+  GET  /api/provision/install_disks        installer-boot-mode only (not gated by the marker)
+  POST /api/provision/install_start
+  GET  /api/provision/install_status
+  ```
+- **`/api/<sources paths>`** and a handful of dedicated forwards (backup,
+  restore, FIR upload, DSP) — token- or session-gated relays straight to
+  `sources_server.py:8080`, since that service only trusts loopback callers
+  itself (see [Pairing & security](#pairing--security)).
 
 ### Sources API — `sources_server.py` (port 8080)
 
@@ -321,30 +368,179 @@ window.electronAPI.showGlobalKeyboard() / hideGlobalKeyboard()
 window.electronAPI.onToggleSimpleKeyboard(callback)
 ```
 
-## First boot & setup
+## Provisioning & first boot
 
-`hifi-firstboot.service` runs exactly once. Lyrion Music Server is
-deliberately absent from the live squashfs and every disk install (installs
-go through `hifi-disk-install.sh`, which `unsquashfs`'s the live filesystem
-verbatim onto the target disk — see `distro/README.md`'s Compliance Notice
-for why Lyrion isn't part of that image at all), so first boot is the only
-place Lyrion ever gets installed: downloads the `.deb` from
-`downloads.lms-community.org`, `apt-mark manual`s it, adds the Lyrion
-service user to the `cdrom` group (needed for the CD Player plugin), enables
-the service, then deletes its own unit file. Runs only outside a live
-session (`ConditionKernelCommandLine=!boot=live`); retries on the next boot
-if it has no network yet.
+Both the disk installer and the first-boot setup wizard are **QR-only**: the
+on-screen kiosk never requires a mouse, keyboard, or touch. It only displays
+branding and a Wi-Fi hotspot QR code, then polls status until a phone
+connected to that hotspot finishes the actual configuration through a
+lightweight captive web page served by `webui_server.py`. This replaced an
+earlier on-screen step-by-step wizard entirely.
 
-The touchscreen Setup Wizard (`src/pages/SetupWizard.jsx`) then walks:
-`welcome → network → wifi-scan (optional) → audio → sources → lyrion` —
-configuring network (wired/DHCP or Wi-Fi), the audio output device, minting
-a sources pairing token/QR, and polling Lyrion install/health before
-handing off to the normal UI.
+### The hotspot / captive-portal mechanism
+
+A single mechanism drives both flows:
+
+- `/etc/hifi-player/provisioning-pending` is the marker that turns it on.
+  It's seeded straight into the live image at build time
+  (`distro/build-distro.sh`, "Seed the first-boot provisioning marker") —
+  the *only* other place that (re)creates it is `hifi-factory-reset.sh`. It
+  is consumed and removed once setup finalizes, and an OS-OTA migration must
+  **never** recreate it (that would drop an already-configured fleet unit
+  back into setup mode).
+- `hifi-webui.service` is enabled unconditionally at image-build time (not
+  just via OTA), so it's already part of the live/install squashfs, not
+  something that only exists once an OS is actually installed on disk.
+- While the marker exists, `webui_server.py`'s provisioning loop raises the
+  hotspot **always** (Volumio-style), even if Ethernet is already connected
+  — so a phone can discover the box regardless of how it's wired. A phone
+  joining `Osmium-Setup-XXXX` (WPA2, passphrase `osmiumsetup`) gets the
+  captive portal automatically via OS captive-portal probes; otherwise open
+  `http://10.42.0.1` or `http://hifiplayer.local` by hand.
+- The captive page's *content* forks entirely on **boot mode**
+  (`get_boot_mode()` / kernel param `hifi.installer=1`, same detection
+  `InstallWizard.jsx` uses): booted from the **installer** → the disk-imaging
+  flow; booted from an **already-installed disk still in provisioning** (or a
+  live "Try" session) → the normal setup flow. Both are plain,
+  dependency-free HTML/JS templates baked into `webui_server.py`
+  (`INSTALL_CAPTIVE_HTML` / `SETUP_CAPTIVE_HTML`), defaulting to English with
+  an Italian toggle.
+- `root()`'s `/` route serves the captive page for the **entire** provisioning
+  window (`_provisioning()`), not only while the AP happens to be up. This is
+  what makes the Wi-Fi reconnect above work at all: without it, the moment
+  the hotspot drops the phone would fall through to the normal (pre-auth,
+  session-oriented) Vue admin app instead of picking the same step machine
+  back up at its new address — a real bug caught during review, since the
+  setup flow's later steps (sources, Lyrion discovery) only exist in this
+  captive page.
+
+### Installer flow (booted with `hifi.installer=1`)
+
+`src/pages/InstallWizard.jsx` shows the QR immediately and mirrors
+`GET /install/status` read-only (progress bar, no buttons). The phone drives:
+pick a target disk (`GET /api/provision/install_disks` → `api_server.py`'s
+`GET /install/disks`) → confirm the erase warning → start
+(`POST /api/provision/install_start` → `POST /install/start`, which launches
+`hifi-disk-install.sh` via `systemd-run`). `hifi-disk-install.sh` `unsquashfs`'s
+the live filesystem verbatim onto the target disk (see `distro/README.md`'s
+Compliance Notice for why Lyrion isn't part of that image at all), then
+chroots in to run `hifi-grub-install.sh` + `hifi-finalize-boot.sh`. Once
+`/install/status` reports `done`, the **on-screen kiosk itself** auto-reboots
+after a short countdown — it does not depend on the phone still being
+connected (the phone's own tab independently offers the same reboot as a
+convenience/backup).
+
+### Setup flow (an installed-but-unprovisioned disk, or a live "Try" session)
+
+`src/pages/SetupWizard.jsx` shows the QR immediately and polls
+`GET /provision_status` (proxied through to `webui_server.py`'s
+`/api/provision/status`) until `pending: false`, then hands off to the
+normal kiosk UI (or, on a headless/server-only choice, simply stays off —
+the display-mode switch already happened live at `finalize`). The phone
+drives, in order:
+
+1. **Language** — a `?lang=` reload of the captive page, English by default.
+2. **Restore from backup, or start fresh.** Restoring
+   (`POST /api/provision/restore`, forwarded to `sources_server.py`'s
+   `POST /api/restore`) re-applies the `core`/`network`/`sources`/`lyrion`
+   backup categories — including Wi-Fi/wired profiles, DAC selection,
+   display mode, and time zone — so a restore skips every remaining step and
+   just reboots to apply it (`POST /api/provision/reboot`). See
+   [Backup & restore](#backup--restore) for exactly what those categories
+   cover.
+3. **Network** — wired DHCP or Wi-Fi (`/api/provision/use_wired`,
+   `/api/provision/wifi_connect`), unchanged from before. **Wi-Fi and wired
+   diverge here**: a single Wi-Fi radio can't stay an AP and join the home
+   network at the same time, so a successful Wi-Fi connect intentionally
+   drops the hotspot (`_evaluate_provisioning()`'s "skip while ...
+   after the network step succeeded" branch) — the phone loses its link to
+   the device's captive IP and must reconnect to the home network, then
+   browse to `https://hifiplayer.local` (or the device's new LAN IP) to pick
+   the remaining steps back up. Wired never has this problem: the hotspot is
+   raised "ALWAYS (Volumio-style)" regardless of Ethernet, so the same phone
+   session keeps working throughout. Either way, this ordering — network
+   *before* audio/Lyrion/sources — matters beyond just "ask early": the
+   sources step's SMB share and the Lyrion step's LAN discovery both need
+   the device to already have real network reachability, which it only has
+   once this step succeeds.
+4. **Device mode** — now three-way: *screen*, *headless*, or *server-only*.
+   `POST /api/provision/claim_mode` persists the display-mode choice
+   (`gui`/`headless`) and, for server-only, also calls `api_server.py`'s
+   `POST /player_enabled` with `enabled: false` — see
+   [Display mode & player on/off](#display-mode--player-onoff). Unlike the
+   old flow, choosing "screen" no longer ends the phone-driven part of setup
+   early: every mode keeps going through the remaining steps below, and the
+   display-mode switch only goes **live** at the final `finalize` call, so
+   the hotspot stays up the whole time.
+5. **Audio output** — `/api/provision/audio_devices` /
+   `/api/provision/set_audio_device`, proxied to `api_server.py`'s
+   `list_audio_devices()`/`set_audio_device()`.
+6. **Lyrion: internal or external** — asked *before* sources, so choosing an
+   existing server on the network (`/api/provision/lyrion_mode`, discovery via
+   `/api/provision/discover_lms`) skips the sources step entirely (external
+   Lyrion's sources are configured on that other device, not here — see also
+   [Backend API reference](#backend-api-reference) and `Settings.jsx`'s
+   `settingsSections`, which hides Music Sources the same way post-setup).
+7. **Music sources** (internal Lyrion only) — add an SMB share
+   (`/api/provision/sources/smb`) and apply
+   (`/api/provision/apply_sources` → `sources_server.py`'s `POST /api/apply`).
+   Deliberately no "rescan" language here: Lyrion's own first-run setup
+   wizard performs the actual first scan once handed off.
+8. **Time zone** — `/api/provision/timezone` /
+   `/api/provision/set_timezone`, proxied to `api_server.py`'s
+   `get_timezone()`/`set_timezone()`.
+9. **Finish** — `POST /api/provision/finalize`: applies the chosen display
+   mode **live**, tears down the hotspot, and removes the provisioning
+   marker.
+
+Every `/api/provision/*` endpoint above is gated by the provisioning marker
+being present (`_provisioning()`), not a session — the same
+physical/RF-proximity trust model as the pre-existing network/mode
+endpoints, since no account exists yet at this point.
 
 Network configuration (`api_server.py`: `GET /network_status`,
 `GET /wifi_scan`, `POST /wifi_connect`, `POST /configure_network`) is
-entirely `nmcli`-driven — there is no AP/hotspot fallback mode, so first
-contact needs either ethernet or the on-screen Wi-Fi scan.
+entirely `nmcli`-driven.
+
+### Lyrion install (first real boot, independent of the wizard)
+
+`hifi-firstboot.service` runs exactly once, independent of the above: Lyrion
+Music Server is deliberately absent from the live squashfs and every disk
+install, so first boot is the only place Lyrion ever gets installed —
+downloads the `.deb` from `downloads.lms-community.org`, `apt-mark manual`s
+it, adds the Lyrion service user to the `cdrom` group (needed for the CD
+Player plugin), enables the service, then deletes its own unit file. Runs
+only outside a live session (`ConditionKernelCommandLine=!boot=live`);
+retries on the next boot if it has no network yet. The setup wizard's Lyrion
+step (above) separately checks/installs Lyrion synchronously if this hasn't
+finished yet by the time the phone reaches that step.
+
+## Display mode & player on/off
+
+Two independent, orthogonal controls decide what a unit actually does:
+
+- **Display mode** (`GET/POST /display_mode` in `api_server.py`, persisted
+  to `/etc/hifi-player/display-mode`, applied via
+  `/usr/local/sbin/hifi-display-mode.sh`) — *screen* (`gui`, the default)
+  flips the systemd default target to `graphical.target` and starts LightDM
+  + the Electron kiosk; *headless* (`headless`) flips it to
+  `multi-user.target` with no X session at all. Playback and control are
+  unaffected either way — squeezelite, Lyrion, and every hifi-\* daemon stay
+  `WantedBy=multi-user.target` in both modes.
+- **Player on/off** (`GET/POST /player_enabled` in `api_server.py`,
+  persisted to `/etc/hifi-player/player-enabled`, default enabled) —
+  independently enables/disables `squeezelite.service` itself via
+  `systemctl enable|disable --now`. Turning it off is what makes a unit
+  "server-only": Lyrion Music Server and every other daemon keep running
+  (so it can still serve other Osmium players on the network), this device
+  just never plays audio locally.
+
+The setup wizard's three-way "device mode" step (screen / headless /
+server-only) is the combination of both: server-only = headless display
+mode + player disabled. Both controls also have their own toggle in Settings
+(on-screen `Settings.jsx` and the admin webui's `Settings.vue`) for changing
+either one independently after setup, guarded against switching mid-OTA the
+same way (`_update_in_progress()`).
 
 ## OTA update system
 
@@ -516,13 +712,18 @@ hifi-media-player/
 ├── main/                    # Electron main process
 │   ├── main.js
 │   └── preload.js
-├── src/                     # React renderer
+├── src/                     # React renderer (kiosk)
 │   ├── components/
-│   ├── pages/               # Settings, SetupWizard, LyrionServer, ...
+│   ├── pages/               # Settings, SetupWizard (QR-only), InstallWizard (QR-only), LyrionServer, ...
 │   ├── utils/                # api.js (Flask), lyrionApi.js (Lyrion JSON-RPC)
-│   └── i18n/                 # en/it locale strings
-├── api_server.py            # Flask API (system/network/OTA/DSP/multiroom)
+│   └── i18n/                 # en/it locale strings (English is the default)
+├── admin-webui/             # Vue admin app, served by webui_server.py
+│   └── src/
+│       ├── views/            # Settings.vue, ...
+│       └── i18n/             # en/it locale strings (English is the default)
+├── api_server.py            # Flask API (system/network/OTA/DSP/multiroom/display-mode/player/installer)
 ├── sources_server.py         # USB/SMB/local music sources
+├── webui_server.py           # Web admin + provisioning/captive-portal gateway (port 443/80)
 ├── hifi_backup.py            # Backup/restore core (shared with the sbin worker)
 ├── android-companion/       # Android companion app (Kotlin/Java)
 ├── distro/                  # Custom Debian appliance build (live-build)

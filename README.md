@@ -53,11 +53,12 @@ Bit-perfect audio, streaming services, and signed OTA updates — one sleek dark
 
 1. **Download** the latest install ISO from [Releases](https://github.com/adri6412/osmium-sound/releases).
 2. **Flash** it to an 8GB+ USB stick with [balenaEtcher](https://etcher.balena.io/), Rufus, or `dd`.
-3. **Boot** your x86 mini-PC from the stick and follow the on-screen installer. Reboot — done.
+3. **Boot** your x86 mini-PC from the stick — the screen shows a QR code, nothing else. Scan it with your phone and finish everything from there: pick the disk, confirm, install. No mouse or keyboard ever needed.
+4. On first boot after install, the screen shows a QR code again. Scan it to finish setup (language, network, device mode, audio output, Lyrion, music sources, time zone) from your phone. Reboot — done.
 
 Every later version — UI, system, OS, and Lyrion — arrives automatically over the air from the Settings screen. No reflashing required.
 
-> **Disk selection.** The installer now asks which disk to install on and formats only the one you pick — nothing is wiped without confirmation. Tested on UEFI only so far (BIOS/legacy boot not yet verified with this flow). See [`distro/config/includes.installer/preseed.cfg`](distro/config/includes.installer/preseed.cfg).
+> **Fully hands-off, screen-only workflow.** Both the installer and the first-boot setup wizard are QR-only: the on-screen kiosk never asks for input, it only displays a hotspot QR code and waits. A phone connected to that hotspot drives every actual step (disk choice, language, restore-from-backup, network, device mode, audio, Lyrion, sources, time zone) via a lightweight web page — see [ARCHITECTURE.md § Provisioning & first boot](ARCHITECTURE.md#provisioning--first-boot).
 
 > **Try it live.** Pick **Try Osmium Sound (no install)** at the boot menu to run the kiosk straight from the USB stick, nothing is written to disk. If it doesn't log in automatically, use `hifi` / `hifi` at the login screen.
 
@@ -71,6 +72,7 @@ Control Osmium Sound from your phone — browse the library, drive playback and 
 
 - **[ARCHITECTURE.md](ARCHITECTURE.md)** — components, ports, backend API reference, OTA internals, project layout, local dev setup
 - **[QUICKSTART.md](QUICKSTART.md)** — quick start guide (also in [Italian](GUIDA-RAPIDA.md))
+- **[MANUALE.html](MANUALE.html)** — full installation & configuration manual (English/Italian toggle)
 - **[SECURITY.md](SECURITY.md)** — security policy
 - Release notes: [website changelog](https://osmiumsound.qd.je/#changelog)
 
