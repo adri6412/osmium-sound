@@ -19,6 +19,7 @@ import { useI18n } from '../i18n';
 const SetupWizard = ({ onComplete }) => {
   const { t } = useI18n();
   const [apInfo, setApInfo] = useState(null); // { ssid, psk } from provision status
+  const [wired, setWired] = useState(false);
   const [deviceIp, setDeviceIp] = useState(null);
   const doneRef = useRef(false);
 
@@ -31,6 +32,7 @@ const SetupWizard = ({ onComplete }) => {
         if (!alive) return;
         if (res.success && res.data) {
           if (res.data.ap?.ssid) setApInfo(res.data.ap);
+          setWired(!!res.data.wired);
           // The phone finished setup (claim_mode + finalize already ran
           // server-side) — pick up and move on. No button, no local step.
           if (res.data.pending === false) {
@@ -84,14 +86,16 @@ const SetupWizard = ({ onComplete }) => {
           <h1 className="text-2xl font-bold text-white mb-2">{t('wizard.qr.title')}</h1>
           <p className="text-hifi-silver/70 text-sm leading-relaxed mb-8">{t('wizard.qr.subtitle')}</p>
 
-          {apInfo?.ssid ? (
+          {apInfo?.ssid && !wired ? (
             <div className="inline-flex flex-col items-center bg-white rounded-2xl p-4">
               <QRCodeSVG value={`WIFI:T:WPA;S:${apInfo.ssid};P:${apInfo.psk || ''};;`} size={180} />
               <span className="text-black text-xs mt-2">{apInfo.ssid}</span>
             </div>
           ) : (
-            // No hotspot info (yet) — still show a scannable QR pointing at the
-            // URL directly. Prefer the device's own IP over hifiplayer.local:
+            // Either no hotspot info (yet), or a wired connection is already
+            // up — in that case skip the hotspot entirely and point straight
+            // at the device, since the phone can just join the same LAN.
+            // Prefer the device's own IP over hifiplayer.local:
             // the hostname is ambiguous the moment more than one Osmium Sound
             // unit is on the same network (mDNS answers with whichever
             // responds first), the IP never is.

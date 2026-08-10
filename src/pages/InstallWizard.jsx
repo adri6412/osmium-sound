@@ -24,6 +24,7 @@ import { useI18n } from '../i18n';
 const InstallWizard = () => {
   const { t } = useI18n();
   const [apInfo, setApInfo] = useState(null);
+  const [wired, setWired] = useState(false);
   const [deviceIp, setDeviceIp] = useState(null);
   const [status, setStatus] = useState({ state: 'idle', progress: 0, message: '' });
   const [countdown, setCountdown] = useState(null);
@@ -34,7 +35,9 @@ const InstallWizard = () => {
     const pollAp = async () => {
       try {
         const res = await systemAPI.getProvisionStatus();
-        if (alive && res.success && res.data?.ap?.ssid) setApInfo(res.data.ap);
+        if (!alive || !res.success || !res.data) return;
+        if (res.data.ap?.ssid) setApInfo(res.data.ap);
+        setWired(!!res.data.wired);
       } catch (_) {}
     };
     pollAp();
@@ -107,16 +110,16 @@ const InstallWizard = () => {
             <>
               <h1 className="text-2xl font-bold text-white mb-2">{t('installer.qr.title')}</h1>
               <p className="text-hifi-silver/70 text-sm leading-relaxed mb-8">{t('installer.qr.subtitle')}</p>
-              {apInfo?.ssid ? (
+              {apInfo?.ssid && !wired ? (
                 <div className="inline-flex flex-col items-center bg-white rounded-2xl p-4">
                   <QRCodeSVG value={`WIFI:T:WPA;S:${apInfo.ssid};P:${apInfo.psk || ''};;`} size={180} />
                   <span className="text-black text-xs mt-2">{apInfo.ssid}</span>
                 </div>
               ) : (
-                // No hotspot info (yet) — e.g. no Wi-Fi radio on this hardware/VM,
-                // or the AP hasn't come up. Still show a scannable QR, pointing at
-                // the URL directly — works whenever the phone already shares a
-                // network with this device (wired LAN, bridged VM networking, ...).
+                // Either no hotspot info (yet) — e.g. no Wi-Fi radio on this
+                // hardware/VM, or the AP hasn't come up — or a wired connection
+                // is already up, in which case skip the hotspot and point
+                // straight at the device since the phone can join the same LAN.
                 // Prefer the device's own IP over the hifiplayer.local hostname:
                 // the hostname is ambiguous the moment more than one Osmium Sound
                 // unit is on the same network (mDNS answers with whichever
