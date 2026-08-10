@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { QRCodeSVG } from 'qrcode.react';
-import { Disc3, Server, CheckCircle2 } from 'lucide-react';
+import { Disc3, CheckCircle2 } from 'lucide-react';
 import { systemAPI } from '../utils/api';
 import { useI18n } from '../i18n';
 
@@ -24,6 +24,7 @@ import { useI18n } from '../i18n';
 const InstallWizard = () => {
   const { t } = useI18n();
   const [apInfo, setApInfo] = useState(null);
+  const [deviceIp, setDeviceIp] = useState(null);
   const [status, setStatus] = useState({ state: 'idle', progress: 0, message: '' });
   const [countdown, setCountdown] = useState(null);
   const rebootedRef = useRef(false);
@@ -39,6 +40,23 @@ const InstallWizard = () => {
     pollAp();
     const apId = setInterval(pollAp, 5000);
 
+    // The device's own IP, not just the hostname: hifiplayer.local is
+    // ambiguous the moment more than one Osmium Sound unit is on the same
+    // network (mDNS resolves to whichever one answers first) — the IP is
+    // always unambiguous, so it's what the QR should actually encode.
+    const pollIp = async () => {
+      try {
+        const res = await systemAPI.getNetworkStatus();
+        if (alive && res.success && res.data?.ip) { setDeviceIp(res.data.ip); return; }
+        const info = await systemAPI.getSystemInfo();
+        if (alive && info.success && info.data?.local_ip && info.data.local_ip !== 'Unknown') {
+          setDeviceIp(info.data.local_ip);
+        }
+      } catch (_) {}
+    };
+    pollIp();
+    const ipId = setInterval(pollIp, 5000);
+
     const pollInstall = async () => {
       try {
         const res = await systemAPI.getInstallStatus();
@@ -48,7 +66,7 @@ const InstallWizard = () => {
     pollInstall();
     const installId = setInterval(pollInstall, 1500);
 
-    return () => { alive = false; clearInterval(apId); clearInterval(installId); };
+    return () => { alive = false; clearInterval(apId); clearInterval(ipId); clearInterval(installId); };
   }, []);
 
   // Auto-reboot a few seconds after the install reports done — never a
@@ -95,9 +113,20 @@ const InstallWizard = () => {
                   <span className="text-black text-xs mt-2">{apInfo.ssid}</span>
                 </div>
               ) : (
-                <div className="flex flex-col items-center text-hifi-silver/60">
-                  <Server size={32} className="mb-3" />
-                  <p className="text-sm">http://hifiplayer.local</p>
+                // No hotspot info (yet) — e.g. no Wi-Fi radio on this hardware/VM,
+                // or the AP hasn't come up. Still show a scannable QR, pointing at
+                // the URL directly — works whenever the phone already shares a
+                // network with this device (wired LAN, bridged VM networking, ...).
+                // Prefer the device's own IP over the hifiplayer.local hostname:
+                // the hostname is ambiguous the moment more than one Osmium Sound
+                // unit is on the same network (mDNS answers with whichever
+                // responds first), the IP never is.
+                <div className="inline-flex flex-col items-center bg-white rounded-2xl p-4">
+                  <QRCodeSVG value={`http://${deviceIp || 'hifiplayer.local'}`} size={180} />
+                  <span className="text-black text-xs mt-2">
+                    {deviceIp ? `http://${deviceIp}` : 'http://hifiplayer.local'}
+                  </span>
+                  {deviceIp && <span className="text-black/50 text-[10px] mt-0.5">http://hifiplayer.local</span>}
                 </div>
               )}
             </>

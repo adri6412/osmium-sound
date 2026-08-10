@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { QRCodeSVG } from 'qrcode.react';
-import { Disc3, Server } from 'lucide-react';
+import { Disc3 } from 'lucide-react';
 import { systemAPI } from '../utils/api';
 import { useI18n } from '../i18n';
 
@@ -19,6 +19,7 @@ import { useI18n } from '../i18n';
 const SetupWizard = ({ onComplete }) => {
   const { t } = useI18n();
   const [apInfo, setApInfo] = useState(null); // { ssid, psk } from provision status
+  const [deviceIp, setDeviceIp] = useState(null);
   const doneRef = useRef(false);
 
   useEffect(() => {
@@ -42,7 +43,25 @@ const SetupWizard = ({ onComplete }) => {
     };
     poll();
     const id = setInterval(poll, 3000);
-    return () => { alive = false; clearInterval(id); };
+
+    // The device's own IP, not just the hostname: hifiplayer.local is
+    // ambiguous the moment more than one Osmium Sound unit is on the same
+    // network (mDNS resolves to whichever one answers first) — the IP is
+    // always unambiguous, so it's what the fallback QR should encode.
+    const pollIp = async () => {
+      try {
+        const res = await systemAPI.getNetworkStatus();
+        if (alive && res.success && res.data?.ip) { setDeviceIp(res.data.ip); return; }
+        const info = await systemAPI.getSystemInfo();
+        if (alive && info.success && info.data?.local_ip && info.data.local_ip !== 'Unknown') {
+          setDeviceIp(info.data.local_ip);
+        }
+      } catch (_) {}
+    };
+    pollIp();
+    const ipId = setInterval(pollIp, 5000);
+
+    return () => { alive = false; clearInterval(id); clearInterval(ipId); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -71,9 +90,17 @@ const SetupWizard = ({ onComplete }) => {
               <span className="text-black text-xs mt-2">{apInfo.ssid}</span>
             </div>
           ) : (
-            <div className="flex flex-col items-center text-hifi-silver/60">
-              <Server size={32} className="mb-3" />
-              <p className="text-sm">http://hifiplayer.local</p>
+            // No hotspot info (yet) — still show a scannable QR pointing at the
+            // URL directly. Prefer the device's own IP over hifiplayer.local:
+            // the hostname is ambiguous the moment more than one Osmium Sound
+            // unit is on the same network (mDNS answers with whichever
+            // responds first), the IP never is.
+            <div className="inline-flex flex-col items-center bg-white rounded-2xl p-4">
+              <QRCodeSVG value={`http://${deviceIp || 'hifiplayer.local'}`} size={180} />
+              <span className="text-black text-xs mt-2">
+                {deviceIp ? `http://${deviceIp}` : 'http://hifiplayer.local'}
+              </span>
+              {deviceIp && <span className="text-black/50 text-[10px] mt-0.5">http://hifiplayer.local</span>}
             </div>
           )}
         </motion.div>
