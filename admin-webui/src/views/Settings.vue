@@ -728,13 +728,35 @@ async function downloadBackup(id) {
   }
 }
 
+// Restore runs in a background thread on the appliance (writing files back —
+// a Lyrion profile is thousands of tiny ones — a pre-restore safety snapshot,
+// and restarting whichever services own what was restored, up to and
+// including hifi-webui itself if the restored file was webui.db). Polling its
+// status is what tells "still working" apart from "actually stuck", the same
+// way pollBackupStatus() does for the other direction.
+async function pollRestoreStatus() {
+  for (let i = 0; i < 600; i++) {
+    await new Promise((resolve) => setTimeout(resolve, 1500));
+    const r = await api.restoreStatus();
+    if (!r.ok) continue;
+    const s = r.data;
+    if (s.state === 'done') { say(s.message || t('settings.backup.restored')); break; }
+    if (s.state === 'error') { say(s.message || t('settings.backup.restoreFailed'), true); break; }
+    say((s.message || t('settings.backup.restoring')) + (typeof s.progress === 'number' ? ' ' + s.progress + '%' : ''));
+  }
+  loadBackups();
+}
+
 async function restoreGen(gen) {
   if (!confirm(t('settings.backup.restoreConfirm'))) return;
   say(t('settings.backup.restoring'));
   const r = await api.backupRestore(gen.id, backupPass.value, null);
-  say(bodyMsg(r, r.ok && r.data.success !== false ? t('settings.backup.restored') : t('settings.backup.restoreFailed')),
-      !(r.ok && r.data.success !== false));
-  loadBackups();
+  if (!(r.ok && r.data.started)) {
+    say(bodyMsg(r, t('settings.backup.restoreFailed')), true);
+    loadBackups();
+    return;
+  }
+  await pollRestoreStatus();
 }
 
 async function deleteGen(gen) {
@@ -750,9 +772,12 @@ async function uploadRestore(e) {
   if (!confirm(t('settings.backup.restoreConfirm'))) return;
   say(t('settings.backup.restoring'));
   const r = await api.restoreUpload(file, backupPass.value, null);
-  say(bodyMsg(r, r.ok && r.data.success !== false ? t('settings.backup.restored') : t('settings.backup.restoreFailed')),
-      !(r.ok && r.data.success !== false));
-  loadBackups();
+  if (!(r.ok && r.data.started)) {
+    say(bodyMsg(r, t('settings.backup.restoreFailed')), true);
+    loadBackups();
+    return;
+  }
+  await pollRestoreStatus();
 }
 
 async function saveBackupScheduled(v) {

@@ -91,6 +91,7 @@ export const api = {
   backupRestore: (id, passphrase, categories) =>
     req('/api/system/backup/' + id + '/restore', { method: 'POST', body: { passphrase, categories } }),
   backupDownloadUrl: (id) => (id ? '/api/system/backup/' + id : '/api/system/backup'),
+  restoreStatus: () => req('/api/system/restore/status'),
   restoreUpload: async (file, passphrase, categories) => {
     const body = new FormData();
     body.append('file', file);

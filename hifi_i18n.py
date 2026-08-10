@@ -246,6 +246,7 @@ MESSAGES = {
     'backup.systemUpdateRequired': {'en': 'A system update is required',
                                     'it': 'Aggiornamento di sistema richiesto'},
     'backup.alreadyInProgress': {'en': 'A backup is already in progress', 'it': 'Backup già in corso'},
+    'restore.alreadyInProgress': {'en': 'A restore is already in progress', 'it': 'Ripristino già in corso'},
 
     # ── webui_server.py: api_server proxy unreachable ───────────────
     'proxy.serviceUnavailable': {'en': 'Service unavailable', 'it': 'Servizio non disponibile'},

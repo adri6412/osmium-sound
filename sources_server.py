@@ -963,8 +963,21 @@ def apply_to_lyrion(state):
 # Building an archive is delegated to /usr/local/sbin/hifi-backup-run.py via
 # systemd-run (same detached-worker + /run status-file shape as the disk format
 # and CD rip jobs), because it walks the whole Lyrion prefs tree and can take
-# long enough to hold an HTTP worker hostage. Restoring stays synchronous: it
-# is a handful of small files plus, at worst, a Lyrion stop/start.
+# long enough to hold an HTTP worker hostage. Restoring used to stay
+# synchronous on the theory that it only ever touches "a handful of small
+# files plus, at worst, a Lyrion stop/start" — wrong in practice: a full
+# profile restore writes back the same thousands-of-tiny-files Lyrion prefs/
+# playlists tree a backup reads, takes its OWN pre-restore safety snapshot
+# inline first (another full archive build), and can restart squeezelite,
+# CamillaDSP, NetworkManager, Samba and hifi-webui along the way. Held in an
+# HTTP request, that ran long enough to look hung, with zero feedback on which
+# of those steps it was actually doing — and if the restored file was
+# webui.db, the last of those restarts kills hifi-webui itself, i.e. the very
+# process proxying the request for the web-admin UI, abruptly dropping the
+# connection the browser was waiting on. So restore now runs in a background
+# thread (in-process — unlike backup it never needs to survive sources_server
+# itself restarting, so systemd-run isn't needed) reporting progress to
+# RESTORE_STATUS_FILE exactly like the backup job does, polled the same way.
 #
 # The archive itself is still an allow-list on BOTH sides — a restore never
 # uses the tar member's own path verbatim, only regular files are ever opened,
@@ -992,6 +1005,33 @@ MAX_RESTORE_MEMBERS = 20000
 # members, since that has to happen before any per-member size check can run.
 MAX_RESTORE_ARCHIVE_SIZE = 64 * 1024 * 1024
 
+# Same shape as hb.STATUS_FILE, own file: a restore and a backup can never run
+# at once (the restore path calls _snapshot_before_restore inline, and the
+# scheduled/manual backup guard would otherwise fight it), but keeping them
+# separate means each polling loop only ever sees its own job's progress.
+RESTORE_STATUS_FILE = "/run/hifi-restore-status.json"
+_RESTORE_LOCK = threading.Lock()
+
+
+def _restore_status():
+    try:
+        with open(RESTORE_STATUS_FILE) as f:
+            return json.load(f)
+    except Exception:
+        return {"state": "idle"}
+
+
+def _write_restore_status(state, progress, message, **extra):
+    payload = {"state": state, "progress": progress, "message": message}
+    payload.update(extra)
+    tmp = RESTORE_STATUS_FILE + ".tmp"
+    try:
+        with open(tmp, "w") as f:
+            json.dump(payload, f)
+        os.replace(tmp, RESTORE_STATUS_FILE)
+    except OSError as e:
+        print(f"[sources] impossibile scrivere lo stato restore: {e}")
+
 
 def _backup_status():
     try:
@@ -1010,19 +1050,25 @@ def _passphrase_ok(value):
 
 
 # ── restore ──────────────────────────────────────────────────────────
-def _restore_members(tar, manifest, categories):
+def _restore_members(tar, manifest, categories, progress_cb=None):
     """Write back every member that the selected categories allow.
 
     Returns (restored_paths, errors). Integrity is checked per member against
     the manifest before anything touches the filesystem — the failure mode a
     checksum-free backup tool has (a silently corrupted file restored over a
     good one) is the whole reason this is here.
+
+    progress_cb, if given, is called as progress_cb(done, total) every 50
+    members — a Lyrion profile is thousands of tiny files, so without this a
+    restore's status just sits on "Ripristino file..." for however long that
+    takes, indistinguishable from actually being stuck.
     """
     restored, errors = [], []
     digests = (manifest or {}).get("members") or {}
     members = tar.getmembers()
     if len(members) > MAX_RESTORE_MEMBERS:
         return [], ["Archivio non valido (troppi file)"]
+    total = len(members)
 
     current_sources = None
     if os.path.isfile(STATE_FILE):
@@ -1032,7 +1078,9 @@ def _restore_members(tar, manifest, categories):
         except OSError:
             pass
 
-    for member in members:
+    for i, member in enumerate(members):
+        if progress_cb and i % 50 == 0:
+            progress_cb(i, total)
         if not member.isfile():
             continue  # dirs, symlinks, devices: never followed, never created
         if member.size > MAX_RESTORE_MEMBER_SIZE:
@@ -1067,6 +1115,8 @@ def _restore_members(tar, manifest, categories):
         except Exception as e:
             print(f"[sources] restore failed for {dest}: {e}")
             errors.append(f"{os.path.basename(dest)}: ripristino fallito")
+    if progress_cb:
+        progress_cb(total, total)
     return restored, errors
 
 
@@ -1163,12 +1213,21 @@ def _restore_apply_side_effects(restored):
     return notes
 
 
-def _restore_from_path(path, passphrase, requested_categories):
-    """Open a backup file (either shape), apply it, return (payload, status)."""
+def _restore_from_path(path, passphrase, requested_categories, report=None):
+    """Open a backup file (either shape), apply it, return (payload, status).
+
+    report, if given, is called as report(state, progress, message) at each
+    stage — see RESTORE_STATUS_FILE / _write_restore_status. Defaults to a
+    no-op so this stays callable on its own (e.g. from a test) without a
+    status file in play.
+    """
+    if report is None:
+        report = lambda *a, **kw: None  # noqa: E731
     workdir = tempfile.mkdtemp(prefix="hifi-restore-", dir="/run")
     os.chmod(workdir, 0o700)
     tar = None
     try:
+        report("opening", 20, "Apertura archivio…")
         try:
             tar, manifest = hb.open_backup(path, workdir, passphrase)
         except hb.BackupError as e:
@@ -1190,18 +1249,24 @@ def _restore_from_path(path, passphrase, requested_categories):
 
         lyrion_stopped = False
         if "lyrion" in categories:
+            report("stopping_lyrion", 25, "Arresto di Lyrion…")
             _stop_lyrion()
             lyrion_stopped = True
         try:
-            restored, errors = _restore_members(tar, manifest, categories)
+            def _member_progress(done, total):
+                pct = 30 + int(done / total * 45) if total else 30
+                report("restoring", pct, f"Ripristino file… ({done}/{total})")
+            restored, errors = _restore_members(tar, manifest, categories, _member_progress)
         finally:
             if lyrion_stopped:
+                report("starting_lyrion", 80, "Riavvio di Lyrion…")
                 _chown_lyrion(_lyrion_paths_touched(restored if restored else []))
                 _start_lyrion()
 
         if not restored and errors:
             return {"success": False, "message": "; ".join(errors)}, 400
 
+        report("applying", 90, "Applicazione modifiche (rete, DSP, servizi)…")
         notes = _restore_apply_side_effects(restored)
         msg = f"{len(restored)} file ripristinati."
         if notes:
@@ -1257,6 +1322,49 @@ def _snapshot_before_restore():
         return None
 
 
+def _run_restore_async(path, passphrase, categories, workdir_to_clean=None):
+    """Background-thread body for a restore job. Runs in-process (unlike the
+    backup job, restore never needs to survive sources_server itself dying —
+    nothing it does restarts this process — so a plain daemon thread is enough,
+    no systemd-run/status-file-on-tmpfs-for-a-separate-process needed beyond the
+    status file itself, which exists purely so polling requests don't have to
+    share state with this thread directly)."""
+    try:
+        _write_restore_status("preparing", 5, "Preparazione…")
+        _write_restore_status("snapshotting", 10, "Backup di sicurezza pre-ripristino…")
+        _snapshot_before_restore()
+
+        def report(state, progress, message):
+            _write_restore_status(state, progress, message)
+
+        payload, status = _restore_from_path(path, passphrase, categories, report)
+        if status == 200 and payload.get("success"):
+            _write_restore_status("done", 100, payload.get("message", "Ripristino completato."),
+                                  restored=payload.get("restored"), categories=payload.get("categories"))
+        else:
+            _write_restore_status("error", 0, payload.get("message", "Ripristino fallito"))
+    except Exception as e:
+        print(f"[sources] restore job failed: {e}")
+        _write_restore_status("error", 0, f"Ripristino fallito: {e}")
+    finally:
+        if workdir_to_clean:
+            shutil.rmtree(workdir_to_clean, ignore_errors=True)
+        _RESTORE_LOCK.release()
+
+
+def _start_restore(path, passphrase, categories, workdir_to_clean=None):
+    """Start a restore job in the background. Returns None on success, or a
+    (payload, status) error pair if one is already running."""
+    if not _RESTORE_LOCK.acquire(blocking=False):
+        return {"success": False, "code": "restore.alreadyInProgress",
+                "message": _ht('restore.alreadyInProgress', _hlang())}, 409
+    _write_restore_status("preparing", 0, "Avvio…")
+    threading.Thread(target=_run_restore_async,
+                     args=(path, passphrase, categories, workdir_to_clean),
+                     daemon=True, name="restore-worker").start()
+    return None
+
+
 # ── routes ───────────────────────────────────────────────────────────
 @app.route("/api/backup", methods=["GET"])
 def api_backup():
@@ -1302,6 +1410,12 @@ def api_backup_create():
                         "message": _ht('backup.systemUpdateRequired', _hlang())}), 424
     if _backup_status().get("state") in ("preparing", "checking", "archiving",
                                          "encrypting", "finishing"):
+        return jsonify({"success": False, "code": "backup.alreadyInProgress",
+                        "message": _ht('backup.alreadyInProgress', _hlang())}), 409
+    if _restore_status().get("state") not in ("idle", "done", "error", None):
+        # A restore takes its own pre-restore snapshot via the same STORE_DIR
+        # (hb.build_archive/rotate) a manual backup would touch — let it finish
+        # rather than racing two writers over the same generations directory.
         return jsonify({"success": False, "code": "backup.alreadyInProgress",
                         "message": _ht('backup.alreadyInProgress', _hlang())}), 409
 
@@ -1432,24 +1546,27 @@ def api_backup_restore(gen_id):
     if not _passphrase_ok(passphrase):
         return jsonify({"success": False, "message": "Passphrase non valida"}), 400
 
-    path = hb.archive_path(hb.STORE_DIR, gen_id, manifest)
+    stored_path = hb.archive_path(hb.STORE_DIR, gen_id, manifest)
+    path, workdir = stored_path, None
     if manifest.get("enc"):
         # The stored ciphertext has no wrapper; hand open_backup the manifest
         # by building one on the fly, so both entry points take the same road.
+        # The wrapper lives in its own workdir, which the restore job cleans
+        # up itself once it's actually done reading from it.
         workdir = tempfile.mkdtemp(prefix="hifi-restore-src-", dir="/run")
+        path = os.path.join(workdir, "wrapper.tar.gz")
         try:
-            wrapper = os.path.join(workdir, "wrapper.tar.gz")
-            hb.wrap_encrypted(wrapper, manifest, path)
-            _snapshot_before_restore()
-            payload, status = _restore_from_path(wrapper, passphrase,
-                                                 data.get("categories"))
-        finally:
+            hb.wrap_encrypted(path, manifest, stored_path)
+        except Exception as e:
             shutil.rmtree(workdir, ignore_errors=True)
-        return jsonify(payload), status
+            return jsonify({"success": False, "message": f"Preparazione ripristino fallita: {e}"}), 500
 
-    _snapshot_before_restore()
-    payload, status = _restore_from_path(path, passphrase, data.get("categories"))
-    return jsonify(payload), status
+    err = _start_restore(path, passphrase, data.get("categories"), workdir)
+    if err:
+        if workdir:
+            shutil.rmtree(workdir, ignore_errors=True)
+        return jsonify(err[0]), err[1]
+    return jsonify({"success": True, "started": True}), 202
 
 
 @app.route("/api/backup/settings", methods=["GET", "POST"])
@@ -1478,6 +1595,14 @@ def api_backup_settings():
     return jsonify({"success": True, **settings})
 
 
+@app.route("/api/restore/status", methods=["GET"])
+def api_restore_status():
+    denied = _require_pair_token()
+    if denied:
+        return denied
+    return jsonify(_restore_status())
+
+
 @app.route("/api/restore", methods=["POST"])
 def api_restore():
     denied = _require_pair_token()
@@ -1497,15 +1622,14 @@ def api_restore():
 
     workdir = tempfile.mkdtemp(prefix="hifi-upload-", dir="/run")
     os.chmod(workdir, 0o700)
-    try:
-        upload = os.path.join(workdir, "upload.tar.gz")
-        with open(upload, "wb") as out:
-            out.write(archive_bytes)
-        _snapshot_before_restore()
-        payload, status = _restore_from_path(upload, passphrase, categories)
-    finally:
+    upload = os.path.join(workdir, "upload.tar.gz")
+    with open(upload, "wb") as out:
+        out.write(archive_bytes)
+    err = _start_restore(upload, passphrase, categories, workdir)
+    if err:
         shutil.rmtree(workdir, ignore_errors=True)
-    return jsonify(payload), status
+        return jsonify(err[0]), err[1]
+    return jsonify({"success": True, "started": True}), 202
 
 
 # ─────────────────────────── Room correction (FIR filter) ────────────
@@ -3375,10 +3499,27 @@ async function doRestore(input){
   if(backupPass()) body.append('passphrase', backupPass());
   try{
     const d=await j('/api/restore',{method:'POST',body});
-    m.textContent=d.message||(d.success?T('sources.applied'):T('sources.error')); m.className='msg '+(d.success?'ok':'bad');
-    loadBackups();
+    if(d.success===false){ m.textContent=d.message||T('sources.error'); m.className='msg bad'; input.value=''; return; }
+    await pollRestore();
+    load();
   }catch(e){ m.textContent=T('sources.networkError'); m.className='msg bad'; }
   input.value='';
+}
+
+// Same poll-a-status-file shape as pollBackup() — restore runs in a
+// background thread on the appliance precisely so this can show what step
+// it's actually on (stopping Lyrion, writing files, restarting services)
+// instead of a single "restoring..." message that looks identical whether
+// it's working or stuck.
+async function pollRestore(){
+  const m=document.getElementById('restoreMsg');
+  for(let i=0;i<600;i++){
+    await new Promise(r=>setTimeout(r,1500));
+    let s; try{ s=await j('/api/restore/status'); }catch(e){ continue; }
+    if(s.state==='done'){ m.textContent=s.message||T('sources.applied'); m.className='msg ok'; loadBackups(); return; }
+    if(s.state==='error'){ m.textContent=s.message||T('sources.error'); m.className='msg bad'; loadBackups(); return; }
+    m.textContent=(s.message||T('sources.restoring'))+(typeof s.progress==='number'?' '+s.progress+'%':'');
+  }
 }
 
 async function createBackup(){
@@ -3441,8 +3582,9 @@ async function restoreGen(i){
   try{
     const d=await j('/api/backup/'+g.id+'/restore',{method:'POST',headers:{'Content-Type':'application/json'},
                                                     body:JSON.stringify({passphrase:backupPass()})});
-    m.textContent=d.message||(d.success?T('sources.applied'):T('sources.error')); m.className='msg '+(d.success?'ok':'bad');
-    load(); loadBackups();
+    if(d.success===false){ m.textContent=d.message||T('sources.error'); m.className='msg bad'; return; }
+    await pollRestore();
+    load();
   }catch(e){ m.textContent=T('sources.networkError'); m.className='msg bad'; }
 }
 

@@ -1721,6 +1721,14 @@ def restore_proxy():
     return _forward_to_sources('/api/restore')
 
 
+@app.route('/api/system/restore/status', methods=['GET'])
+def restore_status_proxy():
+    denied = _require_session()
+    if denied:
+        return denied
+    return _forward_to_sources('/api/restore/status')
+
+
 # ── support bundle (zip) — session-gated, forwarded raw ──────────────
 # Binary download, so it can't go through the generic JSON proxy table
 # (_handle_proxy always wraps the response in jsonify()). Same trust level as
