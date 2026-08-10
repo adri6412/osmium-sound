@@ -303,3 +303,106 @@ jobs:
       - name: Deploy to GitHub Pages
         id: pages-deployment
         uses: actions/deploy-pages@v5
+
+  fdroid-dev-repo:
+    name: Publish F-Droid Dev Repo
+    runs-on: ubuntu-latest
+    needs: build
+    # Dev builds only (tag "companion-vX.Y.Z-svilN") — the opt-in counterpart
+    # of fdroid-repo above, published to a separate repo/URL so stable-only
+    # users never see these as an "update". Mutually exclusive with
+    # fdroid-repo: a given tag triggers exactly one of the two jobs.
+    if: startsWith(github.ref, 'refs/tags/companion-v') && contains(github.ref, '-svil')
+    environment:
+      name: github-pages
+      url: ${{ steps.pages-deployment.outputs.page_url }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      - name: Download built APK
+        uses: actions/download-artifact@v8
+        with:
+          name: HiFiMediaPlayer-APK
+          path: release-artifacts
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: '3.11'
+
+      - name: Install fdroidserver
+        run: pip install fdroidserver
+
+      - name: Fetch existing F-Droid dev repo state from gh-pages
+        run: |
+          git fetch origin gh-pages:refs/remotes/origin/gh-pages
+          git worktree add /tmp/gh-pages origin/gh-pages
+          mkdir -p fdroid-dev/repo
+          # Same reasoning as the stable job: only restore previous APKs, not
+          # index/graphics, so `fdroid update` regenerates those fresh. This
+          # dev repo's APK history lives under fdroid/dev/repo on gh-pages,
+          # kept separate from the stable repo's fdroid/repo.
+          if [ -d /tmp/gh-pages/fdroid/dev/repo ]; then
+            find /tmp/gh-pages/fdroid/dev/repo -maxdepth 1 -name '*.apk' -exec cp -a {} fdroid-dev/repo/ \;
+          fi
+
+      - name: Decode repo signing keystore
+        run: echo "${{ secrets.FDROID_REPO_KEYSTORE }}" | base64 -d > fdroid-dev/keystore.p12
+
+      - name: Copy new APK into repo
+        run: cp release-artifacts/*.apk fdroid-dev/repo/
+
+      - name: Mirror app metadata from the stable repo
+        # Title/description/icon/screenshots are maintained once, under
+        # fdroid/metadata/ — this dev repo reuses them as-is rather than
+        # keeping a second copy in git that could drift out of sync.
+        run: cp -r fdroid/metadata fdroid-dev/metadata
+
+      - name: Write repo signing password into config.yml
+        working-directory: fdroid-dev
+        env:
+          FDROID_REPO_KEYSTORE_PASSWORD: ${{ secrets.FDROID_REPO_KEYSTORE_PASSWORD }}
+        run: |
+          {
+            echo "keystorepass: \"$FDROID_REPO_KEYSTORE_PASSWORD\""
+            echo "keypass: \"$FDROID_REPO_KEYSTORE_PASSWORD\""
+          } >> config.yml
+
+      - name: Update F-Droid dev index
+        working-directory: fdroid-dev
+        run: fdroid update --create-metadata --verbose
+
+      - name: Remove keystore before publishing
+        if: always()
+        run: rm -f fdroid-dev/keystore.p12
+
+      - name: Publish F-Droid dev repo to gh-pages
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./fdroid-dev/repo
+          destination_dir: fdroid/dev/repo
+          publish_branch: gh-pages
+          # keep_files so this doesn't wipe website/, ota/, or the stable
+          # fdroid/repo published on the same branch.
+          keep_files: true
+          cname: osmiumsound.qd.je
+
+      # Same "Pages source is build_type workflow" situation as the stable
+      # job above — re-checkout what was just pushed and deploy it explicitly.
+      - name: Checkout updated gh-pages for Actions-based Pages deploy
+        uses: actions/checkout@v7
+        with:
+          ref: gh-pages
+          path: gh-pages-deploy
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: gh-pages-deploy
+
+      - name: Deploy to GitHub Pages
+        id: pages-deployment
+        uses: actions/deploy-pages@v5

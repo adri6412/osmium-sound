@@ -73,6 +73,12 @@ Not published on the Google Play Store. Ships as a signed APK (sideload) or
 via the self-hosted F-Droid repo at `https://osmiumsound.qd.je/fdroid/repo` —
 see the [website](https://osmiumsound.qd.je/#android) for details.
 
+There's also an **opt-in dev repo**, `https://osmiumsound.qd.je/fdroid/dev/repo`,
+fed by every `companion-vX.Y.Z-svilN` tag (same app, not tested to the same
+standard as stable). Add it manually in the F-Droid client (Settings →
+Repositories → add repository) only if you want early builds — it's separate
+from, and doesn't affect, the stable repo above.
+
 ## License
 
 This application is released under the **Apache License, Version 2.0**. See [`docs/LICENSE.md`](docs/LICENSE.md) for the full license text.
