@@ -1,41 +1,41 @@
 {
-  "tag_name": "v2.5.21-dev.68-alpha10",
-  "name": "v2.5.21-dev.68-alpha10",
-  "body": "## What's new in v2.5.21-dev.68-alpha10\n\n- fix(provision): setup-wizard restore skipped Lyrion install entirely\n- fix(player): force a fresh DOM node for now-playing cover art on track change\n- fix(backup): restore left the admin-webui on a stale session, not auto-refreshed\n",
+  "tag_name": "v2.5.21-dev.68-alpha11",
+  "name": "v2.5.21-dev.68-alpha11",
+  "body": "## What's new in v2.5.21-dev.68-alpha11\n\n- feat(ota): report live download progress instead of a frozen percentage\n- feat(provision): let the setup wizard name the player (hostname + LMS name)\n",
   "assets": [
     {
-      "name": "hifi-ui-v2.5.21-dev.68-alpha10.tar.gz",
-      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.68-alpha10/hifi-ui-v2.5.21-dev.68-alpha10.tar.gz",
-      "size": 134014737
+      "name": "hifi-ui-v2.5.21-dev.68-alpha11.tar.gz",
+      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.68-alpha11/hifi-ui-v2.5.21-dev.68-alpha11.tar.gz",
+      "size": 134016699
     },
     {
-      "name": "hifi-ui-v2.5.21-dev.68-alpha10.tar.gz.sha256",
-      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.68-alpha10/hifi-ui-v2.5.21-dev.68-alpha10.tar.gz.sha256",
+      "name": "hifi-ui-v2.5.21-dev.68-alpha11.tar.gz.sha256",
+      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.68-alpha11/hifi-ui-v2.5.21-dev.68-alpha11.tar.gz.sha256",
       "size": 104
     },
     {
-      "name": "hifi-system-v2.5.21-dev.68-alpha10.tar.gz",
-      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.68-alpha10/hifi-system-v2.5.21-dev.68-alpha10.tar.gz",
-      "size": 274534
+      "name": "hifi-system-v2.5.21-dev.68-alpha11.tar.gz",
+      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.68-alpha11/hifi-system-v2.5.21-dev.68-alpha11.tar.gz",
+      "size": 277473
     },
     {
-      "name": "hifi-system-v2.5.21-dev.68-alpha10.tar.gz.sha256",
-      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.68-alpha10/hifi-system-v2.5.21-dev.68-alpha10.tar.gz.sha256",
+      "name": "hifi-system-v2.5.21-dev.68-alpha11.tar.gz.sha256",
+      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.68-alpha11/hifi-system-v2.5.21-dev.68-alpha11.tar.gz.sha256",
       "size": 108
     },
     {
-      "name": "hifi-os-v2.5.21-dev.68-alpha10.tar.gz",
-      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.68-alpha10/hifi-os-v2.5.21-dev.68-alpha10.tar.gz",
-      "size": 1196260
+      "name": "hifi-os-v2.5.21-dev.68-alpha11.tar.gz",
+      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.68-alpha11/hifi-os-v2.5.21-dev.68-alpha11.tar.gz",
+      "size": 1196265
     },
     {
-      "name": "hifi-os-v2.5.21-dev.68-alpha10.tar.gz.sha256",
-      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.68-alpha10/hifi-os-v2.5.21-dev.68-alpha10.tar.gz.sha256",
+      "name": "hifi-os-v2.5.21-dev.68-alpha11.tar.gz.sha256",
+      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.68-alpha11/hifi-os-v2.5.21-dev.68-alpha11.tar.gz.sha256",
       "size": 104
     },
     {
-      "name": "hifi-os-v2.5.21-dev.68-alpha10.tar.gz.sha256.sig",
-      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.68-alpha10/hifi-os-v2.5.21-dev.68-alpha10.tar.gz.sha256.sig",
+      "name": "hifi-os-v2.5.21-dev.68-alpha11.tar.gz.sha256.sig",
+      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.68-alpha11/hifi-os-v2.5.21-dev.68-alpha11.tar.gz.sha256.sig",
       "size": 64
     }
   ]
