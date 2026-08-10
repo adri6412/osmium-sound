@@ -34,6 +34,12 @@
     <string name="settings_pair_confirm_title">Associare a questo apparecchio?</string>
     <string name="settings_pair_confirm_message">Questo codice QR associa l\'app all\'apparecchio all\'indirizzo %1$s. Una volta associato, questo telefono potrà controllarlo da remoto — incluso riavvio, SSH e backup/ripristino. Continua solo se hai inquadrato il codice dallo schermo dell\'apparecchio.</string>
     <string name="settings_pair_confirm_button">Associa</string>
+    <string name="settings_scan_qr_retry">Scansiona di nuovo</string>
+    <string name="settings_advanced_options">Opzioni avanzate (utente, password, Wake-on-LAN)</string>
+    <string name="wizard_step_label">Passo %1$d di %2$d – %3$s</string>
+    <string name="wizard_step_title_scan">Scansiona il codice QR</string>
+    <string name="wizard_step_title_confirm">Conferma abbinamento</string>
+    <string name="wizard_step_title_ready">Pronto per connettersi</string>
     <string name="settings_camera_permission_required">Per scansionare un codice QR serve il permesso di accesso alla fotocamera</string>
 
     <string name="settings_theme_title">Tema</string>

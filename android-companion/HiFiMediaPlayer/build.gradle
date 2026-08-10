@@ -59,8 +59,8 @@ android {
         minSdkVersion rootProject.minSdkVersion
         targetSdkVersion rootProject.targetSdkVersion
 
-        versionCode 16
-        versionName "1.0.7-svil2"
+        versionCode 17
+        versionName "1.0.7-svil3"
 
         vectorDrawables.useSupportLibrary = true
         multiDexEnabled true

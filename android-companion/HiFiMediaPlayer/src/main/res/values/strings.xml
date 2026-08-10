@@ -39,6 +39,12 @@
     <string name="settings_pair_confirm_title">Pair with this appliance?</string>
     <string name="settings_pair_confirm_message">This QR code is pairing the app with the appliance at %1$s. Once paired, this phone will be able to control it remotely — including reboot, SSH, and backup/restore. Only continue if you scanned this from the appliance\'s own screen.</string>
     <string name="settings_pair_confirm_button">Pair</string>
+    <string name="settings_scan_qr_retry">Scan again</string>
+    <string name="settings_advanced_options">Advanced options (username, password, Wake-on-LAN)</string>
+    <string name="wizard_step_label">Step %1$d of %2$d – %3$s</string>
+    <string name="wizard_step_title_scan">Scan the QR code</string>
+    <string name="wizard_step_title_confirm">Confirm pairing</string>
+    <string name="wizard_step_title_ready">Ready to connect</string>
     <string name="settings_camera_permission_required">Camera permission is required to scan a QR code</string>
     <string name="settings_theme_title">Theme</string>
     <string name="settings_theme_dark">Dark</string>
