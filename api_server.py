@@ -801,6 +801,73 @@ def set_player_name(name):
             pass
     return {'success': True, 'name': name, 'message': _t('player.nameSet', _lang(), name=name)}
 
+# ── Device name — Linux hostname + player name, set together ──────────
+# Every appliance ships from the ISO with the same hardcoded hostname
+# ("hifiplayer", baked into /etc/hostname at build time by
+# 0100-system-setup.hook.chroot) and the same default player name
+# ("OsmiumSound"), so two units on one LAN collide on both hifiplayer.local
+# (avahi falls back to hifiplayer-2.local, silently confusing) and the
+# multiroom picker. Letting the owner pick one name in the setup wizard and
+# applying it to both fixes both at once. Stricter charset than
+# _PLAYER_NAME_RE on purpose — this becomes a DNS/mDNS label, which
+# _PLAYER_NAME_RE's dot/underscore aren't safe for.
+_HOSTNAME_RE = re.compile(r'^[A-Za-z0-9]([A-Za-z0-9-]{0,30}[A-Za-z0-9])?$')
+
+def _valid_device_name(name):
+    return bool(isinstance(name, str) and _HOSTNAME_RE.match(name))
+
+def _set_etc_hosts_hostname(name):
+    """Replace (or insert) the 127.0.1.1 line in /etc/hosts to match `name`.
+    Best-effort: a failure here only means `sudo` prints a cosmetic "unable
+    to resolve host" warning, not worth failing the whole rename over."""
+    try:
+        try:
+            with open('/etc/hosts') as f:
+                lines = f.readlines()
+        except FileNotFoundError:
+            lines = []
+        out, seen = [], False
+        for line in lines:
+            if re.match(r'^\s*127\.0\.1\.1\s', line):
+                out.append(f'127.0.1.1\t{name}\n')
+                seen = True
+            else:
+                out.append(line)
+        if not seen:
+            out.append(f'127.0.1.1\t{name}\n')
+        with open('/etc/hosts', 'w') as f:
+            f.writelines(out)
+    except Exception:
+        log.exception("_set_etc_hosts_hostname failed")
+
+def get_device_name():
+    return {'name': socket.gethostname()}
+
+def set_device_name(name):
+    if not _valid_device_name(name):
+        return {'success': False, 'code': 'device.invalidName',
+                'message': _t('device.invalidName', _lang())}
+    try:
+        r = _run(['hostnamectl', 'set-hostname', name], timeout=10)
+        if r.returncode != 0:
+            return {'success': False, 'code': 'device.hostnameSetFailed',
+                    'message': _t('device.hostnameSetFailed', _lang())}
+    except Exception:
+        log.exception("set_device_name: hostnamectl failed")
+        return {'success': False, 'code': 'device.hostnameSetFailed',
+                'message': _t('device.hostnameSetFailed', _lang())}
+    _set_etc_hosts_hostname(name)
+    try:
+        # So the new <name>.local is announced immediately, without waiting
+        # for a reboot — avahi-daemon doesn't watch /etc/hostname on its own.
+        _run(['systemctl', 'restart', 'avahi-daemon'], timeout=15)
+    except Exception:
+        log.exception("set_device_name: avahi restart failed")
+    # Keep the LMS/Bluetooth-facing name in sync too. _HOSTNAME_RE's charset
+    # is a subset of _PLAYER_NAME_RE's, so this always validates.
+    set_player_name(name)
+    return {'success': True, 'name': name, 'message': _t('device.nameSet', _lang(), name=name)}
+
 # ── LAN discovery of other Lyrion/LMS servers ──────────────────────
 # Native Slim/Squeezebox discovery protocol (UDP 3483): broadcast a single
 # 'e' probe, any Lyrion/LMS instance on the same broadcast domain answers
@@ -4231,6 +4298,15 @@ def api_player_name():
 def api_set_player_name():
     data = request.get_json(silent=True) or {}
     return jsonify(set_player_name(data.get('name')))
+
+@app.route('/device_name', methods=['GET'])
+def api_device_name():
+    return jsonify(get_device_name())
+
+@app.route('/device_name', methods=['POST'])
+def api_set_device_name():
+    data = request.get_json(silent=True) or {}
+    return jsonify(set_device_name((data.get('name') or '').strip()))
 
 @app.route('/discover_lms', methods=['GET'])
 def api_discover_lms():

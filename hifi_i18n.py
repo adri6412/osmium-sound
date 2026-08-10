@@ -71,6 +71,15 @@ MESSAGES = {
     'player.enabled': {'en': 'Player enabled.', 'it': 'Player abilitato.'},
     'player.disabled': {'en': 'Player disabled.', 'it': 'Player disabilitato.'},
 
+    # ── Device name (hostname + player name, set together) ────────────
+    'device.invalidName': {'en': 'Invalid name: letters, numbers and dashes only, no spaces '
+                                  '(max 32 characters, cannot start or end with a dash)',
+                           'it': 'Nome non valido: solo lettere, numeri e trattini, senza spazi '
+                                 '(max 32 caratteri, non può iniziare o finire con un trattino)'},
+    'device.hostnameSetFailed': {'en': 'Could not set the device name.',
+                                 'it': 'Impossibile impostare il nome del dispositivo.'},
+    'device.nameSet': {'en': 'Device name set to {name}', 'it': 'Nome dispositivo impostato su {name}'},
+
     # ── SSH ──────────────────────────────────────────────────────────
     'ssh.installFailed': {'en': 'Could not install openssh-server.',
                           'it': 'Impossibile installare openssh-server.'},
