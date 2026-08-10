@@ -1,41 +1,41 @@
 {
-  "tag_name": "v2.5.21-dev.68-alpha8",
-  "name": "v2.5.21-dev.68-alpha8",
-  "body": "## What's new in v2.5.21-dev.68-alpha8\n\n- fix(distro): 0038-etc-hosts.sh reported false failure on a clean no-op\n- fix(backup): restore ran synchronously in the request, looking hung\n- fix(updates): reboot mid-plan made the update UI give up before UI step ran\n- fix(distro): /etc/hosts never got the hostname entry \u2014 self-heal + build fix\n",
+  "tag_name": "v2.5.21-dev.68-alpha9",
+  "name": "v2.5.21-dev.68-alpha9",
+  "body": "## What's new in v2.5.21-dev.68-alpha9\n\n- fix(backup): restore also broke pointer/UI-resolution prefs the same way\n- fix(backup): restore left Lyrion plugin files unreadable, breaking Material skin\n- fix(backup): note that Lyrion keeps scanning after a restore, so it isn't mistaken for stuck\n",
   "assets": [
     {
-      "name": "hifi-ui-v2.5.21-dev.68-alpha8.tar.gz",
-      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.68-alpha8/hifi-ui-v2.5.21-dev.68-alpha8.tar.gz",
-      "size": 134015543
+      "name": "hifi-ui-v2.5.21-dev.68-alpha9.tar.gz",
+      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.68-alpha9/hifi-ui-v2.5.21-dev.68-alpha9.tar.gz",
+      "size": 134015667
     },
     {
-      "name": "hifi-ui-v2.5.21-dev.68-alpha8.tar.gz.sha256",
-      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.68-alpha8/hifi-ui-v2.5.21-dev.68-alpha8.tar.gz.sha256",
+      "name": "hifi-ui-v2.5.21-dev.68-alpha9.tar.gz.sha256",
+      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.68-alpha9/hifi-ui-v2.5.21-dev.68-alpha9.tar.gz.sha256",
       "size": 103
     },
     {
-      "name": "hifi-system-v2.5.21-dev.68-alpha8.tar.gz",
-      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.68-alpha8/hifi-system-v2.5.21-dev.68-alpha8.tar.gz",
-      "size": 272397
+      "name": "hifi-system-v2.5.21-dev.68-alpha9.tar.gz",
+      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.68-alpha9/hifi-system-v2.5.21-dev.68-alpha9.tar.gz",
+      "size": 274180
     },
     {
-      "name": "hifi-system-v2.5.21-dev.68-alpha8.tar.gz.sha256",
-      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.68-alpha8/hifi-system-v2.5.21-dev.68-alpha8.tar.gz.sha256",
+      "name": "hifi-system-v2.5.21-dev.68-alpha9.tar.gz.sha256",
+      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.68-alpha9/hifi-system-v2.5.21-dev.68-alpha9.tar.gz.sha256",
       "size": 107
     },
     {
-      "name": "hifi-os-v2.5.21-dev.68-alpha8.tar.gz",
-      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.68-alpha8/hifi-os-v2.5.21-dev.68-alpha8.tar.gz",
-      "size": 1196255
+      "name": "hifi-os-v2.5.21-dev.68-alpha9.tar.gz",
+      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.68-alpha9/hifi-os-v2.5.21-dev.68-alpha9.tar.gz",
+      "size": 1196267
     },
     {
-      "name": "hifi-os-v2.5.21-dev.68-alpha8.tar.gz.sha256",
-      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.68-alpha8/hifi-os-v2.5.21-dev.68-alpha8.tar.gz.sha256",
+      "name": "hifi-os-v2.5.21-dev.68-alpha9.tar.gz.sha256",
+      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.68-alpha9/hifi-os-v2.5.21-dev.68-alpha9.tar.gz.sha256",
       "size": 103
     },
     {
-      "name": "hifi-os-v2.5.21-dev.68-alpha8.tar.gz.sha256.sig",
-      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.68-alpha8/hifi-os-v2.5.21-dev.68-alpha8.tar.gz.sha256.sig",
+      "name": "hifi-os-v2.5.21-dev.68-alpha9.tar.gz.sha256.sig",
+      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.68-alpha9/hifi-os-v2.5.21-dev.68-alpha9.tar.gz.sha256.sig",
       "size": 64
     }
   ]
