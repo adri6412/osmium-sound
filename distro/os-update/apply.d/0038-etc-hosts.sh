@@ -32,4 +32,6 @@ if ! grep -Eq "^[[:space:]]*127\.0\.1\.1[[:space:]]" "$HOSTS" 2>/dev/null; then
     changed=1
 fi
 
-[ "$changed" = 1 ] && mark_changed "populated $HOSTS for $HOST"
+if [ "$changed" = 1 ]; then
+    mark_changed "populated $HOSTS for $HOST"
+fi
