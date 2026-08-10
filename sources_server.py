@@ -3198,6 +3198,7 @@ INDEX_HTML = r"""<!DOCTYPE html>
     <div class="msg" id="smbMsg"></div>
   </div>
 
+  <div id="backupSection">
   <h2 data-i18n="sources.backupTitle"></h2>
   <div class="card">
     <p style="color:var(--silver);font-size:13px;margin:0 0 10px" data-i18n="sources.backupHint"></p>
@@ -3225,6 +3226,7 @@ INDEX_HTML = r"""<!DOCTYPE html>
     </div>
     <p style="color:var(--silver);font-size:12px;margin:6px 0 0" data-i18n="sources.backupScheduledHint"></p>
   </div>
+  </div>
 </div>
 
 <!-- The gold button is an ACTION, not a counter: the caption says what it does,
@@ -3249,6 +3251,17 @@ INDEX_HTML = r"""<!DOCTYPE html>
 const QS = new URLSearchParams(location.search);
 const PAIR_TOKEN = QS.get('token') || '';
 const LANG = document.documentElement.lang || 'it';
+// Reached mid first-boot setup (webui_server.py's captive page links here
+// with ?setup=1): backup/restore doesn't belong here — the wizard already
+// asked "restore from backup or start fresh" as its very first step, before
+// this page even exists — and Apply shouldn't force an immediate Lyrion
+// restart/scan, since the wizard applies the final source list itself, once,
+// right before handing off to Lyrion's own setup wizard.
+const SETUP_MODE = QS.get('setup') === '1';
+if (SETUP_MODE) {
+  const bs = document.getElementById('backupSection');
+  if (bs) bs.style.display = 'none';
+}
 
 // ── i18n ────────────────────────────────────────────────────────────
 // Strings for the selected language are injected server-side (see _req_lang);
@@ -3451,7 +3464,17 @@ async function saveBackupSettings(){
   }catch(e){ m.textContent=T('sources.networkError'); m.className='msg bad'; }
 }
 async function apply(){
-  const m=document.getElementById('applyMsg'); m.textContent=T('sources.applying'); m.className='msg';
+  const m=document.getElementById('applyMsg');
+  if (SETUP_MODE) {
+    // Sources are already persisted by each add/remove call above — what
+    // /api/apply additionally does is push mediadirs into Lyrion's prefs and
+    // restart it, which is also what triggers Lyrion's own scan-on-restart.
+    // The wizard does that exactly once, right before handing off to
+    // Lyrion's own setup wizard, so it isn't duplicated here.
+    m.textContent=T('sources.applied'); m.className='msg ok';
+    return;
+  }
+  m.textContent=T('sources.applying'); m.className='msg';
   const r=await j('/api/apply',{method:'POST'});
   m.textContent=r.message||(r.success?T('sources.applied'):T('sources.error')); m.className='msg '+(r.success?'ok':'bad');
 }
