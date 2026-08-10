@@ -740,7 +740,17 @@ async function pollRestoreStatus() {
     const r = await api.restoreStatus();
     if (!r.ok) continue;
     const s = r.data;
-    if (s.state === 'done') { say(s.message || t('settings.backup.restored')); break; }
+    if (s.state === 'done') {
+      say(s.message || t('settings.backup.restored'));
+      // A restored webui.db invalidates this very session server-side
+      // (hifi-webui reopens the database it just got restarted with), so a
+      // stale page here can't just keep going — reload so the browser
+      // re-authenticates on its own and lands back on /login if needed.
+      // Harmless when the session is still valid too: just re-fetches
+      // whatever changed.
+      setTimeout(() => window.location.reload(), 1200);
+      return;
+    }
     if (s.state === 'error') { say(s.message || t('settings.backup.restoreFailed'), true); break; }
     say((s.message || t('settings.backup.restoring')) + (typeof s.progress === 'number' ? ' ' + s.progress + '%' : ''));
   }

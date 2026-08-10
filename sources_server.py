@@ -1274,9 +1274,11 @@ def _restore_apply_side_effects(restored):
         notes.append("Reti Wi-Fi ricaricate")
     if "/etc/hifi-player/webui.db" in restored:
         # The admin account changed underneath the running daemon; restart so
-        # it reopens the database, and expect the operator to log in again.
+        # it reopens the database. No note here — restarting hifi-webui.service
+        # is not "the appliance restarted" (it doesn't reboot anything), and
+        # admin-webui reloads itself on a successful restore anyway, which
+        # lands the operator back on the login page on its own.
         _run(["systemctl", "restart", "hifi-webui"], timeout=30)
-        notes.append("Web admin riavviato (nuovo login necessario)")
     if SAMBA_CRED_FILE in restored:
         # The restored file's `synced` flag describes whichever machine's
         # Samba passdb it was written on, not this one's — _create_samba_user
