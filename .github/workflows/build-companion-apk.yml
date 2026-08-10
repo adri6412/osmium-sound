@@ -61,7 +61,7 @@ jobs:
       - name: Create GitHub Release
         # v2: make_latest isn't a valid input on v1 (build-ui-ota.yml is
         # already on v2 for the same reason).
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         if: startsWith(github.ref, 'refs/tags/')
         with:
           # Companion releases must NEVER become the repo's "latest"

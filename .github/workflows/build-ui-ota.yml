@@ -249,7 +249,7 @@ jobs:
 
       - name: Publish to GitHub Release
         if: github.ref_type == 'tag'
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           # A tag with a hyphen (e.g. v2.5.7-dev.1) is a prerelease → the dev
           # OTA channel. GitHub's /releases/latest (used by the prod channel)
