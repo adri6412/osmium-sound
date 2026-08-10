@@ -32,6 +32,15 @@ set -eu
 # Don't leak downloaded bytes to other local users while we work on them.
 umask 077
 
+# Optional: only for hifi_curl_progress (progress-reporting curl wrapper used
+# below) — this script deliberately does NOT call hifi_log_init, so it keeps
+# its existing logging behaviour (persist_apply_log below) untouched.
+if [ -r /usr/local/sbin/hifi-log.sh ]; then
+    # shellcheck source=distro/config/includes.chroot/usr/local/sbin/hifi-log.sh
+    # shellcheck disable=SC1091  # absolute target, only present on the appliance
+    . /usr/local/sbin/hifi-log.sh
+fi
+
 URL="${1:-}"
 SHA="${2:-}"
 SIG_URL="${3:-}"
@@ -103,7 +112,6 @@ openssl pkey -pubin -in "$PUBKEY" -text -noout 2>/dev/null | grep -qi 'ED25519' 
     || fail "Chiave pubblica OTA non è Ed25519: verifica rifiutata"
 
 # ── download ─────────────────────────────────────────────────────────
-write_status downloading 10 "Scaricamento aggiornamento OS $VERSION…"
 # Create a private, unpredictable workdir (avoid symlink/preplaced-file races in
 # the world-writable /var/tmp).
 WORKDIR=$(mktemp -d /var/tmp/hifi-os-ota.XXXXXX) || fail "mktemp fallito"
@@ -112,8 +120,15 @@ SHAFILE="$WORKDIR/hifi-os.sha256"
 SIGFILE="$WORKDIR/hifi-os.sha256.sig"
 PAYLOAD="$WORKDIR/payload"
 mkdir -p "$PAYLOAD"
-curl -fL --retry 3 --proto '=https' --proto-redir '=https' --tlsv1.2 --max-filesize "$MAX_TARBALL_BYTES" \
-    -o "$TARBALL" "$URL"     || fail "Download fallito da $URL"
+if command -v hifi_curl_progress >/dev/null 2>&1; then
+    hifi_curl_progress "$URL" "$TARBALL" 10 25 "Scaricamento aggiornamento OS $VERSION…" \
+        --proto '=https' --proto-redir '=https' --tlsv1.2 --max-filesize "$MAX_TARBALL_BYTES" \
+        || fail "Download fallito da $URL"
+else
+    write_status downloading 10 "Scaricamento aggiornamento OS $VERSION…"
+    curl -fL --retry 3 --proto '=https' --proto-redir '=https' --tlsv1.2 --max-filesize "$MAX_TARBALL_BYTES" \
+        -o "$TARBALL" "$URL" || fail "Download fallito da $URL"
+fi
 curl -fL --retry 3 --proto '=https' --proto-redir '=https' --tlsv1.2 --max-filesize "$MAX_SIG_BYTES" \
     -o "$SIGFILE" "$SIG_URL" || fail "Download firma fallito da $SIG_URL"
 

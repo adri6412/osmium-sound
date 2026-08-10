@@ -53,10 +53,15 @@ fail() {
 [ -n "$SHA" ] || fail "Checksum sha256 mancante"
 
 # ── download ─────────────────────────────────────────────────────────
-write_status downloading 10 "Scaricamento aggiornamento $VERSION…"
 rm -rf "$WORKDIR"; mkdir -p "$WORKDIR"
-curl -fL --retry 3 -o "$TARBALL" "$URL" \
-    || fail "Download fallito da $URL"
+if command -v hifi_curl_progress >/dev/null 2>&1; then
+    hifi_curl_progress "$URL" "$TARBALL" 10 40 "Scaricamento aggiornamento $VERSION…" \
+        || fail "Download fallito da $URL"
+else
+    write_status downloading 10 "Scaricamento aggiornamento $VERSION…"
+    curl -fL --retry 3 -o "$TARBALL" "$URL" \
+        || fail "Download fallito da $URL"
+fi
 
 # ── verify ───────────────────────────────────────────────────────────
 write_status verifying 40 "Verifica integrità…"

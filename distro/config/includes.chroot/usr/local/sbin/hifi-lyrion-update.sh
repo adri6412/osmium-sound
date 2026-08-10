@@ -33,9 +33,9 @@ fail() {
 
 [ -n "$URL" ] || fail "URL di download mancante"
 
-write_status downloading 20 "Scaricamento Lyrion $VERSION…"
 rm -rf "$WORKDIR"; mkdir -p "$WORKDIR"
-curl -fL --retry 3 -o "$DEB" "$URL" || fail "Download fallito da $URL"
+hifi_curl_progress "$URL" "$DEB" 20 55 "Scaricamento Lyrion $VERSION…" \
+    || fail "Download fallito da $URL"
 
 # sanity-check it is really a .deb (download errors often yield HTML)
 head -c2 "$DEB" | grep -q '!<' || fail "Il file scaricato non è un .deb valido"
