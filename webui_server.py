@@ -1203,6 +1203,26 @@ def _boot_mode():
 #    network + mode endpoints above. Each simply forwards to the already-
 #    authenticated-by-loopback api_server/sources_server endpoint the regular
 #    Settings UI uses, gated here by _provisioning() instead of a session. ──
+@app.route('/api/provision/pointer', methods=['GET'])
+def provision_pointer_get():
+    if not _provisioning():
+        return jsonify({'success': False, 'code': 'provision.notInProgress',
+                        'message': _wt('provision.notInProgress', _lang())}), 409
+    body, status = _proxy(API_BASE, '/pointer_status', method='GET')
+    return jsonify(body), status
+
+
+@app.route('/api/provision/pointer', methods=['POST'])
+def provision_pointer_set():
+    if not _provisioning():
+        return jsonify({'success': False, 'code': 'provision.notInProgress',
+                        'message': _wt('provision.notInProgress', _lang())}), 409
+    data = request.get_json(silent=True) or {}
+    body, status = _proxy(API_BASE, '/pointer_set', method='POST',
+                          body={'enable': bool(data.get('enable'))}, timeout=20)
+    return jsonify(body), status
+
+
 @app.route('/api/provision/audio_devices', methods=['GET'])
 def provision_audio_devices():
     if not _provisioning():
@@ -1868,6 +1888,13 @@ SETUP_CAPTIVE_HTML = """<!doctype html><html lang="en"><head><meta charset="utf-
  <p class="muted" id="modehelp">In headless/server-only you manage everything from this web interface.</p>
 </div>
 
+<div class="card" id="step-pointer" style="display:none">
+ <label id="lbl-pointer">Mouse pointer</label>
+ <p class="muted" id="pointer-help">Show the mouse cursor on screen? Leave it off for a touchscreen — turn it on if you're driving this device with a mouse.</p>
+ <button onclick="setPointer(false)" id="btn-pointer-hide">Touchscreen (hide pointer)</button>
+ <button class="sec" onclick="setPointer(true)" id="btn-pointer-show">Mouse (show pointer)</button>
+</div>
+
 <div class="card" id="step-audio" style="display:none">
  <label id="lbl-audio">Audio output</label>
  <div id="audiodevs"></div>
@@ -1899,8 +1926,8 @@ SETUP_CAPTIVE_HTML = """<!doctype html><html lang="en"><head><meta charset="utf-
 
 <div class="card" id="step-sources" style="display:none">
  <label id="lbl-sources">Music sources</label>
- <p class="muted" id="sources-intro">Manage local, network (SMB) and USB sources on the full sources page — it opens in a new tab, come back here when you're done. Optional: you can also do this later from Settings. Lyrion's own setup wizard scans the library once you finish here.</p>
- <button onclick="openSourcesApp()" id="btn-sources-manage">Manage music sources</button>
+ <p class="muted" id="sources-intro">Manage local, network (SMB) and USB sources below. Optional: you can also do this later from Settings. Lyrion's own setup wizard scans the library once you finish here.</p>
+ <iframe id="sources-iframe" style="width:100%;height:60vh;min-height:380px;border:0;border-radius:10px;background:#1a1e26"></iframe>
  <button class="sec" onclick="show('step-timezone');loadTimezone()" id="btn-sources-continue">Continue</button>
 </div>
 
@@ -1918,8 +1945,8 @@ SETUP_CAPTIVE_HTML = """<!doctype html><html lang="en"><head><meta charset="utf-
 
 <script>
 var STRINGS={
- en:{restoreIntro:'Setting up a new device? Restore a previous backup, or start fresh.',fresh:'Start fresh',restoreFile:'Backup file',restorePass:'Passphrase (if the backup is encrypted)',restore:'Restore from backup',restoring:'Restoring…',restoreDone:'Restore complete. Rebooting to apply it — reconnect in about a minute.',restoreFailed:'Restore failed.',restoreNoFile:'Choose a backup file first.',wifi:'Wi-Fi network',ssid:'Or enter the network name (SSID)',pass:'Wi-Fi password',connect:'Connect via Wi-Fi',wired:"I'm connected via cable (Ethernet)",connecting:'Connecting… the setup Wi-Fi will turn off. Reconnect your phone to your home network, then open https://hifiplayer.local to continue setup where you left off.',noCable:'No cable detected',mode:'Device mode',modeGui:'With screen (touchscreen)',modeHeadless:'Headless (no screen)',modeOff:'Server only (player off)',modeHelp:'In headless/server-only you manage everything from this web interface.',audio:'Audio output',audioContinue:'Continue',lyrion:'Music server (Lyrion)',lyrionLocal:'Use this device as the server',lyrionFollow:'Use a server already on my network',lyrionHost:'Server address',lyrionUse:'Use this server',lyrionInstall:'Install Lyrion',lyrionChecking:'Checking whether Lyrion Music Server is installed…',lyrionMissing:"Lyrion Music Server isn't installed yet.",lyrionInstalling:'Installing Lyrion Music Server…',continueAnyway:'Continue anyway',sources:'Music sources',sourcesIntro:"Manage local, network (SMB) and USB sources on the full sources page — it opens in a new tab, come back here when you're done. Optional: you can also do this later from Settings. Lyrion's own setup wizard scans the library once you finish here.",sourcesManage:'Manage music sources',continueBtn:'Continue',timezone:'Time zone',tzSave:'Save and continue',finishGui:'Screen mode set. Setup is complete — press "Complete setup" below: the hotspot will turn off, reconnect your phone to your network. The device will then start its normal on-screen interface.',finishHeadless:'Headless mode set. Press "Complete setup" below: the hotspot will turn off, reconnect your phone to your network and open https://hifiplayer.local',finishOff:'Server-only mode set — this device will not play audio locally. Press "Complete setup" below: the hotspot will turn off, reconnect your phone to your network and open https://hifiplayer.local',finishBtn:'Complete setup',finishDone:'Setup complete — hotspot off. Open https://hifiplayer.local from your network.',error:'Error: '},
- it:{restoreIntro:'Stai configurando un nuovo dispositivo? Ripristina un backup precedente, oppure inizia da zero.',fresh:'Inizia da zero',restoreFile:'File di backup',restorePass:'Passphrase (se il backup è cifrato)',restore:'Ripristina da backup',restoring:'Ripristino in corso…',restoreDone:'Ripristino completato. Riavvio in corso per applicarlo — riconnettiti tra circa un minuto.',restoreFailed:'Ripristino non riuscito.',restoreNoFile:'Scegli prima un file di backup.',wifi:'Rete Wi-Fi',ssid:'Oppure inserisci il nome (SSID)',pass:'Password Wi-Fi',connect:'Connetti via Wi-Fi',wired:'Sono connesso via cavo (Ethernet)',connecting:'Connessione in corso… il Wi-Fi di setup si spegnerà. Riconnetti il telefono alla tua rete di casa, poi apri https://hifiplayer.local per continuare la configurazione da dove l\\'hai lasciata.',noCable:'Nessun cavo rilevato',mode:'Modalità dispositivo',modeGui:'Con schermo (touchscreen)',modeHeadless:'Headless (senza schermo)',modeOff:'Solo server (player spento)',modeHelp:'In headless/solo server gestisci tutto da questa interfaccia web.',audio:'Uscita audio',audioContinue:'Continua',lyrion:'Server musicale (Lyrion)',lyrionLocal:'Usa questo dispositivo come server',lyrionFollow:'Usa un server già presente sulla rete',lyrionHost:'Indirizzo del server',lyrionUse:'Usa questo server',lyrionInstall:'Installa Lyrion',lyrionChecking:'Verifica se Lyrion Music Server è installato…',lyrionMissing:'Lyrion Music Server non è ancora installato.',lyrionInstalling:'Installazione di Lyrion Music Server…',continueAnyway:'Continua comunque',sources:'Sorgenti musicali',sourcesIntro:'Gestisci sorgenti locali, di rete (SMB) e USB dalla pagina sorgenti completa — si apre in una nuova scheda, torna qui una volta finito. Facoltativo: puoi farlo anche più tardi dalle Impostazioni. La scansione della libreria la fa il setup wizard di Lyrion una volta terminato qui.',sourcesManage:'Gestisci sorgenti musicali',continueBtn:'Continua',timezone:'Fuso orario',tzSave:'Salva e continua',finishGui:'Modalità con schermo impostata. Il setup è completo — premi "Completa setup" qui sotto: l\\'hotspot si spegnerà, riconnetti il telefono alla tua rete. Il dispositivo avvierà poi la sua normale interfaccia a schermo.',finishHeadless:'Modalità headless impostata. Premi "Completa setup" qui sotto: l\\'hotspot si spegnerà, riconnetti il telefono alla tua rete e apri https://hifiplayer.local',finishOff:'Modalità solo server impostata — questo dispositivo non riprodurrà audio in locale. Premi "Completa setup" qui sotto: l\\'hotspot si spegnerà, riconnetti il telefono alla tua rete e apri https://hifiplayer.local',finishBtn:'Completa setup',finishDone:'Setup completato — hotspot spento. Apri https://hifiplayer.local dalla tua rete.',error:'Errore: '}
+ en:{restoreIntro:'Setting up a new device? Restore a previous backup, or start fresh.',fresh:'Start fresh',restoreFile:'Backup file',restorePass:'Passphrase (if the backup is encrypted)',restore:'Restore from backup',restoring:'Restoring…',restoreDone:'Restore complete. Rebooting to apply it — reconnect in about a minute.',restoreFailed:'Restore failed.',restoreNoFile:'Choose a backup file first.',wifi:'Wi-Fi network',ssid:'Or enter the network name (SSID)',pass:'Wi-Fi password',connect:'Connect via Wi-Fi',wired:"I'm connected via cable (Ethernet)",connecting:'Connecting… the setup Wi-Fi will turn off. Reconnect your phone to your home network, then open https://hifiplayer.local to continue setup where you left off.',noCable:'No cable detected',mode:'Device mode',modeGui:'With screen (touchscreen)',modeHeadless:'Headless (no screen)',modeOff:'Server only (player off)',modeHelp:'In headless/server-only you manage everything from this web interface.',pointer:'Mouse pointer',pointerHelp:"Show the mouse cursor on screen? Leave it off for a touchscreen — turn it on if you're driving this device with a mouse.",pointerHide:'Touchscreen (hide pointer)',pointerShow:'Mouse (show pointer)',audio:'Audio output',audioContinue:'Continue',lyrion:'Music server (Lyrion)',lyrionLocal:'Use this device as the server',lyrionFollow:'Use a server already on my network',lyrionHost:'Server address',lyrionUse:'Use this server',lyrionInstall:'Install Lyrion',lyrionChecking:'Checking whether Lyrion Music Server is installed…',lyrionMissing:"Lyrion Music Server isn't installed yet.",lyrionInstalling:'Installing Lyrion Music Server…',continueAnyway:'Continue anyway',sources:'Music sources',sourcesIntro:"Manage local, network (SMB) and USB sources below. Optional: you can also do this later from Settings. Lyrion's own setup wizard scans the library once you finish here.",continueBtn:'Continue',timezone:'Time zone',tzSave:'Save and continue',finishGui:'Screen mode set. Setup is complete — press "Complete setup" below: the hotspot will turn off, reconnect your phone to your network. The device will then start its normal on-screen interface.',finishHeadless:'Headless mode set. Press "Complete setup" below: the hotspot will turn off, reconnect your phone to your network and open https://hifiplayer.local',finishOff:'Server-only mode set — this device will not play audio locally. Press "Complete setup" below: the hotspot will turn off, reconnect your phone to your network and open https://hifiplayer.local',finishBtn:'Complete setup',finishDone:'Setup complete — hotspot off. Open https://hifiplayer.local from your network.',error:'Error: '},
+ it:{restoreIntro:'Stai configurando un nuovo dispositivo? Ripristina un backup precedente, oppure inizia da zero.',fresh:'Inizia da zero',restoreFile:'File di backup',restorePass:'Passphrase (se il backup è cifrato)',restore:'Ripristina da backup',restoring:'Ripristino in corso…',restoreDone:'Ripristino completato. Riavvio in corso per applicarlo — riconnettiti tra circa un minuto.',restoreFailed:'Ripristino non riuscito.',restoreNoFile:'Scegli prima un file di backup.',wifi:'Rete Wi-Fi',ssid:'Oppure inserisci il nome (SSID)',pass:'Password Wi-Fi',connect:'Connetti via Wi-Fi',wired:'Sono connesso via cavo (Ethernet)',connecting:'Connessione in corso… il Wi-Fi di setup si spegnerà. Riconnetti il telefono alla tua rete di casa, poi apri https://hifiplayer.local per continuare la configurazione da dove l\\'hai lasciata.',noCable:'Nessun cavo rilevato',mode:'Modalità dispositivo',modeGui:'Con schermo (touchscreen)',modeHeadless:'Headless (senza schermo)',modeOff:'Solo server (player spento)',modeHelp:'In headless/solo server gestisci tutto da questa interfaccia web.',pointer:'Puntatore del mouse',pointerHelp:'Mostrare il cursore del mouse a schermo? Lascialo spento per un touchscreen — accendilo se usi il dispositivo con un mouse.',pointerHide:'Touchscreen (nascondi puntatore)',pointerShow:'Mouse (mostra puntatore)',audio:'Uscita audio',audioContinue:'Continua',lyrion:'Server musicale (Lyrion)',lyrionLocal:'Usa questo dispositivo come server',lyrionFollow:'Usa un server già presente sulla rete',lyrionHost:'Indirizzo del server',lyrionUse:'Usa questo server',lyrionInstall:'Installa Lyrion',lyrionChecking:'Verifica se Lyrion Music Server è installato…',lyrionMissing:'Lyrion Music Server non è ancora installato.',lyrionInstalling:'Installazione di Lyrion Music Server…',continueAnyway:'Continua comunque',sources:'Sorgenti musicali',sourcesIntro:'Gestisci sorgenti locali, di rete (SMB) e USB qui sotto. Facoltativo: puoi farlo anche più tardi dalle Impostazioni. La scansione della libreria la fa il setup wizard di Lyrion una volta terminato qui.',continueBtn:'Continua',timezone:'Fuso orario',tzSave:'Salva e continua',finishGui:'Modalità con schermo impostata. Il setup è completo — premi "Completa setup" qui sotto: l\\'hotspot si spegnerà, riconnetti il telefono alla tua rete. Il dispositivo avvierà poi la sua normale interfaccia a schermo.',finishHeadless:'Modalità headless impostata. Premi "Completa setup" qui sotto: l\\'hotspot si spegnerà, riconnetti il telefono alla tua rete e apri https://hifiplayer.local',finishOff:'Modalità solo server impostata — questo dispositivo non riprodurrà audio in locale. Premi "Completa setup" qui sotto: l\\'hotspot si spegnerà, riconnetti il telefono alla tua rete e apri https://hifiplayer.local',finishBtn:'Completa setup',finishDone:'Setup completato — hotspot spento. Apri https://hifiplayer.local dalla tua rete.',error:'Errore: '}
 };
 var LANG=(new URLSearchParams(location.search).get('lang')||'en');
 if(STRINGS[LANG]===undefined)LANG='en';
@@ -1940,6 +1967,10 @@ document.getElementById('btn-mode-gui').textContent=S.modeGui;
 document.getElementById('btn-mode-headless').textContent=S.modeHeadless;
 document.getElementById('btn-mode-off').textContent=S.modeOff;
 document.getElementById('modehelp').textContent=S.modeHelp;
+document.getElementById('lbl-pointer').textContent=S.pointer;
+document.getElementById('pointer-help').textContent=S.pointerHelp;
+document.getElementById('btn-pointer-hide').textContent=S.pointerHide;
+document.getElementById('btn-pointer-show').textContent=S.pointerShow;
 document.getElementById('lbl-audio').textContent=S.audio;
 document.getElementById('btn-audio-skip').textContent=S.audioContinue;
 document.getElementById('lbl-lyrion').textContent=S.lyrion;
@@ -1952,12 +1983,11 @@ document.getElementById('btn-lyrion-install').textContent=S.lyrionInstall;
 document.getElementById('btn-lyrion-install-skip').textContent=S.continueAnyway;
 document.getElementById('lbl-sources').textContent=S.sources;
 document.getElementById('sources-intro').textContent=S.sourcesIntro;
-document.getElementById('btn-sources-manage').textContent=S.sourcesManage;
 document.getElementById('btn-sources-continue').textContent=S.continueBtn;
 document.getElementById('lbl-timezone').textContent=S.timezone;
 document.getElementById('btn-tz-save').textContent=S.tzSave;
 
-var STEPS=['step-restore','step-net','step-mode','step-audio','step-lyrion','step-lyrion-install','step-sources','step-timezone','step-finish'];
+var STEPS=['step-restore','step-net','step-mode','step-pointer','step-audio','step-lyrion','step-lyrion-install','step-sources','step-timezone','step-finish'];
 var lyrionMode='local';
 var netPhaseDone=false;
 function h(){return {'X-CSRF-Token':(document.cookie.match(/csrf=([^;]+)/)||[])[1]||'','X-UI-Lang':LANG}}
@@ -2002,9 +2032,15 @@ function useWired(){jpost('/api/provision/use_wired',{}).then(function(res){
 function claim(m){jpost('/api/provision/claim_mode',{mode:m,source:'web'}).then(function(res){
   if(!res.success){return}
   window._chosenMode=m;
-  loadAudio();
-  show('step-audio');
+  // Pointer visibility only means anything with an actual screen — headless
+  // and server-only skip straight to audio.
+  if(m==='gui'){show('step-pointer')}else{loadAudio();show('step-audio')}
 })}
+function setPointer(enable){
+  jpost('/api/provision/pointer',{enable:enable}).then(function(){
+    loadAudio();show('step-audio');
+  });
+}
 
 function loadAudio(){
   jget('/api/provision/audio_devices').then(function(res){
@@ -2047,7 +2083,7 @@ function checkLyrionInstall(){
   document.getElementById('lyrion-install-barwrap').style.display='none';
   jget('/api/provision/lyrion_check').then(function(res){
     var cur=res&&res.current;
-    if(cur&&cur!=='unknown'){show('step-sources');return}
+    if(cur&&cur!=='unknown'){showSourcesStep();return}
     document.getElementById('lyrion-install-msg').textContent=S.lyrionMissing;
     var sel=document.getElementById('lyrionchannel');sel.innerHTML='';
     var channels=(res&&res.channels)||{};
@@ -2080,17 +2116,19 @@ function pollLyrionInstall(){
   jget('/api/provision/lyrion_status').then(function(st){
     if(typeof st.progress==='number'){document.getElementById('lyrion-install-bar').style.width=st.progress+'%'}
     if(st.message){document.getElementById('lyrion-install-msg').textContent=st.message}
-    if(st.state==='done'){show('step-sources')}
+    if(st.state==='done'){showSourcesStep()}
     else if(st.state==='error'){
       document.getElementById('lyrion-install-msg').textContent=st.message||S.error;
       document.getElementById('btn-lyrion-install-skip').style.display='block';
     }else{setTimeout(pollLyrionInstall,1500)}
   });
 }
-function skipLyrionInstall(){show('step-sources')}
+function skipLyrionInstall(){showSourcesStep()}
 
-function openSourcesApp(){
-  window.open('/api/provision/sources_app?lang='+encodeURIComponent(LANG),'_blank');
+function showSourcesStep(){
+  var f=document.getElementById('sources-iframe');
+  if(!f.src){f.src='/api/provision/sources_app?lang='+encodeURIComponent(LANG)}
+  show('step-sources');
 }
 
 function loadTimezone(){

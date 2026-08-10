@@ -952,6 +952,20 @@ def set_ssh(enable):
         # Written before the unit (re)starts, so root-login is blocked from
         # sshd's very first start.
         _harden_ssh_no_root_login()
+        # Guarantee host keys exist before the first start. openssh-server
+        # ships in the base image (disabled, not absent — see
+        # 0400-enable-services.hook.chroot), but that install happens inside
+        # the live-build chroot under policy-rc.d, which can leave host-key
+        # generation incomplete depending on exactly when/how the postinst
+        # ran at build time. `ssh-keygen -A` only fills in whatever's
+        # missing and is a no-op if every key type is already present — the
+        # single most common cause of systemd reporting "control process
+        # exited with error code" for sshd is starting with no host keys at
+        # all, so this is cheap insurance regardless of the exact reason.
+        try:
+            subprocess.run(['sudo', 'ssh-keygen', '-A'], capture_output=True, text=True, timeout=15)
+        except Exception:
+            log.exception("ssh-keygen -A failed")
     unit = _ssh_unit()
     action = 'enable' if enable else 'disable'
     try:
