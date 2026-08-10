@@ -1998,6 +1998,8 @@ document.getElementById('btn-tz-save').textContent=S.tzSave;
 var STEPS=['step-restore','step-net','step-mode','step-pointer','step-audio','step-lyrion','step-lyrion-install','step-sources','step-timezone','step-finish'];
 var lyrionMode='local';
 var netPhaseDone=false;
+var restoringFromBackup=false;
+var pendingRestoreFile=null;
 function h(){return {'X-CSRF-Token':(document.cookie.match(/csrf=([^;]+)/)||[])[1]||'','X-UI-Lang':LANG}}
 function show(id){STEPS.forEach(function(s){document.getElementById(s).style.display=(s===id?'block':'none')})}
 function jpost(p,b){return fetch(p,{method:'POST',headers:Object.assign({'Content-Type':'application/json'},h()),body:JSON.stringify(b||{})}).then(function(r){return r.json()})}
@@ -2018,6 +2020,21 @@ function startFresh(){show('step-net')}
 function restore(){
   var f=document.getElementById('restorefile').files[0];
   if(!f){document.getElementById('restoremsg').textContent=S.restoreNoFile;return}
+  // Ask which Lyrion version to install (and install it) before touching the
+  // backup — a restore only writes Lyrion's *prefs*, it never installs the
+  // package. Going straight to finalize/reboot as before left devices with a
+  // restored config but no Lyrion service to read it, relying on
+  // hifi-firstboot's own flaky first-boot install timing to paper over it.
+  pendingRestoreFile=f;
+  restoringFromBackup=true;
+  checkLyrionInstall();
+}
+
+function doRestoreUpload(){
+  var f=pendingRestoreFile;
+  // step-lyrion-install is the card on screen right now (checkLyrionInstall
+  // switched to it) — switch back so #restoremsg is actually visible.
+  show('step-restore');
   var fd=new FormData();fd.append('file',f);fd.append('passphrase',document.getElementById('restorepass').value);
   document.getElementById('restoremsg').textContent=S.restoring;
   fetch('/api/provision/restore',{method:'POST',headers:h(),body:fd}).then(function(r){return r.json()}).then(function(res){
@@ -2091,7 +2108,7 @@ function checkLyrionInstall(){
   document.getElementById('lyrion-install-barwrap').style.display='none';
   jget('/api/provision/lyrion_check').then(function(res){
     var cur=res&&res.current;
-    if(cur&&cur!=='unknown'){showSourcesStep();return}
+    if(cur&&cur!=='unknown'){afterLyrionInstall();return}
     document.getElementById('lyrion-install-msg').textContent=S.lyrionMissing;
     var sel=document.getElementById('lyrionchannel');sel.innerHTML='';
     var channels=(res&&res.channels)||{};
@@ -2124,14 +2141,18 @@ function pollLyrionInstall(){
   jget('/api/provision/lyrion_status').then(function(st){
     if(typeof st.progress==='number'){document.getElementById('lyrion-install-bar').style.width=st.progress+'%'}
     if(st.message){document.getElementById('lyrion-install-msg').textContent=st.message}
-    if(st.state==='done'){showSourcesStep()}
+    if(st.state==='done'){afterLyrionInstall()}
     else if(st.state==='error'){
       document.getElementById('lyrion-install-msg').textContent=st.message||S.error;
       document.getElementById('btn-lyrion-install-skip').style.display='block';
     }else{setTimeout(pollLyrionInstall,1500)}
   });
 }
-function skipLyrionInstall(){showSourcesStep()}
+function skipLyrionInstall(){afterLyrionInstall()}
+function afterLyrionInstall(){
+  if(restoringFromBackup){restoringFromBackup=false;doRestoreUpload();return}
+  showSourcesStep();
+}
 
 function showSourcesStep(){
   var f=document.getElementById('sources-iframe');
