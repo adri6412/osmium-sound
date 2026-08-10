@@ -1108,7 +1108,16 @@ const LyrionServer = () => {
                     <Music size={40} />
                   </div>
                 ) : (
-                  <img src={npArtwork.objectUrl} alt="Album Art" className="w-full h-full object-cover relative z-10" decoding="async" />
+                  // key=identity: on some weak-iGPU kiosks (reported: Intel Gemini
+                  // Lake; not reproduced on a VM or an older Intel box) Chromium's
+                  // compositor has been seen to leave the PREVIOUS track's pixels
+                  // on screen after only the <img> src attribute changes — the
+                  // element itself never got a new paint layer. Forcing a real
+                  // DOM remount (a fresh <img>, not an attribute mutation on the
+                  // same node) on every confirmed track change sidesteps that,
+                  // at the cost of a brief blank frame instead of a silently
+                  // wrong cover.
+                  <img key={artworkIdentityKey} src={npArtwork.objectUrl} alt="Album Art" className="w-full h-full object-cover relative z-10" decoding="async" />
                 )}
               </>
             ) : (
@@ -1116,7 +1125,7 @@ const LyrionServer = () => {
                 {artworkUrl && (
                   <div className="artwork-glow" style={{ backgroundImage: `url(${artworkUrl})` }} />
                 )}
-                <ArtworkImage src={artworkUrl} alt="Album Art" className="w-full h-full object-cover relative z-10" FallbackIcon={Music} />
+                <ArtworkImage key={artworkIdentityKey} src={artworkUrl} alt="Album Art" className="w-full h-full object-cover relative z-10" FallbackIcon={Music} />
               </>
             )}
             {activePlayer && (
@@ -1316,10 +1325,12 @@ const LyrionServer = () => {
                           <Music size={40} />
                         </div>
                       ) : (
-                        <img src={npArtworkLg.objectUrl} alt="Album Art" className="w-full h-full object-cover" decoding="async" />
+                        // key=identity — see the mini-player artwork's own comment
+                        // (same weak-iGPU stale-compositor workaround).
+                        <img key={artworkIdentityKey} src={npArtworkLg.objectUrl} alt="Album Art" className="w-full h-full object-cover" decoding="async" />
                       )
                     ) : (
-                      <ArtworkImage src={artworkUrlLg} alt="Album Art" className="w-full h-full object-cover" FallbackIcon={Music} />
+                      <ArtworkImage key={artworkIdentityKey} src={artworkUrlLg} alt="Album Art" className="w-full h-full object-cover" FallbackIcon={Music} />
                     )}
                   </div>
                 </motion.div>
