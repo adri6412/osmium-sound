@@ -1,12 +1,12 @@
 {
   "tag_name": "v2.5.21-dev.69",
   "name": "v2.5.21-dev.69",
-  "body": "## What's new in v2.5.21-dev.69\n\n- Minor fixes and internal improvements.\n",
+  "body": "## What's new in v2.5.21-dev.69\n\n- fix(provision): point wizard QR at device IP when wired ethernet is up\n",
   "assets": [
     {
       "name": "hifi-ui-v2.5.21-dev.69.tar.gz",
       "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.69/hifi-ui-v2.5.21-dev.69.tar.gz",
-      "size": 134016382
+      "size": 134016317
     },
     {
       "name": "hifi-ui-v2.5.21-dev.69.tar.gz.sha256",
@@ -16,7 +16,7 @@
     {
       "name": "hifi-system-v2.5.21-dev.69.tar.gz",
       "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.69/hifi-system-v2.5.21-dev.69.tar.gz",
-      "size": 278723
+      "size": 278729
     },
     {
       "name": "hifi-system-v2.5.21-dev.69.tar.gz.sha256",
