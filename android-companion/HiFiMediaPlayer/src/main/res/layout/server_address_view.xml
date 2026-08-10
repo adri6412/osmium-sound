@@ -30,7 +30,8 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_marginBottom="8dp"
-        android:textAppearance="?attr/textAppearanceLabelLarge"
+        android:textAppearance="@style/SqueezerTextAppearance.Medium"
+        android:textStyle="bold"
         android:textColor="?attr/colorPrimary"
         tools:text="Step 1 of 3 – Scan the QR code" />
 
@@ -46,7 +47,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:text="@string/settings_scan_qr_prompt"
-            android:textAppearance="?attr/textAppearanceBodyMedium" />
+            android:textAppearance="@style/SqueezerTextAppearance.Medium" />
 
         <com.google.android.material.button.MaterialButton
             android:id="@+id/scan_button"
@@ -75,7 +76,7 @@
                 android:id="@+id/confirm_message"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:textAppearance="?attr/textAppearanceBodyMedium"
+                android:textAppearance="@style/SqueezerTextAppearance.Medium"
                 tools:text="This QR code is pairing the app with the appliance at 192.168.1.50:8080." />
 
             <com.google.android.material.button.MaterialButton
