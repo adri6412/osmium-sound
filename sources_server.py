@@ -1005,6 +1005,28 @@ MAX_RESTORE_MEMBERS = 20000
 # members, since that has to happen before any per-member size check can run.
 MAX_RESTORE_ARCHIVE_SIZE = 64 * 1024 * 1024
 
+# _restore_members() writes every member 0600 root:root — the right default
+# for anything sensitive, but wrong for the handful of /etc/hifi-player files
+# the unprivileged "hifi" user's X session reads DIRECTLY off disk, before
+# Electron even starts and before the root API is anywhere in the loop:
+# ~/.xsession itself reads pointer-enabled, and hifi-ui-resolution.sh apply
+# (invoked from there) reads ui-resolution. Normal writes leave both 644
+# (api_server.py's set_pointer() uses a plain open(); hifi-ui-resolution.sh's
+# own `set` subcommand explicitly `chmod 644`s it) — restoring them 0600
+# silently reverts the kiosk session to its defaults (cursor always hidden;
+# no UI downscaling on large panels) regardless of what the backup actually
+# had, with no error anywhere pointing at why. Checked the rest of every
+# restored category for the same class of bug (root:0600 vs. what the actual
+# reader expects) — this is the only other case beyond the Lyrion plugin
+# cache: everything else here is read only by hifi-api/hifi-sources/hifi-webui
+# (root) or NetworkManager/CamillaDSP/squeezelite (also root; NM's connection
+# profiles are the one place 0600 is what's WANTED, and that's already forced
+# explicitly in _restore_apply_side_effects).
+WORLD_READABLE_RESTORES = frozenset((
+    "/etc/hifi-player/pointer-enabled",
+    "/etc/hifi-player/ui-resolution",
+))
+
 # Same shape as hb.STATUS_FILE, own file: a restore and a backup can never run
 # at once (the restore path calls _snapshot_before_restore inline, and the
 # scheduled/manual backup guard would otherwise fight it), but keeping them
@@ -1203,6 +1225,17 @@ def _chown_lyrion(paths):
             pass
 
 
+def _fix_restored_permissions(restored):
+    """Re-widen the handful of restored files a non-root reader needs — see
+    WORLD_READABLE_RESTORES. Best-effort, same as _chown_lyrion."""
+    for path in restored:
+        if path in WORLD_READABLE_RESTORES:
+            try:
+                os.chmod(path, 0o644)
+            except OSError:
+                pass
+
+
 def _restore_apply_side_effects(restored):
     """Re-apply the config that was just restored (best-effort, non-fatal)."""
     notes = []
@@ -1312,6 +1345,7 @@ def _restore_from_path(path, passphrase, requested_categories, report=None):
                 pct = 30 + int(done / total * 45) if total else 30
                 report("restoring", pct, f"Ripristino file… ({done}/{total})")
             restored, errors = _restore_members(tar, manifest, categories, _member_progress)
+            _fix_restored_permissions(restored)
         finally:
             if lyrion_stopped:
                 report("starting_lyrion", 80, "Riavvio di Lyrion…")
