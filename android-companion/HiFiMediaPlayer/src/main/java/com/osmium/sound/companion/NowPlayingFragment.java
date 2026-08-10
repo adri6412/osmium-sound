@@ -62,6 +62,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import com.osmium.sound.companion.appliance.ApplianceHttpClient;
 import com.osmium.sound.companion.dialog.AboutDialog;
 import com.osmium.sound.companion.dialog.CallStateDialog;
 import com.osmium.sound.companion.dialog.ConfirmDialog;
@@ -1064,8 +1065,38 @@ public class NowPlayingFragment extends Fragment  implements CallStateDialog.Cal
                 Log.v(TAG, "Connection is already in progress, connecting aborted");
                 return;
             }
-            requireService().startConnect(autoConnect);
+
+            // LMS itself has no auth of its own, so a device whose appliance
+            // pairing was revoked (Settings -> Phone control -> revoke) would
+            // otherwise keep controlling playback via LMS forever. Confirm the
+            // pairing token is still accepted before connecting; on an explicit
+            // 401/403 wipe the stored config and force the pairing wizard.
+            ApplianceHttpClient.checkAccess(new ApplianceHttpClient.AccessCheckCallback() {
+                @Override
+                public void onAccessGranted() {
+                    startConnectIfStillAttached(autoConnect);
+                }
+
+                @Override
+                public void onAccessDenied() {
+                    if (!isAdded()) return;
+                    preferences.forgetPairing();
+                    ConnectActivity.show(mActivity);
+                }
+
+                @Override
+                public void onCheckFailed() {
+                    // Inconclusive (offline, appliance briefly unreachable) — not
+                    // a confirmed revocation, so don't block the normal connect.
+                    startConnectIfStillAttached(autoConnect);
+                }
+            });
         });
+    }
+
+    private void startConnectIfStillAttached(boolean autoConnect) {
+        if (!isAdded() || mService == null) return;
+        requireService().startConnect(autoConnect);
     }
 
     private final CallStatePermissionLauncher requestCallStateLauncher = new CallStatePermissionLauncher(this);

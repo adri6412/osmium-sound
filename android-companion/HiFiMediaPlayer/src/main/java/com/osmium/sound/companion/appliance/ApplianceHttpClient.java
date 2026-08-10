@@ -70,6 +70,15 @@ public final class ApplianceHttpClient {
         void onFailure(String message);
     }
 
+    public interface AccessCheckCallback {
+        /** 200: the stored pairing token (if any) is still accepted. */
+        void onAccessGranted();
+        /** 401/403: the appliance explicitly rejected the token — it was revoked, or there never was one. */
+        void onAccessDenied();
+        /** Anything else (network error, timeout, 5xx): inconclusive, not a confirmed revocation. */
+        void onCheckFailed();
+    }
+
     private ApplianceHttpClient() {}
 
     private static String baseUrl() {
@@ -183,6 +192,42 @@ public final class ApplianceHttpClient {
     /** This device's squeezelite display name (default "OsmiumSound"). Response: { name }. */
     public static void playerName(JsonCallback callback) {
         enqueueJson(authedRequest("/api/system/player_name").get().build(), callback);
+    }
+
+    /**
+     * Confirms the stored pairing token (if any) is still accepted by the appliance,
+     * so callers can tell a genuinely revoked pairing (see Settings -> Phone control
+     * -> revoke, sources_server.py's /api/pair/tokens/revoke_all) apart from a
+     * simple network hiccup. Reuses /api/system/player_name — cheap, read-only,
+     * already pair-token-gated — purely for its HTTP status; the body is unused.
+     * Unlike {@link #enqueueJson}, this checks the response code explicitly:
+     * enqueueJson's JsonCallback.onSuccess fires for ANY parseable JSON body,
+     * including a 401 error response, which isn't good enough for an access check.
+     */
+    public static void checkAccess(AccessCheckCallback callback) {
+        Request request = authedRequest("/api/system/player_name").get().build();
+        client.newCall(request).enqueue(new Callback() {
+            @Override
+            public void onFailure(Call call, IOException e) {
+                Log.w(TAG, "Access check failed: " + request.url(), e);
+                postMain(callback::onCheckFailed);
+            }
+
+            @Override
+            public void onResponse(Call call, Response response) {
+                int code = response.code();
+                response.close();
+                postMain(() -> {
+                    if (code == 200) {
+                        callback.onAccessGranted();
+                    } else if (code == 401 || code == 403) {
+                        callback.onAccessDenied();
+                    } else {
+                        callback.onCheckFailed();
+                    }
+                });
+            }
+        });
     }
 
     /** Renames this device's player and restarts squeezelite. Response: { success, name, message }. */
