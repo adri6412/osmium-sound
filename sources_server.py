@@ -1121,7 +1121,18 @@ def _restore_members(tar, manifest, categories, progress_cb=None):
 
 
 def _lyrion_paths_touched(restored):
-    return [p for p in restored if "/prefs/" in p or "/playlists/" in p]
+    # Also cache/InstalledPlugins/Plugins/ — that's real plugin CODE (a
+    # downloaded skin like Material, not just a manifest of what's enabled),
+    # and _restore_members() writes every member 0600 owned by whoever this
+    # process runs as (root). Missing it here left restored plugin files
+    # unreadable by the squeezeboxserver/lyrionmusicserver user Lyrion
+    # actually runs as — reproduced live: Material's Plugin.pm/HTML/*.css
+    # sat there as `-rw------- root root`, so Lyrion silently couldn't load
+    # the skin and served /skin.css empty, i.e. Lyrion's page looking totally
+    # unstyled right after a restore.
+    return [p for p in restored
+            if "/prefs/" in p or "/playlists/" in p
+            or "/cache/InstalledPlugins/Plugins/" in p]
 
 
 def _stop_lyrion():
@@ -1134,6 +1145,50 @@ def _stop_lyrion():
 
 def _start_lyrion():
     _run(["systemctl", "start", "lyrionmusicserver"], timeout=60)
+
+
+def _lyrion_cache_dir():
+    """The active var-lib base's cache/ dir (squeezeboxserver or
+    lyrionmusicserver layout — same dual-package story as everywhere else in
+    this file), or None if neither is found."""
+    prefs = _find_prefs()
+    if prefs:
+        cache = os.path.join(os.path.dirname(os.path.dirname(prefs)), "cache")
+        if os.path.isdir(cache):
+            return cache
+    for base in ("/var/lib/squeezeboxserver", "/var/lib/lyrionmusicserver"):
+        cache = os.path.join(base, "cache")
+        if os.path.isdir(cache):
+            return cache
+    return None
+
+
+def _invalidate_lyrion_plugin_cache():
+    """Force Lyrion to rebuild its plugin listing from scratch on next start.
+
+    Reproduced live: even after _chown_lyrion() fixes ownership, Lyrion's own
+    cache/plugin-data.yaml (built by scanning cache/InstalledPlugins/Plugins/
+    at startup) stays whatever it last managed to build. If that build ran
+    while a plugin's files were still unreadable — as every restore did before
+    _lyrion_paths_touched() covered this directory — the plugin (e.g. the
+    Material skin) stays "missing" in that cache forever, permission fix or
+    not: /skin.css kept serving empty and /material/ kept 404ing even with
+    every file correctly chowned, until this cache was cleared. Deleting it is
+    safe — Lyrion regenerates it from the Plugins/ directory on every start
+    regardless — and this makes an already-affected device (one that hit the
+    bug on a past restore, before this fix shipped) self-heal on its next one
+    instead of needing a manual cache wipe.
+    """
+    cache_dir = _lyrion_cache_dir()
+    if not cache_dir:
+        return
+    targets = [os.path.join(cache_dir, "plugin-data.yaml")]
+    targets += glob.glob(os.path.join(cache_dir, "stringcache.*.bin"))
+    for path in targets:
+        try:
+            os.remove(path)
+        except OSError:
+            pass
 
 
 def _chown_lyrion(paths):
@@ -1260,7 +1315,10 @@ def _restore_from_path(path, passphrase, requested_categories, report=None):
         finally:
             if lyrion_stopped:
                 report("starting_lyrion", 80, "Riavvio di Lyrion…")
-                _chown_lyrion(_lyrion_paths_touched(restored if restored else []))
+                touched = _lyrion_paths_touched(restored if restored else [])
+                _chown_lyrion(touched)
+                if any("/cache/InstalledPlugins/Plugins/" in p for p in touched):
+                    _invalidate_lyrion_plugin_cache()
                 _start_lyrion()
 
         if not restored and errors:
