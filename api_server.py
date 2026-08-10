@@ -422,14 +422,38 @@ def _device_ip(device):
         pass
     return None
 
+def _active_connection_name(device):
+    try:
+        r = _run(['nmcli', '-t', '-f', 'NAME,DEVICE', 'connection', 'show', '--active'])
+        for line in r.stdout.strip().split('\n'):
+            parts = _terse_split(line)
+            if len(parts) >= 2 and parts[1] == device:
+                return parts[0]
+    except Exception:
+        pass
+    return None
+
 def _active_device():
-    """Return (device, type) of the first connected wifi/ethernet device."""
+    """Return (device, type) of the connected uplink to report as "the" network
+    status. Ethernet is preferred over Wi-Fi, and the box's own setup/recovery
+    hotspot (connection 'hifi-setup', see webui_server.py's AP_CON_NAME) is
+    skipped — it's an active 'wifi' device too, and if picked here it would
+    report its own AP address (10.42.0.1) instead of the real LAN IP whenever
+    a cable is plugged in while the hotspot is still up (e.g. during
+    provisioning, which raises it unconditionally)."""
     try:
         r = _run(['nmcli', '-t', '-f', 'DEVICE,TYPE,STATE', 'device', 'status'])
+        rows = []
         for line in r.stdout.strip().split('\n'):
             parts = _terse_split(line)
             if len(parts) >= 3 and parts[2] == 'connected' and parts[1] in ('wifi', 'ethernet'):
-                return parts[0], parts[1]
+                rows.append((parts[0], parts[1]))
+        for device, dtype in rows:
+            if dtype == 'ethernet':
+                return device, dtype
+        for device, dtype in rows:
+            if dtype == 'wifi' and _active_connection_name(device) != 'hifi-setup':
+                return device, dtype
     except Exception:
         pass
     return None, None
