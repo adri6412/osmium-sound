@@ -6,19 +6,25 @@ import vuMeterForeground from '../assets/vu-meter-foreground.png';
 
 // The needle pivots from the wavy notch at the bottom of the foreground
 // bezel's viewing window (where a real VU meter's pivot pin sits) — measured
-// from the artwork itself (971x960 canvas, notch apex at ~[468, 580]) rather
-// than guessed, so it lines up with the printed scale regardless of how this
-// component gets resized.
+// from the artwork itself (971x960 canvas). Anchored at the notch's actual
+// low point (~[468, 638]) rather than partway up it: the shallower spot used
+// previously left the pivot cap floating above the cutout instead of sitting
+// in it, which also reads as slightly less parallel to the tick marks'
+// own incline than pinning it at the notch's lowest dip does. Verified by
+// overlaying the rotated needle on the source artwork at both sweep extremes
+// (see PR discussion) — the tips still land on the "20" and "0"/red-zone
+// ticks with the length bumped accordingly below.
 const PIVOT_X_PCT = 48.2;
-const PIVOT_Y_PCT = 60.4;
+const PIVOT_Y_PCT = 66.5;
 // Needle sweep measured off the artwork's own tick marks: "20" (silence, full
 // left) to "+"/overload (full right), via a circle fit through the scale's
 // tick tips.
 const ANGLE_MIN = -58;
 const ANGLE_MAX = 60;
 // Needle length as % of the meter's own height, reaching just past the tick
-// tips (radius ~27.5% of width in the source art) for a visible overshoot.
-const NEEDLE_LENGTH_PCT = 34;
+// tips. Longer than the pivot-at-the-notch-shoulder version (was 34) to
+// still clear the same tips now that the pivot sits lower.
+const NEEDLE_LENGTH_PCT = 37.5;
 
 // `value` is a framer-motion MotionValue (0-100). Driving the needle straight
 // from a MotionValue means level updates never trigger a React re-render — the
