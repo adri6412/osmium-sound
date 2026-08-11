@@ -245,10 +245,17 @@ body {
    so scrolling a big album grid stays smooth even with hundreds mounted.
    contain-intrinsic-size is a placeholder so scroll height/position stay stable;
    the `auto` keyword makes the browser remember each item's real size after it
-   has been rendered once. */
+   has been rendered once — but a card never seen before still falls back to
+   this literal length, so it needs to be close to the real height or every
+   first-time-on-screen card causes a layout shift as it snaps to its actual
+   size. A 3-col grid card is the square cover (~1/3 of the panel width) plus
+   an 2-line `p-2` caption (~306px + ~50px here) — 350px, not 280px; that
+   130px gap was producing a fresh shift per newly-scrolled-into-view card,
+   the dominant remaining source of a 0.53 CLS score (93-shift cluster) after
+   fixing the progress bar's width animation. */
 .album-grid > * {
   content-visibility: auto;
-  contain-intrinsic-size: auto 280px;
+  contain-intrinsic-size: auto 350px;
 }
 .lib-list > * {
   content-visibility: auto;
