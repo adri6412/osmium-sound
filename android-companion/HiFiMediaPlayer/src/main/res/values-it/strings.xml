@@ -358,6 +358,15 @@
     <string name="settings_display_mode_title">Interfaccia su schermo</string>
     <string name="settings_display_mode_summary">Disattiva per usarlo senza schermo; attiva per riportare l\'interfaccia touch</string>
     <string name="settings_display_mode_changed">Modalità schermo cambiata.</string>
+    <string name="settings_ui_resolution_title">Risoluzione interfaccia</string>
+    <string name="settings_ui_resolution_summary">Riduce la risoluzione a cui viene disegnata l\'interfaccia sugli schermi grandi; la GPU la ridimensiona. Riavvia la sessione grafica.</string>
+    <string name="settings_ui_resolution_auto">Auto</string>
+    <string name="settings_ui_resolution_720">720p</string>
+    <string name="settings_ui_resolution_1080">1080p</string>
+    <string name="settings_ui_resolution_native">Nativa</string>
+    <string name="settings_ui_resolution_changed">Risoluzione interfaccia cambiata.</string>
+    <string name="settings_ui_resolution_failed">Impossibile cambiare la risoluzione dell\'interfaccia</string>
+    <string name="settings_vu_meter_title">VU meter animato</string>
     <string name="settings_system_info_title">Info di sistema</string>
     <string name="settings_system_info_hostname">Nome host</string>
     <string name="settings_system_info_ip">Indirizzo IP</string>

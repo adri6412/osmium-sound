@@ -111,6 +111,77 @@
             <TextView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
+                android:text="@string/settings_ui_resolution_title"
+                android:textColor="@android:color/white"
+                android:textStyle="bold"
+                android:layout_marginBottom="4dp" />
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/settings_ui_resolution_summary"
+                android:textColor="@color/hifiSilver"
+                android:layout_marginBottom="8dp" />
+
+            <RadioGroup
+                android:id="@+id/ui_resolution_group"
+                android:orientation="horizontal"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content">
+                <RadioButton
+                    android:id="@+id/radio_ui_resolution_auto"
+                    android:layout_width="0dp"
+                    android:layout_weight="1"
+                    android:layout_height="wrap_content"
+                    android:text="@string/settings_ui_resolution_auto" />
+                <RadioButton
+                    android:id="@+id/radio_ui_resolution_720"
+                    android:layout_width="0dp"
+                    android:layout_weight="1"
+                    android:layout_height="wrap_content"
+                    android:text="@string/settings_ui_resolution_720" />
+                <RadioButton
+                    android:id="@+id/radio_ui_resolution_1080"
+                    android:layout_width="0dp"
+                    android:layout_weight="1"
+                    android:layout_height="wrap_content"
+                    android:text="@string/settings_ui_resolution_1080" />
+                <RadioButton
+                    android:id="@+id/radio_ui_resolution_native"
+                    android:layout_width="0dp"
+                    android:layout_weight="1"
+                    android:layout_height="wrap_content"
+                    android:text="@string/settings_ui_resolution_native" />
+            </RadioGroup>
+
+            <LinearLayout
+                android:id="@+id/vu_meter_row"
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="16dp">
+                <TextView
+                    android:layout_width="0dp"
+                    android:layout_weight="1"
+                    android:layout_height="wrap_content"
+                    android:text="@string/settings_vu_meter_title" />
+                <com.google.android.material.switchmaterial.SwitchMaterial
+                    android:id="@+id/switch_vu_meter"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content" />
+            </LinearLayout>
+
+            <View
+                android:layout_width="match_parent"
+                android:layout_height="1dp"
+                android:background="?android:attr/listDivider"
+                android:layout_marginTop="16dp"
+                android:layout_marginBottom="16dp" />
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
                 android:text="@string/settings_system_info_title"
                 android:textColor="@android:color/white"
                 android:textStyle="bold"

@@ -186,14 +186,10 @@
 
     </PreferenceCategory>
 
-    <PreferenceCategory
-        android:title="@string/settings_category_dsp">
-
-        <Preference
-            android:key="squeezer.dsp.open"
-            android:title="@string/settings_dsp_title"
-            android:summary="@string/settings_dsp_summary"/>
-    </PreferenceCategory>
+    <!-- DSP/EQ (room correction, crossfeed) is deliberately NOT listed here —
+         held back for a future paid tier, same as the kiosk and admin-webui
+         (see commit 1dd7868). DspSettingsActivity and its backend endpoints
+         stay fully intact, just unreachable from this menu. -->
 
     <PreferenceCategory
         android:title="@string/settings_category_backup">

@@ -97,7 +97,6 @@ public class SettingsFragment  extends PreferenceFragmentCompat implements
 
         fillDownloadPreferences(preferences);
 
-        fillDspPreferences();
         fillBackupPreferences();
         fillAudioOutputPreferences();
         fillPlaybackPreferences();
@@ -107,13 +106,9 @@ public class SettingsFragment  extends PreferenceFragmentCompat implements
         fillMultiroomPreferences();
     }
 
-    private void fillDspPreferences() {
-        Preference pref = requirePreference("squeezer.dsp.open");
-        pref.setOnPreferenceClickListener(preference -> {
-            DspSettingsActivity.show(requireActivity());
-            return true;
-        });
-    }
+    // DSP/EQ is deliberately not wired up here — held back for a future paid
+    // tier, same as the kiosk and admin-webui (see commit 1dd7868).
+    // DspSettingsActivity stays intact and reachable by class name only.
 
     private void fillBackupPreferences() {
         Preference pref = requirePreference("squeezer.backup.open");

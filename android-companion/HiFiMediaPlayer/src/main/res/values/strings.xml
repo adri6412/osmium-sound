@@ -378,6 +378,15 @@
     <string name="settings_display_mode_title">On-screen interface</string>
     <string name="settings_display_mode_summary">Turn off to run headless; turn on to bring the touchscreen interface back</string>
     <string name="settings_display_mode_changed">Display mode changed.</string>
+    <string name="settings_ui_resolution_title">UI render resolution</string>
+    <string name="settings_ui_resolution_summary">Lowers the resolution the interface is drawn at on big screens; the GPU upscales it. Restarts the graphical session.</string>
+    <string name="settings_ui_resolution_auto">Auto</string>
+    <string name="settings_ui_resolution_720">720p</string>
+    <string name="settings_ui_resolution_1080">1080p</string>
+    <string name="settings_ui_resolution_native">Native</string>
+    <string name="settings_ui_resolution_changed">UI resolution changed.</string>
+    <string name="settings_ui_resolution_failed">Could not change UI resolution</string>
+    <string name="settings_vu_meter_title">Animated VU meter</string>
     <string name="settings_system_info_title">System info</string>
     <string name="settings_system_info_hostname">Hostname</string>
     <string name="settings_system_info_ip">IP address</string>
