@@ -24,11 +24,14 @@ import android.view.MenuItem;
 
 import androidx.activity.EdgeToEdge;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.preference.PreferenceFragmentCompat;
+import androidx.preference.PreferenceScreen;
 
 import com.osmium.sound.companion.util.ThemeManager;
 import com.osmium.sound.companion.widget.ViewUtilities;
 
-public class SettingsActivity extends AppCompatActivity {
+public class SettingsActivity extends AppCompatActivity
+        implements PreferenceFragmentCompat.OnPreferenceStartScreenCallback {
     private final ThemeManager mThemeManager = new ThemeManager();
 
     @Override
@@ -43,6 +46,12 @@ public class SettingsActivity extends AppCompatActivity {
         setSupportActionBar(findViewById(R.id.toolbar));
         ViewUtilities.setInsetsListener(findViewById(R.id.toolbar), true, false, false);
         ViewUtilities.setInsetsListener(findViewById(R.id.settings_container), false, true, false);
+
+        getSupportFragmentManager().addOnBackStackChangedListener(() -> {
+            if (getSupportFragmentManager().getBackStackEntryCount() == 0) {
+                setTitle(R.string.activity_settings_name);
+            }
+        });
     }
 
     @Override
@@ -54,10 +63,29 @@ public class SettingsActivity extends AppCompatActivity {
     @Override
     public boolean onOptionsItemSelected(MenuItem item) {
         if (item.getItemId() == android.R.id.home) {
-            finish();
+            if (getSupportFragmentManager().getBackStackEntryCount() > 0) {
+                getSupportFragmentManager().popBackStack();
+            } else {
+                finish();
+            }
             return true;
         }
         return super.onOptionsItemSelected(item);
+    }
+
+    @Override
+    public boolean onPreferenceStartScreen(PreferenceFragmentCompat caller, PreferenceScreen pref) {
+        SettingsFragment fragment = new SettingsFragment();
+        Bundle args = new Bundle();
+        args.putString(PreferenceFragmentCompat.ARG_PREFERENCE_ROOT, pref.getKey());
+        fragment.setArguments(args);
+        getSupportFragmentManager()
+                .beginTransaction()
+                .replace(R.id.settings_container, fragment, pref.getKey())
+                .addToBackStack(pref.getKey())
+                .commit();
+        setTitle(pref.getTitle());
+        return true;
     }
 
     public static void show(Context context) {

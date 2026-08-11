@@ -51,6 +51,8 @@ public class SettingsFragment  extends PreferenceFragmentCompat implements
 
     private final String TAG = "SettingsFragment";
 
+    private static final String KEY_OSMIUM_SOUND = "squeezer.osmium_sound";
+
     private ISqueezeService service = null;
 
     private IntEditTextPreference fadeInPref;
@@ -76,6 +78,18 @@ public class SettingsFragment  extends PreferenceFragmentCompat implements
         getPreferenceManager().setSharedPreferencesName(Preferences.NAME);
         setPreferencesFromResource(R.xml.preferences, rootKey);
 
+        // The "Osmium Sound" screen is a nested PreferenceScreen: when opened,
+        // rootKey scopes findPreference() to just its own children, so only
+        // wire up the preferences that actually live under it.
+        if (KEY_OSMIUM_SOUND.equals(rootKey)) {
+            fillBackupPreferences();
+            fillAudioOutputPreferences();
+            fillUpdatesPreferences();
+            fillSystemAdminPreferences();
+            fillMultiroomPreferences();
+            return;
+        }
+
         SharedPreferences sharedPreferences = getPreferenceManager().getSharedPreferences();
         sharedPreferences.registerOnSharedPreferenceChangeListener(this);
         Preferences preferences = new Preferences(getActivity(), sharedPreferences);
@@ -97,13 +111,8 @@ public class SettingsFragment  extends PreferenceFragmentCompat implements
 
         fillDownloadPreferences(preferences);
 
-        fillBackupPreferences();
-        fillAudioOutputPreferences();
         fillPlaybackPreferences();
         fillLyrionRescanPreferences();
-        fillUpdatesPreferences();
-        fillSystemAdminPreferences();
-        fillMultiroomPreferences();
     }
 
     // DSP/EQ is deliberately not wired up here — held back for a future paid
