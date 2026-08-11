@@ -72,13 +72,24 @@ def _lang():
 #  script; here we only check GitHub Releases and kick it off.
 # ──────────────────────────────────────────────────────────────────
 OTA_REPO = os.environ.get('HIFI_OTA_REPO', 'adri6412/hifi-media-player')
-# Static release manifest published to GitHub Pages (a CDN, NOT subject to the
+# Static release manifest published to a CDN (NOT subject to the
 # api.github.com 60-req/hour rate limit). The release workflow writes
-# `ota/latest-<channel>.json` mirroring the GitHub release object. The device
-# reads this first and only falls back to the REST API if it's unreachable, so
-# normal update checks never touch the rate-limited API.
+# `ota/latest-<channel>.json` mirroring the GitHub release object to the
+# `gh-pages` branch. The device reads this first and only falls back to the
+# REST API if it's unreachable, so normal update checks never touch the
+# rate-limited API.
+#
+# Cloudflare Pages, watching that same `gh-pages` branch, NOT GitHub Pages:
+# the custom domain (osmiumsound.qd.je) got stuck with GitHub Pages' ACME
+# cert provisioning permanently wedged ("bad_authz", would not clear even
+# after repeated re-adds) and the DNS host for that subdomain doesn't
+# support the records needed to fix it any other way. Safe to change the
+# default here with no fleet migration dance: every existing device already
+# falls back to the GitHub REST API whenever this URL is unreachable (which
+# it has been) -- they'll pick up whatever release carries this change via
+# that fallback, then use the fast path again from then on.
 OTA_MANIFEST_BASE = os.environ.get('HIFI_OTA_MANIFEST_BASE',
-                                   'https://osmiumsound.qd.je/ota')
+                                   'https://osmium-sound.pages.dev/ota')
 # OTA release channel: 'prod' tracks GitHub's /releases/latest (stable releases
 # only); 'dev' tracks the newest release including prereleases (vX.Y.Z-dev.N).
 # 'alpha' tracks the newest release of ANY kind, including private test tags cut
