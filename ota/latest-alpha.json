@@ -1,41 +1,41 @@
 {
-  "tag_name": "v2.5.21-dev.70-alpha4",
-  "name": "v2.5.21-dev.70-alpha4",
-  "body": "## What's new in v2.5.21-dev.70-alpha4\n\n- perf(ui): animate now-playing progress bar with scaleX instead of width\n",
+  "tag_name": "v2.5.21-dev.70-alpha5",
+  "name": "v2.5.21-dev.70-alpha5",
+  "body": "## What's new in v2.5.21-dev.70-alpha5\n\n- perf(ui): fix album-grid content-visibility placeholder height (CLS)\n",
   "assets": [
     {
-      "name": "hifi-ui-v2.5.21-dev.70-alpha4.tar.gz",
-      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.70-alpha4/hifi-ui-v2.5.21-dev.70-alpha4.tar.gz",
-      "size": 134015769
+      "name": "hifi-ui-v2.5.21-dev.70-alpha5.tar.gz",
+      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.70-alpha5/hifi-ui-v2.5.21-dev.70-alpha5.tar.gz",
+      "size": 134016196
     },
     {
-      "name": "hifi-ui-v2.5.21-dev.70-alpha4.tar.gz.sha256",
-      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.70-alpha4/hifi-ui-v2.5.21-dev.70-alpha4.tar.gz.sha256",
+      "name": "hifi-ui-v2.5.21-dev.70-alpha5.tar.gz.sha256",
+      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.70-alpha5/hifi-ui-v2.5.21-dev.70-alpha5.tar.gz.sha256",
       "size": 103
     },
     {
-      "name": "hifi-system-v2.5.21-dev.70-alpha4.tar.gz",
-      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.70-alpha4/hifi-system-v2.5.21-dev.70-alpha4.tar.gz",
-      "size": 278996
+      "name": "hifi-system-v2.5.21-dev.70-alpha5.tar.gz",
+      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.70-alpha5/hifi-system-v2.5.21-dev.70-alpha5.tar.gz",
+      "size": 279011
     },
     {
-      "name": "hifi-system-v2.5.21-dev.70-alpha4.tar.gz.sha256",
-      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.70-alpha4/hifi-system-v2.5.21-dev.70-alpha4.tar.gz.sha256",
+      "name": "hifi-system-v2.5.21-dev.70-alpha5.tar.gz.sha256",
+      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.70-alpha5/hifi-system-v2.5.21-dev.70-alpha5.tar.gz.sha256",
       "size": 107
     },
     {
-      "name": "hifi-os-v2.5.21-dev.70-alpha4.tar.gz",
-      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.70-alpha4/hifi-os-v2.5.21-dev.70-alpha4.tar.gz",
-      "size": 1196263
+      "name": "hifi-os-v2.5.21-dev.70-alpha5.tar.gz",
+      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.70-alpha5/hifi-os-v2.5.21-dev.70-alpha5.tar.gz",
+      "size": 1196265
     },
     {
-      "name": "hifi-os-v2.5.21-dev.70-alpha4.tar.gz.sha256",
-      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.70-alpha4/hifi-os-v2.5.21-dev.70-alpha4.tar.gz.sha256",
+      "name": "hifi-os-v2.5.21-dev.70-alpha5.tar.gz.sha256",
+      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.70-alpha5/hifi-os-v2.5.21-dev.70-alpha5.tar.gz.sha256",
       "size": 103
     },
     {
-      "name": "hifi-os-v2.5.21-dev.70-alpha4.tar.gz.sha256.sig",
-      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.70-alpha4/hifi-os-v2.5.21-dev.70-alpha4.tar.gz.sha256.sig",
+      "name": "hifi-os-v2.5.21-dev.70-alpha5.tar.gz.sha256.sig",
+      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.70-alpha5/hifi-os-v2.5.21-dev.70-alpha5.tar.gz.sha256.sig",
       "size": 64
     }
   ]
