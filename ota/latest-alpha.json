@@ -1,41 +1,41 @@
 {
-  "tag_name": "v2.5.21-dev.72-alpha2",
-  "name": "v2.5.21-dev.72-alpha2",
-  "body": "## What's new in v2.5.21-dev.72-alpha2\n\n- fix(vu-meter): lower needle pivot to sit at the bezel notch's low point\n- feat(admin-webui): system stats tiles, Tailscale DERP detail, drop stale Tidal Connect text\n- fix(backend): squeezelite server-only guard, LMS Tailscale trust, system/tailscale stats\n- fix(display-mode): power off video output when switching to headless\n",
+  "tag_name": "v2.5.21-dev.72-alpha3",
+  "name": "v2.5.21-dev.72-alpha3",
+  "body": "## What's new in v2.5.21-dev.72-alpha3\n\n- feat(admin-webui): auto-refresh dashboard stats every 5s\n- fix(gpu-stats): ship intel-gpu-tools and fix the busy% sample capture\n",
   "assets": [
     {
-      "name": "hifi-ui-v2.5.21-dev.72-alpha2.tar.gz",
-      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.72-alpha2/hifi-ui-v2.5.21-dev.72-alpha2.tar.gz",
-      "size": 134012413
+      "name": "hifi-ui-v2.5.21-dev.72-alpha3.tar.gz",
+      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.72-alpha3/hifi-ui-v2.5.21-dev.72-alpha3.tar.gz",
+      "size": 134010967
     },
     {
-      "name": "hifi-ui-v2.5.21-dev.72-alpha2.tar.gz.sha256",
-      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.72-alpha2/hifi-ui-v2.5.21-dev.72-alpha2.tar.gz.sha256",
+      "name": "hifi-ui-v2.5.21-dev.72-alpha3.tar.gz.sha256",
+      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.72-alpha3/hifi-ui-v2.5.21-dev.72-alpha3.tar.gz.sha256",
       "size": 103
     },
     {
-      "name": "hifi-system-v2.5.21-dev.72-alpha2.tar.gz",
-      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.72-alpha2/hifi-system-v2.5.21-dev.72-alpha2.tar.gz",
-      "size": 284685
+      "name": "hifi-system-v2.5.21-dev.72-alpha3.tar.gz",
+      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.72-alpha3/hifi-system-v2.5.21-dev.72-alpha3.tar.gz",
+      "size": 284000
     },
     {
-      "name": "hifi-system-v2.5.21-dev.72-alpha2.tar.gz.sha256",
-      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.72-alpha2/hifi-system-v2.5.21-dev.72-alpha2.tar.gz.sha256",
+      "name": "hifi-system-v2.5.21-dev.72-alpha3.tar.gz.sha256",
+      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.72-alpha3/hifi-system-v2.5.21-dev.72-alpha3.tar.gz.sha256",
       "size": 107
     },
     {
-      "name": "hifi-os-v2.5.21-dev.72-alpha2.tar.gz",
-      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.72-alpha2/hifi-os-v2.5.21-dev.72-alpha2.tar.gz",
-      "size": 1195822
+      "name": "hifi-os-v2.5.21-dev.72-alpha3.tar.gz",
+      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.72-alpha3/hifi-os-v2.5.21-dev.72-alpha3.tar.gz",
+      "size": 1196503
     },
     {
-      "name": "hifi-os-v2.5.21-dev.72-alpha2.tar.gz.sha256",
-      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.72-alpha2/hifi-os-v2.5.21-dev.72-alpha2.tar.gz.sha256",
+      "name": "hifi-os-v2.5.21-dev.72-alpha3.tar.gz.sha256",
+      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.72-alpha3/hifi-os-v2.5.21-dev.72-alpha3.tar.gz.sha256",
       "size": 103
     },
     {
-      "name": "hifi-os-v2.5.21-dev.72-alpha2.tar.gz.sha256.sig",
-      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.72-alpha2/hifi-os-v2.5.21-dev.72-alpha2.tar.gz.sha256.sig",
+      "name": "hifi-os-v2.5.21-dev.72-alpha3.tar.gz.sha256.sig",
+      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.72-alpha3/hifi-os-v2.5.21-dev.72-alpha3.tar.gz.sha256.sig",
       "size": 64
     }
   ]
