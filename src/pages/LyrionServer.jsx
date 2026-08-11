@@ -47,6 +47,15 @@ const TABS = [
 // generic icon — a station that genuinely has no art still ends up there,
 // just one retry later.
 const ARTWORK_RETRY_MS = 2000;
+// A cover-art fetch with no AbortController/timeout that gets "superseded" by
+// a newer poll only stops being *looked at* (requestIdRef mismatch) — the
+// underlying network request keeps running against LMS regardless. Over
+// hours of ~10s heartbeat polling that piles up abandoned-but-live requests
+// and can exhaust the browser's per-origin connection pool, at which point
+// even a brand-new station/track's fetch queues behind the dead ones and the
+// art appears permanently stuck. Same fix already applied to the JSON-RPC
+// client for the same reason, see lyrionApi.js's request().
+const ARTWORK_FETCH_TIMEOUT_MS = 8000;
 const ArtworkImage = ({ src, alt, className, FallbackIcon }) => {
   const safeSrc = src ? safeUrl(src) : null;
   const [displayedSrc, setDisplayedSrc] = useState(safeSrc);
@@ -133,6 +142,7 @@ const usePolledArtwork = (url, identityKey) => {
   const hashRef = useRef(null);
   const objectUrlRef = useRef(null);
   const requestIdRef = useRef(0);
+  const controllerRef = useRef(null);
   // Sentinel (not a value identityKey can ever equal) so the very first
   // fetch after mount is always treated as a confirmed change — it gets the
   // full retry budget, same as any other genuine track change, rather than
@@ -172,8 +182,11 @@ const usePolledArtwork = (url, identityKey) => {
     // probe cycle.
     const MAX_ATTEMPTS = isConfirmedChange ? 6 : 2;
     const attempt = async (attemptNum) => {
+      const controller = new AbortController();
+      controllerRef.current = controller;
+      const timer = setTimeout(() => controller.abort(), ARTWORK_FETCH_TIMEOUT_MS);
       try {
-        const res = await fetch(safeSrc);
+        const res = await fetch(safeSrc, { signal: controller.signal });
         if (!res.ok) throw new Error(`http ${res.status}`);
         const buf = await res.arrayBuffer();
         if (requestIdRef.current !== myRequestId) return; // superseded by a newer poll
@@ -202,9 +215,16 @@ const usePolledArtwork = (url, identityKey) => {
         // A failed probe (not a confirmed change) leaves the current art
         // exactly as-is — there's no evidence it's wrong, so there's nothing
         // to correct until the next probe or a confirmed change.
+      } finally {
+        clearTimeout(timer);
       }
     };
     attempt(1);
+    // Actually cancel the in-flight request (not just ignore its result) the
+    // moment it's superseded — by a newer heartbeat/track (effect re-run) or
+    // by this instance going away — instead of leaving it running to eat a
+    // connection slot. See ARTWORK_FETCH_TIMEOUT_MS above for why this matters.
+    return () => { if (controllerRef.current) controllerRef.current.abort(); };
   }, [safeSrc, identityKey]);
 
   // Release the last object URL when this instance goes away entirely.
