@@ -61,6 +61,10 @@ class SqueezeliteVisualizer:
         # Buffer offset will be determined dynamically
         self.buffer_offset = None
         self.buf_size = 0
+        # True once a scan has actually matched one of the known vis_t
+        # layouts (as opposed to falling back to a guessed default) — see
+        # the reuse-on-reconnect comment in connect() for why this matters.
+        self._layout_confirmed = False
 
     def find_shm_file(self):
         """Find the squeezelite shared memory file in /dev/shm"""
@@ -82,6 +86,24 @@ class SqueezeliteVisualizer:
             self.fd = os.open(self.shm_file, os.O_RDONLY)
             size = os.path.getsize(self.shm_file)
             self.mmap_obj = mmap.mmap(self.fd, size, access=mmap.ACCESS_READ)
+
+            if self._layout_confirmed:
+                # Squeezelite unlinks+recreates this shm segment on every
+                # restart, which is exactly when connect() gets called again
+                # (see shm_changed()/read_audio_data()) — but the struct
+                # layout of vis_t is a fixed property of the squeezelite
+                # binary on this device, it never changes across restarts.
+                # Re-scanning here would race against squeezelite still
+                # zero-initializing the *freshly recreated* segment's header
+                # (file already ftruncate'd to full size, but buf_size not
+                # written yet), which made the scan below fail and fall back
+                # to a guessed offset — silently misreading buf_index/PCM
+                # from the wrong region of the segment and producing
+                # levels that jump around at random until the next restart
+                # happened to re-detect correctly. Once genuinely detected,
+                # just reuse it.
+                self.buf_size = (size - self.buffer_offset) // 2
+                return True
 
             # Autodetect the actual layout. Different Squeezelite forks (like R2)
             # or platforms have different headers.
@@ -130,6 +152,11 @@ class SqueezeliteVisualizer:
                 print(f"Warning: Could not auto-detect offset. File size: {size}. Defaulting to 32.")
                 self.buffer_offset = 32
                 self.index_offset = 8 # Default standard buf_index offset
+            else:
+                # A real match (not the guessed fallback above) — trust it
+                # for the rest of this process's lifetime, see the
+                # _layout_confirmed branch above.
+                self._layout_confirmed = True
 
             self.buf_size = (size - self.buffer_offset) // 2
 
