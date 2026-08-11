@@ -240,6 +240,7 @@
     <string name="menu_item_lyrics_unavailable">Testo non disponibile per questo brano.</string>
 
     <string name="settings_category_dsp">Correzione ambientale (DSP)</string>
+    <string name="settings_category_osmium_sound">Osmium Sound</string>
     <string name="settings_dsp_title">Correzione ambientale (DSP)</string>
     <string name="settings_dsp_summary">Attiva il DSP, la correzione ambientale, il crossfeed e gestisci il filtro a convoluzione</string>
     <string name="settings_dsp_unavailable">Il DSP non è disponibile su questo apparecchio.</string>
@@ -283,7 +284,6 @@
     <string name="settings_dsp_preset_bright">Brillante</string>
     <string name="settings_dsp_preset_loudness">Loudness (volume basso)</string>
 
-    <string name="settings_category_backup">Backup e ripristino</string>
     <string name="settings_backup_title">Backup e ripristino</string>
     <string name="settings_backup_summary">Esporta o ripristina la configurazione dell\'apparecchio</string>
     <string name="settings_backup_export_help">Scarica una copia della configurazione dell\'apparecchio (DAC, DSP/EQ, filtro di correzione ambientale, sorgenti musicali, canale aggiornamenti).</string>
@@ -296,13 +296,11 @@
     <string name="settings_backup_restore_confirm_message">Questa operazione sovrascrive la configurazione attuale dell\'apparecchio e riavvia Squeezelite/CamillaDSP/SMB. Non può essere annullata.</string>
     <string name="settings_backup_restore_failed">Ripristino fallito</string>
 
-    <string name="settings_category_audio_output">Uscita audio</string>
     <string name="settings_audio_output_title">Uscita audio</string>
     <string name="settings_audio_output_summary">Scegli il DAC / dispositivo di uscita dell\'apparecchio</string>
     <string name="settings_audio_output_applied">Dispositivo di uscita cambiato.</string>
     <string name="settings_audio_output_failed">Impossibile cambiare il dispositivo di uscita</string>
 
-    <string name="settings_category_multiroom">Lyrion Music Server</string>
     <string name="settings_multiroom_title">Lyrion Music Server</string>
     <string name="settings_multiroom_summary">Server musicale interno o esterno, la sua versione e il nome di questo player</string>
     <string name="settings_multiroom_name_title">Nome di questo player</string>
@@ -347,8 +345,7 @@
     <string name="settings_lyrion_rescan_summary">Chiedi al server di cercare musica nuova o modificata</string>
     <string name="settings_lyrion_rescan_started">Scansione della libreria avviata.</string>
 
-    <string name="settings_category_system_admin">Amministrazione del sistema</string>
-    <string name="settings_system_admin_title">Amministrazione del sistema</string>
+    <string name="settings_system_admin_title">Sistema</string>
     <string name="settings_system_admin_summary">Accesso SSH, info di sistema, riavvio e spegnimento</string>
     <string name="settings_ssh_title">Accesso SSH</string>
     <string name="settings_ssh_warning">SSH dà accesso remoto da riga di comando all\'apparecchio, con pieni diritti di amministratore. Attivalo solo se sai a cosa vai incontro.</string>

@@ -191,23 +191,43 @@
          (see commit 1dd7868). DspSettingsActivity and its backend endpoints
          stay fully intact, just unreachable from this menu. -->
 
-    <PreferenceCategory
-        android:title="@string/settings_category_backup">
-
-        <Preference
-            android:key="squeezer.backup.open"
-            android:title="@string/settings_backup_title"
-            android:summary="@string/settings_backup_summary"/>
-    </PreferenceCategory>
-
-    <PreferenceCategory
-        android:title="@string/settings_category_audio_output">
+    <!-- Osmium Sound: appliance settings that also exist in the web admin,
+         grouped under one submenu with the exact same section names/wording
+         as admin-webui's Settings.vue (see settings.sections.* in its i18n
+         locales), in the same relative order. Only sections with a working
+         Android equivalent are listed — no dead entries for the webui-only
+         sections (Network, Music sources, Services, Tailscale, Timezone,
+         Companion app, Web account, Language) that have no /api/system/*
+         proxy route reachable from here yet. -->
+    <PreferenceScreen
+        android:key="squeezer.osmium_sound"
+        android:title="@string/settings_category_osmium_sound">
 
         <Preference
             android:key="squeezer.audio_output.open"
             android:title="@string/settings_audio_output_title"
             android:summary="@string/settings_audio_output_summary"/>
-    </PreferenceCategory>
+
+        <Preference
+            android:key="squeezer.multiroom.open"
+            android:title="@string/settings_multiroom_title"
+            android:summary="@string/settings_multiroom_summary"/>
+
+        <Preference
+            android:key="squeezer.updates.open"
+            android:title="@string/settings_updates_title"
+            android:summary="@string/settings_updates_summary"/>
+
+        <Preference
+            android:key="squeezer.backup.open"
+            android:title="@string/settings_backup_title"
+            android:summary="@string/settings_backup_summary"/>
+
+        <Preference
+            android:key="squeezer.system_admin.open"
+            android:title="@string/settings_system_admin_title"
+            android:summary="@string/settings_system_admin_summary"/>
+    </PreferenceScreen>
 
     <PreferenceCategory
         android:title="@string/settings_category_playback">
@@ -224,32 +244,5 @@
             android:key="squeezer.lyrion_rescan.open"
             android:title="@string/settings_lyrion_rescan_title"
             android:summary="@string/settings_lyrion_rescan_summary"/>
-    </PreferenceCategory>
-
-    <PreferenceCategory
-        android:title="@string/settings_category_updates">
-
-        <Preference
-            android:key="squeezer.updates.open"
-            android:title="@string/settings_updates_title"
-            android:summary="@string/settings_updates_summary"/>
-    </PreferenceCategory>
-
-    <PreferenceCategory
-        android:title="@string/settings_category_system_admin">
-
-        <Preference
-            android:key="squeezer.system_admin.open"
-            android:title="@string/settings_system_admin_title"
-            android:summary="@string/settings_system_admin_summary"/>
-    </PreferenceCategory>
-
-    <PreferenceCategory
-        android:title="@string/settings_category_multiroom">
-
-        <Preference
-            android:key="squeezer.multiroom.open"
-            android:title="@string/settings_multiroom_title"
-            android:summary="@string/settings_multiroom_summary"/>
     </PreferenceCategory>
 </PreferenceScreen>
