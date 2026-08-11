@@ -86,6 +86,15 @@ body {
   border-radius: 8px;
   padding: 8px;
   margin: 0;
+  /* VirtualKeyboard.jsx destroys the SimpleKeyboard instance (emptying this
+     box's content) the instant it's told to close, but the sheet's own
+     framer-motion exit animation keeps it visibly on screen for a few
+     hundred ms after that — without a floor, the sheet's height collapses
+     out from under the still-playing slide-down/fade-out, a real captured
+     layout shift (~193px, DevTools trace: old height 367 -> new 174,
+     bottom edge fixed) on every close. Reserve the populated height so
+     emptying the keyboard can't shrink the sheet mid-exit. */
+  min-height: 190px;
 }
 
 .simple-keyboard {
