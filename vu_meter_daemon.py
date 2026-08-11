@@ -186,7 +186,7 @@ class SqueezeliteVisualizer:
 
             # If it hasn't changed for ~10 frames, send zeros
             if self.same_index_count > 10:
-                return [0] * self.num_bars
+                return self._zero_levels()
 
             # If buf_index is very small, we might not have enough data to read a frame
             samples_to_read = 1024  # Read last 1024 interleaved samples (512 pairs)
@@ -200,29 +200,36 @@ class SqueezeliteVisualizer:
             file_size = self.mmap_obj.size()
             if start_offset + (samples_to_read * 2) > file_size:
                 # Re-connect or reset if size is weird
-                return [0] * self.num_bars
+                return self._zero_levels()
 
             self.mmap_obj.seek(start_offset)
             raw_samples = self.mmap_obj.read(samples_to_read * 2)
 
             num_samples = len(raw_samples) // 2
             if num_samples == 0:
-                return [0] * self.num_bars
+                return self._zero_levels()
 
             if np is not None:
-                dop_values = self._decode_dop(raw_samples, num_samples)
-                if dop_values is not None:
-                    return self._levels_from_values(dop_values)
+                dop_stereo = self._decode_dop(raw_samples, num_samples)
+                if dop_stereo is not None:
+                    left_env, right_env = dop_stereo
+                    bars_per_channel = max(1, self.num_bars // 2)
+                    return (self._bucket_rms(left_env, bars_per_channel),
+                            self._bucket_rms(right_env, bars_per_channel))
 
                 # Vectorised RMS — ~10x cheaper than the Python loop at 30 fps.
                 buf = np.frombuffer(raw_samples, dtype='<i2', count=num_samples)
-                return self._levels_from_values(buf.astype(np.float64))
+                return self._stereo_levels_from_values(buf.astype(np.float64))
 
             # Pure-Python fallback (numpy not installed).
             samples = struct.unpack(f'<{num_samples}h', raw_samples)
-            dop_values = self._decode_dop_py(samples)
-            values = dop_values if dop_values is not None else samples
-            return self._levels_from_values_py(values)
+            dop_stereo = self._decode_dop_py(samples)
+            if dop_stereo is not None:
+                left_env, right_env = dop_stereo
+                bars_per_channel = max(1, self.num_bars // 2)
+                return (self._bucket_rms_py(left_env, bars_per_channel),
+                        self._bucket_rms_py(right_env, bars_per_channel))
+            return self._stereo_levels_from_values_py(samples)
 
         except Exception as e:
             print(f"Error reading shared memory: {e}")
@@ -236,14 +243,19 @@ class SqueezeliteVisualizer:
     _MIN_DB = -50.0
     _MAX_DB = -5.0
 
-    def _levels_from_values(self, values):
+    def _zero_levels(self):
+        """(left, right) all-zero levels in the current stereo payload shape."""
+        bars_per_channel = max(1, self.num_bars // 2)
+        return ([0] * bars_per_channel, [0] * bars_per_channel)
+
+    def _bucket_rms(self, values, num_bars):
         """values: 1-D numpy float64 array on the same +/-32767 full-scale as
-        PCM (real PCM samples, or the decimated DSD envelope from
-        _decode_dop). Buckets into num_bars and computes RMS->dB->percent."""
+        PCM (real PCM samples, or a decimated DSD envelope). Buckets into
+        num_bars and computes RMS->dB->percent."""
         n = values.size
-        samples_per_bar = max(1, n // self.num_bars)
-        usable = samples_per_bar * self.num_bars
-        buckets = values[:usable].reshape(self.num_bars, samples_per_bar)
+        samples_per_bar = max(1, n // num_bars)
+        usable = samples_per_bar * num_bars
+        buckets = values[:usable].reshape(num_bars, samples_per_bar)
         rms = np.sqrt(np.mean(buckets * buckets, axis=1))
         with np.errstate(divide='ignore'):
             db = 20.0 * np.log10(rms / 32767.0)
@@ -251,12 +263,12 @@ class SqueezeliteVisualizer:
         percent = np.power(percent / 100.0, 1.2) * 100.0
         return [int(x) for x in percent]
 
-    def _levels_from_values_py(self, values):
-        """Pure-Python equivalent of _levels_from_values."""
+    def _bucket_rms_py(self, values, num_bars):
+        """Pure-Python equivalent of _bucket_rms."""
         n = len(values)
-        samples_per_bar = max(1, n // self.num_bars)
+        samples_per_bar = max(1, n // num_bars)
         levels = []
-        for i in range(self.num_bars):
+        for i in range(num_bars):
             start_idx = i * samples_per_bar
             chunk = values[start_idx:start_idx + samples_per_bar]
             if not chunk:
@@ -272,6 +284,26 @@ class SqueezeliteVisualizer:
             levels.append(int(percent))
         return levels
 
+    def _stereo_levels_from_values(self, values):
+        """values: 1-D numpy float64 array of *interleaved* stereo samples
+        ([L0, R0, L1, R1, ...]). Deinterleaves into left/right before
+        bucketing so each channel's RMS is computed independently, instead
+        of bucketing the raw interleaved stream into consecutive time slices
+        (which mixes both channels into every bucket)."""
+        left = values[0::2]
+        right = values[1::2]
+        bars_per_channel = max(1, self.num_bars // 2)
+        return (self._bucket_rms(left, bars_per_channel),
+                self._bucket_rms(right, bars_per_channel))
+
+    def _stereo_levels_from_values_py(self, values):
+        """Pure-Python equivalent of _stereo_levels_from_values."""
+        left = values[0::2]
+        right = values[1::2]
+        bars_per_channel = max(1, self.num_bars // 2)
+        return (self._bucket_rms_py(left, bars_per_channel),
+                self._bucket_rms_py(right, bars_per_channel))
+
     def _decode_dop(self, raw_samples, num_samples):
         """Detect a DoP (DSD-over-PCM) stream in the vis buffer and turn it
         into an approximate PCM envelope so the existing RMS meter pipeline
@@ -285,8 +317,13 @@ class SqueezeliteVisualizer:
         average tracks the analog waveform, so decimating those bits with a
         small moving average recovers a coarse but real amplitude envelope.
 
+        Vis-buffer entries are interleaved per channel just like PCM (one
+        entry per output frame), so the marker/data bytes are deinterleaved
+        into left/right *before* decimation — otherwise the recovered
+        envelope mixes both channels' DSD bits together.
+
         Returns None if the buffer doesn't look like DoP (plain PCM path
-        stays untouched then).
+        stays untouched then). Otherwise returns (left_env, right_env).
         """
         buf_u16 = np.frombuffer(raw_samples, dtype='<i2', count=num_samples).view(np.uint16)
         high_bytes = (buf_u16 >> 8) & 0xFF
@@ -294,8 +331,17 @@ class SqueezeliteVisualizer:
             return None
 
         data_bytes = (buf_u16 & 0xFF).astype(np.uint8)
-        bits = np.unpackbits(data_bytes).astype(np.float64) * 2.0 - 1.0
+        left_env = self._decimate_dop_bytes(data_bytes[0::2])
+        right_env = self._decimate_dop_bytes(data_bytes[1::2])
+        if left_env is None or right_env is None:
+            return None
+        return left_env, right_env
 
+    def _decimate_dop_bytes(self, data_bytes):
+        """Unpack a single channel's DSD PDM bytes and decimate them into a
+        coarse PCM-like envelope. Returns None if there aren't enough bits
+        for even one decimated sample."""
+        bits = np.unpackbits(data_bytes).astype(np.float64) * 2.0 - 1.0
         usable_bits = (bits.size // _DSD_DECIMATE_BLOCK) * _DSD_DECIMATE_BLOCK
         if usable_bits == 0:
             return None
@@ -310,6 +356,14 @@ class SqueezeliteVisualizer:
         if marker_hits / len(samples) < 0.9:
             return None
 
+        left_env = self._decimate_dop_bytes_py(samples[0::2])
+        right_env = self._decimate_dop_bytes_py(samples[1::2])
+        if left_env is None or right_env is None:
+            return None
+        return left_env, right_env
+
+    def _decimate_dop_bytes_py(self, samples):
+        """Pure-Python equivalent of _decimate_dop_bytes."""
         bits = []
         for s in samples:
             byte = s & 0xFF
@@ -419,12 +473,12 @@ class BluetoothTapReader:
         num_samples = len(raw) // 2
         if num_samples < 64:
             # Capture just (re)started — not enough buffered yet this tick.
-            return [0] * visualizer.num_bars
+            return visualizer._zero_levels()
         if np is not None:
             values = np.frombuffer(raw, dtype='<i2', count=num_samples).astype(np.float64)
-            return visualizer._levels_from_values(values)
+            return visualizer._stereo_levels_from_values(values)
         samples = struct.unpack(f'<{num_samples}h', raw)
-        return visualizer._levels_from_values_py(list(samples))
+        return visualizer._stereo_levels_from_values_py(list(samples))
 
 
 async def vu_meter_server(websocket, path):
@@ -434,7 +488,11 @@ async def vu_meter_server(websocket, path):
     bt_tap = BluetoothTapReader()
 
     # Send empty data initially
-    empty_data = [0] * viz.num_bars
+    empty_left, empty_right = viz._zero_levels()
+
+    def _payload(stereo_levels, active):
+        left, right = stereo_levels
+        return json.dumps({"levels_l": left, "levels_r": right, "active": active})
 
     try:
         while True:
@@ -449,23 +507,23 @@ async def vu_meter_server(websocket, path):
             sq_active = levels is not None and viz.same_index_count <= 10
 
             if sq_active:
-                payload = json.dumps({"levels": levels, "active": any(l > 0 for l in levels)})
-                await websocket.send(payload)
+                active = any(l > 0 for l in levels[0]) or any(l > 0 for l in levels[1])
+                await websocket.send(_payload(levels, active))
                 continue
 
             bt_levels = bt_tap.read_levels(viz)
             if bt_levels is not None:
-                payload = json.dumps({"levels": bt_levels, "active": any(l > 0 for l in bt_levels)})
-                await websocket.send(payload)
+                active = any(l > 0 for l in bt_levels[0]) or any(l > 0 for l in bt_levels[1])
+                await websocket.send(_payload(bt_levels, active))
                 continue
 
             if levels is None:
                 # Shared memory not found or error, send zeros
-                await websocket.send(json.dumps({"levels": empty_data, "active": False}))
+                await websocket.send(_payload((empty_left, empty_right), False))
                 # Poll slower if not active
                 await asyncio.sleep(1.0)
             else:
-                await websocket.send(json.dumps({"levels": levels, "active": False}))
+                await websocket.send(_payload(levels, False))
 
     except websockets.exceptions.ConnectionClosed:
         print("Client disconnected")

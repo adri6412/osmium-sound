@@ -121,13 +121,10 @@ const AnalogVUMeter = ({ isPlaying, className = "" }) => {
     lastUpdateRef.current = now;
     try {
       const data = JSON.parse(lastMessage.data);
-      if (data.levels && Array.isArray(data.levels)) {
-        const mid = Math.floor(data.levels.length / 2);
-        const leftBars = data.levels.slice(0, mid);
-        const rightBars = data.levels.slice(mid);
+      if (Array.isArray(data.levels_l) && Array.isArray(data.levels_r)) {
         const getPeak = (arr) => (arr.length ? Math.max(...arr) : 0);
-        leftValue.set(getPeak(leftBars));
-        rightValue.set(getPeak(rightBars));
+        leftValue.set(getPeak(data.levels_l));
+        rightValue.set(getPeak(data.levels_r));
       }
     } catch (error) {
       console.error("Error parsing VU meter websocket data:", error);
