@@ -223,7 +223,7 @@ async function saveShellAccount() {
 // login URL the owner opens on ANY device to approve this node from their own
 // account, no auth key to generate/paste. If Tailscale isn't installed yet
 // (device missed the build-time/OTA install), a button installs it on demand.
-const tailscale = reactive({ available: true, connected: false, ip: '', busy: false, installing: false, loginUrl: '' });
+const tailscale = reactive({ available: true, connected: false, ip: '', busy: false, installing: false, loginUrl: '', derpRegion: '', derpLatencyMs: null });
 let tailscalePoll = null;
 async function loadTailscale() {
   const r = await api.sys('tailscale');
@@ -231,6 +231,8 @@ async function loadTailscale() {
     tailscale.available = !!r.data.available;
     tailscale.connected = !!r.data.connected;
     tailscale.ip = r.data.ip || '';
+    tailscale.derpRegion = r.data.derp_region || '';
+    tailscale.derpLatencyMs = r.data.derp_latency_ms ?? null;
     if (tailscale.connected) tailscale.loginUrl = '';
   }
 }
@@ -947,6 +949,10 @@ onUnmounted(() => {
             <span class="muted">{{ tailscale.connected ? t('settings.tailscale.connectedHint', { ip: tailscale.ip }) : t('settings.tailscale.disconnectedHint') }}</span>
           </span>
           <Toggle :model-value="tailscale.connected" :disabled="tailscale.busy" @update:model-value="setTailscale" />
+        </div>
+        <div class="between item" v-if="tailscale.connected && tailscale.derpRegion">
+          <span class="muted">{{ t('settings.tailscale.derp') }}</span>
+          <span class="silver">{{ tailscale.derpRegion }}<template v-if="tailscale.derpLatencyMs != null"> · {{ tailscale.derpLatencyMs }}ms</template></span>
         </div>
         <template v-if="!tailscale.connected && tailscale.loginUrl">
           <p class="sub">{{ t('settings.tailscale.loginHint') }}</p>

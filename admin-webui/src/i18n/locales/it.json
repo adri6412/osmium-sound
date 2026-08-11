@@ -81,7 +81,12 @@
     "wifi": "Wi-Fi",
     "wired": "Cavo",
     "headless": "Headless",
-    "onscreen": "Su schermo"
+    "onscreen": "Su schermo",
+    "cpu": "CPU",
+    "ram": "RAM",
+    "disk": "Disco",
+    "temperature": "Temperatura",
+    "gpu": "GPU"
   },
   "settings": {
     "title": "Impostazioni",
@@ -105,7 +110,7 @@
       },
       "services": {
         "label": "Servizi",
-        "desc": "Tidal Connect, accesso SSH"
+        "desc": "Accesso SSH"
       },
       "tailscale": {
         "label": "Tailscale",
@@ -229,6 +234,7 @@
       "toggle": "Tailscale",
       "connectedHint": "Connesso — raggiungibile su {ip}",
       "disconnectedHint": "Non connesso",
+      "derp": "Relay DERP più vicino",
       "loginHint": "Apri questo link su un qualsiasi dispositivo (anche il telefono) per autorizzare l'apparecchio dal tuo account Tailscale. Serve solo la prima volta: da quel momento resta autenticato.",
       "openLink": "Apri il link per autorizzare il dispositivo",
       "on": "Tailscale connesso",
