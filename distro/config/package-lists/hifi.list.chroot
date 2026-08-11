@@ -165,3 +165,7 @@ unattended-upgrades
 # daemons/scripts write there now (see hifi_logging.py / hifi-log.sh) so the
 # support-bundle endpoint has persistent history, without ever growing unbounded.
 logrotate
+
+# intel_gpu_top — Intel iGPU busy% for the admin dashboard's system stats
+# tile (api_server.py get_system_stats). Not pulled in by anything else.
+intel-gpu-tools

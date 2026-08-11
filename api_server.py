@@ -331,22 +331,30 @@ def _cpu_temp_c():
 
 def _gpu_busy_pct():
     """Intel iGPU busy % via intel_gpu_top, if installed (not shipped on the
-    image by default -- see intel-gpu-tools). Best-effort: a single JSON
-    sample over a short window, None on anything but a clean read."""
+    image by default -- see intel-gpu-tools). `-J` streams a JSON array that
+    only gets its closing `]` once the process exits, and it never exits on
+    its own -- a plain `subprocess.run(..., timeout=N)` would always hit the
+    timeout and lose the output. Let it sample for one interval, then ask it
+    to exit cleanly (SIGINT, same as Ctrl-C) so it flushes valid JSON."""
     if not shutil.which('intel_gpu_top'):
         return None
+    proc = None
     try:
-        r = subprocess.run(
+        proc = subprocess.Popen(
             ['intel_gpu_top', '-J', '-s', '500', '-o', '-'],
-            capture_output=True, text=True, timeout=3)
-        # Output is a top-level JSON array; take the last complete sample.
-        text = (r.stdout or '').strip()
-        if text.endswith(','):
-            text = text[:-1]
+            stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True)
+        time.sleep(1.0)
+        proc.send_signal(signal.SIGINT)
+        try:
+            out, _ = proc.communicate(timeout=3)
+        except subprocess.TimeoutExpired:
+            proc.kill()
+            out, _ = proc.communicate()
+        text = out.strip()
         if not text.startswith('['):
-            text = '[' + text
-        if not text.endswith(']'):
-            text = text + ']'
+            text = '[' + text.lstrip(',')
+        if not text.rstrip().endswith(']'):
+            text = text.rstrip().rstrip(',') + ']'
         samples = json.loads(text)
         if not samples:
             return None
@@ -356,6 +364,9 @@ def _gpu_busy_pct():
         return round(float(busy), 1) if busy is not None else None
     except Exception:
         return None
+    finally:
+        if proc and proc.poll() is None:
+            proc.kill()
 
 def get_system_stats():
     """CPU/RAM/disk/temperature/GPU snapshot for the admin dashboard. All
