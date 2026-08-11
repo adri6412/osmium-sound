@@ -841,6 +841,69 @@ def ensure_playlistdir():
     print(f"[sources] playlistdir set to {data.get('playlistdir')}")
 
 
+# Tailscale's CGNAT range isn't RFC1918, so it falls outside whatever
+# operators may have set up as Lyrion's own "trusted networks" allow-list —
+# a device reachable only over Tailscale (e.g. Lyrplay) can then be refused
+# some Lyrion config endpoints even though nothing on the Osmium side blocks
+# it (no firewall/reverse-proxy restricts :9000, see webui_server.py).
+TAILSCALE_CGNAT = "100.64.0.0/10"
+
+
+def _add_trusted_network(data):
+    """Given the loaded prefs dict, add Tailscale's CGNAT range to Lyrion's
+    allowedHosts -- but only when the operator has host filtering turned ON
+    (filterHosts); if it's off, every network is already allowed and there is
+    nothing to fix. Returns the (possibly updated) dict and a bool telling
+    whether anything changed."""
+    if not data.get("filterHosts"):
+        return data, False
+    cur = (data.get("allowedHosts") or "").strip()
+    entries = [e.strip() for e in cur.split(",") if e.strip()]
+    if TAILSCALE_CGNAT in entries:
+        return data, False
+    entries.append(TAILSCALE_CGNAT)
+    data["allowedHosts"] = ",".join(entries)
+    return data, True
+
+
+def ensure_lms_trusted_networks():
+    """Standalone provisioning used at service start, same pattern as
+    ensure_playlistdir(): idempotent, only stops/edits/starts Lyrion when
+    something actually needs to change."""
+    try:
+        import yaml
+    except Exception:
+        return
+    prefs = _find_prefs()
+    if not prefs:
+        return
+    try:
+        with open(prefs) as f:
+            data = yaml.safe_load(f) or {}
+    except Exception:
+        return
+    data, changed = _add_trusted_network(data)
+    if not changed:
+        return
+    _run(["systemctl", "stop", LYRION_SERVICE], timeout=60)
+    try:
+        tmp = prefs + ".tmp"
+        with open(tmp, "w") as f:
+            yaml.safe_dump(data, f, default_flow_style=False, allow_unicode=True)
+        os.replace(tmp, prefs)
+        uid, gid = _squeezebox_ids()
+        if uid is not None:
+            try:
+                os.chown(prefs, uid, gid)
+            except Exception:
+                pass
+    except Exception as e:
+        print(f"[sources] lms trusted-networks prefs write failed: {e}")
+    finally:
+        _run(["systemctl", "start", LYRION_SERVICE], timeout=60)
+    print(f"[sources] added Tailscale CGNAT range to Lyrion allowedHosts")
+
+
 def current_paths(state):
     """Media directories to hand to Lyrion. Re-validates every path against the
     same confinement each source type is supposed to already satisfy (MOUNT_ROOT
@@ -3949,6 +4012,12 @@ if __name__ == "__main__":
         ensure_playlistdir()
     except Exception as e:
         print(f"[sources] ensure_playlistdir error: {e}")
+    # Let Tailscale-only clients (e.g. Lyrplay) through Lyrion's own IP-based
+    # access control, if the operator has it enabled.
+    try:
+        ensure_lms_trusted_networks()
+    except Exception as e:
+        print(f"[sources] ensure_lms_trusted_networks error: {e}")
     # Ensure the internal-storage mount root exists.
     try:
         os.makedirs(INTERNAL_MOUNT_ROOT, exist_ok=True)

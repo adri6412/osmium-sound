@@ -18,6 +18,7 @@ import threading
 import queue
 import zipfile
 import io
+import glob
 from hifi_logging import get_logger
 from hifi_i18n import t as _t
 
@@ -309,6 +310,78 @@ def get_system_info():
             'network_interfaces': [],
             'error': _t('system.infoFetchFailed', _lang())
         }
+
+def _cpu_temp_c():
+    """Highest reading across /sys/class/thermal/thermal_zone* (usually the
+    CPU package sensor), in whole °C. None if no thermal zone is exposed."""
+    best = None
+    try:
+        for zone in glob.glob('/sys/class/thermal/thermal_zone*/temp'):
+            try:
+                with open(zone) as f:
+                    millideg = int(f.read().strip())
+            except Exception:
+                continue
+            c = millideg / 1000.0
+            if best is None or c > best:
+                best = c
+    except Exception:
+        pass
+    return round(best, 1) if best is not None else None
+
+def _gpu_busy_pct():
+    """Intel iGPU busy % via intel_gpu_top, if installed (not shipped on the
+    image by default -- see intel-gpu-tools). Best-effort: a single JSON
+    sample over a short window, None on anything but a clean read."""
+    if not shutil.which('intel_gpu_top'):
+        return None
+    try:
+        r = subprocess.run(
+            ['intel_gpu_top', '-J', '-s', '500', '-o', '-'],
+            capture_output=True, text=True, timeout=3)
+        # Output is a top-level JSON array; take the last complete sample.
+        text = (r.stdout or '').strip()
+        if text.endswith(','):
+            text = text[:-1]
+        if not text.startswith('['):
+            text = '[' + text
+        if not text.endswith(']'):
+            text = text + ']'
+        samples = json.loads(text)
+        if not samples:
+            return None
+        engines = samples[-1].get('engines') or {}
+        render = engines.get('Render/3D') or engines.get('Render/3D/0') or {}
+        busy = render.get('busy')
+        return round(float(busy), 1) if busy is not None else None
+    except Exception:
+        return None
+
+def get_system_stats():
+    """CPU/RAM/disk/temperature/GPU snapshot for the admin dashboard. All
+    fields are best-effort and independently None-able -- one missing sensor
+    (e.g. no GPU tool installed) must never take the whole tile down."""
+    try:
+        import psutil
+        cpu_pct = psutil.cpu_percent(interval=0.2)
+        vm = psutil.virtual_memory()
+        du = shutil.disk_usage('/')
+        return {
+            'cpu_percent': cpu_pct,
+            'ram_percent': vm.percent,
+            'ram_used_mb': round(vm.used / 1024 / 1024),
+            'ram_total_mb': round(vm.total / 1024 / 1024),
+            'disk_percent': round(du.used / du.total * 100, 1) if du.total else None,
+            'disk_used_gb': round(du.used / 1024 / 1024 / 1024, 1),
+            'disk_total_gb': round(du.total / 1024 / 1024 / 1024, 1),
+            'temp_c': _cpu_temp_c(),
+            'gpu_percent': _gpu_busy_pct(),
+        }
+    except Exception:
+        log.exception("get_system_stats failed")
+        return {'cpu_percent': None, 'ram_percent': None, 'ram_used_mb': None,
+                'ram_total_mb': None, 'disk_percent': None, 'disk_used_gb': None,
+                'disk_total_gb': None, 'temp_c': None, 'gpu_percent': None}
 
 _IFACE_RE = re.compile(r'^[A-Za-z0-9][A-Za-z0-9._-]*$')
 
@@ -705,7 +778,7 @@ def set_audio_device(device):
                 'message': _t('audio.writeConfigFailed', _lang())}
 
     try:
-        r = _run(['systemctl', 'restart', 'squeezelite'], timeout=30)
+        r = _restart_squeezelite_if_enabled()
         if r.returncode != 0:
             return {'success': True, 'message': _t('audio.deviceSetRestartWarn', _lang(),
                     device=device, err=(r.stderr or '').strip())}
@@ -756,7 +829,7 @@ def set_lms_role(mode, host):
     _write_sq_args(_sq_set_s(args, target))
 
     try:
-        r = _run(['systemctl', 'restart', 'squeezelite'], timeout=30)
+        r = _restart_squeezelite_if_enabled()
         if r.returncode != 0:
             return {'success': True, 'host': target if mode == 'follow' else None,
                     'message': _t('lms.serverSetRestartWarn', _lang(),
@@ -805,7 +878,7 @@ def set_player_name(name):
     _write_sq_args(args)
 
     try:
-        r = _run(['systemctl', 'restart', 'squeezelite'], timeout=30)
+        r = _restart_squeezelite_if_enabled()
         if r.returncode != 0:
             return {'success': True, 'name': name,
                     'message': _t('player.nameSetRestartWarn', _lang(),
@@ -1411,6 +1484,33 @@ def _device_label():
     return f'{name}-{suffix}'
 
 
+_DERP_NEAREST_RE = re.compile(r'Nearest DERP:\s*(.+)')
+_DERP_LATENCY_LINE_RE = re.compile(r'-\s*(\w+):\s*([\d.]+)ms\s*\(([^)]+)\)')
+
+
+def _tailscale_netcheck():
+    """Best-effort nearest-DERP name + latency from `tailscale netcheck`'s
+    plain-text report -- there's no stable structured output for this
+    subcommand across tailscale versions, so this is a defensive text scrape:
+    any format mismatch just yields empty fields rather than failing, since
+    it's purely informational (Tailscale status card)."""
+    try:
+        r = subprocess.run(['tailscale', 'netcheck'], capture_output=True, text=True, timeout=10)
+        out = (r.stdout or '') + (r.stderr or '')
+        m = _DERP_NEAREST_RE.search(out)
+        nearest = m.group(1).strip() if m else ''
+        latency_ms = None
+        if nearest:
+            for line in out.splitlines():
+                lm = _DERP_LATENCY_LINE_RE.search(line)
+                if lm and lm.group(3).strip().lower() == nearest.lower():
+                    latency_ms = float(lm.group(2))
+                    break
+        return nearest, latency_ms
+    except Exception:
+        return '', None
+
+
 def get_tailscale_status():
     if not _tailscale_available():
         return {'available': False, 'connected': False}
@@ -1425,8 +1525,11 @@ def get_tailscale_status():
     except Exception:
         log.exception("get_tailscale_status failed")
         return {'available': True, 'connected': False, 'error': _t('tailscale.statusUnavailable', _lang())}
+    derp_region, derp_latency_ms = _tailscale_netcheck() if connected else ('', None)
     return {'available': True, 'connected': connected, 'backend_state': backend,
-            'ip': ips[0] if ips else '', 'hostname': self_node.get('HostName') or ''}
+            'ip': ips[0] if ips else '', 'hostname': self_node.get('HostName') or '',
+            'derp_relay': self_node.get('Relay') or '', 'derp_region': derp_region,
+            'derp_latency_ms': derp_latency_ms}
 
 
 _TAILSCALE_URL_RE = re.compile(r'https://\S+')
@@ -1718,6 +1821,16 @@ def set_player_enabled(enabled):
         log.exception("set_player_enabled: failed to persist state")
     msg = _t('player.enabled' if enabled else 'player.disabled', _lang())
     return {'success': True, 'enabled': enabled, 'message': msg}
+
+def _restart_squeezelite_if_enabled(timeout=30):
+    """`systemctl restart` starts a unit regardless of its enablement, so a
+    plain restart after an audio/DSP config change would silently bring
+    squeezelite back up even while the user has it off (server-only mode).
+    Skip the restart entirely while disabled; the config change is still
+    persisted to disk and takes effect next time the player is re-enabled."""
+    if not get_player_enabled()['enabled']:
+        return subprocess.CompletedProcess(args=['systemctl', 'restart', 'squeezelite'], returncode=0)
+    return _run(['systemctl', 'restart', 'squeezelite'], timeout=timeout)
 
 # ──────────────────────────────────────────────────────────────────
 #  UI render resolution. The interface is a fixed 1024x600 canvas CSS-zoomed
@@ -2449,7 +2562,7 @@ def _apply_dsp_on_locked(playback_dev, bands, crossfeed, room_correction, balanc
             # device and CamillaDSP's open can fail or wedge the DAC until a
             # reboot. Same reasoning as _apply_dsp_off(), just mirrored:
             # release the old holder before starting the new one.
-            _run(['systemctl', 'restart', 'squeezelite'], timeout=30)
+            _restart_squeezelite_if_enabled()
     # `enable --now` is a no-op on an already-running unit — it would NOT pick
     # up the config.yml we just wrote (CamillaDSP only reads it at startup, no
     # hot reload). Enable separately for boot persistence, then always
@@ -2477,7 +2590,7 @@ def _apply_dsp_off():
             _write_sq_args(re.sub(r'\s+', ' ', args).strip())
         subprocess.run(['sudo', 'systemctl', 'disable', '--now', DSP_UNIT],
                        capture_output=True, text=True, timeout=30)
-        _run(['systemctl', 'restart', 'squeezelite'], timeout=30)
+        _restart_squeezelite_if_enabled()
     finally:
         if playing_player:
             _lms_resume(playing_player, elapsed)
@@ -4137,6 +4250,11 @@ def api_close_and_restart():
 @app.route('/system_info', methods=['GET'])
 def api_system_info():
     result = get_system_info()
+    return jsonify(result)
+
+@app.route('/system_stats', methods=['GET'])
+def api_system_stats():
+    result = get_system_stats()
     return jsonify(result)
 
 @app.route('/network_info', methods=['GET'])

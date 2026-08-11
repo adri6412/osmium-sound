@@ -794,6 +794,7 @@ def _proxy(base, path, method='GET', body=None, timeout=15):
 # Full admin whitelist (session required). (local_path, method) -> api path.
 _AUTH_ROUTES = {
     ('/api/system/info', 'GET'): '/system_info',
+    ('/api/system/stats', 'GET'): '/system_stats',
     ('/api/system/network_status', 'GET'): '/network_status',
     ('/api/system/network_info', 'GET'): '/network_info',
     ('/api/system/wifi_scan', 'GET'): '/wifi_scan',
