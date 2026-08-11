@@ -3,7 +3,7 @@ import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import { exec } from 'child_process';
 import { promisify } from 'util';
-import { appendFileSync } from 'fs';
+import { appendFileSync, readFileSync } from 'fs';
 
 const execAsync = promisify(exec);
 
@@ -35,6 +35,21 @@ app.on('second-instance', () => {
     mainWindow.focus();
   }
 });
+
+// The kiosk has no keyboard/mouse to drive DevTools during normal operation,
+// but debugging on the actual device is sometimes the only way to chase a
+// hardware-specific bug — this flag file lets that be toggled over SSH
+// without shipping a special build, mirroring the other on-device toggles
+// under /etc/hifi-player (ota-channel, pointer-enabled, ota-alpha-unlocked).
+// Read once at window creation (not watched live): flip it and restart the
+// app to take effect. Missing file / anything other than exactly "true" ⇒ off.
+function shouldOpenDevTools() {
+  try {
+    return readFileSync('/etc/hifi-player/devtools', 'utf8').trim() === 'true';
+  } catch {
+    return false;
+  }
+}
 
 // Same sink the renderer's console-message listener writes to (see below) —
 // main-process events (recovery reloads, load failures) land in the same
@@ -152,17 +167,14 @@ function createWindow() {
       mainWindow.loadURL('data:text/html,<html><body><h1>Loading...</h1><p>Please wait...</p></body></html>');
     });
   }
-  // TEMP (v2.5.21-dev.70-alpha): force DevTools open on the kiosk itself so
-  // the Network tab can be watched live while chasing the stale now-playing
-  // artwork bug on real hardware. Normally the kiosk has none (no
-  // keyboard/mouse to drive it — see the console-message mirroring below);
-  // revert this once that's confirmed fixed, don't let it ride into a
-  // regular dev/prod release. 'detach' (alpha1) opened a separate top-level
-  // window, which is unusable on this kiosk: there's no window manager, so
-  // it can't be moved, focused, or brought back if it ends up off-screen or
-  // behind the main window. 'bottom' docks the panel inside mainWindow
-  // itself instead, so it's always visible with the rest of the UI.
-  mainWindow.webContents.openDevTools({ mode: 'bottom' });
+
+  // 'bottom' docks the panel inside mainWindow itself rather than opening a
+  // separate top-level window — this kiosk has no window manager, so a
+  // detached DevTools window can't be moved, focused, or recovered if it
+  // ends up off-screen or behind the main window.
+  if (isDev || shouldOpenDevTools()) {
+    mainWindow.webContents.openDevTools({ mode: 'bottom' });
+  }
 
   // Show window when ready
   mainWindow.once('ready-to-show', () => {
