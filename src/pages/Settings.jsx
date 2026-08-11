@@ -31,7 +31,6 @@ import {
   Speaker,
   CheckCircle2,
   AlertTriangle,
-  HardDriveDownload,
   Lock
 } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
@@ -74,7 +73,7 @@ const DSP_BUILTIN_PRESET_LABEL_KEYS = {
  * System configuration and information
  */
 const Settings = ({ initialSection, onSectionConsumed } = {}) => {
-  const { t, lang } = useI18n();
+  const { t } = useI18n();
   const [systemInfo, setSystemInfo] = useState({
     hostname: t('common.loading'),
     platform: 'linux',
@@ -125,10 +124,6 @@ const Settings = ({ initialSection, onSectionConsumed } = {}) => {
   const [pairToken, setPairToken] = useState(null);
   const [revokeBusy, setRevokeBusy] = useState(false);
   const [revokeMessage, setRevokeMessage] = useState('');
-  // Token for the "Backup e ripristino" QR (:8080 embedded SPA, scanned by a
-  // plain phone/PC browser — no companion app). Minted the same way as
-  // pairToken below, just for the other QR section.
-  const [sourcesToken, setSourcesToken] = useState(null);
 
   // SSH server toggle
   const [sshStatus, setSshStatus] = useState(null); // { available, enabled, active }
@@ -1042,29 +1037,6 @@ const Settings = ({ initialSection, onSectionConsumed } = {}) => {
     return () => { cancelled = true; };
   }, [activeSection]);
 
-  // Same idea as above, for the "Backup e ripristino" QR: that page (embedded
-  // SPA on :8080) is meant to be usable from a plain phone/PC browser with no
-  // companion app, but its routes now require pairing like everything else —
-  // so the QR's URL itself needs to carry a token (see sources_server.py's
-  // PAIR_TOKEN/?token= handling in the embedded SPA and _require_pair_token()'s
-  // query-string fallback).
-  useEffect(() => {
-    if (activeSection !== 'custom-backup') return;
-    let cancelled = false;
-    (async () => {
-      try {
-        const r = await fetch('http://localhost:8080/api/pair/token', { method: 'POST' });
-        if (r.ok) {
-          const data = await r.json();
-          if (!cancelled) setSourcesToken(data.token || null);
-        }
-      } catch (_) {
-        if (!cancelled) setSourcesToken(null);
-      }
-    })();
-    return () => { cancelled = true; };
-  }, [activeSection]);
-
   // Invalidates every previously-paired phone (see sources_server.py's
   // /api/pair/tokens/revoke_all — also localhost-only). Re-mints a fresh
   // token right after so the QR on screen keeps working for a new pairing.
@@ -1750,22 +1722,6 @@ const Settings = ({ initialSection, onSectionConsumed } = {}) => {
   })();
   const isUsableIp = deviceIp && !/^127\./.test(deviceIp) && !/loading|caric/i.test(deviceIp);
   const webRemoteUrl = isUsableIp ? `http://${deviceIp}:${lyrionPort}/material/` : null;
-  // Sources web service (:8080) — also hosts the Backup/restore page. Not
-  // shown/usable until sourcesToken arrives (mirrors pairingQrValue below):
-  // every route on that page now requires pairing, so the URL must carry the
-  // token or the page would 401 on every action.
-  // &lang= renders that page in the language the kiosk is set to, instead of
-  // always Italian.
-  // Routed through webui's reverse proxy (:80 /sources-app, see
-  // webui_server.py) rather than straight to :8080, so it shares that
-  // service's session/pairing plumbing. webui_server.py is plain HTTP (no
-  // TLS, see its module docstring) — NOTE: iOS Safari's "HTTPS-Only" setting
-  // hard-refuses to even navigate to a bare http:// URL (previously reported
-  // by a user scanning this exact QR), which is a known, accepted regression
-  // of that decision for anyone with that Safari setting on.
-  const sourcesUrl = (isUsableIp && sourcesToken)
-    ? `http://${deviceIp}/sources-app?token=${encodeURIComponent(sourcesToken)}&lang=${encodeURIComponent(lang)}`
-    : null;
   // Companion-app pairing QR payload: JSON (not a bare URL) so the app can pick
   // out the LMS address, the :8080 API address, and the pairing token in one
   // scan. `pairToken` is minted fresh each time this section is opened (see the
@@ -1838,11 +1794,6 @@ const Settings = ({ initialSection, onSectionConsumed } = {}) => {
       title: t('settings.sections.webRemoteIos'),
       icon: Tablet,
       content: 'custom-web-remote-ios'
-    },
-    {
-      title: t('settings.sections.backup'),
-      icon: HardDriveDownload,
-      content: 'custom-backup'
     },
     {
       title: t('settings.sections.ssh'),
@@ -3092,37 +3043,6 @@ const Settings = ({ initialSection, onSectionConsumed } = {}) => {
                         {t('settings.webRemoteIos.disclaimer')}
                       </p>
                     </div>
-                  </div>
-                )}
-
-                {/* Custom Backup/Restore Section */}
-                {section.content === 'custom-backup' && (
-                  <div className="space-y-4">
-                    <p className="text-sm text-hifi-silver">{t('settings.backup.help')}</p>
-
-                    {sourcesUrl ? (
-                      <div className="flex flex-col items-center space-y-4">
-                        <div className="bg-white p-4 rounded-xl">
-                          <QRCodeSVG value={sourcesUrl} size={200} level="M" />
-                        </div>
-                        <div className="text-center">
-                          <p className="text-xs text-hifi-silver mb-1">{t('settings.backup.scanHint')}</p>
-                          <code className="text-sm text-hifi-gold break-all">{sourcesUrl}</code>
-                        </div>
-                        <p className="text-[11px] text-hifi-silver/50 text-center max-w-xs">
-                          {t('settings.backup.certHint')}
-                        </p>
-                      </div>
-                    ) : isUsableIp ? (
-                      <div className="flex flex-col items-center space-y-3 text-hifi-silver text-sm">
-                        <Loader2 size={24} className="animate-spin" />
-                        <span>{t('settings.webRemote.generatingToken')}</span>
-                      </div>
-                    ) : (
-                      <div className="rounded-lg p-3 text-center text-sm bg-hifi-dark text-hifi-silver">
-                        {t('settings.webRemote.noIp')}
-                      </div>
-                    )}
                   </div>
                 )}
 
