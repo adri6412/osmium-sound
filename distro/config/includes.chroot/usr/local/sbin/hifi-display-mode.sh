@@ -35,7 +35,28 @@ set -eu
 # the display-mode toggle.
 MODE_FILE=/etc/hifi-player/display-mode
 
+# L'ambiente X della sessione kiosk (autologin hifi = :0), solo per la ricerca
+# dell'output da spegnere in `set headless --live` qui sotto — stesso schema
+# di hifi-ui-resolution.sh.
+: "${DISPLAY:=:0}"
+: "${XAUTHORITY:=/home/hifi/.Xauthority}"
+export DISPLAY XAUTHORITY
+
 die() { echo "$1" >&2; exit 1; }
+
+# Output da spegnere: il primo connesso, preferendo quello marcato "primary".
+# Rilevato dinamicamente ad ogni chiamata (mai hardcoded) perché non è detto
+# sia lo stesso connettore su tutti i dispositivi. Stampa nulla se non c'è X
+# o nessun output connesso.
+find_output() {
+    xrandr --query 2>/dev/null | awk '
+        / connected/ {
+            if ($3 == "primary") { print $1; exit }
+            if (first == "")     { first = $1 }
+        }
+        END { if (first != "") print first }
+    '
+}
 
 target_for() {
     case "$1" in
@@ -63,6 +84,20 @@ case "${1:-}" in
         LIVE=0
         [ "${3:-}" = "--live" ] && LIVE=1
         TARGET="$(target_for "$MODE")"
+
+        # Passaggio live a headless: senza questo, il monitor resta acceso con
+        # un segnale nero non appena X muore (multi-user.target non ha più
+        # nulla che gestisca il DPMS). Spegniamo l'uscita video esplicitamente
+        # ORA, mentre X è ancora vivo (xrandr non funziona senza), un attimo
+        # prima che venga abbattuto sotto — così il pannello va davvero in
+        # standby invece di restare nero e retroilluminato. Nessuna azione
+        # equivalente serve nel verso opposto: la sessione X che riparte al
+        # ritorno in modalità gui riaccende da sé ogni output connesso (comportamento
+        # di default del driver), quindi non c'è uno stato da "riabilitare".
+        if [ "$MODE" = headless ] && [ "$LIVE" = 1 ] && command -v xrandr >/dev/null 2>&1; then
+            OUT="$(find_output)"
+            [ -n "$OUT" ] && xrandr --output "$OUT" --off >/dev/null 2>&1 || true
+        fi
 
         # Persist atomically (tmp + mv), same pattern as pointer-enabled.
         mkdir -p "$(dirname "$MODE_FILE")"
