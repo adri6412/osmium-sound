@@ -1,7 +1,7 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { QRCodeSVG } from 'qrcode.react';
-import { Disc3, CheckCircle2 } from 'lucide-react';
+import { HardDrive, ChevronRight, ChevronLeft, Loader2, AlertCircle, CheckCircle2, Disc3, RefreshCw } from 'lucide-react';
 import { systemAPI } from '../utils/api';
 import { useI18n } from '../i18n';
 
@@ -11,24 +11,36 @@ import { useI18n } from '../i18n';
  * detected via systemAPI.getBootMode() — see api_server.py get_boot_mode()).
  * Replaces Debian Installer entirely.
  *
- * No mouse/keyboard/touch required: this screen only shows branding, the
- * setup hotspot's QR code, and a read-only progress mirror. Disk selection,
- * the erase confirmation, and starting the install all happen on a phone/
- * browser connected to that hotspot, served by webui_server.py's captive
- * portal (see INSTALL_CAPTIVE_HTML there), which calls
- * hifi-disk-install.sh via the same /install/* endpoints this screen only
- * reads from. Once the install finishes, this screen auto-reboots on its
- * own after a short countdown — it doesn't depend on the phone still being
+ * Two ways to drive it, both live at once and both end up calling the same
+ * hifi-disk-install.sh via the same /install/* endpoints:
+ *  - Remote: scan the QR code with a phone, which opens webui_server.py's
+ *    captive portal (INSTALL_CAPTIVE_HTML) to pick the disk and confirm.
+ *  - On-screen: for machines with a mouse/keyboard/touch attached, the
+ *    "choose disk on this screen" link below the QR walks through the same
+ *    welcome → disk → confirm steps locally.
+ * Either path can be the one that actually starts the install — this screen
+ * always mirrors /install/status, so if the phone starts it the on-screen
+ * wizard (if left open) jumps straight to the progress view too. Once the
+ * install finishes, this screen auto-reboots on its own after a short
+ * countdown — it doesn't depend on whichever side started it still being
  * connected.
  */
 const InstallWizard = () => {
   const { t } = useI18n();
+  const [step, setStep] = useState('welcome'); // welcome | disk | confirm
   const [apInfo, setApInfo] = useState(null);
   const [wired, setWired] = useState(false);
   const [deviceIp, setDeviceIp] = useState(null);
+  const [disks, setDisks] = useState([]);
+  const [disksLoading, setDisksLoading] = useState(false);
+  const [disksError, setDisksError] = useState('');
+  const [selectedDisk, setSelectedDisk] = useState(null);
   const [status, setStatus] = useState({ state: 'idle', progress: 0, message: '' });
+  const [localError, setLocalError] = useState('');
+  const [ignoreRemoteError, setIgnoreRemoteError] = useState(false);
   const [countdown, setCountdown] = useState(null);
-  const rebootedRef = useRef(false);
+  const rebootedRef = useRef(null);
+  const pollRef = useRef(null);
 
   useEffect(() => {
     let alive = true;
@@ -60,6 +72,13 @@ const InstallWizard = () => {
     pollIp();
     const ipId = setInterval(pollIp, 5000);
 
+    return () => { alive = false; clearInterval(apId); clearInterval(ipId); };
+  }, []);
+
+  // Always mirrors /install/status, regardless of which side (this screen or
+  // a phone on the captive portal) actually kicked the install off.
+  useEffect(() => {
+    let alive = true;
     const pollInstall = async () => {
       try {
         const res = await systemAPI.getInstallStatus();
@@ -67,13 +86,12 @@ const InstallWizard = () => {
       } catch (_) {}
     };
     pollInstall();
-    const installId = setInterval(pollInstall, 1500);
-
-    return () => { alive = false; clearInterval(apId); clearInterval(ipId); clearInterval(installId); };
+    pollRef.current = setInterval(pollInstall, 1500);
+    return () => { alive = false; clearInterval(pollRef.current); };
   }, []);
 
   // Auto-reboot a few seconds after the install reports done — never a
-  // button, and not dependent on the phone that started it still being on
+  // button, and not dependent on whichever side started it still being on
   // the page.
   useEffect(() => {
     if (status.state !== 'done' || rebootedRef.current) return;
@@ -94,20 +112,131 @@ const InstallWizard = () => {
     return () => clearInterval(id);
   }, [status.state]);
 
-  const showProgress = status.state === 'running' || status.state === 'done' || status.state === 'error';
+  const loadDisks = useCallback(async () => {
+    setDisksLoading(true);
+    setDisksError('');
+    try {
+      const res = await systemAPI.getInstallDisks();
+      if (res.success && res.data?.success) {
+        setDisks(res.data.disks || []);
+      } else {
+        setDisksError(res.data?.message || t('installer.disk.none'));
+      }
+    } catch (_) {
+      setDisksError(t('installer.disk.none'));
+    }
+    setDisksLoading(false);
+  }, [t]);
+
+  useEffect(() => {
+    if (step === 'disk') loadDisks();
+  }, [step, loadDisks]);
+
+  const startInstall = async () => {
+    if (!selectedDisk) return;
+    setLocalError('');
+    setIgnoreRemoteError(false);
+    const res = await systemAPI.startInstall(selectedDisk.path);
+    if (!res.success || res.data?.success === false) {
+      setLocalError(res.data?.message || res.message || '');
+    }
+  };
+
+  const retry = () => {
+    setSelectedDisk(null);
+    setLocalError('');
+    setIgnoreRemoteError(true);
+    setStep('disk');
+  };
+
+  const formatSize = (bytes) => {
+    const n = Number(bytes);
+    if (!n) return '';
+    const gb = n / (1024 ** 3);
+    return gb >= 1000 ? `${(gb / 1024).toFixed(1)} TB` : `${gb.toFixed(0)} GB`;
+  };
+
+  // The remote (phone) side can start/finish/fail an install at any time,
+  // independently of whatever step this screen happens to be sitting on —
+  // so progress/done always win over the local welcome/disk/confirm wizard.
+  // A remote error only wins until the user explicitly retries on-screen
+  // (ignoreRemoteError), so a stale error from a previous attempt doesn't
+  // trap the local disk picker.
+  const showProgress = !localError && (
+    status.state === 'running' ||
+    status.state === 'done' ||
+    (status.state === 'error' && !ignoreRemoteError)
+  );
+  const errorMessage = localError || (status.state === 'error' ? status.message : '');
+  const showError = !!localError || (showProgress && status.state === 'error');
+
+  const Shell = ({ children, footer }) => (
+    <div className="absolute inset-0 z-[60] bg-hifi-dark flex flex-col font-display overflow-hidden">
+      <div className="flex items-center px-6 h-12 shrink-0 border-b border-hifi-border/60">
+        <div className="flex items-center space-x-2">
+          <div className="w-2 h-2 rounded-full bg-hifi-gold shadow-[0_0_6px_rgba(212,175,55,0.8)]" />
+          <span className="text-[11px] font-bold tracking-[0.2em] text-hifi-silver/70 uppercase">Osmium Sound</span>
+        </div>
+      </div>
+      <div className="flex-1 min-h-0 flex flex-col items-center justify-center px-8 overflow-y-auto content-scrollbar">
+        {children}
+      </div>
+      {footer && <div className="shrink-0 px-8 py-4 border-t border-hifi-border/60 flex items-center justify-between">{footer}</div>}
+    </div>
+  );
+
+  if (showProgress || localError) {
+    return (
+      <AnimatePresence>
+        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.2 }}
+          className="absolute inset-0 z-[60] bg-hifi-dark flex flex-col items-center justify-center font-display overflow-hidden px-8">
+          <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} transition={{ delay: 0.1 }}
+            className="flex flex-col items-center text-center max-w-md">
+            <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-hifi-gold to-yellow-600 flex items-center justify-center shadow-[0_0_40px_rgba(212,175,55,0.3)] mb-6">
+              {status.state === 'done' ? <CheckCircle2 size={32} className="text-black" /> : <Disc3 size={32} className="text-black" />}
+            </div>
+
+            <div className="w-full max-w-sm">
+              <h2 className="text-xl font-bold text-white mb-1">
+                {showError ? t('installer.error.title')
+                  : status.state === 'done' ? t('installer.done.title')
+                  : t('installer.progress.title')}
+              </h2>
+              <p className="text-hifi-silver/60 text-sm mb-6">
+                {showError ? errorMessage
+                  : status.message || (status.state === 'done' ? t('installer.done.subtitle') : t('installer.progress.subtitle'))}
+              </p>
+              {!showError && status.state === 'running' && (
+                <div className="w-full h-2 rounded-full bg-hifi-border overflow-hidden">
+                  <div className="h-full bg-hifi-gold transition-all" style={{ width: `${Math.max(0, Math.min(100, status.progress || 0))}%` }} />
+                </div>
+              )}
+              {!showError && status.state === 'done' && countdown != null && (
+                <p className="text-hifi-silver/50 text-xs mt-4">{t('installer.done.rebootIn', { n: countdown })}</p>
+              )}
+              {showError && (
+                <button onClick={retry} className="mt-2 bg-hifi-gold text-black font-semibold px-6 py-2.5 rounded-xl hover:brightness-110 transition">
+                  {t('installer.error.retry')}
+                </button>
+              )}
+            </div>
+          </motion.div>
+        </motion.div>
+      </AnimatePresence>
+    );
+  }
 
   return (
-    <AnimatePresence>
-      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.2 }}
-        className="absolute inset-0 z-[60] bg-hifi-dark flex flex-col items-center justify-center font-display overflow-hidden px-8">
-        <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} transition={{ delay: 0.1 }}
-          className="flex flex-col items-center text-center max-w-md">
-          <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-hifi-gold to-yellow-600 flex items-center justify-center shadow-[0_0_40px_rgba(212,175,55,0.3)] mb-6">
-            {status.state === 'done' ? <CheckCircle2 size={32} className="text-black" /> : <Disc3 size={32} className="text-black" />}
-          </div>
+    <AnimatePresence mode="wait">
+      <motion.div key={step} initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} transition={{ duration: 0.2 }} className="absolute inset-0 z-[60]">
 
-          {!showProgress && (
-            <>
+        {step === 'welcome' && (
+          <div className="absolute inset-0 z-[60] bg-hifi-dark flex flex-col items-center justify-center font-display overflow-hidden px-8">
+            <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} transition={{ delay: 0.1 }}
+              className="flex flex-col items-center text-center max-w-md">
+              <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-hifi-gold to-yellow-600 flex items-center justify-center shadow-[0_0_40px_rgba(212,175,55,0.3)] mb-6">
+                <Disc3 size={32} className="text-black" />
+              </div>
               <h1 className="text-2xl font-bold text-white mb-2">{t('installer.qr.title')}</h1>
               <p className="text-hifi-silver/70 text-sm leading-relaxed mb-8">{t('installer.qr.subtitle')}</p>
               {apInfo?.ssid && !wired ? (
@@ -120,10 +249,6 @@ const InstallWizard = () => {
                 // hardware/VM, or the AP hasn't come up — or a wired connection
                 // is already up, in which case skip the hotspot and point
                 // straight at the device since the phone can join the same LAN.
-                // Prefer the device's own IP over the hifiplayer.local hostname:
-                // the hostname is ambiguous the moment more than one Osmium Sound
-                // unit is on the same network (mDNS answers with whichever
-                // responds first), the IP never is.
                 <div className="inline-flex flex-col items-center bg-white rounded-2xl p-4">
                   <QRCodeSVG value={`http://${deviceIp || 'hifiplayer.local'}`} size={180} />
                   <span className="text-black text-xs mt-2">
@@ -132,30 +257,83 @@ const InstallWizard = () => {
                   {deviceIp && <span className="text-black/50 text-[10px] mt-0.5">http://hifiplayer.local</span>}
                 </div>
               )}
-            </>
-          )}
+              <button onClick={() => setStep('disk')} className="mt-8 flex items-center space-x-1 text-hifi-silver/60 hover:text-hifi-gold transition text-sm">
+                <span>{t('installer.start')}</span><ChevronRight size={16} />
+              </button>
+            </motion.div>
+          </div>
+        )}
 
-          {showProgress && (
-            <div className="w-full max-w-sm">
-              <h2 className="text-xl font-bold text-white mb-1">
-                {status.state === 'done' ? t('installer.done.title')
-                  : status.state === 'error' ? t('installer.error.title')
-                  : t('installer.progress.title')}
-              </h2>
-              <p className="text-hifi-silver/60 text-sm mb-6">
-                {status.message || (status.state === 'done' ? t('installer.done.subtitle') : t('installer.progress.subtitle'))}
-              </p>
-              {status.state === 'running' && (
-                <div className="w-full h-2 rounded-full bg-hifi-border overflow-hidden">
-                  <div className="h-full bg-hifi-gold transition-all" style={{ width: `${Math.max(0, Math.min(100, status.progress || 0))}%` }} />
+        {step === 'disk' && (
+          <Shell footer={
+            <button onClick={() => setStep('welcome')} className="flex items-center space-x-1 text-hifi-silver/60 hover:text-white transition">
+              <ChevronLeft size={18} /><span className="text-sm">{t('common.back')}</span>
+            </button>
+          }>
+            <div className="w-full max-w-lg">
+              <h2 className="text-2xl font-bold text-white mb-1 text-center">{t('installer.disk.title')}</h2>
+              <p className="text-hifi-silver/60 text-sm text-center mb-8">{t('installer.disk.subtitle')}</p>
+
+              {disksLoading && (
+                <p className="text-center text-hifi-silver/60 text-sm flex items-center justify-center">
+                  <Loader2 size={15} className="animate-spin mr-2" />{t('installer.disk.loading')}
+                </p>
+              )}
+
+              {!disksLoading && disks.length === 0 && (
+                <div className="text-center">
+                  <p className="text-hifi-silver/60 text-sm mb-4 flex items-center justify-center">
+                    <AlertCircle size={15} className="mr-2" />{disksError || t('installer.disk.none')}
+                  </p>
+                  <button onClick={loadDisks} className="inline-flex items-center space-x-2 bg-hifi-surface hover:bg-hifi-light px-4 py-2 rounded-xl text-sm text-white transition">
+                    <RefreshCw size={14} /><span>{t('installer.disk.refresh')}</span>
+                  </button>
                 </div>
               )}
-              {status.state === 'done' && countdown != null && (
-                <p className="text-hifi-silver/50 text-xs mt-4">{t('installer.done.rebootIn', { n: countdown })}</p>
+
+              {!disksLoading && disks.length > 0 && (
+                <div className="space-y-3">
+                  {disks.map((d) => (
+                    <button
+                      key={d.path}
+                      onClick={() => { setSelectedDisk(d); setStep('confirm'); }}
+                      className="w-full flex items-center space-x-4 bg-hifi-surface hover:bg-hifi-light rounded-2xl border border-hifi-border hover:border-hifi-gold/50 transition px-5 py-4 text-left"
+                    >
+                      <HardDrive size={28} className="text-hifi-gold shrink-0" />
+                      <div className="flex-1 min-w-0">
+                        <div className="text-white font-medium truncate">{d.model || d.path}</div>
+                        <div className="text-hifi-silver/50 text-xs">{d.path} · {formatSize(d.size)}{d.transport ? ` · ${d.transport}` : ''}</div>
+                      </div>
+                      <ChevronRight size={18} className="text-hifi-silver/40 shrink-0" />
+                    </button>
+                  ))}
+                </div>
               )}
             </div>
-          )}
-        </motion.div>
+          </Shell>
+        )}
+
+        {step === 'confirm' && selectedDisk && (
+          <Shell footer={
+            <button onClick={() => setStep('disk')} className="flex items-center space-x-1 text-hifi-silver/60 hover:text-white transition">
+              <ChevronLeft size={18} /><span className="text-sm">{t('common.back')}</span>
+            </button>
+          }>
+            <div className="w-full max-w-lg text-center">
+              <AlertCircle size={40} className="text-amber-400 mb-4 mx-auto" />
+              <h2 className="text-2xl font-bold text-white mb-4">{t('installer.confirm.title')}</h2>
+              <div className="rounded-2xl border border-amber-500/30 bg-amber-900/10 p-5 mb-6">
+                <p className="text-sm text-amber-200">
+                  {t('installer.confirm.warning', { disk: `${selectedDisk.model || selectedDisk.path} (${selectedDisk.path})` })}
+                </p>
+              </div>
+              <button onClick={startInstall} className="w-full bg-amber-600 hover:bg-amber-500 text-white font-semibold px-6 py-3 rounded-xl transition">
+                {t('installer.confirm.button')}
+              </button>
+            </div>
+          </Shell>
+        )}
+
       </motion.div>
     </AnimatePresence>
   );
