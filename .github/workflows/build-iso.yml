@@ -158,6 +158,10 @@ jobs:
           # created, but when it runs first it creates the release itself, and
           # a name here would stick.
           fail_on_unmatched_files: true
+          # Same rule as build-ui-ota.yml: a hyphenated tag (dev/alpha build)
+          # is a prerelease, so it never becomes /releases/latest and can't
+          # be mistaken for a stable prod release by the OTA fallback path.
+          prerelease: ${{ contains(inputs.tag, '-') }}
           files: |
             ${{ steps.iso.outputs.iso }}
             ${{ steps.iso.outputs.iso }}.sha256
