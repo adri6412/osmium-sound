@@ -223,6 +223,22 @@ class SqueezeliteVisualizer:
             else:
                 start_offset = self.buffer_offset + (buf_index - (samples_to_read * 2))
 
+            # Snap the window to a stereo-frame boundary. self.buffer_offset
+            # is sample index 0 in the ring buffer, which is always L by
+            # construction (squeezelite writes strictly L,R,L,R... and
+            # buf_size is always even, so that phase is preserved across
+            # wraps) — but start_offset above is derived from buf_index at
+            # whatever instant we happened to poll it, which can land on
+            # either the L or the R half of a pair essentially at random
+            # from one read to the next. Without this, roughly half our
+            # reads deinterleave correctly (values[0::2]=L) and half get L
+            # and R fully swapped. That's invisible on real stereo material
+            # (both needles keep moving either way), but on a hard-panned
+            # mono signal it makes the one active channel appear to hop
+            # between the two needles at random every other frame.
+            if ((start_offset - self.buffer_offset) // 2) % 2 != 0:
+                start_offset -= 2
+
             # Ensure we don't read past the file limit
             file_size = self.mmap_obj.size()
             if start_offset + (samples_to_read * 2) > file_size:
