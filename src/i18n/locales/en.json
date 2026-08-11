@@ -673,7 +673,8 @@
     },
     "welcome": {
       "title": "Install Osmium Sound",
-      "subtitle": "This will install Osmium Sound onto this computer's disk. All data on the chosen disk will be erased."
+      "subtitle": "This will install Osmium Sound onto this computer's disk. All data on the chosen disk will be erased.",
+      "remoteLink": "Prefer your phone? Scan a QR code instead"
     },
     "start": "Choose disk",
     "disk": {

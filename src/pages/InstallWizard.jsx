@@ -1,9 +1,14 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { QRCodeSVG } from 'qrcode.react';
-import { HardDrive, ChevronRight, ChevronLeft, Loader2, AlertCircle, CheckCircle2, Disc3, RefreshCw } from 'lucide-react';
+import { HardDrive, ChevronRight, ChevronLeft, Loader2, AlertCircle, CheckCircle2, Disc3, RefreshCw, Smartphone } from 'lucide-react';
 import { systemAPI } from '../utils/api';
 import { useI18n } from '../i18n';
+
+// Keyboard-only focus ring (focus-visible, not plain focus) — this screen is
+// meant to be operable with just a keyboard, so tabbing through it needs to
+// stay legible without adding a ring on every mouse/touch click too.
+const FOCUS_RING = 'focus:outline-none focus-visible:ring-2 focus-visible:ring-hifi-gold focus-visible:ring-offset-2 focus-visible:ring-offset-hifi-dark';
 
 /**
  * Installer UI shown when this live session was booted from the
@@ -13,11 +18,11 @@ import { useI18n } from '../i18n';
  *
  * Two ways to drive it, both live at once and both end up calling the same
  * hifi-disk-install.sh via the same /install/* endpoints:
- *  - Remote: scan the QR code with a phone, which opens webui_server.py's
- *    captive portal (INSTALL_CAPTIVE_HTML) to pick the disk and confirm.
- *  - On-screen: for machines with a mouse/keyboard/touch attached, the
- *    "choose disk on this screen" link below the QR walks through the same
- *    welcome → disk → confirm steps locally.
+ *  - On-screen (primary): welcome → disk → confirm, driven locally with a
+ *    mouse/keyboard/touch attached to this machine.
+ *  - Remote (secondary, backgrounded behind a link): scan the QR code with a
+ *    phone, which opens webui_server.py's captive portal
+ *    (INSTALL_CAPTIVE_HTML) to pick the disk and confirm from there instead.
  * Either path can be the one that actually starts the install — this screen
  * always mirrors /install/status, so if the phone starts it the on-screen
  * wizard (if left open) jumps straight to the progress view too. Once the
@@ -27,7 +32,7 @@ import { useI18n } from '../i18n';
  */
 const InstallWizard = () => {
   const { t } = useI18n();
-  const [step, setStep] = useState('welcome'); // welcome | disk | confirm
+  const [step, setStep] = useState('welcome'); // welcome | qr | disk | confirm
   const [apInfo, setApInfo] = useState(null);
   const [wired, setWired] = useState(false);
   const [deviceIp, setDeviceIp] = useState(null);
@@ -215,7 +220,7 @@ const InstallWizard = () => {
                 <p className="text-hifi-silver/50 text-xs mt-4">{t('installer.done.rebootIn', { n: countdown })}</p>
               )}
               {showError && (
-                <button onClick={retry} className="mt-2 bg-hifi-gold text-black font-semibold px-6 py-2.5 rounded-xl hover:brightness-110 transition">
+                <button onClick={retry} className={`mt-2 bg-hifi-gold text-black font-semibold px-6 py-2.5 rounded-xl hover:brightness-110 transition ${FOCUS_RING}`}>
                   {t('installer.error.retry')}
                 </button>
               )}
@@ -234,8 +239,27 @@ const InstallWizard = () => {
           <div className="absolute inset-0 z-[60] bg-hifi-dark flex flex-col items-center justify-center font-display overflow-hidden px-8">
             <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} transition={{ delay: 0.1 }}
               className="flex flex-col items-center text-center max-w-md">
+              <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-hifi-gold to-yellow-600 flex items-center justify-center shadow-[0_0_40px_rgba(212,175,55,0.3)] mb-6">
+                <Disc3 size={40} className="text-black" />
+              </div>
+              <h1 className="text-3xl font-bold text-white mb-3">{t('installer.welcome.title')}</h1>
+              <p className="text-hifi-silver/70 leading-relaxed mb-8">{t('installer.welcome.subtitle')}</p>
+              <button onClick={() => setStep('disk')} className={`flex items-center space-x-2 bg-hifi-gold text-black font-semibold px-8 py-3 rounded-xl hover:brightness-110 transition ${FOCUS_RING}`}>
+                <span>{t('installer.start')}</span><ChevronRight size={18} />
+              </button>
+              <button onClick={() => setStep('qr')} className={`mt-6 flex items-center space-x-1 text-hifi-silver/50 hover:text-hifi-silver transition text-xs rounded-md px-2 py-1 ${FOCUS_RING}`}>
+                <Smartphone size={13} /><span>{t('installer.welcome.remoteLink')}</span>
+              </button>
+            </motion.div>
+          </div>
+        )}
+
+        {step === 'qr' && (
+          <div className="absolute inset-0 z-[60] bg-hifi-dark flex flex-col items-center justify-center font-display overflow-hidden px-8">
+            <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} transition={{ delay: 0.1 }}
+              className="flex flex-col items-center text-center max-w-md">
               <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-hifi-gold to-yellow-600 flex items-center justify-center shadow-[0_0_40px_rgba(212,175,55,0.3)] mb-6">
-                <Disc3 size={32} className="text-black" />
+                <Smartphone size={32} className="text-black" />
               </div>
               <h1 className="text-2xl font-bold text-white mb-2">{t('installer.qr.title')}</h1>
               <p className="text-hifi-silver/70 text-sm leading-relaxed mb-8">{t('installer.qr.subtitle')}</p>
@@ -257,8 +281,8 @@ const InstallWizard = () => {
                   {deviceIp && <span className="text-black/50 text-[10px] mt-0.5">http://hifiplayer.local</span>}
                 </div>
               )}
-              <button onClick={() => setStep('disk')} className="mt-8 flex items-center space-x-1 text-hifi-silver/60 hover:text-hifi-gold transition text-sm">
-                <span>{t('installer.start')}</span><ChevronRight size={16} />
+              <button onClick={() => setStep('welcome')} className={`mt-8 flex items-center space-x-1 text-hifi-silver/60 hover:text-white transition text-sm rounded-md px-2 py-1 ${FOCUS_RING}`}>
+                <ChevronLeft size={16} /><span>{t('common.back')}</span>
               </button>
             </motion.div>
           </div>
@@ -266,7 +290,7 @@ const InstallWizard = () => {
 
         {step === 'disk' && (
           <Shell footer={
-            <button onClick={() => setStep('welcome')} className="flex items-center space-x-1 text-hifi-silver/60 hover:text-white transition">
+            <button onClick={() => setStep('welcome')} className={`flex items-center space-x-1 text-hifi-silver/60 hover:text-white transition rounded-md px-2 py-1 ${FOCUS_RING}`}>
               <ChevronLeft size={18} /><span className="text-sm">{t('common.back')}</span>
             </button>
           }>
@@ -285,7 +309,7 @@ const InstallWizard = () => {
                   <p className="text-hifi-silver/60 text-sm mb-4 flex items-center justify-center">
                     <AlertCircle size={15} className="mr-2" />{disksError || t('installer.disk.none')}
                   </p>
-                  <button onClick={loadDisks} className="inline-flex items-center space-x-2 bg-hifi-surface hover:bg-hifi-light px-4 py-2 rounded-xl text-sm text-white transition">
+                  <button onClick={loadDisks} className={`inline-flex items-center space-x-2 bg-hifi-surface hover:bg-hifi-light px-4 py-2 rounded-xl text-sm text-white transition ${FOCUS_RING}`}>
                     <RefreshCw size={14} /><span>{t('installer.disk.refresh')}</span>
                   </button>
                 </div>
@@ -297,7 +321,7 @@ const InstallWizard = () => {
                     <button
                       key={d.path}
                       onClick={() => { setSelectedDisk(d); setStep('confirm'); }}
-                      className="w-full flex items-center space-x-4 bg-hifi-surface hover:bg-hifi-light rounded-2xl border border-hifi-border hover:border-hifi-gold/50 transition px-5 py-4 text-left"
+                      className={`w-full flex items-center space-x-4 bg-hifi-surface hover:bg-hifi-light rounded-2xl border border-hifi-border hover:border-hifi-gold/50 transition px-5 py-4 text-left ${FOCUS_RING}`}
                     >
                       <HardDrive size={28} className="text-hifi-gold shrink-0" />
                       <div className="flex-1 min-w-0">
@@ -315,7 +339,7 @@ const InstallWizard = () => {
 
         {step === 'confirm' && selectedDisk && (
           <Shell footer={
-            <button onClick={() => setStep('disk')} className="flex items-center space-x-1 text-hifi-silver/60 hover:text-white transition">
+            <button onClick={() => setStep('disk')} className={`flex items-center space-x-1 text-hifi-silver/60 hover:text-white transition rounded-md px-2 py-1 ${FOCUS_RING}`}>
               <ChevronLeft size={18} /><span className="text-sm">{t('common.back')}</span>
             </button>
           }>
@@ -327,7 +351,7 @@ const InstallWizard = () => {
                   {t('installer.confirm.warning', { disk: `${selectedDisk.model || selectedDisk.path} (${selectedDisk.path})` })}
                 </p>
               </div>
-              <button onClick={startInstall} className="w-full bg-amber-600 hover:bg-amber-500 text-white font-semibold px-6 py-3 rounded-xl transition">
+              <button onClick={startInstall} className={`w-full bg-amber-600 hover:bg-amber-500 text-white font-semibold px-6 py-3 rounded-xl transition ${FOCUS_RING}`}>
                 {t('installer.confirm.button')}
               </button>
             </div>

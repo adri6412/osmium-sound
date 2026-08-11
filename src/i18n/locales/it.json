@@ -673,7 +673,8 @@
     },
     "welcome": {
       "title": "Installa Osmium Sound",
-      "subtitle": "Questa procedura installa Osmium Sound sul disco di questo computer. Tutti i dati presenti sul disco scelto verranno cancellati."
+      "subtitle": "Questa procedura installa Osmium Sound sul disco di questo computer. Tutti i dati presenti sul disco scelto verranno cancellati.",
+      "remoteLink": "Preferisci il telefono? Scansiona invece un QR code"
     },
     "start": "Scegli il disco",
     "disk": {
