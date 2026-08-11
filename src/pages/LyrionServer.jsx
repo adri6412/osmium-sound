@@ -1181,8 +1181,14 @@ const LyrionServer = () => {
               seek((e.clientX - r.left) / r.width);
             }}>
             <div className="absolute inset-0 bg-white/5 rounded-full" />
-            <motion.div className="absolute top-0 left-0 h-full bg-gradient-to-r from-hifi-gold to-yellow-400 rounded-full"
-              style={{ width: `${progress}%` }} />
+            {/* scaleX, not width: this repaints every 1s from the playback
+                poll while playing, and animating `width` makes each tick a
+                real layout reflow (tracked as a CLS shift even though the
+                element is `absolute` and moves no siblings) — a 2-minute
+                track alone accounted for ~120 of the shifts behind a 0.51
+                CLS score seen live. transform never touches layout. */}
+            <motion.div className="absolute top-0 left-0 w-full h-full bg-gradient-to-r from-hifi-gold to-yellow-400 rounded-full"
+              style={{ scaleX: progress / 100, transformOrigin: 'left' }} />
           </div>
         </div>
 
@@ -1381,8 +1387,8 @@ const LyrionServer = () => {
                         const r = e.currentTarget.getBoundingClientRect();
                         seek((e.clientX - r.left) / r.width);
                       }}>
-                      <motion.div className="absolute top-0 left-0 h-full bg-gradient-to-r from-hifi-gold to-yellow-400 rounded-full"
-                        style={{ width: `${progress}%` }} />
+                      <motion.div className="absolute top-0 left-0 w-full h-full bg-gradient-to-r from-hifi-gold to-yellow-400 rounded-full"
+                        style={{ scaleX: progress / 100, transformOrigin: 'left' }} />
                     </div>
                   </div>
 
