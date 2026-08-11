@@ -665,43 +665,5 @@
       "shutdownError": "Error during shutdown",
       "shutdownSystemError": "Error during system shutdown"
     }
-  },
-  "installer": {
-    "qr": {
-      "title": "Scan to install",
-      "subtitle": "Connect your phone to this Wi-Fi network to choose a disk and start the install — no need to touch this screen."
-    },
-    "welcome": {
-      "title": "Install Osmium Sound",
-      "subtitle": "This will install Osmium Sound onto this computer's disk. All data on the chosen disk will be erased.",
-      "remoteLink": "Prefer your phone? Scan a QR code instead"
-    },
-    "start": "Choose disk",
-    "disk": {
-      "title": "Choose the installation disk",
-      "subtitle": "The selected disk will be wiped and fully replaced by Osmium Sound.",
-      "loading": "Looking for disks…",
-      "none": "No disks available.",
-      "refresh": "Refresh list"
-    },
-    "confirm": {
-      "title": "Confirm installation?",
-      "warning": "ALL DATA on {disk} will be permanently erased. This cannot be undone.",
-      "button": "Erase and install"
-    },
-    "progress": {
-      "title": "Installing…",
-      "subtitle": "Do not power off or remove the boot media."
-    },
-    "done": {
-      "title": "Installation complete",
-      "subtitle": "Remove the boot media (USB/DVD) now — rebooting automatically.",
-      "reboot": "Reboot now",
-      "rebootIn": "Rebooting in {n}s…"
-    },
-    "error": {
-      "title": "Installation failed",
-      "retry": "Retry"
-    }
   }
 }

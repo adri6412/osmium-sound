@@ -12,7 +12,7 @@ const API_BASE_URL = 'http://localhost:8000';
 // being hardcoded to one language regardless of the user's setting.
 const networkErrorMessage = () => {
   const lang = localStorage.getItem('appLanguage');
-  return (lang === 'en' ? en : it).common.networkError;
+  return (lang === 'it' ? it : en).common.networkError;
 };
 
 /**
@@ -31,7 +31,7 @@ export const apiPost = async (endpoint, data = {}) => {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'X-UI-Lang': (localStorage.getItem('appLanguage') === 'en' ? 'en' : 'it'),
+        'X-UI-Lang': (localStorage.getItem('appLanguage') === 'it' ? 'it' : 'en'),
       },
       body: JSON.stringify(data),
     });
@@ -66,7 +66,7 @@ export const apiGet = async (endpoint) => {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',
-        'X-UI-Lang': (localStorage.getItem('appLanguage') === 'en' ? 'en' : 'it'),
+        'X-UI-Lang': (localStorage.getItem('appLanguage') === 'it' ? 'it' : 'en'),
       },
     });
     status = response.status;

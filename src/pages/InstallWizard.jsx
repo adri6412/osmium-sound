@@ -3,7 +3,6 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { QRCodeSVG } from 'qrcode.react';
 import { HardDrive, ChevronRight, ChevronLeft, Loader2, AlertCircle, CheckCircle2, Disc3, RefreshCw, Smartphone } from 'lucide-react';
 import { systemAPI } from '../utils/api';
-import { useI18n } from '../i18n';
 
 // Keyboard-only focus ring (focus-visible, not plain focus) — this screen is
 // meant to be operable with just a keyboard, so tabbing through it needs to
@@ -31,7 +30,6 @@ const FOCUS_RING = 'focus:outline-none focus-visible:ring-2 focus-visible:ring-h
  * connected.
  */
 const InstallWizard = () => {
-  const { t } = useI18n();
   const [step, setStep] = useState('welcome'); // welcome | qr | disk | confirm
   const [apInfo, setApInfo] = useState(null);
   const [wired, setWired] = useState(false);
@@ -125,13 +123,13 @@ const InstallWizard = () => {
       if (res.success && res.data?.success) {
         setDisks(res.data.disks || []);
       } else {
-        setDisksError(res.data?.message || t('installer.disk.none'));
+        setDisksError(res.data?.message || 'No disks available.');
       }
     } catch (_) {
-      setDisksError(t('installer.disk.none'));
+      setDisksError('No disks available.');
     }
     setDisksLoading(false);
-  }, [t]);
+  }, []);
 
   useEffect(() => {
     if (step === 'disk') loadDisks();
@@ -203,13 +201,13 @@ const InstallWizard = () => {
 
             <div className="w-full max-w-sm">
               <h2 className="text-xl font-bold text-white mb-1">
-                {showError ? t('installer.error.title')
-                  : status.state === 'done' ? t('installer.done.title')
-                  : t('installer.progress.title')}
+                {showError ? 'Installation failed'
+                  : status.state === 'done' ? 'Installation complete'
+                  : 'Installing…'}
               </h2>
               <p className="text-hifi-silver/60 text-sm mb-6">
                 {showError ? errorMessage
-                  : status.message || (status.state === 'done' ? t('installer.done.subtitle') : t('installer.progress.subtitle'))}
+                  : status.message || (status.state === 'done' ? 'Remove the boot media (USB/DVD) now — rebooting automatically.' : 'Do not power off or remove the boot media.')}
               </p>
               {!showError && status.state === 'running' && (
                 <div className="w-full h-2 rounded-full bg-hifi-border overflow-hidden">
@@ -217,11 +215,11 @@ const InstallWizard = () => {
                 </div>
               )}
               {!showError && status.state === 'done' && countdown != null && (
-                <p className="text-hifi-silver/50 text-xs mt-4">{t('installer.done.rebootIn', { n: countdown })}</p>
+                <p className="text-hifi-silver/50 text-xs mt-4">{`Rebooting in ${countdown}s…`}</p>
               )}
               {showError && (
                 <button onClick={retry} className={`mt-2 bg-hifi-gold text-black font-semibold px-6 py-2.5 rounded-xl hover:brightness-110 transition ${FOCUS_RING}`}>
-                  {t('installer.error.retry')}
+                  Retry
                 </button>
               )}
             </div>
@@ -242,13 +240,13 @@ const InstallWizard = () => {
               <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-hifi-gold to-yellow-600 flex items-center justify-center shadow-[0_0_40px_rgba(212,175,55,0.3)] mb-6">
                 <Disc3 size={40} className="text-black" />
               </div>
-              <h1 className="text-3xl font-bold text-white mb-3">{t('installer.welcome.title')}</h1>
-              <p className="text-hifi-silver/70 leading-relaxed mb-8">{t('installer.welcome.subtitle')}</p>
+              <h1 className="text-3xl font-bold text-white mb-3">Install Osmium Sound</h1>
+              <p className="text-hifi-silver/70 leading-relaxed mb-8">This will install Osmium Sound onto this computer's disk. All data on the chosen disk will be erased.</p>
               <button onClick={() => setStep('disk')} className={`flex items-center space-x-2 bg-hifi-gold text-black font-semibold px-8 py-3 rounded-xl hover:brightness-110 transition ${FOCUS_RING}`}>
-                <span>{t('installer.start')}</span><ChevronRight size={18} />
+                <span>Choose disk</span><ChevronRight size={18} />
               </button>
               <button onClick={() => setStep('qr')} className={`mt-6 flex items-center space-x-1 text-hifi-silver/50 hover:text-hifi-silver transition text-xs rounded-md px-2 py-1 ${FOCUS_RING}`}>
-                <Smartphone size={13} /><span>{t('installer.welcome.remoteLink')}</span>
+                <Smartphone size={13} /><span>Prefer your phone? Scan a QR code instead</span>
               </button>
             </motion.div>
           </div>
@@ -261,8 +259,8 @@ const InstallWizard = () => {
               <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-hifi-gold to-yellow-600 flex items-center justify-center shadow-[0_0_40px_rgba(212,175,55,0.3)] mb-6">
                 <Smartphone size={32} className="text-black" />
               </div>
-              <h1 className="text-2xl font-bold text-white mb-2">{t('installer.qr.title')}</h1>
-              <p className="text-hifi-silver/70 text-sm leading-relaxed mb-8">{t('installer.qr.subtitle')}</p>
+              <h1 className="text-2xl font-bold text-white mb-2">Scan to install</h1>
+              <p className="text-hifi-silver/70 text-sm leading-relaxed mb-8">Connect your phone to this Wi-Fi network to choose a disk and start the install — no need to touch this screen.</p>
               {apInfo?.ssid && !wired ? (
                 <div className="inline-flex flex-col items-center bg-white rounded-2xl p-4">
                   <QRCodeSVG value={`WIFI:T:WPA;S:${apInfo.ssid};P:${apInfo.psk || ''};;`} size={180} />
@@ -282,7 +280,7 @@ const InstallWizard = () => {
                 </div>
               )}
               <button onClick={() => setStep('welcome')} className={`mt-8 flex items-center space-x-1 text-hifi-silver/60 hover:text-white transition text-sm rounded-md px-2 py-1 ${FOCUS_RING}`}>
-                <ChevronLeft size={16} /><span>{t('common.back')}</span>
+                <ChevronLeft size={16} /><span>Back</span>
               </button>
             </motion.div>
           </div>
@@ -291,26 +289,26 @@ const InstallWizard = () => {
         {step === 'disk' && (
           <Shell footer={
             <button onClick={() => setStep('welcome')} className={`flex items-center space-x-1 text-hifi-silver/60 hover:text-white transition rounded-md px-2 py-1 ${FOCUS_RING}`}>
-              <ChevronLeft size={18} /><span className="text-sm">{t('common.back')}</span>
+              <ChevronLeft size={18} /><span className="text-sm">Back</span>
             </button>
           }>
             <div className="w-full max-w-lg">
-              <h2 className="text-2xl font-bold text-white mb-1 text-center">{t('installer.disk.title')}</h2>
-              <p className="text-hifi-silver/60 text-sm text-center mb-8">{t('installer.disk.subtitle')}</p>
+              <h2 className="text-2xl font-bold text-white mb-1 text-center">Choose the installation disk</h2>
+              <p className="text-hifi-silver/60 text-sm text-center mb-8">The selected disk will be wiped and fully replaced by Osmium Sound.</p>
 
               {disksLoading && (
                 <p className="text-center text-hifi-silver/60 text-sm flex items-center justify-center">
-                  <Loader2 size={15} className="animate-spin mr-2" />{t('installer.disk.loading')}
+                  <Loader2 size={15} className="animate-spin mr-2" />Looking for disks…
                 </p>
               )}
 
               {!disksLoading && disks.length === 0 && (
                 <div className="text-center">
                   <p className="text-hifi-silver/60 text-sm mb-4 flex items-center justify-center">
-                    <AlertCircle size={15} className="mr-2" />{disksError || t('installer.disk.none')}
+                    <AlertCircle size={15} className="mr-2" />{disksError || 'No disks available.'}
                   </p>
                   <button onClick={loadDisks} className={`inline-flex items-center space-x-2 bg-hifi-surface hover:bg-hifi-light px-4 py-2 rounded-xl text-sm text-white transition ${FOCUS_RING}`}>
-                    <RefreshCw size={14} /><span>{t('installer.disk.refresh')}</span>
+                    <RefreshCw size={14} /><span>Refresh list</span>
                   </button>
                 </div>
               )}
@@ -340,19 +338,19 @@ const InstallWizard = () => {
         {step === 'confirm' && selectedDisk && (
           <Shell footer={
             <button onClick={() => setStep('disk')} className={`flex items-center space-x-1 text-hifi-silver/60 hover:text-white transition rounded-md px-2 py-1 ${FOCUS_RING}`}>
-              <ChevronLeft size={18} /><span className="text-sm">{t('common.back')}</span>
+              <ChevronLeft size={18} /><span className="text-sm">Back</span>
             </button>
           }>
             <div className="w-full max-w-lg text-center">
               <AlertCircle size={40} className="text-amber-400 mb-4 mx-auto" />
-              <h2 className="text-2xl font-bold text-white mb-4">{t('installer.confirm.title')}</h2>
+              <h2 className="text-2xl font-bold text-white mb-4">Confirm installation?</h2>
               <div className="rounded-2xl border border-amber-500/30 bg-amber-900/10 p-5 mb-6">
                 <p className="text-sm text-amber-200">
-                  {t('installer.confirm.warning', { disk: `${selectedDisk.model || selectedDisk.path} (${selectedDisk.path})` })}
+                  {`ALL DATA on ${selectedDisk.model || selectedDisk.path} (${selectedDisk.path}) will be permanently erased. This cannot be undone.`}
                 </p>
               </div>
               <button onClick={startInstall} className={`w-full bg-amber-600 hover:bg-amber-500 text-white font-semibold px-6 py-3 rounded-xl transition ${FOCUS_RING}`}>
-                {t('installer.confirm.button')}
+                Erase and install
               </button>
             </div>
           </Shell>

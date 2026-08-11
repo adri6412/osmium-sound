@@ -307,7 +307,7 @@ def get_system_info():
             'version': _installed_ui_version(),
             'local_ip': 'Unknown',
             'network_interfaces': [],
-            'error': 'Errore nel recupero delle informazioni di sistema'
+            'error': _t('system.infoFetchFailed', _lang())
         }
 
 _IFACE_RE = re.compile(r'^[A-Za-z0-9][A-Za-z0-9._-]*$')

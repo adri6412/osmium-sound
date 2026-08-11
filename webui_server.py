@@ -460,7 +460,7 @@ def _connect_wifi(ssid, password):
     """Drop the AP, try to join, and on failure delete the stale profile and
     re-raise the AP so the phone (which auto-rejoins) sees the error."""
     if not _SSID_RE.match(ssid or ''):
-        return False, 'SSID non valido'
+        return False, _wt('network.ssidInvalidChars', _lang())
     _teardown_ap()
     args = ['device', 'wifi', 'connect', ssid]
     if password:
@@ -474,7 +474,7 @@ def _connect_wifi(ssid, password):
     dev = _wifi_device()
     if dev:
         _raise_ap(dev)
-    return False, (err.strip() or 'Connessione Wi-Fi fallita')
+    return False, (err.strip() or _wt('network.connectFailed', _lang()))
 
 
 # ── network resilience (runs always, independent of provisioning) ───
@@ -606,7 +606,7 @@ def _has_any_connectivity():
 def _raise_net_recovery_ap():
     dev = _wifi_device()
     if not dev or not _ap_supported(dev):
-        _net_recovery['error'] = 'Nessuna scheda Wi-Fi disponibile per l\'hotspot di recupero'
+        _net_recovery['error'] = _wt('network.noWifiForRecoveryAp', _lang())
         return False
     _net_recovery['networks'] = _scan_wifi()
     _net_recovery['networks_cached_at'] = time.time()
@@ -615,7 +615,7 @@ def _raise_net_recovery_ap():
         _net_recovery.update({'active': True, 'ssid': ssid, 'psk': AP_PSK, 'error': None})
         print(f'[webui] network lost — raised recovery hotspot {ssid}')
     else:
-        _net_recovery['error'] = 'Attivazione hotspot di recupero fallita'
+        _net_recovery['error'] = _wt('network.recoveryApFailed', _lang())
     return ok
 
 
@@ -696,9 +696,9 @@ def _evaluate_provisioning():
         if ok:
             err = None
         elif not dnsmasq_ok:
-            err = 'dnsmasq-base mancante — hotspot non disponibile'
+            err = _wt('network.dnsmasqMissing', _lang())
         else:
-            err = 'Attivazione hotspot fallita'
+            err = _wt('network.hotspotActivateFailed', _lang())
         state['ap'] = {'active': ok, 'supported': True, 'ssid': ssid,
                        'psk': AP_PSK if ok else None, 'error': err}
         state['stage'] = 'waiting-ap' if ok else 'waiting-lan'
@@ -982,7 +982,7 @@ def _account_setup(username, password):
         return {'success': False, 'code': 'auth.accountExists',
                 'message': _wt('auth.accountExists', _lang())}, 409
     if len(username) < 3 or len(password) < 8:
-        return {'success': False, 'message': 'Utente ≥3 e password ≥8 caratteri'}, 400
+        return {'success': False, 'message': _wt('auth.setupFieldsTooShort', _lang())}, 400
     _create_user(username, password)
     shell_ok = _sync_shell_account(username, password)
     session.clear()
@@ -1003,7 +1003,7 @@ def auth_setup():
 def auth_login():
     ip = request.remote_addr
     if _rate_limited(ip):
-        return jsonify({'success': False, 'message': 'Troppi tentativi, riprova più tardi'}), 429
+        return jsonify({'success': False, 'message': _wt('auth.tooManyAttempts', _lang())}), 429
     data = request.get_json(silent=True) or {}
     username = (data.get('username') or '').strip()
     password = data.get('password') or ''
@@ -1035,9 +1035,9 @@ def auth_change_password():
     new = data.get('new_password') or ''
     username = (data.get('username') or (_get_user()['username'] if _get_user() else '')).strip()
     if not _verify_password(current):
-        return jsonify({'success': False, 'message': 'Password attuale errata'}), 403
+        return jsonify({'success': False, 'message': _wt('auth.wrongCurrentPassword', _lang())}), 403
     if len(username) < 3 or len(new) < 8:
-        return jsonify({'success': False, 'message': 'Utente ≥3 e password ≥8 caratteri'}), 400
+        return jsonify({'success': False, 'message': _wt('auth.setupFieldsTooShort', _lang())}), 400
     _create_user(username, new)
     shell_ok = _sync_shell_account(username, new)
     _bump_session_version()  # log every other session out
@@ -1649,7 +1649,7 @@ def _forward_to(base, path, timeout=120, service_label='servizio'):
         disposition = None
     except Exception as e:
         print(f'[webui] {service_label} forward {path} failed: {e}')
-        return jsonify({'success': False, 'message': f'Servizio {service_label} non raggiungibile'}), 502
+        return jsonify({'success': False, 'message': _wt('proxy.serviceUnreachable', _lang())}), 502
     if disposition:
         out.headers['Content-Disposition'] = disposition
     # Explicitly allow embedding by our own Settings page (some browsers — Brave
@@ -2321,9 +2321,6 @@ INSTALL_CAPTIVE_HTML = """<!doctype html><html lang="en"><head><meta charset="ut
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Osmium Sound — Install</title>
 <style>""" + _CAPTIVE_CSS + """</style></head><body>
-<div class="langbar">
- <a href="?lang=en" id="lang-en">English</a><a href="?lang=it" id="lang-it">Italiano</a>
-</div>
 <h1 id="h1title">Osmium Sound — Install</h1>
 
 <div class="card" id="step-disks">
@@ -2348,19 +2345,13 @@ INSTALL_CAPTIVE_HTML = """<!doctype html><html lang="en"><head><meta charset="ut
 </div>
 
 <script>
-var STRINGS={
- en:{intro:'Choose the disk to install onto. Everything on it will be erased.',cancel:'Cancel',confirm:'Erase and install',confirmText:'This will ERASE ALL DATA on {disk} and install Osmium Sound. This cannot be undone.',starting:'Starting install…',rebootIn:'Install complete. Rebooting in {n}…',error:'Error: ',noDisks:'No usable disks found.'},
- it:{intro:'Scegli il disco su cui installare. Tutto il contenuto verrà cancellato.',cancel:'Annulla',confirm:'Cancella e installa',confirmText:'Questo CANCELLERÀ TUTTI I DATI su {disk} e installerà Osmium Sound. L\\'operazione è irreversibile.',starting:'Avvio installazione…',rebootIn:'Installazione completata. Riavvio tra {n}…',error:'Errore: ',noDisks:'Nessun disco utilizzabile trovato.'}
-};
-var LANG=(new URLSearchParams(location.search).get('lang')||'en');
-if(STRINGS[LANG]===undefined)LANG='en';
-var S=STRINGS[LANG];
-document.getElementById('lang-'+LANG).className='active';
-document.getElementById('disks-intro').textContent=S.intro;
-document.getElementById('btn-cancel').textContent=S.cancel;
-document.getElementById('btn-confirm').textContent=S.confirm;
+// English only, on purpose: this runs before any language/account setup
+// exists on the machine (replaces Debian Installer), so there's no
+// language preference to read yet — see src/pages/InstallWizard.jsx.
+var CONFIRM_TEXT='This will ERASE ALL DATA on {disk} and install Osmium Sound. This cannot be undone.';
+var ERROR_PREFIX='Error: ';
 
-function h(){return {'X-CSRF-Token':(document.cookie.match(/csrf=([^;]+)/)||[])[1]||'','X-UI-Lang':LANG}}
+function h(){return {'X-CSRF-Token':(document.cookie.match(/csrf=([^;]+)/)||[])[1]||''}}
 function jpost(p,b){return fetch(p,{method:'POST',headers:Object.assign({'Content-Type':'application/json'},h()),body:JSON.stringify(b||{})}).then(function(r){return r.json()})}
 function jget(p){return fetch(p,{headers:h()}).then(function(r){return r.json()})}
 function show(id){['step-disks','step-confirm','step-progress','step-done'].forEach(function(s){document.getElementById(s).style.display=(s===id?'block':'none')})}
@@ -2370,13 +2361,13 @@ function loadDisks(){
   jget('/api/provision/install_disks').then(function(res){
     var box=document.getElementById('disklist');box.innerHTML='';
     var disks=(res&&res.disks)||[];
-    if(!disks.length){document.getElementById('disksmsg').textContent=S.noDisks;return}
+    if(!disks.length){document.getElementById('disksmsg').textContent='No usable disks found.';return}
     disks.forEach(function(d){var el=document.createElement('div');el.className='disk';
       var gb=d.size?Math.round(d.size/1e9)+' GB':'';
       el.textContent=(d.model||d.path)+' — '+d.path+(gb?' ('+gb+')':'');
       el.onclick=function(){selectedDisk=d.path;
         document.querySelectorAll('.disk').forEach(function(x){x.className='disk'});el.className='disk sel';
-        document.getElementById('confirmtext').textContent=S.confirmText.replace('{disk}',d.path);
+        document.getElementById('confirmtext').textContent=CONFIRM_TEXT.replace('{disk}',d.path);
         show('step-confirm')};
       box.appendChild(el)});
   });
@@ -2384,9 +2375,9 @@ function loadDisks(){
 function startInstall(){
   if(!selectedDisk)return;
   show('step-progress');
-  document.getElementById('progressmsg').textContent=S.starting;
+  document.getElementById('progressmsg').textContent='Starting install…';
   jpost('/api/provision/install_start',{device:selectedDisk}).then(function(res){
-    if(!res.success){document.getElementById('progressmsg').textContent=res.message||S.error;return}
+    if(!res.success){document.getElementById('progressmsg').textContent=res.message||ERROR_PREFIX;return}
     pollStatus();
   });
 }
@@ -2397,12 +2388,12 @@ function pollStatus(){
     if(st.state==='done'){
       show('step-done');
       var n=5;
-      var tick=function(){document.getElementById('donemsg').textContent=S.rebootIn.replace('{n}',n+'s');
+      var tick=function(){document.getElementById('donemsg').textContent='Install complete. Rebooting in '+n+'s…';
         if(n<=0){jpost('/api/provision/reboot',{});return}
         n--;setTimeout(tick,1000)};
       tick();
     }else if(st.state==='error'){
-      document.getElementById('progressmsg').textContent=S.error+(st.message||'');
+      document.getElementById('progressmsg').textContent=ERROR_PREFIX+(st.message||'');
     }else{
       setTimeout(pollStatus,1000);
     }
@@ -2416,49 +2407,68 @@ loadDisks();
 # just re-enter Wi-Fi credentials, nothing else. It self-resolves: once the
 # network monitor confirms connectivity again it tears the AP down on its own,
 # no "finish" step needed here.
-NET_RECOVERY_HTML = """<!doctype html><html lang="it"><head><meta charset="utf-8">
+NET_RECOVERY_HTML = """<!doctype html><html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Osmium Sound — Rete</title>
+<title>Osmium Sound — Network</title>
 <style>
  body{font-family:system-ui,sans-serif;background:#0f1115;color:#eee;margin:0;padding:24px;max-width:520px;margin:auto}
  h1{font-size:20px} .card{background:#1a1e26;border-radius:12px;padding:16px;margin:14px 0}
  label{display:block;font-size:13px;color:#aab;margin:8px 0 4px} input,button{width:100%;padding:12px;border-radius:8px;border:1px solid #333;background:#12151b;color:#eee;font-size:15px;box-sizing:border-box}
  button{background:#c8a24a;color:#111;font-weight:600;border:0;margin-top:12px} .muted{color:#889;font-size:13px}
  .net{padding:10px;border-bottom:1px solid #262b35;cursor:pointer} .row{display:flex;justify-content:space-between}
+ .langbar{text-align:right;margin-bottom:8px} .langbar a{color:#889;font-size:13px;text-decoration:none;margin-left:10px}
+ .langbar a.active{color:#c8a24a;font-weight:600}
 </style></head><body>
-<h1>Osmium Sound — Rete non raggiungibile</h1>
-<p class="muted">Il dispositivo è già configurato e ha perso la connessione (né cavo né Wi-Fi funzionanti). Ricollegalo scegliendo una rete Wi-Fi qui sotto — nessun'altra impostazione verrà modificata.</p>
+<div class="langbar">
+ <a href="?lang=en" id="lang-en">English</a><a href="?lang=it" id="lang-it">Italiano</a>
+</div>
+<h1 id="h1title">Osmium Sound — Network unreachable</h1>
+<p class="muted" id="introtext">This device is already configured and lost its connection (neither cable nor Wi-Fi is working). Reconnect it by choosing a Wi-Fi network below — nothing else will be changed.</p>
 <div class="card">
- <label>Rete Wi-Fi</label>
+ <label id="lbl-wifi">Wi-Fi network</label>
  <div id="nets"></div>
- <label>Oppure inserisci il nome (SSID)</label>
- <input id="ssid" placeholder="Nome rete">
- <label>Password Wi-Fi</label>
+ <label id="lbl-ssid">Or enter the network name (SSID)</label>
+ <input id="ssid" placeholder="Network name">
+ <label id="lbl-pass">Wi-Fi password</label>
  <input id="pass" type="password" placeholder="Password">
- <button onclick="connect()">Connetti</button>
+ <button onclick="connect()" id="btn-connect">Connect</button>
  <p class="muted" id="netmsg"></p>
 </div>
 <script>
-function h(){return {'X-CSRF-Token':(document.cookie.match(/csrf=([^;]+)/)||[])[1]||''}}
-function load(){fetch('/api/netrecovery/status').then(function(r){return r.json()}).then(function(s){
+var STRINGS={
+ en:{intro:'This device is already configured and lost its connection (neither cable nor Wi-Fi is working). Reconnect it by choosing a Wi-Fi network below — nothing else will be changed.',wifi:'Wi-Fi network',ssid:'Or enter the network name (SSID)',pass:'Wi-Fi password',connect:'Connect',connecting:'Connecting… if you return to your network this page will no longer be reachable here — reopen http://hifiplayer.local',error:'Error: '},
+ it:{intro:'Il dispositivo è già configurato e ha perso la connessione (né cavo né Wi-Fi funzionanti). Ricollegalo scegliendo una rete Wi-Fi qui sotto — nessun\\'altra impostazione verrà modificata.',wifi:'Rete Wi-Fi',ssid:'Oppure inserisci il nome (SSID)',pass:'Password Wi-Fi',connect:'Connetti',connecting:'Connessione in corso… se torni sulla tua rete questa pagina non sarà più raggiungibile qui — riapri http://hifiplayer.local',error:'Errore: '}
+};
+var LANG=(new URLSearchParams(location.search).get('lang')||'en');
+if(STRINGS[LANG]===undefined)LANG='en';
+var S=STRINGS[LANG];
+document.getElementById('lang-'+LANG).className='active';
+document.getElementById('introtext').textContent=S.intro;
+document.getElementById('lbl-wifi').textContent=S.wifi;
+document.getElementById('lbl-ssid').textContent=S.ssid;
+document.getElementById('lbl-pass').textContent=S.pass;
+document.getElementById('btn-connect').textContent=S.connect;
+
+function h(){return {'X-CSRF-Token':(document.cookie.match(/csrf=([^;]+)/)||[])[1]||'','X-UI-Lang':LANG}}
+function load(){fetch('/api/netrecovery/status',{headers:h()}).then(function(r){return r.json()}).then(function(s){
   if(!s.active){location.href='/';return}
   var n=document.getElementById('nets');n.innerHTML='';
   (s.networks||[]).forEach(function(net){var d=document.createElement('div');d.className='net';
     d.innerHTML='<div class="row"><span>'+net.ssid+'</span><span class="muted">'+net.signal+'%</span></div>';
     d.onclick=function(){document.getElementById('ssid').value=net.ssid};n.appendChild(d)});
-  if(s.error){document.getElementById('netmsg').textContent='Errore: '+s.error}
+  if(s.error){document.getElementById('netmsg').textContent=S.error+s.error}
 })}
 function connect(){var b={ssid:document.getElementById('ssid').value,password:document.getElementById('pass').value};
-  document.getElementById('netmsg').textContent='Connessione in corso… se torni sulla tua rete questa pagina non sarà più raggiungibile qui — riapri http://hifiplayer.local';
+  document.getElementById('netmsg').textContent=S.connecting;
   fetch('/api/netrecovery/wifi_connect',{method:'POST',headers:Object.assign({'Content-Type':'application/json'},h()),body:JSON.stringify(b)})}
 setInterval(load,3000);load();
 </script></body></html>"""
 
-FALLBACK_HTML = """<!doctype html><html><head><meta charset="utf-8">
+FALLBACK_HTML = """<!doctype html><html lang="en"><head><meta charset="utf-8">
 <title>Osmium Sound</title><style>body{font-family:system-ui;background:#0f1115;color:#eee;padding:40px;text-align:center}</style>
 </head><body><h1>Osmium Sound — Web Admin</h1>
-<p>L'interfaccia di gestione non è ancora stata installata su questo dispositivo.</p>
-<p>Le API di autenticazione e provisioning sono attive.</p></body></html>"""
+<p>The management interface has not been installed on this device yet.</p>
+<p>The authentication and provisioning APIs are active.</p></body></html>"""
 
 
 # ── startup ──────────────────────────────────────────────────────────

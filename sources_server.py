@@ -183,18 +183,18 @@ def mount_smb(src):
     password = src.get("password", "")
     for value in (server, share, username, password):
         if not _field_ok(value):
-            return False, "Valore non valido in server/condivisione/credenziali"
+            return False, _ht('mount.invalidFields', _hlang())
 
     # The mountpoint is derived from user-supplied server/share; resolve it and
     # make sure it can never escape MOUNT_ROOT before we create or mount onto it.
     root = os.path.realpath(MOUNT_ROOT)
     mountpoint = os.path.realpath(src["mountpoint"])
     if mountpoint != root and not mountpoint.startswith(root + os.sep):
-        return False, "mountpoint non valido"
+        return False, _ht('mount.invalidMountpoint', _hlang())
     os.makedirs(mountpoint, exist_ok=True)
 
     if os.path.ismount(mountpoint):
-        return True, "già montato"
+        return True, _ht('mount.alreadyMounted', _hlang())
 
     unc = f"//{server}/{share}"
     base_opts = "uid=0,gid=0,iocharset=utf8,ro,file_mode=0644,dir_mode=0755"
@@ -217,9 +217,9 @@ def mount_smb(src):
             opts = f"{base_opts}{cred_opt},vers={vers}"
             r = _run(["mount", "-t", "cifs", unc, mountpoint, "-o", opts])
             if r.returncode == 0:
-                return True, f"montato (SMB {vers})"
+                return True, _ht('mount.mountedSmb', _hlang(), vers=vers)
             last = (r.stderr or r.stdout).strip()
-        return False, last or "mount fallito"
+        return False, last or _ht('mount.genericFailed', _hlang())
     finally:
         if cred_path:
             try:
@@ -510,14 +510,14 @@ def _mount_adopted_disk(src, root):
     fstype = (src.get("fstype") or "").lower()
     mountpoint = src.get("mountpoint")
     if (not partuuid and not fsuuid) or not mountpoint:
-        return False, "partuuid/uuid o mountpoint mancante"
+        return False, _ht('mount.missingIdentifiers', _hlang())
     root = os.path.realpath(root)
     p = os.path.realpath(mountpoint)
     if p != root and not p.startswith(root + os.sep):
-        return False, "mountpoint non valido"
+        return False, _ht('mount.invalidMountpoint', _hlang())
     os.makedirs(mountpoint, exist_ok=True)
     if os.path.ismount(mountpoint):
-        return True, "già montato"
+        return True, _ht('mount.alreadyMounted', _hlang())
 
     if fstype == "ext4":
         opts = "rw,noatime,nosuid,nodev"
@@ -532,7 +532,7 @@ def _mount_adopted_disk(src, root):
     spec = f"PARTUUID={partuuid}" if partuuid else f"UUID={fsuuid}"
     r = _run(["mount", "-t", _fs_mount_type(fstype), "-o", opts, spec, mountpoint], timeout=30)
     if r.returncode != 0:
-        return False, (r.stderr or r.stdout or "mount fallito").strip()
+        return False, (r.stderr or r.stdout or _ht('mount.genericFailed', _hlang())).strip()
 
     if fstype == "ext4":
         # mkfs.ext4 leaves the root dir owned by root:root, which the Samba
@@ -544,7 +544,7 @@ def _mount_adopted_disk(src, root):
             os.chmod(mountpoint, 0o2775)
         except Exception:
             pass
-    return True, "montato"
+    return True, _ht('mount.mounted', _hlang())
 
 
 def mount_internal(src):
@@ -1089,7 +1089,7 @@ def _restore_members(tar, manifest, categories, progress_cb=None):
     digests = (manifest or {}).get("members") or {}
     members = tar.getmembers()
     if len(members) > MAX_RESTORE_MEMBERS:
-        return [], ["Archivio non valido (troppi file)"]
+        return [], [_ht('restore.archiveInvalidTooManyFiles', _hlang())]
     total = len(members)
 
     current_sources = None
@@ -1106,7 +1106,7 @@ def _restore_members(tar, manifest, categories, progress_cb=None):
         if not member.isfile():
             continue  # dirs, symlinks, devices: never followed, never created
         if member.size > MAX_RESTORE_MEMBER_SIZE:
-            errors.append(f"{member.name}: troppo grande, saltato")
+            errors.append(_ht('restore.memberTooLarge', _hlang(), name=member.name))
             continue
         dest = hb.restore_dest_for_member(member.name, categories)
         if not dest:
@@ -1119,7 +1119,7 @@ def _restore_members(tar, manifest, categories, progress_cb=None):
 
             expected = digests.get(member.name)
             if expected and hashlib.sha256(data).hexdigest() != expected:
-                errors.append(f"{os.path.basename(dest)}: checksum non valido")
+                errors.append(_ht('restore.checksumInvalid', _hlang(), name=os.path.basename(dest)))
                 continue
 
             if dest == STATE_FILE and current_sources:
@@ -1136,7 +1136,7 @@ def _restore_members(tar, manifest, categories, progress_cb=None):
             restored.append(dest)
         except Exception as e:
             print(f"[sources] restore failed for {dest}: {e}")
-            errors.append(f"{os.path.basename(dest)}: ripristino fallito")
+            errors.append(_ht('restore.memberFailed', _hlang(), name=os.path.basename(dest)))
     if progress_cb:
         progress_cb(total, total)
     return restored, errors
@@ -1243,13 +1243,13 @@ def _restore_apply_side_effects(restored):
         try:
             remount_all()
             ok, msg = apply_to_lyrion(load_state())
-            notes.append(msg if ok else f"Sorgenti: {msg}")
+            notes.append(msg if ok else _ht('restore.sourcesFailed', _hlang(), msg=msg))
         except Exception as e:
             print(f"[sources] restore side-effect (sources) failed: {e}")
-            notes.append("Sorgenti non riapplicate")
+            notes.append(_ht('restore.sourcesNotReapplied', _hlang()))
     if any(p in restored for p in ("/etc/default/squeezelite", "/var/lib/hifi-player/dsp-target")):
         _run(["systemctl", "restart", "squeezelite"], timeout=30)
-        notes.append("squeezelite riavviato")
+        notes.append(_ht('restore.squeezeliteRestarted', _hlang()))
     if any(p in restored for p in ("/etc/camilladsp/config.yml", "/etc/hifi-player/dsp.json")) \
             or any(p.startswith("/etc/camilladsp/filters/") for p in restored):
         # Only restart CamillaDSP if it was already running — restoring a
@@ -1258,7 +1258,7 @@ def _restore_apply_side_effects(restored):
             active = _run(["systemctl", "is-active", "camilladsp.service"], timeout=10)
             if (active.stdout or "").strip() == "active":
                 _run(["systemctl", "restart", "camilladsp.service"], timeout=30)
-                notes.append("CamillaDSP riavviato")
+                notes.append(_ht('restore.camillaRestarted', _hlang()))
         except Exception:
             pass
     if any(p.startswith("/etc/NetworkManager/system-connections/") for p in restored):
@@ -1271,7 +1271,7 @@ def _restore_apply_side_effects(restored):
                 except OSError:
                     pass
         _run(["nmcli", "connection", "reload"], timeout=30)
-        notes.append("Reti Wi-Fi ricaricate")
+        notes.append(_ht('restore.wifiReloaded', _hlang()))
     if "/etc/hifi-player/webui.db" in restored:
         # The admin account changed underneath the running daemon; restart so
         # it reopens the database. No note here — restarting hifi-webui.service
@@ -1299,7 +1299,7 @@ def _restore_apply_side_effects(restored):
             print(f"[sources] samba-cred resync flag reset failed: {e}")
         _create_samba_user()
         _run(["systemctl", "try-restart", "smbd"], timeout=30)
-        notes.append("Credenziali SMB risincronizzate")
+        notes.append(_ht('restore.smbResynced', _hlang()))
     return notes
 
 
@@ -1317,7 +1317,7 @@ def _restore_from_path(path, passphrase, requested_categories, report=None):
     os.chmod(workdir, 0o700)
     tar = None
     try:
-        report("opening", 20, "Apertura archivio…")
+        report("opening", 20, _ht('restore.openingArchive', _hlang()))
         try:
             tar, manifest = hb.open_backup(path, workdir, passphrase)
         except hb.BackupError as e:
@@ -1327,30 +1327,29 @@ def _restore_from_path(path, passphrase, requested_categories, report=None):
         # code does not understand; refuse rather than half-apply it.
         if manifest and int(manifest.get("schema") or 1) > hb.SCHEMA:
             return {"success": False,
-                    "message": "Backup creato da una versione più recente: "
-                               "aggiorna il dispositivo prima di ripristinarlo"}, 409
+                    "message": _ht('restore.newerVersion', _hlang())}, 409
 
         available = hb.categories_in_manifest(manifest)
         wanted = set(requested_categories or available)
         categories = [c for c in available if c in wanted]
         if not categories:
             return {"success": False,
-                    "message": "Nessuna categoria da ripristinare"}, 400
+                    "message": _ht('restore.noCategories', _hlang())}, 400
 
         lyrion_stopped = False
         if "lyrion" in categories:
-            report("stopping_lyrion", 25, "Arresto di Lyrion…")
+            report("stopping_lyrion", 25, _ht('restore.stoppingLyrion', _hlang()))
             _stop_lyrion()
             lyrion_stopped = True
         try:
             def _member_progress(done, total):
                 pct = 30 + int(done / total * 45) if total else 30
-                report("restoring", pct, f"Ripristino file… ({done}/{total})")
+                report("restoring", pct, _ht('restore.restoringFiles', _hlang(), done=done, total=total))
             restored, errors = _restore_members(tar, manifest, categories, _member_progress)
             _fix_restored_permissions(restored)
         finally:
             if lyrion_stopped:
-                report("starting_lyrion", 80, "Riavvio di Lyrion…")
+                report("starting_lyrion", 80, _ht('restore.startingLyrion', _hlang()))
                 touched = _lyrion_paths_touched(restored if restored else [])
                 _chown_lyrion(touched)
                 if any("/cache/InstalledPlugins/Plugins/" in p for p in touched):
@@ -1360,7 +1359,7 @@ def _restore_from_path(path, passphrase, requested_categories, report=None):
         if not restored and errors:
             return {"success": False, "message": "; ".join(errors)}, 400
 
-        report("applying", 90, "Applicazione modifiche (rete, DSP, servizi)…")
+        report("applying", 90, _ht('restore.applyingChanges', _hlang()))
         notes = _restore_apply_side_effects(restored)
         if lyrion_stopped:
             # Restoring prefs/playlists makes Lyrion treat them as changed on
@@ -1368,12 +1367,12 @@ def _restore_from_path(path, passphrase, requested_categories, report=None):
             # this code drives or can see the end of, and the LMS web UI's
             # "please wait" banner during that looks a lot like something
             # stuck. Say so up front instead of leaving the user to wonder.
-            notes.append("Lyrion sta terminando la scansione della libreria in background.")
-        msg = f"{len(restored)} file ripristinati."
+            notes.append(_ht('restore.lyrionScanning', _hlang()))
+        msg = _ht('restore.filesRestored', _hlang(), count=len(restored))
         if notes:
             msg += " " + " ".join(notes)
         if errors:
-            msg += " Avvisi: " + "; ".join(errors)
+            msg += _ht('restore.warningsPrefix', _hlang()) + "; ".join(errors)
         hb.record_history(hb.STORE_DIR,
                           f"restore\tcompleted\t{len(restored)} file\t"
                           f"{','.join(categories)}")
@@ -1431,8 +1430,8 @@ def _run_restore_async(path, passphrase, categories, workdir_to_clean=None):
     status file itself, which exists purely so polling requests don't have to
     share state with this thread directly)."""
     try:
-        _write_restore_status("preparing", 5, "Preparazione…")
-        _write_restore_status("snapshotting", 10, "Backup di sicurezza pre-ripristino…")
+        _write_restore_status("preparing", 5, _ht('restore.preparing', _hlang()))
+        _write_restore_status("snapshotting", 10, _ht('restore.snapshotting', _hlang()))
         _snapshot_before_restore()
 
         def report(state, progress, message):
@@ -1440,13 +1439,13 @@ def _run_restore_async(path, passphrase, categories, workdir_to_clean=None):
 
         payload, status = _restore_from_path(path, passphrase, categories, report)
         if status == 200 and payload.get("success"):
-            _write_restore_status("done", 100, payload.get("message", "Ripristino completato."),
+            _write_restore_status("done", 100, payload.get("message", _ht('restore.completed', _hlang())),
                                   restored=payload.get("restored"), categories=payload.get("categories"))
         else:
-            _write_restore_status("error", 0, payload.get("message", "Ripristino fallito"))
+            _write_restore_status("error", 0, payload.get("message", _ht('restore.failed', _hlang())))
     except Exception as e:
         print(f"[sources] restore job failed: {e}")
-        _write_restore_status("error", 0, f"Ripristino fallito: {e}")
+        _write_restore_status("error", 0, _ht('restore.failedDetail', _hlang(), err=e))
     finally:
         if workdir_to_clean:
             shutil.rmtree(workdir_to_clean, ignore_errors=True)
@@ -1459,7 +1458,7 @@ def _start_restore(path, passphrase, categories, workdir_to_clean=None):
     if not _RESTORE_LOCK.acquire(blocking=False):
         return {"success": False, "code": "restore.alreadyInProgress",
                 "message": _ht('restore.alreadyInProgress', _hlang())}, 409
-    _write_restore_status("preparing", 0, "Avvio…")
+    _write_restore_status("preparing", 0, _ht('common.starting', _hlang()))
     threading.Thread(target=_run_restore_async,
                      args=(path, passphrase, categories, workdir_to_clean),
                      daemon=True, name="restore-worker").start()
@@ -1491,7 +1490,7 @@ def api_backup():
             data = f.read()
     except Exception as e:
         print(f"[sources] backup build failed: {e}")
-        return jsonify({"success": False, "message": "Creazione backup fallita"}), 500
+        return jsonify({"success": False, "message": _ht('backup.createFailed', _hlang())}), 500
     finally:
         shutil.rmtree(workdir, ignore_errors=True)
     resp = Response(data, mimetype="application/gzip")
@@ -1523,11 +1522,11 @@ def api_backup_create():
     data = request.get_json(silent=True) or {}
     passphrase = data.get("passphrase") or ""
     if not _passphrase_ok(passphrase):
-        return jsonify({"success": False, "message": "Passphrase non valida"}), 400
+        return jsonify({"success": False, "message": _ht('backup.invalidPassphrase', _hlang())}), 400
     categories = hb.selected_categories(data.get("categories"), bool(passphrase))
     if not categories:
         return jsonify({"success": False,
-                        "message": "Nessuna categoria selezionata"}), 400
+                        "message": _ht('backup.noCategoriesSelected', _hlang())}), 400
 
     job = {"categories": categories, "passphrase": passphrase,
            "trigger": "manual", "keep": hb.read_settings()["keep"]}
@@ -1537,26 +1536,26 @@ def api_backup_create():
     with os.fdopen(fd, "w") as f:
         json.dump(job, f)
     with open(hb.STATUS_FILE, "w") as f:
-        json.dump({"state": "preparing", "progress": 0, "message": "Avvio…"}, f)
+        json.dump({"state": "preparing", "progress": 0, "message": _ht('common.starting', _hlang())}, f)
     try:
         r = _run(["systemd-run", "--no-block", "--collect", "--unit=" + BACKUP_UNIT,
                   BACKUP_SCRIPT, BACKUP_JOB], timeout=15)
         launch_err = None if r.returncode == 0 else (r.stderr or r.stdout or "").strip()
     except subprocess.TimeoutExpired:
-        launch_err = "systemd-run non ha risposto"
+        launch_err = _ht('install.systemdRunNoResponse', _hlang())
     if launch_err:
-        # Without this, a systemd-run failure (unit già attivo, dbus, ecc.)
-        # leaves the "Avvio…"/0% placeholder above in place forever, since
+        # Without this, a systemd-run failure (unit already active, dbus, etc.)
+        # leaves the "Starting…"/0% placeholder above in place forever, since
         # nothing ever starts to overwrite it — the UI just polls a frozen
         # status and looks hung.
         with open(hb.STATUS_FILE, "w") as f:
             json.dump({"state": "error", "progress": 0,
-                       "message": f"Avvio del backup fallito: {launch_err}"[:300]}, f)
+                       "message": _ht('backup.startFailedDetail', _hlang(), detail=launch_err)[:300]}, f)
         try:
             os.unlink(BACKUP_JOB)
         except OSError:
             pass
-        return jsonify({"success": False, "message": "Avvio del backup fallito"}), 500
+        return jsonify({"success": False, "message": _ht('backup.startFailed', _hlang())}), 500
     return jsonify({"success": True, "categories": categories,
                     "encrypted": bool(passphrase)}), 202
 
@@ -1589,10 +1588,10 @@ def api_backup_download(gen_id):
     if denied:
         return denied
     if not hb.valid_gen_id(gen_id):
-        return jsonify({"success": False, "message": "Backup non trovato"}), 404
+        return jsonify({"success": False, "message": _ht('backup.notFound', _hlang())}), 404
     manifest = hb.read_manifest(hb.STORE_DIR, gen_id)
     if not manifest:
-        return jsonify({"success": False, "message": "Backup non trovato"}), 404
+        return jsonify({"success": False, "message": _ht('backup.notFound', _hlang())}), 404
 
     src = hb.archive_path(hb.STORE_DIR, gen_id, manifest)
     workdir = None
@@ -1607,7 +1606,7 @@ def api_backup_download(gen_id):
         with open(src, "rb") as f:
             data = f.read()
     except OSError:
-        return jsonify({"success": False, "message": "Backup non leggibile"}), 500
+        return jsonify({"success": False, "message": _ht('backup.unreadable', _hlang())}), 500
     finally:
         if workdir:
             shutil.rmtree(workdir, ignore_errors=True)
@@ -1623,13 +1622,13 @@ def api_backup_delete(gen_id):
     if denied:
         return denied
     if not hb.valid_gen_id(gen_id):
-        return jsonify({"success": False, "message": "Backup non trovato"}), 404
+        return jsonify({"success": False, "message": _ht('backup.notFound', _hlang())}), 404
     path = os.path.join(hb.STORE_DIR, gen_id)
     if not os.path.isdir(path):
-        return jsonify({"success": False, "message": "Backup non trovato"}), 404
+        return jsonify({"success": False, "message": _ht('backup.notFound', _hlang())}), 404
     shutil.rmtree(path, ignore_errors=True)
     hb.record_history(hb.STORE_DIR, f"delete\t{gen_id}")
-    return jsonify({"success": True, "message": "Backup eliminato"})
+    return jsonify({"success": True, "message": _ht('backup.deleted', _hlang())})
 
 
 @app.route("/api/backup/<gen_id>/restore", methods=["POST"])
@@ -1638,14 +1637,14 @@ def api_backup_restore(gen_id):
     if denied:
         return denied
     if not hb.valid_gen_id(gen_id):
-        return jsonify({"success": False, "message": "Backup non trovato"}), 404
+        return jsonify({"success": False, "message": _ht('backup.notFound', _hlang())}), 404
     manifest = hb.read_manifest(hb.STORE_DIR, gen_id)
     if not manifest:
-        return jsonify({"success": False, "message": "Backup non trovato"}), 404
+        return jsonify({"success": False, "message": _ht('backup.notFound', _hlang())}), 404
     data = request.get_json(silent=True) or {}
     passphrase = data.get("passphrase") or ""
     if not _passphrase_ok(passphrase):
-        return jsonify({"success": False, "message": "Passphrase non valida"}), 400
+        return jsonify({"success": False, "message": _ht('backup.invalidPassphrase', _hlang())}), 400
 
     stored_path = hb.archive_path(hb.STORE_DIR, gen_id, manifest)
     path, workdir = stored_path, None
@@ -1660,7 +1659,8 @@ def api_backup_restore(gen_id):
             hb.wrap_encrypted(path, manifest, stored_path)
         except Exception as e:
             shutil.rmtree(workdir, ignore_errors=True)
-            return jsonify({"success": False, "message": f"Preparazione ripristino fallita: {e}"}), 500
+            return jsonify({"success": False,
+                            "message": _ht('restore.prepareFailed', _hlang(), err=e)}), 500
 
     err = _start_restore(path, passphrase, data.get("categories"), workdir)
     if err:
@@ -1687,7 +1687,7 @@ def api_backup_settings():
             json.dump(settings, f, indent=2)
         os.replace(tmp, hb.SETTINGS_FILE)
     except OSError as e:
-        return jsonify({"success": False, "message": f"Salvataggio fallito: {e}"}), 500
+        return jsonify({"success": False, "message": _ht('backup.saveFailed', _hlang(), err=e)}), 500
     # The timer unit itself ships from the OS channel; this only flips it,
     # and 0033-backup-scheduler.sh re-applies the same choice on every OS
     # update so it survives one.
@@ -1717,7 +1717,7 @@ def api_restore():
         return _err("msg.fileTooLarge", 400)
     passphrase = request.form.get("passphrase") or ""
     if not _passphrase_ok(passphrase):
-        return jsonify({"success": False, "message": "Passphrase non valida"}), 400
+        return jsonify({"success": False, "message": _ht('backup.invalidPassphrase', _hlang())}), 400
     requested = request.form.get("categories") or ""
     categories = [c for c in requested.split(",") if c] or None
 
@@ -2572,7 +2572,7 @@ def api_internal_format():
 
     # Reset status file.
     with open(FORMAT_STATUS, "w") as f:
-        json.dump({"state": "idle", "progress": 0, "message": "Avvio…"}, f)
+        json.dump({"state": "idle", "progress": 0, "message": _ht('common.starting', _hlang())}, f)
 
     _run(["systemd-run", "--no-block", "--collect", "--unit=" + FORMAT_UNIT,
           FORMAT_SCRIPT, device, fs, label], timeout=10)
@@ -2815,8 +2815,7 @@ def api_cd_rip():
         if len(sources) == 1 and not source_id:
             src = sources[0]
         else:
-            return jsonify({"success": False,
-                            "message": "Nessuna destinazione scrivibile: adotta un disco interno"}), 400
+            return _err("msg.noWritableTarget", 400)
 
     meta = _cd_metadata(toc)
     artist = str(data.get("artist") or meta["artist"]).strip() or "Unknown Artist"
@@ -2862,7 +2861,7 @@ def api_cd_rip():
     os.chmod(RIP_PLAN, 0o600)
     with open(RIP_STATUS, "w") as f:
         json.dump({"state": "starting", "track": 0, "total": len(tracks),
-                   "progress": 0, "message": "Avvio…"}, f)
+                   "progress": 0, "message": _ht('common.starting', _hlang())}, f)
 
     _run(["systemd-run", "--no-block", "--collect", "--unit=" + RIP_UNIT,
           RIP_SCRIPT, RIP_PLAN], timeout=10)
