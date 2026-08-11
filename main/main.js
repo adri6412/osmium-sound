@@ -12,6 +12,30 @@ const __dirname = dirname(__filename);
 
 let mainWindow;
 
+// The xsession restart loop (distro/os-update/files/xsession) relaunches this
+// binary in a `while true` loop whenever it exits, and a UI-channel OTA
+// update restarts lightdm (which re-runs xsession) to pick up new files —
+// neither of those is guaranteed to have actually killed the previous
+// process tree first (e.g. lightdm restarting while the old xsession's
+// process group is still mid-shutdown). Without this lock, that races into
+// two full Electron process trees running at once — seen live on the test
+// VM as 9 renderer processes and 2 gpu-process/main-process pairs in htop —
+// each polling LMS/the local API on its own timers, silently doubling real
+// network+CPU load behind a single visible (frontmost) window. Electron's
+// single-instance lock makes any second launch detect the first and exit
+// immediately instead of standing up its own window/subprocess tree.
+if (!app.requestSingleInstanceLock()) {
+  app.quit();
+  process.exit(0);
+}
+app.on('second-instance', () => {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    if (mainWindow.isMinimized()) mainWindow.restore();
+    mainWindow.show();
+    mainWindow.focus();
+  }
+});
+
 // Same sink the renderer's console-message listener writes to (see below) —
 // main-process events (recovery reloads, load failures) land in the same
 // file/timeline so the two can be correlated over SSH without a screen.
