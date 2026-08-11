@@ -1,5 +1,5 @@
 <script setup>
-import { ref, onMounted } from 'vue';
+import { ref, onMounted, onUnmounted } from 'vue';
 import { api } from '../api.js';
 import { useI18n } from '../i18n';
 
@@ -9,6 +9,12 @@ const info = ref({});
 const net = ref({});
 const mode = ref('');
 const stats = ref({});
+let statsPoll = null;
+
+async function loadStats() {
+  const st = await api.sys('stats');
+  if (st.ok) stats.value = st.data;
+}
 
 onMounted(async () => {
   const s = await api.sys('info');
@@ -19,8 +25,14 @@ onMounted(async () => {
   if (n.ok) net.value = n.data;
   const m = await api.sys('display_mode');
   if (m.ok) mode.value = m.data.mode;
-  const st = await api.sys('stats');
-  if (st.ok) stats.value = st.data;
+  await loadStats();
+  // CPU/RAM/disk/temperature/GPU are live figures -- keep the status card
+  // current without requiring a manual page reload.
+  statsPoll = setInterval(loadStats, 5000);
+});
+
+onUnmounted(() => {
+  if (statsPoll) clearInterval(statsPoll);
 });
 </script>
 
