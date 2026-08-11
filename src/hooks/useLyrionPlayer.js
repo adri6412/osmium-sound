@@ -169,8 +169,16 @@ export function useLyrionPlayer() {
   // last change, giving in-flight requests time to actually land server-side.
   const lastVolumeChangeRef = useRef(0);
   const VOLUME_GUARD_MS = 1200;
+  // No overlap guard: a 1s tick with a slow/stuck LMS (this box shares its
+  // CPU with squeezelite/CamillaDSP) used to just fire another concurrent
+  // POST to jsonrpc.js on top of whichever was still in flight — up to 10 of
+  // them stacked before lyrionApi's own 10s abort ceiling caught the first
+  // one, which was enough to make LMS's own web server start dropping
+  // connections outright (net::ERR_EMPTY_RESPONSE), not just respond slowly.
+  const statusInFlightRef = useRef(false);
   const fetchStatus = async () => {
-    if (!activePlayer) return;
+    if (!activePlayer || statusInFlightRef.current) return;
+    statusInFlightRef.current = true;
     try {
       const st = await lyrionApi.getPlayerStatus(activePlayer.playerid);
       if (st && typeof st === 'object' && 'mode' in st) {
@@ -192,6 +200,9 @@ export function useLyrionPlayer() {
         return;
       }
     } catch (_) { /* fall through to failure counting below */ }
+    finally {
+      statusInFlightRef.current = false;
+    }
     if (++statusFailCountRef.current >= 3) {
       statusFailCountRef.current = 0;
       connectToServer();

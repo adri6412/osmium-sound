@@ -359,7 +359,13 @@ const Settings = ({ initialSection, onSectionConsumed } = {}) => {
     loadVuMeter();
     loadOtaChannel();
     loadPlaybackPrefs();
-    loadDspStatus();
+    // loadDspStatus() disabled: DSP is held back for a future paid tier (see
+    // the 'custom-dsp' nav comment below) and its endpoints (dsp_status,
+    // dsp_presets — loadDspStatus triggers both) aren't meant to be called
+    // yet. Left commented rather than deleted so it's a one-line revert once
+    // the tier ships; loadDspStatus/loadDspPresets and all DSP state/UI stay
+    // fully intact, just unreachable now that nothing invokes them.
+    // loadDspStatus();
     loadLmsRole();
     loadPlayerName();
   }, []);
@@ -373,16 +379,18 @@ const Settings = ({ initialSection, onSectionConsumed } = {}) => {
   dspSyncBlockedRef.current = dspBusy || presetBusy;
   const dspDirtyRef = useRef(false);
   const markDspDirty = () => { dspDirtyRef.current = true; };
-  useEffect(() => {
-    const id = setInterval(() => {
-      if (document.visibilityState === 'visible'
-          && !dspSyncBlockedRef.current && !dspDirtyRef.current) {
-        loadDspStatus();
-      }
-    }, 10000);
-    return () => clearInterval(id);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  // Periodic sync disabled along with the initial load above — same reason:
+  // DSP endpoints aren't meant to be called until the paid tier ships.
+  // useEffect(() => {
+  //   const id = setInterval(() => {
+  //     if (document.visibilityState === 'visible'
+  //         && !dspSyncBlockedRef.current && !dspDirtyRef.current) {
+  //       loadDspStatus();
+  //     }
+  //   }, 10000);
+  //   return () => clearInterval(id);
+  //   // eslint-disable-next-line react-hooks/exhaustive-deps
+  // }, []);
 
   // Timezone can also change out from under this page — set from the admin
   // webui, or vice versa. Same visibility-aware polling as DSP state above,

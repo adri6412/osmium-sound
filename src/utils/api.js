@@ -204,9 +204,6 @@ export const systemAPI = {
   // Enable/disable the Tidal Connect daemon. Returns { success, enabled, active, message }
   setTidal: (enable) => apiPost('/tidal_set', { enable }),
 
-  // Currently-streaming Bluetooth track (AVRCP metadata + online cover lookup):
-  // { active, title, artist, album, duration, position, device_name, cover_url }
-  getBluetoothNowPlaying: () => apiGet('/bluetooth_now_playing'),
   // DSP/EQ engine state: { available, enabled, bands, crossfeed }
   getDspStatus: () => apiGet('/dsp_status'),
   // Apply DSP settings. Returns { success, enabled, message }
