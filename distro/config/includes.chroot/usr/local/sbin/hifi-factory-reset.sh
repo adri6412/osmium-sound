@@ -43,7 +43,7 @@ done
 # ── 2) wipe user state + settings ────────────────────────────────────
 log "removing user settings"
 # /etc/hifi-player: keep the OTA baseline + public key + channel; drop the rest,
-# INCLUDING the web-admin account DB + its per-device cookie/TLS material.
+# INCLUDING the web-admin account DB + its per-device cookie signing key.
 # github-support-pat is a leftover of the retired vendor remote-support flow
 # (nothing re-provisions it any more); wiping it here is just cleanup on
 # devices that still have one from an older release. Tailscale's own node
@@ -52,7 +52,7 @@ log "removing user settings"
 # from Settings → Tailscale (or the Tailscale admin console) if they want to.
 for f in display-mode ui-resolution pointer-enabled dsp.json dsp-presets.json bluetooth.json \
          samba-cred.json provisioning-state.json webui.db webui-secret.key \
-         webui-cert.pem webui-key.pem github-support-pat lyrion-channel; do
+         github-support-pat lyrion-channel; do
     rm -f "/etc/hifi-player/$f" 2>/dev/null || true
 done
 # Reset the OTA channel to the stable default (factory semantics).

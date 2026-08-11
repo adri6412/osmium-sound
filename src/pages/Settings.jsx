@@ -1756,15 +1756,15 @@ const Settings = ({ initialSection, onSectionConsumed } = {}) => {
   // token or the page would 401 on every action.
   // &lang= renders that page in the language the kiosk is set to, instead of
   // always Italian.
-  // Routed through webui's HTTPS reverse proxy (:443 /sources-app, see
-  // webui_server.py) rather than straight to :8080 over plain HTTP: iOS
-  // Safari's "HTTPS-Only" setting hard-refuses to even navigate to a bare
-  // http:// URL (reported by a user scanning this QR), producing a dead-end
-  // error page instead of the usual "connection not private" click-through.
-  // The self-signed cert still triggers that click-through warning here —
-  // unavoidable without a CA-trusted cert — but at least the page loads.
+  // Routed through webui's reverse proxy (:80 /sources-app, see
+  // webui_server.py) rather than straight to :8080, so it shares that
+  // service's session/pairing plumbing. webui_server.py is plain HTTP (no
+  // TLS, see its module docstring) — NOTE: iOS Safari's "HTTPS-Only" setting
+  // hard-refuses to even navigate to a bare http:// URL (previously reported
+  // by a user scanning this exact QR), which is a known, accepted regression
+  // of that decision for anyone with that Safari setting on.
   const sourcesUrl = (isUsableIp && sourcesToken)
-    ? `https://${deviceIp}/sources-app?token=${encodeURIComponent(sourcesToken)}&lang=${encodeURIComponent(lang)}`
+    ? `http://${deviceIp}/sources-app?token=${encodeURIComponent(sourcesToken)}&lang=${encodeURIComponent(lang)}`
     : null;
   // Companion-app pairing QR payload: JSON (not a bare URL) so the app can pick
   // out the LMS address, the :8080 API address, and the pairing token in one

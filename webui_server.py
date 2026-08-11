@@ -12,7 +12,7 @@ process so there is a single service to operate:
 
   2. AUTH: a self-contained username/password admin account in SQLite (its own
      credentials, NOT the companion pairing-token), cookie session, CSRF,
-     Host-header allowlist, TLS.
+     Host-header allowlist.
 
   3. WEB ADMIN + PROXY: serves the separate Vue admin app (built to
      /opt/hifi-webui/dist) and relays a whitelisted set of api_server.py:8000
@@ -22,8 +22,12 @@ process so there is a single service to operate:
 Security model (see the plan's "Analisi di sicurezza"):
   * api_server is NEVER exposed directly; the proxy runs here, behind the
     session, and calls 127.0.0.1:8000.
-  * TLS self-signed cert + cookie signing key are generated PER-DEVICE on first
-    start and never shipped in the image (shared keys => forgeable sessions).
+  * The cookie signing key is generated PER-DEVICE on first start and never
+    shipped in the image (a shared key => forgeable sessions). Plain HTTP by
+    design (no TLS): a per-device self-signed cert made every browser show a
+    "connection not private" click-through on first visit, which was worse
+    UX than the plain-HTTP tradeoff (session cookies are not Secure-flagged
+    as a result -- see _bootstrap below).
   * Every mutating request needs a double-submit CSRF token; every request's
     Host header must be in the allowlist (anti DNS-rebinding).
   * The proxy whitelist is PARTITIONED: a small pre-auth set is reachable during
@@ -34,8 +38,8 @@ Security model (see the plan's "Analisi di sicurezza"):
 Dev/local flags:
   HIFI_WEBUI_STATE_DIR   override /etc/hifi-player (default) for state files
   HIFI_WEBUI_DIST        override /opt/hifi-webui/dist (the Vue build)
-  HIFI_WEBUI_HTTP_ONLY=1 skip TLS, serve plain HTTP on HIFI_WEBUI_PORT (dev)
-  HIFI_WEBUI_PORT        HTTP-only dev port (default 8081)
+  HIFI_WEBUI_PORT        override the HTTP port (default 80; use e.g. 8081
+                         to run unprivileged on a dev machine)
   HIFI_PROVISION_FAKE=1  stub every nmcli call (no real Wi-Fi), for a laptop
 """
 
@@ -69,8 +73,6 @@ MARKER = os.path.join(STATE_DIR, 'provisioning-pending')
 PROVISION_STATE = os.path.join(STATE_DIR, 'provisioning-state.json')
 DB_PATH = os.path.join(STATE_DIR, 'webui.db')
 SECRET_KEY_FILE = os.path.join(STATE_DIR, 'webui-secret.key')
-TLS_CERT = os.path.join(STATE_DIR, 'webui-cert.pem')
-TLS_KEY = os.path.join(STATE_DIR, 'webui-key.pem')
 DISPLAY_MODE_FILE = os.path.join(STATE_DIR, 'display-mode')
 
 API_BASE = 'http://127.0.0.1:8000'
@@ -86,7 +88,7 @@ AP_ADDR = '10.42.0.1'
 AP_PSK = 'osmiumsetup'
 
 FAKE = os.environ.get('HIFI_PROVISION_FAKE') == '1'
-HTTP_ONLY = os.environ.get('HIFI_WEBUI_HTTP_ONLY') == '1'
+PORT = int(os.environ.get('HIFI_WEBUI_PORT', '80'))
 
 app = Flask(__name__)
 
@@ -127,7 +129,7 @@ def _lang():
     return v if v in ('en', 'it') else 'en'
 
 
-# ── local IP discovery (for Host allowlist + cert SAN) ───────────────
+# ── local IP discovery (for Host allowlist) ───────────────────────────
 def _local_ips():
     ips = {'127.0.0.1', AP_ADDR}
     try:
@@ -146,7 +148,7 @@ def _local_ips():
     return {ip for ip in ips if ip}
 
 
-# ── one-time per-device secrets: cookie key + TLS cert ───────────────
+# ── one-time per-device secret: cookie signing key ────────────────────
 def _ensure_secret_key():
     try:
         if os.path.isfile(SECRET_KEY_FILE):
@@ -169,30 +171,6 @@ def _ensure_secret_key():
         # survive a restart, but the daemon still works).
         pass
     return key
-
-
-def _ensure_tls():
-    """Generate a per-device self-signed cert on first start (via openssl, which
-    is in the image). Returns (cert, key) paths or None if generation failed."""
-    if os.path.isfile(TLS_CERT) and os.path.isfile(TLS_KEY):
-        return TLS_CERT, TLS_KEY
-    sans = ['DNS:hifiplayer.local', 'DNS:localhost']
-    for ip in sorted(_local_ips()):
-        sans.append(f'IP:{ip}')
-    try:
-        os.makedirs(STATE_DIR, exist_ok=True)
-        subprocess.run(
-            ['openssl', 'req', '-x509', '-newkey', 'rsa:2048', '-nodes',
-             '-keyout', TLS_KEY, '-out', TLS_CERT, '-days', '3650',
-             '-subj', '/CN=hifiplayer.local',
-             '-addext', 'subjectAltName=' + ','.join(sans)],
-            check=True, capture_output=True, timeout=60)
-        os.chmod(TLS_KEY, 0o600)
-        os.chmod(TLS_CERT, 0o644)
-        return TLS_CERT, TLS_KEY
-    except Exception as e:
-        print(f'[webui] TLS cert generation failed: {e}')
-        return None
 
 
 # ── SQLite auth store ────────────────────────────────────────────────
@@ -926,11 +904,9 @@ def _guard():
     #   * localhost — api_server.py makes server-to-server provisioning calls
     #     from 127.0.0.1 (no browser, no cookie), same loopback-trust as
     #     elsewhere.
-    #   * /api/provision/* and /api/netrecovery/* — both captive flows run over
-    #     PLAIN HTTP (:80 / http://10.42.0.1), where the Secure CSRF cookie is
-    #     unavailable by design. Both are pre-auth and gated by physical/RF
-    #     proximity + PSK; CSRF protects the authenticated HTTPS admin session,
-    #     a separate surface.
+    #   * /api/provision/* and /api/netrecovery/* — both captive flows are
+    #     pre-auth and gated by physical/RF proximity + PSK instead; CSRF here
+    #     protects the authenticated admin session, a separate surface.
     #   * forwarded sources paths — authenticated by the pairing bearer token
     #     (not cookies), so they're CSRF-immune by construction; requiring our
     #     cookie-bound header would just break the embedded :8080 SPA.
@@ -950,10 +926,11 @@ def _guard():
 @app.after_request
 def _set_csrf_cookie(resp):
     # Ensure a CSRF cookie exists so the SPA can read + echo it. Not HttpOnly by
-    # design (double-submit needs JS to read it); Secure under TLS.
+    # design (double-submit needs JS to read it). Not Secure either: plain
+    # HTTP, no TLS (see the module docstring's security-model note).
     if not request.cookies.get('csrf'):
         resp.set_cookie('csrf', secrets.token_urlsafe(24), samesite='Strict',
-                        secure=not HTTP_ONLY, httponly=False)
+                        secure=False, httponly=False)
     return resp
 
 
@@ -1293,12 +1270,11 @@ def provision_set_name():
 @app.route('/api/provision/create_account', methods=['POST'])
 def provision_create_account():
     # Same account /api/auth/setup creates, reachable from the AP-hotspot
-    # captive wizard (plain HTTP on :80/10.42.0.1). /api/auth/setup itself
-    # isn't under /api/provision/*, so it's subject to the CSRF check below —
-    # which the captive page can never satisfy, since its Secure CSRF cookie
-    # (SESSION_COOKIE_SECURE/csrf cookie both `secure=not HTTP_ONLY`) is
-    # dropped by the browser on a non-HTTPS response. This route lives under
-    # the already-exempted /api/provision/ prefix instead.
+    # captive wizard (10.42.0.1). /api/auth/setup itself isn't under
+    # /api/provision/*, so it's subject to the CSRF check above -- which the
+    # captive page, still mid-provisioning, can't necessarily satisfy yet.
+    # This route lives under the already-exempted /api/provision/ prefix
+    # instead.
     if not _provisioning():
         return jsonify({'success': False, 'code': 'provision.notInProgress',
                         'message': _wt('provision.notInProgress', _lang())}), 409
@@ -1595,9 +1571,10 @@ def factory_reset():
     return jsonify(body), status
 
 
-# ── sources app (:8080 SPA) embedded over HTTPS ──────────────────────
-# The webui is HTTPS; an <iframe> pointing at http://host:8080 would be blocked
-# as mixed content. So we reverse-proxy the sources SPA through this daemon:
+# ── sources app (:8080 SPA) embedded via reverse proxy ────────────────
+# Reverse-proxied through this daemon (same origin as the Settings page that
+# embeds it, single session/pairing-token story) rather than pointed straight
+# at :8080:
 #   GET /sources-app            (session) → mint a pairing token, redirect with it
 #   GET /sources-app?token=T    (token)   → proxied SPA HTML from loopback :8080
 #   /api/<sources paths>        (token)   → transparently forwarded to :8080
@@ -1836,7 +1813,7 @@ def root():
     # remaining setup steps (mode, audio, Lyrion, sources, timezone) only
     # exist in this captive page, so the phone must be able to pick the exact
     # same flow back up once it rejoins the real LAN and browses to
-    # https://hifiplayer.local or the device's new address. A wired
+    # http://hifiplayer.local or the device's new address. A wired
     # connection never has this problem — the AP stays up throughout (see
     # the "raised ALWAYS" policy above), so this branch is a no-op there.
     #
@@ -1991,7 +1968,7 @@ SETUP_CAPTIVE_HTML = """<!doctype html><html lang="en"><head><meta charset="utf-
 
 <div class="card" id="step-account" style="display:none">
  <label id="lbl-account">Web admin account</label>
- <p class="muted" id="account-help">Used to log into this device's web interface (https://&#8230;) from now on.</p>
+ <p class="muted" id="account-help">Used to log into this device's web interface (http://&#8230;) from now on.</p>
  <label id="lbl-acc-user">Username</label>
  <input id="acc-user" autocomplete="username">
  <label id="lbl-acc-pass">Password</label>
@@ -2009,8 +1986,8 @@ SETUP_CAPTIVE_HTML = """<!doctype html><html lang="en"><head><meta charset="utf-
 
 <script>
 var STRINGS={
- en:{restoreIntro:'Setting up a new device? Restore a previous backup, or start fresh.',fresh:'Start fresh',restoreFile:'Backup file',restorePass:'Passphrase (if the backup is encrypted)',restore:'Restore from backup',restoring:'Restoring…',restoreDone:'Restore complete. Rebooting to apply it — reconnect in about a minute.',restoreFailed:'Restore failed.',restoreNoFile:'Choose a backup file first.',wifi:'Wi-Fi network',ssid:'Or enter the network name (SSID)',pass:'Wi-Fi password',connect:'Connect via Wi-Fi',wired:"I'm connected via cable (Ethernet)",connecting:'Connecting… the setup Wi-Fi will turn off. Reconnect your phone to your home network, then open https://hifiplayer.local to continue setup where you left off.',noCable:'No cable detected',devname:'Name this player',devnameHelp:'Used as its network name (e.g. "livingroom" → livingroom.local) and its Bluetooth/multiroom name. Letters, numbers and dashes only — leave empty to keep the default.',devnameSaving:'Saving…',mode:'Device mode',modeGui:'With screen (touchscreen)',modeHeadless:'Headless (no screen)',modeOff:'Server only (player off)',modeHelp:'In headless/server-only you manage everything from this web interface.',pointer:'Mouse pointer',pointerHelp:"Show the mouse cursor on screen? Leave it off for a touchscreen — turn it on if you're driving this device with a mouse.",pointerHide:'Touchscreen (hide pointer)',pointerShow:'Mouse (show pointer)',audio:'Audio output',audioContinue:'Continue',lyrion:'Music server (Lyrion)',lyrionLocal:'Use this device as the server',lyrionFollow:'Use a server already on my network',lyrionHost:'Server address',lyrionUse:'Use this server',lyrionInstall:'Install Lyrion',lyrionChecking:'Checking whether Lyrion Music Server is installed…',lyrionMissing:"Lyrion Music Server isn't installed yet.",lyrionInstalling:'Installing Lyrion Music Server…',continueAnyway:'Continue anyway',sources:'Music sources',sourcesIntro:"Manage local, network (SMB) and USB sources below. Optional: you can also do this later from Settings. Lyrion's own setup wizard scans the library once you finish here.",continueBtn:'Continue',timezone:'Time zone',tzSave:'Save and continue',account:'Web admin account',accountHelp:"Used to log into this device's web interface (https://…) from now on.",username:'Username',password:'Password',confirmPassword:'Confirm password',createAccount:'Create account',creating:'Creating…',accountMismatch:'Passwords do not match.',accountTooShort:'Username needs at least 3 characters, password at least 8.',finishGui:'Screen mode set. Setup is complete — press "Complete setup" below: the hotspot will turn off, reconnect your phone to your network. The device will then start its normal on-screen interface.',finishHeadless:'Headless mode set. Press "Complete setup" below: the hotspot will turn off, reconnect your phone to your network and open https://hifiplayer.local',finishOff:'Server-only mode set — this device will not play audio locally. Press "Complete setup" below: the hotspot will turn off, reconnect your phone to your network and open https://hifiplayer.local',finishBtn:'Complete setup',finishDone:'Setup complete — hotspot off. Open https://hifiplayer.local from your network.',finishToLyrion:"Setup complete. Taking you to Lyrion's own setup wizard to finish scanning your library…",error:'Error: '},
- it:{restoreIntro:'Stai configurando un nuovo dispositivo? Ripristina un backup precedente, oppure inizia da zero.',fresh:'Inizia da zero',restoreFile:'File di backup',restorePass:'Passphrase (se il backup è cifrato)',restore:'Ripristina da backup',restoring:'Ripristino in corso…',restoreDone:'Ripristino completato. Riavvio in corso per applicarlo — riconnettiti tra circa un minuto.',restoreFailed:'Ripristino non riuscito.',restoreNoFile:'Scegli prima un file di backup.',wifi:'Rete Wi-Fi',ssid:'Oppure inserisci il nome (SSID)',pass:'Password Wi-Fi',connect:'Connetti via Wi-Fi',wired:'Sono connesso via cavo (Ethernet)',connecting:'Connessione in corso… il Wi-Fi di setup si spegnerà. Riconnetti il telefono alla tua rete di casa, poi apri https://hifiplayer.local per continuare la configurazione da dove l\\'hai lasciata.',noCable:'Nessun cavo rilevato',devname:'Dai un nome a questo player',devnameHelp:'Usato come nome di rete (es. "salotto" → salotto.local) e come nome Bluetooth/multiroom. Solo lettere, numeri e trattini — lascia vuoto per mantenere quello predefinito.',devnameSaving:'Salvataggio…',mode:'Modalità dispositivo',modeGui:'Con schermo (touchscreen)',modeHeadless:'Headless (senza schermo)',modeOff:'Solo server (player spento)',modeHelp:'In headless/solo server gestisci tutto da questa interfaccia web.',pointer:'Puntatore del mouse',pointerHelp:'Mostrare il cursore del mouse a schermo? Lascialo spento per un touchscreen — accendilo se usi il dispositivo con un mouse.',pointerHide:'Touchscreen (nascondi puntatore)',pointerShow:'Mouse (mostra puntatore)',audio:'Uscita audio',audioContinue:'Continua',lyrion:'Server musicale (Lyrion)',lyrionLocal:'Usa questo dispositivo come server',lyrionFollow:'Usa un server già presente sulla rete',lyrionHost:'Indirizzo del server',lyrionUse:'Usa questo server',lyrionInstall:'Installa Lyrion',lyrionChecking:'Verifica se Lyrion Music Server è installato…',lyrionMissing:'Lyrion Music Server non è ancora installato.',lyrionInstalling:'Installazione di Lyrion Music Server…',continueAnyway:'Continua comunque',sources:'Sorgenti musicali',sourcesIntro:'Gestisci sorgenti locali, di rete (SMB) e USB qui sotto. Facoltativo: puoi farlo anche più tardi dalle Impostazioni. La scansione della libreria la fa il setup wizard di Lyrion una volta terminato qui.',continueBtn:'Continua',timezone:'Fuso orario',tzSave:'Salva e continua',account:'Account amministratore web',accountHelp:"Usato per accedere all'interfaccia web di questo dispositivo (https://…) da ora in poi.",username:'Nome utente',password:'Password',confirmPassword:'Conferma password',createAccount:'Crea account',creating:'Creazione…',accountMismatch:'Le password non coincidono.',accountTooShort:'Nome utente di almeno 3 caratteri, password di almeno 8.',finishGui:'Modalità con schermo impostata. Il setup è completo — premi "Completa setup" qui sotto: l\\'hotspot si spegnerà, riconnetti il telefono alla tua rete. Il dispositivo avvierà poi la sua normale interfaccia a schermo.',finishHeadless:'Modalità headless impostata. Premi "Completa setup" qui sotto: l\\'hotspot si spegnerà, riconnetti il telefono alla tua rete e apri https://hifiplayer.local',finishOff:'Modalità solo server impostata — questo dispositivo non riprodurrà audio in locale. Premi "Completa setup" qui sotto: l\\'hotspot si spegnerà, riconnetti il telefono alla tua rete e apri https://hifiplayer.local',finishBtn:'Completa setup',finishDone:'Setup completato — hotspot spento. Apri https://hifiplayer.local dalla tua rete.',finishToLyrion:'Setup completato. Ti porto al setup wizard di Lyrion per finire la scansione della libreria…',error:'Errore: '}
+ en:{restoreIntro:'Setting up a new device? Restore a previous backup, or start fresh.',fresh:'Start fresh',restoreFile:'Backup file',restorePass:'Passphrase (if the backup is encrypted)',restore:'Restore from backup',restoring:'Restoring…',restoreDone:'Restore complete. Rebooting to apply it — reconnect in about a minute.',restoreFailed:'Restore failed.',restoreNoFile:'Choose a backup file first.',wifi:'Wi-Fi network',ssid:'Or enter the network name (SSID)',pass:'Wi-Fi password',connect:'Connect via Wi-Fi',wired:"I'm connected via cable (Ethernet)",connecting:'Connecting… the setup Wi-Fi will turn off. Reconnect your phone to your home network, then open http://hifiplayer.local to continue setup where you left off.',noCable:'No cable detected',devname:'Name this player',devnameHelp:'Used as its network name (e.g. "livingroom" → livingroom.local) and its Bluetooth/multiroom name. Letters, numbers and dashes only — leave empty to keep the default.',devnameSaving:'Saving…',mode:'Device mode',modeGui:'With screen (touchscreen)',modeHeadless:'Headless (no screen)',modeOff:'Server only (player off)',modeHelp:'In headless/server-only you manage everything from this web interface.',pointer:'Mouse pointer',pointerHelp:"Show the mouse cursor on screen? Leave it off for a touchscreen — turn it on if you're driving this device with a mouse.",pointerHide:'Touchscreen (hide pointer)',pointerShow:'Mouse (show pointer)',audio:'Audio output',audioContinue:'Continue',lyrion:'Music server (Lyrion)',lyrionLocal:'Use this device as the server',lyrionFollow:'Use a server already on my network',lyrionHost:'Server address',lyrionUse:'Use this server',lyrionInstall:'Install Lyrion',lyrionChecking:'Checking whether Lyrion Music Server is installed…',lyrionMissing:"Lyrion Music Server isn't installed yet.",lyrionInstalling:'Installing Lyrion Music Server…',continueAnyway:'Continue anyway',sources:'Music sources',sourcesIntro:"Manage local, network (SMB) and USB sources below. Optional: you can also do this later from Settings. Lyrion's own setup wizard scans the library once you finish here.",continueBtn:'Continue',timezone:'Time zone',tzSave:'Save and continue',account:'Web admin account',accountHelp:"Used to log into this device's web interface (http://…) from now on.",username:'Username',password:'Password',confirmPassword:'Confirm password',createAccount:'Create account',creating:'Creating…',accountMismatch:'Passwords do not match.',accountTooShort:'Username needs at least 3 characters, password at least 8.',finishGui:'Screen mode set. Setup is complete — press "Complete setup" below: the hotspot will turn off, reconnect your phone to your network. The device will then start its normal on-screen interface.',finishHeadless:'Headless mode set. Press "Complete setup" below: the hotspot will turn off, reconnect your phone to your network and open http://hifiplayer.local',finishOff:'Server-only mode set — this device will not play audio locally. Press "Complete setup" below: the hotspot will turn off, reconnect your phone to your network and open http://hifiplayer.local',finishBtn:'Complete setup',finishDone:'Setup complete — hotspot off. Open http://hifiplayer.local from your network.',finishToLyrion:"Setup complete. Taking you to Lyrion's own setup wizard to finish scanning your library…",error:'Error: '},
+ it:{restoreIntro:'Stai configurando un nuovo dispositivo? Ripristina un backup precedente, oppure inizia da zero.',fresh:'Inizia da zero',restoreFile:'File di backup',restorePass:'Passphrase (se il backup è cifrato)',restore:'Ripristina da backup',restoring:'Ripristino in corso…',restoreDone:'Ripristino completato. Riavvio in corso per applicarlo — riconnettiti tra circa un minuto.',restoreFailed:'Ripristino non riuscito.',restoreNoFile:'Scegli prima un file di backup.',wifi:'Rete Wi-Fi',ssid:'Oppure inserisci il nome (SSID)',pass:'Password Wi-Fi',connect:'Connetti via Wi-Fi',wired:'Sono connesso via cavo (Ethernet)',connecting:'Connessione in corso… il Wi-Fi di setup si spegnerà. Riconnetti il telefono alla tua rete di casa, poi apri http://hifiplayer.local per continuare la configurazione da dove l\\'hai lasciata.',noCable:'Nessun cavo rilevato',devname:'Dai un nome a questo player',devnameHelp:'Usato come nome di rete (es. "salotto" → salotto.local) e come nome Bluetooth/multiroom. Solo lettere, numeri e trattini — lascia vuoto per mantenere quello predefinito.',devnameSaving:'Salvataggio…',mode:'Modalità dispositivo',modeGui:'Con schermo (touchscreen)',modeHeadless:'Headless (senza schermo)',modeOff:'Solo server (player spento)',modeHelp:'In headless/solo server gestisci tutto da questa interfaccia web.',pointer:'Puntatore del mouse',pointerHelp:'Mostrare il cursore del mouse a schermo? Lascialo spento per un touchscreen — accendilo se usi il dispositivo con un mouse.',pointerHide:'Touchscreen (nascondi puntatore)',pointerShow:'Mouse (mostra puntatore)',audio:'Uscita audio',audioContinue:'Continua',lyrion:'Server musicale (Lyrion)',lyrionLocal:'Usa questo dispositivo come server',lyrionFollow:'Usa un server già presente sulla rete',lyrionHost:'Indirizzo del server',lyrionUse:'Usa questo server',lyrionInstall:'Installa Lyrion',lyrionChecking:'Verifica se Lyrion Music Server è installato…',lyrionMissing:'Lyrion Music Server non è ancora installato.',lyrionInstalling:'Installazione di Lyrion Music Server…',continueAnyway:'Continua comunque',sources:'Sorgenti musicali',sourcesIntro:'Gestisci sorgenti locali, di rete (SMB) e USB qui sotto. Facoltativo: puoi farlo anche più tardi dalle Impostazioni. La scansione della libreria la fa il setup wizard di Lyrion una volta terminato qui.',continueBtn:'Continua',timezone:'Fuso orario',tzSave:'Salva e continua',account:'Account amministratore web',accountHelp:"Usato per accedere all'interfaccia web di questo dispositivo (http://…) da ora in poi.",username:'Nome utente',password:'Password',confirmPassword:'Conferma password',createAccount:'Crea account',creating:'Creazione…',accountMismatch:'Le password non coincidono.',accountTooShort:'Nome utente di almeno 3 caratteri, password di almeno 8.',finishGui:'Modalità con schermo impostata. Il setup è completo — premi "Completa setup" qui sotto: l\\'hotspot si spegnerà, riconnetti il telefono alla tua rete. Il dispositivo avvierà poi la sua normale interfaccia a schermo.',finishHeadless:'Modalità headless impostata. Premi "Completa setup" qui sotto: l\\'hotspot si spegnerà, riconnetti il telefono alla tua rete e apri http://hifiplayer.local',finishOff:'Modalità solo server impostata — questo dispositivo non riprodurrà audio in locale. Premi "Completa setup" qui sotto: l\\'hotspot si spegnerà, riconnetti il telefono alla tua rete e apri http://hifiplayer.local',finishBtn:'Completa setup',finishDone:'Setup completato — hotspot spento. Apri http://hifiplayer.local dalla tua rete.',finishToLyrion:'Setup completato. Ti porto al setup wizard di Lyrion per finire la scansione della libreria…',error:'Errore: '}
 };
 var LANG=(new URLSearchParams(location.search).get('lang')||'en');
 if(STRINGS[LANG]===undefined)LANG='en';
@@ -2066,7 +2043,7 @@ var netPhaseDone=false;
 var restoringFromBackup=false;
 var pendingRestoreFile=null;
 var deviceHost='hifiplayer';
-// The finish/connecting strings hardcode https://hifiplayer.local as the
+// The finish/connecting strings hardcode http://hifiplayer.local as the
 // address to reconnect to — once the user picks a different name in
 // step-name, that address changes, so route those strings through this.
 function hostMsg(s){return s.replace(/hifiplayer\.local/g,deviceHost+'.local')}
@@ -2264,12 +2241,12 @@ function saveTimezone(){
   });
 }
 
-// The web-admin account (port 443) used to only get asked for the first time
-// you opened https://…, which for a screenless/AP-hotspot setup meant AFTER
-// finishing Lyrion's own wizard too — easy to forget, and it left the device
-// reachable-but-unclaimed in the meantime. Create it here instead, unless one
-// already exists (e.g. this wizard is being re-run, or the account was
-// already created from https://… directly).
+// The web-admin account used to only get asked for the first time you
+// opened the web interface, which for a screenless/AP-hotspot setup meant
+// AFTER finishing Lyrion's own wizard too — easy to forget, and it left the
+// device reachable-but-unclaimed in the meantime. Create it here instead,
+// unless one already exists (e.g. this wizard is being re-run, or the
+// account was already created from the web interface directly).
 function checkAccountStep(){
   show('step-account');
   jget('/api/auth/status').then(function(res){
@@ -2478,7 +2455,10 @@ def _bootstrap():
     app.config.update(
         SESSION_COOKIE_HTTPONLY=True,
         SESSION_COOKIE_SAMESITE='Strict',
-        SESSION_COOKIE_SECURE=not HTTP_ONLY,
+        # Not Secure: plain HTTP, no TLS -- see the module docstring's
+        # security-model note. A Secure-flagged cookie would just get
+        # silently dropped by the browser on every response.
+        SESSION_COOKIE_SECURE=False,
         PERMANENT_SESSION_LIFETIME=7 * 24 * 3600,
     )
     _init_db()
@@ -2502,42 +2482,8 @@ def main():
     _start_provisioning_loop()
     _start_network_monitor()
     from werkzeug.serving import make_server
-
-    if HTTP_ONLY:
-        port = int(os.environ.get('HIFI_WEBUI_PORT', '8081'))
-        print(f'[webui] HTTP-only dev mode on :{port}')
-        make_server('0.0.0.0', port, app, threaded=True).serve_forever()
-        return
-
-    tls = _ensure_tls()
-    if not tls:
-        print('[webui] no TLS — falling back to plain HTTP on :80')
-        make_server('0.0.0.0', 80, app, threaded=True).serve_forever()
-        return
-
-    # :80 in a background thread (captive probes + redirect to :443), :443 main.
-    def _http80():
-        make_server('0.0.0.0', 80, _redirect_app, threaded=True).serve_forever()
-    threading.Thread(target=_http80, daemon=True).start()
-
-    import ssl
-    ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
-    ctx.load_cert_chain(tls[0], tls[1])
-    print('[webui] serving HTTPS on :443 (+ :80 redirect/captive)')
-    make_server('0.0.0.0', 443, app, threaded=True, ssl_context=ctx).serve_forever()
-
-
-def _redirect_app(environ, start_response):
-    """Tiny WSGI app for :80. Delegates to the Flask app for the provisioning
-    API (so api_server.py's loopback proxy + the phone reach it on plain HTTP
-    regardless of AP state) and for captive traffic while the AP is up;
-    everything else 301s to HTTPS so admin traffic is always encrypted."""
-    path = environ.get('PATH_INFO', '/')
-    if path.startswith('/api/provision/') or path.startswith('/api/netrecovery/') or _any_ap_active():
-        return app(environ, start_response)
-    host = environ.get('HTTP_HOST', 'hifiplayer.local').split(':')[0]
-    start_response('301 Moved Permanently', [('Location', f'https://{host}{path}')])
-    return [b'']
+    print(f'[webui] serving HTTP on :{PORT}')
+    make_server('0.0.0.0', PORT, app, threaded=True).serve_forever()
 
 
 if __name__ == '__main__':

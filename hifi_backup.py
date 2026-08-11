@@ -99,12 +99,10 @@ DENY_FILES = frozenset((
     # Trust root for the signed OS channel. An archive must never be able to
     # swap the key that decides which OS payloads are allowed to run as root.
     "/etc/hifi-player/ota-pubkey.pem",
-    # Per-device identity: cookie signing key and the self-signed TLS pair.
-    # Cloning these across devices would let one box's session cookies work on
-    # another. A restored webui.db is enough to get the account back.
+    # Per-device identity: cookie signing key. Cloning it across devices would
+    # let one box's session cookies work on another. A restored webui.db is
+    # enough to get the account back.
     "/etc/hifi-player/webui-secret.key",
-    "/etc/hifi-player/webui-cert.pem",
-    "/etc/hifi-player/webui-key.pem",
     # Support/provisioning state that is re-derived, not user config.
     "/etc/hifi-player/github-support-pat",
     "/etc/hifi-player/shell-account",
