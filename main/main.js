@@ -128,14 +128,17 @@ function createWindow() {
       mainWindow.loadURL('data:text/html,<html><body><h1>Loading...</h1><p>Please wait...</p></body></html>');
     });
   }
-  // TEMP (v2.5.21-dev.70-alpha1): force DevTools open on the kiosk itself so
+  // TEMP (v2.5.21-dev.70-alpha): force DevTools open on the kiosk itself so
   // the Network tab can be watched live while chasing the stale now-playing
   // artwork bug on real hardware. Normally the kiosk has none (no
   // keyboard/mouse to drive it — see the console-message mirroring below);
   // revert this once that's confirmed fixed, don't let it ride into a
-  // regular dev/prod release. 'detach' keeps it a separate window since
-  // mainWindow is frameless/fixed-size and can't sanely dock a panel.
-  mainWindow.webContents.openDevTools({ mode: 'detach' });
+  // regular dev/prod release. 'detach' (alpha1) opened a separate top-level
+  // window, which is unusable on this kiosk: there's no window manager, so
+  // it can't be moved, focused, or brought back if it ends up off-screen or
+  // behind the main window. 'bottom' docks the panel inside mainWindow
+  // itself instead, so it's always visible with the rest of the UI.
+  mainWindow.webContents.openDevTools({ mode: 'bottom' });
 
   // Show window when ready
   mainWindow.once('ready-to-show', () => {
