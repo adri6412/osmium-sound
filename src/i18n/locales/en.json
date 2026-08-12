@@ -36,6 +36,7 @@
     "share": "Share",
     "user": "User (empty = guest)",
     "pass": "Password",
+    "smbRw": "Allow writing (needed to use it as a CD-rip destination)",
     "mountAndAdd": "Mount and add",
     "apply": "Apply & rescan library",
     "added": "Added ✓",

@@ -36,6 +36,7 @@
     "share": "Condivisione",
     "user": "Utente (vuoto = ospite)",
     "pass": "Password",
+    "smbRw": "Consenti scrittura (necessario per usarla come destinazione del rip CD)",
     "mountAndAdd": "Monta e aggiungi",
     "apply": "Applica e scansiona libreria",
     "added": "Aggiunta ✓",

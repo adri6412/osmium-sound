@@ -31,7 +31,7 @@ export default function SourcesManager() {
   const [localPath, setLocalPath] = useState('');
   const localRef = useKeyboardInput(localPath, setLocalPath);
 
-  const [smb, setSmb] = useState({ server: '', share: '', username: '', password: '' });
+  const [smb, setSmb] = useState({ server: '', share: '', username: '', password: '', rw: false });
   const setSmbField = (k) => (e) => setSmb((s) => ({ ...s, [k]: e.target.value }));
   const serverRef = useKeyboardInput(smb.server, () => {});
   const shareRef = useKeyboardInput(smb.share, () => {});
@@ -92,7 +92,7 @@ export default function SourcesManager() {
     try {
       const r = await post('/api/sources/smb', smb);
       setMsg(r.success ? t('sources.mounted') : (r.message || t('common.error')));
-      if (r.success) { setSmb({ server: '', share: '', username: '', password: '' }); loadSources(); }
+      if (r.success) { setSmb({ server: '', share: '', username: '', password: '', rw: false }); loadSources(); }
     } catch (_) { setMsg(t('common.error')); } finally { setBusy(false); }
   };
 
@@ -144,7 +144,7 @@ export default function SourcesManager() {
             const usbType = s.type === 'usb';
             const sub = smbType ? `//${s.server}/${s.share} → ${s.mountpoint}` : (internalType || usbType) ? s.mountpoint : s.path;
             const ok = smbType || internalType || usbType ? s.mounted : s.exists;
-            const tag = smbType ? 'SMB' : internalType ? t('sources.internal.tag') : usbType ? 'USB' : t('sources.local');
+            const tag = smbType ? (s.rw ? 'SMB · RW' : 'SMB') : internalType ? t('sources.internal.tag') : usbType ? 'USB' : t('sources.local');
             return (
               <div key={s.id} className="flex items-center justify-between bg-hifi-dark rounded-lg p-3">
                 <div className="min-w-0">
@@ -216,6 +216,10 @@ export default function SourcesManager() {
               <input ref={userRef} type="text" value={smb.username} onChange={setSmbField('username')} className={input} placeholder={t('sources.user')} />
               <input ref={passRef} type="password" value={smb.password} onChange={setSmbField('password')} className={input} placeholder={t('sources.pass')} />
             </div>
+            <label className="flex items-center gap-2 mt-3 text-sm text-hifi-silver">
+              <input type="checkbox" checked={smb.rw} onChange={(e) => setSmb((s) => ({ ...s, rw: e.target.checked }))} className="accent-hifi-gold" />
+              <span>{t('sources.smbRw')}</span>
+            </label>
             <button onClick={addSmb} disabled={busy} className={`${ghostBtn} w-full mt-3`}><Plus size={18} /><span>{t('sources.mountAndAdd')}</span></button>
           </div>
         </>

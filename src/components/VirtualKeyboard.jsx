@@ -190,7 +190,11 @@ const VirtualKeyboard = () => {
             left: 0,
             right: 0,
             bottom: 0,
-            zIndex: 9999,
+            // Must outrank every modal that can trigger it, including the
+            // highest-tier ones (InternalDisks' FormatWizard, UpdatePlanOverlay,
+            // UsbToast: z-[10050]) — otherwise their backdrop covers the
+            // keyboard and its inputs become unreachable.
+            zIndex: 10100,
             backgroundColor: 'transparent'
           }}
         >

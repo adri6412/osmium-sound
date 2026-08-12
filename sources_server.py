@@ -176,7 +176,16 @@ def _run_json(cmd, timeout=30):
 
 # ─────────────────────────── SMB mounting ───────────────────────────
 def mount_smb(src):
-    """Mount one SMB source. Returns (ok, message)."""
+    """Mount one SMB source. Returns (ok, message).
+
+    Read-only by default (matches "add a NAS folder to browse into the
+    library" — most SMB sources are someone else's existing music
+    collection, not a target the appliance should be able to modify).
+    src["rw"]=True mounts read-write instead, with the same uid=/gid=
+    mapping the FAT-like adopted-disk mounts use (mount.cifs presents every
+    file under that uid/gid regardless of what wrote it, so unlike ext4
+    there's no post-write chown step needed) — opt-in, e.g. for CD-ripping
+    onto a NAS share (see _rip_writable_sources())."""
     server = src["server"].strip().strip("/")
     share = src["share"].strip().strip("/")
     username = src.get("username", "")
@@ -197,7 +206,11 @@ def mount_smb(src):
         return True, _ht('mount.alreadyMounted', _hlang())
 
     unc = f"//{server}/{share}"
-    base_opts = "uid=0,gid=0,iocharset=utf8,ro,file_mode=0644,dir_mode=0755"
+    if src.get("rw"):
+        uid, gid = _ensure_samba_uid_gid()
+        base_opts = f"uid={uid},gid={gid},iocharset=utf8,rw,file_mode=0664,dir_mode=0775"
+    else:
+        base_opts = "uid=0,gid=0,iocharset=utf8,ro,file_mode=0644,dir_mode=0755"
 
     cred_path = None
     try:
@@ -2481,6 +2494,9 @@ def api_add_smb():
         "username": (data.get("username") or "").strip(),
         "password": data.get("password") or "",
         "mountpoint": os.path.join(MOUNT_ROOT, _slug(server, share)),
+        # Opt-in — see mount_smb()'s docstring. Off by default: most SMB
+        # sources are an existing NAS library the appliance should only read.
+        "rw": bool(data.get("rw")),
     }
     ok, msg = mount_smb(src)
     if not ok:
@@ -2924,8 +2940,11 @@ def _lyrion_add_mediadir_live(path):
 
 def _rip_watcher():
     """Background thread (spawned per rip): when the worker reports done, fix
-    ownership for Samba access and ask Lyrion for a rescan — a plain rescan,
-    not apply_to_lyrion(), so LMS is not restarted mid-listen."""
+    ownership for Samba access (ext4 destinations only — see
+    _mount_adopted_disk()'s docstring; SMB/FAT-like destinations already
+    present every file under a fixed uid/gid via mount options, so nothing to
+    fix there) and add the destination to Lyrion's library live — not
+    apply_to_lyrion(), so LMS is not restarted mid-listen."""
     deadline = time.monotonic() + 3 * 60 * 60
     while time.monotonic() < deadline:
         time.sleep(3)
@@ -2936,7 +2955,8 @@ def _rip_watcher():
                 if state == "done":
                     dest = st.get("dest") or ""
                     uid, gid = _ensure_samba_uid_gid()
-                    if dest.startswith(INTERNAL_MOUNT_ROOT + "/") and os.path.isdir(dest):
+                    local_roots = (INTERNAL_MOUNT_ROOT + "/", USB_ADOPTED_ROOT + "/")
+                    if dest.startswith(local_roots) and os.path.isdir(dest):
                         for root, dirs, files in os.walk(dest):
                             for name in dirs + files:
                                 try:
@@ -2948,19 +2968,23 @@ def _rip_watcher():
                         except OSError:
                             pass
                     try:
-                        _lyrion_rescan()
+                        _lyrion_add_mediadir_live(dest)
                     except Exception as e:
-                        print(f"[sources] rip rescan failed: {e}")
+                        print(f"[sources] rip library add/rescan failed: {e}")
                 return
         except Exception as e:
             print(f"[sources] rip watcher error: {e}")
 
 
 def _rip_writable_sources():
-    """Adopted (rw, hifimusic-owned) internal or USB sources the rip can write
-    into."""
+    """Sources the rip can write into: adopted (rw, hifimusic-owned) internal
+    or USB disks, plus any SMB share explicitly mounted read-write (opt-in —
+    see mount_smb())."""
     out = []
-    for s in _adopted_disk_sources():
+    for s in load_state().get("sources", []):
+        t = s.get("type")
+        if t not in ("internal", "usb") and not (t == "smb" and s.get("rw")):
+            continue
         mp = s.get("mountpoint") or ""
         if os.path.ismount(mp) and os.access(mp, os.W_OK):
             out.append(s)
