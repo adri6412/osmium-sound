@@ -146,10 +146,13 @@ CATEGORIES = {
             ("file", "/etc/hifi-player/display-mode"),
             ("file", "/etc/hifi-player/ui-resolution"),
             ("file", "/etc/hifi-player/lyrion-channel"),
-            # The standard Debian file (not a custom /etc/hifi-player/ one):
-            # `timedatectl set-timezone` already keeps this and the
-            # /etc/localtime symlink it points at in sync and durable across
-            # reboots on its own, so there's nothing bespoke to reconcile here.
+            # The standard Debian file (not a custom /etc/hifi-player/ one).
+            # `timedatectl set-timezone` keeps this and the /etc/localtime
+            # symlink in sync when a user actively sets the zone, but a
+            # restore only writes this file back -- it does NOT re-derive
+            # /etc/localtime, so sources_server.py's _restore_apply_side_effects
+            # re-runs `timedatectl set-timezone` on the restored value to keep
+            # them in sync. Keep that in mind if this entry ever moves/renames.
             ("file", "/etc/timezone"),
             ("file", "/etc/default/squeezelite"),
             ("file", "/etc/camilladsp/config.yml"),

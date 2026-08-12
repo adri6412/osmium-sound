@@ -1980,6 +1980,16 @@ def set_timezone(tz):
         log.exception("set_timezone failed")
         return {'success': False, 'timezone': get_timezone()['timezone'],
                 'code': 'timezone.changeFailed', 'message': _t('timezone.changeFailed', _lang())}
+    # timedatectl updates /etc/localtime live, but the kiosk's Electron/Chromium
+    # process resolves its timezone (ICU) once at startup and never re-reads
+    # it -- the on-screen clock would otherwise keep showing the old offset
+    # until the next reboot. Kill it; the xsession restart loop (distro/os-update/
+    # files/xsession) relaunches it within ~3s with the new zone applied. A
+    # headless unit has no such process, so this is a harmless no-op there.
+    try:
+        subprocess.run(['pkill', '-x', 'hifi-media-player'], capture_output=True, timeout=10)
+    except Exception:
+        log.exception("set_timezone: kiosk restart failed")
     return {'success': True, 'timezone': tz,
             'message': _t('timezone.updated', _lang(), tz=tz)}
 

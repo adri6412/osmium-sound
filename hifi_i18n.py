@@ -301,6 +301,7 @@ MESSAGES = {
     'restore.camillaRestarted': {'en': 'CamillaDSP restarted', 'it': 'CamillaDSP riavviato'},
     'restore.wifiReloaded': {'en': 'Wi-Fi networks reloaded', 'it': 'Reti Wi-Fi ricaricate'},
     'restore.smbResynced': {'en': 'SMB credentials resynced', 'it': 'Credenziali SMB risincronizzate'},
+    'restore.timezoneApplied': {'en': 'Timezone re-applied ({tz})', 'it': 'Fuso orario riapplicato ({tz})'},
 
     # ── sources_server.py: SMB / adopted-disk mounting ───────────────
     'mount.invalidFields': {'en': 'Invalid value in server/share/credentials',

@@ -1310,6 +1310,29 @@ def _restore_apply_side_effects(restored):
         except Exception as e:
             print(f"[sources] restore side-effect (sources) failed: {e}")
             notes.append(_ht('restore.sourcesNotReapplied', _hlang()))
+    if "/etc/timezone" in restored:
+        # /etc/timezone was restored as a plain file, but that's just the IANA
+        # name -- /etc/localtime (the symlink libc/Chromium/timedatectl actually
+        # resolve wall-clock time against) is a separate artifact normally kept
+        # in sync by `timedatectl set-timezone`, which nothing in a restore
+        # calls. Left alone, the restored name shows up correctly in Settings
+        # while every clock on the box keeps running on whatever zone the image
+        # shipped with (UTC) until the file and symlink are re-synced here.
+        try:
+            with open("/etc/timezone") as f:
+                tz = f.read().strip()
+            real = os.path.normpath(os.path.join("/usr/share/zoneinfo", tz))
+            if tz and real.startswith("/usr/share/zoneinfo/") and os.path.isfile(real):
+                _run(["timedatectl", "set-timezone", tz], timeout=15)
+                # Same reason api_server.py's set_timezone() does this on the
+                # live-set path: the kiosk's Electron/Chromium process reads
+                # its timezone (ICU) once at startup and never again, so the
+                # on-screen clock would keep showing the pre-restore offset
+                # until the next reboot. pkill is a no-op on a headless unit.
+                _run(["pkill", "-x", "hifi-media-player"], timeout=10)
+                notes.append(_ht('restore.timezoneApplied', _hlang(), tz=tz))
+        except Exception as e:
+            print(f"[sources] restore side-effect (timezone) failed: {e}")
     if any(p in restored for p in ("/etc/default/squeezelite", "/var/lib/hifi-player/dsp-target")):
         _run(["systemctl", "restart", "squeezelite"], timeout=30)
         notes.append(_ht('restore.squeezeliteRestarted', _hlang()))
