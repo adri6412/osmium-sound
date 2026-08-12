@@ -9,19 +9,20 @@ on:
 
 permissions:
   contents: write
-  pages: write
-  id-token: write
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.pages-deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v7
 
-      - name: Deploy to gh-pages branch
+      # Just a git push to the gh-pages branch, despite the action's name —
+      # Cloudflare Pages (osmium-sound.pages.dev) watches this branch and
+      # redeploys on its own from here. GitHub Pages itself is no longer in
+      # the loop: its custom-domain cert (osmiumsound.qd.je) got permanently
+      # stuck, see api_server.py's OTA_MANIFEST_BASE for the same story on
+      # the OTA-manifest side.
+      - name: Push website to gh-pages branch
         uses: peaceiris/actions-gh-pages@v4
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
@@ -31,22 +32,3 @@ jobs:
           # OTA manifest the release workflow publishes under ota/ on this same
           # branch. force_orphan would wipe it on every website change.
           keep_files: true
-          cname: osmiumsound.qd.je
-
-      # Pages source is build_type "workflow" (see build-ui-ota.yml for why) —
-      # the push above no longer triggers a deploy on its own. Re-checkout
-      # what was just pushed and publish it explicitly via Actions.
-      - name: Checkout updated gh-pages for Actions-based Pages deploy
-        uses: actions/checkout@v7
-        with:
-          ref: gh-pages
-          path: gh-pages-deploy
-
-      - name: Upload Pages artifact
-        uses: actions/upload-pages-artifact@v3
-        with:
-          path: gh-pages-deploy
-
-      - name: Deploy to GitHub Pages
-        id: pages-deployment
-        uses: actions/deploy-pages@v5

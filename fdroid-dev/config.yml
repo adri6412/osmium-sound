@@ -1,8 +1,8 @@
-repo_url: "https://osmiumsound.qd.je/fdroid/dev/repo"
+repo_url: "https://osmium-sound.pages.dev/fdroid/dev/repo"
 repo_name: "Osmium Sound (Dev)"
 repo_description: >
   Development builds of Osmium Sound Companion (tags with a "-svil" suffix),
-  published from the same source as https://osmiumsound.qd.je/fdroid/repo but
+  published from the same source as https://osmium-sound.pages.dev/fdroid/repo but
   ahead of it and NOT tested to the same standard. Add this repo only if you
   want early/unstable builds; leave it out to stay on stable releases only.
   (https://github.com/adri6412/osmium-sound).
