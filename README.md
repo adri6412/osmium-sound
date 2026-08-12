@@ -11,7 +11,7 @@ Bit-perfect audio, streaming services, and signed OTA updates — one sleek dark
 ![License](https://img.shields.io/badge/license-MIT-green)
 ![Node](https://img.shields.io/badge/node-18%2B-brightgreen)
 
-[**🌐 Website**](https://osmiumsound.qd.je) · [**⬇️ Download**](https://github.com/adri6412/osmium-sound/releases) · [**📱 Android companion**](https://github.com/adri6412/osmium-sound/releases?q=companion) · [**📖 Architecture**](ARCHITECTURE.md)
+[**🌐 Website**](https://osmiumsound.it) · [**⬇️ Download**](https://github.com/adri6412/osmium-sound/releases) · [**📱 Android companion**](https://github.com/adri6412/osmium-sound/releases?q=companion) · [**📖 Architecture**](ARCHITECTURE.md)
 
 <img src="website/01.png" alt="Osmium Sound — Now Playing" width="640" />
 
