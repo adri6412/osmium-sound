@@ -37,6 +37,8 @@
     "user": "User (empty = guest)",
     "pass": "Password",
     "smbRw": "Allow writing (needed to use it as a CD-rip destination)",
+    "smbMakeRw": "Make writable",
+    "smbMakeRo": "Make read-only",
     "mountAndAdd": "Mount and add",
     "apply": "Apply & rescan library",
     "added": "Added ✓",

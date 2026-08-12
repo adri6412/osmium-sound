@@ -100,6 +100,15 @@ export default function SourcesManager() {
     try { await j('/api/sources/' + id, { method: 'DELETE' }); loadSources(); } catch (_) {}
   };
 
+  const setSmbRw = async (id, rw) => {
+    setBusy(true);
+    try {
+      const r = await post(`/api/sources/${id}/rw`, { rw });
+      setMsg(r.success ? (r.message || t('sources.mounted')) : (r.message || t('common.error')));
+      if (r.success) loadSources();
+    } catch (_) { setMsg(t('common.error')); } finally { setBusy(false); }
+  };
+
   const apply = async () => {
     setApplying(true);
     setMsg(t('sources.applying'));
@@ -154,9 +163,20 @@ export default function SourcesManager() {
                   </div>
                   <div className={`text-xs truncate ${ok ? 'text-hifi-silver/70' : 'text-red-400'}`}>{sub}</div>
                 </div>
-                <button onClick={() => removeSource(s.id)} className="ml-3 shrink-0 p-2 rounded-lg bg-red-900/30 hover:bg-red-900/60 text-red-300">
-                  <Trash2 size={16} />
-                </button>
+                <div className="flex items-center gap-2 ml-3 shrink-0">
+                  {smbType && (
+                    <button
+                      onClick={() => setSmbRw(s.id, !s.rw)}
+                      disabled={busy}
+                      className={`text-xs py-1.5 px-3 rounded-md ${s.rw ? 'bg-hifi-gold/20 hover:bg-hifi-gold/30 text-hifi-gold' : 'bg-hifi-accent hover:bg-hifi-light text-white'}`}
+                    >
+                      {s.rw ? t('sources.smbMakeRo') : t('sources.smbMakeRw')}
+                    </button>
+                  )}
+                  <button onClick={() => removeSource(s.id)} className="p-2 rounded-lg bg-red-900/30 hover:bg-red-900/60 text-red-300">
+                    <Trash2 size={16} />
+                  </button>
+                </div>
               </div>
             );
           })}

@@ -37,6 +37,8 @@
     "user": "Utente (vuoto = ospite)",
     "pass": "Password",
     "smbRw": "Consenti scrittura (necessario per usarla come destinazione del rip CD)",
+    "smbMakeRw": "Rendi scrivibile",
+    "smbMakeRo": "Rendi sola lettura",
     "mountAndAdd": "Monta e aggiungi",
     "apply": "Applica e scansiona libreria",
     "added": "Aggiunta ✓",

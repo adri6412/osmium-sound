@@ -2509,6 +2509,39 @@ def api_add_smb():
     return jsonify({"success": True, "message": msg})
 
 
+@app.route("/api/sources/<sid>/rw", methods=["POST"])
+def api_set_smb_rw(sid):
+    """Flip an SMB source's stored read-only/read-write flag. Takes effect on
+    the next reboot rather than live: CIFS doesn't support changing
+    uid=/gid=/file_mode=/dir_mode= with an `-o remount`, so making this live
+    would mean unmount+remount while Lyrion (or an in-progress CD rip) may
+    still have the old mount open. A lazy `umount -l` doesn't break already-
+    open reads, but anything that opens a *new* file during the swap window
+    hits a dead mountpoint, an in-flight rip's write handles stay bound to
+    the old (soon fully torn down) CIFS session instead of the new one — a
+    real risk of silently losing ripped tracks — and a library scan that
+    catches the transient failure can misread it as "file gone" and prune
+    the track from the database. None of that is worth risking for a
+    rarely-toggled setting, so this just persists the new flag; boot's
+    remount_all_retry() re-mounts every SMB source from state fresh, picking
+    it up with mount_smb()'s current option set."""
+    denied = _require_pair_token()
+    if denied:
+        return denied
+    data = request.get_json(silent=True) or {}
+    rw = bool(data.get("rw"))
+    with _lock:
+        state = load_state()
+        src = next((s for s in state["sources"] if s.get("id") == sid and s.get("type") == "smb"), None)
+        if not src:
+            return _err("msg.sourceNotFound", 404)
+        if src.get("rw", False) == rw:
+            return jsonify({"success": True, "message": _m("msg.noChange")})
+        src["rw"] = rw
+        save_state(state)
+    return jsonify({"success": True, "message": _m("msg.rebootRequired")})
+
+
 @app.route("/api/sources/<sid>", methods=["DELETE"])
 def api_remove(sid):
     denied = _require_pair_token()
@@ -3211,9 +3244,10 @@ SOURCES_I18N = {
         "sources.loading": "Loading…",
         "sources.active": "Active sources",
         "sources.none": "No sources yet. Add one below.",
-        "sources.usbTitle": "USB disks",
-        "sources.usbNone": "No USB disk connected. Insert a USB stick or drive.",
-        "sources.usbFullHint": "\"Use as source\" mounts the drive read-write and creates a network share (Samba), like an internal disk — no need to reformat it. It won't interrupt playback, but the new folder only joins the music library once you press \"Apply & rescan library\" below.",
+        "sources.usbAttention": "USB devices needing attention",
+        "sources.usbNeedsFormat": "No recognized filesystem — format it from a computer.",
+        "sources.usbMountError": "Mount error",
+        "sources.usbRetry": "Retry",
         "sources.addLocal": "Add local folder",
         "sources.localPath": "Path on the device",
         "sources.localPathPlaceholder": "/media/music",
@@ -3224,6 +3258,9 @@ SOURCES_I18N = {
         "sources.user": "User (empty = guest)",
         "sources.userPlaceholder": "user",
         "sources.pass": "Password",
+        "sources.smbRw": "Allow writing (needed to use it as a CD-rip destination)",
+        "sources.smbMakeRw": "Make writable",
+        "sources.smbMakeRo": "Make read-only",
         "sources.mountAndAdd": "Mount and add",
         "sources.mounting": "Mounting…",
         "sources.mounted": "Mounted ✓",
@@ -3241,23 +3278,6 @@ SOURCES_I18N = {
         "sources.applyHint": "Saves the sources above and rescans the music library.",
         "sources.applying": "Applying…",
         "sources.applied": "Done ✓",
-        "sources.backupTitle": "Backup & restore",
-        "sources.backupHint": "Save the device's configuration, Lyrion preferences and playlists. Set a passphrase to also include credentials (Wi-Fi, SMB shares, web-admin account) in an encrypted, restorable file — without one, only non-secret settings are saved.",
-        "sources.backupPassphrase": "Passphrase (optional)",
-        "sources.backupPassphraseHint": "Leave empty for a plain backup with no credentials. Set one to also save Wi-Fi networks, SMB passwords and the web-admin account, encrypted.",
-        "sources.backupCreate": "Create backup",
-        "sources.backupDownload": "⬇ Download now",
-        "sources.backupRestore": "⬆ Restore from file",
-        "sources.backupWorking": "Working…",
-        "sources.backupStored": "Backups on this device",
-        "sources.backupNone": "No backup yet.",
-        "sources.backupEncrypted": "encrypted",
-        "sources.backupRestoreThis": "Restore",
-        "sources.backupRestoreConfirm": "Restore this backup? A safety copy of the current configuration is taken first.",
-        "sources.backupDeleteConfirm": "Delete this backup? This cannot be undone.",
-        "sources.backupScheduled": "Automatic weekly backup",
-        "sources.backupScheduledHint": "Runs unattended, so it never includes credentials — only device settings, sources and Lyrion preferences/playlists.",
-        "sources.restoring": "Restoring…",
         "sources.internal.title": "Internal disks",
         "sources.internal.none": "No additional internal disk detected.",
         "sources.internal.tag": "INTERNAL",
@@ -3320,6 +3340,9 @@ SOURCES_I18N = {
         "msg.mountFailed": "Mount failed: {detail}",
         "msg.badDevice": "Invalid device.",
         "msg.diskNotFound": "Disk not found, or it is a system disk.",
+        "msg.sourceNotFound": "Source not found.",
+        "msg.noChange": "No change needed.",
+        "msg.rebootRequired": "Saved — reboot the device for this to take effect.",
         "msg.pickPartition": "Select a partition that has a filesystem.",
         "msg.partitionNoFs": "That partition has no filesystem.",
         "msg.unsupportedFs": "Unsupported filesystem.",
@@ -3343,9 +3366,10 @@ SOURCES_I18N = {
         "sources.loading": "Caricamento…",
         "sources.active": "Sorgenti attive",
         "sources.none": "Nessuna sorgente. Aggiungine una qui sotto.",
-        "sources.usbTitle": "Dischi USB",
-        "sources.usbNone": "Nessun disco USB collegato. Inserisci una chiavetta o un hard disk USB.",
-        "sources.usbFullHint": "\"Usa come sorgente\" monta la chiavetta in lettura/scrittura e crea una condivisione di rete (Samba), come un disco interno — non serve formattarla. Non interrompe la riproduzione, ma la nuova cartella entra nella libreria musicale solo dopo aver premuto \"Applica e scansiona libreria\" qui sotto.",
+        "sources.usbAttention": "Dispositivi USB da controllare",
+        "sources.usbNeedsFormat": "Nessun filesystem riconosciuto — formattala da un computer.",
+        "sources.usbMountError": "Errore di montaggio",
+        "sources.usbRetry": "Riprova",
         "sources.addLocal": "Aggiungi cartella locale",
         "sources.localPath": "Percorso sul dispositivo",
         "sources.localPathPlaceholder": "/media/musica",
@@ -3356,6 +3380,9 @@ SOURCES_I18N = {
         "sources.user": "Utente (vuoto = ospite)",
         "sources.userPlaceholder": "utente",
         "sources.pass": "Password",
+        "sources.smbRw": "Consenti scrittura (necessario per usarla come destinazione del rip CD)",
+        "sources.smbMakeRw": "Rendi scrivibile",
+        "sources.smbMakeRo": "Rendi sola lettura",
         "sources.mountAndAdd": "Monta e aggiungi",
         "sources.mounting": "Montaggio…",
         "sources.mounted": "Montata ✓",
@@ -3373,23 +3400,6 @@ SOURCES_I18N = {
         "sources.applyHint": "Salva le sorgenti qui sopra e riscansiona la libreria musicale.",
         "sources.applying": "Applico…",
         "sources.applied": "Fatto ✓",
-        "sources.backupTitle": "Backup e ripristino",
-        "sources.backupHint": "Salva la configurazione del dispositivo, le preferenze e le playlist di Lyrion. Imposta una passphrase per includere anche le credenziali (Wi-Fi, condivisioni SMB, account web-admin) in un file cifrato e ripristinabile — senza, viene salvato solo ciò che non è segreto.",
-        "sources.backupPassphrase": "Passphrase (opzionale)",
-        "sources.backupPassphraseHint": "Lascia vuoto per un backup semplice senza credenziali. Impostane una per salvare anche reti Wi-Fi, password SMB e account web-admin, cifrati.",
-        "sources.backupCreate": "Crea backup",
-        "sources.backupDownload": "⬇ Scarica ora",
-        "sources.backupRestore": "⬆ Ripristina da file",
-        "sources.backupWorking": "In corso…",
-        "sources.backupStored": "Backup su questo dispositivo",
-        "sources.backupNone": "Nessun backup ancora.",
-        "sources.backupEncrypted": "cifrato",
-        "sources.backupRestoreThis": "Ripristina",
-        "sources.backupRestoreConfirm": "Ripristinare questo backup? Verrà creata prima una copia di sicurezza della configurazione attuale.",
-        "sources.backupDeleteConfirm": "Eliminare questo backup? L'operazione non è reversibile.",
-        "sources.backupScheduled": "Backup automatico settimanale",
-        "sources.backupScheduledHint": "Viene eseguito senza supervisione, quindi non include mai credenziali — solo impostazioni del dispositivo, sorgenti e preferenze/playlist di Lyrion.",
-        "sources.restoring": "Ripristino…",
         "sources.internal.title": "Dischi interni",
         "sources.internal.none": "Nessun disco interno aggiuntivo rilevato.",
         "sources.internal.tag": "INTERNO",
@@ -3448,6 +3458,9 @@ SOURCES_I18N = {
         "msg.mountFailed": "Mount fallito: {detail}",
         "msg.badDevice": "Device non valido.",
         "msg.diskNotFound": "Disco non trovato o di sistema.",
+        "msg.sourceNotFound": "Sorgente non trovata.",
+        "msg.noChange": "Nessuna modifica necessaria.",
+        "msg.rebootRequired": "Salvato — riavvia il dispositivo perché la modifica abbia effetto.",
         "msg.pickPartition": "Seleziona una partizione con filesystem.",
         "msg.partitionNoFs": "Partizione senza filesystem.",
         "msg.unsupportedFs": "Filesystem non supportato.",
@@ -3602,8 +3615,10 @@ INDEX_HTML = r"""<!DOCTYPE html>
   <h2 data-i18n="sources.active"></h2>
   <div class="card" id="list"><div style="color:var(--silver);font-size:14px" data-i18n="sources.loading"></div></div>
 
-  <h2 data-i18n="sources.usbTitle"></h2>
-  <div class="card" id="usbList"><div style="color:var(--silver);font-size:14px" data-i18n="sources.usbNone"></div></div>
+  <div id="usbSection" style="display:none">
+  <h2 data-i18n="sources.usbAttention"></h2>
+  <div class="card" id="usbList"></div>
+  </div>
 
   <h2 data-i18n="sources.internal.title"></h2>
   <div class="card" id="internalList"><div style="color:var(--silver);font-size:14px" data-i18n="sources.loading"></div></div>
@@ -3624,39 +3639,13 @@ INDEX_HTML = r"""<!DOCTYPE html>
     <div style="flex:1"><label data-i18n="sources.share"></label><input id="smbShare" data-i18n-ph="sources.sharePlaceholder"></div></div>
     <div class="row"><div style="flex:1"><label data-i18n="sources.user"></label><input id="smbUser" data-i18n-ph="sources.userPlaceholder"></div>
     <div style="flex:1"><label data-i18n="sources.pass"></label><input id="smbPass" type="password" placeholder="••••••"></div></div>
+    <div style="height:10px"></div>
+    <label style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--silver)">
+      <input type="checkbox" id="smbRw" style="width:auto"> <span data-i18n="sources.smbRw"></span>
+    </label>
     <div style="height:12px"></div>
     <button class="ghost" onclick="addSmb()" data-i18n="sources.mountAndAdd"></button>
     <div class="msg" id="smbMsg"></div>
-  </div>
-
-  <div id="backupSection">
-  <h2 data-i18n="sources.backupTitle"></h2>
-  <div class="card">
-    <p style="color:var(--silver);font-size:13px;margin:0 0 10px" data-i18n="sources.backupHint"></p>
-
-    <label data-i18n="sources.backupPassphrase"></label>
-    <input id="backupPass" type="password" placeholder="••••••">
-    <p style="color:var(--silver);font-size:12px;margin:6px 0 12px" data-i18n="sources.backupPassphraseHint"></p>
-
-    <div class="row">
-      <button class="ghost" style="flex:1" onclick="createBackup()" data-i18n="sources.backupCreate"></button>
-      <a id="backupLink" class="ghost" style="text-decoration:none;display:inline-block;text-align:center;flex:1" href="/api/backup" data-i18n="sources.backupDownload"></a>
-      <label class="ghost" style="text-align:center;flex:1;cursor:pointer" for="restoreFile" data-i18n="sources.backupRestore"></label>
-    </div>
-    <input type="file" id="restoreFile" accept=".gz,.tar.gz,application/gzip" style="display:none" onchange="doRestore(this)">
-    <div class="msg" id="restoreMsg"></div>
-
-    <div style="height:14px"></div>
-    <label data-i18n="sources.backupStored"></label>
-    <div id="backupList" style="font-size:13px;color:var(--silver)" data-i18n="sources.loading"></div>
-
-    <div style="height:14px"></div>
-    <div class="row">
-      <span style="font-size:13px" data-i18n="sources.backupScheduled"></span>
-      <input type="checkbox" id="backupSched" style="width:auto" onchange="saveBackupSettings()">
-    </div>
-    <p style="color:var(--silver);font-size:12px;margin:6px 0 0" data-i18n="sources.backupScheduledHint"></p>
-  </div>
   </div>
 </div>
 
@@ -3673,26 +3662,23 @@ INDEX_HTML = r"""<!DOCTYPE html>
 </div></div>
 
 <script>
-// A remote (non-localhost) visit — the "scan the QR from Settings → Backup e
-// ripristino, no companion app needed" flow — carries a pairing token in the
-// URL (?token=...), minted server-side when that QR was generated. Attach it
-// to every call this page makes so /api/* routes that now require pairing
-// (see _require_pair_token()) keep working from a plain phone/PC browser,
-// not just from the Electron kiosk (which is exempt via 127.0.0.1).
+// A remote (non-localhost) visit — reached either embedded in the web admin's
+// Settings/Setup pages (see admin-webui's SourcesFrame.vue, which mints this
+// token itself) or via webui_server.py's own sources_app() route — carries a
+// pairing token in the URL (?token=...). Attach it to every call this page
+// makes so /api/* routes that now require pairing (see _require_pair_token())
+// keep working from a plain phone/PC browser, not just from the Electron
+// kiosk (which is exempt via 127.0.0.1). Backup/restore lives natively in the
+// web admin's own Settings page now (Vue, calling the same /api/backup/*
+// endpoints directly) — this page no longer duplicates it.
 const QS = new URLSearchParams(location.search);
 const PAIR_TOKEN = QS.get('token') || '';
 const LANG = document.documentElement.lang || 'it';
 // Reached mid first-boot setup (webui_server.py's captive page links here
-// with ?setup=1): backup/restore doesn't belong here — the wizard already
-// asked "restore from backup or start fresh" as its very first step, before
-// this page even exists — and Apply shouldn't force an immediate Lyrion
-// restart/scan, since the wizard applies the final source list itself, once,
-// right before handing off to Lyrion's own setup wizard.
+// with ?setup=1): Apply shouldn't force an immediate Lyrion restart/scan,
+// since the wizard applies the final source list itself, once, right before
+// handing off to Lyrion's own setup wizard.
 const SETUP_MODE = QS.get('setup') === '1';
-if (SETUP_MODE) {
-  const bs = document.getElementById('backupSection');
-  if (bs) bs.style.display = 'none';
-}
 
 // ── i18n ────────────────────────────────────────────────────────────
 // Strings for the selected language are injected server-side (see _req_lang);
@@ -3743,15 +3729,6 @@ async function j(url, opts){
   const r=await fetch(url + sep + 'lang=' + encodeURIComponent(LANG), opts); return r.json();
 }
 function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
-// Plain <a href> navigation cannot set an Authorization header, so download
-// links carry the pairing token in the query string instead — same fallback
-// _require_pair_token() accepts for exactly this reason.
-function withToken(url){
-  return PAIR_TOKEN ? (url + (url.indexOf('?')>=0?'&':'?') + 'token=' + encodeURIComponent(PAIR_TOKEN)) : url;
-}
-if (PAIR_TOKEN) {
-  document.getElementById('backupLink').href = withToken('/api/backup');
-}
 async function load(){
   const d=await j('/api/sources');
   const el=document.getElementById('list');
@@ -3768,10 +3745,11 @@ async function load(){
     const sub=isSmb?('//'+esc(s.server)+'/'+esc(s.share)+' → '+esc(s.mountpoint))
               :(isInternal||isUsb)?(esc(s.mountpoint||s.path||''))
               :esc(s.path);
-    const tag=isSmb?T('sources.smbTag'):isInternal?T('sources.internal.tag'):isUsb?'USB':T('sources.local');
+    const tag=isSmb?(s.rw?T('sources.smbTag')+' · RW':T('sources.smbTag')):isInternal?T('sources.internal.tag'):isUsb?'USB':T('sources.local');
+    const rwBtn=isSmb?`<button class="ghost" onclick="setSmbRw('${s.id}',${s.rw?'false':'true'})">${esc(s.rw?T('sources.smbMakeRo'):T('sources.smbMakeRw'))}</button>`:'';
     return `<div class="src"><div class="meta"><div class="name">${esc(s.name)}<span class="tag">${esc(tag)}</span></div>
       <div class="sub">${sub} · ${status}</div></div>
-      <button class="danger" onclick="rm('${s.id}')">${esc(T('sources.remove'))}</button></div>`;
+      <div style="display:flex;gap:6px">${rwBtn}<button class="danger" onclick="rm('${s.id}')">${esc(T('sources.remove'))}</button></div></div>`;
   }).join('');
 }
 async function addLocal(){
@@ -3782,136 +3760,20 @@ async function addLocal(){
   if(r.success){document.getElementById('localPath').value='';load();}
 }
 async function addSmb(){
-  const body={server:smbServer.value,share:smbShare.value,username:smbUser.value,password:smbPass.value};
+  const body={server:smbServer.value,share:smbShare.value,username:smbUser.value,password:smbPass.value,rw:document.getElementById('smbRw').checked};
   const m=document.getElementById('smbMsg'); m.textContent=T('sources.mounting');
   const r=await j('/api/sources/smb',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
   m.textContent=r.success?(T('sources.mounted')+' '+(r.message||'')):(r.message||T('sources.error')); m.className='msg '+(r.success?'ok':'bad');
-  if(r.success){smbPass.value='';load();}
+  if(r.success){smbPass.value='';document.getElementById('smbRw').checked=false;load();}
 }
 async function rm(id){ await j('/api/sources/'+id,{method:'DELETE'}); load(); }
-
-// ── Backup / restore ───────────────────────────────────────────────
-// The passphrase field is the single switch that decides whether credentials
-// (Wi-Fi PSKs, SMB passwords, the admin account) are in the archive at all —
-// filled in means encrypted and complete, empty means plain and non-secret.
-// It is never stored anywhere: it is sent with the request that needs it and
-// forgotten.
-let backupGens=[];
-function backupPass(){ return document.getElementById('backupPass').value||''; }
-
-async function doRestore(input){
-  const file=input.files && input.files[0]; if(!file) return;
-  const m=document.getElementById('restoreMsg'); m.textContent=T('sources.restoring'); m.className='msg';
-  const body=new FormData(); body.append('file', file);
-  if(backupPass()) body.append('passphrase', backupPass());
-  try{
-    const d=await j('/api/restore',{method:'POST',body});
-    if(d.success===false){ m.textContent=d.message||T('sources.error'); m.className='msg bad'; input.value=''; return; }
-    await pollRestore();
-    load();
-  }catch(e){ m.textContent=T('sources.networkError'); m.className='msg bad'; }
-  input.value='';
+async function setSmbRw(id,rw){
+  const m=document.getElementById('smbMsg'); m.textContent=T('sources.mounting');
+  const r=await j('/api/sources/'+id+'/rw',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({rw})});
+  m.textContent=r.success?(r.message||T('sources.mounted')):(r.message||T('sources.error')); m.className='msg '+(r.success?'ok':'bad');
+  if(r.success) load();
 }
 
-// Same poll-a-status-file shape as pollBackup() — restore runs in a
-// background thread on the appliance precisely so this can show what step
-// it's actually on (stopping Lyrion, writing files, restarting services)
-// instead of a single "restoring..." message that looks identical whether
-// it's working or stuck.
-async function pollRestore(){
-  const m=document.getElementById('restoreMsg');
-  for(let i=0;i<600;i++){
-    await new Promise(r=>setTimeout(r,1500));
-    let s; try{ s=await j('/api/restore/status'); }catch(e){ continue; }
-    if(s.state==='done'){ m.textContent=s.message||T('sources.applied'); m.className='msg ok'; loadBackups(); return; }
-    if(s.state==='error'){ m.textContent=s.message||T('sources.error'); m.className='msg bad'; loadBackups(); return; }
-    m.textContent=(s.message||T('sources.restoring'))+(typeof s.progress==='number'?' '+s.progress+'%':'');
-  }
-}
-
-async function createBackup(){
-  const m=document.getElementById('restoreMsg'); m.textContent=T('sources.backupWorking'); m.className='msg';
-  try{
-    const d=await j('/api/backup/create',{method:'POST',headers:{'Content-Type':'application/json'},
-                                          body:JSON.stringify({passphrase:backupPass()})});
-    if(d.success===false){ m.textContent=d.message||T('sources.error'); m.className='msg bad'; return; }
-    pollBackup();
-  }catch(e){ m.textContent=T('sources.networkError'); m.className='msg bad'; }
-}
-
-// Same poll-a-status-file shape as the disk format and CD rip jobs.
-async function pollBackup(){
-  const m=document.getElementById('restoreMsg');
-  for(let i=0;i<600;i++){
-    await new Promise(r=>setTimeout(r,1500));
-    let s; try{ s=await j('/api/backup/status'); }catch(e){ continue; }
-    if(s.state==='done'){ m.textContent=s.message||T('sources.applied'); m.className='msg ok'; loadBackups(); return; }
-    if(s.state==='error'){ m.textContent=s.message||T('sources.error'); m.className='msg bad'; loadBackups(); return; }
-    m.textContent=(s.message||T('sources.backupWorking'))+' '+(s.progress||0)+'%';
-  }
-}
-
-function fmtBackupSize(n){
-  if(!n) return '';
-  return n>=1048576 ? (n/1048576).toFixed(1)+' MB' : Math.max(1,Math.round(n/1024))+' kB';
-}
-function fmtStamp(id){
-  // Generation ids are YYYYMMDD-HHMMSS, which is unreadable as-is.
-  if(!id||id.length<15) return id||'';
-  return id.slice(6,8)+'/'+id.slice(4,6)+'/'+id.slice(0,4)+' '+id.slice(9,11)+':'+id.slice(11,13);
-}
-
-async function loadBackups(){
-  const el=document.getElementById('backupList');
-  let d; try{ d=await j('/api/backup/list'); }catch(e){ el.textContent=T('sources.networkError'); return; }
-  backupGens=d.generations||[];
-  document.getElementById('backupSched').checked=!!(d.settings&&d.settings.scheduled);
-  if(!backupGens.length){ el.textContent=T('sources.backupNone'); return; }
-  el.innerHTML=backupGens.map((g,i)=>{
-    const tags=[];
-    if(g.encrypted) tags.push(`<span class="tag">${esc(T('sources.backupEncrypted'))}</span>`);
-    if(g.trigger&&g.trigger!=='manual') tags.push(`<span class="tag">${esc(g.trigger)}</span>`);
-    return `<div class="src"><div class="meta">`+
-      `<div class="name">${esc(fmtStamp(g.id))}${tags.join('')}</div>`+
-      `<div class="sub">${esc((g.categories||[]).join(', '))} · ${esc(fmtBackupSize(g.size))}</div>`+
-      `</div><div style="display:flex;gap:6px">`+
-      `<a class="ghost" style="text-decoration:none" href="${esc(withToken('/api/backup/'+g.id))}">⬇</a>`+
-      `<button class="ghost" onclick="restoreGen(${i})">${esc(T('sources.backupRestoreThis'))}</button>`+
-      `<button class="ghost" onclick="deleteGen(${i})">✕</button>`+
-      `</div></div>`;
-  }).join('');
-}
-
-async function restoreGen(i){
-  const g=backupGens[i]; if(!g) return;
-  if(!confirm(T('sources.backupRestoreConfirm'))) return;
-  const m=document.getElementById('restoreMsg'); m.textContent=T('sources.restoring'); m.className='msg';
-  try{
-    const d=await j('/api/backup/'+g.id+'/restore',{method:'POST',headers:{'Content-Type':'application/json'},
-                                                    body:JSON.stringify({passphrase:backupPass()})});
-    if(d.success===false){ m.textContent=d.message||T('sources.error'); m.className='msg bad'; return; }
-    await pollRestore();
-    load();
-  }catch(e){ m.textContent=T('sources.networkError'); m.className='msg bad'; }
-}
-
-async function deleteGen(i){
-  const g=backupGens[i]; if(!g) return;
-  if(!confirm(T('sources.backupDeleteConfirm'))) return;
-  await j('/api/backup/'+g.id,{method:'DELETE'});
-  loadBackups();
-}
-
-async function saveBackupSettings(){
-  const on=document.getElementById('backupSched').checked;
-  const m=document.getElementById('restoreMsg');
-  try{
-    const d=await j('/api/backup/settings',{method:'POST',headers:{'Content-Type':'application/json'},
-                                            body:JSON.stringify({scheduled:on})});
-    m.textContent=d.success===false?(d.message||T('sources.error')):T('sources.applied');
-    m.className='msg '+(d.success===false?'bad':'ok');
-  }catch(e){ m.textContent=T('sources.networkError'); m.className='msg bad'; }
-}
 async function apply(){
   const m=document.getElementById('applyMsg');
   if (SETUP_MODE) {
@@ -3928,27 +3790,31 @@ async function apply(){
   m.textContent=r.message||(r.success?T('sources.applied'):T('sources.error')); m.className='msg '+(r.success?'ok':'bad');
 }
 
-// ── USB disks ───────────────────────────────────────────────────────
-// Device paths are kept in an array and referenced by index in onclick
-// handlers, so a label with quotes/specials can never break the markup.
+// ── USB devices needing attention ───────────────────────────────────
+// Healthy USB drives auto-adopt the instant they're plugged in (mount
+// read-write + Samba share, see sources_server.py's usb_sync()) — no action
+// here, they just show up in the sources list above. This panel only ever
+// lists what auto-adoption couldn't handle on its own: no recognized
+// filesystem, or a failed mount attempt. Device paths are kept in an array
+// and referenced by index in onclick handlers, so a label with quotes/
+// specials can never break the markup.
 let usbDevices=[];
 async function loadUsb(){
   let d; try{ d=await j('/api/usb'); }catch(e){ return; }
+  const section=document.getElementById('usbSection');
   const el=document.getElementById('usbList'); usbDevices=[];
-  if(!d.disks || !d.disks.length){
-    el.innerHTML=`<div style="color:var(--silver);font-size:14px">${esc(T('sources.usbNone'))}</div>`;
-    return;
-  }
-  const hint=`<p style="color:var(--silver);opacity:.7;font-size:12px;margin:0 0 10px">${esc(T('sources.usbFullHint'))}</p>`;
-  el.innerHTML=hint+d.disks.map(dk=>{
+  if(!d.disks || !d.disks.length){ section.style.display='none'; return; }
+  section.style.display='';
+  el.innerHTML=d.disks.map(dk=>{
     const devi=usbDevices.push(dk.path||'')-1;
     const tag=`USB${dk.fstype?(' '+esc(dk.fstype)):''}${dk.size?(' · '+esc(dk.size)):''}`;
     const head=`<div class="name">${esc(dk.label)||'USB'}<span class="tag">${tag}</span></div>`;
-    const adopt=dk.path?`<button class="ghost" onclick="adoptUsb(${devi})">${esc(T('sources.internal.adopt'))}</button>`:'';
-    return `<div style="margin-bottom:14px">${head}<div style="height:8px"></div><div class="row" style="gap:8px">${adopt}</div></div>`;
+    const reason=`<div class="sub" style="color:#e66">${dk.needs_format?esc(T('sources.usbNeedsFormat')):esc(T('sources.usbMountError'))+': '+esc(dk.error||'')}</div>`;
+    const retry=(!dk.needs_format&&dk.path)?`<button class="ghost" onclick="retryUsb(${devi})">${esc(T('sources.usbRetry'))}</button>`:'';
+    return `<div style="margin-bottom:14px">${head}${reason}<div style="height:8px"></div><div class="row" style="gap:8px">${retry}</div></div>`;
   }).join('');
 }
-async function adoptUsb(i){
+async function retryUsb(i){
   const device=usbDevices[i]; if(!device) return;
   const r=await j('/api/usb/adopt',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({device})});
   if(r.success){ loadUsb(); load(); } else { alert(r.message||T('sources.error')); }
@@ -4118,7 +3984,10 @@ load();
 loadUsb();
 loadInternal();
 loadSmbCard();
-loadBackups();
+// sources_server.py auto-adopts USB drives in the background, so poll the
+// active-sources list too — matches loadUsb()'s cadence, picks up a freshly
+// mounted drive without a manual reload.
+setInterval(load, 4000);
 setInterval(loadUsb, 4000);
 setInterval(loadInternal, 5000);
 </script>
