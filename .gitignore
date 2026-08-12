@@ -34,3 +34,13 @@ fdroid/unsigned/
 # Local-only copy of Lyrion Media Server sources, kept for reference/analysis
 # — not part of this repo, never committed.
 lyrion/
+
+# Email <-> GitHub Issues support bot: runs standalone on a cloud VM, not
+# part of this app. The script itself + its secrets/state stay local-only.
+support_bot.py
+support_bot.service
+support_bot.env
+support_bot_state.db
+support_bot_state.db-wal
+support_bot_state.db-shm
+.env
