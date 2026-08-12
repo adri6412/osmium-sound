@@ -1,41 +1,41 @@
 {
-  "tag_name": "v2.5.21-dev.77",
-  "name": "v2.5.21-dev.77",
-  "body": "## What's new in v2.5.21-dev.77\n\n- Minor fixes and internal improvements.\n",
+  "tag_name": "v2.5.21-dev.78",
+  "name": "v2.5.21-dev.78",
+  "body": "## What's new in v2.5.21-dev.78\n\n- fix(network): periodic mDNS/DHCP keepalive\n- chore(android): rebuild buildSrc.jar\n- chore: ignore local support-bot files\n- chore(ui): remove restart setup wizard button from Settings\n- fix(timezone): resync /etc/localtime on restore, refresh kiosk clock live\n- chore(infra): move gh-pages consumers off GitHub Pages custom domain\n",
   "assets": [
     {
-      "name": "hifi-ui-v2.5.21-dev.77.tar.gz",
-      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.77/hifi-ui-v2.5.21-dev.77.tar.gz",
-      "size": 134012546
+      "name": "hifi-ui-v2.5.21-dev.78.tar.gz",
+      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.78/hifi-ui-v2.5.21-dev.78.tar.gz",
+      "size": 134014398
     },
     {
-      "name": "hifi-ui-v2.5.21-dev.77.tar.gz.sha256",
-      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.77/hifi-ui-v2.5.21-dev.77.tar.gz.sha256",
+      "name": "hifi-ui-v2.5.21-dev.78.tar.gz.sha256",
+      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.78/hifi-ui-v2.5.21-dev.78.tar.gz.sha256",
       "size": 96
     },
     {
-      "name": "hifi-system-v2.5.21-dev.77.tar.gz",
-      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.77/hifi-system-v2.5.21-dev.77.tar.gz",
-      "size": 285358
+      "name": "hifi-system-v2.5.21-dev.78.tar.gz",
+      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.78/hifi-system-v2.5.21-dev.78.tar.gz",
+      "size": 286144
     },
     {
-      "name": "hifi-system-v2.5.21-dev.77.tar.gz.sha256",
-      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.77/hifi-system-v2.5.21-dev.77.tar.gz.sha256",
+      "name": "hifi-system-v2.5.21-dev.78.tar.gz.sha256",
+      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.78/hifi-system-v2.5.21-dev.78.tar.gz.sha256",
       "size": 100
     },
     {
-      "name": "hifi-os-v2.5.21-dev.77.tar.gz",
-      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.77/hifi-os-v2.5.21-dev.77.tar.gz",
-      "size": 1196911
+      "name": "hifi-os-v2.5.21-dev.78.tar.gz",
+      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.78/hifi-os-v2.5.21-dev.78.tar.gz",
+      "size": 1197888
     },
     {
-      "name": "hifi-os-v2.5.21-dev.77.tar.gz.sha256",
-      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.77/hifi-os-v2.5.21-dev.77.tar.gz.sha256",
+      "name": "hifi-os-v2.5.21-dev.78.tar.gz.sha256",
+      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.78/hifi-os-v2.5.21-dev.78.tar.gz.sha256",
       "size": 96
     },
     {
-      "name": "hifi-os-v2.5.21-dev.77.tar.gz.sha256.sig",
-      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.77/hifi-os-v2.5.21-dev.77.tar.gz.sha256.sig",
+      "name": "hifi-os-v2.5.21-dev.78.tar.gz.sha256.sig",
+      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.78/hifi-os-v2.5.21-dev.78.tar.gz.sha256.sig",
       "size": 64
     }
   ]
