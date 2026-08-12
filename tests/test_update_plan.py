@@ -229,17 +229,21 @@ class TestStepValidation(PlanTestCase):
         self.assertEqual(step['state'], 'pending')
 
     def test_rejects_a_version_with_whitespace_or_shell_metacharacters(self):
+        # These are real-update-but-invalid-step cases: build_update_plan()
+        # must surface them as errors, not silently as "no update available".
         for bad in ('v2 3', 'v2;reboot', 'v2$(id)', '../../etc/passwd', ''):
-            self.assertIsNone(api_server._plan_step_from_info('ui', self.base_info(latest=bad)), bad)
+            self.assertIs(api_server._plan_step_from_info('ui', self.base_info(latest=bad)),
+                          api_server._STEP_INVALID, bad)
 
     def test_rejects_a_non_tls_asset_url(self):
-        self.assertIsNone(api_server._plan_step_from_info(
-            'ui', self.base_info(asset_url='http://e/x.tgz')))
+        self.assertIs(api_server._plan_step_from_info(
+            'ui', self.base_info(asset_url='http://e/x.tgz')), api_server._STEP_INVALID)
 
     def test_rejects_an_unsigned_os_bundle(self):
         # The OS payload runs its own apply.sh as root — a checksum only proves
         # the file arrived intact, not that we authored it.
-        self.assertIsNone(api_server._plan_step_from_info('os', self.base_info(sig_url='')))
+        self.assertIs(api_server._plan_step_from_info('os', self.base_info(sig_url='')),
+                      api_server._STEP_INVALID)
 
     def test_allows_an_unsigned_ui_or_system_bundle(self):
         self.assertIsNotNone(api_server._plan_step_from_info('ui', self.base_info(sig_url='')))
@@ -247,11 +251,54 @@ class TestStepValidation(PlanTestCase):
 
     def test_rejects_a_malformed_checksum(self):
         api_server._fetch_sha256 = lambda url: 'nothex'
-        self.assertIsNone(api_server._plan_step_from_info('ui', self.base_info()))
+        self.assertIs(api_server._plan_step_from_info('ui', self.base_info()),
+                      api_server._STEP_INVALID)
 
     def test_skips_a_component_with_no_update(self):
         self.assertIsNone(api_server._plan_step_from_info('ui', self.base_info(update_available=False)))
         self.assertIsNone(api_server._plan_step_from_info('ui', {'error': 'boom'}))
+
+
+class TestFetchSha256Retry(unittest.TestCase):
+    """GitHub's release-download host resets the connection outright on a
+    noticeable fraction of requests from some networks — not a timeout, just
+    a bare connection failure — so _fetch_sha256() must ride through a couple
+    of those the way every curl-based download elsewhere already does with
+    `--retry 3`, instead of taking down the whole plan on the first blip."""
+
+    def setUp(self):
+        self._saved_urlopen = api_server.urllib.request.urlopen
+        self._saved_sleep = api_server.time.sleep
+        api_server.time.sleep = lambda seconds: None  # no real delay in tests
+
+    def tearDown(self):
+        api_server.urllib.request.urlopen = self._saved_urlopen
+        api_server.time.sleep = self._saved_sleep
+
+    def _resp(self, text):
+        class R:
+            def __enter__(self): return self
+            def __exit__(self, *a): return False
+            def read(self): return text.encode()
+        return R()
+
+    def test_succeeds_after_transient_failures_within_budget(self):
+        calls = []
+        def flaky(req, timeout=None):
+            calls.append(1)
+            if len(calls) < 3:
+                raise ConnectionResetError('connection reset')
+            return self._resp('%s  file.tgz\n' % ('a' * 64))
+        api_server.urllib.request.urlopen = flaky
+        self.assertEqual(api_server._fetch_sha256('https://e/x.sha256'), 'a' * 64)
+        self.assertEqual(len(calls), 3)
+
+    def test_raises_the_real_error_once_retries_are_exhausted(self):
+        def always_fails(req, timeout=None):
+            raise ConnectionResetError('connection reset')
+        api_server.urllib.request.urlopen = always_fails
+        with self.assertRaises(ConnectionResetError):
+            api_server._fetch_sha256('https://e/x.sha256')
 
 
 class TestApplyAll(PlanTestCase):
@@ -302,6 +349,26 @@ class TestApplyAll(PlanTestCase):
         self._offer(())
         r = api_server.apply_all_updates()
         self.assertFalse(r['started'])
+        self.assertEqual(r['code'], 'update.noneAvailable')
+        self.assertIsNone(api_server._read_update_plan())
+
+    def test_a_real_update_with_an_invalid_step_is_reported_as_a_check_failure(self):
+        # Regression: an update IS on offer (as shown to the user on the
+        # updates page) but _plan_step_from_info() can't build a safe step for
+        # it (e.g. a transient blip fetching the checksum sidecar). This must
+        # surface as 'update.checkFailed', never as the misleading
+        # 'update.noneAvailable' — that message tells the user there is
+        # nothing to install when in fact there is, just not right now.
+        info = {'update_available': True, 'latest': 'v2',
+                'asset_url': 'http://e/x.tgz',  # non-TLS -> _STEP_INVALID
+                'sha_url': 'https://e/x.sha', 'sig_url': 'https://e/x.sig'}
+        api_server._PLAN_KINDS = {
+            k: ((lambda k=k: dict(info)), self.status_files[k], (lambda k=k: self.installed[k]))
+            for k in ('system', 'os', 'ui')
+        }
+        r = api_server.apply_all_updates()
+        self.assertFalse(r['started'])
+        self.assertEqual(r['code'], 'update.checkFailed')
         self.assertIsNone(api_server._read_update_plan())
 
     def test_the_runner_is_started_once(self):

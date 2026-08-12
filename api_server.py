@@ -3250,12 +3250,28 @@ def check_app_update():
     return _check_release_update(_installed_ui_version(), OTA_UI_PREFIX)
 
 def _fetch_sha256(sha_url):
-    """Download the .sha256 sidecar and return just the hex digest."""
+    """Download the .sha256 sidecar and return just the hex digest.
+
+    GitHub's release-download host resets the connection outright on a
+    noticeable fraction of requests from some networks (observed ~20-25%,
+    independent of curl vs urllib and of IPv4/IPv6) — a plain timeout/DNS
+    problem it is not. Every curl-based download elsewhere in the OTA scripts
+    already rides through that with `--retry 3`; this one-shot fetch had no
+    such retry, so with 3 components to check, "Aggiorna tutto" had a good
+    chance of tripping over it on at least one of them."""
     req = urllib.request.Request(sha_url, headers={'User-Agent': 'hifi-player-ota'})
-    with urllib.request.urlopen(req, timeout=15) as resp:
-        text = resp.read().decode('utf-8', 'replace').strip()
-    # format is "<sha>  <filename>"; take the first whitespace-delimited token
-    return text.split()[0] if text else ''
+    last_exc = None
+    for attempt in range(3):
+        if attempt:
+            time.sleep(1)
+        try:
+            with urllib.request.urlopen(req, timeout=15) as resp:
+                text = resp.read().decode('utf-8', 'replace').strip()
+            # format is "<sha>  <filename>"; take the first whitespace-delimited token
+            return text.split()[0] if text else ''
+        except Exception as e:
+            last_exc = e
+    raise last_exc
 
 def apply_app_update():
     info = check_app_update()
@@ -3594,8 +3610,15 @@ def _clear_update_plan():
     except Exception:
         log.exception("could not remove the update plan")
 
+# Sentinel returned by _plan_step_from_info() to mean "an update IS available
+# but the step couldn't be safely built" — distinct from plain None ("nothing
+# to do"), so build_update_plan() can surface it as a real error instead of
+# silently treating it as if there was no update at all.
+_STEP_INVALID = object()
+
 def _plan_step_from_info(kind, info):
-    """Turn a check result into a plan step, or None when there's nothing to do.
+    """Turn a check result into a plan step. Returns None when there's nothing
+    to do, or _STEP_INVALID when an update exists but the step failed validation.
 
     Every field is validated here rather than in the runner: the plan file is
     parsed by /bin/sh on whitespace, and the OS step's arguments end up as
@@ -3608,25 +3631,25 @@ def _plan_step_from_info(kind, info):
     sig = (info.get('sig_url') or '').strip()
     if not _SAFE_VERSION_RE.match(version):
         log.warning("update plan: refusing %s, unsafe version %r", kind, version)
-        return None
+        return _STEP_INVALID
     if not url.startswith('https://') or not sha.startswith('https://'):
         log.warning("update plan: refusing %s, non-TLS asset URL", kind)
-        return None
+        return _STEP_INVALID
     # The OS bundle runs root code from its payload, so its signature is not
     # optional — mirrors apply_os_update().
     if kind == 'os' and not sig.startswith('https://'):
         log.warning("update plan: refusing os step, missing signature")
-        return None
+        return _STEP_INVALID
     try:
         digest = _fetch_sha256(sha)
     except Exception:
         log.exception("update plan: checksum fetch failed for %s", kind)
-        return None
+        return _STEP_INVALID
     if not _SAFE_SHA_RE.match(digest or ''):
         log.warning("update plan: refusing %s, malformed checksum", kind)
-        return None
+        return _STEP_INVALID
     if any(c.isspace() for c in url + sig):
-        return None
+        return _STEP_INVALID
     return {'kind': kind, 'state': 'pending', 'attempts': 0, 'version': version,
             'url': url, 'sha': digest, 'sig': sig or None}
 
@@ -3647,6 +3670,9 @@ def build_update_plan():
             errors.append(kind)
             continue
         step = _plan_step_from_info(kind, info)
+        if step is _STEP_INVALID:
+            errors.append(kind)
+            continue
         if step:
             steps.append(step)
     return steps, errors

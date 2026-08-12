@@ -200,7 +200,8 @@ MESSAGES = {
     'ota.channelSaveFailed': {'en': 'Could not save the channel', 'it': 'Impossibile salvare il canale'},
 
     # ── OTA updates (UI / system / OS) + the multi-component sequencer ─
-    'update.checkFailed': {'en': 'Update check failed', 'it': 'Controllo aggiornamenti fallito'},
+    'update.checkFailed': {'en': 'Update check failed, please try again',
+                           'it': 'Controllo aggiornamenti fallito, riprova'},
     'update.noneAvailable': {'en': 'No update available', 'it': 'Nessun aggiornamento disponibile'},
     'update.noneAvailableOs': {'en': 'No OS update available', 'it': 'Nessun aggiornamento OS disponibile'},
     'update.checksumMissing': {'en': 'Checksum (.sha256) missing from the release',
