@@ -308,6 +308,8 @@ MESSAGES = {
                             'it': 'Valore non valido in server/condivisione/credenziali'},
     'mount.invalidMountpoint': {'en': 'Invalid mount point', 'it': 'Mountpoint non valido'},
     'mount.alreadyMounted': {'en': 'Already mounted', 'it': 'Già montato'},
+    'mount.smbUnreachable': {'en': "Can't reach {server} on the network (port 445)",
+                             'it': 'Impossibile raggiungere {server} sulla rete (porta 445)'},
     'mount.mountedSmb': {'en': 'Mounted (SMB {vers})', 'it': 'Montato (SMB {vers})'},
     'mount.genericFailed': {'en': 'Mount failed', 'it': 'Mount fallito'},
     'mount.missingIdentifiers': {'en': 'Missing partuuid/uuid or mount point',

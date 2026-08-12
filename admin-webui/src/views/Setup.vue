@@ -4,7 +4,7 @@ import { useRouter } from 'vue-router';
 import { api } from '../api.js';
 import { useI18n } from '../i18n';
 import LanguageSelector from '../components/LanguageSelector.vue';
-import SourcesFrame from '../components/SourcesFrame.vue';
+import SourcesPanel from '../components/SourcesPanel.vue';
 
 const router = useRouter();
 const { t } = useI18n();
@@ -222,9 +222,7 @@ async function finish() {
     <div class="card">
       <h3><span class="dot"></span>{{ t('setup.musicTitle') }}</h3>
       <p class="sub">{{ t('setup.musicHint') }}</p>
-      <!-- Embedded, not linked: a link here left the user on a separate page
-           with no way back to setup except the browser's back button. -->
-      <SourcesFrame height="60vh" />
+      <SourcesPanel setup-mode />
     </div>
     <button :disabled="busy" @click="finish">{{ busy ? t('setup.finishing') : t('setup.finishSetup') }}</button>
   </div>

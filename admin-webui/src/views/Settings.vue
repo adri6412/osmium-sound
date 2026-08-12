@@ -6,7 +6,7 @@ import { api } from '../api.js';
 import { useI18n } from '../i18n';
 import Toggle from '../components/Toggle.vue';
 import LanguageSelector from '../components/LanguageSelector.vue';
-import SourcesFrame from '../components/SourcesFrame.vue';
+import SourcesPanel from '../components/SourcesPanel.vue';
 
 const host = location.hostname;
 const route = useRoute();
@@ -866,10 +866,12 @@ onUnmounted(() => {
       <div class="row"><input v-model="playerName" /><button class="secondary fit" @click="saveName">{{ t('common.save') }}</button></div>
     </div>
 
-    <!-- Sources (embedded :8080 SPA over HTTPS proxy) -->
-    <div v-if="open === 'sources'">
-      <p class="sub" style="margin: 0 0 10px;">{{ t('settings.sources.hint') }}</p>
-      <SourcesFrame />
+    <!-- Sources (native — talks directly to sources_server.py through
+         webui_server's session-gated /api/system/sources|usb|internal|apply
+         forwarders, see SourcesPanel.vue) -->
+    <div class="card" v-if="open === 'sources'">
+      <p class="sub">{{ t('settings.sources.hint') }}</p>
+      <SourcesPanel />
     </div>
 
     <!-- DSP -->

@@ -20,6 +20,7 @@ import os
 import re
 import glob
 import time
+import socket
 import subprocess
 import threading
 import io
@@ -204,6 +205,19 @@ def mount_smb(src):
 
     if os.path.ismount(mountpoint):
         return True, _ht('mount.alreadyMounted', _hlang())
+
+    # mount.cifs against an unreachable/silently-dropping host can block the
+    # kernel-level mount() syscall in uninterruptible sleep (D state) for far
+    # longer than _run()'s own timeout — a SIGKILL can't interrupt that until
+    # the blocking syscall itself gives up, which can take minutes or hang
+    # indefinitely, wedging the request. A plain TCP probe on the SMB port
+    # first fails fast (5s) instead of ever reaching that risky call when the
+    # server just isn't there.
+    try:
+        with socket.create_connection((server, 445), timeout=5):
+            pass
+    except OSError:
+        return False, _ht('mount.smbUnreachable', _hlang(), server=server)
 
     unc = f"//{server}/{share}"
     if src.get("rw"):
@@ -393,6 +407,25 @@ def _share_name(label):
     while f"{base}-{n}" in names:
         n += 1
     return f"{base}-{n}"
+
+
+def _existing_adopted_source(source_type, partuuid, fsuuid):
+    """An already-adopted "internal"/"usb" source for this exact physical
+    partition, if any — matched by partuuid, falling back to fsuuid for a
+    "superfloppy" disk with no partition table. Re-adopting an
+    already-adopted disk (a double tap, a retry after a slow response)
+    should reuse that source's id/share/mountpoint, not mint a second one
+    under a different share name via _share_name() — the id is derived from
+    the share, so a fresh share means a fresh id, and the old entry never
+    gets cleaned up since nothing then matches its id."""
+    for s in _adopted_disk_sources():
+        if s.get("type") != source_type:
+            continue
+        if partuuid and s.get("partuuid") == partuuid:
+            return s
+        if not partuuid and fsuuid and s.get("fsuuid") == fsuuid:
+            return s
+    return None
 
 
 def _ensure_samba_uid_gid():
@@ -767,25 +800,34 @@ def usb_sync():
             if key not in raw_keys:
                 _usb_fail_backoff.pop(key, None)
 
-        needs_attention = []
-        for p in _usb_partitions():
-            if not p.get("fstype"):
-                needs_attention.append({**p, "needs_format": True})
-                continue
-            key = _usb_key(p)
-            last_ts, last_msg = _usb_fail_backoff.get(key, (None, None))
-            if last_ts is not None and time.monotonic() - last_ts < _USB_RETRY_BACKOFF:
-                needs_attention.append({**p, "error": last_msg})
-                continue
-            ok, msg, _src = _adopt_usb_partition(p)
-            if not ok:
-                if key not in _usb_fail_backoff:
-                    print(f"[sources] auto-adopt failed for {p.get('path')}: {msg}")
-                _usb_fail_backoff[key] = (time.monotonic(), msg)
-                needs_attention.append({**p, "error": msg})
+    # _adopt_usb_partition() takes _lock itself (a plain, non-reentrant
+    # threading.Lock()) to save state, so it must run outside the block
+    # above — calling it while already holding _lock here previously
+    # self-deadlocked the whole thread on the very first successful mount:
+    # mount_usb_adopted() succeeded (so the drive showed up mounted), but
+    # the thread then hung forever trying to re-acquire _lock to persist
+    # that source, silently — no exception, no log — and every other part of
+    # the service that needs _lock (adding/removing sources, etc.) froze
+    # right along with it until the process was restarted.
+    needs_attention = []
+    for p in _usb_partitions():
+        if not p.get("fstype"):
+            needs_attention.append({**p, "needs_format": True})
+            continue
+        key = _usb_key(p)
+        last_ts, last_msg = _usb_fail_backoff.get(key, (None, None))
+        if last_ts is not None and time.monotonic() - last_ts < _USB_RETRY_BACKOFF:
+            needs_attention.append({**p, "error": last_msg})
+            continue
+        ok, msg, _src = _adopt_usb_partition(p)
+        if not ok:
+            if key not in _usb_fail_backoff:
+                print(f"[sources] auto-adopt failed for {p.get('path')}: {msg}")
+            _usb_fail_backoff[key] = (time.monotonic(), msg)
+            needs_attention.append({**p, "error": msg})
 
-        _usb_state = needs_attention
-        return needs_attention
+    _usb_state = needs_attention
+    return needs_attention
 
 
 def _migrate_stale_usb_sources():
@@ -2625,12 +2667,19 @@ def api_internal_adopt():
     fstype = (part.get("fstype") or "").lower()
     label = part.get("label") or disk.get("label") or "Musica"
     model = disk.get("model") or ""
-    share = _share_name(label)
-    mountpoint = os.path.join(INTERNAL_MOUNT_ROOT,
-                              _slug(label) + "-" + (partuuid or fsuuid or "adopt")[:8])
+    existing = _existing_adopted_source("internal", partuuid, fsuuid)
+    if existing:
+        share = existing["share"]
+        mountpoint = existing["mountpoint"]
+        sid = existing["id"]
+    else:
+        share = _share_name(label)
+        mountpoint = os.path.join(INTERNAL_MOUNT_ROOT,
+                                  _slug(label) + "-" + (partuuid or fsuuid or "adopt")[:8])
+        sid = _slug("internal", share)
 
     src = {
-        "id": _slug("internal", share),
+        "id": sid,
         "type": "internal",
         "name": f"{label or 'Musica'} (interno)",
         "partuuid": partuuid,
@@ -2666,12 +2715,19 @@ def _adopt_usb_partition(part):
     fsuuid = part.get("uuid")
     fstype = (part.get("fstype") or "").lower()
     label = part.get("label") or part.get("name") or "USB"
-    share = _share_name(label)
-    mountpoint = os.path.join(USB_ADOPTED_ROOT,
-                              _slug(label) + "-" + (partuuid or fsuuid or "adopt")[:8])
+    existing = _existing_adopted_source("usb", partuuid, fsuuid)
+    if existing:
+        share = existing["share"]
+        mountpoint = existing["mountpoint"]
+        sid = existing["id"]
+    else:
+        share = _share_name(label)
+        mountpoint = os.path.join(USB_ADOPTED_ROOT,
+                                  _slug(label) + "-" + (partuuid or fsuuid or "adopt")[:8])
+        sid = _slug("usb", share)
 
     src = {
-        "id": _slug("usb", share),
+        "id": sid,
         "type": "usb",
         "name": f"{label or 'USB'} (USB)",
         "partuuid": partuuid,

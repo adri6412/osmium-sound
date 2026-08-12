@@ -1753,6 +1753,61 @@ def restore_status_proxy():
     return _forward_to_sources('/api/restore/status')
 
 
+# ── Sources (music library sources) — session-gated forward to sources_server
+# Same story as backup/restore/DSP FIR above: sources_server.py's own
+# `/api/sources`, `/api/usb`, `/api/internal/*`, `/api/apply` are otherwise
+# only reachable through the pairing-TOKEN catch-all (sources_forward()
+# below), which the web-admin's native Sources page (SourcesPanel.vue) has no
+# token to offer — it has a webui session instead, so these are the
+# session-gated equivalents, one per sources_server.py path family.
+@app.route('/api/system/sources', methods=['GET'])
+def sources_list_proxy():
+    denied = _require_session()
+    if denied:
+        return denied
+    return _forward_to_sources('/api/sources')
+
+
+@app.route('/api/system/sources/<path:rest>', methods=['GET', 'POST', 'DELETE'])
+def sources_item_proxy(rest):
+    denied = _require_session()
+    if denied:
+        return denied
+    return _forward_to_sources('/api/sources/' + rest)
+
+
+@app.route('/api/system/usb', methods=['GET'])
+def usb_list_proxy():
+    denied = _require_session()
+    if denied:
+        return denied
+    return _forward_to_sources('/api/usb')
+
+
+@app.route('/api/system/usb/<path:rest>', methods=['POST'])
+def usb_item_proxy(rest):
+    denied = _require_session()
+    if denied:
+        return denied
+    return _forward_to_sources('/api/usb/' + rest)
+
+
+@app.route('/api/system/internal/<path:rest>', methods=['GET', 'POST'])
+def internal_proxy(rest):
+    denied = _require_session()
+    if denied:
+        return denied
+    return _forward_to_sources('/api/internal/' + rest)
+
+
+@app.route('/api/system/apply', methods=['POST'])
+def apply_proxy():
+    denied = _require_session()
+    if denied:
+        return denied
+    return _forward_to_sources('/api/apply')
+
+
 # ── support bundle (zip) — session-gated, forwarded raw ──────────────
 # Binary download, so it can't go through the generic JSON proxy table
 # (_handle_proxy always wraps the response in jsonify()). Same trust level as

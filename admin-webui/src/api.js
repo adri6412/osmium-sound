@@ -40,6 +40,7 @@ async function req(path, { method = 'GET', body } = {}) {
 export const api = {
   get: (p) => req(p),
   post: (p, body) => req(p, { method: 'POST', body }),
+  del: (p) => req(p, { method: 'DELETE' }),
 
   // auth
   authStatus: () => req('/api/auth/status'),
@@ -107,4 +108,24 @@ export const api = {
     try { data = await res.json(); } catch (_) { data = {}; }
     return { ok: res.ok, status: res.status, data };
   },
+
+  // Music sources — live on sources_server.py, forwarded raw through
+  // webui_server (session-gated: see /api/system/sources|usb|internal|apply
+  // in webui_server.py). Powers SourcesPanel.vue.
+  sourcesList: () => req('/api/system/sources'),
+  sourcesAddLocal: (path) => req('/api/system/sources/local', { method: 'POST', body: { path } }),
+  sourcesAddSmb: ({ server, share, username, password, rw }) =>
+    req('/api/system/sources/smb', { method: 'POST', body: { server, share, username, password, rw } }),
+  sourcesSetRw: (id, rw) => req('/api/system/sources/' + id + '/rw', { method: 'POST', body: { rw } }),
+  sourcesRemove: (id) => req('/api/system/sources/' + id, { method: 'DELETE' }),
+  sourcesApply: () => req('/api/system/apply', { method: 'POST' }),
+  usbList: () => req('/api/system/usb'),
+  usbAdopt: (device) => req('/api/system/usb/adopt', { method: 'POST', body: { device } }),
+  internalDisks: () => req('/api/system/internal/disks'),
+  internalAdopt: (device) => req('/api/system/internal/adopt', { method: 'POST', body: { device } }),
+  internalFormat: ({ device, fs, label, confirm }) =>
+    req('/api/system/internal/format', { method: 'POST', body: { device, fs, label, confirm } }),
+  internalFormatStatus: () => req('/api/system/internal/format/status'),
+  internalSmb: () => req('/api/system/internal/smb'),
+  internalSmbRegenerate: () => req('/api/system/internal/smb/regenerate', { method: 'POST' }),
 };
