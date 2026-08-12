@@ -11,8 +11,7 @@ process so there is a single service to operate:
      the network and have its mode chosen from a phone.
 
   2. AUTH: a self-contained username/password admin account in SQLite (its own
-     credentials, NOT the companion pairing-token), cookie session, CSRF,
-     Host-header allowlist.
+     credentials, NOT the companion pairing-token), cookie session, CSRF.
 
   3. WEB ADMIN + PROXY: serves the separate Vue admin app (built to
      /opt/hifi-webui/dist) and relays a whitelisted set of api_server.py:8000
@@ -28,8 +27,11 @@ Security model (see the plan's "Analisi di sicurezza"):
     "connection not private" click-through on first visit, which was worse
     UX than the plain-HTTP tradeoff (session cookies are not Secure-flagged
     as a result -- see _bootstrap below).
-  * Every mutating request needs a double-submit CSRF token; every request's
-    Host header must be in the allowlist (anti DNS-rebinding).
+  * Every mutating request needs a double-submit CSRF token, checked against
+    a cookie that is host-only and SameSite=Strict -- neither is forgeable by
+    spoofing the Host header, so normal traffic is not gated on Host. Only
+    while a setup/recovery AP is up does an unrecognized Host get redirected
+    to the captive portal (see _guard/_allowed_hosts).
   * The proxy whitelist is PARTITIONED: a small pre-auth set is reachable during
     the captive window (wifi/dac/lyrion-install/claim/create-account); the full
     admin set (reboot/shutdown/ssh/ota/dsp/...) needs a live session.
@@ -863,9 +865,13 @@ _CAPTIVE_PROBES = (
 )
 
 
-# ── request guards: Host allowlist + captive redirect + CSRF ─────────
+# ── request guards: AP captive redirect + CSRF ────────────────────────
 def _allowed_hosts():
-    hosts = {'hifiplayer.local', 'localhost', AP_ADDR}
+    # Only consulted while an AP (setup or recovery) is up, to decide whether
+    # a request is captive-portal-bound. Not a general access-control list --
+    # see _guard() below for why the appliance doesn't gate normal traffic on
+    # Host anymore.
+    hosts = {socket.gethostname() + '.local', 'localhost', AP_ADDR}
     for ip in _local_ips():
         hosts.add(ip)
     return hosts
@@ -883,15 +889,21 @@ def _any_ap_active():
 
 @app.before_request
 def _guard():
-    # 1) Host allowlist (anti DNS-rebinding). Host header minus any :port.
+    # 1) Captive-AP redirect. While the setup/recovery hotspot is up, an
+    # unrecognized Host is a captive-portal probe (or a client that resolved
+    # the wrong name) — send it to the portal so phones/OSes auto-pop the
+    # setup page. Outside an AP window there is no Host gate: the appliance
+    # is meant to be reachable under any hostname/IP (custom mDNS name,
+    # Tailscale, LAN IP, ...), and mutations are already protected
+    # independently of Host by CSRF + the host-only, SameSite=Strict session
+    # cookie (see _set_csrf_cookie/_bootstrap below) -- a spoofed Host header
+    # alone can't forge either. The only unauthenticated reads reachable here
+    # are /api/auth/status's two booleans and /api/netrecovery/status, which
+    # isn't worth gating on Host.
     host = (request.host or '').split(':')[0]
     ap_up = _any_ap_active()
-    if host not in _allowed_hosts():
-        # During a captive window an unknown Host is a probe/redirect target,
-        # not an attack — send it to the portal. Otherwise reject outright.
-        if ap_up:
-            return redirect(f'http://{AP_ADDR}/', code=302)
-        return Response('Forbidden host', status=403)
+    if ap_up and host not in _allowed_hosts():
+        return redirect(f'http://{AP_ADDR}/', code=302)
 
     # 2) Captive probes → portal (only while an AP is actually up).
     if ap_up and request.path in _CAPTIVE_PROBES:

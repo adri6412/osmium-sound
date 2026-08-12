@@ -34,8 +34,15 @@ trade-offs:
   two units share key material. Because there is no public CA for a local
   appliance, **browsers show a one-time "not trusted" warning — this is
   expected**; the connection is still encrypted.
-- **CSRF + Host allowlist.** Every mutation requires a double-submit CSRF token;
-  every request's `Host` header must be in an allowlist (anti DNS-rebinding).
+- **CSRF via double-submit token.** Every mutation requires a CSRF token
+  matched against a cookie that is host-only and `SameSite=Strict`, so it is
+  never attached to a request whose Host was spoofed (e.g. DNS rebinding) —
+  neither the CSRF token nor the session cookie can be forged that way. The
+  appliance is therefore reachable under any hostname or IP (custom mDNS
+  name, Tailscale, plain LAN IP, ...) without a Host allowlist blocking
+  legitimate access. The only concession to Host is during first-boot/
+  recovery setup: while the hotspot AP is up, an unrecognized Host is
+  redirected to the captive portal instead of served directly.
 - **Destructive actions re-validate the password.** Factory reset (and the web
   password change) require re-entering the admin password, so a stolen session
   cookie alone cannot wipe the box.
