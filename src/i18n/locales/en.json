@@ -640,7 +640,6 @@
       "done": "Web interface credentials cleared.",
       "failed": "Could not reset the web interface credentials."
     },
-    "restartWizard": "Restart setup wizard",
     "about": {
       "builtWith": "Built with Electron, React, and Tailwind CSS"
     },

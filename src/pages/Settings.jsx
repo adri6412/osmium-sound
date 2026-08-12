@@ -3689,21 +3689,9 @@ const Settings = ({ initialSection, onSectionConsumed } = {}) => {
         </div>
         )}
 
-        {/* Restart wizard + About — shown only on the section menu */}
+        {/* About — shown only on the section menu */}
         {!openSection && (
           <>
-            <motion.button
-              onClick={() => {
-                localStorage.removeItem('firstSetupComplete');
-                window.dispatchEvent(new Event('hifi-open-wizard'));
-              }}
-              className="w-full mt-6 bg-hifi-light hover:bg-hifi-accent text-white py-4 rounded-lg font-semibold flex items-center justify-center space-x-2 transition-colors"
-              whileTap={{ scale: 0.95 }}
-            >
-              <RotateCw size={20} />
-              <span>{t('settings.restartWizard')}</span>
-            </motion.button>
-
             <motion.div
               initial={{ y: 20, opacity: 0 }}
               animate={{ y: 0, opacity: 1 }}

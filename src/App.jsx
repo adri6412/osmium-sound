@@ -206,13 +206,6 @@ const AppContent = () => {
     document.documentElement.classList.toggle('hifi-hide-cursor', !show);
   }, [bootMode]);
 
-  // Allow re-opening the setup wizard from Settings
-  React.useEffect(() => {
-    const open = () => setShowWizard(true);
-    window.addEventListener('hifi-open-wizard', open);
-    return () => window.removeEventListener('hifi-open-wizard', open);
-  }, []);
-
   // Global "USB drive just plugged in" prompt (offers to jump to Settings →
   // Music sources to adopt it). Runs regardless of which screen is showing —
   // SourcesManager.jsx's own poll only runs while that screen is open. Polls

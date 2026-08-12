@@ -640,7 +640,6 @@
       "done": "Credenziali interfaccia web azzerate.",
       "failed": "Impossibile azzerare le credenziali dell'interfaccia web."
     },
-    "restartWizard": "Riavvia configurazione guidata",
     "about": {
       "builtWith": "Realizzato con Electron, React e Tailwind CSS"
     },
