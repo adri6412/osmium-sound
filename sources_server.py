@@ -2646,13 +2646,19 @@ def _adopt_usb_partition(part):
     # Deliberately does NOT call apply_to_lyrion() — that does a full
     # systemctl stop/start of lyrionmusicserver, which drops the squeezelite
     # connection and kills any music currently playing. The Samba share is
-    # already live at this point (regen_samba_shares() above) without it, so
-    # there's no need to force that disruption automatically on every USB
-    # plug-in-and-adopt; the user applies it to the library explicitly via
-    # "Apply & rescan library" when ready — matching how adding a local
-    # folder or SMB source already behaves (api_add_local/api_add_smb below
-    # don't auto-apply either; only the rarer, one-time internal-disk-adopt
-    # flow does).
+    # already live at this point (regen_samba_shares() above) without it.
+    # Instead, add the folder to Lyrion's live mediadirs and trigger a scan
+    # over JSON-RPC (_lyrion_add_mediadir_live) — same non-disruptive
+    # approach _rip_watcher() already uses after a CD rip — so the music
+    # shows up in the library without a restart. Best-effort: if Lyrion isn't
+    # reachable this silently does nothing, and the folder still gets picked
+    # up whenever the user next presses "Apply & rescan library" (which
+    # recomputes mediadirs from state regardless, so there's nothing to
+    # reconcile either way).
+    try:
+        _lyrion_add_mediadir_live(mountpoint)
+    except Exception as e:
+        print(f"[sources] live mediadir add/rescan failed for {mountpoint}: {e}")
     return True, "", src
 
 
@@ -2880,12 +2886,40 @@ def _rip_running():
     return _rip_state().get("state") not in ("idle", "done", "error")
 
 
-def _lyrion_rescan():
-    payload = {"id": 1, "method": "slim.request", "params": ["", ["rescan"]]}
+def _lyrion_request(params, timeout=10):
+    """POST one slim.request command to Lyrion's JSON-RPC endpoint and return
+    its `result` dict. Raises on any transport/JSON error — callers decide
+    whether that's fatal for them."""
+    payload = {"id": 1, "method": "slim.request", "params": ["", params]}
     req = urllib.request.Request(
         LYRION_RPC, data=json.dumps(payload).encode("utf-8"),
         headers={"Content-Type": "application/json"})
-    urllib.request.urlopen(req, timeout=10)
+    with urllib.request.urlopen(req, timeout=timeout) as resp:
+        return json.loads(resp.read().decode("utf-8")).get("result") or {}
+
+
+def _lyrion_rescan():
+    _lyrion_request(["rescan"])
+
+
+def _lyrion_add_mediadir_live(path):
+    """Add `path` to Lyrion's live mediadirs and trigger a scan — without
+    stopping/starting lyrionmusicserver like apply_to_lyrion() does, so
+    whatever's currently playing keeps going. mediadirs is an array pref;
+    Lyrion's CLI can't set array values (JSON-RPC only — confirmed against
+    the Lyrion forum's own guidance for this exact pref), so this reads the
+    live list first and writes it back with `path` appended, rather than
+    trusting our own state: apply_to_lyrion()'s next full "Apply" run
+    recomputes mediadirs from state regardless, so this is just an eager
+    preview, never the source of truth. Raises on failure (e.g. Lyrion not
+    reachable) — callers treat that as non-fatal, since the folder still
+    gets picked up on the next manual "Apply & rescan library"."""
+    current = _lyrion_request(["pref", "mediadirs", "?"]).get("_p2")
+    if not isinstance(current, list):
+        current = [current] if current else []
+    if path not in current:
+        _lyrion_request(["pref", "mediadirs", current + [path]])
+    _lyrion_rescan()
 
 
 def _rip_watcher():
