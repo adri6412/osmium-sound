@@ -24,11 +24,12 @@
     "active": "Sorgenti attive",
     "none": "Nessuna sorgente. Aggiungine una qui sotto.",
     "local": "Locale",
-    "usbTitle": "Dischi USB",
-    "usbNone": "Nessun disco USB collegato. Inserisci una chiavetta o un hard disk USB.",
-    "usbFullHint": "\"Aggiungi tutto\"/\"Aggiungi\" copiano una cartella una sola volta, in sola lettura. \"Usa come sorgente\" dà accesso in lettura/scrittura e una condivisione di rete (Samba), come un disco interno — senza bisogno di formattare il disco. Non interrompe la riproduzione, ma la nuova cartella entra nella libreria musicale solo dopo aver premuto \"Applica e scansiona libreria\" qui sotto.",
-    "addWhole": "Aggiungi tutto",
-    "add": "Aggiungi",
+    "viewSimple": "Semplice",
+    "viewAdvanced": "Avanzate",
+    "usbAttention": "Dispositivi USB da controllare",
+    "usbNeedsFormat": "Nessun filesystem riconosciuto — formattala da un computer.",
+    "usbMountError": "Errore di montaggio",
+    "usbRetry": "Riprova",
     "addLocal": "Aggiungi cartella locale",
     "addSmb": "Aggiungi cartella di rete (SMB)",
     "server": "Server / IP",
@@ -79,10 +80,8 @@
       "smbRegenerateHint": "Se Windows continua a rifiutare le credenziali, rimuovi la voce salvata per questo dispositivo in Gestione credenziali di Windows e riprova."
     }
   },
-  "usbPrompt": {
-    "title": "Chiavetta USB rilevata",
-    "body": "È stata collegata \"{label}\". Montarla come sorgente musicale (accesso in lettura/scrittura + condivisione di rete), come un disco interno?",
-    "mount": "Monta"
+  "usbToast": {
+    "mounted": "\"{label}\" collegata e pronta"
   },
   "wizard": {
     "brand": "Osmium Sound · Setup",

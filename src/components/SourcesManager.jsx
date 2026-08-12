@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { motion } from 'framer-motion';
-import { Usb, FolderPlus, Network, Trash2, Loader2, Plus, FolderOpen } from 'lucide-react';
+import { FolderPlus, Network, Trash2, Loader2, Plus, AlertTriangle } from 'lucide-react';
 import { useI18n } from '../i18n';
 import { useKeyboardInput } from '../hooks/useKeyboardInput';
 import InternalDisks from './InternalDisks';
@@ -15,8 +15,15 @@ const isErr = (m) => /error|errore|fallit|fail|non valido|invalid/i.test(m || ''
 export default function SourcesManager() {
   const { t } = useI18n();
 
+  // "Semplice" (default) shows only what the average user needs: active
+  // sources + USB devices needing attention (rare) + Apply. "Avanzate" adds
+  // internal-disk adoption/formatting and manual local/SMB folder entry —
+  // same pill-toggle pattern as the DSP EQ graphic/advanced view in
+  // Settings.jsx.
+  const [view, setView] = useState('simple');
+
   const [sources, setSources] = useState([]);
-  const [usb, setUsb] = useState([]);
+  const [usb, setUsb] = useState([]); // USB devices needing attention only — see api_usb()
   const [msg, setMsg] = useState('');
   const [busy, setBusy] = useState(false);
   const [applying, setApplying] = useState(false);
@@ -48,16 +55,14 @@ export default function SourcesManager() {
   useEffect(() => {
     loadSources();
     loadUsb();
-    const id = setInterval(loadUsb, 4000); // pick up freshly-inserted drives
-    return () => clearInterval(id);
+    // sources_server.py auto-adopts every healthy USB drive on its own
+    // (read-write + Samba share, no tap needed) — poll both lists so a
+    // freshly-inserted drive shows up here live, without navigating away
+    // and back.
+    const sourcesId = setInterval(loadSources, 4000);
+    const usbId = setInterval(loadUsb, 4000);
+    return () => { clearInterval(sourcesId); clearInterval(usbId); };
   }, [loadSources, loadUsb]);
-
-  // Tell App.jsx's global "USB detected" prompt to stay quiet while this
-  // screen is already open — the user can see and adopt the drive right here.
-  useEffect(() => {
-    window.dispatchEvent(new CustomEvent('hifi-sources-page-active', { detail: true }));
-    return () => window.dispatchEvent(new CustomEvent('hifi-sources-page-active', { detail: false }));
-  }, []);
 
   const addLocal = async () => {
     const path = localPath.trim();
@@ -70,16 +75,7 @@ export default function SourcesManager() {
     } catch (_) { setMsg(t('common.error')); } finally { setBusy(false); }
   };
 
-  const addUsbPath = async (path) => {
-    setBusy(true);
-    try {
-      const r = await post('/api/sources/local', { path });
-      setMsg(r.success ? t('sources.added') : (r.message || t('common.error')));
-      if (r.success) loadSources();
-    } catch (_) { setMsg(t('common.error')); } finally { setBusy(false); }
-  };
-
-  const adoptUsb = async (device) => {
+  const retryUsb = async (device) => {
     setBusy(true);
     setMsg(t('sources.internal.adopting'));
     try {
@@ -118,7 +114,22 @@ export default function SourcesManager() {
 
   return (
     <div className="space-y-6">
-      <p className="text-sm text-hifi-silver">{t('settings.sources.help')}</p>
+      <div className="flex items-start justify-between gap-3">
+        <p className="text-sm text-hifi-silver">{t('settings.sources.help')}</p>
+        <div className="flex bg-hifi-dark rounded-full p-0.5 shrink-0">
+          {['simple', 'advanced'].map((v) => (
+            <button
+              key={v}
+              onClick={() => setView(v)}
+              className={`text-xs px-3 py-1 rounded-full transition-colors ${
+                view === v ? 'bg-hifi-gold text-black' : 'text-hifi-silver hover:text-white'
+              }`}
+            >
+              {t(v === 'simple' ? 'sources.viewSimple' : 'sources.viewAdvanced')}
+            </button>
+          ))}
+        </div>
+      </div>
 
       {/* Active sources */}
       <div>
@@ -152,73 +163,63 @@ export default function SourcesManager() {
         </div>
       </div>
 
-      {/* USB disks */}
-      <div>
-        <h3 className="text-white font-semibold mb-3 flex items-center space-x-2"><Usb size={18} className="text-hifi-gold" /><span>{t('sources.usbTitle')}</span></h3>
-        <div className="space-y-3">
-          {usb.length === 0 && (
-            <p className="text-sm text-hifi-silver/70">{t('sources.usbNone')}</p>
-          )}
-          {usb.length > 0 && (
-            <p className="text-xs text-hifi-silver/60">{t('sources.usbFullHint')}</p>
-          )}
-          {usb.map((dk) => (
-            <div key={dk.mountpoint} className="bg-hifi-dark rounded-lg p-3">
-              <div className="flex items-center justify-between gap-2">
-                <div className="text-white text-sm min-w-0">
-                  {dk.label || 'USB'}
-                  <span className="ml-2 text-[10px] uppercase tracking-wide text-hifi-gold/80">USB{dk.fstype ? ` ${dk.fstype}` : ''}{dk.size ? ` · ${dk.size}` : ''}</span>
-                </div>
-                <div className="flex gap-2 shrink-0">
-                  <button onClick={() => addUsbPath(dk.mountpoint)} disabled={busy} className="text-xs bg-hifi-accent hover:bg-hifi-light text-white py-1.5 px-3 rounded-md">
-                    {t('sources.addWhole')}
-                  </button>
-                  <button onClick={() => adoptUsb(dk.path)} disabled={busy || !dk.path} className="text-xs bg-hifi-gold/20 hover:bg-hifi-gold/30 text-hifi-gold py-1.5 px-3 rounded-md">
-                    {t('sources.internal.adopt')}
-                  </button>
+      {/* USB devices needing attention (no filesystem, or auto-mount failed) —
+          healthy drives are adopted automatically and show up above instead. */}
+      {usb.length > 0 && (
+        <div>
+          <h3 className="text-white font-semibold mb-3 flex items-center space-x-2">
+            <AlertTriangle size={18} className="text-hifi-gold" /><span>{t('sources.usbAttention')}</span>
+          </h3>
+          <div className="space-y-2">
+            {usb.map((dk) => (
+              <div key={dk.path} className="bg-hifi-dark rounded-lg p-3">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="min-w-0">
+                    <div className="text-white text-sm truncate">
+                      {dk.label || 'USB'}
+                      <span className="ml-2 text-[10px] uppercase tracking-wide text-hifi-gold/80">USB{dk.fstype ? ` ${dk.fstype}` : ''}{dk.size ? ` · ${dk.size}` : ''}</span>
+                    </div>
+                    <div className="text-xs text-red-400 truncate">
+                      {dk.needs_format ? t('sources.usbNeedsFormat') : `${t('sources.usbMountError')}: ${dk.error || ''}`}
+                    </div>
+                  </div>
+                  {!dk.needs_format && (
+                    <button onClick={() => retryUsb(dk.path)} disabled={busy || !dk.path} className="shrink-0 text-xs bg-hifi-gold/20 hover:bg-hifi-gold/30 text-hifi-gold py-1.5 px-3 rounded-md">
+                      {t('sources.usbRetry')}
+                    </button>
+                  )}
                 </div>
               </div>
-              {(dk.folders || []).length > 0 && (
-                <div className="mt-2 space-y-1">
-                  {dk.folders.map((f) => (
-                    <div key={f.path} className="flex items-center justify-between pl-2">
-                      <div className="flex items-center space-x-2 min-w-0 text-hifi-silver text-sm">
-                        <FolderOpen size={14} className="shrink-0 text-hifi-gold/70" />
-                        <span className="truncate">{f.name}</span>
-                      </div>
-                      <button onClick={() => addUsbPath(f.path)} disabled={busy} className="ml-3 shrink-0 text-xs bg-hifi-gold/20 hover:bg-hifi-gold/30 text-hifi-gold py-1 px-3 rounded-md">
-                        {t('sources.add')}
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              )}
+            ))}
+          </div>
+        </div>
+      )}
+
+      {view === 'advanced' && (
+        <>
+          {/* Internal disks (adopt existing / format) */}
+          <InternalDisks onSourcesChanged={loadSources} />
+
+          {/* Add local folder */}
+          <div>
+            <h3 className="text-white font-semibold mb-3 flex items-center space-x-2"><FolderPlus size={18} className="text-hifi-gold" /><span>{t('sources.addLocal')}</span></h3>
+            <input ref={localRef} type="text" value={localPath} onChange={(e) => setLocalPath(e.target.value)} className={input} placeholder="/media/musica" />
+            <button onClick={addLocal} disabled={busy} className={`${ghostBtn} w-full mt-3`}><Plus size={18} /><span>{t('sources.addLocal')}</span></button>
+          </div>
+
+          {/* Add network folder (SMB) */}
+          <div>
+            <h3 className="text-white font-semibold mb-3 flex items-center space-x-2"><Network size={18} className="text-hifi-gold" /><span>{t('sources.addSmb')}</span></h3>
+            <div className="grid grid-cols-2 gap-3">
+              <input ref={serverRef} type="text" value={smb.server} onChange={setSmbField('server')} className={input} placeholder={t('sources.server')} />
+              <input ref={shareRef} type="text" value={smb.share} onChange={setSmbField('share')} className={input} placeholder={t('sources.share')} />
+              <input ref={userRef} type="text" value={smb.username} onChange={setSmbField('username')} className={input} placeholder={t('sources.user')} />
+              <input ref={passRef} type="password" value={smb.password} onChange={setSmbField('password')} className={input} placeholder={t('sources.pass')} />
             </div>
-          ))}
-        </div>
-      </div>
-
-      {/* Internal disks (adopt existing / format) */}
-      <InternalDisks onSourcesChanged={loadSources} />
-
-      {/* Add local folder */}
-      <div>
-        <h3 className="text-white font-semibold mb-3 flex items-center space-x-2"><FolderPlus size={18} className="text-hifi-gold" /><span>{t('sources.addLocal')}</span></h3>
-        <input ref={localRef} type="text" value={localPath} onChange={(e) => setLocalPath(e.target.value)} className={input} placeholder="/media/musica" />
-        <button onClick={addLocal} disabled={busy} className={`${ghostBtn} w-full mt-3`}><Plus size={18} /><span>{t('sources.addLocal')}</span></button>
-      </div>
-
-      {/* Add network folder (SMB) */}
-      <div>
-        <h3 className="text-white font-semibold mb-3 flex items-center space-x-2"><Network size={18} className="text-hifi-gold" /><span>{t('sources.addSmb')}</span></h3>
-        <div className="grid grid-cols-2 gap-3">
-          <input ref={serverRef} type="text" value={smb.server} onChange={setSmbField('server')} className={input} placeholder={t('sources.server')} />
-          <input ref={shareRef} type="text" value={smb.share} onChange={setSmbField('share')} className={input} placeholder={t('sources.share')} />
-          <input ref={userRef} type="text" value={smb.username} onChange={setSmbField('username')} className={input} placeholder={t('sources.user')} />
-          <input ref={passRef} type="password" value={smb.password} onChange={setSmbField('password')} className={input} placeholder={t('sources.pass')} />
-        </div>
-        <button onClick={addSmb} disabled={busy} className={`${ghostBtn} w-full mt-3`}><Plus size={18} /><span>{t('sources.mountAndAdd')}</span></button>
-      </div>
+            <button onClick={addSmb} disabled={busy} className={`${ghostBtn} w-full mt-3`}><Plus size={18} /><span>{t('sources.mountAndAdd')}</span></button>
+          </div>
+        </>
+      )}
 
       {msg && (
         <div className={`rounded-lg p-3 text-center text-sm ${isErr(msg) ? 'bg-red-900/20 text-red-300 border border-red-500/30' : 'bg-hifi-dark text-hifi-silver'}`}>{msg}</div>

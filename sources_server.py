@@ -74,8 +74,8 @@ STATE_FILE = "/etc/hifi-sources.json"
 MOUNT_ROOT = "/mnt/hifi-sources"
 INTERNAL_MOUNT_ROOT = "/mnt/hifi-internal"
 # Adopted USB disks (type "usb") mount here, read-write, keyed by stable
-# PARTUUID/UUID — distinct from USB_MOUNT_ROOT below, which is the ephemeral
-# read-only browse mount for USB sticks that haven't been adopted.
+# PARTUUID/UUID. This is the only mountpoint a USB stick ever gets — see the
+# USB drives section below.
 USB_ADOPTED_ROOT = "/mnt/hifi-usb"
 # Local music folders may only be added from these base directories. This
 # keeps the (root-privileged) service from being pointed at arbitrary paths
@@ -282,7 +282,7 @@ def _internal_disks():
                 try:
                     rp = os.path.realpath(mp)
                     allowed = False
-                    for root in ("/mnt", "/media", INTERNAL_MOUNT_ROOT, USB_MOUNT_ROOT):
+                    for root in ("/mnt", "/media", INTERNAL_MOUNT_ROOT):
                         if rp == root or rp.startswith(root + os.sep):
                             allowed = True
                             break
@@ -363,7 +363,7 @@ def _internal_disks():
 def _adopted_disk_sources():
     """Adopted internal disks AND adopted (read-write) USB disks — the two
     source types that get a stable mountpoint, a Samba share, and can be a CD
-    rip destination. Ephemeral read-only USB browse mounts are not included."""
+    rip destination."""
     return [s for s in load_state().get("sources", []) if s.get("type") in ("internal", "usb")]
 
 
@@ -606,24 +606,38 @@ def remount_all_retry(attempts=60, delay=5):
 
 
 # ─────────────────────────── USB drives ─────────────────────────────
-# USB sticks / external drives are auto-mounted read-only under USB_MOUNT_ROOT
-# (inside the allowed /media root) so they show up in the Sources UI and the
-# user can add folders from them as local sources. We poll lsblk rather than
-# wiring udev, so the whole feature stays in this one service.
-USB_MOUNT_ROOT = "/media/hifi-usb"
+# USB sticks / external drives are auto-adopted the moment they're plugged
+# in: mounted read-write under USB_ADOPTED_ROOT and Samba-shared, with no
+# user action needed (see usb_sync() below). This is deliberately more
+# aggressive than the "mount read-only, ask before enabling read-write" model
+# some similar appliances use — chosen so a device is immediately usable
+# without a trip to Settings. The only thing that still needs an explicit
+# tap is the (rarer) manual retry for a device whose auto-mount failed, and
+# joining Lyrion's actual media library scan ("Apply & rescan"), which stays
+# manual so plugging in a stick never interrupts playback with a forced
+# Lyrion restart. There used to also be a separate ephemeral, automatic,
+# read-only browse mount under /media/hifi-usb so a stick would show up
+# before adoption; it was removed because it gave every USB drive two
+# different paths (one read-only, one read-write) and users kept pointing
+# Lyrion's playlist/media folders at the read-only one, where writes silently
+# fail.
 _FAT_LIKE = ("vfat", "exfat", "ntfs", "ntfs3", "fuseblk", "msdos")
+# Legacy mountpoint root from the removed ephemeral browse mount — kept only
+# so _migrate_stale_usb_sources() can recognize and drop old "local" sources
+# that pointed into it.
+_LEGACY_USB_MOUNT_ROOT = "/media/hifi-usb"
 # Latest snapshot from usb_sync(), refreshed by the background usb_monitor thread
-# every few seconds. /api/usb serves this instead of running the full lsblk +
-# mount scan on every poll (the web UI polls /api/usb every 4s and the monitor
+# every few seconds — USB devices that still need attention (no filesystem, or
+# auto-mount failed). /api/usb serves this instead of running the full lsblk
+# scan on every poll (the web UI polls /api/usb every 4s and the monitor
 # already scans that often). None = no scan has completed yet.
 _usb_state = None
 
 
 def _fs_mount_type(fstype):
-    """Explicit `mount -t` type for a given fstype — shared by the ephemeral
-    read-only USB browse mount and the adopted (internal/USB) read-write
-    mount, so both get the same kernel-driver mapping rather than relying on
-    autodetection."""
+    """Explicit `mount -t` type for a given fstype, used by the adopted
+    (internal/USB) read-write mount so it gets a consistent kernel-driver
+    mapping rather than relying on autodetection."""
     if fstype == "ntfs":
         return "ntfs3"                       # in-kernel NTFS (no ntfs-3g needed)
     if fstype in ("vfat", "exfat", "ntfs3", "msdos"):
@@ -631,18 +645,10 @@ def _fs_mount_type(fstype):
     return "auto"
 
 
-def _usb_mount_opts(fstype):
-    base = "ro,noatime,nosuid,nodev,noexec"
-    if fstype in _FAT_LIKE:
-        # These carry no UNIX perms — map everything readable for Lyrion.
-        return base + ",uid=0,gid=0,iocharset=utf8,umask=022"
-    return base
-
-
 def _adopted_usb_ids():
     """(partuuid, fsuuid) lowercased sets of already-adopted "usb" sources —
-    used to keep the ephemeral browse mount from fighting over a disk that's
-    now mounted read-write under USB_ADOPTED_ROOT."""
+    used to drop them from _usb_partitions() once they're mounted read-write
+    under USB_ADOPTED_ROOT, so usb_sync() doesn't try to adopt them again."""
     partuuids, fsuuids = set(), set()
     for s in load_state().get("sources", []):
         if s.get("type") == "usb":
@@ -653,72 +659,143 @@ def _adopted_usb_ids():
     return partuuids, fsuuids
 
 
-def _usb_partitions():
-    """USB block devices carrying a filesystem, excluding already-adopted ones
-    → [{path,name,fstype,label,size,uuid,partuuid}]. Handles partitioned
-    (sdX1) and whole-disk filesystems; skips optical drives (type 'rom') and
-    any non-USB transport (internal SATA/eMMC)."""
+def _ignored_usb_ids():
+    """(partuuid, fsuuid) lowercased sets the user explicitly removed (via
+    DELETE /api/sources/<id>) while the device was still connected — kept out
+    of auto-adoption so removing a source actually sticks instead of usb_sync()
+    silently re-mounting it a few seconds later. Pruned once the device is no
+    longer physically present (see usb_sync()), mirroring the client-side
+    "forget the dismissal once it's unplugged" behaviour already used for the
+    insertion toast in App.jsx."""
+    partuuids, fsuuids = set(), set()
+    for e in load_state().get("usb_ignored", []):
+        if e.get("partuuid"):
+            partuuids.add(e["partuuid"].lower())
+        if e.get("fsuuid"):
+            fsuuids.add(e["fsuuid"].lower())
+    return partuuids, fsuuids
+
+
+def _usb_raw_partitions():
+    """Every USB block device that could carry a filesystem, no adopted/
+    ignored filtering → [{path,name,fstype,label,size,uuid,partuuid}].
+    `fstype` is empty/missing for a blank/unformatted device. Handles
+    partitioned (sdX1) and whole-disk filesystems; skips optical drives
+    (type 'rom') and any non-USB transport (internal SATA/eMMC)."""
     try:
         r = _run(["lsblk", "-J", "-o", "PATH,NAME,TYPE,FSTYPE,LABEL,SIZE,TRAN,UUID,PARTUUID"], timeout=10)
         data = json.loads(r.stdout or "{}")
     except Exception:
         return []
-    adopted_partuuids, adopted_fsuuids = _adopted_usb_ids()
     out = []
     for dev in data.get("blockdevices", []):
         if dev.get("tran") != "usb" or dev.get("type") != "disk":
             continue
         kids = dev.get("children") or []
         if kids:
-            out.extend(p for p in kids if p.get("type") == "part" and p.get("fstype"))
-        elif dev.get("fstype"):
+            out.extend(p for p in kids if p.get("type") == "part")
+        else:
             out.append(dev)
+    return out
+
+
+def _usb_partitions():
+    """USB partitions not yet adopted and not explicitly ignored — the pool
+    usb_sync() auto-adopts from and api_usb_adopt() (manual retry) picks
+    from."""
+    adopted_partuuids, adopted_fsuuids = _adopted_usb_ids()
+    ignored_partuuids, ignored_fsuuids = _ignored_usb_ids()
     return [
-        p for p in out
+        p for p in _usb_raw_partitions()
         if (p.get("partuuid") or "").lower() not in adopted_partuuids
         and (p.get("uuid") or "").lower() not in adopted_fsuuids
+        and (p.get("partuuid") or "").lower() not in ignored_partuuids
+        and (p.get("uuid") or "").lower() not in ignored_fsuuids
     ]
 
 
-def _usb_mountpoint(part):
-    return os.path.join(USB_MOUNT_ROOT, _slug(part.get("label") or part.get("name")))
+def _usb_key(p):
+    return (p.get("partuuid") or p.get("uuid") or p.get("path") or "").lower()
+
+
+# In-memory backoff for failed auto-adopt attempts: _usb_key(part) -> (last
+# attempt time (monotonic), error message). Stops a stubbornly-broken
+# filesystem from spamming `mount`/the logs on every usb_monitor() tick;
+# cleared once the device is no longer plugged in.
+_usb_fail_backoff = {}
+_USB_RETRY_BACKOFF = 15
 
 
 def usb_sync():
-    """Mount newly-appeared USB filesystems (read-only) and unmount ones whose
-    device has gone. Returns {mountpoint: part} for the currently live disks.
-    Also publishes the result to _usb_state for /api/usb to read cheaply."""
+    """Auto-adopt every USB partition with a recognized filesystem as soon as
+    it's seen (mount read-write + Samba share — see _adopt_usb_partition()),
+    no user action needed. Partitions with no filesystem, or whose last
+    auto-adopt attempt failed, are left for /api/usb to surface as "needs
+    attention" instead. Also prunes usb_ignored entries for devices that are
+    no longer physically present. Publishes the needs-attention list to
+    _usb_state for /api/usb to read cheaply."""
     global _usb_state
     with _lock:
-        os.makedirs(USB_MOUNT_ROOT, exist_ok=True)
-        wanted = {}
+        raw = _usb_raw_partitions()
+        raw_keys = {_usb_key(p) for p in raw}
+
+        state = load_state()
+        ignored = state.get("usb_ignored", [])
+        still_present = [
+            e for e in ignored
+            if (e.get("partuuid") or "").lower() in raw_keys
+            or (e.get("fsuuid") or "").lower() in raw_keys
+        ]
+        if len(still_present) != len(ignored):
+            state["usb_ignored"] = still_present
+            save_state(state)
+
+        for key in list(_usb_fail_backoff):
+            if key not in raw_keys:
+                _usb_fail_backoff.pop(key, None)
+
+        needs_attention = []
         for p in _usb_partitions():
-            mp = _usb_mountpoint(p)
-            wanted[mp] = p
-            if not os.path.ismount(mp):
-                try:
-                    os.makedirs(mp, exist_ok=True)
-                    fs = (p.get("fstype") or "").lower()
-                    _run(["mount", "-t", _fs_mount_type(fs), "-o", _usb_mount_opts(fs),
-                          p["path"], mp], timeout=20)
-                except Exception as e:
-                    print(f"[sources] usb mount failed for {p.get('path')}: {e}")
-        # Reap mountpoints we created that are no longer present (drive removed).
-        try:
-            for name in os.listdir(USB_MOUNT_ROOT):
-                mp = os.path.join(USB_MOUNT_ROOT, name)
-                if mp in wanted:
-                    continue
-                if os.path.ismount(mp):
-                    _run(["umount", "-l", mp], timeout=10)
-                try:
-                    os.rmdir(mp)
-                except OSError:
-                    pass
-        except FileNotFoundError:
-            pass
-        _usb_state = dict(wanted)
-        return wanted
+            if not p.get("fstype"):
+                needs_attention.append({**p, "needs_format": True})
+                continue
+            key = _usb_key(p)
+            last_ts, last_msg = _usb_fail_backoff.get(key, (None, None))
+            if last_ts is not None and time.monotonic() - last_ts < _USB_RETRY_BACKOFF:
+                needs_attention.append({**p, "error": last_msg})
+                continue
+            ok, msg, _src = _adopt_usb_partition(p)
+            if not ok:
+                if key not in _usb_fail_backoff:
+                    print(f"[sources] auto-adopt failed for {p.get('path')}: {msg}")
+                _usb_fail_backoff[key] = (time.monotonic(), msg)
+                needs_attention.append({**p, "error": msg})
+
+        _usb_state = needs_attention
+        return needs_attention
+
+
+def _migrate_stale_usb_sources():
+    """One-time startup cleanup: drop "local" sources whose path lives under
+    the removed ephemeral read-only USB browse mount (_LEGACY_USB_MOUNT_ROOT).
+    That mountpoint is never recreated anymore, so these are permanently dead
+    — left in place they'd keep getting handed to Lyrion as nonexistent
+    mediadirs on every apply. No-op once a device has been upgraded once."""
+    with _lock:
+        state = load_state()
+        prefix = _LEGACY_USB_MOUNT_ROOT + os.sep
+        stale = [
+            s for s in state.get("sources", [])
+            if s.get("type") == "local"
+            and (s.get("path") or "").startswith(prefix)
+        ]
+        if not stale:
+            return
+        stale_ids = {s.get("id") for s in stale}
+        state["sources"] = [s for s in state["sources"] if s.get("id") not in stale_ids]
+        save_state(state)
+    for s in stale:
+        print(f"[sources] dropped stale local source under {_LEGACY_USB_MOUNT_ROOT}: {s.get('path')}")
 
 
 def usb_monitor(interval=4):
@@ -2431,6 +2508,13 @@ def api_remove(sid):
                     umount(s["mountpoint"])
                 elif t in ("internal", "usb"):
                     umount(s.get("mountpoint"))
+                if t == "usb":
+                    # Auto-adoption (usb_sync()) would otherwise re-mount this
+                    # within a few seconds, since the device is still plugged
+                    # in and no longer in `sources`. Remember it as ignored
+                    # until it's unplugged (pruned there once it's gone).
+                    ignored = state.setdefault("usb_ignored", [])
+                    ignored.append({"partuuid": s.get("partuuid"), "fsuuid": s.get("fsuuid")})
             else:
                 keep.append(s)
         state["sources"] = keep
@@ -2522,26 +2606,13 @@ def api_internal_adopt():
     return jsonify({"success": True, "source_id": src["id"], "share": share})
 
 
-@app.route("/api/usb/adopt", methods=["POST"])
-def api_usb_adopt():
-    """Adopt a currently-connected USB partition as a persistent, read-write,
-    Samba-shared source — the USB equivalent of /api/internal/adopt. No
-    reformat: mounts whatever filesystem is already on it (ext4/exfat/vfat, or
-    NTFS via the in-kernel ntfs3 driver)."""
-    denied = _require_pair_token()
-    if denied:
-        return denied
-    data = request.get_json(silent=True) or {}
-    device = (data.get("device") or "").strip()
-    if not _path_ok(device):
-        return _err("msg.badDevice", 400)
-
-    part = next((p for p in _usb_partitions() if p.get("path") == device), None)
-    if not part:
-        return _err("msg.diskNotFound", 400)
-    if not part.get("fstype"):
-        return _err("msg.partitionNoFs", 400)
-
+def _adopt_usb_partition(part):
+    """Mount `part` (one of _usb_partitions()'s dicts) read-write under
+    USB_ADOPTED_ROOT and register it as a persistent, Samba-shared "usb"
+    source. Pure — no Flask request/response — so it's safe to call both from
+    an HTTP request (api_usb_adopt(), the manual retry path) and from the
+    usb_monitor background thread (the automatic path every healthy device
+    takes, see usb_sync()). Returns (ok, message, src_dict_or_None)."""
     partuuid = part.get("partuuid")
     fsuuid = part.get("uuid")
     fstype = (part.get("fstype") or "").lower()
@@ -2549,19 +2620,6 @@ def api_usb_adopt():
     share = _share_name(label)
     mountpoint = os.path.join(USB_ADOPTED_ROOT,
                               _slug(label) + "-" + (partuuid or fsuuid or "adopt")[:8])
-
-    # Drop the ephemeral read-only browse mount for this device (if any),
-    # guarded by the same lock usb_sync() uses, so the background monitor
-    # can't recreate it out from under us mid-adopt. Any "local" source that
-    # was pointed into it would otherwise dangle once it's gone.
-    ephemeral_mp = _usb_mountpoint(part)
-    with _lock:
-        if os.path.ismount(ephemeral_mp):
-            umount(ephemeral_mp)
-        try:
-            os.rmdir(ephemeral_mp)
-        except OSError:
-            pass
 
     src = {
         "id": _slug("usb", share),
@@ -2577,20 +2635,11 @@ def api_usb_adopt():
     }
     ok, msg = mount_usb_adopted(src)
     if not ok:
-        return _err("msg.mountFailed", 400, detail=msg)
-
-    def _stale_local(s):
-        if s.get("type") != "local":
-            return False
-        p = s.get("path") or ""
-        return p == ephemeral_mp or p.startswith(ephemeral_mp + os.sep)
+        return False, msg, None
 
     with _lock:
         state = load_state()
-        state["sources"] = [
-            s for s in state["sources"]
-            if s.get("id") != src["id"] and not _stale_local(s)
-        ]
+        state["sources"] = [s for s in state["sources"] if s.get("id") != src["id"]]
         state["sources"].append(src)
         save_state(state)
         regen_samba_shares()
@@ -2604,7 +2653,33 @@ def api_usb_adopt():
     # folder or SMB source already behaves (api_add_local/api_add_smb below
     # don't auto-apply either; only the rarer, one-time internal-disk-adopt
     # flow does).
-    return jsonify({"success": True, "source_id": src["id"], "share": share})
+    return True, "", src
+
+
+@app.route("/api/usb/adopt", methods=["POST"])
+def api_usb_adopt():
+    """Manual retry for a USB partition that usb_sync()'s automatic adoption
+    couldn't mount (recognized filesystem, transient mount error) — every
+    healthy device is adopted automatically as soon as it's plugged in, no
+    user action needed."""
+    denied = _require_pair_token()
+    if denied:
+        return denied
+    data = request.get_json(silent=True) or {}
+    device = (data.get("device") or "").strip()
+    if not _path_ok(device):
+        return _err("msg.badDevice", 400)
+
+    part = next((p for p in _usb_partitions() if p.get("path") == device), None)
+    if not part:
+        return _err("msg.diskNotFound", 400)
+    if not part.get("fstype"):
+        return _err("msg.partitionNoFs", 400)
+
+    ok, msg, src = _adopt_usb_partition(part)
+    if not ok:
+        return _err("msg.mountFailed", 400, detail=msg)
+    return jsonify({"success": True, "source_id": src["id"], "share": src["share"]})
 
 
 @app.route("/api/internal/format", methods=["POST"])
@@ -2849,7 +2924,7 @@ def _rip_watcher():
 
 def _rip_writable_sources():
     """Adopted (rw, hifimusic-owned) internal or USB sources the rip can write
-    into. Ephemeral read-only USB browse mounts never qualify."""
+    into."""
     out = []
     for s in _adopted_disk_sources():
         mp = s.get("mountpoint") or ""
@@ -3028,42 +3103,34 @@ def api_internal_smb_regenerate():
 
 @app.route("/api/usb", methods=["GET"])
 def api_usb():
-    """List currently-mounted USB disks and their top-level folders, so the UI
-    can offer to add them as local sources."""
+    """List USB devices that need attention: no recognized filesystem
+    (needs_format) or the last automatic mount attempt failed (error).
+    Healthy devices don't appear here — usb_sync() auto-adopts them as soon
+    as they're plugged in and they show up under /api/sources instead."""
     denied = _require_pair_token()
     if denied:
         return denied
     # Serve the snapshot kept fresh by the background usb_monitor thread instead
     # of re-scanning on every poll. Only force a scan if none has run yet.
-    wanted = _usb_state
-    if wanted is None:
+    entries = _usb_state
+    if entries is None:
         try:
-            wanted = usb_sync()
+            entries = usb_sync()
         except Exception:
             app.logger.exception("Failed to enumerate USB disks")
             return jsonify({"disks": [], "error": "Unable to enumerate USB disks."}), 500
-    disks = []
-    for mp, p in wanted.items():
-        if not os.path.ismount(mp):
-            continue
-        folders = []
-        try:
-            for entry in sorted(os.listdir(mp)):
-                full = os.path.join(mp, entry)
-                if not entry.startswith(".") and os.path.isdir(full):
-                    folders.append({"name": entry, "path": full})
-        except Exception:
-            pass
-        disks.append({
+    disks = [
+        {
             "label": p.get("label") or p.get("name"),
             "fstype": p.get("fstype"),
             "size": p.get("size"),
-            "mountpoint": mp,
-            "folders": folders,
-            # Raw device node, used by the "use as source" (adopt) action —
-            # already-adopted disks never appear here (see _usb_partitions()).
+            "needs_format": p.get("needs_format", False),
+            "error": p.get("error"),
+            # Device node, used by the "Riprova" (manual retry adopt) action.
             "path": p.get("path"),
-        })
+        }
+        for p in entries
+    ]
     return jsonify({"disks": disks})
 
 
@@ -3088,9 +3155,7 @@ SOURCES_I18N = {
         "sources.none": "No sources yet. Add one below.",
         "sources.usbTitle": "USB disks",
         "sources.usbNone": "No USB disk connected. Insert a USB stick or drive.",
-        "sources.usbAddWhole": "Add whole disk",
-        "sources.usbFullHint": "\"Add whole disk\"/\"Add\" copy a folder once, read-only. \"Use as source\" gives read-write access and a network share (Samba), like an internal disk — no need to reformat the drive. It won't interrupt playback, but the new folder only joins the music library once you press \"Apply & rescan library\" below.",
-        "sources.add": "Add",
+        "sources.usbFullHint": "\"Use as source\" mounts the drive read-write and creates a network share (Samba), like an internal disk — no need to reformat it. It won't interrupt playback, but the new folder only joins the music library once you press \"Apply & rescan library\" below.",
         "sources.addLocal": "Add local folder",
         "sources.localPath": "Path on the device",
         "sources.localPathPlaceholder": "/media/music",
@@ -3222,9 +3287,7 @@ SOURCES_I18N = {
         "sources.none": "Nessuna sorgente. Aggiungine una qui sotto.",
         "sources.usbTitle": "Dischi USB",
         "sources.usbNone": "Nessun disco USB collegato. Inserisci una chiavetta o un hard disk USB.",
-        "sources.usbAddWhole": "Aggiungi tutto il disco",
-        "sources.usbFullHint": "\"Aggiungi tutto il disco\"/\"Aggiungi\" copiano una cartella una sola volta, in sola lettura. \"Usa come sorgente\" dà accesso in lettura/scrittura e una condivisione di rete (Samba), come un disco interno — senza bisogno di formattare il disco. Non interrompe la riproduzione, ma la nuova cartella entra nella libreria musicale solo dopo aver premuto \"Applica e scansiona libreria\" qui sotto.",
-        "sources.add": "Aggiungi",
+        "sources.usbFullHint": "\"Usa come sorgente\" monta la chiavetta in lettura/scrittura e crea una condivisione di rete (Samba), come un disco interno — non serve formattarla. Non interrompe la riproduzione, ma la nuova cartella entra nella libreria musicale solo dopo aver premuto \"Applica e scansiona libreria\" qui sotto.",
         "sources.addLocal": "Aggiungi cartella locale",
         "sources.localPath": "Percorso sul dispositivo",
         "sources.localPathPlaceholder": "/media/musica",
@@ -3808,36 +3871,24 @@ async function apply(){
 }
 
 // ── USB disks ───────────────────────────────────────────────────────
-// Paths are kept in an array and referenced by index in onclick handlers, so a
-// folder name with quotes/specials can never break the markup.
-let usbPaths=[];
+// Device paths are kept in an array and referenced by index in onclick
+// handlers, so a label with quotes/specials can never break the markup.
 let usbDevices=[];
 async function loadUsb(){
   let d; try{ d=await j('/api/usb'); }catch(e){ return; }
-  const el=document.getElementById('usbList'); usbPaths=[]; usbDevices=[];
+  const el=document.getElementById('usbList'); usbDevices=[];
   if(!d.disks || !d.disks.length){
     el.innerHTML=`<div style="color:var(--silver);font-size:14px">${esc(T('sources.usbNone'))}</div>`;
     return;
   }
   const hint=`<p style="color:var(--silver);opacity:.7;font-size:12px;margin:0 0 10px">${esc(T('sources.usbFullHint'))}</p>`;
   el.innerHTML=hint+d.disks.map(dk=>{
-    const di=usbPaths.push(dk.mountpoint)-1;
     const devi=usbDevices.push(dk.path||'')-1;
     const tag=`USB${dk.fstype?(' '+esc(dk.fstype)):''}${dk.size?(' · '+esc(dk.size)):''}`;
-    const head=`<div class="name">${esc(dk.label)||'USB'}<span class="tag">${tag}</span></div><div class="sub">${esc(dk.mountpoint)}</div>`;
-    const all=`<button class="ghost" onclick="addUsb(${di})">${esc(T('sources.usbAddWhole'))}</button>`;
+    const head=`<div class="name">${esc(dk.label)||'USB'}<span class="tag">${tag}</span></div>`;
     const adopt=dk.path?`<button class="ghost" onclick="adoptUsb(${devi})">${esc(T('sources.internal.adopt'))}</button>`:'';
-    const fold=(dk.folders||[]).map(f=>{
-      const i=usbPaths.push(f.path)-1;
-      return `<div class="src"><div class="meta"><div class="sub">📁 ${esc(f.name)}</div></div><button class="ghost" onclick="addUsb(${i})">${esc(T('sources.add'))}</button></div>`;
-    }).join('');
-    return `<div style="margin-bottom:14px">${head}<div style="height:8px"></div><div class="row" style="gap:8px">${all}${adopt}</div>${fold?('<div style="height:8px"></div>'+fold):''}</div>`;
+    return `<div style="margin-bottom:14px">${head}<div style="height:8px"></div><div class="row" style="gap:8px">${adopt}</div></div>`;
   }).join('');
-}
-async function addUsb(i){
-  const path=usbPaths[i]; if(!path) return;
-  const r=await j('/api/sources/local',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({path})});
-  if(r.success){ load(); } else { alert(r.message||T('sources.error')); }
 }
 async function adoptUsb(i){
   const device=usbDevices[i]; if(!device) return;
@@ -4025,9 +4076,15 @@ if __name__ == "__main__":
     # background with retries: boot no longer waits for the network, so the NAS
     # may not be reachable yet — keep trying instead of failing once.
     threading.Thread(target=remount_all_retry, daemon=True, name="smb-remount").start()
-    # Auto-mount USB sticks / external drives (read-only) and keep them in sync,
-    # so they appear in the Sources UI ready to be added as local sources.
+    # Auto-adopt USB sticks/drives as soon as they're plugged in (mount
+    # read-write + Samba share, no user action needed — see usb_sync()).
     threading.Thread(target=usb_monitor, daemon=True, name="usb-monitor").start()
+    # One-time cleanup of "local" sources left over from the old ephemeral
+    # read-only USB browse mount (removed — see the USB drives section above).
+    try:
+        _migrate_stale_usb_sources()
+    except Exception as e:
+        print(f"[sources] _migrate_stale_usb_sources error: {e}")
     # Watch for completed disk-format jobs and adopt the resulting partition.
     threading.Thread(target=_format_watcher, daemon=True, name="format-watcher").start()
     # Make sure Lyrion has a writable playlist folder ("save as playlist")
