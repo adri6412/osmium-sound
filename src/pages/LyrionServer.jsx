@@ -1413,13 +1413,8 @@ const LyrionServer = () => {
                     </div>
                     <p className="text-lg text-hifi-gold truncate mt-0.5 font-medium">{artist}</p>
                     <p className="text-sm text-hifi-silver/70 truncate">{album}</p>
-                    <div className="flex items-center gap-2 mt-1">
-                      {formatLabel && (
-                        <span className="inline-block px-2 py-0.5 bg-white/5 text-[10px] text-hifi-silver/50 rounded border border-white/5 tracking-wide">
-                          {formatLabel}
-                        </span>
-                      )}
-                      <LedBar mode={playbackMode} className="h-16" />
+                    <div className="mt-1">
+                      <LedBar mode={playbackMode} formatLabel={formatLabel} className="h-16" />
                     </div>
                   </div>
 
