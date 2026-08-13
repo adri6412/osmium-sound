@@ -328,7 +328,12 @@
       "vuMeter": "VU meter animati",
       "vuMeterHelp": "Il quadrante VU nella schermata \"in riproduzione\" si aggiorna in tempo reale con il livello audio. Disattivalo per ridurre il carico sulla GPU su hardware più limitato.",
       "autoExpand": "Apertura automatica in riproduzione",
-      "autoExpandHelp": "Quando parte un brano, apre automaticamente la schermata a schermo intero \"in riproduzione\" dopo questi secondi. Si apre una sola volta per brano: se poi navighi altrove di tua scelta, resta ferma."
+      "autoExpandHelp": "Quando parte un brano, apre automaticamente la schermata a schermo intero \"in riproduzione\" dopo questi secondi. Si apre una sola volta per brano: se poi navighi altrove di tua scelta, resta ferma.",
+      "qualityLedLegend": "LED qualità formato",
+      "qualityLedFlac": "Verde — FLAC, qualità CD (16bit/44.1kHz)",
+      "qualityLedHiRes": "Giallo — Hi-Res (oltre 16bit o 44.1kHz)",
+      "qualityLedDsd": "Blu scuro — DSD",
+      "qualityLedMp3": "Arancione — MP3"
     },
     "dsp": {
       "help": "Elaborazione digitale del segnale opzionale: equalizzatore parametrico e crossfeed per cuffie applicati a tutta la riproduzione.",

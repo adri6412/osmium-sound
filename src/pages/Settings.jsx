@@ -2266,6 +2266,24 @@ const Settings = ({ initialSection, onSectionConsumed } = {}) => {
                         ))}
                       </div>
                     </div>
+
+                    {/* Format-quality LED legend */}
+                    <div className="space-y-2">
+                      <label className="text-white font-medium text-sm">{t('settings.playback.qualityLedLegend')}</label>
+                      <div className="grid grid-cols-2 gap-2">
+                        {[
+                          { color: 'bg-emerald-500', label: t('settings.playback.qualityLedFlac') },
+                          { color: 'bg-yellow-400', label: t('settings.playback.qualityLedHiRes') },
+                          { color: 'bg-blue-900', label: t('settings.playback.qualityLedDsd') },
+                          { color: 'bg-orange-500', label: t('settings.playback.qualityLedMp3') },
+                        ].map((row) => (
+                          <div key={row.label} className="flex items-center gap-2 bg-hifi-dark rounded-lg px-3 py-2">
+                            <span className={`w-3 h-3 rounded-full shrink-0 ${row.color}`} />
+                            <span className="text-xs text-hifi-silver">{row.label}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
                   </div>
                 )}
 
