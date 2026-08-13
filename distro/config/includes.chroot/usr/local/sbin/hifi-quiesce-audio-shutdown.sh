@@ -24,6 +24,16 @@
 # for the Before=/Conflicts=shutdown.target ordering that guarantees this).
 set -eu
 
+# Capture wherever playback currently is (playing/paused/stopped, track,
+# position) so the next boot can restore it — see
+# hifi-capture-playback-state.py and api_server.py's
+# _resume_playback_after_boot for the read side. Must run BEFORE squeezelite
+# (and LMS, via the unit's Before=lyrionmusicserver.service) get stopped
+# below, while a live status is still there to query. Best-effort: a failure
+# here (LMS unreachable, nothing playing) just means no resume next boot,
+# same as before this existed — never worth delaying a shutdown over.
+python3 /usr/local/sbin/hifi-capture-playback-state.py 2>/dev/null || true
+
 if [ "$(systemctl is-active camilladsp.service 2>/dev/null)" = "active" ] \
         || [ "$(systemctl is-active squeezelite.service 2>/dev/null)" = "active" ]; then
     systemctl stop camilladsp.service squeezelite.service 2>/dev/null || true

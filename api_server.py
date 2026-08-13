@@ -2568,6 +2568,78 @@ def _lms_resume(playerid, resume_at=0.0):
     except Exception:
         log.exception('_lms_resume failed')
 
+# ──────────────────────────────────────────────────────────────────
+#  Resume playback across a reboot. hifi-quiesce-audio-shutdown.sh runs
+#  hifi-capture-playback-state.py before every shutdown/reboot (while LMS/
+#  squeezelite are still up) and writes PLAYBACK_STATE_FILE; this reads it
+#  back once at this process's own next startup. Not relying on LMS's native
+#  playingAtPowerOff/positionAtDisconnect prefs for the same reason
+#  _local_playing_player() above doesn't trust bare position-across-
+#  disconnect: found unreliable in practice, plus those prefs are only
+#  flushed to disk on a 10s debounced autosave that a fast power-off can miss
+#  entirely — this file is written synchronously, right before shutdown.
+# ──────────────────────────────────────────────────────────────────
+PLAYBACK_STATE_FILE = '/var/lib/hifi-player/playback-state.json'
+
+def _resume_playback_after_boot():
+    """Was playing -> jump to that track/position and resume playing. Was
+    paused -> load the same track at that position but leave it paused (the
+    kiosk shows the right "now playing" info without audio starting on its
+    own). Was stopped, or no state file (fresh install, or a normal restart
+    that never captured one) -> do nothing. Runs in a background thread from
+    __main__ so it never delays this API's own readiness; the kiosk UI works
+    normally regardless of how long squeezelite takes to reconnect."""
+    try:
+        with open(PLAYBACK_STATE_FILE) as f:
+            state = json.load(f)
+    except Exception:
+        return
+    # Consume once: a later ordinary process restart (crash, manual restart)
+    # must not re-apply a now-stale capture.
+    try:
+        os.remove(PLAYBACK_STATE_FILE)
+    except OSError:
+        pass
+    mode = state.get('mode')
+    if mode not in ('play', 'pause'):
+        return
+    try:
+        index = int(state.get('playlist_cur_index') or 0)
+        elapsed = float(state.get('time') or 0.0)
+    except (TypeError, ValueError):
+        return
+    playerid = None
+    try:
+        for _ in range(30):  # up to ~15s for squeezelite to reconnect to LMS
+            try:
+                result = _lms_request('-', ['serverstatus', 0, 999]) or {}
+                for p in result.get('players_loop', []):
+                    if str(p.get('ip', '')).startswith('127.0.0.1:'):
+                        playerid = p.get('playerid')
+                        break
+            except Exception:
+                pass
+            if playerid:
+                break
+            time.sleep(0.5)
+        if not playerid:
+            return
+        # `playlist index` both jumps to and starts that queue position —
+        # there's no "load without playing" command — so a captured 'pause'
+        # still starts it here and gets paused right back below, just long
+        # enough to land on the right track/position first.
+        _lms_request(playerid, ['playlist', 'index', index])
+        if elapsed > 1.0:
+            time.sleep(0.5)
+            try:
+                _lms_request(playerid, ['time', round(elapsed, 1)])
+            except Exception:
+                pass
+        if mode == 'pause':
+            _lms_request(playerid, ['pause', '1'])
+    except Exception:
+        log.exception('_resume_playback_after_boot failed')
+
 def _camilla_config_valid(cfg):
     """Write cfg to a scratch file and ask CamillaDSP itself to validate it,
     so a bad EQ/balance/FIR combination can never leave squeezelite pointed
@@ -4667,4 +4739,5 @@ if __name__ == '__main__':
     # threaded=True so a slow handler (apt/systemctl/network reconfig, or a
     # 15s OTA fetch) doesn't block the kiosk UI's other requests behind it.
     _startup_network_recovery()
+    threading.Thread(target=_resume_playback_after_boot, daemon=True).start()
     app.run(host='127.0.0.1', port=8000, threaded=True)

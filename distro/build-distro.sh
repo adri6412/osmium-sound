@@ -230,6 +230,7 @@ chmod +x "$SBIN_DEST/hifi-format-disk.sh"
 chmod +x "$SBIN_DEST/hifi-display-mode.sh"
 chmod +x "$SBIN_DEST/hifi-factory-reset.sh"
 chmod +x "$SBIN_DEST/hifi-quiesce-audio-shutdown.sh"
+chmod +x "$SBIN_DEST/hifi-capture-playback-state.py"
 chmod +x "$SBIN_DEST/hifi-grub-install.sh"
 chmod +x "$SBIN_DEST/hifi-disk-install.sh"
 

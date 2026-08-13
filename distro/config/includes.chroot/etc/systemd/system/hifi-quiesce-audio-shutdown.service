@@ -7,7 +7,7 @@ Description=HiFi Player - quiesce audio DMA before shutdown/reboot (DesignWare D
 # reboot`, `systemctl reboot`, the app's own reboot/shutdown endpoints, an
 # OS-update, factory reset, or the physical power button via logind).
 DefaultDependencies=no
-Before=shutdown.target
+Before=shutdown.target lyrionmusicserver.service
 Conflicts=shutdown.target
 
 [Service]
