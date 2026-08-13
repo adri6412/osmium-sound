@@ -270,6 +270,40 @@ export class LyrionAPI {
     return this.request(playerMac, ['randomplay', mode]);
   }
 
+  // --- Random Mix genre filtering ---
+  // Genre inclusion is a single state per player, not scoped to a mix mode:
+  // whichever genres are enabled here apply to the next randomPlay() call
+  // regardless of mode ('tracks'/'albums'/'contributors').
+
+  // All known genres with current include/exclude state. The raw response is
+  // a Jive-formatted menu (like getHomeMenu()) whose first two rows are
+  // "select all"/"select none" convenience entries with no `checkbox` field —
+  // filtered out so callers only see real genres.
+  async getRandomPlayGenres(playerMac) {
+    const r = await this.request(playerMac, ['randomplaygenrelist', 0, 999]);
+    const loop = r?.item_loop || [];
+    return loop
+      .filter((it) => typeof it.checkbox !== 'undefined')
+      .map((it) => ({ name: it.text, included: Number(it.checkbox) === 1 }));
+  }
+
+  // Toggle a single genre on/off for future Random Mixes.
+  async setRandomPlayGenre(playerMac, genreName, included) {
+    return this.request(playerMac, ['randomplaychoosegenre', genreName, included ? 1 : 0]);
+  }
+
+  // Select/deselect every genre in one call.
+  async setAllRandomPlayGenres(playerMac, included) {
+    return this.request(playerMac, ['randomplaygenreselectall', included ? 1 : 0]);
+  }
+
+  // Apply an exact genre subset: clear everything, then enable just
+  // `genreNames`. Used to apply a saved genre preset.
+  async applyRandomPlayGenreSet(playerMac, genreNames) {
+    await this.setAllRandomPlayGenres(playerMac, false);
+    await Promise.all(genreNames.map((name) => this.setRandomPlayGenre(playerMac, name, true)));
+  }
+
   // Artist biography via MusicArtistInfo (same plugin the lyrics use).
   // Returns text or null (plugin missing / nothing found).
   async getArtistBio(playerMac, artist) {

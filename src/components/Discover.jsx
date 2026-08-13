@@ -1,7 +1,8 @@
-import React, { useState, useEffect } from 'react';
-import { Shuffle, Disc, User, Infinity as InfinityIcon, BookOpen, Play } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { Shuffle, Disc, User, Infinity as InfinityIcon, BookOpen, Play, Filter, Trash2 } from 'lucide-react';
 import { lyrionApi } from '../utils/lyrionApi';
 import { useI18n } from '../i18n';
+import { useKeyboardActions } from '../contexts/KeyboardContext';
 
 // "Discover" tab: endless-mix controls (Random Mix + Don't Stop The Music) and
 // context for the current artist (similar artists, biography) via the
@@ -9,8 +10,25 @@ import { useI18n } from '../i18n';
 // missing, so the tab degrades gracefully on a bare LMS install.
 const DSTM_LAST_PROVIDER_KEY = 'hifiDstmLastProvider';
 
+// Saved genre presets for the mix panel: [{ id, name, genres: [string] }].
+// App-local only — LMS itself only tracks one live include/exclude state per
+// player, not named sets, so presets can't be synced from/to the server.
+const MIX_GENRE_PRESETS_KEY = 'hifiMixGenrePresets';
+
+const loadGenrePresets = () => {
+  try {
+    const raw = JSON.parse(localStorage.getItem(MIX_GENRE_PRESETS_KEY) || '[]');
+    return Array.isArray(raw) ? raw : [];
+  } catch (_) { return []; }
+};
+
+const saveGenrePresets = (presets) => {
+  try { localStorage.setItem(MIX_GENRE_PRESETS_KEY, JSON.stringify(presets)); } catch (_) { /* storage full/unavailable */ }
+};
+
 const Discover = ({ playerMac, artist, onPlayArtist }) => {
   const { t } = useI18n();
+  const { showKeyboard } = useKeyboardActions();
   // undefined = probing, null = plugin missing, string = current provider
   const [dstmProvider, setDstmProvider] = useState(undefined);
   const [dstmBusy, setDstmBusy] = useState(false);
@@ -19,6 +37,17 @@ const Discover = ({ playerMac, artist, onPlayArtist }) => {
   const [libraryArtists, setLibraryArtists] = useState(null); // name(lower) -> id
   const [bio, setBio] = useState(null);
   const [bioOpen, setBioOpen] = useState(false);
+
+  // Genre filter panel for the mix buttons below.
+  const [genrePanelOpen, setGenrePanelOpen] = useState(false);
+  const [genres, setGenres] = useState(null); // null = not fetched yet
+  const [genresLoading, setGenresLoading] = useState(false);
+  const [genresError, setGenresError] = useState(false);
+  const [genresBusy, setGenresBusy] = useState(false); // toggle/select-all/apply in flight
+  const [presets, setPresets] = useState(() => loadGenrePresets());
+  const [presetNameDraft, setPresetNameDraft] = useState('');
+  const [presetToDelete, setPresetToDelete] = useState(null); // preset id pending confirm
+  const presetNameInputRef = useRef(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -66,6 +95,86 @@ const Discover = ({ playerMac, artist, onPlayArtist }) => {
     }
   };
 
+  // Fetch current genre state whenever the panel opens, so it stays in sync
+  // if selection changed elsewhere (e.g. LMS's own web UI) between opens.
+  useEffect(() => {
+    let cancelled = false;
+    if (!genrePanelOpen || !playerMac) return undefined;
+    setGenresLoading(true);
+    setGenresError(false);
+    lyrionApi.getRandomPlayGenres(playerMac)
+      .then((list) => { if (!cancelled) setGenres(list); })
+      .catch(() => { if (!cancelled) setGenresError(true); })
+      .finally(() => { if (!cancelled) setGenresLoading(false); });
+    return () => { cancelled = true; };
+  }, [genrePanelOpen, playerMac]);
+
+  const toggleGenre = async (genre) => {
+    if (genresBusy || !playerMac) return;
+    const next = !genre.included;
+    setGenresBusy(true);
+    setGenres((list) => list.map((g) => (g.name === genre.name ? { ...g, included: next } : g)));
+    try {
+      await lyrionApi.setRandomPlayGenre(playerMac, genre.name, next);
+    } catch (_) {
+      setGenres((list) => list.map((g) => (g.name === genre.name ? { ...g, included: !next } : g)));
+    }
+    setGenresBusy(false);
+  };
+
+  const quickSetAllGenres = async (included) => {
+    if (genresBusy || !playerMac || !genres) return;
+    setGenresBusy(true);
+    const prev = genres;
+    setGenres((list) => list.map((g) => ({ ...g, included })));
+    try {
+      await lyrionApi.setAllRandomPlayGenres(playerMac, included);
+    } catch (_) {
+      setGenres(prev);
+    }
+    setGenresBusy(false);
+  };
+
+  const applyGenrePreset = async (preset) => {
+    if (genresBusy || !playerMac) return;
+    setGenresBusy(true);
+    const prev = genres;
+    setGenres((list) => (list || []).map((g) => ({ ...g, included: preset.genres.includes(g.name) })));
+    try {
+      await lyrionApi.applyRandomPlayGenreSet(playerMac, preset.genres);
+    } catch (_) {
+      setGenres(prev);
+    }
+    setGenresBusy(false);
+  };
+
+  const saveCurrentAsGenrePreset = () => {
+    const name = presetNameDraft.trim();
+    if (!name || !genres || !genres.some((g) => g.included)) return;
+    const included = genres.filter((g) => g.included).map((g) => g.name);
+    const next = [...presets, {
+      id: `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`,
+      name, genres: included,
+    }];
+    setPresets(next);
+    saveGenrePresets(next);
+    setPresetNameDraft('');
+  };
+
+  const deleteGenrePreset = (id) => {
+    const next = presets.filter((p) => p.id !== id);
+    setPresets(next);
+    saveGenrePresets(next);
+    setPresetToDelete(null);
+  };
+
+  const includedCount = genres ? genres.filter((g) => g.included).length : null;
+  const genreFilterLabel = !genres
+    ? t('player.discover.genresFilter')
+    : includedCount === genres.length
+      ? t('player.discover.genresAll')
+      : t('player.discover.genresCount', { count: includedCount, total: genres.length });
+
   const dstmOn = typeof dstmProvider === 'string' && dstmProvider !== '' && dstmProvider !== '0';
   const savedProvider = localStorage.getItem(DSTM_LAST_PROVIDER_KEY) || '';
   const dstmAvailable = dstmProvider !== null && dstmProvider !== undefined;
@@ -92,9 +201,91 @@ const Discover = ({ playerMac, artist, onPlayArtist }) => {
 
       {/* ── Endless mixes ── */}
       <div>
-        <p className="text-xs font-semibold tracking-wider text-hifi-silver/60 uppercase mb-2">
-          {t('player.discover.mixes')}
-        </p>
+        <div className="flex items-center justify-between mb-2">
+          <p className="text-xs font-semibold tracking-wider text-hifi-silver/60 uppercase">
+            {t('player.discover.mixes')}
+          </p>
+          <button onClick={() => setGenrePanelOpen((v) => !v)} disabled={!playerMac}
+            className="flex items-center gap-1 text-[11px] text-hifi-silver/60 hover:text-hifi-gold disabled:opacity-40">
+            <Filter size={13} className={includedCount != null && genres && includedCount < genres.length ? 'text-hifi-gold' : ''} />
+            <span>{genreFilterLabel}</span>
+          </button>
+        </div>
+
+        {genrePanelOpen && (
+          <div className="bg-hifi-surface border border-hifi-border rounded-xl p-3 mb-3 space-y-3">
+            {genresLoading && <p className="text-xs text-hifi-silver/50">{t('player.discover.genresLoading')}</p>}
+            {genresError && <p className="text-xs text-hifi-silver/50">{t('player.discover.genresError')}</p>}
+            {genres && genres.length === 0 && !genresLoading && (
+              <p className="text-xs text-hifi-silver/40">{t('player.discover.genresEmpty')}</p>
+            )}
+
+            {genres && genres.length > 0 && (
+              <>
+                <div className="flex gap-2">
+                  <button onClick={() => quickSetAllGenres(true)} disabled={genresBusy}
+                    className="text-[11px] px-2 py-1 rounded-full bg-hifi-dark text-hifi-silver hover:bg-hifi-light/40 disabled:opacity-50">
+                    {t('player.discover.genresSelectAll')}
+                  </button>
+                  <button onClick={() => quickSetAllGenres(false)} disabled={genresBusy}
+                    className="text-[11px] px-2 py-1 rounded-full bg-hifi-dark text-hifi-silver hover:bg-hifi-light/40 disabled:opacity-50">
+                    {t('player.discover.genresSelectNone')}
+                  </button>
+                </div>
+
+                {presets.length > 0 && (
+                  <div className="flex flex-wrap gap-2">
+                    {presets.map((p) => (
+                      <button key={p.id} onClick={() => applyGenrePreset(p)} disabled={genresBusy}
+                        className="flex items-center gap-1 text-xs px-3 py-1.5 rounded-full bg-hifi-dark text-hifi-silver hover:bg-hifi-light/40 disabled:opacity-50">
+                        <span>{p.name}</span>
+                        <Trash2 size={12} className="hover:text-red-400"
+                          onClick={(e) => { e.stopPropagation(); setPresetToDelete(p.id); }} />
+                      </button>
+                    ))}
+                  </div>
+                )}
+                {presetToDelete && (
+                  <div className="flex items-center justify-between bg-hifi-dark rounded-lg p-2 text-xs text-white">
+                    <span>{t('player.discover.genresPresetDeleteConfirm',
+                      { name: presets.find((p) => p.id === presetToDelete)?.name || '' })}</span>
+                    <div className="flex gap-2">
+                      <button onClick={() => deleteGenrePreset(presetToDelete)} className="text-red-400 hover:text-red-300 px-2">
+                        {t('player.discover.genresPresetDelete')}
+                      </button>
+                      <button onClick={() => setPresetToDelete(null)} className="text-hifi-silver px-2">×</button>
+                    </div>
+                  </div>
+                )}
+
+                <div className="flex flex-wrap gap-1.5 max-h-48 overflow-y-auto content-scrollbar">
+                  {genres.map((g) => (
+                    <button key={g.name} onClick={() => toggleGenre(g)} disabled={genresBusy}
+                      className={`text-xs px-3 py-1.5 rounded-full border transition-colors disabled:opacity-50 ${
+                        g.included
+                          ? 'bg-hifi-gold/20 border-hifi-gold text-hifi-gold'
+                          : 'bg-hifi-dark border-transparent text-hifi-silver/70 hover:border-hifi-border'}`}>
+                      {g.name}
+                    </button>
+                  ))}
+                </div>
+
+                <div onClick={() => showKeyboard(presetNameInputRef, presetNameDraft)} className="flex items-center gap-2 pt-1">
+                  <input ref={presetNameInputRef} type="text" value={presetNameDraft}
+                    onChange={(e) => setPresetNameDraft(e.target.value)}
+                    placeholder={t('player.discover.genresPresetNamePlaceholder')}
+                    className="flex-1 bg-hifi-surface border border-hifi-accent rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-hifi-gold cursor-pointer" />
+                  <button onClick={saveCurrentAsGenrePreset}
+                    disabled={!presetNameDraft.trim() || !genres.some((g) => g.included)}
+                    className="text-xs bg-hifi-light text-white px-3 py-2 rounded-lg disabled:opacity-50 hover:bg-hifi-accent transition-colors">
+                    {t('player.discover.genresPresetSaveAs')}
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        )}
+
         <div className="grid grid-cols-3 gap-3">
           {[
             { mode: 'tracks', label: t('player.discover.mixTracks'), Icon: Shuffle },
