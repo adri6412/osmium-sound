@@ -15,6 +15,7 @@ import { lyrionApi } from '../utils/lyrionApi';
 import { systemAPI } from '../utils/api';
 import { useI18n } from '../i18n';
 import AnalogVUMeter from '../components/AnalogVUMeter';
+import LedBar from '../components/LedBar';
 import CdRip from '../components/CdRip';
 import Discover from '../components/Discover';
 import ContextMenu from '../components/ContextMenu';
@@ -433,6 +434,7 @@ const LyrionServer = () => {
     connectToServer, handleAction,
     currentTrack, title, artist, album, isPlaying, volume, repeatMode, shuffleMode,
     willSleepIn, duration, time, progress, artworkUrl, artworkUrlLg, formatLabel,
+    playbackMode,
     isRemoteTrack, artworkIdentityKey,
     setVolume: setPlayerVolume, toggleMute, seek, cycleShuffle, cycleRepeat,
     setSleepTimer: applySleepTimer,
@@ -647,6 +649,48 @@ const LyrionServer = () => {
     window.addEventListener('hifi-vu-meter-enabled', onChange);
     return () => { alive = false; clearInterval(poll); window.removeEventListener('hifi-vu-meter-enabled', onChange); };
   }, []);
+
+  // Now-playing auto-expand: same fetch-on-mount + poll + broadcast-event
+  // shape as vuMeterEnabled above (see its comment for why the poll exists).
+  const [autoExpandSeconds, setAutoExpandSeconds] = useState(
+    Number(localStorage.getItem('hifiNowPlayingAutoExpandSeconds')) || 0
+  );
+  useEffect(() => {
+    let alive = true;
+    const refresh = () => systemAPI.getNowPlayingAutoExpand().then((res) => {
+      if (alive && res.success && typeof res.data?.seconds === 'number') {
+        setAutoExpandSeconds(res.data.seconds);
+        localStorage.setItem('hifiNowPlayingAutoExpandSeconds', String(res.data.seconds));
+      }
+    });
+    refresh();
+    const poll = setInterval(refresh, 5000);
+    const onChange = (e) => setAutoExpandSeconds(Number(e.detail) || 0);
+    window.addEventListener('hifi-nowplaying-autoexpand-changed', onChange);
+    return () => { alive = false; clearInterval(poll); window.removeEventListener('hifi-nowplaying-autoexpand-changed', onChange); };
+  }, []);
+  // Song this auto-expand feature has already acted on (auto-opened for, OR
+  // the user manually dismissed while it was playing) — either way, don't
+  // touch isPlayerExpanded again until a *different* song starts. Ref, not
+  // state: this must never itself trigger a re-render/re-schedule.
+  const autoExpandHandledKeyRef = useRef(null);
+  useEffect(() => {
+    if (!isPlaying || !autoExpandSeconds || !activePlayer) return;
+    if (autoExpandHandledKeyRef.current === artworkIdentityKey) return;
+    const timer = setTimeout(() => {
+      autoExpandHandledKeyRef.current = artworkIdentityKey;
+      setIsPlayerExpanded(true);
+    }, autoExpandSeconds * 1000);
+    return () => clearTimeout(timer);
+  }, [isPlaying, artworkIdentityKey, autoExpandSeconds, activePlayer]);
+  // Manual collapse (the ChevronDown close button) counts as "the user moved
+  // away on purpose" — mark this song handled so a still-pending timer (user
+  // closed before it fired) can't pop the view back open on its own.
+  const collapsePlayer = () => {
+    autoExpandHandledKeyRef.current = artworkIdentityKey;
+    setIsPlayerExpanded(false);
+  };
+
   const [nowPlayingView, setNowPlayingView] = useState(
     localStorage.getItem('hifiNowPlayingView') === 'lyrics' ? 'lyrics' : 'vu'
   );
@@ -1162,11 +1206,14 @@ const LyrionServer = () => {
           </div>
           <p className="text-[13px] text-hifi-gold truncate mt-0.5 font-medium">{artist}</p>
           {album && <p className="text-[12px] text-hifi-silver/60 truncate">{album}</p>}
-          {formatLabel && (
-            <span className="inline-block mt-1 px-2 py-0.5 bg-white/5 text-[10px] text-hifi-silver/50 rounded border border-white/5 tracking-wide">
-              {formatLabel}
-            </span>
-          )}
+          <div className="flex items-center gap-2 mt-1">
+            {formatLabel && (
+              <span className="inline-block px-2 py-0.5 bg-white/5 text-[10px] text-hifi-silver/50 rounded border border-white/5 tracking-wide">
+                {formatLabel}
+              </span>
+            )}
+            <LedBar mode={playbackMode} className="h-5" />
+          </div>
         </div>
 
         {/* Progress */}
@@ -1311,7 +1358,7 @@ const LyrionServer = () => {
 
               {/* Close button row */}
               <div className="relative z-40 flex items-center justify-between px-5 pt-3 pb-1 shrink-0">
-                <button onClick={() => setIsPlayerExpanded(false)}
+                <button onClick={collapsePlayer}
                   className="p-2 bg-white/10 hover:bg-white/20 rounded-full text-white transition-colors">
                   <ChevronDown size={22} />
                 </button>
@@ -1369,11 +1416,14 @@ const LyrionServer = () => {
                     </div>
                     <p className="text-lg text-hifi-gold truncate mt-0.5 font-medium">{artist}</p>
                     <p className="text-sm text-hifi-silver/70 truncate">{album}</p>
-                    {formatLabel && (
-                      <span className="inline-block mt-1 px-2 py-0.5 bg-white/5 text-[10px] text-hifi-silver/50 rounded border border-white/5 tracking-wide">
-                        {formatLabel}
-                      </span>
-                    )}
+                    <div className="flex items-center gap-2 mt-1">
+                      {formatLabel && (
+                        <span className="inline-block px-2 py-0.5 bg-white/5 text-[10px] text-hifi-silver/50 rounded border border-white/5 tracking-wide">
+                          {formatLabel}
+                        </span>
+                      )}
+                      <LedBar mode={playbackMode} className="h-6" />
+                    </div>
                   </div>
 
                   {/* Progress */}

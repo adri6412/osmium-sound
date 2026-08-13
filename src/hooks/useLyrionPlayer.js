@@ -58,6 +58,12 @@ export function useLyrionPlayer() {
   const [queue, setQueue] = useState([]);
   const [queueIndex, setQueueIndex] = useState(0);
 
+  // ReplayGain mode ('0' off / '1' track / '2' album / '3' smart) — drives the
+  // BitPerfect/ReplayGain LED bar. Polled separately from playerStatus since
+  // it's an LMS player *pref*, not part of the status payload, and changes
+  // rarely (only via Settings), so a slow independent poll is enough.
+  const [replayGainMode, setReplayGainMode] = useState('0');
+
   // Library navigation state
   const [currentView, setCurrentView] = useState('home');
   const [libraryData, setLibraryData] = useState([]);
@@ -231,6 +237,25 @@ export function useLyrionPlayer() {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activePlayer, playing]);
+
+  // ReplayGain mode: cheap, rarely-changing pref — a flat 5s poll (no
+  // play/pause-adaptive cadence needed) is enough to keep the LED bar in sync
+  // with changes made from Settings.
+  useEffect(() => {
+    if (!activePlayer) return;
+    let cancelled = false;
+    const pollReplayGain = async () => {
+      try {
+        const v = await lyrionApi.getPlayerPref(activePlayer.playerid, 'replayGainMode');
+        if (!cancelled && v != null) setReplayGainMode(String(v));
+      } catch (_) { /* keep last known value */ }
+    };
+    pollReplayGain();
+    const id = setInterval(() => {
+      if (document.visibilityState === 'visible') pollReplayGain();
+    }, 5000);
+    return () => { cancelled = true; clearInterval(id); };
+  }, [activePlayer]);
 
   // New list contents (navigated to a different view / went back) → render from
   // the top again. Consumers with a scroll container reset it via this ref.
@@ -570,6 +595,13 @@ export function useLyrionPlayer() {
     ? `${String(codecType).toUpperCase()}${samplesize ? ` · ${samplesize}bit` : ''}${samplerate ? ` · ${Math.round(samplerate / 1000)}kHz` : ''}`
     : null;
 
+  // LMS applies ReplayGain via software gain on the samples, so a track is
+  // never bit-perfect while it's active — the two are mutually exclusive,
+  // which is also how the LED bar artwork itself was drawn (only one LED lit
+  // at a time). Nothing lit while nothing is actually playing.
+  const replayGainActive = replayGainMode !== '0';
+  const playbackMode = !isPlaying ? null : (replayGainActive ? 'replaygain' : 'bitperfect');
+
   return {
     // connection
     serverUrl, isConnected, activePlayer, playerStatus, error, isLoading,
@@ -577,6 +609,7 @@ export function useLyrionPlayer() {
     // now playing (derived)
     currentTrack, title, artist, album, isPlaying, volume, repeatMode, shuffleMode,
     willSleepIn, duration, time, progress, artworkUrl, artworkUrlLg, formatLabel,
+    replayGainMode, replayGainActive, playbackMode,
     isRemoteTrack, artworkIdentityKey,
     setVolume, toggleMute, seek, cycleShuffle, cycleRepeat, setSleepTimer,
     // queue

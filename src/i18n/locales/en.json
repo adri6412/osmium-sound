@@ -326,7 +326,9 @@
       "rgSmart": "Smart",
       "saved": "Setting saved.",
       "vuMeter": "Animated VU meters",
-      "vuMeterHelp": "The VU dial in the \"now playing\" screen updates live with the audio level. Turn it off to reduce GPU load on more limited hardware."
+      "vuMeterHelp": "The VU dial in the \"now playing\" screen updates live with the audio level. Turn it off to reduce GPU load on more limited hardware.",
+      "autoExpand": "Auto-open now playing",
+      "autoExpandHelp": "When a song starts playing, automatically open the fullscreen now-playing view after this many seconds. It only opens once per song — if you navigate away yourself, it stays put."
     },
     "dsp": {
       "help": "Optional digital signal processing: a parametric equalizer and headphone crossfeed applied to all playback.",
