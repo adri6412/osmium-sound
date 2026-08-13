@@ -156,6 +156,11 @@ export const systemAPI = {
   // persisted only, so it's reachable remotely on a headless unit.
   getVuMeter: () => apiGet('/vu_meter'),
   setVuMeter: (enable) => apiPost('/vu_meter', { enable }),
+  // Now-playing auto-expand (kiosk-only): { seconds } — 0 disables it. After
+  // a song starts playing, the kiosk auto-opens the fullscreen now-playing
+  // view (VU meter) on its own after this many seconds.
+  getNowPlayingAutoExpand: () => apiGet('/nowplaying_autoexpand'),
+  setNowPlayingAutoExpand: (seconds) => apiPost('/nowplaying_autoexpand', { seconds }),
   // First-boot provisioning status (proxied from webui_server): { pending,
   // stage, mode, claimed_by, ap: { active, ssid, psk }, ... }
   getProvisionStatus: () => apiGet('/provision_status'),

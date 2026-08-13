@@ -817,6 +817,8 @@ _AUTH_ROUTES = {
     ('/api/system/timezones', 'GET'): '/timezones',
     ('/api/system/vu_meter', 'GET'): '/vu_meter',
     ('/api/system/vu_meter', 'POST'): '/vu_meter',
+    ('/api/system/nowplaying_autoexpand', 'GET'): '/nowplaying_autoexpand',
+    ('/api/system/nowplaying_autoexpand', 'POST'): '/nowplaying_autoexpand',
     ('/api/system/updates/app/check', 'GET'): '/app_update/check',
     ('/api/system/updates/app/apply', 'POST'): '/app_update/apply',
     ('/api/system/updates/app/status', 'GET'): '/app_update/status',

@@ -287,6 +287,33 @@ const Settings = ({ initialSection, onSectionConsumed } = {}) => {
     }
   };
 
+  // Now-playing auto-expand: how long after a song starts playing the kiosk
+  // auto-opens the fullscreen now-playing view on its own. Same
+  // persisted-server-side / localStorage-cache / broadcast-event shape as
+  // vuMeterEnabled above, for the same reason (reachable on a headless unit).
+  const [autoExpandSeconds, setAutoExpandSeconds] = useState(
+    Number(localStorage.getItem('hifiNowPlayingAutoExpandSeconds')) || 0
+  );
+  const [autoExpandBusy, setAutoExpandBusy] = useState(false);
+  const loadAutoExpand = async () => {
+    const res = await systemAPI.getNowPlayingAutoExpand();
+    if (res.success && typeof res.data?.seconds === 'number') {
+      setAutoExpandSeconds(res.data.seconds);
+      localStorage.setItem('hifiNowPlayingAutoExpandSeconds', String(res.data.seconds));
+    }
+  };
+  const changeAutoExpand = async (seconds) => {
+    if (autoExpandBusy || seconds === autoExpandSeconds) return;
+    setAutoExpandBusy(true);
+    const res = await systemAPI.setNowPlayingAutoExpand(seconds);
+    setAutoExpandBusy(false);
+    if (res.success && res.data?.success) {
+      setAutoExpandSeconds(res.data.seconds);
+      localStorage.setItem('hifiNowPlayingAutoExpandSeconds', String(res.data.seconds));
+      window.dispatchEvent(new CustomEvent('hifi-nowplaying-autoexpand-changed', { detail: res.data.seconds }));
+    }
+  };
+
   // ── Multiroom (LMS sync zones) ─────────────────────────────────
   // Other players seen on the LMS, and the macs currently synced to *this*
   // appliance (its sync slaves). Grouping is native LMS sync.
@@ -352,6 +379,7 @@ const Settings = ({ initialSection, onSectionConsumed } = {}) => {
     loadUiResolution();
     loadTimezone();
     loadVuMeter();
+    loadAutoExpand();
     loadOtaChannel();
     loadPlaybackPrefs();
     // loadDspStatus() disabled: DSP is held back for a future paid tier (see
@@ -2217,6 +2245,27 @@ const Settings = ({ initialSection, onSectionConsumed } = {}) => {
                         <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${vuMeterEnabled ? 'translate-x-6' : 'translate-x-1'}`} />
                       </span>
                     </button>
+
+                    {/* Now-playing auto-expand */}
+                    <div className="space-y-2">
+                      <label className="text-white font-medium text-sm">{t('settings.playback.autoExpand')}</label>
+                      <p className="text-xs text-hifi-silver">{t('settings.playback.autoExpandHelp')}</p>
+                      <div className="grid grid-cols-5 gap-2">
+                        {[0, 3, 5, 10, 15].map((s) => (
+                          <motion.button
+                            key={s}
+                            onClick={() => changeAutoExpand(s)}
+                            disabled={autoExpandBusy}
+                            className={`p-3 rounded-lg text-sm font-medium transition-colors disabled:opacity-40 ${
+                              autoExpandSeconds === s ? 'bg-hifi-gold text-black' : 'bg-hifi-light text-white hover:bg-hifi-accent'
+                            }`}
+                            whileTap={{ scale: 0.95 }}
+                          >
+                            {s === 0 ? t('settings.playback.rgOff') : `${s}s`}
+                          </motion.button>
+                        ))}
+                      </div>
+                    </div>
                   </div>
                 )}
 

@@ -434,6 +434,19 @@ async function setVuMeter(enable) {
   else say(bodyMsg(r, t('settings.display.vuMeterFailed')), true);
 }
 
+// ── Now-playing auto-expand ─────────────────────────────────────────
+// How long after a song starts playing the kiosk auto-opens its fullscreen
+// now-playing view on its own. 0 = disabled. Same "reachable here for a
+// headless unit" reasoning as vuMeter above.
+const autoExpand = ref(0);
+async function loadAutoExpand() { const r = await api.sys('nowplaying_autoexpand'); if (r.ok) autoExpand.value = r.data.seconds || 0; }
+async function setAutoExpand(seconds) {
+  if (seconds === autoExpand.value) return;
+  const r = await api.sysPost('nowplaying_autoexpand', { seconds });
+  if (r.ok && r.data.success !== false) { autoExpand.value = r.data.seconds; say(bodyMsg(r, t('settings.display.autoExpandChanged'))); }
+  else say(bodyMsg(r, t('settings.display.autoExpandFailed')), true);
+}
+
 // ── updates (prod/dev[/alpha] channel; single "update all" + blocking modal) ─
 const channel = ref('prod');
 // 'alpha' only ever appears here when the server reports it (i.e. the device
@@ -800,7 +813,7 @@ async function saveBackupScheduled(v) {
 
 onMounted(async () => {
   loadNet(); loadAudio(); loadDsp(); loadFir(); loadToggles(); loadShell(); loadLms(); loadLyrion();
-  loadMode(); loadPlayerEnabled(); loadUiRes(); loadTimezone(); loadVuMeter(); loadChannel(); checkAll(); resumePlanIfRunning(); loadBackups(); loadTailscale();
+  loadMode(); loadPlayerEnabled(); loadUiRes(); loadTimezone(); loadVuMeter(); loadAutoExpand(); loadChannel(); checkAll(); resumePlanIfRunning(); loadBackups(); loadTailscale();
   timezonePoll = setInterval(pollTimezone, 10000);
   // Tell the global UpdateProgressOverlay (mounted in App.vue) that this page
   // owns the OTA modal while it's open, so the two never render on top of
@@ -1045,6 +1058,14 @@ onUnmounted(() => {
       <span class="seg">
         <button :class="{ active: vuMeter }" @click="setVuMeter(true)">{{ t('settings.display.vuMeterOn') }}</button>
         <button :class="{ active: !vuMeter }" @click="setVuMeter(false)">{{ t('settings.display.vuMeterOff') }}</button>
+      </span>
+      <p class="sub">{{ t('settings.display.autoExpandLabel') }}</p>
+      <p class="muted">{{ t('settings.display.autoExpandHelp') }}</p>
+      <span class="seg">
+        <button v-for="s in [0, 3, 5, 10, 15]" :key="s"
+                :class="{ active: autoExpand === s }" @click="setAutoExpand(s)">
+          {{ s === 0 ? t('settings.display.vuMeterOff') : s + 's' }}
+        </button>
       </span>
       <p class="sub">{{ t('settings.display.playerLabel') }}</p>
       <p class="muted">{{ t('settings.display.playerHelp') }}</p>

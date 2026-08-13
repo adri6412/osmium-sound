@@ -2028,6 +2028,47 @@ def set_vu_meter(enable):
     return {'success': True, 'enabled': enable}
 
 # ──────────────────────────────────────────────────────────────────
+#  Now-playing auto-expand (kiosk-only UI behaviour, like the VU meter
+#  above): how long after a song starts playing the kiosk should
+#  automatically open the fullscreen now-playing view on its own, if the
+#  user hasn't already navigated there. 0 = disabled (never auto-opens).
+#  Persisted here (not just localStorage) for the same reason as
+#  vu-meter-enabled: reachable from the companion app / web admin on a
+#  headless unit.
+# ──────────────────────────────────────────────────────────────────
+NOWPLAYING_AUTOEXPAND_FILE = '/etc/hifi-player/nowplaying-autoexpand-seconds'
+NOWPLAYING_AUTOEXPAND_CHOICES = (0, 3, 5, 10, 15)
+
+def get_nowplaying_autoexpand():
+    """Return { seconds }. Defaults to 0 (disabled; file absent/unreadable/invalid)."""
+    seconds = 0
+    try:
+        with open(NOWPLAYING_AUTOEXPAND_FILE) as f:
+            seconds = int(f.read().strip())
+    except Exception:
+        pass
+    return {'seconds': seconds if seconds in NOWPLAYING_AUTOEXPAND_CHOICES else 0}
+
+def set_nowplaying_autoexpand(seconds):
+    try:
+        seconds = int(seconds)
+    except (TypeError, ValueError):
+        seconds = 0
+    if seconds not in NOWPLAYING_AUTOEXPAND_CHOICES:
+        seconds = 0
+    try:
+        os.makedirs(os.path.dirname(NOWPLAYING_AUTOEXPAND_FILE), exist_ok=True)
+        tmp = NOWPLAYING_AUTOEXPAND_FILE + '.tmp'
+        with open(tmp, 'w') as f:
+            f.write(str(seconds) + '\n')
+        os.replace(tmp, NOWPLAYING_AUTOEXPAND_FILE)
+    except Exception:
+        log.exception("set_nowplaying_autoexpand: persist failed")
+        return {'success': False, 'seconds': get_nowplaying_autoexpand()['seconds'],
+                'code': 'prefs.saveFailed', 'message': _t('prefs.saveFailed', _lang())}
+    return {'success': True, 'seconds': seconds}
+
+# ──────────────────────────────────────────────────────────────────
 #  Provisioning + factory reset. The first-boot hotspot/captive flow and
 #  the web-admin account live in webui_server.py (bound 0.0.0.0:443/:80).
 #  api_server stays loopback-only; these endpoints are thin bridges the
@@ -4443,6 +4484,15 @@ def api_vu_meter():
 def api_set_vu_meter():
     data = request.get_json(silent=True) or {}
     return jsonify(set_vu_meter(bool(data.get('enable'))))
+
+@app.route('/nowplaying_autoexpand', methods=['GET'])
+def api_nowplaying_autoexpand():
+    return jsonify(get_nowplaying_autoexpand())
+
+@app.route('/nowplaying_autoexpand', methods=['POST'])
+def api_set_nowplaying_autoexpand():
+    data = request.get_json(silent=True) or {}
+    return jsonify(set_nowplaying_autoexpand(data.get('seconds')))
 
 @app.route('/provision_status', methods=['GET'])
 def api_provision_status():
