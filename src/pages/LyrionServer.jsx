@@ -1382,23 +1382,26 @@ const LyrionServer = () => {
               {/* Body: artwork (left) | info + controls + VU (right) */}
               <div className="relative z-40 flex-1 flex flex-row items-stretch px-5 pb-5 gap-6 min-h-0">
 
-                {/* Left: artwork */}
+                {/* Left: artwork + LED status bar */}
                 <motion.div className="w-[44%] flex items-center justify-center flex-shrink-0"
                   initial={{ x: -20, opacity: 0 }} animate={{ x: 0, opacity: 1 }} transition={{ delay: 0.08 }}>
-                  <div className="relative w-full max-w-[320px] aspect-square rounded-2xl overflow-hidden shadow-[0_20px_60px_rgba(0,0,0,0.7)] border border-white/8 bg-hifi-gray">
-                    {isRemoteTrack ? (
-                      npArtworkLg.failed || !npArtworkLg.objectUrl ? (
-                        <div className="absolute inset-0 flex items-center justify-center text-hifi-silver/20 bg-gradient-to-br from-hifi-gray to-hifi-dark">
-                          <Music size={40} />
-                        </div>
+                  <div className="w-full max-w-[320px] flex flex-col items-center gap-3">
+                    <div className="relative w-full aspect-square rounded-2xl overflow-hidden shadow-[0_20px_60px_rgba(0,0,0,0.7)] border border-white/8 bg-hifi-gray">
+                      {isRemoteTrack ? (
+                        npArtworkLg.failed || !npArtworkLg.objectUrl ? (
+                          <div className="absolute inset-0 flex items-center justify-center text-hifi-silver/20 bg-gradient-to-br from-hifi-gray to-hifi-dark">
+                            <Music size={40} />
+                          </div>
+                        ) : (
+                          // key=identity — see the mini-player artwork's own comment
+                          // (same weak-iGPU stale-compositor workaround).
+                          <img key={artworkIdentityKey} src={npArtworkLg.objectUrl} alt="Album Art" className="w-full h-full object-cover" decoding="async" />
+                        )
                       ) : (
-                        // key=identity — see the mini-player artwork's own comment
-                        // (same weak-iGPU stale-compositor workaround).
-                        <img key={artworkIdentityKey} src={npArtworkLg.objectUrl} alt="Album Art" className="w-full h-full object-cover" decoding="async" />
-                      )
-                    ) : (
-                      <ArtworkImage key={artworkIdentityKey} src={artworkUrlLg} alt="Album Art" className="w-full h-full object-cover" FallbackIcon={Music} />
-                    )}
+                        <ArtworkImage key={artworkIdentityKey} src={artworkUrlLg} alt="Album Art" className="w-full h-full object-cover" FallbackIcon={Music} />
+                      )}
+                    </div>
+                    <LedBar mode={playbackMode} formatLabel={formatLabel} className="h-16" />
                   </div>
                 </motion.div>
 
@@ -1413,9 +1416,6 @@ const LyrionServer = () => {
                     </div>
                     <p className="text-lg text-hifi-gold truncate mt-0.5 font-medium">{artist}</p>
                     <p className="text-sm text-hifi-silver/70 truncate">{album}</p>
-                    <div className="mt-1">
-                      <LedBar mode={playbackMode} formatLabel={formatLabel} className="h-16" />
-                    </div>
                   </div>
 
                   {/* Progress */}
