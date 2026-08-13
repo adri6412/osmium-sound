@@ -19,8 +19,12 @@ import ledBarReplaygain from '../assets/ledbar/led-bar-replaygain.png';
 // varies vertically, so tiling it horizontally is seamless) — so the seam
 // against the baked segments is invisible despite the segment stretching to
 // fit whatever text is passed in.
+// Wrapped in its own rounded-2xl + overflow-hidden shell — same corner
+// radius as the album artwork card next to it — instead of trusting the
+// baked cap art's own curvature to read as "rounded" at every render size;
+// this guarantees clean corners on both ends regardless.
 const LedBar = ({ mode, formatLabel, className = '' }) => (
-  <div className={`inline-flex items-stretch select-none ${className}`}>
+  <div className={`inline-flex items-stretch select-none rounded-2xl overflow-hidden ${className}`}>
     <div className="shrink-0 h-full" style={{ aspectRatio: '52 / 175', backgroundImage: `url(${ledBarLeftCap})`, backgroundSize: '100% 100%' }} />
     <div className="flex items-center shrink-0 h-full px-2"
       style={{
