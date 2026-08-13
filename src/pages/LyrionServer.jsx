@@ -1212,7 +1212,7 @@ const LyrionServer = () => {
                 {formatLabel}
               </span>
             )}
-            <LedBar mode={playbackMode} className="h-5" />
+            <LedBar mode={playbackMode} className="h-7" />
           </div>
         </div>
 
@@ -1382,6 +1382,11 @@ const LyrionServer = () => {
                 </div>
               </div>
 
+              {/* BitPerfect / ReplayGain LED status, centered under the NOW PLAYING label */}
+              <div className="relative z-40 flex justify-center pb-2 shrink-0">
+                <LedBar mode={playbackMode} className="h-16" />
+              </div>
+
               {/* Body: artwork (left) | info + controls + VU (right) */}
               <div className="relative z-40 flex-1 flex flex-row items-stretch px-5 pb-5 gap-6 min-h-0">
 
@@ -1416,14 +1421,11 @@ const LyrionServer = () => {
                     </div>
                     <p className="text-lg text-hifi-gold truncate mt-0.5 font-medium">{artist}</p>
                     <p className="text-sm text-hifi-silver/70 truncate">{album}</p>
-                    <div className="flex items-center gap-2 mt-1">
-                      {formatLabel && (
-                        <span className="inline-block px-2 py-0.5 bg-white/5 text-[10px] text-hifi-silver/50 rounded border border-white/5 tracking-wide">
-                          {formatLabel}
-                        </span>
-                      )}
-                      <LedBar mode={playbackMode} className="h-6" />
-                    </div>
+                    {formatLabel && (
+                      <span className="inline-block mt-1 px-2 py-0.5 bg-white/5 text-[10px] text-hifi-silver/50 rounded border border-white/5 tracking-wide">
+                        {formatLabel}
+                      </span>
+                    )}
                   </div>
 
                   {/* Progress */}
