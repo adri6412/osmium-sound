@@ -1206,14 +1206,11 @@ const LyrionServer = () => {
           </div>
           <p className="text-[13px] text-hifi-gold truncate mt-0.5 font-medium">{artist}</p>
           {album && <p className="text-[12px] text-hifi-silver/60 truncate">{album}</p>}
-          <div className="flex items-center gap-2 mt-1">
-            {formatLabel && (
-              <span className="inline-block px-2 py-0.5 bg-white/5 text-[10px] text-hifi-silver/50 rounded border border-white/5 tracking-wide">
-                {formatLabel}
-              </span>
-            )}
-            <LedBar mode={playbackMode} className="h-6" />
-          </div>
+          {formatLabel && (
+            <span className="inline-block mt-1 px-2 py-0.5 bg-white/5 text-[10px] text-hifi-silver/50 rounded border border-white/5 tracking-wide">
+              {formatLabel}
+            </span>
+          )}
         </div>
 
         {/* Progress */}
@@ -1422,7 +1419,7 @@ const LyrionServer = () => {
                           {formatLabel}
                         </span>
                       )}
-                      <LedBar mode={playbackMode} className="h-8" />
+                      <LedBar mode={playbackMode} className="h-16" />
                     </div>
                   </div>
 
