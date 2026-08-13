@@ -29,7 +29,7 @@ const LedBar = ({ mode, formatLabel, className = '' }) => (
     <div className="flex items-center shrink-0 h-full px-2"
       style={{
         backgroundImage: `url(${ledBarFill})`, backgroundRepeat: 'repeat-x', backgroundSize: 'auto 100%',
-        borderRight: '1px solid rgba(180,200,220,0.15)', boxShadow: 'inset -2px 0 4px rgba(0,0,0,0.35)',
+        borderRight: '1px solid rgba(180,200,220,0.08)',
       }}>
       {formatLabel && (
         <span className="text-[10px] text-hifi-silver/60 tracking-wide whitespace-nowrap">{formatLabel}</span>
