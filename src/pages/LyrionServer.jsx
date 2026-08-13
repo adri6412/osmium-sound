@@ -9,7 +9,7 @@ import {
   Settings as SettingsIcon, Maximize2,
   Shuffle, Repeat, Repeat1, ListMusic, Moon,
   Trash2, X, Save, GripVertical, ListPlus, ListStart,
-  Mic2, AudioLines, Heart
+  Mic2, AudioLines, Heart, Search
 } from 'lucide-react';
 import { lyrionApi } from '../utils/lyrionApi';
 import { systemAPI } from '../utils/api';
@@ -716,31 +716,6 @@ const LyrionServer = () => {
 
   // ── Library content renderer ───────────────────────────────
   const renderLibraryContent = () => {
-    if (menuSearch) {
-      return (
-        <div className="p-4 space-y-3">
-          <p className="text-sm font-medium text-white">{menuSearch.title}</p>
-          <input
-            type="text"
-            value={searchText}
-            onChange={(e) => setSearchText(e.target.value)}
-            onKeyDown={(e) => { if (e.key === 'Enter') submitMenuSearch(); }}
-            placeholder={t('player.searchPlaceholder')}
-            className="w-full bg-hifi-dark border border-hifi-accent rounded-lg px-4 py-3 text-white focus:outline-none focus:border-hifi-gold"
-          />
-          <div className="flex gap-2">
-            <button onClick={() => { setMenuSearch(null); setSearchText(''); }}
-              className="flex-1 bg-hifi-light hover:bg-hifi-accent text-white py-2.5 rounded-lg text-sm font-medium transition-colors">
-              {t('common.cancel')}
-            </button>
-            <button onClick={submitMenuSearch}
-              className="flex-1 bg-hifi-gold hover:bg-yellow-600 text-black py-2.5 rounded-lg text-sm font-semibold transition-colors">
-              {t('common.search')}
-            </button>
-          </div>
-        </div>
-      );
-    }
     if (libraryLoading) {
       return (
         <div className="flex-1 flex items-center justify-center">
@@ -1020,7 +995,7 @@ const LyrionServer = () => {
   // item click handlers (which capture it) refresh when the player changes.
   const libraryContent = React.useMemo(
     renderLibraryContent,
-    [menuSearch, searchText, libraryLoading, currentView, libraryData,
+    [libraryLoading, currentView, libraryData,
      visibleCount, navigationStack, activePlayer?.playerid, serverUrl, t, libFilterDebounced]
   );
 
@@ -1115,6 +1090,36 @@ const LyrionServer = () => {
             </button>
           )}
         </div>
+
+        {/* Persistent search bar (Qobuz/Tidal-style) for any Lyrion menu node
+            that needs text input (RadioNet station search, global Search, …).
+            Stays open across submits — see submitMenuSearch — instead of the
+            old one-shot modal that closed (and lost the query) as soon as you
+            searched. */}
+        {menuSearch && (
+          <div className="flex items-center gap-2 px-3 py-2 border-b border-hifi-border/50 shrink-0 bg-hifi-panel/40">
+            <Search size={15} className="text-hifi-silver/50 flex-shrink-0" />
+            <input
+              type="text"
+              autoFocus
+              value={searchText}
+              onChange={(e) => setSearchText(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') submitMenuSearch(); }}
+              placeholder={menuSearch.title || t('player.searchPlaceholder')}
+              className="flex-1 min-w-0 bg-hifi-dark border border-hifi-border rounded-lg px-3 py-1.5 text-sm text-white focus:outline-none focus:border-hifi-gold"
+            />
+            <button onClick={submitMenuSearch} disabled={!searchText.trim()}
+              className="p-1.5 bg-hifi-gold/20 text-hifi-gold rounded-lg hover:bg-hifi-gold hover:text-black disabled:opacity-40 disabled:hover:bg-hifi-gold/20 disabled:hover:text-hifi-gold transition-colors flex-shrink-0"
+              title={t('common.search')}>
+              <Search size={15} />
+            </button>
+            <button onClick={() => { setMenuSearch(null); setSearchText(''); }}
+              className="p-1.5 text-hifi-silver/60 hover:text-white hover:bg-white/10 rounded-lg transition-colors flex-shrink-0"
+              title={t('common.cancel')}>
+              <X size={15} />
+            </button>
+          </div>
+        )}
 
         {libraryContent}
       </div>

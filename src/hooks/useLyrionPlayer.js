@@ -402,11 +402,16 @@ export function useLyrionPlayer() {
     return [];
   };
 
-  const navigateTo = async (view, title, params = null) => {
+  // `replace`: swap the current top-of-stack entry instead of pushing a new
+  // one — used when re-submitting a search from its own results screen, so
+  // typing a second query doesn't pile up a fresh breadcrumb crumb per search.
+  const navigateTo = async (view, title, params = null, { replace = false } = {}) => {
     setLibraryLoading(true);
     try {
       const data = await fetchViewData(view, params);
-      setNavigationStack(prev => [...prev, { view, title, params }]);
+      setNavigationStack(prev => replace
+        ? [...prev.slice(0, -1), { view, title, params }]
+        : [...prev, { view, title, params }]);
       setCurrentView(view);
       setLibraryData(data);
     } catch (err) { console.error(`Failed to load ${view}:`, err); }
@@ -415,6 +420,7 @@ export function useLyrionPlayer() {
 
   const goBack = async () => {
     if (navigationStack.length <= 1) return;
+    setMenuSearch(null); // leaving this node — dismiss its search bar, if any
     const newStack = navigationStack.slice(0, -1);
     const prev = newStack[newStack.length - 1];
     setNavigationStack(newStack);
@@ -427,6 +433,7 @@ export function useLyrionPlayer() {
 
   const goToBreadcrumb = (idx) => {
     if (idx >= navigationStack.length - 1) return;
+    setMenuSearch(null); // jumping to an ancestor crumb — dismiss any open search bar
     const ns = navigationStack.slice(0, idx + 1);
     setNavigationStack(ns);
     const last = ns[ns.length - 1];
@@ -466,10 +473,11 @@ export function useLyrionPlayer() {
     const go = lyrionApi.resolveMenuAction(base, item, 'go');
     const play = lyrionApi.resolveMenuAction(base, item, 'play');
     const doAct = lyrionApi.resolveMenuAction(base, item, 'do');
-    if (item.input && go) {                 // needs text input → search prompt
+    if (item.input && go) {                 // needs text input → search bar
       setSearchText('');
       setMenuSearch({ action: go, title: item.text || item.name || t('player.titles.search') });
     } else if (go) {                        // submenu (or play-on-go leaf) → drill in
+      setMenuSearch(null);                  // leaving any open search context behind
       navigateTo('menu', item.text || item.name || '…', { action: go });
     } else if (play) {                      // playable leaf
       handleAction(() => lyrionApi.menuDo(activePlayer.playerid, play));
@@ -478,13 +486,23 @@ export function useLyrionPlayer() {
     }
   };
 
+  // Submits the persistent search bar (see LyrionServer.jsx's renderTabContent).
+  // The bar stays open after this — Qobuz/Tidal-style search-then-refine —
+  // rather than closing on every query like the old one-shot prompt did.
   const submitMenuSearch = () => {
     if (!menuSearch) return;
+    const q = searchText.trim();
+    // An empty query isn't just a no-op here: some Lyrion search plugins
+    // (RadioNet in particular) build an outbound API request straight from
+    // it and choke on a blank term, surfacing a raw network-error string as
+    // the first "result" instead of just returning nothing.
+    if (!q) return;
     const { action, title } = menuSearch;
-    const q = searchText;
-    setMenuSearch(null);
-    setSearchText('');
-    navigateTo('menu', title, { action, input: q });
+    // Re-searching from the results screen replaces that entry instead of
+    // stacking a fresh breadcrumb crumb per query.
+    const top = navigationStack[navigationStack.length - 1];
+    const isSameSearch = top?.view === 'menu' && top?.params?.action === action;
+    navigateTo('menu', title, { action, input: q }, { replace: isSameSearch });
   };
 
   // Loads the default view for a top-level tab (radio/apps get their own
