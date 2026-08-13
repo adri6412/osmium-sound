@@ -594,6 +594,16 @@ export function useLyrionPlayer() {
   const formatLabel = codecType
     ? `${String(codecType).toUpperCase()}${samplesize ? ` · ${samplesize}bit` : ''}${samplerate ? ` · ${Math.round(samplerate / 1000)}kHz` : ''}`
     : null;
+  // Hi-Res Audio: above CD quality (16bit/44.1kHz), either dimension.
+  const isHiRes = Number(samplesize) > 16 || Number(samplerate) > 44100;
+  // DSD: LMS reports the container codec as 'dsf' or 'dff' (the two DSD file
+  // formats) in the track's `type` tag — squeezelite plays it back as DoP
+  // passthrough (see the -D flag elsewhere in this codebase).
+  const isDsd = /^(dsf|dff|dsd)$/i.test(String(codecType || ''));
+  const isMp3 = /^mp3$/i.test(String(codecType || ''));
+  // Standard (CD-quality or below) FLAC — LMS reports the type tag as 'flc'.
+  // Hi-Res FLAC shows the Hi-Res Audio badge instead, not this one.
+  const isFlacStandard = /^flc$/i.test(String(codecType || '')) && !isHiRes;
 
   // LMS applies ReplayGain via software gain on the samples, so a track is
   // never bit-perfect while it's active — the two are mutually exclusive,
@@ -609,7 +619,7 @@ export function useLyrionPlayer() {
     // now playing (derived)
     currentTrack, title, artist, album, isPlaying, volume, repeatMode, shuffleMode,
     willSleepIn, duration, time, progress, artworkUrl, artworkUrlLg, formatLabel,
-    replayGainMode, replayGainActive, playbackMode,
+    replayGainMode, replayGainActive, playbackMode, isHiRes, isDsd, isMp3, isFlacStandard,
     isRemoteTrack, artworkIdentityKey,
     setVolume, toggleMute, seek, cycleShuffle, cycleRepeat, setSleepTimer,
     // queue
