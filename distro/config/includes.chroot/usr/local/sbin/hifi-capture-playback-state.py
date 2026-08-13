@@ -70,6 +70,17 @@ def main():
         json.dump(state, f)
     os.replace(tmp, STATE_FILE)
 
+    # Best-effort: tell LMS's OWN native resume-on-reconnect not to act, so it
+    # can't race the explicit restore api_server.py does from the state file
+    # above. Not load-bearing (that explicit restore starts with its own
+    # `stop` specifically because this pref write isn't guaranteed to have
+    # reached disk before LMS itself goes down) — just reduces how often
+    # native resume gets a chance to briefly start the wrong track at all.
+    try:
+        lms_request(playerid, ['playerpref', 'playingAtPowerOff', '0'])
+    except Exception:
+        pass
+
 
 if __name__ == '__main__':
     main()
