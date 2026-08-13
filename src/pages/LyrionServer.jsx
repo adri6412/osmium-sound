@@ -16,10 +16,6 @@ import { systemAPI } from '../utils/api';
 import { useI18n } from '../i18n';
 import AnalogVUMeter from '../components/AnalogVUMeter';
 import LedBar from '../components/LedBar';
-import hiResAudioLogo from '../assets/hires-audio-logo.svg';
-import dsdLogo from '../assets/dsd-logo.svg';
-import mp3Logo from '../assets/mp3-logo.png';
-import flacLogo from '../assets/flac-logo.webp';
 import CdRip from '../components/CdRip';
 import Discover from '../components/Discover';
 import ContextMenu from '../components/ContextMenu';
@@ -438,7 +434,7 @@ const LyrionServer = () => {
     connectToServer, handleAction,
     currentTrack, title, artist, album, isPlaying, volume, repeatMode, shuffleMode,
     willSleepIn, duration, time, progress, artworkUrl, artworkUrlLg, formatLabel,
-    playbackMode, isHiRes, isDsd, isMp3, isFlacStandard,
+    playbackMode, qualityLed,
     isRemoteTrack, artworkIdentityKey,
     setVolume: setPlayerVolume, toggleMute, seek, cycleShuffle, cycleRepeat,
     setSleepTimer: applySleepTimer,
@@ -1405,33 +1401,7 @@ const LyrionServer = () => {
                         <ArtworkImage key={artworkIdentityKey} src={artworkUrlLg} alt="Album Art" className="w-full h-full object-cover" FallbackIcon={Music} />
                       )}
                     </div>
-                    <div className="flex items-center gap-3">
-                      {(isHiRes || isDsd || isMp3 || isFlacStandard) && (
-                        <div className="flex items-center gap-2">
-                          {isHiRes && <img src={hiResAudioLogo} alt="Hi-Res Audio" draggable={false} className="h-9 w-auto select-none pointer-events-none" />}
-                          {/* DSD/MP3/FLAC source art is a black wordmark on transparent
-                              (each meant for a light card, per its usual real-world
-                              presentation) — invisible on this dark UI without a light
-                              plate behind it. */}
-                          {isDsd && (
-                            <div className="h-7 px-2 flex items-center bg-white rounded-md">
-                              <img src={dsdLogo} alt="DSD" draggable={false} className="h-4 w-auto select-none pointer-events-none" />
-                            </div>
-                          )}
-                          {isMp3 && (
-                            <div className="h-7 px-2 flex items-center bg-white rounded-md">
-                              <img src={mp3Logo} alt="MP3" draggable={false} className="h-4 w-auto select-none pointer-events-none" />
-                            </div>
-                          )}
-                          {isFlacStandard && (
-                            <div className="h-7 px-2 flex items-center bg-white rounded-md">
-                              <img src={flacLogo} alt="FLAC" draggable={false} className="h-4 w-auto select-none pointer-events-none" />
-                            </div>
-                          )}
-                        </div>
-                      )}
-                      <LedBar mode={playbackMode} formatLabel={formatLabel} className="h-16" />
-                    </div>
+                    <LedBar mode={playbackMode} formatLabel={formatLabel} qualityLed={qualityLed} className="h-16" />
                   </div>
                 </motion.div>
 

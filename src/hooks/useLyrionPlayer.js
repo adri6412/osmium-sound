@@ -602,8 +602,17 @@ export function useLyrionPlayer() {
   const isDsd = /^(dsf|dff|dsd)$/i.test(String(codecType || ''));
   const isMp3 = /^mp3$/i.test(String(codecType || ''));
   // Standard (CD-quality or below) FLAC — LMS reports the type tag as 'flc'.
-  // Hi-Res FLAC shows the Hi-Res Audio badge instead, not this one.
+  // Hi-Res FLAC lights the same LED as any other hi-res track, not this one.
   const isFlacStandard = /^flc$/i.test(String(codecType || '')) && !isHiRes;
+  // Quality LED colour for the format segment: DSD gets its own colour
+  // regardless of resolution; otherwise hi-res (any codec) reads 'yellow',
+  // standard FLAC reads 'green', MP3 reads 'orange', nothing else lights it.
+  const qualityLed = !codecType ? null
+    : isDsd ? 'darkblue'
+    : isHiRes ? 'yellow'
+    : isMp3 ? 'orange'
+    : isFlacStandard ? 'green'
+    : null;
 
   // LMS applies ReplayGain via software gain on the samples, so a track is
   // never bit-perfect while it's active — the two are mutually exclusive,
@@ -619,7 +628,7 @@ export function useLyrionPlayer() {
     // now playing (derived)
     currentTrack, title, artist, album, isPlaying, volume, repeatMode, shuffleMode,
     willSleepIn, duration, time, progress, artworkUrl, artworkUrlLg, formatLabel,
-    replayGainMode, replayGainActive, playbackMode, isHiRes, isDsd, isMp3, isFlacStandard,
+    replayGainMode, replayGainActive, playbackMode, isHiRes, isDsd, isMp3, isFlacStandard, qualityLed,
     isRemoteTrack, artworkIdentityKey,
     setVolume, toggleMute, seek, cycleShuffle, cycleRepeat, setSleepTimer,
     // queue
