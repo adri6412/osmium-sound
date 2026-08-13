@@ -1212,7 +1212,7 @@ const LyrionServer = () => {
                 {formatLabel}
               </span>
             )}
-            <LedBar mode={playbackMode} className="h-5" />
+            <LedBar mode={playbackMode} className="h-6" />
           </div>
         </div>
 
@@ -1422,7 +1422,7 @@ const LyrionServer = () => {
                           {formatLabel}
                         </span>
                       )}
-                      <LedBar mode={playbackMode} className="h-6" />
+                      <LedBar mode={playbackMode} className="h-8" />
                     </div>
                   </div>
 
