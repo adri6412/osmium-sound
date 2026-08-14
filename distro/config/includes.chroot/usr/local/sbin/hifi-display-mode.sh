@@ -44,18 +44,18 @@ export DISPLAY XAUTHORITY
 
 die() { echo "$1" >&2; exit 1; }
 
-# Output da spegnere: il primo connesso, preferendo quello marcato "primary".
+# Output da spegnere: TUTTI quelli connessi, non solo il "primary". Su alcune
+# macchine (visto su un mini PC con uscita USB-C) più connettori risultano
+# "connected" contemporaneamente -- una porta fantasma rilevata come attiva
+# pur senza monitor reale, oltre a quella con lo schermo vero -- e spegnere
+# solo il primo/primary lasciava lo schermo reale nero ma retroilluminato
+# perché il comando andava sul connettore sbagliato. Spegnerli tutti è
+# corretto in headless: non deve restare acceso nessun output video.
 # Rilevato dinamicamente ad ogni chiamata (mai hardcoded) perché non è detto
 # sia lo stesso connettore su tutti i dispositivi. Stampa nulla se non c'è X
 # o nessun output connesso.
-find_output() {
-    xrandr --query 2>/dev/null | awk '
-        / connected/ {
-            if ($3 == "primary") { print $1; exit }
-            if (first == "")     { first = $1 }
-        }
-        END { if (first != "") print first }
-    '
+find_outputs() {
+    xrandr --query 2>/dev/null | awk '/ connected/ { print $1 }'
 }
 
 target_for() {
@@ -95,8 +95,9 @@ case "${1:-}" in
         # ritorno in modalità gui riaccende da sé ogni output connesso (comportamento
         # di default del driver), quindi non c'è uno stato da "riabilitare".
         if [ "$MODE" = headless ] && [ "$LIVE" = 1 ] && command -v xrandr >/dev/null 2>&1; then
-            OUT="$(find_output)"
-            [ -n "$OUT" ] && xrandr --output "$OUT" --off >/dev/null 2>&1 || true
+            for OUT in $(find_outputs); do
+                xrandr --output "$OUT" --off >/dev/null 2>&1 || true
+            done
         fi
 
         # Persist atomically (tmp + mv), same pattern as pointer-enabled.
