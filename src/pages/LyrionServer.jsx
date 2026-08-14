@@ -1406,7 +1406,7 @@ const LyrionServer = () => {
                         <ArtworkImage key={artworkIdentityKey} src={artworkUrlLg} alt="Album Art" className="w-full h-full object-cover" FallbackIcon={Music} />
                       )}
                     </div>
-                    <LedBar mode={playbackMode} formatLabel={formatLabel} className="w-full max-w-[320px]" />
+                    <LedBar mode={playbackMode} formatLabel={formatLabel} className="w-full max-w-[330px]" />
                   </div>
                 </motion.div>
 
