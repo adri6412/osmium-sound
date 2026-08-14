@@ -26,6 +26,12 @@ const NATIVE_H = 175;
 const COVER_RADIUS_PX = 16;
 const BAR_RADIUS_PX = COVER_RADIUS_PX * (NATIVE_H / NATIVE_W);
 
+// The panel has one segment left free (no DSP indicator in this build) —
+// the brand mark goes there, at the same box the source artwork reserves
+// for it (721,70 115x50 of the 897x175 plate), expressed as percentages so
+// it tracks the bar's own responsive width/height.
+const BRAND_BOX = { left: '80.38%', top: '40%', width: '12.82%', height: '28.57%' };
+
 // Hardware-style status plate: Hi-Res/PCM/DSD format-quality LEDs on the left,
 // BitPerfect/ReplayGain further right. `quality` lights the format LEDs per
 // the source file's own rate/depth (PCM alone at 44.1/16, PCM+Hi-Res above
@@ -52,6 +58,10 @@ const LedBar = ({ mode, quality, className = '', style }) => (
     <img src={ledBarReplaygain} alt="ReplayGain" draggable={false}
       className="absolute inset-0 w-full h-full pointer-events-none transition-opacity duration-200"
       style={{ opacity: mode === 'replaygain' ? 1 : 0 }} />
+    <div className="absolute flex flex-col items-center justify-center leading-[1.05] pointer-events-none" style={BRAND_BOX}>
+      <span className="text-[7px] font-bold tracking-[0.1em] text-white/90">OSMIUM</span>
+      <span className="text-[7px] font-bold tracking-[0.1em] text-hifi-gold">SOUND</span>
+    </div>
   </div>
 );
 
