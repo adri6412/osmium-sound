@@ -56,6 +56,19 @@ const ARTWORK_RETRY_MS = 2000;
 // art appears permanently stuck. Same fix already applied to the JSON-RPC
 // client for the same reason, see lyrionApi.js's request().
 const ARTWORK_FETCH_TIMEOUT_MS = 8000;
+// Some stations' ICY metadata arrives in rapid bursts (an interim/blank
+// title immediately followed by the real one, jingle/ID tags between songs,
+// ...), each of which lands on the ~1s status poll as its own "confirmed"
+// identityKey change. Without this debounce, usePolledArtwork reacted to
+// every one of them immediately: wipe the art, abort whatever fetch was
+// already in flight, restart at attempt 1 — and since the redirect-to-CDN
+// path (see below) is slow enough to still be in flight when the *next*
+// burst update lands, the cycle could repeat indefinitely without a single
+// attempt ever completing or exhausting its retry budget, leaving the
+// placeholder/generic icon up. Waiting for identityKey to hold still for one
+// quiet window coalesces a burst into the single fetch its final, settled
+// value deserves.
+const ARTWORK_DEBOUNCE_MS = 400;
 const ArtworkImage = ({ src, alt, className, FallbackIcon }) => {
   const safeSrc = src ? safeUrl(src) : null;
   const [displayedSrc, setDisplayedSrc] = useState(safeSrc);
@@ -150,85 +163,100 @@ const usePolledArtwork = (url, identityKey) => {
   const lastIdentityRef = useRef(Symbol('initial'));
 
   useEffect(() => {
-    const isConfirmedChange = identityKey !== lastIdentityRef.current;
-    lastIdentityRef.current = identityKey;
+    // Debounce the reaction itself, not just the fetch: a burst of rapid
+    // identityKey changes (see ARTWORK_DEBOUNCE_MS above) now schedules and
+    // re-schedules this timer without ever wiping the art or touching
+    // controllerRef/requestIdRef, so a fetch already in flight for the
+    // previous *settled* identity is left completely undisturbed until the
+    // new identity actually holds still. Only once it does do we abort the
+    // stale fetch and start the replacement.
+    const debounceTimer = setTimeout(() => {
+      const isConfirmedChange = identityKey !== lastIdentityRef.current;
+      lastIdentityRef.current = identityKey;
 
-    if (!safeSrc) {
-      requestIdRef.current += 1;
-      hashRef.current = null;
-      if (objectUrlRef.current) { URL.revokeObjectURL(objectUrlRef.current); objectUrlRef.current = null; }
-      setObjectUrl(null);
-      setFailed(true);
-      return;
-    }
-    const myRequestId = ++requestIdRef.current;
-
-    if (isConfirmedChange) {
-      // LMS told us this is a different track than what's on screen — that
-      // art is now known-wrong. Drop it immediately instead of leaving a
-      // confidently-wrong image up while the replacement loads.
-      hashRef.current = null;
-      if (objectUrlRef.current) { URL.revokeObjectURL(objectUrlRef.current); objectUrlRef.current = null; }
-      setObjectUrl(null);
-      setFailed(false); // loading, not failed yet
-    }
-
-    // Confirmed changes retry harder: LMS resizes cover art itself
-    // (Image::Scale, a native Perl module) on demand, which can genuinely
-    // take several seconds on a loaded/slower box (squeezelite/CamillaDSP
-    // sharing the CPU) — worth waiting out before giving up to the
-    // placeholder. A heartbeat probe has no evidence anything changed, so it
-    // isn't worth hammering retries over — one retry and move on to the next
-    // probe cycle.
-    const MAX_ATTEMPTS = isConfirmedChange ? 6 : 2;
-    const attempt = async (attemptNum) => {
-      const controller = new AbortController();
-      controllerRef.current = controller;
-      const timer = setTimeout(() => controller.abort(), ARTWORK_FETCH_TIMEOUT_MS);
-      try {
-        const res = await fetch(safeSrc, { signal: controller.signal });
-        if (!res.ok) throw new Error(`http ${res.status}`);
-        const buf = await res.arrayBuffer();
-        if (requestIdRef.current !== myRequestId) return; // superseded by a newer poll
-        const hash = fnv1aHash(new Uint8Array(buf));
-        setFailed(false);
-        if (hash === hashRef.current) return; // identical cover — no DOM change at all
-        const nextObjectUrl = URL.createObjectURL(new Blob([buf]));
-        const prevObjectUrl = objectUrlRef.current;
-        hashRef.current = hash;
-        objectUrlRef.current = nextObjectUrl;
-        setObjectUrl(nextObjectUrl);
-        if (prevObjectUrl) URL.revokeObjectURL(prevObjectUrl);
-      } catch {
-        if (requestIdRef.current !== myRequestId) return;
-        if (attemptNum < MAX_ATTEMPTS) {
-          setTimeout(() => { if (requestIdRef.current === myRequestId) attempt(attemptNum + 1); }, ARTWORK_RETRY_MS);
-        } else if (isConfirmedChange) {
-          // Every retry failed on a track we know changed — this isn't a
-          // one-off blip. Fall back to the placeholder icon instead of
-          // leaving a stale (or already-cleared) image up indefinitely.
-          hashRef.current = null;
-          if (objectUrlRef.current) { URL.revokeObjectURL(objectUrlRef.current); objectUrlRef.current = null; }
-          setObjectUrl(null);
-          setFailed(true);
-        }
-        // A failed probe (not a confirmed change) leaves the current art
-        // exactly as-is — there's no evidence it's wrong, so there's nothing
-        // to correct until the next probe or a confirmed change.
-      } finally {
-        clearTimeout(timer);
+      if (!safeSrc) {
+        requestIdRef.current += 1;
+        if (controllerRef.current) controllerRef.current.abort();
+        hashRef.current = null;
+        if (objectUrlRef.current) { URL.revokeObjectURL(objectUrlRef.current); objectUrlRef.current = null; }
+        setObjectUrl(null);
+        setFailed(true);
+        return;
       }
-    };
-    attempt(1);
-    // Actually cancel the in-flight request (not just ignore its result) the
-    // moment it's superseded — by a newer heartbeat/track (effect re-run) or
-    // by this instance going away — instead of leaving it running to eat a
-    // connection slot. See ARTWORK_FETCH_TIMEOUT_MS above for why this matters.
-    return () => { if (controllerRef.current) controllerRef.current.abort(); };
+
+      // The identity just settled on something new — whatever was still in
+      // flight for the previous settled identity is now stale, cancel it.
+      if (controllerRef.current) controllerRef.current.abort();
+      const myRequestId = ++requestIdRef.current;
+
+      if (isConfirmedChange) {
+        // LMS told us this is a different track than what's on screen — that
+        // art is now known-wrong. Drop it immediately instead of leaving a
+        // confidently-wrong image up while the replacement loads.
+        hashRef.current = null;
+        if (objectUrlRef.current) { URL.revokeObjectURL(objectUrlRef.current); objectUrlRef.current = null; }
+        setObjectUrl(null);
+        setFailed(false); // loading, not failed yet
+      }
+
+      // Confirmed changes retry harder: LMS resizes cover art itself
+      // (Image::Scale, a native Perl module) on demand, which can genuinely
+      // take several seconds on a loaded/slower box (squeezelite/CamillaDSP
+      // sharing the CPU) — worth waiting out before giving up to the
+      // placeholder. A heartbeat probe has no evidence anything changed, so it
+      // isn't worth hammering retries over — one retry and move on to the next
+      // probe cycle.
+      const MAX_ATTEMPTS = isConfirmedChange ? 6 : 2;
+      const attempt = async (attemptNum) => {
+        const controller = new AbortController();
+        controllerRef.current = controller;
+        const timer = setTimeout(() => controller.abort(), ARTWORK_FETCH_TIMEOUT_MS);
+        try {
+          const res = await fetch(safeSrc, { signal: controller.signal });
+          if (!res.ok) throw new Error(`http ${res.status}`);
+          const buf = await res.arrayBuffer();
+          if (requestIdRef.current !== myRequestId) return; // superseded by a newer poll
+          const hash = fnv1aHash(new Uint8Array(buf));
+          setFailed(false);
+          if (hash === hashRef.current) return; // identical cover — no DOM change at all
+          const nextObjectUrl = URL.createObjectURL(new Blob([buf]));
+          const prevObjectUrl = objectUrlRef.current;
+          hashRef.current = hash;
+          objectUrlRef.current = nextObjectUrl;
+          setObjectUrl(nextObjectUrl);
+          if (prevObjectUrl) URL.revokeObjectURL(prevObjectUrl);
+        } catch {
+          if (requestIdRef.current !== myRequestId) return;
+          if (attemptNum < MAX_ATTEMPTS) {
+            setTimeout(() => { if (requestIdRef.current === myRequestId) attempt(attemptNum + 1); }, ARTWORK_RETRY_MS);
+          } else if (isConfirmedChange) {
+            // Every retry failed on a track we know changed — this isn't a
+            // one-off blip. Fall back to the placeholder icon instead of
+            // leaving a stale (or already-cleared) image up indefinitely.
+            hashRef.current = null;
+            if (objectUrlRef.current) { URL.revokeObjectURL(objectUrlRef.current); objectUrlRef.current = null; }
+            setObjectUrl(null);
+            setFailed(true);
+          }
+          // A failed probe (not a confirmed change) leaves the current art
+          // exactly as-is — there's no evidence it's wrong, so there's nothing
+          // to correct until the next probe or a confirmed change.
+        } finally {
+          clearTimeout(timer);
+        }
+      };
+      attempt(1);
+    }, ARTWORK_DEBOUNCE_MS);
+
+    return () => clearTimeout(debounceTimer);
   }, [safeSrc, identityKey]);
 
-  // Release the last object URL when this instance goes away entirely.
-  useEffect(() => () => { if (objectUrlRef.current) URL.revokeObjectURL(objectUrlRef.current); }, []);
+  // Release the in-flight request and the last object URL when this instance
+  // goes away entirely (not on every debounced re-run — see above).
+  useEffect(() => () => {
+    if (controllerRef.current) controllerRef.current.abort();
+    if (objectUrlRef.current) URL.revokeObjectURL(objectUrlRef.current);
+  }, []);
 
   return { objectUrl, failed };
 };
@@ -762,7 +790,7 @@ const LyrionServer = () => {
       const renderRow = (item, idx) => {
         if (currentView === 'albums') {
           const aId  = item.artwork_track_id || item.id;
-          const aUrl = aId ? lyrionApi.getArtworkUrl(aId, 200) : null;
+          const aUrl = aId ? lyrionApi.getArtworkUrl(aId, 200, item.coverid) : null;
           return (
             <div key={item.id || idx} data-az-index={idx}
               onClick={() => navigateTo('tracks', item.album, { albumId: item.id })}

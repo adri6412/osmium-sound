@@ -111,13 +111,19 @@ export class LyrionAPI {
     //   to know when to apply its cover-art cache-busting heartbeat, since
     //   streaming-service "radio" features (Qobuz, Tidal, ...) don't reliably
     //   update N/current_title per song the way classic ICY radio does.
-    // Cover art for the now-playing view doesn't need a tag at all — it's
-    // fetched via LMS's own /music/current/cover.jpg?player=... endpoint,
-    // which resolves local vs. remote artwork server-side (see
-    // useLyrionPlayer's artworkUrl/artworkUrlLg).
+    //   c=coverid — changes when a *local* track's artwork changes even
+    //   though its stable db id doesn't (retag, replaced file, rescan
+    //   picking different embedded art). getArtworkUrl folds it into the
+    //   query string as a cache-buster so the browser's (very long-lived,
+    //   no-ETag) HTTP cache for /music/{id}/cover can't get stuck serving a
+    //   stale image for that id — see useLyrionPlayer's artworkUrl.
+    // Cover art for *remote* tracks doesn't need a tag at all — it's fetched
+    // via LMS's own /music/current/cover.jpg?player=... endpoint, which
+    // resolves that artwork server-side (see useLyrionPlayer's
+    // artworkUrl/artworkUrlLg).
     // (The old request asked for every available tag every poll — wasted work
     // on the server for fields the UI never reads.)
-    return this.request(playerMac, ['status', '-', 1, 'tags:aldoTINx']);
+    return this.request(playerMac, ['status', '-', 1, 'tags:aldoTINxc']);
   }
 
   async play(playerMac) {
@@ -381,7 +387,11 @@ export class LyrionAPI {
   }
 
   async getAlbums(limit = 9999, offset = 0, artistId = null) {
-    const params = ['albums', offset, limit, 'tags:alSj'];
+    // j=artwork_track_id (which track's embedded art represents the album)
+    // c=coverid of that art, for the same cache-busting reason as
+    // getPlayerStatus above — the album grid builds its cover URL from
+    // artwork_track_id, which is just as stable-but-stale-prone as a track id.
+    const params = ['albums', offset, limit, 'tags:alSjc'];
     if (artistId) {
       params.push(`artist_id:${artistId}`);
     }
@@ -501,9 +511,15 @@ export class LyrionAPI {
     return this.request(playerMac, ['playlistcontrol', `cmd:${mode}`, `${itemType}:${itemId}`]);
   }
 
-  getArtworkUrl(trackId, size = 300) {
+  // coverid is optional and purely a cache-buster: LMS resolves the image
+  // from trackId alone regardless, but its response has a very long
+  // Cache-Control and no ETag/Last-Modified, so the browser can never
+  // revalidate on its own — folding coverid into the query string is what
+  // makes the URL actually change when the art behind trackId does.
+  getArtworkUrl(trackId, size = 300, coverid = null) {
     if (!trackId) return null;
-    return `${this.baseUrl}/music/${trackId}/cover?size=${size}`;
+    const url = `${this.baseUrl}/music/${trackId}/cover?size=${size}`;
+    return coverid ? `${url}&coverid=${encodeURIComponent(coverid)}` : url;
   }
 }
 

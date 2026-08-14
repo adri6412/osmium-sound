@@ -617,10 +617,10 @@ export function useLyrionPlayer() {
     : null;
   const artworkUrl   = isRemoteTrack
     ? (nowPlayingCoverBase ? safeUrl(`${nowPlayingCoverBase}&size=300`) : null)
-    : (currentTrack.id ? safeUrl(lyrionApi.getArtworkUrl(currentTrack.id, 300)) : null);
+    : (currentTrack.id ? safeUrl(lyrionApi.getArtworkUrl(currentTrack.id, 300, currentTrack.coverid)) : null);
   const artworkUrlLg = isRemoteTrack
     ? (nowPlayingCoverBase ? safeUrl(`${nowPlayingCoverBase}&size=600`) : null)
-    : (currentTrack.id ? safeUrl(lyrionApi.getArtworkUrl(currentTrack.id, 600)) : null);
+    : (currentTrack.id ? safeUrl(lyrionApi.getArtworkUrl(currentTrack.id, 600, currentTrack.coverid)) : null);
 
   const samplerate = currentTrack.samplerate;
   const samplesize = currentTrack.samplesize;
