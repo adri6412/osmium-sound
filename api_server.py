@@ -1456,6 +1456,39 @@ def _support_bundle_build():
     return buf.getvalue()
 
 # ──────────────────────────────────────────────────────────────────
+#  HAR network capture (Debug section, Settings.jsx) — captured by the
+#  Electron main process over Chrome DevTools Protocol (main/main.js's
+#  har-capture-start/stop IPC handlers, kiosk-only: only the on-device app
+#  can drive its own webContents.debugger). This file's job is just to list/
+#  serve/delete whatever .har files already landed on disk, for the web
+#  admin to download — same loopback-only trust model as /support_bundle.
+# ──────────────────────────────────────────────────────────────────
+# Must match main/main.js's HAR_CAPTURE_DIR exactly (app.getPath('logs') +
+# '/har-captures', which resolves to this on the appliance's --user-data-dir).
+HAR_CAPTURE_DIR = '/home/hifi/.config/hifi-media-player/logs/har-captures'
+# Matches exactly what main.js generates (`capture-` + toISOString() with
+# ':'/'.' replaced by '-', which leaves the trailing 'Z' + '.har') -- anchored
+# both ends, so this also doubles as the path-traversal guard for the
+# download/delete routes below (no '/', no '..').
+_HAR_FILENAME_RE = re.compile(r'^capture-[0-9TZ-]+\.har$')
+
+def _har_captures_list():
+    out = []
+    try:
+        fnames = os.listdir(HAR_CAPTURE_DIR)
+    except OSError:
+        return out
+    for fname in sorted(fnames, reverse=True):
+        if not _HAR_FILENAME_RE.match(fname):
+            continue
+        try:
+            st = os.stat(os.path.join(HAR_CAPTURE_DIR, fname))
+        except OSError:
+            continue
+        out.append({'name': fname, 'size': st.st_size, 'mtime': int(st.st_mtime)})
+    return out
+
+# ──────────────────────────────────────────────────────────────────
 #  Tailscale — join the OWNER's OWN existing tailnet (their own Tailscale
 #  account), so the appliance and all of its ports (web UI, Lyrion, SMB,
 #  etc.) become reachable from anywhere that tailnet reaches — e.g. to get
@@ -4524,6 +4557,40 @@ def api_support_bundle():
     resp.headers['Content-Disposition'] = \
         f'attachment; filename="hifi-support-{socket.gethostname()}-{stamp}.zip"'
     return resp
+
+@app.route('/har_captures', methods=['GET'])
+def api_har_captures():
+    return jsonify({'captures': _har_captures_list()})
+
+@app.route('/har_captures/<filename>', methods=['GET'])
+def api_har_capture_download(filename):
+    if not _HAR_FILENAME_RE.match(filename or ''):
+        return jsonify({'error': 'invalid filename'}), 400
+    fpath = os.path.join(HAR_CAPTURE_DIR, filename)
+    if not os.path.isfile(fpath):
+        return jsonify({'error': 'not found'}), 404
+    try:
+        with open(fpath, 'rb') as f:
+            data = f.read()
+    except Exception:
+        log.exception("har capture download failed for %s", filename)
+        return jsonify({'error': 'read failed'}), 500
+    resp = Response(data, mimetype='application/json')
+    resp.headers['Content-Disposition'] = f'attachment; filename="{filename}"'
+    return resp
+
+@app.route('/har_captures/<filename>', methods=['DELETE'])
+def api_har_capture_delete(filename):
+    if not _HAR_FILENAME_RE.match(filename or ''):
+        return jsonify({'success': False, 'error': 'invalid filename'}), 400
+    try:
+        os.remove(os.path.join(HAR_CAPTURE_DIR, filename))
+    except FileNotFoundError:
+        pass
+    except Exception:
+        log.exception("har capture delete failed for %s", filename)
+        return jsonify({'success': False}), 500
+    return jsonify({'success': True})
 
 @app.route('/tailscale_status', methods=['GET'])
 def api_tailscale_status():

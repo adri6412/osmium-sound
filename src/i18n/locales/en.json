@@ -316,7 +316,8 @@
       "systemInfo": "System Information",
       "updates": "Updates",
       "systemControls": "System Controls",
-      "language": "Language"
+      "language": "Language",
+      "debug": "Debug"
     },
     "language": {
       "help": "Choose the interface language."
@@ -519,6 +520,16 @@
       "confirmHeadless": "Turn off screen",
       "cancel": "Cancel",
       "failed": "Could not change the display mode."
+    },
+    "debug": {
+      "help": "Record the app's network traffic (a HAR file) to help diagnose a connection problem. Start capturing, reproduce the issue, then stop and save — download the file from the web admin's Debug section.",
+      "start": "Start capture",
+      "stop": "Stop & save",
+      "recording": "Recording network traffic…",
+      "unavailable": "Not available in this build.",
+      "failed": "HAR capture failed.",
+      "empty": "Capture stopped — no network requests were recorded.",
+      "saved": "Saved {filename} ({count} requests) — download it from the web admin's Debug section."
     },
     "playerEnabled": {
       "help": "Turn the player itself off for a server-only unit — Lyrion Music Server and everything else keeps running, this device just never plays audio locally. Useful for a box in a closet driving other players elsewhere.",

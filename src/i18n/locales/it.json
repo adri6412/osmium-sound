@@ -316,7 +316,8 @@
       "systemInfo": "Informazioni Sistema",
       "updates": "Aggiornamenti",
       "systemControls": "Controlli Sistema",
-      "language": "Lingua"
+      "language": "Lingua",
+      "debug": "Debug"
     },
     "language": {
       "help": "Scegli la lingua dell'interfaccia."
@@ -519,6 +520,16 @@
       "confirmHeadless": "Spegni lo schermo",
       "cancel": "Annulla",
       "failed": "Impossibile cambiare la modalità schermo."
+    },
+    "debug": {
+      "help": "Registra il traffico di rete dell'app (un file HAR) per aiutare a diagnosticare un problema di connessione. Avvia la registrazione, riproduci il problema, poi ferma e salva — scarica il file dalla sezione Debug del pannello web.",
+      "start": "Avvia registrazione",
+      "stop": "Ferma e salva",
+      "recording": "Registrazione traffico di rete in corso…",
+      "unavailable": "Non disponibile in questa build.",
+      "failed": "Cattura HAR fallita.",
+      "empty": "Registrazione fermata — nessuna richiesta di rete registrata.",
+      "saved": "Salvato {filename} ({count} richieste) — scaricalo dalla sezione Debug del pannello web."
     },
     "playerEnabled": {
       "help": "Spegni il player stesso per un'unità solo-server — Lyrion Music Server e tutto il resto continuano a funzionare, questo dispositivo semplicemente non riproduce più audio in locale. Utile per un dispositivo in un ripostiglio che pilota altri player altrove.",

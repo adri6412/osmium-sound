@@ -31,7 +31,8 @@ import {
   Speaker,
   CheckCircle2,
   AlertTriangle,
-  Lock
+  Lock,
+  Bug
 } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import { systemAPI, checkApiServer } from '../utils/api';
@@ -148,6 +149,12 @@ const Settings = ({ initialSection, onSectionConsumed } = {}) => {
   const [displayModeBusy, setDisplayModeBusy] = useState(false);
   const [displayModeMessage, setDisplayModeMessage] = useState('');
   const [displayModeConfirm, setDisplayModeConfirm] = useState(false); // headless confirm step
+
+  // HAR network capture (Debug section) — runs via Electron IPC/CDP, not the
+  // Flask API, so there's no systemAPI call here; see main/main.js.
+  const [harRunning, setHarRunning] = useState(false);
+  const [harBusy, setHarBusy] = useState(false);
+  const [harMessage, setHarMessage] = useState('');
 
   // Player enabled/disabled (squeezelite) — orthogonal to display mode: does
   // this device play audio at all, for "server only" units.
@@ -375,6 +382,7 @@ const Settings = ({ initialSection, onSectionConsumed } = {}) => {
     loadShellAccount();
     loadPointerStatus();
     loadDisplayMode();
+    loadHarStatus();
     loadPlayerEnabled();
     loadUiResolution();
     loadTimezone();
@@ -759,6 +767,38 @@ const Settings = ({ initialSection, onSectionConsumed } = {}) => {
       // more to do here — the X session is about to end.
     } else {
       setDisplayModeMessage(res.data?.message || res.message || t('settings.displayMode.failed'));
+    }
+  };
+
+  // ── HAR network capture (Debug section) ──────────────────────────
+  const loadHarStatus = async () => {
+    const res = await window.electronAPI?.getHarCaptureStatus?.();
+    if (res) setHarRunning(!!res.running);
+  };
+
+  const toggleHarCapture = async () => {
+    if (harBusy || !window.electronAPI?.startHarCapture) return;
+    setHarBusy(true);
+    setHarMessage('');
+    if (harRunning) {
+      const res = await window.electronAPI.stopHarCapture();
+      setHarBusy(false);
+      setHarRunning(false);
+      if (!res?.success) {
+        setHarMessage(res?.message || t('settings.debug.failed'));
+      } else if (res.empty) {
+        setHarMessage(t('settings.debug.empty'));
+      } else {
+        setHarMessage(t('settings.debug.saved', { filename: res.filename, count: res.count }));
+      }
+    } else {
+      const res = await window.electronAPI.startHarCapture();
+      setHarBusy(false);
+      if (res?.success) {
+        setHarRunning(true);
+      } else {
+        setHarMessage(res?.message || t('settings.debug.failed'));
+      }
     }
   };
 
@@ -1867,6 +1907,11 @@ const Settings = ({ initialSection, onSectionConsumed } = {}) => {
       title: t('settings.sections.systemControls'),
       icon: Power,
       content: 'custom-system-controls'
+    },
+    {
+      title: t('settings.sections.debug'),
+      icon: Bug,
+      content: 'custom-debug'
     }
   ].filter((s) =>
     // Music Sources only matters for a locally-served library — when this
@@ -3715,6 +3760,49 @@ const Settings = ({ initialSection, onSectionConsumed } = {}) => {
                         <span>{t('settings.factory.button')}</span>
                       </motion.button>
                     </div>
+                  </div>
+                )}
+
+                {/* Custom Debug Section (HAR network capture) */}
+                {section.content === 'custom-debug' && (
+                  <div className="space-y-4">
+                    <p className="text-sm text-hifi-silver">{t('settings.debug.help')}</p>
+
+                    <button
+                      onClick={toggleHarCapture}
+                      disabled={harBusy || !window.electronAPI?.startHarCapture}
+                      className={`w-full flex items-center justify-center space-x-2 py-4 rounded-lg font-semibold transition-colors ${
+                        harRunning
+                          ? 'bg-red-600 hover:bg-red-700 text-white'
+                          : 'bg-hifi-gold hover:brightness-110 text-black'
+                      } disabled:opacity-60`}
+                    >
+                      {harBusy && <Loader2 size={18} className="animate-spin" />}
+                      <Bug size={20} />
+                      <span>{harRunning ? t('settings.debug.stop') : t('settings.debug.start')}</span>
+                    </button>
+
+                    {harRunning && (
+                      <div className="rounded-lg p-3 text-center text-sm bg-hifi-dark text-hifi-silver">
+                        {t('settings.debug.recording')}
+                      </div>
+                    )}
+
+                    {!window.electronAPI?.startHarCapture && (
+                      <div className="rounded-lg p-3 text-center text-sm bg-hifi-dark text-hifi-silver">
+                        {t('settings.debug.unavailable')}
+                      </div>
+                    )}
+
+                    {harMessage && (
+                      <div className={`rounded-lg p-3 text-center text-sm ${
+                        isErrorMsg(harMessage)
+                          ? 'bg-red-900/20 text-red-300 border border-red-500/30'
+                          : 'bg-hifi-dark text-hifi-silver'
+                      }`}>
+                        {harMessage}
+                      </div>
+                    )}
                   </div>
                 )}
 

@@ -152,6 +152,10 @@
       "system": {
         "label": "Sistema",
         "desc": "Riavvio, spegnimento, ripristino di fabbrica"
+      },
+      "debug": {
+        "label": "Debug",
+        "desc": "Scarica le catture di rete HAR registrate sul kiosk"
       }
     },
     "network": {
@@ -481,6 +485,13 @@
       "factoryConfirm": "Cancella TUTTE le impostazioni e questo account, poi riavvia nel setup. Continuare?",
       "factoryStarted": "Ripristino di fabbrica avviato — il dispositivo si riavvierà",
       "factoryFailed": "Ripristino fallito"
+    },
+    "debug": {
+      "hint": "Le catture di rete HAR si registrano sul kiosk stesso (Impostazioni → Debug), non qui — questa pagina mostra solo quelle già salvate.",
+      "none": "Nessuna cattura salvata.",
+      "downloadFailed": "Download fallito",
+      "deleteConfirm": "Eliminare questa cattura?",
+      "deleteFailed": "Eliminazione fallita"
     }
   }
 }

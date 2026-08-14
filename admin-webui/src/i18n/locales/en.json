@@ -152,6 +152,10 @@
       "system": {
         "label": "System",
         "desc": "Reboot, shutdown, factory reset"
+      },
+      "debug": {
+        "label": "Debug",
+        "desc": "Download HAR network captures recorded on the kiosk"
       }
     },
     "network": {
@@ -481,6 +485,13 @@
       "factoryConfirm": "This erases ALL settings and this account, then restarts into setup. Continue?",
       "factoryStarted": "Factory reset started — the device will restart",
       "factoryFailed": "Reset failed"
+    },
+    "debug": {
+      "hint": "HAR network captures are recorded on the kiosk itself (Settings → Debug), not here — this just lists what's already been saved.",
+      "none": "No captures saved yet.",
+      "downloadFailed": "Download failed",
+      "deleteConfirm": "Delete this capture?",
+      "deleteFailed": "Delete failed"
     }
   }
 }

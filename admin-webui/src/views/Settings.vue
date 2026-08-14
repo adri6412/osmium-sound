@@ -34,6 +34,7 @@ const sections = computed(() => [
   { key: 'backup',    label: t('settings.sections.backup.label'),    desc: t('settings.sections.backup.desc') },
   { key: 'language',  label: t('settings.sections.language.label'),  desc: t('settings.sections.language.desc') },
   { key: 'system',    label: t('settings.sections.system.label'),    desc: t('settings.sections.system.desc') },
+  { key: 'debug',     label: t('settings.sections.debug.label'),     desc: t('settings.sections.debug.desc') },
 ]);
 // 'multiroom' was this section's key before it became "Lyrion Music Server";
 // keep old bookmarks and the kiosk's deep links working. 'dsp' is held back
@@ -79,6 +80,51 @@ async function downloadSupportBundle() {
     say(t('settings.system.supportBundleFailed') || 'Download support bundle fallito', true);
     console.error('support bundle download failed', err);
   }
+}
+
+// ── HAR network captures (Debug section) ────────────────────────────
+// Recording only happens on the kiosk itself (Settings.jsx → Electron's
+// webContents.debugger, see main/main.js) — the web admin can only list,
+// download and delete whatever .har files have already landed on disk.
+const harCaptures = ref([]);
+const harBusy = ref(false);
+
+function fmtHarSize(n) {
+  if (!n) return '0 kB';
+  return n >= 1048576 ? (n / 1048576).toFixed(1) + ' MB' : Math.max(1, Math.round(n / 1024)) + ' kB';
+}
+function fmtHarStamp(mtime) {
+  return mtime ? new Date(mtime * 1000).toLocaleString() : '';
+}
+
+async function loadHarCaptures() {
+  const r = await api.sys('har_captures');
+  if (r.ok) harCaptures.value = r.data.captures || [];
+}
+
+async function downloadHarCapture(name) {
+  try {
+    const resp = await fetch('/api/system/har_captures/' + encodeURIComponent(name), { credentials: 'same-origin' });
+    if (!resp.ok) throw new Error(await resp.text() || resp.statusText);
+    const blob = await resp.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = name;
+    document.body.appendChild(a); a.click(); a.remove();
+    URL.revokeObjectURL(url);
+  } catch (e) {
+    say(t('settings.debug.downloadFailed'), true);
+    console.error('har capture download failed', e);
+  }
+}
+
+async function deleteHarCapture(name) {
+  if (!confirm(t('settings.debug.deleteConfirm'))) return;
+  harBusy.value = true;
+  const r = await api.del('/api/system/har_captures/' + encodeURIComponent(name));
+  harBusy.value = false;
+  if (!r.ok || r.data.success === false) say(bodyMsg(r, t('settings.debug.deleteFailed')), true);
+  loadHarCaptures();
 }
 
 // ── network ──────────────────────────────────────────────────────
@@ -813,7 +859,7 @@ async function saveBackupScheduled(v) {
 
 onMounted(async () => {
   loadNet(); loadAudio(); loadDsp(); loadFir(); loadToggles(); loadShell(); loadLms(); loadLyrion();
-  loadMode(); loadPlayerEnabled(); loadUiRes(); loadTimezone(); loadVuMeter(); loadAutoExpand(); loadChannel(); checkAll(); resumePlanIfRunning(); loadBackups(); loadTailscale();
+  loadMode(); loadPlayerEnabled(); loadUiRes(); loadTimezone(); loadVuMeter(); loadAutoExpand(); loadChannel(); checkAll(); resumePlanIfRunning(); loadBackups(); loadTailscale(); loadHarCaptures();
   timezonePoll = setInterval(pollTimezone, 10000);
   // Tell the global UpdateProgressOverlay (mounted in App.vue) that this page
   // owns the OTA modal while it's open, so the two never render on top of
@@ -1233,6 +1279,22 @@ onUnmounted(() => {
         <p class="sub">{{ t('settings.system.factoryHint') }}</p>
         <label>{{ t('settings.system.adminPassword') }}</label><input v-model="resetPw" type="password" />
         <div style="margin-top: 12px;"><button class="danger" @click="factoryReset">{{ t('settings.system.factoryReset') }}</button></div>
+      </div>
+    </div>
+
+    <!-- Debug: HAR network captures recorded on the kiosk -->
+    <div class="card" v-if="open === 'debug'">
+      <p class="sub">{{ t('settings.debug.hint') }}</p>
+      <p v-if="!harCaptures.length" class="sub">{{ t('settings.debug.none') }}</p>
+      <div v-for="c in harCaptures" :key="c.name" class="net between" style="align-items: flex-start;">
+        <div>
+          <div>{{ fmtHarStamp(c.mtime) }}</div>
+          <div class="muted">{{ c.name }} · {{ fmtHarSize(c.size) }}</div>
+        </div>
+        <div class="row">
+          <button class="secondary fit" :disabled="harBusy" @click="downloadHarCapture(c.name)">⬇</button>
+          <button class="danger fit" :disabled="harBusy" @click="deleteHarCapture(c.name)">✕</button>
+        </div>
       </div>
     </div>
   </template>

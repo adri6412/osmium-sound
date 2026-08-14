@@ -3,7 +3,7 @@ import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import { exec } from 'child_process';
 import { promisify } from 'util';
-import { appendFileSync, readFileSync } from 'fs';
+import { appendFileSync, readFileSync, mkdirSync, writeFileSync } from 'fs';
 
 const execAsync = promisify(exec);
 
@@ -62,6 +62,12 @@ function logToFile(prefix, message) {
     );
   } catch (_) {}
 }
+
+// Where Settings.jsx's Debug section saves HAR captures (see the
+// har-capture-* IPC handlers near the bottom of this file). api_server.py
+// serves this exact same path to the web admin for download — the two must
+// stay in sync (grep HAR_CAPTURE_DIR there if this ever moves).
+const HAR_CAPTURE_DIR = join(app.getPath('logs'), 'har-captures');
 
 // Renderer-crash recovery: how many times we've auto-reloaded, and when we last
 // did. After long uptime the Chromium renderer/GPU process can die (OOM, GPU
@@ -349,3 +355,170 @@ ipcMain.handle('hide-global-keyboard', async () => {
   }
   return { success: true, message: 'Tastiera virtuale chiusa' };
 });
+
+/**
+ * HAR (network traffic) capture, for Settings.jsx's Debug section. The kiosk
+ * has no keyboard to drive DevTools' own Network panel, so this drives the
+ * same underlying Chrome DevTools Protocol from the main process instead:
+ * attach webContents.debugger, record Network.* events between start/stop,
+ * and write a standard .har file the user later downloads from the web
+ * admin (api_server.py serves HAR_CAPTURE_DIR — see the constant above).
+ *
+ * Deliberately headers/status/timing only, no response bodies: fetching
+ * Network.getResponseBody for every request would mean an extra CDP
+ * round-trip per request and could balloon the file with image/audio
+ * payloads, on a device that's already tight on CPU. That's still enough to
+ * diagnose the failures this is meant for (wrong URL, CORS, 4xx/5xx, slow
+ * requests) without the overhead.
+ *
+ * Mutually exclusive with openDevTools() (shouldOpenDevTools()/NODE_ENV=
+ * development, above) — Chromium only allows one CDP client per target, so
+ * dbg.attach() throws if real DevTools is already open on this window; the
+ * error is surfaced to the caller rather than crashing anything.
+ */
+let harCapture = null; // { entries: Map<requestId, entry>, startedAt } | null
+
+function harDebuggerListener(_event, method, params) {
+  if (!harCapture) return;
+  const entries = harCapture.entries;
+  switch (method) {
+    case 'Network.requestWillBeSent': {
+      const { requestId, request, timestamp, wallTime, type } = params;
+      entries.set(requestId, {
+        _resourceType: type || '',
+        _startTimestamp: timestamp,
+        _endTimestamp: null,
+        _failed: null,
+        startedDateTime: new Date(wallTime * 1000).toISOString(),
+        request: {
+          method: request.method,
+          url: request.url,
+          httpVersion: 'HTTP/1.1',
+          headers: Object.entries(request.headers || {}).map(([name, value]) => ({ name, value: String(value) })),
+          queryString: [],
+          cookies: [],
+          headersSize: -1,
+          bodySize: request.postData ? Buffer.byteLength(request.postData) : 0,
+        },
+        response: null,
+      });
+      break;
+    }
+    case 'Network.responseReceived': {
+      const e = entries.get(params.requestId);
+      if (!e) return;
+      const { response } = params;
+      e.response = {
+        status: response.status,
+        statusText: response.statusText || '',
+        httpVersion: response.protocol || 'HTTP/1.1',
+        headers: Object.entries(response.headers || {}).map(([name, value]) => ({ name, value: String(value) })),
+        cookies: [],
+        content: { size: 0, mimeType: response.mimeType || '' },
+        redirectURL: '',
+        headersSize: -1,
+        bodySize: -1,
+      };
+      break;
+    }
+    case 'Network.loadingFinished': {
+      const e = entries.get(params.requestId);
+      if (!e) return;
+      if (e.response) {
+        e.response.content.size = params.encodedDataLength || 0;
+        e.response.bodySize = params.encodedDataLength || 0;
+      }
+      e._endTimestamp = params.timestamp;
+      break;
+    }
+    case 'Network.loadingFailed': {
+      const e = entries.get(params.requestId);
+      if (!e) return;
+      e._failed = params.errorText || 'failed';
+      e._endTimestamp = params.timestamp;
+      break;
+    }
+    default:
+      break;
+  }
+}
+
+function buildHarLog(capture) {
+  const emptyResponse = (reason) => ({
+    status: 0, statusText: reason || '', httpVersion: '',
+    headers: [], cookies: [], content: { size: 0, mimeType: '' },
+    redirectURL: '', headersSize: -1, bodySize: -1,
+  });
+  const entries = [...capture.entries.values()].map((e) => ({
+    startedDateTime: e.startedDateTime,
+    time: e._endTimestamp != null ? Math.max(0, (e._endTimestamp - e._startTimestamp) * 1000) : 0,
+    request: e.request,
+    response: e.response || emptyResponse(e._failed || 'no response received'),
+    cache: {},
+    timings: { send: 0, wait: 0, receive: 0 },
+    _resourceType: e._resourceType,
+  }));
+  entries.sort((a, b) => a.startedDateTime.localeCompare(b.startedDateTime));
+  return {
+    log: {
+      version: '1.2',
+      creator: { name: 'HiFi Player Debug Capture', version: app.getVersion() },
+      pages: [],
+      entries,
+    },
+  };
+}
+
+ipcMain.handle('har-capture-start', async () => {
+  if (harCapture) return { success: false, message: 'Capture already running' };
+  if (!mainWindow || mainWindow.isDestroyed()) return { success: false, message: 'No window' };
+  const dbg = mainWindow.webContents.debugger;
+  try {
+    if (!dbg.isAttached()) dbg.attach('1.3');
+    await dbg.sendCommand('Network.enable');
+  } catch (err) {
+    return { success: false, message: err.message || String(err) };
+  }
+  harCapture = { entries: new Map(), startedAt: Date.now() };
+  dbg.on('message', harDebuggerListener);
+  dbg.once('detach', () => {
+    // Something else took the CDP session (or the window died) — don't leave
+    // the renderer thinking a capture is still running with no way to stop it.
+    harCapture = null;
+  });
+  return { success: true };
+});
+
+ipcMain.handle('har-capture-stop', async () => {
+  if (!harCapture) return { success: false, message: 'No capture running' };
+  const capture = harCapture;
+  harCapture = null;
+  try {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      const dbg = mainWindow.webContents.debugger;
+      dbg.removeListener('message', harDebuggerListener);
+      if (dbg.isAttached()) dbg.detach();
+    }
+  } catch (err) {
+    console.error('har-capture-stop: debugger detach failed:', err);
+  }
+
+  const har = buildHarLog(capture);
+  const count = har.log.entries.length;
+  if (count === 0) return { success: true, empty: true, count: 0 };
+
+  const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+  const filename = `capture-${stamp}.har`;
+  try {
+    mkdirSync(HAR_CAPTURE_DIR, { recursive: true });
+    writeFileSync(join(HAR_CAPTURE_DIR, filename), JSON.stringify(har));
+  } catch (err) {
+    return { success: false, message: err.message || String(err) };
+  }
+  return { success: true, filename, count };
+});
+
+ipcMain.handle('har-capture-status', () => ({
+  running: !!harCapture,
+  startedAt: harCapture ? harCapture.startedAt : null,
+}));

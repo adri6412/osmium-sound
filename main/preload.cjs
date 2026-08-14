@@ -22,5 +22,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
   },
   removeToggleSimpleKeyboard: (callback) => {
     ipcRenderer.removeListener('toggle-simple-keyboard', callback);
-  }
+  },
+
+  // Debug section (Settings.jsx) — HAR network capture via CDP, only the
+  // main process can drive webContents.debugger. The saved .har is
+  // downloaded from the web admin, not from here (see api_server.py).
+  startHarCapture: () => ipcRenderer.invoke('har-capture-start'),
+  stopHarCapture: () => ipcRenderer.invoke('har-capture-stop'),
+  getHarCaptureStatus: () => ipcRenderer.invoke('har-capture-status')
 });

@@ -1828,6 +1828,29 @@ def support_bundle_proxy():
     return out
 
 
+# ── HAR captures (Debug section) — list is plain JSON, download/delete are
+# per-file and need the raw forwarder (same reasoning as support_bundle
+# above: a .har download can't go through the JSON-wrapping generic proxy).
+@app.route('/api/system/har_captures', methods=['GET'])
+def har_captures_proxy():
+    denied = _require_session()
+    if denied:
+        return denied
+    return _forward_to_api('/har_captures')
+
+
+@app.route('/api/system/har_captures/<path:filename>', methods=['GET', 'DELETE'])
+def har_capture_proxy(filename):
+    denied = _require_session()
+    if denied:
+        return denied
+    out = _forward_to(API_BASE, '/har_captures/' + filename, timeout=120, service_label='sistema')
+    if request.method == 'GET':
+        out.headers['Cache-Control'] = 'no-store'
+        out.headers['X-Content-Type-Options'] = 'nosniff'
+    return out
+
+
 # ── companion pairing (mint via loopback :8080, session-gated) ───────
 @app.route('/api/system/pair_token', methods=['POST'])
 def pair_token():
