@@ -111,6 +111,8 @@ check "happy path: ui applied last" "ui https://e/ui.tgz cccc v2" "$(sed -n 3p "
 check "happy path: plan finished" "finished" "$(overall)"
 check "happy path: every step done" "done done done" \
       "$(step_state system) $(step_state os) $(step_state ui)"
+check "happy path: mandatory reboot fired" "yes" \
+      "$([ -f "$ROOT/update-plan.would-reboot" ] && echo yes || echo no)"
 
 # ── 2. the field bug: an OS step that reboots must not lose the UI step ──
 # The OS payload reboots, so the runner dies mid-plan and /run is wiped. The
@@ -133,6 +135,8 @@ check "reboot: os resolved as done after resume" "done" "$(step_state os)"
 check "reboot: ui applied after the reboot" "ui https://e/ui.tgz cccc v2" \
       "$(grep '^ui ' "$ROOT/calls")"
 check "reboot: plan finished" "finished" "$(overall)"
+check "reboot: mandatory reboot fires once resume completes it" "yes" \
+      "$([ -f "$ROOT/update-plan.would-reboot" ] && echo yes || echo no)"
 
 # ── 3. a failing step stops the plan (and doesn't apply the rest) ─────
 setup
@@ -147,6 +151,8 @@ check "failure: system marked error" "error" "$(step_state system)"
 check "failure: later steps untouched" "pending pending" "$(step_state os) $(step_state ui)"
 check "failure: only the failing step ran" "system https://e/sys.tgz aaaa v2" "$(calls)"
 check "failure: plan reports error" "error" "$(overall)"
+check "failure: does not reboot" "no" \
+      "$([ -f "$ROOT/update-plan.would-reboot" ] && echo yes || echo no)"
 
 # ── 4. a step that exits 0 without landing its version is a failure ───
 # A truncated bundle, or an updater that dies after its own success message,
@@ -191,15 +197,22 @@ check "retry: gives up after the budget" "error" "$(step_state system)"
 check "retry: attempted exactly twice" "2" "$(grep -c '^system ' "$ROOT/calls")"
 
 # ── 6. an already-finished plan is a no-op (resume unit on every boot) ──
+# The `finished` line is already there, simulating the resume unit running
+# again on a LATER, unrelated boot (box manually rebooted before the
+# completed overlay was dismissed) — this must NOT reboot again, or every
+# such boot would trigger another one forever.
 setup
 stub system ok; stub os ok; stub ui ok
 write_plan <<EOF
 step system done 1 v2 https://e/sys.tgz aaaa -
 step ui done 1 v2 https://e/ui.tgz cccc -
+finished 1700000000 finished
 EOF
 run_runner || true
 check "no-op: nothing re-applied" "" "$(calls)"
 check "no-op: still finished" "finished" "$(overall)"
+check "no-op: does not reboot again" "no" \
+      "$([ -f "$ROOT/update-plan.would-reboot" ] && echo yes || echo no)"
 
 # ── 7. no plan at all → clean exit 0 (the common boot case) ──────────
 setup

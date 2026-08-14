@@ -49,6 +49,11 @@
 #   os second     — it may reboot, and the resume unit picks the plan back up;
 #   ui last       — it restarts lightdm, which tears down the kiosk.
 #
+# Once every step has landed, the box reboots unconditionally (exactly once —
+# guarded by whether this run is the one that first wrote the `finished` line,
+# see `already_finished` below), so the fleet never runs on a half-reloaded
+# process tree after an update.
+#
 # Usage (no arguments):
 #     hifi-update-runner.sh
 set -eu
@@ -124,6 +129,16 @@ cleanup() {
 trap cleanup EXIT INT TERM
 
 [ -f "$PLAN" ] || { log "no plan at $PLAN — nothing to do"; exit 0; }
+
+# Was this plan already fully finished before this invocation? Needed below to
+# fire the end-of-plan reboot exactly once — the resume unit runs on EVERY
+# boot, so if we rebooted whenever `next_step` finds nothing left to do, a
+# completed-but-not-yet-dismissed plan would reboot the box again on its very
+# next unrelated boot, and again after that: an infinite reboot loop. Only the
+# run that ADDS the `finished` line (real work just landed) should reboot;
+# a run that finds it already there is the no-op case and must stay quiet.
+already_finished=0
+grep -q '^finished ' "$PLAN" 2>/dev/null && already_finished=1
 
 # ── plan helpers ─────────────────────────────────────────────────────
 # Rewrite the plan atomically: temp sibling + mv, so a power cut can never
@@ -233,5 +248,27 @@ done
 
 plan_finish "$overall"
 log "plan $overall"
+
+# Mandatory reboot once every step in the plan has actually landed (not on a
+# no-op re-run of an already-finished plan — see already_finished above).
+# Previously only the OS step could reboot, and only when one of its own
+# migrations asked for it — so a System+UI-only update (or an OS update whose
+# payload didn't need a reboot) could leave stale code loaded in memory
+# (hifi-api, lightdm/Electron, etc.) until the box was next power-cycled by
+# hand. A guaranteed reboot at the end removes that class of "the update
+# applied but didn't fully take" reports.
+if [ "$overall" = finished ] && [ "$already_finished" -eq 0 ]; then
+    if [ -n "${HIFI_UPDATE_TEST_ROOT:-}" ]; then
+        # Test hook: record the intent instead of touching the real machine.
+        : > "${PLAN}.would-reboot"
+    else
+        log "plan complete — rebooting"
+        # hifi-quiesce-audio-shutdown.service (Before=/Conflicts=shutdown.target,
+        # unconditional for every halt/reboot however triggered) already stops
+        # any active DMA audio path first, so no extra mitigation is needed here.
+        systemctl reboot || log "systemctl reboot failed"
+    fi
+fi
+
 [ "$overall" = finished ] || exit 1
 exit 0
