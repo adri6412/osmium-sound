@@ -434,7 +434,7 @@ const LyrionServer = () => {
     connectToServer, handleAction,
     currentTrack, title, artist, album, isPlaying, volume, repeatMode, shuffleMode,
     willSleepIn, duration, time, progress, artworkUrl, artworkUrlLg, formatLabel,
-    playbackMode, qualityLed,
+    playbackMode,
     isRemoteTrack, artworkIdentityKey,
     setVolume: setPlayerVolume, toggleMute, seek, cycleShuffle, cycleRepeat,
     setSleepTimer: applySleepTimer,
@@ -1406,7 +1406,7 @@ const LyrionServer = () => {
                         <ArtworkImage key={artworkIdentityKey} src={artworkUrlLg} alt="Album Art" className="w-full h-full object-cover" FallbackIcon={Music} />
                       )}
                     </div>
-                    <LedBar mode={playbackMode} formatLabel={formatLabel} qualityLed={qualityLed} className="h-16" />
+                    <LedBar mode={playbackMode} formatLabel={formatLabel} className="w-full max-w-[320px]" />
                   </div>
                 </motion.div>
 
