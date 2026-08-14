@@ -1406,10 +1406,12 @@ const LyrionServer = () => {
                         <ArtworkImage key={artworkIdentityKey} src={artworkUrlLg} alt="Album Art" className="w-full h-full object-cover" FallbackIcon={Music} />
                       )}
                     </div>
-                    {/* 332 wide, centered, nudged 1px left: (332-320)/2=6px overhang
-                        each side by default; the 1px shift makes it 7px left / 5px
-                        right — 2px more on the left specifically, as asked. */}
-                    <LedBar mode={playbackMode} quality={formatQuality} className="w-full max-w-[332px]" style={{ transform: 'translateX(-1px)' }} />
+                    {/* Sized above the 320px album cover on purpose — a bit
+                        wider/taller than an exact match reads more legibly
+                        for the Hi-Res/PCM/DSD/BitPerfect/ReplayGain labels
+                        baked into the artwork. Aspect ratio (set in LedBar
+                        itself) keeps the enlargement uniform. */}
+                    <LedBar mode={playbackMode} quality={formatQuality} className="w-full max-w-[368px]" />
                   </div>
                 </motion.div>
 

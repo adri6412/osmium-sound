@@ -41,7 +41,10 @@ const BRAND_BOX = { left: '80.38%', top: '40%', width: '12.82%', height: '28.57%
 // which only ever lit one of the two.
 const LedBar = ({ mode, quality, className = '', style }) => (
   <div className={`relative select-none overflow-hidden ${className}`}
-    style={{ aspectRatio: `${NATIVE_W} / ${NATIVE_H}`, borderRadius: `${BAR_RADIUS_PX}px`, ...style }}>
+    style={{
+      aspectRatio: `${NATIVE_W} / ${NATIVE_H}`, borderRadius: `${BAR_RADIUS_PX}px`,
+      containerType: 'inline-size', ...style,
+    }}>
     <img src={ledBarBase} alt="" draggable={false} className="block w-full h-full pointer-events-none" />
     <img src={ledBarHires} alt="Hi-Res" draggable={false}
       className="absolute inset-0 w-full h-full pointer-events-none transition-opacity duration-200"
@@ -59,8 +62,12 @@ const LedBar = ({ mode, quality, className = '', style }) => (
       className="absolute inset-0 w-full h-full pointer-events-none transition-opacity duration-200"
       style={{ opacity: mode === 'replaygain' ? 1 : 0 }} />
     <div className="absolute flex flex-col items-center justify-center leading-[1.05] pointer-events-none" style={BRAND_BOX}>
-      <span className="text-[7px] font-bold tracking-[0.1em] text-white/90">OSMIUM</span>
-      <span className="text-[7px] font-bold tracking-[0.1em] text-hifi-gold">SOUND</span>
+      {/* cqw, not a fixed px size: this is the one label that isn't baked
+          into the raster art, so it needs to scale with the bar itself
+          (container-type: inline-size set above) instead of staying a fixed
+          size while everything around it grows/shrinks. */}
+      <span className="font-bold tracking-[0.1em] text-white/90" style={{ fontSize: '2.1cqw' }}>OSMIUM</span>
+      <span className="font-bold tracking-[0.1em] text-hifi-gold" style={{ fontSize: '2.1cqw' }}>SOUND</span>
     </div>
   </div>
 );
