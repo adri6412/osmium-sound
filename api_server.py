@@ -385,7 +385,14 @@ def get_system_stats():
     (e.g. no GPU tool installed) must never take the whole tile down."""
     try:
         import psutil
-        cpu_pct = psutil.cpu_percent(interval=0.2)
+        # psutil.cpu_percent(percpu=False) is already the system-wide average
+        # across all cores (not a single core), matching `top`'s %Cpu(s) line.
+        # A 0.2s sample window was too short and jittery on a bursty system
+        # (Electron/vu_meter/Lyrion background load), making single reads
+        # swing widely and look like they disagreed with a manual `top`
+        # check -- 1s brings it in line with typical manual observation and
+        # the dashboard already polls this endpoint only every 5s.
+        cpu_pct = psutil.cpu_percent(interval=1.0)
         vm = psutil.virtual_memory()
         du = shutil.disk_usage('/')
         return {
