@@ -19,6 +19,19 @@ const TOTAL_W = CAP_W + FORMAT_W + BODY_W;
 const NATIVE_H = 175;
 const pct = (w) => `${(w / TOTAL_W) * 100}%`;
 
+// The album cover next to this bar is a square using Tailwind's rounded-2xl
+// (16px) — at its ~320px size, a 5%-of-edge corner. Reusing that same 16px
+// flat on the bar looked wrong even once the two matched exactly in overall
+// width: the bar's own rendered height is only ~width * (NATIVE_H/TOTAL_W)
+// (~65px for a 320px-wide bar), so a 16px radius there eats ~24% of that
+// edge — the corners visually dominate and the bar reads as shorter/more
+// pill-shaped than the cover despite the identical bounding-box width.
+// Scaling the radius down by that same NATIVE_H/TOTAL_W factor keeps both
+// corners at the same 5%-of-height proportion, so they actually match
+// instead of just sharing a number.
+const COVER_RADIUS_PX = 16;
+const BAR_RADIUS_PX = COVER_RADIUS_PX * (NATIVE_H / TOTAL_W);
+
 // Three-segment hardware-style status bar: Format/bitrate | BitPerfect |
 // ReplayGain. The BitPerfect/ReplayGain segments are baked art (from the
 // source PSD, DSP segment removed — DSP is an unreleased paid feature, kept
@@ -33,13 +46,13 @@ const pct = (w) => `${(w / TOTAL_W) * 100}%`;
 // varies vertically, so tiling it horizontally is seamless) — so the seam
 // against the baked segments is invisible.
 //
-// Wrapped in its own rounded-2xl + overflow-hidden shell — same corner
-// radius as the album artwork card next to it — instead of trusting the
-// baked cap art's own curvature to read as "rounded" at every render size;
-// this guarantees clean corners on both ends regardless.
-const LedBar = ({ mode, formatLabel, className = '' }) => (
-  <div className={`flex items-stretch select-none rounded-2xl overflow-hidden ${className}`}
-    style={{ aspectRatio: `${TOTAL_W} / ${NATIVE_H}` }}>
+// Wrapped in its own rounded + overflow-hidden shell (radius computed above
+// to match the album artwork card's corners proportionally) instead of
+// trusting the baked cap art's own curvature to read as "rounded" at every
+// render size; this guarantees clean corners on both ends regardless.
+const LedBar = ({ mode, formatLabel, className = '', style }) => (
+  <div className={`flex items-stretch select-none overflow-hidden ${className}`}
+    style={{ aspectRatio: `${TOTAL_W} / ${NATIVE_H}`, borderRadius: `${BAR_RADIUS_PX}px`, ...style }}>
     <div className="shrink-0 h-full" style={{ width: pct(CAP_W), backgroundImage: `url(${ledBarLeftCap})`, backgroundSize: '100% 100%' }} />
     <div className="flex items-center shrink-0 h-full px-2 overflow-hidden"
       style={{
