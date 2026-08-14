@@ -53,6 +53,10 @@ export function useLyrionPlayer() {
   const [playerStatus, setPlayerStatus] = useState(null);
   const [error, setError] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
+  // This device's own squeezelite player name (see connectToServer), kept in
+  // a ref so fetchStatus can cheaply cross-check every poll against it — see
+  // fetchStatus's player_name guard below.
+  const localPlayerNameRef = useRef(null);
 
   // Queue state
   const [queue, setQueue] = useState([]);
@@ -131,14 +135,28 @@ export function useLyrionPlayer() {
       if (avail.length > 0) {
         // `players_loop` isn't necessarily "this appliance first": the companion
         // app auto-launches Squeezelite/SqueezePlayer on the phone as a second
-        // LMS player (radios/apps browsing is capability-filtered per-player, so
-        // landing on that one leaves tabs like Radio empty). Prefer the player
-        // matching this device's own squeezelite name (-n, from the Flask API)
-        // over just taking the first entry in the list.
+        // LMS player, and on a multiroom LMS server there can be several more
+        // (other appliances, lirplay/AirPlay receivers, ...) — radios/apps
+        // browsing is capability-filtered per-player, so landing on the wrong
+        // one leaves tabs like Radio empty, and now-playing/cover art follows
+        // whatever THAT player happens to be doing. Prefer the player matching
+        // this device's own squeezelite name (-n, from the Flask API) over
+        // just taking the first entry in the list.
         const nameRes = await systemAPI.getPlayerName().catch(() => null);
         const localName = nameRes?.success ? nameRes.data?.name : null;
+        localPlayerNameRef.current = localName;
         const local = localName && avail.find(x => x.name === localName);
-        setActivePlayer(p => (p && avail.find(x => x.playerid === p.playerid)) ? p : (local || avail[0]));
+        // A fresh local-name match always wins over whatever was already
+        // selected: if an earlier resolution locked onto the wrong player
+        // (e.g. this device's own squeezelite hadn't registered with LMS yet
+        // the first time this ran, while other players had), that lock would
+        // otherwise persist forever — connectToServer() only re-runs on a
+        // poll failure or a multiroom URL change, and a wrongly-selected but
+        // perfectly healthy player never fails a poll. Only fall back to
+        // keeping the previous selection (or avail[0]) when no local match is
+        // resolvable at all, so a transient Flask API hiccup doesn't cause
+        // needless flapping between players.
+        setActivePlayer(p => local || ((p && avail.find(x => x.playerid === p.playerid)) ? p : avail[0]));
       }
       else { setActivePlayer(null); setPlayerStatus(null); }
     } catch (_) {
@@ -197,6 +215,19 @@ export function useLyrionPlayer() {
     try {
       const st = await lyrionApi.getPlayerStatus(activePlayer.playerid);
       if (st && typeof st === 'object' && 'mode' in st) {
+        // Defense against a stale activePlayer lock (see connectToServer's
+        // local-name-match comment): LMS's status response for this exact
+        // playerid still carries its own player_name, so if it no longer
+        // matches this device's actual local player name, activePlayer has
+        // drifted onto someone else's player (renamed locally, or a stale
+        // lock from before the local player registered with LMS). Don't
+        // apply that status/artwork — force a fresh resolution instead of
+        // quietly showing another player's now-playing indefinitely.
+        if (localPlayerNameRef.current && st.player_name && st.player_name !== localPlayerNameRef.current) {
+          statusFailCountRef.current = 0;
+          connectToServer();
+          return;
+        }
         statusFailCountRef.current = 0;
         // LMS reports volume under the key "mixer volume" (space, like
         // "playlist shuffle"/"playlist repeat" below) — there is no
