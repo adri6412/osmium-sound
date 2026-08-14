@@ -290,8 +290,23 @@ def _system_disk_paths():
 
 def _lsblk_full():
     return _run_json(["lsblk", "-J", "-b", "-o",
-                        "PATH,NAME,TYPE,SIZE,MODEL,SERIAL,TRAN,ROTA,RM,FSTYPE,LABEL,UUID,PARTUUID,PKNAME,MOUNTPOINT"],
+                        "PATH,NAME,TYPE,SIZE,MODEL,SERIAL,TRAN,ROTA,RM,FSTYPE,LABEL,UUID,PARTUUID,"
+                        "PKNAME,MOUNTPOINT,PARTTYPENAME"],
                        timeout=10)
+
+
+def _is_efi_partition(part):
+    """True for an EFI System Partition, on GPT or MBR alike. Identified by
+    lsblk's own PARTTYPENAME (util-linux resolves both the GPT ESP GUID
+    c12a7328-f81f-11d2-ba4b-00a0c93ec93b and the MBR 0xEF type code to a name
+    containing "EFI"), not by filesystem label -- a user's own USB stick can
+    be vfat-formatted and labeled anything, but its partition *type* is set by
+    whatever tool made it bootable and isn't something a music folder would
+    ever legitimately have. Seen in the field: a bootable installer USB stick
+    plugged in for something unrelated got its ESP auto-adopted as a music
+    source alongside the real data partition, cluttering "Music sources" with
+    a permanently-empty/junk entry."""
+    return "efi" in (part.get("parttypename") or "").lower()
 
 
 def _internal_disks():
@@ -348,6 +363,8 @@ def _internal_disks():
         source_id = None
         for part in dev.get("children") or []:
             if part.get("type") != "part":
+                continue
+            if _is_efi_partition(part):
                 continue
             p = {
                 "path": part.get("path"),
@@ -727,9 +744,13 @@ def _usb_raw_partitions():
     ignored filtering → [{path,name,fstype,label,size,uuid,partuuid}].
     `fstype` is empty/missing for a blank/unformatted device. Handles
     partitioned (sdX1) and whole-disk filesystems; skips optical drives
-    (type 'rom') and any non-USB transport (internal SATA/eMMC)."""
+    (type 'rom'), any non-USB transport (internal SATA/eMMC), and EFI System
+    Partitions (see _is_efi_partition) -- a bootable installer stick has one
+    alongside its real data partition, and it's never a legitimate music
+    source."""
     try:
-        r = _run(["lsblk", "-J", "-o", "PATH,NAME,TYPE,FSTYPE,LABEL,SIZE,TRAN,UUID,PARTUUID"], timeout=10)
+        r = _run(["lsblk", "-J", "-o",
+                  "PATH,NAME,TYPE,FSTYPE,LABEL,SIZE,TRAN,UUID,PARTUUID,PARTTYPENAME"], timeout=10)
         data = json.loads(r.stdout or "{}")
     except Exception:
         return []
@@ -739,7 +760,7 @@ def _usb_raw_partitions():
             continue
         kids = dev.get("children") or []
         if kids:
-            out.extend(p for p in kids if p.get("type") == "part")
+            out.extend(p for p in kids if p.get("type") == "part" and not _is_efi_partition(p))
         else:
             out.append(dev)
     return out
@@ -770,6 +791,36 @@ def _usb_key(p):
 # cleared once the device is no longer plugged in.
 _usb_fail_backoff = {}
 _USB_RETRY_BACKOFF = 15
+
+
+def _remount_reconnected_usb(raw_keys):
+    """Re-mount an already-adopted USB source whose device has just
+    reappeared (unplugged, then plugged back in). usb_sync()'s adoption loop
+    below never touches it: _usb_partitions() explicitly excludes anything
+    already in the adopted set, so without this a reconnected drive stayed
+    "not mounted" — requiring the user to open Settings and press "Apply &
+    rescan library" (which doesn't even mount anything itself, it only checks
+    and refuses if a disk isn't mounted) — until the whole box was next
+    rebooted (remount_all_retry only ever runs once, at startup). Mirrors
+    _adopt_usb_partition()'s post-mount step (live mediadir add, no Lyrion
+    restart) but skips the state/Samba-share writes, which are already in
+    place for a source that's merely reconnecting, not being adopted fresh."""
+    for src in load_state().get("sources", []):
+        if src.get("type") != "usb":
+            continue
+        key = (src.get("partuuid") or src.get("fsuuid") or "").lower()
+        mountpoint = src.get("mountpoint")
+        if not key or key not in raw_keys or not mountpoint or os.path.ismount(mountpoint):
+            continue
+        ok, msg = mount_usb_adopted(src)
+        if not ok:
+            print(f"[sources] reconnected USB remount failed for {src.get('name')}: {msg}")
+            continue
+        print(f"[sources] reconnected USB source remounted: {src.get('name')}")
+        try:
+            _lyrion_add_mediadir_live(mountpoint)
+        except Exception as e:
+            print(f"[sources] live mediadir add/rescan failed for {mountpoint}: {e}")
 
 
 def usb_sync():
@@ -809,6 +860,8 @@ def usb_sync():
     # that source, silently — no exception, no log — and every other part of
     # the service that needs _lock (adding/removing sources, etc.) froze
     # right along with it until the process was restarted.
+    _remount_reconnected_usb(raw_keys)
+
     needs_attention = []
     for p in _usb_partitions():
         if not p.get("fstype"):
