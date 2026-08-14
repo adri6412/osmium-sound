@@ -433,7 +433,7 @@ const LyrionServer = () => {
     serverUrl, isConnected, activePlayer, error, isLoading,
     connectToServer, handleAction,
     currentTrack, title, artist, album, isPlaying, volume, repeatMode, shuffleMode,
-    willSleepIn, duration, time, progress, artworkUrl, artworkUrlLg, formatLabel,
+    willSleepIn, duration, time, progress, artworkUrl, artworkUrlLg, formatLabel, formatQuality,
     playbackMode,
     isRemoteTrack, artworkIdentityKey,
     setVolume: setPlayerVolume, toggleMute, seek, cycleShuffle, cycleRepeat,
@@ -1409,7 +1409,7 @@ const LyrionServer = () => {
                     {/* 332 wide, centered, nudged 1px left: (332-320)/2=6px overhang
                         each side by default; the 1px shift makes it 7px left / 5px
                         right — 2px more on the left specifically, as asked. */}
-                    <LedBar mode={playbackMode} formatLabel={formatLabel} className="w-full max-w-[332px]" style={{ transform: 'translateX(-1px)' }} />
+                    <LedBar mode={playbackMode} quality={formatQuality} className="w-full max-w-[332px]" style={{ transform: 'translateX(-1px)' }} />
                   </div>
                 </motion.div>
 
@@ -1424,6 +1424,11 @@ const LyrionServer = () => {
                     </div>
                     <p className="text-lg text-hifi-gold truncate mt-0.5 font-medium">{artist}</p>
                     <p className="text-sm text-hifi-silver/70 truncate">{album}</p>
+                    {formatLabel && (
+                      <span className="inline-block mt-1.5 px-2 py-0.5 bg-white/5 text-[11px] text-hifi-silver/50 rounded border border-white/5 tracking-wide">
+                        {formatLabel}
+                      </span>
+                    )}
                   </div>
 
                   {/* Progress */}

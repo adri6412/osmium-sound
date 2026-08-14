@@ -628,6 +628,16 @@ export function useLyrionPlayer() {
   const formatLabel = codecType
     ? `${String(codecType).toUpperCase()}${samplesize ? ` · ${samplesize}bit` : ''}${samplerate ? ` · ${Math.round(samplerate / 1000)}kHz` : ''}`
     : null;
+  // Hi-Res/PCM/DSD LED bar segment. `type` is LMS's own codec id — DSD-native
+  // files report 'dsf'/'dff' there regardless of the DoP samplerate they're
+  // wrapped in, so that's the reliable DSD signal (not samplerate/size, which
+  // describe the PCM carrier, not the source). PCM above redbook (44.1kHz/
+  // 16bit) also lights Hi-Res alongside PCM; DSD always lights Hi-Res too.
+  const isDsdTrack = /^ds[df]$/i.test(String(codecType || ''));
+  const isHiResPcm = !isDsdTrack && ((samplerate > 44100) || (samplesize > 16));
+  const formatQuality = codecType
+    ? { pcm: !isDsdTrack, hires: isDsdTrack || isHiResPcm, dsd: isDsdTrack }
+    : { pcm: false, hires: false, dsd: false };
   // LMS applies ReplayGain via software gain on the samples, so a track is
   // never bit-perfect while it's active — the two are mutually exclusive,
   // which is also how the LED bar artwork itself was drawn (only one LED lit
@@ -660,7 +670,7 @@ export function useLyrionPlayer() {
     connectToServer, fetchStatus, handleAction,
     // now playing (derived)
     currentTrack, title, artist, album, isPlaying, volume, repeatMode, shuffleMode,
-    willSleepIn, duration, time, progress, artworkUrl, artworkUrlLg, formatLabel,
+    willSleepIn, duration, time, progress, artworkUrl, artworkUrlLg, formatLabel, formatQuality,
     replayGainMode, replayGainActive, playbackMode,
     isRemoteTrack, artworkIdentityKey,
     setVolume, toggleMute, seek, cycleShuffle, cycleRepeat, setSleepTimer,
