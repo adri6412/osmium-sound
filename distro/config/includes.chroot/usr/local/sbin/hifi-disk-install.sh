@@ -178,6 +178,23 @@ done
 
 chroot "$TARGET" /bin/sh -c 'systemd-machine-id-setup' >/dev/null 2>&1 || true
 
+# Persistent, unique squeezelite player MAC (-m) — same fix as OTA migration
+# 0042-squeezelite-persistent-mac.sh: without it, squeezelite (talking to LMS
+# over -s 127.0.0.1, so it doesn't always see a real network MAC) can fall
+# back to a non-unique placeholder that collides with other LMS players.
+# Assign it here too so a fresh install never boots even once without one —
+# derived from the machine-id this script just regenerated above, so it's
+# already unique and won't collide with any other unit from the same ISO.
+SQ_DEFAULT_INSTALL="$TARGET/etc/default/squeezelite"
+if [ -f "$SQ_DEFAULT_INSTALL" ] && ! grep -qE '(^|[[:space:]])-m([[:space:]]|$)' "$SQ_DEFAULT_INSTALL" 2>/dev/null; then
+    INSTALL_MAC_SEED="$(cat "$TARGET/etc/machine-id" 2>/dev/null || true)"
+    [ -n "$INSTALL_MAC_SEED" ] || INSTALL_MAC_SEED="hifi-install-fallback-$$"
+    INSTALL_MAC_HASH="$(printf '%s' "$INSTALL_MAC_SEED" | md5sum | cut -c1-12)"
+    INSTALL_MAC_RAW="02${INSTALL_MAC_HASH#??}"
+    INSTALL_MAC="$(printf '%s' "$INSTALL_MAC_RAW" | sed 's/\(..\)/\1:/g; s/:$//')"
+    sed -i "s/^ARGS=\(['\"]\)\(.*\)\1\$/ARGS=\1-m $INSTALL_MAC \2\1/" "$SQ_DEFAULT_INSTALL" || true
+fi
+
 # Log INSIDE the target (not the outer live session's own /var/log/hifi/,
 # which is what a plain ">>/var/log/hifi/..." redirect here would hit — the
 # redirect is opened by THIS shell, running on the live root, before chroot
