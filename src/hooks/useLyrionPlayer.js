@@ -63,6 +63,15 @@ export function useLyrionPlayer() {
   // it's an LMS player *pref*, not part of the status payload, and changes
   // rarely (only via Settings), so a slow independent poll is enough.
   const [replayGainMode, setReplayGainMode] = useState('0');
+  // Transition type ('0' none / '1' crossfade / '2' fade-in / '3' fade-out /
+  // '4' fade-in+out) + its duration (seconds) — same reasoning as
+  // replayGainMode: a player pref, not in `status`, polled alongside it.
+  // Feeds BitPerfect too: any active transition applies a gain envelope (a
+  // crossfade blends two tracks' samples together, a fade shapes one
+  // track's), so it's a digital gain stage exactly like ReplayGain/volume
+  // control, not just a crossfade-specific concern.
+  const [transitionType, setTransitionType] = useState('0');
+  const [transitionDuration, setTransitionDuration] = useState('0');
 
   // Library navigation state
   const [currentView, setCurrentView] = useState('home');
@@ -246,9 +255,16 @@ export function useLyrionPlayer() {
     let cancelled = false;
     const pollReplayGain = async () => {
       try {
-        const v = await lyrionApi.getPlayerPref(activePlayer.playerid, 'replayGainMode');
-        if (!cancelled && v != null) setReplayGainMode(String(v));
-      } catch (_) { /* keep last known value */ }
+        const [rg, tt, td] = await Promise.all([
+          lyrionApi.getPlayerPref(activePlayer.playerid, 'replayGainMode'),
+          lyrionApi.getPlayerPref(activePlayer.playerid, 'transitionType'),
+          lyrionApi.getPlayerPref(activePlayer.playerid, 'transitionDuration'),
+        ]);
+        if (cancelled) return;
+        if (rg != null) setReplayGainMode(String(rg));
+        if (tt != null) setTransitionType(String(tt));
+        if (td != null) setTransitionDuration(String(td));
+      } catch (_) { /* keep last known values */ }
     };
     pollReplayGain();
     const id = setInterval(() => {
@@ -617,7 +633,26 @@ export function useLyrionPlayer() {
   // which is also how the LED bar artwork itself was drawn (only one LED lit
   // at a time). Nothing lit while nothing is actually playing.
   const replayGainActive = replayGainMode !== '0';
-  const playbackMode = !isPlaying ? null : (replayGainActive ? 'replaygain' : 'bitperfect');
+  // Actually verify bit-perfect, not just "ReplayGain happens to be off":
+  // `status` always includes `use_volume_control` (Slim::Control::Queries,
+  // unconditional, no tag needed) — 1 whenever LMS's own volume slider is
+  // adjusting the digital output level (the "Il controllo del volume regola
+  // le uscite" player setting, or a player with no fixed-100% option at
+  // all), 0 only when output is fixed at 100% ("digitalVolumeControl" pref
+  // off). Either way it's a digital gain stage on the samples, same as
+  // ReplayGain — so it blocks BitPerfect the same way. Missing/undefined
+  // (older LMS, field briefly absent) fails open (treated as not adjusting)
+  // rather than never lighting BitPerfect on an LMS that doesn't send it.
+  const digitalVolumeAdjusting = Number(playerStatus?.use_volume_control) === 1;
+  // Any transition (crossfade blends two tracks' samples; a fade shapes
+  // one) is a digital gain stage too — only matters once it actually has a
+  // nonzero duration to apply.
+  const transitionActive = transitionType !== '0' && Number(transitionDuration) > 0;
+  const isBitPerfect = isPlaying && !replayGainActive && !digitalVolumeAdjusting && !transitionActive;
+  // Neither LED lights when playing with volume-adjusted-but-not-ReplayGain
+  // (e.g. LMS's own volume control turned up) — genuinely neither label,
+  // and lighting ReplayGain there would be wrong.
+  const playbackMode = !isPlaying ? null : replayGainActive ? 'replaygain' : (isBitPerfect ? 'bitperfect' : null);
 
   return {
     // connection
