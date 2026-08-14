@@ -1,41 +1,41 @@
 {
-  "tag_name": "v2.5.21-dev.82-alpha5",
-  "name": "v2.5.21-dev.82-alpha5",
-  "body": "## What's new in v2.5.21-dev.82-alpha5\n\n- feat(player): OSMIUM SOUND brand mark in the LED bar's free box\n",
+  "tag_name": "v2.5.21-dev.83-alpha1",
+  "name": "v2.5.21-dev.83-alpha1",
+  "body": "## What's new in v2.5.21-dev.83-alpha1\n\n- fix(player): scale OSMIUM SOUND label with the LED bar, widen bar to 368px\n- fix(sources): exclude EFI partitions, auto-remount reconnected USB drives\n- feat(update): mandatory reboot at the end of a fully-applied update plan\n- fix(display-mode): power off every connected output, not just one\n- fix(dashboard): smooth CPU% sampling window\n",
   "assets": [
     {
-      "name": "hifi-ui-v2.5.21-dev.82-alpha5.tar.gz",
-      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.82-alpha5/hifi-ui-v2.5.21-dev.82-alpha5.tar.gz",
-      "size": 134226163
+      "name": "hifi-ui-v2.5.21-dev.83-alpha1.tar.gz",
+      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.83-alpha1/hifi-ui-v2.5.21-dev.83-alpha1.tar.gz",
+      "size": 134224647
     },
     {
-      "name": "hifi-ui-v2.5.21-dev.82-alpha5.tar.gz.sha256",
-      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.82-alpha5/hifi-ui-v2.5.21-dev.82-alpha5.tar.gz.sha256",
+      "name": "hifi-ui-v2.5.21-dev.83-alpha1.tar.gz.sha256",
+      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.83-alpha1/hifi-ui-v2.5.21-dev.83-alpha1.tar.gz.sha256",
       "size": 103
     },
     {
-      "name": "hifi-system-v2.5.21-dev.82-alpha5.tar.gz",
-      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.82-alpha5/hifi-system-v2.5.21-dev.82-alpha5.tar.gz",
-      "size": 297908
+      "name": "hifi-system-v2.5.21-dev.83-alpha1.tar.gz",
+      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.83-alpha1/hifi-system-v2.5.21-dev.83-alpha1.tar.gz",
+      "size": 301088
     },
     {
-      "name": "hifi-system-v2.5.21-dev.82-alpha5.tar.gz.sha256",
-      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.82-alpha5/hifi-system-v2.5.21-dev.82-alpha5.tar.gz.sha256",
+      "name": "hifi-system-v2.5.21-dev.83-alpha1.tar.gz.sha256",
+      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.83-alpha1/hifi-system-v2.5.21-dev.83-alpha1.tar.gz.sha256",
       "size": 107
     },
     {
-      "name": "hifi-os-v2.5.21-dev.82-alpha5.tar.gz",
-      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.82-alpha5/hifi-os-v2.5.21-dev.82-alpha5.tar.gz",
-      "size": 1197901
+      "name": "hifi-os-v2.5.21-dev.83-alpha1.tar.gz",
+      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.83-alpha1/hifi-os-v2.5.21-dev.83-alpha1.tar.gz",
+      "size": 1197585
     },
     {
-      "name": "hifi-os-v2.5.21-dev.82-alpha5.tar.gz.sha256",
-      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.82-alpha5/hifi-os-v2.5.21-dev.82-alpha5.tar.gz.sha256",
+      "name": "hifi-os-v2.5.21-dev.83-alpha1.tar.gz.sha256",
+      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.83-alpha1/hifi-os-v2.5.21-dev.83-alpha1.tar.gz.sha256",
       "size": 103
     },
     {
-      "name": "hifi-os-v2.5.21-dev.82-alpha5.tar.gz.sha256.sig",
-      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.82-alpha5/hifi-os-v2.5.21-dev.82-alpha5.tar.gz.sha256.sig",
+      "name": "hifi-os-v2.5.21-dev.83-alpha1.tar.gz.sha256.sig",
+      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.83-alpha1/hifi-os-v2.5.21-dev.83-alpha1.tar.gz.sha256.sig",
       "size": 64
     }
   ]
