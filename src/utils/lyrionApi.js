@@ -387,11 +387,14 @@ export class LyrionAPI {
   }
 
   async getAlbums(limit = 9999, offset = 0, artistId = null) {
-    // j=artwork_track_id (which track's embedded art represents the album)
-    // c=coverid of that art, for the same cache-busting reason as
-    // getPlayerStatus above — the album grid builds its cover URL from
-    // artwork_track_id, which is just as stable-but-stale-prone as a track id.
-    const params = ['albums', offset, limit, 'tags:alSjc'];
+    // j=artwork_track_id: which track's art represents the album. Unlike a
+    // plain track id this is already LMS's own coverid — Slim::Schema::
+    // Track::coverid hashes {cover, url, mtime, filesize} and the scanner
+    // resets it to force regeneration whenever a rescan sees the file
+    // change (Slim::Utils::Scanner::Local) — so it changes on its own
+    // whenever the art actually does, no separate cache-buster needed here
+    // (unlike getPlayerStatus's currentTrack.id, which never changes).
+    const params = ['albums', offset, limit, 'tags:alSj'];
     if (artistId) {
       params.push(`artist_id:${artistId}`);
     }

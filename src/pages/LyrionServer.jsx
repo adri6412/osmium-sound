@@ -790,7 +790,7 @@ const LyrionServer = () => {
       const renderRow = (item, idx) => {
         if (currentView === 'albums') {
           const aId  = item.artwork_track_id || item.id;
-          const aUrl = aId ? lyrionApi.getArtworkUrl(aId, 200, item.coverid) : null;
+          const aUrl = aId ? lyrionApi.getArtworkUrl(aId, 200) : null;
           return (
             <div key={item.id || idx} data-az-index={idx}
               onClick={() => navigateTo('tracks', item.album, { albumId: item.id })}
