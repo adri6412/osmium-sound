@@ -387,9 +387,13 @@ def _scan_wifi():
     # provisioning -- the one call site that matters here, made seconds after
     # NetworkManager itself starts, with no such cache yet -- it came back
     # empty even with networks in range. Poll briefly instead of trusting the
-    # first read.
+    # first read. Worth spending real time on: _evaluate_provisioning() calls
+    # this exactly ONCE, right before raising the setup hotspot, and never
+    # again for the rest of first-boot provisioning -- once that hotspot is up
+    # the same radio can't scan any more (single radio, see the call site), so
+    # whatever list is captured here is final for the whole setup flow.
     nets = []
-    for _ in range(6):
+    for _ in range(8):
         rc, out, _ = _nmcli(['-t', '-f', 'IN-USE,SSID,SIGNAL,SECURITY', 'device', 'wifi', 'list'])
         nets = []
         if rc == 0:
@@ -407,7 +411,7 @@ def _scan_wifi():
                              'security': parts[3] or '', 'in_use': parts[0].strip() == '*'})
         if nets:
             break
-        time.sleep(1)
+        time.sleep(1.5)
     return nets
 
 

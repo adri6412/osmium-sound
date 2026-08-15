@@ -109,13 +109,6 @@ const SetupWizard = ({ onComplete }) => {
     }
   };
 
-  // Optional, touch-only fallback for a bench/dev unit with no phone handy —
-  // never required, never advertised beyond this one small link.
-  const skip = () => {
-    localStorage.setItem('firstSetupComplete', 'true');
-    onComplete?.();
-  };
-
   return (
     <AnimatePresence>
       <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.2 }}
@@ -179,13 +172,17 @@ const SetupWizard = ({ onComplete }) => {
           )}
         </motion.div>
 
-        <button onClick={skip} className="absolute bottom-4 right-4 text-[11px] text-hifi-silver/30 hover:text-hifi-silver/70 transition-colors">
-          {t('wizard.skip')}
-        </button>
-
         {showWifiPanel && (
           <WifiConfigPanel
             networks={networks}
+            // The scan behind `networks` is a single pre-hotspot snapshot
+            // (see webui_server.py's _scan_wifi()/_evaluate_provisioning():
+            // this device's one Wi-Fi radio can't scan once it's also running
+            // the setup hotspot). Until that hotspot is confirmed up, an
+            // empty list just means "hasn't reported back yet" — say so
+            // instead of claiming there's nothing nearby; once it's active
+            // the list is final and a real "none found" is accurate.
+            scanning={!isConnected && !apInfo?.active && !apInfo?.error && networks.length === 0}
             connecting={wifiSubmitting || stage === 'connecting'}
             error={wifiSubmitError || (stage === 'failed' ? apInfo?.error : null)}
             onConnect={handleWifiConnect}
