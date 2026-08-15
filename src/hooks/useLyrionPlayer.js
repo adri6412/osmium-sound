@@ -12,19 +12,27 @@ export const safeUrl = (url) => {
   const raw = url.trim();
   if (!raw) return '';
   // Same-origin relative path (e.g. "/music/123/cover"): rebuild it from the
-  // parsed URL so no scheme/host/meta-characters can ride along.
+  // parsed URL so no scheme/host/meta-characters can ride along. u.pathname/
+  // u.search are already fully percent-encoded per the WHATWG URL spec —
+  // confirmed live: `new URL('http://x/y?a=<script>"')`.search comes back as
+  // `?a=%3Cscript%3E%22`, no extra escaping needed. Wrapping that in
+  // encodeURI() (as this used to) doesn't add safety, it just re-escapes the
+  // '%' of any percent-encoded byte already in the string — which every
+  // artwork URL here has (encodeURIComponent'd player mac / cache-buster).
+  // That corrupted e.g. now-playing artwork's ?player=<mac> into garbage LMS
+  // couldn't parse back into a real player, silently falling back to
+  // whatever other player happened to be active on the same LMS server.
   if (raw[0] === '/' && raw[1] !== '/') {
-    try { const u = new URL(raw, 'http://localhost'); return encodeURI(u.pathname + u.search); }
+    try { const u = new URL(raw, 'http://localhost'); return u.pathname + u.search; }
     catch { return ''; }
   }
-  // Absolute URL: allow ONLY http/https (blocks javascript:/data:/…) and return
-  // the parser's serialized href — a freshly built, well-formed string rather
-  // than the raw input. encodeURI() escapes any residual HTML meta-characters
-  // (< > ") while keeping the URL valid, so nothing unescaped flows through to
-  // <img src> (and it's a sanitizer the static analyser recognises).
+  // Absolute URL: allow ONLY http/https (blocks javascript:/data:/…) and
+  // return the parser's serialized href as-is — already a well-formed,
+  // fully percent-encoded string (see above), re-encoding it is redundant
+  // and, for any URL that already contains a percent-escape, corrupting.
   try {
     const u = new URL(raw);
-    return (u.protocol === 'http:' || u.protocol === 'https:') ? encodeURI(u.href) : '';
+    return (u.protocol === 'http:' || u.protocol === 'https:') ? u.href : '';
   } catch { return ''; }
 };
 
@@ -639,7 +647,17 @@ export function useLyrionPlayer() {
   // must not linger — apart from a periodic "maybe it changed, maybe it
   // didn't" probe, where keeping the current art visible until proven
   // otherwise is the right call.
-  const isRemoteTrack = !!currentTrack.remote;
+  // LMS's JSON-RPC serializes `remote` as the STRING "0"/"1", not a number
+  // or boolean — confirmed live (`"remote":"0"` in a real status response).
+  // `!!currentTrack.remote` is true for ANY non-empty string, "0" included,
+  // so this was permanently misidentifying every local track as remote and
+  // routing it through the player-scoped /music/current/cover.jpg path
+  // instead of the static per-id one. Harmless with a single active LMS
+  // player (that endpoint's own player= resolution has nothing else to fall
+  // back to but the right one); becomes visibly wrong the moment a second
+  // player is active on the same server (see safeUrl's comment above for the
+  // other half of this bug — a mangled player= param compounded it).
+  const isRemoteTrack = Number(currentTrack.remote) === 1;
   const remoteHeartbeat = isRemoteTrack ? Math.floor((playerStatus?.time || 0) / 10) : '';
   const artworkIdentityKey = `${currentTrack.id || ''}-${currentTrack.title || ''}-${currentTrack.artist || ''}-${currentTrack.album || ''}-${playerStatus?.current_title || ''}`;
   const trackKey = `${artworkIdentityKey}-${remoteHeartbeat}`;
