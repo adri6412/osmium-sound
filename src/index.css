@@ -297,6 +297,17 @@ input[type=range].vol-slider::-webkit-slider-thumb {
   cursor: pointer;
   box-shadow: 0 0 5px rgba(212,175,55,0.5);
 }
+input[type=range].vol-slider:disabled {
+  cursor: not-allowed;
+}
+input[type=range].vol-slider:disabled::-webkit-slider-runnable-track {
+  background: #1a1a1a;
+}
+input[type=range].vol-slider:disabled::-webkit-slider-thumb {
+  background: #555;
+  box-shadow: none;
+  cursor: not-allowed;
+}
 
 /* Graphic EQ — vintage analog console styling (Settings → DSP).
    Vertical faders in a brushed dark faceplate: tick marks along the fader

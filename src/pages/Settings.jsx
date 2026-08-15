@@ -262,6 +262,12 @@ const Settings = ({ initialSection, onSectionConsumed } = {}) => {
   const [transitionType, setTransitionType] = useState('0');     // 0 none … 4 fade in/out
   const [transitionDuration, setTransitionDuration] = useState('10'); // seconds
   const [replayGainMode, setReplayGainMode] = useState('0');     // 0 off / 1 track / 2 album / 3 smart
+  // digitalVolumeControl: 1 = LMS applies its own digital volume (adjustable,
+  // default), 0 = output fixed at 100% — the same pref useLyrionPlayer polls
+  // directly for BitPerfect and to grey out the volume slider (see its
+  // volumeFixed comment; NOT status's use_volume_control, which is unusable
+  // on squeezelite).
+  const [digitalVolumeControl, setDigitalVolumeControl] = useState('1');
   const [playbackMessage, setPlaybackMessage] = useState('');
 
   // Animated VU meter in the expanded now-playing view. Persisted server-side
@@ -455,14 +461,16 @@ const Settings = ({ initialSection, onSectionConsumed } = {}) => {
       const mac = (local || players?.[0])?.playerid;
       if (!mac) return;
       setPlayerMac(mac);
-      const [tt, td, rg] = await Promise.all([
+      const [tt, td, rg, dvc] = await Promise.all([
         lyrionApi.getPlayerPref(mac, 'transitionType'),
         lyrionApi.getPlayerPref(mac, 'transitionDuration'),
         lyrionApi.getPlayerPref(mac, 'replayGainMode'),
+        lyrionApi.getPlayerPref(mac, 'digitalVolumeControl'),
       ]);
       if (tt != null) setTransitionType(String(tt));
       if (td != null) setTransitionDuration(String(td));
       if (rg != null) setReplayGainMode(String(rg));
+      if (dvc != null) setDigitalVolumeControl(String(dvc));
       loadAlarms(mac);
       loadMultiroom(mac, players);
     } catch (_) {}
@@ -615,6 +623,13 @@ const Settings = ({ initialSection, onSectionConsumed } = {}) => {
     if (playerMac) lyrionApi.setPlayerPref(playerMac, 'replayGainMode', v);
     setPlaybackMessage(t('settings.playback.saved'));
   };
+  const toggleFixedVolume = () => {
+    if (!playerMac) return;
+    const next = digitalVolumeControl === '0' ? '1' : '0';
+    setDigitalVolumeControl(next);
+    lyrionApi.setPlayerPref(playerMac, 'digitalVolumeControl', next);
+    setPlaybackMessage(t('settings.playback.saved'));
+  };
 
   // ── Alarm handlers ──────────────────────────────────────────────
   const loadAlarms = async (mac = playerMac) => {
@@ -656,8 +671,7 @@ const Settings = ({ initialSection, onSectionConsumed } = {}) => {
     }
   };
 
-  const changeOtaChannel = async (channel) => {
-    if (channelBusy || channel === otaChannel) return;
+  const doChangeOtaChannel = async (channel) => {
     setChannelBusy(true);
     const res = await systemAPI.setOtaChannel(channel);
     setChannelBusy(false);
@@ -665,6 +679,21 @@ const Settings = ({ initialSection, onSectionConsumed } = {}) => {
       setOtaChannel(res.data.channel);
       refreshAllChecks(); // re-check against the newly selected channel
     }
+  };
+
+  const changeOtaChannel = async (channel) => {
+    if (channelBusy || channel === otaChannel) return;
+    // Downgrading back to prod from dev is gated by a newer prod release, so
+    // warn before the switch rather than after — the user can't just flip back.
+    if (otaChannel === 'prod' && channel === 'dev') {
+      setConfirmDialog({
+        message: t('settings.updates.confirmProdToDev'),
+        confirmLabel: t(`settings.updates.channelDev`),
+        onConfirm: () => doChangeOtaChannel(channel),
+      });
+      return;
+    }
+    doChangeOtaChannel(channel);
   };
 
   // ── SSH server handlers ─────────────────────────────────────────
@@ -2269,6 +2298,21 @@ const Settings = ({ initialSection, onSectionConsumed } = {}) => {
                         ))}
                       </div>
                     </div>
+
+                    {/* Fixed volume 100% (bit-perfect output, no digital volume control) */}
+                    <button
+                      onClick={toggleFixedVolume}
+                      disabled={!playerMac}
+                      className="w-full flex items-center justify-between bg-hifi-dark hover:bg-hifi-light/40 rounded-lg px-4 py-3 transition-colors disabled:opacity-40"
+                    >
+                      <span className="text-left">
+                        <span className="block text-sm text-white">{t('settings.playback.fixedVolume')}</span>
+                        <span className="block text-xs text-hifi-silver mt-0.5">{t('settings.playback.fixedVolumeHelp')}</span>
+                      </span>
+                      <span className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors ml-4 ${digitalVolumeControl === '0' ? 'bg-hifi-gold' : 'bg-hifi-accent'}`}>
+                        <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${digitalVolumeControl === '0' ? 'translate-x-6' : 'translate-x-1'}`} />
+                      </span>
+                    </button>
 
                     {playbackMessage && playerMac && (
                       <div className="rounded-lg p-3 text-center text-sm bg-hifi-dark text-hifi-silver">

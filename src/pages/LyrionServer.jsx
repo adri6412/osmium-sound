@@ -462,7 +462,7 @@ const LyrionServer = () => {
     connectToServer, handleAction,
     currentTrack, title, artist, album, isPlaying, volume, repeatMode, shuffleMode,
     willSleepIn, duration, time, progress, artworkUrl, artworkUrlLg, formatLabel, formatQuality,
-    playbackMode,
+    playbackMode, volumeFixed,
     isRemoteTrack, artworkIdentityKey,
     setVolume: setPlayerVolume, toggleMute, seek, cycleShuffle, cycleRepeat,
     setSleepTimer: applySleepTimer,
@@ -1312,14 +1312,21 @@ const LyrionServer = () => {
           </button>
         </div>
 
-        {/* Volume */}
+        {/* Volume — greyed out and disabled when the player's output is fixed
+            at 100% (the same "digitalVolumeControl" setting BitPerfect
+            depends on, see useLyrionPlayer's volumeFixed): dragging it
+            wouldn't change anything. */}
         <div className="flex items-center space-x-2 px-4 py-1 shrink-0">
           <button
             onClick={toggleMute}
-            className="text-hifi-silver/60 hover:text-hifi-silver transition-colors flex-shrink-0">
+            disabled={volumeFixed}
+            title={volumeFixed ? t('player.volumeFixed') : undefined}
+            className="text-hifi-silver/60 hover:text-hifi-silver transition-colors flex-shrink-0 disabled:opacity-30 disabled:hover:text-hifi-silver/60">
             {volume === 0 ? <VolumeX size={14} /> : <Volume2 size={14} />}
           </button>
           <input type="range" min="0" max="100" value={volume}
+            disabled={volumeFixed}
+            title={volumeFixed ? t('player.volumeFixed') : undefined}
             className="vol-slider flex-1"
             onChange={(e) => setPlayerVolume(parseInt(e.target.value))} />
           <span className="text-[10px] text-hifi-silver/40 w-6 text-right font-mono flex-shrink-0">{volume}</span>
@@ -1507,14 +1514,22 @@ const LyrionServer = () => {
                       {repeatMode === 1 ? <Repeat1 size={18} /> : <Repeat size={18} />}
                     </button>
 
-                    {/* Volume (inline) — flexible width so it never gets clipped */}
+                    {/* Volume (inline) — flexible width so it never gets clipped.
+                        Greyed out and disabled when output is fixed at 100%
+                        (see the compact slider's comment above). */}
                     <div className="flex items-center space-x-2 ml-auto min-w-0 flex-1 max-w-[180px]">
                       <button onClick={toggleMute}
-                        className="shrink-0 text-hifi-silver/70 hover:text-hifi-silver transition-colors">
+                        disabled={volumeFixed}
+                        title={volumeFixed ? t('player.volumeFixed') : undefined}
+                        className="shrink-0 text-hifi-silver/70 hover:text-hifi-silver transition-colors disabled:opacity-30 disabled:hover:text-hifi-silver/70">
                         {volume === 0 ? <VolumeX size={17} /> : <Volume2 size={17} />}
                       </button>
                       <input type="range" min="0" max="100" value={volume}
-                        className="min-w-0 flex-1 h-1.5 bg-white/10 rounded-full appearance-none cursor-pointer accent-hifi-gold"
+                        disabled={volumeFixed}
+                        title={volumeFixed ? t('player.volumeFixed') : undefined}
+                        className={`min-w-0 flex-1 h-1.5 rounded-full appearance-none cursor-pointer ${
+                          volumeFixed ? 'bg-white/5 accent-hifi-silver/30 cursor-not-allowed' : 'bg-white/10 accent-hifi-gold'
+                        }`}
                         onChange={(e) => setPlayerVolume(parseInt(e.target.value))} />
                     </div>
                   </div>

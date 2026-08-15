@@ -84,6 +84,17 @@ export function useLyrionPlayer() {
   // control, not just a crossfade-specific concern.
   const [transitionType, setTransitionType] = useState('0');
   const [transitionDuration, setTransitionDuration] = useState('0');
+  // digitalVolumeControl ('1' adjustable / '0' fixed at 100%) — also a
+  // player pref, polled the same way. NOT read from the status payload's
+  // `use_volume_control`: LMS derives that field as
+  // `digitalVolumeControl || !hasDigitalOut` (Slim::Control::Queries), and
+  // hasDigitalOut defaults to 0 for a SqueezePlay-class client (which is how
+  // squeezelite registers, deviceid 12) unless it explicitly advertises
+  // HasDigitalOut in its slimproto capability string — squeezelite doesn't,
+  // so on this hardware use_volume_control is pinned to 1 forever regardless
+  // of the digitalVolumeControl pref, permanently blocking BitPerfect. The
+  // pref itself has no such caveat.
+  const [digitalVolumeControl, setDigitalVolumeControl] = useState('1');
 
   // Library navigation state
   const [currentView, setCurrentView] = useState('home');
@@ -294,15 +305,17 @@ export function useLyrionPlayer() {
     let cancelled = false;
     const pollReplayGain = async () => {
       try {
-        const [rg, tt, td] = await Promise.all([
+        const [rg, tt, td, dvc] = await Promise.all([
           lyrionApi.getPlayerPref(activePlayer.playerid, 'replayGainMode'),
           lyrionApi.getPlayerPref(activePlayer.playerid, 'transitionType'),
           lyrionApi.getPlayerPref(activePlayer.playerid, 'transitionDuration'),
+          lyrionApi.getPlayerPref(activePlayer.playerid, 'digitalVolumeControl'),
         ]);
         if (cancelled) return;
         if (rg != null) setReplayGainMode(String(rg));
         if (tt != null) setTransitionType(String(tt));
         if (td != null) setTransitionDuration(String(td));
+        if (dvc != null) setDigitalVolumeControl(String(dvc));
       } catch (_) { /* keep last known values */ }
     };
     pollReplayGain();
@@ -692,17 +705,20 @@ export function useLyrionPlayer() {
   // which is also how the LED bar artwork itself was drawn (only one LED lit
   // at a time). Nothing lit while nothing is actually playing.
   const replayGainActive = replayGainMode !== '0';
-  // Actually verify bit-perfect, not just "ReplayGain happens to be off":
-  // `status` always includes `use_volume_control` (Slim::Control::Queries,
-  // unconditional, no tag needed) — 1 whenever LMS's own volume slider is
-  // adjusting the digital output level (the "Il controllo del volume regola
-  // le uscite" player setting, or a player with no fixed-100% option at
-  // all), 0 only when output is fixed at 100% ("digitalVolumeControl" pref
-  // off). Either way it's a digital gain stage on the samples, same as
-  // ReplayGain — so it blocks BitPerfect the same way. Missing/undefined
-  // (older LMS, field briefly absent) fails open (treated as not adjusting)
-  // rather than never lighting BitPerfect on an LMS that doesn't send it.
-  const digitalVolumeAdjusting = Number(playerStatus?.use_volume_control) === 1;
+  // Actually verify bit-perfect, not just "ReplayGain happens to be off": the
+  // digitalVolumeControl pref ('1' adjustable / '0' fixed at 100%) is a
+  // digital gain stage on the samples exactly like ReplayGain, so it blocks
+  // BitPerfect the same way. Read the pref directly (polled above alongside
+  // replayGainMode/transitionType), NOT status's `use_volume_control` — that
+  // field is `digitalVolumeControl || !hasDigitalOut` server-side, and
+  // hasDigitalOut is permanently 0 for squeezelite (registers as a
+  // SqueezePlay-class client, which defaults hasDigitalOut off unless the
+  // client advertises it — squeezelite doesn't), which would pin it to 1
+  // forever regardless of the actual pref.
+  const digitalVolumeAdjusting = digitalVolumeControl === '1';
+  // Same pref, opposite sense — drives the volume slider's disabled/greyed
+  // state: dragging it while output is fixed at 100% wouldn't do anything.
+  const volumeFixed = digitalVolumeControl === '0';
   // Any transition (crossfade blends two tracks' samples; a fade shapes
   // one) is a digital gain stage too — only matters once it actually has a
   // nonzero duration to apply.
@@ -720,7 +736,7 @@ export function useLyrionPlayer() {
     // now playing (derived)
     currentTrack, title, artist, album, isPlaying, volume, repeatMode, shuffleMode,
     willSleepIn, duration, time, progress, artworkUrl, artworkUrlLg, formatLabel, formatQuality,
-    replayGainMode, replayGainActive, playbackMode,
+    replayGainMode, replayGainActive, playbackMode, volumeFixed,
     isRemoteTrack, artworkIdentityKey,
     setVolume, toggleMute, seek, cycleShuffle, cycleRepeat, setSleepTimer,
     // queue
