@@ -1518,15 +1518,6 @@ def provision_sources_delete(sid):
     return jsonify(body), status
 
 
-@app.route('/api/provision/apply_sources', methods=['POST'])
-def provision_apply_sources():
-    if not _provisioning():
-        return jsonify({'success': False, 'code': 'provision.notInProgress',
-                        'message': _wt('provision.notInProgress', _lang())}), 409
-    body, status = _proxy(SOURCES_BASE, '/api/apply', method='POST', body={}, timeout=90)
-    return jsonify(body), status
-
-
 @app.route('/api/provision/timezone', methods=['GET'])
 def provision_timezone_get():
     if not _provisioning():
@@ -1585,30 +1576,6 @@ def provision_restore_status():
         return jsonify({'success': False, 'code': 'provision.notInProgress',
                         'message': _wt('provision.notInProgress', _lang())}), 409
     return _forward_to_sources('/api/restore/status')
-
-
-@app.route('/api/provision/sources_app', methods=['GET'])
-def provision_sources_app():
-    # The captive setup page links here instead of reimplementing source
-    # management itself — mints a pairing token via the same localhost-only
-    # loopback call sources_app() (above) uses for the authenticated case,
-    # gated by _provisioning() instead of a session since no account exists
-    # yet at this point, then redirects into the real, full-featured sources
-    # SPA (local/SMB/USB/internal disk, not just SMB). ?setup=1 tells that
-    # page to swap its "Apply & rescan library" copy for setup-appropriate
-    # wording (see sources_server.py's index()) — Lyrion's own setup wizard
-    # does the real first scan right after this step, so "rescan" here would
-    # be misleading and redundant.
-    if not _provisioning():
-        return jsonify({'success': False, 'code': 'provision.notInProgress',
-                        'message': _wt('provision.notInProgress', _lang())}), 409
-    body, status = _proxy(SOURCES_BASE, '/api/pair/token', method='POST', body={})
-    token = (body or {}).get('token')
-    if not token:
-        return jsonify({'success': False, 'code': 'sources.pairUnavailable',
-                        'message': 'Pairing is unavailable.'}), 502
-    lang = request.args.get('lang') or _lang()
-    return redirect(f'/sources-app?token={token}&setup=1&lang={urllib.parse.quote(lang)}', code=302)
 
 
 # ── provisioning endpoints: installer branch (disk-imaging, no OS on disk
@@ -2239,21 +2206,6 @@ SETUP_CAPTIVE_HTML = """<!doctype html><html lang="en"><head><meta charset="utf-
  <button class="sec" onclick="skipLyrionInstall()" id="btn-lyrion-install-skip" style="display:none">Continue anyway</button>
 </div>
 
-<div class="card" id="step-sources" style="display:none">
- <label id="lbl-sources">Music sources</label>
- <p class="muted" id="sources-intro">Manage local, network (SMB) and USB sources below. Optional: you can also do this later from Settings. Lyrion's own setup wizard scans the library once you finish here.</p>
- <iframe id="sources-iframe" style="width:100%;height:60vh;min-height:380px;border:0;border-radius:10px;background:#1a1e26"></iframe>
- <button class="sec" onclick="continueFromSources()" id="btn-sources-continue">Continue</button>
-</div>
-
-<div class="card" id="step-timezone" style="display:none">
- <p class="muted" id="timezone-intro">Used for the clock, alarms and any scheduled tasks on this device.</p>
- <label id="lbl-timezone">Time zone</label>
- <select id="tzselect"></select>
- <button onclick="saveTimezone()" id="btn-tz-save">Save and continue</button>
- <p class="muted" id="tzmsg"></p>
-</div>
-
 <div class="card" id="step-account" style="display:none">
  <label id="lbl-account">Web admin account</label>
  <p class="muted" id="account-help">Used to log into this device's web interface (http://&#8230;) from now on.</p>
@@ -2265,6 +2217,28 @@ SETUP_CAPTIVE_HTML = """<!doctype html><html lang="en"><head><meta charset="utf-
  <input id="acc-pass2" type="password" autocomplete="new-password">
  <button onclick="createAccount()" id="btn-account">Create account</button>
  <p class="muted" id="accountmsg"></p>
+</div>
+
+<div class="card" id="step-timezone" style="display:none">
+ <p class="muted" id="timezone-intro">Used for the clock, alarms and any scheduled tasks on this device.</p>
+ <label id="lbl-timezone">Time zone</label>
+ <select id="tzselect"></select>
+ <button onclick="saveTimezone()" id="btn-tz-save">Save and continue</button>
+ <p class="muted" id="tzmsg"></p>
+</div>
+
+<div class="card" id="step-sources-ask" style="display:none">
+ <label id="lbl-sources">Music sources</label>
+ <p class="muted" id="sources-ask-intro">Do you want to set up sources like a NAS or an internal hard disk? External devices (USB) already mount automatically — nothing to do for those.</p>
+ <button onclick="sourcesAsk(true)" id="btn-sources-yes">Yes, set up sources</button>
+ <button class="sec" onclick="sourcesAsk(false)" id="btn-sources-no">No, skip this</button>
+</div>
+
+<div class="card" id="step-sources" style="display:none">
+ <p class="muted" id="sources-intro">Manage local, network (SMB) and USB sources on the page that opens — your admin account (just created) signs you in there automatically. Lyrion's own setup wizard scans the library once you finish here.</p>
+ <button class="sec" onclick="openSourcesPage()" id="btn-sources-open">Open sources page</button>
+ <p class="muted" id="sources-open-hint">Opens in a new tab. Come back here and press Continue once you're done.</p>
+ <button onclick="continueFromSources()" id="btn-sources-continue">Continue</button>
 </div>
 
 <div class="card" id="step-finish" style="display:none">
@@ -2283,8 +2257,8 @@ SETUP_CAPTIVE_HTML = """<!doctype html><html lang="en"><head><meta charset="utf-
 
 <script>
 var STRINGS={
- en:{restoreIntro:'Setting up a new device? Restore a previous backup, or start fresh.',fresh:'Start fresh',restoreFile:'Backup file',restorePass:'Passphrase (if the backup is encrypted)',restore:'Restore from backup',restoring:'Restoring…',restoreDone:'Restore complete. Rebooting to apply it — reconnect in about a minute.',restoreFailed:'Restore failed.',restoreNoFile:'Choose a backup file first.',wifi:'Wi-Fi network',ssid:'Or enter the network name (SSID)',pass:'Wi-Fi password',connect:'Connect via Wi-Fi',wired:"I'm connected via cable (Ethernet)",connecting:'Connecting… the setup Wi-Fi will turn off. Reconnect your phone to your home network, then open http://hifiplayer.local to continue setup where you left off.',noCable:'No cable detected',netIntro:'Connect this device to your home network so it can finish setting up and be reachable from your phone/PC afterwards.',stepLabel:'Step {n} of {total}',audioIntro:'Pick the DAC / output device this player should send audio to. You can change this later from Settings.',lyrionIntro:'Choose where your music library lives: on this device, or on a Lyrion server you already run elsewhere on your network.',timezoneIntro:'Used for the clock, alarms and any scheduled tasks on this device.',updateRequired:'Update required',updateNow:'Update now',updateChecking:'Checking for updates…',updateAutoStarting:'An update is available and required — starting it now…',updateDevAvailable:'A preview (dev channel) update is available and required to continue setup.',updateApplying:'Updating — this can take a few minutes…',updateDoneRebooting:'Update complete. Rebooting…',updateFailed:'Update check/install failed. Retrying is required to continue setup.',devname:'Name this player',devnameHelp:'Used as its network name (e.g. "livingroom" → livingroom.local) and its Bluetooth/multiroom name. Letters, numbers and dashes only — leave empty to keep the default.',devnameSaving:'Saving…',mode:'Device mode',modeGui:'With screen (touchscreen)',modeHeadless:'Headless (no screen)',modeOff:'Server only (player off)',modeHelp:'In headless/server-only you manage everything from this web interface.',pointer:'Mouse pointer',pointerHelp:"Show the mouse cursor on screen? Leave it off for a touchscreen — turn it on if you're driving this device with a mouse.",pointerHide:'Touchscreen (hide pointer)',pointerShow:'Mouse (show pointer)',audio:'Audio output',audioContinue:'Continue',lyrion:'Music server (Lyrion)',lyrionLocal:'Use this device as the server',lyrionFollow:'Use a server already on my network',lyrionHost:'Server address',lyrionUse:'Use this server',lyrionInstall:'Install Lyrion',lyrionChecking:'Checking whether Lyrion Music Server is installed…',lyrionMissing:"Lyrion Music Server isn't installed yet.",lyrionInstalling:'Installing Lyrion Music Server…',continueAnyway:'Continue anyway',sources:'Music sources',sourcesIntro:"Manage local, network (SMB) and USB sources below. Optional: you can also do this later from Settings. Lyrion's own setup wizard scans the library once you finish here.",continueBtn:'Continue',timezone:'Time zone',tzSave:'Save and continue',account:'Web admin account',accountHelp:"Used to log into this device's web interface (http://…) from now on.",username:'Username',password:'Password',confirmPassword:'Confirm password',createAccount:'Create account',creating:'Creating…',accountMismatch:'Passwords do not match.',accountTooShort:'Username needs at least 3 characters, password at least 8.',finishGui:'Screen mode set. Setup is complete — press "Complete setup" below: the hotspot will turn off, reconnect your phone to your network. The device will then start its normal on-screen interface.',finishHeadless:'Headless mode set. Press "Complete setup" below: the hotspot will turn off, reconnect your phone to your network and open http://hifiplayer.local',finishOff:'Server-only mode set — this device will not play audio locally. Press "Complete setup" below: the hotspot will turn off, reconnect your phone to your network and open http://hifiplayer.local',finishBtn:'Complete setup',finishDone:'Setup complete — hotspot off. Open http://hifiplayer.local from your network.',finishToLyrion:"Setup complete. Taking you to Lyrion's own setup wizard to finish scanning your library…",rebootTitle:'Rebooting…',rebootGoingDown:'The device is restarting.',rebootComingBack:'Waiting for the device to come back online.',rebootAuto:'This page will reconnect automatically — no need to refresh.',error:'Error: '},
- it:{restoreIntro:'Stai configurando un nuovo dispositivo? Ripristina un backup precedente, oppure inizia da zero.',fresh:'Inizia da zero',restoreFile:'File di backup',restorePass:'Passphrase (se il backup è cifrato)',restore:'Ripristina da backup',restoring:'Ripristino in corso…',restoreDone:'Ripristino completato. Riavvio in corso per applicarlo — riconnettiti tra circa un minuto.',restoreFailed:'Ripristino non riuscito.',restoreNoFile:'Scegli prima un file di backup.',wifi:'Rete Wi-Fi',ssid:'Oppure inserisci il nome (SSID)',pass:'Password Wi-Fi',connect:'Connetti via Wi-Fi',wired:'Sono connesso via cavo (Ethernet)',connecting:'Connessione in corso… il Wi-Fi di setup si spegnerà. Riconnetti il telefono alla tua rete di casa, poi apri http://hifiplayer.local per continuare la configurazione da dove l\\'hai lasciata.',noCable:'Nessun cavo rilevato',netIntro:'Collega questo dispositivo alla tua rete di casa così può completare la configurazione ed essere raggiungibile da telefono/PC in seguito.',stepLabel:'Passo {n} di {total}',audioIntro:'Scegli il DAC / dispositivo di uscita a cui questo player deve inviare l\\'audio. Puoi cambiarlo in seguito dalle Impostazioni.',lyrionIntro:'Scegli dove vive la tua libreria musicale: su questo dispositivo, oppure su un server Lyrion che hai già altrove sulla tua rete.',timezoneIntro:'Usato per l\\'orologio, le sveglie e qualsiasi attività pianificata su questo dispositivo.',updateRequired:'Aggiornamento richiesto',updateNow:'Aggiorna ora',updateChecking:'Controllo aggiornamenti…',updateAutoStarting:'È disponibile un aggiornamento obbligatorio — avvio in corso…',updateDevAvailable:'È disponibile un aggiornamento di anteprima (canale dev), obbligatorio per continuare il setup.',updateApplying:'Aggiornamento in corso — può richiedere qualche minuto…',updateDoneRebooting:'Aggiornamento completato. Riavvio in corso…',updateFailed:'Controllo/installazione aggiornamento fallito. È necessario riprovare per continuare il setup.',devname:'Dai un nome a questo player',devnameHelp:'Usato come nome di rete (es. "salotto" → salotto.local) e come nome Bluetooth/multiroom. Solo lettere, numeri e trattini — lascia vuoto per mantenere quello predefinito.',devnameSaving:'Salvataggio…',mode:'Modalità dispositivo',modeGui:'Con schermo (touchscreen)',modeHeadless:'Headless (senza schermo)',modeOff:'Solo server (player spento)',modeHelp:'In headless/solo server gestisci tutto da questa interfaccia web.',pointer:'Puntatore del mouse',pointerHelp:'Mostrare il cursore del mouse a schermo? Lascialo spento per un touchscreen — accendilo se usi il dispositivo con un mouse.',pointerHide:'Touchscreen (nascondi puntatore)',pointerShow:'Mouse (mostra puntatore)',audio:'Uscita audio',audioContinue:'Continua',lyrion:'Server musicale (Lyrion)',lyrionLocal:'Usa questo dispositivo come server',lyrionFollow:'Usa un server già presente sulla rete',lyrionHost:'Indirizzo del server',lyrionUse:'Usa questo server',lyrionInstall:'Installa Lyrion',lyrionChecking:'Verifica se Lyrion Music Server è installato…',lyrionMissing:'Lyrion Music Server non è ancora installato.',lyrionInstalling:'Installazione di Lyrion Music Server…',continueAnyway:'Continua comunque',sources:'Sorgenti musicali',sourcesIntro:'Gestisci sorgenti locali, di rete (SMB) e USB qui sotto. Facoltativo: puoi farlo anche più tardi dalle Impostazioni. La scansione della libreria la fa il setup wizard di Lyrion una volta terminato qui.',continueBtn:'Continua',timezone:'Fuso orario',tzSave:'Salva e continua',account:'Account amministratore web',accountHelp:"Usato per accedere all'interfaccia web di questo dispositivo (http://…) da ora in poi.",username:'Nome utente',password:'Password',confirmPassword:'Conferma password',createAccount:'Crea account',creating:'Creazione…',accountMismatch:'Le password non coincidono.',accountTooShort:'Nome utente di almeno 3 caratteri, password di almeno 8.',finishGui:'Modalità con schermo impostata. Il setup è completo — premi "Completa setup" qui sotto: l\\'hotspot si spegnerà, riconnetti il telefono alla tua rete. Il dispositivo avvierà poi la sua normale interfaccia a schermo.',finishHeadless:'Modalità headless impostata. Premi "Completa setup" qui sotto: l\\'hotspot si spegnerà, riconnetti il telefono alla tua rete e apri http://hifiplayer.local',finishOff:'Modalità solo server impostata — questo dispositivo non riprodurrà audio in locale. Premi "Completa setup" qui sotto: l\\'hotspot si spegnerà, riconnetti il telefono alla tua rete e apri http://hifiplayer.local',finishBtn:'Completa setup',finishDone:'Setup completato — hotspot spento. Apri http://hifiplayer.local dalla tua rete.',finishToLyrion:'Setup completato. Ti porto al setup wizard di Lyrion per finire la scansione della libreria…',rebootTitle:'Riavvio in corso…',rebootGoingDown:'Il dispositivo si sta riavviando.',rebootComingBack:'In attesa che il dispositivo torni online.',rebootAuto:'Questa pagina si ricollegherà automaticamente — non serve aggiornarla.',error:'Errore: '}
+ en:{restoreIntro:'Setting up a new device? Restore a previous backup, or start fresh.',fresh:'Start fresh',restoreFile:'Backup file',restorePass:'Passphrase (if the backup is encrypted)',restore:'Restore from backup',restoring:'Restoring…',restoreDone:'Restore complete. Rebooting to apply it — reconnect in about a minute.',restoreFailed:'Restore failed.',restoreNoFile:'Choose a backup file first.',wifi:'Wi-Fi network',ssid:'Or enter the network name (SSID)',pass:'Wi-Fi password',connect:'Connect via Wi-Fi',wired:"I'm connected via cable (Ethernet)",connecting:'Connecting… the setup Wi-Fi will turn off. Reconnect your phone to your home network, then open http://hifiplayer.local to continue setup where you left off.',noCable:'No cable detected',netIntro:'Connect this device to your home network so it can finish setting up and be reachable from your phone/PC afterwards.',stepLabel:'Step {n} of {total}',audioIntro:'Pick the DAC / output device this player should send audio to. You can change this later from Settings.',lyrionIntro:'Choose where your music library lives: on this device, or on a Lyrion server you already run elsewhere on your network.',timezoneIntro:'Used for the clock, alarms and any scheduled tasks on this device.',updateRequired:'Update required',updateNow:'Update now',updateChecking:'Checking for updates…',updateAutoStarting:'An update is available and required — starting it now…',updateDevAvailable:'A preview (dev channel) update is available and required to continue setup.',updateApplying:'Updating — this can take a few minutes…',updateDoneRebooting:'Update complete. Rebooting…',updateFailed:'Update check/install failed. Retrying is required to continue setup.',devname:'Name this player',devnameHelp:'Used as its network name (e.g. "livingroom" → livingroom.local) and its Bluetooth/multiroom name. Letters, numbers and dashes only — leave empty to keep the default.',devnameSaving:'Saving…',mode:'Device mode',modeGui:'With screen (touchscreen)',modeHeadless:'Headless (no screen)',modeOff:'Server only (player off)',modeHelp:'In headless/server-only you manage everything from this web interface.',pointer:'Mouse pointer',pointerHelp:"Show the mouse cursor on screen? Leave it off for a touchscreen — turn it on if you're driving this device with a mouse.",pointerHide:'Touchscreen (hide pointer)',pointerShow:'Mouse (show pointer)',audio:'Audio output',audioContinue:'Continue',lyrion:'Music server (Lyrion)',lyrionLocal:'Use this device as the server',lyrionFollow:'Use a server already on my network',lyrionHost:'Server address',lyrionUse:'Use this server',lyrionInstall:'Install Lyrion',lyrionChecking:'Checking whether Lyrion Music Server is installed…',lyrionMissing:"Lyrion Music Server isn't installed yet.",lyrionInstalling:'Installing Lyrion Music Server…',continueAnyway:'Continue anyway',sources:'Music sources',sourcesAskIntro:'Do you want to set up sources like a NAS or an internal hard disk? External devices (USB) already mount automatically — nothing to do for those.',sourcesYes:'Yes, set up sources',sourcesNo:'No, skip this',sourcesOpenBtn:'Open sources page',sourcesOpenHint:"Opens in a new tab. Come back here and press Continue once you're done.",sourcesIntro:"Manage local, network (SMB) and USB sources on the page that opens — your admin account (just created) signs you in there automatically. Lyrion's own setup wizard scans the library once you finish here.",continueBtn:'Continue',timezone:'Time zone',tzSave:'Save and continue',account:'Web admin account',accountHelp:"Used to log into this device's web interface (http://…) from now on.",username:'Username',password:'Password',confirmPassword:'Confirm password',createAccount:'Create account',creating:'Creating…',accountMismatch:'Passwords do not match.',accountTooShort:'Username needs at least 3 characters, password at least 8.',finishGui:'Screen mode set. Setup is complete — press "Complete setup" below: the hotspot will turn off, reconnect your phone to your network. The device will then start its normal on-screen interface.',finishHeadless:'Headless mode set. Press "Complete setup" below: the hotspot will turn off, reconnect your phone to your network and open http://hifiplayer.local',finishOff:'Server-only mode set — this device will not play audio locally. Press "Complete setup" below: the hotspot will turn off, reconnect your phone to your network and open http://hifiplayer.local',finishBtn:'Complete setup',finishDone:'Setup complete — hotspot off. Open http://hifiplayer.local from your network.',finishToLyrion:"Setup complete. Taking you to Lyrion's own setup wizard to finish scanning your library…",rebootTitle:'Rebooting…',rebootGoingDown:'The device is restarting.',rebootComingBack:'Waiting for the device to come back online.',rebootAuto:'This page will reconnect automatically — no need to refresh.',error:'Error: '},
+ it:{restoreIntro:'Stai configurando un nuovo dispositivo? Ripristina un backup precedente, oppure inizia da zero.',fresh:'Inizia da zero',restoreFile:'File di backup',restorePass:'Passphrase (se il backup è cifrato)',restore:'Ripristina da backup',restoring:'Ripristino in corso…',restoreDone:'Ripristino completato. Riavvio in corso per applicarlo — riconnettiti tra circa un minuto.',restoreFailed:'Ripristino non riuscito.',restoreNoFile:'Scegli prima un file di backup.',wifi:'Rete Wi-Fi',ssid:'Oppure inserisci il nome (SSID)',pass:'Password Wi-Fi',connect:'Connetti via Wi-Fi',wired:'Sono connesso via cavo (Ethernet)',connecting:'Connessione in corso… il Wi-Fi di setup si spegnerà. Riconnetti il telefono alla tua rete di casa, poi apri http://hifiplayer.local per continuare la configurazione da dove l\\'hai lasciata.',noCable:'Nessun cavo rilevato',netIntro:'Collega questo dispositivo alla tua rete di casa così può completare la configurazione ed essere raggiungibile da telefono/PC in seguito.',stepLabel:'Passo {n} di {total}',audioIntro:'Scegli il DAC / dispositivo di uscita a cui questo player deve inviare l\\'audio. Puoi cambiarlo in seguito dalle Impostazioni.',lyrionIntro:'Scegli dove vive la tua libreria musicale: su questo dispositivo, oppure su un server Lyrion che hai già altrove sulla tua rete.',timezoneIntro:'Usato per l\\'orologio, le sveglie e qualsiasi attività pianificata su questo dispositivo.',updateRequired:'Aggiornamento richiesto',updateNow:'Aggiorna ora',updateChecking:'Controllo aggiornamenti…',updateAutoStarting:'È disponibile un aggiornamento obbligatorio — avvio in corso…',updateDevAvailable:'È disponibile un aggiornamento di anteprima (canale dev), obbligatorio per continuare il setup.',updateApplying:'Aggiornamento in corso — può richiedere qualche minuto…',updateDoneRebooting:'Aggiornamento completato. Riavvio in corso…',updateFailed:'Controllo/installazione aggiornamento fallito. È necessario riprovare per continuare il setup.',devname:'Dai un nome a questo player',devnameHelp:'Usato come nome di rete (es. "salotto" → salotto.local) e come nome Bluetooth/multiroom. Solo lettere, numeri e trattini — lascia vuoto per mantenere quello predefinito.',devnameSaving:'Salvataggio…',mode:'Modalità dispositivo',modeGui:'Con schermo (touchscreen)',modeHeadless:'Headless (senza schermo)',modeOff:'Solo server (player spento)',modeHelp:'In headless/solo server gestisci tutto da questa interfaccia web.',pointer:'Puntatore del mouse',pointerHelp:'Mostrare il cursore del mouse a schermo? Lascialo spento per un touchscreen — accendilo se usi il dispositivo con un mouse.',pointerHide:'Touchscreen (nascondi puntatore)',pointerShow:'Mouse (mostra puntatore)',audio:'Uscita audio',audioContinue:'Continua',lyrion:'Server musicale (Lyrion)',lyrionLocal:'Usa questo dispositivo come server',lyrionFollow:'Usa un server già presente sulla rete',lyrionHost:'Indirizzo del server',lyrionUse:'Usa questo server',lyrionInstall:'Installa Lyrion',lyrionChecking:'Verifica se Lyrion Music Server è installato…',lyrionMissing:'Lyrion Music Server non è ancora installato.',lyrionInstalling:'Installazione di Lyrion Music Server…',continueAnyway:'Continua comunque',sources:'Sorgenti musicali',sourcesAskIntro:'Vuoi configurare sorgenti come un NAS o un disco rigido interno? I dispositivi esterni (USB) si montano già automaticamente — per quelli non serve fare nulla.',sourcesYes:'Sì, configura le sorgenti',sourcesNo:'No, salta questo passaggio',sourcesOpenBtn:'Apri la pagina delle sorgenti',sourcesOpenHint:'Si apre in una nuova scheda. Torna qui e premi Continua quando hai finito.',sourcesIntro:'Gestisci sorgenti locali, di rete (SMB) e USB nella pagina che si apre — il tuo account admin (appena creato) ti accede automaticamente. La scansione della libreria la fa il setup wizard di Lyrion una volta terminato qui.',continueBtn:'Continua',timezone:'Fuso orario',tzSave:'Salva e continua',account:'Account amministratore web',accountHelp:"Usato per accedere all'interfaccia web di questo dispositivo (http://…) da ora in poi.",username:'Nome utente',password:'Password',confirmPassword:'Conferma password',createAccount:'Crea account',creating:'Creazione…',accountMismatch:'Le password non coincidono.',accountTooShort:'Nome utente di almeno 3 caratteri, password di almeno 8.',finishGui:'Modalità con schermo impostata. Il setup è completo — premi "Completa setup" qui sotto: l\\'hotspot si spegnerà, riconnetti il telefono alla tua rete. Il dispositivo avvierà poi la sua normale interfaccia a schermo.',finishHeadless:'Modalità headless impostata. Premi "Completa setup" qui sotto: l\\'hotspot si spegnerà, riconnetti il telefono alla tua rete e apri http://hifiplayer.local',finishOff:'Modalità solo server impostata — questo dispositivo non riprodurrà audio in locale. Premi "Completa setup" qui sotto: l\\'hotspot si spegnerà, riconnetti il telefono alla tua rete e apri http://hifiplayer.local',finishBtn:'Completa setup',finishDone:'Setup completato — hotspot spento. Apri http://hifiplayer.local dalla tua rete.',finishToLyrion:'Setup completato. Ti porto al setup wizard di Lyrion per finire la scansione della libreria…',rebootTitle:'Riavvio in corso…',rebootGoingDown:'Il dispositivo si sta riavviando.',rebootComingBack:'In attesa che il dispositivo torni online.',rebootAuto:'Questa pagina si ricollegherà automaticamente — non serve aggiornarla.',error:'Errore: '}
 };
 // Chosen once, up front, on step-lang -- persisted so it survives the
 // network step's own reload (Wi-Fi hands off from the setup hotspot to the
@@ -2332,6 +2306,11 @@ document.getElementById('lbl-lyrion-install').textContent=S.lyrion;
 document.getElementById('btn-lyrion-install').textContent=S.lyrionInstall;
 document.getElementById('btn-lyrion-install-skip').textContent=S.continueAnyway;
 document.getElementById('lbl-sources').textContent=S.sources;
+document.getElementById('sources-ask-intro').textContent=S.sourcesAskIntro;
+document.getElementById('btn-sources-yes').textContent=S.sourcesYes;
+document.getElementById('btn-sources-no').textContent=S.sourcesNo;
+document.getElementById('btn-sources-open').textContent=S.sourcesOpenBtn;
+document.getElementById('sources-open-hint').textContent=S.sourcesOpenHint;
 document.getElementById('sources-intro').textContent=S.sourcesIntro;
 document.getElementById('btn-sources-continue').textContent=S.continueBtn;
 document.getElementById('timezone-intro').textContent=S.timezoneIntro;
@@ -2345,7 +2324,7 @@ document.getElementById('lbl-acc-pass2').textContent=S.confirmPassword;
 document.getElementById('btn-account').textContent=S.createAccount;
 }
 
-var STEPS=['step-lang','step-restore','step-net','step-update','step-name','step-mode','step-pointer','step-audio','step-lyrion','step-lyrion-install','step-sources','step-timezone','step-account','step-finish'];
+var STEPS=['step-lang','step-restore','step-net','step-update','step-name','step-mode','step-pointer','step-audio','step-lyrion','step-lyrion-install','step-account','step-timezone','step-sources-ask','step-sources','step-finish'];
 var lyrionMode='local';
 var netPhaseDone=false;
 var restoringFromBackup=false;
@@ -2665,23 +2644,34 @@ function pollLyrionInstall(){
 function skipLyrionInstall(){afterLyrionInstall()}
 function afterLyrionInstall(){
   if(restoringFromBackup){restoringFromBackup=false;doRestoreUpload();return}
-  showSourcesStep();
+  checkAccountStep();
 }
 
-function showSourcesStep(){
-  var f=document.getElementById('sources-iframe');
-  if(!f.src){f.src='/api/provision/sources_app?lang='+encodeURIComponent(LANG)}
-  show('step-sources');
+// The web-admin account used to only get asked for the first time you
+// opened the web interface, which for a screenless/AP-hotspot setup meant
+// AFTER finishing Lyrion's own wizard too — easy to forget, and it left the
+// device reachable-but-unclaimed in the meantime. Create it here instead,
+// unless one already exists (e.g. this wizard is being re-run, or the
+// account was already created from the web interface directly). Also now
+// the thing that unlocks the REAL Sources page below (session-gated) rather
+// than a pre-auth workaround, so it has to happen before that step, not after.
+function checkAccountStep(){
+  show('step-account');
+  jget('/api/auth/status').then(function(res){
+    if(res&&res.has_account){show('step-timezone');loadTimezone();return}
+  });
 }
-
-// Pushes the final source list into Lyrion's prefs and restarts it (the
-// embedded sources page's own Apply button is a no-op restart-wise during
-// setup — see ?setup=1 handling in sources_server.py) — done exactly once,
-// here, right before handing off to Lyrion's own setup wizard at finish().
-// Proceeds regardless of success: a wrong/missing source can be fixed later
-// from Settings, it shouldn't block finishing the device setup.
-function continueFromSources(){
-  jpost('/api/provision/apply_sources',{}).then(function(){show('step-timezone');loadTimezone()});
+function createAccount(){
+  var u=document.getElementById('acc-user').value.trim();
+  var p=document.getElementById('acc-pass').value;
+  var p2=document.getElementById('acc-pass2').value;
+  if(u.length<3||p.length<8){document.getElementById('accountmsg').textContent=S.accountTooShort;return}
+  if(p!==p2){document.getElementById('accountmsg').textContent=S.accountMismatch;return}
+  document.getElementById('accountmsg').textContent=S.creating;
+  jpost('/api/provision/create_account',{username:u,password:p}).then(function(res){
+    if(res.success){show('step-timezone');loadTimezone()}
+    else{document.getElementById('accountmsg').textContent=res.message||S.error}
+  });
 }
 
 function loadTimezone(){
@@ -2694,33 +2684,48 @@ function loadTimezone(){
 function saveTimezone(){
   var tz=document.getElementById('tzselect').value;
   jpost('/api/provision/set_timezone',{timezone:tz}).then(function(){
-    checkAccountStep();
+    // Account + timezone are the last things that need the pre-auth
+    // provisioning API -- finalize now (marker removed, AP torn down, mode
+    // switched live) so the sources step below can open the REAL,
+    // session-authenticated Vue Settings page instead of a pre-auth
+    // workaround. finish()'s own finalize call later becomes a harmless
+    // no-op (provision_finalize() early-returns once already finalized).
+    jpost('/api/provision/finalize',{}).then(function(){showSourcesStep()});
   });
 }
 
-// The web-admin account used to only get asked for the first time you
-// opened the web interface, which for a screenless/AP-hotspot setup meant
-// AFTER finishing Lyrion's own wizard too — easy to forget, and it left the
-// device reachable-but-unclaimed in the meantime. Create it here instead,
-// unless one already exists (e.g. this wizard is being re-run, or the
-// account was already created from the web interface directly).
-function checkAccountStep(){
-  show('step-account');
-  jget('/api/auth/status').then(function(res){
-    if(res&&res.has_account){showFinishScreen();return}
-  });
+function showSourcesStep(){
+  show('step-sources-ask');
 }
-function createAccount(){
-  var u=document.getElementById('acc-user').value.trim();
-  var p=document.getElementById('acc-pass').value;
-  var p2=document.getElementById('acc-pass2').value;
-  if(u.length<3||p.length<8){document.getElementById('accountmsg').textContent=S.accountTooShort;return}
-  if(p!==p2){document.getElementById('accountmsg').textContent=S.accountMismatch;return}
-  document.getElementById('accountmsg').textContent=S.creating;
-  jpost('/api/provision/create_account',{username:u,password:p}).then(function(res){
-    if(res.success){showFinishScreen()}
-    else{document.getElementById('accountmsg').textContent=res.message||S.error}
-  });
+// Most setups have nothing beyond a USB drive plugged into the device, which
+// already automounts on its own -- forcing everyone through the sources page
+// just to click past it added a step for no reason. "No" skips straight to
+// finish (nothing was configured, nothing to apply); "Yes" is the only path
+// that opens the sources page at all.
+function sourcesAsk(yes){
+  if(yes){show('step-sources')}else{showFinishScreen()}
+}
+// Opened as its own tab/window, not an iframe: it's a full source-management
+// app (local/SMB/USB/internal disk) that needs real screen space. This is
+// the REAL admin-webui Sources page now (not the standalone pre-auth one) --
+// the account created above already signed this browser in (session cookie,
+// same origin), so the new tab inherits it. Also hands the wizard's chosen
+// language across, since admin-webui keeps its own separate preference.
+function openSourcesPage(){
+  try{localStorage.setItem('webuiLanguage',LANG)}catch(e){}
+  window.open('/#/settings?open=sources','_blank');
+}
+
+// Safety-net apply: the real Sources page has its own "Apply & rescan"
+// button (SourcesPanel.vue -> /api/system/apply), so this is normally a
+// harmless no-op re-apply of the same list — but nothing forces the
+// operator to actually press it over there before switching back to this
+// tab and clicking Continue. Session-gated, not the old pre-auth provisioning
+// route (provisioning is already finalized by this point). Proceeds to
+// finish regardless of outcome: a wrong/missing source can be fixed later
+// from Settings, it shouldn't block finishing the device setup.
+function continueFromSources(){
+  jpost('/api/system/apply',{}).then(showFinishScreen).catch(showFinishScreen);
 }
 function showFinishScreen(){
   show('step-finish');
@@ -2734,8 +2739,8 @@ function finish(){jpost('/api/provision/finalize',{}).then(function(){
   if(lyrionMode==='local'){
     // Hand off to Lyrion's own setup wizard — it shows itself automatically
     // on first visit to its web UI, and it's the one that actually knows
-    // when the library scan (kicked off above, once, by apply_sources) is
-    // done, unlike anything we could show here.
+    // when the library scan (kicked off above, once, by continueFromSources's
+    // apply call) is done, unlike anything we could show here.
     document.getElementById('finishmsg').textContent=S.finishToLyrion;
     setTimeout(function(){location.href='http://'+location.hostname+':9000/'},1500);
   }else{
