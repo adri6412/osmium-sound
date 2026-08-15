@@ -2123,6 +2123,12 @@ _CAPTIVE_CSS = """
  .overlay .card{max-width:340px;text-align:center}
  .spinner{width:32px;height:32px;margin:0 auto 14px;border-radius:50%;border:3px solid #333;border-top-color:#c8a24a;animation:spin 1s linear infinite}
  @keyframes spin{to{transform:rotate(360deg)}}
+ .progress-wrap{margin:4px 0 0}
+ .progress-label{color:#889;font-size:12px;margin-bottom:4px}
+ .progress-bar{height:5px;border-radius:3px;background:#1a1e26;overflow:hidden}
+ .progress-bar > div{height:100%;background:#c8a24a;transition:width .3s ease}
+ @keyframes cardIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
+ .card.step-in{animation:cardIn .3s ease}
 """
 
 # ─────────────────────────────────────────────────────────────────────────
@@ -2136,12 +2142,19 @@ SETUP_CAPTIVE_HTML = """<!doctype html><html lang="en"><head><meta charset="utf-
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Osmium Sound — Setup</title>
 <style>""" + _CAPTIVE_CSS + """</style></head><body>
-<div class="langbar">
- <a href="?lang=en" id="lang-en">English</a><a href="?lang=it" id="lang-it">Italiano</a>
-</div>
 <h1 id="h1title">Osmium Sound — Setup</h1>
+<div class="progress-wrap" id="progress-wrap" style="display:none">
+ <div class="progress-label" id="progress-label"></div>
+ <div class="progress-bar"><div id="progress-fill" style="width:0%"></div></div>
+</div>
 
-<div class="card" id="step-restore">
+<div class="card" id="step-lang">
+ <p class="muted">Choose your language / Scegli la lingua</p>
+ <button onclick="pickLang('en')" id="btn-lang-en">English</button>
+ <button onclick="pickLang('it')" id="btn-lang-it">Italiano</button>
+</div>
+
+<div class="card" id="step-restore" style="display:none">
  <p class="muted" id="restore-intro">Setting up a new device? Restore a previous backup, or start fresh.</p>
  <button class="sec" onclick="startFresh()" id="btn-fresh">Start fresh</button>
  <label id="lbl-restorefile">Backup file</label>
@@ -2153,6 +2166,7 @@ SETUP_CAPTIVE_HTML = """<!doctype html><html lang="en"><head><meta charset="utf-
 </div>
 
 <div class="card" id="step-net" style="display:none">
+ <p class="muted" id="net-intro">Connect this device to your home network so it can finish setting up and be reachable from your phone/PC afterwards.</p>
  <label id="lbl-wifi">Wi-Fi network</label>
  <div id="nets"></div>
  <label id="lbl-ssid">Or enter the network name (SSID)</label>
@@ -2195,6 +2209,7 @@ SETUP_CAPTIVE_HTML = """<!doctype html><html lang="en"><head><meta charset="utf-
 </div>
 
 <div class="card" id="step-audio" style="display:none">
+ <p class="muted" id="audio-intro">Pick the DAC / output device this player should send audio to. You can change this later from Settings.</p>
  <label id="lbl-audio">Audio output</label>
  <div id="audiodevs"></div>
  <p class="muted" id="audiomsg"></p>
@@ -2202,6 +2217,7 @@ SETUP_CAPTIVE_HTML = """<!doctype html><html lang="en"><head><meta charset="utf-
 </div>
 
 <div class="card" id="step-lyrion" style="display:none">
+ <p class="muted" id="lyrion-intro">Choose where your music library lives: on this device, or on a Lyrion server you already run elsewhere on your network.</p>
  <label id="lbl-lyrion">Music server (Lyrion)</label>
  <button onclick="setLyrion('local')" id="btn-lyrion-local">Use this device as the server</button>
  <button class="sec" onclick="showLyrionFollow()" id="btn-lyrion-follow">Use a server already on my network</button>
@@ -2231,6 +2247,7 @@ SETUP_CAPTIVE_HTML = """<!doctype html><html lang="en"><head><meta charset="utf-
 </div>
 
 <div class="card" id="step-timezone" style="display:none">
+ <p class="muted" id="timezone-intro">Used for the clock, alarms and any scheduled tasks on this device.</p>
  <label id="lbl-timezone">Time zone</label>
  <select id="tzselect"></select>
  <button onclick="saveTimezone()" id="btn-tz-save">Save and continue</button>
@@ -2266,18 +2283,23 @@ SETUP_CAPTIVE_HTML = """<!doctype html><html lang="en"><head><meta charset="utf-
 
 <script>
 var STRINGS={
- en:{restoreIntro:'Setting up a new device? Restore a previous backup, or start fresh.',fresh:'Start fresh',restoreFile:'Backup file',restorePass:'Passphrase (if the backup is encrypted)',restore:'Restore from backup',restoring:'Restoring…',restoreDone:'Restore complete. Rebooting to apply it — reconnect in about a minute.',restoreFailed:'Restore failed.',restoreNoFile:'Choose a backup file first.',wifi:'Wi-Fi network',ssid:'Or enter the network name (SSID)',pass:'Wi-Fi password',connect:'Connect via Wi-Fi',wired:"I'm connected via cable (Ethernet)",connecting:'Connecting… the setup Wi-Fi will turn off. Reconnect your phone to your home network, then open http://hifiplayer.local to continue setup where you left off.',noCable:'No cable detected',updateRequired:'Update required',updateNow:'Update now',updateChecking:'Checking for updates…',updateAutoStarting:'An update is available and required — starting it now…',updateDevAvailable:'A preview (dev channel) update is available and required to continue setup.',updateApplying:'Updating — this can take a few minutes…',updateDoneRebooting:'Update complete. Rebooting…',updateFailed:'Update check/install failed. Retrying is required to continue setup.',devname:'Name this player',devnameHelp:'Used as its network name (e.g. "livingroom" → livingroom.local) and its Bluetooth/multiroom name. Letters, numbers and dashes only — leave empty to keep the default.',devnameSaving:'Saving…',mode:'Device mode',modeGui:'With screen (touchscreen)',modeHeadless:'Headless (no screen)',modeOff:'Server only (player off)',modeHelp:'In headless/server-only you manage everything from this web interface.',pointer:'Mouse pointer',pointerHelp:"Show the mouse cursor on screen? Leave it off for a touchscreen — turn it on if you're driving this device with a mouse.",pointerHide:'Touchscreen (hide pointer)',pointerShow:'Mouse (show pointer)',audio:'Audio output',audioContinue:'Continue',lyrion:'Music server (Lyrion)',lyrionLocal:'Use this device as the server',lyrionFollow:'Use a server already on my network',lyrionHost:'Server address',lyrionUse:'Use this server',lyrionInstall:'Install Lyrion',lyrionChecking:'Checking whether Lyrion Music Server is installed…',lyrionMissing:"Lyrion Music Server isn't installed yet.",lyrionInstalling:'Installing Lyrion Music Server…',continueAnyway:'Continue anyway',sources:'Music sources',sourcesIntro:"Manage local, network (SMB) and USB sources below. Optional: you can also do this later from Settings. Lyrion's own setup wizard scans the library once you finish here.",continueBtn:'Continue',timezone:'Time zone',tzSave:'Save and continue',account:'Web admin account',accountHelp:"Used to log into this device's web interface (http://…) from now on.",username:'Username',password:'Password',confirmPassword:'Confirm password',createAccount:'Create account',creating:'Creating…',accountMismatch:'Passwords do not match.',accountTooShort:'Username needs at least 3 characters, password at least 8.',finishGui:'Screen mode set. Setup is complete — press "Complete setup" below: the hotspot will turn off, reconnect your phone to your network. The device will then start its normal on-screen interface.',finishHeadless:'Headless mode set. Press "Complete setup" below: the hotspot will turn off, reconnect your phone to your network and open http://hifiplayer.local',finishOff:'Server-only mode set — this device will not play audio locally. Press "Complete setup" below: the hotspot will turn off, reconnect your phone to your network and open http://hifiplayer.local',finishBtn:'Complete setup',finishDone:'Setup complete — hotspot off. Open http://hifiplayer.local from your network.',finishToLyrion:"Setup complete. Taking you to Lyrion's own setup wizard to finish scanning your library…",rebootTitle:'Rebooting…',rebootGoingDown:'The device is restarting.',rebootComingBack:'Waiting for the device to come back online.',rebootAuto:'This page will reconnect automatically — no need to refresh.',error:'Error: '},
- it:{restoreIntro:'Stai configurando un nuovo dispositivo? Ripristina un backup precedente, oppure inizia da zero.',fresh:'Inizia da zero',restoreFile:'File di backup',restorePass:'Passphrase (se il backup è cifrato)',restore:'Ripristina da backup',restoring:'Ripristino in corso…',restoreDone:'Ripristino completato. Riavvio in corso per applicarlo — riconnettiti tra circa un minuto.',restoreFailed:'Ripristino non riuscito.',restoreNoFile:'Scegli prima un file di backup.',wifi:'Rete Wi-Fi',ssid:'Oppure inserisci il nome (SSID)',pass:'Password Wi-Fi',connect:'Connetti via Wi-Fi',wired:'Sono connesso via cavo (Ethernet)',connecting:'Connessione in corso… il Wi-Fi di setup si spegnerà. Riconnetti il telefono alla tua rete di casa, poi apri http://hifiplayer.local per continuare la configurazione da dove l\\'hai lasciata.',noCable:'Nessun cavo rilevato',updateRequired:'Aggiornamento richiesto',updateNow:'Aggiorna ora',updateChecking:'Controllo aggiornamenti…',updateAutoStarting:'È disponibile un aggiornamento obbligatorio — avvio in corso…',updateDevAvailable:'È disponibile un aggiornamento di anteprima (canale dev), obbligatorio per continuare il setup.',updateApplying:'Aggiornamento in corso — può richiedere qualche minuto…',updateDoneRebooting:'Aggiornamento completato. Riavvio in corso…',updateFailed:'Controllo/installazione aggiornamento fallito. È necessario riprovare per continuare il setup.',devname:'Dai un nome a questo player',devnameHelp:'Usato come nome di rete (es. "salotto" → salotto.local) e come nome Bluetooth/multiroom. Solo lettere, numeri e trattini — lascia vuoto per mantenere quello predefinito.',devnameSaving:'Salvataggio…',mode:'Modalità dispositivo',modeGui:'Con schermo (touchscreen)',modeHeadless:'Headless (senza schermo)',modeOff:'Solo server (player spento)',modeHelp:'In headless/solo server gestisci tutto da questa interfaccia web.',pointer:'Puntatore del mouse',pointerHelp:'Mostrare il cursore del mouse a schermo? Lascialo spento per un touchscreen — accendilo se usi il dispositivo con un mouse.',pointerHide:'Touchscreen (nascondi puntatore)',pointerShow:'Mouse (mostra puntatore)',audio:'Uscita audio',audioContinue:'Continua',lyrion:'Server musicale (Lyrion)',lyrionLocal:'Usa questo dispositivo come server',lyrionFollow:'Usa un server già presente sulla rete',lyrionHost:'Indirizzo del server',lyrionUse:'Usa questo server',lyrionInstall:'Installa Lyrion',lyrionChecking:'Verifica se Lyrion Music Server è installato…',lyrionMissing:'Lyrion Music Server non è ancora installato.',lyrionInstalling:'Installazione di Lyrion Music Server…',continueAnyway:'Continua comunque',sources:'Sorgenti musicali',sourcesIntro:'Gestisci sorgenti locali, di rete (SMB) e USB qui sotto. Facoltativo: puoi farlo anche più tardi dalle Impostazioni. La scansione della libreria la fa il setup wizard di Lyrion una volta terminato qui.',continueBtn:'Continua',timezone:'Fuso orario',tzSave:'Salva e continua',account:'Account amministratore web',accountHelp:"Usato per accedere all'interfaccia web di questo dispositivo (http://…) da ora in poi.",username:'Nome utente',password:'Password',confirmPassword:'Conferma password',createAccount:'Crea account',creating:'Creazione…',accountMismatch:'Le password non coincidono.',accountTooShort:'Nome utente di almeno 3 caratteri, password di almeno 8.',finishGui:'Modalità con schermo impostata. Il setup è completo — premi "Completa setup" qui sotto: l\\'hotspot si spegnerà, riconnetti il telefono alla tua rete. Il dispositivo avvierà poi la sua normale interfaccia a schermo.',finishHeadless:'Modalità headless impostata. Premi "Completa setup" qui sotto: l\\'hotspot si spegnerà, riconnetti il telefono alla tua rete e apri http://hifiplayer.local',finishOff:'Modalità solo server impostata — questo dispositivo non riprodurrà audio in locale. Premi "Completa setup" qui sotto: l\\'hotspot si spegnerà, riconnetti il telefono alla tua rete e apri http://hifiplayer.local',finishBtn:'Completa setup',finishDone:'Setup completato — hotspot spento. Apri http://hifiplayer.local dalla tua rete.',finishToLyrion:'Setup completato. Ti porto al setup wizard di Lyrion per finire la scansione della libreria…',rebootTitle:'Riavvio in corso…',rebootGoingDown:'Il dispositivo si sta riavviando.',rebootComingBack:'In attesa che il dispositivo torni online.',rebootAuto:'Questa pagina si ricollegherà automaticamente — non serve aggiornarla.',error:'Errore: '}
+ en:{restoreIntro:'Setting up a new device? Restore a previous backup, or start fresh.',fresh:'Start fresh',restoreFile:'Backup file',restorePass:'Passphrase (if the backup is encrypted)',restore:'Restore from backup',restoring:'Restoring…',restoreDone:'Restore complete. Rebooting to apply it — reconnect in about a minute.',restoreFailed:'Restore failed.',restoreNoFile:'Choose a backup file first.',wifi:'Wi-Fi network',ssid:'Or enter the network name (SSID)',pass:'Wi-Fi password',connect:'Connect via Wi-Fi',wired:"I'm connected via cable (Ethernet)",connecting:'Connecting… the setup Wi-Fi will turn off. Reconnect your phone to your home network, then open http://hifiplayer.local to continue setup where you left off.',noCable:'No cable detected',netIntro:'Connect this device to your home network so it can finish setting up and be reachable from your phone/PC afterwards.',stepLabel:'Step {n} of {total}',audioIntro:'Pick the DAC / output device this player should send audio to. You can change this later from Settings.',lyrionIntro:'Choose where your music library lives: on this device, or on a Lyrion server you already run elsewhere on your network.',timezoneIntro:'Used for the clock, alarms and any scheduled tasks on this device.',updateRequired:'Update required',updateNow:'Update now',updateChecking:'Checking for updates…',updateAutoStarting:'An update is available and required — starting it now…',updateDevAvailable:'A preview (dev channel) update is available and required to continue setup.',updateApplying:'Updating — this can take a few minutes…',updateDoneRebooting:'Update complete. Rebooting…',updateFailed:'Update check/install failed. Retrying is required to continue setup.',devname:'Name this player',devnameHelp:'Used as its network name (e.g. "livingroom" → livingroom.local) and its Bluetooth/multiroom name. Letters, numbers and dashes only — leave empty to keep the default.',devnameSaving:'Saving…',mode:'Device mode',modeGui:'With screen (touchscreen)',modeHeadless:'Headless (no screen)',modeOff:'Server only (player off)',modeHelp:'In headless/server-only you manage everything from this web interface.',pointer:'Mouse pointer',pointerHelp:"Show the mouse cursor on screen? Leave it off for a touchscreen — turn it on if you're driving this device with a mouse.",pointerHide:'Touchscreen (hide pointer)',pointerShow:'Mouse (show pointer)',audio:'Audio output',audioContinue:'Continue',lyrion:'Music server (Lyrion)',lyrionLocal:'Use this device as the server',lyrionFollow:'Use a server already on my network',lyrionHost:'Server address',lyrionUse:'Use this server',lyrionInstall:'Install Lyrion',lyrionChecking:'Checking whether Lyrion Music Server is installed…',lyrionMissing:"Lyrion Music Server isn't installed yet.",lyrionInstalling:'Installing Lyrion Music Server…',continueAnyway:'Continue anyway',sources:'Music sources',sourcesIntro:"Manage local, network (SMB) and USB sources below. Optional: you can also do this later from Settings. Lyrion's own setup wizard scans the library once you finish here.",continueBtn:'Continue',timezone:'Time zone',tzSave:'Save and continue',account:'Web admin account',accountHelp:"Used to log into this device's web interface (http://…) from now on.",username:'Username',password:'Password',confirmPassword:'Confirm password',createAccount:'Create account',creating:'Creating…',accountMismatch:'Passwords do not match.',accountTooShort:'Username needs at least 3 characters, password at least 8.',finishGui:'Screen mode set. Setup is complete — press "Complete setup" below: the hotspot will turn off, reconnect your phone to your network. The device will then start its normal on-screen interface.',finishHeadless:'Headless mode set. Press "Complete setup" below: the hotspot will turn off, reconnect your phone to your network and open http://hifiplayer.local',finishOff:'Server-only mode set — this device will not play audio locally. Press "Complete setup" below: the hotspot will turn off, reconnect your phone to your network and open http://hifiplayer.local',finishBtn:'Complete setup',finishDone:'Setup complete — hotspot off. Open http://hifiplayer.local from your network.',finishToLyrion:"Setup complete. Taking you to Lyrion's own setup wizard to finish scanning your library…",rebootTitle:'Rebooting…',rebootGoingDown:'The device is restarting.',rebootComingBack:'Waiting for the device to come back online.',rebootAuto:'This page will reconnect automatically — no need to refresh.',error:'Error: '},
+ it:{restoreIntro:'Stai configurando un nuovo dispositivo? Ripristina un backup precedente, oppure inizia da zero.',fresh:'Inizia da zero',restoreFile:'File di backup',restorePass:'Passphrase (se il backup è cifrato)',restore:'Ripristina da backup',restoring:'Ripristino in corso…',restoreDone:'Ripristino completato. Riavvio in corso per applicarlo — riconnettiti tra circa un minuto.',restoreFailed:'Ripristino non riuscito.',restoreNoFile:'Scegli prima un file di backup.',wifi:'Rete Wi-Fi',ssid:'Oppure inserisci il nome (SSID)',pass:'Password Wi-Fi',connect:'Connetti via Wi-Fi',wired:'Sono connesso via cavo (Ethernet)',connecting:'Connessione in corso… il Wi-Fi di setup si spegnerà. Riconnetti il telefono alla tua rete di casa, poi apri http://hifiplayer.local per continuare la configurazione da dove l\\'hai lasciata.',noCable:'Nessun cavo rilevato',netIntro:'Collega questo dispositivo alla tua rete di casa così può completare la configurazione ed essere raggiungibile da telefono/PC in seguito.',stepLabel:'Passo {n} di {total}',audioIntro:'Scegli il DAC / dispositivo di uscita a cui questo player deve inviare l\\'audio. Puoi cambiarlo in seguito dalle Impostazioni.',lyrionIntro:'Scegli dove vive la tua libreria musicale: su questo dispositivo, oppure su un server Lyrion che hai già altrove sulla tua rete.',timezoneIntro:'Usato per l\\'orologio, le sveglie e qualsiasi attività pianificata su questo dispositivo.',updateRequired:'Aggiornamento richiesto',updateNow:'Aggiorna ora',updateChecking:'Controllo aggiornamenti…',updateAutoStarting:'È disponibile un aggiornamento obbligatorio — avvio in corso…',updateDevAvailable:'È disponibile un aggiornamento di anteprima (canale dev), obbligatorio per continuare il setup.',updateApplying:'Aggiornamento in corso — può richiedere qualche minuto…',updateDoneRebooting:'Aggiornamento completato. Riavvio in corso…',updateFailed:'Controllo/installazione aggiornamento fallito. È necessario riprovare per continuare il setup.',devname:'Dai un nome a questo player',devnameHelp:'Usato come nome di rete (es. "salotto" → salotto.local) e come nome Bluetooth/multiroom. Solo lettere, numeri e trattini — lascia vuoto per mantenere quello predefinito.',devnameSaving:'Salvataggio…',mode:'Modalità dispositivo',modeGui:'Con schermo (touchscreen)',modeHeadless:'Headless (senza schermo)',modeOff:'Solo server (player spento)',modeHelp:'In headless/solo server gestisci tutto da questa interfaccia web.',pointer:'Puntatore del mouse',pointerHelp:'Mostrare il cursore del mouse a schermo? Lascialo spento per un touchscreen — accendilo se usi il dispositivo con un mouse.',pointerHide:'Touchscreen (nascondi puntatore)',pointerShow:'Mouse (mostra puntatore)',audio:'Uscita audio',audioContinue:'Continua',lyrion:'Server musicale (Lyrion)',lyrionLocal:'Usa questo dispositivo come server',lyrionFollow:'Usa un server già presente sulla rete',lyrionHost:'Indirizzo del server',lyrionUse:'Usa questo server',lyrionInstall:'Installa Lyrion',lyrionChecking:'Verifica se Lyrion Music Server è installato…',lyrionMissing:'Lyrion Music Server non è ancora installato.',lyrionInstalling:'Installazione di Lyrion Music Server…',continueAnyway:'Continua comunque',sources:'Sorgenti musicali',sourcesIntro:'Gestisci sorgenti locali, di rete (SMB) e USB qui sotto. Facoltativo: puoi farlo anche più tardi dalle Impostazioni. La scansione della libreria la fa il setup wizard di Lyrion una volta terminato qui.',continueBtn:'Continua',timezone:'Fuso orario',tzSave:'Salva e continua',account:'Account amministratore web',accountHelp:"Usato per accedere all'interfaccia web di questo dispositivo (http://…) da ora in poi.",username:'Nome utente',password:'Password',confirmPassword:'Conferma password',createAccount:'Crea account',creating:'Creazione…',accountMismatch:'Le password non coincidono.',accountTooShort:'Nome utente di almeno 3 caratteri, password di almeno 8.',finishGui:'Modalità con schermo impostata. Il setup è completo — premi "Completa setup" qui sotto: l\\'hotspot si spegnerà, riconnetti il telefono alla tua rete. Il dispositivo avvierà poi la sua normale interfaccia a schermo.',finishHeadless:'Modalità headless impostata. Premi "Completa setup" qui sotto: l\\'hotspot si spegnerà, riconnetti il telefono alla tua rete e apri http://hifiplayer.local',finishOff:'Modalità solo server impostata — questo dispositivo non riprodurrà audio in locale. Premi "Completa setup" qui sotto: l\\'hotspot si spegnerà, riconnetti il telefono alla tua rete e apri http://hifiplayer.local',finishBtn:'Completa setup',finishDone:'Setup completato — hotspot spento. Apri http://hifiplayer.local dalla tua rete.',finishToLyrion:'Setup completato. Ti porto al setup wizard di Lyrion per finire la scansione della libreria…',rebootTitle:'Riavvio in corso…',rebootGoingDown:'Il dispositivo si sta riavviando.',rebootComingBack:'In attesa che il dispositivo torni online.',rebootAuto:'Questa pagina si ricollegherà automaticamente — non serve aggiornarla.',error:'Errore: '}
 };
-var LANG=(new URLSearchParams(location.search).get('lang')||'en');
-if(STRINGS[LANG]===undefined)LANG='en';
-var S=STRINGS[LANG];
-document.getElementById('lang-'+LANG).className='active';
+// Chosen once, up front, on step-lang -- persisted so it survives the
+// network step's own reload (Wi-Fi hands off from the setup hotspot to the
+// phone's home network, dropping this page entirely) and every other reload
+// for the rest of this wizard run. No in-wizard way to change it afterwards,
+// same as Android's own first-run language screen.
+var LANG=localStorage.getItem('hifiSetupLang')||'';
+var S=STRINGS[LANG]||STRINGS.en;
+function applyStrings(){
 document.getElementById('restore-intro').textContent=S.restoreIntro;
 document.getElementById('btn-fresh').textContent=S.fresh;
 document.getElementById('lbl-restorefile').textContent=S.restoreFile;
 document.getElementById('lbl-restorepass').textContent=S.restorePass;
 document.getElementById('btn-restore').textContent=S.restore;
+document.getElementById('net-intro').textContent=S.netIntro;
 document.getElementById('lbl-wifi').textContent=S.wifi;
 document.getElementById('lbl-ssid').textContent=S.ssid;
 document.getElementById('lbl-pass').textContent=S.pass;
@@ -2297,8 +2319,10 @@ document.getElementById('lbl-pointer').textContent=S.pointer;
 document.getElementById('pointer-help').textContent=S.pointerHelp;
 document.getElementById('btn-pointer-hide').textContent=S.pointerHide;
 document.getElementById('btn-pointer-show').textContent=S.pointerShow;
+document.getElementById('audio-intro').textContent=S.audioIntro;
 document.getElementById('lbl-audio').textContent=S.audio;
 document.getElementById('btn-audio-skip').textContent=S.audioContinue;
+document.getElementById('lyrion-intro').textContent=S.lyrionIntro;
 document.getElementById('lbl-lyrion').textContent=S.lyrion;
 document.getElementById('btn-lyrion-local').textContent=S.lyrionLocal;
 document.getElementById('btn-lyrion-follow').textContent=S.lyrionFollow;
@@ -2310,6 +2334,7 @@ document.getElementById('btn-lyrion-install-skip').textContent=S.continueAnyway;
 document.getElementById('lbl-sources').textContent=S.sources;
 document.getElementById('sources-intro').textContent=S.sourcesIntro;
 document.getElementById('btn-sources-continue').textContent=S.continueBtn;
+document.getElementById('timezone-intro').textContent=S.timezoneIntro;
 document.getElementById('lbl-timezone').textContent=S.timezone;
 document.getElementById('btn-tz-save').textContent=S.tzSave;
 document.getElementById('lbl-account').textContent=S.account;
@@ -2318,8 +2343,9 @@ document.getElementById('lbl-acc-user').textContent=S.username;
 document.getElementById('lbl-acc-pass').textContent=S.password;
 document.getElementById('lbl-acc-pass2').textContent=S.confirmPassword;
 document.getElementById('btn-account').textContent=S.createAccount;
+}
 
-var STEPS=['step-restore','step-net','step-update','step-name','step-mode','step-pointer','step-audio','step-lyrion','step-lyrion-install','step-sources','step-timezone','step-account','step-finish'];
+var STEPS=['step-lang','step-restore','step-net','step-update','step-name','step-mode','step-pointer','step-audio','step-lyrion','step-lyrion-install','step-sources','step-timezone','step-account','step-finish'];
 var lyrionMode='local';
 var netPhaseDone=false;
 var restoringFromBackup=false;
@@ -2330,9 +2356,47 @@ var deviceHost='hifiplayer';
 // step-name, that address changes, so route those strings through this.
 function hostMsg(s){return s.replace(/hifiplayer\.local/g,deviceHost+'.local')}
 function h(){return {'X-CSRF-Token':(document.cookie.match(/csrf=([^;]+)/)||[])[1]||'','X-UI-Lang':LANG}}
-function show(id){STEPS.forEach(function(s){document.getElementById(s).style.display=(s===id?'block':'none')})}
+function show(id){
+  STEPS.forEach(function(s){
+    var el=document.getElementById(s);
+    if(s===id){
+      el.style.display='block';
+      el.classList.remove('step-in');
+      void el.offsetWidth; // reflow, so re-adding the class restarts the animation
+      el.classList.add('step-in');
+    }else{
+      el.style.display='none';
+    }
+  });
+  updateProgress(id);
+}
+// "Step N of total" orientation bar -- excludes step-lang (nothing to count
+// yet) and step-finish (there's nothing after it) from the denominator, so it
+// reads as progress through the actual configuration steps.
+function updateProgress(id){
+  var wrap=document.getElementById('progress-wrap');
+  if(id==='step-lang'||id==='step-finish'){wrap.style.display='none';return}
+  var pos=STEPS.indexOf(id);
+  var total=STEPS.length-2;
+  wrap.style.display='block';
+  document.getElementById('progress-label').textContent=
+    (S.stepLabel||'Step {n} of {total}').replace('{n}',pos).replace('{total}',total);
+  document.getElementById('progress-fill').style.width=Math.round(pos/total*100)+'%';
+}
 function jpost(p,b){return fetch(p,{method:'POST',headers:Object.assign({'Content-Type':'application/json'},h()),body:JSON.stringify(b||{})}).then(function(r){return r.json()})}
 function jget(p){return fetch(p,{headers:h()}).then(function(r){return r.json()})}
+
+function pickLang(l){
+  LANG=l;
+  localStorage.setItem('hifiSetupLang',l);
+  S=STRINGS[LANG];
+  applyStrings();
+  show('step-restore');
+}
+// Already chosen in an earlier visit this same wizard run (e.g. this is the
+// reload right after the network step handed off from the setup hotspot to
+// the phone's home network) -- skip straight past step-lang.
+if(STRINGS[LANG]){applyStrings();show('step-restore')}
 
 function load(){if(netPhaseDone)return;fetch('/api/provision/status').then(function(r){return r.json()}).then(function(s){
   if(!s.pending){return}
