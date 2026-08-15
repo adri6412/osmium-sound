@@ -121,6 +121,10 @@
         "label": "Lyrion Music Server",
         "desc": "Server musicale interno o esterno, e la sua versione"
       },
+      "playback": {
+        "label": "Riproduzione",
+        "desc": "Transizioni tra i brani, ReplayGain, volume fisso, apertura automatica in riproduzione"
+      },
       "display": {
         "label": "Modalità schermo",
         "desc": "Interfaccia su schermo o headless"
@@ -338,6 +342,33 @@
       "searching": "Cerco server sulla rete…",
       "roleUpdated": "Server musicale aggiornato"
     },
+    "playback": {
+      "help": "Opzioni di riproduzione applicate al player attivo: transizioni tra i brani (crossfade/gapless), normalizzazione del volume (ReplayGain) e uscita a volume fisso (bit-perfect).",
+      "noPlayer": "Nessun player attivo trovato. Avvia la riproduzione sul dispositivo o verifica la connessione a Lyrion.",
+      "transition": {
+        "label": "Transizione tra brani",
+        "0": "Nessuna (gapless)",
+        "1": "Dissolvenza incrociata",
+        "2": "Dissolvenza in entrata",
+        "3": "Dissolvenza in uscita",
+        "4": "Dissolvenza entrata/uscita"
+      },
+      "transDuration": "Durata transizione",
+      "replayGain": {
+        "label": "Normalizzazione volume (ReplayGain)",
+        "0": "Off",
+        "1": "Brano",
+        "2": "Album",
+        "3": "Intelligente"
+      },
+      "fixedVolume": "Volume fisso al 100% (bit-perfect)",
+      "fixedVolumeHelp": "Esclude completamente il controllo volume digitale del player: l'uscita è sempre al 100%. Necessario per la riproduzione bit-perfect; disattivalo per tornare a usare il cursore del volume a schermo.",
+      "saved": "Impostazione salvata.",
+      "autoExpandLabel": "Apertura automatica in riproduzione",
+      "autoExpandHelp": "Quando parte un brano, apre automaticamente la schermata a schermo intero \"in riproduzione\" dopo questi secondi. Si apre una sola volta per brano: se poi si naviga altrove manualmente dal chiosco, resta ferma.",
+      "autoExpandChanged": "Preferenza salvata",
+      "autoExpandFailed": "Salvataggio preferenza fallito"
+    },
     "display": {
       "currentLabel": "Attuale",
       "headless": "Headless (senza schermo)",
@@ -364,10 +395,6 @@
       "vuMeterOff": "Disattivo",
       "vuMeterChanged": "Preferenza VU meter salvata",
       "vuMeterFailed": "Salvataggio preferenza fallito",
-      "autoExpandLabel": "Apertura automatica in riproduzione",
-      "autoExpandHelp": "Quando parte un brano, apre automaticamente la schermata a schermo intero \"in riproduzione\" dopo questi secondi. Si apre una sola volta per brano: se poi si naviga altrove manualmente dal chiosco, resta ferma.",
-      "autoExpandChanged": "Preferenza salvata",
-      "autoExpandFailed": "Salvataggio preferenza fallito",
       "playerLabel": "Player",
       "playerHelp": "Spegni il player stesso per un'unità solo-server — Lyrion Music Server e tutto il resto continuano a funzionare, questo dispositivo semplicemente non riproduce più audio in locale. Utile per un dispositivo in un ripostiglio che pilota altri player altrove.",
       "playerOn": "Acceso",
@@ -388,6 +415,7 @@
       "channelDev": "sviluppo (dev)",
       "channelProd": "stabile (prod)",
       "channelAlpha": "Alpha (privato)",
+      "confirmProdToDev": "Una volta aggiornato ad una release di dev sarà possibile tornare in produzione solo quando uscirà una release di produzione più nuova di quella di dev.",
       "stable": "Stabile",
       "dev": "Sviluppo",
       "upToDate": "aggiornato",

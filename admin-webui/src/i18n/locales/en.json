@@ -121,6 +121,10 @@
         "label": "Lyrion Music Server",
         "desc": "Internal or external music server, and its version"
       },
+      "playback": {
+        "label": "Playback",
+        "desc": "Track transitions, ReplayGain, fixed volume, auto-open now playing"
+      },
       "display": {
         "label": "Display mode",
         "desc": "On-screen interface or headless"
@@ -338,6 +342,33 @@
       "searching": "Searching the network for servers…",
       "roleUpdated": "Music server updated"
     },
+    "playback": {
+      "help": "Playback options applied to the active player: track transitions (crossfade/gapless), volume normalisation (ReplayGain), and fixed-volume (bit-perfect) output.",
+      "noPlayer": "No active player found. Start playback on the device or check the Lyrion connection.",
+      "transition": {
+        "label": "Track transition",
+        "0": "None (gapless)",
+        "1": "Crossfade",
+        "2": "Fade in",
+        "3": "Fade out",
+        "4": "Fade in/out"
+      },
+      "transDuration": "Transition duration",
+      "replayGain": {
+        "label": "Volume normalisation (ReplayGain)",
+        "0": "Off",
+        "1": "Track",
+        "2": "Album",
+        "3": "Smart"
+      },
+      "fixedVolume": "Fixed volume 100% (bit-perfect)",
+      "fixedVolumeHelp": "Bypasses the player's digital volume control entirely — output is always at 100%. Required for bit-perfect playback; turn it off to use the on-screen volume slider again.",
+      "saved": "Setting saved.",
+      "autoExpandLabel": "Auto-open now playing",
+      "autoExpandHelp": "When a song starts playing, automatically open the fullscreen now-playing view after this many seconds. It only opens once per song — if the kiosk is navigated away manually, it stays put.",
+      "autoExpandChanged": "Auto-open preference saved",
+      "autoExpandFailed": "Could not save the preference"
+    },
     "display": {
       "currentLabel": "Current",
       "headless": "Headless (no screen)",
@@ -364,10 +395,6 @@
       "vuMeterOff": "Off",
       "vuMeterChanged": "VU meter preference saved",
       "vuMeterFailed": "Could not save the preference",
-      "autoExpandLabel": "Auto-open now playing",
-      "autoExpandHelp": "When a song starts playing, automatically open the fullscreen now-playing view after this many seconds. It only opens once per song — if the kiosk is navigated away manually, it stays put.",
-      "autoExpandChanged": "Auto-open preference saved",
-      "autoExpandFailed": "Could not save the preference",
       "playerLabel": "Player",
       "playerHelp": "Turn the player itself off for a server-only unit — Lyrion Music Server and everything else keeps running, this device just never plays audio locally. Useful for a box in a closet driving other players elsewhere.",
       "playerOn": "On",
@@ -388,6 +415,7 @@
       "channelDev": "development (dev)",
       "channelProd": "stable (prod)",
       "channelAlpha": "Alpha (private)",
+      "confirmProdToDev": "Once you update to a dev release, you will only be able to switch back to production once a production release newer than that dev release is out.",
       "stable": "Stable",
       "dev": "Development",
       "upToDate": "up to date",

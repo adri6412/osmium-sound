@@ -37,10 +37,32 @@ async function req(path, { method = 'GET', body } = {}) {
   return { ok: res.ok, status: res.status, data };
 }
 
+// Lyrion JSON-RPC (per-player prefs: transitions, ReplayGain, fixed volume).
+// Proxied through webui_server's /api/lyrion to avoid CORS — see that route's
+// comment in webui_server.py. Same request shape as the kiosk's own
+// lyrionApi.js (LYRION_BASE there is always this device's local LMS, so this
+// only resolves prefs for a local server, same as the proxy).
+async function lyrionRequest(playerMac, command) {
+  const r = await req('/api/lyrion', { method: 'POST', body: { id: 1, method: 'slim.request', params: [playerMac, command] } });
+  return { ok: r.ok, status: r.status, data: r.data && r.data.result };
+}
+
 export const api = {
   get: (p) => req(p),
   post: (p, body) => req(p, { method: 'POST', body }),
   del: (p) => req(p, { method: 'DELETE' }),
+
+  lyrionPlayers: async () => {
+    const r = await lyrionRequest('', ['serverstatus', 0, 999]);
+    return (r.data && r.data.players_loop) || [];
+  },
+  // Lyrion returns the queried value under `_p2` (and sometimes under the
+  // pref name itself) — same fallback as the kiosk's getPlayerPref.
+  lyrionGetPref: async (playerMac, pref) => {
+    const r = await lyrionRequest(playerMac, ['playerpref', pref, '?']);
+    return (r.data && (r.data._p2 ?? r.data[pref])) ?? null;
+  },
+  lyrionSetPref: (playerMac, pref, value) => lyrionRequest(playerMac, ['playerpref', pref, value]),
 
   // auth
   authStatus: () => req('/api/auth/status'),

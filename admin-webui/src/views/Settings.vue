@@ -26,6 +26,7 @@ const sections = computed(() => [
   { key: 'services',  label: t('settings.sections.services.label'),  desc: t('settings.sections.services.desc') },
   { key: 'tailscale', label: t('settings.sections.tailscale.label'), desc: t('settings.sections.tailscale.desc') },
   { key: 'lyrion',    label: t('settings.sections.lyrion.label'),    desc: t('settings.sections.lyrion.desc') },
+  { key: 'playback',  label: t('settings.sections.playback.label'),  desc: t('settings.sections.playback.desc') },
   { key: 'display',   label: t('settings.sections.display.label'),   desc: t('settings.sections.display.desc') },
   { key: 'timezone',  label: t('settings.sections.timezone.label'),  desc: t('settings.sections.timezone.desc') },
   { key: 'updates',   label: t('settings.sections.updates.label'),   desc: t('settings.sections.updates.desc') },
@@ -163,6 +164,61 @@ async function pickDevice(id) {
 async function saveName() {
   const r = await api.sysPost('player_name', { name: playerName.value });
   say(r.ok && r.data.success !== false ? t('settings.audio.nameSaved') : bodyMsg(r, t('settings.audio.saveFailed')), !(r.ok && r.data.success !== false));
+}
+
+// ── Playback (per-player Lyrion prefs: transitions, ReplayGain, fixed volume) ──
+// Mirrors the kiosk's Settings.jsx loadPlaybackPrefs: `players_loop` isn't
+// necessarily "this appliance first" (companion-app SqueezePlayer, other
+// multiroom players can also be in the list) — resolve by matching this
+// device's own squeezelite name, same as the kiosk and the "audio" section's
+// player_name lookup above.
+const playbackMac = ref(null);
+const transitionType = ref('0');     // 0 none … 4 fade in/out
+const transitionDuration = ref('10'); // seconds
+const replayGainMode = ref('0');     // 0 off / 1 track / 2 album / 3 smart
+// digitalVolumeControl: 1 = LMS applies its own digital volume (adjustable),
+// 0 = output fixed at 100% — required for bit-perfect playback.
+const digitalVolumeControl = ref('1');
+async function loadPlayback() {
+  try {
+    const players = await api.lyrionPlayers();
+    const localName = playerName.value || (await api.sys('player_name')).data?.name;
+    const local = localName && players.find((p) => p.name === localName);
+    const mac = (local || players[0])?.playerid;
+    if (!mac) { playbackMac.value = null; return; }
+    playbackMac.value = mac;
+    const [tt, td, rg, dvc] = await Promise.all([
+      api.lyrionGetPref(mac, 'transitionType'),
+      api.lyrionGetPref(mac, 'transitionDuration'),
+      api.lyrionGetPref(mac, 'replayGainMode'),
+      api.lyrionGetPref(mac, 'digitalVolumeControl'),
+    ]);
+    if (tt != null) transitionType.value = String(tt);
+    if (td != null) transitionDuration.value = String(td);
+    if (rg != null) replayGainMode.value = String(rg);
+    if (dvc != null) digitalVolumeControl.value = String(dvc);
+  } catch (_) { playbackMac.value = null; }
+}
+function setTransitionType(v) {
+  transitionType.value = v;
+  if (playbackMac.value) api.lyrionSetPref(playbackMac.value, 'transitionType', v);
+  say(t('settings.playback.saved'));
+}
+function setTransitionDuration(v) {
+  transitionDuration.value = v;
+  if (playbackMac.value) api.lyrionSetPref(playbackMac.value, 'transitionDuration', v);
+  say(t('settings.playback.saved'));
+}
+function setReplayGain(v) {
+  replayGainMode.value = v;
+  if (playbackMac.value) api.lyrionSetPref(playbackMac.value, 'replayGainMode', v);
+  say(t('settings.playback.saved'));
+}
+function setFixedVolume(on) {
+  const next = on ? '0' : '1';
+  digitalVolumeControl.value = next;
+  if (playbackMac.value) api.lyrionSetPref(playbackMac.value, 'digitalVolumeControl', next);
+  say(t('settings.playback.saved'));
 }
 
 // ── DSP ──────────────────────────────────────────────────────────
@@ -489,8 +545,8 @@ async function loadAutoExpand() { const r = await api.sys('nowplaying_autoexpand
 async function setAutoExpand(seconds) {
   if (seconds === autoExpand.value) return;
   const r = await api.sysPost('nowplaying_autoexpand', { seconds });
-  if (r.ok && r.data.success !== false) { autoExpand.value = r.data.seconds; say(bodyMsg(r, t('settings.display.autoExpandChanged'))); }
-  else say(bodyMsg(r, t('settings.display.autoExpandFailed')), true);
+  if (r.ok && r.data.success !== false) { autoExpand.value = r.data.seconds; say(bodyMsg(r, t('settings.playback.autoExpandChanged'))); }
+  else say(bodyMsg(r, t('settings.playback.autoExpandFailed')), true);
 }
 
 // ── updates (prod/dev[/alpha] channel; single "update all" + blocking modal) ─
@@ -522,6 +578,9 @@ async function loadChannel() {
 }
 async function setChannel(c) {
   if (applying.active || c === channel.value) return;
+  // Downgrading back to prod from dev is gated by a newer prod release, so
+  // warn before the switch rather than after — the user can't just flip back.
+  if (channel.value === 'prod' && c === 'dev' && !confirm(t('settings.updates.confirmProdToDev'))) return;
   channel.value = c;
   const r = await api.sysPost('ota_channel', { channel: c });
   const changedKey = { prod: 'channelChangedProd', dev: 'channelChangedDev', alpha: 'channelChangedAlpha' }[c] || 'channelChangedDev';
@@ -858,7 +917,7 @@ async function saveBackupScheduled(v) {
 }
 
 onMounted(async () => {
-  loadNet(); loadAudio(); loadDsp(); loadFir(); loadToggles(); loadShell(); loadLms(); loadLyrion();
+  loadNet(); loadAudio(); loadDsp(); loadFir(); loadToggles(); loadShell(); loadLms(); loadLyrion(); loadPlayback();
   loadMode(); loadPlayerEnabled(); loadUiRes(); loadTimezone(); loadVuMeter(); loadAutoExpand(); loadChannel(); checkAll(); resumePlanIfRunning(); loadBackups(); loadTailscale(); loadHarCaptures();
   timezonePoll = setInterval(pollTimezone, 10000);
   // Tell the global UpdateProgressOverlay (mounted in App.vue) that this page
@@ -1082,6 +1141,48 @@ onUnmounted(() => {
       </template>
     </div>
 
+    <!-- Playback (per-player Lyrion prefs) -->
+    <div class="card" v-if="open === 'playback'">
+      <p class="sub">{{ t('settings.playback.help') }}</p>
+      <p class="muted" v-if="!playbackMac">{{ t('settings.playback.noPlayer') }}</p>
+      <template v-else>
+        <p class="sub">{{ t('settings.playback.transition.label') }}</p>
+        <span class="seg">
+          <button v-for="opt in ['0', '1', '2', '3', '4']" :key="opt"
+                  :class="{ active: transitionType === opt }" @click="setTransitionType(opt)">
+            {{ t('settings.playback.transition.' + opt) }}
+          </button>
+        </span>
+        <template v-if="transitionType !== '0'">
+          <p class="sub">{{ t('settings.playback.transDuration') }}: <span class="silver">{{ transitionDuration }}s</span></p>
+          <input type="range" min="1" max="15" :value="transitionDuration"
+                 style="width: 100%; accent-color: var(--gold);"
+                 @input="setTransitionDuration($event.target.value)" />
+        </template>
+        <p class="sub">{{ t('settings.playback.replayGain.label') }}</p>
+        <span class="seg">
+          <button v-for="opt in ['0', '1', '2', '3']" :key="opt"
+                  :class="{ active: replayGainMode === opt }" @click="setReplayGain(opt)">
+            {{ t('settings.playback.replayGain.' + opt) }}
+          </button>
+        </span>
+        <div class="between item">
+          <span>{{ t('settings.playback.fixedVolume') }}
+            <span class="muted">{{ t('settings.playback.fixedVolumeHelp') }}</span>
+          </span>
+          <Toggle :model-value="digitalVolumeControl === '0'" @update:model-value="setFixedVolume" />
+        </div>
+      </template>
+      <p class="sub">{{ t('settings.playback.autoExpandLabel') }}</p>
+      <p class="muted">{{ t('settings.playback.autoExpandHelp') }}</p>
+      <span class="seg">
+        <button v-for="s in [0, 3, 5, 10, 15]" :key="s"
+                :class="{ active: autoExpand === s }" @click="setAutoExpand(s)">
+          {{ s === 0 ? t('settings.display.vuMeterOff') : s + 's' }}
+        </button>
+      </span>
+    </div>
+
     <!-- Display mode -->
     <div class="card" v-if="open === 'display'">
       <p class="sub">{{ t('settings.display.currentLabel') }}: <span class="silver">{{ mode === 'headless' ? t('settings.display.headless') : t('settings.display.onscreen') }}</span></p>
@@ -1104,14 +1205,6 @@ onUnmounted(() => {
       <span class="seg">
         <button :class="{ active: vuMeter }" @click="setVuMeter(true)">{{ t('settings.display.vuMeterOn') }}</button>
         <button :class="{ active: !vuMeter }" @click="setVuMeter(false)">{{ t('settings.display.vuMeterOff') }}</button>
-      </span>
-      <p class="sub">{{ t('settings.display.autoExpandLabel') }}</p>
-      <p class="muted">{{ t('settings.display.autoExpandHelp') }}</p>
-      <span class="seg">
-        <button v-for="s in [0, 3, 5, 10, 15]" :key="s"
-                :class="{ active: autoExpand === s }" @click="setAutoExpand(s)">
-          {{ s === 0 ? t('settings.display.vuMeterOff') : s + 's' }}
-        </button>
       </span>
       <p class="sub">{{ t('settings.display.playerLabel') }}</p>
       <p class="muted">{{ t('settings.display.playerHelp') }}</p>
