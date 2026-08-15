@@ -786,9 +786,17 @@ function fmtBackupSize(n) {
   return n >= 1048576 ? (n / 1048576).toFixed(1) + ' MB' : Math.max(1, Math.round(n / 1024)) + ' kB';
 }
 function fmtBackupStamp(id) {
-  // Generation ids are YYYYMMDD-HHMMSS.
+  // Generation ids are UTC timestamps (hifi_backup.py: datetime.now(timezone.utc)),
+  // formatted YYYYMMDD-HHMMSS. Render them in the device's configured timezone
+  // instead of slicing the raw UTC digits, or the displayed time is off by
+  // the device's UTC offset.
   if (!id || id.length < 15) return id || '';
-  return `${id.slice(6, 8)}/${id.slice(4, 6)}/${id.slice(0, 4)} ${id.slice(9, 11)}:${id.slice(11, 13)}`;
+  const iso = `${id.slice(0, 4)}-${id.slice(4, 6)}-${id.slice(6, 8)}T${id.slice(9, 11)}:${id.slice(11, 13)}:${id.slice(13, 15)}Z`;
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return id;
+  const opts = { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false };
+  if (timezone.value) opts.timeZone = timezone.value;
+  return new Intl.DateTimeFormat('en-GB', opts).format(d).replace(',', '');
 }
 
 async function loadBackups() {

@@ -40,16 +40,24 @@ for mp in /mnt/hifi-sources/* /mnt/hifi-internal/*; do
     fi
 done
 
+# ── Tailscale: fully sign the box out of the owner's tailnet ──────────
+# `tailscale logout` (not just `down`) revokes this node's key with the
+# control server, so the appliance actually leaves the owner's tailnet and
+# disappears from their admin console, instead of just going offline while
+# still counting as an authorized device. A fresh `tailscale up` login is
+# required afterwards, exactly like first setup.
+if command -v tailscale >/dev/null 2>&1; then
+    log "signing out of tailscale"
+    tailscale logout 2>/dev/null || true
+fi
+
 # ── 2) wipe user state + settings ────────────────────────────────────
 log "removing user settings"
 # /etc/hifi-player: keep the OTA baseline + public key + channel; drop the rest,
 # INCLUDING the web-admin account DB + its per-device cookie signing key.
 # github-support-pat is a leftover of the retired vendor remote-support flow
 # (nothing re-provisions it any more); wiping it here is just cleanup on
-# devices that still have one from an older release. Tailscale's own node
-# state (the owner's tailnet membership) lives under /var/lib/tailscale, not
-# here, so a factory reset does NOT disconnect it — the owner disconnects
-# from Settings → Tailscale (or the Tailscale admin console) if they want to.
+# devices that still have one from an older release.
 for f in display-mode ui-resolution pointer-enabled dsp.json dsp-presets.json bluetooth.json \
          samba-cred.json provisioning-state.json webui.db webui-secret.key \
          github-support-pat lyrion-channel; do
