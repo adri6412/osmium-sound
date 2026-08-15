@@ -3612,10 +3612,15 @@ def _fetch_release(channel):
         _RELEASE_CACHE[channel] = (now, release)
         return release
 
-def _check_release_update(current, prefix):
+def _check_release_update(current, prefix, channel=None):
     """Look at the relevant GitHub Release and return update info for the asset
-    whose name starts with `prefix` (e.g. 'hifi-ui-' or 'hifi-system-')."""
-    channel = get_ota_channel()
+    whose name starts with `prefix` (e.g. 'hifi-ui-' or 'hifi-system-').
+
+    channel defaults to the persisted OTA channel; the setup wizard's
+    mandatory update gate (wizard_update_check() below) passes an explicit
+    one to check prod/dev independently of whatever the device's own channel
+    setting happens to be, without touching it."""
+    channel = channel or get_ota_channel()
     try:
         release = _fetch_release(channel)
     except Exception:
@@ -4245,6 +4250,44 @@ def dismiss_update_plan():
         return {'success': True}
 
 # ──────────────────────────────────────────────────────────────────
+#  Setup wizard: mandatory update gate, right after the network step.
+#  TEMPORARY (per explicit request): checks BOTH prod and dev, regardless of
+#  the device's own (always 'prod' this early) OTA channel setting -- a prod
+#  update applies automatically, a dev-only one needs the operator's
+#  confirmation on screen first. Drop the dev branch once this has shipped to
+#  production and prod-only checks are enough again.
+# ──────────────────────────────────────────────────────────────────
+def _channel_has_update(channel):
+    for current, prefix in ((_installed_ui_version(), OTA_UI_PREFIX),
+                            (_installed_system_version(), SYS_PREFIX),
+                            (_installed_os_version(), OS_PREFIX)):
+        try:
+            info = _check_release_update(current, prefix, channel)
+        except Exception:
+            continue
+        if info.get('update_available'):
+            return True
+    return False
+
+def wizard_update_check():
+    if _channel_has_update('prod'):
+        return {'available': True, 'channel': 'prod', 'auto': True}
+    if _channel_has_update('dev'):
+        return {'available': True, 'channel': 'dev', 'auto': False}
+    return {'available': False}
+
+def wizard_update_apply(channel):
+    if channel not in ('prod', 'dev'):
+        return {'started': False, 'code': 'update.checkFailed',
+                'message': _t('update.checkFailed', _lang())}
+    # Not a side-channel hack: this is a real, deliberate channel switch (the
+    # same one Settings -> Updates would make), so the device legitimately
+    # tracks whichever channel it was just updated from, same as if the
+    # operator had picked it there.
+    set_ota_channel(channel)
+    return apply_all_updates()
+
+# ──────────────────────────────────────────────────────────────────
 #  Lyrion Music Server update helpers
 # ──────────────────────────────────────────────────────────────────
 
@@ -4667,6 +4710,15 @@ def api_update_status():
 @app.route('/update/dismiss', methods=['POST'])
 def api_update_dismiss():
     return jsonify(dismiss_update_plan())
+
+@app.route('/wizard_update_check', methods=['GET'])
+def api_wizard_update_check():
+    return jsonify(wizard_update_check())
+
+@app.route('/wizard_update_apply', methods=['POST'])
+def api_wizard_update_apply():
+    data = request.get_json(silent=True) or {}
+    return jsonify(wizard_update_apply(data.get('channel')))
 
 @app.route('/lyrion_update/check', methods=['GET'])
 def api_lyrion_update_check():

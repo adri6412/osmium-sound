@@ -1408,6 +1408,42 @@ def provision_create_account():
     return jsonify(body), status
 
 
+# ── Mandatory OTA update gate, right after the network step ──────────
+# TEMPORARY (explicit request): checks BOTH prod and dev channels, regardless
+# of the device's own OTA channel setting (always 'prod' this early) -- a
+# prod update applies automatically, a dev-only one needs the operator's
+# confirmation in the wizard first. Drop the dev check once this has shipped
+# to production and prod-only is enough again (see wizard_update_check() in
+# api_server.py).
+@app.route('/api/provision/update_check', methods=['GET'])
+def provision_update_check():
+    if not _provisioning():
+        return jsonify({'success': False, 'code': 'provision.notInProgress',
+                        'message': _wt('provision.notInProgress', _lang())}), 409
+    body, status = _proxy(API_BASE, '/wizard_update_check', method='GET', timeout=25)
+    return jsonify(body), status
+
+
+@app.route('/api/provision/update_apply', methods=['POST'])
+def provision_update_apply():
+    if not _provisioning():
+        return jsonify({'success': False, 'code': 'provision.notInProgress',
+                        'message': _wt('provision.notInProgress', _lang())}), 409
+    data = request.get_json(silent=True) or {}
+    body, status = _proxy(API_BASE, '/wizard_update_apply', method='POST',
+                          body={'channel': data.get('channel')}, timeout=20)
+    return jsonify(body), status
+
+
+@app.route('/api/provision/update_status', methods=['GET'])
+def provision_update_status():
+    if not _provisioning():
+        return jsonify({'success': False, 'code': 'provision.notInProgress',
+                        'message': _wt('provision.notInProgress', _lang())}), 409
+    body, status = _proxy(API_BASE, '/update/status', method='GET')
+    return jsonify(body), status
+
+
 # ── Lyrion install check/trigger (local mode only) ───────────────────
 # hifi-firstboot.service normally installs Lyrion on its own, on the first
 # real (non-live) boot — but it only retries "on the next boot" if it had no
@@ -2128,6 +2164,13 @@ SETUP_CAPTIVE_HTML = """<!doctype html><html lang="en"><head><meta charset="utf-
  <p class="muted" id="netmsg"></p>
 </div>
 
+<div class="card" id="step-update" style="display:none">
+ <label id="lbl-update">Update required</label>
+ <p class="muted" id="update-msg"></p>
+ <button onclick="startMandatoryUpdate()" id="btn-update-confirm" style="display:none">Update now</button>
+ <div class="bar" id="update-barwrap" style="display:none"><div id="update-bar" style="width:0%"></div></div>
+</div>
+
 <div class="card" id="step-name" style="display:none">
  <label id="lbl-devname">Name this player</label>
  <p class="muted" id="devname-help">Used as its network name (e.g. "livingroom" &#8594; livingroom.local) and its Bluetooth/multiroom name. Letters, numbers and dashes only &#8212; leave empty to keep the default.</p>
@@ -2223,8 +2266,8 @@ SETUP_CAPTIVE_HTML = """<!doctype html><html lang="en"><head><meta charset="utf-
 
 <script>
 var STRINGS={
- en:{restoreIntro:'Setting up a new device? Restore a previous backup, or start fresh.',fresh:'Start fresh',restoreFile:'Backup file',restorePass:'Passphrase (if the backup is encrypted)',restore:'Restore from backup',restoring:'Restoring…',restoreDone:'Restore complete. Rebooting to apply it — reconnect in about a minute.',restoreFailed:'Restore failed.',restoreNoFile:'Choose a backup file first.',wifi:'Wi-Fi network',ssid:'Or enter the network name (SSID)',pass:'Wi-Fi password',connect:'Connect via Wi-Fi',wired:"I'm connected via cable (Ethernet)",connecting:'Connecting… the setup Wi-Fi will turn off. Reconnect your phone to your home network, then open http://hifiplayer.local to continue setup where you left off.',noCable:'No cable detected',devname:'Name this player',devnameHelp:'Used as its network name (e.g. "livingroom" → livingroom.local) and its Bluetooth/multiroom name. Letters, numbers and dashes only — leave empty to keep the default.',devnameSaving:'Saving…',mode:'Device mode',modeGui:'With screen (touchscreen)',modeHeadless:'Headless (no screen)',modeOff:'Server only (player off)',modeHelp:'In headless/server-only you manage everything from this web interface.',pointer:'Mouse pointer',pointerHelp:"Show the mouse cursor on screen? Leave it off for a touchscreen — turn it on if you're driving this device with a mouse.",pointerHide:'Touchscreen (hide pointer)',pointerShow:'Mouse (show pointer)',audio:'Audio output',audioContinue:'Continue',lyrion:'Music server (Lyrion)',lyrionLocal:'Use this device as the server',lyrionFollow:'Use a server already on my network',lyrionHost:'Server address',lyrionUse:'Use this server',lyrionInstall:'Install Lyrion',lyrionChecking:'Checking whether Lyrion Music Server is installed…',lyrionMissing:"Lyrion Music Server isn't installed yet.",lyrionInstalling:'Installing Lyrion Music Server…',continueAnyway:'Continue anyway',sources:'Music sources',sourcesIntro:"Manage local, network (SMB) and USB sources below. Optional: you can also do this later from Settings. Lyrion's own setup wizard scans the library once you finish here.",continueBtn:'Continue',timezone:'Time zone',tzSave:'Save and continue',account:'Web admin account',accountHelp:"Used to log into this device's web interface (http://…) from now on.",username:'Username',password:'Password',confirmPassword:'Confirm password',createAccount:'Create account',creating:'Creating…',accountMismatch:'Passwords do not match.',accountTooShort:'Username needs at least 3 characters, password at least 8.',finishGui:'Screen mode set. Setup is complete — press "Complete setup" below: the hotspot will turn off, reconnect your phone to your network. The device will then start its normal on-screen interface.',finishHeadless:'Headless mode set. Press "Complete setup" below: the hotspot will turn off, reconnect your phone to your network and open http://hifiplayer.local',finishOff:'Server-only mode set — this device will not play audio locally. Press "Complete setup" below: the hotspot will turn off, reconnect your phone to your network and open http://hifiplayer.local',finishBtn:'Complete setup',finishDone:'Setup complete — hotspot off. Open http://hifiplayer.local from your network.',finishToLyrion:"Setup complete. Taking you to Lyrion's own setup wizard to finish scanning your library…",rebootTitle:'Rebooting…',rebootGoingDown:'The device is restarting.',rebootComingBack:'Waiting for the device to come back online.',rebootAuto:'This page will reconnect automatically — no need to refresh.',error:'Error: '},
- it:{restoreIntro:'Stai configurando un nuovo dispositivo? Ripristina un backup precedente, oppure inizia da zero.',fresh:'Inizia da zero',restoreFile:'File di backup',restorePass:'Passphrase (se il backup è cifrato)',restore:'Ripristina da backup',restoring:'Ripristino in corso…',restoreDone:'Ripristino completato. Riavvio in corso per applicarlo — riconnettiti tra circa un minuto.',restoreFailed:'Ripristino non riuscito.',restoreNoFile:'Scegli prima un file di backup.',wifi:'Rete Wi-Fi',ssid:'Oppure inserisci il nome (SSID)',pass:'Password Wi-Fi',connect:'Connetti via Wi-Fi',wired:'Sono connesso via cavo (Ethernet)',connecting:'Connessione in corso… il Wi-Fi di setup si spegnerà. Riconnetti il telefono alla tua rete di casa, poi apri http://hifiplayer.local per continuare la configurazione da dove l\\'hai lasciata.',noCable:'Nessun cavo rilevato',devname:'Dai un nome a questo player',devnameHelp:'Usato come nome di rete (es. "salotto" → salotto.local) e come nome Bluetooth/multiroom. Solo lettere, numeri e trattini — lascia vuoto per mantenere quello predefinito.',devnameSaving:'Salvataggio…',mode:'Modalità dispositivo',modeGui:'Con schermo (touchscreen)',modeHeadless:'Headless (senza schermo)',modeOff:'Solo server (player spento)',modeHelp:'In headless/solo server gestisci tutto da questa interfaccia web.',pointer:'Puntatore del mouse',pointerHelp:'Mostrare il cursore del mouse a schermo? Lascialo spento per un touchscreen — accendilo se usi il dispositivo con un mouse.',pointerHide:'Touchscreen (nascondi puntatore)',pointerShow:'Mouse (mostra puntatore)',audio:'Uscita audio',audioContinue:'Continua',lyrion:'Server musicale (Lyrion)',lyrionLocal:'Usa questo dispositivo come server',lyrionFollow:'Usa un server già presente sulla rete',lyrionHost:'Indirizzo del server',lyrionUse:'Usa questo server',lyrionInstall:'Installa Lyrion',lyrionChecking:'Verifica se Lyrion Music Server è installato…',lyrionMissing:'Lyrion Music Server non è ancora installato.',lyrionInstalling:'Installazione di Lyrion Music Server…',continueAnyway:'Continua comunque',sources:'Sorgenti musicali',sourcesIntro:'Gestisci sorgenti locali, di rete (SMB) e USB qui sotto. Facoltativo: puoi farlo anche più tardi dalle Impostazioni. La scansione della libreria la fa il setup wizard di Lyrion una volta terminato qui.',continueBtn:'Continua',timezone:'Fuso orario',tzSave:'Salva e continua',account:'Account amministratore web',accountHelp:"Usato per accedere all'interfaccia web di questo dispositivo (http://…) da ora in poi.",username:'Nome utente',password:'Password',confirmPassword:'Conferma password',createAccount:'Crea account',creating:'Creazione…',accountMismatch:'Le password non coincidono.',accountTooShort:'Nome utente di almeno 3 caratteri, password di almeno 8.',finishGui:'Modalità con schermo impostata. Il setup è completo — premi "Completa setup" qui sotto: l\\'hotspot si spegnerà, riconnetti il telefono alla tua rete. Il dispositivo avvierà poi la sua normale interfaccia a schermo.',finishHeadless:'Modalità headless impostata. Premi "Completa setup" qui sotto: l\\'hotspot si spegnerà, riconnetti il telefono alla tua rete e apri http://hifiplayer.local',finishOff:'Modalità solo server impostata — questo dispositivo non riprodurrà audio in locale. Premi "Completa setup" qui sotto: l\\'hotspot si spegnerà, riconnetti il telefono alla tua rete e apri http://hifiplayer.local',finishBtn:'Completa setup',finishDone:'Setup completato — hotspot spento. Apri http://hifiplayer.local dalla tua rete.',finishToLyrion:'Setup completato. Ti porto al setup wizard di Lyrion per finire la scansione della libreria…',rebootTitle:'Riavvio in corso…',rebootGoingDown:'Il dispositivo si sta riavviando.',rebootComingBack:'In attesa che il dispositivo torni online.',rebootAuto:'Questa pagina si ricollegherà automaticamente — non serve aggiornarla.',error:'Errore: '}
+ en:{restoreIntro:'Setting up a new device? Restore a previous backup, or start fresh.',fresh:'Start fresh',restoreFile:'Backup file',restorePass:'Passphrase (if the backup is encrypted)',restore:'Restore from backup',restoring:'Restoring…',restoreDone:'Restore complete. Rebooting to apply it — reconnect in about a minute.',restoreFailed:'Restore failed.',restoreNoFile:'Choose a backup file first.',wifi:'Wi-Fi network',ssid:'Or enter the network name (SSID)',pass:'Wi-Fi password',connect:'Connect via Wi-Fi',wired:"I'm connected via cable (Ethernet)",connecting:'Connecting… the setup Wi-Fi will turn off. Reconnect your phone to your home network, then open http://hifiplayer.local to continue setup where you left off.',noCable:'No cable detected',updateRequired:'Update required',updateNow:'Update now',updateChecking:'Checking for updates…',updateAutoStarting:'An update is available and required — starting it now…',updateDevAvailable:'A preview (dev channel) update is available and required to continue setup.',updateApplying:'Updating — this can take a few minutes…',updateDoneRebooting:'Update complete. Rebooting…',updateFailed:'Update check/install failed. Retrying is required to continue setup.',devname:'Name this player',devnameHelp:'Used as its network name (e.g. "livingroom" → livingroom.local) and its Bluetooth/multiroom name. Letters, numbers and dashes only — leave empty to keep the default.',devnameSaving:'Saving…',mode:'Device mode',modeGui:'With screen (touchscreen)',modeHeadless:'Headless (no screen)',modeOff:'Server only (player off)',modeHelp:'In headless/server-only you manage everything from this web interface.',pointer:'Mouse pointer',pointerHelp:"Show the mouse cursor on screen? Leave it off for a touchscreen — turn it on if you're driving this device with a mouse.",pointerHide:'Touchscreen (hide pointer)',pointerShow:'Mouse (show pointer)',audio:'Audio output',audioContinue:'Continue',lyrion:'Music server (Lyrion)',lyrionLocal:'Use this device as the server',lyrionFollow:'Use a server already on my network',lyrionHost:'Server address',lyrionUse:'Use this server',lyrionInstall:'Install Lyrion',lyrionChecking:'Checking whether Lyrion Music Server is installed…',lyrionMissing:"Lyrion Music Server isn't installed yet.",lyrionInstalling:'Installing Lyrion Music Server…',continueAnyway:'Continue anyway',sources:'Music sources',sourcesIntro:"Manage local, network (SMB) and USB sources below. Optional: you can also do this later from Settings. Lyrion's own setup wizard scans the library once you finish here.",continueBtn:'Continue',timezone:'Time zone',tzSave:'Save and continue',account:'Web admin account',accountHelp:"Used to log into this device's web interface (http://…) from now on.",username:'Username',password:'Password',confirmPassword:'Confirm password',createAccount:'Create account',creating:'Creating…',accountMismatch:'Passwords do not match.',accountTooShort:'Username needs at least 3 characters, password at least 8.',finishGui:'Screen mode set. Setup is complete — press "Complete setup" below: the hotspot will turn off, reconnect your phone to your network. The device will then start its normal on-screen interface.',finishHeadless:'Headless mode set. Press "Complete setup" below: the hotspot will turn off, reconnect your phone to your network and open http://hifiplayer.local',finishOff:'Server-only mode set — this device will not play audio locally. Press "Complete setup" below: the hotspot will turn off, reconnect your phone to your network and open http://hifiplayer.local',finishBtn:'Complete setup',finishDone:'Setup complete — hotspot off. Open http://hifiplayer.local from your network.',finishToLyrion:"Setup complete. Taking you to Lyrion's own setup wizard to finish scanning your library…",rebootTitle:'Rebooting…',rebootGoingDown:'The device is restarting.',rebootComingBack:'Waiting for the device to come back online.',rebootAuto:'This page will reconnect automatically — no need to refresh.',error:'Error: '},
+ it:{restoreIntro:'Stai configurando un nuovo dispositivo? Ripristina un backup precedente, oppure inizia da zero.',fresh:'Inizia da zero',restoreFile:'File di backup',restorePass:'Passphrase (se il backup è cifrato)',restore:'Ripristina da backup',restoring:'Ripristino in corso…',restoreDone:'Ripristino completato. Riavvio in corso per applicarlo — riconnettiti tra circa un minuto.',restoreFailed:'Ripristino non riuscito.',restoreNoFile:'Scegli prima un file di backup.',wifi:'Rete Wi-Fi',ssid:'Oppure inserisci il nome (SSID)',pass:'Password Wi-Fi',connect:'Connetti via Wi-Fi',wired:'Sono connesso via cavo (Ethernet)',connecting:'Connessione in corso… il Wi-Fi di setup si spegnerà. Riconnetti il telefono alla tua rete di casa, poi apri http://hifiplayer.local per continuare la configurazione da dove l\\'hai lasciata.',noCable:'Nessun cavo rilevato',updateRequired:'Aggiornamento richiesto',updateNow:'Aggiorna ora',updateChecking:'Controllo aggiornamenti…',updateAutoStarting:'È disponibile un aggiornamento obbligatorio — avvio in corso…',updateDevAvailable:'È disponibile un aggiornamento di anteprima (canale dev), obbligatorio per continuare il setup.',updateApplying:'Aggiornamento in corso — può richiedere qualche minuto…',updateDoneRebooting:'Aggiornamento completato. Riavvio in corso…',updateFailed:'Controllo/installazione aggiornamento fallito. È necessario riprovare per continuare il setup.',devname:'Dai un nome a questo player',devnameHelp:'Usato come nome di rete (es. "salotto" → salotto.local) e come nome Bluetooth/multiroom. Solo lettere, numeri e trattini — lascia vuoto per mantenere quello predefinito.',devnameSaving:'Salvataggio…',mode:'Modalità dispositivo',modeGui:'Con schermo (touchscreen)',modeHeadless:'Headless (senza schermo)',modeOff:'Solo server (player spento)',modeHelp:'In headless/solo server gestisci tutto da questa interfaccia web.',pointer:'Puntatore del mouse',pointerHelp:'Mostrare il cursore del mouse a schermo? Lascialo spento per un touchscreen — accendilo se usi il dispositivo con un mouse.',pointerHide:'Touchscreen (nascondi puntatore)',pointerShow:'Mouse (mostra puntatore)',audio:'Uscita audio',audioContinue:'Continua',lyrion:'Server musicale (Lyrion)',lyrionLocal:'Usa questo dispositivo come server',lyrionFollow:'Usa un server già presente sulla rete',lyrionHost:'Indirizzo del server',lyrionUse:'Usa questo server',lyrionInstall:'Installa Lyrion',lyrionChecking:'Verifica se Lyrion Music Server è installato…',lyrionMissing:'Lyrion Music Server non è ancora installato.',lyrionInstalling:'Installazione di Lyrion Music Server…',continueAnyway:'Continua comunque',sources:'Sorgenti musicali',sourcesIntro:'Gestisci sorgenti locali, di rete (SMB) e USB qui sotto. Facoltativo: puoi farlo anche più tardi dalle Impostazioni. La scansione della libreria la fa il setup wizard di Lyrion una volta terminato qui.',continueBtn:'Continua',timezone:'Fuso orario',tzSave:'Salva e continua',account:'Account amministratore web',accountHelp:"Usato per accedere all'interfaccia web di questo dispositivo (http://…) da ora in poi.",username:'Nome utente',password:'Password',confirmPassword:'Conferma password',createAccount:'Crea account',creating:'Creazione…',accountMismatch:'Le password non coincidono.',accountTooShort:'Nome utente di almeno 3 caratteri, password di almeno 8.',finishGui:'Modalità con schermo impostata. Il setup è completo — premi "Completa setup" qui sotto: l\\'hotspot si spegnerà, riconnetti il telefono alla tua rete. Il dispositivo avvierà poi la sua normale interfaccia a schermo.',finishHeadless:'Modalità headless impostata. Premi "Completa setup" qui sotto: l\\'hotspot si spegnerà, riconnetti il telefono alla tua rete e apri http://hifiplayer.local',finishOff:'Modalità solo server impostata — questo dispositivo non riprodurrà audio in locale. Premi "Completa setup" qui sotto: l\\'hotspot si spegnerà, riconnetti il telefono alla tua rete e apri http://hifiplayer.local',finishBtn:'Completa setup',finishDone:'Setup completato — hotspot spento. Apri http://hifiplayer.local dalla tua rete.',finishToLyrion:'Setup completato. Ti porto al setup wizard di Lyrion per finire la scansione della libreria…',rebootTitle:'Riavvio in corso…',rebootGoingDown:'Il dispositivo si sta riavviando.',rebootComingBack:'In attesa che il dispositivo torni online.',rebootAuto:'Questa pagina si ricollegherà automaticamente — non serve aggiornarla.',error:'Errore: '}
 };
 var LANG=(new URLSearchParams(location.search).get('lang')||'en');
 if(STRINGS[LANG]===undefined)LANG='en';
@@ -2240,6 +2283,8 @@ document.getElementById('lbl-ssid').textContent=S.ssid;
 document.getElementById('lbl-pass').textContent=S.pass;
 document.getElementById('btn-connect').textContent=S.connect;
 document.getElementById('btn-wired').textContent=S.wired;
+document.getElementById('lbl-update').textContent=S.updateRequired;
+document.getElementById('btn-update-confirm').textContent=S.updateNow;
 document.getElementById('lbl-devname').textContent=S.devname;
 document.getElementById('devname-help').textContent=S.devnameHelp;
 document.getElementById('btn-devname').textContent=S.continueBtn;
@@ -2274,7 +2319,7 @@ document.getElementById('lbl-acc-pass').textContent=S.password;
 document.getElementById('lbl-acc-pass2').textContent=S.confirmPassword;
 document.getElementById('btn-account').textContent=S.createAccount;
 
-var STEPS=['step-restore','step-net','step-name','step-mode','step-pointer','step-audio','step-lyrion','step-lyrion-install','step-sources','step-timezone','step-account','step-finish'];
+var STEPS=['step-restore','step-net','step-update','step-name','step-mode','step-pointer','step-audio','step-lyrion','step-lyrion-install','step-sources','step-timezone','step-account','step-finish'];
 var lyrionMode='local';
 var netPhaseDone=false;
 var restoringFromBackup=false;
@@ -2296,8 +2341,71 @@ function load(){if(netPhaseDone)return;fetch('/api/provision/status').then(funct
     d.innerHTML='<div class="row"><span>'+net.ssid+'</span><span class="muted">'+net.signal+'%</span></div>';
     d.onclick=function(){document.getElementById('ssid').value=net.ssid};n.appendChild(d)});
   if(s.error){document.getElementById('netmsg').textContent=S.error+s.error}
-  if(s.stage==='network-ok'){netPhaseDone=true;show('step-name')}
+  if(s.stage==='network-ok'){netPhaseDone=true;checkMandatoryUpdate()}
 })}
+
+// Mandatory update gate, right after the network step (see the comment on
+// the /api/provision/update_check route in this file for why it checks both
+// prod and dev channels). A prod update starts on its own; a dev-only one
+// waits for the operator to press the button below.
+var pendingUpdateChannel=null;
+function checkMandatoryUpdate(){
+  show('step-update');
+  document.getElementById('update-msg').textContent=S.updateChecking;
+  document.getElementById('btn-update-confirm').style.display='none';
+  document.getElementById('update-barwrap').style.display='none';
+  jget('/api/provision/update_check').then(function(res){
+    if(!res.available){show('step-name');return}
+    pendingUpdateChannel=res.channel;
+    if(res.auto){
+      document.getElementById('update-msg').textContent=S.updateAutoStarting;
+      startMandatoryUpdate();
+    }else{
+      document.getElementById('update-msg').textContent=S.updateDevAvailable;
+      document.getElementById('btn-update-confirm').style.display='block';
+    }
+  }).catch(function(){setTimeout(checkMandatoryUpdate,1500)});
+}
+function startMandatoryUpdate(){
+  document.getElementById('btn-update-confirm').style.display='none';
+  document.getElementById('update-msg').textContent=S.updateApplying;
+  document.getElementById('update-barwrap').style.display='block';
+  jpost('/api/provision/update_apply',{channel:pendingUpdateChannel}).then(function(res){
+    if(!res.started){
+      document.getElementById('update-msg').textContent=res.message||S.updateFailed;
+      document.getElementById('update-barwrap').style.display='none';
+      document.getElementById('btn-update-confirm').style.display='block';
+      return;
+    }
+    pollMandatoryUpdate();
+  }).catch(function(){
+    document.getElementById('update-msg').textContent=S.updateFailed;
+    document.getElementById('update-barwrap').style.display='none';
+    document.getElementById('btn-update-confirm').style.display='block';
+  });
+}
+function pollMandatoryUpdate(){
+  // A 'system' component update restarts hifi-webui itself -- a request
+  // landing exactly then fails outright (connection refused for a second or
+  // two), not with an error JSON. Without a catch that stops the whole poll
+  // loop silently, stranding the operator on "Updating…" forever even though
+  // the update finishes fine in the background. Just retry.
+  jget('/api/provision/update_status').then(function(st){
+    if(typeof st.overall_progress==='number')document.getElementById('update-bar').style.width=st.overall_progress+'%';
+    if(st.message)document.getElementById('update-msg').textContent=st.message;
+    if(st.state==='finished'){
+      document.getElementById('update-msg').textContent=S.updateDoneRebooting;
+      jpost('/api/provision/reboot',{});
+      waitForReboot();
+    }else if(st.state==='error'){
+      document.getElementById('update-msg').textContent=S.updateFailed;
+      document.getElementById('update-barwrap').style.display='none';
+      document.getElementById('btn-update-confirm').style.display='block';
+    }else{
+      setTimeout(pollMandatoryUpdate,1500);
+    }
+  }).catch(function(){setTimeout(pollMandatoryUpdate,1500)});
+}
 
 function startFresh(){show('step-net')}
 
