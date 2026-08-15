@@ -2237,6 +2237,17 @@ def provision_wifi_connect(ssid, password):
                 'message': _t('provisioning.notActive', _lang())}
     return body
 
+def provision_wifi_rescan():
+    """Live Wi-Fi rescan for the on-screen manual panel: briefly drops and
+    re-raises the setup hotspot around the scan (see webui_server.py's
+    _live_wifi_rescan()) so the list isn't stuck with whatever the single
+    early-boot scan found. Generous timeout: AP down + scan + AP back up."""
+    body, status = _proxy_webui('/api/provision/wifi_rescan', method='POST', timeout=30)
+    if body is None:
+        return {'success': False, 'code': 'provisioning.notActive',
+                'message': _t('provisioning.notActive', _lang())}
+    return body
+
 def factory_reset():
     if _update_in_progress():
         return {'success': False, 'code': 'update.inProgressRetry',
@@ -4768,6 +4779,10 @@ def api_provision_wifi_connect():
     data = request.get_json(silent=True) or {}
     return jsonify(provision_wifi_connect((data.get('ssid') or '').strip(),
                                           data.get('password') or ''))
+
+@app.route('/provision_wifi_rescan', methods=['POST'])
+def api_provision_wifi_rescan():
+    return jsonify(provision_wifi_rescan())
 
 @app.route('/factory_reset', methods=['POST'])
 def api_factory_reset():

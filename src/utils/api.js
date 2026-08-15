@@ -169,6 +169,12 @@ export const systemAPI = {
   // poll getProvisionStatus() for stage 'connecting' -> 'network-ok'/'failed'.
   // Returns { success, dropping_ap }
   provisionWifiConnect: (ssid, password) => apiPost('/provision_wifi_connect', { ssid, password }),
+  // On-demand live rescan for the on-screen manual Wi-Fi panel: briefly
+  // drops and re-raises the setup hotspot around a fresh scan (the box's one
+  // Wi-Fi radio can't scan while it's also the AP), instead of relying on
+  // the single passive scan taken before the hotspot first came up. Takes a
+  // few seconds; returns { success, networks }.
+  provisionWifiRescan: () => apiPost('/provision_wifi_rescan', {}),
   // Which boot menu entry this live session started from: { mode: 'installer'|'live' }.
   // 'installer' means App.jsx should show InstallWizard instead of the kiosk UI.
   getBootMode: () => apiGet('/boot_mode'),

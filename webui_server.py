@@ -730,6 +730,37 @@ def _evaluate_provisioning():
         _save_prov_state(state)
 
 
+def _live_wifi_rescan():
+    """On-demand rescan for the on-screen manual Wi-Fi panel.
+
+    The normal provisioning flow only ever scans once, before the hotspot
+    first comes up (see _evaluate_provisioning()) -- after that the radio is
+    busy being the AP and can't scan any more, so the on-screen list is stuck
+    with whatever that single early-boot scan found. This trades a brief,
+    deliberate hotspot outage (the owner is already looking at the screen
+    asking for a rescan, not mid-flow on their phone) for an actually-live
+    result: drop the AP if it's up, scan, then re-raise it so the phone-based
+    flow is exactly as it was for anyone else."""
+    with _prov_lock:
+        state = _load_prov_state()
+        ap = state.get('ap') or {}
+        was_active = bool(ap.get('active'))
+        dev = _wifi_device()
+        if was_active and dev:
+            _teardown_ap()
+        nets = _scan_wifi() if dev else state.get('networks', [])
+        state['networks'] = nets
+        state['networks_cached_at'] = time.time()
+        if was_active and dev:
+            ok, ssid = _raise_ap(dev)
+            state['ap'] = {'active': ok, 'supported': True, 'ssid': ssid if ok else None,
+                           'psk': AP_PSK if ok else None,
+                           'error': None if ok else _wt('network.hotspotActivateFailed', _lang())}
+            state['stage'] = 'waiting-ap' if ok else 'waiting-lan'
+        _save_prov_state(state)
+    return nets
+
+
 def _provisioning_loop():
     """Re-evaluate the hotspot every ~20s until the box leaves provisioning
     (finalize removes the marker). This makes the AP resilient to a slow
@@ -1151,6 +1182,19 @@ def provision_wifi_connect():
     # Reply first (the AP is about to drop; the phone must know to expect it).
     threading.Thread(target=_bg_connect, args=(ssid, password), daemon=True).start()
     return jsonify({'success': True, 'dropping_ap': True})
+
+
+@app.route('/api/provision/wifi_rescan', methods=['POST'])
+def provision_wifi_rescan():
+    # Synchronous on purpose (unlike wifi_connect above): this briefly drops
+    # and re-raises the hotspot around the scan (see _live_wifi_rescan()), so
+    # the caller needs the real network list back, not just an
+    # acknowledgement that something started.
+    if not _provisioning():
+        return jsonify({'success': False, 'code': 'provision.notInProgress',
+                        'message': _wt('provision.notInProgress', _lang())}), 409
+    nets = _live_wifi_rescan()
+    return jsonify({'success': True, 'networks': nets})
 
 
 def _bg_connect(ssid, password):

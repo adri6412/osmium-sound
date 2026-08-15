@@ -30,6 +30,7 @@ const SetupWizard = ({ onComplete }) => {
   const [wired, setWired] = useState(false);
   const [deviceIp, setDeviceIp] = useState(null);
   const [showWifiPanel, setShowWifiPanel] = useState(false);
+  const [wifiRescanning, setWifiRescanning] = useState(false);
   const [wifiSubmitting, setWifiSubmitting] = useState(false);
   const [wifiSubmitError, setWifiSubmitError] = useState(null);
   const doneRef = useRef(false);
@@ -89,6 +90,23 @@ const SetupWizard = ({ onComplete }) => {
   }, [stage]);
 
   const isConnected = wired || stage === 'network-ok';
+
+  // The passive `networks` list is a single scan taken before the hotspot
+  // first came up (this device's one Wi-Fi radio can't scan while it's also
+  // the AP — see _scan_wifi()/_evaluate_provisioning() in webui_server.py).
+  // Opening the panel is the one moment the owner is looking at the screen
+  // instead of their phone, so it's worth briefly trading the hotspot for a
+  // genuinely live scan: drop it, scan, raise it back (provisionWifiRescan
+  // on the server does all three under one lock) — takes a few seconds.
+  const openWifiPanel = async () => {
+    setShowWifiPanel(true);
+    setWifiRescanning(true);
+    try {
+      const res = await systemAPI.provisionWifiRescan();
+      if (res.success && Array.isArray(res.data?.networks)) setNetworks(res.data.networks);
+    } catch (_) {}
+    setWifiRescanning(false);
+  };
 
   const handleWifiConnect = async (ssid, password) => {
     setWifiSubmitError(null);
@@ -165,7 +183,7 @@ const SetupWizard = ({ onComplete }) => {
           )}
 
           {!isConnected && (
-            <button onClick={() => setShowWifiPanel(true)}
+            <button onClick={openWifiPanel}
               className="mt-4 text-xs text-hifi-silver/50 hover:text-hifi-silver underline underline-offset-2">
               {t('wizard.qr.manualButton')}
             </button>
@@ -175,14 +193,10 @@ const SetupWizard = ({ onComplete }) => {
         {showWifiPanel && (
           <WifiConfigPanel
             networks={networks}
-            // The scan behind `networks` is a single pre-hotspot snapshot
-            // (see webui_server.py's _scan_wifi()/_evaluate_provisioning():
-            // this device's one Wi-Fi radio can't scan once it's also running
-            // the setup hotspot). Until that hotspot is confirmed up, an
-            // empty list just means "hasn't reported back yet" — say so
-            // instead of claiming there's nothing nearby; once it's active
-            // the list is final and a real "none found" is accurate.
-            scanning={!isConnected && !apInfo?.active && !apInfo?.error && networks.length === 0}
+            // Live while openWifiPanel's rescan is in flight; otherwise fall
+            // back to "hasn't reported back yet" vs. a real empty result the
+            // same way as before the AP was ever confirmed up.
+            scanning={wifiRescanning || (!isConnected && !apInfo?.active && !apInfo?.error && networks.length === 0)}
             connecting={wifiSubmitting || stage === 'connecting'}
             error={wifiSubmitError || (stage === 'failed' ? apInfo?.error : null)}
             onConnect={handleWifiConnect}
