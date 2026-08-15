@@ -189,11 +189,6 @@ public final class ApplianceHttpClient {
         enqueueJson(authedRequest("/api/dsp/preset/delete").post(body).build(), callback);
     }
 
-    /** This device's squeezelite display name (default "OsmiumSound"). Response: { name }. */
-    public static void playerName(JsonCallback callback) {
-        enqueueJson(authedRequest("/api/system/player_name").get().build(), callback);
-    }
-
     /**
      * Confirms the stored pairing token (if any) is still accepted by the appliance,
      * so callers can tell a genuinely revoked pairing (see Settings -> Phone control
@@ -230,8 +225,18 @@ public final class ApplianceHttpClient {
         });
     }
 
-    /** Renames this device's player and restarts squeezelite. Response: { success, name, message }. */
-    public static void setPlayerName(String name, JsonCallback callback) {
+    /** This device's Linux hostname (defaults to "hifiplayer"). Response: { name }. */
+    public static void deviceName(JsonCallback callback) {
+        enqueueJson(authedRequest("/api/system/device_name").get().build(), callback);
+    }
+
+    /**
+     * Renames BOTH the hostname (so &lt;name&gt;.local updates live) and the
+     * squeezelite/Bluetooth player name together — the kiosk and web admin's
+     * Multiroom/Audio name field call this too, so a rename from any of the
+     * three frontends stays in sync. Response: { success, name, message }.
+     */
+    public static void setDeviceName(String name, JsonCallback callback) {
         JSONObject payload = new JSONObject();
         try {
             payload.put("name", name);
@@ -240,7 +245,7 @@ public final class ApplianceHttpClient {
             return;
         }
         RequestBody body = RequestBody.create(payload.toString(), JSON);
-        enqueueJson(authedRequest("/api/system/player_name").post(body).build(), callback);
+        enqueueJson(authedRequest("/api/system/device_name").post(body).build(), callback);
     }
 
     /** Which Lyrion server this device's squeezelite points at. Response: { mode: "local"|"follow", host }. */

@@ -320,7 +320,7 @@ public class MultiroomActivity extends AppCompatActivity {
     }
 
     private void loadPlayerName() {
-        ApplianceHttpClient.playerName(new ApplianceHttpClient.JsonCallback() {
+        ApplianceHttpClient.deviceName(new ApplianceHttpClient.JsonCallback() {
             @Override
             public void onSuccess(JSONObject body) {
                 currentName = body.optString("name", "OsmiumSound");
@@ -338,7 +338,7 @@ public class MultiroomActivity extends AppCompatActivity {
         String name = nameField.getText().toString().trim();
         if (name.isEmpty() || name.equals(currentName)) return;
         setBusy(true);
-        ApplianceHttpClient.setPlayerName(name, new ApplianceHttpClient.JsonCallback() {
+        ApplianceHttpClient.setDeviceName(name, new ApplianceHttpClient.JsonCallback() {
             @Override
             public void onSuccess(JSONObject body) {
                 setBusy(false);
