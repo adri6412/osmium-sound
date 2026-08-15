@@ -2178,6 +2178,129 @@ def set_nowplaying_autoexpand(seconds):
     return {'success': True, 'seconds': seconds}
 
 # ──────────────────────────────────────────────────────────────────
+#  Boot debug flags (Settings → Debug, admin webui only). For diagnosing a box
+#  that hangs at boot/shutdown behind the Plymouth splash instead of actually
+#  crashing cleanly, or that needs a captured vmcore off a real kernel panic.
+#  Both edit only GRUB_CMDLINE_LINUX_DEFAULT in /etc/default/grub, via the
+#  same read-modify-write + `update-grub` pattern as the 0005-silent-grub OS
+#  migration -- never grub-install/shim/Secure Boot (that's the one thing that
+#  can brick a headless unit; regenerating grub.cfg from the already-installed
+#  bootloader cannot). Both require an actual reboot to take effect, since a
+#  running kernel's own cmdline can't be changed retroactively.
+# ──────────────────────────────────────────────────────────────────
+GRUB_DEFAULTS_FILE = '/etc/default/grub'
+KDUMP_DEFAULTS_FILE = '/etc/default/kdump-tools'
+# Reserved for the crash kernel once kdump is on -- taken out of normal use
+# permanently after the next boot, so kept modest; standard x86_64 default.
+KDUMP_CRASHKERNEL = 'crashkernel=256M'
+# Stripped when disabling Plymouth so panic/boot text is actually visible
+# (loglevel=0 silences the console same as the splash does); restored as a
+# group when re-enabling.
+_PLYMOUTH_QUIET_TOKENS = ('quiet', 'splash', 'loglevel=0')
+
+def _read_kv_file(path, key):
+    try:
+        with open(path) as f:
+            for line in f:
+                line = line.strip()
+                if line.startswith(f'{key}='):
+                    return line.split('=', 1)[1].strip().strip('"')
+    except Exception:
+        pass
+    return None
+
+def _write_kv_file(path, key, value):
+    """In-place set/replace of KEY=value in a shell-sourced defaults file
+    (/etc/default/*) -- read-modify-write, touches only this one key, leaves
+    everything else in the file untouched."""
+    try:
+        with open(path) as f:
+            lines = f.readlines()
+    except Exception:
+        lines = []
+    new_line = f'{key}={value}\n'
+    found = False
+    for i, line in enumerate(lines):
+        if line.strip().startswith(f'{key}='):
+            lines[i] = new_line
+            found = True
+            break
+    if not found:
+        lines.append(new_line)
+    try:
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        tmp = path + '.tmp'
+        with open(tmp, 'w') as f:
+            f.writelines(lines)
+        os.replace(tmp, path)
+        return True
+    except Exception:
+        log.exception("_write_kv_file(%s) failed", path)
+        return False
+
+def _grub_cmdline_default():
+    return (_read_kv_file(GRUB_DEFAULTS_FILE, 'GRUB_CMDLINE_LINUX_DEFAULT') or '').strip()
+
+def _set_grub_cmdline_default(tokens):
+    ok = _write_kv_file(GRUB_DEFAULTS_FILE, 'GRUB_CMDLINE_LINUX_DEFAULT', '"' + ' '.join(tokens) + '"')
+    if not ok:
+        return False
+    r = _run(['update-grub'], timeout=60)
+    if r.returncode != 0:
+        r = _run(['update-grub2'], timeout=60)
+    return r.returncode == 0
+
+def get_plymouth_disabled():
+    return {'disabled': 'plymouth.enable=0' in _grub_cmdline_default().split()}
+
+def set_plymouth_disabled(disable):
+    tokens = [t for t in _grub_cmdline_default().split()
+              if t not in _PLYMOUTH_QUIET_TOKENS and t != 'plymouth.enable=0']
+    if disable:
+        tokens.append('plymouth.enable=0')
+    else:
+        tokens = list(_PLYMOUTH_QUIET_TOKENS) + tokens
+    if not _set_grub_cmdline_default(tokens):
+        return {'success': False, 'disabled': get_plymouth_disabled()['disabled'],
+                'code': 'debug.updateGrubFailed', 'message': _t('debug.updateGrubFailed', _lang())}
+    return {'success': True, 'disabled': disable, 'code': 'debug.rebootRequired',
+            'message': _t('debug.rebootRequired', _lang())}
+
+def _kdump_tools_installed():
+    return subprocess.run(['dpkg', '-s', 'kdump-tools'], capture_output=True, timeout=10).returncode == 0
+
+def get_kdump_enabled():
+    return {'enabled': KDUMP_CRASHKERNEL in _grub_cmdline_default().split(),
+            'installed': _kdump_tools_installed()}
+
+def set_kdump_enabled(enable):
+    if enable and not _kdump_tools_installed():
+        try:
+            r = subprocess.run(['apt-get', 'install', '-y', 'kdump-tools', 'linux-crashdump'],
+                               capture_output=True, text=True, timeout=180,
+                               env=dict(os.environ, DEBIAN_FRONTEND='noninteractive'))
+        except Exception:
+            r = None
+        if r is None or r.returncode != 0 or not _kdump_tools_installed():
+            log.error("kdump-tools install failed: %s", (r.stderr if r else '').strip())
+            return {'success': False, 'enabled': get_kdump_enabled()['enabled'],
+                    'code': 'debug.kdumpInstallFailed', 'message': _t('debug.kdumpInstallFailed', _lang())}
+    tokens = [t for t in _grub_cmdline_default().split() if not t.startswith('crashkernel=')]
+    if enable:
+        tokens.append(KDUMP_CRASHKERNEL)
+    if not _set_grub_cmdline_default(tokens):
+        return {'success': False, 'enabled': get_kdump_enabled()['enabled'],
+                'code': 'debug.updateGrubFailed', 'message': _t('debug.updateGrubFailed', _lang())}
+    _write_kv_file(KDUMP_DEFAULTS_FILE, 'KDUMP_ENABLED', 'true' if enable else 'false')
+    try:
+        subprocess.run(['systemctl', 'enable' if enable else 'disable', '--now', 'kdump-tools'],
+                       capture_output=True, timeout=30)
+    except Exception:
+        pass
+    return {'success': True, 'enabled': enable, 'code': 'debug.rebootRequired',
+            'message': _t('debug.rebootRequired', _lang())}
+
+# ──────────────────────────────────────────────────────────────────
 #  Provisioning + factory reset. The first-boot hotspot/captive flow and
 #  the web-admin account live in webui_server.py (bound 0.0.0.0:443/:80).
 #  api_server stays loopback-only; these endpoints are thin bridges the
@@ -4696,6 +4819,24 @@ def api_tailscale_install():
 def api_tailscale_set():
     data = request.get_json(silent=True) or {}
     return jsonify(set_tailscale(bool(data.get('enable'))))
+
+@app.route('/debug_plymouth', methods=['GET'])
+def api_debug_plymouth_get():
+    return jsonify(get_plymouth_disabled())
+
+@app.route('/debug_plymouth', methods=['POST'])
+def api_debug_plymouth_set():
+    data = request.get_json(silent=True) or {}
+    return jsonify(set_plymouth_disabled(bool(data.get('disable'))))
+
+@app.route('/debug_kdump', methods=['GET'])
+def api_debug_kdump_get():
+    return jsonify(get_kdump_enabled())
+
+@app.route('/debug_kdump', methods=['POST'])
+def api_debug_kdump_set():
+    data = request.get_json(silent=True) or {}
+    return jsonify(set_kdump_enabled(bool(data.get('enable'))))
 
 @app.route('/pointer_status', methods=['GET'])
 def api_pointer_status():

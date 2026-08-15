@@ -923,6 +923,10 @@ _AUTH_ROUTES = {
     ('/api/system/lyrion_channel', 'POST'): '/lyrion_channel',
     ('/api/system/reboot', 'POST'): '/reboot',
     ('/api/system/shutdown', 'POST'): '/shutdown',
+    ('/api/system/debug_plymouth', 'GET'): '/debug_plymouth',
+    ('/api/system/debug_plymouth', 'POST'): '/debug_plymouth',
+    ('/api/system/debug_kdump', 'GET'): '/debug_kdump',
+    ('/api/system/debug_kdump', 'POST'): '/debug_kdump',
 }
 
 # Pre-auth set reachable during the captive window ONLY (no destructive ops).
@@ -1664,9 +1668,11 @@ def _handle_proxy(local_path, method):
                         'message': _wt('proxy.endpointNotAllowed', _lang())}), 403
     body = request.get_json(silent=True) if method != 'GET' else None
     data, status = _proxy(API_BASE, api_path, method=method, body=body,
-                          timeout=200 if 'tailscale_install' in api_path
+                          timeout=220 if 'debug_kdump' in api_path  # may apt-get install kdump-tools
+                          else 200 if 'tailscale_install' in api_path
                           else 90 if 'apply' in api_path or 'dsp' in api_path
-                          or 'tailscale' in api_path or 'ssh' in api_path else 15)
+                          or 'tailscale' in api_path or 'ssh' in api_path
+                          or 'debug_plymouth' in api_path else 15)
     return jsonify(data), status
 
 

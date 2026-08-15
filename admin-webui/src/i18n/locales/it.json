@@ -159,7 +159,7 @@
       },
       "debug": {
         "label": "Debug",
-        "desc": "Scarica le catture di rete HAR registrate sul kiosk"
+        "desc": "Diagnostica avvio/crash, catture di rete HAR"
       }
     },
     "network": {
@@ -522,6 +522,16 @@
     },
     "debug": {
       "hint": "Le catture di rete HAR si registrano sul kiosk stesso (Impostazioni → Debug), non qui — questa pagina mostra solo quelle già salvate.",
+      "bootHint": "Per un dispositivo che si blocca all'avvio o allo spegnimento dietro la schermata di boot invece di andare in errore in modo pulito — possibile kernel panic nascosto. Entrambe le opzioni richiedono un riavvio per avere effetto.",
+      "plymouth": "Disattiva schermata di boot (Plymouth)",
+      "plymouthHelp": "Mostra il testo reale di avvio/spegnimento invece della schermata grafica, così un blocco o un kernel panic sono effettivamente visibili sullo schermo.",
+      "kdump": "Salva un memory dump al kernel panic",
+      "kdumpHelp": "Riserva una piccola quantità di RAM per salvare il crash su disco (/var/crash) e poterlo analizzare dopo un kernel panic.",
+      "kdumpNotInstalled": "Installa gli strumenti per il memory dump la prima volta che viene attivato (richiede una connessione a Internet).",
+      "kdumpInstalling": "Installazione degli strumenti per il memory dump…",
+      "rebootRequired": "Salvato — riavvia il dispositivo perché la modifica abbia effetto.",
+      "rebootPrompt": "Riavviare ora il dispositivo per applicare la modifica?",
+      "saveFailed": "Impossibile salvare questa impostazione",
       "none": "Nessuna cattura salvata.",
       "downloadFailed": "Download fallito",
       "deleteConfirm": "Eliminare questa cattura?",

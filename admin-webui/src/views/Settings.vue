@@ -128,6 +128,50 @@ async function deleteHarCapture(name) {
   loadHarCaptures();
 }
 
+// ── Boot debug flags (Settings → Debug) ──────────────────────────────
+// For a box that hangs at shutdown/boot behind the Plymouth splash instead of
+// crashing cleanly (possibly a kernel panic hidden behind it), or to capture
+// a vmcore off a real one. Both only take effect after a reboot — offer one
+// via the same reboot-wait overlay every other reboot-ending action here
+// uses (see waitForReboot() below).
+const plymouthDisabled = ref(false);
+const kdumpEnabled = ref(false);
+const kdumpInstalled = ref(true);
+const debugFlagsBusy = ref(false);
+async function loadDebugFlags() {
+  const [py, kd] = await Promise.all([api.sys('debug_plymouth'), api.sys('debug_kdump')]);
+  if (py.ok) plymouthDisabled.value = !!py.data.disabled;
+  if (kd.ok) { kdumpEnabled.value = !!kd.data.enabled; kdumpInstalled.value = kd.data.installed !== false; }
+}
+async function togglePlymouth(disable) {
+  if (debugFlagsBusy.value || disable === plymouthDisabled.value) return;
+  debugFlagsBusy.value = true;
+  const r = await api.sysPost('debug_plymouth', { disable });
+  debugFlagsBusy.value = false;
+  if (r.ok && r.data.success !== false) {
+    plymouthDisabled.value = disable;
+    say(bodyMsg(r, t('settings.debug.rebootRequired')));
+    if (confirm(t('settings.debug.rebootPrompt'))) { await api.sysPost('reboot', {}); waitForReboot(); }
+  } else {
+    say(bodyMsg(r, t('settings.debug.saveFailed')), true);
+  }
+}
+async function toggleKdump(enable) {
+  if (debugFlagsBusy.value || enable === kdumpEnabled.value) return;
+  debugFlagsBusy.value = true;
+  say(enable ? t('settings.debug.kdumpInstalling') : '');
+  const r = await api.sysPost('debug_kdump', { enable });
+  debugFlagsBusy.value = false;
+  if (r.ok && r.data.success !== false) {
+    kdumpEnabled.value = enable;
+    kdumpInstalled.value = true;
+    say(bodyMsg(r, t('settings.debug.rebootRequired')));
+    if (confirm(t('settings.debug.rebootPrompt'))) { await api.sysPost('reboot', {}); waitForReboot(); }
+  } else {
+    say(bodyMsg(r, t('settings.debug.saveFailed')), true);
+  }
+}
+
 // ── network ──────────────────────────────────────────────────────
 const net = ref({}); const wifi = ref([]); const ssid = ref(''); const wifiPass = ref('');
 const netBusy = ref(false);
@@ -966,7 +1010,7 @@ async function saveBackupScheduled(v) {
 
 onMounted(async () => {
   loadNet(); loadAudio(); loadDsp(); loadFir(); loadToggles(); loadShell(); loadLms(); loadLyrion(); loadPlayback();
-  loadMode(); loadPlayerEnabled(); loadUiRes(); loadTimezone(); loadVuMeter(); loadAutoExpand(); loadChannel(); checkAll(); resumePlanIfRunning(); loadBackups(); loadTailscale(); loadHarCaptures();
+  loadMode(); loadPlayerEnabled(); loadUiRes(); loadTimezone(); loadVuMeter(); loadAutoExpand(); loadChannel(); checkAll(); resumePlanIfRunning(); loadBackups(); loadTailscale(); loadHarCaptures(); loadDebugFlags();
   timezonePoll = setInterval(pollTimezone, 10000);
   // Tell the global UpdateProgressOverlay (mounted in App.vue) that this page
   // owns the OTA modal while it's open, so the two never render on top of
@@ -1437,6 +1481,23 @@ onUnmounted(() => {
     <!-- Debug: HAR network captures recorded on the kiosk -->
     <div class="card" v-if="open === 'debug'">
       <p class="sub">{{ t('settings.debug.hint') }}</p>
+
+      <div style="padding-bottom: 16px; border-bottom: 1px solid rgba(255,255,255,0.1); margin-bottom: 16px;">
+        <p class="sub">{{ t('settings.debug.bootHint') }}</p>
+        <div class="between item">
+          <span>{{ t('settings.debug.plymouth') }}
+            <span class="muted">{{ t('settings.debug.plymouthHelp') }}</span>
+          </span>
+          <Toggle :model-value="plymouthDisabled" :disabled="debugFlagsBusy" @update:model-value="togglePlymouth" />
+        </div>
+        <div class="between item">
+          <span>{{ t('settings.debug.kdump') }}
+            <span class="muted">{{ kdumpInstalled ? t('settings.debug.kdumpHelp') : t('settings.debug.kdumpNotInstalled') }}</span>
+          </span>
+          <Toggle :model-value="kdumpEnabled" :disabled="debugFlagsBusy" @update:model-value="toggleKdump" />
+        </div>
+      </div>
+
       <p v-if="!harCaptures.length" class="sub">{{ t('settings.debug.none') }}</p>
       <div v-for="c in harCaptures" :key="c.name" class="net between" style="align-items: flex-start;">
         <div>

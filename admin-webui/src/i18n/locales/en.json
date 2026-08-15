@@ -159,7 +159,7 @@
       },
       "debug": {
         "label": "Debug",
-        "desc": "Download HAR network captures recorded on the kiosk"
+        "desc": "Boot/crash diagnostics, HAR network captures"
       }
     },
     "network": {
@@ -522,6 +522,16 @@
     },
     "debug": {
       "hint": "HAR network captures are recorded on the kiosk itself (Settings → Debug), not here — this just lists what's already been saved.",
+      "bootHint": "For a device that hangs at boot or shutdown behind the splash screen instead of failing cleanly — possibly a hidden kernel panic. Both settings need a reboot to take effect.",
+      "plymouth": "Disable boot splash (Plymouth)",
+      "plymouthHelp": "Shows real boot/shutdown text instead of the graphical splash, so a hang or kernel panic is actually visible on the screen.",
+      "kdump": "Save a memory dump on kernel panic",
+      "kdumpHelp": "Reserves a small amount of RAM to capture the crash to disk (/var/crash) so it can be inspected after a kernel panic.",
+      "kdumpNotInstalled": "Installs the crash-dump tools the first time this is turned on (needs Internet access).",
+      "kdumpInstalling": "Installing crash-dump tools…",
+      "rebootRequired": "Saved — reboot the device for this to take effect.",
+      "rebootPrompt": "Reboot the device now to apply this?",
+      "saveFailed": "Could not save this setting",
       "none": "No captures saved yet.",
       "downloadFailed": "Download failed",
       "deleteConfirm": "Delete this capture?",

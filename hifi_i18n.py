@@ -119,6 +119,16 @@ MESSAGES = {
     'tailscale.enabling': {'en': 'Enabling Tailscale…', 'it': 'Attivazione Tailscale in corso…'},
     'tailscale.disabled': {'en': 'Tailscale disabled', 'it': 'Tailscale disattivato'},
 
+    # ── Boot debug flags (Settings → Debug) ──────────────────────────
+    'debug.rebootRequired': {'en': 'Saved — reboot the device for this to take effect.',
+                             'it': 'Salvato — riavvia il dispositivo perché la modifica abbia effetto.'},
+    'debug.updateGrubFailed': {'en': 'Could not update the boot configuration',
+                               'it': 'Impossibile aggiornare la configurazione di avvio'},
+    'debug.kdumpInstallFailed': {'en': 'Could not install the crash-dump tools — check your Internet '
+                                        'connection and try again',
+                                 'it': "Impossibile installare gli strumenti per il memory dump — controlla "
+                                       'la connessione a Internet e riprova'},
+
     # ── Mouse pointer / misc preferences ────────────────────────────
     'prefs.saveFailed': {'en': 'Could not save the preference', 'it': 'Impossibile salvare la preferenza'},
     'pointer.shown': {'en': 'Mouse pointer shown', 'it': 'Puntatore mouse attivato'},
