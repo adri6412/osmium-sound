@@ -1,41 +1,41 @@
 {
-  "tag_name": "v2.5.21-dev.86",
-  "name": "v2.5.21-dev.86",
-  "body": "## What's new in v2.5.21-dev.86\n\n- fix(audio): assign squeezelite a persistent, unique player MAC\n",
+  "tag_name": "v2.5.21-dev.87",
+  "name": "v2.5.21-dev.87",
+  "body": "## What's new in v2.5.21-dev.87\n\n- fix(artwork): stop now-playing cover from following another LMS player\n",
   "assets": [
     {
-      "name": "hifi-ui-v2.5.21-dev.86.tar.gz",
-      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.86/hifi-ui-v2.5.21-dev.86.tar.gz",
-      "size": 134224100
+      "name": "hifi-ui-v2.5.21-dev.87.tar.gz",
+      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.87/hifi-ui-v2.5.21-dev.87.tar.gz",
+      "size": 134230383
     },
     {
-      "name": "hifi-ui-v2.5.21-dev.86.tar.gz.sha256",
-      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.86/hifi-ui-v2.5.21-dev.86.tar.gz.sha256",
+      "name": "hifi-ui-v2.5.21-dev.87.tar.gz.sha256",
+      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.87/hifi-ui-v2.5.21-dev.87.tar.gz.sha256",
       "size": 96
     },
     {
-      "name": "hifi-system-v2.5.21-dev.86.tar.gz",
-      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.86/hifi-system-v2.5.21-dev.86.tar.gz",
-      "size": 303049
+      "name": "hifi-system-v2.5.21-dev.87.tar.gz",
+      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.87/hifi-system-v2.5.21-dev.87.tar.gz",
+      "size": 303045
     },
     {
-      "name": "hifi-system-v2.5.21-dev.86.tar.gz.sha256",
-      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.86/hifi-system-v2.5.21-dev.86.tar.gz.sha256",
+      "name": "hifi-system-v2.5.21-dev.87.tar.gz.sha256",
+      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.87/hifi-system-v2.5.21-dev.87.tar.gz.sha256",
       "size": 100
     },
     {
-      "name": "hifi-os-v2.5.21-dev.86.tar.gz",
-      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.86/hifi-os-v2.5.21-dev.86.tar.gz",
+      "name": "hifi-os-v2.5.21-dev.87.tar.gz",
+      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.87/hifi-os-v2.5.21-dev.87.tar.gz",
       "size": 1198733
     },
     {
-      "name": "hifi-os-v2.5.21-dev.86.tar.gz.sha256",
-      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.86/hifi-os-v2.5.21-dev.86.tar.gz.sha256",
+      "name": "hifi-os-v2.5.21-dev.87.tar.gz.sha256",
+      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.87/hifi-os-v2.5.21-dev.87.tar.gz.sha256",
       "size": 96
     },
     {
-      "name": "hifi-os-v2.5.21-dev.86.tar.gz.sha256.sig",
-      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.86/hifi-os-v2.5.21-dev.86.tar.gz.sha256.sig",
+      "name": "hifi-os-v2.5.21-dev.87.tar.gz.sha256.sig",
+      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.87/hifi-os-v2.5.21-dev.87.tar.gz.sha256.sig",
       "size": 64
     }
   ]
