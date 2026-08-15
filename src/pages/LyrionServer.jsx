@@ -702,14 +702,29 @@ const LyrionServer = () => {
   // touch isPlayerExpanded again until a *different* song starts. Ref, not
   // state: this must never itself trigger a re-render/re-schedule.
   const autoExpandHandledKeyRef = useRef(null);
+  // Any touch/mouse/keyboard activity resets the countdown, so the popup
+  // only fires after the user has actually been idle for autoExpandSeconds
+  // (not just autoExpandSeconds after the track started).
   useEffect(() => {
     if (!isPlaying || !autoExpandSeconds || !activePlayer) return;
     if (autoExpandHandledKeyRef.current === artworkIdentityKey) return;
-    const timer = setTimeout(() => {
+    const delayMs = autoExpandSeconds * 1000;
+    let timer;
+    const fire = () => {
       autoExpandHandledKeyRef.current = artworkIdentityKey;
       setIsPlayerExpanded(true);
-    }, autoExpandSeconds * 1000);
-    return () => clearTimeout(timer);
+    };
+    const resetTimer = () => {
+      clearTimeout(timer);
+      timer = setTimeout(fire, delayMs);
+    };
+    resetTimer();
+    const interactionEvents = ['pointerdown', 'touchstart', 'keydown', 'wheel'];
+    interactionEvents.forEach((ev) => window.addEventListener(ev, resetTimer, { passive: true }));
+    return () => {
+      clearTimeout(timer);
+      interactionEvents.forEach((ev) => window.removeEventListener(ev, resetTimer));
+    };
   }, [isPlaying, artworkIdentityKey, autoExpandSeconds, activePlayer]);
   // Manual collapse (the ChevronDown close button) counts as "the user moved
   // away on purpose" — mark this song handled so a still-pending timer (user
