@@ -9,6 +9,25 @@ import { systemAPI } from '../utils/api';
 // stay legible without adding a ring on every mouse/touch click too.
 const FOCUS_RING = 'focus:outline-none focus-visible:ring-2 focus-visible:ring-hifi-gold focus-visible:ring-offset-2 focus-visible:ring-offset-hifi-dark';
 
+// Always-on QR badge, not a step you have to click into — a box with no
+// mouse/keyboard/touchscreen attached at all still needs a way in, so the
+// phone hand-off can't be gated behind an on-screen tap.
+const QrCorner = ({ apInfo, wired, deviceIp }) => {
+  const showHotspot = apInfo?.ssid && !wired;
+  const value = showHotspot
+    ? `WIFI:T:WPA;S:${apInfo.ssid};P:${apInfo.psk || ''};;`
+    : `http://${deviceIp || 'hifiplayer.local'}`;
+  return (
+    <div className="absolute top-16 right-4 z-[65] flex flex-col items-center bg-white rounded-xl p-2.5 shadow-lg">
+      <QRCodeSVG value={value} size={104} />
+      <span className="text-black/70 text-[10px] mt-1.5 flex items-center gap-1 max-w-[104px] text-center leading-tight">
+        <Smartphone size={11} className="shrink-0" />
+        {showHotspot ? apInfo.ssid : (deviceIp ? `http://${deviceIp}` : 'http://hifiplayer.local')}
+      </span>
+    </div>
+  );
+};
+
 /**
  * Installer UI shown when this live session was booted from the
  * "Install Osmium Sound" boot menu entry (kernel param hifi.installer=1,
@@ -17,11 +36,13 @@ const FOCUS_RING = 'focus:outline-none focus-visible:ring-2 focus-visible:ring-h
  *
  * Two ways to drive it, both live at once and both end up calling the same
  * hifi-disk-install.sh via the same /install/* endpoints:
- *  - On-screen (primary): welcome → disk → confirm, driven locally with a
+ *  - On-screen: welcome → disk → confirm, driven locally with a
  *    mouse/keyboard/touch attached to this machine.
- *  - Remote (secondary, backgrounded behind a link): scan the QR code with a
- *    phone, which opens webui_server.py's captive portal
- *    (INSTALL_CAPTIVE_HTML) to pick the disk and confirm from there instead.
+ *  - Remote: the QrCorner badge is always on screen (not a step you have to
+ *    click into — a box with no mouse/keyboard/touchscreen at all still
+ *    needs a way in), scannable from the very first frame. It opens
+ *    webui_server.py's captive portal (INSTALL_CAPTIVE_HTML) on the phone to
+ *    pick the disk and confirm from there instead.
  * Either path can be the one that actually starts the install — this screen
  * always mirrors /install/status, so if the phone starts it the on-screen
  * wizard (if left open) jumps straight to the progress view too. Once the
@@ -30,7 +51,7 @@ const FOCUS_RING = 'focus:outline-none focus-visible:ring-2 focus-visible:ring-h
  * connected.
  */
 const InstallWizard = () => {
-  const [step, setStep] = useState('welcome'); // welcome | qr | disk | confirm
+  const [step, setStep] = useState('welcome'); // welcome | disk | confirm
   const [apInfo, setApInfo] = useState(null);
   const [wired, setWired] = useState(false);
   const [deviceIp, setDeviceIp] = useState(null);
@@ -235,6 +256,7 @@ const InstallWizard = () => {
 
         {step === 'welcome' && (
           <div className="absolute inset-0 z-[60] bg-hifi-dark flex flex-col items-center justify-center font-display overflow-hidden px-8">
+            <QrCorner apInfo={apInfo} wired={wired} deviceIp={deviceIp} />
             <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} transition={{ delay: 0.1 }}
               className="flex flex-col items-center text-center max-w-md">
               <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-hifi-gold to-yellow-600 flex items-center justify-center shadow-[0_0_40px_rgba(212,175,55,0.3)] mb-6">
@@ -245,43 +267,9 @@ const InstallWizard = () => {
               <button onClick={() => setStep('disk')} className={`flex items-center space-x-2 bg-hifi-gold text-black font-semibold px-8 py-3 rounded-xl hover:brightness-110 transition ${FOCUS_RING}`}>
                 <span>Choose disk</span><ChevronRight size={18} />
               </button>
-              <button onClick={() => setStep('qr')} className={`mt-6 flex items-center space-x-1 text-hifi-silver/50 hover:text-hifi-silver transition text-xs rounded-md px-2 py-1 ${FOCUS_RING}`}>
-                <Smartphone size={13} /><span>Prefer your phone? Scan a QR code instead</span>
-              </button>
-            </motion.div>
-          </div>
-        )}
-
-        {step === 'qr' && (
-          <div className="absolute inset-0 z-[60] bg-hifi-dark flex flex-col items-center justify-center font-display overflow-hidden px-8">
-            <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} transition={{ delay: 0.1 }}
-              className="flex flex-col items-center text-center max-w-md">
-              <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-hifi-gold to-yellow-600 flex items-center justify-center shadow-[0_0_40px_rgba(212,175,55,0.3)] mb-6">
-                <Smartphone size={32} className="text-black" />
-              </div>
-              <h1 className="text-2xl font-bold text-white mb-2">Scan to install</h1>
-              <p className="text-hifi-silver/70 text-sm leading-relaxed mb-8">Connect your phone to this Wi-Fi network to choose a disk and start the install — no need to touch this screen.</p>
-              {apInfo?.ssid && !wired ? (
-                <div className="inline-flex flex-col items-center bg-white rounded-2xl p-4">
-                  <QRCodeSVG value={`WIFI:T:WPA;S:${apInfo.ssid};P:${apInfo.psk || ''};;`} size={180} />
-                  <span className="text-black text-xs mt-2">{apInfo.ssid}</span>
-                </div>
-              ) : (
-                // Either no hotspot info (yet) — e.g. no Wi-Fi radio on this
-                // hardware/VM, or the AP hasn't come up — or a wired connection
-                // is already up, in which case skip the hotspot and point
-                // straight at the device since the phone can join the same LAN.
-                <div className="inline-flex flex-col items-center bg-white rounded-2xl p-4">
-                  <QRCodeSVG value={`http://${deviceIp || 'hifiplayer.local'}`} size={180} />
-                  <span className="text-black text-xs mt-2">
-                    {deviceIp ? `http://${deviceIp}` : 'http://hifiplayer.local'}
-                  </span>
-                  {deviceIp && <span className="text-black/50 text-[10px] mt-0.5">http://hifiplayer.local</span>}
-                </div>
-              )}
-              <button onClick={() => setStep('welcome')} className={`mt-8 flex items-center space-x-1 text-hifi-silver/60 hover:text-white transition text-sm rounded-md px-2 py-1 ${FOCUS_RING}`}>
-                <ChevronLeft size={16} /><span>Back</span>
-              </button>
+              <p className="mt-6 flex items-center space-x-1 text-hifi-silver/50 text-xs">
+                <Smartphone size={13} /><span>Or scan the QR code (top right) to use your phone instead</span>
+              </p>
             </motion.div>
           </div>
         )}
@@ -292,6 +280,7 @@ const InstallWizard = () => {
               <ChevronLeft size={18} /><span className="text-sm">Back</span>
             </button>
           }>
+            <QrCorner apInfo={apInfo} wired={wired} deviceIp={deviceIp} />
             <div className="w-full max-w-lg">
               <h2 className="text-2xl font-bold text-white mb-1 text-center">Choose the installation disk</h2>
               <p className="text-hifi-silver/60 text-sm text-center mb-8">The selected disk will be wiped and fully replaced by Osmium Sound.</p>

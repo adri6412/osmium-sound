@@ -230,6 +230,7 @@
     <a href="#en-backup">Backup & restore</a>
     <a href="#en-updates">OTA updates</a>
     <a href="#en-ssh">SSH & advanced access</a>
+    <a href="#en-remote-access">Remote access (Tailscale)</a>
     <a href="#en-reset">Factory reset</a>
 
     <div class="grp">Support</div>
@@ -257,6 +258,7 @@
     <a href="#it-backup">Backup e ripristino</a>
     <a href="#it-aggiornamenti">Aggiornamenti OTA</a>
     <a href="#it-ssh">SSH e accesso avanzato</a>
+    <a href="#it-remote-access">Accesso remoto (Tailscale)</a>
     <a href="#it-reset">Reset di fabbrica</a>
 
     <div class="grp">Assistenza</div>
@@ -271,7 +273,7 @@
 
       <div class="hero">
         <h1>Osmium Sound</h1>
-        <p>Complete installation and configuration manual. A bit-perfect hi-fi network streamer built on Debian, with Lyrion Music Server, optional DSP, and web administration — designed to be installed and configured entirely from your phone, without ever plugging in a mouse or keyboard.</p>
+        <p>Complete installation and configuration manual. A bit-perfect hi-fi network streamer built on Debian, with Lyrion Music Server, optional DSP, and web administration</p>
         <div class="badges">
           <span class="badge">QR-code setup</span>
           <span class="badge">No mouse/keyboard required</span>
@@ -284,23 +286,23 @@
         <h2>Hardware requirements</h2>
         <table>
           <tr><th>Component</th><th>Requirement</th></tr>
-          <tr><td>Computer</td><td>x86/x86-64 mini-PC (a recycled/used one works fine)</td></tr>
-          <tr><td>Storage</td><td>Internal disk/SSD to install onto (any reasonable size)</td></tr>
+          <tr><td>Computer</td><td>x86/x86-64 mini-PC</td></tr>
+          <tr><td>Storage</td><td>Internal disk/SSD to install onto (16gb minimum)</td></tr>
           <tr><td>USB stick</td><td>8&nbsp;GB or larger, needed only for the initial install</td></tr>
           <tr><td>Screen (optional)</td><td>1024×600 touchscreen recommended for "with screen" mode — not needed in headless or server-only mode</td></tr>
           <tr><td>Audio output</td><td>USB DAC or HDMI output</td></tr>
           <tr><td>Network</td><td>Ethernet or Wi-Fi</td></tr>
-          <tr><td>Phone</td><td>Required for installation and first setup — any smartphone with a camera and a browser</td></tr>
+          <tr><td>Phone</td><td>Required for installation and first setup — any smartphone with a camera and a browser and/or a pc</td></tr>
         </table>
         <div class="box tip">
           <span class="label">Note</span>
-          <p>No high-end hardware needed: Osmium Sound runs well on inexpensive or recycled mini-PCs. The most common bottleneck is the integrated GPU when using the screen — avoiding heavy animations isn't something you need to worry about, it's already handled in software.</p>
+          <p>No high-end hardware needed: Osmium Sound runs well on inexpensive or recycled mini-PCs.</p>
         </div>
       </section>
 
       <section id="en-installation">
         <h2>Installation</h2>
-        <p>Installation happens entirely from a USB stick and, importantly, <strong>never requires touching the mini-PC's screen</strong>: after boot, the screen shows only a QR code, and the whole process — choosing the disk, confirming, starting the install — happens on your phone.</p>
+        <p>Installation happens entirely from a USB stick, with a full installer built into the device itself. Drive it directly on the mini-PC's screen (mouse/keyboard/touchscreen), or from your phone via the QR code shown in the corner — both work at once, and neither needs the other to get started.</p>
 
         <ol class="steps">
           <li><strong>Download the ISO</strong>
@@ -309,13 +311,18 @@
             Use <a href="https://etcher.balena.io/" target="_blank" rel="noopener">balenaEtcher</a>, Rufus, or the <code>dd</code> command, onto a stick of at least 8&nbsp;GB.</li>
           <li><strong>Boot the mini-PC from the stick</strong>
             Plug in the stick, power on the mini-PC, and pick USB boot from the boot menu (usually <kbd>F11</kbd>/<kbd>F12</kbd>/<kbd>Esc</kbd> depending on the motherboard). Choose <strong>Install Osmium Sound</strong> from the menu.</li>
-          <li><strong>Scan the QR code</strong>
-            The screen shows a QR code with the credentials of a temporary Wi-Fi hotspot. Scan it with your phone's camera: the phone connects to the hotspot automatically and the install page opens.</li>
-          <li><strong>Choose the disk and confirm</strong>
-            From your phone, pick which disk to install Osmium Sound onto. A clear warning is shown: <em>all data on the chosen disk will be erased</em>. Confirm to proceed.</li>
+          <li><strong>Choose the disk, right on the screen</strong>
+            The welcome screen offers <strong>Choose disk</strong> as the main action: tap it and pick the target disk from the list shown on the mini-PC's own screen.</li>
+          <li><strong>Confirm</strong>
+            A clear warning is shown: <em>all data on the chosen disk will be erased</em>. Tap <strong>Erase and install</strong> to proceed.</li>
           <li><strong>Wait for it to finish</strong>
-            The mini-PC's screen mirrors install progress in real time, read-only. When it's done, the device reboots on its own — remove the USB stick during the on-screen countdown.</li>
+            Progress is shown live on screen. When it's done, the device reboots on its own — remove the USB stick during the on-screen countdown.</li>
         </ol>
+
+        <div class="box tip">
+          <span class="label">Prefer your phone?</span>
+          <p>A QR code sits in the top-right corner of the screen from the very first frame — no click needed to reveal it, so the whole install can be driven from your phone even with no mouse, keyboard, or touchscreen attached to the mini-PC at all. Scan it, then pick the disk and confirm from there. Whichever side actually starts the install, the mini-PC's screen always mirrors progress.</p>
+        </div>
 
         <div class="box warn">
           <span class="label">Warning</span>
@@ -347,12 +354,14 @@
           <li><strong>Language</strong>
             Choose between English (default) and Italian — change the setup page's language at any time.</li>
           <li><strong>Restore from backup, or start fresh</strong>
-            If you've used Osmium Sound before and have a backup file, you can upload it here (with its passphrase, if encrypted): network, audio output, Lyrion, music sources and time zone are all restored automatically and the device reboots on its own. Otherwise, choose to start fresh and continue with the steps below.</li>
+            If you've used Osmium Sound before and have a backup file, you can upload it here (with its passphrase, if encrypted): network, audio output, Lyrion, music sources, time zone <em>and your account</em> are all restored automatically and the device reboots on its own. Otherwise, choose to start fresh and continue with the steps below.</li>
+          <li><strong>Create your account</strong>
+            Only when starting fresh: pick the username and password you'll use for web administration (<code>http://hifiplayer.local</code>) and for pairing the companion app — there's no separate account-creation step later, it's part of this same phone-based wizard.</li>
           <li><strong>Network</strong>
             Connect the device to your home Wi-Fi, or confirm the Ethernet cable if already plugged in.
             <div class="box tip" style="margin-top:10px">
               <span class="label">If you chose Wi-Fi</span>
-              <p>The setup hotspot turns off as soon as the device joins your home Wi-Fi (a single Wi-Fi radio can't do both at once). Your phone will lose its connection to the setup page — reconnect it to your own home Wi-Fi, then open <a href="https://hifiplayer.local">https://hifiplayer.local</a> to pick up exactly where you left off. If you used the Ethernet cable instead, the setup hotspot stays on and nothing needs reconnecting.</p>
+              <p>The setup hotspot turns off as soon as the device joins your home Wi-Fi (a single Wi-Fi radio can't do both at once). Your phone will lose its connection to the setup page — reconnect it to your own home Wi-Fi, then open <a href="http://hifiplayer.local">http://hifiplayer.local</a> to pick up exactly where you left off. If you used the Ethernet cable instead, the setup hotspot stays on and nothing needs reconnecting.</p>
             </div>
           </li>
           <li><strong>Device mode</strong>
@@ -374,11 +383,9 @@
           <p>If the setup page doesn't open automatically after connecting to the <code>Osmium-Setup-XXXX</code> network (passphrase <code>osmiumsetup</code>), open <a href="http://10.42.0.1">http://10.42.0.1</a> manually in your phone's browser.</p>
         </div>
 
-        <h3>Create the web administration account</h3>
-        <p>After finishing setup and reconnecting your phone to your home network, open <a href="https://hifiplayer.local">https://hifiplayer.local</a> to create the web administration account (username + password).</p>
-        <div class="box warn">
-          <span class="label">Certificate warning</span>
-          <p>Your browser will warn that the certificate is "not trusted". This is expected: Osmium Sound generates a unique HTTPS certificate per device, and there's no public certification authority for a local address like <code>hifiplayer.local</code>. The connection is still encrypted. It's safe to continue (usually "Advanced" → "Proceed anyway").</p>
+        <div class="box tip">
+          <span class="label">No certificate warnings</span>
+          <p>Osmium Sound's web administration is plain HTTP — there's no TLS certificate to trust or click through. A per-device self-signed certificate was tried and dropped: it just meant an extra "connection not private" warning on first visit, for no real gain on a local-only address like <code>hifiplayer.local</code>.</p>
         </div>
       </section>
 
@@ -411,7 +418,7 @@
 
         <div class="box tip">
           <span class="label">Bringing "with screen" mode back</span>
-          <p>If a device is in headless or server-only mode and you want to turn the screen back on, open web administration (<a href="https://hifiplayer.local">https://hifiplayer.local</a>) or the companion app and go to Settings → Display mode.</p>
+          <p>If a device is in headless or server-only mode and you want to turn the screen back on, open web administration (<a href="http://hifiplayer.local">http://hifiplayer.local</a>) or the companion app and go to Settings → Display mode.</p>
         </div>
       </section>
 
@@ -420,7 +427,7 @@
         <p>Every Osmium Sound device exposes a web administration page reachable from any browser on the same network — especially useful for headless or server-only devices, but always available.</p>
         <table>
           <tr><th>Address</th><th>What's there</th></tr>
-          <tr><td><a href="https://hifiplayer.local">https://hifiplayer.local</a></td><td>Web administration: network, audio output, updates, display mode, player on/off, account, backup, factory reset</td></tr>
+          <tr><td><a href="http://hifiplayer.local">http://hifiplayer.local</a></td><td>Web administration: network, audio output, updates, display mode, player on/off, account, backup, factory reset</td></tr>
           <tr><td><code>http://hifiplayer.local:9000</code></td><td>Lyrion Music Server's own web interface (library, playlists, server settings)</td></tr>
         </table>
         <p>If you have several devices on your network and <code>hifiplayer.local</code> is ambiguous, use the device's IP address directly (visible in system Settings, or from your router).</p>
@@ -437,24 +444,31 @@
           <li><strong>Use the app</strong>
             Once paired, the app talks directly to Lyrion and the device's API on the local network.</li>
         </ol>
+        <p>The device settings reachable from the app (audio output, Lyrion server, updates, backup & restore, system) are grouped under a single "Osmium Sound" submenu; playback settings and library rescan stay at the top level.</p>
       </section>
 
       <section id="en-daily-use">
         <h2>Daily use</h2>
         <ul>
+          <li><strong>Now Playing</strong> — the expanded view shows a status LED bar above the album art: BitPerfect or ReplayGain on the right, a Hi-Res/PCM/DSD format indicator on the left, and the Osmium Sound brand mark in between.</li>
           <li><strong>Music / Radio / Apps</strong> — Lyrion Music Server's interface: local library, internet radio, and streaming services (Deezer, Qobuz, TIDAL, Spotify and others) via Lyrion plugins.</li>
-          <li><strong>CD</strong> — insert a disc to play it, or rip it to FLAC with automatic tags and cover art (MusicBrainz), straight into your library.</li>
-          <li><strong>Discover</strong> — random mixes, "keep playing similar music", related artists and bios, right on the touchscreen.</li>
+          <li><strong>CD</strong> — insert a disc to play it, or rip it to FLAC with automatic tags and cover art (MusicBrainz), straight into your library, an adopted USB drive, or a writable network share.</li>
+          <li><strong>Discover</strong> — endless mixes by track, album, or artist, with a genre filter and saveable presets, plus "keep playing similar music", related artists, and bios, right on the touchscreen.</li>
+          <li><strong>Settings → Playback</strong> — track transition, ReplayGain, the animated VU meter, the now-playing auto-expand timeout, and a fixed-volume-100% (BitPerfect) toggle that turns off Lyrion's own digital volume control and greys out the volume slider.</li>
           <li><strong>Settings</strong> — system and network info, audio output, optional DSP, multiroom, OTA updates, companion app pairing, backup, factory reset.</li>
         </ul>
+        <div class="box tip">
+          <span class="label">Playback survives a restart</span>
+          <p>Osmium Sound remembers what was playing — track, position, and whether it was playing or paused — across a reboot or shutdown, and picks back up on its own once the device is back online.</p>
+        </div>
       </section>
 
       <section id="en-sources">
         <h2>Music sources</h2>
         <p>Osmium Sound reads your music library from one or more sources, configurable from Settings (or during initial setup, if Lyrion is local):</p>
         <ul>
-          <li><strong>Network share (SMB)</strong> — a NAS or a shared folder on another computer.</li>
-          <li><strong>USB disk</strong> — a USB disk plugged into the device, "adopted" (Samba-shared, read/write).</li>
+          <li><strong>Network share (SMB)</strong> — a NAS or a shared folder on another computer. Each share can be toggled between read-only and writable at any time — handy if you also want to rip CDs onto it.</li>
+          <li><strong>USB disk</strong> — a USB disk plugged into the device, "adopted" (Samba-shared, read/write). An adopted drive auto-remounts on its own if you unplug and reconnect it, or reconnect it after a reboot.</li>
           <li><strong>Internal disk</strong> — a partition of the device's own internal disk dedicated to music.</li>
         </ul>
         <p>After adding or editing a source, apply the change: Lyrion restarts and picks up the new configuration. The actual first library scan is performed by Lyrion's own setup wizard.</p>
@@ -507,13 +521,17 @@
 
       <section id="en-updates">
         <h2>OTA updates</h2>
-        <p>The interface, operating system, and Lyrion Music Server all update automatically via OTA (over-the-air) from the Settings screen — no need to ever reflash the USB stick after the initial install. Operating-system updates are digitally signed (Ed25519): a device refuses a package that isn't signed correctly, even if someone managed to tamper with the download.</p>
+        <p>The interface, operating system, and Lyrion Music Server all update automatically via OTA (over-the-air) from the Settings screen — no need to ever reflash the USB stick after the initial install. Operating-system updates are digitally signed (Ed25519): a device refuses a package that isn't signed correctly, even if someone managed to tamper with the download. Progress is shown live (percentage and MB downloaded), not a frozen number.</p>
         <p>Each device can pick a release channel in Settings → Updates:</p>
         <table>
           <tr><th>Channel</th><th>Description</th></tr>
           <tr><td><strong>Prod</strong> (default)</td><td>Stable releases, recommended for everyday use</td></tr>
           <tr><td><strong>Dev</strong></td><td>More frequent development builds, for trying new things early</td></tr>
         </table>
+        <div class="box tip">
+          <span class="label">Reboot at the end</span>
+          <p>Once every step of an update has been applied, the device reboots on its own to complete it — this is expected, and playback resumes automatically afterwards (see <a href="#en-daily-use">Daily use</a>).</p>
+        </div>
       </section>
 
       <section id="en-ssh">
@@ -522,6 +540,23 @@
         <div class="box warn">
           <span class="label">Security</span>
           <p>When SSH is enabled, logging in as <code>root</code> stays blocked regardless: even knowing the kiosk user's default password, it's not possible to gain system-administrator access over SSH.</p>
+        </div>
+      </section>
+
+      <section id="en-remote-access">
+        <h2>Remote access (Tailscale)</h2>
+        <p>Web administration also offers optional remote access via <a href="https://tailscale.com" target="_blank" rel="noopener">Tailscale</a>, so you can reach the device from outside your home network — into <strong>your own</strong> Tailscale account, not a vendor-run service.</p>
+        <ol class="steps">
+          <li><strong>Install Tailscale</strong>
+            From web administration → Settings → Tailscale, install it on the device if it isn't already present.</li>
+          <li><strong>Enable it</strong>
+            Turning it on opens a one-time login URL — open it in a browser and sign in to your own Tailscale account (or create one) to authorize the device onto your tailnet.</li>
+          <li><strong>Connect from anywhere</strong>
+            Once connected, the device's Tailscale IP and connection details (including DERP relay region/latency) are shown in the same Settings section. Reach web administration through that address from any other device on your tailnet.</li>
+        </ol>
+        <div class="box tip">
+          <span class="label">Web administration only</span>
+          <p>Tailscale is currently only available from web administration (<code>http://hifiplayer.local</code>) — it doesn't appear in the on-screen Settings or in the Android companion app.</p>
         </div>
       </section>
 
@@ -547,7 +582,7 @@
           <tr><td>Missing streaming/radio sources</td><td>Install the corresponding plugin from Lyrion's web UI (Settings → Plugins) — see <a href="#en-streaming">Streaming & Lyrion plugins</a>.</td></tr>
           <tr><td>No audio</td><td>Check the selected audio device in Settings and that the DAC is recognized and connected.</td></tr>
           <tr><td>The first-boot QR code doesn't lead anywhere</td><td>Confirm you're connected to the <code>Osmium-Setup-XXXX</code> network (passphrase <code>osmiumsetup</code>) and try opening <a href="http://10.42.0.1">http://10.42.0.1</a> manually.</td></tr>
-          <tr><td><code>https://hifiplayer.local</code> is unreachable</td><td>Make sure your phone and the device are on the same network; otherwise use the device's IP address directly.</td></tr>
+          <tr><td><code>http://hifiplayer.local</code> is unreachable</td><td>Make sure your phone and the device are on the same network; otherwise use the device's IP address directly.</td></tr>
           <tr><td>A headless device isn't responding</td><td>Use the companion app or web administration to check its status; if needed, temporarily switch it back to "with screen" mode from there.</td></tr>
         </table>
       </section>
@@ -577,7 +612,7 @@
 
       <div class="hero">
         <h1>Osmium Sound</h1>
-        <p>Manuale completo di installazione e configurazione. Un network streamer hi-fi bit-perfect basato su Debian, con Lyrion Music Server, DSP opzionale e amministrazione via web — pensato per essere installato e configurato interamente dal telefono, senza mai dover collegare mouse o tastiera.</p>
+        <p>Manuale completo di installazione e configurazione. Un network streamer hi-fi bit-perfect basato su Debian, con Lyrion Music Server, DSP opzionale e amministrazione via web</p>
         <div class="badges">
           <span class="badge">Setup via QR code</span>
           <span class="badge">Nessun mouse/tastiera richiesto</span>
@@ -590,23 +625,23 @@
         <h2>Requisiti hardware</h2>
         <table>
           <tr><th>Componente</th><th>Requisito</th></tr>
-          <tr><td>Computer</td><td>Mini-PC x86/x86-64 (anche riciclato/usato)</td></tr>
-          <tr><td>Storage</td><td>Disco/SSD interno per l'installazione (qualsiasi dimensione ragionevole)</td></tr>
+          <tr><td>Computer</td><td>Mini-PC x86/x86-64</td></tr>
+          <tr><td>Storage</td><td>Disco/SSD interno per l'installazione (16gb minimo)</td></tr>
           <tr><td>Chiavetta USB</td><td>8&nbsp;GB o superiore, solo per l'installazione iniziale</td></tr>
           <tr><td>Schermo (opzionale)</td><td>Touchscreen 1024×600 consigliato per la modalità "con schermo" — non necessario in modalità headless o solo server</td></tr>
           <tr><td>Uscita audio</td><td>DAC USB oppure uscita HDMI</td></tr>
           <tr><td>Rete</td><td>Ethernet oppure Wi-Fi</td></tr>
-          <tr><td>Telefono</td><td>Necessario per l'installazione e la prima configurazione — qualunque smartphone con fotocamera e browser</td></tr>
+          <tr><td>Telefono</td><td>Necessario per l'installazione e la prima configurazione — qualunque smartphone con fotocamera e browser e/o qualunque pc</td></tr>
         </table>
         <div class="box tip">
           <span class="label">Nota</span>
-          <p>Non serve un dispositivo di fascia alta: Osmium Sound gira bene su mini-PC economici o riciclati. Il collo di bottiglia più comune è la GPU integrata quando si usa lo schermo — evitare animazioni pesanti non è un problema lato utente, è già gestito dal software.</p>
+          <p>Non serve un dispositivo di fascia alta: Osmium Sound gira bene su mini-PC economici o riciclati.</p>
         </div>
       </section>
 
       <section id="it-installazione">
         <h2>Installazione</h2>
-        <p>L'installazione avviene interamente da chiavetta USB e, novità importante, <strong>non richiede mai di toccare lo schermo del mini-PC</strong>: dopo il boot, lo schermo mostra solo un QR code e tutta la procedura — scelta del disco, conferma, avvio dell'installazione — si fa dal telefono.</p>
+        <p>L'installazione avviene interamente da chiavetta USB, con un installer completo integrato nel dispositivo stesso. Guidala direttamente sullo schermo del mini-PC (mouse/tastiera/touchscreen), oppure dal telefono tramite il QR code mostrato nell'angolo — funzionano entrambi contemporaneamente, e nessuno dei due richiede l'altro per iniziare.</p>
 
         <ol class="steps">
           <li><strong>Scarica la ISO</strong>
@@ -615,13 +650,18 @@
             Usa <a href="https://etcher.balena.io/" target="_blank" rel="noopener">balenaEtcher</a>, Rufus oppure il comando <code>dd</code> su una chiavetta da almeno 8&nbsp;GB.</li>
           <li><strong>Avvia il mini-PC dalla chiavetta</strong>
             Collega la chiavetta, accendi il mini-PC e seleziona l'avvio da USB dal menu di boot (di solito <kbd>F11</kbd>/<kbd>F12</kbd>/<kbd>Esc</kbd> a seconda della scheda madre). Scegli <strong>Install Osmium Sound</strong> dal menu.</li>
-          <li><strong>Scansiona il QR code</strong>
-            Lo schermo mostra un QR code con le credenziali di un hotspot Wi-Fi temporaneo. Scansionalo con la fotocamera del telefono: il telefono si connette automaticamente all'hotspot e si apre la pagina di installazione.</li>
-          <li><strong>Scegli il disco e conferma</strong>
-            Dal telefono, scegli il disco su cui installare Osmium Sound. Viene mostrato un avviso chiaro: <em>tutti i dati sul disco scelto verranno cancellati</em>. Conferma per procedere.</li>
+          <li><strong>Scegli il disco, direttamente sullo schermo</strong>
+            La schermata di benvenuto propone <strong>Choose disk</strong> come azione principale: toccala e scegli il disco di destinazione dall'elenco mostrato sullo schermo del mini-PC.</li>
+          <li><strong>Conferma</strong>
+            Viene mostrato un avviso chiaro: <em>tutti i dati sul disco scelto verranno cancellati</em>. Tocca <strong>Erase and install</strong> per procedere.</li>
           <li><strong>Attendi il completamento</strong>
-            Lo schermo del mini-PC mostra l'avanzamento dell'installazione in tempo reale (sola lettura). Al termine, il dispositivo si riavvia automaticamente — rimuovi la chiavetta USB durante il conto alla rovescia mostrato a schermo.</li>
+            L'avanzamento è mostrato in tempo reale a schermo. Al termine, il dispositivo si riavvia automaticamente — rimuovi la chiavetta USB durante il conto alla rovescia mostrato a schermo.</li>
         </ol>
+
+        <div class="box tip">
+          <span class="label">Preferisci il telefono?</span>
+          <p>Un QR code compare nell'angolo in alto a destra dello schermo fin dal primo istante — non serve nessun tocco per farlo apparire, quindi l'intera installazione può essere guidata dal telefono anche senza mouse, tastiera o touchscreen collegati al mini-PC. Scansionalo, poi scegli il disco e conferma da lì. Indipendentemente da chi avvia effettivamente l'installazione, lo schermo del mini-PC mostra sempre l'avanzamento in tempo reale.</p>
+        </div>
 
         <div class="box warn">
           <span class="label">Attenzione</span>
@@ -653,12 +693,14 @@
           <li><strong>Lingua</strong>
             Scegli tra Inglese (predefinita) e Italiano — cambia in ogni momento la lingua della pagina di configurazione.</li>
           <li><strong>Ripristina da backup, oppure inizia da zero</strong>
-            Se hai già usato Osmium Sound in passato e hai un file di backup, puoi caricarlo qui (con la relativa passphrase, se cifrato): rete, uscita audio, Lyrion, sorgenti musicali e fuso orario vengono ripristinati automaticamente e il dispositivo si riavvia da solo. Altrimenti, scegli di iniziare da zero e prosegui con i passaggi seguenti.</li>
+            Se hai già usato Osmium Sound in passato e hai un file di backup, puoi caricarlo qui (con la relativa passphrase, se cifrato): rete, uscita audio, Lyrion, sorgenti musicali, fuso orario <em>e account</em> vengono ripristinati automaticamente e il dispositivo si riavvia da solo. Altrimenti, scegli di iniziare da zero e prosegui con i passaggi seguenti.</li>
+          <li><strong>Crea il tuo account</strong>
+            Solo se inizi da zero: scegli il nome utente e la password che userai per l'amministrazione web (<code>http://hifiplayer.local</code>) e per l'abbinamento dell'app companion — non c'è un passaggio separato più avanti, fa parte di questa stessa procedura guidata dal telefono.</li>
           <li><strong>Rete</strong>
             Collega il dispositivo alla tua rete Wi-Fi di casa, oppure conferma il cavo Ethernet se già collegato.
             <div class="box tip" style="margin-top:10px">
               <span class="label">Se scegli il Wi-Fi</span>
-              <p>L'hotspot di configurazione si spegne non appena il dispositivo si collega alla tua rete Wi-Fi di casa (una singola scheda Wi-Fi non può fare entrambe le cose insieme). Il telefono perderà la connessione alla pagina di configurazione — riconnettilo alla tua rete Wi-Fi di casa, poi apri <a href="https://hifiplayer.local">https://hifiplayer.local</a> per riprendere esattamente da dove avevi lasciato. Se invece usi il cavo Ethernet, l'hotspot di configurazione resta acceso e non c'è nulla da riconnettere.</p>
+              <p>L'hotspot di configurazione si spegne non appena il dispositivo si collega alla tua rete Wi-Fi di casa (una singola scheda Wi-Fi non può fare entrambe le cose insieme). Il telefono perderà la connessione alla pagina di configurazione — riconnettilo alla tua rete Wi-Fi di casa, poi apri <a href="http://hifiplayer.local">http://hifiplayer.local</a> per riprendere esattamente da dove avevi lasciato. Se invece usi il cavo Ethernet, l'hotspot di configurazione resta acceso e non c'è nulla da riconnettere.</p>
             </div>
           </li>
           <li><strong>Modalità del dispositivo</strong>
@@ -680,11 +722,9 @@
           <p>Se la pagina di configurazione non si apre automaticamente dopo esserti connesso alla rete <code>Osmium-Setup-XXXX</code> (passphrase <code>osmiumsetup</code>), apri manualmente <a href="http://10.42.0.1">http://10.42.0.1</a> nel browser del telefono.</p>
         </div>
 
-        <h3>Crea l'account di amministrazione web</h3>
-        <p>Dopo aver completato il setup e riconnesso il telefono alla rete di casa, apri <a href="https://hifiplayer.local">https://hifiplayer.local</a> per creare l'account (nome utente + password) dell'amministrazione web.</p>
-        <div class="box warn">
-          <span class="label">Avviso del certificato</span>
-          <p>Il browser mostrerà un avviso che il certificato "non è attendibile". È normale: Osmium Sound genera un certificato HTTPS univoco per ogni dispositivo, e non esiste un'autorità di certificazione pubblica per un dominio locale come <code>hifiplayer.local</code>. La connessione resta comunque cifrata. Puoi procedere in sicurezza (di solito "Avanzate" → "Procedi comunque").</p>
+        <div class="box tip">
+          <span class="label">Nessun avviso di certificato</span>
+          <p>L'amministrazione web di Osmium Sound è in HTTP semplice — non c'è nessun certificato TLS da approvare. Un certificato autofirmato per dispositivo era stato provato e poi scartato: significava solo un avviso "connessione non privata" in più al primo accesso, senza reale vantaggio su un indirizzo solo locale come <code>hifiplayer.local</code>.</p>
         </div>
       </section>
 
@@ -717,7 +757,7 @@
 
         <div class="box tip">
           <span class="label">Come tornare a "Con schermo"</span>
-          <p>Se un dispositivo è in modalità headless o solo server e vuoi riaccendere lo schermo, apri l'amministrazione web (<a href="https://hifiplayer.local">https://hifiplayer.local</a>) o l'app companion e vai su Impostazioni → Modalità schermo.</p>
+          <p>Se un dispositivo è in modalità headless o solo server e vuoi riaccendere lo schermo, apri l'amministrazione web (<a href="http://hifiplayer.local">http://hifiplayer.local</a>) o l'app companion e vai su Impostazioni → Modalità schermo.</p>
         </div>
       </section>
 
@@ -726,7 +766,7 @@
         <p>Ogni dispositivo Osmium Sound espone una pagina di amministrazione web raggiungibile da qualsiasi browser sulla stessa rete, utile in particolare per i dispositivi in modalità headless o solo server, ma disponibile sempre.</p>
         <table>
           <tr><th>Indirizzo</th><th>Cosa trovi</th></tr>
-          <tr><td><a href="https://hifiplayer.local">https://hifiplayer.local</a></td><td>Amministrazione web: rete, uscita audio, aggiornamenti, modalità schermo, player on/off, account, backup, reset di fabbrica</td></tr>
+          <tr><td><a href="http://hifiplayer.local">http://hifiplayer.local</a></td><td>Amministrazione web: rete, uscita audio, aggiornamenti, modalità schermo, player on/off, account, backup, reset di fabbrica</td></tr>
           <tr><td><code>http://hifiplayer.local:9000</code></td><td>Interfaccia web di Lyrion Music Server (libreria, playlist, impostazioni server)</td></tr>
         </table>
         <p>Se hai più dispositivi in rete e <code>hifiplayer.local</code> è ambiguo, usa direttamente l'indirizzo IP del dispositivo (visibile nelle Impostazioni di sistema, oppure dal router).</p>
@@ -743,24 +783,31 @@
           <li><strong>Usa l'app</strong>
             Una volta abbinata, l'app parla direttamente con Lyrion e con l'API del dispositivo sulla rete locale.</li>
         </ol>
+        <p>Le impostazioni del dispositivo raggiungibili dall'app (uscita audio, server Lyrion, aggiornamenti, backup e ripristino, sistema) sono raggruppate in un unico sottomenu "Osmium Sound"; le impostazioni di riproduzione e la nuova scansione della libreria restano invece al primo livello.</p>
       </section>
 
       <section id="it-uso-quotidiano">
         <h2>Uso quotidiano</h2>
         <ul>
+          <li><strong>Now Playing</strong> — la vista espansa mostra una barra LED di stato sopra la copertina: BitPerfect o ReplayGain a destra, un indicatore di formato Hi-Res/PCM/DSD a sinistra, e il marchio Osmium Sound nello spazio rimanente.</li>
           <li><strong>Musica / Radio / App</strong> — l'interfaccia di Lyrion Music Server: libreria locale, radio internet e servizi di streaming (Deezer, Qobuz, TIDAL, Spotify e altri) tramite i plugin di Lyrion.</li>
-          <li><strong>CD</strong> — inserisci un disco per riprodurlo oppure rippare in FLAC con tag e copertina automatici (MusicBrainz), direttamente nella libreria.</li>
-          <li><strong>Discover</strong> — mix casuali, "continua ad ascoltare musica simile", artisti correlati e biografie direttamente a schermo.</li>
+          <li><strong>CD</strong> — inserisci un disco per riprodurlo oppure rippare in FLAC con tag e copertina automatici (MusicBrainz), direttamente nella libreria, su un disco USB adottato o su una condivisione di rete scrivibile.</li>
+          <li><strong>Discover</strong> — mix infiniti per brano, album o artista, con filtro per genere e preset salvabili, oltre a "continua ad ascoltare musica simile", artisti correlati e biografie direttamente a schermo.</li>
+          <li><strong>Impostazioni → Playback</strong> — transizione tra i brani, ReplayGain, VU meter animato, timeout di espansione automatica del now playing, e un interruttore volume fisso al 100% (BitPerfect) che disattiva il controllo volume digitale di Lyrion e disabilita visivamente lo slider del volume.</li>
           <li><strong>Impostazioni</strong> — info di sistema e rete, uscita audio, DSP opzionale, multiroom, aggiornamenti OTA, abbinamento app companion, backup, reset di fabbrica.</li>
         </ul>
+        <div class="box tip">
+          <span class="label">La riproduzione sopravvive a un riavvio</span>
+          <p>Osmium Sound ricorda cosa stava suonando — brano, posizione e se era in riproduzione o in pausa — attraverso un riavvio o uno spegnimento, e riprende da solo non appena il dispositivo torna online.</p>
+        </div>
       </section>
 
       <section id="it-sorgenti">
         <h2>Sorgenti musicali</h2>
         <p>Osmium Sound legge la libreria musicale da una o più sorgenti, configurabili dalle Impostazioni (o durante il setup iniziale, se il Lyrion è locale):</p>
         <ul>
-          <li><strong>Condivisione di rete (SMB)</strong> — un NAS o una cartella condivisa su un altro computer.</li>
-          <li><strong>Disco USB</strong> — un disco USB collegato al dispositivo, "adottato" (condiviso via Samba, leggibile/scrivibile).</li>
+          <li><strong>Condivisione di rete (SMB)</strong> — un NAS o una cartella condivisa su un altro computer. Ogni condivisione può essere resa scrivibile o di sola lettura in qualsiasi momento — comodo se vuoi anche rippare CD al suo interno.</li>
+          <li><strong>Disco USB</strong> — un disco USB collegato al dispositivo, "adottato" (condiviso via Samba, leggibile/scrivibile). Un disco adottato si rimonta da solo se lo scolleghi e ricolleghi, o dopo un riavvio.</li>
           <li><strong>Disco interno</strong> — una partizione del disco interno del dispositivo dedicata alla musica.</li>
         </ul>
         <p>Dopo aver aggiunto o modificato una sorgente, applica le modifiche: Lyrion viene riavviato e la nuova configurazione presa in carico. La prima scansione vera e propria della libreria avviene tramite il setup guidato di Lyrion stesso.</p>
@@ -813,13 +860,17 @@
 
       <section id="it-aggiornamenti">
         <h2>Aggiornamenti OTA</h2>
-        <p>Interfaccia, sistema operativo e Lyrion Music Server si aggiornano automaticamente via OTA (over-the-air) dalla schermata Impostazioni — non serve mai riflashare la chiavetta USB dopo l'installazione iniziale. Gli aggiornamenti del sistema operativo sono firmati digitalmente (Ed25519): un dispositivo rifiuta un pacchetto non firmato correttamente, anche se qualcuno riuscisse a manometterne il download.</p>
+        <p>Interfaccia, sistema operativo e Lyrion Music Server si aggiornano automaticamente via OTA (over-the-air) dalla schermata Impostazioni — non serve mai riflashare la chiavetta USB dopo l'installazione iniziale. Gli aggiornamenti del sistema operativo sono firmati digitalmente (Ed25519): un dispositivo rifiuta un pacchetto non firmato correttamente, anche se qualcuno riuscisse a manometterne il download. L'avanzamento è mostrato in tempo reale (percentuale e MB scaricati), non un numero fermo.</p>
         <p>Ogni dispositivo può scegliere un canale di rilascio in Impostazioni → Aggiornamenti:</p>
         <table>
           <tr><th>Canale</th><th>Descrizione</th></tr>
           <tr><td><strong>Prod</strong> (predefinito)</td><td>Versioni stabili, consigliato per l'uso quotidiano</td></tr>
           <tr><td><strong>Dev</strong></td><td>Versioni di sviluppo più frequenti, per chi vuole provare le novità in anteprima</td></tr>
         </table>
+        <div class="box tip">
+          <span class="label">Riavvio finale</span>
+          <p>Una volta applicati tutti i passaggi di un aggiornamento, il dispositivo si riavvia da solo per completarlo — è normale, e la riproduzione riprende automaticamente subito dopo (vedi <a href="#it-uso-quotidiano">Uso quotidiano</a>).</p>
+        </div>
       </section>
 
       <section id="it-ssh">
@@ -828,6 +879,23 @@
         <div class="box warn">
           <span class="label">Sicurezza</span>
           <p>Quando SSH viene attivato, l'accesso come utente <code>root</code> resta comunque sempre bloccato: anche conoscendo la password predefinita dell'utente kiosk, non è possibile ottenere accesso come amministratore di sistema via SSH.</p>
+        </div>
+      </section>
+
+      <section id="it-remote-access">
+        <h2>Accesso remoto (Tailscale)</h2>
+        <p>L'amministrazione web offre anche un accesso remoto opzionale via <a href="https://tailscale.com" target="_blank" rel="noopener">Tailscale</a>, per raggiungere il dispositivo da fuori casa — sul <strong>tuo</strong> account Tailscale, non su un servizio gestito da terzi.</p>
+        <ol class="steps">
+          <li><strong>Installa Tailscale</strong>
+            Da amministrazione web → Impostazioni → Tailscale, installalo sul dispositivo se non è già presente.</li>
+          <li><strong>Attivalo</strong>
+            L'attivazione apre un link di login monouso — aprilo nel browser e accedi al tuo account Tailscale (o creane uno) per autorizzare il dispositivo sulla tua tailnet.</li>
+          <li><strong>Connettiti da qualsiasi luogo</strong>
+            Una volta connesso, l'indirizzo IP Tailscale del dispositivo e i dettagli della connessione (inclusa regione/latenza del relay DERP) compaiono nella stessa sezione delle Impostazioni. Raggiungi l'amministrazione web da quell'indirizzo, da qualunque altro dispositivo sulla tua tailnet.</li>
+        </ol>
+        <div class="box tip">
+          <span class="label">Solo da amministrazione web</span>
+          <p>Al momento Tailscale è disponibile solo dall'amministrazione web (<code>http://hifiplayer.local</code>) — non compare nelle Impostazioni a schermo né nell'app companion Android.</p>
         </div>
       </section>
 
@@ -853,7 +921,7 @@
           <tr><td>Mancano sorgenti streaming/radio</td><td>Installa il plugin corrispondente dalla web UI di Lyrion (Impostazioni → Plugin) — vedi <a href="#it-streaming">Streaming e plugin Lyrion</a>.</td></tr>
           <tr><td>Nessun audio</td><td>Controlla il dispositivo audio selezionato in Impostazioni e che il DAC sia riconosciuto e collegato.</td></tr>
           <tr><td>Il QR code al primo avvio non porta a nulla</td><td>Verifica di esserti connesso alla rete <code>Osmium-Setup-XXXX</code> (passphrase <code>osmiumsetup</code>) e prova ad aprire manualmente <a href="http://10.42.0.1">http://10.42.0.1</a>.</td></tr>
-          <tr><td><code>https://hifiplayer.local</code> non è raggiungibile</td><td>Verifica che telefono e dispositivo siano sulla stessa rete; in alternativa usa direttamente l'indirizzo IP del dispositivo.</td></tr>
+          <tr><td><code>http://hifiplayer.local</code> non è raggiungibile</td><td>Verifica che telefono e dispositivo siano sulla stessa rete; in alternativa usa direttamente l'indirizzo IP del dispositivo.</td></tr>
           <tr><td>Il dispositivo headless non risponde</td><td>Usa l'app companion o l'amministrazione web per verificarne lo stato; se necessario, riporta temporaneamente il dispositivo in modalità "con schermo" da lì.</td></tr>
         </table>
       </section>
