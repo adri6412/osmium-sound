@@ -1,41 +1,41 @@
 {
-  "tag_name": "v2.5.21-dev.89",
-  "name": "v2.5.21-dev.89",
-  "body": "## What's new in v2.5.21-dev.89\n\n- fix(wizard): improve readability of Wi-Fi manual-entry link and status text\n- feat(wizard): mandatory OTA update gate right after the network step\n",
+  "tag_name": "v2.5.21-dev.90",
+  "name": "v2.5.21-dev.90",
+  "body": "## What's new in v2.5.21-dev.90\n\n- feat(wizard): dedicated language-choice step, progress bar, step transitions and clearer intros\n",
   "assets": [
     {
-      "name": "hifi-ui-v2.5.21-dev.89.tar.gz",
-      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.89/hifi-ui-v2.5.21-dev.89.tar.gz",
-      "size": 134229240
+      "name": "hifi-ui-v2.5.21-dev.90.tar.gz",
+      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.90/hifi-ui-v2.5.21-dev.90.tar.gz",
+      "size": 134229405
     },
     {
-      "name": "hifi-ui-v2.5.21-dev.89.tar.gz.sha256",
-      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.89/hifi-ui-v2.5.21-dev.89.tar.gz.sha256",
+      "name": "hifi-ui-v2.5.21-dev.90.tar.gz.sha256",
+      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.90/hifi-ui-v2.5.21-dev.90.tar.gz.sha256",
       "size": 96
     },
     {
-      "name": "hifi-system-v2.5.21-dev.89.tar.gz",
-      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.89/hifi-system-v2.5.21-dev.89.tar.gz",
-      "size": 315292
+      "name": "hifi-system-v2.5.21-dev.90.tar.gz",
+      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.90/hifi-system-v2.5.21-dev.90.tar.gz",
+      "size": 316776
     },
     {
-      "name": "hifi-system-v2.5.21-dev.89.tar.gz.sha256",
-      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.89/hifi-system-v2.5.21-dev.89.tar.gz.sha256",
+      "name": "hifi-system-v2.5.21-dev.90.tar.gz.sha256",
+      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.90/hifi-system-v2.5.21-dev.90.tar.gz.sha256",
       "size": 100
     },
     {
-      "name": "hifi-os-v2.5.21-dev.89.tar.gz",
-      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.89/hifi-os-v2.5.21-dev.89.tar.gz",
-      "size": 1198731
+      "name": "hifi-os-v2.5.21-dev.90.tar.gz",
+      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.90/hifi-os-v2.5.21-dev.90.tar.gz",
+      "size": 1199447
     },
     {
-      "name": "hifi-os-v2.5.21-dev.89.tar.gz.sha256",
-      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.89/hifi-os-v2.5.21-dev.89.tar.gz.sha256",
+      "name": "hifi-os-v2.5.21-dev.90.tar.gz.sha256",
+      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.90/hifi-os-v2.5.21-dev.90.tar.gz.sha256",
       "size": 96
     },
     {
-      "name": "hifi-os-v2.5.21-dev.89.tar.gz.sha256.sig",
-      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.89/hifi-os-v2.5.21-dev.89.tar.gz.sha256.sig",
+      "name": "hifi-os-v2.5.21-dev.90.tar.gz.sha256.sig",
+      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.90/hifi-os-v2.5.21-dev.90.tar.gz.sha256.sig",
       "size": 64
     }
   ]
