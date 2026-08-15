@@ -180,6 +180,7 @@
     "audio": {
       "hint": "DAC / dispositivo di riproduzione usato da squeezelite.",
       "playerName": "Nome del player",
+      "playerNameHint": "Rinomina anche il dispositivo sulla rete (hostname e <name>.local). Solo lettere, numeri e trattini — niente spazi.",
       "changed": "Uscita audio cambiata",
       "changeFailed": "Cambio uscita fallito",
       "nameSaved": "Nome salvato",

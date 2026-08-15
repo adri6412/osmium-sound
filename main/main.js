@@ -3,7 +3,7 @@ import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import { exec } from 'child_process';
 import { promisify } from 'util';
-import { appendFileSync, readFileSync, mkdirSync, writeFileSync } from 'fs';
+import { appendFileSync, readFileSync, mkdirSync, writeFileSync, readdirSync } from 'fs';
 
 const execAsync = promisify(exec);
 
@@ -277,6 +277,8 @@ function registerGlobalShortcuts() {
 app.whenReady().then(() => {
   createWindow();
   registerGlobalShortcuts();
+  pollPhysicalKeyboard(); // establish the initial state immediately, don't wait 2s
+  setInterval(pollPhysicalKeyboard, 2000);
 });
 
 // This kiosk has exactly one window and no way for the user to close it (no
@@ -355,6 +357,40 @@ ipcMain.handle('hide-global-keyboard', async () => {
   }
   return { success: true, message: 'Tastiera virtuale chiusa' };
 });
+
+/**
+ * Physical keyboard presence, for the on-screen (simple-keyboard) auto-show
+ * in App.jsx — a plugged-in USB keyboard should suppress it, and unplugging
+ * one should bring it back, live, without a restart. There's no renderer-side
+ * HID enumeration API in Chromium/Electron, so this reads real hardware
+ * state from the main process instead: udev symlinks any device it
+ * recognizes as a keyboard (USB or PS/2) to `*-event-kbd` under
+ * /dev/input/by-id (falling back to /dev/input/by-path for devices with no
+ * stable by-id link). Polled rather than watched — fs.watch on these dirs is
+ * unreliable across filesystems/distros, and this isn't latency-sensitive.
+ */
+const KBD_DEVICE_DIRS = ['/dev/input/by-id', '/dev/input/by-path'];
+let lastPhysicalKeyboard = null;
+
+function hasPhysicalKeyboardNow() {
+  for (const dir of KBD_DEVICE_DIRS) {
+    try {
+      if (readdirSync(dir).some((f) => f.endsWith('-event-kbd'))) return true;
+    } catch (_) { /* dir may not exist, e.g. dev build off-target */ }
+  }
+  return false;
+}
+
+ipcMain.handle('get-physical-keyboard', () => hasPhysicalKeyboardNow());
+
+function pollPhysicalKeyboard() {
+  const now = hasPhysicalKeyboardNow();
+  if (now === lastPhysicalKeyboard) return;
+  lastPhysicalKeyboard = now;
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send('physical-keyboard-changed', now);
+  }
+}
 
 /**
  * HAR (network traffic) capture, for Settings.jsx's Debug section. The kiosk

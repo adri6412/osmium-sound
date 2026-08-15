@@ -24,6 +24,16 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.removeListener('toggle-simple-keyboard', callback);
   },
 
+  // Physical (USB/PS2) keyboard presence — live, from udev via the main
+  // process. Used by App.jsx to suppress the on-screen keyboard.
+  getPhysicalKeyboard: () => ipcRenderer.invoke('get-physical-keyboard'),
+  onPhysicalKeyboardChanged: (callback) => {
+    ipcRenderer.on('physical-keyboard-changed', callback);
+  },
+  removePhysicalKeyboardChanged: (callback) => {
+    ipcRenderer.removeListener('physical-keyboard-changed', callback);
+  },
+
   // Debug section (Settings.jsx) — HAR network capture via CDP, only the
   // main process can drive webContents.debugger. The saved .har is
   // downloaded from the web admin, not from here (see api_server.py).

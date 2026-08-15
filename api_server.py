@@ -613,6 +613,44 @@ def _ensure_dhcp_ip(device, timeout=15):
     return _device_ip(device)
 
 
+def _connection_ids_for_device_type(dtype):
+    """NM connection profile names bound to this device type ('wifi' or
+    'ethernet'), active or not — includes profiles NM auto-created for past
+    manual connects, not just the currently active one."""
+    ids = set()
+    nm_type = '802-11-wireless' if dtype == 'wifi' else '802-3-ethernet'
+    try:
+        r = _run(['nmcli', '-t', '-f', 'NAME,TYPE', 'connection', 'show'])
+        for line in r.stdout.strip().split('\n'):
+            parts = _terse_split(line)
+            if len(parts) >= 2 and parts[1] == nm_type:
+                ids.add(parts[0])
+    except Exception:
+        pass
+    return ids
+
+def _set_interface_enabled(dtype, enabled):
+    """Turn an interface type on (eligible to auto-reconnect, e.g. after a
+    reboot) or off (disconnected right now, and kept from silently coming
+    back on its own). Wired and Wi-Fi profiles both default to NM's own
+    autoconnect=yes with no priority between them, so previously the two
+    could — and did — silently fight over which one actually carried
+    traffic. Picking one here (wifi_connect/wired_dhcp below) now means the
+    other one actually stops competing, not just "also got a route"."""
+    for conn in _connection_ids_for_device_type(dtype):
+        try:
+            _run(['nmcli', 'connection', 'modify', conn,
+                  'connection.autoconnect', 'yes' if enabled else 'no'])
+        except Exception:
+            pass
+    if not enabled:
+        dev = _first_device_of_type(dtype)
+        if dev:
+            try:
+                _run(['nmcli', 'device', 'disconnect', dev])
+            except Exception:
+                pass
+
 def get_network_status():
     device, dtype = _active_device()
     ip = _device_ip(device) if device else None
@@ -675,10 +713,15 @@ def wifi_connect(ssid, password):
     if r.returncode == 0:
         device, _ = _active_device() or (None, None)
         msg = _t('network.connected', _lang(), ssid=ssid)
-        if device:
-            ip = _ensure_dhcp_ip(device)
-            return {'success': True, 'message': msg, 'ip': ip}
-        return {'success': True, 'message': msg, 'ip': None}
+        ip = _ensure_dhcp_ip(device) if device else None
+        # Only make Wi-Fi exclusive once it actually has a working IP — never
+        # turn Ethernet off on the strength of an nmcli command that merely
+        # returned success, which would risk stranding the box with neither
+        # interface reachable.
+        if ip:
+            _set_interface_enabled('wifi', True)
+            _set_interface_enabled('ethernet', False)
+        return {'success': True, 'message': msg, 'ip': ip}
     return {'success': False, 'code': 'network.connectFailed',
             'message': (r.stderr or r.stdout).strip() or _t('network.connectFailed', _lang())}
 
@@ -693,6 +736,10 @@ def wired_dhcp():
         return {'success': False, 'code': 'network.wiredFailed', 'message': _t('network.wiredFailed', _lang())}
     ip = _ensure_dhcp_ip(eth)
     if ip:
+        # Symmetric with wifi_connect above: only flip exclusivity once wired
+        # actually has a working IP.
+        _set_interface_enabled('ethernet', True)
+        _set_interface_enabled('wifi', False)
         return {'success': True, 'code': 'network.wiredConnected',
                 'message': _t('network.wiredConnected', _lang()), 'ip': ip}
     return {'success': False, 'code': 'network.cableNotConnected',
@@ -989,6 +1036,18 @@ def set_device_name(name):
         _run(['systemctl', 'restart', 'avahi-daemon'], timeout=15)
     except Exception:
         log.exception("set_device_name: avahi restart failed")
+    try:
+        # Lyrion Music Server bundles its OWN mDNS/Bonjour responder and reads
+        # the hostname once at startup — restarting avahi-daemon above does
+        # NOT make it re-announce, so without this it keeps advertising (and
+        # answering for) the OLD <name>.local indefinitely, right alongside
+        # the new one now served by avahi. Only bounce it if it's already
+        # running: never turn on a local Lyrion instance the user has off
+        # (e.g. this box follows an external server elsewhere on the LAN).
+        if _run(['systemctl', 'is-active', '--quiet', 'lyrionmusicserver'], timeout=10).returncode == 0:
+            _run(['systemctl', 'restart', 'lyrionmusicserver'], timeout=30)
+    except Exception:
+        log.exception("set_device_name: lyrionmusicserver restart failed")
     # Keep the LMS/Bluetooth-facing name in sync too. _HOSTNAME_RE's charset
     # is a subset of _PLAYER_NAME_RE's, so this always validates.
     set_player_name(name)
@@ -2151,6 +2210,18 @@ def get_provision_status():
 def set_provision_mode(mode, source='screen'):
     body, status = _proxy_webui('/api/provision/claim_mode', method='POST',
                                 body={'mode': mode, 'source': source})
+    if body is None:
+        return {'success': False, 'code': 'provisioning.notActive',
+                'message': _t('provisioning.notActive', _lang())}
+    return body
+
+def provision_wifi_connect(ssid, password):
+    """Kick off the same Wi-Fi join webui_server's captive portal uses, from
+    the on-screen manual network-setup panel. The AP drops immediately on
+    webui's side; the kiosk keeps polling /provision_status to see it
+    through 'connecting' -> 'network-ok'/'failed'."""
+    body, status = _proxy_webui('/api/provision/wifi_connect', method='POST',
+                                body={'ssid': ssid, 'password': password})
     if body is None:
         return {'success': False, 'code': 'provisioning.notActive',
                 'message': _t('provisioning.notActive', _lang())}
@@ -4681,6 +4752,12 @@ def api_provision_mode():
     data = request.get_json(silent=True) or {}
     return jsonify(set_provision_mode((data.get('mode') or '').strip(),
                                       (data.get('source') or 'screen').strip()))
+
+@app.route('/provision_wifi_connect', methods=['POST'])
+def api_provision_wifi_connect():
+    data = request.get_json(silent=True) or {}
+    return jsonify(provision_wifi_connect((data.get('ssid') or '').strip(),
+                                          data.get('password') or ''))
 
 @app.route('/factory_reset', methods=['POST'])
 def api_factory_reset():

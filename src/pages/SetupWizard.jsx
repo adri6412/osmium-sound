@@ -4,6 +4,7 @@ import { QRCodeSVG } from 'qrcode.react';
 import { Disc3 } from 'lucide-react';
 import { systemAPI } from '../utils/api';
 import { useI18n } from '../i18n';
+import WifiConfigPanel from '../components/WifiConfigPanel';
 
 /**
  * First-setup wizard.
@@ -15,12 +16,22 @@ import { useI18n } from '../i18n';
  * connected to that hotspot, served by webui_server.py's captive portal —
  * see SETUP_CAPTIVE_HTML there. This component only polls provisioning
  * status and reacts once the phone side finishes (`finalize`).
+ *
+ * The one thing that CAN be done straight from this screen is the network
+ * step itself (WifiConfigPanel below) — a touch-only escape hatch for
+ * whoever doesn't have a phone handy, using the same provisioning API the
+ * captive portal's network step uses.
  */
 const SetupWizard = ({ onComplete }) => {
   const { t } = useI18n();
-  const [apInfo, setApInfo] = useState(null); // { ssid, psk } from provision status
+  const [apInfo, setApInfo] = useState(null); // { ssid, psk, active, error } from provision status
+  const [stage, setStage] = useState(null);
+  const [networks, setNetworks] = useState([]);
   const [wired, setWired] = useState(false);
   const [deviceIp, setDeviceIp] = useState(null);
+  const [showWifiPanel, setShowWifiPanel] = useState(false);
+  const [wifiSubmitting, setWifiSubmitting] = useState(false);
+  const [wifiSubmitError, setWifiSubmitError] = useState(null);
   const doneRef = useRef(false);
 
   useEffect(() => {
@@ -31,7 +42,9 @@ const SetupWizard = ({ onComplete }) => {
         const res = await systemAPI.getProvisionStatus();
         if (!alive) return;
         if (res.success && res.data) {
-          if (res.data.ap?.ssid) setApInfo(res.data.ap);
+          if (res.data.ap) setApInfo(res.data.ap);
+          setStage(res.data.stage || null);
+          setNetworks(res.data.networks || []);
           setWired(!!res.data.wired);
           // The phone finished setup (claim_mode + finalize already ran
           // server-side) — pick up and move on. No button, no local step.
@@ -67,6 +80,35 @@ const SetupWizard = ({ onComplete }) => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Once the box is on a real network (either the phone drove it, or the
+  // panel below did), close the panel if it's still open and let the normal
+  // render fall through to the "open on your phone" QR.
+  useEffect(() => {
+    if (stage === 'network-ok') setShowWifiPanel(false);
+    if (stage === 'connecting' || stage === 'network-ok' || stage === 'failed') setWifiSubmitting(false);
+  }, [stage]);
+
+  const isConnected = wired || stage === 'network-ok';
+
+  const handleWifiConnect = async (ssid, password) => {
+    setWifiSubmitError(null);
+    setWifiSubmitting(true);
+    try {
+      const res = await systemAPI.provisionWifiConnect(ssid, password);
+      // On success the box's own state machine takes over (stage moves
+      // 'connecting' -> 'network-ok'/'failed', picked up by the poll above);
+      // only a same-tick rejection (e.g. provisioning already finished)
+      // needs to be shown here directly.
+      if (!res.success) {
+        setWifiSubmitError(res.message || t('wizard.wifi.connectFailed'));
+        setWifiSubmitting(false);
+      }
+    } catch (_) {
+      setWifiSubmitError(t('wizard.wifi.connectFailed'));
+      setWifiSubmitting(false);
+    }
+  };
+
   // Optional, touch-only fallback for a bench/dev unit with no phone handy —
   // never required, never advertised beyond this one small link.
   const skip = () => {
@@ -83,22 +125,43 @@ const SetupWizard = ({ onComplete }) => {
           <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-hifi-gold to-yellow-600 flex items-center justify-center shadow-[0_0_40px_rgba(212,175,55,0.3)] mb-6">
             <Disc3 size={32} className="text-black" />
           </div>
-          <h1 className="text-2xl font-bold text-white mb-2">{t('wizard.qr.title')}</h1>
-          <p className="text-hifi-silver/70 text-sm leading-relaxed mb-8">{t('wizard.qr.subtitle')}</p>
+          {apInfo?.error && !isConnected ? (
+            <>
+              <h1 className="text-2xl font-bold text-white mb-2">{t('wizard.qr.errorTitle')}</h1>
+              <p className="text-hifi-silver/70 text-sm leading-relaxed mb-8">{apInfo.error}</p>
+            </>
+          ) : isConnected ? (
+            <>
+              <h1 className="text-2xl font-bold text-white mb-2">{t('wizard.qr.connectedTitle')}</h1>
+              <p className="text-hifi-silver/70 text-sm leading-relaxed mb-8">{t('wizard.qr.connectedSubtitle')}</p>
+            </>
+          ) : (
+            <>
+              <h1 className="text-2xl font-bold text-white mb-2">{t('wizard.qr.title')}</h1>
+              <p className="text-hifi-silver/70 text-sm leading-relaxed mb-8">{t('wizard.qr.subtitle')}</p>
+            </>
+          )}
 
-          {apInfo?.ssid && !wired ? (
+          {apInfo?.ssid && apInfo?.active && !isConnected ? (
             <div className="inline-flex flex-col items-center bg-white rounded-2xl p-4">
               <QRCodeSVG value={`WIFI:T:WPA;S:${apInfo.ssid};P:${apInfo.psk || ''};;`} size={180} />
-              <span className="text-black text-xs mt-2">{apInfo.ssid}</span>
+              <span className="text-black text-xs font-semibold mt-2">{apInfo.ssid}</span>
+              {apInfo.psk && <span className="text-black/60 text-[11px]">{apInfo.psk}</span>}
             </div>
+          ) : apInfo?.error && !isConnected ? (
+            // Hotspot failed to come up and there's no LAN fallback either —
+            // a QR here would point at a network the phone can't reach, so
+            // show nothing and let the error message above stand.
+            null
           ) : (
-            // Either no hotspot info (yet), or a wired connection is already
-            // up — in that case skip the hotspot entirely and point straight
-            // at the device, since the phone can just join the same LAN.
-            // Prefer the device's own IP over hifiplayer.local:
-            // the hostname is ambiguous the moment more than one Osmium Sound
-            // unit is on the same network (mDNS answers with whichever
-            // responds first), the IP never is.
+            // Either the box is already on a real network (wired, or Wi-Fi
+            // configured via the phone or the on-screen panel below), or
+            // nothing back from the poll yet (first few seconds after boot):
+            // both cases fall back to the same LAN/URL QR. Prefer the
+            // device's own IP over hifiplayer.local: the hostname is
+            // ambiguous the moment more than one Osmium Sound unit is on the
+            // same network (mDNS answers with whichever responds first), the
+            // IP never is.
             <div className="inline-flex flex-col items-center bg-white rounded-2xl p-4">
               <QRCodeSVG value={`http://${deviceIp || 'hifiplayer.local'}`} size={180} />
               <span className="text-black text-xs mt-2">
@@ -107,11 +170,28 @@ const SetupWizard = ({ onComplete }) => {
               {deviceIp && <span className="text-black/50 text-[10px] mt-0.5">http://hifiplayer.local</span>}
             </div>
           )}
+
+          {!isConnected && (
+            <button onClick={() => setShowWifiPanel(true)}
+              className="mt-4 text-xs text-hifi-silver/50 hover:text-hifi-silver underline underline-offset-2">
+              {t('wizard.qr.manualButton')}
+            </button>
+          )}
         </motion.div>
 
         <button onClick={skip} className="absolute bottom-4 right-4 text-[11px] text-hifi-silver/30 hover:text-hifi-silver/70 transition-colors">
           {t('wizard.skip')}
         </button>
+
+        {showWifiPanel && (
+          <WifiConfigPanel
+            networks={networks}
+            connecting={wifiSubmitting || stage === 'connecting'}
+            error={wifiSubmitError || (stage === 'failed' ? apInfo?.error : null)}
+            onConnect={handleWifiConnect}
+            onClose={() => setShowWifiPanel(false)}
+          />
+        )}
       </motion.div>
     </AnimatePresence>
   );

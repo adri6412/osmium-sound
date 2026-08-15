@@ -98,7 +98,11 @@
     },
     "qr": {
       "title": "Scan to set up",
-      "subtitle": "Connect your phone to this Wi-Fi network to finish setup — no need to touch this screen."
+      "subtitle": "Connect your phone to this Wi-Fi network to finish setup — no need to touch this screen.",
+      "errorTitle": "Setup hotspot unavailable",
+      "connectedTitle": "Open on your phone",
+      "connectedSubtitle": "Scan to open the full setup page and continue from there.",
+      "manualButton": "Configure Wi-Fi manually"
     },
     "input": {
       "title": "How do you use the device?",
@@ -432,7 +436,7 @@
       },
       "name": {
         "title": "This player's name",
-        "help": "Every Osmium Sound device is named \"OsmiumSound\" by default — group two of them and you can't tell them apart. Give it a unique name (e.g. \"LivingRoom\", no spaces).",
+        "help": "Every Osmium Sound device is named \"OsmiumSound\" by default — group two of them and you can't tell them apart. Give it a unique name (e.g. \"LivingRoom\"). This also renames the device on the network (hostname and livingroom.local), so use only letters, numbers and hyphens — no spaces.",
         "saved": "Player name updated.",
         "failed": "Could not update the player name."
       },
@@ -581,7 +585,16 @@
       "typeSubnet": "Type: {type} | Subnet: {subnet}",
       "dhcpNotice": "The network is configured automatically via DHCP. Plug in the Ethernet cable or set up Wi-Fi to get an IP address.",
       "reloadData": "Reload Data",
-      "loading": "Loading..."
+      "loading": "Loading...",
+      "activeLabel": "Active connection",
+      "activeWired": "Wired · {ip}",
+      "activeWifi": "Wi-Fi ({ssid}) · {ip}",
+      "activeNone": "Not connected",
+      "configureWifiButton": "Connect to Wi-Fi",
+      "useWiredButton": "Use wired",
+      "switchedToWifi": "Now using Wi-Fi ({ssid}) — the wired connection has been turned off.",
+      "switchedToWired": "Now using the wired connection — Wi-Fi has been turned off.",
+      "switchFailed": "Could not switch connection. Check it and try again."
     },
     "info": {
       "hostname": "Hostname",

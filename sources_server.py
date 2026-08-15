@@ -2347,6 +2347,12 @@ _SYSTEM_PROXY_ROUTES = [
     ("/api/system/vu_meter", "POST", "/vu_meter"),
     ("/api/system/player_name", "GET", "/player_name"),
     ("/api/system/player_name", "POST", "/player_name"),
+    # Renames BOTH the hostname and the squeezelite/Bluetooth player name
+    # together (api_server.py's set_device_name) — the companion app's
+    # rename field uses this instead of player_name above, so a rename from
+    # the phone stays in sync with the kiosk/web-admin ones.
+    ("/api/system/device_name", "GET", "/device_name"),
+    ("/api/system/device_name", "POST", "/device_name"),
     ("/api/system/lms_role", "GET", "/lms_role"),
     ("/api/system/lms_role", "POST", "/lms_role"),
     ("/api/system/discover_lms", "GET", "/discover_lms"),

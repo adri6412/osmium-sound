@@ -43,6 +43,7 @@ import { useI18n } from '../i18n';
 import LanguageSelector from '../components/LanguageSelector';
 import SourcesManager from '../components/SourcesManager';
 import RoomCorrectionWizard from '../components/RoomCorrectionWizard';
+import WifiConfigPanel from '../components/WifiConfigPanel';
 
 // Language-agnostic check used only to colour a status message red.
 const isErrorMsg = (m) =>
@@ -85,6 +86,17 @@ const Settings = ({ initialSection, onSectionConsumed } = {}) => {
   });
   const [networkInfo, setNetworkInfo] = useState([]);
   const [selectedInterface, setSelectedInterface] = useState('');
+  // Which uplink is actually carrying traffic right now (from /network_status,
+  // NetworkManager's own view) — distinct from networkInfo above, which just
+  // lists interfaces. { type: 'wired'|'wireless'|'none', ip, ssid }
+  const [activeNetwork, setActiveNetwork] = useState(null);
+  const [showWifiPanel, setShowWifiPanel] = useState(false);
+  const [wifiNetworks, setWifiNetworks] = useState([]);
+  const [wifiScanning, setWifiScanning] = useState(false);
+  const [wifiConnecting, setWifiConnecting] = useState(false);
+  const [wifiError, setWifiError] = useState(null);
+  const [wiredSwitching, setWiredSwitching] = useState(false);
+  const [networkSwitchMessage, setNetworkSwitchMessage] = useState('');
   const [lyrionUrl, setLyrionUrl] = useState(localStorage.getItem('lyrionUrl') || 'http://localhost:9000');
   const [updateMessage, setUpdateMessage] = useState('');
   // In-app confirmation modal (replaces the native window.confirm, which renders
@@ -584,9 +596,12 @@ const Settings = ({ initialSection, onSectionConsumed } = {}) => {
     }
   };
 
-  // ── Player name (squeezelite -n) ─────────────────────────────────
+  // ── Device name (Linux hostname + squeezelite -n, set together) ───
+  // One name for the box: renaming it now also renames the hostname (so
+  // <name>.local updates live), not just the squeezelite/Lyrion display name
+  // — see api_server.py's set_device_name.
   const loadPlayerName = async () => {
-    const res = await systemAPI.getPlayerName();
+    const res = await systemAPI.getDeviceName();
     if (res.success && res.data?.name) {
       setPlayerName(res.data.name);
       setPlayerNameInput(res.data.name);
@@ -598,7 +613,7 @@ const Settings = ({ initialSection, onSectionConsumed } = {}) => {
     if (!name || name === playerName) return;
     setPlayerNameBusy(true);
     setPlayerNameMessage('');
-    const res = await systemAPI.setPlayerName(name);
+    const res = await systemAPI.setDeviceName(name);
     setPlayerNameBusy(false);
     if (res.success && res.data?.success) {
       setPlayerName(name);
@@ -1696,6 +1711,9 @@ const Settings = ({ initialSection, onSectionConsumed } = {}) => {
         if (networkResult.success) {
           setNetworkInfo(networkResult.data);
         }
+
+        const statusResult = await systemAPI.getNetworkStatus();
+        if (statusResult.success) setActiveNetwork(statusResult.data);
       } else {
         setUpdateMessage(t('settings.msg.apiUnavailableHint'));
       }
@@ -1704,6 +1722,63 @@ const Settings = ({ initialSection, onSectionConsumed } = {}) => {
       setUpdateMessage(t('settings.msg.loadDataError'));
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  // Post-setup Wi-Fi/wired switching. Connecting to Wi-Fi (or switching to
+  // wired) now actively turns the other interface off server-side (see
+  // api_server.py's wifi_connect/wired_dhcp) instead of just adding a
+  // connection alongside whatever was already active — so these two actions
+  // are genuinely exclusive, not additive.
+  const openWifiPanel = async () => {
+    setWifiError(null);
+    setShowWifiPanel(true);
+    setWifiScanning(true);
+    try {
+      const res = await systemAPI.scanWifi();
+      setWifiNetworks((res.success && res.data?.networks) || []);
+    } catch (_) {
+      setWifiNetworks([]);
+    } finally {
+      setWifiScanning(false);
+    }
+  };
+
+  const handleWifiConnect = async (ssid, password) => {
+    setWifiError(null);
+    setWifiConnecting(true);
+    try {
+      const res = await systemAPI.connectWifi(ssid, password);
+      // apiPost only reports transport success (res.success) — the actual
+      // connect outcome is inside the JSON body (res.data.success).
+      if (res.success && res.data?.success) {
+        setShowWifiPanel(false);
+        setNetworkSwitchMessage(t('settings.network.switchedToWifi', { ssid }));
+        loadSystemData();
+      } else {
+        setWifiError(res.data?.message || res.message || t('wizard.wifi.connectFailed'));
+      }
+    } catch (_) {
+      setWifiError(t('wizard.wifi.connectFailed'));
+    } finally {
+      setWifiConnecting(false);
+    }
+  };
+
+  const handleUseWired = async () => {
+    setWiredSwitching(true);
+    setNetworkSwitchMessage('');
+    try {
+      const res = await systemAPI.useWiredDhcp();
+      const ok = res.success && res.data?.success;
+      setNetworkSwitchMessage(ok
+        ? t('settings.network.switchedToWired')
+        : (res.data?.message || res.message || t('settings.network.switchFailed')));
+      if (ok) loadSystemData();
+    } catch (_) {
+      setNetworkSwitchMessage(t('settings.network.switchFailed'));
+    } finally {
+      setWiredSwitching(false);
     }
   };
 
@@ -3064,6 +3139,44 @@ const Settings = ({ initialSection, onSectionConsumed } = {}) => {
                       </div>
                     </div>
 
+                    {/* Active connection + switch actions. Picking either one
+                        turns the other interface off server-side (see
+                        api_server.py wifi_connect/wired_dhcp) so exactly one
+                        uplink is ever actually in use. */}
+                    <div className="bg-hifi-dark rounded-lg p-4 space-y-3">
+                      <div className="flex items-center justify-between">
+                        <span className="text-hifi-silver text-sm">{t('settings.network.activeLabel')}</span>
+                        <span className="text-hifi-gold font-mono text-sm flex items-center gap-1.5">
+                          {activeNetwork?.type === 'wired' && <Network size={14} />}
+                          {activeNetwork?.type === 'wireless' && <Wifi size={14} />}
+                          {activeNetwork?.type === 'wired'
+                            ? t('settings.network.activeWired', { ip: activeNetwork.ip || 'N/A' })
+                            : activeNetwork?.type === 'wireless'
+                              ? t('settings.network.activeWifi', { ssid: activeNetwork.ssid || '?', ip: activeNetwork.ip || 'N/A' })
+                              : t('settings.network.activeNone')}
+                        </span>
+                      </div>
+                      <div className="flex gap-2">
+                        <motion.button onClick={openWifiPanel}
+                          className="flex-1 bg-hifi-light hover:bg-hifi-accent text-white py-2 rounded-lg font-medium flex items-center justify-center space-x-2 transition-colors"
+                          whileTap={{ scale: 0.95 }}>
+                          <Wifi size={16} />
+                          <span>{t('settings.network.configureWifiButton')}</span>
+                        </motion.button>
+                        <motion.button onClick={handleUseWired} disabled={wiredSwitching}
+                          className="flex-1 bg-hifi-light hover:bg-hifi-accent disabled:bg-hifi-dark text-white py-2 rounded-lg font-medium flex items-center justify-center space-x-2 transition-colors"
+                          whileTap={{ scale: wiredSwitching ? 1 : 0.95 }}>
+                          {wiredSwitching ? <Loader2 size={16} className="animate-spin" /> : <Network size={16} />}
+                          <span>{t('settings.network.useWiredButton')}</span>
+                        </motion.button>
+                      </div>
+                      {networkSwitchMessage && (
+                        <p className={`text-xs ${isErrorMsg(networkSwitchMessage) ? 'text-red-400' : 'text-hifi-silver'}`}>
+                          {networkSwitchMessage}
+                        </p>
+                      )}
+                    </div>
+
                     {/* Current Interface Info */}
                     {currentInterface && (
                       <div className="bg-hifi-dark rounded-lg p-4">
@@ -3114,6 +3227,17 @@ const Settings = ({ initialSection, onSectionConsumed } = {}) => {
                       }`}>
                         {updateMessage}
                       </div>
+                    )}
+
+                    {showWifiPanel && (
+                      <WifiConfigPanel
+                        networks={wifiNetworks}
+                        scanning={wifiScanning}
+                        connecting={wifiConnecting}
+                        error={wifiError}
+                        onConnect={handleWifiConnect}
+                        onClose={() => setShowWifiPanel(false)}
+                      />
                     )}
                   </div>
                 )}

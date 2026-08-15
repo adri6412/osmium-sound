@@ -98,7 +98,11 @@
     },
     "qr": {
       "title": "Scansiona per configurare",
-      "subtitle": "Collega il telefono a questa rete Wi-Fi per completare la configurazione — non serve toccare questo schermo."
+      "subtitle": "Collega il telefono a questa rete Wi-Fi per completare la configurazione — non serve toccare questo schermo.",
+      "errorTitle": "Hotspot di configurazione non disponibile",
+      "connectedTitle": "Apri dal telefono",
+      "connectedSubtitle": "Scansiona per aprire la pagina di configurazione completa e continuare da lì.",
+      "manualButton": "Configura Wi-Fi manualmente"
     },
     "input": {
       "title": "Come usi il dispositivo?",
@@ -432,7 +436,7 @@
       },
       "name": {
         "title": "Nome di questo player",
-        "help": "Ogni dispositivo Osmium Sound si chiama «OsmiumSound» di default: se ne raggruppi due non li distingui. Dagli un nome univoco (es. «Salotto», senza spazi).",
+        "help": "Ogni dispositivo Osmium Sound si chiama «OsmiumSound» di default: se ne raggruppi due non li distingui. Dagli un nome univoco (es. «Salotto»). Questo rinomina anche il dispositivo sulla rete (hostname e salotto.local), quindi usa solo lettere, numeri e trattini — niente spazi.",
         "saved": "Nome player aggiornato.",
         "failed": "Impossibile aggiornare il nome del player."
       },
@@ -581,7 +585,16 @@
       "typeSubnet": "Tipo: {type} | Subnet: {subnet}",
       "dhcpNotice": "La rete è configurata automaticamente tramite DHCP. Collega il cavo Ethernet o configura il Wi-Fi per ottenere un indirizzo IP.",
       "reloadData": "Ricarica Dati",
-      "loading": "Caricamento..."
+      "loading": "Caricamento...",
+      "activeLabel": "Connessione attiva",
+      "activeWired": "Cavo · {ip}",
+      "activeWifi": "Wi-Fi ({ssid}) · {ip}",
+      "activeNone": "Non connesso",
+      "configureWifiButton": "Connetti al Wi-Fi",
+      "useWiredButton": "Usa il cavo",
+      "switchedToWifi": "Ora in uso il Wi-Fi ({ssid}) — la connessione via cavo è stata disattivata.",
+      "switchedToWired": "Ora in uso la connessione via cavo — il Wi-Fi è stato disattivato.",
+      "switchFailed": "Impossibile cambiare connessione. Verifica e riprova."
     },
     "info": {
       "hostname": "Hostname",

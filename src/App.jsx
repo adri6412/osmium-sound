@@ -14,6 +14,7 @@ import { KeyboardProvider, useKeyboardActions } from './contexts/KeyboardContext
 import { I18nProvider } from './i18n';
 import { lyrionApi } from './utils/lyrionApi';
 import { systemAPI } from './utils/api';
+import { hasPhysicalKeyboard } from './utils/physicalKeyboard';
 
 // Mirrors useLyrionPlayer's connectToServer player-selection logic (see
 // src/hooks/useLyrionPlayer.js): `players_loop` isn't necessarily "this
@@ -161,6 +162,7 @@ const AppContent = () => {
 
     const handleFocus = (e) => {
       if (!isTextInput(e.target)) return;
+      if (hasPhysicalKeyboard()) return;
       const t = e.target;
       if (!t.hasAttribute('data-original-inputmode'))
         t.setAttribute('data-original-inputmode', t.getAttribute('inputmode') || '');
@@ -169,6 +171,7 @@ const AppContent = () => {
     };
     const handleClick = (e) => {
       if (!isTextInput(e.target)) return;
+      if (hasPhysicalKeyboard()) return;
       showKeyboard({ current: e.target }, e.target.value || '');
     };
     const handleFocusOut = (e) => {

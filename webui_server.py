@@ -438,23 +438,30 @@ def _ap_ssid(dev):
 
 def _connect_wifi(ssid, password):
     """Drop the AP, try to join, and on failure delete the stale profile and
-    re-raise the AP so the phone (which auto-rejoins) sees the error."""
+    re-raise the AP so the phone (which auto-rejoins) sees the error.
+
+    Returns (ok, err, ap) — ap is the *actual* outcome of that re-raise
+    ({'active','ssid','psk'}, or None if it wasn't attempted / not needed),
+    never assumed: a single Wi-Fi radio re-raising an AP can itself fail."""
     if not _SSID_RE.match(ssid or ''):
-        return False, _wt('network.ssidInvalidChars', _lang())
+        return False, _wt('network.ssidInvalidChars', _lang()), None
     _teardown_ap()
     args = ['device', 'wifi', 'connect', ssid]
     if password:
         args += ['password', password]
     rc, _, err = _nmcli(args, timeout=45)
     if rc == 0:
-        return True, ''
+        return True, '', None
     # 'wifi connect' persists a bad autoconnect profile even on auth failure —
     # delete it so NM doesn't fight the AP we are about to re-raise.
     _nmcli(['connection', 'delete', 'id', ssid])
     dev = _wifi_device()
+    ap = None
     if dev:
-        _raise_ap(dev)
-    return False, (err.strip() or _wt('network.connectFailed', _lang()))
+        ap_ok, ap_ssid = _raise_ap(dev)
+        ap = {'active': ap_ok, 'ssid': ap_ssid if ap_ok else None,
+              'psk': AP_PSK if ap_ok else None}
+    return False, (err.strip() or _wt('network.connectFailed', _lang())), ap
 
 
 # ── network resilience (runs always, independent of provisioning) ───
@@ -519,6 +526,25 @@ def _wait_for_dhcp_ip(dev, timeout=15):
     return False
 
 
+def _ethernet_intentionally_disabled():
+    """True once the user has explicitly picked Wi-Fi over wired from Settings
+    (api_server.py's _set_interface_enabled sets connection.autoconnect=no on
+    every Ethernet profile when that happens) — carrier-but-no-IP is then the
+    deliberate outcome of that choice, not a fault for self-heal to 'fix' by
+    reconnecting the cable it was just told to stop using."""
+    rc, out, _ = _nmcli(['-t', '-f', 'NAME,TYPE', 'connection', 'show'])
+    if rc != 0:
+        return False
+    for line in out.splitlines():
+        parts = re.split(r'(?<!\\):', line)
+        if len(parts) < 2 or parts[1] != '802-3-ethernet':
+            continue
+        rc2, ac, _ = _nmcli(['-g', 'connection.autoconnect', 'connection', 'show', parts[0].replace('\\:', ':')])
+        if rc2 == 0 and ac.strip() == 'no':
+            return True
+    return False
+
+
 def _wired_self_heal():
     """An Ethernet cable plugged in (carrier=1) with no IP means either no
     connection profile exists yet, or the existing one is broken/stale. First
@@ -529,6 +555,8 @@ def _wired_self_heal():
     profile and retry once more with a clean slate. Never touches Wi-Fi or
     anything else."""
     if FAKE:
+        return
+    if _ethernet_intentionally_disabled():
         return
     now = time.monotonic()
     seen = set()
@@ -679,7 +707,7 @@ def _evaluate_provisioning():
             err = _wt('network.dnsmasqMissing', _lang())
         else:
             err = _wt('network.hotspotActivateFailed', _lang())
-        state['ap'] = {'active': ok, 'supported': True, 'ssid': ssid,
+        state['ap'] = {'active': ok, 'supported': True, 'ssid': ssid if ok else None,
                        'psk': AP_PSK if ok else None, 'error': err}
         state['stage'] = 'waiting-ap' if ok else 'waiting-lan'
         _save_prov_state(state)
@@ -795,6 +823,12 @@ _AUTH_ROUTES = {
     ('/api/system/audio_device', 'POST'): '/set_audio_device',
     ('/api/system/player_name', 'GET'): '/player_name',
     ('/api/system/player_name', 'POST'): '/player_name',
+    # Renames BOTH the Linux hostname and the squeezelite/Bluetooth player
+    # name together (see api_server.py's set_device_name) — the Settings.vue
+    # "Audio" name field uses this instead of the player_name-only routes
+    # above, so a rename also updates <name>.local, not just the LMS/BT name.
+    ('/api/system/device_name', 'GET'): '/device_name',
+    ('/api/system/device_name', 'POST'): '/device_name',
     ('/api/system/lms_role', 'GET'): '/lms_role',
     ('/api/system/lms_role', 'POST'): '/lms_role',
     ('/api/system/discover_lms', 'GET'): '/discover_lms',
@@ -1109,17 +1143,16 @@ def _bg_connect(ssid, password):
         state['ssid_attempt'] = ssid
         state['error'] = None
         _save_prov_state(state)
-        ok, err = _connect_wifi(ssid, password)
+        ok, err, ap = _connect_wifi(ssid, password)
         state = _load_prov_state()
         if ok:
             state['stage'] = 'network-ok'
             state['ap'] = {'active': False, 'supported': True}
             state['error'] = None
         else:
-            dev = _wifi_device()
-            ssid_ap = _ap_ssid(dev) if dev else None
             state['stage'] = 'failed'
-            state['ap'] = {'active': bool(dev), 'supported': True, 'ssid': ssid_ap, 'psk': AP_PSK}
+            state['ap'] = {**(ap or {'active': False, 'ssid': None, 'psk': None}),
+                           'supported': True, 'error': err}
             state['error'] = err
         _save_prov_state(state)
 
@@ -1513,7 +1546,7 @@ def netrecovery_wifi_connect():
 
 
 def _bg_netrecovery_connect(ssid, password):
-    ok, err = _connect_wifi(ssid, password)
+    ok, err, ap = _connect_wifi(ssid, password)
     with _net_lock:
         if ok:
             # Connected: _connect_wifi already tore the AP down; the network
@@ -1521,10 +1554,11 @@ def _bg_netrecovery_connect(ssid, password):
             # same state, but clearing it here immediately is more responsive.
             _net_recovery.update({'active': False, 'ssid': None, 'psk': None, 'error': None})
         else:
-            # _connect_wifi already re-raised the AP itself on failure — reflect
-            # that (SSID is deterministic from the MAC, so it hasn't changed).
-            _net_recovery['error'] = err
-            _net_recovery['active'] = True
+            # _connect_wifi already tried to re-raise the AP on failure — reflect
+            # what actually happened, not what was hoped for (the re-raise
+            # itself can fail too).
+            ap = ap or {'active': False, 'ssid': None, 'psk': None}
+            _net_recovery.update({'error': err, **ap})
 
 
 # ── generic system proxy (partitioned) ───────────────────────────────
@@ -1915,7 +1949,13 @@ def root():
     if _provisioning():
         return Response(_captive_html(), mimetype='text/html')
     if _net_recovery['active']:
-        return Response(NET_RECOVERY_HTML, mimetype='text/html')
+        # This box is already configured, so unlike the setup captive page
+        # (whose deviceHost/hostMsg only exist because the name is being
+        # picked live, mid-flow) there's no "which name" ambiguity here —
+        # socket.gethostname() IS the answer, substituted server-side rather
+        # than hardcoding the ISO's default 'hifiplayer' like this used to.
+        html = NET_RECOVERY_HTML.replace('__DEVICE_HOST__', socket.gethostname())
+        return Response(html, mimetype='text/html')
     return _serve_spa('index.html')
 
 
@@ -2506,8 +2546,8 @@ NET_RECOVERY_HTML = """<!doctype html><html lang="en"><head><meta charset="utf-8
 </div>
 <script>
 var STRINGS={
- en:{intro:'This device is already configured and lost its connection (neither cable nor Wi-Fi is working). Reconnect it by choosing a Wi-Fi network below — nothing else will be changed.',wifi:'Wi-Fi network',ssid:'Or enter the network name (SSID)',pass:'Wi-Fi password',connect:'Connect',connecting:'Connecting… if you return to your network this page will no longer be reachable here — reopen http://hifiplayer.local',error:'Error: '},
- it:{intro:'Il dispositivo è già configurato e ha perso la connessione (né cavo né Wi-Fi funzionanti). Ricollegalo scegliendo una rete Wi-Fi qui sotto — nessun\\'altra impostazione verrà modificata.',wifi:'Rete Wi-Fi',ssid:'Oppure inserisci il nome (SSID)',pass:'Password Wi-Fi',connect:'Connetti',connecting:'Connessione in corso… se torni sulla tua rete questa pagina non sarà più raggiungibile qui — riapri http://hifiplayer.local',error:'Errore: '}
+ en:{intro:'This device is already configured and lost its connection (neither cable nor Wi-Fi is working). Reconnect it by choosing a Wi-Fi network below — nothing else will be changed.',wifi:'Wi-Fi network',ssid:'Or enter the network name (SSID)',pass:'Wi-Fi password',connect:'Connect',connecting:'Connecting… if you return to your network this page will no longer be reachable here — reopen http://__DEVICE_HOST__.local',error:'Error: '},
+ it:{intro:'Il dispositivo è già configurato e ha perso la connessione (né cavo né Wi-Fi funzionanti). Ricollegalo scegliendo una rete Wi-Fi qui sotto — nessun\\'altra impostazione verrà modificata.',wifi:'Rete Wi-Fi',ssid:'Oppure inserisci il nome (SSID)',pass:'Password Wi-Fi',connect:'Connetti',connecting:'Connessione in corso… se torni sulla tua rete questa pagina non sarà più raggiungibile qui — riapri http://__DEVICE_HOST__.local',error:'Errore: '}
 };
 var LANG=(new URLSearchParams(location.search).get('lang')||'en');
 if(STRINGS[LANG]===undefined)LANG='en';

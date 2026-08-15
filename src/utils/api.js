@@ -162,8 +162,13 @@ export const systemAPI = {
   getNowPlayingAutoExpand: () => apiGet('/nowplaying_autoexpand'),
   setNowPlayingAutoExpand: (seconds) => apiPost('/nowplaying_autoexpand', { seconds }),
   // First-boot provisioning status (proxied from webui_server): { pending,
-  // stage, mode, claimed_by, ap: { active, ssid, psk }, ... }
+  // stage, mode, claimed_by, ap: { active, ssid, psk }, networks: [...], ... }
   getProvisionStatus: () => apiGet('/provision_status'),
+  // Join a Wi-Fi network during provisioning (on-screen manual flow, mirrors
+  // the phone captive portal's network step). The AP drops immediately;
+  // poll getProvisionStatus() for stage 'connecting' -> 'network-ok'/'failed'.
+  // Returns { success, dropping_ap }
+  provisionWifiConnect: (ssid, password) => apiPost('/provision_wifi_connect', { ssid, password }),
   // Which boot menu entry this live session started from: { mode: 'installer'|'live' }.
   // 'installer' means App.jsx should show InstallWizard instead of the kiosk UI.
   getBootMode: () => apiGet('/boot_mode'),
@@ -201,6 +206,14 @@ export const systemAPI = {
   getPlayerName: () => apiGet('/player_name'),
   // Rename this device's player and restart squeezelite. Returns { success, name, message }
   setPlayerName: (name) => apiPost('/player_name', { name }),
+  // This device's Linux hostname (defaults to "hifiplayer", collides across
+  // units if never renamed). Returns { name }
+  getDeviceName: () => apiGet('/device_name'),
+  // Renames BOTH the hostname (so <name>.local updates live via avahi) and
+  // the squeezelite/Bluetooth player name — the single "what do I call this
+  // box" setting. Stricter charset than setPlayerName (DNS-safe).
+  // Returns { success, name, message }
+  setDeviceName: (name) => apiPost('/device_name', { name }),
   // Broadcast-discover other Lyrion/LMS servers on the LAN (no IP typing needed).
   // Returns { servers: [{ ip, name, port }] }
   discoverLmsServers: () => apiGet('/discover_lms'),

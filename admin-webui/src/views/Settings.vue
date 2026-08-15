@@ -149,12 +149,16 @@ async function wired() {
   else say(bodyMsg(r, t('settings.network.wiredFailed')), true);
 }
 
-// ── audio + player name ──────────────────────────────────────────
+// ── audio + device name ────────────────────────────────────────────
+// device_name renames BOTH the Linux hostname (so <name>.local updates
+// live) and the squeezelite/Bluetooth player name together — see
+// api_server.py's set_device_name. Was player_name-only before, which left
+// the box's hostname stuck at the factory default forever.
 const devices = ref([]); const currentDevice = ref('default'); const playerName = ref('');
 async function loadAudio() {
   const r = await api.sys('audio_devices');
   if (r.ok) { devices.value = r.data.devices || []; currentDevice.value = r.data.current || 'default'; }
-  const p = await api.sys('player_name'); if (p.ok) playerName.value = p.data.name || '';
+  const p = await api.sys('device_name'); if (p.ok) playerName.value = p.data.name || '';
 }
 async function pickDevice(id) {
   currentDevice.value = id;
@@ -162,7 +166,7 @@ async function pickDevice(id) {
   say(r.ok && r.data.success !== false ? t('settings.audio.changed') : bodyMsg(r, t('settings.audio.changeFailed')), !(r.ok && r.data.success !== false));
 }
 async function saveName() {
-  const r = await api.sysPost('player_name', { name: playerName.value });
+  const r = await api.sysPost('device_name', { name: playerName.value });
   say(r.ok && r.data.success !== false ? t('settings.audio.nameSaved') : bodyMsg(r, t('settings.audio.saveFailed')), !(r.ok && r.data.success !== false));
 }
 
@@ -982,6 +986,7 @@ onUnmounted(() => {
       </div>
       <label>{{ t('settings.audio.playerName') }}</label>
       <div class="row"><input v-model="playerName" /><button class="secondary fit" @click="saveName">{{ t('common.save') }}</button></div>
+      <p class="sub" style="margin-top: 4px;">{{ t('settings.audio.playerNameHint') }}</p>
     </div>
 
     <!-- Sources (native — talks directly to sources_server.py through
