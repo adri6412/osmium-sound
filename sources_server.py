@@ -1026,28 +1026,20 @@ def ensure_playlistdir():
     print(f"[sources] playlistdir set to {data.get('playlistdir')}")
 
 
-# Tailscale's CGNAT range isn't RFC1918, so it falls outside whatever
-# operators may have set up as Lyrion's own "trusted networks" allow-list —
-# a device reachable only over Tailscale (e.g. Lyrplay) can then be refused
-# some Lyrion config endpoints even though nothing on the Osmium side blocks
-# it (no firewall/reverse-proxy restricts :9000, see webui_server.py).
-TAILSCALE_CGNAT = "100.64.0.0/10"
-
-
-def _add_trusted_network(data):
-    """Given the loaded prefs dict, add Tailscale's CGNAT range to Lyrion's
-    allowedHosts -- but only when the operator has host filtering turned ON
-    (filterHosts); if it's off, every network is already allowed and there is
-    nothing to fix. Returns the (possibly updated) dict and a bool telling
-    whether anything changed."""
+# Tailscale's CGNAT range (100.64.0.0/10) isn't RFC1918, so appending it to
+# Lyrion's allowedHosts allow-list still left some Settings/config pages
+# unreachable for Tailscale-only clients (e.g. Lyrplay) -- LMS applies host
+# filtering in more than one place, not just that one pref. Since nothing on
+# the Osmium side restricts :9000 anyway (no firewall/reverse-proxy, see
+# webui_server.py), Lyrion's own IP filter buys this appliance no security,
+# so just turn it off outright instead of chasing every allow-list.
+def _disable_ip_filtering(data):
+    """Given the loaded prefs dict, turn OFF Lyrion's IP-based access control
+    (filterHosts) if the operator has it turned on. Returns the (possibly
+    updated) dict and a bool telling whether anything changed."""
     if not data.get("filterHosts"):
         return data, False
-    cur = (data.get("allowedHosts") or "").strip()
-    entries = [e.strip() for e in cur.split(",") if e.strip()]
-    if TAILSCALE_CGNAT in entries:
-        return data, False
-    entries.append(TAILSCALE_CGNAT)
-    data["allowedHosts"] = ",".join(entries)
+    data["filterHosts"] = 0
     return data, True
 
 
@@ -1067,7 +1059,7 @@ def ensure_lms_trusted_networks():
             data = yaml.safe_load(f) or {}
     except Exception:
         return
-    data, changed = _add_trusted_network(data)
+    data, changed = _disable_ip_filtering(data)
     if not changed:
         return
     _run(["systemctl", "stop", LYRION_SERVICE], timeout=60)
@@ -1086,7 +1078,7 @@ def ensure_lms_trusted_networks():
         print(f"[sources] lms trusted-networks prefs write failed: {e}")
     finally:
         _run(["systemctl", "start", LYRION_SERVICE], timeout=60)
-    print(f"[sources] added Tailscale CGNAT range to Lyrion allowedHosts")
+    print(f"[sources] disabled Lyrion's IP-based access control (filterHosts)")
 
 
 def current_paths(state):
