@@ -49,7 +49,18 @@ const SetupWizard = ({ onComplete }) => {
           setWired(!!res.data.wired);
           // The phone finished setup (claim_mode + finalize already ran
           // server-side) — pick up and move on. No button, no local step.
-          if (res.data.pending === false) {
+          //
+          // `pending: false` alone isn't enough: api_server.py's
+          // get_provision_status() also returns bare `{pending: false}`
+          // (no `completed` key) whenever hifi-webui itself is transiently
+          // unreachable -- e.g. right after a mid-wizard reboot (a
+          // system-component update restarts that very service), a window
+          // this poll starts hitting the instant Electron comes back up,
+          // well before hifi-webui has finished starting. Without the
+          // `completed` check that blip reads as "setup finished" and
+          // permanently jumps to the real app mid-wizard (see App.jsx's own
+          // provisioning check, which already guards on both fields).
+          if (res.data.pending === false && res.data.completed === true) {
             doneRef.current = true;
             localStorage.setItem('firstSetupComplete', 'true');
             onComplete?.();
