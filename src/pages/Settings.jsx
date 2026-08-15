@@ -698,12 +698,16 @@ const Settings = ({ initialSection, onSectionConsumed } = {}) => {
 
   const changeOtaChannel = async (channel) => {
     if (channelBusy || channel === otaChannel) return;
-    // Downgrading back to prod from dev is gated by a newer prod release, so
-    // warn before the switch rather than after — the user can't just flip back.
-    if (otaChannel === 'prod' && channel === 'dev') {
+    // Downgrading back to prod from dev/alpha is gated by a newer prod
+    // release, so warn before the switch rather than after — the user can't
+    // just flip back. Not just 'dev': alpha is an even more bleeding-edge
+    // preview (the unfiltered newest release, prereleases included — see
+    // api_server.py's _fetch_release()), so it's under at least the same
+    // constraint and was wrongly left out.
+    if (otaChannel === 'prod') {
       setConfirmDialog({
         message: t('settings.updates.confirmProdToDev'),
-        confirmLabel: t(`settings.updates.channelDev`),
+        confirmLabel: t(`settings.updates.channel${channel === 'alpha' ? 'Alpha' : 'Dev'}`),
         onConfirm: () => doChangeOtaChannel(channel),
       });
       return;

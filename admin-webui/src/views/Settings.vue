@@ -582,9 +582,12 @@ async function loadChannel() {
 }
 async function setChannel(c) {
   if (applying.active || c === channel.value) return;
-  // Downgrading back to prod from dev is gated by a newer prod release, so
-  // warn before the switch rather than after — the user can't just flip back.
-  if (channel.value === 'prod' && c === 'dev' && !confirm(t('settings.updates.confirmProdToDev'))) return;
+  // Downgrading back to prod from dev/alpha is gated by a newer prod release,
+  // so warn before the switch rather than after — the user can't just flip
+  // back. Not just 'dev': alpha is an even more bleeding-edge preview (the
+  // unfiltered newest release, prereleases included — see _fetch_release()),
+  // so it's under at least the same constraint and was wrongly left out.
+  if (channel.value === 'prod' && !confirm(t('settings.updates.confirmProdToDev'))) return;
   channel.value = c;
   const r = await api.sysPost('ota_channel', { channel: c });
   const changedKey = { prod: 'channelChangedProd', dev: 'channelChangedDev', alpha: 'channelChangedAlpha' }[c] || 'channelChangedDev';
