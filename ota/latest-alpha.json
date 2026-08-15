@@ -1,41 +1,41 @@
 {
-  "tag_name": "v2.5.21-dev.89-alpha4",
-  "name": "v2.5.21-dev.89-alpha4",
-  "body": "## What's new in v2.5.21-dev.89-alpha4\n\n- feat(debug): add boot-splash-disable and kernel-crash-dump toggles\n- feat(wizard): reboot-wait overlay for the captive portal's restore-from-backup step\n- feat(wizard): live Wi-Fi rescan on manual-entry click, not just the one boot-time scan\n- fix(wizard): drop skip button; explain + improve empty Wi-Fi list on-screen\n- fix(webui,kiosk): warn before leaving prod for alpha, not just dev\n",
+  "tag_name": "v2.5.21-dev.90-alpha1",
+  "name": "v2.5.21-dev.90-alpha1",
+  "body": "## What's new in v2.5.21-dev.90-alpha1\n\n- fix(kernel): blacklist dw_dmac/dw_dmac_core -- shutdown crash hangs box behind Plymouth\n- fix(debug): drop linux-crashdump from kdump install (Ubuntu-only, doesn't exist on Debian)\n",
   "assets": [
     {
-      "name": "hifi-ui-v2.5.21-dev.89-alpha4.tar.gz",
-      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.89-alpha4/hifi-ui-v2.5.21-dev.89-alpha4.tar.gz",
-      "size": 134231797
+      "name": "hifi-ui-v2.5.21-dev.90-alpha1.tar.gz",
+      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.90-alpha1/hifi-ui-v2.5.21-dev.90-alpha1.tar.gz",
+      "size": 134230256
     },
     {
-      "name": "hifi-ui-v2.5.21-dev.89-alpha4.tar.gz.sha256",
-      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.89-alpha4/hifi-ui-v2.5.21-dev.89-alpha4.tar.gz.sha256",
+      "name": "hifi-ui-v2.5.21-dev.90-alpha1.tar.gz.sha256",
+      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.90-alpha1/hifi-ui-v2.5.21-dev.90-alpha1.tar.gz.sha256",
       "size": 103
     },
     {
-      "name": "hifi-system-v2.5.21-dev.89-alpha4.tar.gz",
-      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.89-alpha4/hifi-system-v2.5.21-dev.89-alpha4.tar.gz",
-      "size": 313013
+      "name": "hifi-system-v2.5.21-dev.90-alpha1.tar.gz",
+      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.90-alpha1/hifi-system-v2.5.21-dev.90-alpha1.tar.gz",
+      "size": 315458
     },
     {
-      "name": "hifi-system-v2.5.21-dev.89-alpha4.tar.gz.sha256",
-      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.89-alpha4/hifi-system-v2.5.21-dev.89-alpha4.tar.gz.sha256",
+      "name": "hifi-system-v2.5.21-dev.90-alpha1.tar.gz.sha256",
+      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.90-alpha1/hifi-system-v2.5.21-dev.90-alpha1.tar.gz.sha256",
       "size": 107
     },
     {
-      "name": "hifi-os-v2.5.21-dev.89-alpha4.tar.gz",
-      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.89-alpha4/hifi-os-v2.5.21-dev.89-alpha4.tar.gz",
-      "size": 1198738
+      "name": "hifi-os-v2.5.21-dev.90-alpha1.tar.gz",
+      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.90-alpha1/hifi-os-v2.5.21-dev.90-alpha1.tar.gz",
+      "size": 1199445
     },
     {
-      "name": "hifi-os-v2.5.21-dev.89-alpha4.tar.gz.sha256",
-      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.89-alpha4/hifi-os-v2.5.21-dev.89-alpha4.tar.gz.sha256",
+      "name": "hifi-os-v2.5.21-dev.90-alpha1.tar.gz.sha256",
+      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.90-alpha1/hifi-os-v2.5.21-dev.90-alpha1.tar.gz.sha256",
       "size": 103
     },
     {
-      "name": "hifi-os-v2.5.21-dev.89-alpha4.tar.gz.sha256.sig",
-      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.89-alpha4/hifi-os-v2.5.21-dev.89-alpha4.tar.gz.sha256.sig",
+      "name": "hifi-os-v2.5.21-dev.90-alpha1.tar.gz.sha256.sig",
+      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.90-alpha1/hifi-os-v2.5.21-dev.90-alpha1.tar.gz.sha256.sig",
       "size": 64
     }
   ]
