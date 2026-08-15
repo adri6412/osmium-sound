@@ -750,13 +750,46 @@ async function revokePairs() {
 }
 
 // ── system: reboot/shutdown/reset ────────────────────────────────
-async function reboot() { if (confirm(t('settings.system.confirmReboot'))) { await api.sysPost('reboot', {}); say(t('settings.system.rebooting')); } }
+// Shared "device is rebooting" overlay for every action that ends in a
+// reboot (manual reboot, factory reset, a restore that needs one) — polls
+// auth/status (works whether or not the session is still valid, which a
+// factory reset intentionally invalidates) until the box answers again,
+// then reloads so the page reconnects on its own instead of leaving the
+// owner staring at a dead tab.
+const rebootWait = reactive({ active: false, phase: 'going-down' });
+async function waitForReboot() {
+  rebootWait.active = true;
+  rebootWait.phase = 'going-down';
+  const deadline = Date.now() + 6 * 60 * 1000;
+  // Phase 1: wait for the box to actually drop off so a fast reboot can't be
+  // misread as "already back up" on the very first poll.
+  let sawDown = false;
+  for (let i = 0; i < 10 && Date.now() < deadline; i++) {
+    await sleep(1500);
+    const r = await api.authStatus();
+    if (!r.ok) { sawDown = true; break; }
+  }
+  if (!sawDown) await sleep(3000);
+  rebootWait.phase = 'coming-back';
+  while (Date.now() < deadline) {
+    await sleep(2500);
+    const r = await api.authStatus();
+    if (r.ok) { window.location.reload(); return; }
+  }
+  rebootWait.active = false;
+  say(t('settings.system.rebootTimeout'), true);
+}
+async function reboot() {
+  if (!confirm(t('settings.system.confirmReboot'))) return;
+  await api.sysPost('reboot', {});
+  waitForReboot();
+}
 async function shutdown() { if (confirm(t('settings.system.confirmShutdown'))) { await api.sysPost('shutdown', {}); say(t('settings.system.shuttingDown')); } }
 const resetPw = ref('');
 async function factoryReset() {
   if (!confirm(t('settings.system.factoryConfirm'))) return;
   const r = await api.post('/api/system/factory_reset', { password: resetPw.value });
-  if (r.ok && r.data.success !== false) say(t('settings.system.factoryStarted'));
+  if (r.ok && r.data.success !== false) waitForReboot();
   else say(bodyMsg(r, t('settings.system.factoryFailed')), true);
 }
 
@@ -874,13 +907,13 @@ async function pollRestoreStatus() {
     const s = r.data;
     if (s.state === 'done') {
       say(s.message || t('settings.backup.restored'));
-      // A restored webui.db invalidates this very session server-side
-      // (hifi-webui reopens the database it just got restarted with), so a
-      // stale page here can't just keep going — reload so the browser
-      // re-authenticates on its own and lands back on /login if needed.
-      // Harmless when the session is still valid too: just re-fetches
-      // whatever changed.
-      setTimeout(() => window.location.reload(), 1200);
+      // A restore can include NetworkManager profiles, timezone, DSP/audio
+      // config and Lyrion prefs written straight to disk — reboot so every
+      // affected service picks all of that up cleanly (same reasoning as the
+      // setup wizard's own restore step), instead of leaving some of it
+      // pending until whenever the box next restarts on its own.
+      await api.sysPost('reboot', {});
+      waitForReboot();
       return;
     }
     if (s.state === 'error') { say(s.message || t('settings.backup.restoreFailed'), true); break; }
@@ -1335,6 +1368,16 @@ onUnmounted(() => {
     <div class="card" v-if="open === 'language'">
       <p class="sub">{{ t('settings.language.hint') }}</p>
       <LanguageSelector variant="list" />
+    </div>
+
+    <!-- device-rebooting overlay: reboot / factory reset / a restore that reboots -->
+    <div v-if="rebootWait.active" class="overlay">
+      <div class="card" style="width: 340px; text-align: center;">
+        <div class="spinner"></div>
+        <h3 style="justify-content: center;">{{ t('settings.system.rebootWaitTitle') }}</h3>
+        <p class="sub">{{ rebootWait.phase === 'going-down' ? t('settings.system.rebootGoingDown') : t('settings.system.rebootComingBack') }}</p>
+        <p class="muted">{{ t('settings.system.rebootAutoReconnect') }}</p>
+      </div>
     </div>
 
     <!-- forced blocking update modal (kiosk-style) -->

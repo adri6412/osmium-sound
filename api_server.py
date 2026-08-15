@@ -665,22 +665,32 @@ def wifi_scan():
         pass
     networks = []
     try:
-        r = _run(['nmcli', '-t', '-f', 'IN-USE,SSID,SIGNAL,SECURITY', 'device', 'wifi', 'list'])
-        for line in r.stdout.strip().split('\n'):
-            if not line:
-                continue
-            parts = _terse_split(line)
-            if len(parts) < 4:
-                continue
-            in_use, ssid, signal_, security = parts[0], parts[1], parts[2], parts[3]
-            if not ssid:
-                continue
-            networks.append({
-                'ssid': ssid,
-                'signal': signal_,
-                'security': security,
-                'in_use': in_use == '*',
-            })
+        # `rescan` only requests a scan and returns immediately; results land
+        # a few seconds later. An immediate `list` usually looks fine because
+        # NetworkManager already has a scan cache from its own periodic
+        # background scans to fall back on -- but that cache doesn't exist
+        # yet right after boot, so don't trust the first read blindly.
+        for attempt in range(6):
+            r = _run(['nmcli', '-t', '-f', 'IN-USE,SSID,SIGNAL,SECURITY', 'device', 'wifi', 'list'])
+            networks = []
+            for line in r.stdout.strip().split('\n'):
+                if not line:
+                    continue
+                parts = _terse_split(line)
+                if len(parts) < 4:
+                    continue
+                in_use, ssid, signal_, security = parts[0], parts[1], parts[2], parts[3]
+                if not ssid:
+                    continue
+                networks.append({
+                    'ssid': ssid,
+                    'signal': signal_,
+                    'security': security,
+                    'in_use': in_use == '*',
+                })
+            if networks or attempt == 5:
+                break
+            time.sleep(1)
     except Exception:
         log.exception("wifi_scan failed")
         return {'networks': [], 'error': _t('network.scanFailed', _lang())}

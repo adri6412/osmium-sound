@@ -380,21 +380,34 @@ def _scan_wifi():
     if FAKE:
         return [{'ssid': 'FakeNet', 'signal': 80, 'security': 'WPA2', 'in_use': False}]
     _nmcli(['device', 'wifi', 'rescan'], timeout=20)
-    rc, out, _ = _nmcli(['-t', '-f', 'IN-USE,SSID,SIGNAL,SECURITY', 'device', 'wifi', 'list'])
+    # `rescan` only requests a scan and returns immediately -- results land
+    # asynchronously a few seconds later. Reading the list right away worked
+    # in practice post-setup (NetworkManager already had a scan cache from its
+    # own periodic background scans to fall back on), but during first-boot
+    # provisioning -- the one call site that matters here, made seconds after
+    # NetworkManager itself starts, with no such cache yet -- it came back
+    # empty even with networks in range. Poll briefly instead of trusting the
+    # first read.
     nets = []
-    if rc == 0:
-        seen = set()
-        for line in out.splitlines():
-            # nmcli -t escapes ':' inside fields as '\:'; split on unescaped ':'
-            parts = re.split(r'(?<!\\):', line)
-            if len(parts) < 4:
-                continue
-            ssid = parts[1].replace('\\:', ':')
-            if not ssid or ssid in seen:
-                continue
-            seen.add(ssid)
-            nets.append({'ssid': ssid, 'signal': int(parts[2] or 0),
-                         'security': parts[3] or '', 'in_use': parts[0].strip() == '*'})
+    for _ in range(6):
+        rc, out, _ = _nmcli(['-t', '-f', 'IN-USE,SSID,SIGNAL,SECURITY', 'device', 'wifi', 'list'])
+        nets = []
+        if rc == 0:
+            seen = set()
+            for line in out.splitlines():
+                # nmcli -t escapes ':' inside fields as '\:'; split on unescaped ':'
+                parts = re.split(r'(?<!\\):', line)
+                if len(parts) < 4:
+                    continue
+                ssid = parts[1].replace('\\:', ':')
+                if not ssid or ssid in seen:
+                    continue
+                seen.add(ssid)
+                nets.append({'ssid': ssid, 'signal': int(parts[2] or 0),
+                             'security': parts[3] or '', 'in_use': parts[0].strip() == '*'})
+        if nets:
+            break
+        time.sleep(1)
     return nets
 
 
@@ -1200,6 +1213,8 @@ def provision_claim_mode():
 def provision_finalize():
     if not _provisioning():
         return jsonify({'success': True})  # already done
+    data = request.get_json(silent=True) or {}
+    want_reboot = bool(data.get('reboot'))
     with _prov_lock:
         state = _load_prov_state()
         mode = state.get('mode', 'gui')
@@ -1212,6 +1227,17 @@ def provision_finalize():
         # isolate either way, so the HTTP response still returns normally.
         _set_display_mode(mode, live=True)
         _do_finalize()
+    if want_reboot:
+        # Used after restoring a backup: the restored archive can include
+        # NetworkManager profiles, timezone, DSP/audio config and Lyrion
+        # prefs written straight to disk — a reboot is the simple, robust way
+        # to have every affected service pick all of that up cleanly. Issued
+        # from here, inline, rather than as a separate client call to
+        # /api/provision/reboot: that endpoint is gated on _provisioning(),
+        # and _do_finalize() just removed the marker it checks — a second
+        # request would always be rejected (this is why restore never
+        # actually rebooted the box).
+        _proxy(API_BASE, '/reboot', method='POST', body={}, timeout=15)
     return jsonify({'success': True})
 
 
@@ -1459,6 +1485,18 @@ def provision_restore():
         return jsonify({'success': False, 'code': 'provision.notInProgress',
                         'message': _wt('provision.notInProgress', _lang())}), 409
     return _forward_to_sources('/api/restore')
+
+
+@app.route('/api/provision/restore/status', methods=['GET'])
+def provision_restore_status():
+    # /api/restore (above) is fire-and-forget: it returns as soon as the
+    # restore job is *started*, not finished (sources_server runs it in a
+    # background thread — see _run_restore_async). The wizard polls this to
+    # find out when it has actually completed before finalizing/rebooting.
+    if not _provisioning():
+        return jsonify({'success': False, 'code': 'provision.notInProgress',
+                        'message': _wt('provision.notInProgress', _lang())}), 409
+    return _forward_to_sources('/api/restore/status')
 
 
 @app.route('/api/provision/sources_app', methods=['GET'])
@@ -2217,12 +2255,25 @@ function doRestoreUpload(){
   var fd=new FormData();fd.append('file',f);fd.append('passphrase',document.getElementById('restorepass').value);
   document.getElementById('restoremsg').textContent=S.restoring;
   fetch('/api/provision/restore',{method:'POST',headers:h(),body:fd}).then(function(r){return r.json()}).then(function(res){
-    if(res.success){
+    // /api/provision/restore only confirms the restore job STARTED (it runs
+    // in a background thread on the box) — poll its status instead of
+    // finalizing/rebooting on this same response, or a reboot could land
+    // mid-restore.
+    if(res.success&&res.started){pollRestoreStatus();return}
+    document.getElementById('restoremsg').textContent=res.message||S.restoreFailed;
+  });
+}
+function pollRestoreStatus(){
+  jget('/api/provision/restore/status').then(function(st){
+    if(st.state==='done'){
       netPhaseDone=true;
       document.getElementById('restoremsg').textContent=S.restoreDone;
-      jpost('/api/provision/finalize',{}).then(function(){jpost('/api/provision/reboot',{})});
+      jpost('/api/provision/finalize',{reboot:true});
+    }else if(st.state==='error'){
+      document.getElementById('restoremsg').textContent=st.message||S.restoreFailed;
     }else{
-      document.getElementById('restoremsg').textContent=res.message||S.restoreFailed;
+      if(st.message)document.getElementById('restoremsg').textContent=st.message;
+      setTimeout(pollRestoreStatus,1500);
     }
   });
 }
