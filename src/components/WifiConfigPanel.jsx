@@ -34,11 +34,11 @@ const WifiConfigPanel = ({ networks, scanning, connecting, error, onConnect, onC
 
           <div className="max-h-40 overflow-y-auto rounded-lg border border-white/10 mb-3 divide-y divide-white/5">
             {scanning ? (
-              <div className="text-hifi-silver/50 text-sm px-3 py-3 flex items-center gap-2">
+              <div className="text-hifi-silver/80 text-sm px-3 py-3 flex items-center gap-2">
                 <Loader2 size={14} className="animate-spin" /> {t('wizard.wifi.scanning')}
               </div>
             ) : networks.length === 0 ? (
-              <div className="text-hifi-silver/50 text-sm px-3 py-3">{t('wizard.wifi.noNetworks')}</div>
+              <div className="text-hifi-silver/80 text-sm px-3 py-3">{t('wizard.wifi.noNetworks')}</div>
             ) : networks.map((n) => (
               <button key={n.ssid} onClick={() => setSsid(n.ssid)}
                 className={`w-full flex items-center gap-2 px-3 py-2 text-sm text-left hover:bg-white/5 ${ssid === n.ssid ? 'bg-hifi-gold/10 text-hifi-gold' : 'text-hifi-silver'}`}>

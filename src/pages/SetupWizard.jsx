@@ -184,7 +184,7 @@ const SetupWizard = ({ onComplete }) => {
 
           {!isConnected && (
             <button onClick={openWifiPanel}
-              className="mt-4 text-xs text-hifi-silver/50 hover:text-hifi-silver underline underline-offset-2">
+              className="mt-4 text-sm text-hifi-silver/70 hover:text-hifi-silver underline underline-offset-2">
               {t('wizard.qr.manualButton')}
             </button>
           )}
