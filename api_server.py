@@ -2276,7 +2276,14 @@ def get_kdump_enabled():
 def set_kdump_enabled(enable):
     if enable and not _kdump_tools_installed():
         try:
-            r = subprocess.run(['apt-get', 'install', '-y', 'kdump-tools', 'linux-crashdump'],
+            # kdump-tools alone is enough on Debian: it depends on makedumpfile
+            # and kexec-tools itself, and this appliance's own kernel already
+            # supports kexec. linux-crashdump is an Ubuntu-only meta-package
+            # that doesn't exist here -- installing it unconditionally failed
+            # the whole command every time (apt-get install fails atomically
+            # on an unresolvable package name), which is why this always
+            # errored regardless of actual Internet connectivity.
+            r = subprocess.run(['apt-get', 'install', '-y', 'kdump-tools'],
                                capture_output=True, text=True, timeout=180,
                                env=dict(os.environ, DEBIAN_FRONTEND='noninteractive'))
         except Exception:
