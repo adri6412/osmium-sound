@@ -421,7 +421,12 @@ def _raise_ap(dev):
     rc, _, err = _nmcli([
         'connection', 'add', 'type', 'wifi', 'ifname', dev, 'con-name', AP_CON_NAME,
         'autoconnect', 'no', 'ssid', ssid,
+        # Fixed mid-range 2.4GHz channel instead of "auto": this box's AP mode
+        # is driven by wpa_supplicant's own minimal AP implementation (no
+        # hostapd in the image), whose auto channel-select is known flaky
+        # with iOS clients -- pin one that's valid in every regulatory domain.
         '802-11-wireless.mode', 'ap', '802-11-wireless.band', 'bg',
+        '802-11-wireless.channel', '6',
         # Left unset, NM defaults an AP-mode profile to WPA+WPA2 mixed with
         # TKIP+CCMP both advertised. Android joins that fine; iOS is strict
         # about hotspot security and silently refuses to join (or fails right
@@ -429,6 +434,11 @@ def _raise_ap(dev):
         # all three so iPhones can actually connect.
         'wifi-sec.key-mgmt', 'wpa-psk', 'wifi-sec.proto', 'rsn',
         'wifi-sec.pairwise', 'ccmp', 'wifi-sec.group', 'ccmp',
+        # PMF (802.11w) "optional" auto-negotiation on wpa_supplicant's AP
+        # mode is a separately well-documented iOS pain point (handshake
+        # silently fails, no password prompt, exactly the reported symptom)
+        # -- disable it outright rather than leave it to negotiation.
+        'wifi-sec.pmf', '0',
         'wifi-sec.psk', AP_PSK,
         'ipv4.method', 'shared', 'ipv4.addresses', f'{AP_ADDR}/24',
         'ipv6.method', 'disabled'])
