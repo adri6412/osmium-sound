@@ -340,27 +340,37 @@ def _cpu_temp_c():
         pass
     return round(best, 1) if best is not None else None
 
+_gpu_warned = False  # log the first failure only -- this polls every 5s forever
+
+
 def _gpu_busy_pct():
     """Intel iGPU busy % via intel_gpu_top, if installed (not shipped on the
     image by default -- see intel-gpu-tools). `-J` streams a JSON array that
     only gets its closing `]` once the process exits, and it never exits on
     its own -- a plain `subprocess.run(..., timeout=N)` would always hit the
     timeout and lose the output. Let it sample for one interval, then ask it
-    to exit cleanly (SIGINT, same as Ctrl-C) so it flushes valid JSON."""
+    to exit cleanly (SIGINT, same as Ctrl-C) so it flushes valid JSON.
+    Failures are logged once (not every poll): this used to fail completely
+    silently, which is exactly how a real bug (Debian's stricter default
+    perf_event_paranoid rejecting CAP_PERFMON -- see
+    distro/os-update/apply.d/0046-perfmon-sysctl.sh) went unnoticed for a
+    long time."""
+    global _gpu_warned
     if not shutil.which('intel_gpu_top'):
         return None
     proc = None
+    err = ''
     try:
         proc = subprocess.Popen(
             ['intel_gpu_top', '-J', '-s', '500', '-o', '-'],
-            stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True)
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
         time.sleep(1.0)
         proc.send_signal(signal.SIGINT)
         try:
-            out, _ = proc.communicate(timeout=3)
+            out, err = proc.communicate(timeout=3)
         except subprocess.TimeoutExpired:
             proc.kill()
-            out, _ = proc.communicate()
+            out, err = proc.communicate()
         text = out.strip()
         if not text.startswith('['):
             text = '[' + text.lstrip(',')
@@ -368,12 +378,21 @@ def _gpu_busy_pct():
             text = text.rstrip().rstrip(',') + ']'
         samples = json.loads(text)
         if not samples:
+            if not _gpu_warned:
+                _gpu_warned = True
+                log.warning('gpu_busy_pct: no samples captured, stderr: %s', (err or '').strip()[:200])
             return None
         engines = samples[-1].get('engines') or {}
         render = engines.get('Render/3D') or engines.get('Render/3D/0') or {}
         busy = render.get('busy')
+        if busy is None and not _gpu_warned:
+            _gpu_warned = True
+            log.warning('gpu_busy_pct: no \'busy\' field in engines=%s', list(engines))
         return round(float(busy), 1) if busy is not None else None
-    except Exception:
+    except Exception as e:
+        if not _gpu_warned:
+            _gpu_warned = True
+            log.warning('gpu_busy_pct: %s, stderr: %s', e, (err or '').strip()[:200])
         return None
     finally:
         if proc and proc.poll() is None:

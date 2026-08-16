@@ -264,24 +264,39 @@ def cpu_temp_c():
     return round(best, 1) if best is not None else None
 
 
+_gpu_warned = False  # log the first failure only -- this runs every cycle forever
+
+
+def _warn_gpu_once(msg):
+    global _gpu_warned
+    if not _gpu_warned:
+        _gpu_warned = True
+        _log(f'gpu_busy_pct: {msg}')
+
+
 def gpu_busy_pct():
     """Intel iGPU busy % via intel_gpu_top, same approach as api_server.py's
     _gpu_busy_pct() -- not shipped on the image by default (see
-    intel-gpu-tools), so this is a no-op (None) wherever it's missing."""
+    intel-gpu-tools), so this is a no-op (None) wherever it's missing.
+    Failures are logged once (not every cycle): this used to fail completely
+    silently, which is exactly how a real bug (Debian's stricter default
+    perf_event_paranoid rejecting CAP_PERFMON -- see
+    apply.d/0046-perfmon-sysctl.sh) went unnoticed for a long time."""
     if not shutil.which('intel_gpu_top'):
         return None
     proc = None
+    err = ''
     try:
         proc = subprocess.Popen(
             ['intel_gpu_top', '-J', '-s', '500', '-o', '-'],
-            stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True)
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
         time.sleep(1.0)
         proc.send_signal(signal.SIGINT)
         try:
-            out, _ = proc.communicate(timeout=3)
+            out, err = proc.communicate(timeout=3)
         except subprocess.TimeoutExpired:
             proc.kill()
-            out, _ = proc.communicate()
+            out, err = proc.communicate()
         text = out.strip()
         if not text.startswith('['):
             text = '[' + text.lstrip(',')
@@ -289,12 +304,16 @@ def gpu_busy_pct():
             text = text.rstrip().rstrip(',') + ']'
         samples = json.loads(text)
         if not samples:
+            _warn_gpu_once(f'no samples captured, stderr: {(err or "").strip()[:200]}')
             return None
         engines = samples[-1].get('engines') or {}
         render = engines.get('Render/3D') or engines.get('Render/3D/0') or {}
         busy = render.get('busy')
+        if busy is None:
+            _warn_gpu_once(f"no 'busy' field in engines={list(engines)}")
         return round(float(busy), 1) if busy is not None else None
-    except Exception:
+    except Exception as e:
+        _warn_gpu_once(f'{e}, stderr: {(err or "").strip()[:200]}')
         return None
     finally:
         if proc and proc.poll() is None:
