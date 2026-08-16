@@ -167,10 +167,20 @@ const SetupWizard = ({ onComplete }) => {
           )}
 
           {apInfo?.ssid && apInfo?.active && !isConnected ? (
-            <div className="inline-flex flex-col items-center bg-white rounded-2xl px-8 py-6">
-              <span className="text-black/50 text-xs font-semibold uppercase tracking-wide">{t('wizard.qr.networkLabel')}</span>
-              <span className="text-black text-2xl font-bold mt-1">{apInfo.ssid}</span>
-            </div>
+            <>
+              <div className="inline-flex flex-col items-center bg-white rounded-2xl px-8 py-6">
+                <span className="text-black/50 text-xs font-semibold uppercase tracking-wide">{t('wizard.qr.networkLabel')}</span>
+                <span className="text-black text-2xl font-bold mt-1">{apInfo.ssid}</span>
+              </div>
+              {/* Explains both paths (hotspot or Ethernet) up front, since the
+                  owner only sees whichever one applies and may not realize
+                  the other exists — made deliberately prominent, not
+                  fine-print, since it's the one thing this screen needs the
+                  owner to actually read. */}
+              <div className="mt-4 max-w-xs rounded-xl border border-hifi-gold/30 bg-hifi-gold/10 px-4 py-3">
+                <p className="text-white text-sm leading-relaxed">{t('wizard.qr.hotspotInstructions')}</p>
+              </div>
+            </>
           ) : apInfo?.error && !isConnected ? (
             // Hotspot failed to come up and there's no LAN fallback either —
             // an address here would point at a network the phone can't
@@ -195,8 +205,14 @@ const SetupWizard = ({ onComplete }) => {
               {/* Safari assumes https:// for a bare IP typed into the address
                   bar; this device only serves plain http://, so that guess
                   fails with a "can't connect to server" error, not a page —
-                  spell out that http:// is mandatory, not decorative. */}
-              <p className="text-hifi-silver/50 text-xs mt-3 max-w-[240px]">{t('wizard.qr.addressHint')}</p>
+                  spell out that http:// is mandatory, not decorative. Sized
+                  and colored to actually be noticed, not a fine-print
+                  afterthought under the address box. */}
+              <div className="mt-4 max-w-xs rounded-xl border border-hifi-gold/30 bg-hifi-gold/10 px-4 py-3 text-left space-y-1.5">
+                <p className="text-hifi-gold text-xs font-bold uppercase tracking-wide">{t('wizard.qr.tipsLabel')}</p>
+                <p className="text-white/90 text-sm leading-snug">{t('wizard.qr.addressHint')}</p>
+                <p className="text-white/90 text-sm leading-snug">{t('wizard.qr.pcRecommended')}</p>
+              </div>
             </>
           )}
 

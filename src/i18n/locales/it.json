@@ -99,12 +99,15 @@
       "title": "Collega il telefono per configurare",
       "subtitle": "Collega il telefono a questa rete Wi-Fi per completare la configurazione — non serve toccare questo schermo.",
       "errorTitle": "Hotspot di configurazione non disponibile",
-      "connectedTitle": "Apri dal telefono",
-      "connectedSubtitle": "Apri questo indirizzo nel browser del telefono per continuare la configurazione da lì.",
+      "connectedTitle": "Apri in un browser",
+      "connectedSubtitle": "Apri questo indirizzo in un browser qualsiasi — telefono, tablet o computer — per continuare la configurazione da lì.",
       "manualButton": "Configura Wi-Fi manualmente",
+      "hotspotInstructions": "Per configurare il box puoi collegarti all'hotspot indicato a schermo da un device qualsiasi come smartphone, tablet o pc. Se colleghi un cavo di rete ti verrà mostrato l'indirizzo IP al quale potrai collegarti da un browser qualsiasi per iniziare la configurazione.",
       "networkLabel": "Rete Wi-Fi",
       "addressLabel": "Indirizzo",
-      "addressHint": "Scrivi l'indirizzo esattamente come mostrato, incluso \"http://\" — su Safari senza non si apre."
+      "tipsLabel": "Consigli",
+      "addressHint": "Scrivi l'indirizzo esattamente come mostrato, incluso \"http://\" — su Safari senza non si apre.",
+      "pcRecommended": "Meglio un computer: l'interfaccia di Lyrion Music Server richiamata a fine configurazione non si vede benissimo su telefono."
     },
     "input": {
       "title": "Come usi il dispositivo?",

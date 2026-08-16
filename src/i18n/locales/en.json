@@ -99,12 +99,15 @@
       "title": "Connect your phone to set up",
       "subtitle": "Connect your phone to this Wi-Fi network to finish setup — no need to touch this screen.",
       "errorTitle": "Setup hotspot unavailable",
-      "connectedTitle": "Open on your phone",
-      "connectedSubtitle": "Open this address in your phone's browser to continue setup from there.",
+      "connectedTitle": "Open in a browser",
+      "connectedSubtitle": "Open this address in any browser — phone, tablet, or computer — to continue setup from there.",
       "manualButton": "Configure Wi-Fi manually",
+      "hotspotInstructions": "To set up the box you can connect to the hotspot shown on screen from any device — smartphone, tablet, or PC. If you plug in a network cable instead, you'll see the IP address you can connect to from any browser to start setup.",
       "networkLabel": "Wi-Fi network",
       "addressLabel": "Address",
-      "addressHint": "Type the address exactly as shown, including \"http://\" — Safari won't open it without it."
+      "tipsLabel": "Tips",
+      "addressHint": "Type the address exactly as shown, including \"http://\" — Safari won't open it without it.",
+      "pcRecommended": "A computer works best: the Lyrion Music Server interface opened at the end of setup doesn't display great on a phone."
     },
     "input": {
       "title": "How do you use the device?",
