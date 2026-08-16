@@ -13,6 +13,7 @@ CREATE TABLE IF NOT EXISTS devices (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     machine_id TEXT UNIQUE NOT NULL,
     label TEXT NOT NULL,
+    label_is_custom INTEGER NOT NULL DEFAULT 0,
     token_hash TEXT UNIQUE NOT NULL,
     created_at TEXT NOT NULL,
     last_seen_at TEXT
@@ -124,6 +125,7 @@ def init_db():
     try:
         conn.executescript(SCHEMA)
         _ensure_column(conn, 'snapshots', 'gpu_percent', 'REAL')
+        _ensure_column(conn, 'devices', 'label_is_custom', 'INTEGER NOT NULL DEFAULT 0')
         row = conn.execute('SELECT COUNT(*) c FROM fleet_config').fetchone()
         if row['c'] == 0:
             conn.execute(

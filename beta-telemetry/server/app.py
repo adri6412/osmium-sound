@@ -170,10 +170,18 @@ def api_register():
 
     db = get_db()
     try:
-        existing = db.execute('SELECT id FROM devices WHERE machine_id = ?', (machine_id,)).fetchone()
+        existing = db.execute('SELECT id, label_is_custom FROM devices WHERE machine_id = ?', (machine_id,)).fetchone()
         if existing:
-            db.execute('UPDATE devices SET token_hash = ?, label = ?, last_seen_at = ? WHERE id = ?',
-                       (token_hash, label, now_iso(), existing['id']))
+            if existing['label_is_custom']:
+                # Admin gave this device its own name -- don't clobber it with
+                # whatever hostname-derived label the agent computed locally
+                # just because it happened to re-register (e.g. after a
+                # revoked token).
+                db.execute('UPDATE devices SET token_hash = ?, last_seen_at = ? WHERE id = ?',
+                           (token_hash, now_iso(), existing['id']))
+            else:
+                db.execute('UPDATE devices SET token_hash = ?, label = ?, last_seen_at = ? WHERE id = ?',
+                           (token_hash, label, now_iso(), existing['id']))
         else:
             db.execute(
                 'INSERT INTO devices (machine_id, label, token_hash, created_at, last_seen_at) '
@@ -209,6 +217,18 @@ def api_snapshot():
          body.get('disk_total_gb'), body.get('disk_used_gb'), body.get('cpu_percent'),
          body.get('disk_percent'), body.get('temp_c'), body.get('gpu_percent'),
          body.get('connection_type'), body.get('local_ip')))
+    # Keep the display label following the appliance's actual hostname (same
+    # "<hostname>-<machine_id suffix>" shape the agent computes for its own
+    # initial registration) as long as nobody has given it a custom name via
+    # the dashboard -- otherwise a hostname change (e.g. renaming the box)
+    # never shows up here until/unless the device token gets revoked and it
+    # happens to re-register.
+    hostname = (body.get('hostname') or '').strip()
+    if hostname and not g.device['label_is_custom']:
+        mid = g.device['machine_id'] or ''
+        new_label = f'{hostname}-{mid[-6:]}' if mid else hostname
+        if new_label != g.device['label']:
+            g.db.execute('UPDATE devices SET label = ? WHERE id = ?', (new_label, g.device['id']))
     g.db.commit()
     return jsonify({'ok': True})
 
@@ -345,7 +365,10 @@ def device_rename(device_id):
     label = (request.form.get('label') or '').strip()
     if label:
         db = get_db()
-        db.execute('UPDATE devices SET label = ? WHERE id = ?', (label, device_id))
+        # label_is_custom=1 opts this device out of api_snapshot's automatic
+        # hostname-follow -- an explicit admin rename should stick even if
+        # the appliance's hostname later changes again.
+        db.execute('UPDATE devices SET label = ?, label_is_custom = 1 WHERE id = ?', (label, device_id))
         db.commit()
         db.close()
     return redirect(url_for('device_detail', device_id=device_id))
