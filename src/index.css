@@ -240,16 +240,6 @@ body {
   background: linear-gradient(to bottom, transparent, #252525 15%, #252525 85%, transparent);
 }
 
-.artwork-glow {
-  filter: blur(50px);
-  opacity: 0.25;
-  position: absolute;
-  inset: -30px;
-  background-size: cover;
-  background-position: center;
-  pointer-events: none;
-}
-
 /* Long library lists: let Chromium skip layout + paint for off-screen cards/rows
    so scrolling a big album grid stays smooth even with hundreds mounted.
    contain-intrinsic-size is a placeholder so scroll height/position stay stable;

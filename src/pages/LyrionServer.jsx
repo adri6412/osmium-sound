@@ -1209,9 +1209,6 @@ const LyrionServer = () => {
             onClick={() => activePlayer && setIsPlayerExpanded(true)}>
             {isRemoteTrack ? (
               <>
-                {npArtwork.objectUrl && (
-                  <div className="artwork-glow" style={{ backgroundImage: `url(${npArtwork.objectUrl})` }} />
-                )}
                 {npArtwork.failed || !npArtwork.objectUrl ? (
                   <div className="absolute inset-0 flex items-center justify-center text-hifi-silver/20 bg-gradient-to-br from-hifi-gray to-hifi-dark">
                     <Music size={40} />
@@ -1230,12 +1227,7 @@ const LyrionServer = () => {
                 )}
               </>
             ) : (
-              <>
-                {artworkUrl && (
-                  <div className="artwork-glow" style={{ backgroundImage: `url(${artworkUrl})` }} />
-                )}
-                <ArtworkImage key={artworkIdentityKey} src={artworkUrl} alt="Album Art" className="w-full h-full object-cover relative z-10" FallbackIcon={Music} />
-              </>
+              <ArtworkImage key={artworkIdentityKey} src={artworkUrl} alt="Album Art" className="w-full h-full object-cover relative z-10" FallbackIcon={Music} />
             )}
             {activePlayer && (
               <div className="absolute inset-0 z-20 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity rounded-2xl">
