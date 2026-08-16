@@ -496,6 +496,17 @@ const LyrionServer = () => {
 
   // ── Kiosk-only UI state (not part of the shared hook) ──────
   const [isPlayerExpanded, setIsPlayerExpanded] = useState(false);
+  // Once expanded, the fullscreen now-playing portal (below) stays mounted
+  // for the rest of the session and just slides on/off screen instead of
+  // being destroyed and rebuilt on every open/close — see the perf-capture
+  // investigation: on the real Gemini Lake/Iris hardware, GPU-process memory
+  // ratcheted up a few MB on every expand/collapse cycle and never came back
+  // down (not reproduced on a different GPU/driver, but cheap to avoid
+  // either way). Never resets back to false once a player has been expanded.
+  const [hasExpandedOnce, setHasExpandedOnce] = useState(false);
+  useEffect(() => {
+    if (isPlayerExpanded) setHasExpandedOnce(true);
+  }, [isPlayerExpanded]);
   const [activeTab, setActiveTab] = useState('musica');
   // Lets something outside Settings (the global "USB detected" prompt in
   // App.jsx) jump straight to a Settings sub-section — Settings.jsx has no
@@ -1389,12 +1400,12 @@ const LyrionServer = () => {
       </div>
 
       {/* ══════════════════ FULLSCREEN NOW PLAYING (portal) ══════════════════ */}
-      {createPortal(
-        <AnimatePresence>
-          {isPlayerExpanded && (
+      {hasExpandedOnce && createPortal(
             <motion.div
-              initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }}
+              initial={{ y: '100%' }} animate={{ y: isPlayerExpanded ? 0 : '100%' }}
               transition={{ type: 'spring', damping: 26, stiffness: 200 }}
+              style={{ pointerEvents: isPlayerExpanded ? 'auto' : 'none' }}
+              aria-hidden={!isPlayerExpanded}
               className="absolute inset-0 z-50 flex flex-col bg-hifi-dark overflow-hidden">
 
               {/* Blurred art background. Kept as a cheap-ish `blur-lg` (not the
@@ -1442,7 +1453,12 @@ const LyrionServer = () => {
                   initial={{ x: -20, opacity: 0 }} animate={{ x: 0, opacity: 1 }} transition={{ delay: 0.08 }}>
                   <div className="w-full flex flex-col items-center gap-8">
                     <div className="relative w-full max-w-[320px] aspect-square rounded-2xl overflow-hidden shadow-[0_20px_60px_rgba(0,0,0,0.7)] border border-white/8 bg-hifi-gray">
-                      {isRemoteTrack ? (
+                      {/* Gated on isPlayerExpanded (unlike the wrapper above it,
+                          which now stays mounted forever once opened once) so
+                          this doesn't re-decode/re-composite a fresh image on
+                          every track change while the panel is off-screen —
+                          only while it's actually open, same cost as before. */}
+                      {isPlayerExpanded && (isRemoteTrack ? (
                         npArtworkLg.failed || !npArtworkLg.objectUrl ? (
                           <div className="absolute inset-0 flex items-center justify-center text-hifi-silver/20 bg-gradient-to-br from-hifi-gray to-hifi-dark">
                             <Music size={40} />
@@ -1454,7 +1470,7 @@ const LyrionServer = () => {
                         )
                       ) : (
                         <ArtworkImage key={artworkIdentityKey} src={artworkUrlLg} alt="Album Art" className="w-full h-full object-cover" FallbackIcon={Music} />
-                      )}
+                      ))}
                     </div>
                     {/* Sized above the 320px album cover on purpose — a bit
                         wider/taller than an exact match reads more legibly
@@ -1549,11 +1565,30 @@ const LyrionServer = () => {
                     </div>
                   </div>
 
-                  {/* VU Meters (default) or Lyrics — fills remaining vertical space */}
-                  <div className="flex-1 min-h-0">
-                    {effectiveNowPlayingView === 'vu' ? (
-                      <AnalogVUMeter isPlaying={isPlaying} className="w-full h-full" />
-                    ) : (
+                  {/* VU Meters (default) or Lyrics — fills remaining vertical space.
+                      The VU meter wrapper stays mounted once shown for the first
+                      time (opacity/pointer-events toggle, not unmount) instead of
+                      being torn down on every vu<->lyrics switch — its own
+                      `visible` prop pauses the websocket-driven needle updates
+                      while hidden, so there's no ongoing cost, but the decoded
+                      dial images and composited needle layer are never
+                      destroyed and recreated. */}
+                  <div className="flex-1 min-h-0 relative">
+                    <div
+                      className="absolute inset-0"
+                      style={{
+                        opacity: effectiveNowPlayingView === 'vu' ? 1 : 0,
+                        pointerEvents: effectiveNowPlayingView === 'vu' ? 'auto' : 'none',
+                      }}
+                      aria-hidden={effectiveNowPlayingView !== 'vu'}
+                    >
+                      <AnalogVUMeter
+                        isPlaying={isPlaying}
+                        visible={isPlayerExpanded && effectiveNowPlayingView === 'vu'}
+                        className="w-full h-full"
+                      />
+                    </div>
+                    {effectiveNowPlayingView !== 'vu' && (
                       <div className="w-full h-full overflow-y-auto rounded-xl bg-black/20 px-4 py-3">
                         {lyricsText === undefined && (
                           <p className="text-sm text-hifi-silver/50 text-center mt-4">{t('common.loading')}</p>
@@ -1569,9 +1604,7 @@ const LyrionServer = () => {
                   </div>
                 </motion.div>
               </div>
-            </motion.div>
-          )}
-        </AnimatePresence>,
+            </motion.div>,
         document.getElementById(SCALED_CANVAS_ID) || document.body
       )}
 

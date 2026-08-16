@@ -73,7 +73,15 @@ const SingleVUMeter = ({ value, label }) => {
 /**
  * Dual Analog VU Meter component replacing the digital bars
  */
-const AnalogVUMeter = ({ isPlaying, className = "" }) => {
+// `visible` defaults true so any other caller keeps today's always-on
+// behavior; LyrionServer's expanded-player usage is the one that now keeps
+// this component permanently mounted (instead of destroying/recreating its
+// dial images and composited needle layer on every open/close) and passes
+// visible={false} while it's off-screen or the lyrics view is showing —
+// this is what actually avoids the ongoing cost of staying mounted: no
+// websocket data in, no spring re-targeting, nothing for the compositor to
+// keep redrawing.
+const AnalogVUMeter = ({ isPlaying, visible = true, className = "" }) => {
   // Needle positions are MotionValues, not React state: updating them moves the
   // needles on the compositor without re-rendering this component. At ~30-60
   // level messages/sec from the daemon, this turns dozens of React re-renders
@@ -83,7 +91,11 @@ const AnalogVUMeter = ({ isPlaying, className = "" }) => {
   const lastUpdateRef = useRef(0);
   const [socketUrl, setSocketUrl] = useState(`ws://${window.location.hostname}:9001`);
 
-  const { lastMessage, readyState } = useWebSocket(socketUrl, {
+  // Passing `null` to react-use-websocket skips connecting entirely (its
+  // documented way to pause) -- so the socket only exists while a viewer
+  // could actually see the needles move, not for the component's whole
+  // (now much longer) mounted lifetime.
+  const { lastMessage, readyState } = useWebSocket(visible ? socketUrl : null, {
     shouldReconnect: () => true,
     reconnectInterval: 3000,
   });
@@ -137,6 +149,16 @@ const AnalogVUMeter = ({ isPlaying, className = "" }) => {
     let animationFrameId;
     let isActive = true;
 
+    // Hidden (visible=false forces the socket closed above, so readyState
+    // alone can't tell "actually offline" apart from "paused because
+    // nobody's looking") -- stay fully idle rather than falling into the
+    // simulate-audio branch below, which would defeat the point of pausing.
+    if (!visible) {
+      leftValue.set(0);
+      rightValue.set(0);
+      return;
+    }
+
     if (readyState !== ReadyState.OPEN) {
         if (!isPlaying) {
           // Drop to 0. We let framer-motion's useSpring handle the smooth drop,
@@ -170,7 +192,7 @@ const AnalogVUMeter = ({ isPlaying, className = "" }) => {
           if (animationFrameId) cancelAnimationFrame(animationFrameId);
         };
     }
-  }, [isPlaying, readyState, leftValue, rightValue]);
+  }, [isPlaying, visible, readyState, leftValue, rightValue]);
 
   return (
     <div className={`flex items-center justify-center bg-[#111] p-2 md:p-3 rounded-lg shadow-[inset_0_0_10px_rgba(0,0,0,1)] border-2 md:border-4 border-[#1a1a1a] w-full max-w-full ${className}`}>
