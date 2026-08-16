@@ -1,0 +1,16 @@
+[Unit]
+Description=HiFi Player - Beta Testing Telemetry Agent
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=hifi
+StateDirectory=hifi-beta-agent
+WorkingDirectory=/usr/local/sbin
+ExecStart=/usr/bin/python3 /usr/local/sbin/hifi-beta-agent.py
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

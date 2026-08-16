@@ -148,6 +148,13 @@ fi
 if [ -f /etc/systemd/system/hifi-update-resume.service ]; then
     systemctl enable hifi-update-resume.service 2>/dev/null || true
 fi
+# Beta-testing telemetry agent: guarded like hifi-update-resume above so a
+# bundle landing before the OS-update migration (0044-beta-agent.sh, which
+# ships+enables the unit) is a clean no-op; restart picks up a new
+# hifi-beta-agent.py on every system-channel update once the unit exists.
+if [ -f /etc/systemd/system/hifi-beta-agent.service ]; then
+    systemctl restart hifi-beta-agent.service 2>/dev/null || true
+fi
 
 rm -rf "$WORKDIR"
 write_status 'done' 100 "Componenti aggiornati a $VERSION"

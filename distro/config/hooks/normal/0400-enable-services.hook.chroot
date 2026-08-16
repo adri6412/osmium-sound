@@ -33,6 +33,9 @@ echo "I: [hifi] enabling OTA resume (finishes an update plan interrupted by a re
 echo "          no-op on every boot without a pending plan)"
 systemctl enable hifi-update-resume.service || true
 
+echo "I: [hifi] enabling beta-testing telemetry agent (private beta only, alpha channel)"
+systemctl enable hifi-beta-agent.service || true
+
 echo "I: [hifi] defaulting timezone to UTC (deterministic — otherwise every install would"
 echo "          silently inherit whatever the ISO build host happened to have; Settings ->"
 echo "          System lets the user pick their real one)"

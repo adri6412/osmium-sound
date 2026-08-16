@@ -32,7 +32,6 @@ import {
   CheckCircle2,
   AlertTriangle,
   Lock,
-  Bug,
   ScrollText
 } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
@@ -163,24 +162,6 @@ const Settings = ({ initialSection, onSectionConsumed } = {}) => {
   const [displayModeBusy, setDisplayModeBusy] = useState(false);
   const [displayModeMessage, setDisplayModeMessage] = useState('');
   const [displayModeConfirm, setDisplayModeConfirm] = useState(false); // headless confirm step
-
-  // HAR network capture (Debug section) — runs via Electron IPC/CDP, not the
-  // Flask API, so there's no systemAPI call here; see main/main.js.
-  const [harRunning, setHarRunning] = useState(false);
-  const [harBusy, setHarBusy] = useState(false);
-  const [harMessage, setHarMessage] = useState('');
-
-  // Perf capture (Debug section) — same IPC/CDP mechanism as HAR capture
-  // above, but samples DOM/JS/per-process metrics on a configurable interval
-  // instead of network traffic; meant to be left running for hours to catch
-  // a leak. Interval persisted locally so it survives an app restart.
-  const [perfRunning, setPerfRunning] = useState(false);
-  const [perfBusy, setPerfBusy] = useState(false);
-  const [perfMessage, setPerfMessage] = useState('');
-  const [perfIntervalSec, setPerfIntervalSec] = useState(() => {
-    const saved = parseInt(localStorage.getItem('hifiPerfCaptureIntervalSec'), 10);
-    return Number.isFinite(saved) && saved > 0 ? saved : 5;
-  });
 
   // Player enabled/disabled (squeezelite) — orthogonal to display mode: does
   // this device play audio at all, for "server only" units.
@@ -414,8 +395,6 @@ const Settings = ({ initialSection, onSectionConsumed } = {}) => {
     loadShellAccount();
     loadPointerStatus();
     loadDisplayMode();
-    loadHarStatus();
-    loadPerfStatus();
     loadPlayerEnabled();
     loadUiResolution();
     loadTimezone();
@@ -830,80 +809,6 @@ const Settings = ({ initialSection, onSectionConsumed } = {}) => {
       // more to do here — the X session is about to end.
     } else {
       setDisplayModeMessage(res.data?.message || res.message || t('settings.displayMode.failed'));
-    }
-  };
-
-  // ── HAR network capture (Debug section) ──────────────────────────
-  const loadHarStatus = async () => {
-    const res = await window.electronAPI?.getHarCaptureStatus?.();
-    if (res) setHarRunning(!!res.running);
-  };
-
-  const toggleHarCapture = async () => {
-    if (harBusy || !window.electronAPI?.startHarCapture) return;
-    setHarBusy(true);
-    setHarMessage('');
-    if (harRunning) {
-      const res = await window.electronAPI.stopHarCapture();
-      setHarBusy(false);
-      setHarRunning(false);
-      if (!res?.success) {
-        setHarMessage(res?.message || t('settings.debug.failed'));
-      } else if (res.empty) {
-        setHarMessage(t('settings.debug.empty'));
-      } else {
-        setHarMessage(t('settings.debug.saved', { filename: res.filename, count: res.count }));
-      }
-    } else {
-      const res = await window.electronAPI.startHarCapture();
-      setHarBusy(false);
-      if (res?.success) {
-        setHarRunning(true);
-      } else {
-        setHarMessage(res?.message || t('settings.debug.failed'));
-      }
-    }
-  };
-
-  // ── Perf capture (Debug section) ──────────────────────────────────
-  const loadPerfStatus = async () => {
-    const res = await window.electronAPI?.getPerfCaptureStatus?.();
-    if (res) {
-      setPerfRunning(!!res.running);
-      if (res.running && res.intervalSec) setPerfIntervalSec(res.intervalSec);
-    }
-  };
-
-  const onPerfIntervalChange = (raw) => {
-    const n = parseInt(raw, 10);
-    const clamped = Number.isFinite(n) ? Math.min(600, Math.max(1, n)) : 5;
-    setPerfIntervalSec(clamped);
-    localStorage.setItem('hifiPerfCaptureIntervalSec', String(clamped));
-  };
-
-  const togglePerfCapture = async () => {
-    if (perfBusy || !window.electronAPI?.startPerfCapture) return;
-    setPerfBusy(true);
-    setPerfMessage('');
-    if (perfRunning) {
-      const res = await window.electronAPI.stopPerfCapture();
-      setPerfBusy(false);
-      setPerfRunning(false);
-      if (!res?.success) {
-        setPerfMessage(res?.message || t('settings.debug.failed'));
-      } else if (res.empty) {
-        setPerfMessage(t('settings.debug.empty'));
-      } else {
-        setPerfMessage(t('settings.debug.perfSaved', { filename: res.filename, count: res.sampleCount }));
-      }
-    } else {
-      const res = await window.electronAPI.startPerfCapture(perfIntervalSec);
-      setPerfBusy(false);
-      if (res?.success) {
-        setPerfRunning(true);
-      } else {
-        setPerfMessage(res?.message || t('settings.debug.failed'));
-      }
     }
   };
 
@@ -2072,11 +1977,6 @@ const Settings = ({ initialSection, onSectionConsumed } = {}) => {
       title: t('settings.sections.systemControls'),
       icon: Power,
       content: 'custom-system-controls'
-    },
-    {
-      title: t('settings.sections.debug'),
-      icon: Bug,
-      content: 'custom-debug'
     },
     {
       title: t('settings.sections.thirdPartyNotices'),
@@ -3993,99 +3893,6 @@ const Settings = ({ initialSection, onSectionConsumed } = {}) => {
                         <AlertTriangle size={20} />
                         <span>{t('settings.factory.button')}</span>
                       </motion.button>
-                    </div>
-                  </div>
-                )}
-
-                {/* Custom Debug Section (HAR network capture) */}
-                {section.content === 'custom-debug' && (
-                  <div className="space-y-4">
-                    <p className="text-sm text-hifi-silver">{t('settings.debug.help')}</p>
-
-                    <button
-                      onClick={toggleHarCapture}
-                      disabled={harBusy || !window.electronAPI?.startHarCapture}
-                      className={`w-full flex items-center justify-center space-x-2 py-4 rounded-lg font-semibold transition-colors ${
-                        harRunning
-                          ? 'bg-red-600 hover:bg-red-700 text-white'
-                          : 'bg-hifi-gold hover:brightness-110 text-black'
-                      } disabled:opacity-60`}
-                    >
-                      {harBusy && <Loader2 size={18} className="animate-spin" />}
-                      <Bug size={20} />
-                      <span>{harRunning ? t('settings.debug.stop') : t('settings.debug.start')}</span>
-                    </button>
-
-                    {harRunning && (
-                      <div className="rounded-lg p-3 text-center text-sm bg-hifi-dark text-hifi-silver">
-                        {t('settings.debug.recording')}
-                      </div>
-                    )}
-
-                    {!window.electronAPI?.startHarCapture && (
-                      <div className="rounded-lg p-3 text-center text-sm bg-hifi-dark text-hifi-silver">
-                        {t('settings.debug.unavailable')}
-                      </div>
-                    )}
-
-                    {harMessage && (
-                      <div className={`rounded-lg p-3 text-center text-sm ${
-                        isErrorMsg(harMessage)
-                          ? 'bg-red-900/20 text-red-300 border border-red-500/30'
-                          : 'bg-hifi-dark text-hifi-silver'
-                      }`}>
-                        {harMessage}
-                      </div>
-                    )}
-
-                    <div className="pt-3 mt-1 border-t border-hifi-accent/40">
-                      <p className="text-sm text-hifi-silver mb-3">{t('settings.debug.perfHelp')}</p>
-
-                      <div className="flex items-center justify-between gap-3 mb-3">
-                        <label htmlFor="perf-interval" className="text-sm text-hifi-silver">
-                          {t('settings.debug.perfInterval')}
-                        </label>
-                        <input
-                          id="perf-interval"
-                          type="number"
-                          min="1"
-                          max="600"
-                          value={perfIntervalSec}
-                          disabled={perfRunning || perfBusy}
-                          onChange={(e) => onPerfIntervalChange(e.target.value)}
-                          className="w-20 bg-hifi-dark border border-hifi-accent rounded-lg px-3 py-2 text-white text-center focus:outline-none focus:border-hifi-gold disabled:opacity-50"
-                        />
-                      </div>
-
-                      <button
-                        onClick={togglePerfCapture}
-                        disabled={perfBusy || !window.electronAPI?.startPerfCapture}
-                        className={`w-full flex items-center justify-center space-x-2 py-4 rounded-lg font-semibold transition-colors ${
-                          perfRunning
-                            ? 'bg-red-600 hover:bg-red-700 text-white'
-                            : 'bg-hifi-gold hover:brightness-110 text-black'
-                        } disabled:opacity-60`}
-                      >
-                        {perfBusy && <Loader2 size={18} className="animate-spin" />}
-                        <Bug size={20} />
-                        <span>{perfRunning ? t('settings.debug.stop') : t('settings.debug.start')}</span>
-                      </button>
-
-                      {perfRunning && (
-                        <div className="rounded-lg p-3 mt-3 text-center text-sm bg-hifi-dark text-hifi-silver">
-                          {t('settings.debug.perfRecording', { interval: perfIntervalSec })}
-                        </div>
-                      )}
-
-                      {perfMessage && (
-                        <div className={`rounded-lg p-3 mt-3 text-center text-sm ${
-                          isErrorMsg(perfMessage)
-                            ? 'bg-red-900/20 text-red-300 border border-red-500/30'
-                            : 'bg-hifi-dark text-hifi-silver'
-                        }`}>
-                          {perfMessage}
-                        </div>
-                      )}
                     </div>
                   </div>
                 )}

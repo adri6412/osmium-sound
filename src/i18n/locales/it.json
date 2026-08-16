@@ -321,7 +321,6 @@
       "updates": "Aggiornamenti",
       "systemControls": "Controlli Sistema",
       "language": "Lingua",
-      "debug": "Debug",
       "thirdPartyNotices": "Componenti di terze parti"
     },
     "language": {
@@ -527,20 +526,6 @@
       "confirmHeadless": "Spegni lo schermo",
       "cancel": "Annulla",
       "failed": "Impossibile cambiare la modalità schermo."
-    },
-    "debug": {
-      "help": "Registra il traffico di rete dell'app (un file HAR) per aiutare a diagnosticare un problema di connessione. Avvia la registrazione, riproduci il problema, poi ferma e salva — scarica il file dalla sezione Debug del pannello web.",
-      "start": "Avvia registrazione",
-      "stop": "Ferma e salva",
-      "recording": "Registrazione traffico di rete in corso…",
-      "unavailable": "Non disponibile in questa build.",
-      "failed": "Cattura HAR fallita.",
-      "empty": "Registrazione fermata — nessuna richiesta di rete registrata.",
-      "saved": "Salvato {filename} ({count} richieste) — scaricalo dalla sezione Debug del pannello web.",
-      "perfHelp": "Registra il numero di nodi DOM, l'heap JS e CPU/memoria per processo a un intervallo configurabile, per scovare un leak che si nota solo dopo ore d'uso. Pensata per restare attiva a lungo — avviala, usa l'app normalmente, poi fermala e scarica il file dalla sezione Debug del pannello web.",
-      "perfInterval": "Campiona ogni (secondi)",
-      "perfRecording": "Registrazione campioni di performance in corso (ogni {interval}s)…",
-      "perfSaved": "Salvato {filename} ({count} campioni) — scaricalo dalla sezione Debug del pannello web."
     },
     "thirdPartyNotices": {
       "intro": "Osmium Sound include componenti open source, ciascuno con la propria licenza. L'elenco completo è mantenuto anche in THIRD-PARTY-NOTICES.md nel repository del progetto."

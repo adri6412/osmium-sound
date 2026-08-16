@@ -294,6 +294,7 @@ app.whenReady().then(() => {
   registerGlobalShortcuts();
   pollPhysicalKeyboard(); // establish the initial state immediately, don't wait 2s
   setInterval(pollPhysicalKeyboard, 2000);
+  setInterval(tickCaptureScheduler, CAPTURE_SCHEDULE_POLL_MS);
 });
 
 // This kiosk has exactly one window and no way for the user to close it (no
@@ -408,12 +409,14 @@ function pollPhysicalKeyboard() {
 }
 
 /**
- * HAR (network traffic) capture, for Settings.jsx's Debug section. The kiosk
- * has no keyboard to drive DevTools' own Network panel, so this drives the
- * same underlying Chrome DevTools Protocol from the main process instead:
- * attach webContents.debugger, record Network.* events between start/stop,
- * and write a standard .har file the user later downloads from the web
- * admin (api_server.py serves HAR_CAPTURE_DIR — see the constant above).
+ * HAR (network traffic) capture. Driven automatically by the beta-testing
+ * capture scheduler further down (tickCaptureScheduler) — there is no manual
+ * UI for this anymore. The kiosk has no keyboard to drive DevTools' own
+ * Network panel anyway, so this drives the same underlying Chrome DevTools
+ * Protocol from the main process instead: attach webContents.debugger,
+ * record Network.* events between start/stop, and write a standard .har file
+ * later downloaded from the web admin (api_server.py serves HAR_CAPTURE_DIR
+ * — see the constant above) or picked up by hifi-beta-agent.py.
  *
  * Deliberately headers/status/timing only, no response bodies: fetching
  * Network.getResponseBody for every request would mean an extra CDP
@@ -520,7 +523,10 @@ function buildHarLog(capture) {
   };
 }
 
-ipcMain.handle('har-capture-start', async () => {
+// Plain functions (no IPC event dependency) so both the manual ipcMain
+// handlers below and the automatic capture scheduler (see
+// tickCaptureScheduler further down) can drive the same capture logic.
+async function startHarCaptureInternal() {
   if (harCapture) return { success: false, message: 'Capture already running' };
   if (!mainWindow || mainWindow.isDestroyed()) return { success: false, message: 'No window' };
   const dbg = mainWindow.webContents.debugger;
@@ -538,9 +544,9 @@ ipcMain.handle('har-capture-start', async () => {
     harCapture = null;
   });
   return { success: true };
-});
+}
 
-ipcMain.handle('har-capture-stop', async () => {
+async function stopHarCaptureInternal() {
   if (!harCapture) return { success: false, message: 'No capture running' };
   const capture = harCapture;
   harCapture = null;
@@ -569,23 +575,19 @@ ipcMain.handle('har-capture-stop', async () => {
     return { success: false, message: err.message || String(err) };
   }
   return { success: true, filename, count };
-});
-
-ipcMain.handle('har-capture-status', () => ({
-  running: !!harCapture,
-  startedAt: harCapture ? harCapture.startedAt : null,
-}));
+}
 
 /**
- * Performance capture, for Settings.jsx's Debug section. Same motivation as
- * the HAR capture above (no keyboard on the kiosk to drive DevTools) but for
- * a different question: "is something leaking over hours of normal use?" —
- * suspected after a field report of GPU usage climbing back up over a few
- * hours of playback after every OTA-triggered restart (which resets it).
+ * Performance capture. Same motivation as the HAR capture above (no keyboard
+ * on the kiosk to drive DevTools) but for a different question: "is
+ * something leaking over hours of normal use?" — suspected after a field
+ * report of GPU usage climbing back up over a few hours of playback after
+ * every OTA-triggered restart (which resets it). Also driven automatically
+ * by the beta-testing capture scheduler further down — no manual UI.
  *
- * Samples on a configurable interval (default 5s, set from Settings.jsx's
- * Debug section) for as long as it runs (meant to be left recording
- * across hours, unattended) and appends one JSON line per sample rather than
+ * Samples on a configurable interval (default 5s) for as long as it runs
+ * (meant to be left recording across hours, unattended) and appends one JSON
+ * line per sample rather than
  * building the whole thing in memory + writing once at the end like the HAR
  * capture does — a multi-hour capture that's still running when the renderer
  * eventually OOMs (see recoverRenderer's own doc comment above) would
@@ -649,7 +651,8 @@ async function samplePerfCapture() {
   }
 }
 
-ipcMain.handle('perf-capture-start', async (_event, intervalSec) => {
+// Plain function version, same reasoning as startHarCaptureInternal above.
+async function startPerfCaptureInternal(intervalSec) {
   if (perfCapture) return { success: false, message: 'Capture already running' };
   if (!mainWindow || mainWindow.isDestroyed()) return { success: false, message: 'No window' };
   const dbg = mainWindow.webContents.debugger;
@@ -662,8 +665,8 @@ ipcMain.handle('perf-capture-start', async (_event, intervalSec) => {
   mkdirSync(PERF_CAPTURE_DIR, { recursive: true });
   const stamp = new Date().toISOString().replace(/[:.]/g, '-');
   const filePath = join(PERF_CAPTURE_DIR, `perf-${stamp}.jsonl`);
-  // Clamp rather than trust the renderer's input verbatim -- this only
-  // drives a local setInterval, but a stray 0/NaN would busy-loop CDP calls.
+  // Clamp rather than trust the caller's input verbatim -- this only drives
+  // a local setInterval, but a stray 0/NaN would busy-loop CDP calls.
   const sec = Number.isFinite(intervalSec) ? Math.min(600, Math.max(1, intervalSec)) : 5;
   perfCapture = { startedAt: Date.now(), filePath, sampleCount: 0, intervalSec: sec };
   perfCapture.intervalId = setInterval(samplePerfCapture, sec * 1000);
@@ -672,9 +675,9 @@ ipcMain.handle('perf-capture-start', async (_event, intervalSec) => {
     if (perfCapture) console.error('perf-capture: CDP session detached unexpectedly (devtools opened elsewhere?)');
   });
   return { success: true };
-});
+}
 
-ipcMain.handle('perf-capture-stop', async () => {
+async function stopPerfCaptureInternal() {
   if (!perfCapture) return { success: false, message: 'No capture running' };
   const { filePath, sampleCount, intervalId } = perfCapture;
   clearInterval(intervalId);
@@ -691,11 +694,72 @@ ipcMain.handle('perf-capture-stop', async () => {
   }
   if (sampleCount === 0) return { success: true, empty: true, sampleCount: 0 };
   return { success: true, filename: filePath.split(/[\\/]/).pop(), sampleCount };
-});
+}
 
-ipcMain.handle('perf-capture-status', () => ({
-  running: !!perfCapture,
-  startedAt: perfCapture ? perfCapture.startedAt : null,
-  sampleCount: perfCapture ? perfCapture.sampleCount : 0,
-  intervalSec: perfCapture ? perfCapture.intervalSec : null,
-}));
+/**
+ * Automatic capture scheduling, for the beta-testing telemetry pipeline.
+ * This app never decides its own cadence: a separate Python agent
+ * (hifi-beta-agent, distro/config/includes.chroot/usr/local/sbin/) polls a
+ * cloud server for the fleet's current schedule and writes it to
+ * CAPTURE_SCHEDULE_FILE. All this does is read that file and, if it asks
+ * for it, start HAR+perf capture for a while every so often, using the same
+ * internal start/stop functions defined above — never touching a capture it
+ * didn't start itself.
+ */
+const CAPTURE_SCHEDULE_FILE = join(app.getPath('userData'), 'beta-capture-schedule.json');
+const CAPTURE_SCHEDULE_POLL_MS = 60 * 1000;
+const SCHEDULED_PERF_SAMPLE_INTERVAL_SEC = 5;
+
+let scheduledCaptureOwnsHar = false;
+let scheduledCaptureOwnsPerf = false;
+let scheduledCaptureStopTimer = null;
+let lastScheduledRunAt = 0;
+
+function readCaptureSchedule() {
+  try {
+    const raw = JSON.parse(readFileSync(CAPTURE_SCHEDULE_FILE, 'utf8'));
+    const intervalSec = Number(raw.intervalSec);
+    const durationSec = Number(raw.durationSec);
+    if (!raw.enabled || !Number.isFinite(intervalSec) || intervalSec <= 0 || !Number.isFinite(durationSec) || durationSec <= 0) {
+      return null;
+    }
+    return { intervalSec, durationSec };
+  } catch {
+    return null; // missing/malformed file (e.g. agent hasn't run yet) ⇒ off
+  }
+}
+
+async function stopScheduledCapture() {
+  if (scheduledCaptureStopTimer) {
+    clearTimeout(scheduledCaptureStopTimer);
+    scheduledCaptureStopTimer = null;
+  }
+  if (scheduledCaptureOwnsHar) {
+    scheduledCaptureOwnsHar = false;
+    await stopHarCaptureInternal();
+  }
+  if (scheduledCaptureOwnsPerf) {
+    scheduledCaptureOwnsPerf = false;
+    await stopPerfCaptureInternal();
+  }
+}
+
+async function tickCaptureScheduler() {
+  const schedule = readCaptureSchedule();
+  if (!schedule) return;
+  // Something's already running (scheduled or manual) — never stack a
+  // second capture on top, and never touch one this scheduler didn't start.
+  if (harCapture || perfCapture) return;
+  const now = Date.now();
+  if (now - lastScheduledRunAt < schedule.intervalSec * 1000) return;
+  lastScheduledRunAt = now;
+
+  const harResult = await startHarCaptureInternal();
+  scheduledCaptureOwnsHar = !!harResult.success;
+  const perfResult = await startPerfCaptureInternal(SCHEDULED_PERF_SAMPLE_INTERVAL_SEC);
+  scheduledCaptureOwnsPerf = !!perfResult.success;
+
+  if (scheduledCaptureOwnsHar || scheduledCaptureOwnsPerf) {
+    scheduledCaptureStopTimer = setTimeout(stopScheduledCapture, schedule.durationSec * 1000);
+  }
+}

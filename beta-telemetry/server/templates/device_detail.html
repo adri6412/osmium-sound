@@ -1,0 +1,135 @@
+{% extends "base.html" %}
+{% block title %}{{ device.label }}{% endblock %}
+{% block content %}
+<p><a href="{{ url_for('devices') }}" class="muted">&larr; Tutte le macchine</a></p>
+
+<div class="card">
+  <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:12px;">
+    <div>
+      <h1>{{ device.label }}
+        {% if device.last_seen_at and device.last_seen_at >= online_cutoff %}
+          <span class="pill online">online</span>
+        {% else %}
+          <span class="pill offline">offline</span>
+        {% endif %}
+      </h1>
+      <p class="muted">machine-id {{ device.machine_id }} · registrata il {{ device.created_at }} · ultimo contatto {{ device.last_seen_at or 'mai' }}</p>
+    </div>
+    <div style="display:flex;gap:8px">
+      <form method="post" action="{{ url_for('device_rename', device_id=device.id) }}" style="display:flex;gap:6px">
+        <input type="text" name="label" placeholder="Nuovo nome" value="{{ device.label }}">
+        <button class="btn secondary" type="submit">Rinomina</button>
+      </form>
+      <form method="post" action="{{ url_for('device_revoke', device_id=device.id) }}"
+            onsubmit="return confirm('Revocare il token? La macchina si ri-registrerà da sola al prossimo ciclo.')">
+        <button class="btn secondary" type="submit">Revoca token</button>
+      </form>
+    </div>
+  </div>
+
+  {% set last = snapshots[-1] if snapshots else none %}
+  {% if last %}
+  <div class="grid" style="margin-top:18px">
+    <div><div class="stat-label">CPU</div><div class="stat-value">{{ last.cpu_model or '—' }}</div>
+         <div class="muted">{{ last.cpu_cores }} core</div></div>
+    <div><div class="stat-label">GPU</div><div class="stat-value">{{ last.gpu_model or '—' }}</div></div>
+    <div><div class="stat-label">RAM</div><div class="stat-value">{{ last.ram_total_mb }} MB</div></div>
+    <div><div class="stat-label">Disco</div><div class="stat-value">{{ last.disk_total_gb }} GB</div></div>
+    <div><div class="stat-label">Versione</div><div class="stat-value">{{ last.os_version or '—' }}</div></div>
+    <div><div class="stat-label">Connessione</div><div class="stat-value">{{ last.connection_type or '—' }}</div>
+         <div class="muted">{{ last.local_ip or '' }}</div></div>
+  </div>
+  {% else %}
+  <p class="muted">Nessuno snapshot ricevuto ancora.</p>
+  {% endif %}
+</div>
+
+{% if snapshots %}
+<div class="card">
+  <h2>Andamento (ultimi {{ snapshots|length }} snapshot)</h2>
+  <canvas id="statsChart" height="90"></canvas>
+</div>
+{% endif %}
+
+<div class="card">
+  <h2>HAR captures ({{ har_captures|length }})</h2>
+  {% if not har_captures %}
+  <p class="muted">Nessuna cattura HAR caricata.</p>
+  {% else %}
+  <table>
+    <thead><tr><th>File</th><th>Richieste</th><th>Errori</th><th>Top domini</th><th>Caricato</th><th></th></tr></thead>
+    <tbody>
+      {% for h in har_captures %}
+      <tr>
+        <td>{{ h.filename }}</td>
+        <td>{{ h.requests_count if h.requests_count is not none else '—' }}</td>
+        <td>{{ h.errors_count if h.errors_count is not none else '—' }}</td>
+        <td class="muted">
+          {% for dom, v in (h.top_domains_json|fromjson).items() %}{{ dom }} ({{ v.count }}){% if not loop.last %}, {% endif %}{% endfor %}
+        </td>
+        <td class="muted">{{ h.uploaded_at }}</td>
+        <td><a class="btn secondary" href="{{ url_for('download_har', device_id=device.id, filename=h.filename) }}">Scarica</a></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% endif %}
+</div>
+
+<div class="card">
+  <h2>Perf captures ({{ perf_captures|length }})</h2>
+  {% if not perf_captures %}
+  <p class="muted">Nessuna cattura perf caricata.</p>
+  {% else %}
+  <table>
+    <thead><tr><th>File</th><th>Campioni</th><th>Durata</th><th>CPU media/max</th><th>RAM media</th><th>Per schermata</th><th>Aggiornato</th><th></th></tr></thead>
+    <tbody>
+      {% for p in perf_captures %}
+      <tr>
+        <td>{{ p.filename }}</td>
+        <td>{{ p.sample_count }}</td>
+        <td>{{ '%.0f'|format(p.duration_sec) ~ ' s' if p.duration_sec is not none else '—' }}</td>
+        <td>{{ '%.1f'|format(p.cpu_avg) if p.cpu_avg is not none else '—' }} / {{ '%.1f'|format(p.cpu_max) if p.cpu_max is not none else '—' }}</td>
+        <td>{{ '%.0f'|format(p.ram_avg_kb / 1024) ~ ' MB' if p.ram_avg_kb is not none else '—' }}</td>
+        <td class="muted">
+          {% for tab, count in (p.by_tab_json|fromjson).items() %}{{ tab }} ({{ count }}){% if not loop.last %}, {% endif %}{% endfor %}
+        </td>
+        <td class="muted">{{ p.last_updated_at }}</td>
+        <td><a class="btn secondary" href="{{ url_for('download_perf', device_id=device.id, filename=p.filename) }}">Scarica</a></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% endif %}
+</div>
+
+{% if snapshots %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+<script>
+const snapshots = {{ snapshots|tojson }};
+const labels = snapshots.map(s => s.ts);
+const ctx = document.getElementById('statsChart');
+new Chart(ctx, {
+  type: 'line',
+  data: {
+    labels,
+    datasets: [
+      { label: 'CPU %', data: snapshots.map(s => s.cpu_percent), borderColor: '#5b8cff', tension: 0.25, pointRadius: 0 },
+      { label: 'Disco %', data: snapshots.map(s => s.disk_percent), borderColor: '#e0a83c', tension: 0.25, pointRadius: 0 },
+      { label: 'Temp °C', data: snapshots.map(s => s.temp_c), borderColor: '#e05b5b', tension: 0.25, pointRadius: 0, yAxisID: 'y1' },
+    ],
+  },
+  options: {
+    responsive: true,
+    interaction: { mode: 'index', intersect: false },
+    scales: {
+      x: { ticks: { color: '#8b90a3', maxTicksLimit: 8 }, grid: { color: '#262b3a' } },
+      y: { ticks: { color: '#8b90a3' }, grid: { color: '#262b3a' } },
+      y1: { position: 'right', ticks: { color: '#8b90a3' }, grid: { display: false } },
+    },
+    plugins: { legend: { labels: { color: '#e6e8ef' } } },
+  },
+});
+</script>
+{% endif %}
+{% endblock %}

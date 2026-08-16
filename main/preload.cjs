@@ -32,21 +32,5 @@ contextBridge.exposeInMainWorld('electronAPI', {
   },
   removePhysicalKeyboardChanged: (callback) => {
     ipcRenderer.removeListener('physical-keyboard-changed', callback);
-  },
-
-  // Debug section (Settings.jsx) — HAR network capture via CDP, only the
-  // main process can drive webContents.debugger. The saved .har is
-  // downloaded from the web admin, not from here (see api_server.py).
-  startHarCapture: () => ipcRenderer.invoke('har-capture-start'),
-  stopHarCapture: () => ipcRenderer.invoke('har-capture-stop'),
-  getHarCaptureStatus: () => ipcRenderer.invoke('har-capture-status'),
-
-  // Debug section (Settings.jsx) — long-running perf capture (DOM nodes, JS
-  // heap, per-process CPU/memory) sampled on a configurable interval
-  // (default 5s), for chasing leaks that only show up after hours of
-  // uptime. Saved .jsonl is downloaded from the web admin, not from here
-  // (see api_server.py).
-  startPerfCapture: (intervalSec) => ipcRenderer.invoke('perf-capture-start', intervalSec),
-  stopPerfCapture: () => ipcRenderer.invoke('perf-capture-stop'),
-  getPerfCaptureStatus: () => ipcRenderer.invoke('perf-capture-status')
+  }
 });
