@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { QRCodeSVG } from 'qrcode.react';
 import { Disc3 } from 'lucide-react';
 import { systemAPI } from '../utils/api';
 import { useI18n } from '../i18n';
@@ -10,12 +9,15 @@ import WifiConfigPanel from '../components/WifiConfigPanel';
  * First-setup wizard.
  *
  * No mouse/keyboard/touch is required: the screen's only job is to display
- * branding and the setup hotspot's Wi-Fi QR code the instant it boots, then
- * wait. Every actual setup step (language, restore-from-backup, network,
- * device mode, audio, Lyrion, sources, timezone) happens on a phone/browser
- * connected to that hotspot, served by webui_server.py's captive portal —
- * see SETUP_CAPTIVE_HTML there. This component only polls provisioning
- * status and reacts once the phone side finishes (`finalize`).
+ * branding and the setup hotspot's network name the instant it boots, then
+ * wait. Deliberately plain text, not a QR code: iOS's camera QR scanner opens
+ * its own "Join this network"/Safari flow *before* the captive portal has a
+ * chance to fire, which strands the user staring at the camera app with
+ * nothing happening. Every actual setup step (language, restore-from-backup,
+ * network, device mode, audio, Lyrion, sources, timezone) happens on a
+ * phone/browser connected to that hotspot, served by webui_server.py's
+ * captive portal — see SETUP_CAPTIVE_HTML there. This component only polls
+ * provisioning status and reacts once the phone side finishes (`finalize`).
  *
  * The one thing that CAN be done straight from this screen is the network
  * step itself (WifiConfigPanel below) — a touch-only escape hatch for
@@ -165,31 +167,37 @@ const SetupWizard = ({ onComplete }) => {
           )}
 
           {apInfo?.ssid && apInfo?.active && !isConnected ? (
-            <div className="inline-flex flex-col items-center bg-white rounded-2xl p-4">
-              <QRCodeSVG value={`WIFI:T:nopass;S:${apInfo.ssid};;`} size={180} />
-              <span className="text-black text-xs font-semibold mt-2">{apInfo.ssid}</span>
+            <div className="inline-flex flex-col items-center bg-white rounded-2xl px-8 py-6">
+              <span className="text-black/50 text-xs font-semibold uppercase tracking-wide">{t('wizard.qr.networkLabel')}</span>
+              <span className="text-black text-2xl font-bold mt-1">{apInfo.ssid}</span>
             </div>
           ) : apInfo?.error && !isConnected ? (
             // Hotspot failed to come up and there's no LAN fallback either —
-            // a QR here would point at a network the phone can't reach, so
-            // show nothing and let the error message above stand.
+            // an address here would point at a network the phone can't
+            // reach, so show nothing and let the error message above stand.
             null
           ) : (
             // Either the box is already on a real network (wired, or Wi-Fi
             // configured via the phone or the on-screen panel below), or
             // nothing back from the poll yet (first few seconds after boot):
-            // both cases fall back to the same LAN/URL QR. Prefer the
+            // both cases fall back to the same LAN address. Prefer the
             // device's own IP over hifiplayer.local: the hostname is
             // ambiguous the moment more than one Osmium Sound unit is on the
             // same network (mDNS answers with whichever responds first), the
             // IP never is.
-            <div className="inline-flex flex-col items-center bg-white rounded-2xl p-4">
-              <QRCodeSVG value={`http://${deviceIp || 'hifiplayer.local'}`} size={180} />
-              <span className="text-black text-xs mt-2">
-                {deviceIp ? `http://${deviceIp}` : 'http://hifiplayer.local'}
-              </span>
-              {deviceIp && <span className="text-black/50 text-[10px] mt-0.5">http://hifiplayer.local</span>}
-            </div>
+            <>
+              <div className="inline-flex flex-col items-center bg-white rounded-2xl px-8 py-6">
+                <span className="text-black/50 text-xs font-semibold uppercase tracking-wide">{t('wizard.qr.addressLabel')}</span>
+                <span className="text-black text-2xl font-bold font-mono mt-1">
+                  {deviceIp ? `http://${deviceIp}` : 'http://hifiplayer.local'}
+                </span>
+              </div>
+              {/* Safari assumes https:// for a bare IP typed into the address
+                  bar; this device only serves plain http://, so that guess
+                  fails with a "can't connect to server" error, not a page —
+                  spell out that http:// is mandatory, not decorative. */}
+              <p className="text-hifi-silver/50 text-xs mt-3 max-w-[240px]">{t('wizard.qr.addressHint')}</p>
+            </>
           )}
 
           {!isConnected && (

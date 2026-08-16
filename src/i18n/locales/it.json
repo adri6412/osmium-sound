@@ -96,12 +96,15 @@
       "subtitle": "Configuriamo insieme il tuo network streamer. Bastano pochi passaggi: rete, sorgenti musicali e sei pronto all'ascolto."
     },
     "qr": {
-      "title": "Scansiona per configurare",
+      "title": "Collega il telefono per configurare",
       "subtitle": "Collega il telefono a questa rete Wi-Fi per completare la configurazione — non serve toccare questo schermo.",
       "errorTitle": "Hotspot di configurazione non disponibile",
       "connectedTitle": "Apri dal telefono",
-      "connectedSubtitle": "Scansiona per aprire la pagina di configurazione completa e continuare da lì.",
-      "manualButton": "Configura Wi-Fi manualmente"
+      "connectedSubtitle": "Apri questo indirizzo nel browser del telefono per continuare la configurazione da lì.",
+      "manualButton": "Configura Wi-Fi manualmente",
+      "networkLabel": "Rete Wi-Fi",
+      "addressLabel": "Indirizzo",
+      "addressHint": "Scrivi l'indirizzo esattamente come mostrato, incluso \"http://\" — su Safari senza non si apre."
     },
     "input": {
       "title": "Come usi il dispositivo?",

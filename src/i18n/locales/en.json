@@ -96,12 +96,15 @@
       "subtitle": "Let's set up your network streamer together. Just a few steps: network, music sources, and you're ready to listen."
     },
     "qr": {
-      "title": "Scan to set up",
+      "title": "Connect your phone to set up",
       "subtitle": "Connect your phone to this Wi-Fi network to finish setup — no need to touch this screen.",
       "errorTitle": "Setup hotspot unavailable",
       "connectedTitle": "Open on your phone",
-      "connectedSubtitle": "Scan to open the full setup page and continue from there.",
-      "manualButton": "Configure Wi-Fi manually"
+      "connectedSubtitle": "Open this address in your phone's browser to continue setup from there.",
+      "manualButton": "Configure Wi-Fi manually",
+      "networkLabel": "Wi-Fi network",
+      "addressLabel": "Address",
+      "addressHint": "Type the address exactly as shown, including \"http://\" — Safari won't open it without it."
     },
     "input": {
       "title": "How do you use the device?",
