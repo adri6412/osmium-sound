@@ -146,6 +146,20 @@ CATEGORIES = {
             ("file", "/etc/hifi-player/display-mode"),
             ("file", "/etc/hifi-player/ui-resolution"),
             ("file", "/etc/hifi-player/lyrion-channel"),
+            # The standard Debian file, not a custom /etc/hifi-player/ one —
+            # same reasoning as /etc/timezone below. Every appliance ships
+            # with the same hardcoded "hifiplayer" (0100-system-setup.hook.
+            # chroot), so two units on a LAN collide on hifiplayer.local until
+            # the owner picks a name in the setup wizard (api_server.py's
+            # set_device_name). That chosen name is exactly the kind of user
+            # state this profile exists to protect, unlike /etc/machine-id or
+            # the SSH host keys (DENY_FILES/DENY_PREFIXES above), which are
+            # per-installation identity and must never travel between boxes.
+            # A restore only writes this file back -- it does NOT itself
+            # re-run `hostnamectl set-hostname`, so sources_server.py's
+            # _restore_apply_side_effects re-applies it from the restored
+            # value, the same pattern used for /etc/timezone below.
+            ("file", "/etc/hostname"),
             # The standard Debian file (not a custom /etc/hifi-player/ one).
             # `timedatectl set-timezone` keeps this and the /etc/localtime
             # symlink in sync when a user actively sets the zone, but a

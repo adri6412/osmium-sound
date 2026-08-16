@@ -1487,6 +1487,27 @@ def _restore_apply_side_effects(restored):
         except Exception as e:
             print(f"[sources] restore side-effect (sources) failed: {e}")
             notes.append(_ht('restore.sourcesNotReapplied', _hlang()))
+    if "/etc/hostname" in restored:
+        # /etc/hostname was restored as a plain file, but the live kernel
+        # hostname (what hostnamectl/socket.gethostname() actually report) is
+        # separate state nothing in a restore re-derives on its own — same
+        # story as /etc/timezone just below. Proxies to api_server.py's
+        # _apply_hostname (via /hostname_apply) instead of duplicating its
+        # hostnamectl/avahi/etc-hosts logic here, and deliberately does NOT go
+        # through /device_name — that would also force the Bluetooth/
+        # squeezelite player name to match, clobbering the player name
+        # /etc/default/squeezelite just restored on its own (see the
+        # squeezelite-restart branch below).
+        try:
+            with open("/etc/hostname") as f:
+                name = f.read().strip()
+            if name:
+                body, status = _proxy_to_api_server(
+                    "/hostname_apply", method="POST", body={"name": name}, timeout=30)
+                if status == 200 and body.get("success"):
+                    notes.append(_ht('restore.hostnameApplied', _hlang(), name=name))
+        except Exception as e:
+            print(f"[sources] restore side-effect (hostname) failed: {e}")
     if "/etc/timezone" in restored:
         # /etc/timezone was restored as a plain file, but that's just the IANA
         # name -- /etc/localtime (the symlink libc/Chromium/timedatectl actually

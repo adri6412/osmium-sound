@@ -1045,17 +1045,21 @@ def _set_etc_hosts_hostname(name):
 def get_device_name():
     return {'name': socket.gethostname()}
 
-def set_device_name(name):
-    if not _valid_device_name(name):
-        return {'success': False, 'code': 'device.invalidName',
-                'message': _t('device.invalidName', _lang())}
+def _apply_hostname(name):
+    """The OS-level half of a rename: hostnamectl + /etc/hosts + avahi/Lyrion
+    re-announce. Split out of set_device_name so a backup restore (which
+    restores /etc/hostname itself as plain "core" state — see hifi_backup.py)
+    can re-apply just this half through /hostname_apply, without also forcing
+    the Bluetooth/squeezelite player name to follow — set_player_name() below
+    does that, and a restore already re-applies the player name independently
+    from the restored /etc/default/squeezelite."""
     try:
         r = _run(['hostnamectl', 'set-hostname', name], timeout=10)
         if r.returncode != 0:
             return {'success': False, 'code': 'device.hostnameSetFailed',
                     'message': _t('device.hostnameSetFailed', _lang())}
     except Exception:
-        log.exception("set_device_name: hostnamectl failed")
+        log.exception("_apply_hostname: hostnamectl failed")
         return {'success': False, 'code': 'device.hostnameSetFailed',
                 'message': _t('device.hostnameSetFailed', _lang())}
     _set_etc_hosts_hostname(name)
@@ -1064,7 +1068,7 @@ def set_device_name(name):
         # for a reboot — avahi-daemon doesn't watch /etc/hostname on its own.
         _run(['systemctl', 'restart', 'avahi-daemon'], timeout=15)
     except Exception:
-        log.exception("set_device_name: avahi restart failed")
+        log.exception("_apply_hostname: avahi restart failed")
     try:
         # Lyrion Music Server bundles its OWN mDNS/Bonjour responder and reads
         # the hostname once at startup — restarting avahi-daemon above does
@@ -1076,7 +1080,17 @@ def set_device_name(name):
         if _run(['systemctl', 'is-active', '--quiet', 'lyrionmusicserver'], timeout=10).returncode == 0:
             _run(['systemctl', 'restart', 'lyrionmusicserver'], timeout=30)
     except Exception:
-        log.exception("set_device_name: lyrionmusicserver restart failed")
+        log.exception("_apply_hostname: lyrionmusicserver restart failed")
+    return {'success': True, 'name': name}
+
+
+def set_device_name(name):
+    if not _valid_device_name(name):
+        return {'success': False, 'code': 'device.invalidName',
+                'message': _t('device.invalidName', _lang())}
+    result = _apply_hostname(name)
+    if not result.get('success'):
+        return result
     # Keep the LMS/Bluetooth-facing name in sync too. _HOSTNAME_RE's charset
     # is a subset of _PLAYER_NAME_RE's, so this always validates.
     set_player_name(name)
@@ -5119,6 +5133,20 @@ def api_device_name():
 def api_set_device_name():
     data = request.get_json(silent=True) or {}
     return jsonify(set_device_name((data.get('name') or '').strip()))
+
+@app.route('/hostname_apply', methods=['POST'])
+def api_apply_hostname():
+    # Internal-only (this API is bound to 127.0.0.1, see the bottom of this
+    # file): re-applies an already-restored /etc/hostname at the OS level,
+    # for sources_server.py's backup-restore path. Deliberately a separate
+    # route from /device_name above — see _apply_hostname's docstring for why
+    # it must not also touch the player name.
+    data = request.get_json(silent=True) or {}
+    name = (data.get('name') or '').strip()
+    if not _valid_device_name(name):
+        return jsonify({'success': False, 'code': 'device.invalidName',
+                        'message': _t('device.invalidName', _lang())})
+    return jsonify(_apply_hostname(name))
 
 @app.route('/discover_lms', methods=['GET'])
 def api_discover_lms():
