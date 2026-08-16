@@ -352,28 +352,30 @@
         <h3>Guided setup steps (on your phone)</h3>
         <ol class="steps">
           <li><strong>Language</strong>
-            Choose between English (default) and Italian — change the setup page's language at any time.</li>
+            Choose English or Italian for this setup run. It's asked once, up front — there's no way to change it again until you restart the wizard from scratch (the same as a phone's own first-run language screen).</li>
           <li><strong>Restore from backup, or start fresh</strong>
             If you've used Osmium Sound before and have a backup file, you can upload it here (with its passphrase, if encrypted): network, audio output, Lyrion, music sources, time zone <em>and your account</em> are all restored automatically and the device reboots on its own. Otherwise, choose to start fresh and continue with the steps below.</li>
-          <li><strong>Create your account</strong>
-            Only when starting fresh: pick the username and password you'll use for web administration (<code>http://hifiplayer.local</code>) and for pairing the companion app — there's no separate account-creation step later, it's part of this same phone-based wizard.</li>
           <li><strong>Network</strong>
             Connect the device to your home Wi-Fi, or confirm the Ethernet cable if already plugged in.
             <div class="box tip" style="margin-top:10px">
               <span class="label">If you chose Wi-Fi</span>
-              <p>The setup hotspot turns off as soon as the device joins your home Wi-Fi (a single Wi-Fi radio can't do both at once). Your phone will lose its connection to the setup page — reconnect it to your own home Wi-Fi, then open <a href="http://hifiplayer.local">http://hifiplayer.local</a> to pick up exactly where you left off. If you used the Ethernet cable instead, the setup hotspot stays on and nothing needs reconnecting.</p>
+              <p>The setup hotspot turns off as soon as the device joins your home Wi-Fi (a single Wi-Fi radio can't do both at once). Your phone will lose its connection to the setup page — reconnect it to your own home Wi-Fi, then continue from <code>http://hifiplayer.local</code> (the device's default address — see the <a href="#tip-hostname">note below</a> if you've already renamed it, or if it doesn't load, use the device's IP address instead). If you used the Ethernet cable instead, the setup hotspot stays on and nothing needs reconnecting.</p>
             </div>
           </li>
+          <li><strong>Name this device</strong>
+            Optional: give it a name (letters, numbers, and dashes only) — it becomes both its network address (e.g. "livingroom" → <code>livingroom.local</code> instead of <code>hifiplayer.local</code>) and its Bluetooth/multiroom name. Leave it empty to keep the default. Worth setting if you'll have more than one Osmium Sound at home, since two units with the same default name collide on both fronts.</li>
           <li><strong>Device mode</strong>
             Choose between <em>With screen</em>, <em>Headless</em>, and <em>Server-only</em> — see <a href="#en-modes">Device modes</a> for details.</li>
           <li><strong>Audio output</strong>
             Select the detected USB DAC or HDMI output. You can change this at any time later from Settings.</li>
           <li><strong>Music server (Lyrion)</strong>
             Choose whether this device should run its own Lyrion Music Server (recommended for the first device in your home), or follow a Lyrion server already on your network (for an additional device in a home that already has an Osmium Sound or another Lyrion server).</li>
-          <li><strong>Music sources</strong>
-            Only if you chose a local Lyrion in the previous step: add a network share (SMB) where your music library lives. By this point the device is already on your home network (see the Network step above), so it can actually reach the share — this step wouldn't work while still on the setup hotspot. You can add more later from Settings — the actual first library scan is performed by Lyrion's own setup wizard right after.</li>
+          <li><strong>Create your account</strong>
+            Only when starting fresh: pick the username and password you'll use for web administration and for pairing the companion app from now on — there's no separate account-creation step later, it's part of this same phone-based wizard.</li>
           <li><strong>Time zone</strong>
             Set the correct time zone for the clock, alarms, and scheduling.</li>
+          <li><strong>Music sources</strong>
+            Optional, and available no matter which Lyrion option you picked above: add a network share (NAS) and/or set up an internal disk for your music library — USB drives already mount automatically, so there's nothing to do for those. Choosing "Yes" opens a small guided flow where you can add as many sources as you like, one after another; an internal disk can be used as-is or formatted first (ext4 or exFAT — this erases everything on it and asks you to type the disk's name to confirm). You can always add more later from Settings — the actual first library scan is performed by Lyrion's own setup wizard right after.</li>
           <li><strong>Finish setup</strong>
             Press "Complete setup" on your phone. If you're still on the setup hotspot (wired connection), it turns off now and the device switches to the chosen mode — reconnect your phone to your home network. If you already reconnected earlier (Wi-Fi connection), nothing more to do here.</li>
         </ol>
@@ -381,6 +383,16 @@
         <div class="box tip">
           <span class="label">Hotspot page doesn't open by itself?</span>
           <p>If the setup page doesn't open automatically after connecting to the <code>Osmium-Setup-XXXX</code> network (passphrase <code>osmiumsetup</code>), open <a href="http://10.42.0.1">http://10.42.0.1</a> manually in your phone's browser.</p>
+        </div>
+
+        <div class="box tip">
+          <span class="label">Update required before continuing?</span>
+          <p>Right after the network step, the device briefly checks for a mandatory update. If one is required, the wizard pauses here and applies it automatically (a short wait, then the device reboots and setup picks back up right where it left off) before letting you continue.</p>
+        </div>
+
+        <div class="box tip" id="tip-hostname">
+          <span class="label">Renamed the device? Use its IP address instead</span>
+          <p><code>hifiplayer.local</code> is only the <em>default</em> address — it's really <code>&lt;device-name&gt;.local</code>, and it changes the moment you (or a previous setup) pick a different name in the step above. It also isn't unique: two devices that both still have the default name answer to the same <code>hifiplayer.local</code>, and one of them silently wins. The address that always works, regardless of name, is the device's <strong>IP address</strong> — see <a href="#en-web-admin">Web administration</a>.</p>
         </div>
 
         <div class="box tip">
@@ -418,19 +430,22 @@
 
         <div class="box tip">
           <span class="label">Bringing "with screen" mode back</span>
-          <p>If a device is in headless or server-only mode and you want to turn the screen back on, open web administration (<a href="http://hifiplayer.local">http://hifiplayer.local</a>) or the companion app and go to Settings → Display mode.</p>
+          <p>If a device is in headless or server-only mode and you want to turn the screen back on, open <a href="#en-web-admin">web administration</a> or the companion app and go to Settings → Display mode.</p>
         </div>
       </section>
 
       <section id="en-web-admin">
         <h2>Web administration</h2>
-        <p>Every Osmium Sound device exposes a web administration page reachable from any browser on the same network — especially useful for headless or server-only devices, but always available.</p>
+        <p>Every Osmium Sound device exposes a web administration page reachable from any browser on the same network — especially useful for headless or server-only devices, but always available. The address to use is the device's <strong>IP address</strong>, visible in Settings → System info (on screen or in the companion app), the web admin session itself, or your router's device list:</p>
         <table>
           <tr><th>Address</th><th>What's there</th></tr>
-          <tr><td><a href="http://hifiplayer.local">http://hifiplayer.local</a></td><td>Web administration: network, audio output, updates, display mode, player on/off, account, backup, factory reset</td></tr>
-          <tr><td><code>http://hifiplayer.local:9000</code></td><td>Lyrion Music Server's own web interface (library, playlists, server settings)</td></tr>
+          <tr><td><code>http://&lt;device-ip&gt;</code></td><td>Web administration: network, audio output, updates, display mode, player on/off, account, backup, factory reset</td></tr>
+          <tr><td><code>http://&lt;device-ip&gt;:9000</code></td><td>Lyrion Music Server's own web interface (library, playlists, server settings)</td></tr>
         </table>
-        <p>If you have several devices on your network and <code>hifiplayer.local</code> is ambiguous, use the device's IP address directly (visible in system Settings, or from your router).</p>
+        <div class="box tip">
+          <span class="label">What about hifiplayer.local?</span>
+          <p>The device also answers at <code>http://hifiplayer.local</code> by default — a shortcut, not a fixed address. It's really <code>&lt;device-name&gt;.local</code>, so it stops working (or points at a different device) the moment you rename the device, and it's ambiguous the moment you have more than one Osmium Sound with the same name on the network. The IP address is the one that's always correct.</p>
+        </div>
       </section>
 
       <section id="en-companion">
@@ -465,7 +480,7 @@
 
       <section id="en-sources">
         <h2>Music sources</h2>
-        <p>Osmium Sound reads your music library from one or more sources, configurable from Settings (or during initial setup, if Lyrion is local):</p>
+        <p>Osmium Sound reads your music library from one or more sources, configurable from Settings (or during initial setup):</p>
         <ul>
           <li><strong>Network share (SMB)</strong> — a NAS or a shared folder on another computer. Each share can be toggled between read-only and writable at any time — handy if you also want to rip CDs onto it.</li>
           <li><strong>USB disk</strong> — a USB disk plugged into the device, "adopted" (Samba-shared, read/write). An adopted drive auto-remounts on its own if you unplug and reconnect it, or reconnect it after a reboot.</li>
@@ -483,7 +498,7 @@
         <p>Streaming services (Deezer, Qobuz, TIDAL, Spotify and others) and extra features (UPnP/DLNA, AirPlay, radio) are Lyrion Music Server plugins, not part of the Osmium Sound app itself.</p>
         <ol class="steps">
           <li><strong>Open Lyrion's web UI</strong>
-            <code>http://hifiplayer.local:9000</code> (or the device's IP address, port 9000).</li>
+            <code>http://&lt;device-ip&gt;:9000</code> — see <a href="#en-web-admin">Web administration</a> for how to find the IP address.</li>
           <li><strong>Go to Settings → Plugins</strong>
             Find and enable the plugin for the service you want.</li>
           <li><strong>Log in with your credentials</strong>
@@ -556,7 +571,7 @@
         </ol>
         <div class="box tip">
           <span class="label">Web administration only</span>
-          <p>Tailscale is currently only available from web administration (<code>http://hifiplayer.local</code>) — it doesn't appear in the on-screen Settings or in the Android companion app.</p>
+          <p>Tailscale is currently only available from <a href="#en-web-admin">web administration</a> — it doesn't appear in the on-screen Settings or in the Android companion app.</p>
         </div>
       </section>
 
@@ -582,7 +597,7 @@
           <tr><td>Missing streaming/radio sources</td><td>Install the corresponding plugin from Lyrion's web UI (Settings → Plugins) — see <a href="#en-streaming">Streaming & Lyrion plugins</a>.</td></tr>
           <tr><td>No audio</td><td>Check the selected audio device in Settings and that the DAC is recognized and connected.</td></tr>
           <tr><td>The first-boot QR code doesn't lead anywhere</td><td>Confirm you're connected to the <code>Osmium-Setup-XXXX</code> network (passphrase <code>osmiumsetup</code>) and try opening <a href="http://10.42.0.1">http://10.42.0.1</a> manually.</td></tr>
-          <tr><td><code>http://hifiplayer.local</code> is unreachable</td><td>Make sure your phone and the device are on the same network; otherwise use the device's IP address directly.</td></tr>
+          <tr><td>Web administration is unreachable at <code>&lt;name&gt;.local</code></td><td>That address only works if the device still has that exact name — a rename, or a second device with the same default name, breaks it. Use the device's IP address instead (see <a href="#en-web-admin">Web administration</a>).</td></tr>
           <tr><td>A headless device isn't responding</td><td>Use the companion app or web administration to check its status; if needed, temporarily switch it back to "with screen" mode from there.</td></tr>
         </table>
       </section>
@@ -691,28 +706,30 @@
         <h3>Passaggi della configurazione guidata (dal telefono)</h3>
         <ol class="steps">
           <li><strong>Lingua</strong>
-            Scegli tra Inglese (predefinita) e Italiano — cambia in ogni momento la lingua della pagina di configurazione.</li>
+            Scegli Inglese o Italiano per questa configurazione. Viene chiesto una sola volta, all'inizio — non c'è modo di cambiarla di nuovo finché non riavvii la procedura guidata da zero (come la schermata di scelta della lingua al primo avvio di un telefono).</li>
           <li><strong>Ripristina da backup, oppure inizia da zero</strong>
             Se hai già usato Osmium Sound in passato e hai un file di backup, puoi caricarlo qui (con la relativa passphrase, se cifrato): rete, uscita audio, Lyrion, sorgenti musicali, fuso orario <em>e account</em> vengono ripristinati automaticamente e il dispositivo si riavvia da solo. Altrimenti, scegli di iniziare da zero e prosegui con i passaggi seguenti.</li>
-          <li><strong>Crea il tuo account</strong>
-            Solo se inizi da zero: scegli il nome utente e la password che userai per l'amministrazione web (<code>http://hifiplayer.local</code>) e per l'abbinamento dell'app companion — non c'è un passaggio separato più avanti, fa parte di questa stessa procedura guidata dal telefono.</li>
           <li><strong>Rete</strong>
             Collega il dispositivo alla tua rete Wi-Fi di casa, oppure conferma il cavo Ethernet se già collegato.
             <div class="box tip" style="margin-top:10px">
               <span class="label">Se scegli il Wi-Fi</span>
-              <p>L'hotspot di configurazione si spegne non appena il dispositivo si collega alla tua rete Wi-Fi di casa (una singola scheda Wi-Fi non può fare entrambe le cose insieme). Il telefono perderà la connessione alla pagina di configurazione — riconnettilo alla tua rete Wi-Fi di casa, poi apri <a href="http://hifiplayer.local">http://hifiplayer.local</a> per riprendere esattamente da dove avevi lasciato. Se invece usi il cavo Ethernet, l'hotspot di configurazione resta acceso e non c'è nulla da riconnettere.</p>
+              <p>L'hotspot di configurazione si spegne non appena il dispositivo si collega alla tua rete Wi-Fi di casa (una singola scheda Wi-Fi non può fare entrambe le cose insieme). Il telefono perderà la connessione alla pagina di configurazione — riconnettilo alla tua rete Wi-Fi di casa, poi continua da <code>http://hifiplayer.local</code> (l'indirizzo predefinito del dispositivo — vedi la <a href="#tip-hostname-it">nota qui sotto</a> se l'hai già rinominato, oppure se non si apre usa direttamente l'indirizzo IP del dispositivo). Se invece usi il cavo Ethernet, l'hotspot di configurazione resta acceso e non c'è nulla da riconnettere.</p>
             </div>
           </li>
+          <li><strong>Dai un nome a questo dispositivo</strong>
+            Facoltativo: assegnagli un nome (solo lettere, numeri e trattini) — diventa sia il suo indirizzo di rete (es. "salotto" → <code>salotto.local</code> invece di <code>hifiplayer.local</code>) sia il suo nome Bluetooth/multiroom. Lascia vuoto per mantenere quello predefinito. Vale la pena impostarlo se avrai più di un Osmium Sound in casa, perché due unità con lo stesso nome predefinito entrano in conflitto su entrambi i fronti.</li>
           <li><strong>Modalità del dispositivo</strong>
             Scegli tra <em>Con schermo</em>, <em>Headless</em> e <em>Solo server</em> — vedi la sezione <a href="#it-modalita">Modalità del dispositivo</a> per i dettagli.</li>
           <li><strong>Uscita audio</strong>
             Seleziona il DAC USB o l'uscita HDMI rilevata. Si può cambiare in ogni momento più avanti dalle Impostazioni.</li>
           <li><strong>Server musicale (Lyrion)</strong>
             Scegli se questo dispositivo deve eseguire il proprio Lyrion Music Server (impostazione consigliata per il primo dispositivo in casa), oppure seguire un server Lyrion già presente sulla rete (per un dispositivo aggiuntivo in una casa che ha già un Osmium Sound o un altro server Lyrion).</li>
-          <li><strong>Sorgenti musicali</strong>
-            Solo se hai scelto un Lyrion locale al passaggio precedente: aggiungi una condivisione di rete (SMB) dove si trova la tua libreria musicale. A questo punto il dispositivo è già sulla tua rete di casa (vedi il passaggio Rete sopra), quindi riesce davvero a raggiungere la condivisione — questo passaggio non funzionerebbe restando sull'hotspot di configurazione. Puoi aggiungerne altre in seguito dalle Impostazioni — la scansione vera e propria della libreria la esegue il setup guidato di Lyrion subito dopo.</li>
+          <li><strong>Crea il tuo account</strong>
+            Solo se inizi da zero: scegli il nome utente e la password che userai da ora in poi per l'amministrazione web e per l'abbinamento dell'app companion — non c'è un passaggio separato più avanti, fa parte di questa stessa procedura guidata dal telefono.</li>
           <li><strong>Fuso orario</strong>
             Imposta il fuso orario corretto per orologio, allarmi e programmazioni.</li>
+          <li><strong>Sorgenti musicali</strong>
+            Facoltativo, e disponibile indipendentemente dall'opzione Lyrion scelta sopra: aggiungi una condivisione di rete (NAS) e/o configura un disco interno per la tua libreria musicale — le unità USB si montano già automaticamente, quindi per quelle non serve fare nulla. Scegliendo "Sì" si apre un piccolo percorso guidato dove puoi aggiungere quante sorgenti vuoi, una dopo l'altra; un disco interno può essere usato così com'è oppure formattato prima (ext4 o exFAT — questo cancella tutto ciò che contiene e chiede di digitare il nome del disco per confermare). Puoi sempre aggiungerne altre in seguito dalle Impostazioni — la scansione vera e propria della libreria la esegue il setup guidato di Lyrion subito dopo.</li>
           <li><strong>Completa il setup</strong>
             Premi "Completa setup" sul telefono. Se sei ancora sull'hotspot di configurazione (connessione via cavo), si spegne adesso e il dispositivo passa alla modalità scelta — riconnetti il telefono alla tua rete di casa. Se ti sei già riconnesso in precedenza (connessione Wi-Fi), non c'è altro da fare qui.</li>
         </ol>
@@ -720,6 +737,16 @@
         <div class="box tip">
           <span class="label">L'hotspot non si apre da solo?</span>
           <p>Se la pagina di configurazione non si apre automaticamente dopo esserti connesso alla rete <code>Osmium-Setup-XXXX</code> (passphrase <code>osmiumsetup</code>), apri manualmente <a href="http://10.42.0.1">http://10.42.0.1</a> nel browser del telefono.</p>
+        </div>
+
+        <div class="box tip">
+          <span class="label">Aggiornamento richiesto prima di continuare?</span>
+          <p>Subito dopo il passaggio di rete, il dispositivo verifica brevemente la presenza di un aggiornamento obbligatorio. Se ce n'è uno, la procedura guidata si ferma qui e lo applica automaticamente (una breve attesa, poi il dispositivo si riavvia e la configurazione riprende esattamente da dove si era interrotta) prima di lasciarti continuare.</p>
+        </div>
+
+        <div class="box tip" id="tip-hostname-it">
+          <span class="label">Hai rinominato il dispositivo? Usa il suo indirizzo IP</span>
+          <p><code>hifiplayer.local</code> è solo l'indirizzo <em>predefinito</em> — è in realtà <code>&lt;nome-dispositivo&gt;.local</code>, e cambia nel momento in cui tu (o una configurazione precedente) scegli un nome diverso al passaggio sopra. Non è nemmeno univoco: due dispositivi che hanno entrambi ancora il nome predefinito rispondono allo stesso <code>hifiplayer.local</code>, e uno dei due vince silenziosamente. L'indirizzo che funziona sempre, a prescindere dal nome, è l'<strong>indirizzo IP</strong> del dispositivo — vedi <a href="#it-amministrazione-web">Amministrazione web</a>.</p>
         </div>
 
         <div class="box tip">
@@ -757,19 +784,22 @@
 
         <div class="box tip">
           <span class="label">Come tornare a "Con schermo"</span>
-          <p>Se un dispositivo è in modalità headless o solo server e vuoi riaccendere lo schermo, apri l'amministrazione web (<a href="http://hifiplayer.local">http://hifiplayer.local</a>) o l'app companion e vai su Impostazioni → Modalità schermo.</p>
+          <p>Se un dispositivo è in modalità headless o solo server e vuoi riaccendere lo schermo, apri l'<a href="#it-amministrazione-web">amministrazione web</a> o l'app companion e vai su Impostazioni → Modalità schermo.</p>
         </div>
       </section>
 
       <section id="it-amministrazione-web">
         <h2>Amministrazione web</h2>
-        <p>Ogni dispositivo Osmium Sound espone una pagina di amministrazione web raggiungibile da qualsiasi browser sulla stessa rete, utile in particolare per i dispositivi in modalità headless o solo server, ma disponibile sempre.</p>
+        <p>Ogni dispositivo Osmium Sound espone una pagina di amministrazione web raggiungibile da qualsiasi browser sulla stessa rete, utile in particolare per i dispositivi in modalità headless o solo server, ma disponibile sempre. L'indirizzo da usare è l'<strong>indirizzo IP</strong> del dispositivo, visibile in Impostazioni → Info di sistema (a schermo o nell'app companion), nella sessione di amministrazione web stessa, oppure nell'elenco dispositivi del router:</p>
         <table>
           <tr><th>Indirizzo</th><th>Cosa trovi</th></tr>
-          <tr><td><a href="http://hifiplayer.local">http://hifiplayer.local</a></td><td>Amministrazione web: rete, uscita audio, aggiornamenti, modalità schermo, player on/off, account, backup, reset di fabbrica</td></tr>
-          <tr><td><code>http://hifiplayer.local:9000</code></td><td>Interfaccia web di Lyrion Music Server (libreria, playlist, impostazioni server)</td></tr>
+          <tr><td><code>http://&lt;ip-dispositivo&gt;</code></td><td>Amministrazione web: rete, uscita audio, aggiornamenti, modalità schermo, player on/off, account, backup, reset di fabbrica</td></tr>
+          <tr><td><code>http://&lt;ip-dispositivo&gt;:9000</code></td><td>Interfaccia web di Lyrion Music Server (libreria, playlist, impostazioni server)</td></tr>
         </table>
-        <p>Se hai più dispositivi in rete e <code>hifiplayer.local</code> è ambiguo, usa direttamente l'indirizzo IP del dispositivo (visibile nelle Impostazioni di sistema, oppure dal router).</p>
+        <div class="box tip">
+          <span class="label">E hifiplayer.local?</span>
+          <p>Il dispositivo risponde anche su <code>http://hifiplayer.local</code> per impostazione predefinita — è una scorciatoia, non un indirizzo fisso. È in realtà <code>&lt;nome-dispositivo&gt;.local</code>, quindi smette di funzionare (o punta a un altro dispositivo) nel momento in cui lo rinomini, ed è ambiguo appena hai più di un Osmium Sound con lo stesso nome in rete. L'indirizzo sempre corretto è l'indirizzo IP.</p>
+        </div>
       </section>
 
       <section id="it-app-companion">
@@ -804,7 +834,7 @@
 
       <section id="it-sorgenti">
         <h2>Sorgenti musicali</h2>
-        <p>Osmium Sound legge la libreria musicale da una o più sorgenti, configurabili dalle Impostazioni (o durante il setup iniziale, se il Lyrion è locale):</p>
+        <p>Osmium Sound legge la libreria musicale da una o più sorgenti, configurabili dalle Impostazioni (o durante il setup iniziale):</p>
         <ul>
           <li><strong>Condivisione di rete (SMB)</strong> — un NAS o una cartella condivisa su un altro computer. Ogni condivisione può essere resa scrivibile o di sola lettura in qualsiasi momento — comodo se vuoi anche rippare CD al suo interno.</li>
           <li><strong>Disco USB</strong> — un disco USB collegato al dispositivo, "adottato" (condiviso via Samba, leggibile/scrivibile). Un disco adottato si rimonta da solo se lo scolleghi e ricolleghi, o dopo un riavvio.</li>
@@ -822,7 +852,7 @@
         <p>I servizi di streaming (Deezer, Qobuz, TIDAL, Spotify e altri) e le funzioni aggiuntive (UPnP/DLNA, AirPlay, radio) sono plugin di Lyrion Music Server, non parte dell'app Osmium Sound stessa.</p>
         <ol class="steps">
           <li><strong>Apri la web UI di Lyrion</strong>
-            <code>http://hifiplayer.local:9000</code> (oppure l'indirizzo IP del dispositivo, porta 9000).</li>
+            <code>http://&lt;ip-dispositivo&gt;:9000</code> — vedi <a href="#it-amministrazione-web">Amministrazione web</a> per come trovare l'indirizzo IP.</li>
           <li><strong>Vai su Impostazioni → Plugin</strong>
             Cerca e attiva il plugin del servizio che vuoi usare.</li>
           <li><strong>Accedi con le tue credenziali</strong>
@@ -895,7 +925,7 @@
         </ol>
         <div class="box tip">
           <span class="label">Solo da amministrazione web</span>
-          <p>Al momento Tailscale è disponibile solo dall'amministrazione web (<code>http://hifiplayer.local</code>) — non compare nelle Impostazioni a schermo né nell'app companion Android.</p>
+          <p>Al momento Tailscale è disponibile solo dall'<a href="#it-amministrazione-web">amministrazione web</a> — non compare nelle Impostazioni a schermo né nell'app companion Android.</p>
         </div>
       </section>
 
@@ -921,7 +951,7 @@
           <tr><td>Mancano sorgenti streaming/radio</td><td>Installa il plugin corrispondente dalla web UI di Lyrion (Impostazioni → Plugin) — vedi <a href="#it-streaming">Streaming e plugin Lyrion</a>.</td></tr>
           <tr><td>Nessun audio</td><td>Controlla il dispositivo audio selezionato in Impostazioni e che il DAC sia riconosciuto e collegato.</td></tr>
           <tr><td>Il QR code al primo avvio non porta a nulla</td><td>Verifica di esserti connesso alla rete <code>Osmium-Setup-XXXX</code> (passphrase <code>osmiumsetup</code>) e prova ad aprire manualmente <a href="http://10.42.0.1">http://10.42.0.1</a>.</td></tr>
-          <tr><td><code>http://hifiplayer.local</code> non è raggiungibile</td><td>Verifica che telefono e dispositivo siano sulla stessa rete; in alternativa usa direttamente l'indirizzo IP del dispositivo.</td></tr>
+          <tr><td>L'amministrazione web non è raggiungibile su <code>&lt;nome&gt;.local</code></td><td>Quell'indirizzo funziona solo se il dispositivo ha ancora esattamente quel nome — una rinomina, o un secondo dispositivo con lo stesso nome predefinito, lo rompe. Usa invece l'indirizzo IP del dispositivo (vedi <a href="#it-amministrazione-web">Amministrazione web</a>).</td></tr>
           <tr><td>Il dispositivo headless non risponde</td><td>Usa l'app companion o l'amministrazione web per verificarne lo stato; se necessario, riporta temporaneamente il dispositivo in modalità "con schermo" da lì.</td></tr>
         </table>
       </section>
