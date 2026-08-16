@@ -8,8 +8,10 @@ asks the cloud server (GET /api/v1/config) how often to run and whether the
 on-device HAR/perf captures (main.js's Settings -> Debug feature, see
 HAR_CAPTURE_DIR/PERF_CAPTURE_DIR below) should be running right now, writes
 that schedule to a file main.js polls, then uploads whatever new
-snapshot/capture data there is. All cadence lives in the dashboard on the
-server, not here — see beta-telemetry/server/.
+snapshot/capture data there is. Captures (HAR + perf) are deleted from disk
+once fully uploaded, so beta devices don't accumulate them indefinitely. All
+cadence lives in the dashboard on the server, not here — see
+beta-telemetry/server/.
 
 State (device token, per-file upload offsets) persists to STATE_FILE so a
 restart never re-registers or re-uploads already-shipped data.
@@ -135,6 +137,21 @@ def http_request(method, path, token=None, json_body=None, raw_body=None,
         return None, None
 
 
+def device_request(state, method, path, **kwargs):
+    """http_request using state's device_token, with one added behaviour: a
+    401 means the server-side token was revoked (e.g. the dashboard's
+    "Revoca token" button) -- it will never start working again on its own,
+    so keep retrying it is pointless. Clearing it here makes the *next*
+    cycle's ensure_registered() see no token and register fresh, instead of
+    the agent being stuck presenting a dead token forever."""
+    status, body = http_request(method, path, token=state.get('device_token'), **kwargs)
+    if status == 401 and state.get('device_token'):
+        _log('device token rejected (401), likely revoked -- clearing so the agent re-registers next cycle')
+        state.pop('device_token', None)
+        save_state(state)
+    return status, body
+
+
 # ── device identity ──────────────────────────────────────────────────────
 def machine_id():
     try:
@@ -192,7 +209,7 @@ def write_capture_schedule_file(schedule):
 
 
 def fetch_config(state):
-    status, body = http_request('GET', '/api/v1/config', token=state['device_token'])
+    status, body = device_request(state, 'GET', '/api/v1/config')
     if status != 200 or not body:
         return
     interval = body.get('agentIntervalSec')
@@ -343,13 +360,16 @@ def system_snapshot():
 
 
 def send_snapshot(state):
-    status, _ = http_request('POST', '/api/v1/snapshot', token=state['device_token'],
-                              json_body=system_snapshot())
+    status, _ = device_request(state, 'POST', '/api/v1/snapshot', json_body=system_snapshot())
     if status != 200:
         _log(f'snapshot upload failed (status={status})')
 
 
 # ── HAR captures: whole file, uploaded once it looks finished ───────────
+# Deleted from disk right after a successful upload -- the server is now the
+# copy of record, and beta devices are disk-constrained. har_uploaded still
+# exists as a fallback: if the delete itself fails (e.g. permissions), we
+# remember the filename so we don't re-upload it forever.
 def upload_har_captures(state):
     uploaded = set(state.setdefault('har_uploaded', []))
     try:
@@ -373,18 +393,29 @@ def upload_har_captures(state):
             _log(f'cannot read {filename}: {e}')
             continue
 
-        status, _ = http_request(
-            'POST', f'/api/v1/har?filename={urllib.parse.quote(filename)}',
-            token=state['device_token'], raw_body=data, content_type='application/json')
+        status, _ = device_request(
+            state, 'POST', f'/api/v1/har?filename={urllib.parse.quote(filename)}',
+            raw_body=data, content_type='application/json')
         if status == 200:
-            uploaded.add(filename)
-            state['har_uploaded'] = sorted(uploaded)
-            save_state(state)
+            try:
+                os.remove(path)
+            except Exception as e:
+                _log(f'uploaded {filename} but failed to remove it from disk: {e}')
+                uploaded.add(filename)
+                state['har_uploaded'] = sorted(uploaded)
+                save_state(state)
         else:
             _log(f'HAR upload failed for {filename} (status={status}), will retry next cycle')
 
 
 # ── perf captures: append-only, shipped incrementally by byte offset ────
+# Once a file has no more unshipped bytes and hasn't grown in a while (the
+# capture has clearly ended, not just paused between writes), it's deleted
+# from disk the same way HAR captures are -- nothing left on the device that
+# hasn't already reached the server.
+_PERF_QUIET_SEC = 30
+
+
 def upload_perf_captures(state):
     offsets = state.setdefault('perf_offsets', {})
     try:
@@ -401,30 +432,45 @@ def upload_perf_captures(state):
         path = os.path.join(PERF_CAPTURE_DIR, filename)
         offset = offsets.get(filename, 0)
         try:
-            size = os.path.getsize(path)
-            if size <= offset:
-                continue
-            with open(path, 'rb') as f:
-                f.seek(offset)
-                chunk = f.read()
+            stat = os.stat(path)
+            size = stat.st_size
         except Exception as e:
-            _log(f'cannot read {filename}: {e}')
+            _log(f'cannot stat {filename}: {e}')
             continue
 
-        last_nl = chunk.rfind(b'\n')
-        if last_nl == -1:
-            continue  # no complete line yet -- wait for the next cycle
-        complete = chunk[:last_nl + 1]
+        if size > offset:
+            try:
+                with open(path, 'rb') as f:
+                    f.seek(offset)
+                    chunk = f.read()
+            except Exception as e:
+                _log(f'cannot read {filename}: {e}')
+                continue
 
-        status, _ = http_request(
-            'POST', f'/api/v1/perf?filename={urllib.parse.quote(filename)}',
-            token=state['device_token'], raw_body=complete, content_type='application/x-ndjson')
-        if status == 200:
-            offsets[filename] = offset + len(complete)
+            last_nl = chunk.rfind(b'\n')
+            if last_nl == -1:
+                continue  # no complete line yet -- wait for the next cycle
+            complete = chunk[:last_nl + 1]
+
+            status, _ = device_request(
+                state, 'POST', f'/api/v1/perf?filename={urllib.parse.quote(filename)}',
+                raw_body=complete, content_type='application/x-ndjson')
+            if status != 200:
+                _log(f'perf upload failed for {filename} (status={status}), will retry next cycle')
+                continue
+            offset += len(complete)
+            offsets[filename] = offset
             state['perf_offsets'] = offsets
             save_state(state)
-        else:
-            _log(f'perf upload failed for {filename} (status={status}), will retry next cycle')
+
+        if offset >= size and time.time() - stat.st_mtime > _PERF_QUIET_SEC:
+            try:
+                os.remove(path)
+                offsets.pop(filename, None)
+                state['perf_offsets'] = offsets
+                save_state(state)
+            except Exception as e:
+                _log(f'uploaded {filename} but failed to remove it from disk: {e}')
 
 
 # ── main loop ─────────────────────────────────────────────────────────────

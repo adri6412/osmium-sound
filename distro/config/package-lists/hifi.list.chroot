@@ -169,3 +169,8 @@ logrotate
 # intel_gpu_top — Intel iGPU busy% for the admin dashboard's system stats
 # tile (api_server.py get_system_stats). Not pulled in by anything else.
 intel-gpu-tools
+
+# lspci — GPU model string for both the admin dashboard and the beta-testing
+# telemetry snapshot (hifi-beta-agent.py gpu_model()). Not pulled in by
+# anything else, and not part of a minimal Debian base.
+pciutils
