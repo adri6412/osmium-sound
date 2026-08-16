@@ -476,6 +476,17 @@
     .privacy-notice .pn-ico { flex-shrink: 0; font-size: 1.05rem; line-height: 1.5; }
     .privacy-notice strong { color: #6cc6ff; }
     .privacy-notice a { color: #6cc6ff; }
+
+    /* ── MANUAL CALLOUT ──────────────────────────────────── */
+    #manual { border-top: 1px solid var(--border); background: var(--bg-card); }
+    .manual-card {
+      max-width: 760px; margin: 0 auto; text-align: center;
+      background: var(--bg); border: 1px solid rgba(245,184,32,0.35);
+      border-radius: var(--radius); padding: 2.25rem 2rem;
+    }
+    .manual-card .manual-icon { font-size: 2.2rem; margin-bottom: 0.75rem; }
+    .manual-card h2 { font-size: 1.4rem; font-weight: 700; margin-bottom: 0.6rem; }
+    .manual-card p { color: var(--muted); font-size: 0.95rem; max-width: 480px; margin: 0 auto 1.5rem; line-height: 1.65; }
     @media (max-width: 760px) { .quickstart { grid-template-columns: 1fr; } }
     .code-block {
       background: #060606;
@@ -614,6 +625,7 @@
   </a>
   <ul class="nav-links">
     <li><a href="#install" data-en="Install" data-it="Installazione">Install</a></li>
+    <li><a href="#manual" data-en="Manual" data-it="Manuale" style="color:var(--accent)">Manual</a></li>
     <li><a href="#features" data-en="Features" data-it="Funzioni">Features</a></li>
     <li><a href="#screenshots" data-en="Screenshots" data-it="Screenshot">Screenshots</a></li>
     <li><a href="#specs" data-en="Specs" data-it="Specifiche">Specs</a></li>
@@ -712,6 +724,19 @@
     <p class="install-note" data-en="&lt;strong&gt;Try it live:&lt;/strong&gt; pick &lt;strong&gt;Try Osmium Sound (no install)&lt;/strong&gt; at the boot menu to run the kiosk straight from the USB stick, nothing written to disk. If it doesn't log in automatically, use &lt;code&gt;hifi&lt;/code&gt; / &lt;code&gt;hifi&lt;/code&gt; at the login screen." data-it="&lt;strong&gt;Provala in live:&lt;/strong&gt; scegli &lt;strong&gt;Try Osmium Sound (no install)&lt;/strong&gt; nel menu di avvio per far partire il kiosk direttamente dalla chiavetta, senza scrivere nulla sul disco. Se non fa l'accesso automatico, usa &lt;code&gt;hifi&lt;/code&gt; / &lt;code&gt;hifi&lt;/code&gt; alla schermata di login.">
       <strong>Try it live:</strong> pick <strong>Try Osmium Sound (no install)</strong> at the boot menu to run the kiosk straight from the USB stick, nothing written to disk. If it doesn't log in automatically, use <code>hifi</code> / <code>hifi</code> at the login screen.
     </p>
+  </div>
+</section>
+
+<!-- MANUAL -->
+<section id="manual">
+  <div class="manual-card">
+    <div class="manual-icon">📖</div>
+    <h2 data-en="Full installation &amp; configuration manual" data-it="Manuale completo di installazione e configurazione">Full installation &amp; configuration manual</h2>
+    <p data-en="Step by step: writing the USB stick, first boot, device modes, web admin, music sources, DSP, multiroom, backup, OTA updates and troubleshooting — in English and Italian." data-it="Passo dopo passo: creazione della chiavetta USB, primo avvio, modalità del dispositivo, amministrazione web, sorgenti musicali, DSP, multiroom, backup, aggiornamenti OTA e risoluzione dei problemi — in italiano e inglese.">Step by step: writing the USB stick, first boot, device modes, web admin, music sources, DSP, multiroom, backup, OTA updates and troubleshooting — in English and Italian.</p>
+    <a class="btn-primary" href="../manuale.html" target="_blank">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+      <span data-en="Open the manual" data-it="Apri il manuale">Open the manual</span>
+    </a>
   </div>
 </section>
 
@@ -860,7 +885,7 @@
         <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0 0 24 12c0-6.63-5.37-12-12-12z"/></svg>
         <span data-en="Release notes" data-it="Note di rilascio">Release notes</span>
       </a>
-      <a class="btn-secondary" href="fdroidrepos://osmium-sound.pages.dev/fdroid/dev/repo?fingerprint=B45A4EF8CDA78DB906BB6027D82C8E0795179CA701466699EB657A0798C2385F">
+      <a class="btn-secondary" href="fdroidrepos://osmiumsound.it/fdroid/dev/repo?fingerprint=B45A4EF8CDA78DB906BB6027D82C8E0795179CA701466699EB657A0798C2385F">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
         <span data-en="Add F-Droid dev repo" data-it="Aggiungi repo F-Droid dev">Add F-Droid dev repo</span>
       </a>
@@ -884,8 +909,8 @@
       </div>
     </div>
 
-    <p class="install-note" data-en="&lt;strong&gt;Note:&lt;/strong&gt; the companion app is distributed as a signed APK (sideload) or via our self-hosted F-Droid &lt;strong&gt;dev&lt;/strong&gt; repo — it is not on the Play Store. This dev repo tracks &quot;-svil&quot; builds, ahead of and less tested than the stable repo. Prefer F-Droid if you want automatic updates: tap &lt;strong&gt;Add F-Droid dev repo&lt;/strong&gt; above (F-Droid app required), or add &lt;code&gt;https://osmium-sound.pages.dev/fdroid/dev/repo&lt;/code&gt; manually under Settings → Repositories. Your phone and the appliance must be on the same local network." data-it="&lt;strong&gt;Nota:&lt;/strong&gt; l'app companion è distribuita come APK firmato (sideload) oppure tramite il nostro repo F-Droid &lt;strong&gt;dev&lt;/strong&gt; self-hosted — non è sul Play Store. Questo repo dev segue le build «-svil», più recenti e meno testate del repo stabile. Se vuoi gli aggiornamenti automatici usa F-Droid: tocca &lt;strong&gt;Aggiungi repo F-Droid dev&lt;/strong&gt; qui sopra (serve l'app F-Droid), oppure aggiungi manualmente &lt;code&gt;https://osmium-sound.pages.dev/fdroid/dev/repo&lt;/code&gt; in Impostazioni → Repository. Il telefono e il dispositivo devono essere sulla stessa rete locale.">
-      <strong>Note:</strong> the companion app is distributed as a signed APK (sideload) or via our self-hosted F-Droid <strong>dev</strong> repo — it is not on the Play Store. This dev repo tracks "-svil" builds, ahead of and less tested than the stable repo. Prefer F-Droid if you want automatic updates: tap <strong>Add F-Droid dev repo</strong> above (F-Droid app required), or add <code>https://osmium-sound.pages.dev/fdroid/dev/repo</code> manually under Settings → Repositories. Your phone and the appliance must be on the same local network.
+    <p class="install-note" data-en="&lt;strong&gt;Note:&lt;/strong&gt; the companion app is distributed as a signed APK (sideload) or via our self-hosted F-Droid &lt;strong&gt;dev&lt;/strong&gt; repo — it is not on the Play Store. This dev repo tracks &quot;-svil&quot; builds, ahead of and less tested than the stable repo. Prefer F-Droid if you want automatic updates: tap &lt;strong&gt;Add F-Droid dev repo&lt;/strong&gt; above (F-Droid app required), or add &lt;code&gt;https://osmiumsound.it/fdroid/dev/repo&lt;/code&gt; manually under Settings → Repositories. Your phone and the appliance must be on the same local network." data-it="&lt;strong&gt;Nota:&lt;/strong&gt; l'app companion è distribuita come APK firmato (sideload) oppure tramite il nostro repo F-Droid &lt;strong&gt;dev&lt;/strong&gt; self-hosted — non è sul Play Store. Questo repo dev segue le build «-svil», più recenti e meno testate del repo stabile. Se vuoi gli aggiornamenti automatici usa F-Droid: tocca &lt;strong&gt;Aggiungi repo F-Droid dev&lt;/strong&gt; qui sopra (serve l'app F-Droid), oppure aggiungi manualmente &lt;code&gt;https://osmiumsound.it/fdroid/dev/repo&lt;/code&gt; in Impostazioni → Repository. Il telefono e il dispositivo devono essere sulla stessa rete locale.">
+      <strong>Note:</strong> the companion app is distributed as a signed APK (sideload) or via our self-hosted F-Droid <strong>dev</strong> repo — it is not on the Play Store. This dev repo tracks "-svil" builds, ahead of and less tested than the stable repo. Prefer F-Droid if you want automatic updates: tap <strong>Add F-Droid dev repo</strong> above (F-Droid app required), or add <code>https://osmiumsound.it/fdroid/dev/repo</code> manually under Settings → Repositories. Your phone and the appliance must be on the same local network.
     </p>
 
     <p class="privacy-notice">
