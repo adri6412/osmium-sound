@@ -1,41 +1,41 @@
 {
-  "tag_name": "v2.5.21-dev.94",
-  "name": "v2.5.21-dev.94",
-  "body": "## What's new in v2.5.21-dev.94\n\n- fix(player): remove invisible artwork-glow blur causing sustained GPU spike\n",
+  "tag_name": "v2.5.21-dev.95",
+  "name": "v2.5.21-dev.95",
+  "body": "## What's new in v2.5.21-dev.95\n\n- fix(ui): remove another invisible backdrop-blur; add long-running perf capture\n- feat(settings): add in-app third-party notices + notices/branding cleanup\n",
   "assets": [
     {
-      "name": "hifi-ui-v2.5.21-dev.94.tar.gz",
-      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.94/hifi-ui-v2.5.21-dev.94.tar.gz",
-      "size": 134230483
+      "name": "hifi-ui-v2.5.21-dev.95.tar.gz",
+      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.95/hifi-ui-v2.5.21-dev.95.tar.gz",
+      "size": 134231629
     },
     {
-      "name": "hifi-ui-v2.5.21-dev.94.tar.gz.sha256",
-      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.94/hifi-ui-v2.5.21-dev.94.tar.gz.sha256",
+      "name": "hifi-ui-v2.5.21-dev.95.tar.gz.sha256",
+      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.95/hifi-ui-v2.5.21-dev.95.tar.gz.sha256",
       "size": 96
     },
     {
-      "name": "hifi-system-v2.5.21-dev.94.tar.gz",
-      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.94/hifi-system-v2.5.21-dev.94.tar.gz",
-      "size": 320078
+      "name": "hifi-system-v2.5.21-dev.95.tar.gz",
+      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.95/hifi-system-v2.5.21-dev.95.tar.gz",
+      "size": 320810
     },
     {
-      "name": "hifi-system-v2.5.21-dev.94.tar.gz.sha256",
-      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.94/hifi-system-v2.5.21-dev.94.tar.gz.sha256",
+      "name": "hifi-system-v2.5.21-dev.95.tar.gz.sha256",
+      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.95/hifi-system-v2.5.21-dev.95.tar.gz.sha256",
       "size": 100
     },
     {
-      "name": "hifi-os-v2.5.21-dev.94.tar.gz",
-      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.94/hifi-os-v2.5.21-dev.94.tar.gz",
-      "size": 1199448
+      "name": "hifi-os-v2.5.21-dev.95.tar.gz",
+      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.95/hifi-os-v2.5.21-dev.95.tar.gz",
+      "size": 1199446
     },
     {
-      "name": "hifi-os-v2.5.21-dev.94.tar.gz.sha256",
-      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.94/hifi-os-v2.5.21-dev.94.tar.gz.sha256",
+      "name": "hifi-os-v2.5.21-dev.95.tar.gz.sha256",
+      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.95/hifi-os-v2.5.21-dev.95.tar.gz.sha256",
       "size": 96
     },
     {
-      "name": "hifi-os-v2.5.21-dev.94.tar.gz.sha256.sig",
-      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.94/hifi-os-v2.5.21-dev.94.tar.gz.sha256.sig",
+      "name": "hifi-os-v2.5.21-dev.95.tar.gz.sha256.sig",
+      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.95/hifi-os-v2.5.21-dev.95.tar.gz.sha256.sig",
       "size": 64
     }
   ]
