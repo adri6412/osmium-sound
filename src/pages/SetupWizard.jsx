@@ -166,9 +166,8 @@ const SetupWizard = ({ onComplete }) => {
 
           {apInfo?.ssid && apInfo?.active && !isConnected ? (
             <div className="inline-flex flex-col items-center bg-white rounded-2xl p-4">
-              <QRCodeSVG value={`WIFI:T:WPA;S:${apInfo.ssid};P:${apInfo.psk || ''};;`} size={180} />
+              <QRCodeSVG value={`WIFI:T:nopass;S:${apInfo.ssid};;`} size={180} />
               <span className="text-black text-xs font-semibold mt-2">{apInfo.ssid}</span>
-              {apInfo.psk && <span className="text-black/60 text-[11px]">{apInfo.psk}</span>}
             </div>
           ) : apInfo?.error && !isConnected ? (
             // Hotspot failed to come up and there's no LAN fallback either —

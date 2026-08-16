@@ -83,11 +83,14 @@ SOURCES_BASE = 'http://127.0.0.1:8080'
 
 AP_CON_NAME = 'hifi-setup'
 AP_ADDR = '10.42.0.1'
-# WPA2 PSK for the setup hotspot. Fixed + documented (see SECURITY.md): the
-# residual risk (an RF-range attacker who knows it can reach the pre-auth set on
-# an unconfigured unit) is accepted; WPA2 still encrypts the home Wi-Fi password
-# in transit and the pre-auth set carries no destructive endpoint.
-AP_PSK = 'osmiumsetup'
+# The setup hotspot is deliberately open (no PSK) -- see SECURITY.md. It used
+# to be WPA2 with a fixed, publicly-documented PSK ('osmiumsetup'), which
+# already gave a targeted attacker no real barrier, but its wpa_supplicant
+# software-AP handshake also turned out to be flat-out incompatible with iOS
+# (invalid MIC on message 2/4, a known upstream issue -- see the fix commit
+# for the forum thread this traces to). Accepted trade-off: this is a home
+# appliance, the window is the ~2 minutes first-boot setup takes, and the
+# pre-auth set behind it carries no destructive endpoint.
 
 FAKE = os.environ.get('HIFI_PROVISION_FAKE') == '1'
 PORT = int(os.environ.get('HIFI_WEBUI_PORT', '80'))
@@ -427,19 +430,13 @@ def _raise_ap(dev):
         # with iOS clients -- pin one that's valid in every regulatory domain.
         '802-11-wireless.mode', 'ap', '802-11-wireless.band', 'bg',
         '802-11-wireless.channel', '6',
-        # Left unset, NM defaults an AP-mode profile to WPA+WPA2 mixed with
-        # TKIP+CCMP both advertised. Android joins that fine; iOS is strict
-        # about hotspot security and silently refuses to join (or fails right
-        # after the password) anything that isn't pure WPA2-PSK/CCMP -- pin
-        # all three so iPhones can actually connect.
-        'wifi-sec.key-mgmt', 'wpa-psk', 'wifi-sec.proto', 'rsn',
-        'wifi-sec.pairwise', 'ccmp', 'wifi-sec.group', 'ccmp',
-        # PMF (802.11w) "optional" auto-negotiation on wpa_supplicant's AP
-        # mode is a separately well-documented iOS pain point (handshake
-        # silently fails, no password prompt, exactly the reported symptom)
-        # -- disable it outright rather than leave it to negotiation.
-        'wifi-sec.pmf', '0',
-        'wifi-sec.psk', AP_PSK,
+        # No wifi-sec.* here on purpose -- see the module-level comment above
+        # AP_CON_NAME/AP_ADDR for why. WPA2
+        # pinning (key-mgmt/proto/pairwise/group/pmf) was tried first and
+        # didn't fix iOS joins: the failure is in wpa_supplicant's AP-mode
+        # 4-way handshake itself (invalid MIC on message 2/4), not the cipher
+        # negotiation, so an open network sidesteps it at the root instead of
+        # working around it.
         'ipv4.method', 'shared', 'ipv4.addresses', f'{AP_ADDR}/24',
         'ipv6.method', 'disabled'])
     if rc != 0:
@@ -514,8 +511,7 @@ def _connect_wifi(ssid, password):
     ap = None
     if dev:
         ap_ok, ap_ssid = _raise_ap(dev)
-        ap = {'active': ap_ok, 'ssid': ap_ssid if ap_ok else None,
-              'psk': AP_PSK if ap_ok else None}
+        ap = {'active': ap_ok, 'ssid': ap_ssid if ap_ok else None, 'psk': None}
     return False, (err.strip() or _wt('network.connectFailed', _lang())), ap
 
 
@@ -675,7 +671,7 @@ def _raise_net_recovery_ap():
     _net_recovery['networks_cached_at'] = time.time()
     ok, ssid = _raise_ap(dev)
     if ok:
-        _net_recovery.update({'active': True, 'ssid': ssid, 'psk': AP_PSK, 'error': None})
+        _net_recovery.update({'active': True, 'ssid': ssid, 'psk': None, 'error': None})
         print(f'[webui] network lost — raised recovery hotspot {ssid}')
     else:
         _net_recovery['error'] = _wt('network.recoveryApFailed', _lang())
@@ -763,7 +759,7 @@ def _evaluate_provisioning():
         else:
             err = _wt('network.hotspotActivateFailed', _lang())
         state['ap'] = {'active': ok, 'supported': True, 'ssid': ssid if ok else None,
-                       'psk': AP_PSK if ok else None, 'error': err}
+                       'psk': None, 'error': err}
         state['stage'] = 'waiting-ap' if ok else 'waiting-lan'
         _save_prov_state(state)
 
@@ -792,7 +788,7 @@ def _live_wifi_rescan():
         if was_active and dev:
             ok, ssid = _raise_ap(dev)
             state['ap'] = {'active': ok, 'supported': True, 'ssid': ssid if ok else None,
-                           'psk': AP_PSK if ok else None,
+                           'psk': None,
                            'error': None if ok else _wt('network.hotspotActivateFailed', _lang())}
             state['stage'] = 'waiting-ap' if ok else 'waiting-lan'
         _save_prov_state(state)

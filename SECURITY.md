@@ -46,12 +46,17 @@ trade-offs:
 - **Destructive actions re-validate the password.** Factory reset (and the web
   password change) require re-entering the admin password, so a stolen session
   cookie alone cannot wipe the box.
-- **Setup hotspot.** During first boot an unconfigured unit raises a WPA2 Wi-Fi
-  hotspot (`Osmium-Setup-XXXX`) with a **fixed, documented passphrase**. Accepted
-  residual risk: someone in RF range who knows the passphrase can reach the
-  minimal pre-auth set on an *unconfigured* unit during the short setup window.
-  WPA2 still encrypts the home Wi-Fi password in transit, the pre-auth set has no
-  destructive endpoint, and the window closes when setup finishes.
+- **Setup hotspot.** During first boot an unconfigured unit raises an **open**
+  (unencrypted) Wi-Fi hotspot (`Osmium-Setup-XXXX`). It was WPA2 with a fixed,
+  documented passphrase until this was traced to an iOS incompatibility in the
+  underlying wpa_supplicant software-AP handshake (invalid MIC on message 2/4,
+  a known upstream issue) — the passphrase gave no real barrier against a
+  targeted attacker anyway (it's public), so dropping it fixes iPhone setup at
+  no material cost. Accepted residual risk: anyone in RF range can reach the
+  minimal pre-auth set on an *unconfigured* unit, and can now also observe the
+  home Wi-Fi password in the clear as it's submitted (setup itself is plain
+  HTTP). This is a home appliance with a ~2 minute setup window, and the
+  pre-auth set has no destructive endpoint.
 - **Password recovery.** If the web admin password is lost: reset it from the
   on-screen kiosk (physical access), or factory reset (which also clears it).
 

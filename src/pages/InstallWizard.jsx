@@ -15,7 +15,7 @@ const FOCUS_RING = 'focus:outline-none focus-visible:ring-2 focus-visible:ring-h
 const QrCorner = ({ apInfo, wired, deviceIp }) => {
   const showHotspot = apInfo?.ssid && !wired;
   const value = showHotspot
-    ? `WIFI:T:WPA;S:${apInfo.ssid};P:${apInfo.psk || ''};;`
+    ? `WIFI:T:nopass;S:${apInfo.ssid};;`
     : `http://${deviceIp || 'hifiplayer.local'}`;
   return (
     <div className="absolute top-16 right-4 z-[65] flex flex-col items-center bg-white rounded-xl p-2.5 shadow-lg">
