@@ -360,6 +360,8 @@
     <string name="settings_playback_transition_title">Transition</string>
     <string name="settings_playback_transition_duration_title">Transition duration (seconds)</string>
     <string name="settings_playback_replaygain_title">ReplayGain</string>
+    <string name="settings_playback_fixed_volume_title">Fixed volume 100% (bit-perfect)</string>
+    <string name="settings_playback_fixed_volume_help">Bypasses the player\'s digital volume control entirely — output is always at 100%. Required for bit-perfect playback; turn it off to use the volume slider again.</string>
     <string name="settings_playback_no_player">No active player</string>
 
     <string name="settings_category_lyrion_server">Music library</string>
