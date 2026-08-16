@@ -171,7 +171,7 @@ const Settings = ({ initialSection, onSectionConsumed } = {}) => {
   const [harMessage, setHarMessage] = useState('');
 
   // Perf capture (Debug section) — same IPC/CDP mechanism as HAR capture
-  // above, but samples DOM/JS/per-process metrics once a minute instead of
+  // above, but samples DOM/JS/per-process metrics every 5 seconds instead of
   // network traffic; meant to be left running for hours to catch a leak.
   const [perfRunning, setPerfRunning] = useState(false);
   const [perfBusy, setPerfBusy] = useState(false);

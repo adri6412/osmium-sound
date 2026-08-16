@@ -537,8 +537,8 @@
       "failed": "HAR capture failed.",
       "empty": "Capture stopped — no network requests were recorded.",
       "saved": "Saved {filename} ({count} requests) — download it from the web admin's Debug section.",
-      "perfHelp": "Record DOM node count, JS heap and per-process CPU/memory once a minute, to catch a leak that only shows up after hours of use. Meant to be left running for a long time — start it, use the app normally, then stop and download from the web admin's Debug section.",
-      "perfRecording": "Recording performance samples (once a minute)…",
+      "perfHelp": "Record DOM node count, JS heap and per-process CPU/memory every 5 seconds, to catch a leak that only shows up after hours of use. Meant to be left running for a long time — start it, use the app normally, then stop and download from the web admin's Debug section.",
+      "perfRecording": "Recording performance samples (every 5 seconds)…",
       "perfSaved": "Saved {filename} ({count} samples) — download it from the web admin's Debug section."
     },
     "thirdPartyNotices": {

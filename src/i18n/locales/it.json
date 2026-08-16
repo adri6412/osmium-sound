@@ -537,8 +537,8 @@
       "failed": "Cattura HAR fallita.",
       "empty": "Registrazione fermata — nessuna richiesta di rete registrata.",
       "saved": "Salvato {filename} ({count} richieste) — scaricalo dalla sezione Debug del pannello web.",
-      "perfHelp": "Registra il numero di nodi DOM, l'heap JS e CPU/memoria per processo una volta al minuto, per scovare un leak che si nota solo dopo ore d'uso. Pensata per restare attiva a lungo — avviala, usa l'app normalmente, poi fermala e scarica il file dalla sezione Debug del pannello web.",
-      "perfRecording": "Registrazione campioni di performance in corso (ogni minuto)…",
+      "perfHelp": "Registra il numero di nodi DOM, l'heap JS e CPU/memoria per processo ogni 5 secondi, per scovare un leak che si nota solo dopo ore d'uso. Pensata per restare attiva a lungo — avviala, usa l'app normalmente, poi fermala e scarica il file dalla sezione Debug del pannello web.",
+      "perfRecording": "Registrazione campioni di performance in corso (ogni 5 secondi)…",
       "perfSaved": "Salvato {filename} ({count} campioni) — scaricalo dalla sezione Debug del pannello web."
     },
     "thirdPartyNotices": {

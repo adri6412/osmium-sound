@@ -583,7 +583,7 @@ ipcMain.handle('har-capture-status', () => ({
  * suspected after a field report of GPU usage climbing back up over a few
  * hours of playback after every OTA-triggered restart (which resets it).
  *
- * Samples once a minute for as long as it runs (meant to be left recording
+ * Samples every 5 seconds for as long as it runs (meant to be left recording
  * across hours, unattended) and appends one JSON line per sample rather than
  * building the whole thing in memory + writing once at the end like the HAR
  * capture does — a multi-hour capture that's still running when the renderer
@@ -662,8 +662,8 @@ ipcMain.handle('perf-capture-start', async () => {
   const stamp = new Date().toISOString().replace(/[:.]/g, '-');
   const filePath = join(PERF_CAPTURE_DIR, `perf-${stamp}.jsonl`);
   perfCapture = { startedAt: Date.now(), filePath, sampleCount: 0 };
-  perfCapture.intervalId = setInterval(samplePerfCapture, 60000);
-  samplePerfCapture(); // first sample immediately, don't wait a full minute
+  perfCapture.intervalId = setInterval(samplePerfCapture, 5000);
+  samplePerfCapture(); // first sample immediately, don't wait for the first tick
   dbg.once('detach', () => {
     if (perfCapture) console.error('perf-capture: CDP session detached unexpectedly (devtools opened elsewhere?)');
   });
