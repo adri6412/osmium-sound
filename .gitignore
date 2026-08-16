@@ -44,3 +44,7 @@ support_bot_state.db
 support_bot_state.db-wal
 support_bot_state.db-shm
 .env
+
+# Local-only personal cheat sheet for manual git/deploy steps — never
+# committed, so it can freely mention internal workflow details.
+DEPLOY-CHEATSHEET.html
