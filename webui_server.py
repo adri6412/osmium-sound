@@ -2647,6 +2647,14 @@ function pollRestoreStatus(){
       showRestoreOverlay(st.message||S.restoring);
       setTimeout(pollRestoreStatus,1500);
     }
+  }).catch(function(){
+    // The restore's own "applying changes" phase can restart hifi-webui
+    // itself (a restored admin-account DB does exactly that) -- this fetch
+    // fails for the few seconds that takes. Without this, the poll loop died
+    // silently right here and left the overlay stuck forever on whatever
+    // message was last shown. Keep it up and keep retrying instead; once
+    // hifi-webui is back this resumes exactly like any other poll tick.
+    setTimeout(pollRestoreStatus,1500);
   });
 }
 
