@@ -58,6 +58,7 @@ CREATE TABLE IF NOT EXISTS snapshots (
     cpu_percent REAL,
     disk_percent REAL,
     temp_c REAL,
+    gpu_percent REAL,
     connection_type TEXT,
     local_ip TEXT
 );
@@ -107,11 +108,22 @@ def get_db():
     return conn
 
 
+def _ensure_column(conn, table, column, coltype):
+    """CREATE TABLE IF NOT EXISTS is a no-op on a table that already exists,
+    so a column added to SCHEMA after the first deploy never reaches an
+    already-running server's DB file on its own -- this adds it once,
+    idempotently, on every startup."""
+    cols = {row['name'] for row in conn.execute(f'PRAGMA table_info({table})')}
+    if column not in cols:
+        conn.execute(f'ALTER TABLE {table} ADD COLUMN {column} {coltype}')
+
+
 def init_db():
     os.makedirs(os.path.dirname(DB_PATH) or '.', exist_ok=True)
     conn = get_db()
     try:
         conn.executescript(SCHEMA)
+        _ensure_column(conn, 'snapshots', 'gpu_percent', 'REAL')
         row = conn.execute('SELECT COUNT(*) c FROM fleet_config').fetchone()
         if row['c'] == 0:
             conn.execute(

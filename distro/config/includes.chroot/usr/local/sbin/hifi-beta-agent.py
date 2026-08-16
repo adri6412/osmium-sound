@@ -247,6 +247,43 @@ def cpu_temp_c():
     return round(best, 1) if best is not None else None
 
 
+def gpu_busy_pct():
+    """Intel iGPU busy % via intel_gpu_top, same approach as api_server.py's
+    _gpu_busy_pct() -- not shipped on the image by default (see
+    intel-gpu-tools), so this is a no-op (None) wherever it's missing."""
+    if not shutil.which('intel_gpu_top'):
+        return None
+    proc = None
+    try:
+        proc = subprocess.Popen(
+            ['intel_gpu_top', '-J', '-s', '500', '-o', '-'],
+            stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True)
+        time.sleep(1.0)
+        proc.send_signal(signal.SIGINT)
+        try:
+            out, _ = proc.communicate(timeout=3)
+        except subprocess.TimeoutExpired:
+            proc.kill()
+            out, _ = proc.communicate()
+        text = out.strip()
+        if not text.startswith('['):
+            text = '[' + text.lstrip(',')
+        if not text.rstrip().endswith(']'):
+            text = text.rstrip().rstrip(',') + ']'
+        samples = json.loads(text)
+        if not samples:
+            return None
+        engines = samples[-1].get('engines') or {}
+        render = engines.get('Render/3D') or engines.get('Render/3D/0') or {}
+        busy = render.get('busy')
+        return round(float(busy), 1) if busy is not None else None
+    except Exception:
+        return None
+    finally:
+        if proc and proc.poll() is None:
+            proc.kill()
+
+
 def network_info():
     if psutil is None:
         return 'unknown', None
@@ -299,6 +336,7 @@ def system_snapshot():
         'cpu_percent': cpu_pct,
         'disk_percent': round(du.used / du.total * 100, 1) if du.total else None,
         'temp_c': cpu_temp_c(),
+        'gpu_percent': gpu_busy_pct(),
         'connection_type': conn_type,
         'local_ip': local_ip,
     }

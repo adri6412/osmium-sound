@@ -115,6 +115,7 @@ new Chart(ctx, {
     labels,
     datasets: [
       { label: 'CPU %', data: snapshots.map(s => s.cpu_percent), borderColor: '#5b8cff', tension: 0.25, pointRadius: 0 },
+      { label: 'GPU %', data: snapshots.map(s => s.gpu_percent), borderColor: '#35c07a', tension: 0.25, pointRadius: 0 },
       { label: 'Disco %', data: snapshots.map(s => s.disk_percent), borderColor: '#e0a83c', tension: 0.25, pointRadius: 0 },
       { label: 'Temp °C', data: snapshots.map(s => s.temp_c), borderColor: '#e05b5b', tension: 0.25, pointRadius: 0, yAxisID: 'y1' },
     ],
