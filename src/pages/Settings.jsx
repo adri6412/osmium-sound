@@ -1175,16 +1175,27 @@ const Settings = ({ initialSection, onSectionConsumed } = {}) => {
     // A 404 just means this appliance predates the sequencer.
     if (!r.success || !r.data || r.data.state === 'idle') return;
     const s = r.data;
+    // 'interrupted' on this very first read is the normal case right after an
+    // OS-step reboot (this app just relaunched, hifi-update-resume.service
+    // hasn't started yet) — soften it the same way followUpdatePlan()'s poll
+    // loop does, instead of rendering it as the terminal error state with a
+    // dismiss button available before the resume unit ever got a chance to
+    // continue the plan (that dismiss deletes the on-disk plan, permanently
+    // stranding any steps — e.g. 'ui' — that hadn't run yet).
+    const softened = s.state === 'interrupted' ? 'restarting' : s.state;
     setPlanStatus({
-      state: s.state,
+      state: softened,
       kind: s.kind || '',
-      message: progressStateMessage(s.step_state, s.message || ''),
+      message: softened === 'restarting'
+        ? t('settings.updates.progressState.restarting')
+        : progressStateMessage(s.step_state, s.message || ''),
       progress: typeof s.overall_progress === 'number' ? s.overall_progress : null,
       doneKinds: (s.steps || []).filter((x) => x.state === 'done').map((x) => x.kind),
     });
-    if (s.state === 'running') {
+    if (s.state === 'running' || s.state === 'interrupted') {
       setIsApplyingAll(true);
-      await followUpdatePlan();
+      const ok = await followUpdatePlan();
+      if (!ok) setAllStatus({ phase: 'error', message: t('settings.updates.msg.updateError') });
       setIsApplyingAll(false);
       refreshAllChecks();
     }
@@ -4081,7 +4092,7 @@ const Settings = ({ initialSection, onSectionConsumed } = {}) => {
             </div>
 
             <div className="mt-4 h-8 text-2xl font-semibold tabular-nums text-hifi-accent">
-              {hasPct && !isErr ? `${pct}%` : ''}
+              {hasPct && !isErr && !isDone ? `${pct}%` : ''}
             </div>
 
             {/* `done` is reachable now that a sequenced plan can finish with the

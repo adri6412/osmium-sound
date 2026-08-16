@@ -30,10 +30,28 @@ const UpdatePlanOverlay = () => {
   }, []);
 
   useEffect(() => {
+    // 'interrupted' means "a step was left running with nobody currently
+    // resuming it" — which is also exactly what the plan looks like for the
+    // first few seconds after an OS-step reboot, before hifi-update-resume.
+    // service has come up (it waits on network-online.target), or during the
+    // brief window right after the system step restarts hifi-api. Treating a
+    // single 'interrupted' read as final showed the terminal error+dismiss
+    // overlay for a run that was actually still going to finish on its own —
+    // and dismissing here deletes the on-disk plan server-side, permanently
+    // stranding whichever steps (e.g. 'ui') hadn't run yet. Mirrors the same
+    // grace-period logic as Settings.jsx's followUpdatePlan().
+    let interruptedStreak = 0;
+    const MAX_INTERRUPTED_POLLS = 60; // ~2 minutes at 2s/poll
     const poll = async () => {
       const r = await systemAPI.getUpdatePlanStatus();
-      if (!r.success || !r.data || r.data.state === 'idle') { setStatus(null); return; }
-      setStatus(r.data);
+      if (!r.success || !r.data || r.data.state === 'idle') { setStatus(null); interruptedStreak = 0; return; }
+      const s = r.data;
+      if (s.state === 'interrupted') {
+        interruptedStreak += 1;
+      } else {
+        interruptedStreak = 0;
+      }
+      setStatus({ ...s, _stillWaiting: s.state === 'interrupted' && interruptedStreak < MAX_INTERRUPTED_POLLS });
     };
     poll();
     pollRef.current = setInterval(poll, 2000);
@@ -41,8 +59,12 @@ const UpdatePlanOverlay = () => {
   }, []);
 
   const dismiss = async () => {
-    await systemAPI.dismissUpdatePlan();
-    setStatus(null);
+    const r = await systemAPI.dismissUpdatePlan();
+    // The endpoint always answers 200 even when it refuses (business-logic
+    // `data.success: false` while a plan is genuinely still running) — check
+    // that field, not the HTTP-transport-only `r.success`, or a refused
+    // dismiss would still clear the overlay out from under an active update.
+    if (r.success && r.data?.success !== false) setStatus(null);
   };
 
   if (settingsOpen || !status) return null;
@@ -56,11 +78,16 @@ const UpdatePlanOverlay = () => {
     return known.includes(state) ? t(`settings.updates.progressState.${state}`) : rawMessage;
   };
 
-  const terminal = status.state === 'error' || status.state === 'interrupted';
+  // While still inside the grace window (_stillWaiting, set by the poll loop
+  // above), render 'interrupted' as just another in-progress step rather than
+  // the terminal error state — see the comment on the poll effect for why.
+  const terminal = status.state === 'error' || (status.state === 'interrupted' && !status._stillWaiting);
   const isDone = status.state === 'finished';
-  const message = stepMessage(status.step_state, status.message || '')
-    || (status.kind ? t(`settings.updates.${status.kind}`) : '')
-    || t('settings.updates.msg.starting');
+  const message = status._stillWaiting
+    ? t('settings.updates.progressState.restarting')
+    : stepMessage(status.step_state, status.message || '')
+      || (status.kind ? t(`settings.updates.${status.kind}`) : '')
+      || t('settings.updates.msg.starting');
   const hasPct = typeof status.overall_progress === 'number';
   const pct = hasPct ? Math.max(0, Math.min(100, Math.round(status.overall_progress))) : 0;
 
@@ -93,7 +120,7 @@ const UpdatePlanOverlay = () => {
       </div>
 
       <div className="mt-4 h-8 text-2xl font-semibold tabular-nums text-hifi-accent">
-        {hasPct && !terminal ? `${pct}%` : ''}
+        {hasPct && !terminal && !isDone ? `${pct}%` : ''}
       </div>
 
       {terminal || isDone ? (
