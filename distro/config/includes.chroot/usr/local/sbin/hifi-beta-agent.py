@@ -22,6 +22,7 @@ import signal
 import socket
 import subprocess
 import sys
+import threading
 import time
 import traceback
 import urllib.error
@@ -64,7 +65,14 @@ HTTP_TIMEOUT_SEC = 30
 _HAR_RE = re.compile(r'^capture-[0-9TZ-]+\.har$')
 _PERF_RE = re.compile(r'^perf-[0-9TZ-]+\.jsonl$')
 
-_running = True
+# Set (not time.sleep()) so shutdown is prompt: a signal handler that doesn't
+# raise just lets time.sleep() silently resume for its full remaining
+# duration (PEP 475 auto-retries interrupted syscalls) -- with the default
+# 600s interval that meant systemd waiting the better part of 10 minutes (or
+# hitting its own stop-timeout and SIGKILLing) on every shutdown/reboot.
+# Event.wait() re-checks the flag before re-blocking, so .set() from the
+# handler wakes it immediately.
+_stop_event = threading.Event()
 
 
 def _log(msg):
@@ -72,8 +80,7 @@ def _log(msg):
 
 
 def _handle_term(signum, _frame):
-    global _running
-    _running = False
+    _stop_event.set()
 
 
 signal.signal(signal.SIGTERM, _handle_term)
@@ -397,14 +404,14 @@ def main():
     state = load_state()
     state.setdefault('agent_interval_sec', DEFAULT_INTERVAL_SEC)
 
-    while _running:
+    while not _stop_event.is_set():
         try:
             run_cycle(state)
         except Exception:
             _log('cycle failed:\n' + traceback.format_exc())
         if once:
             break
-        time.sleep(max(30, state.get('agent_interval_sec', DEFAULT_INTERVAL_SEC)))
+        _stop_event.wait(max(30, state.get('agent_interval_sec', DEFAULT_INTERVAL_SEC)))
 
 
 if __name__ == '__main__':
