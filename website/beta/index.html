@@ -248,57 +248,6 @@
       background: var(--bg-card);
     }
     .carousel-wrap { max-width: 960px; margin: 2.5rem auto 0; }
-
-    /* ── VIDEO EMBED ─────────────────────────────────── */
-    .video-wrap {
-      max-width: 960px; margin: 2.5rem auto 0;
-    }
-    .video-frame {
-      position: relative; width: 100%;
-      aspect-ratio: 16 / 9;
-      border-radius: 14px; overflow: hidden;
-      border: 1px solid var(--border);
-      background: #060606;
-      box-shadow: 0 24px 80px rgba(0,0,0,0.6);
-    }
-    .video-frame iframe {
-      position: absolute; inset: 0;
-      width: 100%; height: 100%; border: 0;
-    }
-    .video-facade {
-      position: absolute; inset: 0;
-      width: 100%; height: 100%;
-      border: 0; padding: 0; cursor: pointer;
-      display: flex; align-items: center; justify-content: center;
-      background: #060606;
-    }
-    .video-facade img {
-      position: absolute; inset: 0;
-      width: 100%; height: 100%; object-fit: cover;
-      display: block;
-    }
-    .video-facade::after {
-      content: ''; position: absolute; inset: 0;
-      background: rgba(0,0,0,0.28); transition: background 0.2s;
-    }
-    .video-facade:hover::after { background: rgba(0,0,0,0.12); }
-    .video-play {
-      position: relative; z-index: 1;
-      width: 74px; height: 74px; border-radius: 50%;
-      background: var(--accent); color: #000;
-      display: flex; align-items: center; justify-content: center;
-      padding-left: 4px;
-      box-shadow: 0 8px 30px rgba(0,0,0,0.5);
-      transition: transform 0.15s;
-    }
-    .video-facade:hover .video-play { transform: scale(1.08); }
-    .carousel-main {
-      border-radius: 14px; overflow: hidden;
-      border: 1px solid var(--border);
-      background: #060606;
-      position: relative; cursor: zoom-in;
-      box-shadow: 0 24px 80px rgba(0,0,0,0.6);
-    }
     .carousel-main img {
       width: 100%; display: block;
       max-height: 520px; object-fit: contain;
@@ -637,7 +586,7 @@
       <button type="button" data-lang="en">EN</button>
       <button type="button" data-lang="it">IT</button>
     </div>
-    <a class="btn-nav is-placeholder" href="#install" data-en="Download (soon)" data-it="Scarica (a breve)">Download (soon)</a>
+    <a class="btn-nav" href="#install" data-en="Download" data-it="Scarica">Download</a>
   </div>
 </nav>
 
@@ -687,9 +636,9 @@
     </p>
 
     <div style="display:flex; gap:1rem; justify-content:center; flex-wrap:wrap; margin-top:2.25rem;">
-      <a class="btn-primary is-placeholder" href="#" aria-disabled="true">
+      <a class="btn-primary" href="https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.104/hifi-player-v2.5.21-dev.104.iso">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-        <span class="iso-badge"><span data-en="ISO coming soon" data-it="ISO in arrivo">ISO coming soon</span><small>v2.5.21-dev.104</small></span>
+        <span class="iso-badge"><span data-en="Download ISO" data-it="Scarica ISO">Download ISO</span><small>v2.5.21-dev.104</small></span>
       </a>
       <a class="btn-secondary" href="https://github.com/adri6412/osmium-sound/releases" target="_blank">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0 0 24 12c0-6.63-5.37-12-12-12z"/></svg>
@@ -701,8 +650,8 @@
       <div class="qs-step">
         <div class="qs-num">1</div>
         <h4 data-en="Download the ISO" data-it="Scarica la ISO">Download the ISO</h4>
-        <p data-en="&lt;strong&gt;hifi-player-v2.5.21-dev.104.iso&lt;/strong&gt; is being built and will appear here — this beta page will be updated with a working download link once it's ready." data-it="&lt;strong&gt;hifi-player-v2.5.21-dev.104.iso&lt;/strong&gt; è in fase di compilazione e apparirà qui — questa pagina beta sarà aggiornata con un link di download funzionante non appena sarà pronta.">
-          <strong>hifi-player-v2.5.21-dev.104.iso</strong> is being built and will appear here — this beta page will be updated with a working download link once it's ready.
+        <p data-en="&lt;strong&gt;hifi-player-v2.5.21-dev.104.iso&lt;/strong&gt; is now ready! Click the link to start your download." data-it="&lt;strong&gt;hifi-player-v2.5.21-dev.104.iso&lt;/strong&gt; è ora pronto! Clicca sul link per avviare il download.">
+          <strong>hifi-player-v2.5.21-dev.104.iso</strong> is now ready! Click the link to start your download.
         </p>
       </div>
       <div class="qs-step">
@@ -805,20 +754,7 @@
     <div class="section-label" data-en="Interface" data-it="Interfaccia">Interface</div>
     <h2 class="section-title" data-en="Designed for the listening room" data-it="Progettata per la sala d'ascolto">Designed for the listening room</h2>
     <p class="section-desc" data-en="Optimised for touchscreens. Clean, dark, distraction-free." data-it="Ottimizzata per i touchscreen. Pulita, scura, senza distrazioni.">Optimised for touchscreens. Clean, dark, distraction-free.</p>
-  </div>
-
-  <div class="video-wrap">
-    <div class="video-frame">
-      <button class="video-facade" id="videoFacade" aria-label="Play demo video">
-        <img src="https://i.ytimg.com/vi/7Dw9oanIkuM/sddefault.jpg"
-             onerror="this.onerror=null;this.src='https://i.ytimg.com/vi/7Dw9oanIkuM/hqdefault.jpg';"
-             alt="" loading="lazy">
-        <span class="video-play" aria-hidden="true">
-          <svg width="26" height="26" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
-        </span>
-      </button>
-    </div>
-  </div>
+  </div>  
 
   <div class="carousel-wrap">
     <div class="carousel-main" id="carouselMain">
@@ -1118,13 +1054,10 @@
 <script>
   // ── Bilingual EN / IT support ────────────────────────────────
   const screens = [
-    { src: '../01.png', cap: { en: 'Main player — Now Playing',                         it: 'Player principale — In riproduzione' } },
-    { src: '../02.png', cap: { en: 'Full-screen Now Playing with analog VU meters',      it: 'In riproduzione a schermo intero con VU meter analogici' } },
-    { src: '../03.png', cap: { en: 'Album grid view',                                    it: 'Vista a griglia degli album' } },
-    { src: '../04.png', cap: { en: 'Apps & Streaming services',                          it: 'App e servizi di streaming' } },
-    { src: '../05.png', cap: { en: 'Audio output — pick your DAC',                       it: 'Uscita audio — scegli il tuo DAC' } },
-    { src: '../06.png', cap: { en: 'Multiroom — group players in sync',                  it: 'Multiroom — raggruppa i player in sincronia' } },
-    { src: '../07.png', cap: { en: 'Updates — dev/production OTA channel',               it: 'Aggiornamenti — canale OTA dev/produzione' } },
+    { src: './3.png', cap: { en: 'Main player — Now Playing',                         it: 'Player principale — In riproduzione' } },
+    { src: './2.png', cap: { en: 'Full-screen Now Playing with analog VU meters',      it: 'In riproduzione a schermo intero con VU meter analogici' } },
+    { src: './1.png', cap: { en: 'Album grid view',                                    it: 'Vista a griglia degli album' } },
+    { src: './4.png', cap: { en: 'Apps & Streaming services',                          it: 'App e servizi di streaming' } },
   ];
 
   let lang = 'en';
@@ -1160,21 +1093,6 @@
       .some(l => l.toLowerCase().startsWith('it'));
     applyLang(saved || (browserIt ? 'it' : 'en'));
   })();
-
-  // Click-to-play YouTube facade — keeps the title/channel hidden at rest
-  const videoFacade = document.getElementById('videoFacade');
-  if (videoFacade) {
-    videoFacade.addEventListener('click', () => {
-      const iframe = document.createElement('iframe');
-      iframe.src = 'https://www.youtube-nocookie.com/embed/7Dw9oanIkuM?autoplay=1&modestbranding=1&rel=0&playsinline=1';
-      iframe.title = 'Osmium Sound — Demo video';
-      iframe.allow = 'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share';
-      iframe.allowFullscreen = true;
-      iframe.setAttribute('referrerpolicy', 'strict-origin-when-cross-origin');
-      videoFacade.replaceWith(iframe);
-    });
-  }
-
   let autoTimer;
 
   // Build thumbnails
