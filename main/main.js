@@ -624,6 +624,16 @@ async function samplePerfCapture() {
       if (dbg.isAttached()) {
         const { metrics } = await dbg.sendCommand('Performance.getMetrics');
         sample.domMetrics = Object.fromEntries((metrics || []).map((m) => [m.name, m.value]));
+        // window.__hifiPerfState (LyrionServer.jsx) — which screen/state this
+        // sample's numbers belong to, so a multi-hour capture is legible
+        // afterwards without having to remember what was on screen when.
+        const { result } = await dbg.sendCommand('Runtime.evaluate', {
+          expression: 'JSON.stringify(window.__hifiPerfState || null)',
+          returnByValue: true,
+        });
+        if (result && typeof result.value === 'string') {
+          try { sample.uiState = JSON.parse(result.value); } catch (_) {}
+        }
       }
     }
   } catch (err) {
