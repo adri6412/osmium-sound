@@ -129,6 +129,32 @@ def _device_capture_dir(device_id):
     return path
 
 
+# ── admin password: DB override, falling back to the env var ────────────
+# Lets the password be changed from /account without redeploying, while
+# BETA_ADMIN_PASSWORD_HASH stays as the value reset_password.py --clear
+# restores when the admin is locked out (see that script's docstring).
+def get_active_password_hash():
+    db = get_db()
+    try:
+        row = db.execute('SELECT password_hash FROM admin_config WHERE id = 1').fetchone()
+    finally:
+        db.close()
+    return row['password_hash'] if row else ADMIN_PASSWORD_HASH
+
+
+def set_active_password_hash(new_hash):
+    db = get_db()
+    try:
+        db.execute(
+            'INSERT INTO admin_config (id, password_hash, updated_at) VALUES (1, ?, ?) '
+            'ON CONFLICT(id) DO UPDATE SET password_hash = excluded.password_hash, '
+            'updated_at = excluded.updated_at',
+            (new_hash, now_iso()))
+        db.commit()
+    finally:
+        db.close()
+
+
 # ── ingestion API ─────────────────────────────────────────────────────────
 @app.route('/api/v1/register', methods=['POST'])
 @require_bootstrap
@@ -256,7 +282,7 @@ def api_perf():
 def login():
     if request.method == 'POST':
         password = request.form.get('password', '')
-        if check_password_hash(ADMIN_PASSWORD_HASH, password):
+        if check_password_hash(get_active_password_hash(), password):
             session['admin'] = True
             return redirect(request.args.get('next') or url_for('devices'))
         return render_template('login.html', error='Password errata')
@@ -360,6 +386,28 @@ def download_perf(device_id, filename):
     if not row or not os.path.isfile(row['storage_path']):
         return 'Not found', 404
     return send_file(row['storage_path'], as_attachment=True, download_name=filename)
+
+
+# ── dashboard: account ────────────────────────────────────────────────────
+@app.route('/account', methods=['GET', 'POST'])
+@require_admin
+def account():
+    error = None
+    saved = False
+    if request.method == 'POST':
+        current = request.form.get('current_password', '')
+        new = request.form.get('new_password', '')
+        confirm = request.form.get('confirm_password', '')
+        if not check_password_hash(get_active_password_hash(), current):
+            error = 'Password attuale errata.'
+        elif len(new) < 8:
+            error = 'La nuova password deve avere almeno 8 caratteri.'
+        elif new != confirm:
+            error = 'Le due password non coincidono.'
+        else:
+            set_active_password_hash(generate_password_hash(new))
+            saved = True
+    return render_template('account.html', error=error, saved=saved)
 
 
 # ── dashboard: fleet config ──────────────────────────────────────────────

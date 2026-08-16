@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% block title %}Account{% endblock %}
+{% block content %}
+<h1>Account</h1>
+<p class="muted">Cambia la password di accesso alla dashboard.</p>
+
+<div class="card" style="max-width:360px">
+  <form method="post">
+    <div class="field">
+      <label for="current_password">Password attuale</label>
+      <input type="password" id="current_password" name="current_password" required autofocus>
+    </div>
+    <div class="field">
+      <label for="new_password">Nuova password</label>
+      <input type="password" id="new_password" name="new_password" minlength="8" required>
+    </div>
+    <div class="field">
+      <label for="confirm_password">Conferma nuova password</label>
+      <input type="password" id="confirm_password" name="confirm_password" minlength="8" required>
+    </div>
+    {% if error %}<p style="color:var(--err)">{{ error }}</p>{% endif %}
+    {% if saved %}<p style="color:var(--ok)">Password aggiornata.</p>{% endif %}
+    <button class="btn" type="submit">Salva</button>
+  </form>
+</div>
+
+<p class="muted" style="max-width:360px">
+  Se hai perso l'accesso, puoi resettarla direttamente dal server senza passare da qui —
+  vedi <code>reset_password.py</code> nella cartella del server (eseguibile con
+  <code>docker compose exec beta-server python3 reset_password.py "NuovaPassword"</code>).
+</p>
+{% endblock %}

@@ -18,6 +18,18 @@ CREATE TABLE IF NOT EXISTS devices (
     last_seen_at TEXT
 );
 
+-- Single row (id=1): the dashboard's admin password, changeable from the
+-- Account page (app.py's /account) without redeploying. Falls back to the
+-- BETA_ADMIN_PASSWORD_HASH env var (see app.py's get_active_password_hash())
+-- until the first change -- that env var stays useful as the value
+-- reset_password.py restores with --clear, or as a fresh baseline if the
+-- volume is ever wiped.
+CREATE TABLE IF NOT EXISTS admin_config (
+    id INTEGER PRIMARY KEY CHECK (id = 1),
+    password_hash TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
+
 -- Single row (id=1): fleet-wide config, entirely dashboard-editable. Nothing
 -- about cadence is ever hardcoded in the agent or in main.js -- this table is
 -- the one source of truth (see GET /api/v1/config in app.py).
