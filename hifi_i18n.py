@@ -313,6 +313,7 @@ MESSAGES = {
     'restore.wifiReloaded': {'en': 'Wi-Fi networks reloaded', 'it': 'Reti Wi-Fi ricaricate'},
     'restore.smbResynced': {'en': 'SMB credentials resynced', 'it': 'Credenziali SMB risincronizzate'},
     'restore.timezoneApplied': {'en': 'Timezone re-applied ({tz})', 'it': 'Fuso orario riapplicato ({tz})'},
+    'restore.hostnameApplied': {'en': 'Hostname re-applied ({name})', 'it': 'Nome host riapplicato ({name})'},
 
     # ── sources_server.py: SMB / adopted-disk mounting ───────────────
     'mount.invalidFields': {'en': 'Invalid value in server/share/credentials',
