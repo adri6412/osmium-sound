@@ -171,11 +171,16 @@ const Settings = ({ initialSection, onSectionConsumed } = {}) => {
   const [harMessage, setHarMessage] = useState('');
 
   // Perf capture (Debug section) — same IPC/CDP mechanism as HAR capture
-  // above, but samples DOM/JS/per-process metrics every 5 seconds instead of
-  // network traffic; meant to be left running for hours to catch a leak.
+  // above, but samples DOM/JS/per-process metrics on a configurable interval
+  // instead of network traffic; meant to be left running for hours to catch
+  // a leak. Interval persisted locally so it survives an app restart.
   const [perfRunning, setPerfRunning] = useState(false);
   const [perfBusy, setPerfBusy] = useState(false);
   const [perfMessage, setPerfMessage] = useState('');
+  const [perfIntervalSec, setPerfIntervalSec] = useState(() => {
+    const saved = parseInt(localStorage.getItem('hifiPerfCaptureIntervalSec'), 10);
+    return Number.isFinite(saved) && saved > 0 ? saved : 5;
+  });
 
   // Player enabled/disabled (squeezelite) — orthogonal to display mode: does
   // this device play audio at all, for "server only" units.
@@ -863,7 +868,17 @@ const Settings = ({ initialSection, onSectionConsumed } = {}) => {
   // ── Perf capture (Debug section) ──────────────────────────────────
   const loadPerfStatus = async () => {
     const res = await window.electronAPI?.getPerfCaptureStatus?.();
-    if (res) setPerfRunning(!!res.running);
+    if (res) {
+      setPerfRunning(!!res.running);
+      if (res.running && res.intervalSec) setPerfIntervalSec(res.intervalSec);
+    }
+  };
+
+  const onPerfIntervalChange = (raw) => {
+    const n = parseInt(raw, 10);
+    const clamped = Number.isFinite(n) ? Math.min(600, Math.max(1, n)) : 5;
+    setPerfIntervalSec(clamped);
+    localStorage.setItem('hifiPerfCaptureIntervalSec', String(clamped));
   };
 
   const togglePerfCapture = async () => {
@@ -882,7 +897,7 @@ const Settings = ({ initialSection, onSectionConsumed } = {}) => {
         setPerfMessage(t('settings.debug.perfSaved', { filename: res.filename, count: res.sampleCount }));
       }
     } else {
-      const res = await window.electronAPI.startPerfCapture();
+      const res = await window.electronAPI.startPerfCapture(perfIntervalSec);
       setPerfBusy(false);
       if (res?.success) {
         setPerfRunning(true);
@@ -4026,6 +4041,22 @@ const Settings = ({ initialSection, onSectionConsumed } = {}) => {
                     <div className="pt-3 mt-1 border-t border-hifi-accent/40">
                       <p className="text-sm text-hifi-silver mb-3">{t('settings.debug.perfHelp')}</p>
 
+                      <div className="flex items-center justify-between gap-3 mb-3">
+                        <label htmlFor="perf-interval" className="text-sm text-hifi-silver">
+                          {t('settings.debug.perfInterval')}
+                        </label>
+                        <input
+                          id="perf-interval"
+                          type="number"
+                          min="1"
+                          max="600"
+                          value={perfIntervalSec}
+                          disabled={perfRunning || perfBusy}
+                          onChange={(e) => onPerfIntervalChange(e.target.value)}
+                          className="w-20 bg-hifi-dark border border-hifi-accent rounded-lg px-3 py-2 text-white text-center focus:outline-none focus:border-hifi-gold disabled:opacity-50"
+                        />
+                      </div>
+
                       <button
                         onClick={togglePerfCapture}
                         disabled={perfBusy || !window.electronAPI?.startPerfCapture}
@@ -4042,7 +4073,7 @@ const Settings = ({ initialSection, onSectionConsumed } = {}) => {
 
                       {perfRunning && (
                         <div className="rounded-lg p-3 mt-3 text-center text-sm bg-hifi-dark text-hifi-silver">
-                          {t('settings.debug.perfRecording')}
+                          {t('settings.debug.perfRecording', { interval: perfIntervalSec })}
                         </div>
                       )}
 

@@ -583,7 +583,8 @@ ipcMain.handle('har-capture-status', () => ({
  * suspected after a field report of GPU usage climbing back up over a few
  * hours of playback after every OTA-triggered restart (which resets it).
  *
- * Samples every 5 seconds for as long as it runs (meant to be left recording
+ * Samples on a configurable interval (default 5s, set from Settings.jsx's
+ * Debug section) for as long as it runs (meant to be left recording
  * across hours, unattended) and appends one JSON line per sample rather than
  * building the whole thing in memory + writing once at the end like the HAR
  * capture does — a multi-hour capture that's still running when the renderer
@@ -648,7 +649,7 @@ async function samplePerfCapture() {
   }
 }
 
-ipcMain.handle('perf-capture-start', async () => {
+ipcMain.handle('perf-capture-start', async (_event, intervalSec) => {
   if (perfCapture) return { success: false, message: 'Capture already running' };
   if (!mainWindow || mainWindow.isDestroyed()) return { success: false, message: 'No window' };
   const dbg = mainWindow.webContents.debugger;
@@ -661,8 +662,11 @@ ipcMain.handle('perf-capture-start', async () => {
   mkdirSync(PERF_CAPTURE_DIR, { recursive: true });
   const stamp = new Date().toISOString().replace(/[:.]/g, '-');
   const filePath = join(PERF_CAPTURE_DIR, `perf-${stamp}.jsonl`);
-  perfCapture = { startedAt: Date.now(), filePath, sampleCount: 0 };
-  perfCapture.intervalId = setInterval(samplePerfCapture, 5000);
+  // Clamp rather than trust the renderer's input verbatim -- this only
+  // drives a local setInterval, but a stray 0/NaN would busy-loop CDP calls.
+  const sec = Number.isFinite(intervalSec) ? Math.min(600, Math.max(1, intervalSec)) : 5;
+  perfCapture = { startedAt: Date.now(), filePath, sampleCount: 0, intervalSec: sec };
+  perfCapture.intervalId = setInterval(samplePerfCapture, sec * 1000);
   samplePerfCapture(); // first sample immediately, don't wait for the first tick
   dbg.once('detach', () => {
     if (perfCapture) console.error('perf-capture: CDP session detached unexpectedly (devtools opened elsewhere?)');
@@ -693,4 +697,5 @@ ipcMain.handle('perf-capture-status', () => ({
   running: !!perfCapture,
   startedAt: perfCapture ? perfCapture.startedAt : null,
   sampleCount: perfCapture ? perfCapture.sampleCount : 0,
+  intervalSec: perfCapture ? perfCapture.intervalSec : null,
 }));
