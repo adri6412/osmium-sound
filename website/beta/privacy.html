@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Osmium Sound — Beta Privacy Notice</title>
+  <meta name="robots" content="noindex, nofollow">
+  <link rel="icon" type="image/svg+xml" href="../favicon.svg">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #0a0a0a; --bg-card: #141414; --bg-card2: #1c1c1c;
+      --border: #2a2a2a; --accent: #f5b820; --accent-dim: rgba(245,184,32,0.12);
+      --text: #e8e8e8; --muted: #999; --radius: 12px;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: var(--bg); color: var(--text);
+      font-family: 'Inter', system-ui, -apple-system, sans-serif;
+      line-height: 1.7;
+    }
+    nav {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 0 clamp(1.25rem, 5vw, 4rem); height: 58px;
+      border-bottom: 1px solid var(--border);
+      position: sticky; top: 0; background: rgba(10,10,10,0.92);
+      backdrop-filter: blur(10px);
+    }
+    nav a.back { color: var(--muted); text-decoration: none; font-size: 0.88rem; font-weight: 500; }
+    nav a.back:hover { color: var(--text); }
+    .lang-switch {
+      display: inline-flex; align-items: center;
+      border: 1px solid var(--border); border-radius: 6px;
+      overflow: hidden; background: var(--bg-card);
+    }
+    .lang-switch button {
+      background: none; border: none; cursor: pointer;
+      color: var(--muted); font-family: inherit;
+      font-size: 0.74rem; font-weight: 700; letter-spacing: 0.06em;
+      padding: 5px 9px;
+    }
+    .lang-switch button + button { border-left: 1px solid var(--border); }
+    .lang-switch button.active { color: #000; background: var(--accent); }
+    main { max-width: 720px; margin: 0 auto; padding: 3rem clamp(1.25rem, 5vw, 2rem) 5rem; }
+    h1 { font-size: clamp(1.6rem, 4vw, 2.1rem); font-weight: 800; margin-bottom: 0.4rem; }
+    .updated { color: var(--muted); font-size: 0.85rem; margin-bottom: 2.25rem; }
+    h2 {
+      font-size: 1.1rem; font-weight: 700; color: var(--accent);
+      margin: 2.25rem 0 0.75rem;
+    }
+    h3 { font-size: 0.95rem; font-weight: 700; margin: 1.25rem 0 0.5rem; }
+    p { margin-bottom: 0.85rem; color: var(--text); font-size: 0.94rem; }
+    ul, ol { margin: 0.5rem 0 0.85rem 1.4rem; color: var(--text); font-size: 0.94rem; }
+    li { margin-bottom: 0.4rem; }
+    strong { color: #fff; }
+    a { color: var(--accent); }
+    code {
+      font-family: 'Fira Code', 'Consolas', monospace; font-size: 0.85em;
+      background: var(--bg-card2); border: 1px solid var(--border);
+      padding: 1px 5px; border-radius: 4px;
+    }
+    .callout {
+      background: rgba(255,99,71,0.10); border: 1px solid rgba(255,99,71,0.4);
+      border-radius: 10px; padding: 1rem 1.2rem; margin: 1.25rem 0;
+      font-size: 0.9rem;
+    }
+    .callout strong { color: #ff8166; }
+    .box {
+      background: var(--bg-card); border: 1px solid var(--border);
+      border-radius: var(--radius); padding: 1.25rem 1.4rem; margin: 1rem 0;
+    }
+    table { width: 100%; border-collapse: collapse; margin: 0.75rem 0 1.25rem; font-size: 0.88rem; }
+    th, td { text-align: left; padding: 0.5rem 0.6rem; border-bottom: 1px solid var(--border); vertical-align: top; }
+    th { color: var(--muted); font-weight: 600; font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.04em; }
+    #lang-it { display: none; }
+  </style>
+</head>
+<body>
+
+<nav>
+  <a class="back" href="index.html" id="backLink">&larr; Back to beta</a>
+  <div class="lang-switch" role="group" aria-label="Language">
+    <button type="button" data-lang="en">EN</button>
+    <button type="button" data-lang="it">IT</button>
+  </div>
+</nav>
+
+<main>
+
+<div id="lang-en">
+  <h1>Osmium Sound — Private Beta Privacy Notice</h1>
+  <p class="updated">Last updated: 16 August 2026 · Applies only to devices running a private beta / dev-channel build</p>
+
+  <div class="callout">
+    <strong>Scope of this notice:</strong> this page describes data collection that runs <strong>only</strong> on appliances installed from this <code>/beta</code> page or otherwise switched to the Dev/Alpha OTA channel, for the duration of the private beta test. Stable production releases (the main download on <a href="../index.html">osmium-sound.pages.dev</a>) do not currently run this feature. Once the private beta ends, this data-collection feature and all data already collected through it will be removed/deleted.
+  </div>
+
+  <h2>1. Data controller</h2>
+  <p><strong>Adriano Frongillo</strong>, sole developer of Osmium Sound.<br>
+  Contact: <a href="mailto:frongillo.adriano@gmail.com">frongillo.adriano@gmail.com</a></p>
+
+  <h2>2. What is collected</h2>
+  <p>A background agent (<code>hifi-beta-agent</code>) runs on the appliance for the duration of the private beta and sends the following to our server (<code>telemetry.osmiumsound.it</code>) over HTTPS:</p>
+
+  <h3>a) Periodic device snapshot</h3>
+  <p>Sent automatically (by default every 10 minutes; we can remotely change this interval for the whole beta fleet):</p>
+  <table>
+    <tr><th>Field</th><th>Example</th></tr>
+    <tr><td>Hostname / device label</td><td>a name you (or we) gave the device</td></tr>
+    <tr><td>Appliance software version</td><td>v2.5.21-dev.104</td></tr>
+    <tr><td>CPU model, core count, CPU load %, temperature</td><td>Intel N100, 4 cores, 12%, 48.2°C</td></tr>
+    <tr><td>GPU model and GPU busy %</td><td>Intel UHD, 6%</td></tr>
+    <tr><td>RAM total/used, disk total/used</td><td>8192 MB / 3100 MB</td></tr>
+    <tr><td>Network connection type and local IP address</td><td>wired, 192.168.1.42</td></tr>
+  </table>
+
+  <h3>b) Diagnostic network captures (HAR)</h3>
+  <p>Only during short capture windows that <strong>we schedule remotely</strong> (this is not continuous, and there is currently no on-device switch to trigger or block it yourself), the appliance records the network requests made by its own interface: request/response URLs, HTTP method, status codes, headers, and timing. <strong>Response bodies are deliberately not captured</strong> — no page content, images or audio. Because request URLs can include things like track/album identifiers or search terms typed into the interface, and because headers can incidentally include authentication/session information for connected streaming services, these captures can contain more than pure system metrics; access to them is restricted to the data controller.</p>
+
+  <h3>c) Performance captures</h3>
+  <p>During the same capture windows, CPU and memory usage per interface screen/tab is logged, to help diagnose slowdowns.</p>
+
+  <h3>d) Device identifier</h3>
+  <p>A technical identifier derived from the appliance's machine ID, plus an access token used only to authenticate uploads from that specific device. Neither is tied to your name unless you chose to put your name in the device's hostname/label.</p>
+
+  <h2>3. Why we collect it</h2>
+  <p>Solely to find and fix bugs and performance problems, and improve the software during the private beta. It is <strong>never</strong> used for advertising or profiling, and is not sold or shared with third parties.</p>
+
+  <h2>4. Legal basis</h2>
+  <p>Consent (Art. 6(1)(a) GDPR), given by choosing to install and run a beta/dev-channel build after being informed by the notice on the download page and this document.</p>
+
+  <h2>5. Who can access it</h2>
+  <p>Only the data controller, through a password-protected dashboard. Processors involved purely for hosting: the provider hosting <code>telemetry.osmiumsound.it</code> (receives the data described above), and Cloudflare Pages / GitHub (host this website and the software downloads, and do not receive appliance telemetry).</p>
+
+  <h2>6. Retention</h2>
+  <p>Captures are deleted from your device automatically right after a successful upload — nothing accumulates on the appliance itself. On the server, data is kept only for the duration of the private beta. <strong>When the beta ends, this feature is switched off and the data collected through it is deleted.</strong></p>
+
+  <div class="callout">
+    <strong>No in-app opt-out yet.</strong> During the beta there is no Settings toggle to disable this data collection on a device that is already running it. If you do not want to participate, please don't install a beta/dev-channel build — use the stable production release instead, which does not include this feature, or ask us to switch your device back to the Production OTA channel.
+  </div>
+
+  <h2>7. Your rights</h2>
+  <p>Under GDPR you can, at any time, contact us at <a href="mailto:frongillo.adriano@gmail.com">frongillo.adriano@gmail.com</a> to:</p>
+  <ul>
+    <li>ask whether we hold data about your device, and get a copy of it;</li>
+    <li>ask us to correct or delete it;</li>
+    <li>ask us to restrict or stop processing it;</li>
+    <li>withdraw your consent (equivalent to switching the device off the Dev/Alpha channel or uninstalling the beta);</li>
+    <li>receive it in a portable format.</li>
+  </ul>
+  <p>To identify your device for one of these requests, tell us its hostname/label or approximate registration date. You also have the right to lodge a complaint with your national supervisory authority — in Italy, the <a href="https://www.garanteprivacy.it" target="_blank" rel="noopener">Garante per la Protezione dei Dati Personali</a>.</p>
+
+  <h2>8. Security</h2>
+  <p>All uploads are made over HTTPS. The dashboard used to view this data is protected by a password known only to the data controller. No third-party advertising or analytics SDKs are involved in this data collection.</p>
+
+  <h2>9. Changes</h2>
+  <p>This notice may be updated as the beta evolves; check the date at the top. Material changes will also be reflected on the <a href="index.html">beta download page</a>.</p>
+</div>
+
+<div id="lang-it">
+  <h1>Osmium Sound — Informativa Privacy Beta Privata</h1>
+  <p class="updated">Ultimo aggiornamento: 16 agosto 2026 · Si applica solo ai dispositivi con una build della beta privata / canale dev</p>
+
+  <div class="callout">
+    <strong>Ambito di questa informativa:</strong> questa pagina descrive la raccolta dati che gira <strong>solo</strong> sui dispositivi installati da questa pagina <code>/beta</code> o comunque passati al canale OTA Dev/Alpha, per la durata della beta privata. Le versioni stabili di produzione (il download principale su <a href="../index.html">osmium-sound.pages.dev</a>) al momento non eseguono questa funzione. Al termine della beta privata, questa funzione di raccolta dati e tutti i dati già raccolti tramite essa verranno rimossi/eliminati.
+  </div>
+
+  <h2>1. Titolare del trattamento</h2>
+  <p><strong>Adriano Frongillo</strong>, unico sviluppatore di Osmium Sound.<br>
+  Contatto: <a href="mailto:frongillo.adriano@gmail.com">frongillo.adriano@gmail.com</a></p>
+
+  <h2>2. Cosa viene raccolto</h2>
+  <p>Un agente in background (<code>hifi-beta-agent</code>) gira sul dispositivo per la durata della beta privata e invia quanto segue al nostro server (<code>telemetry.osmiumsound.it</code>) via HTTPS:</p>
+
+  <h3>a) Snapshot periodico del dispositivo</h3>
+  <p>Inviato automaticamente (di default ogni 10 minuti; possiamo cambiare questo intervallo da remoto per l'intera flotta beta):</p>
+  <table>
+    <tr><th>Campo</th><th>Esempio</th></tr>
+    <tr><td>Hostname / etichetta dispositivo</td><td>un nome dato al dispositivo (da te o da noi)</td></tr>
+    <tr><td>Versione software del dispositivo</td><td>v2.5.21-dev.104</td></tr>
+    <tr><td>Modello CPU, numero core, carico CPU %, temperatura</td><td>Intel N100, 4 core, 12%, 48.2°C</td></tr>
+    <tr><td>Modello GPU e utilizzo GPU %</td><td>Intel UHD, 6%</td></tr>
+    <tr><td>RAM totale/usata, disco totale/usato</td><td>8192 MB / 3100 MB</td></tr>
+    <tr><td>Tipo di connessione di rete e indirizzo IP locale</td><td>cablata, 192.168.1.42</td></tr>
+  </table>
+
+  <h3>b) Catture diagnostiche di rete (HAR)</h3>
+  <p>Solo durante brevi finestre di cattura che <strong>attiviamo da remoto</strong> (non è continuo, e al momento non esiste un interruttore sul dispositivo per attivarlo o bloccarlo autonomamente), il dispositivo registra le richieste di rete effettuate dalla sua interfaccia: URL di richiesta/risposta, metodo HTTP, codici di stato, header e tempistiche. <strong>I corpi delle risposte non vengono deliberatamente catturati</strong> — nessun contenuto di pagina, immagine o audio. Poiché gli URL di richiesta possono includere elementi come identificativi di brani/album o termini di ricerca digitati nell'interfaccia, e poiché gli header possono includere incidentalmente informazioni di autenticazione/sessione dei servizi di streaming connessi, queste catture possono contenere più delle sole metriche di sistema; l'accesso è riservato al titolare del trattamento.</p>
+
+  <h3>c) Catture di performance</h3>
+  <p>Durante le stesse finestre di cattura, viene registrato l'utilizzo di CPU e memoria per ogni schermata/tab dell'interfaccia, per aiutarci a diagnosticare rallentamenti.</p>
+
+  <h3>d) Identificativo del dispositivo</h3>
+  <p>Un identificativo tecnico derivato dal machine ID del dispositivo, più un token di accesso usato solo per autenticare i caricamenti da quel dispositivo specifico. Nessuno dei due è collegato al tuo nome, a meno che tu non abbia scelto di inserire il tuo nome nell'hostname/etichetta del dispositivo.</p>
+
+  <h2>3. Perché lo raccogliamo</h2>
+  <p>Esclusivamente per trovare e correggere bug e problemi di performance, e migliorare il software durante la beta privata. Non viene <strong>mai</strong> usato per pubblicità o profilazione, né venduto o condiviso con terze parti.</p>
+
+  <h2>4. Base giuridica</h2>
+  <p>Consenso (art. 6(1)(a) GDPR), dato scegliendo di installare ed eseguire una build beta/canale dev dopo essere stati informati tramite l'avviso nella pagina di download e questo documento.</p>
+
+  <h2>5. Chi può accedervi</h2>
+  <p>Solo il titolare del trattamento, tramite una dashboard protetta da password. Fornitori coinvolti puramente per l'hosting: il provider che ospita <code>telemetry.osmiumsound.it</code> (riceve i dati sopra descritti), e Cloudflare Pages / GitHub (ospitano questo sito e i download del software, e non ricevono la telemetria del dispositivo).</p>
+
+  <h2>6. Conservazione</h2>
+  <p>Le catture vengono eliminate automaticamente dal dispositivo subito dopo un caricamento riuscito — nulla si accumula sul dispositivo stesso. Sul server, i dati vengono conservati solo per la durata della beta privata. <strong>Al termine della beta, questa funzione viene disattivata e i dati raccolti tramite essa vengono eliminati.</strong></p>
+
+  <div class="callout">
+    <strong>Nessuna disattivazione in-app per ora.</strong> Durante la beta non esiste un interruttore nelle Impostazioni per disattivare questa raccolta dati su un dispositivo che la sta già eseguendo. Se non vuoi partecipare, ti chiediamo di non installare una build beta/canale dev — usa la versione stabile di produzione, che non include questa funzione, oppure chiedici di riportare il tuo dispositivo sul canale OTA di Produzione.
+  </div>
+
+  <h2>7. I tuoi diritti</h2>
+  <p>Ai sensi del GDPR puoi, in qualsiasi momento, scriverci a <a href="mailto:frongillo.adriano@gmail.com">frongillo.adriano@gmail.com</a> per:</p>
+  <ul>
+    <li>chiedere se conserviamo dati relativi al tuo dispositivo, e ottenerne una copia;</li>
+    <li>chiederne la correzione o la cancellazione;</li>
+    <li>chiederne la limitazione o l'interruzione del trattamento;</li>
+    <li>revocare il consenso (equivalente a riportare il dispositivo fuori dal canale Dev/Alpha o disinstallare la beta);</li>
+    <li>riceverli in un formato portabile.</li>
+  </ul>
+  <p>Per identificare il tuo dispositivo ai fini di una di queste richieste, indicaci il suo hostname/etichetta o la data approssimativa di registrazione. Hai inoltre diritto a presentare reclamo alla tua autorità di controllo nazionale — in Italia, il <a href="https://www.garanteprivacy.it" target="_blank" rel="noopener">Garante per la Protezione dei Dati Personali</a>.</p>
+
+  <h2>8. Sicurezza</h2>
+  <p>Tutti i caricamenti avvengono via HTTPS. La dashboard usata per consultare questi dati è protetta da una password nota solo al titolare del trattamento. Nessun SDK pubblicitario o di analytics di terze parti è coinvolto in questa raccolta dati.</p>
+
+  <h2>9. Modifiche</h2>
+  <p>Questa informativa può essere aggiornata con l'evolversi della beta; controlla la data in alto. Le modifiche rilevanti saranno riportate anche nella <a href="index.html">pagina di download della beta</a>.</p>
+</div>
+
+</main>
+
+<script>
+  function applyLang(lang) {
+    document.getElementById('lang-en').style.display = (lang === 'it') ? 'none' : 'block';
+    document.getElementById('lang-it').style.display = (lang === 'it') ? 'block' : 'none';
+    document.querySelectorAll('.lang-switch button').forEach(function (b) {
+      b.classList.toggle('active', b.dataset.lang === lang);
+    });
+    document.getElementById('backLink').textContent = (lang === 'it') ? '← Torna alla beta' : '← Back to beta';
+    document.documentElement.lang = lang;
+    try { localStorage.setItem('lang', lang); } catch (e) {}
+  }
+  document.querySelectorAll('.lang-switch button').forEach(function (b) {
+    b.addEventListener('click', function () { applyLang(b.dataset.lang); });
+  });
+  (function () {
+    var saved = null;
+    try { saved = localStorage.getItem('lang'); } catch (e) {}
+    var browserIt = (navigator.languages || [navigator.language || '']).some(function (l) { return l.toLowerCase().indexOf('it') === 0; });
+    applyLang(saved || (browserIt ? 'it' : 'en'));
+  })();
+</script>
+</body>
+</html>
