@@ -491,7 +491,8 @@
       "loginFailed": "Could not update the SSH login."
     },
     "pointer": {
-      "help": "Show the mouse pointer on screen. Useful if you use the device with a mouse instead of the touchscreen. The pointer is hidden by default.",
+      "label": "Mouse pointer",
+      "help": "Show the mouse pointer on screen, or hide it if you only use the touchscreen. Shown by default, so the on-screen setup wizard stays usable.",
       "enabled": "Mouse pointer shown",
       "disabled": "Mouse pointer hidden",
       "unavailable": "Pointer control is not available on this device.",
@@ -531,6 +532,7 @@
       "intro": "Osmium Sound includes open source components, each under its own license. The full record is also kept in THIRD-PARTY-NOTICES.md in the project repository."
     },
     "playerEnabled": {
+      "label": "Player",
       "help": "Turn the player itself off for a server-only unit — Lyrion Music Server and everything else keeps running, this device just never plays audio locally. Useful for a box in a closet driving other players elsewhere.",
       "currentOn": "Player on",
       "currentOff": "Player off (server only)",

@@ -4,17 +4,17 @@ xset s off
 xset -dpms
 xset s noblank
 
-# Hide the mouse cursor when idle — unless the user enabled the on-screen
-# pointer (Settings → Mouse pointer), persisted by the API at the path below.
-# A non-touchscreen user can thus keep a visible mouse pointer across reboots.
+# The mouse cursor is visible by default — the on-device first-boot QR/Wi-Fi
+# setup wizard has a touch/mouse-driven manual-network fallback that needs a
+# visible pointer to be usable. A touchscreen owner can hide it from Settings
+# → Mouse pointer, persisted by the API at the path below (only an explicit
+# "0" hides it; unset/anything else leaves it visible).
 # Installer sessions (hifi.installer=1, see InstallWizard.jsx) always keep the
-# pointer visible: there's no touchscreen yet at install time, and the disk
-# picker needs a visible cursor to be usable from a VM console / mouse.
+# pointer visible too: there's no touchscreen yet at install time, and the
+# disk picker needs a visible cursor to be usable from a VM console / mouse.
 if grep -qw 'hifi.installer=1' /proc/cmdline 2>/dev/null; then
     : # installer session — leave the cursor visible
-elif [ "$(cat /etc/hifi-player/pointer-enabled 2>/dev/null)" = "1" ]; then
-    : # pointer enabled — leave the cursor visible (don't start unclutter)
-else
+elif [ "$(cat /etc/hifi-player/pointer-enabled 2>/dev/null)" = "0" ]; then
     unclutter -idle 1 -root &
 fi
 

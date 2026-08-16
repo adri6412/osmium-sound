@@ -617,8 +617,26 @@ async function loadVuMeter() { const r = await api.sys('vu_meter'); if (r.ok) vu
 async function setVuMeter(enable) {
   if (enable === vuMeter.value) return;
   const r = await api.sysPost('vu_meter', { enable });
-  if (r.ok && r.data.success !== false) { vuMeter.value = r.data.enabled; say(bodyMsg(r, t('settings.display.vuMeterChanged'))); }
-  else say(bodyMsg(r, t('settings.display.vuMeterFailed')), true);
+  if (r.ok && r.data.success !== false) { vuMeter.value = r.data.enabled; say(bodyMsg(r, t('settings.playback.vuMeterChanged'))); }
+  else say(bodyMsg(r, t('settings.playback.vuMeterFailed')), true);
+}
+
+// ── Mouse pointer (cursor) — mirrors the kiosk's Settings.jsx pointer
+// toggle. Shown by default (the on-device QR/Wi-Fi wizard needs a visible
+// cursor); a touchscreen owner can hide it here or from the kiosk itself.
+const pointer = reactive({ available: true, enabled: true });
+const pointerBusy = ref(false);
+async function loadPointer() {
+  const r = await api.sys('pointer_status');
+  if (r.ok) { pointer.available = !!r.data.available; pointer.enabled = r.data.enabled !== false; }
+}
+async function setPointer(enable) {
+  if (pointerBusy.value || enable === pointer.enabled) return;
+  pointerBusy.value = true;
+  const r = await api.sysPost('pointer_set', { enable });
+  pointerBusy.value = false;
+  if (r.ok && r.data.success !== false) { pointer.enabled = r.data.enabled; say(r.data.message || t('settings.display.pointerChanged')); }
+  else say(bodyMsg(r, t('settings.display.pointerFailed')), true);
 }
 
 // ── Now-playing auto-expand ─────────────────────────────────────────
@@ -1047,7 +1065,7 @@ async function saveBackupScheduled(v) {
 
 onMounted(async () => {
   loadNet(); loadAudio(); loadDsp(); loadFir(); loadToggles(); loadShell(); loadLms(); loadLyrion(); loadPlayback();
-  loadMode(); loadPlayerEnabled(); loadUiRes(); loadTimezone(); loadVuMeter(); loadAutoExpand(); loadChannel(); checkAll(); resumePlanIfRunning(); loadBackups(); loadTailscale(); loadHarCaptures(); loadPerfCaptures(); loadDebugFlags();
+  loadMode(); loadPlayerEnabled(); loadUiRes(); loadPointer(); loadTimezone(); loadVuMeter(); loadAutoExpand(); loadChannel(); checkAll(); resumePlanIfRunning(); loadBackups(); loadTailscale(); loadHarCaptures(); loadPerfCaptures(); loadDebugFlags();
   timezonePoll = setInterval(pollTimezone, 10000);
   // Tell the global UpdateProgressOverlay (mounted in App.vue) that this page
   // owns the OTA modal while it's open, so the two never render on top of
@@ -1303,14 +1321,26 @@ onUnmounted(() => {
           <Toggle :model-value="digitalVolumeControl === '0'" @update:model-value="setFixedVolume" />
         </div>
       </template>
-      <p class="sub">{{ t('settings.playback.autoExpandLabel') }}</p>
-      <p class="muted">{{ t('settings.playback.autoExpandHelp') }}</p>
-      <span class="seg">
-        <button v-for="s in [0, 3, 5, 10, 15]" :key="s"
-                :class="{ active: autoExpand === s }" @click="setAutoExpand(s)">
-          {{ s === 0 ? t('settings.display.vuMeterOff') : s + 's' }}
-        </button>
-      </span>
+
+      <div style="margin-top: 18px; padding-top: 16px; border-top: 1px solid rgba(255,255,255,0.1);">
+        <p class="sub">{{ t('settings.playback.vuMeterLabel') }}</p>
+        <p class="muted">{{ t('settings.playback.vuMeterHelp') }}</p>
+        <span class="seg">
+          <button :class="{ active: vuMeter }" @click="setVuMeter(true)">{{ t('settings.playback.vuMeterOn') }}</button>
+          <button :class="{ active: !vuMeter }" @click="setVuMeter(false)">{{ t('settings.playback.vuMeterOff') }}</button>
+        </span>
+      </div>
+
+      <div style="margin-top: 18px; padding-top: 16px; border-top: 1px solid rgba(255,255,255,0.1);">
+        <p class="sub">{{ t('settings.playback.autoExpandLabel') }}</p>
+        <p class="muted">{{ t('settings.playback.autoExpandHelp') }}</p>
+        <span class="seg">
+          <button v-for="s in [0, 3, 5, 10, 15]" :key="s"
+                  :class="{ active: autoExpand === s }" @click="setAutoExpand(s)">
+            {{ s === 0 ? t('settings.playback.replayGain.0') : s + 's' }}
+          </button>
+        </span>
+      </div>
     </div>
 
     <!-- Display mode -->
@@ -1321,27 +1351,36 @@ onUnmounted(() => {
         <button v-else class="secondary" @click="setMode('headless')">{{ t('settings.display.switchToHeadless') }}</button>
       </div>
       <template v-if="mode !== 'headless'">
-        <p class="sub">{{ t('settings.display.resolutionLabel') }}</p>
-        <p class="muted">{{ t('settings.display.resolutionHelp') }}</p>
-        <span class="seg">
-          <button v-for="opt in ['auto', '720', '1080', 'native']" :key="opt"
-                  :class="{ active: uiRes === opt }" @click="setUiRes(opt)">
-            {{ t('settings.display.resolution.' + opt) }}
-          </button>
-        </span>
+        <div style="margin-top: 18px; padding-top: 16px; border-top: 1px solid rgba(255,255,255,0.1);">
+          <p class="sub">{{ t('settings.display.resolutionLabel') }}</p>
+          <p class="muted">{{ t('settings.display.resolutionHelp') }}</p>
+          <span class="seg">
+            <button v-for="opt in ['auto', '720', '1080', 'native']" :key="opt"
+                    :class="{ active: uiRes === opt }" @click="setUiRes(opt)">
+              {{ t('settings.display.resolution.' + opt) }}
+            </button>
+          </span>
+        </div>
+
+        <div style="margin-top: 18px; padding-top: 16px; border-top: 1px solid rgba(255,255,255,0.1);">
+          <p class="sub">{{ t('settings.display.pointerLabel') }}</p>
+          <p class="muted">{{ t('settings.display.pointerHelp') }}</p>
+          <p class="muted" v-if="!pointer.available">{{ t('settings.display.pointerUnavailable') }}</p>
+          <span class="seg">
+            <button :disabled="pointerBusy" :class="{ active: pointer.enabled }" @click="setPointer(true)">{{ t('settings.display.pointerOn') }}</button>
+            <button :disabled="pointerBusy" :class="{ active: !pointer.enabled }" @click="setPointer(false)">{{ t('settings.display.pointerOff') }}</button>
+          </span>
+        </div>
       </template>
-      <p class="sub">{{ t('settings.display.vuMeterLabel') }}</p>
-      <p class="muted">{{ t('settings.display.vuMeterHelp') }}</p>
-      <span class="seg">
-        <button :class="{ active: vuMeter }" @click="setVuMeter(true)">{{ t('settings.display.vuMeterOn') }}</button>
-        <button :class="{ active: !vuMeter }" @click="setVuMeter(false)">{{ t('settings.display.vuMeterOff') }}</button>
-      </span>
-      <p class="sub">{{ t('settings.display.playerLabel') }}</p>
-      <p class="muted">{{ t('settings.display.playerHelp') }}</p>
-      <span class="seg">
-        <button :class="{ active: playerEnabled }" @click="setPlayerEnabled(true)">{{ t('settings.display.playerOn') }}</button>
-        <button :class="{ active: !playerEnabled }" @click="setPlayerEnabled(false)">{{ t('settings.display.playerOff') }}</button>
-      </span>
+
+      <div style="margin-top: 18px; padding-top: 16px; border-top: 1px solid rgba(255,255,255,0.1);">
+        <p class="sub">{{ t('settings.display.playerLabel') }}</p>
+        <p class="muted">{{ t('settings.display.playerHelp') }}</p>
+        <span class="seg">
+          <button :class="{ active: playerEnabled }" @click="setPlayerEnabled(true)">{{ t('settings.display.playerOn') }}</button>
+          <button :class="{ active: !playerEnabled }" @click="setPlayerEnabled(false)">{{ t('settings.display.playerOff') }}</button>
+        </span>
+      </div>
     </div>
 
     <!-- Timezone -->

@@ -933,6 +933,8 @@ _AUTH_ROUTES = {
     ('/api/system/timezones', 'GET'): '/timezones',
     ('/api/system/vu_meter', 'GET'): '/vu_meter',
     ('/api/system/vu_meter', 'POST'): '/vu_meter',
+    ('/api/system/pointer_status', 'GET'): '/pointer_status',
+    ('/api/system/pointer_set', 'POST'): '/pointer_set',
     ('/api/system/nowplaying_autoexpand', 'GET'): '/nowplaying_autoexpand',
     ('/api/system/nowplaying_autoexpand', 'POST'): '/nowplaying_autoexpand',
     ('/api/system/updates/app/check', 'GET'): '/app_update/check',

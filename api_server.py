@@ -1784,9 +1784,10 @@ def set_tailscale(enable):
     return status
 
 # ──────────────────────────────────────────────────────────────────
-#  Mouse pointer (cursor) control — the appliance is built for a
-#  touchscreen, so the X cursor is auto-hidden by unclutter. This lets a
-#  user WITHOUT a touchscreen turn the on-screen pointer on from Settings.
+#  Mouse pointer (cursor) control — shown by default (the on-device
+#  first-boot QR/Wi-Fi setup wizard has a touch/mouse-driven manual-network
+#  fallback that needs a visible cursor). A touchscreen-only owner can turn
+#  it off from Settings, which starts unclutter to auto-hide it.
 #  The choice is persisted and re-applied at login by ~/.xsession; here we
 #  also apply it live so it takes effect without a reboot.
 #  NOTE: the cursor only ever appears once the X server is no longer started
@@ -1800,11 +1801,14 @@ def _has_unclutter():
 
 def get_pointer_status():
     """Return { available, enabled }. 'enabled' = pointer shown (cursor not
-    auto-hidden). Defaults to disabled (hidden) — the touchscreen default."""
-    enabled = False
+    auto-hidden). Defaults to enabled (shown) on a unit that has never set a
+    preference — the on-device first-boot QR/Wi-Fi setup wizard needs the
+    pointer visible to be usable; a touchscreen owner can still switch it off
+    from Settings."""
+    enabled = True
     try:
         with open(POINTER_FILE) as f:
-            enabled = f.read().strip() == '1'
+            enabled = f.read().strip() != '0'
     except Exception:
         pass
     return {'available': _has_unclutter(), 'enabled': enabled}

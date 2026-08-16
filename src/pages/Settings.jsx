@@ -3568,7 +3568,8 @@ const Settings = ({ initialSection, onSectionConsumed } = {}) => {
                         server-only unit keeps Lyrion running but never plays
                         audio locally. */}
                     <div className="pt-2 border-t border-hifi-border space-y-3">
-                      <p className="text-sm text-hifi-silver">{t('settings.playerEnabled.help')}</p>
+                      <label className="text-white font-medium">{t('settings.playerEnabled.label')}</label>
+                      <p className="text-sm text-hifi-silver mb-2">{t('settings.playerEnabled.help')}</p>
                       <div className="flex items-center justify-between bg-hifi-dark rounded-lg px-4 py-3">
                         <span className="text-sm text-white">
                           {playerEnabled === false

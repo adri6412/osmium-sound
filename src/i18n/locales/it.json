@@ -491,7 +491,8 @@
       "loginFailed": "Impossibile aggiornare l'accesso SSH."
     },
     "pointer": {
-      "help": "Mostra il puntatore del mouse sullo schermo. Utile se usi il dispositivo con un mouse invece del touchscreen. Di default il puntatore è nascosto.",
+      "label": "Puntatore mouse",
+      "help": "Mostra il puntatore del mouse sullo schermo, oppure nascondilo se usi solo il touchscreen. Attivo di default, così la procedura di configurazione a schermo resta utilizzabile.",
       "enabled": "Puntatore mouse attivo",
       "disabled": "Puntatore mouse nascosto",
       "unavailable": "Controllo del puntatore non disponibile su questo dispositivo.",
@@ -531,6 +532,7 @@
       "intro": "Osmium Sound include componenti open source, ciascuno con la propria licenza. L'elenco completo è mantenuto anche in THIRD-PARTY-NOTICES.md nel repository del progetto."
     },
     "playerEnabled": {
+      "label": "Player",
       "help": "Spegni il player stesso per un'unità solo-server — Lyrion Music Server e tutto il resto continuano a funzionare, questo dispositivo semplicemente non riproduce più audio in locale. Utile per un dispositivo in un ripostiglio che pilota altri player altrove.",
       "currentOn": "Player acceso",
       "currentOff": "Player spento (solo server)",
