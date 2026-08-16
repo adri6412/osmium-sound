@@ -1,41 +1,41 @@
 {
-  "tag_name": "v2.5.21-dev.100-alpha5",
-  "name": "v2.5.21-dev.100-alpha5",
-  "body": "## What's new in v2.5.21-dev.100-alpha5\n\n- fix(setup): pin AP channel + disable PMF for iOS hotspot join\n",
+  "tag_name": "v2.5.21-dev.100-alpha6",
+  "name": "v2.5.21-dev.100-alpha6",
+  "body": "## What's new in v2.5.21-dev.100-alpha6\n\n- fix(setup): restore-status polling died silently on hifi-webui's own restart\n",
   "assets": [
     {
-      "name": "hifi-ui-v2.5.21-dev.100-alpha5.tar.gz",
-      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.100-alpha5/hifi-ui-v2.5.21-dev.100-alpha5.tar.gz",
-      "size": 134236746
+      "name": "hifi-ui-v2.5.21-dev.100-alpha6.tar.gz",
+      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.100-alpha6/hifi-ui-v2.5.21-dev.100-alpha6.tar.gz",
+      "size": 134236705
     },
     {
-      "name": "hifi-ui-v2.5.21-dev.100-alpha5.tar.gz.sha256",
-      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.100-alpha5/hifi-ui-v2.5.21-dev.100-alpha5.tar.gz.sha256",
+      "name": "hifi-ui-v2.5.21-dev.100-alpha6.tar.gz.sha256",
+      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.100-alpha6/hifi-ui-v2.5.21-dev.100-alpha6.tar.gz.sha256",
       "size": 104
     },
     {
-      "name": "hifi-system-v2.5.21-dev.100-alpha5.tar.gz",
-      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.100-alpha5/hifi-system-v2.5.21-dev.100-alpha5.tar.gz",
-      "size": 327370
+      "name": "hifi-system-v2.5.21-dev.100-alpha6.tar.gz",
+      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.100-alpha6/hifi-system-v2.5.21-dev.100-alpha6.tar.gz",
+      "size": 327548
     },
     {
-      "name": "hifi-system-v2.5.21-dev.100-alpha5.tar.gz.sha256",
-      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.100-alpha5/hifi-system-v2.5.21-dev.100-alpha5.tar.gz.sha256",
+      "name": "hifi-system-v2.5.21-dev.100-alpha6.tar.gz.sha256",
+      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.100-alpha6/hifi-system-v2.5.21-dev.100-alpha6.tar.gz.sha256",
       "size": 108
     },
     {
-      "name": "hifi-os-v2.5.21-dev.100-alpha5.tar.gz",
-      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.100-alpha5/hifi-os-v2.5.21-dev.100-alpha5.tar.gz",
-      "size": 1200148
+      "name": "hifi-os-v2.5.21-dev.100-alpha6.tar.gz",
+      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.100-alpha6/hifi-os-v2.5.21-dev.100-alpha6.tar.gz",
+      "size": 1200146
     },
     {
-      "name": "hifi-os-v2.5.21-dev.100-alpha5.tar.gz.sha256",
-      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.100-alpha5/hifi-os-v2.5.21-dev.100-alpha5.tar.gz.sha256",
+      "name": "hifi-os-v2.5.21-dev.100-alpha6.tar.gz.sha256",
+      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.100-alpha6/hifi-os-v2.5.21-dev.100-alpha6.tar.gz.sha256",
       "size": 104
     },
     {
-      "name": "hifi-os-v2.5.21-dev.100-alpha5.tar.gz.sha256.sig",
-      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.100-alpha5/hifi-os-v2.5.21-dev.100-alpha5.tar.gz.sha256.sig",
+      "name": "hifi-os-v2.5.21-dev.100-alpha6.tar.gz.sha256.sig",
+      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.100-alpha6/hifi-os-v2.5.21-dev.100-alpha6.tar.gz.sha256.sig",
       "size": 64
     }
   ]
