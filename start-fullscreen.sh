@@ -1,5 +1,5 @@
 #!/bin/bash
-# Start HiFi Media Player in fullscreen mode
+# Start Osmium Sound in fullscreen mode
 # Optimized for 1024x600 touchscreen
 
 # Set display resolution to 1024x600

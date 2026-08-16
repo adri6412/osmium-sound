@@ -1,8 +1,8 @@
-# HiFi Media Player Companion - Android Design Guidelines
+# Osmium Sound Companion - Android Design Guidelines
 
 ## Design Philosophy
 
-The Android companion app mirrors the desktop HiFi Media Player interface while being optimized for mobile/tablet screens. The design emphasizes clarity, responsive touch interaction, and a premium hi-fi aesthetic.
+The Android companion app mirrors the desktop Osmium Sound interface while being optimized for mobile/tablet screens. The design emphasizes clarity, responsive touch interaction, and a premium hi-fi aesthetic.
 
 ## Color Palette
 
@@ -178,6 +178,6 @@ The companion app **mirrors the desktop layout structure** but optimized for sma
 
 ## References
 
-- Desktop UI: HiFi Media Player React/Tailwind CSS
+- Desktop UI: Osmium Sound React/Tailwind CSS
 - Material Design 3: https://m3.material.io/
 - Android Design System: https://developer.android.com/design

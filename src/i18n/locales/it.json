@@ -321,7 +321,8 @@
       "updates": "Aggiornamenti",
       "systemControls": "Controlli Sistema",
       "language": "Lingua",
-      "debug": "Debug"
+      "debug": "Debug",
+      "thirdPartyNotices": "Componenti di terze parti"
     },
     "language": {
       "help": "Scegli la lingua dell'interfaccia."
@@ -536,6 +537,9 @@
       "failed": "Cattura HAR fallita.",
       "empty": "Registrazione fermata — nessuna richiesta di rete registrata.",
       "saved": "Salvato {filename} ({count} richieste) — scaricalo dalla sezione Debug del pannello web."
+    },
+    "thirdPartyNotices": {
+      "intro": "Osmium Sound include componenti open source, ciascuno con la propria licenza. L'elenco completo è mantenuto anche in THIRD-PARTY-NOTICES.md nel repository del progetto."
     },
     "playerEnabled": {
       "help": "Spegni il player stesso per un'unità solo-server — Lyrion Music Server e tutto il resto continuano a funzionare, questo dispositivo semplicemente non riproduce più audio in locale. Utile per un dispositivo in un ripostiglio che pilota altri player altrove.",

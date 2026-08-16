@@ -1,6 +1,6 @@
 # GitHub Actions Workflows
 
-This directory contains automated workflows for building and releasing the HiFi Media Player Companion Android app.
+This directory contains automated workflows for building and releasing the Osmium Sound Companion Android app.
 
 ## 🚀 Workflows
 
@@ -86,7 +86,7 @@ To test that secrets are configured correctly:
 
 ```bash
 # Trigger a manual workflow run
-# GitHub → Actions → Build HiFi Media Player Companion APK → Run workflow
+# GitHub → Actions → Build Osmium Sound Companion APK → Run workflow
 ```
 
 ---
@@ -112,7 +112,7 @@ Workflow will automatically:
 ### Method 2: Manual Trigger
 
 1. Go to **GitHub → Actions**
-2. Select **Build HiFi Media Player Companion APK**
+2. Select **Build Osmium Sound Companion APK**
 3. Click **Run workflow**
 4. Workflow runs with latest commit on main branch
 
@@ -157,7 +157,7 @@ Runs Android lint checks:
 When the workflow creates a GitHub Release, it automatically includes:
 
 ```markdown
-# HiFi Media Player Companion v2.5.0
+# Osmium Sound Companion v2.5.0
 
 ## Release Notes
 
@@ -183,7 +183,7 @@ When the workflow creates a GitHub Release, it automatically includes:
 
 ### Requirements
 - Android 8.0 or higher
-- Local network connection to HiFi Media Player server
+- Local network connection to Osmium Sound server
 ```
 
 You can customize this in the workflow file: `.github/workflows/build-companion-apk.yml`

@@ -205,7 +205,7 @@
             android:theme="@style/Theme.MaterialComponents.NoActionBar">
         </activity>
 
-        <service android:exported="false" android:label="HiFi Media Player Service"
+        <service android:exported="false" android:label="Osmium Sound Service"
             android:foregroundServiceType="mediaPlayback"
             android:name=".service.SqueezeService">
             <intent-filter>

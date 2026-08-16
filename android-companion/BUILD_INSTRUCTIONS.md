@@ -1,4 +1,4 @@
-# HiFi Media Player Companion - Build Instructions
+# Osmium Sound Companion - Build Instructions
 
 ## Prerequisites
 
@@ -139,7 +139,7 @@ Place in: `android-companion/` directory
 
 ### Connection Issues
 
-**Issue**: App can't connect to HiFi Media Player server
+**Issue**: App can't connect to Osmium Sound server
 - **Solution**: 
   - Verify server is running and accessible on local network
   - Check firewall settings (default port: 9000)

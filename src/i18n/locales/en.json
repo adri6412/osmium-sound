@@ -321,7 +321,8 @@
       "updates": "Updates",
       "systemControls": "System Controls",
       "language": "Language",
-      "debug": "Debug"
+      "debug": "Debug",
+      "thirdPartyNotices": "Third-Party Notices"
     },
     "language": {
       "help": "Choose the interface language."
@@ -536,6 +537,9 @@
       "failed": "HAR capture failed.",
       "empty": "Capture stopped — no network requests were recorded.",
       "saved": "Saved {filename} ({count} requests) — download it from the web admin's Debug section."
+    },
+    "thirdPartyNotices": {
+      "intro": "Osmium Sound includes open source components, each under its own license. The full record is also kept in THIRD-PARTY-NOTICES.md in the project repository."
     },
     "playerEnabled": {
       "help": "Turn the player itself off for a server-only unit — Lyrion Music Server and everything else keeps running, this device just never plays audio locally. Useful for a box in a closet driving other players elsewhere.",

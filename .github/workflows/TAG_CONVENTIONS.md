@@ -4,7 +4,7 @@ This document explains how to use git tags to trigger different GitHub Actions w
 
 ## Tag Naming
 
-### Main App (HiFi Media Player - Desktop/Electron)
+### Main App (Osmium Sound - Desktop/Electron)
 **Format**: `v<MAJOR>.<MINOR>.<PATCH>`
 
 **Examples**:
@@ -16,7 +16,7 @@ This document explains how to use git tags to trigger different GitHub Actions w
 - ✅ `build-ui-ota.yml` - Builds OTA bundles for desktop app
 - ❌ `build-companion-apk.yml` - NOT triggered
 
-### Companion App (HiFi Media Player Companion - Android)
+### Companion App (Osmium Sound Companion - Android)
 **Format**: `companion-v<MAJOR>.<MINOR>.<PATCH>`
 
 **Examples**:
@@ -127,7 +127,7 @@ git commit -m "chore(release): v2.5.1"
 git push origin main
 
 # 4. Create and push tag (WITH COMPANION PREFIX!)
-git tag -a companion-v2.5.1 -m "HiFi Media Player Companion v2.5.1 - Release notes..."
+git tag -a companion-v2.5.1 -m "Osmium Sound Companion v2.5.1 - Release notes..."
 git push origin companion-v2.5.1
 
 # 5. GitHub Actions automatically:

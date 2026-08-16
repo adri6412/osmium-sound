@@ -32,7 +32,8 @@ import {
   CheckCircle2,
   AlertTriangle,
   Lock,
-  Bug
+  Bug,
+  ScrollText
 } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import { systemAPI, checkApiServer } from '../utils/api';
@@ -44,6 +45,7 @@ import LanguageSelector from '../components/LanguageSelector';
 import SourcesManager from '../components/SourcesManager';
 import RoomCorrectionWizard from '../components/RoomCorrectionWizard';
 import WifiConfigPanel from '../components/WifiConfigPanel';
+import { thirdPartyNotices } from '../data/thirdPartyNotices';
 
 // Language-agnostic check used only to colour a status message red.
 const isErrorMsg = (m) =>
@@ -2020,6 +2022,11 @@ const Settings = ({ initialSection, onSectionConsumed } = {}) => {
       title: t('settings.sections.debug'),
       icon: Bug,
       content: 'custom-debug'
+    },
+    {
+      title: t('settings.sections.thirdPartyNotices'),
+      icon: ScrollText,
+      content: 'custom-third-party-notices'
     }
   ].filter((s) =>
     // Music Sources only matters for a locally-served library — when this
@@ -3978,6 +3985,49 @@ const Settings = ({ initialSection, onSectionConsumed } = {}) => {
                   </div>
                 )}
 
+                {/* Third-Party Notices */}
+                {section.content === 'custom-third-party-notices' && (
+                  <div className="space-y-5">
+                    <p className="text-sm text-hifi-silver">{t('settings.thirdPartyNotices.intro')}</p>
+
+                    {thirdPartyNotices.map((group) => (
+                      <div key={group.section}>
+                        <h3 className="text-xs uppercase tracking-wide text-hifi-silver/60 mb-2">
+                          {group.section}
+                        </h3>
+                        <div className="space-y-2">
+                          {group.entries.map((entry) => (
+                            <div key={entry.name} className="bg-hifi-dark rounded-lg p-3">
+                              <div className="flex items-center justify-between gap-2">
+                                <span className="text-white text-sm font-medium">
+                                  {entry.url ? (
+                                    <a
+                                      href={entry.url}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="hover:text-hifi-gold underline decoration-dotted"
+                                    >
+                                      {entry.name}
+                                    </a>
+                                  ) : entry.name}
+                                </span>
+                                <span className="text-hifi-silver/80 text-xs font-mono whitespace-nowrap">
+                                  {entry.license}
+                                </span>
+                              </div>
+                              {(entry.version || entry.notes) && (
+                                <p className="text-hifi-silver/60 text-xs mt-1">
+                                  {[entry.version, entry.notes].filter(Boolean).join(' — ')}
+                                </p>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
                 {/* Regular items */}
                 {section.items && (
                   <div className="space-y-3">
@@ -4007,7 +4057,7 @@ const Settings = ({ initialSection, onSectionConsumed } = {}) => {
               transition={{ delay: 0.6 }}
               className="mt-8 text-center text-hifi-silver text-sm"
             >
-              <p>HiFi Media Player v{__APP_VERSION__}</p>
+              <p>Osmium Sound v{__APP_VERSION__}</p>
               <p className="mt-1">{t('settings.about.builtWith')}</p>
             </motion.div>
           </>

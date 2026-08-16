@@ -1,4 +1,4 @@
-name: Build HiFi Media Player Companion APK
+name: Build Osmium Sound Companion APK
 
 on:
   push:
@@ -75,7 +75,7 @@ jobs:
           files: |
             release-artifacts/*.apk
           body: |
-            # HiFi Media Player Companion v${{ steps.version.outputs.version }}
+            # Osmium Sound Companion v${{ steps.version.outputs.version }}
 
             ## Release Notes
 
@@ -99,11 +99,11 @@ jobs:
             2. Enable "Unknown Sources" in Settings → Security
             3. Open the APK and install
             4. Grant required permissions
-            5. Connect to HiFi Media Player server
+            5. Connect to Osmium Sound server
 
             ### Requirements
             - Android 8.0 or higher
-            - Local network connection to HiFi Media Player server
+            - Local network connection to Osmium Sound server
             - 4"-7" screen size (optimized for smartphones)
 
             ### What's New
