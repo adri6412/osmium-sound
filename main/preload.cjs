@@ -39,5 +39,13 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // downloaded from the web admin, not from here (see api_server.py).
   startHarCapture: () => ipcRenderer.invoke('har-capture-start'),
   stopHarCapture: () => ipcRenderer.invoke('har-capture-stop'),
-  getHarCaptureStatus: () => ipcRenderer.invoke('har-capture-status')
+  getHarCaptureStatus: () => ipcRenderer.invoke('har-capture-status'),
+
+  // Debug section (Settings.jsx) — long-running perf capture (DOM nodes, JS
+  // heap, per-process CPU/memory) sampled once a minute, for chasing leaks
+  // that only show up after hours of uptime. Saved .jsonl is downloaded from
+  // the web admin, not from here (see api_server.py).
+  startPerfCapture: () => ipcRenderer.invoke('perf-capture-start'),
+  stopPerfCapture: () => ipcRenderer.invoke('perf-capture-stop'),
+  getPerfCaptureStatus: () => ipcRenderer.invoke('perf-capture-status')
 });

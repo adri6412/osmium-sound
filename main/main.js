@@ -69,6 +69,10 @@ function logToFile(prefix, message) {
 // stay in sync (grep HAR_CAPTURE_DIR there if this ever moves).
 const HAR_CAPTURE_DIR = join(app.getPath('logs'), 'har-captures');
 
+// Same idea as HAR_CAPTURE_DIR, for long-running perf-capture-* below.
+// api_server.py mirrors this path too (grep PERF_CAPTURE_DIR there).
+const PERF_CAPTURE_DIR = join(app.getPath('logs'), 'perf-captures');
+
 // Renderer-crash recovery: how many times we've auto-reloaded, and when we last
 // did. After long uptime the Chromium renderer/GPU process can die (OOM, GPU
 // driver fault) leaving the window alive but blank — a white screen the user
@@ -221,6 +225,17 @@ function createWindow() {
         recoveryReloads = 0;
       }
     }, 60000);
+    // A crash/reload (recoverRenderer above) tears down the old CDP session —
+    // if a perf capture was in progress, re-enable the domain on the fresh
+    // one instead of silently going dark on the renderer-side half of its
+    // data for the rest of the (possibly multi-hour) capture.
+    if (perfCapture && mainWindow) {
+      const dbg = mainWindow.webContents.debugger;
+      Promise.resolve()
+        .then(() => { if (!dbg.isAttached()) dbg.attach('1.3'); })
+        .then(() => dbg.sendCommand('Performance.enable'))
+        .catch((err) => console.error('perf-capture: re-attach after reload failed:', err));
+    }
   });
 
   // Renderer process died (crash, OOM, killed). Without this the window is left
@@ -533,7 +548,9 @@ ipcMain.handle('har-capture-stop', async () => {
     if (mainWindow && !mainWindow.isDestroyed()) {
       const dbg = mainWindow.webContents.debugger;
       dbg.removeListener('message', harDebuggerListener);
-      if (dbg.isAttached()) dbg.detach();
+      // perf-capture-* below shares this same CDP session — only let go of it
+      // if that capture isn't also relying on it right now.
+      if (dbg.isAttached() && !perfCapture) dbg.detach();
     }
   } catch (err) {
     console.error('har-capture-stop: debugger detach failed:', err);
@@ -557,4 +574,113 @@ ipcMain.handle('har-capture-stop', async () => {
 ipcMain.handle('har-capture-status', () => ({
   running: !!harCapture,
   startedAt: harCapture ? harCapture.startedAt : null,
+}));
+
+/**
+ * Performance capture, for Settings.jsx's Debug section. Same motivation as
+ * the HAR capture above (no keyboard on the kiosk to drive DevTools) but for
+ * a different question: "is something leaking over hours of normal use?" —
+ * suspected after a field report of GPU usage climbing back up over a few
+ * hours of playback after every OTA-triggered restart (which resets it).
+ *
+ * Samples once a minute for as long as it runs (meant to be left recording
+ * across hours, unattended) and appends one JSON line per sample rather than
+ * building the whole thing in memory + writing once at the end like the HAR
+ * capture does — a multi-hour capture that's still running when the renderer
+ * eventually OOMs (see recoverRenderer's own doc comment above) would
+ * otherwise lose everything.
+ *
+ * Two data sources per sample:
+ *  - app.getAppMetrics() — Electron/Chromium's own per-process CPU+memory
+ *    breakdown (browser, renderer, gpu, utility). Doesn't need the debugger
+ *    at all, so it keeps working even across a renderer crash/reload.
+ *  - CDP Performance.getMetrics() — renderer-side detail (DOM node count,
+ *    JS event listener count, JS heap) the app-metrics view above can't see.
+ *    Shares the same debugger session as HAR capture (see the detach guards
+ *    on both sides); if the renderer dies mid-capture this domain has to be
+ *    re-enabled after the reload, see did-finish-load below.
+ */
+let perfCapture = null; // { startedAt, filePath, intervalId, sampleCount } | null
+
+function perfMetricsFromAppMetrics() {
+  try {
+    return app.getAppMetrics().map((m) => ({
+      type: m.type,
+      pid: m.pid,
+      cpuPct: m.cpu ? m.cpu.percentCPUUsage : null,
+      workingSetKb: m.memory ? m.memory.workingSetSize : null,
+    }));
+  } catch (err) {
+    return { error: err.message || String(err) };
+  }
+}
+
+async function samplePerfCapture() {
+  if (!perfCapture) return;
+  const sample = { ts: new Date().toISOString(), appMetrics: perfMetricsFromAppMetrics() };
+  try {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      const dbg = mainWindow.webContents.debugger;
+      if (dbg.isAttached()) {
+        const { metrics } = await dbg.sendCommand('Performance.getMetrics');
+        sample.domMetrics = Object.fromEntries((metrics || []).map((m) => [m.name, m.value]));
+      }
+    }
+  } catch (err) {
+    sample.domMetricsError = err.message || String(err);
+  }
+  if (!perfCapture) return; // capture may have been stopped while awaiting above
+  perfCapture.sampleCount += 1;
+  try {
+    appendFileSync(perfCapture.filePath, JSON.stringify(sample) + '\n');
+  } catch (err) {
+    console.error('perf-capture: write failed:', err);
+  }
+}
+
+ipcMain.handle('perf-capture-start', async () => {
+  if (perfCapture) return { success: false, message: 'Capture already running' };
+  if (!mainWindow || mainWindow.isDestroyed()) return { success: false, message: 'No window' };
+  const dbg = mainWindow.webContents.debugger;
+  try {
+    if (!dbg.isAttached()) dbg.attach('1.3');
+    await dbg.sendCommand('Performance.enable');
+  } catch (err) {
+    return { success: false, message: err.message || String(err) };
+  }
+  mkdirSync(PERF_CAPTURE_DIR, { recursive: true });
+  const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+  const filePath = join(PERF_CAPTURE_DIR, `perf-${stamp}.jsonl`);
+  perfCapture = { startedAt: Date.now(), filePath, sampleCount: 0 };
+  perfCapture.intervalId = setInterval(samplePerfCapture, 60000);
+  samplePerfCapture(); // first sample immediately, don't wait a full minute
+  dbg.once('detach', () => {
+    if (perfCapture) console.error('perf-capture: CDP session detached unexpectedly (devtools opened elsewhere?)');
+  });
+  return { success: true };
+});
+
+ipcMain.handle('perf-capture-stop', async () => {
+  if (!perfCapture) return { success: false, message: 'No capture running' };
+  const { filePath, sampleCount, intervalId } = perfCapture;
+  clearInterval(intervalId);
+  perfCapture = null;
+  try {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      const dbg = mainWindow.webContents.debugger;
+      // HAR capture above shares this same CDP session — only let go of it
+      // if that capture isn't also relying on it right now.
+      if (dbg.isAttached() && !harCapture) dbg.detach();
+    }
+  } catch (err) {
+    console.error('perf-capture-stop: debugger detach failed:', err);
+  }
+  if (sampleCount === 0) return { success: true, empty: true, sampleCount: 0 };
+  return { success: true, filename: filePath.split(/[\\/]/).pop(), sampleCount };
+});
+
+ipcMain.handle('perf-capture-status', () => ({
+  running: !!perfCapture,
+  startedAt: perfCapture ? perfCapture.startedAt : null,
+  sampleCount: perfCapture ? perfCapture.sampleCount : 0,
 }));

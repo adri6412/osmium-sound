@@ -65,7 +65,7 @@ body {
   }
   
   .hifi-panel {
-    @apply bg-hifi-gray border border-hifi-accent rounded-2xl shadow-hifi backdrop-blur-sm;
+    @apply bg-hifi-gray border border-hifi-accent rounded-2xl shadow-hifi;
   }
   
   .hifi-input {

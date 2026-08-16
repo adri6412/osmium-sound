@@ -535,7 +535,8 @@
       "none": "No captures saved yet.",
       "downloadFailed": "Download failed",
       "deleteConfirm": "Delete this capture?",
-      "deleteFailed": "Delete failed"
+      "deleteFailed": "Delete failed",
+      "perfHelp": "Perf captures (DOM nodes, JS heap, per-process CPU/memory sampled once a minute) are also recorded on the kiosk itself (Settings → Debug), for chasing leaks that only show up after hours of use."
     }
   }
 }

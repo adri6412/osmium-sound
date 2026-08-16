@@ -1557,6 +1557,31 @@ def _har_captures_list():
         out.append({'name': fname, 'size': st.st_size, 'mtime': int(st.st_mtime)})
     return out
 
+# Same idea as HAR_CAPTURE_DIR above, for main.js's perf-capture-* IPC
+# handlers (Settings.jsx Debug section) — long-running DOM/JS/per-process
+# metric samples, one JSON line per minute, meant to chase leaks that only
+# show up after hours of uptime. Must match main/main.js's PERF_CAPTURE_DIR.
+PERF_CAPTURE_DIR = '/home/hifi/.config/hifi-media-player/logs/perf-captures'
+# Matches `perf-` + toISOString() with ':'/'.' replaced by '-' + '.jsonl',
+# same anchoring/path-traversal-guard role as _HAR_FILENAME_RE above.
+_PERF_FILENAME_RE = re.compile(r'^perf-[0-9TZ-]+\.jsonl$')
+
+def _perf_captures_list():
+    out = []
+    try:
+        fnames = os.listdir(PERF_CAPTURE_DIR)
+    except OSError:
+        return out
+    for fname in sorted(fnames, reverse=True):
+        if not _PERF_FILENAME_RE.match(fname):
+            continue
+        try:
+            st = os.stat(os.path.join(PERF_CAPTURE_DIR, fname))
+        except OSError:
+            continue
+        out.append({'name': fname, 'size': st.st_size, 'mtime': int(st.st_mtime)})
+    return out
+
 # ──────────────────────────────────────────────────────────────────
 #  Tailscale — join the OWNER's OWN existing tailnet (their own Tailscale
 #  account), so the appliance and all of its ports (web UI, Lyrion, SMB,
@@ -4863,6 +4888,40 @@ def api_har_capture_delete(filename):
         pass
     except Exception:
         log.exception("har capture delete failed for %s", filename)
+        return jsonify({'success': False}), 500
+    return jsonify({'success': True})
+
+@app.route('/perf_captures', methods=['GET'])
+def api_perf_captures():
+    return jsonify({'captures': _perf_captures_list()})
+
+@app.route('/perf_captures/<filename>', methods=['GET'])
+def api_perf_capture_download(filename):
+    if not _PERF_FILENAME_RE.match(filename or ''):
+        return jsonify({'error': 'invalid filename'}), 400
+    fpath = os.path.join(PERF_CAPTURE_DIR, filename)
+    if not os.path.isfile(fpath):
+        return jsonify({'error': 'not found'}), 404
+    try:
+        with open(fpath, 'rb') as f:
+            data = f.read()
+    except Exception:
+        log.exception("perf capture download failed for %s", filename)
+        return jsonify({'error': 'read failed'}), 500
+    resp = Response(data, mimetype='application/jsonlines')
+    resp.headers['Content-Disposition'] = f'attachment; filename="{filename}"'
+    return resp
+
+@app.route('/perf_captures/<filename>', methods=['DELETE'])
+def api_perf_capture_delete(filename):
+    if not _PERF_FILENAME_RE.match(filename or ''):
+        return jsonify({'success': False, 'error': 'invalid filename'}), 400
+    try:
+        os.remove(os.path.join(PERF_CAPTURE_DIR, filename))
+    except FileNotFoundError:
+        pass
+    except Exception:
+        log.exception("perf capture delete failed for %s", filename)
         return jsonify({'success': False}), 500
     return jsonify({'success': True})
 

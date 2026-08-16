@@ -535,7 +535,8 @@
       "none": "Nessuna cattura salvata.",
       "downloadFailed": "Download fallito",
       "deleteConfirm": "Eliminare questa cattura?",
-      "deleteFailed": "Eliminazione fallita"
+      "deleteFailed": "Eliminazione fallita",
+      "perfHelp": "Anche le catture di performance (nodi DOM, heap JS, CPU/memoria per processo campionati una volta al minuto) vengono registrate sul kiosk stesso (Impostazioni → Debug), per scovare leak che si notano solo dopo ore d'uso."
     }
   }
 }
