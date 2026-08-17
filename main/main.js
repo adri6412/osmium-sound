@@ -432,6 +432,22 @@ function pollPhysicalKeyboard() {
  */
 let harCapture = null; // { entries: Map<requestId, entry>, startedAt } | null
 
+// Header names/token patterns that can carry streaming-service auth (Tidal,
+// Qobuz, Spotify, ...) or session identifiers. Captures are downloaded via
+// the web admin / picked up by hifi-beta-agent.py, so these must never land
+// in the .har in the clear.
+const SENSITIVE_HEADER_NAMES = new Set(['authorization', 'proxy-authorization', 'cookie', 'set-cookie', 'x-api-key']);
+const SENSITIVE_HEADER_PATTERN = /token|secret|session/i;
+
+function redactHeaders(headers) {
+  return Object.entries(headers || {}).map(([name, value]) => ({
+    name,
+    value: SENSITIVE_HEADER_NAMES.has(name.toLowerCase()) || SENSITIVE_HEADER_PATTERN.test(name)
+      ? '[REDACTED]'
+      : String(value),
+  }));
+}
+
 function harDebuggerListener(_event, method, params) {
   if (!harCapture) return;
   const entries = harCapture.entries;
@@ -448,7 +464,7 @@ function harDebuggerListener(_event, method, params) {
           method: request.method,
           url: request.url,
           httpVersion: 'HTTP/1.1',
-          headers: Object.entries(request.headers || {}).map(([name, value]) => ({ name, value: String(value) })),
+          headers: redactHeaders(request.headers),
           queryString: [],
           cookies: [],
           headersSize: -1,
@@ -466,7 +482,7 @@ function harDebuggerListener(_event, method, params) {
         status: response.status,
         statusText: response.statusText || '',
         httpVersion: response.protocol || 'HTTP/1.1',
-        headers: Object.entries(response.headers || {}).map(([name, value]) => ({ name, value: String(value) })),
+        headers: redactHeaders(response.headers),
         cookies: [],
         content: { size: 0, mimeType: response.mimeType || '' },
         redirectURL: '',
