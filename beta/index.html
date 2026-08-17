@@ -426,18 +426,18 @@
     .privacy-notice .pn-ico { flex-shrink: 0; font-size: 1.05rem; line-height: 1.5; }
     .privacy-notice strong { color: #6cc6ff; }
     .privacy-notice a { color: #6cc6ff; }
-    .consent-check {
+    .beta-agree {
       display: flex; align-items: flex-start; gap: 0.55rem;
       max-width: 520px; margin: 1.1rem auto 0;
       font-size: 0.85rem; color: var(--text); line-height: 1.5;
       text-align: left; justify-content: center; cursor: pointer;
     }
-    .consent-check input[type="checkbox"] {
+    .beta-agree input[type="checkbox"] {
       flex-shrink: 0; margin-top: 0.2rem;
       width: 16px; height: 16px; accent-color: var(--accent);
       cursor: pointer;
     }
-    .consent-check a { color: var(--accent); }
+    .beta-agree a { color: var(--accent); }
 
     /* ── MANUAL CALLOUT ──────────────────────────────────── */
     #manual { border-top: 1px solid var(--border); background: var(--bg-card); }
@@ -591,8 +591,8 @@
       </span>
     </p>
 
-    <label class="consent-check">
-      <input type="checkbox" id="privacyConsent">
+    <label class="beta-agree">
+      <input type="checkbox" id="betaAgreeBox">
       <span data-en="I have read and accept the &lt;a href=&quot;privacy.html&quot;&gt;Beta Privacy Notice&lt;/a&gt;." data-it="Ho letto e accetto la &lt;a href=&quot;privacy.html&quot;&gt;Beta Privacy Notice&lt;/a&gt;.">I have read and accept the <a href="privacy.html">Beta Privacy Notice</a>.</span>
     </label>
 
@@ -954,7 +954,7 @@
   });
 
   // Gate the ISO download behind the privacy-notice checkbox
-  const consentBox = document.getElementById('privacyConsent');
+  const consentBox = document.getElementById('betaAgreeBox');
   const isoBtn = document.getElementById('isoDownloadBtn');
   if (consentBox && isoBtn) {
     consentBox.addEventListener('change', () => {
