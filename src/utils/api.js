@@ -162,18 +162,17 @@ export const systemAPI = {
   getNowPlayingAutoExpand: () => apiGet('/nowplaying_autoexpand'),
   setNowPlayingAutoExpand: (seconds) => apiPost('/nowplaying_autoexpand', { seconds }),
   // First-boot provisioning status (proxied from webui_server): { pending,
-  // stage, mode, claimed_by, ap: { active, ssid, psk }, networks: [...], ... }
+  // stage, mode, claimed_by, error, networks: [...], wired, ... }. No `ap`
+  // any more -- first-boot never raises a setup hotspot (see
+  // SetupWizard.jsx); the network step is on-screen-only (or Ethernet).
   getProvisionStatus: () => apiGet('/provision_status'),
-  // Join a Wi-Fi network during provisioning (on-screen manual flow, mirrors
-  // the phone captive portal's network step). The AP drops immediately;
-  // poll getProvisionStatus() for stage 'connecting' -> 'network-ok'/'failed'.
-  // Returns { success, dropping_ap }
+  // Join a Wi-Fi network during provisioning (on-screen panel, the only way
+  // to do this step). Poll getProvisionStatus() for stage 'connecting' ->
+  // 'network-ok'/'failed'. Returns { success, dropping_ap }
   provisionWifiConnect: (ssid, password) => apiPost('/provision_wifi_connect', { ssid, password }),
-  // On-demand live rescan for the on-screen manual Wi-Fi panel: briefly
-  // drops and re-raises the setup hotspot around a fresh scan (the box's one
-  // Wi-Fi radio can't scan while it's also the AP), instead of relying on
-  // the single passive scan taken before the hotspot first came up. Takes a
-  // few seconds; returns { success, networks }.
+  // On-demand live rescan for the on-screen Wi-Fi panel: a plain station-mode
+  // scan (no AP to juggle around it). Takes a couple of seconds; returns
+  // { success, networks }.
   provisionWifiRescan: () => apiPost('/provision_wifi_rescan', {}),
   // Which boot menu entry this live session started from: { mode: 'installer'|'live' }.
   // 'installer' means App.jsx should show InstallWizard instead of the kiosk UI.

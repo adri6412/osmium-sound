@@ -96,14 +96,8 @@
       "subtitle": "Let's set up your network streamer together. Just a few steps: network, music sources, and you're ready to listen."
     },
     "qr": {
-      "title": "Connect your phone to set up",
-      "subtitle": "Connect your phone to this Wi-Fi network to finish setup — no need to touch this screen.",
-      "errorTitle": "Setup hotspot unavailable",
       "connectedTitle": "Open in a browser",
       "connectedSubtitle": "Open this address in any browser — phone, tablet, or computer — to continue setup from there.",
-      "manualButton": "Configure Wi-Fi manually",
-      "hotspotInstructions": "To set up the box you can connect to the hotspot shown on screen from any device — smartphone, tablet, or PC. If you plug in a network cable instead, you'll see the IP address you can connect to from any browser to start setup.",
-      "networkLabel": "Wi-Fi network",
       "addressLabel": "Address",
       "tipsLabel": "Tips",
       "addressHint": "Type the address exactly as shown, including \"http://\" — Safari won't open it without it.",
@@ -147,6 +141,8 @@
     },
     "wifi": {
       "title": "Wi-Fi networks",
+      "setupSubtitle": "Pick your Wi-Fi network below, or connect an Ethernet cable instead.",
+      "rescan": "Rescan",
       "scanUnavailable": "Wi-Fi scan not available.",
       "noNetworks": "No networks found.",
       "scanning": "Scanning…",

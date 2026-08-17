@@ -419,6 +419,7 @@ def _scan_wifi():
 
 
 def _raise_ap(dev):
+    _ensure_dnsmasq()  # best-effort; ipv4.method=shared below needs it
     ssid = _ap_ssid(dev)
     _nmcli(['connection', 'delete', AP_CON_NAME])  # clear any stale profile
     rc, _, err = _nmcli([
@@ -467,25 +468,37 @@ def _ap_ssid(dev):
     return f'Osmium-Setup-{suffix}'
 
 
-def _connect_wifi(ssid, password):
-    """Drop the AP, try to join, and on failure delete the stale profile and
-    re-raise the AP so the phone (which auto-rejoins) sees the error.
+def _connect_wifi(ssid, password, ap_fallback=True):
+    """Try to join, and on failure delete the stale profile.
 
-    Returns (ok, err, ap) — ap is the *actual* outcome of that re-raise
-    ({'active','ssid','psk'}, or None if it wasn't attempted / not needed),
-    never assumed: a single Wi-Fi radio re-raising an AP can itself fail."""
+    `ap_fallback` (only True for the post-setup network-loss recovery
+    caller): also drop any AP before joining and, on failure, re-raise it so
+    the phone -- which auto-rejoins it -- sees the error. First-boot
+    provisioning passes False: it never raises an AP at all any more (see
+    SetupWizard.jsx), so there is nothing to tear down or re-raise, and doing
+    so unconditionally used to be exactly the AP<->station cycling that made
+    joins flaky in the first place on some Wi-Fi hardware (e.g. Intel
+    iwlwifi) -- one less mode switch now that first-boot never needs it.
+
+    Returns (ok, err, ap) — ap is the *actual* outcome of an `ap_fallback`
+    re-raise ({'active','ssid','psk'}, or None if it wasn't attempted / not
+    needed), never assumed: a single Wi-Fi radio re-raising an AP can itself
+    fail."""
     if not _SSID_RE.match(ssid or ''):
         return False, _wt('network.ssidInvalidChars', _lang()), None
-    _teardown_ap()
+    if ap_fallback:
+        _teardown_ap()
     # The radio may have just cycled AP->station->AP->station in quick
-    # succession (the on-screen panel's live rescan does exactly that right
-    # before this runs) -- NetworkManager's scan cache doesn't reliably catch
-    # up from repeated rapid mode switches, so `device wifi connect` below can
-    # fail with "no network with SSID found" even though the network is
-    # actually in range (reproduced: on-screen panel fails every time with
-    # that exact error, while the phone flow -- which only ever does ONE
-    # AP->station transition, right here -- works fine). Force a fresh scan
-    # and confirm the target SSID actually landed in nmcli's list before
+    # succession (the on-screen panel's live rescan used to do exactly that
+    # right before this ran, back when first-boot still raised an AP) --
+    # NetworkManager's scan cache doesn't reliably catch up from repeated
+    # rapid mode switches, so `device wifi connect` below can fail with "no
+    # network with SSID found" even though the network is actually in range
+    # (reproduced: on-screen panel failed every time with that exact error,
+    # while the phone flow -- which only ever did ONE AP->station transition,
+    # right here -- worked fine). Still relevant for the `ap_fallback` caller
+    # (recovery), and cheap insurance even without an AP in the picture, so
+    # keep confirming the target SSID actually landed in nmcli's list before
     # attempting the join, instead of trusting its own scan-on-connect to
     # recover in time. Mirrors _scan_wifi()'s own retry loop for the same
     # class of "cache not populated yet" problem.
@@ -535,13 +548,15 @@ def _connect_wifi(ssid, password):
             continue
         break
     # 'wifi connect' persists a bad autoconnect profile even on auth failure —
-    # delete it so NM doesn't fight the AP we are about to re-raise.
+    # delete it so NM doesn't fight any AP we're about to re-raise (and so it
+    # doesn't linger and interfere with the next attempt either way).
     _nmcli(['connection', 'delete', 'id', ssid])
-    dev = _wifi_device()
     ap = None
-    if dev:
-        ap_ok, ap_ssid = _raise_ap(dev)
-        ap = {'active': ap_ok, 'ssid': ap_ssid if ap_ok else None, 'psk': None}
+    if ap_fallback:
+        dev = _wifi_device()
+        if dev:
+            ap_ok, ap_ssid = _raise_ap(dev)
+            ap = {'active': ap_ok, 'ssid': ap_ssid if ap_ok else None, 'psk': None}
     return False, (err.strip() or _wt('network.connectFailed', _lang())), ap
 
 
@@ -740,15 +755,35 @@ def _network_monitor_loop():
 
 # ── provisioning state machine ───────────────────────────────────────
 def _evaluate_provisioning():
-    """Called at startup and on demand. Decides AP vs LAN-only vs finalize."""
-    """Bring the setup hotspot up (or reconcile it) during the provisioning
-    window. Called repeatedly by _provisioning_loop, so it must be idempotent
-    and cheap when there is nothing to do.
+    """Called at startup and on demand. Keeps the on-screen network list
+    fresh, picks up finalize, and (installer boot mode only) reconciles the
+    QR/hotspot.
 
-    Policy: the hotspot is raised at first setup ALWAYS (Volumio-style) — even
-    when Ethernet is connected — so a phone can always discover the box during
-    setup. It is only skipped while a Wi-Fi connect is mid-flight, after the
-    network step succeeded, or once the AP is already up."""
+    Normal first-boot Wi-Fi setup no longer raises a hotspot/AP at all: it's
+    done entirely from the on-screen panel, or Ethernet. Two reasons. First,
+    device mode (screen vs. headless) isn't decided until *after* this step
+    (see provision_claim_mode below), so a screen is always physically
+    available here regardless of what the unit ends up being configured as
+    -- there's no headless case to serve with a phone-facing hotspot at this
+    point in the flow. Second, and what actually forced the change: the
+    AP<->station radio cycling this used to require was unreliable on some
+    real Wi-Fi hardware (reproduced on a Dell with an Intel/iwlwifi card --
+    joins would time out with "network not found" or NetworkManager's opaque
+    "secrets were required" even with a correct password and the network in
+    range), while a plain station-mode scan+join never needs to leave
+    station mode at all.
+
+    The live-USB *installer* (_boot_mode() == 'installer') is a different
+    problem and keeps raising its AP as before: it images a disk before any
+    OS is installed, may have no keyboard/mouse/touch attached at all, and
+    relies on InstallWizard.jsx's always-on QR badge (hotspot or LAN IP) to
+    be driven from a phone instead -- there's no on-screen network panel to
+    fall back on there, so the "a screen is always available" reasoning
+    above doesn't apply to it.
+
+    The (still AP-capable) network-loss recovery hotspot for an
+    already-configured unit is untouched either way -- see
+    _raise_net_recovery_ap()."""
     if not _provisioning():
         return
     with _prov_lock:
@@ -758,10 +793,18 @@ def _evaluate_provisioning():
             return
         stage = state.get('stage')
         ap = state.get('ap') or {}
-        # Leave the AP alone mid-connect, after a successful network step, or
-        # when it's already up (incl. the 'failed' state, where _connect_wifi
-        # already re-raised it so the phone can see the error).
-        if stage in ('connecting', 'network-ok') or ap.get('active'):
+        # Leave it alone mid-connect or after a successful network step.
+        if stage in ('connecting', 'network-ok'):
+            return
+        if _boot_mode() != 'installer':
+            dev = _wifi_device()
+            state['networks'] = _scan_wifi() if dev else state.get('networks', [])
+            state['networks_cached_at'] = time.time()
+            state['stage'] = stage or 'waiting-wifi'
+            _save_prov_state(state)
+            return
+        # Installer boot mode from here on: original AP-raising behavior.
+        if ap.get('active'):
             return
         dev = _wifi_device()
         if not dev:
@@ -777,50 +820,27 @@ def _evaluate_provisioning():
             state['stage'] = 'waiting-lan'
             _save_prov_state(state)
             return
-        dnsmasq_ok = _ensure_dnsmasq()
         # Cache a scan BEFORE raising the AP (single radio can't scan while AP).
         state['networks'] = _scan_wifi()
         state['networks_cached_at'] = time.time()
         ok, ssid = _raise_ap(dev)
-        if ok:
-            err = None
-        elif not dnsmasq_ok:
-            err = _wt('network.dnsmasqMissing', _lang())
-        else:
-            err = _wt('network.hotspotActivateFailed', _lang())
         state['ap'] = {'active': ok, 'supported': True, 'ssid': ssid if ok else None,
-                       'psk': None, 'error': err}
+                       'psk': None,
+                       'error': None if ok else _wt('network.hotspotActivateFailed', _lang())}
         state['stage'] = 'waiting-ap' if ok else 'waiting-lan'
         _save_prov_state(state)
 
 
 def _live_wifi_rescan():
-    """On-demand rescan for the on-screen manual Wi-Fi panel.
-
-    The normal provisioning flow only ever scans once, before the hotspot
-    first comes up (see _evaluate_provisioning()) -- after that the radio is
-    busy being the AP and can't scan any more, so the on-screen list is stuck
-    with whatever that single early-boot scan found. This trades a brief,
-    deliberate hotspot outage (the owner is already looking at the screen
-    asking for a rescan, not mid-flow on their phone) for an actually-live
-    result: drop the AP if it's up, scan, then re-raise it so the phone-based
-    flow is exactly as it was for anyone else."""
+    """On-demand rescan for the on-screen Wi-Fi panel -- a plain station-mode
+    scan, nothing else: first-boot never raises an AP, so there's no radio
+    mode to preserve/restore around it any more."""
     with _prov_lock:
         state = _load_prov_state()
-        ap = state.get('ap') or {}
-        was_active = bool(ap.get('active'))
         dev = _wifi_device()
-        if was_active and dev:
-            _teardown_ap()
         nets = _scan_wifi() if dev else state.get('networks', [])
         state['networks'] = nets
         state['networks_cached_at'] = time.time()
-        if was_active and dev:
-            ok, ssid = _raise_ap(dev)
-            state['ap'] = {'active': ok, 'supported': True, 'ssid': ssid if ok else None,
-                           'psk': None,
-                           'error': None if ok else _wt('network.hotspotActivateFailed', _lang())}
-            state['stage'] = 'waiting-ap' if ok else 'waiting-lan'
         _save_prov_state(state)
     return nets
 
@@ -1249,17 +1269,17 @@ def provision_wifi_connect():
     data = request.get_json(silent=True) or {}
     ssid = (data.get('ssid') or '').strip()
     password = data.get('password') or ''
-    # Reply first (the AP is about to drop; the phone must know to expect it).
+    # Reply first: the join itself (with its scan-and-retry dance) can take a
+    # while, and the on-screen panel just needs to know it started.
     threading.Thread(target=_bg_connect, args=(ssid, password), daemon=True).start()
     return jsonify({'success': True, 'dropping_ap': True})
 
 
 @app.route('/api/provision/wifi_rescan', methods=['POST'])
 def provision_wifi_rescan():
-    # Synchronous on purpose (unlike wifi_connect above): this briefly drops
-    # and re-raises the hotspot around the scan (see _live_wifi_rescan()), so
-    # the caller needs the real network list back, not just an
-    # acknowledgement that something started.
+    # Synchronous on purpose (unlike wifi_connect above): the caller needs
+    # the real network list back, not just an acknowledgement that something
+    # started.
     if not _provisioning():
         return jsonify({'success': False, 'code': 'provision.notInProgress',
                         'message': _wt('provision.notInProgress', _lang())}), 409
@@ -1274,7 +1294,7 @@ def _bg_connect(ssid, password):
         state['ssid_attempt'] = ssid
         state['error'] = None
         _save_prov_state(state)
-        ok, err, ap = _connect_wifi(ssid, password)
+        ok, err, ap = _connect_wifi(ssid, password, ap_fallback=False)
         state = _load_prov_state()
         if ok:
             state['stage'] = 'network-ok'

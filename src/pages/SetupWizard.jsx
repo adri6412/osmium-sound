@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Disc3 } from 'lucide-react';
+import { Disc3, RefreshCw } from 'lucide-react';
 import { systemAPI } from '../utils/api';
 import { useI18n } from '../i18n';
 import WifiConfigPanel from '../components/WifiConfigPanel';
@@ -8,30 +8,28 @@ import WifiConfigPanel from '../components/WifiConfigPanel';
 /**
  * First-setup wizard.
  *
- * No mouse/keyboard/touch is required: the screen's only job is to display
- * branding and the setup hotspot's network name the instant it boots, then
- * wait. Deliberately plain text, not a QR code: iOS's camera QR scanner opens
- * its own "Join this network"/Safari flow *before* the captive portal has a
- * chance to fire, which strands the user staring at the camera app with
- * nothing happening. Every actual setup step (language, restore-from-backup,
- * network, device mode, audio, Lyrion, sources, timezone) happens on a
- * phone/browser connected to that hotspot, served by webui_server.py's
- * captive portal — see SETUP_CAPTIVE_HTML there. This component only polls
- * provisioning status and reacts once the phone side finishes (`finalize`).
- *
- * The one thing that CAN be done straight from this screen is the network
- * step itself (WifiConfigPanel below) — a touch-only escape hatch for
- * whoever doesn't have a phone handy, using the same provisioning API the
- * captive portal's network step uses.
+ * The network step (this screen's whole job before the box is online) is
+ * done entirely on-screen now, via WifiConfigPanel below — there is no
+ * setup hotspot/AP any more. It used to raise one so a phone could join it
+ * and drive the whole flow (language, network, mode, audio, Lyrion,
+ * sources, timezone) through webui_server.py's captive portal, but a
+ * single Wi-Fi radio switching between AP and station mode on every join
+ * attempt proved unreliable on real hardware (some Wi-Fi cards, e.g. Intel
+ * iwlwifi, would time out or fail activation even with a correct password
+ * and the network in range) — and device mode (screen vs. headless) isn't
+ * even decided until *after* this step, so a screen is always physically
+ * available here regardless of what the unit ends up being configured as.
+ * Once the network step succeeds (here, or via Ethernet), the remaining
+ * steps still happen from a phone/browser on the box's real address — see
+ * the "connected" branch below.
  */
 const SetupWizard = ({ onComplete }) => {
   const { t } = useI18n();
-  const [apInfo, setApInfo] = useState(null); // { ssid, psk, active, error } from provision status
   const [stage, setStage] = useState(null);
+  const [provisionError, setProvisionError] = useState(null);
   const [networks, setNetworks] = useState([]);
   const [wired, setWired] = useState(false);
   const [deviceIp, setDeviceIp] = useState(null);
-  const [showWifiPanel, setShowWifiPanel] = useState(false);
   const [wifiRescanning, setWifiRescanning] = useState(false);
   const [wifiSubmitting, setWifiSubmitting] = useState(false);
   const [wifiSubmitError, setWifiSubmitError] = useState(null);
@@ -45,8 +43,8 @@ const SetupWizard = ({ onComplete }) => {
         const res = await systemAPI.getProvisionStatus();
         if (!alive) return;
         if (res.success && res.data) {
-          if (res.data.ap) setApInfo(res.data.ap);
           setStage(res.data.stage || null);
+          setProvisionError(res.data.error || null);
           setNetworks(res.data.networks || []);
           setWired(!!res.data.wired);
           // The phone finished setup (claim_mode + finalize already ran
@@ -76,7 +74,7 @@ const SetupWizard = ({ onComplete }) => {
     // The device's own IP, not just the hostname: hifiplayer.local is
     // ambiguous the moment more than one Osmium Sound unit is on the same
     // network (mDNS resolves to whichever one answers first) — the IP is
-    // always unambiguous, so it's what the fallback QR should encode.
+    // always unambiguous, so it's what the fallback address should show.
     const pollIp = async () => {
       try {
         const res = await systemAPI.getNetworkStatus();
@@ -94,25 +92,17 @@ const SetupWizard = ({ onComplete }) => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Once the box is on a real network (either the phone drove it, or the
-  // panel below did), close the panel if it's still open and let the normal
-  // render fall through to the "open on your phone" QR.
   useEffect(() => {
-    if (stage === 'network-ok') setShowWifiPanel(false);
     if (stage === 'connecting' || stage === 'network-ok' || stage === 'failed') setWifiSubmitting(false);
   }, [stage]);
 
   const isConnected = wired || stage === 'network-ok';
 
-  // The passive `networks` list is a single scan taken before the hotspot
-  // first came up (this device's one Wi-Fi radio can't scan while it's also
-  // the AP — see _scan_wifi()/_evaluate_provisioning() in webui_server.py).
-  // Opening the panel is the one moment the owner is looking at the screen
-  // instead of their phone, so it's worth briefly trading the hotspot for a
-  // genuinely live scan: drop it, scan, raise it back (provisionWifiRescan
-  // on the server does all three under one lock) — takes a few seconds.
-  const openWifiPanel = async () => {
-    setShowWifiPanel(true);
+  // Manual "refresh now" — the server also rescans on its own every ~20s
+  // while waiting (see _evaluate_provisioning() in webui_server.py), this
+  // just gives the owner an immediate result instead of waiting for that
+  // tick. No AP to juggle any more, so it's just a plain scan.
+  const rescan = async () => {
     setWifiRescanning(true);
     try {
       const res = await systemAPI.provisionWifiRescan();
@@ -149,58 +139,26 @@ const SetupWizard = ({ onComplete }) => {
           <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-hifi-gold to-yellow-600 flex items-center justify-center shadow-[0_0_40px_rgba(212,175,55,0.3)] mb-6">
             <Disc3 size={32} className="text-black" />
           </div>
-          {apInfo?.error && !apInfo?.active && !isConnected ? (
-            // Only the "hotspot itself is down" case earns this title/message.
-            // A failed *join* attempt (wrong password, transient scan miss...)
-            // re-raises the AP just fine -- apInfo.active stays true -- so it
-            // must NOT show here as "hotspot unavailable" while the network
-            // box below is simultaneously telling the owner to connect to it.
-            // That join error is already surfaced in WifiConfigPanel itself.
-            <>
-              <h1 className="text-2xl font-bold text-white mb-2">{t('wizard.qr.errorTitle')}</h1>
-              <p className="text-hifi-silver/70 text-sm leading-relaxed mb-8">{apInfo.error}</p>
-            </>
-          ) : isConnected ? (
+          {isConnected ? (
             <>
               <h1 className="text-2xl font-bold text-white mb-2">{t('wizard.qr.connectedTitle')}</h1>
               <p className="text-hifi-silver/70 text-sm leading-relaxed mb-8">{t('wizard.qr.connectedSubtitle')}</p>
             </>
           ) : (
             <>
-              <h1 className="text-2xl font-bold text-white mb-2">{t('wizard.qr.title')}</h1>
-              <p className="text-hifi-silver/70 text-sm leading-relaxed mb-8">{t('wizard.qr.subtitle')}</p>
+              <h1 className="text-2xl font-bold text-white mb-2">{t('wizard.wifi.title')}</h1>
+              <p className="text-hifi-silver/70 text-sm leading-relaxed mb-6">{t('wizard.wifi.setupSubtitle')}</p>
             </>
           )}
 
-          {apInfo?.ssid && apInfo?.active && !isConnected ? (
-            <>
-              <div className="inline-flex flex-col items-center bg-white rounded-2xl px-8 py-6">
-                <span className="text-black/50 text-xs font-semibold uppercase tracking-wide">{t('wizard.qr.networkLabel')}</span>
-                <span className="text-black text-2xl font-bold mt-1">{apInfo.ssid}</span>
-              </div>
-              {/* Explains both paths (hotspot or Ethernet) up front, since the
-                  owner only sees whichever one applies and may not realize
-                  the other exists — made deliberately prominent, not
-                  fine-print, since it's the one thing this screen needs the
-                  owner to actually read. */}
-              <div className="mt-4 max-w-xs rounded-xl border border-hifi-gold/30 bg-hifi-gold/10 px-4 py-3">
-                <p className="text-white text-sm leading-relaxed">{t('wizard.qr.hotspotInstructions')}</p>
-              </div>
-            </>
-          ) : apInfo?.error && !isConnected ? (
-            // Hotspot failed to come up and there's no LAN fallback either —
-            // an address here would point at a network the phone can't
-            // reach, so show nothing and let the error message above stand.
-            null
-          ) : (
+          {isConnected && (
             // Either the box is already on a real network (wired, or Wi-Fi
-            // configured via the phone or the on-screen panel below), or
-            // nothing back from the poll yet (first few seconds after boot):
-            // both cases fall back to the same LAN address. Prefer the
-            // device's own IP over hifiplayer.local: the hostname is
-            // ambiguous the moment more than one Osmium Sound unit is on the
-            // same network (mDNS answers with whichever responds first), the
-            // IP never is.
+            // just configured below), or nothing back from the poll yet
+            // (first few seconds after boot): both cases fall back to the
+            // same LAN address. Prefer the device's own IP over
+            // hifiplayer.local: the hostname is ambiguous the moment more
+            // than one Osmium Sound unit is on the same network (mDNS
+            // answers with whichever responds first), the IP never is.
             <>
               <div className="inline-flex flex-col items-center bg-white rounded-2xl px-8 py-6">
                 <span className="text-black/50 text-xs font-semibold uppercase tracking-wide">{t('wizard.qr.addressLabel')}</span>
@@ -221,27 +179,24 @@ const SetupWizard = ({ onComplete }) => {
               </div>
             </>
           )}
-
-          {!isConnected && (
-            <button onClick={openWifiPanel}
-              className="mt-4 text-sm text-hifi-silver/70 hover:text-hifi-silver underline underline-offset-2">
-              {t('wizard.qr.manualButton')}
-            </button>
-          )}
         </motion.div>
 
-        {showWifiPanel && (
-          <WifiConfigPanel
-            networks={networks}
-            // Live while openWifiPanel's rescan is in flight; otherwise fall
-            // back to "hasn't reported back yet" vs. a real empty result the
-            // same way as before the AP was ever confirmed up.
-            scanning={wifiRescanning || (!isConnected && !apInfo?.active && !apInfo?.error && networks.length === 0)}
-            connecting={wifiSubmitting || stage === 'connecting'}
-            error={wifiSubmitError || (stage === 'failed' ? apInfo?.error : null)}
-            onConnect={handleWifiConnect}
-            onClose={() => setShowWifiPanel(false)}
-          />
+        {!isConnected && (
+          <div className="w-full max-w-sm mt-2">
+            <WifiConfigPanel
+              inline
+              networks={networks}
+              scanning={wifiRescanning || (networks.length === 0 && !wifiSubmitError && !provisionError)}
+              connecting={wifiSubmitting || stage === 'connecting'}
+              error={wifiSubmitError || (stage === 'failed' ? provisionError : null)}
+              onConnect={handleWifiConnect}
+            />
+            <button onClick={rescan} disabled={wifiRescanning}
+              className="mt-3 mx-auto flex items-center gap-1.5 text-sm text-hifi-silver/70 hover:text-hifi-silver disabled:opacity-40">
+              <RefreshCw size={13} className={wifiRescanning ? 'animate-spin' : ''} />
+              {t('wizard.wifi.rescan')}
+            </button>
+          </div>
         )}
       </motion.div>
     </AnimatePresence>
