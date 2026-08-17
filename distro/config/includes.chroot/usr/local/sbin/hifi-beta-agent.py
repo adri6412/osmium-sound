@@ -9,9 +9,12 @@ on-device HAR/perf captures (main.js's Settings -> Debug feature, see
 HAR_CAPTURE_DIR/PERF_CAPTURE_DIR below) should be running right now, writes
 that schedule to a file main.js polls, then uploads whatever new
 snapshot/capture data there is. Captures (HAR + perf) are deleted from disk
-once fully uploaded, so beta devices don't accumulate them indefinitely. All
-cadence lives in the dashboard on the server, not here — see
-beta-telemetry/server/.
+once fully uploaded, so beta devices don't accumulate them indefinitely. If
+the server is unreachable, snapshots are queued to SNAPSHOT_QUEUE_FILE
+instead of being dropped, and captures simply stay on disk (they were never
+deleted in the first place) -- both get flushed/retried once the server
+answers again. All cadence lives in the dashboard on the server, not here —
+see beta-telemetry/server/.
 
 State (device token, per-file upload offsets) persists to STATE_FILE so a
 restart never re-registers or re-uploads already-shipped data.
@@ -54,6 +57,10 @@ BOOTSTRAP_SECRET = os.environ.get('HIFI_BETA_BOOTSTRAP_SECRET', 'REPLACE_ME_BOOT
 
 STATE_DIR = os.environ.get('HIFI_BETA_STATE_DIR', '/var/lib/hifi-beta-agent')
 STATE_FILE = os.path.join(STATE_DIR, 'state.json')
+SNAPSHOT_QUEUE_FILE = os.path.join(STATE_DIR, 'pending-snapshots.jsonl')
+MAX_QUEUED_SNAPSHOTS = 1000  # ~1 week at the default 10-minute cadence -- keeps
+                             # an extended cloud outage from growing this file
+                             # without bound
 
 HOME_DIR = os.path.expanduser('~')
 HAR_CAPTURE_DIR = os.path.join(HOME_DIR, '.config', 'hifi-media-player', 'logs', 'har-captures')
@@ -378,10 +385,85 @@ def system_snapshot():
     }
 
 
+# ── snapshot queue: local cache for when the cloud is unreachable ───────
+# Snapshots that fail to upload are appended here (oldest first) instead of
+# being dropped, and shipped out in order the next time the server answers --
+# deleted from disk only once the server has confirmed it has them.
+def _enqueue_snapshot(snapshot):
+    try:
+        os.makedirs(STATE_DIR, exist_ok=True)
+        with open(SNAPSHOT_QUEUE_FILE, 'a') as f:
+            f.write(json.dumps(snapshot) + '\n')
+        _trim_snapshot_queue()
+    except Exception as e:
+        _log(f'failed to queue snapshot: {e}')
+
+
+def _trim_snapshot_queue():
+    try:
+        with open(SNAPSHOT_QUEUE_FILE) as f:
+            lines = f.readlines()
+    except FileNotFoundError:
+        return
+    if len(lines) <= MAX_QUEUED_SNAPSHOTS:
+        return
+    lines = lines[-MAX_QUEUED_SNAPSHOTS:]
+    tmp = SNAPSHOT_QUEUE_FILE + '.tmp'
+    with open(tmp, 'w') as f:
+        f.writelines(lines)
+    os.replace(tmp, SNAPSHOT_QUEUE_FILE)
+
+
+def flush_snapshot_queue(state):
+    try:
+        with open(SNAPSHOT_QUEUE_FILE) as f:
+            lines = f.readlines()
+    except FileNotFoundError:
+        return
+    if not lines:
+        return
+
+    sent = 0
+    for line in lines:
+        line = line.strip()
+        if not line:
+            sent += 1
+            continue
+        try:
+            snapshot = json.loads(line)
+        except Exception:
+            sent += 1  # corrupt line, nothing usable to retry -- drop it
+            continue
+        status, _ = device_request(state, 'POST', '/api/v1/snapshot', json_body=snapshot)
+        if status != 200:
+            break  # stop here so older entries aren't skipped over newer ones
+        sent += 1
+
+    remaining = lines[sent:]
+    if not remaining:
+        try:
+            os.remove(SNAPSHOT_QUEUE_FILE)
+        except FileNotFoundError:
+            pass
+        if sent:
+            _log(f'flushed {sent} queued snapshot(s)')
+        return
+    tmp = SNAPSHOT_QUEUE_FILE + '.tmp'
+    with open(tmp, 'w') as f:
+        f.writelines(remaining)
+    os.replace(tmp, SNAPSHOT_QUEUE_FILE)
+    if sent:
+        _log(f'flushed {sent} queued snapshot(s), {len(remaining)} still pending')
+
+
 def send_snapshot(state):
-    status, _ = device_request(state, 'POST', '/api/v1/snapshot', json_body=system_snapshot())
+    snapshot = system_snapshot()
+    snapshot['ts'] = time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())
+    flush_snapshot_queue(state)
+    status, _ = device_request(state, 'POST', '/api/v1/snapshot', json_body=snapshot)
     if status != 200:
-        _log(f'snapshot upload failed (status={status})')
+        _log(f'snapshot upload failed (status={status}), queuing for retry')
+        _enqueue_snapshot(snapshot)
 
 
 # ── HAR captures: whole file, uploaded once it looks finished ───────────

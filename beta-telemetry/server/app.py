@@ -129,6 +129,27 @@ def _device_capture_dir(device_id):
     return path
 
 
+MAX_CAPTURES_PER_DEVICE = 10
+
+
+def _prune_old_captures(db, table, order_col, device_id):
+    """Keep only the MAX_CAPTURES_PER_DEVICE most recent rows of `table` for
+    this device, deleting the rest (DB row + the file on disk it points at).
+    Runs on every upload so storage stays bounded without a separate cron job
+    -- each appliance uploads then deletes its local copy (see
+    hifi-beta-agent.py), so the server is the only place these accumulate."""
+    rows = db.execute(
+        f'SELECT id, storage_path FROM {table} WHERE device_id = ? ORDER BY {order_col} DESC',
+        (device_id,)).fetchall()
+    for row in rows[MAX_CAPTURES_PER_DEVICE:]:
+        if row['storage_path']:
+            try:
+                os.remove(row['storage_path'])
+            except OSError:
+                pass
+        db.execute(f'DELETE FROM {table} WHERE id = ?', (row['id'],))
+
+
 # ── admin password: DB override, falling back to the env var ────────────
 # Lets the password be changed from /account without redeploying, while
 # BETA_ADMIN_PASSWORD_HASH stays as the value reset_password.py --clear
@@ -204,6 +225,20 @@ def api_config():
     })
 
 
+def _client_ts_or_now(value):
+    """hifi-beta-agent.py stamps each snapshot with its own capture time and
+    replays queued ones after a cloud outage -- honor that so a snapshot sent
+    hours late still lands at its real capture time instead of the upload
+    time (device_detail.html's chart is ordered/labeled by this column)."""
+    if isinstance(value, str):
+        try:
+            time.strptime(value, '%Y-%m-%dT%H:%M:%SZ')
+            return value
+        except ValueError:
+            pass
+    return now_iso()
+
+
 @app.route('/api/v1/snapshot', methods=['POST'])
 @require_device
 def api_snapshot():
@@ -212,7 +247,7 @@ def api_snapshot():
         'INSERT INTO snapshots (device_id, ts, hostname, os_version, cpu_model, cpu_cores, gpu_model, '
         'ram_total_mb, ram_used_mb, disk_total_gb, disk_used_gb, cpu_percent, disk_percent, temp_c, '
         'gpu_percent, connection_type, local_ip) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-        (g.device['id'], now_iso(), body.get('hostname'), body.get('os_version'), body.get('cpu_model'),
+        (g.device['id'], _client_ts_or_now(body.get('ts')), body.get('hostname'), body.get('os_version'), body.get('cpu_model'),
          body.get('cpu_cores'), body.get('gpu_model'), body.get('ram_total_mb'), body.get('ram_used_mb'),
          body.get('disk_total_gb'), body.get('disk_used_gb'), body.get('cpu_percent'),
          body.get('disk_percent'), body.get('temp_c'), body.get('gpu_percent'),
@@ -256,6 +291,7 @@ def api_har():
         (g.device['id'], filename, now_iso(), len(raw), summary.get('requests_count'),
          summary.get('errors_count'), json.dumps(summary.get('by_status') or {}),
          json.dumps(summary.get('top_domains') or {}), storage_path))
+    _prune_old_captures(g.db, 'har_captures', 'uploaded_at', g.device['id'])
     g.db.commit()
     return jsonify({'ok': True})
 
@@ -294,6 +330,7 @@ def api_perf():
             (g.device['id'], filename, rollup['first_seen_at'], rollup['last_updated_at'],
              rollup['sample_count'], rollup['cpu_avg'], rollup['cpu_max'], rollup['ram_avg_kb'],
              rollup['duration_sec'], rollup['by_tab_json'], storage_path))
+    _prune_old_captures(g.db, 'perf_captures', 'last_updated_at', g.device['id'])
     g.db.commit()
     return jsonify({'ok': True})
 
