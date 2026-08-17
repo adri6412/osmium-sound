@@ -475,10 +475,23 @@ def _connect_wifi(ssid, password, ap_fallback=True):
     caller): also drop any AP before joining and, on failure, re-raise it so
     the phone -- which auto-rejoins it -- sees the error. First-boot
     provisioning passes False: it never raises an AP at all any more (see
-    SetupWizard.jsx), so there is nothing to tear down or re-raise, and doing
-    so unconditionally used to be exactly the AP<->station cycling that made
-    joins flaky in the first place on some Wi-Fi hardware (e.g. Intel
-    iwlwifi) -- one less mode switch now that first-boot never needs it.
+    SetupWizard.jsx).
+
+    Builds an explicit connection profile (`connection add` + `connection
+    up`) instead of the `nmcli device wifi connect SSID` shorthand. Root-caused
+    live via SSH on the actual failing hardware (Intel AC 9560/iwlwifi): the
+    shorthand refuses instantly with "No network with SSID found" whenever
+    the SSID isn't already sitting in NetworkManager's own *passive* scan
+    cache -- and a real, joinable, correctly-configured network can be
+    consistently absent from that cache (reproduced: 5+ fresh
+    `device wifi rescan` cycles in a row, 5s apart, never once showed a
+    network that was live and reachable the whole time) while still being
+    reachable, because `connection add`+`up` doesn't need the passive cache
+    at all -- it drives wpa_supplicant's own active (scan_ssid=1) probe
+    during activation, which found and joined the same network in ~7s on the
+    very first try. This is a strictly more robust join path, not just a
+    workaround for this one card: it removes a precondition (SSID visible in
+    a passive scan snapshot) the join was never supposed to need.
 
     Returns (ok, err, ap) — ap is the *actual* outcome of an `ap_fallback`
     re-raise ({'active','ssid','psk'}, or None if it wasn't attempted / not
@@ -488,68 +501,34 @@ def _connect_wifi(ssid, password, ap_fallback=True):
         return False, _wt('network.ssidInvalidChars', _lang()), None
     if ap_fallback:
         _teardown_ap()
-    # The radio may have just cycled AP->station->AP->station in quick
-    # succession (the on-screen panel's live rescan used to do exactly that
-    # right before this ran, back when first-boot still raised an AP) --
-    # NetworkManager's scan cache doesn't reliably catch up from repeated
-    # rapid mode switches, so `device wifi connect` below can fail with "no
-    # network with SSID found" even though the network is actually in range
-    # (reproduced: on-screen panel failed every time with that exact error,
-    # while the phone flow -- which only ever did ONE AP->station transition,
-    # right here -- worked fine). Still relevant for the `ap_fallback` caller
-    # (recovery), and cheap insurance even without an AP in the picture, so
-    # keep confirming the target SSID actually landed in nmcli's list before
-    # attempting the join, instead of trusting its own scan-on-connect to
-    # recover in time. Mirrors _scan_wifi()'s own retry loop for the same
-    # class of "cache not populated yet" problem.
-    #
-    # That pre-check still isn't enough on its own, though (reproduced live:
-    # the SSID confirmed present in `device wifi list` immediately beforehand,
-    # then `device wifi connect` still answered "could not be found") --
-    # `connect`'s own internal freshness check apparently isn't the same scan
-    # this pre-check just read, so it can race independently, especially
-    # right after the AP teardown above while the radio is still settling.
-    # A real end user can't be expected to notice this and retry by hand, so
-    # retry the whole join a few times here instead of surfacing a transient
-    # miss as a hard failure on the first try.
-    _TRANSIENT_MARKERS = ('could not be found', 'no network with ssid')
-    # "Secrets were required, but not provided" is the *same* class of
-    # transient activation race, not just the "not found" wording -- but
-    # unlike that one, this exact message is also EXACTLY what a genuinely
-    # missing password produces, so it's only safe to treat as transient
-    # (and retry) when we know a password was actually supplied. Callers are
-    # expected to have already refused to submit an empty password against a
-    # network that needs one (see WifiConfigPanel's passwordMissing guard);
-    # this is the server-side half of that same guarantee, not a duplicate
-    # of it -- it's what keeps a real "secrets required" (no password given)
-    # failing fast instead of being retried 4 times for nothing.
+    dev = _wifi_device()
+    _nmcli(['connection', 'delete', 'id', ssid])  # clear any stale profile first
+    add_args = ['connection', 'add', 'type', 'wifi', 'con-name', ssid, 'ssid', ssid]
+    if dev:
+        add_args += ['ifname', dev]
     if password:
-        _TRANSIENT_MARKERS += ('secrets were required',)
-    args = ['device', 'wifi', 'connect', ssid]
-    if password:
-        args += ['password', password]
+        add_args += ['802-11-wireless-security.key-mgmt', 'wpa-psk',
+                     '802-11-wireless-security.psk', password]
+    rc, _, err = _nmcli(add_args)
+    if rc != 0:
+        return False, (err.strip() or _wt('network.connectFailed', _lang())), None
+    # Association can still fail transiently on marginal signal (observed:
+    # identical config, back-to-back attempts, one hung in
+    # associating<->disconnected for 25s and failed, the next completed the
+    # 4-way handshake in under a second) -- worth a couple of retries before
+    # surfacing a hard failure, same reasoning as the old SSID-visibility
+    # retry this replaces.
     rc, err = 1, ''
-    for attempt in range(4):
-        dev = _wifi_device()
-        if dev:
-            _nmcli(['device', 'wifi', 'rescan'], timeout=20)
-            for _ in range(8):
-                rc2, out, _ = _nmcli(['-t', '-f', 'SSID', 'device', 'wifi', 'list'])
-                if rc2 == 0 and any(re.split(r'(?<!\\):', line)[0].replace('\\:', ':') == ssid
-                                   for line in out.splitlines() if line):
-                    break
-                time.sleep(1.5)
-        rc, _, err = _nmcli(args, timeout=45)
+    for attempt in range(3):
+        rc, _, err = _nmcli(['connection', 'up', ssid], timeout=45)
         if rc == 0:
             return True, '', None
-        if attempt < 3 and any(m in err.lower() for m in _TRANSIENT_MARKERS):
-            print(f'[webui] wifi connect: transient activation failure on attempt {attempt + 1}, retrying')
+        if attempt < 2:
+            print(f'[webui] wifi connect: activation attempt {attempt + 1} failed ({err.strip()}), retrying')
             time.sleep(2)
-            continue
-        break
-    # 'wifi connect' persists a bad autoconnect profile even on auth failure —
-    # delete it so NM doesn't fight any AP we're about to re-raise (and so it
-    # doesn't linger and interfere with the next attempt either way).
+    # Delete the profile on failure so NM doesn't fight any AP we're about to
+    # re-raise (and so it doesn't linger and interfere with the next attempt
+    # either way).
     _nmcli(['connection', 'delete', 'id', ssid])
     ap = None
     if ap_fallback:
