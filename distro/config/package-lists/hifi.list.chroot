@@ -170,6 +170,10 @@ logrotate
 # tile (api_server.py get_system_stats). Not pulled in by anything else.
 intel-gpu-tools
 
+# radeontop — AMD/ATI GPU busy% counterpart to intel-gpu-tools, same two
+# call sites. Not pulled in by anything else.
+radeontop
+
 # lspci — GPU model string for both the admin dashboard and the beta-testing
 # telemetry snapshot (hifi-beta-agent.py gpu_model()). Not pulled in by
 # anything else, and not part of a minimal Debian base.

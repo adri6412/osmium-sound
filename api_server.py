@@ -344,20 +344,28 @@ _gpu_warned = False  # log the first failure only -- this polls every 5s forever
 
 
 def _gpu_busy_pct():
-    """Intel iGPU busy % via intel_gpu_top, if installed (not shipped on the
-    image by default -- see intel-gpu-tools). `-J` streams a JSON array that
-    only gets its closing `]` once the process exits, and it never exits on
-    its own -- a plain `subprocess.run(..., timeout=N)` would always hit the
-    timeout and lose the output. Let it sample for one interval, then ask it
-    to exit cleanly (SIGINT, same as Ctrl-C) so it flushes valid JSON.
-    Failures are logged once (not every poll): this used to fail completely
-    silently, which is exactly how a real bug (Debian's stricter default
-    perf_event_paranoid rejecting CAP_PERFMON -- see
-    distro/os-update/apply.d/0046-perfmon-sysctl.sh) went unnoticed for a
-    long time."""
+    """GPU busy % -- Intel iGPU via intel_gpu_top, AMD/ATI via radeontop.
+    Neither tool ships on the image by default (see intel-gpu-tools /
+    radeontop apply.d steps), so this is a no-op (None) wherever neither is
+    installed."""
+    if shutil.which('intel_gpu_top'):
+        return _intel_gpu_busy_pct()
+    if shutil.which('radeontop'):
+        return _amd_gpu_busy_pct()
+    return None
+
+
+def _intel_gpu_busy_pct():
+    """`-J` streams a JSON array that only gets its closing `]` once the
+    process exits, and it never exits on its own -- a plain
+    `subprocess.run(..., timeout=N)` would always hit the timeout and lose
+    the output. Let it sample for one interval, then ask it to exit cleanly
+    (SIGINT, same as Ctrl-C) so it flushes valid JSON. Failures are logged
+    once (not every poll): this used to fail completely silently, which is
+    exactly how a real bug (Debian's stricter default perf_event_paranoid
+    rejecting CAP_PERFMON -- see distro/os-update/apply.d/0046-perfmon-sysctl.sh)
+    went unnoticed for a long time."""
     global _gpu_warned
-    if not shutil.which('intel_gpu_top'):
-        return None
     proc = None
     err = ''
     try:
@@ -397,6 +405,32 @@ def _gpu_busy_pct():
     finally:
         if proc and proc.poll() is None:
             proc.kill()
+
+
+def _amd_gpu_busy_pct():
+    """AMD/ATI GPU busy % via radeontop. Works across both the legacy
+    `radeon` and current `amdgpu` kernel drivers (unlike reading
+    gpu_busy_percent from sysfs, which only amdgpu exposes -- it would miss
+    older cards). `-l 1` takes exactly one sample and exits on its own, no
+    SIGINT dance needed like intel_gpu_top's endless JSON stream."""
+    global _gpu_warned
+    try:
+        out = subprocess.run(
+            ['radeontop', '-d', '-', '-l', '1'],
+            capture_output=True, text=True, timeout=5).stdout
+        m = re.search(r'\bgpu\s+([\d.]+)%', out)
+        if not m:
+            if not _gpu_warned:
+                _gpu_warned = True
+                log.warning('gpu_busy_pct: no gpu field in radeontop output: %s', out.strip()[:200])
+            return None
+        return round(float(m.group(1)), 1)
+    except Exception as e:
+        if not _gpu_warned:
+            _gpu_warned = True
+            log.warning('gpu_busy_pct: %s', e)
+        return None
+
 
 def get_system_stats():
     """CPU/RAM/disk/temperature/GPU snapshot for the admin dashboard. All

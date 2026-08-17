@@ -282,15 +282,22 @@ def _warn_gpu_once(msg):
 
 
 def gpu_busy_pct():
-    """Intel iGPU busy % via intel_gpu_top, same approach as api_server.py's
-    _gpu_busy_pct() -- not shipped on the image by default (see
-    intel-gpu-tools), so this is a no-op (None) wherever it's missing.
-    Failures are logged once (not every cycle): this used to fail completely
-    silently, which is exactly how a real bug (Debian's stricter default
+    """GPU busy % -- Intel iGPU via intel_gpu_top, AMD/ATI via radeontop,
+    same approach as api_server.py's _gpu_busy_pct(). Neither tool ships on
+    the image by default (see intel-gpu-tools / radeontop apply.d steps), so
+    this is a no-op (None) wherever neither is installed. Failures are
+    logged once (not every cycle): this used to fail completely silently,
+    which is exactly how a real bug (Debian's stricter default
     perf_event_paranoid rejecting CAP_PERFMON -- see
     apply.d/0046-perfmon-sysctl.sh) went unnoticed for a long time."""
-    if not shutil.which('intel_gpu_top'):
-        return None
+    if shutil.which('intel_gpu_top'):
+        return _intel_gpu_busy_pct()
+    if shutil.which('radeontop'):
+        return _amd_gpu_busy_pct()
+    return None
+
+
+def _intel_gpu_busy_pct():
     proc = None
     err = ''
     try:
@@ -325,6 +332,27 @@ def gpu_busy_pct():
     finally:
         if proc and proc.poll() is None:
             proc.kill()
+
+
+def _amd_gpu_busy_pct():
+    """AMD/ATI GPU busy % via radeontop. Works across both the legacy
+    `radeon` and current `amdgpu` kernel drivers (unlike reading
+    gpu_busy_percent from sysfs, which only amdgpu exposes -- it would miss
+    older cards like the one that flagged this gap). `-l 1` takes exactly
+    one sample and exits on its own, no SIGINT dance needed like
+    intel_gpu_top's endless JSON stream."""
+    try:
+        out = subprocess.run(
+            ['radeontop', '-d', '-', '-l', '1'],
+            capture_output=True, text=True, timeout=5).stdout
+        m = re.search(r'\bgpu\s+([\d.]+)%', out)
+        if not m:
+            _warn_gpu_once(f'no gpu field in radeontop output: {out.strip()[:200]}')
+            return None
+        return round(float(m.group(1)), 1)
+    except Exception as e:
+        _warn_gpu_once(str(e))
+        return None
 
 
 def network_info():
