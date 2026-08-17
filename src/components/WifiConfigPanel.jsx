@@ -15,8 +15,18 @@ const WifiConfigPanel = ({ networks, scanning, connecting, error, onConnect, onC
   const [ssid, setSsid] = useState('');
   const [password, setPassword] = useState('');
 
+  // Only enforceable for a network we actually scanned (its `security` field
+  // tells us it's locked) -- a hand-typed SSID could be anything, so it's
+  // let through without this check. Without this, submitting a locked
+  // network with an empty password silently reaches nmcli's `device wifi
+  // connect SSID` (no `password` arg at all), which fails with NetworkManager's
+  // opaque "Secrets were required, but not provided" instead of a clear
+  // "you forgot the password" -- exactly what field debugging turned up.
+  const selectedNetwork = networks.find((n) => n.ssid === ssid);
+  const passwordMissing = !!selectedNetwork?.security && !password;
+
   const submit = () => {
-    if (!ssid || connecting) return;
+    if (!ssid || connecting || passwordMissing) return;
     onConnect(ssid, password);
   };
 
@@ -56,7 +66,9 @@ const WifiConfigPanel = ({ networks, scanning, connecting, error, onConnect, onC
             placeholder={t('wizard.wifi.passwordPlaceholder')}
             className="w-full mb-3 px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white text-sm placeholder:text-hifi-silver/40 focus:outline-none focus:border-hifi-gold/50" />
 
-          {error && !connecting && (
+          {passwordMissing && !connecting ? (
+            <p className="text-hifi-gold text-xs mb-3">{t('wizard.wifi.passwordRequired')}</p>
+          ) : error && !connecting && (
             <p className="text-red-400 text-xs mb-3">{error}</p>
           )}
 
@@ -65,7 +77,7 @@ const WifiConfigPanel = ({ networks, scanning, connecting, error, onConnect, onC
               className="flex-1 py-2 rounded-lg border border-white/10 text-hifi-silver text-sm hover:bg-white/5">
               {t('common.cancel')}
             </button>
-            <button onClick={submit} disabled={!ssid || connecting}
+            <button onClick={submit} disabled={!ssid || connecting || passwordMissing}
               className="flex-1 py-2 rounded-lg bg-hifi-gold text-black text-sm font-semibold disabled:opacity-40 flex items-center justify-center gap-2">
               {connecting && <Loader2 size={14} className="animate-spin" />}
               {connecting ? t('wizard.wifi.connecting', { ssid }) : t('wizard.connect')}

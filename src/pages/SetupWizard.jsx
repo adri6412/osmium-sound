@@ -149,7 +149,13 @@ const SetupWizard = ({ onComplete }) => {
           <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-hifi-gold to-yellow-600 flex items-center justify-center shadow-[0_0_40px_rgba(212,175,55,0.3)] mb-6">
             <Disc3 size={32} className="text-black" />
           </div>
-          {apInfo?.error && !isConnected ? (
+          {apInfo?.error && !apInfo?.active && !isConnected ? (
+            // Only the "hotspot itself is down" case earns this title/message.
+            // A failed *join* attempt (wrong password, transient scan miss...)
+            // re-raises the AP just fine -- apInfo.active stays true -- so it
+            // must NOT show here as "hotspot unavailable" while the network
+            // box below is simultaneously telling the owner to connect to it.
+            // That join error is already surfaced in WifiConfigPanel itself.
             <>
               <h1 className="text-2xl font-bold text-white mb-2">{t('wizard.qr.errorTitle')}</h1>
               <p className="text-hifi-silver/70 text-sm leading-relaxed mb-8">{apInfo.error}</p>

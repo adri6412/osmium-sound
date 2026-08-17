@@ -489,21 +489,51 @@ def _connect_wifi(ssid, password):
     # attempting the join, instead of trusting its own scan-on-connect to
     # recover in time. Mirrors _scan_wifi()'s own retry loop for the same
     # class of "cache not populated yet" problem.
-    dev = _wifi_device()
-    if dev:
-        _nmcli(['device', 'wifi', 'rescan'], timeout=20)
-        for _ in range(8):
-            rc, out, _ = _nmcli(['-t', '-f', 'SSID', 'device', 'wifi', 'list'])
-            if rc == 0 and any(re.split(r'(?<!\\):', line)[0].replace('\\:', ':') == ssid
-                               for line in out.splitlines() if line):
-                break
-            time.sleep(1.5)
+    #
+    # That pre-check still isn't enough on its own, though (reproduced live:
+    # the SSID confirmed present in `device wifi list` immediately beforehand,
+    # then `device wifi connect` still answered "could not be found") --
+    # `connect`'s own internal freshness check apparently isn't the same scan
+    # this pre-check just read, so it can race independently, especially
+    # right after the AP teardown above while the radio is still settling.
+    # A real end user can't be expected to notice this and retry by hand, so
+    # retry the whole join a few times here instead of surfacing a transient
+    # miss as a hard failure on the first try.
+    _TRANSIENT_MARKERS = ('could not be found', 'no network with ssid')
+    # "Secrets were required, but not provided" is the *same* class of
+    # transient activation race, not just the "not found" wording -- but
+    # unlike that one, this exact message is also EXACTLY what a genuinely
+    # missing password produces, so it's only safe to treat as transient
+    # (and retry) when we know a password was actually supplied. Callers are
+    # expected to have already refused to submit an empty password against a
+    # network that needs one (see WifiConfigPanel's passwordMissing guard);
+    # this is the server-side half of that same guarantee, not a duplicate
+    # of it -- it's what keeps a real "secrets required" (no password given)
+    # failing fast instead of being retried 4 times for nothing.
+    if password:
+        _TRANSIENT_MARKERS += ('secrets were required',)
     args = ['device', 'wifi', 'connect', ssid]
     if password:
         args += ['password', password]
-    rc, _, err = _nmcli(args, timeout=45)
-    if rc == 0:
-        return True, '', None
+    rc, err = 1, ''
+    for attempt in range(4):
+        dev = _wifi_device()
+        if dev:
+            _nmcli(['device', 'wifi', 'rescan'], timeout=20)
+            for _ in range(8):
+                rc2, out, _ = _nmcli(['-t', '-f', 'SSID', 'device', 'wifi', 'list'])
+                if rc2 == 0 and any(re.split(r'(?<!\\):', line)[0].replace('\\:', ':') == ssid
+                                   for line in out.splitlines() if line):
+                    break
+                time.sleep(1.5)
+        rc, _, err = _nmcli(args, timeout=45)
+        if rc == 0:
+            return True, '', None
+        if attempt < 3 and any(m in err.lower() for m in _TRANSIENT_MARKERS):
+            print(f'[webui] wifi connect: transient activation failure on attempt {attempt + 1}, retrying')
+            time.sleep(2)
+            continue
+        break
     # 'wifi connect' persists a bad autoconnect profile even on auth failure —
     # delete it so NM doesn't fight the AP we are about to re-raise.
     _nmcli(['connection', 'delete', 'id', ssid])

@@ -155,7 +155,8 @@
       "connecting": "Connessione a {ssid}…",
       "connectedTo": "Connesso a {ssid}",
       "connectedToIp": "Connesso a {ssid} · IP {ip}",
-      "connectFailed": "Connessione WiFi non riuscita. Controlla la password."
+      "connectFailed": "Connessione WiFi non riuscita. Controlla la password.",
+      "passwordRequired": "Questa rete è protetta da password — inseriscila."
     },
     "audio": {
       "title": "Uscita audio",

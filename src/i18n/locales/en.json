@@ -155,7 +155,8 @@
       "connecting": "Connecting to {ssid}…",
       "connectedTo": "Connected to {ssid}",
       "connectedToIp": "Connected to {ssid} · IP {ip}",
-      "connectFailed": "Wi-Fi connection failed. Check the password."
+      "connectFailed": "Wi-Fi connection failed. Check the password.",
+      "passwordRequired": "This network is password-protected — enter its password."
     },
     "audio": {
       "title": "Audio output",
