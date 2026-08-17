@@ -1,41 +1,41 @@
 {
-  "tag_name": "v2.5.21-dev.105",
-  "name": "v2.5.21-dev.105",
-  "body": "## What's new in v2.5.21-dev.105\n\n- fix(main): redact auth/token headers in HAR network captures\n- feat(website): gate the ISO download behind a privacy-notice checkbox\n- docs(privacy): drop the restrict/stop-processing right\n- docs(privacy): drop the supervisory-authority complaint mention\n- docs(privacy): note the data collector is removed at first prod release\n- docs(privacy): the only guaranteed way to avoid sharing data is a wipe\n- docs(privacy): drop unoffered correction/deletion right, clarify stop-processing\n- docs(privacy): clarify hosting/device-label wording, drop dead opt-out mention\n- feat(website): remove changelog section from the beta site\n- fix(website): trim beta changelog down to the last 2 dev releases\n- fix(website): drop unverifiable prod version labels from beta changelog\n- fix(website): relabel beta changelog with dev release tags\n- chore: gitignore a local-only manual-deploy cheat sheet\n- fix(website): anchor carousel counter/nav to the carousel image\n- fix(website): correct leftover stale carousel refs after beta screenshot swap\n- Aggiornato index.html con link ISO v2.5.21-dev.104\n- Aggiornato .gitignore e buildSrc.jar\n- Aggiornato index.html con link ISO v2.5.21-dev.104\n- fix(website): point the manual callout at the new /beta/manual path\n- fix(website): move the manual to /beta/manual instead of site root\n- feat(website): publish the manual on /beta, warn about Secure Boot, fix contact/domain\n",
+  "tag_name": "v2.5.21-dev.106",
+  "name": "v2.5.21-dev.106",
+  "body": "## What's new in v2.5.21-dev.106\n\n- feat(beta-telemetry): cache snapshots locally during cloud outages\n- feat(website): add support section explaining email-to-GitHub-issue\n",
   "assets": [
     {
-      "name": "hifi-ui-v2.5.21-dev.105.tar.gz",
-      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.105/hifi-ui-v2.5.21-dev.105.tar.gz",
-      "size": 134235711
+      "name": "hifi-ui-v2.5.21-dev.106.tar.gz",
+      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.106/hifi-ui-v2.5.21-dev.106.tar.gz",
+      "size": 134236015
     },
     {
-      "name": "hifi-ui-v2.5.21-dev.105.tar.gz.sha256",
-      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.105/hifi-ui-v2.5.21-dev.105.tar.gz.sha256",
+      "name": "hifi-ui-v2.5.21-dev.106.tar.gz.sha256",
+      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.106/hifi-ui-v2.5.21-dev.106.tar.gz.sha256",
       "size": 97
     },
     {
-      "name": "hifi-system-v2.5.21-dev.105.tar.gz",
-      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.105/hifi-system-v2.5.21-dev.105.tar.gz",
-      "size": 330804
+      "name": "hifi-system-v2.5.21-dev.106.tar.gz",
+      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.106/hifi-system-v2.5.21-dev.106.tar.gz",
+      "size": 331604
     },
     {
-      "name": "hifi-system-v2.5.21-dev.105.tar.gz.sha256",
-      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.105/hifi-system-v2.5.21-dev.105.tar.gz.sha256",
+      "name": "hifi-system-v2.5.21-dev.106.tar.gz.sha256",
+      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.106/hifi-system-v2.5.21-dev.106.tar.gz.sha256",
       "size": 101
     },
     {
-      "name": "hifi-os-v2.5.21-dev.105.tar.gz",
-      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.105/hifi-os-v2.5.21-dev.105.tar.gz",
-      "size": 1201784
+      "name": "hifi-os-v2.5.21-dev.106.tar.gz",
+      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.106/hifi-os-v2.5.21-dev.106.tar.gz",
+      "size": 1201783
     },
     {
-      "name": "hifi-os-v2.5.21-dev.105.tar.gz.sha256",
-      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.105/hifi-os-v2.5.21-dev.105.tar.gz.sha256",
+      "name": "hifi-os-v2.5.21-dev.106.tar.gz.sha256",
+      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.106/hifi-os-v2.5.21-dev.106.tar.gz.sha256",
       "size": 97
     },
     {
-      "name": "hifi-os-v2.5.21-dev.105.tar.gz.sha256.sig",
-      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.105/hifi-os-v2.5.21-dev.105.tar.gz.sha256.sig",
+      "name": "hifi-os-v2.5.21-dev.106.tar.gz.sha256.sig",
+      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.106/hifi-os-v2.5.21-dev.106.tar.gz.sha256.sig",
       "size": 64
     }
   ]
