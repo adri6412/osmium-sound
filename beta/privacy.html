@@ -91,7 +91,7 @@
 
 <div id="lang-en">
   <h1>Osmium Sound — Private Beta Privacy Notice</h1>
-  <p class="updated">Last updated: 16 August 2026 · Applies only to devices running a private beta / dev-channel build</p>
+  <p class="updated">Last updated: 17 August 2026 · Applies only to devices running a private beta / dev-channel build</p>
 
   <div class="callout">
     <strong>Scope of this notice:</strong> this page describes data collection that runs <strong>only</strong> on appliances installed from this <code>/beta</code> page or otherwise switched to the Dev/Alpha OTA channel, for the duration of the private beta test. Stable production releases (the main download on <a href="../index.html">osmiumsound.it</a>) do not currently run this feature. Once the private beta ends, this data-collection feature and all data already collected through it will be removed/deleted.
@@ -117,7 +117,7 @@
   </table>
 
   <h3>b) Diagnostic network captures (HAR)</h3>
-  <p>Only during short capture windows that <strong>we schedule remotely</strong> (this is not continuous, and there is currently no on-device switch to trigger or block it yourself), the appliance records the network requests made by its own interface: request/response URLs, HTTP method, status codes, headers, and timing. <strong>Response bodies are deliberately not captured</strong> — no page content, images or audio. Because request URLs can include things like track/album identifiers or search terms typed into the interface, and because headers can incidentally include authentication/session information for connected streaming services, these captures can contain more than pure system metrics; access to them is restricted to the data controller.</p>
+  <p>Only during short capture windows that <strong>we schedule remotely</strong> (this is not continuous, and there is currently no on-device switch to trigger or block it yourself), the appliance records the network requests made by <strong>its own on-screen interface</strong> — not system-wide network traffic, and not requests from any other device on your network. Authentication and session information (streaming-service logins, cookies, API tokens, and any header matching a token/secret/session pattern) is <strong>automatically stripped before the capture file is even written</strong>, so it never leaves the device. <strong>Response bodies are also never captured</strong> — no page content, images or audio. What remains is request/response URLs, HTTP method, status codes, and timing; URLs can still include things like track/album identifiers or search terms typed into the interface. Access to these captures is restricted to the data controller.</p>
 
   <h3>c) Performance captures</h3>
   <p>During the same capture windows, CPU and memory usage per interface screen/tab is logged, to help diagnose slowdowns.</p>
@@ -159,7 +159,7 @@
 
 <div id="lang-it">
   <h1>Osmium Sound — Informativa Privacy Beta Privata</h1>
-  <p class="updated">Ultimo aggiornamento: 16 agosto 2026 · Si applica solo ai dispositivi con una build della beta privata / canale dev</p>
+  <p class="updated">Ultimo aggiornamento: 17 agosto 2026 · Si applica solo ai dispositivi con una build della beta privata / canale dev</p>
 
   <div class="callout">
     <strong>Ambito di questa informativa:</strong> questa pagina descrive la raccolta dati che gira <strong>solo</strong> sui dispositivi installati da questa pagina <code>/beta</code> o comunque passati al canale OTA Dev/Alpha, per la durata della beta privata. Le versioni stabili di produzione (il download principale su <a href="../index.html">osmiumsound.it</a>) al momento non eseguono questa funzione. Al termine della beta privata, questa funzione di raccolta dati e tutti i dati già raccolti tramite essa verranno rimossi/eliminati.
@@ -185,7 +185,7 @@
   </table>
 
   <h3>b) Catture diagnostiche di rete (HAR)</h3>
-  <p>Solo durante brevi finestre di cattura che <strong>attiviamo da remoto</strong> (non è continuo, e al momento non esiste un interruttore sul dispositivo per attivarlo o bloccarlo autonomamente), il dispositivo registra le richieste di rete effettuate dalla sua interfaccia: URL di richiesta/risposta, metodo HTTP, codici di stato, header e tempistiche. <strong>I corpi delle risposte non vengono deliberatamente catturati</strong> — nessun contenuto di pagina, immagine o audio. Poiché gli URL di richiesta possono includere elementi come identificativi di brani/album o termini di ricerca digitati nell'interfaccia, e poiché gli header possono includere incidentalmente informazioni di autenticazione/sessione dei servizi di streaming connessi, queste catture possono contenere più delle sole metriche di sistema; l'accesso è riservato al titolare del trattamento.</p>
+  <p>Solo durante brevi finestre di cattura che <strong>attiviamo da remoto</strong> (non è continuo, e al momento non esiste un interruttore sul dispositivo per attivarlo o bloccarlo autonomamente), il dispositivo registra le richieste di rete effettuate <strong>dalla sua interfaccia a schermo</strong> — non il traffico dell'intero dispositivo, e non le richieste di altri dispositivi sulla tua rete. Le informazioni di autenticazione e sessione (login dei servizi di streaming, cookie, token API e qualsiasi header che corrisponda a un pattern token/secret/session) vengono <strong>rimosse automaticamente prima ancora che il file di cattura venga scritto</strong>, quindi non lasciano mai il dispositivo. <strong>I corpi delle risposte non vengono mai catturati</strong> — nessun contenuto di pagina, immagine o audio. Quello che resta sono URL di richiesta/risposta, metodo HTTP, codici di stato e tempistiche; gli URL possono comunque includere elementi come identificativi di brani/album o termini di ricerca digitati nell'interfaccia. L'accesso a queste catture è riservato al titolare del trattamento.</p>
 
   <h3>c) Catture di performance</h3>
   <p>Durante le stesse finestre di cattura, viene registrato l'utilizzo di CPU e memoria per ogni schermata/tab dell'interfaccia, per aiutarci a diagnosticare rallentamenti.</p>
