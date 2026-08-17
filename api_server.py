@@ -4327,6 +4327,13 @@ def dismiss_update_plan():
 #  production and prod-only checks are enough again.
 # ──────────────────────────────────────────────────────────────────
 def _channel_has_update(channel):
+    """Returns (has_update, checked_ok). checked_ok is False only when EVERY
+    component's check failed outright (network/API blip) -- distinct from a
+    check that actually ran and simply found nothing newer. Right after the
+    network step, DNS/routing can still be warming up, so a failed check here
+    must not read the same as a confirmed "nothing to update" (see
+    wizard_update_check() below)."""
+    any_ok = False
     for current, prefix in ((_installed_ui_version(), OTA_UI_PREFIX),
                             (_installed_system_version(), SYS_PREFIX),
                             (_installed_os_version(), OS_PREFIX)):
@@ -4334,15 +4341,25 @@ def _channel_has_update(channel):
             info = _check_release_update(current, prefix, channel)
         except Exception:
             continue
+        if info.get('error'):
+            continue
+        any_ok = True
         if info.get('update_available'):
-            return True
-    return False
+            return True, True
+    return False, any_ok
 
 def wizard_update_check():
-    if _channel_has_update('prod'):
+    prod_avail, prod_ok = _channel_has_update('prod')
+    if prod_avail:
         return {'available': True, 'channel': 'prod', 'auto': True}
-    if _channel_has_update('dev'):
+    dev_avail, dev_ok = _channel_has_update('dev')
+    if dev_avail:
         return {'available': True, 'channel': 'dev', 'auto': False}
+    if not prod_ok and not dev_ok:
+        # Neither channel could be checked at all -- report it distinctly so
+        # the wizard retries instead of treating "couldn't check" the same as
+        # "checked, nothing to update".
+        return {'available': False, 'checkFailed': True}
     return {'available': False}
 
 def wizard_update_apply(channel):
