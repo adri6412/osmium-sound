@@ -319,13 +319,21 @@ const AzIndex = ({ items, keyField, onJump }) => {
     }
     setActiveLetter(null);
     lastLetterRef.current = null;
+    // Tell the now-playing auto-expand timer it's safe to resume counting.
+    window.dispatchEvent(new CustomEvent('hifi-az-scrub', { detail: false }));
   };
 
   return (
     <div ref={stripRef}
       className="relative flex flex-col items-center justify-between w-8 shrink-0 select-none py-1"
       style={{ touchAction: 'none' }}
-      onPointerDown={(e) => { e.currentTarget.setPointerCapture(e.pointerId); handlePoint(e.clientY); }}
+      onPointerDown={(e) => {
+        e.currentTarget.setPointerCapture(e.pointerId);
+        // Suspend the now-playing auto-expand timer outright for as long as a
+        // finger is on this strip — see the effect in LyrionServer for why.
+        window.dispatchEvent(new CustomEvent('hifi-az-scrub', { detail: true }));
+        handlePoint(e.clientY);
+      }}
       onPointerMove={(e) => { if (e.buttons === 1 || e.pointerType === 'touch') handlePoint(e.clientY); }}
       onPointerUp={endTouch}
       onPointerCancel={endTouch}
@@ -747,20 +755,28 @@ const LyrionServer = () => {
       clearTimeout(timer);
       timer = setTimeout(fire, delayMs);
     };
+    // While the A-Z index strip is actively being scrubbed, suspend the timer
+    // outright instead of just resetting it on each interaction event — relying
+    // on pointermove/scroll bubbling up to window turned out not to be reliable
+    // enough on this kiosk's embedded Chromium (see AzIndex's pointerdown/
+    // endTouch, which broadcast 'hifi-az-scrub' for exactly this purpose).
+    let suspended = false;
+    const resetTimerGuarded = () => { if (!suspended) resetTimer(); };
+    const onAzScrub = (e) => {
+      suspended = !!e.detail;
+      if (suspended) clearTimeout(timer);
+      else resetTimer();
+    };
     resetTimer();
-    // pointermove/scroll matter as much as the "start" events: a held drag
-    // (e.g. scrubbing the A-Z index) or a slow list scroll only fires
-    // pointerdown/touchstart once at the very start, so without these the
-    // idle timer could still expire *mid-gesture* and yank the user into the
-    // now-playing overlay while e.g. the A-Z strip still holds pointer
-    // capture — unmounting it out from under an in-progress drag.
     const interactionEvents = ['pointerdown', 'pointermove', 'touchstart', 'touchmove', 'keydown', 'wheel'];
-    interactionEvents.forEach((ev) => window.addEventListener(ev, resetTimer, { passive: true }));
-    window.addEventListener('scroll', resetTimer, { passive: true, capture: true });
+    interactionEvents.forEach((ev) => window.addEventListener(ev, resetTimerGuarded, { passive: true }));
+    window.addEventListener('scroll', resetTimerGuarded, { passive: true, capture: true });
+    window.addEventListener('hifi-az-scrub', onAzScrub);
     return () => {
       clearTimeout(timer);
-      interactionEvents.forEach((ev) => window.removeEventListener(ev, resetTimer));
-      window.removeEventListener('scroll', resetTimer, { capture: true });
+      interactionEvents.forEach((ev) => window.removeEventListener(ev, resetTimerGuarded));
+      window.removeEventListener('scroll', resetTimerGuarded, { capture: true });
+      window.removeEventListener('hifi-az-scrub', onAzScrub);
     };
   }, [isPlaying, artworkIdentityKey, autoExpandSeconds, activePlayer]);
   // Manual collapse (the ChevronDown close button) counts as "the user moved
