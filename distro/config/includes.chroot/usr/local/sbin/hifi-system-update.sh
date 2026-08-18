@@ -185,7 +185,7 @@ apply)
         systemctl enable hifi-update-apply.service 2>/dev/null || true
     fi
 
-    write_status done 100 "Componenti aggiornati a $VERSION"
+    write_status 'done' 100 "Componenti aggiornati a $VERSION"
     ;;
 
 full)
