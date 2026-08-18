@@ -506,6 +506,11 @@ const LyrionServer = () => {
 
   // ── Kiosk-only UI state (not part of the shared hook) ──────
   const [isPlayerExpanded, setIsPlayerExpanded] = useState(false);
+  // TEMP DEBUG (2026-08-18): tags which code path opened the fullscreen
+  // player, shown as a small on-screen label — remove once the A-Z index
+  // now-playing report is understood; no devtools access needed on-device.
+  const [debugExpandReason, setDebugExpandReason] = useState('');
+  const expandPlayer = (reason) => { setDebugExpandReason(`${reason} @ ${new Date().toLocaleTimeString()}`); setIsPlayerExpanded(true); };
   // Once expanded, the fullscreen now-playing portal (below) stays mounted
   // for the rest of the session and just slides on/off screen instead of
   // being destroyed and rebuilt on every open/close — see the perf-capture
@@ -767,7 +772,7 @@ const LyrionServer = () => {
     wasPlayingRef.current = isPlaying;
     clearTimeout(autoExpandTimerRef.current);
     if (!justStartedPlaying || !autoExpandSeconds || !activePlayer) return;
-    autoExpandTimerRef.current = setTimeout(() => setIsPlayerExpanded(true), autoExpandSeconds * 1000);
+    autoExpandTimerRef.current = setTimeout(() => expandPlayer('auto-timer'), autoExpandSeconds * 1000);
     return () => clearTimeout(autoExpandTimerRef.current);
   }, [isPlaying, autoExpandSeconds, activePlayer]);
   const collapsePlayer = () => {
@@ -1221,6 +1226,14 @@ const LyrionServer = () => {
   // ─────────────────────────────────────────────────────────────────────────────
   return (
     <div className="h-full w-full flex overflow-hidden bg-hifi-dark font-display">
+      {/* TEMP DEBUG (2026-08-18): fixed overlay, independent of the sliding
+          panel's own animation, so it stays readable even if the panel only
+          rises partway. Remove alongside debugExpandReason/expandPlayer. */}
+      {debugExpandReason && (
+        <div className="fixed top-1 left-1 z-[999] px-2 py-1 rounded bg-red-600 text-white text-[10px] font-mono pointer-events-none">
+          expanded by: {debugExpandReason}
+        </div>
+      )}
       {/* ══════════════════ LEFT — NOW PLAYING (340px) ══════════════════ */}
       <div className="w-[340px] flex-shrink-0 flex flex-col bg-hifi-panel overflow-hidden">
 
@@ -1240,7 +1253,7 @@ const LyrionServer = () => {
             )}
             <div className={`w-1.5 h-1.5 rounded-full ${isConnected ? 'bg-emerald-500' : 'bg-red-500/70'}`} />
             {activePlayer && (
-              <button onClick={() => setIsPlayerExpanded(true)} title={t('player.expand')}
+              <button onClick={() => expandPlayer('chevron-button')} title={t('player.expand')}
                 className="p-2 bg-white/10 hover:bg-white/20 rounded-full text-white transition-colors">
                 <ChevronUp size={22} />
               </button>
@@ -1255,7 +1268,7 @@ const LyrionServer = () => {
         <div className="flex justify-center px-5 pt-2 pb-3 shrink-0">
           <div
             className="relative w-[250px] h-[250px] rounded-2xl overflow-hidden shadow-[0_8px_40px_rgba(0,0,0,0.7)] border border-white/5 cursor-pointer group bg-hifi-gray flex-shrink-0"
-            onClick={() => activePlayer && setIsPlayerExpanded(true)}>
+            onClick={() => activePlayer && expandPlayer('artwork-click')}>
             {isRemoteTrack ? (
               <>
                 {npArtwork.failed || !npArtwork.objectUrl ? (
