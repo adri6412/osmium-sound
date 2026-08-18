@@ -735,14 +735,18 @@ const LyrionServer = () => {
     const justResumed = isPlaying && !wasPlayingRef.current;
     wasPlayingRef.current = isPlaying;
     if (justResumed) autoExpandHandledKeyRef.current = null;
-    // Confirmed (2026-08-18): this was never actually about interaction
-    // events failing to reset the countdown — it fires just as reliably from
-    // sitting idle in the artists/albums list with zero touches, because it's
-    // only ever gated on isPlaying, not on what the user is doing. It's meant
-    // as an ambient "nothing else going on" auto-reveal, so it must stay off
-    // entirely while the user is browsing any menu/list, not just paused
-    // while a pointer happens to be down.
-    if (!isPlaying || !autoExpandSeconds || !activePlayer || activeTab !== 'musica' || currentView !== 'home') return;
+    // Suppress ONLY while actually browsing one of Musica's library list
+    // sub-views (same set useLyrionPlayer.js:595 treats as "still inside
+    // Musica") — that's the specific case that was interrupting the user
+    // (A-Z index, artist/album lists). The activeTab==='musica' check still
+    // matters even though these view names are unambiguous: currentView is
+    // NOT reset when switching to another tab (see useLyrionPlayer.js:594-598
+    // — it only gets reconciled when switching back INTO Musica), so without
+    // it, leaving currentView stale at e.g. 'artists' while sitting on
+    // Settings would keep auto-expand wrongly suppressed there too.
+    const isBrowsingLibraryList = activeTab === 'musica'
+      && ['artists', 'albums', 'tracks', 'folders', 'playlists', 'playlist_tracks'].includes(currentView);
+    if (!isPlaying || !autoExpandSeconds || !activePlayer || isBrowsingLibraryList) return;
     if (autoExpandHandledKeyRef.current === artworkIdentityKey) return;
     const delayMs = autoExpandSeconds * 1000;
     let timer;
