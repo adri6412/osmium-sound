@@ -1448,7 +1448,25 @@ const LyrionServer = () => {
       {/* ══════════════════ FULLSCREEN NOW PLAYING (portal) ══════════════════ */}
       {hasExpandedOnce && createPortal(
             <motion.div
-              initial={{ y: '100%' }} animate={{ y: isPlayerExpanded ? 0 : '100%' }}
+              // visibility: hidden (applied only once the close animation
+              // actually finishes, via transitionEnd — not immediately, so
+              // the slide-down is still visible) fully drops this
+              // always-mounted layer from painting/compositing while idle.
+              // Suspected fix (2026-08-18) for a stuck-halfway "ghost" frame
+              // reported when a heavy re-render elsewhere (A-Z index jump)
+              // interrupts this transform mid-flight on weak iGPU hardware —
+              // confirmed via an on-screen debug tag that isPlayerExpanded
+              // itself never actually changes when this happens, so nothing
+              // here was wrong at the React-state level; only the painted
+              // layer was left stale. Plain "y: 100%" alone kept the layer
+              // live/composited even fully off-screen, which is exactly the
+              // kind of persistent layer that's susceptible to this.
+              variants={{
+                open: { y: 0, visibility: 'visible' },
+                closed: { y: '100%', transitionEnd: { visibility: 'hidden' } },
+              }}
+              initial="closed"
+              animate={isPlayerExpanded ? 'open' : 'closed'}
               transition={{ type: 'spring', damping: 26, stiffness: 200 }}
               style={{ pointerEvents: isPlayerExpanded ? 'auto' : 'none' }}
               aria-hidden={!isPlayerExpanded}
