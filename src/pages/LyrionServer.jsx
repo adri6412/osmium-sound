@@ -635,13 +635,76 @@ const LyrionServer = () => {
   };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { clearLibFilter(); }, [currentView, navigationStack.length]);
-  // Jump the progressive-render window past `idx` so the target row is
-  // actually mounted, then scroll it into view once the DOM reflects that.
-  const jumpToIndex = (idx) => {
-    setVisibleCount(c => Math.max(c, idx + LIST_PAGE));
-    requestAnimationFrame(() => {
-      listScrollRef.current?.querySelector(`[data-az-index="${idx}"]`)?.scrollIntoView({ block: 'start' });
-    });
+  // ── Virtualized artists/albums list ─────────────────────────────
+  // Root-caused 2026-08-18: the old approach grew a *cumulative* render
+  // window (visibleCount, sliced from index 0) every time the A-Z index
+  // jumped — landing on a letter near the end of a large library could mount
+  // most of the whole collection (hundreds of album cards with artwork) in
+  // one go. On weak iGPU hardware that's enough main-thread/paint work to
+  // interrupt the now-playing panel's in-flight/idle transform animation and
+  // leave a corrupted compositor frame (a black bar) on screen — confirmed
+  // by ruling out every other theory first (an on-screen debug tag, plus
+  // visibility:hidden, will-change, and startTransition attempts that each
+  // only changed the symptom without fixing it). The real fix is to never
+  // mount more than what's actually near the viewport, regardless of how far
+  // a jump lands — a small hand-rolled window (not a library) since this
+  // screen's size is fixed (kiosk, not a responsive page) and it reuses the
+  // existing scroll container/AzIndex wiring directly.
+  const AZ_ROW_HEIGHT = 56;        // artist row, incl. its gap — see renderRow's classes
+  const AZ_GRID_GAP = 12;          // gap-3
+  const AZ_CARD_TEXT_HEIGHT = 48;  // album card's text block below the square artwork
+  const AZ_OVERSCAN = 6;           // extra rows rendered above/below the viewport
+  const [azContainerSize, setAzContainerSize] = useState({ width: 0, height: 0 });
+  const [azScrollTop, setAzScrollTop] = useState(0);
+  // Callback ref instead of useEffect+useRef: two attempts to time a plain
+  // effect against listScrollRef.current (synchronous measure, then also
+  // re-running on libraryLoading) still measured w:0 h:0, confirmed via the
+  // debug overlay — something about this screen's mount timing doesn't line
+  // up with an effect keyed on state changes. A callback ref sidesteps the
+  // guessing entirely: React calls it exactly when the DOM node is actually
+  // attached/detached, with no dependency-array timing to get wrong.
+  const azResizeObserverRef = useRef(null);
+  const attachAzListRef = React.useCallback((el) => {
+    listScrollRef.current = el;
+    if (azResizeObserverRef.current) {
+      azResizeObserverRef.current.disconnect();
+      azResizeObserverRef.current = null;
+    }
+    if (!el) return;
+    const measure = () => {
+      const cs = getComputedStyle(el);
+      const paddingX = parseFloat(cs.paddingLeft) + parseFloat(cs.paddingRight);
+      const paddingY = parseFloat(cs.paddingTop) + parseFloat(cs.paddingBottom);
+      setAzContainerSize({
+        width: Math.max(0, el.clientWidth - paddingX),
+        height: Math.max(0, el.clientHeight - paddingY),
+      });
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    azResizeObserverRef.current = ro;
+    setAzScrollTop(el.scrollTop);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  // Without this, typing a search filter while scrolled deep into the list
+  // could leave azScrollTop pointing past the now-much-shorter filtered
+  // array — filtered.slice(startIdx, ...) with an out-of-range startIdx just
+  // returns [], so the list would render blank until manually scrolled back
+  // up. Reset on every filter/view change instead, same as the scrollTop
+  // reset useLyrionPlayer.js already does on a fresh libraryData fetch.
+  useEffect(() => {
+    if (currentView !== 'artists' && currentView !== 'albums') return;
+    setAzScrollTop(0);
+    if (listScrollRef.current) listScrollRef.current.scrollTop = 0;
+  }, [libFilterDebounced, currentView]);
+  const onAzScroll = (e) => setAzScrollTop(e.currentTarget.scrollTop);
+  // AzIndex only ever needs to land on a row that may not be mounted yet —
+  // setting scrollTop directly (vs. the old DOM query + scrollIntoView) works
+  // immediately regardless of mount state, since the window is derived from
+  // scrollTop itself on the next render.
+  const jumpToIndex = (idx, columns, rowHeight) => {
+    if (listScrollRef.current) listScrollRef.current.scrollTop = Math.floor(idx / columns) * rowHeight;
   };
   const [sleepMenuOpen, setSleepMenuOpen] = useState(false);
 
@@ -747,75 +810,31 @@ const LyrionServer = () => {
     window.addEventListener('hifi-nowplaying-autoexpand-changed', onChange);
     return () => { alive = false; clearInterval(poll); window.removeEventListener('hifi-nowplaying-autoexpand-changed', onChange); };
   }, []);
-  // Song this auto-expand feature has already acted on (auto-opened for, OR
-  // the user manually dismissed while it was playing) — either way, don't
-  // touch isPlayerExpanded again until a *different* song starts, OR playback
-  // is paused and resumed (see wasPlayingRef below). Ref, not state: this
-  // must never itself trigger a re-render/re-schedule.
-  const autoExpandHandledKeyRef = useRef(null);
-  // Tracks the previous isPlaying value so we can detect a paused→playing
-  // transition below — resuming counts as a fresh "session" even for the
-  // same track, so the auto-expand timer is allowed to fire again.
+  // Redesigned 2026-08-18: every earlier version of this feature tried to
+  // detect "the user is idle" (no touch/mouse activity for N seconds), which
+  // required suppressing itself while browsing any list/menu to avoid
+  // interrupting the user — and that suppression kept being wrong in one
+  // direction or another across several iterations. Dropped entirely.
+  // Instead: fire on the actual PLAY-STATE TRANSITION (paused/stopped ->
+  // playing), unconditionally, from whatever screen the user happens to be
+  // on — exactly what "auto-expand on play" was always meant to mean, and
+  // what the settings copy already describes ("how long after a song starts
+  // playing..."). No interaction tracking, no view/tab gating.
   const wasPlayingRef = useRef(isPlaying);
-  // Any touch/mouse/keyboard activity keeps the countdown from firing — it
-  // only starts once the user has actually gone idle (not just
-  // autoExpandSeconds after the track started).
+  // The pending timer's id, so a manual collapse (below) can cancel it too —
+  // otherwise dismissing the view right after it opens wouldn't stop an
+  // already-scheduled fire from popping it back open a moment later.
+  const autoExpandTimerRef = useRef(null);
   useEffect(() => {
-    const justResumed = isPlaying && !wasPlayingRef.current;
+    const justStartedPlaying = isPlaying && !wasPlayingRef.current;
     wasPlayingRef.current = isPlaying;
-    if (justResumed) autoExpandHandledKeyRef.current = null;
-    // Confirmed working (2026-08-18): only counts down while actually
-    // sitting on Musica's home view — not while browsing any list (Artists/
-    // Albums A-Z index included) or on another tab. An AND-based rewrite
-    // that tried to also fire from other tabs while still suppressing the
-    // library-list case (alpha9) looked equivalent on paper but broke the
-    // library-list suppression in practice, so this is intentionally kept
-    // simple rather than revisited.
-    if (!isPlaying || !autoExpandSeconds || !activePlayer || activeTab !== 'musica' || currentView !== 'home') return;
-    if (autoExpandHandledKeyRef.current === artworkIdentityKey) return;
-    const delayMs = autoExpandSeconds * 1000;
-    let timer;
-    const fire = () => {
-      autoExpandHandledKeyRef.current = artworkIdentityKey;
-      setIsPlayerExpanded(true);
-    };
-    const startCountdown = () => {
-      clearTimeout(timer);
-      timer = setTimeout(fire, delayMs);
-    };
-    // A held pointer/touch (drag, scrub, long-press) genuinely PAUSES the
-    // countdown for the whole gesture, rather than just getting nudged back
-    // by whichever move/scroll events happen to bubble up — down/up tracked
-    // in the capture phase, so it's seen even where an inner handler (e.g.
-    // the A-Z index, queue drag) calls stopPropagation() or takes pointer
-    // capture. Discrete activity with no natural "end" (wheel, keydown, plain
-    // pointer movement with nothing held) just restarts the countdown, same
-    // as before.
-    let pointersDown = 0;
-    const onPointerDown = () => { pointersDown++; clearTimeout(timer); };
-    const onPointerUp = () => { pointersDown = Math.max(0, pointersDown - 1); if (pointersDown === 0) startCountdown(); };
-    const onActivity = () => { if (pointersDown === 0) startCountdown(); };
-    startCountdown();
-    window.addEventListener('pointerdown', onPointerDown, { passive: true, capture: true });
-    window.addEventListener('pointerup', onPointerUp, { passive: true, capture: true });
-    window.addEventListener('pointercancel', onPointerUp, { passive: true, capture: true });
-    const activityEvents = ['pointermove', 'touchmove', 'keydown', 'wheel'];
-    activityEvents.forEach((ev) => window.addEventListener(ev, onActivity, { passive: true, capture: true }));
-    window.addEventListener('scroll', onActivity, { passive: true, capture: true });
-    return () => {
-      clearTimeout(timer);
-      window.removeEventListener('pointerdown', onPointerDown, { capture: true });
-      window.removeEventListener('pointerup', onPointerUp, { capture: true });
-      window.removeEventListener('pointercancel', onPointerUp, { capture: true });
-      activityEvents.forEach((ev) => window.removeEventListener(ev, onActivity, { capture: true }));
-      window.removeEventListener('scroll', onActivity, { capture: true });
-    };
-  }, [isPlaying, artworkIdentityKey, autoExpandSeconds, activePlayer, activeTab, currentView]);
-  // Manual collapse (the ChevronDown close button) counts as "the user moved
-  // away on purpose" — mark this song handled so a still-pending timer (user
-  // closed before it fired) can't pop the view back open on its own.
+    clearTimeout(autoExpandTimerRef.current);
+    if (!justStartedPlaying || !autoExpandSeconds || !activePlayer) return;
+    autoExpandTimerRef.current = setTimeout(() => setIsPlayerExpanded(true), autoExpandSeconds * 1000);
+    return () => clearTimeout(autoExpandTimerRef.current);
+  }, [isPlaying, autoExpandSeconds, activePlayer]);
   const collapsePlayer = () => {
-    autoExpandHandledKeyRef.current = artworkIdentityKey;
+    clearTimeout(autoExpandTimerRef.current);
     setIsPlayerExpanded(false);
   };
 
@@ -893,7 +912,29 @@ const LyrionServer = () => {
       const filtered = norm
         ? sorted.filter((item) => normalize(currentView === 'artists' ? item.artist : `${item.album} ${item.artist || ''}`).includes(norm))
         : sorted;
-      const visibleItems = filtered.slice(0, visibleCount);
+
+      const isGrid = currentView === 'albums';
+      const columns = isGrid ? 3 : 1;
+      // Only the grid needs a real measurement before it can lay out rows —
+      // the list's row height is a fixed constant. Waiting for a real width
+      // instead of ever computing off width:0 is what actually guarantees
+      // rowHeight/totalHeight are never wrong, regardless of what caused
+      // measurement to race before (three earlier attempts at timing the
+      // measurement itself against mount/loading state all failed).
+      const notMeasuredYet = isGrid && azContainerSize.width === 0;
+      const cardWidth = isGrid && azContainerSize.width > 0
+        ? (azContainerSize.width - AZ_GRID_GAP * (columns - 1)) / columns
+        : 0;
+      const rowHeight = isGrid ? Math.round(cardWidth + AZ_CARD_TEXT_HEIGHT + AZ_GRID_GAP) : AZ_ROW_HEIGHT;
+      const rowCount = Math.ceil(filtered.length / columns);
+      const totalHeight = rowCount * rowHeight;
+      const viewportHeight = azContainerSize.height || 600;
+      const firstVisibleRow = rowHeight > 0 ? Math.floor(azScrollTop / rowHeight) : 0;
+      const visibleRowCount = rowHeight > 0 ? Math.ceil(viewportHeight / rowHeight) : 0;
+      const startRow = Math.max(0, firstVisibleRow - AZ_OVERSCAN);
+      const endRow = Math.min(rowCount, firstVisibleRow + visibleRowCount + AZ_OVERSCAN);
+      const startIdx = startRow * columns;
+      const windowItems = filtered.slice(startIdx, Math.min(filtered.length, endRow * columns));
 
       const renderRow = (item, idx) => {
         if (currentView === 'albums') {
@@ -958,21 +999,31 @@ const LyrionServer = () => {
             </div>
           </div>
           <div className="flex-1 flex overflow-hidden">
-            <div ref={listScrollRef} onScroll={handleLibraryScroll}
+            <div ref={attachAzListRef} onScroll={onAzScroll}
               className="flex-1 overflow-y-auto content-scrollbar px-3 pb-3">
               {filtered.length === 0 ? (
                 <p className="text-center text-hifi-silver/40 text-sm py-8">{t('common.noResults')}</p>
-              ) : currentView === 'albums' ? (
-                <div className="album-grid grid grid-cols-3 gap-3 pt-1">
-                  {visibleItems.map((item, idx) => renderRow(item, idx))}
+              ) : notMeasuredYet ? (
+                <div className="flex items-center justify-center py-10">
+                  <motion.div animate={{ rotate: 360 }} transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
+                    className="w-8 h-8 border-4 border-hifi-gold border-t-transparent rounded-full" />
                 </div>
               ) : (
-                <ul className="lib-list space-y-1 pt-1">
-                  {visibleItems.map((item, idx) => renderRow(item, idx))}
-                </ul>
+                // Fixed-height spacer reserves the FULL scrollable extent so the
+                // scrollbar/scrollTop behave normally, while only the windowed
+                // slice (startRow..endRow, positioned via `top`) is ever
+                // actually mounted — this is what keeps a far A-Z jump from
+                // mounting everything between the top of the list and the target.
+                <div style={{ position: 'relative', height: totalHeight, marginTop: 4 }}>
+                  <div
+                    style={{ position: 'absolute', top: startRow * rowHeight, left: 0, right: 0 }}
+                    className={isGrid ? 'album-grid grid grid-cols-3 gap-3' : 'lib-list space-y-1'}>
+                    {windowItems.map((item, i) => renderRow(item, startIdx + i))}
+                  </div>
+                </div>
               )}
             </div>
-            <AzIndex items={filtered} keyField={field} onJump={jumpToIndex} />
+            <AzIndex items={filtered} keyField={field} onJump={(idx) => jumpToIndex(idx, columns, rowHeight)} />
           </div>
         </div>
       );
@@ -1129,10 +1180,19 @@ const LyrionServer = () => {
   // playerStatus — so excluding it stops the per-second re-render that made
   // scrolling a big album grid stutter. activePlayer is keyed by playerid so the
   // item click handlers (which capture it) refresh when the player changes.
+  // azContainerSize/azScrollTop drive the virtualized artists/albums window
+  // (see jumpToIndex/attachAzListRef above) — missing them here was the
+  // actual cause of the "shows correctly once, then blank" bug reported
+  // 2026-08-18 (confirmed via a screen recording showing identical
+  // scrollTop/measured-size debug numbers between a working and a blank
+  // frame): scrolling or a fresh measurement updated that state and
+  // re-rendered the component, but this memo kept returning its previous,
+  // now-stale renderLibraryContent() output since neither value was listed.
   const libraryContent = React.useMemo(
     renderLibraryContent,
     [libraryLoading, currentView, libraryData,
-     visibleCount, navigationStack, activePlayer?.playerid, serverUrl, t, libFilterDebounced]
+     visibleCount, navigationStack, activePlayer?.playerid, serverUrl, t, libFilterDebounced,
+     azContainerSize.width, azContainerSize.height, azScrollTop]
   );
 
   // ── Right-panel content ────────────────────────────────────
@@ -1479,9 +1539,33 @@ const LyrionServer = () => {
       {/* ══════════════════ FULLSCREEN NOW PLAYING (portal) ══════════════════ */}
       {hasExpandedOnce && createPortal(
             <motion.div
-              initial={{ y: '100%' }} animate={{ y: isPlayerExpanded ? 0 : '100%' }}
+              // visibility: hidden (applied only once the close animation
+              // actually finishes, via transitionEnd — not immediately, so
+              // the slide-down is still visible) fully drops this
+              // always-mounted layer from painting/compositing while idle.
+              // Suspected fix (2026-08-18) for a stuck-halfway "ghost" frame
+              // reported when a heavy re-render elsewhere (A-Z index jump)
+              // interrupts this transform mid-flight on weak iGPU hardware —
+              // confirmed via an on-screen debug tag that isPlayerExpanded
+              // itself never actually changes when this happens, so nothing
+              // here was wrong at the React-state level; only the painted
+              // layer was left stale. Plain "y: 100%" alone kept the layer
+              // live/composited even fully off-screen, which is exactly the
+              // kind of persistent layer that's susceptible to this.
+              variants={{
+                open: { y: 0, visibility: 'visible' },
+                closed: { y: '100%', transitionEnd: { visibility: 'hidden' } },
+              }}
+              initial="closed"
+              animate={isPlayerExpanded ? 'open' : 'closed'}
               transition={{ type: 'spring', damping: 26, stiffness: 200 }}
-              style={{ pointerEvents: isPlayerExpanded ? 'auto' : 'none' }}
+              // will-change pins this to its own dedicated GPU compositor
+              // layer up front, instead of the browser deciding on the fly —
+              // the standard mitigation for a transform layer getting torn/
+              // left stale (a black bar at the cut edge, in this case) when
+              // main-thread work elsewhere (A-Z index jump) interrupts it
+              // mid-animation on weak iGPU hardware.
+              style={{ pointerEvents: isPlayerExpanded ? 'auto' : 'none', willChange: 'transform' }}
               aria-hidden={!isPlayerExpanded}
               className="absolute inset-0 z-50 flex flex-col bg-hifi-dark overflow-hidden">
 
@@ -1606,7 +1690,9 @@ const LyrionServer = () => {
                     </motion.button>
 
                     <motion.button whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}
-                      className="shrink-0 w-14 h-14 flex items-center justify-center bg-hifi-gold text-black rounded-full shadow-[0_0_24px_rgba(212,175,55,0.4)] hover:shadow-[0_0_36px_rgba(212,175,55,0.65)] transition-all"
+                      // Nudged left off the shared space-x-3 rhythm: on 7" kiosk
+                      // screens this sat right up against Next, an easy mis-tap.
+                      className="shrink-0 -ml-1.5 w-14 h-14 flex items-center justify-center bg-hifi-gold text-black rounded-full shadow-[0_0_24px_rgba(212,175,55,0.4)] hover:shadow-[0_0_36px_rgba(212,175,55,0.65)] transition-all"
                       onClick={() => handleAction(() => lyrionApi.togglePause(activePlayer?.playerid))}>
                       {isPlaying ? <Pause size={26} fill="currentColor" /> : <Play size={26} fill="currentColor" className="ml-1" />}
                     </motion.button>
