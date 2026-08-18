@@ -523,6 +523,7 @@
     },
     "uiRefresh": {
       "help": "Sia lo scaling dello schermo sia il ridisegno dell'interfaccia sono legati alla frequenza di aggiornamento del pannello: abbassarla riduce il carico sul chip grafico, circa il 40% in meno su questo hardware. Il movimento di lancette e livelli resta fluido; le animazioni più rapide possono apparire leggermente meno scattanti.",
+      "monitorDisclaimer": "Se il monitor collegato non supporta una frequenza di aggiornamento più bassa, il cambio non avrà alcun effetto — né a livello visivo né di riduzione del carico sul chip grafico.",
       "unsupported": "Questo schermo non offre una frequenza di aggiornamento più bassa a cui passare.",
       "currentNative": "Frequenza nativa",
       "currentLow": "Frequenza a basso consumo",

@@ -523,6 +523,7 @@
     },
     "uiRefresh": {
       "help": "Both the screen scaling and the interface's own redraws are tied to the panel's refresh rate, so lowering it reduces graphics-chip load — measured at roughly 40% less on this hardware. The needle/level movements stay smooth; fast animations may look very slightly less fluid.",
+      "monitorDisclaimer": "If the connected monitor doesn't support a lower refresh rate, switching won't have any effect — no visual difference and no reduction in graphics-chip load either.",
       "unsupported": "This screen does not offer a lower refresh rate to switch to.",
       "currentNative": "Native refresh rate",
       "currentLow": "Low-power refresh rate",

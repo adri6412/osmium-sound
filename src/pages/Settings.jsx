@@ -3636,6 +3636,7 @@ const Settings = ({ initialSection, onSectionConsumed } = {}) => {
                 {section.content === 'custom-ui-refresh' && (
                   <div className="space-y-4">
                     <p className="text-sm text-hifi-silver">{t('settings.uiRefresh.help')}</p>
+                    <p className="text-sm text-amber-200/80">{t('settings.uiRefresh.monitorDisclaimer')}</p>
 
                     {uiRefresh && !uiRefreshSupported && (
                       <div className="rounded-lg bg-hifi-dark p-3 text-center text-sm text-hifi-silver">
