@@ -439,6 +439,21 @@
     }
     .beta-agree a { color: var(--accent); }
 
+    /* ── VIDEO ───────────────────────────────────────── */
+    #video { border-top: 1px solid var(--border); }
+    .video-wrap {
+      max-width: 860px; margin: 2.5rem auto 0;
+      border-radius: var(--radius); overflow: hidden;
+      border: 1px solid var(--border);
+      background: var(--bg-card);
+      position: relative; width: 100%;
+      padding-top: 56.25%;
+    }
+    .video-wrap iframe {
+      position: absolute; inset: 0;
+      width: 100%; height: 100%; border: 0;
+    }
+
     /* ── MANUAL CALLOUT ──────────────────────────────────── */
     #manual { border-top: 1px solid var(--border); background: var(--bg-card); }
     #support { border-top: 1px solid var(--border); }
@@ -537,6 +552,7 @@
   <ul class="nav-links">
     <li><a href="#install" data-en="Install" data-it="Installazione">Install</a></li>
     <li><a href="#manual" data-en="Manual" data-it="Manuale" style="color:var(--accent)">Manual</a></li>
+    <li><a href="#video" data-en="Video" data-it="Video">Video</a></li>
     <li><a href="#features" data-en="Features" data-it="Funzioni">Features</a></li>
     <li><a href="#screenshots" data-en="Screenshots" data-it="Screenshot">Screenshots</a></li>
     <li><a href="#specs" data-en="Specs" data-it="Specifiche">Specs</a></li>
@@ -653,6 +669,17 @@
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
       <span data-en="Open the manual" data-it="Apri il manuale">Open the manual</span>
     </a>
+  </div>
+</section>
+
+<!-- VIDEO -->
+<section id="video">
+  <div class="centered">
+    <div class="section-label" data-en="Watch it in action" data-it="Guardala in azione">Watch it in action</div>
+    <h2 class="section-title" data-en="Demo video" data-it="Video dimostrativo">Demo video</h2>
+  </div>
+  <div class="video-wrap">
+    <iframe src="https://www.youtube.com/embed/vle6ki4pvQk" title="Osmium Sound demo video" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen loading="lazy"></iframe>
   </div>
 </section>
 
