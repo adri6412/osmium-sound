@@ -735,18 +735,18 @@ const LyrionServer = () => {
     const justResumed = isPlaying && !wasPlayingRef.current;
     wasPlayingRef.current = isPlaying;
     if (justResumed) autoExpandHandledKeyRef.current = null;
-    // Suppress ONLY while actually browsing one of Musica's library list
-    // sub-views (same set useLyrionPlayer.js:595 treats as "still inside
-    // Musica") — that's the specific case that was interrupting the user
-    // (A-Z index, artist/album lists). The activeTab==='musica' check still
-    // matters even though these view names are unambiguous: currentView is
-    // NOT reset when switching to another tab (see useLyrionPlayer.js:594-598
-    // — it only gets reconciled when switching back INTO Musica), so without
-    // it, leaving currentView stale at e.g. 'artists' while sitting on
-    // Settings would keep auto-expand wrongly suppressed there too.
-    const isBrowsingLibraryList = activeTab === 'musica'
-      && ['artists', 'albums', 'tracks', 'folders', 'playlists', 'playlist_tracks'].includes(currentView);
-    if (!isPlaying || !autoExpandSeconds || !activePlayer || isBrowsingLibraryList) return;
+    // Reverted to alpha8's condition (2026-08-18): the AND-based rewrite
+    // (alpha9) should have been equivalent for the reported case — activeTab
+    // ==='musica' && currentView==='artists' makes both this OR and alpha9's
+    // AND evaluate to "suppress" — but the user confirmed alpha8 worked and
+    // alpha9 didn't, on the same repro (tap a letter in Artists/Albums), and
+    // no discrepancy could be found by re-reading the code. Going with what's
+    // confirmed to work rather than a plausible-looking rewrite. This still
+    // has alpha8's known side effect (never fires while on another tab if
+    // currentView is left stale at a non-home value) — to be fixed
+    // separately, at the root, by resetting currentView on tab-away instead
+    // of tweaking this condition again.
+    if (!isPlaying || !autoExpandSeconds || !activePlayer || activeTab !== 'musica' || currentView !== 'home') return;
     if (autoExpandHandledKeyRef.current === artworkIdentityKey) return;
     const delayMs = autoExpandSeconds * 1000;
     let timer;
