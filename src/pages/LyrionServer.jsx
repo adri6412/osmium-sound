@@ -319,21 +319,13 @@ const AzIndex = ({ items, keyField, onJump }) => {
     }
     setActiveLetter(null);
     lastLetterRef.current = null;
-    // Tell the now-playing auto-expand timer it's safe to resume counting.
-    window.dispatchEvent(new CustomEvent('hifi-az-scrub', { detail: false }));
   };
 
   return (
     <div ref={stripRef}
       className="relative flex flex-col items-center justify-between w-8 shrink-0 select-none py-1"
       style={{ touchAction: 'none' }}
-      onPointerDown={(e) => {
-        e.currentTarget.setPointerCapture(e.pointerId);
-        // Suspend the now-playing auto-expand timer outright for as long as a
-        // finger is on this strip — see the effect in LyrionServer for why.
-        window.dispatchEvent(new CustomEvent('hifi-az-scrub', { detail: true }));
-        handlePoint(e.clientY);
-      }}
+      onPointerDown={(e) => { e.currentTarget.setPointerCapture(e.pointerId); handlePoint(e.clientY); }}
       onPointerMove={(e) => { if (e.buttons === 1 || e.pointerType === 'touch') handlePoint(e.clientY); }}
       onPointerUp={endTouch}
       onPointerCancel={endTouch}
@@ -736,9 +728,9 @@ const LyrionServer = () => {
   // transition below — resuming counts as a fresh "session" even for the
   // same track, so the auto-expand timer is allowed to fire again.
   const wasPlayingRef = useRef(isPlaying);
-  // Any touch/mouse/keyboard activity resets the countdown, so the popup
-  // only fires after the user has actually been idle for autoExpandSeconds
-  // (not just autoExpandSeconds after the track started).
+  // Any touch/mouse/keyboard activity keeps the countdown from firing — it
+  // only starts once the user has actually gone idle (not just
+  // autoExpandSeconds after the track started).
   useEffect(() => {
     const justResumed = isPlaying && !wasPlayingRef.current;
     wasPlayingRef.current = isPlaying;
@@ -751,32 +743,36 @@ const LyrionServer = () => {
       autoExpandHandledKeyRef.current = artworkIdentityKey;
       setIsPlayerExpanded(true);
     };
-    const resetTimer = () => {
+    const startCountdown = () => {
       clearTimeout(timer);
       timer = setTimeout(fire, delayMs);
     };
-    // While the A-Z index strip is actively being scrubbed, suspend the timer
-    // outright instead of just resetting it on each interaction event — relying
-    // on pointermove/scroll bubbling up to window turned out not to be reliable
-    // enough on this kiosk's embedded Chromium (see AzIndex's pointerdown/
-    // endTouch, which broadcast 'hifi-az-scrub' for exactly this purpose).
-    let suspended = false;
-    const resetTimerGuarded = () => { if (!suspended) resetTimer(); };
-    const onAzScrub = (e) => {
-      suspended = !!e.detail;
-      if (suspended) clearTimeout(timer);
-      else resetTimer();
-    };
-    resetTimer();
-    const interactionEvents = ['pointerdown', 'pointermove', 'touchstart', 'touchmove', 'keydown', 'wheel'];
-    interactionEvents.forEach((ev) => window.addEventListener(ev, resetTimerGuarded, { passive: true }));
-    window.addEventListener('scroll', resetTimerGuarded, { passive: true, capture: true });
-    window.addEventListener('hifi-az-scrub', onAzScrub);
+    // A held pointer/touch (drag, scrub, long-press) genuinely PAUSES the
+    // countdown for the whole gesture, rather than just getting nudged back
+    // by whichever move/scroll events happen to bubble up — down/up tracked
+    // in the capture phase, so it's seen even where an inner handler (e.g.
+    // the A-Z index, queue drag) calls stopPropagation() or takes pointer
+    // capture. Discrete activity with no natural "end" (wheel, keydown, plain
+    // pointer movement with nothing held) just restarts the countdown, same
+    // as before.
+    let pointersDown = 0;
+    const onPointerDown = () => { pointersDown++; clearTimeout(timer); };
+    const onPointerUp = () => { pointersDown = Math.max(0, pointersDown - 1); if (pointersDown === 0) startCountdown(); };
+    const onActivity = () => { if (pointersDown === 0) startCountdown(); };
+    startCountdown();
+    window.addEventListener('pointerdown', onPointerDown, { passive: true, capture: true });
+    window.addEventListener('pointerup', onPointerUp, { passive: true, capture: true });
+    window.addEventListener('pointercancel', onPointerUp, { passive: true, capture: true });
+    const activityEvents = ['pointermove', 'touchmove', 'keydown', 'wheel'];
+    activityEvents.forEach((ev) => window.addEventListener(ev, onActivity, { passive: true, capture: true }));
+    window.addEventListener('scroll', onActivity, { passive: true, capture: true });
     return () => {
       clearTimeout(timer);
-      interactionEvents.forEach((ev) => window.removeEventListener(ev, resetTimerGuarded));
-      window.removeEventListener('scroll', resetTimerGuarded, { capture: true });
-      window.removeEventListener('hifi-az-scrub', onAzScrub);
+      window.removeEventListener('pointerdown', onPointerDown, { capture: true });
+      window.removeEventListener('pointerup', onPointerUp, { capture: true });
+      window.removeEventListener('pointercancel', onPointerUp, { capture: true });
+      activityEvents.forEach((ev) => window.removeEventListener(ev, onActivity, { capture: true }));
+      window.removeEventListener('scroll', onActivity, { capture: true });
     };
   }, [isPlaying, artworkIdentityKey, autoExpandSeconds, activePlayer]);
   // Manual collapse (the ChevronDown close button) counts as "the user moved
