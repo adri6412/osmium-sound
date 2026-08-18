@@ -661,21 +661,21 @@ const LyrionServer = () => {
   const AZ_OVERSCAN = 6;           // extra rows rendered above/below the viewport
   const [azContainerSize, setAzContainerSize] = useState({ width: 0, height: 0 });
   const [azScrollTop, setAzScrollTop] = useState(0);
-  useEffect(() => {
-    const el = listScrollRef.current;
-    if (!el || (currentView !== 'artists' && currentView !== 'albums')) return;
-    // Measure synchronously up front instead of only waiting on
-    // ResizeObserver's first (async) callback — if that callback is ever
-    // delayed, azContainerSize.width stays 0 in the meantime, which collapses
-    // the album grid's estimated row height down to just the text block
-    // (~60px instead of ~250px+), making totalHeight far too small and the
-    // scrollbar run out of room a fraction of the way through the list —
-    // exactly the "nothing past M" symptom reported 2026-08-18. Also re-runs
-    // on libraryLoading: renderLibraryContent() shows a spinner (no
-    // listScrollRef node at all) while loading, so on a fresh view/nav this
-    // effect's first firing (on the currentView change alone) can measure
-    // before the real container even exists — confirmed via the debug
-    // overlay showing w:0 h:0 even with the synchronous-measure fix above.
+  // Callback ref instead of useEffect+useRef: two attempts to time a plain
+  // effect against listScrollRef.current (synchronous measure, then also
+  // re-running on libraryLoading) still measured w:0 h:0, confirmed via the
+  // debug overlay — something about this screen's mount timing doesn't line
+  // up with an effect keyed on state changes. A callback ref sidesteps the
+  // guessing entirely: React calls it exactly when the DOM node is actually
+  // attached/detached, with no dependency-array timing to get wrong.
+  const azResizeObserverRef = useRef(null);
+  const attachAzListRef = React.useCallback((el) => {
+    listScrollRef.current = el;
+    if (azResizeObserverRef.current) {
+      azResizeObserverRef.current.disconnect();
+      azResizeObserverRef.current = null;
+    }
+    if (!el) return;
     const measure = () => {
       const cs = getComputedStyle(el);
       const paddingX = parseFloat(cs.paddingLeft) + parseFloat(cs.paddingRight);
@@ -688,9 +688,10 @@ const LyrionServer = () => {
     measure();
     const ro = new ResizeObserver(measure);
     ro.observe(el);
+    azResizeObserverRef.current = ro;
     setAzScrollTop(el.scrollTop);
-    return () => ro.disconnect();
-  }, [currentView, libraryLoading]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   // Without this, typing a search filter while scrolled deep into the list
   // could leave azScrollTop pointing past the now-much-shorter filtered
   // array — filtered.slice(startIdx, ...) with an out-of-range startIdx just
@@ -1001,7 +1002,7 @@ const LyrionServer = () => {
             </div>
           </div>
           <div className="flex-1 flex overflow-hidden">
-            <div ref={listScrollRef} onScroll={onAzScroll}
+            <div ref={attachAzListRef} onScroll={onAzScroll}
               className="flex-1 overflow-y-auto content-scrollbar px-3 pb-3">
               {filtered.length === 0 ? (
                 <p className="text-center text-hifi-silver/40 text-sm py-8">{t('common.noResults')}</p>
