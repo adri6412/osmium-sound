@@ -920,6 +920,13 @@ const LyrionServer = () => {
 
       const isGrid = currentView === 'albums';
       const columns = isGrid ? 3 : 1;
+      // Only the grid needs a real measurement before it can lay out rows —
+      // the list's row height is a fixed constant. Waiting for a real width
+      // instead of ever computing off width:0 is what actually guarantees
+      // rowHeight/totalHeight are never wrong, regardless of what caused
+      // measurement to race before (three earlier attempts at timing the
+      // measurement itself against mount/loading state all failed).
+      const notMeasuredYet = isGrid && azContainerSize.width === 0;
       const cardWidth = isGrid && azContainerSize.width > 0
         ? (azContainerSize.width - AZ_GRID_GAP * (columns - 1)) / columns
         : 0;
@@ -1006,6 +1013,11 @@ const LyrionServer = () => {
               className="flex-1 overflow-y-auto content-scrollbar px-3 pb-3">
               {filtered.length === 0 ? (
                 <p className="text-center text-hifi-silver/40 text-sm py-8">{t('common.noResults')}</p>
+              ) : notMeasuredYet ? (
+                <div className="flex items-center justify-center py-10">
+                  <motion.div animate={{ rotate: 360 }} transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
+                    className="w-8 h-8 border-4 border-hifi-gold border-t-transparent rounded-full" />
+                </div>
               ) : (
                 // Fixed-height spacer reserves the FULL scrollable extent so the
                 // scrollbar/scrollTop behave normally, while only the windowed
