@@ -442,14 +442,20 @@
     /* ── MANUAL CALLOUT ──────────────────────────────────── */
     #manual { border-top: 1px solid var(--border); background: var(--bg-card); }
     #support { border-top: 1px solid var(--border); }
+    .support-grid {
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+      gap: 1.25rem; max-width: 900px; margin: 0 auto;
+    }
     .manual-card {
       max-width: 760px; margin: 0 auto; text-align: center;
       background: var(--bg); border: 1px solid rgba(245,184,32,0.35);
       border-radius: var(--radius); padding: 2.25rem 2rem;
     }
+    .support-grid .manual-card { max-width: none; display: flex; flex-direction: column; }
     .manual-card .manual-icon { font-size: 2.2rem; margin-bottom: 0.75rem; }
     .manual-card h2 { font-size: 1.4rem; font-weight: 700; margin-bottom: 0.6rem; }
     .manual-card p { color: var(--muted); font-size: 0.95rem; max-width: 480px; margin: 0 auto 1.5rem; line-height: 1.65; }
+    .support-grid .manual-card p { flex-grow: 1; }
     @media (max-width: 760px) { .quickstart { grid-template-columns: 1fr; } }
     .code-block {
       background: #060606;
@@ -821,14 +827,25 @@
 
 <!-- SUPPORT -->
 <section id="support">
-  <div class="manual-card">
-    <div class="manual-icon">✉️</div>
-    <h2 data-en="Need help? Email support" data-it="Serve aiuto? Scrivi al supporto">Need help? Email support</h2>
-    <p data-en="Write to &lt;strong&gt;support@osmiumsound.it&lt;/strong&gt; and an issue is opened automatically on the project's GitHub repository, so it can be tracked and followed up like any other bug or request. Please describe your issue clearly (what happened, what you expected, and any relevant details like your ISO/APK version) — this becomes the issue text." data-it="Scrivi a &lt;strong&gt;support@osmiumsound.it&lt;/strong&gt; e verrà aperta automaticamente una issue sul repository GitHub del progetto, così da poterla tracciare e seguire come qualsiasi altro bug o richiesta. Descrivi chiaramente il problema (cosa è successo, cosa ti aspettavi ed eventuali dettagli utili come la versione della ISO/APK) — diventerà il testo della issue.">Write to <strong>support@osmiumsound.it</strong> and an issue is opened automatically on the project's GitHub repository, so it can be tracked and followed up like any other bug or request. Please describe your issue clearly (what happened, what you expected, and any relevant details like your ISO/APK version) — this becomes the issue text.</p>
-    <a class="btn-primary" href="mailto:support@osmiumsound.it">
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16v16H4z" fill="none"/><path d="M22 6 12 13 2 6"/><path d="M2 6h20v12H2z"/></svg>
-      <span data-en="Email support@osmiumsound.it" data-it="Scrivi a support@osmiumsound.it">Email support@osmiumsound.it</span>
-    </a>
+  <div class="support-grid">
+    <div class="manual-card">
+      <div class="manual-icon">✉️</div>
+      <h2 data-en="Need help? Email support" data-it="Serve aiuto? Scrivi al supporto">Need help? Email support</h2>
+      <p data-en="Write to &lt;strong&gt;support@osmiumsound.it&lt;/strong&gt; and an issue is opened automatically on the project's GitHub repository, so it can be tracked and followed up like any other bug or request. Please describe your issue clearly (what happened, what you expected, and any relevant details like your ISO/APK version) — this becomes the issue text." data-it="Scrivi a &lt;strong&gt;support@osmiumsound.it&lt;/strong&gt; e verrà aperta automaticamente una issue sul repository GitHub del progetto, così da poterla tracciare e seguire come qualsiasi altro bug o richiesta. Descrivi chiaramente il problema (cosa è successo, cosa ti aspettavi ed eventuali dettagli utili come la versione della ISO/APK) — diventerà il testo della issue.">Write to <strong>support@osmiumsound.it</strong> and an issue is opened automatically on the project's GitHub repository, so it can be tracked and followed up like any other bug or request. Please describe your issue clearly (what happened, what you expected, and any relevant details like your ISO/APK version) — this becomes the issue text.</p>
+      <a class="btn-primary" href="mailto:support@osmiumsound.it">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16v16H4z" fill="none"/><path d="M22 6 12 13 2 6"/><path d="M2 6h20v12H2z"/></svg>
+        <span data-en="Email support@osmiumsound.it" data-it="Scrivi a support@osmiumsound.it">Email support@osmiumsound.it</span>
+      </a>
+    </div>
+    <div class="manual-card">
+      <div class="manual-icon">🐙</div>
+      <h2 data-en="Prefer GitHub? Open an issue" data-it="Preferisci GitHub? Apri una issue">Prefer GitHub? Open an issue</h2>
+      <p data-en="File it yourself directly on the project's GitHub repository — the same place your email would end up anyway, just skipping the middle step." data-it="Aprila tu stesso direttamente sul repository GitHub del progetto — lo stesso posto dove finirebbe comunque la tua email, saltando il passaggio intermedio.">File it yourself directly on the project's GitHub repository — the same place your email would end up anyway, just skipping the middle step.</p>
+      <a class="btn-primary" href="https://github.com/adri6412/osmium-sound/issues" target="_blank">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0 0 24 12c0-6.63-5.37-12-12-12z"/></svg>
+        <span data-en="Open an issue on GitHub" data-it="Apri una issue su GitHub">Open an issue on GitHub</span>
+      </a>
+    </div>
   </div>
 </section>
 
