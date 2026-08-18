@@ -1190,10 +1190,19 @@ const LyrionServer = () => {
   // playerStatus — so excluding it stops the per-second re-render that made
   // scrolling a big album grid stutter. activePlayer is keyed by playerid so the
   // item click handlers (which capture it) refresh when the player changes.
+  // azContainerSize/azScrollTop drive the virtualized artists/albums window
+  // (see jumpToIndex/attachAzListRef above) — missing them here was the
+  // actual cause of the "shows correctly once, then blank" bug reported
+  // 2026-08-18 (confirmed via a screen recording showing identical
+  // scrollTop/measured-size debug numbers between a working and a blank
+  // frame): scrolling or a fresh measurement updated that state and
+  // re-rendered the component, but this memo kept returning its previous,
+  // now-stale renderLibraryContent() output since neither value was listed.
   const libraryContent = React.useMemo(
     renderLibraryContent,
     [libraryLoading, currentView, libraryData,
-     visibleCount, navigationStack, activePlayer?.playerid, serverUrl, t, libFilterDebounced]
+     visibleCount, navigationStack, activePlayer?.playerid, serverUrl, t, libFilterDebounced,
+     azContainerSize.width, azContainerSize.height, azScrollTop]
   );
 
   // ── Right-panel content ────────────────────────────────────
