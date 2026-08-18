@@ -309,7 +309,17 @@ const AzIndex = ({ items, keyField, onJump }) => {
     lastLetterRef.current = letter;
     if (letter in letterIndex) onJump(letterIndex[letter]);
   };
-  const endTouch = () => { setActiveLetter(null); lastLetterRef.current = null; };
+  // Explicitly release capture instead of relying on the implicit release on
+  // pointerup/cancel — on this kiosk's embedded Chromium, leaving that to the
+  // browser can leave the strip holding capture, which blocks touch/scroll
+  // input on the rest of the list until something else forces a reflow.
+  const endTouch = (e) => {
+    if (e?.pointerId != null) {
+      try { e.currentTarget.releasePointerCapture(e.pointerId); } catch (_) {}
+    }
+    setActiveLetter(null);
+    lastLetterRef.current = null;
+  };
 
   return (
     <div ref={stripRef}
@@ -710,13 +720,21 @@ const LyrionServer = () => {
   }, []);
   // Song this auto-expand feature has already acted on (auto-opened for, OR
   // the user manually dismissed while it was playing) — either way, don't
-  // touch isPlayerExpanded again until a *different* song starts. Ref, not
-  // state: this must never itself trigger a re-render/re-schedule.
+  // touch isPlayerExpanded again until a *different* song starts, OR playback
+  // is paused and resumed (see wasPlayingRef below). Ref, not state: this
+  // must never itself trigger a re-render/re-schedule.
   const autoExpandHandledKeyRef = useRef(null);
+  // Tracks the previous isPlaying value so we can detect a paused→playing
+  // transition below — resuming counts as a fresh "session" even for the
+  // same track, so the auto-expand timer is allowed to fire again.
+  const wasPlayingRef = useRef(isPlaying);
   // Any touch/mouse/keyboard activity resets the countdown, so the popup
   // only fires after the user has actually been idle for autoExpandSeconds
   // (not just autoExpandSeconds after the track started).
   useEffect(() => {
+    const justResumed = isPlaying && !wasPlayingRef.current;
+    wasPlayingRef.current = isPlaying;
+    if (justResumed) autoExpandHandledKeyRef.current = null;
     if (!isPlaying || !autoExpandSeconds || !activePlayer) return;
     if (autoExpandHandledKeyRef.current === artworkIdentityKey) return;
     const delayMs = autoExpandSeconds * 1000;
