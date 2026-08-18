@@ -157,15 +157,18 @@ jobs:
           echo "tarball=$TAR" >> "$GITHUB_OUTPUT"
 
       - name: Test the OTA update sequencer
-        # The sequencer is what keeps a multi-component update from stopping
-        # half-way (a reboot mid-plan, a restarted hifi-api, a stale /run status
-        # file). Both suites are hermetic — the shell one runs the runner
-        # against stub updaters in a temp dir, the Python one redirects every
-        # path it touches — so neither needs an appliance.
+        # The two-phase sequencer is what keeps a multi-component update from
+        # stopping half-way (a restarted hifi-api mid-stage, an interrupted
+        # download, a crash mid-apply). All three suites are hermetic — the
+        # shell ones run each runner against stub updaters in a temp dir, the
+        # Python one redirects every path it touches — so none needs an
+        # appliance.
         run: |
           set -e
-          echo "== sequencer (shell) =="
-          sh tests/test-update-runner.sh
+          echo "== stage sequencer (shell) =="
+          sh tests/test-update-stage-runner.sh
+          echo "== apply sequencer (shell) =="
+          sh tests/test-update-apply-runner.sh
           echo "== update plan (python) =="
           python3 -m pip install --quiet flask flask-cors
           python3 tests/test_update_plan.py
