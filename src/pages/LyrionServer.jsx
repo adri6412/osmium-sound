@@ -748,11 +748,19 @@ const LyrionServer = () => {
       timer = setTimeout(fire, delayMs);
     };
     resetTimer();
-    const interactionEvents = ['pointerdown', 'touchstart', 'keydown', 'wheel'];
+    // pointermove/scroll matter as much as the "start" events: a held drag
+    // (e.g. scrubbing the A-Z index) or a slow list scroll only fires
+    // pointerdown/touchstart once at the very start, so without these the
+    // idle timer could still expire *mid-gesture* and yank the user into the
+    // now-playing overlay while e.g. the A-Z strip still holds pointer
+    // capture — unmounting it out from under an in-progress drag.
+    const interactionEvents = ['pointerdown', 'pointermove', 'touchstart', 'touchmove', 'keydown', 'wheel'];
     interactionEvents.forEach((ev) => window.addEventListener(ev, resetTimer, { passive: true }));
+    window.addEventListener('scroll', resetTimer, { passive: true, capture: true });
     return () => {
       clearTimeout(timer);
       interactionEvents.forEach((ev) => window.removeEventListener(ev, resetTimer));
+      window.removeEventListener('scroll', resetTimer, { capture: true });
     };
   }, [isPlaying, artworkIdentityKey, autoExpandSeconds, activePlayer]);
   // Manual collapse (the ChevronDown close button) counts as "the user moved
