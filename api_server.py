@@ -143,37 +143,62 @@ INSTALL_SCRIPT = '/usr/local/sbin/hifi-disk-install.sh'
 INSTALL_STATUS_FILE = '/run/hifi-install-status.json'
 
 # ──────────────────────────────────────────────────────────────────
-#  Multi-component update sequencer.
+#  Multi-component update sequencer — two-phase, isolated apply.
 #
 #  Applying "everything" used to be sequenced by the client that started
 #  it: apply one component, poll its /run status file, apply the next.
 #  Anything that killed the client killed the rest of the sequence, and
 #  the three most common events in an update are exactly that — the
 #  system bundle restarts hifi-api and hifi-webui, the UI bundle
-#  restarts lightdm, and an OS payload may reboot the box. The result
-#  was a run that stopped half-way with some components still stale.
+#  restarts lightdm, and an OS payload may reboot the box. A later
+#  redesign moved that sequencing server-side (hifi-update-runner.sh, one
+#  transient unit), which fixed "killed the client" but not "applying
+#  while the very things being replaced are still running" — a service
+#  restart or a lightdm teardown mid-install could still leave a
+#  component half-applied.
 #
-#  So the plan is now persisted here and executed to the end by
-#  hifi-update-runner.sh under its own transient systemd unit. This
-#  module only builds the plan, starts the runner, and reports progress
-#  by merging the persisted plan with the running step's /run status
-#  file. See hifi-update-runner.sh for the file format.
+#  So the flow is now split in two phases, each with its own runner:
+#    1. hifi-update-stage-runner.sh downloads and verifies every
+#       component (nothing applied yet, the box stays fully live) and,
+#       once everything has staged, creates /system-update and reboots.
+#    2. systemd-system-update-generator(8) redirects that one boot into
+#       system-update.target instead of the normal graphical session —
+#       nothing from the app stack starts at all — where
+#       hifi-update-apply-runner.sh (hifi-update-apply.service) applies
+#       every staged, already-verified payload with nothing else running
+#       to race against, then clears /system-update and reboots back to
+#       normal.
+#
+#  This module builds the plan, starts the stage runner, and reports
+#  progress by merging the persisted plan with the running step's /run
+#  status file during staging, then — once the box comes back from its
+#  two reboots — the durable post-apply outcome recorded in
+#  UPDATE_STATE_FILE. See hifi-update-stage-runner.sh /
+#  hifi-update-apply-runner.sh for the on-disk formats.
 #
 #  The per-component endpoints below stay: they are still the right
 #  thing for updating a single component, and older clients use them.
 # ──────────────────────────────────────────────────────────────────
-UPDATE_PLAN_FILE = '/var/lib/hifi-player/update-plan'
-UPDATE_RUNNER_SCRIPT = '/usr/local/sbin/hifi-update-runner.sh'
-UPDATE_RUNNER_UNIT = 'hifi-update-runner'
+UPDATE_DIR = '/var/lib/hifi-player/update'
+UPDATE_PLAN_FILE = UPDATE_DIR + '/plan'
+# Written by the stage/apply runners; read (never written) here. Key=value
+# lines: phase (staged|applying|done|error), ts (epoch), message.
+UPDATE_STATE_FILE = UPDATE_DIR + '/state'
+# Detail for the terminal apply_error state — channel + free-text message.
+UPDATE_ERROR_FILE = UPDATE_DIR + '/error.json'
+UPDATE_STAGE_RUNNER_SCRIPT = '/usr/local/sbin/hifi-update-stage-runner.sh'
+UPDATE_STAGE_RUNNER_UNIT = 'hifi-update-stage'
+# systemd-system-update-generator(8)'s own trigger: its mere existence at
+# early boot is what redirects default.target to system-update.target for
+# that one boot. Created by the stage runner, removed by the apply runner.
+SYSTEM_UPDATE_LINK = '/system-update'
 # Canonical order. system first (it delivers the API, daemons, helper
-# scripts and units everything else relies on), os second (it may reboot,
-# and hifi-update-resume.service picks the plan back up), ui last (it
-# restarts lightdm, tearing down the kiosk).
+# scripts and units everything else relies on), os second, ui last.
 UPDATE_PLAN_ORDER = ('system', 'os', 'ui')
-# How long a finished plan stays readable so clients can show the outcome
-# — including a kiosk that was itself restarted by the UI step. After
-# this it is cleared automatically, so a plan nobody dismissed cannot
-# keep re-opening the "update complete" overlay forever.
+# How long a finished/failed outcome stays readable so clients can show it
+# — including a kiosk that only comes back up after both update-mode
+# reboots. After this it is cleared automatically, so a plan/outcome
+# nobody dismissed cannot keep re-opening the overlay forever.
 UPDATE_PLAN_TTL = 900
 # The plan file is whitespace-separated and parsed by /bin/sh, so every
 # field must be whitespace-free. Versions also land in a file name.
@@ -1512,6 +1537,7 @@ SUPPORT_CONFIG_FILES = [
     '/etc/hifi-sources.json',
     '/etc/hifi-player/display-mode',
     '/etc/hifi-player/ui-resolution',
+    '/etc/hifi-player/ui-refresh',
     '/etc/hifi-player/ota-channel',
     '/etc/hifi-player/SYSTEM_VERSION',
     '/etc/hifi-player/OS_VERSION',
@@ -1946,11 +1972,14 @@ _UPDATE_BUSY_STATES = ('downloading', 'verifying', 'applying', 'installing', 'ru
 
 def _update_in_progress():
     # A sequenced plan is authoritative: it is persistent, so unlike the /run
-    # status files it still reads "running" across the reboot an OS payload
-    # asked for — which is exactly when a display-mode switch or a factory
-    # reset would do the most damage.
+    # status files it still reads "running"/'staged_pending_reboot'/'applying'
+    # across both reboots of the isolated update flow — which is exactly when
+    # a display-mode switch or a factory reset would do the most damage (the
+    # latter two states can only ever be observed in the brief window right
+    # before/after the update-mode reboots, since hifi-api itself isn't
+    # running while the apply half is actually working).
     try:
-        if update_plan_status().get('state') == 'running':
+        if update_plan_status().get('state') in ('running', 'staged_pending_reboot', 'applying'):
             return True
     except Exception:
         pass
@@ -2122,6 +2151,79 @@ def set_ui_resolution(mode):
     # the kiosk UI issuing the request is about to disappear and come back.
     return {'success': True, 'mode': mode,
             'message': _t('uiResolution.updated', _lang())}
+
+# ──────────────────────────────────────────────────────────────────
+#  Panel refresh rate. Both X's own scale-blit (when ui-resolution is active)
+#  and Chromium's on-screen compositor are vblank-paced, so their GPU cost
+#  scales with refresh: halving it roughly halves both — measured on Gemini
+#  Lake, same content, ~79% -> ~49% render-engine busy going 49.98Hz ->
+#  29.99Hz. Unlike ui-resolution this never touches the framebuffer area
+#  (only the CRTC timing), so the Electron window — sized once at launch — is
+#  untouched and the switch applies live with no session restart.
+#
+#  Not every panel exposes a low-refresh alternative for its native mode
+#  (fixed-frequency embedded panels often have just one); 'supported'
+#  reflects that per-unit so the UI can hide the control instead of offering
+#  a toggle that would silently do nothing.
+#
+#  Persisted state ABSENT means "native" — opt-in, unlike ui-resolution: an
+#  existing unit must not change behaviour until someone explicitly picks
+#  "low" from Settings.
+# ──────────────────────────────────────────────────────────────────
+UI_REFRESH_FILE = '/etc/hifi-player/ui-refresh'
+UI_REFRESH_SCRIPT = '/usr/local/sbin/hifi-ui-refresh.sh'
+UI_REFRESHES = ('native', 'low')
+
+def get_ui_refresh():
+    """Return { mode, supported }. mode is one of UI_REFRESHES; 'native' when
+    the file is absent or holds anything unrecognised. supported reflects
+    whether the current panel/mode actually has a distinct low-refresh
+    alternative at all (probed live via the script; False if the script is
+    missing)."""
+    mode = 'native'
+    try:
+        with open(UI_REFRESH_FILE) as f:
+            val = f.read().strip()
+        if val in UI_REFRESHES:
+            mode = val
+    except Exception:
+        pass
+    supported = False
+    if os.path.exists(UI_REFRESH_SCRIPT):
+        try:
+            r = subprocess.run([UI_REFRESH_SCRIPT, 'supported'],
+                               capture_output=True, text=True, timeout=10)
+            supported = r.returncode == 0 and r.stdout.strip() == '1'
+        except Exception:
+            pass
+    return {'mode': mode, 'supported': supported}
+
+def set_ui_refresh(mode):
+    """Persist the refresh-rate preference and apply it live — no session
+    restart needed, see module comment above. Refused while an OTA is
+    applying, same guard as ui-resolution."""
+    if mode not in UI_REFRESHES:
+        return {'success': False, 'mode': get_ui_refresh()['mode'],
+                'code': 'uiRefresh.invalid', 'message': _t('uiRefresh.invalid', _lang())}
+    if _update_in_progress():
+        return {'success': False, 'mode': get_ui_refresh()['mode'],
+                'code': 'update.inProgressRetry', 'message': _t('update.inProgressRetry', _lang())}
+    if not os.path.exists(UI_REFRESH_SCRIPT):
+        return {'success': False, 'mode': get_ui_refresh()['mode'],
+                'code': 'uiRefresh.unavailable', 'message': _t('uiRefresh.unavailable', _lang())}
+    try:
+        r = subprocess.run([UI_REFRESH_SCRIPT, 'set', mode, '--live'],
+                           capture_output=True, text=True, timeout=30)
+        if r.returncode != 0:
+            log.error("set_ui_refresh failed: %s", (r.stderr or '').strip())
+            return {'success': False, 'mode': get_ui_refresh()['mode'],
+                    'code': 'uiRefresh.changeFailed', 'message': _t('uiRefresh.changeFailed', _lang())}
+    except Exception:
+        log.exception("set_ui_refresh failed")
+        return {'success': False, 'mode': get_ui_refresh()['mode'],
+                'code': 'uiRefresh.changeFailed', 'message': _t('uiRefresh.changeFailed', _lang())}
+    return {'success': True, 'mode': mode,
+            'message': _t('uiRefresh.updated', _lang())}
 
 # ──────────────────────────────────────────────────────────────────
 #  Timezone. The installer asks nothing about it (see distro/README.md) and
@@ -3804,13 +3906,13 @@ def apply_app_update():
 
     cmd = [
         'systemd-run', '--no-block', '--collect', '--unit=hifi-ota',
-        OTA_SCRIPT, info['asset_url'], sha, info['latest'],
+        OTA_SCRIPT, 'full', info['asset_url'], sha, info['latest'],
     ]
     try:
         subprocess.run(cmd, capture_output=True, text=True, timeout=15, check=True)
     except FileNotFoundError:
         # systemd-run unavailable → fall back to a detached subprocess
-        subprocess.Popen([OTA_SCRIPT, info['asset_url'], sha, info['latest']],
+        subprocess.Popen([OTA_SCRIPT, 'full', info['asset_url'], sha, info['latest']],
                          start_new_session=True)
     except subprocess.CalledProcessError:
         log.exception("update: apply command failed")
@@ -3861,13 +3963,13 @@ def apply_system_update():
 
     cmd = [
         'systemd-run', '--no-block', '--collect', '--unit=hifi-system-update',
-        SYS_SCRIPT, info['asset_url'], sha, info['latest'],
+        SYS_SCRIPT, 'full', info['asset_url'], sha, info['latest'],
     ]
     try:
         subprocess.run(cmd, capture_output=True, text=True, timeout=15, check=True)
     except FileNotFoundError:
         # systemd-run unavailable → fall back to a detached subprocess
-        subprocess.Popen([SYS_SCRIPT, info['asset_url'], sha, info['latest']],
+        subprocess.Popen([SYS_SCRIPT, 'full', info['asset_url'], sha, info['latest']],
                          start_new_session=True)
     except subprocess.CalledProcessError:
         log.exception("update: apply command failed")
@@ -3922,13 +4024,13 @@ def apply_os_update():
 
     cmd = [
         'systemd-run', '--no-block', '--collect', '--unit=hifi-os-update',
-        OS_SCRIPT, info['asset_url'], sha, info['sig_url'], info['latest'],
+        OS_SCRIPT, 'full', info['asset_url'], sha, info['sig_url'], info['latest'],
     ]
     try:
         subprocess.run(cmd, capture_output=True, text=True, timeout=15, check=True)
     except FileNotFoundError:
         # systemd-run unavailable → fall back to a detached subprocess
-        subprocess.Popen([OS_SCRIPT, info['asset_url'], sha, info['sig_url'], info['latest']],
+        subprocess.Popen([OS_SCRIPT, 'full', info['asset_url'], sha, info['sig_url'], info['latest']],
                          start_new_session=True)
     except subprocess.CalledProcessError:
         log.exception("update: apply command failed")
@@ -4097,7 +4199,7 @@ def _read_update_plan():
 def _write_update_plan(plan):
     """Serialise the plan atomically (tmp + os.replace) — it is the only record
     of what is still pending, and it has to survive a power cut mid-write."""
-    lines = ['v 1',
+    lines = ['v 2',
              'plan %s %s %d' % (plan['plan_id'], plan['channel'], plan['created'])]
     for s in plan['steps']:
         lines.append('step %s %s %d %s %s %s %s' % (
@@ -4117,6 +4219,45 @@ def _clear_update_plan():
         pass
     except Exception:
         log.exception("could not remove the update plan")
+
+def _read_update_state():
+    """Parse UPDATE_STATE_FILE (written by the stage/apply runners), or None
+    when there isn't one. Never written from here — this module only reads
+    the outcome the shell side recorded."""
+    try:
+        with open(UPDATE_STATE_FILE) as f:
+            lines = f.read().splitlines()
+    except Exception:
+        return None
+    info = {}
+    for line in lines:
+        k, sep, v = line.partition('=')
+        if sep:
+            info[k] = v
+    if not info:
+        return None
+    try:
+        info['ts'] = int(info.get('ts', 0))
+    except ValueError:
+        info['ts'] = 0
+    return info
+
+def _clear_update_state():
+    for f in (UPDATE_STATE_FILE, UPDATE_ERROR_FILE):
+        try:
+            os.remove(f)
+        except FileNotFoundError:
+            pass
+        except Exception:
+            log.exception("could not remove %s", f)
+
+def _read_update_error():
+    """Detail for a failed apply (channel + message), or None."""
+    try:
+        with open(UPDATE_ERROR_FILE) as f:
+            return json.load(f)
+    except Exception:
+        return None
 
 # Sentinel returned by _plan_step_from_info() to mean "an update IS available
 # but the step couldn't be safely built" — distinct from plain None ("nothing
@@ -4186,9 +4327,12 @@ def build_update_plan():
     return steps, errors
 
 def _runner_active():
-    """True while the sequencer is running (either the transient unit started by
-    apply_all_updates, or the boot-time resume unit)."""
-    for unit in (UPDATE_RUNNER_UNIT + '.service', 'hifi-update-resume.service'):
+    """True while the STAGE sequencer is running (either the transient unit
+    started by apply_all_updates, or the boot-time stage-resume unit). The
+    apply half never runs while this module can observe it — it only ever
+    runs isolated under system-update.target, where hifi-api itself is not
+    scheduled to start."""
+    for unit in (UPDATE_STAGE_RUNNER_UNIT + '.service', 'hifi-update-stage-resume.service'):
         try:
             r = _run(['systemctl', 'is-active', unit])
             if (r.stdout or '').strip() in ('active', 'activating', 'reloading'):
@@ -4215,7 +4359,7 @@ def _plan_overall_state(plan):
 
 def apply_all_updates():
     """Build a plan for every component that has an update and hand it to the
-    sequencer. Returns immediately; poll update_plan_status()."""
+    stage sequencer. Returns immediately; poll update_plan_status()."""
     with _UPDATE_PLAN_LOCK:
         existing = _read_update_plan()
         if existing and _plan_overall_state(existing) == 'running':
@@ -4229,6 +4373,11 @@ def apply_all_updates():
                         'message': _t('update.checkFailed', _lang())}
             return {'started': False, 'code': 'update.noneAvailable',
                     'message': _t('update.noneAvailable', _lang())}
+
+        # A leftover outcome from a previous cycle (done/error banner) would
+        # otherwise take priority over this brand-new plan's own progress —
+        # see update_plan_status(), which checks the state file first.
+        _clear_update_state()
 
         plan = {
             'plan_id': '%d-%d' % (int(time.time()), os.getpid()),
@@ -4244,30 +4393,31 @@ def apply_all_updates():
             return {'started': False, 'code': 'update.planSaveFailed',
                     'message': _t('update.planSaveFailed', _lang())}
 
-        # Belt and braces: a device imaged before hifi-update-runner.sh was
-        # added to the ISO's chmod-list (0300-app-install.hook.chroot) ships it
-        # non-executable. `systemd-run --no-block` below still returns success
-        # in that case — it only queues the transient unit, it doesn't wait for
-        # the exec to actually happen — so the permission error is invisible
-        # here and only shows up later as a plan stuck forever in 'pending'
-        # (nothing ever marks it 'running'). Fix it unconditionally so this
-        # class of bug can't silently strand a plan again.
+        # Belt and braces: a device imaged before hifi-update-stage-runner.sh
+        # was added to the ISO's chmod-list (0300-app-install.hook.chroot)
+        # ships it non-executable. `systemd-run --no-block` below still
+        # returns success in that case — it only queues the transient unit, it
+        # doesn't wait for the exec to actually happen — so the permission
+        # error is invisible here and only shows up later as a plan stuck
+        # forever in 'pending' (nothing ever marks it 'running'). Fix it
+        # unconditionally so this class of bug can't silently strand a plan
+        # again.
         try:
-            os.chmod(UPDATE_RUNNER_SCRIPT, 0o755)
+            os.chmod(UPDATE_STAGE_RUNNER_SCRIPT, 0o755)
         except OSError:
-            log.exception("update plan: could not chmod +x %s", UPDATE_RUNNER_SCRIPT)
+            log.exception("update plan: could not chmod +x %s", UPDATE_STAGE_RUNNER_SCRIPT)
 
         cmd = ['systemd-run', '--no-block', '--collect',
-               '--unit=' + UPDATE_RUNNER_UNIT, UPDATE_RUNNER_SCRIPT]
+               '--unit=' + UPDATE_STAGE_RUNNER_UNIT, UPDATE_STAGE_RUNNER_SCRIPT]
         try:
             subprocess.run(cmd, capture_output=True, text=True, timeout=15, check=True)
         except FileNotFoundError:
             # systemd-run unavailable → detached subprocess. It no longer
-            # survives a reboot, but the plan on disk does, so the resume unit
-            # (or the next apply) finishes the job.
-            subprocess.Popen([UPDATE_RUNNER_SCRIPT], start_new_session=True)
+            # survives a reboot, but the plan on disk does, so the stage-resume
+            # unit (or the next apply) finishes the job.
+            subprocess.Popen([UPDATE_STAGE_RUNNER_SCRIPT], start_new_session=True)
         except Exception:
-            log.exception("update plan: could not start the runner")
+            log.exception("update plan: could not start the stage runner")
             _clear_update_plan()
             return {'started': False, 'code': 'update.startFailed',
                     'message': _t('update.startFailed', _lang())}
@@ -4276,25 +4426,76 @@ def apply_all_updates():
                 'steps': [{'kind': s['kind'], 'version': s['version']} for s in steps]}
 
 def update_plan_status():
-    """Progress of the current plan: the persisted step list plus the live
-    progress of whichever step is running."""
+    """Progress of the current update, across BOTH phases and the two reboots
+    between them:
+
+    - while staging: the persisted plan's step list plus the live progress of
+      whichever step is downloading/verifying (unchanged from before the
+      two-phase split);
+    - once staging finishes: 'staged_pending_reboot' — the box is about to
+      reboot into the isolated apply session on its own, nothing more to poll
+      until it comes back;
+    - after the box returns (successfully or not): the durable outcome
+      hifi-update-apply-runner.sh recorded in UPDATE_STATE_FILE, since by then
+      the plan file itself is gone (removed on success) or stale (left behind
+      on failure, superseded by the state file — see below).
+
+    The state file is checked FIRST and wins whenever it holds a terminal
+    result: hifi-api does not run at all while the apply runner works, so the
+    only time this function can ever observe 'applying' is a leftover from a
+    run that crashed before finishing — still worth surfacing rather than
+    silently falling through to a stale plan."""
+    state_info = _read_update_state()
+    if state_info and state_info.get('phase') in ('applying', 'done', 'error'):
+        phase = state_info['phase']
+        ts = state_info.get('ts', 0)
+        if phase in ('done', 'error') and time.time() - ts > UPDATE_PLAN_TTL:
+            _clear_update_state()
+            _clear_update_plan()
+        elif phase == 'applying':
+            return {'state': 'applying',
+                    'message': state_info.get('message') or _t('update.applying', _lang()),
+                    'finished': None}
+        elif phase == 'done':
+            return {'state': 'done',
+                    'message': state_info.get('message') or _t('update.applyDone', _lang()),
+                    'finished': ts}
+        else:
+            err = _read_update_error() or {}
+            return {'state': 'apply_error', 'kind': err.get('channel', ''),
+                    'message': (err.get('message') or state_info.get('message')
+                                or _t('update.applyError', _lang())),
+                    'finished': ts}
+
     plan = _read_update_plan()
     if not plan:
         return {'state': 'idle'}
 
     state = _plan_overall_state(plan)
 
-    # Retire a finished plan once everyone has had a chance to see the outcome,
-    # so it stops re-opening the completion overlay on every client start.
+    # Retire a finished-but-never-staged (i.e. purely stage-side error) plan
+    # once everyone has had a chance to see the outcome, so it stops
+    # re-opening the overlay on every client start. A plan that DID finish
+    # staging is retired via the state file above instead (it is superseded
+    # by 'staged'/'applying'/'done'/'error' the moment the box reboots).
     if plan.get('finished') and time.time() - plan['finished'] > UPDATE_PLAN_TTL:
         _clear_update_plan()
         return {'state': 'idle'}
 
-    # 'error' ranks above 'pending': the runner (hifi-update-runner.sh) always
-    # stops at the first failed step, so any steps still 'pending' after that
-    # were simply never reached — picking one of those as `current` would
-    # attribute the failure to the wrong component and its version wouldn't
-    # match the (unwritten) live status file below, silently losing the message.
+    # Every step has staged; the stage runner is about to (or already did)
+    # create /system-update and reboot into the isolated apply session. There
+    # is nothing left to poll here until the box comes back — the state-file
+    # branch above takes over from that point on.
+    if state == 'finished':
+        return {'state': 'staged_pending_reboot',
+                'message': _t('update.stagedPendingReboot', _lang()),
+                'finished': plan.get('finished')}
+
+    # 'error' ranks above 'pending': the stage runner always stops at the
+    # first failed step, so any steps still 'pending' after that were simply
+    # never reached — picking one of those as `current` would attribute the
+    # failure to the wrong component and its version wouldn't match the
+    # (unwritten) live status file below, silently losing the message.
     current = (next((s for s in plan['steps'] if s['state'] == 'running'), None)
                or next((s for s in plan['steps'] if s['state'] == 'error'), None)
                or next((s for s in plan['steps'] if s['state'] == 'pending'), None)
@@ -4342,13 +4543,14 @@ def update_plan_status():
     }
 
 def dismiss_update_plan():
-    """Drop a plan that is no longer running (the client has shown the outcome).
-    Refuses while the sequencer is still working."""
+    """Drop a plan/outcome that is no longer running (the client has shown the
+    result). Refuses while either phase is still actually working."""
     with _UPDATE_PLAN_LOCK:
-        plan = _read_update_plan()
-        if plan and _plan_overall_state(plan) == 'running':
+        state = update_plan_status().get('state')
+        if state in ('running', 'staged_pending_reboot', 'applying'):
             return {'success': False, 'code': 'update.inProgress',
                     'message': _t('update.inProgress', _lang())}
+        _clear_update_state()
         _clear_update_plan()
         return {'success': True}
 
@@ -5079,6 +5281,15 @@ def api_ui_resolution():
 def api_set_ui_resolution():
     data = request.get_json(silent=True) or {}
     return jsonify(set_ui_resolution((data.get('mode') or '').strip()))
+
+@app.route('/ui_refresh', methods=['GET'])
+def api_ui_refresh():
+    return jsonify(get_ui_refresh())
+
+@app.route('/ui_refresh', methods=['POST'])
+def api_set_ui_refresh():
+    data = request.get_json(silent=True) or {}
+    return jsonify(set_ui_refresh((data.get('mode') or '').strip()))
 
 @app.route('/timezone', methods=['GET'])
 def api_timezone():

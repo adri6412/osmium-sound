@@ -551,6 +551,70 @@ restart — e.g. lightdm — its own payload triggers). Each channel writes live
 progress to `/run/hifi-*-status.json`, polled by the UI via
 `GET /{app,system,os,lyrion}_update/status`.
 
+Each of `hifi-ota-update.sh`, `hifi-system-update.sh` and `hifi-os-update.sh`
+now exposes three subcommands, not one:
+
+- `stage <url> <sha256> [<sig_url>] <version>` — download + verify only,
+  extracted to a *persistent* directory under
+  `/var/lib/hifi-player/update/staged/<channel>/<version>`. Never touches the
+  running system.
+- `apply <staged_dir> <version>` — installs an already-staged, already-verified
+  payload. No download, no service restarts/reboots of its own — it assumes it
+  is running isolated (see below).
+- `full <url> <sha256> [<sig_url>] <version>` — the ORIGINAL single-shot
+  behaviour (download, verify, apply, restart/reboot as needed, all in one
+  live call). Kept only for the single-component `/{app,system,os}_update/apply`
+  endpoints, which are intentionally **not** part of the isolated flow below.
+
+### The combined "Update Now" flow is isolated, in two phases
+
+`POST /update/apply_all` (Settings → Updates → "Aggiorna ora") used to apply
+system → os → ui in sequence **on the live system** — a server restart
+(system step), a lightdm restart (ui step) or an OS-payload reboot could all
+interrupt an in-progress install and leave the device with some components
+updated and others stale.
+
+It now splits into two isolated phases:
+
+1. **Stage** (`hifi-update-stage-runner.sh`, transient unit `hifi-update-stage`)
+   walks the plan calling every channel's `stage` subcommand — download +
+   verify only, box stays fully live. Once every step has staged, it creates
+   `/system-update` and reboots.
+2. **Apply** (`hifi-update-apply-runner.sh`, `hifi-update-apply.service`) only
+   ever runs during a boot `systemd-system-update-generator(8)` has already
+   redirected into `system-update.target` because `/system-update` exists —
+   nothing from the app stack is even scheduled to start (not `hifi-api`, not
+   `hifi-webui`, not `hifi-sources`/`hifi-vumeter`, not `squeezelite`, not
+   lightdm/Electron). With nothing left to race, it applies every staged
+   payload (system → os → ui) in one pass, clears `/system-update`, and
+   reboots back to normal.
+
+Progress during staging is reported the same way as before
+(`GET /update/status`, plan persisted at `/var/lib/hifi-player/update/plan`,
+schema header `v 2`). Once staging finishes, that endpoint reports
+`staged_pending_reboot` (the box is about to/just did reboot into the isolated
+session — nothing more to poll until it's back). Since `hifi-api` does not run
+at all during the apply phase, the durable outcome is instead read from
+`/var/lib/hifi-player/update/state` (`applying` → `done`/`error`, the latter
+surfaced as API state `apply_error`) once the box returns.
+
+A crash mid-apply recovers for free: on the next boot `/system-update` still
+exists, the generator re-enters `system-update.target`, and the apply runner
+reruns from the top — every apply step is idempotent (already-applied
+components are skipped by comparing the installed version file). Only the
+*stage* half needs a dedicated resume unit
+(`hifi-update-stage-resume.service`, `ConditionPathExists=.../update/plan`)
+for an interrupted download.
+
+Progress during the isolated apply session is shown on the boot splash itself
+(Plymouth theme `hifi`, DRM-direct — no dependency on X/lightdm or on
+`/opt/hifi-media-player`, which is precisely the directory the ui step is
+mid-replacing): a bar driven by `plymouth system-update --progress=N`, frozen
+and turned red on a sentinel `plymouth display-message` call if the apply
+fails. SSH is brought up in that isolated session only if the owner had
+already enabled it from Settings — otherwise recovery from a failed apply
+needs physical access.
+
 | Channel | Asset prefix | Updates | Verification | Script |
 |---|---|---|---|---|
 | UI | `hifi-ui-` | `/opt/hifi-media-player` (Electron) | sha256 | `hifi-ota-update.sh` |
@@ -679,9 +743,14 @@ from the update being **cumulative, idempotent, and fail-fast**, with the
   via `request_reboot` (writes a `REBOOT` marker) only after a real change
   that needs one — since the payload re-runs on every release, an
   unconditional reboot would otherwise reboot the box on every single update.
-  `hifi-os-update.sh` honours that marker only after the version file is
-  already written and status is already `done`, so a crash right at reboot
-  time still leaves the device in a consistent, fully-applied state.
+  `hifi-os-update.sh`'s `full` subcommand (the single-component
+  `/os_update/apply` path) honours that marker only after the version file is
+  already written and status is already `done`. The isolated `apply`
+  subcommand (used by the combined "Update Now" flow, see above) deliberately
+  **ignores** the marker instead — honouring it mid-session would strand the
+  system/ui steps still to come, since the whole isolated session reboots
+  exactly once, unconditionally, at the very end regardless of what any single
+  migration asked for.
 
 ### UI/System channels — atomic swap, not in-place overwrite
 

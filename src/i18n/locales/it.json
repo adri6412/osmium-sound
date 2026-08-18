@@ -318,6 +318,7 @@
       "ssh": "Accesso SSH",
       "pointer": "Puntatore mouse",
       "uiResolution": "Risoluzione interfaccia",
+      "uiRefresh": "Frequenza di aggiornamento",
       "displayMode": "Modalità schermo",
       "timezone": "Fuso orario",
       "systemInfo": "Informazioni Sistema",
@@ -519,6 +520,20 @@
       "confirm": "Applica",
       "cancel": "Annulla",
       "failed": "Impossibile cambiare la risoluzione."
+    },
+    "uiRefresh": {
+      "help": "Sia lo scaling dello schermo sia il ridisegno dell'interfaccia sono legati alla frequenza di aggiornamento del pannello: abbassarla riduce il carico sul chip grafico, circa il 40% in meno su questo hardware. Il movimento di lancette e livelli resta fluido; le animazioni più rapide possono apparire leggermente meno scattanti.",
+      "unsupported": "Questo schermo non offre una frequenza di aggiornamento più bassa a cui passare.",
+      "currentNative": "Frequenza nativa",
+      "currentLow": "Frequenza a basso consumo",
+      "switchToLow": "Passa a basso consumo",
+      "switchToNative": "Torna alla frequenza nativa",
+      "confirmPrompt": "Mantenere la frequenza a basso consumo? Ripristino automatico tra {seconds}s.",
+      "revertNow": "Ripristina ora",
+      "keep": "Mantieni",
+      "kept": "Frequenza a basso consumo mantenuta.",
+      "reverted": "Nessuna conferma ricevuta — ripristinata la frequenza nativa.",
+      "failed": "Impossibile cambiare la frequenza di aggiornamento."
     },
     "displayMode": {
       "help": "Scegli se questo dispositivo funziona con l'interfaccia touchscreen sullo schermo oppure in modalità headless (senza schermo), controllato da remoto tramite l'app companion Android, l'interfaccia web di Lyrion (porta 9000) o la pagina delle sorgenti musicali (porta 8080).",

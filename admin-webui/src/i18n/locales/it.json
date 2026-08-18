@@ -396,6 +396,16 @@
       "confirmResolution": "L'interfaccia del dispositivo si chiude e si riapre dopo qualche secondo. La riproduzione non viene interrotta. Continuare?",
       "resolutionChanged": "Risoluzione interfaccia cambiata",
       "resolutionFailed": "Cambio risoluzione fallito",
+      "refreshLabel": "Frequenza di aggiornamento",
+      "refreshHelp": "Sia lo scaling dello schermo sia il ridisegno dell'interfaccia sono legati alla frequenza di aggiornamento del pannello: abbassarla riduce il carico sul chip grafico, circa il 40% in meno su questo hardware. Si applica subito, nessun riavvio.",
+      "refreshUnsupported": "Lo schermo di questo dispositivo non offre una frequenza di aggiornamento più bassa a cui passare.",
+      "refresh": {
+        "native": "Nativa",
+        "low": "Basso consumo"
+      },
+      "confirmRefresh": "Lo schermo del dispositivo passerà a una frequenza di aggiornamento più bassa. Continuare?",
+      "refreshChanged": "Frequenza di aggiornamento cambiata",
+      "refreshChangeFailed": "Cambio frequenza di aggiornamento fallito",
       "pointerLabel": "Puntatore mouse",
       "pointerHelp": "Mostra il puntatore del mouse sullo schermo, oppure nascondilo se usi solo il touchscreen. Attivo di default, così la procedura di configurazione a schermo resta utilizzabile.",
       "pointerOn": "Attivo",

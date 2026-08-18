@@ -396,6 +396,16 @@
       "confirmResolution": "The device's interface will close and reopen after a few seconds. Playback is not interrupted. Continue?",
       "resolutionChanged": "Interface resolution changed",
       "resolutionFailed": "Could not change the resolution",
+      "refreshLabel": "Refresh rate",
+      "refreshHelp": "Both the screen scaling and the interface's own redraws are tied to the panel's refresh rate, so lowering it reduces graphics-chip load — roughly 40% less on this hardware. Applies immediately, no restart.",
+      "refreshUnsupported": "This device's screen does not offer a lower refresh rate to switch to.",
+      "refresh": {
+        "native": "Native",
+        "low": "Low-power"
+      },
+      "confirmRefresh": "The device screen will switch to a lower refresh rate. Continue?",
+      "refreshChanged": "Refresh rate changed",
+      "refreshChangeFailed": "Could not change the refresh rate",
       "pointerLabel": "Mouse pointer",
       "pointerHelp": "Show the mouse pointer on screen, or hide it if you only use the touchscreen. Shown by default, so the on-screen setup wizard stays usable.",
       "pointerOn": "On",

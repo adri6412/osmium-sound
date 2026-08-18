@@ -23,6 +23,7 @@ import {
   Monitor,
   MonitorOff,
   Gauge,
+  RefreshCw,
   Clock,
   ChevronRight,
   ChevronLeft,
@@ -70,6 +71,16 @@ const DSP_BUILTIN_PRESET_LABEL_KEYS = {
   Bright: 'settings.dsp.presetBright',
   'Loudness (low volume)': 'settings.dsp.presetLoudness',
 };
+
+// Kept outside the component on purpose: Settings unmounts whenever the user
+// leaves this tab (LyrionServer.jsx only renders <SettingsPage> while
+// activeTab === 'settings'), which would clear any React-effect-owned timer.
+// The 10s "keep this refresh rate?" revert-on-timeout has to fire even if the
+// user taps away from Settings before answering, or the box could be stuck
+// at 30Hz with no visible way back — so the actual revert timer lives here,
+// not in component state.
+let uiRefreshRevertTimer = null;
+let uiRefreshRevertDeadline = 0; // epoch ms the pending revert fires at; 0 = none pending
 
 /**
  * Settings screen component - Simplified version for debugging
@@ -175,6 +186,15 @@ const Settings = ({ initialSection, onSectionConsumed } = {}) => {
   const [uiResolutionBusy, setUiResolutionBusy] = useState(false);
   const [uiResolutionMessage, setUiResolutionMessage] = useState('');
   const [uiResolutionPending, setUiResolutionPending] = useState(null); // choice awaiting confirm
+
+  // Panel refresh rate (native <-> low-power, vblank-paced GPU cost). Switching
+  // to "low" applies immediately, then arms a 10s keep-or-revert countdown —
+  // see uiRefreshRevertTimer above for why the actual timer lives outside React.
+  const [uiRefresh, setUiRefresh] = useState(null); // 'native'|'low'
+  const [uiRefreshSupported, setUiRefreshSupported] = useState(true);
+  const [uiRefreshBusy, setUiRefreshBusy] = useState(false);
+  const [uiRefreshMessage, setUiRefreshMessage] = useState('');
+  const [uiRefreshCountdown, setUiRefreshCountdown] = useState(0); // >0 while the keep/revert popup is up
 
   // Timezone (fresh installs default to UTC — the installer asks nothing
   // about it, see distro/README.md)
@@ -397,6 +417,7 @@ const Settings = ({ initialSection, onSectionConsumed } = {}) => {
     loadDisplayMode();
     loadPlayerEnabled();
     loadUiResolution();
+    loadUiRefresh();
     loadTimezone();
     loadVuMeter();
     loadAutoExpand();
@@ -860,6 +881,89 @@ const Settings = ({ initialSection, onSectionConsumed } = {}) => {
     }
   };
 
+  // ── Panel refresh rate handlers ─────────────────────────────────
+  const loadUiRefresh = async () => {
+    const res = await systemAPI.getUiRefresh();
+    if (res.success && res.data?.mode) {
+      setUiRefresh(res.data.mode);
+      setUiRefreshSupported(res.data.supported !== false);
+      // Rejoin an already-armed revert (e.g. the user switched to "low",
+      // left Settings before answering, and came back): restore the popup
+      // with the time actually remaining instead of silently losing it.
+      if (uiRefreshRevertDeadline > Date.now()) {
+        setUiRefreshCountdown(Math.max(1, Math.ceil((uiRefreshRevertDeadline - Date.now()) / 1000)));
+      }
+    }
+  };
+
+  // Ticks the visible countdown once a second. The real revert-on-timeout is
+  // driven by the module-level uiRefreshRevertTimer (see its declaration for
+  // why), not by this effect — this only keeps the popup text accurate and
+  // safely no-ops if the deadline was already cleared elsewhere.
+  useEffect(() => {
+    if (uiRefreshCountdown <= 0) return undefined;
+    const id = setTimeout(() => {
+      const remaining = Math.max(0, Math.ceil((uiRefreshRevertDeadline - Date.now()) / 1000));
+      setUiRefreshCountdown(remaining);
+    }, 1000);
+    return () => clearTimeout(id);
+  }, [uiRefreshCountdown]);
+
+  const armUiRefreshRevert = () => {
+    if (uiRefreshRevertTimer) clearTimeout(uiRefreshRevertTimer);
+    uiRefreshRevertDeadline = Date.now() + 10000;
+    setUiRefreshCountdown(10);
+    uiRefreshRevertTimer = setTimeout(async () => {
+      uiRefreshRevertTimer = null;
+      uiRefreshRevertDeadline = 0;
+      await systemAPI.setUiRefresh('native');
+      setUiRefresh('native');
+      setUiRefreshCountdown(0);
+      setUiRefreshMessage(t('settings.uiRefresh.reverted'));
+    }, 10000);
+  };
+
+  const switchToLowRefresh = async () => {
+    if (uiRefreshBusy) return;
+    setUiRefreshBusy(true);
+    setUiRefreshMessage('');
+    const res = await systemAPI.setUiRefresh('low');
+    setUiRefreshBusy(false);
+    if (res.success && res.data?.success) {
+      setUiRefresh(res.data.mode || 'low');
+      armUiRefreshRevert();
+    } else {
+      setUiRefreshMessage(res.data?.message || res.message || t('settings.uiRefresh.failed'));
+    }
+  };
+
+  // "Keep" during the countdown: cancel the pending auto-revert, stay at low.
+  const keepLowRefresh = () => {
+    if (uiRefreshRevertTimer) { clearTimeout(uiRefreshRevertTimer); uiRefreshRevertTimer = null; }
+    uiRefreshRevertDeadline = 0;
+    setUiRefreshCountdown(0);
+    setUiRefreshMessage(t('settings.uiRefresh.kept'));
+  };
+
+  // Manual switch back to native — always safe, no countdown needed (that's
+  // only for the direction that could leave a stuttery/degraded screen
+  // behind unconfirmed).
+  const switchToNativeRefresh = async () => {
+    if (uiRefreshBusy) return;
+    if (uiRefreshRevertTimer) { clearTimeout(uiRefreshRevertTimer); uiRefreshRevertTimer = null; }
+    uiRefreshRevertDeadline = 0;
+    setUiRefreshCountdown(0);
+    setUiRefreshBusy(true);
+    setUiRefreshMessage('');
+    const res = await systemAPI.setUiRefresh('native');
+    setUiRefreshBusy(false);
+    if (res.success && res.data?.success) {
+      setUiRefresh(res.data.mode || 'native');
+    } else {
+      setUiRefreshMessage(res.data?.message || res.message || t('settings.uiRefresh.failed'));
+    }
+  };
+
   // ── Timezone handlers ────────────────────────────────────────────
   const loadTimezone = async () => {
     const [tzRes, listRes] = await Promise.all([systemAPI.getTimezone(), systemAPI.getTimezones()]);
@@ -1175,9 +1279,9 @@ const Settings = ({ initialSection, onSectionConsumed } = {}) => {
     // A 404 just means this appliance predates the sequencer.
     if (!r.success || !r.data || r.data.state === 'idle') return;
     const s = r.data;
-    // 'interrupted' on this very first read is the normal case right after an
-    // OS-step reboot (this app just relaunched, hifi-update-resume.service
-    // hasn't started yet) — soften it the same way followUpdatePlan()'s poll
+    // 'interrupted' on this very first read is the normal case right after a
+    // stage download is interrupted (hifi-update-stage-resume.service hasn't
+    // started yet) — soften it the same way followUpdatePlan()'s poll
     // loop does, instead of rendering it as the terminal error state with a
     // dismiss button available before the resume unit ever got a chance to
     // continue the plan (that dismiss deletes the on-disk plan, permanently
@@ -1192,11 +1296,22 @@ const Settings = ({ initialSection, onSectionConsumed } = {}) => {
       progress: typeof s.overall_progress === 'number' ? s.overall_progress : null,
       doneKinds: (s.steps || []).filter((x) => x.state === 'done').map((x) => x.kind),
     });
-    if (s.state === 'running' || s.state === 'interrupted') {
+    // 'staged_pending_reboot'/'applying' mean the box is mid isolated-update
+    // session (about to, or already did, reboot) — still worth rejoining the
+    // poll for, same as 'running'/'interrupted'.
+    if (s.state === 'running' || s.state === 'interrupted'
+        || s.state === 'staged_pending_reboot' || s.state === 'applying') {
       setIsApplyingAll(true);
       const ok = await followUpdatePlan();
       if (!ok) setAllStatus({ phase: 'error', message: t('settings.updates.msg.updateError') });
       setIsApplyingAll(false);
+      refreshAllChecks();
+    } else if (s.state === 'done' || s.state === 'apply_error') {
+      // The isolated apply session finished (successfully or not) while this
+      // page wasn't open to watch it — surface the outcome once, same as
+      // followUpdatePlan() would have shown it live.
+      setAllStatus({ phase: s.state === 'done' ? 'done' : 'error',
+                     message: s.message || t('settings.updates.msg.updateError') });
       refreshAllChecks();
     }
   };
@@ -1335,35 +1450,42 @@ const Settings = ({ initialSection, onSectionConsumed } = {}) => {
   };
 
   // ── Combined UI + System + OS OTA (single button) ───────────────
-  // The sequence runs on the appliance: /update/apply_all writes a plan to
-  // persistent storage and hifi-update-runner.sh walks it to the end under its
-  // own systemd unit. That matters because every step of an update tears
-  // something down — the system bundle restarts hifi-api, the UI bundle
-  // restarts lightdm (this very page), and an OS payload may reboot the box —
-  // and when this page owned the sequence, each of those aborted it and left
-  // components behind. Here we only start the plan and render its progress.
+  // The sequence runs on the appliance, in two isolated phases:
+  // /update/apply_all writes a plan to persistent storage and
+  // hifi-update-stage-runner.sh downloads+verifies every component under its
+  // own systemd unit — the box stays fully live. Once every component has
+  // staged ('staged_pending_reboot'), the appliance reboots into an isolated
+  // system-update.target session where NOTHING from the app stack runs (not
+  // even hifi-api) and hifi-update-apply-runner.sh applies everything, then
+  // reboots back. That's why polling here has to ride through two reboots and
+  // a stretch where the API isn't even listening — 'applying' surfaces only
+  // if this page happens to be watching right as the box comes back up, and
+  // the durable outcome ('done'/'apply_error') is what api_server.py reports
+  // once it does. Here we only start the plan and render its progress.
   const followUpdatePlan = () => new Promise((resolve) => {
     if (planPollRef.current) clearInterval(planPollRef.current);
     // 'interrupted' means "a step was left running with nobody currently
     // resuming it" — which is also exactly what the plan looks like for the
-    // first few seconds after an OS-step reboot, before hifi-update-resume.service
-    // has come up (it waits on network-online.target). Treating a single
-    // 'interrupted' read as final made this page give up on updates that were
-    // about to continue on their own, which is why it now only stops after the
-    // status is 'interrupted' on MANY consecutive polls — long enough for the
-    // resume unit to have started if it ever will (~2 minutes), not just one.
+    // first few seconds after a stage download is interrupted, before
+    // hifi-update-stage-resume.service has come up (it waits on
+    // network-online.target). Treating a single 'interrupted' read as final
+    // made this page give up on updates that were about to continue on their
+    // own, which is why it now only stops after the status is 'interrupted'
+    // on MANY consecutive polls — long enough for the resume unit to have
+    // started if it ever will (~2 minutes), not just one.
     let interruptedStreak = 0;
     const MAX_INTERRUPTED_POLLS = 60; // ~2 minutes at 2s/poll
     planPollRef.current = setInterval(async () => {
       const r = await systemAPI.getUpdatePlanStatus();
-      // A failed request is expected mid-plan (the API is restarting, or the
-      // box is rebooting). The plan is on disk — just keep polling.
+      // A failed request is expected throughout (the API restarts after the
+      // system step lands, and is not running at all during the isolated
+      // apply session). The plan/outcome is on disk — just keep polling.
       if (!r.success) return;
       const s = r.data || {};
       if (s.state === 'idle') return;
       // While still inside the grace window, render 'interrupted' as if it
       // were just another in-progress step ('restarting' matches the message
-      // shown for an OS reboot in flight) — NOT as the terminal 'error' state,
+      // shown for a reboot in flight) — NOT as the terminal 'error' state,
       // which would put the dismiss button on screen and let it delete the
       // on-disk plan before the resume unit ever got to it.
       const stillWaiting = s.state === 'interrupted' && interruptedStreak < MAX_INTERRUPTED_POLLS;
@@ -1382,10 +1504,14 @@ const Settings = ({ initialSection, onSectionConsumed } = {}) => {
       } else {
         interruptedStreak = 0;
       }
-      if (s.state === 'finished' || s.state === 'error' || s.state === 'interrupted') {
+      // 'staged_pending_reboot' and 'applying' are still in progress (the box
+      // is about to, or already did, reboot into the isolated apply session)
+      // — only 'done' (full success) and 'error'/'apply_error'/'interrupted'
+      // (past the grace window) are terminal.
+      if (s.state === 'done' || s.state === 'error' || s.state === 'apply_error' || s.state === 'interrupted') {
         clearInterval(planPollRef.current);
         planPollRef.current = null;
-        resolve(s.state === 'finished');
+        resolve(s.state === 'done');
       }
     }, 2000);
   });
@@ -1960,6 +2086,11 @@ const Settings = ({ initialSection, onSectionConsumed } = {}) => {
       content: 'custom-ui-resolution'
     },
     {
+      title: t('settings.sections.uiRefresh'),
+      icon: RefreshCw,
+      content: 'custom-ui-refresh'
+    },
+    {
       title: t('settings.sections.displayMode'),
       icon: displayMode === 'headless' ? MonitorOff : Monitor,
       content: 'custom-display-mode'
@@ -2011,9 +2142,13 @@ const Settings = ({ initialSection, onSectionConsumed } = {}) => {
   // of that to one shape { title, message, progress, state } the overlay renders.
   const activeOta = (() => {
     // A server-side plan wins over everything: it is the only source that stays
-    // accurate across the restarts and the reboot an update performs.
+    // accurate across both update-mode reboots and the stretch where the API
+    // itself isn't running (the isolated apply session).
     if (planStatus) {
-      const terminal = planStatus.state === 'error' || planStatus.state === 'interrupted';
+      const terminal = planStatus.state === 'error' || planStatus.state === 'apply_error'
+        || planStatus.state === 'interrupted';
+      // 'staged_pending_reboot'/'applying'/'running' are all still "in
+      // progress" for display purposes — only 'done' is the real finish line.
       return {
         title: t('settings.updates.overlay.titleAll'),
         // Fall back to naming the component being applied ('ui'/'system'/'os'
@@ -2022,7 +2157,7 @@ const Settings = ({ initialSection, onSectionConsumed } = {}) => {
           || (planStatus.kind ? t(`settings.updates.${planStatus.kind}`) : '')
           || t('settings.updates.msg.starting'),
         progress: typeof planStatus.progress === 'number' ? planStatus.progress : null,
-        state: terminal ? 'error' : (planStatus.state === 'finished' ? 'done' : 'applying'),
+        state: terminal ? 'error' : (planStatus.state === 'done' ? 'done' : 'applying'),
       };
     }
     if (isApplyingAll) {
@@ -3492,6 +3627,99 @@ const Settings = ({ initialSection, onSectionConsumed } = {}) => {
                           : 'bg-hifi-dark text-hifi-silver'
                       }`}>
                         {uiResolutionMessage}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Panel refresh rate (native <-> low-power, vblank-paced GPU cost) */}
+                {section.content === 'custom-ui-refresh' && (
+                  <div className="space-y-4">
+                    <p className="text-sm text-hifi-silver">{t('settings.uiRefresh.help')}</p>
+
+                    {uiRefresh && !uiRefreshSupported && (
+                      <div className="rounded-lg bg-hifi-dark p-3 text-center text-sm text-hifi-silver">
+                        {t('settings.uiRefresh.unsupported')}
+                      </div>
+                    )}
+
+                    {uiRefreshSupported && (
+                      <>
+                        <div className="flex items-center justify-between bg-hifi-dark rounded-lg px-4 py-3">
+                          <span className="flex items-center space-x-2 text-sm text-white">
+                            <RefreshCw size={16} className="text-hifi-gold" />
+                            <span>
+                              {uiRefresh === 'low'
+                                ? t('settings.uiRefresh.currentLow')
+                                : t('settings.uiRefresh.currentNative')}
+                            </span>
+                          </span>
+                        </div>
+
+                        {/* Native -> low: applies immediately, then arms the
+                            keep-or-revert popup below (no upfront confirm — the
+                            popup itself IS the confirmation step). */}
+                        {uiRefresh === 'native' && uiRefreshCountdown === 0 && (
+                          <button
+                            onClick={switchToLowRefresh}
+                            disabled={uiRefreshBusy || !uiRefresh}
+                            className="w-full flex items-center justify-center space-x-2 bg-hifi-dark hover:bg-hifi-light/40 disabled:opacity-60 rounded-lg px-4 py-3 text-sm text-white transition-colors"
+                          >
+                            {uiRefreshBusy && <Loader2 size={16} className="animate-spin" />}
+                            <RefreshCw size={16} />
+                            <span>{t('settings.uiRefresh.switchToLow')}</span>
+                          </button>
+                        )}
+
+                        {/* Low -> native: always safe, no countdown needed. */}
+                        {uiRefresh === 'low' && uiRefreshCountdown === 0 && (
+                          <button
+                            onClick={switchToNativeRefresh}
+                            disabled={uiRefreshBusy}
+                            className="w-full flex items-center justify-center space-x-2 bg-hifi-dark hover:bg-hifi-light/40 disabled:opacity-60 rounded-lg px-4 py-3 text-sm text-white transition-colors"
+                          >
+                            {uiRefreshBusy && <Loader2 size={16} className="animate-spin" />}
+                            <RefreshCw size={16} />
+                            <span>{t('settings.uiRefresh.switchToNative')}</span>
+                          </button>
+                        )}
+
+                        {/* Just switched to low: keep-or-revert, auto-reverts to
+                            native if left untouched — see uiRefreshRevertTimer. */}
+                        {uiRefreshCountdown > 0 && (
+                          <div className="space-y-3 rounded-lg border border-amber-500/30 bg-amber-900/10 p-4">
+                            <p className="text-sm text-amber-200">
+                              {t('settings.uiRefresh.confirmPrompt', { seconds: uiRefreshCountdown })}
+                            </p>
+                            <div className="flex space-x-3">
+                              <button
+                                onClick={switchToNativeRefresh}
+                                disabled={uiRefreshBusy}
+                                className="flex-1 rounded-lg bg-hifi-dark hover:bg-hifi-light/40 disabled:opacity-60 px-4 py-2 text-sm text-white transition-colors"
+                              >
+                                {t('settings.uiRefresh.revertNow')}
+                              </button>
+                              <button
+                                onClick={keepLowRefresh}
+                                disabled={uiRefreshBusy}
+                                className="flex-1 flex items-center justify-center space-x-2 rounded-lg bg-amber-600 hover:bg-amber-500 disabled:opacity-60 px-4 py-2 text-sm text-white transition-colors"
+                              >
+                                {uiRefreshBusy && <Loader2 size={16} className="animate-spin" />}
+                                <span>{t('settings.uiRefresh.keep')}</span>
+                              </button>
+                            </div>
+                          </div>
+                        )}
+                      </>
+                    )}
+
+                    {uiRefreshMessage && (
+                      <div className={`rounded-lg p-3 text-center text-sm ${
+                        isErrorMsg(uiRefreshMessage)
+                          ? 'bg-red-900/20 text-red-300 border border-red-500/30'
+                          : 'bg-hifi-dark text-hifi-silver'
+                      }`}>
+                        {uiRefreshMessage}
                       </div>
                     )}
                   </div>

@@ -578,6 +578,32 @@ async function setUiRes(m) {
   else say(bodyMsg(r, t('settings.display.resolutionFailed')), true);
 }
 
+// ── Panel refresh rate ─────────────────────────────────────────────
+// Native <-> low-power CRTC refresh — orthogonal to uiRes above (that shrinks
+// the framebuffer area; this only changes how many times per second it's
+// scanned out). Both the X scale-blit and the on-screen compositor are
+// vblank-paced, so halving the refresh roughly halves both: measured ~40%
+// less GPU render-engine busy on this hardware, same content. Applies live,
+// no session restart — the Electron window's size never changes. Not every
+// panel offers a distinct low-refresh mode for its native resolution;
+// 'supported' reflects that so the control can be hidden instead of offering
+// a toggle that would silently do nothing. No auto-revert-if-unconfirmed
+// here (unlike the kiosk UI) — this page isn't the screen being changed, so
+// there's no risk of losing access to it.
+const uiRefresh = ref('');
+const uiRefreshSupported = ref(true);
+async function loadUiRefresh() {
+  const r = await api.sys('ui_refresh');
+  if (r.ok) { uiRefresh.value = r.data.mode; uiRefreshSupported.value = r.data.supported !== false; }
+}
+async function setUiRefresh(m) {
+  if (m === uiRefresh.value) return;
+  if (m === 'low' && !confirm(t('settings.display.confirmRefresh'))) return;
+  const r = await api.sysPost('ui_refresh', { mode: m });
+  if (r.ok && r.data.success !== false) { uiRefresh.value = r.data.mode || m; say(bodyMsg(r, t('settings.display.refreshChanged'))); }
+  else say(bodyMsg(r, t('settings.display.refreshChangeFailed')), true);
+}
+
 // ── Timezone ────────────────────────────────────────────────────────
 // Fresh installs default to UTC (no timezone question in the installer —
 // see distro/README.md), so this is the only place to actually correct it.
@@ -719,10 +745,12 @@ function showChangelog() {
 }
 function closeChangelog() { changelog.open = false; }
 
-// The whole sequence runs on the appliance (hifi-update-runner.sh, driven by a
-// plan persisted under /var/lib). This page only starts it and renders its
-// progress, so losing the browser — or this very daemon, which the system
-// bundle restarts — no longer interrupts anything.
+// The whole sequence runs on the appliance in two isolated phases
+// (hifi-update-stage-runner.sh / hifi-update-apply-runner.sh, driven by a
+// plan persisted under /var/lib) — the second phase runs with nothing from
+// the app stack running at all, not even this daemon. This page only starts
+// it and renders its progress, so losing the browser — or this very daemon —
+// no longer interrupts anything.
 // The shell scripts driving each step (hifi-os-update.sh, hifi-system-update.sh)
 // write free-text `message` in Italian only — not locale-aware. `state` is the
 // one locale-neutral field they emit, so that's what drives the UI text; the
@@ -748,8 +776,9 @@ async function pollPlan(timeoutMs = 30 * 60 * 1000) {
   const t0 = Date.now();
   // 'interrupted' means "a step was left running with nobody currently
   // resuming it" — which is also exactly what the plan looks like for the
-  // first stretch after an OS-step reboot, before hifi-update-resume.service
-  // has come up (it waits on network-online.target). Treating the very first
+  // first stretch after a stage download is interrupted, before
+  // hifi-update-stage-resume.service has come up (it waits on
+  // network-online.target). Treating the very first
   // 'interrupted' read as a final failure gave up on updates that were about
   // to continue on their own; require several consecutive reads before
   // believing it's a real, dead plan.
@@ -774,8 +803,12 @@ async function pollPlan(timeoutMs = 30 * 60 * 1000) {
       interruptedStreak = 0;
     }
     renderPlan(s);
-    if (s.state === 'finished') return true;
-    if (s.state === 'error' || s.state === 'interrupted') return false;
+    // 'staged_pending_reboot'/'applying' mean the box is mid isolated-update
+    // session (about to, or already did, reboot into system-update.target) —
+    // still in progress, keep polling. 'apply_error' is the same terminal
+    // failure as 'error', just discovered after that isolated session.
+    if (s.state === 'done') return true;
+    if (s.state === 'error' || s.state === 'apply_error' || s.state === 'interrupted') return false;
   }
   applying.message = t('settings.updates.timeout');
   return false;
@@ -795,7 +828,7 @@ async function applyAll() {
   }
   const ok = await pollPlan();
   applying.error = !ok;
-  applying.state = ok ? 'finished' : 'error';
+  applying.state = ok ? 'done' : 'error';
   if (ok) applying.message = t('settings.updates.allCompleted');
   // Keep the modal up until the user closes it (shows the outcome).
 }
@@ -809,18 +842,24 @@ async function resumePlanIfRunning() {
   if (s.state === 'idle') return;
   applying.active = true;
   renderPlan(s);
-  if (s.state === 'running' || s.state === 'interrupted') {
+  // 'staged_pending_reboot'/'applying' mean the box is mid isolated-update
+  // session (about to, or already did, reboot) — still worth rejoining the
+  // poll for, same as 'running'/'interrupted'.
+  if (s.state === 'running' || s.state === 'interrupted'
+      || s.state === 'staged_pending_reboot' || s.state === 'applying') {
     // 'interrupted' here just means the page (re)loaded during the gap
-    // before hifi-update-resume.service comes up after a reboot — give
+    // before hifi-update-stage-resume.service comes up after a reboot — give
     // pollPlan its own grace period instead of declaring failure on this
     // single snapshot.
     const ok = await pollPlan();
     applying.error = !ok;
-    applying.state = ok ? 'finished' : 'error';
+    applying.state = ok ? 'done' : 'error';
     if (ok) applying.message = t('settings.updates.allCompleted');
   } else {
-    applying.error = s.state !== 'finished';
-    applying.state = applying.error ? 'error' : 'finished';
+    // A terminal outcome ('done'/'error'/'apply_error') found on load — the
+    // isolated apply session finished while this page wasn't open to watch it.
+    applying.error = s.state !== 'done';
+    applying.state = applying.error ? 'error' : 'done';
     if (!applying.error) applying.message = t('settings.updates.allCompleted');
   }
 }
@@ -1065,7 +1104,7 @@ async function saveBackupScheduled(v) {
 
 onMounted(async () => {
   loadNet(); loadAudio(); loadDsp(); loadFir(); loadToggles(); loadShell(); loadLms(); loadLyrion(); loadPlayback();
-  loadMode(); loadPlayerEnabled(); loadUiRes(); loadPointer(); loadTimezone(); loadVuMeter(); loadAutoExpand(); loadChannel(); checkAll(); resumePlanIfRunning(); loadBackups(); loadTailscale(); loadHarCaptures(); loadPerfCaptures(); loadDebugFlags();
+  loadMode(); loadPlayerEnabled(); loadUiRes(); loadUiRefresh(); loadPointer(); loadTimezone(); loadVuMeter(); loadAutoExpand(); loadChannel(); checkAll(); resumePlanIfRunning(); loadBackups(); loadTailscale(); loadHarCaptures(); loadPerfCaptures(); loadDebugFlags();
   timezonePoll = setInterval(pollTimezone, 10000);
   // Tell the global UpdateProgressOverlay (mounted in App.vue) that this page
   // owns the OTA modal while it's open, so the two never render on top of
@@ -1363,6 +1402,16 @@ onUnmounted(() => {
         </div>
 
         <div style="margin-top: 18px; padding-top: 16px; border-top: 1px solid rgba(255,255,255,0.1);">
+          <p class="sub">{{ t('settings.display.refreshLabel') }}</p>
+          <p class="muted">{{ t('settings.display.refreshHelp') }}</p>
+          <p class="muted" v-if="!uiRefreshSupported">{{ t('settings.display.refreshUnsupported') }}</p>
+          <span class="seg" v-else>
+            <button :class="{ active: uiRefresh === 'native' }" @click="setUiRefresh('native')">{{ t('settings.display.refresh.native') }}</button>
+            <button :class="{ active: uiRefresh === 'low' }" @click="setUiRefresh('low')">{{ t('settings.display.refresh.low') }}</button>
+          </span>
+        </div>
+
+        <div style="margin-top: 18px; padding-top: 16px; border-top: 1px solid rgba(255,255,255,0.1);">
           <p class="sub">{{ t('settings.display.pointerLabel') }}</p>
           <p class="muted">{{ t('settings.display.pointerHelp') }}</p>
           <p class="muted" v-if="!pointer.available">{{ t('settings.display.pointerUnavailable') }}</p>
@@ -1506,7 +1555,7 @@ onUnmounted(() => {
     <!-- forced blocking update modal (kiosk-style) -->
     <div v-if="applying.active" class="overlay">
       <div class="card" style="width: 340px; text-align: center;">
-        <template v-if="applying.state !== 'finished' && applying.state !== 'error'">
+        <template v-if="applying.state !== 'done' && applying.state !== 'error' && applying.state !== 'apply_error'">
           <div class="spinner"></div>
           <h3 style="justify-content: center;">{{ t('settings.updates.updating', { label: applying.label }) }}</h3>
           <p class="sub" style="margin-bottom: 6px;">

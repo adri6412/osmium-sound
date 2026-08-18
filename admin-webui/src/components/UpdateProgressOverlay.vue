@@ -19,8 +19,9 @@ const settingsActive = ref(false);
 let pollTimer = null;
 // 'interrupted' means "a step was left running with nobody currently resuming
 // it" — which is also exactly what the plan looks like for the first stretch
-// after an OS-step reboot, before hifi-update-resume.service has come up (it
-// waits on network-online.target). Showing the error card (with its "Chiudi"
+// after a stage download is interrupted, before hifi-update-stage-resume.
+// service has come up (it waits on network-online.target). Showing the error
+// card (with its "Chiudi"
 // button, which calls updates/dismiss and DELETES the on-disk plan) on the
 // very first 'interrupted' read let an impatient close wipe out a plan the
 // resume unit hadn't gotten to yet — the remaining steps (typically the UI)
@@ -45,14 +46,16 @@ async function poll() {
   // fetch there would just 401 every 2s for no reason.
   if (route.path === '/login' || route.path === '/setup') { applying.active = false; return; }
   const r = await api.sys('updates/status');
-  if (!r.ok) return; // expected mid-plan: hifi-api restarting, or a reboot
+  // Expected throughout: the box reboots into the isolated apply session
+  // (hifi-webui itself does not run there at all), then reboots back.
+  if (!r.ok) return;
   const s = r.data || {};
   if (s.state === 'idle') { applying.active = false; interruptedStreak = 0; return; }
   if (s.state === 'interrupted') {
     interruptedStreak += 1;
     if (interruptedStreak < MAX_INTERRUPTED_POLLS) {
-      // Still plausibly waiting on hifi-update-resume.service — show it as
-      // in-progress rather than failed, and don't offer the destructive close.
+      // Still plausibly waiting on hifi-update-stage-resume.service — show it
+      // as in-progress rather than failed, and don't offer the destructive close.
       applying.active = true;
       applying.kind = s.kind || '';
       applying.state = 'restarting';
@@ -69,7 +72,9 @@ async function poll() {
   applying.state = s.state;
   applying.progress = (typeof s.overall_progress === 'number') ? s.overall_progress : null;
   applying.message = progressStateMessage(s.step_state || s.state, s.message || '');
-  applying.error = s.state === 'error' || s.state === 'interrupted';
+  // 'apply_error' is the same terminal failure as 'error', just discovered
+  // after the isolated apply session (rather than during staging).
+  applying.error = s.state === 'error' || s.state === 'apply_error' || s.state === 'interrupted';
 }
 
 async function dismiss() {
@@ -91,7 +96,7 @@ onUnmounted(() => {
 <template>
   <div v-if="applying.active && !settingsActive" class="overlay">
     <div class="card" style="width: 340px; text-align: center;">
-      <template v-if="applying.state !== 'finished' && applying.state !== 'error' && applying.state !== 'interrupted'">
+      <template v-if="applying.state !== 'done' && applying.state !== 'error' && applying.state !== 'apply_error' && applying.state !== 'interrupted'">
         <div class="spinner"></div>
         <h3 style="justify-content: center;">{{ t('settings.updates.updating', { label: applying.kind ? kindLabels[applying.kind]?.() : '' }) }}</h3>
         <p class="sub" style="margin-bottom: 6px;">

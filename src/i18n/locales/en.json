@@ -318,6 +318,7 @@
       "ssh": "SSH Access",
       "pointer": "Mouse pointer",
       "uiResolution": "Interface resolution",
+      "uiRefresh": "Refresh rate",
       "displayMode": "Display mode",
       "timezone": "Timezone",
       "systemInfo": "System Information",
@@ -519,6 +520,20 @@
       "confirm": "Apply",
       "cancel": "Cancel",
       "failed": "Could not change the resolution."
+    },
+    "uiRefresh": {
+      "help": "Both the screen scaling and the interface's own redraws are tied to the panel's refresh rate, so lowering it reduces graphics-chip load — measured at roughly 40% less on this hardware. The needle/level movements stay smooth; fast animations may look very slightly less fluid.",
+      "unsupported": "This screen does not offer a lower refresh rate to switch to.",
+      "currentNative": "Native refresh rate",
+      "currentLow": "Low-power refresh rate",
+      "switchToLow": "Switch to low-power",
+      "switchToNative": "Switch back to native",
+      "confirmPrompt": "Keep the low-power refresh rate? Reverting automatically in {seconds}s.",
+      "revertNow": "Revert now",
+      "keep": "Keep it",
+      "kept": "Low-power refresh rate kept.",
+      "reverted": "No confirmation received — reverted to the native refresh rate.",
+      "failed": "Could not change the refresh rate."
     },
     "displayMode": {
       "help": "Choose whether this device runs with the on-screen touchscreen interface or headless (no screen), controlled remotely from the Android companion app, the Lyrion web interface (port 9000) or the music sources page (port 8080).",
