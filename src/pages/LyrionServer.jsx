@@ -735,17 +735,13 @@ const LyrionServer = () => {
     const justResumed = isPlaying && !wasPlayingRef.current;
     wasPlayingRef.current = isPlaying;
     if (justResumed) autoExpandHandledKeyRef.current = null;
-    // Reverted to alpha8's condition (2026-08-18): the AND-based rewrite
-    // (alpha9) should have been equivalent for the reported case — activeTab
-    // ==='musica' && currentView==='artists' makes both this OR and alpha9's
-    // AND evaluate to "suppress" — but the user confirmed alpha8 worked and
-    // alpha9 didn't, on the same repro (tap a letter in Artists/Albums), and
-    // no discrepancy could be found by re-reading the code. Going with what's
-    // confirmed to work rather than a plausible-looking rewrite. This still
-    // has alpha8's known side effect (never fires while on another tab if
-    // currentView is left stale at a non-home value) — to be fixed
-    // separately, at the root, by resetting currentView on tab-away instead
-    // of tweaking this condition again.
+    // Confirmed working (2026-08-18): only counts down while actually
+    // sitting on Musica's home view — not while browsing any list (Artists/
+    // Albums A-Z index included) or on another tab. An AND-based rewrite
+    // that tried to also fire from other tabs while still suppressing the
+    // library-list case (alpha9) looked equivalent on paper but broke the
+    // library-list suppression in practice, so this is intentionally kept
+    // simple rather than revisited.
     if (!isPlaying || !autoExpandSeconds || !activePlayer || activeTab !== 'musica' || currentView !== 'home') return;
     if (autoExpandHandledKeyRef.current === artworkIdentityKey) return;
     const delayMs = autoExpandSeconds * 1000;
