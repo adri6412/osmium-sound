@@ -25,6 +25,14 @@ const ANGLE_MAX = 60;
 // tips. Longer than the pivot-at-the-notch-shoulder version (was 34) to
 // still clear the same tips now that the pivot sits lower.
 const NEEDLE_LENGTH_PCT = 37.5;
+// Minimum peak change (0-100 scale) before we redirect the needle spring at
+// all. Below this, level-message noise (quiet passages, sustained tones)
+// would otherwise keep re-targeting the spring 20x/sec forever, which is
+// exactly the kind of unbounded continuous transform animation that pins
+// the i915/iris Render engine busy at low clock on Gemini Lake (see
+// freedesktop.org drm/i915 work item 16771) — letting truly-stable levels
+// fall below this threshold lets the spring actually settle and go idle.
+const LEVEL_DELTA_THRESHOLD = 2;
 
 // `value` is a framer-motion MotionValue (0-100). Driving the needle straight
 // from a MotionValue means level updates never trigger a React re-render — the
@@ -81,7 +89,7 @@ const SingleVUMeter = ({ value, label }) => {
 // this is what actually avoids the ongoing cost of staying mounted: no
 // websocket data in, no spring re-targeting, nothing for the compositor to
 // keep redrawing.
-const AnalogVUMeter = ({ isPlaying, visible = true, className = "" }) => {
+const AnalogVUMeter = ({ visible = true, className = "" }) => {
   // Needle positions are MotionValues, not React state: updating them moves the
   // needles on the compositor without re-rendering this component. At ~30-60
   // level messages/sec from the daemon, this turns dozens of React re-renders
@@ -89,6 +97,8 @@ const AnalogVUMeter = ({ isPlaying, visible = true, className = "" }) => {
   const leftValue = useMotionValue(0);
   const rightValue = useMotionValue(0);
   const lastUpdateRef = useRef(0);
+  const lastLeftCommittedRef = useRef(0);
+  const lastRightCommittedRef = useRef(0);
   const [socketUrl, setSocketUrl] = useState(`ws://${window.location.hostname}:9001`);
 
   // Passing `null` to react-use-websocket skips connecting entirely (its
@@ -135,64 +145,37 @@ const AnalogVUMeter = ({ isPlaying, visible = true, className = "" }) => {
       const data = JSON.parse(lastMessage.data);
       if (Array.isArray(data.levels_l) && Array.isArray(data.levels_r)) {
         const getPeak = (arr) => (arr.length ? Math.max(...arr) : 0);
-        leftValue.set(getPeak(data.levels_l));
-        rightValue.set(getPeak(data.levels_r));
+        const peakL = getPeak(data.levels_l);
+        const peakR = getPeak(data.levels_r);
+        // Only redirect the spring when the level actually moved by more
+        // than noise-floor jitter — see LEVEL_DELTA_THRESHOLD above.
+        if (Math.abs(peakL - lastLeftCommittedRef.current) >= LEVEL_DELTA_THRESHOLD) {
+          leftValue.set(peakL);
+          lastLeftCommittedRef.current = peakL;
+        }
+        if (Math.abs(peakR - lastRightCommittedRef.current) >= LEVEL_DELTA_THRESHOLD) {
+          rightValue.set(peakR);
+          lastRightCommittedRef.current = peakR;
+        }
       }
     } catch (error) {
       console.error("Error parsing VU meter websocket data:", error);
     }
   }, [lastMessage, leftValue, rightValue]);
 
-  // Fallback animation if WS is disconnected but audio is playing
+  // No real level data available (hidden, or WS disconnected): rest at zero
+  // rather than faking movement. A VU meter is a measuring instrument, not
+  // decoration — showing random motion when there's no signal to back it up
+  // would be actively misleading, on top of being another unbounded
+  // continuous-transform loop for the iris driver to chew on for no reason.
   useEffect(() => {
-    let timeoutId;
-    let animationFrameId;
-    let isActive = true;
-
-    // Hidden (visible=false forces the socket closed above, so readyState
-    // alone can't tell "actually offline" apart from "paused because
-    // nobody's looking") -- stay fully idle rather than falling into the
-    // simulate-audio branch below, which would defeat the point of pausing.
-    if (!visible) {
+    if (!visible || readyState !== ReadyState.OPEN) {
       leftValue.set(0);
       rightValue.set(0);
-      return;
+      lastLeftCommittedRef.current = 0;
+      lastRightCommittedRef.current = 0;
     }
-
-    if (readyState !== ReadyState.OPEN) {
-        if (!isPlaying) {
-          // Drop to 0. We let framer-motion's useSpring handle the smooth drop,
-          // so we only need to set the value to 0 once here.
-          leftValue.set(0);
-          rightValue.set(0);
-          return;
-        }
-
-        // Simulate audio
-        const animateFallback = () => {
-          if (!isActive) return;
-
-          const sim = () => {
-            const base = Math.random() * 100;
-            return base > 80 ? base : Math.random() * 50 + 5;
-          };
-          leftValue.set(sim());
-          rightValue.set(sim());
-
-          timeoutId = setTimeout(() => {
-            if (isActive) animationFrameId = requestAnimationFrame(animateFallback);
-          }, 80);
-        };
-
-        animationFrameId = requestAnimationFrame(animateFallback);
-
-        return () => {
-          isActive = false;
-          if (timeoutId) clearTimeout(timeoutId);
-          if (animationFrameId) cancelAnimationFrame(animationFrameId);
-        };
-    }
-  }, [isPlaying, visible, readyState, leftValue, rightValue]);
+  }, [visible, readyState, leftValue, rightValue]);
 
   return (
     <div className={`flex items-center justify-center bg-[#111] p-2 md:p-3 rounded-lg shadow-[inset_0_0_10px_rgba(0,0,0,1)] border-2 md:border-4 border-[#1a1a1a] w-full max-w-full ${className}`}>
@@ -206,5 +189,5 @@ const AnalogVUMeter = ({ isPlaying, visible = true, className = "" }) => {
 };
 
 // Memoized so LyrionServer's 1 Hz status poll doesn't re-render the meter;
-// only `isPlaying` changes matter here.
+// its own websocket-driven MotionValues handle needle motion independently.
 export default React.memo(AnalogVUMeter);

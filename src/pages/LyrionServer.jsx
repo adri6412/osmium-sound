@@ -1746,7 +1746,6 @@ const LyrionServer = () => {
                       aria-hidden={effectiveNowPlayingView !== 'vu'}
                     >
                       <AnalogVUMeter
-                        isPlaying={isPlaying}
                         visible={isPlayerExpanded && effectiveNowPlayingView === 'vu'}
                         className="w-full h-full"
                       />
