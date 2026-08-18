@@ -1,41 +1,41 @@
 {
-  "tag_name": "v2.5.21-dev.111-alpha12",
-  "name": "v2.5.21-dev.111-alpha12",
-  "body": "## What's new in v2.5.21-dev.111-alpha12\n\n- fix(player): wait for a real measurement before rendering the album grid\n",
+  "tag_name": "v2.5.21-dev.111-alpha13",
+  "name": "v2.5.21-dev.111-alpha13",
+  "body": "## What's new in v2.5.21-dev.111-alpha13\n\n- fix(player): include azContainerSize/azScrollTop in the library-content memo\n",
   "assets": [
     {
-      "name": "hifi-ui-v2.5.21-dev.111-alpha12.tar.gz",
-      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.111-alpha12/hifi-ui-v2.5.21-dev.111-alpha12.tar.gz",
-      "size": 134236833
+      "name": "hifi-ui-v2.5.21-dev.111-alpha13.tar.gz",
+      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.111-alpha13/hifi-ui-v2.5.21-dev.111-alpha13.tar.gz",
+      "size": 134236597
     },
     {
-      "name": "hifi-ui-v2.5.21-dev.111-alpha12.tar.gz.sha256",
-      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.111-alpha12/hifi-ui-v2.5.21-dev.111-alpha12.tar.gz.sha256",
+      "name": "hifi-ui-v2.5.21-dev.111-alpha13.tar.gz.sha256",
+      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.111-alpha13/hifi-ui-v2.5.21-dev.111-alpha13.tar.gz.sha256",
       "size": 105
     },
     {
-      "name": "hifi-system-v2.5.21-dev.111-alpha12.tar.gz",
-      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.111-alpha12/hifi-system-v2.5.21-dev.111-alpha12.tar.gz",
-      "size": 347377
+      "name": "hifi-system-v2.5.21-dev.111-alpha13.tar.gz",
+      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.111-alpha13/hifi-system-v2.5.21-dev.111-alpha13.tar.gz",
+      "size": 347368
     },
     {
-      "name": "hifi-system-v2.5.21-dev.111-alpha12.tar.gz.sha256",
-      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.111-alpha12/hifi-system-v2.5.21-dev.111-alpha12.tar.gz.sha256",
+      "name": "hifi-system-v2.5.21-dev.111-alpha13.tar.gz.sha256",
+      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.111-alpha13/hifi-system-v2.5.21-dev.111-alpha13.tar.gz.sha256",
       "size": 109
     },
     {
-      "name": "hifi-os-v2.5.21-dev.111-alpha12.tar.gz",
-      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.111-alpha12/hifi-os-v2.5.21-dev.111-alpha12.tar.gz",
-      "size": 1202105
+      "name": "hifi-os-v2.5.21-dev.111-alpha13.tar.gz",
+      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.111-alpha13/hifi-os-v2.5.21-dev.111-alpha13.tar.gz",
+      "size": 1202107
     },
     {
-      "name": "hifi-os-v2.5.21-dev.111-alpha12.tar.gz.sha256",
-      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.111-alpha12/hifi-os-v2.5.21-dev.111-alpha12.tar.gz.sha256",
+      "name": "hifi-os-v2.5.21-dev.111-alpha13.tar.gz.sha256",
+      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.111-alpha13/hifi-os-v2.5.21-dev.111-alpha13.tar.gz.sha256",
       "size": 105
     },
     {
-      "name": "hifi-os-v2.5.21-dev.111-alpha12.tar.gz.sha256.sig",
-      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.111-alpha12/hifi-os-v2.5.21-dev.111-alpha12.tar.gz.sha256.sig",
+      "name": "hifi-os-v2.5.21-dev.111-alpha13.tar.gz.sha256.sig",
+      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.111-alpha13/hifi-os-v2.5.21-dev.111-alpha13.tar.gz.sha256.sig",
       "size": 64
     }
   ]
