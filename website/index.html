@@ -482,6 +482,8 @@
       border-top: 1px solid var(--border);
       text-align: center;
     }
+    #support { border-top: 1px solid var(--border); text-align: center; }
+    #support .features-grid { margin: 2.5rem auto 0; }
     #android .install-inner, #android .quickstart { margin-left: auto; margin-right: auto; }
 
     /* ── FOOTER ──────────────────────────────────────── */
@@ -527,6 +529,7 @@
     <li><a href="#screenshots" data-en="Screenshots" data-it="Screenshot">Screenshots</a></li>
     <li><a href="#specs" data-en="Specs" data-it="Specifiche">Specs</a></li>
     <li><a href="#android" data-en="Android app" data-it="App Android">Android app</a></li>
+    <li><a href="#support" data-en="Support" data-it="Assistenza">Support</a></li>
   </ul>
   <div class="nav-right">
     <div class="lang-switch" role="group" aria-label="Language">
@@ -789,6 +792,31 @@
   </div>
 </section>
 
+<!-- SUPPORT -->
+<section id="support">
+  <div class="centered">
+    <div class="section-label" data-en="Need help?" data-it="Serve aiuto?">Need help?</div>
+    <h2 class="section-title" data-en="Get support" data-it="Richiedi assistenza">Get support</h2>
+    <p class="section-desc" data-en="Two ways to open a support issue — pick whichever you prefer." data-it="Due modi per aprire una issue di supporto — scegli quello che preferisci.">Two ways to open a support issue — pick whichever you prefer.</p>
+  </div>
+  <div class="features-grid" style="max-width:720px;">
+    <div class="feature-card">
+      <div class="feature-icon">✉️</div>
+      <h3 data-en="By email" data-it="Via email">By email</h3>
+      <p data-en="Write to us and we'll open the issue on GitHub for you." data-it="Scrivici e apriremo noi la issue su GitHub.">Write to us and we'll open the issue on GitHub for you.</p>
+      <a class="btn-secondary" style="margin-top:1.1rem; font-size:0.88rem;" href="mailto:support@osmiumsound.it">support@osmiumsound.it</a>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon">🐙</div>
+      <h3 data-en="On GitHub" data-it="Su GitHub">On GitHub</h3>
+      <p data-en="Or open the issue yourself, directly on GitHub." data-it="Oppure apri tu stesso la issue, direttamente su GitHub.">Or open the issue yourself, directly on GitHub.</p>
+      <a class="btn-secondary" style="margin-top:1.1rem; font-size:0.88rem;" href="https://github.com/adri6412/osmium-sound/issues" target="_blank">
+        <span data-en="Open an issue" data-it="Apri una issue">Open an issue</span>
+      </a>
+    </div>
+  </div>
+</section>
+
 <!-- FOOTER -->
 <footer>
   <div>
@@ -797,6 +825,7 @@
     &nbsp;·&nbsp; &copy; 2025 Adriano Frongillo
   </div>
   <div class="footer-links">
+    <a href="mailto:support@osmiumsound.it">support@osmiumsound.it</a>
     <a href="https://github.com/adri6412/osmium-sound" target="_blank">GitHub</a>
     <a href="https://github.com/adri6412/osmium-sound/issues" target="_blank" data-en="Issues" data-it="Problemi">Issues</a>
   </div>
