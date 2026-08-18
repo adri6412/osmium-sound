@@ -670,7 +670,12 @@ const LyrionServer = () => {
     // the album grid's estimated row height down to just the text block
     // (~60px instead of ~250px+), making totalHeight far too small and the
     // scrollbar run out of room a fraction of the way through the list —
-    // exactly the "nothing past M" symptom reported 2026-08-18.
+    // exactly the "nothing past M" symptom reported 2026-08-18. Also re-runs
+    // on libraryLoading: renderLibraryContent() shows a spinner (no
+    // listScrollRef node at all) while loading, so on a fresh view/nav this
+    // effect's first firing (on the currentView change alone) can measure
+    // before the real container even exists — confirmed via the debug
+    // overlay showing w:0 h:0 even with the synchronous-measure fix above.
     const measure = () => {
       const cs = getComputedStyle(el);
       const paddingX = parseFloat(cs.paddingLeft) + parseFloat(cs.paddingRight);
@@ -685,7 +690,7 @@ const LyrionServer = () => {
     ro.observe(el);
     setAzScrollTop(el.scrollTop);
     return () => ro.disconnect();
-  }, [currentView]);
+  }, [currentView, libraryLoading]);
   // Without this, typing a search filter while scrolled deep into the list
   // could leave azScrollTop pointing past the now-much-shorter filtered
   // array — filtered.slice(startIdx, ...) with an out-of-range startIdx just
