@@ -757,14 +757,21 @@ const LyrionServer = () => {
   // transition below — resuming counts as a fresh "session" even for the
   // same track, so the auto-expand timer is allowed to fire again.
   const wasPlayingRef = useRef(isPlaying);
-  // Any touch/mouse/keyboard activity resets the countdown, so the popup
-  // only fires after the user has actually been idle for autoExpandSeconds
-  // (not just autoExpandSeconds after the track started).
+  // Any touch/mouse/keyboard activity keeps the countdown from firing — it
+  // only starts once the user has actually gone idle (not just
+  // autoExpandSeconds after the track started).
   useEffect(() => {
     const justResumed = isPlaying && !wasPlayingRef.current;
     wasPlayingRef.current = isPlaying;
     if (justResumed) autoExpandHandledKeyRef.current = null;
-    if (!isPlaying || !autoExpandSeconds || !activePlayer) return;
+    // Confirmed working (2026-08-18): only counts down while actually
+    // sitting on Musica's home view — not while browsing any list (Artists/
+    // Albums A-Z index included) or on another tab. An AND-based rewrite
+    // that tried to also fire from other tabs while still suppressing the
+    // library-list case (alpha9) looked equivalent on paper but broke the
+    // library-list suppression in practice, so this is intentionally kept
+    // simple rather than revisited.
+    if (!isPlaying || !autoExpandSeconds || !activePlayer || activeTab !== 'musica' || currentView !== 'home') return;
     if (autoExpandHandledKeyRef.current === artworkIdentityKey) return;
     const delayMs = autoExpandSeconds * 1000;
     let timer;
@@ -772,18 +779,38 @@ const LyrionServer = () => {
       autoExpandHandledKeyRef.current = artworkIdentityKey;
       setIsPlayerExpanded(true);
     };
-    const resetTimer = () => {
+    const startCountdown = () => {
       clearTimeout(timer);
       timer = setTimeout(fire, delayMs);
     };
-    resetTimer();
-    const interactionEvents = ['pointerdown', 'touchstart', 'keydown', 'wheel'];
-    interactionEvents.forEach((ev) => window.addEventListener(ev, resetTimer, { passive: true }));
+    // A held pointer/touch (drag, scrub, long-press) genuinely PAUSES the
+    // countdown for the whole gesture, rather than just getting nudged back
+    // by whichever move/scroll events happen to bubble up — down/up tracked
+    // in the capture phase, so it's seen even where an inner handler (e.g.
+    // the A-Z index, queue drag) calls stopPropagation() or takes pointer
+    // capture. Discrete activity with no natural "end" (wheel, keydown, plain
+    // pointer movement with nothing held) just restarts the countdown, same
+    // as before.
+    let pointersDown = 0;
+    const onPointerDown = () => { pointersDown++; clearTimeout(timer); };
+    const onPointerUp = () => { pointersDown = Math.max(0, pointersDown - 1); if (pointersDown === 0) startCountdown(); };
+    const onActivity = () => { if (pointersDown === 0) startCountdown(); };
+    startCountdown();
+    window.addEventListener('pointerdown', onPointerDown, { passive: true, capture: true });
+    window.addEventListener('pointerup', onPointerUp, { passive: true, capture: true });
+    window.addEventListener('pointercancel', onPointerUp, { passive: true, capture: true });
+    const activityEvents = ['pointermove', 'touchmove', 'keydown', 'wheel'];
+    activityEvents.forEach((ev) => window.addEventListener(ev, onActivity, { passive: true, capture: true }));
+    window.addEventListener('scroll', onActivity, { passive: true, capture: true });
     return () => {
       clearTimeout(timer);
-      interactionEvents.forEach((ev) => window.removeEventListener(ev, resetTimer));
+      window.removeEventListener('pointerdown', onPointerDown, { capture: true });
+      window.removeEventListener('pointerup', onPointerUp, { capture: true });
+      window.removeEventListener('pointercancel', onPointerUp, { capture: true });
+      activityEvents.forEach((ev) => window.removeEventListener(ev, onActivity, { capture: true }));
+      window.removeEventListener('scroll', onActivity, { capture: true });
     };
-  }, [isPlaying, artworkIdentityKey, autoExpandSeconds, activePlayer]);
+  }, [isPlaying, artworkIdentityKey, autoExpandSeconds, activePlayer, activeTab, currentView]);
   // Manual collapse (the ChevronDown close button) counts as "the user moved
   // away on purpose" — mark this song handled so a still-pending timer (user
   // closed before it fired) can't pop the view back open on its own.
