@@ -9,9 +9,9 @@ Description=HiFi Player - Web admin + first-boot provisioning gateway (HTTPS :44
 # existed) silently prevented the service from ever starting during any live
 # boot, which broke both the hotspot/QR entirely and made :443/:80
 # unreachable — do not reintroduce it. hifi-firstboot.service and
-# hifi-update-resume.service keep the equivalent condition on purpose: unlike
-# this one, they only make sense for an already-installed, actually-booted
-# system.
+# hifi-update-stage-resume.service keep the equivalent condition on purpose:
+# unlike this one, they only make sense for an already-installed,
+# actually-booted system.
 After=network.target NetworkManager.service hifi-api.service
 Wants=NetworkManager.service
 

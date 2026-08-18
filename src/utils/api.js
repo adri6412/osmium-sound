@@ -145,6 +145,14 @@ export const systemAPI = {
   // Change it (persisted). The graphical session restarts shortly after this
   // returns, so this UI goes away and comes back. Returns { success, mode, message }
   setUiResolution: (mode) => apiPost('/ui_resolution', { mode }),
+  // Panel refresh rate: { mode: 'native'|'low', supported }. 'supported' is
+  // false when the panel's native mode has no distinct low-refresh
+  // alternative to offer (common on fixed-frequency embedded panels).
+  getUiRefresh: () => apiGet('/ui_refresh'),
+  // Change it (live, no session restart — only the CRTC timing changes, not
+  // the framebuffer the Electron window was sized against). Returns
+  // { success, mode, message }
+  setUiRefresh: (mode) => apiPost('/ui_refresh', { mode }),
   // Timezone: { timezone: 'Europe/Rome' }. Fresh installs default to UTC (the
   // installer asks nothing about it — see distro/README.md).
   getTimezone: () => apiGet('/timezone'),
@@ -263,17 +271,21 @@ export const systemAPI = {
 
   // ── Sequenced multi-component update ────────────────────────────
   // Applies every component that has an update, in the order the appliance
-  // knows is safe (system → os → ui), driven entirely on the device by
-  // hifi-update-runner.sh from a plan persisted under /var/lib. Preferred over
-  // chaining the three apply calls from here: this page is torn down by the UI
-  // step (lightdm restart) and by an OS payload that reboots, which used to
+  // knows is safe (system → os → ui), driven entirely on the device in two
+  // isolated phases: hifi-update-stage-runner.sh downloads+verifies
+  // everything (plan persisted under /var/lib, box stays fully live), then
+  // the appliance reboots into a system-update.target session where
+  // hifi-update-apply-runner.sh applies everything with nothing else from the
+  // app stack running. Preferred over chaining the three apply calls from
+  // here: this page is torn down by both of those reboots, which used to
   // abandon the rest of the sequence.
   // { started, plan_id, steps: [{kind, version}] } | { started: false, message }
   applyAllUpdates: () => apiPost('/update/apply_all'),
-  // { state: idle|running|finished|error|interrupted, kind, version, step_state,
-  //   progress, message, overall_progress, steps: [{kind, version, state, installed}] }
+  // { state: idle|running|staged_pending_reboot|applying|done|error|apply_error|interrupted,
+  //   kind, version, step_state, progress, message, overall_progress,
+  //   steps: [{kind, version, state, installed}] }
   getUpdatePlanStatus: () => apiGet('/update/status'),
-  // Drop a finished plan once its outcome has been shown.
+  // Drop a finished/failed plan once its outcome has been shown.
   dismissUpdatePlan: () => apiPost('/update/dismiss'),
 
   // ── Lyrion Music Server install / update ────────────────────────

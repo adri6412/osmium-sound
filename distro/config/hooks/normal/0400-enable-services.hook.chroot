@@ -29,9 +29,13 @@ systemctl enable hifi-firstboot.service || true
 echo "I: [hifi] enabling audio quiesce before any shutdown/reboot (DMA panic workaround)"
 systemctl enable hifi-quiesce-audio-shutdown.service || true
 
-echo "I: [hifi] enabling OTA resume (finishes an update plan interrupted by a reboot;"
-echo "          no-op on every boot without a pending plan)"
-systemctl enable hifi-update-resume.service || true
+echo "I: [hifi] enabling OTA stage-resume (finishes a download interrupted by a reboot;"
+echo "          no-op on every boot without a pending stage plan)"
+systemctl enable hifi-update-stage-resume.service || true
+echo "I: [hifi] enabling OTA apply (only ever scheduled during a boot already redirected"
+echo "          into system-update.target — see hifi-update-stage-runner.sh; a no-op enable"
+echo "          symlink otherwise, never pulled into a normal graphical/multi-user boot)"
+systemctl enable hifi-update-apply.service || true
 
 echo "I: [hifi] enabling mDNS/ARP keepalive (a router silently drops this device's"
 echo "          ARP/mDNS entry after long network silence otherwise — see apply.d/0041)"

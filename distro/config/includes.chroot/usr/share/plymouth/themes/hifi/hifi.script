@@ -10,17 +10,85 @@ logo.sprite.SetX(Window.GetWidth()  / 2 - logo.image.GetWidth()  / 2);
 logo.sprite.SetY(Window.GetHeight() / 2 - logo.image.GetHeight() / 2);
 logo.sprite.SetZ(10);
 
-// Gentle pulsing of the logo while booting.
+// Isolated-update-mode progress bar (see hifi-update-apply-runner.sh, which is
+// the only thing that ever calls `plymouth system-update --progress=N`).
+// Hidden (zero width) on every ordinary boot — nothing calls that command
+// then, so this costs nothing outside update-mode.
+progress_track.image  = Image("progress-track.png");
+progress_fill.image   = Image("progress-fill.png");
+progress_fill_error.image = Image("progress-fill-error.png");
+
+progress_bar_width  = 320;
+progress_bar_height = 6;
+progress_bar_y = logo.sprite.GetY() + logo.image.GetHeight() + 40;
+progress_bar_x = Window.GetWidth() / 2 - progress_bar_width / 2;
+
+progress_track.sprite = Sprite(progress_track.image.Scale(progress_bar_width, progress_bar_height));
+progress_track.sprite.SetX(progress_bar_x);
+progress_track.sprite.SetY(progress_bar_y);
+progress_track.sprite.SetZ(9);
+progress_track.sprite.SetOpacity(0);
+
+progress_fill.sprite = Sprite();
+progress_fill.sprite.SetX(progress_bar_x);
+progress_fill.sprite.SetY(progress_bar_y);
+progress_fill.sprite.SetZ(10);
+progress_fill.sprite.SetOpacity(0);
+
+update_mode = 0;
+update_error = 0;
+update_percent = 0;
+
+fun redraw_progress_fill() {
+    w = Math.Int(progress_bar_width * update_percent / 100);
+    if (w < 1) w = 1;
+    if (update_error) {
+        img = progress_fill_error.image;
+    } else {
+        img = progress_fill.image;
+    }
+    progress_fill.sprite.SetImage(img.Scale(w, progress_bar_height));
+}
+
+// Called by `plymouth system-update --progress=N` — see hifi-update-apply-runner.sh.
+// Only ever invoked while genuinely applying a staged update; a normal boot
+// never triggers this, so the bar stays invisible then.
+fun system_update_callback(progress) {
+    update_mode = 1;
+    update_percent = progress;
+    progress_track.sprite.SetOpacity(1);
+    progress_fill.sprite.SetOpacity(1);
+    redraw_progress_fill();
+}
+Plymouth.SetSystemUpdateFunction(system_update_callback);
+
+// Gentle pulsing of the logo while booting; frozen once an update-mode error
+// is signalled (see message_callback below), so it reads as "stopped" rather
+// than "still working".
 progress = 0;
 fun refresh_callback() {
+    if (update_error) {
+        logo.sprite.SetOpacity(1);
+        return;
+    }
     progress++;
     opacity = 0.75 + 0.25 * Math.Sin(progress / 18);
     logo.sprite.SetOpacity(opacity);
 }
 Plymouth.SetRefreshFunction(refresh_callback);
 
-// Swallow boot/quit messages so no text is ever shown.
-fun message_callback(text) { }
+// Swallow boot/quit messages so no text is ever shown — EXCEPT one sentinel
+// hifi-update-apply-runner.sh sends on a failed apply (`plymouth
+// display-message --text=HIFI_UPDATE_ERROR`): freeze the logo pulse and turn
+// the progress bar red, so a device parked in update-mode after a failure
+// reads as "stopped, needs attention" instead of "still working". Everything
+// else keeps being silently swallowed, preserving the existing no-text look.
+fun message_callback(text) {
+    if (text == "HIFI_UPDATE_ERROR") {
+        update_error = 1;
+        redraw_progress_fill();
+    }
+}
 Plymouth.SetMessageFunction(message_callback);
 
 // Password prompt (e.g. disk unlock) — minimal, only if ever needed.

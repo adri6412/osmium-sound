@@ -228,6 +228,7 @@ mkdir -p "$SBIN_DEST"
 # pass; only the exec bit needs setting.
 chmod +x "$SBIN_DEST/hifi-format-disk.sh"
 chmod +x "$SBIN_DEST/hifi-display-mode.sh"
+chmod +x "$SBIN_DEST/hifi-ui-refresh.sh"
 chmod +x "$SBIN_DEST/hifi-factory-reset.sh"
 chmod +x "$SBIN_DEST/hifi-quiesce-audio-shutdown.sh"
 chmod +x "$SBIN_DEST/hifi-capture-playback-state.py"

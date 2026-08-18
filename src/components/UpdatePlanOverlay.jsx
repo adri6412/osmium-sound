@@ -7,12 +7,14 @@ import { systemAPI } from '../utils/api';
 import { SCALED_CANVAS_ID } from './ScaledCanvas';
 
 // Mirrors the fullscreen OTA-progress overlay Settings.jsx renders while it's
-// open, but mounted at the app root so it survives whatever the running plan
-// just did to this process (the system step restarts hifi-api, the UI step
-// restarts lightdm — which kills and relaunches this very app — and an OS
-// step may reboot the box) and stays visible from any screen, not only
-// Settings. The server-side plan (hifi-update-runner.sh, polled here via
-// /update/status) is the only state that stays accurate across all of that.
+// open, but mounted at the app root so it survives whatever the running
+// update just did to this process — staging can restart hifi-api, and once
+// everything has staged the appliance reboots into an isolated
+// system-update.target session (nothing from the app stack, including this
+// very kiosk, runs there) before rebooting back — and stays visible from any
+// screen, not only Settings. The server-side plan/outcome (hifi-update-stage-
+// runner.sh / hifi-update-apply-runner.sh, polled here via /update/status) is
+// the only state that stays accurate across all of that.
 //
 // Settings.jsx keeps its own copy of this overlay for the "started here, user
 // is watching" case and announces when it's mounted via 'hifi-settings-mounted'
@@ -32,9 +34,10 @@ const UpdatePlanOverlay = () => {
   useEffect(() => {
     // 'interrupted' means "a step was left running with nobody currently
     // resuming it" — which is also exactly what the plan looks like for the
-    // first few seconds after an OS-step reboot, before hifi-update-resume.
-    // service has come up (it waits on network-online.target), or during the
-    // brief window right after the system step restarts hifi-api. Treating a
+    // first few seconds after a stage download is interrupted, before
+    // hifi-update-stage-resume.service has come up (it waits on
+    // network-online.target), or during the brief window right after the
+    // system step restarts hifi-api. Treating a
     // single 'interrupted' read as final showed the terminal error+dismiss
     // overlay for a run that was actually still going to finish on its own —
     // and dismissing here deletes the on-disk plan server-side, permanently
@@ -81,8 +84,12 @@ const UpdatePlanOverlay = () => {
   // While still inside the grace window (_stillWaiting, set by the poll loop
   // above), render 'interrupted' as just another in-progress step rather than
   // the terminal error state — see the comment on the poll effect for why.
-  const terminal = status.state === 'error' || (status.state === 'interrupted' && !status._stillWaiting);
-  const isDone = status.state === 'finished';
+  // 'apply_error' is the same terminal failure, just discovered after the
+  // isolated apply session (rather than during staging); 'staged_pending_
+  // reboot'/'applying' are still in progress — only 'done' is the real finish.
+  const terminal = status.state === 'error' || status.state === 'apply_error'
+    || (status.state === 'interrupted' && !status._stillWaiting);
+  const isDone = status.state === 'done';
   const message = status._stillWaiting
     ? t('settings.updates.progressState.restarting')
     : stepMessage(status.step_state, status.message || '')

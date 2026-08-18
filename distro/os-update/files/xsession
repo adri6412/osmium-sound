@@ -30,6 +30,15 @@ if [ -x /usr/local/sbin/hifi-ui-resolution.sh ]; then
     /usr/local/sbin/hifi-ui-resolution.sh apply || true
 fi
 
+# Refresh rate del pannello (nativo <-> basso consumo GPU): non tocca l'area
+# di framebuffer, quindi indifferente rispetto all'ordine con la risoluzione
+# sopra — deve solo girare prima di Electron come lei, per lo stesso motivo
+# (evitare un cambio di CRTC sotto una finestra già viva). Stesso guard di
+# skew OS-update/system-update.
+if [ -x /usr/local/sbin/hifi-ui-refresh.sh ]; then
+    /usr/local/sbin/hifi-ui-refresh.sh apply || true
+fi
+
 # Make sure audio is unmuted
 amixer -q sset Master unmute 2>/dev/null || true
 amixer -q sset PCM unmute 2>/dev/null || true

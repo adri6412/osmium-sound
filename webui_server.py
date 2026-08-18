@@ -957,6 +957,8 @@ _AUTH_ROUTES = {
     ('/api/system/player_enabled', 'POST'): '/player_enabled',
     ('/api/system/ui_resolution', 'GET'): '/ui_resolution',
     ('/api/system/ui_resolution', 'POST'): '/ui_resolution',
+    ('/api/system/ui_refresh', 'GET'): '/ui_refresh',
+    ('/api/system/ui_refresh', 'POST'): '/ui_refresh',
     ('/api/system/timezone', 'GET'): '/timezone',
     ('/api/system/timezone', 'POST'): '/timezone',
     ('/api/system/timezones', 'GET'): '/timezones',
@@ -2615,11 +2617,17 @@ function pollMandatoryUpdate(){
   jget('/api/provision/update_status').then(function(st){
     if(typeof st.overall_progress==='number')document.getElementById('update-bar').style.width=st.overall_progress+'%';
     if(st.message)document.getElementById('update-msg').textContent=st.message;
-    if(st.state==='finished'){
+    if(st.state==='staged_pending_reboot'||st.state==='applying'){
+      setTimeout(pollMandatoryUpdate,1500);
+    }else if(st.state==='done'){
+      // By the time this state is observable here, the appliance has already
+      // rebooted on its own (twice: once to enter the isolated apply session,
+      // once to leave it) -- webui_server.py could not have answered this
+      // request otherwise, since it does not run during that window. No
+      // reboot left to wait for; just reload into the now-current wizard state.
       document.getElementById('update-msg').textContent=S.updateDoneRebooting;
-      jpost('/api/provision/reboot',{});
-      waitForReboot();
-    }else if(st.state==='error'){
+      location.reload();
+    }else if(st.state==='error'||st.state==='apply_error'){
       document.getElementById('update-msg').textContent=S.updateFailed;
       document.getElementById('update-barwrap').style.display='none';
       document.getElementById('btn-update-confirm').style.display='block';

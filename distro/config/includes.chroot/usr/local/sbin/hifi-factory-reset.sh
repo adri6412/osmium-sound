@@ -94,10 +94,15 @@ rm -f /etc/hifi-sources.json /etc/hifi-pairing-tokens.json \
       /etc/samba/hifi-shares.conf /etc/camilladsp/config.yml 2>/dev/null || true
 
 # /var/lib/hifi-player: keep the os-migrations ledger; drop per-user artefacts.
-# update-plan goes too: a half-finished OTA plan must not resume itself on the
-# next boot of a box the owner has just reset.
-rm -f /var/lib/hifi-player/dsp-target /var/lib/hifi-player/roomcorr-result \
-      /var/lib/hifi-player/update-plan 2>/dev/null || true
+# The whole update/ dir goes too (plan, state, staged payloads): a
+# half-finished OTA plan or pending update-mode flag must not resume itself
+# or reboot the box a reset owner didn't ask for. /system-update is the
+# trigger systemd-system-update-generator(8) looks for at boot — removing it
+# here is defensive (api_server.py, which drives a factory reset, never runs
+# while it's set), but cheap enough to not skip.
+rm -f /var/lib/hifi-player/dsp-target /var/lib/hifi-player/roomcorr-result 2>/dev/null || true
+rm -rf /var/lib/hifi-player/update 2>/dev/null || true
+rm -f /system-update 2>/dev/null || true
 
 # Stored backup generations (Settings -> Backup e ripristino). These can carry
 # the previous owner's Wi-Fi PSK, SMB passwords and web-admin account when

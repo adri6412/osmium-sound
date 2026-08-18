@@ -1,8 +1,11 @@
 """Tests for the update-plan bookkeeping in api_server.py.
 
-These cover the *client-visible* half of the sequencer: how a plan is written,
-read back, and turned into progress. The shell half (walking the plan, resuming
-after a reboot) is covered by tests/test-update-runner.sh.
+These cover the *client-visible* half of the two-phase sequencer: how a plan
+is written, read back, and turned into progress during staging, and how the
+durable post-apply outcome (UPDATE_STATE_FILE) is reported once the box comes
+back from its two update-mode reboots. The shell half (walking the plan,
+resuming an interrupted stage, applying in isolation) is covered by
+tests/test-update-stage-runner.sh and tests/test-update-apply-runner.sh.
 
 Run with:  python tests/test_update_plan.py
 """
@@ -25,6 +28,8 @@ class PlanTestCase(unittest.TestCase):
         self.tmp = tempfile.mkdtemp(prefix='hifi-plan-test-')
         self._saved = {}
         self._patch('UPDATE_PLAN_FILE', os.path.join(self.tmp, 'update-plan'))
+        self._patch('UPDATE_STATE_FILE', os.path.join(self.tmp, 'update-state'))
+        self._patch('UPDATE_ERROR_FILE', os.path.join(self.tmp, 'update-error.json'))
         # Per-kind status files (the /run ones) + the version readers.
         self.status_files = {k: os.path.join(self.tmp, '%s-status.json' % k)
                              for k in ('system', 'os', 'ui')}
@@ -67,6 +72,17 @@ class PlanTestCase(unittest.TestCase):
         with open(self.status_files[kind], 'w') as f:
             json.dump(payload, f)
 
+    def write_state(self, phase, ts=None, message=''):
+        # Mirrors what hifi-update-stage-runner.sh / hifi-update-apply-runner.sh
+        # write to UPDATE_STATE_FILE — see api_server._read_update_state().
+        with open(api_server.UPDATE_STATE_FILE, 'w') as f:
+            f.write('phase=%s\nts=%d\nmessage=%s\n' %
+                    (phase, ts if ts is not None else int(time.time()), message))
+
+    def write_error(self, channel, message):
+        with open(api_server.UPDATE_ERROR_FILE, 'w') as f:
+            json.dump({'channel': channel, 'message': message}, f)
+
 
 class TestPlanRoundTrip(PlanTestCase):
     def test_write_then_read_preserves_every_field(self):
@@ -83,8 +99,8 @@ class TestPlanRoundTrip(PlanTestCase):
         self.assertEqual(got['steps'][2]['attempts'], 1)
 
     def test_plan_file_is_whitespace_separated_and_shell_parsable(self):
-        # hifi-update-runner.sh parses this with awk/`set --`; a field with a
-        # space in it would silently shift every later field.
+        # hifi-update-stage-runner.sh parses this with awk/`set --`; a field
+        # with a space in it would silently shift every later field.
         self.write_plan([self.step('system')])
         with open(api_server.UPDATE_PLAN_FILE) as f:
             step_lines = [l for l in f.read().splitlines() if l.startswith('step ')]
@@ -101,9 +117,13 @@ class TestPlanState(PlanTestCase):
         self.write_plan([self.step('system', 'done'), self.step('os', 'running')])
         self.assertEqual(api_server.update_plan_status()['state'], 'running')
 
-    def test_all_done_is_finished(self):
+    def test_all_staged_is_pending_reboot(self):
+        # Under the two-phase design, every step reaching 'done' means every
+        # component has STAGED — nothing has been applied yet, and the stage
+        # runner is about to (or already did) reboot into the isolated apply
+        # session. This must not read as a finished/dismissable update.
         self.write_plan([self.step('system', 'done'), self.step('ui', 'done')])
-        self.assertEqual(api_server.update_plan_status()['state'], 'finished')
+        self.assertEqual(api_server.update_plan_status()['state'], 'staged_pending_reboot')
 
     def test_any_error_is_error(self):
         self.write_plan([self.step('system', 'done'), self.step('os', 'error'),
@@ -123,12 +143,13 @@ class TestPlanState(PlanTestCase):
         self.assertEqual(api_server.update_plan_status(), {'state': 'idle'})
         self.assertFalse(os.path.exists(api_server.UPDATE_PLAN_FILE))
 
-    def test_finished_plan_is_kept_within_its_ttl(self):
-        # The kiosk is restarted by the UI step, so it has to be able to come
-        # back and still find the outcome to show.
+    def test_staged_plan_is_kept_within_its_ttl(self):
+        # A plan that finished staging very recently is still 'staged_pending_
+        # reboot' (not yet retired) — the box hasn't rebooted into the apply
+        # session yet, or a client is polling in the brief window before it does.
         self.write_plan([self.step('ui', 'done')],
                         finished=int(time.time()), overall='finished')
-        self.assertEqual(api_server.update_plan_status()['state'], 'finished')
+        self.assertEqual(api_server.update_plan_status()['state'], 'staged_pending_reboot')
 
 
 class TestLiveProgress(PlanTestCase):
@@ -179,8 +200,9 @@ class TestLiveProgress(PlanTestCase):
         self.assertEqual(by_kind['ui']['installed'], 'old')
 
     def test_failed_steps_real_error_message_is_surfaced(self):
-        # THE bug this test guards against: the runner marks a failed step
-        # 'error' and stops (hifi-update-runner.sh), leaving the updater's own
+        # THE bug this test guards against: the stage runner marks a failed
+        # step 'error' and stops (hifi-update-stage-runner.sh), leaving the
+        # updater's own
         # /run/hifi-*-status.json — written by its fail() helper, e.g. "Download
         # fallito da ..." — as the only record of *why*. If update_plan_status()
         # doesn't read that file for state=='error', the client falls back to
@@ -205,6 +227,60 @@ class TestLiveProgress(PlanTestCase):
         s = api_server.update_plan_status()
         self.assertEqual(s['kind'], 'os')
         self.assertEqual(s['message'], 'Checksum non valido')
+
+
+class TestPostApplyOutcome(PlanTestCase):
+    """update_plan_status() after the box has been through (or is stuck mid)
+    the isolated apply session — driven entirely by UPDATE_STATE_FILE, which
+    hifi-update-apply-runner.sh writes and this module only ever reads."""
+
+    def test_applying_is_surfaced_even_with_no_plan(self):
+        # The plan file may already be gone (removed by a stage-resume run
+        # on some earlier, unrelated boot) — 'applying' must not depend on it.
+        self.write_state('applying', message='Applicazione in corso')
+        s = api_server.update_plan_status()
+        self.assertEqual(s['state'], 'applying')
+        self.assertEqual(s['message'], 'Applicazione in corso')
+
+    def test_done_outcome_wins_over_a_stale_plan(self):
+        # The plan the stage runner wrote before the first reboot is still on
+        # disk (only the apply runner removes it, and only on full success) —
+        # a terminal state-file outcome must take priority over it regardless.
+        self.write_plan([self.step('ui', 'done')],
+                        finished=int(time.time()), overall='finished')
+        self.write_state('done', message='Aggiornamento completato')
+        s = api_server.update_plan_status()
+        self.assertEqual(s['state'], 'done')
+        self.assertEqual(s['message'], 'Aggiornamento completato')
+
+    def test_apply_error_surfaces_the_failing_channel_and_message(self):
+        self.write_state('error', message='fallback message')
+        self.write_error('os', 'apply.sh fallito: errore sconosciuto')
+        s = api_server.update_plan_status()
+        self.assertEqual(s['state'], 'apply_error')
+        self.assertEqual(s['kind'], 'os')
+        self.assertEqual(s['message'], 'apply.sh fallito: errore sconosciuto')
+
+    def test_apply_error_falls_back_to_the_state_message_without_an_error_file(self):
+        self.write_state('error', message='fallback message')
+        s = api_server.update_plan_status()
+        self.assertEqual(s['state'], 'apply_error')
+        self.assertEqual(s['message'], 'fallback message')
+
+    def test_done_outcome_is_retired_after_its_ttl(self):
+        old = int(time.time()) - api_server.UPDATE_PLAN_TTL - 1
+        self.write_state('done', ts=old)
+        self.assertEqual(api_server.update_plan_status(), {'state': 'idle'})
+        self.assertIsNone(api_server._read_update_state())
+
+    def test_done_outcome_is_kept_within_its_ttl(self):
+        self.write_state('done')
+        self.assertEqual(api_server.update_plan_status()['state'], 'done')
+
+    def test_error_outcome_is_retired_after_its_ttl(self):
+        old = int(time.time()) - api_server.UPDATE_PLAN_TTL - 1
+        self.write_state('error', ts=old)
+        self.assertEqual(api_server.update_plan_status(), {'state': 'idle'})
 
 
 class TestStepValidation(PlanTestCase):
@@ -371,11 +447,11 @@ class TestApplyAll(PlanTestCase):
         self.assertEqual(r['code'], 'update.checkFailed')
         self.assertIsNone(api_server._read_update_plan())
 
-    def test_the_runner_is_started_once(self):
+    def test_the_stage_runner_is_started_once(self):
         self._offer(('system',))
         api_server.apply_all_updates()
         self.assertEqual(len(self.started), 1)
-        self.assertIn(api_server.UPDATE_RUNNER_SCRIPT, self.started[0])
+        self.assertIn(api_server.UPDATE_STAGE_RUNNER_SCRIPT, self.started[0])
 
     def test_a_second_apply_is_refused_while_one_is_running(self):
         self._offer(('system', 'ui'))
@@ -393,14 +469,26 @@ class TestApplyAll(PlanTestCase):
                         finished=int(time.time()), overall='finished')
         self.assertTrue(api_server.apply_all_updates()['started'])
 
-    def test_dismiss_clears_a_finished_plan_but_not_a_running_one(self):
+    def test_dismiss_refuses_a_running_or_staged_plan_but_clears_a_done_outcome(self):
         self.write_plan([self.step('os', 'running')])
         self.assertFalse(api_server.dismiss_update_plan()['success'])
         self.assertIsNotNone(api_server._read_update_plan())
 
+        # Fully staged: the box is about to reboot into the apply session —
+        # still not something the client should be able to dismiss out from
+        # under.
         self.write_plan([self.step('os', 'done')])
-        self.assertTrue(api_server.dismiss_update_plan()['success'])
+        self.assertFalse(api_server.dismiss_update_plan()['success'])
+        self.assertIsNotNone(api_server._read_update_plan())
+
+        # The outcome the client can actually dismiss lives in the state file,
+        # written only after the box has come back from both update-mode
+        # reboots.
+        self.write_state('done')
+        r = api_server.dismiss_update_plan()
+        self.assertTrue(r['success'])
         self.assertIsNone(api_server._read_update_plan())
+        self.assertIsNone(api_server._read_update_state())
 
 
 class TestUpdateInProgressGuard(PlanTestCase):
@@ -411,8 +499,29 @@ class TestUpdateInProgressGuard(PlanTestCase):
         self.write_plan([self.step('os', 'running')])
         self.assertTrue(api_server._update_in_progress())
 
-    def test_a_finished_plan_does_not_block(self):
+    def test_a_staged_plan_still_blocks(self):
+        # Every step staged means the box is about to reboot into the isolated
+        # apply session — still exactly the wrong moment for a display-mode
+        # switch or a factory reset to run.
         self.write_plan([self.step('os', 'done')])
+        self.assertTrue(api_server._update_in_progress())
+
+    def test_applying_state_blocks(self):
+        self.write_state('applying')
+        self.assertTrue(api_server._update_in_progress())
+
+    def test_a_done_outcome_does_not_block(self):
+        # Once the apply session has actually finished and the box is back on
+        # a normal boot, there is nothing left to protect against.
+        self.write_state('done')
+        self.assertFalse(api_server._update_in_progress())
+
+    def test_an_apply_error_outcome_does_not_block(self):
+        # A failed apply leaves the box parked in update-mode, where hifi-api
+        # does not even run — this state is only ever observed AFTER a manual
+        # recovery + normal reboot, by which point there is nothing in
+        # progress to protect against either.
+        self.write_state('error')
         self.assertFalse(api_server._update_in_progress())
 
 

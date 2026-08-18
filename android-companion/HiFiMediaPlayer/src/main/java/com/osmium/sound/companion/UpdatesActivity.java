@@ -37,7 +37,7 @@ import com.osmium.sound.companion.widget.ViewUtilities;
  * <p>
  * "Update now" POSTs /api/system/updates/apply_all and then only *watches*:
  * the appliance writes a plan to persistent storage and walks it to the end
- * itself (System → OS → UI, see hifi-update-runner.sh). This used to be a
+ * itself (System → OS → UI, see hifi-update-stage-runner.sh / hifi-update-apply-runner.sh). This used to be a
  * chain of per-component applies driven from here, which broke whenever the
  * update dropped the connection — and it always does: System restarts
  * hifi-api, OS may reboot the box, UI restarts the kiosk. Losing the
@@ -53,7 +53,10 @@ public class UpdatesActivity extends AppCompatActivity {
      * purpose — giving up early is what used to make a run that was still
      * progressing look failed.
      */
-    private static final long PLAN_TIMEOUT_MS = 1_200_000;
+    // Widened from 20 to 30 minutes: the isolated update-mode flow adds a full
+    // extra reboot leg (stage -> reboot -> apply, possibly incl. OS package
+    // installs -> reboot back) on top of what this used to cover.
+    private static final long PLAN_TIMEOUT_MS = 1_800_000;
 
     private final ThemeManager mThemeManager = new ThemeManager();
     private final Handler pollHandler = new Handler(Looper.getMainLooper());
@@ -287,14 +290,20 @@ public class UpdatesActivity extends AppCompatActivity {
                     String message = body.optString("message", "");
                     int progress = body.optInt("overall_progress", -1);
 
-                    if ("finished".equals(state)) {
+                    if ("done".equals(state)) {
                         setCoreStatus(getString(R.string.settings_updates_all_done));
                         setCoreBusy(false);
                         dismissPlan();
                         checkCore();
                         return;
                     }
-                    if ("error".equals(state) || "interrupted".equals(state)) {
+                    // 'staged_pending_reboot'/'applying' mean the appliance is
+                    // mid isolated-update session (about to, or already did,
+                    // reboot) -- fall through to the generic in-progress
+                    // status update below and keep polling. 'apply_error' is
+                    // the same terminal failure as 'error', just discovered
+                    // after that isolated session.
+                    if ("error".equals(state) || "apply_error".equals(state) || "interrupted".equals(state)) {
                         String text = message.isEmpty()
                                 ? getString(R.string.settings_updates_update_error) : message;
                         Toast.makeText(UpdatesActivity.this, text, Toast.LENGTH_LONG).show();
@@ -357,7 +366,13 @@ public class UpdatesActivity extends AppCompatActivity {
             @Override
             public void onSuccess(JSONObject body) {
                 if (destroyed) return;
-                if (!"running".equals(body.optString("state", "idle"))) return;
+                // 'staged_pending_reboot'/'applying' mean the appliance is mid
+                // isolated-update session (about to, or already did, reboot into
+                // system-update.target) -- still worth rejoining the poll for,
+                // same as 'running'.
+                String state = body.optString("state", "idle");
+                if (!"running".equals(state) && !"staged_pending_reboot".equals(state)
+                        && !"applying".equals(state)) return;
                 setCoreBusy(true);
                 applyCoreButton.setVisibility(View.GONE);
         whatsNewButton.setVisibility(View.GONE);

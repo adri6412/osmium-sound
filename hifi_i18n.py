@@ -151,6 +151,13 @@ MESSAGES = {
     'uiResolution.updated': {'en': 'Resolution updated — the interface is restarting',
                              'it': "Risoluzione aggiornata — l'interfaccia si riavvia"},
 
+    # ── Panel refresh rate ──────────────────────────────────────────
+    'uiRefresh.invalid': {'en': 'Invalid refresh rate', 'it': 'Frequenza di aggiornamento non valida'},
+    'uiRefresh.unavailable': {'en': 'Feature not available on this system version',
+                              'it': 'Funzione non disponibile su questa versione di sistema'},
+    'uiRefresh.changeFailed': {'en': 'Refresh rate change failed', 'it': 'Cambio frequenza fallito'},
+    'uiRefresh.updated': {'en': 'Refresh rate updated', 'it': 'Frequenza pannello aggiornata'},
+
     # ── Provisioning / factory reset / web-admin credential reset ──
     'provisioning.notActive': {'en': 'Provisioning is not active', 'it': 'Provisioning non attivo'},
     'factoryReset.scriptMissing': {'en': 'Reset script not available',
@@ -224,6 +231,16 @@ MESSAGES = {
     'update.alreadyInProgress': {'en': 'Update already in progress', 'it': 'Aggiornamento già in corso'},
     'update.planSaveFailed': {'en': 'Saving the update plan failed', 'it': 'Salvataggio del piano fallito'},
     'update.inProgress': {'en': 'Update in progress', 'it': 'Aggiornamento in corso'},
+    # ── Isolated update mode (stage-then-reboot-then-apply) ────────────
+    'update.stagedPendingReboot': {
+        'en': 'Update verified — the device will restart to apply it',
+        'it': 'Aggiornamento verificato — il dispositivo si riavvierà per applicarlo'},
+    'update.applying': {
+        'en': 'Applying the update — do not disconnect power',
+        'it': 'Applicazione aggiornamento in corso — non staccare l\'alimentazione'},
+    'update.applyDone': {'en': 'Update applied successfully', 'it': 'Aggiornamento applicato con successo'},
+    'update.applyError': {'en': 'The update could not be applied',
+                          'it': "Non è stato possibile applicare l'aggiornamento"},
 
     # ── Disk install (bare-metal installer) + guided room correction ──
     'install.enumFailed': {'en': 'Disk enumeration failed', 'it': 'Enumerazione dischi fallita'},

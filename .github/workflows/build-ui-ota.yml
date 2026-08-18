@@ -181,12 +181,14 @@ jobs:
           sudo apt-get update -qq && sudo apt-get install -y shellcheck >/dev/null
           echo "== shellcheck =="
           shellcheck -s sh distro/os-update/apply.sh distro/os-update/lib.sh distro/os-update/apply.d/*.sh \
-            distro/config/includes.chroot/usr/local/sbin/hifi-update-runner.sh \
+            distro/config/includes.chroot/usr/local/sbin/hifi-update-stage-runner.sh \
+            distro/config/includes.chroot/usr/local/sbin/hifi-update-apply-runner.sh \
             distro/config/includes.chroot/usr/local/sbin/hifi-system-update.sh \
             distro/config/includes.chroot/usr/local/sbin/hifi-ota-update.sh \
+            distro/config/includes.chroot/usr/local/sbin/hifi-os-update.sh \
             distro/config/includes.chroot/usr/local/sbin/hifi-ota-enroll-key.sh \
             distro/config/includes.chroot/usr/local/sbin/hifi-ota-alpha-toggle.sh \
-            tests/test-update-runner.sh
+            tests/test-update-stage-runner.sh tests/test-update-apply-runner.sh
           echo "== idempotency (run apply.sh twice) =="
           export HIFI_OS_VERSION=ci-test
           export HIFI_PAYLOAD_DIR="$PWD/distro/os-update"
