@@ -699,6 +699,35 @@ const LyrionServer = () => {
     return () => { alive = false; clearInterval(poll); window.removeEventListener('hifi-vu-meter-enabled', onChange); };
   }, []);
 
+  // "Update available" badge on the Settings tab (kiosk-only) — mirrors the
+  // same three checks Settings.jsx uses for its own coreUpdateAvailable
+  // banner, so the two never disagree. Respects the "check for updates
+  // automatically" toggle (localStorage only, no broadcast event to listen
+  // for — re-read fresh on every poll tick instead). A much longer interval
+  // than the other polls above: this one hits GitHub via api_server.py on
+  // every tick, not a cheap local preference.
+  const [coreUpdateAvailable, setCoreUpdateAvailable] = useState(false);
+  useEffect(() => {
+    let alive = true;
+    const check = async () => {
+      if (localStorage.getItem('hifiAutoCheckUpdates') === 'false') return;
+      try {
+        const [app, sys, os] = await Promise.all([
+          systemAPI.checkAppUpdate(),
+          systemAPI.checkSystemUpdate(),
+          systemAPI.checkOsUpdate(),
+        ]);
+        if (!alive) return;
+        setCoreUpdateAvailable(!!(
+          app?.data?.update_available || sys?.data?.update_available || os?.data?.update_available
+        ));
+      } catch (_) {}
+    };
+    check();
+    const poll = setInterval(check, 15 * 60 * 1000);
+    return () => { alive = false; clearInterval(poll); };
+  }, []);
+
   // Now-playing auto-expand: same fetch-on-mount + poll + broadcast-event
   // shape as vuMeterEnabled above (see its comment for why the poll exists).
   const [autoExpandSeconds, setAutoExpandSeconds] = useState(
@@ -1396,6 +1425,9 @@ const LyrionServer = () => {
                   ${active ? 'text-white' : 'text-hifi-silver/50 hover:text-hifi-silver'}`}>
                 <Icon size={14} />
                 {labelKey && <span>{t(labelKey)}</span>}
+                {id === 'settings' && coreUpdateAvailable && (
+                  <span className="text-hifi-gold">{t('settings.updates.available')}</span>
+                )}
                 {active && (
                   <span className="absolute bottom-0 left-2 right-2 h-[2px] bg-hifi-gold rounded-t-sm" />
                 )}
