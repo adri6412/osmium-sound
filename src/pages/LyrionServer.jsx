@@ -664,9 +664,24 @@ const LyrionServer = () => {
   useEffect(() => {
     const el = listScrollRef.current;
     if (!el || (currentView !== 'artists' && currentView !== 'albums')) return;
-    const ro = new ResizeObserver(([entry]) => {
-      setAzContainerSize({ width: entry.contentRect.width, height: entry.contentRect.height });
-    });
+    // Measure synchronously up front instead of only waiting on
+    // ResizeObserver's first (async) callback — if that callback is ever
+    // delayed, azContainerSize.width stays 0 in the meantime, which collapses
+    // the album grid's estimated row height down to just the text block
+    // (~60px instead of ~250px+), making totalHeight far too small and the
+    // scrollbar run out of room a fraction of the way through the list —
+    // exactly the "nothing past M" symptom reported 2026-08-18.
+    const measure = () => {
+      const cs = getComputedStyle(el);
+      const paddingX = parseFloat(cs.paddingLeft) + parseFloat(cs.paddingRight);
+      const paddingY = parseFloat(cs.paddingTop) + parseFloat(cs.paddingBottom);
+      setAzContainerSize({
+        width: Math.max(0, el.clientWidth - paddingX),
+        height: Math.max(0, el.clientHeight - paddingY),
+      });
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
     ro.observe(el);
     setAzScrollTop(el.scrollTop);
     return () => ro.disconnect();
