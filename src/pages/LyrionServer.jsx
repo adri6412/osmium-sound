@@ -972,6 +972,11 @@ const LyrionServer = () => {
 
       return (
         <div className="flex-1 flex flex-col overflow-hidden">
+          {/* TEMP DEBUG (2026-08-18): live virtualization numbers — remove
+              once the "nothing past M" cutoff is understood. */}
+          <div className="fixed top-1 right-1 z-[999] px-2 py-1 rounded bg-blue-700 text-white text-[9px] font-mono pointer-events-none leading-tight">
+            w:{Math.round(azContainerSize.width)} h:{Math.round(azContainerSize.height)} rowH:{rowHeight} rows:{rowCount} total:{totalHeight} filtered:{filtered.length} scrollTop:{Math.round(azScrollTop)} start:{startIdx} shown:{windowItems.length}
+          </div>
           <div className="px-3 pt-2 pb-1 shrink-0">
             <div className="relative">
               <input
