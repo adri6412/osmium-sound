@@ -250,7 +250,7 @@ apply)
         echo "I: [hifi-os] payload requested a reboot — deferred to end of update session" >&2
     fi
 
-    write_status done 100 "Sistema operativo aggiornato a $VERSION"
+    write_status 'done' 100 "Sistema operativo aggiornato a $VERSION"
     ;;
 
 full)
@@ -358,7 +358,7 @@ full)
     fi
 
     rm -rf "$WORKDIR"
-    write_status done 100 "Sistema operativo aggiornato a $VERSION"
+    write_status 'done' 100 "Sistema operativo aggiornato a $VERSION"
     ;;
 
 *)

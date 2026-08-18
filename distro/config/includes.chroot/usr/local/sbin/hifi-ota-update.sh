@@ -174,7 +174,7 @@ apply)
     ln -sf "$APPDIR/hifi-media-player" /usr/bin/hifi-media-player
     printf '%s\n' "$VERSION" > "$APPDIR/UI_VERSION"
 
-    write_status done 100 "Aggiornamento a $VERSION completato"
+    write_status 'done' 100 "Aggiornamento a $VERSION completato"
     ;;
 
 full)

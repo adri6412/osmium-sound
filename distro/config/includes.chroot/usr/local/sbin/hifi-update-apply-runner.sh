@@ -82,13 +82,17 @@ log() { printf '%s [hifi-update-apply-runner] %s\n' "$(date -Is 2>/dev/null || d
 
 # ── splash progress (best-effort; never fatal) ─────────────────────────
 splash_progress() {  # <0-100>
-    command -v "$PLYMOUTH" >/dev/null 2>&1 && "$PLYMOUTH" system-update --progress="$1" 2>/dev/null || true
+    if command -v "$PLYMOUTH" >/dev/null 2>&1; then
+        "$PLYMOUTH" system-update --progress="$1" 2>/dev/null || true
+    fi
 }
 splash_error() {
     # hifi.script special-cases this exact sentinel: freezes the logo pulse and
     # turns the progress bar red. Everything else stays silenced, same as
     # every other boot message this theme swallows on purpose.
-    command -v "$PLYMOUTH" >/dev/null 2>&1 && "$PLYMOUTH" display-message --text=HIFI_UPDATE_ERROR 2>/dev/null || true
+    if command -v "$PLYMOUTH" >/dev/null 2>&1; then
+        "$PLYMOUTH" display-message --text=HIFI_UPDATE_ERROR 2>/dev/null || true
+    fi
 }
 
 # ── state helpers ────────────────────────────────────────────────────
@@ -183,7 +187,7 @@ for kind in system os ui; do
     set -- $info
     state=$1; version=$2
 
-    if [ "$state" != done ]; then
+    if [ "$state" != "done" ]; then
         # The stage runner only creates /system-update once EVERY step in the
         # plan reached 'done' — a step in any other state here means the
         # on-disk plan was tampered with or corrupted between boots. Refuse
@@ -224,7 +228,7 @@ done
 log "update-mode session complete — returning to normal boot"
 rm -rf "$STAGE_ROOT"
 rm -f "$PLAN"
-write_state done "Aggiornamento completato"
+write_state 'done' "Aggiornamento completato"
 splash_progress 100
 
 if ! rm -f "$SYSTEM_UPDATE_LINK"; then
