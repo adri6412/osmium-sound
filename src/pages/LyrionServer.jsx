@@ -735,7 +735,14 @@ const LyrionServer = () => {
     const justResumed = isPlaying && !wasPlayingRef.current;
     wasPlayingRef.current = isPlaying;
     if (justResumed) autoExpandHandledKeyRef.current = null;
-    if (!isPlaying || !autoExpandSeconds || !activePlayer) return;
+    // Confirmed (2026-08-18): this was never actually about interaction
+    // events failing to reset the countdown — it fires just as reliably from
+    // sitting idle in the artists/albums list with zero touches, because it's
+    // only ever gated on isPlaying, not on what the user is doing. It's meant
+    // as an ambient "nothing else going on" auto-reveal, so it must stay off
+    // entirely while the user is browsing any menu/list, not just paused
+    // while a pointer happens to be down.
+    if (!isPlaying || !autoExpandSeconds || !activePlayer || activeTab !== 'musica' || currentView !== 'home') return;
     if (autoExpandHandledKeyRef.current === artworkIdentityKey) return;
     const delayMs = autoExpandSeconds * 1000;
     let timer;
@@ -774,7 +781,7 @@ const LyrionServer = () => {
       activityEvents.forEach((ev) => window.removeEventListener(ev, onActivity, { capture: true }));
       window.removeEventListener('scroll', onActivity, { capture: true });
     };
-  }, [isPlaying, artworkIdentityKey, autoExpandSeconds, activePlayer]);
+  }, [isPlaying, artworkIdentityKey, autoExpandSeconds, activePlayer, activeTab, currentView]);
   // Manual collapse (the ChevronDown close button) counts as "the user moved
   // away on purpose" — mark this song handled so a still-pending timer (user
   // closed before it fired) can't pop the view back open on its own.
