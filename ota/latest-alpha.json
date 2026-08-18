@@ -1,41 +1,41 @@
 {
-  "tag_name": "v2.5.21-dev.108-alpha2",
-  "name": "v2.5.21-dev.108-alpha2",
-  "body": "## What's new in v2.5.21-dev.108-alpha2\n\n- fix(wizard): drop the first-boot setup hotspot, configure Wi-Fi on-screen only\n",
+  "tag_name": "v2.5.21-dev.110-alpha3",
+  "name": "v2.5.21-dev.110-alpha3",
+  "body": "## What's new in v2.5.21-dev.110-alpha3\n\n- fix(ci): shellcheck failures in the new update-mode scripts\n- fix(ci): update-sequencer test step still ran the pre-split tests/test-update-runner.sh\n- feat(ota): isolated two-phase update mode; feat(ui): panel refresh-rate toggle\n- fix(lyrion): release pointer capture on A-Z strip, re-fire auto-expand after resume\n- feat(website): put email and GitHub Issues side by side as support channels\n- Revert \"feat(website): highlight email and GitHub Issues as support channels\"\n- feat(website): highlight email and GitHub Issues as support channels\n",
   "assets": [
     {
-      "name": "hifi-ui-v2.5.21-dev.108-alpha2.tar.gz",
-      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.108-alpha2/hifi-ui-v2.5.21-dev.108-alpha2.tar.gz",
-      "size": 134231380
+      "name": "hifi-ui-v2.5.21-dev.110-alpha3.tar.gz",
+      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.110-alpha3/hifi-ui-v2.5.21-dev.110-alpha3.tar.gz",
+      "size": 134233934
     },
     {
-      "name": "hifi-ui-v2.5.21-dev.108-alpha2.tar.gz.sha256",
-      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.108-alpha2/hifi-ui-v2.5.21-dev.108-alpha2.tar.gz.sha256",
+      "name": "hifi-ui-v2.5.21-dev.110-alpha3.tar.gz.sha256",
+      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.110-alpha3/hifi-ui-v2.5.21-dev.110-alpha3.tar.gz.sha256",
       "size": 104
     },
     {
-      "name": "hifi-system-v2.5.21-dev.108-alpha2.tar.gz",
-      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.108-alpha2/hifi-system-v2.5.21-dev.108-alpha2.tar.gz",
-      "size": 332772
+      "name": "hifi-system-v2.5.21-dev.110-alpha3.tar.gz",
+      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.110-alpha3/hifi-system-v2.5.21-dev.110-alpha3.tar.gz",
+      "size": 347361
     },
     {
-      "name": "hifi-system-v2.5.21-dev.108-alpha2.tar.gz.sha256",
-      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.108-alpha2/hifi-system-v2.5.21-dev.108-alpha2.tar.gz.sha256",
+      "name": "hifi-system-v2.5.21-dev.110-alpha3.tar.gz.sha256",
+      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.110-alpha3/hifi-system-v2.5.21-dev.110-alpha3.tar.gz.sha256",
       "size": 108
     },
     {
-      "name": "hifi-os-v2.5.21-dev.108-alpha2.tar.gz",
-      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.108-alpha2/hifi-os-v2.5.21-dev.108-alpha2.tar.gz",
-      "size": 1201791
+      "name": "hifi-os-v2.5.21-dev.110-alpha3.tar.gz",
+      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.110-alpha3/hifi-os-v2.5.21-dev.110-alpha3.tar.gz",
+      "size": 1202115
     },
     {
-      "name": "hifi-os-v2.5.21-dev.108-alpha2.tar.gz.sha256",
-      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.108-alpha2/hifi-os-v2.5.21-dev.108-alpha2.tar.gz.sha256",
+      "name": "hifi-os-v2.5.21-dev.110-alpha3.tar.gz.sha256",
+      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.110-alpha3/hifi-os-v2.5.21-dev.110-alpha3.tar.gz.sha256",
       "size": 104
     },
     {
-      "name": "hifi-os-v2.5.21-dev.108-alpha2.tar.gz.sha256.sig",
-      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.108-alpha2/hifi-os-v2.5.21-dev.108-alpha2.tar.gz.sha256.sig",
+      "name": "hifi-os-v2.5.21-dev.110-alpha3.tar.gz.sha256.sig",
+      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.110-alpha3/hifi-os-v2.5.21-dev.110-alpha3.tar.gz.sha256.sig",
       "size": 64
     }
   ]
