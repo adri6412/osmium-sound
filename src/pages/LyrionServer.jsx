@@ -640,34 +640,56 @@ const LyrionServer = () => {
   };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { clearLibFilter(); }, [currentView, navigationStack.length]);
-  // Jump the progressive-render window past `idx` so the target row is
-  // actually mounted, then scroll it into view once the DOM reflects that.
-  // Jumping far down a long list can mount hundreds of rows in one go — on
-  // weak iGPU hardware that's enough main-thread work to block the browser
-  // long enough to interrupt the now-playing panel's in-flight/idle
-  // transform animation and leave a corrupted compositor frame (a black bar)
-  // on screen, confirmed 2026-08-18 (visibility:hidden and will-change alone
-  // didn't fix it — the block itself was the problem, not the layer). Wrapped
-  // in startTransition so React can interleave this with other rendering
-  // (like the panel's animation) instead of blocking synchronously; the
-  // effect below scrolls to the target once it actually lands in the DOM,
-  // since a transitioned update's exact commit timing isn't predictable
-  // the way a plain requestAnimationFrame guess was.
-  const pendingJumpIndexRef = useRef(null);
-  const jumpToIndex = (idx) => {
-    pendingJumpIndexRef.current = idx;
-    React.startTransition(() => {
-      setVisibleCount(c => Math.max(c, idx + LIST_PAGE));
-    });
-  };
+  // ── Virtualized artists/albums list ─────────────────────────────
+  // Root-caused 2026-08-18: the old approach grew a *cumulative* render
+  // window (visibleCount, sliced from index 0) every time the A-Z index
+  // jumped — landing on a letter near the end of a large library could mount
+  // most of the whole collection (hundreds of album cards with artwork) in
+  // one go. On weak iGPU hardware that's enough main-thread/paint work to
+  // interrupt the now-playing panel's in-flight/idle transform animation and
+  // leave a corrupted compositor frame (a black bar) on screen — confirmed
+  // by ruling out every other theory first (an on-screen debug tag, plus
+  // visibility:hidden, will-change, and startTransition attempts that each
+  // only changed the symptom without fixing it). The real fix is to never
+  // mount more than what's actually near the viewport, regardless of how far
+  // a jump lands — a small hand-rolled window (not a library) since this
+  // screen's size is fixed (kiosk, not a responsive page) and it reuses the
+  // existing scroll container/AzIndex wiring directly.
+  const AZ_ROW_HEIGHT = 56;        // artist row, incl. its gap — see renderRow's classes
+  const AZ_GRID_GAP = 12;          // gap-3
+  const AZ_CARD_TEXT_HEIGHT = 48;  // album card's text block below the square artwork
+  const AZ_OVERSCAN = 6;           // extra rows rendered above/below the viewport
+  const [azContainerSize, setAzContainerSize] = useState({ width: 0, height: 0 });
+  const [azScrollTop, setAzScrollTop] = useState(0);
   useEffect(() => {
-    if (pendingJumpIndexRef.current == null) return;
-    const el = listScrollRef.current?.querySelector(`[data-az-index="${pendingJumpIndexRef.current}"]`);
-    if (el) {
-      el.scrollIntoView({ block: 'start' });
-      pendingJumpIndexRef.current = null;
-    }
-  });
+    const el = listScrollRef.current;
+    if (!el || (currentView !== 'artists' && currentView !== 'albums')) return;
+    const ro = new ResizeObserver(([entry]) => {
+      setAzContainerSize({ width: entry.contentRect.width, height: entry.contentRect.height });
+    });
+    ro.observe(el);
+    setAzScrollTop(el.scrollTop);
+    return () => ro.disconnect();
+  }, [currentView]);
+  // Without this, typing a search filter while scrolled deep into the list
+  // could leave azScrollTop pointing past the now-much-shorter filtered
+  // array — filtered.slice(startIdx, ...) with an out-of-range startIdx just
+  // returns [], so the list would render blank until manually scrolled back
+  // up. Reset on every filter/view change instead, same as the scrollTop
+  // reset useLyrionPlayer.js already does on a fresh libraryData fetch.
+  useEffect(() => {
+    if (currentView !== 'artists' && currentView !== 'albums') return;
+    setAzScrollTop(0);
+    if (listScrollRef.current) listScrollRef.current.scrollTop = 0;
+  }, [libFilterDebounced, currentView]);
+  const onAzScroll = (e) => setAzScrollTop(e.currentTarget.scrollTop);
+  // AzIndex only ever needs to land on a row that may not be mounted yet —
+  // setting scrollTop directly (vs. the old DOM query + scrollIntoView) works
+  // immediately regardless of mount state, since the window is derived from
+  // scrollTop itself on the next render.
+  const jumpToIndex = (idx, columns, rowHeight) => {
+    if (listScrollRef.current) listScrollRef.current.scrollTop = Math.floor(idx / columns) * rowHeight;
+  };
   const [sleepMenuOpen, setSleepMenuOpen] = useState(false);
 
   const openQueue = () => { setShowQueue(true); loadQueue(); };
@@ -874,7 +896,22 @@ const LyrionServer = () => {
       const filtered = norm
         ? sorted.filter((item) => normalize(currentView === 'artists' ? item.artist : `${item.album} ${item.artist || ''}`).includes(norm))
         : sorted;
-      const visibleItems = filtered.slice(0, visibleCount);
+
+      const isGrid = currentView === 'albums';
+      const columns = isGrid ? 3 : 1;
+      const cardWidth = isGrid && azContainerSize.width > 0
+        ? (azContainerSize.width - AZ_GRID_GAP * (columns - 1)) / columns
+        : 0;
+      const rowHeight = isGrid ? Math.round(cardWidth + AZ_CARD_TEXT_HEIGHT + AZ_GRID_GAP) : AZ_ROW_HEIGHT;
+      const rowCount = Math.ceil(filtered.length / columns);
+      const totalHeight = rowCount * rowHeight;
+      const viewportHeight = azContainerSize.height || 600;
+      const firstVisibleRow = rowHeight > 0 ? Math.floor(azScrollTop / rowHeight) : 0;
+      const visibleRowCount = rowHeight > 0 ? Math.ceil(viewportHeight / rowHeight) : 0;
+      const startRow = Math.max(0, firstVisibleRow - AZ_OVERSCAN);
+      const endRow = Math.min(rowCount, firstVisibleRow + visibleRowCount + AZ_OVERSCAN);
+      const startIdx = startRow * columns;
+      const windowItems = filtered.slice(startIdx, Math.min(filtered.length, endRow * columns));
 
       const renderRow = (item, idx) => {
         if (currentView === 'albums') {
@@ -939,21 +976,26 @@ const LyrionServer = () => {
             </div>
           </div>
           <div className="flex-1 flex overflow-hidden">
-            <div ref={listScrollRef} onScroll={handleLibraryScroll}
+            <div ref={listScrollRef} onScroll={onAzScroll}
               className="flex-1 overflow-y-auto content-scrollbar px-3 pb-3">
               {filtered.length === 0 ? (
                 <p className="text-center text-hifi-silver/40 text-sm py-8">{t('common.noResults')}</p>
-              ) : currentView === 'albums' ? (
-                <div className="album-grid grid grid-cols-3 gap-3 pt-1">
-                  {visibleItems.map((item, idx) => renderRow(item, idx))}
-                </div>
               ) : (
-                <ul className="lib-list space-y-1 pt-1">
-                  {visibleItems.map((item, idx) => renderRow(item, idx))}
-                </ul>
+                // Fixed-height spacer reserves the FULL scrollable extent so the
+                // scrollbar/scrollTop behave normally, while only the windowed
+                // slice (startRow..endRow, positioned via `top`) is ever
+                // actually mounted — this is what keeps a far A-Z jump from
+                // mounting everything between the top of the list and the target.
+                <div style={{ position: 'relative', height: totalHeight, marginTop: 4 }}>
+                  <div
+                    style={{ position: 'absolute', top: startRow * rowHeight, left: 0, right: 0 }}
+                    className={isGrid ? 'album-grid grid grid-cols-3 gap-3' : 'lib-list space-y-1'}>
+                    {windowItems.map((item, i) => renderRow(item, startIdx + i))}
+                  </div>
+                </div>
               )}
             </div>
-            <AzIndex items={filtered} keyField={field} onJump={jumpToIndex} />
+            <AzIndex items={filtered} keyField={field} onJump={(idx) => jumpToIndex(idx, columns, rowHeight)} />
           </div>
         </div>
       );
