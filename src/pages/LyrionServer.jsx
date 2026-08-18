@@ -1468,7 +1468,13 @@ const LyrionServer = () => {
               initial="closed"
               animate={isPlayerExpanded ? 'open' : 'closed'}
               transition={{ type: 'spring', damping: 26, stiffness: 200 }}
-              style={{ pointerEvents: isPlayerExpanded ? 'auto' : 'none' }}
+              // will-change pins this to its own dedicated GPU compositor
+              // layer up front, instead of the browser deciding on the fly —
+              // the standard mitigation for a transform layer getting torn/
+              // left stale (a black bar at the cut edge, in this case) when
+              // main-thread work elsewhere (A-Z index jump) interrupts it
+              // mid-animation on weak iGPU hardware.
+              style={{ pointerEvents: isPlayerExpanded ? 'auto' : 'none', willChange: 'transform' }}
               aria-hidden={!isPlayerExpanded}
               className="absolute inset-0 z-50 flex flex-col bg-hifi-dark overflow-hidden">
 
