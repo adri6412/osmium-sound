@@ -642,12 +642,32 @@ const LyrionServer = () => {
   useEffect(() => { clearLibFilter(); }, [currentView, navigationStack.length]);
   // Jump the progressive-render window past `idx` so the target row is
   // actually mounted, then scroll it into view once the DOM reflects that.
+  // Jumping far down a long list can mount hundreds of rows in one go — on
+  // weak iGPU hardware that's enough main-thread work to block the browser
+  // long enough to interrupt the now-playing panel's in-flight/idle
+  // transform animation and leave a corrupted compositor frame (a black bar)
+  // on screen, confirmed 2026-08-18 (visibility:hidden and will-change alone
+  // didn't fix it — the block itself was the problem, not the layer). Wrapped
+  // in startTransition so React can interleave this with other rendering
+  // (like the panel's animation) instead of blocking synchronously; the
+  // effect below scrolls to the target once it actually lands in the DOM,
+  // since a transitioned update's exact commit timing isn't predictable
+  // the way a plain requestAnimationFrame guess was.
+  const pendingJumpIndexRef = useRef(null);
   const jumpToIndex = (idx) => {
-    setVisibleCount(c => Math.max(c, idx + LIST_PAGE));
-    requestAnimationFrame(() => {
-      listScrollRef.current?.querySelector(`[data-az-index="${idx}"]`)?.scrollIntoView({ block: 'start' });
+    pendingJumpIndexRef.current = idx;
+    React.startTransition(() => {
+      setVisibleCount(c => Math.max(c, idx + LIST_PAGE));
     });
   };
+  useEffect(() => {
+    if (pendingJumpIndexRef.current == null) return;
+    const el = listScrollRef.current?.querySelector(`[data-az-index="${pendingJumpIndexRef.current}"]`);
+    if (el) {
+      el.scrollIntoView({ block: 'start' });
+      pendingJumpIndexRef.current = null;
+    }
+  });
   const [sleepMenuOpen, setSleepMenuOpen] = useState(false);
 
   const openQueue = () => { setShowQueue(true); loadQueue(); };
