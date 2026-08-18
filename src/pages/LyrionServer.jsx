@@ -718,75 +718,31 @@ const LyrionServer = () => {
     window.addEventListener('hifi-nowplaying-autoexpand-changed', onChange);
     return () => { alive = false; clearInterval(poll); window.removeEventListener('hifi-nowplaying-autoexpand-changed', onChange); };
   }, []);
-  // Song this auto-expand feature has already acted on (auto-opened for, OR
-  // the user manually dismissed while it was playing) — either way, don't
-  // touch isPlayerExpanded again until a *different* song starts, OR playback
-  // is paused and resumed (see wasPlayingRef below). Ref, not state: this
-  // must never itself trigger a re-render/re-schedule.
-  const autoExpandHandledKeyRef = useRef(null);
-  // Tracks the previous isPlaying value so we can detect a paused→playing
-  // transition below — resuming counts as a fresh "session" even for the
-  // same track, so the auto-expand timer is allowed to fire again.
+  // Redesigned 2026-08-18: every earlier version of this feature tried to
+  // detect "the user is idle" (no touch/mouse activity for N seconds), which
+  // required suppressing itself while browsing any list/menu to avoid
+  // interrupting the user — and that suppression kept being wrong in one
+  // direction or another across several iterations. Dropped entirely.
+  // Instead: fire on the actual PLAY-STATE TRANSITION (paused/stopped ->
+  // playing), unconditionally, from whatever screen the user happens to be
+  // on — exactly what "auto-expand on play" was always meant to mean, and
+  // what the settings copy already describes ("how long after a song starts
+  // playing..."). No interaction tracking, no view/tab gating.
   const wasPlayingRef = useRef(isPlaying);
-  // Any touch/mouse/keyboard activity keeps the countdown from firing — it
-  // only starts once the user has actually gone idle (not just
-  // autoExpandSeconds after the track started).
+  // The pending timer's id, so a manual collapse (below) can cancel it too —
+  // otherwise dismissing the view right after it opens wouldn't stop an
+  // already-scheduled fire from popping it back open a moment later.
+  const autoExpandTimerRef = useRef(null);
   useEffect(() => {
-    const justResumed = isPlaying && !wasPlayingRef.current;
+    const justStartedPlaying = isPlaying && !wasPlayingRef.current;
     wasPlayingRef.current = isPlaying;
-    if (justResumed) autoExpandHandledKeyRef.current = null;
-    // Confirmed working (2026-08-18): only counts down while actually
-    // sitting on Musica's home view — not while browsing any list (Artists/
-    // Albums A-Z index included) or on another tab. An AND-based rewrite
-    // that tried to also fire from other tabs while still suppressing the
-    // library-list case (alpha9) looked equivalent on paper but broke the
-    // library-list suppression in practice, so this is intentionally kept
-    // simple rather than revisited.
-    if (!isPlaying || !autoExpandSeconds || !activePlayer || activeTab !== 'musica' || currentView !== 'home') return;
-    if (autoExpandHandledKeyRef.current === artworkIdentityKey) return;
-    const delayMs = autoExpandSeconds * 1000;
-    let timer;
-    const fire = () => {
-      autoExpandHandledKeyRef.current = artworkIdentityKey;
-      setIsPlayerExpanded(true);
-    };
-    const startCountdown = () => {
-      clearTimeout(timer);
-      timer = setTimeout(fire, delayMs);
-    };
-    // A held pointer/touch (drag, scrub, long-press) genuinely PAUSES the
-    // countdown for the whole gesture, rather than just getting nudged back
-    // by whichever move/scroll events happen to bubble up — down/up tracked
-    // in the capture phase, so it's seen even where an inner handler (e.g.
-    // the A-Z index, queue drag) calls stopPropagation() or takes pointer
-    // capture. Discrete activity with no natural "end" (wheel, keydown, plain
-    // pointer movement with nothing held) just restarts the countdown, same
-    // as before.
-    let pointersDown = 0;
-    const onPointerDown = () => { pointersDown++; clearTimeout(timer); };
-    const onPointerUp = () => { pointersDown = Math.max(0, pointersDown - 1); if (pointersDown === 0) startCountdown(); };
-    const onActivity = () => { if (pointersDown === 0) startCountdown(); };
-    startCountdown();
-    window.addEventListener('pointerdown', onPointerDown, { passive: true, capture: true });
-    window.addEventListener('pointerup', onPointerUp, { passive: true, capture: true });
-    window.addEventListener('pointercancel', onPointerUp, { passive: true, capture: true });
-    const activityEvents = ['pointermove', 'touchmove', 'keydown', 'wheel'];
-    activityEvents.forEach((ev) => window.addEventListener(ev, onActivity, { passive: true, capture: true }));
-    window.addEventListener('scroll', onActivity, { passive: true, capture: true });
-    return () => {
-      clearTimeout(timer);
-      window.removeEventListener('pointerdown', onPointerDown, { capture: true });
-      window.removeEventListener('pointerup', onPointerUp, { capture: true });
-      window.removeEventListener('pointercancel', onPointerUp, { capture: true });
-      activityEvents.forEach((ev) => window.removeEventListener(ev, onActivity, { capture: true }));
-      window.removeEventListener('scroll', onActivity, { capture: true });
-    };
-  }, [isPlaying, artworkIdentityKey, autoExpandSeconds, activePlayer, activeTab, currentView]);
-  // Manual collapse (the ChevronDown close button) counts as "the user moved
-  // away on purpose" — mark this song handled so a still-pending timer (user
-  // closed before it fired) can't pop the view back open on its own.
+    clearTimeout(autoExpandTimerRef.current);
+    if (!justStartedPlaying || !autoExpandSeconds || !activePlayer) return;
+    autoExpandTimerRef.current = setTimeout(() => setIsPlayerExpanded(true), autoExpandSeconds * 1000);
+    return () => clearTimeout(autoExpandTimerRef.current);
+  }, [isPlaying, autoExpandSeconds, activePlayer]);
   const collapsePlayer = () => {
-    autoExpandHandledKeyRef.current = artworkIdentityKey;
+    clearTimeout(autoExpandTimerRef.current);
     setIsPlayerExpanded(false);
   };
 
@@ -1574,7 +1530,9 @@ const LyrionServer = () => {
                     </motion.button>
 
                     <motion.button whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}
-                      className="shrink-0 w-14 h-14 flex items-center justify-center bg-hifi-gold text-black rounded-full shadow-[0_0_24px_rgba(212,175,55,0.4)] hover:shadow-[0_0_36px_rgba(212,175,55,0.65)] transition-all"
+                      // Nudged left off the shared space-x-3 rhythm: on 7" kiosk
+                      // screens this sat right up against Next, an easy mis-tap.
+                      className="shrink-0 -ml-1.5 w-14 h-14 flex items-center justify-center bg-hifi-gold text-black rounded-full shadow-[0_0_24px_rgba(212,175,55,0.4)] hover:shadow-[0_0_36px_rgba(212,175,55,0.65)] transition-all"
                       onClick={() => handleAction(() => lyrionApi.togglePause(activePlayer?.playerid))}>
                       {isPlaying ? <Pause size={26} fill="currentColor" /> : <Play size={26} fill="currentColor" className="ml-1" />}
                     </motion.button>
