@@ -365,7 +365,7 @@ export default function SourcesManager() {
             <h3 className="text-white font-semibold mb-3 flex items-center space-x-2"><FolderPlus size={18} className="text-hifi-gold" /><span>{t('sources.addLocal')}</span></h3>
             <div className="bg-hifi-dark rounded-lg p-3">
               <div className="flex items-center justify-between gap-2">
-                <span className="text-xs text-hifi-silver truncate">/{addLocalPath || ''}</span>
+                <span className="text-xs text-hifi-silver truncate">{addLocalPath || '/'}</span>
                 <button
                   onClick={addLocalUp}
                   disabled={addLocalParent === null || addLocalParent === undefined}

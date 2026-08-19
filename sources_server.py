@@ -2738,22 +2738,23 @@ def api_add_local():
 
 @app.route("/api/local/browse", methods=["GET"])
 def api_browse_local():
-    """List roots (if no ?path=) or immediate subdirectories under an
-    ALLOWED_LOCAL_ROOTS-confined path -- powers the "Add local folder"
-    picker's file-browser UI, mirroring Lyrion's own folder picker instead
-    of a free-text path box. Distinct from api_browse_subpath(): that one
-    browses under an existing source's own mountpoint, this one has no
-    source yet and starts from the allow-listed roots themselves."""
+    """List immediate subdirectories under any path, starting from / when
+    no ?path= is given -- powers the "Add local folder" picker's
+    file-browser UI, mirroring Lyrion's own folder picker (which also
+    starts at / and can browse the whole filesystem) rather than a
+    free-text path box. Deliberately NOT confined to ALLOWED_LOCAL_ROOTS:
+    that confinement guards what may actually become a Lyrion media
+    directory or a Samba share (api_add_local()/api_mkdir_local() still
+    enforce it), not read-only directory-name listing for an
+    already-pair-token-authenticated admin session. Distinct from
+    api_browse_subpath(): that one browses under an existing source's own
+    mountpoint; this one has no source yet."""
     denied = _require_pair_token()
     if denied:
         return denied
-    rel = (request.args.get("path") or "").strip()
-    if not rel:
-        roots = sorted({os.path.realpath(r) for r in ALLOWED_LOCAL_ROOTS
-                        if os.path.isdir(os.path.realpath(r))})
-        return jsonify({"path": "", "parent": None, "dirs": roots})
-    cand = _local_path_allowed(rel)
-    if not cand or not os.path.isdir(cand):
+    rel = (request.args.get("path") or "").strip() or "/"
+    cand = os.path.realpath(rel)
+    if not os.path.isdir(cand):
         return _err("msg.folderMissing", 400, path=rel)
     try:
         dirs = sorted(
@@ -2763,8 +2764,8 @@ def api_browse_local():
     except OSError:
         dirs = []
     parent = os.path.dirname(cand.rstrip("/")) or "/"
-    if parent == cand or not _local_path_allowed(parent):
-        parent = ""  # back to the top-level roots list
+    if parent == cand:
+        parent = None  # already at /, nowhere further up
     return jsonify({"path": cand, "parent": parent, "dirs": dirs})
 
 

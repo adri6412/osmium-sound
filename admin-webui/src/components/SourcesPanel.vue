@@ -451,7 +451,7 @@ onUnmounted(() => {
       </label>
       <div class="card" style="margin: 8px 0;">
         <div class="row" style="justify-content: space-between; align-items: center;">
-          <span class="muted">/{{ addLocalPath || '' }}</span>
+          <span class="muted">{{ addLocalPath || '/' }}</span>
           <button class="secondary fit" :disabled="addLocalParent === null || addLocalParent === undefined" @click="addLocalUp">
             {{ t('settings.sources.subpathUp') }}
           </button>
