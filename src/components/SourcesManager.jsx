@@ -109,6 +109,55 @@ export default function SourcesManager() {
     } catch (_) { setMsg(t('common.error')); } finally { setBusy(false); }
   };
 
+  // ── Subfolder picker (smb/internal/usb only) ──────────────────────────
+  // Narrows a source to a subfolder of its mount from here, instead of
+  // needing Lyrion's own setup wizard for that — mirrors the admin-webui's
+  // SourcesPanel.vue against the same sources_server.py endpoints.
+  const [browsingId, setBrowsingId] = useState(null);
+  const [browsePath, setBrowsePath] = useState('');
+  const [browseDirs, setBrowseDirs] = useState([]);
+  const [browseParent, setBrowseParent] = useState(null);
+  const [browseBusy, setBrowseBusy] = useState(false);
+
+  const loadBrowse = async (id, path) => {
+    setBrowseBusy(true);
+    try {
+      const d = await j(`/api/sources/${id}/browse?path=${encodeURIComponent(path)}`);
+      if (d.success === false) {
+        setMsg(d.message || t('common.error'));
+        setBrowsingId(null);
+      } else {
+        setBrowseDirs(d.dirs || []);
+        setBrowseParent(d.parent);
+      }
+    } catch (_) { setMsg(t('common.error')); setBrowsingId(null); }
+    finally { setBrowseBusy(false); }
+  };
+  const openBrowse = (s) => {
+    setBrowsingId(s.id);
+    setBrowsePath(s.subpath || '');
+    loadBrowse(s.id, s.subpath || '');
+  };
+  const closeBrowse = () => setBrowsingId(null);
+  const browseInto = (name) => {
+    const next = browsePath ? `${browsePath}/${name}` : name;
+    setBrowsePath(next);
+    loadBrowse(browsingId, next);
+  };
+  const browseUp = () => {
+    if (browseParent === null || browseParent === undefined) return;
+    setBrowsePath(browseParent);
+    loadBrowse(browsingId, browseParent);
+  };
+  const useBrowsePath = async (path) => {
+    setBusy(true);
+    try {
+      const r = await post(`/api/sources/${browsingId}/subpath`, { subpath: path });
+      setMsg(r.success ? (r.message || t('sources.subpathSaved')) : (r.message || t('common.error')));
+      if (r.success) { setBrowsingId(null); loadSources(); }
+    } catch (_) { setMsg(t('common.error')); } finally { setBusy(false); }
+  };
+
   const apply = async () => {
     setApplying(true);
     setMsg(t('sources.applying'));
@@ -151,11 +200,13 @@ export default function SourcesManager() {
             const smbType = s.type === 'smb';
             const internalType = s.type === 'internal';
             const usbType = s.type === 'usb';
-            const sub = smbType ? `//${s.server}/${s.share} → ${s.mountpoint}` : (internalType || usbType) ? s.mountpoint : s.path;
-            const ok = smbType || internalType || usbType ? s.mounted : s.exists;
+            const mountBased = smbType || internalType || usbType;
+            const sub = smbType ? `//${s.server}/${s.share} → ${s.mountpoint}${s.subpath ? '/' + s.subpath : ''}` : mountBased ? s.mountpoint + (s.subpath ? '/' + s.subpath : '') : s.path;
+            const ok = mountBased ? s.mounted : s.exists;
             const tag = smbType ? (s.rw ? 'SMB · RW' : 'SMB') : internalType ? t('sources.internal.tag') : usbType ? 'USB' : t('sources.local');
             return (
-              <div key={s.id} className="flex items-center justify-between bg-hifi-dark rounded-lg p-3">
+              <React.Fragment key={s.id}>
+              <div className="flex items-center justify-between bg-hifi-dark rounded-lg p-3">
                 <div className="min-w-0">
                   <div className="text-white text-sm truncate">
                     {s.name}
@@ -173,11 +224,61 @@ export default function SourcesManager() {
                       {s.rw ? t('sources.smbMakeRo') : t('sources.smbMakeRw')}
                     </button>
                   )}
+                  {mountBased && (
+                    <button
+                      onClick={() => (browsingId === s.id ? closeBrowse() : openBrowse(s))}
+                      disabled={busy || !s.mounted}
+                      className="text-xs py-1.5 px-3 rounded-md bg-hifi-accent hover:bg-hifi-light disabled:opacity-50 text-white"
+                    >
+                      {t('sources.subpathPick')}
+                    </button>
+                  )}
                   <button onClick={() => removeSource(s.id)} className="p-2 rounded-lg bg-red-900/30 hover:bg-red-900/60 text-red-300">
                     <Trash2 size={16} />
                   </button>
                 </div>
               </div>
+              {browsingId === s.id && (
+                <div className="bg-hifi-dark/60 border border-hifi-accent rounded-lg p-3 -mt-1">
+                  <div className="flex items-center justify-between gap-2 mb-2">
+                    <span className="text-xs text-hifi-silver truncate">/{browsePath || ''}</span>
+                    <button onClick={closeBrowse} className="text-xs text-hifi-silver hover:text-white shrink-0">{t('common.back')}</button>
+                  </div>
+                  {browseBusy ? (
+                    <p className="text-xs text-hifi-silver/70">{t('common.loading')}</p>
+                  ) : (
+                    <>
+                      <div className="flex gap-2 mb-2">
+                        <button onClick={browseUp} disabled={browseParent === null || browseParent === undefined} className="text-xs py-1.5 px-3 rounded-md bg-hifi-accent hover:bg-hifi-light disabled:opacity-50 text-white">
+                          {t('sources.subpathUp')}
+                        </button>
+                        <button onClick={() => useBrowsePath(browsePath)} disabled={busy} className="text-xs py-1.5 px-3 rounded-md bg-hifi-gold/20 hover:bg-hifi-gold/30 text-hifi-gold">
+                          {t('sources.subpathUseHere')}
+                        </button>
+                        <button onClick={() => useBrowsePath('')} disabled={busy || !browsePath} className="text-xs py-1.5 px-3 rounded-md bg-hifi-accent hover:bg-hifi-light disabled:opacity-50 text-white">
+                          {t('sources.subpathUseRoot')}
+                        </button>
+                      </div>
+                      {browseDirs.length === 0 ? (
+                        <p className="text-xs text-hifi-silver/70">{t('sources.subpathNoSubfolders')}</p>
+                      ) : (
+                        <div className="space-y-1 max-h-48 overflow-y-auto">
+                          {browseDirs.map((name) => (
+                            <button
+                              key={name}
+                              onClick={() => browseInto(name)}
+                              className="w-full text-left text-sm text-white bg-hifi-accent/40 hover:bg-hifi-accent rounded-md px-3 py-1.5 truncate"
+                            >
+                              {name}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </>
+                  )}
+                </div>
+              )}
+              </React.Fragment>
             );
           })}
         </div>

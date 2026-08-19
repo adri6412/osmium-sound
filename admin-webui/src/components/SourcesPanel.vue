@@ -50,8 +50,8 @@ function sourceTag(s) {
   return t('settings.sources.localTag');
 }
 function sourceSub(s) {
-  if (s.type === 'smb') return `//${s.server}/${s.share} → ${s.mountpoint}`;
-  if (s.type === 'internal' || s.type === 'usb') return s.mountpoint;
+  if (s.type === 'smb') return `//${s.server}/${s.share} → ${s.mountpoint}${s.subpath ? '/' + s.subpath : ''}`;
+  if (s.type === 'internal' || s.type === 'usb') return s.mountpoint + (s.subpath ? '/' + s.subpath : '');
   return s.path;
 }
 function sourceOk(s) {
@@ -67,6 +67,53 @@ async function setSmbRw(id, rw) {
   const r = await api.sourcesSetRw(id, rw);
   say(r.ok ? (r.data.message || t('settings.sources.mounted')) : ((r.data && r.data.message) || t('common.error')), !r.ok);
   if (r.ok) loadSources();
+  busy.value = false;
+}
+
+// ── Subfolder picker (smb/internal/usb only) ───────────────────────────
+// Lets a source be narrowed to a subfolder of its mount directly from here,
+// instead of needing Lyrion's own setup wizard for that — see
+// sources_server.py's api_set_subpath()/api_browse_subpath().
+const browsingId = ref(null);
+const browsePath = ref('');
+const browseDirs = ref([]);
+const browseParent = ref(null);
+const browseBusy = ref(false);
+
+async function loadBrowse() {
+  browseBusy.value = true;
+  const r = await api.sourcesBrowse(browsingId.value, browsePath.value);
+  if (r.ok) {
+    browseDirs.value = r.data.dirs || [];
+    browseParent.value = r.data.parent;
+  } else {
+    say((r.data && r.data.message) || t('common.error'), true);
+    browsingId.value = null;
+  }
+  browseBusy.value = false;
+}
+function openBrowse(s) {
+  browsingId.value = s.id;
+  browsePath.value = s.subpath || '';
+  loadBrowse();
+}
+function closeBrowse() {
+  browsingId.value = null;
+}
+function browseInto(name) {
+  browsePath.value = browsePath.value ? browsePath.value + '/' + name : name;
+  loadBrowse();
+}
+function browseUp() {
+  if (browseParent.value === null || browseParent.value === undefined) return;
+  browsePath.value = browseParent.value;
+  loadBrowse();
+}
+async function useBrowsePath(path) {
+  busy.value = true;
+  const r = await api.sourcesSetSubpath(browsingId.value, path);
+  say(r.ok ? (r.data.message || t('settings.sources.subpathSaved')) : ((r.data && r.data.message) || t('common.error')), !r.ok);
+  if (r.ok) { closeBrowse(); loadSources(); }
   busy.value = false;
 }
 async function retryUsb(device) {
@@ -250,8 +297,38 @@ onUnmounted(() => {
         <button v-if="s.type === 'smb'" class="secondary fit" :disabled="busy" @click="setSmbRw(s.id, !s.rw)">
           {{ s.rw ? t('settings.sources.smbMakeRo') : t('settings.sources.smbMakeRw') }}
         </button>
+        <button v-if="['smb', 'internal', 'usb'].includes(s.type)" class="secondary fit" :disabled="busy || !s.mounted"
+                @click="browsingId === s.id ? closeBrowse() : openBrowse(s)">
+          {{ t('settings.sources.subpathPick') }}
+        </button>
         <button class="danger fit" @click="removeSource(s.id)">{{ t('settings.sources.remove') }}</button>
       </div>
+    </div>
+
+    <!-- Inline subfolder browser for the source currently being narrowed -->
+    <div v-if="browsingId === s.id" class="card" style="margin: 6px 0 12px;">
+      <div class="row" style="justify-content: space-between; align-items: center;">
+        <span class="muted">/{{ browsePath || '' }}</span>
+        <button class="secondary fit" @click="closeBrowse">{{ t('common.back') }}</button>
+      </div>
+      <p v-if="browseBusy" class="sub">{{ t('common.loading') }}</p>
+      <template v-else>
+        <div class="row" style="gap: 8px; margin: 8px 0;">
+          <button class="secondary fit" :disabled="browseParent === null || browseParent === undefined" @click="browseUp">
+            {{ t('settings.sources.subpathUp') }}
+          </button>
+          <button class="fit" :disabled="busy" @click="useBrowsePath(browsePath)">
+            {{ t('settings.sources.subpathUseHere') }}
+          </button>
+          <button class="secondary fit" :disabled="busy || !browsePath" @click="useBrowsePath('')">
+            {{ t('settings.sources.subpathUseRoot') }}
+          </button>
+        </div>
+        <p v-if="!browseDirs.length" class="sub">{{ t('settings.sources.subpathNoSubfolders') }}</p>
+        <div v-for="name in browseDirs" :key="name" class="net" style="cursor: pointer;" @click="browseInto(name)">
+          {{ name }}
+        </div>
+      </template>
     </div>
 
     <!-- USB devices needing attention — healthy drives auto-adopt on their

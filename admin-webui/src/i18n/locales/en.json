@@ -257,7 +257,13 @@
       "smbShareUser": "Username",
       "smbSharePass": "Password",
       "smbRegenerate": "Regenerate password",
-      "smbRegenerateHint": "If Windows keeps rejecting the credentials, remove the saved entry for this device in Windows Credential Manager, then try again."
+      "smbRegenerateHint": "If Windows keeps rejecting the credentials, remove the saved entry for this device in Windows Credential Manager, then try again.",
+      "subpathPick": "Subfolder…",
+      "subpathUp": "Up",
+      "subpathUseHere": "Use this folder",
+      "subpathUseRoot": "Use whole drive/share",
+      "subpathNoSubfolders": "No subfolders here.",
+      "subpathSaved": "Subfolder saved. Apply & rescan to update the library."
     },
     "dsp": {
       "unavailable": "DSP is not available on this device.",

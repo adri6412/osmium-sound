@@ -139,6 +139,8 @@ export const api = {
   sourcesAddSmb: ({ server, share, username, password, rw }) =>
     req('/api/system/sources/smb', { method: 'POST', body: { server, share, username, password, rw } }),
   sourcesSetRw: (id, rw) => req('/api/system/sources/' + id + '/rw', { method: 'POST', body: { rw } }),
+  sourcesSetSubpath: (id, subpath) => req('/api/system/sources/' + id + '/subpath', { method: 'POST', body: { subpath } }),
+  sourcesBrowse: (id, path = '') => req('/api/system/sources/' + id + '/browse?path=' + encodeURIComponent(path)),
   sourcesRemove: (id) => req('/api/system/sources/' + id, { method: 'DELETE' }),
   sourcesApply: () => req('/api/system/apply', { method: 'POST' }),
   usbList: () => req('/api/system/usb'),

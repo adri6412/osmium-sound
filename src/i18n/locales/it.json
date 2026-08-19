@@ -46,6 +46,12 @@
     "mounted": "Montata ✓",
     "applying": "Applico…",
     "applied": "Fatto ✓",
+    "subpathPick": "Sottocartella…",
+    "subpathUp": "Su",
+    "subpathUseHere": "Usa questa cartella",
+    "subpathUseRoot": "Usa tutto il disco/condivisione",
+    "subpathNoSubfolders": "Nessuna sottocartella qui.",
+    "subpathSaved": "Sottocartella salvata. Applica e riscansiona per aggiornare la libreria.",
     "internal": {
       "tag": "INTERNO",
       "title": "Dischi interni",

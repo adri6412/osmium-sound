@@ -1122,9 +1122,88 @@ def current_paths(state):
         else:
             raw = src.get("path")
             p = _local_path_allowed(raw) if raw else None
+        if p and t in ("smb", "internal", "usb"):
+            sub = (src.get("subpath") or "").strip("/")
+            if sub:
+                mount_root = p
+                cand = os.path.realpath(os.path.join(mount_root, sub))
+                # Re-confine to this source's own mountpoint (not just the
+                # shared smb_root/internal_root/usb_root) so a subpath can
+                # never wander into a sibling mount, let alone escape it
+                # entirely. An invalid/escaping subpath just falls back to
+                # the mount root rather than being handed to Lyrion.
+                if cand == mount_root or cand.startswith(mount_root + os.sep):
+                    p = cand
         if p and p not in paths:
             paths.append(p)
     return paths
+
+
+def _sync_from_lyrion(state):
+    """Pull any change made directly in Lyrion's own source list into our
+    state, so the next Apply doesn't blindly clobber it with a mount root.
+    Without this, a subfolder picked in Lyrion's own setup wizard (rather
+    than through our subpath control) gets silently replaced the next time
+    current_paths()/apply_to_lyrion() rebuilds mediadirs purely from our own
+    state -- the two lists otherwise "fight" over whichever applied last.
+
+    For each managed smb/internal/usb source, if a live Lyrion mediadir
+    resolves under that source's mountpoint but to a different subfolder
+    than what we have stored, adopt Lyrion's value. A mediadir that isn't
+    under any managed mount at all is offered as a new `local` source
+    (confined to ALLOWED_LOCAL_ROOTS, same as api_add_local()) instead of
+    silently vanishing on the next Apply -- but only when it's a real
+    directory inside those safe roots; anything else is left alone exactly
+    as before.
+
+    Best-effort: any failure to reach Lyrion (not installed yet, service
+    down) just leaves state untouched. Returns True if state was modified,
+    so the caller knows whether to save_state()."""
+    try:
+        current = _lyrion_request(["pref", "mediadirs", "?"]).get("_p2")
+    except Exception:
+        return False
+    if not isinstance(current, list):
+        current = [current] if current else []
+    if not current:
+        return False
+
+    sources = state.get("sources", [])
+    managed = [(s, os.path.realpath(s["mountpoint"]))
+               for s in sources if s.get("type") in ("smb", "internal", "usb") and s.get("mountpoint")]
+    local_paths = {os.path.realpath(s["path"]) for s in sources if s.get("type") == "local" and s.get("path")}
+
+    changed = False
+    for raw in current:
+        if not raw:
+            continue
+        p = os.path.realpath(raw)
+        owner = next(((s, root) for s, root in managed
+                      if p == root or p.startswith(root + os.sep)), None)
+        if owner:
+            src, root = owner
+            sub = "" if p == root else os.path.relpath(p, root)
+            if src.get("subpath", "") != sub:
+                src["subpath"] = sub
+                changed = True
+            continue
+
+        # Not under any mount we manage: offer it as a `local` source rather
+        # than let it disappear on the next Apply, but only inside the same
+        # confinement api_add_local() itself enforces.
+        allowed = _local_path_allowed(raw)
+        if not allowed or allowed in local_paths or not os.path.isdir(allowed):
+            continue
+        sid = _slug("local", os.path.basename(allowed.rstrip("/")))
+        if any(s.get("id") == sid for s in sources):
+            continue
+        sources.append({"id": sid, "type": "local", "name": allowed, "path": allowed})
+        local_paths.add(allowed)
+        changed = True
+
+    if changed:
+        state["sources"] = sources
+    return changed
 
 
 def _hlang():
@@ -1151,6 +1230,14 @@ def apply_to_lyrion(state):
     prefs = _ensure_prefs()
     if not prefs:
         return False, _ht('lyrion.prefsNotFound', _hlang())
+
+    # Absorb any change made directly in Lyrion's own source list first, so
+    # this Apply (which may be running unattended, e.g. right after USB
+    # auto-adopt) doesn't clobber it with a bare mount root — see
+    # _sync_from_lyrion()'s docstring.
+    with _lock:
+        if _sync_from_lyrion(state):
+            save_state(state)
 
     paths = current_paths(state)
 
@@ -2449,7 +2536,10 @@ def api_list():
     denied = _require_pair_token()
     if denied:
         return denied
-    state = load_state()
+    with _lock:
+        state = load_state()
+        if _sync_from_lyrion(state):
+            save_state(state)
     out = []
     for s in state.get("sources", []):
         item = dict(s)
@@ -2654,6 +2744,80 @@ def api_set_smb_rw(sid):
         src["rw"] = rw
         save_state(state)
     return jsonify({"success": True, "message": _m("msg.rebootRequired")})
+
+
+@app.route("/api/sources/<sid>/subpath", methods=["POST"])
+def api_set_subpath(sid):
+    """Set (or clear, with an empty subpath) the subfolder under a
+    smb/internal/usb source's mount that Lyrion should actually scan, instead
+    of always the whole mount. This is what lets Music Sources fully replace
+    Lyrion's own "pick a folder" step in its setup wizard: the subfolder
+    choice now lives in state we control (current_paths() applies it) and
+    survives the next Apply instead of being silently reset to the mount
+    root."""
+    denied = _require_pair_token()
+    if denied:
+        return denied
+    data = request.get_json(silent=True) or {}
+    subpath = (data.get("subpath") or "").strip("/")
+    with _lock:
+        state = load_state()
+        src = next((s for s in state["sources"] if s.get("id") == sid), None)
+        if not src:
+            return _err("msg.sourceNotFound", 404)
+        if src.get("type") not in ("smb", "internal", "usb"):
+            return _err("msg.subpathNotSupported", 400)
+        mountpoint = src.get("mountpoint")
+        if subpath and mountpoint:
+            root = os.path.realpath(mountpoint)
+            cand = os.path.realpath(os.path.join(root, subpath))
+            if cand != root and not cand.startswith(root + os.sep):
+                return _err("msg.pathNotAllowed", 400)
+            if os.path.ismount(mountpoint) and not os.path.isdir(cand):
+                return _err("msg.folderMissing", 400, path=cand)
+        src["subpath"] = subpath
+        save_state(state)
+    return jsonify({"success": True, "message": _m("msg.subpathSaved")})
+
+
+@app.route("/api/sources/<sid>/browse", methods=["GET"])
+def api_browse_subpath(sid):
+    """List immediate subdirectories under a source's mount (optionally under
+    a further relative ?path=), so the subpath control above can offer a
+    folder picker instead of free-text entry -- no such browse endpoint
+    existed before this."""
+    denied = _require_pair_token()
+    if denied:
+        return denied
+    state = load_state()
+    src = next((s for s in state["sources"] if s.get("id") == sid), None)
+    if not src:
+        return _err("msg.sourceNotFound", 404)
+    if src.get("type") not in ("smb", "internal", "usb"):
+        return _err("msg.subpathNotSupported", 400)
+    mountpoint = src.get("mountpoint")
+    if not mountpoint or not os.path.ismount(mountpoint):
+        return _err("msg.folderMissing", 400, path=mountpoint or "")
+    root = os.path.realpath(mountpoint)
+    rel = (request.args.get("path") or "").strip("/")
+    cand = os.path.realpath(os.path.join(root, rel))
+    if cand != root and not cand.startswith(root + os.sep):
+        return _err("msg.pathNotAllowed", 400)
+    if not os.path.isdir(cand):
+        return _err("msg.folderMissing", 400, path=cand)
+    try:
+        dirs = sorted(
+            e.name for e in os.scandir(cand)
+            if e.is_dir(follow_symlinks=False) and not e.name.startswith(".")
+        )
+    except OSError:
+        dirs = []
+    parent = None
+    if cand != root:
+        parent = os.path.relpath(os.path.dirname(cand), root)
+        if parent == ".":
+            parent = ""
+    return jsonify({"path": rel, "parent": parent, "dirs": dirs})
 
 
 @app.route("/api/sources/<sid>", methods=["DELETE"])
@@ -3470,6 +3634,8 @@ SOURCES_I18N = {
         "msg.diskNotFound": "Disk not found, or it is a system disk.",
         "msg.sourceNotFound": "Source not found.",
         "msg.noChange": "No change needed.",
+        "msg.subpathNotSupported": "This source type doesn't support a subfolder.",
+        "msg.subpathSaved": "Subfolder saved. Apply to update the library.",
         "msg.rebootRequired": "Saved — reboot the device for this to take effect.",
         "msg.pickPartition": "Select a partition that has a filesystem.",
         "msg.partitionNoFs": "That partition has no filesystem.",
@@ -3588,6 +3754,8 @@ SOURCES_I18N = {
         "msg.diskNotFound": "Disco non trovato o di sistema.",
         "msg.sourceNotFound": "Sorgente non trovata.",
         "msg.noChange": "Nessuna modifica necessaria.",
+        "msg.subpathNotSupported": "Questo tipo di sorgente non supporta una sottocartella.",
+        "msg.subpathSaved": "Sottocartella salvata. Premi Applica per aggiornare la libreria.",
         "msg.rebootRequired": "Salvato — riavvia il dispositivo perché la modifica abbia effetto.",
         "msg.pickPartition": "Seleziona una partizione con filesystem.",
         "msg.partitionNoFs": "Partizione senza filesystem.",

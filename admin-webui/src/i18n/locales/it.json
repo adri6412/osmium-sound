@@ -257,7 +257,13 @@
       "smbShareUser": "Utente",
       "smbSharePass": "Password",
       "smbRegenerate": "Rigenera password",
-      "smbRegenerateHint": "Se Windows continua a rifiutare le credenziali, rimuovi la voce salvata per questo dispositivo in Gestione credenziali di Windows e riprova."
+      "smbRegenerateHint": "Se Windows continua a rifiutare le credenziali, rimuovi la voce salvata per questo dispositivo in Gestione credenziali di Windows e riprova.",
+      "subpathPick": "Sottocartella…",
+      "subpathUp": "Su",
+      "subpathUseHere": "Usa questa cartella",
+      "subpathNoSubfolders": "Nessuna sottocartella qui.",
+      "subpathUseRoot": "Usa tutto il disco/condivisione",
+      "subpathSaved": "Sottocartella salvata. Applica e riscansiona per aggiornare la libreria."
     },
     "dsp": {
       "unavailable": "DSP non disponibile su questo dispositivo.",

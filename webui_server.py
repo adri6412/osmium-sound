@@ -2168,6 +2168,10 @@ _CAPTIVE_CSS = """
  label{display:block;font-size:13px;color:#aab;margin:8px 0 4px} input,select,button{width:100%;padding:12px;border-radius:8px;border:1px solid #333;background:#12151b;color:#eee;font-size:15px;box-sizing:border-box}
  button{background:#c8a24a;color:#111;font-weight:600;border:0;margin-top:12px} button.sec{background:#12151b;color:#eee;border:1px solid #333;font-weight:500}
  button:disabled{opacity:.5}
+ /* Explicit chevron so a <select> reads as a dropdown even on browsers (e.g.
+    iPadOS Safari) whose native affordance is too subtle against this dark
+    theme to notice before tapping it. */
+ select{-webkit-appearance:none;appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20'%3E%3Cpath fill='%23aab' d='M5 7l5 6 5-6z'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 12px center;background-size:14px;padding-right:36px}
  .muted{color:#889;font-size:13px}
  .net{padding:10px;border-bottom:1px solid #262b35;cursor:pointer} .row{display:flex;justify-content:space-between}
  .langbar{text-align:right;margin-bottom:8px} .langbar a{color:#889;font-size:13px;text-decoration:none;margin-left:10px}
@@ -2812,9 +2816,15 @@ function checkLyrionInstall(){
     document.getElementById('lyrion-install-msg').textContent=S.lyrionMissing;
     var sel=document.getElementById('lyrionchannel');sel.innerHTML='';
     var channels=(res&&res.channels)||{};
-    Object.keys(channels).forEach(function(c){var o=document.createElement('option');o.value=c;
+    var channelKeys=Object.keys(channels);
+    channelKeys.forEach(function(c){var o=document.createElement('option');o.value=c;
       o.textContent=c+(channels[c]&&channels[c].version?' ('+channels[c].version+')':'');sel.appendChild(o)});
-    sel.style.display=Object.keys(channels).length?'block':'none';
+    // Default to 'release' explicitly rather than relying on it happening to
+    // be the first key the backend returned -- fall back to whatever key IS
+    // first if 'release' isn't offered at all.
+    if(channels.hasOwnProperty('release')){sel.value='release'}
+    else if(channelKeys.length){sel.value=channelKeys[0]}
+    sel.style.display=channelKeys.length?'block':'none';
     document.getElementById('btn-lyrion-install').style.display='block';
     document.getElementById('btn-lyrion-install-skip').style.display='block';
   });
