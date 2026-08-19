@@ -225,7 +225,6 @@
     <div class="grp">Advanced configuration</div>
     <a href="#en-sources">Music sources</a>
     <a href="#en-streaming">Streaming & Lyrion plugins</a>
-    <a href="#en-dsp">DSP & room correction</a>
     <a href="#en-multiroom">Multiroom</a>
     <a href="#en-backup">Backup & restore</a>
     <a href="#en-updates">OTA updates</a>
@@ -253,7 +252,6 @@
     <div class="grp">Configurazione avanzata</div>
     <a href="#it-sorgenti">Sorgenti musicali</a>
     <a href="#it-streaming">Streaming e plugin Lyrion</a>
-    <a href="#it-dsp">DSP e correzione ambientale</a>
     <a href="#it-multiroom">Multiroom</a>
     <a href="#it-backup">Backup e ripristino</a>
     <a href="#it-aggiornamenti">Aggiornamenti OTA</a>
@@ -273,7 +271,7 @@
 
       <div class="hero">
         <h1>Osmium Sound</h1>
-        <p>Complete installation and configuration manual. A bit-perfect hi-fi network streamer built on Debian, with Lyrion Music Server, optional DSP, and web administration</p>
+        <p>Complete installation and configuration manual. A bit-perfect hi-fi network streamer built on Debian, with Lyrion Music Server and web administration</p>
         <div class="badges">
           <span class="badge">QR-code setup</span>
           <span class="badge">No mouse/keyboard required</span>
@@ -475,7 +473,7 @@
           <li><strong>CD</strong> — insert a disc to play it, or rip it to FLAC with automatic tags and cover art (MusicBrainz), straight into your library, an adopted USB drive, or a writable network share.</li>
           <li><strong>Discover</strong> — endless mixes by track, album, or artist, with a genre filter and saveable presets, plus "keep playing similar music", related artists, and bios, right on the touchscreen.</li>
           <li><strong>Settings → Playback</strong> — track transition, ReplayGain, the animated VU meter, the now-playing auto-expand timeout, and a fixed-volume-100% (BitPerfect) toggle that turns off Lyrion's own digital volume control and greys out the volume slider.</li>
-          <li><strong>Settings</strong> — system and network info, audio output, optional DSP, multiroom, OTA updates, companion app pairing, backup, factory reset.</li>
+          <li><strong>Settings</strong> — system and network info, audio output, multiroom, OTA updates, companion app pairing, backup, factory reset.</li>
         </ul>
         <div class="box tip">
           <span class="label">Playback survives a restart</span>
@@ -513,12 +511,6 @@
         </ol>
       </section>
 
-      <section id="en-dsp">
-        <h2>DSP & room correction</h2>
-        <p>The audio path is bit-perfect by default (no resampling). The optional DSP (parametric EQ, headphone crossfeed, room correction) is <strong>off by default</strong> and doesn't touch the bit-perfect path in any way until enabled.</p>
-        <p>Guided room correction can be run directly from the screen with a USB measurement microphone (e.g. UMIK-1): the correction FIR filter is generated on the device itself, no PC needed.</p>
-      </section>
-
       <section id="en-multiroom">
         <h2>Multiroom</h2>
         <p>Multiple Osmium Sound devices can be grouped to play in sync. Each device always runs its own local player (squeezelite); "follow" mode (in Settings → Lyrion) points the player at another Osmium Sound device's Lyrion server already on your network, auto-discoverable via a local-network search — no need to type in an IP address by hand, though you still can.</p>
@@ -527,7 +519,7 @@
 
       <section id="en-backup">
         <h2>Backup & restore</h2>
-        <p>From Settings you can create a full backup of the device's configuration: audio/DSP output, the music source list, Lyrion preferences and playlists, Wi-Fi network profiles, account and pairing tokens. Sensitive data (network, account, Bluetooth) only enters the backup if you choose to protect it with a passphrase.</p>
+        <p>From Settings you can create a full backup of the device's configuration: audio output, the music source list, Lyrion preferences and playlists, Wi-Fi network profiles, account and pairing tokens. Sensitive data (network, account, Bluetooth) only enters the backup if you choose to protect it with a passphrase.</p>
         <ul>
           <li><strong>Manual backup</strong> — Settings → Backup → Create backup now, with or without a passphrase.</li>
           <li><strong>Scheduled backup</strong> — enable it in Settings; runs a weekly backup automatically (non-sensitive data only, since there's nobody to ask for a passphrase).</li>
@@ -632,7 +624,7 @@
 
       <div class="hero">
         <h1>Osmium Sound</h1>
-        <p>Manuale completo di installazione e configurazione. Un network streamer hi-fi bit-perfect basato su Debian, con Lyrion Music Server, DSP opzionale e amministrazione via web</p>
+        <p>Manuale completo di installazione e configurazione. Un network streamer hi-fi bit-perfect basato su Debian, con Lyrion Music Server e amministrazione via web</p>
         <div class="badges">
           <span class="badge">Setup via QR code</span>
           <span class="badge">Nessun mouse/tastiera richiesto</span>
@@ -834,7 +826,7 @@
           <li><strong>CD</strong> — inserisci un disco per riprodurlo oppure rippare in FLAC con tag e copertina automatici (MusicBrainz), direttamente nella libreria, su un disco USB adottato o su una condivisione di rete scrivibile.</li>
           <li><strong>Discover</strong> — mix infiniti per brano, album o artista, con filtro per genere e preset salvabili, oltre a "continua ad ascoltare musica simile", artisti correlati e biografie direttamente a schermo.</li>
           <li><strong>Impostazioni → Playback</strong> — transizione tra i brani, ReplayGain, VU meter animato, timeout di espansione automatica del now playing, e un interruttore volume fisso al 100% (BitPerfect) che disattiva il controllo volume digitale di Lyrion e disabilita visivamente lo slider del volume.</li>
-          <li><strong>Impostazioni</strong> — info di sistema e rete, uscita audio, DSP opzionale, multiroom, aggiornamenti OTA, abbinamento app companion, backup, reset di fabbrica.</li>
+          <li><strong>Impostazioni</strong> — info di sistema e rete, uscita audio, multiroom, aggiornamenti OTA, abbinamento app companion, backup, reset di fabbrica.</li>
         </ul>
         <div class="box tip">
           <span class="label">La riproduzione sopravvive a un riavvio</span>
@@ -872,12 +864,6 @@
         </ol>
       </section>
 
-      <section id="it-dsp">
-        <h2>DSP e correzione ambientale</h2>
-        <p>Il percorso audio è bit-perfect per impostazione predefinita (nessun ricampionamento). Il DSP opzionale (equalizzatore parametrico, crossfeed per cuffie, correzione ambientale) è <strong>disattivato di default</strong> e non tocca in alcun modo il percorso bit-perfect finché non viene attivato.</p>
-        <p>La correzione ambientale guidata può essere eseguita direttamente dallo schermo con un microfono di misura USB (es. UMIK-1): il filtro FIR di correzione viene generato sul dispositivo stesso, senza bisogno di un PC.</p>
-      </section>
-
       <section id="it-multiroom">
         <h2>Multiroom</h2>
         <p>Più dispositivi Osmium Sound possono essere raggruppati per suonare in sincronia. Ogni dispositivo esegue sempre il proprio player locale (squeezelite); la modalità "segui" (in Impostazioni → Lyrion) punta il player verso il server Lyrion di un altro dispositivo Osmium Sound già presente sulla rete, individuabile automaticamente tramite ricerca sulla rete locale — non serve inserire l'indirizzo IP a mano, anche se è comunque possibile farlo.</p>
@@ -886,7 +872,7 @@
 
       <section id="it-backup">
         <h2>Backup e ripristino</h2>
-        <p>Dalle Impostazioni puoi creare un backup completo della configurazione del dispositivo: uscita audio/DSP, elenco delle sorgenti musicali, preferenze e playlist di Lyrion, profili di rete Wi-Fi, account e token di abbinamento. I dati sensibili (rete, account, Bluetooth) entrano nel backup solo se scegli di proteggerlo con una passphrase.</p>
+        <p>Dalle Impostazioni puoi creare un backup completo della configurazione del dispositivo: uscita audio, elenco delle sorgenti musicali, preferenze e playlist di Lyrion, profili di rete Wi-Fi, account e token di abbinamento. I dati sensibili (rete, account, Bluetooth) entrano nel backup solo se scegli di proteggerlo con una passphrase.</p>
         <ul>
           <li><strong>Backup manuale</strong> — Impostazioni → Backup → Crea backup adesso, con o senza passphrase.</li>
           <li><strong>Backup programmato</strong> — attivabile in Impostazioni; esegue automaticamente un backup settimanale (solo dati non sensibili, dato che non c'è nessuno a cui chiedere una passphrase).</li>
