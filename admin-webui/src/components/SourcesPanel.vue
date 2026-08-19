@@ -288,7 +288,8 @@ onUnmounted(() => {
     <!-- Active sources -->
     <label style="margin-top: 16px; display: block;">{{ t('settings.sources.active') }}</label>
     <p v-if="!sources.length" class="sub">{{ t('settings.sources.none') }}</p>
-    <div v-for="s in sources" :key="s.id" class="net between" style="align-items: flex-start;">
+    <template v-for="s in sources" :key="s.id">
+    <div class="net between" style="align-items: flex-start;">
       <div>
         <div>{{ s.name }} <span class="pill">{{ sourceTag(s) }}</span></div>
         <div class="muted" :style="{ color: sourceOk(s) ? '' : 'var(--danger)' }">{{ sourceSub(s) }}</div>
@@ -330,6 +331,7 @@ onUnmounted(() => {
         </div>
       </template>
     </div>
+    </template>
 
     <!-- USB devices needing attention — healthy drives auto-adopt on their
          own (sources_server.py's usb_sync()) and show up above instead. -->
