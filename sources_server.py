@@ -1085,6 +1085,424 @@ def ensure_lms_trusted_networks():
     print(f"[sources] disabled Lyrion's IP-based access control (filterHosts)")
 
 
+# ─────────────────────────── LMS skin (Osmium / Material) ───────────────────
+# The appliance ships an "Osmium" look for Lyrion's web UI, built as a custom
+# theme + global css on top of the third-party Material Skin plugin (never a
+# from-scratch LMS skin). The user's choice lives in LMS_SKIN_FILE:
+#   osmium   → Material installed, root skin = material, global Osmium css on
+#   material → Material installed, root skin = material, global css removed
+#   (absent) → "unset": legacy device, nothing about its skin is ever touched,
+#              except that Material itself gets auto-installed (user decision
+#              2026-08-19) so the /material/ web remote the kiosk QR already
+#              points at actually works.
+LMS_SKIN_FILE = "/etc/hifi-player/lms-skin"
+LMS_SKIN_ASSET_DIRS = [
+    "/usr/local/share/hifi-lms-skin",
+    # Dev checkout fallback: the committed source of the same assets.
+    os.path.join(os.path.dirname(os.path.abspath(__file__)), "distro",
+                 "config", "includes.chroot", "usr", "local", "share",
+                 "hifi-lms-skin"),
+]
+LMS_SKIN_MARKER = "managed-by: osmium-appliance"
+LMS_PLUGIN_REPO_XML = \
+    "https://lms-community.github.io/lms-plugin-repository/extensions.xml"
+# Last-resort pinned Material release, used only when the repo XML is
+# unreachable/unparseable. sha is SHA1 — that is what LMS's own
+# PluginDownloader verifies, and what the repo XML publishes.
+LMS_MATERIAL_FALLBACK = (
+    "https://github.com/CDrummond/lms-material/releases/download/6.4.6/lms-material-6.4.6.zip",
+    "8e7830a148acab4971b9acd0654ae2cee6254521",
+)
+
+_SKIN_LOCK = threading.Lock()
+_SKIN_STATUS = {"state": "idle"}
+# Serializes the actual install/apply work (user-triggered apply thread vs the
+# startup autoinstall thread) — both stop/start Lyrion, so they must not
+# overlap. _SKIN_LOCK above only guards the status dict.
+_SKIN_JOB_LOCK = threading.Lock()
+
+
+def _skin_status():
+    with _SKIN_LOCK:
+        return dict(_SKIN_STATUS)
+
+
+def _skin_status_set(state, progress, code, **extra):
+    payload = {"state": state, "progress": progress, "code": code,
+               "message": _m(code)}
+    payload.update(extra)
+    with _SKIN_LOCK:
+        _SKIN_STATUS.clear()
+        _SKIN_STATUS.update(payload)
+
+
+def _skin_job_running():
+    return _skin_status().get("state") in ("installing", "applying")
+
+
+def _lms_skin_choice():
+    try:
+        with open(LMS_SKIN_FILE) as f:
+            v = f.read().strip()
+        return v if v in ("osmium", "material") else None
+    except OSError:
+        return None
+
+
+def _skin_asset_dir():
+    for d in LMS_SKIN_ASSET_DIRS:
+        if os.path.isdir(d):
+            return d
+    return None
+
+
+def _material_installed():
+    cache = _lyrion_cache_dir()
+    if not cache:
+        return False
+    return os.path.isfile(os.path.join(
+        cache, "InstalledPlugins", "Plugins", "MaterialSkin", "install.xml"))
+
+
+def _material_skin_dir():
+    """<prefsdir>/material-skin — where Material looks for user themes/css."""
+    prefs = _find_prefs()
+    if not prefs:
+        return None
+    return os.path.join(os.path.dirname(prefs), "material-skin")
+
+
+def _lms_skin_applied(choice):
+    """Whether the stored choice is fully reflected on disk (drives the
+    Settings UIs' retry affordance)."""
+    if not choice or not _material_installed():
+        return False
+    ms = _material_skin_dir()
+    if not ms:
+        return False
+    desktop = os.path.join(ms, "css", "desktop.css")
+    managed = _is_skin_managed_css(desktop)
+    return managed if choice == "osmium" else not managed
+
+
+def _is_skin_managed_css(path):
+    """True when `path` is a css file this appliance wrote (marker header).
+    A user's own hand-made custom css never carries the marker and is never
+    deleted by us."""
+    try:
+        with open(path, encoding="utf-8", errors="replace") as f:
+            return LMS_SKIN_MARKER in f.read(512)
+    except OSError:
+        return False
+
+
+def _material_repo_entry():
+    """MaterialSkin's (zip_url, sha1) from the official LMS plugin repository —
+    the same metadata LMS's own extension manager consumes."""
+    with urllib.request.urlopen(LMS_PLUGIN_REPO_XML, timeout=20) as resp:
+        xml = resp.read(4 * 1024 * 1024).decode("utf-8", "replace")
+    m = re.search(r'<plugin\s+name="MaterialSkin"[^>]*>', xml)
+    if not m:
+        raise ValueError("MaterialSkin not found in plugin repository")
+    tag = m.group(0)
+    url = re.search(r'\burl="([^"]+)"', tag)
+    sha = re.search(r'\bsha="([0-9a-fA-F]{40})"', tag)
+    if not url or not sha or not url.group(1).startswith("https://"):
+        raise ValueError("MaterialSkin repo entry malformed")
+    return url.group(1), sha.group(1).lower()
+
+
+def _yaml_pref_edit(path, mutate):
+    """Load one plugin prefs YAML (missing file → {}), run mutate(dict) → bool
+    changed, write back atomically + chown to the Lyrion user. Caller is
+    responsible for Lyrion being stopped (prefs are rewritten from memory on
+    exit — see _stop_lyrion)."""
+    import yaml
+    data = {}
+    try:
+        with open(path) as f:
+            data = yaml.safe_load(f) or {}
+    except OSError:
+        pass
+    if not mutate(data):
+        return False
+    tmp = path + ".tmp"
+    with open(tmp, "w") as f:
+        yaml.safe_dump(data, f, default_flow_style=False, allow_unicode=True)
+    os.replace(tmp, path)
+    _chown_lyrion([path])
+    return True
+
+
+def _ensure_material_installed():
+    """Install Material Skin deterministically via LMS's own needs-install
+    mechanism (validated live on the test device, 2026-08-19):
+
+      1. sha1-verified zip → <cache>/DownloadedPlugins/MaterialSkin.zip
+      2. plugin/state.prefs:      MaterialSkin: needs-install
+         plugin/extensions.prefs: plugin: {MaterialSkin: 1}  (so the extension
+         manager keeps managing/updating it afterwards)
+      3. restart Lyrion → its PluginManager extracts and enables the plugin
+      4. poll /material/ until it serves
+
+    Merely seeding extensions.prefs does NOT work: at startup LMS prunes
+    selected-but-missing plugins from that list instead of re-downloading them
+    (Slim::Utils::ExtensionsManager "failed to download... let's not re-try").
+    Returns True when Material is installed and serving. Raises nothing —
+    errors are printed and reported as False."""
+    if _material_installed():
+        return True
+    prefs = _ensure_prefs()
+    if not prefs:
+        return False
+    cache = _lyrion_cache_dir()
+    if not cache:
+        return False
+    try:
+        try:
+            url, sha = _material_repo_entry()
+        except Exception as e:
+            print(f"[sources] lms-skin: plugin repo lookup failed ({e}), "
+                  "using pinned fallback")
+            url, sha = LMS_MATERIAL_FALLBACK
+        dl_dir = os.path.join(cache, "DownloadedPlugins")
+        os.makedirs(dl_dir, exist_ok=True)
+        zip_path = os.path.join(dl_dir, "MaterialSkin.zip")
+        tmp = zip_path + ".tmp"
+        req = urllib.request.Request(url)
+        h = hashlib.sha1()
+        with urllib.request.urlopen(req, timeout=60) as resp, open(tmp, "wb") as out:
+            while True:
+                chunk = resp.read(65536)
+                if not chunk:
+                    break
+                h.update(chunk)
+                out.write(chunk)
+                if out.tell() > 64 * 1024 * 1024:
+                    raise ValueError("MaterialSkin download too large")
+        if h.hexdigest().lower() != sha:
+            os.remove(tmp)
+            raise ValueError("MaterialSkin download sha1 mismatch")
+        os.replace(tmp, zip_path)
+        _chown_lyrion([zip_path])
+
+        plugin_prefs_dir = os.path.join(os.path.dirname(prefs), "plugin")
+        os.makedirs(plugin_prefs_dir, exist_ok=True)
+        _stop_lyrion()
+        try:
+            now = int(time.time())
+
+            def set_state(data):
+                data["MaterialSkin"] = "needs-install"
+                data["_ts_MaterialSkin"] = now
+                return True
+
+            def set_selected(data):
+                plugins = data.get("plugin")
+                if not isinstance(plugins, dict):
+                    plugins = {}
+                plugins["MaterialSkin"] = 1
+                data["plugin"] = plugins
+                data["_ts_plugin"] = now
+                return True
+
+            _yaml_pref_edit(os.path.join(plugin_prefs_dir, "state.prefs"),
+                            set_state)
+            _yaml_pref_edit(os.path.join(plugin_prefs_dir, "extensions.prefs"),
+                            set_selected)
+        finally:
+            _start_lyrion()
+        for _ in range(60):  # up to ~120s
+            time.sleep(2)
+            if _material_installed():
+                try:
+                    req = urllib.request.Request(
+                        "http://127.0.0.1:9000/material/", method="HEAD")
+                    with urllib.request.urlopen(req, timeout=3):
+                        return True
+                except Exception:
+                    continue
+        print("[sources] lms-skin: Material did not come up after install")
+        return False
+    except Exception as e:
+        print(f"[sources] lms-skin: Material install failed: {e}")
+        return False
+
+
+def _install_skin_theme_files(choice):
+    """Sync the Osmium theme/css files under <prefsdir>/material-skin.
+
+    Always installs themes/dark/Osmium.css (a harmless extra entry in
+    Material's own theme picker). The global css/desktop.css + css/mobile.css
+    — the lever that restyles EVERY client — are written only for the
+    'osmium' choice and removed (only if marker-managed) for 'material'.
+    choice=None (unset/legacy device) leaves the global css alone entirely."""
+    src = _skin_asset_dir()
+    ms = _material_skin_dir()
+    if not src or not ms:
+        return
+    uid, gid = _squeezebox_ids()
+
+    def put(rel_src, dest):
+        os.makedirs(os.path.dirname(dest), exist_ok=True)
+        shutil.copyfile(os.path.join(src, rel_src), dest)
+        try:
+            os.chmod(dest, 0o644)
+            if uid is not None:
+                os.chown(dest, uid, gid)
+        except OSError:
+            pass
+
+    # Material must be able to traverse the tree; _chown_lyrion's 0640 is for
+    # single prefs files, dirs need to stay listable.
+    for d in (ms, os.path.join(ms, "themes"), os.path.join(ms, "themes", "dark"),
+              os.path.join(ms, "css")):
+        try:
+            os.makedirs(d, exist_ok=True)
+            os.chmod(d, 0o755)
+            if uid is not None:
+                os.chown(d, uid, gid)
+        except OSError:
+            pass
+    put(os.path.join("themes", "Osmium.css"),
+        os.path.join(ms, "themes", "dark", "Osmium.css"))
+    if choice == "osmium":
+        put(os.path.join("css", "desktop.css"), os.path.join(ms, "css", "desktop.css"))
+        put(os.path.join("css", "mobile.css"), os.path.join(ms, "css", "mobile.css"))
+    elif choice == "material":
+        for name in ("desktop.css", "mobile.css"):
+            path = os.path.join(ms, "css", name)
+            if _is_skin_managed_css(path):
+                try:
+                    os.remove(path)
+                except OSError:
+                    pass
+
+
+def _set_root_skin_material():
+    """Make :9000/ serve Material instead of the classic Default skin. Live
+    JSON-RPC first (no restart, LMS persists it on its own); stop→edit→start
+    fallback when LMS isn't reachable."""
+    try:
+        _lyrion_request(["pref", "skin", "material"])
+        return True
+    except Exception:
+        pass
+    prefs = _find_prefs()
+    if not prefs:
+        return False
+    try:
+        import yaml
+        _stop_lyrion()
+        try:
+            with open(prefs) as f:
+                data = yaml.safe_load(f) or {}
+            data["skin"] = "material"
+            tmp = prefs + ".tmp"
+            with open(tmp, "w") as f:
+                yaml.safe_dump(data, f, default_flow_style=False,
+                               allow_unicode=True)
+            os.replace(tmp, prefs)
+            _chown_lyrion([prefs])
+        finally:
+            _start_lyrion()
+        return True
+    except Exception as e:
+        print(f"[sources] lms-skin: root skin pref write failed: {e}")
+        return False
+
+
+def _lms_skin_apply(choice):
+    """Worker thread behind POST /api/lms_skin. Every step idempotent."""
+    try:
+        _skin_status_set("installing", 10, "msg.skinInstalling")
+        with _SKIN_JOB_LOCK:
+            if not _ensure_material_installed():
+                _skin_status_set("error", 0, "msg.skinInstallFailed")
+                return
+            _skin_status_set("applying", 70, "msg.skinApplying")
+            _install_skin_theme_files(choice)
+            if not _set_root_skin_material():
+                _skin_status_set("error", 0, "msg.skinApplyFailed")
+                return
+        _skin_status_set("done", 100, "msg.skinApplied")
+    except Exception as e:
+        print(f"[sources] lms-skin apply failed: {e}")
+        _skin_status_set("error", 0, "msg.skinApplyFailed")
+
+
+def _lms_skin_autoinstall():
+    """Startup convergence thread (user requirement 2026-08-19: Material gets
+    installed automatically whenever missing). Waits for a local LMS, then
+    ensures Material + the Osmium theme file exist, and re-syncs the global
+    css to the stored choice if there is one. Never touches the root `skin`
+    pref or the global css on 'unset' devices — their look must not change
+    until the user actively picks a skin. Exits once converged; retries with
+    backoff while offline (boot without network)."""
+    delays = [60, 300, 1800, 21600]
+    attempt = 0
+    while True:
+        try:
+            if _find_prefs() and not _skin_job_running() \
+                    and _restore_status().get("state") in ("idle", "done", "error") \
+                    and _SKIN_JOB_LOCK.acquire(blocking=False):
+                try:
+                    if _ensure_material_installed():
+                        _install_skin_theme_files(_lms_skin_choice())
+                        print("[sources] lms-skin: converged "
+                              f"(choice={_lms_skin_choice() or 'unset'})")
+                        return
+                finally:
+                    _SKIN_JOB_LOCK.release()
+        except Exception as e:
+            print(f"[sources] lms-skin autoinstall error: {e}")
+        time.sleep(delays[min(attempt, len(delays) - 1)])
+        attempt += 1
+
+
+@app.route("/api/lms_skin", methods=["GET"])
+def api_lms_skin_get():
+    choice = _lms_skin_choice()
+    return jsonify({
+        "success": True,
+        "skin": choice or "unset",
+        "lms_installed": bool(_find_prefs()),
+        "material_installed": _material_installed(),
+        "applied": _lms_skin_applied(choice),
+        "busy": _skin_job_running(),
+    })
+
+
+@app.route("/api/lms_skin", methods=["POST"])
+def api_lms_skin_set():
+    skin = ((request.get_json(silent=True) or {}).get("skin") or "").strip()
+    if skin not in ("osmium", "material"):
+        return _err("msg.skinInvalid", 400)
+    if _skin_job_running():
+        return _err("msg.skinBusy", 409)
+    if not _find_prefs():
+        # No local LMS (external/"follow" mode, or not installed yet).
+        return _err("msg.skinLmsMissing", 409)
+    # Record the intent first: even if the apply fails (offline), the choice
+    # survives and Settings can retry.
+    try:
+        tmp = LMS_SKIN_FILE + ".tmp"
+        with open(tmp, "w") as f:
+            f.write(skin + "\n")
+        os.replace(tmp, LMS_SKIN_FILE)
+        os.chmod(LMS_SKIN_FILE, 0o644)
+    except OSError:
+        return _err("msg.saveFailed", 500)
+    threading.Thread(target=_lms_skin_apply, args=(skin,),
+                     daemon=True, name="lms-skin-apply").start()
+    return jsonify({"success": True, "started": True})
+
+
+@app.route("/api/lms_skin_status", methods=["GET"])
+def api_lms_skin_status():
+    return jsonify(_skin_status())
+
+
 def current_paths(state):
     """Media directories to hand to Lyrion. Re-validates every path against the
     same confinement each source type is supposed to already satisfy (MOUNT_ROOT
@@ -3749,6 +4167,14 @@ SOURCES_I18N = {
         "msg.badPairToken": "Missing or invalid pairing token.",
         "msg.dspUnavailable": "The DSP service is unavailable.",
         "msg.dspUnreachable": "The DSP service is unreachable.",
+        "msg.skinInvalid": "Invalid skin value.",
+        "msg.skinBusy": "A skin change is already in progress.",
+        "msg.skinLmsMissing": "Lyrion is not installed on this device.",
+        "msg.skinInstalling": "Installing the Material web interface…",
+        "msg.skinApplying": "Applying the skin…",
+        "msg.skinApplied": "Skin applied.",
+        "msg.skinInstallFailed": "Could not download the Material web interface. Check the network connection and try again.",
+        "msg.skinApplyFailed": "Could not apply the skin.",
         "msg.pathMissing": "Path missing.",
         "msg.pathNotAllowed": "This path is not allowed.",
         "msg.folderMissing": "The folder {path} does not exist.",
@@ -3869,6 +4295,14 @@ SOURCES_I18N = {
         "msg.badPairToken": "Token di pairing mancante o non valido.",
         "msg.dspUnavailable": "Servizio DSP non disponibile.",
         "msg.dspUnreachable": "Servizio DSP non raggiungibile.",
+        "msg.skinInvalid": "Valore skin non valido.",
+        "msg.skinBusy": "Un cambio di skin è già in corso.",
+        "msg.skinLmsMissing": "Lyrion non è installato su questo dispositivo.",
+        "msg.skinInstalling": "Installazione dell'interfaccia web Material…",
+        "msg.skinApplying": "Applicazione della skin…",
+        "msg.skinApplied": "Skin applicata.",
+        "msg.skinInstallFailed": "Impossibile scaricare l'interfaccia web Material. Controlla la connessione di rete e riprova.",
+        "msg.skinApplyFailed": "Impossibile applicare la skin.",
         "msg.pathMissing": "Percorso mancante.",
         "msg.pathNotAllowed": "Percorso non consentito.",
         "msg.folderMissing": "La cartella {path} non esiste.",
@@ -4445,6 +4879,10 @@ if __name__ == "__main__":
         ensure_lms_trusted_networks()
     except Exception as e:
         print(f"[sources] ensure_lms_trusted_networks error: {e}")
+    # Auto-install Material Skin (and sync the Osmium theme files) whenever a
+    # local Lyrion is present — see _lms_skin_autoinstall for the contract.
+    threading.Thread(target=_lms_skin_autoinstall, daemon=True,
+                     name="lms-skin-autoinstall").start()
     # Ensure the internal-storage mount root exists.
     try:
         os.makedirs(INTERNAL_MOUNT_ROOT, exist_ok=True)
