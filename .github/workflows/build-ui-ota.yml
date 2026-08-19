@@ -18,6 +18,9 @@ permissions:
 jobs:
   build-ui-ota:
     runs-on: ubuntu-latest
+    # Without this a hung step (an apt mirror that never answers, say) keeps the
+    # job alive for the 6h default instead of failing fast enough to rerun.
+    timeout-minutes: 30
 
     # Skip if this is a companion app release tag
     if: ${{ !contains(github.ref, 'companion') }}
@@ -185,7 +188,25 @@ jobs:
         # reboot every device on every update).
         run: |
           set -e
-          sudo apt-get update -qq && sudo apt-get install -y shellcheck >/dev/null
+          # shellcheck ships with the ubuntu-latest image, so normally there is
+          # nothing to install. Only reach for apt as a fallback, and cap it: a
+          # hanging mirror used to wedge this step for hours with no output.
+          if ! command -v shellcheck >/dev/null 2>&1; then
+            echo "== shellcheck not preinstalled, installing =="
+            export DEBIAN_FRONTEND=noninteractive
+            for try in 1 2 3; do
+              if timeout 120 sudo -E apt-get update -qq \
+                && timeout 180 sudo -E apt-get install -y shellcheck >/dev/null; then
+                break
+              fi
+              echo "apt attempt $try failed or timed out"
+              if [ "$try" = 3 ]; then
+                echo "FAIL: could not install shellcheck"
+                exit 1
+              fi
+              sleep 10
+            done
+          fi
           echo "== shellcheck =="
           shellcheck -s sh distro/os-update/apply.sh distro/os-update/lib.sh distro/os-update/apply.d/*.sh \
             distro/config/includes.chroot/usr/local/sbin/hifi-update-stage-runner.sh \
