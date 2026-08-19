@@ -60,7 +60,7 @@ log "removing user settings"
 # devices that still have one from an older release.
 for f in display-mode ui-resolution pointer-enabled dsp.json dsp-presets.json bluetooth.json \
          samba-cred.json provisioning-state.json webui.db webui-secret.key \
-         github-support-pat lyrion-channel; do
+         github-support-pat lyrion-channel lms-skin; do
     rm -f "/etc/hifi-player/$f" 2>/dev/null || true
 done
 # Reset the OTA channel to the stable default (factory semantics).

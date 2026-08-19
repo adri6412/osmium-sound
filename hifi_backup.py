@@ -146,6 +146,7 @@ CATEGORIES = {
             ("file", "/etc/hifi-player/display-mode"),
             ("file", "/etc/hifi-player/ui-resolution"),
             ("file", "/etc/hifi-player/lyrion-channel"),
+            ("file", "/etc/hifi-player/lms-skin"),
             # The standard Debian file, not a custom /etc/hifi-player/ one —
             # same reasoning as /etc/timezone below. Every appliance ships
             # with the same hardcoded "hifiplayer" (0100-system-setup.hook.
