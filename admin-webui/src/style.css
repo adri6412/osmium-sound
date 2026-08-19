@@ -65,10 +65,10 @@ a:hover { filter: brightness(1.15); }
    edge instead, which is what shipped and was reported broken. */
 @media (min-width: 900px) {
   .card.wide {
-    width: 1040px;
+    width: 880px;
     max-width: calc(100vw - 40px);
-    margin-left: -158px;
-    margin-right: -158px;
+    margin-left: -78px;
+    margin-right: -78px;
   }
 }
 
