@@ -1336,11 +1336,22 @@ def _install_skin_theme_files(choice):
     Material's own theme picker). The global css/desktop.css + css/mobile.css
     — the lever that restyles EVERY client — are written only for the
     'osmium' choice and removed (only if marker-managed) for 'material'.
-    choice=None (unset/legacy device) leaves the global css alone entirely."""
+    choice=None (unset/legacy device) leaves the global css alone entirely.
+
+    Returns True when the sync actually ran, False when it could not. The
+    caller MUST honour False: this used to return None silently, so a device
+    missing the asset dir still reported "Skin applied." while installing
+    nothing at all — which is exactly how the OTA never shipping
+    /usr/local/share (see hifi-system-update.sh) stayed invisible."""
     src = _skin_asset_dir()
     ms = _material_skin_dir()
-    if not src or not ms:
-        return
+    if not src:
+        print("[sources] lms-skin: asset dir missing "
+              f"(looked in {LMS_SKIN_ASSET_DIRS}) — nothing to install")
+        return False
+    if not ms:
+        print("[sources] lms-skin: no Lyrion prefs dir found — cannot install")
+        return False
     uid, gid = _squeezebox_ids()
 
     def put(rel_src, dest):
@@ -1377,6 +1388,7 @@ def _install_skin_theme_files(choice):
                     os.remove(path)
                 except OSError:
                     pass
+    return True
 
 
 def _set_root_skin_material():
@@ -1421,7 +1433,9 @@ def _lms_skin_apply(choice):
                 _skin_status_set("error", 0, "msg.skinInstallFailed")
                 return
             _skin_status_set("applying", 70, "msg.skinApplying")
-            _install_skin_theme_files(choice)
+            if not _install_skin_theme_files(choice):
+                _skin_status_set("error", 0, "msg.skinApplyFailed")
+                return
             if not _set_root_skin_material():
                 _skin_status_set("error", 0, "msg.skinApplyFailed")
                 return
@@ -1447,8 +1461,12 @@ def _lms_skin_autoinstall():
                     and _restore_status().get("state") in ("idle", "done", "error") \
                     and _SKIN_JOB_LOCK.acquire(blocking=False):
                 try:
-                    if _ensure_material_installed():
-                        _install_skin_theme_files(_lms_skin_choice())
+                    # Only treat this as converged when the sync really ran:
+                    # returning here on a False would strand a device that has
+                    # the code but not the asset dir (it would never retry,
+                    # and /api/lms_skin would report applied=false forever).
+                    if _ensure_material_installed() \
+                            and _install_skin_theme_files(_lms_skin_choice()):
                         print("[sources] lms-skin: converged "
                               f"(choice={_lms_skin_choice() or 'unset'})")
                         return

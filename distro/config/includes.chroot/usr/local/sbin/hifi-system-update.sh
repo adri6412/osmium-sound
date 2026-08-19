@@ -153,7 +153,14 @@ apply)
     [ -d "$NEWROOT/usr/local/bin" ]      && cp -af "$NEWROOT/usr/local/bin/."      /usr/local/bin/
     [ -d "$NEWROOT/usr/local/sbin" ]     && cp -af "$NEWROOT/usr/local/sbin/."     /usr/local/sbin/
     [ -d "$NEWROOT/etc/systemd/system" ] && cp -af "$NEWROOT/etc/systemd/system/." /etc/systemd/system/
-    # Web-admin Vue build ships under /opt (outside the three dirs above).
+    # Read-only shared assets (currently the Osmium LMS skin under
+    # /usr/local/share/hifi-lms-skin). This merges ONLY what the bundle
+    # carries, so the distro's own /usr/local/share entries (fonts,
+    # ca-certificates, man…) are left alone. Omitting this line is what made
+    # the LMS skin installable on fresh ISO installs but never on OTA-updated
+    # devices: live-build copies includes.chroot wholesale, the OTA did not.
+    [ -d "$NEWROOT/usr/local/share" ]    && { mkdir -p /usr/local/share; cp -af "$NEWROOT/usr/local/share/." /usr/local/share/; }
+    # Web-admin Vue build ships under /opt (outside the dirs above).
     [ -d "$NEWROOT/opt/hifi-webui" ]     && { mkdir -p /opt/hifi-webui; cp -af "$NEWROOT/opt/hifi-webui/." /opt/hifi-webui/; }
 
     # normalise CRLF + perms for the things we just shipped
@@ -228,6 +235,8 @@ full)
     [ -d "$NEWROOT/usr/local/bin" ]      && cp -af "$NEWROOT/usr/local/bin/."      /usr/local/bin/
     [ -d "$NEWROOT/usr/local/sbin" ]     && cp -af "$NEWROOT/usr/local/sbin/."     /usr/local/sbin/
     [ -d "$NEWROOT/etc/systemd/system" ] && cp -af "$NEWROOT/etc/systemd/system/." /etc/systemd/system/
+    # Shared read-only assets — see the same line in `apply` above for why.
+    [ -d "$NEWROOT/usr/local/share" ]    && { mkdir -p /usr/local/share; cp -af "$NEWROOT/usr/local/share/." /usr/local/share/; }
     [ -d "$NEWROOT/opt/hifi-webui" ]     && { mkdir -p /opt/hifi-webui; cp -af "$NEWROOT/opt/hifi-webui/." /opt/hifi-webui/; }
 
     for f in /usr/local/bin/api_server.py /usr/local/bin/vu_meter_daemon.py \

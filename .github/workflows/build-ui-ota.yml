@@ -180,6 +180,25 @@ jobs:
           python3 -m pip install --quiet flask flask-cors
           python3 tests/test_update_plan.py
 
+      - name: Stage LMS skin assets into the OS payload
+        # apply.d/0048-lms-skin-assets.sh installs these; they are deliberately
+        # NOT committed under distro/os-update/files/ so there is a single source
+        # of truth (the same tree live-build bakes and the system bundle ships)
+        # and the image / system bundle / OS bundle cannot drift apart.
+        # Runs BEFORE the idempotency test on purpose, so that test exercises the
+        # migration for real instead of hitting its no-op branch.
+        run: |
+          set -e
+          SRC=distro/config/includes.chroot/usr/local/share/hifi-lms-skin
+          if [ ! -d "$SRC" ]; then
+            echo "::error::$SRC missing — refusing to build an OS payload that would silently ship no LMS skin assets" >&2
+            exit 1
+          fi
+          rm -rf distro/os-update/files/hifi-lms-skin
+          mkdir -p distro/os-update/files
+          cp -r "$SRC" distro/os-update/files/
+          find distro/os-update/files/hifi-lms-skin -type f | sort
+
       - name: Lint + idempotency test for OS update payload
         # Guards the OS-channel contract automatically: shellcheck the runner +
         # helpers + migrations, then prove apply.sh is idempotent — a second run
