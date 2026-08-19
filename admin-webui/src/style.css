@@ -54,14 +54,22 @@ a:hover { filter: brightness(1.15); }
 
 /* Breaks out of .wrap's 760px cap for cards with denser content (e.g. the
    Sources panel's source rows: name + path + up to 3 buttons per row get
-   cramped at 760px). Works regardless of .wrap's own width because .wrap is
-   itself centered with margin:0 auto -- see the standard CSS "full-bleed"
-   breakout formula this mirrors, just capped instead of going edge-to-edge. */
-.card.wide {
-  width: min(1040px, calc(100vw - 40px));
-  max-width: none;
-  margin-left: calc(50% - 50vw + 20px);
-  margin-right: calc(50% - 50vw + 20px);
+   cramped at 760px). Only applies above 900px viewport width, where .wrap
+   is guaranteed to sit at its own max-width (760px box, 724px content
+   after its 18px+18px padding) -- so a fixed symmetric negative margin
+   keeps this card centered on the same point .wrap already centers on
+   (which is the viewport center, since .wrap uses margin:0 auto), without
+   any vw-based math. A first attempt used `calc(50% - 50vw)` (the classic
+   full-bleed trick) but that formula only centers an edge-to-edge (100vw)
+   element -- for a capped width like this it pins the card to the left
+   edge instead, which is what shipped and was reported broken. */
+@media (min-width: 900px) {
+  .card.wide {
+    width: 1040px;
+    max-width: calc(100vw - 40px);
+    margin-left: -158px;
+    margin-right: -158px;
+  }
 }
 
 .muted { color: var(--muted); font-size: 13px; }
