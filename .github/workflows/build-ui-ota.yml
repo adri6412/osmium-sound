@@ -139,6 +139,10 @@ jobs:
           # Helper / OTA scripts (sh + python workers)
           cp distro/config/includes.chroot/usr/local/sbin/*.sh \
              distro/config/includes.chroot/usr/local/sbin/*.py "$ROOT/usr/local/sbin/"
+          # Osmium LMS skin assets (Material Skin theme + global css), installed
+          # into Lyrion's prefs by sources_server.py's lms_skin logic.
+          mkdir -p "$ROOT/usr/local/share"
+          cp -r distro/config/includes.chroot/usr/local/share/hifi-lms-skin "$ROOT/usr/local/share/"
           # systemd units
           cp distro/config/includes.chroot/etc/systemd/system/*.service "$ROOT/etc/systemd/system/"
           # hifi-beta-agent.py ships with a placeholder bootstrap secret in source

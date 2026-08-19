@@ -1,0 +1,55 @@
+/* managed-by: osmium-appliance */
+/* Osmium Sound global Material Skin style (desktop layout).
+ * Installed as <prefsdir>/material-skin/css/desktop.css while the appliance's
+ * LMS skin is set to "Osmium"; Material applies it to every client, so this
+ * file carries the full appliance look regardless of per-client theme/color.
+ * Removed (by its managed-by marker) when the user switches back to stock
+ * Material. Keep the overrides variable-level where possible so Material
+ * updates stay compatible.
+ */
+:root {
+  --primary-color: #d4af37 !important;
+  --accent-color: #d4af37 !important;
+  --highlight-rgb: 212, 175, 55 !important;
+  --active-color: #d4af37 !important;
+  --std-background-color: #0a0a0a !important;
+  --background-shadow-color: rgba(10, 10, 10, 0.85) !important;
+  --subtoolbar-shadow-color: rgba(10, 10, 10, 0.75) !important;
+  --text-shadow-color: #0a0a0a !important;
+  --std-scrollbar-thumb-color: #3a3a3a !important;
+  --std-scrollbar-thumb-hover-color: #4a4a4a !important;
+  --std-popup-background-color: #161616 !important;
+  --popup-border-color: #252525 !important;
+  --top-toolbar-color: #0f0f0f !important;
+  --sub-toolbar-color: #0f0f0f !important;
+  --bottom-toolbar-color: #0f0f0f !important;
+  --dialog-toolbar-color: #0f0f0f !important;
+  --browse-header-color: rgba(37, 37, 37, 0.3) !important;
+  --nav-hover-color: rgba(42, 42, 42, 0.45) !important;
+  --active-nav-btn-color: #d4af37 !important;
+  --toolbar-volume-color: #d4af37 !important;
+  --bottom-position-slider-color: #d4af37 !important;
+  --border-color: rgba(37, 37, 37, 0.9) !important;
+  --list-item-border-color: rgba(37, 37, 37, 0.7) !important;
+  --splitter-color: rgba(37, 37, 37, 0.7) !important;
+  --top-toolbar-border-color: rgba(37, 37, 37, 0.9) !important;
+  --sub-toolbar-border-color: rgba(37, 37, 37, 0.9) !important;
+  --bottom-toolbar-border-color: rgba(37, 37, 37, 0.9) !important;
+  --dialog-toolbar-border-color: rgba(37, 37, 37, 0.9) !important;
+  --light-text-color: #f2f2f2 !important;
+}
+html, body {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
+}
+.np-info-cover { background-color: #0a0a0a; }
+.lms-toolbar .v-btn__content i.active-btn { color: #d4af37 !important; }
+.v-overlay--active:before { opacity: 0.85 !important; }
+/* Soft-rounded surfaces, mirroring the appliance's 8/16px radii. */
+.v-dialog:not(.v-dialog--fullscreen) {
+  border-radius: 16px !important;
+  border: 1px solid #252525;
+}
+.v-menu__content, .v-snack__wrapper {
+  border-radius: 8px !important;
+  border: 1px solid #252525;
+}
