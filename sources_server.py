@@ -1493,6 +1493,9 @@ def api_lms_skin_set():
         os.chmod(LMS_SKIN_FILE, 0o644)
     except OSError:
         return _err("msg.saveFailed", 500)
+    # Status is set here, not in the thread, so a poll that lands right after
+    # this response never sees a stale idle/done from a previous run.
+    _skin_status_set("installing", 5, "msg.skinInstalling")
     threading.Thread(target=_lms_skin_apply, args=(skin,),
                      daemon=True, name="lms-skin-apply").start()
     return jsonify({"success": True, "started": True})
