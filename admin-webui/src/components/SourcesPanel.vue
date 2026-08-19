@@ -127,6 +127,7 @@ async function retryUsb(device) {
 
 // ── Add local folder (file-browser picker, mirrors Lyrion's own folder
 //    picker instead of a free-text path box) / SMB share ─────────────────
+const addLocalOpen = ref(false);   // collapsed by default; expand on demand
 const addLocalPath = ref('');      // '' = showing the top-level roots list
 const addLocalParent = ref(null);
 const addLocalDirs = ref([]);
@@ -134,6 +135,10 @@ const addLocalBusy = ref(false);
 const addLocalSamba = ref(false);  // also create a network-writable Samba share
 const newFolderName = ref('');
 
+function toggleAddLocal() {
+  addLocalOpen.value = !addLocalOpen.value;
+  if (addLocalOpen.value && !addLocalDirs.value.length) loadAddLocalBrowse();
+}
 async function loadAddLocalBrowse() {
   addLocalBusy.value = true;
   const r = await api.localBrowse(addLocalPath.value);
@@ -302,7 +307,6 @@ onMounted(() => {
   loadUsb();
   loadInternal();
   loadSmbCard();
-  loadAddLocalBrowse();
   sourcesTimer = setInterval(loadSources, 4000);
   usbTimer = setInterval(loadUsb, 4000);
   internalTimer = setInterval(loadInternal, 5000);
@@ -449,7 +453,10 @@ onUnmounted(() => {
       <label style="margin-top: 18px; padding-top: 16px; border-top: 1px solid rgba(255,255,255,0.1); display: block;">
         {{ t('settings.sources.addLocal') }}
       </label>
-      <div class="card" style="margin: 8px 0;">
+      <button class="secondary" @click="toggleAddLocal">
+        {{ addLocalOpen ? t('common.close') : t('settings.sources.addLocal') }}
+      </button>
+      <div v-if="addLocalOpen" class="card" style="margin: 8px 0;">
         <div class="row" style="justify-content: space-between; align-items: center;">
           <span class="muted">{{ addLocalPath || '/' }}</span>
           <button class="secondary fit" :disabled="addLocalParent === null || addLocalParent === undefined" @click="addLocalUp">

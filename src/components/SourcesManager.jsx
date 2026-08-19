@@ -30,6 +30,7 @@ export default function SourcesManager() {
 
   // Add local folder — file-browser picker (mirrors Lyrion's own folder
   // picker) instead of a free-text path box.
+  const [addLocalOpen, setAddLocalOpen] = useState(false); // collapsed by default; expand on demand
   const [addLocalPath, setAddLocalPath] = useState('');   // '' = top-level roots list
   const [addLocalParent, setAddLocalParent] = useState(null);
   const [addLocalDirs, setAddLocalDirs] = useState([]);
@@ -78,7 +79,6 @@ export default function SourcesManager() {
   useEffect(() => {
     loadSources();
     loadUsb();
-    loadAddLocalBrowse('');
     // sources_server.py auto-adopts every healthy USB drive on its own
     // (read-write + Samba share, no tap needed) — poll both lists so a
     // freshly-inserted drive shows up here live, without navigating away
@@ -86,8 +86,15 @@ export default function SourcesManager() {
     const sourcesId = setInterval(loadSources, 4000);
     const usbId = setInterval(loadUsb, 4000);
     return () => { clearInterval(sourcesId); clearInterval(usbId); };
-  }, [loadSources, loadUsb, loadAddLocalBrowse]);
+  }, [loadSources, loadUsb]);
 
+  const toggleAddLocal = () => {
+    setAddLocalOpen((open) => {
+      const next = !open;
+      if (next && addLocalDirs.length === 0) loadAddLocalBrowse('');
+      return next;
+    });
+  };
   const addLocalUp = () => {
     if (addLocalParent === null || addLocalParent === undefined) return;
     loadAddLocalBrowse(addLocalParent);
@@ -363,7 +370,11 @@ export default function SourcesManager() {
               folder picker) instead of a free-text path box. */}
           <div>
             <h3 className="text-white font-semibold mb-3 flex items-center space-x-2"><FolderPlus size={18} className="text-hifi-gold" /><span>{t('sources.addLocal')}</span></h3>
-            <div className="bg-hifi-dark rounded-lg p-3">
+            <button onClick={toggleAddLocal} className={`${ghostBtn} w-full`}>
+              <span>{addLocalOpen ? t('common.close') : t('sources.addLocal')}</span>
+            </button>
+            {addLocalOpen && (
+            <div className="bg-hifi-dark rounded-lg p-3 mt-3">
               <div className="flex items-center justify-between gap-2">
                 <span className="text-xs text-hifi-silver truncate">{addLocalPath || '/'}</span>
                 <button
@@ -403,6 +414,7 @@ export default function SourcesManager() {
               </label>
               <button onClick={addLocal} disabled={busy || !addLocalPath} className={`${ghostBtn} w-full mt-3`}><Plus size={18} /><span>{t('sources.useThisFolder')}</span></button>
             </div>
+            )}
           </div>
 
           {/* Add network folder (SMB) */}
