@@ -217,6 +217,14 @@ const Settings = ({ initialSection, onSectionConsumed } = {}) => {
   const [dspBalance, setDspBalance] = useState(0);   // dB, -12..+12, positive = toward right
   const [firStatus, setFirStatus] = useState(null); // { present, filename, size } from the :8080 sources service
   const [firBusy, setFirBusy] = useState(false);
+  // LMS web skin (Osmium/Material) — mirrors the captive wizard's step, from
+  // sources_server's :8080 (kiosk is loopback-exempt, same as FIR above).
+  // undefined = not loaded yet (endpoint hidden), so an older system bundle
+  // that predates this endpoint (UI/System channels can land in either
+  // order) degrades to "no skin control" instead of a broken one.
+  const [skinChoice, setSkinChoice] = useState(undefined);
+  const [skinBusy, setSkinBusy] = useState(false);
+  const [skinMessage, setSkinMessage] = useState('');
   const [firMessage, setFirMessage] = useState('');
   const [dspBusy, setDspBusy] = useState(false);
   const [dspMessage, setDspMessage] = useState('');
@@ -1219,6 +1227,69 @@ const Settings = ({ initialSection, onSectionConsumed } = {}) => {
     return () => { cancelled = true; };
   }, [activeSection]);
 
+  const loadSkinChoice = async () => {
+    try {
+      const r = await fetch('http://localhost:8080/api/lms_skin');
+      if (!r.ok) { setSkinChoice(undefined); return; }
+      const d = await r.json();
+      setSkinChoice(d.skin || 'unset');
+    } catch (_) {
+      setSkinChoice(undefined);
+    }
+  };
+
+  useEffect(() => {
+    // Also needed on custom-web-remote: webRemoteUrl/the pairing QR append
+    // ?defaultTheme=dark/Osmium once that's the active skin.
+    if (activeSection !== 'custom-lyrion' && activeSection !== 'custom-web-remote') return;
+    loadSkinChoice();
+  }, [activeSection]);
+
+  const pickSkin = async (v) => {
+    if (skinBusy || v === skinChoice) return;
+    setSkinBusy(true);
+    setSkinMessage(t('settings.lyrion.skinApplying'));
+    try {
+      const r = await fetch('http://localhost:8080/api/lms_skin', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ skin: v }),
+      });
+      const d = await r.json();
+      if (!d.started) {
+        setSkinMessage(d.message || t('settings.lyrion.skinFailed'));
+        setSkinBusy(false);
+        return;
+      }
+      setSkinChoice(v);
+      pollSkinStatus();
+    } catch (_) {
+      setSkinMessage(t('settings.lyrion.skinFailed'));
+      setSkinBusy(false);
+    }
+  };
+
+  const pollSkinStatus = async () => {
+    try {
+      const r = await fetch('http://localhost:8080/api/lms_skin_status');
+      const d = await r.json();
+      setSkinMessage(
+        d.state === 'installing' ? t('settings.lyrion.skinInstalling')
+        : d.state === 'applying' ? t('settings.lyrion.skinApplying')
+        : (d.message || '')
+      );
+      if (d.state === 'done' || d.state === 'error') {
+        setSkinBusy(false);
+        if (d.state === 'error') setSkinMessage(d.message || t('settings.lyrion.skinFailed'));
+      } else {
+        setTimeout(pollSkinStatus, 1500);
+      }
+    } catch (_) {
+      setSkinBusy(false);
+      setSkinMessage(t('settings.lyrion.skinFailed'));
+    }
+  };
+
   // Invalidates every previously-paired phone (see sources_server.py's
   // /api/pair/tokens/revoke_all — also localhost-only). Re-mints a fresh
   // token right after so the QR on screen keeps working for a new pairing.
@@ -1996,7 +2067,9 @@ const Settings = ({ initialSection, onSectionConsumed } = {}) => {
     return m ? m[1] : '9000';
   })();
   const isUsableIp = deviceIp && !/^127\./.test(deviceIp) && !/loading|caric/i.test(deviceIp);
-  const webRemoteUrl = isUsableIp ? `http://${deviceIp}:${lyrionPort}/material/` : null;
+  const webRemoteUrl = isUsableIp
+    ? `http://${deviceIp}:${lyrionPort}/material/${skinChoice === 'osmium' ? '?defaultTheme=dark/Osmium' : ''}`
+    : null;
   // Companion-app pairing QR payload: JSON (not a bare URL) so the app can pick
   // out the LMS address, the :8080 API address, and the pairing token in one
   // scan. `pairToken` is minted fresh each time this section is opened (see the
@@ -2315,6 +2388,54 @@ const Settings = ({ initialSection, onSectionConsumed } = {}) => {
                         />
                       </div>
                     </div>
+
+                    {/* Web player skin (Osmium vs stock Material) */}
+                    {skinChoice !== undefined && (
+                      <div className="space-y-3 pt-2 border-t border-hifi-accent/40">
+                        <label className="text-white font-medium">{t('settings.lyrion.skinLabel')}</label>
+                        <p className="text-sm text-hifi-silver mb-2">{t('settings.lyrion.skinHint')}</p>
+                        <div className="flex gap-2">
+                          <motion.button
+                            onClick={() => pickSkin('osmium')}
+                            disabled={skinBusy}
+                            className={`flex-1 py-3 rounded-lg font-medium transition-colors ${
+                              skinChoice === 'osmium'
+                                ? 'bg-hifi-gold text-black'
+                                : 'bg-hifi-light text-white hover:bg-hifi-accent'
+                            }`}
+                            whileTap={{ scale: skinBusy ? 1 : 0.95 }}
+                          >
+                            {t('settings.lyrion.skinOsmium')}
+                          </motion.button>
+                          <motion.button
+                            onClick={() => pickSkin('material')}
+                            disabled={skinBusy}
+                            className={`flex-1 py-3 rounded-lg font-medium transition-colors ${
+                              skinChoice === 'material'
+                                ? 'bg-hifi-gold text-black'
+                                : 'bg-hifi-light text-white hover:bg-hifi-accent'
+                            }`}
+                            whileTap={{ scale: skinBusy ? 1 : 0.95 }}
+                          >
+                            {t('settings.lyrion.skinMaterial')}
+                          </motion.button>
+                        </div>
+                        {skinChoice === 'unset' && (
+                          <p className="text-sm text-hifi-silver/70">{t('settings.lyrion.skinUnset')}</p>
+                        )}
+                        {skinBusy && (
+                          <div className="flex items-center space-x-2 text-sm text-hifi-silver">
+                            <Loader2 size={16} className="animate-spin" />
+                            <span>{skinMessage}</span>
+                          </div>
+                        )}
+                        {!skinBusy && skinMessage && (
+                          <div className="rounded-lg p-3 text-center text-sm bg-red-900/20 text-red-300 border border-red-500/30">
+                            {skinMessage}
+                          </div>
+                        )}
+                      </div>
+                    )}
 
                     {/* Library rescan */}
                     <div className="space-y-3 pt-2 border-t border-hifi-accent/40">
