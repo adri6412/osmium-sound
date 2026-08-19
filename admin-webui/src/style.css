@@ -52,6 +52,18 @@ a:hover { filter: brightness(1.15); }
 .card h3 .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--gold); display: inline-block; }
 .card .sub { color: var(--muted); font-size: 13px; margin: 0 0 14px; line-height: 1.45; }
 
+/* Breaks out of .wrap's 760px cap for cards with denser content (e.g. the
+   Sources panel's source rows: name + path + up to 3 buttons per row get
+   cramped at 760px). Works regardless of .wrap's own width because .wrap is
+   itself centered with margin:0 auto -- see the standard CSS "full-bleed"
+   breakout formula this mirrors, just capped instead of going edge-to-edge. */
+.card.wide {
+  width: min(1040px, calc(100vw - 40px));
+  max-width: none;
+  margin-left: calc(50% - 50vw + 20px);
+  margin-right: calc(50% - 50vw + 20px);
+}
+
 .muted { color: var(--muted); font-size: 13px; }
 .silver { color: var(--silver); }
 .gold { color: var(--gold); }

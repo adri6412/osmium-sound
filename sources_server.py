@@ -1147,14 +1147,23 @@ def _sync_from_lyrion(state):
     current_paths()/apply_to_lyrion() rebuilds mediadirs purely from our own
     state -- the two lists otherwise "fight" over whichever applied last.
 
-    For each managed smb/internal/usb source, if a live Lyrion mediadir
-    resolves under that source's mountpoint but to a different subfolder
-    than what we have stored, adopt Lyrion's value. A mediadir that isn't
-    under any managed mount at all is offered as a new `local` source
-    (confined to ALLOWED_LOCAL_ROOTS, same as api_add_local()) instead of
-    silently vanishing on the next Apply -- but only when it's a real
-    directory inside those safe roots; anything else is left alone exactly
-    as before.
+    Critical: this must NOT treat "our own state has a pending edit we
+    haven't pushed yet" as "Lyrion changed" -- those look identical if you
+    just compare live Lyrion mediadirs against current state (a subpath
+    picked in Music Sources but not yet Applied would get reverted by this
+    function on the very next poll/GET, before the user ever reaches
+    Apply). So a source whose `subpath_pending` flag is set (api_set_subpath
+    sets it; apply_to_lyrion clears it once actually pushed) is left alone
+    here entirely -- its local value wins until the next Apply, at which
+    point it's what actually gets written and the flag clears.
+
+    For each OTHER managed smb/internal/usb source (not pending), an
+    adopted live mediadir that resolves under that source's mountpoint
+    updates its stored subpath. A mediadir that isn't under any managed
+    mount at all is offered as a new `local` source (confined to
+    ALLOWED_LOCAL_ROOTS, same as api_add_local()) instead of silently
+    vanishing on the next Apply -- but only when it's a real directory
+    inside those safe roots; anything else is left alone exactly as before.
 
     Best-effort: any failure to reach Lyrion (not installed yet, service
     down) just leaves state untouched. Returns True if state was modified,
@@ -1182,6 +1191,12 @@ def _sync_from_lyrion(state):
                       if p == root or p.startswith(root + os.sep)), None)
         if owner:
             src, root = owner
+            if src.get("subpath_pending"):
+                # A local edit is staged for this source and hasn't been
+                # pushed yet -- Lyrion still shows the old value, which is
+                # expected, not an external change. Leave it alone; Apply
+                # will reconcile them.
+                continue
             sub = "" if p == root else os.path.relpath(p, root)
             if src.get("subpath", "") != sub:
                 src["subpath"] = sub
@@ -1277,6 +1292,17 @@ def apply_to_lyrion(state):
             pass
     finally:
         _run(["systemctl", "start", LYRION_SERVICE], timeout=60)
+
+    # Whatever subpaths were staged are now actually live in Lyrion --
+    # clear the pending flag so _sync_from_lyrion() resumes reconciling
+    # these sources normally. Re-read+save rather than reuse the `state`
+    # object passed in, in case something else touched sources while
+    # Lyrion was stopped.
+    with _lock:
+        fresh = load_state()
+        for s in fresh.get("sources", []):
+            s.pop("subpath_pending", None)
+        save_state(fresh)
 
     return True, _ht('lyrion.applied', _hlang(), count=len(paths))
 
@@ -2776,6 +2802,12 @@ def api_set_subpath(sid):
             if os.path.ismount(mountpoint) and not os.path.isdir(cand):
                 return _err("msg.folderMissing", 400, path=cand)
         src["subpath"] = subpath
+        # Staged, not yet pushed to Lyrion -- tell _sync_from_lyrion() to
+        # leave this source alone until the next Apply actually writes it,
+        # otherwise the very next GET /api/sources poll sees Lyrion still
+        # showing the old mediadir and "reconciles" this pick right back
+        # out before the user ever reaches Apply.
+        src["subpath_pending"] = True
         save_state(state)
     return jsonify({"success": True, "message": _m("msg.subpathSaved")})
 

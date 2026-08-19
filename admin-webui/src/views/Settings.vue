@@ -1174,7 +1174,7 @@ onUnmounted(() => {
     <!-- Sources (native — talks directly to sources_server.py through
          webui_server's session-gated /api/system/sources|usb|internal|apply
          forwarders, see SourcesPanel.vue) -->
-    <div class="card" v-if="open === 'sources'">
+    <div class="card wide" v-if="open === 'sources'">
       <p class="sub">{{ t('settings.sources.hint') }}</p>
       <SourcesPanel />
     </div>

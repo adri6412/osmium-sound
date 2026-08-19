@@ -289,12 +289,12 @@ onUnmounted(() => {
     <label style="margin-top: 16px; display: block;">{{ t('settings.sources.active') }}</label>
     <p v-if="!sources.length" class="sub">{{ t('settings.sources.none') }}</p>
     <template v-for="s in sources" :key="s.id">
-    <div class="net between" style="align-items: flex-start;">
-      <div>
+    <div class="net between" style="align-items: center; gap: 16px; flex-wrap: wrap;">
+      <div style="min-width: 260px;">
         <div>{{ s.name }} <span class="pill">{{ sourceTag(s) }}</span></div>
         <div class="muted" :style="{ color: sourceOk(s) ? '' : 'var(--danger)' }">{{ sourceSub(s) }}</div>
       </div>
-      <div class="row">
+      <div class="row" style="flex-wrap: wrap; justify-content: flex-end;">
         <button v-if="s.type === 'smb'" class="secondary fit" :disabled="busy" @click="setSmbRw(s.id, !s.rw)">
           {{ s.rw ? t('settings.sources.smbMakeRo') : t('settings.sources.smbMakeRw') }}
         </button>
