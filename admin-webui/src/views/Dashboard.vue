@@ -5,6 +5,9 @@ import { useI18n } from '../i18n';
 
 const { t } = useI18n();
 const host = location.hostname;
+// LMS link follows the skin choice: Material's page once a skin was chosen
+// (Osmium theme pre-selected for new browsers), bare root on legacy devices.
+const lmsUrl = ref(`http://${host}:9000`);
 const info = ref({});
 const net = ref({});
 const mode = ref('');
@@ -25,6 +28,9 @@ onMounted(async () => {
   if (n.ok) net.value = n.data;
   const m = await api.sys('display_mode');
   if (m.ok) mode.value = m.data.mode;
+  const sk = await api.sys('lms_skin');
+  if (sk.ok && sk.data.skin === 'osmium') lmsUrl.value = `http://${host}:9000/material/?defaultTheme=dark/Osmium`;
+  else if (sk.ok && sk.data.skin === 'material') lmsUrl.value = `http://${host}:9000/material/`;
   await loadStats();
   // CPU/RAM/disk/temperature/GPU are live figures -- keep the status card
   // current without requiring a manual page reload.
@@ -39,7 +45,7 @@ onUnmounted(() => {
 <template>
   <h2 class="page">{{ t('dashboard.title') }}</h2>
   <div class="grid">
-    <a class="tile" :href="`http://${host}:9000`" target="_blank">
+    <a class="tile" :href="lmsUrl" target="_blank">
       <span class="t gold">{{ t('dashboard.music') }}</span>
       <span class="muted">{{ t('dashboard.musicDesc') }}</span>
     </a>

@@ -1,5 +1,5 @@
 <script setup>
-import { ref, onMounted, onUnmounted } from 'vue';
+import { ref, computed, onMounted, onUnmounted } from 'vue';
 import { useRouter } from 'vue-router';
 import { api } from '../api.js';
 import { useI18n } from '../i18n';
@@ -70,6 +70,7 @@ async function checkLyrion() {
   // whether Lyrion is installed). 'unknown' ⇒ not installed.
   const cur = r.ok ? r.data.current : null;
   lyrionState.value = (cur && cur !== 'unknown') ? 'installed' : 'missing';
+  if (lyrionState.value === 'installed') loadSkin();
 }
 
 async function installLyrion() {
@@ -92,13 +93,67 @@ async function installLyrion() {
     if (d.state === 'done' || d.state === 'error') {
       clearInterval(lyrionPoll); lyrionPoll = null;
       lyrionInstalling.value = false;
-      if (d.state === 'done') { lyrionProgress.value = 100; lyrionState.value = 'installed'; }
+      if (d.state === 'done') { lyrionProgress.value = 100; lyrionState.value = 'installed'; loadSkin(); }
       else lyrionError.value = d.message || t('setup.lyrionInstallFailed');
     }
   }, 2000);
 }
 
-onUnmounted(() => { if (lyrionPoll) clearInterval(lyrionPoll); });
+// LMS web skin (Osmium/Material) — mirrors the captive wizard's step-lms-skin
+// for headless setups that land here instead. Backed by sources_server's
+// /api/lms_skin, session-gated through webui_server.
+const skinChoice = ref('unset');
+const skinBusy = ref(false);
+const skinMsg = ref('');
+const skinError = ref('');
+let skinPoll = null;
+
+async function loadSkin() {
+  const r = await api.sys('lms_skin');
+  if (r.ok) skinChoice.value = r.data.skin || 'unset';
+}
+
+function skinStateMsg(d) {
+  if (d.state === 'installing') return t('setup.skinInstalling');
+  if (d.state === 'applying') return t('setup.skinApplying');
+  return d.message || '';
+}
+
+async function chooseSkin(v) {
+  if (skinBusy.value) return;
+  skinBusy.value = true; skinError.value = ''; skinMsg.value = t('setup.skinApplying');
+  const r = await api.sysPost('lms_skin', { skin: v });
+  if (!(r.ok && r.data.started)) {
+    skinBusy.value = false;
+    skinError.value = (r.data && r.data.message) || t('setup.skinFailed');
+    return;
+  }
+  skinChoice.value = v;
+  skinPoll = setInterval(async () => {
+    const s = await api.sys('lms_skin_status');
+    const d = s.data || {};
+    skinMsg.value = skinStateMsg(d);
+    if (d.state === 'done' || d.state === 'error') {
+      clearInterval(skinPoll); skinPoll = null;
+      skinBusy.value = false;
+      if (d.state === 'error') skinError.value = d.message || t('setup.skinFailed');
+      else skinMsg.value = '';
+    }
+  }, 1500);
+}
+
+// Where "Open Lyrion" should land: Material's page once a skin choice exists,
+// the bare root (classic skin) on legacy/unset devices.
+const lmsUrl = computed(() => {
+  if (skinChoice.value === 'osmium') return `http://${host.value}:9000/material/?defaultTheme=dark/Osmium`;
+  if (skinChoice.value === 'material') return `http://${host.value}:9000/material/`;
+  return `http://${host.value}:9000`;
+});
+
+onUnmounted(() => {
+  if (lyrionPoll) clearInterval(lyrionPoll);
+  if (skinPoll) clearInterval(skinPoll);
+});
 
 onMounted(load);
 
@@ -216,7 +271,16 @@ async function finish() {
           </template>
         </template>
         <p v-else class="sub">{{ t('setup.lyrionInstalled') }}</p>
-        <p class="item" v-if="lyrionState === 'installed'"><a :href="`http://${host}:9000`" target="_blank">{{ t('setup.openLyrion') }}</a></p>
+        <template v-if="lyrionState === 'installed'">
+          <p class="sub" style="margin-top: 12px;">{{ t('setup.skinHint') }}</p>
+          <div class="seg">
+            <button :class="{ active: skinChoice === 'osmium' }" :disabled="skinBusy" @click="chooseSkin('osmium')">{{ t('setup.skinOsmium') }}</button>
+            <button :class="{ active: skinChoice === 'material' }" :disabled="skinBusy" @click="chooseSkin('material')">{{ t('setup.skinMaterial') }}</button>
+          </div>
+          <p v-if="skinBusy" class="muted">{{ skinMsg }}</p>
+          <div v-if="skinError" class="msg err">{{ skinError }}</div>
+          <p class="item"><a :href="lmsUrl" target="_blank">{{ t('setup.openLyrion') }}</a></p>
+        </template>
       </template>
     </div>
     <div class="card">

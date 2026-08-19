@@ -538,6 +538,59 @@ async function installLyrion() {
   }, 2000);
 }
 
+// ── LMS web skin (Osmium / Material) ────────────────────────────────
+// Which look Lyrion's web player serves. 'unset' = legacy device that never
+// chose (nothing has been touched); picking either value installs Material if
+// needed (sources_server does the work) and sets it as the :9000 root skin.
+const skin = reactive({ choice: 'unset', supported: true, busy: false, message: '', error: '' });
+let skinPoll = null;
+
+async function loadSkin() {
+  // Feature-detect like loadLyrion(): the UI bundle can land before the
+  // system bundle that ships /api/system/lms_skin.
+  const r = await api.sys('lms_skin');
+  skin.supported = r.ok && !!r.data.skin;
+  if (skin.supported) skin.choice = r.data.skin;
+}
+
+function skinStateMessage(state, raw) {
+  if (state === 'installing') return t('settings.lyrion.skinInstalling');
+  if (state === 'applying') return t('settings.lyrion.skinApplying');
+  return raw || '';
+}
+
+async function pickSkin(v) {
+  if (skin.busy || v === skin.choice) return;
+  skin.busy = true; skin.error = ''; skin.message = t('settings.lyrion.skinApplying');
+  const r = await api.sysPost('lms_skin', { skin: v });
+  if (!(r.ok && r.data.started)) {
+    skin.busy = false;
+    skin.error = bodyMsg(r, t('settings.lyrion.skinFailed'));
+    return;
+  }
+  skin.choice = v;
+  skinPoll = setInterval(async () => {
+    const s = await api.sys('lms_skin_status');
+    const d = s.data || {};
+    skin.message = skinStateMessage(d.state, d.message);
+    if (d.state === 'done' || d.state === 'error') {
+      clearInterval(skinPoll); skinPoll = null;
+      skin.busy = false;
+      if (d.state === 'done') say(t('settings.lyrion.skinChanged'));
+      else skin.error = d.message || t('settings.lyrion.skinFailed');
+    }
+  }, 1500);
+}
+
+// Where LMS links should land: Material's page once a skin choice exists
+// (with the Osmium theme pre-selected for new browsers), the bare root
+// (classic skin) on legacy/unset devices.
+const lmsUrl = computed(() => {
+  if (skin.choice === 'osmium') return `http://${host}:9000/material/?defaultTheme=dark/Osmium`;
+  if (skin.choice === 'material') return `http://${host}:9000/material/`;
+  return `http://${host}:9000`;
+});
+
 // ── display mode ─────────────────────────────────────────────────
 const mode = ref('');
 async function loadMode() { const r = await api.sys('display_mode'); if (r.ok) mode.value = r.data.mode; }
@@ -879,7 +932,9 @@ async function mintPair() {
   const r = await api.post('/api/system/pair_token', {});
   pairBusy.value = false;
   if (r.ok && r.data.token) {
-    const payload = JSON.stringify({ lms: `http://${host}:9000`, api: `${host}:8080`, token: r.data.token });
+    // lms follows the skin choice (aligned with the kiosk QR, which points at
+    // /material/): legacy/unset devices keep the bare root they always had.
+    const payload = JSON.stringify({ lms: lmsUrl.value, api: `${host}:8080`, token: r.data.token });
     pairQr.value = await QRCode.toDataURL(payload, { margin: 1, width: 380 });
   } else say(bodyMsg(r, t('settings.companion.tokenFailed')), true);
 }
@@ -1103,7 +1158,7 @@ async function saveBackupScheduled(v) {
 }
 
 onMounted(async () => {
-  loadNet(); loadAudio(); loadDsp(); loadFir(); loadToggles(); loadShell(); loadLms(); loadLyrion(); loadPlayback();
+  loadNet(); loadAudio(); loadDsp(); loadFir(); loadToggles(); loadShell(); loadLms(); loadLyrion(); loadSkin(); loadPlayback();
   loadMode(); loadPlayerEnabled(); loadUiRes(); loadUiRefresh(); loadPointer(); loadTimezone(); loadVuMeter(); loadAutoExpand(); loadChannel(); checkAll(); resumePlanIfRunning(); loadBackups(); loadTailscale(); loadHarCaptures(); loadPerfCaptures(); loadDebugFlags();
   timezonePoll = setInterval(pollTimezone, 10000);
   // Tell the global UpdateProgressOverlay (mounted in App.vue) that this page
@@ -1112,7 +1167,7 @@ onMounted(async () => {
   window.dispatchEvent(new CustomEvent('hifi-settings-active', { detail: true }));
 });
 onUnmounted(() => {
-  if (lyrionPoll) clearInterval(lyrionPoll); if (tailscalePoll) clearInterval(tailscalePoll);
+  if (lyrionPoll) clearInterval(lyrionPoll); if (skinPoll) clearInterval(skinPoll); if (tailscalePoll) clearInterval(tailscalePoll);
   if (timezonePoll) clearInterval(timezonePoll);
   window.dispatchEvent(new CustomEvent('hifi-settings-active', { detail: false }));
 });
@@ -1283,7 +1338,7 @@ onUnmounted(() => {
           <span>{{ t('settings.lyrion.installed') }}
             <span class="muted">{{ lyrion.current || t('settings.lyrion.notInstalled') }}<template v-if="lyrion.current && lyrion.updateAvailable"> → <span class="gold">{{ lyrion.channels[lyrion.channel] && lyrion.channels[lyrion.channel].version }}</span></template><template v-else-if="lyrion.current"> · {{ t('settings.updates.upToDate') }}</template></span>
           </span>
-          <a v-if="lyrion.current" :href="`http://${host}:9000`" target="_blank">{{ t('settings.lyrion.open') }}</a>
+          <a v-if="lyrion.current" :href="lmsUrl" target="_blank">{{ t('settings.lyrion.open') }}</a>
         </div>
 
         <template v-if="lyrion.supported">
@@ -1311,6 +1366,19 @@ onUnmounted(() => {
             <div style="height: 100%; background: var(--gold); transition: width .4s;" :style="{ width: lyrion.progress + '%' }"></div>
           </div>
           <p class="muted">{{ lyrion.message || t('settings.lyrion.installing') }}</p>
+        </template>
+
+        <!-- Web player skin: Osmium (appliance look) vs stock Material. -->
+        <template v-if="skin.supported && lyrion.current">
+          <label style="margin-top: 14px;">{{ t('settings.lyrion.skinLabel') }}</label>
+          <p class="sub">{{ t('settings.lyrion.skinHint') }}</p>
+          <div class="seg">
+            <button :class="{ active: skin.choice === 'osmium' }" :disabled="skin.busy" @click="pickSkin('osmium')">{{ t('settings.lyrion.skinOsmium') }}</button>
+            <button :class="{ active: skin.choice === 'material' }" :disabled="skin.busy" @click="pickSkin('material')">{{ t('settings.lyrion.skinMaterial') }}</button>
+          </div>
+          <p class="sub" v-if="skin.choice === 'unset'">{{ t('settings.lyrion.skinUnset') }}</p>
+          <p class="muted" v-if="skin.busy">{{ skin.message }}</p>
+          <div v-if="skin.error" class="msg err">{{ skin.error }}</div>
         </template>
       </template>
 
