@@ -405,10 +405,14 @@ def _internal_disks():
 
 
 def _adopted_disk_sources():
-    """Adopted internal disks AND adopted (read-write) USB disks — the two
-    source types that get a stable mountpoint, a Samba share, and can be a CD
-    rip destination."""
-    return [s for s in load_state().get("sources", []) if s.get("type") in ("internal", "usb")]
+    """Adopted internal disks, adopted (read-write) USB disks, and local
+    rootfs folders opted into Samba sharing (`type == "local"` with
+    `samba: true`) -- every source type that gets a Samba share. Only the
+    first two get a stable mountpoint/CD-rip-destination status; a shared
+    local folder is just a plain rootfs path (see api_add_local())."""
+    return [s for s in load_state().get("sources", [])
+            if s.get("type") in ("internal", "usb")
+            or (s.get("type") == "local" and s.get("samba"))]
 
 
 def _share_name(label):
@@ -523,7 +527,7 @@ def regen_samba_shares():
     lines = []
     for src in disks:
         share = src.get("share") or "Musica"
-        mp = src.get("mountpoint")
+        mp = src.get("mountpoint") or src.get("path")  # "path" for a shared local folder
         if not mp:
             continue
         lines.append(f"\n[{share}]")
@@ -2682,25 +2686,112 @@ def _local_path_allowed(path):
 
 @app.route("/api/sources/local", methods=["POST"])
 def api_add_local():
+    """Add a rootfs folder as a `local` source. With `samba: true`, also
+    turn it into a network-writable Samba share (same ownership/mode
+    treatment ext4 internal disks get -- see _mount_adopted_disk()) so
+    music can be copied onto the appliance over the network instead of
+    needing SSH/a USB stick -- the folder is created if it doesn't exist
+    yet, since the whole point is often to make a fresh empty share to
+    upload into."""
     denied = _require_pair_token()
     if denied:
         return denied
     data = request.get_json(silent=True) or {}
     path = (data.get("path") or "").strip()
+    samba = bool(data.get("samba"))
     if not path:
         return _err("msg.pathMissing", 400)
     path = _local_path_allowed(path)
     if not path:
         return _err("msg.pathNotAllowed", 400)
     if not os.path.isdir(path):
-        return _err("msg.folderMissing", 400, path=path)
+        if not samba:
+            return _err("msg.folderMissing", 400, path=path)
+        try:
+            os.makedirs(path, exist_ok=True)
+        except OSError as e:
+            return _err("msg.mountFailed", 400, detail=str(e))
+
     with _lock:
         state = load_state()
         sid = _slug("local", os.path.basename(path.rstrip("/")))
+        src = {"id": sid, "type": "local", "name": path, "path": path}
+        if samba:
+            uid, gid = _ensure_samba_uid_gid()
+            try:
+                os.chown(path, uid, gid)
+                os.chmod(path, 0o2775)
+            except Exception as e:
+                print(f"[sources] chown/chmod for shared local folder {path} failed: {e}")
+            existing = next((s for s in state["sources"] if s.get("id") == sid), None)
+            src["samba"] = True
+            src["share"] = (existing or {}).get("share") or _share_name(os.path.basename(path.rstrip("/")))
         state["sources"] = [s for s in state["sources"] if s.get("id") != sid]
-        state["sources"].append({"id": sid, "type": "local", "name": path, "path": path})
+        state["sources"].append(src)
         save_state(state)
+        # Always regenerate, not just when samba=True now: re-adding the
+        # same path with the box unchecked must also drop a share it had
+        # from a previous add.
+        regen_samba_shares()
     return jsonify({"success": True})
+
+
+@app.route("/api/local/browse", methods=["GET"])
+def api_browse_local():
+    """List roots (if no ?path=) or immediate subdirectories under an
+    ALLOWED_LOCAL_ROOTS-confined path -- powers the "Add local folder"
+    picker's file-browser UI, mirroring Lyrion's own folder picker instead
+    of a free-text path box. Distinct from api_browse_subpath(): that one
+    browses under an existing source's own mountpoint, this one has no
+    source yet and starts from the allow-listed roots themselves."""
+    denied = _require_pair_token()
+    if denied:
+        return denied
+    rel = (request.args.get("path") or "").strip()
+    if not rel:
+        roots = sorted({os.path.realpath(r) for r in ALLOWED_LOCAL_ROOTS
+                        if os.path.isdir(os.path.realpath(r))})
+        return jsonify({"path": "", "parent": None, "dirs": roots})
+    cand = _local_path_allowed(rel)
+    if not cand or not os.path.isdir(cand):
+        return _err("msg.folderMissing", 400, path=rel)
+    try:
+        dirs = sorted(
+            e.path for e in os.scandir(cand)
+            if e.is_dir(follow_symlinks=False) and not e.name.startswith(".")
+        )
+    except OSError:
+        dirs = []
+    parent = os.path.dirname(cand.rstrip("/")) or "/"
+    if parent == cand or not _local_path_allowed(parent):
+        parent = ""  # back to the top-level roots list
+    return jsonify({"path": cand, "parent": parent, "dirs": dirs})
+
+
+@app.route("/api/local/mkdir", methods=["POST"])
+def api_mkdir_local():
+    """Create a new subfolder inside an ALLOWED_LOCAL_ROOTS-confined path --
+    the picker's "new folder" action, for making a fresh empty folder to
+    share/upload into rather than only picking among what already exists."""
+    denied = _require_pair_token()
+    if denied:
+        return denied
+    data = request.get_json(silent=True) or {}
+    parent = (data.get("path") or "").strip()
+    name = (data.get("name") or "").strip()
+    if not parent or not name or "/" in name or name in (".", ".."):
+        return _err("msg.pathNotAllowed", 400)
+    parent_ok = _local_path_allowed(parent)
+    if not parent_ok or not os.path.isdir(parent_ok):
+        return _err("msg.folderMissing", 400, path=parent)
+    target = _local_path_allowed(os.path.join(parent_ok, name))
+    if not target:
+        return _err("msg.pathNotAllowed", 400)
+    try:
+        os.makedirs(target, exist_ok=True)
+    except OSError as e:
+        return _err("msg.mountFailed", 400, detail=str(e))
+    return jsonify({"success": True, "path": target})
 
 
 @app.route("/api/sources/smb", methods=["POST"])
@@ -3481,7 +3572,7 @@ def api_internal_smb():
     for s in _adopted_disk_sources():
         shares.append({
             "name": s.get("share") or "Musica",
-            "mountpoint": s.get("mountpoint"),
+            "mountpoint": s.get("mountpoint") or s.get("path"),
             "source_id": s.get("id"),
         })
     password = ""

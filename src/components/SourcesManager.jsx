@@ -28,8 +28,15 @@ export default function SourcesManager() {
   const [busy, setBusy] = useState(false);
   const [applying, setApplying] = useState(false);
 
-  const [localPath, setLocalPath] = useState('');
-  const localRef = useKeyboardInput(localPath, setLocalPath);
+  // Add local folder — file-browser picker (mirrors Lyrion's own folder
+  // picker) instead of a free-text path box.
+  const [addLocalPath, setAddLocalPath] = useState('');   // '' = top-level roots list
+  const [addLocalParent, setAddLocalParent] = useState(null);
+  const [addLocalDirs, setAddLocalDirs] = useState([]);
+  const [addLocalBusy, setAddLocalBusy] = useState(false);
+  const [addLocalSamba, setAddLocalSamba] = useState(false);
+  const [newFolderName, setNewFolderName] = useState('');
+  const newFolderRef = useKeyboardInput(newFolderName, setNewFolderName);
 
   const [smb, setSmb] = useState({ server: '', share: '', username: '', password: '', rw: false });
   const setSmbField = (k) => (e) => setSmb((s) => ({ ...s, [k]: e.target.value }));
@@ -52,9 +59,26 @@ export default function SourcesManager() {
     try { const d = await j('/api/usb'); setUsb(d.disks || []); } catch (_) {}
   }, []);
 
+  const loadAddLocalBrowse = useCallback(async (path = addLocalPath) => {
+    setAddLocalBusy(true);
+    try {
+      const d = await j('/api/local/browse?path=' + encodeURIComponent(path));
+      if (d.success === false) {
+        setMsg(d.message || t('common.error'));
+      } else {
+        setAddLocalDirs(d.dirs || []);
+        setAddLocalParent(d.parent);
+        setAddLocalPath(d.path || '');
+      }
+    } catch (_) { setMsg(t('common.error')); }
+    finally { setAddLocalBusy(false); }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   useEffect(() => {
     loadSources();
     loadUsb();
+    loadAddLocalBrowse('');
     // sources_server.py auto-adopts every healthy USB drive on its own
     // (read-write + Samba share, no tap needed) — poll both lists so a
     // freshly-inserted drive shows up here live, without navigating away
@@ -62,16 +86,30 @@ export default function SourcesManager() {
     const sourcesId = setInterval(loadSources, 4000);
     const usbId = setInterval(loadUsb, 4000);
     return () => { clearInterval(sourcesId); clearInterval(usbId); };
-  }, [loadSources, loadUsb]);
+  }, [loadSources, loadUsb, loadAddLocalBrowse]);
 
+  const addLocalUp = () => {
+    if (addLocalParent === null || addLocalParent === undefined) return;
+    loadAddLocalBrowse(addLocalParent);
+  };
+  const createFolderHere = async () => {
+    const name = newFolderName.trim();
+    if (!name || !addLocalPath) return;
+    setAddLocalBusy(true);
+    try {
+      const r = await post('/api/local/mkdir', { path: addLocalPath, name });
+      if (r.success) { setNewFolderName(''); await loadAddLocalBrowse(r.path); }
+      else setMsg(r.message || t('common.error'));
+    } catch (_) { setMsg(t('common.error')); }
+    finally { setAddLocalBusy(false); }
+  };
   const addLocal = async () => {
-    const path = localPath.trim();
-    if (!path) return;
+    if (!addLocalPath) return;
     setBusy(true);
     try {
-      const r = await post('/api/sources/local', { path });
+      const r = await post('/api/sources/local', { path: addLocalPath, samba: addLocalSamba });
       setMsg(r.success ? t('sources.added') : (r.message || t('common.error')));
-      if (r.success) { setLocalPath(''); loadSources(); }
+      if (r.success) { setAddLocalSamba(false); loadAddLocalBrowse(addLocalPath); loadSources(); }
     } catch (_) { setMsg(t('common.error')); } finally { setBusy(false); }
   };
 
@@ -321,11 +359,50 @@ export default function SourcesManager() {
           {/* Internal disks (adopt existing / format) */}
           <InternalDisks onSourcesChanged={loadSources} />
 
-          {/* Add local folder */}
+          {/* Add local folder — file-browser picker (mirrors Lyrion's own
+              folder picker) instead of a free-text path box. */}
           <div>
             <h3 className="text-white font-semibold mb-3 flex items-center space-x-2"><FolderPlus size={18} className="text-hifi-gold" /><span>{t('sources.addLocal')}</span></h3>
-            <input ref={localRef} type="text" value={localPath} onChange={(e) => setLocalPath(e.target.value)} className={input} placeholder="/media/musica" />
-            <button onClick={addLocal} disabled={busy} className={`${ghostBtn} w-full mt-3`}><Plus size={18} /><span>{t('sources.addLocal')}</span></button>
+            <div className="bg-hifi-dark rounded-lg p-3">
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-xs text-hifi-silver truncate">/{addLocalPath || ''}</span>
+                <button
+                  onClick={addLocalUp}
+                  disabled={addLocalParent === null || addLocalParent === undefined}
+                  className="shrink-0 text-xs py-1.5 px-3 rounded-md bg-hifi-accent hover:bg-hifi-light disabled:opacity-50 text-white"
+                >
+                  {t('sources.subpathUp')}
+                </button>
+              </div>
+              {addLocalBusy ? (
+                <p className="text-xs text-hifi-silver/70 mt-2">{t('common.loading')}</p>
+              ) : addLocalDirs.length === 0 ? (
+                <p className="text-xs text-hifi-silver/70 mt-2">{t('sources.subpathNoSubfolders')}</p>
+              ) : (
+                <div className="space-y-1 mt-2 max-h-40 overflow-y-auto">
+                  {addLocalDirs.map((dir) => (
+                    <button
+                      key={dir}
+                      onClick={() => loadAddLocalBrowse(dir)}
+                      className="w-full text-left text-sm text-white bg-hifi-accent/40 hover:bg-hifi-accent rounded-md px-3 py-1.5 truncate"
+                    >
+                      {dir}
+                    </button>
+                  ))}
+                </div>
+              )}
+              <div className="flex gap-2 mt-3">
+                <input ref={newFolderRef} type="text" value={newFolderName} onChange={(e) => setNewFolderName(e.target.value)} className={input} placeholder={t('sources.newFolderPlaceholder')} />
+                <button onClick={createFolderHere} disabled={addLocalBusy || !newFolderName.trim() || !addLocalPath} className="shrink-0 text-xs py-1.5 px-3 rounded-md bg-hifi-accent hover:bg-hifi-light disabled:opacity-50 text-white">
+                  {t('sources.newFolderCreate')}
+                </button>
+              </div>
+              <label className="flex items-center gap-2 mt-3 text-sm text-hifi-silver">
+                <input type="checkbox" checked={addLocalSamba} onChange={(e) => setAddLocalSamba(e.target.checked)} className="accent-hifi-gold" />
+                <span>{t('sources.localSambaHint')}</span>
+              </label>
+              <button onClick={addLocal} disabled={busy || !addLocalPath} className={`${ghostBtn} w-full mt-3`}><Plus size={18} /><span>{t('sources.useThisFolder')}</span></button>
+            </div>
           </div>
 
           {/* Add network folder (SMB) */}

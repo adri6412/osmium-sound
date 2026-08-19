@@ -135,7 +135,9 @@ export const api = {
   // webui_server (session-gated: see /api/system/sources|usb|internal|apply
   // in webui_server.py). Powers SourcesPanel.vue.
   sourcesList: () => req('/api/system/sources'),
-  sourcesAddLocal: (path) => req('/api/system/sources/local', { method: 'POST', body: { path } }),
+  sourcesAddLocal: (path, samba = false) => req('/api/system/sources/local', { method: 'POST', body: { path, samba } }),
+  localBrowse: (path = '') => req('/api/system/local/browse?path=' + encodeURIComponent(path)),
+  localMkdir: (path, name) => req('/api/system/local/mkdir', { method: 'POST', body: { path, name } }),
   sourcesAddSmb: ({ server, share, username, password, rw }) =>
     req('/api/system/sources/smb', { method: 'POST', body: { server, share, username, password, rw } }),
   sourcesSetRw: (id, rw) => req('/api/system/sources/' + id + '/rw', { method: 'POST', body: { rw } }),

@@ -125,15 +125,51 @@ async function retryUsb(device) {
   busy.value = false;
 }
 
-// ── Add local folder / SMB share ──────────────────────────────────────
-const localPath = ref('');
+// ── Add local folder (file-browser picker, mirrors Lyrion's own folder
+//    picker instead of a free-text path box) / SMB share ─────────────────
+const addLocalPath = ref('');      // '' = showing the top-level roots list
+const addLocalParent = ref(null);
+const addLocalDirs = ref([]);
+const addLocalBusy = ref(false);
+const addLocalSamba = ref(false);  // also create a network-writable Samba share
+const newFolderName = ref('');
+
+async function loadAddLocalBrowse() {
+  addLocalBusy.value = true;
+  const r = await api.localBrowse(addLocalPath.value);
+  if (r.ok) {
+    addLocalDirs.value = r.data.dirs || [];
+    addLocalParent.value = r.data.parent;
+    addLocalPath.value = r.data.path || '';
+  } else {
+    say((r.data && r.data.message) || t('common.error'), true);
+  }
+  addLocalBusy.value = false;
+}
+function addLocalInto(dir) {
+  addLocalPath.value = dir;
+  loadAddLocalBrowse();
+}
+function addLocalUp() {
+  if (addLocalParent.value === null || addLocalParent.value === undefined) return;
+  addLocalPath.value = addLocalParent.value;
+  loadAddLocalBrowse();
+}
+async function createFolderHere() {
+  const name = newFolderName.value.trim();
+  if (!name || !addLocalPath.value) return;
+  addLocalBusy.value = true;
+  const r = await api.localMkdir(addLocalPath.value, name);
+  if (r.ok) { newFolderName.value = ''; addLocalPath.value = r.data.path; await loadAddLocalBrowse(); }
+  else say((r.data && r.data.message) || t('common.error'), true);
+  addLocalBusy.value = false;
+}
 async function addLocal() {
-  const path = localPath.value.trim();
-  if (!path) return;
+  if (!addLocalPath.value) return;
   busy.value = true;
-  const r = await api.sourcesAddLocal(path);
+  const r = await api.sourcesAddLocal(addLocalPath.value, addLocalSamba.value);
   say(r.ok ? t('settings.sources.added') : ((r.data && r.data.message) || t('common.error')), !r.ok);
-  if (r.ok) { localPath.value = ''; loadSources(); }
+  if (r.ok) { addLocalPath.value = ''; addLocalSamba.value = false; loadAddLocalBrowse(); loadSources(); }
   busy.value = false;
 }
 
@@ -266,6 +302,7 @@ onMounted(() => {
   loadUsb();
   loadInternal();
   loadSmbCard();
+  loadAddLocalBrowse();
   sourcesTimer = setInterval(loadSources, 4000);
   usbTimer = setInterval(loadUsb, 4000);
   internalTimer = setInterval(loadInternal, 5000);
@@ -407,12 +444,39 @@ onUnmounted(() => {
         </template>
       </div>
 
-      <!-- Add local folder -->
+      <!-- Add local folder — file-browser picker (mirrors Lyrion's own
+           folder picker) instead of a free-text path box. -->
       <label style="margin-top: 18px; padding-top: 16px; border-top: 1px solid rgba(255,255,255,0.1); display: block;">
         {{ t('settings.sources.addLocal') }}
       </label>
-      <input v-model="localPath" type="text" :placeholder="t('settings.sources.localPathPlaceholder')" />
-      <button style="margin-top: 8px;" :disabled="busy" @click="addLocal">{{ t('settings.sources.addLocal') }}</button>
+      <div class="card" style="margin: 8px 0;">
+        <div class="row" style="justify-content: space-between; align-items: center;">
+          <span class="muted">/{{ addLocalPath || '' }}</span>
+          <button class="secondary fit" :disabled="addLocalParent === null || addLocalParent === undefined" @click="addLocalUp">
+            {{ t('settings.sources.subpathUp') }}
+          </button>
+        </div>
+        <p v-if="addLocalBusy" class="sub" style="margin-top: 8px;">{{ t('common.loading') }}</p>
+        <template v-else>
+          <p v-if="!addLocalDirs.length" class="sub" style="margin-top: 8px;">{{ t('settings.sources.subpathNoSubfolders') }}</p>
+          <div v-for="dir in addLocalDirs" :key="dir" class="net" style="cursor: pointer;" @click="addLocalInto(dir)">
+            {{ dir }}
+          </div>
+        </template>
+        <div class="row" style="margin-top: 10px;">
+          <input v-model="newFolderName" type="text" :placeholder="t('settings.sources.newFolderPlaceholder')" />
+          <button class="secondary fit" :disabled="addLocalBusy || !newFolderName.trim() || !addLocalPath" @click="createFolderHere">
+            {{ t('settings.sources.newFolderCreate') }}
+          </button>
+        </div>
+        <label class="row" style="align-items: center; gap: 8px; margin-top: 12px; cursor: pointer;">
+          <input type="checkbox" v-model="addLocalSamba" style="width: auto;" />
+          <span class="muted">{{ t('settings.sources.localSambaHint') }}</span>
+        </label>
+        <button style="margin-top: 10px;" :disabled="busy || !addLocalPath" @click="addLocal">
+          {{ t('settings.sources.useThisFolder') }}
+        </button>
+      </div>
 
       <!-- Add network folder (SMB) -->
       <label style="margin-top: 18px; padding-top: 16px; border-top: 1px solid rgba(255,255,255,0.1); display: block;">

@@ -263,7 +263,11 @@
       "subpathUseHere": "Use this folder",
       "subpathUseRoot": "Use whole drive/share",
       "subpathNoSubfolders": "No subfolders here.",
-      "subpathSaved": "Subfolder saved. Apply & rescan to update the library."
+      "subpathSaved": "Subfolder saved. Apply & rescan to update the library.",
+      "newFolderPlaceholder": "New folder name",
+      "newFolderCreate": "Create",
+      "localSambaHint": "Also share this folder over the network (SMB), so you can copy music onto it from a PC.",
+      "useThisFolder": "Use this folder"
     },
     "dsp": {
       "unavailable": "DSP is not available on this device.",

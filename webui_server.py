@@ -1794,7 +1794,7 @@ def factory_reset():
 # mirroring sources' own auth (bearer/?token=, constant-time compare). Token
 # auth (not cookies) also means these routes are CSRF-immune by design.
 _SOURCES_FWD_PREFIXES = ('/api/sources', '/api/usb', '/api/internal', '/api/apply',
-                         '/api/backup', '/api/restore', '/api/cd', '/api/dsp')
+                         '/api/backup', '/api/restore', '/api/cd', '/api/dsp', '/api/local')
 _PAIR_TOKENS_FILE = '/etc/hifi-pairing-tokens.json'
 
 
@@ -1996,6 +1996,14 @@ def internal_proxy(rest):
     if denied:
         return denied
     return _forward_to_sources('/api/internal/' + rest)
+
+
+@app.route('/api/system/local/<path:rest>', methods=['GET', 'POST'])
+def local_proxy(rest):
+    denied = _require_session()
+    if denied:
+        return denied
+    return _forward_to_sources('/api/local/' + rest)
 
 
 @app.route('/api/system/apply', methods=['POST'])
