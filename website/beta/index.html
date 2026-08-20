@@ -407,6 +407,28 @@
     }
     .install-warning .warn-ico { flex-shrink: 0; font-size: 1.05rem; line-height: 1.5; }
     .install-warning strong { color: #ff8166; }
+    /* Release notice — the Debian 13 jump, which decides whether a tester
+       should reinstall or just let the OTA run. */
+    .release-notice {
+      max-width: 760px; margin: 1.9rem auto 0; text-align: left;
+      background: linear-gradient(180deg, rgba(245,184,32,0.11), rgba(245,184,32,0.04));
+      border: 1px solid rgba(245,184,32,0.45);
+      border-radius: 12px; padding: 1.15rem 1.3rem;
+    }
+    .rn-head { display: flex; align-items: center; gap: 0.65rem; flex-wrap: wrap; }
+    .rn-badge {
+      font-size: 0.7rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase;
+      color: #0a0a0a; background: var(--accent); padding: 3px 9px; border-radius: 100px;
+    }
+    .rn-title { font-size: 1rem; font-weight: 700; color: var(--text); }
+    .release-notice p { font-size: 0.86rem; color: var(--text); line-height: 1.6; margin: 0.7rem 0 0; }
+    .release-notice a { color: var(--accent); }
+    .release-notice .rn-warn {
+      display: flex; gap: 0.6rem; align-items: flex-start;
+      background: rgba(255,99,71,0.10); border: 1px solid rgba(255,99,71,0.35);
+      border-radius: 10px; padding: 0.75rem 0.95rem; margin-top: 0.95rem;
+    }
+    .release-notice .rn-warn strong { color: #ff8166; }
 
     /* ── BETA BANNER + PRIVACY NOTICE ───────────────────── */
     .beta-banner {
@@ -605,6 +627,15 @@
     <h2 class="section-title" data-en="Download &amp; install" data-it="Scarica e installa">Download &amp; install</h2>
     <p class="section-desc" data-en="Flash one ISO image to a USB stick for the first install. From then on, every update — UI, system and OS — is delivered automatically over the air (dev channel: expect frequent, less-tested builds)." data-it="Flasha una sola immagine ISO su una chiavetta USB per la prima installazione. Da lì in poi, ogni aggiornamento — interfaccia, sistema e OS — arriva automaticamente via OTA (canale dev: build frequenti e meno testate).">Flash one ISO image to a USB stick for the first install. From then on, every update — UI, system and OS — is delivered automatically over the air (dev channel: expect frequent, less-tested builds).</p>
 
+    <div class="release-notice">
+      <div class="rn-head">
+        <span class="rn-badge">Debian 13</span>
+        <span class="rn-title" data-en="dev113 is the first Debian 13 image" data-it="dev113 è la prima immagine su Debian 13">dev113 is the first Debian 13 image</span>
+      </div>
+      <p data-en="The kiosk session now runs on &lt;strong&gt;Wayland (labwc)&lt;/strong&gt; instead of Xorg, which is where most of the GPU load during normal listening was going. labwc, wlr-randr and xwayland only exist from Debian 13 (trixie) onward, so the install image moved with them — every beta ISO up to dev111 was a Debian 12 image." data-it="La sessione kiosk ora gira su &lt;strong&gt;Wayland (labwc)&lt;/strong&gt; al posto di Xorg, dove finiva gran parte del carico GPU durante il normale ascolto. labwc, wlr-randr e xwayland esistono solo da Debian 13 (trixie) in poi, quindi l&#39;immagine di installazione si è spostata con loro — tutte le ISO beta fino alla dev111 erano immagini Debian 12.">The kiosk session now runs on <strong>Wayland (labwc)</strong> instead of Xorg, which is where most of the GPU load during normal listening was going. labwc, wlr-randr and xwayland only exist from Debian 13 (trixie) onward, so the install image moved with them — every beta ISO up to dev111 was a Debian 12 image.</p>
+      <p class="rn-warn" data-en="&lt;span class=&quot;warn-ico&quot;&gt;⚠️&lt;/span&gt;&lt;span&gt;&lt;strong&gt;An OTA update will not move your device to Debian 13.&lt;/strong&gt; A device installed from dev111 or earlier keeps receiving everything else on the dev channel, but labwc cannot be installed on Debian 12 — the kiosk stays on Xorg and part of the saving on Intel integrated graphics is lost. Measured on a Gemini Lake J4105/UHD 600, same scene: &lt;strong&gt;0.81 W&lt;/strong&gt; GPU and ~73% render-engine busy on Xorg, against &lt;strong&gt;0.59 W&lt;/strong&gt; and ~55% on Wayland. To get it, reinstall from the dev113 ISO below instead of updating over the air.&lt;/span&gt;" data-it="&lt;span class=&quot;warn-ico&quot;&gt;⚠️&lt;/span&gt;&lt;span&gt;&lt;strong&gt;L&#39;aggiornamento OTA non porta il dispositivo a Debian 13.&lt;/strong&gt; Un dispositivo installato da dev111 o precedenti continua a ricevere tutto il resto sul canale dev, ma labwc su Debian 12 non si può installare: il kiosk resta su Xorg e una parte del risparmio sulla grafica integrata Intel si perde. Misurato su Gemini Lake J4105/UHD 600, stessa scena: &lt;strong&gt;0,81 W&lt;/strong&gt; di GPU e ~73% di render engine occupato su Xorg, contro &lt;strong&gt;0,59 W&lt;/strong&gt; e ~55% su Wayland. Per averlo, reinstalla dalla ISO dev113 qui sotto invece di aggiornare via OTA.&lt;/span&gt;"><span class="warn-ico">⚠️</span><span><strong>An OTA update will not move your device to Debian 13.</strong> A device installed from dev111 or earlier keeps receiving everything else on the dev channel, but labwc cannot be installed on Debian 12 — the kiosk stays on Xorg and part of the saving on Intel integrated graphics is lost. Measured on a Gemini Lake J4105/UHD 600, same scene: <strong>0.81 W</strong> GPU and ~73% render-engine busy on Xorg, against <strong>0.59 W</strong> and ~55% on Wayland. To get it, reinstall from the dev113 ISO below instead of updating over the air.</span></p>
+    </div>
+
     <p class="privacy-notice">
       <span class="pn-ico">🔒</span>
       <span data-en="&lt;strong&gt;Before you download:&lt;/strong&gt; installing this beta build means the appliance will automatically send diagnostic and performance data (device specs, resource usage) to our cloud platform, to help us find and fix bugs during the beta. During troubleshooting windows we trigger remotely, it also captures the network calls made by the on-screen interface itself — not system-wide traffic — with authentication/session data (streaming-service logins, cookies, tokens) and response bodies (page content, audio) automatically stripped before anything leaves the device. There is currently no in-app switch to turn this off — see the &lt;a href=&quot;privacy.html&quot;&gt;full privacy notice&lt;/a&gt; for exactly what is collected. This data collection is temporary: it will be removed once the private beta ends." data-it="&lt;strong&gt;Prima di scaricare:&lt;/strong&gt; installando questa build beta il dispositivo invierà automaticamente dati diagnostici e di performance (specifiche hardware, utilizzo risorse) alla nostra piattaforma cloud, per aiutarci a trovare e correggere i bug durante la beta. Durante le finestre di debug che attiviamo da remoto, cattura anche le chiamate di rete fatte dall'interfaccia stessa — non il traffico dell'intero dispositivo — con dati di autenticazione/sessione (login dei servizi di streaming, cookie, token) e corpi delle risposte (contenuti di pagina, audio) rimossi automaticamente prima che lascino il dispositivo. Al momento non esiste un interruttore in-app per disattivarlo — consulta &lt;a href=&quot;privacy.html&quot;&gt;l'informativa privacy completa&lt;/a&gt; per sapere esattamente cosa viene raccolto. Questa raccolta dati è temporanea: verrà rimossa al termine della beta privata.">
@@ -618,9 +649,9 @@
     </label>
 
     <div style="display:flex; gap:1rem; justify-content:center; flex-wrap:wrap; margin-top:1.25rem;">
-      <a class="btn-primary is-placeholder" id="isoDownloadBtn" data-href="https://file.osmiumsound.it/hifi-player-v2.5.21-dev.111.iso" aria-disabled="true">
+      <a class="btn-primary is-placeholder" id="isoDownloadBtn" data-href="https://file.osmiumsound.it/hifi-player-v2.5.21-dev.113.iso" aria-disabled="true">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-        <span class="iso-badge"><span data-en="Download ISO" data-it="Scarica ISO">Download ISO</span><small>v2.5.21-dev.111</small></span>
+        <span class="iso-badge"><span data-en="Download ISO" data-it="Scarica ISO">Download ISO</span><small>v2.5.21-dev.113</small></span>
       </a>
       <a class="btn-secondary" href="https://github.com/adri6412/osmium-sound/releases" target="_blank">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0 0 24 12c0-6.63-5.37-12-12-12z"/></svg>
@@ -632,8 +663,8 @@
       <div class="qs-step">
         <div class="qs-num">1</div>
         <h4 data-en="Download the ISO" data-it="Scarica la ISO">Download the ISO</h4>
-        <p data-en="&lt;strong&gt;hifi-player-v2.5.21-dev.111.iso&lt;/strong&gt; is now ready! Click the link to start your download." data-it="&lt;strong&gt;hifi-player-v2.5.21-dev.111.iso&lt;/strong&gt; è ora pronto! Clicca sul link per avviare il download.">
-          <strong>hifi-player-v2.5.21-dev.111.iso</strong> is now ready! Click the link to start your download.
+        <p data-en="&lt;strong&gt;hifi-player-v2.5.21-dev.113.iso&lt;/strong&gt; is now ready! Click the link to start your download." data-it="&lt;strong&gt;hifi-player-v2.5.21-dev.113.iso&lt;/strong&gt; è ora pronto! Clicca sul link per avviare il download.">
+          <strong>hifi-player-v2.5.21-dev.113.iso</strong> is now ready! Click the link to start your download.
         </p>
       </div>
       <div class="qs-step">
