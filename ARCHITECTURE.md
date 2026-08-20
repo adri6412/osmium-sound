@@ -690,9 +690,12 @@ removes only files we wrote.
 
 The same asset dir also carries `actions.json`, Material's documented hook for
 adding entries to its own menus. Ours puts an **Osmium Admin** item in the nav
-drawer's *Impostazioni / Settings* block (`title-en` + `title-it`, so it follows
-Material's language) which opens `http://$HOST/` — this appliance's web admin —
-in Material's built-in iframe dialog, on every client that opens Lyrion. It is
+drawer's *Impostazioni / Settings* block, which opens `http://$HOST/` — this
+appliance's web admin — in Material's built-in iframe dialog, on every client
+that opens Lyrion. The label is translated into all 19 languages Lyrion itself
+offers, one `title-<lang>` key each: Material matches that key against its
+normalized language code (`ZH_CN` becomes `zh-CN`, `EN`/`EN_US` mean `en`) with
+no partial matching, so a missing key silently falls back to English. It is
 merged, not copied: only entries whose `id` starts with `osmium-` are ours, so a
 user's own custom actions survive, and a file that is not plain json (Material
 `eval()`s it, so it may be hand-written javascript) is left untouched. Being a
