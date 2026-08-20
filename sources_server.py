@@ -962,6 +962,34 @@ def _ensure_prefs():
     return None
 
 
+def _lyrion_present():
+    """Whether a LOCAL Lyrion exists on this device at all.
+
+    Deliberately NOT `bool(_find_prefs())`. server.prefs only appears the first
+    time Lyrion actually RUNS, so on a device where the setup wizard has just
+    installed the package — which is exactly the moment the wizard then asks
+    about the web-player skin — prefs are still missing and the prefs-based
+    check reported "Lyrion is not installed on this device" about a Lyrion that
+    was installed and simply had not started yet.
+
+    Ask dpkg (then the unit) instead, and leave the waiting to _ensure_prefs().
+    A device in external/"follow" mode still answers False here, which is the
+    case the message was written for."""
+    if _find_prefs():
+        return True
+    try:
+        r = _run(["dpkg-query", "-W", "-f=${db:Status-Status}", "lyrionmusicserver"])
+        if r.returncode == 0 and (r.stdout or "").strip() == "installed":
+            return True
+    except Exception:
+        pass
+    try:
+        r = _run(["systemctl", "list-unit-files", LYRION_SERVICE])
+        return r.returncode == 0 and LYRION_SERVICE in (r.stdout or "")
+    except Exception:
+        return False
+
+
 def _squeezebox_ids():
     """(uid, gid) of the squeezeboxserver user, or (None, None)."""
     try:
@@ -1633,6 +1661,13 @@ def _lms_skin_apply(choice):
     try:
         _skin_status_set("installing", 10, "msg.skinInstalling")
         with _SKIN_JOB_LOCK:
+            # Lyrion may have been installed minutes ago by the setup wizard and
+            # never started, in which case there is no prefs dir yet for Material
+            # or the theme files to land in. Start it and wait here, inside the
+            # lock, so every step below has one.
+            if not _ensure_prefs():
+                _skin_status_set("error", 0, "msg.skinLmsMissing")
+                return
             if not _ensure_material_installed():
                 _skin_status_set("error", 0, "msg.skinInstallFailed")
                 return
@@ -1688,7 +1723,7 @@ def api_lms_skin_get():
     return jsonify({
         "success": True,
         "skin": choice or "unset",
-        "lms_installed": bool(_find_prefs()),
+        "lms_installed": _lyrion_present(),
         "material_installed": _material_installed(),
         "applied": _lms_skin_applied(choice),
         "busy": _skin_job_running(),
@@ -1702,8 +1737,9 @@ def api_lms_skin_set():
         return _err("msg.skinInvalid", 400)
     if _skin_job_running():
         return _err("msg.skinBusy", 409)
-    if not _find_prefs():
-        # No local LMS (external/"follow" mode, or not installed yet).
+    if not _lyrion_present():
+        # No local LMS at all (external/"follow" mode). A local Lyrion that has
+        # simply never run yet is NOT this case — the worker waits for it.
         return _err("msg.skinLmsMissing", 409)
     # Record the intent first: even if the apply fails (offline), the choice
     # survives and Settings can retry.
@@ -1771,6 +1807,11 @@ def _lms_setup_apply(plugins, analytics, language):
     try:
         _lms_setup_status_set("installing", 10, "msg.lmsSetupInstalling")
         with _SKIN_JOB_LOCK:
+            # Same first-run wait as the skin worker: everything below reads or
+            # writes server.prefs, which only exists once Lyrion has run.
+            if not _ensure_prefs():
+                _lms_setup_status_set("error", 0, "msg.skinLmsMissing")
+                return
             # MaterialSkin is normally already in by now (the skin step runs
             # first); listing it here costs nothing and covers the case where
             # that step was skipped or failed.
@@ -1807,7 +1848,7 @@ def api_lms_setup_get():
         return denied
     return jsonify({
         "success": True,
-        "lms_installed": bool(_find_prefs()),
+        "lms_installed": _lyrion_present(),
         "wizard_done": _lms_wizard_done(),
         "analytics": _builtin_plugin_enabled(LMS_ANALYTICS_PLUGIN),
         "plugins": [{"id": name, "default": default,
@@ -1838,9 +1879,10 @@ def api_lms_setup_set():
     language = "it" if (data.get("language") or _req_lang()) == "it" else "en"
     if _lms_setup_job_running() or _skin_job_running():
         return _err("msg.lmsSetupBusy", 409)
-    if not _find_prefs():
-        # No local LMS (external/"follow" mode, or not installed yet) — there
-        # is no wizard to skip and nothing to install into.
+    if not _lyrion_present():
+        # No local LMS at all (external/"follow" mode) — there is no wizard to
+        # skip and nothing to install into. A freshly installed Lyrion that has
+        # not run yet is NOT this case; the worker waits for its first run.
         return _err("msg.skinLmsMissing", 409)
     _lms_setup_status_set("installing", 5, "msg.lmsSetupInstalling")
     threading.Thread(target=_lms_setup_apply,
@@ -1871,7 +1913,7 @@ def api_playlistdir_get():
         "default": DEFAULT_PLAYLISTDIR,
         "is_default": bool(path) and os.path.realpath(path) == os.path.realpath(DEFAULT_PLAYLISTDIR),
         "exists": bool(path) and os.path.isdir(path),
-        "lms_installed": bool(_find_prefs()),
+        "lms_installed": _lyrion_present(),
     })
 
 
