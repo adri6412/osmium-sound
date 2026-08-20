@@ -109,6 +109,38 @@ backup_and_edit() {
 # ── package install (idempotent) ─────────────────────────────────────
 # Installs a package only if missing. Honours HIFI_OS_NO_APT=1 (set by the CI
 # idempotency test) to stay offline/deterministic. Returns non-zero if the
+
+# ── Debian release detection ─────────────────────────────────────────
+# The fleet spans TWO Debian releases: devices imaged before the trixie switch
+# run Debian 12 (bookworm), newer images run Debian 13 (trixie). The OS channel
+# is cumulative and ships ONE payload that runs unchanged on both, so a
+# migration whose correct action differs between the two must branch on these
+# helpers rather than assume a release.
+#
+#   hifi_suite            -> "bookworm" | "trixie" | <raw codename> | "unknown"
+#   hifi_suite_is <name>  -> true if the running system is that release
+#
+# Typical use inside a migration:
+#
+#   if hifi_suite_is trixie; then ensure_pkg foo-t64; else ensure_pkg foo; fi
+#
+# Prefer detecting the actual thing you care about (does this binary exist? is
+# this package installed?) over branching on the release name — a runtime probe
+# keeps working on the next Debian, a codename check does not. Branch on the
+# suite only when the difference genuinely IS the release.
+hifi_suite() {
+    _hifi_suite=$(. /etc/os-release 2>/dev/null && printf '%s' "${VERSION_CODENAME:-}")
+    if [ -z "$_hifi_suite" ] && [ -r /etc/debian_version ]; then
+        case "$(cat /etc/debian_version 2>/dev/null)" in
+            12|12.*) _hifi_suite=bookworm ;;
+            13|13.*) _hifi_suite=trixie ;;
+        esac
+    fi
+    printf '%s' "${_hifi_suite:-unknown}"
+}
+
+hifi_suite_is() { [ "$(hifi_suite)" = "$1" ]; }
+
 # install was attempted but failed — caller decides whether that's fatal.
 ensure_pkg() {
     if dpkg -s "$1" >/dev/null 2>&1; then
