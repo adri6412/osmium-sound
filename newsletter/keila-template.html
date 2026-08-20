@@ -1,0 +1,448 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="x-apple-disable-message-reformatting" />
+    <meta name="color-scheme" content="dark" />
+    <meta name="supported-color-schemes" content="dark" />
+    <!--[if mso]>
+    <style>* { font-family: Arial, Helvetica, sans-serif !important; }</style>
+    <![endif]-->
+    <!--[if !mso]><!-->
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap"
+      rel="stylesheet"
+    />
+    <!--<![endif]-->
+    <style>
+      /* ── Osmium Sound — palette del sito ─────────────────
+         bg #0a0a0a · card #141414 · card2 #1c1c1c
+         border #2a2a2a · accent #f5b820 · text #e8e8e8 · muted #888
+         ──────────────────────────────────────────────────── */
+      body,
+      table,
+      td {
+        -webkit-text-size-adjust: 100%;
+        -ms-text-size-adjust: 100%;
+      }
+      table {
+        border-collapse: collapse !important;
+      }
+      img {
+        border: 0;
+        outline: none;
+        line-height: 100%;
+        -ms-interpolation-mode: bicubic;
+      }
+
+      /* Contenuto della campagna (dentro <keila-content>) */
+      .osm-body p {
+        margin: 0 0 1.15em;
+        font-size: 16px;
+        line-height: 1.7;
+        color: #e8e8e8;
+      }
+      .osm-body h1,
+      .osm-body h2,
+      .osm-body h3 {
+        margin: 1.8em 0 0.6em;
+        color: #ffffff;
+        font-weight: 800;
+        letter-spacing: -0.02em;
+        line-height: 1.25;
+      }
+      .osm-body h1 {
+        font-size: 27px;
+      }
+      .osm-body h2 {
+        font-size: 21px;
+      }
+      .osm-body h3 {
+        font-size: 17px;
+        font-weight: 700;
+        color: #f5b820;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+      }
+      .osm-body a {
+        color: #f5b820;
+        text-decoration: underline;
+        text-underline-offset: 2px;
+      }
+      .osm-body ul,
+      .osm-body ol {
+        margin: 0 0 1.15em;
+        padding-left: 22px;
+        font-size: 16px;
+        line-height: 1.7;
+        color: #e8e8e8;
+      }
+      .osm-body li {
+        margin-bottom: 0.45em;
+      }
+      .osm-body strong {
+        color: #ffffff;
+        font-weight: 700;
+      }
+      .osm-body blockquote {
+        margin: 0 0 1.15em;
+        padding: 14px 18px;
+        background: #1c1c1c;
+        border-left: 3px solid #f5b820;
+        border-radius: 0 8px 8px 0;
+        color: #cfcfcf;
+        font-size: 15px;
+      }
+      .osm-body code,
+      .osm-body pre {
+        font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas,
+          monospace;
+        font-size: 14px;
+        color: #f5b820;
+      }
+      .osm-body pre {
+        background: #000000;
+        border: 1px solid #2a2a2a;
+        border-radius: 10px;
+        padding: 14px 16px;
+        overflow-x: auto;
+        color: #e8e8e8;
+      }
+      .osm-body hr {
+        border: 0;
+        border-top: 1px solid #2a2a2a;
+        margin: 2em 0;
+      }
+      .osm-body img {
+        max-width: 100%;
+        height: auto;
+        border-radius: 10px;
+      }
+
+      a.osm-cta:hover {
+        opacity: 0.85;
+      }
+      a.osm-foot-link:hover {
+        color: #e8e8e8 !important;
+      }
+
+      @media only screen and (max-width: 620px) {
+        .osm-pad {
+          padding-left: 22px !important;
+          padding-right: 22px !important;
+        }
+        .osm-hero-title {
+          font-size: 26px !important;
+        }
+      }
+
+      /* I client che forzano il light-mode non devono schiarire il fondo */
+      @media (prefers-color-scheme: light) {
+        .osm-shell,
+        .osm-card {
+          background-color: #0a0a0a !important;
+        }
+      }
+    </style>
+  </head>
+
+  <body
+    style="
+      margin: 0;
+      padding: 0;
+      width: 100% !important;
+      background-color: #0a0a0a;
+      color: #e8e8e8;
+      font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto,
+        Helvetica, Arial, sans-serif;
+      -webkit-font-smoothing: antialiased;
+    "
+  >
+    <!-- Testo di anteprima nella inbox (invisibile nel messaggio) -->
+    <div
+      style="
+        display: none;
+        max-height: 0;
+        overflow: hidden;
+        mso-hide: all;
+        font-size: 1px;
+        line-height: 1px;
+        color: #0a0a0a;
+        opacity: 0;
+      "
+    >
+      Osmium Sound — Private Beta
+      &#8203;&#847;&zwnj;&nbsp;&#8203;&#847;&zwnj;&nbsp;&#8203;&#847;&zwnj;&nbsp;&#8203;&#847;&zwnj;&nbsp;&#8203;&#847;&zwnj;&nbsp;&#8203;&#847;&zwnj;&nbsp;&#8203;&#847;&zwnj;&nbsp;
+    </div>
+
+    <table
+      class="osm-shell"
+      role="presentation"
+      width="100%"
+      cellpadding="0"
+      cellspacing="0"
+      border="0"
+      style="background-color: #0a0a0a"
+    >
+      <tr>
+        <td align="center" style="padding: 28px 12px 40px">
+          <table
+            class="osm-card"
+            role="presentation"
+            width="600"
+            cellpadding="0"
+            cellspacing="0"
+            border="0"
+            style="
+              width: 600px;
+              max-width: 600px;
+              background-color: #0a0a0a;
+              border: 1px solid #2a2a2a;
+              border-radius: 14px;
+              overflow: hidden;
+            "
+          >
+            <!-- ── HEADER ─────────────────────────────── -->
+            <tr>
+              <td
+                class="osm-pad"
+                style="
+                  padding: 18px 34px;
+                  background-color: #141414;
+                  border-bottom: 1px solid #2a2a2a;
+                "
+              >
+                <table
+                  role="presentation"
+                  width="100%"
+                  cellpadding="0"
+                  cellspacing="0"
+                  border="0"
+                >
+                  <tr>
+                    <td align="left" valign="middle">
+                      <table
+                        role="presentation"
+                        cellpadding="0"
+                        cellspacing="0"
+                        border="0"
+                      >
+                        <tr>
+                          <!-- Logo: quadrato accent + anello nero (nessuna immagine esterna).
+                               Per usare il PNG ospitato, sostituisci questa <td> con:
+                               <td><img src="https://osmiumsound.it/favicon.png" width="28" height="28" alt="Osmium Sound" style="display:block;border-radius:6px"></td> -->
+                          <td
+                            width="28"
+                            height="28"
+                            align="center"
+                            valign="middle"
+                            style="
+                              width: 28px;
+                              height: 28px;
+                              background-color: #f5b820;
+                              border-radius: 6px;
+                              font-size: 0;
+                              line-height: 0;
+                            "
+                          >
+                            <div
+                              style="
+                                width: 14px;
+                                height: 14px;
+                                border: 2px solid #000000;
+                                border-radius: 50%;
+                                font-size: 0;
+                                line-height: 0;
+                              "
+                            >
+                              &nbsp;
+                            </div>
+                          </td>
+                          <td style="width: 10px">&nbsp;</td>
+                          <td
+                            valign="middle"
+                            style="
+                              font-family: 'Inter', system-ui, -apple-system,
+                                'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+                              font-size: 13px;
+                              font-weight: 700;
+                              letter-spacing: 0.14em;
+                              text-transform: uppercase;
+                              color: #e8e8e8;
+                              white-space: nowrap;
+                            "
+                          >
+                            Osmium Sound
+                          </td>
+                        </tr>
+                      </table>
+                    </td>
+                    <td align="right" valign="middle">
+                      <table
+                        role="presentation"
+                        cellpadding="0"
+                        cellspacing="0"
+                        border="0"
+                      >
+                        <tr>
+                          <td
+                            style="
+                              padding: 5px 12px;
+                              background-color: #241d0a;
+                              border: 1px solid #4a3a12;
+                              border-radius: 100px;
+                              font-family: 'Inter', system-ui, -apple-system,
+                                'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+                              font-size: 11px;
+                              font-weight: 700;
+                              letter-spacing: 0.09em;
+                              text-transform: uppercase;
+                              color: #f5b820;
+                              white-space: nowrap;
+                            "
+                          >
+                            Private Beta
+                          </td>
+                        </tr>
+                      </table>
+                    </td>
+                  </tr>
+                </table>
+              </td>
+            </tr>
+
+            <!-- Filo accent, richiama il glow dell'hero del sito -->
+            <tr>
+              <td
+                height="3"
+                style="
+                  height: 3px;
+                  font-size: 0;
+                  line-height: 0;
+                  background-color: #f5b820;
+                "
+              >
+                &nbsp;
+              </td>
+            </tr>
+
+            <!-- ── CONTENUTO ──────────────────────────── -->
+            <tr>
+              <td
+                class="osm-pad osm-body"
+                style="
+                  padding: 34px;
+                  background-color: #0a0a0a;
+                  font-family: 'Inter', system-ui, -apple-system, 'Segoe UI',
+                    Roboto, Helvetica, Arial, sans-serif;
+                  font-size: 16px;
+                  line-height: 1.7;
+                  color: #e8e8e8;
+                "
+              >
+                <keila-content name="main">
+                  <p>Hello {{ contact.first_name | default: "there" }}!</p>
+                </keila-content>
+
+                <!-- ── CTA pronto da incollare nella campagna ──
+                <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:26px 0 6px">
+                  <tr>
+                    <td align="center" bgcolor="#f5b820" style="border-radius:9px">
+                      <a class="osm-cta" href="https://osmiumsound.it/beta/"
+                         style="display:inline-block;padding:13px 28px;font-family:'Inter',Helvetica,Arial,sans-serif;
+                                font-size:15px;font-weight:700;color:#000000;text-decoration:none;border-radius:9px">
+                        Scarica l'ultima build &rarr;
+                      </a>
+                    </td>
+                  </tr>
+                </table>
+                ──────────────────────────────────────────── -->
+              </td>
+            </tr>
+
+            <!-- ── FOOTER ─────────────────────────────── -->
+            <tr>
+              <td
+                class="osm-pad"
+                style="
+                  padding: 24px 34px 28px;
+                  background-color: #141414;
+                  border-top: 1px solid #2a2a2a;
+                  font-family: 'Inter', system-ui, -apple-system, 'Segoe UI',
+                    Roboto, Helvetica, Arial, sans-serif;
+                  font-size: 12px;
+                  line-height: 1.8;
+                  color: #888888;
+                "
+              >
+                <p style="margin: 0 0 10px; font-size: 12px; color: #888888">
+                  <a
+                    class="osm-foot-link"
+                    href="https://osmiumsound.it"
+                    style="color: #888888; text-decoration: none"
+                    >Sito</a
+                  >
+                  &nbsp;·&nbsp;
+                  <a
+                    class="osm-foot-link"
+                    href="https://osmiumsound.it/beta/"
+                    style="color: #888888; text-decoration: none"
+                    >Beta privata</a
+                  >
+                  &nbsp;·&nbsp;
+                  <a
+                    class="osm-foot-link"
+                    href="https://github.com/adri6412/osmium-sound"
+                    style="color: #888888; text-decoration: none"
+                    >GitHub</a
+                  >
+                  &nbsp;·&nbsp;
+                  <a
+                    class="osm-foot-link"
+                    href="mailto:support@osmiumsound.it"
+                    style="color: #888888; text-decoration: none"
+                    >support@osmiumsound.it</a
+                  >
+                </p>
+
+                <p style="margin: 0 0 14px; font-size: 12px; color: #666666">
+                  <strong style="color: #f5b820; font-weight: 700"
+                    >OSMIUM SOUND</strong
+                  >
+                  &nbsp;·&nbsp; MIT &nbsp;·&nbsp; &copy; 2025 Adriano Frongillo
+                </p>
+
+                <p
+                  style="
+                    margin: 0;
+                    padding-top: 14px;
+                    border-top: 1px solid #2a2a2a;
+                    font-size: 11px;
+                    color: #666666;
+                  "
+                >
+                  Ricevi questa email perché sei iscritto alla beta privata di
+                  Osmium Sound.<br />
+                  You are receiving this email because you signed up for the
+                  Osmium Sound private beta.<br />
+                  <a
+                    href="{{ unsubscribe_link }}"
+                    style="color: #888888; text-decoration: underline"
+                    >Cancella iscrizione / Unsubscribe</a
+                  >
+                  &nbsp;·&nbsp;
+                  <a
+                    href="https://www.keila.io"
+                    style="color: #555555; text-decoration: none"
+                    >Powered by Keila — Open Source Newsletters</a
+                  >
+                </p>
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+    </table>
+  </body>
+</html>
