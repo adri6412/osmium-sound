@@ -7,7 +7,8 @@ name: Build HiFi Player ISO (manual)
 #     • tag         : e.g. v1.0.5  (created on the current commit if missing)
 #     • make_release: attach the ISO to a Release for that tag (default: true)
 #     • lyrion_url  : override the Lyrion .deb URL (optional)
-#     • suite       : Debian suite (default: bookworm)
+#     • suite       : Debian suite (default: trixie — labwc/xwayland non
+#                     esistono su bookworm, vedi build-distro.sh)
 
 on:
   workflow_dispatch:
@@ -29,7 +30,7 @@ on:
         description: 'Debian suite'
         required: false
         type: string
-        default: 'bookworm'
+        default: 'trixie'
 
 permissions:
   contents: write

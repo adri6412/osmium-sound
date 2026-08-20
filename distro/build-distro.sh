@@ -28,7 +28,12 @@
 set -euo pipefail
 
 # ─────────────────────────── Configurable ───────────────────────────
-DEBIAN_SUITE="${DEBIAN_SUITE:-bookworm}"
+# trixie, non bookworm: la sessione kiosk gira su labwc (vedi
+# os-update/files/kiosk-wayland-session) e labwc, wlr-randr e xwayland
+# esistono solo da Debian 13 in poi. Con bookworm la lista pacchetti non
+# si risolve e l'immagine, se pure venisse fuori, si accenderebbe sul
+# greeter: l'autologin punta a una sessione il cui compositor non c'è.
+DEBIAN_SUITE="${DEBIAN_SUITE:-trixie}"
 ARCH="${ARCH:-amd64}"
 ISO_NAME="${ISO_NAME:-hifi-player-installer.iso}"
 LYRION_DEB_URL="${LYRION_DEB_URL:-https://downloads.lms-community.org/LyrionMusicServer_v9.1.0/lyrionmusicserver_9.1.0_all.deb}"
@@ -65,6 +70,12 @@ case "$STAGE" in
     all|chroot|binary) ;;
     *) die "Invalid --stage '$STAGE' (use: all | chroot | binary)." ;;
 esac
+
+# Stessa ragione, ma per chi passa --suite a mano: meglio fermarsi qui che
+# scoprirlo a immagine masterizzata.
+if [ "$DEBIAN_SUITE" = "bookworm" ] && grep -qx 'labwc' "$CONFIG/package-lists/hifi.list.chroot" 2>/dev/null; then
+    die "--suite bookworm non ha labwc/wlr-randr/xwayland: la sessione kiosk non partirebbe. Usa trixie."
+fi
 
 # ─────────────────────────── Pre-flight ─────────────────────────────
 [ "$(id -u)" -eq 0 ] || die "Please run as root (sudo)."
