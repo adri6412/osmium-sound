@@ -35,6 +35,10 @@ amixer -q sset PCM unmute 2>/dev/null || true
 # Ponte MPRIS per i comandi AVRCP, come nella sessione X11.
 command -v mpris-proxy >/dev/null 2>&1 && mpris-proxy &
 
+# PID del compositor: è il nostro genitore, perché labwc ci esegue con -S. Il
+# ciclo di rilancio più sotto lo usa per accorgersi che la sessione è finita.
+COMPOSITOR_PID="$(ps -o ppid= -p $$ 2>/dev/null | tr -d ' ')"
+
 # Risolve il binario Electron (electron-builder lo linka in /usr/bin)
 APP="$(command -v hifi-media-player || true)"
 [ -z "$APP" ] && APP="/opt/hifi-media-player/hifi-media-player"
@@ -90,6 +94,20 @@ while true; do
         --ozone-platform=x11 \
         --touch-events=enabled \
         --start-fullscreen
-    echo "hifi kiosk exited ($?) — relaunching in 3s" >&2
+    status=$?
+
+    # Se il compositor non c'è più, la sessione è finita e questo ciclo non deve
+    # sopravvivergli. Senza questo controllo lo script viene adottato da init e
+    # continua a rilanciare il kiosk dentro la sessione SUCCESSIVA, con la riga
+    # di comando che aveva quando è partito: visto sul campo dopo qualche
+    # riavvio della sessione, due istanze insieme e quella di troppo avviata su
+    # Wayland nativo, dove il touch non scorre (vedi sopra). Chi si prende il
+    # dito, a quel punto, è questione di fortuna.
+    if [ -n "$COMPOSITOR_PID" ] && ! kill -0 "$COMPOSITOR_PID" 2>/dev/null; then
+        echo "hifi kiosk exited ($status) — compositor sparito, esco con la sessione" >&2
+        exit 0
+    fi
+
+    echo "hifi kiosk exited ($status) — relaunching in 3s" >&2
     sleep 3
 done
