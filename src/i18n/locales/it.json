@@ -57,6 +57,15 @@
     "newFolderCreate": "Crea",
     "localSambaHint": "Condividi anche questa cartella in rete (SMB), così puoi caricarci musica da un PC.",
     "useThisFolder": "Usa questa cartella",
+    "playlistdir": {
+      "title": "Cartella playlist",
+      "hint": "Dove Lyrion salva le playlist che crei dal player. Quella predefinita va bene nella maggior parte dei casi — scegli una cartella sul tuo disco se preferisci tenere le playlist vicino alla musica.",
+      "unset": "Non impostata",
+      "pick": "Scegli cartella…",
+      "use": "Usa questa cartella",
+      "default": "Ripristina predefinita",
+      "saved": "Cartella playlist salvata."
+    },
     "internal": {
       "tag": "INTERNO",
       "title": "Dischi interni",

@@ -143,3 +143,11 @@ html, body {
  * (desktop.css only) is intentionally omitted here -- verified live that
  * the narrower mobile drawer doesn't leave enough room to its left and
  * the text collides with the pill. Toolbar branding above still applies. */
+
+/* -- Embedded-page dialog: Material paints a light grey (#ddd) backdrop
+ * behind iframes it classes as "other" -- which is what the "Osmium Admin"
+ * custom action (actions.json) is. Keep the dark ground so the admin loads
+ * out of black instead of flashing grey. -- */
+.iframe-text {
+  background-color: #0a0a0a !important;
+}

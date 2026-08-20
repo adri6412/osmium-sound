@@ -273,7 +273,14 @@
       "newFolderPlaceholder": "Nome nuova cartella",
       "newFolderCreate": "Crea",
       "localSambaHint": "Condividi anche questa cartella in rete (SMB), così puoi caricarci musica da un PC.",
-      "useThisFolder": "Usa questa cartella"
+      "useThisFolder": "Usa questa cartella",
+      "playlistdirTitle": "Cartella playlist",
+      "playlistdirHint": "Dove Lyrion salva le playlist che crei dal player. Quella predefinita va bene nella maggior parte dei casi — scegli una cartella sul tuo disco se preferisci tenere le playlist vicino alla musica.",
+      "playlistdirUnset": "Non impostata",
+      "playlistdirPick": "Scegli cartella…",
+      "playlistdirUse": "Usa questa cartella",
+      "playlistdirDefault": "Ripristina predefinita",
+      "playlistdirSaved": "Cartella playlist salvata."
     },
     "dsp": {
       "unavailable": "DSP non disponibile su questo dispositivo.",

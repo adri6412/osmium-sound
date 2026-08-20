@@ -1883,6 +1883,12 @@ def set_tailscale(enable):
 #  it off from Settings, which starts unclutter to auto-hide it.
 #  The choice is persisted and re-applied at login by ~/.xsession; here we
 #  also apply it live so it takes effect without a reboot.
+#  On the Wayland kiosk session (labwc) unclutter is inert — it is an X11
+#  client and never sees the kiosk window. There the flag is read at login by
+#  /usr/local/bin/hifi-kiosk-wayland, which hides the compositor's own pointer
+#  with a transparent cursor theme; inside the window it is the UI's
+#  `hifi-hide-cursor` class that applies live, so this toggle still takes
+#  effect immediately where the pointer is actually visible.
 #  NOTE: the cursor only ever appears once the X server is no longer started
 #  with `-nocursor` (removed at build time + by OS-OTA migration); on an
 #  un-migrated device a reboot is needed after that update for it to show.
@@ -2096,10 +2102,14 @@ def _restart_squeezelite_if_enabled(timeout=30):
 #  100%. Nothing inside Chromium reduces that pixel count; the only real lever
 #  is below it, in the X framebuffer.
 #
-#  /usr/local/sbin/hifi-ui-resolution.sh shrinks the framebuffer area mapped to
-#  the output (xrandr --scale-from), keeping the native video mode, and the GPU
-#  upscales it during scanout. api_server runs as root, so no sudoers entry is
-#  needed.
+#  /usr/local/sbin/hifi-ui-resolution.sh shrinks that pixel count. It prefers a
+#  real smaller video mode with the panel's own aspect ratio (xrandr --mode), so
+#  the panel/TV scaler does the upscale and the GPU does nothing; only when the
+#  panel exposes no such mode (21:9, 16:10, ...) does it fall back to shrinking
+#  the framebuffer area with xrandr --scale-from, which costs a full-screen GPU
+#  rescale per frame inside Xorg (measured on Gemini Lake: 1.80 W GPU with
+#  --scale-from vs 0.89 W on a real mode, same scene). api_server runs as root,
+#  so no sudoers entry is needed.
 #
 #  Persisted state ABSENT means "auto" — unlike display-mode, the default here
 #  is deliberately meant to reach the already-installed fleet: a unit that has

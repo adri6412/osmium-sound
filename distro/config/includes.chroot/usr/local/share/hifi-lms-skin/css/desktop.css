@@ -241,3 +241,11 @@ html, body {
 .lms-toolbar {
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5) !important;
 }
+
+/* -- Embedded-page dialog: Material paints a light grey (#ddd) backdrop
+ * behind iframes it classes as "other" -- which is what the "Osmium Admin"
+ * custom action (actions.json) is. Keep the dark ground so the admin loads
+ * out of black instead of flashing grey. -- */
+.iframe-text {
+  background-color: #0a0a0a !important;
+}

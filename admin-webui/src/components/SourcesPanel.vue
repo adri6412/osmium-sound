@@ -178,6 +178,62 @@ async function addLocal() {
   busy.value = false;
 }
 
+// ── Playlist folder ───────────────────────────────────────────────────
+// Where Lyrion saves playlists created from the player. The appliance
+// provisions a working default on its own (ensure_playlistdir() in
+// sources_server.py); this is the override — the last thing Lyrion's own
+// setup wizard used to ask for, now that the wizard is skipped entirely.
+const playlistdir = ref('');
+const playlistdirDefault = ref('');
+const pldOpen = ref(false);
+const pldPath = ref('');
+const pldParent = ref(null);
+const pldDirs = ref([]);
+const pldBusy = ref(false);
+
+async function loadPlaylistdir() {
+  const r = await api.playlistdirGet();
+  if (!r.ok) return;
+  playlistdir.value = r.data.path || '';
+  playlistdirDefault.value = r.data.default || '';
+}
+function togglePld() {
+  pldOpen.value = !pldOpen.value;
+  if (pldOpen.value) {
+    // Start browsing from the folder in use, so "somewhere near here" is one
+    // click away rather than a walk down from /.
+    pldPath.value = playlistdir.value || '';
+    loadPldBrowse();
+  }
+}
+async function loadPldBrowse() {
+  pldBusy.value = true;
+  const r = await api.localBrowse(pldPath.value);
+  if (r.ok) {
+    pldDirs.value = r.data.dirs || [];
+    pldParent.value = r.data.parent;
+    pldPath.value = r.data.path || '';
+  } else {
+    say((r.data && r.data.message) || t('common.error'), true);
+  }
+  pldBusy.value = false;
+}
+function pldInto(dir) { pldPath.value = dir; loadPldBrowse(); }
+function pldUp() {
+  if (pldParent.value === null || pldParent.value === undefined) return;
+  pldPath.value = pldParent.value;
+  loadPldBrowse();
+}
+async function savePlaylistdir(path) {
+  if (!path) return;
+  busy.value = true;
+  const r = await api.playlistdirSet(path);
+  say(r.ok ? ((r.data && r.data.message) || t('settings.sources.playlistdirSaved'))
+           : ((r.data && r.data.message) || t('common.error')), !r.ok);
+  if (r.ok) { pldOpen.value = false; loadPlaylistdir(); }
+  busy.value = false;
+}
+
 const smb = reactive({ server: '', share: '', username: '', password: '', rw: false });
 async function addSmb() {
   if (!smb.server.trim() || !smb.share.trim()) return;
@@ -307,6 +363,7 @@ onMounted(() => {
   loadUsb();
   loadInternal();
   loadSmbCard();
+  loadPlaylistdir();
   sourcesTimer = setInterval(loadSources, 4000);
   usbTimer = setInterval(loadUsb, 4000);
   internalTimer = setInterval(loadInternal, 5000);
@@ -514,6 +571,46 @@ onUnmounted(() => {
         <input v-model="smb.rw" type="checkbox" style="width: auto;" />
       </div>
       <button style="margin-top: 8px;" :disabled="busy" @click="addSmb">{{ t('settings.sources.mountAndAdd') }}</button>
+
+      <!-- Playlist folder — Lyrion's playlistdir pref. Same browser widget as
+           "Add local folder" above, against the same /api/local/browse. -->
+      <label style="margin-top: 18px; padding-top: 16px; border-top: 1px solid rgba(255,255,255,0.1); display: block;">
+        {{ t('settings.sources.playlistdirTitle') }}
+      </label>
+      <p class="muted">{{ t('settings.sources.playlistdirHint') }}</p>
+      <div class="net between" style="align-items: center; gap: 12px; flex-wrap: wrap;">
+        <div class="muted" style="min-width: 220px; word-break: break-all;">
+          {{ playlistdir || t('settings.sources.playlistdirUnset') }}
+        </div>
+        <div class="row" style="flex-wrap: wrap; justify-content: flex-end;">
+          <button class="secondary fit" @click="togglePld">
+            {{ pldOpen ? t('common.close') : t('settings.sources.playlistdirPick') }}
+          </button>
+          <button class="secondary fit"
+                  :disabled="busy || !playlistdirDefault || playlistdir === playlistdirDefault"
+                  @click="savePlaylistdir(playlistdirDefault)">
+            {{ t('settings.sources.playlistdirDefault') }}
+          </button>
+        </div>
+      </div>
+      <div v-if="pldOpen" class="card" style="margin: 8px 0;">
+        <div class="row" style="justify-content: space-between; align-items: center;">
+          <span class="muted">{{ pldPath || '/' }}</span>
+          <button class="secondary fit" :disabled="pldParent === null || pldParent === undefined" @click="pldUp">
+            {{ t('settings.sources.subpathUp') }}
+          </button>
+        </div>
+        <p v-if="pldBusy" class="sub" style="margin-top: 8px;">{{ t('common.loading') }}</p>
+        <template v-else>
+          <p v-if="!pldDirs.length" class="sub" style="margin-top: 8px;">{{ t('settings.sources.subpathNoSubfolders') }}</p>
+          <div v-for="dir in pldDirs" :key="dir" class="net" style="cursor: pointer;" @click="pldInto(dir)">
+            {{ dir }}
+          </div>
+        </template>
+        <button style="margin-top: 10px;" :disabled="busy || !pldPath" @click="savePlaylistdir(pldPath)">
+          {{ t('settings.sources.playlistdirUse') }}
+        </button>
+      </div>
     </template>
 
     <div v-if="msg" class="msg" :class="{ err }">{{ msg }}</div>

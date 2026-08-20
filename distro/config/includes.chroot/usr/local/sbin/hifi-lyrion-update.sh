@@ -43,9 +43,23 @@ head -c2 "$DEB" | grep -q '!<' || fail "Il file scaricato non è un .deb valido"
 write_status applying 60 "Installazione…"
 export DEBIAN_FRONTEND=noninteractive
 # apt-get install on a local .deb upgrades the package and pulls any new deps.
-if ! apt-get install -y --allow-downgrades "$DEB"; then
-    fail "Installazione del pacchetto fallita"
+#
+# Deliberately NOT trusting apt's exit code on its own: Lyrion's postinst is
+# noisy (it enables/starts its own unit and warns about perl/plugin state), and
+# a non-zero exit from a maintainer script or a trigger makes apt return
+# non-zero even when the package ends up fully unpacked AND configured. That
+# made a perfectly good install show up in the setup wizard as
+# "Installazione del pacchetto fallita" — the failure was in the reporting,
+# not in the install. dpkg's own recorded state is the authority here; apt's
+# exit code is kept only as diagnostic detail when dpkg agrees it failed.
+apt_rc=0
+apt-get install -y --allow-downgrades "$DEB" || apt_rc=$?
+pkg_state=$(dpkg-query -W -f='${db:Status-Status}' lyrionmusicserver 2>/dev/null || true)
+if [ "$pkg_state" != "installed" ]; then
+    fail "Installazione del pacchetto fallita (apt rc=$apt_rc, stato dpkg: ${pkg_state:-assente})"
 fi
+[ "$apt_rc" -eq 0 ] \
+    || echo "W: [hifi-lyrion] apt ha restituito $apt_rc ma dpkg riporta il pacchetto installato e configurato — proseguo" >&2
 
 write_status restarting 90 "Riavvio Lyrion…"
 systemctl restart lyrionmusicserver 2>/dev/null || true

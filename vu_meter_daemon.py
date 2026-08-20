@@ -524,8 +524,17 @@ class BluetoothTapReader:
         return visualizer._stereo_levels_from_values_py(list(samples))
 
 
-async def vu_meter_server(websocket, path):
-    """WebSocket handler to stream VU meter data"""
+async def vu_meter_server(websocket, path=None):
+    """WebSocket handler to stream VU meter data.
+
+    `path` is optional on purpose, so this one handler works on both Debian
+    releases the fleet spans. python3-websockets 10.x (bookworm) invokes the
+    handler as handler(connection, path); 14.x (trixie) dropped the second
+    argument and calls handler(connection). With a required `path` the trixie
+    library raised "vu_meter_server() missing 1 required positional argument:
+    'path'" on every connection, so the browser never received a level and the
+    VU meters sat still while audio played perfectly well. The argument is not
+    used in the body — it only ever needed to be accepted."""
     print(f"Client connected to VU meter stream")
     viz = SqueezeliteVisualizer()
     bt_tap = BluetoothTapReader()

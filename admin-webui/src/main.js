@@ -22,7 +22,12 @@ const router = createRouter({
 // account yet, or the captive setup flow if the box is still provisioning).
 router.beforeEach(async (to) => {
   if (!to.meta.auth) return true;
-  const { data } = await api.authStatus();
+  const { ok, data } = await api.authStatus();
+  // Couldn't ask the server (daemon restarting, network blip): assume NOT
+  // authenticated and show the login form. Without this the checks below read
+  // `undefined` and `!data.has_account` sends the visitor into the pre-auth
+  // setup wizard instead.
+  if (!ok) return '/login';
   if (data.logged_in) return true;
   if (!data.has_account || data.provisioning) return '/setup';
   return '/login';

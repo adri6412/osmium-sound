@@ -962,6 +962,34 @@ def _ensure_prefs():
     return None
 
 
+def _lyrion_present():
+    """Whether a LOCAL Lyrion exists on this device at all.
+
+    Deliberately NOT `bool(_find_prefs())`. server.prefs only appears the first
+    time Lyrion actually RUNS, so on a device where the setup wizard has just
+    installed the package — which is exactly the moment the wizard then asks
+    about the web-player skin — prefs are still missing and the prefs-based
+    check reported "Lyrion is not installed on this device" about a Lyrion that
+    was installed and simply had not started yet.
+
+    Ask dpkg (then the unit) instead, and leave the waiting to _ensure_prefs().
+    A device in external/"follow" mode still answers False here, which is the
+    case the message was written for."""
+    if _find_prefs():
+        return True
+    try:
+        r = _run(["dpkg-query", "-W", "-f=${db:Status-Status}", "lyrionmusicserver"])
+        if r.returncode == 0 and (r.stdout or "").strip() == "installed":
+            return True
+    except Exception:
+        pass
+    try:
+        r = _run(["systemctl", "list-unit-files", LYRION_SERVICE])
+        return r.returncode == 0 and LYRION_SERVICE in (r.stdout or "")
+    except Exception:
+        return False
+
+
 def _squeezebox_ids():
     """(uid, gid) of the squeezeboxserver user, or (None, None)."""
     try:
@@ -972,6 +1000,21 @@ def _squeezebox_ids():
         return None, None
 
 
+def _make_playlist_folder(target):
+    """Create `target` if needed and hand it to the Lyrion user, so "save queue
+    as playlist" can actually write there. Shared by the automatic provisioning
+    below and the user-picked folder (/api/playlistdir)."""
+    uid, gid = _squeezebox_ids()
+    try:
+        os.makedirs(target, exist_ok=True)
+        if uid is not None:
+            os.chown(target, uid, gid)
+    except Exception as e:
+        print(f"[sources] playlistdir mkdir failed: {e}")
+        return False
+    return os.path.isdir(target)
+
+
 def _provision_playlistdir(data):
     """Given the loaded prefs dict, make sure `playlistdir` points at an
     existing, writable folder (creating/chowning it). Returns the (possibly
@@ -980,13 +1023,7 @@ def _provision_playlistdir(data):
     if cur and os.path.isdir(cur) and os.access(cur, os.W_OK):
         return data, False
     target = cur or DEFAULT_PLAYLISTDIR
-    uid, gid = _squeezebox_ids()
-    try:
-        os.makedirs(target, exist_ok=True)
-        if uid is not None:
-            os.chown(target, uid, gid)
-    except Exception as e:
-        print(f"[sources] playlistdir mkdir failed: {e}")
+    if not _make_playlist_folder(target):
         return data, False
     data["playlistdir"] = target
     return data, True
@@ -1104,8 +1141,26 @@ LMS_SKIN_ASSET_DIRS = [
                  "hifi-lms-skin"),
 ]
 LMS_SKIN_MARKER = "managed-by: osmium-appliance"
+# Material's documented hook for adding entries to its own menus: a json file
+# in the same prefs dir as the theme/css above. Each entry lands in the section
+# it is listed under ("settings" = the Impostazioni block of the nav drawer),
+# and an entry with an "iframe" url opens that url in Material's built-in
+# dialog — which is how the appliance gets an "Osmium Admin" button into Lyrion
+# without patching a single Material file (so it survives Material updates).
+# The file belongs to the user as much as to us: we own exactly the entries
+# whose id starts with LMS_SKIN_ACTION_ID_PREFIX and merge them into whatever
+# else is already in there.
+LMS_SKIN_ACTIONS_FILE = "actions.json"
+LMS_SKIN_ACTION_ID_PREFIX = "osmium-"
 LMS_PLUGIN_REPO_XML = \
     "https://lms-community.github.io/lms-plugin-repository/extensions.xml"
+# The repository is served from GitHub Pages, which answers 403 to urllib's
+# default "Python-urllib/3.x" User-Agent (verified 2026-08-20 against the live
+# host, from the appliance and from a dev machine: default UA → 403, any other
+# UA → 200). Without this every repo lookup failed and Material only ever
+# installed from the pinned fallback below — silently, since the failure just
+# logged and fell through. Any non-default UA works; this one says who we are.
+LMS_HTTP_UA = "Osmium-Sound/1.0 (+https://osmiumsound.it)"
 # Last-resort pinned Material release, used only when the repo XML is
 # unreachable/unparseable. sha is SHA1 — that is what LMS's own
 # PluginDownloader verifies, and what the repo XML publishes.
@@ -1113,6 +1168,43 @@ LMS_MATERIAL_FALLBACK = (
     "https://github.com/CDrummond/lms-material/releases/download/6.4.6/lms-material-6.4.6.zip",
     "8e7830a148acab4971b9acd0654ae2cee6254521",
 )
+# Pinned last-resort releases, by plugin name. Only Material has one: it is the
+# single plugin this appliance MUST be able to install even with the repo
+# unreachable (the whole web UI hangs off it). Everything else simply fails and
+# stays offered for a later retry.
+LMS_PLUGIN_FALLBACKS = {"MaterialSkin": LMS_MATERIAL_FALLBACK}
+
+# ── LMS first-run setup (the wizard hand-off) ───────────────────────────────
+# Lyrion ships its own setup wizard and redirects every visit to :9000 into it
+# until server.prefs' `wizardDone` is 1 (Slim/Web/Settings/Server/Wizard.pm).
+# That wizard asks four things — language, which plugins to install, the music
+# folder, the playlist folder — and this appliance already answers three of
+# them (Sources owns mediadirs, ensure_playlistdir() owns playlistdir, the skin
+# step owns Material). So the Osmium wizard asks the one remaining question in
+# a step of its own and finalises Lyrion through /api/lms_setup, instead of
+# handing the user over to a second, redundant wizard.
+#
+# The offered list mirrors Lyrion's own recommendations
+# (HTML/EN/settings/wizard.json) minus MaterialSkin (always installed, see the
+# skin section above) and minus Analytics (opt-in telemetry — see below).
+LMS_SETUP_PLUGINS = [           # (id, ticked by default)
+    ("MusicArtistInfo", True),  # Lyrion ticks this one by default too
+    ("Spotty", False),
+    ("TIDAL", False),
+    ("Qobuz", False),
+    ("Deezer", False),
+    ("RadioNowPlaying", False),
+    ("RadioNet", False),
+]
+# Bundled inside Lyrion itself (Slim/Plugin/<name>/), so there is nothing to
+# download: these are switched on by writing 'needs-enable' into their plugin
+# state, which LMS turns into 'enabled' on its next start
+# (Slim/Utils/PluginManager.pm::_needsEnable). Analytics is the usage report to
+# stats.lms-community.org; it ships `defaultState: disabled` and the wizard
+# only ever enables it on an explicit, unticked-by-default opt-in.
+LMS_ANALYTICS_PLUGIN = "Analytics"
+LMS_BUILTIN_PLUGINS = {LMS_ANALYTICS_PLUGIN}
+LMS_WIZARD_DONE_PREF = "wizardDone"
 
 _SKIN_LOCK = threading.Lock()
 _SKIN_STATUS = {"state": "idle"}
@@ -1120,6 +1212,11 @@ _SKIN_STATUS = {"state": "idle"}
 # startup autoinstall thread) — both stop/start Lyrion, so they must not
 # overlap. _SKIN_LOCK above only guards the status dict.
 _SKIN_JOB_LOCK = threading.Lock()
+# Same split for the LMS first-run setup job: its own status dict + lock, but
+# the SAME _SKIN_JOB_LOCK for the work itself — it stops/starts Lyrion just
+# like the skin job does, and the two must never overlap.
+_LMS_SETUP_LOCK = threading.Lock()
+_LMS_SETUP_STATUS = {"state": "idle"}
 
 
 def _skin_status():
@@ -1156,12 +1253,47 @@ def _skin_asset_dir():
     return None
 
 
-def _material_installed():
+def _plugin_prefs_dir():
+    """<prefsdir>/plugin — where Lyrion keeps state.prefs/extensions.prefs."""
+    prefs = _find_prefs()
+    return os.path.join(os.path.dirname(prefs), "plugin") if prefs else None
+
+
+def _plugin_state(name):
+    """`name`'s value in Lyrion's plugin/state.prefs ('enabled', 'disabled',
+    'needs-install', …), or None when the file/key isn't there."""
+    d = _plugin_prefs_dir()
+    if not d:
+        return None
+    try:
+        import yaml
+        with open(os.path.join(d, "state.prefs")) as f:
+            data = yaml.safe_load(f) or {}
+    except Exception:
+        return None
+    v = data.get(name)
+    return v if isinstance(v, str) else None
+
+
+def _builtin_plugin_enabled(name):
+    """Built-in plugins never land in InstalledPlugins/ — their state file is
+    the only record of whether they're on. 'needs-enable' counts as on: it is
+    the transition state LMS resolves to 'enabled' on its next start."""
+    return _plugin_state(name) in ("enabled", "needs-enable")
+
+
+def _plugin_installed(name):
+    if name in LMS_BUILTIN_PLUGINS:
+        return _builtin_plugin_enabled(name)
     cache = _lyrion_cache_dir()
     if not cache:
         return False
     return os.path.isfile(os.path.join(
-        cache, "InstalledPlugins", "Plugins", "MaterialSkin", "install.xml"))
+        cache, "InstalledPlugins", "Plugins", name, "install.xml"))
+
+
+def _material_installed():
+    return _plugin_installed("MaterialSkin")
 
 
 def _material_skin_dir():
@@ -1196,19 +1328,29 @@ def _is_skin_managed_css(path):
         return False
 
 
-def _material_repo_entry():
-    """MaterialSkin's (zip_url, sha1) from the official LMS plugin repository —
-    the same metadata LMS's own extension manager consumes."""
-    with urllib.request.urlopen(LMS_PLUGIN_REPO_XML, timeout=20) as resp:
-        xml = resp.read(4 * 1024 * 1024).decode("utf-8", "replace")
-    m = re.search(r'<plugin\s+name="MaterialSkin"[^>]*>', xml)
+def _plugin_repo_entry(name):
+    """`name`'s (zip_url, sha1) from the official LMS plugin repository — the
+    same metadata LMS's own extension manager consumes."""
+    req = urllib.request.Request(LMS_PLUGIN_REPO_XML,
+                                 headers={"User-Agent": LMS_HTTP_UA})
+    with urllib.request.urlopen(req, timeout=20) as resp:
+        xml = resp.read(8 * 1024 * 1024).decode("utf-8", "replace")
+    m = re.search(r'<plugin\s+[^>]*\bname="%s"[^>]*>' % re.escape(name), xml)
     if not m:
-        raise ValueError("MaterialSkin not found in plugin repository")
+        raise ValueError(f"{name} not found in plugin repository")
     tag = m.group(0)
     url = re.search(r'\burl="([^"]+)"', tag)
     sha = re.search(r'\bsha="([0-9a-fA-F]{40})"', tag)
-    if not url or not sha or not url.group(1).startswith("https://"):
-        raise ValueError("MaterialSkin repo entry malformed")
+    # A sha1 is mandatory; the zip URL itself may be plain http. Several
+    # community plugins host their releases that way (RadioNowPlaying, for
+    # one), and refusing them outright would mean offering a plugin that can
+    # never install. Integrity does not rest on the payload's transport: the
+    # manifest that carries the sha1 comes over HTTPS, and the download is
+    # checked against it (_download_plugin_zip), so a tampered zip is rejected
+    # whatever the wire looked like. This is exactly the model LMS's own
+    # Slim::Utils::PluginDownloader uses for the same repository.
+    if not url or not sha or not re.match(r'https?://', url.group(1)):
+        raise ValueError(f"{name} repo entry malformed")
     return url.group(1), sha.group(1).lower()
 
 
@@ -1234,94 +1376,166 @@ def _yaml_pref_edit(path, mutate):
     return True
 
 
-def _ensure_material_installed():
-    """Install Material Skin deterministically via LMS's own needs-install
-    mechanism (validated live on the test device, 2026-08-19):
+def _download_plugin_zip(name, cache):
+    """sha1-verified download of `name`'s zip into <cache>/DownloadedPlugins/,
+    where LMS's own PluginManager picks it up on its next start. Returns the
+    zip path; raises on any lookup/download/verification failure."""
+    try:
+        url, sha = _plugin_repo_entry(name)
+    except Exception as e:
+        fallback = LMS_PLUGIN_FALLBACKS.get(name)
+        if not fallback:
+            raise
+        print(f"[sources] lms-plugins: {name} repo lookup failed ({e}), "
+              "using pinned fallback")
+        url, sha = fallback
+    dl_dir = os.path.join(cache, "DownloadedPlugins")
+    os.makedirs(dl_dir, exist_ok=True)
+    zip_path = os.path.join(dl_dir, f"{name}.zip")
+    tmp = zip_path + ".tmp"
+    req = urllib.request.Request(url, headers={"User-Agent": LMS_HTTP_UA})
+    h = hashlib.sha1()
+    with urllib.request.urlopen(req, timeout=60) as resp, open(tmp, "wb") as out:
+        while True:
+            chunk = resp.read(65536)
+            if not chunk:
+                break
+            h.update(chunk)
+            out.write(chunk)
+            if out.tell() > 64 * 1024 * 1024:
+                raise ValueError(f"{name} download too large")
+    if h.hexdigest().lower() != sha:
+        os.remove(tmp)
+        raise ValueError(f"{name} download sha1 mismatch")
+    os.replace(tmp, zip_path)
+    _chown_lyrion([zip_path])
+    return zip_path
 
-      1. sha1-verified zip → <cache>/DownloadedPlugins/MaterialSkin.zip
-      2. plugin/state.prefs:      MaterialSkin: needs-install
-         plugin/extensions.prefs: plugin: {MaterialSkin: 1}  (so the extension
+
+def _ensure_plugins_installed(names, builtin_states=None):
+    """Install `names` and set the on/off state of the built-in plugins in
+    `builtin_states` ({name: bool}) — all inside ONE Lyrion stop/start, because
+    prefs written under a running server are overwritten from memory when it
+    exits (see _stop_lyrion).
+
+    Deterministic install path via LMS's own needs-install mechanism
+    (validated live on the test device, 2026-08-19):
+
+      1. sha1-verified zip → <cache>/DownloadedPlugins/<name>.zip
+      2. plugin/state.prefs:      <name>: needs-install
+         plugin/extensions.prefs: plugin: {<name>: 1}  (so the extension
          manager keeps managing/updating it afterwards)
       3. restart Lyrion → its PluginManager extracts and enables the plugin
-      4. poll /material/ until it serves
 
     Merely seeding extensions.prefs does NOT work: at startup LMS prunes
     selected-but-missing plugins from that list instead of re-downloading them
     (Slim::Utils::ExtensionsManager "failed to download... let's not re-try").
-    Returns True when Material is installed and serving. Raises nothing —
-    errors are printed and reported as False."""
-    if _material_installed():
-        return True
+
+    Built-in plugins (LMS_BUILTIN_PLUGINS) skip all of that: they ship inside
+    Lyrion, so they only need a state of 'needs-enable' (→ 'enabled' on the
+    next start) or 'disabled'.
+
+    Returns (installed, failed). A download that fails costs only its own
+    plugin — the rest still go in — so an offline device gets what it can and
+    the user can retry the others later from Lyrion. Raises nothing."""
+    builtin_states = dict(builtin_states or {})
     prefs = _ensure_prefs()
-    if not prefs:
-        return False
     cache = _lyrion_cache_dir()
-    if not cache:
-        return False
-    try:
+    if not prefs or not cache:
+        print("[sources] lms-plugins: no local Lyrion — nothing to install")
+        return [], list(names) + list(builtin_states)
+
+    installed, failed, to_seed = [], [], []
+    for name in names:
+        if name in LMS_BUILTIN_PLUGINS:
+            # Callers pass built-ins through `builtin_states`; ignore them here
+            # rather than trying to download something that has no zip.
+            continue
+        if _plugin_installed(name):
+            installed.append(name)
+            continue
         try:
-            url, sha = _material_repo_entry()
+            _download_plugin_zip(name, cache)
+            to_seed.append(name)
         except Exception as e:
-            print(f"[sources] lms-skin: plugin repo lookup failed ({e}), "
-                  "using pinned fallback")
-            url, sha = LMS_MATERIAL_FALLBACK
-        dl_dir = os.path.join(cache, "DownloadedPlugins")
-        os.makedirs(dl_dir, exist_ok=True)
-        zip_path = os.path.join(dl_dir, "MaterialSkin.zip")
-        tmp = zip_path + ".tmp"
-        req = urllib.request.Request(url)
-        h = hashlib.sha1()
-        with urllib.request.urlopen(req, timeout=60) as resp, open(tmp, "wb") as out:
-            while True:
-                chunk = resp.read(65536)
-                if not chunk:
-                    break
-                h.update(chunk)
-                out.write(chunk)
-                if out.tell() > 64 * 1024 * 1024:
-                    raise ValueError("MaterialSkin download too large")
-        if h.hexdigest().lower() != sha:
-            os.remove(tmp)
-            raise ValueError("MaterialSkin download sha1 mismatch")
-        os.replace(tmp, zip_path)
-        _chown_lyrion([zip_path])
+            print(f"[sources] lms-plugins: {name} download failed: {e}")
+            failed.append(name)
 
-        plugin_prefs_dir = os.path.join(os.path.dirname(prefs), "plugin")
-        os.makedirs(plugin_prefs_dir, exist_ok=True)
-        _stop_lyrion()
-        try:
-            now = int(time.time())
+    # Only touch prefs whose state actually has to change: an unnecessary
+    # stop/start would interrupt playback for nothing.
+    builtin_todo = {n: bool(on) for n, on in builtin_states.items()
+                    if _plugin_state(n) != ("enabled" if on else "disabled")}
+    if not to_seed and not builtin_todo:
+        return installed, failed
 
-            def set_state(data):
-                data["MaterialSkin"] = "needs-install"
-                data["_ts_MaterialSkin"] = now
-                return True
+    plugin_prefs_dir = os.path.join(os.path.dirname(prefs), "plugin")
+    os.makedirs(plugin_prefs_dir, exist_ok=True)
+    _stop_lyrion()
+    try:
+        now = int(time.time())
 
-            def set_selected(data):
-                plugins = data.get("plugin")
-                if not isinstance(plugins, dict):
-                    plugins = {}
-                plugins["MaterialSkin"] = 1
-                data["plugin"] = plugins
-                data["_ts_plugin"] = now
-                return True
+        def set_state(data):
+            for name in to_seed:
+                data[name] = "needs-install"
+                data["_ts_" + name] = now
+            for name, on in builtin_todo.items():
+                data[name] = "needs-enable" if on else "disabled"
+                data["_ts_" + name] = now
+            return True
 
-            _yaml_pref_edit(os.path.join(plugin_prefs_dir, "state.prefs"),
-                            set_state)
+        def set_selected(data):
+            plugins = data.get("plugin")
+            if not isinstance(plugins, dict):
+                plugins = {}
+            for name in to_seed:
+                plugins[name] = 1
+            data["plugin"] = plugins
+            data["_ts_plugin"] = now
+            return True
+
+        _yaml_pref_edit(os.path.join(plugin_prefs_dir, "state.prefs"),
+                        set_state)
+        if to_seed:
             _yaml_pref_edit(os.path.join(plugin_prefs_dir, "extensions.prefs"),
                             set_selected)
-        finally:
-            _start_lyrion()
+    except Exception as e:
+        print(f"[sources] lms-plugins: seeding plugin prefs failed: {e}")
+        failed += [n for n in to_seed if n not in failed]
+        to_seed = []
+    finally:
+        _start_lyrion()
+
+    for _ in range(60):  # up to ~120s
+        if all(_plugin_installed(n) for n in to_seed):
+            break
+        time.sleep(2)
+    for name in to_seed:
+        (installed if _plugin_installed(name) else failed).append(name)
+    if failed:
+        print(f"[sources] lms-plugins: not installed: {', '.join(failed)}")
+    return installed, failed
+
+
+def _ensure_material_installed():
+    """Material Skin specifically: install it if missing, then wait until it
+    actually serves /material/ — the plugin appearing on disk is a moment
+    earlier than its web endpoint being up, and the skin is only usable once
+    the latter is true. Returns True when Material is installed and serving.
+    Raises nothing — errors are printed and reported as False."""
+    if _material_installed():
+        return True
+    try:
+        installed, _ = _ensure_plugins_installed(["MaterialSkin"])
+        if "MaterialSkin" not in installed:
+            return False
         for _ in range(60):  # up to ~120s
-            time.sleep(2)
-            if _material_installed():
-                try:
-                    req = urllib.request.Request(
-                        "http://127.0.0.1:9000/material/", method="HEAD")
-                    with urllib.request.urlopen(req, timeout=3):
-                        return True
-                except Exception:
-                    continue
+            try:
+                req = urllib.request.Request(
+                    "http://127.0.0.1:9000/material/", method="HEAD")
+                with urllib.request.urlopen(req, timeout=3):
+                    return True
+            except Exception:
+                time.sleep(2)
         print("[sources] lms-skin: Material did not come up after install")
         return False
     except Exception as e:
@@ -1330,7 +1544,8 @@ def _ensure_material_installed():
 
 
 def _install_skin_theme_files(choice):
-    """Sync the Osmium theme/css files under <prefsdir>/material-skin.
+    """Sync the Osmium theme/css files (and our custom-action entries) under
+    <prefsdir>/material-skin.
 
     Always installs themes/dark/Osmium.css (a harmless extra entry in
     Material's own theme picker). The global css/desktop.css + css/mobile.css
@@ -1388,15 +1603,103 @@ def _install_skin_theme_files(choice):
                     os.remove(path)
                 except OSError:
                     pass
+    # Menu entry, not styling: installed for every choice (and for unset
+    # devices, like the theme file above) — it is what puts the appliance's own
+    # web admin one tap away from Lyrion's UI.
+    _install_skin_actions(src, ms, uid, gid)
     return True
 
 
-def _set_root_skin_material():
-    """Make :9000/ serve Material instead of the classic Default skin. Live
-    JSON-RPC first (no restart, LMS persists it on its own); stop→edit→start
-    fallback when LMS isn't reachable."""
+def _install_skin_actions(src, ms, uid, gid):
+    """Merge our entries into Material's custom-actions file
+    (<prefsdir>/material-skin/actions.json).
+
+    Additive by design: entries already in the file are kept, ours (id prefixed
+    with LMS_SKIN_ACTION_ID_PREFIX) are replaced, so a user's own custom actions
+    survive every re-sync. Material eval()s this file, which means it is allowed
+    to hold hand-written javascript rather than strict json — anything we cannot
+    parse is left exactly as it is instead of being overwritten.
+
+    Failures here never fail the skin sync: the theme is the contract, this
+    button is a convenience on top of it."""
+    dest = os.path.join(ms, LMS_SKIN_ACTIONS_FILE)
     try:
-        _lyrion_request(["pref", "skin", "material"])
+        with open(os.path.join(src, LMS_SKIN_ACTIONS_FILE), encoding="utf-8") as f:
+            ours = json.load(f)
+    except (OSError, ValueError) as e:
+        print(f"[sources] lms-skin: no usable {LMS_SKIN_ACTIONS_FILE} asset ({e})")
+        return
+    current = {}
+    if os.path.exists(dest):
+        try:
+            with open(dest, encoding="utf-8") as f:
+                current = json.load(f)
+        except (OSError, ValueError) as e:
+            print(f"[sources] lms-skin: {dest} is not plain json — left alone ({e})")
+            return
+        if not isinstance(current, dict):
+            print(f"[sources] lms-skin: unexpected shape in {dest} — left alone")
+            return
+    merged = {k: v for k, v in current.items()}
+    for section, entries in ours.items():
+        existing = merged.get(section, [])
+        if not isinstance(existing, list):
+            print(f"[sources] lms-skin: section '{section}' in {dest} is not a "
+                  "list — left alone")
+            continue
+        merged[section] = [e for e in existing
+                           if not _is_osmium_action(e)] + entries
+    if merged == current:
+        return
+    try:
+        tmp = dest + ".tmp"
+        with open(tmp, "w", encoding="utf-8") as f:
+            json.dump(merged, f, indent=2, ensure_ascii=False)
+            f.write("\n")
+        os.replace(tmp, dest)
+        os.chmod(dest, 0o644)
+        if uid is not None:
+            os.chown(dest, uid, gid)
+        print(f"[sources] lms-skin: custom actions written to {dest}")
+    except OSError as e:
+        print(f"[sources] lms-skin: could not write {dest}: {e}")
+
+
+def _is_osmium_action(entry):
+    return (isinstance(entry, dict)
+            and str(entry.get("id", "")).startswith(LMS_SKIN_ACTION_ID_PREFIX))
+
+
+def _get_lms_pref(key, default=None):
+    """Read one server.prefs pref. Live JSON-RPC first — Lyrion keeps prefs in
+    memory and only flushes them to disk periodically, so a running server is
+    the authoritative source — with the prefs file as the fallback for when it
+    isn't running."""
+    try:
+        v = _lyrion_request(["pref", key, "?"]).get("_p2")
+        if v is not None:
+            return v
+    except Exception:
+        pass
+    prefs = _find_prefs()
+    if not prefs:
+        return default
+    try:
+        import yaml
+        with open(prefs) as f:
+            data = yaml.safe_load(f) or {}
+    except Exception:
+        return default
+    v = data.get(key)
+    return default if v is None else v
+
+
+def _set_lms_pref(key, value):
+    """Write one server.prefs pref. Live JSON-RPC first (no restart, LMS
+    persists it on its own); stop→edit→start fallback when LMS isn't
+    reachable."""
+    try:
+        _lyrion_request(["pref", key, value])
         return True
     except Exception:
         pass
@@ -1409,7 +1712,7 @@ def _set_root_skin_material():
         try:
             with open(prefs) as f:
                 data = yaml.safe_load(f) or {}
-            data["skin"] = "material"
+            data[key] = value
             tmp = prefs + ".tmp"
             with open(tmp, "w") as f:
                 yaml.safe_dump(data, f, default_flow_style=False,
@@ -1420,8 +1723,13 @@ def _set_root_skin_material():
             _start_lyrion()
         return True
     except Exception as e:
-        print(f"[sources] lms-skin: root skin pref write failed: {e}")
+        print(f"[sources] lms pref write failed ({key}): {e}")
         return False
+
+
+def _set_root_skin_material():
+    """Make :9000/ serve Material instead of the classic Default skin."""
+    return _set_lms_pref("skin", "material")
 
 
 def _lms_skin_apply(choice):
@@ -1429,6 +1737,13 @@ def _lms_skin_apply(choice):
     try:
         _skin_status_set("installing", 10, "msg.skinInstalling")
         with _SKIN_JOB_LOCK:
+            # Lyrion may have been installed minutes ago by the setup wizard and
+            # never started, in which case there is no prefs dir yet for Material
+            # or the theme files to land in. Start it and wait here, inside the
+            # lock, so every step below has one.
+            if not _ensure_prefs():
+                _skin_status_set("error", 0, "msg.skinLmsMissing")
+                return
             if not _ensure_material_installed():
                 _skin_status_set("error", 0, "msg.skinInstallFailed")
                 return
@@ -1484,7 +1799,7 @@ def api_lms_skin_get():
     return jsonify({
         "success": True,
         "skin": choice or "unset",
-        "lms_installed": bool(_find_prefs()),
+        "lms_installed": _lyrion_present(),
         "material_installed": _material_installed(),
         "applied": _lms_skin_applied(choice),
         "busy": _skin_job_running(),
@@ -1498,8 +1813,9 @@ def api_lms_skin_set():
         return _err("msg.skinInvalid", 400)
     if _skin_job_running():
         return _err("msg.skinBusy", 409)
-    if not _find_prefs():
-        # No local LMS (external/"follow" mode, or not installed yet).
+    if not _lyrion_present():
+        # No local LMS at all (external/"follow" mode). A local Lyrion that has
+        # simply never run yet is NOT this case — the worker waits for it.
         return _err("msg.skinLmsMissing", 409)
     # Record the intent first: even if the apply fails (offline), the choice
     # survives and Settings can retry.
@@ -1522,6 +1838,184 @@ def api_lms_skin_set():
 @app.route("/api/lms_skin_status", methods=["GET"])
 def api_lms_skin_status():
     return jsonify(_skin_status())
+
+
+# ─────────────────── LMS first-run setup (wizard hand-off) ──────────────────
+# See LMS_SETUP_PLUGINS above for why this exists. Shape deliberately mirrors
+# the skin job right above: POST starts a worker thread, a status endpoint is
+# polled for progress, and the actual work takes _SKIN_JOB_LOCK so the two can
+# never stop/start Lyrion at the same time.
+
+def _lms_setup_status():
+    with _LMS_SETUP_LOCK:
+        return dict(_LMS_SETUP_STATUS)
+
+
+def _lms_setup_status_set(state, progress, code, **extra):
+    payload = {"state": state, "progress": progress, "code": code,
+               "message": _m(code)}
+    payload.update(extra)
+    with _LMS_SETUP_LOCK:
+        _LMS_SETUP_STATUS.clear()
+        _LMS_SETUP_STATUS.update(payload)
+
+
+def _lms_setup_job_running():
+    return _lms_setup_status().get("state") in ("installing", "applying")
+
+
+def _lms_wizard_done():
+    return bool(_get_lms_pref(LMS_WIZARD_DONE_PREF))
+
+
+def _lms_setup_apply(plugins, analytics, language):
+    """Worker thread behind POST /api/lms_setup.
+
+    Order matters twice over:
+      * playlistdir BEFORE the live pref writes — ensure_playlistdir() reads
+        the prefs file, then stops Lyrion, then writes the whole dict back, so
+        anything set live just before it would be clobbered by that stale read.
+      * wizardDone LAST — a device that dies halfway through then comes back
+        still showing Lyrion's own wizard (recoverable) instead of a
+        half-configured server with no wizard left to finish the job.
+
+    Every step is idempotent, so re-running this is harmless."""
+    try:
+        _lms_setup_status_set("installing", 10, "msg.lmsSetupInstalling")
+        with _SKIN_JOB_LOCK:
+            # Same first-run wait as the skin worker: everything below reads or
+            # writes server.prefs, which only exists once Lyrion has run.
+            if not _ensure_prefs():
+                _lms_setup_status_set("error", 0, "msg.skinLmsMissing")
+                return
+            # MaterialSkin is normally already in by now (the skin step runs
+            # first); listing it here costs nothing and covers the case where
+            # that step was skipped or failed.
+            installed, failed = _ensure_plugins_installed(
+                ["MaterialSkin"] + list(plugins),
+                {LMS_ANALYTICS_PLUGIN: bool(analytics)})
+            _lms_setup_status_set("applying", 70, "msg.lmsSetupApplying")
+            try:
+                ensure_playlistdir()
+            except Exception as e:
+                print(f"[sources] lms-setup: playlistdir failed: {e}")
+            _set_lms_pref("language", "IT" if language == "it" else "EN")
+            if not _set_lms_pref(LMS_WIZARD_DONE_PREF, 1):
+                _lms_setup_status_set("error", 0, "msg.lmsSetupFailed")
+                return
+        # Lyrion's own wizard ends with a library scan and nothing else does it
+        # for a first-boot device. Best-effort: a device whose sources are
+        # still empty simply has nothing to scan.
+        try:
+            _lyrion_rescan()
+        except Exception:
+            pass
+        _lms_setup_status_set("done", 100, "msg.lmsSetupDone",
+                              installed=installed, failed=failed)
+    except Exception as e:
+        print(f"[sources] lms-setup failed: {e}")
+        _lms_setup_status_set("error", 0, "msg.lmsSetupFailed")
+
+
+@app.route("/api/lms_setup", methods=["GET"])
+def api_lms_setup_get():
+    denied = _require_pair_token()
+    if denied:
+        return denied
+    return jsonify({
+        "success": True,
+        "lms_installed": _lyrion_present(),
+        "wizard_done": _lms_wizard_done(),
+        "analytics": _builtin_plugin_enabled(LMS_ANALYTICS_PLUGIN),
+        "plugins": [{"id": name, "default": default,
+                     "installed": _plugin_installed(name)}
+                    for name, default in LMS_SETUP_PLUGINS],
+        "busy": _lms_setup_job_running(),
+    })
+
+
+@app.route("/api/lms_setup", methods=["POST"])
+def api_lms_setup_set():
+    denied = _require_pair_token()
+    if denied:
+        return denied
+    data = request.get_json(silent=True) or {}
+    requested = data.get("plugins")
+    if not isinstance(requested, list):
+        requested = []
+    known = [name for name, _ in LMS_SETUP_PLUGINS]
+    # Allow-list, not free text: whatever survives here becomes a key in
+    # Lyrion's own plugin state file and a download URL looked up by name.
+    if any(n not in known for n in requested):
+        return _err("msg.lmsSetupBadPlugin", 400)
+    plugins = [n for n in known if n in set(requested)]
+    # Telemetry is a separate boolean rather than an id in the list above, so
+    # it can never be switched on by smuggling a plugin name through.
+    analytics = bool(data.get("analytics"))
+    language = "it" if (data.get("language") or _req_lang()) == "it" else "en"
+    if _lms_setup_job_running() or _skin_job_running():
+        return _err("msg.lmsSetupBusy", 409)
+    if not _lyrion_present():
+        # No local LMS at all (external/"follow" mode) — there is no wizard to
+        # skip and nothing to install into. A freshly installed Lyrion that has
+        # not run yet is NOT this case; the worker waits for its first run.
+        return _err("msg.skinLmsMissing", 409)
+    _lms_setup_status_set("installing", 5, "msg.lmsSetupInstalling")
+    threading.Thread(target=_lms_setup_apply,
+                     args=(plugins, analytics, language),
+                     daemon=True, name="lms-setup-apply").start()
+    return jsonify({"success": True, "started": True})
+
+
+@app.route("/api/lms_setup_status", methods=["GET"])
+def api_lms_setup_status():
+    return jsonify(_lms_setup_status())
+
+
+# ─────────────────────────── Playlist folder ────────────────────────────────
+# Where Lyrion saves "save queue as playlist". ensure_playlistdir() picks a
+# sane default on its own; this is the user-facing override, so the last thing
+# Lyrion's own setup wizard used to ask has a home in our Sources page.
+
+@app.route("/api/playlistdir", methods=["GET"])
+def api_playlistdir_get():
+    denied = _require_pair_token()
+    if denied:
+        return denied
+    path = (_get_lms_pref("playlistdir") or "").strip()
+    return jsonify({
+        "success": True,
+        "path": path,
+        "default": DEFAULT_PLAYLISTDIR,
+        "is_default": bool(path) and os.path.realpath(path) == os.path.realpath(DEFAULT_PLAYLISTDIR),
+        "exists": bool(path) and os.path.isdir(path),
+        "lms_installed": _lyrion_present(),
+    })
+
+
+@app.route("/api/playlistdir", methods=["POST"])
+def api_playlistdir_set():
+    denied = _require_pair_token()
+    if denied:
+        return denied
+    data = request.get_json(silent=True) or {}
+    raw = (data.get("path") or "").strip()
+    if not raw:
+        return _err("msg.pathMissing", 400)
+    target = os.path.realpath(raw)
+    # Same confinement a media folder gets, plus the appliance's own default —
+    # that one lives under /var/lib and is therefore outside
+    # ALLOWED_LOCAL_ROOTS on purpose (it is ours, not user-picked), but it must
+    # stay reachable so "restore the default" works.
+    if target != os.path.realpath(DEFAULT_PLAYLISTDIR) \
+            and not _local_path_allowed(target):
+        return _err("msg.pathNotAllowed", 400)
+    if not _make_playlist_folder(target):
+        return _err("msg.playlistdirNotWritable", 400, path=target)
+    if not _set_lms_pref("playlistdir", target):
+        return _err("msg.saveFailed", 500)
+    return jsonify({"success": True, "path": target,
+                    "message": _m("msg.playlistdirSaved")})
 
 
 def current_paths(state):
@@ -4131,6 +4625,12 @@ SOURCES_I18N = {
         "sources.networkError": "Network error",
         "sources.apply": "Apply & rescan library",
         "sources.applyHint": "Saves the sources above and rescans the music library.",
+        "sources.playlistdirTitle": "Playlist folder",
+        "sources.playlistdirHint": "Where Lyrion saves the playlists you create from the player. The default is fine for most setups — pick a folder on your own disk if you want the playlists next to your music.",
+        "sources.playlistdirCurrent": "Current folder",
+        "sources.playlistdirUse": "Use this folder",
+        "sources.playlistdirDefault": "Restore default",
+        "sources.playlistdirSaving": "Saving…",
         "sources.applying": "Applying…",
         "sources.applied": "Done ✓",
         "sources.internal.title": "Internal disks",
@@ -4196,6 +4696,14 @@ SOURCES_I18N = {
         "msg.skinApplied": "Skin applied.",
         "msg.skinInstallFailed": "Could not download the Material web interface. Check the network connection and try again.",
         "msg.skinApplyFailed": "Could not apply the skin.",
+        "msg.lmsSetupBusy": "Lyrion is already being set up.",
+        "msg.lmsSetupBadPlugin": "Unknown plugin.",
+        "msg.lmsSetupInstalling": "Installing the selected services…",
+        "msg.lmsSetupApplying": "Finishing the Lyrion setup…",
+        "msg.lmsSetupDone": "Lyrion is set up.",
+        "msg.lmsSetupFailed": "Could not finish the Lyrion setup.",
+        "msg.playlistdirSaved": "Playlist folder saved.",
+        "msg.playlistdirNotWritable": "Could not use {path} as the playlist folder.",
         "msg.pathMissing": "Path missing.",
         "msg.pathNotAllowed": "This path is not allowed.",
         "msg.folderMissing": "The folder {path} does not exist.",
@@ -4263,6 +4771,12 @@ SOURCES_I18N = {
         "sources.networkError": "Errore di rete",
         "sources.apply": "Applica e scansiona libreria",
         "sources.applyHint": "Salva le sorgenti qui sopra e riscansiona la libreria musicale.",
+        "sources.playlistdirTitle": "Cartella playlist",
+        "sources.playlistdirHint": "Dove Lyrion salva le playlist che crei dal player. Per la maggior parte dei casi va bene quella predefinita — scegli una cartella sul tuo disco se le vuoi vicino alla musica.",
+        "sources.playlistdirCurrent": "Cartella attuale",
+        "sources.playlistdirUse": "Usa questa cartella",
+        "sources.playlistdirDefault": "Ripristina predefinita",
+        "sources.playlistdirSaving": "Salvataggio…",
         "sources.applying": "Applico…",
         "sources.applied": "Fatto ✓",
         "sources.internal.title": "Dischi interni",
@@ -4324,6 +4838,14 @@ SOURCES_I18N = {
         "msg.skinApplied": "Skin applicata.",
         "msg.skinInstallFailed": "Impossibile scaricare l'interfaccia web Material. Controlla la connessione di rete e riprova.",
         "msg.skinApplyFailed": "Impossibile applicare la skin.",
+        "msg.lmsSetupBusy": "La configurazione di Lyrion è già in corso.",
+        "msg.lmsSetupBadPlugin": "Plugin sconosciuto.",
+        "msg.lmsSetupInstalling": "Installazione dei servizi selezionati…",
+        "msg.lmsSetupApplying": "Completamento della configurazione di Lyrion…",
+        "msg.lmsSetupDone": "Lyrion è configurato.",
+        "msg.lmsSetupFailed": "Impossibile completare la configurazione di Lyrion.",
+        "msg.playlistdirSaved": "Cartella playlist salvata.",
+        "msg.playlistdirNotWritable": "Impossibile usare {path} come cartella playlist.",
         "msg.pathMissing": "Percorso mancante.",
         "msg.pathNotAllowed": "Percorso non consentito.",
         "msg.folderMissing": "La cartella {path} non esiste.",
@@ -4415,16 +4937,17 @@ def index():
     # the catalog is server-side only.
     strings = {k: v for k, v in SOURCES_I18N[lang].items() if k.startswith("sources.")}
     # Reached mid first-boot setup (webui_server.py's captive page links here
-    # with ?setup=1): Lyrion's own setup wizard performs the real first scan
-    # right after, so "Apply & rescan library" is misleading/redundant here —
-    # swap in setup-appropriate copy for just these two strings, in whichever
-    # language is active. Overriding this local dict (not SOURCES_I18N itself)
-    # leaves the normal Settings -> Sources page's wording untouched.
+    # with ?setup=1): the library scan is kicked off once at the end of the
+    # setup wizard (see _lms_setup_apply), so "Apply & rescan library" is
+    # misleading/redundant here — swap in setup-appropriate copy for just these
+    # two strings, in whichever language is active. Overriding this local dict
+    # (not SOURCES_I18N itself) leaves the normal Settings -> Sources page's
+    # wording untouched.
     if request.args.get("setup") == "1":
         strings["sources.apply"] = {"en": "Save sources", "it": "Salva sorgenti"}.get(lang, "Save sources")
         strings["sources.applyHint"] = {
-            "en": "Saves the sources above. Lyrion's own setup wizard scans your library once you finish setup.",
-            "it": "Salva le sorgenti qui sopra. La scansione della libreria la esegue il setup wizard di Lyrion una volta terminata la configurazione.",
+            "en": "Saves the sources above. Your library is scanned once, at the end of the setup.",
+            "it": "Salva le sorgenti qui sopra. La libreria viene scansionata una volta sola, al termine della configurazione.",
         }.get(lang, strings["sources.applyHint"])
     html = (INDEX_HTML
             .replace("__LANG__", lang)
@@ -4521,6 +5044,19 @@ INDEX_HTML = r"""<!DOCTYPE html>
     <div style="height:12px"></div>
     <button class="ghost" onclick="addSmb()" data-i18n="sources.mountAndAdd"></button>
     <div class="msg" id="smbMsg"></div>
+  </div>
+
+  <h2 data-i18n="sources.playlistdirTitle"></h2>
+  <div class="card">
+    <p class="hint" style="margin:0 0 10px" data-i18n="sources.playlistdirHint"></p>
+    <label data-i18n="sources.playlistdirCurrent"></label>
+    <input id="playlistdir" placeholder="/var/lib/squeezeboxserver/playlists">
+    <div style="height:10px"></div>
+    <div class="row">
+      <button class="ghost" onclick="savePlaylistdir()" data-i18n="sources.playlistdirUse"></button>
+      <button class="ghost" onclick="resetPlaylistdir()" data-i18n="sources.playlistdirDefault"></button>
+    </div>
+    <div class="msg" id="playlistdirMsg"></div>
   </div>
 </div>
 
@@ -4634,6 +5170,29 @@ async function addLocal(){
   m.textContent=r.success?T('sources.added'):(r.message||T('sources.error')); m.className='msg '+(r.success?'ok':'bad');
   if(r.success){document.getElementById('localPath').value='';load();}
 }
+// Playlist folder — where Lyrion saves playlists created from the player.
+// ensure_playlistdir() already picks a working default; this is the override,
+// the last thing Lyrion's own setup wizard used to ask for.
+let PLAYLISTDIR_DEFAULT = '';
+async function loadPlaylistdir(){
+  const d = await j('/api/playlistdir');
+  if (!d || !d.success) return;
+  PLAYLISTDIR_DEFAULT = d.default || '';
+  document.getElementById('playlistdir').value = d.path || '';
+}
+async function setPlaylistdir(path){
+  const m=document.getElementById('playlistdirMsg'); m.textContent=T('sources.playlistdirSaving'); m.className='msg';
+  const r=await j('/api/playlistdir',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({path})});
+  m.textContent=r.success?(r.message||T('sources.applied')):(r.message||T('sources.error'));
+  m.className='msg '+(r.success?'ok':'bad');
+  if(r.success) document.getElementById('playlistdir').value=r.path||path;
+}
+function savePlaylistdir(){
+  const path=document.getElementById('playlistdir').value.trim();
+  if(!path) return;
+  setPlaylistdir(path);
+}
+function resetPlaylistdir(){ if(PLAYLISTDIR_DEFAULT) setPlaylistdir(PLAYLISTDIR_DEFAULT); }
 async function addSmb(){
   const body={server:smbServer.value,share:smbShare.value,username:smbUser.value,password:smbPass.value,rw:document.getElementById('smbRw').checked};
   const m=document.getElementById('smbMsg'); m.textContent=T('sources.mounting');
@@ -4859,6 +5418,7 @@ load();
 loadUsb();
 loadInternal();
 loadSmbCard();
+loadPlaylistdir();
 // sources_server.py auto-adopts USB drives in the background, so poll the
 // active-sources list too — matches loadUsb()'s cadence, picks up a freshly
 // mounted drive without a manual reload.
