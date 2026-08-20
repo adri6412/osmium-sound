@@ -20,7 +20,6 @@ flowchart TB
         WebUI["webui_server.py\nweb admin + provisioning — :443/:80"]
         Lyrion["Lyrion Music Server\nJSON-RPC + web UI — :9000"]
         Squeezelite["squeezelite\nplayer client (ALSA)"]
-        Camilla["CamillaDSP\n(optional DSP: EQ, crossfeed, room correction)"]
     end
 
     DAC["USB DAC / HDMI output"]
@@ -32,10 +31,8 @@ flowchart TB
     Renderer -- "fetch (src/utils/api.js)" --> Flask
     Renderer -- "fetch (src/utils/lyrionApi.js)" --> Lyrion
     Flask -- systemd-run / systemctl --> Squeezelite
-    Flask -- manages --> Camilla
     Lyrion -- controls --> Squeezelite
-    Squeezelite -- "if CamillaDSP on" --> Camilla --> DAC
-    Squeezelite -- "if CamillaDSP off" --> DAC
+    Squeezelite --> DAC
     Phone -- HTTP --> Flask
     Phone -- HTTP --> Sources
     Browser -- "HTTPS (LAN-facing)" --> WebUI
@@ -50,14 +47,12 @@ flowchart TB
 | Electron main | `main/main.js` | Window/kiosk management, renderer crash recovery, relaxes CSP only for the local Lyrion origin so the renderer can call its JSON-RPC API |
 | Preload | `main/preload.js` | Minimal `contextBridge` surface — only UI-local concerns (frame-rate cap, global on-screen keyboard). **System control does not go through IPC.** |
 | React renderer | `src/` | The touchscreen UI (Now Playing, Music/Radio/Apps via Lyrion, Settings, Setup Wizard) |
-| Flask API | `api_server.py` | Runs as root on the appliance; system info/control, network/Wi-Fi, OTA channels, DSP, multiroom (LMS role), pairing tokens, display mode, player on/off, disk installer. Loopback-only, port `8000`. |
-| Sources service | `sources_server.py` | USB/SMB/local source management, internal-disk adoption/formatting, backup/restore (core logic shared via `hifi_backup.py`), FIR filter upload, a DSP control proxy to the loopback-only Flask API, and every piece of Lyrion-side configuration the appliance owns for the user (web-UI skin, first-run setup/plugins, media + playlist folders — see [Lyrion web UI](#lyrion-web-ui--osmium-skin--first-run-setup)). Port `8080`. |
+| Flask API | `api_server.py` | Runs as root on the appliance; system info/control, network/Wi-Fi, OTA channels, multiroom (LMS role), pairing tokens, display mode, player on/off, disk installer. Loopback-only, port `8000`. |
+| Sources service | `sources_server.py` | USB/SMB/local source management, internal-disk adoption/formatting, backup/restore (core logic shared via `hifi_backup.py`), and every piece of Lyrion-side configuration the appliance owns for the user (web-UI skin, first-run setup/plugins, media + playlist folders — see [Lyrion web UI](#lyrion-web-ui--osmium-skin--first-run-setup)). Port `8080`. |
 | Web admin / provisioning gateway | `webui_server.py` | The only LAN-facing service: serves the Vue admin app (`admin-webui/`) behind a session, reverse-proxies a whitelisted subset of `api_server.py`/`sources_server.py` calls, and — while `/etc/hifi-player/provisioning-pending` exists — raises a Wi-Fi hotspot and serves the QR-only captive setup/install portal. HTTPS `:443` (+ `:80` redirect), self-signed per-device cert. See [Provisioning & first boot](#provisioning--first-boot). |
 | Lyrion Music Server | external (Debian package / on-demand download) | Library indexing, playback engine, plugin ecosystem (Spotty, TIDAL Connect, radio, UPnP/DLNA, AirPlay). Port `9000`. Its web UI is the Material Skin plugin, branded as "Osmium" — see [Lyrion web UI](#lyrion-web-ui--osmium-skin--first-run-setup). |
 | squeezelite | systemd service | Lyrion's player client; `-D` flag enables bit-perfect DSD via DoP; `-v` exports a shared-memory buffer the VU meter reads |
-| CamillaDSP | systemd-managed, optional | Parametric EQ, headphone crossfeed, room correction from an uploaded filter. Off by default — bit-perfect path is untouched unless enabled. |
-| VU meter daemon | `vu_meter_daemon.py` | Reads squeezelite's shared-memory visualizer segment (`/dev/shm/squeezelite-*`) via mmap, auto-detecting the header layout, computes 32-bar RMS and streams it over WebSocket to `AnalogVUMeter.jsx`. Re-attaches on shm inode changes (DAC switch, restart, multiroom follow-switch); falls back to a Bluetooth loopback tap (see [Bluetooth audio](#bluetooth-audio-a2dp-sink)) when squeezelite has nothing playing. |
-| Bluetooth watcher | `hifi-bt-watcher.py` (system OTA channel) | Watches BlueZ over D-Bus; on the first active A2DP transport, pauses the local Lyrion player and CamillaDSP (if running) and restarts `hifi-bt-aplay`; publishes AVRCP Now Playing metadata to `/run/hifi-bt/now-playing.json`. Optional, off by default. |
+| VU meter daemon | `vu_meter_daemon.py` | Reads squeezelite's shared-memory visualizer segment (`/dev/shm/squeezelite-*`) via mmap, auto-detecting the header layout, computes 32-bar RMS and streams it over WebSocket to `AnalogVUMeter.jsx`. Re-attaches on shm inode changes (DAC switch, restart, multiroom follow-switch). |
 | Android companion | `android-companion/` | Native Android app; talks to the Flask API and Lyrion over HTTP/LAN after QR-code pairing |
 
 ### Appliance systemd services
@@ -70,15 +65,6 @@ flowchart TB
 | `hifi-vumeter` | `vu_meter_daemon.py` | VU meter shared-memory reader |
 | `hifi-firstboot` | `hifi-firstboot.sh` | One-shot: installs Lyrion (absent from the image by design), then deletes its own unit — see [Provisioning & first boot](#provisioning--first-boot) |
 | `squeezelite` | — | Lyrion's player client |
-| `hifi-bluealsa` | BlueALSA daemon (`-p a2dp-sink`) | Bluetooth A2DP sink backend. Disabled by default — see [Bluetooth audio](#bluetooth-audio-a2dp-sink) |
-| `hifi-bt-agent` | `bt-agent -c NoInputNoOutput` | Headless pairing agent (no PIN prompt) |
-| `hifi-bt-aplay` | `hifi-bt-aplay-run` | Plays the A2DP stream to the current DAC (+ a VU-meter tap when possible); restarted by the watcher on every handover |
-| `hifi-bt-watcher` | `hifi-bt-watcher.py` | DAC handover + Now Playing metadata (see table above) |
-
-`camilladsp.service` is enabled/controlled at runtime (`DSP_UNIT` in
-`api_server.py`, binary `/usr/local/bin/camilladsp`, config
-`/etc/camilladsp/config.yml`) but has **no unit file in this repo** — it
-ships from the base image, not from `distro/config/`.
 
 ## Multiroom
 
@@ -91,57 +77,6 @@ finds candidate servers on the LAN using the real Slim/Squeezebox discovery
 protocol (UDP broadcast, port 3483) — no manual IP entry needed.
 `GET/POST /player_name` names each device so grouped players are easy to
 tell apart in the Lyrion UI.
-
-## Bluetooth audio (A2DP sink)
-
-Optional, off by default (`GET/POST /bluetooth_status`, `/bluetooth_set` in
-`api_server.py`, persisted to `/etc/hifi-player/bluetooth.json`). Lets a
-phone connect and stream straight to the DAC, like a Bluetooth speaker — no
-app or account. Stack is BlueZ + BlueALSA (not PulseAudio/PipeWire), so the
-bit-perfect ALSA path used when Bluetooth is off/idle is untouched.
-
-**Prerequisites & reconciliation** — `distro/os-update/apply.d/0024-bluetooth.sh`
-installs `bluez`/`bluez-tools`/`bluez-alsa-utils` and four disabled systemd
-units (table above). `0009-faster-boot-2.sh` blacklists `btusb`/`bluetooth`
-and masks `bluetooth.service` on *every* OS update (cumulative migration, for
-fast boot on the common case); `0024` always runs after it and re-applies the
-user's persisted choice on top, so Bluetooth enabled from Settings survives
-the next OS update instead of being silently reverted.
-
-**DAC handover** — squeezelite (`-C 5` idle timeout) and CamillaDSP (when
-DSP is on) are the two things that can hold the real DAC. `hifi-bt-watcher.py`
-watches BlueZ D-Bus signals directly (via `dbus-monitor`, not python3-dbus —
-consistent with the rest of the appliance shelling out to CLI tools for
-D-Bus-backed services like NetworkManager): when the first A2DP transport
-goes active, it pauses the local Lyrion player over JSON-RPC and stops
-CamillaDSP if it was running (flag file `/run/hifi-bt/camilla-stopped` so it
-knows whether to restart it afterward), then restarts `hifi-bt-aplay.service`
-so it can open the now-free DAC. Local playback is never auto-resumed. This
-mirrors the release-before-open ordering `api_server.py`'s DSP toggle already
-uses between squeezelite and CamillaDSP.
-
-**VU meter tap** — `hifi-bt-aplay-run` fans the A2DP audio out (ALSA `route`
-+ `multi`) to an unused CamillaDSP Loopback subdevice pair (DEV=0/1,
-SUBDEV=1 — DSP itself only ever uses SUBDEV=0, so this doesn't collide with
-it) whenever the Loopback card is present, which it unconditionally is since
-migration `0015-camilladsp.sh`. `vu_meter_daemon.py` captures that tap with
-`arecord` and reuses its existing RMS→dB→percent mapping, so the analog VU
-meters keep moving during Bluetooth playback; falls back to the DAC alone
-(no VU) if the tap config can't be set up.
-
-**Now Playing metadata** — the watcher also follows `org.bluez.MediaPlayer1`
-AVRCP properties (Title/Artist/Album/Position) and writes them to
-`/run/hifi-bt/now-playing.json`. `GET /bluetooth_now_playing` in
-`api_server.py` adds a `cover_url` on top via a best-effort online lookup
-(iTunes Search API, in-memory cache) — Bluetooth never carries reliable cover
-art (BlueZ's own AVRCP art support is experimental). The renderer's
-`BluetoothNowPlaying.jsx` polls this and renders a small top banner (title,
-artist, cover, device name) whenever Bluetooth is actively streaming,
-independent of the regular Lyrion-driven Now Playing panel (which has
-nothing to show while the local player is paused for a BT session).
-
-Not yet implemented: Bluetooth as an *output* (appliance → BT
-headphones/speakers) — a natural fase 2, tracked in `ANALISI-CONCORRENTI.md`.
 
 ## Backup & restore
 
@@ -157,13 +92,14 @@ reproducible from the install ISO plus the cumulative OS-update migrations
 on both the archiving and the restoring side. Restoring those would only ever
 fight the updater or clone one device's session identity onto another.
 
-**Categories**: `core` (DAC/DSP/EQ/pointer/OTA channel), `sources` (the music
+**Categories**: `core` (audio output, pointer, OTA/Lyrion channel, display
+mode, UI resolution, skin, hostname, time zone), `sources` (the music
 source list — kept in every backup, but with SMB passwords redacted unless
 encrypted), `lyrion` (prefs + playlists, *not* the scanned library cache,
 which Lyrion rebuilds on its own), `network` (Wi-Fi profiles only — Ethernet
 carries no secret and recreates itself), `accounts` (web-admin DB via
 SQLite's own backup API for a consistent snapshot, Samba credentials, pairing
-tokens) and `bluetooth` (link keys). The last three are flagged *secret* and
+tokens). The last two are flagged *secret* and
 only ever enter an archive when a passphrase is supplied — a scheduled
 (unattended) backup therefore always sticks to the non-secret half.
 
@@ -184,13 +120,12 @@ format that can't be safely byte-copied has its own consistent-snapshot path
 **Restoring** does stop `lyrionmusicserver` around the prefs it's about to
 overwrite (an explicit, rare action, unlike backup), takes an automatic
 "pre-restore" safety generation first, and restarts only the services whose
-files actually changed — CamillaDSP is never turned on by a restore that
-finds it off.
+files actually changed.
 
 Scheduling (`hifi-backup.timer`, weekly, `Persistent=false`) ships via
-`distro/os-update/apply.d/0033-backup-scheduler.sh`, same pattern as the
-Bluetooth units above: installed disabled, reconciled against the user's
-choice in `/etc/hifi-player/backup.json` on every OS update. A factory reset
+`distro/os-update/apply.d/0033-backup-scheduler.sh`: the unit is installed
+disabled and reconciled against the user's choice in
+`/etc/hifi-player/backup.json` on every OS update. A factory reset
 wipes `/var/lib/hifi-player/backups` — otherwise a device handed to someone
 else would carry the previous owner's Wi-Fi/SMB/admin credentials in an
 encrypted backup they never asked to keep.
@@ -246,7 +181,6 @@ POST /wizard_update_apply
 GET/POST /lyrion_channel      which Lyrion release train to install/track
 GET/POST /device_name, POST /hostname_apply
 GET/POST /{app,system,os,lyrion}_update/{check,apply,status}
-GET/POST /dsp_status, /dsp_set
 GET/POST /lms_role           multiroom "follow" mode
 GET/POST /player_name
 GET  /discover_lms            LAN auto-discovery for multiroom
@@ -258,14 +192,6 @@ GET  /boot_mode                'installer' (hifi.installer=1) vs 'live', read fr
 GET  /install/disks            candidate target disks for the disk installer
 POST /install/start            launch hifi-disk-install.sh (async systemd-run job)
 GET  /install/status           poll the running/finished install job
-GET  /roomcorr/mics           USB measurement-mic candidates (arecord -l)
-POST /roomcorr/measure        guided room measurement (async systemd-run job)
-GET  /roomcorr/status         poll the measurement; carries the result curves
-POST /roomcorr/apply|discard  activate or delete the generated FIR
-GET/POST /bluetooth_status, /bluetooth_set    Bluetooth A2DP sink on/off + paired devices
-POST /bluetooth_discoverable  make the device visible for pairing (2 min)
-POST /bluetooth_forget        unpair a device
-GET  /bluetooth_now_playing   current Bluetooth track (AVRCP + online cover lookup)
 ```
 
 The full route table is the source of truth — see the `@app.route` decorators
@@ -292,7 +218,7 @@ The only LAN-facing surface. Three route families:
   GET  /api/provision/update_check        mandatory-update gate (prod + dev), then:
   POST /api/provision/update_apply
   GET  /api/provision/update_status
-  POST /api/provision/set_name            device/host/Bluetooth/multiroom name
+  POST /api/provision/set_name            device/host/multiroom name
   GET/POST /api/provision/pointer
   GET/POST /api/provision/audio_devices, /set_audio_device
   GET/POST /api/provision/lyrion_mode
@@ -315,7 +241,7 @@ The only LAN-facing surface. Three route families:
   GET  /api/provision/install_status
   ```
 - **`/api/<sources paths>`** and a handful of dedicated forwards (backup,
-  restore, FIR upload, DSP, `lms_skin[_status]`, `playlistdir`, `local/*`,
+  restore, `lms_skin[_status]`, `playlistdir`, `local/*`,
   `internal/*`, `usb/*`) — token- or session-gated relays straight to
   `sources_server.py:8080`, since that service only trusts loopback callers
   itself (see [Pairing & security](#pairing--security)). The captive
@@ -359,8 +285,6 @@ GET    /api/cd/rip/status          🔒   poll a rip job
 POST   /api/cd/eject               🔒   open the tray
 POST   /api/pair/token                  mint a companion pairing token (localhost only)
 POST   /api/pair/tokens/revoke_all      revoke all tokens (localhost only)
-GET/POST /api/dsp/status, /api/dsp/set  🔒   proxy to the loopback-only Flask DSP routes
-POST   /api/dsp/fir                🔒   upload a FIR filter for CamillaDSP
 GET    /api/backup                 🔒   build + download a plain (non-secret) backup immediately
 POST   /api/backup/create          🔒   start an async backup generation (systemd-run job)
 GET    /api/backup/status          🔒   poll the running backup job
@@ -506,7 +430,7 @@ drives, in order:
    "couldn't check" must not be mistaken for "nothing to update".
 5. **Device name** — `/api/provision/set_name` → `POST /device_name` +
    `/hostname_apply`: the unit's network name (`<name>.local`), also used as
-   its Bluetooth and multiroom name.
+   its multiroom name.
 6. **Device mode** — three-way: *screen*, *headless*, or *server-only*.
    `POST /api/provision/claim_mode` persists the display-mode choice
    (`gui`/`headless`) and, for server-only, also calls `api_server.py`'s
@@ -961,7 +885,7 @@ hifi-media-player/
 │   └── src/
 │       ├── views/            # Settings.vue, ...
 │       └── i18n/             # en/it locale strings (English is the default)
-├── api_server.py            # Flask API (system/network/OTA/DSP/multiroom/display-mode/player/installer)
+├── api_server.py            # Flask API (system/network/OTA/multiroom/display-mode/player/installer)
 ├── sources_server.py         # USB/SMB/local music sources
 ├── webui_server.py           # Web admin + provisioning/captive-portal gateway (port 443/80)
 ├── hifi_backup.py            # Backup/restore core (shared with the sbin worker)
