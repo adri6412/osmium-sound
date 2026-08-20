@@ -145,6 +145,10 @@ export const api = {
   sourcesBrowse: (id, path = '') => req('/api/system/sources/' + id + '/browse?path=' + encodeURIComponent(path)),
   sourcesRemove: (id) => req('/api/system/sources/' + id, { method: 'DELETE' }),
   sourcesApply: () => req('/api/system/apply', { method: 'POST' }),
+  // Playlist folder — a Lyrion pref, so it lives on sources_server.py behind
+  // webui's session-gated /api/system/playlistdir forwarder.
+  playlistdirGet: () => req('/api/system/playlistdir'),
+  playlistdirSet: (path) => req('/api/system/playlistdir', { method: 'POST', body: { path } }),
   usbList: () => req('/api/system/usb'),
   usbAdopt: (device) => req('/api/system/usb/adopt', { method: 'POST', body: { device } }),
   internalDisks: () => req('/api/system/internal/disks'),

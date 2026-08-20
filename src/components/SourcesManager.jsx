@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { motion } from 'framer-motion';
-import { FolderPlus, Network, Trash2, Loader2, Plus, AlertTriangle } from 'lucide-react';
+import { FolderPlus, Network, Trash2, Loader2, Plus, AlertTriangle, ListMusic } from 'lucide-react';
 import { useI18n } from '../i18n';
 import { useKeyboardInput } from '../hooks/useKeyboardInput';
 import InternalDisks from './InternalDisks';
@@ -39,6 +39,18 @@ export default function SourcesManager() {
   const [newFolderName, setNewFolderName] = useState('');
   const newFolderRef = useKeyboardInput(newFolderName, setNewFolderName);
 
+  // Playlist folder — where Lyrion saves playlists created from the player.
+  // sources_server.py provisions a working default on its own
+  // (ensure_playlistdir()); this is the override, and the last thing Lyrion's
+  // own setup wizard used to ask for now that the wizard is skipped.
+  const [playlistdir, setPlaylistdir] = useState('');
+  const [playlistdirDefault, setPlaylistdirDefault] = useState('');
+  const [pldOpen, setPldOpen] = useState(false);
+  const [pldPath, setPldPath] = useState('');
+  const [pldParent, setPldParent] = useState(null);
+  const [pldDirs, setPldDirs] = useState([]);
+  const [pldBusy, setPldBusy] = useState(false);
+
   const [smb, setSmb] = useState({ server: '', share: '', username: '', password: '', rw: false });
   const setSmbField = (k) => (e) => setSmb((s) => ({ ...s, [k]: e.target.value }));
   const serverRef = useKeyboardInput(smb.server, () => {});
@@ -60,6 +72,13 @@ export default function SourcesManager() {
     try { const d = await j('/api/usb'); setUsb(d.disks || []); } catch (_) {}
   }, []);
 
+  const loadPlaylistdir = useCallback(async () => {
+    try {
+      const d = await j('/api/playlistdir');
+      if (d && d.success) { setPlaylistdir(d.path || ''); setPlaylistdirDefault(d.default || ''); }
+    } catch (_) {}
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const loadAddLocalBrowse = useCallback(async (path = addLocalPath) => {
     setAddLocalBusy(true);
     try {
@@ -79,6 +98,7 @@ export default function SourcesManager() {
   useEffect(() => {
     loadSources();
     loadUsb();
+    loadPlaylistdir();
     // sources_server.py auto-adopts every healthy USB drive on its own
     // (read-write + Samba share, no tap needed) — poll both lists so a
     // freshly-inserted drive shows up here live, without navigating away
@@ -86,7 +106,7 @@ export default function SourcesManager() {
     const sourcesId = setInterval(loadSources, 4000);
     const usbId = setInterval(loadUsb, 4000);
     return () => { clearInterval(sourcesId); clearInterval(usbId); };
-  }, [loadSources, loadUsb]);
+  }, [loadSources, loadUsb, loadPlaylistdir]);
 
   const toggleAddLocal = () => {
     setAddLocalOpen((open) => {
@@ -151,6 +171,38 @@ export default function SourcesManager() {
       const r = await post(`/api/sources/${id}/rw`, { rw });
       setMsg(r.success ? (r.message || t('sources.mounted')) : (r.message || t('common.error')));
       if (r.success) loadSources();
+    } catch (_) { setMsg(t('common.error')); } finally { setBusy(false); }
+  };
+
+  const loadPldBrowse = async (path) => {
+    setPldBusy(true);
+    try {
+      const d = await j('/api/local/browse?path=' + encodeURIComponent(path || ''));
+      if (d.success === false) setMsg(d.message || t('common.error'));
+      else { setPldDirs(d.dirs || []); setPldParent(d.parent); setPldPath(d.path || ''); }
+    } catch (_) { setMsg(t('common.error')); }
+    finally { setPldBusy(false); }
+  };
+  const togglePld = () => {
+    setPldOpen((open) => {
+      const next = !open;
+      // Start from the folder in use, so a sibling folder is one tap away
+      // rather than a walk down from /.
+      if (next) loadPldBrowse(playlistdir || '');
+      return next;
+    });
+  };
+  const pldUp = () => {
+    if (pldParent === null || pldParent === undefined) return;
+    loadPldBrowse(pldParent);
+  };
+  const savePlaylistdir = async (path) => {
+    if (!path) return;
+    setBusy(true);
+    try {
+      const r = await post('/api/playlistdir', { path });
+      setMsg(r.success ? (r.message || t('sources.playlistdir.saved')) : (r.message || t('common.error')));
+      if (r.success) { setPldOpen(false); loadPlaylistdir(); }
     } catch (_) { setMsg(t('common.error')); } finally { setBusy(false); }
   };
 
@@ -431,6 +483,66 @@ export default function SourcesManager() {
               <span>{t('sources.smbRw')}</span>
             </label>
             <button onClick={addSmb} disabled={busy} className={`${ghostBtn} w-full mt-3`}><Plus size={18} /><span>{t('sources.mountAndAdd')}</span></button>
+          </div>
+
+          {/* Playlist folder — Lyrion's playlistdir pref, same file-browser
+              picker as "Add local folder" above. */}
+          <div>
+            <h3 className="text-white font-semibold mb-1 flex items-center space-x-2">
+              <ListMusic size={18} className="text-hifi-gold" /><span>{t('sources.playlistdir.title')}</span>
+            </h3>
+            <p className="text-sm text-hifi-silver mb-3">{t('sources.playlistdir.hint')}</p>
+            <div className="flex items-center justify-between gap-3 bg-hifi-dark rounded-lg p-3">
+              <div className="text-xs text-hifi-silver/80 break-all min-w-0">
+                {playlistdir || t('sources.playlistdir.unset')}
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                <button onClick={togglePld} className="text-xs py-1.5 px-3 rounded-md bg-hifi-accent hover:bg-hifi-light text-white">
+                  {pldOpen ? t('common.close') : t('sources.playlistdir.pick')}
+                </button>
+                <button
+                  onClick={() => savePlaylistdir(playlistdirDefault)}
+                  disabled={busy || !playlistdirDefault || playlistdir === playlistdirDefault}
+                  className="text-xs py-1.5 px-3 rounded-md bg-hifi-accent hover:bg-hifi-light disabled:opacity-50 text-white"
+                >
+                  {t('sources.playlistdir.default')}
+                </button>
+              </div>
+            </div>
+            {pldOpen && (
+              <div className="bg-hifi-dark rounded-lg p-3 mt-2">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-xs text-hifi-silver truncate">{pldPath || '/'}</span>
+                  <button
+                    onClick={pldUp}
+                    disabled={pldParent === null || pldParent === undefined}
+                    className="shrink-0 text-xs py-1.5 px-3 rounded-md bg-hifi-accent hover:bg-hifi-light disabled:opacity-50 text-white"
+                  >
+                    {t('sources.subpathUp')}
+                  </button>
+                </div>
+                {pldBusy ? (
+                  <p className="text-xs text-hifi-silver/70 mt-2">{t('common.loading')}</p>
+                ) : pldDirs.length === 0 ? (
+                  <p className="text-xs text-hifi-silver/70 mt-2">{t('sources.subpathNoSubfolders')}</p>
+                ) : (
+                  <div className="space-y-1 mt-2 max-h-40 overflow-y-auto">
+                    {pldDirs.map((dir) => (
+                      <button
+                        key={dir}
+                        onClick={() => loadPldBrowse(dir)}
+                        className="w-full text-left text-sm text-white bg-hifi-accent/40 hover:bg-hifi-accent rounded-md px-3 py-1.5 truncate"
+                      >
+                        {dir}
+                      </button>
+                    ))}
+                  </div>
+                )}
+                <button onClick={() => savePlaylistdir(pldPath)} disabled={busy || !pldPath} className={`${ghostBtn} w-full mt-3`}>
+                  <span>{t('sources.playlistdir.use')}</span>
+                </button>
+              </div>
+            )}
           </div>
         </>
       )}

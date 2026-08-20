@@ -273,7 +273,14 @@
       "newFolderPlaceholder": "New folder name",
       "newFolderCreate": "Create",
       "localSambaHint": "Also share this folder over the network (SMB), so you can copy music onto it from a PC.",
-      "useThisFolder": "Use this folder"
+      "useThisFolder": "Use this folder",
+      "playlistdirTitle": "Playlist folder",
+      "playlistdirHint": "Where Lyrion saves the playlists you create from the player. The default works for most setups — pick a folder on your own disk if you'd rather keep the playlists next to your music.",
+      "playlistdirUnset": "Not set",
+      "playlistdirPick": "Choose folder…",
+      "playlistdirUse": "Use this folder",
+      "playlistdirDefault": "Restore default",
+      "playlistdirSaved": "Playlist folder saved."
     },
     "dsp": {
       "unavailable": "DSP is not available on this device.",

@@ -57,6 +57,15 @@
     "newFolderCreate": "Create",
     "localSambaHint": "Also share this folder over the network (SMB), so you can copy music onto it from a PC.",
     "useThisFolder": "Use this folder",
+    "playlistdir": {
+      "title": "Playlist folder",
+      "hint": "Where Lyrion saves the playlists you create from the player. The default works for most setups — pick a folder on your own disk if you'd rather keep the playlists next to your music.",
+      "unset": "Not set",
+      "pick": "Choose folder…",
+      "use": "Use this folder",
+      "default": "Restore default",
+      "saved": "Playlist folder saved."
+    },
     "internal": {
       "tag": "INTERNAL",
       "title": "Internal disks",
