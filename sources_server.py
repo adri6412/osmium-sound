@@ -1141,6 +1141,17 @@ LMS_SKIN_ASSET_DIRS = [
                  "hifi-lms-skin"),
 ]
 LMS_SKIN_MARKER = "managed-by: osmium-appliance"
+# Material's documented hook for adding entries to its own menus: a json file
+# in the same prefs dir as the theme/css above. Each entry lands in the section
+# it is listed under ("settings" = the Impostazioni block of the nav drawer),
+# and an entry with an "iframe" url opens that url in Material's built-in
+# dialog — which is how the appliance gets an "Osmium Admin" button into Lyrion
+# without patching a single Material file (so it survives Material updates).
+# The file belongs to the user as much as to us: we own exactly the entries
+# whose id starts with LMS_SKIN_ACTION_ID_PREFIX and merge them into whatever
+# else is already in there.
+LMS_SKIN_ACTIONS_FILE = "actions.json"
+LMS_SKIN_ACTION_ID_PREFIX = "osmium-"
 LMS_PLUGIN_REPO_XML = \
     "https://lms-community.github.io/lms-plugin-repository/extensions.xml"
 # The repository is served from GitHub Pages, which answers 403 to urllib's
@@ -1533,7 +1544,8 @@ def _ensure_material_installed():
 
 
 def _install_skin_theme_files(choice):
-    """Sync the Osmium theme/css files under <prefsdir>/material-skin.
+    """Sync the Osmium theme/css files (and our custom-action entries) under
+    <prefsdir>/material-skin.
 
     Always installs themes/dark/Osmium.css (a harmless extra entry in
     Material's own theme picker). The global css/desktop.css + css/mobile.css
@@ -1591,7 +1603,71 @@ def _install_skin_theme_files(choice):
                     os.remove(path)
                 except OSError:
                     pass
+    # Menu entry, not styling: installed for every choice (and for unset
+    # devices, like the theme file above) — it is what puts the appliance's own
+    # web admin one tap away from Lyrion's UI.
+    _install_skin_actions(src, ms, uid, gid)
     return True
+
+
+def _install_skin_actions(src, ms, uid, gid):
+    """Merge our entries into Material's custom-actions file
+    (<prefsdir>/material-skin/actions.json).
+
+    Additive by design: entries already in the file are kept, ours (id prefixed
+    with LMS_SKIN_ACTION_ID_PREFIX) are replaced, so a user's own custom actions
+    survive every re-sync. Material eval()s this file, which means it is allowed
+    to hold hand-written javascript rather than strict json — anything we cannot
+    parse is left exactly as it is instead of being overwritten.
+
+    Failures here never fail the skin sync: the theme is the contract, this
+    button is a convenience on top of it."""
+    dest = os.path.join(ms, LMS_SKIN_ACTIONS_FILE)
+    try:
+        with open(os.path.join(src, LMS_SKIN_ACTIONS_FILE), encoding="utf-8") as f:
+            ours = json.load(f)
+    except (OSError, ValueError) as e:
+        print(f"[sources] lms-skin: no usable {LMS_SKIN_ACTIONS_FILE} asset ({e})")
+        return
+    current = {}
+    if os.path.exists(dest):
+        try:
+            with open(dest, encoding="utf-8") as f:
+                current = json.load(f)
+        except (OSError, ValueError) as e:
+            print(f"[sources] lms-skin: {dest} is not plain json — left alone ({e})")
+            return
+        if not isinstance(current, dict):
+            print(f"[sources] lms-skin: unexpected shape in {dest} — left alone")
+            return
+    merged = {k: v for k, v in current.items()}
+    for section, entries in ours.items():
+        existing = merged.get(section, [])
+        if not isinstance(existing, list):
+            print(f"[sources] lms-skin: section '{section}' in {dest} is not a "
+                  "list — left alone")
+            continue
+        merged[section] = [e for e in existing
+                           if not _is_osmium_action(e)] + entries
+    if merged == current:
+        return
+    try:
+        tmp = dest + ".tmp"
+        with open(tmp, "w", encoding="utf-8") as f:
+            json.dump(merged, f, indent=2, ensure_ascii=False)
+            f.write("\n")
+        os.replace(tmp, dest)
+        os.chmod(dest, 0o644)
+        if uid is not None:
+            os.chown(dest, uid, gid)
+        print(f"[sources] lms-skin: custom actions written to {dest}")
+    except OSError as e:
+        print(f"[sources] lms-skin: could not write {dest}: {e}")
+
+
+def _is_osmium_action(entry):
+    return (isinstance(entry, dict)
+            and str(entry.get("id", "")).startswith(LMS_SKIN_ACTION_ID_PREFIX))
 
 
 def _get_lms_pref(key, default=None):

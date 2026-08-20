@@ -1,0 +1,12 @@
+{
+  "settings": [
+    {
+      "id": "osmium-webui",
+      "title": "Osmium Admin",
+      "title-en": "Osmium Admin",
+      "title-it": "Amministrazione Osmium",
+      "icon": "settings_applications",
+      "iframe": "http://$HOST/"
+    }
+  ]
+}

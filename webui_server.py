@@ -36,6 +36,10 @@ Security model (see the plan's "Analisi di sicurezza"):
     the captive window (wifi/dac/lyrion-install/claim/create-account); the full
     admin set (reboot/shutdown/ssh/ota/dsp/...) needs a live session.
   * factory_reset / password reset re-validate the admin password in the body.
+  * Framing is allowed for this origin plus Lyrion's (same host, :9000), which
+    is what Material's "Osmium Admin" menu entry embeds -- see
+    _frame_ancestors(). Same host means same site, so the session cookie above
+    still travels into that frame.
 
 Dev/local flags:
   HIFI_WEBUI_STATE_DIR   override /etc/hifi-player (default) for state files
@@ -1090,6 +1094,18 @@ def _guard():
                             'message': _wt('auth.csrfInvalid', _lang())}), 403
 
 
+def _frame_ancestors():
+    # Lyrion's web UI lives on the SAME host, port 9000, and its Material skin
+    # carries an "Osmium Admin" entry that opens this admin in an iframe (see
+    # the actions.json asset in distro/.../hifi-lms-skin). A different port is a
+    # different *origin* — so it must be named here — but the same *site*, which
+    # is why the SameSite=Strict session cookie still travels into that frame.
+    host = request.host
+    host = host[:host.index(']') + 1] if host.startswith('[') and ']' in host \
+        else host.split(':')[0]
+    return f"'self' http://{host}:9000 https://{host}:9000"
+
+
 @app.after_request
 def _set_csrf_cookie(resp):
     # Ensure a CSRF cookie exists so the SPA can read + echo it. Not HttpOnly by
@@ -1098,6 +1114,12 @@ def _set_csrf_cookie(resp):
     if not request.cookies.get('csrf'):
         resp.set_cookie('csrf', secrets.token_urlsafe(24), samesite='Strict',
                         secure=False, httponly=False)
+    # One framing policy for every response, so the whole admin (including the
+    # nested /sources-app frame inside Settings) works both standalone and
+    # embedded in Lyrion. X-Frame-Options cannot express "self + that origin"
+    # and browsers ignore it once frame-ancestors is present, so it is not set.
+    resp.headers['Content-Security-Policy'] = \
+        f'frame-ancestors {_frame_ancestors()}'
     # No API answer may ever be cached. These replies are per-session state
     # (auth status above all), and a browser that reuses a cached
     # /api/auth/status keeps showing the admin to someone who just logged out
@@ -1901,10 +1923,9 @@ def _forward_to(base, path, timeout=120, service_label='servizio'):
         return jsonify({'success': False, 'message': _wt('proxy.serviceUnreachable', _lang())}), 502
     if disposition:
         out.headers['Content-Disposition'] = disposition
-    # Explicitly allow embedding by our own Settings page (some browsers — Brave
-    # in particular — are aggressive about frames that don't declare a policy).
-    out.headers['Content-Security-Policy'] = "frame-ancestors 'self'"
-    out.headers['X-Frame-Options'] = 'SAMEORIGIN'
+    # Framing policy (this response is embedded by our own Settings page, and
+    # the whole admin may itself be embedded in Lyrion) is set centrally in
+    # _set_csrf_cookie's after_request hook.
     return out
 
 

@@ -688,6 +688,21 @@ to `<lyrion-prefsdir>/material-skin/`; the CSS files carry a
 `managed-by: osmium-appliance` marker so switching back to plain Material
 removes only files we wrote.
 
+The same asset dir also carries `actions.json`, Material's documented hook for
+adding entries to its own menus. Ours puts an **Osmium Admin** item in the nav
+drawer's *Impostazioni / Settings* block (`title-en` + `title-it`, so it follows
+Material's language) which opens `http://$HOST/` — this appliance's web admin —
+in Material's built-in iframe dialog, on every client that opens Lyrion. It is
+merged, not copied: only entries whose `id` starts with `osmium-` are ours, so a
+user's own custom actions survive, and a file that is not plain json (Material
+`eval()`s it, so it may be hand-written javascript) is left untouched. Being a
+menu entry rather than styling, it is installed for every skin choice, unset
+devices included. Embedding works because the admin answers with
+`frame-ancestors 'self' http://<host>:9000` (`_frame_ancestors()` in
+`webui_server.py`): a different port is a different *origin* — so it has to be
+named — but the same *site*, which is why the `SameSite=Strict` session cookie
+still reaches the frame.
+
 The user's choice is one word in `/etc/hifi-player/lms-skin`:
 
 | Value | Meaning |
@@ -1048,7 +1063,7 @@ hifi-media-player/
 ├── android-companion/       # Android companion app (Kotlin/Java)
 ├── distro/                  # Custom Debian appliance build (live-build)
 │   ├── config/               # live-build includes, hooks, systemd units
-│   │   └── includes.chroot/usr/local/share/hifi-lms-skin/    # Osmium theme + global CSS for Lyrion's Material Skin
+│   │   └── includes.chroot/usr/local/share/hifi-lms-skin/    # Osmium theme + global CSS + menu entry for Lyrion's Material Skin
 │   └── os-update/            # apply.d migrations, apply.sh (cumulative)
 ├── website/                  # Marketing site (website/index.html)
 └── package.json
