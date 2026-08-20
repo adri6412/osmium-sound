@@ -24,6 +24,10 @@
             onsubmit="return confirm('Revocare il token? La macchina si ri-registrerà da sola al prossimo ciclo.')">
         <button class="btn secondary" type="submit">Revoca token</button>
       </form>
+      <form method="post" action="{{ url_for('device_delete', device_id=device.id) }}"
+            onsubmit="return confirm('Eliminare definitivamente questa macchina? Verranno cancellati anche i suoi snapshot e le sue catture. Se la macchina \u00e8 ancora installata si ri-registrer\u00e0 da sola al prossimo ciclo.')">
+        <button class="btn secondary" type="submit" style="border-color:var(--err);color:var(--err)">Elimina macchina</button>
+      </form>
     </div>
   </div>
 

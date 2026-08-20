@@ -15,6 +15,7 @@ import hmac
 import json
 import os
 import secrets
+import shutil
 import sqlite3
 import time
 from functools import wraps
@@ -148,6 +149,24 @@ def _prune_old_captures(db, table, order_col, device_id):
             except OSError:
                 pass
         db.execute(f'DELETE FROM {table} WHERE id = ?', (row['id'],))
+
+
+def _delete_device(db, device_id):
+    """Remove a device and everything hanging off it: the snapshots/HAR/perf
+    rows go with it via ON DELETE CASCADE (foreign_keys is ON, see get_db()),
+    and its capture directory is removed here since nothing else on disk
+    tracks it. Used to clear out appliances that registered once and were
+    then uninstalled -- they'd otherwise sit in the list forever as 'offline'.
+    """
+    row = db.execute('SELECT id FROM devices WHERE id = ?', (device_id,)).fetchone()
+    if not row:
+        return False
+    db.execute('DELETE FROM devices WHERE id = ?', (device_id,))
+    try:
+        shutil.rmtree(os.path.join(CAPTURES_DIR, str(device_id)))
+    except OSError:
+        pass
+    return True
 
 
 # ── admin password: DB override, falling back to the env var ────────────
@@ -423,6 +442,42 @@ def device_revoke(device_id):
     db.commit()
     db.close()
     return redirect(url_for('device_detail', device_id=device_id))
+
+
+@app.route('/devices/<int:device_id>/delete', methods=['POST'])
+@require_admin
+def device_delete(device_id):
+    db = get_db()
+    try:
+        _delete_device(db, device_id)
+        db.commit()
+    finally:
+        db.close()
+    return redirect(url_for('devices'))
+
+
+# Bulk version of the above: one button to clear out every appliance that
+# hasn't checked in for `days` days (never-seen ones included). An agent that
+# is merely switched off for a while re-appears on its own next check-in --
+# only the DB history is lost -- so the cutoff can be reasonably aggressive.
+@app.route('/devices/purge', methods=['POST'])
+@require_admin
+def devices_purge():
+    try:
+        days = max(1, int(request.form.get('days', 30)))
+    except (TypeError, ValueError):
+        days = 30
+    cutoff = time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime(time.time() - days * 86400))
+    db = get_db()
+    try:
+        rows = db.execute(
+            'SELECT id FROM devices WHERE last_seen_at IS NULL OR last_seen_at < ?', (cutoff,)).fetchall()
+        for row in rows:
+            _delete_device(db, row['id'])
+        db.commit()
+    finally:
+        db.close()
+    return redirect(url_for('devices', purged=len(rows), days=days))
 
 
 @app.route('/devices/<int:device_id>/har/<path:filename>')
