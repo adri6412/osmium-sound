@@ -1098,6 +1098,17 @@ def _set_csrf_cookie(resp):
     if not request.cookies.get('csrf'):
         resp.set_cookie('csrf', secrets.token_urlsafe(24), samesite='Strict',
                         secure=False, httponly=False)
+    # No API answer may ever be cached. These replies are per-session state
+    # (auth status above all), and a browser that reuses a cached
+    # /api/auth/status keeps showing the admin to someone who just logged out
+    # -- the SPA asks the server on every navigation precisely so it doesn't
+    # have to trust its own memory. `Vary: Cookie` alone isn't enough: after
+    # logout the cookie is gone, which is a *different* cache key, but the
+    # pre-login (cookie-less) entry from before login can match it.
+    if request.path.startswith('/api/'):
+        resp.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate'
+        resp.headers['Pragma'] = 'no-cache'
+        resp.headers['Expires'] = '0'
     return resp
 
 

@@ -13,7 +13,11 @@ function csrfToken() {
 
 async function req(path, { method = 'GET', body } = {}) {
   const headers = {};
-  const opts = { method, headers, credentials: 'same-origin' };
+  // `no-store`: never read an API reply from the HTTP cache and never write
+  // one into it. Belt-and-braces with the no-store headers webui_server sends
+  // on /api/* -- a stale /api/auth/status is what makes a logged-out browser
+  // walk straight back into the admin on F5.
+  const opts = { method, headers, credentials: 'same-origin', cache: 'no-store' };
   if (body !== undefined) {
     headers['Content-Type'] = 'application/json';
     opts.body = JSON.stringify(body);

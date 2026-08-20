@@ -13,7 +13,11 @@ const busy = ref(false);
 const error = ref('');
 
 onMounted(async () => {
-  const { data } = await api.authStatus();
+  // Same rule as the router guard in main.js: if the status call itself fails,
+  // stay on the login form rather than reading `undefined` and bouncing into
+  // the setup wizard.
+  const { ok, data } = await api.authStatus();
+  if (!ok) return;
   if (data.logged_in) router.push('/');
   else if (!data.has_account) router.push('/setup');
 });
