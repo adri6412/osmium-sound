@@ -12,8 +12,9 @@
 # -> 0.59 W (Wayland + modo reale), pacchetto da 7.21 W a 5.04 W.
 #
 # COSA FA
-#   - installa labwc (compositor) e wlr-randr (configurazione output, usata da
-#     hifi-ui-resolution.sh / hifi-ui-refresh.sh sul backend Wayland);
+#   - installa labwc (compositor), wlr-randr (configurazione output, usata da
+#     hifi-ui-resolution.sh / hifi-ui-refresh.sh sul backend Wayland) e xwayland
+#     (ci gira dentro la finestra del kiosk);
 #   - installa la sessione (/usr/local/bin/hifi-kiosk-wayland + hifi-kiosk-launch
 #     + la voce in /usr/share/wayland-sessions);
 #   - crea /run/hifi-player (tmpfiles.d) dove la sessione, che gira come utente
@@ -43,6 +44,10 @@ elif ! ensure_pkg labwc; then
     log_warn "labwc non installato — sessione kiosk lasciata su X11"
 else
     ensure_pkg wlr-randr || log_warn "wlr-randr assente: su Wayland la risoluzione UI resterà quella nativa"
+    # XWayland: la finestra del kiosk gira lì dentro, non come client Wayland
+    # nativo — vedi il commento su --ozone-platform=x11 in kiosk-wayland-launch
+    # (bug del touch in labwc). Senza, la sessione parte e resta a schermo nero.
+    ensure_pkg xwayland || log_warn "xwayland assente: il kiosk non partirà finché non si installa"
 
     if [ -f "$HIFI_PAYLOAD_DIR/files/kiosk-wayland-session" ] && \
        [ -f "$HIFI_PAYLOAD_DIR/files/kiosk-wayland-launch" ]; then

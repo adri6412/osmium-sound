@@ -20,6 +20,11 @@
 # compositor, quindi tutto ciò che deve parlare con lo schermo sta in
 # hifi-kiosk-launch, che labwc esegue quando il socket Wayland è pronto.
 #
+# NB: la finestra del kiosk gira dentro XWayland, non come client Wayland
+# nativo — un bug del touch in labwc lo impone, e il perché sta nel commento
+# su --ozone-platform=x11 in hifi-kiosk-launch. Il guadagno della sessione
+# resta comunque quello misurato qui sopra: la scalatura RandR di Xorg via.
+#
 # ROLLBACK: la sessione X11 (~/.xsession + /usr/share/xsessions/hifi-kiosk.desktop)
 # resta installata e funzionante. Per tornare indietro basta rimettere
 # user-session=hifi-kiosk in /etc/lightdm/lightdm.conf.d/99-hifi-autologin.conf.
