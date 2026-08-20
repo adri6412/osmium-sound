@@ -4,6 +4,17 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
     <title>Osmium Sound</title>
+    <script>
+      // Puntatore mouse: applica la preferenza salvata prima che React monti,
+      // se no il cursore di sistema resta visibile sulla finestra per tutto il
+      // boot della UI. App.jsx la riapplica poi come sorgente di verità (ed è
+      // lì che la sessione dell'installer la scavalca, mostrandolo sempre).
+      try {
+        if (localStorage.getItem('hifiShowPointer') === '0') {
+          document.documentElement.classList.add('hifi-hide-cursor');
+        }
+      } catch (e) {}
+    </script>
   </head>
   <body>
     <div id="root"></div>

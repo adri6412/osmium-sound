@@ -28,7 +28,85 @@ export XDG_SESSION_TYPE=wayland
 : "${XDG_RUNTIME_DIR:=/run/user/$(id -u)}"
 export XDG_RUNTIME_DIR
 
+# ── Cursore del compositor ────────────────────────────────────────────────
+# labwc disegna il proprio puntatore dal primo frame, cioè per tutti i secondi
+# che passano tra il login e la comparsa della finestra di Electron: in quel
+# buco la classe `hifi-hide-cursor` della UI non è ancora applicata e unclutter
+# non aiuta (è un client X11, qui non vede nulla). Risultato: il puntatore si
+# vedeva all'avvio anche con l'impostazione "Puntatore mouse" disattivata.
+#
+# Rimedio senza dipendenze nuove: un tema di cursori tutto trasparente (un
+# Xcursor 1x1 ARGB a zero) generato in ~/.icons e imposto via XCURSOR_THEME.
+# Vale solo per il compositor — hifi-kiosk-launch toglie le due variabili
+# dall'ambiente prima di avviare Electron, così il client continua a usare il
+# tema di sistema e il toggle delle impostazioni può far ricomparire il cursore
+# a runtime (via CSS) senza riavviare la sessione.
+#
+# Stessa regola di ~/.xsession: la sessione dell'installer tiene comunque il
+# puntatore visibile (non c'è ancora un touchscreen, e il disk picker si usa
+# col mouse), e solo un esplicito "0" nasconde.
+if grep -qw 'hifi.installer=1' /proc/cmdline 2>/dev/null; then
+    : # sessione installer — cursore sempre visibile
+elif [ "$(cat /etc/hifi-player/pointer-enabled 2>/dev/null)" = "0" ]; then
+    CURSOR_ROOT="${HOME:-/home/hifi}/.icons"
+    CURSOR_DIR="$CURSOR_ROOT/hifi-invisible/cursors"
+    # 68 byte: header Xcursor + 1 voce di TOC + 1 immagine 1x1 con l'unico
+    # pixel a 0x00000000 (dimensione nominale 24). Rigenerato ad ogni avvio,
+    # così un file troncato da uno spegnimento brutale si ripara da solo.
+    if mkdir -p "$CURSOR_DIR" 2>/dev/null && printf '%s' \
+        'WGN1chAAAAAAAAEAAQAAAAIA/f8YAAAAHAAAACQAAAACAP3/GAAAAAEAAAABAAAAAQAAAAAAAAAAAAAAAAAAAAAAAAA=' \
+        | base64 -d > "$CURSOR_DIR/default" 2>/dev/null; then
+        printf '[Icon Theme]\nName=hifi-invisible\n' \
+            > "$CURSOR_ROOT/hifi-invisible/index.theme" 2>/dev/null || true
+        # Il nome del puntatore di default cambia con la versione di wlroots
+        # ("default" sulle recenti, "left_ptr" sulle vecchie): con entrambi
+        # presenti il tema copre tutte. Un nome mancante non sarebbe comunque
+        # un problema — nessuna immagine = nessun cursore disegnato.
+        for name in left_ptr top_left_arrow arrow; do
+            ln -sf default "$CURSOR_DIR/$name" 2>/dev/null || true
+        done
+        # XCURSOR_PATH esplicito: ~/.icons è nel percorso di ricerca
+        # predefinito, ma quale sia dipende dalla libreria; così non dipende.
+        XCURSOR_PATH="$CURSOR_ROOT:/usr/share/icons:/usr/share/pixmaps"
+        XCURSOR_THEME=hifi-invisible
+        export XCURSOR_PATH XCURSOR_THEME
+    fi
+fi
+
+# ── Menu del compositor ───────────────────────────────────────────────────
+# Di default labwc apre il proprio root-menu (Reconfigure / Exit) al clic —
+# sinistro, destro o centrale — sul desktop, cioè ovunque non ci sia ancora la
+# finestra del kiosk. Su un'appliance non deve esistere: "Exit" chiude la
+# sessione e lascia lo schermo a lightdm.
+#
+# L'idioma per togliere un binding predefinito (labwc-config(5)) è caricare i
+# default con <default /> e poi ridichiarare il binding SENZA azioni: labwc
+# sostituisce il duplicato e poi scarta i binding rimasti senza azione. Così si
+# perde solo il menu, non il resto (fra cui il clic che dà il fuoco alla
+# finestra, che invece salterebbe dichiarando dei mousebind senza <default />).
+LABWC_CONF_DIR="$XDG_RUNTIME_DIR/hifi-labwc"
+if mkdir -p "$LABWC_CONF_DIR" 2>/dev/null && cat > "$LABWC_CONF_DIR/rc.xml" <<'EOF' 2>/dev/null
+<?xml version="1.0"?>
+<labwc_config>
+  <mouse>
+    <default />
+    <context name="Root">
+      <mousebind button="Left" action="Press" />
+      <mousebind button="Right" action="Press" />
+      <mousebind button="Middle" action="Press" />
+    </context>
+  </mouse>
+</labwc_config>
+EOF
+then
+    set -- -C "$LABWC_CONF_DIR"
+else
+    # Senza configurazione si parte lo stesso: meglio il menu di labwc che una
+    # sessione che non parte.
+    set --
+fi
+
 # -S: labwc termina quando termina il comando, così la fine del kiosk chiude la
 # sessione e lightdm la riapre — l'equivalente del ciclo di riavvio che su X11
 # stava dentro ~/.xsession.
-exec labwc -S /usr/local/bin/hifi-kiosk-launch
+exec labwc "$@" -S /usr/local/bin/hifi-kiosk-launch

@@ -1883,6 +1883,12 @@ def set_tailscale(enable):
 #  it off from Settings, which starts unclutter to auto-hide it.
 #  The choice is persisted and re-applied at login by ~/.xsession; here we
 #  also apply it live so it takes effect without a reboot.
+#  On the Wayland kiosk session (labwc) unclutter is inert — it is an X11
+#  client and never sees the kiosk window. There the flag is read at login by
+#  /usr/local/bin/hifi-kiosk-wayland, which hides the compositor's own pointer
+#  with a transparent cursor theme; inside the window it is the UI's
+#  `hifi-hide-cursor` class that applies live, so this toggle still takes
+#  effect immediately where the pointer is actually visible.
 #  NOTE: the cursor only ever appears once the X server is no longer started
 #  with `-nocursor` (removed at build time + by OS-OTA migration); on an
 #  un-migrated device a reboot is needed after that update for it to show.
