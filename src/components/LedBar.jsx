@@ -1,5 +1,6 @@
 import React from 'react';
 import ledBarBase from '../assets/ledbar/led-bar-base.png';
+import ledBarOff from '../assets/ledbar/led-bar-off.png';
 import ledBarHires from '../assets/ledbar/led-bar-hires.png';
 import ledBarPcm from '../assets/ledbar/led-bar-pcm.png';
 import ledBarDsd from '../assets/ledbar/led-bar-dsd.png';
@@ -12,8 +13,14 @@ import ledBarReplaygain from '../assets/ledbar/led-bar-replaygain.png';
 // stacked on top and toggled by opacity.
 //
 // The artwork itself is the flat ("biscotto flat") redesign: matte plate, no
-// gloss, and the LED domes only exist in the lit overlays — an unlit segment
-// is simply empty above its label, so the base plate carries no dark dome.
+// gloss. The lit overlays are the only thing the source art draws for the
+// BitPerfect/ReplayGain domes, so an unlit one used to leave nothing at all
+// above its label — you couldn't tell whether the other LED was off or simply
+// didn't exist. `led-bar-off.png` fills that in: both domes, always on screen,
+// dark when not lit. It's derived from the lit overlays themselves (their
+// solid dome+bezel pixels, glow halo dropped, luminance pulled down to dark
+// plastic with a whisper of the LED's own hue), so it lines up with them
+// exactly and the lit layer covers it completely when it fades in.
 const NATIVE_W = 897;
 const NATIVE_H = 175;
 
@@ -40,6 +47,9 @@ const LedBar = ({ mode, quality, className = '', style }) => (
   <div className={`relative select-none ${className}`}
     style={{ aspectRatio: `${NATIVE_W} / ${NATIVE_H}`, containerType: 'inline-size', ...style }}>
     <img src={ledBarBase} alt="" draggable={false} className="block w-full h-full pointer-events-none" />
+    {/* Unlit domes — no opacity toggle, this layer is always on */}
+    <img src={ledBarOff} alt="" draggable={false}
+      className="absolute inset-0 w-full h-full pointer-events-none" />
     <img src={ledBarHires} alt="Hi-Res" draggable={false}
       className="absolute inset-0 w-full h-full pointer-events-none transition-opacity duration-200"
       style={{ opacity: quality?.hires ? 1 : 0 }} />
