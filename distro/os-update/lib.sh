@@ -129,6 +129,10 @@ backup_and_edit() {
 # keeps working on the next Debian, a codename check does not. Branch on the
 # suite only when the difference genuinely IS the release.
 hifi_suite() {
+    # /etc/os-release is a runtime file on the appliance, not a repo source, so
+    # shellcheck cannot follow it (SC1091). Sourced in a subshell so nothing it
+    # sets leaks into the migration that called us.
+    # shellcheck disable=SC1091
     _hifi_suite=$(. /etc/os-release 2>/dev/null && printf '%s' "${VERSION_CODENAME:-}")
     if [ -z "$_hifi_suite" ] && [ -r /etc/debian_version ]; then
         case "$(cat /etc/debian_version 2>/dev/null)" in
