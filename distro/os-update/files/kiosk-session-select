@@ -1,0 +1,160 @@
+#!/bin/sh
+# HiFi Player — sceglie il PROTOCOLLO della sessione kiosk prima di lightdm.
+#
+# PERCHÉ ESISTE
+# La sessione kiosk gira su labwc/Wayland (vedi kiosk-wayland-session: due terzi
+# del carico GPU erano del server X con la scalatura del framebuffer). Quel
+# guadagno però presuppone una GPU vera: wlroots inizializza il renderer GLES2
+# via EGL e, se dietro trova un driver software, si RIFIUTA di partire —
+#
+#     [render/egl.c] Software rendering detected, please use the
+#                    WLR_RENDERER_ALLOW_SOFTWARE environment variable to proceed
+#     [render/egl.c] Failed to initialize EGL context
+#
+# — ripiegando sul renderer pixman. Lì il compositor si accende (schermo nero
+# col solo puntatore) ma XWayland perde glamor ("GBM Wayland interfaces not
+# available, falling back to sw") e la finestra del kiosk non si disegna più:
+# Electron entra nel ciclo di "renderer recovery", la sessione muore e lightdm
+# mostra il greeter. È esattamente ciò che si vede installando l'immagine in una
+# macchina virtuale (riprodotto su VMware Workstation e su QEMU/bochs), mentre
+# sullo stesso identico squashfs un PC fisico con iGPU Intel parte regolarmente.
+#
+# Su X11 quel caso non esiste: Xorg col driver modesetting/fbdev disegna anche
+# in software, che è lento ma perfettamente utilizzabile per una UI a 30 FPS.
+# Quindi la regola è: Wayland dove c'è una GPU vera, X11 dove non c'è. In una VM
+# non c'è nessun watt da risparmiare, e la sessione X11 resta installata apposta
+# come via di rollback.
+#
+# COME DECIDE (nell'ordine)
+#   1. /etc/hifi-player/kiosk-session = "wayland" | "x11" -> vince sempre
+#      (scappatoia manuale/diagnostica; "auto" o file assente = decide lui).
+#   2. labwc o la sessione Wayland non installati -> X11.
+#   3. Nessun /dev/dri/card* (niente KMS) -> X11.
+#   4. Driver DRM di una GPU virtuale (vmwgfx, vboxvideo, qxl, bochs-drm,
+#      cirrus, hyperv_drm, virtio_gpu, simpledrm, vkms) -> X11. È una lista
+#      esplicita e non un tentativo: su questi driver l'accelerazione o non c'è
+#      o dipende dall'host, e un'appliance non deve scoprirlo a schermo nero.
+#   5. Sonda vera: labwc col backend headless e il renderer GLES2 forzato (senza
+#      ripiego pixman). Se EGL non trova hardware, labwc esce con errore in
+#      meno di un secondo e senza toccare né VT né DRM master -> X11.
+#      Altrimenti -> Wayland.
+#
+# Il risultato finisce in un frammento SEPARATO di lightdm
+# (99-hifi-session.conf): i file in lightdm.conf.d si caricano in ordine
+# alfabetico e l'ultimo vince, quindi questo sovrascrive lo `user-session` di
+# 99-hifi-autologin.conf senza riscriverlo. Se questo script non gira affatto
+# resta valido quello di base, che è la sessione X11 — cioè si sbaglia sempre
+# dalla parte che funziona ovunque.
+set -eu
+
+CONF=/etc/lightdm/lightdm.conf.d/99-hifi-session.conf
+PREF_FILE=/etc/hifi-player/kiosk-session
+WL_SESSION=hifi-kiosk-wayland
+X11_SESSION=hifi-kiosk
+
+# Su stderr, non su stdout: choose_session() restituisce il nome della sessione
+# per sostituzione di comando, e una riga di log finita là dentro diventerebbe
+# il valore di user-session.
+log() { printf 'I: [hifi-kiosk-session] %s\n' "$*" >&2; }
+
+# GPU virtuali/software: qui Wayland non si usa, punto. (simpledrm è il
+# framebuffer generico dell'EFI, senza alcuna accelerazione.)
+VIRTUAL_DRIVERS='vmwgfx vboxvideo qxl bochs-drm cirrus hyperv_drm virtio_gpu simpledrm vkms'
+
+drm_drivers() {
+    for card in /dev/dri/card*; do
+        [ -e "$card" ] || continue
+        sys="/sys/class/drm/${card##*/}/device/driver"
+        [ -L "$sys" ] || continue
+        readlink -f "$sys" | sed 's|.*/||'
+    done
+}
+
+# Sonda: labwc backend headless + renderer GLES2 forzato. Headless non apre né
+# VT né DRM master (nessun conflitto con plymouth o con una sessione in corso) e
+# il renderer è quello VERO della sessione, quindi la sonda fallisce esattamente
+# nei casi in cui fallirebbe il kiosk. `timeout` perché una sonda che si pianta
+# non deve trattenere l'avvio del display manager.
+probe_wayland_egl() {
+    probe_dir="$(mktemp -d /run/hifi-kiosk-probe.XXXXXX)" || return 1
+    chmod 700 "$probe_dir"
+    probe_rc=0
+    XDG_RUNTIME_DIR="$probe_dir" HOME="$probe_dir" \
+    WLR_BACKENDS=headless WLR_RENDERER=gles2 \
+        timeout 20 labwc -S /bin/true >"$probe_dir/labwc.log" 2>&1 || probe_rc=$?
+    if [ "$probe_rc" -ne 0 ]; then
+        log "sonda labwc fallita (exit $probe_rc): $(tr '\n' ' ' < "$probe_dir/labwc.log" | tail -c 300)"
+    fi
+    rm -rf "$probe_dir"
+    return "$probe_rc"
+}
+
+choose_session() {
+    # 1. preferenza esplicita
+    # 2>/dev/null PRIMA di <: le redirezioni si applicano da sinistra a destra e
+    # il file di solito non esiste, quindi l'errore di apertura deve trovare lo
+    # stderr già dirottato.
+    pref="$(tr -d '[:space:]' 2>/dev/null < "$PREF_FILE")" || pref=""
+    case "$pref" in
+        wayland) log "preferenza esplicita: wayland"; echo "$WL_SESSION"; return 0 ;;
+        x11)     log "preferenza esplicita: x11";     echo "$X11_SESSION"; return 0 ;;
+    esac
+
+    # 2. la sessione Wayland c'è davvero?
+    if ! command -v labwc >/dev/null 2>&1 || [ ! -x /usr/local/bin/hifi-kiosk-wayland ]; then
+        log "labwc o la sessione Wayland non sono installati -> X11"
+        echo "$X11_SESSION"; return 0
+    fi
+
+    # 3. KMS presente? (breve attesa: si gira prima di lightdm, e su alcune
+    #    macchine il modulo della GPU viene caricato da udev proprio in quei
+    #    secondi. Senza questa attesa una corsa persa significherebbe X11 — e
+    #    quindi la scalatura RandR — su una macchina che meritava Wayland.)
+    waited=0
+    while [ -z "$(drm_drivers)" ] && [ "$waited" -lt 10 ]; do
+        sleep 1
+        waited=$((waited + 1))
+    done
+    if [ -z "$(drm_drivers)" ]; then
+        log "nessun dispositivo DRM con driver -> X11"
+        echo "$X11_SESSION"; return 0
+    fi
+
+    # 4. GPU virtuale?
+    for drv in $(drm_drivers); do
+        for bad in $VIRTUAL_DRIVERS; do
+            if [ "$drv" = "$bad" ]; then
+                log "GPU virtuale ($drv) -> X11"
+                echo "$X11_SESSION"; return 0
+            fi
+        done
+    done
+
+    # 5. sonda EGL
+    if probe_wayland_egl; then
+        log "EGL hardware disponibile -> Wayland (labwc)"
+        echo "$WL_SESSION"
+    else
+        log "nessun EGL hardware -> X11"
+        echo "$X11_SESSION"
+    fi
+}
+
+session="$(choose_session)"
+
+mkdir -p "$(dirname "$CONF")"
+tmp="${CONF}.tmp.$$"
+cat > "$tmp" <<EOF
+# GENERATO A OGNI AVVIO da /usr/local/sbin/hifi-kiosk-session.sh — non
+# modificare a mano: per forzare una scelta scrivere "wayland" o "x11" in
+# $PREF_FILE.
+[Seat:*]
+user-session=$session
+EOF
+chmod 644 "$tmp"
+if [ -f "$CONF" ] && cmp -s "$tmp" "$CONF"; then
+    rm -f "$tmp"
+else
+    mv -f "$tmp" "$CONF"
+fi
+log "sessione kiosk: $session"

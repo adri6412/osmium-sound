@@ -1,0 +1,16 @@
+[Unit]
+Description=HiFi Player - scelta del protocollo della sessione kiosk (Wayland/X11)
+Documentation=file:/usr/local/sbin/hifi-kiosk-session.sh
+# Deve girare PRIMA del display manager: scrive lo user-session che lightdm
+# leggerà all'avvio (99-hifi-session.conf). Se questa unità fallisce lightdm
+# parte lo stesso e usa il default di base, che è la sessione X11.
+Before=lightdm.service display-manager.service
+After=local-fs.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/local/sbin/hifi-kiosk-session.sh
+
+[Install]
+WantedBy=graphical.target

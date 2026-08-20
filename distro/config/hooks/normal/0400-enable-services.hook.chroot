@@ -5,6 +5,12 @@ set -e
 echo "I: [hifi] enabling graphical target + display manager"
 systemctl set-default graphical.target || true
 systemctl enable lightdm || true
+# Sceglie il protocollo della sessione kiosk (Wayland dove c'è una GPU vera, X11
+# in VM/software, dove wlroots rifiuta il renderer GLES2 e il kiosk resterebbe a
+# schermo nero) e lo scrive per lightdm PRIMA che parta — vedi
+# /usr/local/sbin/hifi-kiosk-session.sh.
+echo "I: [hifi] enabling kiosk session selector (Wayland/X11)"
+systemctl enable hifi-kiosk-session.service || true
 
 echo "I: [hifi] enabling HiFi services"
 systemctl enable hifi-api.service     || true

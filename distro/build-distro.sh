@@ -185,6 +185,24 @@ chmod +x "$CONFIG/includes.chroot/usr/local/bin/hifi-kiosk-wayland" \
 cp -f "$WL_DESKTOP_SRC"  "$CONFIG/includes.chroot/usr/share/wayland-sessions/hifi-kiosk-wayland.desktop"
 cp -f "$WL_TMPFILES_SRC" "$CONFIG/includes.chroot/usr/lib/tmpfiles.d/hifi-player.conf"
 
+log "Injecting kiosk session selector (Wayland vs X11) → includes.chroot"
+# Wayland vale solo dove c'è una GPU vera: in una VM (VMware, VirtualBox,
+# QEMU) wlroots rifiuta il renderer GLES2 in software e il kiosk resta a
+# schermo nero fino a far ricomparire il greeter. Questo selettore gira a ogni
+# avvio, prima di lightdm, e decide il protocollo — stesso file canonico che
+# installa l'OTA (os-update/apply.d/0050-kiosk-session-select.sh).
+SEL_SRC="$SCRIPT_DIR/os-update/files/kiosk-session-select"
+SEL_UNIT_SRC="$SCRIPT_DIR/os-update/files/hifi-kiosk-session.service"
+for f in "$SEL_SRC" "$SEL_UNIT_SRC"; do
+    [ -f "$f" ] || die "Missing canonical kiosk session selector at $f"
+done
+mkdir -p "$CONFIG/includes.chroot/usr/local/sbin" \
+         "$CONFIG/includes.chroot/etc/systemd/system"
+cp -f "$SEL_SRC" "$CONFIG/includes.chroot/usr/local/sbin/hifi-kiosk-session.sh"
+sed -i 's/\r$//' "$CONFIG/includes.chroot/usr/local/sbin/hifi-kiosk-session.sh"
+chmod +x "$CONFIG/includes.chroot/usr/local/sbin/hifi-kiosk-session.sh"
+cp -f "$SEL_UNIT_SRC" "$CONFIG/includes.chroot/etc/systemd/system/hifi-kiosk-session.service"
+
 log "Injecting EFI-boot-entry-fix → kernel postinst.d hook + apt Post-Invoke hook"
 # Single source of truth: the SAME script the OS-update OTA installs
 # (distro/os-update/files/hifi-fix-efi-boot.sh) is baked into the image here,
