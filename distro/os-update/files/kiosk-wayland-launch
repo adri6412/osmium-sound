@@ -1,0 +1,47 @@
+#!/bin/sh
+# HiFi Player — avvio del kiosk DENTRO il compositor Wayland (qui
+# WAYLAND_DISPLAY è impostato). Eseguito da /usr/local/bin/hifi-kiosk-wayland
+# tramite `labwc -S`. È l'equivalente Wayland di ~/.xsession.
+
+# Risoluzione di rendering della UI e refresh del pannello: DEVONO girare prima
+# di Electron, perché la finestra viene dimensionata una volta sola all'avvio su
+# screen.getPrimaryDisplay().size. Guardati: su un'unità che ha ricevuto l'OS
+# update ma non ancora il system update questi script possono non esserci, e la
+# sessione deve partire lo stesso.
+if [ -x /usr/local/sbin/hifi-ui-resolution.sh ]; then
+    /usr/local/sbin/hifi-ui-resolution.sh apply || true
+fi
+if [ -x /usr/local/sbin/hifi-ui-refresh.sh ]; then
+    /usr/local/sbin/hifi-ui-refresh.sh apply || true
+fi
+
+# Il cursore NON si gestisce qui: unclutter è un client X11 e sotto Wayland
+# vedrebbe solo le finestre XWayland, non quella del kiosk. Ci pensa già la UI
+# stessa, che applica la classe `hifi-hide-cursor` (src/App.jsx + src/index.css)
+# secondo la preferenza salvata — meccanismo indipendente dal protocollo, che su
+# X11 conviveva con unclutter e qui resta l'unico.
+
+amixer -q sset Master unmute 2>/dev/null || true
+amixer -q sset PCM unmute 2>/dev/null || true
+
+# Ponte MPRIS per i comandi AVRCP, come nella sessione X11.
+command -v mpris-proxy >/dev/null 2>&1 && mpris-proxy &
+
+# Risolve il binario Electron (electron-builder lo linka in /usr/bin)
+APP="$(command -v hifi-media-player || true)"
+[ -z "$APP" ] && APP="/opt/hifi-media-player/hifi-media-player"
+
+# Stesso ciclo di riavvio della sessione X11: se l'app esce o viene uccisa
+# (crash del renderer dopo lunga uptime) si rilancia invece di lasciare uno
+# schermo morto. `nice -n -5`: seconda priorità della macchina dopo squeezelite,
+# vedi /etc/security/limits.d/10-hifi-kiosk-nice.conf.
+while true; do
+    nice -n -5 "$APP" \
+        --no-sandbox \
+        --disable-dev-shm-usage \
+        --enable-features=UseOzonePlatform \
+        --ozone-platform=wayland \
+        --start-fullscreen
+    echo "hifi kiosk exited ($?) — relaunching in 3s" >&2
+    sleep 3
+done

@@ -40,7 +40,9 @@ MODE_FILE=/etc/hifi-player/display-mode
 # di hifi-ui-resolution.sh.
 : "${DISPLAY:=:0}"
 : "${XAUTHORITY:=/home/hifi/.Xauthority}"
-export DISPLAY XAUTHORITY
+: "${XDG_RUNTIME_DIR:=/run/user/1000}"
+: "${WAYLAND_DISPLAY:=wayland-0}"
+export DISPLAY XAUTHORITY XDG_RUNTIME_DIR WAYLAND_DISPLAY
 
 die() { echo "$1" >&2; exit 1; }
 
@@ -52,10 +54,24 @@ die() { echo "$1" >&2; exit 1; }
 # perché il comando andava sul connettore sbagliato. Spegnerli tutti è
 # corretto in headless: non deve restare acceso nessun output video.
 # Rilevato dinamicamente ad ogni chiamata (mai hardcoded) perché non è detto
-# sia lo stesso connettore su tutti i dispositivi. Stampa nulla se non c'è X
-# o nessun output connesso.
+# sia lo stesso connettore su tutti i dispositivi. Funziona su entrambi i
+# server grafici (xrandr su X11, wlr-randr sulla sessione kiosk Wayland) e
+# stampa nulla se non c'è nessuno dei due in ascolto o nessun output.
 find_outputs() {
-    xrandr --query 2>/dev/null | awk '/ connected/ { print $1 }'
+    if [ -S "$XDG_RUNTIME_DIR/$WAYLAND_DISPLAY" ] && command -v wlr-randr >/dev/null 2>&1; then
+        wlr-randr 2>/dev/null | awk '/^[^ \t]/ { print $1 }'
+    elif command -v xrandr >/dev/null 2>&1; then
+        xrandr --query 2>/dev/null | awk '/ connected/ { print $1 }'
+    fi
+}
+
+# Spegne un output, sul server grafico che è in ascolto.
+output_off() {
+    if [ -S "$XDG_RUNTIME_DIR/$WAYLAND_DISPLAY" ] && command -v wlr-randr >/dev/null 2>&1; then
+        wlr-randr --output "$1" --off >/dev/null 2>&1 || true
+    else
+        xrandr --output "$1" --off >/dev/null 2>&1 || true
+    fi
 }
 
 target_for() {
@@ -94,9 +110,9 @@ case "${1:-}" in
         # equivalente serve nel verso opposto: la sessione X che riparte al
         # ritorno in modalità gui riaccende da sé ogni output connesso (comportamento
         # di default del driver), quindi non c'è uno stato da "riabilitare".
-        if [ "$MODE" = headless ] && [ "$LIVE" = 1 ] && command -v xrandr >/dev/null 2>&1; then
+        if [ "$MODE" = headless ] && [ "$LIVE" = 1 ]; then
             for OUT in $(find_outputs); do
-                xrandr --output "$OUT" --off >/dev/null 2>&1 || true
+                output_off "$OUT"
             done
         fi
 

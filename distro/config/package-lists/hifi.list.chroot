@@ -49,6 +49,14 @@ x11-xserver-utils
 xinit
 lightdm
 unclutter
+# Compositor Wayland della sessione kiosk (vedi os-update/files/kiosk-wayland-*):
+# la finestra a schermo intero va in scanout diretto, cosa che su X11 non
+# succede quando è attiva la scalatura del framebuffer. wlr-randr è il modo in
+# cui hifi-ui-resolution.sh / hifi-ui-refresh.sh configurano l'output sul
+# backend Wayland; xwayland serve ai pochi client X rimasti (tastiera virtuale).
+labwc
+wlr-randr
+xwayland
 
 # Fonts — the base image shipped none, so album/track names in Japanese (and
 # Chinese/Korean) rendered as tofu boxes. Noto CJK supplies those glyphs;

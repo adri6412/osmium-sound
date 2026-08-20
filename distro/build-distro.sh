@@ -149,6 +149,31 @@ cp -f "$XSESSION_SRC" "$XSESSION_DEST_DIR/.xsession"
 sed -i 's/\r$//' "$XSESSION_DEST_DIR/.xsession"
 chmod +x "$XSESSION_DEST_DIR/.xsession"
 
+log "Injecting canonical kiosk Wayland session → includes.chroot (labwc)"
+# Stessa regola della .xsession qui sopra: i file canonici sono quelli che
+# installa anche l'OTA (distro/os-update/files/kiosk-wayland-*), così immagine e
+# aggiornamento non possono divergere. La sessione X11 resta comunque installata
+# come via di rollback (basta rimettere user-session=hifi-kiosk in
+# etc/lightdm/lightdm.conf.d/99-hifi-autologin.conf).
+WL_SESSION_SRC="$SCRIPT_DIR/os-update/files/kiosk-wayland-session"
+WL_LAUNCH_SRC="$SCRIPT_DIR/os-update/files/kiosk-wayland-launch"
+WL_DESKTOP_SRC="$SCRIPT_DIR/os-update/files/hifi-kiosk-wayland.desktop"
+WL_TMPFILES_SRC="$SCRIPT_DIR/os-update/files/hifi-player-tmpfiles.conf"
+for f in "$WL_SESSION_SRC" "$WL_LAUNCH_SRC" "$WL_DESKTOP_SRC" "$WL_TMPFILES_SRC"; do
+    [ -f "$f" ] || die "Missing canonical Wayland kiosk file at $f"
+done
+mkdir -p "$CONFIG/includes.chroot/usr/local/bin" \
+         "$CONFIG/includes.chroot/usr/share/wayland-sessions" \
+         "$CONFIG/includes.chroot/usr/lib/tmpfiles.d"
+cp -f "$WL_SESSION_SRC"  "$CONFIG/includes.chroot/usr/local/bin/hifi-kiosk-wayland"
+cp -f "$WL_LAUNCH_SRC"   "$CONFIG/includes.chroot/usr/local/bin/hifi-kiosk-launch"
+sed -i 's/\r$//' "$CONFIG/includes.chroot/usr/local/bin/hifi-kiosk-wayland" \
+                 "$CONFIG/includes.chroot/usr/local/bin/hifi-kiosk-launch"
+chmod +x "$CONFIG/includes.chroot/usr/local/bin/hifi-kiosk-wayland" \
+         "$CONFIG/includes.chroot/usr/local/bin/hifi-kiosk-launch"
+cp -f "$WL_DESKTOP_SRC"  "$CONFIG/includes.chroot/usr/share/wayland-sessions/hifi-kiosk-wayland.desktop"
+cp -f "$WL_TMPFILES_SRC" "$CONFIG/includes.chroot/usr/lib/tmpfiles.d/hifi-player.conf"
+
 log "Injecting EFI-boot-entry-fix → kernel postinst.d hook + apt Post-Invoke hook"
 # Single source of truth: the SAME script the OS-update OTA installs
 # (distro/os-update/files/hifi-fix-efi-boot.sh) is baked into the image here,

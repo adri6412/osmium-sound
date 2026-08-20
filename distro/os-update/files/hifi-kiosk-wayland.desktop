@@ -1,0 +1,6 @@
+[Desktop Entry]
+Name=HiFi Kiosk (Wayland)
+Comment=HiFi Player appliance kiosk session (labwc/wlroots)
+Exec=/usr/local/bin/hifi-kiosk-wayland
+Type=Application
+DesktopNames=labwc

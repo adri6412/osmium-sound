@@ -1,0 +1,34 @@
+#!/bin/sh
+# HiFi Player — sessione kiosk Wayland (avviata da lightdm, utente hifi).
+#
+# PERCHÉ ESISTE
+# Su X11 il costo GPU della UI non è quasi mai la UI: con la scalatura del
+# framebuffer attiva (hifi-ui-resolution.sh, ripiego --scale-from) due terzi del
+# lavoro erano del server X, che ricompone e riscala l'intero schermo ad ogni
+# frame. Un compositor wlroots manda invece la finestra a schermo intero in
+# scanout diretto: il compositor sparisce quasi del tutto dal profilo GPU.
+# Misurato su Gemini Lake (J4105/UHD 600), stessa scena (Now Playing con VU
+# meter, musica in riproduzione), stesso modo video reale 1280x720:
+#
+#   X11 + --scale-from        1.74 W GPU / 7.21 W pacchetto / 85% render busy
+#   X11 + modo reale          0.81 W GPU / 5.29 W pacchetto / 73% render busy
+#   Wayland + modo reale      0.59 W GPU / 5.04 W pacchetto / 57% render busy
+#
+# COM'È FATTA
+# lightdm esegue questo file (voce hifi-kiosk-wayland in
+# /usr/share/wayland-sessions), che è solo l'involucro: qui NON c'è ancora un
+# compositor, quindi tutto ciò che deve parlare con lo schermo sta in
+# hifi-kiosk-launch, che labwc esegue quando il socket Wayland è pronto.
+#
+# ROLLBACK: la sessione X11 (~/.xsession + /usr/share/xsessions/hifi-kiosk.desktop)
+# resta installata e funzionante. Per tornare indietro basta rimettere
+# user-session=hifi-kiosk in /etc/lightdm/lightdm.conf.d/99-hifi-autologin.conf.
+
+export XDG_SESSION_TYPE=wayland
+: "${XDG_RUNTIME_DIR:=/run/user/$(id -u)}"
+export XDG_RUNTIME_DIR
+
+# -S: labwc termina quando termina il comando, così la fine del kiosk chiude la
+# sessione e lightdm la riapre — l'equivalente del ciclo di riavvio che su X11
+# stava dentro ~/.xsession.
+exec labwc -S /usr/local/bin/hifi-kiosk-launch
