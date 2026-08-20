@@ -1,41 +1,41 @@
 {
-  "tag_name": "v2.5.21-dev.113",
-  "name": "v2.5.21-dev.113",
-  "body": "## What's new in v2.5.21-dev.113\n\n- fix(iso): default the image to trixie \u2014 bookworm has no labwc\n- docs(architecture): the setup flow has no hotspot, and webui is plain HTTP\n- docs(architecture): drop the DSP and Bluetooth sections\n- docs(architecture): document the LMS skin and the absorbed Lyrion wizard\n",
+  "tag_name": "v2.5.21-dev.114",
+  "name": "v2.5.21-dev.114",
+  "body": "## What's new in v2.5.21-dev.114\n\n- fix(vu): the needles turn about the dial's own centre, not the bezel notch\n- fix(kiosk): Wayland solo dove c'\u00e8 una GPU vera \u2014 in VM si torna a X11\n- feat(website): beta page announces the Debian 13 jump, ISO to dev113\n",
   "assets": [
     {
-      "name": "hifi-ui-v2.5.21-dev.113.tar.gz",
-      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.113/hifi-ui-v2.5.21-dev.113.tar.gz",
-      "size": 133500993
+      "name": "hifi-ui-v2.5.21-dev.114.tar.gz",
+      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.114/hifi-ui-v2.5.21-dev.114.tar.gz",
+      "size": 133501220
     },
     {
-      "name": "hifi-ui-v2.5.21-dev.113.tar.gz.sha256",
-      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.113/hifi-ui-v2.5.21-dev.113.tar.gz.sha256",
+      "name": "hifi-ui-v2.5.21-dev.114.tar.gz.sha256",
+      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.114/hifi-ui-v2.5.21-dev.114.tar.gz.sha256",
       "size": 97
     },
     {
-      "name": "hifi-system-v2.5.21-dev.113.tar.gz",
-      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.113/hifi-system-v2.5.21-dev.113.tar.gz",
-      "size": 395517
+      "name": "hifi-system-v2.5.21-dev.114.tar.gz",
+      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.114/hifi-system-v2.5.21-dev.114.tar.gz",
+      "size": 395518
     },
     {
-      "name": "hifi-system-v2.5.21-dev.113.tar.gz.sha256",
-      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.113/hifi-system-v2.5.21-dev.113.tar.gz.sha256",
+      "name": "hifi-system-v2.5.21-dev.114.tar.gz.sha256",
+      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.114/hifi-system-v2.5.21-dev.114.tar.gz.sha256",
       "size": 101
     },
     {
-      "name": "hifi-os-v2.5.21-dev.113.tar.gz",
-      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.113/hifi-os-v2.5.21-dev.113.tar.gz",
-      "size": 1228072
+      "name": "hifi-os-v2.5.21-dev.114.tar.gz",
+      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.114/hifi-os-v2.5.21-dev.114.tar.gz",
+      "size": 1232971
     },
     {
-      "name": "hifi-os-v2.5.21-dev.113.tar.gz.sha256",
-      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.113/hifi-os-v2.5.21-dev.113.tar.gz.sha256",
+      "name": "hifi-os-v2.5.21-dev.114.tar.gz.sha256",
+      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.114/hifi-os-v2.5.21-dev.114.tar.gz.sha256",
       "size": 97
     },
     {
-      "name": "hifi-os-v2.5.21-dev.113.tar.gz.sha256.sig",
-      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.113/hifi-os-v2.5.21-dev.113.tar.gz.sha256.sig",
+      "name": "hifi-os-v2.5.21-dev.114.tar.gz.sha256.sig",
+      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.114/hifi-os-v2.5.21-dev.114.tar.gz.sha256.sig",
       "size": 64
     }
   ]
