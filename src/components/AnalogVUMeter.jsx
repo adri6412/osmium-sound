@@ -12,23 +12,28 @@ import vuMeterBezel from '../assets/vu-meter-bezel.png';
 const PANEL_W = 1280;
 const PANEL_H = 675;
 
-// Each needle pivots from the apex of the wavy notch at the bottom of its
-// bezel window (where a real VU meter's pivot pin sits), measured off the
-// bezel artwork's own alpha channel: the notch tops out at y=385 for the left
-// window and y=387 for the right, centred on x=336 / x=945.
+// Each needle pivots from the centre of its dial's own scale — i.e. tucked
+// *under* the bezel's hump, not perched on top of it, the way a real VU
+// meter's pivot pin hides behind the movement cover. Measured by least-
+// squares circle fit on the scale arc traced out of the dial artwork
+// (left: 335.4, 460.5 / right: 944.2, 460.8; both r=246), which is ~75px
+// below the hump's apex (y=386), so the cap sits behind the bezel and the
+// needle emerges out of the hump. Pinning it at the apex instead — as it
+// briefly was — both showed the cap and made the tips sweep off the scale,
+// since the needle then no longer turns about the arc's own centre.
 const PIVOTS = [
-  { x: 336, y: 385 },
-  { x: 945, y: 387 },
+  { x: 335, y: 461 },
+  { x: 944, y: 461 },
 ];
 
 // Needle sweep measured off the dial artwork's own tick marks, by polar-
-// binning the black/red ink around the pivot: the long "20" tick that opens
-// the scale sits at -47.5 deg and the last tick of the red overload arc ("3")
-// at +48 deg, both reaching out to r=236.
-const ANGLE_MIN = -47.5;
-const ANGLE_MAX = 48;
+// binning the black/red ink around that pivot: the long "20" tick that opens
+// the scale sits at -36.4 deg and the last tick of the red overload arc ("3")
+// at +37 deg, both reaching out to r=270.
+const ANGLE_MIN = -36.4;
+const ANGLE_MAX = 37;
 // Needle length in artwork pixels, reaching just past those tick tips.
-const NEEDLE_LENGTH = 245;
+const NEEDLE_LENGTH = 275;
 // Minimum peak change (0-100 scale) before we redirect the needle spring at
 // all. Below this, level-message noise (quiet passages, sustained tones)
 // would otherwise keep re-targeting the spring 20x/sec forever, which is
@@ -70,7 +75,8 @@ const VUNeedle = ({ value, pivot }) => {
           transformOrigin: 'bottom center',
         }}
       />
-      {/* Needle pivot cap — sits in the notch, half-hidden by the bezel */}
+      {/* Needle pivot cap — sits under the hump, hidden by the bezel, so the
+          needle reads as coming out of the movement rather than off a dot */}
       <div
         className="absolute bg-[#111] rounded-full z-20 shadow-md"
         style={{
