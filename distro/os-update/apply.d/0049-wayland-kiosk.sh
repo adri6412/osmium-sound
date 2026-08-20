@@ -25,12 +25,21 @@
 # file di autologin riporta tutto com'era, senza disinstallare nulla.
 
 LIGHTDM_CONF=/etc/lightdm/lightdm.conf.d/99-hifi-autologin.conf
+HIFI_HOME=/home/hifi
 
+# Prima condizione: esserci davvero un kiosk da spostare. Senza la home di hifi
+# e senza l'autologin di lightdm questa non è un'appliance (è il runner della CI,
+# o un checkout su una macchina qualsiasi) e la migrazione non deve toccare
+# niente — stesso guard di 0001-selfhealing-xsession.sh, e per lo stesso motivo:
+# una migrazione che modifica lo stato di una macchina che non è un'appliance
+# chiederebbe anche un riavvio che nessuno le ha chiesto.
+if [ ! -d "$HIFI_HOME" ] || [ ! -f "$LIGHTDM_CONF" ]; then
+    log_info "nessuna sessione kiosk qui ($HIFI_HOME o $LIGHTDM_CONF assenti) — niente da fare"
 # Senza il compositor non si va da nessuna parte: se l'installazione fallisce
 # (rete assente durante l'OTA) non si tocca niente, la sessione X11 resta al suo
 # posto e il prossimo OTA riproverà. Tutto il resto della migrazione sta dentro
-# questo ramo proprio per questo.
-if ! ensure_pkg labwc; then
+# l'ultimo ramo proprio per questo.
+elif ! ensure_pkg labwc; then
     log_warn "labwc non installato — sessione kiosk lasciata su X11"
 else
     ensure_pkg wlr-randr || log_warn "wlr-randr assente: su Wayland la risoluzione UI resterà quella nativa"
