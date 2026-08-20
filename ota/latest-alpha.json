@@ -1,41 +1,41 @@
 {
-  "tag_name": "v2.5.21-dev.113-alpha5",
-  "name": "v2.5.21-dev.113-alpha5",
-  "body": "## What's new in v2.5.21-dev.113-alpha5\n\n- fix(os-update): 0049 must be a no-op where there is no kiosk to migrate\n- fix(os-update): keep 0049 shellcheck-clean (no early return in a sourced migration)\n- perf(kiosk): run the session on Wayland and prefer a real reduced video mode\n- docs(architecture): the SSH login is chosen in the web admin, not 'hifi'\n",
+  "tag_name": "v2.5.21-dev.113-alpha6",
+  "name": "v2.5.21-dev.113-alpha6",
+  "body": "## What's new in v2.5.21-dev.113-alpha6\n\n- feat(ledbar): flat status-bar artwork, DSP segment cut\n- i18n(lms-skin): translate the \"Osmium Admin\" entry into Lyrion's 19 languages\n- chore: ignore the statusbar design working file\n- chore(artifacts): refresh the tracked 3D export and buildSrc jar\n- chore(newsletter): Keila email template in the site's palette\n- feat(beta-telemetry): delete a machine, and purge the stale ones\n- fix(lms-skin): keep the embedded admin dialog dark\n- feat(lms-skin): an \"Osmium Admin\" entry in Material's nav drawer\n- fix(webui): logout must survive an F5 (no-cache on /api, hard reload)\n",
   "assets": [
     {
-      "name": "hifi-ui-v2.5.21-dev.113-alpha5.tar.gz",
-      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.113-alpha5/hifi-ui-v2.5.21-dev.113-alpha5.tar.gz",
-      "size": 134243402
+      "name": "hifi-ui-v2.5.21-dev.113-alpha6.tar.gz",
+      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.113-alpha6/hifi-ui-v2.5.21-dev.113-alpha6.tar.gz",
+      "size": 134116735
     },
     {
-      "name": "hifi-ui-v2.5.21-dev.113-alpha5.tar.gz.sha256",
-      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.113-alpha5/hifi-ui-v2.5.21-dev.113-alpha5.tar.gz.sha256",
+      "name": "hifi-ui-v2.5.21-dev.113-alpha6.tar.gz.sha256",
+      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.113-alpha6/hifi-ui-v2.5.21-dev.113-alpha6.tar.gz.sha256",
       "size": 104
     },
     {
-      "name": "hifi-system-v2.5.21-dev.113-alpha5.tar.gz",
-      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.113-alpha5/hifi-system-v2.5.21-dev.113-alpha5.tar.gz",
-      "size": 393236
+      "name": "hifi-system-v2.5.21-dev.113-alpha6.tar.gz",
+      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.113-alpha6/hifi-system-v2.5.21-dev.113-alpha6.tar.gz",
+      "size": 395381
     },
     {
-      "name": "hifi-system-v2.5.21-dev.113-alpha5.tar.gz.sha256",
-      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.113-alpha5/hifi-system-v2.5.21-dev.113-alpha5.tar.gz.sha256",
+      "name": "hifi-system-v2.5.21-dev.113-alpha6.tar.gz.sha256",
+      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.113-alpha6/hifi-system-v2.5.21-dev.113-alpha6.tar.gz.sha256",
       "size": 108
     },
     {
-      "name": "hifi-os-v2.5.21-dev.113-alpha5.tar.gz",
-      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.113-alpha5/hifi-os-v2.5.21-dev.113-alpha5.tar.gz",
-      "size": 1223468
+      "name": "hifi-os-v2.5.21-dev.113-alpha6.tar.gz",
+      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.113-alpha6/hifi-os-v2.5.21-dev.113-alpha6.tar.gz",
+      "size": 1223862
     },
     {
-      "name": "hifi-os-v2.5.21-dev.113-alpha5.tar.gz.sha256",
-      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.113-alpha5/hifi-os-v2.5.21-dev.113-alpha5.tar.gz.sha256",
+      "name": "hifi-os-v2.5.21-dev.113-alpha6.tar.gz.sha256",
+      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.113-alpha6/hifi-os-v2.5.21-dev.113-alpha6.tar.gz.sha256",
       "size": 104
     },
     {
-      "name": "hifi-os-v2.5.21-dev.113-alpha5.tar.gz.sha256.sig",
-      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.113-alpha5/hifi-os-v2.5.21-dev.113-alpha5.tar.gz.sha256.sig",
+      "name": "hifi-os-v2.5.21-dev.113-alpha6.tar.gz.sha256.sig",
+      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.113-alpha6/hifi-os-v2.5.21-dev.113-alpha6.tar.gz.sha256.sig",
       "size": 64
     }
   ]
