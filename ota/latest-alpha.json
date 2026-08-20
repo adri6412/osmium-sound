@@ -1,41 +1,41 @@
 {
-  "tag_name": "v2.5.21-dev.113-alpha7",
-  "name": "v2.5.21-dev.113-alpha7",
-  "body": "## What's new in v2.5.21-dev.113-alpha7\n\n- fix(kiosk-wayland): hide the compositor pointer, drop labwc's menu, restore touch scrolling\n",
+  "tag_name": "v2.5.21-dev.113-alpha8",
+  "name": "v2.5.21-dev.113-alpha8",
+  "body": "## What's new in v2.5.21-dev.113-alpha8\n\n- fix(kiosk): the window asks for fullscreen, and the kiosk gets a dark GTK theme\n- fix(kiosk-wayland): the relaunch loop must die with the compositor\n- fix(kiosk-wayland): no compositor decorations \u2014 the 4px border was showing\n- fix(kiosk-wayland): run the window under XWayland \u2014 labwc mangles touch motion\n",
   "assets": [
     {
-      "name": "hifi-ui-v2.5.21-dev.113-alpha7.tar.gz",
-      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.113-alpha7/hifi-ui-v2.5.21-dev.113-alpha7.tar.gz",
-      "size": 134120365
+      "name": "hifi-ui-v2.5.21-dev.113-alpha8.tar.gz",
+      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.113-alpha8/hifi-ui-v2.5.21-dev.113-alpha8.tar.gz",
+      "size": 134117155
     },
     {
-      "name": "hifi-ui-v2.5.21-dev.113-alpha7.tar.gz.sha256",
-      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.113-alpha7/hifi-ui-v2.5.21-dev.113-alpha7.tar.gz.sha256",
+      "name": "hifi-ui-v2.5.21-dev.113-alpha8.tar.gz.sha256",
+      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.113-alpha8/hifi-ui-v2.5.21-dev.113-alpha8.tar.gz.sha256",
       "size": 104
     },
     {
-      "name": "hifi-system-v2.5.21-dev.113-alpha7.tar.gz",
-      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.113-alpha7/hifi-system-v2.5.21-dev.113-alpha7.tar.gz",
+      "name": "hifi-system-v2.5.21-dev.113-alpha8.tar.gz",
+      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.113-alpha8/hifi-system-v2.5.21-dev.113-alpha8.tar.gz",
       "size": 395522
     },
     {
-      "name": "hifi-system-v2.5.21-dev.113-alpha7.tar.gz.sha256",
-      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.113-alpha7/hifi-system-v2.5.21-dev.113-alpha7.tar.gz.sha256",
+      "name": "hifi-system-v2.5.21-dev.113-alpha8.tar.gz.sha256",
+      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.113-alpha8/hifi-system-v2.5.21-dev.113-alpha8.tar.gz.sha256",
       "size": 108
     },
     {
-      "name": "hifi-os-v2.5.21-dev.113-alpha7.tar.gz",
-      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.113-alpha7/hifi-os-v2.5.21-dev.113-alpha7.tar.gz",
-      "size": 1226292
+      "name": "hifi-os-v2.5.21-dev.113-alpha8.tar.gz",
+      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.113-alpha8/hifi-os-v2.5.21-dev.113-alpha8.tar.gz",
+      "size": 1228062
     },
     {
-      "name": "hifi-os-v2.5.21-dev.113-alpha7.tar.gz.sha256",
-      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.113-alpha7/hifi-os-v2.5.21-dev.113-alpha7.tar.gz.sha256",
+      "name": "hifi-os-v2.5.21-dev.113-alpha8.tar.gz.sha256",
+      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.113-alpha8/hifi-os-v2.5.21-dev.113-alpha8.tar.gz.sha256",
       "size": 104
     },
     {
-      "name": "hifi-os-v2.5.21-dev.113-alpha7.tar.gz.sha256.sig",
-      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.113-alpha7/hifi-os-v2.5.21-dev.113-alpha7.tar.gz.sha256.sig",
+      "name": "hifi-os-v2.5.21-dev.113-alpha8.tar.gz.sha256.sig",
+      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.113-alpha8/hifi-os-v2.5.21-dev.113-alpha8.tar.gz.sha256.sig",
       "size": 64
     }
   ]
