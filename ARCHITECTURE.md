@@ -51,9 +51,9 @@ flowchart TB
 | Preload | `main/preload.js` | Minimal `contextBridge` surface — only UI-local concerns (frame-rate cap, global on-screen keyboard). **System control does not go through IPC.** |
 | React renderer | `src/` | The touchscreen UI (Now Playing, Music/Radio/Apps via Lyrion, Settings, Setup Wizard) |
 | Flask API | `api_server.py` | Runs as root on the appliance; system info/control, network/Wi-Fi, OTA channels, DSP, multiroom (LMS role), pairing tokens, display mode, player on/off, disk installer. Loopback-only, port `8000`. |
-| Sources service | `sources_server.py` | USB/SMB/local source management, internal-disk adoption/formatting, backup/restore (core logic shared via `hifi_backup.py`), FIR filter upload, and a DSP control proxy to the loopback-only Flask API. Port `8080`. |
+| Sources service | `sources_server.py` | USB/SMB/local source management, internal-disk adoption/formatting, backup/restore (core logic shared via `hifi_backup.py`), FIR filter upload, a DSP control proxy to the loopback-only Flask API, and every piece of Lyrion-side configuration the appliance owns for the user (web-UI skin, first-run setup/plugins, media + playlist folders — see [Lyrion web UI](#lyrion-web-ui--osmium-skin--first-run-setup)). Port `8080`. |
 | Web admin / provisioning gateway | `webui_server.py` | The only LAN-facing service: serves the Vue admin app (`admin-webui/`) behind a session, reverse-proxies a whitelisted subset of `api_server.py`/`sources_server.py` calls, and — while `/etc/hifi-player/provisioning-pending` exists — raises a Wi-Fi hotspot and serves the QR-only captive setup/install portal. HTTPS `:443` (+ `:80` redirect), self-signed per-device cert. See [Provisioning & first boot](#provisioning--first-boot). |
-| Lyrion Music Server | external (Debian package / on-demand download) | Library indexing, playback engine, plugin ecosystem (Spotty, TIDAL Connect, radio, UPnP/DLNA, AirPlay). Port `9000`. |
+| Lyrion Music Server | external (Debian package / on-demand download) | Library indexing, playback engine, plugin ecosystem (Spotty, TIDAL Connect, radio, UPnP/DLNA, AirPlay). Port `9000`. Its web UI is the Material Skin plugin, branded as "Osmium" — see [Lyrion web UI](#lyrion-web-ui--osmium-skin--first-run-setup). |
 | squeezelite | systemd service | Lyrion's player client; `-D` flag enables bit-perfect DSD via DoP; `-v` exports a shared-memory buffer the VU meter reads |
 | CamillaDSP | systemd-managed, optional | Parametric EQ, headphone crossfeed, room correction from an uploaded filter. Off by default — bit-perfect path is untouched unless enabled. |
 | VU meter daemon | `vu_meter_daemon.py` | Reads squeezelite's shared-memory visualizer segment (`/dev/shm/squeezelite-*`) via mmap, auto-detecting the header layout, computes 32-bar RMS and streams it over WebSocket to `AnalogVUMeter.jsx`. Re-attaches on shm inode changes (DAC switch, restart, multiroom follow-switch); falls back to a Bluetooth loopback tap (see [Bluetooth audio](#bluetooth-audio-a2dp-sink)) when squeezelite has nothing playing. |
@@ -241,6 +241,10 @@ GET  /audio_devices           detected DACs/outputs
 POST /set_audio_device
 POST /reboot | /shutdown
 GET/POST /ota_channel        dev | prod
+GET  /wizard_update_check     mandatory-update gate used by the setup wizard
+POST /wizard_update_apply
+GET/POST /lyrion_channel      which Lyrion release train to install/track
+GET/POST /device_name, POST /hostname_apply
 GET/POST /{app,system,os,lyrion}_update/{check,apply,status}
 GET/POST /dsp_status, /dsp_set
 GET/POST /lms_role           multiroom "follow" mode
@@ -284,22 +288,39 @@ The only LAN-facing surface. Three route families:
 
   ```
   GET  /api/provision/status              hotspot/stage/mode/AP info; poll target for both on-screen QR shells
-  POST /api/provision/use_wired, /wifi_connect, /claim_mode, /finalize, /reboot
+  POST /api/provision/use_wired, /wifi_connect, /wifi_rescan, /claim_mode, /finalize, /reboot
+  GET  /api/provision/update_check        mandatory-update gate (prod + dev), then:
+  POST /api/provision/update_apply
+  GET  /api/provision/update_status
+  POST /api/provision/set_name            device/host/Bluetooth/multiroom name
+  GET/POST /api/provision/pointer
   GET/POST /api/provision/audio_devices, /set_audio_device
   GET/POST /api/provision/lyrion_mode
   GET  /api/provision/discover_lms
-  GET/POST /api/provision/sources, /sources/local, /sources/smb, /apply_sources
+  GET  /api/provision/lyrion_check        Lyrion present? (hifi-firstboot may not have managed it)
+  POST /api/provision/lyrion_install
+  GET  /api/provision/lyrion_status
+  GET/POST /api/provision/lms_skin        web-player skin step  → sources_server
+  GET  /api/provision/lms_skin_status
+  GET/POST /api/provision/lms_setup       music-services step   → sources_server
+  GET  /api/provision/lms_setup_status
+  POST /api/provision/create_account      the web-admin account; after it, the wizard uses /api/system/*
+  GET/POST /api/provision/sources, /sources/local, /sources/smb
   DELETE /api/provision/sources/<id>
   GET/POST /api/provision/timezone, /set_timezone
   POST /api/provision/restore              forwarded raw (multipart) to sources_server's /api/restore
+  GET  /api/provision/restore/status
   GET  /api/provision/install_disks        installer-boot-mode only (not gated by the marker)
   POST /api/provision/install_start
   GET  /api/provision/install_status
   ```
 - **`/api/<sources paths>`** and a handful of dedicated forwards (backup,
-  restore, FIR upload, DSP) — token- or session-gated relays straight to
+  restore, FIR upload, DSP, `lms_skin[_status]`, `playlistdir`, `local/*`,
+  `internal/*`, `usb/*`) — token- or session-gated relays straight to
   `sources_server.py:8080`, since that service only trusts loopback callers
-  itself (see [Pairing & security](#pairing--security)).
+  itself (see [Pairing & security](#pairing--security)). The captive
+  wizard's own sources step uses the session-gated `/api/system/*` half of
+  these, not a pre-auth path — it runs after the account step.
 
 ### Sources API — `sources_server.py` (port 8080)
 
@@ -310,10 +331,20 @@ require the pairing bearer token (or `?token=`) — see
 ```
 GET    /                           🔒   the sources SPA page itself
 GET    /api/sources                🔒   list configured sources
-POST   /api/sources/local          🔒   add a local-folder source
+POST   /api/sources/local          🔒   add a rootfs folder as a source ({samba: true} also shares it over SMB, creating it if missing)
 POST   /api/sources/smb            🔒   add an SMB source
+POST   /api/sources/<id>/rw        🔒   flip an SMB source read-only/read-write (applied at next boot, not live)
+POST   /api/sources/<id>/subpath   🔒   scan only a subfolder of a mounted source, instead of the whole mount
+GET    /api/sources/<id>/browse    🔒   list subfolders under a source's mount (the subpath picker)
 DELETE /api/sources/<id>           🔒   remove a source (a.k.a. "un-adopt")
+GET    /api/local/browse           🔒   browse the rootfs (source-independent — no source exists yet at add time)
+POST   /api/local/mkdir            🔒   create a folder to share/scan (confined to ALLOWED_LOCAL_ROOTS)
 POST   /api/apply                  🔒   push current source config to Lyrion
+GET/POST /api/playlistdir          🔒   where Lyrion saves playlists (Sources → Advanced)
+GET/POST /api/lms_skin             🔒   web-player skin choice (osmium | material); POST starts a background job
+GET    /api/lms_skin_status        🔒   poll that job
+GET/POST /api/lms_setup            🔒   Lyrion first-run: install picked plugins + set wizardDone
+GET    /api/lms_setup_status       🔒   poll that job
 GET    /api/internal/disks         🔒   internal disks/partitions
 POST   /api/internal/adopt         🔒   adopt an existing partition as a source
 POST   /api/internal/format        🔒   wipe + mkfs (sfdisk, async systemd-run job)
@@ -463,40 +494,82 @@ drives, in order:
    sources step's SMB share and the Lyrion step's LAN discovery both need
    the device to already have real network reachability, which it only has
    once this step succeeds.
-4. **Device mode** — now three-way: *screen*, *headless*, or *server-only*.
+4. **Mandatory update gate** — `/api/provision/update_check` →
+   `api_server.py`'s `wizard_update_check()`, then
+   `/api/provision/update_apply` + `/api/provision/update_status`, which
+   drive the same two-phase staged flow described in
+   [OTA update system](#ota-update-system) (so this step can reboot the box
+   mid-setup; the wizard picks itself back up afterwards). A prod update
+   starts on its own; a dev-channel one waits for an explicit press. A check
+   that fails on *every* component is retried (~8 attempts) before being
+   skipped — right after the network step DNS is often still warming up, and
+   "couldn't check" must not be mistaken for "nothing to update".
+5. **Device name** — `/api/provision/set_name` → `POST /device_name` +
+   `/hostname_apply`: the unit's network name (`<name>.local`), also used as
+   its Bluetooth and multiroom name.
+6. **Device mode** — three-way: *screen*, *headless*, or *server-only*.
    `POST /api/provision/claim_mode` persists the display-mode choice
    (`gui`/`headless`) and, for server-only, also calls `api_server.py`'s
    `POST /player_enabled` with `enabled: false` — see
-   [Display mode & player on/off](#display-mode--player-onoff). Unlike the
-   old flow, choosing "screen" no longer ends the phone-driven part of setup
-   early: every mode keeps going through the remaining steps below, and the
-   display-mode switch only goes **live** at the final `finalize` call, so
-   the hotspot stays up the whole time.
-5. **Audio output** — `/api/provision/audio_devices` /
+   [Display mode & player on/off](#display-mode--player-onoff). Choosing
+   "screen" does not end the phone-driven part of setup: every mode keeps
+   going through the remaining steps, and the display-mode switch only goes
+   **live** at `finalize` (step 14), so the hotspot stays up meanwhile.
+7. **Mouse pointer** (screen mode only) — `/api/provision/pointer` →
+   `pointer_status`/`pointer_set`.
+8. **Audio output** — `/api/provision/audio_devices` /
    `/api/provision/set_audio_device`, proxied to `api_server.py`'s
    `list_audio_devices()`/`set_audio_device()`.
-6. **Lyrion: internal or external** — asked *before* sources, so choosing an
+9. **Lyrion: internal or external** — asked *before* sources, so choosing an
    existing server on the network (`/api/provision/lyrion_mode`, discovery via
-   `/api/provision/discover_lms`) skips the sources step entirely (external
-   Lyrion's sources are configured on that other device, not here — see also
-   [Backend API reference](#backend-api-reference) and `Settings.jsx`'s
-   `settingsSections`, which hides Music Sources the same way post-setup).
-7. **Music sources** (internal Lyrion only) — add an SMB share
-   (`/api/provision/sources/smb`) and apply
-   (`/api/provision/apply_sources` → `sources_server.py`'s `POST /api/apply`).
-   Deliberately no "rescan" language here: Lyrion's own first-run setup
-   wizard performs the actual first scan once handed off.
-8. **Time zone** — `/api/provision/timezone` /
-   `/api/provision/set_timezone`, proxied to `api_server.py`'s
-   `get_timezone()`/`set_timezone()`.
-9. **Finish** — `POST /api/provision/finalize`: applies the chosen display
-   mode **live**, tears down the hotspot, and removes the provisioning
-   marker.
+   `/api/provision/discover_lms`) skips the Lyrion-side steps and the sources
+   step entirely (external Lyrion's sources are configured on that other
+   device, not here — see also [Backend API reference](#backend-api-reference)
+   and `Settings.jsx`'s `settingsSections`, which hides Music Sources the same
+   way post-setup).
+10. **Lyrion install check** (internal Lyrion only) —
+    `/api/provision/lyrion_check`, `/lyrion_install`, `/lyrion_status`.
+    `hifi-firstboot.service` normally installs Lyrion on its own, but it only
+    retries "next boot" if it had no network — which is easily still true by
+    the time this wizard's network step finishes. So the wizard checks and,
+    if missing, installs it here (release channel selectable), with a
+    "continue anyway" fallback. Everything below needs a live Lyrion, so a
+    skip here jumps straight to step 13.
+11. **Web player look** — Osmium or Material,
+    `/api/provision/lms_skin[_status]`; see
+    [Lyrion web UI](#lyrion-web-ui--osmium-skin--first-run-setup).
+12. **Music services** — the plugin picker that replaces Lyrion's own
+    first-run wizard, `/api/provision/lms_setup[_status]`; same section.
+13. **Web admin account** — `/api/provision/create_account` (skipped if one
+    already exists, e.g. after a restore). This is the hinge of the whole
+    flow: from here on there *is* a session, so the remaining steps use the
+    session-gated `/api/system/*` endpoints instead of pre-auth ones.
+14. **Time zone** — `/api/provision/timezone` /
+    `/api/provision/set_timezone`, proxied to `api_server.py`'s
+    `get_timezone()`/`set_timezone()` — and then, immediately,
+    **`POST /api/provision/finalize`**: applies the chosen display mode
+    **live**, tears down the hotspot, and removes the provisioning marker.
+    Finalizing *here* rather than at the very end is deliberate: account and
+    time zone are the last steps that need the pre-auth provisioning API, so
+    the sources step below can talk to the real, session-authenticated
+    endpoints instead of a pre-auth workaround. `finish()`'s own `finalize`
+    call is then a harmless no-op (`provision_finalize()` early-returns once
+    already finalized).
+15. **Music sources** (internal Lyrion only, and optional) — "do you have a
+    NAS or an internal disk?" first, because most setups have nothing beyond
+    a USB drive, which automounts on its own; answering no skips straight to
+    finish. Yes opens a small guided loop — add a NAS share
+    (`/api/system/sources/smb`) and/or adopt/format an internal disk
+    (`/api/system/internal/*`) as many times as wanted — hitting exactly the
+    endpoints Settings → Sources uses.
+16. **Finish** — with an internal Lyrion the phone is sent to `:9000`, which
+    now lands on the **web player itself**: step 12 already wrote Lyrion's
+    `wizardDone`, so its own first-run wizard never appears.
 
 Every `/api/provision/*` endpoint above is gated by the provisioning marker
 being present (`_provisioning()`), not a session — the same
 physical/RF-proximity trust model as the pre-existing network/mode
-endpoints, since no account exists yet at this point.
+endpoints, since no account exists yet at that point.
 
 Network configuration (`api_server.py`: `GET /network_status`,
 `GET /wifi_scan`, `POST /wifi_connect`, `POST /configure_network`) is
@@ -514,6 +587,95 @@ only outside a live session (`ConditionKernelCommandLine=!boot=live`);
 retries on the next boot if it has no network yet. The setup wizard's Lyrion
 step (above) separately checks/installs Lyrion synchronously if this hasn't
 finished yet by the time the phone reaches that step.
+
+## Lyrion web UI — Osmium skin & first-run setup
+
+Everything the phone/browser sees on `:9000` is Lyrion's own web UI, so the
+appliance owns two pieces of Lyrion configuration on the user's behalf: what
+that UI *looks* like, and Lyrion's own first-run wizard. Both live in
+`sources_server.py` (it already owns Lyrion's media dirs and prefs) and are
+exposed to all three front-ends through the same endpoints.
+
+### Skin — a theme + global CSS on Material, never a skin of our own
+
+The "Osmium" look is built on top of the third-party **Material Skin**
+plugin, not as a from-scratch LMS skin: a `themes/dark/Osmium.css` entry in
+Material's own theme picker, plus `css/desktop.css` + `css/mobile.css` —
+Material's documented global-CSS hook, which restyles *every* client that
+opens the UI, not just this browser. Assets are committed at
+`distro/config/includes.chroot/usr/local/share/hifi-lms-skin/` and installed
+to `<lyrion-prefsdir>/material-skin/`; the CSS files carry a
+`managed-by: osmium-appliance` marker so switching back to plain Material
+removes only files we wrote.
+
+The user's choice is one word in `/etc/hifi-player/lms-skin`:
+
+| Value | Meaning |
+|---|---|
+| `osmium` | Material installed, root `skin` pref = `material`, Osmium theme + global CSS on |
+| `material` | Material installed, root `skin` = `material`, our global CSS removed |
+| *(absent)* | **unset** — a legacy device: its look is never touched. Material itself is still auto-installed, so the `/material/` web remote the kiosk QR points at works. |
+
+That unset state is why nothing about an existing fleet changes on its own:
+a startup convergence thread (`_lms_skin_autoinstall()`, backoff-retried
+while the box is still offline) only ever ensures **Material + the theme
+file** exist and re-syncs the global CSS to a *stored* choice — it never
+writes the root `skin` pref or the global CSS on a device whose owner hasn't
+picked anything.
+
+Material is installed the way Lyrion installs plugins itself, deterministically
+rather than by driving its web UI: the sha1-verified zip goes into
+`DownloadedPlugins` with a `needs-install` seed in `state.prefs`/
+`extensions.prefs`, and the result is validated live before the job reports
+success. Plugin metadata comes from the LMS community repository XML — fetched
+with an **explicit User-Agent**, because GitHub Pages answers 403 to urllib's
+default one (which had silently defeated every repo lookup, leaving Material
+to install from its pinned fallback release only).
+
+`POST /api/lms_skin` runs the apply as a background job (`/api/lms_skin_status`
+polls it) under a lock shared with the convergence thread and the first-run
+setup job below — all three stop/start Lyrion and must never overlap.
+
+**Where it shows up**: the captive wizard's "Web player look" step, the kiosk
+Settings → Lyrion section (talking to `:8080` on loopback, and hiding itself
+on a 404 so an older system bundle degrades quietly), and the admin webui's
+Settings + Setup pages. Everything that links to the web player — Dashboard,
+Settings, the pairing QR — points at `/material/?defaultTheme=dark/Osmium`
+when Osmium is active, and at the bare `:9000` root on unset devices.
+
+**Lifecycle**: the choice file is wiped by `hifi-factory-reset.sh` (Lyrion's
+prefs go with it, so the wizard re-asks) and is part of `hifi_backup.py`'s
+`core` category. The assets ship in the **system** bundle — whose apply list
+had to grow `/usr/local/share` — and, for boxes already in the field, via OS
+migration `0048-lms-skin-assets.sh`, which is the bridge: a system-bundle fix
+only takes effect one release later (the updater re-execs itself from
+`/var/tmp` and applies the bundle with the *old* copy rules), while an OS
+payload's `apply.d/` runs from the bundle on the very first update carrying
+it. See [OTA update system](#ota-update-system).
+
+### Lyrion's own first-run wizard, absorbed
+
+Lyrion redirects every visit to `:9000` into its own setup wizard until
+`server.prefs`' `wizardDone` is set, and that wizard asks four things —
+language, plugins, music folder, playlist folder — three of which this
+appliance already answers (Sources owns `mediadirs`, `ensure_playlistdir()`
+owns `playlistdir`, the skin step owns Material). Handing the user over to it
+meant answering the same questions twice.
+
+So the Osmium wizard asks the one remaining question itself, in the "Music
+services" step: MusicArtistInfo ticked by default (as Lyrion's own wizard
+does), Spotty/TIDAL/Qobuz/Deezer/RadioNowPlaying/Radio.net optional, plus a
+separate, unticked opt-in for Lyrion's usage reporting that spells out what
+it sends and to whom. `POST /api/lms_setup` installs the picked plugins and
+writes `wizardDone`; **"Skip" still POSTs**, because writing that pref is the
+point of the step. Bundled-in-Lyrion plugins (Analytics) take a different
+branch — nothing to download, they're switched on by writing `needs-enable`
+into their plugin state — and the whole batch costs one Lyrion stop/start, or
+none at all when nothing has to change.
+
+The playlist folder — the last thing that wizard used to ask for — is now
+`GET/POST /api/playlistdir`, wired into Sources → Advanced in all three
+front-ends on top of the same folder picker the local-source flow uses.
 
 ## Display mode & player on/off
 
@@ -618,7 +780,7 @@ needs physical access.
 | Channel | Asset prefix | Updates | Verification | Script |
 |---|---|---|---|---|
 | UI | `hifi-ui-` | `/opt/hifi-media-player` (Electron) | sha256 | `hifi-ota-update.sh` |
-| System | `hifi-system-` | Python API/daemons, helper scripts, systemd units | sha256 | `hifi-system-update.sh` |
+| System | `hifi-system-` | Python API/daemons, helper scripts (`/usr/local/bin`, `/usr/local/sbin`), shared data (`/usr/local/share` — the LMS skin assets), systemd units, `/opt/hifi-webui` | sha256 | `hifi-system-update.sh` |
 | OS | `hifi-os-` | arbitrary root `apply.sh` | sha256 **+ Ed25519 signature** | `hifi-os-update.sh` |
 | Lyrion | — | Lyrion Music Server `.deb` | version match | `hifi-lyrion-update.sh` |
 
@@ -774,6 +936,15 @@ migrations but a wholesale file replacement:
 - The kiosk restart (`systemctl restart lightdm`) is the very last step, once
   `UI_VERSION` is already committed.
 
+One consequence worth knowing for the System channel: `hifi-system-update.sh`
+re-execs itself from a private copy under `/var/tmp` before applying (it is
+about to overwrite itself), so a change to *which paths* the bundle installs
+only takes effect **one release later** — the running copy is still the old
+one. When such a fix has to reach devices immediately, the bridge is an OS
+migration, whose `apply.d/` runs from the bundle on the very first update that
+carries it (`0048-lms-skin-assets.sh` is the worked example — see
+[Lyrion web UI](#lyrion-web-ui--osmium-skin--first-run-setup)).
+
 ## Project structure
 
 ```
@@ -797,6 +968,7 @@ hifi-media-player/
 ├── android-companion/       # Android companion app (Kotlin/Java)
 ├── distro/                  # Custom Debian appliance build (live-build)
 │   ├── config/               # live-build includes, hooks, systemd units
+│   │   └── includes.chroot/usr/local/share/hifi-lms-skin/    # Osmium theme + global CSS for Lyrion's Material Skin
 │   └── os-update/            # apply.d migrations, apply.sh (cumulative)
 ├── website/                  # Marketing site (website/index.html)
 └── package.json
