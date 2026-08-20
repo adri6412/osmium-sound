@@ -16,7 +16,7 @@ flowchart TB
 
     subgraph Local["Local services on the appliance"]
         Flask["api_server.py\nFlask API — :8000 (loopback only)"]
-        Sources["sources_server.py\nUSB/SMB/local sources — :8080"]
+        Sources["sources_server.py\nUSB/SMB/local sources — :8080\n(LAN-bound, pairing-token gated)"]
         WebUI["webui_server.py\nweb admin + provisioning — :80"]
         Lyrion["Lyrion Music Server\nJSON-RPC + web UI — :9000"]
         Squeezelite["squeezelite\nplayer client (ALSA)"]
@@ -48,8 +48,8 @@ flowchart TB
 | Preload | `main/preload.js` | Minimal `contextBridge` surface — only UI-local concerns (frame-rate cap, global on-screen keyboard). **System control does not go through IPC.** |
 | React renderer | `src/` | The touchscreen UI (Now Playing, Music/Radio/Apps via Lyrion, Settings, Setup Wizard) |
 | Flask API | `api_server.py` | Runs as root on the appliance; system info/control, network/Wi-Fi, OTA channels, multiroom (LMS role), pairing tokens, display mode, player on/off, disk installer. Loopback-only, port `8000`. |
-| Sources service | `sources_server.py` | USB/SMB/local source management, internal-disk adoption/formatting, backup/restore (core logic shared via `hifi_backup.py`), and every piece of Lyrion-side configuration the appliance owns for the user (web-UI skin, first-run setup/plugins, media + playlist folders — see [Lyrion web UI](#lyrion-web-ui--osmium-skin--first-run-setup)). Port `8080`. |
-| Web admin / provisioning gateway | `webui_server.py` | The only LAN-facing service: serves the Vue admin app (`admin-webui/`) behind a session, reverse-proxies a whitelisted subset of `api_server.py`/`sources_server.py` calls, and — while `/etc/hifi-player/provisioning-pending` exists — serves the first-boot setup portal (plus, in installer boot mode, a Wi-Fi hotspot and captive portal). Plain HTTP on `:80`, no TLS: a per-device self-signed cert made every browser show a "connection not private" click-through on first visit, which was worse UX than the plain-HTTP tradeoff. See [Provisioning & first boot](#provisioning--first-boot). |
+| Sources service | `sources_server.py` | USB/SMB/local source management, internal-disk adoption/formatting, Samba share config, audio-CD ripping, backup/restore (core logic shared via `hifi_backup.py`), and every piece of Lyrion-side configuration the appliance owns for the user (web-UI skin, first-run setup/plugins, media + playlist folders — see [Lyrion web UI](#lyrion-web-ui--osmium-skin--first-run-setup)). Binds `0.0.0.0:8080` — LAN-reachable like the web admin, but every route is gated by a pairing token (see [Pairing & security](#pairing--security)), which is what lets the Android companion talk to it directly. |
+| Web admin / provisioning gateway | `webui_server.py` | The primary LAN-facing service (the other one is the pairing-gated sources API above): serves the Vue admin app (`admin-webui/`) behind a session, reverse-proxies a whitelisted subset of `api_server.py`/`sources_server.py` calls, and — while `/etc/hifi-player/provisioning-pending` exists — serves the first-boot setup portal (plus, in installer boot mode, a Wi-Fi hotspot and captive portal). Plain HTTP on `:80`, no TLS: a per-device self-signed cert made every browser show a "connection not private" click-through on first visit, which was worse UX than the plain-HTTP tradeoff. See [Provisioning & first boot](#provisioning--first-boot). |
 | Lyrion Music Server | external (Debian package / on-demand download) | Library indexing, playback engine, plugin ecosystem (Spotty, TIDAL Connect, radio, UPnP/DLNA, AirPlay). Port `9000`. Its web UI is the Material Skin plugin, branded as "Osmium" — see [Lyrion web UI](#lyrion-web-ui--osmium-skin--first-run-setup). |
 | squeezelite | systemd service | Lyrion's player client; `-D` flag enables bit-perfect DSD via DoP; `-v` exports a shared-memory buffer the VU meter reads |
 | VU meter daemon | `vu_meter_daemon.py` | Reads squeezelite's shared-memory visualizer segment (`/dev/shm/squeezelite-*`) via mmap, auto-detecting the header layout, computes 32-bar RMS and streams it over WebSocket to `AnalogVUMeter.jsx`. Re-attaches on shm inode changes (DAC switch, restart, multiroom follow-switch). |
@@ -141,8 +141,12 @@ the always-available "just get me a file" path used by both UIs.
 The Android companion pairs via a bearer token, not a password. Minting a
 token (`POST /api/pair/token` in `sources_server.py`, `secrets.token_urlsafe(24)`,
 persisted to `/etc/hifi-pairing-tokens.json`) and revoking all tokens are
-**localhost-only** — they require physical access to the kiosk screen
-(Settings shows the token as a QR code). After pairing, the companion app
+**localhost-only** in `sources_server` itself — physical access to the kiosk
+screen, where Settings shows the token as a QR code. `webui_server.py` *is*
+localhost, so it mints and revokes on behalf of an authenticated web admin
+(`POST /api/system/pair_token`, `/api/system/pair_revoke_all`, and the
+implicit mint inside `/sources-app`): the admin session is the equivalent
+trust anchor. After pairing, the companion app
 sends `Authorization: Bearer <token>`; a second flow appends `?token=` to
 plain URLs (backup/restore, the sources web UI) since `<a href>` navigation
 can't set headers. `_require_pair_token()` gates every `sources_server.py`
@@ -152,13 +156,91 @@ the LAN that isn't paired and isn't going through the webui:80 proxy or the
 Electron kiosk (both loopback) can't reach the Sources UI or its data at all
 — with per-IP rate limiting (20 failures / 60s).
 
-SSH ships **disabled**. `GET/POST /ssh_status` / `/ssh_set` in
-`api_server.py` installs `openssh-server` on demand and, before starting
-`sshd`, drops `/etc/ssh/sshd_config.d/99-hifi-no-root-login.conf`
-(`PermitRootLogin no`) — the kiosk `hifi` user ships with a well-known
-default password, so this ensures a leaked password only ever grants
-unprivileged access, never root. The same hardening is reapplied by the
-OS-update channel (`distro/os-update/apply.d/0017-ssh-no-root-login.sh`).
+### SSH & the shell account
+
+`openssh-server` ships **in** the image but **disabled** (package list
+`hifi.list.chroot`, switched off by `0400-enable-services.hook.chroot`); SSH
+is opt-in from Settings (→ Services in the web admin, → SSH on the kiosk).
+`GET /ssh_status` / `POST /ssh_set` in
+`api_server.py` enables+starts the unit (`ssh.service` on Debian,
+`sshd.service` elsewhere — `_ssh_unit()` probes), installing the package
+first only on an image that somehow lacks it (a pinned
+`apt-get install -y openssh-server` NOPASSWD rule, never a wildcard). It also
+runs `ssh-keygen -A` before that first start: the build-time install happens
+inside the live-build chroot under `policy-rc.d`, which can leave host-key
+generation incomplete, and starting `sshd` with no host keys is the single
+most common cause of a "control process exited with error code" failure.
+`ssh-keygen -A` only fills in what's missing, so it's a no-op otherwise.
+
+**The interactive login is not the kiosk user.** `hifi` is the account the
+Electron kiosk runs as, and it is not a login target: its privilege surface
+is the pinned NOPASSWD list in `/etc/sudoers.d/hifi`, it is kept out of the
+`sudo` group (re-asserted on every OS update by
+`apply.d/0002-security-hardening.sh`), and once a real login exists its
+password is removed outright (`usermod -p '*'`, `_disable_kiosk_password()`)
+so the documented `hifi`/`hifi` default stops working. LightDM autologin is
+unaffected — it authenticates via the `autologin`/`nopasswdlogin` groups, not
+a password.
+
+**The owner picks the SSH login themselves, from the web admin.** Settings →
+Services has a username + password form right under the SSH toggle
+(`saveShellAccount()` in `admin-webui/src/views/Settings.vue` →
+`/api/system/shell_account` → `POST /shell_account` in `api_server.py`); the
+same form exists on the kiosk touchscreen (`src/pages/Settings.jsx`). The
+panel shows the resulting `ssh <user>@<host>` line, and `GET /shell_account`
+reports `{exists, username}` so a device that has no login yet says so
+instead of implying a default one works. `/ssh_set`'s response carries the
+same `account` object for the same reason.
+
+The field is only **pre-filled** from the web-admin credential, not dictated
+by it: `_sync_shell_account()` in `webui_server.py` mirrors the admin
+username/password into the same endpoint over loopback at the two moments the
+plaintext exists — account creation (`/api/auth/setup`) and password change
+(`/api/auth/change-password`) — so a freshly provisioned box already has a
+working login. Renaming or repointing it afterwards is just another save from
+the form. The mirror is deliberately non-fatal: if `api_server` is too old or
+`useradd` is unavailable, the admin account is still created and the login can
+be provisioned later from the panel.
+
+`set_shell_account()` `useradd`s into `sudo` (real sudo, unlike `hifi`) plus
+`adm`/`systemd-journal` for journal reads, validates the username against a
+reserved-name list, and rejects passwords under 8 chars or containing
+`:`/newline (either would let a crafted password rewrite another account's
+`chpasswd` line). `/shell_account` is **not** in `sources_server.py`'s
+companion proxy table — a stolen pairing token must not be able to mint a
+root-capable login; the phone only reads the login name and sends the user to
+the touchscreen or web admin.
+
+`PermitRootLogin no` is enforced from three places so it is never missed:
+baked into new images at build time
+(`distro/config/includes.chroot/etc/ssh/sshd_config.d/99-hifi-no-root-login.conf`
+— Debian's packaged `sshd_config` includes that directory, so the drop-in is
+already in place the moment the unit is first started), written again by
+`api_server.py` right before the first `sshd` start, and reapplied to
+already-installed devices by `apply.d/0017-ssh-no-root-login.sh`.
+`apply.d/0019-ssh-motd-banner.sh` ships the matching `/etc/motd` banner.
+
+**Remote access beyond the LAN** is Tailscale, owner-driven:
+`GET /tailscale_status`, `POST /tailscale_install`, `POST /tailscale_set`
+(Settings → Tailscale in the web admin only — the kiosk has no such panel).
+The package comes from Tailscale's own installer at build time
+(`0410-tailscale.hook.chroot`) or over OTA
+(`apply.d/0029-remote-support.sh`); `/tailscale_install` is the runtime
+fallback for a device that missed both, running the same official script
+because a plain `apt-get install tailscale` fails against stock Debian repos.
+Enabling runs plain `tailscale up --hostname=<device>` — the hostname is a
+derived per-device label, since every appliance ships as `hifiplayer` and
+would otherwise collide on a tailnet — reads just far enough into its output
+to grab the
+one-time login URL, and leaves the process in the background while the
+frontend polls status — the owner approves the node into **their own**
+tailnet from any device. Disabling uses `down`, not `logout`, so re-enabling
+reconnects with no fresh login. The earlier vendor-operated remote-support
+tailnet (GitHub-Actions-minted keys, a device PAT) was retired by
+`apply.d/0034-remove-vendor-remote-support.sh`; the `support` user that
+`apply.d/0029-remote-support.sh` created stays only because a shipped OS
+migration can't be rewritten, and is locked with Tailscale SSH never
+advertised to it.
 
 ## Backend API reference
 
@@ -185,6 +267,10 @@ GET/POST /lms_role           multiroom "follow" mode
 GET/POST /player_name
 GET  /discover_lms            LAN auto-discovery for multiroom
 GET/POST /ssh_status, /ssh_set
+GET/POST /shell_account       the Linux SSH/console login (sudo group) — mirrored from the web-admin credential
+GET  /tailscale_status        owner's own tailnet: state, IP, DERP relay + latency
+POST /tailscale_install, /tailscale_set
+GET  /support_bundle          diagnostic zip (logs, unit state, config)
 GET/POST /pointer_status, /pointer_set
 GET/POST /display_mode        screen (gui) vs headless
 GET/POST /player_enabled      player on/off — independent of display_mode, makes a unit "server-only"
@@ -199,7 +285,7 @@ in `api_server.py`.
 
 ### Web admin & provisioning API — `webui_server.py` (port 80)
 
-The only LAN-facing surface. Three route families:
+The web admin's LAN surface. Four route families:
 
 - **`/api/system/*`** — session-gated proxy to a whitelisted subset of the
   Flask API above, called by the admin webui (`admin-webui/src/api.js`,
@@ -230,9 +316,7 @@ The only LAN-facing surface. Three route families:
   GET  /api/provision/lms_skin_status
   GET/POST /api/provision/lms_setup       music-services step   → sources_server
   GET  /api/provision/lms_setup_status
-  POST /api/provision/create_account      the web-admin account; after it, the wizard uses /api/system/*
-  GET/POST /api/provision/sources, /sources/local, /sources/smb
-  DELETE /api/provision/sources/<id>
+  POST /api/provision/create_account      the web-admin account (also provisions the Linux SSH login, see SSH & the shell account); after it, the wizard uses /api/system/*
   GET/POST /api/provision/timezone, /set_timezone
   POST /api/provision/restore              forwarded raw (multipart) to sources_server's /api/restore
   GET  /api/provision/restore/status
@@ -240,13 +324,38 @@ The only LAN-facing surface. Three route families:
   POST /api/provision/install_start
   GET  /api/provision/install_status
   ```
-- **`/api/<sources paths>`** and a handful of dedicated forwards (backup,
-  restore, `lms_skin[_status]`, `playlistdir`, `local/*`,
-  `internal/*`, `usb/*`) — token- or session-gated relays straight to
-  `sources_server.py:8080`, since that service only trusts loopback callers
-  itself (see [Pairing & security](#pairing--security)). The setup portal's
-  own sources step uses the session-gated `/api/system/*` half of these, not
-  a pre-auth path — it runs after the account step.
+  `/api/provision/sources*` also still exist but have no caller left — the
+  wizard's sources step moved behind the account step (see below). Don't
+  build on them.
+- **Relays to `sources_server.py:8080`**, in two gating flavours, since that
+  service exempts loopback but demands a pairing token from anyone else (see
+  [Pairing & security](#pairing--security)) — the proxy is what supplies one
+  of the two:
+  - a **token-gated catch-all** `/api/<path>` (`sources_forward()`), which
+    forwards only the known sources prefixes — `/api/sources`, `/api/usb`,
+    `/api/internal`, `/api/apply`, `/api/backup`, `/api/restore`, `/api/cd`,
+    `/api/local`, `/api/playlistdir` — and 404s everything else.
+    This is the path the embedded Sources SPA's own `fetch`es take.
+  - **session-gated `/api/system/*` mirrors** of the same set (`sources`,
+    `usb`, `internal`, `local`, `apply`, `backup`, `restore[/status]`,
+    `playlistdir`, `lms_skin[_status]`), forwarded raw over
+    loopback where no token is needed. This is what the Vue admin
+    (`api.sourcesList()` & co.) and the setup portal's sources step use — the
+    step runs after the account step, so it has a session.
+- **`GET /sources-app`** — the browser entry point to `sources_server`'s own
+  embedded SPA. With a valid `?token=` it serves that page straight from
+  `sources_server`; without one it requires the admin session, mints a fresh
+  pairing token over loopback (minting is localhost-only in `sources_server`,
+  and the session is the equivalent trust anchor), then 302s back to itself
+  with `?token=` so the SPA's plain-navigation flows (backup download, restore
+  upload) have one. `lang=`/`back=` survive the redirect. Nothing in the Vue
+  admin links here today — it has its own native `SourcesPanel.vue` on the
+  `/api/system/*` mirrors — so this is the path for a bare browser or a
+  QR-carried link.
+
+The Electron kiosk uses none of the above: it calls
+`http://localhost:8080/...` directly, where `_require_pair_token()` exempts
+loopback outright.
 
 ### Sources API — `sources_server.py` (port 8080)
 
@@ -292,7 +401,8 @@ GET    /api/backup/list            🔒   generations stored on-device
 GET/DELETE /api/backup/<id>        🔒   download / delete one generation
 POST   /api/backup/<id>/restore    🔒   restore a stored generation
 GET/POST /api/backup/settings      🔒   scheduled-backup on/off + retention
-POST   /api/restore                🔒   restore from an uploaded archive
+POST   /api/restore                🔒   restore from an uploaded archive (async — returns once the job has started)
+GET    /api/restore/status         🔒   poll that restore job
 ```
 
 `_require_pair_token()` exempts calls from `127.0.0.1`/`::1` (the on-device
@@ -301,6 +411,28 @@ for LAN callers (the phone app), waived for the local kiosk." The two
 `/api/pair/token*` routes use a stricter, different check (`remote_addr`
 must literally be localhost, full stop) since they mint/revoke the very
 token the others check — a LAN caller can never satisfy it, kiosk or not.
+
+#### Sharing a source over SMB
+
+`samba` is in the image but its units ship **disabled**
+(`0400-enable-services.hook.chroot`) — an appliance with no adopted disk has
+nothing to serve and shouldn't answer on 445. `_write_samba_shares()` owns
+the whole lifecycle: it rewrites `/etc/samba/hifi-shares.conf` from the
+current source list, then `systemctl enable --now smbd` if there is at
+least one share and `disable --now` if there is none. Writable sources are
+therefore the only thing that ever brings the SMB server up. That file is
+never edited by hand: Osmium ships its own `/etc/samba/smb.conf` whose only
+job is to `include` it (baked in at build time, carried to already-installed
+devices by `apply.d/0018-samba-internal-shares.sh`).
+
+Every share is served as a single dedicated system account, `hifimusic`
+(`useradd -r -M -s /usr/sbin/nologin`, `valid users` + `force user`), whose
+password is generated on the device and stored in
+`/etc/hifi-player/samba-cred.json`; `POST /api/internal/smb/regenerate`
+rotates it. It is a Samba-only credential — no shell, no sudo, unrelated to
+both the kiosk `hifi` user and the SSH login. A restore has to re-run
+`smbpasswd` from the restored credential file, otherwise `smbd` would keep
+authenticating with its own old password against a newly restored one.
 
 ### Lyrion JSON-RPC — `src/utils/lyrionApi.js` (port 9000)
 
