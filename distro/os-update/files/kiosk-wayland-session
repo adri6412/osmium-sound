@@ -101,6 +101,19 @@ if mkdir -p "$LABWC_CONF_DIR" 2>/dev/null && cat > "$LABWC_CONF_DIR/rc.xml" <<'E
       <mousebind button="Middle" action="Press" />
     </context>
   </mouse>
+  <!--
+    Niente decorazioni. La finestra del kiosk gira sotto XWayland (vedi
+    hifi-kiosk-launch), e un client X11 non disegna decorazioni proprie:
+    le mette il compositor. Con la finestra grande quanto lo schermo il
+    bordo non ci sta, e quello che si vede è una barretta chiara di 4 px
+    sul lato sinistro, con la finestra scalata di altrettanto a destra e
+    la sua colonna destra fuori schermo. Su un'appliance non c'è nulla da
+    decorare: nessun bordo, nessuna barra del titolo, la finestra parte da
+    (0,0). Vale per ogni finestra ("*"), incluse le eventuali transitorie.
+  -->
+  <windowRules>
+    <windowRule identifier="*" serverDecoration="no" />
+  </windowRules>
 </labwc_config>
 EOF
 then
