@@ -50,3 +50,8 @@ android-companion/buildSrc/build/libs/*.jar
 # Local-only personal cheat sheet for manual git/deploy steps — never
 # committed, so it can freely mention internal workflow details.
 DEPLOY-CHEATSHEET.html
+
+# Design working files (Photoshop sources and their exports, zipped): they are
+# the artwork's editing history, not something the build consumes — only the
+# exported assets under assets/ are.
+statusbarflat.zip
