@@ -133,7 +133,7 @@ function createWindow() {
     callback({ responseHeaders: details.responseHeaders });
   });
 
-  // The xsession runs Chromium bare (no window manager), so the
+  // The X11 rollback session runs Chromium bare (no window manager), so the
   // `--start-fullscreen` CLI flag has nothing to make it fullscreen with —
   // that flag is a Chrome *browser* switch, not something Electron's
   // BrowserWindow reads from argv. Without a WM to honor the EWMH fullscreen
@@ -141,6 +141,18 @@ function createWindow() {
   // touchscreen, 1080p/4K TV over HDMI, ...) is to size the window to the
   // display's actual resolution ourselves, up front.
   const { width: screenWidth, height: screenHeight } = screen.getPrimaryDisplay().size;
+
+  // The Wayland session (labwc) does have a compositor, and there the manual
+  // sizing is not enough: the window runs under XWayland (see the comment on
+  // --ozone-platform=x11 in distro/os-update/files/kiosk-wayland-launch) and
+  // Chromium draws its own Linux frame around it — ElectronFrameViewLinux, a
+  // resize band plus a border painted in the system theme's colours. On a black
+  // UI that border reads as a light 4px strip down the edge of the panel.
+  // Asking the compositor to fullscreen the window from the outside does not
+  // remove it (it only moves which edges land on screen): Chromium drops the
+  // frame when *it* knows it is fullscreen, so the window has to ask for it.
+  const isCompositorSession =
+    process.env.XDG_SESSION_TYPE === 'wayland' || !!process.env.WAYLAND_DISPLAY;
 
   mainWindow = new BrowserWindow({
     width: screenWidth,
@@ -161,7 +173,7 @@ function createWindow() {
     titleBarStyle: 'hidden',
     frame: false,
     resizable: false,
-    fullscreen: false,
+    fullscreen: isCompositorSession,
     show: false
   });
 

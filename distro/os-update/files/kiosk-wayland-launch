@@ -29,6 +29,18 @@ fi
 # il client al tema di sistema.
 unset XCURSOR_THEME XCURSOR_PATH
 
+# Tema GTK scuro. Non è cosmetica di contorno: il frame view Linux di Electron
+# (ElectronFrameViewLinux, rifatto su FrameViewLinux di Chromium) disegna il
+# bordo della finestra coi colori del tema di sistema, e sull'appliance il tema
+# è quello chiaro di default. Su una UI nera quel bordo si vede: una riga di
+# 4 px, misurata (221,218,214) con contorno (188,186,182), esattamente i grigi
+# di Adwaita chiaro. Con il tema scuro la riga resta ma sparisce nel nero.
+# La cura vera è che la finestra sia fullscreen, dove Chromium il frame non lo
+# disegna affatto (main/main.js); questo è la cintura oltre alle bretelle, e
+# vale comunque per ogni altro pezzo di interfaccia nativa.
+GTK_THEME=Adwaita:dark
+export GTK_THEME
+
 amixer -q sset Master unmute 2>/dev/null || true
 amixer -q sset PCM unmute 2>/dev/null || true
 
