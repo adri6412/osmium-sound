@@ -16,6 +16,7 @@ contextBridge.exposeInMainWorld('flasher', {
 
   watchDrives: () => ipcRenderer.invoke('drives:watch'),
   write: (args) => ipcRenderer.invoke('write:start', args),
+  restore: (args) => ipcRenderer.invoke('restore:start', args),
   openExternal: (url) => ipcRenderer.invoke('shell:open', url),
 
   onImageProgress: (fn) => ipcRenderer.on('image:progress', (_e, p) => fn(p)),

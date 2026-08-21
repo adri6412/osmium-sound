@@ -19,6 +19,25 @@ Doing this from the browser is not possible: WebUSB refuses to claim
 mass-storage interfaces, and the File System Access API only reaches mounted
 volumes, never a raw block device. Hence a native app.
 
+## Restoring a stick
+
+The welcome screen also offers to put a stick back to factory condition: a
+single empty FAT32 partition spanning the whole device. It is there because
+writing an installer image leaves the stick carrying the image's own partition
+layout — a few megabytes of FAT followed by raw data — which every desktop OS
+then reports as damaged or unformatted.
+
+`helper/fat32.js` writes the MBR and the FAT32 volume itself rather than
+shelling out, which keeps one code path across all three systems and sidesteps
+the fact that Windows' own `diskpart` refuses to make a FAT32 volume larger than
+32 GB. It only ever builds a volume from scratch, so clusters are handed out
+linearly and there is no free list, no fragmentation and nothing to reclaim —
+which is most of what makes a general FAT implementation hard.
+
+It goes through etcher-sdk's `BlockDevice` for the same reason the image path
+does: unmounting on Linux and macOS, `diskpart clean` and volume locking on
+Windows.
+
 ## What the first phase does
 
 1. Reads `https://file.osmiumsound.it/latest.json` to find the current image.

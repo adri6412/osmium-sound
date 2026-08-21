@@ -22,6 +22,7 @@ const STRINGS = {
     'welcome.need2': 'A USB stick of at least 8 GB. Everything already on it will be erased.',
     'welcome.need3': 'This computer, connected to the internet — the image is about 1 GB.',
     'welcome.useLocal': 'Use an image already on this computer instead',
+    'welcome.restore': 'Restore a USB stick to factory condition',
     'welcome.loading': 'Looking for the current image…',
     'welcome.localPicked': 'Local image — not signature-checked',
 
@@ -44,6 +45,8 @@ const STRINGS = {
     'work.leadDownload': 'The image is about 1 GB. An interrupted download resumes where it stopped.',
     'work.leadElevate': 'Your system will ask for your password: writing to a raw device needs administrator rights.',
     'work.leadFlash': 'Do not unplug the stick.',
+    'work.formatting': 'Restoring the USB stick',
+    'work.leadFormat': 'Writing a fresh partition table and an empty FAT32 volume. This takes a few seconds.',
 
     'boot.ready': 'The USB stick is ready.',
     'boot.title': 'Boot the mini PC from the stick',
@@ -72,6 +75,12 @@ const STRINGS = {
     'finish.next': 'Every later update — interface, operating system and music server — arrives automatically over the air from the Settings screen. The stick is only ever needed for a first install, so you can safely reuse it.',
     'finish.another': 'Write another USB stick',
 
+    'restore.title': 'Restore this USB stick?',
+    'restore.warnTitle': 'Everything on this drive will be erased.',
+    'restore.warnBody': 'The stick is rebuilt as a single empty FAT32 partition covering its full capacity — the state it was in before an installer image was written to it. Nothing on it can be recovered afterwards.',
+    'restored.title': 'The USB stick is back to normal',
+    'restored.lead': 'It is now a single empty FAT32 volume spanning the whole stick, and your computer will show it as an ordinary removable drive again.',
+
     'error.title': 'It did not work',
     'error.support': 'If it keeps failing, write to support@osmiumsound.it with the detail above.',
 
@@ -81,6 +90,7 @@ const STRINGS = {
     'btn.write': 'Erase and write',
     'btn.close': 'Close',
     'btn.retry': 'Try again',
+    'btn.restore': 'Erase and restore',
 
     'err.ENET': 'The download could not be completed. Check the connection and try again.',
     'err.EHTTP': 'The server did not return the image.',
@@ -111,6 +121,7 @@ const STRINGS = {
     'welcome.need2': 'Una chiavetta USB da almeno 8 GB. Tutto quello che contiene verrà cancellato.',
     'welcome.need3': "Questo computer, connesso a internet — l'immagine pesa circa 1 GB.",
     'welcome.useLocal': "Usa invece un'immagine già presente su questo computer",
+    'welcome.restore': 'Riporta una chiavetta alle condizioni di fabbrica',
     'welcome.loading': "Ricerca dell'immagine corrente…",
     'welcome.localPicked': 'Immagine locale — firma non verificata',
 
@@ -133,6 +144,8 @@ const STRINGS = {
     'work.leadDownload': "L'immagine pesa circa 1 GB. Un download interrotto riprende da dove si era fermato.",
     'work.leadElevate': 'Il sistema chiederà la password: scrivere direttamente su un dispositivo richiede i permessi di amministratore.',
     'work.leadFlash': 'Non scollegare la chiavetta.',
+    'work.formatting': 'Ripristino della chiavetta',
+    'work.leadFormat': 'Scrittura di una nuova tabella delle partizioni e di un volume FAT32 vuoto. Richiede pochi secondi.',
 
     'boot.ready': 'La chiavetta è pronta.',
     'boot.title': 'Avvia il mini PC dalla chiavetta',
@@ -161,6 +174,12 @@ const STRINGS = {
     'finish.next': 'Tutti gli aggiornamenti successivi — interfaccia, sistema operativo e server musicale — arrivano automaticamente via OTA dalla schermata Impostazioni. La chiavetta serve solo per la prima installazione, quindi puoi tranquillamente riutilizzarla.',
     'finish.another': "Scrivi un'altra chiavetta",
 
+    'restore.title': 'Ripristinare questa chiavetta?',
+    'restore.warnTitle': "Tutto il contenuto di questa unità verrà cancellato.",
+    'restore.warnBody': "La chiavetta viene ricostruita come una singola partizione FAT32 vuota che copre tutta la capacità — lo stato in cui si trovava prima che ci fosse scritta un'immagine di installazione. Nulla sarà più recuperabile.",
+    'restored.title': 'La chiavetta è tornata normale',
+    'restored.lead': 'Ora è un unico volume FAT32 vuoto esteso a tutta la chiavetta, e il computer tornerà a mostrarla come una comune unità rimovibile.',
+
     'error.title': 'Non ha funzionato',
     'error.support': 'Se continua a fallire, scrivi a support@osmiumsound.it allegando il dettaglio qui sopra.',
 
@@ -170,6 +189,7 @@ const STRINGS = {
     'btn.write': 'Cancella e scrivi',
     'btn.close': 'Chiudi',
     'btn.retry': 'Riprova',
+    'btn.restore': 'Cancella e ripristina',
 
     'err.ENET': 'Il download non è stato completato. Controlla la connessione e riprova.',
     'err.EHTTP': "Il server non ha restituito l'immagine.",
@@ -229,11 +249,13 @@ const PHASE_OF = {
   welcome: 'stick', select: 'stick', confirm: 'stick', work: 'stick',
   boot: 'boot',
   install: 'install', finish: 'install',
+  restored: 'stick',   // restoring is a stick job; the stepper is hidden for it
 };
 const PHASE_ORDER = ['stick', 'boot', 'install'];
 
 const state = {
   screen: 'welcome',
+  mode: 'install',      // 'install' walks the whole wizard; 'restore' just reformats
   release: null,
   local: null,          // locally picked image, bypasses the manifest
   imagePromise: null,   // download+verify running in the background
@@ -258,6 +280,12 @@ function show(screen) {
 
 // ── rendering ──────────────────────────────────────────────────────────────
 function renderStepper() {
+  // Restoring a stick is not part of the three-phase install, so the wizard's
+  // progress indicator would only be misleading there.
+  const stepper = document.getElementById('stepper');
+  stepper.hidden = state.mode === 'restore';
+  if (stepper.hidden) return;
+
   const current = PHASE_OF[state.screen] || state.lastPhase;
   const at = PHASE_ORDER.indexOf(current);
   document.querySelectorAll('.stepper .step').forEach((el) => {
@@ -292,7 +320,7 @@ function renderFooter() {
     case 'confirm': {
       back.hidden = false;
       back.textContent = t('btn.back');
-      next.textContent = t('btn.write');
+      next.textContent = t(state.mode === 'restore' ? 'btn.restore' : 'btn.write');
       next.className = 'btn destroy';
       const needsAck = state.selected && state.selected.oversize;
       next.disabled = Boolean(needsAck) && !$('oversizeAck').checked;
@@ -312,6 +340,7 @@ function renderFooter() {
       next.textContent = t('btn.continue');
       break;
     case 'finish':
+    case 'restored':
       next.textContent = t('btn.close');
       break;
     case 'error':
@@ -388,6 +417,10 @@ function renderDrives() {
 
 function renderConfirm() {
   if (!state.selected) return;
+  const restoring = state.mode === 'restore';
+  $('confirmTitle').textContent = t(restoring ? 'restore.title' : 'confirm.title');
+  $('confirmWarnTitle').textContent = t(restoring ? 'restore.warnTitle' : 'confirm.warnTitle');
+  $('confirmWarnBody').textContent = t(restoring ? 'restore.warnBody' : 'confirm.warnBody');
   $('confirmTarget').textContent =
     `${state.selected.description || state.selected.displayName} — ${bytes(state.selected.size)} (${state.selected.device})`;
   $('oversizeWrap').hidden = !state.selected.oversize;
@@ -399,7 +432,8 @@ function renderWork() {
   $('workLead').textContent =
     phase === 'downloading' ? t('work.leadDownload')
       : phase === 'starting' ? t('work.leadElevate')
-        : t('work.leadFlash');
+        : phase === 'formatting' ? t('work.leadFormat')
+          : t('work.leadFlash');
 
   const bar = $('workBar');
   const p = state.progress;
@@ -479,6 +513,20 @@ function restartForAnotherStick() {
   show('select');
 }
 
+async function runRestore() {
+  show('work');
+  state.writing = true;
+  state.phase = 'starting';
+  state.progress = null;
+  render();
+
+  const res = await window.flasher.restore({ devicePath: state.selected.device });
+
+  state.writing = false;
+  if (!res.ok) return fail(res);
+  show('restored');
+}
+
 async function runWrite() {
   show('work');
   state.phase = state.local ? 'starting' : 'downloading';
@@ -543,10 +591,11 @@ window.addEventListener('DOMContentLoaded', async () => {
 
   window.flasher.onWriteProgress((event) => {
     if (event.type === 'progress') {
-      state.phase = event.stage === 'verifying' ? 'verifying' : 'flashing';
+      state.phase = event.stage === 'verifying' ? 'verifying'
+        : event.stage === 'formatting' ? 'formatting' : 'flashing';
       state.progress = event;
     } else if (event.type === 'stage') {
-      state.phase = 'flashing';
+      state.phase = event.stage === 'formatting' ? 'formatting' : 'flashing';
     }
     if (state.screen === 'work') renderWork();
   });
@@ -561,6 +610,13 @@ window.addEventListener('DOMContentLoaded', async () => {
   });
 
   $('anotherStick').addEventListener('click', restartForAnotherStick);
+
+  $('restoreStick').addEventListener('click', () => {
+    state.mode = 'restore';
+    state.selected = null;
+    window.flasher.watchDrives();
+    show('select');
+  });
   $('oversizeAck').addEventListener('change', renderFooter);
 
   $('btnNext').addEventListener('click', () => {
@@ -574,7 +630,7 @@ window.addEventListener('DOMContentLoaded', async () => {
         show('confirm');
         break;
       case 'confirm':
-        runWrite();
+        if (state.mode === 'restore') runRestore(); else runWrite();
         break;
       case 'boot':
         show('install');
@@ -583,6 +639,7 @@ window.addEventListener('DOMContentLoaded', async () => {
         show('finish');
         break;
       case 'finish':
+      case 'restored':
         window.close();
         break;
       case 'error':
@@ -596,7 +653,7 @@ window.addEventListener('DOMContentLoaded', async () => {
   });
 
   $('btnBack').addEventListener('click', () => {
-    if (state.screen === 'select') show('welcome');
+    if (state.screen === 'select') { state.mode = 'install'; show('welcome'); }
     else if (state.screen === 'confirm') show('select');
     else if (state.screen === 'install') show('boot');
     else if (state.screen === 'error') window.close();

@@ -144,6 +144,20 @@ ipcMain.handle('write:start', async (_event, { devicePath, imagePath, imageSize,
   }
 });
 
+ipcMain.handle('restore:start', async (_event, { devicePath, label }) => {
+  try {
+    const result = await writeElevated({
+      devicePath,
+      mode: 'restore',
+      label: label || 'OSMIUM',
+      onEvent: (event) => send('write:progress', event),
+    });
+    return { ok: true, ...result };
+  } catch (err) {
+    return failure(err);
+  }
+});
+
 ipcMain.handle('shell:open', (_event, url) => {
   if (/^https:\/\//.test(url) || /^mailto:/.test(url)) shell.openExternal(url);
   return { ok: true };

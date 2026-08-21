@@ -220,3 +220,7 @@ code {
   border-radius: 4px; font-size: 0.9em;
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
 }
+
+.aside { margin-top: 1.4rem; padding-top: 1rem; border-top: 1px solid var(--line); }
+.aside .linkish { color: var(--muted); }
+.aside .linkish:hover { color: var(--text); }

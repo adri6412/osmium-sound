@@ -49,6 +49,9 @@
 
     <p class="lead" id="releaseError" hidden></p>
     <button class="linkish" id="useLocal" data-i18n="welcome.useLocal"></button>
+    <p class="aside">
+      <button class="linkish" id="restoreStick" data-i18n="welcome.restore"></button>
+    </p>
   </section>
 
   <!-- 2 ── drive selection ─────────────────────────────────────────────── -->
@@ -64,11 +67,11 @@
 
   <!-- 3 ── confirm ─────────────────────────────────────────────────────── -->
   <section class="screen" id="screenConfirm">
-    <h1 data-i18n="confirm.title"></h1>
+    <h1 id="confirmTitle" data-i18n="confirm.title"></h1>
     <div class="danger-box">
-      <p><strong data-i18n="confirm.warnTitle"></strong></p>
+      <p><strong id="confirmWarnTitle" data-i18n="confirm.warnTitle"></strong></p>
       <p id="confirmTarget"></p>
-      <p data-i18n="confirm.warnBody"></p>
+      <p id="confirmWarnBody" data-i18n="confirm.warnBody"></p>
       <label class="check" id="oversizeWrap" hidden>
         <input type="checkbox" id="oversizeAck">
         <span data-i18n="confirm.oversize"></span>
@@ -138,7 +141,14 @@
     <button class="linkish" id="anotherStick" data-i18n="finish.another"></button>
   </section>
 
-  <!-- 8 ── error ───────────────────────────────────────────────────────── -->
+  <!-- 8 ── stick restored ─────────────────────────────────────────────── -->
+  <section class="screen" id="screenRestored">
+    <div class="result-ico">✅</div>
+    <h1 data-i18n="restored.title"></h1>
+    <p class="lead" data-i18n="restored.lead"></p>
+  </section>
+
+  <!-- 9 ── error ───────────────────────────────────────────────────────── -->
   <section class="screen" id="screenError">
     <div class="result-ico">⚠️</div>
     <h1 data-i18n="error.title"></h1>

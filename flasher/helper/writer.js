@@ -15,8 +15,14 @@
  * a crash.
  *
  * Usage:
- *   writer.js --approot <dir> --device <path> --image <file>
- *             --progress <file> [--expect-size <bytes>] [--no-verify]
+ *   writer.js --approot <dir> --device <path> --progress <file>
+ *             --image <file> [--expect-size <bytes>] [--no-verify]
+ *             --mode restore [--label NAME]
+ *
+ * Two modes. `write` (the default) puts an installer image on the stick.
+ * `restore` puts the stick back to how it left the factory: one empty FAT32
+ * partition spanning the whole device, which is what a stick looks like before
+ * an image with its own partition layout is written over it.
  */
 
 const fs = require('fs');
@@ -33,6 +39,8 @@ const imagePath = arg('image');
 const progressPath = arg('progress');
 const expectSize = Number(arg('expect-size', '0'));
 const verify = !process.argv.includes('--no-verify');
+const mode = arg('mode', 'write');
+const label = arg('label', 'OSMIUM');
 
 // ── progress channel ───────────────────────────────────────────────────────
 // Opened once and appended to; the GUI only ever parses whole lines, so a
@@ -77,16 +85,18 @@ function loadDep(name) {
 
 async function main() {
   if (!devicePath) die('EARGS', 'missing --device');
-  if (!imagePath) die('EARGS', 'missing --image');
 
-  let stat;
-  try {
-    stat = fs.statSync(imagePath);
-  } catch (_) {
-    die('ENOIMAGE', 'image file not found: ' + imagePath);
-  }
-  if (expectSize && stat.size !== expectSize) {
-    die('ESIZE', 'image size changed under us: expected ' + expectSize + ', found ' + stat.size);
+  let stat = null;
+  if (mode === 'write') {
+    if (!imagePath) die('EARGS', 'missing --image');
+    try {
+      stat = fs.statSync(imagePath);
+    } catch (_) {
+      die('ENOIMAGE', 'image file not found: ' + imagePath);
+    }
+    if (expectSize && stat.size !== expectSize) {
+      die('ESIZE', 'image size changed under us: expected ' + expectSize + ', found ' + stat.size);
+    }
   }
 
   // Electron's V8 is built with pointer compression, which forbids external
@@ -121,7 +131,7 @@ async function main() {
   if (!drive) die('EGONE', 'the selected drive is no longer connected');
   if (drive.isSystem) die('ESYSTEM', 'refusing to write to a system drive');
   if (drive.isReadOnly) die('EREADONLY', 'the selected drive is write-protected');
-  if (drive.size && drive.size < stat.size) {
+  if (stat && drive.size && drive.size < stat.size) {
     die('ETOOSMALL', 'the drive is smaller than the image');
   }
 
@@ -174,6 +184,55 @@ async function main() {
   }
 
   emit({ type: 'done', bytesWritten: result ? result.bytesWritten : stat.size });
+  if (progressFd !== null) {
+    try { fs.closeSync(progressFd); } catch (_) { /* ignore */ }
+  }
+  process.exit(0);
+}
+
+/**
+ * Rebuilds the stick as a single empty FAT32 partition.
+ *
+ * Goes through etcher-sdk's BlockDevice rather than opening the device
+ * directly, so it inherits the platform handling the image path already relies
+ * on: unmounting on Linux and macOS, `diskpart clean` and volume locking on
+ * Windows.
+ */
+async function restore(sdk, drive) {
+  const fat32 = require(path.join(__dirname, 'fat32.js'));
+
+  if (!drive.size) die('ENOSIZE', 'the drive reports no size');
+  const geometry = fat32.computeGeometry(Math.floor(drive.size / fat32.SECTOR));
+
+  const device = new sdk.sourceDestination.BlockDevice({
+    drive,
+    unmountOnSuccess: true,
+    write: true,
+    direct: false,          // see the note about Electron and aligned buffers
+  });
+
+  await device.open();
+  try {
+    const writeAt = async (buffer, offset) => {
+      await device.write(buffer, 0, buffer.length, offset);
+    };
+    await fat32.writeEmptyVolume(writeAt, geometry, {
+      label,
+      // Volume serial numbers are conventionally derived from the clock; there
+      // is nothing to be gained from it being meaningful.
+      volumeId: (Date.now() & 0xffffffff) >>> 0,
+      onProgress: ({ done, total }) => emit({
+        type: 'progress', stage: 'formatting', position: done, size: total,
+        percentage: total ? (done / total) * 100 : 0,
+      }),
+    });
+  } catch (err) {
+    die('EFORMAT', err && err.message ? err.message : String(err));
+  } finally {
+    try { await device.close(); } catch (_) { /* ignore */ }
+  }
+
+  emit({ type: 'done', formatted: true, label });
   if (progressFd !== null) {
     try { fs.closeSync(progressFd); } catch (_) { /* ignore */ }
   }

@@ -94,13 +94,18 @@ class ProgressTail {
 /**
  * @param {object}   opts
  * @param {string}   opts.devicePath  drivelist `device` of the target stick
- * @param {string}   opts.imagePath   verified image on disk
- * @param {number}   opts.expectSize  size the GUI verified, re-checked elevated
- * @param {boolean}  opts.verify      read back and compare after writing
+ * @param {string}   [opts.imagePath] verified image on disk (write mode only)
+ * @param {number}   [opts.expectSize] size the GUI verified, re-checked elevated
+ * @param {boolean}  [opts.verify]    read back and compare after writing
+ * @param {string}   [opts.mode]      'write' (default) or 'restore'
+ * @param {string}   [opts.label]     volume label, restore mode only
  * @param {function} opts.onEvent     receives each helper event
  * @returns {Promise<{bytesWritten:number}>}
  */
-async function writeElevated({ devicePath, imagePath, expectSize, verify = true, onEvent }) {
+async function writeElevated({
+  devicePath, imagePath, expectSize, verify = true,
+  mode = 'write', label = 'OSMIUM', onEvent,
+}) {
   const appRoot = path.join(__dirname, '..');
   const helper = path.join(appRoot, 'helper', 'writer.js');
 
@@ -119,11 +124,15 @@ async function writeElevated({ devicePath, imagePath, expectSize, verify = true,
     quote(helperPath),
     '--approot', quote(appRoot),
     '--device', quote(devicePath),
-    '--image', quote(imagePath),
     '--progress', quote(progressFile),
-    '--expect-size', String(expectSize || 0),
+    '--mode', quote(mode),
   ];
-  if (!verify) argv.push('--no-verify');
+  if (mode === 'restore') {
+    argv.push('--label', quote(label));
+  } else {
+    argv.push('--image', quote(imagePath), '--expect-size', String(expectSize || 0));
+    if (!verify) argv.push('--no-verify');
+  }
 
   const bare = argv.join(' ');
   const command = process.platform === 'win32' ? bare : `ELECTRON_RUN_AS_NODE=1 ${bare}`;
