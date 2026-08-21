@@ -263,10 +263,11 @@ def _client_ts_or_now(value):
 def api_snapshot():
     body = request.get_json(silent=True) or {}
     g.db.execute(
-        'INSERT INTO snapshots (device_id, ts, hostname, os_version, cpu_model, cpu_cores, gpu_model, '
+        'INSERT INTO snapshots (device_id, ts, hostname, os_version, debian_version, cpu_model, cpu_cores, gpu_model, '
         'ram_total_mb, ram_used_mb, disk_total_gb, disk_used_gb, cpu_percent, disk_percent, temp_c, '
-        'gpu_percent, connection_type, local_ip) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-        (g.device['id'], _client_ts_or_now(body.get('ts')), body.get('hostname'), body.get('os_version'), body.get('cpu_model'),
+        'gpu_percent, connection_type, local_ip) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        (g.device['id'], _client_ts_or_now(body.get('ts')), body.get('hostname'), body.get('os_version'),
+         body.get('debian_version'), body.get('cpu_model'),
          body.get('cpu_cores'), body.get('gpu_model'), body.get('ram_total_mb'), body.get('ram_used_mb'),
          body.get('disk_total_gb'), body.get('disk_used_gb'), body.get('cpu_percent'),
          body.get('disk_percent'), body.get('temp_c'), body.get('gpu_percent'),
@@ -378,7 +379,7 @@ def logout():
 def devices():
     db = get_db()
     rows = db.execute('''
-        SELECT d.*, s.hostname, s.os_version, s.cpu_model, s.gpu_model, s.ram_total_mb, s.disk_total_gb,
+        SELECT d.*, s.hostname, s.os_version, s.debian_version, s.cpu_model, s.gpu_model, s.ram_total_mb, s.disk_total_gb,
                s.cpu_percent, s.disk_percent, s.connection_type
         FROM devices d
         LEFT JOIN snapshots s ON s.id = (

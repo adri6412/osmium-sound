@@ -40,6 +40,7 @@
     <div><div class="stat-label">RAM</div><div class="stat-value">{{ last.ram_total_mb }} MB</div></div>
     <div><div class="stat-label">Disco</div><div class="stat-value">{{ last.disk_total_gb }} GB</div></div>
     <div><div class="stat-label">Versione</div><div class="stat-value">{{ last.os_version or '—' }}</div></div>
+    <div><div class="stat-label">Sistema operativo</div><div class="stat-value">{{ last.debian_version or '—' }}</div></div>
     <div><div class="stat-label">Connessione</div><div class="stat-value">{{ last.connection_type or '—' }}</div>
          <div class="muted">{{ last.local_ip or '' }}</div></div>
   </div>

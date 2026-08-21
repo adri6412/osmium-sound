@@ -29,7 +29,7 @@
   <thead>
     <tr>
       <th>Macchina</th><th>Stato</th><th>CPU</th><th>RAM</th><th>Disco</th>
-      <th>Connessione</th><th>Versione</th><th>Ultimo contatto</th><th></th>
+      <th>Connessione</th><th>Versione</th><th>Debian</th><th>Ultimo contatto</th><th></th>
     </tr>
   </thead>
   <tbody>
@@ -52,6 +52,7 @@
           {% if d.disk_percent is not none %}<span class="muted">di {{ d.disk_total_gb }} GB</span>{% endif %}</td>
       <td>{{ d.connection_type or '—' }}</td>
       <td>{{ d.os_version or '—' }}</td>
+      <td class="muted">{{ d.debian_version or '—' }}</td>
       <td class="muted">{{ d.last_seen_at or 'mai' }}</td>
       <td onclick="event.stopPropagation()">
         <form method="post" action="{{ url_for('device_delete', device_id=d.id) }}"

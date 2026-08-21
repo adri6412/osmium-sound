@@ -389,6 +389,32 @@ def read_os_version():
         return None
 
 
+def read_debian_version():
+    """The Debian release the appliance is actually running, from
+    /etc/os-release (e.g. "Debian GNU/Linux 13 (trixie)"). Distinct from
+    read_os_version() above, which is the HiFi Player build number: the two
+    move independently, and a base-OS jump rolling unevenly across the fleet
+    is exactly what this is for."""
+    values = {}
+    try:
+        with open('/etc/os-release') as f:
+            for line in f:
+                if '=' not in line:
+                    continue
+                key, value = line.split('=', 1)
+                values[key.strip()] = value.strip().strip('"')
+    except Exception:
+        return None
+    pretty = values.get('PRETTY_NAME')
+    if pretty:
+        return pretty
+    name = values.get('NAME')
+    version = values.get('VERSION') or values.get('VERSION_ID')
+    if name and version:
+        return f'{name} {version}'
+    return name or version or None
+
+
 def system_snapshot():
     vm = psutil.virtual_memory() if psutil else None
     du = shutil.disk_usage('/')
@@ -397,6 +423,7 @@ def system_snapshot():
     return {
         'hostname': socket.gethostname(),
         'os_version': read_os_version(),
+        'debian_version': read_debian_version(),
         'cpu_model': cpu_model(),
         'cpu_cores': os.cpu_count(),
         'gpu_model': gpu_model(),

@@ -49,6 +49,7 @@ CREATE TABLE IF NOT EXISTS snapshots (
     ts TEXT NOT NULL,
     hostname TEXT,
     os_version TEXT,
+    debian_version TEXT,
     cpu_model TEXT,
     cpu_cores INTEGER,
     gpu_model TEXT,
@@ -125,6 +126,7 @@ def init_db():
     try:
         conn.executescript(SCHEMA)
         _ensure_column(conn, 'snapshots', 'gpu_percent', 'REAL')
+        _ensure_column(conn, 'snapshots', 'debian_version', 'TEXT')
         _ensure_column(conn, 'devices', 'label_is_custom', 'INTEGER NOT NULL DEFAULT 0')
         row = conn.execute('SELECT COUNT(*) c FROM fleet_config').fetchone()
         if row['c'] == 0:
