@@ -46,7 +46,7 @@ jobs:
           - os: macos-14
             label: mac-arm64
             build: npm run dist:mac
-          - os: macos-13
+          - os: macos-15
             label: mac-x64
             build: npm run dist:mac
 
@@ -83,6 +83,20 @@ jobs:
           # for one and fail the build rather than ad-hoc signing.
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
 
+      # Linux ships as one self-extracting executable rather than the raw
+      # tarball. Not an AppImage: that is mounted over FUSE, which denies access
+      # to root, so pkexec could never reach the elevated helper inside it.
+      - name: Wrap Linux build into a single executable
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          set -eu
+          VERSION="$(node -p "require('./package.json').version")"
+          TARBALL="dist/Osmium-Flasher-${VERSION}-linux-x86_64.tar.gz"
+          ./build/make-selfextract.sh "$TARBALL" "$VERSION" \
+            "dist/Osmium-Flasher-${VERSION}-linux-x86_64.run"
+          rm -f "$TARBALL"
+          ls -lh dist/
+
       - name: Upload
         uses: actions/upload-artifact@v4
         with:
@@ -90,6 +104,6 @@ jobs:
           path: |
             flasher/dist/*.exe
             flasher/dist/*.dmg
-            flasher/dist/*.tar.gz
+            flasher/dist/*.run
           if-no-files-found: error
           retention-days: 14
