@@ -364,6 +364,60 @@
       display: inline-flex; align-items: baseline; gap: 6px;
     }
     .iso-badge small { font-size: 0.78em; font-weight: 600; opacity: 0.8; }
+    /* ── Osmium Flasher download block ─────────────────────────────────── */
+    .flasher-block {
+      margin: 2rem auto 0;
+      max-width: 720px;
+      padding: 1.4rem 1.5rem;
+      border: 1px solid rgba(216, 163, 90, 0.32);
+      border-radius: 12px;
+      background: rgba(216, 163, 90, 0.05);
+      text-align: left;
+    }
+    .flasher-block h3 { margin: 0 0 0.4rem; font-size: 1.05rem; }
+    .flasher-block > p { margin: 0 0 1.1rem; opacity: 0.85; font-size: 0.92rem; }
+
+    .dl-picker {
+      display: flex; flex-wrap: wrap; align-items: flex-end; gap: 0.8rem;
+      margin-bottom: 0.9rem;
+    }
+    .dl-field { display: flex; flex-direction: column; gap: 0.3rem; }
+    .dl-field label { font-size: 0.78rem; opacity: 0.7; }
+    .dl-field select {
+      appearance: none;
+      padding: 0.55rem 2rem 0.55rem 0.8rem;
+      border-radius: 8px;
+      border: 1px solid rgba(255, 255, 255, 0.18);
+      background-color: rgba(0, 0, 0, 0.35);
+      /* Inline chevron: the CSP forbids remote assets, and a data: URI keeps
+         the control from falling back to the platform's default look. */
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath fill='%23d8a35a' d='M1 1l5 5 5-5'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 0.7rem center;
+      color: inherit; font: inherit; font-size: 0.9rem; cursor: pointer;
+    }
+    .dl-field select:focus { outline: 2px solid rgba(216, 163, 90, 0.6); outline-offset: 1px; }
+    /* Native dropdown lists are drawn by the OS, which does not inherit the
+       page's dark palette on every platform. */
+    .dl-field select option { background: #191c1f; color: #e8eaec; }
+
+    /* Same gate as the ISO button: nothing downloads until the privacy notice
+       is accepted, because the flasher installs a beta build too. */
+    .flasher-block .is-placeholder { opacity: 0.45; cursor: not-allowed; }
+
+    .flasher-note { margin-top: 0.45rem; font-size: 0.85rem; }
+    .flasher-note summary { cursor: pointer; opacity: 0.8; }
+    .flasher-note summary:hover { opacity: 1; }
+    .flasher-note p { margin: 0.5rem 0 0 1.1rem; opacity: 0.8; line-height: 1.6; }
+    .flasher-note code {
+      background: rgba(255, 255, 255, 0.08); padding: 0.1em 0.35em;
+      border-radius: 4px; font-size: 0.92em;
+    }
+
+    @media (max-width: 640px) {
+      .dl-picker { flex-direction: column; align-items: stretch; }
+      .dl-picker .btn-primary { justify-content: center; }
+    }
     .quickstart {
       display: grid; grid-template-columns: repeat(3, 1fr);
       gap: 1.1rem; max-width: 860px; margin: 2.75rem auto 0;
@@ -657,6 +711,39 @@
         <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0 0 24 12c0-6.63-5.37-12-12-12z"/></svg>
         <span data-en="All dev releases" data-it="Tutte le release dev">All dev releases</span>
       </a>
+    </div>
+
+
+    <div class="flasher-block" data-flasher-version="1.0.0">
+      <h3 data-en="Or let the app do it for you" data-it="Oppure lascia fare all&#x27;app">Or let the app do it for you</h3>
+      <p data-en="&lt;strong&gt;Osmium Flasher&lt;/strong&gt; downloads the image itself, checks its signature and writes the stick for you, then walks you through booting the mini PC and running the installer on it. No other tool, and no chance of picking the wrong disk — your system drive is never even listed. Pick the computer you will prepare the stick on, not the mini PC." data-it="&lt;strong&gt;Osmium Flasher&lt;/strong&gt; scarica l&#x27;immagine da solo, ne verifica la firma e scrive la chiavetta al posto tuo, poi ti guida nell&#x27;avvio del mini PC e nell&#x27;installer che ci gira sopra. Nessun altro programma e nessun rischio di sbagliare disco: quello di sistema non viene nemmeno elencato. Scegli il computer con cui preparerai la chiavetta, non il mini PC."><strong>Osmium Flasher</strong> downloads the image itself, checks its signature and writes the stick for you, then walks you through booting the mini PC and running the installer on it. No other tool, and no chance of picking the wrong disk — your system drive is never even listed. Pick the computer you will prepare the stick on, not the mini PC.</p>
+      <div class="dl-picker">
+        <div class="dl-field">
+          <label for="flasherOs" data-en="Operating system" data-it="Sistema operativo">Operating system</label>
+          <select id="flasherOs">
+            <option value="win">Windows</option>
+            <option value="mac-arm">macOS (Apple Silicon)</option>
+            <option value="mac-intel">macOS (Intel)</option>
+            <option value="linux">Linux</option>
+          </select>
+        </div>
+        <a class="btn-primary is-placeholder is-gated" id="flasherDownloadBtn" aria-disabled="true">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          <span data-en="Download Osmium Flasher" data-it="Scarica Osmium Flasher">Download Osmium Flasher</span>
+        </a>
+      </div>
+      <details class="flasher-note" data-osnote="win" hidden>
+        <summary data-en="Windows — “unknown publisher”" data-it="Windows — “editore sconosciuto”">Windows — “unknown publisher”</summary>
+        <p data-en="Osmium Flasher is not code-signed, so SmartScreen stops it the first time. Click &lt;strong&gt;More info&lt;/strong&gt;, then &lt;strong&gt;Run anyway&lt;/strong&gt;. Windows will also ask for administrator rights: writing to a raw device needs them." data-it="Osmium Flasher non è firmato digitalmente, quindi la prima volta SmartScreen lo blocca. Clicca su &lt;strong&gt;Ulteriori informazioni&lt;/strong&gt; e poi su &lt;strong&gt;Esegui comunque&lt;/strong&gt;. Windows chiederà anche i permessi di amministratore: scrivere direttamente su un dispositivo li richiede.">Osmium Flasher is not code-signed, so SmartScreen stops it the first time. Click <strong>More info</strong>, then <strong>Run anyway</strong>. Windows will also ask for administrator rights: writing to a raw device needs them.</p>
+      </details>
+      <details class="flasher-note" data-osnote="mac" hidden>
+        <summary data-en="macOS — Gatekeeper" data-it="macOS — Gatekeeper">macOS — Gatekeeper</summary>
+        <p data-en="The app is not notarized. Open it once, let macOS refuse, then go to &lt;strong&gt;System Settings → Privacy &amp;amp; Security&lt;/strong&gt; and press &lt;strong&gt;Open Anyway&lt;/strong&gt;. If that button is missing, run &lt;code&gt;xattr -dr com.apple.quarantine &quot;/Applications/Osmium Flasher.app&quot;&lt;/code&gt; in Terminal." data-it="L&#x27;app non è notarizzata. Aprila una prima volta, lascia che macOS la rifiuti, poi vai in &lt;strong&gt;Impostazioni di Sistema → Privacy e sicurezza&lt;/strong&gt; e premi &lt;strong&gt;Apri comunque&lt;/strong&gt;. Se quel pulsante non compare, esegui &lt;code&gt;xattr -dr com.apple.quarantine &quot;/Applications/Osmium Flasher.app&quot;&lt;/code&gt; nel Terminale.">The app is not notarized. Open it once, let macOS refuse, then go to <strong>System Settings → Privacy &amp; Security</strong> and press <strong>Open Anyway</strong>. If that button is missing, run <code>xattr -dr com.apple.quarantine "/Applications/Osmium Flasher.app"</code> in Terminal.</p>
+      </details>
+      <details class="flasher-note" data-osnote="linux" hidden>
+        <summary data-en="Linux — one executable file" data-it="Linux — un solo file eseguibile">Linux — one executable file</summary>
+        <p data-en="Make it executable with &lt;code&gt;chmod +x Osmium-Flasher-*.run&lt;/code&gt; and run it. No warning to dismiss; you will get a polkit password prompt when the write starts. It is a self-extracting executable rather than an AppImage on purpose — an AppImage is mounted so that root cannot read it, which is exactly what the elevated write needs to do." data-it="Rendilo eseguibile con &lt;code&gt;chmod +x Osmium-Flasher-*.run&lt;/code&gt; e avvialo. Nessun avviso da chiudere; al momento della scrittura comparirà la richiesta password di polkit. È un eseguibile auto-estraente e non un AppImage di proposito: un AppImage viene montato in modo che root non possa leggerlo, ed è proprio quello che serve alla scrittura privilegiata.">Make it executable with <code>chmod +x Osmium-Flasher-*.run</code> and run it. No warning to dismiss; you will get a polkit password prompt when the write starts. It is a self-extracting executable rather than an AppImage on purpose — an AppImage is mounted so that root cannot read it, which is exactly what the elevated write needs to do.</p>
+      </details>
     </div>
 
     <div class="quickstart">
@@ -1027,22 +1114,83 @@
     if (e.key === 'ArrowRight') goTo(current + 1);
   });
 
-  // Gate the ISO download behind the privacy-notice checkbox
+  // Gate every beta download behind the privacy-notice checkbox. The ISO and
+  // the flasher both end up installing a beta build, so one consent covers both;
+  // `.is-gated` marks the flasher button, the ISO button predates it.
   const consentBox = document.getElementById('betaAgreeBox');
-  const isoBtn = document.getElementById('isoDownloadBtn');
-  if (consentBox && isoBtn) {
-    consentBox.addEventListener('change', () => {
-      if (consentBox.checked) {
-        isoBtn.setAttribute('href', isoBtn.dataset.href);
-        isoBtn.classList.remove('is-placeholder');
-        isoBtn.removeAttribute('aria-disabled');
+  const flasherBlock = document.querySelector('.flasher-block');
+  const osSelect = document.getElementById('flasherOs');
+  const flasherBtn = document.getElementById('flasherDownloadBtn');
+
+  // One version in one place: the four filenames differ only by this suffix.
+  const FLASHER_SUFFIX = {
+    'win': 'win-x64.exe',
+    'mac-arm': 'mac-arm64.dmg',
+    'mac-intel': 'mac-x64.dmg',
+    'linux': 'linux-x86_64.run',
+  };
+
+  function gatedButtons() {
+    return [
+      document.getElementById('isoDownloadBtn'),
+      ...document.querySelectorAll('.is-gated'),
+    ].filter(Boolean);
+  }
+
+  function applyGate() {
+    const on = consentBox && consentBox.checked;
+    gatedButtons().forEach(btn => {
+      if (on && btn.dataset.href) {
+        btn.setAttribute('href', btn.dataset.href);
+        btn.classList.remove('is-placeholder');
+        btn.removeAttribute('aria-disabled');
       } else {
-        isoBtn.removeAttribute('href');
-        isoBtn.classList.add('is-placeholder');
-        isoBtn.setAttribute('aria-disabled', 'true');
+        btn.removeAttribute('href');
+        btn.classList.add('is-placeholder');
+        btn.setAttribute('aria-disabled', 'true');
       }
     });
   }
+
+  // Keeps the link and the visible note in step with the dropdown. Only the
+  // selected platform's note is shown: three open at once is just noise.
+  function syncFlasher() {
+    if (!flasherBtn || !osSelect || !flasherBlock) return;
+    const version = flasherBlock.dataset.flasherVersion;
+    const suffix = FLASHER_SUFFIX[osSelect.value];
+    if (suffix) {
+      flasherBtn.dataset.href =
+        'https://file.osmiumsound.it/Osmium-Flasher-' + version + '-' + suffix;
+    }
+    const wanted = osSelect.value.indexOf('mac') === 0 ? 'mac' : osSelect.value;
+    document.querySelectorAll('.flasher-note').forEach(note => {
+      note.hidden = note.dataset.osnote !== wanted;
+    });
+    applyGate();
+  }
+
+  if (consentBox) consentBox.addEventListener('change', applyGate);
+  if (osSelect) osSelect.addEventListener('change', syncFlasher);
+
+  // Preselect the visitor's own platform. Every option stays available: people
+  // do download for a machine other than the one they are sitting at.
+  if (osSelect) {
+    const hay = ((navigator.userAgentData && navigator.userAgentData.platform)
+      || navigator.platform || '') + ' ' + (navigator.userAgent || '');
+    const low = hay.toLowerCase();
+    let pick = null;
+    if (low.indexOf('win') !== -1) pick = 'win';
+    else if (low.indexOf('mac') !== -1) {
+      // Apple Silicon Macs still report an Intel user-agent string, so the core
+      // count is the only hint available in-page. A wrong guess is harmless:
+      // both macOS entries are one click away in the list.
+      pick = (navigator.hardwareConcurrency >= 8) ? 'mac-arm' : 'mac-intel';
+    }
+    else if (low.indexOf('linux') !== -1 && low.indexOf('android') === -1) pick = 'linux';
+    if (pick) osSelect.value = pick;
+  }
+
+  syncFlasher();
 
   // Auto-advance
   function startAuto() { autoTimer = setInterval(() => goTo(current + 1), 4800); }
