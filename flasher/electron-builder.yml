@@ -64,8 +64,11 @@ mac:
     - dmg
   icon: build/icon.png
   category: public.app-category.utilities
-  # `identity: null` still ad-hoc signs the bundle, which arm64 requires in
-  # order to launch at all. It is NOT notarized — Gatekeeper will complain.
-  identity: null
+  # "-" is an ad-hoc signature; null would skip signing altogether, and an
+  # entirely unsigned arm64 binary is refused by the kernel rather than merely
+  # warned about. Ad-hoc is not notarization: a downloaded copy still carries
+  # the quarantine flag, which macOS reports as "damaged" -- see the macOS note
+  # on the beta page for clearing it.
+  identity: "-"
   hardenedRuntime: false
   artifactName: Osmium-Flasher-${version}-mac-${arch}.${ext}

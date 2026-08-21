@@ -151,3 +151,13 @@ test('every platform points at the icon, and the window sets its own', () => {
   assert.match(main, /icon: path\.join\(__dirname, '\.\.', 'assets', 'icon\.png'\)/,
     'the BrowserWindow icon is missing — Linux would show a blank window icon');
 });
+
+test('the macOS build is ad-hoc signed, not left unsigned', () => {
+  // electron-builder treats these very differently: '-' is an ad-hoc signature,
+  // null skips signing altogether. An entirely unsigned arm64 bundle is refused
+  // by the kernel outright rather than merely warned about, which is how a
+  // downloaded copy came to report itself as damaged.
+  const yml = fs.readFileSync(path.join(__dirname, '..', 'electron-builder.yml'), 'utf8');
+  assert.match(yml, /^\s+identity: "-"$/m, 'mac.identity must be "-" (ad-hoc)');
+  assert.doesNotMatch(yml, /^\s+identity: null$/m, 'identity: null skips signing entirely');
+});
