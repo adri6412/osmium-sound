@@ -96,7 +96,10 @@ jobs:
           set -eu
           VERSION="$(node -p "require('./package.json').version")"
           TARBALL="dist/Osmium-Flasher-${VERSION}-linux-x86_64.tar.gz"
-          ./build/make-selfextract.sh "$TARBALL" "$VERSION" \
+          # Invoked through sh on purpose: this repo has core.fileMode=false, so
+          # the executable bit does not survive a commit and the script would
+          # otherwise fail with "Permission denied" (exit 126).
+          sh ./build/make-selfextract.sh "$TARBALL" "$VERSION" \
             "dist/Osmium-Flasher-${VERSION}-linux-x86_64.run"
           rm -f "$TARBALL"
           ls -lh dist/

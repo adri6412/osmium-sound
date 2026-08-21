@@ -135,7 +135,23 @@ async function main() {
     die('ETOOSMALL', 'the drive is smaller than the image');
   }
 
-  emit({ type: 'stage', stage: 'starting', device: drive.device, size: drive.size });
+  emit({
+    type: 'stage',
+    stage: mode === 'restore' ? 'formatting' : 'starting',
+    device: drive.device,
+    size: drive.size,
+    direct: !underElectron,
+  });
+
+  if (mode === 'restore') {
+    await restore(sdk, drive);
+    return;
+  }
+  // Anything that is neither mode must stop here. Without this, an unhandled
+  // mode falls through to the image path and fails much later with whatever
+  // the missing arguments happen to break first -- which is exactly how a
+  // restore once ended up reporting a missing image path.
+  if (mode !== 'write') die('EARGS', `unknown mode: ${mode}`);
 
   const source = new sourceDestination.File({ path: imagePath });
   const destination = new sourceDestination.BlockDevice({

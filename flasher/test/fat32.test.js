@@ -128,3 +128,21 @@ test('the written volume matches the on-disk layout FAT32 defines', async () => 
     await fsp.rm(dir, { recursive: true, force: true });
   }
 });
+
+test('the helper dispatches on mode before it needs an image', () => {
+  // A restore carries no --image. When the dispatch to restore() was missing,
+  // the helper fell through to the image path and died on `new File({path:
+  // undefined})` — reported as a write failure, pointing nowhere near the cause.
+  const src = fs.readFileSync(path.join(__dirname, '..', 'helper', 'writer.js'), 'utf8');
+
+  const dispatch = src.search(/if \(mode === 'restore'\)/);
+  const usesImage = src.search(/new sourceDestination\.File\(/);
+  assert.ok(dispatch !== -1, 'the restore branch is missing');
+  assert.ok(usesImage !== -1, 'the image source is missing');
+  assert.ok(dispatch < usesImage,
+    'restore must be dispatched before the image path is entered');
+
+  assert.match(src, /async function restore\(/, 'restore() itself is missing');
+  assert.match(src, /if \(mode !== 'write'\)/,
+    'an unhandled mode must be rejected rather than falling through');
+});
