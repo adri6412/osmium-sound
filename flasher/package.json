@@ -24,6 +24,7 @@
     "electron-builder": "^26.15.3"
   },
   "overrides": {
-    "usb": "^3.0.1"
+    "usb": "^3.0.1",
+    "follow-redirects": "^1.16.0"
   }
 }

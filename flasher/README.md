@@ -82,6 +82,33 @@ tarball into one executable that unpacks into `~/.cache/osmium-flasher/<version>
 on first run and launches from there — a single file to download, but real files
 on disk for the elevated helper to reach.
 
+## Dependencies, and the noise `npm ci` prints
+
+There are two runtime dependencies: `@vscode/sudo-prompt` and `etcher-sdk`.
+Every deprecation warning you see on install comes from the second one's tree
+(`inflight`, `rimraf`, old `glob`, `partitioninfo`, `file-disk`, `blockmap`,
+`boolean`, `prebuild-install`) — none is ours to bump, and etcher-sdk is what
+buys us Windows volume locking and safe drive enumeration.
+
+`npm audit` reports two moderate advisories, both `file-type` (an infinite loop
+on malformed ASF input). They cannot be overridden away: etcher-sdk requires
+`file-type ^16` with CommonJS `require`, and the fixed line is ESM-only from v17
+on, so forcing it breaks the import. What limits the exposure is that the image
+is Ed25519-verified *before* etcher-sdk is handed anything. The one path where
+the input is not verified is "use an image already on this computer", where the
+worst case is the app hanging on a file the user chose themselves.
+
+Two advisories that did apply were removed with an override:
+`follow-redirects` (header leak across redirects) is pinned to `^1.16.0`. Note
+it was never reachable either — downloads go through Node's `fetch` in
+`src/image.js`, and etcher-sdk only ever sees a local `File`, never its HTTP or
+S3 sources. The `usb` override is a separate matter; see the native-modules
+notes above.
+
+`npm ci` also warns that it is "skipping integrity check for git dependency"
+for `unbzip2-stream`. That one is pinned to commit `4a54f56a` in the lockfile,
+so the content is fixed regardless of what the branch does.
+
 ## Development
 
 ```sh
