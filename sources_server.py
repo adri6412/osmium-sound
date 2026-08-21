@@ -2561,24 +2561,26 @@ def _restore_apply_side_effects(restored):
     if "/etc/timezone" in restored:
         # /etc/timezone was restored as a plain file, but that's just the IANA
         # name -- /etc/localtime (the symlink libc/Chromium/timedatectl actually
-        # resolve wall-clock time against) is a separate artifact normally kept
-        # in sync by `timedatectl set-timezone`, which nothing in a restore
-        # calls. Left alone, the restored name shows up correctly in Settings
-        # while every clock on the box keeps running on whatever zone the image
-        # shipped with (UTC) until the file and symlink are re-synced here.
+        # resolve wall-clock time against) is a separate artifact that nothing
+        # in a restore touches. Left alone, the restored name shows up in
+        # Settings while every clock on the box keeps running on whatever zone
+        # the image shipped with (UTC).
+        #
+        # Handed to api_server.py's /timezone rather than re-implemented here:
+        # applying a zone means validating the name, writing the symlink,
+        # keeping the two files in sync and restarting the kiosk so Chromium
+        # re-reads ICU, and having two copies of that is how the pair drifted
+        # in the first place. Same proxy pattern as the hostname re-apply above.
         try:
             with open("/etc/timezone") as f:
                 tz = f.read().strip()
-            real = os.path.normpath(os.path.join("/usr/share/zoneinfo", tz))
-            if tz and real.startswith("/usr/share/zoneinfo/") and os.path.isfile(real):
-                _run(["timedatectl", "set-timezone", tz], timeout=15)
-                # Same reason api_server.py's set_timezone() does this on the
-                # live-set path: the kiosk's Electron/Chromium process reads
-                # its timezone (ICU) once at startup and never again, so the
-                # on-screen clock would keep showing the pre-restore offset
-                # until the next reboot. pkill is a no-op on a headless unit.
-                _run(["pkill", "-x", "hifi-media-player"], timeout=10)
-                notes.append(_ht('restore.timezoneApplied', _hlang(), tz=tz))
+            if tz:
+                body, status = _proxy_to_api_server(
+                    "/timezone", method="POST", body={"timezone": tz}, timeout=30)
+                if status == 200 and body.get("success"):
+                    notes.append(_ht('restore.timezoneApplied', _hlang(), tz=tz))
+                else:
+                    print(f"[sources] restore side-effect (timezone) rejected: {body}")
         except Exception as e:
             print(f"[sources] restore side-effect (timezone) failed: {e}")
     if any(p in restored for p in ("/etc/default/squeezelite", "/var/lib/hifi-player/dsp-target")):

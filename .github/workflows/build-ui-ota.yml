@@ -163,13 +163,14 @@ jobs:
           sha256sum "$TAR" > "${TAR}.sha256"
           echo "tarball=$TAR" >> "$GITHUB_OUTPUT"
 
-      - name: Test the OTA update sequencer
+      - name: Test the OTA update sequencer + system settings
         # The two-phase sequencer is what keeps a multi-component update from
         # stopping half-way (a restarted hifi-api mid-stage, an interrupted
-        # download, a crash mid-apply). All three suites are hermetic — the
-        # shell ones run each runner against stub updaters in a temp dir, the
-        # Python one redirects every path it touches — so none needs an
-        # appliance.
+        # download, a crash mid-apply); the timezone suite guards the OS state
+        # api_server writes outside its own /etc/hifi-player/ tree. All four
+        # suites are hermetic — the shell ones run each runner against stub
+        # updaters in a temp dir, the Python ones redirect every path they
+        # touch — so none needs an appliance.
         run: |
           set -e
           echo "== stage sequencer (shell) =="
@@ -179,6 +180,8 @@ jobs:
           echo "== update plan (python) =="
           python3 -m pip install --quiet flask flask-cors
           python3 tests/test_update_plan.py
+          echo "== timezone (python) =="
+          python3 tests/test_timezone.py
 
       - name: Stage LMS skin assets into the OS payload
         # apply.d/0048-lms-skin-assets.sh installs these; they are deliberately

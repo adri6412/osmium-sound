@@ -162,12 +162,15 @@ CATEGORIES = {
             # value, the same pattern used for /etc/timezone below.
             ("file", "/etc/hostname"),
             # The standard Debian file (not a custom /etc/hifi-player/ one).
-            # `timedatectl set-timezone` keeps this and the /etc/localtime
-            # symlink in sync when a user actively sets the zone, but a
-            # restore only writes this file back -- it does NOT re-derive
-            # /etc/localtime, so sources_server.py's _restore_apply_side_effects
-            # re-runs `timedatectl set-timezone` on the restored value to keep
-            # them in sync. Keep that in mind if this entry ever moves/renames.
+            # It holds only the IANA name: /etc/localtime, the symlink every
+            # clock on the box actually resolves against, is a separate
+            # artifact (api_server.py's set_timezone writes both, precisely
+            # because systemd's timedated does not maintain this one on
+            # trixie). A restore only writes this file back -- it does NOT
+            # re-derive /etc/localtime, so sources_server.py's
+            # _restore_apply_side_effects re-applies the restored name through
+            # api_server's /timezone to bring the symlink along with it. Keep
+            # that in mind if this entry ever moves/renames.
             ("file", "/etc/timezone"),
             ("file", "/etc/default/squeezelite"),
             ("file", "/etc/camilladsp/config.yml"),

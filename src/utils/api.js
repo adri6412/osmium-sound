@@ -158,7 +158,8 @@ export const systemAPI = {
   getTimezone: () => apiGet('/timezone'),
   // All IANA zone names the installed tzdata knows about: { timezones: [...] }
   getTimezones: () => apiGet('/timezones'),
-  // Change it (live, via timedatectl). Returns { success, timezone, message }
+  // Change it (live: /etc/localtime + /etc/timezone, then the kiosk restarts
+  // so Chromium re-reads ICU). Returns { success, timezone, message }
   setTimezone: (timezone) => apiPost('/timezone', { timezone }),
   // Animated VU meter (expanded now-playing view): { enabled }. No restart —
   // persisted only, so it's reachable remotely on a headless unit.

@@ -2236,22 +2236,99 @@ def set_ui_refresh(mode):
             'message': _t('uiRefresh.updated', _lang())}
 
 # ──────────────────────────────────────────────────────────────────
+#  Kiosk restart. Both session launchers (distro/os-update/files/xsession on
+#  X11, kiosk-wayland-launch on Wayland) run Electron inside a `while true`
+#  loop, so killing the process is all it takes: it comes back ~3s later with
+#  whatever OS state changed underneath it. A headless unit has no such
+#  process and this is a harmless no-op there.
+# ──────────────────────────────────────────────────────────────────
+# `pkill -x` matches the kernel's `comm`, which is capped at 15 characters:
+# "hifi-media-player" is 17, so the obvious pattern matches NOTHING (procps
+# even warns about it) and every caller that used it was silently doing
+# nothing at all. Match the truncated name instead — `-f` is not an option
+# here, it would also match any shell or script with the app name on its
+# command line, including the OTA updater.
+KIOSK_COMM = 'hifi-media-play'  # 'hifi-media-player' truncated to comm's 15 chars
+
+def restart_kiosk_ui(delay=1.5):
+    """Kill the on-screen Electron kiosk; its session loop relaunches it.
+
+    Deferred onto a timer because the caller is usually serving a request that
+    the kiosk itself made (on-device Settings): killing it inline would tear
+    the browser down before Flask ever flushed the response, and the page would
+    come back up reporting the change as failed. Same reason
+    hifi-ui-resolution.sh delays its lightdm restart.
+    """
+    def _kill():
+        try:
+            subprocess.run(['pkill', '-x', KIOSK_COMM], capture_output=True, timeout=10)
+        except Exception:
+            log.exception("restart_kiosk_ui failed")
+    t = threading.Timer(delay, _kill)
+    t.daemon = True
+    t.start()
+
+# ──────────────────────────────────────────────────────────────────
 #  Timezone. The installer asks nothing about it (see distro/README.md) and
 #  the build defaults every fresh image to UTC (0400-enable-services.hook.chroot)
 #  — deterministic, but wrong for anyone who isn't in it, and units built from
 #  old/refurbished hardware can drift further still without a working RTC
 #  battery (systemd-timesyncd is now enabled by default to correct for that,
-#  but it can't fix which zone the clock is displayed in). `timedatectl
-#  set-timezone` is the whole mechanism: it updates /etc/localtime and
-#  /etc/timezone itself and both survive a reboot on their own, so there is no
-#  separate /etc/hifi-player/* marker file to keep in sync here.
+#  but it can't fix which zone the clock is displayed in).
+#
+#  Two files carry the zone and they are NOT equivalent:
+#
+#    /etc/localtime  — the symlink into the zoneinfo tree that glibc, Chromium
+#                      and timedatectl itself actually resolve wall-clock time
+#                      against. This one is the truth.
+#    /etc/timezone   — a Debian-ism holding just the IANA name. systemd's
+#                      timedated does not maintain it upstream, so on a trixie
+#                      unit `timedatectl set-timezone` leaves it on whatever
+#                      the image shipped ("Etc/UTC"). It still matters here
+#                      because the backup profile captures it (hifi_backup.py).
+#
+#  Reading the name back from /etc/timezone was therefore how a zone that HAD
+#  been applied kept reporting UTC to every Settings page on the box. Read the
+#  symlink instead, and write both files on the way in so the two never drift.
 # ──────────────────────────────────────────────────────────────────
 ZONEINFO_DIR = '/usr/share/zoneinfo'
+LOCALTIME_LINK = '/etc/localtime'
+TIMEZONE_FILE = '/etc/timezone'
+
+def _zone_from_localtime():
+    """IANA name behind the /etc/localtime symlink, or None.
+
+    Read with readlink and normalised by hand rather than realpath()'d: the
+    zoneinfo tree is full of symlinks between equivalent zones (Etc/UTC → UTC,
+    Europe/Vatican → Europe/Rome), and following them would hand back a name
+    other than the one the user picked — which the Settings <select> would then
+    fail to match against its own option list.
+    """
+    try:
+        link = os.readlink(LOCALTIME_LINK)
+    except OSError:
+        return None  # missing, or a plain copy of the zone file
+    target = link if os.path.isabs(link) else os.path.join(os.path.dirname(LOCALTIME_LINK), link)
+    target = os.path.normpath(target)
+    prefix = ZONEINFO_DIR + os.sep
+    if not target.startswith(prefix):
+        return None
+    name = target[len(prefix):]
+    # /usr/share/zoneinfo/posix/<zone> is a second copy of the same tree; strip
+    # the prefix so the value matches what list_timezones() offers.
+    if name.startswith('posix/'):
+        name = name[len('posix/'):]
+    return name or None
 
 def get_timezone():
     """Return { timezone }. 'UTC' if it can't be determined."""
+    tz = _zone_from_localtime()
+    if tz:
+        return {'timezone': tz}
+    # No usable symlink (an image that copied the zone file in place, say).
+    # The Debian name file is the only thing left to go on.
     try:
-        with open('/etc/timezone') as f:
+        with open(TIMEZONE_FILE) as f:
             tz = f.read().strip()
             if tz:
                 return {'timezone': tz}
@@ -2262,7 +2339,14 @@ def get_timezone():
 def list_timezones():
     """All IANA zone names the installed tzdata knows about, e.g. 'Europe/Rome'."""
     names = []
-    for dirpath, _dirnames, filenames in os.walk(ZONEINFO_DIR):
+    for dirpath, dirnames, filenames in os.walk(ZONEINFO_DIR):
+        if os.path.relpath(dirpath, ZONEINFO_DIR) == '.':
+            # posix/ is a second, identical copy of the entire tree, and right/
+            # is the leap-second variant — correct only for a clock counting
+            # TAI, so a box set from one displays ~37s off. Neither belongs in
+            # a "pick your city" list (they'd also treble its length);
+            # `timedatectl list-timezones` doesn't offer them either.
+            dirnames[:] = [d for d in dirnames if d not in ('posix', 'right')]
         for name in filenames:
             real = os.path.join(dirpath, name)
             rel = os.path.relpath(real, ZONEINFO_DIR)
@@ -2275,9 +2359,56 @@ def list_timezones():
             names.append(rel.replace(os.sep, '/'))
     return sorted(names)
 
+def _link_localtime(tz):
+    """Point /etc/localtime at `tz` ourselves. True on success.
+
+    Same relative form timedated writes ('../usr/share/zoneinfo/<zone>'), and
+    swapped in with rename(2) so a reader never catches the link missing.
+    """
+    tmp = LOCALTIME_LINK + '.hifi-tmp'
+    try:
+        if os.path.lexists(tmp):
+            os.unlink(tmp)
+        os.symlink(os.path.join('../usr/share/zoneinfo', tz), tmp)
+        os.replace(tmp, LOCALTIME_LINK)
+        return True
+    except Exception:
+        log.exception("set_timezone: could not link %s to %s", LOCALTIME_LINK, tz)
+        try:
+            if os.path.lexists(tmp):
+                os.unlink(tmp)
+        except Exception:
+            pass
+        return False
+
+def _write_etc_timezone(tz):
+    """Keep the Debian name file in step with the symlink (best effort)."""
+    try:
+        current = ''
+        try:
+            with open(TIMEZONE_FILE) as f:
+                current = f.read().strip()
+        except Exception:
+            pass
+        if current == tz:
+            return
+        tmp = TIMEZONE_FILE + '.hifi-tmp'
+        with open(tmp, 'w') as f:
+            f.write(tz + '\n')
+        os.chmod(tmp, 0o644)
+        os.replace(tmp, TIMEZONE_FILE)
+    except Exception:
+        log.exception("set_timezone: could not update %s", TIMEZONE_FILE)
+
 def set_timezone(tz):
-    """Switch the system timezone, live + persisted, via timedatectl."""
+    """Switch the system timezone, live + persisted."""
     tz = (tz or '').strip()
+    # A client holding a name from the posix/ mirror of the tree (it used to
+    # be offered in /timezones) means the plain zone: normalise it, or the
+    # read-back check below would compare 'Europe/Rome' against
+    # 'posix/Europe/Rome' and report a change that did in fact happen as failed.
+    if tz.startswith('posix/'):
+        tz = tz[len('posix/'):]
     # timedatectl itself would refuse a bad name, but validate against
     # zoneinfo directly first: tz flows into a filesystem path below and this
     # is the chokepoint that keeps a "../../etc/passwd"-shaped value from ever
@@ -2290,23 +2421,33 @@ def set_timezone(tz):
         r = subprocess.run(['timedatectl', 'set-timezone', tz],
                            capture_output=True, text=True, timeout=15)
         if r.returncode != 0:
-            log.error("set_timezone failed: %s", (r.stderr or '').strip())
-            return {'success': False, 'timezone': get_timezone()['timezone'],
-                    'code': 'timezone.changeFailed', 'message': _t('timezone.changeFailed', _lang())}
+            log.error("timedatectl set-timezone %s failed: %s", tz, (r.stderr or '').strip())
     except Exception:
-        log.exception("set_timezone failed")
+        log.exception("timedatectl set-timezone failed")
+    # Never take timedatectl's word for it. It is the preferred path (it also
+    # tells timedated, so a later `timedatectl status` agrees with us), but it
+    # needs a live systemd-timedated on the bus to do anything at all, and a
+    # unit where that call fails must still end up in the right zone rather
+    # than silently sitting in UTC. Verify against the symlink, then finish
+    # the job by hand if it didn't happen.
+    if _zone_from_localtime() != tz and not _link_localtime(tz):
         return {'success': False, 'timezone': get_timezone()['timezone'],
                 'code': 'timezone.changeFailed', 'message': _t('timezone.changeFailed', _lang())}
-    # timedatectl updates /etc/localtime live, but the kiosk's Electron/Chromium
-    # process resolves its timezone (ICU) once at startup and never re-reads
-    # it -- the on-screen clock would otherwise keep showing the old offset
-    # until the next reboot. Kill it; the xsession restart loop (distro/os-update/
-    # files/xsession) relaunches it within ~3s with the new zone applied. A
-    # headless unit has no such process, so this is a harmless no-op there.
+    _write_etc_timezone(tz)
+    if get_timezone()['timezone'] != tz:
+        return {'success': False, 'timezone': get_timezone()['timezone'],
+                'code': 'timezone.changeFailed', 'message': _t('timezone.changeFailed', _lang())}
+    # This process cached the old zone the first time it formatted a local
+    # time; without tzset() every timestamp the API renders (log views, backup
+    # generation names) would stay on the old offset until hifi-api restarts.
     try:
-        subprocess.run(['pkill', '-x', 'hifi-media-player'], capture_output=True, timeout=10)
+        time.tzset()
     except Exception:
-        log.exception("set_timezone: kiosk restart failed")
+        pass
+    # And the kiosk's Electron/Chromium process resolves its timezone (ICU)
+    # once at startup and never re-reads it, so the on-screen clock would keep
+    # showing the old offset until the next reboot.
+    restart_kiosk_ui()
     return {'success': True, 'timezone': tz,
             'message': _t('timezone.updated', _lang(), tz=tz)}
 
