@@ -57,10 +57,13 @@ npm start          # run the app
 npm test           # trust chain + UI checks, no display needed
 ```
 
-`npm test` signs its fixtures at run time with `distro/ota-keys/ota-signing-key.pem`
-(gitignored, kept locally), so it also proves the app agrees with what CI's
-`openssl pkeyutl -sign` produces. Without that key the signature tests fail —
-that is expected on a machine that does not hold it.
+`npm test` is hermetic: the trust-chain fixtures are signed with a throwaway
+Ed25519 keypair generated at run time, so the suite is green on CI and on a
+fresh clone alike. One further test signs with the real
+`distro/ota-keys/ota-signing-key.pem` and checks the result against the shipped
+`assets/ota-pubkey.pem` — that is what would catch the two drifting apart, which
+would make the flasher refuse every release. It skips wherever that key is
+absent, which is everywhere except a maintainer's machine.
 
 ### Testing a write without a USB stick
 

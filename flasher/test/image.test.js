@@ -5,10 +5,13 @@
  * speaks Range requests. Covers the cases that decide whether a tampered or
  * truncated image can reach a user's USB stick.
  *
- *   node --test test/
+ *   node --test test/*.test.js
  *
- * The fixtures are signed with the OTA key from distro/ota-keys/ at run time,
- * so this also proves the flasher agrees with what the CI actually produces.
+ * Fixtures are signed with a throwaway Ed25519 keypair generated here, not with
+ * the production OTA key: that key is gitignored and absent on CI runners, and
+ * the logic under test does not care which key it is. The separate
+ * "shipped public key" test below closes that gap on machines that do hold the
+ * real key, and skips where they do not.
  */
 
 const assert = require('node:assert/strict');
@@ -22,9 +25,8 @@ const path = require('node:path');
 
 const image = require('../src/image');
 
-const KEYS = path.join(__dirname, '..', '..', 'distro', 'ota-keys');
-const PRIVATE_KEY = path.join(KEYS, 'ota-signing-key.pem');
-const PUBLIC_KEY = path.join(__dirname, '..', 'assets', 'ota-pubkey.pem');
+const REAL_PRIVATE_KEY = path.join(__dirname, '..', '..', 'distro', 'ota-keys', 'ota-signing-key.pem');
+const SHIPPED_PUBLIC_KEY = path.join(__dirname, '..', 'assets', 'ota-pubkey.pem');
 
 const IMAGE_NAME = 'hifi-player-v9.9.9-test.iso';
 const IMAGE_BYTES = 3 * 1024 * 1024;
@@ -35,6 +37,8 @@ let server;
 let base;
 let payload;
 let digest;
+let signingKey;   // throwaway private key for the fixtures
+let PUBLIC_KEY;   // its public half on disk, standing in for the shipped one
 
 /** Reproduces exactly what `sha256sum file > file.sha256` writes. */
 function sidecarFor(name, hex) {
@@ -42,8 +46,7 @@ function sidecarFor(name, hex) {
 }
 
 function sign(buf) {
-  const key = crypto.createPrivateKey(fs.readFileSync(PRIVATE_KEY));
-  return crypto.sign(null, buf, key);
+  return crypto.sign(null, buf, signingKey);
 }
 
 function manifest(overrides = {}) {
@@ -63,6 +66,11 @@ function manifest(overrides = {}) {
 before(async () => {
   dir = await fsp.mkdtemp(path.join(os.tmpdir(), 'osmium-fixture-'));
   cache = await fsp.mkdtemp(path.join(os.tmpdir(), 'osmium-cache-'));
+
+  const pair = crypto.generateKeyPairSync('ed25519');
+  signingKey = pair.privateKey;
+  PUBLIC_KEY = path.join(dir, 'test-pubkey.pem');
+  await fsp.writeFile(PUBLIC_KEY, pair.publicKey.export({ type: 'spki', format: 'pem' }));
 
   payload = crypto.randomBytes(IMAGE_BYTES);
   digest = crypto.createHash('sha256').update(payload).digest('hex');
@@ -213,4 +221,23 @@ test('discards a corrupt download instead of caching it', async () => {
   assert.equal(fs.existsSync(path.join(badCache, corruptName)), false,
     'a corrupt image must not be left in the cache');
   await fsp.rm(badCache, { recursive: true, force: true });
+});
+
+// Runs only where the production private key is present (a maintainer's
+// machine, never CI). It is the one check that ties this app to the real OTA
+// key: if assets/ota-pubkey.pem ever drifts from the key the workflow signs
+// with, every release would be refused by the flasher, and this catches it.
+test('the shipped public key matches the real OTA signing key', (t) => {
+  if (!fs.existsSync(REAL_PRIVATE_KEY)) {
+    t.skip('production signing key not present on this machine');
+    return;
+  }
+  const sidecar = sidecarFor(IMAGE_NAME, digest);
+  const realKey = crypto.createPrivateKey(fs.readFileSync(REAL_PRIVATE_KEY));
+  const signature = crypto.sign(null, sidecar, realKey);
+  const shipped = crypto.createPublicKey(fs.readFileSync(SHIPPED_PUBLIC_KEY));
+  assert.ok(
+    crypto.verify(null, sidecar, shipped, signature),
+    'assets/ota-pubkey.pem does not correspond to distro/ota-keys/ota-signing-key.pem',
+  );
 });
