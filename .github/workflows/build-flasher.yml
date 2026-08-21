@@ -34,6 +34,12 @@ jobs:
     strategy:
       # One runner per target: native addons are compiled/fetched for the host
       # architecture, so cross-building is not an option here.
+      #
+      # No macOS. The app could fetch and verify the image there, but never write
+      # it: macOS guards raw disk devices with a permission granted by code
+      # signature, and an unsigned app cannot obtain it. electron-builder still
+      # carries the mac configuration and `npm run dist:mac` still works, so the
+      # day the app is notarized this is two lines to restore.
       fail-fast: false
       matrix:
         include:
@@ -43,16 +49,6 @@ jobs:
           - os: windows-latest
             label: win-x64
             build: npm run dist:win
-          - os: macos-14
-            label: mac-arm64
-            build: npm run dist:mac
-          # macos-13 is being retired; macos-15-intel is the replacement and the
-          # last x86_64 image Actions will offer (through August 2027). Plain
-          # `macos-15` is Apple Silicon, so using it here would build arm64
-          # twice and label one of them x64.
-          - os: macos-15-intel
-            label: mac-x64
-            build: npm run dist:mac
 
     runs-on: ${{ matrix.os }}
 
@@ -110,7 +106,6 @@ jobs:
           name: osmium-flasher-${{ matrix.label }}
           path: |
             flasher/dist/*.exe
-            flasher/dist/*.dmg
             flasher/dist/*.run
           if-no-files-found: error
           retention-days: 14
