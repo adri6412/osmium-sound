@@ -33,6 +33,18 @@ path that belongs to a running system. An internal disk answers to none of
 those. Erring towards permissive destroys a computer; erring towards strict
 means a stick is not listed and somebody tells us.
 
+Disk images — attached with `hdiutil attach -removable` on macOS, or `losetup`
+on Linux — are excluded too, being virtual devices. They are also the only way
+to exercise the write path without real hardware, so there is an opt-in:
+
+```sh
+OSMIUM_FLASHER_ALLOW_VIRTUAL=1 "/Applications/Osmium Flasher.app/Contents/MacOS/Osmium Flasher"
+```
+
+It relaxes that one condition and nothing else: a system disk, or anything
+mounted where a system lives, stays refused. There is deliberately no setting
+for it in the interface.
+
 The interface and the elevated writer call the same function, and a test asserts
 they both still do: by the time the writer runs it holds root and the device path
 reached it as an argument, so it re-checks rather than trusting the list.

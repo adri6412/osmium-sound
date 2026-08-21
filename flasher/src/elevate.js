@@ -127,6 +127,7 @@ async function writeElevated({
     '--progress', quote(progressFile),
     '--mode', quote(mode),
   ];
+  if (process.env.OSMIUM_FLASHER_ALLOW_VIRTUAL === '1') argv.push('--allow-virtual');
   if (mode === 'restore') {
     argv.push('--label', quote(label));
   } else {

@@ -40,6 +40,9 @@ const progressPath = arg('progress');
 const expectSize = Number(arg('expect-size', '0'));
 const verify = !process.argv.includes('--no-verify');
 const mode = arg('mode', 'write');
+// Passed explicitly rather than read from the environment: sudo-prompt does not
+// carry the environment across on every platform.
+const allowVirtual = process.argv.includes('--allow-virtual');
 const label = arg('label', 'OSMIUM');
 
 // ── progress channel ───────────────────────────────────────────────────────
@@ -155,7 +158,7 @@ async function main() {
   // Last line of defence, and the one that counts: the interface filtered this
   // list already, but by the time we are here we hold root and the device path
   // arrived as an argument. Same rule, applied again.
-  const refusal = loadDep2('drive-safety').rejectionReason(drive);
+  const refusal = loadDep2('drive-safety').rejectionReason(drive, { allowVirtual });
   if (refusal) die('ESYSTEM', `refusing to write to this drive (${refusal})`);
   if (drive.isReadOnly) die('EREADONLY', 'the selected drive is write-protected');
   if (stat && drive.size && drive.size < stat.size) {

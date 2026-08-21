@@ -39,10 +39,17 @@ function mountpointPaths(drive) {
  * @returns {null|string} null when the drive may be written to, otherwise a
  *          short reason code explaining why it was rejected.
  */
-function rejectionReason(drive) {
+function rejectionReason(drive, options = {}) {
   if (!drive) return 'missing';
+
+  // These two are never relaxed, whatever the caller asks for.
   if (drive.isSystem) return 'system';
-  if (drive.isVirtual) return 'virtual';
+
+  // Disk images attached with hdiutil or losetup are virtual devices, and are
+  // excluded so that nobody writes an installer to one by accident. They are
+  // also the only way to exercise the write path without real hardware, hence
+  // the opt-in — which relaxes this condition and nothing else.
+  if (drive.isVirtual && !options.allowVirtual) return 'virtual';
 
   const mounts = mountpointPaths(drive);
   if (mounts.some((p) => SYSTEM_MOUNTPOINTS.includes(p))) return 'system-mount';
@@ -54,6 +61,12 @@ function rejectionReason(drive) {
   return null;
 }
 
-const isWritableTarget = (drive) => rejectionReason(drive) === null;
+const isWritableTarget = (drive, options) => rejectionReason(drive, options) === null;
 
-module.exports = { SYSTEM_MOUNTPOINTS, mountpointPaths, rejectionReason, isWritableTarget };
+/** Reads the opt-in from the environment; there is deliberately no UI for it. */
+const virtualDrivesAllowed = () => process.env.OSMIUM_FLASHER_ALLOW_VIRTUAL === '1';
+
+module.exports = {
+  SYSTEM_MOUNTPOINTS, mountpointPaths, rejectionReason, isWritableTarget,
+  virtualDrivesAllowed,
+};

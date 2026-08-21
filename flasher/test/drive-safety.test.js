@@ -75,11 +75,49 @@ test('the interface and the elevated writer share one rule', () => {
   const writer = fs.readFileSync(path.join(__dirname, '..', 'helper', 'writer.js'), 'utf8');
 
   assert.match(list, /require\('\.\.\/helper\/drive-safety'\)/, 'the drive list must use the shared rule');
-  assert.match(list, /isWritableTarget\(drive\)/);
+  assert.match(list, /isWritableTarget\(drive[,)]/);
   assert.match(writer, /drive-safety/, 'the writer must re-check before writing');
-  assert.match(writer, /rejectionReason\(drive\)/);
+  assert.match(writer, /rejectionReason\(drive[,)]/);
 
   // Neither may fall back to judging a drive by the system flag alone.
   assert.doesNotMatch(list, /if \(drive\.isSystem\) return;/);
   assert.doesNotMatch(writer, /if \(drive\.isSystem\) die\(/);
+});
+
+test('disk images are excluded, and the opt-in relaxes only that', () => {
+  // A hdiutil or losetup image is the only way to exercise the write path
+  // without real hardware. It is still excluded by default, so that nobody
+  // writes an installer to a mounted image by accident.
+  const image = drive({ device: '/dev/disk7', isVirtual: true, isRemovable: true });
+  assert.equal(rejectionReason(image), 'virtual');
+  assert.equal(rejectionReason(image, { allowVirtual: true }), null);
+
+  // The opt-in must not become a way past the checks that matter.
+  const cases = [
+    ['a virtual system disk', drive({ isVirtual: true, isRemovable: true, isSystem: true }), 'system'],
+    ['an image mounted at /', drive({ isVirtual: true, isRemovable: true, mountpoints: [{ path: '/' }] }), 'system-mount'],
+    ['an image mounted at C:\\', drive({ isVirtual: true, isUSB: true, mountpoints: [{ path: 'C:\\' }] }), 'system-mount'],
+    ['a non-removable image', drive({ isVirtual: true }), 'not-removable'],
+  ];
+  for (const [what, d, why] of cases) {
+    assert.equal(rejectionReason(d, { allowVirtual: true }), why,
+      `${what} must stay refused even with virtual drives allowed`);
+  }
+});
+
+test('the opt-in reaches the elevated writer, which would otherwise refuse', () => {
+  // The writer re-checks with the same rule. If the flag stopped at the
+  // interface, a drive offered in the list would be rejected at the last
+  // moment, which reads as a bug rather than as a policy.
+  const elevate = fs.readFileSync(path.join(__dirname, '..', 'src', 'elevate.js'), 'utf8');
+  const writer = fs.readFileSync(path.join(__dirname, '..', 'helper', 'writer.js'), 'utf8');
+
+  assert.match(elevate, /OSMIUM_FLASHER_ALLOW_VIRTUAL/, 'the flag must be forwarded');
+  assert.match(elevate, /'--allow-virtual'/);
+  assert.match(writer, /--allow-virtual/, 'the writer must accept it');
+  assert.match(writer, /rejectionReason\(drive, \{ allowVirtual \}\)/);
+
+  // It is passed as an argument, not inherited: sudo-prompt does not carry the
+  // environment across on Linux.
+  assert.doesNotMatch(writer, /process\.env\.OSMIUM_FLASHER_ALLOW_VIRTUAL/);
 });
