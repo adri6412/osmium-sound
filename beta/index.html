@@ -792,8 +792,7 @@
           <label for="flasherOs" data-en="Operating system" data-it="Sistema operativo">Operating system</label>
           <select id="flasherOs">
             <option value="win">Windows</option>
-            <option value="mac-arm">macOS (Apple Silicon)</option>
-            <option value="mac-intel">macOS (Intel)</option>
+            <option value="mac">macOS</option>
             <option value="linux">Linux</option>
           </select>
         </div>
@@ -803,10 +802,8 @@
         </a>
       </div>
       <div class="mac-cmds" id="macCmds" hidden>
-        <p data-en="On macOS there is no download button on purpose. Run these two lines in Terminal instead — a browser would mark the app as quarantined and macOS would then refuse to open it." data-it="Su macOS non c&#x27;è un pulsante di download, di proposito. Esegui invece queste due righe nel Terminale — un browser contrassegnerebbe l&#x27;app come «in quarantena» e macOS si rifiuterebbe poi di aprirla.">On macOS there is no download button on purpose. Run these two lines in Terminal instead — a browser would mark the app as quarantined and macOS would then refuse to open it.</p>
-        <pre class="cmd"><code>curl -L -o ~/Downloads/Osmium-Flasher.dmg <span id="macCurlUrl"></span>
-open ~/Downloads/Osmium-Flasher.dmg</code></pre>
-        <p class="mac-cmds-after" data-en="Then drag the app across as usual. It starts with no warning at all." data-it="Poi trascina l&#x27;app come al solito. Si avvia senza alcun avviso.">Then drag the app across as usual. It starts with no warning at all.</p>
+        <p data-en="&lt;strong&gt;There is no macOS build.&lt;/strong&gt; macOS guards raw disk devices with a permission it grants by code signature, and an unsigned application cannot obtain it — the app could fetch and verify the image, but never write it." data-it="&lt;strong&gt;Per macOS non esiste un&#x27;applicazione.&lt;/strong&gt; macOS protegge i dispositivi disco con un permesso che concede in base alla firma del codice, e un&#x27;applicazione non firmata non può ottenerlo — l&#x27;app potrebbe scaricare e verificare l&#x27;immagine, ma non scriverla mai."><strong>There is no macOS build.</strong> macOS guards raw disk devices with a permission it grants by code signature, and an unsigned application cannot obtain it — the app could fetch and verify the image, but never write it.</p>
+        <p class="mac-cmds-after" data-en="Download the image below and write it with &lt;a href=&quot;https://etcher.balena.io/&quot; target=&quot;_blank&quot; rel=&quot;noopener&quot;&gt;balenaEtcher&lt;/a&gt; instead. It is signed and notarized by its makers, so macOS lets it do what it needs to. Everything after that — booting the mini PC and running the installer — is exactly the same." data-it="Scarica l&#x27;immagine qui sotto e scrivila con &lt;a href=&quot;https://etcher.balena.io/&quot; target=&quot;_blank&quot; rel=&quot;noopener&quot;&gt;balenaEtcher&lt;/a&gt;. È firmato e notarizzato dai suoi autori, quindi macOS gli concede quello che serve. Tutto il resto — avviare il mini PC ed eseguire l&#x27;installer — è identico.">Download the image below and write it with <a href="https://etcher.balena.io/" target="_blank" rel="noopener">balenaEtcher</a> instead. It is signed and notarized by its makers, so macOS lets it do what it needs to. Everything after that — booting the mini PC and running the installer — is exactly the same.</p>
       </div>
       <p class="dl-warning" data-en="&lt;strong&gt;Heads up:&lt;/strong&gt; the app is not code-signed, so Windows and macOS will warn you the first time you open it. That is expected, and the note below says how to get past it." data-it="&lt;strong&gt;Attenzione:&lt;/strong&gt; l&#x27;app non è firmata digitalmente, quindi Windows e macOS ti avviseranno al primo avvio. È previsto, e la nota qui sotto spiega come procedere."><strong>Heads up:</strong> the app is not code-signed, so Windows and macOS will warn you the first time you open it. That is expected, and the note below says how to get past it.</p>
       <details class="flasher-note" data-osnote="win" hidden>
@@ -816,11 +813,6 @@ open ~/Downloads/Osmium-Flasher.dmg</code></pre>
       <details class="flasher-note" data-osnote="linux" hidden>
         <summary data-en="Linux — one executable file" data-it="Linux — un solo file eseguibile">Linux — one executable file</summary>
         <p data-en="Make it executable with &lt;code&gt;chmod +x Osmium-Flasher-*.run&lt;/code&gt; and run it. No warning to dismiss; you will get a polkit password prompt when the write starts. It is a self-extracting executable rather than an AppImage on purpose — an AppImage is mounted so that root cannot read it, which is exactly what the elevated write needs to do." data-it="Rendilo eseguibile con &lt;code&gt;chmod +x Osmium-Flasher-*.run&lt;/code&gt; e avvialo. Nessun avviso da chiudere; al momento della scrittura comparirà la richiesta password di polkit. È un eseguibile auto-estraente e non un AppImage di proposito: un AppImage viene montato in modo che root non possa leggerlo, ed è proprio quello che serve alla scrittura privilegiata.">Make it executable with <code>chmod +x Osmium-Flasher-*.run</code> and run it. No warning to dismiss; you will get a polkit password prompt when the write starts. It is a self-extracting executable rather than an AppImage on purpose — an AppImage is mounted so that root cannot read it, which is exactly what the elevated write needs to do.</p>
-      </details>
-      <details class="flasher-note" data-osnote="mac" hidden>
-        <summary data-en="Why not just a download button?" data-it="Perché non un semplice pulsante?">Why not just a download button?</summary>
-        <p data-en="The app is not notarized, and a browser marks everything it downloads as quarantined — macOS then refuses to open it as &lt;strong&gt;“damaged”&lt;/strong&gt;, with no button to get past it. The mark comes from the browser, not from the file, so fetching it from Terminal avoids it altogether." data-it="L&#x27;app non è notarizzata, e un browser contrassegna come «in quarantena» tutto ciò che scarica — macOS si rifiuta poi di aprirla dicendola &lt;strong&gt;«danneggiata»&lt;/strong&gt;, senza alcun pulsante per procedere. Il contrassegno lo mette il browser, non il file, quindi scaricarla dal Terminale lo evita del tutto.">The app is not notarized, and a browser marks everything it downloads as quarantined — macOS then refuses to open it as <strong>“damaged”</strong>, with no button to get past it. The mark comes from the browser, not from the file, so fetching it from Terminal avoids it altogether.</p>
-        <p data-en="If you have already downloaded it another way and hit that dialog, run &lt;code&gt;xattr -dr com.apple.quarantine&lt;/code&gt; on the app to clear the mark." data-it="Se l&#x27;hai già scaricata in altro modo e ti sei imbattuto in quella finestra, esegui &lt;code&gt;xattr -dr com.apple.quarantine&lt;/code&gt; sull&#x27;app per rimuovere il contrassegno.">If you have already downloaded it another way and hit that dialog, run <code>xattr -dr com.apple.quarantine</code> on the app to clear the mark.</p>
       </details>
     </div>
 
@@ -1232,8 +1224,6 @@ open ~/Downloads/Osmium-Flasher.dmg</code></pre>
   // One version in one place: the four filenames differ only by this suffix.
   const FLASHER_SUFFIX = {
     'win': 'win-x64.exe',
-    'mac-arm': 'mac-arm64.dmg',
-    'mac-intel': 'mac-x64.dmg',
     'linux': 'linux-x86_64.run',
   };
 
@@ -1249,11 +1239,11 @@ open ~/Downloads/Osmium-Flasher.dmg</code></pre>
     const hint = document.getElementById('gateHint');
     if (hint) hint.hidden = Boolean(on);
 
-    // The commands download the app just as the buttons do, so they answer to
-    // the same consent: showing them regardless would make the gate decorative.
+    // Shown whenever macOS is picked, consent or not: it downloads nothing, it
+    // explains why there is nothing to download.
     const macCmds = document.getElementById('macCmds');
     const sel = document.getElementById('flasherOs');
-    if (macCmds) macCmds.hidden = !(on && sel && sel.value.indexOf('mac') === 0);
+    if (macCmds) macCmds.hidden = !(sel && sel.value === 'mac');
     gatedButtons().forEach(btn => {
       if (on && btn.dataset.href) {
         btn.setAttribute('href', btn.dataset.href);
@@ -1277,18 +1267,9 @@ open ~/Downloads/Osmium-Flasher.dmg</code></pre>
       flasherBtn.dataset.href =
         'https://file.osmiumsound.it/Osmium-Flasher-' + version + '-' + suffix;
     }
-    // macOS gets Terminal commands instead of a button: a browser download would
-    // be quarantined, and the app is not notarized, so macOS would refuse it.
-    // The command names the exact file, and the two macOS builds differ, so it
-    // is written here rather than hard-coded in the markup.
-    const onMac = osSelect.value.indexOf('mac') === 0;
-    // Only the URL is filled in: the line break between the two commands lives
-    // in the <pre>, so no escape sequence has to survive being written out.
-    const macCurlUrl = document.getElementById('macCurlUrl');
-    if (macCurlUrl && suffix) {
-      macCurlUrl.textContent =
-        'https://file.osmiumsound.it/Osmium-Flasher-' + version + '-' + suffix;
-    }
+    // There is nothing to download on macOS, so the button gives way to the
+    // explanation and the pointer to balenaEtcher.
+    const onMac = osSelect.value === 'mac';
     flasherBtn.hidden = onMac;
 
     const wanted = osSelect.value.indexOf('mac') === 0 ? 'mac' : osSelect.value;
@@ -1313,12 +1294,7 @@ open ~/Downloads/Osmium-Flasher.dmg</code></pre>
     let pick = null;
     if (low.indexOf('win') !== -1) pick = 'win';
     else if (low.indexOf('linux') !== -1 && low.indexOf('android') === -1) pick = 'linux';
-    else if (low.indexOf('mac') !== -1) {
-      // Apple Silicon Macs still report an Intel user-agent string, so the core
-      // count is the only hint available in-page. A wrong guess is harmless:
-      // both macOS entries are one click away in the list.
-      pick = (navigator.hardwareConcurrency >= 8) ? 'mac-arm' : 'mac-intel';
-    }
+    else if (low.indexOf('mac') !== -1) pick = 'mac';
     if (pick) osSelect.value = pick;
   }
 
