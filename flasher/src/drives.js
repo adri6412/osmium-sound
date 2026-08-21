@@ -9,6 +9,7 @@
  */
 
 const { scanner } = require('etcher-sdk');
+const { isWritableTarget, rejectionReason } = require('../helper/drive-safety');
 
 // Above this, a "USB stick" is almost certainly an external hard drive the user
 // did not mean to erase. Such drives are still listed, but flagged so the UI can
@@ -46,7 +47,10 @@ class DriveWatcher {
     this.scanner = new scanner.Scanner([this.adapter]);
 
     this.scanner.on('attach', (drive) => {
-      if (drive.isSystem) return;
+      // The adapter is asked not to report system drives, but that flag has been
+      // seen clear on a Mac's own boot disk, so the decision is made here too --
+      // by the same rule the elevated writer applies before it writes.
+      if (!isWritableTarget(drive)) return;
       this.drives.set(drive.device, drive);
       this.emit();
     });

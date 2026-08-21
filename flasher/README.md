@@ -19,6 +19,24 @@ Doing this from the browser is not possible: WebUSB refuses to claim
 mass-storage interfaces, and the File System Access API only reaches mounted
 volumes, never a raw block device. Hence a native app.
 
+## Which drives are offered
+
+A Mac once listed its own boot disk as a target: a 4 TB internal NVMe mounted at
+`/Volumes/Macintosh_HD`, with drivelist's system flag clear. On macOS the boot
+volume sits on a synthesised APFS container, which the detection does not always
+recognise, and a virtual machine confuses it further.
+
+`helper/drive-safety.js` therefore inverts the question. Instead of trying to
+recognise the disks that must be excluded, it admits only those that positively
+look detachable — removable, USB or card — and refuses anything mounted at a
+path that belongs to a running system. An internal disk answers to none of
+those. Erring towards permissive destroys a computer; erring towards strict
+means a stick is not listed and somebody tells us.
+
+The interface and the elevated writer call the same function, and a test asserts
+they both still do: by the time the writer runs it holds root and the device path
+reached it as an argument, so it re-checks rather than trusting the list.
+
 ## Restoring a stick
 
 The welcome screen also offers to put a stick back to factory condition: a
@@ -62,7 +80,8 @@ Windows.
 |---|---|
 | `src/main.js` | Electron main: IPC, orchestration. Never elevated. |
 | `src/image.js` | Manifest, download/resume, signature and checksum. |
-| `src/drives.js` | Removable-drive discovery; system disks excluded at the adapter. |
+| `src/drives.js` | Removable-drive discovery. |
+| `helper/drive-safety.js` | Which drives may be written to. Shared with the writer. |
 | `src/elevate.js` | Spawns the helper with sudo-prompt, tails its progress file. |
 | `helper/writer.js` | Runs as root/Administrator; the only code that touches the device. |
 | `src/renderer.js` | UI and the en/it dictionary. No Node access. |

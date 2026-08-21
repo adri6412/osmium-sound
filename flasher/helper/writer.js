@@ -72,6 +72,11 @@ function die(code, message) {
 // ── etcher-sdk lives inside app.asar, which this file does not ─────────────
 // The helper is unpacked to app.asar.unpacked/helper/, so walking up from here
 // never reaches app.asar/node_modules. The GUI passes the app root explicitly.
+/** Sibling modules of this file, which live beside it when unpacked. */
+function loadDep2(name) {
+  return require(path.join(__dirname, `${name}.js`));
+}
+
 function loadDep(name) {
   if (appRoot) {
     try {
@@ -129,7 +134,12 @@ async function main() {
 
   const drive = drives.find((d) => d.device === devicePath || d.raw === devicePath);
   if (!drive) die('EGONE', 'the selected drive is no longer connected');
-  if (drive.isSystem) die('ESYSTEM', 'refusing to write to a system drive');
+
+  // Last line of defence, and the one that counts: the interface filtered this
+  // list already, but by the time we are here we hold root and the device path
+  // arrived as an argument. Same rule, applied again.
+  const refusal = loadDep2('drive-safety').rejectionReason(drive);
+  if (refusal) die('ESYSTEM', `refusing to write to this drive (${refusal})`);
   if (drive.isReadOnly) die('EREADONLY', 'the selected drive is write-protected');
   if (stat && drive.size && drive.size < stat.size) {
     die('ETOOSMALL', 'the drive is smaller than the image');
