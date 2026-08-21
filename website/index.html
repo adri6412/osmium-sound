@@ -441,6 +441,18 @@
       border-radius: 10px; padding: 0.9rem 1.2rem; text-align: left;
     }
     .install-note strong { color: var(--accent); }
+    /* Third-party recommendation, deliberately quieter than our own app. */
+    .apple-companion {
+      max-width: 760px; margin: 2.25rem auto 0;
+      padding: 1.1rem 1.3rem;
+      border: 1px dashed rgba(255, 255, 255, 0.16);
+      border-radius: 10px;
+      text-align: left;
+    }
+    .apple-companion h3 { margin: 0 0 0.5rem; font-size: 1rem; }
+    .apple-companion p {
+      margin: 0 0 1rem; font-size: 0.88rem; line-height: 1.65; opacity: 0.85;
+    }
     .install-warning {
       max-width: 760px; margin: 1.1rem auto 0;
       font-size: 0.86rem; color: var(--text); line-height: 1.6;
@@ -840,6 +852,14 @@
         <h4 data-en="Pair by QR" data-it="Abbina con QR">Pair by QR</h4>
         <p data-en="On the same Wi-Fi, open the app and scan the &lt;strong&gt;pairing QR code&lt;/strong&gt; from the device's Settings → Phone control." data-it="Sulla stessa rete Wi-Fi, apri l'app e scansiona il &lt;strong&gt;QR code di abbinamento&lt;/strong&gt; da Impostazioni → Controllo da telefono del dispositivo.">On the same Wi-Fi, open the app and scan the <strong>pairing QR code</strong> from the device's Settings → Phone control.</p>
       </div>
+    </div>
+
+    <div class="apple-companion">
+      <h3 data-en="On iPhone and iPad" data-it="Su iPhone e iPad">On iPhone and iPad</h3>
+      <p data-en="There is no Osmium companion app for Apple devices. We suggest &lt;strong&gt;LyrPlay&lt;/strong&gt;, a third-party app by Eric Miller: it connects to the Lyrion Music Server running on your Osmium device, gives you the Material interface to drive playback, and can also turn the iPhone or iPad itself into another player on the network. It is free, with an optional paid icon pack. It is not our app, we have no connection with its author and we cannot support it — we are simply recommending something that works well with Osmium Sound." data-it="Per i dispositivi Apple non esiste un&#x27;app companion di Osmium. Suggeriamo &lt;strong&gt;LyrPlay&lt;/strong&gt;, un&#x27;app di terze parti di Eric Miller: si collega al Lyrion Music Server che gira sul dispositivo Osmium, mette a disposizione l&#x27;interfaccia Material per comandare la riproduzione, e può anche trasformare l&#x27;iPhone o l&#x27;iPad in un ulteriore lettore sulla rete. È gratuita, con un pacchetto di icone opzionale a pagamento. Non è un&#x27;app nostra, non abbiamo alcun rapporto con il suo autore e non possiamo fornirne assistenza: ci limitiamo a segnalare qualcosa che funziona bene con Osmium Sound.">There is no Osmium companion app for Apple devices. We suggest <strong>LyrPlay</strong>, a third-party app by Eric Miller: it connects to the Lyrion Music Server running on your Osmium device, gives you the Material interface to drive playback, and can also turn the iPhone or iPad itself into another player on the network. It is free, with an optional paid icon pack. It is not our app, we have no connection with its author and we cannot support it — we are simply recommending something that works well with Osmium Sound.</p>
+      <a class="btn-secondary" href="https://apps.apple.com/it/app/lyrplay/id6746776736" target="_blank" rel="noopener">
+        <span data-en="LyrPlay on the App Store" data-it="LyrPlay sull&#x27;App Store">LyrPlay on the App Store</span>
+      </a>
     </div>
 
     <p class="install-note" data-en="&lt;strong&gt;Note:&lt;/strong&gt; the companion app is distributed as a signed APK (sideload) or via our self-hosted F-Droid repo — it is not on the Play Store. Prefer F-Droid if you want automatic updates: tap &lt;strong&gt;Add F-Droid repo&lt;/strong&gt; above (F-Droid app required), or add &lt;code&gt;https://osmium-sound.pages.dev/fdroid/repo&lt;/code&gt; manually under Settings → Repositories. Your phone and the appliance must be on the same local network." data-it="&lt;strong&gt;Nota:&lt;/strong&gt; l'app companion è distribuita come APK firmato (sideload) oppure tramite il nostro repo F-Droid self-hosted — non è sul Play Store. Se vuoi gli aggiornamenti automatici usa F-Droid: tocca &lt;strong&gt;Aggiungi repo F-Droid&lt;/strong&gt; qui sopra (serve l'app F-Droid), oppure aggiungi manualmente &lt;code&gt;https://osmium-sound.pages.dev/fdroid/repo&lt;/code&gt; in Impostazioni → Repository. Il telefono e il dispositivo devono essere sulla stessa rete locale.">
