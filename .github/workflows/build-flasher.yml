@@ -64,7 +64,11 @@ jobs:
       - name: Stamp the version
         if: ${{ inputs.version != '' }}
         shell: bash
-        run: npm version "${{ inputs.version }}" --no-git-tag-version
+        # --allow-same-version is not optional here: re-running a build for the
+        # version package.json already carries is the normal case, and without
+        # the flag npm calls that an error ("Version not changed") and fails the
+        # whole matrix before a single binary is produced.
+        run: npm version "${{ inputs.version }}" --no-git-tag-version --allow-same-version
 
       - name: Install dependencies
         run: npm ci
