@@ -426,12 +426,17 @@
     .dl-alt-head { margin: 0 0 0.7rem; font-size: 0.88rem; opacity: 0.7; }
     .dl-alt .btn-secondary.is-placeholder { opacity: 0.45; cursor: not-allowed; }
 
-    .mac-hint {
-      margin: 0 0 0.9rem; padding: 0.6rem 0.9rem;
-      border-radius: 8px;
-      border: 1px dashed rgba(255, 255, 255, 0.22);
-      background: rgba(255, 255, 255, 0.04);
-      font-size: 0.86rem; line-height: 1.6;
+    .flasher-note pre.cmd {
+      margin: 0.6rem 0 0.6rem 1.1rem;
+      padding: 0.6rem 0.8rem;
+      border-radius: 7px;
+      background: rgba(0, 0, 0, 0.4);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      overflow-x: auto;
+    }
+    .flasher-note pre.cmd code {
+      background: none; padding: 0; font-size: 0.82rem;
+      white-space: pre; user-select: all;
     }
 
     .dl-warning {
@@ -745,6 +750,8 @@
           <label for="flasherOs" data-en="Operating system" data-it="Sistema operativo">Operating system</label>
           <select id="flasherOs">
             <option value="win">Windows</option>
+            <option value="mac-arm">macOS (Apple Silicon)</option>
+            <option value="mac-intel">macOS (Intel)</option>
             <option value="linux">Linux</option>
           </select>
         </div>
@@ -753,7 +760,6 @@
           <span data-en="Download Osmium Flasher" data-it="Scarica Osmium Flasher">Download Osmium Flasher</span>
         </a>
       </div>
-      <p class="mac-hint" id="macHint" hidden data-en="There is no macOS build yet. Download the image below instead and write it with &lt;a href=&quot;https://etcher.balena.io/&quot; target=&quot;_blank&quot; rel=&quot;noopener&quot;&gt;balenaEtcher&lt;/a&gt;, which is signed and notarized — the rest of the install is identical." data-it="Per macOS non c&#x27;è ancora un&#x27;app. Scarica invece l&#x27;immagine qui sotto e scrivila con &lt;a href=&quot;https://etcher.balena.io/&quot; target=&quot;_blank&quot; rel=&quot;noopener&quot;&gt;balenaEtcher&lt;/a&gt;, che è firmato e notarizzato — il resto dell&#x27;installazione è identico.">There is no macOS build yet. Download the image below instead and write it with <a href="https://etcher.balena.io/" target="_blank" rel="noopener">balenaEtcher</a>, which is signed and notarized — the rest of the install is identical.</p>
       <p class="dl-warning" data-en="&lt;strong&gt;Heads up:&lt;/strong&gt; the app is not code-signed, so Windows and macOS will warn you the first time you open it. That is expected, and the note below says how to get past it." data-it="&lt;strong&gt;Attenzione:&lt;/strong&gt; l&#x27;app non è firmata digitalmente, quindi Windows e macOS ti avviseranno al primo avvio. È previsto, e la nota qui sotto spiega come procedere."><strong>Heads up:</strong> the app is not code-signed, so Windows and macOS will warn you the first time you open it. That is expected, and the note below says how to get past it.</p>
       <details class="flasher-note" data-osnote="win" hidden>
         <summary data-en="Windows — “unknown publisher”" data-it="Windows — “editore sconosciuto”">Windows — “unknown publisher”</summary>
@@ -762,6 +768,12 @@
       <details class="flasher-note" data-osnote="linux" hidden>
         <summary data-en="Linux — one executable file" data-it="Linux — un solo file eseguibile">Linux — one executable file</summary>
         <p data-en="Make it executable with &lt;code&gt;chmod +x Osmium-Flasher-*.run&lt;/code&gt; and run it. No warning to dismiss; you will get a polkit password prompt when the write starts. It is a self-extracting executable rather than an AppImage on purpose — an AppImage is mounted so that root cannot read it, which is exactly what the elevated write needs to do." data-it="Rendilo eseguibile con &lt;code&gt;chmod +x Osmium-Flasher-*.run&lt;/code&gt; e avvialo. Nessun avviso da chiudere; al momento della scrittura comparirà la richiesta password di polkit. È un eseguibile auto-estraente e non un AppImage di proposito: un AppImage viene montato in modo che root non possa leggerlo, ed è proprio quello che serve alla scrittura privilegiata.">Make it executable with <code>chmod +x Osmium-Flasher-*.run</code> and run it. No warning to dismiss; you will get a polkit password prompt when the write starts. It is a self-extracting executable rather than an AppImage on purpose — an AppImage is mounted so that root cannot read it, which is exactly what the elevated write needs to do.</p>
+      </details>
+      <details class="flasher-note" data-osnote="mac" hidden>
+        <summary data-en="macOS — download it from Terminal" data-it="macOS — scaricala dal Terminale">macOS — download it from Terminal</summary>
+        <p data-en="The app is not notarized, and a browser marks everything it downloads as quarantined — macOS then refuses to open it as &lt;strong&gt;“damaged”&lt;/strong&gt;, with no button to get past it. The mark comes from the browser, not from the file, so fetching it from Terminal avoids it altogether:" data-it="L&#x27;app non è notarizzata, e un browser contrassegna come «in quarantena» tutto ciò che scarica — macOS si rifiuta poi di aprirla dicendola &lt;strong&gt;«danneggiata»&lt;/strong&gt;, senza alcun pulsante per procedere. Il contrassegno lo mette il browser, non il file, quindi scaricarla dal Terminale lo evita del tutto:">The app is not notarized, and a browser marks everything it downloads as quarantined — macOS then refuses to open it as <strong>“damaged”</strong>, with no button to get past it. The mark comes from the browser, not from the file, so fetching it from Terminal avoids it altogether:</p>
+        <pre class="cmd"><code id="macCurl"></code></pre>
+        <p data-en="Then open the downloaded &lt;code&gt;.dmg&lt;/code&gt; and drag the app across as usual — it starts with no warning at all. If you already used the button above, run &lt;code&gt;xattr -dr com.apple.quarantine&lt;/code&gt; on the app instead." data-it="Poi apri il &lt;code&gt;.dmg&lt;/code&gt; scaricato e trascina l&#x27;app come al solito — si avvia senza alcun avviso. Se hai già usato il pulsante qui sopra, esegui invece &lt;code&gt;xattr -dr com.apple.quarantine&lt;/code&gt; sull&#x27;app.">Then open the downloaded <code>.dmg</code> and drag the app across as usual — it starts with no warning at all. If you already used the button above, run <code>xattr -dr com.apple.quarantine</code> on the app instead.</p>
       </details>
     </div>
 
@@ -1165,6 +1177,8 @@
   // One version in one place: the four filenames differ only by this suffix.
   const FLASHER_SUFFIX = {
     'win': 'win-x64.exe',
+    'mac-arm': 'mac-arm64.dmg',
+    'mac-intel': 'mac-x64.dmg',
     'linux': 'linux-x86_64.run',
   };
 
@@ -1202,6 +1216,14 @@
       flasherBtn.dataset.href =
         'https://file.osmiumsound.it/Osmium-Flasher-' + version + '-' + suffix;
     }
+    // The Terminal command has to name the exact file, and the two macOS builds
+    // differ, so it is written here rather than hard-coded in the markup.
+    const macCurl = document.getElementById('macCurl');
+    if (macCurl && suffix) {
+      macCurl.textContent =
+        'curl -L -O https://file.osmiumsound.it/Osmium-Flasher-' + version + '-' + suffix;
+    }
+
     const wanted = osSelect.value.indexOf('mac') === 0 ? 'mac' : osSelect.value;
     document.querySelectorAll('.flasher-note').forEach(note => {
       note.hidden = note.dataset.osnote !== wanted;
@@ -1224,12 +1246,13 @@
     let pick = null;
     if (low.indexOf('win') !== -1) pick = 'win';
     else if (low.indexOf('linux') !== -1 && low.indexOf('android') === -1) pick = 'linux';
+    else if (low.indexOf('mac') !== -1) {
+      // Apple Silicon Macs still report an Intel user-agent string, so the core
+      // count is the only hint available in-page. A wrong guess is harmless:
+      // both macOS entries are one click away in the list.
+      pick = (navigator.hardwareConcurrency >= 8) ? 'mac-arm' : 'mac-intel';
+    }
     if (pick) osSelect.value = pick;
-
-    // Nothing in the list runs on a Mac, so say so rather than leaving a
-    // visitor to pick a Windows build and find out the hard way.
-    const macHint = document.getElementById('macHint');
-    if (macHint) macHint.hidden = low.indexOf('mac') === -1;
   }
 
   syncFlasher();
