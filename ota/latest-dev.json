@@ -1,41 +1,41 @@
 {
-  "tag_name": "v2.5.21-dev.114",
-  "name": "v2.5.21-dev.114",
-  "body": "## What's new in v2.5.21-dev.114\n\n- fix(vu): the needles turn about the dial's own centre, not the bezel notch\n- fix(kiosk): Wayland solo dove c'\u00e8 una GPU vera \u2014 in VM si torna a X11\n- feat(website): beta page announces the Debian 13 jump, ISO to dev113\n",
+  "tag_name": "v2.5.21-dev.115",
+  "name": "v2.5.21-dev.115",
+  "body": "## What's new in v2.5.21-dev.115\n\n- chore(flasher): make-selfextract.sh eseguibile, come su svil\n- feat: drop the macOS build and send Mac users to balenaEtcher\n- fix(flasher): read drive flags from the entry, not from the wrapper hiding them\n- fix(flasher): the writability probe test assumed a POSIX filesystem\n- feat(flasher): skip elevation when the drive is already writable\n- feat(flasher): allow disk images as targets, behind an explicit opt-in\n- fix(flasher): say what macOS actually refused instead of blaming the stick\n- fix(website): the download button now really disappears when macOS is selected\n- fix(flasher): stop offering system disks, whatever drivelist claims about them\n- fix(website): repair the broken script that left every download button dead\n- fix(website): move the LyrPlay recommendation to the beta site, with a QR code\n- feat(website): macOS gets two Terminal commands instead of a download button\n- docs(website): recommend LyrPlay for iPhone and iPad, clearly as a third party\n- feat(website): macOS is back, downloaded from Terminal so it is never quarantined\n- feat(website): drop the macOS builds from the download options for now\n- fix(website): the macOS note described a button that never appears\n- fix(flasher): ad-hoc sign the macOS build instead of not signing it at all\n- fix(flasher): stop the image cache growing by a gigabyte per release\n- feat(website): lead with the app, keep the ISO as the fallback, explain the gate\n- fix(website): say the app is unsigned without making anyone click for it\n- feat(website): choose the ISO or the app for your OS from a dropdown\n- fix(flasher): write the partition table last, and give the disk a signature\n- fix(flasher): restore mode never reached restore(), and the Linux wrap could not run\n- fix(flasher): report what the elevated helper said, not what the shell made of it\n- fix(ci): the Intel macOS job needs macos-15-intel, not macos-15\n- feat(flasher): restore a stick to factory condition\n- fix(flasher): Secure Boot is a required step, and the stick comes out after the reboot\n- feat(flasher): give the app its own icon, derived from the project logo\n- chore(flasher): drop the two fixable advisories, document the rest\n- feat(flasher): guide the whole install, not just the USB stick\n- feat(flasher): Linux ships as a single self-extracting executable\n- fix(flasher): the write test runs on macOS and Windows too\n- fix(flasher): stop the elevated helper aborting on Electron's buffer limits\n- fix(flasher): the over-256-GB warning no longer shows on every drive\n- fix(flasher): pin usb to 3.x so the native rebuild stops failing\n- fix(flasher): the test suite no longer needs the production signing key\n- fix(ci): the flasher build no longer dies when the version is unchanged\n- feat(flasher): Osmium Flasher writes the installer ISO to a USB stick\n",
   "assets": [
     {
-      "name": "hifi-ui-v2.5.21-dev.114.tar.gz",
-      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.114/hifi-ui-v2.5.21-dev.114.tar.gz",
-      "size": 133501220
+      "name": "hifi-ui-v2.5.21-dev.115.tar.gz",
+      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.115/hifi-ui-v2.5.21-dev.115.tar.gz",
+      "size": 133500602
     },
     {
-      "name": "hifi-ui-v2.5.21-dev.114.tar.gz.sha256",
-      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.114/hifi-ui-v2.5.21-dev.114.tar.gz.sha256",
+      "name": "hifi-ui-v2.5.21-dev.115.tar.gz.sha256",
+      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.115/hifi-ui-v2.5.21-dev.115.tar.gz.sha256",
       "size": 97
     },
     {
-      "name": "hifi-system-v2.5.21-dev.114.tar.gz",
-      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.114/hifi-system-v2.5.21-dev.114.tar.gz",
-      "size": 395518
+      "name": "hifi-system-v2.5.21-dev.115.tar.gz",
+      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.115/hifi-system-v2.5.21-dev.115.tar.gz",
+      "size": 400677
     },
     {
-      "name": "hifi-system-v2.5.21-dev.114.tar.gz.sha256",
-      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.114/hifi-system-v2.5.21-dev.114.tar.gz.sha256",
+      "name": "hifi-system-v2.5.21-dev.115.tar.gz.sha256",
+      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.115/hifi-system-v2.5.21-dev.115.tar.gz.sha256",
       "size": 101
     },
     {
-      "name": "hifi-os-v2.5.21-dev.114.tar.gz",
-      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.114/hifi-os-v2.5.21-dev.114.tar.gz",
-      "size": 1232971
+      "name": "hifi-os-v2.5.21-dev.115.tar.gz",
+      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.115/hifi-os-v2.5.21-dev.115.tar.gz",
+      "size": 1232973
     },
     {
-      "name": "hifi-os-v2.5.21-dev.114.tar.gz.sha256",
-      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.114/hifi-os-v2.5.21-dev.114.tar.gz.sha256",
+      "name": "hifi-os-v2.5.21-dev.115.tar.gz.sha256",
+      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.115/hifi-os-v2.5.21-dev.115.tar.gz.sha256",
       "size": 97
     },
     {
-      "name": "hifi-os-v2.5.21-dev.114.tar.gz.sha256.sig",
-      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.114/hifi-os-v2.5.21-dev.114.tar.gz.sha256.sig",
+      "name": "hifi-os-v2.5.21-dev.115.tar.gz.sha256.sig",
+      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.115/hifi-os-v2.5.21-dev.115.tar.gz.sha256.sig",
       "size": 64
     }
   ]
