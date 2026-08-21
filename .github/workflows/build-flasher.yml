@@ -1,0 +1,111 @@
+name: Build Osmium Flasher (manual)
+
+# Builds the desktop app that writes the installer ISO to a USB stick.
+#
+#   Actions → "Build Osmium Flasher (manual)" → Run workflow
+#
+# The binaries are NOT published anywhere by this job. Download the artifacts
+# and upload them to file.osmiumsound.it by hand, the same way the ISO is
+# published, then point website/beta/index.html at the new filenames.
+#
+# Reminder: `gh workflow run` without an explicit --ref silently builds from
+# main. Always pass --ref <branch-or-tag> and check the run's branch column.
+#
+# The binaries are unsigned on purpose — see electron-builder.yml and the
+# "unknown publisher" instructions on the beta page.
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Flasher version to stamp (e.g. 1.0.0); leave empty to keep package.json'
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    working-directory: flasher
+
+jobs:
+  build:
+    strategy:
+      # One runner per target: native addons are compiled/fetched for the host
+      # architecture, so cross-building is not an option here.
+      #
+      # No macOS. The app could fetch and verify the image there, but never write
+      # it: macOS guards raw disk devices with a permission granted by code
+      # signature, and an unsigned app cannot obtain it. electron-builder still
+      # carries the mac configuration and `npm run dist:mac` still works, so the
+      # day the app is notarized this is two lines to restore.
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            label: linux-x86_64
+            build: npm run dist:linux
+          - os: windows-latest
+            label: win-x64
+            build: npm run dist:win
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: flasher/package-lock.json
+
+      - name: Stamp the version
+        if: ${{ inputs.version != '' }}
+        shell: bash
+        # --allow-same-version is not optional here: re-running a build for the
+        # version package.json already carries is the normal case, and without
+        # the flag npm calls that an error ("Version not changed") and fails the
+        # whole matrix before a single binary is produced.
+        run: npm version "${{ inputs.version }}" --no-git-tag-version --allow-same-version
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Test
+        run: npm test
+
+      - name: Build
+        run: ${{ matrix.build }}
+        env:
+          # Without a certificate electron-builder would otherwise go looking
+          # for one and fail the build rather than ad-hoc signing.
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+
+      # Linux ships as one self-extracting executable rather than the raw
+      # tarball. Not an AppImage: that is mounted over FUSE, which denies access
+      # to root, so pkexec could never reach the elevated helper inside it.
+      - name: Wrap Linux build into a single executable
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          set -eu
+          VERSION="$(node -p "require('./package.json').version")"
+          TARBALL="dist/Osmium-Flasher-${VERSION}-linux-x86_64.tar.gz"
+          # Invoked through sh on purpose: this repo has core.fileMode=false, so
+          # the executable bit does not survive a commit and the script would
+          # otherwise fail with "Permission denied" (exit 126).
+          sh ./build/make-selfextract.sh "$TARBALL" "$VERSION" \
+            "dist/Osmium-Flasher-${VERSION}-linux-x86_64.run"
+          rm -f "$TARBALL"
+          ls -lh dist/
+
+      - name: Upload
+        uses: actions/upload-artifact@v4
+        with:
+          name: osmium-flasher-${{ matrix.label }}
+          path: |
+            flasher/dist/*.exe
+            flasher/dist/*.run
+          if-no-files-found: error
+          retention-days: 14
