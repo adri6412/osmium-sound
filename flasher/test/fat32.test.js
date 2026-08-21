@@ -146,3 +146,50 @@ test('the helper dispatches on mode before it needs an image', () => {
   assert.match(src, /if \(mode !== 'write'\)/,
     'an unhandled mode must be rejected rather than falling through');
 });
+
+test('the partition table is the last thing written', async () => {
+  // Windows mounts a volume as soon as a partition table points at one. If the
+  // MBR went down first, it could mount the stick while the FAT was still being
+  // zeroed, cache an inconsistent view, and write its own stale metadata back
+  // over ours — which is what left a freshly restored stick unreadable.
+  const geo = fat32.computeGeometry((2 * GB) / 512);
+
+  const offsets = [];
+  await fat32.writeEmptyVolume(async (buf, offset) => { offsets.push(offset); }, geo, {});
+
+  assert.equal(offsets[offsets.length - 1], 0,
+    'the MBR must be written last, after everything it points at');
+  assert.ok(offsets.filter((o) => o === 0).length === 1, 'the MBR is written once');
+
+  // And the boot sector must follow the FAT it describes.
+  const bootAt = geo.partitionStart * 512;
+  const firstFatAt = geo.fatStart * 512;
+  assert.ok(offsets.indexOf(firstFatAt) < offsets.indexOf(bootAt),
+    'the FAT must be in place before the boot sector advertises it');
+});
+
+test('the MBR carries a non-zero disk signature', async () => {
+  const dir = await fsp.mkdtemp(path.join(os.tmpdir(), 'osmium-sig-'));
+  try {
+    const image = path.join(dir, 'stick.img');
+    const fd = fs.openSync(image, 'w');
+    fs.ftruncateSync(fd, 2 * GB);
+    const geo = fat32.computeGeometry((2 * GB) / 512);
+    await fat32.writeEmptyVolume(
+      async (buf, offset) => { fs.writeSync(fd, buf, 0, buf.length, offset); },
+      geo, { label: 'OSMIUM', diskSignature: 0xdeadbeef },
+    );
+    fs.closeSync(fd);
+
+    const mbr = Buffer.alloc(512);
+    const f = fs.openSync(image, 'r');
+    fs.readSync(f, mbr, 0, 512, 0);
+    fs.closeSync(f);
+
+    assert.equal(mbr.readUInt32LE(0x1b8), 0xdeadbeef, 'disk signature');
+    // A zero signature is what makes Windows offer to initialise the disk.
+    assert.notEqual(mbr.readUInt32LE(0x1b8), 0);
+  } finally {
+    await fsp.rm(dir, { recursive: true, force: true });
+  }
+});

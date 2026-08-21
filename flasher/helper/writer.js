@@ -244,6 +244,8 @@ async function restore(sdk, drive) {
       // Volume serial numbers are conventionally derived from the clock; there
       // is nothing to be gained from it being meaningful.
       volumeId: (Date.now() & 0xffffffff) >>> 0,
+      // Windows treats a zeroed disk signature as an uninitialised disk.
+      diskSignature: ((Date.now() >>> 3) ^ 0x5a5a5a5a) >>> 0 || 0xa1b2c3d4,
       onProgress: ({ done, total }) => emit({
         type: 'progress', stage: 'formatting', position: done, size: total,
         percentage: total ? (done / total) * 100 : 0,

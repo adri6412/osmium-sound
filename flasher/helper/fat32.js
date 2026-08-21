@@ -88,8 +88,14 @@ function chs(lba) {
   return [h, ((c >> 2) & 0xc0) | s, c & 0xff];
 }
 
-function buildMbr(geo) {
+function buildMbr(geo, diskSignature) {
   const mbr = Buffer.alloc(SECTOR);
+
+  // Windows identifies a disk by this signature and treats a zeroed one as an
+  // uninitialised disk, offering to initialise it rather than reading the
+  // partition. Every real formatter writes one.
+  mbr.writeUInt32LE((diskSignature >>> 0) || 0xa1b2c3d4, 0x1b8);
+
   const p = 0x1be;                       // first partition entry
 
   mbr[p] = 0x00;                         // not marked active: UEFI does not care
@@ -173,17 +179,13 @@ async function writeEmptyVolume(writeAt, geo, opts = {}) {
 
   const sectorAt = (lba) => lba * SECTOR;
 
-  await writeAt(buildMbr(geo), 0);
-
-  const boot = buildBootSector(geo, { label, volumeId });
-  await writeAt(boot, sectorAt(geo.partitionStart));
-  await writeAt(boot, sectorAt(geo.partitionStart + 6));      // backup copy
-
-  // Root directory occupies exactly one cluster to begin with, so one cluster
-  // is already spoken for.
-  const fsInfo = buildFsInfo(geo.clusterCount - 1, ROOT_CLUSTER + 1);
-  await writeAt(fsInfo, sectorAt(geo.partitionStart + 1));
-  await writeAt(fsInfo, sectorAt(geo.partitionStart + 7));
+  // Order matters, and not for tidiness. Windows mounts a volume the moment a
+  // valid partition table points at one, so stamping the MBR first would let it
+  // mount the stick while the FAT is still being zeroed — it would then cache an
+  // inconsistent view and write its own stale metadata back over ours. The
+  // partition table therefore goes in last, once everything it points at is
+  // already on the device. etcher-sdk withholds the first 64 KB during an image
+  // write for exactly this reason.
 
   // The FAT has to be zeroed rather than merely stamped: whatever the stick held
   // before would otherwise read as a live cluster chain.
@@ -211,6 +213,19 @@ async function writeEmptyVolume(writeAt, geo, opts = {}) {
   entry.copy(rootCluster, 0);
   rootCluster[11] = ATTR_VOLUME_ID;
   await writeAt(rootCluster, sectorAt(geo.dataStart));
+
+  // Now the volume itself: boot sector, its backup, and the free-space hints.
+  const boot = buildBootSector(geo, { label, volumeId });
+  await writeAt(boot, sectorAt(geo.partitionStart));
+  await writeAt(boot, sectorAt(geo.partitionStart + 6));
+
+  // The root directory already holds one cluster.
+  const fsInfo = buildFsInfo(geo.clusterCount - 1, ROOT_CLUSTER + 1);
+  await writeAt(fsInfo, sectorAt(geo.partitionStart + 1));
+  await writeAt(fsInfo, sectorAt(geo.partitionStart + 7));
+
+  // Only now does the stick become mountable.
+  await writeAt(buildMbr(geo, opts.diskSignature), 0);
 }
 
 module.exports = {
