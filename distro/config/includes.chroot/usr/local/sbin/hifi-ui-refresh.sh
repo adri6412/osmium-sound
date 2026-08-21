@@ -105,6 +105,11 @@ find_output() {
 # hifi-ui-resolution.sh: va letto di lì e non dalla geometria corrente perché
 # con un --scale-from attivo la geometria riporta l'area di framebuffer
 # scalata, non il modo vero.
+#
+# Su wlr-randr il marcatore va cercato come "current)" e non come "(current)":
+# quando il modo corrente è anche il preferito i due finiscono insieme fra le
+# stesse parentesi, "(preferred, current)". Vedi il commento esteso in
+# query_state() di hifi-ui-resolution.sh.
 current_mode() {
     case "$1" in
         x11)
@@ -120,7 +125,7 @@ current_mode() {
             wlr-randr 2>/dev/null | awk -v out="$2" '
                 /^[^ \t]/ { inblock = ($1 == out); next }
                 !inblock  { next }
-                $2 == "px," && /\(current\)/ { print $1; exit }
+                $2 ~ /^px,?$/ && /current\)/ { print $1; exit }
             '
             ;;
     esac
@@ -177,17 +182,20 @@ compute_rates() {
         wayland)
             # Su wlr-randr ogni rate è una riga a sé ("1280x720 px, 60.000000 Hz
             # (current)"), quindi si accumula sull'intero blocco dell'output
-            # invece che su una sola riga. I marcatori sono "(current)" e
-            # "(preferred)" al posto di "*" e "+".
+            # invece che su una sola riga. I marcatori sono "current" e
+            # "preferred" al posto di "*" e "+", ma stanno nella stessa coppia
+            # di parentesi quando valgono entrambi ("(preferred, current)"), che
+            # è poi il caso normale: vanno cercati come "current)" e
+            # "(preferred", non come gruppi interi.
             wlr-randr 2>/dev/null | awk -v out="$2" -v mode="$3" '
                 /^[^ \t]/ { inblock = ($1 == out); next }
                 !inblock  { next }
-                $2 == "px," && $1 == mode {
+                $2 ~ /^px,?$/ && $1 == mode {
                     tok = $3
                     if (tok !~ /^[0-9]+(\.[0-9]+)?$/) next
                     val = tok + 0
-                    if ($0 ~ /\(current\)/)   current = tok
-                    if ($0 ~ /\(preferred\)/) native = tok
+                    if ($0 ~ /current\)/)   current = tok
+                    if ($0 ~ /\(preferred/) native = tok
                     if (val > 0 && (top == "" || val > (top + 0))) top = tok
                     if (val > 0 && val <= 32 && (low == "" || val > (low + 0))) low = tok
                 }

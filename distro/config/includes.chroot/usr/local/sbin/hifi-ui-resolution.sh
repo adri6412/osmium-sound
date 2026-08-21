@@ -183,9 +183,20 @@ find_output() {
 #   MODE <WxH>   una riga per ogni modo disponibile
 #
 # Il modo attuale va letto dalla lista modi (la riga marcata "*" su xrandr,
-# "(current)" su wlr-randr) e NON dalla geometria: con un transform attivo la
+# "current" su wlr-randr) e NON dalla geometria: con un transform attivo la
 # geometria riporta l'area scalata mentre il modo resta quello vero, e
 # confonderli renderebbe `apply` non idempotente.
+#
+# ATTENZIONE al marcatore di wlr-randr: NON è sempre "(current)". Quando il modo
+# corrente è anche quello preferito dall'EDID — cioè il caso normale, perché il
+# compositor parte proprio da lì — i due marcatori finiscono nella STESSA coppia
+# di parentesi, "(preferred, current)" (main.c di wlr-randr: apre "(", stampa
+# "preferred", poi ", " se sono entrambi, poi "current", poi chiude). Cercare
+# "\(current\)" letterale non trovava nulla su ogni pannello che parte sul suo
+# modo preferito: CUR restava vuoto, `apply` usciva subito e la risoluzione non
+# cambiava MAI, in silenzio. Funzionava solo dove il compositor si era acceso su
+# un modo diverso dal preferito (il TV di prova). Da qui "current\)" e
+# "\(preferred", che reggono entrambe le forme.
 query_state() {
     be="$1"; out="$2"
     case "$be" in
@@ -209,9 +220,9 @@ query_state() {
             wlr-randr 2>/dev/null | awk -v out="$out" '
                 /^[^ \t]/ { inblock = ($1 == out); next }
                 !inblock  { next }
-                $2 == "px," {
+                $2 ~ /^px,?$/ {
                     print "MODE " $1
-                    if ($0 ~ /\(current\)/) { print "CUR " $1; print "GEOM " $1 }
+                    if ($0 ~ /current\)/) { print "CUR " $1; print "GEOM " $1 }
                 }
             '
             ;;
