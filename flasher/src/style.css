@@ -13,6 +13,12 @@
 
 * { box-sizing: border-box; }
 
+/* The UA rule for [hidden] is `display: none` at zero specificity, so any rule
+   of ours that sets `display` on a class silently defeats it -- which is how a
+   29 GB stick ended up being told it exceeded 256 GB. Keep this guard above
+   every layout rule. */
+[hidden] { display: none !important; }
+
 html, body {
   margin: 0;
   height: 100%;

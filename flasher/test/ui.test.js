@@ -68,3 +68,19 @@ test('the renderer never reaches for Node directly', () => {
   // contextIsolation is on; anything here would be a real bug, not a style nit.
   assert.ok(!/\brequire\(/.test(renderer), 'renderer.js must go through the preload bridge');
 });
+
+test('the [hidden] attribute is not defeated by a layout rule', () => {
+  // Several elements are shown and hidden purely through the `hidden`
+  // attribute, and the UA rule that implements it has zero specificity: a
+  // single `label.check { display: flex }` is enough to pin one permanently
+  // on screen. The explicit guard is what keeps that from happening.
+  const css = fs.readFileSync(path.join(SRC, 'style.css'), 'utf8');
+  const guard = /\[hidden\]\s*\{[^}]*display:\s*none\s*!important/.test(css);
+  assert.ok(guard, 'style.css must force [hidden] { display: none !important }');
+
+  // And the guard has to come before the rules it neutralises.
+  const guardAt = css.search(/\[hidden\]\s*\{/);
+  const firstDisplay = css.search(/^[^@\n]*\{[^}]*display:/m);
+  assert.ok(guardAt <= firstDisplay || firstDisplay === -1,
+    'the [hidden] guard must precede the layout rules');
+});
