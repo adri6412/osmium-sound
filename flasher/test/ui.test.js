@@ -121,3 +121,33 @@ test('the markup is well formed and every screen is closed', () => {
     assert.equal(o, c, `unbalanced <${tag}> tags: ${o} open, ${c} closed`);
   }
 });
+
+test('the app icons are square and large enough for every target', () => {
+  // electron-builder derives the Windows .ico and the macOS .icns from
+  // build/icon.png, and refuses anything under 256 and 512 respectively. A
+  // non-square source is silently distorted rather than rejected.
+  const png = (file) => {
+    const buf = fs.readFileSync(file);
+    assert.ok(buf.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])),
+      `${file} is not a PNG`);
+    return { width: buf.readUInt32BE(16), height: buf.readUInt32BE(20) };
+  };
+
+  const master = png(path.join(__dirname, '..', 'build', 'icon.png'));
+  assert.equal(master.width, master.height, 'build/icon.png must be square');
+  assert.ok(master.width >= 512, `build/icon.png is ${master.width}px, macOS needs 512+`);
+
+  const window = png(path.join(__dirname, '..', 'assets', 'icon.png'));
+  assert.equal(window.width, window.height, 'assets/icon.png must be square');
+  assert.ok(window.width >= 256, `assets/icon.png is ${window.width}px`);
+});
+
+test('every platform points at the icon, and the window sets its own', () => {
+  const yml = fs.readFileSync(path.join(__dirname, '..', 'electron-builder.yml'), 'utf8');
+  assert.equal((yml.match(/^\s+icon: build\/icon\.png$/gm) || []).length, 3,
+    'win, linux and mac must each declare the icon');
+
+  const main = fs.readFileSync(path.join(__dirname, '..', 'src', 'main.js'), 'utf8');
+  assert.match(main, /icon: path\.join\(__dirname, '\.\.', 'assets', 'icon\.png'\)/,
+    'the BrowserWindow icon is missing — Linux would show a blank window icon');
+});

@@ -44,6 +44,9 @@ function createWindow() {
     minHeight: 560,
     backgroundColor: '#101214',
     title: 'Osmium Flasher',
+    // Linux does not take the window icon from the packaged metadata the way
+    // Windows takes it from the .exe, so it has to be set here.
+    icon: path.join(__dirname, '..', 'assets', 'icon.png'),
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,

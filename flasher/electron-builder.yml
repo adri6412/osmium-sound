@@ -35,6 +35,8 @@ asarUnpack:
 win:
   target:
     - portable
+  # Generated from build/icon.png (1024²) at build time; no .ico is committed.
+  icon: build/icon.png
   artifactName: Osmium-Flasher-${version}-win-x64.${ext}
 
 portable:
@@ -48,6 +50,7 @@ portable:
 linux:
   target:
     - tar.gz
+  icon: build/icon.png
   category: Utility
   maintainer: Osmium Sound <support@osmiumsound.it>
   artifactName: Osmium-Flasher-${version}-linux-x86_64.${ext}
@@ -59,6 +62,7 @@ linux:
 mac:
   target:
     - dmg
+  icon: build/icon.png
   category: public.app-category.utilities
   # `identity: null` still ad-hoc signs the bundle, which arm64 requires in
   # order to launch at all. It is NOT notarized — Gatekeeper will complain.
