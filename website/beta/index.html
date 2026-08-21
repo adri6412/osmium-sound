@@ -804,7 +804,8 @@
       </div>
       <div class="mac-cmds" id="macCmds" hidden>
         <p data-en="On macOS there is no download button on purpose. Run these two lines in Terminal instead — a browser would mark the app as quarantined and macOS would then refuse to open it." data-it="Su macOS non c&#x27;è un pulsante di download, di proposito. Esegui invece queste due righe nel Terminale — un browser contrassegnerebbe l&#x27;app come «in quarantena» e macOS si rifiuterebbe poi di aprirla.">On macOS there is no download button on purpose. Run these two lines in Terminal instead — a browser would mark the app as quarantined and macOS would then refuse to open it.</p>
-        <pre class="cmd"><code id="macCurl"></code></pre>
+        <pre class="cmd"><code>curl -L -o ~/Downloads/Osmium-Flasher.dmg <span id="macCurlUrl"></span>
+open ~/Downloads/Osmium-Flasher.dmg</code></pre>
         <p class="mac-cmds-after" data-en="Then drag the app across as usual. It starts with no warning at all." data-it="Poi trascina l&#x27;app come al solito. Si avvia senza alcun avviso.">Then drag the app across as usual. It starts with no warning at all.</p>
       </div>
       <p class="dl-warning" data-en="&lt;strong&gt;Heads up:&lt;/strong&gt; the app is not code-signed, so Windows and macOS will warn you the first time you open it. That is expected, and the note below says how to get past it." data-it="&lt;strong&gt;Attenzione:&lt;/strong&gt; l&#x27;app non è firmata digitalmente, quindi Windows e macOS ti avviseranno al primo avvio. È previsto, e la nota qui sotto spiega come procedere."><strong>Heads up:</strong> the app is not code-signed, so Windows and macOS will warn you the first time you open it. That is expected, and the note below says how to get past it.</p>
@@ -1288,12 +1289,12 @@
     // The command names the exact file, and the two macOS builds differ, so it
     // is written here rather than hard-coded in the markup.
     const onMac = osSelect.value.indexOf('mac') === 0;
-    const macCurl = document.getElementById('macCurl');
-    if (macCurl && suffix) {
-      macCurl.textContent =
-        'curl -L -o ~/Downloads/Osmium-Flasher.dmg https://file.osmiumsound.it/Osmium-Flasher-'
-        + version + '-' + suffix + '
-open ~/Downloads/Osmium-Flasher.dmg';
+    // Only the URL is filled in: the line break between the two commands lives
+    // in the <pre>, so no escape sequence has to survive being written out.
+    const macCurlUrl = document.getElementById('macCurlUrl');
+    if (macCurlUrl && suffix) {
+      macCurlUrl.textContent =
+        'https://file.osmiumsound.it/Osmium-Flasher-' + version + '-' + suffix;
     }
     flasherBtn.hidden = onMac;
 
