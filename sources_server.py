@@ -260,6 +260,59 @@ def umount(mountpoint):
         _run(["umount", "-l", mountpoint])
 
 
+def umount_clean(mountpoint):
+    """Unmount an adopted disk the way a removable device deserves: flush
+    first, then a plain umount, and the lazy detach only as a fallback.
+
+    `umount -l` on its own (what umount() does, and what removing a source
+    used to call) returns immediately and leaves the writeback to happen
+    whenever the kernel gets round to it. On a USB stick — which the user
+    pulls out the moment the entry disappears from the list — that is
+    precisely how a FAT filesystem ends up corrupted. `sync` first, so
+    there is nothing left to write back; the plain umount then fails loudly
+    if something still holds the mount (the Lyrion scanner walking it, an
+    open Samba handle), and only then do we detach lazily rather than leave
+    the user with a source that refuses to go away.
+
+    Returns (ok, lazy_used)."""
+    if not mountpoint or not os.path.ismount(mountpoint):
+        return True, False
+    _run(["sync"], timeout=60)
+    if _run(["umount", mountpoint], timeout=30).returncode == 0:
+        return True, False
+    r = _run(["umount", "-l", mountpoint], timeout=30)
+    return r.returncode == 0, True
+
+
+def _drop_adopted_mountpoint(mountpoint):
+    """Remove the now-unused mountpoint directory of an adopted disk.
+
+    Not housekeeping for its own sake: an empty /mnt/hifi-usb/<LABEL>-<id>
+    left behind is indistinguishable, to os.path.isdir(), from a real folder,
+    and _sync_from_lyrion() takes exactly that test as permission to offer a
+    stale Lyrion mediadir back as a new `local` source. Seen in the field: an
+    Osmium install stick adopted as a music source, unplugged, its source
+    deleted — and the entry reappearing on the very next poll, for good.
+
+    Confined to the two roots we create ourselves, and only when the
+    directory is really unmounted and really empty, so this can never eat a
+    user's folder."""
+    if not mountpoint:
+        return
+    p = os.path.realpath(mountpoint)
+    for root in (os.path.realpath(USB_ADOPTED_ROOT), os.path.realpath(INTERNAL_MOUNT_ROOT)):
+        if p.startswith(root + os.sep):
+            break
+    else:
+        return
+    if os.path.ismount(p):
+        return
+    try:
+        os.rmdir(p)                      # fails, harmlessly, if not empty
+    except OSError:
+        pass
+
+
 def _system_disk_paths():
     """Return a set of disk paths that are part of the running system and must
     never be offered for adoption or formatting."""
@@ -3884,16 +3937,31 @@ def api_remove(sid):
     denied = _require_pair_token()
     if denied:
         return denied
+    removed = []
     with _lock:
         state = load_state()
         keep = []
         for s in state["sources"]:
             if s.get("id") == sid:
+                removed.append(s)
                 t = s.get("type")
                 if t == "smb":
                     umount(s["mountpoint"])
                 elif t in ("internal", "usb"):
-                    umount(s.get("mountpoint"))
+                    ok, lazy = umount_clean(s.get("mountpoint"))
+                    if not ok:
+                        print(f"[sources] umount failed for {s.get('mountpoint')}")
+                    elif lazy:
+                        print(f"[sources] {s.get('mountpoint')} was busy — detached lazily")
+                # Leftover mountpoint directory, for every type — `path` and
+                # not just `mountpoint` because that is how these usually
+                # present: a stale Lyrion mediadir pointing at the mountpoint
+                # of a device long unplugged, re-imported by
+                # _sync_from_lyrion() as a `local` source. The call is inert
+                # anywhere else (SMB mounts, a real music folder): it only
+                # ever touches an empty, unmounted directory under the two
+                # roots we create ourselves.
+                _drop_adopted_mountpoint(s.get("mountpoint") or s.get("path"))
                 if t == "usb":
                     # Auto-adoption (usb_sync()) would otherwise re-mount this
                     # within a few seconds, since the device is still plugged
@@ -3906,6 +3974,18 @@ def api_remove(sid):
         state["sources"] = keep
         save_state(state)
         regen_samba_shares()
+        # Lyrion, still inside the lock: a GET /api/sources landing between
+        # the save above and this call would see a mediadir belonging to no
+        # source and re-import it through _sync_from_lyrion(), undoing the
+        # removal the user just asked for.
+        roots = [r for s in removed for r in _source_lyrion_roots(s)]
+        if roots:
+            try:
+                _lyrion_remove_mediadir_live(roots)
+            except Exception as e:
+                # Not fatal: the source is gone from our state either way and
+                # the next "Apply & rescan" rewrites mediadirs from it.
+                print(f"[sources] could not drop {roots} from Lyrion mediadirs: {e}")
     return jsonify({"success": True})
 
 
@@ -4320,6 +4400,52 @@ def _lyrion_add_mediadir_live(path):
     if path not in current:
         _lyrion_request(["pref", "mediadirs", current + [path]])
     _lyrion_rescan()
+
+
+def _source_lyrion_roots(src):
+    """Every path in Lyrion's mediadirs that belongs to `src`: its mount root
+    for an adopted/SMB source, its folder for a `local` one. The subpath is
+    deliberately not applied — what Lyrion holds may be the root, a subpath,
+    or (after an edit that was never applied) both, and all of it goes when
+    the source goes."""
+    if src.get("type") in ("smb", "internal", "usb"):
+        mp = src.get("mountpoint")
+        return [os.path.realpath(mp)] if mp else []
+    raw = src.get("path")
+    return [os.path.realpath(raw)] if raw else []
+
+
+def _lyrion_remove_mediadir_live(roots):
+    """The counterpart of _lyrion_add_mediadir_live(): drop every live
+    mediadir at or under `roots`, then rescan — again without restarting
+    lyrionmusicserver, so removing a source doesn't cut the music off.
+
+    Without this, removing a source only ever took it out of our own state:
+    Lyrion kept the folder, and the very next GET /api/sources handed it
+    back through _sync_from_lyrion(), which re-imports any mediadir it does
+    not recognise as a `local` source. The user's deletion undid itself
+    within the second, forever — and neither the kiosk nor the web UI could
+    do anything about it, since both go through this same endpoint.
+
+    Raises on failure (Lyrion unreachable): the caller decides, and the next
+    "Apply & rescan" recomputes mediadirs from state regardless."""
+    current = _lyrion_request(["pref", "mediadirs", "?"]).get("_p2")
+    if not isinstance(current, list):
+        current = [current] if current else []
+    victims = [r for r in roots if r]
+    keep = []
+    for d in current:
+        if not d:
+            continue
+        p = os.path.realpath(d)
+        if any(p == v or p.startswith(v + os.sep) for v in victims):
+            continue
+        keep.append(d)
+    if len(keep) == len(current):
+        return False
+    _lyrion_request(["pref", "mediadirs", keep])
+    _lyrion_rescan()
+    return True
 
 
 def _rip_watcher():
