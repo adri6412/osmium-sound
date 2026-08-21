@@ -405,6 +405,11 @@
        is accepted, because the flasher installs a beta build too. */
     .flasher-block .is-placeholder { opacity: 0.45; cursor: not-allowed; }
 
+    .dl-warning {
+      margin: 0 0 0.9rem; font-size: 0.86rem; line-height: 1.6;
+      opacity: 0.9;
+    }
+
     .flasher-note { margin-top: 0.45rem; font-size: 0.85rem; }
     .flasher-note summary { cursor: pointer; opacity: 0.8; }
     .flasher-note summary:hover { opacity: 1; }
@@ -732,6 +737,7 @@
           <span data-en="Download Osmium Flasher" data-it="Scarica Osmium Flasher">Download Osmium Flasher</span>
         </a>
       </div>
+      <p class="dl-warning" data-en="&lt;strong&gt;Heads up:&lt;/strong&gt; the app is not code-signed, so Windows and macOS will warn you the first time you open it. That is expected, and the note below says how to get past it." data-it="&lt;strong&gt;Attenzione:&lt;/strong&gt; l&#x27;app non è firmata digitalmente, quindi Windows e macOS ti avviseranno al primo avvio. È previsto, e la nota qui sotto spiega come procedere."><strong>Heads up:</strong> the app is not code-signed, so Windows and macOS will warn you the first time you open it. That is expected, and the note below says how to get past it.</p>
       <details class="flasher-note" data-osnote="win" hidden>
         <summary data-en="Windows — “unknown publisher”" data-it="Windows — “editore sconosciuto”">Windows — “unknown publisher”</summary>
         <p data-en="Osmium Flasher is not code-signed, so SmartScreen stops it the first time. Click &lt;strong&gt;More info&lt;/strong&gt;, then &lt;strong&gt;Run anyway&lt;/strong&gt;. Windows will also ask for administrator rights: writing to a raw device needs them." data-it="Osmium Flasher non è firmato digitalmente, quindi la prima volta SmartScreen lo blocca. Clicca su &lt;strong&gt;Ulteriori informazioni&lt;/strong&gt; e poi su &lt;strong&gt;Esegui comunque&lt;/strong&gt;. Windows chiederà anche i permessi di amministratore: scrivere direttamente su un dispositivo li richiede.">Osmium Flasher is not code-signed, so SmartScreen stops it the first time. Click <strong>More info</strong>, then <strong>Run anyway</strong>. Windows will also ask for administrator rights: writing to a raw device needs them.</p>
@@ -1172,6 +1178,9 @@
     const wanted = osSelect.value.indexOf('mac') === 0 ? 'mac' : osSelect.value;
     document.querySelectorAll('.flasher-note').forEach(note => {
       note.hidden = note.dataset.osnote !== wanted;
+      // Open it rather than leaving it folded: it carries the warning the
+      // visitor is about to run into, and one behind a click is one unread.
+      note.open = !note.hidden;
     });
     applyGate();
   }
