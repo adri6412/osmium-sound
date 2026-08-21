@@ -46,7 +46,11 @@ jobs:
           - os: macos-14
             label: mac-arm64
             build: npm run dist:mac
-          - os: macos-15
+          # macos-13 is being retired; macos-15-intel is the replacement and the
+          # last x86_64 image Actions will offer (through August 2027). Plain
+          # `macos-15` is Apple Silicon, so using it here would build arm64
+          # twice and label one of them x64.
+          - os: macos-15-intel
             label: mac-x64
             build: npm run dist:mac
 
