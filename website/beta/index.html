@@ -725,9 +725,9 @@
           <span class="bf-name" data-en="macOS (Intel)" data-it="macOS (Intel)">macOS (Intel)</span>
           <small>.dmg</small>
         </a>
-        <a class="btn-flasher is-placeholder is-gated" data-os="linux" data-href="https://file.osmiumsound.it/Osmium-Flasher-1.0.0-linux-x86_64.tar.gz" aria-disabled="true">
+        <a class="btn-flasher is-placeholder is-gated" data-os="linux" data-href="https://file.osmiumsound.it/Osmium-Flasher-1.0.0-linux-x86_64.run" aria-disabled="true">
           <span class="bf-name" data-en="Linux" data-it="Linux">Linux</span>
-          <small>.tar.gz</small>
+          <small>.run</small>
         </a>
       </div>
       <details class="flasher-note" data-osnote="win">
@@ -739,8 +739,8 @@
         <p data-en="The app is not notarized. Open it once, let macOS refuse, then go to &lt;strong&gt;System Settings → Privacy &amp;amp; Security&lt;/strong&gt; and press &lt;strong&gt;Open Anyway&lt;/strong&gt;. If that button is missing, run &lt;code&gt;xattr -dr com.apple.quarantine &quot;/Applications/Osmium Flasher.app&quot;&lt;/code&gt; in Terminal." data-it="L&#x27;app non è notarizzata. Aprila una prima volta, lascia che macOS la rifiuti, poi vai in &lt;strong&gt;Impostazioni di Sistema → Privacy e sicurezza&lt;/strong&gt; e premi &lt;strong&gt;Apri comunque&lt;/strong&gt;. Se quel pulsante non compare, esegui &lt;code&gt;xattr -dr com.apple.quarantine &quot;/Applications/Osmium Flasher.app&quot;&lt;/code&gt; nel Terminale.">The app is not notarized. Open it once, let macOS refuse, then go to <strong>System Settings → Privacy &amp; Security</strong> and press <strong>Open Anyway</strong>. If that button is missing, run <code>xattr -dr com.apple.quarantine "/Applications/Osmium Flasher.app"</code> in Terminal.</p>
       </details>
       <details class="flasher-note" data-osnote="linux">
-        <summary data-en="Linux — extract and run" data-it="Linux — estrai ed esegui">Linux — extract and run</summary>
-        <p data-en="Unpack the archive and run &lt;code&gt;./osmium-flasher&lt;/code&gt; inside it. No warning to dismiss; you will get a polkit password prompt when the write starts. It is a tar.gz rather than an AppImage on purpose — an AppImage is mounted so that root cannot read it, which is exactly what the elevated write needs to do." data-it="Estrai l&#x27;archivio ed esegui &lt;code&gt;./osmium-flasher&lt;/code&gt; al suo interno. Nessun avviso da chiudere; al momento della scrittura comparirà la richiesta password di polkit. È un tar.gz e non un AppImage di proposito: un AppImage viene montato in modo che root non possa leggerlo, ed è proprio quello che serve alla scrittura privilegiata.">Unpack the archive and run <code>./osmium-flasher</code> inside it. No warning to dismiss; you will get a polkit password prompt when the write starts. It is a tar.gz rather than an AppImage on purpose — an AppImage is mounted so that root cannot read it, which is exactly what the elevated write needs to do.</p>
+        <summary data-en="Linux — one executable file" data-it="Linux — un solo file eseguibile">Linux — one executable file</summary>
+        <p data-en="Make it executable with &lt;code&gt;chmod +x Osmium-Flasher-1.0.0-linux-x86_64.run&lt;/code&gt; and run it. No warning to dismiss; you will get a polkit password prompt when the write starts. It is a self-extracting executable rather than an AppImage on purpose — an AppImage is mounted so that root cannot read it, which is exactly what the elevated write needs to do." data-it="Rendilo eseguibile con &lt;code&gt;chmod +x Osmium-Flasher-1.0.0-linux-x86_64.run&lt;/code&gt; e avvialo. Nessun avviso da chiudere; al momento della scrittura comparirà la richiesta password di polkit. È un eseguibile auto-estraente e non un AppImage di proposito: un AppImage viene montato in modo che root non possa leggerlo, ed è proprio quello che serve alla scrittura privilegiata.">Make it executable with <code>chmod +x Osmium-Flasher-1.0.0-linux-x86_64.run</code> and run it. No warning to dismiss; you will get a polkit password prompt when the write starts. It is a self-extracting executable rather than an AppImage on purpose — an AppImage is mounted so that root cannot read it, which is exactly what the elevated write needs to do.</p>
       </details>
     </div>
 

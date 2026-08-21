@@ -62,10 +62,14 @@ so the native addons keep the right ABI.
   built for it: `mountutils` is V8/NAN-based, not N-API, so a single build cannot
   serve both runtimes.
 
-And one that dictated the packaging: the Linux build is a **tar.gz, not an
-AppImage**. An AppImage is mounted over FUSE by the unprivileged user, and FUSE
-denies access to every other user — root included — unless `user_allow_other` is
-set in `/etc/fuse.conf`. `pkexec` could never reach the helper inside the mount.
+And one that dictated the packaging: the Linux build is a **self-extracting
+`.run`, not an AppImage**. An AppImage is mounted over FUSE by the unprivileged
+user, and FUSE denies access to every other user — root included — unless
+`user_allow_other` is set in `/etc/fuse.conf`, so `pkexec` could never reach the
+helper inside the mount. `build/make-selfextract.sh` wraps electron-builder's
+tarball into one executable that unpacks into `~/.cache/osmium-flasher/<version>`
+on first run and launches from there — a single file to download, but real files
+on disk for the elevated helper to reach.
 
 ## Development
 
