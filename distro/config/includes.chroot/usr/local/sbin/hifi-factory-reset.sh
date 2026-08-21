@@ -26,10 +26,13 @@ log() { echo "I: [hifi-factory-reset] $*"; }
 
 # ── 1) stop services that hold user state ────────────────────────────
 log "stopping user-state services"
-for unit in smbd nmbd hifi-bluealsa hifi-bt-agent hifi-bt-aplay hifi-bt-watcher \
+for unit in smbd nmbd wsdd2 hifi-bluealsa hifi-bt-agent hifi-bt-aplay hifi-bt-watcher \
             bluetooth camilladsp lyrionmusicserver hifi-backup; do
     systemctl stop "$unit" 2>/dev/null || true
 done
+# Both are re-enabled by sources_server.py the moment a disk is adopted again;
+# leaving them enabled here would announce a server with no shares after a reset.
+systemctl disable smbd wsdd2 2>/dev/null || true
 
 # Unmount every SMB source (sources_server re-mounts from /etc/hifi-sources.json
 # at boot, so dropping the JSON below is what makes them stay gone — there is no
@@ -91,7 +94,8 @@ usermod -p '*' hifi 2>/dev/null || true
 
 # Other config files owned by the appliance.
 rm -f /etc/hifi-sources.json /etc/hifi-pairing-tokens.json \
-      /etc/samba/hifi-shares.conf /etc/camilladsp/config.yml 2>/dev/null || true
+      /etc/samba/hifi-shares.conf /etc/avahi/services/hifi-smb.service \
+      /etc/camilladsp/config.yml 2>/dev/null || true
 
 # /var/lib/hifi-player: keep the os-migrations ledger; drop per-user artefacts.
 # The whole update/ dir goes too (plan, state, staged payloads): a

@@ -126,6 +126,13 @@ python3-numpy
 cifs-utils
 samba
 exfatprogs
+# WS-Discovery + LLMNR responder: what actually makes the shares appear in
+# Windows Explorer's "Network" (nmbd is masked for boot speed and Explorer
+# stopped browsing over NetBIOS with SMB1 anyway). Starts/stops with smbd —
+# the unit is BindsTo=/PartOf=smbd.service — and ships disabled here, since
+# sources_server.py enables it only once a disk is actually shared.
+# macOS/Linux use the Bonjour record avahi publishes instead.
+wsdd2
 
 # hifi-disk-install.sh (the Electron installer's backend): unsquashfs
 # copies the live filesystem onto the target disk, mkfs.vfat formats the

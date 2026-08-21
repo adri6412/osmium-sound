@@ -86,6 +86,11 @@ LYRION_SERVICE = "lyrionmusicserver.service"
 SAMBA_SHARES_FILE = "/etc/samba/hifi-shares.conf"
 SAMBA_CRED_FILE = "/etc/hifi-player/samba-cred.json"
 SAMBA_USER = "hifimusic"
+# LAN discovery for those shares (see _publish_smb_discovery): a Bonjour record
+# for macOS/Linux and the wsdd2 daemon (WS-Discovery + LLMNR) for Windows. Both
+# are published only while the shares actually exist.
+AVAHI_SMB_SERVICE = "/etc/avahi/services/hifi-smb.service"
+WSDD_UNIT = "wsdd2.service"
 FORMAT_STATUS = "/run/hifi-format-status.json"
 FORMAT_UNIT = "hifi-format-disk"
 FORMAT_SCRIPT = "/usr/local/sbin/hifi-format-disk.sh"
@@ -574,6 +579,82 @@ def _create_samba_user(force_new_password=False):
     return password
 
 
+# Announced as the host's own mDNS name (%h -> hifiplayer.local), so it follows
+# a renamed device for free. _device-info._tcp carries no port of its own (0 is
+# the Bonjour convention for a record that only describes the host); it exists
+# purely so Finder draws a server icon instead of a generic PC.
+_AVAHI_SMB_XML = """<?xml version="1.0" standalone='no'?><!--*-nxml-*-->
+<!DOCTYPE service-group SYSTEM "avahi-service.dtd">
+<!-- HiFi Player - written by sources_server.py, do not edit by hand. -->
+<service-group>
+  <name replace-wildcards="yes">%h</name>
+  <service>
+    <type>_smb._tcp</type>
+    <port>445</port>
+  </service>
+  <service>
+    <type>_device-info._tcp</type>
+    <port>0</port>
+    <txt-record>model=RackMac</txt-record>
+  </service>
+</service-group>
+"""
+
+
+def _unit_available(unit):
+    """True if systemd knows a unit file by that name (i.e. pkg installed)."""
+    r = _run(["systemctl", "list-unit-files", unit], timeout=5)
+    return r.returncode == 0 and unit in (r.stdout or "")
+
+
+def _publish_smb_discovery(enabled):
+    """Make the shares show up in the network browser of the three OSes.
+
+    None of them browses SMB servers over SMB itself: Windows Explorer's
+    "Network" uses WS-Discovery (the wsdd2 daemon — NetBIOS browsing died with
+    SMB1, and nmbd is masked here for boot speed, see apply.d/0031), while
+    macOS Finder and GNOME's "Networks" use the Bonjour `_smb._tcp` record.
+    Publish neither and the shares still work, but the device is invisible and
+    the user has to type \\\\<ip>\\<share> by hand.
+
+    Tied to the shares existing rather than left permanently on: with no
+    adopted disk smbd is stopped, and advertising a server that refuses every
+    connection is worse than advertising nothing.
+    """
+    try:
+        if enabled:
+            os.makedirs(os.path.dirname(AVAHI_SMB_SERVICE), exist_ok=True)
+            cur = None
+            try:
+                with open(AVAHI_SMB_SERVICE) as f:
+                    cur = f.read()
+            except OSError:
+                pass
+            if cur != _AVAHI_SMB_XML:
+                tmp = AVAHI_SMB_SERVICE + ".tmp"
+                with open(tmp, "w") as f:
+                    f.write(_AVAHI_SMB_XML)
+                os.chmod(tmp, 0o644)
+                # avahi-daemon watches this directory and reloads on its own.
+                os.replace(tmp, AVAHI_SMB_SERVICE)
+        elif os.path.exists(AVAHI_SMB_SERVICE):
+            os.remove(AVAHI_SMB_SERVICE)
+    except Exception as e:
+        print(f"[sources] avahi smb service: {e}")
+
+    # wsdd2 is left disabled by the OS update that installs it (a daemon idling
+    # for nothing costs boot time), and is missing outright on a device that
+    # hasn't taken that update yet — either way it only costs Windows browsing,
+    # never the shares themselves, so a failure here is not fatal.
+    try:
+        if not _unit_available(WSDD_UNIT):
+            return
+        action = "enable" if enabled else "disable"
+        _run(["systemctl", action, "--now", WSDD_UNIT], timeout=30)
+    except Exception as e:
+        print(f"[sources] {WSDD_UNIT}: {e}")
+
+
 def regen_samba_shares():
     """Rewrite the included shares file and start/stop smbd accordingly."""
     disks = _adopted_disk_sources()
@@ -602,11 +683,13 @@ def regen_samba_shares():
     if not disks:
         if smbd:
             _run(["systemctl", "disable", "--now", "smbd"], timeout=30)
+        _publish_smb_discovery(False)
         return
     if smbd:
         _create_samba_user()
         _run(["systemctl", "enable", "--now", "smbd"], timeout=30)
         _run(["systemctl", "reload", "smbd"], timeout=10)
+    _publish_smb_discovery(smbd)
 
 
 def _ip_addresses():

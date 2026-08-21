@@ -70,6 +70,9 @@ systemctl disable ssh.service || true
 
 echo "I: [hifi] Samba installed but OFF by default (enabled when an internal disk is adopted)"
 systemctl disable smbd.service nmbd.service || true
+# Same for the WS-Discovery/LLMNR responder that makes those shares show up in
+# Windows' "Network": sources_server.py turns it on together with smbd.
+systemctl disable wsdd2.service || true
 
 echo "I: [hifi] disabling getty on tty1 (no text console flashes)"
 systemctl mask getty@tty1.service || true
