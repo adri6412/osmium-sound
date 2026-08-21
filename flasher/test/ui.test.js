@@ -84,3 +84,40 @@ test('the [hidden] attribute is not defeated by a layout rule', () => {
   assert.ok(guardAt <= firstDisplay || firstDisplay === -1,
     'the [hidden] guard must precede the layout rules');
 });
+
+test('every screen belongs to a wizard phase', () => {
+  // The stepper is driven by PHASE_OF; a screen missing from it would leave the
+  // phase indicator stuck on whatever was highlighted before.
+  const screens = [...html.matchAll(/id="screen([A-Za-z]+)"/g)]
+    .map((m) => m[1][0].toLowerCase() + m[1].slice(1));
+
+  const phaseOf = /const PHASE_OF = \{([\s\S]*?)\};/.exec(renderer);
+  assert.ok(phaseOf, 'PHASE_OF not found in renderer.js');
+  const mapped = new Set([...phaseOf[1].matchAll(/(\w+):\s*'(\w+)'/g)].map((m) => m[1]));
+
+  // The error screen deliberately keeps whichever phase was already showing.
+  const unmapped = screens.filter((s) => s !== 'error' && !mapped.has(s));
+  assert.deepEqual(unmapped, [], `screens with no phase: ${unmapped}`);
+
+  const order = /const PHASE_ORDER = \[([^\]]*)\]/.exec(renderer);
+  assert.ok(order, 'PHASE_ORDER not found');
+  const phases = new Set([...order[1].matchAll(/'(\w+)'/g)].map((m) => m[1]));
+
+  const markupPhases = [...html.matchAll(/data-phase="(\w+)"/g)].map((m) => m[1]);
+  assert.ok(markupPhases.length > 0, 'the stepper has no steps');
+  const strays = markupPhases.filter((p) => !phases.has(p));
+  assert.deepEqual(strays, [], `stepper steps absent from PHASE_ORDER: ${strays}`);
+});
+
+test('the markup is well formed and every screen is closed', () => {
+  // A stray or unclosed tag would swallow the rest of the wizard silently.
+  const opens = (html.match(/<section class="screen/g) || []).length;
+  const closes = (html.match(/<\/section>/g) || []).length;
+  assert.equal(opens, closes, 'unbalanced <section> tags');
+
+  for (const tag of ['div', 'ol', 'ul', 'nav', 'footer', 'main', 'header']) {
+    const o = (html.match(new RegExp(`<${tag}[\\s>]`, 'g')) || []).length;
+    const c = (html.match(new RegExp(`</${tag}>`, 'g')) || []).length;
+    assert.equal(o, c, `unbalanced <${tag}> tags: ${o} open, ${c} closed`);
+  }
+});

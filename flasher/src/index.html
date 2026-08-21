@@ -18,12 +18,29 @@
   </span>
 </header>
 
+<!-- The three phases of getting Osmium onto a mini PC. The stick is only the
+     first of them, which is the whole point of the wizard. -->
+<nav class="stepper" id="stepper">
+  <span class="step" data-phase="stick"><i>1</i><span data-i18n="step.stick"></span></span>
+  <span class="step" data-phase="boot"><i>2</i><span data-i18n="step.boot"></span></span>
+  <span class="step" data-phase="install"><i>3</i><span data-i18n="step.install"></span></span>
+</nav>
+
 <main>
 
   <!-- 1 ── welcome ─────────────────────────────────────────────────────── -->
   <section class="screen on" id="screenWelcome">
     <h1 data-i18n="welcome.title"></h1>
     <p class="lead" data-i18n="welcome.lead"></p>
+
+    <div class="card">
+      <h3 data-i18n="welcome.needTitle"></h3>
+      <ul class="needs">
+        <li data-i18n="welcome.need1"></li>
+        <li data-i18n="welcome.need2"></li>
+        <li data-i18n="welcome.need3"></li>
+      </ul>
+    </div>
 
     <div class="card release" id="releaseCard">
       <span class="tag" id="releaseTag">…</span>
@@ -70,14 +87,56 @@
     </div>
   </section>
 
-  <!-- 5 ── done ────────────────────────────────────────────────────────── -->
-  <section class="screen" id="screenDone">
-    <div class="result-ico">✅</div>
-    <h1 data-i18n="done.title"></h1>
-    <p class="lead" data-i18n="done.lead"></p>
+  <!-- 5 ── boot the mini PC ────────────────────────────────────────────── -->
+  <section class="screen" id="screenBoot">
+    <p class="banner-ok" data-i18n="boot.ready"></p>
+    <h1 data-i18n="boot.title"></h1>
+    <ol class="steps">
+      <li data-i18n="boot.s1"></li>
+      <li data-i18n="boot.s2"></li>
+      <li data-i18n="boot.s3"></li>
+    </ol>
+    <div class="card note">
+      <h3 data-i18n="boot.tryTitle"></h3>
+      <p data-i18n="boot.try"></p>
+    </div>
+    <div class="card note">
+      <h3 data-i18n="boot.troubleTitle"></h3>
+      <p data-i18n="boot.trouble"></p>
+    </div>
   </section>
 
-  <!-- 6 ── error ───────────────────────────────────────────────────────── -->
+  <!-- 6 ── install on the mini PC ──────────────────────────────────────── -->
+  <section class="screen" id="screenInstall">
+    <h1 data-i18n="install.title"></h1>
+    <ol class="steps">
+      <li data-i18n="install.s1"></li>
+      <li data-i18n="install.s2"></li>
+      <li data-i18n="install.s3"></li>
+    </ol>
+    <div class="danger-box">
+      <p><strong data-i18n="install.warnTitle"></strong></p>
+      <p data-i18n="install.warn"></p>
+    </div>
+    <div class="card note">
+      <h3 data-i18n="install.phoneTitle"></h3>
+      <p data-i18n="install.phone"></p>
+    </div>
+  </section>
+
+  <!-- 7 ── finished ────────────────────────────────────────────────────── -->
+  <section class="screen" id="screenFinish">
+    <div class="result-ico">✅</div>
+    <h1 data-i18n="finish.title"></h1>
+    <p class="lead" data-i18n="finish.lead"></p>
+    <div class="card note">
+      <h3 data-i18n="finish.nextTitle"></h3>
+      <p data-i18n="finish.next"></p>
+    </div>
+    <button class="linkish" id="anotherStick" data-i18n="finish.another"></button>
+  </section>
+
+  <!-- 8 ── error ───────────────────────────────────────────────────────── -->
   <section class="screen" id="screenError">
     <div class="result-ico">⚠️</div>
     <h1 data-i18n="error.title"></h1>

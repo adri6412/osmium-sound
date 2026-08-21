@@ -1,14 +1,25 @@
 # Osmium Flasher
 
-Desktop app that writes the Osmium Sound installer image to a USB stick.
-Downloaded by beta testers from the beta page; it is not part of the appliance
+Desktop app that walks a beta tester through installing Osmium Sound on a mini
+PC, end to end. Downloaded from the beta page; it is not part of the appliance
 and never runs on the device itself.
+
+Three phases, shown as a stepper across the top:
+
+1. **USB stick** — fetch the current image, verify it, write it to the stick.
+2. **Boot** — how to get the mini PC to start from that stick.
+3. **Install** — how to drive the on-device installer through to first boot.
+
+Only the first phase is something the app *does*; the other two happen on the
+other machine and are instructions. They are in here because stopping at "the
+stick is ready" is exactly where people got stranded. Their wording tracks the
+install section of `website/beta/manual.html` — change them together.
 
 Doing this from the browser is not possible: WebUSB refuses to claim
 mass-storage interfaces, and the File System Access API only reaches mounted
 volumes, never a raw block device. Hence a native app.
 
-## What it does
+## What the first phase does
 
 1. Reads `https://file.osmiumsound.it/latest.json` to find the current image.
 2. Verifies the Ed25519 signature over the `.sha256` sidecar with the OTA public

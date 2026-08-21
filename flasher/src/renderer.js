@@ -1,25 +1,41 @@
 'use strict';
 
 /* Osmium Flasher — renderer. No Node access here; everything goes through the
-   `flasher` bridge exposed by preload.js. */
+   `flasher` bridge exposed by preload.js.
+
+   The app walks the whole install, not just the stick: prepare the USB stick,
+   boot the mini PC from it, then run the on-device installer. Phases 2 and 3
+   happen on the other machine, so they are instructions rather than actions --
+   but leaving them out is what left people stranded halfway. */
 
 // ── strings ────────────────────────────────────────────────────────────────
 const STRINGS = {
   en: {
-    'welcome.title': 'Prepare an Osmium Sound USB stick',
-    'welcome.lead': 'This writes the installer image to a USB stick. Everything already on that stick will be erased.',
+    'step.stick': 'USB stick',
+    'step.boot': 'Boot',
+    'step.install': 'Install',
+
+    'welcome.title': 'Install Osmium Sound on a mini PC',
+    'welcome.lead': 'Three steps: this app writes a USB stick, you boot the mini PC from it, and the installer on that machine does the rest. Nothing on this computer is touched.',
+    'welcome.needTitle': 'What you need',
+    'welcome.need1': 'An x86 mini PC to turn into the player.',
+    'welcome.need2': 'A USB stick of at least 8 GB. Everything already on it will be erased.',
+    'welcome.need3': 'This computer, connected to the internet — the image is about 1 GB.',
     'welcome.useLocal': 'Use an image already on this computer instead',
     'welcome.loading': 'Looking for the current image…',
     'welcome.localPicked': 'Local image — not signature-checked',
+
     'select.title': 'Choose the USB stick',
     'select.lead': 'Only removable drives are listed. Your system disk is never shown.',
     'select.empty': 'Insert a USB stick — it will appear here automatically.',
     'select.readonly': 'write-protected',
     'select.toosmall': 'too small for this image',
+
     'confirm.title': 'Last check before erasing',
     'confirm.warnTitle': 'Everything on this drive will be destroyed.',
     'confirm.warnBody': 'The image is written to the raw device, so existing partitions and files cannot be recovered afterwards.',
     'confirm.oversize': 'This drive is larger than 256 GB — unusual for a USB stick. I have checked it is not an external hard drive.',
+
     'work.downloading': 'Downloading the image',
     'work.checking': 'Checking the image',
     'work.flashing': 'Writing to the USB stick',
@@ -28,16 +44,42 @@ const STRINGS = {
     'work.leadDownload': 'The image is about 1 GB. An interrupted download resumes where it stopped.',
     'work.leadElevate': 'Your system will ask for your password: writing to a raw device needs administrator rights.',
     'work.leadFlash': 'Do not unplug the stick.',
-    'done.title': 'The USB stick is ready',
-    'done.lead': 'Plug it into the mini PC, boot from it, and follow the installer on screen.',
+
+    'boot.ready': 'The USB stick is ready.',
+    'boot.title': 'Boot the mini PC from the stick',
+    'boot.s1': 'Plug the stick into the mini PC and switch it on.',
+    'boot.s2': 'Tap the boot-menu key repeatedly as it starts — usually F11, F12, Esc or Del, depending on the motherboard.',
+    'boot.s3': 'Pick the USB stick from the list, then choose <strong>Install Osmium Sound</strong> from the menu that appears.',
+    'boot.tryTitle': 'Want a look first?',
+    'boot.try': 'Choose <strong>Try Osmium Sound (no install)</strong> instead to run the interface straight from the stick, without writing anything to the mini PC\'s disk. If it does not log in by itself, use <code>hifi</code> / <code>hifi</code>.',
+    'boot.troubleTitle': 'The stick is not in the boot menu',
+    'boot.trouble': 'Check that USB booting is enabled in the firmware setup, and try the other USB ports — rear ports are often more reliable than front ones. On some machines Secure Boot has to be turned off as well.',
+
+    'install.title': 'Install on the mini PC',
+    'install.s1': 'On the welcome screen, pick <strong>Choose disk</strong> and select the target disk from the list.',
+    'install.s2': 'Read the warning, then confirm with <strong>Erase and install</strong>.',
+    'install.s3': 'Progress is shown on screen. When it finishes the mini PC reboots on its own — pull the stick out during the countdown.',
+    'install.warnTitle': 'Choosing a disk erases it permanently.',
+    'install.warn': 'Double-check you picked the right one before confirming, especially if the mini PC has more than one disk attached.',
+    'install.phoneTitle': 'No keyboard or mouse on the mini PC?',
+    'install.phone': 'A QR code sits in the top-right corner of the screen from the very first frame. Scan it and run the whole install from your phone — the mini PC\'s screen mirrors the progress either way.',
+
+    'finish.title': 'That is the whole install',
+    'finish.lead': 'The mini PC restarts into Osmium Sound on its own. Give it a moment on first boot while it sets itself up.',
+    'finish.nextTitle': 'You will not need the stick again',
+    'finish.next': 'Every later update — interface, operating system and music server — arrives automatically over the air from the Settings screen. The stick is only ever needed for a first install, so you can safely reuse it.',
+    'finish.another': 'Write another USB stick',
+
     'error.title': 'It did not work',
     'error.support': 'If it keeps failing, write to support@osmiumsound.it with the detail above.',
+
     'btn.continue': 'Continue',
     'btn.back': 'Back',
     'btn.cancel': 'Cancel',
     'btn.write': 'Erase and write',
     'btn.close': 'Close',
     'btn.retry': 'Try again',
+
     'err.ENET': 'The download could not be completed. Check the connection and try again.',
     'err.EHTTP': 'The server did not return the image.',
     'err.EMANIFEST': 'The list of available images could not be read.',
@@ -54,39 +96,77 @@ const STRINGS = {
     'err.EWRITE': 'Writing failed. Try a different USB stick or a different port.',
     'err.ECRASH': 'The writer stopped unexpectedly.',
   },
+
   it: {
-    'welcome.title': 'Prepara una chiavetta Osmium Sound',
-    'welcome.lead': "Scrive l'immagine di installazione su una chiavetta USB. Tutto quello che c'è già sulla chiavetta verrà cancellato.",
-    'welcome.useLocal': 'Usa invece un\'immagine già presente su questo computer',
+    'step.stick': 'Chiavetta',
+    'step.boot': 'Avvio',
+    'step.install': 'Installazione',
+
+    'welcome.title': 'Installa Osmium Sound su un mini PC',
+    'welcome.lead': "Tre passaggi: questa app scrive una chiavetta USB, tu avvii il mini PC da quella, e l'installer su quella macchina fa il resto. Su questo computer non viene toccato nulla.",
+    'welcome.needTitle': 'Cosa serve',
+    'welcome.need1': 'Un mini PC x86 da trasformare nel lettore.',
+    'welcome.need2': 'Una chiavetta USB da almeno 8 GB. Tutto quello che contiene verrà cancellato.',
+    'welcome.need3': "Questo computer, connesso a internet — l'immagine pesa circa 1 GB.",
+    'welcome.useLocal': "Usa invece un'immagine già presente su questo computer",
     'welcome.loading': "Ricerca dell'immagine corrente…",
     'welcome.localPicked': 'Immagine locale — firma non verificata',
+
     'select.title': 'Scegli la chiavetta USB',
     'select.lead': 'Sono elencate solo le unità rimovibili. Il disco di sistema non compare mai.',
     'select.empty': 'Inserisci una chiavetta USB — comparirà qui automaticamente.',
     'select.readonly': 'protetta da scrittura',
     'select.toosmall': "troppo piccola per quest'immagine",
+
     'confirm.title': 'Ultimo controllo prima di cancellare',
-    'confirm.warnTitle': 'Tutto il contenuto di questa unità verrà distrutto.',
+    'confirm.warnTitle': "Tutto il contenuto di questa unità verrà distrutto.",
     'confirm.warnBody': "L'immagine viene scritta direttamente sul dispositivo: le partizioni e i file esistenti non saranno più recuperabili.",
     'confirm.oversize': 'Questa unità supera i 256 GB — insolito per una chiavetta. Ho verificato che non è un disco esterno.',
+
     'work.downloading': "Download dell'immagine",
     'work.checking': "Controllo dell'immagine",
     'work.flashing': 'Scrittura sulla chiavetta',
     'work.verifying': 'Verifica di quanto scritto',
-    'work.starting': 'In attesa dell\'autorizzazione…',
+    'work.starting': "In attesa dell'autorizzazione…",
     'work.leadDownload': "L'immagine pesa circa 1 GB. Un download interrotto riprende da dove si era fermato.",
     'work.leadElevate': 'Il sistema chiederà la password: scrivere direttamente su un dispositivo richiede i permessi di amministratore.',
     'work.leadFlash': 'Non scollegare la chiavetta.',
-    'done.title': 'La chiavetta è pronta',
-    'done.lead': "Collegala al mini PC, avvialo da lì e segui l'installer sullo schermo.",
+
+    'boot.ready': 'La chiavetta è pronta.',
+    'boot.title': 'Avvia il mini PC dalla chiavetta',
+    'boot.s1': 'Collega la chiavetta al mini PC e accendilo.',
+    'boot.s2': 'Premi ripetutamente il tasto del menu di avvio appena si accende — di solito F11, F12, Esc o Canc, a seconda della scheda madre.',
+    'boot.s3': "Scegli la chiavetta dall'elenco, poi seleziona <strong>Install Osmium Sound</strong> dal menu che compare.",
+    'boot.tryTitle': 'Vuoi prima dare un\'occhiata?',
+    'boot.try': "Scegli invece <strong>Try Osmium Sound (no install)</strong> per far partire l'interfaccia direttamente dalla chiavetta, senza scrivere nulla sul disco del mini PC. Se non effettua l'accesso da solo, usa <code>hifi</code> / <code>hifi</code>.",
+    'boot.troubleTitle': "La chiavetta non compare nel menu di avvio",
+    'boot.trouble': "Verifica che l'avvio da USB sia abilitato nel setup del firmware e prova le altre porte USB — quelle posteriori sono spesso più affidabili di quelle frontali. Su alcune macchine occorre anche disattivare il Secure Boot.",
+
+    'install.title': 'Installa sul mini PC',
+    'install.s1': 'Nella schermata di benvenuto scegli <strong>Choose disk</strong> e seleziona il disco di destinazione dall\'elenco.',
+    'install.s2': 'Leggi l\'avviso, poi conferma con <strong>Erase and install</strong>.',
+    'install.s3': "L'avanzamento è mostrato a schermo. Al termine il mini PC si riavvia da solo — sfila la chiavetta durante il conto alla rovescia.",
+    'install.warnTitle': 'La scelta del disco lo cancella in modo permanente.',
+    'install.warn': 'Verifica di aver scelto quello giusto prima di confermare, soprattutto se il mini PC ha più di un disco collegato.',
+    'install.phoneTitle': 'Niente tastiera o mouse sul mini PC?',
+    'install.phone': "Un QR code compare nell'angolo in alto a destra dello schermo fin dal primo istante. Scansionalo e guida tutta l'installazione dal telefono — lo schermo del mini PC mostra comunque l'avanzamento.",
+
+    'finish.title': "L'installazione finisce qui",
+    'finish.lead': 'Il mini PC si riavvia da solo su Osmium Sound. Al primo avvio lascialo lavorare qualche istante mentre si configura.',
+    'finish.nextTitle': 'La chiavetta non ti servirà più',
+    'finish.next': 'Tutti gli aggiornamenti successivi — interfaccia, sistema operativo e server musicale — arrivano automaticamente via OTA dalla schermata Impostazioni. La chiavetta serve solo per la prima installazione, quindi puoi tranquillamente riutilizzarla.',
+    'finish.another': "Scrivi un'altra chiavetta",
+
     'error.title': 'Non ha funzionato',
     'error.support': 'Se continua a fallire, scrivi a support@osmiumsound.it allegando il dettaglio qui sopra.',
+
     'btn.continue': 'Continua',
     'btn.back': 'Indietro',
     'btn.cancel': 'Annulla',
     'btn.write': 'Cancella e scrivi',
     'btn.close': 'Chiudi',
     'btn.retry': 'Riprova',
+
     'err.ENET': 'Il download non è stato completato. Controlla la connessione e riprova.',
     'err.EHTTP': "Il server non ha restituito l'immagine.",
     'err.EMANIFEST': 'Non è stato possibile leggere la lista delle immagini disponibili.',
@@ -97,10 +177,10 @@ const STRINGS = {
     'err.ECANCELLED': 'Annullato.',
     'err.EDENIED': 'Autorizzazione negata: non è stato scritto nulla.',
     'err.EGONE': 'La chiavetta è stata scollegata.',
-    'err.ESYSTEM': 'Quell\'unità sembra un disco di sistema ed è stata rifiutata.',
+    'err.ESYSTEM': "Quell'unità sembra un disco di sistema ed è stata rifiutata.",
     'err.EREADONLY': 'La chiavetta è protetta da scrittura.',
     'err.ETOOSMALL': "La chiavetta è troppo piccola per quest'immagine.",
-    'err.EWRITE': 'Scrittura fallita. Prova con un\'altra chiavetta o un\'altra porta USB.',
+    'err.EWRITE': "Scrittura fallita. Prova con un'altra chiavetta o un'altra porta USB.",
     'err.ECRASH': 'Il processo di scrittura si è interrotto in modo imprevisto.',
   },
 };
@@ -111,7 +191,9 @@ const t = (key) => (STRINGS[lang] && STRINGS[lang][key]) || STRINGS.en[key] || k
 function applyLanguage() {
   document.documentElement.lang = lang;
   document.querySelectorAll('[data-i18n]').forEach((el) => {
-    el.textContent = t(el.dataset.i18n);
+    // Several strings carry <strong>/<code> for emphasis, so this is innerHTML.
+    // Everything here is our own literal text, never anything from outside.
+    el.innerHTML = t(el.dataset.i18n);
   });
   document.getElementById('langEn').classList.toggle('on', lang === 'en');
   document.getElementById('langIt').classList.toggle('on', lang === 'it');
@@ -138,29 +220,49 @@ function duration(seconds) {
 }
 
 // ── state ──────────────────────────────────────────────────────────────────
+// Which wizard phase each screen belongs to, for the stepper.
+const PHASE_OF = {
+  welcome: 'stick', select: 'stick', confirm: 'stick', work: 'stick',
+  boot: 'boot',
+  install: 'install', finish: 'install',
+};
+const PHASE_ORDER = ['stick', 'boot', 'install'];
+
 const state = {
   screen: 'welcome',
   release: null,
   local: null,          // locally picked image, bypasses the manifest
   imagePromise: null,   // download+verify running in the background
   imageResult: null,
-  imageError: null,
   drives: [],
   selected: null,
   writing: false,
   phase: null,
   progress: null,
   error: null,
+  lastPhase: 'stick',   // keeps the stepper steady while the error screen shows
 };
 
 function show(screen) {
   state.screen = screen;
+  if (PHASE_OF[screen]) state.lastPhase = PHASE_OF[screen];
   document.querySelectorAll('.screen').forEach((el) => el.classList.remove('on'));
   $('screen' + screen[0].toUpperCase() + screen.slice(1)).classList.add('on');
+  document.querySelector('main').scrollTop = 0;
   render();
 }
 
 // ── rendering ──────────────────────────────────────────────────────────────
+function renderStepper() {
+  const current = PHASE_OF[state.screen] || state.lastPhase;
+  const at = PHASE_ORDER.indexOf(current);
+  document.querySelectorAll('.stepper .step').forEach((el) => {
+    const i = PHASE_ORDER.indexOf(el.dataset.phase);
+    el.classList.toggle('on', i === at);
+    el.classList.toggle('done', i < at);
+  });
+}
+
 function renderFooter() {
   const next = $('btnNext');
   const back = $('btnBack');
@@ -170,6 +272,7 @@ function renderFooter() {
   cancel.hidden = true;
   next.hidden = false;
   next.className = 'btn primary';
+  next.disabled = false;
 
   switch (state.screen) {
     case 'welcome':
@@ -188,7 +291,7 @@ function renderFooter() {
       next.textContent = t('btn.write');
       next.className = 'btn destroy';
       const needsAck = state.selected && state.selected.oversize;
-      next.disabled = needsAck && !$('oversizeAck').checked;
+      next.disabled = Boolean(needsAck) && !$('oversizeAck').checked;
       break;
     }
     case 'work':
@@ -196,15 +299,21 @@ function renderFooter() {
       cancel.hidden = state.writing;      // a write in flight must not be torn off
       cancel.textContent = t('btn.cancel');
       break;
-    case 'done':
+    case 'boot':
+      next.textContent = t('btn.continue');
+      break;
+    case 'install':
+      back.hidden = false;
+      back.textContent = t('btn.back');
+      next.textContent = t('btn.continue');
+      break;
+    case 'finish':
       next.textContent = t('btn.close');
-      next.disabled = false;
       break;
     case 'error':
       back.hidden = false;
       back.textContent = t('btn.close');
       next.textContent = t('btn.retry');
-      next.disabled = false;
       break;
     default:
       break;
@@ -222,7 +331,6 @@ function renderWelcome() {
     $('releaseTag').textContent = t('welcome.loading');
     $('releaseSize').textContent = '';
   }
-  $('useLocal').textContent = t('welcome.useLocal');
 }
 
 function renderDrives() {
@@ -230,7 +338,7 @@ function renderDrives() {
   const empty = $('driveEmpty');
   const imageSize = state.imageResult ? state.imageResult.size
     : state.local ? state.local.size
-    : state.release ? state.release.size : 0;
+      : state.release ? state.release.size : 0;
 
   list.textContent = '';
   empty.hidden = state.drives.length > 0;
@@ -322,6 +430,7 @@ function renderError() {
 }
 
 function render() {
+  renderStepper();
   renderWelcome();
   if (state.screen === 'select') renderDrives();
   if (state.screen === 'confirm') renderConfirm();
@@ -341,6 +450,7 @@ async function loadManifest() {
   const res = await window.flasher.fetchManifest();
   if (res.ok) {
     state.release = res.release;
+    $('releaseError').hidden = true;
   } else {
     $('releaseError').hidden = false;
     $('releaseError').textContent = t('err.' + res.code) || res.message;
@@ -352,9 +462,17 @@ function startImagePrepare() {
   if (state.local || state.imagePromise) return;
   state.imagePromise = window.flasher.prepareImage(state.release).then((res) => {
     if (res.ok) state.imageResult = res;
-    else state.imageError = res;
     return res;
   });
+}
+
+/** Back to the top of phase 1, keeping the image already downloaded. */
+function restartForAnotherStick() {
+  state.selected = null;
+  state.error = null;
+  state.progress = null;
+  state.phase = null;
+  show('select');
 }
 
 async function runWrite() {
@@ -364,11 +482,14 @@ async function runWrite() {
   render();
 
   // Wait for the background download+verify that started when we left the
-  // welcome screen; if the user brought their own file there is nothing to wait for.
+  // welcome screen; a hand-picked file has nothing to wait for.
   let img = state.local;
   if (!img) {
     const res = await state.imagePromise;
-    if (!res.ok) return fail(res);
+    if (!res.ok) {
+      state.imagePromise = null;   // let a retry start a fresh attempt
+      return fail(res);
+    }
     img = res;
   }
 
@@ -386,7 +507,7 @@ async function runWrite() {
 
   state.writing = false;
   if (!res.ok) return fail(res);
-  show('done');
+  show('boot');
 }
 
 // ── wiring ─────────────────────────────────────────────────────────────────
@@ -431,9 +552,11 @@ window.addEventListener('DOMContentLoaded', async () => {
     if (!res.ok) return;
     state.local = res;
     state.release = null;
+    $('releaseError').hidden = true;
     render();
   });
 
+  $('anotherStick').addEventListener('click', restartForAnotherStick);
   $('oversizeAck').addEventListener('change', renderFooter);
 
   $('btnNext').addEventListener('click', () => {
@@ -449,15 +572,19 @@ window.addEventListener('DOMContentLoaded', async () => {
       case 'confirm':
         runWrite();
         break;
-      case 'done':
+      case 'boot':
+        show('install');
+        break;
+      case 'install':
+        show('finish');
+        break;
+      case 'finish':
         window.close();
         break;
       case 'error':
         state.error = null;
-        state.imagePromise = null;
-        state.imageResult = null;
-        show('welcome');
-        if (!state.local) loadManifest();
+        show(state.selected ? 'select' : 'welcome');
+        if (!state.local && !state.release) loadManifest();
         break;
       default:
         break;
@@ -467,6 +594,7 @@ window.addEventListener('DOMContentLoaded', async () => {
   $('btnBack').addEventListener('click', () => {
     if (state.screen === 'select') show('welcome');
     else if (state.screen === 'confirm') show('select');
+    else if (state.screen === 'install') show('boot');
     else if (state.screen === 'error') window.close();
   });
 
