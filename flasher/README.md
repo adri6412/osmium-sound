@@ -47,6 +47,13 @@ Windows.
    an unsigned build merely warns.
 3. Downloads to a cache in the app's userData dir, resuming an interrupted
    transfer with a Range request instead of refetching a gigabyte.
+
+   The cache holds **one image at a time**: `prepare()` deletes every other file
+   in there before it starts. Reopening the app, or writing a second stick, then
+   costs nothing — but a channel that publishes a dev build every few days does
+   not quietly leave a gigabyte behind for each one. On Windows that directory is
+   `%APPDATA%\Osmium Flasher\images`, on Linux `~/.config/Osmium Flasher/images`,
+   and on macOS `~/Library/Application Support/Osmium Flasher/images`.
 4. Writes the image raw to the chosen stick and reads it back to verify.
 
 ## Layout

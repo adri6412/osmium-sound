@@ -241,3 +241,65 @@ test('the shipped public key matches the real OTA signing key', (t) => {
     'assets/ota-pubkey.pem does not correspond to distro/ota-keys/ota-signing-key.pem',
   );
 });
+
+test('the cache keeps only the image in use', async () => {
+  const cacheDir = await fsp.mkdtemp(path.join(os.tmpdir(), 'osmium-prune-'));
+  try {
+    // What an appliance owner's cache looks like after a few dev releases.
+    await fsp.writeFile(path.join(cacheDir, 'hifi-player-v2.5.21-dev.112.iso'), 'old');
+    await fsp.writeFile(path.join(cacheDir, 'hifi-player-v2.5.21-dev.113.iso'), 'older');
+    await fsp.writeFile(path.join(cacheDir, IMAGE_NAME), 'current');
+    await fsp.writeFile(path.join(cacheDir, `${IMAGE_NAME}.part`), 'resuming');
+
+    const removed = await image.pruneCache(cacheDir, IMAGE_NAME);
+
+    const left = (await fsp.readdir(cacheDir)).sort();
+    assert.deepEqual(left, [IMAGE_NAME, `${IMAGE_NAME}.part`].sort(),
+      'only the current image and its partial download may survive');
+    assert.equal(removed.length, 2);
+  } finally {
+    await fsp.rm(cacheDir, { recursive: true, force: true });
+  }
+});
+
+test('pruning an empty or missing cache is harmless', async () => {
+  assert.deepEqual(await image.pruneCache(path.join(os.tmpdir(), 'osmium-does-not-exist'), 'x'), []);
+});
+
+test('preparing an image clears out earlier ones', async () => {
+  // The point of the cache is that reopening the app does not refetch a
+  // gigabyte; the point of pruning is that it does not accumulate one per
+  // release either.
+  const cacheDir = await fsp.mkdtemp(path.join(os.tmpdir(), 'osmium-prune2-'));
+  try {
+    const stale = path.join(cacheDir, 'hifi-player-v2.5.21-dev.001.iso');
+    await fsp.writeFile(stale, Buffer.alloc(4096));
+
+    const release = await image.fetchManifest(`${base}/latest.json`);
+    const result = await image.prepare(release, cacheDir, PUBLIC_KEY, {});
+
+    assert.equal(result.digest, digest);
+    assert.equal(fs.existsSync(stale), false, 'the older image should be gone');
+    assert.deepEqual(await fsp.readdir(cacheDir), [IMAGE_NAME]);
+  } finally {
+    await fsp.rm(cacheDir, { recursive: true, force: true });
+  }
+});
+
+test('a cached image is reused instead of downloaded again', async () => {
+  const cacheDir = await fsp.mkdtemp(path.join(os.tmpdir(), 'osmium-reuse-'));
+  try {
+    await fsp.writeFile(path.join(cacheDir, IMAGE_NAME), payload);
+
+    const release = await image.fetchManifest(`${base}/latest.json`);
+    let downloaded = false;
+    const result = await image.prepare(release, cacheDir, PUBLIC_KEY, {
+      onProgress: (p) => { if (p.phase === 'downloading') downloaded = true; },
+    });
+
+    assert.equal(result.digest, digest);
+    assert.equal(downloaded, false, 'a complete cached image must not be refetched');
+  } finally {
+    await fsp.rm(cacheDir, { recursive: true, force: true });
+  }
+});

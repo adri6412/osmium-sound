@@ -182,11 +182,41 @@ async function download(release, cacheDir, { onProgress, signal } = {}) {
 }
 
 /**
+ * Drops every cached image except the one about to be used.
+ *
+ * Images are kept so that reopening the app, or writing a second stick, does not
+ * mean fetching a gigabyte again. Keeping *all* of them is another matter: each
+ * dev release would leave another gigabyte behind for good, on a channel that
+ * publishes often. Exactly one is kept, along with its partial download.
+ */
+async function pruneCache(cacheDir, keepName) {
+  let entries;
+  try {
+    entries = await fsp.readdir(cacheDir);
+  } catch (_) {
+    return [];                       // nothing cached yet
+  }
+  const keep = new Set([keepName, `${keepName}.part`]);
+  const removed = [];
+  for (const name of entries) {
+    if (keep.has(name)) continue;
+    try {
+      await fsp.rm(path.join(cacheDir, name), { force: true, recursive: true });
+      removed.push(name);
+    } catch (_) {
+      /* a file we cannot remove is not worth failing the write over */
+    }
+  }
+  return removed;
+}
+
+/**
  * Full prepare step: manifest → signed digest → download (or reuse cache) →
  * checksum. Throws with a `code` the UI maps to a translated message.
  */
 async function prepare(release, cacheDir, publicKeyPath, { onProgress, signal } = {}) {
   const expected = await fetchVerifiedDigest(release, publicKeyPath);
+  await pruneCache(cacheDir, release.name);
   const file = await download(release, cacheDir, { onProgress, signal });
 
   const size = (await fsp.stat(file)).size;
@@ -209,6 +239,7 @@ module.exports = {
   MANIFEST_URL,
   fetchManifest,
   fetchVerifiedDigest,
+  pruneCache,
   download,
   sha256File,
   prepare,
