@@ -364,6 +364,55 @@
       display: inline-flex; align-items: baseline; gap: 6px;
     }
     .iso-badge small { font-size: 0.78em; font-weight: 600; opacity: 0.8; }
+
+    /* ── Osmium Flasher download block ─────────────────────────────────── */
+    .flasher-block {
+      margin: 2rem auto 0;
+      max-width: 720px;
+      padding: 1.4rem 1.5rem;
+      border: 1px solid rgba(216, 163, 90, 0.32);
+      border-radius: 12px;
+      background: rgba(216, 163, 90, 0.05);
+      text-align: left;
+    }
+    .flasher-block h3 { margin: 0 0 0.4rem; font-size: 1.05rem; }
+    .flasher-block > p { margin: 0 0 1.1rem; opacity: 0.85; font-size: 0.92rem; }
+
+    .flasher-btns {
+      display: flex; flex-wrap: wrap; gap: 0.6rem; margin-bottom: 0.9rem;
+    }
+    .btn-flasher {
+      display: inline-flex; align-items: baseline; gap: 0.4rem;
+      padding: 0.55rem 0.95rem; border-radius: 8px;
+      border: 1px solid rgba(255, 255, 255, 0.16);
+      font-size: 0.88rem; font-weight: 600; text-decoration: none;
+      color: inherit; cursor: pointer;
+    }
+    .btn-flasher:hover { border-color: rgba(216, 163, 90, 0.75); }
+    .btn-flasher small { font-size: 0.74em; opacity: 0.6; font-weight: 500; }
+    /* Detected platform first, so the right button is the obvious one. */
+    .btn-flasher.is-suggested {
+      order: -1;
+      border-color: rgba(216, 163, 90, 0.85);
+      background: rgba(216, 163, 90, 0.14);
+    }
+    /* Same gate as the ISO button: nothing is downloadable until the privacy
+       notice is accepted, because the flasher installs a beta build too. */
+    .btn-flasher.is-placeholder { opacity: 0.4; cursor: not-allowed; }
+
+    .flasher-note { margin-top: 0.45rem; font-size: 0.85rem; }
+    .flasher-note summary { cursor: pointer; opacity: 0.8; }
+    .flasher-note summary:hover { opacity: 1; }
+    .flasher-note p { margin: 0.5rem 0 0 1.1rem; opacity: 0.8; line-height: 1.6; }
+    .flasher-note code {
+      background: rgba(255, 255, 255, 0.08); padding: 0.1em 0.35em;
+      border-radius: 4px; font-size: 0.92em;
+    }
+
+    @media (max-width: 640px) {
+      .flasher-btns { flex-direction: column; }
+      .btn-flasher { justify-content: center; }
+    }
     .quickstart {
       display: grid; grid-template-columns: repeat(3, 1fr);
       gap: 1.1rem; max-width: 860px; margin: 2.75rem auto 0;
@@ -659,6 +708,42 @@
       </a>
     </div>
 
+
+    <div class="flasher-block">
+      <h3 data-en="Prepare the USB stick automatically" data-it="Prepara la chiavetta automaticamente">Prepare the USB stick automatically</h3>
+      <p data-en="&lt;strong&gt;Osmium Flasher&lt;/strong&gt; downloads the image above, checks its signature and writes it to the stick for you — no other tool, and no chance of picking the wrong disk: your system drive is never even listed. Download it for your computer, not for the mini PC." data-it="&lt;strong&gt;Osmium Flasher&lt;/strong&gt; scarica l&#x27;immagine qui sopra, ne verifica la firma e la scrive sulla chiavetta al posto tuo — nessun altro programma e nessun rischio di sbagliare disco: quello di sistema non viene nemmeno elencato. Scaricalo per il tuo computer, non per il mini PC."><strong>Osmium Flasher</strong> downloads the image above, checks its signature and writes it to the stick for you — no other tool, and no chance of picking the wrong disk: your system drive is never even listed. Download it for your computer, not for the mini PC.</p>
+      <div class="flasher-btns">
+        <a class="btn-flasher is-placeholder is-gated" data-os="win" data-href="https://file.osmiumsound.it/Osmium-Flasher-1.0.0-win-x64.exe" aria-disabled="true">
+          <span class="bf-name" data-en="Windows" data-it="Windows">Windows</span>
+          <small>.exe</small>
+        </a>
+        <a class="btn-flasher is-placeholder is-gated" data-os="mac-arm" data-href="https://file.osmiumsound.it/Osmium-Flasher-1.0.0-mac-arm64.dmg" aria-disabled="true">
+          <span class="bf-name" data-en="macOS (Apple Silicon)" data-it="macOS (Apple Silicon)">macOS (Apple Silicon)</span>
+          <small>.dmg</small>
+        </a>
+        <a class="btn-flasher is-placeholder is-gated" data-os="mac-intel" data-href="https://file.osmiumsound.it/Osmium-Flasher-1.0.0-mac-x64.dmg" aria-disabled="true">
+          <span class="bf-name" data-en="macOS (Intel)" data-it="macOS (Intel)">macOS (Intel)</span>
+          <small>.dmg</small>
+        </a>
+        <a class="btn-flasher is-placeholder is-gated" data-os="linux" data-href="https://file.osmiumsound.it/Osmium-Flasher-1.0.0-linux-x86_64.tar.gz" aria-disabled="true">
+          <span class="bf-name" data-en="Linux" data-it="Linux">Linux</span>
+          <small>.tar.gz</small>
+        </a>
+      </div>
+      <details class="flasher-note" data-osnote="win">
+        <summary data-en="Windows — “unknown publisher”" data-it="Windows — “editore sconosciuto”">Windows — “unknown publisher”</summary>
+        <p data-en="Osmium Flasher is not code-signed, so SmartScreen stops it the first time. Click &lt;strong&gt;More info&lt;/strong&gt;, then &lt;strong&gt;Run anyway&lt;/strong&gt;. Windows will also ask for administrator rights: writing to a raw device needs them." data-it="Osmium Flasher non è firmato digitalmente, quindi la prima volta SmartScreen lo blocca. Clicca su &lt;strong&gt;Ulteriori informazioni&lt;/strong&gt; e poi su &lt;strong&gt;Esegui comunque&lt;/strong&gt;. Windows chiederà anche i permessi di amministratore: scrivere direttamente su un dispositivo li richiede.">Osmium Flasher is not code-signed, so SmartScreen stops it the first time. Click <strong>More info</strong>, then <strong>Run anyway</strong>. Windows will also ask for administrator rights: writing to a raw device needs them.</p>
+      </details>
+      <details class="flasher-note" data-osnote="mac">
+        <summary data-en="macOS — Gatekeeper" data-it="macOS — Gatekeeper">macOS — Gatekeeper</summary>
+        <p data-en="The app is not notarized. Open it once, let macOS refuse, then go to &lt;strong&gt;System Settings → Privacy &amp;amp; Security&lt;/strong&gt; and press &lt;strong&gt;Open Anyway&lt;/strong&gt;. If that button is missing, run &lt;code&gt;xattr -dr com.apple.quarantine &quot;/Applications/Osmium Flasher.app&quot;&lt;/code&gt; in Terminal." data-it="L&#x27;app non è notarizzata. Aprila una prima volta, lascia che macOS la rifiuti, poi vai in &lt;strong&gt;Impostazioni di Sistema → Privacy e sicurezza&lt;/strong&gt; e premi &lt;strong&gt;Apri comunque&lt;/strong&gt;. Se quel pulsante non compare, esegui &lt;code&gt;xattr -dr com.apple.quarantine &quot;/Applications/Osmium Flasher.app&quot;&lt;/code&gt; nel Terminale.">The app is not notarized. Open it once, let macOS refuse, then go to <strong>System Settings → Privacy &amp; Security</strong> and press <strong>Open Anyway</strong>. If that button is missing, run <code>xattr -dr com.apple.quarantine "/Applications/Osmium Flasher.app"</code> in Terminal.</p>
+      </details>
+      <details class="flasher-note" data-osnote="linux">
+        <summary data-en="Linux — extract and run" data-it="Linux — estrai ed esegui">Linux — extract and run</summary>
+        <p data-en="Unpack the archive and run &lt;code&gt;./osmium-flasher&lt;/code&gt; inside it. No warning to dismiss; you will get a polkit password prompt when the write starts. It is a tar.gz rather than an AppImage on purpose — an AppImage is mounted so that root cannot read it, which is exactly what the elevated write needs to do." data-it="Estrai l&#x27;archivio ed esegui &lt;code&gt;./osmium-flasher&lt;/code&gt; al suo interno. Nessun avviso da chiudere; al momento della scrittura comparirà la richiesta password di polkit. È un tar.gz e non un AppImage di proposito: un AppImage viene montato in modo che root non possa leggerlo, ed è proprio quello che serve alla scrittura privilegiata.">Unpack the archive and run <code>./osmium-flasher</code> inside it. No warning to dismiss; you will get a polkit password prompt when the write starts. It is a tar.gz rather than an AppImage on purpose — an AppImage is mounted so that root cannot read it, which is exactly what the elevated write needs to do.</p>
+      </details>
+    </div>
+
     <div class="quickstart">
       <div class="qs-step">
         <div class="qs-num">1</div>
@@ -670,7 +755,7 @@
       <div class="qs-step">
         <div class="qs-num">2</div>
         <h4 data-en="Flash a USB stick" data-it="Flasha una chiavetta USB">Flash a USB stick</h4>
-        <p data-en="Write the ISO to an 8&nbsp;GB+ USB stick with &lt;a href=&quot;https://etcher.balena.io/&quot; target=&quot;_blank&quot; rel=&quot;noopener&quot;&gt;balenaEtcher&lt;/a&gt;, Rufus or &lt;code&gt;dd&lt;/code&gt;." data-it="Scrivi la ISO su una chiavetta USB da 8&nbsp;GB+ con &lt;a href=&quot;https://etcher.balena.io/&quot; target=&quot;_blank&quot; rel=&quot;noopener&quot;&gt;balenaEtcher&lt;/a&gt;, Rufus o &lt;code&gt;dd&lt;/code&gt;.">Write the ISO to an 8&nbsp;GB+ USB stick with <a href="https://etcher.balena.io/" target="_blank" rel="noopener">balenaEtcher</a>, Rufus or <code>dd</code>.</p>
+        <p data-en="Use &lt;strong&gt;Osmium Flasher&lt;/strong&gt; above on an 8&amp;nbsp;GB+ stick — it fetches and verifies the image itself. Prefer to do it by hand? &lt;a href=&quot;https://etcher.balena.io/&quot; target=&quot;_blank&quot; rel=&quot;noopener&quot;&gt;balenaEtcher&lt;/a&gt;, Rufus and &lt;code&gt;dd&lt;/code&gt; all still work." data-it="Usa &lt;strong&gt;Osmium Flasher&lt;/strong&gt; qui sopra su una chiavetta da 8&amp;nbsp;GB+ — scarica e verifica l&#x27;immagine da solo. Preferisci farlo a mano? &lt;a href=&quot;https://etcher.balena.io/&quot; target=&quot;_blank&quot; rel=&quot;noopener&quot;&gt;balenaEtcher&lt;/a&gt;, Rufus e &lt;code&gt;dd&lt;/code&gt; restano validi.">Use <strong>Osmium Flasher</strong> above on an 8&nbsp;GB+ stick — it fetches and verifies the image itself. Prefer to do it by hand? <a href="https://etcher.balena.io/" target="_blank" rel="noopener">balenaEtcher</a>, Rufus and <code>dd</code> all still work.</p>
       </div>
       <div class="qs-step">
         <div class="qs-num">3</div>
@@ -1034,22 +1119,55 @@
     if (e.key === 'ArrowRight') goTo(current + 1);
   });
 
-  // Gate the ISO download behind the privacy-notice checkbox
+  // Gate every beta download behind the privacy-notice checkbox: the ISO and
+  // the flasher both end up installing a beta build, so the same consent covers
+  // them. `.is-gated` marks the flasher buttons; the ISO button predates it.
   const consentBox = document.getElementById('betaAgreeBox');
-  const isoBtn = document.getElementById('isoDownloadBtn');
-  if (consentBox && isoBtn) {
+  const gated = [
+    document.getElementById('isoDownloadBtn'),
+    ...document.querySelectorAll('.is-gated'),
+  ].filter(Boolean);
+  if (consentBox && gated.length) {
     consentBox.addEventListener('change', () => {
-      if (consentBox.checked) {
-        isoBtn.setAttribute('href', isoBtn.dataset.href);
-        isoBtn.classList.remove('is-placeholder');
-        isoBtn.removeAttribute('aria-disabled');
-      } else {
-        isoBtn.removeAttribute('href');
-        isoBtn.classList.add('is-placeholder');
-        isoBtn.setAttribute('aria-disabled', 'true');
-      }
+      gated.forEach(btn => {
+        if (consentBox.checked) {
+          btn.setAttribute('href', btn.dataset.href);
+          btn.classList.remove('is-placeholder');
+          btn.removeAttribute('aria-disabled');
+        } else {
+          btn.removeAttribute('href');
+          btn.classList.add('is-placeholder');
+          btn.setAttribute('aria-disabled', 'true');
+        }
+      });
     });
   }
+
+  // Highlight the build for the visitor's own computer -- and only that one.
+  // Everything stays visible: someone may well be downloading for another machine.
+  (function detectPlatform() {
+    const ua = navigator.userAgent || '';
+    const plat = (navigator.userAgentData && navigator.userAgentData.platform)
+      || navigator.platform || '';
+    const hay = (plat + ' ' + ua).toLowerCase();
+
+    let pick = null;
+    if (hay.indexOf('win') !== -1) pick = 'win';
+    else if (hay.indexOf('mac') !== -1) {
+      // Apple Silicon Macs report an Intel UA string, so the CPU count is the
+      // only hint available in-page. Wrong guesses are harmless: both are listed.
+      pick = (navigator.hardwareConcurrency >= 8) ? 'mac-arm' : 'mac-intel';
+    }
+    else if (hay.indexOf('linux') !== -1 && hay.indexOf('android') === -1) pick = 'linux';
+    if (!pick) return;
+
+    const btn = document.querySelector('.btn-flasher[data-os="' + pick + '"]');
+    if (btn) btn.classList.add('is-suggested');
+
+    const noteKey = pick.indexOf('mac') === 0 ? 'mac' : pick;
+    const note = document.querySelector('.flasher-note[data-osnote="' + noteKey + '"]');
+    if (note) note.setAttribute('open', '');
+  })();
 
   // Auto-advance
   function startAuto() { autoTimer = setInterval(() => goTo(current + 1), 4800); }

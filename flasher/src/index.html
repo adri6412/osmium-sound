@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy"
+        content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:">
+  <title>Osmium Flasher</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header>
+  <span class="brand">Osmium Flasher</span>
+  <span class="ver" id="appVersion"></span>
+  <span class="lang">
+    <button id="langEn" class="on">EN</button>
+    <button id="langIt">IT</button>
+  </span>
+</header>
+
+<main>
+
+  <!-- 1 ── welcome ─────────────────────────────────────────────────────── -->
+  <section class="screen on" id="screenWelcome">
+    <h1 data-i18n="welcome.title"></h1>
+    <p class="lead" data-i18n="welcome.lead"></p>
+
+    <div class="card release" id="releaseCard">
+      <span class="tag" id="releaseTag">…</span>
+      <span class="size" id="releaseSize"></span>
+    </div>
+
+    <p class="lead" id="releaseError" hidden></p>
+    <button class="linkish" id="useLocal" data-i18n="welcome.useLocal"></button>
+  </section>
+
+  <!-- 2 ── drive selection ─────────────────────────────────────────────── -->
+  <section class="screen" id="screenSelect">
+    <h1 data-i18n="select.title"></h1>
+    <p class="lead" data-i18n="select.lead"></p>
+    <div class="drives" id="driveList"></div>
+    <div class="empty" id="driveEmpty">
+      <div class="spin">⌛</div>
+      <p data-i18n="select.empty"></p>
+    </div>
+  </section>
+
+  <!-- 3 ── confirm ─────────────────────────────────────────────────────── -->
+  <section class="screen" id="screenConfirm">
+    <h1 data-i18n="confirm.title"></h1>
+    <div class="danger-box">
+      <p><strong data-i18n="confirm.warnTitle"></strong></p>
+      <p id="confirmTarget"></p>
+      <p data-i18n="confirm.warnBody"></p>
+      <label class="check" id="oversizeWrap" hidden>
+        <input type="checkbox" id="oversizeAck">
+        <span data-i18n="confirm.oversize"></span>
+      </label>
+    </div>
+  </section>
+
+  <!-- 4 ── working ─────────────────────────────────────────────────────── -->
+  <section class="screen" id="screenWork">
+    <h1 id="workTitle"></h1>
+    <p class="lead" id="workLead"></p>
+    <div class="bar" id="workBar"><i></i></div>
+    <div class="stats">
+      <span id="workLeft"></span>
+      <span id="workRight"></span>
+    </div>
+  </section>
+
+  <!-- 5 ── done ────────────────────────────────────────────────────────── -->
+  <section class="screen" id="screenDone">
+    <div class="result-ico">✅</div>
+    <h1 data-i18n="done.title"></h1>
+    <p class="lead" data-i18n="done.lead"></p>
+  </section>
+
+  <!-- 6 ── error ───────────────────────────────────────────────────────── -->
+  <section class="screen" id="screenError">
+    <div class="result-ico">⚠️</div>
+    <h1 data-i18n="error.title"></h1>
+    <p class="lead" id="errorLead"></p>
+    <div class="err-detail" id="errorDetail"></div>
+    <p class="lead" style="margin-top:1rem" data-i18n="error.support"></p>
+  </section>
+
+</main>
+
+<footer>
+  <button class="btn ghost" id="btnBack" hidden></button>
+  <span class="spacer"></span>
+  <button class="btn ghost" id="btnCancel" hidden></button>
+  <button class="btn primary" id="btnNext" disabled></button>
+</footer>
+
+<script src="renderer.js"></script>
+</body>
+</html>

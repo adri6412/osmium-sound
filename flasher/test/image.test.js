@@ -1,0 +1,216 @@
+'use strict';
+
+/**
+ * End-to-end test for the image trust chain, against a real HTTP server that
+ * speaks Range requests. Covers the cases that decide whether a tampered or
+ * truncated image can reach a user's USB stick.
+ *
+ *   node --test test/
+ *
+ * The fixtures are signed with the OTA key from distro/ota-keys/ at run time,
+ * so this also proves the flasher agrees with what the CI actually produces.
+ */
+
+const assert = require('node:assert/strict');
+const { test, before, after } = require('node:test');
+const crypto = require('node:crypto');
+const fs = require('node:fs');
+const fsp = require('node:fs/promises');
+const http = require('node:http');
+const os = require('node:os');
+const path = require('node:path');
+
+const image = require('../src/image');
+
+const KEYS = path.join(__dirname, '..', '..', 'distro', 'ota-keys');
+const PRIVATE_KEY = path.join(KEYS, 'ota-signing-key.pem');
+const PUBLIC_KEY = path.join(__dirname, '..', 'assets', 'ota-pubkey.pem');
+
+const IMAGE_NAME = 'hifi-player-v9.9.9-test.iso';
+const IMAGE_BYTES = 3 * 1024 * 1024;
+
+let dir;        // fixture root served over HTTP
+let cache;      // download target
+let server;
+let base;
+let payload;
+let digest;
+
+/** Reproduces exactly what `sha256sum file > file.sha256` writes. */
+function sidecarFor(name, hex) {
+  return Buffer.from(`${hex}  ${name}\n`, 'utf8');
+}
+
+function sign(buf) {
+  const key = crypto.createPrivateKey(fs.readFileSync(PRIVATE_KEY));
+  return crypto.sign(null, buf, key);
+}
+
+function manifest(overrides = {}) {
+  const name = overrides.name || IMAGE_NAME;
+  return {
+    tag_name: 'v9.9.9-test',
+    name: 'v9.9.9-test',
+    body: '',
+    assets: [
+      { name, browser_download_url: `${base}/${name}`, size: payload.length },
+      { name: `${name}.sha256`, browser_download_url: `${base}/${overrides.shaFile || name + '.sha256'}`, size: 0 },
+      { name: `${name}.sha256.sig`, browser_download_url: `${base}/${overrides.sigFile || name + '.sha256.sig'}`, size: 0 },
+    ],
+  };
+}
+
+before(async () => {
+  dir = await fsp.mkdtemp(path.join(os.tmpdir(), 'osmium-fixture-'));
+  cache = await fsp.mkdtemp(path.join(os.tmpdir(), 'osmium-cache-'));
+
+  payload = crypto.randomBytes(IMAGE_BYTES);
+  digest = crypto.createHash('sha256').update(payload).digest('hex');
+
+  await fsp.writeFile(path.join(dir, IMAGE_NAME), payload);
+
+  const good = sidecarFor(IMAGE_NAME, digest);
+  await fsp.writeFile(path.join(dir, `${IMAGE_NAME}.sha256`), good);
+  await fsp.writeFile(path.join(dir, `${IMAGE_NAME}.sha256.sig`), sign(good));
+
+  // A sidecar whose digest was swapped after signing.
+  const tampered = sidecarFor(IMAGE_NAME, 'f'.repeat(64));
+  await fsp.writeFile(path.join(dir, 'tampered.sha256'), tampered);
+  await fsp.writeFile(path.join(dir, 'tampered.sha256.sig'), sign(good)); // old signature
+
+  // A valid signature — but over a different image's sidecar.
+  const otherName = 'hifi-player-v0.0.1-other.iso';
+  const other = sidecarFor(otherName, digest);
+  await fsp.writeFile(path.join(dir, 'other.sha256'), other);
+  await fsp.writeFile(path.join(dir, 'other.sha256.sig'), sign(other));
+
+  server = http.createServer((req, res) => {
+    const name = decodeURIComponent(req.url.slice(1));
+    const file = path.join(dir, name);
+    if (!fs.existsSync(file)) {
+      res.writeHead(404).end('nope');
+      return;
+    }
+    const size = fs.statSync(file).size;
+    const range = req.headers.range;
+    if (range) {
+      const start = Number(/bytes=(\d+)-/.exec(range)[1]);
+      res.writeHead(206, {
+        'Content-Range': `bytes ${start}-${size - 1}/${size}`,
+        'Content-Length': size - start,
+        'Accept-Ranges': 'bytes',
+      });
+      fs.createReadStream(file, { start }).pipe(res);
+      return;
+    }
+    res.writeHead(200, { 'Content-Length': size, 'Accept-Ranges': 'bytes' });
+    fs.createReadStream(file).pipe(res);
+  });
+
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  base = `http://127.0.0.1:${server.address().port}`;
+});
+
+after(async () => {
+  await new Promise((resolve) => server.close(resolve));
+  await fsp.rm(dir, { recursive: true, force: true });
+  await fsp.rm(cache, { recursive: true, force: true });
+});
+
+test('parses a manifest into a release', async () => {
+  await fsp.writeFile(path.join(dir, 'latest.json'), JSON.stringify(manifest()));
+  const release = await image.fetchManifest(`${base}/latest.json`);
+  assert.equal(release.name, IMAGE_NAME);
+  assert.equal(release.version, 'v9.9.9-test');
+  assert.ok(release.sigUrl, 'the signature asset must be picked up');
+});
+
+test('accepts a correctly signed sidecar and returns its digest', async () => {
+  const release = await image.fetchManifest(`${base}/latest.json`);
+  assert.equal(await image.fetchVerifiedDigest(release, PUBLIC_KEY), digest);
+});
+
+test('downloads, checksums and caches the image', async () => {
+  const release = await image.fetchManifest(`${base}/latest.json`);
+  const result = await image.prepare(release, cache, PUBLIC_KEY, {});
+  assert.equal(result.digest, digest);
+  assert.equal(result.size, IMAGE_BYTES);
+  assert.ok(fs.existsSync(path.join(cache, IMAGE_NAME)));
+});
+
+test('resumes a partial download instead of restarting it', async () => {
+  const resumeCache = await fsp.mkdtemp(path.join(os.tmpdir(), 'osmium-resume-'));
+  const half = Math.floor(IMAGE_BYTES / 2);
+  await fsp.writeFile(path.join(resumeCache, `${IMAGE_NAME}.part`), payload.subarray(0, half));
+
+  const release = await image.fetchManifest(`${base}/latest.json`);
+  let firstReceived = null;
+  const result = await image.prepare(release, resumeCache, PUBLIC_KEY, {
+    onProgress: (p) => {
+      if (p.phase === 'downloading' && firstReceived === null) firstReceived = p.received;
+    },
+  });
+
+  assert.equal(result.digest, digest, 'a resumed file must still hash correctly');
+  assert.ok(firstReceived > half, `progress should start past the resume point, got ${firstReceived}`);
+  await fsp.rm(resumeCache, { recursive: true, force: true });
+});
+
+test('refuses a sidecar whose digest was altered after signing', async () => {
+  const m = manifest({ shaFile: 'tampered.sha256', sigFile: 'tampered.sha256.sig' });
+  await fsp.writeFile(path.join(dir, 'tampered.json'), JSON.stringify(m));
+  const release = await image.fetchManifest(`${base}/tampered.json`);
+  await assert.rejects(
+    () => image.fetchVerifiedDigest(release, PUBLIC_KEY),
+    (err) => err.code === 'EBADSIG',
+  );
+});
+
+test('refuses a valid signature that belongs to a different image', async () => {
+  const m = manifest({ shaFile: 'other.sha256', sigFile: 'other.sha256.sig' });
+  await fsp.writeFile(path.join(dir, 'other.json'), JSON.stringify(m));
+  const release = await image.fetchManifest(`${base}/other.json`);
+  await assert.rejects(
+    () => image.fetchVerifiedDigest(release, PUBLIC_KEY),
+    (err) => err.code === 'ENAMEMISMATCH',
+  );
+});
+
+test('refuses a release with no signature at all', async () => {
+  const m = manifest();
+  m.assets = m.assets.filter((a) => !a.name.endsWith('.sig'));
+  await fsp.writeFile(path.join(dir, 'unsigned.json'), JSON.stringify(m));
+  const release = await image.fetchManifest(`${base}/unsigned.json`);
+  await assert.rejects(
+    () => image.fetchVerifiedDigest(release, PUBLIC_KEY),
+    (err) => err.code === 'ENOSIG',
+  );
+});
+
+test('discards a corrupt download instead of caching it', async () => {
+  const badCache = await fsp.mkdtemp(path.join(os.tmpdir(), 'osmium-bad-'));
+  const corruptName = 'corrupt.iso';
+  const corrupt = crypto.randomBytes(1024);
+  await fsp.writeFile(path.join(dir, corruptName), corrupt);
+
+  // Sidecar signs the *expected* digest; the served bytes are something else.
+  const sidecar = sidecarFor(corruptName, digest);
+  await fsp.writeFile(path.join(dir, `${corruptName}.sha256`), sidecar);
+  await fsp.writeFile(path.join(dir, `${corruptName}.sha256.sig`), sign(sidecar));
+
+  const release = {
+    name: corruptName,
+    url: `${base}/${corruptName}`,
+    size: corrupt.length,
+    shaUrl: `${base}/${corruptName}.sha256`,
+    sigUrl: `${base}/${corruptName}.sha256.sig`,
+  };
+
+  await assert.rejects(
+    () => image.prepare(release, badCache, PUBLIC_KEY, {}),
+    (err) => err.code === 'EBADSUM',
+  );
+  assert.equal(fs.existsSync(path.join(badCache, corruptName)), false,
+    'a corrupt image must not be left in the cache');
+  await fsp.rm(badCache, { recursive: true, force: true });
+});

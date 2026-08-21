@@ -111,16 +111,45 @@ jobs:
           INPUT_SUITE: ${{ inputs.suite }}
           INPUT_LYRION_URL: ${{ inputs.lyrion_url }}
 
-      - name: Locate + checksum the ISO
+      - name: Locate + checksum + sign the ISO
         id: iso
+        env:
+          OTA_SIGNING_KEY: ${{ secrets.OTA_SIGNING_KEY }}
         run: |
           set -euo pipefail
           ISO="hifi-player-${{ inputs.tag }}.iso"
           [ -f "$ISO" ] || ISO="$(ls -1 *.iso 2>/dev/null | head -n1)"
           [ -n "$ISO" ] && [ -f "$ISO" ] || { echo "No ISO produced"; exit 1; }
           sha256sum "$ISO" > "${ISO}.sha256"
+          # Sign the sha256 sidecar with the same offline Ed25519 key used for
+          # OS OTA bundles (see build-ui-ota.yml). Osmium Flasher verifies this
+          # signature before it will write anything, and refuses an unsigned
+          # image outright -- so unlike the OTA job, a missing key is fatal here
+          # rather than a warning.
+          if [ -z "$OTA_SIGNING_KEY" ]; then
+            echo "::error::OTA_SIGNING_KEY is not set -- the ISO would be unusable by Osmium Flasher."
+            exit 1
+          fi
+          printf '%s' "$OTA_SIGNING_KEY" > /tmp/ota-key.pem
+          openssl pkeyutl -sign -inkey /tmp/ota-key.pem -rawin \
+            -in "${ISO}.sha256" -out "${ISO}.sha256.sig"
+          rm -f /tmp/ota-key.pem
+          openssl pkeyutl -verify -pubin -inkey distro/ota-keys/ota-pubkey.pem \
+            -rawin -in "${ISO}.sha256" -sigfile "${ISO}.sha256.sig" \
+            || { echo "::error::the signature does not verify against the shipped public key"; exit 1; }
           echo "iso=$ISO" >> "$GITHUB_OUTPUT"
-          ls -lh "$ISO" "${ISO}.sha256"
+          ls -lh "$ISO" "${ISO}.sha256" "${ISO}.sha256.sig"
+
+      # latest.json is what Osmium Flasher polls to discover the current image.
+      # It is NOT deployed anywhere by this job: upload it to
+      # file.osmiumsound.it by hand, in the same pass as the ISO it describes.
+      - name: Build the flasher manifest (latest.json)
+        run: |
+          set -euo pipefail
+          python3 .github/scripts/make-iso-manifest.py \
+            "${{ inputs.tag }}" "${{ steps.iso.outputs.iso }}"
+          cp manifest-out/latest.json .
+          cat latest.json
 
       - name: Upload ISO artifact
         uses: actions/upload-artifact@v4
@@ -129,6 +158,8 @@ jobs:
           path: |
             ${{ steps.iso.outputs.iso }}
             ${{ steps.iso.outputs.iso }}.sha256
+            ${{ steps.iso.outputs.iso }}.sha256.sig
+            latest.json
           retention-days: 14
 
       - name: Create tag if missing
@@ -166,3 +197,4 @@ jobs:
           files: |
             ${{ steps.iso.outputs.iso }}
             ${{ steps.iso.outputs.iso }}.sha256
+            ${{ steps.iso.outputs.iso }}.sha256.sig
