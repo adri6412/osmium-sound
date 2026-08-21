@@ -2105,11 +2105,15 @@ def _restart_squeezelite_if_enabled(timeout=30):
 #  /usr/local/sbin/hifi-ui-resolution.sh shrinks that pixel count. It prefers a
 #  real smaller video mode with the panel's own aspect ratio (xrandr --mode), so
 #  the panel/TV scaler does the upscale and the GPU does nothing; only when the
-#  panel exposes no such mode (21:9, 16:10, ...) does it fall back to shrinking
-#  the framebuffer area with xrandr --scale-from, which costs a full-screen GPU
-#  rescale per frame inside Xorg (measured on Gemini Lake: 1.80 W GPU with
-#  --scale-from vs 0.89 W on a real mode, same scene). api_server runs as root,
-#  so no sudoers entry is needed.
+#  panel exposes no such mode under the cap (21:9, 16:10, and every 16:9 panel
+#  without a 1280x720 mode — 720p is a CEA mode, so TVs have it and PC monitors
+#  mostly don't) does it need a fallback, and the fallback differs per backend:
+#  on X11 it shrinks the framebuffer area with xrandr --scale-from, which costs
+#  a full-screen GPU rescale per frame inside Xorg (measured on Gemini Lake:
+#  1.80 W GPU with --scale-from vs 0.89 W on a real mode, same scene); on
+#  Wayland, where that transform does not exist, it takes the smallest real
+#  mode ABOVE the cap instead (1920x1200 -> 1280x800) — still free, still the
+#  panel's own scaler. api_server runs as root, so no sudoers entry is needed.
 #
 #  Persisted state ABSENT means "auto" — unlike display-mode, the default here
 #  is deliberately meant to reach the already-installed fleet: a unit that has

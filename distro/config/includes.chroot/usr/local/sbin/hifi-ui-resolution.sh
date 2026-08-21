@@ -24,8 +24,8 @@
 # DUE BACKEND
 # Lo script parla sia con X11 (xrandr) sia con Wayland (wlr-randr, compositore
 # wlroots — labwc nella sessione kiosk), scegliendo da sé in base al socket che
-# trova. Le due strade qui sotto valgono su X11; su Wayland esiste solo la
-# prima, perché la seconda lì non serve (vedi in fondo).
+# trova. Le due strade qui sotto valgono su X11; su Wayland la seconda non c'è
+# e al suo posto c'è la 1b) (vedi in fondo).
 #
 # COME — 1) un MODO VIDEO REALE, quando il pannello ne espone uno adatto
 #     xrandr    --output <OUT> --mode <W>x<H> --scale 1x1     (X11)
@@ -61,16 +61,35 @@
 # a schermo intero in scanout diretto, quindi disegnare a risoluzione NATIVA
 # costa meno di quanto costi su X11 il framebuffer ridotto con la trasformata
 # (misurato, stessa scena: 1.21 W nativo su Wayland contro 1.87 W con
-# --scale-from su X11). Su un pannello senza un modo reale adatto si lascia
-# semplicemente il nativo.
+# --scale-from su X11).
+#
+# COME — 1b) IL MODO REALE PIÙ PICCOLO ANCHE SOPRA AL CAP, e solo su Wayland
+# Senza il ripiego, però, "nessun modo reale sotto al cap" su Wayland voleva
+# dire "non fare niente", in silenzio. E il caso non è raro: sotto a un cap di
+# 720 e con lo stesso rapporto d'aspetto, su un pannello 16:9 l'unico modo che
+# passa i filtri è il 1280x720, che è un modo CEA — sta nell'EDID dei
+# televisori (sul TV di prova infatti funzionava) e quasi mai in quello dei
+# monitor da PC; su un 16:10 o su un 5:4 non passa nessuno, perché un modo 16:9
+# uscirebbe comunque deformato. Su quei pannelli si prende allora il modo reale
+# più PICCOLO dello stesso rapporto d'aspetto, anche se supera il cap, purché
+# resti sotto al pannello: 1920x1200 -> 1280x800, 1920x1080 senza 720p ->
+# 1366x768. Il paragone giusto non è col cap ma col NATIVO, che è l'unica altra
+# cosa che potrebbe succedere lì: 1.02M pixel invece di 2.30M, sempre un modo
+# EDID e sempre con lo scaler del pannello, quindi ancora a costo GPU zero.
+#
+# Su X11 questo ramo NON si applica: lì l'alternativa non è il nativo ma la
+# strada 2), che il cap lo centra esattamente, e allargare anche di là
+# sposterebbe pixel su pannelli che oggi funzionano (un 21:9, dove il modo reale
+# più piccolo è 2560x1080, perderebbe il framebuffer 1720x720).
 #
 # ASPECT RATIO: sia `--scale-from` sia lo scaler del pannello stirano fino a
 # riempire TUTTO lo schermo, quindi il target non può essere la costante
-# 1280x720 o la UI esce deformata. Per la strada 1) si scarta ogni modo il cui
-# rapporto non combaci (±1%) con quello del pannello; per la 2) si fissa
+# 1280x720 o la UI esce deformata. Per le strade 1) e 1b) si scarta ogni modo il
+# cui rapporto non combaci (±1%) con quello del pannello; per la 2) si fissa
 # l'ALTEZZA al cap e si ricava la larghezza dal rapporto del pannello (allineata
 # a multipli di 8 per lo stride del driver): 1920x1080 -> 1280x720 (modo reale),
-# 1920x1200 -> 1152x720 (scale-from), 3840x2160 -> 1280x720 (modo reale).
+# 1920x1200 -> 1152x720 su X11 (scale-from) e 1280x800 su Wayland (modo reale
+# sopra al cap), 3840x2160 -> 1280x720 (modo reale).
 #
 # Stato in /etc/hifi-player/ui-resolution: "auto" | "720" | "1080" | "native".
 # ASSENTE significa "auto" — a differenza di display-mode, qui il default vuole
@@ -272,21 +291,36 @@ panel_mode() {
 #     ScaledCanvas.jsx): sotto quella soglia la UI verrebbe RIMPICCIOLITA
 #     invece che ingrandita, perdendo dettaglio per davvero e non solo
 #     nitidezza.
-# Stampa nulla se non ce n'è nessuno — ed è il caso normale sui pannelli 21:9 e
-# 16:10.
+#
+# Sotto al cap non ce n'è nessuno sui pannelli 21:9, 16:10, 5:4 e su ogni 16:9
+# che non esponga il 720p. Se il chiamante passa over=1 — cioè su Wayland, dove
+# l'alternativa è lasciare il nativo e basta (strada 1b, vedi in testa) — si
+# ripiega allora sul modo più PICCOLO tra quelli che stanno SOPRA al cap
+# rispettando tutti gli altri vincoli: il più vicino al cap dall'alto, che è
+# comunque una frazione dei pixel del pannello. Con over=0 (X11) il
+# comportamento è quello di prima.
+#
+# Stampa nulla se non c'è proprio nessun modo utilizzabile.
 best_real_mode() {
-    state_modes | awk -v pw="$1" -v ph="$2" -v th="$3" '
+    state_modes | awk -v pw="$1" -v ph="$2" -v th="$3" -v over="$4" '
         {
             split($1, d, "x")
             w = d[1] + 0; h = d[2] + 0
-            if (h < 1 || h > th)     next
+            if (h < 1)               next
             if (w >= pw && h >= ph)  next
             if (w < 1024 || h < 600) next
             pa = pw / ph; ar = w / h
             if (ar > pa * 1.01 || ar < pa * 0.99) next
-            if (w * h > best_px) { best_px = w * h; best = $1 }
+            if (h <= th) {
+                if (w * h > under_px) { under_px = w * h; under = $1 }
+            } else if (over) {
+                if (over_px == 0 || w * h < over_px) { over_px = w * h; above = $1 }
+            }
         }
-        END { if (best != "") print best }
+        END {
+            if (under != "")      print under
+            else if (above != "") print above
+        }
     '
 }
 
@@ -344,7 +378,11 @@ apply_pref() {
     WANT_MODE="$MODE"
     WANT_GEOM="$MODE"
     if [ -n "$TH" ]; then
-        REAL="$(best_real_mode "$PW" "$PH" "$TH")"
+        # Sopra al cap si ripiega solo su Wayland: su X11 c'è la strada 2), che
+        # il cap lo centra esattamente (strada 1b, vedi in testa).
+        OVER=0
+        [ "$BE" = wayland ] && OVER=1
+        REAL="$(best_real_mode "$PW" "$PH" "$TH" "$OVER")"
         if [ -n "$REAL" ]; then
             WANT_MODE="$REAL"
             WANT_GEOM="$REAL"
@@ -353,12 +391,13 @@ apply_pref() {
             # Non ingrandire mai il framebuffer oltre il pannello.
             [ "${TARGET%x*}" -lt "$PW" ] && WANT_GEOM="$TARGET"
         fi
-        # Su Wayland il ripiego non esiste ed è voluto: il compositor manda la
-        # finestra in scanout diretto, quindi il nativo costa MENO di quanto
-        # costi su X11 il framebuffer ridotto (misurato su Gemini Lake, stessa
-        # scena: 1.21 W nativo su Wayland contro 1.87 W con --scale-from su
-        # X11). Su un pannello senza un modo reale adatto si lascia il nativo e
-        # si guadagna comunque.
+        # Su Wayland il ripiego con la trasformata non esiste ed è voluto: il
+        # compositor manda la finestra in scanout diretto, quindi il nativo
+        # costa MENO di quanto costi su X11 il framebuffer ridotto (misurato su
+        # Gemini Lake, stessa scena: 1.21 W nativo su Wayland contro 1.87 W con
+        # --scale-from su X11). Al suo posto c'è il modo reale sopra al cap
+        # (over=1 qui sopra); si resta sul nativo solo se il pannello non espone
+        # NESSUN modo più piccolo con il proprio rapporto d'aspetto.
     fi
 
     # Già come lo vogliamo: non toccare il CRTC (evita uno sfarfallio inutile ad
