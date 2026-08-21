@@ -9,14 +9,19 @@
  */
 
 const { scanner } = require('etcher-sdk');
-const { isWritableTarget, virtualDrivesAllowed } = require('../helper/drive-safety');
+const { isWritableTarget, virtualDrivesAllowed, underlying } = require('../helper/drive-safety');
 
 // Above this, a "USB stick" is almost certainly an external hard drive the user
 // did not mean to erase. Such drives are still listed, but flagged so the UI can
 // demand a second, explicit confirmation.
 const OVERSIZE_BYTES = 256 * 1024 * 1024 * 1024;
 
-function describe(drive) {
+function describe(wrapper) {
+  // Same unwrapping as the safety rule: read the flags from the drivelist entry
+  // rather than from the BlockDevice, which does not forward them. Taking them
+  // from the wrapper left isReadOnly undefined, so a write-protected stick was
+  // offered as if it were fine.
+  const drive = underlying(wrapper);
   return {
     device: drive.device,
     raw: drive.raw,

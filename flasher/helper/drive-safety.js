@@ -29,6 +29,29 @@ const SYSTEM_MOUNTPOINTS = [
   'C:\\',
 ];
 
+/**
+ * The drivelist entry behind whatever we were handed.
+ *
+ * etcher-sdk's scanner does not emit drivelist entries: it emits BlockDevice
+ * objects, which forward only seven fields — device, raw, devicePath,
+ * description, mountpoints, size and isSystem. Everything else, isRemovable and
+ * isUSB and isCard and isVirtual among them, reads as undefined on the wrapper
+ * while the real values sit in .drive.
+ *
+ * That is worth stating plainly because of how it fails. Asking a wrapper
+ * whether it is removable returns undefined, so a rule that admits only
+ * removable drives rejects every one of them and the list comes up empty. Worse
+ * is the other direction: asking whether it is virtual also returns undefined,
+ * so the check that keeps disk images out passes silently. Repairing the empty
+ * list without noticing that would have quietly removed the protection.
+ *
+ * The helper receives entries straight from drivelist and needs no unwrapping,
+ * so this handles both shapes.
+ */
+function underlying(drive) {
+  return drive && drive.drive ? drive.drive : drive;
+}
+
 function mountpointPaths(drive) {
   return (drive.mountpoints || [])
     .map((m) => (typeof m === 'string' ? m : m && m.path))
@@ -39,7 +62,9 @@ function mountpointPaths(drive) {
  * @returns {null|string} null when the drive may be written to, otherwise a
  *          short reason code explaining why it was rejected.
  */
-function rejectionReason(drive, options = {}) {
+function rejectionReason(wrapperOrDrive, options = {}) {
+  if (!wrapperOrDrive) return 'missing';
+  const drive = underlying(wrapperOrDrive);
   if (!drive) return 'missing';
 
   // These two are never relaxed, whatever the caller asks for.
@@ -67,6 +92,6 @@ const isWritableTarget = (drive, options) => rejectionReason(drive, options) ===
 const virtualDrivesAllowed = () => process.env.OSMIUM_FLASHER_ALLOW_VIRTUAL === '1';
 
 module.exports = {
-  SYSTEM_MOUNTPOINTS, mountpointPaths, rejectionReason, isWritableTarget,
-  virtualDrivesAllowed,
+  SYSTEM_MOUNTPOINTS, underlying, mountpointPaths, rejectionReason,
+  isWritableTarget, virtualDrivesAllowed,
 };

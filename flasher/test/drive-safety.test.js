@@ -121,3 +121,67 @@ test('the opt-in reaches the elevated writer, which would otherwise refuse', () 
   // environment across on Linux.
   assert.doesNotMatch(writer, /process\.env\.OSMIUM_FLASHER_ALLOW_VIRTUAL/);
 });
+
+// ── Through the object the interface is actually handed ─────────────────────
+//
+// The tests above judge plain drivelist entries, which is what the elevated
+// writer receives. The interface receives something else: etcher-sdk's scanner
+// emits BlockDevice wrappers. Those forward only seven fields, so every flag
+// this rule depends on reads as undefined and the verdicts invert -- a real
+// stick is refused as not-removable, and a disk image passes the virtual check
+// unnoticed. Entry-shaped fixtures cannot see any of that, which is how the
+// drive list came to be empty with every test still green.
+
+const { sourceDestination } = require('etcher-sdk');
+
+const wrap = (props) => new sourceDestination.BlockDevice({
+  drive: {
+    device: '/dev/sdz', raw: '/dev/sdz', description: 'Test', size: 8 * 1024 ** 3,
+    mountpoints: [], blockSize: 512, logicalBlockSize: 512, displayName: 'Test',
+    isSystem: false, isRemovable: false, isUSB: false, isCard: false,
+    isVirtual: false, isReadOnly: false,
+    ...props,
+  },
+  write: true,
+  direct: false,
+});
+
+test('a BlockDevice hides the flags the rule depends on', () => {
+  // Documents why the unwrapping exists. If etcher-sdk ever forwards these, this
+  // test says so rather than leaving the workaround unexplained.
+  const device = wrap({ isRemovable: true, isUSB: true, isVirtual: true, isReadOnly: true });
+  for (const field of ['isRemovable', 'isUSB', 'isCard', 'isVirtual', 'isReadOnly']) {
+    assert.equal(device[field], undefined, `${field} is not forwarded by BlockDevice`);
+  }
+  assert.equal(device.isSystem, false, 'isSystem is forwarded, which is why it alone appeared to work');
+  assert.equal(device.drive.isRemovable, true, 'the real entry is reachable');
+});
+
+test('verdicts are the same whether given a wrapper or an entry', () => {
+  const cases = [
+    ['a USB stick', { isRemovable: true, isUSB: true }, null],
+    ['an SD card', { isCard: true }, null],
+    ['an internal disk', {}, 'not-removable'],
+    ['a system disk', { isSystem: true, isRemovable: true }, 'system'],
+    ['a disk image', { isVirtual: true, isRemovable: true }, 'virtual'],
+    ['mounted at /', { isRemovable: true, mountpoints: [{ path: '/' }] }, 'system-mount'],
+  ];
+
+  for (const [what, props, expected] of cases) {
+    assert.equal(rejectionReason(wrap(props)), expected, `${what}, as a wrapper`);
+    assert.equal(rejectionReason(drive(props)), expected, `${what}, as an entry`);
+  }
+});
+
+test('the opt-in still only reaches disk images when given a wrapper', () => {
+  assert.equal(rejectionReason(wrap({ isVirtual: true, isRemovable: true }), { allowVirtual: true }), null);
+  assert.equal(rejectionReason(wrap({ isVirtual: true, isSystem: true, isRemovable: true }), { allowVirtual: true }), 'system');
+});
+
+test('the drive list reads its flags from the entry, not the wrapper', () => {
+  // isReadOnly is not forwarded either, so a write-protected stick was being
+  // shown as usable.
+  const src = fs.readFileSync(path.join(__dirname, '..', 'src', 'drives.js'), 'utf8');
+  assert.match(src, /underlying/, 'describe() must unwrap before reading flags');
+  assert.match(src, /const drive = underlying\(wrapper\)/);
+});
