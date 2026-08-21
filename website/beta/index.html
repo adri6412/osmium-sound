@@ -426,6 +426,21 @@
     .dl-alt-head { margin: 0 0 0.7rem; font-size: 0.88rem; opacity: 0.7; }
     .dl-alt .btn-secondary.is-placeholder { opacity: 0.45; cursor: not-allowed; }
 
+    .mac-cmds { margin: 0 0 0.9rem; }
+    .mac-cmds p { margin: 0 0 0.6rem; font-size: 0.86rem; line-height: 1.6; }
+    .mac-cmds .mac-cmds-after { margin: 0.6rem 0 0; opacity: 0.8; }
+    .mac-cmds pre.cmd {
+      margin: 0; padding: 0.7rem 0.9rem;
+      border-radius: 8px;
+      background: rgba(0, 0, 0, 0.45);
+      border: 1px solid rgba(255, 255, 255, 0.14);
+      overflow-x: auto;
+    }
+    .mac-cmds pre.cmd code {
+      background: none; padding: 0; font-size: 0.82rem;
+      white-space: pre; user-select: all; line-height: 1.7;
+    }
+
     .flasher-note pre.cmd {
       margin: 0.6rem 0 0.6rem 1.1rem;
       padding: 0.6rem 0.8rem;
@@ -761,6 +776,11 @@
           <span data-en="Download Osmium Flasher" data-it="Scarica Osmium Flasher">Download Osmium Flasher</span>
         </a>
       </div>
+      <div class="mac-cmds" id="macCmds" hidden>
+        <p data-en="On macOS there is no download button on purpose. Run these two lines in Terminal instead — a browser would mark the app as quarantined and macOS would then refuse to open it." data-it="Su macOS non c&#x27;è un pulsante di download, di proposito. Esegui invece queste due righe nel Terminale — un browser contrassegnerebbe l&#x27;app come «in quarantena» e macOS si rifiuterebbe poi di aprirla.">On macOS there is no download button on purpose. Run these two lines in Terminal instead — a browser would mark the app as quarantined and macOS would then refuse to open it.</p>
+        <pre class="cmd"><code id="macCurl"></code></pre>
+        <p class="mac-cmds-after" data-en="Then drag the app across as usual. It starts with no warning at all." data-it="Poi trascina l&#x27;app come al solito. Si avvia senza alcun avviso.">Then drag the app across as usual. It starts with no warning at all.</p>
+      </div>
       <p class="dl-warning" data-en="&lt;strong&gt;Heads up:&lt;/strong&gt; the app is not code-signed, so Windows and macOS will warn you the first time you open it. That is expected, and the note below says how to get past it." data-it="&lt;strong&gt;Attenzione:&lt;/strong&gt; l&#x27;app non è firmata digitalmente, quindi Windows e macOS ti avviseranno al primo avvio. È previsto, e la nota qui sotto spiega come procedere."><strong>Heads up:</strong> the app is not code-signed, so Windows and macOS will warn you the first time you open it. That is expected, and the note below says how to get past it.</p>
       <details class="flasher-note" data-osnote="win" hidden>
         <summary data-en="Windows — “unknown publisher”" data-it="Windows — “editore sconosciuto”">Windows — “unknown publisher”</summary>
@@ -771,10 +791,9 @@
         <p data-en="Make it executable with &lt;code&gt;chmod +x Osmium-Flasher-*.run&lt;/code&gt; and run it. No warning to dismiss; you will get a polkit password prompt when the write starts. It is a self-extracting executable rather than an AppImage on purpose — an AppImage is mounted so that root cannot read it, which is exactly what the elevated write needs to do." data-it="Rendilo eseguibile con &lt;code&gt;chmod +x Osmium-Flasher-*.run&lt;/code&gt; e avvialo. Nessun avviso da chiudere; al momento della scrittura comparirà la richiesta password di polkit. È un eseguibile auto-estraente e non un AppImage di proposito: un AppImage viene montato in modo che root non possa leggerlo, ed è proprio quello che serve alla scrittura privilegiata.">Make it executable with <code>chmod +x Osmium-Flasher-*.run</code> and run it. No warning to dismiss; you will get a polkit password prompt when the write starts. It is a self-extracting executable rather than an AppImage on purpose — an AppImage is mounted so that root cannot read it, which is exactly what the elevated write needs to do.</p>
       </details>
       <details class="flasher-note" data-osnote="mac" hidden>
-        <summary data-en="macOS — download it from Terminal" data-it="macOS — scaricala dal Terminale">macOS — download it from Terminal</summary>
-        <p data-en="The app is not notarized, and a browser marks everything it downloads as quarantined — macOS then refuses to open it as &lt;strong&gt;“damaged”&lt;/strong&gt;, with no button to get past it. The mark comes from the browser, not from the file, so fetching it from Terminal avoids it altogether:" data-it="L&#x27;app non è notarizzata, e un browser contrassegna come «in quarantena» tutto ciò che scarica — macOS si rifiuta poi di aprirla dicendola &lt;strong&gt;«danneggiata»&lt;/strong&gt;, senza alcun pulsante per procedere. Il contrassegno lo mette il browser, non il file, quindi scaricarla dal Terminale lo evita del tutto:">The app is not notarized, and a browser marks everything it downloads as quarantined — macOS then refuses to open it as <strong>“damaged”</strong>, with no button to get past it. The mark comes from the browser, not from the file, so fetching it from Terminal avoids it altogether:</p>
-        <pre class="cmd"><code id="macCurl"></code></pre>
-        <p data-en="Then open the downloaded &lt;code&gt;.dmg&lt;/code&gt; and drag the app across as usual — it starts with no warning at all. If you already used the button above, run &lt;code&gt;xattr -dr com.apple.quarantine&lt;/code&gt; on the app instead." data-it="Poi apri il &lt;code&gt;.dmg&lt;/code&gt; scaricato e trascina l&#x27;app come al solito — si avvia senza alcun avviso. Se hai già usato il pulsante qui sopra, esegui invece &lt;code&gt;xattr -dr com.apple.quarantine&lt;/code&gt; sull&#x27;app.">Then open the downloaded <code>.dmg</code> and drag the app across as usual — it starts with no warning at all. If you already used the button above, run <code>xattr -dr com.apple.quarantine</code> on the app instead.</p>
+        <summary data-en="Why not just a download button?" data-it="Perché non un semplice pulsante?">Why not just a download button?</summary>
+        <p data-en="The app is not notarized, and a browser marks everything it downloads as quarantined — macOS then refuses to open it as &lt;strong&gt;“damaged”&lt;/strong&gt;, with no button to get past it. The mark comes from the browser, not from the file, so fetching it from Terminal avoids it altogether." data-it="L&#x27;app non è notarizzata, e un browser contrassegna come «in quarantena» tutto ciò che scarica — macOS si rifiuta poi di aprirla dicendola &lt;strong&gt;«danneggiata»&lt;/strong&gt;, senza alcun pulsante per procedere. Il contrassegno lo mette il browser, non il file, quindi scaricarla dal Terminale lo evita del tutto.">The app is not notarized, and a browser marks everything it downloads as quarantined — macOS then refuses to open it as <strong>“damaged”</strong>, with no button to get past it. The mark comes from the browser, not from the file, so fetching it from Terminal avoids it altogether.</p>
+        <p data-en="If you have already downloaded it another way and hit that dialog, run &lt;code&gt;xattr -dr com.apple.quarantine&lt;/code&gt; on the app to clear the mark." data-it="Se l&#x27;hai già scaricata in altro modo e ti sei imbattuto in quella finestra, esegui &lt;code&gt;xattr -dr com.apple.quarantine&lt;/code&gt; sull&#x27;app per rimuovere il contrassegno.">If you have already downloaded it another way and hit that dialog, run <code>xattr -dr com.apple.quarantine</code> on the app to clear the mark.</p>
       </details>
     </div>
 
@@ -1194,6 +1213,12 @@
     const on = consentBox && consentBox.checked;
     const hint = document.getElementById('gateHint');
     if (hint) hint.hidden = Boolean(on);
+
+    // The commands download the app just as the buttons do, so they answer to
+    // the same consent: showing them regardless would make the gate decorative.
+    const macCmds = document.getElementById('macCmds');
+    const sel = document.getElementById('flasherOs');
+    if (macCmds) macCmds.hidden = !(on && sel && sel.value.indexOf('mac') === 0);
     gatedButtons().forEach(btn => {
       if (on && btn.dataset.href) {
         btn.setAttribute('href', btn.dataset.href);
@@ -1217,13 +1242,19 @@
       flasherBtn.dataset.href =
         'https://file.osmiumsound.it/Osmium-Flasher-' + version + '-' + suffix;
     }
-    // The Terminal command has to name the exact file, and the two macOS builds
-    // differ, so it is written here rather than hard-coded in the markup.
+    // macOS gets Terminal commands instead of a button: a browser download would
+    // be quarantined, and the app is not notarized, so macOS would refuse it.
+    // The command names the exact file, and the two macOS builds differ, so it
+    // is written here rather than hard-coded in the markup.
+    const onMac = osSelect.value.indexOf('mac') === 0;
     const macCurl = document.getElementById('macCurl');
     if (macCurl && suffix) {
       macCurl.textContent =
-        'curl -L -O https://file.osmiumsound.it/Osmium-Flasher-' + version + '-' + suffix;
+        'curl -L -o ~/Downloads/Osmium-Flasher.dmg https://file.osmiumsound.it/Osmium-Flasher-'
+        + version + '-' + suffix + '
+open ~/Downloads/Osmium-Flasher.dmg';
     }
+    flasherBtn.hidden = onMac;
 
     const wanted = osSelect.value.indexOf('mac') === 0 ? 'mac' : osSelect.value;
     document.querySelectorAll('.flasher-note').forEach(note => {
