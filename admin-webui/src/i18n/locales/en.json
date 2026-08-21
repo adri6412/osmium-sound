@@ -147,6 +147,10 @@
         "label": "Companion app",
         "desc": "Pair an Android phone (QR)"
       },
+      "companionIos": {
+        "label": "iPhone / iPad (LyrPlay)",
+        "desc": "Recommended third-party app (QR)"
+      },
       "account": {
         "label": "Web interface account",
         "desc": "Username and password"
@@ -508,6 +512,11 @@
       "tokenFailed": "Could not generate the token",
       "revoked": "All pairings revoked",
       "revokeFailed": "Revoke failed"
+    },
+    "companionIos": {
+      "hint": "On iPhone/iPad, use LyrPlay — a free App Store app for controlling Lyrion/Squeezebox: native FLAC/Opus decoding, real background playback, lock-screen controls, CarPlay and Siri. Scan the QR code to download it. Note: DSP, updates, reboot and multiroom role stay manageable only from the device screen and this web interface.",
+      "open": "Open LyrPlay on the App Store",
+      "disclaimer": "LyrPlay is a third-party app, not developed by or affiliated with this project. It is only recommended as a compatible Lyrion/Squeezebox client."
     },
     "account": {
       "newUsername": "New username",

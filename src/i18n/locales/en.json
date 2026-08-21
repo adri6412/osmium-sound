@@ -334,7 +334,7 @@
       "alarm": "Alarm Clock",
       "network": "Network Configuration",
       "webRemote": "Android Companion",
-      "webRemoteIos": "iPhone / iPad",
+      "webRemoteIos": "iPhone / iPad (LyrPlay)",
       "ssh": "SSH Access",
       "pointer": "Mouse pointer",
       "uiResolution": "Interface resolution",
@@ -489,7 +489,7 @@
     "webRemoteIos": {
       "help": "On iPhone/iPad, use LyrPlay — a free app already on the App Store for controlling Lyrion/Squeezebox: native FLAC/Opus decoding, real background playback, lock-screen controls, CarPlay and Siri. Scan the QR to download it. Note: DSP, updates, reboot and multiroom role stay kiosk-only.",
       "scanHint": "Scan to open LyrPlay on the App Store",
-      "disclaimer": "LyrPlay is a third-party app, not developed by or affiliated with this project. Listed only as a compatible Lyrion/Squeezebox client."
+      "disclaimer": "LyrPlay is a third-party app, not developed by or affiliated with this project. Only recommended as a compatible Lyrion/Squeezebox client."
     },
     "alarm": {
       "help": "Schedule alarms on the active player. At the set time the player wakes up and starts playing.",

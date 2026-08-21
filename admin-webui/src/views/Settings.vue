@@ -31,6 +31,7 @@ const sections = computed(() => [
   { key: 'timezone',  label: t('settings.sections.timezone.label'),  desc: t('settings.sections.timezone.desc') },
   { key: 'updates',   label: t('settings.sections.updates.label'),   desc: t('settings.sections.updates.desc') },
   { key: 'companion', label: t('settings.sections.companion.label'), desc: t('settings.sections.companion.desc') },
+  { key: 'companionIos', label: t('settings.sections.companionIos.label'), desc: t('settings.sections.companionIos.desc') },
   { key: 'account',   label: t('settings.sections.account.label'),   desc: t('settings.sections.account.desc') },
   { key: 'backup',    label: t('settings.sections.backup.label'),    desc: t('settings.sections.backup.desc') },
   { key: 'language',  label: t('settings.sections.language.label'),  desc: t('settings.sections.language.desc') },
@@ -945,6 +946,21 @@ async function revokePairs() {
   pairQr.value = null;
 }
 
+// ── iPhone/iPad: LyrPlay (third-party App Store client) ──────────
+// No Osmium app exists for iOS; LyrPlay is an actively maintained App Store
+// client that speaks the standard Lyrion/Squeezebox protocol. Static URL —
+// no device address or pairing token involved (LyrPlay talks to Lyrion
+// directly, it never touches the :8080 admin API), so the QR is just the
+// store link and can be rendered once, offline. Mirrors the kiosk's own
+// iPhone/iPad section (src/pages/Settings.jsx).
+const LYRPLAY_APP_STORE_URL = 'https://apps.apple.com/app/lyrplay/id6746776736';
+const lyrplayQr = ref(null);
+async function makeLyrplayQr() {
+  if (lyrplayQr.value) return;
+  lyrplayQr.value = await QRCode.toDataURL(LYRPLAY_APP_STORE_URL, { margin: 1, width: 380 });
+}
+watch(open, (v) => { if (v === 'companionIos') makeLyrplayQr(); }, { immediate: true });
+
 // ── system: reboot/shutdown/reset ────────────────────────────────
 // Shared "device is rebooting" overlay for every action that ends in a
 // reboot (manual reboot, factory reset, a restore that needs one) — polls
@@ -1550,6 +1566,16 @@ onUnmounted(() => {
         <button class="ghost" @click="revokePairs">{{ t('settings.companion.revokeAll') }}</button>
       </div>
       <div v-if="pairQr" style="margin-top: 14px;"><span class="qrbox"><img :src="pairQr" alt="QR pairing" /></span></div>
+    </div>
+
+    <!-- Companion iPhone/iPad (LyrPlay, third-party) -->
+    <div class="card" v-if="open === 'companionIos'">
+      <p class="sub">{{ t('settings.companionIos.hint') }}</p>
+      <div v-if="lyrplayQr" style="margin-top: 14px;"><span class="qrbox"><img :src="lyrplayQr" alt="QR LyrPlay" /></span></div>
+      <p style="margin-top: 12px;">
+        <a :href="LYRPLAY_APP_STORE_URL" target="_blank" rel="noopener">{{ t('settings.companionIos.open') }}</a>
+      </p>
+      <p class="muted" style="margin-top: 10px;">{{ t('settings.companionIos.disclaimer') }}</p>
     </div>
 
     <!-- Account -->

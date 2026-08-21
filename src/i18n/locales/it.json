@@ -334,7 +334,7 @@
       "alarm": "Sveglia",
       "network": "Configurazione Rete",
       "webRemote": "Companion Android",
-      "webRemoteIos": "iPhone / iPad",
+      "webRemoteIos": "iPhone / iPad (LyrPlay)",
       "ssh": "Accesso SSH",
       "pointer": "Puntatore mouse",
       "uiResolution": "Risoluzione interfaccia",
@@ -489,7 +489,7 @@
     "webRemoteIos": {
       "help": "Su iPhone/iPad usa LyrPlay, un'app gratuita già disponibile su App Store per controllare Lyrion/Squeezebox: decodifica nativa FLAC/Opus, riproduzione in background, controlli da lock screen, CarPlay e Siri. Inquadra il QR per scaricarla. Nota: DSP, aggiornamenti, riavvio e ruolo multiroom restano gestibili solo dal kiosk.",
       "scanHint": "Inquadra per aprire LyrPlay su App Store",
-      "disclaimer": "LyrPlay è un'app di terze parti, non sviluppata né affiliata a questo progetto. Segnalata solo come client compatibile con Lyrion/Squeezebox."
+      "disclaimer": "LyrPlay è un'app di terze parti, non sviluppata né affiliata a questo progetto. È solo consigliata come client compatibile con Lyrion/Squeezebox."
     },
     "alarm": {
       "help": "Programma sveglie sul player attivo. All'orario impostato il player si attiva e avvia la riproduzione.",
