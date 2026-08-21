@@ -140,6 +140,11 @@ async function writeElevated({
   const tail = new ProgressTail(progressFile, onEvent);
   tail.start();
 
+  // The helper exits non-zero after reporting a failure, which sudo-prompt
+  // surfaces as a generic "Command failed". Its own diagnosis is far more
+  // useful, so the elevation error is held back until the progress file has
+  // been consulted.
+  let elevationError = null;
   try {
     await new Promise((resolve, reject) => {
       sudo.exec(
@@ -162,19 +167,38 @@ async function writeElevated({
         },
       );
     });
+  } catch (err) {
+    if (err.code === 'EDENIED') { tail.stop(); throw err; }
+    elevationError = err;
   } finally {
     tail.stop();
   }
 
   const last = tail.last;
-  if (!last || last.type === 'error') {
-    const err = new Error(last ? last.message : 'the writer exited without reporting a result');
-    err.code = last ? last.code : 'ECRASH';
+
+  // What the helper said about itself wins over what the shell made of it.
+  if (last && last.type === 'error') {
+    const err = new Error(last.message);
+    err.code = last.code || 'EUNKNOWN';
+    err.progressFile = progressFile;
+    throw err;
+  }
+  if (elevationError) {
+    // Nothing was reported: the process died before it could say why. Keep the
+    // progress file so the failure can still be looked at afterwards.
+    elevationError.progressFile = progressFile;
+    throw elevationError;
+  }
+  if (!last) {
+    const err = new Error('the writer exited without reporting a result');
+    err.code = 'ECRASH';
+    err.progressFile = progressFile;
     throw err;
   }
   if (last.type !== 'done') {
     const err = new Error('the writer stopped before finishing');
     err.code = 'EINCOMPLETE';
+    err.progressFile = progressFile;
     throw err;
   }
 

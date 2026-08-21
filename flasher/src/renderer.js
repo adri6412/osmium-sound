@@ -107,6 +107,12 @@ const STRINGS = {
     'err.ETOOSMALL': 'The USB stick is too small for this image.',
     'err.EWRITE': 'Writing failed. Try a different USB stick or a different port.',
     'err.ECRASH': 'The writer stopped unexpectedly.',
+    'err.EELEVATE': 'The elevated step failed without reporting a reason.',
+    'err.EOPEN': 'The drive could not be opened for writing. Close anything using it and try again.',
+    'err.EFORMAT': 'The stick could not be reformatted.',
+    'err.ENOSIZE': 'The drive did not report its size, so it cannot be reformatted.',
+    'err.EUNEXPECTED': 'Something went wrong that was not anticipated.',
+    'error.report': 'Report file:',
   },
 
   it: {
@@ -206,6 +212,12 @@ const STRINGS = {
     'err.ETOOSMALL': "La chiavetta è troppo piccola per quest'immagine.",
     'err.EWRITE': "Scrittura fallita. Prova con un'altra chiavetta o un'altra porta USB.",
     'err.ECRASH': 'Il processo di scrittura si è interrotto in modo imprevisto.',
+    'err.EELEVATE': "Il passaggio con privilegi è fallito senza indicarne il motivo.",
+    'err.EOPEN': "Non è stato possibile aprire l'unità in scrittura. Chiudi ciò che la sta usando e riprova.",
+    'err.EFORMAT': 'Non è stato possibile riformattare la chiavetta.',
+    'err.ENOSIZE': "L'unità non riporta la propria dimensione, quindi non può essere riformattata.",
+    'err.EUNEXPECTED': 'Si è verificato un problema non previsto.',
+    'error.report': 'File di diagnosi:',
   },
 };
 
@@ -464,7 +476,9 @@ function renderWork() {
 function renderError() {
   const err = state.error || {};
   $('errorLead').textContent = t('err.' + err.code) || err.message || '';
-  $('errorDetail').textContent = `${err.code || 'EUNKNOWN'}: ${err.message || ''}`;
+  const lines = [`${err.code || 'EUNKNOWN'}: ${err.message || ''}`];
+  if (err.progressFile) lines.push('', `${t('error.report')} ${err.progressFile}`);
+  $('errorDetail').textContent = lines.join('\n');
 }
 
 function render() {

@@ -211,7 +211,14 @@ async function restore(sdk, drive) {
     direct: false,          // see the note about Electron and aligned buffers
   });
 
-  await device.open();
+  try {
+    await device.open();
+  } catch (err) {
+    // On Windows this is also where `diskpart clean` runs, so a failure here is
+    // as likely to be the partition wipe as the open itself.
+    die('EOPEN', 'could not open the drive for writing: ' + (err && err.message ? err.message : err));
+  }
+
   try {
     const writeAt = async (buffer, offset) => {
       await device.write(buffer, 0, buffer.length, offset);

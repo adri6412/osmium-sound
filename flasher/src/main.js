@@ -33,6 +33,9 @@ function failure(err) {
     ok: false,
     code: err && err.code ? err.code : 'EUNKNOWN',
     message: err && err.message ? err.message : String(err),
+    // Kept when the helper left a report behind: it holds the elevated side's
+    // account of the failure, which is the only record of it.
+    progressFile: err && err.progressFile ? err.progressFile : undefined,
   };
 }
 
