@@ -12,6 +12,7 @@ const assert = require('node:assert/strict');
 const { test } = require('node:test');
 const fs = require('node:fs');
 const path = require('node:path');
+const os = require('node:os');
 
 const SRC = path.join(__dirname, '..', 'src');
 const html = fs.readFileSync(path.join(SRC, 'index.html'), 'utf8');
@@ -210,9 +211,20 @@ test('elevation is skipped only when the device is already writable', () => {
      ${/function writableAsIs[\s\S]*?\n\}/.exec(src)[0]}
      return writableAsIs;`)({ platform }, fs);
 
-  const posix = build('linux');
-  assert.equal(posix('/dev/null'), true, 'a writable node needs no elevation');
-  assert.equal(posix('/dev/nonexistent-device'), false, 'an unopenable node must elevate');
+  // A real file rather than /dev/null: the platform is forced to 'linux' to
+  // exercise the POSIX branch, but the filesystem underneath is whatever the
+  // test is running on, and Windows has no /dev.
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'osmium-probe-'));
+  try {
+    const writable = path.join(dir, 'node');
+    fs.writeFileSync(writable, '');
+
+    const posix = build('linux');
+    assert.equal(posix(writable), true, 'a writable node needs no elevation');
+    assert.equal(posix(path.join(dir, 'absent')), false, 'an unopenable node must elevate');
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
 
   // Windows has no equivalent check to make, and must always elevate.
   assert.equal(build('win32')('\\\\.\\PhysicalDrive4'), false);
