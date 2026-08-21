@@ -405,6 +405,27 @@
        is accepted, because the flasher installs a beta build too. */
     .flasher-block .is-placeholder { opacity: 0.45; cursor: not-allowed; }
 
+    /* Shown only while the privacy notice is unticked, so the disabled buttons
+       are explained rather than just inert. */
+    .gate-hint {
+      max-width: 720px; margin: 0.9rem auto 0;
+      padding: 0.6rem 0.9rem;
+      border-radius: 8px;
+      border: 1px dashed rgba(216, 163, 90, 0.45);
+      background: rgba(216, 163, 90, 0.06);
+      font-size: 0.86rem; text-align: left;
+    }
+
+    /* The ISO stays available, one step down: most people want the app. */
+    .dl-alt {
+      max-width: 720px; margin: 1.4rem auto 0;
+      padding-top: 1.1rem;
+      border-top: 1px solid rgba(255, 255, 255, 0.1);
+      text-align: left;
+    }
+    .dl-alt-head { margin: 0 0 0.7rem; font-size: 0.88rem; opacity: 0.7; }
+    .dl-alt .btn-secondary.is-placeholder { opacity: 0.45; cursor: not-allowed; }
+
     .dl-warning {
       margin: 0 0 0.9rem; font-size: 0.86rem; line-height: 1.6;
       opacity: 0.9;
@@ -707,21 +728,10 @@
       <input type="checkbox" id="betaAgreeBox">
       <span data-en="I have read and accept the &lt;a href=&quot;privacy.html&quot;&gt;Beta Privacy Notice&lt;/a&gt;." data-it="Ho letto e accetto la &lt;a href=&quot;privacy.html&quot;&gt;Beta Privacy Notice&lt;/a&gt;.">I have read and accept the <a href="privacy.html">Beta Privacy Notice</a>.</span>
     </label>
-
-    <div style="display:flex; gap:1rem; justify-content:center; flex-wrap:wrap; margin-top:1.25rem;">
-      <a class="btn-primary is-placeholder" id="isoDownloadBtn" data-href="https://file.osmiumsound.it/hifi-player-v2.5.21-dev.114.iso" aria-disabled="true">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-        <span class="iso-badge"><span data-en="Download ISO" data-it="Scarica ISO">Download ISO</span><small>v2.5.21-dev.114</small></span>
-      </a>
-      <a class="btn-secondary" href="https://github.com/adri6412/osmium-sound/releases" target="_blank">
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0 0 24 12c0-6.63-5.37-12-12-12z"/></svg>
-        <span data-en="All dev releases" data-it="Tutte le release dev">All dev releases</span>
-      </a>
-    </div>
-
+    <p class="gate-hint" id="gateHint" data-en="Accept the privacy notice above to enable the downloads." data-it="Accetta l&#x27;informativa qui sopra per abilitare i download.">Accept the privacy notice above to enable the downloads.</p>
 
     <div class="flasher-block" data-flasher-version="1.0.0">
-      <h3 data-en="Or let the app do it for you" data-it="Oppure lascia fare all&#x27;app">Or let the app do it for you</h3>
+      <h3 data-en="The simplest way" data-it="Il modo più semplice">The simplest way</h3>
       <p data-en="&lt;strong&gt;Osmium Flasher&lt;/strong&gt; downloads the image itself, checks its signature and writes the stick for you, then walks you through booting the mini PC and running the installer on it. No other tool, and no chance of picking the wrong disk — your system drive is never even listed. Pick the computer you will prepare the stick on, not the mini PC." data-it="&lt;strong&gt;Osmium Flasher&lt;/strong&gt; scarica l&#x27;immagine da solo, ne verifica la firma e scrive la chiavetta al posto tuo, poi ti guida nell&#x27;avvio del mini PC e nell&#x27;installer che ci gira sopra. Nessun altro programma e nessun rischio di sbagliare disco: quello di sistema non viene nemmeno elencato. Scegli il computer con cui preparerai la chiavetta, non il mini PC."><strong>Osmium Flasher</strong> downloads the image itself, checks its signature and writes the stick for you, then walks you through booting the mini PC and running the installer on it. No other tool, and no chance of picking the wrong disk — your system drive is never even listed. Pick the computer you will prepare the stick on, not the mini PC.</p>
       <div class="dl-picker">
         <div class="dl-field">
@@ -751,6 +761,20 @@
         <summary data-en="Linux — one executable file" data-it="Linux — un solo file eseguibile">Linux — one executable file</summary>
         <p data-en="Make it executable with &lt;code&gt;chmod +x Osmium-Flasher-*.run&lt;/code&gt; and run it. No warning to dismiss; you will get a polkit password prompt when the write starts. It is a self-extracting executable rather than an AppImage on purpose — an AppImage is mounted so that root cannot read it, which is exactly what the elevated write needs to do." data-it="Rendilo eseguibile con &lt;code&gt;chmod +x Osmium-Flasher-*.run&lt;/code&gt; e avvialo. Nessun avviso da chiudere; al momento della scrittura comparirà la richiesta password di polkit. È un eseguibile auto-estraente e non un AppImage di proposito: un AppImage viene montato in modo che root non possa leggerlo, ed è proprio quello che serve alla scrittura privilegiata.">Make it executable with <code>chmod +x Osmium-Flasher-*.run</code> and run it. No warning to dismiss; you will get a polkit password prompt when the write starts. It is a self-extracting executable rather than an AppImage on purpose — an AppImage is mounted so that root cannot read it, which is exactly what the elevated write needs to do.</p>
       </details>
+    </div>
+
+    <div class="dl-alt">
+      <p class="dl-alt-head" data-en="Rather write the stick yourself? Download the image and use balenaEtcher, Rufus or &lt;code&gt;dd&lt;/code&gt;." data-it="Preferisci scrivere la chiavetta da solo? Scarica l&#x27;immagine e usa balenaEtcher, Rufus o &lt;code&gt;dd&lt;/code&gt;.">Rather write the stick yourself? Download the image and use balenaEtcher, Rufus or <code>dd</code>.</p>
+      <div style="display:flex; gap:1rem; justify-content:center; flex-wrap:wrap; margin-top:1.25rem;">
+        <a class="btn-secondary is-placeholder" id="isoDownloadBtn" data-href="https://file.osmiumsound.it/hifi-player-v2.5.21-dev.114.iso" aria-disabled="true">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          <span class="iso-badge"><span data-en="Download ISO" data-it="Scarica ISO">Download ISO</span><small>v2.5.21-dev.114</small></span>
+        </a>
+        <a class="btn-secondary" href="https://github.com/adri6412/osmium-sound/releases" target="_blank">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0 0 24 12c0-6.63-5.37-12-12-12z"/></svg>
+          <span data-en="All dev releases" data-it="Tutte le release dev">All dev releases</span>
+        </a>
+      </div>
     </div>
 
     <div class="quickstart">
@@ -1153,6 +1177,8 @@
 
   function applyGate() {
     const on = consentBox && consentBox.checked;
+    const hint = document.getElementById('gateHint');
+    if (hint) hint.hidden = Boolean(on);
     gatedButtons().forEach(btn => {
       if (on && btn.dataset.href) {
         btn.setAttribute('href', btn.dataset.href);
