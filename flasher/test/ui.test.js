@@ -187,3 +187,44 @@ test('a macOS permission refusal is not reported as a bad USB stick', () => {
   assert.equal((renderer.match(/'err\.EPERM_MACOS':/g) || []).length, 2,
     'the explanation must exist in both languages');
 });
+
+test('the writability probe looks at every node the write will open', () => {
+  // On macOS the write goes to the character device while the block device is
+  // what gets unmounted, so checking only the name we were handed would let an
+  // unprivileged write start and then fail halfway.
+  const src = fs.readFileSync(path.join(__dirname, '..', 'src', 'elevate.js'), 'utf8');
+  const deviceNodes = new Function(`${/function deviceNodes[\s\S]*?\n\}/.exec(src)[0]}; return deviceNodes;`)();
+
+  assert.deepEqual(deviceNodes('/dev/disk5'), ['/dev/rdisk5', '/dev/disk5']);
+  assert.deepEqual(deviceNodes('/dev/disk12'), ['/dev/rdisk12', '/dev/disk12']);
+  assert.deepEqual(deviceNodes('/dev/sdb'), ['/dev/sdb'], 'elsewhere the two names coincide');
+  assert.deepEqual(deviceNodes('\\\\.\\PhysicalDrive4'), ['\\\\.\\PhysicalDrive4']);
+  // Not a whole-disk name: nothing to rewrite.
+  assert.deepEqual(deviceNodes('/dev/disk5s1'), ['/dev/disk5s1']);
+});
+
+test('elevation is skipped only when the device is already writable', () => {
+  const src = fs.readFileSync(path.join(__dirname, '..', 'src', 'elevate.js'), 'utf8');
+  const build = (platform) => new Function('process', 'fs',
+    `${/function deviceNodes[\s\S]*?\n\}/.exec(src)[0]}
+     ${/function writableAsIs[\s\S]*?\n\}/.exec(src)[0]}
+     return writableAsIs;`)({ platform }, fs);
+
+  const posix = build('linux');
+  assert.equal(posix('/dev/null'), true, 'a writable node needs no elevation');
+  assert.equal(posix('/dev/nonexistent-device'), false, 'an unopenable node must elevate');
+
+  // Windows has no equivalent check to make, and must always elevate.
+  assert.equal(build('win32')('\\\\.\\PhysicalDrive4'), false);
+});
+
+test('the interface is told which way the write will go', () => {
+  // Otherwise it announces a password prompt that never arrives.
+  const elevate = fs.readFileSync(path.join(__dirname, '..', 'src', 'elevate.js'), 'utf8');
+  assert.match(elevate, /onEvent\(\{ type: 'elevation', elevated \}\)/);
+
+  const renderer = fs.readFileSync(path.join(__dirname, '..', 'src', 'renderer.js'), 'utf8');
+  assert.match(renderer, /event\.type === 'elevation'/, 'the renderer must consume it');
+  assert.equal((renderer.match(/'work\.leadDirect':/g) || []).length, 2,
+    'both languages need the wording for the unelevated case');
+});

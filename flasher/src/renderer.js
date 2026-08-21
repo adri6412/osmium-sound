@@ -44,6 +44,7 @@ const STRINGS = {
     'work.starting': 'Waiting for permission…',
     'work.leadDownload': 'The image is about 1 GB. An interrupted download resumes where it stopped.',
     'work.leadElevate': 'Your system will ask for your password: writing to a raw device needs administrator rights.',
+    'work.leadDirect': 'Getting ready. This drive can be written to without administrator rights, so nothing will be asked of you.',
     'work.leadFlash': 'Do not unplug the stick.',
     'work.formatting': 'Restoring the USB stick',
     'work.leadFormat': 'Writing a fresh partition table and an empty FAT32 volume. This takes a few seconds.',
@@ -150,6 +151,7 @@ const STRINGS = {
     'work.starting': "In attesa dell'autorizzazione…",
     'work.leadDownload': "L'immagine pesa circa 1 GB. Un download interrotto riprende da dove si era fermato.",
     'work.leadElevate': 'Il sistema chiederà la password: scrivere direttamente su un dispositivo richiede i permessi di amministratore.',
+    'work.leadDirect': "Preparazione in corso. Questa unità è scrivibile senza permessi di amministratore, quindi non ti verrà chiesto nulla.",
     'work.leadFlash': 'Non scollegare la chiavetta.',
     'work.formatting': 'Ripristino della chiavetta',
     'work.leadFormat': 'Scrittura di una nuova tabella delle partizioni e di un volume FAT32 vuoto. Richiede pochi secondi.',
@@ -277,6 +279,7 @@ const state = {
   drives: [],
   selected: null,
   writing: false,
+  elevated: true,      // finché l'helper non dice il contrario
   phase: null,
   progress: null,
   error: null,
@@ -445,7 +448,7 @@ function renderWork() {
   $('workTitle').textContent = t('work.' + phase) || '';
   $('workLead').textContent =
     phase === 'downloading' ? t('work.leadDownload')
-      : phase === 'starting' ? t('work.leadElevate')
+      : phase === 'starting' ? t(state.elevated ? 'work.leadElevate' : 'work.leadDirect')
         : phase === 'formatting' ? t('work.leadFormat')
           : t('work.leadFlash');
 
@@ -564,6 +567,7 @@ async function runWrite() {
   state.writing = true;
   state.phase = 'starting';
   state.progress = null;
+  state.elevated = true;
   render();
 
   const res = await window.flasher.write({
@@ -606,6 +610,13 @@ window.addEventListener('DOMContentLoaded', async () => {
   });
 
   window.flasher.onWriteProgress((event) => {
+    // Sent before anything is written: on a drive we can already open for
+    // writing there is no password prompt coming, so we must not announce one.
+    if (event.type === 'elevation') {
+      state.elevated = event.elevated !== false;
+      if (state.screen === 'work') renderWork();
+      return;
+    }
     if (event.type === 'progress') {
       state.phase = event.stage === 'verifying' ? 'verifying'
         : event.stage === 'formatting' ? 'formatting' : 'flashing';

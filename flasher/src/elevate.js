@@ -3,7 +3,11 @@
 /**
  * Runs helper/writer.js with root/Administrator rights and relays its progress.
  *
- * Two platform details drive the shape of this module:
+ * Elevation is not unconditional: when the target is already writable as we
+ * are, the helper is spawned as an ordinary child process instead. See
+ * writableAsIs() for when that happens and why it matters.
+ *
+ * Two platform details drive the shape of the elevated path:
  *
  *  1. sudo-prompt buffers the child's stdout rather than streaming it, so the
  *     helper reports through a temp file that we tail here.
@@ -21,6 +25,7 @@ const fsp = require('fs/promises');
 const os = require('os');
 const path = require('path');
 const crypto = require('crypto');
+const { spawn } = require('child_process');
 
 const sudo = require('@vscode/sudo-prompt');
 
@@ -92,6 +97,79 @@ class ProgressTail {
 }
 
 /**
+ * The device nodes etcher-sdk will actually open for this drive.
+ *
+ * On macOS the write goes through the character device, /dev/rdiskN, while the
+ * block device is what gets unmounted; both have to be ours for the
+ * unprivileged path to be safe to take. Elsewhere the two names coincide.
+ */
+function deviceNodes(devicePath) {
+  const raw = devicePath.replace(/^(\/dev\/)(disk\d+)$/, '$1r$2');
+  return raw === devicePath ? [devicePath] : [raw, devicePath];
+}
+
+/**
+ * Whether the target can be opened for writing without elevating first.
+ *
+ * Normally it cannot: a stick plugged into macOS is root:operator 0640, and a
+ * Linux block device is root:disk. But `hdiutil attach` hands the device nodes
+ * of a disk image to the account that attached it, which is exactly the
+ * testing path the README describes — and it is also true wherever a system
+ * grants the console user its removable devices outright.
+ *
+ * Elevating regardless puts a password prompt in front of a write that does
+ * not need one, and on a machine whose user is not an administrator that
+ * prompt cannot be satisfied at all: the dialog asks for an administrator's
+ * credentials, not the user's own. Probing first turns that dead end into a
+ * write that simply works.
+ *
+ * A refusal here is never reported as an error — it only means the elevated
+ * path is used, which is what happened before this check existed. That
+ * includes EBUSY from a mounted volume, where elevating is the right answer
+ * anyway: the helper unmounts before it writes.
+ */
+function writableAsIs(devicePath) {
+  if (process.platform === 'win32') return false;
+  return deviceNodes(devicePath).every((node) => {
+    let fd;
+    try {
+      fd = fs.openSync(node, fs.constants.O_WRONLY);
+    } catch (_) {
+      return false;
+    }
+    fs.closeSync(fd);
+    return true;
+  });
+}
+
+/**
+ * Runs the helper as an ordinary child process, for when no rights are needed.
+ *
+ * Unlike sudo-prompt this takes a real argument vector, so nothing has to be
+ * quoted into a shell. Progress still travels through the file the caller
+ * tails: the helper does not know which way it was started.
+ */
+function runDirect(args) {
+  return new Promise((resolve, reject) => {
+    const child = spawn(process.execPath, args, {
+      env: Object.assign({}, process.env, { ELECTRON_RUN_AS_NODE: '1' }),
+      stdio: ['ignore', 'ignore', 'pipe'],
+    });
+    let stderr = '';
+    child.stderr.on('data', (chunk) => { stderr += chunk.toString(); });
+    child.on('error', reject);
+    child.on('close', (status) => {
+      if (status === 0) return resolve();
+      const err = new Error(
+        `the writer exited with status ${status}` + (stderr ? ` \u2014 ${stderr.trim()}` : ''),
+      );
+      err.code = 'EHELPER';
+      reject(err);
+    });
+  });
+}
+
+/**
  * @param {object}   opts
  * @param {string}   opts.devicePath  drivelist `device` of the target stick
  * @param {string}   [opts.imagePath] verified image on disk (write mode only)
@@ -119,24 +197,32 @@ async function writeElevated({
   );
   await fsp.writeFile(progressFile, '');
 
-  const argv = [
-    quote(process.execPath),
-    quote(helperPath),
-    '--approot', quote(appRoot),
-    '--device', quote(devicePath),
-    '--progress', quote(progressFile),
-    '--mode', quote(mode),
+  // Kept unquoted: the direct path needs a real argument vector, and the
+  // elevated one is quoted into a command line out of the same list below.
+  const args = [
+    helperPath,
+    '--approot', appRoot,
+    '--device', devicePath,
+    '--progress', progressFile,
+    '--mode', mode,
   ];
-  if (process.env.OSMIUM_FLASHER_ALLOW_VIRTUAL === '1') argv.push('--allow-virtual');
+  if (process.env.OSMIUM_FLASHER_ALLOW_VIRTUAL === '1') args.push('--allow-virtual');
   if (mode === 'restore') {
-    argv.push('--label', quote(label));
+    args.push('--label', label);
   } else {
-    argv.push('--image', quote(imagePath), '--expect-size', String(expectSize || 0));
-    if (!verify) argv.push('--no-verify');
+    args.push('--image', imagePath, '--expect-size', String(expectSize || 0));
+    if (!verify) args.push('--no-verify');
   }
 
-  const bare = argv.join(' ');
+  const bare = [quote(process.execPath)]
+    .concat(args.map((a) => (a.startsWith('--') ? a : quote(a))))
+    .join(' ');
   const command = process.platform === 'win32' ? bare : `ELECTRON_RUN_AS_NODE=1 ${bare}`;
+
+  // Decided before anything is written, and reported so the interface does not
+  // announce a password prompt that is never going to appear.
+  const elevated = !writableAsIs(devicePath);
+  onEvent({ type: 'elevation', elevated });
 
   const tail = new ProgressTail(progressFile, onEvent);
   tail.start();
@@ -147,27 +233,31 @@ async function writeElevated({
   // been consulted.
   let elevationError = null;
   try {
-    await new Promise((resolve, reject) => {
-      sudo.exec(
-        command,
-        { name: 'Osmium Flasher', env: { ELECTRON_RUN_AS_NODE: '1' } },
-        (error, _stdout, stderr) => {
-          if (error) {
-            const message = String(error.message || error);
-            // The polkit/UAC/osascript dialog was dismissed.
-            if (/did not grant|User did not grant permission|cancell?ed/i.test(message)) {
-              const denied = new Error('elevation refused');
-              denied.code = 'EDENIED';
-              return reject(denied);
+    if (!elevated) {
+      await runDirect(args);
+    } else {
+      await new Promise((resolve, reject) => {
+        sudo.exec(
+          command,
+          { name: 'Osmium Flasher', env: { ELECTRON_RUN_AS_NODE: '1' } },
+          (error, _stdout, stderr) => {
+            if (error) {
+              const message = String(error.message || error);
+              // The polkit/UAC/osascript dialog was dismissed.
+              if (/did not grant|User did not grant permission|cancell?ed/i.test(message)) {
+                const denied = new Error('elevation refused');
+                denied.code = 'EDENIED';
+                return reject(denied);
+              }
+              const failed = new Error(message + (stderr ? ` — ${stderr}` : ''));
+              failed.code = 'EELEVATE';
+              return reject(failed);
             }
-            const failed = new Error(message + (stderr ? ` — ${stderr}` : ''));
-            failed.code = 'EELEVATE';
-            return reject(failed);
-          }
-          resolve();
-        },
-      );
-    });
+            resolve();
+          },
+        );
+      });
+    }
   } catch (err) {
     if (err.code === 'EDENIED') { tail.stop(); throw err; }
     elevationError = err;
