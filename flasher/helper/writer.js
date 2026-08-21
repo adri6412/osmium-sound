@@ -88,6 +88,23 @@ function loadDep(name) {
   return require(name);
 }
 
+/**
+ * Distinguishes a permission refusal from an ordinary write failure.
+ *
+ * On macOS the raw disk devices are guarded by TCC, which applies to root as
+ * well and judges the request by the app's code signature. An ad-hoc signature
+ * has no stable identity, so the request is refused outright — and with EPERM
+ * rather than anything that suggests permissions. Reporting that as "try
+ * another stick" sends people to look in entirely the wrong place.
+ */
+function writeErrorCode(errors) {
+  const text = errors.map((e) => (e && e.message) || String(e)).join(' ');
+  if (process.platform === 'darwin' && /EPERM|operation not permitted/i.test(text)) {
+    return 'EPERM_MACOS';
+  }
+  return 'EWRITE';
+}
+
 async function main() {
   if (!devicePath) die('EARGS', 'missing --device');
 
@@ -197,11 +214,11 @@ async function main() {
       verify,
     });
   } catch (err) {
-    die('EWRITE', err && err.message ? err.message : err);
+    die(writeErrorCode([err]), err && err.message ? err.message : err);
   }
 
   if (failures.length > 0) {
-    die('EWRITE', failures.map((e) => e.message).join('; '));
+    die(writeErrorCode(failures), failures.map((e) => e.message).join('; '));
   }
   if (result && result.failures && result.failures.size > 0) {
     const msgs = [];

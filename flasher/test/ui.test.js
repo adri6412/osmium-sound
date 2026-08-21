@@ -161,3 +161,29 @@ test('the macOS build is ad-hoc signed, not left unsigned', () => {
   assert.match(yml, /^\s+identity: "-"$/m, 'mac.identity must be "-" (ad-hoc)');
   assert.doesNotMatch(yml, /^\s+identity: null$/m, 'identity: null skips signing entirely');
 });
+
+test('a macOS permission refusal is not reported as a bad USB stick', () => {
+  // TCC refuses raw disk access with EPERM even to root. Folding that into the
+  // generic write failure told people to go and find another stick, which is
+  // the one thing that cannot help.
+  const src = fs.readFileSync(path.join(__dirname, '..', 'helper', 'writer.js'), 'utf8');
+  const body = /function writeErrorCode\(errors\) \{[\s\S]*?\n\}/.exec(src);
+  assert.ok(body, 'writeErrorCode is missing');
+
+  const build = (platform) => new Function('process', `${body[0]}; return writeErrorCode;`)({ platform });
+
+  const onMac = build('darwin');
+  assert.equal(onMac([new Error("EPERM: operation not permitted, open '/dev/rdisk5'")]), 'EPERM_MACOS');
+  assert.equal(onMac([new Error('operation not permitted')]), 'EPERM_MACOS');
+  assert.equal(onMac([new Error('EIO: i/o error')]), 'EWRITE');
+  assert.equal(onMac([]), 'EWRITE');
+
+  // The same message elsewhere means something else entirely, so it keeps the
+  // generic advice.
+  assert.equal(build('linux')([new Error('EPERM: operation not permitted')]), 'EWRITE');
+  assert.equal(build('win32')([new Error('EPERM: operation not permitted')]), 'EWRITE');
+
+  const renderer = fs.readFileSync(path.join(__dirname, '..', 'src', 'renderer.js'), 'utf8');
+  assert.equal((renderer.match(/'err\.EPERM_MACOS':/g) || []).length, 2,
+    'the explanation must exist in both languages');
+});
