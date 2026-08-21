@@ -13,6 +13,14 @@
  * The destination is a BlockDevice pointed at an ordinary file: that is what
  * makes etcher-sdk take the BlockWriteStream path (and call getAlignedBuffer)
  * rather than the plain-file one, without needing a real USB stick or root.
+ *
+ * Two of BlockDevice's real-hardware steps have to be held back for that trick
+ * to work, and neither is what this test is about:
+ *   - on macOS and Linux, _open() unmounts the drive first, and a temp file is
+ *     not a drive ("Unmount failed, invalid drive");
+ *   - on Windows it runs `diskpart clean`, which needs a \\.\PhysicalDriveN
+ *     path and throws on anything else. keepOriginal skips it. That guard is
+ *     also why this test could never touch a real disk by accident.
  */
 
 const assert = require('node:assert/strict');
@@ -41,6 +49,13 @@ test('the image is written byte-exact with unaligned buffers', async () => {
   // for clarity even though either would work.
   const { sourceDestination, multiWrite } = require('etcher-sdk');
 
+  // Reaching into etcher-sdk's internals on purpose: getUnmountDisk is resolved
+  // lazily and read per call, so replacing it here keeps _open() from trying to
+  // unmount a temp file.
+  const lazy = require('etcher-sdk/build/lazy');
+  const originalGetUnmountDisk = lazy.getUnmountDisk;
+  lazy.getUnmountDisk = () => async () => { /* a temp file has nothing to unmount */ };
+
   const dir = await fsp.mkdtemp(path.join(os.tmpdir(), 'osmium-write-'));
   try {
     const imagePath = path.join(dir, 'image.img');
@@ -63,6 +78,7 @@ test('the image is written byte-exact with unaligned buffers', async () => {
       source: new sourceDestination.File({ path: imagePath }),
       destinations: [new sourceDestination.BlockDevice({
         drive, write: true, direct: false, unmountOnSuccess: false,
+        keepOriginal: true,   // skip `diskpart clean`, see the note above
       })],
       onFail: (_d, err) => failures.push(err),
       onProgress: () => {},
@@ -84,6 +100,7 @@ test('the image is written byte-exact with unaligned buffers', async () => {
     );
   } finally {
     directIo.getAlignedBuffer = originalGetAlignedBuffer;
+    lazy.getUnmountDisk = originalGetUnmountDisk;
     await fsp.rm(dir, { recursive: true, force: true });
   }
 });
