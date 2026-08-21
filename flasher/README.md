@@ -34,7 +34,7 @@ The GUI stays unprivileged for its whole life — only `helper/writer.js` is
 elevated, and it is spawned on Electron's own binary via `ELECTRON_RUN_AS_NODE`
 so the native addons keep the right ABI.
 
-### Two platform traps, already handled
+### Three platform traps, already handled
 
 - **sudo-prompt buffers stdout** rather than streaming it, so progress travels
   through a temp JSON-lines file that the GUI tails. Do not "simplify" this back
@@ -43,6 +43,24 @@ so the native addons keep the right ABI.
   it emits the exports *before* `pkexec`, which then scrubs the environment. On
   POSIX the variable is therefore also inlined into the command itself. Windows
   and macOS put the exports inside the elevated script, so they are fine.
+
+- **Electron forbids external buffers**, because its V8 is built with pointer
+  compression: `napi_create_external_buffer` always fails there. That is the only
+  way to hand aligned memory to JS, so `@ronomon/direct-io`'s `getAlignedBuffer`
+  cannot work — and it reacts with a C `assert`, killing the process rather than
+  throwing something catchable. The helper therefore replaces the allocator with
+  a plain one and passes `direct: false`, since aligned memory exists only to
+  serve `O_DIRECT`. Both must change together: `O_DIRECT` against unaligned
+  memory fails with `EINVAL`.
+
+  The consequence is real and worth knowing: **writes go through the OS cache**
+  rather than straight to the device, so the read-back verification is less
+  independent than it looks — it will catch a truncated or failed write, but a
+  stick that lies about what it stored can hide behind the cache. Restoring
+  `O_DIRECT` means running the helper on a real Node binary instead of Electron,
+  which in turn means shipping one, plus a second copy of the native modules
+  built for it: `mountutils` is V8/NAN-based, not N-API, so a single build cannot
+  serve both runtimes.
 
 And one that dictated the packaging: the Linux build is a **tar.gz, not an
 AppImage**. An AppImage is mounted over FUSE by the unprivileged user, and FUSE

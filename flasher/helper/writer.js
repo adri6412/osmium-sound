@@ -89,6 +89,20 @@ async function main() {
     die('ESIZE', 'image size changed under us: expected ' + expectSize + ', found ' + stat.size);
   }
 
+  // Electron's V8 is built with pointer compression, which forbids external
+  // buffers: napi_create_external_buffer always fails there. @ronomon/direct-io
+  // asserts on that failure and aborts the process outright -- a C assert, not a
+  // JS exception, so it cannot be probed for and must be pre-empted.
+  //
+  // Aligned memory is only ever needed for O_DIRECT, so we drop both together:
+  // plain buffers here, and direct: false on the destination below. The cost is
+  // that writes go through the OS cache instead of straight to the device.
+  const directIo = loadDep('@ronomon/direct-io');
+  const underElectron = Boolean(process.versions.electron);
+  if (underElectron) {
+    directIo.getAlignedBuffer = (size) => Buffer.alloc(size);
+  }
+
   const sdk = loadDep('etcher-sdk');
   const { sourceDestination, multiWrite } = sdk;
   const { list } = loadDep('drivelist');
@@ -118,7 +132,10 @@ async function main() {
     drive,
     unmountOnSuccess: true,
     write: true,
-    direct: true,
+    // Must stay in step with the getAlignedBuffer shim above: O_DIRECT with
+    // unaligned memory fails with EINVAL. Exclusive locking of the device
+    // (O_EXCL / O_EXLOCK) is unaffected and still applies.
+    direct: !underElectron,
   });
 
   const failures = [];
