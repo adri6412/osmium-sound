@@ -620,6 +620,23 @@
     }
     #android .install-inner, #android .quickstart { margin-left: auto; margin-right: auto; }
 
+    /* ── DONATE (Ko-fi) ───────────────────────────────── */
+    #donate {
+      border-top: 1px solid var(--border);
+      padding: 2.25rem clamp(1.25rem, 5vw, 4rem);
+    }
+    .donate-inner {
+      max-width: 900px; margin: 0 auto;
+      display: flex; align-items: center; justify-content: center;
+      gap: 1.25rem 1.75rem; flex-wrap: wrap; text-align: center;
+    }
+    .donate-inner p {
+      color: var(--muted); font-size: 0.92rem; line-height: 1.6;
+      max-width: 560px; margin: 0;
+    }
+    .kofi-btn { padding: 10px 20px; font-size: 0.9rem; white-space: nowrap; }
+    .kofi-btn img { width: 24px; height: auto; display: block; }
+
     /* ── FOOTER ──────────────────────────────────────── */
     footer {
       border-top: 1px solid var(--border);
@@ -716,7 +733,7 @@
 
     <p class="install-warning">
       <span class="warn-ico">⚠️</span>
-      <span data-en="&lt;strong&gt;Were you in the private beta?&lt;/strong&gt; You need to reinstall from the latest ISO below — an over-the-air update will not get you there." data-it="&lt;strong&gt;Hai partecipato alla beta privata?&lt;/strong&gt; Devi reinstallare dall&#39;ultima ISO qui sotto: l&#39;aggiornamento via OTA non basta."><strong>Were you in the private beta?</strong> You need to reinstall from the latest ISO below — an over-the-air update will not get you there.</span>
+      <span data-en="&lt;strong&gt;Were you in the private beta on a Debian 12 build?&lt;/strong&gt; You need to reinstall from the latest ISO below: starting with the next release, Debian 12 is no longer supported and will not receive over-the-air updates any more — so you will not be able to update from it." data-it="&lt;strong&gt;Hai partecipato alla beta privata con una build su Debian 12?&lt;/strong&gt; Devi reinstallare dall&#39;ultima ISO qui sotto: dalla prossima versione in poi Debian 12 non sarà più supportato e non riceverà più aggiornamenti via OTA, quindi da lì non potrai più aggiornare."><strong>Were you in the private beta on a Debian 12 build?</strong> You need to reinstall from the latest ISO below: starting with the next release, Debian 12 is no longer supported and will not receive over-the-air updates any more — so you will not be able to update from it.</span>
     </p>
 
     <div class="flasher-block" data-flasher-version="1.0.0">
@@ -1024,6 +1041,17 @@
   </div>
 </section>
 
+<!-- DONATE -->
+<section id="donate">
+  <div class="donate-inner">
+    <p data-en="Osmium Sound is free and open source. If you enjoy it, you can support its development with a voluntary donation on Ko-fi." data-it="Osmium Sound è gratuito e open source. Se ti piace, puoi sostenerne lo sviluppo con una donazione volontaria su Ko-fi.">Osmium Sound is free and open source. If you enjoy it, you can support its development with a voluntary donation on Ko-fi.</p>
+    <a class="btn-secondary kofi-btn" href="https://ko-fi.com/osmiumsound" target="_blank" rel="noopener">
+      <img src="kofi.png" alt="Ko-fi" width="24" height="19">
+      <span data-en="Support us on Ko-fi" data-it="Sostienici su Ko-fi">Support us on Ko-fi</span>
+    </a>
+  </div>
+</section>
+
 <!-- FOOTER -->
 <footer>
   <div>
@@ -1034,6 +1062,7 @@
   <div class="footer-links">
     <a href="https://github.com/adri6412/osmium-sound" target="_blank">GitHub</a>
     <a href="https://github.com/adri6412/osmium-sound/issues" target="_blank" data-en="Issues" data-it="Problemi">Issues</a>
+    <a href="https://ko-fi.com/osmiumsound" target="_blank" rel="noopener">Ko-fi</a>
   </div>
 </footer>
 
