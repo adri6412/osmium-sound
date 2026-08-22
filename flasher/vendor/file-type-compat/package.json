@@ -1,0 +1,11 @@
+{
+  "name": "file-type-compat",
+  "version": "16.99.0",
+  "private": true,
+  "description": "file-type 16's API (fromStream, fromBuffer, …) on top of file-type 21, for etcher-sdk",
+  "main": "index.js",
+  "license": "MIT",
+  "dependencies": {
+    "file-type-upstream": "npm:file-type@^21.3.1"
+  }
+}

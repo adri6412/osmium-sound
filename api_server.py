@@ -2363,6 +2363,10 @@ def set_timezone(tz):
     if not tz or not real.startswith(ZONEINFO_DIR + os.sep) or not os.path.isfile(real):
         return {'success': False, 'timezone': get_timezone()['timezone'],
                 'code': 'timezone.invalid', 'message': _t('timezone.invalid', _lang())}
+    # From here on the zone name is the one read back off the validated path,
+    # not the request's own string: it is what the /etc/localtime link below
+    # gets built from.
+    tz = os.path.relpath(real, ZONEINFO_DIR)
     try:
         r = subprocess.run(['timedatectl', 'set-timezone', tz],
                            capture_output=True, text=True, timeout=15)

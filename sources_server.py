@@ -166,6 +166,16 @@ def _path_ok(value):
     return bool(re.fullmatch(r"/dev/[A-Za-z0-9/_-]+", v))
 
 
+def _oserror_detail(e):
+    """Short, user-facing reason for a failed filesystem operation: the
+    errno's own text ("Permission denied", "Read-only file system"), never
+    the exception's full string with its path and internals."""
+    try:
+        return os.strerror(e.errno) if getattr(e, "errno", None) else "error"
+    except Exception:
+        return "error"
+
+
 def _run(cmd, timeout=30):
     return subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
 
@@ -204,7 +214,9 @@ def mount_smb(src):
     # make sure it can never escape MOUNT_ROOT before we create or mount onto it.
     root = os.path.realpath(MOUNT_ROOT)
     mountpoint = os.path.realpath(src["mountpoint"])
-    if mountpoint != root and not mountpoint.startswith(root + os.sep):
+    # Strictly below the root: the slug is never empty, so a mountpoint equal
+    # to MOUNT_ROOT itself could only be a bug, never a legitimate share.
+    if not mountpoint.startswith(root + os.sep):
         return False, _ht('mount.invalidMountpoint', _hlang())
     os.makedirs(mountpoint, exist_ok=True)
 
@@ -2316,14 +2328,17 @@ def api_playlistdir_set():
     raw = (data.get("path") or "").strip()
     if not raw:
         return _err("msg.pathMissing", 400)
-    target = os.path.realpath(raw)
     # Same confinement a media folder gets, plus the appliance's own default —
     # that one lives under /var/lib and is therefore outside
     # ALLOWED_LOCAL_ROOTS on purpose (it is ours, not user-picked), but it must
-    # stay reachable so "restore the default" works.
-    if target != os.path.realpath(DEFAULT_PLAYLISTDIR) \
-            and not _local_path_allowed(target):
-        return _err("msg.pathNotAllowed", 400)
+    # stay reachable so "restore the default" works. Either way what goes on
+    # is our own constant or the confined path, never the request's string.
+    if os.path.realpath(raw) == os.path.realpath(DEFAULT_PLAYLISTDIR):
+        target = DEFAULT_PLAYLISTDIR
+    else:
+        target = _local_path_allowed(raw)
+        if not target:
+            return _err("msg.pathNotAllowed", 400)
     if not _make_playlist_folder(target):
         return _err("msg.playlistdirNotWritable", 400, path=target)
     if not _set_lms_pref("playlistdir", target):
@@ -3273,7 +3288,7 @@ def api_backup_delete(gen_id):
         return denied
     if not hb.valid_gen_id(gen_id):
         return jsonify({"success": False, "message": _ht('backup.notFound', _hlang())}), 404
-    path = os.path.join(hb.STORE_DIR, gen_id)
+    path = hb.gen_dir(hb.STORE_DIR, gen_id)
     if not os.path.isdir(path):
         return jsonify({"success": False, "message": _ht('backup.notFound', _hlang())}), 404
     shutil.rmtree(path, ignore_errors=True)
@@ -3934,6 +3949,22 @@ def _auto_adopt_formatted(st):
     _lyrion_push_live(add_paths=[src["mountpoint"]])
 
 
+def _under_roots(path, roots):
+    """Resolve `path` and confine it to one of `roots`. Returns the resolved
+    realpath if it is one of the roots or sits below one, otherwise None.
+    The root itself is handed back as the root (our own constant), a deeper
+    path only once the prefix check has passed -- so what comes out of here
+    is never the caller's string, which is what makes it safe to use on disk."""
+    path = os.path.realpath(path)
+    for root in roots:
+        root = os.path.realpath(root)
+        if path == root:
+            return root
+        if path.startswith(root + os.sep):
+            return path
+    return None
+
+
 def _local_path_allowed(path):
     """Resolve `path` and confine it to an allow-listed media root. Returns the
     resolved realpath if allowed, otherwise None. Shared by api_add_local
@@ -3941,12 +3972,7 @@ def _local_path_allowed(path):
     hifi-sources.json (untrusted archive content) — both must apply the exact
     same confinement before the path is ever touched on disk or handed to
     Lyrion as a media directory."""
-    path = os.path.realpath(path)
-    for root in ALLOWED_LOCAL_ROOTS:
-        root = os.path.realpath(root)
-        if path == root or path.startswith(root + os.sep):
-            return path
-    return None
+    return _under_roots(path, ALLOWED_LOCAL_ROOTS)
 
 
 @app.route("/api/sources/local", methods=["POST"])
@@ -3975,7 +4001,7 @@ def api_add_local():
         try:
             os.makedirs(path, exist_ok=True)
         except OSError as e:
-            return _err("msg.mountFailed", 400, detail=str(e))
+            return _err("msg.mountFailed", 400, detail=_oserror_detail(e))
 
     with _lock:
         state = load_state()
@@ -4002,24 +4028,31 @@ def api_add_local():
     return jsonify({"success": True})
 
 
+# What the folder picker may browse: the roots a picked folder can actually
+# end up under (see _local_path_allowed()) plus the appliance's own default
+# playlist folder, which api_playlistdir_set() accepts on its own.
+_BROWSE_ROOTS = ALLOWED_LOCAL_ROOTS + (DEFAULT_PLAYLISTDIR,)
+
+
 @app.route("/api/local/browse", methods=["GET"])
 def api_browse_local():
-    """List immediate subdirectories under any path, starting from / when
-    no ?path= is given -- powers the "Add local folder" picker's
-    file-browser UI, mirroring Lyrion's own folder picker (which also
-    starts at / and can browse the whole filesystem) rather than a
-    free-text path box. Deliberately NOT confined to ALLOWED_LOCAL_ROOTS:
-    that confinement guards what may actually become a Lyrion media
-    directory or a Samba share (api_add_local()/api_mkdir_local() still
-    enforce it), not read-only directory-name listing for an
-    already-pair-token-authenticated admin session. Distinct from
+    """List immediate subdirectories under a path -- powers the "Add local
+    folder" picker's file-browser UI, a folder picker rather than a
+    free-text path box. Confined to _BROWSE_ROOTS: anything outside them
+    would be refused by api_add_local()/api_mkdir_local()/
+    api_playlistdir_set() anyway, so the picker only shows what can be
+    picked. With no ?path= (or one outside the roots) the listing is the
+    roots themselves, as a virtual top level. Distinct from
     api_browse_subpath(): that one browses under an existing source's own
     mountpoint; this one has no source yet."""
     denied = _require_pair_token()
     if denied:
         return denied
-    rel = (request.args.get("path") or "").strip() or "/"
-    cand = os.path.realpath(rel)
+    rel = (request.args.get("path") or "").strip()
+    cand = _under_roots(rel, _BROWSE_ROOTS) if rel else None
+    if cand is None:
+        roots = sorted({r for r in _BROWSE_ROOTS if os.path.isdir(r)})
+        return jsonify({"path": "/", "parent": None, "dirs": roots})
     if not os.path.isdir(cand):
         return _err("msg.folderMissing", 400, path=rel)
     try:
@@ -4057,7 +4090,7 @@ def api_mkdir_local():
     try:
         os.makedirs(target, exist_ok=True)
     except OSError as e:
-        return _err("msg.mountFailed", 400, detail=str(e))
+        return _err("msg.mountFailed", 400, detail=_oserror_detail(e))
     return jsonify({"success": True, "path": target})
 
 
@@ -4155,10 +4188,12 @@ def api_set_subpath(sid):
         mountpoint = src.get("mountpoint")
         if subpath and mountpoint:
             root = os.path.realpath(mountpoint)
-            cand = os.path.realpath(os.path.join(root, subpath))
-            if cand != root and not cand.startswith(root + os.sep):
+            cand = _under_roots(os.path.join(root, subpath), (root,))
+            if cand is None:
                 return _err("msg.pathNotAllowed", 400)
-            if os.path.ismount(mountpoint) and not os.path.isdir(cand):
+            if cand == root:
+                subpath = ""  # "." and friends: the mount itself, i.e. no subpath
+            elif os.path.ismount(mountpoint) and not os.path.isdir(cand):
                 return _err("msg.folderMissing", 400, path=cand)
         src["subpath"] = subpath
         # Staged until the live push below lands -- tell _sync_from_lyrion()
@@ -4201,8 +4236,8 @@ def api_browse_subpath(sid):
         return _err("msg.folderMissing", 400, path=mountpoint or "")
     root = os.path.realpath(mountpoint)
     rel = (request.args.get("path") or "").strip("/")
-    cand = os.path.realpath(os.path.join(root, rel))
-    if cand != root and not cand.startswith(root + os.sep):
+    cand = _under_roots(os.path.join(root, rel), (root,))  # root itself when no path
+    if cand is None:
         return _err("msg.pathNotAllowed", 400)
     if not os.path.isdir(cand):
         return _err("msg.folderMissing", 400, path=cand)
@@ -5305,14 +5340,18 @@ def _req_lang():
     """Language for this request: explicit ?lang= wins (the web admin and the
     kiosk QR both pass their own), then the browser's Accept-Language, then the
     appliance default. Mirrors how src/i18n/index.jsx picks a locale."""
-    lang = (request.args.get("lang") or "").strip().lower()[:2]
-    if lang in SOURCES_I18N:
-        return lang
+    # What gets returned is always one of our own catalog's keys, never the
+    # request's string itself (it ends up in the page's <html lang=...>).
+    wanted = (request.args.get("lang") or "").strip().lower()[:2]
+    for code in SOURCES_I18N:
+        if code == wanted:
+            return code
     header = request.headers.get("Accept-Language", "")
     for part in header.split(","):
-        code = part.split(";")[0].strip().lower()[:2]
-        if code in SOURCES_I18N:
-            return code
+        wanted = part.split(";")[0].strip().lower()[:2]
+        for code in SOURCES_I18N:
+            if code == wanted:
+                return code
     return DEFAULT_LANG
 
 

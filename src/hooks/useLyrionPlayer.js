@@ -7,6 +7,16 @@ import { useI18n } from '../i18n';
 // Artwork/icon URLs come from the (untrusted) Lyrion server. Only allow
 // http(s) absolute or same-origin relative URLs as <img src>; reject
 // javascript:, data: and other schemes that can lead to DOM-based XSS.
+// Percent-encodes the few characters that are URL-legal but break out of an
+// HTML attribute. WHATWG serialization already escapes < > " everywhere and
+// ' in a query, so in practice this only ever touches a ' in a path — and
+// %27 is the same path once the server decodes it — but it is what lets a
+// safeUrl() result sit in any attribute, not just <img src>. Unlike the old
+// encodeURI() wrapper it never touches '%', so percent-escapes that are
+// already there stay intact.
+const ATTR_META = { "'": '%27', '"': '%22', '<': '%3C', '>': '%3E' };
+const encodeAttrMeta = (s) => s.replace(/['"<>]/g, (c) => ATTR_META[c]);
+
 export const safeUrl = (url) => {
   if (typeof url !== 'string') return '';
   const raw = url.trim();
@@ -23,16 +33,19 @@ export const safeUrl = (url) => {
   // couldn't parse back into a real player, silently falling back to
   // whatever other player happened to be active on the same LMS server.
   if (raw[0] === '/' && raw[1] !== '/') {
-    try { const u = new URL(raw, 'http://localhost'); return u.pathname + u.search; }
-    catch { return ''; }
+    try {
+      const u = new URL(raw, 'http://localhost');
+      return encodeAttrMeta(u.pathname + u.search);
+    } catch { return ''; }
   }
   // Absolute URL: allow ONLY http/https (blocks javascript:/data:/…) and
-  // return the parser's serialized href as-is — already a well-formed,
-  // fully percent-encoded string (see above), re-encoding it is redundant
-  // and, for any URL that already contains a percent-escape, corrupting.
+  // return the parser's serialized href — already a well-formed, fully
+  // percent-encoded string (see above); re-encoding it wholesale would be
+  // redundant and, for any URL that already contains a percent-escape,
+  // corrupting. Only the attribute metacharacters above get touched.
   try {
     const u = new URL(raw);
-    return (u.protocol === 'http:' || u.protocol === 'https:') ? u.href : '';
+    return (u.protocol === 'http:' || u.protocol === 'https:') ? encodeAttrMeta(u.href) : '';
   } catch { return ''; }
 };
 

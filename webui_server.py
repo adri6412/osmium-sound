@@ -1955,10 +1955,13 @@ def sources_app():
                         'message': 'Pairing is unavailable.'}), 502
     # Keep the caller's other params (lang= picks the page language, back= gives
     # it a way home) — dropping them here would send the user to an Italian
-    # dead-end page.
-    extra = ''.join(f'&{k}={urllib.parse.quote(v)}'
-                    for k, v in request.args.items() if k != 'token')
-    return redirect(f'/sources-app?token={token}{extra}', code=302)
+    # dead-end page. Only the params the page actually reads (QS.get() in
+    # sources_server's INDEX_HTML, _req_lang()), each URL-encoded, and only
+    # ever as the tail of our own fixed "/sources-app?token=..." prefix — so
+    # no request value can pick the destination, just the query it carries.
+    extra = ''.join('&' + key + '=' + urllib.parse.quote(request.args[key])
+                    for key in ('lang', 'back', 'setup') if key in request.args)
+    return redirect('/sources-app?token=' + token + extra, code=302)
 
 
 @app.route('/api/<path:rest>', methods=['GET', 'POST', 'PUT', 'DELETE'])
@@ -2225,8 +2228,11 @@ def spa(subpath):
 
 
 def _serve_spa(subpath):
-    full = os.path.join(DIST_DIR, subpath)
-    if os.path.isfile(full):
+    # send_from_directory() refuses traversal on its own; the isfile() probe
+    # in front of it is confined the same way, so no "../" ever touches disk.
+    root = os.path.normpath(DIST_DIR)
+    full = os.path.normpath(os.path.join(root, subpath))
+    if full.startswith(root + os.sep) and os.path.isfile(full):
         return send_from_directory(DIST_DIR, subpath)
     index = os.path.join(DIST_DIR, 'index.html')
     if os.path.isfile(index):
