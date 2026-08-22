@@ -1635,9 +1635,14 @@ const LyrionServer = () => {
 
               {/* Close button row */}
               <div className="relative z-40 flex items-center justify-between px-5 pt-3 pb-1 shrink-0">
-                <div className="flex items-center gap-3">
+                {/* Same w-[44%] inside the same px-5 as the artwork column in
+                    the body below, so this block spans exactly that column and
+                    the clock centered in it sits over the middle of the album
+                    cover. The close button is taken out of the flow (absolute)
+                    so its width can't pull the clock off that centre. */}
+                <div className="relative w-[44%] shrink-0 flex items-center justify-center">
                   <button onClick={collapsePlayer}
-                    className="p-2 bg-white/10 hover:bg-white/20 rounded-full text-white transition-colors">
+                    className="absolute left-0 top-1/2 -translate-y-1/2 p-2 bg-white/10 hover:bg-white/20 rounded-full text-white transition-colors">
                     <ChevronDown size={22} />
                   </button>
                   {/* Tapping the clock puts the screensaver up on demand (see
@@ -1646,7 +1651,10 @@ const LyrionServer = () => {
                   <NowPlayingClock active={isPlayerExpanded} title={t('player.startScreensaver')}
                     onActivate={() => window.dispatchEvent(new CustomEvent('hifi-start-screensaver'))} />
                 </div>
-                <p className="text-[10px] tracking-[0.25em] text-hifi-silver/70 uppercase">{t('player.nowPlaying')}</p>
+                {/* Out of the flow too: with the 44%-wide block above holding
+                    the left side, justify-between would otherwise push this
+                    label well right of the screen centre. */}
+                <p className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none text-[10px] tracking-[0.25em] text-hifi-silver/70 uppercase">{t('player.nowPlaying')}</p>
                 <div className="flex items-center space-x-2">
                   {vuMeterEnabled && (
                     <button onClick={toggleNowPlayingView}
