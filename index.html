@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title data-en="Osmium Sound — Hi-Fi Media Appliance for x86 / Debian" data-it="Osmium Sound — Media player Hi-Fi per x86 / Debian">Osmium Sound — Hi-Fi Media Appliance for x86 / Debian</title>
-  <meta name="description" content="Touchscreen-friendly hi-fi media player for x86 on Debian. FLAC, DSD, 192kHz, bit-perfect DoP. Streams Deezer, Qobuz, TIDAL & Spotify.">
+  <meta name="description" content="Touchscreen-friendly hi-fi media player for x86 on Debian. FLAC, DSD, 192kHz, bit-perfect DoP. Streams Deezer, Qobuz, TIDAL &amp; Spotify.">
   <meta property="og:title" content="Osmium Sound">
   <meta property="og:description" content="Touchscreen-friendly hi-fi media appliance. Bit-perfect audio. Streaming services. No compromise.">
   <meta property="og:image" content="01.png">
@@ -25,6 +25,7 @@
       --radius:    12px;
     }
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    [hidden] { display: none !important; }
     html { scroll-behavior: smooth; }
     body {
       background: var(--bg);
@@ -241,7 +242,6 @@
       background: var(--bg-card);
     }
     .carousel-wrap { max-width: 960px; margin: 2.5rem auto 0; }
-
     /* ── VIDEO EMBED ─────────────────────────────────── */
     .video-wrap {
       max-width: 960px; margin: 2.5rem auto 0;
@@ -407,6 +407,99 @@
       display: inline-flex; align-items: baseline; gap: 6px;
     }
     .iso-badge small { font-size: 0.78em; font-weight: 600; opacity: 0.8; }
+    /* ── Osmium Flasher download block ─────────────────────────────────── */
+    .flasher-block {
+      margin: 2rem auto 0;
+      max-width: 720px;
+      padding: 1.4rem 1.5rem;
+      border: 1px solid rgba(216, 163, 90, 0.32);
+      border-radius: 12px;
+      background: rgba(216, 163, 90, 0.05);
+      text-align: left;
+    }
+    .flasher-block h3 { margin: 0 0 0.4rem; font-size: 1.05rem; }
+    .flasher-block > p { margin: 0 0 1.1rem; opacity: 0.85; font-size: 0.92rem; }
+
+    .dl-picker {
+      display: flex; flex-wrap: wrap; align-items: flex-end; gap: 0.8rem;
+      margin-bottom: 0.9rem;
+    }
+    .dl-field { display: flex; flex-direction: column; gap: 0.3rem; }
+    .dl-field label { font-size: 0.78rem; opacity: 0.7; }
+    .dl-field select {
+      appearance: none;
+      padding: 0.55rem 2rem 0.55rem 0.8rem;
+      border-radius: 8px;
+      border: 1px solid rgba(255, 255, 255, 0.18);
+      background-color: rgba(0, 0, 0, 0.35);
+      /* Inline chevron: the CSP forbids remote assets, and a data: URI keeps
+         the control from falling back to the platform's default look. */
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath fill='%23d8a35a' d='M1 1l5 5 5-5'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 0.7rem center;
+      color: inherit; font: inherit; font-size: 0.9rem; cursor: pointer;
+    }
+    .dl-field select:focus { outline: 2px solid rgba(216, 163, 90, 0.6); outline-offset: 1px; }
+    /* Native dropdown lists are drawn by the OS, which does not inherit the
+       page's dark palette on every platform. */
+    .dl-field select option { background: #191c1f; color: #e8eaec; }
+
+    /* The ISO stays available, one step down: most people want the app. */
+    .dl-alt {
+      max-width: 720px; margin: 1.4rem auto 0;
+      padding-top: 1.1rem;
+      border-top: 1px solid rgba(255, 255, 255, 0.1);
+      text-align: left;
+    }
+    .dl-alt-head { margin: 0 0 0.7rem; font-size: 0.88rem; opacity: 0.7; }
+
+    .mac-cmds { margin: 0 0 0.9rem; }
+    .mac-cmds p { margin: 0 0 0.6rem; font-size: 0.86rem; line-height: 1.6; }
+    .mac-cmds .mac-cmds-after { margin: 0.6rem 0 0; opacity: 0.8; }
+    .mac-cmds pre.cmd {
+      margin: 0; padding: 0.7rem 0.9rem;
+      border-radius: 8px;
+      background: rgba(0, 0, 0, 0.45);
+      border: 1px solid rgba(255, 255, 255, 0.14);
+      overflow-x: auto;
+    }
+    .mac-cmds pre.cmd code {
+      background: none; padding: 0; font-size: 0.82rem;
+      white-space: pre; user-select: all; line-height: 1.7;
+    }
+
+    .flasher-note pre.cmd {
+      margin: 0.6rem 0 0.6rem 1.1rem;
+      padding: 0.6rem 0.8rem;
+      border-radius: 7px;
+      background: rgba(0, 0, 0, 0.4);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      overflow-x: auto;
+    }
+    .flasher-note pre.cmd code {
+      background: none; padding: 0; font-size: 0.82rem;
+      white-space: pre; user-select: all;
+    }
+
+    .dl-warning {
+      margin: 0 0 0.9rem; font-size: 0.86rem; line-height: 1.6;
+      opacity: 0.9;
+    }
+
+    .flasher-note { margin-top: 0.45rem; font-size: 0.85rem; }
+    .flasher-note summary { cursor: pointer; opacity: 0.8; }
+    .flasher-note summary:hover { opacity: 1; }
+    .flasher-note p { margin: 0.5rem 0 0 1.1rem; opacity: 0.8; line-height: 1.6; }
+    .flasher-note code {
+      background: rgba(255, 255, 255, 0.08); padding: 0.1em 0.35em;
+      border-radius: 4px; font-size: 0.92em;
+    }
+
+    @media (max-width: 640px) {
+      .dl-picker { flex-direction: column; align-items: stretch; }
+      .dl-picker .btn-primary { justify-content: center; }
+    }
+
     .quickstart {
       display: grid; grid-template-columns: repeat(3, 1fr);
       gap: 1.1rem; max-width: 860px; margin: 2.75rem auto 0;
@@ -453,6 +546,19 @@
     .apple-companion p {
       margin: 0 0 1rem; font-size: 0.88rem; line-height: 1.65; opacity: 0.85;
     }
+    .apple-companion .qr-wrap {
+      display: flex; align-items: center; gap: 1rem; margin-top: 1.1rem;
+    }
+    /* The code needs a light field behind it to scan reliably on a dark page. */
+    .apple-companion .qr {
+      width: 116px; height: 116px; flex: none;
+      border-radius: 6px; background: #fff; padding: 4px;
+    }
+    .apple-companion .qr-wrap p { margin: 0; font-size: 0.82rem; opacity: 0.75; }
+    @media (max-width: 520px) {
+      .apple-companion .qr-wrap { flex-direction: column; align-items: flex-start; }
+    }
+    /* end apple-companion */
     .install-warning {
       max-width: 760px; margin: 1.1rem auto 0;
       font-size: 0.86rem; color: var(--text); line-height: 1.6;
@@ -462,6 +568,46 @@
     }
     .install-warning .warn-ico { flex-shrink: 0; font-size: 1.05rem; line-height: 1.5; }
     .install-warning strong { color: #ff8166; }
+    /* Release notice — the Debian 13 jump, which decides whether a tester
+       should reinstall or just let the OTA run. */
+    .release-notice {
+      max-width: 760px; margin: 1.9rem auto 0; text-align: left;
+      background: linear-gradient(180deg, rgba(245,184,32,0.11), rgba(245,184,32,0.04));
+      border: 1px solid rgba(245,184,32,0.45);
+      border-radius: 12px; padding: 1.15rem 1.3rem;
+    }
+    .rn-head { display: flex; align-items: center; gap: 0.65rem; flex-wrap: wrap; }
+    .rn-badge {
+      font-size: 0.7rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase;
+      color: #0a0a0a; background: var(--accent); padding: 3px 9px; border-radius: 100px;
+    }
+    .rn-title { font-size: 1rem; font-weight: 700; color: var(--text); }
+    .release-notice p { font-size: 0.86rem; color: var(--text); line-height: 1.6; margin: 0.7rem 0 0; }
+    .release-notice a { color: var(--accent); }
+    .release-notice .rn-warn {
+      display: flex; gap: 0.6rem; align-items: flex-start;
+      background: rgba(255,99,71,0.10); border: 1px solid rgba(255,99,71,0.35);
+      border-radius: 10px; padding: 0.75rem 0.95rem; margin-top: 0.95rem;
+    }
+    .release-notice .rn-warn strong { color: #ff8166; }
+
+    /* ── MANUAL CALLOUT ──────────────────────────────────── */
+    #manual { border-top: 1px solid var(--border); background: var(--bg-card); }
+    #support { border-top: 1px solid var(--border); }
+    .support-grid {
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+      gap: 1.25rem; max-width: 900px; margin: 0 auto;
+    }
+    .manual-card {
+      max-width: 760px; margin: 0 auto; text-align: center;
+      background: var(--bg); border: 1px solid rgba(245,184,32,0.35);
+      border-radius: var(--radius); padding: 2.25rem 2rem;
+    }
+    .support-grid .manual-card { max-width: none; display: flex; flex-direction: column; }
+    .manual-card .manual-icon { font-size: 2.2rem; margin-bottom: 0.75rem; }
+    .manual-card h2 { font-size: 1.4rem; font-weight: 700; margin-bottom: 0.6rem; }
+    .manual-card p { color: var(--muted); font-size: 0.95rem; max-width: 480px; margin: 0 auto 1.5rem; line-height: 1.65; }
+    .support-grid .manual-card p { flex-grow: 1; }
     @media (max-width: 760px) { .quickstart { grid-template-columns: 1fr; } }
     .code-block {
       background: #060606;
@@ -535,17 +681,20 @@
   </a>
   <ul class="nav-links">
     <li><a href="#install" data-en="Install" data-it="Installazione">Install</a></li>
+    <li><a href="#manual" data-en="Manual" data-it="Manuale" style="color:var(--accent)">Manual</a></li>
     <li><a href="#features" data-en="Features" data-it="Funzioni">Features</a></li>
     <li><a href="#screenshots" data-en="Screenshots" data-it="Screenshot">Screenshots</a></li>
     <li><a href="#specs" data-en="Specs" data-it="Specifiche">Specs</a></li>
     <li><a href="#android" data-en="Android app" data-it="App Android">Android app</a></li>
+    <li><a href="#apple" data-en="iPhone/iPad app" data-it="App iPhone/iPad">iPhone/iPad app</a></li>
+    <li><a href="#support" data-en="Support" data-it="Supporto">Support</a></li>
   </ul>
   <div class="nav-right">
     <div class="lang-switch" role="group" aria-label="Language">
       <button type="button" data-lang="en">EN</button>
       <button type="button" data-lang="it">IT</button>
     </div>
-    <a class="btn-nav" href="https://github.com/adri6412/osmium-sound/releases/download/v2.5.19/hifi-player-v2.5.19.iso" data-en="Download" data-it="Scarica">Download</a>
+    <a class="btn-nav" href="#install" data-en="Download" data-it="Scarica">Download</a>
   </div>
 </nav>
 
@@ -587,32 +736,78 @@
     <h2 class="section-title" data-en="Download &amp; install" data-it="Scarica e installa">Download &amp; install</h2>
     <p class="section-desc" data-en="Flash one ISO image to a USB stick for the first install. From then on, every update — UI, system and OS — is delivered automatically over the air." data-it="Flasha una sola immagine ISO su una chiavetta USB per la prima installazione. Da lì in poi, ogni aggiornamento — interfaccia, sistema e OS — arriva automaticamente via OTA.">Flash one ISO image to a USB stick for the first install. From then on, every update — UI, system and OS — is delivered automatically over the air.</p>
 
-    <div style="display:flex; gap:1rem; justify-content:center; flex-wrap:wrap; margin-top:2.25rem;">
-      <a class="btn-primary" href="https://github.com/adri6412/osmium-sound/releases/download/v2.5.19/hifi-player-v2.5.19.iso">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-        <span class="iso-badge"><span data-en="Download install ISO" data-it="Scarica la ISO di installazione">Download install ISO</span><small>v2.5.19</small></span>
-      </a>
-      <a class="btn-secondary" href="https://github.com/adri6412/osmium-sound" target="_blank">
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0 0 24 12c0-6.63-5.37-12-12-12z"/></svg>
-        <span data-en="View on GitHub" data-it="Guarda su GitHub">View on GitHub</span>
-      </a>
+    <div class="release-notice">
+      <div class="rn-head">
+        <span class="rn-badge">Debian 13</span>
+        <span class="rn-title" data-en="The install image now runs on Debian 13" data-it="L&#39;immagine di installazione ora gira su Debian 13">The install image now runs on Debian 13</span>
+      </div>
+      <p data-en="The kiosk session now runs on &lt;strong&gt;Wayland (labwc)&lt;/strong&gt; instead of Xorg, which is where most of the GPU load during normal listening was going. labwc, wlr-randr and xwayland only exist from Debian 13 (trixie) onward, so the install image moved with them — earlier images were built on Debian 12." data-it="La sessione kiosk ora gira su &lt;strong&gt;Wayland (labwc)&lt;/strong&gt; al posto di Xorg, dove finiva gran parte del carico GPU durante il normale ascolto. labwc, wlr-randr e xwayland esistono solo da Debian 13 (trixie) in poi, quindi l&#39;immagine di installazione si è spostata con loro — le immagini precedenti erano su Debian 12.">The kiosk session now runs on <strong>Wayland (labwc)</strong> instead of Xorg, which is where most of the GPU load during normal listening was going. labwc, wlr-randr and xwayland only exist from Debian 13 (trixie) onward, so the install image moved with them — earlier images were built on Debian 12.</p>
+      <p class="rn-warn" data-en="&lt;span class=&quot;warn-ico&quot;&gt;⚠️&lt;/span&gt;&lt;span&gt;&lt;strong&gt;An OTA update will not move your device to Debian 13.&lt;/strong&gt; A device installed from an older, Debian 12 image keeps receiving everything else over the air, but labwc cannot be installed on Debian 12 — the kiosk stays on Xorg and part of the saving on Intel integrated graphics is lost. Measured on a Gemini Lake J4105/UHD 600, same scene: &lt;strong&gt;0.81 W&lt;/strong&gt; GPU and ~73% render-engine busy on Xorg, against &lt;strong&gt;0.59 W&lt;/strong&gt; and ~55% on Wayland. To get it, reinstall from the image below instead of updating over the air.&lt;/span&gt;" data-it="&lt;span class=&quot;warn-ico&quot;&gt;⚠️&lt;/span&gt;&lt;span&gt;&lt;strong&gt;L&#39;aggiornamento OTA non porta il dispositivo a Debian 13.&lt;/strong&gt; Un dispositivo installato da un&#39;immagine Debian 12 più vecchia continua a ricevere tutto il resto via OTA, ma labwc su Debian 12 non si può installare: il kiosk resta su Xorg e una parte del risparmio sulla grafica integrata Intel si perde. Misurato su Gemini Lake J4105/UHD 600, stessa scena: &lt;strong&gt;0,81 W&lt;/strong&gt; di GPU e ~73% di render engine occupato su Xorg, contro &lt;strong&gt;0,59 W&lt;/strong&gt; e ~55% su Wayland. Per averlo, reinstalla dall&#39;immagine qui sotto invece di aggiornare via OTA.&lt;/span&gt;"><span class="warn-ico">⚠️</span><span><strong>An OTA update will not move your device to Debian 13.</strong> A device installed from an older, Debian 12 image keeps receiving everything else over the air, but labwc cannot be installed on Debian 12 — the kiosk stays on Xorg and part of the saving on Intel integrated graphics is lost. Measured on a Gemini Lake J4105/UHD 600, same scene: <strong>0.81 W</strong> GPU and ~73% render-engine busy on Xorg, against <strong>0.59 W</strong> and ~55% on Wayland. To get it, reinstall from the image below instead of updating over the air.</span></p>
+    </div>
+
+    <div class="flasher-block" data-flasher-version="1.0.0">
+      <h3 data-en="The simplest way" data-it="Il modo più semplice">The simplest way</h3>
+      <p data-en="&lt;strong&gt;Osmium Flasher&lt;/strong&gt; downloads the image itself, checks its signature and writes the stick for you, then walks you through booting the mini PC and running the installer on it. No other tool, and no chance of picking the wrong disk — your system drive is never even listed. Pick the computer you will prepare the stick on, not the mini PC." data-it="&lt;strong&gt;Osmium Flasher&lt;/strong&gt; scarica l&#x27;immagine da solo, ne verifica la firma e scrive la chiavetta al posto tuo, poi ti guida nell&#x27;avvio del mini PC e nell&#x27;installer che ci gira sopra. Nessun altro programma e nessun rischio di sbagliare disco: quello di sistema non viene nemmeno elencato. Scegli il computer con cui preparerai la chiavetta, non il mini PC."><strong>Osmium Flasher</strong> downloads the image itself, checks its signature and writes the stick for you, then walks you through booting the mini PC and running the installer on it. No other tool, and no chance of picking the wrong disk — your system drive is never even listed. Pick the computer you will prepare the stick on, not the mini PC.</p>
+      <div class="dl-picker">
+        <div class="dl-field">
+          <label for="flasherOs" data-en="Operating system" data-it="Sistema operativo">Operating system</label>
+          <select id="flasherOs">
+            <option value="win">Windows</option>
+            <option value="mac">macOS</option>
+            <option value="linux">Linux</option>
+          </select>
+        </div>
+        <a class="btn-primary" id="flasherDownloadBtn">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          <span data-en="Download Osmium Flasher" data-it="Scarica Osmium Flasher">Download Osmium Flasher</span>
+        </a>
+      </div>
+      <div class="mac-cmds" id="macCmds" hidden>
+        <p data-en="&lt;strong&gt;There is no macOS build.&lt;/strong&gt; macOS guards raw disk devices with a permission it grants by code signature, and an unsigned application cannot obtain it — the app could fetch and verify the image, but never write it." data-it="&lt;strong&gt;Per macOS non esiste un&#x27;applicazione.&lt;/strong&gt; macOS protegge i dispositivi disco con un permesso che concede in base alla firma del codice, e un&#x27;applicazione non firmata non può ottenerlo — l&#x27;app potrebbe scaricare e verificare l&#x27;immagine, ma non scriverla mai."><strong>There is no macOS build.</strong> macOS guards raw disk devices with a permission it grants by code signature, and an unsigned application cannot obtain it — the app could fetch and verify the image, but never write it.</p>
+        <p class="mac-cmds-after" data-en="Download the image below and write it with &lt;a href=&quot;https://etcher.balena.io/&quot; target=&quot;_blank&quot; rel=&quot;noopener&quot;&gt;balenaEtcher&lt;/a&gt; instead. It is signed and notarized by its makers, so macOS lets it do what it needs to. Everything after that — booting the mini PC and running the installer — is exactly the same." data-it="Scarica l&#x27;immagine qui sotto e scrivila con &lt;a href=&quot;https://etcher.balena.io/&quot; target=&quot;_blank&quot; rel=&quot;noopener&quot;&gt;balenaEtcher&lt;/a&gt;. È firmato e notarizzato dai suoi autori, quindi macOS gli concede quello che serve. Tutto il resto — avviare il mini PC ed eseguire l&#x27;installer — è identico.">Download the image below and write it with <a href="https://etcher.balena.io/" target="_blank" rel="noopener">balenaEtcher</a> instead. It is signed and notarized by its makers, so macOS lets it do what it needs to. Everything after that — booting the mini PC and running the installer — is exactly the same.</p>
+      </div>
+      <p class="dl-warning" data-en="&lt;strong&gt;Heads up:&lt;/strong&gt; the app is not code-signed, so Windows and macOS will warn you the first time you open it. That is expected, and the note below says how to get past it." data-it="&lt;strong&gt;Attenzione:&lt;/strong&gt; l&#x27;app non è firmata digitalmente, quindi Windows e macOS ti avviseranno al primo avvio. È previsto, e la nota qui sotto spiega come procedere."><strong>Heads up:</strong> the app is not code-signed, so Windows and macOS will warn you the first time you open it. That is expected, and the note below says how to get past it.</p>
+      <details class="flasher-note" data-osnote="win" hidden>
+        <summary data-en="Windows — “unknown publisher”" data-it="Windows — “editore sconosciuto”">Windows — “unknown publisher”</summary>
+        <p data-en="Osmium Flasher is not code-signed, so SmartScreen stops it the first time. Click &lt;strong&gt;More info&lt;/strong&gt;, then &lt;strong&gt;Run anyway&lt;/strong&gt;. Windows will also ask for administrator rights: writing to a raw device needs them." data-it="Osmium Flasher non è firmato digitalmente, quindi la prima volta SmartScreen lo blocca. Clicca su &lt;strong&gt;Ulteriori informazioni&lt;/strong&gt; e poi su &lt;strong&gt;Esegui comunque&lt;/strong&gt;. Windows chiederà anche i permessi di amministratore: scrivere direttamente su un dispositivo li richiede.">Osmium Flasher is not code-signed, so SmartScreen stops it the first time. Click <strong>More info</strong>, then <strong>Run anyway</strong>. Windows will also ask for administrator rights: writing to a raw device needs them.</p>
+      </details>
+      <details class="flasher-note" data-osnote="linux" hidden>
+        <summary data-en="Linux — one executable file" data-it="Linux — un solo file eseguibile">Linux — one executable file</summary>
+        <p data-en="Make it executable with &lt;code&gt;chmod +x Osmium-Flasher-*.run&lt;/code&gt; and run it. No warning to dismiss; you will get a polkit password prompt when the write starts. It is a self-extracting executable rather than an AppImage on purpose — an AppImage is mounted so that root cannot read it, which is exactly what the elevated write needs to do." data-it="Rendilo eseguibile con &lt;code&gt;chmod +x Osmium-Flasher-*.run&lt;/code&gt; e avvialo. Nessun avviso da chiudere; al momento della scrittura comparirà la richiesta password di polkit. È un eseguibile auto-estraente e non un AppImage di proposito: un AppImage viene montato in modo che root non possa leggerlo, ed è proprio quello che serve alla scrittura privilegiata.">Make it executable with <code>chmod +x Osmium-Flasher-*.run</code> and run it. No warning to dismiss; you will get a polkit password prompt when the write starts. It is a self-extracting executable rather than an AppImage on purpose — an AppImage is mounted so that root cannot read it, which is exactly what the elevated write needs to do.</p>
+      </details>
+    </div>
+
+    <div class="dl-alt">
+      <p class="dl-alt-head" data-en="Rather write the stick yourself? Download the image and use balenaEtcher, Rufus or &lt;code&gt;dd&lt;/code&gt;." data-it="Preferisci scrivere la chiavetta da solo? Scarica l&#x27;immagine e usa balenaEtcher, Rufus o &lt;code&gt;dd&lt;/code&gt;.">Rather write the stick yourself? Download the image and use balenaEtcher, Rufus or <code>dd</code>.</p>
+      <div style="display:flex; gap:1rem; justify-content:center; flex-wrap:wrap; margin-top:1.25rem;">
+        <a class="btn-secondary" id="isoDownloadBtn" href="https://file.osmiumsound.it/hifi-player-v2.5.21-dev.114.iso">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          <span class="iso-badge"><span data-en="Download ISO" data-it="Scarica ISO">Download ISO</span><small>v2.5.21-dev.114</small></span>
+        </a>
+        <a class="btn-secondary" href="https://github.com/adri6412/osmium-sound/releases" target="_blank">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0 0 24 12c0-6.63-5.37-12-12-12z"/></svg>
+          <span data-en="All releases" data-it="Tutte le release">All releases</span>
+        </a>
+      </div>
     </div>
 
     <div class="quickstart">
       <div class="qs-step">
         <div class="qs-num">1</div>
         <h4 data-en="Download the ISO" data-it="Scarica la ISO">Download the ISO</h4>
-        <p data-en="Grab the install image &lt;strong&gt;hifi-player-v2.5.19.iso&lt;/strong&gt; using the button above." data-it="Prendi l'immagine di installazione &lt;strong&gt;hifi-player-v2.5.19.iso&lt;/strong&gt; con il pulsante qui sopra.">Grab the install image <strong>hifi-player-v2.5.19.iso</strong> using the button above.</p>
+        <p data-en="&lt;strong&gt;hifi-player-v2.5.21-dev.114.iso&lt;/strong&gt; is now ready! Click the link to start your download." data-it="&lt;strong&gt;hifi-player-v2.5.21-dev.114.iso&lt;/strong&gt; è ora pronto! Clicca sul link per avviare il download.">
+          <strong>hifi-player-v2.5.21-dev.114.iso</strong> is now ready! Click the link to start your download.
+        </p>
       </div>
       <div class="qs-step">
         <div class="qs-num">2</div>
         <h4 data-en="Flash a USB stick" data-it="Flasha una chiavetta USB">Flash a USB stick</h4>
-        <p data-en="Write the ISO to an 8&nbsp;GB+ USB stick with &lt;a href=&quot;https://etcher.balena.io/&quot; target=&quot;_blank&quot; rel=&quot;noopener&quot;&gt;balenaEtcher&lt;/a&gt;, Rufus or &lt;code&gt;dd&lt;/code&gt;." data-it="Scrivi la ISO su una chiavetta USB da 8&nbsp;GB+ con &lt;a href=&quot;https://etcher.balena.io/&quot; target=&quot;_blank&quot; rel=&quot;noopener&quot;&gt;balenaEtcher&lt;/a&gt;, Rufus o &lt;code&gt;dd&lt;/code&gt;.">Write the ISO to an 8&nbsp;GB+ USB stick with <a href="https://etcher.balena.io/" target="_blank" rel="noopener">balenaEtcher</a>, Rufus or <code>dd</code>.</p>
+        <p data-en="Use &lt;strong&gt;Osmium Flasher&lt;/strong&gt; above on an 8&amp;nbsp;GB+ stick — it fetches and verifies the image itself. Prefer to do it by hand? &lt;a href=&quot;https://etcher.balena.io/&quot; target=&quot;_blank&quot; rel=&quot;noopener&quot;&gt;balenaEtcher&lt;/a&gt;, Rufus and &lt;code&gt;dd&lt;/code&gt; all still work." data-it="Usa &lt;strong&gt;Osmium Flasher&lt;/strong&gt; qui sopra su una chiavetta da 8&amp;nbsp;GB+ — scarica e verifica l&#x27;immagine da solo. Preferisci farlo a mano? &lt;a href=&quot;https://etcher.balena.io/&quot; target=&quot;_blank&quot; rel=&quot;noopener&quot;&gt;balenaEtcher&lt;/a&gt;, Rufus e &lt;code&gt;dd&lt;/code&gt; restano validi.">Use <strong>Osmium Flasher</strong> above on an 8&nbsp;GB+ stick — it fetches and verifies the image itself. Prefer to do it by hand? <a href="https://etcher.balena.io/" target="_blank" rel="noopener">balenaEtcher</a>, Rufus and <code>dd</code> all still work.</p>
       </div>
       <div class="qs-step">
         <div class="qs-num">3</div>
         <h4 data-en="Boot &amp; install" data-it="Avvia e installa">Boot &amp; install</h4>
-        <p data-en="Boot your x86 mini-PC from the USB stick and follow the on-screen installer. Reboot — you're done." data-it="Avvia il tuo mini-PC x86 dalla chiavetta e segui l'installazione guidata. Riavvia ed è fatta.">Boot your x86 mini-PC from the USB stick and follow the on-screen installer. Reboot — you're done.</p>
+        <p data-en="Turn <strong>Secure Boot off</strong> in the firmware setup first — it is required on every machine. Then boot your x86 mini-PC from the stick and follow the on-screen installer. Reboot — you're done." data-it="Prima <strong>disattiva il Secure Boot</strong> nel setup del firmware — serve su tutte le macchine. Poi avvia il tuo mini-PC x86 dalla chiavetta e segui l'installazione guidata. Riavvia ed è fatta.">Turn <strong>Secure Boot off</strong> in the firmware setup first — it is required on every machine. Then boot your x86 mini-PC from the stick and follow the on-screen installer. Reboot — you're done.</p>
       </div>
     </div>
 
@@ -623,6 +818,20 @@
     <p class="install-note" data-en="&lt;strong&gt;Try it live:&lt;/strong&gt; pick &lt;strong&gt;Try Osmium Sound (no install)&lt;/strong&gt; at the boot menu to run the kiosk straight from the USB stick, nothing written to disk. If it doesn't log in automatically, use &lt;code&gt;hifi&lt;/code&gt; / &lt;code&gt;hifi&lt;/code&gt; at the login screen." data-it="&lt;strong&gt;Provala in live:&lt;/strong&gt; scegli &lt;strong&gt;Try Osmium Sound (no install)&lt;/strong&gt; nel menu di avvio per far partire il kiosk direttamente dalla chiavetta, senza scrivere nulla sul disco. Se non fa l'accesso automatico, usa &lt;code&gt;hifi&lt;/code&gt; / &lt;code&gt;hifi&lt;/code&gt; alla schermata di login.">
       <strong>Try it live:</strong> pick <strong>Try Osmium Sound (no install)</strong> at the boot menu to run the kiosk straight from the USB stick, nothing written to disk. If it doesn't log in automatically, use <code>hifi</code> / <code>hifi</code> at the login screen.
     </p>
+
+  </div>
+</section>
+
+<!-- MANUAL -->
+<section id="manual">
+  <div class="manual-card">
+    <div class="manual-icon">📖</div>
+    <h2 data-en="Full installation &amp; configuration manual" data-it="Manuale completo di installazione e configurazione">Full installation &amp; configuration manual</h2>
+    <p data-en="Step by step: writing the USB stick, first boot, device modes, web admin, music sources, DSP, multiroom, backup, OTA updates and troubleshooting — in English and Italian." data-it="Passo dopo passo: creazione della chiavetta USB, primo avvio, modalità del dispositivo, amministrazione web, sorgenti musicali, DSP, multiroom, backup, aggiornamenti OTA e risoluzione dei problemi — in italiano e inglese.">Step by step: writing the USB stick, first boot, device modes, web admin, music sources, DSP, multiroom, backup, OTA updates and troubleshooting — in English and Italian.</p>
+    <a class="btn-primary" href="manual.html" target="_blank">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+      <span data-en="Open the manual" data-it="Apri il manuale">Open the manual</span>
+    </a>
   </div>
 </section>
 
@@ -696,8 +905,8 @@
   <div class="video-wrap">
     <div class="video-frame">
       <button class="video-facade" id="videoFacade" aria-label="Play demo video">
-        <img src="https://i.ytimg.com/vi/7Dw9oanIkuM/sddefault.jpg"
-             onerror="this.onerror=null;this.src='https://i.ytimg.com/vi/7Dw9oanIkuM/hqdefault.jpg';"
+        <img src="https://i.ytimg.com/vi/vle6ki4pvQk/sddefault.jpg"
+             onerror="this.onerror=null;this.src='https://i.ytimg.com/vi/vle6ki4pvQk/hqdefault.jpg';"
              alt="" loading="lazy">
         <span class="video-play" aria-hidden="true">
           <svg width="26" height="26" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
@@ -771,7 +980,7 @@
         <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0 0 24 12c0-6.63-5.37-12-12-12z"/></svg>
         <span data-en="Release notes" data-it="Note di rilascio">Release notes</span>
       </a>
-      <a class="btn-secondary" href="fdroidrepos://osmium-sound.pages.dev/fdroid/repo?fingerprint=B45A4EF8CDA78DB906BB6027D82C8E0795179CA701466699EB657A0798C2385F">
+      <a class="btn-secondary" href="fdroidrepos://osmiumsound.it/fdroid/repo?fingerprint=B45A4EF8CDA78DB906BB6027D82C8E0795179CA701466699EB657A0798C2385F">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
         <span data-en="Add F-Droid repo" data-it="Aggiungi repo F-Droid">Add F-Droid repo</span>
       </a>
@@ -795,9 +1004,49 @@
       </div>
     </div>
 
-    <p class="install-note" data-en="&lt;strong&gt;Note:&lt;/strong&gt; the companion app is distributed as a signed APK (sideload) or via our self-hosted F-Droid repo — it is not on the Play Store. Prefer F-Droid if you want automatic updates: tap &lt;strong&gt;Add F-Droid repo&lt;/strong&gt; above (F-Droid app required), or add &lt;code&gt;https://osmium-sound.pages.dev/fdroid/repo&lt;/code&gt; manually under Settings → Repositories. Your phone and the appliance must be on the same local network." data-it="&lt;strong&gt;Nota:&lt;/strong&gt; l'app companion è distribuita come APK firmato (sideload) oppure tramite il nostro repo F-Droid self-hosted — non è sul Play Store. Se vuoi gli aggiornamenti automatici usa F-Droid: tocca &lt;strong&gt;Aggiungi repo F-Droid&lt;/strong&gt; qui sopra (serve l'app F-Droid), oppure aggiungi manualmente &lt;code&gt;https://osmium-sound.pages.dev/fdroid/repo&lt;/code&gt; in Impostazioni → Repository. Il telefono e il dispositivo devono essere sulla stessa rete locale.">
-      <strong>Note:</strong> the companion app is distributed as a signed APK (sideload) or via our self-hosted F-Droid repo — it is not on the Play Store. Prefer F-Droid if you want automatic updates: tap <strong>Add F-Droid repo</strong> above (F-Droid app required), or add <code>https://osmium-sound.pages.dev/fdroid/repo</code> manually under Settings → Repositories. Your phone and the appliance must be on the same local network.
+    <div class="apple-companion" id="apple">
+      <h3 data-en="On iPhone and iPad" data-it="Su iPhone e iPad">On iPhone and iPad</h3>
+      <p data-en="There is no Osmium companion app for Apple devices. We suggest &lt;strong&gt;LyrPlay&lt;/strong&gt;, a third-party app by Eric Miller: it connects to the Lyrion Music Server running on your Osmium device, gives you the Material interface to drive playback, and can also turn the iPhone or iPad itself into another player on the network. It is free, with an optional paid icon pack. It is not our app, we have no connection with its author and we cannot support it — we are simply recommending something that works well with Osmium Sound." data-it="Per i dispositivi Apple non esiste un&#x27;app companion di Osmium. Suggeriamo &lt;strong&gt;LyrPlay&lt;/strong&gt;, un&#x27;app di terze parti di Eric Miller: si collega al Lyrion Music Server che gira sul dispositivo Osmium, mette a disposizione l&#x27;interfaccia Material per comandare la riproduzione, e può anche trasformare l&#x27;iPhone o l&#x27;iPad in un ulteriore lettore sulla rete. È gratuita, con un pacchetto di icone opzionale a pagamento. Non è un&#x27;app nostra, non abbiamo alcun rapporto con il suo autore e non possiamo fornirne assistenza: ci limitiamo a segnalare qualcosa che funziona bene con Osmium Sound.">There is no Osmium companion app for Apple devices. We suggest <strong>LyrPlay</strong>, a third-party app by Eric Miller: it connects to the Lyrion Music Server running on your Osmium device, gives you the Material interface to drive playback, and can also turn the iPhone or iPad itself into another player on the network. It is free, with an optional paid icon pack. It is not our app, we have no connection with its author and we cannot support it — we are simply recommending something that works well with Osmium Sound.</p>
+      <a class="btn-secondary" href="https://apps.apple.com/it/app/lyrplay/id6746776736" target="_blank" rel="noopener">
+        <span data-en="LyrPlay on the App Store" data-it="LyrPlay sull&#x27;App Store">LyrPlay on the App Store</span>
+      </a>
+      <div class="qr-wrap">
+        <svg class="qr" viewBox="0 0 37 37" role="img" aria-label="LyrPlay on the App Store">
+          <rect width="100%" height="100%" fill="#fff"/>
+          <path d="M2 2h7v1h-7zM10 2h1v1h-1zM13 2h2v1h-2zM16 2h1v1h-1zM18 2h1v1h-1zM20 2h1v1h-1zM23 2h2v1h-2zM28 2h7v1h-7zM2 3h1v1h-1zM8 3h1v1h-1zM10 3h3v1h-3zM14 3h1v1h-1zM19 3h1v1h-1zM21 3h1v1h-1zM23 3h2v1h-2zM26 3h1v1h-1zM28 3h1v1h-1zM34 3h1v1h-1zM2 4h1v1h-1zM4 4h3v1h-3zM8 4h1v1h-1zM10 4h1v1h-1zM12 4h3v1h-3zM17 4h4v1h-4zM22 4h2v1h-2zM25 4h1v1h-1zM28 4h1v1h-1zM30 4h3v1h-3zM34 4h1v1h-1zM2 5h1v1h-1zM4 5h3v1h-3zM8 5h1v1h-1zM12 5h2v1h-2zM21 5h1v1h-1zM23 5h3v1h-3zM28 5h1v1h-1zM30 5h3v1h-3zM34 5h1v1h-1zM2 6h1v1h-1zM4 6h3v1h-3zM8 6h1v1h-1zM10 6h1v1h-1zM13 6h1v1h-1zM15 6h3v1h-3zM20 6h1v1h-1zM22 6h3v1h-3zM26 6h1v1h-1zM28 6h1v1h-1zM30 6h3v1h-3zM34 6h1v1h-1zM2 7h1v1h-1zM8 7h1v1h-1zM13 7h1v1h-1zM15 7h2v1h-2zM19 7h1v1h-1zM22 7h1v1h-1zM24 7h3v1h-3zM28 7h1v1h-1zM34 7h1v1h-1zM2 8h7v1h-7zM10 8h1v1h-1zM12 8h1v1h-1zM14 8h1v1h-1zM16 8h1v1h-1zM18 8h1v1h-1zM20 8h1v1h-1zM22 8h1v1h-1zM24 8h1v1h-1zM26 8h1v1h-1zM28 8h7v1h-7zM11 9h2v1h-2zM15 9h1v1h-1zM21 9h2v1h-2zM24 9h2v1h-2zM2 10h1v1h-1zM5 10h6v1h-6zM12 10h3v1h-3zM16 10h2v1h-2zM19 10h3v1h-3zM26 10h2v1h-2zM30 10h1v1h-1zM32 10h3v1h-3zM2 11h1v1h-1zM4 11h4v1h-4zM9 11h4v1h-4zM14 11h1v1h-1zM16 11h2v1h-2zM20 11h2v1h-2zM25 11h2v1h-2zM30 11h4v1h-4zM4 12h2v1h-2zM7 12h3v1h-3zM11 12h1v1h-1zM14 12h1v1h-1zM16 12h2v1h-2zM19 12h2v1h-2zM24 12h2v1h-2zM30 12h5v1h-5zM4 13h4v1h-4zM10 13h1v1h-1zM12 13h1v1h-1zM16 13h1v1h-1zM18 13h2v1h-2zM21 13h1v1h-1zM26 13h2v1h-2zM29 13h1v1h-1zM32 13h1v1h-1zM34 13h1v1h-1zM3 14h2v1h-2zM8 14h1v1h-1zM10 14h2v1h-2zM13 14h1v1h-1zM15 14h8v1h-8zM24 14h2v1h-2zM28 14h2v1h-2zM33 14h2v1h-2zM2 15h1v1h-1zM5 15h1v1h-1zM7 15h1v1h-1zM9 15h1v1h-1zM13 15h3v1h-3zM18 15h2v1h-2zM21 15h1v1h-1zM24 15h4v1h-4zM29 15h1v1h-1zM32 15h1v1h-1zM2 16h1v1h-1zM4 16h2v1h-2zM7 16h5v1h-5zM18 16h2v1h-2zM23 16h2v1h-2zM26 16h1v1h-1zM28 16h1v1h-1zM32 16h1v1h-1zM3 17h1v1h-1zM5 17h1v1h-1zM9 17h2v1h-2zM13 17h3v1h-3zM17 17h1v1h-1zM21 17h1v1h-1zM24 17h1v1h-1zM27 17h1v1h-1zM29 17h1v1h-1zM31 17h2v1h-2zM34 17h1v1h-1zM3 18h2v1h-2zM8 18h2v1h-2zM13 18h2v1h-2zM18 18h1v1h-1zM21 18h2v1h-2zM24 18h2v1h-2zM27 18h5v1h-5zM2 19h3v1h-3zM6 19h2v1h-2zM9 19h4v1h-4zM15 19h3v1h-3zM20 19h3v1h-3zM28 19h1v1h-1zM30 19h1v1h-1zM32 19h3v1h-3zM2 20h4v1h-4zM7 20h2v1h-2zM10 20h1v1h-1zM14 20h1v1h-1zM16 20h2v1h-2zM21 20h2v1h-2zM25 20h2v1h-2zM28 20h2v1h-2zM31 20h2v1h-2zM34 20h1v1h-1zM4 21h1v1h-1zM7 21h1v1h-1zM9 21h1v1h-1zM11 21h1v1h-1zM13 21h2v1h-2zM16 21h1v1h-1zM19 21h2v1h-2zM26 21h3v1h-3zM30 21h3v1h-3zM34 21h1v1h-1zM5 22h1v1h-1zM7 22h6v1h-6zM14 22h4v1h-4zM24 22h1v1h-1zM27 22h1v1h-1zM29 22h1v1h-1zM31 22h1v1h-1zM33 22h2v1h-2zM2 23h4v1h-4zM10 23h2v1h-2zM16 23h1v1h-1zM18 23h3v1h-3zM22 23h1v1h-1zM25 23h3v1h-3zM30 23h2v1h-2zM2 24h1v1h-1zM4 24h1v1h-1zM6 24h1v1h-1zM8 24h1v1h-1zM11 24h1v1h-1zM13 24h8v1h-8zM22 24h2v1h-2zM25 24h1v1h-1zM28 24h1v1h-1zM31 24h4v1h-4zM2 25h1v1h-1zM5 25h1v1h-1zM10 25h1v1h-1zM16 25h1v1h-1zM18 25h2v1h-2zM21 25h2v1h-2zM24 25h1v1h-1zM27 25h1v1h-1zM32 25h1v1h-1zM34 25h1v1h-1zM2 26h2v1h-2zM5 26h1v1h-1zM7 26h3v1h-3zM12 26h1v1h-1zM15 26h1v1h-1zM17 26h2v1h-2zM21 26h2v1h-2zM25 26h7v1h-7zM33 26h2v1h-2zM10 27h4v1h-4zM15 27h1v1h-1zM17 27h2v1h-2zM22 27h1v1h-1zM25 27h2v1h-2zM30 27h1v1h-1zM32 27h1v1h-1zM2 28h7v1h-7zM10 28h2v1h-2zM14 28h4v1h-4zM20 28h3v1h-3zM25 28h2v1h-2zM28 28h1v1h-1zM30 28h1v1h-1zM32 28h1v1h-1zM2 29h1v1h-1zM8 29h1v1h-1zM10 29h1v1h-1zM12 29h1v1h-1zM14 29h2v1h-2zM17 29h1v1h-1zM25 29h2v1h-2zM30 29h3v1h-3zM34 29h1v1h-1zM2 30h1v1h-1zM4 30h3v1h-3zM8 30h1v1h-1zM10 30h2v1h-2zM16 30h1v1h-1zM19 30h2v1h-2zM25 30h6v1h-6zM33 30h1v1h-1zM2 31h1v1h-1zM4 31h3v1h-3zM8 31h1v1h-1zM10 31h2v1h-2zM14 31h1v1h-1zM19 31h1v1h-1zM21 31h1v1h-1zM23 31h1v1h-1zM25 31h3v1h-3zM29 31h1v1h-1zM31 31h4v1h-4zM2 32h1v1h-1zM4 32h3v1h-3zM8 32h1v1h-1zM11 32h1v1h-1zM14 32h1v1h-1zM18 32h2v1h-2zM21 32h1v1h-1zM23 32h1v1h-1zM25 32h2v1h-2zM29 32h2v1h-2zM32 32h3v1h-3zM2 33h1v1h-1zM8 33h1v1h-1zM12 33h1v1h-1zM14 33h1v1h-1zM16 33h3v1h-3zM20 33h1v1h-1zM22 33h1v1h-1zM25 33h1v1h-1zM28 33h7v1h-7zM2 34h7v1h-7zM10 34h2v1h-2zM13 34h3v1h-3zM18 34h4v1h-4zM26 34h6v1h-6z" fill="#000"/>
+        </svg>
+        <p data-en="Scan it to open LyrPlay in the App Store on your phone." data-it="Inquadralo per aprire LyrPlay nell&#x27;App Store dal telefono.">Scan it to open LyrPlay in the App Store on your phone.</p>
+      </div>
+    </div>
+
+    <p class="install-note" data-en="&lt;strong&gt;Note:&lt;/strong&gt; the companion app is distributed as a signed APK (sideload) or via our self-hosted F-Droid repo — it is not on the Play Store. Prefer F-Droid if you want automatic updates: tap &lt;strong&gt;Add F-Droid repo&lt;/strong&gt; above (F-Droid app required), or add &lt;code&gt;https://osmiumsound.it/fdroid/repo&lt;/code&gt; manually under Settings → Repositories. Your phone and the appliance must be on the same local network." data-it="&lt;strong&gt;Nota:&lt;/strong&gt; l'app companion è distribuita come APK firmato (sideload) oppure tramite il nostro repo F-Droid self-hosted — non è sul Play Store. Se vuoi gli aggiornamenti automatici usa F-Droid: tocca &lt;strong&gt;Aggiungi repo F-Droid&lt;/strong&gt; qui sopra (serve l'app F-Droid), oppure aggiungi manualmente &lt;code&gt;https://osmiumsound.it/fdroid/repo&lt;/code&gt; in Impostazioni → Repository. Il telefono e il dispositivo devono essere sulla stessa rete locale.">
+      <strong>Note:</strong> the companion app is distributed as a signed APK (sideload) or via our self-hosted F-Droid repo — it is not on the Play Store. Prefer F-Droid if you want automatic updates: tap <strong>Add F-Droid repo</strong> above (F-Droid app required), or add <code>https://osmiumsound.it/fdroid/repo</code> manually under Settings → Repositories. Your phone and the appliance must be on the same local network.
     </p>
+
+  </div>
+</section>
+
+<!-- SUPPORT -->
+<section id="support">
+  <div class="support-grid">
+    <div class="manual-card">
+      <div class="manual-icon">✉️</div>
+      <h2 data-en="Need help? Email support" data-it="Serve aiuto? Scrivi al supporto">Need help? Email support</h2>
+      <p data-en="Write to &lt;strong&gt;support@osmiumsound.it&lt;/strong&gt; and an issue is opened automatically on the project's GitHub repository, so it can be tracked and followed up like any other bug or request. Please describe your issue clearly (what happened, what you expected, and any relevant details like your ISO/APK version) — this becomes the issue text." data-it="Scrivi a &lt;strong&gt;support@osmiumsound.it&lt;/strong&gt; e verrà aperta automaticamente una issue sul repository GitHub del progetto, così da poterla tracciare e seguire come qualsiasi altro bug o richiesta. Descrivi chiaramente il problema (cosa è successo, cosa ti aspettavi ed eventuali dettagli utili come la versione della ISO/APK) — diventerà il testo della issue.">Write to <strong>support@osmiumsound.it</strong> and an issue is opened automatically on the project's GitHub repository, so it can be tracked and followed up like any other bug or request. Please describe your issue clearly (what happened, what you expected, and any relevant details like your ISO/APK version) — this becomes the issue text.</p>
+      <a class="btn-primary" href="mailto:support@osmiumsound.it">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16v16H4z" fill="none"/><path d="M22 6 12 13 2 6"/><path d="M2 6h20v12H2z"/></svg>
+        <span data-en="Email support@osmiumsound.it" data-it="Scrivi a support@osmiumsound.it">Email support@osmiumsound.it</span>
+      </a>
+    </div>
+    <div class="manual-card">
+      <div class="manual-icon">🐙</div>
+      <h2 data-en="Prefer GitHub? Open an issue" data-it="Preferisci GitHub? Apri una issue">Prefer GitHub? Open an issue</h2>
+      <p data-en="File it yourself directly on the project's GitHub repository — the same place your email would end up anyway, just skipping the middle step." data-it="Aprila tu stesso direttamente sul repository GitHub del progetto — lo stesso posto dove finirebbe comunque la tua email, saltando il passaggio intermedio.">File it yourself directly on the project's GitHub repository — the same place your email would end up anyway, just skipping the middle step.</p>
+      <a class="btn-primary" href="https://github.com/adri6412/osmium-sound/issues" target="_blank">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0 0 24 12c0-6.63-5.37-12-12-12z"/></svg>
+        <span data-en="Open an issue on GitHub" data-it="Apri una issue su GitHub">Open an issue on GitHub</span>
+      </a>
+    </div>
   </div>
 </section>
 
@@ -865,13 +1114,12 @@
       .some(l => l.toLowerCase().startsWith('it'));
     applyLang(saved || (browserIt ? 'it' : 'en'));
   })();
-
   // Click-to-play YouTube facade — keeps the title/channel hidden at rest
   const videoFacade = document.getElementById('videoFacade');
   if (videoFacade) {
     videoFacade.addEventListener('click', () => {
       const iframe = document.createElement('iframe');
-      iframe.src = 'https://www.youtube-nocookie.com/embed/7Dw9oanIkuM?autoplay=1&modestbranding=1&rel=0&playsinline=1';
+      iframe.src = 'https://www.youtube-nocookie.com/embed/vle6ki4pvQk?autoplay=1&modestbranding=1&rel=0&playsinline=1';
       iframe.title = 'Osmium Sound — Demo video';
       iframe.allow = 'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share';
       iframe.allowFullscreen = true;
@@ -937,6 +1185,59 @@
     if (e.key === 'ArrowLeft')  goTo(current - 1);
     if (e.key === 'ArrowRight') goTo(current + 1);
   });
+
+  const flasherBlock = document.querySelector('.flasher-block');
+  const osSelect = document.getElementById('flasherOs');
+  const flasherBtn = document.getElementById('flasherDownloadBtn');
+
+  // One version in one place: the filenames differ only by this suffix.
+  const FLASHER_SUFFIX = {
+    'win': 'win-x64.exe',
+    'linux': 'linux-x86_64.run',
+  };
+
+  // Keeps the link and the visible note in step with the dropdown. Only the
+  // selected platform's note is shown: three open at once is just noise.
+  function syncFlasher() {
+    if (!flasherBtn || !osSelect || !flasherBlock) return;
+    const version = flasherBlock.dataset.flasherVersion;
+    const suffix = FLASHER_SUFFIX[osSelect.value];
+    if (suffix) {
+      flasherBtn.setAttribute('href',
+        'https://file.osmiumsound.it/Osmium-Flasher-' + version + '-' + suffix);
+    }
+    // There is nothing to download on macOS, so the button gives way to the
+    // explanation and the pointer to balenaEtcher.
+    const onMac = osSelect.value === 'mac';
+    flasherBtn.hidden = onMac;
+    const macCmds = document.getElementById('macCmds');
+    if (macCmds) macCmds.hidden = !onMac;
+
+    const wanted = onMac ? 'mac' : osSelect.value;
+    document.querySelectorAll('.flasher-note').forEach(note => {
+      note.hidden = note.dataset.osnote !== wanted;
+      // Open it rather than leaving it folded: it carries the warning the
+      // visitor is about to run into, and one behind a click is one unread.
+      note.open = !note.hidden;
+    });
+  }
+
+  if (osSelect) osSelect.addEventListener('change', syncFlasher);
+
+  // Preselect the visitor's own platform. Every option stays available: people
+  // do download for a machine other than the one they are sitting at.
+  if (osSelect) {
+    const hay = ((navigator.userAgentData && navigator.userAgentData.platform)
+      || navigator.platform || '') + ' ' + (navigator.userAgent || '');
+    const low = hay.toLowerCase();
+    let pick = null;
+    if (low.indexOf('win') !== -1) pick = 'win';
+    else if (low.indexOf('linux') !== -1 && low.indexOf('android') === -1) pick = 'linux';
+    else if (low.indexOf('mac') !== -1) pick = 'mac';
+    if (pick) osSelect.value = pick;
+  }
+
+  syncFlasher();
 
   // Auto-advance
   function startAuto() { autoTimer = setInterval(() => goTo(current + 1), 4800); }
