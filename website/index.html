@@ -586,6 +586,11 @@
     .manual-card h2 { font-size: 1.4rem; font-weight: 700; margin-bottom: 0.6rem; }
     .manual-card p { color: var(--muted); font-size: 0.95rem; max-width: 480px; margin: 0 auto 1.5rem; line-height: 1.65; }
     .support-grid .manual-card p { flex-grow: 1; }
+    .support-grid .manual-card p.alt-contact {
+      flex-grow: 0; margin: 1.1rem auto 0; font-size: 0.85rem; line-height: 1.5;
+    }
+    .alt-contact a { color: var(--accent); text-decoration: none; font-weight: 600; }
+    .alt-contact a:hover { text-decoration: underline; }
     @media (max-width: 760px) { .quickstart { grid-template-columns: 1fr; } }
     .code-block {
       background: #060606;
@@ -1028,6 +1033,7 @@
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16v16H4z" fill="none"/><path d="M22 6 12 13 2 6"/><path d="M2 6h20v12H2z"/></svg>
         <span data-en="Email support@osmiumsound.it" data-it="Scrivi a support@osmiumsound.it">Email support@osmiumsound.it</span>
       </a>
+      <p class="alt-contact" data-en="Not a bug or a request to track? For general enquiries write to &lt;a href=&quot;mailto:info@osmiumsound.it&quot;&gt;info@osmiumsound.it&lt;/a&gt; instead." data-it="Non &egrave; un problema da segnalare? Per comunicazioni generiche scrivi invece a &lt;a href=&quot;mailto:info@osmiumsound.it&quot;&gt;info@osmiumsound.it&lt;/a&gt;.">Not a bug or a request to track? For general enquiries write to <a href="mailto:info@osmiumsound.it">info@osmiumsound.it</a> instead.</p>
     </div>
     <div class="manual-card">
       <div class="manual-icon">🐙</div>
