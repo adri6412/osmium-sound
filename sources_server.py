@@ -2119,8 +2119,15 @@ def _lms_skin_autoinstall():
         attempt += 1
 
 
+# Skin routes: control, not just data — so, like the /api/system/* proxy
+# below, they take a pairing token from the LAN (the companion app sends its
+# Bearer token). Loopback callers (kiosk UI, webui_server's forwarders, the
+# first-boot wizard) are exempt, see _require_pair_token().
 @app.route("/api/lms_skin", methods=["GET"])
 def api_lms_skin_get():
+    denied = _require_pair_token()
+    if denied:
+        return denied
     choice = _lms_skin_choice()
     return jsonify({
         "success": True,
@@ -2134,6 +2141,9 @@ def api_lms_skin_get():
 
 @app.route("/api/lms_skin", methods=["POST"])
 def api_lms_skin_set():
+    denied = _require_pair_token()
+    if denied:
+        return denied
     skin = ((request.get_json(silent=True) or {}).get("skin") or "").strip()
     if skin not in ("osmium", "material"):
         return _err("msg.skinInvalid", 400)
@@ -2163,6 +2173,9 @@ def api_lms_skin_set():
 
 @app.route("/api/lms_skin_status", methods=["GET"])
 def api_lms_skin_status():
+    denied = _require_pair_token()
+    if denied:
+        return denied
     return jsonify(_skin_status())
 
 
@@ -3747,6 +3760,12 @@ _SYSTEM_PROXY_ROUTES = [
     # on-screen Settings to flip it locally.
     ("/api/system/vu_meter", "GET", "/vu_meter"),
     ("/api/system/vu_meter", "POST", "/vu_meter"),
+    # Panel refresh rate (native <-> low-power). Same rationale as
+    # ui_resolution: applies live with no OS action, and worth reaching
+    # remotely because the unit it helps most (big TV, weak iGPU) may well be
+    # headless or across the room. Mirrors admin-webui's forwarder.
+    ("/api/system/ui_refresh", "GET", "/ui_refresh"),
+    ("/api/system/ui_refresh", "POST", "/ui_refresh"),
     ("/api/system/player_name", "GET", "/player_name"),
     ("/api/system/player_name", "POST", "/player_name"),
     # Renames BOTH the hostname and the squeezelite/Bluetooth player name

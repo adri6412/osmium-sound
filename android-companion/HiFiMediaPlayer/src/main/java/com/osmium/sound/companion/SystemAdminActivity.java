@@ -24,11 +24,11 @@ import com.osmium.sound.companion.util.ThemeManager;
 import com.osmium.sound.companion.widget.ViewUtilities;
 
 /**
- * SSH toggle, UI render resolution, VU meter toggle, read-only system info,
- * and reboot/shutdown — mirrors the Electron UI's "SSH", "Display" (partial),
- * "System Info" and "System Controls" sections (kept on one screen since each
- * is small). All calls go through ApplianceHttpClient's /api/system/* proxy
- * routes on sources_server.py.
+ * SSH toggle, UI render resolution, panel refresh rate, VU meter toggle,
+ * read-only system info, and reboot/shutdown — mirrors the Electron UI's
+ * "SSH", "Display" (partial), "System Info" and "System Controls" sections
+ * (kept on one screen since each is small). All calls go through
+ * ApplianceHttpClient's /api/system/* proxy routes on sources_server.py.
  */
 public class SystemAdminActivity extends AppCompatActivity {
     private final ThemeManager mThemeManager = new ThemeManager();
@@ -37,6 +37,9 @@ public class SystemAdminActivity extends AppCompatActivity {
     private TextView sshLogin;
     private SwitchMaterial displayModeSwitch;
     private RadioGroup uiResolutionGroup;
+    private View uiRefreshBlock;
+    private RadioGroup uiRefreshGroup;
+    private TextView uiRefreshUnsupported;
     private SwitchMaterial vuMeterSwitch;
     private TextView systemInfoText;
     private ProgressBar progressBar;
@@ -44,6 +47,7 @@ public class SystemAdminActivity extends AppCompatActivity {
     private boolean suppressSshEvent;
     private boolean suppressDisplayModeEvent;
     private boolean suppressUiResolutionEvent;
+    private boolean suppressUiRefreshEvent;
     private boolean suppressVuMeterEvent;
 
     @Override
@@ -63,6 +67,9 @@ public class SystemAdminActivity extends AppCompatActivity {
         sshLogin = findViewById(R.id.ssh_login);
         displayModeSwitch = findViewById(R.id.switch_display_mode);
         uiResolutionGroup = findViewById(R.id.ui_resolution_group);
+        uiRefreshBlock = findViewById(R.id.ui_refresh_block);
+        uiRefreshGroup = findViewById(R.id.ui_refresh_group);
+        uiRefreshUnsupported = findViewById(R.id.ui_refresh_unsupported);
         vuMeterSwitch = findViewById(R.id.switch_vu_meter);
         systemInfoText = findViewById(R.id.system_info_text);
         progressBar = findViewById(R.id.system_admin_progress);
@@ -89,6 +96,27 @@ public class SystemAdminActivity extends AppCompatActivity {
             if (!suppressVuMeterEvent) setVuMeter(checked);
         });
 
+        // Panel refresh rate (native <-> low-power): applies live on the
+        // appliance, no session restart. Switching down asks first, like
+        // admin-webui does — this phone isn't the screen being changed, so
+        // there's no keep-or-revert countdown here (that exists only in the
+        // on-screen Settings, where an unconfirmed low-refresh switch could
+        // leave a degraded screen behind with no visible way back).
+        uiRefreshGroup.setOnCheckedChangeListener((group, checkedId) -> {
+            if (suppressUiRefreshEvent) return;
+            if (checkedId == R.id.radio_ui_refresh_low) {
+                new MaterialAlertDialogBuilder(this)
+                        .setTitle(R.string.settings_ui_refresh_title)
+                        .setMessage(R.string.settings_ui_refresh_confirm)
+                        .setNegativeButton(android.R.string.cancel, (d, w) -> checkUiRefresh("native"))
+                        .setOnCancelListener(d -> checkUiRefresh("native"))
+                        .setPositiveButton(android.R.string.ok, (d, w) -> setUiRefresh("low"))
+                        .show();
+            } else {
+                setUiRefresh("native");
+            }
+        });
+
         findViewById(R.id.button_reboot).setOnClickListener(v -> new MaterialAlertDialogBuilder(this)
                 .setTitle(R.string.settings_reboot_button)
                 .setMessage(R.string.settings_reboot_confirm)
@@ -106,6 +134,7 @@ public class SystemAdminActivity extends AppCompatActivity {
         loadSshStatus();
         loadDisplayMode();
         loadUiResolution();
+        loadUiRefresh();
         loadVuMeter();
         loadSystemInfo();
     }
@@ -166,6 +195,72 @@ public class SystemAdminActivity extends AppCompatActivity {
             public void onFailure(String message) {
                 setBusy(false);
                 showMessage(getString(R.string.settings_ui_resolution_failed) + ": " + message);
+            }
+        });
+    }
+
+    /** Reflects a refresh mode in the radios without firing the change listener. */
+    private void checkUiRefresh(String mode) {
+        suppressUiRefreshEvent = true;
+        uiRefreshGroup.check("low".equals(mode) ? R.id.radio_ui_refresh_low : R.id.radio_ui_refresh_native);
+        suppressUiRefreshEvent = false;
+    }
+
+    private void loadUiRefresh() {
+        ApplianceHttpClient.getJson("/api/system/ui_refresh", new ApplianceHttpClient.JsonCallback() {
+            @Override
+            public void onSuccess(JSONObject body) {
+                if (!body.has("mode")) {
+                    // Not the { mode, supported } shape (e.g. a pairing error
+                    // body) — nothing sensible to show, keep the block hidden.
+                    uiRefreshBlock.setVisibility(View.GONE);
+                    return;
+                }
+                // 'supported' is per-unit: not every panel offers a distinct
+                // low-refresh mode for its native resolution. Show the note
+                // instead of a toggle that would silently do nothing.
+                boolean supported = body.optBoolean("supported", true);
+                uiRefreshGroup.setVisibility(supported ? View.VISIBLE : View.GONE);
+                uiRefreshUnsupported.setVisibility(supported ? View.GONE : View.VISIBLE);
+                checkUiRefresh(body.optString("mode", "native"));
+                uiRefreshBlock.setVisibility(View.VISIBLE);
+            }
+
+            @Override
+            public void onFailure(String message) {
+                // Older appliance without the ui_refresh proxy route — hide the block.
+                uiRefreshBlock.setVisibility(View.GONE);
+            }
+        });
+    }
+
+    private void setUiRefresh(String mode) {
+        setBusy(true);
+        JSONObject payload = new JSONObject();
+        try {
+            payload.put("mode", mode);
+        } catch (Exception ignored) {
+        }
+        ApplianceHttpClient.postJson("/api/system/ui_refresh", payload, new ApplianceHttpClient.JsonCallback() {
+            @Override
+            public void onSuccess(JSONObject body) {
+                setBusy(false);
+                if (body.optBoolean("success", true)) {
+                    checkUiRefresh(body.optString("mode", mode));
+                    showMessage(body.optString("message", getString(R.string.settings_ui_refresh_changed)));
+                } else {
+                    // api_server reports the mode still in force alongside the
+                    // refusal (OTA in progress, script missing, ...): snap back.
+                    checkUiRefresh(body.optString("mode", "native"));
+                    showMessage(body.optString("message", getString(R.string.settings_ui_refresh_failed)));
+                }
+            }
+
+            @Override
+            public void onFailure(String message) {
+                setBusy(false);
+                showMessage(getString(R.string.settings_ui_refresh_failed) + ": " + message);
+                loadUiRefresh();
             }
         });
     }

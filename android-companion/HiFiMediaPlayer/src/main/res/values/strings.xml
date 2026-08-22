@@ -368,6 +368,16 @@
     <string name="settings_lyrion_rescan_title">Rescan library</string>
     <string name="settings_lyrion_rescan_summary">Ask the server to scan for new or changed music</string>
     <string name="settings_lyrion_rescan_started">Library rescan started.</string>
+    <string name="settings_lyrion_skin_title">Web player look</string>
+    <string name="settings_lyrion_skin_summary">The look of Lyrion\'s web player (the page you open from a browser or phone). Osmium matches this device\'s interface.</string>
+    <string name="settings_lyrion_skin_current">Current: %1$s</string>
+    <string name="settings_lyrion_skin_osmium">Osmium</string>
+    <string name="settings_lyrion_skin_material">Material</string>
+    <string name="settings_lyrion_skin_unset">not chosen yet (Lyrion\'s stock look)</string>
+    <string name="settings_lyrion_skin_installing">Installing the Material web interface…</string>
+    <string name="settings_lyrion_skin_applying">Applying the skin…</string>
+    <string name="settings_lyrion_skin_changed">Web player skin updated.</string>
+    <string name="settings_lyrion_skin_failed">Could not apply the skin. Check the network connection and try again.</string>
 
     <string name="settings_system_admin_title">System</string>
     <string name="settings_system_admin_summary">SSH access, system info, reboot and shutdown</string>
@@ -385,6 +395,14 @@
     <string name="settings_ui_resolution_native">Native</string>
     <string name="settings_ui_resolution_changed">UI resolution changed.</string>
     <string name="settings_ui_resolution_failed">Could not change UI resolution</string>
+    <string name="settings_ui_refresh_title">Refresh rate</string>
+    <string name="settings_ui_refresh_summary">Both the screen scaling and the interface\'s own redraws are tied to the panel\'s refresh rate, so lowering it reduces graphics-chip load — roughly 40% less on this hardware. Applies immediately, no restart. If the connected monitor doesn\'t support a lower refresh rate, switching has no effect.</string>
+    <string name="settings_ui_refresh_native">Native</string>
+    <string name="settings_ui_refresh_low">Low-power</string>
+    <string name="settings_ui_refresh_unsupported">This device\'s screen does not offer a lower refresh rate to switch to.</string>
+    <string name="settings_ui_refresh_confirm">The device screen will switch to a lower refresh rate. Continue?</string>
+    <string name="settings_ui_refresh_changed">Refresh rate changed.</string>
+    <string name="settings_ui_refresh_failed">Could not change the refresh rate</string>
     <string name="settings_vu_meter_title">Animated VU meter</string>
     <string name="settings_system_info_title">System info</string>
     <string name="settings_system_info_hostname">Hostname</string>

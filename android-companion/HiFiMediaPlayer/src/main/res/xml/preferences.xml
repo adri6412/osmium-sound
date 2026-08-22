@@ -244,5 +244,15 @@
             android:key="squeezer.lyrion_rescan.open"
             android:title="@string/settings_lyrion_rescan_title"
             android:summary="@string/settings_lyrion_rescan_summary"/>
+
+        <!-- Which look Lyrion's web player serves (Osmium / Material) — the
+             same chooser the kiosk and admin-webui offer in their Lyrion
+             section. Talks to sources_server's /api/lms_skin directly;
+             hidden at runtime when the appliance can't answer (older bundle,
+             not paired yet, or no local Lyrion to skin). -->
+        <Preference
+            android:key="squeezer.lyrion_skin.open"
+            android:title="@string/settings_lyrion_skin_title"
+            android:summary="@string/settings_lyrion_skin_summary"/>
     </PreferenceCategory>
 </PreferenceScreen>

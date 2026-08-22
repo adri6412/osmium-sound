@@ -9,7 +9,9 @@ import android.content.ServiceConnection;
 import android.content.SharedPreferences;
 import android.net.Uri;
 import android.os.Bundle;
+import android.os.Handler;
 import android.os.IBinder;
+import android.os.Looper;
 import android.provider.Settings;
 import android.util.Log;
 import android.view.View;
@@ -29,9 +31,13 @@ import androidx.preference.SwitchPreferenceCompat;
 
 import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 
+import org.json.JSONException;
+import org.json.JSONObject;
+
 import java.util.ArrayList;
 import java.util.Arrays;
 
+import com.osmium.sound.companion.appliance.ApplianceHttpClient;
 import com.osmium.sound.companion.dialog.CallStateDialog;
 import com.osmium.sound.companion.download.DownloadFilenameStructure;
 import com.osmium.sound.companion.download.DownloadPathStructure;
@@ -52,6 +58,18 @@ public class SettingsFragment  extends PreferenceFragmentCompat implements
     private final String TAG = "SettingsFragment";
 
     private static final String KEY_OSMIUM_SOUND = "squeezer.osmium_sound";
+    private static final String KEY_LYRION_SKIN = "squeezer.lyrion_skin.open";
+
+    // Progress polling for the web-player skin change (see
+    // fillLyrionSkinPreferences): 1.5s like the kiosk/webui, bounded so a
+    // job that never reports done/error can't keep this fragment polling for
+    // ever. Installing Material + restarting Lyrion normally takes well under
+    // a minute; 6 minutes is generous.
+    private static final long SKIN_POLL_INTERVAL_MS = 1500;
+    private static final int SKIN_POLL_MAX = 240;
+    private final Handler skinPollHandler = new Handler(Looper.getMainLooper());
+    private String skinChoice = "unset";
+    private int skinPollCount;
 
     private ISqueezeService service = null;
 
@@ -113,6 +131,7 @@ public class SettingsFragment  extends PreferenceFragmentCompat implements
 
         fillPlaybackPreferences();
         fillLyrionRescanPreferences();
+        fillLyrionSkinPreferences();
     }
 
     // DSP/EQ is deliberately not wired up here — held back for a future paid
@@ -154,6 +173,142 @@ public class SettingsFragment  extends PreferenceFragmentCompat implements
             }
             return true;
         });
+    }
+
+    // ── LMS web player skin (Osmium / Material) ─────────────────────────
+    // Mirrors the chooser the kiosk (Settings.jsx, "Lyrion" section) and the
+    // admin-webui (Settings.vue, same section) offer. It lives on
+    // sources_server itself (/api/lms_skin, /api/lms_skin_status — not behind
+    // the /api/system/* proxy), reached with the same pairing token. The
+    // entry hides itself when the appliance can't answer: older bundle without
+    // the route, not paired yet, or no local Lyrion to skin (external server).
+
+    private void fillLyrionSkinPreferences() {
+        Preference pref = requirePreference(KEY_LYRION_SKIN);
+        pref.setOnPreferenceClickListener(preference -> {
+            showLyrionSkinDialog(pref);
+            return true;
+        });
+        loadLyrionSkin(pref);
+    }
+
+    private void loadLyrionSkin(Preference pref) {
+        ApplianceHttpClient.getJson("/api/lms_skin", new ApplianceHttpClient.JsonCallback() {
+            @Override
+            public void onSuccess(JSONObject body) {
+                if (!isAdded()) return;
+                if (!body.optBoolean("success", false) || !body.optBoolean("lms_installed", false)) {
+                    pref.setVisible(false);
+                    return;
+                }
+                skinChoice = body.optString("skin", "unset");
+                pref.setSummary(getString(R.string.settings_lyrion_skin_summary) + "\n"
+                        + getString(R.string.settings_lyrion_skin_current, skinLabel(skinChoice)));
+                pref.setEnabled(true);
+                pref.setVisible(true);
+            }
+
+            @Override
+            public void onFailure(String message) {
+                if (!isAdded()) return;
+                pref.setVisible(false);
+            }
+        });
+    }
+
+    private String skinLabel(String skin) {
+        if ("osmium".equals(skin)) return getString(R.string.settings_lyrion_skin_osmium);
+        if ("material".equals(skin)) return getString(R.string.settings_lyrion_skin_material);
+        return getString(R.string.settings_lyrion_skin_unset);
+    }
+
+    private void showLyrionSkinDialog(Preference pref) {
+        final String[] values = {"osmium", "material"};
+        final CharSequence[] labels = {
+                getString(R.string.settings_lyrion_skin_osmium),
+                getString(R.string.settings_lyrion_skin_material)};
+        int current = "material".equals(skinChoice) ? 1 : ("osmium".equals(skinChoice) ? 0 : -1);
+        final int[] picked = {current};
+        new MaterialAlertDialogBuilder(requireContext())
+                .setTitle(R.string.settings_lyrion_skin_title)
+                .setSingleChoiceItems(labels, current, (dialog, which) -> picked[0] = which)
+                .setNegativeButton(android.R.string.cancel, null)
+                .setPositiveButton(android.R.string.ok, (dialog, which) -> {
+                    if (picked[0] < 0 || values[picked[0]].equals(skinChoice)) return;
+                    applyLyrionSkin(pref, values[picked[0]]);
+                })
+                .show();
+    }
+
+    private void applyLyrionSkin(Preference pref, String skin) {
+        JSONObject payload = new JSONObject();
+        try {
+            payload.put("skin", skin);
+        } catch (JSONException ignored) {
+        }
+        pref.setEnabled(false);
+        pref.setSummary(R.string.settings_lyrion_skin_applying);
+        ApplianceHttpClient.postJson("/api/lms_skin", payload, new ApplianceHttpClient.JsonCallback() {
+            @Override
+            public void onSuccess(JSONObject body) {
+                if (!isAdded()) return;
+                if (!body.optBoolean("started", false)) {
+                    // Refused (busy, no local Lyrion, bad token...) — the
+                    // appliance's message says why; the choice on disk is unchanged.
+                    Toast.makeText(getContext(),
+                            body.optString("message", getString(R.string.settings_lyrion_skin_failed)),
+                            Toast.LENGTH_LONG).show();
+                    loadLyrionSkin(pref);
+                    return;
+                }
+                skinChoice = skin;
+                skinPollCount = 0;
+                pollLyrionSkinStatus(pref);
+            }
+
+            @Override
+            public void onFailure(String message) {
+                if (!isAdded()) return;
+                Toast.makeText(getContext(), getString(R.string.settings_lyrion_skin_failed), Toast.LENGTH_LONG).show();
+                loadLyrionSkin(pref);
+            }
+        });
+    }
+
+    private void pollLyrionSkinStatus(Preference pref) {
+        skinPollHandler.removeCallbacksAndMessages(null);
+        if (++skinPollCount > SKIN_POLL_MAX) {
+            Toast.makeText(getContext(), getString(R.string.settings_lyrion_skin_failed), Toast.LENGTH_LONG).show();
+            loadLyrionSkin(pref);
+            return;
+        }
+        skinPollHandler.postDelayed(() -> ApplianceHttpClient.getJson("/api/lms_skin_status",
+                new ApplianceHttpClient.JsonCallback() {
+            @Override
+            public void onSuccess(JSONObject body) {
+                if (!isAdded()) return;
+                String state = body.optString("state", "");
+                if ("done".equals(state) || "error".equals(state)) {
+                    Toast.makeText(getContext(), "done".equals(state)
+                            ? getString(R.string.settings_lyrion_skin_changed)
+                            : body.optString("message", getString(R.string.settings_lyrion_skin_failed)),
+                            Toast.LENGTH_LONG).show();
+                    loadLyrionSkin(pref);
+                    return;
+                }
+                pref.setSummary("installing".equals(state)
+                        ? R.string.settings_lyrion_skin_installing
+                        : R.string.settings_lyrion_skin_applying);
+                pollLyrionSkinStatus(pref);
+            }
+
+            @Override
+            public void onFailure(String message) {
+                if (!isAdded()) return;
+                // One dropped poll (Wi-Fi hiccup) is not a verdict — keep watching.
+                pollLyrionSkinStatus(pref);
+            }
+        }), SKIN_POLL_INTERVAL_MS);
     }
 
     private void fillUpdatesPreferences() {
@@ -385,6 +540,7 @@ public class SettingsFragment  extends PreferenceFragmentCompat implements
     @Override
     public void onDestroy() {
         super.onDestroy();
+        skinPollHandler.removeCallbacksAndMessages(null);
         getActivity().unbindService(serviceConnection);
     }
 

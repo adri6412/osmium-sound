@@ -154,6 +154,62 @@
                     android:text="@string/settings_ui_resolution_native" />
             </RadioGroup>
 
+            <!-- Panel refresh rate (native <-> low-power). Stays hidden until
+                 the appliance answers /api/system/ui_refresh (older units
+                 don't have the route); the radios give way to a note when
+                 the panel has no lower mode to offer. Mirrors admin-webui's
+                 Display card and the kiosk's "Refresh rate" section. -->
+            <LinearLayout
+                android:id="@+id/ui_refresh_block"
+                android:orientation="vertical"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="16dp"
+                android:visibility="gone">
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="@string/settings_ui_refresh_title"
+                    android:textColor="@android:color/white"
+                    android:textStyle="bold"
+                    android:layout_marginBottom="4dp" />
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="@string/settings_ui_refresh_summary"
+                    android:textColor="@color/hifiSilver"
+                    android:layout_marginBottom="8dp" />
+
+                <TextView
+                    android:id="@+id/ui_refresh_unsupported"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="@string/settings_ui_refresh_unsupported"
+                    android:textColor="@color/hifiSilver"
+                    android:visibility="gone" />
+
+                <RadioGroup
+                    android:id="@+id/ui_refresh_group"
+                    android:orientation="horizontal"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content">
+                    <RadioButton
+                        android:id="@+id/radio_ui_refresh_native"
+                        android:layout_width="0dp"
+                        android:layout_weight="1"
+                        android:layout_height="wrap_content"
+                        android:text="@string/settings_ui_refresh_native" />
+                    <RadioButton
+                        android:id="@+id/radio_ui_refresh_low"
+                        android:layout_width="0dp"
+                        android:layout_weight="1"
+                        android:layout_height="wrap_content"
+                        android:text="@string/settings_ui_refresh_low" />
+                </RadioGroup>
+            </LinearLayout>
+
             <LinearLayout
                 android:id="@+id/vu_meter_row"
                 android:orientation="horizontal"

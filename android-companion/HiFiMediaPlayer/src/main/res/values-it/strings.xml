@@ -346,6 +346,16 @@
     <string name="settings_lyrion_rescan_title">Scansiona la libreria</string>
     <string name="settings_lyrion_rescan_summary">Chiedi al server di cercare musica nuova o modificata</string>
     <string name="settings_lyrion_rescan_started">Scansione della libreria avviata.</string>
+    <string name="settings_lyrion_skin_title">Aspetto del player web</string>
+    <string name="settings_lyrion_skin_summary">L\'aspetto del player web di Lyrion (la pagina che apri da browser o telefono). Osmium è coerente con l\'interfaccia di questo dispositivo.</string>
+    <string name="settings_lyrion_skin_current">Attuale: %1$s</string>
+    <string name="settings_lyrion_skin_osmium">Osmium</string>
+    <string name="settings_lyrion_skin_material">Material</string>
+    <string name="settings_lyrion_skin_unset">non ancora scelto (aspetto originale di Lyrion)</string>
+    <string name="settings_lyrion_skin_installing">Installazione dell\'interfaccia web Material…</string>
+    <string name="settings_lyrion_skin_applying">Applicazione della skin…</string>
+    <string name="settings_lyrion_skin_changed">Skin del player web aggiornata.</string>
+    <string name="settings_lyrion_skin_failed">Impossibile applicare la skin. Controlla la connessione di rete e riprova.</string>
 
     <string name="settings_system_admin_title">Sistema</string>
     <string name="settings_system_admin_summary">Accesso SSH, info di sistema, riavvio e spegnimento</string>
@@ -365,6 +375,14 @@
     <string name="settings_ui_resolution_native">Nativa</string>
     <string name="settings_ui_resolution_changed">Risoluzione interfaccia cambiata.</string>
     <string name="settings_ui_resolution_failed">Impossibile cambiare la risoluzione dell\'interfaccia</string>
+    <string name="settings_ui_refresh_title">Frequenza di aggiornamento</string>
+    <string name="settings_ui_refresh_summary">Sia lo scaling dello schermo sia il ridisegno dell\'interfaccia sono legati alla frequenza di aggiornamento del pannello: abbassarla riduce il carico sul chip grafico, circa il 40% in meno su questo hardware. Si applica subito, nessun riavvio. Se il monitor collegato non supporta una frequenza più bassa, il cambio non ha alcun effetto.</string>
+    <string name="settings_ui_refresh_native">Nativa</string>
+    <string name="settings_ui_refresh_low">Basso consumo</string>
+    <string name="settings_ui_refresh_unsupported">Lo schermo di questo dispositivo non offre una frequenza di aggiornamento più bassa a cui passare.</string>
+    <string name="settings_ui_refresh_confirm">Lo schermo del dispositivo passerà a una frequenza di aggiornamento più bassa. Continuare?</string>
+    <string name="settings_ui_refresh_changed">Frequenza di aggiornamento cambiata.</string>
+    <string name="settings_ui_refresh_failed">Impossibile cambiare la frequenza di aggiornamento</string>
     <string name="settings_vu_meter_title">VU meter animato</string>
     <string name="settings_system_info_title">Info di sistema</string>
     <string name="settings_system_info_hostname">Nome host</string>
