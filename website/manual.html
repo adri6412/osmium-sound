@@ -138,7 +138,7 @@
     border:1px solid var(--gold); color:var(--gold); font-weight:700; font-size:13px;
     display:flex; align-items:center; justify-content:center;
   }
-  ol.steps > li > strong{display:block; color:var(--text); margin-bottom:2px}
+  ol.steps > li > strong:first-child{display:block; color:var(--text); margin-bottom:2px}
 
   /* ── tables ──────────────────────────────────────────── */
   table{width:100%; border-collapse:collapse; margin:14px 0; font-size:13.5px}
@@ -226,7 +226,7 @@
     <div class="grp">Advanced configuration</div>
     <a href="#en-sources">Music sources</a>
     <a href="#en-streaming">Streaming & Lyrion plugins</a>
-    <a href="#en-multiroom">Multiroom</a>
+    <a href="#en-multiroom">External Lyrion server</a>
     <a href="#en-backup">Backup & restore</a>
     <a href="#en-updates">OTA updates</a>
     <a href="#en-ssh">SSH & advanced access</a>
@@ -254,7 +254,7 @@
     <div class="grp">Configurazione avanzata</div>
     <a href="#it-sorgenti">Sorgenti musicali</a>
     <a href="#it-streaming">Streaming e plugin Lyrion</a>
-    <a href="#it-multiroom">Multiroom</a>
+    <a href="#it-multiroom">Server Lyrion esterno</a>
     <a href="#it-backup">Backup e ripristino</a>
     <a href="#it-aggiornamenti">Aggiornamenti OTA</a>
     <a href="#it-ssh">SSH e accesso avanzato</a>
@@ -484,7 +484,7 @@
           <li><strong>CD</strong> — insert a disc to play it, or rip it to FLAC with automatic tags and cover art (MusicBrainz), straight into your library, an adopted USB drive, or a writable network share.</li>
           <li><strong>Discover</strong> — endless mixes by track, album, or artist, with a genre filter and saveable presets, plus "keep playing similar music", related artists, and bios, right on the touchscreen.</li>
           <li><strong>Settings → Playback</strong> — track transition, ReplayGain, the animated VU meter, the now-playing auto-expand timeout, and a fixed-volume-100% (BitPerfect) toggle that turns off Lyrion's own digital volume control and greys out the volume slider.</li>
-          <li><strong>Settings</strong> — system and network info, audio output, multiroom, OTA updates, companion app pairing, backup, factory reset.</li>
+          <li><strong>Settings</strong> — system and network info, audio output, Lyrion server, OTA updates, companion app pairing, backup, factory reset.</li>
         </ul>
         <div class="box tip">
           <span class="label">Playback survives a restart</span>
@@ -523,9 +523,9 @@
       </section>
 
       <section id="en-multiroom">
-        <h2>Multiroom</h2>
-        <p>Multiple Osmium Sound devices can be grouped to play in sync. Each device always runs its own local player (squeezelite); "follow" mode (in Settings → Lyrion) points the player at another Osmium Sound device's Lyrion server already on your network, auto-discoverable via a local-network search — no need to type in an IP address by hand, though you still can.</p>
-        <p>Give each device a name (Settings → Player name) so grouped players are easy to tell apart in Lyrion's interface.</p>
+        <h2>External Lyrion server</h2>
+        <p>Each Osmium Sound device runs its own local player (squeezelite) against its own local Lyrion Music Server by default. From Settings → Lyrion Music Server you can instead point it at a Lyrion server already running on another device on your network, auto-discoverable via a local-network search — no need to type in an IP address by hand, though you still can.</p>
+        <p>Playing several players in sync (multiroom) is a native Lyrion Music Server feature, managed from Lyrion's own interface — Osmium Sound doesn't provide a separate multiroom feature of its own. Give each device a name (Settings → Player name) so they're easy to tell apart there.</p>
       </section>
 
       <section id="en-backup">
@@ -846,7 +846,7 @@
           <li><strong>CD</strong> — inserisci un disco per riprodurlo oppure rippare in FLAC con tag e copertina automatici (MusicBrainz), direttamente nella libreria, su un disco USB adottato o su una condivisione di rete scrivibile.</li>
           <li><strong>Discover</strong> — mix infiniti per brano, album o artista, con filtro per genere e preset salvabili, oltre a "continua ad ascoltare musica simile", artisti correlati e biografie direttamente a schermo.</li>
           <li><strong>Impostazioni → Playback</strong> — transizione tra i brani, ReplayGain, VU meter animato, timeout di espansione automatica del now playing, e un interruttore volume fisso al 100% (BitPerfect) che disattiva il controllo volume digitale di Lyrion e disabilita visivamente lo slider del volume.</li>
-          <li><strong>Impostazioni</strong> — info di sistema e rete, uscita audio, multiroom, aggiornamenti OTA, abbinamento app companion, backup, reset di fabbrica.</li>
+          <li><strong>Impostazioni</strong> — info di sistema e rete, uscita audio, server Lyrion, aggiornamenti OTA, abbinamento app companion, backup, reset di fabbrica.</li>
         </ul>
         <div class="box tip">
           <span class="label">La riproduzione sopravvive a un riavvio</span>
@@ -885,9 +885,9 @@
       </section>
 
       <section id="it-multiroom">
-        <h2>Multiroom</h2>
-        <p>Più dispositivi Osmium Sound possono essere raggruppati per suonare in sincronia. Ogni dispositivo esegue sempre il proprio player locale (squeezelite); la modalità "segui" (in Impostazioni → Lyrion) punta il player verso il server Lyrion di un altro dispositivo Osmium Sound già presente sulla rete, individuabile automaticamente tramite ricerca sulla rete locale — non serve inserire l'indirizzo IP a mano, anche se è comunque possibile farlo.</p>
-        <p>Assegna un nome a ogni dispositivo (Impostazioni → Nome player) per distinguerli facilmente nell'interfaccia di Lyrion quando sono raggruppati.</p>
+        <h2>Server Lyrion esterno</h2>
+        <p>Ogni dispositivo Osmium Sound esegue di default il proprio player locale (squeezelite) sul proprio Lyrion Music Server locale. Da Impostazioni → Lyrion Music Server puoi invece puntarlo verso un server Lyrion già in esecuzione su un altro dispositivo della rete, individuabile automaticamente tramite ricerca sulla rete locale — non serve inserire l'indirizzo IP a mano, anche se è comunque possibile farlo.</p>
+        <p>Far suonare più player in sincronia (multiroom) è una funzione nativa di Lyrion Music Server, gestita dalla sua stessa interfaccia — Osmium Sound non offre una funzione di multiroom propria. Assegna un nome a ogni dispositivo (Impostazioni → Nome player) per distinguerli facilmente lì.</p>
       </section>
 
       <section id="it-backup">
