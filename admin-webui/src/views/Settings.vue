@@ -84,88 +84,6 @@ async function downloadSupportBundle() {
   }
 }
 
-// ── HAR network captures (Debug section) ────────────────────────────
-// Recording only happens on the kiosk itself (Settings.jsx → Electron's
-// webContents.debugger, see main/main.js) — the web admin can only list,
-// download and delete whatever .har files have already landed on disk.
-const harCaptures = ref([]);
-const harBusy = ref(false);
-
-function fmtHarSize(n) {
-  if (!n) return '0 kB';
-  return n >= 1048576 ? (n / 1048576).toFixed(1) + ' MB' : Math.max(1, Math.round(n / 1024)) + ' kB';
-}
-function fmtHarStamp(mtime) {
-  return mtime ? new Date(mtime * 1000).toLocaleString() : '';
-}
-
-async function loadHarCaptures() {
-  const r = await api.sys('har_captures');
-  if (r.ok) harCaptures.value = r.data.captures || [];
-}
-
-async function downloadHarCapture(name) {
-  try {
-    const resp = await fetch('/api/system/har_captures/' + encodeURIComponent(name), { credentials: 'same-origin' });
-    if (!resp.ok) throw new Error(await resp.text() || resp.statusText);
-    const blob = await resp.blob();
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url; a.download = name;
-    document.body.appendChild(a); a.click(); a.remove();
-    URL.revokeObjectURL(url);
-  } catch (e) {
-    say(t('settings.debug.downloadFailed'), true);
-    console.error('har capture download failed', e);
-  }
-}
-
-async function deleteHarCapture(name) {
-  if (!confirm(t('settings.debug.deleteConfirm'))) return;
-  harBusy.value = true;
-  const r = await api.del('/api/system/har_captures/' + encodeURIComponent(name));
-  harBusy.value = false;
-  if (!r.ok || r.data.success === false) say(bodyMsg(r, t('settings.debug.deleteFailed')), true);
-  loadHarCaptures();
-}
-
-// ── Perf captures (Debug section) ────────────────────────────────────
-// Same recording-only-on-the-kiosk model as HAR captures above, one JSON
-// line per minute (DOM nodes, JS heap, per-process CPU/memory) instead of
-// network traffic — see main/main.js's perf-capture-* IPC handlers.
-const perfCaptures = ref([]);
-const perfBusy = ref(false);
-
-async function loadPerfCaptures() {
-  const r = await api.sys('perf_captures');
-  if (r.ok) perfCaptures.value = r.data.captures || [];
-}
-
-async function downloadPerfCapture(name) {
-  try {
-    const resp = await fetch('/api/system/perf_captures/' + encodeURIComponent(name), { credentials: 'same-origin' });
-    if (!resp.ok) throw new Error(await resp.text() || resp.statusText);
-    const blob = await resp.blob();
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url; a.download = name;
-    document.body.appendChild(a); a.click(); a.remove();
-    URL.revokeObjectURL(url);
-  } catch (e) {
-    say(t('settings.debug.downloadFailed'), true);
-    console.error('perf capture download failed', e);
-  }
-}
-
-async function deletePerfCapture(name) {
-  if (!confirm(t('settings.debug.deleteConfirm'))) return;
-  perfBusy.value = true;
-  const r = await api.del('/api/system/perf_captures/' + encodeURIComponent(name));
-  perfBusy.value = false;
-  if (!r.ok || r.data.success === false) say(bodyMsg(r, t('settings.debug.deleteFailed')), true);
-  loadPerfCaptures();
-}
-
 // ── Boot debug flags (Settings → Debug) ──────────────────────────────
 // For a box that hangs at shutdown/boot behind the Plymouth splash instead of
 // crashing cleanly (possibly a kernel panic hidden behind it), or to capture
@@ -1175,7 +1093,7 @@ async function saveBackupScheduled(v) {
 
 onMounted(async () => {
   loadNet(); loadAudio(); loadDsp(); loadFir(); loadToggles(); loadShell(); loadLms(); loadLyrion(); loadSkin(); loadPlayback();
-  loadMode(); loadPlayerEnabled(); loadUiRes(); loadUiRefresh(); loadPointer(); loadTimezone(); loadVuMeter(); loadAutoExpand(); loadChannel(); checkAll(); resumePlanIfRunning(); loadBackups(); loadTailscale(); loadHarCaptures(); loadPerfCaptures(); loadDebugFlags();
+  loadMode(); loadPlayerEnabled(); loadUiRes(); loadUiRefresh(); loadPointer(); loadTimezone(); loadVuMeter(); loadAutoExpand(); loadChannel(); checkAll(); resumePlanIfRunning(); loadBackups(); loadTailscale(); loadDebugFlags();
   timezonePoll = setInterval(pollTimezone, 10000);
   // Tell the global UpdateProgressOverlay (mounted in App.vue) that this page
   // owns the OTA modal while it's open, so the two never render on top of
@@ -1697,49 +1615,20 @@ onUnmounted(() => {
       </div>
     </div>
 
-    <!-- Debug: HAR network captures recorded on the kiosk -->
+    <!-- Debug: boot / kernel-panic troubleshooting flags -->
     <div class="card" v-if="open === 'debug'">
-      <p class="sub">{{ t('settings.debug.hint') }}</p>
-
-      <div style="padding-bottom: 16px; border-bottom: 1px solid rgba(255,255,255,0.1); margin-bottom: 16px;">
-        <p class="sub">{{ t('settings.debug.bootHint') }}</p>
-        <div class="between item">
-          <span>{{ t('settings.debug.plymouth') }}
-            <span class="muted">{{ t('settings.debug.plymouthHelp') }}</span>
-          </span>
-          <Toggle :model-value="plymouthDisabled" :disabled="debugFlagsBusy" @update:model-value="togglePlymouth" />
-        </div>
-        <div class="between item">
-          <span>{{ t('settings.debug.kdump') }}
-            <span class="muted">{{ kdumpInstalled ? t('settings.debug.kdumpHelp') : t('settings.debug.kdumpNotInstalled') }}</span>
-          </span>
-          <Toggle :model-value="kdumpEnabled" :disabled="debugFlagsBusy" @update:model-value="toggleKdump" />
-        </div>
+      <p class="sub">{{ t('settings.debug.bootHint') }}</p>
+      <div class="between item">
+        <span>{{ t('settings.debug.plymouth') }}
+          <span class="muted">{{ t('settings.debug.plymouthHelp') }}</span>
+        </span>
+        <Toggle :model-value="plymouthDisabled" :disabled="debugFlagsBusy" @update:model-value="togglePlymouth" />
       </div>
-
-      <p v-if="!harCaptures.length" class="sub">{{ t('settings.debug.none') }}</p>
-      <div v-for="c in harCaptures" :key="c.name" class="net between" style="align-items: flex-start;">
-        <div>
-          <div>{{ fmtHarStamp(c.mtime) }}</div>
-          <div class="muted">{{ c.name }} · {{ fmtHarSize(c.size) }}</div>
-        </div>
-        <div class="row">
-          <button class="secondary fit" :disabled="harBusy" @click="downloadHarCapture(c.name)">⬇</button>
-          <button class="danger fit" :disabled="harBusy" @click="deleteHarCapture(c.name)">✕</button>
-        </div>
-      </div>
-
-      <p class="sub" style="padding-top: 16px; margin-top: 16px; border-top: 1px solid rgba(255,255,255,0.1);">{{ t('settings.debug.perfHelp') }}</p>
-      <p v-if="!perfCaptures.length" class="sub">{{ t('settings.debug.none') }}</p>
-      <div v-for="c in perfCaptures" :key="c.name" class="net between" style="align-items: flex-start;">
-        <div>
-          <div>{{ fmtHarStamp(c.mtime) }}</div>
-          <div class="muted">{{ c.name }} · {{ fmtHarSize(c.size) }}</div>
-        </div>
-        <div class="row">
-          <button class="secondary fit" :disabled="perfBusy" @click="downloadPerfCapture(c.name)">⬇</button>
-          <button class="danger fit" :disabled="perfBusy" @click="deletePerfCapture(c.name)">✕</button>
-        </div>
+      <div class="between item">
+        <span>{{ t('settings.debug.kdump') }}
+          <span class="muted">{{ kdumpInstalled ? t('settings.debug.kdumpHelp') : t('settings.debug.kdumpNotInstalled') }}</span>
+        </span>
+        <Toggle :model-value="kdumpEnabled" :disabled="debugFlagsBusy" @update:model-value="toggleKdump" />
       </div>
     </div>
   </template>

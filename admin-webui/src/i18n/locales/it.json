@@ -593,7 +593,6 @@
       "factoryFailed": "Ripristino fallito"
     },
     "debug": {
-      "hint": "Le catture di rete HAR si registrano sul kiosk stesso (Impostazioni → Debug), non qui — questa pagina mostra solo quelle già salvate.",
       "bootHint": "Per un dispositivo che si blocca all'avvio o allo spegnimento dietro la schermata di boot invece di andare in errore in modo pulito — possibile kernel panic nascosto. Entrambe le opzioni richiedono un riavvio per avere effetto.",
       "plymouth": "Disattiva schermata di boot (Plymouth)",
       "plymouthHelp": "Mostra il testo reale di avvio/spegnimento invece della schermata grafica, così un blocco o un kernel panic sono effettivamente visibili sullo schermo.",
@@ -603,12 +602,7 @@
       "kdumpInstalling": "Installazione degli strumenti per il memory dump…",
       "rebootRequired": "Salvato — riavvia il dispositivo perché la modifica abbia effetto.",
       "rebootPrompt": "Riavviare ora il dispositivo per applicare la modifica?",
-      "saveFailed": "Impossibile salvare questa impostazione",
-      "none": "Nessuna cattura salvata.",
-      "downloadFailed": "Download fallito",
-      "deleteConfirm": "Eliminare questa cattura?",
-      "deleteFailed": "Eliminazione fallita",
-      "perfHelp": "Anche le catture di performance (nodi DOM, heap JS, CPU/memoria per processo campionati una volta al minuto) vengono registrate sul kiosk stesso (Impostazioni → Debug), per scovare leak che si notano solo dopo ore d'uso."
+      "saveFailed": "Impossibile salvare questa impostazione"
     }
   }
 }

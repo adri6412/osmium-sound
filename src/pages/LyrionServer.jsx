@@ -914,14 +914,6 @@ const LyrionServer = () => {
     return () => { cancelled = true; };
   }, [effectiveNowPlayingView, isPlayerExpanded, currentTrack.id]);
 
-  // Read by main.js's perf-capture sampler (window.__hifiPerfState, via CDP
-  // Runtime.evaluate) so a multi-hour capture's rows are self-describing —
-  // without this there's no way to tell afterwards which screen/state a
-  // given sample's DOM/CPU numbers actually belong to.
-  useEffect(() => {
-    window.__hifiPerfState = { activeTab, isPlayerExpanded, nowPlayingView: effectiveNowPlayingView, isPlaying, showQueue };
-  }, [activeTab, isPlayerExpanded, effectiveNowPlayingView, isPlaying, showQueue]);
-
   // ── Library content renderer ───────────────────────────────
   const renderLibraryContent = () => {
     if (libraryLoading) {
