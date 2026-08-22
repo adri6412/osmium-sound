@@ -153,20 +153,6 @@
   .modecard h4{margin:0 0 6px; font-size:14.5px; color:var(--gold)}
   .modecard p{margin:0; font-size:13px}
 
-  /* ── qr mock ─────────────────────────────────────────── */
-  .qrmock{
-    display:flex; align-items:center; gap:18px; background:var(--surface);
-    border:1px solid var(--border); border-radius:var(--radius); padding:18px; margin:18px 0;
-  }
-  .qrmock .sq{
-    flex:none; width:88px; height:88px; border-radius:10px; background:#fff;
-    background-image:
-      linear-gradient(90deg,#000 0 14%,transparent 0 20%,#000 0 34%,transparent 0 42%,#000 0 58%,transparent 0 66%,#000 0 80%,transparent 0 100%),
-      linear-gradient(0deg,#000 0 14%,transparent 0 20%,#000 0 34%,transparent 0 42%,#000 0 58%,transparent 0 66%,#000 0 80%,transparent 0 100%);
-    background-blend-mode:multiply;
-  }
-  .qrmock p{margin:0; font-size:13.5px}
-
   footer{max-width:var(--maxw); padding:30px 0 70px; color:var(--muted); font-size:13px; border-top:1px solid var(--border); margin-top:60px}
   footer a{color:var(--silver)}
 
@@ -352,11 +338,6 @@
       <section id="en-first-boot">
         <h2>First boot and setup</h2>
         <p>After installation, on first boot the screen again shows <strong>only a QR code</strong> — setup, just like installation, is completed from your phone. The device picks up on its own as soon as setup finishes: there's no button to press on the screen.</p>
-
-        <div class="qrmock">
-          <div class="sq"></div>
-          <p>What you actually see on first boot: the Osmium Sound logo, the setup hotspot's QR code <code>Osmium-Setup-XXXX</code>, and nothing else interactive.</p>
-        </div>
 
         <h3>Guided setup steps (on your phone)</h3>
         <ol class="steps">
@@ -714,11 +695,6 @@
       <section id="it-primo-avvio">
         <h2>Primo avvio e configurazione</h2>
         <p>Dopo l'installazione, al primo avvio lo schermo mostra di nuovo <strong>solo un QR code</strong> — la configurazione, esattamente come l'installazione, si completa dal telefono. Il dispositivo prosegue da solo non appena la configurazione viene completata: non c'è nessun pulsante da premere sullo schermo.</p>
-
-        <div class="qrmock">
-          <div class="sq"></div>
-          <p>Schermata reale al primo avvio: logo Osmium Sound, QR code dell'hotspot di configurazione <code>Osmium-Setup-XXXX</code>, nessun altro elemento interattivo.</p>
-        </div>
 
         <h3>Passaggi della configurazione guidata (dal telefono)</h3>
         <ol class="steps">
