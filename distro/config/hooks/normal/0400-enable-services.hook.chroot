@@ -47,9 +47,6 @@ echo "I: [hifi] enabling mDNS/ARP keepalive (a router silently drops this device
 echo "          ARP/mDNS entry after long network silence otherwise — see apply.d/0041)"
 systemctl enable hifi-mdns-keepalive.timer || true
 
-echo "I: [hifi] enabling beta-testing telemetry agent (private beta only, alpha channel)"
-systemctl enable hifi-beta-agent.service || true
-
 echo "I: [hifi] defaulting timezone to UTC (deterministic — otherwise every install would"
 echo "          silently inherit whatever the ISO build host happened to have; Settings ->"
 echo "          System lets the user pick their real one)"

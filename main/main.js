@@ -63,10 +63,9 @@ function logToFile(prefix, message) {
   } catch (_) {}
 }
 
-// Where Settings.jsx's Debug section saves HAR captures (see the
-// har-capture-* IPC handlers near the bottom of this file). api_server.py
-// serves this exact same path to the web admin for download — the two must
-// stay in sync (grep HAR_CAPTURE_DIR there if this ever moves).
+// Where HAR captures are written. api_server.py serves this exact same path
+// to the web admin for download — the two must stay in sync (grep
+// HAR_CAPTURE_DIR there if this ever moves).
 const HAR_CAPTURE_DIR = join(app.getPath('logs'), 'har-captures');
 
 // Same idea as HAR_CAPTURE_DIR, for long-running perf-capture-* below.
@@ -306,7 +305,6 @@ app.whenReady().then(() => {
   registerGlobalShortcuts();
   pollPhysicalKeyboard(); // establish the initial state immediately, don't wait 2s
   setInterval(pollPhysicalKeyboard, 2000);
-  setInterval(tickCaptureScheduler, CAPTURE_SCHEDULE_POLL_MS);
 });
 
 // This kiosk has exactly one window and no way for the user to close it (no
@@ -421,14 +419,14 @@ function pollPhysicalKeyboard() {
 }
 
 /**
- * HAR (network traffic) capture. Driven automatically by the beta-testing
- * capture scheduler further down (tickCaptureScheduler) — there is no manual
- * UI for this anymore. The kiosk has no keyboard to drive DevTools' own
- * Network panel anyway, so this drives the same underlying Chrome DevTools
- * Protocol from the main process instead: attach webContents.debugger,
- * record Network.* events between start/stop, and write a standard .har file
- * later downloaded from the web admin (api_server.py serves HAR_CAPTURE_DIR
- * — see the constant above) or picked up by hifi-beta-agent.py.
+ * HAR (network traffic) capture. NOTHING STARTS THIS TODAY: the private-beta
+ * telemetry agent that used to schedule it was removed with the beta, and
+ * there is no manual trigger in its place — the kiosk has no keyboard to
+ * drive DevTools' own Network panel. Kept because it is the only way to see
+ * that traffic on an appliance: it drives the Chrome DevTools Protocol from
+ * the main process (attach webContents.debugger, record Network.* events
+ * between start/stop) and writes a standard .har file the web admin can then
+ * download (api_server.py serves HAR_CAPTURE_DIR — see the constant above).
  *
  * Deliberately headers/status/timing only, no response bodies: fetching
  * Network.getResponseBody for every request would mean an extra CDP
@@ -446,8 +444,7 @@ let harCapture = null; // { entries: Map<requestId, entry>, startedAt } | null
 
 // Header names/token patterns that can carry streaming-service auth (Tidal,
 // Qobuz, Spotify, ...) or session identifiers. Captures are downloaded via
-// the web admin / picked up by hifi-beta-agent.py, so these must never land
-// in the .har in the clear.
+// the web admin, so these must never land in the .har in the clear.
 const SENSITIVE_HEADER_NAMES = new Set(['authorization', 'proxy-authorization', 'cookie', 'set-cookie', 'x-api-key']);
 const SENSITIVE_HEADER_PATTERN = /token|secret|session/i;
 
@@ -551,9 +548,8 @@ function buildHarLog(capture) {
   };
 }
 
-// Plain functions (no IPC event dependency) so both the manual ipcMain
-// handlers below and the automatic capture scheduler (see
-// tickCaptureScheduler further down) can drive the same capture logic.
+// Plain functions, no IPC event dependency: whatever ends up driving a
+// capture calls these directly.
 async function startHarCaptureInternal() {
   if (harCapture) return { success: false, message: 'Capture already running' };
   if (!mainWindow || mainWindow.isDestroyed()) return { success: false, message: 'No window' };
@@ -610,8 +606,8 @@ async function stopHarCaptureInternal() {
  * on the kiosk to drive DevTools) but for a different question: "is
  * something leaking over hours of normal use?" — suspected after a field
  * report of GPU usage climbing back up over a few hours of playback after
- * every OTA-triggered restart (which resets it). Also driven automatically
- * by the beta-testing capture scheduler further down — no manual UI.
+ * every OTA-triggered restart (which resets it). Same as HAR capture above,
+ * nothing starts it since the beta telemetry agent was removed.
  *
  * Samples on a configurable interval (default 5s) for as long as it runs
  * (meant to be left recording across hours, unattended) and appends one JSON
@@ -722,72 +718,4 @@ async function stopPerfCaptureInternal() {
   }
   if (sampleCount === 0) return { success: true, empty: true, sampleCount: 0 };
   return { success: true, filename: filePath.split(/[\\/]/).pop(), sampleCount };
-}
-
-/**
- * Automatic capture scheduling, for the beta-testing telemetry pipeline.
- * This app never decides its own cadence: a separate Python agent
- * (hifi-beta-agent, distro/config/includes.chroot/usr/local/sbin/) polls a
- * cloud server for the fleet's current schedule and writes it to
- * CAPTURE_SCHEDULE_FILE. All this does is read that file and, if it asks
- * for it, start HAR+perf capture for a while every so often, using the same
- * internal start/stop functions defined above — never touching a capture it
- * didn't start itself.
- */
-const CAPTURE_SCHEDULE_FILE = join(app.getPath('userData'), 'beta-capture-schedule.json');
-const CAPTURE_SCHEDULE_POLL_MS = 60 * 1000;
-const SCHEDULED_PERF_SAMPLE_INTERVAL_SEC = 5;
-
-let scheduledCaptureOwnsHar = false;
-let scheduledCaptureOwnsPerf = false;
-let scheduledCaptureStopTimer = null;
-let lastScheduledRunAt = 0;
-
-function readCaptureSchedule() {
-  try {
-    const raw = JSON.parse(readFileSync(CAPTURE_SCHEDULE_FILE, 'utf8'));
-    const intervalSec = Number(raw.intervalSec);
-    const durationSec = Number(raw.durationSec);
-    if (!raw.enabled || !Number.isFinite(intervalSec) || intervalSec <= 0 || !Number.isFinite(durationSec) || durationSec <= 0) {
-      return null;
-    }
-    return { intervalSec, durationSec };
-  } catch {
-    return null; // missing/malformed file (e.g. agent hasn't run yet) ⇒ off
-  }
-}
-
-async function stopScheduledCapture() {
-  if (scheduledCaptureStopTimer) {
-    clearTimeout(scheduledCaptureStopTimer);
-    scheduledCaptureStopTimer = null;
-  }
-  if (scheduledCaptureOwnsHar) {
-    scheduledCaptureOwnsHar = false;
-    await stopHarCaptureInternal();
-  }
-  if (scheduledCaptureOwnsPerf) {
-    scheduledCaptureOwnsPerf = false;
-    await stopPerfCaptureInternal();
-  }
-}
-
-async function tickCaptureScheduler() {
-  const schedule = readCaptureSchedule();
-  if (!schedule) return;
-  // Something's already running (scheduled or manual) — never stack a
-  // second capture on top, and never touch one this scheduler didn't start.
-  if (harCapture || perfCapture) return;
-  const now = Date.now();
-  if (now - lastScheduledRunAt < schedule.intervalSec * 1000) return;
-  lastScheduledRunAt = now;
-
-  const harResult = await startHarCaptureInternal();
-  scheduledCaptureOwnsHar = !!harResult.success;
-  const perfResult = await startPerfCaptureInternal(SCHEDULED_PERF_SAMPLE_INTERVAL_SEC);
-  scheduledCaptureOwnsPerf = !!perfResult.success;
-
-  if (scheduledCaptureOwnsHar || scheduledCaptureOwnsPerf) {
-    scheduledCaptureStopTimer = setTimeout(stopScheduledCapture, schedule.durationSec * 1000);
-  }
 }

@@ -189,7 +189,7 @@ intel-gpu-tools
 # call sites. Not pulled in by anything else.
 radeontop
 
-# lspci — GPU model string for both the admin dashboard and the beta-testing
-# telemetry snapshot (hifi-beta-agent.py gpu_model()). Not pulled in by
-# anything else, and not part of a minimal Debian base.
+# lspci — GPU model string for the admin dashboard (api_server.py's
+# gpu_model()). Not pulled in by anything else, and not part of a minimal
+# Debian base.
 pciutils

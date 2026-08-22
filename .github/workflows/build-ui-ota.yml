@@ -120,8 +120,6 @@ jobs:
 
       - name: Package system-components OTA bundle (tarball + sha256)
         id: packsys
-        env:
-          HIFI_BETA_BOOTSTRAP_SECRET: ${{ secrets.HIFI_BETA_BOOTSTRAP_SECRET }}
         run: |
           VERSION="${{ steps.ver.outputs.version }}"
           ROOT=sysbundle
@@ -148,15 +146,6 @@ jobs:
           cp -r distro/config/includes.chroot/usr/local/share/hifi-lms-skin "$ROOT/usr/local/share/"
           # systemd units
           cp distro/config/includes.chroot/etc/systemd/system/*.service "$ROOT/etc/systemd/system/"
-          # hifi-beta-agent.py ships with a placeholder bootstrap secret in source
-          # (this repo is public) -- substitute the real value into the PACKAGED
-          # copy only, from a GitHub Actions secret, same pattern as
-          # OTA_SIGNING_KEY below for OS-update signing.
-          if [ -n "$HIFI_BETA_BOOTSTRAP_SECRET" ]; then
-            sed -i "s/REPLACE_ME_BOOTSTRAP_SECRET/$HIFI_BETA_BOOTSTRAP_SECRET/" "$ROOT/usr/local/sbin/hifi-beta-agent.py"
-          else
-            echo "::warning::HIFI_BETA_BOOTSTRAP_SECRET not set — hifi-beta-agent.py shipped with the placeholder secret and will fail to register against the telemetry server."
-          fi
           printf '%s\n' "$VERSION" > "$ROOT/SYSTEM_VERSION"
           TAR="hifi-system-${VERSION}.tar.gz"
           tar czf "$TAR" -C "$ROOT" .

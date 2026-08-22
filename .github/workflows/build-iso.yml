@@ -95,26 +95,6 @@ jobs:
             exit 1
           fi
 
-      - name: Bake the beta-agent bootstrap secret into the ISO
-        env:
-          HIFI_BETA_BOOTSTRAP_SECRET: ${{ secrets.HIFI_BETA_BOOTSTRAP_SECRET }}
-        run: |
-          set -euo pipefail
-          # includes.chroot is copied into the image verbatim by
-          # build-distro.sh, so without this the ISO ships the placeholder
-          # secret that lives in the public source and every freshly-installed
-          # appliance gets HTTP 401 from /api/v1/register until a system OTA
-          # happens to replace the file. Same substitution, same secret, as
-          # the "Package system-components OTA bundle" step in build-ui-ota.yml.
-          AGENT=distro/config/includes.chroot/usr/local/sbin/hifi-beta-agent.py
-          if [ -z "$HIFI_BETA_BOOTSTRAP_SECRET" ]; then
-            echo "::warning::HIFI_BETA_BOOTSTRAP_SECRET not set — the ISO ships the placeholder secret and installed units will not register with the telemetry server."
-            exit 0
-          fi
-          sed -i "s|REPLACE_ME_BOOTSTRAP_SECRET|$HIFI_BETA_BOOTSTRAP_SECRET|" "$AGENT"
-          grep -q REPLACE_ME_BOOTSTRAP_SECRET "$AGENT" \
-            && { echo "::error::bootstrap secret substitution did not take"; exit 1; } || true
-
       - name: Build installer ISO (live-build, as root)
         run: |
           set -euo pipefail

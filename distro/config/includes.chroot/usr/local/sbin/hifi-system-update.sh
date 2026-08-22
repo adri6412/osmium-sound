@@ -264,9 +264,6 @@ full)
     if [ -f /etc/systemd/system/hifi-update-apply.service ]; then
         systemctl enable hifi-update-apply.service 2>/dev/null || true
     fi
-    if [ -f /etc/systemd/system/hifi-beta-agent.service ]; then
-        systemctl restart hifi-beta-agent.service 2>/dev/null || true
-    fi
 
     rm -rf "$WORKDIR"
     write_status 'done' 100 "Componenti aggiornati a $VERSION"
