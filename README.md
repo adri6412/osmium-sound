@@ -29,8 +29,6 @@ Bit-perfect audio, streaming services, and signed OTA updates — one sleek dark
 - 💿 **CD playback & ripping** — insert a disc, play it or rip it to tagged FLAC (MusicBrainz metadata + cover art) straight into your library
 - 🧭 **Discover** — endless random mixes, "keep playing similar music", similar artists and artist bios on the touchscreen
 - 📻 **Internet radio** — thousands of stations, save favourites from the touchscreen
-- 🔌 **DAC auto-detection** — persistent output selection across reboots
-- 🔊 **Multiroom** — group Osmium Sound devices to play in sync
 - 🖥️ **With screen or headless** — touchscreen kiosk, headless (web admin + companion app), or server-only (serves Lyrion to other players, plays nothing itself)
 - 🌐 **Web admin** — manage a unit from any browser on the LAN (network, audio, sources, updates, backups, SSH, Tailscale remote access)
 - 📱 **Android companion app** — browse, control playback/queue, adjust volume, pair by QR code
@@ -55,15 +53,13 @@ Bit-perfect audio, streaming services, and signed OTA updates — one sleek dark
 ## 🚀 Get started
 
 1. **Download** the latest install ISO from [Releases](https://github.com/adri6412/osmium-sound/releases) (or use **Osmium Flasher**, see `flasher/`, which downloads and verifies the current image for you).
-2. **Flash** it to an 8GB+ USB stick with Osmium Flasher, [balenaEtcher](https://etcher.balena.io/), Rufus, or `dd`.
-3. **Boot** your x86 mini-PC from the stick — the screen shows a QR code, nothing else. Scan it with your phone (it joins the open `Osmium-Setup-XXXX` hotspot, or just use the LAN address if the box is on Ethernet) and finish the install from there: pick the disk, confirm, done. No mouse or keyboard ever needed.
-4. On first boot after install, the screen asks only for the network (pick your Wi-Fi on the touchscreen — nothing to do if wired), then shows its own address (`http://<ip>`). Open it on your phone or laptop to finish setup: language, restore-from-backup or fresh start, device name and mode, audio output, Lyrion, web-player look, music services, web-admin account, time zone, music sources.
+2. **Flash** it to an 8GB+ USB stick with [Osmium Flasher](https://osmiumsound.it), [balenaEtcher](https://etcher.balena.io/), Rufus, or `dd`.
+3. **Boot** your x86 mini-PC from the stick and finish the install from there: pick the disk, confirm, done.
+4. On first boot after install, the screen shows its own address (`http://<ip>`). Open it on your phone or laptop to finish setup: language, restore-from-backup or fresh start, device name and mode, audio output, Lyrion, web-player look, music services, web-admin account, time zone, music sources.
 
 Every later version — UI, system, OS, and Lyrion — arrives automatically over the air from the Settings screen (or the web admin). No reflashing required.
 
 > **Try it live.** Pick **Try Osmium Sound (no install)** at the boot menu to run the kiosk straight from the USB stick, nothing is written to disk. If it doesn't log in automatically, use `hifi` / `hifi` at the login screen.
-
-Want to run the UI locally for development instead of flashing an appliance? See [ARCHITECTURE.md](ARCHITECTURE.md#local-development).
 
 ## 📱 Android companion
 
