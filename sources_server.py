@@ -985,7 +985,7 @@ _USB_RETRY_BACKOFF = 15
 
 # How long a USB device has to stay unseen before usb_sync() acts on its
 # absence, and when each currently-missing identifier was first missed.
-_USB_GONE_GRACE = 60
+_USB_GONE_GRACE = 30
 _usb_missing_since = {}
 
 
