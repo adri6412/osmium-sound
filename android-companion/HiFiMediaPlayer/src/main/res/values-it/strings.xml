@@ -1,0 +1,452 @@
+<?xml version="1.0" encoding="UTF-8"?><!--
+ Italian translation.
+
+ Osmium Sound ships an Italian-first appliance (kiosk and web admin both
+ default to Italian), so the companion carries a full Italian translation
+ rather than falling back to the English base for most of its UI.
+
+ Android escaping: apostrophes must be \' and ampersands &amp;. Format
+ specifiers (%s, %1$s, %d, %1$.1f) must survive translation unchanged and in a
+ quantity that matches the base string.
+-->
+<resources>
+    <string name="undo">Annulla</string>
+    <string name="disabled">Disattivato</string>
+    <string name="mute">Muto</string>
+    <string name="no_action">Nessuna azione</string>
+    <string name="pause_active">Metti in pausa il player selezionato</string>
+    <string name="pause_all">Metti in pausa tutti i player</string>
+    <string name="mute_active">Silenzia il player selezionato</string>
+    <string name="mute_all">Silenzia tutti i player</string>
+    <string name="minutes">minuti</string>
+
+    <string name="menu_item_players">Player</string>
+    <string name="menu_item_settings_label">Impostazioni</string>
+    <string name="menu_item_about_label">Informazioni</string>
+    <string name="menu_item_view">Vista</string>
+    <string name="menu_nowplaying_trackinfo">Info brano</string>
+    <string name="activity_settings_name">Impostazioni</string>
+
+    <string name="settings_serveraddr_hint">Apparecchio associato</string>
+    <string name="settings_scan_qr">Scansiona codice QR</string>
+    <string name="settings_scan_qr_prompt">Inquadra il codice QR mostrato in Osmium Sound → Impostazioni → Controllo da telefono</string>
+    <string name="settings_scan_qr_failed">Impossibile leggere un indirizzo server da quel codice QR</string>
+    <string name="settings_pair_confirm_title">Associare a questo apparecchio?</string>
+    <string name="settings_pair_confirm_message">Questo codice QR associa l\'app all\'apparecchio all\'indirizzo %1$s. Una volta associato, questo telefono potrà controllarlo da remoto — incluso riavvio, SSH e backup/ripristino. Continua solo se hai inquadrato il codice dallo schermo dell\'apparecchio.</string>
+    <string name="settings_pair_confirm_button">Associa</string>
+    <string name="settings_scan_qr_retry">Scansiona di nuovo</string>
+    <string name="settings_advanced_options">Opzioni avanzate (utente, password, Wake-on-LAN)</string>
+    <string name="wizard_step_label">Passo %1$d di %2$d – %3$s</string>
+    <string name="wizard_step_title_scan">Scansiona il codice QR</string>
+    <string name="wizard_step_title_confirm">Conferma abbinamento</string>
+    <string name="wizard_step_title_ready">Pronto per connettersi</string>
+    <string name="settings_camera_permission_required">Per scansionare un codice QR serve il permesso di accesso alla fotocamera</string>
+
+    <string name="settings_theme_title">Tema</string>
+    <string name="settings_theme_dark">Scuro</string>
+    <string name="settings_theme_light">Chiaro</string>
+    <string name="settings_layout_grouped">Raggruppato</string>
+    <string name="settings_screensaver_title">Mantieni lo schermo acceso</string>
+    <string name="settings_screensaver_off">No</string>
+    <string name="settings_screensaver_on">Sì</string>
+    <string name="settings_fullscreen_off">No</string>
+    <string name="settings_fullscreen_on">Sì</string>
+    <string name="settings_screensaver_clock">Mostra l\'orologio quando inattivo</string>
+    <string name="settings_show_track_number">Numero di traccia</string>
+    <string name="settings_show_technical_info">Info tecniche (bitrate, ecc.)</string>
+    <string name="settings_add_composer_line">Mostra il compositore</string>
+    <string name="settings_band_instead_album">Informazioni per musica classica</string>
+    <string name="settings_add_conductor_line">Mostra orchestra e direttore</string>
+    <string name="settings_use_flat_icons">Icone piatte</string>
+    <string name="settings_top_bar_search">Ricerca nella barra superiore</string>
+    <string name="settings_top_bar_search_global">Ovunque</string>
+    <string name="settings_top_bar_search_my_music">La mia musica</string>
+
+    <string name="settings_launcher_title">Modalità launcher</string>
+    <string name="settings_launcher_summary">Usa Squeezer come schermata Home del dispositivo</string>
+    <string name="settings_launcher_explanation">La modalità launcher permette a Squeezer di diventare la schermata Home del dispositivo.\n\nSostituirà la Home attuale, lo sfondo e ogni altra funzione del launcher.\n\nPer usarla devi prima attivarla qui, poi selezionare Squeezer come app Home nelle impostazioni di sistema del dispositivo.</string>
+    <string name="settings_launcher_open_system_settings">Apri le impostazioni di sistema</string>
+
+    <string name="settings_clear_current_playlist_confirmation">Quando svuoti una playlist</string>
+    <string name="settings_clear_current_playlist_confirmation_off">Non chiedere conferma</string>
+    <string name="settings_clear_current_playlist_confirmation_on">Chiedi conferma</string>
+
+    <string name="settings_username_hint">Nome utente (facoltativo)</string>
+    <string name="settings_password_hint">Password (facoltativa)</string>
+    <string name="settings_use_wake_on_lan">Risveglia il server (Wake-on-LAN)</string>
+    <string name="settings_MAC_label">Indirizzo MAC</string>
+    <string name="settings_invalid_MAC">Indirizzo MAC non valido, formato: 01:23:45:67:89:AB</string>
+    <string name="settings_MAC_help">Esempio: 01:23:45:67:89:AB</string>
+    <string name="settings_MAC_info"><![CDATA[Se compilato, prima di connettersi viene inviato un messaggio Wake-on-LAN (WoL). <p>Wake-on-LAN è uno standard di rete che permette di accendere o risvegliare un computer tramite un messaggio di rete.</p> <p>Richiede che il computer su cui gira Squeezebox Server sia configurato per usare Wake-on-LAN.</p>]]></string>
+
+    <string name="settings_volume_title">Impostazioni del controllo volume</string>
+    <string name="settings_background_volume_title">Controllo volume in background</string>
+    <string name="settings_background_volume_off">Controlla il volume del player solo quando l\'app è visibile.</string>
+    <string name="settings_background_volume_on">Permetti di cambiare il volume del player anche quando l\'app non è visibile.</string>
+    <string name="settings_volume_increment_title">Passi di aumento/diminuzione volume</string>
+    <string name="settings_volume_increment_summary">Imposta i passi per i tasti volume del telefono</string>
+    <string name="settings_fadeinsecs_title">Durata della dissolvenza in entrata</string>
+    <string name="settings_fadeinsecs_summary">Indica quanti secondi deve durare la dissolvenza in entrata alla ripresa della riproduzione. Inserisci 0 per disattivarla.</string>
+
+    <string name="settings_action_on_incoming_call_title">Azione quando ricevi o effettui una chiamata</string>
+    <string name="settings_restore_after_call">Torna automaticamente alla musica dopo una chiamata</string>
+    <string name="call_state_permission_title">Serve il permesso sullo stato delle chiamate</string>
+    <string name="call_state_permission_message">Squeezer può mettere in pausa la musica quando ricevi o effettui una chiamata. Per farlo deve poter essere notificato dei cambi di stato delle chiamate.</string>
+    <string name="request_permission">Richiedi il permesso</string>
+
+    <string name="settings_scrobble_title">Scrobble su Last.fm</string>
+    <string name="settings_scrobble_on">Le informazioni sui brani vengono inviate a Last.fm</string>
+    <string name="settings_scrobble_off">Le informazioni sui brani non vengono inviate a Last.fm</string>
+    <string name="settings_scrobble_noapp">Non è installata nessuna app in grado di fare scrobble</string>
+    <string name="settings_market_not_found">Impossibile avviare Google Play, è installato?</string>
+    <string name="settings_squeezeplayer_title">Avvia SqueezePlayer</string>
+    <string name="settings_squeezeplayer_summary">Attiva questa opzione per assicurarti che SqueezePlayer sia in esecuzione quando usi Squeezer</string>
+    <string name="settings_squeezelite_title">Avvia squeezelite</string>
+    <string name="settings_squeezelite_summary">Se attivo, avvia automaticamente squeezelite all\'avvio di Squeezer.</string>
+
+    <string name="settings_category_display">Aspetto</string>
+    <string name="settings_category_ui">Scorciatoie, ecc.</string>
+    <string name="settings_customize_home_menu_mode">Archivio</string>
+    <string name="settings_customize_home_menu_info">Una pressione prolungata su una voce di menu adatta la sposta nell\'archivio</string>
+    <string name="settings_customize_home_menu_archive">Attivo</string>
+    <string name="settings_customize_home_menu_disabled">Disattivato</string>
+    <string name="settings_customize_home_menu_locked">Disattivato, ma mantieni l\'archivio</string>
+    <string name="settings_swipe_right_action">Azione con scorrimento a destra</string>
+    <string name="settings_swipe_right_action_summary">Cosa fare scorrendo a destra su un elemento riproducibile</string>
+    <string name="settings_swipe_left_action">Azione con scorrimento a sinistra</string>
+    <string name="settings_swipe_left_action_summary">Cosa fare scorrendo a sinistra su un elemento riproducibile</string>
+
+    <string name="menu_item_disconnect">Disconnetti</string>
+    <string name="menu_item_connect">Connetti</string>
+    <string name="menu_item_stop_server">Ferma Lyrion Music Server</string>
+    <string name="menu_item_restart_server">Riavvia Lyrion Music Server</string>
+    <string name="menu_item_poweron">Accendi \"%s\"</string>
+    <string name="menu_item_poweroff">Spegni \"%s\"</string>
+    <string name="menu_item_rename">Rinomina</string>
+    <string name="menu_item_playlist">Playlist</string>
+    <string name="menu_item_playlist_clear">Svuota la playlist</string>
+    <string name="menu_item_playlist_save">Salva come playlist</string>
+    <string name="menu_item_playlist_show_current_song">Vai al brano corrente</string>
+    <string name="menu_item_volume">Cambia volume</string>
+
+    <string name="connecting_text">Connessione in corso</string>
+    <string name="connecting_to_text">Connessione a Lyrion Music Server su %s</string>
+    <string name="connection_failed_text">Connessione fallita.</string>
+    <string name="login_failed_text">Accesso fallito. Verifica che nome utente e password siano corretti.</string>
+    <string name="invalid_url_text">Inserisci un indirizzo valido.</string>
+    <string name="disconnected_text">Disconnesso.</string>
+
+    <string name="save_playlist_title">Salva la playlist</string>
+    <string name="save_playlist_hint">Inserisci il nome della playlist</string>
+    <string name="rename_title">Rinomina %s</string>
+    <string name="sync_title">Sincronizza %s con…</string>
+    <string name="player_group_header">Gruppo: %s</string>
+    <string name="player_group_volume">Volume del gruppo</string>
+    <string name="player_group_volume_on">Regola il volume dei player sincronizzati</string>
+    <string name="player_group_volume_off">Regola il volume solo del player selezionato</string>
+    <string name="menu_item_player_sync">Sincronizza…</string>
+    <string name="menu_item_player_unsync">Nessuna sincronizzazione</string>
+    <string name="no_players_connected">Nessun player connesso.</string>
+    <string name="player_list_changed">I player connessi sono cambiati mentre il menu contestuale era aperto, richiesta ignorata</string>
+
+    <string name="unknown_track">Brano sconosciuto</string>
+    <string name="unknown_album">Album sconosciuto</string>
+    <string name="unknown_artist">Artista sconosciuto</string>
+    <string name="unknown_artistalbum">Artista/album sconosciuto</string>
+    <string name="conductor">Direttore: %s</string>
+    <string name="soloist">Solista: %s</string>
+    <string name="soloists">Solisti: %s</string>
+
+    <string name="settings_category_nowplaying_trackinfo">Informazioni sul brano in riproduzione</string>
+    <string name="settings_show_track_number_title">Numero di traccia</string>
+    <string name="settings_show_track_number_off">Non mostrare il numero di traccia</string>
+    <string name="settings_show_track_number_on">Mostra il numero di traccia sopra il tempo del brano</string>
+    <string name="settings_show_technical_info_title">Info tecniche (bitrate, ecc.)</string>
+    <string name="settings_show_technical_info_off">Non mostrare le info tecniche</string>
+    <string name="settings_show_technical_info_on">Mostra le info tecniche sopra il tempo del brano</string>
+    <string name="settings_add_composer_line_off">Non mostrare il compositore</string>
+    <string name="settings_add_composer_line_on">Mostra il compositore prima del titolo del brano</string>
+    <string name="settings_add_composer_line_title">Informazioni sul compositore</string>
+    <string name="settings_add_conductor_line_off">Non mostrare orchestra e direttore</string>
+    <string name="settings_add_conductor_line_on">Mostra l\'orchestra al posto dell\'album e il direttore su una riga separata</string>
+    <string name="settings_add_conductor_line_title">Informazioni su orchestra e direttore</string>
+    <string name="settings_classical_music_tags_off">Comportamento normale</string>
+    <string name="settings_classical_music_tags_on">Adattato alla musica classica, con indicazione di direttore e solisti</string>
+    <string name="settings_classical_music_tags_title">Aspetto delle informazioni sul brano</string>
+
+    <string name="all_alarms_on_hint">Le singole sveglie possono essere attivate</string>
+    <string name="all_alarms_off_hint">Tutte le sveglie sono disattivate</string>
+    <string name="alarm_music_prompt">Musica per la sveglia</string>
+    <string name="alarms_settings_dialog_title">Impostazioni sveglia %s</string>
+    <string name="alarm_volume_text">Volume della sveglia</string>
+    <string name="alarm_snooze_duration_text">Durata dello snooze</string>
+    <string name="alarm_timeout_text">Durata massima della sveglia</string>
+    <string name="alarm_timeout_hint_text_zero">Le sveglie suonano indefinitamente</string>
+    <string name="alarm_fade_text">Dissolvenza in entrata delle sveglie</string>
+    <string name="alarm_fade_on_text">Le sveglie sfumeranno in entrata</string>
+    <string name="alarm_fade_off_text">Le sveglie non sfumeranno in entrata</string>
+    <plurals name="alarm_snooze_hint_text">
+        <item quantity="one">Le sveglie si sospendono per %d minuto</item>
+        <item quantity="other">Le sveglie si sospendono per %d minuti</item>
+    </plurals>
+    <plurals name="alarm_timeout_hint_text">
+        <item quantity="one">Le sveglie si fermano dopo %d minuto</item>
+        <item quantity="other">Le sveglie si fermano dopo %d minuti</item>
+    </plurals>
+    <plurals name="seconds">
+        <item quantity="one">secondo</item>
+        <item quantity="other">secondi</item>
+    </plurals>
+
+    <string name="tips_title">Suggerimenti</string>
+    <string name="tip_volume">Usa i tasti del volume del dispositivo per cambiare il volume di riproduzione.\n\nProva adesso.</string>
+    <string name="server_error">%1$s ha segnalato un errore: \"%2$s\".</string>
+    <string name="menu_item_power_off">Spegni</string>
+    <string name="menu_item_power_on">Accendi</string>
+    <string name="set_sleep_timer">Imposta il timer di spegnimento</string>
+    <string name="dialog_license">Licenza</string>
+    <string name="copyright_text">Copyright © 2009 Google Inc. Tutti i diritti riservati\nCopyright © 2011 Kurt Aaholst. Tutti i diritti riservati.\nCopyright © 2026 Adriano Frongillo. Tutti i diritti riservati.</string>
+
+    <string name="PLAY_NOW">Riproduci</string>
+    <string name="ADD_TO_END">Aggiungi alla playlist</string>
+    <string name="PLAY_NEXT">Riproduci dopo il brano corrente</string>
+    <string name="DOWNLOAD">Scarica</string>
+    <string name="DOWNLOAD_REQUIRES_WRITE_PERMISSION">Download annullato: manca il permesso per salvare i file scaricati</string>
+    <string name="DONT_ASK_AGAIN">Non chiedermelo più</string>
+    <string name="pref_cat_third_party">Integrazione con servizi esterni</string>
+    <string name="confirm_cancel_downloads">Annullare i download in corso?</string>
+    <string name="settings_category_download">Download</string>
+    <string name="settings_download_enabled">Attiva i download</string>
+    <string name="settings_download_confirmation">Chiedi conferma prima di scaricare</string>
+    <string name="settings_download_use_server_path">Usa percorso e nome file del server</string>
+    <string name="settings_download_path_structure">Struttura delle cartelle</string>
+    <string name="settings_download_filename_structure">Nome del file</string>
+    <string name="download_path_structure_artist_artistalbum">Artista/Artista - Album</string>
+    <string name="download_path_structure_artist_album">Artista/Album</string>
+    <string name="download_path_structure_artistalbum">Artista - Album</string>
+    <string name="download_path_structure_album">Album</string>
+    <string name="download_path_structure_artist">Artista</string>
+    <string name="download_filename_structure_number_title">Numero - Titolo</string>
+    <string name="download_filename_structure_artist_title">Artista - Titolo</string>
+    <string name="download_filename_structure_artist_number_title">Artista - Numero - Titolo</string>
+    <string name="download_filename_structure_albumartist_number_title">Artista (Album) - Numero - Titolo</string>
+    <string name="download_filename_structure_title">Titolo</string>
+    <string name="download_filename_structure_number_dot_artist_title">Numero. Artista - Titolo</string>
+    <string name="NOTIFICATION_DOWNLOAD_MEDIA_SCANNER_ERROR">non è stato possibile aggiungerlo al database multimediale del dispositivo</string>
+    <string name="download_item">Scarica %s</string>
+    <string name="disable_downloads">Disattiva i download</string>
+
+    <string name="menu_item_lyrics">Testo</string>
+    <string name="menu_item_lyrics_unavailable">Testo non disponibile per questo brano.</string>
+
+    <string name="settings_category_dsp">Correzione ambientale (DSP)</string>
+    <string name="settings_category_osmium_sound">Osmium Sound</string>
+    <string name="settings_dsp_title">Correzione ambientale (DSP)</string>
+    <string name="settings_dsp_summary">Attiva il DSP, la correzione ambientale, il crossfeed e gestisci il filtro a convoluzione</string>
+    <string name="settings_dsp_unavailable">Il DSP non è disponibile su questo apparecchio.</string>
+    <string name="settings_dsp_enabled_title">DSP attivo</string>
+    <string name="settings_dsp_room_correction_title">Correzione ambientale</string>
+    <string name="settings_dsp_crossfeed_title">Crossfeed</string>
+    <string name="settings_dsp_filter_title">Filtro a convoluzione</string>
+    <string name="settings_dsp_filter_none">Nessun filtro caricato</string>
+    <string name="settings_dsp_filter_present">%1$s (%2$d KB)</string>
+    <string name="settings_dsp_filter_upload">Carica un filtro…</string>
+    <string name="settings_dsp_filter_remove">Rimuovi il filtro</string>
+    <string name="settings_dsp_filter_remove_confirm">Rimuovere il filtro di correzione ambientale dall\'apparecchio?</string>
+    <string name="settings_dsp_filter_upload_failed">Operazione sul filtro fallita</string>
+    <string name="settings_dsp_status_failed">Impossibile raggiungere il servizio DSP dell\'apparecchio</string>
+    <string name="settings_dsp_balance_title">Bilanciamento</string>
+    <string name="settings_dsp_balance_center">Centrato</string>
+    <string name="settings_dsp_balance_left">Sinistra %1$.1f dB</string>
+    <string name="settings_dsp_balance_right">Destra %1$.1f dB</string>
+    <string name="settings_dsp_presets_title">Preset</string>
+    <string name="settings_dsp_preset_custom">Personalizzato</string>
+    <string name="settings_dsp_preset_name_hint">Nome del preset</string>
+    <string name="settings_dsp_preset_save">Salva come preset</string>
+    <string name="settings_dsp_preset_saved">Preset salvato</string>
+    <string name="settings_dsp_preset_loaded">Preset caricato</string>
+    <string name="settings_dsp_preset_delete_confirm">Eliminare il preset \"%1$s\"?</string>
+    <string name="settings_dsp_preset_failed">Operazione sul preset fallita</string>
+    <string name="settings_dsp_eq_title">EQ parametrico</string>
+    <string name="settings_dsp_eq_add_band">Aggiungi banda</string>
+    <string name="settings_dsp_eq_no_bands">Nessuna banda EQ. Aggiungine una per esaltare o attenuare una frequenza.</string>
+    <string name="settings_dsp_eq_apply">Applica EQ</string>
+    <string name="settings_dsp_eq_freq_hint">Hz</string>
+    <string name="settings_dsp_eq_gain_hint">dB</string>
+    <string name="settings_dsp_eq_q_hint">Q</string>
+    <string name="settings_dsp_band_type_peaking">Picco</string>
+    <string name="settings_dsp_band_type_lowshelf">Shelf bassi</string>
+    <string name="settings_dsp_band_type_highshelf">Shelf alti</string>
+    <string name="settings_dsp_band_type_highpass">Passa-alto</string>
+    <string name="settings_dsp_band_type_lowpass">Passa-basso</string>
+    <string name="settings_dsp_preset_flat">Neutro</string>
+    <string name="settings_dsp_preset_warm">Caldo</string>
+    <string name="settings_dsp_preset_bright">Brillante</string>
+    <string name="settings_dsp_preset_loudness">Loudness (volume basso)</string>
+
+    <string name="settings_backup_title">Backup e ripristino</string>
+    <string name="settings_backup_summary">Esporta o ripristina la configurazione dell\'apparecchio</string>
+    <string name="settings_backup_export_help">Scarica una copia della configurazione dell\'apparecchio (DAC, DSP/EQ, filtro di correzione ambientale, sorgenti musicali, canale aggiornamenti).</string>
+    <string name="settings_backup_export_button">Esporta backup</string>
+    <string name="settings_backup_export_success">Backup esportato.</string>
+    <string name="settings_backup_export_failed">Esportazione del backup fallita</string>
+    <string name="settings_backup_restore_help">Ripristina la configurazione dell\'apparecchio da un file di backup esportato in precedenza.</string>
+    <string name="settings_backup_restore_button">Ripristina da file</string>
+    <string name="settings_backup_restore_confirm_title">Ripristinare la configurazione?</string>
+    <string name="settings_backup_restore_confirm_message">Questa operazione sovrascrive la configurazione attuale dell\'apparecchio e riavvia Squeezelite/CamillaDSP/SMB. Non può essere annullata.</string>
+    <string name="settings_backup_restore_failed">Ripristino fallito</string>
+
+    <string name="settings_audio_output_title">Uscita audio</string>
+    <string name="settings_audio_output_summary">Scegli il DAC / dispositivo di uscita dell\'apparecchio</string>
+    <string name="settings_audio_output_applied">Dispositivo di uscita cambiato.</string>
+    <string name="settings_audio_output_failed">Impossibile cambiare il dispositivo di uscita</string>
+
+    <string name="settings_multiroom_title">Lyrion Music Server</string>
+    <string name="settings_multiroom_summary">Server musicale interno o esterno, la sua versione e il nome di questo player</string>
+    <string name="settings_multiroom_name_title">Nome di questo player</string>
+    <string name="settings_multiroom_name_help">Ogni dispositivo Osmium Sound si chiama «OsmiumSound» di default: se ne raggruppi due non li distingui. Dagli un nome univoco (senza spazi).</string>
+    <string name="settings_multiroom_name_hint">Nome del player</string>
+    <string name="settings_multiroom_name_save">Salva il nome</string>
+    <string name="settings_multiroom_name_saved">Nome del player aggiornato.</string>
+    <string name="settings_multiroom_name_failed">Impossibile aggiornare il nome del player</string>
+    <string name="settings_multiroom_role_title">Server musicale</string>
+    <string name="settings_multiroom_role_help">Questo dispositivo può eseguire il proprio Lyrion Music Server oppure usarne uno già presente sulla rete. Due dispositivi possono essere raggruppati solo se puntano allo stesso server.</string>
+    <string name="settings_multiroom_role_local">Interno (questo dispositivo)</string>
+    <string name="settings_multiroom_role_follow">Esterno (sulla mia rete)</string>
+    <string name="settings_multiroom_role_host_hint">Indirizzo IP, es. 192.168.1.50</string>
+    <string name="settings_multiroom_role_apply">Applica</string>
+    <string name="settings_multiroom_role_scan">Cerca sulla rete</string>
+    <string name="settings_multiroom_role_discovered_label">Dispositivi trovati sulla rete</string>
+    <string name="settings_multiroom_role_none_found">Nessun server Lyrion trovato automaticamente. Inserisci l\'indirizzo IP a mano qui sotto.</string>
+    <string name="settings_multiroom_role_host_required">Inserisci l\'indirizzo IP del dispositivo da seguire.</string>
+    <string name="settings_multiroom_role_saved">Server Lyrion aggiornato.</string>
+    <string name="settings_multiroom_role_failed">Impossibile aggiornare il server Lyrion</string>
+
+    <string name="settings_lyrion_installed">Versione installata: %1$s</string>
+    <string name="settings_lyrion_not_installed">non installato</string>
+    <string name="settings_lyrion_channel">Canale versione</string>
+    <string name="settings_lyrion_channel_release">Release</string>
+    <string name="settings_lyrion_channel_nightly">Nightly stabile</string>
+    <string name="settings_lyrion_channel_dev">Sviluppo</string>
+    <string name="settings_lyrion_channel_warning">Le build nightly e di sviluppo sono pre-release: qualche problema è possibile. Puoi tornare a Release in qualsiasi momento.</string>
+    <string name="settings_lyrion_install">Installa Lyrion</string>
+    <string name="settings_lyrion_update">Installa / aggiorna</string>
+    <string name="settings_lyrion_installing">Installazione di Lyrion…</string>
+    <string name="settings_lyrion_install_failed">Installazione di Lyrion fallita.</string>
+
+    <string name="settings_category_playback">Riproduzione</string>
+    <string name="settings_playback_transition_title">Transizione</string>
+    <string name="settings_playback_transition_duration_title">Durata della transizione (secondi)</string>
+    <string name="settings_playback_replaygain_title">ReplayGain</string>
+    <string name="settings_playback_fixed_volume_title">Volume fisso al 100% (bit-perfect)</string>
+    <string name="settings_playback_fixed_volume_help">Esclude completamente il controllo volume digitale del player: l\'uscita è sempre al 100%. Necessario per la riproduzione bit-perfect; disattivalo per tornare a usare il cursore del volume.</string>
+    <string name="settings_playback_no_player">Nessun player attivo</string>
+
+    <string name="settings_category_lyrion_server">Libreria musicale</string>
+    <string name="settings_lyrion_rescan_title">Scansiona la libreria</string>
+    <string name="settings_lyrion_rescan_summary">Chiedi al server di cercare musica nuova o modificata</string>
+    <string name="settings_lyrion_rescan_started">Scansione della libreria avviata.</string>
+
+    <string name="settings_system_admin_title">Sistema</string>
+    <string name="settings_system_admin_summary">Accesso SSH, info di sistema, riavvio e spegnimento</string>
+    <string name="settings_ssh_title">Accesso SSH</string>
+    <string name="settings_ssh_warning">SSH dà accesso remoto da riga di comando all\'apparecchio, con pieni diritti di amministratore. Attivalo solo se sai a cosa vai incontro.</string>
+    <string name="settings_ssh_unavailable">Il server SSH non è disponibile su questo apparecchio.</string>
+    <string name="settings_ssh_login_is">Collegati con: ssh %1$s@</string>
+    <string name="settings_ssh_no_login_app">Non è ancora stato creato un accesso SSH. Crealo dallo schermo dell\'apparecchio o dal web admin.</string>
+    <string name="settings_display_mode_title">Interfaccia su schermo</string>
+    <string name="settings_display_mode_summary">Disattiva per usarlo senza schermo; attiva per riportare l\'interfaccia touch</string>
+    <string name="settings_display_mode_changed">Modalità schermo cambiata.</string>
+    <string name="settings_ui_resolution_title">Risoluzione interfaccia</string>
+    <string name="settings_ui_resolution_summary">Riduce la risoluzione a cui viene disegnata l\'interfaccia sugli schermi grandi; la GPU la ridimensiona. Riavvia la sessione grafica.</string>
+    <string name="settings_ui_resolution_auto">Auto</string>
+    <string name="settings_ui_resolution_720">720p</string>
+    <string name="settings_ui_resolution_1080">1080p</string>
+    <string name="settings_ui_resolution_native">Nativa</string>
+    <string name="settings_ui_resolution_changed">Risoluzione interfaccia cambiata.</string>
+    <string name="settings_ui_resolution_failed">Impossibile cambiare la risoluzione dell\'interfaccia</string>
+    <string name="settings_vu_meter_title">VU meter animato</string>
+    <string name="settings_system_info_title">Info di sistema</string>
+    <string name="settings_system_info_hostname">Nome host</string>
+    <string name="settings_system_info_ip">Indirizzo IP</string>
+    <string name="settings_system_info_platform">Piattaforma</string>
+    <string name="settings_system_controls_title">Controlli di sistema</string>
+    <string name="settings_reboot_button">Riavvia</string>
+    <string name="settings_reboot_confirm">Riavviare l\'apparecchio adesso? La riproduzione si interromperà.</string>
+    <string name="settings_shutdown_button">Spegni</string>
+    <string name="settings_shutdown_confirm">Spegnere l\'apparecchio adesso? Per riaccenderlo servirà l\'accesso fisico.</string>
+    <string name="settings_system_admin_failed">Richiesta fallita</string>
+
+    <string name="settings_category_updates">Aggiornamenti</string>
+    <string name="settings_updates_title">Aggiornamenti</string>
+    <string name="settings_updates_summary">Controlla e applica gli aggiornamenti di interfaccia, sistema e OS</string>
+    <string name="settings_updates_channel_title">Canale aggiornamenti</string>
+    <string name="settings_updates_channel_prod">Stabile</string>
+    <string name="settings_updates_channel_dev">Sviluppo</string>
+    <string name="settings_updates_check_button">Controlla</string>
+    <string name="settings_updates_apply_button">Aggiorna</string>
+    <string name="settings_updates_up_to_date">Aggiornato</string>
+    <string name="settings_updates_available">Aggiornamento disponibile: %s</string>
+    <string name="settings_updates_applying">Applicazione dell\'aggiornamento…</string>
+    <string name="settings_updates_starting">avvio…</string>
+    <string name="settings_updates_reconnecting">riconnessione…</string>
+    <string name="settings_updates_start_failed">impossibile avviare l\'aggiornamento</string>
+    <string name="settings_updates_update_error">aggiornamento fallito</string>
+    <string name="settings_updates_timeout">tempo scaduto in attesa della conferma dall\'apparecchio; controlla il suo stato quando torna online</string>
+    <string name="settings_updates_all_done">Tutti gli aggiornamenti sono stati applicati</string>
+    <string name="settings_updates_ui">Interfaccia</string>
+    <string name="settings_updates_system">Sistema</string>
+    <string name="settings_updates_os">OS</string>
+    <string name="settings_updates_whats_new">Novità</string>
+    <string name="settings_updates_changelog_title">Novità in %s</string>
+
+    <string name="settings_language_title">Lingua</string>
+    <string name="settings_language_summary">Lingua usata da questa app</string>
+    <string name="settings_language_system">Predefinita di sistema</string>
+
+    <string name="configure_select_player">Scegli il player da controllare</string>
+    <string name="configure_select_button">Azione del widget</string>
+    <string name="remote_unknownDescription">Sconosciuto</string>
+    <string name="remote_openPlayer">Apri il player in Squeezer</string>
+    <string name="remote_openNowPlaying">Apri In riproduzione per il player</string>
+    <string name="remote_openCurrentPlaylist">Apri la playlist corrente del player</string>
+    <string name="remote_powerDescription">Accensione</string>
+    <string name="remote_pausePlayDescription">Pausa/Riproduci</string>
+    <string name="remote_nextDescription">Brano successivo</string>
+    <string name="remote_previousDescription">Brano precedente</string>
+    <string name="remote_preset1Description">Preset 1</string>
+    <string name="remote_preset2Description">Preset 2</string>
+    <string name="remote_preset3Description">Preset 3</string>
+    <string name="remote_preset4Description">Preset 4</string>
+    <string name="remote_preset5Description">Preset 5</string>
+    <string name="remote_preset6Description">Preset 6</string>
+
+    <string name="ARCHIVE_NODE">Archivio</string>
+    <string name="MENU_ITEM_MOVED">Voce di menu spostata nell\'archivio (o rimossa)</string>
+    <string name="MENU_IS_SUBMENU_IN_ARCHIVE">Sei già nell\'archivio!</string>
+    <string name="ARCHIVE_CANNOT_BE_ARCHIVED">L\'archivio non può essere archiviato!</string>
+    <string name="ARCHIVE_NODE_REMOVED">Archivio vuoto rimosso</string>
+    <string name="ITEM_CANNOT_BE_ARCHIVED">Questo elemento non può essere archiviato!</string>
+    <string name="SHORTCUTS">Scorciatoie</string>
+    <string name="CUSTOM_SHORTCUT_REMOVED">Scorciatoia rimossa dal menu principale</string>
+    <string name="ITEM_IS_ALREADY_A_SHORTCUT">È già una scorciatoia!</string>
+    <string name="ITEM_PUT_AS_SHORTCUT_ON_HOME_MENU">Scorciatoia aggiunta al menu principale</string>
+    <string name="ITEM_CAN_NOT_BE_SHORTCUT_OR_ARCHIVED">Non può diventare una scorciatoia né essere archiviato!</string>
+    <string name="settings_custom_shortcut_enabled">Attivo</string>
+    <string name="settings_custom_shortcut_disabled">Disattivato</string>
+    <string name="settings_custom_shortcut_locked">Disattivato, ma mostra le scorciatoie esistenti.</string>
+    <string name="settings_customize_customShortcut_mode">Scorciatoie</string>
+    <string name="settings_customize_customShortcut_info">Una pressione prolungata aggiunge le scorciatoie al menu principale.</string>
+    <string name="ITEM_CANNOT_BE_SHORTCUT">L\'elemento non può diventare una scorciatoia!</string>
+
+    <string name="PLAY_RANDOM_FOLDER">Riproduzione casuale</string>
+    <string name="backward_seconds">Secondi indietro</string>
+    <string name="forward_seconds">Secondi avanti</string>
+    <string name="RANDOM_PLAY_UNABLE">Impossibile avviare la riproduzione casuale</string>
+    <string name="RANDOM_PLAY_STARTED">Riproduzione casuale avviata</string>
+    <string name="continue_playback">Riprendi la riproduzione</string>
+    <string name="volume">Volume</string>
+    <string name="don_t_show_volume_control">Non mostrare il cursore del volume</string>
+    <string name="show_volume_control">Mostra il cursore del volume</string>
+    <string name="fullscreen_mode">Modalità a schermo intero</string>
+</resources>

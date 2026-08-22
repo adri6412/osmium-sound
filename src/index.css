@@ -26,13 +26,13 @@ body {
   background: #0a0a0a;
   color: #ffffff;
   overflow: hidden;
-  width: 1024px;
-  height: 600px;
+  width: 100vw;
+  height: 100vh;
 }
 
 #root {
-  width: 1024px;
-  height: 600px;
+  width: 100%;
+  height: 100%;
 }
 
 /* Custom scrollbar for hi-fi look */
@@ -65,21 +65,12 @@ body {
   }
   
   .hifi-panel {
-    @apply bg-hifi-gray border border-hifi-accent rounded-2xl shadow-hifi backdrop-blur-sm;
+    @apply bg-hifi-gray border border-hifi-accent rounded-2xl shadow-hifi;
   }
   
   .hifi-input {
     @apply bg-hifi-dark border border-hifi-accent rounded-lg px-4 py-3 text-white focus:outline-none focus:border-hifi-gold transition-colors;
   }
-}
-
-/* Blinking caret in the virtual keyboard preview */
-@keyframes kb-blink {
-  0%, 49% { opacity: 1; }
-  50%, 100% { opacity: 0; }
-}
-.kb-caret {
-  animation: kb-blink 1s step-end infinite;
 }
 
 /* Simple Keyboard Styles */
@@ -95,6 +86,15 @@ body {
   border-radius: 8px;
   padding: 8px;
   margin: 0;
+  /* VirtualKeyboard.jsx destroys the SimpleKeyboard instance (emptying this
+     box's content) the instant it's told to close, but the sheet's own
+     framer-motion exit animation keeps it visibly on screen for a few
+     hundred ms after that — without a floor, the sheet's height collapses
+     out from under the still-playing slide-down/fade-out, a real captured
+     layout shift (~193px, DevTools trace: old height 367 -> new 174,
+     bottom edge fixed) on every close. Reserve the populated height so
+     emptying the keyboard can't shrink the sheet mid-exit. */
+  min-height: 190px;
 }
 
 .simple-keyboard {
@@ -240,24 +240,21 @@ body {
   background: linear-gradient(to bottom, transparent, #252525 15%, #252525 85%, transparent);
 }
 
-.artwork-glow {
-  filter: blur(50px);
-  opacity: 0.25;
-  position: absolute;
-  inset: -30px;
-  background-size: cover;
-  background-position: center;
-  pointer-events: none;
-}
-
 /* Long library lists: let Chromium skip layout + paint for off-screen cards/rows
    so scrolling a big album grid stays smooth even with hundreds mounted.
    contain-intrinsic-size is a placeholder so scroll height/position stay stable;
    the `auto` keyword makes the browser remember each item's real size after it
-   has been rendered once. */
+   has been rendered once — but a card never seen before still falls back to
+   this literal length, so it needs to be close to the real height or every
+   first-time-on-screen card causes a layout shift as it snaps to its actual
+   size. A 3-col grid card is the square cover (~1/3 of the panel width) plus
+   an 2-line `p-2` caption (~306px + ~50px here) — 350px, not 280px; that
+   130px gap was producing a fresh shift per newly-scrolled-into-view card,
+   the dominant remaining source of a 0.53 CLS score (93-shift cluster) after
+   fixing the progress bar's width animation. */
 .album-grid > * {
   content-visibility: auto;
-  contain-intrinsic-size: auto 280px;
+  contain-intrinsic-size: auto 350px;
 }
 .lib-list > * {
   content-visibility: auto;
@@ -268,20 +265,6 @@ body {
 .content-scrollbar::-webkit-scrollbar-track { background: transparent; }
 .content-scrollbar::-webkit-scrollbar-thumb { background: #333; border-radius: 2px; }
 .content-scrollbar::-webkit-scrollbar-thumb:hover { background: #444; }
-
-@keyframes bar-bounce {
-  0%, 100% { transform: scaleY(0.35); }
-  50%       { transform: scaleY(1.0); }
-}
-.playing-bar {
-  width: 3px;
-  border-radius: 2px;
-  background: #d4af37;
-  transform-origin: bottom;
-  animation: bar-bounce 0.9s ease-in-out infinite;
-}
-.playing-bar:nth-child(2) { animation-delay: 0.18s; }
-.playing-bar:nth-child(3) { animation-delay: 0.36s; }
 
 input[type=range].vol-slider {
   -webkit-appearance: none;
@@ -303,6 +286,17 @@ input[type=range].vol-slider::-webkit-slider-thumb {
   margin-top: -5px;
   cursor: pointer;
   box-shadow: 0 0 5px rgba(212,175,55,0.5);
+}
+input[type=range].vol-slider:disabled {
+  cursor: not-allowed;
+}
+input[type=range].vol-slider:disabled::-webkit-slider-runnable-track {
+  background: #1a1a1a;
+}
+input[type=range].vol-slider:disabled::-webkit-slider-thumb {
+  background: #555;
+  box-shadow: none;
+  cursor: not-allowed;
 }
 
 /* Graphic EQ — vintage analog console styling (Settings → DSP).

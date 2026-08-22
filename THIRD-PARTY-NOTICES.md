@@ -1,8 +1,11 @@
 # Third-Party Notices
 
-HiFi Media Player includes and/or redistributes the following third-party components under their respective licenses. **The MIT License of this project applies ONLY to the project's own code** (Electron/React application, Python services, distro packaging scripts). All third-party components are subject to their own licenses.
+<!-- Also rendered in-app (Settings → Third-Party Notices) from src/data/thirdPartyNotices.js.
+     Keep that file in sync whenever a dependency is added, removed or changed here. -->
 
-**HiFi Media Player is an independent project and is NOT affiliated with, sponsored by, or endorsed by the Lyrion / LMS-Community project.**
+Osmium Sound includes and/or redistributes the following third-party components under their respective licenses. **The MIT License of this project applies ONLY to the project's own code** (Electron/React application, Python services, distro packaging scripts). All third-party components are subject to their own licenses.
+
+**Osmium Sound is an independent project and is NOT affiliated with, sponsored by, or endorsed by the Lyrion / LMS-Community project.**
 
 ---
 
@@ -32,7 +35,14 @@ A complete source code archive matching this ISO can be provided upon written re
 
 | Component | License | Copyright | Notes |
 |-----------|---------|-----------|-------|
-| **android-squeezer (rebranded)** | Apache-2.0 | Kurt Aaholst, Google Inc. | Rebranded as "HiFi Media Player Companion" for remote control. Upstream: [android-squeezer GitHub](https://github.com/kaaholst/android-squeezer). Full license text in `android-companion/docs/LICENSE.md`. |
+| **android-squeezer (rebranded)** | Apache-2.0 | Kurt Aaholst, Google Inc. | Rebranded as "Osmium Sound Companion" for remote control. Upstream: [android-squeezer GitHub](https://github.com/kaaholst/android-squeezer). Full license text in `android-companion/docs/LICENSE.md`. |
+| **OkHttp** | Apache-2.0 | Square, Inc. | HTTP client. [square/okhttp](https://square.github.io/okhttp/) |
+| **ZXing Android Embedded** | Apache-2.0 | journeyapps / ZXing | QR code pairing scanner. [journeyapps/zxing-android-embedded](https://github.com/journeyapps/zxing-android-embedded) |
+| **CometD Java Client** | Apache-2.0 | CometD project | Comet/Bayeux client used for LMS server push notifications. [cometd/cometd](https://github.com/cometd/cometd) |
+| **SLF4J Android** | MIT | QOS.ch | Logging facade binding. [slf4j.org](https://www.slf4j.org/) |
+| **ckChangeLog** | Apache-2.0 | cketti | In-app changelog display. [cketti/ckChangeLog](https://github.com/cketti/ckChangeLog) |
+| **RecyclerView-FastScroller** | Apache-2.0 | quiph | Fast-scroll UI widget. [quiph/RecyclerView-FastScroller](https://github.com/quiph/RecyclerView-FastScroller) |
+| **AndroidX libraries & Material Components** | Apache-2.0 | Google / AOSP | `core`, `palette`, `webkit`, `appcompat`, `activity`, `preference`, `media`. [developer.android.com/jetpack/androidx](https://developer.android.com/jetpack/androidx) |
 
 ---
 
@@ -41,7 +51,6 @@ A complete source code archive matching this ISO can be provided upon written re
 All npm dependencies bundled in the Electron build are permissive open source licenses:
 
 - **React, react-dom** (MIT)
-- **react-router-dom** (MIT)
 - **react-use-websocket** (MIT)
 - **qrcode.react** (MIT)
 - **framer-motion** (MIT)
@@ -75,8 +84,12 @@ For a complete list, see `requirements.txt`.
 
 ## Disclaimer of Affiliation
 
-HiFi Media Player is an **independent open-source project** developed to provide a touchscreen-friendly interface for the Lyrion Music Server. It is not affiliated with, sponsored by, endorsed by, or officially associated with the Lyrion project, the LMS-Community, or their contributors. The name "Lyrion" is used in a nominative sense only to describe the service that this frontend connects to.
+Osmium Sound is an **independent open-source project** developed to provide a touchscreen-friendly interface for the Lyrion Music Server. It is not affiliated with, sponsored by, endorsed by, or officially associated with the Lyrion project, the LMS-Community, or their contributors. The name "Lyrion" is used in a nominative sense only to describe the service that this frontend connects to.
 
 ---
 
 **For license compliance questions or to request source code, please contact:** `info@adrianofrongillo.ovh`
+
+---
+
+**Last reviewed:** 2026-08-16, against `package.json`, `requirements.txt` and `android-companion/HiFiMediaPlayer/build.gradle`.

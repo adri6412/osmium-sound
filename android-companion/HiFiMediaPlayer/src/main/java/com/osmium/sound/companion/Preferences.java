@@ -205,6 +205,14 @@ public final class Preferences {
     // Preferred UI theme.
     static final String KEY_ON_THEME_SELECT_ACTION = "squeezer.theme";
 
+    /**
+     * In-app UI language as a BCP-47 tag ("it", "en") or empty to follow the
+     * system. Written by the picker in SettingsFragment; the value that
+     * actually applies lives in AppCompatDelegate.getApplicationLocales(),
+     * which is also where it is read back from.
+     */
+    static final String KEY_LANGUAGE = "squeezer.language";
+
     // Screensaver
     public static final String KEY_SCREENSAVER = "squeezer.screensaver";
 
@@ -550,6 +558,27 @@ public final class Preferences {
                 .putString(KEY_APPLIANCE_API_ADDRESS, apiAddress)
                 .putString(KEY_APPLIANCE_PAIR_TOKEN, pairToken)
                 .apply();
+    }
+
+    /**
+     * Wipes the appliance pairing and the LMS server address, so
+     * {@link #hasServerConfig()} goes back to false and the pairing wizard
+     * runs again from the start. Called when the appliance confirms (401/403)
+     * that a previously-stored pairing token is no longer valid — e.g. the
+     * owner revoked it from Settings -> Phone control -> revoke — since
+     * otherwise the app would keep controlling LMS anyway (LMS itself isn't
+     * gated by the pairing token).
+     */
+    public void forgetPairing() {
+        SharedPreferences.Editor editor = sharedPreferences.edit()
+                .remove(KEY_APPLIANCE_API_ADDRESS)
+                .remove(KEY_APPLIANCE_PAIR_TOKEN)
+                .remove(KEY_SERVER_ADDRESS);
+        String bssId = getBssId();
+        if (bssId != null) {
+            editor.remove(prefixed(bssId, KEY_SERVER_ADDRESS));
+        }
+        editor.apply();
     }
 
     public PlayableItemAction getSwipeRightAction() {

@@ -7,7 +7,8 @@ name: Build HiFi Player ISO (manual)
 #     • tag         : e.g. v1.0.5  (created on the current commit if missing)
 #     • make_release: attach the ISO to a Release for that tag (default: true)
 #     • lyrion_url  : override the Lyrion .deb URL (optional)
-#     • suite       : Debian suite (default: bookworm)
+#     • suite       : Debian suite (default: trixie — labwc/xwayland non
+#                     esistono su bookworm, vedi build-distro.sh)
 
 on:
   workflow_dispatch:
@@ -29,7 +30,7 @@ on:
         description: 'Debian suite'
         required: false
         type: string
-        default: 'bookworm'
+        default: 'trixie'
 
 permissions:
   contents: write
@@ -63,7 +64,7 @@ jobs:
             cpio gzip squashfs-tools dosfstools mtools isolinux syslinux-common
 
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
@@ -83,6 +84,37 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Build web-admin (Vue) — injected into the ISO by build-distro.sh
+        # build-distro.sh itself refuses to inject a missing/empty dist, but
+        # fail fast here too rather than burning ~15min of live-build first.
+        run: |
+          if [ -f admin-webui/package.json ]; then
+            (cd admin-webui && npm ci && npm run build)
+          else
+            echo "::error::admin-webui/package.json missing — cannot build the web-admin UI" >&2
+            exit 1
+          fi
+
+      - name: Bake the beta-agent bootstrap secret into the ISO
+        env:
+          HIFI_BETA_BOOTSTRAP_SECRET: ${{ secrets.HIFI_BETA_BOOTSTRAP_SECRET }}
+        run: |
+          set -euo pipefail
+          # includes.chroot is copied into the image verbatim by
+          # build-distro.sh, so without this the ISO ships the placeholder
+          # secret that lives in the public source and every freshly-installed
+          # appliance gets HTTP 401 from /api/v1/register until a system OTA
+          # happens to replace the file. Same substitution, same secret, as
+          # the "Package system-components OTA bundle" step in build-ui-ota.yml.
+          AGENT=distro/config/includes.chroot/usr/local/sbin/hifi-beta-agent.py
+          if [ -z "$HIFI_BETA_BOOTSTRAP_SECRET" ]; then
+            echo "::warning::HIFI_BETA_BOOTSTRAP_SECRET not set — the ISO ships the placeholder secret and installed units will not register with the telemetry server."
+            exit 0
+          fi
+          sed -i "s|REPLACE_ME_BOOTSTRAP_SECRET|$HIFI_BETA_BOOTSTRAP_SECRET|" "$AGENT"
+          grep -q REPLACE_ME_BOOTSTRAP_SECRET "$AGENT" \
+            && { echo "::error::bootstrap secret substitution did not take"; exit 1; } || true
+
       - name: Build installer ISO (live-build, as root)
         run: |
           set -euo pipefail
@@ -99,16 +131,45 @@ jobs:
           INPUT_SUITE: ${{ inputs.suite }}
           INPUT_LYRION_URL: ${{ inputs.lyrion_url }}
 
-      - name: Locate + checksum the ISO
+      - name: Locate + checksum + sign the ISO
         id: iso
+        env:
+          OTA_SIGNING_KEY: ${{ secrets.OTA_SIGNING_KEY }}
         run: |
           set -euo pipefail
           ISO="hifi-player-${{ inputs.tag }}.iso"
           [ -f "$ISO" ] || ISO="$(ls -1 *.iso 2>/dev/null | head -n1)"
           [ -n "$ISO" ] && [ -f "$ISO" ] || { echo "No ISO produced"; exit 1; }
           sha256sum "$ISO" > "${ISO}.sha256"
+          # Sign the sha256 sidecar with the same offline Ed25519 key used for
+          # OS OTA bundles (see build-ui-ota.yml). Osmium Flasher verifies this
+          # signature before it will write anything, and refuses an unsigned
+          # image outright -- so unlike the OTA job, a missing key is fatal here
+          # rather than a warning.
+          if [ -z "$OTA_SIGNING_KEY" ]; then
+            echo "::error::OTA_SIGNING_KEY is not set -- the ISO would be unusable by Osmium Flasher."
+            exit 1
+          fi
+          printf '%s' "$OTA_SIGNING_KEY" > /tmp/ota-key.pem
+          openssl pkeyutl -sign -inkey /tmp/ota-key.pem -rawin \
+            -in "${ISO}.sha256" -out "${ISO}.sha256.sig"
+          rm -f /tmp/ota-key.pem
+          openssl pkeyutl -verify -pubin -inkey distro/ota-keys/ota-pubkey.pem \
+            -rawin -in "${ISO}.sha256" -sigfile "${ISO}.sha256.sig" \
+            || { echo "::error::the signature does not verify against the shipped public key"; exit 1; }
           echo "iso=$ISO" >> "$GITHUB_OUTPUT"
-          ls -lh "$ISO" "${ISO}.sha256"
+          ls -lh "$ISO" "${ISO}.sha256" "${ISO}.sha256.sig"
+
+      # latest.json is what Osmium Flasher polls to discover the current image.
+      # It is NOT deployed anywhere by this job: upload it to
+      # file.osmiumsound.it by hand, in the same pass as the ISO it describes.
+      - name: Build the flasher manifest (latest.json)
+        run: |
+          set -euo pipefail
+          python3 .github/scripts/make-iso-manifest.py \
+            "${{ inputs.tag }}" "${{ steps.iso.outputs.iso }}"
+          cp manifest-out/latest.json .
+          cat latest.json
 
       - name: Upload ISO artifact
         uses: actions/upload-artifact@v4
@@ -117,6 +178,8 @@ jobs:
           path: |
             ${{ steps.iso.outputs.iso }}
             ${{ steps.iso.outputs.iso }}.sha256
+            ${{ steps.iso.outputs.iso }}.sha256.sig
+            latest.json
           retention-days: 14
 
       - name: Create tag if missing
@@ -141,8 +204,17 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ inputs.tag }}
-          name: HiFi Player ${{ inputs.tag }}
+          # No `name:` on purpose. A release is named after its tag and nothing
+          # else — "v2.5.21-dev.37", never "HiFi Player v2.5.21-dev.37". This
+          # job usually attaches an ISO to a release the tag push already
+          # created, but when it runs first it creates the release itself, and
+          # a name here would stick.
           fail_on_unmatched_files: true
+          # Same rule as build-ui-ota.yml: a hyphenated tag (dev/alpha build)
+          # is a prerelease, so it never becomes /releases/latest and can't
+          # be mistaken for a stable prod release by the OTA fallback path.
+          prerelease: ${{ contains(inputs.tag, '-') }}
           files: |
             ${{ steps.iso.outputs.iso }}
             ${{ steps.iso.outputs.iso }}.sha256
+            ${{ steps.iso.outputs.iso }}.sha256.sig

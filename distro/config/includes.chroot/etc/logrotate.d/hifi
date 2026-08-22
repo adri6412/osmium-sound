@@ -1,0 +1,21 @@
+# Rotates the plain-appended logs written by the shell helper hifi-log.sh
+# (distro/config/includes.chroot/usr/local/sbin/hifi-log.sh) and the persisted
+# hifi-os-update.sh apply.log. Listed explicitly rather than /var/log/hifi/*.log
+# — the Python daemons' logs in the same directory (webui.log, api.log, ...)
+# already self-rotate via logging.handlers.RotatingFileHandler and must NOT
+# also be truncated from underneath by logrotate.
+/var/log/hifi/hifi-factory-reset.log
+/var/log/hifi/hifi-format-disk.log
+/var/log/hifi/hifi-lyrion-update.log
+/var/log/hifi/hifi-ota-update.log
+/var/log/hifi/hifi-system-update.log
+/var/log/hifi/os-update.log
+{
+    daily
+    rotate 5
+    maxsize 2M
+    compress
+    missingok
+    notifempty
+    copytruncate
+}

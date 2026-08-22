@@ -21,16 +21,19 @@ import android.content.Context;
 import android.content.Intent;
 import android.text.Editable;
 import android.util.AttributeSet;
+import android.view.View;
 import android.widget.AutoCompleteTextView;
 import android.widget.EditText;
 import android.widget.LinearLayout;
+import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.fragment.app.FragmentManager;
 
+import com.google.android.material.button.MaterialButton;
+import com.google.android.material.card.MaterialCardView;
 import com.google.android.material.checkbox.MaterialCheckBox;
-import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 import com.google.android.material.textfield.TextInputLayout;
 import com.google.zxing.integration.android.IntentIntegrator;
 import com.google.zxing.integration.android.IntentResult;
@@ -44,8 +47,9 @@ import com.osmium.sound.companion.Util;
 import com.osmium.sound.companion.util.AfterTextChangedLister;
 
 /**
- * Lets the user pair with an appliance by scanning its "Phone control" QR code
- * and optionally enter LMS authentication (username/password/wake-on-LAN).
+ * Walks the user through pairing with an appliance as a 3-step wizard:
+ * scan the "Phone control" QR code, confirm the pairing it resolved to, then
+ * (optionally) fill in LMS credentials/Wake-on-LAN before connecting.
  * <p>
  * The server address can ONLY be set by scanning the QR code — there is
  * deliberately no manual host:port entry or network-discovery fallback.
@@ -55,8 +59,28 @@ import com.osmium.sound.companion.util.AfterTextChangedLister;
  * (see sources_server.py's /api/pair/token and Preferences#setAppliancePairing).
  */
 public class ServerAddressView extends LinearLayout {
+
+    /** The three screens of the pairing wizard, shown one at a time. */
+    public enum Step { SCAN, CONFIRM, READY }
+
+    /** Notified whenever the wizard advances/returns to a different step. */
+    public interface StepListener {
+        void onStepChanged(Step step);
+    }
+
     private Preferences preferences;
     private Preferences.ServerAddress serverAddress;
+
+    private TextView stepIndicator;
+    private View scanGroup;
+    private MaterialButton scanButton;
+    private MaterialCardView confirmGroup;
+    private TextView confirmMessage;
+    private MaterialButton confirmPairButton;
+    private MaterialButton confirmRescanButton;
+    private View readyGroup;
+    private MaterialButton advancedOptionsToggle;
+    private View advancedOptionsGroup;
 
     private AutoCompleteTextView serverAddressEditText;
     private EditText userNameEditText;
@@ -65,6 +89,12 @@ public class ServerAddressView extends LinearLayout {
     private TextInputLayout macLayout;
     private boolean macDirty;
     private EditText macEditText;
+
+    private Step currentStep;
+    private StepListener stepListener;
+    private String pendingHostPort;
+    private String pendingApi;
+    private String pendingToken;
 
     public ServerAddressView(final Context context) {
         super(context);
@@ -79,6 +109,22 @@ public class ServerAddressView extends LinearLayout {
     private void initialize() {
         inflate(getContext(), R.layout.server_address_view, this);
         if (!isInEditMode()) {
+            stepIndicator = findViewById(R.id.wizard_step_indicator);
+            scanGroup = findViewById(R.id.step_scan);
+            scanButton = findViewById(R.id.scan_button);
+            scanButton.setOnClickListener(view -> startQrScan());
+            confirmGroup = findViewById(R.id.step_confirm);
+            confirmMessage = findViewById(R.id.confirm_message);
+            confirmPairButton = findViewById(R.id.confirm_pair_button);
+            confirmPairButton.setOnClickListener(view -> confirmPendingPairing());
+            confirmRescanButton = findViewById(R.id.confirm_rescan_button);
+            confirmRescanButton.setOnClickListener(view -> startQrScan());
+            readyGroup = findViewById(R.id.step_ready);
+            advancedOptionsToggle = findViewById(R.id.advanced_options_toggle);
+            advancedOptionsGroup = findViewById(R.id.advanced_options_group);
+            advancedOptionsToggle.setOnClickListener(view -> setAdvancedOptionsExpanded(
+                    advancedOptionsGroup.getVisibility() != VISIBLE));
+
             HiFiMediaPlayer.getPreferences(prefs -> {
                 preferences = prefs;
                 serverAddress = preferences.getServerAddress();
@@ -90,7 +136,7 @@ public class ServerAddressView extends LinearLayout {
                 }
 
                 serverAddressEditText = findViewById(R.id.server_address);
-                // Read-only: the only way to set the server address is scanning the
+                // Read-only: the only way to (re)set the server address is scanning the
                 // appliance's pairing QR (see class doc). Tapping the field itself
                 // also starts a scan, same as the end icon.
                 serverAddressEditText.setFocusable(false);
@@ -128,6 +174,7 @@ public class ServerAddressView extends LinearLayout {
                 });
 
                 setServerAddress(serverAddress.localAddress());
+                setStep(serverAddress.localAddress() != null ? Step.READY : Step.SCAN);
             });
         }
     }
@@ -156,6 +203,47 @@ public class ServerAddressView extends LinearLayout {
         return true;
     }
 
+    /** Registers a listener for step changes, and immediately reports the current step if known. */
+    public void setStepListener(StepListener listener) {
+        this.stepListener = listener;
+        if (listener != null && currentStep != null) {
+            listener.onStepChanged(currentStep);
+        }
+    }
+
+    public Step getStep() {
+        return currentStep;
+    }
+
+    /** Expands the collapsed username/password/Wake-on-LAN section, e.g. after a login failure. */
+    public void expandAdvancedOptions() {
+        setAdvancedOptionsExpanded(true);
+    }
+
+    private void setAdvancedOptionsExpanded(boolean expanded) {
+        advancedOptionsGroup.setVisibility(expanded ? VISIBLE : GONE);
+    }
+
+    private void setStep(Step step) {
+        currentStep = step;
+        scanGroup.setVisibility(step == Step.SCAN ? VISIBLE : GONE);
+        confirmGroup.setVisibility(step == Step.CONFIRM ? VISIBLE : GONE);
+        readyGroup.setVisibility(step == Step.READY ? VISIBLE : GONE);
+
+        int titleRes = switch (step) {
+            case SCAN -> R.string.wizard_step_title_scan;
+            case CONFIRM -> R.string.wizard_step_title_confirm;
+            case READY -> R.string.wizard_step_title_ready;
+        };
+        int stepNumber = step.ordinal() + 1;
+        stepIndicator.setText(getResources().getString(R.string.wizard_step_label, stepNumber, Step.values().length,
+                getResources().getString(titleRes)));
+
+        if (stepListener != null) {
+            stepListener.onStepChanged(step);
+        }
+    }
+
     /**
      * Launches the ZXing scanner activity to read the QR code shown on the appliance
      * (Settings -> Phone control). Camera permission is requested by the scanner
@@ -178,8 +266,8 @@ public class ServerAddressView extends LinearLayout {
 
     /**
      * Forwards the host Activity's onActivityResult here so a completed QR scan can
-     * fill in the server address field. Returns true if the result was consumed
-     * (i.e. it was a scan result at all, scanned or cancelled).
+     * advance the wizard. Returns true if the result was consumed (i.e. it was a scan
+     * result at all, scanned or cancelled).
      */
     public boolean handleActivityResult(int requestCode, int resultCode, Intent data) {
         IntentResult result = IntentIntegrator.parseActivityResult(requestCode, resultCode, data);
@@ -188,7 +276,7 @@ public class ServerAddressView extends LinearLayout {
         }
         String contents = result.getContents();
         if (contents == null) {
-            return true; // user cancelled the scan
+            return true; // user cancelled the scan, stay on the current step
         }
 
         String lms = contents;
@@ -207,9 +295,14 @@ public class ServerAddressView extends LinearLayout {
             return true;
         }
         if (api != null && token != null && preferences != null) {
-            confirmAndApplyPairing(hostPort, api, token);
+            pendingHostPort = hostPort;
+            pendingApi = api;
+            pendingToken = token;
+            confirmMessage.setText(getResources().getString(R.string.settings_pair_confirm_message, api));
+            setStep(Step.CONFIRM);
         } else {
             setServerAddress(hostPort);
+            setStep(Step.READY);
         }
         return true;
     }
@@ -222,20 +315,10 @@ public class ServerAddressView extends LinearLayout {
      * resolved host and require explicit confirmation before persisting it,
      * rather than pairing silently the instant a QR is scanned.
      */
-    private void confirmAndApplyPairing(String hostPort, String api, String token) {
-        if (!(getContext() instanceof Activity)) {
-            setServerAddress(hostPort);
-            return;
-        }
-        new MaterialAlertDialogBuilder(getContext())
-                .setTitle(R.string.settings_pair_confirm_title)
-                .setMessage(getResources().getString(R.string.settings_pair_confirm_message, api))
-                .setPositiveButton(R.string.settings_pair_confirm_button, (dialog, which) -> {
-                    preferences.setAppliancePairing(api, token);
-                    setServerAddress(hostPort);
-                })
-                .setNegativeButton(android.R.string.cancel, null)
-                .show();
+    private void confirmPendingPairing() {
+        preferences.setAppliancePairing(pendingApi, pendingToken);
+        setServerAddress(pendingHostPort);
+        setStep(Step.READY);
     }
 
     /**
@@ -300,5 +383,4 @@ public class ServerAddressView extends LinearLayout {
         macLayout.setVisibility(serverAddress.wakeOnLan ? VISIBLE : GONE);
         macEditText.setText(Util.formatMac(serverAddress.mac));
     }
-
 }

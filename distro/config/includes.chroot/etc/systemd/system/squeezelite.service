@@ -21,5 +21,13 @@ ExecStart=/usr/bin/squeezelite $ARGS
 Restart=always
 RestartSec=5
 
+# Highest scheduling priority on the box: squeezelite feeds the DAC directly,
+# so an underrun is audible in a way a dropped UI frame never is. CPU niceness
+# (not realtime/RR) to avoid starving other processes if it ever spins; realtime
+# I/O class so buffer reads never queue behind UI/log/update disk traffic.
+Nice=-10
+IOSchedulingClass=realtime
+IOSchedulingPriority=0
+
 [Install]
 WantedBy=multi-user.target

@@ -28,7 +28,12 @@
 set -euo pipefail
 
 # ─────────────────────────── Configurable ───────────────────────────
-DEBIAN_SUITE="${DEBIAN_SUITE:-bookworm}"
+# trixie, non bookworm: la sessione kiosk gira su labwc (vedi
+# os-update/files/kiosk-wayland-session) e labwc, wlr-randr e xwayland
+# esistono solo da Debian 13 in poi. Con bookworm la lista pacchetti non
+# si risolve e l'immagine, se pure venisse fuori, si accenderebbe sul
+# greeter: l'autologin punta a una sessione il cui compositor non c'è.
+DEBIAN_SUITE="${DEBIAN_SUITE:-trixie}"
 ARCH="${ARCH:-amd64}"
 ISO_NAME="${ISO_NAME:-hifi-player-installer.iso}"
 LYRION_DEB_URL="${LYRION_DEB_URL:-https://downloads.lms-community.org/LyrionMusicServer_v9.1.0/lyrionmusicserver_9.1.0_all.deb}"
@@ -66,6 +71,12 @@ case "$STAGE" in
     *) die "Invalid --stage '$STAGE' (use: all | chroot | binary)." ;;
 esac
 
+# Stessa ragione, ma per chi passa --suite a mano: meglio fermarsi qui che
+# scoprirlo a immagine masterizzata.
+if [ "$DEBIAN_SUITE" = "bookworm" ] && grep -qx 'labwc' "$CONFIG/package-lists/hifi.list.chroot" 2>/dev/null; then
+    die "--suite bookworm non ha labwc/wlr-randr/xwayland: la sessione kiosk non partirebbe. Usa trixie."
+fi
+
 # ─────────────────────────── Pre-flight ─────────────────────────────
 [ "$(id -u)" -eq 0 ] || die "Please run as root (sudo)."
 
@@ -99,6 +110,9 @@ if [ "$STAGE" != "binary" ]; then
     [ -f "$REPO_ROOT/api_server.py" ]      || die "Missing $REPO_ROOT/api_server.py"
     [ -f "$REPO_ROOT/vu_meter_daemon.py" ] || die "Missing $REPO_ROOT/vu_meter_daemon.py"
     [ -f "$REPO_ROOT/sources_server.py" ]  || die "Missing $REPO_ROOT/sources_server.py"
+    [ -f "$REPO_ROOT/hifi_logging.py" ]    || die "Missing $REPO_ROOT/hifi_logging.py"
+    [ -f "$REPO_ROOT/hifi_backup.py" ]     || die "Missing $REPO_ROOT/hifi_backup.py"
+    [ -f "$REPO_ROOT/hifi_i18n.py" ]       || die "Missing $REPO_ROOT/hifi_i18n.py"
 fi
 
 # ─────────────────────────── Normalise text files ──────────────────
@@ -145,6 +159,49 @@ mkdir -p "$XSESSION_DEST_DIR"
 cp -f "$XSESSION_SRC" "$XSESSION_DEST_DIR/.xsession"
 sed -i 's/\r$//' "$XSESSION_DEST_DIR/.xsession"
 chmod +x "$XSESSION_DEST_DIR/.xsession"
+
+log "Injecting canonical kiosk Wayland session → includes.chroot (labwc)"
+# Stessa regola della .xsession qui sopra: i file canonici sono quelli che
+# installa anche l'OTA (distro/os-update/files/kiosk-wayland-*), così immagine e
+# aggiornamento non possono divergere. La sessione X11 resta comunque installata
+# come via di rollback (basta rimettere user-session=hifi-kiosk in
+# etc/lightdm/lightdm.conf.d/99-hifi-autologin.conf).
+WL_SESSION_SRC="$SCRIPT_DIR/os-update/files/kiosk-wayland-session"
+WL_LAUNCH_SRC="$SCRIPT_DIR/os-update/files/kiosk-wayland-launch"
+WL_DESKTOP_SRC="$SCRIPT_DIR/os-update/files/hifi-kiosk-wayland.desktop"
+WL_TMPFILES_SRC="$SCRIPT_DIR/os-update/files/hifi-player-tmpfiles.conf"
+for f in "$WL_SESSION_SRC" "$WL_LAUNCH_SRC" "$WL_DESKTOP_SRC" "$WL_TMPFILES_SRC"; do
+    [ -f "$f" ] || die "Missing canonical Wayland kiosk file at $f"
+done
+mkdir -p "$CONFIG/includes.chroot/usr/local/bin" \
+         "$CONFIG/includes.chroot/usr/share/wayland-sessions" \
+         "$CONFIG/includes.chroot/usr/lib/tmpfiles.d"
+cp -f "$WL_SESSION_SRC"  "$CONFIG/includes.chroot/usr/local/bin/hifi-kiosk-wayland"
+cp -f "$WL_LAUNCH_SRC"   "$CONFIG/includes.chroot/usr/local/bin/hifi-kiosk-launch"
+sed -i 's/\r$//' "$CONFIG/includes.chroot/usr/local/bin/hifi-kiosk-wayland" \
+                 "$CONFIG/includes.chroot/usr/local/bin/hifi-kiosk-launch"
+chmod +x "$CONFIG/includes.chroot/usr/local/bin/hifi-kiosk-wayland" \
+         "$CONFIG/includes.chroot/usr/local/bin/hifi-kiosk-launch"
+cp -f "$WL_DESKTOP_SRC"  "$CONFIG/includes.chroot/usr/share/wayland-sessions/hifi-kiosk-wayland.desktop"
+cp -f "$WL_TMPFILES_SRC" "$CONFIG/includes.chroot/usr/lib/tmpfiles.d/hifi-player.conf"
+
+log "Injecting kiosk session selector (Wayland vs X11) → includes.chroot"
+# Wayland vale solo dove c'è una GPU vera: in una VM (VMware, VirtualBox,
+# QEMU) wlroots rifiuta il renderer GLES2 in software e il kiosk resta a
+# schermo nero fino a far ricomparire il greeter. Questo selettore gira a ogni
+# avvio, prima di lightdm, e decide il protocollo — stesso file canonico che
+# installa l'OTA (os-update/apply.d/0050-kiosk-session-select.sh).
+SEL_SRC="$SCRIPT_DIR/os-update/files/kiosk-session-select"
+SEL_UNIT_SRC="$SCRIPT_DIR/os-update/files/hifi-kiosk-session.service"
+for f in "$SEL_SRC" "$SEL_UNIT_SRC"; do
+    [ -f "$f" ] || die "Missing canonical kiosk session selector at $f"
+done
+mkdir -p "$CONFIG/includes.chroot/usr/local/sbin" \
+         "$CONFIG/includes.chroot/etc/systemd/system"
+cp -f "$SEL_SRC" "$CONFIG/includes.chroot/usr/local/sbin/hifi-kiosk-session.sh"
+sed -i 's/\r$//' "$CONFIG/includes.chroot/usr/local/sbin/hifi-kiosk-session.sh"
+chmod +x "$CONFIG/includes.chroot/usr/local/sbin/hifi-kiosk-session.sh"
+cp -f "$SEL_UNIT_SRC" "$CONFIG/includes.chroot/etc/systemd/system/hifi-kiosk-session.service"
 
 log "Injecting EFI-boot-entry-fix → kernel postinst.d hook + apt Post-Invoke hook"
 # Single source of truth: the SAME script the OS-update OTA installs
@@ -194,8 +251,27 @@ mkdir -p "$BIN_DEST"
 cp -f "$REPO_ROOT/api_server.py"      "$BIN_DEST/"
 cp -f "$REPO_ROOT/vu_meter_daemon.py" "$BIN_DEST/"
 cp -f "$REPO_ROOT/sources_server.py"  "$BIN_DEST/"
-sed -i 's/\r$//' "$BIN_DEST/api_server.py" "$BIN_DEST/vu_meter_daemon.py" "$BIN_DEST/sources_server.py"
-chmod +x "$BIN_DEST/api_server.py" "$BIN_DEST/vu_meter_daemon.py" "$BIN_DEST/sources_server.py"
+cp -f "$REPO_ROOT/webui_server.py"    "$BIN_DEST/"
+cp -f "$REPO_ROOT/hifi_logging.py"    "$BIN_DEST/"
+cp -f "$REPO_ROOT/hifi_backup.py"     "$BIN_DEST/"
+cp -f "$REPO_ROOT/hifi_i18n.py"       "$BIN_DEST/"
+sed -i 's/\r$//' "$BIN_DEST/api_server.py" "$BIN_DEST/vu_meter_daemon.py" "$BIN_DEST/sources_server.py" "$BIN_DEST/webui_server.py" "$BIN_DEST/hifi_logging.py" "$BIN_DEST/hifi_backup.py" "$BIN_DEST/hifi_i18n.py"
+chmod +x "$BIN_DEST/api_server.py" "$BIN_DEST/vu_meter_daemon.py" "$BIN_DEST/sources_server.py" "$BIN_DEST/webui_server.py"
+
+# Web-admin Vue build (built by CI before this script runs). REQUIRED: a
+# missing/empty dist here means every device installed from this ISO gets the
+# daemon's built-in fallback page instead of the real web-admin, silently and
+# with nothing in the ISO itself to show for it. Fail the build instead of
+# shipping that — build it first with (cd admin-webui && npm ci && npm run build).
+WEBUI_DIST_SRC="$REPO_ROOT/admin-webui/dist"
+WEBUI_DIST_DEST="$CONFIG/includes.chroot/opt/hifi-webui/dist"
+if [ -f "$WEBUI_DIST_SRC/index.html" ]; then
+    mkdir -p "$WEBUI_DIST_DEST"
+    cp -a "$WEBUI_DIST_SRC/." "$WEBUI_DIST_DEST/"
+    log "Injected web-admin build → /opt/hifi-webui/dist"
+else
+    die "admin-webui/dist missing or empty (no index.html) — build it first: (cd admin-webui && npm ci && npm run build). Refusing to ship an ISO without the web-admin UI."
+fi
 
 log "Injecting helper scripts → includes.chroot/usr/local/sbin"
 SBIN_DEST="$CONFIG/includes.chroot/usr/local/sbin"
@@ -205,6 +281,13 @@ mkdir -p "$SBIN_DEST"
 # already in place and already CRLF-normalized by the earlier repo-wide sed
 # pass; only the exec bit needs setting.
 chmod +x "$SBIN_DEST/hifi-format-disk.sh"
+chmod +x "$SBIN_DEST/hifi-display-mode.sh"
+chmod +x "$SBIN_DEST/hifi-ui-refresh.sh"
+chmod +x "$SBIN_DEST/hifi-factory-reset.sh"
+chmod +x "$SBIN_DEST/hifi-quiesce-audio-shutdown.sh"
+chmod +x "$SBIN_DEST/hifi-capture-playback-state.py"
+chmod +x "$SBIN_DEST/hifi-grub-install.sh"
+chmod +x "$SBIN_DEST/hifi-disk-install.sh"
 
 # Seed the installed system-components version (baseline for OTA comparison),
 # matching the UI version so a fresh image reports a real baseline.
@@ -216,6 +299,14 @@ log "Seeded SYSTEM_VERSION = $APP_VERSION"
 # Seed the OS OTA baseline version (so hifi-os-* comparisons have a baseline).
 printf '%s\n' "$APP_VERSION" > "$SYS_VERSION_DEST/OS_VERSION"
 log "Seeded OS_VERSION = $APP_VERSION"
+
+# Seed the first-boot provisioning marker. This is the ONLY place (besides
+# hifi-factory-reset.sh) that creates it: a freshly installed unit boots into
+# the hotspot/captive setup flow (webui_server.py picks it up). It is consumed
+# and removed at finalize, and an OS-OTA migration must NEVER recreate it (that
+# would drop configured fleet units back into setup mode).
+printf 'pending\n' > "$SYS_VERSION_DEST/provisioning-pending"
+log "Seeded provisioning-pending marker (fresh-install setup flow)"
 
 # Bake the OTA public key so the device can verify signed OS bundles. Without
 # it, the OS updater safely refuses every update. Generate it once with
@@ -327,31 +418,36 @@ fi
 # don't disturb the chroot we're about to reuse.
 if [ "$STAGE" != "binary" ]; then
     log "Configuring live-build (suite=$DEBIAN_SUITE arch=$ARCH)…"
-    # IMPORTANT: keep --debian-installer LIVE. The whole appliance (Electron
-    # app, python daemons, Lyrion, helper scripts, the hifi user/services) is
-    # assembled in the live filesystem (squashfs), and the install works by
-    # CLONING that filesystem onto the target (preseed: live-installer/enable=
-    # true). With --debian-installer=true there is NO live squashfs to clone,
-    # so the target gets a plain Debian without our files → the preseed
-    # late_command (hifi-finalize-install.sh) then fails with "file not found".
+    # No debian-installer at all: this is a live-only ISO. Both boot menu
+    # entries ("Install Osmium Sound" and "Try Osmium Sound") boot the SAME
+    # live kernel/initrd/squashfs — they differ only by a kernel parameter
+    # (hifi.installer=1) that the Electron app reads at startup to decide
+    # whether to show the installer UI or the normal kiosk UI. The actual
+    # disk installation (partition/format/copy/bootloader) is driven by
+    # hifi-disk-install.sh from inside that live session, not by d-i.
+    # See config/hooks/normal/0500-brand-boot.hook.binary for the boot menu
+    # generation and distro/README.md for the full flow.
     #
-    # The ISO still behaves as "installer only" because the binary hook
-    # 0500-brand-boot.hook.binary rewrites the boot menus to a SINGLE branded
-    # "Install HiFi Player" entry (no live entry is shown to the user).
+    # noautologin: live-config (pulled in automatically by live-build) writes
+    # its OWN lightdm autologin fragment at boot for the generic Debian-Live
+    # default account ("user"), which lands AFTER our baked-in
+    # includes.chroot/etc/lightdm/lightdm.conf.d/99-hifi-autologin.conf and
+    # wins — lightdm then tries "Can't login unknown user 'user'" and falls
+    # back to the greeter instead of autologging in as 'hifi'. This boot
+    # parameter tells live-config to leave autologin alone entirely, so our
+    # own config is the only one lightdm ever sees.
     lb config \
         --distribution "$DEBIAN_SUITE" \
         --architectures "$ARCH" \
         --archive-areas "main contrib non-free non-free-firmware" \
-        --debian-installer live \
-        --debian-installer-gui false \
         --bootloaders "syslinux,grub-efi" \
-        --bootappend-live "boot=live components quiet splash loglevel=0 vt.global_cursor_default=0 hostname=hifiplayer" \
-        --bootappend-install "auto=true priority=critical preseed/file=/preseed.cfg ---" \
+        --bootappend-live "boot=live components quiet splash loglevel=0 vt.global_cursor_default=0 hostname=hifiplayer noautologin" \
         --iso-application "$BRAND_NAME" \
         --iso-publisher "$BRAND_NAME" \
         --iso-volume "OSMIUM_SOUND" \
         --memtest none \
-        --apt-recommends false
+        --apt-recommends false \
+        --compression xz
 else
     [ -d config/bootstrap ] \
         || die "--stage binary but no live-build config found. Run '--stage all' first."

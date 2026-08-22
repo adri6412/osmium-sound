@@ -9,6 +9,10 @@
 # partition as an internal music source.
 set -eu
 
+# shellcheck source=distro/config/includes.chroot/usr/local/sbin/hifi-log.sh
+. /usr/local/sbin/hifi-log.sh
+hifi_log_init hifi-format-disk
+
 DEVICE="${1:-}"
 FS="${2:-}"
 LABEL="${3:-Musica}"

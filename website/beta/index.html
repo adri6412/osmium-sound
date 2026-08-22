@@ -473,6 +473,7 @@
       .dl-picker { flex-direction: column; align-items: stretch; }
       .dl-picker .btn-primary { justify-content: center; }
     }
+
     .quickstart {
       display: grid; grid-template-columns: repeat(3, 1fr);
       gap: 1.1rem; max-width: 860px; margin: 2.75rem auto 0;
@@ -841,12 +842,12 @@
       <div class="qs-step">
         <div class="qs-num">2</div>
         <h4 data-en="Flash a USB stick" data-it="Flasha una chiavetta USB">Flash a USB stick</h4>
-        <p data-en="Write the ISO to an 8&nbsp;GB+ USB stick with &lt;a href=&quot;https://etcher.balena.io/&quot; target=&quot;_blank&quot; rel=&quot;noopener&quot;&gt;balenaEtcher&lt;/a&gt;, Rufus or &lt;code&gt;dd&lt;/code&gt;." data-it="Scrivi la ISO su una chiavetta USB da 8&nbsp;GB+ con &lt;a href=&quot;https://etcher.balena.io/&quot; target=&quot;_blank&quot; rel=&quot;noopener&quot;&gt;balenaEtcher&lt;/a&gt;, Rufus o &lt;code&gt;dd&lt;/code&gt;.">Write the ISO to an 8&nbsp;GB+ USB stick with <a href="https://etcher.balena.io/" target="_blank" rel="noopener">balenaEtcher</a>, Rufus or <code>dd</code>.</p>
+        <p data-en="Use &lt;strong&gt;Osmium Flasher&lt;/strong&gt; above on an 8&amp;nbsp;GB+ stick — it fetches and verifies the image itself. Prefer to do it by hand? &lt;a href=&quot;https://etcher.balena.io/&quot; target=&quot;_blank&quot; rel=&quot;noopener&quot;&gt;balenaEtcher&lt;/a&gt;, Rufus and &lt;code&gt;dd&lt;/code&gt; all still work." data-it="Usa &lt;strong&gt;Osmium Flasher&lt;/strong&gt; qui sopra su una chiavetta da 8&amp;nbsp;GB+ — scarica e verifica l&#x27;immagine da solo. Preferisci farlo a mano? &lt;a href=&quot;https://etcher.balena.io/&quot; target=&quot;_blank&quot; rel=&quot;noopener&quot;&gt;balenaEtcher&lt;/a&gt;, Rufus e &lt;code&gt;dd&lt;/code&gt; restano validi.">Use <strong>Osmium Flasher</strong> above on an 8&nbsp;GB+ stick — it fetches and verifies the image itself. Prefer to do it by hand? <a href="https://etcher.balena.io/" target="_blank" rel="noopener">balenaEtcher</a>, Rufus and <code>dd</code> all still work.</p>
       </div>
       <div class="qs-step">
         <div class="qs-num">3</div>
         <h4 data-en="Boot &amp; install" data-it="Avvia e installa">Boot &amp; install</h4>
-        <p data-en="Boot your x86 mini-PC from the USB stick and follow the on-screen installer. Reboot — you're done." data-it="Avvia il tuo mini-PC x86 dalla chiavetta e segui l'installazione guidata. Riavvia ed è fatta.">Boot your x86 mini-PC from the USB stick and follow the on-screen installer. Reboot — you're done.</p>
+        <p data-en="Turn <strong>Secure Boot off</strong> in the firmware setup first — it is required on every machine. Then boot your x86 mini-PC from the stick and follow the on-screen installer. Reboot — you're done." data-it="Prima <strong>disattiva il Secure Boot</strong> nel setup del firmware — serve su tutte le macchine. Poi avvia il tuo mini-PC x86 dalla chiavetta e segui l'installazione guidata. Riavvia ed è fatta.">Turn <strong>Secure Boot off</strong> in the firmware setup first — it is required on every machine. Then boot your x86 mini-PC from the stick and follow the on-screen installer. Reboot — you're done.</p>
       </div>
     </div>
 
@@ -856,6 +857,13 @@
 
     <p class="install-note" data-en="&lt;strong&gt;Try it live:&lt;/strong&gt; pick &lt;strong&gt;Try Osmium Sound (no install)&lt;/strong&gt; at the boot menu to run the kiosk straight from the USB stick, nothing written to disk. If it doesn't log in automatically, use &lt;code&gt;hifi&lt;/code&gt; / &lt;code&gt;hifi&lt;/code&gt; at the login screen." data-it="&lt;strong&gt;Provala in live:&lt;/strong&gt; scegli &lt;strong&gt;Try Osmium Sound (no install)&lt;/strong&gt; nel menu di avvio per far partire il kiosk direttamente dalla chiavetta, senza scrivere nulla sul disco. Se non fa l'accesso automatico, usa &lt;code&gt;hifi&lt;/code&gt; / &lt;code&gt;hifi&lt;/code&gt; alla schermata di login.">
       <strong>Try it live:</strong> pick <strong>Try Osmium Sound (no install)</strong> at the boot menu to run the kiosk straight from the USB stick, nothing written to disk. If it doesn't log in automatically, use <code>hifi</code> / <code>hifi</code> at the login screen.
+    </p>
+
+    <p class="install-warning">
+      <span class="warn-ico">⚠️</span>
+      <span data-en="&lt;strong&gt;Get future updates:&lt;/strong&gt; the installed system defaults to the &lt;strong&gt;Production&lt;/strong&gt; channel, so it will &lt;strong&gt;not&lt;/strong&gt; pick up new beta builds on its own. On the device, go to &lt;strong&gt;Settings → Updates&lt;/strong&gt; and switch the update channel to &lt;strong&gt;Development&lt;/strong&gt;. New dev builds will then show up there automatically as soon as they're published." data-it="&lt;strong&gt;Per ricevere i prossimi aggiornamenti:&lt;/strong&gt; il sistema installato usa di default il canale &lt;strong&gt;Produzione&lt;/strong&gt;, quindi &lt;strong&gt;non&lt;/strong&gt; riceverà da solo le nuove build beta. Sul dispositivo vai in &lt;strong&gt;Impostazioni → Aggiornamenti&lt;/strong&gt; e passa il canale di aggiornamento a &lt;strong&gt;Sviluppo&lt;/strong&gt;. Le nuove build dev appariranno lì automaticamente non appena pubblicate.">
+        <strong>Get future updates:</strong> the installed system defaults to the <strong>Production</strong> channel, so it will <strong>not</strong> pick up new beta builds on its own. On the device, go to <strong>Settings → Updates</strong> and switch the update channel to <strong>Development</strong>. New dev builds will then show up there automatically as soon as they're published.
+      </span>
     </p>
   </div>
 </section>

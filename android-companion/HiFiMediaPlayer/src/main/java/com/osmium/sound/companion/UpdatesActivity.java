@@ -4,6 +4,8 @@ import android.content.Context;
 import android.content.Intent;
 import android.os.Build;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
 import android.view.MenuItem;
 import android.view.View;
 import android.widget.ProgressBar;
@@ -15,6 +17,7 @@ import androidx.activity.EdgeToEdge;
 import androidx.appcompat.app.AppCompatActivity;
 
 import com.google.android.material.button.MaterialButton;
+import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 
 import org.json.JSONObject;
 
@@ -25,22 +28,53 @@ import com.osmium.sound.companion.widget.ViewUtilities;
 /**
  * OTA channel (stable/dev) + updates, mirroring the Electron UI's "Updates"
  * section: UI + System + OS are checked/applied together as a single group
- * (one "Check" / one "Update now" button, applied in sequence System → UI →
- * OS — see applyAllUpdates() in Settings.jsx), while Lyrion Music Server has
- * its own separate check/apply (Electron's "Advanced" sub-section). Each
- * shows its currently installed version, not just update availability.
+ * (one "Check" / one "Update now" button). Each shows its currently installed
+ * version, not just update availability.
+ * <p>
+ * Lyrion Music Server is deliberately NOT here: it is third-party software
+ * with its own release cadence, managed from Settings → Lyrion Music Server
+ * (MultiroomActivity) together with the internal/external choice.
+ * <p>
+ * "Update now" POSTs /api/system/updates/apply_all and then only *watches*:
+ * the appliance writes a plan to persistent storage and walks it to the end
+ * itself (System → OS → UI, see hifi-update-stage-runner.sh / hifi-update-apply-runner.sh). This used to be a
+ * chain of per-component applies driven from here, which broke whenever the
+ * update dropped the connection — and it always does: System restarts
+ * hifi-api, OS may reboot the box, UI restarts the kiosk. Losing the
+ * connection now costs nothing; {@link #resumePlan()} re-attaches to a run
+ * still in progress when the screen is reopened. An appliance too old to know
+ * the endpoint falls back to {@link #applyCoreLegacy()}.
  */
 public class UpdatesActivity extends AppCompatActivity {
+    private static final long POLL_INTERVAL_MS = 2500;
+    /**
+     * Budget for a whole sequenced plan: up to three bundles to download,
+     * verify and apply, plus the reboot an OS payload may ask for. Generous on
+     * purpose — giving up early is what used to make a run that was still
+     * progressing look failed.
+     */
+    // Widened from 20 to 30 minutes: the isolated update-mode flow adds a full
+    // extra reboot leg (stage -> reboot -> apply, possibly incl. OS package
+    // installs -> reboot back) on top of what this used to cover.
+    private static final long PLAN_TIMEOUT_MS = 1_800_000;
+
     private final ThemeManager mThemeManager = new ThemeManager();
+    private final Handler pollHandler = new Handler(Looper.getMainLooper());
+    private boolean destroyed;
 
     private RadioGroup channelGroup;
     private boolean suppressChannelEvent;
 
-    private TextView versionUi, versionSystem, versionOs, versionLyrion;
-    private MaterialButton applyCoreButton, applyLyrionButton;
-    private ProgressBar coreProgress, lyrionProgress;
+    private TextView versionUi, versionSystem, versionOs;
+    private TextView coreStatus;
+    private MaterialButton applyCoreButton;
+    private MaterialButton whatsNewButton;
+    private ProgressBar coreProgress;
 
     private boolean uiUpdateAvailable, systemUpdateAvailable, osUpdateAvailable;
+    // ui/system/os ship from the same tagged release, so their `notes` are
+    // normally identical — whichever check response has one wins.
+    private String changelogVersion, changelogNotes;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -59,11 +93,10 @@ public class UpdatesActivity extends AppCompatActivity {
         versionUi = findViewById(R.id.version_ui);
         versionSystem = findViewById(R.id.version_system);
         versionOs = findViewById(R.id.version_os);
-        versionLyrion = findViewById(R.id.version_lyrion);
+        coreStatus = findViewById(R.id.core_status);
         applyCoreButton = findViewById(R.id.button_apply_core);
-        applyLyrionButton = findViewById(R.id.button_apply_lyrion);
+        whatsNewButton = findViewById(R.id.button_whats_new);
         coreProgress = findViewById(R.id.core_progress);
-        lyrionProgress = findViewById(R.id.lyrion_progress);
 
         channelGroup.setOnCheckedChangeListener((group, checkedId) -> {
             if (suppressChannelEvent) return;
@@ -72,12 +105,11 @@ public class UpdatesActivity extends AppCompatActivity {
 
         findViewById(R.id.button_check_core).setOnClickListener(v -> checkCore());
         applyCoreButton.setOnClickListener(v -> applyCore());
-        findViewById(R.id.button_check_lyrion).setOnClickListener(v -> checkLyrion());
-        applyLyrionButton.setOnClickListener(v -> applyLyrion());
+        whatsNewButton.setOnClickListener(v -> showChangelog());
 
         loadChannel();
         checkCore();
-        checkLyrion();
+        resumePlan();
     }
 
     private void loadChannel() {
@@ -117,14 +149,28 @@ public class UpdatesActivity extends AppCompatActivity {
 
     private void checkCore() {
         setCoreBusy(true);
+        changelogVersion = null;
+        changelogNotes = null;
         checkOne("app", getString(R.string.settings_updates_ui), versionUi, available -> uiUpdateAvailable = available, () -> {
             checkOne("system", getString(R.string.settings_updates_system), versionSystem, available -> systemUpdateAvailable = available, () -> {
                 checkOne("os", getString(R.string.settings_updates_os), versionOs, available -> osUpdateAvailable = available, () -> {
                     setCoreBusy(false);
                     applyCoreButton.setVisibility(uiUpdateAvailable || systemUpdateAvailable || osUpdateAvailable ? View.VISIBLE : View.GONE);
+                    whatsNewButton.setVisibility(changelogNotes != null && !changelogNotes.isEmpty() ? View.VISIBLE : View.GONE);
                 });
             });
         });
+    }
+
+    private void showChangelog() {
+        if (changelogNotes == null || changelogNotes.isEmpty()) return;
+        String title = String.format(getString(R.string.settings_updates_changelog_title),
+                changelogVersion == null ? "" : changelogVersion);
+        new MaterialAlertDialogBuilder(this)
+                .setTitle(title)
+                .setMessage(changelogNotes)
+                .setPositiveButton(android.R.string.ok, null)
+                .show();
     }
 
     private interface AvailabilityConsumer {
@@ -144,6 +190,11 @@ public class UpdatesActivity extends AppCompatActivity {
                     line += " (" + getString(R.string.settings_updates_up_to_date) + ")";
                 }
                 versionText.setText(line);
+                String notes = body.optString("notes", "");
+                if (available && !notes.isEmpty()) {
+                    changelogVersion = body.optString("latest", "");
+                    changelogNotes = notes;
+                }
                 onResult.accept(available);
                 then.run();
             }
@@ -157,79 +208,330 @@ public class UpdatesActivity extends AppCompatActivity {
         });
     }
 
-    /** Applies in the same order as the Electron UI's applyAllUpdates(): System → UI → OS. */
+    /** Notified as an apply-and-poll step progresses; see {@link #startApply}. */
+    private interface UpdatePhase {
+        void onStatus(String text);
+        void onDone();
+        void onFailed(String message);
+    }
+
+    /**
+     * Hands the whole update to the appliance, which sequences it itself
+     * (System → OS → UI) from a plan it persists to disk. That matters most
+     * here: of the three clients this is the one furthest from the appliance,
+     * and every step of an update drops the connection — System restarts
+     * hifi-api, OS may reboot the box, UI restarts the kiosk. When the phone
+     * drove the sequence, any of those could end it early and leave components
+     * stale. Now losing the connection (or closing the app) costs nothing: the
+     * appliance finishes on its own and we just re-attach to the progress.
+     */
     private void applyCore() {
         setCoreBusy(true);
         applyCoreButton.setVisibility(View.GONE);
-        applyOne("system", () -> applyOne("app", () -> applyOne("os", () -> setCoreBusy(false))));
+        whatsNewButton.setVisibility(View.GONE);
+        setCoreStatus(getString(R.string.settings_updates_applying));
+        ApplianceHttpClient.postJson("/api/system/updates/apply_all", null, new ApplianceHttpClient.JsonCallback() {
+            @Override
+            public void onSuccess(JSONObject body) {
+                if (destroyed) return;
+                if (body.optBoolean("started", false)) {
+                    pollPlan(System.currentTimeMillis());
+                } else {
+                    setCoreStatus(body.optString("message", getString(R.string.settings_updates_start_failed)));
+                    setCoreBusy(false);
+                    checkCore();
+                }
+            }
+
+            @Override
+            public void onFailure(String message) {
+                if (destroyed) return;
+                // Either there is no such endpoint (an appliance still running
+                // an api_server without the sequencer) or we simply lost the
+                // answer to a request that did go through. Ask before assuming:
+                // falling back to the per-component chain on top of a plan that
+                // is already running would have two updaters racing.
+                ApplianceHttpClient.getJson("/api/system/updates/status", new ApplianceHttpClient.JsonCallback() {
+                    @Override
+                    public void onSuccess(JSONObject body) {
+                        if (destroyed) return;
+                        if ("running".equals(body.optString("state", "idle"))) {
+                            pollPlan(System.currentTimeMillis());
+                        } else {
+                            applyCoreLegacy();
+                        }
+                    }
+
+                    @Override
+                    public void onFailure(String m) {
+                        if (destroyed) return;
+                        applyCoreLegacy();
+                    }
+                });
+            }
+        });
     }
 
-    private void applyOne(String kind, Runnable then) {
+    /**
+     * Follows the appliance-side plan to its end. A failed request is expected
+     * mid-plan — the API restarts and the box may reboot — so failures are
+     * retried rather than treated as the final word; the plan is on persistent
+     * storage and the appliance resumes it after a reboot on its own.
+     */
+    private void pollPlan(long startTime) {
+        if (destroyed) return;
+        pollHandler.postDelayed(() -> {
+            if (destroyed) return;
+            ApplianceHttpClient.getJson("/api/system/updates/status", new ApplianceHttpClient.JsonCallback() {
+                @Override
+                public void onSuccess(JSONObject body) {
+                    if (destroyed) return;
+                    String state = body.optString("state", "idle");
+                    String message = body.optString("message", "");
+                    int progress = body.optInt("overall_progress", -1);
+
+                    if ("done".equals(state)) {
+                        setCoreStatus(getString(R.string.settings_updates_all_done));
+                        setCoreBusy(false);
+                        dismissPlan();
+                        checkCore();
+                        return;
+                    }
+                    // 'staged_pending_reboot'/'applying' mean the appliance is
+                    // mid isolated-update session (about to, or already did,
+                    // reboot) -- fall through to the generic in-progress
+                    // status update below and keep polling. 'apply_error' is
+                    // the same terminal failure as 'error', just discovered
+                    // after that isolated session.
+                    if ("error".equals(state) || "apply_error".equals(state) || "interrupted".equals(state)) {
+                        String text = message.isEmpty()
+                                ? getString(R.string.settings_updates_update_error) : message;
+                        Toast.makeText(UpdatesActivity.this, text, Toast.LENGTH_LONG).show();
+                        setCoreStatus(text);
+                        setCoreBusy(false);
+                        dismissPlan();
+                        checkCore();
+                        return;
+                    }
+                    if (!"idle".equals(state)) {
+                        setCoreStatus((message.isEmpty() ? state : message)
+                                + (progress >= 0 ? " (" + progress + "%)" : ""));
+                    }
+                    if (System.currentTimeMillis() - startTime > PLAN_TIMEOUT_MS) {
+                        setCoreStatus(getString(R.string.settings_updates_timeout));
+                        setCoreBusy(false);
+                        checkCore();
+                        return;
+                    }
+                    pollPlan(startTime);
+                }
+
+                @Override
+                public void onFailure(String message) {
+                    if (destroyed) return;
+                    setCoreStatus(getString(R.string.settings_updates_reconnecting));
+                    if (System.currentTimeMillis() - startTime > PLAN_TIMEOUT_MS) {
+                        setCoreStatus(getString(R.string.settings_updates_timeout));
+                        setCoreBusy(false);
+                        checkCore();
+                        return;
+                    }
+                    pollPlan(startTime);
+                }
+            });
+        }, POLL_INTERVAL_MS);
+    }
+
+    /** Lets the appliance drop a plan whose outcome we've already shown. */
+    private void dismissPlan() {
+        ApplianceHttpClient.postJson("/api/system/updates/dismiss", null, new ApplianceHttpClient.JsonCallback() {
+            @Override
+            public void onSuccess(JSONObject body) {
+            }
+
+            @Override
+            public void onFailure(String message) {
+            }
+        });
+    }
+
+    /**
+     * Re-attaches to a plan that is already running (or that finished while the
+     * app was closed) — called when the screen opens. Without it, an update
+     * started from here and interrupted by a reboot would look like nothing
+     * had ever happened.
+     */
+    private void resumePlan() {
+        ApplianceHttpClient.getJson("/api/system/updates/status", new ApplianceHttpClient.JsonCallback() {
+            @Override
+            public void onSuccess(JSONObject body) {
+                if (destroyed) return;
+                // 'staged_pending_reboot'/'applying' mean the appliance is mid
+                // isolated-update session (about to, or already did, reboot into
+                // system-update.target) -- still worth rejoining the poll for,
+                // same as 'running'.
+                String state = body.optString("state", "idle");
+                if (!"running".equals(state) && !"staged_pending_reboot".equals(state)
+                        && !"applying".equals(state)) return;
+                setCoreBusy(true);
+                applyCoreButton.setVisibility(View.GONE);
+        whatsNewButton.setVisibility(View.GONE);
+                setCoreStatus(getString(R.string.settings_updates_applying));
+                pollPlan(System.currentTimeMillis());
+            }
+
+            @Override
+            public void onFailure(String message) {
+            }
+        });
+    }
+
+    /**
+     * Pre-sequencer fallback, in the same order the appliance uses: System →
+     * OS → UI. Carries the limitation the sequencer removes — if the OS step
+     * reboots, the UI step is never applied.
+     */
+    private void applyCoreLegacy() {
+        setCoreBusy(true);
+        applyCoreButton.setVisibility(View.GONE);
+        whatsNewButton.setVisibility(View.GONE);
+        setCoreStatus(getString(R.string.settings_updates_applying));
+        runCoreStep("system", getString(R.string.settings_updates_system), 90_000, false, () ->
+                runCoreStep("os", getString(R.string.settings_updates_os), 180_000, true, () ->
+                        runCoreStep("app", getString(R.string.settings_updates_ui), 60_000, false, () -> {
+                            setCoreStatus(getString(R.string.settings_updates_all_done));
+                            checkCore();
+                        })));
+    }
+
+    private void runCoreStep(String kind, String phaseLabel, long timeoutMs, boolean osRebootAware, Runnable onDone) {
+        startApply(kind, phaseLabel, timeoutMs, osRebootAware, new UpdatePhase() {
+            @Override
+            public void onStatus(String text) {
+                setCoreStatus(text);
+            }
+
+            @Override
+            public void onDone() {
+                onDone.run();
+            }
+
+            @Override
+            public void onFailed(String message) {
+                Toast.makeText(UpdatesActivity.this, message, Toast.LENGTH_LONG).show();
+                setCoreStatus(message);
+                // Re-check rather than assume: the step may have actually
+                // finished server-side despite the dropped/timed-out connection.
+                checkCore();
+            }
+        });
+    }
+
+    /**
+     * POSTs {@code /api/system/updates/<kind>/apply} (fire-and-forget on the
+     * appliance, via systemd-run) then polls {@code .../status} until it
+     * reports "done" or "error". A dropped connection while polling is
+     * expected mid-update — System restarts hifi-api itself, OS may reboot
+     * the whole box — so transient poll failures are retried, not treated as
+     * a finished (successful or failed) update.
+     */
+    private void startApply(String kind, String phaseLabel, long timeoutMs, boolean osRebootAware, UpdatePhase phase) {
+        phase.onStatus(phaseLabel + ": " + getString(R.string.settings_updates_starting));
         ApplianceHttpClient.postJson("/api/system/updates/" + kind + "/apply", null, new ApplianceHttpClient.JsonCallback() {
             @Override
             public void onSuccess(JSONObject body) {
-                then.run();
-            }
-
-            @Override
-            public void onFailure(String message) {
-                Toast.makeText(UpdatesActivity.this, message, Toast.LENGTH_SHORT).show();
-                then.run();
-            }
-        });
-    }
-
-    private void checkLyrion() {
-        lyrionProgress.setVisibility(View.VISIBLE);
-        ApplianceHttpClient.getJson("/api/system/updates/lyrion/check", new ApplianceHttpClient.JsonCallback() {
-            @Override
-            public void onSuccess(JSONObject body) {
-                lyrionProgress.setVisibility(View.GONE);
-                boolean available = body.optBoolean("update_available", false);
-                String line = body.optString("current", "?");
-                if (available) {
-                    line += " → " + body.optString("latest", "?");
+                if (body.optBoolean("started", false)) {
+                    pollApplyStatus(kind, phaseLabel, timeoutMs, osRebootAware, System.currentTimeMillis(), false, phase);
                 } else {
-                    line += " (" + getString(R.string.settings_updates_up_to_date) + ")";
+                    phase.onFailed(phaseLabel + ": " + body.optString("message", getString(R.string.settings_updates_start_failed)));
                 }
-                versionLyrion.setText(line);
-                applyLyrionButton.setVisibility(available ? View.VISIBLE : View.GONE);
             }
 
             @Override
             public void onFailure(String message) {
-                lyrionProgress.setVisibility(View.GONE);
-                versionLyrion.setText(message);
+                phase.onFailed(phaseLabel + ": " + message);
             }
         });
     }
 
-    private void applyLyrion() {
-        lyrionProgress.setVisibility(View.VISIBLE);
-        applyLyrionButton.setVisibility(View.GONE);
-        ApplianceHttpClient.postJson("/api/system/updates/lyrion/apply", null, new ApplianceHttpClient.JsonCallback() {
-            @Override
-            public void onSuccess(JSONObject body) {
-                lyrionProgress.setVisibility(View.GONE);
-                checkLyrion();
-            }
+    private void pollApplyStatus(String kind, String phaseLabel, long timeoutMs, boolean osRebootAware,
+                                  long startTime, boolean sawRestarting, UpdatePhase phase) {
+        if (destroyed) return;
+        pollHandler.postDelayed(() -> {
+            if (destroyed) return;
+            ApplianceHttpClient.getJson("/api/system/updates/" + kind + "/status", new ApplianceHttpClient.JsonCallback() {
+                @Override
+                public void onSuccess(JSONObject body) {
+                    if (destroyed) return;
+                    String state = body.optString("state", "idle");
+                    String message = body.optString("message", "");
+                    int progress = body.optInt("progress", -1);
+                    boolean nowRestarting = sawRestarting || "restarting".equals(state);
 
-            @Override
-            public void onFailure(String message) {
-                lyrionProgress.setVisibility(View.GONE);
-                Toast.makeText(UpdatesActivity.this, message, Toast.LENGTH_SHORT).show();
-            }
-        });
+                    if ("done".equals(state)) {
+                        phase.onDone();
+                        return;
+                    }
+                    if ("error".equals(state)) {
+                        phase.onFailed(phaseLabel + ": " + (message.isEmpty() ? getString(R.string.settings_updates_update_error) : message));
+                        return;
+                    }
+                    if ("idle".equals(state)) {
+                        if (osRebootAware && sawRestarting) {
+                            // The status file lives on tmpfs and is wiped by the
+                            // reboot this OS update triggered; seeing "idle" again
+                            // right after "restarting" means it came back up, i.e.
+                            // the update (and reboot) succeeded.
+                            phase.onDone();
+                            return;
+                        }
+                    } else {
+                        phase.onStatus(phaseLabel + ": " + (message.isEmpty() ? state : message)
+                                + (progress >= 0 ? " (" + progress + "%)" : ""));
+                    }
+
+                    if (System.currentTimeMillis() - startTime > timeoutMs) {
+                        phase.onFailed(phaseLabel + ": " + getString(R.string.settings_updates_timeout));
+                        return;
+                    }
+                    pollApplyStatus(kind, phaseLabel, timeoutMs, osRebootAware, startTime, nowRestarting, phase);
+                }
+
+                @Override
+                public void onFailure(String message) {
+                    if (destroyed) return;
+                    phase.onStatus(phaseLabel + ": " + getString(R.string.settings_updates_reconnecting));
+                    if (System.currentTimeMillis() - startTime > timeoutMs) {
+                        phase.onFailed(phaseLabel + ": " + getString(R.string.settings_updates_timeout));
+                        return;
+                    }
+                    pollApplyStatus(kind, phaseLabel, timeoutMs, osRebootAware, startTime, sawRestarting, phase);
+                }
+            });
+        }, POLL_INTERVAL_MS);
     }
+
 
     private void setCoreBusy(boolean busy) {
         coreProgress.setVisibility(busy ? View.VISIBLE : View.GONE);
+    }
+
+    private void setCoreStatus(String text) {
+        coreStatus.setText(text);
+        coreStatus.setVisibility(View.VISIBLE);
     }
 
     @Override
     public void onResume() {
         super.onResume();
         mThemeManager.onResume(this);
+    }
+
+    @Override
+    protected void onDestroy() {
+        destroyed = true;
+        pollHandler.removeCallbacksAndMessages(null);
+        super.onDestroy();
     }
 
     @Override

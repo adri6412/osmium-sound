@@ -12,19 +12,27 @@ export const safeUrl = (url) => {
   const raw = url.trim();
   if (!raw) return '';
   // Same-origin relative path (e.g. "/music/123/cover"): rebuild it from the
-  // parsed URL so no scheme/host/meta-characters can ride along.
+  // parsed URL so no scheme/host/meta-characters can ride along. u.pathname/
+  // u.search are already fully percent-encoded per the WHATWG URL spec —
+  // confirmed live: `new URL('http://x/y?a=<script>"')`.search comes back as
+  // `?a=%3Cscript%3E%22`, no extra escaping needed. Wrapping that in
+  // encodeURI() (as this used to) doesn't add safety, it just re-escapes the
+  // '%' of any percent-encoded byte already in the string — which every
+  // artwork URL here has (encodeURIComponent'd player mac / cache-buster).
+  // That corrupted e.g. now-playing artwork's ?player=<mac> into garbage LMS
+  // couldn't parse back into a real player, silently falling back to
+  // whatever other player happened to be active on the same LMS server.
   if (raw[0] === '/' && raw[1] !== '/') {
-    try { const u = new URL(raw, 'http://localhost'); return encodeURI(u.pathname + u.search); }
+    try { const u = new URL(raw, 'http://localhost'); return u.pathname + u.search; }
     catch { return ''; }
   }
-  // Absolute URL: allow ONLY http/https (blocks javascript:/data:/…) and return
-  // the parser's serialized href — a freshly built, well-formed string rather
-  // than the raw input. encodeURI() escapes any residual HTML meta-characters
-  // (< > ") while keeping the URL valid, so nothing unescaped flows through to
-  // <img src> (and it's a sanitizer the static analyser recognises).
+  // Absolute URL: allow ONLY http/https (blocks javascript:/data:/…) and
+  // return the parser's serialized href as-is — already a well-formed,
+  // fully percent-encoded string (see above), re-encoding it is redundant
+  // and, for any URL that already contains a percent-escape, corrupting.
   try {
     const u = new URL(raw);
-    return (u.protocol === 'http:' || u.protocol === 'https:') ? encodeURI(u.href) : '';
+    return (u.protocol === 'http:' || u.protocol === 'https:') ? u.href : '';
   } catch { return ''; }
 };
 
@@ -53,10 +61,40 @@ export function useLyrionPlayer() {
   const [playerStatus, setPlayerStatus] = useState(null);
   const [error, setError] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
+  // This device's own squeezelite player name (see connectToServer), kept in
+  // a ref so fetchStatus can cheaply cross-check every poll against it — see
+  // fetchStatus's player_name guard below.
+  const localPlayerNameRef = useRef(null);
 
   // Queue state
   const [queue, setQueue] = useState([]);
   const [queueIndex, setQueueIndex] = useState(0);
+
+  // ReplayGain mode ('0' off / '1' track / '2' album / '3' smart) — drives the
+  // BitPerfect/ReplayGain LED bar. Polled separately from playerStatus since
+  // it's an LMS player *pref*, not part of the status payload, and changes
+  // rarely (only via Settings), so a slow independent poll is enough.
+  const [replayGainMode, setReplayGainMode] = useState('0');
+  // Transition type ('0' none / '1' crossfade / '2' fade-in / '3' fade-out /
+  // '4' fade-in+out) + its duration (seconds) — same reasoning as
+  // replayGainMode: a player pref, not in `status`, polled alongside it.
+  // Feeds BitPerfect too: any active transition applies a gain envelope (a
+  // crossfade blends two tracks' samples together, a fade shapes one
+  // track's), so it's a digital gain stage exactly like ReplayGain/volume
+  // control, not just a crossfade-specific concern.
+  const [transitionType, setTransitionType] = useState('0');
+  const [transitionDuration, setTransitionDuration] = useState('0');
+  // digitalVolumeControl ('1' adjustable / '0' fixed at 100%) — also a
+  // player pref, polled the same way. NOT read from the status payload's
+  // `use_volume_control`: LMS derives that field as
+  // `digitalVolumeControl || !hasDigitalOut` (Slim::Control::Queries), and
+  // hasDigitalOut defaults to 0 for a SqueezePlay-class client (which is how
+  // squeezelite registers, deviceid 12) unless it explicitly advertises
+  // HasDigitalOut in its slimproto capability string — squeezelite doesn't,
+  // so on this hardware use_volume_control is pinned to 1 forever regardless
+  // of the digitalVolumeControl pref, permanently blocking BitPerfect. The
+  // pref itself has no such caveat.
+  const [digitalVolumeControl, setDigitalVolumeControl] = useState('1');
 
   // Library navigation state
   const [currentView, setCurrentView] = useState('home');
@@ -116,14 +154,28 @@ export function useLyrionPlayer() {
       if (avail.length > 0) {
         // `players_loop` isn't necessarily "this appliance first": the companion
         // app auto-launches Squeezelite/SqueezePlayer on the phone as a second
-        // LMS player (radios/apps browsing is capability-filtered per-player, so
-        // landing on that one leaves tabs like Radio empty). Prefer the player
-        // matching this device's own squeezelite name (-n, from the Flask API)
-        // over just taking the first entry in the list.
+        // LMS player, and on a multiroom LMS server there can be several more
+        // (other appliances, lirplay/AirPlay receivers, ...) — radios/apps
+        // browsing is capability-filtered per-player, so landing on the wrong
+        // one leaves tabs like Radio empty, and now-playing/cover art follows
+        // whatever THAT player happens to be doing. Prefer the player matching
+        // this device's own squeezelite name (-n, from the Flask API) over
+        // just taking the first entry in the list.
         const nameRes = await systemAPI.getPlayerName().catch(() => null);
         const localName = nameRes?.success ? nameRes.data?.name : null;
+        localPlayerNameRef.current = localName;
         const local = localName && avail.find(x => x.name === localName);
-        setActivePlayer(p => (p && avail.find(x => x.playerid === p.playerid)) ? p : (local || avail[0]));
+        // A fresh local-name match always wins over whatever was already
+        // selected: if an earlier resolution locked onto the wrong player
+        // (e.g. this device's own squeezelite hadn't registered with LMS yet
+        // the first time this ran, while other players had), that lock would
+        // otherwise persist forever — connectToServer() only re-runs on a
+        // poll failure or a multiroom URL change, and a wrongly-selected but
+        // perfectly healthy player never fails a poll. Only fall back to
+        // keeping the previous selection (or avail[0]) when no local match is
+        // resolvable at all, so a transient Flask API hiccup doesn't cause
+        // needless flapping between players.
+        setActivePlayer(p => local || ((p && avail.find(x => x.playerid === p.playerid)) ? p : avail[0]));
       }
       else { setActivePlayer(null); setPlayerStatus(null); }
     } catch (_) {
@@ -159,16 +211,63 @@ export function useLyrionPlayer() {
   // UI was reloaded. Recover automatically instead: after a few consecutive
   // bad polls, re-run connectToServer() to re-resolve everything from scratch.
   const statusFailCountRef = useRef(0);
+  // Volume drags fire many onChange ticks in quick succession, each kicking
+  // off its own optimistic update + setVolume request + status refetch. Those
+  // refetches can resolve out of order (or the periodic poll below can land
+  // mid-drag), and a plain setPlayerStatus(st) would stomp the just-set
+  // optimistic mixer_volume with a stale snapshot — the slider visibly snaps
+  // back even though the server did receive the right value. Guard by
+  // preserving the locally-set volume for a short window after the user's
+  // last change, giving in-flight requests time to actually land server-side.
+  const lastVolumeChangeRef = useRef(0);
+  const VOLUME_GUARD_MS = 1200;
+  // No overlap guard: a 1s tick with a slow/stuck LMS (this box shares its
+  // CPU with squeezelite/CamillaDSP) used to just fire another concurrent
+  // POST to jsonrpc.js on top of whichever was still in flight — up to 10 of
+  // them stacked before lyrionApi's own 10s abort ceiling caught the first
+  // one, which was enough to make LMS's own web server start dropping
+  // connections outright (net::ERR_EMPTY_RESPONSE), not just respond slowly.
+  const statusInFlightRef = useRef(false);
   const fetchStatus = async () => {
-    if (!activePlayer) return;
+    if (!activePlayer || statusInFlightRef.current) return;
+    statusInFlightRef.current = true;
     try {
       const st = await lyrionApi.getPlayerStatus(activePlayer.playerid);
       if (st && typeof st === 'object' && 'mode' in st) {
+        // Defense against a stale activePlayer lock (see connectToServer's
+        // local-name-match comment): LMS's status response for this exact
+        // playerid still carries its own player_name, so if it no longer
+        // matches this device's actual local player name, activePlayer has
+        // drifted onto someone else's player (renamed locally, or a stale
+        // lock from before the local player registered with LMS). Don't
+        // apply that status/artwork — force a fresh resolution instead of
+        // quietly showing another player's now-playing indefinitely.
+        if (localPlayerNameRef.current && st.player_name && st.player_name !== localPlayerNameRef.current) {
+          statusFailCountRef.current = 0;
+          connectToServer();
+          return;
+        }
         statusFailCountRef.current = 0;
-        setPlayerStatus(st);
+        // LMS reports volume under the key "mixer volume" (space, like
+        // "playlist shuffle"/"playlist repeat" below) — there is no
+        // "mixer_volume" in the real status payload. Normalize it into the
+        // "mixer_volume" key the rest of this hook (and setVolume's
+        // optimistic update) reads/writes; otherwise every unguarded refetch
+        // wipes it to undefined and the `?? 0` fallback further down shows 0
+        // — the actual cause of the slider settling back to zero after the
+        // guard window above elapses.
+        const normalized = { ...st, mixer_volume: Math.abs(Number(st['mixer volume'])) || 0 };
+        if (Date.now() - lastVolumeChangeRef.current < VOLUME_GUARD_MS) {
+          setPlayerStatus(prev => ({ ...normalized, mixer_volume: prev?.mixer_volume ?? normalized.mixer_volume }));
+        } else {
+          setPlayerStatus(normalized);
+        }
         return;
       }
     } catch (_) { /* fall through to failure counting below */ }
+    finally {
+      statusInFlightRef.current = false;
+    }
     if (++statusFailCountRef.current >= 3) {
       statusFailCountRef.current = 0;
       connectToServer();
@@ -197,6 +296,34 @@ export function useLyrionPlayer() {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activePlayer, playing]);
+
+  // ReplayGain mode: cheap, rarely-changing pref — a flat 5s poll (no
+  // play/pause-adaptive cadence needed) is enough to keep the LED bar in sync
+  // with changes made from Settings.
+  useEffect(() => {
+    if (!activePlayer) return;
+    let cancelled = false;
+    const pollReplayGain = async () => {
+      try {
+        const [rg, tt, td, dvc] = await Promise.all([
+          lyrionApi.getPlayerPref(activePlayer.playerid, 'replayGainMode'),
+          lyrionApi.getPlayerPref(activePlayer.playerid, 'transitionType'),
+          lyrionApi.getPlayerPref(activePlayer.playerid, 'transitionDuration'),
+          lyrionApi.getPlayerPref(activePlayer.playerid, 'digitalVolumeControl'),
+        ]);
+        if (cancelled) return;
+        if (rg != null) setReplayGainMode(String(rg));
+        if (tt != null) setTransitionType(String(tt));
+        if (td != null) setTransitionDuration(String(td));
+        if (dvc != null) setDigitalVolumeControl(String(dvc));
+      } catch (_) { /* keep last known values */ }
+    };
+    pollReplayGain();
+    const id = setInterval(() => {
+      if (document.visibilityState === 'visible') pollReplayGain();
+    }, 5000);
+    return () => { cancelled = true; clearInterval(id); };
+  }, [activePlayer]);
 
   // New list contents (navigated to a different view / went back) → render from
   // the top again. Consumers with a scroll container reset it via this ref.
@@ -234,6 +361,7 @@ export function useLyrionPlayer() {
   };
 
   const setVolume = (v) => {
+    lastVolumeChangeRef.current = Date.now();
     setPlayerStatus(prev => ({ ...prev, mixer_volume: v }));
     handleAction(() => lyrionApi.setVolume(activePlayer?.playerid, v));
   };
@@ -245,11 +373,16 @@ export function useLyrionPlayer() {
   };
 
   // ── Play queue ─────────────────────────────────────────────
+  // Queue entries carry no stable id of their own (id/url can repeat when the
+  // same track appears twice in a queue), so React would key drag-reordered
+  // rows by position and remount them instead of sliding them. Stamp a
+  // synthetic per-fetch `_uid` here, once, so row components can key off it.
+  const queueUidRef = useRef(0);
   const loadQueue = async () => {
     if (!activePlayer) return;
     try {
       const r = await lyrionApi.getQueue(activePlayer.playerid);
-      setQueue(r?.playlist_loop || []);
+      setQueue((r?.playlist_loop || []).map((item) => ({ ...item, _uid: ++queueUidRef.current })));
       setQueueIndex(Number(r?.playlist_cur_index ?? 0));
     } catch (_) {}
   };
@@ -260,6 +393,11 @@ export function useLyrionPlayer() {
     handleAction(() => lyrionApi.playlistMove(activePlayer.playerid, from, to)).then(loadQueue);
   };
   const queueClear  = () => handleAction(() => lyrionApi.playlistClear(activePlayer.playerid)).then(loadQueue);
+  // Append to / insert-next-in the queue without replacing it (unlike
+  // handlePlayItem's playlistcontrol cmd:load) — backs the long-press
+  // context menu's "add to queue" / "play next" actions.
+  const queueAddTrack  = (id) => handleAction(() => lyrionApi.playItem(activePlayer.playerid, 'track_id', id, 'add'));
+  const queuePlayNext  = (id) => handleAction(() => lyrionApi.playItem(activePlayer.playerid, 'track_id', id, 'insert'));
 
   // Save the queue, verify Lyrion actually wrote it, then jump to the Playlists
   // view so the result is immediately visible. Returns { success, error } —
@@ -305,10 +443,17 @@ export function useLyrionPlayer() {
       const all = await lyrionApi.getHomeMenu(activePlayer?.playerid);
       menuBaseRef.current = null; // home items carry their own complete actions
       const EXCLUDE = new Set(['myMusic', 'radios', 'playerpower']);
+      // Favorites now has its own tile in the Musica tab (see LyrionServer.jsx),
+      // so drop it from the generic Apps list here. Match on the resolved `go`
+      // action's base command rather than `id`/label text — those vary across
+      // LMS versions/locales, but the command a Favorites node drills into is
+      // always ['favorites', 'items', ...].
+      const isFavorites = (it) => it.actions?.go?.cmd?.[0] === 'favorites';
       return all
         .filter(it => it.actions && (it.actions.go || it.actions.do || it.input)
           && ['home', '', 'extras'].includes(it.node)
-          && !EXCLUDE.has(it.id))
+          && !EXCLUDE.has(it.id)
+          && !isFavorites(it))
         .sort((a, b) => (Number(a.weight) || 0) - (Number(b.weight) || 0));
     }
     if (view === 'menu') {
@@ -325,11 +470,16 @@ export function useLyrionPlayer() {
     return [];
   };
 
-  const navigateTo = async (view, title, params = null) => {
+  // `replace`: swap the current top-of-stack entry instead of pushing a new
+  // one — used when re-submitting a search from its own results screen, so
+  // typing a second query doesn't pile up a fresh breadcrumb crumb per search.
+  const navigateTo = async (view, title, params = null, { replace = false } = {}) => {
     setLibraryLoading(true);
     try {
       const data = await fetchViewData(view, params);
-      setNavigationStack(prev => [...prev, { view, title, params }]);
+      setNavigationStack(prev => replace
+        ? [...prev.slice(0, -1), { view, title, params }]
+        : [...prev, { view, title, params }]);
       setCurrentView(view);
       setLibraryData(data);
     } catch (err) { console.error(`Failed to load ${view}:`, err); }
@@ -338,6 +488,7 @@ export function useLyrionPlayer() {
 
   const goBack = async () => {
     if (navigationStack.length <= 1) return;
+    setMenuSearch(null); // leaving this node — dismiss its search bar, if any
     const newStack = navigationStack.slice(0, -1);
     const prev = newStack[newStack.length - 1];
     setNavigationStack(newStack);
@@ -350,6 +501,7 @@ export function useLyrionPlayer() {
 
   const goToBreadcrumb = (idx) => {
     if (idx >= navigationStack.length - 1) return;
+    setMenuSearch(null); // jumping to an ancestor crumb — dismiss any open search bar
     const ns = navigationStack.slice(0, idx + 1);
     setNavigationStack(ns);
     const last = ns[ns.length - 1];
@@ -389,10 +541,11 @@ export function useLyrionPlayer() {
     const go = lyrionApi.resolveMenuAction(base, item, 'go');
     const play = lyrionApi.resolveMenuAction(base, item, 'play');
     const doAct = lyrionApi.resolveMenuAction(base, item, 'do');
-    if (item.input && go) {                 // needs text input → search prompt
+    if (item.input && go) {                 // needs text input → search bar
       setSearchText('');
       setMenuSearch({ action: go, title: item.text || item.name || t('player.titles.search') });
     } else if (go) {                        // submenu (or play-on-go leaf) → drill in
+      setMenuSearch(null);                  // leaving any open search context behind
       navigateTo('menu', item.text || item.name || '…', { action: go });
     } else if (play) {                      // playable leaf
       handleAction(() => lyrionApi.menuDo(activePlayer.playerid, play));
@@ -401,13 +554,23 @@ export function useLyrionPlayer() {
     }
   };
 
+  // Submits the persistent search bar (see LyrionServer.jsx's renderTabContent).
+  // The bar stays open after this — Qobuz/Tidal-style search-then-refine —
+  // rather than closing on every query like the old one-shot prompt did.
   const submitMenuSearch = () => {
     if (!menuSearch) return;
+    const q = searchText.trim();
+    // An empty query isn't just a no-op here: some Lyrion search plugins
+    // (RadioNet in particular) build an outbound API request straight from
+    // it and choke on a blank term, surfacing a raw network-error string as
+    // the first "result" instead of just returning nothing.
+    if (!q) return;
     const { action, title } = menuSearch;
-    const q = searchText;
-    setMenuSearch(null);
-    setSearchText('');
-    navigateTo('menu', title, { action, input: q });
+    // Re-searching from the results screen replaces that entry instead of
+    // stacking a fresh breadcrumb crumb per query.
+    const top = navigationStack[navigationStack.length - 1];
+    const isSameSearch = top?.view === 'menu' && top?.params?.action === action;
+    navigateTo('menu', title, { action, input: q }, { replace: isSameSearch });
   };
 
   // Loads the default view for a top-level tab (radio/apps get their own
@@ -448,8 +611,78 @@ export function useLyrionPlayer() {
   const duration     = currentTrack.duration || 0;
   const time         = playerStatus?.time || 0;
   const progress     = duration > 0 ? (time / duration) * 100 : 0;
-  const artworkUrl   = currentTrack.id ? lyrionApi.getArtworkUrl(currentTrack.id, 300) : null;
-  const artworkUrlLg = currentTrack.id ? lyrionApi.getArtworkUrl(currentTrack.id, 600) : null;
+  // Local tracks have a stable DB id, so they use the exact same static,
+  // race-free per-ID endpoint the library browse grid already relies on
+  // (lyrionApi.getArtworkUrl → /music/{id}/cover) — no cache-buster needed,
+  // the URL itself changes when (and only when) the track does, and there's
+  // no server-side "what's playing right now" state to race against.
+  //
+  // Remote streams (radio/Qobuz/Spotify/on-demand plugins/...) don't have a
+  // resolvable id/coverid on the client — that field can be a path relative
+  // to LMS itself (its /imageproxy/... proxy), a protocol-handler-specific
+  // format, or simply absent depending on the plugin. LMS already has to
+  // solve this exact problem for its own web skins, via a special
+  // `/music/current/cover.jpg?player=<mac>` URL that it resolves server-side
+  // for whatever is actually playing (see Slim::Web::Graphics::
+  // artworkRequest's `id eq 'current'` case) — reuse that instead of
+  // duplicating LMS's own resolution logic on the client. `k=` is a pure
+  // cache-buster: the URL itself never changes as tracks advance, so without
+  // it the browser would keep showing a stale image.
+  // For internet radio the playlist_loop entry's `id`/`title`/`artist`/
+  // `album` are the *station*'s, set once when the stream started, and
+  // don't change as the station's own now-playing song changes — LMS never
+  // rewrites the playlist entry's DB fields from ICY/plugin metadata.
+  // The one field that *does* update live per song is the top-level
+  // `current_title` the status query adds for any playing remote track
+  // (Slim::Control::Queries::statusQuery, via Slim::Music::Info::
+  // getCurrentTitle) — and it's exactly what the /music/current/cover.jpg
+  // endpoint re-resolves through the stream's protocol handler on every
+  // request (Slim::Web::Graphics, the `id eq 'current'` + `->remote` case).
+  // Without it in the key, the URL stays identical across songs and the
+  // browser just keeps showing the first song's (or the station's) cover.
+  //
+  // current_title alone isn't enough, though: it's populated via ICY-style
+  // metadata, which classic internet radio sends but on-demand streaming
+  // plugins (Qobuz, Tidal, ...) generally don't — their "radio"/mix features
+  // can advance to a new song while leaving id/title/artist/album/current_title
+  // all exactly as they were (whatever the plugin set when the stream started),
+  // so the key never changes and the cover sticks on the first song. There's
+  // no single field these plugins reliably update, so for any remote source
+  // add a coarse heartbeat (`time` is the one field guaranteed to keep moving
+  // during playback) — it re-fetches the cover at most every ~10s, which
+  // bounds how stale it can get without refetching on every 1s poll.
+  //
+  // `artworkIdentityKey` mirrors trackKey but *without* the heartbeat: it
+  // only changes when LMS has actually told us something changed (id/title/
+  // artist/album/current_title), never on a routine heartbeat tick. The
+  // consumer (usePolledArtwork in LyrionServer.jsx) uses this to tell a
+  // confirmed track change — where the art on screen is now known-stale and
+  // must not linger — apart from a periodic "maybe it changed, maybe it
+  // didn't" probe, where keeping the current art visible until proven
+  // otherwise is the right call.
+  // LMS's JSON-RPC serializes `remote` as the STRING "0"/"1", not a number
+  // or boolean — confirmed live (`"remote":"0"` in a real status response).
+  // `!!currentTrack.remote` is true for ANY non-empty string, "0" included,
+  // so this was permanently misidentifying every local track as remote and
+  // routing it through the player-scoped /music/current/cover.jpg path
+  // instead of the static per-id one. Harmless with a single active LMS
+  // player (that endpoint's own player= resolution has nothing else to fall
+  // back to but the right one); becomes visibly wrong the moment a second
+  // player is active on the same server (see safeUrl's comment above for the
+  // other half of this bug — a mangled player= param compounded it).
+  const isRemoteTrack = Number(currentTrack.remote) === 1;
+  const remoteHeartbeat = isRemoteTrack ? Math.floor((playerStatus?.time || 0) / 10) : '';
+  const artworkIdentityKey = `${currentTrack.id || ''}-${currentTrack.title || ''}-${currentTrack.artist || ''}-${currentTrack.album || ''}-${playerStatus?.current_title || ''}`;
+  const trackKey = `${artworkIdentityKey}-${remoteHeartbeat}`;
+  const nowPlayingCoverBase = activePlayer?.playerid
+    ? `${lyrionApi.baseUrl}/music/current/cover.jpg?player=${encodeURIComponent(activePlayer.playerid)}&k=${encodeURIComponent(trackKey)}`
+    : null;
+  const artworkUrl   = isRemoteTrack
+    ? (nowPlayingCoverBase ? safeUrl(`${nowPlayingCoverBase}&size=300`) : null)
+    : (currentTrack.id ? safeUrl(lyrionApi.getArtworkUrl(currentTrack.id, 300, currentTrack.coverid)) : null);
+  const artworkUrlLg = isRemoteTrack
+    ? (nowPlayingCoverBase ? safeUrl(`${nowPlayingCoverBase}&size=600`) : null)
+    : (currentTrack.id ? safeUrl(lyrionApi.getArtworkUrl(currentTrack.id, 600, currentTrack.coverid)) : null);
 
   const samplerate = currentTrack.samplerate;
   const samplesize = currentTrack.samplesize;
@@ -457,6 +690,44 @@ export function useLyrionPlayer() {
   const formatLabel = codecType
     ? `${String(codecType).toUpperCase()}${samplesize ? ` · ${samplesize}bit` : ''}${samplerate ? ` · ${Math.round(samplerate / 1000)}kHz` : ''}`
     : null;
+  // Hi-Res/PCM/DSD LED bar segment. `type` is LMS's own codec id — DSD-native
+  // files report 'dsf'/'dff' there regardless of the DoP samplerate they're
+  // wrapped in, so that's the reliable DSD signal (not samplerate/size, which
+  // describe the PCM carrier, not the source). PCM above redbook (44.1kHz/
+  // 16bit) also lights Hi-Res alongside PCM; DSD always lights Hi-Res too.
+  const isDsdTrack = /^ds[df]$/i.test(String(codecType || ''));
+  const isHiResPcm = !isDsdTrack && ((samplerate > 44100) || (samplesize > 16));
+  const formatQuality = codecType
+    ? { pcm: !isDsdTrack, hires: isDsdTrack || isHiResPcm, dsd: isDsdTrack }
+    : { pcm: false, hires: false, dsd: false };
+  // LMS applies ReplayGain via software gain on the samples, so a track is
+  // never bit-perfect while it's active — the two are mutually exclusive,
+  // which is also how the LED bar artwork itself was drawn (only one LED lit
+  // at a time). Nothing lit while nothing is actually playing.
+  const replayGainActive = replayGainMode !== '0';
+  // Actually verify bit-perfect, not just "ReplayGain happens to be off": the
+  // digitalVolumeControl pref ('1' adjustable / '0' fixed at 100%) is a
+  // digital gain stage on the samples exactly like ReplayGain, so it blocks
+  // BitPerfect the same way. Read the pref directly (polled above alongside
+  // replayGainMode/transitionType), NOT status's `use_volume_control` — that
+  // field is `digitalVolumeControl || !hasDigitalOut` server-side, and
+  // hasDigitalOut is permanently 0 for squeezelite (registers as a
+  // SqueezePlay-class client, which defaults hasDigitalOut off unless the
+  // client advertises it — squeezelite doesn't), which would pin it to 1
+  // forever regardless of the actual pref.
+  const digitalVolumeAdjusting = digitalVolumeControl === '1';
+  // Same pref, opposite sense — drives the volume slider's disabled/greyed
+  // state: dragging it while output is fixed at 100% wouldn't do anything.
+  const volumeFixed = digitalVolumeControl === '0';
+  // Any transition (crossfade blends two tracks' samples; a fade shapes
+  // one) is a digital gain stage too — only matters once it actually has a
+  // nonzero duration to apply.
+  const transitionActive = transitionType !== '0' && Number(transitionDuration) > 0;
+  const isBitPerfect = isPlaying && !replayGainActive && !digitalVolumeAdjusting && !transitionActive;
+  // Neither LED lights when playing with volume-adjusted-but-not-ReplayGain
+  // (e.g. LMS's own volume control turned up) — genuinely neither label,
+  // and lighting ReplayGain there would be wrong.
+  const playbackMode = !isPlaying ? null : replayGainActive ? 'replaygain' : (isBitPerfect ? 'bitperfect' : null);
 
   return {
     // connection
@@ -464,12 +735,15 @@ export function useLyrionPlayer() {
     connectToServer, fetchStatus, handleAction,
     // now playing (derived)
     currentTrack, title, artist, album, isPlaying, volume, repeatMode, shuffleMode,
-    willSleepIn, duration, time, progress, artworkUrl, artworkUrlLg, formatLabel,
+    willSleepIn, duration, time, progress, artworkUrl, artworkUrlLg, formatLabel, formatQuality,
+    replayGainMode, replayGainActive, playbackMode, volumeFixed,
+    isRemoteTrack, artworkIdentityKey,
     setVolume, toggleMute, seek, cycleShuffle, cycleRepeat, setSleepTimer,
     // queue
     queue, queueIndex, loadQueue, queueJump, queueRemove, queueMove, queueClear, saveQueue,
+    queueAddTrack, queuePlayNext,
     // library navigation
-    currentView, libraryData, libraryLoading, visibleCount, navigationStack,
+    currentView, libraryData, libraryLoading, visibleCount, setVisibleCount, navigationStack,
     menuSearch, setMenuSearch, searchText, setSearchText,
     // Jive base+item action model for the current menu view (see resolveMenuIcon/
     // handleMenuItem) — row renderers need this to resolve a leaf's play action.

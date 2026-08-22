@@ -14,22 +14,25 @@ on:
 
 permissions:
   contents: write
-  pages: write
-  id-token: write
 
 jobs:
   build-ui-ota:
     runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.pages-deployment.outputs.page_url }}
+    # Without this a hung step (an apt mirror that never answers, say) keeps the
+    # job alive for the 6h default instead of failing fast enough to rerun.
+    timeout-minutes: 30
 
     # Skip if this is a companion app release tag
     if: ${{ !contains(github.ref, 'companion') }}
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
+        with:
+          # Full history + all tags, not the default single-commit shallow
+          # clone — the changelog step below needs to walk back to the
+          # previous release's tag.
+          fetch-depth: 0
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -47,6 +50,20 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Build web-admin (Vue) — shipped in the system bundle
+        # Separate, self-contained Vue project (does not touch the Electron
+        # kiosk build). Served by webui_server.py from /opt/hifi-webui/dist.
+        # Fail loud rather than silently shipping a system bundle without it —
+        # see the "Package system-components OTA bundle" step below, which
+        # also refuses to package without a real build.
+        run: |
+          if [ -f admin-webui/package.json ]; then
+            (cd admin-webui && npm ci && npm run build)
+          else
+            echo "::error::admin-webui/package.json missing — cannot build the web-admin UI" >&2
+            exit 1
+          fi
+
       - name: Resolve version
         id: ver
         run: |
@@ -56,6 +73,40 @@ jobs:
             VERSION="$(node -p "require('./package.json').version")"
           fi
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Generate changelog
+        # Powers the "what's new" popup in the Updates screen on web-admin,
+        # kiosk, and the Android companion app (see _check_release_update's
+        # `notes` field in api_server.py). Built from the actual commit log
+        # since the previous published release, not hand-authored — this repo
+        # ships small dev builds often (see release-versioning-rules), so a
+        # manual changelog file would rot immediately. `chore(release)`
+        # version-bump-only commits are filtered out as noise.
+        id: changelog
+        if: github.ref_type == 'tag'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -e
+          CUR="${{ steps.ver.outputs.version }}"
+          PREV="$(gh release list --repo "${{ github.repository }}" --limit 1 \
+                    --json tagName --jq '.[0].tagName' 2>/dev/null || true)"
+          if [ -n "$PREV" ] && git rev-parse -q --verify "refs/tags/$PREV" >/dev/null; then
+            RANGE="refs/tags/$PREV..HEAD"
+          else
+            RANGE="HEAD"
+          fi
+          {
+            echo "## What's new in $CUR"
+            echo
+            git log --no-merges --format='- %s' "$RANGE" \
+              | grep -vE '^- chore\(release\)' || true
+          } > CHANGELOG_RELEASE.md
+          if ! grep -q '^- ' CHANGELOG_RELEASE.md; then
+            echo "- Minor fixes and internal improvements." >> CHANGELOG_RELEASE.md
+          fi
+          cat CHANGELOG_RELEASE.md
+          echo "file=CHANGELOG_RELEASE.md" >> "$GITHUB_OUTPUT"
 
       - name: Package UI OTA bundle (tarball + sha256)
         id: pack
@@ -69,22 +120,87 @@ jobs:
 
       - name: Package system-components OTA bundle (tarball + sha256)
         id: packsys
+        env:
+          HIFI_BETA_BOOTSTRAP_SECRET: ${{ secrets.HIFI_BETA_BOOTSTRAP_SECRET }}
         run: |
           VERSION="${{ steps.ver.outputs.version }}"
           ROOT=sysbundle
           rm -rf "$ROOT"
           mkdir -p "$ROOT/usr/local/bin" "$ROOT/usr/local/sbin" "$ROOT/etc/systemd/system"
           # Python API + daemons
-          cp api_server.py vu_meter_daemon.py sources_server.py "$ROOT/usr/local/bin/"
-          # Helper / OTA scripts
-          cp distro/config/includes.chroot/usr/local/sbin/*.sh "$ROOT/usr/local/sbin/"
+          cp api_server.py vu_meter_daemon.py sources_server.py webui_server.py hifi_logging.py hifi_backup.py hifi_i18n.py "$ROOT/usr/local/bin/"
+          # Web-admin Vue build (served by webui_server.py from /opt/hifi-webui/dist).
+          # REQUIRED: a missing/empty dist here means every device that applies
+          # this system bundle loses the web-admin UI, silently. Fail instead.
+          if [ -f admin-webui/dist/index.html ]; then
+            mkdir -p "$ROOT/opt/hifi-webui/dist"
+            cp -r admin-webui/dist/. "$ROOT/opt/hifi-webui/dist/"
+          else
+            echo "::error::admin-webui/dist missing or empty (no index.html) — refusing to package a system bundle without the web-admin UI" >&2
+            exit 1
+          fi
+          # Helper / OTA scripts (sh + python workers)
+          cp distro/config/includes.chroot/usr/local/sbin/*.sh \
+             distro/config/includes.chroot/usr/local/sbin/*.py "$ROOT/usr/local/sbin/"
+          # Osmium LMS skin assets (Material Skin theme + global css), installed
+          # into Lyrion's prefs by sources_server.py's lms_skin logic.
+          mkdir -p "$ROOT/usr/local/share"
+          cp -r distro/config/includes.chroot/usr/local/share/hifi-lms-skin "$ROOT/usr/local/share/"
           # systemd units
           cp distro/config/includes.chroot/etc/systemd/system/*.service "$ROOT/etc/systemd/system/"
+          # hifi-beta-agent.py ships with a placeholder bootstrap secret in source
+          # (this repo is public) -- substitute the real value into the PACKAGED
+          # copy only, from a GitHub Actions secret, same pattern as
+          # OTA_SIGNING_KEY below for OS-update signing.
+          if [ -n "$HIFI_BETA_BOOTSTRAP_SECRET" ]; then
+            sed -i "s/REPLACE_ME_BOOTSTRAP_SECRET/$HIFI_BETA_BOOTSTRAP_SECRET/" "$ROOT/usr/local/sbin/hifi-beta-agent.py"
+          else
+            echo "::warning::HIFI_BETA_BOOTSTRAP_SECRET not set — hifi-beta-agent.py shipped with the placeholder secret and will fail to register against the telemetry server."
+          fi
           printf '%s\n' "$VERSION" > "$ROOT/SYSTEM_VERSION"
           TAR="hifi-system-${VERSION}.tar.gz"
           tar czf "$TAR" -C "$ROOT" .
           sha256sum "$TAR" > "${TAR}.sha256"
           echo "tarball=$TAR" >> "$GITHUB_OUTPUT"
+
+      - name: Test the OTA update sequencer + system settings
+        # The two-phase sequencer is what keeps a multi-component update from
+        # stopping half-way (a restarted hifi-api mid-stage, an interrupted
+        # download, a crash mid-apply); the timezone suite guards the OS state
+        # api_server writes outside its own /etc/hifi-player/ tree. All four
+        # suites are hermetic — the shell ones run each runner against stub
+        # updaters in a temp dir, the Python ones redirect every path they
+        # touch — so none needs an appliance.
+        run: |
+          set -e
+          echo "== stage sequencer (shell) =="
+          sh tests/test-update-stage-runner.sh
+          echo "== apply sequencer (shell) =="
+          sh tests/test-update-apply-runner.sh
+          echo "== update plan (python) =="
+          python3 -m pip install --quiet flask flask-cors
+          python3 tests/test_update_plan.py
+          echo "== timezone (python) =="
+          python3 tests/test_timezone.py
+
+      - name: Stage LMS skin assets into the OS payload
+        # apply.d/0048-lms-skin-assets.sh installs these; they are deliberately
+        # NOT committed under distro/os-update/files/ so there is a single source
+        # of truth (the same tree live-build bakes and the system bundle ships)
+        # and the image / system bundle / OS bundle cannot drift apart.
+        # Runs BEFORE the idempotency test on purpose, so that test exercises the
+        # migration for real instead of hitting its no-op branch.
+        run: |
+          set -e
+          SRC=distro/config/includes.chroot/usr/local/share/hifi-lms-skin
+          if [ ! -d "$SRC" ]; then
+            echo "::error::$SRC missing — refusing to build an OS payload that would silently ship no LMS skin assets" >&2
+            exit 1
+          fi
+          rm -rf distro/os-update/files/hifi-lms-skin
+          mkdir -p distro/os-update/files
+          cp -r "$SRC" distro/os-update/files/
+          find distro/os-update/files/hifi-lms-skin -type f | sort
 
       - name: Lint + idempotency test for OS update payload
         # Guards the OS-channel contract automatically: shellcheck the runner +
@@ -94,9 +210,35 @@ jobs:
         # reboot every device on every update).
         run: |
           set -e
-          sudo apt-get update -qq && sudo apt-get install -y shellcheck >/dev/null
+          # shellcheck ships with the ubuntu-latest image, so normally there is
+          # nothing to install. Only reach for apt as a fallback, and cap it: a
+          # hanging mirror used to wedge this step for hours with no output.
+          if ! command -v shellcheck >/dev/null 2>&1; then
+            echo "== shellcheck not preinstalled, installing =="
+            export DEBIAN_FRONTEND=noninteractive
+            for try in 1 2 3; do
+              if timeout 120 sudo -E apt-get update -qq \
+                && timeout 180 sudo -E apt-get install -y shellcheck >/dev/null; then
+                break
+              fi
+              echo "apt attempt $try failed or timed out"
+              if [ "$try" = 3 ]; then
+                echo "FAIL: could not install shellcheck"
+                exit 1
+              fi
+              sleep 10
+            done
+          fi
           echo "== shellcheck =="
-          shellcheck -s sh distro/os-update/apply.sh distro/os-update/lib.sh distro/os-update/apply.d/*.sh
+          shellcheck -s sh distro/os-update/apply.sh distro/os-update/lib.sh distro/os-update/apply.d/*.sh \
+            distro/config/includes.chroot/usr/local/sbin/hifi-update-stage-runner.sh \
+            distro/config/includes.chroot/usr/local/sbin/hifi-update-apply-runner.sh \
+            distro/config/includes.chroot/usr/local/sbin/hifi-system-update.sh \
+            distro/config/includes.chroot/usr/local/sbin/hifi-ota-update.sh \
+            distro/config/includes.chroot/usr/local/sbin/hifi-os-update.sh \
+            distro/config/includes.chroot/usr/local/sbin/hifi-ota-enroll-key.sh \
+            distro/config/includes.chroot/usr/local/sbin/hifi-ota-alpha-toggle.sh \
+            tests/test-update-stage-runner.sh tests/test-update-apply-runner.sh
           echo "== idempotency (run apply.sh twice) =="
           export HIFI_OS_VERSION=ci-test
           export HIFI_PAYLOAD_DIR="$PWD/distro/os-update"
@@ -171,6 +313,7 @@ jobs:
           # OTA channel. GitHub's /releases/latest (used by the prod channel)
           # ignores prereleases, so dev builds never reach prod devices.
           prerelease: ${{ contains(github.ref_name, '-') }}
+          body_path: ${{ steps.changelog.outputs.file }}
           # The installer glob matches only on dev tags (built above); on prod
           # tags it matches nothing and is silently skipped.
           fail_on_unmatched_files: false
@@ -193,15 +336,25 @@ jobs:
         if: github.ref_type == 'tag'
         run: |
           VERSION="${{ steps.ver.outputs.version }}"
-          if printf '%s' "$VERSION" | grep -q '-'; then CH=dev; else CH=prod; fi
+          if printf '%s' "$VERSION" | grep -qE -- '-alpha[0-9]+$'; then CH=alpha
+          elif printf '%s' "$VERSION" | grep -q '-'; then CH=dev
+          else CH=prod
+          fi
           python3 .github/scripts/make-ota-manifest.py \
             "$VERSION" "${{ github.repository }}" "$CH" \
             "${{ steps.pack.outputs.tarball }}" \
             "${{ steps.packsys.outputs.tarball }}" \
-            "${{ steps.packos.outputs.tarball }}"
+            "${{ steps.packos.outputs.tarball }}" \
+            "${{ steps.changelog.outputs.file }}"
           echo "channel=$CH" >> "$GITHUB_OUTPUT"
 
-      - name: Publish OTA manifest to GitHub Pages
+      # Commits the manifest to the gh-pages branch — despite the action's
+      # name this is just a git push, not a GitHub Pages deploy. Cloudflare
+      # Pages (osmium-sound.pages.dev) watches this same branch and
+      # redeploys on its own from here; see OTA_MANIFEST_BASE in
+      # api_server.py for why GitHub Pages itself is no longer in the loop
+      # (its custom-domain cert got permanently stuck).
+      - name: Push OTA manifest to gh-pages branch
         if: github.ref_type == 'tag'
         uses: peaceiris/actions-gh-pages@v4
         with:
@@ -210,35 +363,6 @@ jobs:
           publish_branch: gh-pages
           destination_dir: ota
           keep_files: true          # don't wipe the website already on gh-pages
-          cname: osmiumsound.qd.je
-
-      # Pages' "legacy" build_type auto-deploys on every push to gh-pages via
-      # GitHub's own Jekyll-era builder — deploy-pages.yml, build-ui-ota.yml
-      # and build-companion-apk.yml all just push their slice of the site
-      # there and relied on that. That builder can get stuck (seen 2026-08-06:
-      # a site sat "errored"/"building" for 30+ min across every push, with no
-      # incident on githubstatus.com), so the repo's Pages source is now
-      # build_type "workflow": nothing deploys until an Actions-based
-      # deploy-pages run says so. This step is that explicit deploy — it
-      # re-checks-out the branch this job just pushed to and publishes it via
-      # the same mechanism in each of the three gh-pages-publishing workflows.
-      - name: Checkout updated gh-pages for Actions-based Pages deploy
-        if: github.ref_type == 'tag'
-        uses: actions/checkout@v4
-        with:
-          ref: gh-pages
-          path: gh-pages-deploy
-
-      - name: Upload Pages artifact
-        if: github.ref_type == 'tag'
-        uses: actions/upload-pages-artifact@v3
-        with:
-          path: gh-pages-deploy
-
-      - name: Deploy to GitHub Pages
-        if: github.ref_type == 'tag'
-        id: pages-deployment
-        uses: actions/deploy-pages@v4
 
       - name: Upload artifact (manual runs)
         if: github.ref_type != 'tag'

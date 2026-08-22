@@ -22,5 +22,15 @@ contextBridge.exposeInMainWorld('electronAPI', {
   },
   removeToggleSimpleKeyboard: (callback) => {
     ipcRenderer.removeListener('toggle-simple-keyboard', callback);
+  },
+
+  // Physical (USB/PS2) keyboard presence — live, from udev via the main
+  // process. Used by App.jsx to suppress the on-screen keyboard.
+  getPhysicalKeyboard: () => ipcRenderer.invoke('get-physical-keyboard'),
+  onPhysicalKeyboardChanged: (callback) => {
+    ipcRenderer.on('physical-keyboard-changed', callback);
+  },
+  removePhysicalKeyboardChanged: (callback) => {
+    ipcRenderer.removeListener('physical-keyboard-changed', callback);
   }
 });

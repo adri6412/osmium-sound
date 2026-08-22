@@ -1,0 +1,22 @@
+[Unit]
+Description=HiFi Player — apply staged OTA payloads (isolated update mode)
+# This unit ONLY ever runs during a boot that systemd-system-update-generator(8)
+# has already redirected into system-update.target — which only happens when
+# /system-update exists (created by hifi-update-stage-runner.sh once every
+# component has downloaded and verified). DefaultDependencies=no plus the
+# explicit ordering below keeps it out of the normal boot graph entirely, so
+# it can never be pulled in by an ordinary graphical/multi-user boot.
+DefaultDependencies=no
+Conflicts=shutdown.target
+After=local-fs.target NetworkManager.service network-online.target
+Wants=NetworkManager.service network-online.target
+Before=system-update.target shutdown.target
+
+[Service]
+Type=oneshot
+ExecStart=/bin/sh /usr/local/sbin/hifi-update-apply-runner.sh
+TimeoutStartSec=1800
+StandardOutput=journal+console
+
+[Install]
+WantedBy=system-update.target

@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+{% block title %}Macchine{% endblock %}
+{% block content %}
+<div style="display:flex;justify-content:space-between;align-items:flex-end;flex-wrap:wrap;gap:12px;margin-bottom:14px">
+  <div>
+    <h1>Macchine in beta</h1>
+    <p class="muted" style="margin:0">{{ devices|length }} macchine registrate.</p>
+  </div>
+  {% if devices %}
+  <form method="post" action="{{ url_for('devices_purge') }}"
+        style="display:flex;gap:6px;align-items:center"
+        onsubmit="return confirm('Eliminare definitivamente tutte le macchine senza contatti da pi\u00f9 giorni di quelli indicati? Verranno cancellati anche i loro snapshot e le loro catture.')">
+    <label class="muted" for="days">Elimina le macchine offline da più di</label>
+    <input type="number" id="days" name="days" min="1" value="30" style="width:70px">
+    <span class="muted">giorni</span>
+    <button class="btn secondary" type="submit">Pulisci</button>
+  </form>
+  {% endif %}
+</div>
+
+{% if request.args.get('purged') %}
+<div class="card">Eliminate {{ request.args.get('purged') }} macchine senza contatti da più di {{ request.args.get('days') }} giorni.</div>
+{% endif %}
+
+{% if not devices %}
+<div class="card">Nessuna macchina si è ancora registrata.</div>
+{% else %}
+<table>
+  <thead>
+    <tr>
+      <th>Macchina</th><th>Stato</th><th>CPU</th><th>RAM</th><th>Disco</th>
+      <th>Connessione</th><th>Versione</th><th>Debian</th><th>Ultimo contatto</th><th></th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for d in devices %}
+    <tr onclick="location.href='{{ url_for('device_detail', device_id=d.id) }}'" style="cursor:pointer">
+      <td>
+        <strong>{{ d.label }}</strong><br>
+        <span class="muted">{{ d.cpu_model or '—' }}{% if d.gpu_model %} · {{ d.gpu_model }}{% endif %}</span>
+      </td>
+      <td>
+        {% if d.last_seen_at and d.last_seen_at >= online_cutoff %}
+          <span class="pill online">online</span>
+        {% else %}
+          <span class="pill offline">offline</span>
+        {% endif %}
+      </td>
+      <td>{{ '%.0f'|format(d.cpu_percent) ~ '%' if d.cpu_percent is not none else '—' }}</td>
+      <td>{{ d.ram_total_mb ~ ' MB' if d.ram_total_mb else '—' }}</td>
+      <td>{{ '%.0f'|format(d.disk_percent) ~ '%' if d.disk_percent is not none else '—' }}
+          {% if d.disk_percent is not none %}<span class="muted">di {{ d.disk_total_gb }} GB</span>{% endif %}</td>
+      <td>{{ d.connection_type or '—' }}</td>
+      <td>{{ d.os_version or '—' }}</td>
+      <td class="muted">{{ d.debian_version or '—' }}</td>
+      <td class="muted">{{ d.last_seen_at or 'mai' }}</td>
+      <td onclick="event.stopPropagation()">
+        <form method="post" action="{{ url_for('device_delete', device_id=d.id) }}"
+              onsubmit="return confirm('Eliminare definitivamente \u00ab' + {{ d.label|tojson }} + '\u00bb? Verranno cancellati anche i suoi snapshot e le sue catture. Se la macchina \u00e8 ancora installata si ri-registrer\u00e0 da sola.')">
+          <button class="btn secondary" type="submit">Elimina</button>
+        </form>
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endif %}
+{% endblock %}

@@ -9,35 +9,58 @@
     "next": "Next",
     "retry": "Retry",
     "cancel": "Cancel",
+    "close": "Close",
     "search": "Search",
     "confirm": "Confirm",
     "clear": "Clear",
     "loading": "Loading...",
     "notAvailable": "N/A",
     "language": "Language",
-    "error": "Error"
+    "error": "Error",
+    "done": "Done",
+    "noResults": "No results",
+    "networkError": "Connection error"
   },
   "sources": {
     "active": "Active sources",
     "none": "No sources yet. Add one below.",
     "local": "Local",
-    "usbTitle": "USB disks",
-    "usbNone": "No USB disk connected. Insert a USB stick or drive.",
-    "addWhole": "Add all",
-    "add": "Add",
+    "usbAttention": "USB devices needing attention",
+    "usbNeedsFormat": "No recognized filesystem — format it from a computer.",
+    "usbMountError": "Mount error",
+    "usbRetry": "Retry",
     "addLocal": "Add local folder",
     "addSmb": "Add network folder (SMB)",
     "server": "Server / IP",
     "share": "Share",
     "user": "User (empty = guest)",
     "pass": "Password",
+    "smbRw": "Allow writing (needed to use it as a CD-rip destination)",
+    "smbMakeRw": "Make writable",
+    "smbMakeRo": "Make read-only",
     "mountAndAdd": "Mount and add",
-    "apply": "Apply & rescan library",
     "added": "Added ✓",
     "mounting": "Mounting…",
     "mounted": "Mounted ✓",
-    "applying": "Applying…",
-    "applied": "Done ✓",
+    "subpathPick": "Subfolder…",
+    "subpathUp": "Up",
+    "subpathUseHere": "Use this folder",
+    "subpathUseRoot": "Use whole drive/share",
+    "subpathNoSubfolders": "No subfolders here.",
+    "subpathSaved": "Subfolder saved — the library is being updated.",
+    "newFolderPlaceholder": "New folder name",
+    "newFolderCreate": "Create",
+    "localSambaHint": "Also share this folder over the network (SMB), so you can copy music onto it from a PC.",
+    "useThisFolder": "Use this folder",
+    "playlistdir": {
+      "title": "Playlist folder",
+      "hint": "Where Lyrion saves the playlists you create from the player. The default works for most setups — pick a folder on your own disk if you'd rather keep the playlists next to your music.",
+      "unset": "Not set",
+      "pick": "Choose folder…",
+      "use": "Use this folder",
+      "default": "Restore default",
+      "saved": "Playlist folder saved."
+    },
     "internal": {
       "tag": "INTERNAL",
       "title": "Internal disks",
@@ -72,18 +95,40 @@
       "smbUser": "Username",
       "smbPass": "Password",
       "smbRegenerate": "Regenerate password",
-      "smbRegenerateHint": "If Windows keeps rejecting the credentials, remove the saved entry for this device in Windows Credential Manager, then try again."
-    }
+      "smbRegenerateHint": "If Windows keeps rejecting the credentials, remove the saved entry for this device in Windows Credential Manager, then try again.",
+      "smbInfo": "Info"
+    },
+    "autoApplyHint": "Every change is applied on its own — the library updates without restarting playback.",
+    "countSummary": "{count} in use",
+    "freeOf": "{free} free of {total}",
+    "addSource": "Add source",
+    "addSourceHint": "Network share, internal disk or a folder on this player",
+    "shareTitle": "Shared folders",
+    "shareHint": "Folders this player publishes on the network, so you can copy music onto it from a computer.",
+    "shareNone": "Nothing shared yet.",
+    "shareCount": "{count} shared",
+    "shareLocal": "Share a local folder",
+    "shareThisFolder": "Share this folder"
+  },
+  "usbToast": {
+    "mounted": "\"{label}\" connected and ready"
   },
   "wizard": {
     "brand": "Osmium Sound · Setup",
-    "skip": "Skip",
     "start": "Start",
     "connect": "Connect",
     "finish": "Finish",
     "welcome": {
       "title": "Welcome",
       "subtitle": "Let's set up your network streamer together. Just a few steps: network, music sources, and you're ready to listen."
+    },
+    "qr": {
+      "connectedTitle": "Open in a browser",
+      "connectedSubtitle": "Open this address in any browser — phone, tablet, or computer — to continue setup from there.",
+      "addressLabel": "Address",
+      "tipsLabel": "Tips",
+      "addressHint": "Type the address exactly as shown, including \"http://\" — Safari won't open it without it.",
+      "pcRecommended": "A computer works best: the Lyrion Music Server interface opened at the end of setup doesn't display great on a phone."
     },
     "input": {
       "title": "How do you use the device?",
@@ -92,6 +137,18 @@
       "touchSub": "I tap the screen",
       "mouse": "Mouse",
       "mouseSub": "Show the pointer"
+    },
+    "mode": {
+      "title": "How will you use this device?",
+      "subtitle": "You can change this any time in Settings.",
+      "gui": "With a screen",
+      "guiSub": "Use the touchscreen interface on this device",
+      "headless": "Headless",
+      "headlessSub": "No screen — control from your phone or browser",
+      "headlessWarning": "The screen will turn off. You will control this device from the companion app, from http://hifiplayer.local, and from the Lyrion web interface (:9000). Continue?",
+      "confirmHeadless": "Turn off screen",
+      "waitTitle": "Continue from your phone",
+      "waitSubtitle": "This device is now headless. Connect to the setup hotspot or open http://hifiplayer.local to finish."
     },
     "language": {
       "title": "Language",
@@ -111,6 +168,8 @@
     },
     "wifi": {
       "title": "Wi-Fi networks",
+      "setupSubtitle": "Pick your Wi-Fi network below, or connect an Ethernet cable instead.",
+      "rescan": "Rescan",
       "scanUnavailable": "Wi-Fi scan not available.",
       "noNetworks": "No networks found.",
       "scanning": "Scanning…",
@@ -119,7 +178,8 @@
       "connecting": "Connecting to {ssid}…",
       "connectedTo": "Connected to {ssid}",
       "connectedToIp": "Connected to {ssid} · IP {ip}",
-      "connectFailed": "Wi-Fi connection failed. Check the password."
+      "connectFailed": "Wi-Fi connection failed. Check the password.",
+      "passwordRequired": "This network is password-protected — enter its password."
     },
     "audio": {
       "title": "Audio output",
@@ -129,9 +189,9 @@
       "searching": "Searching for devices…"
     },
     "sources": {
-      "title": "Music sources",
-      "subtitle": "Scan the QR with your phone to open the configuration page and add your music folders — local on the device or shared over the network (SMB).",
-      "addressLabel": "Configuration address",
+      "title": "Configure from your phone",
+      "subtitle": "Scan the QR with your phone to open the full box setup and complete configuration from your smartphone.",
+      "addressLabel": "Full setup address",
       "scanHint": "Scan the QR code with your phone camera"
     },
     "lyrion": {
@@ -144,7 +204,17 @@
       "notInstalledHint": "Lyrion Music Server is not installed on this device. Install it now to manage your music library.",
       "install": "Install Lyrion",
       "installing": "Installing Lyrion…",
-      "installFailed": "Lyrion installation failed. Check your connection and try again."
+      "installFailed": "Lyrion installation failed. Check your connection and try again.",
+      "modeHint": "Does this device run the music server, or do you already have one on your network?",
+      "internal": "Internal",
+      "external": "External",
+      "externalHint": "Pick the server found on your network, or type its address.",
+      "noneFound": "No Lyrion server found on the network yet.",
+      "hostPlaceholder": "IP address, e.g. 192.168.1.50",
+      "search": "Search again",
+      "useExternal": "Use this server",
+      "externalApplied": "This device now uses that server.",
+      "externalFailed": "Could not switch to that server. Check the address and try again."
     }
   },
   "sidebar": {
@@ -165,7 +235,36 @@
     "tabs": {
       "music": "Music",
       "radio": "Radio",
-      "apps": "Apps / CD"
+      "apps": "Apps / CD",
+      "discover": "Discover"
+    },
+    "discover": {
+      "mixes": "Endless mixes",
+      "mixTracks": "Random mix",
+      "mixAlbums": "Random album",
+      "mixArtists": "Random artist",
+      "mixStarted": "Mix started: the queue keeps itself topped up.",
+      "mixError": "Couldn't start the mix (Random Mix plugin not enabled?).",
+      "genresFilter": "Genres",
+      "genresAll": "All genres",
+      "genresCount": "{count}/{total} genres",
+      "genresLoading": "Loading genres…",
+      "genresError": "Couldn't load genres (Random Mix plugin not enabled?).",
+      "genresEmpty": "No genres found in the library.",
+      "genresSelectAll": "Select all",
+      "genresSelectNone": "Select none",
+      "genresPresetSaveAs": "Save as preset",
+      "genresPresetNamePlaceholder": "Preset name (e.g. Jazz)",
+      "genresPresetDelete": "Delete",
+      "genresPresetDeleteConfirm": "Delete preset \"{name}\"?",
+      "dstm": "Keep playing similar music",
+      "dstmOn": "On ({provider}): music continues when the queue ends.",
+      "dstmOff": "Off: playback stops at the end of the queue.",
+      "dstmSetupHint": "Pick a provider once in Lyrion → Settings → Don't Stop The Music, then the toggle will appear here.",
+      "similarTo": "Artists similar to {artist}",
+      "similarHint": "Artists with ▶ are in your library: tap to play them.",
+      "bio": "About {artist}",
+      "hint": "Play a track to see similar artists and a biography. Suggestions use the Lyrion \"MusicArtistInfo\" and \"Don't Stop The Music\" plugins."
     },
     "titles": {
       "home": "Home",
@@ -175,9 +274,12 @@
       "playlists": "Playlists",
       "radio": "Radio",
       "apps": "Apps",
+      "favorites": "Favorites",
       "search": "Search"
     },
     "searchPlaceholder": "Type and press Search…",
+    "filterArtistsPlaceholder": "Search artist…",
+    "filterAlbumsPlaceholder": "Search album…",
     "connecting": "Connecting to Lyrion…",
     "connectionErrorTitle": "Connection Error",
     "noPlayer": "No Lyrion player found",
@@ -185,6 +287,8 @@
     "connectingShort": "Connecting…",
     "reconnect": "Reconnect",
     "nowPlaying": "Now Playing",
+    "startScreensaver": "Start screensaver",
+    "volumeFixed": "Volume is fixed at 100% (bit-perfect output). Change this in Settings → Playback.",
     "lyrics": "Lyrics",
     "vuMeters": "VU meters",
     "lyricsNone": "No lyrics found for this track.",
@@ -195,13 +299,33 @@
     "repeat": "Repeat",
     "queue": "Queue",
     "queueEmpty": "The queue is empty",
+    "addToQueue": "Add to queue",
+    "playNext": "Play next",
     "saveAsPlaylist": "Save as playlist",
     "clearQueue": "Clear",
     "playlistNamePlaceholder": "Playlist name",
     "saveError": "Couldn't save the playlist. Check that a playlist folder is configured in Lyrion.",
     "sleep": "Sleep timer",
     "sleepActive": "Stops in about {min} min",
-    "sleepOff": "Turn off timer"
+    "sleepOff": "Turn off timer",
+    "cd": {
+      "detected": "Audio CD detected",
+      "rip": "Rip",
+      "ripTitle": "Rip CD to library",
+      "ripProgress": "Track {track} of {total}",
+      "ripProgressShort": "In progress…",
+      "ripDone": "Rip complete! The album is in your library.",
+      "ripError": "Rip failed. Check the disc and try again.",
+      "artist": "Artist",
+      "album": "Album",
+      "start": "Start rip",
+      "eject": "Eject",
+      "noDestination": "No writable destination: adopt an internal disk from Settings → Music sources."
+    },
+    "bluetooth": {
+      "unknownTrack": "Bluetooth playback",
+      "streaming": "Streaming from a phone"
+    }
   },
   "settings": {
     "title": "Settings",
@@ -214,18 +338,22 @@
       "audio": "Audio Output (DAC)",
       "playback": "Playback",
       "dsp": "DSP / Equalizer",
-      "multiroom": "Multiroom",
+      "multiroom": "Lyrion Music Server",
       "alarm": "Alarm Clock",
       "network": "Network Configuration",
       "webRemote": "Android Companion",
-      "webRemoteIos": "iPhone / iPad",
-      "backup": "Backup & restore",
+      "webRemoteIos": "iPhone / iPad (LyrPlay)",
       "ssh": "SSH Access",
       "pointer": "Mouse pointer",
+      "uiResolution": "Interface resolution",
+      "uiRefresh": "Refresh rate",
+      "displayMode": "Display mode",
+      "timezone": "Timezone",
       "systemInfo": "System Information",
       "updates": "Updates",
       "systemControls": "System Controls",
-      "language": "Language"
+      "language": "Language",
+      "thirdPartyNotices": "Third-Party Notices"
     },
     "language": {
       "help": "Choose the interface language."
@@ -245,7 +373,13 @@
       "rgTrack": "Track",
       "rgAlbum": "Album",
       "rgSmart": "Smart",
-      "saved": "Setting saved."
+      "saved": "Setting saved.",
+      "fixedVolume": "Fixed volume 100% (bit-perfect)",
+      "fixedVolumeHelp": "Bypasses the player's digital volume control entirely — output is always at 100%. Required for bit-perfect playback; turn it off to use the on-screen volume slider again.",
+      "vuMeter": "Animated VU meters",
+      "vuMeterHelp": "The VU dial in the \"now playing\" screen updates live with the audio level. Turn it off to reduce GPU load on more limited hardware.",
+      "autoExpand": "Auto-open now playing",
+      "autoExpandHelp": "When a song starts playing, automatically open the fullscreen now-playing view after this many seconds. It only opens once per song — if you navigate away yourself, it stays put."
     },
     "dsp": {
       "help": "Optional digital signal processing: a parametric equalizer and headphone crossfeed applied to all playback.",
@@ -273,8 +407,12 @@
       "balanceRight": "Right",
       "balanceCenter": "Centered",
       "roomCorrection": "Room correction (FIR)",
-      "roomCorrectionPresent": "Filter loaded: {filename}. Upload a new one any time from Backup & restore / phone control.",
-      "roomCorrectionMissing": "No filter uploaded yet. Open the sources address (Backup & restore section) from a phone or PC browser to upload a WAV/TXT convolution filter (REW/rePhase).",
+      "roomCorrectionPresent": "Filter loaded: {filename}. Upload a new one any time below, or run the guided measurement.",
+      "roomCorrectionMissing": "No filter loaded yet. Upload a WAV/TXT convolution filter (REW/rePhase) below, or run the guided measurement.",
+      "firUpload": "Upload filter",
+      "firUploading": "Uploading…",
+      "firRemove": "Remove filter",
+      "firRemoved": "Filter removed",
       "save": "Apply EQ",
       "failed": "DSP operation failed.",
       "presets": "Presets",
@@ -289,16 +427,35 @@
       "presetDeleteConfirm": "Delete preset \"{name}\"?",
       "presetFailed": "Preset operation failed."
     },
+    "roomcorr": {
+      "title": "Guided room correction",
+      "start": "Measure the room",
+      "intro": "The appliance plays a test sweep, records it with a USB measurement microphone and automatically generates the correction filter for this room.",
+      "req1": "Connect a USB measurement microphone (e.g. miniDSP UMIK-1).",
+      "req2": "Place the microphone at the listening position, at ear height.",
+      "req3": "Set a normal listening volume and keep the room quiet during the measurement.",
+      "pickMic": "Measurement microphone:",
+      "position": "When you're ready, start: you'll hear a sweep of about 10 seconds.",
+      "noMic": "No USB microphone detected. Connect one and reopen the wizard.",
+      "measure": "Start measurement",
+      "measuring": "Measuring…",
+      "keepQuiet": "Keep the room quiet until the measurement is done.",
+      "measured": "Measured response",
+      "corrected": "With correction",
+      "apply": "Apply correction",
+      "discard": "Discard",
+      "error": "Measurement failed. Check the microphone and volume, then try again."
+    },
     "multiroom": {
       "help": "Group other players on your network with this device so they play the same music in sync (native Lyrion sync).",
       "noOthers": "No other players found on the network. Multiroom needs at least one more player (e.g. another Osmium device or a squeezelite player).",
       "saved": "Multiroom group updated.",
       "failed": "Could not change the multiroom group.",
       "role": {
-        "title": "This device's Lyrion server",
-        "help": "For two devices to be grouped they must point at the same Lyrion server — each Osmium Sound runs its own and they can't see each other until they share one. Choose whether this device should use its own server (default, standalone) or follow another Osmium device's server on the network.",
-        "local": "This device",
-        "follow": "Another device",
+        "title": "Music server",
+        "help": "This device can run its own Lyrion Music Server, or use one that is already running on your network. Two devices can only be grouped when they point at the same server.",
+        "local": "Internal (this device)",
+        "follow": "External (on my network)",
         "hostPlaceholder": "IP address, e.g. 192.168.1.50",
         "hostRequired": "Enter the IP address of the device to follow.",
         "apply": "Apply",
@@ -310,9 +467,20 @@
       },
       "name": {
         "title": "This player's name",
-        "help": "Every Osmium Sound device is named \"OsmiumSound\" by default — group two of them and you can't tell them apart. Give it a unique name (e.g. \"LivingRoom\", no spaces).",
+        "help": "Every Osmium Sound device is named \"OsmiumSound\" by default — group two of them and you can't tell them apart. Give it a unique name (e.g. \"LivingRoom\"). This also renames the device on the network (hostname and livingroom.local), so use only letters, numbers and hyphens — no spaces.",
         "saved": "Player name updated.",
         "failed": "Could not update the player name."
+      },
+      "server": {
+        "installed": "Installed version",
+        "notInstalled": "not installed",
+        "channel": "Version channel",
+        "channel_release": "Release",
+        "channel_nightly": "Stable nightly",
+        "channel_dev": "Development",
+        "channelWarning": "Nightly and development builds are pre-release: expect the occasional bug. You can switch back to Release at any time.",
+        "install": "Install Lyrion",
+        "update": "Install / update"
       }
     },
     "webRemote": {
@@ -329,11 +497,7 @@
     "webRemoteIos": {
       "help": "On iPhone/iPad, use LyrPlay — a free app already on the App Store for controlling Lyrion/Squeezebox: native FLAC/Opus decoding, real background playback, lock-screen controls, CarPlay and Siri. Scan the QR to download it. Note: DSP, updates, reboot and multiroom role stay kiosk-only.",
       "scanHint": "Scan to open LyrPlay on the App Store",
-      "disclaimer": "LyrPlay is a third-party app, not developed by or affiliated with this project. Listed only as a compatible Lyrion/Squeezebox client."
-    },
-    "backup": {
-      "help": "Export or restore this device's configuration (DAC, DSP/EQ, music sources, mouse pointer, update channel) from a browser on your phone or PC. Open the address below or scan the QR code, then use \"Download backup\" or \"Restore from file\".",
-      "scanHint": "Scan with your phone camera"
+      "disclaimer": "LyrPlay is a third-party app, not developed by or affiliated with this project. Only recommended as a compatible Lyrion/Squeezebox client."
     },
     "alarm": {
       "help": "Schedule alarms on the active player. At the set time the player wakes up and starts playing.",
@@ -341,23 +505,106 @@
     },
     "ssh": {
       "help": "Enable or disable the SSH server for remote terminal access to the device.",
-      "warning": "For security, SSH is disabled by default. Only enable it if you know what you are doing, and change the default password immediately.",
+      "warning": "SSH is disabled by default. Turn it on only if you know what you are doing — the login below has full administrator rights on the appliance.",
       "enabled": "SSH enabled",
       "disabled": "SSH disabled",
       "unavailable": "SSH service is not installed on this device.",
       "installHint": "SSH is not installed yet: enabling it will install and start it automatically (requires an internet connection).",
-      "failed": "SSH operation failed."
+      "failed": "SSH operation failed.",
+      "loginTitle": "SSH login",
+      "loginIs": "Connect with:",
+      "noLogin": "No SSH login has been created on this device yet.",
+      "sudoWarning": "This login has full administrator rights (sudo). SSH is for advanced users — use at your own risk.",
+      "usernamePlaceholder": "Username (lowercase, no spaces)",
+      "passwordPlaceholder": "Password (at least 8 characters)",
+      "loginCreate": "Create SSH login",
+      "loginUpdate": "Change SSH password",
+      "loginSaved": "SSH login updated.",
+      "loginFailed": "Could not update the SSH login."
     },
     "pointer": {
-      "help": "Show the mouse pointer on screen. Useful if you use the device with a mouse instead of the touchscreen. The pointer is hidden by default.",
+      "label": "Mouse pointer",
+      "help": "Show the mouse pointer on screen, or hide it if you only use the touchscreen. Shown by default, so the on-screen setup wizard stays usable.",
       "enabled": "Mouse pointer shown",
       "disabled": "Mouse pointer hidden",
       "unavailable": "Pointer control is not available on this device.",
       "failed": "Could not change the pointer."
     },
+    "uiResolution": {
+      "help": "On large screens the interface is drawn at full panel resolution, which keeps the graphics chip busy. Rendering it lower and letting the screen enlarge it makes everything much smoother, at the cost of some sharpness.",
+      "option": {
+        "auto": "Automatic",
+        "720": "1280 × 720",
+        "1080": "1920 × 1080",
+        "native": "Native"
+      },
+      "optionHelp": {
+        "auto": "Recommended — lowers the resolution only on screens that need it",
+        "720": "Best performance",
+        "1080": "Middle ground, useful on 4K screens",
+        "native": "Sharpest picture, heaviest on the graphics chip"
+      },
+      "restartWarning": "The interface will close and reopen after a few seconds. Playback is not interrupted.",
+      "confirm": "Apply",
+      "cancel": "Cancel",
+      "failed": "Could not change the resolution."
+    },
+    "uiRefresh": {
+      "help": "Both the screen scaling and the interface's own redraws are tied to the panel's refresh rate, so lowering it reduces graphics-chip load — measured at roughly 40% less on this hardware. The needle/level movements stay smooth; fast animations may look very slightly less fluid.",
+      "monitorDisclaimer": "If the connected monitor doesn't support a lower refresh rate, switching won't have any effect — no visual difference and no reduction in graphics-chip load either.",
+      "unsupported": "This screen does not offer a lower refresh rate to switch to.",
+      "currentNative": "Native refresh rate",
+      "currentLow": "Low-power refresh rate",
+      "switchToLow": "Switch to low-power",
+      "switchToNative": "Switch back to native",
+      "confirmPrompt": "Keep the low-power refresh rate? Reverting automatically in {seconds}s.",
+      "revertNow": "Revert now",
+      "keep": "Keep it",
+      "kept": "Low-power refresh rate kept.",
+      "reverted": "No confirmation received — reverted to the native refresh rate.",
+      "failed": "Could not change the refresh rate."
+    },
+    "displayMode": {
+      "help": "Choose whether this device runs with the on-screen touchscreen interface or headless (no screen), controlled remotely from the Android companion app, the Lyrion web interface (port 9000) or the music sources page (port 8080).",
+      "currentGui": "On-screen interface (touchscreen)",
+      "currentHeadless": "Headless (no screen)",
+      "switchToHeadless": "Switch to headless",
+      "switchToGui": "Switch to on-screen interface",
+      "headlessWarning": "The screen will turn off immediately. You will then control this device only from the companion app, http://hifiplayer.local:9000 (Lyrion) and :8080 (sources). To bring the interface back, use the companion app → Settings → Display mode.",
+      "confirmHeadless": "Turn off screen",
+      "cancel": "Cancel",
+      "failed": "Could not change the display mode."
+    },
+    "thirdPartyNotices": {
+      "intro": "Osmium Sound includes open source components, each under its own license. The full record is also kept in THIRD-PARTY-NOTICES.md in the project repository."
+    },
+    "playerEnabled": {
+      "label": "Player",
+      "help": "Turn the player itself off for a server-only unit — Lyrion Music Server and everything else keeps running, this device just never plays audio locally. Useful for a box in a closet driving other players elsewhere.",
+      "currentOn": "Player on",
+      "currentOff": "Player off (server only)",
+      "switchOff": "Turn player off",
+      "switchOn": "Turn player on",
+      "offWarning": "This device will stop playing audio locally. Lyrion Music Server and remote control keep working.",
+      "confirmOff": "Turn off player",
+      "cancel": "Cancel",
+      "failed": "Could not change the player on/off state."
+    },
+    "timezone": {
+      "help": "A fresh install has no way to ask for this, so it defaults to UTC — pick the device's real one here.",
+      "failed": "Could not change the timezone."
+    },
     "lyrion": {
       "urlLabel": "Lyrion Server URL",
       "urlHelp": "Enter the address of your Lyrion Media Server (e.g. http://192.168.1.100:9000)",
+      "skinLabel": "Web player look",
+      "skinHint": "The look of Lyrion's web player (the page you open from a browser or phone). Osmium matches this device's interface.",
+      "skinOsmium": "Osmium",
+      "skinMaterial": "Material",
+      "skinUnset": "No skin chosen yet — the web player still uses Lyrion's stock look. Pick one to switch.",
+      "skinInstalling": "Installing the Material web interface…",
+      "skinApplying": "Applying the skin…",
+      "skinFailed": "Could not apply the skin. Check the network connection and try again.",
       "rescanLabel": "Music library",
       "rescanHelp": "Re-check the music folders for new or changed tracks.",
       "rescan": "Rescan library",
@@ -367,7 +614,7 @@
       "rescanFailed": "Failed to start the scan."
     },
     "sources": {
-      "help": "Add your music folders: USB sticks/drives (auto-mounted), network (SMB) or local folders. Press \"Apply & rescan\" when done."
+      "help": "Add your music folders: USB sticks/drives (auto-mounted), network (SMB) or local folders. Changes take effect right away."
     },
     "audio": {
       "help": "Choose the playback device (DAC). The selection is saved and kept across reboots. DSD playback is bit-perfect (DoP).",
@@ -387,7 +634,16 @@
       "typeSubnet": "Type: {type} | Subnet: {subnet}",
       "dhcpNotice": "The network is configured automatically via DHCP. Plug in the Ethernet cable or set up Wi-Fi to get an IP address.",
       "reloadData": "Reload Data",
-      "loading": "Loading..."
+      "loading": "Loading...",
+      "activeLabel": "Active connection",
+      "activeWired": "Wired · {ip}",
+      "activeWifi": "Wi-Fi ({ssid}) · {ip}",
+      "activeNone": "Not connected",
+      "configureWifiButton": "Connect to Wi-Fi",
+      "useWiredButton": "Use wired",
+      "switchedToWifi": "Now using Wi-Fi ({ssid}) — the wired connection has been turned off.",
+      "switchedToWired": "Now using the wired connection — Wi-Fi has been turned off.",
+      "switchFailed": "Could not switch connection. Check it and try again."
     },
     "info": {
       "hostname": "Hostname",
@@ -403,7 +659,9 @@
       "channel": "Update channel",
       "channelProd": "Production",
       "channelDev": "Development",
+      "channelAlpha": "Alpha (private)",
       "channelWarning": "Development channel: you will receive prerelease, potentially unstable builds. Switch back to Production when you finish testing.",
+      "confirmProdToDev": "Once you update to a dev release, you will only be able to switch back to production once a production release newer than that dev release is out.",
       "system": "System (API/daemon/script)",
       "os": "Operating system",
       "signed": "signed",
@@ -413,17 +671,12 @@
       "checkButton": "Check for updates",
       "updating": "Updating...",
       "updateNow": "Update now",
-      "orderNote": "Updates are applied in order: system, interface and — if present — the operating system (with a final reboot).",
+      "orderNote": "Updates are applied by the player itself, in order: system, operating system (with a reboot if needed) and interface. The update carries on even if this screen closes.",
+      "whatsNew": "What's new",
+      "changelogTitle": "What's new in {version}",
       "autoCheck": "Check for updates on startup",
-      "advanced": "Advanced (Lyrion)",
-      "lyrionInstalled": "Lyrion installed",
       "latestVersion": "Latest version",
       "installedVersion": "Installed version",
-      "lyrionAvailable": "Lyrion update available: {version}",
-      "lyrionAvailableShort": "Update available: {version}",
-      "lyrionUpToDate": "Lyrion is up to date",
-      "checkLyrion": "Check for Lyrion updates",
-      "updateLyrion": "Update Lyrion ({version})",
       "lyrionRestartNote": "The music server will be restarted when finished.",
       "msg": {
         "checkFailed": "Update check failed",
@@ -443,6 +696,14 @@
         "applyingUi": "Updating interface (restart when finished)…",
         "allDone": "Update complete"
       },
+      "progressState": {
+        "starting": "Starting…",
+        "downloading": "Downloading update…",
+        "verifying": "Verifying…",
+        "applying": "Applying changes…",
+        "restarting": "Restarting…",
+        "done": "Done"
+      },
       "overlay": {
         "titleAll": "Update in progress",
         "titleUi": "Updating interface",
@@ -459,7 +720,19 @@
       "reboot": "Reboot System",
       "shutdown": "Shut Down System"
     },
-    "restartWizard": "Restart setup wizard",
+    "factory": {
+      "help": "Erase all settings and return the device to its initial state (Wi-Fi networks, music sources, DSP/room correction, Bluetooth, companion pairing and the web-admin account are all cleared). The device restarts into the setup wizard.",
+      "button": "Factory reset",
+      "confirm": "This erases ALL settings and the web-admin account, then restarts into the setup wizard. This cannot be undone. Continue?",
+      "running": "Factory reset started — the device will restart…",
+      "failed": "Could not start the factory reset."
+    },
+    "webuiReset": {
+      "button": "Reset web interface password",
+      "confirm": "This clears the web admin account so it can be recreated on the next web login. Other settings are unaffected. Continue?",
+      "done": "Web interface credentials cleared.",
+      "failed": "Could not reset the web interface credentials."
+    },
     "about": {
       "builtWith": "Built with Electron, React, and Tailwind CSS"
     },

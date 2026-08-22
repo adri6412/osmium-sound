@@ -1,11 +1,11 @@
 #!/bin/bash
-# HiFi Media Player - Installation script for DietPi/Debian
+# Osmium Sound - Installation script for DietPi/Debian
 # Optimized for 1024x600 touchscreen displays
 
 set -e
 
 echo "=========================================="
-echo "  HiFi Media Player - DietPi Installer"
+echo "  Osmium Sound - DietPi Installer"
 echo "=========================================="
 echo ""
 

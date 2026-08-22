@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy"
+        content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:">
+  <title>Osmium Flasher</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header>
+  <span class="brand">Osmium Flasher</span>
+  <span class="ver" id="appVersion"></span>
+  <span class="lang">
+    <button id="langEn" class="on">EN</button>
+    <button id="langIt">IT</button>
+  </span>
+</header>
+
+<!-- The three phases of getting Osmium onto a mini PC. The stick is only the
+     first of them, which is the whole point of the wizard. -->
+<nav class="stepper" id="stepper">
+  <span class="step" data-phase="stick"><i>1</i><span data-i18n="step.stick"></span></span>
+  <span class="step" data-phase="boot"><i>2</i><span data-i18n="step.boot"></span></span>
+  <span class="step" data-phase="install"><i>3</i><span data-i18n="step.install"></span></span>
+</nav>
+
+<main>
+
+  <!-- 1 ── welcome ─────────────────────────────────────────────────────── -->
+  <section class="screen on" id="screenWelcome">
+    <h1 data-i18n="welcome.title"></h1>
+    <p class="lead" data-i18n="welcome.lead"></p>
+
+    <div class="card">
+      <h3 data-i18n="welcome.needTitle"></h3>
+      <ul class="needs">
+        <li data-i18n="welcome.need1"></li>
+        <li data-i18n="welcome.need2"></li>
+        <li data-i18n="welcome.need3"></li>
+      </ul>
+    </div>
+
+    <div class="card release" id="releaseCard">
+      <span class="tag" id="releaseTag">…</span>
+      <span class="size" id="releaseSize"></span>
+    </div>
+
+    <p class="lead" id="releaseError" hidden></p>
+    <button class="linkish" id="useLocal" data-i18n="welcome.useLocal"></button>
+    <p class="aside">
+      <button class="linkish" id="restoreStick" data-i18n="welcome.restore"></button>
+    </p>
+  </section>
+
+  <!-- 2 ── drive selection ─────────────────────────────────────────────── -->
+  <section class="screen" id="screenSelect">
+    <h1 data-i18n="select.title"></h1>
+    <p class="lead" data-i18n="select.lead"></p>
+    <div class="drives" id="driveList"></div>
+    <div class="empty" id="driveEmpty">
+      <div class="spin">⌛</div>
+      <p data-i18n="select.empty"></p>
+    </div>
+  </section>
+
+  <!-- 3 ── confirm ─────────────────────────────────────────────────────── -->
+  <section class="screen" id="screenConfirm">
+    <h1 id="confirmTitle" data-i18n="confirm.title"></h1>
+    <div class="danger-box">
+      <p><strong id="confirmWarnTitle" data-i18n="confirm.warnTitle"></strong></p>
+      <p id="confirmTarget"></p>
+      <p id="confirmWarnBody" data-i18n="confirm.warnBody"></p>
+      <label class="check" id="oversizeWrap" hidden>
+        <input type="checkbox" id="oversizeAck">
+        <span data-i18n="confirm.oversize"></span>
+      </label>
+    </div>
+  </section>
+
+  <!-- 4 ── working ─────────────────────────────────────────────────────── -->
+  <section class="screen" id="screenWork">
+    <h1 id="workTitle"></h1>
+    <p class="lead" id="workLead"></p>
+    <div class="bar" id="workBar"><i></i></div>
+    <div class="stats">
+      <span id="workLeft"></span>
+      <span id="workRight"></span>
+    </div>
+  </section>
+
+  <!-- 5 ── boot the mini PC ────────────────────────────────────────────── -->
+  <section class="screen" id="screenBoot">
+    <p class="banner-ok" data-i18n="boot.ready"></p>
+    <h1 data-i18n="boot.title"></h1>
+    <ol class="steps">
+      <li data-i18n="boot.s1"></li>
+      <li data-i18n="boot.s2"></li>
+      <li data-i18n="boot.s3"></li>
+      <li data-i18n="boot.s4"></li>
+    </ol>
+    <div class="card note">
+      <h3 data-i18n="boot.tryTitle"></h3>
+      <p data-i18n="boot.try"></p>
+    </div>
+    <div class="card note">
+      <h3 data-i18n="boot.troubleTitle"></h3>
+      <p data-i18n="boot.trouble"></p>
+    </div>
+  </section>
+
+  <!-- 6 ── install on the mini PC ──────────────────────────────────────── -->
+  <section class="screen" id="screenInstall">
+    <h1 data-i18n="install.title"></h1>
+    <ol class="steps">
+      <li data-i18n="install.s1"></li>
+      <li data-i18n="install.s2"></li>
+      <li data-i18n="install.s3"></li>
+      <li data-i18n="install.s4"></li>
+    </ol>
+    <div class="danger-box">
+      <p><strong data-i18n="install.warnTitle"></strong></p>
+      <p data-i18n="install.warn"></p>
+    </div>
+    <div class="card note">
+      <h3 data-i18n="install.phoneTitle"></h3>
+      <p data-i18n="install.phone"></p>
+    </div>
+  </section>
+
+  <!-- 7 ── finished ────────────────────────────────────────────────────── -->
+  <section class="screen" id="screenFinish">
+    <div class="result-ico">✅</div>
+    <h1 data-i18n="finish.title"></h1>
+    <p class="lead" data-i18n="finish.lead"></p>
+    <div class="card note">
+      <h3 data-i18n="finish.nextTitle"></h3>
+      <p data-i18n="finish.next"></p>
+    </div>
+    <button class="linkish" id="anotherStick" data-i18n="finish.another"></button>
+  </section>
+
+  <!-- 8 ── stick restored ─────────────────────────────────────────────── -->
+  <section class="screen" id="screenRestored">
+    <div class="result-ico">✅</div>
+    <h1 data-i18n="restored.title"></h1>
+    <p class="lead" data-i18n="restored.lead"></p>
+  </section>
+
+  <!-- 9 ── error ───────────────────────────────────────────────────────── -->
+  <section class="screen" id="screenError">
+    <div class="result-ico">⚠️</div>
+    <h1 data-i18n="error.title"></h1>
+    <p class="lead" id="errorLead"></p>
+    <div class="err-detail" id="errorDetail"></div>
+    <p class="lead" style="margin-top:1rem" data-i18n="error.support"></p>
+  </section>
+
+</main>
+
+<footer>
+  <button class="btn ghost" id="btnBack" hidden></button>
+  <span class="spacer"></span>
+  <button class="btn ghost" id="btnCancel" hidden></button>
+  <button class="btn primary" id="btnNext" disabled></button>
+</footer>
+
+<script src="renderer.js"></script>
+</body>
+</html>

@@ -3,6 +3,22 @@
  * Uses JSON-RPC over HTTP
  */
 
+// MusicArtistInfo's `biography` command returns an HTML fragment (it's the
+// same markup MAI's own web/Jive popup renders), not plain text — a <link>
+// tag plus <p>/<b>/<i>/<span> wrapping the prose. We only want the words, and
+// parsing it as HTML (rather than executing it) also means we never have to
+// trust that markup: DOMParser-produced documents aren't inserted into a
+// browsing context, so embedded <script>/<img onerror> etc. never run.
+const htmlToText = (html) => {
+  const doc = new DOMParser().parseFromString(html, 'text/html');
+  doc.querySelectorAll('script, style, link').forEach((el) => el.remove());
+  doc.querySelectorAll('p, br, div').forEach((el) => el.append('\n\n'));
+  return (doc.body.textContent || '')
+    .replace(/[ \t]+/g, ' ')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+};
+
 export class LyrionAPI {
   constructor(baseUrl = 'http://localhost:9000') {
     // Strip trailing slashes and /material/ if present
@@ -91,9 +107,23 @@ export class LyrionAPI {
     // Only request the song tags the player UI actually renders:
     //   a=artist  l=album  d=duration  o=type  T=samplerate  I=samplesize
     //   N=remote stream title (radio). title/id come back without a tag.
+    //   x=remote flag (1 for any non-local source) — needed by useLyrionPlayer
+    //   to know when to apply its cover-art cache-busting heartbeat, since
+    //   streaming-service "radio" features (Qobuz, Tidal, ...) don't reliably
+    //   update N/current_title per song the way classic ICY radio does.
+    //   c=coverid — changes when a *local* track's artwork changes even
+    //   though its stable db id doesn't (retag, replaced file, rescan
+    //   picking different embedded art). getArtworkUrl folds it into the
+    //   query string as a cache-buster so the browser's (very long-lived,
+    //   no-ETag) HTTP cache for /music/{id}/cover can't get stuck serving a
+    //   stale image for that id — see useLyrionPlayer's artworkUrl.
+    // Cover art for *remote* tracks doesn't need a tag at all — it's fetched
+    // via LMS's own /music/current/cover.jpg?player=... endpoint, which
+    // resolves that artwork server-side (see useLyrionPlayer's
+    // artworkUrl/artworkUrlLg).
     // (The old request asked for every available tag every poll — wasted work
     // on the server for fields the UI never reads.)
-    return this.request(playerMac, ['status', '-', 1, 'tags:aldoTIN']);
+    return this.request(playerMac, ['status', '-', 1, 'tags:aldoTINxc']);
   }
 
   async play(playerMac) {
@@ -224,6 +254,92 @@ export class LyrionAPI {
     }
   }
 
+  // --- Discovery (Don't Stop The Music / Random Mix / MusicArtistInfo) ---
+
+  // DSTM per-player provider ('' = off). Returns null when the plugin isn't
+  // installed (pref unreadable) so the UI can hide the toggle entirely.
+  async getDstmProvider(playerMac) {
+    try {
+      return await this.getPlayerPref(playerMac, 'plugin.dontstopthemusic:provider');
+    } catch (_) {
+      return null;
+    }
+  }
+
+  async setDstmProvider(playerMac, provider) {
+    return this.setPlayerPref(playerMac, 'plugin.dontstopthemusic:provider', provider || '');
+  }
+
+  // Random Mix (bundled LMS plugin): start an endless random mix.
+  // mode: 'tracks' | 'albums' | 'contributors' | 'year'
+  async randomPlay(playerMac, mode = 'tracks') {
+    return this.request(playerMac, ['randomplay', mode]);
+  }
+
+  // --- Random Mix genre filtering ---
+  // Genre inclusion is a single state per player, not scoped to a mix mode:
+  // whichever genres are enabled here apply to the next randomPlay() call
+  // regardless of mode ('tracks'/'albums'/'contributors').
+
+  // All known genres with current include/exclude state. The raw response is
+  // a Jive-formatted menu (like getHomeMenu()) whose first two rows are
+  // "select all"/"select none" convenience entries with no `checkbox` field —
+  // filtered out so callers only see real genres.
+  async getRandomPlayGenres(playerMac) {
+    const r = await this.request(playerMac, ['randomplaygenrelist', 0, 999]);
+    const loop = r?.item_loop || [];
+    return loop
+      .filter((it) => typeof it.checkbox !== 'undefined')
+      .map((it) => ({ name: it.text, included: Number(it.checkbox) === 1 }));
+  }
+
+  // Toggle a single genre on/off for future Random Mixes.
+  async setRandomPlayGenre(playerMac, genreName, included) {
+    return this.request(playerMac, ['randomplaychoosegenre', genreName, included ? 1 : 0]);
+  }
+
+  // Select/deselect every genre in one call.
+  async setAllRandomPlayGenres(playerMac, included) {
+    return this.request(playerMac, ['randomplaygenreselectall', included ? 1 : 0]);
+  }
+
+  // Apply an exact genre subset: clear everything, then enable just
+  // `genreNames`. Used to apply a saved genre preset.
+  async applyRandomPlayGenreSet(playerMac, genreNames) {
+    await this.setAllRandomPlayGenres(playerMac, false);
+    await Promise.all(genreNames.map((name) => this.setRandomPlayGenre(playerMac, name, true)));
+  }
+
+  // Artist biography via MusicArtistInfo (same plugin the lyrics use).
+  // Returns text or null (plugin missing / nothing found).
+  async getArtistBio(playerMac, artist) {
+    if (!artist) return null;
+    try {
+      const r = await this.request(playerMac, ['musicartistinfo', 'biography', `artist:${artist}`]);
+      const raw = r?.biography;
+      if (typeof raw !== 'string' || !raw.trim()) return null;
+      const text = htmlToText(raw);
+      return text || null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  // Similar artists via MusicArtistInfo. Not every MAI version exposes this
+  // command — degrade to an empty list so the UI hides the section.
+  async getSimilarArtists(playerMac, artist) {
+    if (!artist) return [];
+    try {
+      const r = await this.request(playerMac, ['musicartistinfo', 'similarartists', `artist:${artist}`]);
+      const loop = r?.item_loop || r?.similarartists_loop || [];
+      return loop
+        .map((it) => (typeof it === 'string' ? it : (it.artist || it.name || it.text || '')))
+        .filter(Boolean);
+    } catch (_) {
+      return [];
+    }
+  }
+
   // --- Multiroom / synchronised zones ---
   // LMS syncs multiple players natively: a sync group has one master and any
   // number of slaves that all play the master's queue in lock-step.
@@ -271,6 +387,13 @@ export class LyrionAPI {
   }
 
   async getAlbums(limit = 9999, offset = 0, artistId = null) {
+    // j=artwork_track_id: which track's art represents the album. Unlike a
+    // plain track id this is already LMS's own coverid — Slim::Schema::
+    // Track::coverid hashes {cover, url, mtime, filesize} and the scanner
+    // resets it to force regeneration whenever a rescan sees the file
+    // change (Slim::Utils::Scanner::Local) — so it changes on its own
+    // whenever the art actually does, no separate cache-buster needed here
+    // (unlike getPlayerStatus's currentTrack.id, which never changes).
     const params = ['albums', offset, limit, 'tags:alSj'];
     if (artistId) {
       params.push(`artist_id:${artistId}`);
@@ -384,14 +507,22 @@ export class LyrionAPI {
 
   // --- Playback Commands ---
 
-  async playItem(playerMac, itemType, itemId) {
+  // mode: 'load' (default, replaces the queue and plays), 'add' (append to
+  // queue), 'insert' (play next).
+  async playItem(playerMac, itemType, itemId, mode = 'load') {
     // itemType can be 'artist_id', 'album_id', 'track_id', or 'folder_id'
-    return this.request(playerMac, ['playlistcontrol', 'cmd:load', `${itemType}:${itemId}`]);
+    return this.request(playerMac, ['playlistcontrol', `cmd:${mode}`, `${itemType}:${itemId}`]);
   }
 
-  getArtworkUrl(trackId, size = 300) {
+  // coverid is optional and purely a cache-buster: LMS resolves the image
+  // from trackId alone regardless, but its response has a very long
+  // Cache-Control and no ETag/Last-Modified, so the browser can never
+  // revalidate on its own — folding coverid into the query string is what
+  // makes the URL actually change when the art behind trackId does.
+  getArtworkUrl(trackId, size = 300, coverid = null) {
     if (!trackId) return null;
-    return `${this.baseUrl}/music/${trackId}/cover?size=${size}`;
+    const url = `${this.baseUrl}/music/${trackId}/cover?size=${size}`;
+    return coverid ? `${url}&coverid=${encodeURIComponent(coverid)}` : url;
   }
 }
 

@@ -1,0 +1,19 @@
+[Unit]
+Description=HiFi Player - quiesce audio DMA before shutdown/reboot (DesignWare DMA panic workaround)
+# Canonical systemd pattern for "run this unconditionally, once, before any
+# halt/poweroff/reboot/kexec transition" (systemd.special(7)): every one of
+# those targets pulls in shutdown.target, so hooking it here alone covers
+# them all, regardless of what actually triggered the transition (SSH `sudo
+# reboot`, `systemctl reboot`, the app's own reboot/shutdown endpoints, an
+# OS-update, factory reset, or the physical power button via logind).
+DefaultDependencies=no
+Before=shutdown.target lyrionmusicserver.service
+Conflicts=shutdown.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/hifi-quiesce-audio-shutdown.sh
+TimeoutStartSec=15
+
+[Install]
+WantedBy=shutdown.target

@@ -1,0 +1,15 @@
+#!/bin/sh
+# HiFi Player appliance — install Tailscale (via the official install script,
+# which sets up its own repo/signing key), so the "Tailscale" section in
+# Settings (webui_server.py → api_server.py's set_tailscale) works
+# immediately on a fresh install, without relying on a runtime apt install
+# from the web UI. This lets the owner join the appliance to their OWN
+# tailnet with their own auth key, to reach it (and every port on it) from
+# outside the home. See distro/os-update/apply.d/0029-remote-support.sh for
+# the equivalent migration on already-installed devices — keep in sync.
+set -e
+
+echo "I: [hifi] installing Tailscale"
+curl -fsSL https://tailscale.com/install.sh | sh
+
+echo "I: [hifi] tailscale hook done"

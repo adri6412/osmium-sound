@@ -1,0 +1,10 @@
+[Unit]
+Description=HiFi Player - mDNS/DHCP keepalive (periodic)
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=5min
+Persistent=false
+
+[Install]
+WantedBy=timers.target

@@ -4,13 +4,39 @@ xset s off
 xset -dpms
 xset s noblank
 
-# Hide the mouse cursor when idle — unless the user enabled the on-screen
-# pointer (Settings → Mouse pointer), persisted by the API at the path below.
-# A non-touchscreen user can thus keep a visible mouse pointer across reboots.
-if [ "$(cat /etc/hifi-player/pointer-enabled 2>/dev/null)" = "1" ]; then
-    : # pointer enabled — leave the cursor visible (don't start unclutter)
-else
+# The mouse cursor is visible by default — the on-device first-boot QR/Wi-Fi
+# setup wizard has a touch/mouse-driven manual-network fallback that needs a
+# visible pointer to be usable. A touchscreen owner can hide it from Settings
+# → Mouse pointer, persisted by the API at the path below (only an explicit
+# "0" hides it; unset/anything else leaves it visible).
+# Installer sessions (hifi.installer=1, see InstallWizard.jsx) always keep the
+# pointer visible too: there's no touchscreen yet at install time, and the
+# disk picker needs a visible cursor to be usable from a VM console / mouse.
+if grep -qw 'hifi.installer=1' /proc/cmdline 2>/dev/null; then
+    : # installer session — leave the cursor visible
+elif [ "$(cat /etc/hifi-player/pointer-enabled 2>/dev/null)" = "0" ]; then
     unclutter -idle 1 -root &
+fi
+
+# Risoluzione di rendering della UI: su pannelli grandi rimpicciolisce l'area di
+# framebuffer mappata sull'uscita (default: ~720p sopra gli 800px di altezza) e
+# lascia l'ingrandimento alla scansione della GPU, così Chromium non rasterizza
+# 2..8 Mpixel per repaint. Deve girare PRIMA di Electron: la finestra viene
+# dimensionata una sola volta all'avvio, su screen.getPrimaryDisplay().size.
+#
+# Guardato: su un'unità che ha ricevuto l'OS-update ma non ancora il
+# system-update lo script non esiste ancora, e la sessione deve partire lo stesso.
+if [ -x /usr/local/sbin/hifi-ui-resolution.sh ]; then
+    /usr/local/sbin/hifi-ui-resolution.sh apply || true
+fi
+
+# Refresh rate del pannello (nativo <-> basso consumo GPU): non tocca l'area
+# di framebuffer, quindi indifferente rispetto all'ordine con la risoluzione
+# sopra — deve solo girare prima di Electron come lei, per lo stesso motivo
+# (evitare un cambio di CRTC sotto una finestra già viva). Stesso guard di
+# skew OS-update/system-update.
+if [ -x /usr/local/sbin/hifi-ui-refresh.sh ]; then
+    /usr/local/sbin/hifi-ui-refresh.sh apply || true
 fi
 
 # Make sure audio is unmuted
@@ -25,8 +51,15 @@ APP="$(command -v hifi-media-player || true)"
 # if the app ever exits or is killed (full crash after long uptime), relaunch it
 # instead of dropping to a dead/blank screen. A short sleep avoids a hot loop if
 # it fails to start at all.
+#
+# `nice -n -5`: second-highest CPU priority on the box (after squeezelite's
+# Nice=-10, see squeezelite.service) so background work — OTA/log/samba —
+# doesn't steal cycles mid-animation and make window open/close feel laggy.
+# The "hifi" user's PAM nice ceiling is raised for this in
+# /etc/security/limits.d/10-hifi-kiosk-nice.conf; without it this silently
+# runs at nice 0 (nice(1) warns to stderr but still execs the app).
 while true; do
-    "$APP" \
+    nice -n -5 "$APP" \
         --no-sandbox \
         --disable-dev-shm-usage \
         --enable-features=UseOzonePlatform \

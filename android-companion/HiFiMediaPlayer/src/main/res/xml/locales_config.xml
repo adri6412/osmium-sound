@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Languages this app is actually translated into, i.e. the ones offered by the
+  in-app language picker (Settings → Display → Language) and by the system's
+  per-app language screen on Android 13+.
+
+  Only en and it are listed: those are the two the Osmium screens are fully
+  translated into, matching the kiosk and web admin language selectors. The
+  da/de/fr/nl/pl/tr files inherited from Squeezer cover only part of the base
+  strings and none of the appliance ones, so offering them here would promise a
+  translation the app does not have.
+-->
+<locale-config xmlns:android="http://schemas.android.com/apk/res/android">
+    <locale android:name="en" />
+    <locale android:name="it" />
+</locale-config>

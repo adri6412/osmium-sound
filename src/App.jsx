@@ -1,17 +1,47 @@
 import React from 'react';
+import { createPortal } from 'react-dom';
 
 import LyrionServer from './pages/LyrionServer';
 import SetupWizard from './pages/SetupWizard';
+import InstallWizard from './pages/InstallWizard';
 import VirtualKeyboard from './components/VirtualKeyboard';
 import Screensaver from './components/Screensaver';
 import BootIntro from './components/BootIntro';
-import { KeyboardProvider, useKeyboard } from './contexts/KeyboardContext';
+import UsbToast from './components/UsbToast';
+import UpdatePlanOverlay from './components/UpdatePlanOverlay';
+import { SCALED_CANVAS_ID } from './components/ScaledCanvas';
+import { KeyboardProvider, useKeyboardActions } from './contexts/KeyboardContext';
 import { I18nProvider } from './i18n';
 import { lyrionApi } from './utils/lyrionApi';
+import { systemAPI } from './utils/api';
+import { hasPhysicalKeyboard } from './utils/physicalKeyboard';
+
+// Mirrors useLyrionPlayer's connectToServer player-selection logic (see
+// src/hooks/useLyrionPlayer.js): `players_loop` isn't necessarily "this
+// appliance first" — the companion app auto-launches Squeezelite/
+// SqueezePlayer on the phone as a second LMS player, and LMS can list it
+// ahead of this kiosk's own player. The screensaver wake/sleep checks below
+// used to just take `players_loop[0]` — on a setup with a second player,
+// that's a coinflip on whether it lands on the kiosk's own player or the
+// phone's, and if it lands on the phone's (stopped) player, playback started
+// remotely on the *kiosk* keeps reading as "not playing" and the screensaver
+// never wakes. Resolve the same way the rest of the app does: prefer the
+// player matching this device's own squeezelite name.
+const isLocalPlayerPlaying = async () => {
+  const status = await lyrionApi.getServerStatus();
+  const players = status?.players_loop || [];
+  if (players.length === 0) return false;
+  const nameRes = await systemAPI.getPlayerName().catch(() => null);
+  const localName = nameRes?.success ? nameRes.data?.name : null;
+  const player = (localName && players.find(p => p.name === localName)) || players[0];
+  const ps = await lyrionApi.getPlayerStatus(player.playerid);
+  return ps?.mode === 'play';
+};
 
 const AppContent = () => {
-  // Boot intro: a 5s logo animation shown over everything at startup, then
+  // Boot intro: the logo animation shown over everything at startup, then
   // faded out to reveal the UI (which mounts/loads underneath meanwhile).
+  // Its length lives in the clip itself — see BootIntro.jsx.
   const [showIntro, setShowIntro] = React.useState(true);
   const [introFading, setIntroFading] = React.useState(false);
   // Run the compositor at 60 FPS while the intro animates (smooth on the x86
@@ -27,28 +57,111 @@ const AppContent = () => {
     }, 600);
   }, []);
   const [isScreensaverActive, setIsScreensaverActive] = React.useState(false);
+  // The screensaver can also be raised on purpose, by tapping the clock in the
+  // Now Playing header. That one is a deliberate "screen off" — it must stay
+  // up until the user taps the screen again, so unlike the idle screensaver it
+  // ignores everything that normally wakes it (stray mouse moves, a track
+  // starting from the companion app, the idle timer re-arming). Mirrored in a
+  // ref because resetInactivityTimer is a stable ([]-deps) callback wired to
+  // document-level listeners and can't read the state value.
+  const [isManualScreensaver, setIsManualScreensaver] = React.useState(false);
+  const manualScreensaverRef = React.useRef(false);
   const [showWizard, setShowWizard] = React.useState(
     () => localStorage.getItem('firstSetupComplete') !== 'true'
   );
+
+  // Boot mode: this live session may have started from the "Install Osmium
+  // Sound" boot entry (kernel param hifi.installer=1) instead of "Try Osmium
+  // Sound" — see api_server.py get_boot_mode(). null = not resolved yet
+  // (render nothing rather than flash the normal kiosk UI first).
+  const [bootMode, setBootMode] = React.useState(null);
+  React.useEffect(() => {
+    let alive = true;
+    (async () => {
+      // hifi-api.service isn't ordered before the X session, so on a cold
+      // live boot this can race Flask still starting up — a single failed
+      // fetch here used to silently fall back to 'live' and drop straight
+      // into the kiosk UI instead of the installer. Retry for a few seconds
+      // instead of giving up after one attempt.
+      let mode = 'live';
+      for (let attempt = 0; attempt < 20 && alive; attempt++) {
+        const res = await systemAPI.getBootMode();
+        if (res.success && res.data?.mode) { mode = res.data.mode; break; }
+        await new Promise((r) => setTimeout(r, 500));
+      }
+      if (alive) setBootMode(mode);
+    })();
+    return () => { alive = false; };
+  }, []);
+
+  // The localStorage flag only records a wizard completed ON THIS SCREEN. If
+  // setup ran through the provisioning flow from the web instead (headless
+  // first, GUI re-enabled later), the flag was never written here — ask the
+  // system whether setup is already done and skip the wizard if so. Feature-
+  // detected: on older systems the endpoint is missing and nothing changes.
+  React.useEffect(() => {
+    if (!showWizard) return;
+    let alive = true;
+    (async () => {
+      try {
+        const res = await systemAPI.getProvisionStatus();
+        if (alive && res.success && res.data?.pending === false && res.data?.completed === true) {
+          localStorage.setItem('firstSetupComplete', 'true');
+          setShowWizard(false);
+        }
+      } catch (_) {}
+    })();
+    return () => { alive = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const inactivityTimer = React.useRef(null);
-  const { showKeyboard } = useKeyboard();
+  // Bumped on every resetInactivityTimer() call (any activity, or the timer
+  // re-arming itself). The 5-minute callback below is async — clearTimeout
+  // can't cancel it once it has started running — so without this token a
+  // callback started right before playback began could resolve `isPlaying`
+  // from a stale read and pop the screensaver over active audio. Any call
+  // that supersedes this one bumps the token, and the callback checks it's
+  // still current before acting on what it found.
+  const inactivityTokenRef = React.useRef(0);
+  const { showKeyboard } = useKeyboardActions();
 
   const resetInactivityTimer = React.useCallback(() => {
+    // Deliberate screensaver: activity doesn't dismiss it, and there's nothing
+    // to re-arm while it's up — wakeScreensaver() below restarts the idle
+    // timer once the user actually taps to come back.
+    if (manualScreensaverRef.current) return;
     setIsScreensaverActive(false);
     if (inactivityTimer.current) clearTimeout(inactivityTimer.current);
+    const myToken = ++inactivityTokenRef.current;
     inactivityTimer.current = setTimeout(async () => {
       let isPlaying = false;
       try {
-        const status = await lyrionApi.getServerStatus();
-        const players = status?.players_loop || [];
-        if (players.length > 0) {
-          const ps = await lyrionApi.getPlayerStatus(players[0].playerid);
-          isPlaying = ps?.mode === 'play';
-        }
+        isPlaying = await isLocalPlayerPlaying();
       } catch (_) {}
+      if (inactivityTokenRef.current !== myToken) return; // superseded — discard this stale read
       if (!isPlaying) setIsScreensaverActive(true);
       else resetInactivityTimer();
     }, 5 * 60 * 1000);
+  }, []);
+
+  // Tap-to-wake, and the only way out of a clock-started screensaver.
+  const wakeScreensaver = React.useCallback(() => {
+    manualScreensaverRef.current = false;
+    setIsManualScreensaver(false);
+    resetInactivityTimer();
+  }, [resetInactivityTimer]);
+
+  // Raised by the clock button in the Now Playing header (LyrionServer.jsx).
+  React.useEffect(() => {
+    const onStart = () => {
+      manualScreensaverRef.current = true;
+      setIsManualScreensaver(true);
+      setIsScreensaverActive(true);
+      if (inactivityTimer.current) clearTimeout(inactivityTimer.current);
+      inactivityTokenRef.current++; // discard whatever the pending idle check finds
+    };
+    window.addEventListener('hifi-start-screensaver', onStart);
+    return () => window.removeEventListener('hifi-start-screensaver', onStart);
   }, []);
 
   React.useEffect(() => {
@@ -65,20 +178,17 @@ const AppContent = () => {
   // controller) with no touch/mouse activity on the kiosk itself. Once the
   // screensaver is up, poll for that case and wake it — otherwise it would
   // keep covering the screen for the whole track.
+  // Not for a clock-started one: that's the user asking for the screen to stay
+  // dark *while* music plays, so polling for playback would defeat it.
   React.useEffect(() => {
-    if (!isScreensaverActive) return;
+    if (!isScreensaverActive || isManualScreensaver) return;
     const poll = setInterval(async () => {
       try {
-        const status = await lyrionApi.getServerStatus();
-        const players = status?.players_loop || [];
-        if (players.length > 0) {
-          const ps = await lyrionApi.getPlayerStatus(players[0].playerid);
-          if (ps?.mode === 'play') resetInactivityTimer();
-        }
+        if (await isLocalPlayerPlaying()) resetInactivityTimer();
       } catch (_) {}
     }, 10 * 1000);
     return () => clearInterval(poll);
-  }, [isScreensaverActive, resetInactivityTimer]);
+  }, [isScreensaverActive, isManualScreensaver, resetInactivityTimer]);
 
   // Auto-show virtual keyboard on text input focus
   React.useEffect(() => {
@@ -88,6 +198,7 @@ const AppContent = () => {
 
     const handleFocus = (e) => {
       if (!isTextInput(e.target)) return;
+      if (hasPhysicalKeyboard()) return;
       const t = e.target;
       if (!t.hasAttribute('data-original-inputmode'))
         t.setAttribute('data-original-inputmode', t.getAttribute('inputmode') || '');
@@ -96,6 +207,7 @@ const AppContent = () => {
     };
     const handleClick = (e) => {
       if (!isTextInput(e.target)) return;
+      if (hasPhysicalKeyboard()) return;
       showKeyboard({ current: e.target }, e.target.value || '');
     };
     const handleFocusOut = (e) => {
@@ -120,31 +232,90 @@ const AppContent = () => {
   }, [showKeyboard]);
 
   // Apply the saved mouse-pointer preference app-wide on startup. Default is
-  // hidden (touchscreen); Settings → Mouse pointer flips it for mouse users.
+  // shown (the on-device first-boot QR/Wi-Fi wizard needs a visible pointer
+  // for its manual-network fallback); Settings → Mouse pointer flips it for
+  // touchscreen-only use. Installer sessions always show the cursor (no
+  // touchscreen yet, no saved preference to read either) — this CSS-level
+  // hide is independent of, and otherwise overrides, the X11/unclutter check
+  // in .xsession.
   React.useEffect(() => {
-    const show = localStorage.getItem('hifiShowPointer') === '1';
-    document.documentElement.classList.toggle('hifi-hide-cursor', !show);
-  }, []);
+    if (bootMode === 'installer') {
+      document.documentElement.classList.remove('hifi-hide-cursor');
+      return;
+    }
+    const hide = localStorage.getItem('hifiShowPointer') === '0';
+    document.documentElement.classList.toggle('hifi-hide-cursor', hide);
+  }, [bootMode]);
 
-  // Allow re-opening the setup wizard from Settings
+  // Global "USB drive mounted" notice. sources_server.py auto-adopts every
+  // USB drive (read-write + Samba share) the instant it's plugged in — no
+  // user action needed (see usb_sync() there) — this just lets the user know
+  // it happened. Watches /api/sources (not /api/usb, which now only lists
+  // devices that still need attention — see api_usb()) for a newly-appeared
+  // `type: usb` entry. Runs regardless of which screen is showing —
+  // SourcesManager.jsx's own poll only runs while that screen is open. Polls
+  // sources_server.py directly (not through api.js) to match the pattern
+  // SourcesManager/InternalDisks already use for that service.
+  const [usbToast, setUsbToast] = React.useState(null);
+  const seenUsbRef = React.useRef(new Set());
+  // The very first poll just establishes the baseline (whatever's already
+  // mounted at that point) — only insertions seen on a *later* poll are
+  // "new", so a stick left in the appliance across a reboot doesn't notify.
+  const usbBaselineDoneRef = React.useRef(false);
   React.useEffect(() => {
-    const open = () => setShowWizard(true);
-    window.addEventListener('hifi-open-wizard', open);
-    return () => window.removeEventListener('hifi-open-wizard', open);
-  }, []);
+    // Don't start notifying mid-setup or during the boot animation.
+    if (showWizard || showIntro) return undefined;
+    const poll = async () => {
+      let sources = [];
+      try {
+        const r = await fetch('http://localhost:8080/api/sources');
+        const d = await r.json();
+        sources = (d.sources || []).filter((s) => s.type === 'usb');
+      } catch (_) { return; }
+      const currentIds = new Set(sources.map((s) => s.id));
+      if (!usbBaselineDoneRef.current) {
+        usbBaselineDoneRef.current = true;
+      } else {
+        const fresh = sources.find((s) => s.id && !seenUsbRef.current.has(s.id));
+        if (fresh) setUsbToast(fresh);
+      }
+      seenUsbRef.current = currentIds;
+    };
+    poll();
+    const id = setInterval(poll, 4000);
+    return () => clearInterval(id);
+  }, [showWizard, showIntro]);
+
+  // Boot mode not resolved yet: render nothing rather than flash the normal
+  // kiosk UI before we know whether this is an installer session.
+  if (bootMode === null) {
+    return <div className="h-full w-full overflow-hidden bg-hifi-dark relative" />;
+  }
+  // Installer session: replace the whole app tree — there's no player/
+  // sources content to show underneath while installing to disk.
+  if (bootMode === 'installer') {
+    return (
+      <div className="h-full w-full overflow-hidden bg-hifi-dark relative">
+        <InstallWizard />
+      </div>
+    );
+  }
 
   return (
-    <div className="h-screen w-screen overflow-hidden bg-hifi-dark relative">
+    <div className="h-full w-full overflow-hidden bg-hifi-dark relative">
       <LyrionServer />
       {showWizard && <SetupWizard onComplete={() => setShowWizard(false)} />}
-      <Screensaver isActive={isScreensaverActive && !showWizard} onWake={() => setIsScreensaverActive(false)} />
-      {showIntro && (
+      <Screensaver isActive={isScreensaverActive && !showWizard} requireTap={isManualScreensaver} onWake={wakeScreensaver} />
+      {usbToast && <UsbToast disk={usbToast} onDismiss={() => setUsbToast(null)} />}
+      <UpdatePlanOverlay />
+      {showIntro && createPortal(
         <div
-          className="fixed inset-0 z-[10000] bg-black"
+          className="absolute inset-0 z-[10000] bg-black"
           style={{ opacity: introFading ? 0 : 1, transition: 'opacity 600ms ease', pointerEvents: introFading ? 'none' : 'auto' }}
         >
           <BootIntro onDone={handleIntroDone} />
-        </div>
+        </div>,
+        document.getElementById(SCALED_CANVAS_ID) || document.body
       )}
     </div>
   );

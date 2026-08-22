@@ -1,0 +1,29 @@
+[Unit]
+Description=HiFi Player - Web admin + first-boot provisioning gateway (HTTPS :443 / :80)
+# Deliberately runs on a live session too (both "Try" and "Install Osmium
+# Sound" boot from the same squashfs with boot=live) — the QR-only installer
+# and setup flows are served by THIS daemon's captive portal
+# (INSTALL_CAPTIVE_HTML / SETUP_CAPTIVE_HTML in webui_server.py), gated by
+# _boot_mode() there, not by whether an OS is actually on disk yet. A prior
+# `ConditionKernelCommandLine=!boot=live` here (from before that flow
+# existed) silently prevented the service from ever starting during any live
+# boot, which broke both the hotspot/QR entirely and made :443/:80
+# unreachable — do not reintroduce it. hifi-firstboot.service and
+# hifi-update-stage-resume.service keep the equivalent condition on purpose:
+# unlike this one, they only make sense for an already-installed,
+# actually-booted system.
+After=network.target NetworkManager.service hifi-api.service
+Wants=NetworkManager.service
+
+[Service]
+Type=simple
+# Runs as root: manages NetworkManager (hotspot), generates the per-device TLS
+# cert + cookie key under /etc/hifi-player, and proxies to the loopback API.
+User=root
+WorkingDirectory=/usr/local/bin
+ExecStart=/usr/bin/python3 /usr/local/bin/webui_server.py
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target

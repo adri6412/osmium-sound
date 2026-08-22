@@ -102,6 +102,92 @@
                     android:text="@string/settings_multiroom_role_follow" />
             </RadioGroup>
 
+            <!-- Internal: the appliance runs its own server, so it also owns
+                 which build of it runs. Mirrors Settings → Lyrion Music Server
+                 in the kiosk and web admin. -->
+            <LinearLayout
+                android:id="@+id/multiroom_internal_section"
+                android:orientation="vertical"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content">
+
+                <TextView
+                    android:id="@+id/lyrion_installed_version"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:textColor="@color/hifiSilver"
+                    android:layout_marginBottom="8dp" />
+
+                <!-- Hidden on an appliance older than 2.5.21-dev.37, which has
+                     no /lyrion_channel endpoint. -->
+                <LinearLayout
+                    android:id="@+id/lyrion_channel_section"
+                    android:orientation="vertical"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:visibility="gone">
+
+                    <TextView
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="@string/settings_lyrion_channel"
+                        android:textColor="@android:color/white"
+                        android:layout_marginBottom="4dp" />
+
+                    <RadioGroup
+                        android:id="@+id/lyrion_channel_group"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content">
+                        <RadioButton
+                            android:id="@+id/radio_channel_release"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:text="@string/settings_lyrion_channel_release" />
+                        <RadioButton
+                            android:id="@+id/radio_channel_nightly"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:text="@string/settings_lyrion_channel_nightly" />
+                        <RadioButton
+                            android:id="@+id/radio_channel_dev"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:text="@string/settings_lyrion_channel_dev" />
+                    </RadioGroup>
+
+                    <TextView
+                        android:id="@+id/lyrion_channel_warning"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="@string/settings_lyrion_channel_warning"
+                        android:textColor="@color/hifiSilver"
+                        android:layout_marginBottom="8dp"
+                        android:visibility="gone" />
+                </LinearLayout>
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/button_install_lyrion"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:text="@string/settings_lyrion_update" />
+
+                <ProgressBar
+                    android:id="@+id/lyrion_progress"
+                    style="?android:attr/progressBarStyleHorizontal"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:visibility="gone" />
+
+                <TextView
+                    android:id="@+id/lyrion_status"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="4dp"
+                    android:textColor="@color/hifiSilver" />
+            </LinearLayout>
+
             <LinearLayout
                 android:id="@+id/multiroom_follow_section"
                 android:orientation="vertical"

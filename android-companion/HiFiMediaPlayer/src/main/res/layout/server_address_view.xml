@@ -16,36 +16,98 @@
  limitations under the License.
 -->
 
-<androidx.constraintlayout.widget.ConstraintLayout
+<LinearLayout
     xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
+    android:orientation="vertical"
     android:layout_width="fill_parent"
     android:layout_height="wrap_content"
     android:paddingHorizontal="16dp">
 
     <TextView
-        android:id="@+id/server_address_help"
+        android:id="@+id/wizard_step_indicator"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="@string/settings_scan_qr_prompt"
-        android:textAppearance="?attr/textAppearanceBodyMedium"
-        app:layout_constraintTop_toTopOf="parent"
-        app:layout_constraintStart_toStartOf="parent" />
+        android:layout_marginBottom="8dp"
+        android:textAppearance="@style/SqueezerTextAppearance.Medium"
+        android:textStyle="bold"
+        android:textColor="?attr/colorPrimary"
+        tools:text="Step 1 of 3 – Scan the QR code" />
 
+    <!-- Step 1: scan the appliance's pairing QR code. -->
+    <LinearLayout
+        android:id="@+id/step_scan"
+        android:orientation="vertical"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content">
+
+        <TextView
+            android:id="@+id/server_address_help"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/settings_scan_qr_prompt"
+            android:textAppearance="@style/SqueezerTextAppearance.Medium" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/scan_button"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            app:icon="@drawable/ic_qr_code_scanner"
+            android:text="@string/settings_scan_qr" />
+    </LinearLayout>
+
+    <!-- Step 2: confirm the pairing resolved from the QR code before it's applied. -->
     <com.google.android.material.card.MaterialCardView
-        android:id="@+id/server_info"
+        android:id="@+id/step_confirm"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        app:layout_constraintTop_toBottomOf="@id/server_address_help"
-        app:layout_constraintStart_toStartOf="parent"
-        android:layout_marginTop="8dp"
+        android:visibility="gone"
         app:cardCornerRadius="4dp">
 
         <LinearLayout
+            android:orientation="vertical"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:orientation="vertical">
+            android:padding="16dp">
+
+            <TextView
+                android:id="@+id/confirm_message"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:textAppearance="@style/SqueezerTextAppearance.Medium"
+                tools:text="This QR code is pairing the app with the appliance at 192.168.1.50:8080." />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/confirm_pair_button"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="16dp"
+                android:text="@string/settings_pair_confirm_button" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/confirm_rescan_button"
+                style="@style/Widget.MaterialComponents.Button.TextButton"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:text="@string/settings_scan_qr_retry" />
+        </LinearLayout>
+    </com.google.android.material.card.MaterialCardView>
+
+    <!-- Step 3: paired address, with LMS credentials/Wake-on-LAN collapsed by default. -->
+    <LinearLayout
+        android:id="@+id/step_ready"
+        android:orientation="vertical"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:visibility="gone">
+
+        <com.google.android.material.card.MaterialCardView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            app:cardCornerRadius="4dp">
 
             <com.google.android.material.textfield.TextInputLayout
                 android:id="@+id/server_address_til"
@@ -63,57 +125,80 @@
                     android:layout_height="wrap_content"
                     android:inputType="textNoSuggestions" />
             </com.google.android.material.textfield.TextInputLayout>
+        </com.google.android.material.card.MaterialCardView>
 
-            <com.google.android.material.textfield.TextInputLayout
-                android:id="@+id/username_til"
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/advanced_options_toggle"
+            style="@style/Widget.MaterialComponents.Button.TextButton"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:text="@string/settings_advanced_options" />
+
+        <com.google.android.material.card.MaterialCardView
+            android:id="@+id/advanced_options_group"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:visibility="gone"
+            app:cardCornerRadius="4dp">
+
+            <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:hint="@string/settings_username_hint">
+                android:orientation="vertical">
 
-                <com.google.android.material.textfield.TextInputEditText
-                    android:id="@+id/username"
-                    android:layout_width="fill_parent"
+                <com.google.android.material.textfield.TextInputLayout
+                    android:id="@+id/username_til"
+                    android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:inputType="textNoSuggestions" />
-            </com.google.android.material.textfield.TextInputLayout>
+                    android:hint="@string/settings_username_hint">
 
-            <com.google.android.material.textfield.TextInputLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:hint="@string/settings_password_hint"
-                app:endIconMode="password_toggle">
+                    <com.google.android.material.textfield.TextInputEditText
+                        android:id="@+id/username"
+                        android:layout_width="fill_parent"
+                        android:layout_height="wrap_content"
+                        android:inputType="textNoSuggestions" />
+                </com.google.android.material.textfield.TextInputLayout>
 
-                <com.google.android.material.textfield.TextInputEditText
-                    android:id="@+id/password"
-                    android:layout_width="fill_parent"
+                <com.google.android.material.textfield.TextInputLayout
+                    android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:inputType="textPassword" />
-            </com.google.android.material.textfield.TextInputLayout>
+                    android:hint="@string/settings_password_hint"
+                    app:endIconMode="password_toggle">
 
-            <com.google.android.material.checkbox.MaterialCheckBox
-                android:id="@+id/wol"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="@string/settings_use_wake_on_lan" />
+                    <com.google.android.material.textfield.TextInputEditText
+                        android:id="@+id/password"
+                        android:layout_width="fill_parent"
+                        android:layout_height="wrap_content"
+                        android:inputType="textPassword" />
+                </com.google.android.material.textfield.TextInputLayout>
 
-            <com.google.android.material.textfield.TextInputLayout
-                android:id="@+id/mac_til"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:hint="@string/settings_MAC_label"
-                app:helperTextEnabled="true"
-                app:helperText="@string/settings_MAC_help"
-                app:endIconDrawable="@drawable/ic_info"
-                app:endIconMode="custom">
-
-                <com.google.android.material.textfield.TextInputEditText
-                    android:id="@+id/mac"
-                    android:layout_width="fill_parent"
+                <com.google.android.material.checkbox.MaterialCheckBox
+                    android:id="@+id/wol"
+                    android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:inputType="textNoSuggestions" />
-            </com.google.android.material.textfield.TextInputLayout>
+                    android:text="@string/settings_use_wake_on_lan" />
 
-        </LinearLayout>
-    </com.google.android.material.card.MaterialCardView>
+                <com.google.android.material.textfield.TextInputLayout
+                    android:id="@+id/mac_til"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:hint="@string/settings_MAC_label"
+                    app:helperTextEnabled="true"
+                    app:helperText="@string/settings_MAC_help"
+                    app:endIconDrawable="@drawable/ic_info"
+                    app:endIconMode="custom">
 
-</androidx.constraintlayout.widget.ConstraintLayout>
+                    <com.google.android.material.textfield.TextInputEditText
+                        android:id="@+id/mac"
+                        android:layout_width="fill_parent"
+                        android:layout_height="wrap_content"
+                        android:inputType="textNoSuggestions" />
+                </com.google.android.material.textfield.TextInputLayout>
+
+            </LinearLayout>
+        </com.google.android.material.card.MaterialCardView>
+    </LinearLayout>
+
+</LinearLayout>

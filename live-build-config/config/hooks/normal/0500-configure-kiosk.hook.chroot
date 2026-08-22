@@ -22,7 +22,7 @@ mkdir -p /usr/share/xsessions
 cat <<EOF > /usr/share/xsessions/hifi-kiosk.desktop
 [Desktop Entry]
 Name=HiFi Kiosk
-Comment=Start HiFi Media Player Appliance Mode
+Comment=Start Osmium Sound Appliance Mode
 Exec=/home/hifi/.xsession
 Type=Application
 EOF

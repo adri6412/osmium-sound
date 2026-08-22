@@ -32,6 +32,13 @@ curl
 ca-certificates
 unzip
 
+# NTP time sync — NOT bundled into the base systemd package on Debian 12
+# (confirmed live: `systemctl status systemd-timesyncd` -> "could not be
+# found" on a device that only had `systemd`/`systemd-sysv` installed).
+# Needed explicitly, or 0400-enable-services.hook.chroot's `systemctl enable`
+# silently no-ops and every fresh install boots with no time sync at all.
+systemd-timesyncd
+
 # Installer
 calamares
 calamares-settings-debian

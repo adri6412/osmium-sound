@@ -1,11 +1,54 @@
 import React, { useState, useRef, useEffect } from 'react';
 import useWebSocket, { ReadyState } from 'react-use-websocket';
 import { motion, useSpring, useTransform, useMotionValue } from 'framer-motion';
+import vuMeterDials from '../assets/vu-meter-dials.png';
+import vuMeterBezel from '../assets/vu-meter-bezel.png';
+
+// The artwork is a single 1280x675 stereo panel: both dial faces live in
+// `vu-meter-dials.png` and the black bezel that frames them (LEFT/RIGHT
+// engraving included) lives in `vu-meter-bezel.png`, whose two dial windows
+// are cut out. So the whole meter is one composited unit — the needles are
+// positioned in percentages of that shared 1280x675 box, not per-dial.
+const PANEL_W = 1280;
+const PANEL_H = 675;
+
+// Each needle pivots from the centre of its dial's own scale — i.e. tucked
+// *under* the bezel's hump, not perched on top of it, the way a real VU
+// meter's pivot pin hides behind the movement cover. Measured by least-
+// squares circle fit on the scale arc traced out of the dial artwork
+// (left: 335.4, 460.5 / right: 944.2, 460.8; both r=246), which is ~75px
+// below the hump's apex (y=386), so the cap sits behind the bezel and the
+// needle emerges out of the hump. Pinning it at the apex instead — as it
+// briefly was — both showed the cap and made the tips sweep off the scale,
+// since the needle then no longer turns about the arc's own centre.
+const PIVOTS = [
+  { x: 335, y: 461 },
+  { x: 944, y: 461 },
+];
+
+// Needle sweep measured off the dial artwork's own tick marks, by polar-
+// binning the black/red ink around that pivot: the long "20" tick that opens
+// the scale sits at -36.4 deg and the last tick of the red overload arc ("3")
+// at +37 deg, both reaching out to r=270.
+const ANGLE_MIN = -36.4;
+const ANGLE_MAX = 37;
+// Needle length in artwork pixels, reaching just past those tick tips.
+const NEEDLE_LENGTH = 275;
+// Minimum peak change (0-100 scale) before we redirect the needle spring at
+// all. Below this, level-message noise (quiet passages, sustained tones)
+// would otherwise keep re-targeting the spring 20x/sec forever, which is
+// exactly the kind of unbounded continuous transform animation that pins
+// the i915/iris Render engine busy at low clock on Gemini Lake (see
+// freedesktop.org drm/i915 work item 16771) — letting truly-stable levels
+// fall below this threshold lets the spring actually settle and go idle.
+const LEVEL_DELTA_THRESHOLD = 2;
+
+const pct = (v, total) => `${(v / total) * 100}%`;
 
 // `value` is a framer-motion MotionValue (0-100). Driving the needle straight
 // from a MotionValue means level updates never trigger a React re-render — the
 // needle moves purely on the compositor.
-const SingleVUMeter = ({ value, label }) => {
+const VUNeedle = ({ value, pivot }) => {
   // Create a spring for smooth needle movement
   const springValue = useSpring(value, {
     stiffness: 150,
@@ -13,139 +56,53 @@ const SingleVUMeter = ({ value, label }) => {
     mass: 0.5,
   });
 
-  const rotate = useTransform(springValue, [0, 100], [-45, 45]);
+  const rotate = useTransform(springValue, [0, 100], [ANGLE_MIN, ANGLE_MAX]);
 
   return (
-    <div className="relative w-full min-w-[150px] max-w-[450px] h-full aspect-[4/3] bg-[#d9c79e] rounded-sm shadow-inner overflow-hidden flex flex-col items-center justify-end pb-4 border-[6px] border-[#2a2a2a] box-border relative"
-         style={{
-           backgroundImage: 'radial-gradient(circle at 50% 120%, #fcf5d4 0%, #c2ac74 80%, #a68f56 100%)'
-         }}>
-
-      {/* Background shadow/lighting effects to simulate the vintage bulb look */}
-      <div className="absolute inset-0 shadow-[inset_0_0_20px_rgba(0,0,0,0.6)] pointer-events-none" />
-      <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-[120%] h-[80%] bg-[#fffae6] blur-3xl opacity-40 pointer-events-none" />
-
-      {/* Top Right "Bulb" screw/dot */}
-      <div className="absolute top-3 right-3 w-3 h-3 bg-[#111] rounded-full shadow-[inset_-1px_-1px_2px_rgba(255,255,255,0.3),_1px_1px_2px_rgba(0,0,0,0.8)] border border-black/50" />
-
-      {/* VU Text */}
-      <div className="absolute top-4 left-5 text-xl font-bold text-[#222] tracking-wider" style={{ fontFamily: 'sans-serif' }}>
-        VU
-      </div>
-
-      {/* Scale Arc and Ticks */}
-      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-[20%] w-[85%] aspect-[2/1] pointer-events-none">
-        {/* SVG Arc for the scale */}
-        <svg viewBox="0 0 200 100" className="w-full h-full overflow-visible">
-          {/* Main Arc Line */}
-          <path d="M 10 90 A 100 100 0 0 1 190 90" fill="none" stroke="#222" strokeWidth="1.5" />
-
-          {/* Red portion of the arc (overload) */}
-          <path d="M 140 37 A 100 100 0 0 1 190 90" fill="none" stroke="#c0392b" strokeWidth="4" />
-
-          {/* Ticks (Simulated positions) */}
-          {/* Black Ticks */}
-          {[
-            { angle: -45, label: "20" },
-            { angle: -30, label: "10" },
-            { angle: -15, label: "7" },
-            { angle: 0, label: "5" },
-            { angle: 10, label: "3" },
-            { angle: 20, label: "2" },
-            { angle: 30, label: "1" },
-            { angle: 40, label: "0" },
-          ].map((tick, i) => {
-             // Center of rotation is around 100, 150
-             const cx = 100;
-             const cy = 150;
-             const radius = 95;
-             const rad = (tick.angle - 90) * (Math.PI / 180);
-             const x1 = cx + radius * Math.cos(rad);
-             const y1 = cy + radius * Math.sin(rad);
-             const x2 = cx + (radius - 8) * Math.cos(rad);
-             const y2 = cy + (radius - 8) * Math.sin(rad);
-             const tx = cx + (radius - 20) * Math.cos(rad);
-             const ty = cy + (radius - 20) * Math.sin(rad);
-
-             return (
-               <g key={i}>
-                 <line x1={x1} y1={y1} x2={x2} y2={y2} stroke="#222" strokeWidth="1.5" />
-                 <text x={tx} y={ty} fontSize="10" fill="#222" textAnchor="middle" dominantBaseline="middle" fontWeight="bold" transform={`rotate(${tick.angle}, ${tx}, ${ty})`}>
-                    {tick.label}
-                 </text>
-               </g>
-             );
-          })}
-
-          {/* Red Ticks */}
-           {[
-            { angle: 50, label: "1" },
-            { angle: 60, label: "2" },
-            { angle: 70, label: "3" },
-            { angle: 80, label: "+" },
-          ].map((tick, i) => {
-             const cx = 100;
-             const cy = 150;
-             const radius = 95;
-             const rad = (tick.angle - 90) * (Math.PI / 180);
-             const x1 = cx + radius * Math.cos(rad);
-             const y1 = cy + radius * Math.sin(rad);
-             const x2 = cx + (radius - 8) * Math.cos(rad);
-             const y2 = cy + (radius - 8) * Math.sin(rad);
-             const tx = cx + (radius - 20) * Math.cos(rad);
-             const ty = cy + (radius - 20) * Math.sin(rad);
-
-             return (
-               <g key={`red-${i}`}>
-                 <line x1={x1} y1={y1} x2={x2} y2={y2} stroke="#c0392b" strokeWidth="1.5" />
-                 <text x={tx} y={ty} fontSize="10" fill="#c0392b" textAnchor="middle" dominantBaseline="middle" fontWeight="bold" transform={`rotate(${tick.angle}, ${tx}, ${ty})`}>
-                    {tick.label}
-                 </text>
-               </g>
-             );
-          })}
-
-          {/* Secondary scale line below main arc */}
-          <path d="M 18 100 A 90 90 0 0 1 182 100" fill="none" stroke="#222" strokeWidth="0.5" strokeDasharray="3 3" />
-          {/* Some small numbers for secondary scale */}
-          <text x="50" y="110" fontSize="5" fill="#444">20</text>
-          <text x="80" y="105" fontSize="5" fill="#444">40</text>
-          <text x="110" y="105" fontSize="5" fill="#444">60</text>
-          <text x="140" y="110" fontSize="5" fill="#444">80</text>
-          <text x="170" y="120" fontSize="5" fill="#444">100</text>
-        </svg>
-      </div>
-
-      {/* Logo & Label */}
-      <div className="absolute bottom-4 flex flex-col items-center z-10 pointer-events-none">
-        <div className="flex space-x-[2px] mb-1">
-           {/* Simulate "WAVES" like logo */}
-           <div className="w-[3px] h-3 bg-[#222]" style={{ transform: 'skewX(20deg)' }} />
-           <div className="w-[3px] h-4 bg-[#222] translate-y-[-2px]" />
-           <div className="w-[3px] h-3 bg-[#222]" style={{ transform: 'skewX(-20deg)' }} />
-        </div>
-        <span className="text-[9px] font-bold text-[#222] tracking-[0.2em] mt-1">WAVES</span>
-      </div>
-
-      {/* The Needle */}
+    <>
+      {/* The needle — anchored at the pivot, rotating about its own base */}
       <motion.div
-        className="absolute bottom-[-20%] left-1/2 w-[2px] h-[95%] bg-[#111] shadow-[2px_0_5px_rgba(0,0,0,0.5)] z-20"
+        className="absolute bg-[#111] shadow-[1px_0_3px_rgba(0,0,0,0.6)] z-10"
         style={{
+          left: pct(pivot.x, PANEL_W),
+          top: pct(pivot.y, PANEL_H),
+          width: '0.3%',
+          minWidth: '2px',
+          height: pct(NEEDLE_LENGTH, PANEL_H),
+          x: '-50%',
+          y: '-100%',
           rotate,
-          x: "-50%",
-          transformOrigin: "bottom center"
+          transformOrigin: 'bottom center',
         }}
       />
-      {/* Needle Pivot Cap */}
-      <div className="absolute bottom-[-20%] left-1/2 w-4 h-4 bg-[#111] rounded-full -translate-x-1/2 translate-y-1/2 z-30 shadow-md" />
-    </div>
+      {/* Needle pivot cap — sits under the hump, hidden by the bezel, so the
+          needle reads as coming out of the movement rather than off a dot */}
+      <div
+        className="absolute bg-[#111] rounded-full z-20 shadow-md"
+        style={{
+          left: pct(pivot.x, PANEL_W),
+          top: pct(pivot.y, PANEL_H),
+          width: '1.4%',
+          aspectRatio: '1',
+          transform: 'translate(-50%, -50%)',
+        }}
+      />
+    </>
   );
 };
 
 /**
  * Dual Analog VU Meter component replacing the digital bars
  */
-const AnalogVUMeter = ({ isPlaying, className = "" }) => {
+// `visible` defaults true so any other caller keeps today's always-on
+// behavior; LyrionServer's expanded-player usage is the one that now keeps
+// this component permanently mounted (instead of destroying/recreating its
+// dial images and composited needle layer on every open/close) and passes
+// visible={false} while it's off-screen or the lyrics view is showing —
+// this is what actually avoids the ongoing cost of staying mounted: no
+// websocket data in, no spring re-targeting, nothing for the compositor to
+// keep redrawing.
+const AnalogVUMeter = ({ visible = true, className = "" }) => {
   // Needle positions are MotionValues, not React state: updating them moves the
   // needles on the compositor without re-rendering this component. At ~30-60
   // level messages/sec from the daemon, this turns dozens of React re-renders
@@ -153,9 +110,15 @@ const AnalogVUMeter = ({ isPlaying, className = "" }) => {
   const leftValue = useMotionValue(0);
   const rightValue = useMotionValue(0);
   const lastUpdateRef = useRef(0);
+  const lastLeftCommittedRef = useRef(0);
+  const lastRightCommittedRef = useRef(0);
   const [socketUrl, setSocketUrl] = useState(`ws://${window.location.hostname}:9001`);
 
-  const { lastMessage, readyState } = useWebSocket(socketUrl, {
+  // Passing `null` to react-use-websocket skips connecting entirely (its
+  // documented way to pause) -- so the socket only exists while a viewer
+  // could actually see the needles move, not for the component's whole
+  // (now much longer) mounted lifetime.
+  const { lastMessage, readyState } = useWebSocket(visible ? socketUrl : null, {
     shouldReconnect: () => true,
     reconnectInterval: 3000,
   });
@@ -176,78 +139,87 @@ const AnalogVUMeter = ({ isPlaying, className = "" }) => {
 
   useEffect(() => {
     if (lastMessage === null) return;
-    // Throttle to ~33 Hz: even if the daemon streams faster, the needles can't
-    // visibly resolve more than this, so we skip the extra work.
+    // Throttle target updates to 20 Hz (was ~33 Hz). This does NOT make the
+    // needle motion choppy: useSpring below keeps interpolating every
+    // compositor frame regardless of how often we redirect it, exactly like
+    // a real VU meter's mechanical inertia smooths over individual samples —
+    // only the *reaction time* to brand-new peaks is very slightly longer,
+    // not the smoothness of the sweep itself. What it does cut is how often
+    // the spring gets re-targeted while mid-flight during continuous
+    // playback (see main.js's did-finish-load comment — Electron's
+    // setFrameRate() doesn't actually cap this window's frame rate, so nothing
+    // else limits how often that redirection happens), which is the one
+    // animation running non-stop for the entire duration of playback, unlike
+    // the app's other, transient page-transition/loading animations.
     const now = performance.now();
-    if (now - lastUpdateRef.current < 30) return;
+    if (now - lastUpdateRef.current < 50) return;
     lastUpdateRef.current = now;
     try {
       const data = JSON.parse(lastMessage.data);
-      if (data.levels && Array.isArray(data.levels)) {
-        const mid = Math.floor(data.levels.length / 2);
-        const leftBars = data.levels.slice(0, mid);
-        const rightBars = data.levels.slice(mid);
+      if (Array.isArray(data.levels_l) && Array.isArray(data.levels_r)) {
         const getPeak = (arr) => (arr.length ? Math.max(...arr) : 0);
-        leftValue.set(getPeak(leftBars));
-        rightValue.set(getPeak(rightBars));
+        const peakL = getPeak(data.levels_l);
+        const peakR = getPeak(data.levels_r);
+        // Only redirect the spring when the level actually moved by more
+        // than noise-floor jitter — see LEVEL_DELTA_THRESHOLD above.
+        if (Math.abs(peakL - lastLeftCommittedRef.current) >= LEVEL_DELTA_THRESHOLD) {
+          leftValue.set(peakL);
+          lastLeftCommittedRef.current = peakL;
+        }
+        if (Math.abs(peakR - lastRightCommittedRef.current) >= LEVEL_DELTA_THRESHOLD) {
+          rightValue.set(peakR);
+          lastRightCommittedRef.current = peakR;
+        }
       }
     } catch (error) {
       console.error("Error parsing VU meter websocket data:", error);
     }
   }, [lastMessage, leftValue, rightValue]);
 
-  // Fallback animation if WS is disconnected but audio is playing
+  // No real level data available (hidden, or WS disconnected): rest at zero
+  // rather than faking movement. A VU meter is a measuring instrument, not
+  // decoration — showing random motion when there's no signal to back it up
+  // would be actively misleading, on top of being another unbounded
+  // continuous-transform loop for the iris driver to chew on for no reason.
   useEffect(() => {
-    let timeoutId;
-    let animationFrameId;
-    let isActive = true;
-
-    if (readyState !== ReadyState.OPEN) {
-        if (!isPlaying) {
-          // Drop to 0. We let framer-motion's useSpring handle the smooth drop,
-          // so we only need to set the value to 0 once here.
-          leftValue.set(0);
-          rightValue.set(0);
-          return;
-        }
-
-        // Simulate audio
-        const animateFallback = () => {
-          if (!isActive) return;
-
-          const sim = () => {
-            const base = Math.random() * 100;
-            return base > 80 ? base : Math.random() * 50 + 5;
-          };
-          leftValue.set(sim());
-          rightValue.set(sim());
-
-          timeoutId = setTimeout(() => {
-            if (isActive) animationFrameId = requestAnimationFrame(animateFallback);
-          }, 80);
-        };
-
-        animationFrameId = requestAnimationFrame(animateFallback);
-
-        return () => {
-          isActive = false;
-          if (timeoutId) clearTimeout(timeoutId);
-          if (animationFrameId) cancelAnimationFrame(animationFrameId);
-        };
+    if (!visible || readyState !== ReadyState.OPEN) {
+      leftValue.set(0);
+      rightValue.set(0);
+      lastLeftCommittedRef.current = 0;
+      lastRightCommittedRef.current = 0;
     }
-  }, [isPlaying, readyState, leftValue, rightValue]);
+  }, [visible, readyState, leftValue, rightValue]);
 
   return (
-    <div className={`flex items-center justify-center bg-[#111] p-2 md:p-3 rounded-lg shadow-[inset_0_0_10px_rgba(0,0,0,1)] border-2 md:border-4 border-[#1a1a1a] w-full max-w-full ${className}`}>
-      <div className="flex w-full h-full justify-center gap-1 md:gap-2">
-        <SingleVUMeter value={leftValue} label="L" />
-        <div className="w-1 md:w-2 rounded bg-gradient-to-b from-[#222] to-[#111] shadow-inner" /> {/* Separator */}
-        <SingleVUMeter value={rightValue} label="R" />
+    <div className={`flex items-center justify-center w-full h-full [container-type:size] ${className}`}>
+      {/* The panel letterboxes itself inside whatever box the caller gives us,
+          but it has to do so by *sizing this div*, not by object-fit on the
+          images: the needles are positioned in percentages of this div, so an
+          object-contain letterbox inside a differently-shaped box would leave
+          them pointing off the dials. Hence container-query units — the width
+          is whichever of the container's own width or its height-times-aspect
+          is smaller, and aspect-ratio derives the height from it. */}
+      <div
+        className="relative"
+        style={{
+          width: `min(100cqw, 100cqh * ${PANEL_W} / ${PANEL_H})`,
+          aspectRatio: `${PANEL_W} / ${PANEL_H}`,
+        }}
+      >
+        <img src={vuMeterDials} alt="" draggable={false}
+             className="block w-full h-full pointer-events-none select-none" />
+
+        <VUNeedle value={leftValue} pivot={PIVOTS[0]} />
+        <VUNeedle value={rightValue} pivot={PIVOTS[1]} />
+
+        {/* Bezel frame + glass — masks everything above to the dial windows */}
+        <img src={vuMeterBezel} alt="" draggable={false}
+             className="absolute inset-0 w-full h-full pointer-events-none select-none z-30" />
       </div>
     </div>
   );
 };
 
 // Memoized so LyrionServer's 1 Hz status poll doesn't re-render the meter;
-// only `isPlaying` changes matter here.
+// its own websocket-driven MotionValues handle needle motion independently.
 export default React.memo(AnalogVUMeter);

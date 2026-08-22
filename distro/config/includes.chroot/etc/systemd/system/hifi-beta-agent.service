@@ -1,0 +1,21 @@
+[Unit]
+Description=HiFi Player - Beta Testing Telemetry Agent
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=hifi
+# CAP_PERFMON (not full root): intel_gpu_top reads GPU engine-busy % via the
+# kernel perf_event API, gated by perf_event_paranoid regardless of DRM
+# device permissions -- this is the one capability that bypasses that gate.
+AmbientCapabilities=CAP_PERFMON
+CapabilityBoundingSet=CAP_PERFMON
+StateDirectory=hifi-beta-agent
+WorkingDirectory=/usr/local/sbin
+ExecStart=/usr/bin/python3 /usr/local/sbin/hifi-beta-agent.py
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

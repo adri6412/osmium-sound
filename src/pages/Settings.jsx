@@ -1,4 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
+import { SCALED_CANVAS_ID } from '../components/ScaledCanvas';
 import { motion } from 'framer-motion';
 import {
   Wifi,
@@ -18,6 +20,11 @@ import {
   Trash2,
   HardDrive,
   MousePointer2,
+  Monitor,
+  MonitorOff,
+  Gauge,
+  RefreshCw,
+  Clock,
   ChevronRight,
   ChevronLeft,
   Smartphone,
@@ -25,17 +32,20 @@ import {
   Speaker,
   CheckCircle2,
   AlertTriangle,
-  HardDriveDownload,
-  Lock
+  Lock,
+  ScrollText
 } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import { systemAPI, checkApiServer } from '../utils/api';
 import { lyrionApi } from '../utils/lyrionApi';
 import { useKeyboardInput } from '../hooks/useKeyboardInput';
-import { useKeyboard } from '../contexts/KeyboardContext';
+import { useKeyboardActions } from '../contexts/KeyboardContext';
 import { useI18n } from '../i18n';
 import LanguageSelector from '../components/LanguageSelector';
 import SourcesManager from '../components/SourcesManager';
+import RoomCorrectionWizard from '../components/RoomCorrectionWizard';
+import WifiConfigPanel from '../components/WifiConfigPanel';
+import { thirdPartyNotices } from '../data/thirdPartyNotices';
 
 // Language-agnostic check used only to colour a status message red.
 const isErrorMsg = (m) =>
@@ -62,11 +72,21 @@ const DSP_BUILTIN_PRESET_LABEL_KEYS = {
   'Loudness (low volume)': 'settings.dsp.presetLoudness',
 };
 
+// Kept outside the component on purpose: Settings unmounts whenever the user
+// leaves this tab (LyrionServer.jsx only renders <SettingsPage> while
+// activeTab === 'settings'), which would clear any React-effect-owned timer.
+// The 10s "keep this refresh rate?" revert-on-timeout has to fire even if the
+// user taps away from Settings before answering, or the box could be stuck
+// at 30Hz with no visible way back — so the actual revert timer lives here,
+// not in component state.
+let uiRefreshRevertTimer = null;
+let uiRefreshRevertDeadline = 0; // epoch ms the pending revert fires at; 0 = none pending
+
 /**
  * Settings screen component - Simplified version for debugging
  * System configuration and information
  */
-const Settings = () => {
+const Settings = ({ initialSection, onSectionConsumed } = {}) => {
   const { t } = useI18n();
   const [systemInfo, setSystemInfo] = useState({
     hostname: t('common.loading'),
@@ -78,16 +98,50 @@ const Settings = () => {
   });
   const [networkInfo, setNetworkInfo] = useState([]);
   const [selectedInterface, setSelectedInterface] = useState('');
+  // Which uplink is actually carrying traffic right now (from /network_status,
+  // NetworkManager's own view) — distinct from networkInfo above, which just
+  // lists interfaces. { type: 'wired'|'wireless'|'none', ip, ssid }
+  const [activeNetwork, setActiveNetwork] = useState(null);
+  const [showWifiPanel, setShowWifiPanel] = useState(false);
+  const [wifiNetworks, setWifiNetworks] = useState([]);
+  const [wifiScanning, setWifiScanning] = useState(false);
+  const [wifiConnecting, setWifiConnecting] = useState(false);
+  const [wifiError, setWifiError] = useState(null);
+  const [wiredSwitching, setWiredSwitching] = useState(false);
+  const [networkSwitchMessage, setNetworkSwitchMessage] = useState('');
   const [lyrionUrl, setLyrionUrl] = useState(localStorage.getItem('lyrionUrl') || 'http://localhost:9000');
   const [updateMessage, setUpdateMessage] = useState('');
   // In-app confirmation modal (replaces the native window.confirm, which renders
   // with the OS/Electron chrome). Shape: { message, confirmLabel, onConfirm }.
   const [confirmDialog, setConfirmDialog] = useState(null);
+  // "What's new" changelog popup for the Updates section. Shape: { version, notes }.
+  const [changelogDialog, setChangelogDialog] = useState(null);
   // Android-style settings navigation: null = the section menu (list), otherwise
   // the id of the open section (its `content`, or title for the items section).
   const [activeSection, setActiveSection] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [apiConnected, setApiConnected] = useState(false);
+
+  // Tell the global UpdatePlanOverlay (mounted at the app root, see App.jsx)
+  // that this page owns the OTA progress overlay while it's open, so the two
+  // never render on top of each other. The global one takes back over the
+  // instant this page unmounts (tab switch, or the UI-step restart itself).
+  useEffect(() => {
+    window.dispatchEvent(new CustomEvent('hifi-settings-mounted', { detail: true }));
+    return () => window.dispatchEvent(new CustomEvent('hifi-settings-mounted', { detail: false }));
+  }, []);
+
+  // Deep-link into a section on mount (e.g. the global "USB detected" prompt
+  // sends the user straight to Music sources) — consumed once, so navigating
+  // away and back to Settings later (without a fresh event) lands on the
+  // section list as usual, not stuck on this section forever.
+  useEffect(() => {
+    if (initialSection) {
+      setActiveSection(initialSection);
+      onSectionConsumed?.();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Companion-app pairing token: minted fresh each time the "Phone control"
   // QR is opened, so the QR always carries a currently-valid token (scanning
@@ -95,20 +149,59 @@ const Settings = () => {
   const [pairToken, setPairToken] = useState(null);
   const [revokeBusy, setRevokeBusy] = useState(false);
   const [revokeMessage, setRevokeMessage] = useState('');
-  // Token for the "Backup e ripristino" QR (:8080 embedded SPA, scanned by a
-  // plain phone/PC browser — no companion app). Minted the same way as
-  // pairToken below, just for the other QR section.
-  const [sourcesToken, setSourcesToken] = useState(null);
 
   // SSH server toggle
   const [sshStatus, setSshStatus] = useState(null); // { available, enabled, active }
   const [sshBusy, setSshBusy] = useState(false);
   const [sshMessage, setSshMessage] = useState('');
 
+  // The Linux login SSH actually uses, mirrored from the web-admin account.
+  // null until (and unless) /shell_account answers — see loadShellAccount.
+  const [shellAccount, setShellAccount] = useState(null); // { exists, username }
+  const [shellUser, setShellUser] = useState('');
+  const [shellPass, setShellPass] = useState('');
+  const [shellBusy, setShellBusy] = useState(false);
+  const [shellMessage, setShellMessage] = useState('');
+
   // Mouse pointer toggle (for users without a touchscreen)
   const [pointerStatus, setPointerStatus] = useState(null); // { available, enabled }
   const [pointerBusy, setPointerBusy] = useState(false);
   const [pointerMessage, setPointerMessage] = useState('');
+
+  // Display mode (GUI touchscreen kiosk <-> headless)
+  const [displayMode, setDisplayMode] = useState(null); // 'gui' | 'headless'
+  const [displayModeBusy, setDisplayModeBusy] = useState(false);
+  const [displayModeMessage, setDisplayModeMessage] = useState('');
+  const [displayModeConfirm, setDisplayModeConfirm] = useState(false); // headless confirm step
+
+  // Player enabled/disabled (squeezelite) — orthogonal to display mode: does
+  // this device play audio at all, for "server only" units.
+  const [playerEnabled, setPlayerEnabled] = useState(null);
+  const [playerEnabledBusy, setPlayerEnabledBusy] = useState(false);
+  const [playerEnabledMessage, setPlayerEnabledMessage] = useState('');
+  const [playerDisableConfirm, setPlayerDisableConfirm] = useState(false);
+
+  // UI render resolution (framebuffer downscale + GPU upscale)
+  const [uiResolution, setUiResolution] = useState(null); // 'auto'|'720'|'1080'|'native'
+  const [uiResolutionBusy, setUiResolutionBusy] = useState(false);
+  const [uiResolutionMessage, setUiResolutionMessage] = useState('');
+  const [uiResolutionPending, setUiResolutionPending] = useState(null); // choice awaiting confirm
+
+  // Panel refresh rate (native <-> low-power, vblank-paced GPU cost). Switching
+  // to "low" applies immediately, then arms a 10s keep-or-revert countdown —
+  // see uiRefreshRevertTimer above for why the actual timer lives outside React.
+  const [uiRefresh, setUiRefresh] = useState(null); // 'native'|'low'
+  const [uiRefreshSupported, setUiRefreshSupported] = useState(true);
+  const [uiRefreshBusy, setUiRefreshBusy] = useState(false);
+  const [uiRefreshMessage, setUiRefreshMessage] = useState('');
+  const [uiRefreshCountdown, setUiRefreshCountdown] = useState(0); // >0 while the keep/revert popup is up
+
+  // Timezone (fresh installs default to UTC — the installer asks nothing
+  // about it, see distro/README.md)
+  const [timezone, setTimezone] = useState(null); // e.g. 'Europe/Rome'
+  const [timezoneList, setTimezoneList] = useState([]);
+  const [timezoneBusy, setTimezoneBusy] = useState(false);
+  const [timezoneMessage, setTimezoneMessage] = useState('');
 
   // Audio output (DAC) selection
   const [audioDevices, setAudioDevices] = useState([]);
@@ -123,6 +216,16 @@ const Settings = () => {
   const [dspRoomCorrection, setDspRoomCorrection] = useState(false);
   const [dspBalance, setDspBalance] = useState(0);   // dB, -12..+12, positive = toward right
   const [firStatus, setFirStatus] = useState(null); // { present, filename, size } from the :8080 sources service
+  const [firBusy, setFirBusy] = useState(false);
+  // LMS web skin (Osmium/Material) — mirrors the captive wizard's step, from
+  // sources_server's :8080 (kiosk is loopback-exempt, same as FIR above).
+  // undefined = not loaded yet (endpoint hidden), so an older system bundle
+  // that predates this endpoint (UI/System channels can land in either
+  // order) degrades to "no skin control" instead of a broken one.
+  const [skinChoice, setSkinChoice] = useState(undefined);
+  const [skinBusy, setSkinBusy] = useState(false);
+  const [skinMessage, setSkinMessage] = useState('');
+  const [firMessage, setFirMessage] = useState('');
   const [dspBusy, setDspBusy] = useState(false);
   const [dspMessage, setDspMessage] = useState('');
   const [dspEqView, setDspEqView] = useState('graphic'); // 'graphic' (default) | 'advanced'
@@ -168,20 +271,25 @@ const Settings = () => {
   const [osStatus, setOsStatus] = useState(null);
   const osPollRef = useRef(null);
 
-  // Combined UI+System OTA (single-button) state
+  // Combined UI+System+OS OTA (single-button) state
   const [isApplyingAll, setIsApplyingAll] = useState(false);
   const [allStatus, setAllStatus] = useState(null); // { phase, message } combined progress
-
-  // "Advanced" updates (Lyrion) collapsible
-  const [showAdvanced, setShowAdvanced] = useState(false);
+  // Live view of the server-side plan: { state, kind, message, progress, doneKinds }.
+  // Null while the legacy client-driven fallback is in charge.
+  const [planStatus, setPlanStatus] = useState(null);
+  const planPollRef = useRef(null);
 
   // Check-for-updates-on-startup preference (persisted)
   const [autoCheck, setAutoCheck] = useState(
     localStorage.getItem('hifiAutoCheckUpdates') !== 'false'
   );
 
-  // OTA release channel ('prod' | 'dev') — persisted server-side
+  // OTA release channel ('prod' | 'dev' | 'alpha') — persisted server-side.
+  // 'alpha' only ever appears in otaChannels when the server reports it
+  // (i.e. the device has the private-channel marker file), so this default
+  // renders identically to the old two-button UI until then.
   const [otaChannel, setOtaChannel] = useState('prod');
+  const [otaChannels, setOtaChannels] = useState(['prod', 'dev']);
   const [channelBusy, setChannelBusy] = useState(false);
 
   // ── Playback preferences (per-player, via Lyrion) ──────────────
@@ -189,7 +297,70 @@ const Settings = () => {
   const [transitionType, setTransitionType] = useState('0');     // 0 none … 4 fade in/out
   const [transitionDuration, setTransitionDuration] = useState('10'); // seconds
   const [replayGainMode, setReplayGainMode] = useState('0');     // 0 off / 1 track / 2 album / 3 smart
+  // digitalVolumeControl: 1 = LMS applies its own digital volume (adjustable,
+  // default), 0 = output fixed at 100% — the same pref useLyrionPlayer polls
+  // directly for BitPerfect and to grey out the volume slider (see its
+  // volumeFixed comment; NOT status's use_volume_control, which is unusable
+  // on squeezelite).
+  const [digitalVolumeControl, setDigitalVolumeControl] = useState('1');
   const [playbackMessage, setPlaybackMessage] = useState('');
+
+  // Animated VU meter in the expanded now-playing view. Persisted server-side
+  // (like display-mode/ui-resolution below), not just in localStorage: a
+  // headless unit can never open this on-screen Settings page, so the only
+  // way to flip it there is remotely (companion app / web admin), which needs
+  // api_server to be the source of truth. localStorage is kept as a same-tab
+  // cache so LyrionServer.jsx has an instant value before its own fetch lands.
+  const [vuMeterEnabled, setVuMeterEnabled] = useState(
+    localStorage.getItem('hifiVuMeterEnabled') !== 'false'
+  );
+  const [vuMeterBusy, setVuMeterBusy] = useState(false);
+  const loadVuMeter = async () => {
+    const res = await systemAPI.getVuMeter();
+    if (res.success && typeof res.data?.enabled === 'boolean') {
+      setVuMeterEnabled(res.data.enabled);
+      localStorage.setItem('hifiVuMeterEnabled', res.data.enabled ? 'true' : 'false');
+    }
+  };
+  const toggleVuMeter = async () => {
+    if (vuMeterBusy) return;
+    const next = !vuMeterEnabled;
+    setVuMeterBusy(true);
+    const res = await systemAPI.setVuMeter(next);
+    setVuMeterBusy(false);
+    if (res.success && res.data?.success) {
+      setVuMeterEnabled(res.data.enabled);
+      localStorage.setItem('hifiVuMeterEnabled', res.data.enabled ? 'true' : 'false');
+      window.dispatchEvent(new CustomEvent('hifi-vu-meter-enabled', { detail: res.data.enabled }));
+    }
+  };
+
+  // Now-playing auto-expand: how long after a song starts playing the kiosk
+  // auto-opens the fullscreen now-playing view on its own. Same
+  // persisted-server-side / localStorage-cache / broadcast-event shape as
+  // vuMeterEnabled above, for the same reason (reachable on a headless unit).
+  const [autoExpandSeconds, setAutoExpandSeconds] = useState(
+    Number(localStorage.getItem('hifiNowPlayingAutoExpandSeconds')) || 0
+  );
+  const [autoExpandBusy, setAutoExpandBusy] = useState(false);
+  const loadAutoExpand = async () => {
+    const res = await systemAPI.getNowPlayingAutoExpand();
+    if (res.success && typeof res.data?.seconds === 'number') {
+      setAutoExpandSeconds(res.data.seconds);
+      localStorage.setItem('hifiNowPlayingAutoExpandSeconds', String(res.data.seconds));
+    }
+  };
+  const changeAutoExpand = async (seconds) => {
+    if (autoExpandBusy || seconds === autoExpandSeconds) return;
+    setAutoExpandBusy(true);
+    const res = await systemAPI.setNowPlayingAutoExpand(seconds);
+    setAutoExpandBusy(false);
+    if (res.success && res.data?.success) {
+      setAutoExpandSeconds(res.data.seconds);
+      localStorage.setItem('hifiNowPlayingAutoExpandSeconds', String(res.data.seconds));
+      window.dispatchEvent(new CustomEvent('hifi-nowplaying-autoexpand-changed', { detail: res.data.seconds }));
+    }
+  };
 
   // ── Multiroom (LMS sync zones) ─────────────────────────────────
   // Other players seen on the LMS, and the macs currently synced to *this*
@@ -213,6 +384,14 @@ const Settings = () => {
   const [discoveryBusy, setDiscoveryBusy] = useState(false);
   const [discoveryAttempted, setDiscoveryAttempted] = useState(false);
 
+  // Which build of Lyrion runs on this device, when it runs its own. Lives
+  // beside the internal/external choice rather than on the Updates page:
+  // "which server do I use" and "which build of it" are one decision.
+  // null ⇒ the endpoint is missing (older api_server), so hide the picker.
+  const [lyrionChannel, setLyrionChannel] = useState(null);
+  const [lyrionChannelBusy, setLyrionChannelBusy] = useState(false);
+  const LYRION_CHANNELS = ['release', 'nightly', 'dev'];
+
   // This device's squeezelite display name — defaults to "OsmiumSound" on
   // every unit, which makes them indistinguishable once grouped.
   const [playerName, setPlayerName] = useState('OsmiumSound');
@@ -230,19 +409,35 @@ const Settings = () => {
   const lyrionUrlRef = useKeyboardInput(lyrionUrl, setLyrionUrl);
   const followHostRef = useKeyboardInput(followHostInput, setFollowHostInput);
   const playerNameRef = useKeyboardInput(playerNameInput, setPlayerNameInput);
+  const shellUserRef = useKeyboardInput(shellUser, setShellUser);
+  const shellPassRef = useKeyboardInput(shellPass, setShellPass);
   
   // Test keyboard context
-  const { showKeyboard } = useKeyboard();
+  const { showKeyboard } = useKeyboardActions();
 
   // Load system and network data on component mount
   useEffect(() => {
     loadSystemData();
     loadAudioDevices();
     loadSshStatus();
+    loadShellAccount();
     loadPointerStatus();
+    loadDisplayMode();
+    loadPlayerEnabled();
+    loadUiResolution();
+    loadUiRefresh();
+    loadTimezone();
+    loadVuMeter();
+    loadAutoExpand();
     loadOtaChannel();
     loadPlaybackPrefs();
-    loadDspStatus();
+    // loadDspStatus() disabled: DSP is held back for a future paid tier (see
+    // the 'custom-dsp' nav comment below) and its endpoints (dsp_status,
+    // dsp_presets — loadDspStatus triggers both) aren't meant to be called
+    // yet. Left commented rather than deleted so it's a one-line revert once
+    // the tier ships; loadDspStatus/loadDspPresets and all DSP state/UI stay
+    // fully intact, just unreachable now that nothing invokes them.
+    // loadDspStatus();
     loadLmsRole();
     loadPlayerName();
   }, []);
@@ -256,11 +451,29 @@ const Settings = () => {
   dspSyncBlockedRef.current = dspBusy || presetBusy;
   const dspDirtyRef = useRef(false);
   const markDspDirty = () => { dspDirtyRef.current = true; };
+  // Periodic sync disabled along with the initial load above — same reason:
+  // DSP endpoints aren't meant to be called until the paid tier ships.
+  // useEffect(() => {
+  //   const id = setInterval(() => {
+  //     if (document.visibilityState === 'visible'
+  //         && !dspSyncBlockedRef.current && !dspDirtyRef.current) {
+  //       loadDspStatus();
+  //     }
+  //   }, 10000);
+  //   return () => clearInterval(id);
+  //   // eslint-disable-next-line react-hooks/exhaustive-deps
+  // }, []);
+
+  // Timezone can also change out from under this page — set from the admin
+  // webui, or vice versa. Same visibility-aware polling as DSP state above,
+  // guarded against clobbering a change this page just made itself.
+  const timezoneSyncBlockedRef = useRef(false);
+  timezoneSyncBlockedRef.current = timezoneBusy;
   useEffect(() => {
-    const id = setInterval(() => {
-      if (document.visibilityState === 'visible'
-          && !dspSyncBlockedRef.current && !dspDirtyRef.current) {
-        loadDspStatus();
+    const id = setInterval(async () => {
+      if (document.visibilityState === 'visible' && !timezoneSyncBlockedRef.current) {
+        const tzRes = await systemAPI.getTimezone();
+        if (tzRes.success && tzRes.data?.timezone) setTimezone(tzRes.data.timezone);
       }
     }, 10000);
     return () => clearInterval(id);
@@ -283,14 +496,16 @@ const Settings = () => {
       const mac = (local || players?.[0])?.playerid;
       if (!mac) return;
       setPlayerMac(mac);
-      const [tt, td, rg] = await Promise.all([
+      const [tt, td, rg, dvc] = await Promise.all([
         lyrionApi.getPlayerPref(mac, 'transitionType'),
         lyrionApi.getPlayerPref(mac, 'transitionDuration'),
         lyrionApi.getPlayerPref(mac, 'replayGainMode'),
+        lyrionApi.getPlayerPref(mac, 'digitalVolumeControl'),
       ]);
       if (tt != null) setTransitionType(String(tt));
       if (td != null) setTransitionDuration(String(td));
       if (rg != null) setReplayGainMode(String(rg));
+      if (dvc != null) setDigitalVolumeControl(String(dvc));
       loadAlarms(mac);
       loadMultiroom(mac, players);
     } catch (_) {}
@@ -404,9 +619,12 @@ const Settings = () => {
     }
   };
 
-  // ── Player name (squeezelite -n) ─────────────────────────────────
+  // ── Device name (Linux hostname + squeezelite -n, set together) ───
+  // One name for the box: renaming it now also renames the hostname (so
+  // <name>.local updates live), not just the squeezelite/Lyrion display name
+  // — see api_server.py's set_device_name.
   const loadPlayerName = async () => {
-    const res = await systemAPI.getPlayerName();
+    const res = await systemAPI.getDeviceName();
     if (res.success && res.data?.name) {
       setPlayerName(res.data.name);
       setPlayerNameInput(res.data.name);
@@ -418,7 +636,7 @@ const Settings = () => {
     if (!name || name === playerName) return;
     setPlayerNameBusy(true);
     setPlayerNameMessage('');
-    const res = await systemAPI.setPlayerName(name);
+    const res = await systemAPI.setDeviceName(name);
     setPlayerNameBusy(false);
     if (res.success && res.data?.success) {
       setPlayerName(name);
@@ -441,6 +659,13 @@ const Settings = () => {
   const changeReplayGain = (v) => {
     setReplayGainMode(v);
     if (playerMac) lyrionApi.setPlayerPref(playerMac, 'replayGainMode', v);
+    setPlaybackMessage(t('settings.playback.saved'));
+  };
+  const toggleFixedVolume = () => {
+    if (!playerMac) return;
+    const next = digitalVolumeControl === '0' ? '1' : '0';
+    setDigitalVolumeControl(next);
+    lyrionApi.setPlayerPref(playerMac, 'digitalVolumeControl', next);
     setPlaybackMessage(t('settings.playback.saved'));
   };
 
@@ -479,10 +704,12 @@ const Settings = () => {
   const loadOtaChannel = async () => {
     const res = await systemAPI.getOtaChannel();
     if (res.success && res.data?.channel) setOtaChannel(res.data.channel);
+    if (res.success && Array.isArray(res.data?.channels) && res.data.channels.length) {
+      setOtaChannels(res.data.channels);
+    }
   };
 
-  const changeOtaChannel = async (channel) => {
-    if (channelBusy || channel === otaChannel) return;
+  const doChangeOtaChannel = async (channel) => {
     setChannelBusy(true);
     const res = await systemAPI.setOtaChannel(channel);
     setChannelBusy(false);
@@ -492,10 +719,53 @@ const Settings = () => {
     }
   };
 
+  const changeOtaChannel = async (channel) => {
+    if (channelBusy || channel === otaChannel) return;
+    // Downgrading back to prod from dev/alpha is gated by a newer prod
+    // release, so warn before the switch rather than after — the user can't
+    // just flip back. Not just 'dev': alpha is an even more bleeding-edge
+    // preview (the unfiltered newest release, prereleases included — see
+    // api_server.py's _fetch_release()), so it's under at least the same
+    // constraint and was wrongly left out.
+    if (otaChannel === 'prod') {
+      setConfirmDialog({
+        message: t('settings.updates.confirmProdToDev'),
+        confirmLabel: t(`settings.updates.channel${channel === 'alpha' ? 'Alpha' : 'Dev'}`),
+        onConfirm: () => doChangeOtaChannel(channel),
+      });
+      return;
+    }
+    doChangeOtaChannel(channel);
+  };
+
   // ── SSH server handlers ─────────────────────────────────────────
   const loadSshStatus = async () => {
     const res = await systemAPI.getSshStatus();
     if (res.success) setSshStatus(res.data);
+  };
+
+  // The Linux login used for SSH and the console. Feature-detected: an older
+  // api_server has no /shell_account, and the UI bundle can land before the
+  // system bundle — leave the block hidden rather than showing a dead form.
+  const loadShellAccount = async () => {
+    try {
+      const res = await systemAPI.getShellAccount();
+      if (res.success && typeof res.data?.exists === 'boolean') {
+        setShellAccount(res.data);
+        if (res.data.username && !shellUser) setShellUser(res.data.username);
+      }
+    } catch (_) { /* endpoint not present yet */ }
+  };
+
+  const saveShellAccount = async () => {
+    if (shellBusy) return;
+    setShellBusy(true);
+    setShellMessage('');
+    const res = await systemAPI.setShellAccount(shellUser.trim(), shellPass);
+    setShellBusy(false);
+    const ok = res.success && res.data?.success !== false;
+    setShellMessage(res.data?.message || (ok ? t('settings.ssh.loginSaved') : t('settings.ssh.loginFailed')));
+    if (ok) { setShellPass(''); loadShellAccount(); }
   };
 
   const toggleSsh = async () => {
@@ -543,6 +813,183 @@ const Settings = () => {
       setPointerMessage(res.data.message || '');
     } else {
       setPointerMessage(res.data?.message || res.message || t('settings.pointer.failed'));
+    }
+  };
+
+  // ── Display mode (GUI kiosk <-> headless) handlers ──────────────
+  const loadDisplayMode = async () => {
+    const res = await systemAPI.getDisplayMode();
+    if (res.success && res.data?.mode) {
+      setDisplayMode(res.data.mode);
+    }
+  };
+
+  const switchDisplayMode = async (mode) => {
+    if (displayModeBusy) return;
+    setDisplayModeBusy(true);
+    setDisplayModeMessage('');
+    setDisplayModeConfirm(false);
+    const res = await systemAPI.setDisplayMode(mode);
+    setDisplayModeBusy(false);
+    if (res.success && res.data?.success) {
+      setDisplayMode(res.data.mode);
+      setDisplayModeMessage(res.data.message || '');
+      // Switching to headless tears down this very UI a moment later; nothing
+      // more to do here — the X session is about to end.
+    } else {
+      setDisplayModeMessage(res.data?.message || res.message || t('settings.displayMode.failed'));
+    }
+  };
+
+  // ── Player enabled/disabled handlers ─────────────────────────────
+  const loadPlayerEnabled = async () => {
+    const res = await systemAPI.getPlayerEnabled();
+    if (res.success && typeof res.data?.enabled === 'boolean') {
+      setPlayerEnabled(res.data.enabled);
+    }
+  };
+
+  const togglePlayerEnabled = async (enabled) => {
+    if (playerEnabledBusy) return;
+    setPlayerEnabledBusy(true);
+    setPlayerEnabledMessage('');
+    setPlayerDisableConfirm(false);
+    const res = await systemAPI.setPlayerEnabled(enabled);
+    setPlayerEnabledBusy(false);
+    if (res.success && res.data?.success) {
+      setPlayerEnabled(res.data.enabled);
+      setPlayerEnabledMessage(res.data.message || '');
+    } else {
+      setPlayerEnabledMessage(res.data?.message || res.message || t('settings.playerEnabled.failed'));
+    }
+  };
+
+  // ── UI render resolution handlers ───────────────────────────────
+  const loadUiResolution = async () => {
+    const res = await systemAPI.getUiResolution();
+    if (res.success && res.data?.mode) {
+      setUiResolution(res.data.mode);
+    }
+  };
+
+  const changeUiResolution = async (mode) => {
+    if (uiResolutionBusy) return;
+    setUiResolutionBusy(true);
+    setUiResolutionMessage('');
+    setUiResolutionPending(null);
+    const res = await systemAPI.setUiResolution(mode);
+    setUiResolutionBusy(false);
+    if (res.success && res.data?.success) {
+      setUiResolution(res.data.mode);
+      setUiResolutionMessage(res.data.message || '');
+      // The X session restarts a moment later; this UI is about to be replaced
+      // by a freshly-launched one, so there is nothing else to do here.
+    } else {
+      setUiResolutionMessage(res.data?.message || res.message || t('settings.uiResolution.failed'));
+    }
+  };
+
+  // ── Panel refresh rate handlers ─────────────────────────────────
+  const loadUiRefresh = async () => {
+    const res = await systemAPI.getUiRefresh();
+    if (res.success && res.data?.mode) {
+      setUiRefresh(res.data.mode);
+      setUiRefreshSupported(res.data.supported !== false);
+      // Rejoin an already-armed revert (e.g. the user switched to "low",
+      // left Settings before answering, and came back): restore the popup
+      // with the time actually remaining instead of silently losing it.
+      if (uiRefreshRevertDeadline > Date.now()) {
+        setUiRefreshCountdown(Math.max(1, Math.ceil((uiRefreshRevertDeadline - Date.now()) / 1000)));
+      }
+    }
+  };
+
+  // Ticks the visible countdown once a second. The real revert-on-timeout is
+  // driven by the module-level uiRefreshRevertTimer (see its declaration for
+  // why), not by this effect — this only keeps the popup text accurate and
+  // safely no-ops if the deadline was already cleared elsewhere.
+  useEffect(() => {
+    if (uiRefreshCountdown <= 0) return undefined;
+    const id = setTimeout(() => {
+      const remaining = Math.max(0, Math.ceil((uiRefreshRevertDeadline - Date.now()) / 1000));
+      setUiRefreshCountdown(remaining);
+    }, 1000);
+    return () => clearTimeout(id);
+  }, [uiRefreshCountdown]);
+
+  const armUiRefreshRevert = () => {
+    if (uiRefreshRevertTimer) clearTimeout(uiRefreshRevertTimer);
+    uiRefreshRevertDeadline = Date.now() + 10000;
+    setUiRefreshCountdown(10);
+    uiRefreshRevertTimer = setTimeout(async () => {
+      uiRefreshRevertTimer = null;
+      uiRefreshRevertDeadline = 0;
+      await systemAPI.setUiRefresh('native');
+      setUiRefresh('native');
+      setUiRefreshCountdown(0);
+      setUiRefreshMessage(t('settings.uiRefresh.reverted'));
+    }, 10000);
+  };
+
+  const switchToLowRefresh = async () => {
+    if (uiRefreshBusy) return;
+    setUiRefreshBusy(true);
+    setUiRefreshMessage('');
+    const res = await systemAPI.setUiRefresh('low');
+    setUiRefreshBusy(false);
+    if (res.success && res.data?.success) {
+      setUiRefresh(res.data.mode || 'low');
+      armUiRefreshRevert();
+    } else {
+      setUiRefreshMessage(res.data?.message || res.message || t('settings.uiRefresh.failed'));
+    }
+  };
+
+  // "Keep" during the countdown: cancel the pending auto-revert, stay at low.
+  const keepLowRefresh = () => {
+    if (uiRefreshRevertTimer) { clearTimeout(uiRefreshRevertTimer); uiRefreshRevertTimer = null; }
+    uiRefreshRevertDeadline = 0;
+    setUiRefreshCountdown(0);
+    setUiRefreshMessage(t('settings.uiRefresh.kept'));
+  };
+
+  // Manual switch back to native — always safe, no countdown needed (that's
+  // only for the direction that could leave a stuttery/degraded screen
+  // behind unconfirmed).
+  const switchToNativeRefresh = async () => {
+    if (uiRefreshBusy) return;
+    if (uiRefreshRevertTimer) { clearTimeout(uiRefreshRevertTimer); uiRefreshRevertTimer = null; }
+    uiRefreshRevertDeadline = 0;
+    setUiRefreshCountdown(0);
+    setUiRefreshBusy(true);
+    setUiRefreshMessage('');
+    const res = await systemAPI.setUiRefresh('native');
+    setUiRefreshBusy(false);
+    if (res.success && res.data?.success) {
+      setUiRefresh(res.data.mode || 'native');
+    } else {
+      setUiRefreshMessage(res.data?.message || res.message || t('settings.uiRefresh.failed'));
+    }
+  };
+
+  // ── Timezone handlers ────────────────────────────────────────────
+  const loadTimezone = async () => {
+    const [tzRes, listRes] = await Promise.all([systemAPI.getTimezone(), systemAPI.getTimezones()]);
+    if (tzRes.success && tzRes.data?.timezone) setTimezone(tzRes.data.timezone);
+    if (listRes.success && Array.isArray(listRes.data?.timezones)) setTimezoneList(listRes.data.timezones);
+  };
+
+  const changeTimezone = async (tz) => {
+    if (timezoneBusy || !tz || tz === timezone) return;
+    setTimezoneBusy(true);
+    setTimezoneMessage('');
+    const res = await systemAPI.setTimezone(tz);
+    setTimezoneBusy(false);
+    if (res.success && res.data?.success) {
+      setTimezone(res.data.timezone || tz);
+      setTimezoneMessage(res.data.message || '');
+    } else {
+      setTimezoneMessage(res.data?.message || res.message || t('settings.timezone.failed'));
     }
   };
 
@@ -597,13 +1044,47 @@ const Settings = () => {
     }
   };
 
-  // FIR filter status lives on the :8080 sources service (that's where it's
-  // uploaded from a phone/PC browser — see sources_server.py /api/dsp/fir).
+  // FIR filter status/upload/removal live on the :8080 sources service (kiosk
+  // is exempt from its pairing-token check via 127.0.0.1) — the file itself is
+  // colocated there with the rest of the sources/mount storage.
   const loadFirStatus = async () => {
     try {
       const r = await fetch('http://localhost:8080/api/dsp/fir');
       if (r.ok) setFirStatus(await r.json());
     } catch (_) {}
+  };
+
+  const uploadFir = async (file) => {
+    if (!file) return;
+    setFirBusy(true);
+    setFirMessage(t('settings.dsp.firUploading'));
+    try {
+      const body = new FormData();
+      body.append('file', file);
+      const r = await fetch('http://localhost:8080/api/dsp/fir', { method: 'POST', body });
+      const d = await r.json();
+      setFirMessage(d.message || (d.success ? t('common.done') : t('common.error')));
+      if (d.success) loadFirStatus();
+    } catch (_) {
+      setFirMessage(t('common.error'));
+    } finally {
+      setFirBusy(false);
+    }
+  };
+
+  const removeFir = async () => {
+    setFirBusy(true);
+    try {
+      const r = await fetch('http://localhost:8080/api/dsp/fir', { method: 'DELETE' });
+      const d = await r.json();
+      setFirMessage(d.removed ? t('settings.dsp.firRemoved') : '');
+      setDspRoomCorrection(false);
+      loadFirStatus();
+    } catch (_) {
+      setFirMessage(t('common.error'));
+    } finally {
+      setFirBusy(false);
+    }
   };
 
   // Push the current EQ config to the backend. `enabled` defaults to the
@@ -746,28 +1227,68 @@ const Settings = () => {
     return () => { cancelled = true; };
   }, [activeSection]);
 
-  // Same idea as above, for the "Backup e ripristino" QR: that page (embedded
-  // SPA on :8080) is meant to be usable from a plain phone/PC browser with no
-  // companion app, but its routes now require pairing like everything else —
-  // so the QR's URL itself needs to carry a token (see sources_server.py's
-  // PAIR_TOKEN/?token= handling in the embedded SPA and _require_pair_token()'s
-  // query-string fallback).
+  const loadSkinChoice = async () => {
+    try {
+      const r = await fetch('http://localhost:8080/api/lms_skin');
+      if (!r.ok) { setSkinChoice(undefined); return; }
+      const d = await r.json();
+      setSkinChoice(d.skin || 'unset');
+    } catch (_) {
+      setSkinChoice(undefined);
+    }
+  };
+
   useEffect(() => {
-    if (activeSection !== 'custom-backup') return;
-    let cancelled = false;
-    (async () => {
-      try {
-        const r = await fetch('http://localhost:8080/api/pair/token', { method: 'POST' });
-        if (r.ok) {
-          const data = await r.json();
-          if (!cancelled) setSourcesToken(data.token || null);
-        }
-      } catch (_) {
-        if (!cancelled) setSourcesToken(null);
-      }
-    })();
-    return () => { cancelled = true; };
+    // Also needed on custom-web-remote: webRemoteUrl/the pairing QR append
+    // ?defaultTheme=dark/Osmium once that's the active skin.
+    if (activeSection !== 'custom-lyrion' && activeSection !== 'custom-web-remote') return;
+    loadSkinChoice();
   }, [activeSection]);
+
+  const pickSkin = async (v) => {
+    if (skinBusy || v === skinChoice) return;
+    setSkinBusy(true);
+    setSkinMessage(t('settings.lyrion.skinApplying'));
+    try {
+      const r = await fetch('http://localhost:8080/api/lms_skin', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ skin: v }),
+      });
+      const d = await r.json();
+      if (!d.started) {
+        setSkinMessage(d.message || t('settings.lyrion.skinFailed'));
+        setSkinBusy(false);
+        return;
+      }
+      setSkinChoice(v);
+      pollSkinStatus();
+    } catch (_) {
+      setSkinMessage(t('settings.lyrion.skinFailed'));
+      setSkinBusy(false);
+    }
+  };
+
+  const pollSkinStatus = async () => {
+    try {
+      const r = await fetch('http://localhost:8080/api/lms_skin_status');
+      const d = await r.json();
+      setSkinMessage(
+        d.state === 'installing' ? t('settings.lyrion.skinInstalling')
+        : d.state === 'applying' ? t('settings.lyrion.skinApplying')
+        : (d.message || '')
+      );
+      if (d.state === 'done' || d.state === 'error') {
+        setSkinBusy(false);
+        if (d.state === 'error') setSkinMessage(d.message || t('settings.lyrion.skinFailed'));
+      } else {
+        setTimeout(pollSkinStatus, 1500);
+      }
+    } catch (_) {
+      setSkinBusy(false);
+      setSkinMessage(t('settings.lyrion.skinFailed'));
+    }
+  };
 
   // Invalidates every previously-paired phone (see sources_server.py's
   // /api/pair/tokens/revoke_all — also localhost-only). Re-mints a fresh
@@ -799,20 +1320,72 @@ const Settings = () => {
   // Auto-check for updates on mount (only if the user kept it enabled);
   // clean up any poll on unmount.
   useEffect(() => {
+    // Lyrion is checked unconditionally: it now drives the Lyrion Music Server
+    // section (installed version + channel), not the appliance update page, so
+    // the "auto-check for updates" preference doesn't apply to it.
+    checkLyrionUpdate();
+    loadLyrionChannel();
     if (autoCheck) {
       checkAppUpdate();
       checkSystemUpdate();
-      checkLyrionUpdate();
       checkOsUpdate();
     }
+    // Rejoin an update plan that is still running (or that finished while we
+    // were gone). The UI step restarts this very app and an OS step reboots the
+    // box, so the kiosk that started an update is rarely the one that sees it
+    // end — without this the run would silently disappear from the screen.
+    resumeUpdatePlan();
     return () => {
       if (otaPollRef.current) clearInterval(otaPollRef.current);
       if (systemPollRef.current) clearInterval(systemPollRef.current);
       if (lyrionPollRef.current) clearInterval(lyrionPollRef.current);
       if (osPollRef.current) clearInterval(osPollRef.current);
       if (rescanPollRef.current) clearInterval(rescanPollRef.current);
+      if (planPollRef.current) clearInterval(planPollRef.current);
     };
   }, []);
+
+  const resumeUpdatePlan = async () => {
+    const r = await systemAPI.getUpdatePlanStatus();
+    // A 404 just means this appliance predates the sequencer.
+    if (!r.success || !r.data || r.data.state === 'idle') return;
+    const s = r.data;
+    // 'interrupted' on this very first read is the normal case right after a
+    // stage download is interrupted (hifi-update-stage-resume.service hasn't
+    // started yet) — soften it the same way followUpdatePlan()'s poll
+    // loop does, instead of rendering it as the terminal error state with a
+    // dismiss button available before the resume unit ever got a chance to
+    // continue the plan (that dismiss deletes the on-disk plan, permanently
+    // stranding any steps — e.g. 'ui' — that hadn't run yet).
+    const softened = s.state === 'interrupted' ? 'restarting' : s.state;
+    setPlanStatus({
+      state: softened,
+      kind: s.kind || '',
+      message: softened === 'restarting'
+        ? t('settings.updates.progressState.restarting')
+        : progressStateMessage(s.step_state, s.message || ''),
+      progress: typeof s.overall_progress === 'number' ? s.overall_progress : null,
+      doneKinds: (s.steps || []).filter((x) => x.state === 'done').map((x) => x.kind),
+    });
+    // 'staged_pending_reboot'/'applying' mean the box is mid isolated-update
+    // session (about to, or already did, reboot) — still worth rejoining the
+    // poll for, same as 'running'/'interrupted'.
+    if (s.state === 'running' || s.state === 'interrupted'
+        || s.state === 'staged_pending_reboot' || s.state === 'applying') {
+      setIsApplyingAll(true);
+      const ok = await followUpdatePlan();
+      if (!ok) setAllStatus({ phase: 'error', message: t('settings.updates.msg.updateError') });
+      setIsApplyingAll(false);
+      refreshAllChecks();
+    } else if (s.state === 'done' || s.state === 'apply_error') {
+      // The isolated apply session finished (successfully or not) while this
+      // page wasn't open to watch it — surface the outcome once, same as
+      // followUpdatePlan() would have shown it live.
+      setAllStatus({ phase: s.state === 'done' ? 'done' : 'error',
+                     message: s.message || t('settings.updates.msg.updateError') });
+      refreshAllChecks();
+    }
+  };
 
   // Publish "update available" so the Sidebar can show a badge. We consider the
   // core channels behind the single button (UI + System + OS); Lyrion lives on
@@ -822,6 +1395,18 @@ const Settings = () => {
     localStorage.setItem('hifiUpdateAvailable', available ? '1' : '0');
     window.dispatchEvent(new CustomEvent('hifi-update-available', { detail: available }));
   }, [appUpdate, systemUpdate, osUpdate]);
+
+  // The updater scripts on the device (hifi-os-update.sh, hifi-system-update.sh,
+  // hifi-lyrion-update.sh, hifi-ota-update.sh) write free-text progress
+  // `message`s in Italian only — not locale-aware. `state` is the one
+  // locale-neutral field they emit, so that drives the displayed text; the raw
+  // message is kept only for 'error' (a diagnostic reason) and as a
+  // last-resort fallback for a state this list doesn't know about.
+  const progressStateMessage = (state, rawMessage) => {
+    if (state === 'error') return rawMessage || t('settings.updates.msg.updateError');
+    const known = ['starting', 'downloading', 'verifying', 'applying', 'restarting', 'done'];
+    return known.includes(state) ? t(`settings.updates.progressState.${state}`) : rawMessage;
+  };
 
   // ── OTA UI update handlers ──────────────────────────────────────
   const checkAppUpdate = async () => {
@@ -862,7 +1447,7 @@ const Settings = () => {
         otaPollRef.current = setInterval(async () => {
           const s = await systemAPI.getAppUpdateStatus();
           if (s.success) {
-            setOtaStatus(s.data);
+            setOtaStatus({ ...s.data, message: progressStateMessage(s.data.state, s.data.message) });
             if (s.data.state === 'done' || s.data.state === 'error') {
               clearInterval(otaPollRef.current);
               otaPollRef.current = null;
@@ -917,7 +1502,7 @@ const Settings = () => {
         systemPollRef.current = setInterval(async () => {
           const s = await systemAPI.getSystemUpdateStatus();
           if (s.success) {
-            setSystemStatus(s.data);
+            setSystemStatus({ ...s.data, message: progressStateMessage(s.data.state, s.data.message) });
             if (s.data.state === 'done' || s.data.state === 'error') {
               clearInterval(systemPollRef.current);
               systemPollRef.current = null;
@@ -936,22 +1521,111 @@ const Settings = () => {
   };
 
   // ── Combined UI + System + OS OTA (single button) ───────────────
-  // One button applies every core update, in the order that survives:
-  //   1. System components (API/daemons/scripts) — doesn't tear down the page.
-  //   2. OS — verifies the signature and runs apply.sh. apply.sh is a clean
-  //      no-op when the system already matches (so this step usually just falls
-  //      through); only a real OS change reboots, which is rare and ends here.
-  //   3. UI — restarts the Electron front-end, so it goes last (terminal).
-  // (Lyrion stays on its own button.)
+  // The sequence runs on the appliance, in two isolated phases:
+  // /update/apply_all writes a plan to persistent storage and
+  // hifi-update-stage-runner.sh downloads+verifies every component under its
+  // own systemd unit — the box stays fully live. Once every component has
+  // staged ('staged_pending_reboot'), the appliance reboots into an isolated
+  // system-update.target session where NOTHING from the app stack runs (not
+  // even hifi-api) and hifi-update-apply-runner.sh applies everything, then
+  // reboots back. That's why polling here has to ride through two reboots and
+  // a stretch where the API isn't even listening — 'applying' surfaces only
+  // if this page happens to be watching right as the box comes back up, and
+  // the durable outcome ('done'/'apply_error') is what api_server.py reports
+  // once it does. Here we only start the plan and render its progress.
+  const followUpdatePlan = () => new Promise((resolve) => {
+    if (planPollRef.current) clearInterval(planPollRef.current);
+    // 'interrupted' means "a step was left running with nobody currently
+    // resuming it" — which is also exactly what the plan looks like for the
+    // first few seconds after a stage download is interrupted, before
+    // hifi-update-stage-resume.service has come up (it waits on
+    // network-online.target). Treating a single 'interrupted' read as final
+    // made this page give up on updates that were about to continue on their
+    // own, which is why it now only stops after the status is 'interrupted'
+    // on MANY consecutive polls — long enough for the resume unit to have
+    // started if it ever will (~2 minutes), not just one.
+    let interruptedStreak = 0;
+    const MAX_INTERRUPTED_POLLS = 60; // ~2 minutes at 2s/poll
+    planPollRef.current = setInterval(async () => {
+      const r = await systemAPI.getUpdatePlanStatus();
+      // A failed request is expected throughout (the API restarts after the
+      // system step lands, and is not running at all during the isolated
+      // apply session). The plan/outcome is on disk — just keep polling.
+      if (!r.success) return;
+      const s = r.data || {};
+      if (s.state === 'idle') return;
+      // While still inside the grace window, render 'interrupted' as if it
+      // were just another in-progress step ('restarting' matches the message
+      // shown for a reboot in flight) — NOT as the terminal 'error' state,
+      // which would put the dismiss button on screen and let it delete the
+      // on-disk plan before the resume unit ever got to it.
+      const stillWaiting = s.state === 'interrupted' && interruptedStreak < MAX_INTERRUPTED_POLLS;
+      setPlanStatus({
+        state: stillWaiting ? 'restarting' : s.state,
+        kind: s.kind || '',
+        message: stillWaiting
+          ? t('settings.updates.progressState.restarting')
+          : progressStateMessage(s.step_state, s.message || ''),
+        progress: typeof s.overall_progress === 'number' ? s.overall_progress : null,
+        doneKinds: (s.steps || []).filter((x) => x.state === 'done').map((x) => x.kind),
+      });
+      if (s.state === 'interrupted') {
+        interruptedStreak += 1;
+        if (interruptedStreak < MAX_INTERRUPTED_POLLS) return;
+      } else {
+        interruptedStreak = 0;
+      }
+      // 'staged_pending_reboot' and 'applying' are still in progress (the box
+      // is about to, or already did, reboot into the isolated apply session)
+      // — only 'done' (full success) and 'error'/'apply_error'/'interrupted'
+      // (past the grace window) are terminal.
+      if (s.state === 'done' || s.state === 'error' || s.state === 'apply_error' || s.state === 'interrupted') {
+        clearInterval(planPollRef.current);
+        planPollRef.current = null;
+        resolve(s.state === 'done');
+      }
+    }, 2000);
+  });
+
   const applyAllUpdates = async () => {
     if (!apiConnected) {
       setUpdateMessage(t('settings.msg.apiUnavailable'));
       return;
     }
+    if (!(systemUpdate?.update_available || appUpdate?.update_available || osUpdate?.update_available)) return;
+
+    setIsApplyingAll(true);
+    setPlanStatus({ state: 'starting', kind: '', message: t('settings.updates.msg.starting'), progress: null, doneKinds: [] });
+    const started = await systemAPI.applyAllUpdates();
+    if (started.success && started.data?.started) {
+      const ok = await followUpdatePlan();
+      if (!ok) setAllStatus({ phase: 'error', message: t('settings.updates.msg.updateError') });
+      setIsApplyingAll(false);
+      refreshAllChecks();
+      return;
+    }
+    // 404 = this appliance still runs an api_server without the sequencer (the
+    // UI bundle can land before the system bundle). Drive the sequence from
+    // here the way we used to, so the update still goes through.
+    if (started.status !== 404) {
+      setPlanStatus(null);
+      setIsApplyingAll(false);
+      setAllStatus({ phase: 'error', message: started.data?.message || t('settings.updates.msg.startFailed') });
+      return;
+    }
+    setPlanStatus(null);
+    await applyAllUpdatesLegacy();
+  };
+
+  // Pre-sequencer fallback. Same order the runner uses (system → os → ui), with
+  // the known limitation this whole change exists to remove: if the OS step
+  // reboots, or the API restart lands between two steps, the remaining
+  // components are not applied.
+  const applyAllUpdatesLegacy = async () => {
     const hasSystem = !!systemUpdate?.update_available;
     const hasUI = !!appUpdate?.update_available;
     const hasOS = !!osUpdate?.update_available;
-    if (!hasSystem && !hasUI && !hasOS) return;
+    if (!hasSystem && !hasUI && !hasOS) { setIsApplyingAll(false); return; }
 
     setIsApplyingAll(true);
     try {
@@ -1001,6 +1675,15 @@ const Settings = () => {
 
   const coreUpdateAvailable = !!(appUpdate?.update_available || systemUpdate?.update_available || osUpdate?.update_available);
 
+  // ui/system/os ship from the same tagged release, so their `notes` are
+  // normally identical — take whichever check response has one.
+  const availableChangelog = [appUpdate, systemUpdate, osUpdate]
+    .find((u) => u?.update_available && u?.notes);
+  const showChangelog = () => {
+    if (!availableChangelog) return;
+    setChangelogDialog({ version: availableChangelog.latest || '', notes: availableChangelog.notes });
+  };
+
   // ── Lyrion update handlers ──────────────────────────────────────
   const checkLyrionUpdate = async () => {
     setIsCheckingLyrion(true);
@@ -1018,6 +1701,32 @@ const Settings = () => {
     }
   };
 
+  // Feature-detected: the UI bundle can land before the system bundle that
+  // ships /lyrion_channel (apply order is ui → os → system), so a failure here
+  // must leave the section working without a channel picker, not broken.
+  const loadLyrionChannel = async () => {
+    try {
+      const r = await systemAPI.getLyrionChannel();
+      if (r.success && r.data?.channel) setLyrionChannel(r.data.channel);
+    } catch (_) { /* older api_server — picker stays hidden */ }
+  };
+
+  const changeLyrionChannel = async (channel) => {
+    if (channel === lyrionChannel || isApplyingLyrion) return;
+    setLyrionChannelBusy(true);
+    const previous = lyrionChannel;
+    setLyrionChannel(channel);
+    try {
+      const r = await systemAPI.setLyrionChannel(channel);
+      if (!r.success || r.data?.success === false) setLyrionChannel(previous);
+      else await checkLyrionUpdate();
+    } catch (_) {
+      setLyrionChannel(previous);
+    } finally {
+      setLyrionChannelBusy(false);
+    }
+  };
+
   const applyLyrionUpdate = async () => {
     if (!apiConnected) {
       setUpdateMessage(t('settings.msg.apiUnavailable'));
@@ -1026,7 +1735,7 @@ const Settings = () => {
     setIsApplyingLyrion(true);
     setLyrionStatus({ state: 'starting', message: t('settings.updates.msg.startingLyrion') });
     try {
-      const result = await systemAPI.applyLyrionUpdate();
+      const result = await systemAPI.applyLyrionUpdate(lyrionChannel);
       if (!result.success || !result.data.started) {
         setLyrionStatus({ state: 'error', message: result.data?.message || result.message || t('settings.updates.msg.startFailed') });
         setIsApplyingLyrion(false);
@@ -1035,7 +1744,7 @@ const Settings = () => {
       lyrionPollRef.current = setInterval(async () => {
         const s = await systemAPI.getLyrionUpdateStatus();
         if (s.success) {
-          setLyrionStatus(s.data);
+          setLyrionStatus({ ...s.data, message: progressStateMessage(s.data.state, s.data.message) });
           if (s.data.state === 'done' || s.data.state === 'error') {
             clearInterval(lyrionPollRef.current);
             lyrionPollRef.current = null;
@@ -1088,7 +1797,7 @@ const Settings = () => {
         osPollRef.current = setInterval(async () => {
           const s = await systemAPI.getOsUpdateStatus();
           if (s.success) {
-            setOsStatus(s.data);
+            setOsStatus({ ...s.data, message: progressStateMessage(s.data.state, s.data.message) });
             if (s.data.state === 'done' || s.data.state === 'error') {
               clearInterval(osPollRef.current);
               osPollRef.current = null;
@@ -1176,6 +1885,9 @@ const Settings = () => {
         if (networkResult.success) {
           setNetworkInfo(networkResult.data);
         }
+
+        const statusResult = await systemAPI.getNetworkStatus();
+        if (statusResult.success) setActiveNetwork(statusResult.data);
       } else {
         setUpdateMessage(t('settings.msg.apiUnavailableHint'));
       }
@@ -1184,6 +1896,63 @@ const Settings = () => {
       setUpdateMessage(t('settings.msg.loadDataError'));
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  // Post-setup Wi-Fi/wired switching. Connecting to Wi-Fi (or switching to
+  // wired) now actively turns the other interface off server-side (see
+  // api_server.py's wifi_connect/wired_dhcp) instead of just adding a
+  // connection alongside whatever was already active — so these two actions
+  // are genuinely exclusive, not additive.
+  const openWifiPanel = async () => {
+    setWifiError(null);
+    setShowWifiPanel(true);
+    setWifiScanning(true);
+    try {
+      const res = await systemAPI.scanWifi();
+      setWifiNetworks((res.success && res.data?.networks) || []);
+    } catch (_) {
+      setWifiNetworks([]);
+    } finally {
+      setWifiScanning(false);
+    }
+  };
+
+  const handleWifiConnect = async (ssid, password) => {
+    setWifiError(null);
+    setWifiConnecting(true);
+    try {
+      const res = await systemAPI.connectWifi(ssid, password);
+      // apiPost only reports transport success (res.success) — the actual
+      // connect outcome is inside the JSON body (res.data.success).
+      if (res.success && res.data?.success) {
+        setShowWifiPanel(false);
+        setNetworkSwitchMessage(t('settings.network.switchedToWifi', { ssid }));
+        loadSystemData();
+      } else {
+        setWifiError(res.data?.message || res.message || t('wizard.wifi.connectFailed'));
+      }
+    } catch (_) {
+      setWifiError(t('wizard.wifi.connectFailed'));
+    } finally {
+      setWifiConnecting(false);
+    }
+  };
+
+  const handleUseWired = async () => {
+    setWiredSwitching(true);
+    setNetworkSwitchMessage('');
+    try {
+      const res = await systemAPI.useWiredDhcp();
+      const ok = res.success && res.data?.success;
+      setNetworkSwitchMessage(ok
+        ? t('settings.network.switchedToWired')
+        : (res.data?.message || res.message || t('settings.network.switchFailed')));
+      if (ok) loadSystemData();
+    } catch (_) {
+      setNetworkSwitchMessage(t('settings.network.switchFailed'));
+    } finally {
+      setWiredSwitching(false);
     }
   };
 
@@ -1236,6 +2005,53 @@ const Settings = () => {
     });
   };
 
+  const doFactoryReset = async () => {
+    setUpdateMessage(t('settings.factory.running'));
+    try {
+      const result = await systemAPI.factoryReset();
+      setUpdateMessage(result.success && result.data?.success
+        ? (result.data.message || t('settings.factory.running'))
+        : (result.data?.message || result.message || t('settings.factory.failed')));
+    } catch (error) {
+      setUpdateMessage(t('settings.factory.failed'));
+    }
+  };
+
+  const handleFactoryReset = () => {
+    if (!apiConnected) {
+      setUpdateMessage(t('settings.msg.apiUnavailable'));
+      return;
+    }
+    setConfirmDialog({
+      message: t('settings.factory.confirm'),
+      confirmLabel: t('settings.factory.button'),
+      onConfirm: doFactoryReset,
+    });
+  };
+
+  const doWebuiReset = async () => {
+    try {
+      const result = await systemAPI.resetWebuiCredentials();
+      setUpdateMessage(result.success && result.data?.success
+        ? (result.data.message || t('settings.webuiReset.done'))
+        : (result.data?.message || result.message || t('settings.webuiReset.failed')));
+    } catch (error) {
+      setUpdateMessage(t('settings.webuiReset.failed'));
+    }
+  };
+
+  const handleWebuiReset = () => {
+    if (!apiConnected) {
+      setUpdateMessage(t('settings.msg.apiUnavailable'));
+      return;
+    }
+    setConfirmDialog({
+      message: t('settings.webuiReset.confirm'),
+      confirmLabel: t('settings.webuiReset.button'),
+      onConfirm: doWebuiReset,
+    });
+  };
+
   // Get current interface info
   const currentInterface = networkInfo.find(net => net.name === selectedInterface);
   const wiredInterfaces = networkInfo.filter(net => net.type === 'wired');
@@ -1251,13 +2067,8 @@ const Settings = () => {
     return m ? m[1] : '9000';
   })();
   const isUsableIp = deviceIp && !/^127\./.test(deviceIp) && !/loading|caric/i.test(deviceIp);
-  const webRemoteUrl = isUsableIp ? `http://${deviceIp}:${lyrionPort}/material/` : null;
-  // Sources web service (:8080) — also hosts the Backup/restore page. Not
-  // shown/usable until sourcesToken arrives (mirrors pairingQrValue below):
-  // every route on that page now requires pairing, so the URL must carry the
-  // token or the page would 401 on every action.
-  const sourcesUrl = (isUsableIp && sourcesToken)
-    ? `http://${deviceIp}:8080/?token=${encodeURIComponent(sourcesToken)}`
+  const webRemoteUrl = isUsableIp
+    ? `http://${deviceIp}:${lyrionPort}/material/${skinChoice === 'osmium' ? '?defaultTheme=dark/Osmium' : ''}`
     : null;
   // Companion-app pairing QR payload: JSON (not a bare URL) so the app can pick
   // out the LMS address, the :8080 API address, and the pairing token in one
@@ -1300,11 +2111,13 @@ const Settings = () => {
       icon: Sliders,
       content: 'custom-playback'
     },
-    {
-      title: t('settings.sections.dsp'),
-      icon: Sliders,
-      content: 'custom-dsp'
-    },
+    // 'custom-dsp' is deliberately NOT listed here — the feature (and its
+    // room-correction wizard, RoomCorrectionWizard) is being held back for a
+    // future paid tier. The JSX block below (section.content === 'custom-dsp')
+    // and all backing code/API endpoints are left fully intact on purpose,
+    // just unreachable: activeSection is plain React state set only by
+    // clicking an entry in this array, so removing the entry alone closes off
+    // every path to it (no URL/query-string deep-link exists in this app).
     {
       title: t('settings.sections.multiroom'),
       icon: Speaker,
@@ -1331,11 +2144,6 @@ const Settings = () => {
       content: 'custom-web-remote-ios'
     },
     {
-      title: t('settings.sections.backup'),
-      icon: HardDriveDownload,
-      content: 'custom-backup'
-    },
-    {
       title: t('settings.sections.ssh'),
       icon: Terminal,
       content: 'custom-ssh'
@@ -1344,6 +2152,26 @@ const Settings = () => {
       title: t('settings.sections.pointer'),
       icon: MousePointer2,
       content: 'custom-pointer'
+    },
+    {
+      title: t('settings.sections.uiResolution'),
+      icon: Gauge,
+      content: 'custom-ui-resolution'
+    },
+    {
+      title: t('settings.sections.uiRefresh'),
+      icon: RefreshCw,
+      content: 'custom-ui-refresh'
+    },
+    {
+      title: t('settings.sections.displayMode'),
+      icon: displayMode === 'headless' ? MonitorOff : Monitor,
+      content: 'custom-display-mode'
+    },
+    {
+      title: t('settings.sections.timezone'),
+      icon: Clock,
+      content: 'custom-timezone'
     },
     {
       title: t('settings.sections.systemInfo'),
@@ -1364,8 +2192,18 @@ const Settings = () => {
       title: t('settings.sections.systemControls'),
       icon: Power,
       content: 'custom-system-controls'
+    },
+    {
+      title: t('settings.sections.thirdPartyNotices'),
+      icon: ScrollText,
+      content: 'custom-third-party-notices'
     }
-  ];
+  ].filter((s) =>
+    // Music Sources only matters for a locally-served library — when this
+    // unit follows an external Lyrion server, its sources are configured on
+    // that other device, not here.
+    s.content !== 'custom-sources' || lmsRole.mode !== 'follow'
+  );
 
   const sectionId = (s) => s.content || s.title;
   const openSection = settingsSections.find((s) => sectionId(s) === activeSection);
@@ -1376,6 +2214,25 @@ const Settings = () => {
   // and delegates the live progress to the current phase's sub-status. We map all
   // of that to one shape { title, message, progress, state } the overlay renders.
   const activeOta = (() => {
+    // A server-side plan wins over everything: it is the only source that stays
+    // accurate across both update-mode reboots and the stretch where the API
+    // itself isn't running (the isolated apply session).
+    if (planStatus) {
+      const terminal = planStatus.state === 'error' || planStatus.state === 'apply_error'
+        || planStatus.state === 'interrupted';
+      // 'staged_pending_reboot'/'applying'/'running' are all still "in
+      // progress" for display purposes — only 'done' is the real finish line.
+      return {
+        title: t('settings.updates.overlay.titleAll'),
+        // Fall back to naming the component being applied ('ui'/'system'/'os'
+        // are all keys under settings.updates) before the generic "starting".
+        message: planStatus.message
+          || (planStatus.kind ? t(`settings.updates.${planStatus.kind}`) : '')
+          || t('settings.updates.msg.starting'),
+        progress: typeof planStatus.progress === 'number' ? planStatus.progress : null,
+        state: terminal ? 'error' : (planStatus.state === 'done' ? 'done' : 'applying'),
+      };
+    }
     if (isApplyingAll) {
       const sub = allStatus?.phase === 'ui' ? otaStatus
         : allStatus?.phase === 'system' ? systemStatus
@@ -1407,13 +2264,20 @@ const Settings = () => {
   // Tear down every poll + applying flag so the overlay can be dismissed after an
   // error (on success the UI/API restarts, so no dismiss is needed there).
   const dismissOta = () => {
-    [otaPollRef, systemPollRef, osPollRef, lyrionPollRef].forEach((r) => {
+    [otaPollRef, systemPollRef, osPollRef, lyrionPollRef, planPollRef].forEach((r) => {
       if (r.current) { clearInterval(r.current); r.current = null; }
     });
     setIsApplyingAll(false); setIsApplyingUpdate(false); setIsApplyingSystem(false);
     setIsApplyingOs(false); setIsApplyingLyrion(false);
     setAllStatus(null); setOtaStatus(null); setSystemStatus(null);
     setOsStatus(null); setLyrionStatus(null);
+    if (planStatus) {
+      setPlanStatus(null);
+      // Retire the plan server-side too, or it re-opens this overlay every time
+      // the kiosk starts until it expires.
+      systemAPI.dismissUpdatePlan();
+      refreshAllChecks();
+    }
   };
 
   return (
@@ -1524,6 +2388,54 @@ const Settings = () => {
                         />
                       </div>
                     </div>
+
+                    {/* Web player skin (Osmium vs stock Material) */}
+                    {skinChoice !== undefined && (
+                      <div className="space-y-3 pt-2 border-t border-hifi-accent/40">
+                        <label className="text-white font-medium">{t('settings.lyrion.skinLabel')}</label>
+                        <p className="text-sm text-hifi-silver mb-2">{t('settings.lyrion.skinHint')}</p>
+                        <div className="flex gap-2">
+                          <motion.button
+                            onClick={() => pickSkin('osmium')}
+                            disabled={skinBusy}
+                            className={`flex-1 py-3 rounded-lg font-medium transition-colors ${
+                              skinChoice === 'osmium'
+                                ? 'bg-hifi-gold text-black'
+                                : 'bg-hifi-light text-white hover:bg-hifi-accent'
+                            }`}
+                            whileTap={{ scale: skinBusy ? 1 : 0.95 }}
+                          >
+                            {t('settings.lyrion.skinOsmium')}
+                          </motion.button>
+                          <motion.button
+                            onClick={() => pickSkin('material')}
+                            disabled={skinBusy}
+                            className={`flex-1 py-3 rounded-lg font-medium transition-colors ${
+                              skinChoice === 'material'
+                                ? 'bg-hifi-gold text-black'
+                                : 'bg-hifi-light text-white hover:bg-hifi-accent'
+                            }`}
+                            whileTap={{ scale: skinBusy ? 1 : 0.95 }}
+                          >
+                            {t('settings.lyrion.skinMaterial')}
+                          </motion.button>
+                        </div>
+                        {skinChoice === 'unset' && (
+                          <p className="text-sm text-hifi-silver/70">{t('settings.lyrion.skinUnset')}</p>
+                        )}
+                        {skinBusy && (
+                          <div className="flex items-center space-x-2 text-sm text-hifi-silver">
+                            <Loader2 size={16} className="animate-spin" />
+                            <span>{skinMessage}</span>
+                          </div>
+                        )}
+                        {!skinBusy && skinMessage && (
+                          <div className="rounded-lg p-3 text-center text-sm bg-red-900/20 text-red-300 border border-red-500/30">
+                            {skinMessage}
+                          </div>
+                        )}
+                      </div>
+                    )}
 
                     {/* Library rescan */}
                     <div className="space-y-3 pt-2 border-t border-hifi-accent/40">
@@ -1695,11 +2607,62 @@ const Settings = () => {
                       </div>
                     </div>
 
+                    {/* Fixed volume 100% (bit-perfect output, no digital volume control) */}
+                    <button
+                      onClick={toggleFixedVolume}
+                      disabled={!playerMac}
+                      className="w-full flex items-center justify-between bg-hifi-dark hover:bg-hifi-light/40 rounded-lg px-4 py-3 transition-colors disabled:opacity-40"
+                    >
+                      <span className="text-left">
+                        <span className="block text-sm text-white">{t('settings.playback.fixedVolume')}</span>
+                        <span className="block text-xs text-hifi-silver mt-0.5">{t('settings.playback.fixedVolumeHelp')}</span>
+                      </span>
+                      <span className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors ml-4 ${digitalVolumeControl === '0' ? 'bg-hifi-gold' : 'bg-hifi-accent'}`}>
+                        <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${digitalVolumeControl === '0' ? 'translate-x-6' : 'translate-x-1'}`} />
+                      </span>
+                    </button>
+
                     {playbackMessage && playerMac && (
                       <div className="rounded-lg p-3 text-center text-sm bg-hifi-dark text-hifi-silver">
                         {playbackMessage}
                       </div>
                     )}
+
+                    {/* Animated VU meter toggle */}
+                    <button
+                      onClick={toggleVuMeter}
+                      disabled={vuMeterBusy}
+                      className="w-full flex items-center justify-between bg-hifi-dark hover:bg-hifi-light/40 rounded-lg px-4 py-3 transition-colors disabled:opacity-60"
+                    >
+                      <span className="text-left">
+                        <span className="block text-sm text-white">{t('settings.playback.vuMeter')}</span>
+                        <span className="block text-xs text-hifi-silver mt-0.5">{t('settings.playback.vuMeterHelp')}</span>
+                      </span>
+                      <span className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors ml-4 ${vuMeterEnabled ? 'bg-hifi-gold' : 'bg-hifi-accent'}`}>
+                        <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${vuMeterEnabled ? 'translate-x-6' : 'translate-x-1'}`} />
+                      </span>
+                    </button>
+
+                    {/* Now-playing auto-expand */}
+                    <div className="space-y-2">
+                      <label className="text-white font-medium text-sm">{t('settings.playback.autoExpand')}</label>
+                      <p className="text-xs text-hifi-silver">{t('settings.playback.autoExpandHelp')}</p>
+                      <div className="grid grid-cols-5 gap-2">
+                        {[0, 3, 5, 10, 15].map((s) => (
+                          <motion.button
+                            key={s}
+                            onClick={() => changeAutoExpand(s)}
+                            disabled={autoExpandBusy}
+                            className={`p-3 rounded-lg text-sm font-medium transition-colors disabled:opacity-40 ${
+                              autoExpandSeconds === s ? 'bg-hifi-gold text-black' : 'bg-hifi-light text-white hover:bg-hifi-accent'
+                            }`}
+                            whileTap={{ scale: 0.95 }}
+                          >
+                            {s === 0 ? t('settings.playback.rgOff') : `${s}s`}
+                          </motion.button>
+                        ))}
+                      </div>
+                    </div>
                   </div>
                 )}
 
@@ -1970,6 +2933,24 @@ const Settings = () => {
                               ? t('settings.dsp.roomCorrectionPresent', { filename: firStatus.filename })
                               : t('settings.dsp.roomCorrectionMissing')}
                           </p>
+                          {/* Guided measurement: generates the FIR on-device with a USB mic */}
+                          <RoomCorrectionWizard onDone={() => { loadFirStatus(); loadDspStatus(); }} />
+
+                          {/* Manual upload: a filter already generated with REW/rePhase (.wav/.txt) */}
+                          <div className="flex space-x-2 pt-1">
+                            <label className="flex-1 text-center text-sm bg-hifi-accent hover:bg-hifi-light text-white py-2 rounded-lg cursor-pointer transition-colors">
+                              {firBusy ? <Loader2 size={14} className="inline animate-spin" /> : t('settings.dsp.firUpload')}
+                              <input type="file" accept=".wav,.txt" disabled={firBusy} className="hidden"
+                                onChange={(e) => { uploadFir(e.target.files?.[0]); e.target.value = ''; }} />
+                            </label>
+                            {firStatus?.present && (
+                              <button onClick={removeFir} disabled={firBusy}
+                                className="flex-1 text-sm bg-red-900/30 hover:bg-red-900/60 disabled:opacity-50 text-red-300 py-2 rounded-lg transition-colors">
+                                {t('settings.dsp.firRemove')}
+                              </button>
+                            )}
+                          </div>
+                          {firMessage && <p className="text-xs text-hifi-silver">{firMessage}</p>}
                         </div>
 
                         {/* Apply EQ (re-applies live when DSP is on; otherwise just saves) */}
@@ -2033,7 +3014,10 @@ const Settings = () => {
                       )}
                     </div>
 
-                    {/* LMS role: standalone (own server) vs. following another device's */}
+                    {/* Which Lyrion server: internal (this device runs it) or
+                        external (one already on the network). Same wire values
+                        as before — 'local'/'follow' — only the wording changed,
+                        after forum feedback that "own / follow" read as jargon. */}
                     <div className="space-y-3 bg-hifi-dark rounded-lg p-4 border border-hifi-accent/40">
                       <label className="text-white font-medium">{t('settings.multiroom.role.title')}</label>
                       <p className="text-xs text-hifi-silver">{t('settings.multiroom.role.help')}</p>
@@ -2052,6 +3036,104 @@ const Settings = () => {
                           {t('settings.multiroom.role.follow')}
                         </button>
                       </div>
+
+                      {/* Internal: this device owns the server, so it also owns
+                          which build of it runs. */}
+                      {lmsRoleMode === 'local' && (
+                        <div className="space-y-2 border-t border-hifi-accent/40 pt-3">
+                          <div className="flex items-center justify-between">
+                            <span className="text-sm text-hifi-silver">{t('settings.multiroom.server.installed')}</span>
+                            <span className="text-white font-mono text-sm">
+                              {lyrionUpdate?.current && lyrionUpdate.current !== 'unknown'
+                                ? lyrionUpdate.current
+                                : t('settings.multiroom.server.notInstalled')}
+                            </span>
+                          </div>
+
+                          {lyrionChannel && (
+                            <>
+                              <span className="text-xs text-hifi-silver">{t('settings.multiroom.server.channel')}</span>
+                              <div className="space-y-1.5">
+                                {LYRION_CHANNELS.map((c) => (
+                                  <button
+                                    key={c}
+                                    onClick={() => changeLyrionChannel(c)}
+                                    disabled={lyrionChannelBusy || isApplyingLyrion}
+                                    className={`w-full flex items-center justify-between rounded-lg px-3 py-2 text-sm transition-colors disabled:opacity-50 ${
+                                      lyrionChannel === c
+                                        ? 'bg-hifi-gold text-black font-semibold'
+                                        : 'bg-hifi-surface text-white hover:bg-hifi-light/40'
+                                    }`}
+                                  >
+                                    <span>{t(`settings.multiroom.server.channel_${c}`)}</span>
+                                    <span className="opacity-70 font-mono text-xs">
+                                      {lyrionUpdate?.channels?.[c]?.version || ''}
+                                    </span>
+                                  </button>
+                                ))}
+                              </div>
+                              {lyrionChannel !== 'release' && (
+                                <p className="text-xs text-hifi-silver">{t('settings.multiroom.server.channelWarning')}</p>
+                              )}
+                            </>
+                          )}
+
+                          {lyrionUpdate?.error && (
+                            <div className="rounded-lg p-3 text-center text-sm bg-red-900/20 text-red-300 border border-red-500/30">
+                              {lyrionUpdate.error}
+                            </div>
+                          )}
+
+                          <div className="flex gap-2">
+                            <motion.button
+                              onClick={applyLyrionUpdate}
+                              disabled={isApplyingLyrion || isCheckingLyrion}
+                              className="flex-1 bg-hifi-gold hover:brightness-110 disabled:bg-hifi-accent text-black py-2.5 rounded-lg font-semibold flex items-center justify-center space-x-2 transition"
+                              whileTap={{ scale: isApplyingLyrion ? 1 : 0.95 }}
+                            >
+                              {isApplyingLyrion
+                                ? <Loader2 size={18} className="animate-spin" />
+                                : <Download size={18} />}
+                              <span>
+                                {isApplyingLyrion
+                                  ? t('settings.updates.updating')
+                                  : (lyrionUpdate?.current && lyrionUpdate.current !== 'unknown'
+                                      ? t('settings.multiroom.server.update')
+                                      : t('settings.multiroom.server.install'))}
+                              </span>
+                            </motion.button>
+                            <motion.button
+                              onClick={checkLyrionUpdate}
+                              disabled={isCheckingLyrion || isApplyingLyrion}
+                              className="bg-hifi-accent hover:bg-hifi-light disabled:bg-hifi-dark text-white px-4 rounded-lg transition-colors"
+                              whileTap={{ scale: isCheckingLyrion ? 1 : 0.95 }}
+                            >
+                              {isCheckingLyrion
+                                ? <Loader2 size={18} className="animate-spin" />
+                                : <RotateCw size={18} />}
+                            </motion.button>
+                          </div>
+
+                          {isApplyingLyrion && (
+                            <p className="text-xs text-hifi-silver text-center">
+                              {t('settings.updates.lyrionRestartNote')}
+                            </p>
+                          )}
+
+                          {lyrionStatus && (
+                            <div className={`rounded-lg p-3 text-center text-sm ${
+                              lyrionStatus.state === 'error'
+                                ? 'bg-red-900/20 text-red-300 border border-red-500/30'
+                                : 'bg-hifi-surface text-hifi-silver'
+                            }`}>
+                              {lyrionStatus.message || lyrionStatus.state}
+                              {typeof lyrionStatus.progress === 'number' && lyrionStatus.state !== 'error' && (
+                                <span className="ml-1">({lyrionStatus.progress}%)</span>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      )}
 
                       {lmsRoleMode === 'follow' && (
                         <div className="space-y-2">
@@ -2290,6 +3372,44 @@ const Settings = () => {
                       </div>
                     </div>
 
+                    {/* Active connection + switch actions. Picking either one
+                        turns the other interface off server-side (see
+                        api_server.py wifi_connect/wired_dhcp) so exactly one
+                        uplink is ever actually in use. */}
+                    <div className="bg-hifi-dark rounded-lg p-4 space-y-3">
+                      <div className="flex items-center justify-between">
+                        <span className="text-hifi-silver text-sm">{t('settings.network.activeLabel')}</span>
+                        <span className="text-hifi-gold font-mono text-sm flex items-center gap-1.5">
+                          {activeNetwork?.type === 'wired' && <Network size={14} />}
+                          {activeNetwork?.type === 'wireless' && <Wifi size={14} />}
+                          {activeNetwork?.type === 'wired'
+                            ? t('settings.network.activeWired', { ip: activeNetwork.ip || 'N/A' })
+                            : activeNetwork?.type === 'wireless'
+                              ? t('settings.network.activeWifi', { ssid: activeNetwork.ssid || '?', ip: activeNetwork.ip || 'N/A' })
+                              : t('settings.network.activeNone')}
+                        </span>
+                      </div>
+                      <div className="flex gap-2">
+                        <motion.button onClick={openWifiPanel}
+                          className="flex-1 bg-hifi-light hover:bg-hifi-accent text-white py-2 rounded-lg font-medium flex items-center justify-center space-x-2 transition-colors"
+                          whileTap={{ scale: 0.95 }}>
+                          <Wifi size={16} />
+                          <span>{t('settings.network.configureWifiButton')}</span>
+                        </motion.button>
+                        <motion.button onClick={handleUseWired} disabled={wiredSwitching}
+                          className="flex-1 bg-hifi-light hover:bg-hifi-accent disabled:bg-hifi-dark text-white py-2 rounded-lg font-medium flex items-center justify-center space-x-2 transition-colors"
+                          whileTap={{ scale: wiredSwitching ? 1 : 0.95 }}>
+                          {wiredSwitching ? <Loader2 size={16} className="animate-spin" /> : <Network size={16} />}
+                          <span>{t('settings.network.useWiredButton')}</span>
+                        </motion.button>
+                      </div>
+                      {networkSwitchMessage && (
+                        <p className={`text-xs ${isErrorMsg(networkSwitchMessage) ? 'text-red-400' : 'text-hifi-silver'}`}>
+                          {networkSwitchMessage}
+                        </p>
+                      )}
+                    </div>
+
                     {/* Current Interface Info */}
                     {currentInterface && (
                       <div className="bg-hifi-dark rounded-lg p-4">
@@ -2340,6 +3460,17 @@ const Settings = () => {
                       }`}>
                         {updateMessage}
                       </div>
+                    )}
+
+                    {showWifiPanel && (
+                      <WifiConfigPanel
+                        networks={wifiNetworks}
+                        scanning={wifiScanning}
+                        connecting={wifiConnecting}
+                        error={wifiError}
+                        onConnect={handleWifiConnect}
+                        onClose={() => setShowWifiPanel(false)}
+                      />
                     )}
                   </div>
                 )}
@@ -2410,34 +3541,6 @@ const Settings = () => {
                   </div>
                 )}
 
-                {/* Custom Backup/Restore Section */}
-                {section.content === 'custom-backup' && (
-                  <div className="space-y-4">
-                    <p className="text-sm text-hifi-silver">{t('settings.backup.help')}</p>
-
-                    {sourcesUrl ? (
-                      <div className="flex flex-col items-center space-y-4">
-                        <div className="bg-white p-4 rounded-xl">
-                          <QRCodeSVG value={sourcesUrl} size={200} level="M" />
-                        </div>
-                        <div className="text-center">
-                          <p className="text-xs text-hifi-silver mb-1">{t('settings.backup.scanHint')}</p>
-                          <code className="text-sm text-hifi-gold break-all">{sourcesUrl}</code>
-                        </div>
-                      </div>
-                    ) : isUsableIp ? (
-                      <div className="flex flex-col items-center space-y-3 text-hifi-silver text-sm">
-                        <Loader2 size={24} className="animate-spin" />
-                        <span>{t('settings.webRemote.generatingToken')}</span>
-                      </div>
-                    ) : (
-                      <div className="rounded-lg p-3 text-center text-sm bg-hifi-dark text-hifi-silver">
-                        {t('settings.webRemote.noIp')}
-                      </div>
-                    )}
-                  </div>
-                )}
-
                 {section.content === 'custom-ssh' && (
                   <div className="space-y-4">
                     <p className="text-sm text-hifi-silver">{t('settings.ssh.help')}</p>
@@ -2468,6 +3571,64 @@ const Settings = () => {
                     {sshStatus && !sshStatus.available && (
                       <div className="rounded-lg p-3 text-center text-sm bg-hifi-dark text-hifi-silver">
                         {t('settings.ssh.installHint')}
+                      </div>
+                    )}
+
+                    {/* The SSH login itself. The appliance used to ship user
+                        'hifi' with the documented password 'hifi' and no sudo,
+                        which made SSH both unsafe and useless. It is now the
+                        admin account, mirrored into a real Linux user with
+                        sudo; devices provisioned before that shipped can
+                        create one here. */}
+                    {shellAccount && (
+                      <div className="space-y-3 bg-hifi-dark rounded-lg p-4 border border-hifi-accent/40">
+                        <label className="text-white font-medium">{t('settings.ssh.loginTitle')}</label>
+                        {shellAccount.exists ? (
+                          <p className="text-xs text-hifi-silver">
+                            {t('settings.ssh.loginIs')}{' '}
+                            <code className="text-hifi-gold">ssh {shellAccount.username}@{deviceIp || 'hifiplayer.local'}</code>
+                          </p>
+                        ) : (
+                          <p className="text-xs text-hifi-silver">{t('settings.ssh.noLogin')}</p>
+                        )}
+                        <p className="text-xs text-hifi-silver">{t('settings.ssh.sudoWarning')}</p>
+
+                        <div onClick={() => showKeyboard(shellUserRef, shellUser)} className="cursor-pointer">
+                          <input
+                            ref={shellUserRef}
+                            type="text"
+                            value={shellUser}
+                            onChange={(e) => setShellUser(e.target.value)}
+                            placeholder={t('settings.ssh.usernamePlaceholder')}
+                            className="w-full bg-hifi-surface border border-hifi-accent rounded-lg px-4 py-3 text-white focus:outline-none focus:border-hifi-gold cursor-pointer"
+                          />
+                        </div>
+                        <div onClick={() => showKeyboard(shellPassRef, shellPass)} className="cursor-pointer">
+                          <input
+                            ref={shellPassRef}
+                            type="password"
+                            value={shellPass}
+                            onChange={(e) => setShellPass(e.target.value)}
+                            placeholder={t('settings.ssh.passwordPlaceholder')}
+                            className="w-full bg-hifi-surface border border-hifi-accent rounded-lg px-4 py-3 text-white focus:outline-none focus:border-hifi-gold cursor-pointer"
+                          />
+                        </div>
+                        <button
+                          onClick={saveShellAccount}
+                          disabled={shellBusy || !shellUser.trim() || shellPass.length < 8}
+                          className="w-full bg-hifi-gold text-black font-semibold py-2.5 rounded-lg hover:brightness-110 disabled:opacity-50 transition"
+                        >
+                          {shellAccount.exists ? t('settings.ssh.loginUpdate') : t('settings.ssh.loginCreate')}
+                        </button>
+                        {shellMessage && (
+                          <div className={`rounded-lg p-3 text-center text-sm ${
+                            isErrorMsg(shellMessage)
+                              ? 'bg-red-900/20 text-red-300 border border-red-500/30'
+                              : 'bg-hifi-surface text-hifi-silver'
+                          }`}>
+                            {shellMessage}
+                          </div>
+                        )}
                       </div>
                     )}
 
@@ -2522,6 +3683,357 @@ const Settings = () => {
                   </div>
                 )}
 
+                {/* UI render resolution (framebuffer downscale + GPU upscale) */}
+                {section.content === 'custom-ui-resolution' && (
+                  <div className="space-y-4">
+                    <p className="text-sm text-hifi-silver">{t('settings.uiResolution.help')}</p>
+
+                    <div className="space-y-2">
+                      {['auto', '720', '1080', 'native'].map((opt) => {
+                        const active = uiResolution === opt;
+                        return (
+                          <button
+                            key={opt}
+                            onClick={() => setUiResolutionPending(active ? null : opt)}
+                            disabled={uiResolutionBusy || !uiResolution}
+                            className={`w-full flex items-center justify-between rounded-lg px-4 py-3 text-left transition-colors disabled:opacity-60 ${
+                              active
+                                ? 'bg-hifi-dark border border-hifi-gold'
+                                : 'bg-hifi-dark border border-transparent hover:bg-hifi-light/40'
+                            }`}
+                          >
+                            <span>
+                              <span className={`block text-sm ${active ? 'text-hifi-gold' : 'text-white'}`}>
+                                {t(`settings.uiResolution.option.${opt}`)}
+                              </span>
+                              <span className="block text-xs text-hifi-silver">
+                                {t(`settings.uiResolution.optionHelp.${opt}`)}
+                              </span>
+                            </span>
+                            {active && <CheckCircle2 size={16} className="text-hifi-gold shrink-0" />}
+                          </button>
+                        );
+                      })}
+                    </div>
+
+                    {/* Applying restarts the graphical session — this very UI
+                        disappears for a few seconds — so ask before doing it. */}
+                    {uiResolutionPending && (
+                      <div className="space-y-3 rounded-lg border border-amber-500/30 bg-amber-900/10 p-4">
+                        <p className="text-sm text-amber-200">{t('settings.uiResolution.restartWarning')}</p>
+                        <div className="flex space-x-3">
+                          <button
+                            onClick={() => setUiResolutionPending(null)}
+                            disabled={uiResolutionBusy}
+                            className="flex-1 rounded-lg bg-hifi-dark hover:bg-hifi-light/40 disabled:opacity-60 px-4 py-2 text-sm text-white transition-colors"
+                          >
+                            {t('settings.uiResolution.cancel')}
+                          </button>
+                          <button
+                            onClick={() => changeUiResolution(uiResolutionPending)}
+                            disabled={uiResolutionBusy}
+                            className="flex-1 flex items-center justify-center space-x-2 rounded-lg bg-amber-600 hover:bg-amber-500 disabled:opacity-60 px-4 py-2 text-sm text-white transition-colors"
+                          >
+                            {uiResolutionBusy && <Loader2 size={16} className="animate-spin" />}
+                            <span>{t('settings.uiResolution.confirm')}</span>
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
+                    {uiResolutionMessage && (
+                      <div className={`rounded-lg p-3 text-center text-sm ${
+                        isErrorMsg(uiResolutionMessage)
+                          ? 'bg-red-900/20 text-red-300 border border-red-500/30'
+                          : 'bg-hifi-dark text-hifi-silver'
+                      }`}>
+                        {uiResolutionMessage}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Panel refresh rate (native <-> low-power, vblank-paced GPU cost) */}
+                {section.content === 'custom-ui-refresh' && (
+                  <div className="space-y-4">
+                    <p className="text-sm text-hifi-silver">{t('settings.uiRefresh.help')}</p>
+                    <p className="text-sm text-amber-200/80">{t('settings.uiRefresh.monitorDisclaimer')}</p>
+
+                    {uiRefresh && !uiRefreshSupported && (
+                      <div className="rounded-lg bg-hifi-dark p-3 text-center text-sm text-hifi-silver">
+                        {t('settings.uiRefresh.unsupported')}
+                      </div>
+                    )}
+
+                    {uiRefreshSupported && (
+                      <>
+                        <div className="flex items-center justify-between bg-hifi-dark rounded-lg px-4 py-3">
+                          <span className="flex items-center space-x-2 text-sm text-white">
+                            <RefreshCw size={16} className="text-hifi-gold" />
+                            <span>
+                              {uiRefresh === 'low'
+                                ? t('settings.uiRefresh.currentLow')
+                                : t('settings.uiRefresh.currentNative')}
+                            </span>
+                          </span>
+                        </div>
+
+                        {/* Native -> low: applies immediately, then arms the
+                            keep-or-revert popup below (no upfront confirm — the
+                            popup itself IS the confirmation step). */}
+                        {uiRefresh === 'native' && uiRefreshCountdown === 0 && (
+                          <button
+                            onClick={switchToLowRefresh}
+                            disabled={uiRefreshBusy || !uiRefresh}
+                            className="w-full flex items-center justify-center space-x-2 bg-hifi-dark hover:bg-hifi-light/40 disabled:opacity-60 rounded-lg px-4 py-3 text-sm text-white transition-colors"
+                          >
+                            {uiRefreshBusy && <Loader2 size={16} className="animate-spin" />}
+                            <RefreshCw size={16} />
+                            <span>{t('settings.uiRefresh.switchToLow')}</span>
+                          </button>
+                        )}
+
+                        {/* Low -> native: always safe, no countdown needed. */}
+                        {uiRefresh === 'low' && uiRefreshCountdown === 0 && (
+                          <button
+                            onClick={switchToNativeRefresh}
+                            disabled={uiRefreshBusy}
+                            className="w-full flex items-center justify-center space-x-2 bg-hifi-dark hover:bg-hifi-light/40 disabled:opacity-60 rounded-lg px-4 py-3 text-sm text-white transition-colors"
+                          >
+                            {uiRefreshBusy && <Loader2 size={16} className="animate-spin" />}
+                            <RefreshCw size={16} />
+                            <span>{t('settings.uiRefresh.switchToNative')}</span>
+                          </button>
+                        )}
+
+                        {/* Just switched to low: keep-or-revert, auto-reverts to
+                            native if left untouched — see uiRefreshRevertTimer. */}
+                        {uiRefreshCountdown > 0 && (
+                          <div className="space-y-3 rounded-lg border border-amber-500/30 bg-amber-900/10 p-4">
+                            <p className="text-sm text-amber-200">
+                              {t('settings.uiRefresh.confirmPrompt', { seconds: uiRefreshCountdown })}
+                            </p>
+                            <div className="flex space-x-3">
+                              <button
+                                onClick={switchToNativeRefresh}
+                                disabled={uiRefreshBusy}
+                                className="flex-1 rounded-lg bg-hifi-dark hover:bg-hifi-light/40 disabled:opacity-60 px-4 py-2 text-sm text-white transition-colors"
+                              >
+                                {t('settings.uiRefresh.revertNow')}
+                              </button>
+                              <button
+                                onClick={keepLowRefresh}
+                                disabled={uiRefreshBusy}
+                                className="flex-1 flex items-center justify-center space-x-2 rounded-lg bg-amber-600 hover:bg-amber-500 disabled:opacity-60 px-4 py-2 text-sm text-white transition-colors"
+                              >
+                                {uiRefreshBusy && <Loader2 size={16} className="animate-spin" />}
+                                <span>{t('settings.uiRefresh.keep')}</span>
+                              </button>
+                            </div>
+                          </div>
+                        )}
+                      </>
+                    )}
+
+                    {uiRefreshMessage && (
+                      <div className={`rounded-lg p-3 text-center text-sm ${
+                        isErrorMsg(uiRefreshMessage)
+                          ? 'bg-red-900/20 text-red-300 border border-red-500/30'
+                          : 'bg-hifi-dark text-hifi-silver'
+                      }`}>
+                        {uiRefreshMessage}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Display mode (GUI touchscreen kiosk <-> headless) */}
+                {section.content === 'custom-display-mode' && (
+                  <div className="space-y-4">
+                    <p className="text-sm text-hifi-silver">{t('settings.displayMode.help')}</p>
+
+                    <div className="flex items-center justify-between bg-hifi-dark rounded-lg px-4 py-3">
+                      <span className="flex items-center space-x-2 text-sm text-white">
+                        {displayMode === 'headless'
+                          ? <MonitorOff size={16} className="text-hifi-silver" />
+                          : <Monitor size={16} className="text-hifi-gold" />}
+                        <span>
+                          {displayMode === 'headless'
+                            ? t('settings.displayMode.currentHeadless')
+                            : t('settings.displayMode.currentGui')}
+                        </span>
+                      </span>
+                    </div>
+
+                    {/* GUI mode: offer switching to headless (guarded). */}
+                    {displayMode === 'gui' && !displayModeConfirm && (
+                      <button
+                        onClick={() => setDisplayModeConfirm(true)}
+                        disabled={displayModeBusy || !displayMode}
+                        className="w-full flex items-center justify-center space-x-2 bg-hifi-dark hover:bg-hifi-light/40 disabled:opacity-60 rounded-lg px-4 py-3 text-sm text-white transition-colors"
+                      >
+                        <MonitorOff size={16} />
+                        <span>{t('settings.displayMode.switchToHeadless')}</span>
+                      </button>
+                    )}
+
+                    {/* Headless is a footgun on a screen (you lose this UI), so
+                        require an explicit second confirmation with a warning. */}
+                    {displayMode === 'gui' && displayModeConfirm && (
+                      <div className="space-y-3 rounded-lg border border-amber-500/30 bg-amber-900/10 p-4">
+                        <p className="text-sm text-amber-200">{t('settings.displayMode.headlessWarning')}</p>
+                        <div className="flex space-x-3">
+                          <button
+                            onClick={() => setDisplayModeConfirm(false)}
+                            disabled={displayModeBusy}
+                            className="flex-1 rounded-lg bg-hifi-dark hover:bg-hifi-light/40 disabled:opacity-60 px-4 py-2 text-sm text-white transition-colors"
+                          >
+                            {t('settings.displayMode.cancel')}
+                          </button>
+                          <button
+                            onClick={() => switchDisplayMode('headless')}
+                            disabled={displayModeBusy}
+                            className="flex-1 flex items-center justify-center space-x-2 rounded-lg bg-amber-600 hover:bg-amber-500 disabled:opacity-60 px-4 py-2 text-sm text-white transition-colors"
+                          >
+                            {displayModeBusy && <Loader2 size={16} className="animate-spin" />}
+                            <span>{t('settings.displayMode.confirmHeadless')}</span>
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Headless mode: offer switching back to GUI. */}
+                    {displayMode === 'headless' && (
+                      <button
+                        onClick={() => switchDisplayMode('gui')}
+                        disabled={displayModeBusy}
+                        className="w-full flex items-center justify-center space-x-2 bg-hifi-dark hover:bg-hifi-light/40 disabled:opacity-60 rounded-lg px-4 py-3 text-sm text-white transition-colors"
+                      >
+                        {displayModeBusy && <Loader2 size={16} className="animate-spin" />}
+                        <Monitor size={16} />
+                        <span>{t('settings.displayMode.switchToGui')}</span>
+                      </button>
+                    )}
+
+                    {displayModeMessage && (
+                      <div className={`rounded-lg p-3 text-center text-sm ${
+                        isErrorMsg(displayModeMessage)
+                          ? 'bg-red-900/20 text-red-300 border border-red-500/30'
+                          : 'bg-hifi-dark text-hifi-silver'
+                      }`}>
+                        {displayModeMessage}
+                      </div>
+                    )}
+
+                    {/* Player on/off — orthogonal to display mode above; a
+                        server-only unit keeps Lyrion running but never plays
+                        audio locally. */}
+                    <div className="pt-2 border-t border-hifi-border space-y-3">
+                      <label className="text-white font-medium">{t('settings.playerEnabled.label')}</label>
+                      <p className="text-sm text-hifi-silver mb-2">{t('settings.playerEnabled.help')}</p>
+                      <div className="flex items-center justify-between bg-hifi-dark rounded-lg px-4 py-3">
+                        <span className="text-sm text-white">
+                          {playerEnabled === false
+                            ? t('settings.playerEnabled.currentOff')
+                            : t('settings.playerEnabled.currentOn')}
+                        </span>
+                      </div>
+
+                      {playerEnabled !== false && !playerDisableConfirm && (
+                        <button
+                          onClick={() => setPlayerDisableConfirm(true)}
+                          disabled={playerEnabledBusy || playerEnabled === null}
+                          className="w-full flex items-center justify-center space-x-2 bg-hifi-dark hover:bg-hifi-light/40 disabled:opacity-60 rounded-lg px-4 py-3 text-sm text-white transition-colors"
+                        >
+                          <span>{t('settings.playerEnabled.switchOff')}</span>
+                        </button>
+                      )}
+
+                      {playerEnabled !== false && playerDisableConfirm && (
+                        <div className="space-y-3 rounded-lg border border-amber-500/30 bg-amber-900/10 p-4">
+                          <p className="text-sm text-amber-200">{t('settings.playerEnabled.offWarning')}</p>
+                          <div className="flex space-x-3">
+                            <button
+                              onClick={() => setPlayerDisableConfirm(false)}
+                              disabled={playerEnabledBusy}
+                              className="flex-1 rounded-lg bg-hifi-dark hover:bg-hifi-light/40 disabled:opacity-60 px-4 py-2 text-sm text-white transition-colors"
+                            >
+                              {t('settings.playerEnabled.cancel')}
+                            </button>
+                            <button
+                              onClick={() => togglePlayerEnabled(false)}
+                              disabled={playerEnabledBusy}
+                              className="flex-1 flex items-center justify-center space-x-2 rounded-lg bg-amber-600 hover:bg-amber-500 disabled:opacity-60 px-4 py-2 text-sm text-white transition-colors"
+                            >
+                              {playerEnabledBusy && <Loader2 size={16} className="animate-spin" />}
+                              <span>{t('settings.playerEnabled.confirmOff')}</span>
+                            </button>
+                          </div>
+                        </div>
+                      )}
+
+                      {playerEnabled === false && (
+                        <button
+                          onClick={() => togglePlayerEnabled(true)}
+                          disabled={playerEnabledBusy}
+                          className="w-full flex items-center justify-center space-x-2 bg-hifi-dark hover:bg-hifi-light/40 disabled:opacity-60 rounded-lg px-4 py-3 text-sm text-white transition-colors"
+                        >
+                          {playerEnabledBusy && <Loader2 size={16} className="animate-spin" />}
+                          <span>{t('settings.playerEnabled.switchOn')}</span>
+                        </button>
+                      )}
+
+                      {playerEnabledMessage && (
+                        <div className={`rounded-lg p-3 text-center text-sm ${
+                          isErrorMsg(playerEnabledMessage)
+                            ? 'bg-red-900/20 text-red-300 border border-red-500/30'
+                            : 'bg-hifi-dark text-hifi-silver'
+                        }`}>
+                          {playerEnabledMessage}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* Timezone (fresh installs default to UTC — no install-time question) */}
+                {section.content === 'custom-timezone' && (
+                  <div className="space-y-4">
+                    <p className="text-sm text-hifi-silver">{t('settings.timezone.help')}</p>
+
+                    <div className="flex items-center justify-between bg-hifi-dark rounded-lg px-4 py-3">
+                      <span className="flex items-center space-x-2 text-sm text-white">
+                        <Clock size={16} className="text-hifi-gold" />
+                        <span>{timezone || t('common.loading')}</span>
+                      </span>
+                    </div>
+
+                    <select
+                      value={timezone || ''}
+                      onChange={(e) => changeTimezone(e.target.value)}
+                      disabled={timezoneBusy || !timezoneList.length}
+                      className="w-full bg-hifi-dark border border-hifi-accent rounded-lg px-3 py-3 text-white text-sm focus:outline-none focus:border-hifi-gold disabled:opacity-40"
+                    >
+                      {!timezoneList.includes(timezone) && timezone && (
+                        <option value={timezone}>{timezone}</option>
+                      )}
+                      {timezoneList.map((tz) => (
+                        <option key={tz} value={tz}>{tz}</option>
+                      ))}
+                    </select>
+
+                    {timezoneMessage && (
+                      <div className={`rounded-lg p-3 text-center text-sm ${
+                        isErrorMsg(timezoneMessage)
+                          ? 'bg-red-900/20 text-red-300 border border-red-500/30'
+                          : 'bg-hifi-dark text-hifi-silver'
+                      }`}>
+                        {timezoneMessage}
+                      </div>
+                    )}
+                  </div>
+                )}
+
                 {/* Unified UI + System OTA Update Section */}
                 {section.content === 'custom-updates' && (
                   <div className="space-y-4">
@@ -2529,7 +4041,7 @@ const Settings = () => {
                     <div className="space-y-2">
                       <span className="text-sm text-white">{t('settings.updates.channel')}</span>
                       <div className="flex gap-3">
-                        {['prod', 'dev'].map((ch) => (
+                        {otaChannels.map((ch) => (
                           <motion.button
                             key={ch}
                             onClick={() => changeOtaChannel(ch)}
@@ -2541,11 +4053,11 @@ const Settings = () => {
                             }`}
                             whileTap={{ scale: channelBusy ? 1 : 0.95 }}
                           >
-                            {ch === 'prod' ? t('settings.updates.channelProd') : t('settings.updates.channelDev')}
+                            {t(`settings.updates.${{ prod: 'channelProd', dev: 'channelDev', alpha: 'channelAlpha' }[ch] || 'channelDev'}`)}
                           </motion.button>
                         ))}
                       </div>
-                      {otaChannel === 'dev' && (
+                      {otaChannel !== 'prod' && (
                         <div className="flex items-start space-x-2 text-xs text-amber-300 bg-amber-900/20 border border-amber-500/30 rounded-lg p-3">
                           <ShieldAlert size={14} className="mt-0.5 shrink-0" />
                           <span>{t('settings.updates.channelWarning')}</span>
@@ -2603,6 +4115,15 @@ const Settings = () => {
                       <div className="rounded-lg p-3 text-center text-sm bg-red-900/20 text-red-300 border border-red-500/30">
                         {appUpdate?.error || systemUpdate?.error || osUpdate?.error}
                       </div>
+                    )}
+
+                    {availableChangelog && (
+                      <button
+                        onClick={showChangelog}
+                        className="w-full bg-hifi-dark hover:bg-hifi-accent text-hifi-silver hover:text-white py-2.5 rounded-lg text-sm font-medium transition-colors"
+                      >
+                        {t('settings.updates.whatsNew')}
+                      </button>
                     )}
 
                     {/* Check for updates */}
@@ -2677,206 +4198,6 @@ const Settings = () => {
                         <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${autoCheck ? 'translate-x-6' : 'translate-x-1'}`} />
                       </span>
                     </button>
-
-                    {/* Advanced (Lyrion) collapsible — the OS channel is now part
-                        of the single "Aggiorna ora" button above. */}
-                    <button
-                      onClick={() => setShowAdvanced((v) => !v)}
-                      className="w-full text-left text-sm text-hifi-silver hover:text-white pt-2 transition-colors"
-                    >
-                      {showAdvanced ? '▾' : '▸'} {t('settings.updates.advanced')}
-                    </button>
-
-                    {showAdvanced && (
-                      <div className="space-y-3 border-t border-hifi-accent pt-4">
-                        <div className="bg-hifi-dark rounded-lg p-4 space-y-2">
-                          <div className="flex items-center justify-between">
-                            <span className="text-hifi-silver text-sm">{t('settings.updates.lyrionInstalled')}</span>
-                            <span className="text-white font-mono text-sm">{lyrionUpdate?.current || '...'}</span>
-                          </div>
-                          <div className="flex items-center justify-between">
-                            <span className="text-hifi-silver text-sm">{t('settings.updates.latestVersion')}</span>
-                            <span className="text-white font-mono text-sm">
-                              {lyrionUpdate?.error ? t('common.notAvailable') : (lyrionUpdate?.latest || '...')}
-                            </span>
-                          </div>
-                        </div>
-
-                        {lyrionUpdate?.update_available && (
-                          <div className="rounded-lg p-3 text-center text-sm bg-hifi-gold/20 text-hifi-gold border border-hifi-gold/40">
-                            {t('settings.updates.lyrionAvailable', { version: lyrionUpdate.latest })}
-                          </div>
-                        )}
-                        {lyrionUpdate && !lyrionUpdate.error && !lyrionUpdate.update_available && (
-                          <div className="rounded-lg p-3 text-center text-sm bg-hifi-dark text-hifi-silver">
-                            {t('settings.updates.lyrionUpToDate')}
-                          </div>
-                        )}
-                        {lyrionUpdate?.error && (
-                          <div className="rounded-lg p-3 text-center text-sm bg-red-900/20 text-red-300 border border-red-500/30">
-                            {lyrionUpdate.error}
-                          </div>
-                        )}
-
-                        <motion.button
-                          onClick={checkLyrionUpdate}
-                          disabled={isCheckingLyrion || isApplyingLyrion}
-                          className="w-full bg-hifi-accent hover:bg-hifi-light disabled:bg-hifi-dark text-white py-3 rounded-lg font-medium flex items-center justify-center space-x-2 transition-colors"
-                          whileTap={{ scale: isCheckingLyrion ? 1 : 0.95 }}
-                        >
-                          {isCheckingLyrion ? (
-                            <>
-                              <Loader2 size={18} className="animate-spin" />
-                              <span>{t('settings.updates.checking')}</span>
-                            </>
-                          ) : (
-                            <>
-                              <RotateCw size={18} />
-                              <span>{t('settings.updates.checkLyrion')}</span>
-                            </>
-                          )}
-                        </motion.button>
-
-                        {lyrionUpdate?.update_available && (
-                          <motion.button
-                            onClick={applyLyrionUpdate}
-                            disabled={isApplyingLyrion}
-                            className="w-full bg-hifi-gold hover:bg-yellow-600 disabled:bg-hifi-accent text-black py-4 rounded-lg font-semibold flex items-center justify-center space-x-2 transition-colors"
-                            whileTap={{ scale: isApplyingLyrion ? 1 : 0.95 }}
-                          >
-                            {isApplyingLyrion ? (
-                              <>
-                                <Loader2 size={20} className="animate-spin" />
-                                <span>{t('settings.updates.updating')}</span>
-                              </>
-                            ) : (
-                              <>
-                                <Download size={20} />
-                                <span>{t('settings.updates.updateLyrion', { version: lyrionUpdate.latest })}</span>
-                              </>
-                            )}
-                          </motion.button>
-                        )}
-
-                        {isApplyingLyrion && (
-                          <p className="text-xs text-hifi-silver text-center">
-                            {t('settings.updates.lyrionRestartNote')}
-                          </p>
-                        )}
-
-                        {lyrionStatus && (
-                          <div className={`rounded-lg p-3 text-center text-sm ${
-                            lyrionStatus.state === 'error'
-                              ? 'bg-red-900/20 text-red-300 border border-red-500/30'
-                              : 'bg-hifi-dark text-hifi-silver'
-                          }`}>
-                            {lyrionStatus.message || lyrionStatus.state}
-                            {typeof lyrionStatus.progress === 'number' && lyrionStatus.state !== 'error' && (
-                              <span className="ml-1">({lyrionStatus.progress}%)</span>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                {/* Legacy standalone Lyrion section (now under Advanced) */}
-                {section.content === 'custom-lyrion-update' && (
-                  <div className="space-y-4">
-                    {/* Version info */}
-                    <div className="bg-hifi-dark rounded-lg p-4 space-y-2">
-                      <div className="flex items-center justify-between">
-                        <span className="text-hifi-silver text-sm">{t('settings.updates.installedVersion')}</span>
-                        <span className="text-white font-mono text-sm">
-                          {lyrionUpdate?.current || '...'}
-                        </span>
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <span className="text-hifi-silver text-sm">{t('settings.updates.latestVersion')}</span>
-                        <span className="text-white font-mono text-sm">
-                          {lyrionUpdate?.error ? t('common.notAvailable') : (lyrionUpdate?.latest || '...')}
-                        </span>
-                      </div>
-                    </div>
-
-                    {lyrionUpdate?.update_available && (
-                      <div className="rounded-lg p-3 text-center text-sm bg-hifi-gold/20 text-hifi-gold border border-hifi-gold/40">
-                        {t('settings.updates.lyrionAvailableShort', { version: lyrionUpdate.latest })}
-                      </div>
-                    )}
-                    {lyrionUpdate && !lyrionUpdate.error && !lyrionUpdate.update_available && (
-                      <div className="rounded-lg p-3 text-center text-sm bg-hifi-dark text-hifi-silver">
-                        {t('settings.updates.lyrionUpToDate')}
-                      </div>
-                    )}
-                    {lyrionUpdate?.error && (
-                      <div className="rounded-lg p-3 text-center text-sm bg-red-900/20 text-red-300 border border-red-500/30">
-                        {lyrionUpdate.error}
-                      </div>
-                    )}
-
-                    {/* Check for updates */}
-                    <motion.button
-                      onClick={checkLyrionUpdate}
-                      disabled={isCheckingLyrion || isApplyingLyrion}
-                      className="w-full bg-hifi-accent hover:bg-hifi-light disabled:bg-hifi-dark text-white py-3 rounded-lg font-medium flex items-center justify-center space-x-2 transition-colors"
-                      whileTap={{ scale: isCheckingLyrion ? 1 : 0.95 }}
-                    >
-                      {isCheckingLyrion ? (
-                        <>
-                          <Loader2 size={18} className="animate-spin" />
-                          <span>{t('settings.updates.checking')}</span>
-                        </>
-                      ) : (
-                        <>
-                          <RotateCw size={18} />
-                          <span>{t('settings.updates.checkButton')}</span>
-                        </>
-                      )}
-                    </motion.button>
-
-                    {/* Apply update */}
-                    {lyrionUpdate?.update_available && (
-                      <motion.button
-                        onClick={applyLyrionUpdate}
-                        disabled={isApplyingLyrion}
-                        className="w-full bg-hifi-gold hover:bg-yellow-600 disabled:bg-hifi-accent text-black py-4 rounded-lg font-semibold flex items-center justify-center space-x-2 transition-colors"
-                        whileTap={{ scale: isApplyingLyrion ? 1 : 0.95 }}
-                      >
-                        {isApplyingLyrion ? (
-                          <>
-                            <Loader2 size={20} className="animate-spin" />
-                            <span>{t('settings.updates.updating')}</span>
-                          </>
-                        ) : (
-                          <>
-                            <Download size={20} />
-                            <span>{t('settings.updates.updateLyrion', { version: lyrionUpdate.latest })}</span>
-                          </>
-                        )}
-                      </motion.button>
-                    )}
-
-                    {isApplyingLyrion && (
-                      <p className="text-xs text-hifi-silver text-center">
-                        Il server musicale verrà riavviato al termine.
-                      </p>
-                    )}
-
-                    {/* Lyrion update progress */}
-                    {lyrionStatus && (
-                      <div className={`rounded-lg p-3 text-center text-sm ${
-                        lyrionStatus.state === 'error'
-                          ? 'bg-red-900/20 text-red-300 border border-red-500/30'
-                          : 'bg-hifi-dark text-hifi-silver'
-                      }`}>
-                        {lyrionStatus.message || lyrionStatus.state}
-                        {typeof lyrionStatus.progress === 'number' && lyrionStatus.state !== 'error' && (
-                          <span className="ml-1">({lyrionStatus.progress}%)</span>
-                        )}
-                      </div>
-                    )}
                   </div>
                 )}
 
@@ -2912,6 +4233,72 @@ const Settings = () => {
                       <Power size={20} />
                       <span>{t('settings.controls.shutdown')}</span>
                     </motion.button>
+
+                    {/* Reset web-admin password (kiosk recovery) */}
+                    <motion.button
+                      onClick={handleWebuiReset}
+                      className="w-full bg-hifi-dark hover:bg-hifi-light/40 text-white py-4 rounded-lg font-semibold flex items-center justify-center space-x-2 transition-colors"
+                      whileTap={{ scale: 0.95 }}
+                    >
+                      <Lock size={20} />
+                      <span>{t('settings.webuiReset.button')}</span>
+                    </motion.button>
+
+                    {/* Factory reset (destructive — separated + confirmed) */}
+                    <div className="pt-3 mt-3 border-t border-red-500/20">
+                      <p className="text-xs text-hifi-silver/60 mb-2">{t('settings.factory.help')}</p>
+                      <motion.button
+                        onClick={handleFactoryReset}
+                        className="w-full bg-red-900/40 hover:bg-red-800/60 border border-red-500/40 text-red-200 py-4 rounded-lg font-semibold flex items-center justify-center space-x-2 transition-colors"
+                        whileTap={{ scale: 0.95 }}
+                      >
+                        <AlertTriangle size={20} />
+                        <span>{t('settings.factory.button')}</span>
+                      </motion.button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Third-Party Notices */}
+                {section.content === 'custom-third-party-notices' && (
+                  <div className="space-y-5">
+                    <p className="text-sm text-hifi-silver">{t('settings.thirdPartyNotices.intro')}</p>
+
+                    {thirdPartyNotices.map((group) => (
+                      <div key={group.section}>
+                        <h3 className="text-xs uppercase tracking-wide text-hifi-silver/60 mb-2">
+                          {group.section}
+                        </h3>
+                        <div className="space-y-2">
+                          {group.entries.map((entry) => (
+                            <div key={entry.name} className="bg-hifi-dark rounded-lg p-3">
+                              <div className="flex items-center justify-between gap-2">
+                                <span className="text-white text-sm font-medium">
+                                  {entry.url ? (
+                                    <a
+                                      href={entry.url}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="hover:text-hifi-gold underline decoration-dotted"
+                                    >
+                                      {entry.name}
+                                    </a>
+                                  ) : entry.name}
+                                </span>
+                                <span className="text-hifi-silver/80 text-xs font-mono whitespace-nowrap">
+                                  {entry.license}
+                                </span>
+                              </div>
+                              {(entry.version || entry.notes) && (
+                                <p className="text-hifi-silver/60 text-xs mt-1">
+                                  {[entry.version, entry.notes].filter(Boolean).join(' — ')}
+                                </p>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 )}
 
@@ -2935,28 +4322,16 @@ const Settings = () => {
         </div>
         )}
 
-        {/* Restart wizard + About — shown only on the section menu */}
+        {/* About — shown only on the section menu */}
         {!openSection && (
           <>
-            <motion.button
-              onClick={() => {
-                localStorage.removeItem('firstSetupComplete');
-                window.dispatchEvent(new Event('hifi-open-wizard'));
-              }}
-              className="w-full mt-6 bg-hifi-light hover:bg-hifi-accent text-white py-4 rounded-lg font-semibold flex items-center justify-center space-x-2 transition-colors"
-              whileTap={{ scale: 0.95 }}
-            >
-              <RotateCw size={20} />
-              <span>{t('settings.restartWizard')}</span>
-            </motion.button>
-
             <motion.div
               initial={{ y: 20, opacity: 0 }}
               animate={{ y: 0, opacity: 1 }}
               transition={{ delay: 0.6 }}
               className="mt-8 text-center text-hifi-silver text-sm"
             >
-              <p>HiFi Media Player v{__APP_VERSION__}</p>
+              <p>Osmium Sound v{__APP_VERSION__}</p>
               <p className="mt-1">{t('settings.about.builtWith')}</p>
             </motion.div>
           </>
@@ -2964,9 +4339,9 @@ const Settings = () => {
       </div>
 
       {/* In-app confirmation modal (styled, replaces native window.confirm) */}
-      {confirmDialog && (
+      {confirmDialog && createPortal(
         <motion.div
-          className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/70 backdrop-blur-sm p-6"
+          className="absolute inset-0 z-[10000] flex items-center justify-center bg-black/70 backdrop-blur-sm p-6"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           onClick={() => setConfirmDialog(null)}
@@ -2993,7 +4368,40 @@ const Settings = () => {
               </button>
             </div>
           </motion.div>
-        </motion.div>
+        </motion.div>,
+        document.getElementById(SCALED_CANVAS_ID) || document.body
+      )}
+
+      {/* "What's new" changelog popup — dismissible, unlike the confirm modal
+          above (no destructive action to confirm here). */}
+      {changelogDialog && createPortal(
+        <motion.div
+          className="absolute inset-0 z-[10000] flex items-center justify-center bg-black/70 backdrop-blur-sm p-6"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          onClick={() => setChangelogDialog(null)}
+        >
+          <motion.div
+            className="bg-hifi-light border border-hifi-accent rounded-2xl p-6 max-w-md w-full shadow-2xl"
+            initial={{ scale: 0.92, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 className="text-white text-lg font-semibold mb-3">
+              {t('settings.updates.changelogTitle', { version: changelogDialog.version })}
+            </h3>
+            <p className="text-hifi-silver text-sm leading-relaxed mb-6 max-h-[50vh] overflow-y-auto whitespace-pre-wrap break-words">
+              {changelogDialog.notes}
+            </p>
+            <button
+              onClick={() => setChangelogDialog(null)}
+              className="w-full bg-hifi-accent hover:bg-hifi-dark text-white py-3 rounded-lg font-medium transition-colors"
+            >
+              {t('common.close')}
+            </button>
+          </motion.div>
+        </motion.div>,
+        document.getElementById(SCALED_CANVAS_ID) || document.body
       )}
 
       {/* Fullscreen OTA progress overlay — blocks the UI while an update runs and
@@ -3003,9 +4411,9 @@ const Settings = () => {
         const isDone = activeOta.state === 'done';
         const hasPct = typeof activeOta.progress === 'number';
         const pct = hasPct ? Math.max(0, Math.min(100, Math.round(activeOta.progress))) : 0;
-        return (
+        return createPortal(
           <motion.div
-            className="fixed inset-0 z-[10050] flex flex-col items-center justify-center bg-black/90 backdrop-blur-md p-10 text-center"
+            className="absolute inset-0 z-[10050] flex flex-col items-center justify-center bg-black/90 backdrop-blur-md p-10 text-center"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
           >
@@ -3034,10 +4442,13 @@ const Settings = () => {
             </div>
 
             <div className="mt-4 h-8 text-2xl font-semibold tabular-nums text-hifi-accent">
-              {hasPct && !isErr ? `${pct}%` : ''}
+              {hasPct && !isErr && !isDone ? `${pct}%` : ''}
             </div>
 
-            {isErr ? (
+            {/* `done` is reachable now that a sequenced plan can finish with the
+                kiosk still up (the UI step is skipped when only the system/OS
+                had an update) — it needs a way out too, not just errors. */}
+            {isErr || isDone ? (
               <button
                 onClick={dismissOta}
                 className="mt-6 bg-hifi-accent hover:bg-hifi-dark text-white px-8 py-3 rounded-lg font-medium transition-colors"
@@ -3049,11 +4460,16 @@ const Settings = () => {
                 {t('settings.updates.overlay.keepPowered')}
               </p>
             )}
-          </motion.div>
+          </motion.div>,
+          document.getElementById(SCALED_CANVAS_ID) || document.body
         );
       })()}
     </motion.div>
   );
 };
 
-export default Settings;
+// Memoized: while this tab is open, LyrionServer's "now playing" state
+// (time/progress) still ticks every 1s during playback and re-renders the
+// parent. Without memo, that tick rebuilt this entire ~3700-line settings
+// tree every second even though nothing here depends on playback progress.
+export default React.memo(Settings);

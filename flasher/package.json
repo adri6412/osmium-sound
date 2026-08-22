@@ -1,0 +1,30 @@
+{
+  "name": "osmium-flasher",
+  "productName": "Osmium Flasher",
+  "version": "1.0.0",
+  "description": "Downloads the current Osmium Sound installer image and writes it to a USB stick",
+  "main": "src/main.js",
+  "author": "Osmium Sound <support@osmiumsound.it>",
+  "license": "MIT",
+  "private": true,
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder --config electron-builder.yml",
+    "dist:linux": "electron-builder --linux --config electron-builder.yml",
+    "dist:win": "electron-builder --win --config electron-builder.yml",
+    "dist:mac": "electron-builder --mac --config electron-builder.yml",
+    "test": "node --test test/*.test.js"
+  },
+  "dependencies": {
+    "@vscode/sudo-prompt": "^9.3.2",
+    "etcher-sdk": "^10.2.14"
+  },
+  "devDependencies": {
+    "electron": "^43.3.0",
+    "electron-builder": "^26.15.3"
+  },
+  "overrides": {
+    "usb": "^3.0.1",
+    "follow-redirects": "^1.16.0"
+  }
+}

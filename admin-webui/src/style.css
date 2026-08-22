@@ -1,0 +1,198 @@
+/* Osmium Sound web admin — visual language borrowed from the kiosk (gold on
+   near-black, soft cards, silver secondary text) without being a clone. */
+:root {
+  --bg: #0a0a0a;          /* kiosk hifi-dark */
+  --panel: #0f0f0f;       /* kiosk hifi-panel */
+  --surface: #161616;     /* kiosk hifi-surface */
+  --light: #2a2a2a;       /* kiosk hifi-light */
+  --border: #252525;      /* kiosk hifi-border */
+  --text: #f2f2f2;
+  --muted: #9a9a9a;       /* silver-ish */
+  --silver: #c0c0c0;
+  --gold: #d4af37;        /* kiosk hifi-gold */
+  --gold-dim: rgba(212, 175, 55, 0.15);
+  --danger: #e05a5a;
+  --ok: #6fca6f;
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; }
+body {
+  margin: 0;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  -webkit-font-smoothing: antialiased;
+}
+a { color: var(--gold); text-decoration: none; }
+a:hover { filter: brightness(1.15); }
+
+.topbar {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 14px 22px; border-bottom: 1px solid var(--border);
+  background: var(--panel);
+  position: sticky; top: 0; z-index: 10;
+}
+.brand { font-weight: 700; letter-spacing: 2px; font-size: 14px; }
+.brand .gold { color: var(--gold); }
+
+.wrap { max-width: 760px; margin: 0 auto; padding: 22px 18px 60px; }
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 20px;
+  margin: 16px 0;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.35);
+}
+.card h3 {
+  margin: 0 0 6px; font-size: 15px; font-weight: 600;
+  display: flex; align-items: center; gap: 8px;
+}
+.card h3 .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--gold); display: inline-block; }
+.card .sub { color: var(--muted); font-size: 13px; margin: 0 0 14px; line-height: 1.45; }
+
+/* Breaks out of .wrap's 760px cap for cards with denser content (e.g. the
+   Sources panel's source rows: name + path + up to 3 buttons per row get
+   cramped at 760px). Only applies above 900px viewport width, where .wrap
+   is guaranteed to sit at its own max-width (760px box, 724px content
+   after its 18px+18px padding) -- so a fixed symmetric negative margin
+   keeps this card centered on the same point .wrap already centers on
+   (which is the viewport center, since .wrap uses margin:0 auto), without
+   any vw-based math. A first attempt used `calc(50% - 50vw)` (the classic
+   full-bleed trick) but that formula only centers an edge-to-edge (100vw)
+   element -- for a capped width like this it pins the card to the left
+   edge instead, which is what shipped and was reported broken. */
+@media (min-width: 900px) {
+  .card.wide {
+    width: 880px;
+    max-width: calc(100vw - 40px);
+    margin-left: -78px;
+    margin-right: -78px;
+  }
+}
+
+.muted { color: var(--muted); font-size: 13px; }
+.silver { color: var(--silver); }
+.gold { color: var(--gold); }
+
+label { display: block; font-size: 12.5px; color: var(--muted); margin: 12px 0 5px; }
+input, select {
+  width: 100%; padding: 12px 13px; border-radius: 10px;
+  border: 1px solid var(--border); background: var(--panel); color: var(--text);
+  font-size: 14.5px; outline: none;
+}
+input:focus, select:focus { border-color: rgba(212, 175, 55, 0.5); }
+
+button, a.secondary {
+  cursor: pointer; padding: 11px 16px; border-radius: 10px; border: 0;
+  background: var(--gold); color: #111; font-weight: 600; font-size: 14px;
+  transition: filter 0.15s ease;
+}
+button:hover, a.secondary:hover { filter: brightness(1.1); }
+button.secondary, a.secondary {
+  background: var(--light); color: var(--text); border: 1px solid var(--border);
+  font-weight: 500; text-decoration: none; display: inline-block;
+}
+button.ghost { background: transparent; color: var(--silver); border: 1px solid var(--border); font-weight: 500; }
+button.danger { background: rgba(224, 90, 90, 0.12); color: #f0b4b4; border: 1px solid rgba(224, 90, 90, 0.4); }
+button.ghost.active { border-color: var(--gold); color: var(--gold); background: var(--gold-dim); }
+button:disabled { opacity: 0.55; cursor: default; filter: none; }
+
+/* File-picker trigger styled like a secondary button (native <input type=file>
+   can't be restyled directly, so we style the <label for> that wraps it). */
+label.upload-btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  padding: 11px 16px; border-radius: 10px; cursor: pointer; margin: 0;
+  background: var(--light); color: var(--text); border: 1px solid var(--border);
+  font-weight: 500; font-size: 14px;
+}
+label.upload-btn:hover { filter: brightness(1.1); }
+
+.row { display: flex; gap: 10px; align-items: center; }
+.row > * { flex: 1; }
+.row .fit { flex: 0 0 auto; }
+.between { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+
+.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 14px; }
+.tile {
+  display: flex; flex-direction: column; gap: 6px; padding: 22px 20px; border-radius: 16px;
+  background: var(--surface); border: 1px solid var(--border); color: var(--text);
+  transition: border-color 0.15s ease;
+}
+.tile:hover { border-color: rgba(212, 175, 55, 0.5); }
+.tile .t { font-weight: 600; }
+
+.msg { border-radius: 10px; padding: 11px 13px; margin: 10px 0; background: var(--panel); font-size: 13px; border: 1px solid var(--border); }
+.msg.err { background: rgba(224, 90, 90, 0.1); color: #f0b4b4; border-color: rgba(224, 90, 90, 0.35); }
+
+/* Kiosk-like pill toggle */
+.toggle {
+  position: relative; width: 46px; height: 26px; flex: 0 0 auto;
+  border-radius: 999px; background: var(--light); border: 1px solid var(--border);
+  cursor: pointer; transition: background 0.15s ease; padding: 0;
+}
+.toggle.on { background: var(--gold); border-color: var(--gold); }
+.toggle .knob {
+  position: absolute; top: 2px; left: 2px; width: 20px; height: 20px;
+  border-radius: 50%; background: #fff; transition: transform 0.15s ease;
+}
+.toggle.on .knob { transform: translateX(20px); }
+.toggle:disabled { opacity: 0.5; cursor: default; }
+
+.item { padding: 11px 4px; border-bottom: 1px solid var(--border); }
+.item:last-child { border-bottom: 0; }
+.net { padding: 11px 4px; border-bottom: 1px solid var(--border); cursor: pointer; }
+.net:hover { background: rgba(255, 255, 255, 0.02); }
+.net:last-child { border-bottom: 0; }
+.check { color: var(--gold); font-weight: 700; }
+
+.pill { display: inline-block; padding: 3px 10px; border-radius: 999px; font-size: 12px; border: 1px solid var(--border); color: var(--silver); }
+.pill.gold { border-color: rgba(212, 175, 55, 0.5); color: var(--gold); background: var(--gold-dim); }
+
+/* Accordion bands — the Music sources page (SourcesPanel.vue) is four of
+   these, and the "add source"/"shared folders" bands nest one level of the
+   same thing. The header reuses .net.between so it reads like the section
+   rows in the Settings menu; a nested .acc sits on --surface to stay
+   distinguishable from its parent's --panel. */
+.acc { border: 1px solid var(--border); border-radius: 12px; background: var(--panel); margin: 10px 0; overflow: hidden; }
+.acc > .net { border-bottom: 0; padding: 13px 14px; }
+.acc.open > .net { border-bottom: 1px solid var(--border); }
+.acc > .acc-body { padding: 6px 14px 14px; }
+.acc .acc { background: var(--surface); }
+.acc .chev { color: var(--silver); font-size: 18px; flex: 0 0 auto; }
+
+.seg { display: inline-flex; border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+.seg button { border-radius: 0; background: transparent; color: var(--silver); font-weight: 500; padding: 9px 16px; }
+.seg button.active { background: var(--gold); color: #111; font-weight: 600; }
+
+.qrbox { display: inline-flex; flex-direction: column; align-items: center; background: #fff; border-radius: 14px; padding: 14px; }
+.qrbox img { display: block; width: 190px; height: 190px; }
+
+.center { min-height: 72vh; display: flex; align-items: center; justify-content: center; }
+
+/* Network paths / credentials: label in the first column, the value itself in
+   the second, selectable in one click (user-select: all) since it is meant to
+   be copied into a file manager. */
+.pathlist { display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; margin-top: 7px; align-items: baseline; }
+.mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 12.5px; color: var(--silver); word-break: break-all; user-select: all;
+}
+ol.steps { margin: 14px 0 0; padding-left: 20px; color: var(--silver); font-size: 13px; line-height: 1.5; }
+ol.steps li { margin-bottom: 8px; }
+
+/* Forced blocking modal (updates) */
+.overlay {
+  position: fixed; inset: 0; z-index: 100;
+  background: rgba(0, 0, 0, 0.75); backdrop-filter: blur(3px);
+  display: flex; align-items: center; justify-content: center;
+}
+.spinner {
+  width: 38px; height: 38px; margin: 6px auto 14px;
+  border: 3px solid var(--light); border-top-color: var(--gold);
+  border-radius: 50%; animation: spin 0.9s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+.backlink { display: inline-flex; align-items: center; gap: 6px; margin-bottom: 4px; font-size: 14px; }
+h2.page { font-size: 20px; margin: 10px 0 4px; }

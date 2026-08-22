@@ -1,0 +1,125 @@
+#!/bin/sh
+# HiFi Player — avvio del kiosk DENTRO il compositor Wayland (qui
+# WAYLAND_DISPLAY è impostato). Eseguito da /usr/local/bin/hifi-kiosk-wayland
+# tramite `labwc -S`. È l'equivalente Wayland di ~/.xsession.
+
+# Risoluzione di rendering della UI e refresh del pannello: DEVONO girare prima
+# di Electron, perché la finestra viene dimensionata una volta sola all'avvio su
+# screen.getPrimaryDisplay().size. Guardati: su un'unità che ha ricevuto l'OS
+# update ma non ancora il system update questi script possono non esserci, e la
+# sessione deve partire lo stesso.
+if [ -x /usr/local/sbin/hifi-ui-resolution.sh ]; then
+    /usr/local/sbin/hifi-ui-resolution.sh apply || true
+fi
+if [ -x /usr/local/sbin/hifi-ui-refresh.sh ]; then
+    /usr/local/sbin/hifi-ui-refresh.sh apply || true
+fi
+
+# Cursore: dentro la finestra lo nasconde la UI stessa, con la classe
+# `hifi-hide-cursor` (index.html + src/App.jsx + src/index.css) secondo la
+# preferenza salvata — meccanismo indipendente dal protocollo (unclutter è un
+# client X11 e qui non vedrebbe la finestra del kiosk). Fuori dalla finestra,
+# cioè finché Electron non è a schermo, il puntatore è quello di labwc: lo
+# nasconde hifi-kiosk-wayland con un tema di cursori trasparente.
+#
+# Quel tema però deve valere SOLO per il compositor. Se restasse nell'ambiente
+# lo caricherebbe anche Chromium, e riattivare il puntatore dalle impostazioni
+# non lo farebbe più ricomparire fino al riavvio della sessione. Nella sessione
+# kiosk nessun altro imposta queste due variabili, quindi toglierle qui riporta
+# il client al tema di sistema.
+unset XCURSOR_THEME XCURSOR_PATH
+
+# Tema GTK scuro. Non è cosmetica di contorno: il frame view Linux di Electron
+# (ElectronFrameViewLinux, rifatto su FrameViewLinux di Chromium) disegna il
+# bordo della finestra coi colori del tema di sistema, e sull'appliance il tema
+# è quello chiaro di default. Su una UI nera quel bordo si vede: una riga di
+# 4 px, misurata (221,218,214) con contorno (188,186,182), esattamente i grigi
+# di Adwaita chiaro. Con il tema scuro la riga resta ma sparisce nel nero.
+# La cura vera è che la finestra sia fullscreen, dove Chromium il frame non lo
+# disegna affatto (main/main.js); questo è la cintura oltre alle bretelle, e
+# vale comunque per ogni altro pezzo di interfaccia nativa.
+GTK_THEME=Adwaita:dark
+export GTK_THEME
+
+amixer -q sset Master unmute 2>/dev/null || true
+amixer -q sset PCM unmute 2>/dev/null || true
+
+# Ponte MPRIS per i comandi AVRCP, come nella sessione X11.
+command -v mpris-proxy >/dev/null 2>&1 && mpris-proxy &
+
+# PID del compositor: è il nostro genitore, perché labwc ci esegue con -S. Il
+# ciclo di rilancio più sotto lo usa per accorgersi che la sessione è finita.
+COMPOSITOR_PID="$(ps -o ppid= -p $$ 2>/dev/null | tr -d ' ')"
+
+# Risolve il binario Electron (electron-builder lo linka in /usr/bin)
+APP="$(command -v hifi-media-player || true)"
+[ -z "$APP" ] && APP="/opt/hifi-media-player/hifi-media-player"
+
+# --ozone-platform=x11: l'app gira sotto XWayland, NON come client Wayland
+# nativo, e non è una svista. Con --ozone-platform=wayland lo scorrimento col
+# dito è rotto: il primo gesto vola a fine lista e da lì in poi il touch non
+# scorre più, restano solo i tap.
+#
+# La causa è un bug di labwc (0.8.3, e ancora su master). In src/input/touch.c
+# l'offset superficie->layout viene salvato in campi `uint32_t`:
+#
+#     struct touch_point { int32_t touch_id; uint32_t x_offset, y_offset; ... }
+#     ...
+#     double sx = lx - touch_point->x_offset;   /* handle_touch_motion */
+#
+# ma quell'offset è NEGATIVO per ogni client con decorazioni lato client: la
+# superficie di Chromium sporge oltre la finestra (bordo di ridimensionamento e
+# ombra, qui set_window_geometry(16, 10, 1024, 600)), quindi l'origine della
+# superficie sta a (-16,-10) e -16 diventa 4294967280. Il `down` usa la
+# variabile double locale ed è corretto, il `motion` usa il campo troncato:
+# catturato con WAYLAND_DEBUG sul dispositivo,
+#
+#     wl_touch.down(..., 696.0, 470.0)              <- giusto
+#     wl_touch.motion(..., -8388608.0, -8388608.0)  <- underflow di wl_fixed_t
+#
+# Da qui i sintomi: i tap (down+up, senza motion) funzionano, il primo
+# trascinamento fa uno scroll di miliardi di pixel e lo stato del touch in
+# Chromium resta inservibile. Sotto XWayland la superficie non ha margini
+# negativi e il problema sparisce — verificato iniettando gesti sintetici via
+# uinput e confrontando gli screenshot: nativo 1 gesto su 4, XWayland 4 su 4.
+#
+# Alternative scartate: il fullscreen vero (via impostazioni della finestra o
+# window rule di labwc) azzera sì l'offset e ripara il touch, ma Chromium tiene
+# la superficie a 1056x642 e la UI finisce tagliata; forzare serverDecoration
+# non cambia i margini. Il costo di XWayland qui è nullo: 0.98 W di pacchetto
+# nativo contro 1.00 W (schermata statica, Braswell J-series) — resta il
+# guadagno vero della sessione, che era togliere la scalatura RandR di Xorg.
+# Quando labwc corregge il tipo dei due campi, questa riga torna a "wayland".
+#
+# --touch-events=enabled: innocuo, l'appliance è touch-first; su X11 il touch
+# lo espone comunque XI2.
+#
+# Stesso ciclo di riavvio della sessione X11: se l'app esce o viene uccisa
+# (crash del renderer dopo lunga uptime) si rilancia invece di lasciare uno
+# schermo morto. `nice -n -5`: seconda priorità della macchina dopo squeezelite,
+# vedi /etc/security/limits.d/10-hifi-kiosk-nice.conf.
+while true; do
+    nice -n -5 "$APP" \
+        --no-sandbox \
+        --disable-dev-shm-usage \
+        --enable-features=UseOzonePlatform \
+        --ozone-platform=x11 \
+        --touch-events=enabled \
+        --start-fullscreen
+    status=$?
+
+    # Se il compositor non c'è più, la sessione è finita e questo ciclo non deve
+    # sopravvivergli. Senza questo controllo lo script viene adottato da init e
+    # continua a rilanciare il kiosk dentro la sessione SUCCESSIVA, con la riga
+    # di comando che aveva quando è partito: visto sul campo dopo qualche
+    # riavvio della sessione, due istanze insieme e quella di troppo avviata su
+    # Wayland nativo, dove il touch non scorre (vedi sopra). Chi si prende il
+    # dito, a quel punto, è questione di fortuna.
+    if [ -n "$COMPOSITOR_PID" ] && ! kill -0 "$COMPOSITOR_PID" 2>/dev/null; then
+        echo "hifi kiosk exited ($status) — compositor sparito, esco con la sessione" >&2
+        exit 0
+    fi
+
+    echo "hifi kiosk exited ($status) — relaunching in 3s" >&2
+    sleep 3
+done

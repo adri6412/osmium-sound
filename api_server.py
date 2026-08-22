@@ -1,4 +1,4 @@
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify, request, Response
 from flask_cors import CORS
 import subprocess
 import os
@@ -11,8 +11,16 @@ import re
 import json
 import logging
 import urllib.request
+import urllib.parse
+import urllib.error
 import time
 import threading
+import queue
+import zipfile
+import io
+import glob
+from hifi_logging import get_logger
+from hifi_i18n import t as _t
 
 app = Flask(__name__)
 # This API is bound to 127.0.0.1 only (see the bottom of this file) and has no
@@ -27,10 +35,11 @@ CORS(app, origins=["http://localhost:5173", "null"])
 
 # Log full diagnostics server-side; never leak exception text / stack traces to
 # HTTP clients (this API runs as root). Use `log.exception(...)` in handlers and
-# return a generic message to the caller instead.
-logging.basicConfig(level=logging.INFO,
-                    format='%(asctime)s %(levelname)s %(name)s: %(message)s')
-log = logging.getLogger('hifi.api')
+# return a generic message to the caller instead. get_logger() also persists this
+# to a size-rotated file under /var/log/hifi/ (journald alone doesn't survive a
+# reboot on this image) — see the support-bundle endpoint further down, which
+# reads it back for remote diagnostics.
+log = get_logger('api')
 
 # Security headers middleware
 @app.after_request
@@ -41,24 +50,59 @@ def add_security_headers(response):
     response.headers['Strict-Transport-Security'] = 'max-age=31536000; includeSubDomains'
     return response
 
+def _lang():
+    """Caller's UI language, sent as a header by both frontends (admin-webui's
+    api.js, the kiosk's src/utils/api.js) on every request so responses built
+    here — see hifi_i18n.py — come back in whichever language the owner
+    picked, instead of always Italian.
+
+    Some of the functions that call this are also invoked outside a Flask
+    request (the update sequencer, unit tests calling handlers directly) —
+    there's no caller language to read there, so fall back to the default
+    rather than blow up with a "working outside of request context" error."""
+    try:
+        v = request.headers.get('X-UI-Lang')
+    except RuntimeError:
+        return 'en'
+    return v if v in ('en', 'it') else 'en'
+
 # ──────────────────────────────────────────────────────────────────
 #  OTA update of the Electron UI (whole /opt/hifi-media-player dir).
 #  The actual download/swap/restart is done as root by the helper
 #  script; here we only check GitHub Releases and kick it off.
 # ──────────────────────────────────────────────────────────────────
 OTA_REPO = os.environ.get('HIFI_OTA_REPO', 'adri6412/hifi-media-player')
-# Static release manifest published to GitHub Pages (a CDN, NOT subject to the
+# Static release manifest published to a CDN (NOT subject to the
 # api.github.com 60-req/hour rate limit). The release workflow writes
-# `ota/latest-<channel>.json` mirroring the GitHub release object. The device
-# reads this first and only falls back to the REST API if it's unreachable, so
-# normal update checks never touch the rate-limited API.
+# `ota/latest-<channel>.json` mirroring the GitHub release object to the
+# `gh-pages` branch. The device reads this first and only falls back to the
+# REST API if it's unreachable, so normal update checks never touch the
+# rate-limited API.
+#
+# Cloudflare Pages, watching that same `gh-pages` branch, NOT GitHub Pages:
+# the custom domain (osmiumsound.qd.je) got stuck with GitHub Pages' ACME
+# cert provisioning permanently wedged ("bad_authz", would not clear even
+# after repeated re-adds) and the DNS host for that subdomain doesn't
+# support the records needed to fix it any other way. Safe to change the
+# default here with no fleet migration dance: every existing device already
+# falls back to the GitHub REST API whenever this URL is unreachable (which
+# it has been) -- they'll pick up whatever release carries this change via
+# that fallback, then use the fast path again from then on.
 OTA_MANIFEST_BASE = os.environ.get('HIFI_OTA_MANIFEST_BASE',
-                                   'https://osmiumsound.qd.je/ota')
+                                   'https://osmium-sound.pages.dev/ota')
 # OTA release channel: 'prod' tracks GitHub's /releases/latest (stable releases
 # only); 'dev' tracks the newest release including prereleases (vX.Y.Z-dev.N).
+# 'alpha' tracks the newest release of ANY kind, including private test tags cut
+# from the 'alpha' branch (vX.Y.Z-dev.N-alphaM) — those are excluded from what
+# 'dev' sees, so they never reach a device that isn't specifically testing them.
 # Persisted so the backend's GitHub check and the apply step stay consistent.
 OTA_CHANNEL_FILE = '/etc/hifi-player/ota-channel'
-OTA_CHANNELS = ('prod', 'dev')
+OTA_CHANNELS = ('prod', 'dev', 'alpha')
+# 'alpha' only appears as a selectable channel when this marker file has been
+# placed by hand (root, out-of-band — see hifi-ota-alpha-toggle.sh). It is NOT
+# a security boundary (the repo/releases are public) — it just keeps the option
+# out of the UI/API for every device except the owner's own, on purpose.
+OTA_ALPHA_MARKER_FILE = '/etc/hifi-player/ota-alpha-unlocked'
 OTA_APPDIR = '/opt/hifi-media-player'
 OTA_VERSION_FILE = os.path.join(OTA_APPDIR, 'UI_VERSION')
 OTA_SCRIPT = '/usr/local/sbin/hifi-ota-update.sh'
@@ -90,14 +134,105 @@ OS_STATUS_FILE = '/run/hifi-os-status.json'
 OS_PREFIX = 'hifi-os-'
 
 # ──────────────────────────────────────────────────────────────────
-#  OTA update of Lyrion Music Server (stable .deb from the community
-#  downloads server). We parse the downloads page for the latest
-#  stable release and install it as root.
+#  Installer (src/pages/InstallWizard.jsx): backend for the "Install
+#  Osmium Sound" boot entry. Same systemd-run + /run status-file shape
+#  as the OS/system/UI updates above. See hifi-disk-install.sh and
+#  distro/README.md for the full flow — this replaces Debian Installer.
 # ──────────────────────────────────────────────────────────────────
-LYRION_DOWNLOADS_PAGE = os.environ.get('HIFI_LYRION_PAGE', 'https://downloads.lms-community.org/')
+INSTALL_SCRIPT = '/usr/local/sbin/hifi-disk-install.sh'
+INSTALL_STATUS_FILE = '/run/hifi-install-status.json'
+
+# ──────────────────────────────────────────────────────────────────
+#  Multi-component update sequencer — two-phase, isolated apply.
+#
+#  Applying "everything" used to be sequenced by the client that started
+#  it: apply one component, poll its /run status file, apply the next.
+#  Anything that killed the client killed the rest of the sequence, and
+#  the three most common events in an update are exactly that — the
+#  system bundle restarts hifi-api and hifi-webui, the UI bundle
+#  restarts lightdm, and an OS payload may reboot the box. A later
+#  redesign moved that sequencing server-side (hifi-update-runner.sh, one
+#  transient unit), which fixed "killed the client" but not "applying
+#  while the very things being replaced are still running" — a service
+#  restart or a lightdm teardown mid-install could still leave a
+#  component half-applied.
+#
+#  So the flow is now split in two phases, each with its own runner:
+#    1. hifi-update-stage-runner.sh downloads and verifies every
+#       component (nothing applied yet, the box stays fully live) and,
+#       once everything has staged, creates /system-update and reboots.
+#    2. systemd-system-update-generator(8) redirects that one boot into
+#       system-update.target instead of the normal graphical session —
+#       nothing from the app stack starts at all — where
+#       hifi-update-apply-runner.sh (hifi-update-apply.service) applies
+#       every staged, already-verified payload with nothing else running
+#       to race against, then clears /system-update and reboots back to
+#       normal.
+#
+#  This module builds the plan, starts the stage runner, and reports
+#  progress by merging the persisted plan with the running step's /run
+#  status file during staging, then — once the box comes back from its
+#  two reboots — the durable post-apply outcome recorded in
+#  UPDATE_STATE_FILE. See hifi-update-stage-runner.sh /
+#  hifi-update-apply-runner.sh for the on-disk formats.
+#
+#  The per-component endpoints below stay: they are still the right
+#  thing for updating a single component, and older clients use them.
+# ──────────────────────────────────────────────────────────────────
+UPDATE_DIR = '/var/lib/hifi-player/update'
+UPDATE_PLAN_FILE = UPDATE_DIR + '/plan'
+# Written by the stage/apply runners; read (never written) here. Key=value
+# lines: phase (staged|applying|done|error), ts (epoch), message.
+UPDATE_STATE_FILE = UPDATE_DIR + '/state'
+# Detail for the terminal apply_error state — channel + free-text message.
+UPDATE_ERROR_FILE = UPDATE_DIR + '/error.json'
+UPDATE_STAGE_RUNNER_SCRIPT = '/usr/local/sbin/hifi-update-stage-runner.sh'
+UPDATE_STAGE_RUNNER_UNIT = 'hifi-update-stage'
+# systemd-system-update-generator(8)'s own trigger: its mere existence at
+# early boot is what redirects default.target to system-update.target for
+# that one boot. Created by the stage runner, removed by the apply runner.
+SYSTEM_UPDATE_LINK = '/system-update'
+# Canonical order. system first (it delivers the API, daemons, helper
+# scripts and units everything else relies on), os second, ui last.
+UPDATE_PLAN_ORDER = ('system', 'os', 'ui')
+# How long a finished/failed outcome stays readable so clients can show it
+# — including a kiosk that only comes back up after both update-mode
+# reboots. After this it is cleared automatically, so a plan/outcome
+# nobody dismissed cannot keep re-opening the overlay forever.
+UPDATE_PLAN_TTL = 900
+# The plan file is whitespace-separated and parsed by /bin/sh, so every
+# field must be whitespace-free. Versions also land in a file name.
+_SAFE_VERSION_RE = re.compile(r'^[0-9A-Za-z._-]+$')
+_SAFE_SHA_RE = re.compile(r'^[0-9a-fA-F]{64}$')
+
+# ──────────────────────────────────────────────────────────────────
+#  Install/update of Lyrion Music Server (.deb from the community
+#  downloads server). The page publishes three streams and we let the
+#  owner pick: the release, the bugfix nightly for that release, and
+#  the development branch. Managed from Settings → Lyrion Music Server
+#  (NOT from the appliance's own update page — this is third-party
+#  software with its own release cadence).
+#
+#  downloads.lms-community.org/ now 301s here; the .deb files still
+#  live on the old host, which is what the parser matches.
+# ──────────────────────────────────────────────────────────────────
+LYRION_DOWNLOADS_PAGE = os.environ.get('HIFI_LYRION_PAGE', 'https://lyrion.org/downloads')
 LYRION_PKG = 'lyrionmusicserver'
 LYRION_SCRIPT = '/usr/local/sbin/hifi-lyrion-update.sh'
 LYRION_STATUS_FILE = '/run/hifi-lyrion-status.json'
+LYRION_CHANNEL_FILE = '/etc/hifi-player/lyrion-channel'
+# Separate from LYRION_CHANNEL_FILE on purpose: the Settings UI persists the
+# *picked* channel the moment the owner taps it (so the choice survives a page
+# reload before they hit Install), well before apply_lyrion_update() runs. If
+# "switching" were detected by diffing against that same file, it would always
+# read as "no change" by the time apply runs and a same-version channel swap
+# (e.g. nightly -> release when release is not newer than what's installed)
+# would be refused as "already up to date" instead of reinstalling. This file
+# is only written once a build actually starts installing, so it always
+# reflects what's actually running (or about to run).
+LYRION_INSTALLED_CHANNEL_FILE = '/etc/hifi-player/lyrion-installed-channel'
+LYRION_CHANNELS = ('release', 'nightly', 'dev')
+LYRION_DEFAULT_CHANNEL = 'release'
 
 # Mitigation for a kernel panic seen in the DesignWare DMA driver
 # (dw_dmac_core: dw_shutdown -> do_dw_dma_disable) during device_shutdown()
@@ -209,8 +344,151 @@ def get_system_info():
             'version': _installed_ui_version(),
             'local_ip': 'Unknown',
             'network_interfaces': [],
-            'error': 'Errore nel recupero delle informazioni di sistema'
+            'error': _t('system.infoFetchFailed', _lang())
         }
+
+def _cpu_temp_c():
+    """Highest reading across /sys/class/thermal/thermal_zone* (usually the
+    CPU package sensor), in whole °C. None if no thermal zone is exposed."""
+    best = None
+    try:
+        for zone in glob.glob('/sys/class/thermal/thermal_zone*/temp'):
+            try:
+                with open(zone) as f:
+                    millideg = int(f.read().strip())
+            except Exception:
+                continue
+            c = millideg / 1000.0
+            if best is None or c > best:
+                best = c
+    except Exception:
+        pass
+    return round(best, 1) if best is not None else None
+
+_gpu_warned = False  # log the first failure only -- this polls every 5s forever
+
+
+def _gpu_busy_pct():
+    """GPU busy % -- Intel iGPU via intel_gpu_top, AMD/ATI via radeontop.
+    Neither tool ships on the image by default (see intel-gpu-tools /
+    radeontop apply.d steps), so this is a no-op (None) wherever neither is
+    installed."""
+    if shutil.which('intel_gpu_top'):
+        return _intel_gpu_busy_pct()
+    if shutil.which('radeontop'):
+        return _amd_gpu_busy_pct()
+    return None
+
+
+def _intel_gpu_busy_pct():
+    """`-J` streams a JSON array that only gets its closing `]` once the
+    process exits, and it never exits on its own -- a plain
+    `subprocess.run(..., timeout=N)` would always hit the timeout and lose
+    the output. Let it sample for one interval, then ask it to exit cleanly
+    (SIGINT, same as Ctrl-C) so it flushes valid JSON. Failures are logged
+    once (not every poll): this used to fail completely silently, which is
+    exactly how a real bug (Debian's stricter default perf_event_paranoid
+    rejecting CAP_PERFMON -- see distro/os-update/apply.d/0046-perfmon-sysctl.sh)
+    went unnoticed for a long time."""
+    global _gpu_warned
+    proc = None
+    err = ''
+    try:
+        proc = subprocess.Popen(
+            ['intel_gpu_top', '-J', '-s', '500', '-o', '-'],
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        time.sleep(1.0)
+        proc.send_signal(signal.SIGINT)
+        try:
+            out, err = proc.communicate(timeout=3)
+        except subprocess.TimeoutExpired:
+            proc.kill()
+            out, err = proc.communicate()
+        text = out.strip()
+        if not text.startswith('['):
+            text = '[' + text.lstrip(',')
+        if not text.rstrip().endswith(']'):
+            text = text.rstrip().rstrip(',') + ']'
+        samples = json.loads(text)
+        if not samples:
+            if not _gpu_warned:
+                _gpu_warned = True
+                log.warning('gpu_busy_pct: no samples captured, stderr: %s', (err or '').strip()[:200])
+            return None
+        engines = samples[-1].get('engines') or {}
+        render = engines.get('Render/3D') or engines.get('Render/3D/0') or {}
+        busy = render.get('busy')
+        if busy is None and not _gpu_warned:
+            _gpu_warned = True
+            log.warning('gpu_busy_pct: no \'busy\' field in engines=%s', list(engines))
+        return round(float(busy), 1) if busy is not None else None
+    except Exception as e:
+        if not _gpu_warned:
+            _gpu_warned = True
+            log.warning('gpu_busy_pct: %s, stderr: %s', e, (err or '').strip()[:200])
+        return None
+    finally:
+        if proc and proc.poll() is None:
+            proc.kill()
+
+
+def _amd_gpu_busy_pct():
+    """AMD/ATI GPU busy % via radeontop. Works across both the legacy
+    `radeon` and current `amdgpu` kernel drivers (unlike reading
+    gpu_busy_percent from sysfs, which only amdgpu exposes -- it would miss
+    older cards). `-l 1` takes exactly one sample and exits on its own, no
+    SIGINT dance needed like intel_gpu_top's endless JSON stream."""
+    global _gpu_warned
+    try:
+        out = subprocess.run(
+            ['radeontop', '-d', '-', '-l', '1'],
+            capture_output=True, text=True, timeout=5).stdout
+        m = re.search(r'\bgpu\s+([\d.]+)%', out)
+        if not m:
+            if not _gpu_warned:
+                _gpu_warned = True
+                log.warning('gpu_busy_pct: no gpu field in radeontop output: %s', out.strip()[:200])
+            return None
+        return round(float(m.group(1)), 1)
+    except Exception as e:
+        if not _gpu_warned:
+            _gpu_warned = True
+            log.warning('gpu_busy_pct: %s', e)
+        return None
+
+
+def get_system_stats():
+    """CPU/RAM/disk/temperature/GPU snapshot for the admin dashboard. All
+    fields are best-effort and independently None-able -- one missing sensor
+    (e.g. no GPU tool installed) must never take the whole tile down."""
+    try:
+        import psutil
+        # psutil.cpu_percent(percpu=False) is already the system-wide average
+        # across all cores (not a single core), matching `top`'s %Cpu(s) line.
+        # A 0.2s sample window was too short and jittery on a bursty system
+        # (Electron/vu_meter/Lyrion background load), making single reads
+        # swing widely and look like they disagreed with a manual `top`
+        # check -- 1s brings it in line with typical manual observation and
+        # the dashboard already polls this endpoint only every 5s.
+        cpu_pct = psutil.cpu_percent(interval=1.0)
+        vm = psutil.virtual_memory()
+        du = shutil.disk_usage('/')
+        return {
+            'cpu_percent': cpu_pct,
+            'ram_percent': vm.percent,
+            'ram_used_mb': round(vm.used / 1024 / 1024),
+            'ram_total_mb': round(vm.total / 1024 / 1024),
+            'disk_percent': round(du.used / du.total * 100, 1) if du.total else None,
+            'disk_used_gb': round(du.used / 1024 / 1024 / 1024, 1),
+            'disk_total_gb': round(du.total / 1024 / 1024 / 1024, 1),
+            'temp_c': _cpu_temp_c(),
+            'gpu_percent': _gpu_busy_pct(),
+        }
+    except Exception:
+        log.exception("get_system_stats failed")
+        return {'cpu_percent': None, 'ram_percent': None, 'ram_used_mb': None,
+                'ram_total_mb': None, 'disk_percent': None, 'disk_used_gb': None,
+                'disk_total_gb': None, 'temp_c': None, 'gpu_percent': None}
 
 _IFACE_RE = re.compile(r'^[A-Za-z0-9][A-Za-z0-9._-]*$')
 
@@ -324,14 +602,38 @@ def _device_ip(device):
         pass
     return None
 
+def _active_connection_name(device):
+    try:
+        r = _run(['nmcli', '-t', '-f', 'NAME,DEVICE', 'connection', 'show', '--active'])
+        for line in r.stdout.strip().split('\n'):
+            parts = _terse_split(line)
+            if len(parts) >= 2 and parts[1] == device:
+                return parts[0]
+    except Exception:
+        pass
+    return None
+
 def _active_device():
-    """Return (device, type) of the first connected wifi/ethernet device."""
+    """Return (device, type) of the connected uplink to report as "the" network
+    status. Ethernet is preferred over Wi-Fi, and the box's own setup/recovery
+    hotspot (connection 'hifi-setup', see webui_server.py's AP_CON_NAME) is
+    skipped — it's an active 'wifi' device too, and if picked here it would
+    report its own AP address (10.42.0.1) instead of the real LAN IP whenever
+    a cable is plugged in while the hotspot is still up (e.g. during
+    provisioning, which raises it unconditionally)."""
     try:
         r = _run(['nmcli', '-t', '-f', 'DEVICE,TYPE,STATE', 'device', 'status'])
+        rows = []
         for line in r.stdout.strip().split('\n'):
             parts = _terse_split(line)
             if len(parts) >= 3 and parts[2] == 'connected' and parts[1] in ('wifi', 'ethernet'):
-                return parts[0], parts[1]
+                rows.append((parts[0], parts[1]))
+        for device, dtype in rows:
+            if dtype == 'ethernet':
+                return device, dtype
+        for device, dtype in rows:
+            if dtype == 'wifi' and _active_connection_name(device) != 'hifi-setup':
+                return device, dtype
     except Exception:
         pass
     return None, None
@@ -358,6 +660,75 @@ def _active_ssid():
         pass
     return None
 
+
+def _ensure_networkmanager_state(device=None):
+    """Recover from NetworkManager states where the interface is unmanaged or networking is globally off."""
+    try:
+        _run(['nmcli', 'networking', 'on'], timeout=15)
+    except Exception:
+        pass
+    if device:
+        try:
+            _run(['nmcli', 'device', 'set', device, 'managed', 'yes'], timeout=15)
+        except Exception:
+            pass
+
+
+def _startup_network_recovery():
+    device = _first_device_of_type('ethernet') or _first_device_of_type('wifi')
+    _ensure_networkmanager_state(device)
+
+
+def _ensure_dhcp_ip(device, timeout=15):
+    """Wait briefly for a DHCP lease to appear after enabling the device."""
+    _ensure_networkmanager_state(device)
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        ip = _device_ip(device)
+        if ip:
+            return ip
+        time.sleep(1)
+    return _device_ip(device)
+
+
+def _connection_ids_for_device_type(dtype):
+    """NM connection profile names bound to this device type ('wifi' or
+    'ethernet'), active or not — includes profiles NM auto-created for past
+    manual connects, not just the currently active one."""
+    ids = set()
+    nm_type = '802-11-wireless' if dtype == 'wifi' else '802-3-ethernet'
+    try:
+        r = _run(['nmcli', '-t', '-f', 'NAME,TYPE', 'connection', 'show'])
+        for line in r.stdout.strip().split('\n'):
+            parts = _terse_split(line)
+            if len(parts) >= 2 and parts[1] == nm_type:
+                ids.add(parts[0])
+    except Exception:
+        pass
+    return ids
+
+def _set_interface_enabled(dtype, enabled):
+    """Turn an interface type on (eligible to auto-reconnect, e.g. after a
+    reboot) or off (disconnected right now, and kept from silently coming
+    back on its own). Wired and Wi-Fi profiles both default to NM's own
+    autoconnect=yes with no priority between them, so previously the two
+    could — and did — silently fight over which one actually carried
+    traffic. Picking one here (wifi_connect/wired_dhcp below) now means the
+    other one actually stops competing, not just "also got a route"."""
+    for conn in _connection_ids_for_device_type(dtype):
+        try:
+            _run(['nmcli', 'connection', 'modify', conn,
+                  'connection.autoconnect', 'yes' if enabled else 'no'])
+        except Exception:
+            pass
+    if not enabled:
+        dev = _first_device_of_type(dtype)
+        if dev:
+            try:
+                _run(['nmcli', 'device', 'disconnect', dev])
+            except Exception:
+                pass
+
 def get_network_status():
     device, dtype = _active_device()
     ip = _device_ip(device) if device else None
@@ -372,30 +743,40 @@ def wifi_scan():
         pass
     networks = []
     try:
-        r = _run(['nmcli', '-t', '-f', 'IN-USE,SSID,SIGNAL,SECURITY', 'device', 'wifi', 'list'])
-        for line in r.stdout.strip().split('\n'):
-            if not line:
-                continue
-            parts = _terse_split(line)
-            if len(parts) < 4:
-                continue
-            in_use, ssid, signal_, security = parts[0], parts[1], parts[2], parts[3]
-            if not ssid:
-                continue
-            networks.append({
-                'ssid': ssid,
-                'signal': signal_,
-                'security': security,
-                'in_use': in_use == '*',
-            })
+        # `rescan` only requests a scan and returns immediately; results land
+        # a few seconds later. An immediate `list` usually looks fine because
+        # NetworkManager already has a scan cache from its own periodic
+        # background scans to fall back on -- but that cache doesn't exist
+        # yet right after boot, so don't trust the first read blindly.
+        for attempt in range(6):
+            r = _run(['nmcli', '-t', '-f', 'IN-USE,SSID,SIGNAL,SECURITY', 'device', 'wifi', 'list'])
+            networks = []
+            for line in r.stdout.strip().split('\n'):
+                if not line:
+                    continue
+                parts = _terse_split(line)
+                if len(parts) < 4:
+                    continue
+                in_use, ssid, signal_, security = parts[0], parts[1], parts[2], parts[3]
+                if not ssid:
+                    continue
+                networks.append({
+                    'ssid': ssid,
+                    'signal': signal_,
+                    'security': security,
+                    'in_use': in_use == '*',
+                })
+            if networks or attempt == 5:
+                break
+            time.sleep(1)
     except Exception:
         log.exception("wifi_scan failed")
-        return {'networks': [], 'error': 'Scansione WiFi fallita'}
+        return {'networks': [], 'error': _t('network.scanFailed', _lang())}
     return {'networks': networks}
 
 def wifi_connect(ssid, password):
     if not ssid:
-        return {'success': False, 'message': 'SSID mancante'}
+        return {'success': False, 'code': 'network.ssidMissing', 'message': _t('network.ssidMissing', _lang())}
     # ssid/password are passed as argv to nmcli (no shell), but a value that
     # starts with '-' or carries control characters could still be parsed as a
     # flag or break the command line. Validate with an anchored regexp (no
@@ -403,35 +784,54 @@ def wifi_connect(ssid, password):
     safe_arg = re.compile(r'(?!-)[^\x00-\x1f]+')
     for label, value in (('SSID', ssid), ('password', password or '')):
         if value and not safe_arg.fullmatch(value):
-            return {'success': False, 'message': f'{label} non valido'}
+            return {'success': False, 'code': 'network.invalidField',
+                    'message': _t('network.invalidField', _lang(), label=label)}
     cmd = ['nmcli', 'device', 'wifi', 'connect', ssid]
     if password:
         cmd += ['password', password]
     try:
         r = _run(cmd, timeout=45)
     except subprocess.TimeoutExpired:
-        return {'success': False, 'message': 'Timeout durante la connessione'}
+        return {'success': False, 'code': 'network.connectTimeout',
+                'message': _t('network.connectTimeout', _lang())}
     except Exception:
         log.exception("wifi_connect failed")
-        return {'success': False, 'message': 'Connessione fallita'}
+        return {'success': False, 'code': 'network.connectFailed',
+                'message': _t('network.connectFailed', _lang())}
     if r.returncode == 0:
-        device, _ = _active_device()
-        return {'success': True, 'message': f'Connesso a {ssid}', 'ip': _device_ip(device)}
-    return {'success': False, 'message': (r.stderr or r.stdout).strip() or 'Connessione fallita'}
+        device, _ = _active_device() or (None, None)
+        msg = _t('network.connected', _lang(), ssid=ssid)
+        ip = _ensure_dhcp_ip(device) if device else None
+        # Only make Wi-Fi exclusive once it actually has a working IP — never
+        # turn Ethernet off on the strength of an nmcli command that merely
+        # returned success, which would risk stranding the box with neither
+        # interface reachable.
+        if ip:
+            _set_interface_enabled('wifi', True)
+            _set_interface_enabled('ethernet', False)
+        return {'success': True, 'message': msg, 'ip': ip}
+    return {'success': False, 'code': 'network.connectFailed',
+            'message': (r.stderr or r.stdout).strip() or _t('network.connectFailed', _lang())}
 
 def wired_dhcp():
     eth = _first_device_of_type('ethernet')
     if not eth:
-        return {'success': False, 'message': 'Nessuna interfaccia Ethernet trovata'}
+        return {'success': False, 'code': 'network.noEthernet', 'message': _t('network.noEthernet', _lang())}
     try:
         r = _run(['nmcli', 'device', 'connect', eth], timeout=45)
     except Exception:
         log.exception("wired_dhcp failed")
-        return {'success': False, 'message': 'Connessione via cavo fallita'}
-    ip = _device_ip(eth)
+        return {'success': False, 'code': 'network.wiredFailed', 'message': _t('network.wiredFailed', _lang())}
+    ip = _ensure_dhcp_ip(eth)
     if ip:
-        return {'success': True, 'message': 'Connesso via cavo', 'ip': ip}
-    return {'success': r.returncode == 0, 'message': (r.stderr or r.stdout).strip() or 'Cavo non connesso', 'ip': ip}
+        # Symmetric with wifi_connect above: only flip exclusivity once wired
+        # actually has a working IP.
+        _set_interface_enabled('ethernet', True)
+        _set_interface_enabled('wifi', False)
+        return {'success': True, 'code': 'network.wiredConnected',
+                'message': _t('network.wiredConnected', _lang()), 'ip': ip}
+    return {'success': False, 'code': 'network.cableNotConnected',
+            'message': (r.stderr or r.stdout).strip() or _t('network.cableNotConnected', _lang()), 'ip': ip}
 
 # ──────────────────────────────────────────────────────────────────
 #  Audio output (DAC) selection for squeezelite — used by the wizard.
@@ -448,7 +848,7 @@ def list_audio_devices():
     numbers across reboots and the saved "-o hw:1,0" would then point at the PC's
     sound card. The CARD= name is stable, so the selection survives reboots.
     """
-    devices = [{'id': 'default', 'name': 'Predefinito di sistema', 'card': None, 'device': None}]
+    devices = [{'id': 'default', 'name': _t('audio.defaultDeviceName', _lang()), 'card': None, 'device': None}]
     try:
         r = _run(['aplay', '-l'])
         for line in r.stdout.split('\n'):
@@ -470,7 +870,7 @@ def list_audio_devices():
     except Exception:
         log.exception("list_audio_devices failed")
         return {'devices': devices, 'current': _current_real_dac(),
-                'error': 'Lettura dispositivi audio fallita'}
+                'error': _t('audio.listDevicesFailed', _lang())}
     return {'devices': devices, 'current': _current_real_dac()}
 
 def _current_audio_device():
@@ -490,12 +890,13 @@ def _current_audio_device():
 def set_audio_device(device):
     """Rewrite the -o option in /etc/default/squeezelite and restart it."""
     if not device:
-        return {'success': False, 'message': 'Device mancante'}
+        return {'success': False, 'code': 'audio.deviceMissing', 'message': _t('audio.deviceMissing', _lang())}
 
     # Validate device is one of the valid audio device IDs from list_audio_devices()
     valid_devices = [d['id'] for d in list_audio_devices()['devices']]
     if device not in valid_devices:
-        return {'success': False, 'message': f'Dispositivo audio non valido: {device}'}
+        return {'success': False, 'code': 'audio.invalidDevice',
+                'message': _t('audio.invalidDevice', _lang(), device=device)}
 
     # When the DSP engine is ON, the chosen DAC is CamillaDSP's *playback*
     # device — squeezelite stays pointed at the Loopback. Re-apply the DSP
@@ -507,8 +908,9 @@ def set_audio_device(device):
                 _apply_dsp_on(device, st['bands'], st['crossfeed'], st['room_correction'], st['balance'])
         except Exception:
             log.exception("set_audio_device (DSP) failed")
-            return {'success': False, 'message': 'Impostazione uscita (DSP) fallita'}
-        return {'success': True, 'message': f'Uscita audio (DSP) impostata su {device}'}
+            return {'success': False, 'code': 'audio.dspOutputFailed',
+                    'message': _t('audio.dspOutputFailed', _lang())}
+        return {'success': True, 'message': _t('audio.dspOutputSet', _lang(), device=device)}
 
     try:
         with open(SQUEEZELITE_DEFAULT) as f:
@@ -536,16 +938,18 @@ def set_audio_device(device):
             f.write(content)
     except Exception:
         log.exception("set_audio_device: write config failed")
-        return {'success': False, 'message': 'Scrittura configurazione fallita'}
+        return {'success': False, 'code': 'audio.writeConfigFailed',
+                'message': _t('audio.writeConfigFailed', _lang())}
 
     try:
-        r = _run(['systemctl', 'restart', 'squeezelite'], timeout=30)
+        r = _restart_squeezelite_if_enabled()
         if r.returncode != 0:
-            return {'success': True, 'message': f'Device impostato ({device}); riavvio squeezelite: {(r.stderr or "").strip()}'}
+            return {'success': True, 'message': _t('audio.deviceSetRestartWarn', _lang(),
+                    device=device, err=(r.stderr or '').strip())}
     except Exception:
         log.exception("set_audio_device: squeezelite restart failed")
-        return {'success': True, 'message': f'Device impostato ({device}); riavvio non riuscito'}
-    return {'success': True, 'message': f'Uscita audio impostata su {device}'}
+        return {'success': True, 'message': _t('audio.deviceSetRestartFailed', _lang(), device=device)}
+    return {'success': True, 'message': _t('audio.outputSet', _lang(), device=device)}
 
 # ── Multiroom: which Lyrion server this device's squeezelite follows ──
 # Standalone (default) is squeezelite's own local LMS (-s 127.0.0.1). "Follow"
@@ -572,28 +976,34 @@ def set_lms_role(mode, host):
         target = '127.0.0.1'
     elif mode == 'follow':
         if not _valid_ipv4(host):
-            return {'success': False, 'message': f'Indirizzo IP non valido: {host}'}
+            return {'success': False, 'code': 'lms.invalidIp',
+                    'message': _t('lms.invalidIp', _lang(), host=host)}
         if host == '127.0.0.1':
-            return {'success': False, 'message': 'Usa la modalità "Questo dispositivo" per il server locale'}
+            return {'success': False, 'code': 'lms.useLocalMode',
+                    'message': _t('lms.useLocalMode', _lang())}
         target = host
     else:
-        return {'success': False, 'message': f'Modalità non valida: {mode}'}
+        return {'success': False, 'code': 'lms.invalidMode',
+                'message': _t('lms.invalidMode', _lang(), mode=mode)}
 
     _, args = _read_sq_args()
     if args is None:
-        return {'success': False, 'message': 'Configurazione squeezelite non trovata'}
+        return {'success': False, 'code': 'lms.sqConfigMissing',
+                'message': _t('lms.sqConfigMissing', _lang())}
     _write_sq_args(_sq_set_s(args, target))
 
     try:
-        r = _run(['systemctl', 'restart', 'squeezelite'], timeout=30)
+        r = _restart_squeezelite_if_enabled()
         if r.returncode != 0:
             return {'success': True, 'host': target if mode == 'follow' else None,
-                    'message': f'Server impostato ({target}); riavvio squeezelite: {(r.stderr or "").strip()}'}
+                    'message': _t('lms.serverSetRestartWarn', _lang(),
+                                  target=target, err=(r.stderr or '').strip())}
     except Exception:
         log.exception("set_lms_role: squeezelite restart failed")
         return {'success': True, 'host': target if mode == 'follow' else None,
-                'message': f'Server impostato ({target}); riavvio non riuscito'}
-    msg = 'Ripristinato il server Lyrion locale' if mode == 'local' else f'Server Lyrion impostato su {target}'
+                'message': _t('lms.serverSetRestartFailed', _lang(), target=target)}
+    msg = (_t('lms.localRestored', _lang()) if mode == 'local'
+           else _t('lms.serverSet', _lang(), target=target))
     return {'success': True, 'host': target if mode == 'follow' else None, 'message': msg}
 
 # ── Player name (-n) — every device ships as "OsmiumSound" by default, which
@@ -619,10 +1029,12 @@ def get_player_name():
 
 def set_player_name(name):
     if not _valid_player_name(name):
-        return {'success': False, 'message': 'Nome non valido: solo lettere, numeri, punto, trattino e underscore, senza spazi (max 24 caratteri)'}
+        return {'success': False, 'code': 'player.invalidName',
+                'message': _t('player.invalidName', _lang())}
     _, args = _read_sq_args()
     if args is None:
-        return {'success': False, 'message': 'Configurazione squeezelite non trovata'}
+        return {'success': False, 'code': 'lms.sqConfigMissing',
+                'message': _t('lms.sqConfigMissing', _lang())}
     if re.search(r'-n\s+\S+', args):
         args = re.sub(r'-n\s+\S+', f'-n {name}', args)
     else:
@@ -630,13 +1042,118 @@ def set_player_name(name):
     _write_sq_args(args)
 
     try:
-        r = _run(['systemctl', 'restart', 'squeezelite'], timeout=30)
+        r = _restart_squeezelite_if_enabled()
         if r.returncode != 0:
-            return {'success': True, 'name': name, 'message': f'Nome impostato ({name}); riavvio squeezelite: {(r.stderr or "").strip()}'}
+            return {'success': True, 'name': name,
+                    'message': _t('player.nameSetRestartWarn', _lang(),
+                                  name=name, err=(r.stderr or '').strip())}
     except Exception:
         log.exception("set_player_name: squeezelite restart failed")
-        return {'success': True, 'name': name, 'message': f'Nome impostato ({name}); riavvio non riuscito'}
-    return {'success': True, 'name': name, 'message': f'Nome player impostato su {name}'}
+        return {'success': True, 'name': name,
+                'message': _t('player.nameSetRestartFailed', _lang(), name=name)}
+    if _read_bt_state():
+        # Best-effort: keep the Bluetooth alias in sync so a renamed player
+        # doesn't leave phones seeing the old "OsmiumSound" in their picker.
+        # hifi-bt-watcher.py sets this too on its own startup; this just
+        # applies it live without waiting for a watcher restart.
+        try:
+            subprocess.run(['bluetoothctl', 'system-alias', name], capture_output=True, timeout=10)
+        except Exception:
+            pass
+    return {'success': True, 'name': name, 'message': _t('player.nameSet', _lang(), name=name)}
+
+# ── Device name — Linux hostname + player name, set together ──────────
+# Every appliance ships from the ISO with the same hardcoded hostname
+# ("hifiplayer", baked into /etc/hostname at build time by
+# 0100-system-setup.hook.chroot) and the same default player name
+# ("OsmiumSound"), so two units on one LAN collide on both hifiplayer.local
+# (avahi falls back to hifiplayer-2.local, silently confusing) and the
+# multiroom picker. Letting the owner pick one name in the setup wizard and
+# applying it to both fixes both at once. Stricter charset than
+# _PLAYER_NAME_RE on purpose — this becomes a DNS/mDNS label, which
+# _PLAYER_NAME_RE's dot/underscore aren't safe for.
+_HOSTNAME_RE = re.compile(r'^[A-Za-z0-9]([A-Za-z0-9-]{0,30}[A-Za-z0-9])?$')
+
+def _valid_device_name(name):
+    return bool(isinstance(name, str) and _HOSTNAME_RE.match(name))
+
+def _set_etc_hosts_hostname(name):
+    """Replace (or insert) the 127.0.1.1 line in /etc/hosts to match `name`.
+    Best-effort: a failure here only means `sudo` prints a cosmetic "unable
+    to resolve host" warning, not worth failing the whole rename over."""
+    try:
+        try:
+            with open('/etc/hosts') as f:
+                lines = f.readlines()
+        except FileNotFoundError:
+            lines = []
+        out, seen = [], False
+        for line in lines:
+            if re.match(r'^\s*127\.0\.1\.1\s', line):
+                out.append(f'127.0.1.1\t{name}\n')
+                seen = True
+            else:
+                out.append(line)
+        if not seen:
+            out.append(f'127.0.1.1\t{name}\n')
+        with open('/etc/hosts', 'w') as f:
+            f.writelines(out)
+    except Exception:
+        log.exception("_set_etc_hosts_hostname failed")
+
+def get_device_name():
+    return {'name': socket.gethostname()}
+
+def _apply_hostname(name):
+    """The OS-level half of a rename: hostnamectl + /etc/hosts + avahi/Lyrion
+    re-announce. Split out of set_device_name so a backup restore (which
+    restores /etc/hostname itself as plain "core" state — see hifi_backup.py)
+    can re-apply just this half through /hostname_apply, without also forcing
+    the Bluetooth/squeezelite player name to follow — set_player_name() below
+    does that, and a restore already re-applies the player name independently
+    from the restored /etc/default/squeezelite."""
+    try:
+        r = _run(['hostnamectl', 'set-hostname', name], timeout=10)
+        if r.returncode != 0:
+            return {'success': False, 'code': 'device.hostnameSetFailed',
+                    'message': _t('device.hostnameSetFailed', _lang())}
+    except Exception:
+        log.exception("_apply_hostname: hostnamectl failed")
+        return {'success': False, 'code': 'device.hostnameSetFailed',
+                'message': _t('device.hostnameSetFailed', _lang())}
+    _set_etc_hosts_hostname(name)
+    try:
+        # So the new <name>.local is announced immediately, without waiting
+        # for a reboot — avahi-daemon doesn't watch /etc/hostname on its own.
+        _run(['systemctl', 'restart', 'avahi-daemon'], timeout=15)
+    except Exception:
+        log.exception("_apply_hostname: avahi restart failed")
+    try:
+        # Lyrion Music Server bundles its OWN mDNS/Bonjour responder and reads
+        # the hostname once at startup — restarting avahi-daemon above does
+        # NOT make it re-announce, so without this it keeps advertising (and
+        # answering for) the OLD <name>.local indefinitely, right alongside
+        # the new one now served by avahi. Only bounce it if it's already
+        # running: never turn on a local Lyrion instance the user has off
+        # (e.g. this box follows an external server elsewhere on the LAN).
+        if _run(['systemctl', 'is-active', '--quiet', 'lyrionmusicserver'], timeout=10).returncode == 0:
+            _run(['systemctl', 'restart', 'lyrionmusicserver'], timeout=30)
+    except Exception:
+        log.exception("_apply_hostname: lyrionmusicserver restart failed")
+    return {'success': True, 'name': name}
+
+
+def set_device_name(name):
+    if not _valid_device_name(name):
+        return {'success': False, 'code': 'device.invalidName',
+                'message': _t('device.invalidName', _lang())}
+    result = _apply_hostname(name)
+    if not result.get('success'):
+        return result
+    # Keep the LMS/Bluetooth-facing name in sync too. _HOSTNAME_RE's charset
+    # is a subset of _PLAYER_NAME_RE's, so this always validates.
+    set_player_name(name)
+    return {'success': True, 'name': name, 'message': _t('device.nameSet', _lang(), name=name)}
 
 # ── LAN discovery of other Lyrion/LMS servers ──────────────────────
 # Native Slim/Squeezebox discovery protocol (UDP 3483): broadcast a single
@@ -707,17 +1224,27 @@ def _ssh_available():
 
 def _install_openssh():
     """Install the openssh-server package (the appliance image may not ship it).
-    Returns True if the SSH unit is present afterwards."""
+    Returns (available, detail) — detail is stderr from whichever apt-get step
+    failed, or '' on success, so the caller can surface something more useful
+    than a flat "failed" to the UI."""
     try:
         # Refresh the index first; a long-running appliance may have a stale one.
-        subprocess.run(['sudo', 'apt-get', 'update'],
+        r_update = subprocess.run(['sudo', 'apt-get', 'update'],
                       capture_output=True, text=True, timeout=120)
-        subprocess.run(['sudo', 'apt-get', 'install', '-y', 'openssh-server'],
+        if r_update.returncode != 0:
+            log.error("apt-get update failed (rc=%s): %s", r_update.returncode,
+                      (r_update.stderr or '').strip())
+        r_install = subprocess.run(['sudo', 'apt-get', 'install', '-y', 'openssh-server'],
                       capture_output=True, text=True, timeout=180)
+        if r_install.returncode != 0:
+            log.error("apt-get install openssh-server failed (rc=%s): %s",
+                      r_install.returncode, (r_install.stderr or '').strip())
+            if not _ssh_available():
+                return False, (r_install.stderr or '').strip()
     except Exception:
         log.exception("openssh-server install failed")
-        return False
-    return _ssh_available()
+        return False, ''
+    return _ssh_available(), ''
 
 SSH_NO_ROOT_LOGIN_DROPIN = '/etc/ssh/sshd_config.d/99-hifi-no-root-login.conf'
 SSH_NO_ROOT_LOGIN_CONTENT = ("# Managed by HiFi Player — do not edit by hand (overwritten on update).\n"
@@ -762,34 +1289,55 @@ def get_ssh_status():
     except Exception:
         log.exception("get_ssh_status failed")
         return {'available': False, 'enabled': False, 'active': False,
-                'error': 'Stato SSH non disponibile'}
+                'code': 'ssh.statusUnavailable', 'error': 'SSH status unavailable.'}
 
 def set_ssh(enable):
     """Enable+start or disable+stop the SSH server (persists across reboots).
     When enabling on an image that doesn't ship openssh-server, install it
     first so the toggle works out of the box."""
     if enable and not _ssh_available():
-        if not _install_openssh():
+        installed, detail = _install_openssh()
+        if not installed:
+            msg = _t('ssh.installFailed', _lang())
             return {'success': False, 'available': False, 'enabled': False,
-                    'active': False, 'message': 'Installazione di openssh-server fallita'}
+                    'active': False, 'code': 'ssh.installFailed',
+                    'message': f'{msg}: {detail}' if detail else msg}
     if enable:
         # Written before the unit (re)starts, so root-login is blocked from
         # sshd's very first start.
         _harden_ssh_no_root_login()
+        # Guarantee host keys exist before the first start. openssh-server
+        # ships in the base image (disabled, not absent — see
+        # 0400-enable-services.hook.chroot), but that install happens inside
+        # the live-build chroot under policy-rc.d, which can leave host-key
+        # generation incomplete depending on exactly when/how the postinst
+        # ran at build time. `ssh-keygen -A` only fills in whatever's
+        # missing and is a no-op if every key type is already present — the
+        # single most common cause of systemd reporting "control process
+        # exited with error code" for sshd is starting with no host keys at
+        # all, so this is cheap insurance regardless of the exact reason.
+        try:
+            subprocess.run(['sudo', 'ssh-keygen', '-A'], capture_output=True, text=True, timeout=15)
+        except Exception:
+            log.exception("ssh-keygen -A failed")
     unit = _ssh_unit()
     action = 'enable' if enable else 'disable'
     try:
         r = subprocess.run(['sudo', 'systemctl', action, '--now', unit],
                           capture_output=True, text=True, timeout=30)
         if r.returncode != 0:
-            log.error("set_ssh %s failed: %s", action, (r.stderr or '').strip())
+            detail = (r.stderr or '').strip()
+            log.error("set_ssh %s failed: %s", action, detail)
             status = get_ssh_status()
             status['success'] = False
-            status['message'] = 'Operazione SSH fallita'
+            status['code'] = 'ssh.toggleFailed'
+            msg = _t('ssh.toggleFailed', _lang())
+            status['message'] = f'{msg}: {detail}' if detail else msg
             return status
     except Exception:
         log.exception("set_ssh failed")
-        return {'success': False, 'message': 'Operazione SSH fallita'}
+        return {'success': False, 'code': 'ssh.toggleFailed',
+                'message': _t('ssh.toggleFailed', _lang())}
     if enable:
         # If sshd was already active (e.g. re-toggling on without an
         # intervening stop), `enable --now` above doesn't restart it — reload
@@ -802,16 +1350,545 @@ def set_ssh(enable):
             log.exception("sshd reload after hardening failed")
     status = get_ssh_status()
     status['success'] = True
-    status['message'] = ("SSH abilitato. Cambia subito la password predefinita dell'utente \"hifi\" "
-                          "(via terminale: passwd hifi)." if enable else 'SSH disabilitato')
+    # The UI translates by `code`; `message` is a language-appropriate fallback
+    # for older clients (it used to be hardcoded Italian regardless of locale).
+    status['code'] = 'ssh.enabled' if enable else 'ssh.disabled'
+    status['message'] = _t(status['code'], _lang())
+    # Tell the caller whether a login even exists, so the panel can prompt for
+    # one instead of repeating the old "change the default hifi password" advice.
+    status['account'] = get_shell_account()
     return status
 
 # ──────────────────────────────────────────────────────────────────
-#  Mouse pointer (cursor) control — the appliance is built for a
-#  touchscreen, so the X cursor is auto-hidden by unclutter. This lets a
-#  user WITHOUT a touchscreen turn the on-screen pointer on from Settings.
+#  Shell (SSH/console) account.
+#
+#  The appliance used to ship a single kiosk user with the documented
+#  default password 'hifi' and no sudo, which made SSH both insecure and
+#  useless (you had to `su root`, whose password was also documented).
+#  Instead, the admin account the owner creates in the provisioning
+#  wizard is mirrored into a real Linux user with full sudo — a
+#  per-device credential, nothing known shipped in the image.
+#
+#  The plaintext password only exists at account creation and password
+#  change, so webui_server.py calls in at exactly those two moments;
+#  nothing extra is persisted here beyond the account *name*, which the
+#  factory reset needs in order to remove it again.
+# ──────────────────────────────────────────────────────────────────
+SHELL_ACCOUNT_FILE = '/etc/hifi-player/shell-account'
+SHELL_ACCOUNT_RE = re.compile(r'^[a-z_][a-z0-9_-]{2,31}$')
+# Never let the web admin take over an account that already means something.
+SHELL_ACCOUNT_RESERVED = {
+    'root', 'hifi', 'support', 'hifimusic', 'daemon', 'bin', 'sys', 'sync',
+    'games', 'man', 'lp', 'mail', 'news', 'uucp', 'proxy', 'www-data',
+    'backup', 'list', 'irc', 'nobody', 'systemd-network', 'messagebus',
+    'sshd', 'lightdm', 'squeezelite', 'admin',
+}
+KIOSK_USER = 'hifi'
+
+def _user_exists(name):
+    try:
+        subprocess.run(['id', '-u', name], capture_output=True, timeout=10, check=True)
+        return True
+    except Exception:
+        return False
+
+def _user_in_group(name, group):
+    try:
+        r = subprocess.run(['id', '-nG', name], capture_output=True, text=True, timeout=10)
+        return group in (r.stdout or '').split()
+    except Exception:
+        return False
+
+def _kiosk_password_disabled():
+    """True when the kiosk user has no usable password (`passwd -S` reports L
+    for locked or NP for none). Best-effort: unknown ⇒ report False."""
+    try:
+        r = subprocess.run(['passwd', '-S', KIOSK_USER],
+                           capture_output=True, text=True, timeout=10)
+        parts = (r.stdout or '').split()
+        return len(parts) > 1 and parts[1] in ('L', 'NP')
+    except Exception:
+        return False
+
+def get_shell_account():
+    """Report the shell login, if any. Falls back to scanning for a non-system
+    sudo user so a device stays correct even if the marker file is lost (e.g.
+    a system-channel rollback)."""
+    name = ''
+    try:
+        with open(SHELL_ACCOUNT_FILE) as f:
+            name = f.read().strip()
+    except Exception:
+        pass
+    if name and _user_exists(name):
+        return {'exists': True, 'username': name,
+                'kiosk_password_disabled': _kiosk_password_disabled()}
+    # No marker (or it points at a deleted user) — look for one ourselves.
+    try:
+        r = subprocess.run(['getent', 'group', 'sudo'],
+                           capture_output=True, text=True, timeout=10)
+        members = (r.stdout or '').strip().split(':')[-1]
+        for m in [x.strip() for x in members.split(',') if x.strip()]:
+            if m not in SHELL_ACCOUNT_RESERVED:
+                return {'exists': True, 'username': m,
+                        'kiosk_password_disabled': _kiosk_password_disabled()}
+    except Exception:
+        log.exception("shell account lookup failed")
+    return {'exists': False, 'username': '',
+            'kiosk_password_disabled': _kiosk_password_disabled()}
+
+def _disable_kiosk_password():
+    """Retire the documented 'hifi'/'hifi' default once a real login exists.
+    `usermod -p '*'` leaves no hash at all, unlike `passwd -l`, which only
+    prefixes '!' to the (trivially guessed) original. The kiosk is unaffected:
+    LightDM autologin authenticates via the autologin/nopasswdlogin groups, and
+    every privileged call goes through the NOPASSWD rules in sudoers.d/hifi."""
+    if not _user_exists(KIOSK_USER) or _kiosk_password_disabled():
+        return
+    try:
+        subprocess.run(['usermod', '-p', '*', KIOSK_USER],
+                       capture_output=True, text=True, timeout=15, check=True)
+        log.info("kiosk user password disabled (shell account present)")
+    except Exception:
+        log.exception("could not disable kiosk user password")
+
+def set_shell_account(username, password):
+    """Create (or update the password of) the Linux login used for SSH and the
+    console. Full sudo, via 'sudo' group membership — sudoers.d/hifi stays as
+    tight as it is, because it serves the kiosk user, not this one."""
+    username = (username or '').strip().lower()
+    password = password or ''
+    if not SHELL_ACCOUNT_RE.match(username):
+        return {'success': False, 'code': 'shell.badUsername',
+                'message': _t('shell.badUsername', _lang())}
+    if username in SHELL_ACCOUNT_RESERVED:
+        return {'success': False, 'code': 'shell.reservedUsername',
+                'message': _t('shell.reservedUsername', _lang(), username=username)}
+    if len(password) < 8:
+        return {'success': False, 'code': 'shell.shortPassword',
+                'message': _t('shell.shortPassword', _lang())}
+    # chpasswd reads "user:password" lines, so either character would let a
+    # crafted password rewrite a different account's entry.
+    if '\n' in password or ':' in password:
+        return {'success': False, 'code': 'shell.badPassword',
+                'message': _t('shell.badPassword', _lang())}
+
+    existed = _user_exists(username)
+    try:
+        if not existed:
+            subprocess.run(['useradd', '-m', '-s', '/bin/bash', '-G', 'sudo', username],
+                           capture_output=True, text=True, timeout=30, check=True)
+        elif not _user_in_group(username, 'sudo'):
+            subprocess.run(['usermod', '-aG', 'sudo', username],
+                           capture_output=True, text=True, timeout=20, check=True)
+        # Read the journal without needing sudo for it.
+        subprocess.run(['usermod', '-aG', 'adm,systemd-journal', username],
+                       capture_output=True, text=True, timeout=20)
+        # Password on stdin — never on the command line, where it would be
+        # visible in /proc to every local process.
+        subprocess.run(['chpasswd'], input=f'{username}:{password}\n', text=True,
+                       capture_output=True, timeout=30, check=True)
+    except subprocess.CalledProcessError as e:
+        log.error("shell account provisioning failed: %s", (e.stderr or '').strip())
+        return {'success': False, 'code': 'shell.createFailed',
+                'message': _t('shell.createFailed', _lang())}
+    except Exception:
+        log.exception("shell account provisioning failed")
+        return {'success': False, 'code': 'shell.createFailed',
+                'message': _t('shell.createFailed', _lang())}
+
+    # Only now, with a verified working login in place, retire the old default.
+    if _user_exists(username) and _user_in_group(username, 'sudo'):
+        try:
+            os.makedirs(os.path.dirname(SHELL_ACCOUNT_FILE), exist_ok=True)
+            tmp = SHELL_ACCOUNT_FILE + '.tmp'
+            with open(tmp, 'w') as f:
+                f.write(username + '\n')
+            os.chmod(tmp, 0o644)
+            os.replace(tmp, SHELL_ACCOUNT_FILE)
+        except Exception:
+            log.exception("could not record shell account name")
+        _disable_kiosk_password()
+
+    out = get_shell_account()
+    out['success'] = True
+    out['code'] = 'shell.updated' if existed else 'shell.created'
+    out['message'] = 'SSH login updated.' if existed else 'SSH login created.'
+    return out
+
+# ──────────────────────────────────────────────────────────────────
+#  Support bundle — a downloadable zip with logs + system diagnostics, so a
+#  remote issue can be triaged without asking the user for SSH access (which
+#  ships OFF by default, see the SSH section above). Read-only: never touches
+#  system state. Loopback-only like every other route here; webui_server.py
+#  gates it behind an authenticated admin session before proxying.
+# ──────────────────────────────────────────────────────────────────
+SUPPORT_LOG_DIR = '/var/log/hifi'
+SUPPORT_JOURNAL_UNITS = [
+    'hifi-api', 'hifi-webui', 'hifi-sources', 'hifi-vumeter', 'hifi-firstboot',
+    'hifi-quiesce-audio-shutdown', 'squeezelite', 'lyrionmusicserver',
+    'bluetooth', 'NetworkManager',
+]
+# Config worth including — never secrets/keys. Mirrors the allow-list spirit of
+# sources_server.py's BACKUP_FILES, but deliberately excludes everything under
+# /etc/hifi-player (webui.db, TLS key, OTA pubkey/signing material) and
+# /etc/NetworkManager/system-connections (plaintext Wi-Fi PSKs).
+SUPPORT_CONFIG_FILES = [
+    '/etc/hifi-sources.json',
+    '/etc/hifi-player/display-mode',
+    '/etc/hifi-player/ui-resolution',
+    '/etc/hifi-player/ui-refresh',
+    '/etc/hifi-player/ota-channel',
+    '/etc/hifi-player/SYSTEM_VERSION',
+    '/etc/hifi-player/OS_VERSION',
+]
+
+
+def _support_journal_dump(unit, since='7 days ago'):
+    """Bounded window + line cap per unit — a device with months of uptime (or
+    a degraded journald) must never make the whole bundle stall: with only
+    --since, journalctl has to scan the entire matching range before
+    returning; -n also lets it seek from the end and stop early once it has
+    enough lines, which is what actually keeps this fast in practice."""
+    try:
+        r = subprocess.run(['journalctl', '-u', unit, '--since', since,
+                            '-n', '2000', '-o', 'short-iso', '--no-pager'],
+                           capture_output=True, text=True, timeout=12)
+        return r.stdout or ''
+    except Exception as e:
+        return f'(journalctl fallito: {e})\n'
+
+
+def _support_services_snapshot():
+    lines = ['== systemctl list-units --failed ==']
+    try:
+        r = subprocess.run(['systemctl', 'list-units', '--failed', '--no-pager'],
+                           capture_output=True, text=True, timeout=15)
+        lines.append(r.stdout or '')
+    except Exception as e:
+        lines.append(f'(list-units --failed fallito: {e})')
+    lines.append('== stato unit hifi ==')
+    for unit in SUPPORT_JOURNAL_UNITS:
+        try:
+            en = subprocess.run(['systemctl', 'is-enabled', unit],
+                                capture_output=True, text=True, timeout=10)
+            ac = subprocess.run(['systemctl', 'is-active', unit],
+                                capture_output=True, text=True, timeout=10)
+            lines.append(f'{unit}: enabled={en.stdout.strip() or "?"} active={ac.stdout.strip() or "?"}')
+        except Exception as e:
+            lines.append(f'{unit}: errore ({e})')
+    return '\n'.join(lines) + '\n'
+
+
+def _support_bundle_build():
+    """Build the support zip in memory. Every section is best-effort: one
+    failing piece (e.g. journalctl unavailable) must never abort the rest."""
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, 'w', zipfile.ZIP_DEFLATED) as z:
+        # logs/ — the rotated files every daemon now writes (see hifi_logging.py)
+        try:
+            if os.path.isdir(SUPPORT_LOG_DIR):
+                for fname in sorted(os.listdir(SUPPORT_LOG_DIR)):
+                    fpath = os.path.join(SUPPORT_LOG_DIR, fname)
+                    if os.path.isfile(fpath):
+                        z.write(fpath, arcname=f'logs/{fname}')
+        except Exception:
+            log.exception("support bundle: logs/ collection failed")
+
+        for unit in SUPPORT_JOURNAL_UNITS:
+            z.writestr(f'journal/{unit}.log', _support_journal_dump(unit))
+
+        z.writestr('system_info.json', json.dumps(get_system_info(), indent=2))
+        z.writestr('services.txt', _support_services_snapshot())
+
+        for fpath in SUPPORT_CONFIG_FILES:
+            try:
+                if os.path.isfile(fpath):
+                    z.write(fpath, arcname='config' + fpath)
+            except Exception:
+                log.exception("support bundle: config file %s failed", fpath)
+
+        try:
+            r = subprocess.run(['dmesg', '--ctime'], capture_output=True, text=True, timeout=15)
+            tail = '\n'.join((r.stdout or '').splitlines()[-500:])
+            z.writestr('dmesg_tail.txt', tail)
+        except Exception as e:
+            z.writestr('dmesg_tail.txt', f'(dmesg fallito: {e})\n')
+
+    return buf.getvalue()
+
+# ──────────────────────────────────────────────────────────────────
+#  HAR network capture (Debug section, Settings.jsx) — captured by the
+#  Electron main process over Chrome DevTools Protocol (main/main.js's
+#  har-capture-start/stop IPC handlers, kiosk-only: only the on-device app
+#  can drive its own webContents.debugger). This file's job is just to list/
+#  serve/delete whatever .har files already landed on disk, for the web
+#  admin to download — same loopback-only trust model as /support_bundle.
+# ──────────────────────────────────────────────────────────────────
+# Must match main/main.js's HAR_CAPTURE_DIR exactly (app.getPath('logs') +
+# '/har-captures', which resolves to this on the appliance's --user-data-dir).
+HAR_CAPTURE_DIR = '/home/hifi/.config/hifi-media-player/logs/har-captures'
+# Matches exactly what main.js generates (`capture-` + toISOString() with
+# ':'/'.' replaced by '-', which leaves the trailing 'Z' + '.har') -- anchored
+# both ends, so this also doubles as the path-traversal guard for the
+# download/delete routes below (no '/', no '..').
+_HAR_FILENAME_RE = re.compile(r'^capture-[0-9TZ-]+\.har$')
+
+def _har_captures_list():
+    out = []
+    try:
+        fnames = os.listdir(HAR_CAPTURE_DIR)
+    except OSError:
+        return out
+    for fname in sorted(fnames, reverse=True):
+        if not _HAR_FILENAME_RE.match(fname):
+            continue
+        try:
+            st = os.stat(os.path.join(HAR_CAPTURE_DIR, fname))
+        except OSError:
+            continue
+        out.append({'name': fname, 'size': st.st_size, 'mtime': int(st.st_mtime)})
+    return out
+
+# Same idea as HAR_CAPTURE_DIR above, for main.js's perf-capture-* IPC
+# handlers (Settings.jsx Debug section) — long-running DOM/JS/per-process
+# metric samples, one JSON line per minute, meant to chase leaks that only
+# show up after hours of uptime. Must match main/main.js's PERF_CAPTURE_DIR.
+PERF_CAPTURE_DIR = '/home/hifi/.config/hifi-media-player/logs/perf-captures'
+# Matches `perf-` + toISOString() with ':'/'.' replaced by '-' + '.jsonl',
+# same anchoring/path-traversal-guard role as _HAR_FILENAME_RE above.
+_PERF_FILENAME_RE = re.compile(r'^perf-[0-9TZ-]+\.jsonl$')
+
+def _perf_captures_list():
+    out = []
+    try:
+        fnames = os.listdir(PERF_CAPTURE_DIR)
+    except OSError:
+        return out
+    for fname in sorted(fnames, reverse=True):
+        if not _PERF_FILENAME_RE.match(fname):
+            continue
+        try:
+            st = os.stat(os.path.join(PERF_CAPTURE_DIR, fname))
+        except OSError:
+            continue
+        out.append({'name': fname, 'size': st.st_size, 'mtime': int(st.st_mtime)})
+    return out
+
+# ──────────────────────────────────────────────────────────────────
+#  Tailscale — join the OWNER's OWN existing tailnet (their own Tailscale
+#  account), so the appliance and all of its ports (web UI, Lyrion, SMB,
+#  etc.) become reachable from anywhere that tailnet reaches — e.g. to get
+#  at the music library while away from home — without opening anything to
+#  the public internet. This talks only to Tailscale's own service. Login
+#  uses plain `tailscale up` (interactive): it prints a one-time
+#  https://login.tailscale.com/... URL that the owner opens on ANY device
+#  (phone, laptop...) to approve this node from their own account — no auth
+#  key to generate/paste, no vendor infrastructure or approval step.
+# ──────────────────────────────────────────────────────────────────
+def _tailscale_available():
+    return bool(shutil.which('tailscale'))
+
+
+def install_tailscale():
+    """Runtime fallback for devices that missed the build-time hook / OTA
+    migration that normally installs Tailscale (0410-tailscale.hook.chroot,
+    distro/os-update/apply.d/0029-remote-support.sh) — same official
+    installer both of those use, which sets up Tailscale's own apt repo +
+    signing key before installing the package via apt (a plain
+    `apt-get install tailscale` fails on a stock Debian repo list)."""
+    if _tailscale_available():
+        return {'success': True, 'available': True, 'code': 'tailscale.alreadyInstalled',
+                'message': _t('tailscale.alreadyInstalled', _lang())}
+    try:
+        r = subprocess.run(
+            ['sh', '-c', 'curl -fsSL https://tailscale.com/install.sh | sh'],
+            capture_output=True, text=True, timeout=180)
+        if r.returncode != 0 or not _tailscale_available():
+            log.error("tailscale install failed: %s", (r.stderr or '').strip())
+            return {'success': False, 'available': False, 'code': 'tailscale.installFailedNetwork',
+                    'message': _t('tailscale.installFailedNetwork', _lang())}
+    except Exception:
+        log.exception("tailscale install failed")
+        return {'success': False, 'available': False, 'code': 'tailscale.installFailed',
+                'message': _t('tailscale.installFailed', _lang())}
+    return {'success': True, 'available': True, 'code': 'tailscale.installed',
+            'message': _t('tailscale.installed', _lang())}
+
+
+def _device_label():
+    """Human-recognizable, per-device Tailscale hostname: every appliance
+    ships with the SAME hostname (preseed.cfg fixes it to 'hifiplayer'), so
+    socket.gethostname() alone would collide across a tailnet with more than
+    one unit. Combine the customer-chosen player name (may also collide — it
+    defaults to 'OsmiumSound') with a short, genuinely unique-per-install
+    suffix from /etc/machine-id."""
+    try:
+        with open('/etc/machine-id') as f:
+            machine_id = f.read().strip()
+    except Exception:
+        machine_id = ''
+    suffix = machine_id[-6:] if machine_id else socket.gethostname()
+    name = re.sub(r'[^a-z0-9-]+', '-', _current_player_name().lower()).strip('-') or 'device'
+    return f'{name}-{suffix}'
+
+
+_DERP_NEAREST_RE = re.compile(r'Nearest DERP:\s*(.+)')
+_DERP_LATENCY_LINE_RE = re.compile(r'-\s*(\w+):\s*([\d.]+)ms\s*\(([^)]+)\)')
+
+
+def _tailscale_netcheck():
+    """Best-effort nearest-DERP name + latency from `tailscale netcheck`'s
+    plain-text report -- there's no stable structured output for this
+    subcommand across tailscale versions, so this is a defensive text scrape:
+    any format mismatch just yields empty fields rather than failing, since
+    it's purely informational (Tailscale status card)."""
+    try:
+        r = subprocess.run(['tailscale', 'netcheck'], capture_output=True, text=True, timeout=10)
+        out = (r.stdout or '') + (r.stderr or '')
+        m = _DERP_NEAREST_RE.search(out)
+        nearest = m.group(1).strip() if m else ''
+        latency_ms = None
+        if nearest:
+            for line in out.splitlines():
+                lm = _DERP_LATENCY_LINE_RE.search(line)
+                if lm and lm.group(3).strip().lower() == nearest.lower():
+                    latency_ms = float(lm.group(2))
+                    break
+        return nearest, latency_ms
+    except Exception:
+        return '', None
+
+
+def get_tailscale_status():
+    if not _tailscale_available():
+        return {'available': False, 'connected': False}
+    try:
+        r = subprocess.run(['tailscale', 'status', '--json'],
+                           capture_output=True, text=True, timeout=10)
+        st = json.loads(r.stdout or '{}')
+        backend = st.get('BackendState', '')
+        connected = backend == 'Running'
+        self_node = st.get('Self') or {}
+        ips = self_node.get('TailscaleIPs') or []
+    except Exception:
+        log.exception("get_tailscale_status failed")
+        return {'available': True, 'connected': False, 'error': _t('tailscale.statusUnavailable', _lang())}
+    derp_region, derp_latency_ms = _tailscale_netcheck() if connected else ('', None)
+    return {'available': True, 'connected': connected, 'backend_state': backend,
+            'ip': ips[0] if ips else '', 'hostname': self_node.get('HostName') or '',
+            'derp_relay': self_node.get('Relay') or '', 'derp_region': derp_region,
+            'derp_latency_ms': derp_latency_ms}
+
+
+_TAILSCALE_URL_RE = re.compile(r'https://\S+')
+
+
+def set_tailscale(enable):
+    """Join (or leave) the owner's own tailnet. Joining runs plain
+    `tailscale up`, which — the first time, or after a full logout — prints a
+    one-time login URL and then blocks until the node is approved from that
+    URL (opened on any device, not necessarily this one) or a session-scoped
+    timeout tailscaled applies on its own; once authenticated, Tailscale
+    remembers it across reboots, so re-enabling later reconnects instantly
+    with no URL. We don't wait for that: read `up`'s output just long enough
+    to grab the URL (or notice it connected immediately with no URL needed)
+    and hand it back to the caller, leaving the process running in the
+    background — the frontend polls get_tailscale_status() to notice when
+    the owner finishes approving it elsewhere.
+    Leaving uses 'down' (disconnect, keep the node's identity) rather than
+    'logout' (which would deregister it), so a later toggle-on reconnects
+    without a fresh login."""
+    if not _tailscale_available():
+        return {'success': False, 'available': False, 'connected': False,
+                'code': 'tailscale.notInstalled', 'message': _t('tailscale.notInstalled', _lang())}
+    if enable:
+        cmd = ['sudo', 'tailscale', 'up', f'--hostname={_device_label()}']
+        try:
+            proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1)
+        except Exception:
+            log.exception("tailscale up failed to start")
+            return {'success': False, 'available': True, 'connected': False,
+                    'code': 'tailscale.enableFailed', 'message': _t('tailscale.enableFailed', _lang())}
+
+        lines = queue.Queue()
+
+        def _pump():
+            try:
+                for line in proc.stdout:
+                    lines.put(line)
+            except Exception:
+                pass
+
+        threading.Thread(target=_pump, daemon=True).start()
+
+        login_url = None
+        output = []
+        deadline = time.monotonic() + 15
+        while time.monotonic() < deadline:
+            try:
+                line = lines.get(timeout=max(0.1, deadline - time.monotonic()))
+            except queue.Empty:
+                break
+            output.append(line)
+            m = _TAILSCALE_URL_RE.search(line)
+            if m:
+                login_url = m.group(0).strip()
+                break
+            if proc.poll() is not None:
+                break
+
+        if login_url:
+            status = get_tailscale_status()
+            status['success'] = True
+            status['login_url'] = login_url
+            status['message'] = _t('tailscale.openLink', _lang())
+            return status
+
+        exit_code = proc.poll()
+        if exit_code == 0:
+            # Already authenticated (e.g. re-enabling after 'down') — no URL needed.
+            status = get_tailscale_status()
+            status['success'] = True
+            status['message'] = _t('tailscale.enabled', _lang())
+            return status
+        if exit_code not in (None, 0):
+            err = ''.join(output).strip()
+            log.error("tailscale up failed: %s", err)
+            return {'success': False, 'available': True, 'connected': False,
+                    'code': 'tailscale.enableFailed', 'message': _t('tailscale.enableFailed', _lang())}
+
+        # Still running with no URL yet (slow network) — leave it in the
+        # background, the frontend will keep polling status.
+        status = get_tailscale_status()
+        status['success'] = True
+        status['message'] = _t('tailscale.enabling', _lang())
+        return status
+
+    try:
+        subprocess.run(['sudo', 'tailscale', 'down'], capture_output=True, text=True, timeout=30)
+    except Exception:
+        log.exception("set_tailscale(disable) failed")
+        return {'success': False, 'code': 'tailscale.disableFailed',
+                'message': _t('tailscale.disableFailed', _lang())}
+    status = get_tailscale_status()
+    status['success'] = True
+    status['message'] = _t('tailscale.disabled', _lang())
+    return status
+
+# ──────────────────────────────────────────────────────────────────
+#  Mouse pointer (cursor) control — shown by default (the on-device
+#  first-boot QR/Wi-Fi setup wizard has a touch/mouse-driven manual-network
+#  fallback that needs a visible cursor). A touchscreen-only owner can turn
+#  it off from Settings, which starts unclutter to auto-hide it.
 #  The choice is persisted and re-applied at login by ~/.xsession; here we
 #  also apply it live so it takes effect without a reboot.
+#  On the Wayland kiosk session (labwc) unclutter is inert — it is an X11
+#  client and never sees the kiosk window. There the flag is read at login by
+#  /usr/local/bin/hifi-kiosk-wayland, which hides the compositor's own pointer
+#  with a transparent cursor theme; inside the window it is the UI's
+#  `hifi-hide-cursor` class that applies live, so this toggle still takes
+#  effect immediately where the pointer is actually visible.
 #  NOTE: the cursor only ever appears once the X server is no longer started
 #  with `-nocursor` (removed at build time + by OS-OTA migration); on an
 #  un-migrated device a reboot is needed after that update for it to show.
@@ -823,11 +1900,14 @@ def _has_unclutter():
 
 def get_pointer_status():
     """Return { available, enabled }. 'enabled' = pointer shown (cursor not
-    auto-hidden). Defaults to disabled (hidden) — the touchscreen default."""
-    enabled = False
+    auto-hidden). Defaults to enabled (shown) on a unit that has never set a
+    preference — the on-device first-boot QR/Wi-Fi setup wizard needs the
+    pointer visible to be usable; a touchscreen owner can still switch it off
+    from Settings."""
+    enabled = True
     try:
         with open(POINTER_FILE) as f:
-            enabled = f.read().strip() == '1'
+            enabled = f.read().strip() != '0'
     except Exception:
         pass
     return {'available': _has_unclutter(), 'enabled': enabled}
@@ -853,7 +1933,7 @@ def set_pointer(enable):
         log.exception("set_pointer: persist failed")
         return {'success': False, 'available': _has_unclutter(),
                 'enabled': get_pointer_status()['enabled'],
-                'message': 'Impossibile salvare la preferenza'}
+                'code': 'prefs.saveFailed', 'message': _t('prefs.saveFailed', _lang())}
 
     # Apply live to the running session (best-effort; the persisted flag covers
     # the next login regardless of whether this succeeds).
@@ -870,7 +1950,824 @@ def set_pointer(enable):
         log.exception("set_pointer: live apply failed")
 
     return {'success': True, 'available': _has_unclutter(), 'enabled': bool(enable),
-            'message': ('Puntatore mouse attivato' if enable else 'Puntatore mouse disattivato')}
+            'message': _t('pointer.shown' if enable else 'pointer.hidden', _lang())}
+
+# ──────────────────────────────────────────────────────────────────
+#  Display mode — GUI touchscreen kiosk vs headless. The appliance ships
+#  GUI-first (graphical.target -> LightDM -> Electron kiosk). Headless is a
+#  real persisted mode: multi-user.target, no X, controlled remotely
+#  (companion app / Lyrion :9000 / sources :8080). All hifi-* daemons +
+#  squeezelite + Lyrion run in BOTH modes, so switching only adds/removes the
+#  on-screen GUI stack — nothing about playback or control changes.
+#
+#  The actual switch is done by /usr/local/sbin/hifi-display-mode.sh (flips the
+#  default systemd target; --live also isolates the target now, after a short
+#  delay so this HTTP response is flushed before the GUI that issued it dies).
+#  api_server runs as root, so no sudoers entry is needed.
+#
+#  Persisted state ABSENT means gui — the fleet-safety default (an existing
+#  configured unit must never drift into headless on an OS update).
+# ──────────────────────────────────────────────────────────────────
+DISPLAY_MODE_FILE = '/etc/hifi-player/display-mode'
+DISPLAY_MODE_SCRIPT = '/usr/local/sbin/hifi-display-mode.sh'
+DISPLAY_MODES = ('gui', 'headless')
+# Update states that mean "an OTA is actively working"; switching the systemd
+# target mid-update could interrupt it or collide with an update reboot, so we
+# refuse the switch while any of these is in progress.
+_UPDATE_BUSY_STATES = ('downloading', 'verifying', 'applying', 'installing', 'running', 'rebooting')
+
+def _update_in_progress():
+    # A sequenced plan is authoritative: it is persistent, so unlike the /run
+    # status files it still reads "running"/'staged_pending_reboot'/'applying'
+    # across both reboots of the isolated update flow — which is exactly when
+    # a display-mode switch or a factory reset would do the most damage (the
+    # latter two states can only ever be observed in the brief window right
+    # before/after the update-mode reboots, since hifi-api itself isn't
+    # running while the apply half is actually working).
+    try:
+        if update_plan_status().get('state') in ('running', 'staged_pending_reboot', 'applying'):
+            return True
+    except Exception:
+        pass
+    for status_fn in (os_update_status, system_update_status):
+        try:
+            if (status_fn() or {}).get('state') in _UPDATE_BUSY_STATES:
+                return True
+        except Exception:
+            pass
+    return False
+
+def get_display_mode():
+    """Return { mode }. 'gui' (default when the file is absent) or 'headless'."""
+    mode = 'gui'
+    try:
+        with open(DISPLAY_MODE_FILE) as f:
+            if f.read().strip() == 'headless':
+                mode = 'headless'
+    except Exception:
+        pass
+    return {'mode': mode}
+
+def set_display_mode(mode):
+    """Switch GUI <-> headless, live + persisted. Refused while an OTA is
+    applying (a target switch mid-update could interrupt it)."""
+    if mode not in DISPLAY_MODES:
+        return {'success': False, 'mode': get_display_mode()['mode'],
+                'code': 'displayMode.invalid', 'message': _t('displayMode.invalid', _lang())}
+    if _update_in_progress():
+        return {'success': False, 'mode': get_display_mode()['mode'],
+                'code': 'update.inProgressRetry', 'message': _t('update.inProgressRetry', _lang())}
+    try:
+        r = subprocess.run([DISPLAY_MODE_SCRIPT, 'set', mode, '--live'],
+                           capture_output=True, text=True, timeout=30)
+        if r.returncode != 0:
+            log.error("set_display_mode failed: %s", (r.stderr or '').strip())
+            return {'success': False, 'mode': get_display_mode()['mode'],
+                    'code': 'displayMode.changeFailed', 'message': _t('displayMode.changeFailed', _lang())}
+    except Exception:
+        log.exception("set_display_mode failed")
+        return {'success': False, 'mode': get_display_mode()['mode'],
+                'code': 'displayMode.changeFailed', 'message': _t('displayMode.changeFailed', _lang())}
+    # In gui mode the switch is instant (LightDM already up); in headless the X
+    # session is torn down a moment after this response is sent.
+    msg = _t('displayMode.guiEnabled' if mode == 'gui' else 'displayMode.headlessEnabled', _lang())
+    return {'success': True, 'mode': mode, 'message': msg}
+
+# ──────────────────────────────────────────────────────────────────
+#  Player enabled/disabled — whether this device plays audio at all
+#  (squeezelite), orthogonal to display mode above (which only controls the
+#  on-screen kiosk). A "server only" unit keeps Lyrion + every hifi-* daemon
+#  running but never launches squeezelite here — e.g. a box in a closet whose
+#  only job is serving satellite players elsewhere.
+#
+#  Persisted state ABSENT means enabled — same fleet-safety default as
+#  display mode (an existing configured unit must never drift into "no
+#  player" on an OS update).
+# ──────────────────────────────────────────────────────────────────
+PLAYER_ENABLED_FILE = '/etc/hifi-player/player-enabled'
+
+def get_player_enabled():
+    """Return { enabled }. True (default when the file is absent) or False."""
+    enabled = True
+    try:
+        with open(PLAYER_ENABLED_FILE) as f:
+            if f.read().strip() == '0':
+                enabled = False
+    except Exception:
+        pass
+    return {'enabled': enabled}
+
+def set_player_enabled(enabled):
+    """Enable/disable squeezelite, live + persisted. Refused while an OTA is
+    applying, same guard as display mode (set_display_mode above)."""
+    if _update_in_progress():
+        return {'success': False, 'enabled': get_player_enabled()['enabled'],
+                'code': 'update.inProgressRetry', 'message': _t('update.inProgressRetry', _lang())}
+    action = 'enable' if enabled else 'disable'
+    try:
+        r = subprocess.run(['systemctl', action, '--now', 'squeezelite'],
+                           capture_output=True, text=True, timeout=30)
+        if r.returncode != 0:
+            log.error("set_player_enabled %s failed: %s", action, (r.stderr or '').strip())
+            return {'success': False, 'enabled': get_player_enabled()['enabled'],
+                    'code': 'player.toggleFailed', 'message': _t('player.toggleFailed', _lang())}
+    except Exception:
+        log.exception("set_player_enabled failed")
+        return {'success': False, 'enabled': get_player_enabled()['enabled'],
+                'code': 'player.toggleFailed', 'message': _t('player.toggleFailed', _lang())}
+    try:
+        os.makedirs(os.path.dirname(PLAYER_ENABLED_FILE), exist_ok=True)
+        with open(PLAYER_ENABLED_FILE, 'w') as f:
+            f.write('1' if enabled else '0')
+    except Exception:
+        log.exception("set_player_enabled: failed to persist state")
+    msg = _t('player.enabled' if enabled else 'player.disabled', _lang())
+    return {'success': True, 'enabled': enabled, 'message': msg}
+
+def _restart_squeezelite_if_enabled(timeout=30):
+    """`systemctl restart` starts a unit regardless of its enablement, so a
+    plain restart after an audio/DSP config change would silently bring
+    squeezelite back up even while the user has it off (server-only mode).
+    Skip the restart entirely while disabled; the config change is still
+    persisted to disk and takes effect next time the player is re-enabled."""
+    if not get_player_enabled()['enabled']:
+        return subprocess.CompletedProcess(args=['systemctl', 'restart', 'squeezelite'], returncode=0)
+    return _run(['systemctl', 'restart', 'squeezelite'], timeout=timeout)
+
+# ──────────────────────────────────────────────────────────────────
+#  UI render resolution. The interface is a fixed 1024x600 canvas CSS-zoomed
+#  to the panel, and the Electron window is created as large as the panel —
+#  so on a 1080p/4K screen Chromium really rasterizes 2..8 Mpixel per repaint
+#  (every blur radius scales with the zoom too), pinning weak kiosk iGPUs near
+#  100%. Nothing inside Chromium reduces that pixel count; the only real lever
+#  is below it, in the X framebuffer.
+#
+#  /usr/local/sbin/hifi-ui-resolution.sh shrinks that pixel count. It prefers a
+#  real smaller video mode with the panel's own aspect ratio (xrandr --mode), so
+#  the panel/TV scaler does the upscale and the GPU does nothing; only when the
+#  panel exposes no such mode under the cap (21:9, 16:10, and every 16:9 panel
+#  without a 1280x720 mode — 720p is a CEA mode, so TVs have it and PC monitors
+#  mostly don't) does it need a fallback, and the fallback differs per backend:
+#  on X11 it shrinks the framebuffer area with xrandr --scale-from, which costs
+#  a full-screen GPU rescale per frame inside Xorg (measured on Gemini Lake:
+#  1.80 W GPU with --scale-from vs 0.89 W on a real mode, same scene); on
+#  Wayland, where that transform does not exist, it takes the smallest real
+#  mode ABOVE the cap instead (1920x1200 -> 1280x800) — still free, still the
+#  panel's own scaler. api_server runs as root, so no sudoers entry is needed.
+#
+#  Persisted state ABSENT means "auto" — unlike display-mode, the default here
+#  is deliberately meant to reach the already-installed fleet: a unit that has
+#  never written the file is exactly the one suffering from this, and it will
+#  never open Settings.
+# ──────────────────────────────────────────────────────────────────
+UI_RESOLUTION_FILE = '/etc/hifi-player/ui-resolution'
+UI_RESOLUTION_SCRIPT = '/usr/local/sbin/hifi-ui-resolution.sh'
+UI_RESOLUTIONS = ('auto', '720', '1080', 'native')
+
+def get_ui_resolution():
+    """Return { mode }. One of UI_RESOLUTIONS; 'auto' when the file is absent
+    or holds anything unrecognised."""
+    mode = 'auto'
+    try:
+        with open(UI_RESOLUTION_FILE) as f:
+            val = f.read().strip()
+        if val in UI_RESOLUTIONS:
+            mode = val
+    except Exception:
+        pass
+    return {'mode': mode}
+
+def set_ui_resolution(mode):
+    """Persist the render resolution and restart the graphical session so it
+    takes effect. Refused while an OTA is applying — this tears the kiosk down
+    and back up, which must not race an update reboot."""
+    if mode not in UI_RESOLUTIONS:
+        return {'success': False, 'mode': get_ui_resolution()['mode'],
+                'code': 'uiResolution.invalid', 'message': _t('uiResolution.invalid', _lang())}
+    if _update_in_progress():
+        return {'success': False, 'mode': get_ui_resolution()['mode'],
+                'code': 'update.inProgressRetry', 'message': _t('update.inProgressRetry', _lang())}
+    if not os.path.exists(UI_RESOLUTION_SCRIPT):
+        return {'success': False, 'mode': get_ui_resolution()['mode'],
+                'code': 'uiResolution.unavailable', 'message': _t('uiResolution.unavailable', _lang())}
+    try:
+        r = subprocess.run([UI_RESOLUTION_SCRIPT, 'set', mode, '--live'],
+                           capture_output=True, text=True, timeout=30)
+        if r.returncode != 0:
+            log.error("set_ui_resolution failed: %s", (r.stderr or '').strip())
+            return {'success': False, 'mode': get_ui_resolution()['mode'],
+                    'code': 'uiResolution.changeFailed', 'message': _t('uiResolution.changeFailed', _lang())}
+    except Exception:
+        log.exception("set_ui_resolution failed")
+        return {'success': False, 'mode': get_ui_resolution()['mode'],
+                'code': 'uiResolution.changeFailed', 'message': _t('uiResolution.changeFailed', _lang())}
+    # The X session is restarted a moment after this response is flushed, so
+    # the kiosk UI issuing the request is about to disappear and come back.
+    return {'success': True, 'mode': mode,
+            'message': _t('uiResolution.updated', _lang())}
+
+# ──────────────────────────────────────────────────────────────────
+#  Panel refresh rate. Both X's own scale-blit (when ui-resolution is active)
+#  and Chromium's on-screen compositor are vblank-paced, so their GPU cost
+#  scales with refresh: halving it roughly halves both — measured on Gemini
+#  Lake, same content, ~79% -> ~49% render-engine busy going 49.98Hz ->
+#  29.99Hz. Unlike ui-resolution this never touches the framebuffer area
+#  (only the CRTC timing), so the Electron window — sized once at launch — is
+#  untouched and the switch applies live with no session restart.
+#
+#  Not every panel exposes a low-refresh alternative for its native mode
+#  (fixed-frequency embedded panels often have just one); 'supported'
+#  reflects that per-unit so the UI can hide the control instead of offering
+#  a toggle that would silently do nothing.
+#
+#  Persisted state ABSENT means "native" — opt-in, unlike ui-resolution: an
+#  existing unit must not change behaviour until someone explicitly picks
+#  "low" from Settings.
+# ──────────────────────────────────────────────────────────────────
+UI_REFRESH_FILE = '/etc/hifi-player/ui-refresh'
+UI_REFRESH_SCRIPT = '/usr/local/sbin/hifi-ui-refresh.sh'
+UI_REFRESHES = ('native', 'low')
+
+def get_ui_refresh():
+    """Return { mode, supported }. mode is one of UI_REFRESHES; 'native' when
+    the file is absent or holds anything unrecognised. supported reflects
+    whether the current panel/mode actually has a distinct low-refresh
+    alternative at all (probed live via the script; False if the script is
+    missing)."""
+    mode = 'native'
+    try:
+        with open(UI_REFRESH_FILE) as f:
+            val = f.read().strip()
+        if val in UI_REFRESHES:
+            mode = val
+    except Exception:
+        pass
+    supported = False
+    if os.path.exists(UI_REFRESH_SCRIPT):
+        try:
+            r = subprocess.run([UI_REFRESH_SCRIPT, 'supported'],
+                               capture_output=True, text=True, timeout=10)
+            supported = r.returncode == 0 and r.stdout.strip() == '1'
+        except Exception:
+            pass
+    return {'mode': mode, 'supported': supported}
+
+def set_ui_refresh(mode):
+    """Persist the refresh-rate preference and apply it live — no session
+    restart needed, see module comment above. Refused while an OTA is
+    applying, same guard as ui-resolution."""
+    if mode not in UI_REFRESHES:
+        return {'success': False, 'mode': get_ui_refresh()['mode'],
+                'code': 'uiRefresh.invalid', 'message': _t('uiRefresh.invalid', _lang())}
+    if _update_in_progress():
+        return {'success': False, 'mode': get_ui_refresh()['mode'],
+                'code': 'update.inProgressRetry', 'message': _t('update.inProgressRetry', _lang())}
+    if not os.path.exists(UI_REFRESH_SCRIPT):
+        return {'success': False, 'mode': get_ui_refresh()['mode'],
+                'code': 'uiRefresh.unavailable', 'message': _t('uiRefresh.unavailable', _lang())}
+    try:
+        r = subprocess.run([UI_REFRESH_SCRIPT, 'set', mode, '--live'],
+                           capture_output=True, text=True, timeout=30)
+        if r.returncode != 0:
+            log.error("set_ui_refresh failed: %s", (r.stderr or '').strip())
+            return {'success': False, 'mode': get_ui_refresh()['mode'],
+                    'code': 'uiRefresh.changeFailed', 'message': _t('uiRefresh.changeFailed', _lang())}
+    except Exception:
+        log.exception("set_ui_refresh failed")
+        return {'success': False, 'mode': get_ui_refresh()['mode'],
+                'code': 'uiRefresh.changeFailed', 'message': _t('uiRefresh.changeFailed', _lang())}
+    return {'success': True, 'mode': mode,
+            'message': _t('uiRefresh.updated', _lang())}
+
+# ──────────────────────────────────────────────────────────────────
+#  Kiosk restart. Both session launchers (distro/os-update/files/xsession on
+#  X11, kiosk-wayland-launch on Wayland) run Electron inside a `while true`
+#  loop, so killing the process is all it takes: it comes back ~3s later with
+#  whatever OS state changed underneath it. A headless unit has no such
+#  process and this is a harmless no-op there.
+# ──────────────────────────────────────────────────────────────────
+# `pkill -x` matches the kernel's `comm`, which is capped at 15 characters:
+# "hifi-media-player" is 17, so the obvious pattern matches NOTHING (procps
+# even warns about it) and every caller that used it was silently doing
+# nothing at all. Match the truncated name instead — `-f` is not an option
+# here, it would also match any shell or script with the app name on its
+# command line, including the OTA updater.
+KIOSK_COMM = 'hifi-media-play'  # 'hifi-media-player' truncated to comm's 15 chars
+
+def restart_kiosk_ui(delay=1.5):
+    """Kill the on-screen Electron kiosk; its session loop relaunches it.
+
+    Deferred onto a timer because the caller is usually serving a request that
+    the kiosk itself made (on-device Settings): killing it inline would tear
+    the browser down before Flask ever flushed the response, and the page would
+    come back up reporting the change as failed. Same reason
+    hifi-ui-resolution.sh delays its lightdm restart.
+    """
+    def _kill():
+        try:
+            subprocess.run(['pkill', '-x', KIOSK_COMM], capture_output=True, timeout=10)
+        except Exception:
+            log.exception("restart_kiosk_ui failed")
+    t = threading.Timer(delay, _kill)
+    t.daemon = True
+    t.start()
+
+# ──────────────────────────────────────────────────────────────────
+#  Timezone. The installer asks nothing about it (see distro/README.md) and
+#  the build defaults every fresh image to UTC (0400-enable-services.hook.chroot)
+#  — deterministic, but wrong for anyone who isn't in it, and units built from
+#  old/refurbished hardware can drift further still without a working RTC
+#  battery (systemd-timesyncd is now enabled by default to correct for that,
+#  but it can't fix which zone the clock is displayed in).
+#
+#  Two files carry the zone and they are NOT equivalent:
+#
+#    /etc/localtime  — the symlink into the zoneinfo tree that glibc, Chromium
+#                      and timedatectl itself actually resolve wall-clock time
+#                      against. This one is the truth.
+#    /etc/timezone   — a Debian-ism holding just the IANA name. systemd's
+#                      timedated does not maintain it upstream, so on a trixie
+#                      unit `timedatectl set-timezone` leaves it on whatever
+#                      the image shipped ("Etc/UTC"). It still matters here
+#                      because the backup profile captures it (hifi_backup.py).
+#
+#  Reading the name back from /etc/timezone was therefore how a zone that HAD
+#  been applied kept reporting UTC to every Settings page on the box. Read the
+#  symlink instead, and write both files on the way in so the two never drift.
+# ──────────────────────────────────────────────────────────────────
+ZONEINFO_DIR = '/usr/share/zoneinfo'
+LOCALTIME_LINK = '/etc/localtime'
+TIMEZONE_FILE = '/etc/timezone'
+
+def _zone_from_localtime():
+    """IANA name behind the /etc/localtime symlink, or None.
+
+    Read with readlink and normalised by hand rather than realpath()'d: the
+    zoneinfo tree is full of symlinks between equivalent zones (Etc/UTC → UTC,
+    Europe/Vatican → Europe/Rome), and following them would hand back a name
+    other than the one the user picked — which the Settings <select> would then
+    fail to match against its own option list.
+    """
+    try:
+        link = os.readlink(LOCALTIME_LINK)
+    except OSError:
+        return None  # missing, or a plain copy of the zone file
+    target = link if os.path.isabs(link) else os.path.join(os.path.dirname(LOCALTIME_LINK), link)
+    target = os.path.normpath(target)
+    prefix = ZONEINFO_DIR + os.sep
+    if not target.startswith(prefix):
+        return None
+    name = target[len(prefix):]
+    # /usr/share/zoneinfo/posix/<zone> is a second copy of the same tree; strip
+    # the prefix so the value matches what list_timezones() offers.
+    if name.startswith('posix/'):
+        name = name[len('posix/'):]
+    return name or None
+
+def get_timezone():
+    """Return { timezone }. 'UTC' if it can't be determined."""
+    tz = _zone_from_localtime()
+    if tz:
+        return {'timezone': tz}
+    # No usable symlink (an image that copied the zone file in place, say).
+    # The Debian name file is the only thing left to go on.
+    try:
+        with open(TIMEZONE_FILE) as f:
+            tz = f.read().strip()
+            if tz:
+                return {'timezone': tz}
+    except Exception:
+        pass
+    return {'timezone': 'UTC'}
+
+def list_timezones():
+    """All IANA zone names the installed tzdata knows about, e.g. 'Europe/Rome'."""
+    names = []
+    for dirpath, dirnames, filenames in os.walk(ZONEINFO_DIR):
+        if os.path.relpath(dirpath, ZONEINFO_DIR) == '.':
+            # posix/ is a second, identical copy of the entire tree, and right/
+            # is the leap-second variant — correct only for a clock counting
+            # TAI, so a box set from one displays ~37s off. Neither belongs in
+            # a "pick your city" list (they'd also treble its length);
+            # `timedatectl list-timezones` doesn't offer them either.
+            dirnames[:] = [d for d in dirnames if d not in ('posix', 'right')]
+        for name in filenames:
+            real = os.path.join(dirpath, name)
+            rel = os.path.relpath(real, ZONEINFO_DIR)
+            # tzdata ships a few non-zone files (posixrules, localtime itself if
+            # present, leap seconds tables, the iso3166 country table, etc.) —
+            # this is the same "does it look like Area/Location" heuristic
+            # `timedatectl list-timezones` effectively applies.
+            if rel.startswith('.') or rel in ('posixrules',) or '.' in name:
+                continue
+            names.append(rel.replace(os.sep, '/'))
+    return sorted(names)
+
+def _link_localtime(tz):
+    """Point /etc/localtime at `tz` ourselves. True on success.
+
+    Same relative form timedated writes ('../usr/share/zoneinfo/<zone>'), and
+    swapped in with rename(2) so a reader never catches the link missing.
+    """
+    tmp = LOCALTIME_LINK + '.hifi-tmp'
+    try:
+        if os.path.lexists(tmp):
+            os.unlink(tmp)
+        os.symlink(os.path.join('../usr/share/zoneinfo', tz), tmp)
+        os.replace(tmp, LOCALTIME_LINK)
+        return True
+    except Exception:
+        log.exception("set_timezone: could not link %s to %s", LOCALTIME_LINK, tz)
+        try:
+            if os.path.lexists(tmp):
+                os.unlink(tmp)
+        except Exception:
+            pass
+        return False
+
+def _write_etc_timezone(tz):
+    """Keep the Debian name file in step with the symlink (best effort)."""
+    try:
+        current = ''
+        try:
+            with open(TIMEZONE_FILE) as f:
+                current = f.read().strip()
+        except Exception:
+            pass
+        if current == tz:
+            return
+        tmp = TIMEZONE_FILE + '.hifi-tmp'
+        with open(tmp, 'w') as f:
+            f.write(tz + '\n')
+        os.chmod(tmp, 0o644)
+        os.replace(tmp, TIMEZONE_FILE)
+    except Exception:
+        log.exception("set_timezone: could not update %s", TIMEZONE_FILE)
+
+def set_timezone(tz):
+    """Switch the system timezone, live + persisted."""
+    tz = (tz or '').strip()
+    # A client holding a name from the posix/ mirror of the tree (it used to
+    # be offered in /timezones) means the plain zone: normalise it, or the
+    # read-back check below would compare 'Europe/Rome' against
+    # 'posix/Europe/Rome' and report a change that did in fact happen as failed.
+    if tz.startswith('posix/'):
+        tz = tz[len('posix/'):]
+    # timedatectl itself would refuse a bad name, but validate against
+    # zoneinfo directly first: tz flows into a filesystem path below and this
+    # is the chokepoint that keeps a "../../etc/passwd"-shaped value from ever
+    # reaching a shell-adjacent API.
+    real = os.path.normpath(os.path.join(ZONEINFO_DIR, tz))
+    if not tz or not real.startswith(ZONEINFO_DIR + os.sep) or not os.path.isfile(real):
+        return {'success': False, 'timezone': get_timezone()['timezone'],
+                'code': 'timezone.invalid', 'message': _t('timezone.invalid', _lang())}
+    try:
+        r = subprocess.run(['timedatectl', 'set-timezone', tz],
+                           capture_output=True, text=True, timeout=15)
+        if r.returncode != 0:
+            log.error("timedatectl set-timezone %s failed: %s", tz, (r.stderr or '').strip())
+    except Exception:
+        log.exception("timedatectl set-timezone failed")
+    # Never take timedatectl's word for it. It is the preferred path (it also
+    # tells timedated, so a later `timedatectl status` agrees with us), but it
+    # needs a live systemd-timedated on the bus to do anything at all, and a
+    # unit where that call fails must still end up in the right zone rather
+    # than silently sitting in UTC. Verify against the symlink, then finish
+    # the job by hand if it didn't happen.
+    if _zone_from_localtime() != tz and not _link_localtime(tz):
+        return {'success': False, 'timezone': get_timezone()['timezone'],
+                'code': 'timezone.changeFailed', 'message': _t('timezone.changeFailed', _lang())}
+    _write_etc_timezone(tz)
+    if get_timezone()['timezone'] != tz:
+        return {'success': False, 'timezone': get_timezone()['timezone'],
+                'code': 'timezone.changeFailed', 'message': _t('timezone.changeFailed', _lang())}
+    # This process cached the old zone the first time it formatted a local
+    # time; without tzset() every timestamp the API renders (log views, backup
+    # generation names) would stay on the old offset until hifi-api restarts.
+    try:
+        time.tzset()
+    except Exception:
+        pass
+    # And the kiosk's Electron/Chromium process resolves its timezone (ICU)
+    # once at startup and never re-reads it, so the on-screen clock would keep
+    # showing the old offset until the next reboot.
+    restart_kiosk_ui()
+    return {'success': True, 'timezone': tz,
+            'message': _t('timezone.updated', _lang(), tz=tz)}
+
+# ──────────────────────────────────────────────────────────────────
+#  Animated VU meter (expanded now-playing view). Pure rendering choice, no OS
+#  action — but it needs to live here (not just localStorage in the Electron
+#  renderer) so it's reachable from the companion app / web admin on a
+#  headless unit, where nobody can ever open the on-screen Settings to flip
+#  it. Persisted state ABSENT means enabled (the shipped default).
+# ──────────────────────────────────────────────────────────────────
+VU_METER_FILE = '/etc/hifi-player/vu-meter-enabled'
+
+def get_vu_meter():
+    """Return { enabled }. Defaults to True (file absent or unreadable)."""
+    enabled = True
+    try:
+        with open(VU_METER_FILE) as f:
+            enabled = f.read().strip() != '0'
+    except Exception:
+        pass
+    return {'enabled': enabled}
+
+def set_vu_meter(enable):
+    """Persist the VU meter preference. No live session action needed — the
+    kiosk UI reads this on load and reacts immediately within its own tab."""
+    try:
+        os.makedirs(os.path.dirname(VU_METER_FILE), exist_ok=True)
+        tmp = VU_METER_FILE + '.tmp'
+        with open(tmp, 'w') as f:
+            f.write(('1' if enable else '0') + '\n')
+        os.replace(tmp, VU_METER_FILE)
+    except Exception:
+        log.exception("set_vu_meter: persist failed")
+        return {'success': False, 'enabled': get_vu_meter()['enabled'],
+                'code': 'prefs.saveFailed', 'message': _t('prefs.saveFailed', _lang())}
+    return {'success': True, 'enabled': enable}
+
+# ──────────────────────────────────────────────────────────────────
+#  Now-playing auto-expand (kiosk-only UI behaviour, like the VU meter
+#  above): how long after a song starts playing the kiosk should
+#  automatically open the fullscreen now-playing view on its own, if the
+#  user hasn't already navigated there. 0 = disabled (never auto-opens).
+#  Persisted here (not just localStorage) for the same reason as
+#  vu-meter-enabled: reachable from the companion app / web admin on a
+#  headless unit.
+# ──────────────────────────────────────────────────────────────────
+NOWPLAYING_AUTOEXPAND_FILE = '/etc/hifi-player/nowplaying-autoexpand-seconds'
+NOWPLAYING_AUTOEXPAND_CHOICES = (0, 3, 5, 10, 15)
+
+def get_nowplaying_autoexpand():
+    """Return { seconds }. Defaults to 0 (disabled; file absent/unreadable/invalid)."""
+    seconds = 0
+    try:
+        with open(NOWPLAYING_AUTOEXPAND_FILE) as f:
+            seconds = int(f.read().strip())
+    except Exception:
+        pass
+    return {'seconds': seconds if seconds in NOWPLAYING_AUTOEXPAND_CHOICES else 0}
+
+def set_nowplaying_autoexpand(seconds):
+    try:
+        seconds = int(seconds)
+    except (TypeError, ValueError):
+        seconds = 0
+    if seconds not in NOWPLAYING_AUTOEXPAND_CHOICES:
+        seconds = 0
+    try:
+        os.makedirs(os.path.dirname(NOWPLAYING_AUTOEXPAND_FILE), exist_ok=True)
+        tmp = NOWPLAYING_AUTOEXPAND_FILE + '.tmp'
+        with open(tmp, 'w') as f:
+            f.write(str(seconds) + '\n')
+        os.replace(tmp, NOWPLAYING_AUTOEXPAND_FILE)
+    except Exception:
+        log.exception("set_nowplaying_autoexpand: persist failed")
+        return {'success': False, 'seconds': get_nowplaying_autoexpand()['seconds'],
+                'code': 'prefs.saveFailed', 'message': _t('prefs.saveFailed', _lang())}
+    return {'success': True, 'seconds': seconds}
+
+# ──────────────────────────────────────────────────────────────────
+#  Boot debug flags (Settings → Debug, admin webui only). For diagnosing a box
+#  that hangs at boot/shutdown behind the Plymouth splash instead of actually
+#  crashing cleanly, or that needs a captured vmcore off a real kernel panic.
+#  Both edit only GRUB_CMDLINE_LINUX_DEFAULT in /etc/default/grub, via the
+#  same read-modify-write + `update-grub` pattern as the 0005-silent-grub OS
+#  migration -- never grub-install/shim/Secure Boot (that's the one thing that
+#  can brick a headless unit; regenerating grub.cfg from the already-installed
+#  bootloader cannot). Both require an actual reboot to take effect, since a
+#  running kernel's own cmdline can't be changed retroactively.
+# ──────────────────────────────────────────────────────────────────
+GRUB_DEFAULTS_FILE = '/etc/default/grub'
+KDUMP_DEFAULTS_FILE = '/etc/default/kdump-tools'
+# Reserved for the crash kernel once kdump is on -- taken out of normal use
+# permanently after the next boot, so kept modest; standard x86_64 default.
+KDUMP_CRASHKERNEL = 'crashkernel=256M'
+# Stripped when disabling Plymouth so panic/boot text is actually visible
+# (loglevel=0 silences the console same as the splash does); restored as a
+# group when re-enabling.
+_PLYMOUTH_QUIET_TOKENS = ('quiet', 'splash', 'loglevel=0')
+
+def _read_kv_file(path, key):
+    try:
+        with open(path) as f:
+            for line in f:
+                line = line.strip()
+                if line.startswith(f'{key}='):
+                    return line.split('=', 1)[1].strip().strip('"')
+    except Exception:
+        pass
+    return None
+
+def _write_kv_file(path, key, value):
+    """In-place set/replace of KEY=value in a shell-sourced defaults file
+    (/etc/default/*) -- read-modify-write, touches only this one key, leaves
+    everything else in the file untouched."""
+    try:
+        with open(path) as f:
+            lines = f.readlines()
+    except Exception:
+        lines = []
+    new_line = f'{key}={value}\n'
+    found = False
+    for i, line in enumerate(lines):
+        if line.strip().startswith(f'{key}='):
+            lines[i] = new_line
+            found = True
+            break
+    if not found:
+        lines.append(new_line)
+    try:
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        tmp = path + '.tmp'
+        with open(tmp, 'w') as f:
+            f.writelines(lines)
+        os.replace(tmp, path)
+        return True
+    except Exception:
+        log.exception("_write_kv_file(%s) failed", path)
+        return False
+
+def _grub_cmdline_default():
+    return (_read_kv_file(GRUB_DEFAULTS_FILE, 'GRUB_CMDLINE_LINUX_DEFAULT') or '').strip()
+
+def _set_grub_cmdline_default(tokens):
+    ok = _write_kv_file(GRUB_DEFAULTS_FILE, 'GRUB_CMDLINE_LINUX_DEFAULT', '"' + ' '.join(tokens) + '"')
+    if not ok:
+        return False
+    r = _run(['update-grub'], timeout=60)
+    if r.returncode != 0:
+        r = _run(['update-grub2'], timeout=60)
+    return r.returncode == 0
+
+def get_plymouth_disabled():
+    return {'disabled': 'plymouth.enable=0' in _grub_cmdline_default().split()}
+
+def set_plymouth_disabled(disable):
+    tokens = [t for t in _grub_cmdline_default().split()
+              if t not in _PLYMOUTH_QUIET_TOKENS and t != 'plymouth.enable=0']
+    if disable:
+        tokens.append('plymouth.enable=0')
+    else:
+        tokens = list(_PLYMOUTH_QUIET_TOKENS) + tokens
+    if not _set_grub_cmdline_default(tokens):
+        return {'success': False, 'disabled': get_plymouth_disabled()['disabled'],
+                'code': 'debug.updateGrubFailed', 'message': _t('debug.updateGrubFailed', _lang())}
+    return {'success': True, 'disabled': disable, 'code': 'debug.rebootRequired',
+            'message': _t('debug.rebootRequired', _lang())}
+
+def _kdump_tools_installed():
+    return subprocess.run(['dpkg', '-s', 'kdump-tools'], capture_output=True, timeout=10).returncode == 0
+
+def get_kdump_enabled():
+    return {'enabled': KDUMP_CRASHKERNEL in _grub_cmdline_default().split(),
+            'installed': _kdump_tools_installed()}
+
+def set_kdump_enabled(enable):
+    if enable and not _kdump_tools_installed():
+        try:
+            # kdump-tools alone is enough on Debian: it depends on makedumpfile
+            # and kexec-tools itself, and this appliance's own kernel already
+            # supports kexec. linux-crashdump is an Ubuntu-only meta-package
+            # that doesn't exist here -- installing it unconditionally failed
+            # the whole command every time (apt-get install fails atomically
+            # on an unresolvable package name), which is why this always
+            # errored regardless of actual Internet connectivity.
+            r = subprocess.run(['apt-get', 'install', '-y', 'kdump-tools'],
+                               capture_output=True, text=True, timeout=180,
+                               env=dict(os.environ, DEBIAN_FRONTEND='noninteractive'))
+        except Exception:
+            r = None
+        if r is None or r.returncode != 0 or not _kdump_tools_installed():
+            log.error("kdump-tools install failed: %s", (r.stderr if r else '').strip())
+            return {'success': False, 'enabled': get_kdump_enabled()['enabled'],
+                    'code': 'debug.kdumpInstallFailed', 'message': _t('debug.kdumpInstallFailed', _lang())}
+    tokens = [t for t in _grub_cmdline_default().split() if not t.startswith('crashkernel=')]
+    if enable:
+        tokens.append(KDUMP_CRASHKERNEL)
+    if not _set_grub_cmdline_default(tokens):
+        return {'success': False, 'enabled': get_kdump_enabled()['enabled'],
+                'code': 'debug.updateGrubFailed', 'message': _t('debug.updateGrubFailed', _lang())}
+    _write_kv_file(KDUMP_DEFAULTS_FILE, 'KDUMP_ENABLED', 'true' if enable else 'false')
+    try:
+        subprocess.run(['systemctl', 'enable' if enable else 'disable', '--now', 'kdump-tools'],
+                       capture_output=True, timeout=30)
+    except Exception:
+        pass
+    return {'success': True, 'enabled': enable, 'code': 'debug.rebootRequired',
+            'message': _t('debug.rebootRequired', _lang())}
+
+# ──────────────────────────────────────────────────────────────────
+#  Provisioning + factory reset. The first-boot hotspot/captive flow and
+#  the web-admin account live in webui_server.py (bound 0.0.0.0:443/:80).
+#  api_server stays loopback-only; these endpoints are thin bridges the
+#  Electron kiosk uses locally:
+#   - /provision_status / /provision_mode proxy to webui on 127.0.0.1:80
+#     (the provisioning API is always served there, even in LAN-only mode).
+#   - /factory_reset runs the reset script detached (callers are the kiosk
+#     [physical access] or webui [after its own admin-password check]).
+#   - /webui_reset_credentials wipes the web-admin account from the kiosk
+#     (physical-access recovery when the web password is forgotten).
+# ──────────────────────────────────────────────────────────────────
+WEBUI_BASE = 'http://127.0.0.1:80'
+WEBUI_DB = '/etc/hifi-player/webui.db'
+FACTORY_RESET_SCRIPT = '/usr/local/sbin/hifi-factory-reset.sh'
+
+def _proxy_webui(path, method='GET', body=None, timeout=10):
+    req = urllib.request.Request(f'{WEBUI_BASE}{path}', method=method)
+    data = None
+    if body is not None:
+        data = json.dumps(body).encode('utf-8')
+        req.add_header('Content-Type', 'application/json')
+    try:
+        with urllib.request.urlopen(req, data=data, timeout=timeout) as resp:
+            return json.loads(resp.read().decode('utf-8')), resp.status
+    except urllib.error.HTTPError as e:
+        try:
+            return json.loads(e.read().decode('utf-8')), e.code
+        except Exception:
+            return {'success': False}, e.code
+    except Exception:
+        # webui not running / not in provisioning — treat as "nothing pending".
+        return None, 0
+
+def get_provision_status():
+    body, _ = _proxy_webui('/api/provision/status')
+    if body is None:
+        return {'pending': False}
+    return body
+
+def set_provision_mode(mode, source='screen'):
+    body, status = _proxy_webui('/api/provision/claim_mode', method='POST',
+                                body={'mode': mode, 'source': source})
+    if body is None:
+        return {'success': False, 'code': 'provisioning.notActive',
+                'message': _t('provisioning.notActive', _lang())}
+    return body
+
+def provision_wifi_connect(ssid, password):
+    """Kick off the same Wi-Fi join webui_server's captive portal uses, from
+    the on-screen manual network-setup panel. The AP drops immediately on
+    webui's side; the kiosk keeps polling /provision_status to see it
+    through 'connecting' -> 'network-ok'/'failed'."""
+    body, status = _proxy_webui('/api/provision/wifi_connect', method='POST',
+                                body={'ssid': ssid, 'password': password})
+    if body is None:
+        return {'success': False, 'code': 'provisioning.notActive',
+                'message': _t('provisioning.notActive', _lang())}
+    return body
+
+def provision_wifi_rescan():
+    """Live Wi-Fi rescan for the on-screen manual panel: briefly drops and
+    re-raises the setup hotspot around the scan (see webui_server.py's
+    _live_wifi_rescan()) so the list isn't stuck with whatever the single
+    early-boot scan found. Generous timeout: AP down + scan + AP back up."""
+    body, status = _proxy_webui('/api/provision/wifi_rescan', method='POST', timeout=30)
+    if body is None:
+        return {'success': False, 'code': 'provisioning.notActive',
+                'message': _t('provisioning.notActive', _lang())}
+    return body
+
+def factory_reset():
+    if _update_in_progress():
+        return {'success': False, 'code': 'update.inProgressRetry',
+                'message': _t('update.inProgressRetry', _lang())}
+    if not os.path.exists(FACTORY_RESET_SCRIPT):
+        return {'success': False, 'code': 'factoryReset.scriptMissing',
+                'message': _t('factoryReset.scriptMissing', _lang())}
+    try:
+        # Detached transient unit so the reboot at the end doesn't kill us mid
+        # HTTP response.
+        subprocess.Popen(['systemd-run', '--collect', '--',
+                          '/bin/sh', FACTORY_RESET_SCRIPT],
+                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        return {'success': True, 'message': _t('factoryReset.started', _lang())}
+    except Exception:
+        log.exception("factory_reset failed")
+        return {'success': False, 'code': 'factoryReset.startFailed',
+                'message': _t('factoryReset.startFailed', _lang())}
+
+def webui_reset_credentials():
+    """Wipe the web-admin account (kiosk-only recovery). Direct sqlite so it
+    works even if webui_server isn't running."""
+    try:
+        import sqlite3
+        if os.path.exists(WEBUI_DB):
+            conn = sqlite3.connect(WEBUI_DB)
+            conn.execute('DELETE FROM admin_user')
+            # Invalidate any open web sessions too.
+            conn.execute("UPDATE meta SET value = CAST(CAST(value AS INTEGER)+1 AS TEXT) "
+                         "WHERE key = 'session_version'")
+            conn.commit()
+            conn.close()
+        return {'success': True, 'message': _t('webui.credsReset', _lang())}
+    except Exception:
+        log.exception("webui_reset_credentials failed")
+        return {'success': False, 'code': 'webui.credsResetFailed',
+                'message': _t('webui.credsResetFailed', _lang())}
 
 # ──────────────────────────────────────────────────────────────────
 #  Tidal Connect — optional. Lets the appliance appear as a Tidal Connect
@@ -911,13 +2808,14 @@ def get_tidal_status():
     except Exception:
         log.exception("get_tidal_status failed")
         return {'available': False, 'enabled': False, 'active': False,
-                'error': 'Stato Tidal Connect non disponibile'}
+                'error': _t('tidal.statusUnavailable', _lang())}
 
 def set_tidal(enable):
     """Enable+start or disable+stop the Tidal Connect daemon (persists)."""
     if enable and not _tidal_available():
         return {'success': False, 'available': False, 'enabled': False,
-                'active': False, 'message': 'Tidal Connect non installato su questo dispositivo'}
+                'active': False, 'code': 'tidal.notInstalled',
+                'message': _t('tidal.notInstalled', _lang())}
     action = 'enable' if enable else 'disable'
     try:
         r = subprocess.run(['sudo', 'systemctl', action, '--now', TIDAL_UNIT],
@@ -926,14 +2824,15 @@ def set_tidal(enable):
             log.error("set_tidal %s failed: %s", action, (r.stderr or '').strip())
             status = get_tidal_status()
             status['success'] = False
-            status['message'] = 'Operazione Tidal Connect fallita'
+            status['code'] = 'tidal.opFailed'
+            status['message'] = _t('tidal.opFailed', _lang())
             return status
     except Exception:
         log.exception("set_tidal failed")
-        return {'success': False, 'message': 'Operazione Tidal Connect fallita'}
+        return {'success': False, 'code': 'tidal.opFailed', 'message': _t('tidal.opFailed', _lang())}
     status = get_tidal_status()
     status['success'] = True
-    status['message'] = 'Tidal Connect abilitato' if enable else 'Tidal Connect disabilitato'
+    status['message'] = _t('tidal.enabled' if enable else 'tidal.disabled', _lang())
     return status
 
 # ──────────────────────────────────────────────────────────────────
@@ -1284,6 +3183,110 @@ def _lms_resume(playerid, resume_at=0.0):
     except Exception:
         log.exception('_lms_resume failed')
 
+# ──────────────────────────────────────────────────────────────────
+#  Resume playback across a reboot. hifi-quiesce-audio-shutdown.sh runs
+#  hifi-capture-playback-state.py before every shutdown/reboot (while LMS/
+#  squeezelite are still up) and writes PLAYBACK_STATE_FILE; this reads it
+#  back once at this process's own next startup. Not relying on LMS's native
+#  playingAtPowerOff/positionAtDisconnect prefs for the same reason
+#  _local_playing_player() above doesn't trust bare position-across-
+#  disconnect: found unreliable in practice, plus those prefs are only
+#  flushed to disk on a 10s debounced autosave that a fast power-off can miss
+#  entirely — this file is written synchronously, right before shutdown.
+# ──────────────────────────────────────────────────────────────────
+PLAYBACK_STATE_FILE = '/var/lib/hifi-player/playback-state.json'
+
+def _resume_playback_after_boot():
+    """Was playing -> jump to that track/position and resume playing. Was
+    paused -> load the same track at that position but leave it paused (the
+    kiosk shows the right "now playing" info without audio starting on its
+    own). Was stopped, or no state file (fresh install, or a normal restart
+    that never captured one) -> do nothing. Runs in a background thread from
+    __main__ so it never delays this API's own readiness; the kiosk UI works
+    normally regardless of how long squeezelite takes to reconnect.
+
+    LMS has its OWN native power-on-resume (playingAtPowerOff/
+    positionAtDisconnect, applied the moment squeezelite's slimproto socket
+    reconnects — before this function ever gets to run) — that's exactly the
+    unreliable mechanism this whole feature avoids relying on (see the module
+    comment above), and hifi-capture-playback-state.py already asks LMS to
+    clear it at capture time. But that clear is itself just a best-effort pref
+    write (same debounced-autosave risk), so it can't be trusted to have
+    stuck: if it didn't, native resume fires on reconnect with whatever STALE
+    track/position it last managed to persist (symptom seen in practice:
+    some unrelated older track starts playing). An explicit `stop` here,
+    before applying our own captured state, guarantees a clean slate either
+    way regardless of what native resume already did."""
+    log.info('resume-after-boot: state file %s', 'found' if os.path.exists(PLAYBACK_STATE_FILE) else 'absent')
+    try:
+        with open(PLAYBACK_STATE_FILE) as f:
+            state = json.load(f)
+    except Exception:
+        return
+    # Consume once: a later ordinary process restart (crash, manual restart)
+    # must not re-apply a now-stale capture.
+    try:
+        os.remove(PLAYBACK_STATE_FILE)
+    except OSError:
+        pass
+    mode = state.get('mode')
+    if mode not in ('play', 'pause'):
+        log.info('resume-after-boot: captured mode=%r, nothing to restore', mode)
+        return
+    try:
+        index = int(state.get('playlist_cur_index') or 0)
+        elapsed = float(state.get('time') or 0.0)
+    except (TypeError, ValueError):
+        return
+    playerid = None
+    try:
+        for _ in range(90):  # up to ~90s: LMS's own startup/library scan can
+                              # take a while, well past squeezelite's own
+                              # 5s systemd RestartSec reconnect attempts.
+            try:
+                result = _lms_request('-', ['serverstatus', 0, 999]) or {}
+                for p in result.get('players_loop', []):
+                    if str(p.get('ip', '')).startswith('127.0.0.1:'):
+                        candidate = p.get('playerid')
+                        # A candidate can appear in players_loop just from
+                        # LMS's own bookkeeping before slimproto has actually
+                        # re-registered it — confirm it's really connected
+                        # (same check _lms_resume makes) before trusting it.
+                        st = _lms_request(candidate, ['status', '-', 1]) or {}
+                        if st.get('player_connected'):
+                            playerid = candidate
+                        break
+            except Exception:
+                pass
+            if playerid:
+                break
+            time.sleep(1.0)
+        if not playerid:
+            log.warning('resume-after-boot: local player never reconnected, giving up')
+            return
+        log.info('resume-after-boot: restoring mode=%s index=%s time=%.1f on %s', mode, index, elapsed, playerid)
+        # Clean slate first: whatever LMS's own native power-on-resume already
+        # did on reconnect (see docstring) gets wiped out here, so what
+        # follows is the only thing that decides the end state.
+        _lms_request(playerid, ['stop'])
+        time.sleep(0.3)
+        # `playlist index` both jumps to and starts that queue position —
+        # there's no "load without playing" command — so a captured 'pause'
+        # still starts it here and gets paused right back below, just long
+        # enough to land on the right track/position first.
+        _lms_request(playerid, ['playlist', 'index', index])
+        if elapsed > 1.0:
+            time.sleep(0.5)
+            try:
+                _lms_request(playerid, ['time', round(elapsed, 1)])
+            except Exception:
+                pass
+        if mode == 'pause':
+            _lms_request(playerid, ['pause', '1'])
+        log.info('resume-after-boot: done')
+    except Exception:
+        log.exception('_resume_playback_after_boot failed')
+
 def _camilla_config_valid(cfg):
     """Write cfg to a scratch file and ask CamillaDSP itself to validate it,
     so a bad EQ/balance/FIR combination can never leave squeezelite pointed
@@ -1351,7 +3354,7 @@ def _apply_dsp_on_locked(playback_dev, bands, crossfeed, room_correction, balanc
             # device and CamillaDSP's open can fail or wedge the DAC until a
             # reboot. Same reasoning as _apply_dsp_off(), just mirrored:
             # release the old holder before starting the new one.
-            _run(['systemctl', 'restart', 'squeezelite'], timeout=30)
+            _restart_squeezelite_if_enabled()
     # `enable --now` is a no-op on an already-running unit — it would NOT pick
     # up the config.yml we just wrote (CamillaDSP only reads it at startup, no
     # hot reload). Enable separately for boot persistence, then always
@@ -1379,7 +3382,7 @@ def _apply_dsp_off():
             _write_sq_args(re.sub(r'\s+', ' ', args).strip())
         subprocess.run(['sudo', 'systemctl', 'disable', '--now', DSP_UNIT],
                        capture_output=True, text=True, timeout=30)
-        _run(['systemctl', 'restart', 'squeezelite'], timeout=30)
+        _restart_squeezelite_if_enabled()
     finally:
         if playing_player:
             _lms_resume(playing_player, elapsed)
@@ -1406,7 +3409,7 @@ def set_dsp(config):
     by a client that only knows about the older keys."""
     if not _dsp_available():
         return {'success': False, 'available': False,
-                'message': 'DSP non disponibile su questo dispositivo'}
+                'code': 'dsp.unavailable', 'message': _t('dsp.unavailable', _lang())}
     st = _read_dsp_state()
     enabled = bool(config['enabled']) if 'enabled' in config else st['enabled']
     crossfeed = bool(config['crossfeed']) if 'crossfeed' in config else st['crossfeed']
@@ -1435,10 +3438,10 @@ def set_dsp(config):
                               'preset': preset})
     except Exception:
         log.exception('set_dsp failed')
-        return {'success': False, 'message': 'Operazione DSP fallita'}
+        return {'success': False, 'code': 'dsp.opFailed', 'message': _t('dsp.opFailed', _lang())}
     return {'success': True, 'enabled': enabled, 'bands': bands, 'crossfeed': crossfeed,
             'room_correction': room_correction, 'balance': balance, 'preset': preset,
-            'message': 'DSP attivato' if enabled else 'DSP disattivato'}
+            'message': _t('dsp.enabled' if enabled else 'dsp.disabled', _lang())}
 
 # ── DSP presets (named snapshots of bands/crossfeed/room_correction/balance) ──
 
@@ -1482,10 +3485,12 @@ def get_dsp_presets():
 def save_dsp_preset(name):
     clean_name = _valid_preset_name(name)
     if not clean_name:
-        return {'success': False, 'message': 'Nome preset non valido'}
+        return {'success': False, 'code': 'dspPreset.invalidName',
+                'message': _t('dspPreset.invalidName', _lang())}
     user = _read_dsp_presets()
     if clean_name not in user and len(user) >= DSP_MAX_USER_PRESETS:
-        return {'success': False, 'message': 'Numero massimo di preset raggiunto'}
+        return {'success': False, 'code': 'dspPreset.maxReached',
+                'message': _t('dspPreset.maxReached', _lang())}
     st = _read_dsp_state()
     user[clean_name] = {'bands': st['bands'], 'crossfeed': st['crossfeed'],
                         'room_correction': st['room_correction'], 'balance': st['balance']}
@@ -1494,32 +3499,37 @@ def save_dsp_preset(name):
         _write_dsp_state({**st, 'preset': clean_name})
     except Exception:
         log.exception('save_dsp_preset failed')
-        return {'success': False, 'message': 'Salvataggio preset fallito'}
-    return {'success': True, **get_dsp_presets(), 'message': 'Preset salvato'}
+        return {'success': False, 'code': 'dspPreset.saveFailed',
+                'message': _t('dspPreset.saveFailed', _lang())}
+    return {'success': True, **get_dsp_presets(), 'message': _t('dspPreset.saved', _lang())}
 
 def load_dsp_preset(name):
     name = (name or '').strip()
     p = DSP_BUILTIN_PRESETS.get(name) or _read_dsp_presets().get(name)
     if not p:
-        return {'success': False, 'message': 'Preset non trovato'}
+        return {'success': False, 'code': 'dspPreset.notFound',
+                'message': _t('dspPreset.notFound', _lang())}
     # Bands + balance + crossfeed only — 'room_correction' and 'enabled' are
     # deliberately preserved (they depend on a physically-uploaded FIR filter
     # and on the bit-perfect on/off choice, not on the tonal preset).
     result = set_dsp({'bands': p.get('bands') or [], 'balance': p.get('balance') or 0.0,
                       'crossfeed': bool(p.get('crossfeed')), 'preset': name})
     if result.get('success'):
-        result['message'] = 'Preset caricato'
+        result['message'] = _t('dspPreset.loaded', _lang())
     return result
 
 def rename_dsp_preset(name, new_name):
     user = _read_dsp_presets()
     if name not in user:
-        return {'success': False, 'message': 'Preset non trovato'}
+        return {'success': False, 'code': 'dspPreset.notFound',
+                'message': _t('dspPreset.notFound', _lang())}
     clean_new = _valid_preset_name(new_name)
     if not clean_new:
-        return {'success': False, 'message': 'Nome preset non valido'}
+        return {'success': False, 'code': 'dspPreset.invalidName',
+                'message': _t('dspPreset.invalidName', _lang())}
     if clean_new in user and clean_new != name:
-        return {'success': False, 'message': 'Esiste già un preset con questo nome'}
+        return {'success': False, 'code': 'dspPreset.nameExists',
+                'message': _t('dspPreset.nameExists', _lang())}
     user[clean_new] = user.pop(name)
     try:
         _write_dsp_presets(user)
@@ -1528,13 +3538,15 @@ def rename_dsp_preset(name, new_name):
             _write_dsp_state({**st, 'preset': clean_new})
     except Exception:
         log.exception('rename_dsp_preset failed')
-        return {'success': False, 'message': 'Rinomina preset fallita'}
-    return {'success': True, **get_dsp_presets(), 'message': 'Preset rinominato'}
+        return {'success': False, 'code': 'dspPreset.renameFailed',
+                'message': _t('dspPreset.renameFailed', _lang())}
+    return {'success': True, **get_dsp_presets(), 'message': _t('dspPreset.renamed', _lang())}
 
 def delete_dsp_preset(name):
     user = _read_dsp_presets()
     if name not in user:
-        return {'success': False, 'message': 'Preset non trovato'}
+        return {'success': False, 'code': 'dspPreset.notFound',
+                'message': _t('dspPreset.notFound', _lang())}
     del user[name]
     try:
         _write_dsp_presets(user)
@@ -1543,8 +3555,237 @@ def delete_dsp_preset(name):
             _write_dsp_state({**st, 'preset': None})
     except Exception:
         log.exception('delete_dsp_preset failed')
-        return {'success': False, 'message': 'Eliminazione preset fallita'}
-    return {'success': True, **get_dsp_presets(), 'message': 'Preset eliminato'}
+        return {'success': False, 'code': 'dspPreset.deleteFailed',
+                'message': _t('dspPreset.deleteFailed', _lang())}
+    return {'success': True, **get_dsp_presets(), 'message': _t('dspPreset.deleted', _lang())}
+
+# ──────────────────────────────────────────────────────────────────
+#  Bluetooth audio (A2DP sink) — OPTIONAL, OFF by default. Lets the
+#  appliance appear as a Bluetooth speaker: a phone connects and streams
+#  straight to the DAC, no app/account needed (guest-friendly input, the
+#  same idea as Volumio/WiiM/Bluesound/Eversolo). See OS migration
+#  0024-bluetooth.sh for the systemd units/prerequisites, and
+#  distro/config/includes.chroot/usr/local/sbin/hifi-bt-{aplay-run,
+#  watcher.py} (delivered by the system OTA channel) for the runtime DAC
+#  handover + Now Playing metadata.
+#
+#  Concurrency with squeezelite/CamillaDSP: Bluetooth "wins". When a phone
+#  starts actively streaming, hifi-bt-watcher.py pauses the local Lyrion
+#  player (and stops CamillaDSP if it was running, same release-before-open
+#  ordering as the DSP toggle above) so the real DAC is free, then restarts
+#  hifi-bt-aplay.service to open it. That handover reacts to live BlueZ
+#  D-Bus signals from the watcher daemon; this section only turns the whole
+#  subsystem on/off, reports status, and — since Bluetooth carries no cover
+#  art worth trusting (BlueZ's AVRCP art support is unreliable) — resolves
+#  one from an online lookup for the UI's Now Playing overlay.
+# ──────────────────────────────────────────────────────────────────
+BT_UNITS = ('bluetooth.service', 'hifi-bluealsa.service', 'hifi-bt-agent.service',
+            'hifi-bt-aplay.service', 'hifi-bt-watcher.service')
+BT_STATE_FILE = '/etc/hifi-player/bluetooth.json'
+BT_NOW_PLAYING_FILE = '/run/hifi-bt/now-playing.json'
+BT_CAMILLA_STOPPED_FLAG = '/run/hifi-bt/camilla-stopped'
+BT_APLAY_SCRIPT = '/usr/local/sbin/hifi-bt-aplay-run'
+_BT_MAC_RE = re.compile(r'^[0-9A-Fa-f]{2}(:[0-9A-Fa-f]{2}){5}$')
+_bt_apply_lock = threading.Lock()
+
+def _bt_available():
+    return (_unit_exists('hifi-bluealsa.service')
+            and shutil.which('bluetoothctl') is not None
+            and os.path.exists(BT_APLAY_SCRIPT))
+
+def _read_bt_state():
+    try:
+        with open(BT_STATE_FILE) as f:
+            return bool(json.load(f).get('enabled'))
+    except Exception:
+        return False
+
+def _write_bt_state(enabled):
+    os.makedirs(os.path.dirname(BT_STATE_FILE), exist_ok=True)
+    tmp = BT_STATE_FILE + '.tmp'
+    with open(tmp, 'w') as f:
+        json.dump({'enabled': bool(enabled)}, f)
+    os.replace(tmp, BT_STATE_FILE)
+
+def _bt_paired_devices():
+    """[{mac, name, connected}], best-effort — empty on any failure so a
+    flaky bluetoothctl call never breaks the whole status response."""
+    devices = []
+    try:
+        r = subprocess.run(['bluetoothctl', 'devices', 'Paired'],
+                           capture_output=True, text=True, timeout=10)
+        lines = (r.stdout or '').splitlines()
+        if r.returncode != 0 or not lines:
+            # Older bluez CLIs don't support the "Paired" filter argument.
+            r = subprocess.run(['bluetoothctl', 'paired-devices'],
+                               capture_output=True, text=True, timeout=10)
+            lines = (r.stdout or '').splitlines()
+        for line in lines:
+            m = re.match(r'Device\s+([0-9A-Fa-f:]{17})\s+(.*)', line.strip())
+            if not m:
+                continue
+            mac, name = m.group(1), m.group(2)
+            info = subprocess.run(['bluetoothctl', 'info', mac],
+                                  capture_output=True, text=True, timeout=10)
+            devices.append({'mac': mac, 'name': name,
+                            'connected': 'Connected: yes' in (info.stdout or '')})
+    except Exception:
+        log.exception("_bt_paired_devices failed")
+    return devices
+
+def get_bluetooth_status():
+    try:
+        ac = subprocess.run(['systemctl', 'is-active', 'bluetooth.service'],
+                           capture_output=True, text=True, timeout=10)
+        active = ac.stdout.strip() == 'active'
+        discoverable = False
+        if active:
+            show = subprocess.run(['bluetoothctl', 'show'],
+                                  capture_output=True, text=True, timeout=10)
+            discoverable = 'Discoverable: yes' in (show.stdout or '')
+        return {'available': _bt_available(), 'enabled': _read_bt_state(), 'active': active,
+                'discoverable': discoverable, 'devices': _bt_paired_devices() if active else []}
+    except Exception:
+        log.exception("get_bluetooth_status failed")
+        return {'available': False, 'enabled': False, 'active': False, 'discoverable': False,
+                'devices': [], 'error': _t('bluetooth.statusUnavailable', _lang())}
+
+def set_bluetooth(enable):
+    """Enable or disable the whole Bluetooth subsystem (persists). Serialized
+    so an enable/disable double-click can't interleave with itself."""
+    if enable and not _bt_available():
+        return {'success': False, 'available': False, 'enabled': False, 'active': False,
+                'discoverable': False, 'devices': [],
+                'code': 'bluetooth.unavailableUpdate', 'message': _t('bluetooth.unavailableUpdate', _lang())}
+    with _bt_apply_lock:
+        _write_bt_state(enable)
+        try:
+            if enable:
+                subprocess.run(['modprobe', 'btusb'], capture_output=True, timeout=15)
+                subprocess.run(['modprobe', 'bluetooth'], capture_output=True, timeout=15)
+                subprocess.run(['sudo', 'systemctl', 'unmask', 'bluetooth.service'],
+                               capture_output=True, text=True, timeout=15)
+                for unit in BT_UNITS:
+                    r = subprocess.run(['sudo', 'systemctl', 'enable', '--now', unit],
+                                       capture_output=True, text=True, timeout=30)
+                    if r.returncode != 0:
+                        log.error("set_bluetooth enable %s failed: %s", unit, (r.stderr or '').strip())
+                # hifi-bt-watcher.py sets power/pairable/alias once the adapter
+                # comes up — give it a moment before the UI's first status poll.
+                for _ in range(10):
+                    r = subprocess.run(['bluetoothctl', 'list'],
+                                       capture_output=True, text=True, timeout=5)
+                    if (r.stdout or '').strip():
+                        break
+                    time.sleep(1)
+            else:
+                for unit in reversed(BT_UNITS):
+                    subprocess.run(['sudo', 'systemctl', 'disable', '--now', unit],
+                                   capture_output=True, text=True, timeout=30)
+                subprocess.run(['sudo', 'systemctl', 'mask', 'bluetooth.service'],
+                               capture_output=True, text=True, timeout=15)
+                # Never leave DSP off just because Bluetooth is being turned off.
+                if os.path.exists(BT_CAMILLA_STOPPED_FLAG):
+                    _run(['systemctl', 'start', DSP_UNIT], timeout=30)
+                    try:
+                        os.remove(BT_CAMILLA_STOPPED_FLAG)
+                    except OSError:
+                        pass
+                subprocess.run(['modprobe', '-r', 'btusb'], capture_output=True, timeout=15)
+        except Exception:
+            log.exception("set_bluetooth failed")
+            status = get_bluetooth_status()
+            status['success'] = False
+            status['code'] = 'bluetooth.opFailed'
+            status['message'] = _t('bluetooth.opFailed', _lang())
+            return status
+    status = get_bluetooth_status()
+    status['success'] = True
+    status['message'] = _t('bluetooth.enabled' if enable else 'bluetooth.disabled', _lang())
+    return status
+
+def set_bt_discoverable():
+    if not _bt_available():
+        return {'success': False, 'code': 'bluetooth.unavailable',
+                'message': _t('bluetooth.unavailable', _lang())}
+    try:
+        subprocess.run(['bluetoothctl', 'discoverable-timeout', '120'],
+                       capture_output=True, text=True, timeout=10)
+        r = subprocess.run(['bluetoothctl', 'discoverable', 'on'],
+                           capture_output=True, text=True, timeout=10)
+        if r.returncode != 0:
+            return {'success': False, 'code': 'bluetooth.cannotMakeVisible',
+                    'message': _t('bluetooth.cannotMakeVisible', _lang())}
+    except Exception:
+        log.exception("set_bt_discoverable failed")
+        return {'success': False, 'code': 'bluetooth.cannotMakeVisible',
+                'message': _t('bluetooth.cannotMakeVisible', _lang())}
+    return {'success': True, 'seconds': 120, 'message': _t('bluetooth.visibleFor2Min', _lang())}
+
+def bt_forget(mac):
+    """Unpair/remove a device. MAC comes straight from a network request, so
+    it's validated against a strict address pattern before ever reaching a
+    shell-adjacent subprocess argument."""
+    if not mac or not _BT_MAC_RE.match(mac):
+        return {'success': False, 'code': 'bluetooth.invalidAddress',
+                'message': _t('bluetooth.invalidAddress', _lang())}
+    try:
+        r = subprocess.run(['bluetoothctl', 'remove', mac],
+                           capture_output=True, text=True, timeout=10)
+        if r.returncode != 0:
+            return {'success': False, 'code': 'bluetooth.deviceNotFound',
+                    'message': _t('bluetooth.deviceNotFound', _lang())}
+    except Exception:
+        log.exception("bt_forget failed")
+        return {'success': False, 'code': 'bluetooth.forgetFailed',
+                'message': _t('bluetooth.forgetFailed', _lang())}
+    return {'success': True, 'devices': _bt_paired_devices(), 'message': _t('bluetooth.forgotten', _lang())}
+
+# Cover art never arrives over Bluetooth (AVRCP art support in BlueZ is
+# experimental/unreliable, and cars/phones mostly rely on their own
+# proprietary stacks for it) — best-effort online lookup by title+artist
+# instead. Tiny in-memory cache so repeated Now Playing polls during the
+# same track don't refetch; capped so a long BT listening session (many
+# different tracks) can't grow it unbounded.
+_bt_cover_cache = {}
+_BT_COVER_CACHE_MAX = 200
+
+def _bt_cover_lookup(title, artist, album):
+    key = (title or '', artist or '', album or '')
+    if key == ('', '', ''):
+        return None
+    if key in _bt_cover_cache:
+        return _bt_cover_cache[key]
+    cover = None
+    try:
+        term = urllib.parse.quote(f'{artist} {title}'.strip())
+        url = f'https://itunes.apple.com/search?term={term}&media=music&entity=song&limit=1'
+        req = urllib.request.Request(url, headers={'User-Agent': 'OsmiumSound/1.0'})
+        with urllib.request.urlopen(req, timeout=3) as resp:
+            data = json.loads(resp.read())
+        results = data.get('results') or []
+        if results:
+            # ...100x100bb.jpg -> a larger cover; still tiny/fast over LAN.
+            art = results[0].get('artworkUrl100')
+            if art:
+                cover = art.replace('100x100bb', '600x600bb')
+    except Exception:
+        cover = None  # offline / no match / rate-limited — fine, just no art
+    if len(_bt_cover_cache) >= _BT_COVER_CACHE_MAX:
+        _bt_cover_cache.clear()
+    _bt_cover_cache[key] = cover
+    return cover
+
+def get_bluetooth_now_playing():
+    try:
+        with open(BT_NOW_PLAYING_FILE) as f:
+            np = json.load(f)
+    except Exception:
+        np = {}
+    if not np.get('active'):
+        return {'active': False}
+    np['cover_url'] = _bt_cover_lookup(np.get('title'), np.get('artist'), np.get('album'))
+    return np
 
 # ──────────────────────────────────────────────────────────────────
 #  OTA update helpers
@@ -1562,14 +3803,34 @@ def _version_tuple(v):
     nums = re.findall(r'\d+', v or '')
     return tuple(int(n) for n in nums) if nums else None
 
+_ALPHA_TAG_RE = re.compile(r'-alpha\d+$')
+
 def _semver_key(v):
     """Sort key honouring prereleases: '2.5.7-dev.1' ranks BELOW '2.5.7' but
-    above '2.5.6', so switching dev→prod still upgrades to the stable build."""
-    base, _, pre = (v or '').lstrip('vV').partition('-')
+    above '2.5.6', so switching dev→prod still upgrades to the stable build.
+
+    A trailing '-alphaN' (e.g. '2.5.21-dev.52-alpha3') ranks BELOW the plain
+    'dev.52' it's nested on, same idea one level down: naively including the
+    alpha digits in the prerelease tuple made '(52, 3) > (52,)', so a device
+    already on an alpha build considered the promoted plain dev.N *older* and
+    never offered it. alpha1 < alpha2 < ... < dev.N (plain).
+
+    Debian's '~' separator means the same thing and is what the Lyrion nightly
+    builds use ('9.1.2~1781881406' precedes the 9.1.2 release), so treat the two
+    separators alike — whichever comes first wins."""
+    raw = (v or '').lstrip('vV')
+    alpha_match = _ALPHA_TAG_RE.search(raw)
+    if alpha_match:
+        alpha_rank = (0, int(re.search(r'\d+', alpha_match.group()).group()))
+        raw = raw[:alpha_match.start()]
+    else:
+        alpha_rank = (1,)  # not an alpha build: ranks above any alpha of the same base
+    sep = min((raw.index(c) for c in '-~' if c in raw), default=-1)
+    base, pre = (raw, '') if sep < 0 else (raw[:sep], raw[sep + 1:])
     base_nums = tuple(int(n) for n in re.findall(r'\d+', base)) or (0,)
     if pre:  # prerelease: lower than the release with the same base
-        return (base_nums, 0, tuple(int(n) for n in re.findall(r'\d+', pre)) or (0,))
-    return (base_nums, 1, ())  # final release: above any prerelease of same base
+        return (base_nums, 0, tuple(int(n) for n in re.findall(r'\d+', pre)) or (0,), alpha_rank)
+    return (base_nums, 1, (), alpha_rank)  # final release: above any prerelease of same base
 
 def _is_newer(latest, current):
     """True if `latest` should be offered over `current`."""
@@ -1586,22 +3847,30 @@ def _read_version_file(path):
     except Exception:
         return 'unknown'
 
+def _alpha_unlocked():
+    return os.path.exists(OTA_ALPHA_MARKER_FILE)
+
 def get_ota_channel():
-    """Return the persisted OTA channel ('prod' or 'dev'). Defaults to the
-    HIFI_OTA_CHANNEL env var, else 'prod'."""
+    """Return the persisted OTA channel ('prod', 'dev' or 'alpha'). Defaults to
+    the HIFI_OTA_CHANNEL env var, else 'prod'. Falls back to 'prod' if the
+    resolved channel is 'alpha' but the marker file has since been removed, so
+    a device doesn't keep chasing alpha releases after being locked back out."""
     try:
         with open(OTA_CHANNEL_FILE) as f:
             ch = f.read().strip()
-        if ch in OTA_CHANNELS:
+        if ch in OTA_CHANNELS and (ch != 'alpha' or _alpha_unlocked()):
             return ch
     except Exception:
         pass
     env = os.environ.get('HIFI_OTA_CHANNEL', 'prod')
-    return env if env in OTA_CHANNELS else 'prod'
+    if env in OTA_CHANNELS and (env != 'alpha' or _alpha_unlocked()):
+        return env
+    return 'prod'
 
 def set_ota_channel(channel):
-    if channel not in OTA_CHANNELS:
-        return {'success': False, 'message': 'Canale non valido', 'channel': get_ota_channel()}
+    if channel not in OTA_CHANNELS or (channel == 'alpha' and not _alpha_unlocked()):
+        return {'success': False, 'code': 'ota.invalidChannel',
+                'message': _t('ota.invalidChannel', _lang()), 'channel': get_ota_channel()}
     try:
         os.makedirs(os.path.dirname(OTA_CHANNEL_FILE), exist_ok=True)
         tmp = OTA_CHANNEL_FILE + '.tmp'
@@ -1610,7 +3879,8 @@ def set_ota_channel(channel):
         os.replace(tmp, OTA_CHANNEL_FILE)
     except Exception:
         log.exception("set_ota_channel failed")
-        return {'success': False, 'message': 'Impossibile salvare il canale', 'channel': get_ota_channel()}
+        return {'success': False, 'code': 'ota.channelSaveFailed',
+                'message': _t('ota.channelSaveFailed', _lang()), 'channel': get_ota_channel()}
     return {'success': True, 'channel': channel}
 
 # Short-lived cache of the GitHub Release per channel. A single "check updates"
@@ -1638,7 +3908,8 @@ def _fetch_pages_manifest(channel):
 
 def _fetch_github_api_release(channel):
     """Fallback: query the (rate-limited) GitHub REST API.
-    prod → newest stable; dev → newest release incl. prereleases.
+    prod → newest stable; dev → newest release incl. prereleases, EXCLUDING
+    alpha-tagged ones; alpha → newest release of any kind (incl. alpha tags).
 
     The repo also hosts the Android companion app's releases (tags
     "companion-v*", APK-only assets) — those must never be offered to the
@@ -1656,8 +3927,11 @@ def _fetch_github_api_release(channel):
     # GitHub lists releases newest-first; skip drafts and companion releases.
     rels = [rel for rel in data if not rel.get('draft')
             and not str(rel.get('tag_name', '')).startswith('companion-')]
-    if channel == 'dev':
+    if channel == 'alpha':
         return next(iter(rels), {})
+    if channel == 'dev':
+        return next((rel for rel in rels
+                      if not _ALPHA_TAG_RE.search(str(rel.get('tag_name', '')))), {})
     return next((rel for rel in rels if not rel.get('prerelease')), {})
 
 def _fetch_release(channel):
@@ -1698,15 +3972,20 @@ def _fetch_release(channel):
         _RELEASE_CACHE[channel] = (now, release)
         return release
 
-def _check_release_update(current, prefix):
+def _check_release_update(current, prefix, channel=None):
     """Look at the relevant GitHub Release and return update info for the asset
-    whose name starts with `prefix` (e.g. 'hifi-ui-' or 'hifi-system-')."""
-    channel = get_ota_channel()
+    whose name starts with `prefix` (e.g. 'hifi-ui-' or 'hifi-system-').
+
+    channel defaults to the persisted OTA channel; the setup wizard's
+    mandatory update gate (wizard_update_check() below) passes an explicit
+    one to check prod/dev independently of whatever the device's own channel
+    setting happens to be, without touching it."""
+    channel = channel or get_ota_channel()
     try:
         release = _fetch_release(channel)
     except Exception:
         log.exception("update check failed")
-        return {'error': 'Controllo aggiornamenti fallito', 'current': current, 'channel': channel}
+        return {'error': _t('update.checkFailed', _lang()), 'current': current, 'channel': channel}
 
     latest = release.get('tag_name') or release.get('name') or ''
     assets = release.get('assets', [])
@@ -1736,46 +4015,68 @@ def check_app_update():
     return _check_release_update(_installed_ui_version(), OTA_UI_PREFIX)
 
 def _fetch_sha256(sha_url):
-    """Download the .sha256 sidecar and return just the hex digest."""
+    """Download the .sha256 sidecar and return just the hex digest.
+
+    GitHub's release-download host resets the connection outright on a
+    noticeable fraction of requests from some networks (observed ~20-25%,
+    independent of curl vs urllib and of IPv4/IPv6) — a plain timeout/DNS
+    problem it is not. Every curl-based download elsewhere in the OTA scripts
+    already rides through that with `--retry 3`; this one-shot fetch had no
+    such retry, so with 3 components to check, "Aggiorna tutto" had a good
+    chance of tripping over it on at least one of them."""
     req = urllib.request.Request(sha_url, headers={'User-Agent': 'hifi-player-ota'})
-    with urllib.request.urlopen(req, timeout=15) as resp:
-        text = resp.read().decode('utf-8', 'replace').strip()
-    # format is "<sha>  <filename>"; take the first whitespace-delimited token
-    return text.split()[0] if text else ''
+    last_exc = None
+    for attempt in range(3):
+        if attempt:
+            time.sleep(1)
+        try:
+            with urllib.request.urlopen(req, timeout=15) as resp:
+                text = resp.read().decode('utf-8', 'replace').strip()
+            # format is "<sha>  <filename>"; take the first whitespace-delimited token
+            return text.split()[0] if text else ''
+        except Exception as e:
+            last_exc = e
+    raise last_exc
 
 def apply_app_update():
     info = check_app_update()
     if info.get('error'):
         return {'started': False, 'message': info['error']}
     if not info.get('update_available'):
-        return {'started': False, 'message': 'Nessun aggiornamento disponibile'}
+        return {'started': False, 'code': 'update.noneAvailable',
+                'message': _t('update.noneAvailable', _lang())}
     if not info.get('sha_url'):
-        return {'started': False, 'message': 'Checksum (.sha256) mancante nella release'}
+        return {'started': False, 'code': 'update.checksumMissing',
+                'message': _t('update.checksumMissing', _lang())}
 
     try:
         sha = _fetch_sha256(info['sha_url'])
     except Exception:
         log.exception("update: checksum fetch failed")
-        return {'started': False, 'message': 'Lettura checksum fallita'}
+        return {'started': False, 'code': 'update.checksumReadFailed',
+                'message': _t('update.checksumReadFailed', _lang())}
     if not sha:
-        return {'started': False, 'message': 'Checksum vuoto'}
+        return {'started': False, 'code': 'update.checksumEmpty',
+                'message': _t('update.checksumEmpty', _lang())}
 
     cmd = [
         'systemd-run', '--no-block', '--collect', '--unit=hifi-ota',
-        OTA_SCRIPT, info['asset_url'], sha, info['latest'],
+        OTA_SCRIPT, 'full', info['asset_url'], sha, info['latest'],
     ]
     try:
         subprocess.run(cmd, capture_output=True, text=True, timeout=15, check=True)
     except FileNotFoundError:
         # systemd-run unavailable → fall back to a detached subprocess
-        subprocess.Popen([OTA_SCRIPT, info['asset_url'], sha, info['latest']],
+        subprocess.Popen([OTA_SCRIPT, 'full', info['asset_url'], sha, info['latest']],
                          start_new_session=True)
     except subprocess.CalledProcessError:
         log.exception("update: apply command failed")
-        return {'started': False, 'message': 'Avvio aggiornamento fallito'}
+        return {'started': False, 'code': 'update.startFailed',
+                'message': _t('update.startFailed', _lang())}
     except Exception:
         log.exception("update: apply failed")
-        return {'started': False, 'message': 'Avvio aggiornamento fallito'}
+        return {'started': False, 'code': 'update.startFailed',
+                'message': _t('update.startFailed', _lang())}
     return {'started': True, 'version': info['latest']}
 
 def app_update_status():
@@ -1799,34 +4100,40 @@ def apply_system_update():
     if info.get('error'):
         return {'started': False, 'message': info['error']}
     if not info.get('update_available'):
-        return {'started': False, 'message': 'Nessun aggiornamento disponibile'}
+        return {'started': False, 'code': 'update.noneAvailable',
+                'message': _t('update.noneAvailable', _lang())}
     if not info.get('sha_url'):
-        return {'started': False, 'message': 'Checksum (.sha256) mancante nella release'}
+        return {'started': False, 'code': 'update.checksumMissing',
+                'message': _t('update.checksumMissing', _lang())}
 
     try:
         sha = _fetch_sha256(info['sha_url'])
     except Exception:
         log.exception("update: checksum fetch failed")
-        return {'started': False, 'message': 'Lettura checksum fallita'}
+        return {'started': False, 'code': 'update.checksumReadFailed',
+                'message': _t('update.checksumReadFailed', _lang())}
     if not sha:
-        return {'started': False, 'message': 'Checksum vuoto'}
+        return {'started': False, 'code': 'update.checksumEmpty',
+                'message': _t('update.checksumEmpty', _lang())}
 
     cmd = [
         'systemd-run', '--no-block', '--collect', '--unit=hifi-system-update',
-        SYS_SCRIPT, info['asset_url'], sha, info['latest'],
+        SYS_SCRIPT, 'full', info['asset_url'], sha, info['latest'],
     ]
     try:
         subprocess.run(cmd, capture_output=True, text=True, timeout=15, check=True)
     except FileNotFoundError:
         # systemd-run unavailable → fall back to a detached subprocess
-        subprocess.Popen([SYS_SCRIPT, info['asset_url'], sha, info['latest']],
+        subprocess.Popen([SYS_SCRIPT, 'full', info['asset_url'], sha, info['latest']],
                          start_new_session=True)
     except subprocess.CalledProcessError:
         log.exception("update: apply command failed")
-        return {'started': False, 'message': 'Avvio aggiornamento fallito'}
+        return {'started': False, 'code': 'update.startFailed',
+                'message': _t('update.startFailed', _lang())}
     except Exception:
         log.exception("update: apply failed")
-        return {'started': False, 'message': 'Avvio aggiornamento fallito'}
+        return {'started': False, 'code': 'update.startFailed',
+                'message': _t('update.startFailed', _lang())}
     return {'started': True, 'version': info['latest']}
 
 def system_update_status():
@@ -1850,38 +4157,44 @@ def apply_os_update():
     if info.get('error'):
         return {'started': False, 'message': info['error']}
     if not info.get('update_available'):
-        return {'started': False, 'message': 'Nessun aggiornamento OS disponibile'}
+        return {'started': False, 'code': 'update.noneAvailableOs',
+                'message': _t('update.noneAvailableOs', _lang())}
     if not info.get('sha_url'):
-        return {'started': False, 'message': 'Checksum (.sha256) mancante nella release'}
+        return {'started': False, 'code': 'update.checksumMissing',
+                'message': _t('update.checksumMissing', _lang())}
     # The OS bundle runs root scripts, so a valid signature is mandatory.
     if not info.get('sig_url'):
-        return {'started': False,
-                'message': 'Firma (.sha256.sig) mancante: aggiornamento OS rifiutato'}
+        return {'started': False, 'code': 'update.sigMissing',
+                'message': _t('update.sigMissing', _lang())}
 
     try:
         sha = _fetch_sha256(info['sha_url'])
     except Exception:
         log.exception("update: checksum fetch failed")
-        return {'started': False, 'message': 'Lettura checksum fallita'}
+        return {'started': False, 'code': 'update.checksumReadFailed',
+                'message': _t('update.checksumReadFailed', _lang())}
     if not sha:
-        return {'started': False, 'message': 'Checksum vuoto'}
+        return {'started': False, 'code': 'update.checksumEmpty',
+                'message': _t('update.checksumEmpty', _lang())}
 
     cmd = [
         'systemd-run', '--no-block', '--collect', '--unit=hifi-os-update',
-        OS_SCRIPT, info['asset_url'], sha, info['sig_url'], info['latest'],
+        OS_SCRIPT, 'full', info['asset_url'], sha, info['sig_url'], info['latest'],
     ]
     try:
         subprocess.run(cmd, capture_output=True, text=True, timeout=15, check=True)
     except FileNotFoundError:
         # systemd-run unavailable → fall back to a detached subprocess
-        subprocess.Popen([OS_SCRIPT, info['asset_url'], sha, info['sig_url'], info['latest']],
+        subprocess.Popen([OS_SCRIPT, 'full', info['asset_url'], sha, info['sig_url'], info['latest']],
                          start_new_session=True)
     except subprocess.CalledProcessError:
         log.exception("update: apply command failed")
-        return {'started': False, 'message': 'Avvio aggiornamento fallito'}
+        return {'started': False, 'code': 'update.startFailed',
+                'message': _t('update.startFailed', _lang())}
     except Exception:
         log.exception("update: apply failed")
-        return {'started': False, 'message': 'Avvio aggiornamento fallito'}
+        return {'started': False, 'code': 'update.startFailed',
+                'message': _t('update.startFailed', _lang())}
     return {'started': True, 'version': info['latest']}
 
 def os_update_status():
@@ -1890,6 +4203,566 @@ def os_update_status():
             return json.load(f)
     except Exception:
         return {'state': 'idle'}
+
+# ──────────────────────────────────────────────────────────────────
+#  Installer: boot-mode detection + disk-to-disk installation
+# ──────────────────────────────────────────────────────────────────
+def get_boot_mode():
+    """Read from /proc/cmdline whether this live session was booted from the
+    'Install Osmium Sound' menu entry (hifi.installer=1) or the plain 'Try'
+    entry. The Electron app (src/App.jsx) uses this to decide whether to show
+    InstallWizard or the normal kiosk UI."""
+    try:
+        with open('/proc/cmdline') as f:
+            cmdline = f.read()
+    except Exception:
+        cmdline = ''
+    mode = 'installer' if 'hifi.installer=1' in cmdline.split() else 'live'
+    return {'mode': mode}
+
+def _boot_medium_disk():
+    """Resolve the physical disk backing the live boot medium itself, so it
+    can be excluded from the installer's disk picker (hifi-disk-install.sh
+    refuses it independently too, as a second line of defense)."""
+    for mp in ('/run/live/medium', '/lib/live/mount/medium'):
+        try:
+            r = _run(['findmnt', '-no', 'SOURCE', mp], timeout=5)
+        except Exception:
+            continue
+        src = (r.stdout or '').strip()
+        if not src:
+            continue
+        try:
+            pr = _run(['lsblk', '-no', 'PKNAME', src], timeout=5)
+            pk = (pr.stdout or '').strip().split()
+            if pk:
+                return '/dev/' + pk[0]
+        except Exception:
+            pass
+    return None
+
+def list_install_disks():
+    medium_disk = _boot_medium_disk()
+    try:
+        r = _run(['lsblk', '-J', '-b', '-o', 'PATH,TYPE,SIZE,MODEL,TRAN,ROTA'], timeout=10)
+        data = json.loads(r.stdout or '{}')
+    except Exception:
+        log.exception("install: disk enumeration failed")
+        return {'success': False, 'code': 'install.enumFailed',
+                'message': _t('install.enumFailed', _lang()), 'disks': []}
+    disks = []
+    for dev in data.get('blockdevices', []):
+        if dev.get('type') != 'disk':
+            continue
+        path = dev.get('path')
+        if not path or path == medium_disk:
+            continue
+        disks.append({
+            'path': path,
+            'size': dev.get('size'),
+            'model': (dev.get('model') or '').strip(),
+            'transport': dev.get('tran'),
+            'rotational': bool(dev.get('rota')),
+        })
+    return {'success': True, 'disks': disks}
+
+def start_disk_install(device):
+    if not device or not isinstance(device, str) or not re.match(r'^/dev/[A-Za-z0-9/_]+$', device):
+        return {'success': False, 'code': 'install.invalidDisk',
+                'message': _t('install.invalidDisk', _lang())}
+    medium_disk = _boot_medium_disk()
+    if medium_disk and device == medium_disk:
+        return {'success': False, 'code': 'install.cannotInstallOnBootMedia',
+                'message': _t('install.cannotInstallOnBootMedia', _lang())}
+
+    with open(INSTALL_STATUS_FILE, 'w') as f:
+        json.dump({'state': 'running', 'progress': 0, 'message': _t('common.starting', _lang())}, f)
+
+    cmd = ['systemd-run', '--no-block', '--collect', '--unit=hifi-disk-install',
+           INSTALL_SCRIPT, device]
+    try:
+        r = _run(cmd, timeout=15)
+        launch_err = None if r.returncode == 0 else (r.stderr or r.stdout or '').strip()
+    except Exception:
+        log.exception("install: failed to launch")
+        launch_err = _t('install.systemdRunNoResponse', _lang())
+    if launch_err:
+        with open(INSTALL_STATUS_FILE, 'w') as f:
+            json.dump({'state': 'error', 'progress': 0, 'message': launch_err}, f)
+        return {'success': False, 'message': launch_err}
+    return {'success': True}
+
+def disk_install_status():
+    try:
+        with open(INSTALL_STATUS_FILE) as f:
+            return json.load(f)
+    except Exception:
+        return {'state': 'idle', 'progress': 0, 'message': ''}
+
+# ──────────────────────────────────────────────────────────────────
+#  Multi-component update sequencer (see the constants block above)
+# ──────────────────────────────────────────────────────────────────
+_UPDATE_PLAN_LOCK = threading.Lock()
+
+# Per-kind wiring: how to check it, where its live status is written, and how
+# to read the version actually installed right now.
+_PLAN_KINDS = {
+    'system': (lambda: check_system_update(), SYS_STATUS_FILE, lambda: _installed_system_version()),
+    'os':     (lambda: check_os_update(),     OS_STATUS_FILE,  lambda: _installed_os_version()),
+    'ui':     (lambda: check_app_update(),    OTA_STATUS_FILE, lambda: _installed_ui_version()),
+}
+
+def _read_update_plan():
+    """Parse the persisted plan, or None when there isn't one."""
+    try:
+        with open(UPDATE_PLAN_FILE) as f:
+            lines = f.read().splitlines()
+    except Exception:
+        return None
+
+    plan = {'plan_id': '', 'channel': '', 'created': 0, 'steps': [],
+            'finished': None, 'overall': None}
+    for line in lines:
+        parts = line.split()
+        if not parts:
+            continue
+        if parts[0] == 'plan' and len(parts) >= 4:
+            plan['plan_id'] = parts[1]
+            plan['channel'] = parts[2]
+            try:
+                plan['created'] = int(parts[3])
+            except ValueError:
+                pass
+        elif parts[0] == 'step' and len(parts) >= 8:
+            try:
+                attempts = int(parts[3])
+            except ValueError:
+                attempts = 0
+            plan['steps'].append({
+                'kind': parts[1], 'state': parts[2], 'attempts': attempts,
+                'version': parts[4], 'url': parts[5], 'sha': parts[6],
+                'sig': None if parts[7] == '-' else parts[7],
+            })
+        elif parts[0] == 'finished' and len(parts) >= 3:
+            try:
+                plan['finished'] = int(parts[1])
+            except ValueError:
+                plan['finished'] = 0
+            plan['overall'] = parts[2]
+    return plan if plan['steps'] else None
+
+def _write_update_plan(plan):
+    """Serialise the plan atomically (tmp + os.replace) — it is the only record
+    of what is still pending, and it has to survive a power cut mid-write."""
+    lines = ['v 2',
+             'plan %s %s %d' % (plan['plan_id'], plan['channel'], plan['created'])]
+    for s in plan['steps']:
+        lines.append('step %s %s %d %s %s %s %s' % (
+            s['kind'], s['state'], s.get('attempts', 0), s['version'],
+            s['url'], s['sha'], s['sig'] or '-'))
+    os.makedirs(os.path.dirname(UPDATE_PLAN_FILE), exist_ok=True)
+    tmp = UPDATE_PLAN_FILE + '.tmp'
+    with open(tmp, 'w') as f:
+        f.write('\n'.join(lines) + '\n')
+    os.chmod(tmp, 0o644)
+    os.replace(tmp, UPDATE_PLAN_FILE)
+
+def _clear_update_plan():
+    try:
+        os.remove(UPDATE_PLAN_FILE)
+    except FileNotFoundError:
+        pass
+    except Exception:
+        log.exception("could not remove the update plan")
+
+def _read_update_state():
+    """Parse UPDATE_STATE_FILE (written by the stage/apply runners), or None
+    when there isn't one. Never written from here — this module only reads
+    the outcome the shell side recorded."""
+    try:
+        with open(UPDATE_STATE_FILE) as f:
+            lines = f.read().splitlines()
+    except Exception:
+        return None
+    info = {}
+    for line in lines:
+        k, sep, v = line.partition('=')
+        if sep:
+            info[k] = v
+    if not info:
+        return None
+    try:
+        info['ts'] = int(info.get('ts', 0))
+    except ValueError:
+        info['ts'] = 0
+    return info
+
+def _clear_update_state():
+    for f in (UPDATE_STATE_FILE, UPDATE_ERROR_FILE):
+        try:
+            os.remove(f)
+        except FileNotFoundError:
+            pass
+        except Exception:
+            log.exception("could not remove %s", f)
+
+def _read_update_error():
+    """Detail for a failed apply (channel + message), or None."""
+    try:
+        with open(UPDATE_ERROR_FILE) as f:
+            return json.load(f)
+    except Exception:
+        return None
+
+# Sentinel returned by _plan_step_from_info() to mean "an update IS available
+# but the step couldn't be safely built" — distinct from plain None ("nothing
+# to do"), so build_update_plan() can surface it as a real error instead of
+# silently treating it as if there was no update at all.
+_STEP_INVALID = object()
+
+def _plan_step_from_info(kind, info):
+    """Turn a check result into a plan step. Returns None when there's nothing
+    to do, or _STEP_INVALID when an update exists but the step failed validation.
+
+    Every field is validated here rather than in the runner: the plan file is
+    parsed by /bin/sh on whitespace, and the OS step's arguments end up as
+    arguments to a root script."""
+    if not info or info.get('error') or not info.get('update_available'):
+        return None
+    version = (info.get('latest') or '').strip()
+    url = (info.get('asset_url') or '').strip()
+    sha = (info.get('sha_url') or '').strip()
+    sig = (info.get('sig_url') or '').strip()
+    if not _SAFE_VERSION_RE.match(version):
+        log.warning("update plan: refusing %s, unsafe version %r", kind, version)
+        return _STEP_INVALID
+    if not url.startswith('https://') or not sha.startswith('https://'):
+        log.warning("update plan: refusing %s, non-TLS asset URL", kind)
+        return _STEP_INVALID
+    # The OS bundle runs root code from its payload, so its signature is not
+    # optional — mirrors apply_os_update().
+    if kind == 'os' and not sig.startswith('https://'):
+        log.warning("update plan: refusing os step, missing signature")
+        return _STEP_INVALID
+    try:
+        digest = _fetch_sha256(sha)
+    except Exception:
+        log.exception("update plan: checksum fetch failed for %s", kind)
+        return _STEP_INVALID
+    if not _SAFE_SHA_RE.match(digest or ''):
+        log.warning("update plan: refusing %s, malformed checksum", kind)
+        return _STEP_INVALID
+    if any(c.isspace() for c in url + sig):
+        return _STEP_INVALID
+    return {'kind': kind, 'state': 'pending', 'attempts': 0, 'version': version,
+            'url': url, 'sha': digest, 'sig': sig or None}
+
+def build_update_plan():
+    """Check all three components and return the steps that need applying, in
+    canonical order. One release fetch serves all three (60s cache)."""
+    steps = []
+    errors = []
+    for kind in UPDATE_PLAN_ORDER:
+        check_fn = _PLAN_KINDS[kind][0]
+        try:
+            info = check_fn()
+        except Exception:
+            log.exception("update plan: check failed for %s", kind)
+            errors.append(kind)
+            continue
+        if info.get('error'):
+            errors.append(kind)
+            continue
+        step = _plan_step_from_info(kind, info)
+        if step is _STEP_INVALID:
+            errors.append(kind)
+            continue
+        if step:
+            steps.append(step)
+    return steps, errors
+
+def _runner_active():
+    """True while the STAGE sequencer is running (either the transient unit
+    started by apply_all_updates, or the boot-time stage-resume unit). The
+    apply half never runs while this module can observe it — it only ever
+    runs isolated under system-update.target, where hifi-api itself is not
+    scheduled to start."""
+    for unit in (UPDATE_STAGE_RUNNER_UNIT + '.service', 'hifi-update-stage-resume.service'):
+        try:
+            r = _run(['systemctl', 'is-active', unit])
+            if (r.stdout or '').strip() in ('active', 'activating', 'reloading'):
+                return True
+        except Exception:
+            pass
+    return False
+
+def _plan_overall_state(plan):
+    """Derive the plan-level state from its steps."""
+    if plan.get('finished'):
+        return 'error' if plan.get('overall') == 'error' else 'finished'
+    states = [s['state'] for s in plan['steps']]
+    if 'error' in states:
+        return 'error'
+    if 'running' in states:
+        # A step marked running with no live runner means we were killed between
+        # steps (power cut, or a reboot on a box where the resume unit isn't
+        # enabled yet). Say so rather than spinning forever on a dead plan.
+        return 'running' if _runner_active() else 'interrupted'
+    if 'pending' in states:
+        return 'running' if _runner_active() else 'interrupted'
+    return 'finished'
+
+def apply_all_updates():
+    """Build a plan for every component that has an update and hand it to the
+    stage sequencer. Returns immediately; poll update_plan_status()."""
+    with _UPDATE_PLAN_LOCK:
+        existing = _read_update_plan()
+        if existing and _plan_overall_state(existing) == 'running':
+            return {'started': False, 'code': 'update.alreadyInProgress',
+                    'message': _t('update.alreadyInProgress', _lang())}
+
+        steps, errors = build_update_plan()
+        if not steps:
+            if errors:
+                return {'started': False, 'code': 'update.checkFailed',
+                        'message': _t('update.checkFailed', _lang())}
+            return {'started': False, 'code': 'update.noneAvailable',
+                    'message': _t('update.noneAvailable', _lang())}
+
+        # A leftover outcome from a previous cycle (done/error banner) would
+        # otherwise take priority over this brand-new plan's own progress —
+        # see update_plan_status(), which checks the state file first.
+        _clear_update_state()
+
+        plan = {
+            'plan_id': '%d-%d' % (int(time.time()), os.getpid()),
+            'channel': get_ota_channel(),
+            'created': int(time.time()),
+            'steps': steps,
+            'finished': None, 'overall': None,
+        }
+        try:
+            _write_update_plan(plan)
+        except Exception:
+            log.exception("update plan: could not write %s", UPDATE_PLAN_FILE)
+            return {'started': False, 'code': 'update.planSaveFailed',
+                    'message': _t('update.planSaveFailed', _lang())}
+
+        # Belt and braces: a device imaged before hifi-update-stage-runner.sh
+        # was added to the ISO's chmod-list (0300-app-install.hook.chroot)
+        # ships it non-executable. `systemd-run --no-block` below still
+        # returns success in that case — it only queues the transient unit, it
+        # doesn't wait for the exec to actually happen — so the permission
+        # error is invisible here and only shows up later as a plan stuck
+        # forever in 'pending' (nothing ever marks it 'running'). Fix it
+        # unconditionally so this class of bug can't silently strand a plan
+        # again.
+        try:
+            os.chmod(UPDATE_STAGE_RUNNER_SCRIPT, 0o755)
+        except OSError:
+            log.exception("update plan: could not chmod +x %s", UPDATE_STAGE_RUNNER_SCRIPT)
+
+        cmd = ['systemd-run', '--no-block', '--collect',
+               '--unit=' + UPDATE_STAGE_RUNNER_UNIT, UPDATE_STAGE_RUNNER_SCRIPT]
+        try:
+            subprocess.run(cmd, capture_output=True, text=True, timeout=15, check=True)
+        except FileNotFoundError:
+            # systemd-run unavailable → detached subprocess. It no longer
+            # survives a reboot, but the plan on disk does, so the stage-resume
+            # unit (or the next apply) finishes the job.
+            subprocess.Popen([UPDATE_STAGE_RUNNER_SCRIPT], start_new_session=True)
+        except Exception:
+            log.exception("update plan: could not start the stage runner")
+            _clear_update_plan()
+            return {'started': False, 'code': 'update.startFailed',
+                    'message': _t('update.startFailed', _lang())}
+
+        return {'started': True, 'plan_id': plan['plan_id'],
+                'steps': [{'kind': s['kind'], 'version': s['version']} for s in steps]}
+
+def update_plan_status():
+    """Progress of the current update, across BOTH phases and the two reboots
+    between them:
+
+    - while staging: the persisted plan's step list plus the live progress of
+      whichever step is downloading/verifying (unchanged from before the
+      two-phase split);
+    - once staging finishes: 'staged_pending_reboot' — the box is about to
+      reboot into the isolated apply session on its own, nothing more to poll
+      until it comes back;
+    - after the box returns (successfully or not): the durable outcome
+      hifi-update-apply-runner.sh recorded in UPDATE_STATE_FILE, since by then
+      the plan file itself is gone (removed on success) or stale (left behind
+      on failure, superseded by the state file — see below).
+
+    The state file is checked FIRST and wins whenever it holds a terminal
+    result: hifi-api does not run at all while the apply runner works, so the
+    only time this function can ever observe 'applying' is a leftover from a
+    run that crashed before finishing — still worth surfacing rather than
+    silently falling through to a stale plan."""
+    state_info = _read_update_state()
+    if state_info and state_info.get('phase') in ('applying', 'done', 'error'):
+        phase = state_info['phase']
+        ts = state_info.get('ts', 0)
+        if phase in ('done', 'error') and time.time() - ts > UPDATE_PLAN_TTL:
+            _clear_update_state()
+            _clear_update_plan()
+        elif phase == 'applying':
+            return {'state': 'applying',
+                    'message': state_info.get('message') or _t('update.applying', _lang()),
+                    'finished': None}
+        elif phase == 'done':
+            return {'state': 'done',
+                    'message': state_info.get('message') or _t('update.applyDone', _lang()),
+                    'finished': ts}
+        else:
+            err = _read_update_error() or {}
+            return {'state': 'apply_error', 'kind': err.get('channel', ''),
+                    'message': (err.get('message') or state_info.get('message')
+                                or _t('update.applyError', _lang())),
+                    'finished': ts}
+
+    plan = _read_update_plan()
+    if not plan:
+        return {'state': 'idle'}
+
+    state = _plan_overall_state(plan)
+
+    # Retire a finished-but-never-staged (i.e. purely stage-side error) plan
+    # once everyone has had a chance to see the outcome, so it stops
+    # re-opening the overlay on every client start. A plan that DID finish
+    # staging is retired via the state file above instead (it is superseded
+    # by 'staged'/'applying'/'done'/'error' the moment the box reboots).
+    if plan.get('finished') and time.time() - plan['finished'] > UPDATE_PLAN_TTL:
+        _clear_update_plan()
+        return {'state': 'idle'}
+
+    # Every step has staged; the stage runner is about to (or already did)
+    # create /system-update and reboot into the isolated apply session. There
+    # is nothing left to poll here until the box comes back — the state-file
+    # branch above takes over from that point on.
+    if state == 'finished':
+        return {'state': 'staged_pending_reboot',
+                'message': _t('update.stagedPendingReboot', _lang()),
+                'finished': plan.get('finished')}
+
+    # 'error' ranks above 'pending': the stage runner always stops at the
+    # first failed step, so any steps still 'pending' after that were simply
+    # never reached — picking one of those as `current` would attribute the
+    # failure to the wrong component and its version wouldn't match the
+    # (unwritten) live status file below, silently losing the message.
+    current = (next((s for s in plan['steps'] if s['state'] == 'running'), None)
+               or next((s for s in plan['steps'] if s['state'] == 'error'), None)
+               or next((s for s in plan['steps'] if s['state'] == 'pending'), None)
+               or (plan['steps'][-1] if plan['steps'] else None))
+
+    step_state, progress, message = '', None, ''
+    # 'error' must be included here too — otherwise a failed step's real
+    # failure reason (written by the updater script's fail() into
+    # /run/hifi-*-status.json, e.g. "Download fallito da ...") is never read,
+    # and the client falls back to showing just the generic component name.
+    if current and state in ('running', 'interrupted', 'error'):
+        try:
+            with open(_PLAN_KINDS[current['kind']][1]) as f:
+                live = json.load(f)
+        except Exception:
+            live = {}
+        # Only trust the /run status file when it is talking about *this* step.
+        # It is not reset between runs, so it can still hold the previous
+        # update's `done` — which is precisely what used to make a client skip
+        # ahead and start the next component on top of a running one.
+        if live.get('version') == current['version']:
+            step_state = live.get('state') or ''
+            progress = live.get('progress') if isinstance(live.get('progress'), (int, float)) else None
+            message = live.get('message') or ''
+        else:
+            step_state = 'starting'
+
+    done = sum(1 for s in plan['steps'] if s['state'] == 'done')
+    total = len(plan['steps']) or 1
+    overall_progress = int(100.0 * (done + (progress or 0) / 100.0) / total)
+
+    return {
+        'state': state,
+        'plan_id': plan['plan_id'],
+        'channel': plan['channel'],
+        'kind': current['kind'] if current else '',
+        'version': current['version'] if current else '',
+        'step_state': step_state,
+        'progress': progress,
+        'message': message,
+        'overall_progress': min(overall_progress, 100),
+        'finished': plan.get('finished'),
+        'steps': [{'kind': s['kind'], 'version': s['version'], 'state': s['state'],
+                   'installed': _PLAN_KINDS[s['kind']][2]()} for s in plan['steps']],
+    }
+
+def dismiss_update_plan():
+    """Drop a plan/outcome that is no longer running (the client has shown the
+    result). Refuses while either phase is still actually working."""
+    with _UPDATE_PLAN_LOCK:
+        state = update_plan_status().get('state')
+        if state in ('running', 'staged_pending_reboot', 'applying'):
+            return {'success': False, 'code': 'update.inProgress',
+                    'message': _t('update.inProgress', _lang())}
+        _clear_update_state()
+        _clear_update_plan()
+        return {'success': True}
+
+# ──────────────────────────────────────────────────────────────────
+#  Setup wizard: mandatory update gate, right after the network step.
+#  TEMPORARY (per explicit request): checks BOTH prod and dev, regardless of
+#  the device's own (always 'prod' this early) OTA channel setting -- a prod
+#  update applies automatically, a dev-only one needs the operator's
+#  confirmation on screen first. Drop the dev branch once this has shipped to
+#  production and prod-only checks are enough again.
+# ──────────────────────────────────────────────────────────────────
+def _channel_has_update(channel):
+    """Returns (has_update, checked_ok). checked_ok is False only when EVERY
+    component's check failed outright (network/API blip) -- distinct from a
+    check that actually ran and simply found nothing newer. Right after the
+    network step, DNS/routing can still be warming up, so a failed check here
+    must not read the same as a confirmed "nothing to update" (see
+    wizard_update_check() below)."""
+    any_ok = False
+    for current, prefix in ((_installed_ui_version(), OTA_UI_PREFIX),
+                            (_installed_system_version(), SYS_PREFIX),
+                            (_installed_os_version(), OS_PREFIX)):
+        try:
+            info = _check_release_update(current, prefix, channel)
+        except Exception:
+            continue
+        if info.get('error'):
+            continue
+        any_ok = True
+        if info.get('update_available'):
+            return True, True
+    return False, any_ok
+
+def wizard_update_check():
+    prod_avail, prod_ok = _channel_has_update('prod')
+    if prod_avail:
+        return {'available': True, 'channel': 'prod', 'auto': True}
+    dev_avail, dev_ok = _channel_has_update('dev')
+    if dev_avail:
+        return {'available': True, 'channel': 'dev', 'auto': False}
+    if not prod_ok and not dev_ok:
+        # Neither channel could be checked at all -- report it distinctly so
+        # the wizard retries instead of treating "couldn't check" the same as
+        # "checked, nothing to update".
+        return {'available': False, 'checkFailed': True}
+    return {'available': False}
+
+def wizard_update_apply(channel):
+    if channel not in ('prod', 'dev'):
+        return {'started': False, 'code': 'update.checkFailed',
+                'message': _t('update.checkFailed', _lang())}
+    # Not a side-channel hack: this is a real, deliberate channel switch (the
+    # same one Settings -> Updates would make), so the device legitimately
+    # tracks whichever channel it was just updated from, same as if the
+    # operator had picked it there.
+    set_ota_channel(channel)
+    return apply_all_updates()
 
 # ──────────────────────────────────────────────────────────────────
 #  Lyrion Music Server update helpers
@@ -1904,8 +4777,112 @@ def _lyrion_installed_version():
         pass
     return 'unknown'
 
-def check_lyrion_update():
+def get_lyrion_channel():
+    """Return the persisted Lyrion channel. Mirrors get_ota_channel(), but this
+    is a *separate* setting: the appliance's own dev channel says nothing about
+    which music-server build the owner wants."""
+    try:
+        with open(LYRION_CHANNEL_FILE) as f:
+            ch = f.read().strip()
+        if ch in LYRION_CHANNELS:
+            return ch
+    except Exception:
+        pass
+    return LYRION_DEFAULT_CHANNEL
+
+def set_lyrion_channel(channel):
+    if channel not in LYRION_CHANNELS:
+        return {'success': False, 'code': 'lyrion.badChannel',
+                'message': _t('lyrion.badChannel', _lang()), 'channel': get_lyrion_channel()}
+    try:
+        os.makedirs(os.path.dirname(LYRION_CHANNEL_FILE), exist_ok=True)
+        tmp = LYRION_CHANNEL_FILE + '.tmp'
+        with open(tmp, 'w') as f:
+            f.write(channel + '\n')
+        os.replace(tmp, LYRION_CHANNEL_FILE)
+    except Exception:
+        log.exception("set_lyrion_channel failed")
+        return {'success': False, 'code': 'lyrion.channelSaveFailed',
+                'message': _t('lyrion.channelSaveFailed', _lang()), 'channel': get_lyrion_channel()}
+    return {'success': True, 'channel': channel}
+
+def get_lyrion_installed_channel():
+    """Which channel actually produced the build currently installed (or
+    being installed). None if never tracked yet — every device is in this
+    state the first time it runs code that knows about this file, since it
+    didn't exist before. Deliberately does NOT fall back to the preference
+    file (get_lyrion_channel()): that file is what the Settings UI already
+    overwrites the instant the owner picks a channel, before Install is even
+    pressed, which is the exact bug this split was meant to fix — falling
+    back to it here would silently reintroduce it on every device's first
+    switch after upgrading. None compares unequal to any real channel, so
+    apply_lyrion_update() treats an untracked device as "always switching",
+    which is the safe default (worst case: one redundant reinstall)."""
+    try:
+        with open(LYRION_INSTALLED_CHANNEL_FILE) as f:
+            ch = f.read().strip()
+        if ch in LYRION_CHANNELS:
+            return ch
+    except Exception:
+        pass
+    return None
+
+def _set_lyrion_installed_channel(channel):
+    try:
+        os.makedirs(os.path.dirname(LYRION_INSTALLED_CHANNEL_FILE), exist_ok=True)
+        tmp = LYRION_INSTALLED_CHANNEL_FILE + '.tmp'
+        with open(tmp, 'w') as f:
+            f.write(channel + '\n')
+        os.replace(tmp, LYRION_INSTALLED_CHANNEL_FILE)
+    except Exception:
+        log.exception("set_lyrion_installed_channel failed")
+
+def _parse_lyrion_channels(html):
+    """Pull one .deb per channel out of the downloads page.
+
+    Release builds live under /LyrionMusicServer_v<X.Y.Z>/, both the stable
+    nightly and the development build under /nightly/ with a '~<timestamp>'
+    suffix. The two nightly streams are told apart by version: the higher
+    minor is the development branch, the lower one the bugfix stream for the
+    current release. We keep the '_all.deb' flavour, which is what the image
+    installs today — switching to _amd64 would be an arch change, not an
+    update."""
+    out = {}
+    releases = re.findall(
+        r'https://downloads\.lms-community\.org/LyrionMusicServer_v(\d+\.\d+\.\d+)/'
+        r'lyrionmusicserver_\1_all\.deb', html)
+    if releases:
+        latest = max(set(releases), key=_semver_key)
+        out['release'] = {
+            'version': latest,
+            'url': (f'https://downloads.lms-community.org/LyrionMusicServer_v{latest}/'
+                    f'lyrionmusicserver_{latest}_all.deb'),
+        }
+
+    nightlies = sorted(
+        set(re.findall(
+            r'https://downloads\.lms-community\.org/nightly/'
+            r'lyrionmusicserver_(\d+\.\d+\.\d+~\d+)_all\.deb', html)),
+        key=_semver_key)
+    if nightlies:
+        # Highest = development branch; the next one down = stable nightly.
+        # With only one nightly published, treat it as the development build.
+        out['dev'] = {
+            'version': nightlies[-1],
+            'url': ('https://downloads.lms-community.org/nightly/'
+                    f'lyrionmusicserver_{nightlies[-1]}_all.deb'),
+        }
+        if len(nightlies) > 1:
+            out['nightly'] = {
+                'version': nightlies[-2],
+                'url': ('https://downloads.lms-community.org/nightly/'
+                        f'lyrionmusicserver_{nightlies[-2]}_all.deb'),
+            }
+    return out
+
+def check_lyrion_update(channel=None):
     current = _lyrion_installed_version()
+    channel = channel if channel in LYRION_CHANNELS else get_lyrion_channel()
     req = urllib.request.Request(LYRION_DOWNLOADS_PAGE,
                                  headers={'User-Agent': 'hifi-player-ota'})
     try:
@@ -1913,32 +4890,50 @@ def check_lyrion_update():
             html = resp.read().decode('utf-8', 'replace')
     except Exception:
         log.exception("lyrion update check failed")
-        return {'error': 'Controllo aggiornamenti Lyrion fallito', 'current': current}
+        return {'code': 'lyrion.checkFailed',
+                'error': _t('lyrion.checkFailed', _lang()),
+                'current': current, 'channel': channel, 'channels': {}}
 
-    # Stable releases live under LyrionMusicServer_v<X.Y.Z>/lyrionmusicserver_<X.Y.Z>_all.deb
-    # (nightlies are under /nightly/ and do not match this pattern → excluded).
-    matches = re.findall(
-        r'https://downloads\.lms-community\.org/LyrionMusicServer_v(\d+\.\d+\.\d+)/'
-        r'lyrionmusicserver_\1_all\.deb', html)
-    if not matches:
-        return {'error': 'Nessuna release stabile trovata sul server download', 'current': current}
+    channels = _parse_lyrion_channels(html)
+    if not channels:
+        return {'code': 'lyrion.noBuildFound',
+                'error': _t('lyrion.noBuildFound', _lang()),
+                'current': current, 'channel': channel, 'channels': {}}
 
-    latest = max(set(matches), key=_version_tuple)
-    asset_url = (f'https://downloads.lms-community.org/LyrionMusicServer_v{latest}/'
-                 f'lyrionmusicserver_{latest}_all.deb')
+    # An unavailable channel falls back to the release build rather than
+    # reporting nothing — the page is the only source we have.
+    sel = channels.get(channel) or channels.get('release') or next(iter(channels.values()))
     return {
         'current': current,
-        'latest': latest,
-        'update_available': _is_newer(latest, current),
-        'asset_url': asset_url,
+        'channel': channel,
+        'channels': channels,
+        'latest': sel['version'],
+        'update_available': _is_newer(sel['version'], current),
+        'asset_url': sel['url'],
     }
 
-def apply_lyrion_update():
-    info = check_lyrion_update()
+def apply_lyrion_update(channel=None):
+    """Install the selected channel's build.
+
+    A channel *switch* is applied even when it is a downgrade (moving from the
+    development build back to the release is exactly that); only a no-op within
+    the same channel is refused. hifi-lyrion-update.sh already passes
+    --allow-downgrades to apt.
+
+    "Switch" is detected against the *installed* channel, not the preference
+    file the Settings UI writes the instant the owner taps a channel option
+    (well before Install is pressed) — otherwise this always sees "no change"
+    and a same-or-older-version channel swap gets wrongly refused as up to
+    date. See LYRION_INSTALLED_CHANNEL_FILE."""
+    switching = channel in LYRION_CHANNELS and channel != get_lyrion_installed_channel()
+    info = check_lyrion_update(channel)
     if info.get('error'):
-        return {'started': False, 'message': info['error']}
-    if not info.get('update_available'):
-        return {'started': False, 'message': 'Nessun aggiornamento Lyrion disponibile'}
+        return {'started': False, 'code': info.get('code'), 'message': info['error']}
+    if not info.get('update_available') and not switching:
+        return {'started': False, 'code': 'lyrion.upToDate',
+                'message': _t('lyrion.upToDate', _lang())}
+    if switching:
+        set_lyrion_channel(channel)
 
     cmd = [
         'systemd-run', '--no-block', '--collect', '--unit=hifi-lyrion-update',
@@ -1951,11 +4946,14 @@ def apply_lyrion_update():
                          start_new_session=True)
     except subprocess.CalledProcessError:
         log.exception("update: apply command failed")
-        return {'started': False, 'message': 'Avvio aggiornamento fallito'}
+        return {'started': False, 'code': 'lyrion.startFailed',
+                'message': _t('lyrion.startFailed', _lang())}
     except Exception:
         log.exception("update: apply failed")
-        return {'started': False, 'message': 'Avvio aggiornamento fallito'}
-    return {'started': True, 'version': info['latest']}
+        return {'started': False, 'code': 'lyrion.startFailed',
+                'message': _t('lyrion.startFailed', _lang())}
+    _set_lyrion_installed_channel(channel)
+    return {'started': True, 'version': info['latest'], 'channel': info['channel']}
 
 def lyrion_update_status():
     try:
@@ -1982,15 +4980,15 @@ def show_global_keyboard():
                 print(f"Found {cmd}, launching...")
                 # Launch in background
                 subprocess.Popen(f"{cmd} &", shell=True)
-                return f"Tastiera virtuale {cmd} avviata"
+                return _t('keyboard.started', _lang(), cmd=cmd)
             except subprocess.CalledProcessError:
                 print(f"{cmd} not found, trying next...")
                 continue
-        
-        return "Nessuna tastiera virtuale di sistema trovata. Installa onboard, florence, xvkbd o matchbox-keyboard"
+
+        return _t('keyboard.noneFound', _lang())
     except Exception:
         log.exception("show_global_keyboard failed")
-        return "Errore nell'avvio della tastiera virtuale"
+        return _t('keyboard.startFailed', _lang())
 
 # Funzione per nascondere la tastiera virtuale globale
 def hide_global_keyboard():
@@ -2000,10 +4998,122 @@ def hide_global_keyboard():
         subprocess.run("pkill -f florence", shell=True, capture_output=True)
         subprocess.run("pkill -f xvkbd", shell=True, capture_output=True)
         subprocess.run("pkill -f matchbox-keyboard", shell=True, capture_output=True)
-        return "Tastiera virtuale chiusa"
+        return _t('keyboard.closed', _lang())
     except Exception:
         log.exception("hide_global_keyboard failed")
-        return "Errore nella chiusura della tastiera virtuale"
+        return _t('keyboard.closeFailed', _lang())
+
+# ──────────────────────────────────────────────────────────────────
+#  Guided room correction — measure the room with a USB mic and generate
+#  the CamillaDSP FIR automatically (no external REW workflow needed).
+#  Async job, same systemd-run + /run status-file shape as the OTA/format
+#  jobs; the worker writes the same /etc/camilladsp/filters/room.wav the
+#  manual upload flow uses, so the existing room_correction toggle applies it.
+# ──────────────────────────────────────────────────────────────────
+ROOMCORR_STATUS = '/run/hifi-roomcorr-status.json'
+ROOMCORR_CFG = '/run/hifi-roomcorr-config.json'
+ROOMCORR_RESULT = '/var/lib/hifi-player/roomcorr-result.json'
+ROOMCORR_UNIT = 'hifi-room-measure'
+ROOMCORR_SCRIPT = '/usr/local/sbin/hifi-room-measure.py'
+
+def get_roomcorr_mics():
+    """Capture devices from `arecord -l` (the measurement mic candidates).
+    Loopback is the DSP plumbing, never a mic."""
+    mics = []
+    try:
+        r = _run(['arecord', '-l'], timeout=10)
+        for m in re.finditer(r'card (\d+): (\S+) \[(.*?)\], device (\d+): (.*?) \[',
+                             r.stdout or ''):
+            card, cid, cname, dev, dname = m.groups()
+            if 'Loopback' in cid or 'Loopback' in cname:
+                continue
+            mics.append({
+                'device': f'plughw:{card},{dev}',
+                'name': (cname or cid).strip() or f'Card {card}',
+                'detail': dname.strip(),
+            })
+    except Exception:
+        log.exception('get_roomcorr_mics failed')
+    return {'mics': mics, 'available': os.path.exists(ROOMCORR_SCRIPT)}
+
+def _roomcorr_state():
+    try:
+        with open(ROOMCORR_STATUS) as f:
+            return json.load(f)
+    except Exception:
+        return {'state': 'idle'}
+
+def start_roomcorr_measure(data):
+    if not os.path.exists(ROOMCORR_SCRIPT):
+        return {'success': False, 'code': 'roomcorr.updateRequired',
+                'message': _t('roomcorr.updateRequired', _lang())}, 424
+    mic = str(data.get('mic_device') or '').strip()
+    known = [m['device'] for m in get_roomcorr_mics()['mics']]
+    if mic not in known:
+        return {'success': False, 'code': 'roomcorr.micNotFound',
+                'message': _t('roomcorr.micNotFound', _lang())}, 400
+    try:
+        level = float(data.get('level_db') or -12.0)
+    except (TypeError, ValueError):
+        level = -12.0
+    level = max(-30.0, min(-6.0, level))
+    if _roomcorr_state().get('state') in ('preparing', 'sweep', 'analyzing'):
+        return {'success': False, 'code': 'roomcorr.alreadyMeasuring',
+                'message': _t('roomcorr.alreadyMeasuring', _lang())}, 409
+
+    cfg = {'mic_device': mic, 'out_device': _current_real_dac(), 'level_db': level}
+    with open(ROOMCORR_CFG, 'w') as f:
+        json.dump(cfg, f)
+    os.chmod(ROOMCORR_CFG, 0o600)
+    with open(ROOMCORR_STATUS, 'w') as f:
+        json.dump({'state': 'preparing', 'progress': 0, 'message': _t('common.starting', _lang())}, f)
+    subprocess.run(['systemd-run', '--no-block', '--collect',
+                    '--unit=' + ROOMCORR_UNIT, ROOMCORR_SCRIPT, ROOMCORR_CFG],
+                   capture_output=True, text=True, timeout=10)
+    return {'success': True}, 202
+
+def get_roomcorr_status():
+    st = _roomcorr_state()
+    if st.get('state') == 'done':
+        try:
+            with open(ROOMCORR_RESULT) as f:
+                st['result'] = json.load(f)
+        except Exception:
+            pass
+        fir_path, _ = _fir_current()
+        dsp = _read_dsp_state()
+        st['fir_present'] = bool(fir_path)
+        st['applied'] = bool(dsp['enabled'] and dsp['room_correction'])
+    return st
+
+def roomcorr_apply():
+    """Turn the freshly measured filter on via the normal DSP apply path."""
+    fir_path, _ = _fir_current()
+    if not fir_path:
+        return {'success': False, 'code': 'roomcorr.noFilter',
+                'message': _t('roomcorr.noFilter', _lang())}
+    return set_dsp({'enabled': True, 'room_correction': True})
+
+def roomcorr_discard():
+    """Delete the generated filter (and switch the room-correction flag off
+    if it was using it)."""
+    removed = False
+    for ext in FIR_KINDS:
+        p = os.path.join(FIR_DIR, 'room' + ext)
+        try:
+            os.remove(p)
+            removed = True
+        except OSError:
+            pass
+    try:
+        os.remove(ROOMCORR_RESULT)
+    except OSError:
+        pass
+    st = _read_dsp_state()
+    if st['room_correction']:
+        set_dsp({'room_correction': False})
+    return {'success': True, 'removed': removed}
+
 
 @app.route('/check', methods=['GET'])
 def api_check():
@@ -2045,13 +5155,65 @@ def api_os_update_apply():
 def api_os_update_status():
     return jsonify(os_update_status())
 
+@app.route('/boot_mode', methods=['GET'])
+def api_boot_mode():
+    return jsonify(get_boot_mode())
+
+@app.route('/install/disks', methods=['GET'])
+def api_install_disks():
+    return jsonify(list_install_disks())
+
+@app.route('/install/start', methods=['POST'])
+def api_install_start():
+    data = request.get_json(silent=True) or {}
+    return jsonify(start_disk_install((data.get('device') or '').strip()))
+
+@app.route('/install/status', methods=['GET'])
+def api_install_status():
+    return jsonify(disk_install_status())
+
+# Sequenced multi-component update. Preferred over calling the three
+# */apply endpoints in turn: the whole plan is persisted and driven to the
+# end server-side, so a service restart, a kiosk teardown or the reboot an
+# OS payload asks for can no longer leave components half-updated.
+@app.route('/update/apply_all', methods=['POST'])
+def api_update_apply_all():
+    return jsonify(apply_all_updates())
+
+@app.route('/update/status', methods=['GET'])
+def api_update_status():
+    return jsonify(update_plan_status())
+
+@app.route('/update/dismiss', methods=['POST'])
+def api_update_dismiss():
+    return jsonify(dismiss_update_plan())
+
+@app.route('/wizard_update_check', methods=['GET'])
+def api_wizard_update_check():
+    return jsonify(wizard_update_check())
+
+@app.route('/wizard_update_apply', methods=['POST'])
+def api_wizard_update_apply():
+    data = request.get_json(silent=True) or {}
+    return jsonify(wizard_update_apply(data.get('channel')))
+
 @app.route('/lyrion_update/check', methods=['GET'])
 def api_lyrion_update_check():
-    return jsonify(check_lyrion_update())
+    return jsonify(check_lyrion_update(request.args.get('channel')))
 
 @app.route('/lyrion_update/apply', methods=['POST'])
 def api_lyrion_update_apply():
-    return jsonify(apply_lyrion_update())
+    data = request.get_json(silent=True) or {}
+    return jsonify(apply_lyrion_update(data.get('channel')))
+
+@app.route('/lyrion_channel', methods=['GET'])
+def api_lyrion_channel():
+    return jsonify({'channel': get_lyrion_channel(), 'channels': list(LYRION_CHANNELS)})
+
+@app.route('/lyrion_channel', methods=['POST'])
+def api_set_lyrion_channel():
+    data = request.get_json(silent=True) or {}
+    return jsonify(set_lyrion_channel((data.get('channel') or '').strip()))
 
 @app.route('/lyrion_update/status', methods=['GET'])
 def api_lyrion_update_status():
@@ -2075,6 +5237,11 @@ def api_close_and_restart():
 @app.route('/system_info', methods=['GET'])
 def api_system_info():
     result = get_system_info()
+    return jsonify(result)
+
+@app.route('/system_stats', methods=['GET'])
+def api_system_stats():
+    result = get_system_stats()
     return jsonify(result)
 
 @app.route('/network_info', methods=['GET'])
@@ -2117,6 +5284,123 @@ def api_ssh_set():
     data = request.get_json(silent=True) or {}
     return jsonify(set_ssh(bool(data.get('enable'))))
 
+@app.route('/shell_account', methods=['GET'])
+def api_shell_account():
+    return jsonify(get_shell_account())
+
+@app.route('/shell_account', methods=['POST'])
+def api_set_shell_account():
+    data = request.get_json(silent=True) or {}
+    return jsonify(set_shell_account(data.get('username'), data.get('password')))
+
+@app.route('/support_bundle', methods=['GET'])
+def api_support_bundle():
+    data = _support_bundle_build()
+    stamp = time.strftime('%Y%m%d-%H%M')
+    resp = Response(data, mimetype='application/zip')
+    resp.headers['Content-Disposition'] = \
+        f'attachment; filename="hifi-support-{socket.gethostname()}-{stamp}.zip"'
+    return resp
+
+@app.route('/har_captures', methods=['GET'])
+def api_har_captures():
+    return jsonify({'captures': _har_captures_list()})
+
+@app.route('/har_captures/<filename>', methods=['GET'])
+def api_har_capture_download(filename):
+    if not _HAR_FILENAME_RE.match(filename or ''):
+        return jsonify({'error': 'invalid filename'}), 400
+    fpath = os.path.join(HAR_CAPTURE_DIR, filename)
+    if not os.path.isfile(fpath):
+        return jsonify({'error': 'not found'}), 404
+    try:
+        with open(fpath, 'rb') as f:
+            data = f.read()
+    except Exception:
+        log.exception("har capture download failed for %s", filename)
+        return jsonify({'error': 'read failed'}), 500
+    resp = Response(data, mimetype='application/json')
+    resp.headers['Content-Disposition'] = f'attachment; filename="{filename}"'
+    return resp
+
+@app.route('/har_captures/<filename>', methods=['DELETE'])
+def api_har_capture_delete(filename):
+    if not _HAR_FILENAME_RE.match(filename or ''):
+        return jsonify({'success': False, 'error': 'invalid filename'}), 400
+    try:
+        os.remove(os.path.join(HAR_CAPTURE_DIR, filename))
+    except FileNotFoundError:
+        pass
+    except Exception:
+        log.exception("har capture delete failed for %s", filename)
+        return jsonify({'success': False}), 500
+    return jsonify({'success': True})
+
+@app.route('/perf_captures', methods=['GET'])
+def api_perf_captures():
+    return jsonify({'captures': _perf_captures_list()})
+
+@app.route('/perf_captures/<filename>', methods=['GET'])
+def api_perf_capture_download(filename):
+    if not _PERF_FILENAME_RE.match(filename or ''):
+        return jsonify({'error': 'invalid filename'}), 400
+    fpath = os.path.join(PERF_CAPTURE_DIR, filename)
+    if not os.path.isfile(fpath):
+        return jsonify({'error': 'not found'}), 404
+    try:
+        with open(fpath, 'rb') as f:
+            data = f.read()
+    except Exception:
+        log.exception("perf capture download failed for %s", filename)
+        return jsonify({'error': 'read failed'}), 500
+    resp = Response(data, mimetype='application/jsonlines')
+    resp.headers['Content-Disposition'] = f'attachment; filename="{filename}"'
+    return resp
+
+@app.route('/perf_captures/<filename>', methods=['DELETE'])
+def api_perf_capture_delete(filename):
+    if not _PERF_FILENAME_RE.match(filename or ''):
+        return jsonify({'success': False, 'error': 'invalid filename'}), 400
+    try:
+        os.remove(os.path.join(PERF_CAPTURE_DIR, filename))
+    except FileNotFoundError:
+        pass
+    except Exception:
+        log.exception("perf capture delete failed for %s", filename)
+        return jsonify({'success': False}), 500
+    return jsonify({'success': True})
+
+@app.route('/tailscale_status', methods=['GET'])
+def api_tailscale_status():
+    return jsonify(get_tailscale_status())
+
+@app.route('/tailscale_install', methods=['POST'])
+def api_tailscale_install():
+    return jsonify(install_tailscale())
+
+@app.route('/tailscale_set', methods=['POST'])
+def api_tailscale_set():
+    data = request.get_json(silent=True) or {}
+    return jsonify(set_tailscale(bool(data.get('enable'))))
+
+@app.route('/debug_plymouth', methods=['GET'])
+def api_debug_plymouth_get():
+    return jsonify(get_plymouth_disabled())
+
+@app.route('/debug_plymouth', methods=['POST'])
+def api_debug_plymouth_set():
+    data = request.get_json(silent=True) or {}
+    return jsonify(set_plymouth_disabled(bool(data.get('disable'))))
+
+@app.route('/debug_kdump', methods=['GET'])
+def api_debug_kdump_get():
+    return jsonify(get_kdump_enabled())
+
+@app.route('/debug_kdump', methods=['POST'])
+def api_debug_kdump_set():
+    data = request.get_json(silent=True) or {}
+    return jsonify(set_kdump_enabled(bool(data.get('enable'))))
+
 @app.route('/pointer_status', methods=['GET'])
 def api_pointer_status():
     return jsonify(get_pointer_status())
@@ -2126,9 +5410,105 @@ def api_pointer_set():
     data = request.get_json(silent=True) or {}
     return jsonify(set_pointer(bool(data.get('enable'))))
 
+@app.route('/display_mode', methods=['GET'])
+def api_display_mode():
+    return jsonify(get_display_mode())
+
+@app.route('/display_mode', methods=['POST'])
+def api_set_display_mode():
+    data = request.get_json(silent=True) or {}
+    return jsonify(set_display_mode((data.get('mode') or '').strip()))
+
+@app.route('/player_enabled', methods=['GET'])
+def api_player_enabled():
+    return jsonify(get_player_enabled())
+
+@app.route('/player_enabled', methods=['POST'])
+def api_set_player_enabled():
+    data = request.get_json(silent=True) or {}
+    return jsonify(set_player_enabled(bool(data.get('enabled'))))
+
+@app.route('/ui_resolution', methods=['GET'])
+def api_ui_resolution():
+    return jsonify(get_ui_resolution())
+
+@app.route('/ui_resolution', methods=['POST'])
+def api_set_ui_resolution():
+    data = request.get_json(silent=True) or {}
+    return jsonify(set_ui_resolution((data.get('mode') or '').strip()))
+
+@app.route('/ui_refresh', methods=['GET'])
+def api_ui_refresh():
+    return jsonify(get_ui_refresh())
+
+@app.route('/ui_refresh', methods=['POST'])
+def api_set_ui_refresh():
+    data = request.get_json(silent=True) or {}
+    return jsonify(set_ui_refresh((data.get('mode') or '').strip()))
+
+@app.route('/timezone', methods=['GET'])
+def api_timezone():
+    return jsonify(get_timezone())
+
+@app.route('/timezone', methods=['POST'])
+def api_set_timezone():
+    data = request.get_json(silent=True) or {}
+    return jsonify(set_timezone(data.get('timezone') or ''))
+
+@app.route('/timezones', methods=['GET'])
+def api_list_timezones():
+    return jsonify({'timezones': list_timezones()})
+
+@app.route('/vu_meter', methods=['GET'])
+def api_vu_meter():
+    return jsonify(get_vu_meter())
+
+@app.route('/vu_meter', methods=['POST'])
+def api_set_vu_meter():
+    data = request.get_json(silent=True) or {}
+    return jsonify(set_vu_meter(bool(data.get('enable'))))
+
+@app.route('/nowplaying_autoexpand', methods=['GET'])
+def api_nowplaying_autoexpand():
+    return jsonify(get_nowplaying_autoexpand())
+
+@app.route('/nowplaying_autoexpand', methods=['POST'])
+def api_set_nowplaying_autoexpand():
+    data = request.get_json(silent=True) or {}
+    return jsonify(set_nowplaying_autoexpand(data.get('seconds')))
+
+@app.route('/provision_status', methods=['GET'])
+def api_provision_status():
+    return jsonify(get_provision_status())
+
+@app.route('/provision_mode', methods=['POST'])
+def api_provision_mode():
+    data = request.get_json(silent=True) or {}
+    return jsonify(set_provision_mode((data.get('mode') or '').strip(),
+                                      (data.get('source') or 'screen').strip()))
+
+@app.route('/provision_wifi_connect', methods=['POST'])
+def api_provision_wifi_connect():
+    data = request.get_json(silent=True) or {}
+    return jsonify(provision_wifi_connect((data.get('ssid') or '').strip(),
+                                          data.get('password') or ''))
+
+@app.route('/provision_wifi_rescan', methods=['POST'])
+def api_provision_wifi_rescan():
+    return jsonify(provision_wifi_rescan())
+
+@app.route('/factory_reset', methods=['POST'])
+def api_factory_reset():
+    return jsonify(factory_reset())
+
+@app.route('/webui_reset_credentials', methods=['POST'])
+def api_webui_reset_credentials():
+    return jsonify(webui_reset_credentials())
+
 @app.route('/ota_channel', methods=['GET'])
 def api_ota_channel():
-    return jsonify({'channel': get_ota_channel()})
+    channels = [c for c in OTA_CHANNELS if c != 'alpha' or _alpha_unlocked()]
+    return jsonify({'channel': get_ota_channel(), 'channels': channels})
 
 @app.route('/ota_channel', methods=['POST'])
 def api_set_ota_channel():
@@ -2162,9 +5542,54 @@ def api_set_player_name():
     data = request.get_json(silent=True) or {}
     return jsonify(set_player_name(data.get('name')))
 
+@app.route('/device_name', methods=['GET'])
+def api_device_name():
+    return jsonify(get_device_name())
+
+@app.route('/device_name', methods=['POST'])
+def api_set_device_name():
+    data = request.get_json(silent=True) or {}
+    return jsonify(set_device_name((data.get('name') or '').strip()))
+
+@app.route('/hostname_apply', methods=['POST'])
+def api_apply_hostname():
+    # Internal-only (this API is bound to 127.0.0.1, see the bottom of this
+    # file): re-applies an already-restored /etc/hostname at the OS level,
+    # for sources_server.py's backup-restore path. Deliberately a separate
+    # route from /device_name above — see _apply_hostname's docstring for why
+    # it must not also touch the player name.
+    data = request.get_json(silent=True) or {}
+    name = (data.get('name') or '').strip()
+    if not _valid_device_name(name):
+        return jsonify({'success': False, 'code': 'device.invalidName',
+                        'message': _t('device.invalidName', _lang())})
+    return jsonify(_apply_hostname(name))
+
 @app.route('/discover_lms', methods=['GET'])
 def api_discover_lms():
     return jsonify({'servers': discover_lms_servers()})
+
+@app.route('/roomcorr/mics', methods=['GET'])
+def api_roomcorr_mics():
+    return jsonify(get_roomcorr_mics())
+
+@app.route('/roomcorr/measure', methods=['POST'])
+def api_roomcorr_measure():
+    data = request.get_json(silent=True) or {}
+    body, status = start_roomcorr_measure(data)
+    return jsonify(body), status
+
+@app.route('/roomcorr/status', methods=['GET'])
+def api_roomcorr_status():
+    return jsonify(get_roomcorr_status())
+
+@app.route('/roomcorr/apply', methods=['POST'])
+def api_roomcorr_apply():
+    return jsonify(roomcorr_apply())
+
+@app.route('/roomcorr/discard', methods=['POST'])
+def api_roomcorr_discard():
+    return jsonify(roomcorr_discard())
 
 @app.route('/dsp_status', methods=['GET'])
 def api_dsp_status():
@@ -2208,6 +5633,28 @@ def api_tidal_set():
     data = request.get_json(silent=True) or {}
     return jsonify(set_tidal(bool(data.get('enable'))))
 
+@app.route('/bluetooth_status', methods=['GET'])
+def api_bluetooth_status():
+    return jsonify(get_bluetooth_status())
+
+@app.route('/bluetooth_set', methods=['POST'])
+def api_bluetooth_set():
+    data = request.get_json(silent=True) or {}
+    return jsonify(set_bluetooth(bool(data.get('enable'))))
+
+@app.route('/bluetooth_discoverable', methods=['POST'])
+def api_bluetooth_discoverable():
+    return jsonify(set_bt_discoverable())
+
+@app.route('/bluetooth_forget', methods=['POST'])
+def api_bluetooth_forget():
+    data = request.get_json(silent=True) or {}
+    return jsonify(bt_forget(data.get('mac')))
+
+@app.route('/bluetooth_now_playing', methods=['GET'])
+def api_bluetooth_now_playing():
+    return jsonify(get_bluetooth_now_playing())
+
 @app.route('/show_global_keyboard', methods=['POST'])
 def api_show_global_keyboard():
     result = show_global_keyboard()
@@ -2226,4 +5673,6 @@ if __name__ == '__main__':
     # control of the appliance.
     # threaded=True so a slow handler (apt/systemctl/network reconfig, or a
     # 15s OTA fetch) doesn't block the kiosk UI's other requests behind it.
+    _startup_network_recovery()
+    threading.Thread(target=_resume_playback_after_boot, daemon=True).start()
     app.run(host='127.0.0.1', port=8000, threaded=True)

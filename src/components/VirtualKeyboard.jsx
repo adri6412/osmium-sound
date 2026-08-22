@@ -1,10 +1,12 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Delete } from 'lucide-react';
 import { useKeyboard } from '../contexts/KeyboardContext';
 import { useI18n } from '../i18n';
 import SimpleKeyboard from 'simple-keyboard';
 import 'simple-keyboard/build/css/index.css';
+import { SCALED_CANVAS_ID } from './ScaledCanvas';
 
 const VirtualKeyboard = () => {
   const { isKeyboardVisible, inputValue, updateInputValue, hideKeyboard, confirmInput, activeInput } = useKeyboard();
@@ -13,6 +15,16 @@ const VirtualKeyboard = () => {
   const containerRef = useRef(null);
   const simpleKeyboardRef = useRef(null);
   const [isShifted, setIsShifted] = useState(false);
+
+  // Blinking preview caret, driven at a low discrete frequency instead of an
+  // infinite CSS `animation` (kept the compositor busy the entire time the
+  // keyboard was open, regardless of whether the user was actively typing).
+  const [caretOn, setCaretOn] = useState(true);
+  useEffect(() => {
+    if (!isKeyboardVisible) return;
+    const id = setInterval(() => setCaretOn((v) => !v), 500);
+    return () => clearInterval(id);
+  }, [isKeyboardVisible]);
 
   // Label shown above the preview (placeholder of the field being edited)
   const activeLabel =
@@ -45,10 +57,21 @@ const VirtualKeyboard = () => {
     };
   }, [isKeyboardVisible]);
 
-  // Initialize SimpleKeyboard when component mounts and keyboard is visible
+  // Initialize SimpleKeyboard when component mounts and keyboard is visible.
+  //
+  // IMPORTANT: this effect must NOT depend on `inputValue`/`updateInputValue`.
+  // simple-keyboard drives key-repeat (holding a key down) via an internal
+  // setTimeout chain that isn't cancelled by destroy() — if this effect were
+  // re-run (destroying the live instance and creating a new one) while a key
+  // is still physically held, the orphaned old instance's repeat loop keeps
+  // firing onChange forever (observed as a single key, e.g. the first one
+  // touched, spamming itself). `inputValue` changes on every keystroke via
+  // onChange below, so keeping it in the deps array recreated the instance
+  // on every keystroke and made that race trivial to hit. Syncing `inputValue`
+  // back into the keyboard is already handled by the separate effect below.
   useEffect(() => {
     if (isKeyboardVisible && keyboardRef.current && !simpleKeyboardRef.current) {
-      simpleKeyboardRef.current = new SimpleKeyboard(keyboardRef.current, {
+      const instance = new SimpleKeyboard(keyboardRef.current, {
         layout: {
           default: [
             '1 2 3 4 5 6 7 8 9 0',
@@ -86,6 +109,9 @@ const VirtualKeyboard = () => {
           }
         ],
         onKeyPress: (button) => {
+          // Guard against a stale/orphaned instance (see comment above) still
+          // calling back after a newer instance has replaced it.
+          if (simpleKeyboardRef.current !== instance) return;
           if (button === '{shift}') {
             setIsShifted((prev) => {
               const next = !prev;
@@ -95,9 +121,11 @@ const VirtualKeyboard = () => {
           }
         },
         onChange: (input) => {
+          if (simpleKeyboardRef.current !== instance) return;
           updateInputValue(input);
         }
       });
+      simpleKeyboardRef.current = instance;
     }
 
     // Cleanup when keyboard is hidden
@@ -113,7 +141,8 @@ const VirtualKeyboard = () => {
         simpleKeyboardRef.current = null;
       }
     };
-  }, [isKeyboardVisible, inputValue, updateInputValue]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isKeyboardVisible]);
 
   // Update keyboard input when inputValue changes
   useEffect(() => {
@@ -147,21 +176,25 @@ const VirtualKeyboard = () => {
     };
   }, [isKeyboardVisible, hideKeyboard, activeInput]);
 
-  return (
+  return createPortal(
     <AnimatePresence>
       {isKeyboardVisible && (
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          className="fixed inset-0 flex items-end justify-center pointer-events-none"
+          className="absolute inset-0 flex items-end justify-center pointer-events-none"
           style={{
-            position: 'fixed',
+            position: 'absolute',
             top: 0,
             left: 0,
             right: 0,
             bottom: 0,
-            zIndex: 9999,
+            // Must outrank every modal that can trigger it, including the
+            // highest-tier ones (InternalDisks' FormatWizard, UpdatePlanOverlay,
+            // UsbToast: z-[10050]) — otherwise their backdrop covers the
+            // keyboard and its inputs become unreachable.
+            zIndex: 10100,
             backgroundColor: 'transparent'
           }}
         >
@@ -181,7 +214,7 @@ const VirtualKeyboard = () => {
                   <span className="text-white font-mono text-lg break-all">
                     {inputValue || <span className="text-hifi-silver/40">…</span>}
                   </span>
-                  <span className="kb-caret ml-0.5 text-hifi-gold font-mono text-lg">|</span>
+                  <span className={`ml-0.5 text-hifi-gold font-mono text-lg ${caretOn ? 'opacity-100' : 'opacity-0'}`}>|</span>
                 </div>
               </div>
               <motion.button
@@ -220,7 +253,8 @@ const VirtualKeyboard = () => {
           </motion.div>
         </motion.div>
       )}
-    </AnimatePresence>
+    </AnimatePresence>,
+    document.getElementById(SCALED_CANVAS_ID) || document.body
   );
 };
 

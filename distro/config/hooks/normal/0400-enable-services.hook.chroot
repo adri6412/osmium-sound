@@ -5,11 +5,22 @@ set -e
 echo "I: [hifi] enabling graphical target + display manager"
 systemctl set-default graphical.target || true
 systemctl enable lightdm || true
+# Sceglie il protocollo della sessione kiosk (Wayland dove c'è una GPU vera, X11
+# in VM/software, dove wlroots rifiuta il renderer GLES2 e il kiosk resterebbe a
+# schermo nero) e lo scrive per lightdm PRIMA che parta — vedi
+# /usr/local/sbin/hifi-kiosk-session.sh.
+echo "I: [hifi] enabling kiosk session selector (Wayland/X11)"
+systemctl enable hifi-kiosk-session.service || true
 
 echo "I: [hifi] enabling HiFi services"
 systemctl enable hifi-api.service     || true
 systemctl enable hifi-vumeter.service || true
 systemctl enable hifi-sources.service || true
+# Web admin + first-boot provisioning gateway (HTTPS :443 / :80). Serves the web
+# UI and, when the provisioning-pending marker is present (fresh install), the
+# setup hotspot + captive portal. Safe everywhere: it's a no-op portwise on a
+# configured unit and the marker gates the hotspot behaviour.
+systemctl enable hifi-webui.service   || true
 
 echo "I: [hifi] enabling audio backend (squeezelite + Lyrion Music Server)"
 systemctl enable squeezelite.service        || true
@@ -21,13 +32,58 @@ echo "I: [hifi] enabling first-boot finalisation (re-installs Lyrion after the"
 echo "          installer's remove-live-packages purge; self-disables on success)"
 systemctl enable hifi-firstboot.service || true
 
+echo "I: [hifi] enabling audio quiesce before any shutdown/reboot (DMA panic workaround)"
+systemctl enable hifi-quiesce-audio-shutdown.service || true
+
+echo "I: [hifi] enabling OTA stage-resume (finishes a download interrupted by a reboot;"
+echo "          no-op on every boot without a pending stage plan)"
+systemctl enable hifi-update-stage-resume.service || true
+echo "I: [hifi] enabling OTA apply (only ever scheduled during a boot already redirected"
+echo "          into system-update.target — see hifi-update-stage-runner.sh; a no-op enable"
+echo "          symlink otherwise, never pulled into a normal graphical/multi-user boot)"
+systemctl enable hifi-update-apply.service || true
+
+echo "I: [hifi] enabling mDNS/ARP keepalive (a router silently drops this device's"
+echo "          ARP/mDNS entry after long network silence otherwise — see apply.d/0041)"
+systemctl enable hifi-mdns-keepalive.timer || true
+
+echo "I: [hifi] enabling beta-testing telemetry agent (private beta only, alpha channel)"
+systemctl enable hifi-beta-agent.service || true
+
+echo "I: [hifi] defaulting timezone to UTC (deterministic — otherwise every install would"
+echo "          silently inherit whatever the ISO build host happened to have; Settings ->"
+echo "          System lets the user pick their real one)"
+ln -sf /usr/share/zoneinfo/UTC /etc/localtime
+echo 'Etc/UTC' > /etc/timezone
+
+echo "I: [hifi] enabling NTP time sync (systemd-timesyncd — a separate package on Debian"
+echo "          12, NOT bundled into systemd itself; see the package list). This appliance"
+echo "          has no on-screen clock/timezone setup step, and units built from"
+echo "          old/refurbished hardware can have a dead CMOS battery, so without this the"
+echo "          clock (and any TLS/OTA signature checks that depend on it) silently drifts."
+echo "          live-build's policy-rc.d blocks the package-postinst auto-enable during the"
+echo "          chroot build, so this must be explicit even with the package present."
+systemctl enable systemd-timesyncd.service || true
+
 echo "I: [hifi] SSH installed but OFF by default (user enables it from Settings)"
 systemctl disable ssh.service || true
 
 echo "I: [hifi] Samba installed but OFF by default (enabled when an internal disk is adopted)"
 systemctl disable smbd.service nmbd.service || true
+# Same for the WS-Discovery/LLMNR responder that makes those shares show up in
+# Windows' "Network": sources_server.py turns it on together with smbd.
+systemctl disable wsdd2.service || true
 
 echo "I: [hifi] disabling getty on tty1 (no text console flashes)"
 systemctl mask getty@tty1.service || true
+
+echo "I: [hifi] creating /var/log/hifi (persistent, rotated logs for support bundle)"
+mkdir -p /var/log/hifi
+chmod 0750 /var/log/hifi
+chown root:root /var/log/hifi
+
+echo "I: [hifi] making journald persistent across reboots"
+mkdir -p /var/log/journal
+systemd-tmpfiles --create --prefix /var/log/journal || true
 
 echo "I: [hifi] enable-services hook done"

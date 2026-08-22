@@ -1,0 +1,34 @@
+[Unit]
+Description=HiFi Player — resume an interrupted OTA stage plan
+# Staging (download + verify) can legitimately take minutes; an unrelated
+# reboot mid-download would otherwise strand the plan with no way to know
+# whether it should retry the interrupted component. The plan lives on
+# persistent storage, so we simply pick it back up at boot.
+#
+# Renamed from hifi-update-resume.service: that unit used to resume an
+# interrupted APPLY (the old single-phase design could reboot mid-apply, e.g.
+# after an OS payload). Under the two-phase design, apply only ever runs
+# isolated under system-update.target, and a crash there recovers for free —
+# systemd-system-update-generator(8) re-enters system-update.target on every
+# boot while /system-update exists, so hifi-update-apply-runner.sh simply
+# reruns from the top (every apply step is idempotent). Only an interrupted
+# STAGE still needs a dedicated resume unit.
+#
+# No plan file, no work — the unit is a no-op on every ordinary boot.
+ConditionPathExists=/var/lib/hifi-player/update/plan
+# Never in the live ISO session: there is nothing to update there.
+ConditionKernelCommandLine=!boot=live
+# The remaining steps download from GitHub.
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/bin/sh /usr/local/sbin/hifi-update-stage-runner.sh
+RemainAfterExit=no
+# A full stage pass (download + verify of up to three bundles) can legitimately
+# take several minutes; don't let systemd kill it half-way.
+TimeoutStartSec=1800
+
+[Install]
+WantedBy=multi-user.target

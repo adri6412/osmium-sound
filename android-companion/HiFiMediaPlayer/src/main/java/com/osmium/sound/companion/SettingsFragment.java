@@ -18,6 +18,8 @@ import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.AlertDialog;
+import androidx.appcompat.app.AppCompatDelegate;
+import androidx.core.os.LocaleListCompat;
 import androidx.fragment.app.DialogFragment;
 import androidx.preference.CheckBoxPreference;
 import androidx.preference.ListPreference;
@@ -28,6 +30,7 @@ import androidx.preference.SwitchPreferenceCompat;
 import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 
 import com.osmium.sound.companion.dialog.CallStateDialog;
 import com.osmium.sound.companion.download.DownloadFilenameStructure;
@@ -47,6 +50,8 @@ public class SettingsFragment  extends PreferenceFragmentCompat implements
         CallStateDialog.CallStateDialogHost {
 
     private final String TAG = "SettingsFragment";
+
+    private static final String KEY_OSMIUM_SOUND = "squeezer.osmium_sound";
 
     private ISqueezeService service = null;
 
@@ -73,6 +78,18 @@ public class SettingsFragment  extends PreferenceFragmentCompat implements
         getPreferenceManager().setSharedPreferencesName(Preferences.NAME);
         setPreferencesFromResource(R.xml.preferences, rootKey);
 
+        // The "Osmium Sound" screen is a nested PreferenceScreen: when opened,
+        // rootKey scopes findPreference() to just its own children, so only
+        // wire up the preferences that actually live under it.
+        if (KEY_OSMIUM_SOUND.equals(rootKey)) {
+            fillBackupPreferences();
+            fillAudioOutputPreferences();
+            fillUpdatesPreferences();
+            fillSystemAdminPreferences();
+            fillMultiroomPreferences();
+            return;
+        }
+
         SharedPreferences sharedPreferences = getPreferenceManager().getSharedPreferences();
         sharedPreferences.registerOnSharedPreferenceChangeListener(this);
         Preferences preferences = new Preferences(getActivity(), sharedPreferences);
@@ -94,23 +111,13 @@ public class SettingsFragment  extends PreferenceFragmentCompat implements
 
         fillDownloadPreferences(preferences);
 
-        fillDspPreferences();
-        fillBackupPreferences();
-        fillAudioOutputPreferences();
         fillPlaybackPreferences();
         fillLyrionRescanPreferences();
-        fillUpdatesPreferences();
-        fillSystemAdminPreferences();
-        fillMultiroomPreferences();
     }
 
-    private void fillDspPreferences() {
-        Preference pref = requirePreference("squeezer.dsp.open");
-        pref.setOnPreferenceClickListener(preference -> {
-            DspSettingsActivity.show(requireActivity());
-            return true;
-        });
-    }
+    // DSP/EQ is deliberately not wired up here — held back for a future paid
+    // tier, same as the kiosk and admin-webui (see commit 1dd7868).
+    // DspSettingsActivity stays intact and reachable by class name only.
 
     private void fillBackupPreferences() {
         Preference pref = requirePreference("squeezer.backup.open");
@@ -270,8 +277,48 @@ public class SettingsFragment  extends PreferenceFragmentCompat implements
         }
         onSelectThemePref.setOnPreferenceChangeListener(this);
 
+        fillLanguagePreference();
+
         fillEnumPreference(requirePreference(Preferences.KEY_SCREENSAVER), Preferences.ScreensaverMode.class, preferences.getScreensaverMode());
         fillEnumPreference(requirePreference(Preferences.KEY_FULLSCREEN), Preferences.FullScreenMode.class,preferences.getFullScreenMode());
+    }
+
+    /**
+     * In-app language picker, mirroring the kiosk's and web admin's language
+     * selectors so all three UIs of the product can be switched the same way.
+     * <p>
+     * The list is intentionally short: only the languages in
+     * res/xml/locales_config.xml, i.e. the ones the app is actually fully
+     * translated into. Empty value = follow the system.
+     * <p>
+     * The current value is read back from AppCompatDelegate rather than from
+     * SharedPreferences, so the picker still shows the truth when the user
+     * changed the language from Android 13+'s own per-app language screen.
+     */
+    private void fillLanguagePreference() {
+        ListPreference languagePref = requirePreference(Preferences.KEY_LANGUAGE);
+        String[] tags = {"", "it", "en"};
+        String[] labels = {
+                getString(R.string.settings_language_system),
+                "Italiano",
+                "English",
+        };
+        languagePref.setEntryValues(tags);
+        languagePref.setEntries(labels);
+
+        LocaleListCompat current = AppCompatDelegate.getApplicationLocales();
+        String tag = current.isEmpty() ? "" : current.get(0).getLanguage();
+        // A locale we don't offer (e.g. an inherited Squeezer translation still
+        // active from an older install) reads as "follow the system".
+        languagePref.setValue(Arrays.asList(tags).contains(tag) ? tag : "");
+
+        languagePref.setOnPreferenceChangeListener((preference, newValue) -> {
+            String value = String.valueOf(newValue);
+            AppCompatDelegate.setApplicationLocales(value.isEmpty()
+                    ? LocaleListCompat.getEmptyLocaleList()
+                    : LocaleListCompat.forLanguageTags(value));
+            return true;
+        });
     }
 
     private void fillNowPlayingPreferences(Preferences preferences) {

@@ -1,0 +1,74 @@
+appId: it.osmiumsound.flasher
+productName: Osmium Flasher
+copyright: Osmium Sound
+
+directories:
+  output: dist
+  buildResources: build
+
+files:
+  - src/**/*
+  - helper/**/*
+  - assets/**/*
+  - package.json
+  - node_modules/**/*
+
+# Native addons (drivelist, mountutils, lzma-native, @ronomon/direct-io, …) cannot
+# be loaded from inside an asar archive, and the elevated helper is spawned as a
+# real file path — both have to live on disk.
+asar: true
+asarUnpack:
+  - helper/**
+  - "**/*.node"
+  - node_modules/drivelist/**
+  - node_modules/mountutils/**
+  - node_modules/lzma-native/**
+  - node_modules/xxhash-addon/**
+  - node_modules/@ronomon/**
+  - node_modules/usb/**
+  - node_modules/node-raspberrypi-usbboot/**
+  - node_modules/@balena/node-beaglebone-usbboot/**
+
+# The binaries are published unsigned: the beta page carries the per-OS
+# instructions for the "unknown publisher" warning. Do not add signing config
+# here without also updating website/beta/index.html.
+win:
+  target:
+    - portable
+  # Generated from build/icon.png (1024²) at build time; no .ico is committed.
+  icon: build/icon.png
+  artifactName: Osmium-Flasher-${version}-win-x64.${ext}
+
+portable:
+  artifactName: Osmium-Flasher-${version}-win-x64.${ext}
+
+# NOT an AppImage, deliberately. An AppImage is mounted over FUSE by the
+# unprivileged user, and FUSE denies access to every other user — root
+# included — unless `user_allow_other` is set in /etc/fuse.conf. pkexec could
+# therefore never reach the helper inside the mount. A tar.gz unpacks to plain
+# files that root can read.
+linux:
+  target:
+    - tar.gz
+  icon: build/icon.png
+  category: Utility
+  maintainer: Osmium Sound <support@osmiumsound.it>
+  artifactName: Osmium-Flasher-${version}-linux-x86_64.${ext}
+
+# Built separately per architecture on native runners rather than as a
+# universal binary: a universal .app has to merge per-arch native addons
+# (drivelist, mountutils, @ronomon/direct-io …), and that merge is the most
+# fragile part of the whole toolchain.
+mac:
+  target:
+    - dmg
+  icon: build/icon.png
+  category: public.app-category.utilities
+  # "-" is an ad-hoc signature; null would skip signing altogether, and an
+  # entirely unsigned arm64 binary is refused by the kernel rather than merely
+  # warned about. Ad-hoc is not notarization: a downloaded copy still carries
+  # the quarantine flag, which macOS reports as "damaged" -- see the macOS note
+  # on the beta page for clearing it.
+  identity: "-"
+  hardenedRuntime: false
+  artifactName: Osmium-Flasher-${version}-mac-${arch}.${ext}

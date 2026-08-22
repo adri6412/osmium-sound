@@ -1,0 +1,8 @@
+[Unit]
+Description=HiFi Player - mDNS/DHCP keepalive
+After=network-online.target avahi-daemon.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/hifi-mdns-keepalive.sh

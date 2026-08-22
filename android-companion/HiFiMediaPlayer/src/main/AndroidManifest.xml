@@ -52,7 +52,21 @@
         android:resizeableActivity="true"
         android:allowBackup="false"
         tools:replace="android:allowBackup"
+        android:localeConfig="@xml/locales_config"
         android:supportsRtl="true">
+
+        <!-- Per-app language (Settings → Display → Language). On Android 13+
+             the platform stores the choice; on older releases appcompat needs
+             this service to persist it across restarts. `enabled=false` is
+             required: it is a metadata holder, never actually started. -->
+        <service
+            android:name="androidx.appcompat.app.AppLocalesMetadataHolderService"
+            android:enabled="false"
+            android:exported="false">
+            <meta-data
+                android:name="autoStoreLocales"
+                android:value="true" />
+        </service>
 
         <receiver android:exported="false"
             android:name=".homescreenwidgets.SqueezerRemoteControl">
@@ -191,7 +205,7 @@
             android:theme="@style/Theme.MaterialComponents.NoActionBar">
         </activity>
 
-        <service android:exported="false" android:label="HiFi Media Player Service"
+        <service android:exported="false" android:label="Osmium Sound Service"
             android:foregroundServiceType="mediaPlayback"
             android:name=".service.SqueezeService">
             <intent-filter>

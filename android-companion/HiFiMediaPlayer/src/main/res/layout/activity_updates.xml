@@ -84,6 +84,15 @@
                 android:textColor="@color/hifiSilver"
                 android:layout_marginBottom="12dp" />
 
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/button_whats_new"
+                style="@style/Widget.MaterialComponents.Button.TextButton"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:visibility="gone"
+                android:layout_marginBottom="8dp"
+                android:text="@string/settings_updates_whats_new" />
+
             <LinearLayout
                 android:orientation="horizontal"
                 android:layout_width="match_parent"
@@ -115,58 +124,12 @@
                 android:layout_marginTop="16dp"
                 android:visibility="gone" />
 
-            <View
-                android:layout_width="match_parent"
-                android:layout_height="1dp"
-                android:background="?android:attr/listDivider"
-                android:layout_marginTop="24dp"
-                android:layout_marginBottom="16dp" />
-
-            <!-- Lyrion Music Server: its own separate check/apply, like the Electron UI's "Advanced" section -->
             <TextView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="@string/settings_updates_lyrion"
-                android:textColor="@android:color/white"
-                android:textStyle="bold"
-                android:layout_marginBottom="4dp" />
-
-            <TextView
-                android:id="@+id/version_lyrion"
+                android:id="@+id/core_status"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:textColor="@color/hifiSilver"
-                android:layout_marginBottom="12dp" />
-
-            <LinearLayout
-                android:orientation="horizontal"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content">
-
-                <com.google.android.material.button.MaterialButton
-                    android:id="@+id/button_check_lyrion"
-                    style="@style/Widget.MaterialComponents.Button.OutlinedButton"
-                    android:layout_width="0dp"
-                    android:layout_weight="1"
-                    android:layout_height="wrap_content"
-                    android:layout_marginEnd="8dp"
-                    android:text="@string/settings_updates_check_button" />
-
-                <com.google.android.material.button.MaterialButton
-                    android:id="@+id/button_apply_lyrion"
-                    android:layout_width="0dp"
-                    android:layout_weight="1"
-                    android:layout_height="wrap_content"
-                    android:visibility="gone"
-                    android:text="@string/settings_updates_apply_button" />
-            </LinearLayout>
-
-            <ProgressBar
-                android:id="@+id/lyrion_progress"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_gravity="center"
-                android:layout_marginTop="16dp"
+                android:layout_marginTop="8dp"
                 android:visibility="gone" />
 
         </LinearLayout>

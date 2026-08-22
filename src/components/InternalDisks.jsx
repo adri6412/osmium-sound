@@ -1,8 +1,10 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { motion } from 'framer-motion';
-import { HardDrive, AlertTriangle, Loader2, CheckCircle2, Eye, EyeOff, Copy, Check } from 'lucide-react';
+import { AlertTriangle, Loader2, CheckCircle2, Eye, EyeOff, Copy, Check, Info } from 'lucide-react';
 import { useI18n } from '../i18n';
 import { useKeyboardInput } from '../hooks/useKeyboardInput';
+import { SCALED_CANVAS_ID } from './ScaledCanvas';
 
 // Talks to the same on-device sources service as SourcesManager (plain fetch,
 // no auth needed from loopback).
@@ -69,9 +71,9 @@ function FormatWizard({ disk, t, onClose, onDone }) {
   const canFormat = typed.trim() === label.trim() && label.trim().length > 0;
   const pct = status && typeof status.progress === 'number' ? Math.max(0, Math.min(100, Math.round(status.progress))) : 0;
 
-  return (
+  return createPortal(
     <motion.div
-      className="fixed inset-0 z-[10050] flex items-center justify-center bg-black/80 backdrop-blur-sm p-6"
+      className="absolute inset-0 z-[10050] flex items-center justify-center bg-black/80 backdrop-blur-sm p-6"
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       onClick={() => { if (step === 'choose' || step === 'confirm') onClose(); }}
@@ -201,14 +203,23 @@ function FormatWizard({ disk, t, onClose, onDone }) {
           </div>
         )}
       </motion.div>
-    </motion.div>
+    </motion.div>,
+    document.getElementById(SCALED_CANVAS_ID) || document.body
   );
 }
 
-function SmbCard({ smb, t, onRegenerated }) {
+/**
+ * The network shares this appliance publishes: one row per share with an
+ * "info" toggle for the paths to type into Windows/macOS, the single account
+ * they all use, and the regenerate-password escape hatch. Exported because
+ * "Shared folders" in SourcesManager.jsx is its real home — it stays in this
+ * file next to the disk adoption flow that creates most of those shares.
+ */
+export function SmbCard({ smb, t, onRegenerated }) {
   const [showPass, setShowPass] = useState(false);
   const [copied, setCopied] = useState(false);
   const [regenBusy, setRegenBusy] = useState(false);
+  const [infoFor, setInfoFor] = useState(null);
 
   const copyPass = async () => {
     try {
@@ -235,15 +246,27 @@ function SmbCard({ smb, t, onRegenerated }) {
   }
 
   return (
-    <div className="mt-3 bg-hifi-dark rounded-lg p-4 space-y-3">
-      <h4 className="text-white font-semibold">{t('sources.internal.smbTitle')}</h4>
+    <div className="bg-hifi-dark rounded-lg p-4 space-y-3">
       <p className="text-hifi-silver/70 text-sm">{t('sources.internal.smbHelp')}</p>
-      <div className="space-y-1 text-sm">
+      <div className="space-y-2">
         {smb.shares.map((s) => (
-          <React.Fragment key={s.source_id}>
-            {smb.ip && <div className="text-hifi-silver">{`\\\\${smb.ip}\\${s.name}`}</div>}
-            <div className="text-hifi-silver/70">{`\\\\${smb.host}\\${s.name}`}</div>
-          </React.Fragment>
+          <div key={s.source_id} className="bg-hifi-light/10 rounded-md">
+            <div className="flex items-center justify-between gap-2 px-3 py-2">
+              <span className="text-white text-sm truncate">{s.name}</span>
+              <button
+                onClick={() => setInfoFor((cur) => (cur === s.source_id ? null : s.source_id))}
+                className="shrink-0 flex items-center gap-1 text-xs text-hifi-silver/70 hover:text-white"
+              >
+                <Info size={14} /><span>{t('sources.internal.smbInfo')}</span>
+              </button>
+            </div>
+            {infoFor === s.source_id && (
+              <div className="px-3 pb-2 space-y-0.5 text-xs font-mono break-all">
+                {smb.ip && <div className="text-hifi-silver">{`\\\\${smb.ip}\\${s.name}`}</div>}
+                <div className="text-hifi-silver/70">{`\\\\${smb.host}\\${s.name}`}</div>
+              </div>
+            )}
+          </div>
         ))}
       </div>
       <div className="grid grid-cols-2 gap-3 text-sm">
@@ -278,7 +301,7 @@ function SmbCard({ smb, t, onRegenerated }) {
   );
 }
 
-export default function InternalDisks({ onSourcesChanged }) {
+export default function InternalDisks({ onSourcesChanged, showShares = true, adoptedReadOnly = false }) {
   const { t } = useI18n();
   const [disks, setDisks] = useState([]);
   const [smb, setSmb] = useState(null);
@@ -292,9 +315,13 @@ export default function InternalDisks({ onSourcesChanged }) {
   const loadDisks = useCallback(async () => {
     try { const d = await j('/api/internal/disks'); setDisks(d.disks || []); } catch (_) { /* service not reachable yet */ }
   }, []);
+  // Skipped entirely when the shares are rendered elsewhere (SourcesManager's
+  // "Shared folders" band owns SmbCard there) — no point polling for data
+  // this instance won't draw.
   const loadSmb = useCallback(async () => {
+    if (!showShares) return;
     try { const d = await j('/api/internal/smb'); setSmb(d); } catch (_) { /* service not reachable yet */ }
-  }, []);
+  }, [showShares]);
 
   useEffect(() => {
     loadDisks();
@@ -329,14 +356,10 @@ export default function InternalDisks({ onSourcesChanged }) {
     } catch (_) { setMsg(t('common.error')); } finally { setBusy(false); }
   };
 
-  const hasAdoptedShares = smb && Array.isArray(smb.shares) && smb.shares.length > 0;
+  const hasAdoptedShares = showShares && smb && Array.isArray(smb.shares) && smb.shares.length > 0;
 
   return (
     <div>
-      <h3 className="text-white font-semibold mb-3 flex items-center space-x-2">
-        <HardDrive size={18} className="text-hifi-gold" />
-        <span>{t('sources.internal.title')}</span>
-      </h3>
       <div className="space-y-3">
         {disks.length === 0 && <p className="text-sm text-hifi-silver/70">{t('sources.internal.none')}</p>}
         {disks.map((d) => {
@@ -360,15 +383,17 @@ export default function InternalDisks({ onSourcesChanged }) {
                   </div>
                 </div>
                 {d.adopted ? (
-                  <div className="flex gap-2 shrink-0">
-                    <button
-                      onClick={() => removeSource(d.source_id)}
-                      disabled={busy}
-                      className="text-xs bg-red-900/30 hover:bg-red-900/60 text-red-300 py-1.5 px-3 rounded-md"
-                    >
-                      {t('sources.internal.remove')}
-                    </button>
-                  </div>
+                  adoptedReadOnly ? null : (
+                    <div className="flex gap-2 shrink-0">
+                      <button
+                        onClick={() => removeSource(d.source_id)}
+                        disabled={busy}
+                        className="text-xs bg-red-900/30 hover:bg-red-900/60 text-red-300 py-1.5 px-3 rounded-md"
+                      >
+                        {t('sources.internal.remove')}
+                      </button>
+                    </div>
+                  )
                 ) : (
                   <div className="flex gap-2 shrink-0">
                     {fsPartitions.length === 1 && (

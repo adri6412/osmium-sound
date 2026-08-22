@@ -22,6 +22,7 @@ import android.app.Activity;
 import android.content.Intent;
 import android.os.Bundle;
 import android.util.Log;
+import android.view.View;
 
 import androidx.annotation.IntDef;
 import androidx.annotation.NonNull;
@@ -78,7 +79,13 @@ public class ConnectActivity extends BaseActivity {
         serverAddressView = findViewById(R.id.server_address_view);
         setErrorMessageFromReason(mDisconnectionReason);
 
-        findViewById(R.id.connect).setOnClickListener(view -> onUserInitiatesConnect());
+        View connectButton = findViewById(R.id.connect);
+        connectButton.setOnClickListener(view -> onUserInitiatesConnect());
+        // The "Connect" button only makes sense once the wizard has resolved a paired
+        // address (step READY) — earlier steps have their own in-panel actions (scan,
+        // confirm pairing).
+        serverAddressView.setStepListener(step ->
+                connectButton.setVisibility(step == ServerAddressView.Step.READY ? View.VISIBLE : View.GONE));
     }
 
     @Override
@@ -140,7 +147,12 @@ public class ConnectActivity extends BaseActivity {
 
         switch (disconnectionReason) {
             case CONNECTION_FAILED -> serverAddress.setError(getString(R.string.connection_failed_text));
-            case LOGIN_FAILED -> userName.setError(getString(R.string.login_failed_text));
+            case LOGIN_FAILED -> {
+                // The username/password fields live behind "Advanced options" in the
+                // ready step; expand it so the error set below is actually visible.
+                serverAddressView.expandAdvancedOptions();
+                userName.setError(getString(R.string.login_failed_text));
+            }
             case INVALID_URL -> serverAddress.setError(getString(R.string.invalid_url_text));
         }
     }

@@ -313,7 +313,9 @@
           <li><strong>Download the ISO</strong>
             Go to <a href="https://github.com/adri6412/osmium-sound/releases" target="_blank" rel="noopener">github.com/adri6412/osmium-sound/releases</a> and download the latest install image.</li>
           <li><strong>Write the ISO to a USB stick</strong>
-            Use <a href="https://etcher.balena.io/" target="_blank" rel="noopener">balenaEtcher</a>, Rufus, or the <code>dd</code> command, onto a stick of at least 8&nbsp;GB.</li>
+            The simplest way is <strong>Osmium Flasher</strong>, from the beta page: it downloads the image, verifies its signature and writes the stick, and it never lists your system disk. Failing that, <a href="https://etcher.balena.io/" target="_blank" rel="noopener">balenaEtcher</a>, Rufus or the <code>dd</code> command work just as well. Use a stick of at least 8&nbsp;GB.</li>
+          <li><strong>Turn Secure Boot off</strong>
+            Enter the firmware setup (usually <kbd>Del</kbd> or <kbd>F2</kbd>), disable <strong>Secure Boot</strong>, then save and exit. This is needed on every machine: the install image is not signed for Secure Boot and will not start with it enabled.</li>
           <li><strong>Boot the mini-PC from the stick</strong>
             Plug in the stick, power on the mini-PC, and pick USB boot from the boot menu (usually <kbd>F11</kbd>/<kbd>F12</kbd>/<kbd>Esc</kbd> depending on the motherboard). Choose <strong>Install Osmium Sound</strong> from the menu.</li>
           <li><strong>Choose the disk, right on the screen</strong>
@@ -321,7 +323,9 @@
           <li><strong>Confirm</strong>
             A clear warning is shown: <em>all data on the chosen disk will be erased</em>. Tap <strong>Erase and install</strong> to proceed.</li>
           <li><strong>Wait for it to finish</strong>
-            Progress is shown live on screen. When it's done, the device reboots on its own — remove the USB stick during the on-screen countdown.</li>
+            Progress is shown live on screen. When it's done, the device reboots on its own.</li>
+          <li><strong>Unplug the USB stick</strong>
+            Once the mini-PC has restarted, remove the stick.</li>
         </ol>
 
         <div class="box tip">
@@ -671,7 +675,9 @@
           <li><strong>Scarica la ISO</strong>
             Vai su <a href="https://github.com/adri6412/osmium-sound/releases" target="_blank" rel="noopener">github.com/adri6412/osmium-sound/releases</a> e scarica l'ultima immagine ISO disponibile.</li>
           <li><strong>Scrivi la ISO su una chiavetta USB</strong>
-            Usa <a href="https://etcher.balena.io/" target="_blank" rel="noopener">balenaEtcher</a>, Rufus oppure il comando <code>dd</code> su una chiavetta da almeno 8&nbsp;GB.</li>
+            Il modo più semplice è <strong>Osmium Flasher</strong>, dalla pagina beta: scarica l'immagine, ne verifica la firma e scrive la chiavetta, senza mai elencare il disco di sistema. In alternativa vanno bene <a href="https://etcher.balena.io/" target="_blank" rel="noopener">balenaEtcher</a>, Rufus o il comando <code>dd</code>. Serve una chiavetta da almeno 8&nbsp;GB.</li>
+          <li><strong>Disattiva il Secure Boot</strong>
+            Entra nel setup del firmware (di solito <kbd>Canc</kbd> o <kbd>F2</kbd>), disattiva il <strong>Secure Boot</strong>, poi salva ed esci. Serve su tutte le macchine: l'immagine di installazione non è firmata per il Secure Boot e con quello attivo non parte.</li>
           <li><strong>Avvia il mini-PC dalla chiavetta</strong>
             Collega la chiavetta, accendi il mini-PC e seleziona l'avvio da USB dal menu di boot (di solito <kbd>F11</kbd>/<kbd>F12</kbd>/<kbd>Esc</kbd> a seconda della scheda madre). Scegli <strong>Install Osmium Sound</strong> dal menu.</li>
           <li><strong>Scegli il disco, direttamente sullo schermo</strong>
@@ -679,7 +685,9 @@
           <li><strong>Conferma</strong>
             Viene mostrato un avviso chiaro: <em>tutti i dati sul disco scelto verranno cancellati</em>. Tocca <strong>Erase and install</strong> per procedere.</li>
           <li><strong>Attendi il completamento</strong>
-            L'avanzamento è mostrato in tempo reale a schermo. Al termine, il dispositivo si riavvia automaticamente — rimuovi la chiavetta USB durante il conto alla rovescia mostrato a schermo.</li>
+            L'avanzamento è mostrato in tempo reale a schermo. Al termine, il dispositivo si riavvia automaticamente.</li>
+          <li><strong>Scollega la chiavetta USB</strong>
+            Quando il mini-PC si è riavviato, rimuovi la chiavetta.</li>
         </ol>
 
         <div class="box tip">

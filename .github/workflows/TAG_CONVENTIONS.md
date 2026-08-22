@@ -4,7 +4,7 @@ This document explains how to use git tags to trigger different GitHub Actions w
 
 ## Tag Naming
 
-### Main App (HiFi Media Player - Desktop/Electron)
+### Main App (Osmium Sound - Desktop/Electron)
 **Format**: `v<MAJOR>.<MINOR>.<PATCH>`
 
 **Examples**:
@@ -16,7 +16,7 @@ This document explains how to use git tags to trigger different GitHub Actions w
 - ✅ `build-ui-ota.yml` - Builds OTA bundles for desktop app
 - ❌ `build-companion-apk.yml` - NOT triggered
 
-### Companion App (HiFi Media Player Companion - Android)
+### Companion App (Osmium Sound Companion - Android)
 **Format**: `companion-v<MAJOR>.<MINOR>.<PATCH>`
 
 **Examples**:
@@ -39,6 +39,21 @@ This document explains how to use git tags to trigger different GitHub Actions w
   devices never receive it. A device set to the **dev** channel
   (Settings → Updates → Sviluppo) tracks the newest release *including*
   prereleases.
+- **`alpha` = private, ad hoc.** For trying your own experimental fixes on
+  your own device(s) *before* they're ready to be a real, shared `-dev.N`
+  build. `alpha` is the **only** branch releases are tagged from for this
+  channel (a process convention, not a CI-enforced gate — the workflow still
+  only looks at the tag name). Tag format is **nested on top of the dev
+  build you started from**: if `svil` is at `v2.5.21-dev.50`, your first
+  attempt on `alpha` is `v2.5.21-dev.50-alpha1`, the next `-alpha2`, etc.
+  `_fetch_github_api_release`'s `dev` branch explicitly excludes any tag
+  matching `-alpha\d+$`, so these never reach a `dev`-channel device. The
+  **alpha** option itself only appears in Settings on a device where
+  `/etc/hifi-player/ota-alpha-unlocked` has been created by hand (root/SSH,
+  `hifi-ota-alpha-toggle.sh enable` — see the script's header; it is
+  deliberately not reachable via the network API). Once a fix is validated
+  on `alpha`, merge/cherry-pick it into `svil` and cut the next real
+  `v2.5.21-dev.51` there for the shared dev channel.
 
 Promotion: PR `svil` → `main`, then tag a stable `vX.Y.Z` on `main`.
 
@@ -55,6 +70,21 @@ git checkout svil
 git push origin svil
 git tag -a v2.5.7-dev.1 -m "dev build"
 git push origin v2.5.7-dev.1   # → build-ui-ota.yml publishes a PRERELEASE
+```
+
+### Alpha build (private, ad hoc — own devices only)
+
+```bash
+git checkout alpha
+git merge svil                 # stay based on the dev build you're testing against
+# ...commit your experimental fix...
+git push origin alpha
+git tag -a v2.5.21-dev.50-alpha1 -m "alpha: try XYZ fix"
+git push origin v2.5.21-dev.50-alpha1   # → PRERELEASE, invisible to the dev channel
+
+# on the device you want to test with (root/SSH, once):
+hifi-ota-alpha-toggle.sh enable
+# now Settings → Updates shows an "Alpha" option — select it and check for updates
 ```
 
 ### Main App Release (Desktop/Electron)
@@ -97,7 +127,7 @@ git commit -m "chore(release): v2.5.1"
 git push origin main
 
 # 4. Create and push tag (WITH COMPANION PREFIX!)
-git tag -a companion-v2.5.1 -m "HiFi Media Player Companion v2.5.1 - Release notes..."
+git tag -a companion-v2.5.1 -m "Osmium Sound Companion v2.5.1 - Release notes..."
 git push origin companion-v2.5.1
 
 # 5. GitHub Actions automatically:

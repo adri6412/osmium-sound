@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block title %}HiFi Beta{% endblock %} — HiFi Player Beta</title>
+<style>
+  :root {
+    --bg: #0f1115; --panel: #161923; --border: #262b3a; --text: #e6e8ef;
+    --muted: #8b90a3; --accent: #5b8cff; --ok: #35c07a; --warn: #e0a83c; --err: #e05b5b;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.5 -apple-system, Segoe UI, Roboto, sans-serif; }
+  header { display: flex; align-items: center; justify-content: space-between; padding: 14px 24px; border-bottom: 1px solid var(--border); }
+  header a { color: var(--text); text-decoration: none; font-weight: 600; }
+  header nav a { color: var(--muted); margin-left: 18px; font-weight: 500; font-size: 13px; }
+  header nav a:hover { color: var(--text); }
+  main { padding: 24px; max-width: 1100px; margin: 0 auto; }
+  table { width: 100%; border-collapse: collapse; background: var(--panel); border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+  th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--border); font-size: 13px; }
+  th { color: var(--muted); font-weight: 600; text-transform: uppercase; font-size: 11px; letter-spacing: .04em; }
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: rgba(255,255,255,0.02); }
+  .card { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 18px; margin-bottom: 18px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 14px; }
+  .stat-label { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .04em; margin-bottom: 4px; }
+  .stat-value { font-size: 20px; font-weight: 600; }
+  .pill { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 600; }
+  .pill.online { background: rgba(53,192,122,0.15); color: var(--ok); }
+  .pill.offline { background: rgba(139,144,163,0.15); color: var(--muted); }
+  a.btn, button.btn { display: inline-block; background: var(--accent); color: #fff; border: none; padding: 7px 14px;
+    border-radius: 6px; font-size: 13px; font-weight: 600; cursor: pointer; text-decoration: none; }
+  a.btn.secondary, button.btn.secondary { background: transparent; border: 1px solid var(--border); color: var(--text); }
+  input, label { font-size: 13px; }
+  input[type=text], input[type=number], input[type=password] {
+    background: #0b0d12; border: 1px solid var(--border); color: var(--text); padding: 7px 10px; border-radius: 6px; width: 100%;
+  }
+  form .field { margin-bottom: 14px; }
+  .muted { color: var(--muted); }
+  h1 { font-size: 20px; margin: 0 0 4px; }
+  h2 { font-size: 15px; margin: 0 0 12px; }
+</style>
+</head>
+<body>
+<header>
+  <a href="{{ url_for('devices') }}">HiFi Player — Beta</a>
+  {% if session.get('admin') %}
+  <nav>
+    <a href="{{ url_for('devices') }}">Macchine</a>
+    <a href="{{ url_for('fleet_config') }}">Configurazione flotta</a>
+    <a href="{{ url_for('account') }}">Account</a>
+    <a href="{{ url_for('logout') }}">Esci</a>
+  </nav>
+  {% endif %}
+</header>
+<main>
+{% block content %}{% endblock %}
+</main>
+</body>
+</html>

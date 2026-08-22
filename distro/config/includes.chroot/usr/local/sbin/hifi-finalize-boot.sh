@@ -6,31 +6,48 @@
 set -e
 
 GRUB=/etc/default/grub
-if [ -f "$GRUB" ]; then
-    sed -i 's/^GRUB_TIMEOUT=.*/GRUB_TIMEOUT=0/' "$GRUB"
-    sed -i 's/^GRUB_CMDLINE_LINUX_DEFAULT=.*/GRUB_CMDLINE_LINUX_DEFAULT="quiet splash loglevel=0 vt.global_cursor_default=0 rd.udev.log_level=3 udev.log_priority=3"/' "$GRUB"
-    if grep -q '^GRUB_TIMEOUT_STYLE=' "$GRUB"; then
-        sed -i 's/^GRUB_TIMEOUT_STYLE=.*/GRUB_TIMEOUT_STYLE=hidden/' "$GRUB"
-    else
-        echo 'GRUB_TIMEOUT_STYLE=hidden' >> "$GRUB"
-    fi
-    grep -q '^GRUB_DISTRIBUTOR='       "$GRUB" && sed -i 's/^GRUB_DISTRIBUTOR=.*/GRUB_DISTRIBUTOR="Osmium Sound"/' "$GRUB" || echo 'GRUB_DISTRIBUTOR="Osmium Sound"' >> "$GRUB"
-    grep -q '^GRUB_DISABLE_OS_PROBER='  "$GRUB" || echo 'GRUB_DISABLE_OS_PROBER=true'  >> "$GRUB"
-    grep -q '^GRUB_RECORDFAIL_TIMEOUT=' "$GRUB" || echo 'GRUB_RECORDFAIL_TIMEOUT=0'    >> "$GRUB"
-
-    # ── Make GRUB itself invisible (no menu, no "Loading Linux…" text) ──
-    # Use a black graphical terminal so nothing GRUB prints is ever visible,
-    # and disable the boot beep / submenu.
-    grep -q '^GRUB_TERMINAL_OUTPUT=' "$GRUB" \
-        && sed -i 's/^GRUB_TERMINAL_OUTPUT=.*/GRUB_TERMINAL_OUTPUT="gfxterm"/' "$GRUB" \
-        || echo 'GRUB_TERMINAL_OUTPUT="gfxterm"' >> "$GRUB"
-    grep -q '^GRUB_GFXMODE='         "$GRUB" || echo 'GRUB_GFXMODE=auto'          >> "$GRUB"
-    grep -q '^GRUB_GFXPAYLOAD_LINUX=' "$GRUB" || echo 'GRUB_GFXPAYLOAD_LINUX=keep' >> "$GRUB"
-    grep -q '^GRUB_DISABLE_SUBMENU='  "$GRUB" || echo 'GRUB_DISABLE_SUBMENU=y'     >> "$GRUB"
-    grep -q '^GRUB_INIT_TUNE='        "$GRUB" || echo 'GRUB_INIT_TUNE=""'          >> "$GRUB"
-    # Pure-black GRUB background → the "Loading…" echoes (if any) blend in.
-    grep -q '^GRUB_BACKGROUND=' "$GRUB" || echo 'GRUB_BACKGROUND=/boot/grub/hifi-bg.png' >> "$GRUB"
+# grub2-common normally ships this as a conffile, but confirmed live on the
+# test VM that it does NOT exist on this image (the live-build chroot never
+# goes through a "real" grub package configure the way a targeted install
+# would) — the old `if [ -f "$GRUB" ]; then ... fi` guard around this whole
+# block therefore silently skipped ALL of it, every time, with no error
+# anywhere: update-grub still ran (via the fatal call in hifi-grub-install.sh
+# and the best-effort one below) and produced a perfectly valid but
+# completely unbranded grub.cfg (5s timeout, generic "Debian GNU/Linux").
+# Create it if missing instead of skipping.
+mkdir -p "$(dirname "$GRUB")"
+[ -f "$GRUB" ] || : > "$GRUB"
+# GRUB_TIMEOUT/GRUB_CMDLINE_LINUX_DEFAULT used bare `sed -i` with no
+# grep-check + append fallback, unlike every other setting below — on an
+# empty/fresh file (or one missing just these two keys) that's also a
+# silent no-op, so give them the same fallback idiom.
+grep -q '^GRUB_TIMEOUT=' "$GRUB" \
+    && sed -i 's/^GRUB_TIMEOUT=.*/GRUB_TIMEOUT=0/' "$GRUB" \
+    || echo 'GRUB_TIMEOUT=0' >> "$GRUB"
+grep -q '^GRUB_CMDLINE_LINUX_DEFAULT=' "$GRUB" \
+    && sed -i 's/^GRUB_CMDLINE_LINUX_DEFAULT=.*/GRUB_CMDLINE_LINUX_DEFAULT="quiet splash loglevel=0 vt.global_cursor_default=0 rd.udev.log_level=3 udev.log_priority=3"/' "$GRUB" \
+    || echo 'GRUB_CMDLINE_LINUX_DEFAULT="quiet splash loglevel=0 vt.global_cursor_default=0 rd.udev.log_level=3 udev.log_priority=3"' >> "$GRUB"
+if grep -q '^GRUB_TIMEOUT_STYLE=' "$GRUB"; then
+    sed -i 's/^GRUB_TIMEOUT_STYLE=.*/GRUB_TIMEOUT_STYLE=hidden/' "$GRUB"
+else
+    echo 'GRUB_TIMEOUT_STYLE=hidden' >> "$GRUB"
 fi
+grep -q '^GRUB_DISTRIBUTOR='       "$GRUB" && sed -i 's/^GRUB_DISTRIBUTOR=.*/GRUB_DISTRIBUTOR="Osmium Sound"/' "$GRUB" || echo 'GRUB_DISTRIBUTOR="Osmium Sound"' >> "$GRUB"
+grep -q '^GRUB_DISABLE_OS_PROBER='  "$GRUB" || echo 'GRUB_DISABLE_OS_PROBER=true'  >> "$GRUB"
+grep -q '^GRUB_RECORDFAIL_TIMEOUT=' "$GRUB" || echo 'GRUB_RECORDFAIL_TIMEOUT=0'    >> "$GRUB"
+
+# ── Make GRUB itself invisible (no menu, no "Loading Linux…" text) ──
+# Use a black graphical terminal so nothing GRUB prints is ever visible,
+# and disable the boot beep / submenu.
+grep -q '^GRUB_TERMINAL_OUTPUT=' "$GRUB" \
+    && sed -i 's/^GRUB_TERMINAL_OUTPUT=.*/GRUB_TERMINAL_OUTPUT="gfxterm"/' "$GRUB" \
+    || echo 'GRUB_TERMINAL_OUTPUT="gfxterm"' >> "$GRUB"
+grep -q '^GRUB_GFXMODE='         "$GRUB" || echo 'GRUB_GFXMODE=auto'          >> "$GRUB"
+grep -q '^GRUB_GFXPAYLOAD_LINUX=' "$GRUB" || echo 'GRUB_GFXPAYLOAD_LINUX=keep' >> "$GRUB"
+grep -q '^GRUB_DISABLE_SUBMENU='  "$GRUB" || echo 'GRUB_DISABLE_SUBMENU=y'     >> "$GRUB"
+grep -q '^GRUB_INIT_TUNE='        "$GRUB" || echo 'GRUB_INIT_TUNE=""'          >> "$GRUB"
+# Pure-black GRUB background → the "Loading…" echoes (if any) blend in.
+grep -q '^GRUB_BACKGROUND=' "$GRUB" || echo 'GRUB_BACKGROUND=/boot/grub/hifi-bg.png' >> "$GRUB"
 
 # Solid black GRUB background image (so the graphical terminal shows nothing).
 if command -v convert >/dev/null 2>&1; then
@@ -64,3 +81,18 @@ fi
 # live chroot (no real disk); succeeds on the installed target.
 update-initramfs -u 2>/dev/null || true
 update-grub 2>/dev/null || true
+
+# ── Lock the root account ────────────────────────────────────────────
+# Belt-and-braces: root should already be locked, since this same script ran
+# during the live chroot build (below) and hifi-disk-install.sh just copies
+# that chroot verbatim onto the target disk. Kept here so this script stays a
+# complete, idempotent "apply the finalized boot state" step on its own — safe
+# to call from either place — and NO os-update apply.d invokes it, so this can
+# never fire on an already-deployed device behind the owner's back.
+#
+# Combined with the password-less 'hifi' from 0100-system-setup.hook.chroot, a
+# freshly installed appliance carries NO known credential; the SSH/console login
+# is created from the admin account in the provisioning wizard. Without one,
+# recovery is physical: GRUB init=/bin/bash, or the kiosk's own "reset
+# web-admin password" button.
+usermod -p '!' root 2>/dev/null || true

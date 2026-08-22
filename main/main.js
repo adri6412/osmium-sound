@@ -1,9 +1,9 @@
-import { app, BrowserWindow, ipcMain, session, globalShortcut } from 'electron';
+import { app, BrowserWindow, ipcMain, session, globalShortcut, screen } from 'electron';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import { exec } from 'child_process';
 import { promisify } from 'util';
-import { appendFileSync } from 'fs';
+import { appendFileSync, readFileSync, mkdirSync, writeFileSync, readdirSync } from 'fs';
 
 const execAsync = promisify(exec);
 
@@ -11,6 +11,45 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 let mainWindow;
+
+// The xsession restart loop (distro/os-update/files/xsession) relaunches this
+// binary in a `while true` loop whenever it exits, and a UI-channel OTA
+// update restarts lightdm (which re-runs xsession) to pick up new files —
+// neither of those is guaranteed to have actually killed the previous
+// process tree first (e.g. lightdm restarting while the old xsession's
+// process group is still mid-shutdown). Without this lock, that races into
+// two full Electron process trees running at once — seen live on the test
+// VM as 9 renderer processes and 2 gpu-process/main-process pairs in htop —
+// each polling LMS/the local API on its own timers, silently doubling real
+// network+CPU load behind a single visible (frontmost) window. Electron's
+// single-instance lock makes any second launch detect the first and exit
+// immediately instead of standing up its own window/subprocess tree.
+if (!app.requestSingleInstanceLock()) {
+  app.quit();
+  process.exit(0);
+}
+app.on('second-instance', () => {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    if (mainWindow.isMinimized()) mainWindow.restore();
+    mainWindow.show();
+    mainWindow.focus();
+  }
+});
+
+// The kiosk has no keyboard/mouse to drive DevTools during normal operation,
+// but debugging on the actual device is sometimes the only way to chase a
+// hardware-specific bug — this flag file lets that be toggled over SSH
+// without shipping a special build, mirroring the other on-device toggles
+// under /etc/hifi-player (ota-channel, pointer-enabled, ota-alpha-unlocked).
+// Read once at window creation (not watched live): flip it and restart the
+// app to take effect. Missing file / anything other than exactly "true" ⇒ off.
+function shouldOpenDevTools() {
+  try {
+    return readFileSync('/etc/hifi-player/devtools', 'utf8').trim() === 'true';
+  } catch {
+    return false;
+  }
+}
 
 // Same sink the renderer's console-message listener writes to (see below) —
 // main-process events (recovery reloads, load failures) land in the same
@@ -23,6 +62,16 @@ function logToFile(prefix, message) {
     );
   } catch (_) {}
 }
+
+// Where Settings.jsx's Debug section saves HAR captures (see the
+// har-capture-* IPC handlers near the bottom of this file). api_server.py
+// serves this exact same path to the web admin for download — the two must
+// stay in sync (grep HAR_CAPTURE_DIR there if this ever moves).
+const HAR_CAPTURE_DIR = join(app.getPath('logs'), 'har-captures');
+
+// Same idea as HAR_CAPTURE_DIR, for long-running perf-capture-* below.
+// api_server.py mirrors this path too (grep PERF_CAPTURE_DIR there).
+const PERF_CAPTURE_DIR = join(app.getPath('logs'), 'perf-captures');
 
 // Renderer-crash recovery: how many times we've auto-reloaded, and when we last
 // did. After long uptime the Chromium renderer/GPU process can die (OOM, GPU
@@ -57,8 +106,9 @@ function recoverRenderer(reason) {
 }
 
 /**
- * Create the main application window
- * Optimized for 1024x600 touchscreen displays
+ * Create the main application window, sized to fill the actual display
+ * (7" touchscreen, 1080p/4K TV, ...). The renderer's ScaledCanvas then scales
+ * the fixed 1024x600 design canvas to fit whatever size that turns out to be.
  */
 function createWindow() {
   // Relax framing/CSP ONLY for the local Lyrion Music Server (localhost:9000 —
@@ -83,9 +133,30 @@ function createWindow() {
     callback({ responseHeaders: details.responseHeaders });
   });
 
+  // The X11 rollback session runs Chromium bare (no window manager), so the
+  // `--start-fullscreen` CLI flag has nothing to make it fullscreen with —
+  // that flag is a Chrome *browser* switch, not something Electron's
+  // BrowserWindow reads from argv. Without a WM to honor the EWMH fullscreen
+  // hint either, the only reliable way to cover the whole panel (7"
+  // touchscreen, 1080p/4K TV over HDMI, ...) is to size the window to the
+  // display's actual resolution ourselves, up front.
+  const { width: screenWidth, height: screenHeight } = screen.getPrimaryDisplay().size;
+
+  // The Wayland session (labwc) does have a compositor, and there the manual
+  // sizing is not enough: the window runs under XWayland (see the comment on
+  // --ozone-platform=x11 in distro/os-update/files/kiosk-wayland-launch) and
+  // Chromium draws its own Linux frame around it — ElectronFrameViewLinux, a
+  // resize band plus a border painted in the system theme's colours. On a black
+  // UI that border reads as a light 4px strip down the edge of the panel.
+  // Asking the compositor to fullscreen the window from the outside does not
+  // remove it (it only moves which edges land on screen): Chromium drops the
+  // frame when *it* knows it is fullscreen, so the window has to ask for it.
+  const isCompositorSession =
+    process.env.XDG_SESSION_TYPE === 'wayland' || !!process.env.WAYLAND_DISPLAY;
+
   mainWindow = new BrowserWindow({
-    width: 1024,
-    height: 600,
+    width: screenWidth,
+    height: screenHeight,
     minWidth: 1024,
     minHeight: 600,
     webPreferences: {
@@ -102,7 +173,7 @@ function createWindow() {
     titleBarStyle: 'hidden',
     frame: false,
     resizable: false,
-    fullscreen: false,
+    fullscreen: isCompositorSession,
     show: false
   });
 
@@ -110,7 +181,6 @@ function createWindow() {
   const isDev = process.env.NODE_ENV === 'development';
   if (isDev) {
     mainWindow.loadURL('http://localhost:5173');
-    mainWindow.webContents.openDevTools();
   } else {
     const indexPath = join(__dirname, '../renderer-dist/index.html');
     mainWindow.loadFile(indexPath).catch(err => {
@@ -118,6 +188,14 @@ function createWindow() {
       // Fallback to a simple HTML page
       mainWindow.loadURL('data:text/html,<html><body><h1>Loading...</h1><p>Please wait...</p></body></html>');
     });
+  }
+
+  // 'bottom' docks the panel inside mainWindow itself rather than opening a
+  // separate top-level window — this kiosk has no window manager, so a
+  // detached DevTools window can't be moved, focused, or recovered if it
+  // ends up off-screen or behind the main window.
+  if (isDev || shouldOpenDevTools()) {
+    mainWindow.webContents.openDevTools({ mode: 'bottom' });
   }
 
   // Show window when ready
@@ -136,9 +214,17 @@ function createWindow() {
   });
 
   mainWindow.webContents.on('did-finish-load', () => {
-    // Cap the compositor at 30 FPS. For this media-player UI that's visually
-    // smooth and roughly halves paint/composite work on the Pi-class hardware.
-    // Reapplied here (not just at creation) so it survives a recovery reload.
+    // NOTE: webContents.setFrameRate() is a no-op here. Electron only honors
+    // it for BrowserWindows created with webPreferences.offscreen — this
+    // window isn't one (it's the real on-screen kiosk surface), so this call
+    // has never actually capped anything, on any Electron version; it fails
+    // silently (no exception) rather than throwing, which is why nobody
+    // noticed. Left in place in case a future Electron version widens
+    // support, but don't rely on it — see ipcMain 'set-frame-rate' below for
+    // the same caveat, and AnalogVUMeter.jsx for where real frame-rate
+    // mitigation actually lives now (throttling how often continuous
+    // animations get re-targeted, since the compositor itself can't be
+    // capped below the display's vsync rate from here).
     try {
       mainWindow.webContents.setFrameRate(30);
     } catch (err) {
@@ -151,6 +237,17 @@ function createWindow() {
         recoveryReloads = 0;
       }
     }, 60000);
+    // A crash/reload (recoverRenderer above) tears down the old CDP session —
+    // if a perf capture was in progress, re-enable the domain on the fresh
+    // one instead of silently going dark on the renderer-side half of its
+    // data for the rest of the (possibly multi-hour) capture.
+    if (perfCapture && mainWindow) {
+      const dbg = mainWindow.webContents.debugger;
+      Promise.resolve()
+        .then(() => { if (!dbg.isAttached()) dbg.attach('1.3'); })
+        .then(() => dbg.sendCommand('Performance.enable'))
+        .catch((err) => console.error('perf-capture: re-attach after reload failed:', err));
+    }
   });
 
   // Renderer process died (crash, OOM, killed). Without this the window is left
@@ -207,6 +304,9 @@ function registerGlobalShortcuts() {
 app.whenReady().then(() => {
   createWindow();
   registerGlobalShortcuts();
+  pollPhysicalKeyboard(); // establish the initial state immediately, don't wait 2s
+  setInterval(pollPhysicalKeyboard, 2000);
+  setInterval(tickCaptureScheduler, CAPTURE_SCHEDULE_POLL_MS);
 });
 
 // This kiosk has exactly one window and no way for the user to close it (no
@@ -236,9 +336,15 @@ app.on('will-quit', () => {
 });
 
 /**
- * Set the renderer compositor frame rate. The renderer asks for 60 FPS while
- * the boot intro plays (so the animation is smooth on the x86 mini-PC) and 30
- * FPS for the steady UI (to keep idle CPU/heat down).
+ * The renderer asks for 60 FPS while the boot intro plays and 30 FPS for the
+ * steady UI, intending to cap idle CPU/GPU compositor work — but
+ * webContents.setFrameRate() only takes effect on offscreen-rendered
+ * BrowserWindows (see the did-finish-load comment above), which this kiosk
+ * window is not. The call below is kept because it's harmless (silently
+ * ignored, doesn't throw), not because it works; treat this handler as
+ * legacy/inert until the window is actually converted to offscreen
+ * rendering, and look to per-component throttling (AnalogVUMeter.jsx) for
+ * real mitigation in the meantime.
  */
 ipcMain.handle('set-frame-rate', (event, fps) => {
   const n = Math.max(1, Math.min(120, Number(fps) || 30));
@@ -279,3 +385,409 @@ ipcMain.handle('hide-global-keyboard', async () => {
   }
   return { success: true, message: 'Tastiera virtuale chiusa' };
 });
+
+/**
+ * Physical keyboard presence, for the on-screen (simple-keyboard) auto-show
+ * in App.jsx — a plugged-in USB keyboard should suppress it, and unplugging
+ * one should bring it back, live, without a restart. There's no renderer-side
+ * HID enumeration API in Chromium/Electron, so this reads real hardware
+ * state from the main process instead: udev symlinks any device it
+ * recognizes as a keyboard (USB or PS/2) to `*-event-kbd` under
+ * /dev/input/by-id (falling back to /dev/input/by-path for devices with no
+ * stable by-id link). Polled rather than watched — fs.watch on these dirs is
+ * unreliable across filesystems/distros, and this isn't latency-sensitive.
+ */
+const KBD_DEVICE_DIRS = ['/dev/input/by-id', '/dev/input/by-path'];
+let lastPhysicalKeyboard = null;
+
+function hasPhysicalKeyboardNow() {
+  for (const dir of KBD_DEVICE_DIRS) {
+    try {
+      if (readdirSync(dir).some((f) => f.endsWith('-event-kbd'))) return true;
+    } catch (_) { /* dir may not exist, e.g. dev build off-target */ }
+  }
+  return false;
+}
+
+ipcMain.handle('get-physical-keyboard', () => hasPhysicalKeyboardNow());
+
+function pollPhysicalKeyboard() {
+  const now = hasPhysicalKeyboardNow();
+  if (now === lastPhysicalKeyboard) return;
+  lastPhysicalKeyboard = now;
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send('physical-keyboard-changed', now);
+  }
+}
+
+/**
+ * HAR (network traffic) capture. Driven automatically by the beta-testing
+ * capture scheduler further down (tickCaptureScheduler) — there is no manual
+ * UI for this anymore. The kiosk has no keyboard to drive DevTools' own
+ * Network panel anyway, so this drives the same underlying Chrome DevTools
+ * Protocol from the main process instead: attach webContents.debugger,
+ * record Network.* events between start/stop, and write a standard .har file
+ * later downloaded from the web admin (api_server.py serves HAR_CAPTURE_DIR
+ * — see the constant above) or picked up by hifi-beta-agent.py.
+ *
+ * Deliberately headers/status/timing only, no response bodies: fetching
+ * Network.getResponseBody for every request would mean an extra CDP
+ * round-trip per request and could balloon the file with image/audio
+ * payloads, on a device that's already tight on CPU. That's still enough to
+ * diagnose the failures this is meant for (wrong URL, CORS, 4xx/5xx, slow
+ * requests) without the overhead.
+ *
+ * Mutually exclusive with openDevTools() (shouldOpenDevTools()/NODE_ENV=
+ * development, above) — Chromium only allows one CDP client per target, so
+ * dbg.attach() throws if real DevTools is already open on this window; the
+ * error is surfaced to the caller rather than crashing anything.
+ */
+let harCapture = null; // { entries: Map<requestId, entry>, startedAt } | null
+
+// Header names/token patterns that can carry streaming-service auth (Tidal,
+// Qobuz, Spotify, ...) or session identifiers. Captures are downloaded via
+// the web admin / picked up by hifi-beta-agent.py, so these must never land
+// in the .har in the clear.
+const SENSITIVE_HEADER_NAMES = new Set(['authorization', 'proxy-authorization', 'cookie', 'set-cookie', 'x-api-key']);
+const SENSITIVE_HEADER_PATTERN = /token|secret|session/i;
+
+function redactHeaders(headers) {
+  return Object.entries(headers || {}).map(([name, value]) => ({
+    name,
+    value: SENSITIVE_HEADER_NAMES.has(name.toLowerCase()) || SENSITIVE_HEADER_PATTERN.test(name)
+      ? '[REDACTED]'
+      : String(value),
+  }));
+}
+
+function harDebuggerListener(_event, method, params) {
+  if (!harCapture) return;
+  const entries = harCapture.entries;
+  switch (method) {
+    case 'Network.requestWillBeSent': {
+      const { requestId, request, timestamp, wallTime, type } = params;
+      entries.set(requestId, {
+        _resourceType: type || '',
+        _startTimestamp: timestamp,
+        _endTimestamp: null,
+        _failed: null,
+        startedDateTime: new Date(wallTime * 1000).toISOString(),
+        request: {
+          method: request.method,
+          url: request.url,
+          httpVersion: 'HTTP/1.1',
+          headers: redactHeaders(request.headers),
+          queryString: [],
+          cookies: [],
+          headersSize: -1,
+          bodySize: request.postData ? Buffer.byteLength(request.postData) : 0,
+        },
+        response: null,
+      });
+      break;
+    }
+    case 'Network.responseReceived': {
+      const e = entries.get(params.requestId);
+      if (!e) return;
+      const { response } = params;
+      e.response = {
+        status: response.status,
+        statusText: response.statusText || '',
+        httpVersion: response.protocol || 'HTTP/1.1',
+        headers: redactHeaders(response.headers),
+        cookies: [],
+        content: { size: 0, mimeType: response.mimeType || '' },
+        redirectURL: '',
+        headersSize: -1,
+        bodySize: -1,
+      };
+      break;
+    }
+    case 'Network.loadingFinished': {
+      const e = entries.get(params.requestId);
+      if (!e) return;
+      if (e.response) {
+        e.response.content.size = params.encodedDataLength || 0;
+        e.response.bodySize = params.encodedDataLength || 0;
+      }
+      e._endTimestamp = params.timestamp;
+      break;
+    }
+    case 'Network.loadingFailed': {
+      const e = entries.get(params.requestId);
+      if (!e) return;
+      e._failed = params.errorText || 'failed';
+      e._endTimestamp = params.timestamp;
+      break;
+    }
+    default:
+      break;
+  }
+}
+
+function buildHarLog(capture) {
+  const emptyResponse = (reason) => ({
+    status: 0, statusText: reason || '', httpVersion: '',
+    headers: [], cookies: [], content: { size: 0, mimeType: '' },
+    redirectURL: '', headersSize: -1, bodySize: -1,
+  });
+  const entries = [...capture.entries.values()].map((e) => ({
+    startedDateTime: e.startedDateTime,
+    time: e._endTimestamp != null ? Math.max(0, (e._endTimestamp - e._startTimestamp) * 1000) : 0,
+    request: e.request,
+    response: e.response || emptyResponse(e._failed || 'no response received'),
+    cache: {},
+    timings: { send: 0, wait: 0, receive: 0 },
+    _resourceType: e._resourceType,
+  }));
+  entries.sort((a, b) => a.startedDateTime.localeCompare(b.startedDateTime));
+  return {
+    log: {
+      version: '1.2',
+      creator: { name: 'HiFi Player Debug Capture', version: app.getVersion() },
+      pages: [],
+      entries,
+    },
+  };
+}
+
+// Plain functions (no IPC event dependency) so both the manual ipcMain
+// handlers below and the automatic capture scheduler (see
+// tickCaptureScheduler further down) can drive the same capture logic.
+async function startHarCaptureInternal() {
+  if (harCapture) return { success: false, message: 'Capture already running' };
+  if (!mainWindow || mainWindow.isDestroyed()) return { success: false, message: 'No window' };
+  const dbg = mainWindow.webContents.debugger;
+  try {
+    if (!dbg.isAttached()) dbg.attach('1.3');
+    await dbg.sendCommand('Network.enable');
+  } catch (err) {
+    return { success: false, message: err.message || String(err) };
+  }
+  harCapture = { entries: new Map(), startedAt: Date.now() };
+  dbg.on('message', harDebuggerListener);
+  dbg.once('detach', () => {
+    // Something else took the CDP session (or the window died) — don't leave
+    // the renderer thinking a capture is still running with no way to stop it.
+    harCapture = null;
+  });
+  return { success: true };
+}
+
+async function stopHarCaptureInternal() {
+  if (!harCapture) return { success: false, message: 'No capture running' };
+  const capture = harCapture;
+  harCapture = null;
+  try {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      const dbg = mainWindow.webContents.debugger;
+      dbg.removeListener('message', harDebuggerListener);
+      // perf-capture-* below shares this same CDP session — only let go of it
+      // if that capture isn't also relying on it right now.
+      if (dbg.isAttached() && !perfCapture) dbg.detach();
+    }
+  } catch (err) {
+    console.error('har-capture-stop: debugger detach failed:', err);
+  }
+
+  const har = buildHarLog(capture);
+  const count = har.log.entries.length;
+  if (count === 0) return { success: true, empty: true, count: 0 };
+
+  const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+  const filename = `capture-${stamp}.har`;
+  try {
+    mkdirSync(HAR_CAPTURE_DIR, { recursive: true });
+    writeFileSync(join(HAR_CAPTURE_DIR, filename), JSON.stringify(har));
+  } catch (err) {
+    return { success: false, message: err.message || String(err) };
+  }
+  return { success: true, filename, count };
+}
+
+/**
+ * Performance capture. Same motivation as the HAR capture above (no keyboard
+ * on the kiosk to drive DevTools) but for a different question: "is
+ * something leaking over hours of normal use?" — suspected after a field
+ * report of GPU usage climbing back up over a few hours of playback after
+ * every OTA-triggered restart (which resets it). Also driven automatically
+ * by the beta-testing capture scheduler further down — no manual UI.
+ *
+ * Samples on a configurable interval (default 5s) for as long as it runs
+ * (meant to be left recording across hours, unattended) and appends one JSON
+ * line per sample rather than
+ * building the whole thing in memory + writing once at the end like the HAR
+ * capture does — a multi-hour capture that's still running when the renderer
+ * eventually OOMs (see recoverRenderer's own doc comment above) would
+ * otherwise lose everything.
+ *
+ * Two data sources per sample:
+ *  - app.getAppMetrics() — Electron/Chromium's own per-process CPU+memory
+ *    breakdown (browser, renderer, gpu, utility). Doesn't need the debugger
+ *    at all, so it keeps working even across a renderer crash/reload.
+ *  - CDP Performance.getMetrics() — renderer-side detail (DOM node count,
+ *    JS event listener count, JS heap) the app-metrics view above can't see.
+ *    Shares the same debugger session as HAR capture (see the detach guards
+ *    on both sides); if the renderer dies mid-capture this domain has to be
+ *    re-enabled after the reload, see did-finish-load below.
+ */
+let perfCapture = null; // { startedAt, filePath, intervalId, sampleCount } | null
+
+function perfMetricsFromAppMetrics() {
+  try {
+    return app.getAppMetrics().map((m) => ({
+      type: m.type,
+      pid: m.pid,
+      cpuPct: m.cpu ? m.cpu.percentCPUUsage : null,
+      workingSetKb: m.memory ? m.memory.workingSetSize : null,
+    }));
+  } catch (err) {
+    return { error: err.message || String(err) };
+  }
+}
+
+async function samplePerfCapture() {
+  if (!perfCapture) return;
+  const sample = { ts: new Date().toISOString(), appMetrics: perfMetricsFromAppMetrics() };
+  try {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      const dbg = mainWindow.webContents.debugger;
+      if (dbg.isAttached()) {
+        const { metrics } = await dbg.sendCommand('Performance.getMetrics');
+        sample.domMetrics = Object.fromEntries((metrics || []).map((m) => [m.name, m.value]));
+        // window.__hifiPerfState (LyrionServer.jsx) — which screen/state this
+        // sample's numbers belong to, so a multi-hour capture is legible
+        // afterwards without having to remember what was on screen when.
+        const { result } = await dbg.sendCommand('Runtime.evaluate', {
+          expression: 'JSON.stringify(window.__hifiPerfState || null)',
+          returnByValue: true,
+        });
+        if (result && typeof result.value === 'string') {
+          try { sample.uiState = JSON.parse(result.value); } catch (_) {}
+        }
+      }
+    }
+  } catch (err) {
+    sample.domMetricsError = err.message || String(err);
+  }
+  if (!perfCapture) return; // capture may have been stopped while awaiting above
+  perfCapture.sampleCount += 1;
+  try {
+    appendFileSync(perfCapture.filePath, JSON.stringify(sample) + '\n');
+  } catch (err) {
+    console.error('perf-capture: write failed:', err);
+  }
+}
+
+// Plain function version, same reasoning as startHarCaptureInternal above.
+async function startPerfCaptureInternal(intervalSec) {
+  if (perfCapture) return { success: false, message: 'Capture already running' };
+  if (!mainWindow || mainWindow.isDestroyed()) return { success: false, message: 'No window' };
+  const dbg = mainWindow.webContents.debugger;
+  try {
+    if (!dbg.isAttached()) dbg.attach('1.3');
+    await dbg.sendCommand('Performance.enable');
+  } catch (err) {
+    return { success: false, message: err.message || String(err) };
+  }
+  mkdirSync(PERF_CAPTURE_DIR, { recursive: true });
+  const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+  const filePath = join(PERF_CAPTURE_DIR, `perf-${stamp}.jsonl`);
+  // Clamp rather than trust the caller's input verbatim -- this only drives
+  // a local setInterval, but a stray 0/NaN would busy-loop CDP calls.
+  const sec = Number.isFinite(intervalSec) ? Math.min(600, Math.max(1, intervalSec)) : 5;
+  perfCapture = { startedAt: Date.now(), filePath, sampleCount: 0, intervalSec: sec };
+  perfCapture.intervalId = setInterval(samplePerfCapture, sec * 1000);
+  samplePerfCapture(); // first sample immediately, don't wait for the first tick
+  dbg.once('detach', () => {
+    if (perfCapture) console.error('perf-capture: CDP session detached unexpectedly (devtools opened elsewhere?)');
+  });
+  return { success: true };
+}
+
+async function stopPerfCaptureInternal() {
+  if (!perfCapture) return { success: false, message: 'No capture running' };
+  const { filePath, sampleCount, intervalId } = perfCapture;
+  clearInterval(intervalId);
+  perfCapture = null;
+  try {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      const dbg = mainWindow.webContents.debugger;
+      // HAR capture above shares this same CDP session — only let go of it
+      // if that capture isn't also relying on it right now.
+      if (dbg.isAttached() && !harCapture) dbg.detach();
+    }
+  } catch (err) {
+    console.error('perf-capture-stop: debugger detach failed:', err);
+  }
+  if (sampleCount === 0) return { success: true, empty: true, sampleCount: 0 };
+  return { success: true, filename: filePath.split(/[\\/]/).pop(), sampleCount };
+}
+
+/**
+ * Automatic capture scheduling, for the beta-testing telemetry pipeline.
+ * This app never decides its own cadence: a separate Python agent
+ * (hifi-beta-agent, distro/config/includes.chroot/usr/local/sbin/) polls a
+ * cloud server for the fleet's current schedule and writes it to
+ * CAPTURE_SCHEDULE_FILE. All this does is read that file and, if it asks
+ * for it, start HAR+perf capture for a while every so often, using the same
+ * internal start/stop functions defined above — never touching a capture it
+ * didn't start itself.
+ */
+const CAPTURE_SCHEDULE_FILE = join(app.getPath('userData'), 'beta-capture-schedule.json');
+const CAPTURE_SCHEDULE_POLL_MS = 60 * 1000;
+const SCHEDULED_PERF_SAMPLE_INTERVAL_SEC = 5;
+
+let scheduledCaptureOwnsHar = false;
+let scheduledCaptureOwnsPerf = false;
+let scheduledCaptureStopTimer = null;
+let lastScheduledRunAt = 0;
+
+function readCaptureSchedule() {
+  try {
+    const raw = JSON.parse(readFileSync(CAPTURE_SCHEDULE_FILE, 'utf8'));
+    const intervalSec = Number(raw.intervalSec);
+    const durationSec = Number(raw.durationSec);
+    if (!raw.enabled || !Number.isFinite(intervalSec) || intervalSec <= 0 || !Number.isFinite(durationSec) || durationSec <= 0) {
+      return null;
+    }
+    return { intervalSec, durationSec };
+  } catch {
+    return null; // missing/malformed file (e.g. agent hasn't run yet) ⇒ off
+  }
+}
+
+async function stopScheduledCapture() {
+  if (scheduledCaptureStopTimer) {
+    clearTimeout(scheduledCaptureStopTimer);
+    scheduledCaptureStopTimer = null;
+  }
+  if (scheduledCaptureOwnsHar) {
+    scheduledCaptureOwnsHar = false;
+    await stopHarCaptureInternal();
+  }
+  if (scheduledCaptureOwnsPerf) {
+    scheduledCaptureOwnsPerf = false;
+    await stopPerfCaptureInternal();
+  }
+}
+
+async function tickCaptureScheduler() {
+  const schedule = readCaptureSchedule();
+  if (!schedule) return;
+  // Something's already running (scheduled or manual) — never stack a
+  // second capture on top, and never touch one this scheduler didn't start.
+  if (harCapture || perfCapture) return;
+  const now = Date.now();
+  if (now - lastScheduledRunAt < schedule.intervalSec * 1000) return;
+  lastScheduledRunAt = now;
+
+  const harResult = await startHarCaptureInternal();
+  scheduledCaptureOwnsHar = !!harResult.success;
+  const perfResult = await startPerfCaptureInternal(SCHEDULED_PERF_SAMPLE_INTERVAL_SEC);
+  scheduledCaptureOwnsPerf = !!perfResult.success;
+
+  if (scheduledCaptureOwnsHar || scheduledCaptureOwnsPerf) {
+    scheduledCaptureStopTimer = setTimeout(stopScheduledCapture, schedule.durationSec * 1000);
+  }
+}
