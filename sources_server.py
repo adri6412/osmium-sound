@@ -3949,20 +3949,6 @@ def _auto_adopt_formatted(st):
     _lyrion_push_live(add_paths=[src["mountpoint"]])
 
 
-def _local_path_allowed(path):
-    """Resolve `path` and confine it to an allow-listed media root. Returns the
-    resolved realpath if allowed, otherwise None. Shared by api_add_local
-    (fresh user input) and the restore-time re-validation of a restored
-    hifi-sources.json (untrusted archive content) — both must apply the exact
-    same confinement before the path is ever touched on disk or handed to
-    Lyrion as a media directory."""
-    return _under_roots(path, ALLOWED_LOCAL_ROOTS)
-
-
-@app.route("/api/sources/local", methods=["POST"])
-def api_add_local():
-    """Add a rootfs folder as a `local` source. With `samba: true`, also
-    turn it into a network-writable Samba share (same ownership/mode
 def _under_roots(path, roots):
     """Resolve `path` and confine it to one of `roots`. Returns the resolved
     realpath if it is one of the roots or sits below one, otherwise None.
@@ -3979,6 +3965,20 @@ def _under_roots(path, roots):
     return None
 
 
+def _local_path_allowed(path):
+    """Resolve `path` and confine it to an allow-listed media root. Returns the
+    resolved realpath if allowed, otherwise None. Shared by api_add_local
+    (fresh user input) and the restore-time re-validation of a restored
+    hifi-sources.json (untrusted archive content) — both must apply the exact
+    same confinement before the path is ever touched on disk or handed to
+    Lyrion as a media directory."""
+    return _under_roots(path, ALLOWED_LOCAL_ROOTS)
+
+
+@app.route("/api/sources/local", methods=["POST"])
+def api_add_local():
+    """Add a rootfs folder as a `local` source. With `samba: true`, also
+    turn it into a network-writable Samba share (same ownership/mode
     treatment ext4 internal disks get -- see _mount_adopted_disk()) so
     music can be copied onto the appliance over the network instead of
     needing SSH/a USB stick -- the folder is created if it doesn't exist
@@ -4028,6 +4028,12 @@ def _under_roots(path, roots):
     return jsonify({"success": True})
 
 
+# What the folder picker may browse: the roots a picked folder can actually
+# end up under (see _local_path_allowed()) plus the appliance's own default
+# playlist folder, which api_playlistdir_set() accepts on its own.
+_BROWSE_ROOTS = ALLOWED_LOCAL_ROOTS + (DEFAULT_PLAYLISTDIR,)
+
+
 @app.route("/api/local/browse", methods=["GET"])
 def api_browse_local():
     """List immediate subdirectories under a path -- powers the "Add local
@@ -4048,12 +4054,6 @@ def api_browse_local():
         roots = sorted({r for r in _BROWSE_ROOTS if os.path.isdir(r)})
         return jsonify({"path": "/", "parent": None, "dirs": roots})
     if not os.path.isdir(cand):
-# What the folder picker may browse: the roots a picked folder can actually
-# end up under (see _local_path_allowed()) plus the appliance's own default
-# playlist folder, which api_playlistdir_set() accepts on its own.
-_BROWSE_ROOTS = ALLOWED_LOCAL_ROOTS + (DEFAULT_PLAYLISTDIR,)
-
-
         return _err("msg.folderMissing", 400, path=rel)
     try:
         dirs = sorted(
