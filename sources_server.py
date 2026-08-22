@@ -1346,14 +1346,38 @@ def ensure_playlistdir():
 # the Osmium side restricts :9000 anyway (no firewall/reverse-proxy, see
 # webui_server.py), Lyrion's own IP filter buys this appliance no security,
 # so just turn it off outright instead of chasing every allow-list.
+#
+# `protectSettings` is the second of those places, and the one that produced
+# "403 Forbidden: settings/server/basic.html" when opening Server settings over
+# Tailscale. It is on by default (Slim/Utils/Prefs.pm) and is NOT exposed in
+# Lyrion's own Security settings page, so the operator cannot turn it off from
+# the UI. When it is on, Lyrion refuses every /settings/ page
+# (Slim/Web/HTTP.pm) *and* every pref/serverpref/stopserver/restartserver
+# JSON-RPC call (Slim/Web/JSONRPC.pm) whose client is "on a different network".
+# That test is ip_on_different_network(), i.e. "the server is RFC1918 but the
+# client isn't" -- which is exactly a Tailscale peer at 100.64.0.0/10. Same
+# reasoning as filterHosts: the tailnet is already an authenticated private
+# overlay and :9000 is unrestricted on the LAN anyway, so the check costs the
+# appliance its remote Settings pages and buys it nothing.
+LMS_OPEN_ACCESS_PREFS = {
+    # pref name      → (value we want, default when the key is absent)
+    "filterHosts": (0, 0),
+    "protectSettings": (0, 1),
+}
+
+
 def _disable_ip_filtering(data):
-    """Given the loaded prefs dict, turn OFF Lyrion's IP-based access control
-    (filterHosts) if the operator has it turned on. Returns the (possibly
+    """Given the loaded prefs dict, turn OFF Lyrion's IP-based access controls
+    (filterHosts, protectSettings) if they are on. Returns the (possibly
     updated) dict and a bool telling whether anything changed."""
-    if not data.get("filterHosts"):
-        return data, False
-    data["filterHosts"] = 0
-    return data, True
+    changed = False
+    for key, (wanted, default) in LMS_OPEN_ACCESS_PREFS.items():
+        current = data.get(key, default)
+        if current == wanted:
+            continue
+        data[key] = wanted
+        changed = True
+    return data, changed
 
 
 def ensure_lms_trusted_networks():
@@ -1364,19 +1388,36 @@ def ensure_lms_trusted_networks():
         import yaml
     except Exception:
         return
+
     prefs = _find_prefs()
     if not prefs:
         return
-    try:
-        with open(prefs) as f:
-            data = yaml.safe_load(f) or {}
-    except Exception:
+
+    def _load():
+        try:
+            with open(prefs) as f:
+                return yaml.safe_load(f) or {}
+        except Exception:
+            return None
+
+    data = _load()
+    if data is None:
         return
-    data, changed = _disable_ip_filtering(data)
+    _, changed = _disable_ip_filtering(data)
     if not changed:
         return
+
     _run(["systemctl", "stop", LYRION_SERVICE], timeout=60)
     try:
+        # Re-read now that Lyrion is down: it keeps prefs in memory and flushes
+        # them on shutdown, so writing back the copy we loaded while it was
+        # still running would silently revert whatever it had just flushed.
+        data = _load()
+        if data is None:
+            return
+        data, changed = _disable_ip_filtering(data)
+        if not changed:
+            return
         tmp = prefs + ".tmp"
         with open(tmp, "w") as f:
             yaml.safe_dump(data, f, default_flow_style=False, allow_unicode=True)
@@ -1387,11 +1428,12 @@ def ensure_lms_trusted_networks():
                 os.chown(prefs, uid, gid)
             except Exception:
                 pass
+        print("[sources] disabled Lyrion's remote-access restrictions "
+              "(filterHosts, protectSettings)")
     except Exception as e:
         print(f"[sources] lms trusted-networks prefs write failed: {e}")
     finally:
         _run(["systemctl", "start", LYRION_SERVICE], timeout=60)
-    print(f"[sources] disabled Lyrion's IP-based access control (filterHosts)")
 
 
 # ─────────────────────────── LMS skin (Osmium / Material) ───────────────────
@@ -5836,8 +5878,8 @@ if __name__ == "__main__":
         ensure_playlistdir()
     except Exception as e:
         print(f"[sources] ensure_playlistdir error: {e}")
-    # Let Tailscale-only clients (e.g. Lyrplay) through Lyrion's own IP-based
-    # access control, if the operator has it enabled.
+    # Let Tailscale-only clients (e.g. Lyrplay, or Server settings from the
+    # phone) through Lyrion's own IP-based access controls.
     try:
         ensure_lms_trusted_networks()
     except Exception as e:
