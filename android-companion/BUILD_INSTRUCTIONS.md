@@ -2,244 +2,104 @@
 
 ## Prerequisites
 
-### Required Tools
-- **Android SDK**: API 31 or higher
-- **Android SDK Tools**: Latest version
-- **Java Development Kit (JDK)**: Version 17 or higher
-- **Gradle**: 8.0+ (included with Android Studio or bundled in project)
-- **Git**: For version control
-
-### Development Environment
-- **Android Studio**: Latest stable version (optional but recommended)
-- **Windows/Mac/Linux**: Any platform with Java 17+ support
+- **JDK 17** (the build uses `sourceCompatibility`/`targetCompatibility` 17)
+- **Android SDK** with platform **36** installed (`compileSdk`/`targetSdk` 36, `minSdk` 26 — defined in the root `build.gradle`)
+- **Gradle**: use the bundled wrapper (Gradle **8.13**) with **Android Gradle Plugin 8.13.0**. Don't upgrade either blindly: AGP 8.13 does not accept newer Gradle majors, and the `com.github.triplet.play` plugin has its own Gradle floor
+- **Git**; Android Studio is optional
 
 ## Setup
 
-### 1. Clone the Repository
+```bash
+git clone https://github.com/adri6412/osmium-sound.git
+cd osmium-sound/android-companion
+export ANDROID_SDK_ROOT=~/Android/Sdk      # or ANDROID_HOME
+export JAVA_HOME=/path/to/jdk17
+```
+
+The Gradle wrapper script may not carry the executable bit after checkout
+(the repo is used from Windows too) — always invoke it as `bash gradlew …`.
+Many files in this directory are CRLF on disk but LF in git; normalize before
+editing or diffs become whole-file.
+
+## Build variants
+
+### Debug
 
 ```bash
-git clone https://github.com/adriano-frongillo/hifi-media-player.git
-cd hifi-media-player/android-companion
+bash gradlew assembleDebug
+bash gradlew installDebug        # install on a connected device/emulator
+# APK: HiFiMediaPlayer/build/outputs/apk/debug/
 ```
 
-### 2. Install Android SDK
+### Release
 
-If you don't have Android Studio installed:
-1. Download Android SDK command-line tools from: https://developer.android.com/studio
-2. Install minimum SDK 31 and target SDK 34
-
-### 3. Set Environment Variables
+The release signing config in `HiFiMediaPlayer/build.gradle` reads either a
+`keystore` file decoded by CI, or a local
+`HiFiMediaPlayer/hifi-media-player-local-release-key.keystore` with the
+`KEY_ALIAS`, `KEY_STORE_PASSWORD` and `KEY_PASSWORD` environment variables
+(alias defaults to `hifi-media-player`).
 
 ```bash
-# Windows
-set ANDROID_SDK_ROOT=C:\path\to\android-sdk
-set JAVA_HOME=C:\path\to\jdk17
-
-# macOS/Linux
-export ANDROID_SDK_ROOT=~/Library/Android/sdk
-export JAVA_HOME=$(jenv prefix 17)
+keytool -genkey -v -keystore HiFiMediaPlayer/hifi-media-player-local-release-key.keystore \
+  -keyalg RSA -keysize 2048 -validity 10000 -alias hifi-media-player   # first time only
+export KEY_ALIAS=hifi-media-player KEY_STORE_PASSWORD=… KEY_PASSWORD=…
+bash gradlew assembleRelease
+# APK: HiFiMediaPlayer/build/outputs/apk/release/
 ```
-
-## Build Variants
-
-### Debug Build
-
-```bash
-# Build debug APK
-./gradlew assembleDebug
-
-# Install on connected device
-./gradlew installDebug
-
-# Build and run immediately
-./gradlew assembleDebug && adb install -r build/outputs/apk/debug/HiFiMediaPlayer-debug.apk
-```
-
-### Release Build
-
-#### Prerequisites for Release Build
-1. Create a keystore file (first time only):
-```bash
-keytool -genkey -v -keystore hifi-media-player-local-release-key.keystore \
-  -keyalg RSA -keysize 2048 -validity 10000 \
-  -alias hifi-media-player
-```
-
-2. Place keystore in: `android-companion/HiFiMediaPlayer/`
-
-#### Building Release APK
-```bash
-# Build release APK (unsigned initially)
-./gradlew bundleRelease
-
-# Or build signed APK directly
-./gradlew assembleRelease
-```
-
-#### Configuration via Properties File
-
-For automated signing, create `HiFiMediaPlayer.properties`:
-
-```properties
-key.store.password=your-keystore-password
-key.alias.password=your-key-password
-```
-
-Place in: `android-companion/` directory
 
 ## Testing
 
-### Unit Tests
 ```bash
-./gradlew test
+bash gradlew test                   # unit tests
+bash gradlew lintVitalRelease       # the lint gate CI's release build runs — catches strings missing from values-XX/
+bash gradlew connectedAndroidTest   # instrumentation tests (device/emulator)
 ```
 
-### Android Instrumentation Tests
-```bash
-# Connect device or start emulator first
-./gradlew connectedAndroidTest
-```
+Manual checks worth doing before a release: pairing by QR from the appliance's
+Settings screen, playback control, the *Osmium Sound* settings category
+(updates, audio output, system admin), portrait + landscape.
 
-### Manual Testing
-1. **Install app**: `./gradlew installDebug`
-2. **Test server discovery**: Auto-connects to servers on local network
-3. **Test playback control**: Play/pause/skip functionality
-4. **Test navigation**: Browse library, manage playlists
-5. **Test responsive layout**: Portrait and landscape modes
+## Device requirements
 
-## Device Requirements
-
-### Minimum Specifications
-- **Android Version**: 8.0 (API 26) and up
-- **Screen Size**: 4.5" phones to 10" tablets
-- **RAM**: 2GB minimum (4GB recommended)
-- **Storage**: ~50MB for app + data
-
-### Tested Devices
-- Samsung Galaxy S10+ (Android 12)
-- Pixel 5 (Android 13)
-- iPad 7th Gen running Android emulator
-- Various tablets (7"-10" screens)
+- Android 8.0 (API 26) or newer; phones and tablets
+- Same LAN (or Tailscale tailnet) as the Osmium Sound appliance — Lyrion on `:9000`, appliance services on `:8080`
 
 ## Troubleshooting
 
-### Gradle Build Errors
-
-**Issue**: `org.gradle.api.GradleException: A problem occurred evaluating project...`
-- **Solution**: Update Gradle wrapper: `./gradlew wrapper --gradle-version 8.1`
-
-**Issue**: `Duplicate class...` errors
-- **Solution**: Check for conflicting dependencies in `build.gradle`
-
-### Compilation Errors
-
-**Issue**: `Can't find...` symbols
-- **Solution**: Run `./gradlew clean` then rebuild
-- **Alternative**: Invalidate caches in Android Studio (File > Invalidate Caches)
-
-### Connection Issues
-
-**Issue**: App can't connect to Osmium Sound server
-- **Solution**: 
-  - Verify server is running and accessible on local network
-  - Check firewall settings (default port: 9000)
-  - Manually enter server address in Settings
-
-### APK Installation Issues
-
-**Issue**: `INSTALL_FAILED_INVALID_APK`
-- **Solution**: Clear app data: `adb shell pm clear com.hifi.mediaplayer`
-- **Alternative**: Uninstall first: `adb uninstall com.hifi.mediaplayer`
+- **`versionName '…' is not valid`** at configuration time → `publishTrack()` in `HiFiMediaPlayer/build.gradle` whitelists the accepted formats; add a case before using a new scheme.
+- **`lintVitalRelease` fails on a missing translation** → you removed/renamed a base string; remove it from every `values-XX/strings.xml` as well. Debug builds won't catch this.
+- **Gradle/AGP incompatibility** → stay on the wrapper's 8.13 / AGP 8.13.0 pairing.
+- **Can't connect to the appliance** → check both devices are on the same network; the Lyrion port is 9000; the pairing QR is in the appliance's Settings (kiosk) or web admin (Companion card).
+- **`INSTALL_FAILED_UPDATE_INCOMPATIBLE`** → a build signed with a different key is installed: `adb uninstall com.osmium.sound.companion` first.
+- **Duplicate class / stale build errors** → `bash gradlew clean`, or invalidate caches in Android Studio.
 
 ## Distribution
 
-### Google Play Store
+Not on the Google Play Store. Releases are produced by
+`.github/workflows/build-companion-apk.yml` on `companion-v*` tags: signed APK
+on the GitHub Release plus the self-hosted F-Droid repos
+(`https://osmiumsound.it/fdroid/repo` for stable, `…/fdroid/dev/repo` for
+`-svilN` dev builds). See [RELEASE_PROCESS.md](RELEASE_PROCESS.md) and
+[`.github/workflows/README.md`](../.github/workflows/README.md).
 
-1. **Generate signed release APK**:
-   ```bash
-   ./gradlew assembleRelease
-   ```
-
-2. **Output location**: `HiFiMediaPlayer/build/outputs/apk/release/`
-
-3. **Upload to Google Play Console**:
-   - Create app listing
-   - Upload APK
-   - Fill in description, screenshots, etc.
-   - Submit for review
-
-### Direct Distribution
-
-For beta testing or alternative distribution:
-
-1. **Generate APK/AAB**:
-   ```bash
-   ./gradlew bundleRelease
-   ```
-
-2. **Share APK file**: Via email, GitHub releases, or your own server
-
-3. **Installation**: Users download and open APK on Android device
-
-### Version Management
-
-Update version in `HiFiMediaPlayer/build.gradle`:
+### Version management
 
 ```gradle
-android {
-    defaultConfig {
-        versionCode 159  // Increment for each release
-        versionName "2.5.0"  // Semantic versioning
-    }
-}
+// HiFiMediaPlayer/build.gradle
+versionCode 23       // +1 for each release
+versionName "1.0.7"  // must match a publishTrack() case
 ```
 
-## Performance Optimization
+## ProGuard/R8
 
-### Proguard/R8 Configuration
+The release build uses `proguard-android-optimize.txt`, `proguard-cometd.cfg`,
+`proguard-guava.cfg` and the project's own `HiFiMediaPlayer/proguard-squeezer.cfg`.
 
-The build includes:
-- `proguard-android-optimize.txt` (standard Android rules)
-- `proguard-cometd.cfg` (CometD client rules)
-- `proguard-guava.cfg` (Guava library rules)
+## Support & issues
 
-Custom rules in: `HiFiMediaPlayer/proguard-squeezer.cfg`
-
-### Build Optimization Tips
-
-1. Enable build cache: `org.gradle.caching=true` in `gradle.properties`
-2. Increase heap size: `org.gradle.jvmargs=-Xmx2048m`
-3. Use parallel builds: `org.gradle.parallel=true`
-
-## Continuous Integration
-
-For CI/CD pipelines:
-
-```yaml
-# Example GitHub Actions
-name: Build
-on: [push]
-jobs:
-  build:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
-      - uses: actions/setup-java@v3
-        with:
-          java-version: '17'
-          distribution: 'temurin'
-      - run: cd android-companion && ./gradlew assembleDebug
-```
-
-## Support & Issues
-
-For build issues, check:
-1. [Android Developer Documentation](https://developer.android.com/)
-2. [Gradle Build Tool Documentation](https://developer.android.com/build)
-3. Project GitHub Issues: https://github.com/adriano-frongillo/hifi-media-player/issues
+- Project issues: https://github.com/adri6412/osmium-sound/issues — support@osmiumsound.it
+- [Android developer documentation](https://developer.android.com/) · [Gradle build docs](https://developer.android.com/build)
 
 ---
 
-**Last Updated**: 2026-06-21
-**Android Gradle Plugin**: 8.0+
-**Target SDK**: 34 (Android 14)
+**Last updated**: 2026-08-22 · AGP 8.13.0 · Gradle 8.13 · compile/target SDK 36 · min SDK 26

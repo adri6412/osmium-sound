@@ -328,8 +328,8 @@ log "Lyrion Music Server will be downloaded on-demand by hook 0050 (during chroo
 log "Copying Plymouth boot logo from repo root"
 THEME_DIR="$CONFIG/includes.chroot/usr/share/plymouth/themes/hifi"
 mkdir -p "$THEME_DIR"
-if [ -f "$REPO_ROOT/logo.png" ]; then
-    cp -f "$REPO_ROOT/logo.png" "$THEME_DIR/logo.png"
+if [ -f "$REPO_ROOT/logo osmium.png" ]; then
+    cp -f "$REPO_ROOT/logo osmium.png" "$THEME_DIR/logo.png"
 else
     convert -size 720x200 xc:black \
         -gravity center \

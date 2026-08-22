@@ -8,9 +8,9 @@ overview, features, and specs, see [README.md](README.md).
 
 ```mermaid
 flowchart TB
-    subgraph UI["Electron app (kiosk, 1024x600)"]
+    subgraph UI["Electron app (kiosk, 1024x600 — labwc/Wayland session, X11 fallback)"]
         Renderer["React renderer\n(src/)"]
-        Preload["preload.js\n(setFrameRate, on-screen keyboard)"]
+        Preload["preload.cjs\n(setFrameRate, on-screen/physical keyboard)"]
         Main["main.js\n(BrowserWindow, crash recovery)"]
     end
 
@@ -22,22 +22,28 @@ flowchart TB
         Squeezelite["squeezelite\nplayer client (ALSA)"]
     end
 
+    VU["vu_meter_daemon.py\nWebSocket — :9001 (loopback)"]
     DAC["USB DAC / HDMI output"]
-    Phone["Android companion app\n(HTTP, LAN)"]
+    Phone["Android companion app\n(HTTP + CometD, LAN)"]
     Browser["Browser on a phone/laptop\n(setup portal / admin UI)"]
 
     Renderer -- IPC --> Preload
     Preload --> Main
     Renderer -- "fetch (src/utils/api.js)" --> Flask
     Renderer -- "fetch (src/utils/lyrionApi.js)" --> Lyrion
+    Renderer -- "fetch, loopback (no token)" --> Sources
+    Renderer -- WebSocket --> VU
+    VU -- "mmap /dev/shm/squeezelite-*" --> Squeezelite
     Flask -- systemd-run / systemctl --> Squeezelite
     Lyrion -- controls --> Squeezelite
     Squeezelite --> DAC
-    Phone -- HTTP --> Flask
-    Phone -- HTTP --> Sources
+    Phone -- "HTTP, pairing token" --> Sources
+    Phone -- CometD --> Lyrion
+    Sources -- "/api/system/* proxy, loopback" --> Flask
     Browser -- "HTTP (LAN-facing)" --> WebUI
     WebUI -- "proxy, loopback" --> Flask
     WebUI -- "proxy, loopback" --> Sources
+    WebUI -- "JSON-RPC proxy" --> Lyrion
 ```
 
 ## Components
@@ -45,15 +51,17 @@ flowchart TB
 | Component | Path | Role |
 |---|---|---|
 | Electron main | `main/main.js` | Window/kiosk management, renderer crash recovery, relaxes CSP only for the local Lyrion origin so the renderer can call its JSON-RPC API |
-| Preload | `main/preload.js` | Minimal `contextBridge` surface — only UI-local concerns (frame-rate cap, global on-screen keyboard). **System control does not go through IPC.** |
-| React renderer | `src/` | The touchscreen UI (Now Playing, Music/Radio/Apps via Lyrion, Settings, Setup Wizard) |
+| Preload | `main/preload.cjs` | Minimal `contextBridge` surface (`window.electronAPI`) — only UI-local concerns: frame-rate cap, global on-screen keyboard show/hide/toggle, physical-keyboard presence. **System control does not go through IPC.** |
+| React renderer | `src/` | The touchscreen UI: `pages/LyrionServer.jsx` (Now Playing + library/radio/apps/Discover via Lyrion), `pages/Settings.jsx`, `pages/SetupWizard.jsx` (first-boot network step + address), `pages/InstallWizard.jsx` (installer QR), plus `components/` (AnalogVUMeter, LedBar, Discover, CdRip, SourcesManager, InternalDisks, WifiConfigPanel, Screensaver, BootIntro, UpdatePlanOverlay, VirtualKeyboard, …). Strings in `src/i18n/locales/{en,it}.json`, English default. |
 | Flask API | `api_server.py` | Runs as root on the appliance; system info/control, network/Wi-Fi, OTA channels, multiroom (LMS role), pairing tokens, display mode, player on/off, disk installer. Loopback-only, port `8000`. |
 | Sources service | `sources_server.py` | USB/SMB/local source management, internal-disk adoption/formatting, Samba share config, audio-CD ripping, backup/restore (core logic shared via `hifi_backup.py`), and every piece of Lyrion-side configuration the appliance owns for the user (web-UI skin, first-run setup/plugins, media + playlist folders — see [Lyrion web UI](#lyrion-web-ui--osmium-skin--first-run-setup)). Binds `0.0.0.0:8080` — LAN-reachable like the web admin, but every route is gated by a pairing token (see [Pairing & security](#pairing--security)), which is what lets the Android companion talk to it directly. |
 | Web admin / provisioning gateway | `webui_server.py` | The primary LAN-facing service (the other one is the pairing-gated sources API above): serves the Vue admin app (`admin-webui/`) behind a session, reverse-proxies a whitelisted subset of `api_server.py`/`sources_server.py` calls, and — while `/etc/hifi-player/provisioning-pending` exists — serves the first-boot setup portal (plus, in installer boot mode, a Wi-Fi hotspot and captive portal). Plain HTTP on `:80`, no TLS: a per-device self-signed cert made every browser show a "connection not private" click-through on first visit, which was worse UX than the plain-HTTP tradeoff. See [Provisioning & first boot](#provisioning--first-boot). |
 | Lyrion Music Server | external (Debian package / on-demand download) | Library indexing, playback engine, plugin ecosystem (Spotty, TIDAL Connect, radio, UPnP/DLNA, AirPlay). Port `9000`. Its web UI is the Material Skin plugin, branded as "Osmium" — see [Lyrion web UI](#lyrion-web-ui--osmium-skin--first-run-setup). |
 | squeezelite | systemd service | Lyrion's player client; `-D` flag enables bit-perfect DSD via DoP; `-v` exports a shared-memory buffer the VU meter reads |
-| VU meter daemon | `vu_meter_daemon.py` | Reads squeezelite's shared-memory visualizer segment (`/dev/shm/squeezelite-*`) via mmap, auto-detecting the header layout, computes 32-bar RMS and streams it over WebSocket to `AnalogVUMeter.jsx`. Re-attaches on shm inode changes (DAC switch, restart, multiroom follow-switch). |
-| Android companion | `android-companion/` | Native Android app; talks to the Flask API and Lyrion over HTTP/LAN after QR-code pairing |
+| VU meter daemon | `vu_meter_daemon.py` | Runs as the `hifi` user; reads squeezelite's shared-memory visualizer segment (`/dev/shm/squeezelite-*`) via mmap, auto-detecting the header layout, computes 32-bar RMS and streams it over WebSocket (`127.0.0.1:9001`) to `AnalogVUMeter.jsx`. Re-attaches on shm inode changes (DAC switch, restart, multiroom follow-switch). |
+| Shared Python helpers | `hifi_backup.py`, `hifi_i18n.py`, `hifi_logging.py` | Backup/restore core (see [Backup & restore](#backup--restore)); bilingual (en/it) message catalogue selected per request by the `X-UI-Lang` header; journald-friendly logging. Installed next to the daemons in `/usr/local/bin`. |
+| Android companion | `android-companion/` | Native Android app (Java, fork of android-squeezer); talks to Lyrion (CometD, `:9000`) and to `sources_server.py` (`:8080`, pairing token) after QR-code pairing — the latter's `/api/system/*` proxy is its only path to the system API |
+| Osmium Flasher | `flasher/` | Desktop Electron app (Windows/Linux) that downloads the current install ISO from `file.osmiumsound.it`, verifies its Ed25519 signature and writes the USB stick. Not part of the appliance — see `flasher/README.md` |
 
 ### Appliance systemd services
 
@@ -62,9 +70,16 @@ flowchart TB
 | `hifi-api` | `api_server.py` | Flask API, port 8000 |
 | `hifi-sources` | `sources_server.py` | Sources/disk/pairing API, port 8080 |
 | `hifi-webui` | `webui_server.py` | Web admin + provisioning gateway, port 80. Enabled at image-build time (no-op portwise on a fully configured unit; the provisioning marker gates the hotspot/captive behaviour) — see [Provisioning & first boot](#provisioning--first-boot) |
-| `hifi-vumeter` | `vu_meter_daemon.py` | VU meter shared-memory reader |
+| `hifi-vumeter` | `vu_meter_daemon.py` | VU meter shared-memory reader, WebSocket on 127.0.0.1:9001 (runs as `hifi`) |
 | `hifi-firstboot` | `hifi-firstboot.sh` | One-shot: installs Lyrion (absent from the image by design), then deletes its own unit — see [Provisioning & first boot](#provisioning--first-boot) |
-| `squeezelite` | — | Lyrion's player client |
+| `hifi-kiosk-session` | `hifi-kiosk-session.sh` | Oneshot before LightDM: decides Wayland (labwc) vs X11 for the kiosk session and writes LightDM's `user-session` accordingly — see [Kiosk session](#kiosk-session-wayland-with-x11-fallback) |
+| `hifi-update-stage-resume` / `hifi-update-apply` | `hifi-update-stage-runner.sh` / `hifi-update-apply-runner.sh` | Resume an interrupted staging; apply staged bundles inside `system-update.target` — see [OTA update system](#ota-update-system) |
+| `hifi-backup.timer` + `.service` | `hifi-backup-run.py --scheduled` | Weekly profile backup when enabled in Settings (shipped by `apply.d/0033`) |
+| `hifi-mdns-keepalive.timer` | `hifi-mdns-keepalive.sh` | Periodic mDNS/ARP re-announce so an idle unit stays reachable (`apply.d/0041`) |
+| `hifi-quiesce-audio-shutdown` | `hifi-quiesce-audio-shutdown.sh` | Stops audio before any shutdown/reboot (DesignWare DMA panic workaround, `apply.d/0027`) |
+| `squeezelite` | — | Lyrion's player client (`-D` DoP, `-v` visualizer export, persistent `-m` player MAC) |
+| `lyrionmusicserver` | Lyrion Music Server | Installed on first boot; `:9000` |
+| `smbd`, `wsdd2` | Samba / WS-Discovery | Disabled until at least one source is shared over SMB (`sources_server.py` enables them) |
 
 ## Multiroom
 
@@ -245,27 +260,37 @@ advertised to it.
 ## Backend API reference
 
 The renderer never talks to the OS directly — everything goes through one of
-two local HTTP services.
+three local HTTP services: the root system API (`api_server.py`, loopback), the
+sources service (`sources_server.py`, LAN + pairing token) and the web admin
+gateway (`webui_server.py`, LAN + session). All three pick the language of
+their user-facing messages from the `X-UI-Lang` request header via
+`hifi_i18n.py` (English/Italian).
 
-### Flask API — `api_server.py` (port 8000)
+### Flask API — `api_server.py` (port 8000, loopback, root)
 
-Called via [`src/utils/api.js`](src/utils/api.js) (`apiGet`/`apiPost`). Selected routes:
+Called via [`src/utils/api.js`](src/utils/api.js) (`apiGet`/`apiPost`,
+`API_BASE_URL = http://localhost:8000`). Selected routes:
 
 ```
-GET  /system_info            hostname, platform, arch, versions
-GET  /network_info           network interfaces
-GET  /audio_devices           detected DACs/outputs
+GET  /system_info            hostname, platform, arch, versions (UI/System/OS), display/player state
+GET  /system_stats           CPU/memory/temperature/GPU load for the Debug card and the kiosk
+GET  /network_info, /network_status, /wifi_scan
+POST /wifi_connect, /wired_dhcp, /configure_network
+GET  /audio_devices           detected DACs/outputs (stable ALSA card names)
 POST /set_audio_device
-POST /reboot | /shutdown
-GET/POST /ota_channel        dev | prod
+POST /reboot | /shutdown | /close_and_restart (restart the kiosk app only)
+GET/POST /ota_channel        prod | dev | alpha  (GET returns {channel, channels}; alpha listed only if /etc/hifi-player/ota-alpha-unlocked exists)
 GET  /wizard_update_check     mandatory-update gate used by the setup wizard
 POST /wizard_update_apply
-GET/POST /lyrion_channel      which Lyrion release train to install/track
+GET/POST /lyrion_channel      which Lyrion release train to install/track (release | nightly | dev)
 GET/POST /device_name, POST /hostname_apply
-GET/POST /{app,system,os,lyrion}_update/{check,apply,status}
+GET/POST /{app,system,os,lyrion}_update/{check,apply,status}   single-component updates
+POST /update/apply_all        combined "Update now" (stage → reboot → isolated apply)
+GET  /update/status           plan state: running | staged_pending_reboot | applying | done | apply_error
+POST /update/dismiss          acknowledge a finished/failed plan
 GET/POST /lms_role           multiroom "follow" mode
 GET/POST /player_name
-GET  /discover_lms            LAN auto-discovery for multiroom
+GET  /discover_lms            LAN auto-discovery for multiroom (Slim discovery, UDP 3483)
 GET/POST /ssh_status, /ssh_set
 GET/POST /shell_account       the Linux SSH/console login (sudo group) — mirrored from the web-admin credential
 GET  /tailscale_status        owner's own tailnet: state, IP, DERP relay + latency
@@ -274,26 +299,62 @@ GET  /support_bundle          diagnostic zip (logs, unit state, config)
 GET/POST /pointer_status, /pointer_set
 GET/POST /display_mode        screen (gui) vs headless
 GET/POST /player_enabled      player on/off — independent of display_mode, makes a unit "server-only"
+GET/POST /ui_resolution       kiosk render resolution (auto / 720p / 1080p / native) → hifi-ui-resolution.sh
+GET/POST /ui_refresh          panel refresh rate (native / low-power) → hifi-ui-refresh.sh
+GET/POST /vu_meter            analog VU meter on/off
+GET/POST /nowplaying_autoexpand   seconds before Now Playing auto-expands (0 = off)
+GET/POST /timezone, GET /timezones
+GET/POST /tidal_status, /tidal_set  TIDAL Connect service (only "available" when the binary is present)
+GET/POST /debug_plymouth, /debug_kdump   boot/debug flags for the web admin's Debug card
+GET  /provision_status        setup-wizard state, proxied from webui_server; POST /provision_mode, /provision_wifi_connect, /provision_wifi_rescan
+POST /factory_reset           → hifi-factory-reset.sh (web admin re-validates the password first)
+POST /webui_reset_credentials clear the web-admin account (kiosk "reset web interface password")
 GET  /boot_mode                'installer' (hifi.installer=1) vs 'live', read from /proc/cmdline
 GET  /install/disks            candidate target disks for the disk installer
 POST /install/start            launch hifi-disk-install.sh (async systemd-run job)
 GET  /install/status           poll the running/finished install job
+POST /show_global_keyboard, /hide_global_keyboard   on-screen keyboard for the kiosk (called by the renderer)
 ```
 
 The full route table is the source of truth — see the `@app.route` decorators
-in `api_server.py`.
+in `api_server.py`. State is persisted as small files under `/etc/hifi-player/`
+(`ota-channel`, `display-mode`, `player-enabled`, `ui-resolution`, `ui-refresh`,
+`vu-meter-enabled`, `pointer-enabled`, `nowplaying-autoexpand-seconds`,
+`lyrion-channel`, `shell-account`, the version markers `UI_VERSION` /
+`SYSTEM_VERSION` / `OS_VERSION`, …); long-running jobs are `systemd-run`
+transient units reporting through `/run/hifi-*-status.json`.
 
 ### Web admin & provisioning API — `webui_server.py` (port 80)
 
-The web admin's LAN surface. Four route families:
+The web admin's LAN surface (plain HTTP on `:80` — `HIFI_WEBUI_PORT` overrides
+it; dev flags `HIFI_WEBUI_STATE_DIR`, `HIFI_WEBUI_DIST`, `HIFI_PROVISION_FAKE`
+exist for running it on a laptop). Route families:
 
+- **`/api/auth/*`** — `status`, `setup` (create the single admin account,
+  only while none exists), `login`, `logout`, `change-password`. Account in
+  `/etc/hifi-player/webui.db` (Werkzeug password hash), cookie session signed
+  with the per-device `/etc/hifi-player/webui-secret.key`, double-submit CSRF
+  (`csrf` cookie ↔ `X-CSRF-Token`, `SameSite=Strict`). The Vue app
+  (`admin-webui/`: Login, Setup, Dashboard, Settings views; en/it locales) is
+  served from `/opt/hifi-webui/dist`.
 - **`/api/system/*`** — session-gated proxy to a whitelisted subset of the
-  Flask API above, called by the admin webui (`admin-webui/src/api.js`,
-  `api.sys`/`api.sysPost`). A small subset (`display_mode`, `lms_role`,
-  `discover_lms`, `audio_devices`, …) is additionally reachable *before*
-  login while provisioning is in progress, so the pre-account setup flow can
-  use the exact same session-app code path once the Vue app itself is
-  reachable.
+  Flask API above (`_AUTH_ROUTES` in `webui_server.py`: info/stats, network,
+  SSH + shell account, Tailscale, OTA channel, audio, names, multiroom, TIDAL,
+  display mode, player on/off, UI resolution/refresh, time zone, VU meter,
+  pointer, now-playing auto-expand, all `updates/*` incl. `apply_all` /
+  `status` / `dismiss`, Lyrion channel, reboot/shutdown, debug flags), called
+  by the admin webui (`admin-webui/src/api.js`, `api.sys`/`api.sysPost`). A
+  small subset (`_PROVISION_ROUTES`: `audio_devices`/`audio_device`,
+  `updates/lyrion/*`, `lyrion_channel`, `lms_role`, `discover_lms`) is
+  additionally reachable *before* login while provisioning is in progress, so
+  the pre-account setup flow can use the exact same session-app code path
+  once the Vue app itself is reachable. Two `/api/system/*` routes are not
+  plain proxies: `factory_reset` (re-validates the admin password, then
+  `POST /factory_reset`) and `support_bundle`; `pair_token` /
+  `pair_revoke_all` mint/revoke companion tokens over loopback (see
+  [Pairing & security](#pairing--security)).
+- **`POST /api/lyrion`** — session-gated JSON-RPC proxy to Lyrion's
+  `/jsonrpc.js` (per-player prefs from the admin without CORS trouble).
 - **`/api/provision/*`** — pre-auth, gated only by the provisioning marker
   (`_provisioning()`), used exclusively by the setup/installer portal (see
   [Provisioning & first boot](#provisioning--first-boot)):
@@ -447,12 +508,14 @@ lyrionApi.setVolume(playerMac, volume)   // 0-100
 lyrionApi.seek(playerMac, time)
 ```
 
-### Electron preload — `main/preload.js`
+### Electron preload — `main/preload.cjs`
 
 ```javascript
-window.electronAPI.setFrameRate(fps)
+window.electronAPI.setFrameRate(fps)                       // 60 during the boot intro, 30 otherwise (weak iGPU budget)
 window.electronAPI.showGlobalKeyboard() / hideGlobalKeyboard()
-window.electronAPI.onToggleSimpleKeyboard(callback)
+window.electronAPI.onToggleSimpleKeyboard(cb) / removeToggleSimpleKeyboard(cb)
+window.electronAPI.getPhysicalKeyboard()                   // is a hardware keyboard attached? (hides the on-screen one)
+window.electronAPI.onPhysicalKeyboardChanged(cb) / removePhysicalKeyboardChanged(cb)
 ```
 
 ## Provisioning & first boot
@@ -798,9 +861,43 @@ Two independent, orthogonal controls decide what a unit actually does:
 The setup wizard's three-way "device mode" step (screen / headless /
 server-only) is the combination of both: server-only = headless display
 mode + player disabled. Both controls also have their own toggle in Settings
-(on-screen `Settings.jsx` and the admin webui's `Settings.vue`) for changing
-either one independently after setup, guarded against switching mid-OTA the
-same way (`_update_in_progress()`).
+(on-screen `Settings.jsx` → *Display mode*, the admin webui's `Settings.vue`,
+and — display mode only — the Android companion) for changing either one
+independently after setup, guarded against switching mid-OTA the same way
+(`_update_in_progress()`).
+
+### Kiosk session: Wayland with X11 fallback
+
+The image is Debian 13 ("trixie"). In screen mode LightDM autologs the `hifi`
+user into the `hifi-kiosk` session, which is one of two interchangeable
+implementations of "start Electron fullscreen on the panel":
+
+- **Wayland** (`/usr/local/bin/hifi-kiosk-wayland` + `hifi-kiosk-launch`,
+  `hifi-kiosk-wayland.desktop`): a bare **labwc** (wlroots) compositor with
+  the kiosk window in direct scanout. Introduced by `apply.d/0049-wayland-kiosk.sh`
+  because on X11 two thirds of the GPU load was the X server itself — with
+  the UI-resolution scaling (`hifi-ui-resolution.sh`, RandR `--scale-from`)
+  Xorg had to recompose and rescale every frame. Measured on a Gemini Lake
+  iGPU: 1.74 W (X11 + scaling) → 0.59 W (Wayland), which matters on the
+  passively-cooled mini-PCs this targets.
+- **X11** (`~/.xsession`, `distro/os-update/files/xsession`): the previous
+  session, kept as the fallback. Xorg with modesetting/fbdev renders even in
+  software; wlroots refuses a software GLES2 renderer and XWayland then loses
+  glamor, so in a VM (VMware, VirtualBox, QEMU) the Wayland session comes up
+  as a black screen.
+
+`hifi-kiosk-session.service` (`kiosk-session-select`, `apply.d/0050`) therefore
+decides **at every boot**, before LightDM: `/etc/hifi-player/kiosk-session`
+(`wayland` | `x11`) wins if present; otherwise X11 when labwc is missing, when
+there is no `/dev/dri/card*`, when the DRM driver is a virtual one (vmwgfx,
+vboxvideo, qxl, bochs, virtio_gpu, simpledrm, …), or when a headless labwc
+probe can't get a hardware EGL context — Wayland only on a real GPU. The
+session files are the same in new images (`build-distro.sh` injects them) and
+on updated devices (the OS payload ships them), so the two paths never drift.
+`main/main.js` detects the compositor session (`isCompositorSession`) and asks
+for fullscreen itself, since under labwc no window manager will do it from the
+outside. The UI-resolution and refresh-rate settings apply in both sessions
+(`hifi-ui-resolution.sh` / `hifi-ui-refresh.sh` via `wlr-randr` or `xrandr`).
 
 ## OTA update system
 
@@ -882,10 +979,23 @@ needs physical access.
 | OS | `hifi-os-` | arbitrary root `apply.sh` | sha256 **+ Ed25519 signature** | `hifi-os-update.sh` |
 | Lyrion | — | Lyrion Music Server `.deb` | version match | `hifi-lyrion-update.sh` |
 
-Devices also pick a **Dev** or **Prod** release channel (Settings → Updates):
-`main` tags (`vX.Y.Z`) are the Prod channel; `svil` prerelease tags
-(`vX.Y.Z-dev.N`) are the Dev channel and are never picked up by
-`releases/latest`.
+Devices also pick a **release channel** (Settings → Updates, `GET/POST
+/ota_channel`, persisted in `/etc/hifi-player/ota-channel`): **Prod** follows
+`main` tags (`vX.Y.Z`, GitHub's `/releases/latest`); **Dev** follows `svil`
+prerelease tags (`vX.Y.Z-dev.N`), which `/releases/latest` never returns;
+**Alpha** follows the private `alpha` branch tags (`vX.Y.Z-dev.N-alphaM`) —
+excluded from what Dev sees, and offered in Settings only on a device where
+`/etc/hifi-player/ota-alpha-unlocked` exists (`hifi-ota-alpha-toggle.sh enable`,
+root-only, like key enrolment). `_check_release_update` first reads the static
+manifest `ota/latest-<channel>.json` published on the `gh-pages` branch (served
+via Cloudflare Pages; CDN-cached for ~10 minutes, so a brand-new release can
+take a few minutes to show up) and falls back to the GitHub REST API;
+`_semver_key` makes a prerelease sort below its stable and a plain `-dev.N`
+above its `-alphaM` previews, so a device moved back to a "higher" channel
+re-syncs naturally. The same logic is documented from the release side in
+[`.github/workflows/TAG_CONVENTIONS.md`](.github/workflows/TAG_CONVENTIONS.md).
+Release bodies (and the "what's new" shown before updating) are the
+auto-generated `CHANGELOG_RELEASE.md`.
 
 Note that not every stable release ships a new install ISO — most releases
 are OTA-only (OS/System/UI tarballs); a fresh ISO is only cut occasionally.
@@ -1046,44 +1156,76 @@ carries it (`0048-lms-skin-assets.sh` is the worked example — see
 ## Project structure
 
 ```
-hifi-media-player/
-├── main/                    # Electron main process
-│   ├── main.js
-│   └── preload.js
-├── src/                     # React renderer (kiosk)
-│   ├── components/
-│   ├── pages/               # Settings, SetupWizard (on-screen Wi-Fi + address), InstallWizard (QR), LyrionServer, ...
-│   ├── utils/                # api.js (Flask), lyrionApi.js (Lyrion JSON-RPC)
+hifi-media-player/            (GitHub: adri6412/osmium-sound)
+├── main/                     # Electron main process
+│   ├── main.js               # kiosk window, fullscreen under labwc/X11, renderer crash recovery, CSP relax for Lyrion, keyboard IPC
+│   └── preload.cjs           # window.electronAPI (frame rate, on-screen/physical keyboard)
+├── src/                      # React renderer (kiosk), Vite + Tailwind
+│   ├── App.jsx               # boot-mode routing: InstallWizard / SetupWizard / kiosk, screensaver, boot intro
+│   ├── pages/                # LyrionServer (player + library), Settings, SetupWizard (on-screen Wi-Fi + address), InstallWizard (QR)
+│   ├── components/           # AnalogVUMeter, LedBar, Discover, CdRip, SourcesManager, InternalDisks, WifiConfigPanel, UpdatePlanOverlay, VirtualKeyboard, Screensaver, BootIntro, ...
+│   ├── hooks/                # useLyrionPlayer, useKeyboardInput, useLongPress
+│   ├── utils/                # api.js (Flask :8000), lyrionApi.js (Lyrion JSON-RPC :9000), physicalKeyboard.js
+│   ├── data/                 # thirdPartyNotices.js (in-app rendering of THIRD-PARTY-NOTICES.md)
 │   └── i18n/                 # en/it locale strings (English is the default)
-├── admin-webui/             # Vue admin app, served by webui_server.py
+├── admin-webui/              # Vue 3 web admin, built to dist/, served by webui_server.py from /opt/hifi-webui/dist
 │   └── src/
-│       ├── views/            # Settings.vue, ...
+│       ├── views/            # Login, Setup, Dashboard, Settings
+│       ├── components/       # SourcesPanel, FolderPicker, UpdateProgressOverlay, Toggle, LanguageSelector
 │       └── i18n/             # en/it locale strings (English is the default)
-├── api_server.py            # Flask API (system/network/OTA/multiroom/display-mode/player/installer)
-├── sources_server.py         # USB/SMB/local music sources
-├── webui_server.py           # Web admin + provisioning/setup-portal gateway (port 80)
+├── api_server.py             # Flask API (system/network/OTA/multiroom/display-mode/player/installer) — root, loopback :8000
+├── sources_server.py         # Sources, disks, SMB, CD rip, backup/restore, Lyrion skin + first-run setup, companion proxy — :8080
+├── webui_server.py           # Web admin + provisioning/setup-portal gateway — :80
 ├── hifi_backup.py            # Backup/restore core (shared with the sbin worker)
-├── android-companion/       # Android companion app (Kotlin/Java)
-├── distro/                  # Custom Debian appliance build (live-build)
-│   ├── config/               # live-build includes, hooks, systemd units
+├── hifi_i18n.py              # en/it message catalogue for the Python services (X-UI-Lang)
+├── hifi_logging.py           # logging helpers for the Python services
+├── vu_meter_daemon.py        # squeezelite shm → WebSocket :9001 (VU meter)
+├── tests/                    # Python unit tests (backup, OTA channel, update plan, timezone, NetworkManager recovery) + shell tests for the update runners
+├── android-companion/        # Android companion app (Java; fork of android-squeezer)
+├── fdroid/, fdroid-dev/      # self-hosted F-Droid repo configs (stable / dev), published to gh-pages by CI
+├── flasher/                  # Osmium Flasher — desktop USB writer (Electron, Windows/Linux)
+├── distro/                   # Custom Debian 13 appliance build (live-build)
+│   ├── build-distro.sh       # ISO build script (injects kiosk, web admin, daemons, session files, versions, OTA pubkey, provisioning marker)
+│   ├── config/               # live-build package list, hooks, includes.chroot (systemd units, /usr/local/sbin scripts, sudoers, sshd/samba/lightdm conf, Plymouth theme)
 │   │   └── includes.chroot/usr/local/share/hifi-lms-skin/    # Osmium theme + global CSS + menu entry for Lyrion's Material Skin
-│   └── os-update/            # apply.d migrations, apply.sh (cumulative)
-├── website/                  # Marketing site (website/index.html)
-└── package.json
+│   ├── os-update/            # OS OTA payload: apply.sh runner, lib.sh, apply.d/ migrations (cumulative), files/ (kiosk sessions, logo)
+│   ├── ota-keys/             # Ed25519 OTA public key (+ generator; private key never committed)
+│   └── dev-installer/        # template of the offline dev installer hifi-install-<ver>.sh
+├── tools/                    # publish-iso.sh (sign an ISO + latest.json for file.osmiumsound.it), har-viewer/ (local HAR analysis tool)
+├── .github/
+│   ├── workflows/            # build-ui-ota, build-iso, build-companion-apk, build-flasher, deploy-pages, cleanup (see workflows/README.md)
+│   └── scripts/              # make-ota-manifest.py, make-iso-manifest.py
+├── website/                  # Public site (osmiumsound.it, deployed from main via gh-pages → Cloudflare Pages)
+├── hardware/                 # Hardware designs
+└── package.json              # kiosk app (Electron 43, React 18, Vite 6)
 ```
 
 ## Local development
 
+Node 20 (what CI uses), Python 3 with `requirements.txt`.
+
 ```bash
 npm install
-npm run electron:dev   # Vite + Electron with hot reload
-npm run build           # production renderer build
+npm run electron:dev    # Vite + Electron with hot reload (kiosk)
+npm run build           # production renderer build → renderer-dist/
 npm run electron        # run the built app
-npm run package         # electron-builder distributable
+npm run package         # electron-builder distributable (dist/)
+
+(cd admin-webui && npm install && npm run dev)   # web admin with hot reload
+python3 webui_server.py                            # HIFI_WEBUI_PORT=8081 HIFI_PROVISION_FAKE=1 HIFI_WEBUI_STATE_DIR=/tmp/hifi HIFI_WEBUI_DIST=admin-webui/dist for a laptop
+
+# tests — run each file directly, the way CI does (build-ui-ota.yml), not via unittest discover
+sh tests/test-update-stage-runner.sh && sh tests/test-update-apply-runner.sh   # two-phase update sequencer (stub updaters in a temp dir)
+python3 tests/test_update_plan.py && python3 tests/test_timezone.py            # the suites CI gates a release on
+PYTHONPATH=. python3 tests/test_backup.py                                       # hifi_backup.py
+PYTHONPATH=. python3 tests/test_ota_channel.py                                  # release-channel / semver logic
 ```
 
-`install-dietpi.sh` / `start-fullscreen.sh` are developer conveniences for
-testing on a bare DietPi/Debian box by hand — they are **not** how the
-appliance ships. The real production path is: flash the install ISO once,
-then let the OTA system above keep the device (UI, System, OS, Lyrion) up to
-date.
+The Python services expect the appliance layout (root, `nmcli`, systemd,
+`/etc/hifi-player`) — for real end-to-end work use a test VM or a device and
+the offline dev installer (`hifi-install-<ver>.sh` on every Release) rather
+than running them on a workstation. `install-dietpi.sh` / `start-fullscreen.sh`
+are old developer conveniences for testing the kiosk on a bare Debian box by
+hand — they are **not** how the appliance ships. The real production path is:
+flash the install ISO once, then let the OTA system above keep the device
+(UI, System, OS, Lyrion) up to date.

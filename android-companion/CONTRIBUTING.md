@@ -1,126 +1,46 @@
-# How to contribute
+# Contributing to the Osmium Sound Companion
 
-Your contributions to Squeezer are very welcome. Exactly how to do that
-depends on what you want to do.
+The companion app lives inside the Osmium Sound monorepo
+(https://github.com/adri6412/osmium-sound, directory `android-companion/`).
+Bugs, feature requests and pull requests go there — not to the upstream
+[android-squeezer](https://github.com/kaaholst/android-squeezer) project this
+app is derived from (Apache-2.0); please don't report Osmium-specific issues
+upstream.
 
 ## Reporting bugs and feature requests
 
-Please use the
-[issues page](https://github.com/kaaholst/android-squeezer/issues) to
-report bugs or suggest new features.
-
-It's appreciated if you take the time to see if someone else has already
-reported it, and if so, add a comment to their note.
+Use the [issues page](https://github.com/adri6412/osmium-sound/issues). Say
+which app version (Settings → About) and which appliance version (Settings →
+Updates) you were running, and whether the problem is in the Lyrion side
+(library/playback) or in the appliance side (pairing, updates, system admin).
 
 ## Translations
 
-The easiest way to contribute, especially if you are not a programmer,
-is to help translate Squeezer's interface in to different languages.
+The easiest way to contribute, especially if you are not a programmer, is to
+help translate the interface. Strings live in
+`HiFiMediaPlayer/src/main/res/values/strings.xml`; a translation is a copy of
+that file in `values-<language>/` (two-letter ISO 639-1 code, optionally
+`-r<REGION>`). English and Italian must always be complete; when a base string
+is removed it has to be removed from every `values-XX/` file too, or the release
+lint gate fails.
 
-Follow [How to contribute code](#how-to-contribute-code) to fetch the code 
-and submit a pull request with your changes. 
+## Code
 
-For a new translation copy Squeezer/src/main/res/values/strings.xml to a 
-folder named Squeezer/src/main/res/values-\<language\>.
+- Branches: `svil` is day-to-day development, `alpha` is for private test
+  builds, `main` is production. Open pull requests against `svil`.
+- Build with `bash gradlew assembleDebug` (see
+  [BUILD_INSTRUCTIONS.md](BUILD_INSTRUCTIONS.md)); run `bash gradlew test
+  lintVitalRelease` before pushing.
+- Keep the Osmium-specific parts (pairing, `/api/system/*` calls in
+  `SystemAdminActivity`/`UpdatesActivity`/…) consistent with the other two
+  front-ends (kiosk `src/pages/Settings.jsx`, web admin
+  `admin-webui/src/views/Settings.vue`): there is no shared settings schema,
+  so a setting added or hidden in one place has to be mirrored by hand.
+- Anything user-visible must exist in English and Italian.
+- Releases are cut by tag (`companion-vX.Y.Z`, dev `companion-vX.Y.Z-svilN`) —
+  see [RELEASE_PROCESS.md](RELEASE_PROCESS.md).
 
-The language is defined by a two-letter 
-[ISO 639-1](http://www.loc.gov/standards/iso639-2/php/code_list.php) language code, 
-optionally followed by a two-letter 
-[ISO 3166-1-alpha-2](https://www.iso.org/obp/ui/#iso:pub:PUB500001:en) region code 
-(preceded by lowercase r).
+## Android Studio
 
-Translate the copied file, commit and submit a pull request with your changes.
-
-## Small bug fixes
-
-If you've discovered a bug and want to fix it, or you'd like to have a go
-at fixing a bug that's already been reported, please go right ahead.
-
-You can also review the
-[list of open bugs](https://github.com/kaaholst/android-squeezer/issues?q=is%3Aopen+is%3Aissue)
-if you want inspiration for something to work on.
-
-The [How to contribute code](#How-to-contribute-code) section has technical details on how to contribute code.
-
-## Larger features
-
-Contributing larger features to Squeezer is also very welcome. For these
-please use the [issues page](https://github.com/kaaholst/android-squeezer/issues), and let us
-know what you plan on working on, so we don't end up duplicating too much
-effort.
-
-Please see the [How to contribute code](#How-to-contribute-code) section
-for technical details.
-
-## How to contribute code
-
-This guide assumes you have already downloaded and installed the Android
-SDK, in to a directory referred to as $SDK.
-
-### Fetch the code
-
-Follow [GitHub's instructions](https://help.github.com/articles/fork-a-repo)
-for forking the repository.
-
-### Checkout the code
-
-We (roughly) follow the branching model laid out in the
-[A successful Git branching model](http://nvie.com/posts/a-successful-git-branching-model/)
-blog post.
-
-Specifically:
-
-*   The `develop` branch is for small bug fixes or other cleanups that need
-    no more than a single commit to complete. Work is merged onto `develop` by
-    the central maintainer. So, if you contribute please generate a pull request
-    from your own `new-branch-name` (see below) to the maintainer's `develop`.
-
-*   All other work happens on separate branches, branched from `develop`.
-    Collaborative contributions to separate branches are made analogous:
-    You generate a pull request from your personal branch to the according
-    sub-branch of the maintainer.
-
-*   When those branches are complete and ready for release they are merged on
-    `develop` (by the central maintainer).
-
-*   New releases are prepared by creating a release branch from `develop` and
-    working there, before merging changes from the release back to `develop`
-    and `master`.
-
-### Starting work
-
-Suppose you want to start work on contributing a new feature. After fetching
-the repository checkout a new local branch from develop with:
-
-    git checkout -b new-branch-name develop
-
-Then work on `new-branch-name`, pushing it up to GitHub as appropriate. Feel
-free to have discussions on the mailing list as you're working.
-
-### Keeping up to date with `develop`
-
-As you're working other changes may be happening on the origin `develop`
-branch. Please use `git rebase` to pull in changes from `develop` to ensure
-your branch is up to date and that the future merge back in to `develop` is
-straightforward. To do that (assuming you have no open changes on your
-current branch):
-
-```
-git checkout develop  # Checkout the develop branch
-git pull              # Fetch the most recent code
-git checkout -        # Checkout the previous branch
-git rebase develop    # Rebase current branch from develop
-```
-
-### Android Studio configuration
-
-*   Run Android Studio
-
-*   If you have no projects open then choose "Import project" from the dialog
-    that appears.
-
-    If you already have a project open then choose File > Import Project...
-
-*   In the "Select File or Directory to Import" dialog that appears, navigate
-    to the directory that you fetched the Squeezer source code in ("android-squeezer").
-
+Open the `android-companion/` directory as a project (File → Open); the
+Gradle wrapper and JDK 17 settings are picked up from there.

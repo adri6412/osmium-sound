@@ -1,79 +1,75 @@
-# Releasing Squeezer
+# Releasing the Osmium Sound Companion
 
-## Create a release branch from the develop branch.
+Releases are built and published by CI (`.github/workflows/build-companion-apk.yml`)
+from git tags. There is no Play Store or Amazon Appstore upload.
 
-The name of the branch is release-x.y.z, according to the release number.
+## 1. Bump the version
 
-    git switch -c release-x.y.z develop
+Edit `HiFiMediaPlayer/build.gradle`:
 
-## Make 1-n releases from the branch
+```gradle
+versionCode 24        // previous + 1
+versionName "1.0.8"   // must match a case in publishTrack() below
+```
 
-Repeat the following process for each release. Beta versions are named
-x.y.z-beta-n, where n starts at 1.
+`publishTrack()` (same file) whitelists the accepted `versionName` formats
+(`X.Y.Z` → production track, `X.Y.Z-beta-N` → beta). An unknown format fails
+every Gradle build, so extend it first if you need a new scheme.
 
-### Update the version numbers.
+## 2. Release notes
 
-Edit `Squeezer/build.gradle`.  Edit the `versionCode` and `versionName`
-values.
+Edit `HiFiMediaPlayer/src/main/res/xml/changelog_master.xml` (the in-app
+"what's new" dialog, ckChangeLog) and, if you keep them, regenerate the
+derived files:
 
-### Update the release notes.
+```bash
+bash gradlew generateWhatsNew   # → src/main/play/release-notes/…/default.txt
+bash gradlew generateNews       # → docs/NEWS.md
+```
 
-Edit `Squeezer/src/main/res/xml/changelog_master.xml` with the details.
-Run `git log x.y.z..develop` to see what's changed (where x.y.z is previous release)
+## 3. Test
 
-### Update the `default.txt` release-note files.
+```bash
+cd android-companion
+bash gradlew clean assembleDebug test lintVitalRelease
+```
 
-Run `./gradlew generateWhatsNew` to update the files.
+Install the debug build on a phone, pair with an appliance (QR from Settings),
+check playback and the *Osmium Sound* settings screens.
 
-### Update the `NEWS` file.
+## 4. Commit and tag
 
-Run `./gradlew generateNews` to update the file.
+Commit the version bump (message style `companion 1.0.8: …`), then tag **with
+the `companion-` prefix** — the appliance workflow ignores these tags and the
+companion workflow only reacts to them:
 
-### Generate and test the release APK
+```bash
+# dev build from svil → prerelease + dev F-Droid repo
+git tag -a companion-v1.0.8-svil1 -m "companion 1.0.8-svil1: ..."
+git push origin companion-v1.0.8-svil1
 
-From the top level directory, run:
+# stable release (from main) → Release + stable F-Droid repo
+git tag -a companion-v1.0.8 -m "companion 1.0.8: ..."
+git push origin companion-v1.0.8
+```
 
-    ./gradlew build
-    ./gradlew installRelease
+Push the tag explicitly (`git push origin <tag>`), never `git push --tags`.
 
-Verify that the version number in the About dialog is correct and that
-Squeezer works correctly.
+## 5. What CI does
 
-### Update the screenshots (if necessary).
+1. Builds and signs the release APK with the `SIGNING_KEY` keystore.
+2. Creates the GitHub Release (title = the tag; prerelease for `-svil`/`-beta`
+   tags) with the APK attached; runs unit tests and lint.
+3. Stable tags only: updates the self-hosted F-Droid repo
+   (`https://osmiumsound.it/fdroid/repo`, index signed with the separate
+   `FDROID_REPO_KEYSTORE`); `-svilN` tags update the dev repo
+   (`https://osmiumsound.it/fdroid/dev/repo`).
 
-Take new screenshots for market/screenshots, and commit them.
-Run `./gradlew publishListing`
+Details and secrets: [`.github/workflows/README.md`](../.github/workflows/README.md),
+tag/branch rules: [`TAG_CONVENTIONS.md`](../.github/workflows/TAG_CONVENTIONS.md).
 
-### Commit the changes
+## If something went wrong
 
-    git commit -a -m "Prepare for release x.y.z."
-
-### Upload to Google Play (beta, and production)
-
-    ./gradlew publishReleaseApk
-
-### Upload to Amazon Appstore
-
-- Go to https://developer.amazon.com/home.html, signed in as
-  android.squeezer@gmail.com.
-
-- Find the existing entry for Squeezer, and upload the new APK.
-
-- Include the contents of `production.txt` for this release in the "Recent Changes"
-  section.
-
-## Post production-release steps
-
-Carry out the following steps when the production release has been posted,
-and the release branch is no longer necessary.
-
-### Merge the changes back to the develop branch and tag the release.
-
-    git switch develop
-    git merge release-x.y.z
-    git tag -a x.y.z -m "Code for the x.y.z release."
-    git push origin x.y.z
-
-### Delete the release branch
-
-    git branch -d release-x.y.z
+Delete the tag (`git tag -d …`, `git push origin :…`), fix, re-tag. A Release
+deleted by hand while the tag still exists can be recreated with
+`gh run rerun <run-id>` of the original workflow run.

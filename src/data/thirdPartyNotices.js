@@ -15,19 +15,19 @@ export const thirdPartyNotices = [
       },
       {
         name: 'squeezelite',
-        version: 'Debian bookworm',
+        version: 'Debian trixie',
         license: 'GPL-3.0+',
         notes: 'Audio playback engine. Installed from official Debian repositories.'
       },
       {
         name: 'cdparanoia, icedax, libcdio-utils',
-        version: 'Debian bookworm',
+        version: 'Debian trixie',
         license: 'GPL-2.0, GPL-3.0',
         notes: 'CD reading support. Installed from official Debian repositories.'
       },
       {
         name: 'Debian base system, kernel, firmware',
-        version: 'bookworm',
+        version: 'trixie (Debian 13)',
         license: 'Various (GPL/BSD/firmware EULAs)',
         notes: 'Installed from official Debian repositories.'
       }

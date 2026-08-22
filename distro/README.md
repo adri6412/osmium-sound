@@ -1,120 +1,140 @@
-# HiFi Player — Debian Appliance Distro
+# Osmium Sound — Debian Appliance Distro
 
-Builds a self-contained, **installable Debian ISO** that turns any x86 PC into a
-commercial-style network streamer running the HiFi Player UI on top of Lyrion
-Music Server. The boot menu shows two branded entries — **Install Osmium
-Sound** (default) and **Try Osmium Sound (no install)** — both booting the
-same live system; after install the machine has a **completely hidden boot**
-(no GRUB menu, no kernel text, branded Plymouth splash) that goes straight
-into the fullscreen player.
+Builds a self-contained, **installable Debian ISO** that turns any x86-64 PC into
+a network streamer running the Osmium Sound kiosk on top of Lyrion Music
+Server. The boot menu shows two branded entries — **Install Osmium Sound**
+(default) and **Try Osmium Sound (no install)** — both booting the same live
+system; after install the machine has a **completely hidden boot** (no GRUB
+menu, no kernel text, branded Plymouth splash) that goes straight into the
+fullscreen player — or into headless operation, if that's what was chosen at
+setup.
 
-> **No Debian Installer.** The installer is the Electron app itself, in a
-> different mode. There is no separate d-i environment: the "Install"
-> boot entry passes an extra kernel parameter (`hifi.installer=1`) that tells
-> the Electron app (`src/App.jsx`) to show `InstallWizard` — pick a target
-> disk, confirm, done — instead of the normal kiosk UI. The actual disk work
+> **No Debian Installer.** The installer is the appliance itself, in a
+> different mode. The "Install" boot entry passes an extra kernel parameter
+> (`hifi.installer=1`) that tells the Electron app (`src/App.jsx` →
+> `InstallWizard`) to show a QR code instead of the kiosk UI, and tells
+> `webui_server.py` to raise the open `Osmium-Setup-XXXX` hotspot + captive
+> portal. The phone drives the install (pick a target disk, confirm, start);
+> the screen only mirrors progress. The actual disk work
 > (partition/format/copy/bootloader) is done by
-> `config/includes.chroot/usr/local/sbin/hifi-disk-install.sh`, driven from
-> the installer UI via `api_server.py`'s `/install/*` endpoints (same
-> systemd-run + `/run` status-file pattern as every other long-running job in
-> this codebase, e.g. `hifi-format-disk.sh`). It `unsquashfs`'s the live
-> filesystem's own `filesystem.squashfs` straight onto the target disk (GPT:
-> 1MiB bios_grub + 512MiB EFI + rest ext4), then chroots in and runs
-> `hifi-grub-install.sh` + `hifi-finalize-boot.sh` — both unchanged from
-> before.
+> `config/includes.chroot/usr/local/sbin/hifi-disk-install.sh`, launched by
+> `api_server.py`'s `/install/*` endpoints (same `systemd-run` + `/run`
+> status-file pattern as every other long-running job in this codebase). It
+> `unsquashfs`'s the live filesystem's own `filesystem.squashfs` straight onto
+> the target disk (GPT: 1MiB bios_grub + 512MiB EFI + rest ext4), then chroots
+> in and runs `hifi-grub-install.sh` + `hifi-finalize-boot.sh`. See
+> [ARCHITECTURE.md → Provisioning & first boot](../ARCHITECTURE.md#provisioning--first-boot).
 
 ## Compliance Notice
 
-**ISO versions v2.5.7 and earlier:** Include Lyrion Music Server 9.1.0 bundled in the image, licensed under GPL-2.0+. Source code is available from the [LMS-Community GitHub releases](https://github.com/LMS-Community/slimserver/releases/tag/v9.1.0). See [THIRD-PARTY-NOTICES.md](../THIRD-PARTY-NOTICES.md) for full details.
+**ISO versions v2.5.7 and earlier** included Lyrion Music Server 9.1.0 bundled
+in the image, licensed under GPL-2.0+. Source code is available from the
+[LMS-Community GitHub releases](https://github.com/LMS-Community/slimserver/releases/tag/v9.1.0).
+See [THIRD-PARTY-NOTICES.md](../THIRD-PARTY-NOTICES.md) for full details.
 
-**ISO versions v2.6.0 and later:** Lyrion is downloaded on-demand at first boot and is NOT bundled in the ISO.
+**Later ISOs:** Lyrion is **not** bundled at all — it is absent from the live
+squashfs and from every disk install, and is downloaded on the first boot of
+the installed system (or by the setup wizard).
 
 > **Why a live filesystem still exists.** The whole appliance (Electron app,
-> Python daemons, Lyrion, helper scripts, the `hifi` user/services) is
-> assembled in the live squashfs. Booting "Try Osmium Sound" just runs that
-> squashfs live, same as any live-build ISO. Booting "Install Osmium Sound"
-> boots the *same* squashfs, then `hifi-disk-install.sh` `unsquashfs`'s the
-> squashfs image straight onto the target disk — a real copy, not a live
-> overlay clone, so the target ends up pristine regardless of anything
-> written during the live/install session itself.
+> Python daemons, helper scripts, the `hifi` user/services) is assembled in the
+> live squashfs. Booting "Try Osmium Sound" just runs that squashfs live, same
+> as any live-build ISO. Booting "Install Osmium Sound" boots the *same*
+> squashfs, then `hifi-disk-install.sh` `unsquashfs`'s the squashfs image
+> straight onto the target disk — a real copy, not a live overlay clone, so the
+> target ends up pristine regardless of anything written during the
+> live/install session itself.
 
 ## What the image contains
 
-| Component | Role | Service |
+Debian **13 "trixie"** base (`DEBIAN_SUITE` in `build-distro.sh`; the kiosk
+needs `labwc`/`wlr-randr`/`xwayland`, which only exist from trixie on — the
+script refuses `--suite bookworm`).
+
+| Component | Role | Service / port |
 |---|---|---|
-| HiFi Player (Electron) | Fullscreen kiosk UI | LightDM autologin → `hifi-kiosk` session |
-| Lyrion Music Server `9.1.0` | Music server / library / streaming | `lyrionmusicserver.service` (`:9000`) |
-| squeezelite (Debian, `-v`) | Local player + VU visualizer export | `squeezelite.service` |
-| `vu_meter_daemon.py` | Streams VU levels from `/dev/shm/squeezelite-*` | `hifi-vumeter.service` (`:9001`) |
-| `api_server.py` | OS control + WiFi setup (reboot/shutdown/update/network) | `hifi-api.service` (`:8000`) |
-| `sources_server.py` | Web UI to add music sources (local + SMB) to Lyrion | `hifi-sources.service` (`:8080`) |
+| Osmium Sound kiosk (Electron) | Fullscreen touchscreen UI | LightDM autologin (`hifi`) → `hifi-kiosk` session; **Wayland (labwc) where there is a real GPU, X11 otherwise** — decided at every boot by `hifi-kiosk-session.service` (`hifi-kiosk-session.sh`, override via `/etc/hifi-player/kiosk-session`) |
+| `api_server.py` | Root system API (network, audio, OTA, display mode, installer, …) | `hifi-api.service`, `127.0.0.1:8000` |
+| `sources_server.py` | Music sources, internal/USB disks, SMB shares, CD rip, backup/restore, Lyrion skin + first-run setup; companion-app proxy | `hifi-sources.service`, `0.0.0.0:8080` (pairing-token gated) |
+| `webui_server.py` | Web admin (Vue app in `/opt/hifi-webui/dist`) + first-boot setup portal / installer captive portal | `hifi-webui.service`, `:80` (plain HTTP) |
+| `vu_meter_daemon.py` | Streams VU levels from `/dev/shm/squeezelite-*` to the kiosk | `hifi-vumeter.service`, WebSocket `127.0.0.1:9001` |
+| squeezelite (Debian, `-v`) | Local player + VU visualizer export, DSD over DoP | `squeezelite.service` |
+| Lyrion Music Server | Music server / library / streaming (**installed on first boot**, not in the image) | `lyrionmusicserver.service` (`:9000`) |
+| `hifi-firstboot.sh` | One-shot: downloads + installs Lyrion on the installed system, then removes itself | `hifi-firstboot.service` (`ConditionKernelCommandLine=!boot=live`) |
+| `hifi-update-stage-runner.sh` / `hifi-update-apply-runner.sh` | The two-phase "Update now" (stage live → reboot into `system-update.target` → apply in isolation) | transient `hifi-update-stage`, `hifi-update-stage-resume.service`, `hifi-update-apply.service` |
+| `hifi-backup-run.py` | Backup generations (on demand / weekly timer) | `hifi-backup.service` + `hifi-backup.timer` (shipped by `apply.d/0033-backup-scheduler.sh`) |
+| `hifi-mdns-keepalive.sh` | Periodic mDNS/ARP re-announce so idle units stay reachable | `hifi-mdns-keepalive.timer` |
+| `hifi-quiesce-audio-shutdown.sh` | Stops audio cleanly before any shutdown/reboot (DesignWare DMA panic workaround) | `hifi-quiesce-audio-shutdown.service` |
+| Samba (`smbd`), `wsdd2`, Avahi | SMB shares of adopted disks (units start only when a share exists), Windows network discovery, mDNS | disabled until needed / enabled at build |
+| Plymouth theme `hifi` | Boot splash; also shows OTA apply progress | — |
 
-## Network audio receivers ("cast" dal telefono)
+OpenSSH ships **disabled**; `root` is locked and the `hifi` kiosk user has no
+password. Tailscale is installed (hook `0410-tailscale.hook.chroot`) but
+off until the owner enables it from the web admin.
 
-Il device può apparire in rete come bersaglio audio dalle app del telefono. Si
-realizza con i **plugin di Lyrion**, non con servizi di sistema: l'audio passa
-per Lyrion/squeezelite, quindi un solo percorso audio e nessuna contesa ALSA.
-Si installano una volta dal web di Lyrion → **Settings → Plugins** (il device ha
-internet):
+## First boot & setup
 
-| Protocollo | Plugin Lyrion | App sorgente |
-|---|---|---|
-| **AirPlay** | ShairTunes2 | iPhone/iPad/Mac → icona AirPlay |
-| **UPnP/DLNA** | UPnP/DLNA Media Interface | BubbleUPnP & co. (Android) |
-| **Spotify Connect** | Spotty | app Spotify (Premium) → dispositivi |
+The image is seeded with `/etc/hifi-player/provisioning-pending` (only
+`build-distro.sh` and `hifi-factory-reset.sh` ever create it). While it exists:
 
-> Un vero ricevitore **Google Cast/Chromecast** non è disponibile: il lato
-> ricevitore del protocollo è proprietario e non esiste un'implementazione open
-> per l'audio.
+- the kiosk shows `SetupWizard` — a Wi-Fi picker on the touchscreen (nothing to
+  do if wired), then the box's own address in plain text;
+- `webui_server.py` serves the **setup portal** on `http://<ip>` for the rest
+  of the configuration from a phone/laptop (language, restore, update gate,
+  name, device mode, pointer, audio, Lyrion local/external, web-player look,
+  music services, web-admin account, time zone, sources). `finalize` applies
+  the chosen display mode live and removes the marker.
 
-## First-run setup wizard
-
-On first boot the Electron UI shows a setup wizard (welcome → network →
-sources → done). Network is **always DHCP**; WiFi is scanned and joined via
-NetworkManager. The "sources" step shows `http://<device-ip>:8080` (with a QR
-code) where the user adds music folders from a phone/PC. The wizard can be
-re-run later from **Settings → "Riavvia configurazione guidata"**.
-
-SMB shares are mounted with `cifs-utils` under `/mnt/hifi-sources/<name>` and
-written into Lyrion's `mediadirs` (so Lyrion sees them as local folders); the
-mount state is re-applied on boot by `hifi-sources.service`.
+No hotspot is raised at setup (only the installer and the network-loss
+recovery page use one). Lyrion is installed by `hifi-firstboot.service` on the
+first boot with network, or synchronously by the wizard's Lyrion step if that
+hasn't happened yet. The full flow is documented in
+[ARCHITECTURE.md → Provisioning & first boot](../ARCHITECTURE.md#provisioning--first-boot).
 
 The VU meter works because the Debian `squeezelite` package is built with
-`VISEXPORT` and is launched with `-v` (see
-`config/includes.chroot/etc/default/squeezelite`), which exports
-`/dev/shm/squeezelite-*` for the VU daemon.
+`VISEXPORT` and is launched with `-v` (`config/includes.chroot/etc/default/squeezelite`),
+which exports `/dev/shm/squeezelite-*` for the VU daemon.
 
-Lyrion Music Server is **not** installed at image-build time at all — it's
-absent from both the live squashfs and every disk install (a live/"Try Osmium
-Sound" session has no Lyrion, by design; see the Compliance Notice above).
+## Network audio receivers ("cast" from the phone)
 
-> **Lyrion on the installed system.** On first boot of the real (installed)
-> system, `hifi-firstboot.service` downloads and installs the current stable
-> `.deb`, enables the service, then self-disables. It runs only outside the
-> live session (`ConditionKernelCommandLine=!boot=live`). If first boot has no
-> network, it retries on the next boot.
+The device can appear on the network as an audio target for phone apps. This
+is done with **Lyrion plugins**, not system services — the audio goes through
+Lyrion/squeezelite, so there is a single audio path and no ALSA contention.
+Install them once from Lyrion's web UI → **Settings → Plugins** (the device
+needs internet):
+
+| Protocol | Lyrion plugin | Source app |
+|---|---|---|
+| **AirPlay** | ShairTunes2 | iPhone/iPad/Mac → AirPlay icon |
+| **UPnP/DLNA** | UPnP/DLNA Media Interface | BubbleUPnP & co. (Android) |
+| **Spotify Connect** | Spotty | Spotify app (Premium) → devices |
+
+> A real **Google Cast/Chromecast** receiver is not available: the receiver
+> side of the protocol is proprietary and there is no open implementation for
+> audio.
 
 ## Prerequisites (on the build server)
 
-A Debian **bookworm** machine (or container/VM) with internet access. The build
-script installs `live-build`, `imagemagick`, `curl`, `xorriso` itself. You need
+A Debian machine (or container/VM) with internet access — CI uses a
+`debian:bookworm` container to build the trixie image. The build script
+installs `live-build`, `imagemagick`, `curl`, `xorriso` itself. You need
 ~15 GB free disk and root.
 
-> The build server does **not** need Node/npm — the Electron app is consumed
-> pre-compiled as an unpacked directory.
+> The build server needs Node only to **pre-build** the two web apps: the
+> Electron kiosk (`dist/linux-unpacked`) and the web admin
+> (`admin-webui/dist`) are consumed pre-compiled.
 
-## 1. Compile the Electron app (once, anywhere with Node)
-
-Produce the `linux-unpacked` directory with electron-builder, e.g. on the dev
-machine / WSL:
+## 1. Compile the kiosk and the web admin (once, anywhere with Node 20)
 
 ```bash
-npm install
+npm ci
 npm run build
-npx electron-builder --linux dir   # → dist/linux-unpacked/
+npx electron-builder --linux dir          # → dist/linux-unpacked/
+(cd admin-webui && npm ci && npm run build)  # → admin-webui/dist/  (required: the build refuses to ship without it)
 ```
 
-Copy `dist/linux-unpacked/` (or the whole repo) to the build server.
+Copy `dist/linux-unpacked/` and `admin-webui/dist/` (or the whole repo) to the
+build server.
 
 ## 2. Build the ISO (on the Debian server, as root)
 
@@ -126,16 +146,23 @@ sudo ./build-distro.sh --app-dir /path/to/dist/linux-unpacked
 If `--app-dir` is omitted the script looks in `../dist/linux-unpacked`,
 `../linux-unpacked`, and `~/hifi-build/dist/linux-unpacked`.
 
-Result: **`../hifi-player-installer.iso`** (next to the repo root).
+Result: **`../hifi-player-installer.iso`** (next to the repo root; override the
+name with the `ISO_NAME` env var — CI uses `hifi-player-<tag>.iso`).
 
 Useful overrides:
 
 ```bash
 sudo ./build-distro.sh \
   --app-dir ../dist/linux-unpacked \
+  --app-version 2.5.22 \
   --lyrion-url https://downloads.lms-community.org/LyrionMusicServer_v9.1.0/lyrionmusicserver_9.1.0_all.deb \
-  --suite bookworm
+  --suite trixie
 ```
+
+`--app-version` seeds `UI_VERSION`, `SYSTEM_VERSION` and `OS_VERSION` in the
+image (the OTA system compares against them); the OTA public key
+(`ota-keys/ota-pubkey.pem`) and the provisioning marker are seeded at the same
+time.
 
 ### Incremental / staged builds (don't rebuild everything)
 
@@ -157,30 +184,29 @@ sudo ./build-distro.sh --app-dir ../dist/linux-unpacked --stage all
 sudo ./build-distro.sh --stage binary       # seconds-to-minutes, reuses chroot
 ```
 
-A `--stage binary` run skips the Electron/Lyrion/python injection entirely
+A `--stage binary` run skips the Electron/python/web-admin injection entirely
 (those live in the chroot, which is reused), so `--app-dir` isn't required for
 it. Add `--clean-cache` to also wipe the downloaded-package cache.
 
 ### Build the ISO on GitHub (manual, by tag)
 
-You can also rebuild the ISO in CI without a local Debian box. The job runs
-inside a **`debian:bookworm` container** (so live-build/debootstrap and the
-Debian archive keyring behave correctly). In GitHub →
-**Actions → "Build HiFi Player ISO (manual)" → Run workflow**, type the **tag**
-by hand (e.g. `v1.0.5`) and run it. The workflow:
-
-1. compiles the Electron app (`npm run build` + `electron-builder --linux dir`),
-2. runs `distro/build-distro.sh` as root to produce `hifi-player-<tag>.iso`,
-3. uploads the ISO (+ `.sha256`) as a build **artifact**, and
-4. if **make_release** is on (default), creates the tag (if missing) and
-   attaches the ISO to a **GitHub Release** for it.
-
-Optional inputs: `lyrion_url` (override the Lyrion .deb) and `suite` (default
-`bookworm`). See `.github/workflows/build-iso.yml`.
+You can also build the ISO in CI without a local Debian box: GitHub →
+**Actions → "Build HiFi Player ISO (manual)" → Run workflow**, type the
+**tag** (e.g. `v2.5.21`) and run it (from the CLI pass `--ref <tag>` explicitly,
+otherwise it builds `main`). The workflow compiles the kiosk and the web
+admin, runs `build-distro.sh` as root, produces `hifi-player-<tag>.iso` +
+`.sha256` + an Ed25519 `.sha256.sig` + `latest.json`, uploads them as an
+artifact and (if `make_release` is on, the default) attaches the ISO to the
+tag's GitHub Release. The public download lives on **file.osmiumsound.it**
+(where Osmium Flasher reads `latest.json`); `tools/publish-iso.sh` produces the
+same file set by hand. Optional inputs: `lyrion_url`, `suite` (default
+`trixie`). See `.github/workflows/build-iso.yml` and the
+[workflows README](../.github/workflows/README.md).
 
 ## 3. Install on the target PC
 
-Write the ISO to a USB stick and boot the target:
+Write the ISO to a USB stick (Osmium Flasher, balenaEtcher, Rufus, or `dd`)
+and boot the target:
 
 ```bash
 sudo dd if=hifi-player-installer.iso of=/dev/sdX bs=4M status=progress conv=fsync
@@ -190,25 +216,29 @@ sudo dd if=hifi-player-installer.iso of=/dev/sdX bs=4M status=progress conv=fsyn
 > **same logo as the Plymouth splash**): **Install Osmium Sound** (default,
 > auto-starts on timeout) and **Try Osmium Sound (no install)**.
 
-Booting "Install Osmium Sound" starts the normal live session, but the
-Electron app opens straight into `InstallWizard` instead of the kiosk UI:
+Booting "Install Osmium Sound" starts the normal live session, but the kiosk
+opens straight into `InstallWizard` — a QR code — and the box raises the open
+`Osmium-Setup-XXXX` hotspot (or is reachable at its LAN IP when wired). From
+the phone: pick the target disk (the disk backing the boot medium itself is
+excluded) → confirm the clear "all data will be erased" warning → progress →
+done; the screen reboots on its own.
 
-- Welcome → pick the target disk from a list (the disk backing the boot
-  medium itself is excluded) → confirm (clear "all data will be erased"
-  warning) → progress → done.
-- No username/password/language/keyboard/timezone questions — the `hifi`
-  user, services and app are already part of the squashfs being copied.
+- No username/password/language/keyboard/timezone questions at install time —
+  the `hifi` user, services and app are already part of the squashfs being
+  copied; everything personal is asked at first boot.
 - The target disk is wiped and repartitioned (GPT: bios_grub + EFI + ext4),
   GRUB is installed for the machine's actual firmware mode (BIOS or UEFI,
-  detected from the live session's own boot mode), then the wizard offers a
-  reboot button.
+  detected from the live session's own boot mode; the signed
+  shim/grub-efi-amd64-signed chain is in the package list for Secure Boot
+  machines, **at build time only** — the bootloader is never touched by OTA).
 
 > ⚠️ **Confirming the install wipes the selected disk.** There's no "guided
 > vs manual partitioning" choice — a device is picked, and it's wiped and
 > replaced entirely (see `hifi-disk-install.sh`).
 
-After reboot the machine boots **silently** straight into the fullscreen player:
-no desktop, no login screen, no visible GRUB.
+After reboot the machine boots **silently** into the first-boot setup, then
+(on a unit with a screen) straight into the fullscreen player: no desktop, no
+login screen, no visible GRUB.
 
 **No default credentials ship in the image.** The kiosk user `hifi` has no
 password at all and `root` is locked, so a freshly installed appliance carries
@@ -233,7 +263,9 @@ pointing at the **same** kernel/initrd/squashfs:
 - **Install Osmium Sound** (default): `... hifi.installer=1`
 - **Try Osmium Sound (no install)**: same append, without that parameter
 
-`api_server.py`'s `/boot_mode` endpoint reads `/proc/cmdline` for
+Both append `boot=live quiet splash loglevel=0 vt.global_cursor_default=0
+hostname=hifiplayer noautologin`. `api_server.py`'s `/boot_mode` endpoint
+(and `webui_server.py`'s `_boot_mode()`) read `/proc/cmdline` for
 `hifi.installer=1` and `src/App.jsx` uses it to decide which UI to show. The
 gold-on-black splash comes from
 `config/includes.binary/{isolinux,boot/grub}/splash.png`. To boot into the
@@ -243,60 +275,59 @@ the boot prompt (press `Tab` on BIOS / `e` on UEFI) and remove
 
 ## Audio output
 
-The default squeezelite device is ALSA `default`. For a dedicated USB DAC, edit
-`/etc/default/squeezelite` on the installed system, set e.g. `-o hw:DAC` (find
-the name with `aplay -l`), then `systemctl restart squeezelite`.
+The output device is chosen in Settings (or the setup wizard) and persisted by
+`api_server.py`'s `set_audio_device` as a stable ALSA card name
+(`hw:CARD=<id>,DEV=<n>`) in `/etc/default/squeezelite`, so the choice survives
+reboots and USB re-enumeration. For a hand edit on the installed system: set
+`-o hw:DAC` (find the name with `aplay -l`) in `/etc/default/squeezelite`, then
+`systemctl restart squeezelite`. squeezelite runs with `-D` (DSD over DoP) and a
+persistent per-device player MAC (`apply.d/0042`).
 
 ## Customisation map
 
 | Want to change | Edit |
 |---|---|
 | Packages installed | `config/package-lists/hifi.list.chroot` |
-| Plymouth splash logo/text | logo generated in `build-distro.sh`; theme in `config/.../plymouth/themes/hifi/` |
+| Plymouth splash logo/text | logo (repo-root `logo osmium.png`) copied / generated in `build-distro.sh`; theme in `config/includes.chroot/usr/share/plymouth/themes/hifi/` |
 | ISO installer boot splash | generated in `build-distro.sh` → `config/includes.binary/{isolinux,boot/grub}/splash.png` |
 | ISO boot menu colours/title/timeout | patched in place by `config/hooks/normal/0500-brand-boot.hook.binary` |
-| GRUB / kernel quiet flags | `config/hooks/normal/0200-hidden-boot.hook.chroot` |
-| Kiosk launch flags | `.xsession` written by `config/hooks/normal/0100-system-setup.hook.chroot` |
+| GRUB / kernel quiet flags | `config/hooks/normal/0200-hidden-boot.hook.chroot` → `hifi-finalize-boot.sh` |
+| Kiosk session (Wayland) | `os-update/files/kiosk-wayland-session`, `kiosk-wayland-launch`, `hifi-kiosk-wayland.desktop` — single source of truth, injected by `build-distro.sh` **and** shipped by `apply.d/0049` |
+| Kiosk session (X11 fallback) / launch flags | `os-update/files/xsession` (same rule) |
+| Wayland-vs-X11 decision | `os-update/files/kiosk-session-select` + `hifi-kiosk-session.service` (`apply.d/0050`) |
 | Autologin user/session | `config/includes.chroot/etc/lightdm/lightdm.conf.d/99-hifi-autologin.conf` |
 | squeezelite args (incl. `-v`) | `config/includes.chroot/etc/default/squeezelite` |
+| Enabled/disabled services | `config/hooks/normal/0400-enable-services.hook.chroot` |
+| `hifi` user, groups, hostname | `config/hooks/normal/0100-system-setup.hook.chroot` |
+| Electron app finalisation (`/opt/hifi-media-player`, chrome-sandbox) | `config/hooks/normal/0300-app-install.hook.chroot` |
+| sudo rules for the kiosk user | `config/includes.chroot/etc/sudoers.d/hifi` (pinned commands, no wildcards) |
+| Helper scripts run as root by the services | `config/includes.chroot/usr/local/sbin/` |
 
-## Aggiornamento OTA della UI
+Python daemons are injected into `includes.chroot/usr/local/bin` by
+`build-distro.sh` from the repo root (`api_server.py`, `sources_server.py`,
+`webui_server.py`, `vu_meter_daemon.py`, `hifi_backup.py`, `hifi_i18n.py`,
+`hifi_logging.py`); the same files ship in the **system** OTA bundle.
 
-La UI Electron può essere aggiornata **over-the-air** senza reinstallare la ISO.
-L'intera cartella `/opt/hifi-media-player` viene sostituita in modo atomico con
-backup per rollback.
+## Over-the-air updates
 
-**Pubblicare un aggiornamento** (manutentore):
+Installed devices never need the ISO again: four OTA channels (UI, System, OS,
+Lyrion) are served from GitHub Releases and applied by the scripts in
+`config/includes.chroot/usr/local/sbin/` (`hifi-ota-update.sh`,
+`hifi-system-update.sh`, `hifi-os-update.sh`, `hifi-lyrion-update.sh`), driven
+by `api_server.py`. The combined "Update now" stages everything live and
+applies it in an isolated `system-update.target` boot. The OS channel is the
+cumulative, signed, idempotent `os-update/` payload — see
+[`os-update/README.md`](os-update/README.md), [`ota-keys/README.md`](ota-keys/README.md)
+and [ARCHITECTURE.md → OTA update system](../ARCHITECTURE.md#ota-update-system).
 
-1. Aggiorna la `version` in `package.json` e crea un tag, es. `git tag v1.1.0 && git push --tags`.
-2. Il workflow `.github/workflows/build-ui-ota.yml` costruisce
-   `dist/linux-unpacked`, lo impacchetta in `hifi-ui-<tag>.tar.gz` + `.sha256`
-   e li allega alla **Release** del tag.
+Publishing an update = pushing a `v*` tag (see
+[TAG_CONVENTIONS.md](../.github/workflows/TAG_CONVENTIONS.md)). For heavy dev
+iteration the Release also carries `hifi-install-<ver>.sh`
+(`dev-installer/install.sh.tmpl`), an offline installer that applies the same
+bundles over SSH without touching the rate-limited GitHub REST API.
 
-**Aggiornare un dispositivo** (utente): la UI controlla automaticamente la
-disponibilità all'apertura di **Settings → Aggiornamento UI**, mostra la versione
-disponibile e — su pressione di **"Aggiorna ora"** — scarica il bundle, ne verifica
-lo `sha256`, sostituisce l'app e riavvia l'interfaccia.
-
-Sotto il cofano, `api_server.py` (root) interroga
-`https://api.github.com/repos/<owner>/<repo>/releases/latest` (override con la env
-`HIFI_OTA_REPO`) e lancia `/usr/local/sbin/hifi-ota-update.sh` via `systemd-run`,
-così l'update sopravvive al riavvio di `lightdm`. La versione installata è in
-`/opt/hifi-media-player/UI_VERSION` (seminata da `build-distro.sh`, override con
-`--app-version`).
-
-### Aggiornamento di Lyrion Music Server
-
-Dalla stessa pagina **Settings → Aggiornamento Lyrion** è possibile aggiornare il
-server musicale. La UI rileva la versione installata (`dpkg-query`) e l'ultima
-**stable** pubblicata su `https://downloads.lms-community.org/` (le nightly sotto
-`/nightly/` sono escluse), e — su **"Aggiorna Lyrion"** — `api_server.py` (root)
-lancia `/usr/local/sbin/hifi-lyrion-update.sh` che scarica il `.deb`, lo installa
-con `apt-get` (risolve le dipendenze) e riavvia `lyrionmusicserver`. Il controllo
-è automatico all'apertura di Settings; l'installazione resta manuale.
-
-**Rollback**: la versione precedente resta in `/opt/hifi-media-player.old`. Per
-ripristinarla:
+**UI rollback**: `hifi-ota-update.sh` keeps the previous app dir aside as
+`/opt/hifi-media-player.old` (atomic swap). To go back:
 
 ```bash
 sudo systemctl stop lightdm
@@ -309,15 +340,21 @@ sudo systemctl start lightdm
 
 - **VU meter flat / not moving** → confirm `/dev/shm/squeezelite-*` exists while
   playing. If not, check squeezelite is started with `-v` (`/etc/default/squeezelite`).
-- **Black screen after install** → check `systemctl status lightdm` and
-  `~/.xsession` errors in `/home/hifi/.xserver-errors`.
-- **Lyrion not reachable** → `systemctl status lyrionmusicserver`; first start
-  initialises under `/var/lib/squeezeboxserver` and can take a minute.
-- **CD Player: "No CD in drive (-1)"** con un CD inserito → l'utente di Lyrion non
-  accede al lettore. L'immagine include `cdparanoia`/`libcdio-utils`/`icedax`, una
-  regola udev (`/dev/cdrom`, gruppo `cdrom`) e al primo boot aggiunge l'utente
-  Lyrion al gruppo `cdrom`. Verifica con `cdparanoia -Q -d /dev/sr0` (a livello OS)
-  e `ls -l /dev/sr0`; se serve `sudo usermod -aG cdrom squeezeboxserver && sudo
+- **Black screen after install (kiosk never appears)** → `systemctl status
+  lightdm hifi-kiosk-session`; in a VM (VMware/VirtualBox/QEMU) the selector
+  must have picked X11 — force it with `echo x11 >
+  /etc/hifi-player/kiosk-session` and reboot. X11 session errors are in
+  `/home/hifi/.xsession-errors`; the Wayland session logs to the journal
+  (`journalctl -b _COMM=labwc`).
+- **Lyrion not reachable** → `systemctl status lyrionmusicserver` (and
+  `hifi-firstboot` if it was never installed: it needs network on first boot);
+  first start initialises under `/var/lib/squeezeboxserver` and can take a
+  minute.
+- **CD Player: "No CD in drive (-1)"** with a CD inserted → the Lyrion user
+  can't access the drive. The image includes `cdparanoia`/`libcdio-utils`/
+  `icedax`, a udev rule (`/dev/cdrom`, group `cdrom`) and first boot adds the
+  Lyrion user to `cdrom`. Check with `cdparanoia -Q -d /dev/sr0` and
+  `ls -l /dev/sr0`; if needed `sudo usermod -aG cdrom squeezeboxserver && sudo
   systemctl restart lyrionmusicserver`.
 - **GRUB menu still shows briefly** → the installed system hides GRUB entirely:
   `GRUB_TIMEOUT=0` + `GRUB_TIMEOUT_STYLE=hidden`, a black `gfxterm` background
@@ -325,3 +362,7 @@ sudo systemctl start lightdm
   "Loading Linux …/initial ramdisk …" strings in `/etc/grub.d/10_linux` so no
   text appears at all. Hold `Shift` (BIOS) / press `Esc` (UEFI) to reveal it for
   repair.
+- **An update left the box on the Plymouth progress bar in red** → the
+  isolated apply failed; on the next boot it reruns from the top (every step is
+  idempotent). If SSH was enabled before the update it is available during the
+  apply session; otherwise recovery is physical.

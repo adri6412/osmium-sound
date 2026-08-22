@@ -6,20 +6,28 @@ Come installare e iniziare a usare Osmium Sound sul tuo mini-PC x86.
 
 ## 🚀 Installazione
 
-1. **Scarica la ISO** dell'ultima release da
-   [github.com/adri6412/osmium-sound/releases](https://github.com/adri6412/osmium-sound/releases).
-2. **Scrivi la ISO** su una chiavetta USB da 8&nbsp;GB o più, con
-   [balenaEtcher](https://etcher.balena.io/), Rufus o `dd`.
-3. **Avvia il mini-PC dalla chiavetta.** Lo schermo mostra solo un QR code —
-   non serve mai mouse o tastiera. Scansionalo con il telefono: il resto
-   dell'installazione (scelta del disco, conferma, avvio) avviene dal
-   telefono. Lo schermo mostra l'avanzamento in sola lettura e si riavvia da
-   solo al termine.
+1. **Procurati l'immagine di installazione.** Scarica l'ultima ISO da
+   [github.com/adri6412/osmium-sound/releases](https://github.com/adri6412/osmium-sound/releases)
+   e scrivila su una chiavetta USB da 8&nbsp;GB o più con
+   [balenaEtcher](https://etcher.balena.io/), Rufus o `dd`, oppure usa
+   **Osmium Flasher** (app desktop per Windows/Linux, vedi
+   [`flasher/`](flasher/README.md)): scarica l'immagine corrente, ne verifica
+   la firma e scrive la chiavetta per te.
+2. **Avvia il mini-PC dalla chiavetta.** Lo schermo mostra solo un QR code —
+   non serve mai mouse o tastiera. Scansionalo con il telefono: il telefono si
+   collega all'hotspot Wi-Fi aperto `Osmium-Setup-XXXX` del dispositivo (senza
+   password) e la pagina di installazione si apre da sola (captive portal; se
+   non succede, apri `http://10.42.0.1`). Se il dispositivo è collegato via
+   cavo puoi aprire direttamente il suo indirizzo di rete — il QR lo mostra.
+3. **Concludi dal telefono**: scegli il disco di destinazione, conferma la
+   cancellazione, avvia. Lo schermo mostra l'avanzamento in sola lettura e si
+   riavvia da solo al termine.
 
 > **Selezione del disco.** Scegli dal telefono su quale disco installare;
 > viene cancellato solo quello — nulla viene cancellato senza conferma.
-> Testato finora solo su UEFI (avvio BIOS/legacy non ancora verificato con
-> questo flusso).
+> L'installer configura GRUB per la modalità firmware con cui la macchina è
+> stata avviata (UEFI è il percorso collaudato e consigliato; il BIOS legacy è
+> supportato ma meno testato).
 
 > **Provala in modalità live.** Scegli **Try Osmium Sound (no install)** nel
 > menu di avvio per far partire il kiosk direttamente dalla chiavetta USB —
@@ -28,55 +36,89 @@ Come installare e iniziare a usare Osmium Sound sul tuo mini-PC x86.
 
 **Nota:** la ISO serve solo per la prima installazione. Tutti gli aggiornamenti
 successivi (interfaccia, sistema, OS, Lyrion) arrivano automaticamente via
-**OTA** dalla schermata Impostazioni — non serve riflashare nulla.
+**OTA** dalla schermata Impostazioni o dall'amministrazione web — non serve
+riflashare nulla.
 
 ## 🧙 Primo avvio
 
-Al primo avvio dopo l'installazione, lo schermo mostra di nuovo solo un QR
-code. Scansionalo con il telefono per completare la **configurazione
-guidata**, interamente dal telefono: lingua, ripristino da un backup
-precedente oppure configurazione da zero, connessione alla rete, modalità
-del dispositivo (con schermo, headless o solo server — vedi sotto), uscita
-audio, Lyrion Music Server (locale o un server già presente in rete),
-sorgenti musicali e fuso orario. Una volta terminato dal telefono, il
-dispositivo prosegue da solo — nessun pulsante da premere sullo schermo. Da
-lì in poi l'app si apre direttamente sulla schermata principale (oppure
-resta headless, a seconda di cosa hai scelto).
+Al primo avvio dopo l'installazione, lo schermo chiede una sola cosa: la
+**rete**. Scegli il tuo Wi-Fi sul touchscreen e digita la password; con il cavo
+Ethernet non c'è nulla da fare. Lo schermo mostra poi l'indirizzo del
+dispositivo (`http://<ip>`): aprilo dal telefono o dal computer ed esegui la
+**configurazione guidata** dal browser, in quest'ordine:
 
-> **Se ti connetti via Wi-Fi**, l'hotspot di configurazione si spegne non
-> appena il dispositivo si collega alla tua rete di casa (una singola scheda
-> Wi-Fi non può fare entrambe le cose insieme) — riconnetti il telefono alla
-> tua rete Wi-Fi e apri `https://hifiplayer.local` per riprendere il resto
-> della configurazione. Con il cavo Ethernet non c'è questa interruzione:
-> l'hotspot resta acceso per tutto il tempo.
+1. **Lingua** (inglese di default, italiano disponibile).
+2. **Ripristino da backup, oppure configurazione da zero.** Caricando un file
+   di backup precedente (e la relativa passphrase, se cifrato) si ripristinano
+   rete, audio, Lyrion, sorgenti e fuso orario in un colpo solo; il dispositivo
+   si riavvia per applicarli e i passi successivi vengono saltati.
+3. **Rete** — di solito già fatta dallo schermo; il passo resta per chi vuole
+   spostare su Wi-Fi un dispositivo collegato via cavo.
+4. **Aggiornamenti** — un controllo aggiornamenti obbligatorio, così la
+   procedura guidata gira sul software più recente (può riavviare il
+   dispositivo una volta; la procedura riprende da sola).
+5. **Nome del dispositivo** (`<nome>.local`, usato anche per il multiroom).
+6. **Modalità del dispositivo** — *con schermo*, *headless* o *solo server*
+   (vedi sotto).
+7. **Puntatore del mouse** on/off (solo con schermo), **uscita audio**
+   (DAC/HDMI).
+8. **Lyrion** — esegui Lyrion Music Server su questo dispositivo, oppure
+   punta a uno già presente in rete (rilevato automaticamente).
+9. **Aspetto del player web** — tema **Osmium** o **Material** semplice, e i
+   **servizi musicali** da attivare (Spotify, TIDAL, Qobuz, Deezer, radio, …).
+10. **Account di amministrazione web** (utente + password — le credenziali per
+    la pagina di amministrazione e, volendo, per SSH).
+11. **Fuso orario**, poi **sorgenti musicali** (condivisioni NAS o dischi
+    interni, facoltative — una chiavetta USB viene rilevata da sola).
+
+Una volta terminato dal browser, il dispositivo prosegue da solo — nessun
+pulsante da premere sullo schermo. Da lì in poi l'app si apre direttamente
+sulla schermata principale (oppure resta headless, a seconda di cosa hai
+scelto).
 
 ## 🎮 Come si usa
 
-- **Musica / Radio / App**: interfaccia per Lyrion Music Server — libreria
-  locale, radio internet e servizi di streaming (Deezer, Qobuz, TIDAL,
-  Spotify e altri) tramite i **plugin di Lyrion**. Installa il plugin che ti
-  serve dalla web UI di Lyrion (Impostazioni → Plugin): compare da solo nei
-  tab Radio/App, senza bisogno di aggiornare l'app.
-- **Impostazioni**: info di sistema e rete, scelta del DAC/uscita audio, DSP
-  opzionale (EQ, crossfeed, correzione ambientale), Multiroom, aggiornamenti
-  OTA (canale Dev/Prod), abbinamento dell'app companion Android.
+- **Libreria / Radio / App**: l'interfaccia per Lyrion Music Server —
+  libreria locale, radio internet, Scopri (mix casuali, artisti simili,
+  biografie) e servizi di streaming (Deezer, Qobuz, TIDAL, Spotify e altri)
+  tramite i **plugin di Lyrion**. I plugin scelti in fase di configurazione
+  sono già pronti; gli altri si installano dalla web UI di Lyrion
+  (Impostazioni → Plugin) e compaiono da soli, senza aggiornare l'app.
+- **In riproduzione**: copertina grande, trasporto e volume, VU meter analogico
+  opzionale, indicatore bit-perfect / ReplayGain.
+- **CD**: inserisci un CD audio per riprodurlo, oppure rippalo in FLAC
+  taggati dentro una delle tue sorgenti.
+- **Impostazioni** (a schermo): lingua, Lyrion (server, aspetto del player
+  web, rescan), sorgenti musicali, uscita audio, riproduzione, multiroom,
+  sveglia, rete, web remote (QR per aprire il player web dal telefono; note per
+  iPhone), SSH, puntatore, risoluzione UI, frequenza di aggiornamento,
+  modalità schermo, fuso orario, info di sistema, aggiornamenti (canale
+  Prod/Dev, "Aggiorna ora"), controlli di sistema (riavvio, spegnimento,
+  reset di fabbrica, reset password web), licenze di terze parti.
 
 ## 📱 App companion Android
 
 Controlla Osmium Sound dal telefono — sfoglia la libreria, gestisci
-riproduzione e coda, regola il volume. Abbina scansionando il QR code da
+riproduzione e coda, regola il volume, cambia uscita audio, gestisci
+multiroom, aggiornamenti e backup. Abbina scansionando il QR code da
 Impostazioni sul dispositivo. Distribuita come APK firmato o tramite il
 nostro repo F-Droid self-hosted — non è sul Play Store. Dettagli su
-[osmiumsound.qd.je](https://osmiumsound.qd.je/#android).
+[osmiumsound.it](https://osmiumsound.it/#android) e in
+[COMPANION_APP.md](COMPANION_APP.md).
 
 ## 🔧 Problemi comuni
 
-- **Il front-end Lyrion non carica**: verifica l'URL del server Lyrion nelle
-  Impostazioni (default `http://localhost:9000`) e che il servizio sia attivo.
+- **Il front-end Lyrion non carica**: verifica il server Lyrion in
+  Impostazioni → Lyrion (locale, default `http://localhost:9000`, oppure il
+  server esterno scelto) e che il servizio sia attivo.
 - **Sorgenti streaming/radio mancanti**: installa il plugin corrispondente
-  dalla web UI di Lyrion.
+  dalla web UI di Lyrion (Impostazioni → Plugin).
 - **Audio non funziona**: controlla il dispositivo audio selezionato in
-  Impostazioni e che il DAC sia riconosciuto.
+  Impostazioni → Audio e che il DAC sia riconosciuto; in modalità solo server
+  il player è spento di proposito.
+- **`hifiplayer.local` non risponde**: usa l'indirizzo IP mostrato in
+  Impostazioni → Rete (o nella schermata di configurazione) — i nomi `.local`
+  sono ambigui quando in rete c'è più di un'unità.
 
 ## 🖥️ Modalità dispositivo, headless e amministrazione web
 
@@ -86,51 +128,43 @@ server** (senza schermo *e* senza riproduzione audio in locale — per un
 dispositivo il cui unico compito è servire Lyrion Music Server ad altri
 player Osmium in casa).
 
-**Primo avvio (installazione nuova o dopo un reset di fabbrica):**
-1. Il dispositivo alza un hotspot Wi-Fi **`Osmium-Setup-XXXX`** (WPA2,
-   passphrase `osmiumsetup`). Collega il telefono — la pagina di
-   configurazione si apre da sola (captive portal). Se non succede, apri
-   **http://10.42.0.1**.
-2. Segui la pagina di configurazione dal telefono: lingua, ripristino da
-   backup oppure configurazione da zero, Wi-Fi di casa (o cavo), modalità
-   del dispositivo (**con schermo** / **headless** / **solo server**),
-   uscita audio, Lyrion (locale o un server già presente in rete), sorgenti
-   musicali e fuso orario.
-3. Premi *Completa setup*. L'hotspot di configurazione si spegne;
-   riconnetti il telefono alla tua rete e apri **https://hifiplayer.local**
-   per creare l'account di amministrazione web (utente + password). Il
-   browser avviserà che il certificato "non è affidabile" — è normale su un
-   dispositivo locale (non esiste un'autorità di certificazione pubblica);
-   la connessione resta comunque cifrata. Accetta e prosegui.
+**Amministrazione web:** apri **http://\<ip-del-dispositivo\>** (oppure
+`http://hifiplayer.local`) da qualsiasi browser della tua rete e accedi con
+l'account creato durante la configurazione. È HTTP semplice sulla rete locale
+— nessun avviso di certificato, nessun cloud di mezzo. Da lì: rete, audio,
+sorgenti (NAS/dischi interni, condivisione SMB), impostazioni di riproduzione
+e schermo, Lyrion (aspetto del player web, rescan, aggiornamenti Lyrion),
+aggiornamenti, backup (su richiesta, pianificati, cifrati; ripristino), SSH
+(con il login Linux che scegli), accesso remoto Tailscale, abbinamento della
+companion, account, reset di fabbrica e una scheda Debug per l'assistenza.
 
-**Ripristinare invece di configurare da zero:** nella stessa pagina di
-configurazione, carica un file di backup precedente (e la relativa
-passphrase, se cifrato) invece di seguire i vari passaggi — rete, audio,
-Lyrion, sorgenti e fuso orario vengono tutti ripristinati da lì, e il
-dispositivo si riavvia per applicarli.
+**Gestire un dispositivo headless o solo server:** l'amministrazione web qui
+sopra, l'**app companion**, oppure il player web di Lyrion su
+**http://\<ip-del-dispositivo\>:9000** (la voce "Osmium Admin" nel suo menu
+apre anche l'amministrazione web).
 
-**Gestire un dispositivo headless o solo server:** apri
-**https://hifiplayer.local** (amministrazione web — rete, audio,
-aggiornamenti, modalità schermo, player on/off, account, reset di fabbrica),
-l'**app companion**, oppure la libreria Lyrion su
-**http://hifiplayer.local:9000**.
+**Cambiare modalità in seguito:** Impostazioni → *Modalità schermo* contiene
+entrambi gli interruttori — con schermo ⇄ headless, e player acceso ⇄ spento
+(spento = solo server) — a schermo se ne hai uno, oppure dall'amministrazione
+web/app companion se non ne hai. È questo il modo per riaccendere lo schermo
+su un'unità headless.
 
-**Cambiare modalità in seguito:** Impostazioni → *Modalità schermo*
-(con schermo ⇄ headless) e Impostazioni → *Player* (acceso ⇄ spento, per
-solo server) — a schermo se ne hai uno, oppure dall'amministrazione
-web/app companion se non ne hai. È questo il modo per riaccendere lo
-schermo su un'unità headless.
+**Rete persa su un'unità già configurata:** se il dispositivo non raggiunge
+più nessuna rete, rialza l'hotspot `Osmium-Setup-XXXX` con una pagina di sola
+configurazione di rete, così puoi collegarlo a un nuovo Wi-Fi dal telefono;
+l'hotspot sparisce appena la rete torna.
 
-**Reset di fabbrica:** Impostazioni → *Reset di fabbrica* (a schermo),
-oppure dall'amministrazione web (con la password). Cancella tutte le
-impostazioni **e l'account di amministrazione web**, poi riavvia tornando
-a questo stesso flusso di configurazione via QR code.
+**Reset di fabbrica:** Impostazioni → *Controlli di sistema* (a schermo),
+oppure dall'amministrazione web (reinserendo la password). Cancella tutte le
+impostazioni **e l'account di amministrazione web**, elimina i backup
+memorizzati, poi riavvia tornando alla configurazione del primo avvio.
 
 ## 📚 Altre risorse
 
 - **[README.md](README.md)**: panoramica, funzioni e specifiche
 - **[ARCHITECTURE.md](ARCHITECTURE.md)**: dettagli tecnici, API, sviluppo locale
-- Note di rilascio: [changelog sul sito](https://osmiumsound.qd.je/#changelog)
+- **[Manuale utente](https://osmiumsound.it/manual.html)** sul sito
+- Note di rilascio: in ogni [Release GitHub](https://github.com/adri6412/osmium-sound/releases) e nella schermata Aggiornamenti ("novità")
 
 ---
 

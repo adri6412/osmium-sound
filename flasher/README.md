@@ -1,7 +1,7 @@
 # Osmium Flasher
 
 Desktop app that walks a beta tester through installing Osmium Sound on a mini
-PC, end to end. Downloaded from the beta page; it is not part of the appliance
+PC, end to end. Downloaded from the website; it is not part of the appliance
 and never runs on the device itself.
 
 Three phases, shown as a stepper across the top:
@@ -202,10 +202,15 @@ temporarily flip `includeVirtualDrives` in `src/drives.js`.
 2. Actions → **Build Osmium Flasher (manual)** → Run workflow.
    Pass `--ref` explicitly if dispatching from the CLI: without it, `gh` builds
    from `main` regardless of what you meant.
-3. Download the four artifacts (win-x64, mac-arm64, mac-x64, linux-x86_64).
-4. Upload them to `file.osmiumsound.it`, alongside the ISO.
+3. Download the two artifacts (`osmium-flasher-win-x64` → `.exe`,
+   `osmium-flasher-linux-x86_64` → `.run`). macOS is configured in
+   `electron-builder.yml` (`npm run dist:mac` works) but is not built in CI:
+   an unsigned, un-notarized app cannot get the disk-access entitlement
+   macOS now requires, so it stays off until the app is notarized.
+4. Upload them to `file.osmiumsound.it`, alongside the ISO (whose own sidecars
+   and `latest.json` come from `build-iso.yml` or `tools/publish-iso.sh`).
 5. Update the filenames in `website/beta/index.html` — they are versioned, so a
-   new flasher version means four new URLs.
+   new flasher version means new URLs.
 
 The binaries are unsigned. The beta page carries the per-OS instructions for the
 resulting warnings; if signing is ever added, those instructions have to go.

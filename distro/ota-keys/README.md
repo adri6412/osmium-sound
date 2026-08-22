@@ -1,22 +1,28 @@
 # OTA signing keys
 
 The OS OTA channel (`hifi-os-*.tar.gz`) runs an arbitrary root script on the
-appliance, so every bundle must be **signed**. This is an Ed25519 keypair:
+appliance, so every bundle must be **signed**. The same key also signs the
+install ISO's sha256 sidecar (consumed by Osmium Flasher). This is an Ed25519
+keypair:
 
 - **private key** — held only in CI as the GitHub secret `OTA_SIGNING_KEY`,
-  plus an offline backup. It signs the bundle's sha256 sidecar at release time.
-- **public key** — baked into the image at
-  `/etc/hifi-player/ota-pubkey.pem`. The appliance verifies every OS bundle
-  against it and refuses to apply anything that doesn't match.
+  plus an offline backup. It signs the bundle's (and the ISO's) sha256 sidecar
+  at release time (`build-ui-ota.yml`, `build-iso.yml`, or by hand with
+  `tools/publish-iso.sh`).
+- **public key** — committed here as `ota-pubkey.pem`, baked into the image at
+  `/etc/hifi-player/ota-pubkey.pem` by `build-distro.sh`, and shipped inside
+  Osmium Flasher as `flasher/assets/ota-pubkey.pem`. The appliance verifies
+  every OS bundle against it and refuses to apply anything that doesn't match;
+  the flasher refuses to write an image that doesn't verify.
 
 ## One-time setup
 
 ```sh
 cd distro/ota-keys
-./gen-ota-key.sh
+./gen-ota-key.sh            # → ota-signing-key.pem (private, git-ignored) + ota-pubkey.pem
 
-# bake the public key into the image
-cp ota-pubkey.pem ../config/includes.chroot/etc/hifi-player/ota-pubkey.pem
+# the public key is read from here by build-distro.sh; keep the flasher's copy in sync
+cp ota-pubkey.pem ../../flasher/assets/ota-pubkey.pem
 
 # give CI the private key
 gh secret set OTA_SIGNING_KEY < ota-signing-key.pem
@@ -24,15 +30,18 @@ gh secret set OTA_SIGNING_KEY < ota-signing-key.pem
 
 Rebuild the ISO so installed devices carry the public key. The **private key**
 (`ota-signing-key.pem`) is git-ignored — keep it offline and never commit it.
+`flasher`'s test suite checks that `ota-signing-key.pem` (when present on the
+maintainer's machine) matches the shipped `assets/ota-pubkey.pem`.
 
 ## How verification works on the device
 
 `/usr/local/sbin/hifi-os-update.sh`:
 
 1. downloads `hifi-os-<ver>.tar.gz` and the detached signature
-   `hifi-os-<ver>.tar.gz.sha256.sig`;
+   `hifi-os-<ver>.tar.gz.sha256.sig` (HTTPS only, size-bounded);
 2. reconstructs the signed sha256 sidecar and verifies the signature with
-   `openssl pkeyutl -verify` against `ota-pubkey.pem` → **authenticity**;
+   `openssl pkeyutl -verify` against `ota-pubkey.pem` (whose algorithm must be
+   Ed25519) → **authenticity**;
 3. checks the tarball's sha256 against that signed digest → **integrity**;
 4. only then extracts and runs `apply.sh`.
 
@@ -60,13 +69,16 @@ then on the device only trusts OS bundles signed with the matching private key.
 This is intentionally a **root-only, local** command (console / SSH) and is
 **not** exposed over the network API: whoever can set the trust root can
 authorise arbitrary signed root scripts, so it must require physical/root access
-— not a request any LAN client can make. This is what keeps the design
-verified-but-not-tivoised: the owner controls the trust root, the device isn't
-locked, yet the auto-update path is still authenticated.
+— not a request any LAN client can make. The same pattern is used by
+`hifi-ota-alpha-toggle.sh` (unlocking the private alpha release channel). This
+is what keeps the design verified-but-not-tivoised: the owner controls the trust
+root, the device isn't locked, yet the auto-update path is still authenticated.
+Both files survive a factory reset.
 
 ## Key rotation
 
 If the private key leaks or is lost: run `gen-ota-key.sh` again (after deleting
 the old `ota-signing-key.pem`), update the `OTA_SIGNING_KEY` secret, copy the new
-public key into the image, and ship a new ISO. Devices still on the old image
-will only trust bundles signed with the old key until they're re-imaged.
+public key into the image **and** into `flasher/assets/`, and ship a new ISO and
+a new flasher. Devices still on the old image will only trust bundles signed with
+the old key until they're re-imaged or the owner enrols the new key by hand.

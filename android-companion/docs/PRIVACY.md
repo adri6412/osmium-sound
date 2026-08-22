@@ -1,7 +1,38 @@
+# Privacy — Osmium Sound Companion
+
+**Osmium Sound Companion** (`com.osmium.sound.companion`) is a local-network
+remote control. What it does with data, in plain terms:
+
+- It talks only to the **Lyrion Music Server** and the **Osmium Sound
+  appliance** you pair it with, on your own network (or your own Tailscale
+  tailnet). Library contents, playback state, the pairing token and the
+  appliance settings you change stay between the phone and those devices.
+- It contains **no analytics, advertising or crash-reporting SDK** and does not
+  send usage data to the Osmium Sound project or anyone else. The only network
+  contacts outside your LAN are those you initiate (e.g. opening a link).
+- Settings, the server list and the pairing token are stored on the device in
+  the app's private storage; uninstalling removes them. "Download" features
+  write music files to the folder you choose.
+- Album artwork, artist information and streaming content are fetched by Lyrion
+  Music Server, not by the app, under Lyrion's and your plugins' own terms.
+- Permissions: network/Wi-Fi state (server discovery), camera (QR pairing
+  only), notifications and foreground service (playback controls), storage
+  (downloads).
+
+Questions: support@osmiumsound.it — or open an issue at
+https://github.com/adri6412/osmium-sound/issues.
+
 ---
-description: Privacy Policy
-permalink: /privacy/
----
+
+## Upstream Squeezer privacy policy (historical)
+
+The text below is the privacy policy of the upstream
+[Squeezer](https://github.com/kaaholst/android-squeezer) project this app is
+derived from, kept for provenance. It describes Squeezer as distributed by its
+own maintainers (Play Store listing, `privacy@squeezer.org.uk`) and **does not
+describe** the Osmium Sound Companion, which is a separate distribution — see
+the section above.
+
 
 This Application collects some Personal Data from its Users.
 

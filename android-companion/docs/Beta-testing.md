@@ -1,12 +1,14 @@
----
-description: Beta Testing
-permalink: /beta/
----
+# Early builds (dev channel)
 
-Squeezer's beta test programme uses the normal Google mechanism for enrolling and managing beta testers (https://support.google.com/googleplay/android-developer/answer/3131213?hl=en).
+The companion app is not on Google Play, so there is no Play beta programme.
+Early builds are published through the self-hosted **dev F-Droid repo**:
 
-To join the Squeezer beta test programme:
+1. Install the [F-Droid](https://f-droid.org/) client.
+2. Settings → Repositories → add `https://osmiumsound.it/fdroid/dev/repo`.
+3. Install / update **Osmium Sound Companion** from that repo. The stable repo
+   (`https://osmiumsound.it/fdroid/repo`) keeps working independently.
 
-- Opt in to receive beta versions of Squeezer by going to https://play.google.com/apps/testing/uk.org.ngo.squeezer and clicking the "Become a tester" button.
-
-You will receive beta versions of Squeezer before they are released to the general population.
+Dev builds correspond to `companion-vX.Y.Z-svilN` tags and are also attached as
+prereleases to the [GitHub Releases](https://github.com/adri6412/osmium-sound/releases?q=companion)
+page (sideloadable APK). They are not tested to the same standard as stable
+releases; report problems at https://github.com/adri6412/osmium-sound/issues.

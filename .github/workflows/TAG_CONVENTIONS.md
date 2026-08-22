@@ -1,66 +1,63 @@
-# Git Tag Conventions
+# Git Tag & Branch Conventions
 
-This document explains how to use git tags to trigger different GitHub Actions workflows.
+How tags trigger the GitHub Actions workflows, and how branches map onto the
+appliance's OTA release channels. Workflow details are in [README.md](README.md).
 
-## Tag Naming
+## Tag naming
 
-### Main App (Osmium Sound - Desktop/Electron)
-**Format**: `v<MAJOR>.<MINOR>.<PATCH>`
+| What | Format | Triggers | Notes |
+|---|---|---|---|
+| Appliance (kiosk + system + OS OTA bundles) | `v<MAJOR>.<MINOR>.<PATCH>` | `build-ui-ota.yml` | stable → **prod** channel |
+| Appliance dev build | `v<MAJOR>.<MINOR>.<PATCH>-dev.<N>` | `build-ui-ota.yml` (prerelease) | **dev** channel |
+| Appliance alpha build | `v<MAJOR>.<MINOR>.<PATCH>-dev.<N>-alpha<M>` | `build-ui-ota.yml` (prerelease) | **alpha** channel only |
+| Android companion | `companion-v<MAJOR>.<MINOR>.<PATCH>` | `build-companion-apk.yml` | APK + stable F-Droid repo |
+| Android companion dev build | `companion-v<MAJOR>.<MINOR>.<PATCH>-svil<N>` | `build-companion-apk.yml` (prerelease) | APK + dev F-Droid repo |
+| Install ISO | *(no tag trigger)* | `build-iso.yml` is manual; it takes the appliance tag as an input | ISO attached to that tag's Release |
 
-**Examples**:
-- `v1.0.0`
-- `v1.2.3`
-- `v2.5.0`
-
-**Triggers**:
-- ✅ `build-ui-ota.yml` - Builds OTA bundles for desktop app
-- ❌ `build-companion-apk.yml` - NOT triggered
-
-### Companion App (Osmium Sound Companion - Android)
-**Format**: `companion-v<MAJOR>.<MINOR>.<PATCH>`
-
-**Examples**:
-- `companion-v2.5.0`
-- `companion-v2.5.1`
-- `companion-v3.0.0`
-
-**Triggers**:
-- ✅ `build-companion-apk.yml` - Builds release APK
-- ❌ `build-ui-ota.yml` - NOT triggered
+`build-ui-ota.yml` ignores any tag containing `companion`; `build-companion-apk.yml`
+only fires on `companion-v*`. Tag names are case-sensitive.
 
 ## Branches & OTA channels
 
 - **`main` = production.** Stable tags `vX.Y.Z` are cut from here. They publish a
   normal GitHub Release, which the appliance sees via `GET /releases/latest`
-  (the **prod** channel).
+  (the **prod** channel, `ota/latest-prod.json`).
 - **`svil` = development.** Day-to-day work. Prerelease tags `vX.Y.Z-dev.N` are
   cut from here. Because the tag has a hyphen, `build-ui-ota.yml` marks the
   release as a **prerelease**, which `/releases/latest` ignores — so prod
   devices never receive it. A device set to the **dev** channel
-  (Settings → Updates → Sviluppo) tracks the newest release *including*
-  prereleases.
-- **`alpha` = private, ad hoc.** For trying your own experimental fixes on
-  your own device(s) *before* they're ready to be a real, shared `-dev.N`
-  build. `alpha` is the **only** branch releases are tagged from for this
-  channel (a process convention, not a CI-enforced gate — the workflow still
-  only looks at the tag name). Tag format is **nested on top of the dev
-  build you started from**: if `svil` is at `v2.5.21-dev.50`, your first
-  attempt on `alpha` is `v2.5.21-dev.50-alpha1`, the next `-alpha2`, etc.
-  `_fetch_github_api_release`'s `dev` branch explicitly excludes any tag
-  matching `-alpha\d+$`, so these never reach a `dev`-channel device. The
-  **alpha** option itself only appears in Settings on a device where
-  `/etc/hifi-player/ota-alpha-unlocked` has been created by hand (root/SSH,
-  `hifi-ota-alpha-toggle.sh enable` — see the script's header; it is
-  deliberately not reachable via the network API). Once a fix is validated
-  on `alpha`, merge/cherry-pick it into `svil` and cut the next real
-  `v2.5.21-dev.51` there for the shared dev channel.
+  (Settings → Updates) tracks the newest release *including* prereleases
+  (`ota/latest-dev.json`).
+- **`alpha` = private, ad hoc.** For trying experimental fixes on your own
+  device(s) *before* they're ready to be a shared `-dev.N` build. `alpha` is
+  the **only** branch releases are tagged from for this channel (a process
+  convention, not a CI-enforced gate — the workflow still only looks at the tag
+  name). Tag format is **nested on top of the dev build you started from**: if
+  `svil` is at `v2.5.21-dev.118`, your first attempt on `alpha` is
+  `v2.5.21-dev.118-alpha1`, the next `-alpha2`, etc. `api_server.py`'s dev
+  lookup explicitly excludes any tag matching `-alpha\d+$`, so these never
+  reach a `dev`-channel device; the manifest goes to `ota/latest-alpha.json`.
+  The **alpha** option only appears in Settings on a device where
+  `/etc/hifi-player/ota-alpha-unlocked` exists (`hifi-ota-alpha-toggle.sh enable`
+  as root — deliberately not reachable via the network API). Once a fix is
+  validated on `alpha`, merge/cherry-pick it into `svil` and cut the next real
+  `v2.5.21-dev.119` there for the shared dev channel.
+- **`gh-pages`** is generated (website, `ota/` manifests, `fdroid/` repos) —
+  never edit it by hand.
 
 Promotion: PR `svil` → `main`, then tag a stable `vX.Y.Z` on `main`.
 
-Versioning stays patch-incremental: iterate `v2.5.7-dev.1`, `v2.5.7-dev.2`, …
-on `svil`, then promote to the stable `v2.5.7` on `main`.
+Versioning stays **patch-incremental**: iterate `v2.5.7-dev.1`, `v2.5.7-dev.2`,
+… on `svil`, then promote to the stable `v2.5.7` on `main`. Never jump
+versions. Before picking the next number, check `gh release list` rather than
+`git tag` alone — a tag can exist without a published Release, and tag dates
+are not a reliable ordering.
 
-## Release Process
+Keep `main` contained in `alpha`/`svil` (`git merge-base --is-ancestor
+origin/main origin/alpha`) before cutting a dev/alpha tag, otherwise the next
+prerelease silently re-ships whatever `main` removed.
+
+## Release recipes
 
 ### Development build (prerelease, dev channel)
 
@@ -68,163 +65,77 @@ on `svil`, then promote to the stable `v2.5.7` on `main`.
 git checkout svil
 # ...commit work...
 git push origin svil
-git tag -a v2.5.7-dev.1 -m "dev build"
-git push origin v2.5.7-dev.1   # → build-ui-ota.yml publishes a PRERELEASE
+git tag -a v2.5.21-dev.119 -m "dev build"
+git push origin v2.5.21-dev.119   # → build-ui-ota.yml publishes a PRERELEASE
 ```
 
-### Alpha build (private, ad hoc — own devices only)
+### Alpha build (private — own devices only)
 
 ```bash
 git checkout alpha
 git merge svil                 # stay based on the dev build you're testing against
 # ...commit your experimental fix...
 git push origin alpha
-git tag -a v2.5.21-dev.50-alpha1 -m "alpha: try XYZ fix"
-git push origin v2.5.21-dev.50-alpha1   # → PRERELEASE, invisible to the dev channel
+git tag -a v2.5.21-dev.118-alpha1 -m "alpha: try XYZ fix"
+git push origin v2.5.21-dev.118-alpha1   # → PRERELEASE, invisible to the dev channel
 
 # on the device you want to test with (root/SSH, once):
 hifi-ota-alpha-toggle.sh enable
 # now Settings → Updates shows an "Alpha" option — select it and check for updates
 ```
 
-### Main App Release (Desktop/Electron)
+### Stable appliance release (prod)
 
 ```bash
-# 1. Update version in src or main app
-# Update package.json or VERSION file
-
-# 2. Commit changes
-git add -A
-git commit -m "chore(release): v1.2.3"
-git push origin main
-
-# 3. Create and push tag (NO COMPANION PREFIX)
-git tag -a v1.2.3 -m "Release v1.2.3"
-git push origin v1.2.3
-
-# 4. GitHub Actions automatically:
-#    - Runs build-ui-ota.yml
-#    - Builds UI and OS OTA bundles
-#    - Creates GitHub Release
-#    - Attaches OTA bundles
+# 1. bump "version" in package.json on main (surgical one-line edit)
+# 2. merge svil → main (PR), then:
+git checkout main && git pull
+git tag -a v2.5.22 -m "Release v2.5.22"
+git push origin v2.5.22
+# → build-ui-ota.yml builds + signs UI/System/OS bundles, creates the Release,
+#   updates ota/latest-prod.json
+# 3. optionally: Actions → "Build HiFi Player ISO (manual)" with tag v2.5.22
+#    (gh workflow run build-iso.yml --ref v2.5.22 -f tag=v2.5.22), then publish
+#    the ISO + sidecars + latest.json to file.osmiumsound.it
 ```
 
-### Companion App Release (Android)
+Release titles are the bare tag (`v2.5.22`), and the body is the auto-generated
+`CHANGELOG_RELEASE.md`.
+
+### Companion app release (Android)
 
 ```bash
-# 1. Update version in HiFiMediaPlayer/build.gradle
-# versionCode += 1
-# versionName = "2.5.1"
-
+# 1. Update versionCode (+1) and versionName in
+#    android-companion/HiFiMediaPlayer/build.gradle — the versionName must
+#    match a case in publishTrack(), or every Gradle build fails.
 # 2. Test locally
-./gradlew clean assembleDebug
-./gradlew test
-
-# 3. Commit changes
-cd android-companion
-git add HiFiMediaPlayer/build.gradle
-git commit -m "chore(release): v2.5.1"
-git push origin main
-
-# 4. Create and push tag (WITH COMPANION PREFIX!)
-git tag -a companion-v2.5.1 -m "Osmium Sound Companion v2.5.1 - Release notes..."
-git push origin companion-v2.5.1
-
-# 5. GitHub Actions automatically:
-#    - Runs build-companion-apk.yml
-#    - Builds release APK
-#    - Signs with keystore
-#    - Creates GitHub Release
-#    - Attaches APK
+cd android-companion && bash gradlew clean assembleDebug test lintVitalRelease
+# 3. Commit, then tag WITH the companion prefix:
+git tag -a companion-v1.0.8 -m "companion 1.0.8: ..."
+git push origin companion-v1.0.8
+# → build-companion-apk.yml builds + signs the APK, creates the Release,
+#   and (stable tags only) updates the F-Droid repo.
+# Dev builds from svil: companion-v1.0.8-svil1 → prerelease + dev F-Droid repo.
 ```
 
-## Workflow Isolation
+## If you make a mistake
 
-### build-deb.yml
-- **Trigger**: Push of tag matching `v*`
-- **Condition**: Skip if tag contains `companion`
-- **Result**: Builds .deb package and publishes to GitHub Release
-- **Artifact retention**: Tag releases: published to Release; manual runs: 7 days
-
-### build-ui-ota.yml
-- **Trigger**: Push of tag matching `v*`
-- **Condition**: Skip if tag contains `companion`
-- **Result**: Builds desktop app OTA bundles
-
-### build-companion-apk.yml
-- **Trigger**: Push of tag matching `companion-v*`
-- **Condition**: Must start with `companion-` prefix
-- **Result**: Builds Android APK
-
-### build-iso.yml
-- **Trigger**: Manual (`workflow_dispatch`)
-- **No automatic triggers**
-
-## Tag History Reference
-
-```
-v1.0.0          → Desktop app v1.0.0
-v1.0.1          → Desktop app v1.0.1
-v1.1.0          → Desktop app v1.1.0
-companion-v2.5.0 → Companion app v2.5.0
-companion-v2.5.1 → Companion app v2.5.1
-v2.0.0          → Desktop app v2.0.0
-companion-v3.0.0 → Companion app v3.0.0
+```bash
+git tag -d companion-v1.0.8              # delete local tag
+git push origin :companion-v1.0.8        # delete remote tag
+# recreate and push again
 ```
 
-## Important Notes
+A deleted Release whose tag still exists can be recreated by re-running the
+workflow run for that tag (`gh run rerun <id>`).
 
-1. **Always use correct prefix**: 
-   - Main app: no prefix (`v1.2.3`)
-   - Companion app: with prefix (`companion-v2.5.0`)
+## Monitoring
 
-2. **Tag naming is case-sensitive**: 
-   - `companion-v2.5.0` ✅
-   - `Companion-v2.5.0` ❌
-   - `companion-V2.5.0` ❌
-
-3. **Release notes in tag message**:
-   ```bash
-   git tag -a companion-v2.5.0 -m "Release notes here..."
-   ```
-
-4. **If you make a mistake**:
-   ```bash
-   # Delete local tag
-   git tag -d companion-v2.5.0
-   
-   # Delete remote tag
-   git push origin :companion-v2.5.0
-   
-   # Recreate tag
-   git tag -a companion-v2.5.0 -m "..."
-   git push origin companion-v2.5.0
-   ```
-
-## Monitoring Workflows
-
-Watch workflow progress:
-1. GitHub → Actions
-2. Select the workflow
-3. Click the run
-4. View logs in real-time
-
-## Troubleshooting
-
-**Problem**: Wrong workflow triggered
-- **Solution**: Check tag name - must have correct prefix
-
-**Problem**: Workflow didn't trigger
-- **Solution**: Verify tag matches pattern (`v*` or `companion-v*`)
-
-**Problem**: Tag created but workflow didn't start
-- **Solution**: 
-  1. Check tag matches pattern
-  2. Wait 5-10 seconds (GitHub queue)
-  3. Refresh Actions page
-  4. Check workflow's `if:` condition
+GitHub → Actions → select the workflow → open the run. If a tag didn't trigger
+anything, check that it matches the pattern (`v*` vs `companion-v*`), that it
+was actually pushed (`git push origin <tag>` — `--tags` pushes everything, avoid
+it), and the workflow's `if:` conditions.
 
 ---
 
-**Last Updated**: 2026-06-21  
-**Version**: 1.0
+**Last updated:** 2026-08-22
