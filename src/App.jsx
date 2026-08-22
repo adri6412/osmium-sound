@@ -39,8 +39,9 @@ const isLocalPlayerPlaying = async () => {
 };
 
 const AppContent = () => {
-  // Boot intro: a 5s logo animation shown over everything at startup, then
+  // Boot intro: the logo animation shown over everything at startup, then
   // faded out to reveal the UI (which mounts/loads underneath meanwhile).
+  // Its length lives in the clip itself — see BootIntro.jsx.
   const [showIntro, setShowIntro] = React.useState(true);
   const [introFading, setIntroFading] = React.useState(false);
   // Run the compositor at 60 FPS while the intro animates (smooth on the x86
