@@ -23,6 +23,10 @@
 #                     read the PEM from stdin. If omitted, the env var
 #                     OTA_SIGNING_KEY is used (either a path or the PEM text
 #                     itself, matching the GitHub Actions secret of that name).
+#                     Not needed when the ISO already ships a valid signature
+#                     (see below) — a Release ISO is signed by CI, so publishing
+#                     one to S3 needs no key at all.
+#   --resign          Ignore any existing signature and sign afresh with --key.
 #   --tag <vX.Y.Z>    Release tag for latest.json. Default: parsed from the ISO
 #                     name (hifi-player-<tag>.iso).
 #   --base <url>      Base URL the assets will live under.
@@ -53,12 +57,20 @@ info() { printf '\033[36m•\033[0m %s\n' "$*" >&2; }
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd -- "$SCRIPT_DIR/.." && pwd)"
 
+# One cleanup trap for all temp paths; empty until the branches that need them
+# assign, so it is safe under `set -u` whichever path runs.
+KEYPEM=""
+LINKDIR=""
+cleanup() { [ -n "$KEYPEM" ] && rm -f "$KEYPEM"; [ -n "$LINKDIR" ] && rm -rf "$LINKDIR"; return 0; }
+trap cleanup EXIT
+
 ISO=""
 KEY_SRC="${OTA_SIGNING_KEY:-}"
 TAG=""
 BASE="https://file.osmiumsound.it"
 PUBKEY="$REPO_ROOT/flasher/assets/ota-pubkey.pem"
 OUT=""
+RESIGN=0
 
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -67,7 +79,8 @@ while [ $# -gt 0 ]; do
     --base)   BASE="${2:?--base needs a value}"; shift 2 ;;
     --pubkey) PUBKEY="${2:?--pubkey needs a value}"; shift 2 ;;
     --out)    OUT="${2:?--out needs a value}"; shift 2 ;;
-    -h|--help) sed -n '2,50p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    --resign) RESIGN=1; shift ;;
+    -h|--help) sed -n '2,55p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
     --) shift; break ;;
     -*) die "unknown option: $1 (see --help)" ;;
     *)  [ -z "$ISO" ] || die "unexpected extra argument: $1"; ISO="$1"; shift ;;
@@ -102,29 +115,6 @@ fi
 info "tag: $TAG"
 info "iso: $ISO_DIR/$ISO_NAME"
 
-# ── Resolve the signing key into a temp PEM (never left on disk). Accept a
-#    file path, "-" for stdin, or the PEM text itself (the CI-secret form).
-KEYPEM="$(mktemp)"; trap 'rm -f "$KEYPEM"' EXIT
-if [ -z "$KEY_SRC" ]; then
-  die "no signing key. Pass --key <pem|-> or set OTA_SIGNING_KEY (path or PEM text)."
-elif [ "$KEY_SRC" = "-" ]; then
-  cat > "$KEYPEM"
-  info "signing key: read from stdin"
-elif [ -f "$KEY_SRC" ]; then
-  cat -- "$KEY_SRC" > "$KEYPEM"
-  info "signing key: $KEY_SRC"
-elif printf '%s' "$KEY_SRC" | grep -q 'BEGIN .*PRIVATE KEY'; then
-  printf '%s\n' "$KEY_SRC" > "$KEYPEM"
-  info "signing key: from OTA_SIGNING_KEY (inline PEM)"
-else
-  die "signing key '$KEY_SRC' is neither a file nor inline PEM text"
-fi
-
-# Must be an Ed25519 private key — the flasher/OTA scheme is Ed25519-only, and
-# a wrong key type would sign happily and then fail verification below.
-openssl pkey -in "$KEYPEM" -text -noout 2>/dev/null | grep -qi 'ED25519' \
-  || die "the signing key is not an Ed25519 private key"
-
 # ── Output dir.
 [ -n "$OUT" ] || OUT="publish-$TAG"
 mkdir -p -- "$OUT"
@@ -133,24 +123,76 @@ SHA="$OUT/$ISO_NAME.sha256"
 SIG="$OUT/$ISO_NAME.sha256.sig"
 JSON="$OUT/latest.json"
 
-# ── Sidecar: "<hex>  <basename>" — byte-identical to `sha256sum <iso>` run in
-#    the ISO's own directory, so the name the flasher checks is the bare
-#    basename (it compares path.basename(signedName) === iso asset name).
-( cd -- "$ISO_DIR" && sha256_of "$ISO_NAME" ) > "$SHA"
-info "sha256: $(cut -d' ' -f1 < "$SHA")"
+# ── Reuse an existing valid signature when one already sits next to the ISO
+#    (a Release ISO is signed by CI with the offline key, and downloaded with
+#    its .sha256/.sha256.sig). No private key is needed in that case — which is
+#    the whole point when the real key is offline. Fall through to signing only
+#    when the pair is absent, doesn't verify, or --resign was asked for.
+SRC_SHA="$ISO.sha256"
+SRC_SIG="$ISO.sha256.sig"
+REUSE=0
+if [ "$RESIGN" -ne 1 ] && [ -f "$SRC_SHA" ] && [ -f "$SRC_SIG" ]; then
+  if openssl pkeyutl -verify -pubin -inkey "$PUBKEY" -rawin -in "$SRC_SHA" -sigfile "$SRC_SIG" >/dev/null 2>&1; then
+    REUSE=1
+  else
+    warn "existing $ISO_NAME.sha256.sig does not verify against $(basename "$PUBKEY") — re-signing"
+  fi
+fi
 
-# ── Detached Ed25519 signature over the RAW BYTES of the sidecar file.
-#    (openssl pkeyutl -rawin: Ed25519 is one-shot over the whole message —
-#    exactly what crypto.verify(null, sidecar, key, sig) checks in image.js.)
-openssl pkeyutl -sign -inkey "$KEYPEM" -rawin -in "$SHA" -out "$SIG"
-
-# ── Verify NOW, against the key the flasher uses. A signature that doesn't
-#    verify here would be refused on-device, so this is a hard gate.
-if openssl pkeyutl -verify -pubin -inkey "$PUBKEY" -rawin -in "$SHA" -sigfile "$SIG" >/dev/null 2>&1; then
-  info "signature verifies against $(basename "$PUBKEY") ✓"
+if [ "$REUSE" -eq 1 ]; then
+  # Trust the signed sidecar's name/format, but confirm the ISO on disk really
+  # is the one it signs (guards a truncated/corrupt download).
+  cp -- "$SRC_SHA" "$SHA"
+  cp -- "$SRC_SIG" "$SIG"
+  want="$(cut -d' ' -f1 < "$SHA" | tr 'A-F' 'a-f')"
+  got="$( ( cd -- "$ISO_DIR" && sha256_of "$ISO_NAME" ) | cut -d' ' -f1 )"
+  [ "$want" = "$got" ] || die "the ISO does not match its .sha256 ($got != $want) — corrupt download?"
+  info "sha256: $want"
+  info "reusing the shipped signature (verifies against $(basename "$PUBKEY")) ✓ — no key needed"
 else
-  die "signature does NOT verify against $PUBKEY — the flasher would reject this ISO.
+  # ── Resolve the signing key into a temp PEM (never left on disk). Accept a
+  #    file path, "-" for stdin, or the PEM text itself (the CI-secret form).
+  KEYPEM="$(mktemp)"
+  if [ -z "$KEY_SRC" ]; then
+    die "no signing key, and no valid signature ships with the ISO.
+       Pass --key <pem|-> or set OTA_SIGNING_KEY (path or PEM text)."
+  elif [ "$KEY_SRC" = "-" ]; then
+    cat > "$KEYPEM"
+    info "signing key: read from stdin"
+  elif [ -f "$KEY_SRC" ]; then
+    cat -- "$KEY_SRC" > "$KEYPEM"
+    info "signing key: $KEY_SRC"
+  elif printf '%s' "$KEY_SRC" | grep -q 'BEGIN .*PRIVATE KEY'; then
+    printf '%s\n' "$KEY_SRC" > "$KEYPEM"
+    info "signing key: from OTA_SIGNING_KEY (inline PEM)"
+  else
+    die "signing key '$KEY_SRC' is neither a file nor inline PEM text"
+  fi
+
+  # Must be an Ed25519 private key — the flasher/OTA scheme is Ed25519-only, and
+  # a wrong key type would sign happily and then fail verification below.
+  openssl pkey -in "$KEYPEM" -text -noout 2>/dev/null | grep -qi 'ED25519' \
+    || die "the signing key is not an Ed25519 private key"
+
+  # ── Sidecar: "<hex>  <basename>" — byte-identical to `sha256sum <iso>` run in
+  #    the ISO's own directory, so the name the flasher checks is the bare
+  #    basename (it compares path.basename(signedName) === iso asset name).
+  ( cd -- "$ISO_DIR" && sha256_of "$ISO_NAME" ) > "$SHA"
+  info "sha256: $(cut -d' ' -f1 < "$SHA")"
+
+  # ── Detached Ed25519 signature over the RAW BYTES of the sidecar file.
+  #    (openssl pkeyutl -rawin: Ed25519 is one-shot over the whole message —
+  #    exactly what crypto.verify(null, sidecar, key, sig) checks in image.js.)
+  openssl pkeyutl -sign -inkey "$KEYPEM" -rawin -in "$SHA" -out "$SIG"
+
+  # ── Verify NOW, against the key the flasher uses. A signature that doesn't
+  #    verify here would be refused on-device, so this is a hard gate.
+  if openssl pkeyutl -verify -pubin -inkey "$PUBKEY" -rawin -in "$SHA" -sigfile "$SIG" >/dev/null 2>&1; then
+    info "signature verifies against $(basename "$PUBKEY") ✓"
+  else
+    die "signature does NOT verify against $PUBKEY — the flasher would reject this ISO.
        The signing key must be the private counterpart of that public key."
+  fi
 fi
 
 # ── Manifest. Reuse the repo's generator when present so latest.json stays in
@@ -159,7 +201,7 @@ GEN="$REPO_ROOT/.github/scripts/make-iso-manifest.py"
 if [ -f "$GEN" ] && command -v python3 >/dev/null; then
   # The generator wants the three assets beside the ISO name it's given; point
   # it at the ISO while the sidecars live in $OUT, via a scratch dir of links.
-  LINKDIR="$(mktemp -d)"; trap 'rm -f "$KEYPEM"; rm -rf "$LINKDIR"' EXIT
+  LINKDIR="$(mktemp -d)"
   ln -sf -- "$ISO_DIR/$ISO_NAME" "$LINKDIR/$ISO_NAME"
   ln -sf -- "$SHA" "$LINKDIR/$ISO_NAME.sha256"
   ln -sf -- "$SIG" "$LINKDIR/$ISO_NAME.sha256.sig"
