@@ -34,7 +34,6 @@ const busy = ref(false);
 const open = ref('');
 const openAdd = ref('');     // 'smb' | 'internal' | 'local'
 const openShare = ref('');   // 'local'
-const infoFor = ref(null);   // share whose connection details are expanded
 function toggle(k) { open.value = open.value === k ? '' : k; }
 function toggleAdd(k) { openAdd.value = openAdd.value === k ? '' : k; }
 function toggleShare(k) { openShare.value = openShare.value === k ? '' : k; }
@@ -229,6 +228,32 @@ async function regenSmb() {
   loadSmbCard();
 }
 const shares = computed(() => (smbCard.value && smbCard.value.shares) || []);
+
+// Address to hand out for the shares: the IP when we know it (works even
+// where mDNS doesn't), with the .local name as the fallback that survives a
+// DHCP change. Both are shown — the second one only as a hint.
+const smbHost = computed(() => (smbCard.value && (smbCard.value.ip || smbCard.value.host)) || '');
+const smbAltHost = computed(() => {
+  const c = smbCard.value || {};
+  return c.ip && c.host && c.ip !== c.host ? c.host : '';
+});
+function winPath(name, host) { return `\\\\${host || smbHost.value}\\${name}`; }
+function macPath(name, host) { return `smb://${host || smbHost.value}/${name}`; }
+
+// ── "How do I mount this?" popup (Windows / macOS) ────────────────────
+const howtoShare = ref(null);      // share object, null = closed
+const howtoOs = ref('win');        // 'win' | 'mac'
+
+const howtoSteps = computed(() => {
+  const s = howtoShare.value;
+  if (!s) return [];
+  const win = howtoOs.value === 'win';
+  const vars = { path: win ? winPath(s.name) : macPath(s.name), name: s.name };
+  const keys = win
+    ? ['smbHowtoWin1', 'smbHowtoWin2', 'smbHowtoWin3']
+    : ['smbHowtoMac1', 'smbHowtoMac2', 'smbHowtoMac3', 'smbHowtoMac4'];
+  return keys.map((k) => t(`settings.sources.${k}`, vars));
+});
 
 // ── Format wizard (single instance — one disk at a time) ──────────────
 const wizardDisk = ref(null);
@@ -543,18 +568,21 @@ onUnmounted(() => {
         <p class="muted">{{ t('settings.sources.shareHint') }}</p>
         <p v-if="smbCard && !smbCard.installed" class="sub" style="color: var(--danger);">{{ t('settings.sources.needOsUpdate') }}</p>
         <template v-else-if="shares.length">
+          <!-- The addresses are what people open this band for, so they are on
+               screen straight away; Info only adds the step-by-step. -->
           <div v-for="s in shares" :key="s.source_id" class="item">
             <div class="between">
               <span>{{ s.name }}</span>
-              <button class="secondary fit" @click="infoFor = infoFor === s.source_id ? null : s.source_id">
+              <button class="secondary fit" @click="howtoShare = s">
                 {{ t('settings.sources.smbInfo') }}
               </button>
             </div>
-            <div v-if="infoFor === s.source_id" class="muted" style="margin-top: 6px; word-break: break-all;">
-              <div v-if="smbCard.ip">{{ '\\\\' + smbCard.ip + '\\' + s.name }}</div>
-              <div>{{ '\\\\' + smbCard.host + '\\' + s.name }}</div>
+            <div class="pathlist">
+              <span class="muted">Windows</span><span class="mono">{{ winPath(s.name) }}</span>
+              <span class="muted">macOS</span><span class="mono">{{ macPath(s.name) }}</span>
             </div>
           </div>
+          <p v-if="smbAltHost" class="muted" style="margin: 10px 0 0;">{{ t('settings.sources.smbAltHostHint', { host: smbAltHost }) }}</p>
           <div class="row" style="margin-top: 10px;">
             <span class="muted">{{ t('settings.sources.smbShareUser') }}: {{ smbCard.username }}</span>
             <span class="muted">{{ t('settings.sources.smbSharePass') }}: {{ smbCard.password }}</span>
@@ -585,6 +613,38 @@ onUnmounted(() => {
     </div>
 
     <div v-if="msg" class="msg" :class="{ err }">{{ msg }}</div>
+
+    <!-- How to mount the share on a computer -->
+    <div v-if="howtoShare" class="overlay" @click.self="howtoShare = null">
+      <div class="card" style="width: 470px; max-width: calc(100vw - 32px); max-height: 84vh; overflow-y: auto;">
+        <h3><span class="dot"></span>{{ t('settings.sources.smbHowtoTitle') }}</h3>
+        <p class="sub">{{ t('settings.sources.smbHowtoIntro', { name: howtoShare.name }) }}</p>
+
+        <div class="seg" style="margin-bottom: 12px;">
+          <button :class="{ active: howtoOs === 'win' }" @click="howtoOs = 'win'">Windows</button>
+          <button :class="{ active: howtoOs === 'mac' }" @click="howtoOs = 'mac'">macOS</button>
+        </div>
+
+        <div class="pathlist">
+          <span class="muted">{{ t('settings.sources.smbHowtoPath') }}</span>
+          <span class="mono">{{ howtoOs === 'win' ? winPath(howtoShare.name) : macPath(howtoShare.name) }}</span>
+          <template v-if="smbAltHost">
+            <span class="muted">{{ t('settings.sources.smbHowtoPathAlt') }}</span>
+            <span class="mono">{{ howtoOs === 'win' ? winPath(howtoShare.name, smbAltHost) : macPath(howtoShare.name, smbAltHost) }}</span>
+          </template>
+          <span class="muted">{{ t('settings.sources.smbShareUser') }}</span><span class="mono">{{ smbCard.username }}</span>
+          <span class="muted">{{ t('settings.sources.smbSharePass') }}</span><span class="mono">{{ smbCard.password }}</span>
+        </div>
+
+        <ol class="steps">
+          <li v-for="(step, i) in howtoSteps" :key="i">{{ step }}</li>
+        </ol>
+        <p class="muted" style="margin: 10px 0 0;">
+          {{ howtoOs === 'win' ? t('settings.sources.smbRegenerateHint') : t('settings.sources.smbHowtoMacTip') }}
+        </p>
+        <button style="width: 100%; margin-top: 16px;" @click="howtoShare = null">{{ t('common.close') }}</button>
+      </div>
+    </div>
 
     <!-- Format wizard -->
     <div v-if="wizardDisk" class="overlay">

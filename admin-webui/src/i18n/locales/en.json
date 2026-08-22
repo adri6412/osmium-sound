@@ -285,7 +285,20 @@
       "shareCount": "{count} shared",
       "shareLocal": "Share a local folder",
       "shareThisFolder": "Share this folder",
-      "smbInfo": "Info"
+      "smbInfo": "Info",
+      "smbAltHostHint": "If the player's IP address changes, use the name {host} in place of the address.",
+      "smbHowtoTitle": "Connect to this shared folder",
+      "smbHowtoIntro": "Copy music onto \"{name}\" from any computer on the same network. The player must be switched on.",
+      "smbHowtoPath": "Address",
+      "smbHowtoPathAlt": "Or by name",
+      "smbHowtoWin1": "Open File Explorer, click the address bar, type {path} and press Enter.",
+      "smbHowtoWin2": "When Windows asks for credentials, enter the username and password above and tick \"Remember my credentials\".",
+      "smbHowtoWin3": "To keep it handy, right-click the folder and choose \"Map network drive…\", ticking \"Reconnect at sign-in\": it will then appear under This PC at every start-up.",
+      "smbHowtoMac1": "In the Finder choose Go → Connect to Server (⌘K).",
+      "smbHowtoMac2": "Type {path} and click Connect.",
+      "smbHowtoMac3": "Choose \"Registered User\", enter the username and password above, and tick \"Remember this password in my keychain\".",
+      "smbHowtoMac4": "The folder opens in the Finder and stays under Locations in the sidebar.",
+      "smbHowtoMacTip": "To mount it automatically at every login, add the mounted volume under System Settings → General → Login Items."
     },
     "dsp": {
       "unavailable": "DSP is not available on this device.",

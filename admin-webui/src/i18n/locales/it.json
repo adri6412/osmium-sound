@@ -285,7 +285,20 @@
       "shareCount": "{count} condivise",
       "shareLocal": "Condividi una cartella locale",
       "shareThisFolder": "Condividi questa cartella",
-      "smbInfo": "Info"
+      "smbInfo": "Info",
+      "smbAltHostHint": "Se l'indirizzo IP del lettore cambia, usa il nome {host} al posto dell'indirizzo.",
+      "smbHowtoTitle": "Collegarsi a questa cartella condivisa",
+      "smbHowtoIntro": "Copia la musica su «{name}» da un computer sulla stessa rete. Il lettore deve essere acceso.",
+      "smbHowtoPath": "Indirizzo",
+      "smbHowtoPathAlt": "Oppure col nome",
+      "smbHowtoWin1": "Apri Esplora file, clicca sulla barra degli indirizzi, scrivi {path} e premi Invio.",
+      "smbHowtoWin2": "Quando Windows chiede le credenziali, inserisci utente e password qui sopra e spunta «Memorizza credenziali».",
+      "smbHowtoWin3": "Per averla sempre a portata di mano, clicca con il tasto destro sulla cartella e scegli «Connetti unità di rete…», spuntando «Riconnetti all'accesso»: la ritrovi in Questo PC a ogni avvio.",
+      "smbHowtoMac1": "Nel Finder scegli Vai → Connessione al server (⌘K).",
+      "smbHowtoMac2": "Scrivi {path} e clicca Connetti.",
+      "smbHowtoMac3": "Scegli «Utente registrato», inserisci utente e password qui sopra e spunta «Ricorda questa password nel portachiavi».",
+      "smbHowtoMac4": "La cartella si apre nel Finder e resta sotto Posizioni nella barra laterale.",
+      "smbHowtoMacTip": "Per montarla automaticamente a ogni accesso, aggiungi il volume montato in Impostazioni di Sistema → Generali → Elementi login."
     },
     "dsp": {
       "unavailable": "DSP non disponibile su questo dispositivo.",
