@@ -67,7 +67,7 @@ trade-offs:
 Instead, report it privately using one of these methods:
 
 - Open a [GitHub Security Advisory](https://github.com/adri6412/osmium-sound/security/advisories/new) (preferred — keeps the report private until resolved).
-- Email info@adrianofrongillo.ovh with details of the issue.
+- Email info@osmiumsound.it with details of the issue.
 
 Please include as much of the following as you can:
 
