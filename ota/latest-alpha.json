@@ -1,41 +1,41 @@
 {
-  "tag_name": "v2.5.21-dev.117-alpha3",
-  "name": "v2.5.21-dev.117-alpha3",
-  "body": "## What's new in v2.5.21-dev.117-alpha3\n\n- fix(sorgenti): una chiavetta staccata a forza sparisce da sola, anche da Lyrion\n",
+  "tag_name": "v2.5.21-dev.117-alpha4",
+  "name": "v2.5.21-dev.117-alpha4",
+  "body": "## What's new in v2.5.21-dev.117-alpha4\n\n- feat(riproduzione): l'orologio in Now Playing spegne lo schermo finch\u00e9 non lo tocchi\n- fix(sorgenti): le impostazioni di Lyrion si aprono anche da Tailscale\n- chore(sorgenti): attesa prima di dare per staccata una USB da 60 a 30 secondi\n",
   "assets": [
     {
-      "name": "hifi-ui-v2.5.21-dev.117-alpha3.tar.gz",
-      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.117-alpha3/hifi-ui-v2.5.21-dev.117-alpha3.tar.gz",
-      "size": 133501766
+      "name": "hifi-ui-v2.5.21-dev.117-alpha4.tar.gz",
+      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.117-alpha4/hifi-ui-v2.5.21-dev.117-alpha4.tar.gz",
+      "size": 133500297
     },
     {
-      "name": "hifi-ui-v2.5.21-dev.117-alpha3.tar.gz.sha256",
-      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.117-alpha3/hifi-ui-v2.5.21-dev.117-alpha3.tar.gz.sha256",
+      "name": "hifi-ui-v2.5.21-dev.117-alpha4.tar.gz.sha256",
+      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.117-alpha4/hifi-ui-v2.5.21-dev.117-alpha4.tar.gz.sha256",
       "size": 104
     },
     {
-      "name": "hifi-system-v2.5.21-dev.117-alpha3.tar.gz",
-      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.117-alpha3/hifi-system-v2.5.21-dev.117-alpha3.tar.gz",
-      "size": 406950
+      "name": "hifi-system-v2.5.21-dev.117-alpha4.tar.gz",
+      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.117-alpha4/hifi-system-v2.5.21-dev.117-alpha4.tar.gz",
+      "size": 407863
     },
     {
-      "name": "hifi-system-v2.5.21-dev.117-alpha3.tar.gz.sha256",
-      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.117-alpha3/hifi-system-v2.5.21-dev.117-alpha3.tar.gz.sha256",
+      "name": "hifi-system-v2.5.21-dev.117-alpha4.tar.gz.sha256",
+      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.117-alpha4/hifi-system-v2.5.21-dev.117-alpha4.tar.gz.sha256",
       "size": 108
     },
     {
-      "name": "hifi-os-v2.5.21-dev.117-alpha3.tar.gz",
-      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.117-alpha3/hifi-os-v2.5.21-dev.117-alpha3.tar.gz",
-      "size": 1234194
+      "name": "hifi-os-v2.5.21-dev.117-alpha4.tar.gz",
+      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.117-alpha4/hifi-os-v2.5.21-dev.117-alpha4.tar.gz",
+      "size": 1234183
     },
     {
-      "name": "hifi-os-v2.5.21-dev.117-alpha3.tar.gz.sha256",
-      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.117-alpha3/hifi-os-v2.5.21-dev.117-alpha3.tar.gz.sha256",
+      "name": "hifi-os-v2.5.21-dev.117-alpha4.tar.gz.sha256",
+      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.117-alpha4/hifi-os-v2.5.21-dev.117-alpha4.tar.gz.sha256",
       "size": 104
     },
     {
-      "name": "hifi-os-v2.5.21-dev.117-alpha3.tar.gz.sha256.sig",
-      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.117-alpha3/hifi-os-v2.5.21-dev.117-alpha3.tar.gz.sha256.sig",
+      "name": "hifi-os-v2.5.21-dev.117-alpha4.tar.gz.sha256.sig",
+      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.21-dev.117-alpha4/hifi-os-v2.5.21-dev.117-alpha4.tar.gz.sha256.sig",
       "size": 64
     }
   ]
