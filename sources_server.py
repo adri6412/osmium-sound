@@ -3624,6 +3624,23 @@ for _local_path, _method, _remote_path in _SYSTEM_PROXY_ROUTES:
     )
 
 
+def _fs_usage(path):
+    """Total/free bytes of the filesystem holding `path`, or None when it
+    can't be stat'd (not mounted, gone). Reported per source by /api/sources
+    so "Active sources" can show how much room a disk still has without the
+    UI needing a second endpoint per row."""
+    if not path:
+        return None
+    try:
+        st = os.statvfs(path)
+    except (OSError, ValueError):
+        return None
+    total = st.f_blocks * st.f_frsize
+    if total <= 0:
+        return None
+    return {"total": total, "free": st.f_bavail * st.f_frsize}
+
+
 # ─────────────────────────── HTTP API ───────────────────────────────
 @app.route("/api/sources", methods=["GET"])
 def api_list():
@@ -3654,6 +3671,8 @@ def api_list():
             item["share"] = s.get("share")
         else:
             item["exists"] = os.path.isdir(s.get("path", ""))
+        if item.get("mounted") or item.get("exists"):
+            item["usage"] = _fs_usage(s.get("mountpoint") or s.get("path"))
         out.append(item)
     return jsonify({"sources": out, "paths": current_paths(state)})
 
@@ -3734,10 +3753,7 @@ def _auto_adopt_formatted(st):
             json.dump(st, f)
     except Exception:
         pass
-    try:
-        apply_to_lyrion(load_state())
-    except Exception as e:
-        print(f"[sources] auto-adopt apply_to_lyrion failed: {e}")
+    _lyrion_push_live(add_paths=[src["mountpoint"]])
 
 
 def _local_path_allowed(path):
@@ -3804,6 +3820,7 @@ def api_add_local():
         # same path with the box unchecked must also drop a share it had
         # from a previous add.
         regen_samba_shares()
+    _lyrion_push_live(add_paths=[path])
     return jsonify({"success": True})
 
 
@@ -3899,6 +3916,7 @@ def api_add_smb():
         state["sources"] = [s for s in state["sources"] if s.get("id") != sid]
         state["sources"].append(src)
         save_state(state)
+    _lyrion_push_live(add_paths=[src["mountpoint"]])
     return jsonify({"success": True, "message": msg})
 
 
@@ -3965,13 +3983,23 @@ def api_set_subpath(sid):
             if os.path.ismount(mountpoint) and not os.path.isdir(cand):
                 return _err("msg.folderMissing", 400, path=cand)
         src["subpath"] = subpath
-        # Staged, not yet pushed to Lyrion -- tell _sync_from_lyrion() to
-        # leave this source alone until the next Apply actually writes it,
-        # otherwise the very next GET /api/sources poll sees Lyrion still
-        # showing the old mediadir and "reconciles" this pick right back
-        # out before the user ever reaches Apply.
+        # Staged until the live push below lands -- tell _sync_from_lyrion()
+        # to leave this source alone in the meantime, otherwise a GET
+        # /api/sources poll landing in that window sees Lyrion still showing
+        # the old mediadir and "reconciles" this pick right back out.
         src["subpath_pending"] = True
         save_state(state)
+        target = current_paths({"sources": [src]})
+    # Swap the old mediadir for the newly picked subfolder right away: there
+    # is no Apply button to reach any more.
+    if _lyrion_push_live(drop_roots=[mountpoint] if mountpoint else (),
+                         add_paths=target):
+        with _lock:
+            fresh = load_state()
+            for s in fresh.get("sources", []):
+                if s.get("id") == sid:
+                    s.pop("subpath_pending", None)
+            save_state(fresh)
     return jsonify({"success": True, "message": _m("msg.subpathSaved")})
 
 
@@ -4158,7 +4186,10 @@ def api_internal_adopt():
         state["sources"].append(src)
         save_state(state)
         regen_samba_shares()
-    apply_to_lyrion(state)
+    # Live add rather than apply_to_lyrion(): that stops/starts
+    # lyrionmusicserver, which would cut off whatever is playing — exactly
+    # what adopting a second disk should not do.
+    _lyrion_push_live(add_paths=[src["mountpoint"]])
     return jsonify({"success": True, "source_id": src["id"], "share": share})
 
 
@@ -4465,24 +4496,71 @@ def _lyrion_rescan():
     _lyrion_request(["rescan"])
 
 
-def _lyrion_add_mediadir_live(path):
-    """Add `path` to Lyrion's live mediadirs and trigger a scan — without
-    stopping/starting lyrionmusicserver like apply_to_lyrion() does, so
-    whatever's currently playing keeps going. mediadirs is an array pref;
-    Lyrion's CLI can't set array values (JSON-RPC only — confirmed against
-    the Lyrion forum's own guidance for this exact pref), so this reads the
-    live list first and writes it back with `path` appended, rather than
-    trusting our own state: apply_to_lyrion()'s next full "Apply" run
-    recomputes mediadirs from state regardless, so this is just an eager
-    preview, never the source of truth. Raises on failure (e.g. Lyrion not
-    reachable) — callers treat that as non-fatal, since the folder still
-    gets picked up on the next manual "Apply & rescan library"."""
+def _lyrion_edit_mediadirs_live(drop_roots=(), add_paths=(), force_rescan=False):
+    """Drop every live mediadir at or under `drop_roots`, append everything in
+    `add_paths`, then rescan — in one read-modify-write round-trip and,
+    crucially, without stopping/starting lyrionmusicserver the way
+    apply_to_lyrion() does, so whatever is playing keeps going. mediadirs is
+    an array pref and Lyrion's CLI can't set array values (JSON-RPC only —
+    confirmed against the Lyrion forum's own guidance for this exact pref),
+    hence reading the live list first rather than trusting our own state.
+
+    This is what makes every edit in Music Sources take effect by itself:
+    there is no "Apply & rescan" button in the kiosk/web-admin UIs any more,
+    so adding, removing and re-pointing a source each push themselves through
+    here. Deliberately targeted rather than rewriting the whole list from
+    current_paths(): an unrelated source whose disk happens to be unplugged
+    keeps its folder in Lyrion instead of being scanned away to nothing.
+
+    Raises on failure (e.g. Lyrion not reachable) — callers treat that as
+    non-fatal, since /api/apply still recomputes mediadirs from state.
+    Returns True if the list actually changed."""
     current = _lyrion_request(["pref", "mediadirs", "?"]).get("_p2")
     if not isinstance(current, list):
         current = [current] if current else []
-    if path not in current:
-        _lyrion_request(["pref", "mediadirs", current + [path]])
-    _lyrion_rescan()
+    victims = [os.path.realpath(r) for r in drop_roots if r]
+    wanted = []
+    for d in current:
+        if not d:
+            continue
+        p = os.path.realpath(d)
+        if any(p == v or p.startswith(v + os.sep) for v in victims):
+            continue
+        wanted.append(d)
+    for path in add_paths:
+        if path and path not in wanted:
+            wanted.append(path)
+    changed = wanted != current
+    if changed:
+        _lyrion_request(["pref", "mediadirs", wanted])
+    if changed or force_rescan:
+        _lyrion_rescan()
+    return changed
+
+
+def _lyrion_push_live(drop_roots=(), add_paths=()):
+    """Best-effort _lyrion_edit_mediadirs_live() for the HTTP handlers. Music
+    Sources has no "Apply & rescan" button any more, so every mutation calls
+    this — and a Lyrion that is still starting (or not installed yet on a
+    fresh unit) must not turn an otherwise successful edit into an HTTP
+    error. /api/apply, still used by the first-run setup pages, rebuilds
+    mediadirs from state regardless, so nothing is lost when this misses."""
+    try:
+        _lyrion_edit_mediadirs_live(drop_roots=drop_roots, add_paths=add_paths,
+                                    force_rescan=bool(add_paths))
+        return True
+    except Exception as e:
+        print(f"[sources] live mediadirs update failed "
+              f"(drop={list(drop_roots)}, add={list(add_paths)}): {e}")
+        return False
+
+
+def _lyrion_add_mediadir_live(path):
+    """Add `path` to Lyrion's live mediadirs and trigger a scan. Always
+    rescans even when the folder is already listed — the other caller of this
+    is the CD ripper, where the destination folder is unchanged and it is the
+    new files inside it that need picking up."""
+    _lyrion_edit_mediadirs_live(add_paths=[path], force_rescan=True)
 
 
 def _source_lyrion_roots(src):
@@ -4512,23 +4590,7 @@ def _lyrion_remove_mediadir_live(roots):
 
     Raises on failure (Lyrion unreachable): the caller decides, and the next
     "Apply & rescan" recomputes mediadirs from state regardless."""
-    current = _lyrion_request(["pref", "mediadirs", "?"]).get("_p2")
-    if not isinstance(current, list):
-        current = [current] if current else []
-    victims = [r for r in roots if r]
-    keep = []
-    for d in current:
-        if not d:
-            continue
-        p = os.path.realpath(d)
-        if any(p == v or p.startswith(v + os.sep) for v in victims):
-            continue
-        keep.append(d)
-    if len(keep) == len(current):
-        return False
-    _lyrion_request(["pref", "mediadirs", keep])
-    _lyrion_rescan()
-    return True
+    return _lyrion_edit_mediadirs_live(drop_roots=roots)
 
 
 def _rip_watcher():
@@ -4719,6 +4781,7 @@ def api_internal_smb():
             "name": s.get("share") or "Musica",
             "mountpoint": s.get("mountpoint") or s.get("path"),
             "source_id": s.get("id"),
+            "type": s.get("type"),
         })
     password = ""
     if os.path.exists(SAMBA_CRED_FILE):
@@ -4925,7 +4988,7 @@ SOURCES_I18N = {
         "msg.sourceNotFound": "Source not found.",
         "msg.noChange": "No change needed.",
         "msg.subpathNotSupported": "This source type doesn't support a subfolder.",
-        "msg.subpathSaved": "Subfolder saved. Apply to update the library.",
+        "msg.subpathSaved": "Subfolder saved — the library is being updated.",
         "msg.rebootRequired": "Saved — reboot the device for this to take effect.",
         "msg.pickPartition": "Select a partition that has a filesystem.",
         "msg.partitionNoFs": "That partition has no filesystem.",
@@ -5067,7 +5130,7 @@ SOURCES_I18N = {
         "msg.sourceNotFound": "Sorgente non trovata.",
         "msg.noChange": "Nessuna modifica necessaria.",
         "msg.subpathNotSupported": "Questo tipo di sorgente non supporta una sottocartella.",
-        "msg.subpathSaved": "Sottocartella salvata. Premi Applica per aggiornare la libreria.",
+        "msg.subpathSaved": "Sottocartella salvata — la libreria si sta aggiornando.",
         "msg.rebootRequired": "Salvato — riavvia il dispositivo perché la modifica abbia effetto.",
         "msg.pickPartition": "Seleziona una partizione con filesystem.",
         "msg.partitionNoFs": "Partizione senza filesystem.",

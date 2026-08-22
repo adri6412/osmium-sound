@@ -6,11 +6,17 @@
 // webui_server.py), same trust model as the native Backup & restore section
 // in Settings.vue. sources_server.py itself is unchanged; this mirrors the
 // kiosk's src/components/SourcesManager.jsx + InternalDisks.jsx.
+//
+// Laid out as four bands — active sources / add source / playlist folder /
+// shared folders — matching the kiosk screen one-for-one. There is no
+// "Apply & rescan" button: sources_server.py pushes every edit into Lyrion's
+// live mediadirs and rescans on its own (_lyrion_push_live()), without the
+// service restart that would cut off whatever is playing.
 import { ref, reactive, computed, onMounted, onUnmounted } from 'vue';
 import { api } from '../api.js';
 import { useI18n } from '../i18n';
+import FolderPicker from './FolderPicker.vue';
 
-const props = defineProps({ setupMode: { type: Boolean, default: false } });
 const { t } = useI18n();
 
 const msg = ref('');
@@ -22,13 +28,16 @@ function say(m, isErr = false) {
 }
 
 const busy = ref(false);
-const applying = ref(false);
-// "Simple" (default) shows active sources + USB devices needing attention +
-// Apply. "Advanced" adds internal-disk adoption/formatting and manual
-// local/SMB folder entry — same idea as the kiosk's Semplice/Avanzate
-// toggle, using the .seg segmented-button pattern already used elsewhere in
-// Settings.vue (e.g. the Lyrion internal/external picker).
-const view = ref('simple');
+
+// One band open at a time; the two container bands ("add source", "shared
+// folders") hold their own single-open sub-band.
+const open = ref('');
+const openAdd = ref('');     // 'smb' | 'internal' | 'local'
+const openShare = ref('');   // 'local'
+const infoFor = ref(null);   // share whose connection details are expanded
+function toggle(k) { open.value = open.value === k ? '' : k; }
+function toggleAdd(k) { openAdd.value = openAdd.value === k ? '' : k; }
+function toggleShare(k) { openShare.value = openShare.value === k ? '' : k; }
 
 // ── Active sources + USB needing attention ───────────────────────────
 const sources = ref([]);
@@ -58,9 +67,28 @@ function sourceOk(s) {
   return (s.type === 'smb' || s.type === 'internal' || s.type === 'usb') ? s.mounted : s.exists;
 }
 
+function fmtSize(bytes) {
+  const n = Number(bytes) || 0;
+  const gb = n / 1024 ** 3;
+  if (gb <= 0) return '';
+  return gb >= 1000 ? (gb / 1024).toFixed(1) + ' TB' : Math.round(gb) + ' GB';
+}
+// Free space needs one decimal below 10 GB, where fmtSize()'s whole-GB
+// rounding would report a nearly-full disk as "0 GB".
+function fmtBytes(bytes) {
+  const gb = Number(bytes) / 1024 ** 3;
+  if (!Number.isFinite(gb) || gb <= 0) return '';
+  if (gb >= 1000) return (gb / 1024).toFixed(1) + ' TB';
+  return gb >= 10 ? Math.round(gb) + ' GB' : gb.toFixed(1) + ' GB';
+}
+
+// Every edit applies itself (see the file header), so a successful one just
+// refreshes what's on screen.
+function changed() { loadSources(); loadSmbCard(); }
+
 async function removeSource(id) {
   await api.sourcesRemove(id);
-  loadSources();
+  changed();
 }
 async function setSmbRw(id, rw) {
   busy.value = true;
@@ -121,60 +149,30 @@ async function retryUsb(device) {
   say(t('settings.sources.internalAdopting'));
   const r = await api.usbAdopt(device);
   say(r.ok ? t('settings.sources.internalAdopted') : ((r.data && r.data.message) || t('common.error')), !r.ok);
-  if (r.ok) { loadUsb(); loadSources(); }
+  if (r.ok) { loadUsb(); changed(); }
   busy.value = false;
 }
 
-// ── Add local folder (file-browser picker, mirrors Lyrion's own folder
-//    picker instead of a free-text path box) / SMB share ─────────────────
-const addLocalOpen = ref(false);   // collapsed by default; expand on demand
-const addLocalPath = ref('');      // '' = showing the top-level roots list
-const addLocalParent = ref(null);
-const addLocalDirs = ref([]);
-const addLocalBusy = ref(false);
-const addLocalSamba = ref(false);  // also create a network-writable Samba share
-const newFolderName = ref('');
-
-function toggleAddLocal() {
-  addLocalOpen.value = !addLocalOpen.value;
-  if (addLocalOpen.value && !addLocalDirs.value.length) loadAddLocalBrowse();
-}
-async function loadAddLocalBrowse() {
-  addLocalBusy.value = true;
-  const r = await api.localBrowse(addLocalPath.value);
-  if (r.ok) {
-    addLocalDirs.value = r.data.dirs || [];
-    addLocalParent.value = r.data.parent;
-    addLocalPath.value = r.data.path || '';
-  } else {
-    say((r.data && r.data.message) || t('common.error'), true);
-  }
-  addLocalBusy.value = false;
-}
-function addLocalInto(dir) {
-  addLocalPath.value = dir;
-  loadAddLocalBrowse();
-}
-function addLocalUp() {
-  if (addLocalParent.value === null || addLocalParent.value === undefined) return;
-  addLocalPath.value = addLocalParent.value;
-  loadAddLocalBrowse();
-}
-async function createFolderHere() {
-  const name = newFolderName.value.trim();
-  if (!name || !addLocalPath.value) return;
-  addLocalBusy.value = true;
-  const r = await api.localMkdir(addLocalPath.value, name);
-  if (r.ok) { newFolderName.value = ''; addLocalPath.value = r.data.path; await loadAddLocalBrowse(); }
-  else say((r.data && r.data.message) || t('common.error'), true);
-  addLocalBusy.value = false;
-}
-async function addLocal() {
-  if (!addLocalPath.value) return;
+// ── Add source: local folder / SMB share / internal disk ───────────────
+// `samba` also publishes the folder on the network — that is what the
+// "share a local folder" entry under Shared folders passes.
+async function addLocal(path, samba) {
+  if (!path) return;
   busy.value = true;
-  const r = await api.sourcesAddLocal(addLocalPath.value, addLocalSamba.value);
+  const r = await api.sourcesAddLocal(path, samba);
   say(r.ok ? t('settings.sources.added') : ((r.data && r.data.message) || t('common.error')), !r.ok);
-  if (r.ok) { addLocalPath.value = ''; addLocalSamba.value = false; loadAddLocalBrowse(); loadSources(); }
+  if (r.ok) changed();
+  busy.value = false;
+}
+
+const smb = reactive({ server: '', share: '', username: '', password: '', rw: false });
+async function addSmb() {
+  if (!smb.server.trim() || !smb.share.trim()) return;
+  busy.value = true;
+  say(t('settings.sources.mounting'));
+  const r = await api.sourcesAddSmb({ ...smb });
+  say(r.ok ? t('settings.sources.mounted') : ((r.data && r.data.message) || t('common.error')), !r.ok);
+  if (r.ok) { smb.server = ''; smb.share = ''; smb.username = ''; smb.password = ''; smb.rw = false; changed(); }
   busy.value = false;
 }
 
@@ -186,43 +184,12 @@ async function addLocal() {
 const playlistdir = ref('');
 const playlistdirDefault = ref('');
 const pldOpen = ref(false);
-const pldPath = ref('');
-const pldParent = ref(null);
-const pldDirs = ref([]);
-const pldBusy = ref(false);
 
 async function loadPlaylistdir() {
   const r = await api.playlistdirGet();
   if (!r.ok) return;
   playlistdir.value = r.data.path || '';
   playlistdirDefault.value = r.data.default || '';
-}
-function togglePld() {
-  pldOpen.value = !pldOpen.value;
-  if (pldOpen.value) {
-    // Start browsing from the folder in use, so "somewhere near here" is one
-    // click away rather than a walk down from /.
-    pldPath.value = playlistdir.value || '';
-    loadPldBrowse();
-  }
-}
-async function loadPldBrowse() {
-  pldBusy.value = true;
-  const r = await api.localBrowse(pldPath.value);
-  if (r.ok) {
-    pldDirs.value = r.data.dirs || [];
-    pldParent.value = r.data.parent;
-    pldPath.value = r.data.path || '';
-  } else {
-    say((r.data && r.data.message) || t('common.error'), true);
-  }
-  pldBusy.value = false;
-}
-function pldInto(dir) { pldPath.value = dir; loadPldBrowse(); }
-function pldUp() {
-  if (pldParent.value === null || pldParent.value === undefined) return;
-  pldPath.value = pldParent.value;
-  loadPldBrowse();
 }
 async function savePlaylistdir(path) {
   if (!path) return;
@@ -234,43 +201,13 @@ async function savePlaylistdir(path) {
   busy.value = false;
 }
 
-const smb = reactive({ server: '', share: '', username: '', password: '', rw: false });
-async function addSmb() {
-  if (!smb.server.trim() || !smb.share.trim()) return;
-  busy.value = true;
-  say(t('settings.sources.mounting'));
-  const r = await api.sourcesAddSmb({ ...smb });
-  say(r.ok ? t('settings.sources.mounted') : ((r.data && r.data.message) || t('common.error')), !r.ok);
-  if (r.ok) { smb.server = ''; smb.share = ''; smb.username = ''; smb.password = ''; smb.rw = false; loadSources(); }
-  busy.value = false;
-}
-
-// ── Apply & rescan ─────────────────────────────────────────────────────
-async function apply() {
-  if (props.setupMode) {
-    // The setup wizard applies the final source list itself, once, right
-    // before handing off to Lyrion's own setup wizard — mirrors the old
-    // iframe's behaviour under ?setup=1.
-    say(t('settings.sources.applied'));
-    return;
-  }
-  applying.value = true;
-  say(t('settings.sources.applying'));
-  const r = await api.sourcesApply();
-  say(r.ok ? ((r.data && r.data.message) || t('settings.sources.applied')) : ((r.data && r.data.message) || t('common.error')), !r.ok);
-  applying.value = false;
-}
-
 // ── Internal disks (adopt existing / format) ──────────────────────────
+// Adopted disks already appear under "Active sources", so this list only
+// offers what isn't in use yet; an adopted one stays visible, without
+// buttons, so the full set of hardware is still legible.
 const internalDisks = ref([]);
 const smbCard = ref(null);
 
-function fmtSize(bytes) {
-  const n = Number(bytes) || 0;
-  const gb = n / 1024 ** 3;
-  if (gb <= 0) return '';
-  return gb >= 1000 ? (gb / 1024).toFixed(1) + ' TB' : Math.round(gb) + ' GB';
-}
 async function loadInternal() {
   const r = await api.internalDisks();
   if (r.ok) internalDisks.value = r.data.disks || [];
@@ -284,20 +221,14 @@ async function adoptInternal(device) {
   say(t('settings.sources.internalAdopting'));
   const r = await api.internalAdopt(device);
   say(r.ok ? t('settings.sources.internalAdopted') : ((r.data && r.data.message) || t('common.error')), !r.ok);
-  if (r.ok) { loadInternal(); loadSources(); }
+  if (r.ok) { loadInternal(); changed(); }
   busy.value = false;
-}
-async function removeInternal(sourceId) {
-  if (!sourceId) return;
-  await api.sourcesRemove(sourceId);
-  say(t('settings.sources.internalRemoved'));
-  loadInternal(); loadSources();
 }
 async function regenSmb() {
   await api.internalSmbRegenerate();
   loadSmbCard();
 }
-const hasAdoptedShares = computed(() => smbCard.value && Array.isArray(smbCard.value.shares) && smbCard.value.shares.length > 0);
+const shares = computed(() => (smbCard.value && smbCard.value.shares) || []);
 
 // ── Format wizard (single instance — one disk at a time) ──────────────
 const wizardDisk = ref(null);
@@ -353,7 +284,7 @@ async function startFormat() {
 }
 function wizardDone() {
   closeWizard();
-  loadInternal(); loadSources(); loadSmbCard();
+  loadInternal(); changed();
 }
 
 // ── Lifecycle: poll active sources + USB every 4s, internal disks every 5s
@@ -378,245 +309,282 @@ onUnmounted(() => {
 
 <template>
   <div>
-    <div class="seg" style="margin-bottom: 4px;">
-      <button :class="{ active: view === 'simple' }" @click="view = 'simple'">{{ t('settings.sources.viewSimple') }}</button>
-      <button :class="{ active: view === 'advanced' }" @click="view = 'advanced'">{{ t('settings.sources.viewAdvanced') }}</button>
-    </div>
+    <p class="muted">{{ t('settings.sources.autoApplyHint') }}</p>
 
-    <!-- Active sources -->
-    <label style="margin-top: 16px; display: block;">{{ t('settings.sources.active') }}</label>
-    <p v-if="!sources.length" class="sub">{{ t('settings.sources.none') }}</p>
-    <template v-for="s in sources" :key="s.id">
-    <div class="net between" style="align-items: center; gap: 16px; flex-wrap: wrap;">
-      <div style="min-width: 260px;">
-        <div>{{ s.name }} <span class="pill">{{ sourceTag(s) }}</span></div>
-        <div class="muted" :style="{ color: sourceOk(s) ? '' : 'var(--danger)' }">{{ sourceSub(s) }}</div>
+    <!-- ── Active sources ─────────────────────────────────────────── -->
+    <div class="acc" :class="{ open: open === 'active' }">
+      <div class="net between" @click="toggle('active')">
+        <span>
+          <span style="display: block;">{{ t('settings.sources.active') }}</span>
+          <span class="muted">{{ sources.length ? t('settings.sources.countSummary', { count: sources.length }) : t('settings.sources.none') }}</span>
+        </span>
+        <span class="chev">{{ open === 'active' ? '⌄' : '›' }}</span>
       </div>
-      <div class="row" style="flex-wrap: wrap; justify-content: flex-end;">
-        <button v-if="s.type === 'smb'" class="secondary fit" :disabled="busy" @click="setSmbRw(s.id, !s.rw)">
-          {{ s.rw ? t('settings.sources.smbMakeRo') : t('settings.sources.smbMakeRw') }}
-        </button>
-        <button v-if="['smb', 'internal', 'usb'].includes(s.type)" class="secondary fit" :disabled="busy || !s.mounted"
-                @click="browsingId === s.id ? closeBrowse() : openBrowse(s)">
-          {{ t('settings.sources.subpathPick') }}
-        </button>
-        <button class="danger fit" @click="removeSource(s.id)">{{ t('settings.sources.remove') }}</button>
-      </div>
-    </div>
-
-    <!-- Inline subfolder browser for the source currently being narrowed -->
-    <div v-if="browsingId === s.id" class="card" style="margin: 6px 0 12px;">
-      <div class="row" style="justify-content: space-between; align-items: center;">
-        <span class="muted">/{{ browsePath || '' }}</span>
-        <button class="secondary fit" @click="closeBrowse">{{ t('common.back') }}</button>
-      </div>
-      <p v-if="browseBusy" class="sub">{{ t('common.loading') }}</p>
-      <template v-else>
-        <div class="row" style="gap: 8px; margin: 8px 0;">
-          <button class="secondary fit" :disabled="browseParent === null || browseParent === undefined" @click="browseUp">
-            {{ t('settings.sources.subpathUp') }}
-          </button>
-          <button class="fit" :disabled="busy" @click="useBrowsePath(browsePath)">
-            {{ t('settings.sources.subpathUseHere') }}
-          </button>
-          <button class="secondary fit" :disabled="busy || !browsePath" @click="useBrowsePath('')">
-            {{ t('settings.sources.subpathUseRoot') }}
-          </button>
-        </div>
-        <p v-if="!browseDirs.length" class="sub">{{ t('settings.sources.subpathNoSubfolders') }}</p>
-        <div v-for="name in browseDirs" :key="name" class="net" style="cursor: pointer;" @click="browseInto(name)">
-          {{ name }}
-        </div>
-      </template>
-    </div>
-    </template>
-
-    <!-- USB devices needing attention — healthy drives auto-adopt on their
-         own (sources_server.py's usb_sync()) and show up above instead. -->
-    <template v-if="usb.length">
-      <label style="margin-top: 18px; padding-top: 16px; border-top: 1px solid rgba(255,255,255,0.1); display: block;">
-        {{ t('settings.sources.usbAttention') }}
-      </label>
-      <div v-for="dk in usb" :key="dk.path" class="net between" style="align-items: flex-start;">
-        <div>
-          <div>{{ dk.label || 'USB' }} <span class="pill">USB{{ dk.fstype ? ' ' + dk.fstype : '' }}{{ dk.size ? ' · ' + dk.size : '' }}</span></div>
-          <div class="muted" style="color: var(--danger);">{{ dk.needs_format ? t('settings.sources.usbNeedsFormat') : t('settings.sources.usbMountError') + ': ' + (dk.error || '') }}</div>
-        </div>
-        <button v-if="!dk.needs_format" class="secondary fit" :disabled="busy || !dk.path" @click="retryUsb(dk.path)">
-          {{ t('settings.sources.usbRetry') }}
-        </button>
-      </div>
-    </template>
-
-    <template v-if="view === 'advanced'">
-      <!-- Internal disks -->
-      <label style="margin-top: 18px; padding-top: 16px; border-top: 1px solid rgba(255,255,255,0.1); display: block;">
-        {{ t('settings.sources.internalTitle') }}
-      </label>
-      <p v-if="!internalDisks.length" class="sub">{{ t('settings.sources.internalNone') }}</p>
-      <template v-for="dk in internalDisks" :key="dk.path">
-        <div class="net between" style="align-items: flex-start;">
-          <div>
-            <div>
-              {{ dk.model || dk.path }}
-              <span class="pill">{{ fmtSize(dk.size) }}</span>
-              <span v-if="dk.adopted" class="pill gold">{{ t('settings.sources.internalAdoptedBadge') }}</span>
-              <span v-else-if="dk.has_data" class="pill">{{ t('settings.sources.internalHasData') }}</span>
+      <div v-if="open === 'active'" class="acc-body">
+        <p v-if="!sources.length" class="sub">{{ t('settings.sources.none') }}</p>
+        <template v-for="s in sources" :key="s.id">
+          <div class="net between" style="align-items: center; gap: 16px; flex-wrap: wrap;">
+            <div style="min-width: 260px;">
+              <div>{{ s.name }} <span class="pill">{{ sourceTag(s) }}</span></div>
+              <div class="muted" :style="{ color: sourceOk(s) ? '' : 'var(--danger)' }">{{ sourceSub(s) }}</div>
+              <div v-if="s.usage" class="muted" style="opacity: 0.75;">
+                {{ t('settings.sources.freeOf', { free: fmtBytes(s.usage.free), total: fmtBytes(s.usage.total) }) }}
+              </div>
             </div>
-            <div class="muted">{{ dk.path }}{{ dk.fstype ? ' · ' + dk.fstype : '' }}{{ dk.label ? ' · ' + dk.label : '' }}</div>
-          </div>
-          <div class="row">
-            <template v-if="dk.adopted">
-              <button class="danger fit" @click="removeInternal(dk.source_id)">{{ t('settings.sources.internalRemove') }}</button>
-            </template>
-            <template v-else>
-              <button v-if="(dk.partitions || []).filter(p => p.fstype).length === 1"
-                      class="secondary fit" :disabled="busy"
-                      @click="adoptInternal((dk.partitions.filter(p => p.fstype))[0].path)">
-                {{ t('settings.sources.internalAdopt') }}
+            <div class="row" style="flex-wrap: wrap; justify-content: flex-end;">
+              <button v-if="s.type === 'smb'" class="secondary fit" :disabled="busy" @click="setSmbRw(s.id, !s.rw)">
+                {{ s.rw ? t('settings.sources.smbMakeRo') : t('settings.sources.smbMakeRw') }}
               </button>
-              <button class="danger fit" :disabled="busy" @click="openWizard(dk)">{{ t('settings.sources.internalFormat') }}</button>
+              <button v-if="['smb', 'internal', 'usb'].includes(s.type)" class="secondary fit" :disabled="busy || !s.mounted"
+                      @click="browsingId === s.id ? closeBrowse() : openBrowse(s)">
+                {{ t('settings.sources.subpathPick') }}
+              </button>
+              <button class="danger fit" @click="removeSource(s.id)">{{ t('settings.sources.remove') }}</button>
+            </div>
+          </div>
+
+          <!-- Inline subfolder browser for the source currently being narrowed -->
+          <div v-if="browsingId === s.id" class="card" style="margin: 6px 0 12px;">
+            <div class="row" style="justify-content: space-between; align-items: center;">
+              <span class="muted">/{{ browsePath || '' }}</span>
+              <button class="secondary fit" @click="closeBrowse">{{ t('common.back') }}</button>
+            </div>
+            <p v-if="browseBusy" class="sub">{{ t('common.loading') }}</p>
+            <template v-else>
+              <div class="row" style="gap: 8px; margin: 8px 0;">
+                <button class="secondary fit" :disabled="browseParent === null || browseParent === undefined" @click="browseUp">
+                  {{ t('settings.sources.subpathUp') }}
+                </button>
+                <button class="fit" :disabled="busy" @click="useBrowsePath(browsePath)">
+                  {{ t('settings.sources.subpathUseHere') }}
+                </button>
+                <button class="secondary fit" :disabled="busy || !browsePath" @click="useBrowsePath('')">
+                  {{ t('settings.sources.subpathUseRoot') }}
+                </button>
+              </div>
+              <p v-if="!browseDirs.length" class="sub">{{ t('settings.sources.subpathNoSubfolders') }}</p>
+              <div v-for="name in browseDirs" :key="name" class="net" style="cursor: pointer;" @click="browseInto(name)">
+                {{ name }}
+              </div>
+            </template>
+          </div>
+        </template>
+
+        <!-- USB devices needing attention — healthy drives auto-adopt on their
+             own (sources_server.py's usb_sync()) and show up above instead. -->
+        <template v-if="usb.length">
+          <label style="margin-top: 18px; padding-top: 16px; border-top: 1px solid rgba(255,255,255,0.1); display: block;">
+            {{ t('settings.sources.usbAttention') }}
+          </label>
+          <div v-for="dk in usb" :key="dk.path" class="net between" style="align-items: flex-start;">
+            <div>
+              <div>{{ dk.label || 'USB' }} <span class="pill">USB{{ dk.fstype ? ' ' + dk.fstype : '' }}{{ dk.size ? ' · ' + dk.size : '' }}</span></div>
+              <div class="muted" style="color: var(--danger);">{{ dk.needs_format ? t('settings.sources.usbNeedsFormat') : t('settings.sources.usbMountError') + ': ' + (dk.error || '') }}</div>
+            </div>
+            <button v-if="!dk.needs_format" class="secondary fit" :disabled="busy || !dk.path" @click="retryUsb(dk.path)">
+              {{ t('settings.sources.usbRetry') }}
+            </button>
+          </div>
+        </template>
+      </div>
+    </div>
+
+    <!-- ── Add source ─────────────────────────────────────────────── -->
+    <div class="acc" :class="{ open: open === 'add' }">
+      <div class="net between" @click="toggle('add')">
+        <span>
+          <span style="display: block;">{{ t('settings.sources.addSource') }}</span>
+          <span class="muted">{{ t('settings.sources.addSourceHint') }}</span>
+        </span>
+        <span class="chev">{{ open === 'add' ? '⌄' : '›' }}</span>
+      </div>
+      <div v-if="open === 'add'" class="acc-body">
+        <!-- Network folder (SMB) -->
+        <div class="acc" :class="{ open: openAdd === 'smb' }">
+          <div class="net between" @click="toggleAdd('smb')">
+            <span>{{ t('settings.sources.addSmb') }}</span>
+            <span class="chev">{{ openAdd === 'smb' ? '⌄' : '›' }}</span>
+          </div>
+          <div v-if="openAdd === 'smb'" class="acc-body">
+            <div class="row">
+              <div style="flex: 1;">
+                <label>{{ t('settings.sources.server') }}</label>
+                <input v-model="smb.server" type="text" placeholder="192.168.0.20" />
+              </div>
+              <div style="flex: 1;">
+                <label>{{ t('settings.sources.share') }}</label>
+                <input v-model="smb.share" type="text" :placeholder="t('settings.sources.sharePlaceholder')" />
+              </div>
+            </div>
+            <div class="row">
+              <div style="flex: 1;">
+                <label>{{ t('settings.sources.user') }}</label>
+                <input v-model="smb.username" type="text" :placeholder="t('settings.sources.userPlaceholder')" />
+              </div>
+              <div style="flex: 1;">
+                <label>{{ t('settings.sources.pass') }}</label>
+                <input v-model="smb.password" type="password" placeholder="••••••" />
+              </div>
+            </div>
+            <div class="net between" style="margin-top: 8px;">
+              <span class="muted">{{ t('settings.sources.smbRw') }}</span>
+              <input v-model="smb.rw" type="checkbox" style="width: auto;" />
+            </div>
+            <button style="margin-top: 8px;" :disabled="busy" @click="addSmb">{{ t('settings.sources.mountAndAdd') }}</button>
+          </div>
+        </div>
+
+        <!-- Internal disks -->
+        <div class="acc" :class="{ open: openAdd === 'internal' }">
+          <div class="net between" @click="toggleAdd('internal')">
+            <span>{{ t('settings.sources.internalTitle') }}</span>
+            <span class="chev">{{ openAdd === 'internal' ? '⌄' : '›' }}</span>
+          </div>
+          <div v-if="openAdd === 'internal'" class="acc-body">
+            <p v-if="!internalDisks.length" class="sub">{{ t('settings.sources.internalNone') }}</p>
+            <template v-for="dk in internalDisks" :key="dk.path">
+              <div class="net between" style="align-items: flex-start;">
+                <div>
+                  <div>
+                    {{ dk.model || dk.path }}
+                    <span class="pill">{{ fmtSize(dk.size) }}</span>
+                    <span v-if="dk.adopted" class="pill gold">{{ t('settings.sources.internalAdoptedBadge') }}</span>
+                    <span v-else-if="dk.has_data" class="pill">{{ t('settings.sources.internalHasData') }}</span>
+                  </div>
+                  <div class="muted">{{ dk.path }}{{ dk.fstype ? ' · ' + dk.fstype : '' }}{{ dk.label ? ' · ' + dk.label : '' }}</div>
+                </div>
+                <div v-if="!dk.adopted" class="row">
+                  <button v-if="(dk.partitions || []).filter(p => p.fstype).length === 1"
+                          class="secondary fit" :disabled="busy"
+                          @click="adoptInternal((dk.partitions.filter(p => p.fstype))[0].path)">
+                    {{ t('settings.sources.internalAdopt') }}
+                  </button>
+                  <button class="danger fit" :disabled="busy" @click="openWizard(dk)">{{ t('settings.sources.internalFormat') }}</button>
+                </div>
+              </div>
+              <div v-if="!dk.adopted && (dk.partitions || []).filter(p => p.fstype).length > 1" style="padding-left: 14px;">
+                <div v-for="p in dk.partitions.filter(p => p.fstype)" :key="p.path" class="net between">
+                  <span class="muted">{{ p.path }} · {{ p.fstype }}{{ p.label ? ' · ' + p.label : '' }}</span>
+                  <button class="secondary fit" :disabled="busy" @click="adoptInternal(p.path)">{{ t('settings.sources.internalUse') }}</button>
+                </div>
+              </div>
             </template>
           </div>
         </div>
-        <div v-if="!dk.adopted && (dk.partitions || []).filter(p => p.fstype).length > 1" style="padding-left: 14px;">
-          <div v-for="p in dk.partitions.filter(p => p.fstype)" :key="p.path" class="net between">
-            <span class="muted">{{ p.path }} · {{ p.fstype }}{{ p.label ? ' · ' + p.label : '' }}</span>
-            <button class="secondary fit" :disabled="busy" @click="adoptInternal(p.path)">{{ t('settings.sources.internalUse') }}</button>
+
+        <!-- Local folder — file-browser picker (mirrors Lyrion's own folder
+             picker) instead of a free-text path box. -->
+        <div class="acc" :class="{ open: openAdd === 'local' }">
+          <div class="net between" @click="toggleAdd('local')">
+            <span>{{ t('settings.sources.addLocal') }}</span>
+            <span class="chev">{{ openAdd === 'local' ? '⌄' : '›' }}</span>
+          </div>
+          <div v-if="openAdd === 'local'" class="acc-body">
+            <FolderPicker
+              :pick-label="t('settings.sources.useThisFolder')"
+              :busy="busy"
+              @pick="(p) => addLocal(p, false)"
+              @error="(m) => say(m, true)"
+            />
           </div>
         </div>
-      </template>
+      </div>
+    </div>
 
-      <div v-if="hasAdoptedShares" style="margin-top: 12px;">
-        <template v-if="!smbCard.installed">
-          <p class="sub" style="color: var(--danger);">{{ t('settings.sources.needOsUpdate') }}</p>
-        </template>
-        <template v-else>
-          <label>{{ t('settings.sources.smbShareTitle') }}</label>
-          <p class="muted">{{ t('settings.sources.smbShareHelp') }}</p>
-          <div v-for="s in smbCard.shares" :key="s.source_id" class="muted">
-            {{ '\\\\' + (smbCard.ip || smbCard.host) + '\\' + s.name }}
+    <!-- ── Playlist folder ────────────────────────────────────────── -->
+    <div class="acc" :class="{ open: open === 'playlist' }">
+      <div class="net between" @click="toggle('playlist')">
+        <span>
+          <span style="display: block;">{{ t('settings.sources.playlistdirTitle') }}</span>
+          <span class="muted" style="word-break: break-all;">{{ playlistdir || t('settings.sources.playlistdirUnset') }}</span>
+        </span>
+        <span class="chev">{{ open === 'playlist' ? '⌄' : '›' }}</span>
+      </div>
+      <div v-if="open === 'playlist'" class="acc-body">
+        <p class="muted">{{ t('settings.sources.playlistdirHint') }}</p>
+        <div class="net between" style="align-items: center; gap: 12px; flex-wrap: wrap;">
+          <div class="muted" style="min-width: 220px; word-break: break-all;">
+            {{ playlistdir || t('settings.sources.playlistdirUnset') }}
           </div>
-          <div class="row" style="margin-top: 8px;">
+          <div class="row" style="flex-wrap: wrap; justify-content: flex-end;">
+            <button class="secondary fit" @click="pldOpen = !pldOpen">
+              {{ pldOpen ? t('common.close') : t('settings.sources.playlistdirPick') }}
+            </button>
+            <button class="secondary fit"
+                    :disabled="busy || !playlistdirDefault || playlistdir === playlistdirDefault"
+                    @click="savePlaylistdir(playlistdirDefault)">
+              {{ t('settings.sources.playlistdirDefault') }}
+            </button>
+          </div>
+        </div>
+        <!-- Start browsing from the folder in use, so "somewhere near here" is
+             one click away rather than a walk down from /. -->
+        <FolderPicker
+          v-if="pldOpen"
+          :start-at="playlistdir"
+          :pick-label="t('settings.sources.playlistdirUse')"
+          :busy="busy"
+          @pick="savePlaylistdir"
+          @error="(m) => say(m, true)"
+        />
+      </div>
+    </div>
+
+    <!-- ── Shared folders (what this player publishes on the network) ─ -->
+    <div class="acc" :class="{ open: open === 'share' }">
+      <div class="net between" @click="toggle('share')">
+        <span>
+          <span style="display: block;">{{ t('settings.sources.shareTitle') }}</span>
+          <span class="muted">{{ shares.length ? t('settings.sources.shareCount', { count: shares.length }) : t('settings.sources.shareNone') }}</span>
+        </span>
+        <span class="chev">{{ open === 'share' ? '⌄' : '›' }}</span>
+      </div>
+      <div v-if="open === 'share'" class="acc-body">
+        <p class="muted">{{ t('settings.sources.shareHint') }}</p>
+        <p v-if="smbCard && !smbCard.installed" class="sub" style="color: var(--danger);">{{ t('settings.sources.needOsUpdate') }}</p>
+        <template v-else-if="shares.length">
+          <div v-for="s in shares" :key="s.source_id" class="item">
+            <div class="between">
+              <span>{{ s.name }}</span>
+              <button class="secondary fit" @click="infoFor = infoFor === s.source_id ? null : s.source_id">
+                {{ t('settings.sources.smbInfo') }}
+              </button>
+            </div>
+            <div v-if="infoFor === s.source_id" class="muted" style="margin-top: 6px; word-break: break-all;">
+              <div v-if="smbCard.ip">{{ '\\\\' + smbCard.ip + '\\' + s.name }}</div>
+              <div>{{ '\\\\' + smbCard.host + '\\' + s.name }}</div>
+            </div>
+          </div>
+          <div class="row" style="margin-top: 10px;">
             <span class="muted">{{ t('settings.sources.smbShareUser') }}: {{ smbCard.username }}</span>
             <span class="muted">{{ t('settings.sources.smbSharePass') }}: {{ smbCard.password }}</span>
           </div>
+          <p class="muted" style="margin-top: 6px;">{{ t('settings.sources.smbRegenerateHint') }}</p>
           <button class="secondary" style="margin-top: 8px;" @click="regenSmb">{{ t('settings.sources.smbRegenerate') }}</button>
         </template>
-      </div>
+        <p v-else class="sub">{{ t('settings.sources.shareNone') }}</p>
 
-      <!-- Add local folder — file-browser picker (mirrors Lyrion's own
-           folder picker) instead of a free-text path box. -->
-      <label style="margin-top: 18px; padding-top: 16px; border-top: 1px solid rgba(255,255,255,0.1); display: block;">
-        {{ t('settings.sources.addLocal') }}
-      </label>
-      <button class="secondary" @click="toggleAddLocal">
-        {{ addLocalOpen ? t('common.close') : t('settings.sources.addLocal') }}
-      </button>
-      <div v-if="addLocalOpen" class="card" style="margin: 8px 0;">
-        <div class="row" style="justify-content: space-between; align-items: center;">
-          <span class="muted">{{ addLocalPath || '/' }}</span>
-          <button class="secondary fit" :disabled="addLocalParent === null || addLocalParent === undefined" @click="addLocalUp">
-            {{ t('settings.sources.subpathUp') }}
-          </button>
-        </div>
-        <p v-if="addLocalBusy" class="sub" style="margin-top: 8px;">{{ t('common.loading') }}</p>
-        <template v-else>
-          <p v-if="!addLocalDirs.length" class="sub" style="margin-top: 8px;">{{ t('settings.sources.subpathNoSubfolders') }}</p>
-          <div v-for="dir in addLocalDirs" :key="dir" class="net" style="cursor: pointer;" @click="addLocalInto(dir)">
-            {{ dir }}
+        <!-- Share a local folder: same picker as "add local folder", with the
+             Samba flag set so music can be copied onto it from a PC. -->
+        <div class="acc" :class="{ open: openShare === 'local' }">
+          <div class="net between" @click="toggleShare('local')">
+            <span>{{ t('settings.sources.shareLocal') }}</span>
+            <span class="chev">{{ openShare === 'local' ? '⌄' : '›' }}</span>
           </div>
-        </template>
-        <div class="row" style="margin-top: 10px;">
-          <input v-model="newFolderName" type="text" :placeholder="t('settings.sources.newFolderPlaceholder')" />
-          <button class="secondary fit" :disabled="addLocalBusy || !newFolderName.trim() || !addLocalPath" @click="createFolderHere">
-            {{ t('settings.sources.newFolderCreate') }}
-          </button>
-        </div>
-        <label class="row" style="align-items: center; gap: 8px; margin-top: 12px; cursor: pointer;">
-          <input type="checkbox" v-model="addLocalSamba" style="width: auto;" />
-          <span class="muted">{{ t('settings.sources.localSambaHint') }}</span>
-        </label>
-        <button style="margin-top: 10px;" :disabled="busy || !addLocalPath" @click="addLocal">
-          {{ t('settings.sources.useThisFolder') }}
-        </button>
-      </div>
-
-      <!-- Add network folder (SMB) -->
-      <label style="margin-top: 18px; padding-top: 16px; border-top: 1px solid rgba(255,255,255,0.1); display: block;">
-        {{ t('settings.sources.addSmb') }}
-      </label>
-      <div class="row">
-        <div style="flex: 1;">
-          <label>{{ t('settings.sources.server') }}</label>
-          <input v-model="smb.server" type="text" placeholder="192.168.0.20" />
-        </div>
-        <div style="flex: 1;">
-          <label>{{ t('settings.sources.share') }}</label>
-          <input v-model="smb.share" type="text" :placeholder="t('settings.sources.sharePlaceholder')" />
-        </div>
-      </div>
-      <div class="row">
-        <div style="flex: 1;">
-          <label>{{ t('settings.sources.user') }}</label>
-          <input v-model="smb.username" type="text" :placeholder="t('settings.sources.userPlaceholder')" />
-        </div>
-        <div style="flex: 1;">
-          <label>{{ t('settings.sources.pass') }}</label>
-          <input v-model="smb.password" type="password" placeholder="••••••" />
-        </div>
-      </div>
-      <div class="net between" style="margin-top: 8px;">
-        <span class="muted">{{ t('settings.sources.smbRw') }}</span>
-        <input v-model="smb.rw" type="checkbox" style="width: auto;" />
-      </div>
-      <button style="margin-top: 8px;" :disabled="busy" @click="addSmb">{{ t('settings.sources.mountAndAdd') }}</button>
-
-      <!-- Playlist folder — Lyrion's playlistdir pref. Same browser widget as
-           "Add local folder" above, against the same /api/local/browse. -->
-      <label style="margin-top: 18px; padding-top: 16px; border-top: 1px solid rgba(255,255,255,0.1); display: block;">
-        {{ t('settings.sources.playlistdirTitle') }}
-      </label>
-      <p class="muted">{{ t('settings.sources.playlistdirHint') }}</p>
-      <div class="net between" style="align-items: center; gap: 12px; flex-wrap: wrap;">
-        <div class="muted" style="min-width: 220px; word-break: break-all;">
-          {{ playlistdir || t('settings.sources.playlistdirUnset') }}
-        </div>
-        <div class="row" style="flex-wrap: wrap; justify-content: flex-end;">
-          <button class="secondary fit" @click="togglePld">
-            {{ pldOpen ? t('common.close') : t('settings.sources.playlistdirPick') }}
-          </button>
-          <button class="secondary fit"
-                  :disabled="busy || !playlistdirDefault || playlistdir === playlistdirDefault"
-                  @click="savePlaylistdir(playlistdirDefault)">
-            {{ t('settings.sources.playlistdirDefault') }}
-          </button>
-        </div>
-      </div>
-      <div v-if="pldOpen" class="card" style="margin: 8px 0;">
-        <div class="row" style="justify-content: space-between; align-items: center;">
-          <span class="muted">{{ pldPath || '/' }}</span>
-          <button class="secondary fit" :disabled="pldParent === null || pldParent === undefined" @click="pldUp">
-            {{ t('settings.sources.subpathUp') }}
-          </button>
-        </div>
-        <p v-if="pldBusy" class="sub" style="margin-top: 8px;">{{ t('common.loading') }}</p>
-        <template v-else>
-          <p v-if="!pldDirs.length" class="sub" style="margin-top: 8px;">{{ t('settings.sources.subpathNoSubfolders') }}</p>
-          <div v-for="dir in pldDirs" :key="dir" class="net" style="cursor: pointer;" @click="pldInto(dir)">
-            {{ dir }}
+          <div v-if="openShare === 'local'" class="acc-body">
+            <p class="muted">{{ t('settings.sources.localSambaHint') }}</p>
+            <FolderPicker
+              :pick-label="t('settings.sources.shareThisFolder')"
+              :busy="busy"
+              @pick="(p) => addLocal(p, true)"
+              @error="(m) => say(m, true)"
+            />
           </div>
-        </template>
-        <button style="margin-top: 10px;" :disabled="busy || !pldPath" @click="savePlaylistdir(pldPath)">
-          {{ t('settings.sources.playlistdirUse') }}
-        </button>
+        </div>
       </div>
-    </template>
+    </div>
 
     <div v-if="msg" class="msg" :class="{ err }">{{ msg }}</div>
-
-    <button style="margin-top: 16px; width: 100%;" :disabled="applying" @click="apply">{{ t('settings.sources.apply') }}</button>
-    <p class="muted" style="margin-top: 6px;">{{ t('settings.sources.applyHint') }}</p>
 
     <!-- Format wizard -->
     <div v-if="wizardDisk" class="overlay">

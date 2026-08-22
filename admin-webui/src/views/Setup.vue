@@ -286,7 +286,7 @@ async function finish() {
     <div class="card">
       <h3><span class="dot"></span>{{ t('setup.musicTitle') }}</h3>
       <p class="sub">{{ t('setup.musicHint') }}</p>
-      <SourcesPanel setup-mode />
+      <SourcesPanel />
     </div>
     <button :disabled="busy" @click="finish">{{ busy ? t('setup.finishing') : t('setup.finishSetup') }}</button>
   </div>

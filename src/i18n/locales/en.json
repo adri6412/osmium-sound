@@ -25,8 +25,6 @@
     "active": "Active sources",
     "none": "No sources yet. Add one below.",
     "local": "Local",
-    "viewSimple": "Simple",
-    "viewAdvanced": "Advanced",
     "usbAttention": "USB devices needing attention",
     "usbNeedsFormat": "No recognized filesystem — format it from a computer.",
     "usbMountError": "Mount error",
@@ -41,18 +39,15 @@
     "smbMakeRw": "Make writable",
     "smbMakeRo": "Make read-only",
     "mountAndAdd": "Mount and add",
-    "apply": "Apply & rescan library",
     "added": "Added ✓",
     "mounting": "Mounting…",
     "mounted": "Mounted ✓",
-    "applying": "Applying…",
-    "applied": "Done ✓",
     "subpathPick": "Subfolder…",
     "subpathUp": "Up",
     "subpathUseHere": "Use this folder",
     "subpathUseRoot": "Use whole drive/share",
     "subpathNoSubfolders": "No subfolders here.",
-    "subpathSaved": "Subfolder saved. Apply & rescan to update the library.",
+    "subpathSaved": "Subfolder saved — the library is being updated.",
     "newFolderPlaceholder": "New folder name",
     "newFolderCreate": "Create",
     "localSambaHint": "Also share this folder over the network (SMB), so you can copy music onto it from a PC.",
@@ -100,8 +95,20 @@
       "smbUser": "Username",
       "smbPass": "Password",
       "smbRegenerate": "Regenerate password",
-      "smbRegenerateHint": "If Windows keeps rejecting the credentials, remove the saved entry for this device in Windows Credential Manager, then try again."
-    }
+      "smbRegenerateHint": "If Windows keeps rejecting the credentials, remove the saved entry for this device in Windows Credential Manager, then try again.",
+      "smbInfo": "Info"
+    },
+    "autoApplyHint": "Every change is applied on its own — the library updates without restarting playback.",
+    "countSummary": "{count} in use",
+    "freeOf": "{free} free of {total}",
+    "addSource": "Add source",
+    "addSourceHint": "Network share, internal disk or a folder on this player",
+    "shareTitle": "Shared folders",
+    "shareHint": "Folders this player publishes on the network, so you can copy music onto it from a computer.",
+    "shareNone": "Nothing shared yet.",
+    "shareCount": "{count} shared",
+    "shareLocal": "Share a local folder",
+    "shareThisFolder": "Share this folder"
   },
   "usbToast": {
     "mounted": "\"{label}\" connected and ready"
@@ -606,7 +613,7 @@
       "rescanFailed": "Failed to start the scan."
     },
     "sources": {
-      "help": "Add your music folders: USB sticks/drives (auto-mounted), network (SMB) or local folders. Press \"Apply & rescan\" when done."
+      "help": "Add your music folders: USB sticks/drives (auto-mounted), network (SMB) or local folders. Changes take effect right away."
     },
     "audio": {
       "help": "Choose the playback device (DAC). The selection is saved and kept across reboots. DSD playback is bit-perfect (DoP).",

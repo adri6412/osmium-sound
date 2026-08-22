@@ -150,6 +150,18 @@ label.upload-btn:hover { filter: brightness(1.1); }
 .pill { display: inline-block; padding: 3px 10px; border-radius: 999px; font-size: 12px; border: 1px solid var(--border); color: var(--silver); }
 .pill.gold { border-color: rgba(212, 175, 55, 0.5); color: var(--gold); background: var(--gold-dim); }
 
+/* Accordion bands — the Music sources page (SourcesPanel.vue) is four of
+   these, and the "add source"/"shared folders" bands nest one level of the
+   same thing. The header reuses .net.between so it reads like the section
+   rows in the Settings menu; a nested .acc sits on --surface to stay
+   distinguishable from its parent's --panel. */
+.acc { border: 1px solid var(--border); border-radius: 12px; background: var(--panel); margin: 10px 0; overflow: hidden; }
+.acc > .net { border-bottom: 0; padding: 13px 14px; }
+.acc.open > .net { border-bottom: 1px solid var(--border); }
+.acc > .acc-body { padding: 6px 14px 14px; }
+.acc .acc { background: var(--surface); }
+.acc .chev { color: var(--silver); font-size: 18px; flex: 0 0 auto; }
+
 .seg { display: inline-flex; border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
 .seg button { border-radius: 0; background: transparent; color: var(--silver); font-weight: 500; padding: 9px 16px; }
 .seg button.active { background: var(--gold); color: #111; font-weight: 600; }
