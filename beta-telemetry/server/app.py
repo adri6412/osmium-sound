@@ -17,6 +17,7 @@ import os
 import secrets
 import shutil
 import sqlite3
+import sys
 import time
 from functools import wraps
 
@@ -27,7 +28,15 @@ import har_analysis
 import perf_analysis
 from models import get_db, init_db, now_iso
 
-BOOTSTRAP_SECRET = os.environ.get('BETA_BOOTSTRAP_SECRET', '')
+# Comma-separated, because the fleet never rotates in one instant: an
+# appliance only learns a new secret when a system OTA reaches it, so during a
+# rotation both the outgoing and the incoming value have to be accepted. Drop
+# the retired one from the list once every unit has checked in.
+BOOTSTRAP_SECRETS = [v.strip() for v in os.environ.get('BETA_BOOTSTRAP_SECRET', '').split(',') if v.strip()]
+# The literal that sits in the public repo, substituted out at build time by
+# build-ui-ota.yml / build-iso.yml. If it ever ends up configured here, the
+# "shared secret" is one anybody can read off GitHub.
+PUBLIC_PLACEHOLDER_SECRET = 'REPLACE_ME_BOOTSTRAP_SECRET'
 ADMIN_PASSWORD_HASH = os.environ.get('BETA_ADMIN_PASSWORD_HASH', '')  # generate_password_hash('...')
 CAPTURES_DIR = os.environ.get('BETA_CAPTURES_DIR', '/data/captures')
 SECRET_KEY_FILE = os.environ.get('BETA_SECRET_KEY_FILE', '/data/flask-secret.key')
@@ -66,8 +75,13 @@ def _fromjson(value):
     except Exception:
         return {}
 
-if not BOOTSTRAP_SECRET:
+if not BOOTSTRAP_SECRETS:
     raise RuntimeError('BETA_BOOTSTRAP_SECRET must be set (shared secret baked into hifi-beta-agent.py)')
+if PUBLIC_PLACEHOLDER_SECRET in BOOTSTRAP_SECRETS:
+    print('WARNING: BETA_BOOTSTRAP_SECRET still contains the public placeholder '
+          f'"{PUBLIC_PLACEHOLDER_SECRET}" -- anyone who reads the repository can '
+          'enroll a device. Keep it only for as long as the migration needs it.',
+          file=sys.stderr, flush=True)
 if not ADMIN_PASSWORD_HASH:
     raise RuntimeError('BETA_ADMIN_PASSWORD_HASH must be set (generate_password_hash("...") of the dashboard password)')
 
@@ -86,7 +100,9 @@ def require_bootstrap(fn):
     @wraps(fn)
     def wrapper(*args, **kwargs):
         token = _bearer_token() or ''
-        if not hmac.compare_digest(token, BOOTSTRAP_SECRET):
+        # any() over compare_digest rather than `token in BOOTSTRAP_SECRETS`:
+        # the list is short and the comparison stays constant-time per entry.
+        if not any(hmac.compare_digest(token, known) for known in BOOTSTRAP_SECRETS):
             return jsonify({'error': 'unauthorized'}), 401
         return fn(*args, **kwargs)
     return wrapper
