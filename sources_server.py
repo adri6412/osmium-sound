@@ -879,7 +879,7 @@ def _ignored_usb_ids():
     return partuuids, fsuuids
 
 
-def _usb_raw_partitions():
+def _usb_scan():
     """Every USB block device that could carry a filesystem, no adopted/
     ignored filtering → [{path,name,fstype,label,size,uuid,partuuid}].
     `fstype` is empty/missing for a blank/unformatted device. Handles
@@ -887,13 +887,18 @@ def _usb_raw_partitions():
     (type 'rom'), any non-USB transport (internal SATA/eMMC), and EFI System
     Partitions (see _is_efi_partition) -- a bootable installer stick has one
     alongside its real data partition, and it's never a legitimate music
-    source."""
+    source.
+
+    Returns None -- not [] -- when the scan itself failed (lsblk missing,
+    timed out, unparseable output). "The scan did not work" and "no USB
+    device is plugged in" must never collapse into the same value now that
+    usb_sync() *removes* things for devices it no longer sees."""
     try:
         r = _run(["lsblk", "-J", "-o",
                   "PATH,NAME,TYPE,FSTYPE,LABEL,SIZE,TRAN,UUID,PARTUUID,PARTTYPENAME"], timeout=10)
         data = json.loads(r.stdout or "{}")
     except Exception:
-        return []
+        return None
     out = []
     for dev in data.get("blockdevices", []):
         if dev.get("tran") != "usb" or dev.get("type") != "disk":
@@ -904,6 +909,12 @@ def _usb_raw_partitions():
         else:
             out.append(dev)
     return out
+
+
+def _usb_raw_partitions():
+    """_usb_scan() with a failed scan flattened to "found nothing" — for the
+    callers that only ever enumerate and have no absence to react to."""
+    return _usb_scan() or []
 
 
 def _usb_partitions():
@@ -925,6 +936,46 @@ def _usb_key(p):
     return (p.get("partuuid") or p.get("uuid") or p.get("path") or "").lower()
 
 
+def _detach_source(state, src, remember_ignored):
+    """Unmount, unshare and forget one source, in place on `state` — the
+    caller holds _lock and does the save. Shared by DELETE /api/sources/<id>
+    and by the disconnected-USB cleanup in usb_sync(), so a source is torn
+    down exactly the same way whether the user asked for it or the device
+    simply vanished.
+
+    `remember_ignored` records the device in `usb_ignored`: right when the
+    user removed it by hand and the stick may well still be plugged in
+    (without it, usb_sync() auto-adopts the thing back within seconds),
+    wrong when the device is already physically gone — there is nothing left
+    to suppress, and the entry would only sit there until it is pruned
+    again."""
+    t = src.get("type")
+    if t == "smb":
+        umount(src["mountpoint"])
+    elif t in ("internal", "usb"):
+        ok, lazy = umount_clean(src.get("mountpoint"))
+        if not ok:
+            print(f"[sources] umount failed for {src.get('mountpoint')}")
+        elif lazy:
+            print(f"[sources] {src.get('mountpoint')} was busy — detached lazily")
+    # Leftover mountpoint directory, for every type — `path` and not just
+    # `mountpoint` because that is how these usually present: a stale Lyrion
+    # mediadir pointing at the mountpoint of a device long unplugged,
+    # re-imported by _sync_from_lyrion() as a `local` source. The call is
+    # inert anywhere else (SMB mounts, a real music folder): it only ever
+    # touches an empty, unmounted directory under the two roots we create
+    # ourselves.
+    _drop_adopted_mountpoint(src.get("mountpoint") or src.get("path"))
+    if t == "usb" and remember_ignored:
+        # Auto-adoption (usb_sync()) would otherwise re-mount this within a
+        # few seconds, since the device is still plugged in and no longer in
+        # `sources`. Remember it as ignored until it's unplugged (pruned
+        # there once it's gone).
+        state.setdefault("usb_ignored", []).append(
+            {"partuuid": src.get("partuuid"), "fsuuid": src.get("fsuuid")})
+    state["sources"] = [s for s in state.get("sources", []) if s.get("id") != src.get("id")]
+
+
 # In-memory backoff for failed auto-adopt attempts: _usb_key(part) -> (last
 # attempt time (monotonic), error message). Stops a stubbornly-broken
 # filesystem from spamming `mount`/the logs on every usb_monitor() tick;
@@ -932,8 +983,82 @@ def _usb_key(p):
 _usb_fail_backoff = {}
 _USB_RETRY_BACKOFF = 15
 
+# How long a USB device has to stay unseen before usb_sync() acts on its
+# absence, and when each currently-missing identifier was first missed.
+_USB_GONE_GRACE = 60
+_usb_missing_since = {}
 
-def _remount_reconnected_usb(raw_keys):
+
+def _usb_gone_for_good(ids, raw_ids):
+    """True once every identifier in `ids` has been missing from the USB scan
+    for _USB_GONE_GRACE seconds straight. Any scan that sees the device again
+    clears its timer.
+
+    The grace period is the whole point. sources_server is up well before
+    udev has finished enumerating USB, so the first scans after a reboot come
+    back empty for perfectly healthy hardware — acting on that immediately
+    would delete every adopted USB source on every single boot, and throw
+    away the usb_ignored entries whose only job is to stop a hand-removed
+    stick from being auto-adopted seconds later. A device with no identifier
+    at all is never considered gone: there is nothing to match it by, so its
+    absence can't be told apart from a scan that simply reports less."""
+    ids = [i.lower() for i in ids if i]
+    if not ids:
+        return False
+    if any(i in raw_ids for i in ids):
+        for i in ids:
+            _usb_missing_since.pop(i, None)
+        return False
+    now = time.monotonic()
+    return now - min(_usb_missing_since.setdefault(i, now) for i in ids) >= _USB_GONE_GRACE
+
+
+def _drop_disconnected_usb(state, raw_ids):
+    """Forget every adopted USB source whose device is no longer physically
+    there — the stick pulled out without going through "Remove" first.
+
+    Left alone, such a source stays in Music Sources for good: red and
+    unmounted, its Samba share still declared, and its mountpoint still in
+    Lyrion's mediadirs pointing at an empty directory — which is exactly what
+    makes the next library scan prune those tracks, and what
+    _sync_from_lyrion() later re-imports as a bogus `local` source once the
+    directory outlives the source (see _drop_adopted_mountpoint()). Tearing
+    it down the same way an explicit removal does — same _detach_source(),
+    same live mediadir drop, no Lyrion restart — is the only state that
+    matches reality.
+
+    A drive merely unplugged for a while therefore does go away, and comes
+    back on its own once it is plugged in again: auto-adoption is the normal
+    path for every healthy USB device, and it reuses the same share name and
+    mountpoint (see _existing_adopted_source()).
+
+    Caller holds _lock. Returns True if anything was dropped."""
+    gone = [
+        s for s in state.get("sources", [])
+        if s.get("type") == "usb"
+        and _usb_gone_for_good((s.get("partuuid"), s.get("fsuuid")), raw_ids)
+    ]
+    if not gone:
+        return False
+    for src in gone:
+        _detach_source(state, src, remember_ignored=False)
+        print(f"[sources] USB source dropped, device disconnected: "
+              f"{src.get('name')} ({src.get('mountpoint')})")
+    save_state(state)
+    regen_samba_shares()
+    # Lyrion last and still inside the lock, exactly as api_remove() does: a
+    # GET /api/sources landing between the save and this call would see a
+    # mediadir belonging to no source and re-import it as a `local` one.
+    roots = [r for src in gone for r in _source_lyrion_roots(src)]
+    if roots:
+        try:
+            _lyrion_remove_mediadir_live(roots)
+        except Exception as e:
+            print(f"[sources] could not drop {roots} from Lyrion mediadirs: {e}")
+    return True
+
+
+def _remount_reconnected_usb(raw_ids):
     """Re-mount an already-adopted USB source whose device has just
     reappeared (unplugged, then plugged back in). usb_sync()'s adoption loop
     below never touches it: _usb_partitions() explicitly excludes anything
@@ -948,9 +1073,9 @@ def _remount_reconnected_usb(raw_keys):
     for src in load_state().get("sources", []):
         if src.get("type") != "usb":
             continue
-        key = (src.get("partuuid") or src.get("fsuuid") or "").lower()
+        ids = [i.lower() for i in (src.get("partuuid"), src.get("fsuuid")) if i]
         mountpoint = src.get("mountpoint")
-        if not key or key not in raw_keys or not mountpoint or os.path.ismount(mountpoint):
+        if not any(i in raw_ids for i in ids) or not mountpoint or os.path.ismount(mountpoint):
             continue
         ok, msg = mount_usb_adopted(src)
         if not ok:
@@ -968,28 +1093,39 @@ def usb_sync():
     it's seen (mount read-write + Samba share — see _adopt_usb_partition()),
     no user action needed. Partitions with no filesystem, or whose last
     auto-adopt attempt failed, are left for /api/usb to surface as "needs
-    attention" instead. Also prunes usb_ignored entries for devices that are
-    no longer physically present. Publishes the needs-attention list to
-    _usb_state for /api/usb to read cheaply."""
+    attention" instead. Also drops sources whose device has been physically
+    disconnected, and prunes usb_ignored entries for devices no longer
+    present. Publishes the needs-attention list to _usb_state for /api/usb to
+    read cheaply."""
     global _usb_state
     with _lock:
-        raw = _usb_raw_partitions()
+        raw = _usb_scan()
+        # Everything below that reacts to a device being *absent* runs only
+        # on a scan that actually worked — see _usb_scan()'s None contract.
+        scan_ok = raw is not None
+        raw = raw or []
         raw_keys = {_usb_key(p) for p in raw}
+        # Both identifiers of every device present, not just the one
+        # _usb_key() picks: a source stores partuuid *and* fsuuid, and it is
+        # still plugged in if either of them turns up.
+        raw_ids = {v.lower() for p in raw
+                   for v in (p.get("partuuid"), p.get("uuid")) if v}
 
-        state = load_state()
-        ignored = state.get("usb_ignored", [])
-        still_present = [
-            e for e in ignored
-            if (e.get("partuuid") or "").lower() in raw_keys
-            or (e.get("fsuuid") or "").lower() in raw_keys
-        ]
-        if len(still_present) != len(ignored):
-            state["usb_ignored"] = still_present
-            save_state(state)
+        if scan_ok:
+            state = load_state()
+            _drop_disconnected_usb(state, raw_ids)
+            ignored = state.get("usb_ignored", [])
+            still_present = [
+                e for e in ignored
+                if not _usb_gone_for_good((e.get("partuuid"), e.get("fsuuid")), raw_ids)
+            ]
+            if len(still_present) != len(ignored):
+                state["usb_ignored"] = still_present
+                save_state(state)
 
-        for key in list(_usb_fail_backoff):
-            if key not in raw_keys:
-                _usb_fail_backoff.pop(key, None)
+            for key in list(_usb_fail_backoff):
+                if key not in raw_keys:
+                    _usb_fail_backoff.pop(key, None)
 
     # _adopt_usb_partition() takes _lock itself (a plain, non-reentrant
     # threading.Lock()) to save state, so it must run outside the block
@@ -1000,7 +1136,7 @@ def usb_sync():
     # that source, silently — no exception, no log — and every other part of
     # the service that needs _lock (adding/removing sources, etc.) froze
     # right along with it until the process was restarted.
-    _remount_reconnected_usb(raw_keys)
+    _remount_reconnected_usb(raw_ids)
 
     needs_attention = []
     for p in _usb_partitions():
@@ -4048,54 +4184,26 @@ def api_remove(sid):
     denied = _require_pair_token()
     if denied:
         return denied
-    removed = []
     with _lock:
         state = load_state()
-        keep = []
-        for s in state["sources"]:
-            if s.get("id") == sid:
-                removed.append(s)
-                t = s.get("type")
-                if t == "smb":
-                    umount(s["mountpoint"])
-                elif t in ("internal", "usb"):
-                    ok, lazy = umount_clean(s.get("mountpoint"))
-                    if not ok:
-                        print(f"[sources] umount failed for {s.get('mountpoint')}")
-                    elif lazy:
-                        print(f"[sources] {s.get('mountpoint')} was busy — detached lazily")
-                # Leftover mountpoint directory, for every type — `path` and
-                # not just `mountpoint` because that is how these usually
-                # present: a stale Lyrion mediadir pointing at the mountpoint
-                # of a device long unplugged, re-imported by
-                # _sync_from_lyrion() as a `local` source. The call is inert
-                # anywhere else (SMB mounts, a real music folder): it only
-                # ever touches an empty, unmounted directory under the two
-                # roots we create ourselves.
-                _drop_adopted_mountpoint(s.get("mountpoint") or s.get("path"))
-                if t == "usb":
-                    # Auto-adoption (usb_sync()) would otherwise re-mount this
-                    # within a few seconds, since the device is still plugged
-                    # in and no longer in `sources`. Remember it as ignored
-                    # until it's unplugged (pruned there once it's gone).
-                    ignored = state.setdefault("usb_ignored", [])
-                    ignored.append({"partuuid": s.get("partuuid"), "fsuuid": s.get("fsuuid")})
-            else:
-                keep.append(s)
-        state["sources"] = keep
+        removed = [s for s in state.get("sources", []) if s.get("id") == sid]
+        for src in removed:
+            # remember_ignored: the user asked for this one, and the device
+            # may well still be plugged in — see _detach_source().
+            _detach_source(state, src, remember_ignored=True)
         save_state(state)
         regen_samba_shares()
         # Lyrion, still inside the lock: a GET /api/sources landing between
         # the save above and this call would see a mediadir belonging to no
         # source and re-import it through _sync_from_lyrion(), undoing the
         # removal the user just asked for.
-        roots = [r for s in removed for r in _source_lyrion_roots(s)]
+        roots = [r for src in removed for r in _source_lyrion_roots(src)]
         if roots:
             try:
                 _lyrion_remove_mediadir_live(roots)
             except Exception as e:
                 # Not fatal: the source is gone from our state either way and
-                # the next "Apply & rescan" rewrites mediadirs from it.
+                # the next apply rewrites mediadirs from it.
                 print(f"[sources] could not drop {roots} from Lyrion mediadirs: {e}")
     return jsonify({"success": True})
 
