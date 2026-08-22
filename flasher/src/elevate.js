@@ -31,8 +31,40 @@ const sudo = require('@vscode/sudo-prompt');
 
 const POLL_MS = 250;
 
+/**
+ * Quotes one argument for the elevated command line, per platform.
+ *
+ * POSIX: single quotes, with an embedded single quote spliced in as '\''.
+ * On Linux sudo-prompt then wraps the whole line in `/bin/bash -c "…"`, so
+ * a shell reads it twice; the outer pass still expands $, ` and \ inside
+ * its double quotes, so those are escaped for it here (it escapes the "
+ * itself). On macOS the line goes into a script file and is read once.
+ *
+ * Windows: sudo-prompt writes the line into a .bat, cmd runs it, and
+ * Electron's C runtime splits the arguments again: \" for a quote, a run of
+ * backslashes doubled only where it precedes a quote or the end, and % as
+ * %% so cmd does not take it for a variable.
+ */
 function quote(value) {
-  return '"' + String(value).replace(/"/g, '\\"') + '"';
+  const s = String(value);
+  if (process.platform === 'win32') return quoteWindows(s);
+  const single = "'" + s.replace(/'/g, "'\\''") + "'";
+  return process.platform === 'linux' ? single.replace(/[\\$`]/g, '\\$&') : single;
+}
+
+function quoteWindows(s) {
+  let out = '"';
+  let backslashes = 0;
+  for (const ch of s) {
+    if (ch === '\\') { backslashes += 1; continue; }
+    if (ch === '"') {
+      out += '\\'.repeat(backslashes * 2 + 1) + '"';
+    } else {
+      out += '\\'.repeat(backslashes) + (ch === '%' ? '%%' : ch);
+    }
+    backslashes = 0;
+  }
+  return out + '\\'.repeat(backslashes * 2) + '"';
 }
 
 /** Tails the helper's JSON-lines progress file, emitting each complete line. */

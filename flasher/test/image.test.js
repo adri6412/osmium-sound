@@ -93,9 +93,11 @@ before(async () => {
   await fsp.writeFile(path.join(dir, 'other.sha256.sig'), sign(other));
 
   server = http.createServer((req, res) => {
+    // Only ever asked for the flat names written above; kept confined to
+    // the fixture directory all the same.
     const name = decodeURIComponent(req.url.slice(1));
-    const file = path.join(dir, name);
-    if (!fs.existsSync(file)) {
+    const file = path.resolve(dir, path.basename(name));
+    if (!file.startsWith(dir + path.sep) || !fs.existsSync(file)) {
       res.writeHead(404).end('nope');
       return;
     }

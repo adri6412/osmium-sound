@@ -2421,6 +2421,10 @@ def set_timezone(tz):
     if not tz or not real.startswith(ZONEINFO_DIR + os.sep) or not os.path.isfile(real):
         return {'success': False, 'timezone': get_timezone()['timezone'],
                 'code': 'timezone.invalid', 'message': _t('timezone.invalid', _lang())}
+    # From here on the zone name is the one read back off the validated path,
+    # not the request's own string: it is what the /etc/localtime link below
+    # gets built from.
+    tz = os.path.relpath(real, ZONEINFO_DIR)
     try:
         r = subprocess.run(['timedatectl', 'set-timezone', tz],
                            capture_output=True, text=True, timeout=15)
@@ -5302,15 +5306,29 @@ def api_support_bundle():
         f'attachment; filename="hifi-support-{socket.gethostname()}-{stamp}.zip"'
     return resp
 
+def _capture_path(directory, filename, pattern):
+    """Path of one capture file inside `directory`, or None.
+
+    The name has to match `pattern` (our own capture-<stamp>.<ext> shape) and
+    the resolved path has to stay inside the directory -- both checks, so a
+    name that is valid-looking but still resolves elsewhere cannot get through."""
+    if not pattern.match(filename or ''):
+        return None
+    root = os.path.realpath(directory)
+    path = os.path.realpath(os.path.join(root, filename))
+    if not path.startswith(root + os.sep):
+        return None
+    return path
+
 @app.route('/har_captures', methods=['GET'])
 def api_har_captures():
     return jsonify({'captures': _har_captures_list()})
 
 @app.route('/har_captures/<filename>', methods=['GET'])
 def api_har_capture_download(filename):
-    if not _HAR_FILENAME_RE.match(filename or ''):
+    fpath = _capture_path(HAR_CAPTURE_DIR, filename, _HAR_FILENAME_RE)
+    if not fpath:
         return jsonify({'error': 'invalid filename'}), 400
-    fpath = os.path.join(HAR_CAPTURE_DIR, filename)
     if not os.path.isfile(fpath):
         return jsonify({'error': 'not found'}), 404
     try:
@@ -5325,10 +5343,11 @@ def api_har_capture_download(filename):
 
 @app.route('/har_captures/<filename>', methods=['DELETE'])
 def api_har_capture_delete(filename):
-    if not _HAR_FILENAME_RE.match(filename or ''):
+    fpath = _capture_path(HAR_CAPTURE_DIR, filename, _HAR_FILENAME_RE)
+    if not fpath:
         return jsonify({'success': False, 'error': 'invalid filename'}), 400
     try:
-        os.remove(os.path.join(HAR_CAPTURE_DIR, filename))
+        os.remove(fpath)
     except FileNotFoundError:
         pass
     except Exception:
@@ -5342,9 +5361,9 @@ def api_perf_captures():
 
 @app.route('/perf_captures/<filename>', methods=['GET'])
 def api_perf_capture_download(filename):
-    if not _PERF_FILENAME_RE.match(filename or ''):
+    fpath = _capture_path(PERF_CAPTURE_DIR, filename, _PERF_FILENAME_RE)
+    if not fpath:
         return jsonify({'error': 'invalid filename'}), 400
-    fpath = os.path.join(PERF_CAPTURE_DIR, filename)
     if not os.path.isfile(fpath):
         return jsonify({'error': 'not found'}), 404
     try:
@@ -5359,10 +5378,11 @@ def api_perf_capture_download(filename):
 
 @app.route('/perf_captures/<filename>', methods=['DELETE'])
 def api_perf_capture_delete(filename):
-    if not _PERF_FILENAME_RE.match(filename or ''):
+    fpath = _capture_path(PERF_CAPTURE_DIR, filename, _PERF_FILENAME_RE)
+    if not fpath:
         return jsonify({'success': False, 'error': 'invalid filename'}), 400
     try:
-        os.remove(os.path.join(PERF_CAPTURE_DIR, filename))
+        os.remove(fpath)
     except FileNotFoundError:
         pass
     except Exception:

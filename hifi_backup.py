@@ -705,7 +705,22 @@ def merge_sources_state(restored_raw, current_raw):
 
 # ── generations on disk ──────────────────────────────────────────────
 def _gen_dir(store, gen_id):
-    return os.path.join(store, gen_id)
+    """Directory of one generation, confined to `store`.
+
+    Generation ids reach here from URLs (/api/backup/<gen_id>) as well as
+    from our own listings. valid_gen_id() is the API-level check; this is
+    the backstop that holds even if a caller forgets it: an id that would
+    resolve anywhere outside the store raises instead of yielding a path."""
+    root = os.path.abspath(store)
+    path = os.path.abspath(os.path.join(root, str(gen_id)))
+    if not path.startswith(root + os.sep):
+        raise ValueError("invalid generation id")
+    return path
+
+
+def gen_dir(store, gen_id):
+    """Public name of _gen_dir() for the API layer."""
+    return _gen_dir(store, gen_id)
 
 
 def read_manifest(store, gen_id):
