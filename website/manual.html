@@ -272,7 +272,7 @@
         <h2>Hardware requirements</h2>
         <table>
           <tr><th>Component</th><th>Requirement</th></tr>
-          <tr><td>Computer</td><td>x86/x86-64 mini-PC</td></tr>
+          <tr><td>Computer</td><td>x86-64 (64-bit) mini-PC with <strong>UEFI firmware — mandatory</strong>, see the box below. Legacy BIOS-only machines are not supported.</td></tr>
           <tr><td>Storage</td><td>Internal disk/SSD to install onto (16gb minimum)</td></tr>
           <tr><td>USB stick</td><td>8&nbsp;GB or larger, needed only for the initial install</td></tr>
           <tr><td>Screen (optional)</td><td>1024×600 touchscreen recommended for "with screen" mode — not needed in headless or server-only mode</td></tr>
@@ -280,6 +280,16 @@
           <tr><td>Network</td><td>Ethernet or Wi-Fi</td></tr>
           <tr><td>Phone</td><td>Required for installation and first setup — any smartphone with a camera and a browser and/or a pc</td></tr>
         </table>
+        <div class="box warn">
+          <span class="label">UEFI firmware is mandatory</span>
+          <p>Osmium Sound installs and boots <strong>only</strong> on PCs with <strong>UEFI</strong> firmware, started in UEFI mode. Machines with a legacy BIOS only, or set to "Legacy"/"CSM" boot, are not supported. As a rule of thumb, any PC built from <strong>2015 onwards</strong> is fine — in particular platforms based on these CPU families all ship UEFI firmware:</p>
+          <ul>
+            <li><strong>Intel:</strong> Core i3/i5/i7/i9 from the 6th generation "Skylake" (2015) onwards — so 7th to 14th generation and Core Ultra too; the low-power Celeron/Pentium/Atom/N-series families "Braswell" (2015), "Apollo Lake" (2016), "Gemini Lake" (2017–2019), "Jasper Lake" (2021), "Alder Lake-N" (N95/N100/N200/i3-N305, 2023) and "Twin Lake" (N150, 2025) — the chips found in most mini-PCs.</li>
+            <li><strong>AMD:</strong> any Ryzen (2017 onwards, every generation) or Athlon on the AM4 socket; the A-series APUs "Carrizo" (2015) and "Bristol Ridge" (2016).</li>
+          </ul>
+          <p>Avoid Atom "Bay Trail"/"Cherry Trail" tablets and HDMI sticks (2013–2015): many of them have a 32-bit UEFI that cannot boot the 64-bit image. Older PCs may work if their firmware offers a UEFI mode, but we don't test them.</p>
+          <p>Not sure? If the PC came with Windows 8 or newer pre-installed, it has UEFI. On Windows, run <kbd>msinfo32</kbd> and check that "BIOS Mode" says <strong>UEFI</strong>. In the firmware setup make sure the boot mode is "UEFI" (not "Legacy" or "CSM only"), and when you pick the stick from the boot menu choose the entry that starts with <strong>UEFI:</strong> rather than the one without the prefix. UEFI yes, Secure Boot no: it has to be turned off, see <a href="#en-installation">Installation</a>.</p>
+        </div>
         <div class="box tip">
           <span class="label">Note</span>
           <p>No high-end hardware needed: Osmium Sound runs well on inexpensive or recycled mini-PCs.</p>
@@ -629,7 +639,7 @@
         <h2>Requisiti hardware</h2>
         <table>
           <tr><th>Componente</th><th>Requisito</th></tr>
-          <tr><td>Computer</td><td>Mini-PC x86/x86-64</td></tr>
+          <tr><td>Computer</td><td>Mini-PC x86-64 (64 bit) con firmware <strong>UEFI — obbligatorio</strong>, vedi il riquadro qui sotto. Le macchine con solo BIOS legacy non sono supportate.</td></tr>
           <tr><td>Storage</td><td>Disco/SSD interno per l'installazione (16gb minimo)</td></tr>
           <tr><td>Chiavetta USB</td><td>8&nbsp;GB o superiore, solo per l'installazione iniziale</td></tr>
           <tr><td>Schermo (opzionale)</td><td>Touchscreen 1024×600 consigliato per la modalità "con schermo" — non necessario in modalità headless o solo server</td></tr>
@@ -637,6 +647,16 @@
           <tr><td>Rete</td><td>Ethernet oppure Wi-Fi</td></tr>
           <tr><td>Telefono</td><td>Necessario per l'installazione e la prima configurazione — qualunque smartphone con fotocamera e browser e/o qualunque pc</td></tr>
         </table>
+        <div class="box warn">
+          <span class="label">Firmware UEFI obbligatorio</span>
+          <p>Osmium Sound si installa e si avvia <strong>solo</strong> su PC con firmware <strong>UEFI</strong>, avviati in modalità UEFI. Le macchine con solo BIOS legacy, o impostate sull'avvio "Legacy"/"CSM", non sono supportate. Come regola pratica va bene qualsiasi PC prodotto dal <strong>2015 in poi</strong> — in particolare le piattaforme basate su queste famiglie di CPU hanno tutte firmware UEFI:</p>
+          <ul>
+            <li><strong>Intel:</strong> Core i3/i5/i7/i9 dalla 6ª generazione "Skylake" (2015) in poi — quindi anche dalla 7ª alla 14ª generazione e Core Ultra; le famiglie a basso consumo Celeron/Pentium/Atom/serie N "Braswell" (2015), "Apollo Lake" (2016), "Gemini Lake" (2017–2019), "Jasper Lake" (2021), "Alder Lake-N" (N95/N100/N200/i3-N305, 2023) e "Twin Lake" (N150, 2025) — i chip della maggior parte dei mini-PC.</li>
+            <li><strong>AMD:</strong> qualsiasi Ryzen (dal 2017, tutte le generazioni) o Athlon su socket AM4; le APU serie A "Carrizo" (2015) e "Bristol Ridge" (2016).</li>
+          </ul>
+          <p>Evita invece tablet e "stick" HDMI con Atom "Bay Trail"/"Cherry Trail" (2013–2015): molti hanno un UEFI a 32 bit che non può avviare l'immagine a 64 bit. PC più vecchi possono funzionare se il firmware offre la modalità UEFI, ma non li testiamo.</p>
+          <p>Non sei sicuro? Se il PC è stato venduto con Windows 8 o successivo preinstallato, ha l'UEFI. Su Windows esegui <kbd>msinfo32</kbd> e controlla che "Modalità BIOS" indichi <strong>UEFI</strong>. Nel setup del firmware verifica che la modalità di avvio sia "UEFI" (non "Legacy" o "CSM only") e, quando scegli la chiavetta dal menu di boot, usa la voce che inizia con <strong>UEFI:</strong> anziché quella senza prefisso. UEFI sì, Secure Boot no: va disattivato, vedi <a href="#it-installazione">Installazione</a>.</p>
+        </div>
         <div class="box tip">
           <span class="label">Nota</span>
           <p>Non serve un dispositivo di fascia alta: Osmium Sound gira bene su mini-PC economici o riciclati.</p>
