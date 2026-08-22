@@ -56,6 +56,15 @@ const AppContent = () => {
     }, 600);
   }, []);
   const [isScreensaverActive, setIsScreensaverActive] = React.useState(false);
+  // The screensaver can also be raised on purpose, by tapping the clock in the
+  // Now Playing header. That one is a deliberate "screen off" — it must stay
+  // up until the user taps the screen again, so unlike the idle screensaver it
+  // ignores everything that normally wakes it (stray mouse moves, a track
+  // starting from the companion app, the idle timer re-arming). Mirrored in a
+  // ref because resetInactivityTimer is a stable ([]-deps) callback wired to
+  // document-level listeners and can't read the state value.
+  const [isManualScreensaver, setIsManualScreensaver] = React.useState(false);
+  const manualScreensaverRef = React.useRef(false);
   const [showWizard, setShowWizard] = React.useState(
     () => localStorage.getItem('firstSetupComplete') !== 'true'
   );
@@ -116,6 +125,10 @@ const AppContent = () => {
   const { showKeyboard } = useKeyboardActions();
 
   const resetInactivityTimer = React.useCallback(() => {
+    // Deliberate screensaver: activity doesn't dismiss it, and there's nothing
+    // to re-arm while it's up — wakeScreensaver() below restarts the idle
+    // timer once the user actually taps to come back.
+    if (manualScreensaverRef.current) return;
     setIsScreensaverActive(false);
     if (inactivityTimer.current) clearTimeout(inactivityTimer.current);
     const myToken = ++inactivityTokenRef.current;
@@ -128,6 +141,26 @@ const AppContent = () => {
       if (!isPlaying) setIsScreensaverActive(true);
       else resetInactivityTimer();
     }, 5 * 60 * 1000);
+  }, []);
+
+  // Tap-to-wake, and the only way out of a clock-started screensaver.
+  const wakeScreensaver = React.useCallback(() => {
+    manualScreensaverRef.current = false;
+    setIsManualScreensaver(false);
+    resetInactivityTimer();
+  }, [resetInactivityTimer]);
+
+  // Raised by the clock button in the Now Playing header (LyrionServer.jsx).
+  React.useEffect(() => {
+    const onStart = () => {
+      manualScreensaverRef.current = true;
+      setIsManualScreensaver(true);
+      setIsScreensaverActive(true);
+      if (inactivityTimer.current) clearTimeout(inactivityTimer.current);
+      inactivityTokenRef.current++; // discard whatever the pending idle check finds
+    };
+    window.addEventListener('hifi-start-screensaver', onStart);
+    return () => window.removeEventListener('hifi-start-screensaver', onStart);
   }, []);
 
   React.useEffect(() => {
@@ -144,15 +177,17 @@ const AppContent = () => {
   // controller) with no touch/mouse activity on the kiosk itself. Once the
   // screensaver is up, poll for that case and wake it — otherwise it would
   // keep covering the screen for the whole track.
+  // Not for a clock-started one: that's the user asking for the screen to stay
+  // dark *while* music plays, so polling for playback would defeat it.
   React.useEffect(() => {
-    if (!isScreensaverActive) return;
+    if (!isScreensaverActive || isManualScreensaver) return;
     const poll = setInterval(async () => {
       try {
         if (await isLocalPlayerPlaying()) resetInactivityTimer();
       } catch (_) {}
     }, 10 * 1000);
     return () => clearInterval(poll);
-  }, [isScreensaverActive, resetInactivityTimer]);
+  }, [isScreensaverActive, isManualScreensaver, resetInactivityTimer]);
 
   // Auto-show virtual keyboard on text input focus
   React.useEffect(() => {
@@ -269,7 +304,7 @@ const AppContent = () => {
     <div className="h-full w-full overflow-hidden bg-hifi-dark relative">
       <LyrionServer />
       {showWizard && <SetupWizard onComplete={() => setShowWizard(false)} />}
-      <Screensaver isActive={isScreensaverActive && !showWizard} onWake={() => setIsScreensaverActive(false)} />
+      <Screensaver isActive={isScreensaverActive && !showWizard} requireTap={isManualScreensaver} onWake={wakeScreensaver} />
       {usbToast && <UsbToast disk={usbToast} onDismiss={() => setUsbToast(null)} />}
       <UpdatePlanOverlay />
       {showIntro && createPortal(

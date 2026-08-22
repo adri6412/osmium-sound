@@ -287,6 +287,7 @@
     "connectingShort": "Connecting…",
     "reconnect": "Reconnect",
     "nowPlaying": "Now Playing",
+    "startScreensaver": "Start screensaver",
     "volumeFixed": "Volume is fixed at 100% (bit-perfect output). Change this in Settings → Playback.",
     "lyrics": "Lyrics",
     "vuMeters": "VU meters",

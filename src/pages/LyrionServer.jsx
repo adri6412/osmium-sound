@@ -16,6 +16,7 @@ import { systemAPI } from '../utils/api';
 import { useI18n } from '../i18n';
 import AnalogVUMeter from '../components/AnalogVUMeter';
 import LedBar from '../components/LedBar';
+import NowPlayingClock from '../components/NowPlayingClock';
 import CdRip from '../components/CdRip';
 import Discover from '../components/Discover';
 import ContextMenu from '../components/ContextMenu';
@@ -1634,10 +1635,17 @@ const LyrionServer = () => {
 
               {/* Close button row */}
               <div className="relative z-40 flex items-center justify-between px-5 pt-3 pb-1 shrink-0">
-                <button onClick={collapsePlayer}
-                  className="p-2 bg-white/10 hover:bg-white/20 rounded-full text-white transition-colors">
-                  <ChevronDown size={22} />
-                </button>
+                <div className="flex items-center gap-3">
+                  <button onClick={collapsePlayer}
+                    className="p-2 bg-white/10 hover:bg-white/20 rounded-full text-white transition-colors">
+                    <ChevronDown size={22} />
+                  </button>
+                  {/* Tapping the clock puts the screensaver up on demand (see
+                      App.jsx) — a "screen off" gesture within reach while a
+                      record plays, without waiting out the idle timer. */}
+                  <NowPlayingClock active={isPlayerExpanded} title={t('player.startScreensaver')}
+                    onActivate={() => window.dispatchEvent(new CustomEvent('hifi-start-screensaver'))} />
+                </div>
                 <p className="text-[10px] tracking-[0.25em] text-hifi-silver/70 uppercase">{t('player.nowPlaying')}</p>
                 <div className="flex items-center space-x-2">
                   {vuMeterEnabled && (

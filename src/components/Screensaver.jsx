@@ -13,7 +13,10 @@ const DRIFT_OFFSETS = [
 ];
 const DRIFT_INTERVAL_MS = 45000;
 
-const Screensaver = ({ isActive, onWake }) => {
+// `requireTap`: this screensaver was raised on purpose (the clock button in
+// the Now Playing header), not by the idle timer — a passing mouse move or a
+// grazed touch must not dismiss it, only a real tap/click on the screen.
+const Screensaver = ({ isActive, requireTap, onWake }) => {
   const { localeTag } = useI18n();
   const [time, setTime] = useState(new Date());
   const [driftIdx, setDriftIdx] = useState(0);
@@ -118,8 +121,12 @@ const Screensaver = ({ isActive, onWake }) => {
             </div>
           </div>
 
-          {/* Invisible overlay to catch any interaction */}
-          <div className="absolute inset-0" onMouseMove={onWake} onTouchStart={onWake} />
+          {/* Invisible overlay to catch any interaction. A tap/click always
+              wakes (it bubbles to the onClick above); move/touch-start only
+              count for the idle screensaver — see `requireTap`. */}
+          <div className="absolute inset-0"
+            onMouseMove={requireTap ? undefined : onWake}
+            onTouchStart={requireTap ? undefined : onWake} />
         </motion.div>
       )}
     </AnimatePresence>,
