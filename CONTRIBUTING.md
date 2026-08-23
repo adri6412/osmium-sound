@@ -8,9 +8,6 @@ Thanks for considering a contribution! Pull requests and issues are welcome on
 - Development happens on the **`svil`** branch — target your pull requests
   there, not at `main` (which tracks production releases).
 - Keep changes focused; one topic per pull request.
-- User-facing strings (kiosk UI, web admin, API messages) must be provided in
-  **both English and Italian** (the OS installer flow is the one exception —
-  it stays English-only).
 - For local development setup, see
   [ARCHITECTURE.md](ARCHITECTURE.md).
 
