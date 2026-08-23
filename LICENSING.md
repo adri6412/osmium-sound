@@ -19,8 +19,7 @@ complete corresponding source code.
 
 If the AGPL terms don't fit your use case — for example, you want to build a
 commercial product or hosted service based on this code without publishing
-your changes under the AGPL — a **separate commercial license** may be
-asked to the copyright holder.
+your changes under the AGPL — a **separate commercial license** may be requested from the copyright holder.
 
 Contact: **info@osmiumsound.it**
 
