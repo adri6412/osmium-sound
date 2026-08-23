@@ -3918,6 +3918,26 @@ def _fetch_release(channel):
         _RELEASE_CACHE[channel] = (now, release)
         return release
 
+def _debian_codename():
+    """VERSION_CODENAME from /etc/os-release ('bookworm', 'trixie', ...), or
+    '' if it can't be determined. Python-side counterpart of os-update/
+    lib.sh's hifi_suite() -- kept separate rather than shared since this
+    module has no shell/subprocess dependency on that file."""
+    try:
+        return platform.freedesktop_os_release().get('VERSION_CODENAME', '')
+    except Exception:
+        return ''
+
+# Debian 12 (bookworm) devices can't take an OS update built for a release
+# that assumes Debian 13 (trixie) -- see distro/build-distro.sh's labwc/
+# wlr-randr/xwayland requirement, packages that only exist from trixie
+# onward now that the kiosk session moved to Wayland. Rather than let such a
+# device fetch and apply a bundle it can't actually use (and land in some
+# half-upgraded state), every update channel is blocked outright once this
+# ships to it, and Settings shows a banner telling the owner to reinstall
+# from the new (Debian 13) ISO instead of trying to update in place.
+_OTA_BLOCKED_CODENAMES = ('bookworm',)
+
 def _check_release_update(current, prefix, channel=None):
     """Look at the relevant GitHub Release and return update info for the asset
     whose name starts with `prefix` (e.g. 'hifi-ui-' or 'hifi-system-').
@@ -3927,6 +3947,13 @@ def _check_release_update(current, prefix, channel=None):
     one to check prod/dev independently of whatever the device's own channel
     setting happens to be, without touching it."""
     channel = channel or get_ota_channel()
+    if _debian_codename() in _OTA_BLOCKED_CODENAMES:
+        # Deliberately not `error`: build_update_plan()/_plan_step_from_info()
+        # treat that as a failed check and report it; this is a clean,
+        # permanent "nothing to do here", with `blocked` as the extra signal
+        # the update.jsx/.vue banners key off.
+        return {'current': current, 'latest': None, 'channel': channel,
+                'update_available': False, 'blocked': 'debian12'}
     try:
         release = _fetch_release(channel)
     except Exception:

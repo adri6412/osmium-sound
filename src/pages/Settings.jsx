@@ -1674,6 +1674,10 @@ const Settings = ({ initialSection, onSectionConsumed } = {}) => {
   };
 
   const coreUpdateAvailable = !!(appUpdate?.update_available || systemUpdate?.update_available || osUpdate?.update_available);
+  // Debian 12 devices can't take an update built for Debian 13 (see
+  // api_server.py's _check_release_update()) -- every channel check reports
+  // this instead of a normal available/error result.
+  const otaBlockedByOs = appUpdate?.blocked === 'debian12' || systemUpdate?.blocked === 'debian12' || osUpdate?.blocked === 'debian12';
 
   // ui/system/os ship from the same tagged release, so their `notes` are
   // normally identical — take whichever check response has one.
@@ -4102,7 +4106,12 @@ const Settings = ({ initialSection, onSectionConsumed } = {}) => {
                     </div>
 
                     {/* Status summary */}
-                    {coreUpdateAvailable ? (
+                    {otaBlockedByOs ? (
+                      <div className="flex items-start space-x-2 text-sm bg-red-900/20 text-red-300 border border-red-500/30 rounded-lg p-3">
+                        <AlertTriangle size={16} className="mt-0.5 shrink-0" />
+                        <span>{t('settings.updates.debian12Banner')}</span>
+                      </div>
+                    ) : coreUpdateAvailable ? (
                       <div className="rounded-lg p-3 text-center text-sm bg-hifi-gold/20 text-hifi-gold border border-hifi-gold/40">
                         {t('settings.updates.available')}
                       </div>
@@ -4111,7 +4120,7 @@ const Settings = ({ initialSection, onSectionConsumed } = {}) => {
                         {t('settings.updates.upToDate')}
                       </div>
                     ) : null}
-                    {(appUpdate?.error || systemUpdate?.error || osUpdate?.error) && (
+                    {!otaBlockedByOs && (appUpdate?.error || systemUpdate?.error || osUpdate?.error) && (
                       <div className="rounded-lg p-3 text-center text-sm bg-red-900/20 text-red-300 border border-red-500/30">
                         {appUpdate?.error || systemUpdate?.error || osUpdate?.error}
                       </div>
@@ -4127,27 +4136,29 @@ const Settings = ({ initialSection, onSectionConsumed } = {}) => {
                     )}
 
                     {/* Check for updates */}
-                    <motion.button
-                      onClick={refreshAllChecks}
-                      disabled={isCheckingUpdate || isCheckingSystem || isCheckingOs || isApplyingAll}
-                      className="w-full bg-hifi-accent hover:bg-hifi-light disabled:bg-hifi-dark text-white py-3 rounded-lg font-medium flex items-center justify-center space-x-2 transition-colors"
-                      whileTap={{ scale: (isCheckingUpdate || isCheckingSystem || isCheckingOs) ? 1 : 0.95 }}
-                    >
-                      {(isCheckingUpdate || isCheckingSystem || isCheckingOs) ? (
-                        <>
-                          <Loader2 size={18} className="animate-spin" />
-                          <span>{t('settings.updates.checking')}</span>
-                        </>
-                      ) : (
-                        <>
-                          <RotateCw size={18} />
-                          <span>{t('settings.updates.checkButton')}</span>
-                        </>
-                      )}
-                    </motion.button>
+                    {!otaBlockedByOs && (
+                      <motion.button
+                        onClick={refreshAllChecks}
+                        disabled={isCheckingUpdate || isCheckingSystem || isCheckingOs || isApplyingAll}
+                        className="w-full bg-hifi-accent hover:bg-hifi-light disabled:bg-hifi-dark text-white py-3 rounded-lg font-medium flex items-center justify-center space-x-2 transition-colors"
+                        whileTap={{ scale: (isCheckingUpdate || isCheckingSystem || isCheckingOs) ? 1 : 0.95 }}
+                      >
+                        {(isCheckingUpdate || isCheckingSystem || isCheckingOs) ? (
+                          <>
+                            <Loader2 size={18} className="animate-spin" />
+                            <span>{t('settings.updates.checking')}</span>
+                          </>
+                        ) : (
+                          <>
+                            <RotateCw size={18} />
+                            <span>{t('settings.updates.checkButton')}</span>
+                          </>
+                        )}
+                      </motion.button>
+                    )}
 
                     {/* Single apply button: System → UI → OS */}
-                    {coreUpdateAvailable && (
+                    {!otaBlockedByOs && coreUpdateAvailable && (
                       <motion.button
                         onClick={applyAllUpdates}
                         disabled={isApplyingAll}

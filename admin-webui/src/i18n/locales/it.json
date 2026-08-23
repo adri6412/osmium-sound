@@ -489,6 +489,8 @@
       "stable": "Stabile",
       "dev": "Sviluppo",
       "upToDate": "aggiornato",
+      "debian12Short": "reinstallazione richiesta",
+      "debian12Banner": "Questo dispositivo utilizza ancora Debian 12. I prossimi aggiornamenti richiedono Debian 13 — reinstallalo dall'ultima ISO per continuare a ricevere gli aggiornamenti.",
       "updateAll": "Aggiorna tutto",
       "checking": "Controllo…",
       "checkAgain": "Controlla di nuovo",

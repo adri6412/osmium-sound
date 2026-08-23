@@ -2596,6 +2596,19 @@ def apply_to_lyrion(state):
     finally:
         _run(["systemctl", "start", LYRION_SERVICE], timeout=60)
 
+    # The docstring says "restart + rescan", but starting the service back up
+    # does NOT rescan by itself -- Lyrion has no idea mediadirs changed, since
+    # the prefs file was rewritten directly while it was stopped rather than
+    # through a pref it can react to. Without an explicit kick here, whatever
+    # ends up in the library is just whatever was already in the DB before
+    # this ran, which can be an incomplete scan: a source added moments ago
+    # already got a live rescan (_lyrion_push_live()'s force_rescan) queued
+    # in the background, and the stop above cuts it short mid-walk on a slow
+    # network share. Retries because Lyrion's JSON-RPC isn't reachable the
+    # instant systemctl returns -- best-effort, since the prefs write above
+    # already succeeded either way and a manual rescan is always available.
+    _lyrion_wait_and_rescan()
+
     # Whatever subpaths were staged are now actually live in Lyrion --
     # clear the pending flag so _sync_from_lyrion() resumes reconciling
     # these sources normally. Re-read+save rather than reuse the `state`
@@ -4746,6 +4759,28 @@ def _lyrion_request(params, timeout=10):
 
 def _lyrion_rescan():
     _lyrion_request(["rescan"])
+
+
+def _lyrion_wait_and_rescan(attempts=30, delay=2):
+    """Wait for Lyrion's JSON-RPC to come back up after a `systemctl start`
+    (it isn't reachable the instant the unit is reported started -- Perl
+    startup + plugin init takes a few seconds), then trigger a rescan. Used
+    by apply_to_lyrion() right after its restart, since that path rewrites
+    mediadirs straight into the prefs file while the service is stopped --
+    Lyrion has no pref-change hook to react to and never rescans on its own
+    just because the file changed underneath it. Best-effort: apply_to_lyrion()
+    has already written the prefs successfully either way by the time this
+    runs, and a rescan is always reachable by hand (Settings, or Lyrion's own
+    web UI) if every attempt here fails. Returns True once the rescan request
+    itself was accepted."""
+    for _ in range(attempts):
+        try:
+            _lyrion_rescan()
+            return True
+        except Exception:
+            time.sleep(delay)
+    print("[sources] apply: gave up waiting for Lyrion to rescan")
+    return False
 
 
 def _lyrion_edit_mediadirs_live(drop_roots=(), add_paths=(), force_rescan=False):

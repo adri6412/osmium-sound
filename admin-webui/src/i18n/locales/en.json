@@ -489,6 +489,8 @@
       "stable": "Stable",
       "dev": "Development",
       "upToDate": "up to date",
+      "debian12Short": "reinstall required",
+      "debian12Banner": "This device still runs Debian 12. Future updates require Debian 13 — reinstall it from the latest ISO to keep receiving updates.",
       "updateAll": "Update all",
       "checking": "Checking…",
       "checkAgain": "Check again",

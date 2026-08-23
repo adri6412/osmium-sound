@@ -700,6 +700,10 @@ async function checkAll() {
   updBusy.value = false;
 }
 const hasUpdates = () => Object.keys(kinds).some(k => upd[k] && upd[k].update_available);
+// Debian 12 devices can't take an update built for Debian 13 (see
+// api_server.py's _check_release_update()) -- every channel check reports
+// this instead of a normal available/error result.
+const otaBlockedByOs = () => Object.keys(kinds).some(k => upd[k] && upd[k].blocked === 'debian12');
 const sleep = (ms) => new Promise(res => setTimeout(res, ms));
 
 // "What's new" popup — ui/system/os all ship from the same tagged release, so
@@ -1462,12 +1466,16 @@ onUnmounted(() => {
         <span>{{ kindLabels[k] }}
           <span class="muted" v-if="upd[k]">
             {{ upd[k].current || '—' }}<template v-if="upd[k].update_available"> → <span class="gold">{{ upd[k].latest }}</span></template>
+            <template v-else-if="upd[k].blocked === 'debian12'"> · {{ t('settings.updates.debian12Short') }}</template>
             <template v-else> · {{ t('settings.updates.upToDate') }}</template>
           </span>
           <span class="muted" v-else> · —</span>
         </span>
       </div>
-      <div class="row" style="margin-top: 12px;">
+      <p class="sub" v-if="otaBlockedByOs()" style="color: var(--danger); margin-top: 10px;">
+        {{ t('settings.updates.debian12Banner') }}
+      </p>
+      <div class="row" style="margin-top: 12px;" v-if="!otaBlockedByOs()">
         <button v-if="hasUpdates()" :disabled="applying.active" @click="applyAll">{{ t('settings.updates.updateAll') }}</button>
         <button class="secondary" :disabled="updBusy || applying.active" @click="checkAll">{{ updBusy ? t('settings.updates.checking') : t('settings.updates.checkAgain') }}</button>
       </div>

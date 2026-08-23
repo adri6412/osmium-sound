@@ -667,6 +667,7 @@
       "signed": "signed",
       "available": "Update available",
       "upToDate": "Everything up to date",
+      "debian12Banner": "This device still runs Debian 12. Future updates require Debian 13 — reinstall it from the latest ISO to keep receiving updates.",
       "checking": "Checking...",
       "checkButton": "Check for updates",
       "updating": "Updating...",
