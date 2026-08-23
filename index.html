@@ -420,29 +420,20 @@
     .flasher-block h3 { margin: 0 0 0.4rem; font-size: 1.05rem; }
     .flasher-block > p { margin: 0 0 1.1rem; opacity: 0.85; font-size: 0.92rem; }
 
-    .dl-picker {
-      display: flex; flex-wrap: wrap; align-items: flex-end; gap: 0.8rem;
+    .dl-os { margin-bottom: 0.9rem; }
+    /* Links inside the notes: the page's accent, not the browser's blue. */
+    .dl-warning a, .flasher-note a { color: var(--accent); font-weight: 600; }
+    .dl-actions {
+      display: flex; flex-wrap: wrap; align-items: center; gap: 0.8rem;
       margin-bottom: 0.9rem;
     }
-    .dl-field { display: flex; flex-direction: column; gap: 0.3rem; }
-    .dl-field label { font-size: 0.78rem; opacity: 0.7; }
-    .dl-field select {
-      appearance: none;
-      padding: 0.55rem 2rem 0.55rem 0.8rem;
-      border-radius: 8px;
-      border: 1px solid rgba(255, 255, 255, 0.18);
-      background-color: rgba(0, 0, 0, 0.35);
-      /* Inline chevron: the CSP forbids remote assets, and a data: URI keeps
-         the control from falling back to the platform's default look. */
-      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath fill='%23d8a35a' d='M1 1l5 5 5-5'/%3E%3C/svg%3E");
-      background-repeat: no-repeat;
-      background-position: right 0.7rem center;
-      color: inherit; font: inherit; font-size: 0.9rem; cursor: pointer;
+    /* The other platforms stay one click away: people do download for a
+       machine other than the one they are sitting at. */
+    .dl-os-switch { margin: 0.6rem 0 0; font-size: 0.82rem; opacity: 0.75; }
+    .dl-os-switch a { color: var(--accent); }
+    .dl-os-switch a.is-current {
+      color: inherit; font-weight: 600; text-decoration: none; pointer-events: none;
     }
-    .dl-field select:focus { outline: 2px solid rgba(216, 163, 90, 0.6); outline-offset: 1px; }
-    /* Native dropdown lists are drawn by the OS, which does not inherit the
-       page's dark palette on every platform. */
-    .dl-field select option { background: #191c1f; color: #e8eaec; }
 
     /* The ISO stays available, one step down: most people want the app. */
     .dl-alt {
@@ -452,21 +443,6 @@
       text-align: left;
     }
     .dl-alt-head { margin: 0 0 0.7rem; font-size: 0.88rem; opacity: 0.7; }
-
-    .mac-cmds { margin: 0 0 0.9rem; }
-    .mac-cmds p { margin: 0 0 0.6rem; font-size: 0.86rem; line-height: 1.6; }
-    .mac-cmds .mac-cmds-after { margin: 0.6rem 0 0; opacity: 0.8; }
-    .mac-cmds pre.cmd {
-      margin: 0; padding: 0.7rem 0.9rem;
-      border-radius: 8px;
-      background: rgba(0, 0, 0, 0.45);
-      border: 1px solid rgba(255, 255, 255, 0.14);
-      overflow-x: auto;
-    }
-    .mac-cmds pre.cmd code {
-      background: none; padding: 0; font-size: 0.82rem;
-      white-space: pre; user-select: all; line-height: 1.7;
-    }
 
     .flasher-note pre.cmd {
       margin: 0.6rem 0 0.6rem 1.1rem;
@@ -496,8 +472,8 @@
     }
 
     @media (max-width: 640px) {
-      .dl-picker { flex-direction: column; align-items: stretch; }
-      .dl-picker .btn-primary { justify-content: center; }
+      .dl-actions { flex-direction: column; align-items: stretch; }
+      .dl-actions .btn-primary, .dl-actions .btn-secondary { justify-content: center; }
     }
 
     .quickstart {
@@ -740,7 +716,7 @@
 
     <p class="install-warning">
       <span class="warn-ico">⚠️</span>
-      <span data-en="&lt;strong&gt;Standard x86 PCs with UEFI firmware only.&lt;/strong&gt; UEFI is mandatory — legacy BIOS-only machines are not supported. Chromebooks and Intel-based Macs are not supported either: their firmware is locked down by the manufacturer and refuses to boot anything else, unless you flash third-party modified firmware (not provided or endorsed by the manufacturer) and/or use drivers dedicated to that specific platform — neither of which this project provides or supports." data-it="&lt;strong&gt;Solo PC x86 standard con firmware UEFI.&lt;/strong&gt; L&#39;UEFI è obbligatorio: le macchine con solo BIOS legacy non sono supportate. Non sono supportati nemmeno Chromebook e Mac con processore Intel: il loro firmware è bloccato dal produttore e impedisce l&#39;avvio di qualsiasi altro sistema operativo, se non tramite un firmware modificato di terze parti (non fornito né avallato dal produttore) e/o driver dedicati a quella specifica piattaforma — che questo progetto non fornisce né supporta."><strong>Standard x86 PCs with UEFI firmware only.</strong> UEFI is mandatory — legacy BIOS-only machines are not supported. Chromebooks and Intel-based Macs are not supported either: their firmware is locked down by the manufacturer and refuses to boot anything else, unless you flash third-party modified firmware (not provided or endorsed by the manufacturer) and/or use drivers dedicated to that specific platform — neither of which this project provides or supports.</span>
+      <span data-en="&lt;strong&gt;Standard x86 PCs with UEFI firmware only.&lt;/strong&gt; UEFI is mandatory — legacy BIOS-only machines are not supported. Chromebooks are not supported either: their firmware is locked down by the manufacturer and refuses to boot anything else, unless you flash third-party modified firmware (not provided or endorsed by the manufacturer) and/or use drivers dedicated to that specific platform — neither of which this project provides or supports." data-it="&lt;strong&gt;Solo PC x86 standard con firmware UEFI.&lt;/strong&gt; L&#39;UEFI è obbligatorio: le macchine con solo BIOS legacy non sono supportate. Non sono supportati nemmeno i Chromebook: il loro firmware è bloccato dal produttore e impedisce l&#39;avvio di qualsiasi altro sistema operativo, se non tramite un firmware modificato di terze parti (non fornito né avallato dal produttore) e/o driver dedicati a quella specifica piattaforma — che questo progetto non fornisce né supporta."><strong>Standard x86 PCs with UEFI firmware only.</strong> UEFI is mandatory — legacy BIOS-only machines are not supported. Chromebooks are not supported either: their firmware is locked down by the manufacturer and refuses to boot anything else, unless you flash third-party modified firmware (not provided or endorsed by the manufacturer) and/or use drivers dedicated to that specific platform — neither of which this project provides or supports.</span>
     </p>
 
     <p class="install-warning">
@@ -750,34 +726,55 @@
 
     <div class="flasher-block" data-flasher-version="1.0.0">
       <h3 data-en="The simplest way" data-it="Il modo più semplice">The simplest way</h3>
-      <p data-en="&lt;strong&gt;Osmium Flasher&lt;/strong&gt; downloads the image itself, checks its signature and writes the stick for you, then walks you through booting the mini PC and running the installer on it. No other tool, and no chance of picking the wrong disk — your system drive is never even listed. Pick the computer you will prepare the stick on, not the mini PC." data-it="&lt;strong&gt;Osmium Flasher&lt;/strong&gt; scarica l&#x27;immagine da solo, ne verifica la firma e scrive la chiavetta al posto tuo, poi ti guida nell&#x27;avvio del mini PC e nell&#x27;installer che ci gira sopra. Nessun altro programma e nessun rischio di sbagliare disco: quello di sistema non viene nemmeno elencato. Scegli il computer con cui preparerai la chiavetta, non il mini PC."><strong>Osmium Flasher</strong> downloads the image itself, checks its signature and writes the stick for you, then walks you through booting the mini PC and running the installer on it. No other tool, and no chance of picking the wrong disk — your system drive is never even listed. Pick the computer you will prepare the stick on, not the mini PC.</p>
-      <div class="dl-picker">
-        <div class="dl-field">
-          <label for="flasherOs" data-en="Operating system" data-it="Sistema operativo">Operating system</label>
-          <select id="flasherOs">
-            <option value="win">Windows</option>
-            <option value="mac">macOS</option>
-            <option value="linux">Linux</option>
-          </select>
+      <p data-en="&lt;strong&gt;Osmium Flasher&lt;/strong&gt; downloads the image itself, checks its signature and writes the stick for you, then walks you through booting the mini PC and running the installer on it. No other tool, and no chance of picking the wrong disk — your system drive is never even listed." data-it="&lt;strong&gt;Osmium Flasher&lt;/strong&gt; scarica l&#x27;immagine da solo, ne verifica la firma e scrive la chiavetta al posto tuo, poi ti guida nell&#x27;avvio del mini PC e nell&#x27;installer che ci gira sopra. Nessun altro programma e nessun rischio di sbagliare disco: quello di sistema non viene nemmeno elencato."><strong>Osmium Flasher</strong> downloads the image itself, checks its signature and writes the stick for you, then walks you through booting the mini PC and running the installer on it. No other tool, and no chance of picking the wrong disk — your system drive is never even listed.</p>
+
+      <!-- One panel per platform; the script shows the visitor's own one. -->
+      <div class="dl-os" data-os="win" hidden>
+        <div class="dl-actions">
+          <a class="btn-primary flasher-dl">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            <span data-en="Download Osmium Flasher for Windows" data-it="Scarica Osmium Flasher per Windows">Download Osmium Flasher for Windows</span>
+          </a>
         </div>
-        <a class="btn-primary" id="flasherDownloadBtn">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-          <span data-en="Download Osmium Flasher" data-it="Scarica Osmium Flasher">Download Osmium Flasher</span>
-        </a>
+        <p class="dl-warning" data-en="&lt;strong&gt;Heads up:&lt;/strong&gt; the app is not code-signed, so Windows will warn you the first time you open it. That is expected — the note below says how to get past it." data-it="&lt;strong&gt;Attenzione:&lt;/strong&gt; l&#x27;app non è firmata digitalmente, quindi Windows ti avviserà al primo avvio. È previsto, e la nota qui sotto spiega come procedere."><strong>Heads up:</strong> the app is not code-signed, so Windows will warn you the first time you open it. That is expected — the note below says how to get past it.</p>
+        <details class="flasher-note" open>
+          <summary data-en="Windows — “unknown publisher”" data-it="Windows — “editore sconosciuto”">Windows — “unknown publisher”</summary>
+          <p data-en="Osmium Flasher is not code-signed, so SmartScreen stops it the first time. Click &lt;strong&gt;More info&lt;/strong&gt;, then &lt;strong&gt;Run anyway&lt;/strong&gt;. Windows will also ask for administrator rights: writing to a raw device needs them." data-it="Osmium Flasher non è firmato digitalmente, quindi la prima volta SmartScreen lo blocca. Clicca su &lt;strong&gt;Ulteriori informazioni&lt;/strong&gt; e poi su &lt;strong&gt;Esegui comunque&lt;/strong&gt;. Windows chiederà anche i permessi di amministratore: scrivere direttamente su un dispositivo li richiede.">Osmium Flasher is not code-signed, so SmartScreen stops it the first time. Click <strong>More info</strong>, then <strong>Run anyway</strong>. Windows will also ask for administrator rights: writing to a raw device needs them.</p>
+        </details>
       </div>
-      <div class="mac-cmds" id="macCmds" hidden>
-        <p data-en="&lt;strong&gt;There is no macOS build.&lt;/strong&gt; macOS guards raw disk devices with a permission it grants by code signature, and an unsigned application cannot obtain it — the app could fetch and verify the image, but never write it." data-it="&lt;strong&gt;Per macOS non esiste un&#x27;applicazione.&lt;/strong&gt; macOS protegge i dispositivi disco con un permesso che concede in base alla firma del codice, e un&#x27;applicazione non firmata non può ottenerlo — l&#x27;app potrebbe scaricare e verificare l&#x27;immagine, ma non scriverla mai."><strong>There is no macOS build.</strong> macOS guards raw disk devices with a permission it grants by code signature, and an unsigned application cannot obtain it — the app could fetch and verify the image, but never write it.</p>
-        <p class="mac-cmds-after" data-en="Download the image below and write it with &lt;a href=&quot;https://etcher.balena.io/&quot; target=&quot;_blank&quot; rel=&quot;noopener&quot;&gt;balenaEtcher&lt;/a&gt; instead. It is signed and notarized by its makers, so macOS lets it do what it needs to. Everything after that — booting the mini PC and running the installer — is exactly the same." data-it="Scarica l&#x27;immagine qui sotto e scrivila con &lt;a href=&quot;https://etcher.balena.io/&quot; target=&quot;_blank&quot; rel=&quot;noopener&quot;&gt;balenaEtcher&lt;/a&gt;. È firmato e notarizzato dai suoi autori, quindi macOS gli concede quello che serve. Tutto il resto — avviare il mini PC ed eseguire l&#x27;installer — è identico.">Download the image below and write it with <a href="https://etcher.balena.io/" target="_blank" rel="noopener">balenaEtcher</a> instead. It is signed and notarized by its makers, so macOS lets it do what it needs to. Everything after that — booting the mini PC and running the installer — is exactly the same.</p>
+
+      <div class="dl-os" data-os="linux" hidden>
+        <div class="dl-actions">
+          <a class="btn-primary flasher-dl">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            <span data-en="Download Osmium Flasher for Linux" data-it="Scarica Osmium Flasher per Linux">Download Osmium Flasher for Linux</span>
+          </a>
+        </div>
+        <details class="flasher-note" open>
+          <summary data-en="Linux — one executable file" data-it="Linux — un solo file eseguibile">Linux — one executable file</summary>
+          <p data-en="Make it executable with &lt;code&gt;chmod +x Osmium-Flasher-*.run&lt;/code&gt; and run it. No warning to dismiss; you will get a polkit password prompt when the write starts. It is a self-extracting executable rather than an AppImage on purpose — an AppImage is mounted so that root cannot read it, which is exactly what the elevated write needs to do." data-it="Rendilo eseguibile con &lt;code&gt;chmod +x Osmium-Flasher-*.run&lt;/code&gt; e avvialo. Nessun avviso da chiudere; al momento della scrittura comparirà la richiesta password di polkit. È un eseguibile auto-estraente e non un AppImage di proposito: un AppImage viene montato in modo che root non possa leggerlo, ed è proprio quello che serve alla scrittura privilegiata.">Make it executable with <code>chmod +x Osmium-Flasher-*.run</code> and run it. No warning to dismiss; you will get a polkit password prompt when the write starts. It is a self-extracting executable rather than an AppImage on purpose — an AppImage is mounted so that root cannot read it, which is exactly what the elevated write needs to do.</p>
+        </details>
       </div>
-      <p class="dl-warning" data-en="&lt;strong&gt;Heads up:&lt;/strong&gt; the app is not code-signed, so Windows and macOS will warn you the first time you open it. That is expected, and the note below says how to get past it." data-it="&lt;strong&gt;Attenzione:&lt;/strong&gt; l&#x27;app non è firmata digitalmente, quindi Windows e macOS ti avviseranno al primo avvio. È previsto, e la nota qui sotto spiega come procedere."><strong>Heads up:</strong> the app is not code-signed, so Windows and macOS will warn you the first time you open it. That is expected, and the note below says how to get past it.</p>
-      <details class="flasher-note" data-osnote="win" hidden>
-        <summary data-en="Windows — “unknown publisher”" data-it="Windows — “editore sconosciuto”">Windows — “unknown publisher”</summary>
-        <p data-en="Osmium Flasher is not code-signed, so SmartScreen stops it the first time. Click &lt;strong&gt;More info&lt;/strong&gt;, then &lt;strong&gt;Run anyway&lt;/strong&gt;. Windows will also ask for administrator rights: writing to a raw device needs them." data-it="Osmium Flasher non è firmato digitalmente, quindi la prima volta SmartScreen lo blocca. Clicca su &lt;strong&gt;Ulteriori informazioni&lt;/strong&gt; e poi su &lt;strong&gt;Esegui comunque&lt;/strong&gt;. Windows chiederà anche i permessi di amministratore: scrivere direttamente su un dispositivo li richiede.">Osmium Flasher is not code-signed, so SmartScreen stops it the first time. Click <strong>More info</strong>, then <strong>Run anyway</strong>. Windows will also ask for administrator rights: writing to a raw device needs them.</p>
-      </details>
-      <details class="flasher-note" data-osnote="linux" hidden>
-        <summary data-en="Linux — one executable file" data-it="Linux — un solo file eseguibile">Linux — one executable file</summary>
-        <p data-en="Make it executable with &lt;code&gt;chmod +x Osmium-Flasher-*.run&lt;/code&gt; and run it. No warning to dismiss; you will get a polkit password prompt when the write starts. It is a self-extracting executable rather than an AppImage on purpose — an AppImage is mounted so that root cannot read it, which is exactly what the elevated write needs to do." data-it="Rendilo eseguibile con &lt;code&gt;chmod +x Osmium-Flasher-*.run&lt;/code&gt; e avvialo. Nessun avviso da chiudere; al momento della scrittura comparirà la richiesta password di polkit. È un eseguibile auto-estraente e non un AppImage di proposito: un AppImage viene montato in modo che root non possa leggerlo, ed è proprio quello che serve alla scrittura privilegiata.">Make it executable with <code>chmod +x Osmium-Flasher-*.run</code> and run it. No warning to dismiss; you will get a polkit password prompt when the write starts. It is a self-extracting executable rather than an AppImage on purpose — an AppImage is mounted so that root cannot read it, which is exactly what the elevated write needs to do.</p>
-      </details>
+
+      <div class="dl-os" data-os="mac" hidden>
+        <p class="dl-warning" data-en="&lt;strong&gt;On macOS there is no Osmium Flasher.&lt;/strong&gt; Download the ISO and write it to a USB stick (8&amp;nbsp;GB or more) with &lt;a href=&quot;https://etcher.balena.io/&quot; target=&quot;_blank&quot; rel=&quot;noopener&quot;&gt;balenaEtcher&lt;/a&gt;. Everything after that — booting the mini PC and running the installer — is exactly the same." data-it="&lt;strong&gt;Su macOS Osmium Flasher non c&#x27;è.&lt;/strong&gt; Scarica la ISO e scrivila su una chiavetta USB (da 8&amp;nbsp;GB in su) con &lt;a href=&quot;https://etcher.balena.io/&quot; target=&quot;_blank&quot; rel=&quot;noopener&quot;&gt;balenaEtcher&lt;/a&gt;. Tutto il resto — avviare il mini PC ed eseguire l&#x27;installer — è identico."><strong>On macOS there is no Osmium Flasher.</strong> Download the ISO and write it to a USB stick (8&nbsp;GB or more) with <a href="https://etcher.balena.io/" target="_blank" rel="noopener">balenaEtcher</a>. Everything after that — booting the mini PC and running the installer — is exactly the same.</p>
+        <div class="dl-actions">
+          <!-- Same file and version as the ISO button further down: the script copies them. -->
+          <a class="btn-primary" id="macIsoBtn">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            <span class="iso-badge"><span data-en="Download ISO" data-it="Scarica ISO">Download ISO</span><small></small></span>
+          </a>
+          <a class="btn-secondary" href="https://etcher.balena.io/" target="_blank" rel="noopener">
+            <span data-en="Get balenaEtcher" data-it="Scarica balenaEtcher">Get balenaEtcher</span>
+          </a>
+        </div>
+      </div>
+
+      <p class="dl-os-switch">
+        <span data-when="known" data-en="Not your system?" data-it="Non è il tuo sistema?">Not your system?</span>
+        <span data-when="unknown" data-en="Pick the system of the computer you will prepare the stick on — not the mini PC:" data-it="Scegli il sistema del computer con cui preparerai la chiavetta, non del mini PC:">Pick the system of the computer you will prepare the stick on — not the mini PC:</span>
+        <a href="#install" data-pick="win">Windows</a> · <a href="#install" data-pick="mac">macOS</a> · <a href="#install" data-pick="linux">Linux</a>
+      </p>
     </div>
 
     <div class="dl-alt">
@@ -1203,9 +1200,8 @@
     if (e.key === 'ArrowRight') goTo(current + 1);
   });
 
+  // Osmium Flasher block: show the download for the visitor's own platform.
   const flasherBlock = document.querySelector('.flasher-block');
-  const osSelect = document.getElementById('flasherOs');
-  const flasherBtn = document.getElementById('flasherDownloadBtn');
 
   // One version in one place: the filenames differ only by this suffix.
   const FLASHER_SUFFIX = {
@@ -1213,48 +1209,54 @@
     'linux': 'linux-x86_64.run',
   };
 
-  // Keeps the link and the visible note in step with the dropdown. Only the
-  // selected platform's note is shown: three open at once is just noise.
-  function syncFlasher() {
-    if (!flasherBtn || !osSelect || !flasherBlock) return;
-    const version = flasherBlock.dataset.flasherVersion;
-    const suffix = FLASHER_SUFFIX[osSelect.value];
-    if (suffix) {
-      flasherBtn.setAttribute('href',
-        'https://file.osmiumsound.it/Osmium-Flasher-' + version + '-' + suffix);
-    }
-    // There is nothing to download on macOS, so the button gives way to the
-    // explanation and the pointer to balenaEtcher.
-    const onMac = osSelect.value === 'mac';
-    flasherBtn.hidden = onMac;
-    const macCmds = document.getElementById('macCmds');
-    if (macCmds) macCmds.hidden = !onMac;
-
-    const wanted = onMac ? 'mac' : osSelect.value;
-    document.querySelectorAll('.flasher-note').forEach(note => {
-      note.hidden = note.dataset.osnote !== wanted;
-      // Open it rather than leaving it folded: it carries the warning the
-      // visitor is about to run into, and one behind a click is one unread.
-      note.open = !note.hidden;
+  // Shows one platform's panel and marks it in the switch line. 'other'
+  // (phones, unknown platforms) shows no panel and asks the visitor to pick.
+  function showFlasherFor(os) {
+    if (!flasherBlock) return;
+    flasherBlock.querySelectorAll('.dl-os').forEach(panel => {
+      panel.hidden = panel.dataset.os !== os;
+    });
+    flasherBlock.querySelectorAll('.dl-os-switch [data-pick]').forEach(a => {
+      a.classList.toggle('is-current', a.dataset.pick === os);
+    });
+    const known = Object.prototype.hasOwnProperty.call(FLASHER_SUFFIX, os) || os === 'mac';
+    flasherBlock.querySelectorAll('.dl-os-switch [data-when]').forEach(s => {
+      s.hidden = s.dataset.when !== (known ? 'known' : 'unknown');
     });
   }
 
-  if (osSelect) osSelect.addEventListener('change', syncFlasher);
+  if (flasherBlock) {
+    const version = flasherBlock.dataset.flasherVersion;
+    Object.keys(FLASHER_SUFFIX).forEach(os => {
+      const a = flasherBlock.querySelector('.dl-os[data-os="' + os + '"] .flasher-dl');
+      if (a) a.setAttribute('href',
+        'https://file.osmiumsound.it/Osmium-Flasher-' + version + '-' + FLASHER_SUFFIX[os]);
+    });
+    // macOS gets the ISO itself — same file and version as the button below,
+    // copied so that a release bump still touches one place.
+    const iso = document.getElementById('isoDownloadBtn');
+    const macIso = document.getElementById('macIsoBtn');
+    if (iso && macIso) {
+      macIso.setAttribute('href', iso.getAttribute('href'));
+      const v = iso.querySelector('small'), mv = macIso.querySelector('small');
+      if (v && mv) mv.textContent = v.textContent;
+    }
+    flasherBlock.querySelectorAll('.dl-os-switch [data-pick]').forEach(a => {
+      a.addEventListener('click', e => { e.preventDefault(); showFlasherFor(a.dataset.pick); });
+    });
 
-  // Preselect the visitor's own platform. Every option stays available: people
-  // do download for a machine other than the one they are sitting at.
-  if (osSelect) {
+    // Detect the visitor's own platform. Android is a phone, not a Linux PC,
+    // and on a phone there is nothing to download: ask instead.
     const hay = ((navigator.userAgentData && navigator.userAgentData.platform)
       || navigator.platform || '') + ' ' + (navigator.userAgent || '');
     const low = hay.toLowerCase();
-    let pick = null;
+    let pick = 'other';
     if (low.indexOf('win') !== -1) pick = 'win';
-    else if (low.indexOf('linux') !== -1 && low.indexOf('android') === -1) pick = 'linux';
+    else if (low.indexOf('android') !== -1 || low.indexOf('iphone') !== -1 || low.indexOf('ipad') !== -1) pick = 'other';
+    else if (low.indexOf('linux') !== -1) pick = 'linux';
     else if (low.indexOf('mac') !== -1) pick = 'mac';
-    if (pick) osSelect.value = pick;
+    showFlasherFor(pick);
   }
-
-  syncFlasher();
 
   // Auto-advance
   function startAuto() { autoTimer = setInterval(() => goTo(current + 1), 4800); }
