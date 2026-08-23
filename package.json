@@ -19,7 +19,7 @@
     "touchscreen"
   ],
   "author": "HiFi Audio <admin@hifiaudio.local>",
-  "license": "MIT",
+  "license": "AGPL-3.0-only",
   "dependencies": {
     "framer-motion": "^13.0.0",
     "lucide-react": "^0.294.0",

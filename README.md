@@ -8,7 +8,7 @@
 Bit-perfect audio, streaming services, and signed OTA updates — one sleek dark interface.
 
 ![Platform](https://img.shields.io/badge/platform-Electron-blue)
-![License](https://img.shields.io/badge/license-MIT-green)
+![License](https://img.shields.io/badge/license-AGPL--3.0-green)
 ![Node](https://img.shields.io/badge/node-20%2B-brightgreen)
 [![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/P4K825K4Y6)
 
@@ -48,7 +48,7 @@ Bit-perfect audio, streaming services, and signed OTA updates — one sleek dark
 | **Max resolution** | 32-bit / 192kHz PCM |
 | **Output** | USB DAC, HDMI |
 | **Update system** | Signed OTA (Ed25519), Prod/Dev channels |
-| **License** | MIT (app code) — see [Licensing](#-licensing) |
+| **License** | AGPL-3.0 (app code), commercial licenses available — see [Licensing](#-licensing) |
 
 ## 🚀 Get started
 
@@ -78,15 +78,19 @@ Control Osmium Sound from your phone — browse the library, drive playback and 
 
 ## 📄 Licensing
 
-**The application code authored by this project** (Electron/React frontend, Vue web admin, Python services, distro packaging, flasher, hardware designs) is released under the **MIT License** — see [`LICENSE`](LICENSE).
+**The application code authored by this project** (Electron/React frontend, Vue web admin, Python services, distro packaging, flasher, hardware designs) is released under the **GNU Affero General Public License v3.0 only (AGPL-3.0-only)** — see [`LICENSE`](LICENSE). The project is **dual-licensed**: if the AGPL doesn't fit your use case (e.g. a commercial product or service that can't publish its source), commercial licenses are available — write to **info@osmiumsound.it**. See [`LICENSING.md`](LICENSING.md) for details.
 
-**This project also includes and redistributes third-party components** under their own licenses (Lyrion Music Server and squeezelite under GPL, Android companion app under Apache-2.0, npm/Python dependencies under MIT/BSD/ISC). See [`THIRD-PARTY-NOTICES.md`](THIRD-PARTY-NOTICES.md) for the complete list, license texts, and source locations.
+**Exception:** the Android companion app (`android-companion/`) remains under **Apache-2.0**, as it is a rebranded derivative of [android-squeezer](https://github.com/kaaholst/android-squeezer).
+
+**Historical note:** code published by this project **before 2026-08-23** (all releases up to that date) was released under the MIT License and remains available under those terms; the AGPL-3.0 applies from this change onward.
+
+**This project also includes and redistributes third-party components** under their own licenses (Lyrion Music Server and squeezelite under GPL, npm/Python dependencies under MIT/BSD/ISC/Apache-2.0). See [`THIRD-PARTY-NOTICES.md`](THIRD-PARTY-NOTICES.md) for the complete list, license texts, and source locations.
 
 **Disclaimer of affiliation:** Osmium Sound is an independent open-source project and is **NOT affiliated with, sponsored by, endorsed by, or officially associated with** the Lyrion Music Server project or the LMS-Community. "Lyrion" is used in a nominative sense only, to describe the service this frontend connects to.
 
 ## 🤝 Contributing & support
 
-Contributions are welcome — pull requests and issues are open on [GitHub](https://github.com/adri6412/osmium-sound). For questions, open an issue, write to support@osmiumsound.it, or check the docs above.
+Contributions are welcome — pull requests and issues are open on [GitHub](https://github.com/adri6412/osmium-sound). First-time contributors are asked to sign the project's [Contributor License Agreement](CLA.md) (a bot guides you through it on your first PR) — see [CONTRIBUTING.md](CONTRIBUTING.md). For questions, open an issue, write to support@osmiumsound.it, or check the docs above.
 
 If Osmium Sound is useful to you, you can support its development on Ko-fi:
 

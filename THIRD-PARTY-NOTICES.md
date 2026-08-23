@@ -3,7 +3,7 @@
 <!-- Also rendered in-app (Settings → Third-Party Notices) from src/data/thirdPartyNotices.js.
      Keep that file in sync whenever a dependency is added, removed or changed here. -->
 
-Osmium Sound includes and/or redistributes the following third-party components under their respective licenses. **The MIT License of this project applies ONLY to the project's own code** (Electron/React kiosk, Vue web admin, Python services, distro packaging scripts, Osmium Flasher, the "Osmium" theme/CSS for Material Skin). All third-party components are subject to their own licenses.
+Osmium Sound includes and/or redistributes the following third-party components under their respective licenses. **The AGPL-3.0-only license of this project applies ONLY to the project's own code** (Electron/React kiosk, Vue web admin, Python services, distro packaging scripts, Osmium Flasher, the "Osmium" theme/CSS for Material Skin) — with the exception of the Android companion app, which remains Apache-2.0 (see below), and of code published before 2026-08-23, which was released under MIT (see `LICENSING.md`). All third-party components are subject to their own licenses.
 
 **Osmium Sound is an independent project and is NOT affiliated with, sponsored by, or endorsed by the Lyrion / LMS-Community project.**
 
@@ -27,7 +27,7 @@ The above GPL-licensed components (Lyrion, squeezelite, CD tools, …) are unmod
 - **Lyrion 9.1.0**: [LMS-Community GitHub](https://github.com/LMS-Community/slimserver/releases/tag/v9.1.0)
 - **Debian packages**: [Debian source repositories](https://deb.debian.org/debian-source/), suite `trixie`
 
-A complete source code archive matching this ISO can be provided upon written request to `support@osmiumsound.it`.
+A complete source code archive matching this ISO can be provided upon written request to `info@osmiumsound.it`.
 
 **Historical note:** install ISOs **v2.5.7 and earlier** bundled Lyrion 9.1.0 directly as a file in the image, rather than downloading it at first boot (the model described above, used from v2.6.0-era images onward). Earlier images were built on Debian 12 "bookworm"; current images are built on Debian 13 "trixie". The source offer above covers those older ISOs too.
 
@@ -98,7 +98,7 @@ For a complete list, see `requirements.txt` and `distro/config/package-lists/hif
 
 ## Not Bundled (Runtime Interaction Only)
 
-- **Lyrion Material Skin** (GPL-3.0, Craig Drummond) — the Lyrion web player. It is **not redistributed** by this project: the appliance downloads it at runtime from the LMS community plugin repository and installs it into Lyrion the same way Lyrion installs any plugin. The "Osmium" theme, global CSS and menu entry (`distro/config/includes.chroot/usr/local/share/hifi-lms-skin/`) are this project's own files (MIT) placed into Material's documented user-customisation hooks.
+- **Lyrion Material Skin** (GPL-3.0, Craig Drummond) — the Lyrion web player. It is **not redistributed** by this project: the appliance downloads it at runtime from the LMS community plugin repository and installs it into Lyrion the same way Lyrion installs any plugin. The "Osmium" theme, global CSS and menu entry (`distro/config/includes.chroot/usr/local/share/hifi-lms-skin/`) are this project's own files (AGPL-3.0-only) placed into Material's documented user-customisation hooks.
 - **Lyrion plugins** (various licenses: Spotty, TIDAL, Qobuz, Deezer, RadioNowPlaying, Radio.net, MusicArtistInfo, ShairTunes2, UPnP/DLNA, …) — installed on demand from the setup wizard or the Lyrion web UI and NOT bundled.
 - **MusicBrainz** web service — queried at runtime for CD metadata; data under MusicBrainz's own terms.
 
@@ -110,8 +110,8 @@ Osmium Sound is an **independent open-source project** developed to provide a to
 
 ---
 
-**For license compliance questions or to request source code, please contact:** `support@osmiumsound.it`
+**For license compliance questions or to request source code, please contact:** `info@osmiumsound.it`
 
 ---
 
-**Last reviewed:** 2026-08-22, against `package.json`, `admin-webui/package.json`, `flasher/package.json`, `requirements.txt`, `distro/config/package-lists/hifi.list.chroot` and `android-companion/HiFiMediaPlayer/build.gradle`.
+**Last reviewed:** 2026-08-23 (full transitive npm scan with license-checker for the AGPL relicensing), against `package.json`, `admin-webui/package.json`, `flasher/package.json`, `requirements.txt`, `distro/config/package-lists/hifi.list.chroot` and `android-companion/HiFiMediaPlayer/build.gradle`.

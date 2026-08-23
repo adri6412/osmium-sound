@@ -5,7 +5,7 @@
   "description": "Downloads the current Osmium Sound installer image and writes it to a USB stick",
   "main": "src/main.js",
   "author": "Osmium Sound <support@osmiumsound.it>",
-  "license": "MIT",
+  "license": "AGPL-3.0-only",
   "private": true,
   "scripts": {
     "start": "electron .",

@@ -2,6 +2,7 @@
   "name": "osmium-admin-webui",
   "version": "1.0.0",
   "private": true,
+  "license": "AGPL-3.0-only",
   "type": "module",
   "description": "Osmium Sound — web admin UI (served by webui_server.py, separate from the Electron kiosk)",
   "scripts": {
