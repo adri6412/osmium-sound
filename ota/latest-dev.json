@@ -1,41 +1,41 @@
 {
-  "tag_name": "v2.5.23-dev.1",
-  "name": "v2.5.23-dev.1",
-  "body": "## What's new in v2.5.23-dev.1\n\n- feat(sources): scelta cartella NAS prima di Lyrion + fallback ntfs-3g\n- fix(sito): link nelle install-note in giallo accento, non blu default\n- style(sito): sposta l'avviso prima-release fuori dai warning rossi\n- docs(sito): disclaimer prima release pubblica \u2014 segnalare anomalie\n- fix(sito): disclaimer requisiti hardware \u2014 solo UEFI, no BIOS legacy\n- docs(sito): disclaimer requisiti hardware \u2014 solo PC x86 standard\n- feat(beta): banner \"beta non pi\u00f9 necessaria\" \u2014 rimanda alla release pubblica\n- feat(sito): il download ISO del sito di prod punta alla v2.5.22\n- Update README.md\n",
+  "tag_name": "v2.5.23-dev.2",
+  "name": "v2.5.23-dev.2",
+  "body": "## What's new in v2.5.23-dev.2\n\n- feat(updates): banner reinstallazione su Debian 12 + fix rescan Lyrion\n",
   "assets": [
     {
-      "name": "hifi-ui-v2.5.23-dev.1.tar.gz",
-      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.23-dev.1/hifi-ui-v2.5.23-dev.1.tar.gz",
-      "size": 134698002
+      "name": "hifi-ui-v2.5.23-dev.2.tar.gz",
+      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.23-dev.2/hifi-ui-v2.5.23-dev.2.tar.gz",
+      "size": 134693891
     },
     {
-      "name": "hifi-ui-v2.5.23-dev.1.tar.gz.sha256",
-      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.23-dev.1/hifi-ui-v2.5.23-dev.1.tar.gz.sha256",
+      "name": "hifi-ui-v2.5.23-dev.2.tar.gz.sha256",
+      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.23-dev.2/hifi-ui-v2.5.23-dev.2.tar.gz.sha256",
       "size": 95
     },
     {
-      "name": "hifi-system-v2.5.23-dev.1.tar.gz",
-      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.23-dev.1/hifi-system-v2.5.23-dev.1.tar.gz",
-      "size": 402699
+      "name": "hifi-system-v2.5.23-dev.2.tar.gz",
+      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.23-dev.2/hifi-system-v2.5.23-dev.2.tar.gz",
+      "size": 404055
     },
     {
-      "name": "hifi-system-v2.5.23-dev.1.tar.gz.sha256",
-      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.23-dev.1/hifi-system-v2.5.23-dev.1.tar.gz.sha256",
+      "name": "hifi-system-v2.5.23-dev.2.tar.gz.sha256",
+      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.23-dev.2/hifi-system-v2.5.23-dev.2.tar.gz.sha256",
       "size": 99
     },
     {
-      "name": "hifi-os-v2.5.23-dev.1.tar.gz",
-      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.23-dev.1/hifi-os-v2.5.23-dev.1.tar.gz",
+      "name": "hifi-os-v2.5.23-dev.2.tar.gz",
+      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.23-dev.2/hifi-os-v2.5.23-dev.2.tar.gz",
       "size": 1392326
     },
     {
-      "name": "hifi-os-v2.5.23-dev.1.tar.gz.sha256",
-      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.23-dev.1/hifi-os-v2.5.23-dev.1.tar.gz.sha256",
+      "name": "hifi-os-v2.5.23-dev.2.tar.gz.sha256",
+      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.23-dev.2/hifi-os-v2.5.23-dev.2.tar.gz.sha256",
       "size": 95
     },
     {
-      "name": "hifi-os-v2.5.23-dev.1.tar.gz.sha256.sig",
-      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.23-dev.1/hifi-os-v2.5.23-dev.1.tar.gz.sha256.sig",
+      "name": "hifi-os-v2.5.23-dev.2.tar.gz.sha256.sig",
+      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.23-dev.2/hifi-os-v2.5.23-dev.2.tar.gz.sha256.sig",
       "size": 64
     }
   ]
