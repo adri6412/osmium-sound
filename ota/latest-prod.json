@@ -1,41 +1,41 @@
 {
-  "tag_name": "v2.5.22",
-  "name": "v2.5.22",
-  "body": "## What's new in v2.5.22\n\n- docs: allinea tutta la documentazione al codice attuale, nuovo logo\n- docs(sito): manuale, requisiti \u2014 firmware UEFI obbligatorio + famiglie CPU dal 2015\n- feat(sito): mail info@osmiumsound.it per comunicazioni generiche\n- feat(sito): avviso reinstallazione per beta su Debian 12 + donazioni Ko-fi\n- chore(sito): manuale, rimossi i finti screenshot del primo avvio\n- fix(sito): manuale, testo inline non spezzato dal CSS + sezione Multiroom aggiornata\n- feat(sito): il download ISO del sito di prod punta alla v2.5.21\n- feat(release): publish-iso.sh riusa la firma della Release se valida (niente chiave)\n- feat(release): tool per firmare una ISO e generare latest.json per file.osmiumsound.it\n",
+  "tag_name": "v2.5.23",
+  "name": "v2.5.23",
+  "body": "## What's new in v2.5.23\n\n- Minor fixes and internal improvements.\n",
   "assets": [
     {
-      "name": "hifi-ui-v2.5.22.tar.gz",
-      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.22/hifi-ui-v2.5.22.tar.gz",
-      "size": 134700436
+      "name": "hifi-ui-v2.5.23.tar.gz",
+      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.23/hifi-ui-v2.5.23.tar.gz",
+      "size": 134695326
     },
     {
-      "name": "hifi-ui-v2.5.22.tar.gz.sha256",
-      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.22/hifi-ui-v2.5.22.tar.gz.sha256",
+      "name": "hifi-ui-v2.5.23.tar.gz.sha256",
+      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.23/hifi-ui-v2.5.23.tar.gz.sha256",
       "size": 89
     },
     {
-      "name": "hifi-system-v2.5.22.tar.gz",
-      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.22/hifi-system-v2.5.22.tar.gz",
-      "size": 400734
+      "name": "hifi-system-v2.5.23.tar.gz",
+      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.23/hifi-system-v2.5.23.tar.gz",
+      "size": 404046
     },
     {
-      "name": "hifi-system-v2.5.22.tar.gz.sha256",
-      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.22/hifi-system-v2.5.22.tar.gz.sha256",
+      "name": "hifi-system-v2.5.23.tar.gz.sha256",
+      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.23/hifi-system-v2.5.23.tar.gz.sha256",
       "size": 93
     },
     {
-      "name": "hifi-os-v2.5.22.tar.gz",
-      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.22/hifi-os-v2.5.22.tar.gz",
-      "size": 1392054
+      "name": "hifi-os-v2.5.23.tar.gz",
+      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.23/hifi-os-v2.5.23.tar.gz",
+      "size": 1392322
     },
     {
-      "name": "hifi-os-v2.5.22.tar.gz.sha256",
-      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.22/hifi-os-v2.5.22.tar.gz.sha256",
+      "name": "hifi-os-v2.5.23.tar.gz.sha256",
+      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.23/hifi-os-v2.5.23.tar.gz.sha256",
       "size": 89
     },
     {
-      "name": "hifi-os-v2.5.22.tar.gz.sha256.sig",
-      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.22/hifi-os-v2.5.22.tar.gz.sha256.sig",
+      "name": "hifi-os-v2.5.23.tar.gz.sha256.sig",
+      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.23/hifi-os-v2.5.23.tar.gz.sha256.sig",
       "size": 64
     }
   ]
