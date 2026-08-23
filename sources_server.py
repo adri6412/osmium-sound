@@ -745,7 +745,16 @@ def _mount_adopted_disk(src, root):
         opts = "rw,noatime,nosuid,nodev"
 
     spec = f"PARTUUID={partuuid}" if partuuid else f"UUID={fsuuid}"
-    r = _run(["mount", "-t", _fs_mount_type(fstype), "-o", opts, spec, mountpoint], timeout=30)
+    mount_type = _fs_mount_type(fstype)
+    r = _run(["mount", "-t", mount_type, "-o", opts, spec, mountpoint], timeout=30)
+    if r.returncode != 0 and mount_type == "ntfs3":
+        # The in-kernel ntfs3 driver chokes on some real-world NTFS quirks (a
+        # dirty $LogFile from an unclean Windows shutdown, older NTFS
+        # versions, ...) that the far more forgiving FUSE ntfs-3g driver
+        # handles fine -- see os-update/apply.d/0053-ntfs-support.sh for what
+        # installs it. Same mount options: ntfs-3g understands the same
+        # uid=/gid=/fmask=/dmask=/iocharset= as ntfs3.
+        r = _run(["mount", "-t", "ntfs-3g", "-o", opts, spec, mountpoint], timeout=30)
     if r.returncode != 0:
         return False, (r.stderr or r.stdout or _ht('mount.genericFailed', _hlang())).strip()
 
@@ -852,9 +861,14 @@ _usb_state = None
 def _fs_mount_type(fstype):
     """Explicit `mount -t` type for a given fstype, used by the adopted
     (internal/USB) read-write mount so it gets a consistent kernel-driver
-    mapping rather than relying on autodetection."""
+    mapping rather than relying on autodetection.
+
+    NTFS tries the in-kernel ntfs3 driver first (no extra package, and fast)
+    -- _mount_adopted_disk() falls back to the ntfs-3g FUSE driver itself if
+    that mount actually fails, since ntfs3 is pickier about real-world NTFS
+    quirks than ntfs-3g."""
     if fstype == "ntfs":
-        return "ntfs3"                       # in-kernel NTFS (no ntfs-3g needed)
+        return "ntfs3"
     if fstype in ("vfat", "exfat", "ntfs3", "msdos"):
         return fstype
     return "auto"
@@ -2370,12 +2384,22 @@ def current_paths(state):
     untrusted archive content that never goes through api_add_smb()/
     api_add_local()'s own validation. Without this, a crafted backup with
     e.g. {"type":"local", "path":"/"} would get handed straight to Lyrion as
-    a media directory."""
+    a media directory.
+
+    A source flagged pending_activation (api_add_smb()'s defer_activation:
+    mounted, but the user hasn't yet picked "whole share" vs. a subfolder via
+    api_set_subpath()) is skipped entirely -- this is what keeps it out of
+    Lyrion via *every* path, not just the live push api_add_smb() itself
+    skips: the restart-based apply_to_lyrion() safety net (still used by the
+    first-run wizard) rebuilds mediadirs from this function too, and would
+    otherwise hand over the bare mount root before the user ever chose."""
     smb_root = os.path.realpath(MOUNT_ROOT)
     internal_root = os.path.realpath(INTERNAL_MOUNT_ROOT)
     usb_root = os.path.realpath(USB_ADOPTED_ROOT)
     paths = []
     for src in state.get("sources", []):
+        if src.get("pending_activation"):
+            continue
         t = src.get("type")
         if t == "smb":
             mp = src.get("mountpoint")
@@ -4125,6 +4149,13 @@ def api_add_smb():
         return _err("msg.smbFieldsRequired", 400)
     name = data.get("name") or f"{server}/{share}"
     sid = _slug("smb", server, share)
+    # Opt-in, backward-compatible: callers that don't ask to defer (the kiosk's
+    # SourcesManager.jsx today) keep the old behaviour of handing the whole
+    # mount straight to Lyrion. The wizard and webui's Settings -> Sources
+    # pass this so they can let the user pick "whole share" vs. a subfolder
+    # (via the existing api_browse_subpath()/api_set_subpath() picker) between
+    # the mount succeeding and anything reaching Lyrion.
+    defer = bool(data.get("defer_activation"))
     src = {
         "id": sid,
         "type": "smb",
@@ -4138,6 +4169,12 @@ def api_add_smb():
         # sources are an existing NAS library the appliance should only read.
         "rw": bool(data.get("rw")),
     }
+    if defer:
+        # current_paths() (and so both _lyrion_push_live() and the restart-
+        # based apply_to_lyrion() safety net) skips any source flagged like
+        # this, so it can't reach Lyrion by any path until api_set_subpath()
+        # clears the flag -- see current_paths()'s docstring.
+        src["pending_activation"] = True
     ok, msg = mount_smb(src)
     if not ok:
         return _err("msg.mountFailed", 400, detail=msg)
@@ -4146,8 +4183,10 @@ def api_add_smb():
         state["sources"] = [s for s in state["sources"] if s.get("id") != sid]
         state["sources"].append(src)
         save_state(state)
-    _lyrion_push_live(add_paths=[src["mountpoint"]])
-    return jsonify({"success": True, "message": msg})
+    if not defer:
+        _lyrion_push_live(add_paths=[src["mountpoint"]])
+    return jsonify({"success": True, "message": msg, "id": sid,
+                    "mountpoint": src["mountpoint"], "pending_activation": defer})
 
 
 @app.route("/api/sources/<sid>/rw", methods=["POST"])
@@ -4191,7 +4230,13 @@ def api_set_subpath(sid):
     Lyrion's own "pick a folder" step in its setup wizard: the subfolder
     choice now lives in state we control (current_paths() applies it) and
     survives the next Apply instead of being silently reset to the mount
-    root."""
+    root.
+
+    Also doubles as the confirm step for a deferred add (api_add_smb()'s
+    defer_activation): a source still flagged pending_activation has never
+    reached Lyrion at all, so an empty subpath here means "the whole share,
+    thanks" rather than "no change" -- either way, this is what first clears
+    the flag and lets current_paths() see it."""
     denied = _require_pair_token()
     if denied:
         return denied
@@ -4204,6 +4249,7 @@ def api_set_subpath(sid):
             return _err("msg.sourceNotFound", 404)
         if src.get("type") not in ("smb", "internal", "usb"):
             return _err("msg.subpathNotSupported", 400)
+        was_pending = bool(src.get("pending_activation"))
         mountpoint = src.get("mountpoint")
         if subpath and mountpoint:
             root = os.path.realpath(mountpoint)
@@ -4220,6 +4266,7 @@ def api_set_subpath(sid):
         # /api/sources poll landing in that window sees Lyrion still showing
         # the old mediadir and "reconciles" this pick right back out.
         src["subpath_pending"] = True
+        src.pop("pending_activation", None)
         save_state(state)
         target = current_paths({"sources": [src]})
     # Swap the old mediadir for the newly picked subfolder right away: there
@@ -4232,7 +4279,8 @@ def api_set_subpath(sid):
                 if s.get("id") == sid:
                     s.pop("subpath_pending", None)
             save_state(fresh)
-    return jsonify({"success": True, "message": _m("msg.subpathSaved")})
+    return jsonify({"success": True,
+                    "message": _m("msg.sourceActivated" if was_pending else "msg.subpathSaved")})
 
 
 @app.route("/api/sources/<sid>/browse", methods=["GET"])
@@ -5193,6 +5241,7 @@ SOURCES_I18N = {
         "msg.noChange": "No change needed.",
         "msg.subpathNotSupported": "This source type doesn't support a subfolder.",
         "msg.subpathSaved": "Subfolder saved — the library is being updated.",
+        "msg.sourceActivated": "Source added — the library is being updated.",
         "msg.rebootRequired": "Saved — reboot the device for this to take effect.",
         "msg.pickPartition": "Select a partition that has a filesystem.",
         "msg.partitionNoFs": "That partition has no filesystem.",
@@ -5335,6 +5384,7 @@ SOURCES_I18N = {
         "msg.noChange": "Nessuna modifica necessaria.",
         "msg.subpathNotSupported": "Questo tipo di sorgente non supporta una sottocartella.",
         "msg.subpathSaved": "Sottocartella salvata — la libreria si sta aggiornando.",
+        "msg.sourceActivated": "Sorgente aggiunta — la libreria si sta aggiornando.",
         "msg.rebootRequired": "Salvato — riavvia il dispositivo perché la modifica abbia effetto.",
         "msg.pickPartition": "Seleziona una partizione con filesystem.",
         "msg.partitionNoFs": "Partizione senza filesystem.",

@@ -263,6 +263,8 @@
       "subpathNoSubfolders": "Nessuna sottocartella qui.",
       "subpathUseRoot": "Usa tutto il disco/condivisione",
       "subpathSaved": "Sottocartella salvata — la libreria si sta aggiornando.",
+      "chooseFolderHint": "Scegli se usare l'intera condivisione o solo una sottocartella qui sotto.",
+      "pendingChoice": "Non ancora aggiunta alla libreria — scegli una cartella qui sotto per completare.",
       "newFolderPlaceholder": "Nome nuova cartella",
       "newFolderCreate": "Crea",
       "localSambaHint": "Condividi anche questa cartella in rete (SMB), così puoi caricarci musica da un PC.",

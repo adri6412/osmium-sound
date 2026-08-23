@@ -169,9 +169,25 @@ async function addSmb() {
   if (!smb.server.trim() || !smb.share.trim()) return;
   busy.value = true;
   say(t('settings.sources.mounting'));
-  const r = await api.sourcesAddSmb({ ...smb });
-  say(r.ok ? t('settings.sources.mounted') : ((r.data && r.data.message) || t('common.error')), !r.ok);
-  if (r.ok) { smb.server = ''; smb.share = ''; smb.username = ''; smb.password = ''; smb.rw = false; changed(); }
+  // defer_activation: mount only, don't hand the share to Lyrion yet -- the
+  // user still needs to pick "whole share" or a subfolder below, through the
+  // same browse/subpath endpoints as "Pick a subfolder" on an existing
+  // source (see sources_server.py's api_add_smb()/api_set_subpath()).
+  const r = await api.sourcesAddSmb({ ...smb, defer_activation: true });
+  if (!r.ok) {
+    say((r.data && r.data.message) || t('common.error'), true);
+    busy.value = false;
+    return;
+  }
+  smb.server = ''; smb.share = ''; smb.username = ''; smb.password = ''; smb.rw = false;
+  await loadSources();
+  loadSmbCard();
+  const added = sources.value.find((s) => s.id === r.data.id);
+  if (added) {
+    open.value = 'active';
+    openBrowse(added);
+  }
+  say(t('settings.sources.chooseFolderHint'));
   busy.value = false;
 }
 
@@ -354,6 +370,9 @@ onUnmounted(() => {
               <div class="muted" :style="{ color: sourceOk(s) ? '' : 'var(--danger)' }">{{ sourceSub(s) }}</div>
               <div v-if="s.usage" class="muted" style="opacity: 0.75;">
                 {{ t('settings.sources.freeOf', { free: fmtBytes(s.usage.free), total: fmtBytes(s.usage.total) }) }}
+              </div>
+              <div v-if="s.pending_activation" class="muted" style="color: var(--danger);">
+                {{ t('settings.sources.pendingChoice') }}
               </div>
             </div>
             <div class="row" style="flex-wrap: wrap; justify-content: flex-end;">

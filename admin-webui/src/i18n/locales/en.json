@@ -263,6 +263,8 @@
       "subpathUseRoot": "Use whole drive/share",
       "subpathNoSubfolders": "No subfolders here.",
       "subpathSaved": "Subfolder saved — the library is being updated.",
+      "chooseFolderHint": "Choose whether to use the whole share or just a subfolder below.",
+      "pendingChoice": "Not added to the library yet — pick a folder below to finish.",
       "newFolderPlaceholder": "New folder name",
       "newFolderCreate": "Create",
       "localSambaHint": "Also share this folder over the network (SMB), so you can copy music onto it from a PC.",

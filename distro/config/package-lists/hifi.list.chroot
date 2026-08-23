@@ -126,6 +126,10 @@ python3-numpy
 cifs-utils
 samba
 exfatprogs
+# NTFS adopted-disk fallback (see os-update/apply.d/0053-ntfs-support.sh):
+# sources_server.py mounts NTFS disks with the in-kernel ntfs3 driver first,
+# retrying with ntfs-3g when that fails on a quirky real-world NTFS volume.
+ntfs-3g
 # WS-Discovery + LLMNR responder: what actually makes the shares appear in
 # Windows Explorer's "Network" (nmbd is masked for boot speed and Explorer
 # stopped browsing over NetBIOS with SMB1 anyway). Starts/stops with smbd —
