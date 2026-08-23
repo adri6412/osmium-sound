@@ -6,8 +6,8 @@ Osmium Sound (formerly HiFi Media Player) ships as a full appliance image (OS + 
 
 | Version                  | Supported          |
 | ------------------------ | ------------------ |
-| 2.5.21 (latest stable)   | :white_check_mark: |
-| < 2.5.21                 | :x: (please update via OTA or the latest ISO) |
+| 2.5.23 (latest stable)   | :white_check_mark: |
+| < 2.5.22                | :x: (please update via OTA or the latest ISO) |
 
 Pre-release builds are not covered by this policy — they exist for testing only:
 `vX.Y.Z-dev.N` (the public **dev** channel, cut from the `svil` branch) and
@@ -109,7 +109,7 @@ admin UI served by `webui_server.py`; the Android companion talks to
 Instead, report it privately using one of these methods:
 
 - Open a [GitHub Security Advisory](https://github.com/adri6412/osmium-sound/security/advisories/new) (preferred — keeps the report private until resolved).
-- Email support@osmiumsound.it with details of the issue.
+- Email info@osmiumsound.it with details of the issue.
 
 Please include as much of the following as you can:
 
