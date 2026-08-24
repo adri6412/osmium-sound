@@ -94,6 +94,30 @@ APP="$(command -v hifi-media-player || true)"
 # --touch-events=enabled: innocuo, l'appliance è touch-first; su X11 il touch
 # lo espone comunque XI2.
 #
+# Contenimento RAM (misurato su unità da 4 GB: ~322 MB di PSS per i 6 processi
+# Chromium senza questi flag):
+#   --no-zygote: elimina i due processi zygote (~28 MB PSS). Lo zygote serve a
+#     forkare renderer sandboxati; qui la sandbox è già disattivata
+#     (--no-sandbox, obbligatorio con --no-zygote) e i renderer partono con
+#     exec diretto. Il recovery da crash del renderer (render-process-gone in
+#     main/main.js) continua a funzionare: ritestarlo se si cambia questo flag.
+#     (NON aggiungere NetworkServiceInProcess: provato, il Chromium di
+#     Electron 43 parsa la feature ma la ignora — l'utility process del
+#     network service resta comunque.)
+#   --enable-low-end-device-mode: euristiche Chromium per dispositivi con poca
+#     RAM (cache V8/immagini/tile ridotte): −44 MB misurati sulla VM, UI
+#     reattiva. Se sul campo compaiono scatti nelle animazioni, è il primo
+#     flag da togliere.
+#     (NON aggiungere --in-process-gpu: provato 2026-08-24, −30 MB di PSS e
+#     −78 MB di Shmem, ma scartato a ragion veduta — un hang del driver GPU
+#     abbatterebbe l'app intera invece del solo processo GPU, e su i915 il
+#     respawn trasparente del processo GPU separato è la rete di sicurezza
+#     che vogliamo tenere.)
+#   --js-flags: tetto al vecchio heap V8 (la UI ne usa una frazione; il limite
+#     blinda solo la crescita) e young-generation piccola. Semi-space 2 MB
+#     invece dei 16 di default = scavenge più frequenti ma brevi; se compare
+#     jank nelle animazioni, alzare a 4 prima di rinunciare.
+#
 # Stesso ciclo di riavvio della sessione X11: se l'app esce o viene uccisa
 # (crash del renderer dopo lunga uptime) si rilancia invece di lasciare uno
 # schermo morto. `nice -n -5`: seconda priorità della macchina dopo squeezelite,
@@ -102,9 +126,12 @@ while true; do
     nice -n -5 "$APP" \
         --no-sandbox \
         --disable-dev-shm-usage \
+        --no-zygote \
+        --enable-low-end-device-mode \
         --enable-features=UseOzonePlatform \
         --ozone-platform=x11 \
         --touch-events=enabled \
+        --js-flags='--max-old-space-size=256 --max-semi-space-size=2' \
         --start-fullscreen
     status=$?
 
