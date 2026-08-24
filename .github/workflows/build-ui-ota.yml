@@ -171,6 +171,8 @@ jobs:
           python3 tests/test_update_plan.py
           echo "== timezone (python) =="
           python3 tests/test_timezone.py
+          echo "== static IPv4 (python) =="
+          python3 tests/test_static_ipv4.py
 
       - name: Stage LMS skin assets into the OS payload
         # apply.d/0048-lms-skin-assets.sh installs these; they are deliberately

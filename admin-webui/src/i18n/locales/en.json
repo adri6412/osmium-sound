@@ -185,7 +185,22 @@
       "connected": "Connected",
       "connectedWired": "Connected via cable",
       "connectFailed": "Connection failed",
-      "wiredFailed": "Cable not connected"
+      "wiredFailed": "Cable not connected",
+      "addressTitle": "Device address on the network",
+      "addressHint": "By default the router hands out an address that can change over time. A fixed address always stays the same, so bookmarks and other devices keep finding this player.",
+      "modeAuto": "Automatic (DHCP)",
+      "modeStatic": "Fixed address",
+      "addressLabel": "IP address",
+      "prefixLabel": "Network size (prefix)",
+      "prefixHint": "24 on almost every home network — leave it as it is unless you know it differs.",
+      "gatewayLabel": "Router (gateway)",
+      "dnsLabel": "DNS servers",
+      "dnsHint": "Comma-separated. Leave empty to use the router.",
+      "staticWarn": "Pick an address your router will not hand out to anything else, otherwise two devices may end up fighting over it.",
+      "staticConfirm": "The player will move to {address}. This page will stop responding — reopen it at the new address. Continue?",
+      "staticApplying": "Applying the new address…",
+      "staticFailed": "Could not change the address",
+      "appliesTo": "Applies to the connection in use ({device})."
     },
     "audio": {
       "hint": "DAC / output device used by squeezelite.",

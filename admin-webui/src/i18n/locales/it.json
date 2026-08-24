@@ -185,7 +185,22 @@
       "connected": "Connesso",
       "connectedWired": "Connesso via cavo",
       "connectFailed": "Connessione fallita",
-      "wiredFailed": "Cavo non connesso"
+      "wiredFailed": "Cavo non connesso",
+      "addressTitle": "Indirizzo del dispositivo sulla rete",
+      "addressHint": "Normalmente è il router ad assegnare un indirizzo, che può cambiare nel tempo. Un indirizzo fisso resta sempre lo stesso, così i preferiti e gli altri dispositivi continuano a trovare questo lettore.",
+      "modeAuto": "Automatico (DHCP)",
+      "modeStatic": "Indirizzo fisso",
+      "addressLabel": "Indirizzo IP",
+      "prefixLabel": "Dimensione della rete (prefisso)",
+      "prefixHint": "Su quasi tutte le reti di casa è 24 — lascialo così se non sai che è diverso.",
+      "gatewayLabel": "Router (gateway)",
+      "dnsLabel": "Server DNS",
+      "dnsHint": "Separati da virgola. Lascia vuoto per usare il router.",
+      "staticWarn": "Scegli un indirizzo che il router non assegni già a qualcos'altro, altrimenti due dispositivi possono litigarselo.",
+      "staticConfirm": "Il lettore passerà a {address}. Questa pagina smetterà di rispondere: riaprila al nuovo indirizzo. Continuare?",
+      "staticApplying": "Sto applicando il nuovo indirizzo…",
+      "staticFailed": "Impossibile cambiare l'indirizzo",
+      "appliesTo": "Vale per la connessione in uso ({device})."
     },
     "audio": {
       "hint": "DAC / dispositivo di riproduzione usato da squeezelite.",

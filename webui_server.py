@@ -923,6 +923,11 @@ _AUTH_ROUTES = {
     ('/api/system/wifi_scan', 'GET'): '/wifi_scan',
     ('/api/system/wifi_connect', 'POST'): '/wifi_connect',
     ('/api/system/wired_dhcp', 'POST'): '/wired_dhcp',
+    # Fixed (static) address for the active uplink — Settings.vue's Network
+    # page. No provisioning counterpart on purpose: the first-setup wizard
+    # always uses DHCP (see api_server.py's Wi-Fi helpers).
+    ('/api/system/ipv4_config', 'GET'): '/ipv4_config',
+    ('/api/system/ipv4_config', 'POST'): '/ipv4_config',
     ('/api/system/ssh', 'GET'): '/ssh_status',
     ('/api/system/ssh', 'POST'): '/ssh_set',
     # Deliberately NOT in _PROVISION_ROUTES: during first setup the Linux login

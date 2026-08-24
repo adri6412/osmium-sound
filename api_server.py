@@ -834,6 +834,289 @@ def wired_dhcp():
             'message': (r.stderr or r.stdout).strip() or _t('network.cableNotConnected', _lang()), 'ip': ip}
 
 # ──────────────────────────────────────────────────────────────────
+#  Static IPv4 (NetworkManager) — admin-webui only.
+#
+#  The kiosk Settings screen deliberately has no equivalent: mistyping an
+#  address there strands a headless box, and the remote admin at least
+#  reaches the owner's browser where the "you must reconnect at the new
+#  address" warning can be shown.
+#
+#  Everything goes through the *connection profile* (nmcli connection
+#  modify), never `ip addr add` like the legacy /configure_network route
+#  below — a runtime-only address is gone at the next reboot or NM restart,
+#  and writing /etc/resolv.conf by hand is undone by NetworkManager anyway.
+# ──────────────────────────────────────────────────────────────────
+
+def _valid_prefix(prefix):
+    """True for a usable IPv4 CIDR prefix. /31 and /32 leave no room for a
+    host+gateway pair on a LAN, so they're rejected rather than silently
+    producing an unreachable box."""
+    try:
+        return 1 <= int(prefix) <= 30
+    except (TypeError, ValueError):
+        return False
+
+def _ipv4_to_int(addr):
+    a, b, c, d = (int(p) for p in addr.split('.'))
+    return (a << 24) | (b << 16) | (c << 8) | d
+
+def _same_subnet(a, b, prefix):
+    mask = (0xFFFFFFFF << (32 - int(prefix))) & 0xFFFFFFFF
+    return (_ipv4_to_int(a) & mask) == (_ipv4_to_int(b) & mask)
+
+def _assignable_host(addr, prefix):
+    """Reject addresses that are valid dotted-quads but can't be a host on a
+    LAN: loopback/multicast/reserved ranges, and the subnet's own network and
+    broadcast addresses."""
+    first = int(addr.split('.')[0])
+    if first == 0 or first == 127 or first >= 224:
+        return False
+    host_bits = 32 - int(prefix)
+    val = _ipv4_to_int(addr)
+    mask = (0xFFFFFFFF << host_bits) & 0xFFFFFFFF
+    if val == (val & mask):            # network address
+        return False
+    if val == ((val & mask) | ((1 << host_bits) - 1)):   # broadcast address
+        return False
+    return True
+
+def _parse_dns(dns):
+    """Accept a list, or a string with comma/space/semicolon separators."""
+    if dns is None:
+        return []
+    if isinstance(dns, str):
+        parts = re.split(r'[,;\s]+', dns.strip())
+    elif isinstance(dns, (list, tuple)):
+        parts = [str(p).strip() for p in dns]
+    else:
+        return None
+    return [p for p in parts if p]
+
+def _nm_connection_ipv4(conn):
+    """ipv4.* settings as stored in the connection profile (what survives a
+    reboot), as opposed to whatever the interface happens to carry now."""
+    out = {'method': None, 'address': None, 'prefix': None, 'gateway': None, 'dns': []}
+    if not conn:
+        return out
+    try:
+        r = _run(['nmcli', '-t', '-f', 'ipv4.method,ipv4.addresses,ipv4.gateway,ipv4.dns',
+                  'connection', 'show', conn])
+    except Exception:
+        return out
+    for line in r.stdout.strip().split('\n'):
+        parts = _terse_split(line)
+        if len(parts) < 2:
+            continue
+        key, val = parts[0].strip(), parts[1].strip()
+        if val in ('', '--'):
+            continue
+        if key == 'ipv4.method':
+            out['method'] = val
+        elif key == 'ipv4.addresses':
+            first = val.split(',')[0].strip()
+            if '/' in first:
+                addr, _, prefix = first.partition('/')
+                out['address'] = addr.strip()
+                try:
+                    out['prefix'] = int(prefix)
+                except ValueError:
+                    pass
+            else:
+                out['address'] = first
+        elif key == 'ipv4.gateway':
+            out['gateway'] = val
+        elif key == 'ipv4.dns':
+            out['dns'] = [d.strip() for d in val.split(',') if d.strip()]
+    return out
+
+def _device_ipv4_runtime(device):
+    """Address/prefix/gateway/DNS the interface is actually using right now —
+    used to pre-fill the static form with the working DHCP values, so
+    "keep this address, just make it permanent" needs no typing."""
+    out = {'address': None, 'prefix': None, 'gateway': None, 'dns': []}
+    if not device:
+        return out
+    try:
+        r = _run(['nmcli', '-t', '-f', 'IP4.ADDRESS,IP4.GATEWAY,IP4.DNS', 'device', 'show', device])
+    except Exception:
+        return out
+    for line in r.stdout.strip().split('\n'):
+        parts = _terse_split(line)
+        if len(parts) < 2:
+            continue
+        key, val = parts[0].strip(), parts[1].strip()
+        if not val or val == '--':
+            continue
+        if key.startswith('IP4.ADDRESS') and out['address'] is None:
+            addr, _, prefix = val.partition('/')
+            out['address'] = addr.strip()
+            try:
+                out['prefix'] = int(prefix)
+            except ValueError:
+                pass
+        elif key.startswith('IP4.GATEWAY'):
+            out['gateway'] = val
+        elif key.startswith('IP4.DNS'):
+            out['dns'].append(val)
+    return out
+
+def get_ipv4_config():
+    """Current addressing of the uplink the admin is talking to us over."""
+    device, dtype = _active_device()
+    if not device:
+        return {'success': False, 'code': 'network.noActiveConnection',
+                'message': _t('network.noActiveConnection', _lang())}
+    conn = _active_connection_name(device)
+    profile = _nm_connection_ipv4(conn)
+    runtime = _device_ipv4_runtime(device)
+    mode = 'manual' if profile.get('method') == 'manual' else 'auto'
+    return {
+        'success': True,
+        'device': device,
+        'type': 'wireless' if dtype == 'wifi' else 'wired',
+        'connection': conn,
+        'mode': mode,
+        # For a manual profile these are what was configured; for DHCP they're
+        # the live lease, so switching to static starts from a working setup.
+        'address': profile['address'] if mode == 'manual' else runtime['address'],
+        'prefix': (profile['prefix'] if mode == 'manual' else runtime['prefix']) or 24,
+        'gateway': profile['gateway'] if mode == 'manual' else runtime['gateway'],
+        'dns': profile['dns'] if mode == 'manual' else runtime['dns'],
+        'current_ip': runtime['address'],
+    }
+
+def _bg_apply_ipv4(conn, device, expect_ip):
+    """Re-activate the profile after the HTTP reply has been flushed.
+
+    `nmcli connection up` tears the address down and back up, which kills the
+    very TCP connection carrying this request when the admin is on the LAN —
+    so the route answers first and the activation happens here.
+
+    If the interface never comes back with the requested address the profile
+    is put back on DHCP: a box that silently keeps a broken static address is
+    unreachable with no way in short of a keyboard and monitor. A *reachable*
+    address that simply routes badly (wrong gateway for the LAN) is left
+    alone — that's the owner's explicit choice, and the up-front subnet check
+    already rejects the common typo.
+    """
+    time.sleep(1.5)
+    try:
+        _run(['nmcli', 'connection', 'up', conn], timeout=60)
+    except Exception:
+        log.exception('ipv4 apply: bringing %s up failed', conn)
+    deadline = time.monotonic() + 25
+    while time.monotonic() < deadline:
+        ip = _device_ip(device)
+        if ip and (expect_ip is None or ip == expect_ip):
+            log.info('ipv4 apply: %s is up on %s', device, ip)
+            return
+        time.sleep(1)
+    log.error('ipv4 apply: %s never reached %s — reverting to DHCP',
+              device, expect_ip or 'a lease')
+    try:
+        _run(['nmcli', 'connection', 'modify', conn,
+              'ipv4.addresses', '', 'ipv4.gateway', '', 'ipv4.dns', '',
+              'ipv4.ignore-auto-dns', 'no', 'ipv4.method', 'auto'], timeout=20)
+        _run(['nmcli', 'connection', 'up', conn], timeout=60)
+    except Exception:
+        log.exception('ipv4 apply: DHCP rollback failed for %s', conn)
+
+def set_ipv4_config(cfg):
+    cfg = cfg or {}
+    mode = str(cfg.get('mode') or '').strip().lower()
+    # 'dhcp'/'static' are what the legacy /configure_network body called them;
+    # accepted here too so either vocabulary works.
+    mode = {'dhcp': 'auto', 'static': 'manual'}.get(mode, mode)
+    if mode not in ('auto', 'manual'):
+        return {'success': False, 'code': 'network.invalidMode',
+                'message': _t('network.invalidMode', _lang(), mode=cfg.get('mode'))}
+
+    device, dtype = _active_device()
+    if not device:
+        return {'success': False, 'code': 'network.noActiveConnection',
+                'message': _t('network.noActiveConnection', _lang())}
+    conn = _active_connection_name(device)
+    if not conn:
+        return {'success': False, 'code': 'network.noProfile',
+                'message': _t('network.noProfile', _lang(), device=device)}
+
+    if mode == 'auto':
+        args = ['ipv4.addresses', '', 'ipv4.gateway', '', 'ipv4.dns', '',
+                'ipv4.ignore-auto-dns', 'no', 'ipv4.method', 'auto']
+        expect_ip = None
+        new_ip = None
+    else:
+        address = str(cfg.get('address') or cfg.get('ip') or '').strip()
+        gateway = str(cfg.get('gateway') or '').strip()
+        prefix = cfg.get('prefix', 24)
+        if not _valid_ipv4(address):
+            return {'success': False, 'code': 'network.invalidAddress',
+                    'message': _t('network.invalidAddress', _lang(), address=address)}
+        if not _valid_prefix(prefix):
+            return {'success': False, 'code': 'network.invalidPrefix',
+                    'message': _t('network.invalidPrefix', _lang(), prefix=prefix)}
+        prefix = int(prefix)
+        if not _assignable_host(address, prefix):
+            return {'success': False, 'code': 'network.unusableAddress',
+                    'message': _t('network.unusableAddress', _lang(), address=address)}
+        # The gateway has to be a real host too: the subnet's network or
+        # broadcast address passes _same_subnet but can never answer ARP, and
+        # pointing it at our own address is a silent no-route-out.
+        if not _valid_ipv4(gateway) or not _assignable_host(gateway, prefix) or gateway == address:
+            return {'success': False, 'code': 'network.invalidGateway',
+                    'message': _t('network.invalidGateway', _lang(), gateway=gateway)}
+        if not _same_subnet(address, gateway, prefix):
+            # NM would accept the profile and then fail to install a default
+            # route, leaving a box with an address but no way off the LAN.
+            return {'success': False, 'code': 'network.gatewayOutsideSubnet',
+                    'message': _t('network.gatewayOutsideSubnet', _lang(),
+                                  gateway=gateway, address=address, prefix=prefix)}
+        dns = _parse_dns(cfg.get('dns'))
+        if dns is None:
+            return {'success': False, 'code': 'network.invalidDns',
+                    'message': _t('network.invalidDns', _lang(), dns=cfg.get('dns'))}
+        for d in dns:
+            if not _valid_ipv4(d):
+                return {'success': False, 'code': 'network.invalidDns',
+                        'message': _t('network.invalidDns', _lang(), dns=d)}
+        # Without a resolver a static box can still be reached by IP but
+        # nothing it does (streaming services, updates) resolves — fall back
+        # to the router, which is the resolver on virtually every home LAN.
+        if not dns:
+            dns = [gateway]
+        args = ['ipv4.addresses', f'{address}/{prefix}',
+                'ipv4.gateway', gateway,
+                'ipv4.dns', ' '.join(dns[:3]),
+                'ipv4.ignore-auto-dns', 'yes',
+                'ipv4.method', 'manual']
+        expect_ip = address
+        new_ip = address
+
+    try:
+        r = _run(['nmcli', 'connection', 'modify', conn] + args, timeout=25)
+    except Exception:
+        log.exception('set_ipv4_config: nmcli modify failed')
+        return {'success': False, 'code': 'network.ipv4ApplyFailed',
+                'message': _t('network.ipv4ApplyFailed', _lang())}
+    if r.returncode != 0:
+        return {'success': False, 'code': 'network.ipv4ApplyFailed',
+                'message': (r.stderr or r.stdout).strip() or _t('network.ipv4ApplyFailed', _lang())}
+
+    # A profile that doesn't auto-connect would come back on a *different*
+    # (or no) address after a reboot, defeating the point of a fixed address.
+    try:
+        _run(['nmcli', 'connection', 'modify', conn, 'connection.autoconnect', 'yes'], timeout=15)
+    except Exception:
+        pass
+
+    threading.Thread(target=_bg_apply_ipv4, args=(conn, device, expect_ip), daemon=True).start()
+
+    code = 'network.staticApplying' if mode == 'manual' else 'network.dhcpApplying'
+    return {'success': True, 'code': code,
+            'message': _t(code, _lang(), address=new_ip or ''),
+            'mode': mode, 'device': device, 'address': new_ip}
+
+# ──────────────────────────────────────────────────────────────────
 #  Audio output (DAC) selection for squeezelite — used by the wizard.
 # ──────────────────────────────────────────────────────────────────
 
@@ -5247,6 +5530,19 @@ def api_wifi_connect():
 @app.route('/wired_dhcp', methods=['POST'])
 def api_wired_dhcp():
     return jsonify(wired_dhcp())
+
+# Fixed (static) address for the active uplink — driven by the admin-webui
+# Network page. Unlike /configure_network above this edits the NetworkManager
+# profile, so the address survives a reboot.
+@app.route('/ipv4_config', methods=['GET'])
+def api_ipv4_config_get():
+    return jsonify(get_ipv4_config())
+
+@app.route('/ipv4_config', methods=['POST'])
+def api_ipv4_config_set():
+    data = request.get_json(silent=True) or {}
+    result = set_ipv4_config(data)
+    return jsonify(result), (200 if result.get('success') else 400)
 
 @app.route('/ssh_status', methods=['GET'])
 def api_ssh_status():

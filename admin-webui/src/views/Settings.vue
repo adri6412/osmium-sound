@@ -149,6 +149,48 @@ async function wired() {
   else say(bodyMsg(r, t('settings.network.wiredFailed')), true);
 }
 
+// ── fixed (static) IPv4 address ──────────────────────────────────
+// Deliberately webui-only: there is no equivalent on the kiosk screen, where
+// a mistyped address would strand a headless box with no way to tell the
+// owner where it went. The backend edits the NetworkManager profile (see
+// api_server.py's set_ipv4_config), so the address survives a reboot.
+const ipv4 = ref({ mode: 'auto', device: '', address: '', prefix: 24, gateway: '', dns: [] });
+const ipForm = ref({ mode: 'auto', address: '', prefix: 24, gateway: '', dns: '' });
+const ipBusy = ref(false);
+async function loadIpv4() {
+  const r = await api.sys('ipv4_config');
+  if (!r.ok || r.data.success === false) return;
+  ipv4.value = r.data;
+  // For a DHCP box the backend hands back the *live* lease, so switching to
+  // a fixed address starts from a configuration already known to work.
+  ipForm.value = {
+    mode: r.data.mode || 'auto',
+    address: r.data.address || '',
+    prefix: r.data.prefix || 24,
+    gateway: r.data.gateway || '',
+    dns: (r.data.dns || []).join(', '),
+  };
+}
+async function saveIpv4() {
+  if (ipForm.value.mode === 'manual' && !confirm(t('settings.network.staticConfirm', { address: ipForm.value.address }))) return;
+  ipBusy.value = true;
+  const r = await api.sysPost('ipv4_config', {
+    mode: ipForm.value.mode,
+    address: ipForm.value.address.trim(),
+    prefix: Number(ipForm.value.prefix),
+    gateway: ipForm.value.gateway.trim(),
+    dns: ipForm.value.dns,
+  });
+  ipBusy.value = false;
+  if (!r.ok || r.data.success === false) { say(bodyMsg(r, t('settings.network.staticFailed')), true); return; }
+  say(bodyMsg(r, t('settings.network.staticApplying')));
+  // The address change tears down the connection this page is talking over,
+  // so nothing here can confirm the result — re-reading only works if the
+  // browser is still on the old address. Give NM time, then try once; the
+  // owner reconnects at the new address either way.
+  setTimeout(() => { loadNet(); loadIpv4(); }, 8000);
+}
+
 // ── audio + device name ────────────────────────────────────────────
 // device_name renames BOTH the Linux hostname (so <name>.local updates
 // live) and the squeezelite/Bluetooth player name together — see
@@ -1096,7 +1138,7 @@ async function saveBackupScheduled(v) {
 }
 
 onMounted(async () => {
-  loadNet(); loadAudio(); loadDsp(); loadFir(); loadToggles(); loadShell(); loadLms(); loadLyrion(); loadSkin(); loadPlayback();
+  loadNet(); loadIpv4(); loadAudio(); loadDsp(); loadFir(); loadToggles(); loadShell(); loadLms(); loadLyrion(); loadSkin(); loadPlayback();
   loadMode(); loadPlayerEnabled(); loadUiRes(); loadUiRefresh(); loadPointer(); loadTimezone(); loadVuMeter(); loadAutoExpand(); loadChannel(); checkAll(); resumePlanIfRunning(); loadBackups(); loadTailscale(); loadDebugFlags();
   timezonePoll = setInterval(pollTimezone, 10000);
   // Tell the global UpdateProgressOverlay (mounted in App.vue) that this page
@@ -1151,6 +1193,36 @@ onUnmounted(() => {
         <label>{{ t('settings.network.passwordLabel') }}</label><input v-model="wifiPass" type="password" />
         <div style="margin-top: 12px;"><button :disabled="netBusy" @click="connectWifi">{{ t('settings.network.connect') }}</button></div>
       </template>
+
+      <!-- Fixed (static) address. Applies to whichever interface is carrying
+           traffic right now, wired or Wi-Fi (named below). -->
+      <div style="margin-top: 18px; padding-top: 16px; border-top: 1px solid rgba(255,255,255,0.1);">
+        <p class="sub">{{ t('settings.network.addressTitle') }}</p>
+        <p class="muted">{{ t('settings.network.addressHint') }}</p>
+        <span class="seg">
+          <button :class="{ active: ipForm.mode === 'auto' }" @click="ipForm.mode = 'auto'">{{ t('settings.network.modeAuto') }}</button>
+          <button :class="{ active: ipForm.mode === 'manual' }" @click="ipForm.mode = 'manual'">{{ t('settings.network.modeStatic') }}</button>
+        </span>
+        <template v-if="ipForm.mode === 'manual'">
+          <label>{{ t('settings.network.addressLabel') }}</label>
+          <input v-model="ipForm.address" placeholder="192.168.1.50" inputmode="decimal" />
+          <label>{{ t('settings.network.prefixLabel') }}</label>
+          <input v-model="ipForm.prefix" type="number" min="1" max="30" />
+          <p class="muted">{{ t('settings.network.prefixHint') }}</p>
+          <label>{{ t('settings.network.gatewayLabel') }}</label>
+          <input v-model="ipForm.gateway" placeholder="192.168.1.1" inputmode="decimal" />
+          <label>{{ t('settings.network.dnsLabel') }}</label>
+          <input v-model="ipForm.dns" placeholder="192.168.1.1, 1.1.1.1" />
+          <p class="muted">{{ t('settings.network.dnsHint') }}</p>
+          <p class="muted">{{ t('settings.network.staticWarn') }}</p>
+        </template>
+        <div style="margin-top: 12px;">
+          <button :disabled="ipBusy" @click="saveIpv4">{{ t('common.save') }}</button>
+        </div>
+        <p class="muted" v-if="ipv4.device" style="margin-top: 8px;">
+          {{ t('settings.network.appliesTo', { device: ipv4.device }) }}
+        </p>
+      </div>
     </div>
 
     <!-- Audio -->
