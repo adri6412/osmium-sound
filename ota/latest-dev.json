@@ -1,41 +1,41 @@
 {
-  "tag_name": "v2.5.24-dev.2",
-  "name": "v2.5.24-dev.2",
-  "body": "## What's new in v2.5.24-dev.2\n\n- feat(tools): mem-report.sh \u2014 fotografia PSS del dispositivo\n- feat(os): OTA 0055 \u2014 tetti al journal persistente\n- perf(kiosk): meno RAM per Electron \u2014 --no-zygote, low-end-device-mode, tetti V8\n- fix(lyrion): RadioNet search opens the search bar instead of erroring\n- feat(sito): traccia le visite pagina in D1 via Pages Function\n- Update index.html\n- fix(sito): blocco Flasher \u2014 testo introduttivo senza tecnicismi\n- fix(sito): blocco Flasher \u2014 testo introduttivo senza tecnicismi\n- feat(sito): blocco Flasher \u2014 rileva l'OS e mostra solo il download giusto; su macOS ISO + balenaEtcher\n- fix(sito): disclaimer hardware \u2014 tolto il riferimento ai Mac Intel, restano solo i Chromebook\n- feat(sito): blocco Flasher \u2014 rileva l'OS e mostra solo il download giusto; su macOS ISO + balenaEtcher\n- fix(sito): disclaimer hardware \u2014 tolto il riferimento ai Mac Intel, restano solo i Chromebook\n- Update index.html\n- Update index.html\n- Update index.html\n",
+  "tag_name": "v2.5.24-dev.3",
+  "name": "v2.5.24-dev.3",
+  "body": "## What's new in v2.5.24-dev.3\n\n- fix(kiosk): tastiera a schermo assente sui touch senza tastiera \u2014 i controller touch compositi e il PS/2 fantasma non contano pi\u00f9 come tastiera\n",
   "assets": [
     {
-      "name": "hifi-ui-v2.5.24-dev.2.tar.gz",
-      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.24-dev.2/hifi-ui-v2.5.24-dev.2.tar.gz",
-      "size": 134695414
+      "name": "hifi-ui-v2.5.24-dev.3.tar.gz",
+      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.24-dev.3/hifi-ui-v2.5.24-dev.3.tar.gz",
+      "size": 134698240
     },
     {
-      "name": "hifi-ui-v2.5.24-dev.2.tar.gz.sha256",
-      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.24-dev.2/hifi-ui-v2.5.24-dev.2.tar.gz.sha256",
+      "name": "hifi-ui-v2.5.24-dev.3.tar.gz.sha256",
+      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.24-dev.3/hifi-ui-v2.5.24-dev.3.tar.gz.sha256",
       "size": 95
     },
     {
-      "name": "hifi-system-v2.5.24-dev.2.tar.gz",
-      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.24-dev.2/hifi-system-v2.5.24-dev.2.tar.gz",
-      "size": 404067
+      "name": "hifi-system-v2.5.24-dev.3.tar.gz",
+      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.24-dev.3/hifi-system-v2.5.24-dev.3.tar.gz",
+      "size": 404063
     },
     {
-      "name": "hifi-system-v2.5.24-dev.2.tar.gz.sha256",
-      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.24-dev.2/hifi-system-v2.5.24-dev.2.tar.gz.sha256",
+      "name": "hifi-system-v2.5.24-dev.3.tar.gz.sha256",
+      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.24-dev.3/hifi-system-v2.5.24-dev.3.tar.gz.sha256",
       "size": 99
     },
     {
-      "name": "hifi-os-v2.5.24-dev.2.tar.gz",
-      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.24-dev.2/hifi-os-v2.5.24-dev.2.tar.gz",
-      "size": 1396885
+      "name": "hifi-os-v2.5.24-dev.3.tar.gz",
+      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.24-dev.3/hifi-os-v2.5.24-dev.3.tar.gz",
+      "size": 1396897
     },
     {
-      "name": "hifi-os-v2.5.24-dev.2.tar.gz.sha256",
-      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.24-dev.2/hifi-os-v2.5.24-dev.2.tar.gz.sha256",
+      "name": "hifi-os-v2.5.24-dev.3.tar.gz.sha256",
+      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.24-dev.3/hifi-os-v2.5.24-dev.3.tar.gz.sha256",
       "size": 95
     },
     {
-      "name": "hifi-os-v2.5.24-dev.2.tar.gz.sha256.sig",
-      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.24-dev.2/hifi-os-v2.5.24-dev.2.tar.gz.sha256.sig",
+      "name": "hifi-os-v2.5.24-dev.3.tar.gz.sha256.sig",
+      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.24-dev.3/hifi-os-v2.5.24-dev.3.tar.gz.sha256.sig",
       "size": 64
     }
   ]
