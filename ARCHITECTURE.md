@@ -1159,6 +1159,7 @@ carries it (`0048-lms-skin-assets.sh` is the worked example — see
 hifi-media-player/            (GitHub: adri6412/osmium-sound)
 ├── main/                     # Electron main process
 │   ├── main.js               # kiosk window, fullscreen under labwc/X11, renderer crash recovery, CSP relax for Lyrion, keyboard IPC
+│   ├── inputDevices.js       # which kernel input devices count as a keyboard someone can type on (sysfs scan; drives the on-screen keyboard auto-show)
 │   └── preload.cjs           # window.electronAPI (frame rate, on-screen/physical keyboard)
 ├── src/                      # React renderer (kiosk), Vite + Tailwind
 │   ├── App.jsx               # boot-mode routing: InstallWizard / SetupWizard / kiosk, screensaver, boot intro
