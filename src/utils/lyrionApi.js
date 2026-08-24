@@ -493,10 +493,13 @@ export class LyrionAPI {
     return { cmd: [...action.cmd], params };
   }
 
-  async getPluginItems(playerMac = '', pluginCmd, limit = 9999, offset = 0, itemId = null) {
+  async getPluginItems(playerMac = '', pluginCmd, limit = 9999, offset = 0, itemId = null, search = null) {
     const params = [pluginCmd, 'items', offset, limit];
     if (itemId) {
       params.push(`item_id:${itemId}`);
+    }
+    if (search) {
+      params.push(`search:${search}`);
     }
     return this.request(playerMac, params);
   }
