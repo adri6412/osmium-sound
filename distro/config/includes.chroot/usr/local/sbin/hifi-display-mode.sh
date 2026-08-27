@@ -100,6 +100,22 @@ target_for() {
     esac
 }
 
+# Vero solo se la seconda interfaccia puo' DAVVERO partire: il programma
+# (pacchetto di sistema) piu' le librerie Qt (pacchetto OS). Arrivano da due
+# canali diversi e possono arrivare separate; con una meta' sola il programma
+# parte e muore subito, lasciando lo schermo nero. Il modulo grafico per
+# DRM/KMS e il modulo QML di base non sono librerie collegate, quindi vanno
+# cercati a parte.
+qt_ui_ready() {
+    [ -x "$QT_UI_BIN" ] || return 1
+    for _q in /usr/lib/*/qt6; do
+        if [ -e "$_q/plugins/platforms/libqeglfs.so" ] && [ -e "$_q/qml/QtQuick/libqtquick2plugin.so" ]; then
+            return 0
+        fi
+    done
+    return 1
+}
+
 get_engine() {
     if [ -f "$ENGINE_FILE" ] && [ "$(cat "$ENGINE_FILE" 2>/dev/null)" = qt ]; then
         echo qt
@@ -214,8 +230,8 @@ case "${1:-}" in
                 # Non si sceglie un'interfaccia che non c'e': su un apparecchio
                 # che non ha ancora ricevuto il pacchetto Qt il passaggio
                 # lascerebbe lo schermo nero al riavvio.
-                if [ "$ENG" = qt ] && [ ! -x "$QT_UI_BIN" ]; then
-                    die "interfaccia Qt non installata ($QT_UI_BIN assente)"
+                if [ "$ENG" = qt ] && ! qt_ui_ready; then
+                    die "interfaccia Qt non installata o incompleta (serve $QT_UI_BIN e le librerie Qt 6)"
                 fi
                 mkdir -p "$(dirname "$ENGINE_FILE")"
                 tmp="${ENGINE_FILE}.tmp.$$"

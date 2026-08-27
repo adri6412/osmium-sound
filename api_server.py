@@ -2273,7 +2273,17 @@ UI_ENGINES = ('electron', 'qt')
 QT_UI_BIN = '/opt/hifi-qt/hifi-qt'
 
 def _qt_ui_installed():
-    return os.path.isfile(QT_UI_BIN) and os.access(QT_UI_BIN, os.X_OK)
+    """Vero solo se la seconda interfaccia puo' DAVVERO partire su questo
+    apparecchio: il programma (dal pacchetto di sistema) e le librerie Qt che
+    gli servono (dal pacchetto OS, l'unico che puo' installare pacchetti). Le
+    due meta' viaggiano su canali diversi e possono arrivare separate: offrire
+    la scelta con una meta' sola lascerebbe lo schermo nero al riavvio.
+    Il modulo grafico che disegna su DRM/KMS e il modulo QML di base non sono
+    librerie collegate al programma, quindi vanno cercati a parte."""
+    if not (os.path.isfile(QT_UI_BIN) and os.access(QT_UI_BIN, os.X_OK)):
+        return False
+    return bool(glob.glob('/usr/lib/*/qt6/plugins/platforms/libqeglfs.so')
+                and glob.glob('/usr/lib/*/qt6/qml/QtQuick/libqtquick2plugin.so'))
 
 def get_ui_engine():
     """Return { engine, engines }. `engines` is what this device can actually
