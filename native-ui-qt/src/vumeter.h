@@ -13,6 +13,11 @@
 class VuMeter : public QObject {
     Q_OBJECT
     Q_PROPERTY(bool active READ active WRITE setActive NOTIFY activeChanged)
+    // fotogrammi al secondo degli aghi: 30 come la UI Electron, ma a 4K ogni
+    // fotogramma costa quattro volte tanto (la scena si ridisegna tutta anche
+    // se si muovono solo gli aghi) e la scheda video non ce la fa: la' si
+    // scende a 20. Lo decide Main.qml dal modo video.
+    Q_PROPERTY(int hz READ hz WRITE setHz NOTIFY hzChanged)
     Q_PROPERTY(bool connected READ connected NOTIFY connectedChanged)
     Q_PROPERTY(double leftDeg READ leftDeg NOTIFY levelsChanged)
     Q_PROPERTY(double rightDeg READ rightDeg NOTIFY levelsChanged)
@@ -22,12 +27,15 @@ public:
     explicit VuMeter(QObject *parent = nullptr);
     bool active() const { return m_active; }
     void setActive(bool a);
+    int hz() const { return m_hz; }
+    void setHz(int hz);
     bool connected() const { return m_sock.state() == QAbstractSocket::ConnectedState && m_upgraded; }
     double leftDeg() const { return deg(0); }
     double rightDeg() const { return deg(1); }
     double left() const { return m_pos[0]; }
     double right() const { return m_pos[1]; }
 signals:
+    void hzChanged();
     void activeChanged();
     void connectedChanged();
     void levelsChanged();
@@ -40,6 +48,7 @@ private:
     QTcpSocket m_sock;
     QByteArray m_buf;
     bool m_active = false, m_upgraded = false;
+    int m_hz = 30;
     QTimer m_sim, m_reconnect, m_throttle;
     QElapsedTimer m_clock;
     qint64 m_lastStep = 0;

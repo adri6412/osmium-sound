@@ -21,7 +21,7 @@ VuMeter::VuMeter(QObject *parent) : QObject(parent) {
     // 30 Hz: e' il tetto di fotogrammi della UI Electron (setFrameRate(30) in
     // App.jsx) e dimezza il costo del ridisegno della scena, che in Qt Quick
     // e' sempre intero
-    m_sim.setInterval(33);
+    m_sim.setInterval(1000 / m_hz);
     connect(&m_sim, &QTimer::timeout, this, &VuMeter::step);
     m_reconnect.setInterval(3000);
     connect(&m_reconnect, &QTimer::timeout, this, [this]() {
@@ -144,4 +144,12 @@ void VuMeter::step() {
         emit levelsChanged();
     }
     if (!moving) m_sim.stop();
+}
+
+void VuMeter::setHz(int hz) {
+    hz = qBound(10, hz, 60);
+    if (hz == m_hz) return;
+    m_hz = hz;
+    m_sim.setInterval(1000 / m_hz);
+    emit hzChanged();
 }

@@ -39,6 +39,10 @@ Item {
         layer.enabled: root.shown && root.effVu
         layer.textureSize: Qt.size(Math.round(width * root.devScale), Math.round(height * root.devScale))
         layer.smooth: true
+        // Senza canale alpha: la schermata e' opaca (ha il suo fondo scuro), e
+        // cosi' la scheda video la ricopia e basta invece di fonderla con quello
+        // che c'e' sotto — un fotogramma in meno di lettura dello schermo intero.
+        layer.format: ShaderEffectSource.RGB
     // ─── fondale: la copertina piccola e sfocata al 20 %, poi i gradienti ──
     Rectangle { anchors.fill: parent; color: Theme.dark }
     Item {

@@ -36,6 +36,9 @@ Item {
         visible: false
         layer.enabled: true
         layer.smooth: true
+        // alla risoluzione vera, se no gli angoli tondi vengono seghettati
+        layer.textureSize: Qt.size(Math.ceil(root.width * root.devScale),
+                                   Math.ceil(root.height * root.devScale))
     }
     MultiEffect {
         anchors.fill: parent

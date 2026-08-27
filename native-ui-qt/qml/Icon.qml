@@ -4,6 +4,7 @@
 import QtQuick
 import QtQuick.Effects
 import QtQuick.VectorImage
+import Hifi.Ui
 
 Item {
     id: root
@@ -20,6 +21,15 @@ Item {
         preferredRendererType: VectorImage.CurveRenderer
         fillMode: VectorImage.PreserveAspectFit
         visible: false
+        // 🚨 MultiEffect ha bisogno della sorgente come texture, e se non gliela
+        // si misura la fa grande quanto l'icona in punti: a 4K veniva disegnata
+        // 20x20 e poi ingrandita 3,6 volte — icone sgranate. La geometria del
+        // VectorImage e' nitida a qualunque misura, e' il passaggio per
+        // l'effetto (che serve a tingerla) a perdere la risoluzione.
+        layer.enabled: true
+        layer.smooth: true
+        layer.textureSize: Qt.size(Math.ceil(root.size * Theme.dpr),
+                                   Math.ceil(root.size * Theme.dpr))
     }
     MultiEffect {
         anchors.fill: parent

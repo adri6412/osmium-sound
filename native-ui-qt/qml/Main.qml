@@ -2,6 +2,7 @@
 // come ScaledCanvas.jsx) e impila le schermate e gli strati sovrapposti nello
 // stesso ordine del ciclo di app.c.
 import QtQuick
+import Hifi
 import Hifi.Ui
 
 Item {
@@ -12,7 +13,19 @@ Item {
     readonly property real oy: Math.floor((height - Theme.canvasH * s) / 2)
     property alias app: canvas
 
-    Rectangle { anchors.fill: parent; color: Theme.dark }
+    // La scala vera dello schermo, a disposizione di chiunque disegni su una
+    // texture (Icon, Cover, le maschere) e di chi chiede le copertine.
+    Binding { target: Theme; property: "dpr"; value: root.s }
+    // 320 = il lato della copertina in Now Playing, la piu' grande che chiediamo
+    Binding { target: Player; property: "coverPx"; value: Theme.coverPx(320) }
+    // a 4K un fotogramma costa quattro volte quanto a 1080p e la scena si
+    // ridisegna tutta anche solo per gli aghi: la' si va a 20 al secondo
+    Binding { target: Vu; property: "hz"; value: root.s >= 2.5 ? 20 : 30 }
+
+    // Niente rettangolo di sfondo: la finestra si pulisce gia' con lo stesso
+    // colore (view.setColor in main.cpp). Dipingerlo di nuovo era un riempimento
+    // dello schermo intero buttato via a ogni fotogramma — a 4K sono 8 milioni
+    // di pixel per 20-30 volte al secondo.
 
     App {
         id: canvas

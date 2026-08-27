@@ -81,7 +81,8 @@ Item {
                     sourceSize.width: Math.round(24 * root.devScale); sourceSize.height: Math.round(24 * root.devScale)
                     fillMode: Image.PreserveAspectCrop
                 }
-                Rectangle { id: rowMask; anchors.fill: parent; radius: 4; visible: false; layer.enabled: true }
+                Rectangle { id: rowMask; anchors.fill: parent; radius: 4; visible: false; layer.enabled: true
+                            layer.textureSize: Qt.size(Math.ceil(width * root.devScale), Math.ceil(height * root.devScale)) }
                 ShaderImage { anchors.fill: parent; source: rowImg; mask: rowMask; visible: rowImg.status === Image.Ready }
                 Icon {
                     anchors.centerIn: parent
@@ -151,12 +152,16 @@ Item {
                             Icon { anchors.centerIn: parent; name: "disc"; size: 40; color: Theme.silverA(0.2) } }
                 Image {
                     id: artImg; anchors.fill: parent; visible: false
-                    source: card.art ? Api.lmsBase + "/music/" + card.art + "/cover_300x300_o.jpg" : ""
+                    // la misura si sceglie in base allo schermo: 300 basta sulla
+                    // tela 1 a 1, a 4K una scheda e' larga il doppio abbondante
+                    source: card.art ? Api.lmsBase + "/music/" + card.art + "/cover_"
+                            + Theme.coverPx(root.cardW) + "x" + Theme.coverPx(root.cardW) + "_o.jpg" : ""
                     asynchronous: true; cache: true; fillMode: Image.PreserveAspectCrop
                     sourceSize.width: Math.round(root.cardW * root.devScale); sourceSize.height: Math.round(root.cardW * root.devScale)
                 }
                 // angoli tondi solo in alto (rounded-t-xl)
                 Rectangle { id: artMask; anchors.fill: parent; radius: 12; visible: false; layer.enabled: true
+                            layer.textureSize: Qt.size(Math.ceil(width * root.devScale), Math.ceil(height * root.devScale))
                             Rectangle { anchors.bottom: parent.bottom; width: parent.width; height: 12 } }
                 ShaderImage { anchors.fill: parent; source: artImg; mask: artMask; visible: artImg.status === Image.Ready }
                 Rectangle {

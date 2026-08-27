@@ -225,6 +225,17 @@ void Player::derive() {
     } else m_chip.clear();
 }
 
+void Player::setCoverPx(int px) {
+    px = qBound(300, px, 2000);
+    if (px == m_coverPx) return;
+    m_coverPx = px;
+    emit coverPxChanged();
+    // la chiave contiene solo il brano: la misura e' cambiata sotto, quindi va
+    // buttata a mano o l'immagine resterebbe quella piccola fino al brano dopo
+    m_artKey.clear();
+    updateArtwork();
+}
+
 void Player::updateArtwork() {
     // stessa chiave di app.c: per le radio l'immagine puo' cambiare col brano
     QString key = QString("%1|%2|%3|%4|%5").arg(m_id.left(30), m_coverId, QString::number(m_remote),
@@ -235,10 +246,12 @@ void Player::updateArtwork() {
     QString url;
     if (m_remote) {
         url = Api::instance()->lmsBase() + "/music/current/cover.jpg?player=" +
-              QString::fromLatin1(QUrl::toPercentEncoding(m_playerId)) + "&size=600&k=" +
+              QString::fromLatin1(QUrl::toPercentEncoding(m_playerId)) +
+              "&size=" + QString::number(m_coverPx) + "&k=" +
               QString::number(qHash(key));
     } else if (!m_coverId.isEmpty()) {
-        url = Api::instance()->lmsBase() + "/music/" + m_coverId + "/cover_600x600_o.jpg";
+        url = Api::instance()->lmsBase() + "/music/" + m_coverId + "/cover_" +
+              QString::number(m_coverPx) + "x" + QString::number(m_coverPx) + "_o.jpg";
     }
     if (url != m_artworkUrl) { m_artworkUrl = url; emit artworkChanged(); }
 }

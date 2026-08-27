@@ -43,4 +43,19 @@ QtObject {
 
     readonly property int canvasW: 1024
     readonly property int canvasH: 600
+
+    // Quanti pixel veri vale un punto della tela: 1 a 1024x600, 1,25 a 720p,
+    // 1,875 a 1080p, 3,6 a 4K. La imposta Main.qml appena sa il modo video.
+    // 🚨 Serve a tutto cio' che diventa una TEXTURE (icone dentro un effetto,
+    // maschere, immagini): quella roba viene disegnata alla misura in punti e
+    // poi ingrandita, quindi senza questo fattore si vede sgranata mentre il
+    // testo, che e' geometria, resta nitido.
+    property real dpr: 1
+
+    // Misura da chiedere a Lyrion per una copertina larga `pts` punti.
+    // A scaglioni di 300 px: le immagini restano poche e la cache del server
+    // (che le ridimensiona al volo) continua a servire.
+    function coverPx(pts) {
+        return Math.min(1200, Math.max(300, Math.ceil(pts * dpr / 300) * 300))
+    }
 }

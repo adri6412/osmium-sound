@@ -31,6 +31,9 @@ class Player : public QObject {
     Q_PROPERTY(QString bitrate READ bitrate NOTIFY metaChanged)
     Q_PROPERTY(QString chip READ chip NOTIFY metaChanged)          // "FLAC · 24bit · 96kHz"
     Q_PROPERTY(QString artworkUrl READ artworkUrl NOTIFY artworkChanged)
+    // quanti pixel chiedere a Lyrion per la copertina: la sceglie Main.qml
+    // dal modo video (600 sulla tela 1 a 1, fino a 1200 a 4K)
+    Q_PROPERTY(int coverPx READ coverPx WRITE setCoverPx NOTIFY coverPxChanged)
     Q_PROPERTY(bool qPcm READ qPcm NOTIFY metaChanged)
     Q_PROPERTY(bool qHires READ qHires NOTIFY metaChanged)
     Q_PROPERTY(bool qDsd READ qDsd NOTIFY metaChanged)
@@ -79,6 +82,8 @@ public:
     QString bitrate() const { return m_bitrate; }
     QString chip() const { return m_chip; }
     QString artworkUrl() const { return m_artworkUrl; }
+    int coverPx() const { return m_coverPx; }
+    void setCoverPx(int px);
     bool qPcm() const { return m_qPcm; }
     bool qHires() const { return m_qHires; }
     bool qDsd() const { return m_qDsd; }
@@ -137,6 +142,7 @@ signals:
     void connectedChanged();
     void metaChanged();
     void artworkChanged();
+    void coverPxChanged();
     void progressChanged();
     void controlsChanged();
     void modeChanged();
@@ -172,6 +178,7 @@ private:
     bool m_playing = false;
     int m_volume = 0, m_shuffle = 0, m_repeat = 0, m_sleepSecs = 0, m_index = 0, m_total = 0;
     int m_ledMode = 0;
+    int m_coverPx = 600;
     bool m_volumeFixed = false;
     QString m_prefRg = "0", m_prefTrType = "0", m_prefTrDur = "0", m_prefDigVol = "1";
     bool m_vuEnabled = true;
