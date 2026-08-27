@@ -12,6 +12,8 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <!-- Modulo recensioni (Tally) -->
+  <script async src="https://tally.so/widgets/embed.js"></script>
   <style>
     :root {
       --bg:        #0a0a0a;
@@ -603,6 +605,27 @@
     }
     #android .install-inner, #android .quickstart { margin-left: auto; margin-right: auto; }
 
+    /* ── RECENSIONI ───────────────────────────────────── */
+    #review {
+      border-top: 1px solid var(--border);
+      padding: 2.25rem clamp(1.25rem, 5vw, 4rem);
+      background: var(--bg-card);
+    }
+    .review-inner {
+      max-width: 900px; margin: 0 auto;
+      display: flex; align-items: center; justify-content: center;
+      gap: 1.25rem 1.75rem; flex-wrap: wrap; text-align: center;
+    }
+    .review-inner p {
+      color: var(--muted); font-size: 0.92rem; line-height: 1.6;
+      max-width: 560px; margin: 0;
+    }
+    .review-inner strong { color: var(--text); }
+    .review-btn {
+      padding: 10px 20px; font-size: 0.9rem; white-space: nowrap;
+      border: none; cursor: pointer; font-family: inherit; line-height: 1.6;
+    }
+
     /* ── DONATE (Ko-fi) ───────────────────────────────── */
     #donate {
       border-top: 1px solid var(--border);
@@ -1055,6 +1078,24 @@
   </div>
 </section>
 
+<!-- RECENSIONI -->
+<section id="review">
+  <div class="review-inner">
+    <p data-en="&lt;strong&gt;Already using Osmium Sound?&lt;/strong&gt; Tell us how it is going. It takes a minute, and it helps other people decide." data-it="&lt;strong&gt;Usi gi&agrave; Osmium Sound?&lt;/strong&gt; Raccontaci come ti trovi. Ci vuole un minuto e aiuta le altre persone a scegliere."><strong>Already using Osmium Sound?</strong> Tell us how it is going. It takes a minute, and it helps other people decide.</p>
+    <button type="button" class="btn-primary review-btn"
+            data-tally-open="yP5z90"
+            data-tally-align-left="1"
+            data-tally-hide-title="1"
+            data-tally-emoji-text="👋"
+            data-tally-emoji-animation="head-shake"
+            data-tally-auto-close="3000"
+            data-tally-form-events-forwarding="1">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2.5l2.9 5.88 6.49.95-4.7 4.58 1.11 6.46L12 17.32l-5.8 3.05 1.11-6.46-4.7-4.58 6.49-.95L12 2.5z"/></svg>
+      <span data-en="Leave a review" data-it="Lascia una recensione">Leave a review</span>
+    </button>
+  </div>
+</section>
+
 <!-- DONATE -->
 <section id="donate">
   <div class="donate-inner">
@@ -1074,6 +1115,8 @@
     &nbsp;·&nbsp; &copy; 2025 Adriano Frongillo
   </div>
   <div class="footer-links">
+    <a href="#tally-open=yP5z90&amp;tally-align-left=1&amp;tally-hide-title=1&amp;tally-emoji-text=👋&amp;tally-emoji-animation=head-shake&amp;tally-auto-close=3000&amp;tally-form-events-forwarding=1"
+       data-en="Leave a review" data-it="Lascia una recensione">Leave a review</a>
     <a href="https://github.com/adri6412/osmium-sound" target="_blank">GitHub</a>
     <a href="https://github.com/adri6412/osmium-sound/issues" target="_blank" data-en="Issues" data-it="Problemi">Issues</a>
     <a href="https://ko-fi.com/osmiumsound" target="_blank" rel="noopener">Ko-fi</a>
