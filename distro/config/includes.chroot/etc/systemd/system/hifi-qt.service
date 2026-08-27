@@ -11,6 +11,10 @@ After=hifi-api.service hifi-vumeter.service
 # no il primo tentativo muore con "setCrtc: Permission denied" (il DRM master
 # ce l'ha ancora lui) e si vede il nero finché Restart= non riprova.
 After=systemd-user-sessions.service plymouth-quit-wait.service
+# Nessun tetto ai tentativi: se il primo trova il DRM ancora occupato (scambio
+# a caldo dall'altra interfaccia), con il tetto di serie systemd si arrende
+# dopo 5 tentativi e lo schermo resta nero per sempre.
+StartLimitIntervalSec=0
 
 [Service]
 Type=simple
@@ -26,7 +30,16 @@ WorkingDirectory=/opt/hifi-qt
 Environment=QT_QPA_PLATFORM=eglfs
 Environment=QT_QPA_EGLFS_ALWAYS_SET_MODE=1
 Environment=QT_LOGGING_RULES=qt.qpa.input=false
-ExecStartPre=/usr/bin/chvt 1
+# Porta in primo piano il terminale 1, se no lo schermo continua a mostrare
+# quello che era attivo prima (di solito quello lasciato da lightdm) mentre
+# questa interfaccia disegna su uno non visibile.
+# 🚨 Il trattino non è un refuso: chvt sta nel pacchetto kbd, che l'apparecchio
+# di serie NON aveva. Senza trattino un chvt assente fa fallire l'unità con
+# 203/EXEC PRIMA di eseguire il programma — schermo nero e interfaccia che
+# "non parte", mentre avviata a mano dal terminale funziona. Il pacchetto ora
+# viene installato (lista dell'immagine + migrazione 0056), questo è il
+# paracadute per chi non l'ha ancora.
+ExecStartPre=-/usr/bin/chvt 1
 ExecStart=/opt/hifi-qt/hifi-qt --assets /opt/hifi-qt/assets --locales /opt/hifi-qt/locales
 Restart=on-failure
 RestartSec=3

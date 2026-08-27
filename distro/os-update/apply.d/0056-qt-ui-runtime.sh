@@ -23,8 +23,13 @@
 if hifi_suite_is trixie; then
     # Solo i moduli QML importati dal QML più il plugin di piattaforma eglfs:
     # apt tira dentro da sé libQt6Quick/Qml/Gui/Network e il resto.
+    # 🚨 kbd serve per chvt: l'unità porta in primo piano il terminale 1 prima
+    # di partire e senza quel comando l'interfaccia non partiva affatto
+    # (schermo nero). Non era installato di serie e niente altro lo tirava
+    # dentro.
     for p in \
         qt6-qpa-plugins \
+        kbd \
         qml6-module-qtquick \
         qml6-module-qtquick-window \
         qml6-module-qtquick-effects \
