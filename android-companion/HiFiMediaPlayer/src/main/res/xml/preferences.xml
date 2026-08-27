@@ -140,6 +140,34 @@
     </PreferenceCategory>
 
     <PreferenceCategory
+        android:title="@string/pref_cat_local_player">
+
+        <SwitchPreferenceCompat
+            android:key="squeezer.localplayer.enabled"
+            android:defaultValue="true"
+            android:summary="@string/settings_local_player_summary"
+            android:title="@string/settings_local_player_title"/>
+
+        <EditTextPreference
+            android:key="squeezer.localplayer.name"
+            android:dependency="squeezer.localplayer.enabled"
+            android:summary="@string/settings_local_player_name_summary"
+            android:title="@string/settings_local_player_name_title"/>
+
+        <ListPreference
+            android:key="squeezer.localplayer.quality.wifi"
+            android:dependency="squeezer.localplayer.enabled"
+            android:summary="%s"
+            android:title="@string/settings_local_player_quality_wifi_title"/>
+
+        <ListPreference
+            android:key="squeezer.localplayer.quality.mobile"
+            android:dependency="squeezer.localplayer.enabled"
+            android:summary="%s"
+            android:title="@string/settings_local_player_quality_mobile_title"/>
+    </PreferenceCategory>
+
+    <PreferenceCategory
         android:title="@string/pref_cat_third_party">
 
         <SwitchPreferenceCompat

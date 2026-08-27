@@ -1,7 +1,9 @@
-Osmium Sound Companion is the official remote control app for your Osmium Sound hi-fi appliance. Pair instantly by scanning the QR code shown in Osmium Sound → Settings → Phone control, then control playback from anywhere on your local network.
+Osmium Sound Companion is the official remote control app for your Osmium Sound hi-fi appliance, and a Lyrion player in its own right. Pair instantly by scanning the QR code shown in Osmium Sound → Settings → Phone control, then control playback from anywhere on your local network.
 
 Features include:
 
+* Play on the phone itself: it registers with Lyrion as a player of its own, with gapless playback and a quality setting per network
+* Works either with an Osmium Sound appliance (QR pairing, appliance settings) or with any other Lyrion server (host and port)
 * Browse the library by album artist, all artists, composers, album, genre, year, playlist, favorites, or new music
 * Playlist control (now playing, shuffle, repeat, save/clear/modify playlists)
 * Manage players (names, synchronisation groups, sleep, alarms)

@@ -82,6 +82,8 @@ import com.osmium.sound.companion.model.PlayerState;
 import com.osmium.sound.companion.model.Song;
 import com.osmium.sound.companion.service.event.ActivePlayerChanged;
 import com.osmium.sound.companion.service.event.ConnectionChanged;
+import com.osmium.sound.companion.service.localplayer.LocalPlayerController;
+import com.osmium.sound.companion.service.localplayer.LocalPlayerHost;
 import com.osmium.sound.companion.service.event.LastscanChanged;
 import com.osmium.sound.companion.service.event.MusicChanged;
 import com.osmium.sound.companion.service.event.PlayStatusChanged;
@@ -108,7 +110,7 @@ import com.osmium.sound.companion.util.Scrobble;
  * This means the service will as long as there is a Squeezer or we are connected to LMS activity.
  * When we are connected to LMS it runs as a foreground service and a notification is displayed.
  */
-public class SqueezeService extends Service {
+public class SqueezeService extends Service implements LocalPlayerHost {
 
     private static final String TAG = "SqueezeService";
 
@@ -151,6 +153,9 @@ public class SqueezeService extends Service {
 
     private SqueezerVolumeProvider mVolumeProvider;
 
+    /** This phone as a Lyrion player: SlimProto session plus the audio engine. */
+    private LocalPlayerController localPlayer;
+
     @Override
     public void onCreate() {
         super.onCreate();
@@ -163,6 +168,7 @@ public class SqueezeService extends Service {
         mDelegate = new SlimDelegate(repository);
         homeMenuHandling = mDelegate.getHomeMenuHandling();
         randomPlayDelegate = new RandomPlayDelegate(mDelegate);
+        localPlayer = new LocalPlayerController(this, this);
 
         HiFiMediaPlayer.getPreferences(preferences -> {
             cachePreferences(preferences);
@@ -212,12 +218,54 @@ public class SqueezeService extends Service {
         mGroupVolume = preferences.isGroupVolume();
         mVolumeProvider = new SqueezerVolumeProvider(preferences.getVolumeIncrements());
         if (squeezeService.isConnected()) {
-            if (preferences.isBackgroundVolume()) {
-                mediaSession.setPlaybackToRemote(mVolumeProvider);
-            } else {
-                mediaSession.setPlaybackToLocal(AudioManager.STREAM_MUSIC);
-            }
+            applyVolumeRouting();
         }
+    }
+
+    /**
+     * Decides where the hardware volume keys go. When this phone is the player
+     * they have to reach its own output, or a low device volume leaves the user
+     * with silence and no way to fix it; the server's own slider still works,
+     * because it arrives as an audg gain. For every other player this is the
+     * behaviour it always was.
+     */
+    private void applyVolumeRouting() {
+        Player activePlayer = mDelegate.getActivePlayer();
+        if (activePlayer != null && LocalPlayerController.isThisPhone(activePlayer.getId())) {
+            mediaSession.setPlaybackToLocal(AudioManager.STREAM_MUSIC);
+        } else if (HiFiMediaPlayer.getPreferences().isBackgroundVolume()) {
+            mediaSession.setPlaybackToRemote(mVolumeProvider);
+        } else {
+            mediaSession.setPlaybackToLocal(AudioManager.STREAM_MUSIC);
+        }
+    }
+
+    /**
+     * Keeps this phone's own player session in step with the app's connection:
+     * there is no point registering a player against a server the app itself
+     * cannot reach.
+     */
+    private void updateLocalPlayerSession(boolean connected) {
+        if (localPlayer == null) return;
+        Preferences.ServerAddress serverAddress = HiFiMediaPlayer.getPreferences().getServerAddress();
+        localPlayer.onServerConnectionChanged(connected,
+                serverAddress != null ? serverAddress.host() : null,
+                mDelegate.getUsername(), mDelegate.getPassword());
+    }
+
+    @Override
+    public void sendLocalPlayerCommand(String playerId, String... command) {
+        Player player = mDelegate.getPlayer(playerId);
+        if (player == null) return;
+        mDelegate.command(player).cmd(command).exec();
+    }
+
+    @Override
+    public void onLocalPlaybackStateChanged(boolean rendering) {
+        // Playing locally is its own reason to stay in the foreground, on top of
+        // simply being connected.
+        if (rendering) startForeground();
+        applyVolumeRouting();
     }
 
     @Override
@@ -232,6 +280,7 @@ public class SqueezeService extends Service {
 
     @Override
     public void onDestroy() {
+        localPlayer.shutdown();
         disconnect(false);
         repository.removeObserver(this::onConnectionChanged);
         repository.removeObserver(this::onPlayerVolume);
@@ -247,7 +296,11 @@ public class SqueezeService extends Service {
 
     @Override
     public void onTaskRemoved(Intent rootIntent) {
-        disconnect(false);
+        // Dropping the connection is fine for a remote control, but not while
+        // this phone is the player: the music would stop with the swipe.
+        if (!localPlayer.isRendering()) {
+            disconnect(false);
+        }
         super.onTaskRemoved(rootIntent);
     }
 
@@ -541,9 +594,7 @@ public class SqueezeService extends Service {
             }
 
             mediaSession.setCallback(new SqueezerMediaSessionCallback());
-            if (HiFiMediaPlayer.getPreferences().isBackgroundVolume()) {
-                mediaSession.setPlaybackToRemote(mVolumeProvider);
-            }
+            applyVolumeRouting();
             mediaSession.setActive(true);
 
             Notification notification = notificationData().build();
@@ -564,6 +615,10 @@ public class SqueezeService extends Service {
     }
 
     private void stopForeground() {
+        if (localPlayer != null && localPlayer.isRendering()) {
+            Log.i(TAG, "staying in the foreground: this phone is playing");
+            return;
+        }
         Log.i(TAG, "stopForeground");
         foreGround = false;
 
@@ -665,6 +720,7 @@ public class SqueezeService extends Service {
     }
 
     private void onConnectionChanged(ConnectionChanged event) {
+        updateLocalPlayerSession(event.connectionState.isConnected());
         if (event.connectionState.isConnected() ||
             event.connectionState.isConnectInProgress() ||
             event.connectionState.isRehandshaking()
@@ -685,6 +741,7 @@ public class SqueezeService extends Service {
     }
 
     private void onActivePlayerChanged(ActivePlayerChanged event) {
+        applyVolumeRouting();
         updateMediaSession();
     }
 
@@ -823,7 +880,23 @@ public class SqueezeService extends Service {
                 return player;
             }
         }
-        return !players.isEmpty() ? players.iterator().next() : null;
+
+        // Otherwise prefer a connected player, and this phone last of all: an
+        // auto-pick that starts music out of the phone's own speaker while the
+        // appliance's player is briefly away would be a nasty surprise.
+        Player fallback = null;
+        for (Player player : players) {
+            if (fallback == null || rankAsFallback(player) < rankAsFallback(fallback)) {
+                fallback = player;
+            }
+        }
+        return fallback;
+    }
+
+    private int rankAsFallback(Player player) {
+        int rank = player.getConnected() ? 0 : 2;
+        if (LocalPlayerController.isThisPhone(player.getId())) rank += 1;
+        return rank;
     }
 
     /** A download request will be passed to the download manager for each song called back to this */
@@ -1368,6 +1441,9 @@ public class SqueezeService extends Service {
         @Override
         public void preferenceChanged(Preferences preferences, String key) {
             Log.i(TAG, "Preference changed: " + key);
+            if (localPlayer != null) {
+                localPlayer.onPreferenceChanged(preferences, key);
+            }
             if (Preferences.KEY_CUSTOMIZE_HOME_MENU_MODE.equals(key)) {
                 boolean useArchive = preferences.getCustomizeHomeMenuMode() != Preferences.CustomizeHomeMenuMode.DISABLED;
                 Set<String> archivedMenuItems = Collections.emptySet();
