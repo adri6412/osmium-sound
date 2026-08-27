@@ -128,7 +128,15 @@ Item {
     // ─── griglia degli album ───────────────────────────────────────────────
     GridView {
         id: gridView
+        // 🚨 12 punti oltre il bordo destro, di proposito: le celle di una
+        // GridView sono tutte uguali e comprendono il distacco, quindi tre
+        // colonne da (cardW + 12) valgono la larghezza della vista PIU' un
+        // distacco. Senza questo margine la terza colonna non entrava mai e
+        // la griglia ripiegava su due. L'ultima scheda finisce comunque a
+        // filo del bordo (il distacco in piu' cade fuori, vuoto), come la
+        // griglia di Electron (grid-cols-3 gap-3).
         anchors.fill: parent
+        anchors.rightMargin: -12
         visible: root.grid
         model: root.grid ? Library : null
         cellWidth: root.cardW + 12; cellHeight: root.cardH + 12
@@ -180,6 +188,7 @@ Item {
                 }
             }
         }
-        ScrollBar_ { flick: gridView }
+        // la vista sborda di 12 a destra: la barra sta sul bordo VISIBILE
+        ScrollBar_ { flick: gridView; x: gridView.width - 12 - 3 }
     }
 }
