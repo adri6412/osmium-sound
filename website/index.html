@@ -605,42 +605,34 @@
     }
     #android .install-inner, #android .quickstart { margin-left: auto; margin-right: auto; }
 
-    /* ── RECENSIONI ───────────────────────────────────── */
+    /* ── RECENSIONI + KO-FI ───────────────────────────── */
     #review {
-      border-top: 1px solid var(--border);
-      padding: 2.25rem clamp(1.25rem, 5vw, 4rem);
-      background: var(--bg-card);
+      border-top: 1px solid rgba(245,184,32,0.35);
+      border-bottom: 1px solid rgba(245,184,32,0.35);
+      background: var(--accent-dim);
+      padding: 1.75rem clamp(1.25rem, 5vw, 4rem);
     }
     .review-inner {
       max-width: 900px; margin: 0 auto;
       display: flex; align-items: center; justify-content: center;
-      gap: 1.25rem 1.75rem; flex-wrap: wrap; text-align: center;
+      gap: 1rem 1.75rem; flex-wrap: wrap; text-align: center;
     }
     .review-inner p {
-      color: var(--muted); font-size: 0.92rem; line-height: 1.6;
-      max-width: 560px; margin: 0;
+      color: var(--text); font-size: 0.92rem; line-height: 1.6;
+      max-width: 460px; margin: 0;
     }
-    .review-inner strong { color: var(--text); }
+    .review-inner strong { color: var(--accent); }
+    .review-actions {
+      display: flex; gap: 0.75rem; flex-wrap: wrap; justify-content: center;
+    }
     .review-btn {
       padding: 10px 20px; font-size: 0.9rem; white-space: nowrap;
       border: none; cursor: pointer; font-family: inherit; line-height: 1.6;
     }
-
-    /* ── DONATE (Ko-fi) ───────────────────────────────── */
-    #donate {
-      border-top: 1px solid var(--border);
-      padding: 2.25rem clamp(1.25rem, 5vw, 4rem);
+    .kofi-btn {
+      padding: 10px 20px; font-size: 0.9rem; white-space: nowrap;
+      background: var(--bg); border-color: rgba(245,184,32,0.35);
     }
-    .donate-inner {
-      max-width: 900px; margin: 0 auto;
-      display: flex; align-items: center; justify-content: center;
-      gap: 1.25rem 1.75rem; flex-wrap: wrap; text-align: center;
-    }
-    .donate-inner p {
-      color: var(--muted); font-size: 0.92rem; line-height: 1.6;
-      max-width: 560px; margin: 0;
-    }
-    .kofi-btn { padding: 10px 20px; font-size: 0.9rem; white-space: nowrap; }
     .kofi-btn img { width: 24px; height: auto; display: block; }
 
     /* ── FOOTER ──────────────────────────────────────── */
@@ -846,6 +838,30 @@
       <strong>This is Osmium Sound's first public release</strong> — it isn't exempt from problems. On the platforms we tested, every feature has been verified and validated, but the x86 hardware landscape is vast, and we can't rule out issues on other hardware combinations. If you run into one, please report it through the <a href="#support">official channels below</a> — it really helps.
     </p>
 
+  </div>
+</section>
+
+<!-- RECENSIONI + KO-FI -->
+<section id="review">
+  <div class="review-inner">
+    <p data-en="&lt;strong&gt;Already using Osmium Sound?&lt;/strong&gt; Tell us how it is going — it takes a minute and helps other people decide. And if you enjoy it, you can support the work with a voluntary donation." data-it="&lt;strong&gt;Usi gi&agrave; Osmium Sound?&lt;/strong&gt; Raccontaci come ti trovi: ci vuole un minuto e aiuta le altre persone a scegliere. E se ti piace, puoi sostenere il lavoro con una donazione volontaria."><strong>Already using Osmium Sound?</strong> Tell us how it is going — it takes a minute and helps other people decide. And if you enjoy it, you can support the work with a voluntary donation.</p>
+    <div class="review-actions">
+      <button type="button" class="btn-primary review-btn"
+              data-tally-open="yP5z90"
+              data-tally-align-left="1"
+              data-tally-hide-title="1"
+              data-tally-emoji-text="👋"
+              data-tally-emoji-animation="head-shake"
+              data-tally-auto-close="3000"
+              data-tally-form-events-forwarding="1">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2.5l2.9 5.88 6.49.95-4.7 4.58 1.11 6.46L12 17.32l-5.8 3.05 1.11-6.46-4.7-4.58 6.49-.95L12 2.5z"/></svg>
+        <span data-en="Leave a review" data-it="Lascia una recensione">Leave a review</span>
+      </button>
+      <a class="btn-secondary kofi-btn" href="https://ko-fi.com/osmiumsound" target="_blank" rel="noopener">
+        <img src="kofi.png" alt="Ko-fi" width="24" height="19">
+        <span data-en="Support us on Ko-fi" data-it="Sostienici su Ko-fi">Support us on Ko-fi</span>
+      </a>
+    </div>
   </div>
 </section>
 
@@ -1075,35 +1091,6 @@
         <span data-en="Open an issue on GitHub" data-it="Apri una issue su GitHub">Open an issue on GitHub</span>
       </a>
     </div>
-  </div>
-</section>
-
-<!-- RECENSIONI -->
-<section id="review">
-  <div class="review-inner">
-    <p data-en="&lt;strong&gt;Already using Osmium Sound?&lt;/strong&gt; Tell us how it is going. It takes a minute, and it helps other people decide." data-it="&lt;strong&gt;Usi gi&agrave; Osmium Sound?&lt;/strong&gt; Raccontaci come ti trovi. Ci vuole un minuto e aiuta le altre persone a scegliere."><strong>Already using Osmium Sound?</strong> Tell us how it is going. It takes a minute, and it helps other people decide.</p>
-    <button type="button" class="btn-primary review-btn"
-            data-tally-open="yP5z90"
-            data-tally-align-left="1"
-            data-tally-hide-title="1"
-            data-tally-emoji-text="👋"
-            data-tally-emoji-animation="head-shake"
-            data-tally-auto-close="3000"
-            data-tally-form-events-forwarding="1">
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2.5l2.9 5.88 6.49.95-4.7 4.58 1.11 6.46L12 17.32l-5.8 3.05 1.11-6.46-4.7-4.58 6.49-.95L12 2.5z"/></svg>
-      <span data-en="Leave a review" data-it="Lascia una recensione">Leave a review</span>
-    </button>
-  </div>
-</section>
-
-<!-- DONATE -->
-<section id="donate">
-  <div class="donate-inner">
-    <p data-en="Osmium Sound is free and open source. If you enjoy it, you can support its development with a voluntary donation on Ko-fi." data-it="Osmium Sound è gratuito e open source. Se ti piace, puoi sostenerne lo sviluppo con una donazione volontaria su Ko-fi.">Osmium Sound is free and open source. If you enjoy it, you can support its development with a voluntary donation on Ko-fi.</p>
-    <a class="btn-secondary kofi-btn" href="https://ko-fi.com/osmiumsound" target="_blank" rel="noopener">
-      <img src="kofi.png" alt="Ko-fi" width="24" height="19">
-      <span data-en="Support us on Ko-fi" data-it="Sostienici su Ko-fi">Support us on Ko-fi</span>
-    </a>
   </div>
 </section>
 
