@@ -735,7 +735,8 @@
       "failed": "Could not reset the web interface credentials."
     },
     "about": {
-      "builtWith": "Built with Electron, React, and Tailwind CSS"
+      "builtWith": "Built with Electron, React, and Tailwind CSS",
+      "builtWithQt": "Built with Qt 6 and QML"
     },
     "msg": {
       "apiUnavailable": "Error: API server unavailable",

@@ -486,7 +486,16 @@
       "playerOff": "Off (server only)",
       "confirmPlayerOff": "This device will stop playing audio locally. Lyrion Music Server and remote control keep working. Continue?",
       "playerChanged": "Player on/off state changed",
-      "playerChangeFailed": "Could not change the player on/off state"
+      "playerChangeFailed": "Could not change the player on/off state",
+      "engineLabel": "On-screen interface",
+      "engineHelp": "Which of the two interfaces runs on the device's screen. The new one (Qt) draws straight on the screen, with no browser: it uses less power and stays smooth even on 4K screens. Music keeps playing when you switch.",
+      "engine": {
+        "electron": "Classic",
+        "qt": "New (Qt)"
+      },
+      "confirmEngine": "The interface on the device's screen will close and come back with the one you picked. Playback continues. Go ahead?",
+      "engineChanged": "Interface changed",
+      "engineFailed": "Interface change failed"
     },
     "timezone": {
       "hint": "A fresh install has no way to ask for this, so it defaults to UTC — pick the device's real one here.",

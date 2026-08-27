@@ -167,6 +167,13 @@ MESSAGES = {
     'displayMode.headlessEnabled': {'en': 'Headless mode enabled — the screen will turn off',
                                     'it': 'Modalità headless attivata — lo schermo verrà spento'},
 
+    # ── Interfaccia su schermo: quale delle due (Electron / Qt) ─────
+    'uiEngine.invalid': {'en': 'Invalid interface', 'it': 'Interfaccia non valida'},
+    'uiEngine.notInstalled': {'en': 'That interface is not installed on this device',
+                              'it': "Quell'interfaccia non è installata su questo dispositivo"},
+    'uiEngine.changeFailed': {'en': 'Interface change failed', 'it': "Cambio dell'interfaccia fallito"},
+    'uiEngine.electronEnabled': {'en': 'Electron interface enabled', 'it': 'Interfaccia Electron attivata'},
+    'uiEngine.qtEnabled': {'en': 'Qt interface enabled', 'it': 'Interfaccia Qt attivata'},
     # ── UI render resolution ────────────────────────────────────────
     'uiResolution.invalid': {'en': 'Invalid resolution', 'it': 'Risoluzione non valida'},
     'uiResolution.unavailable': {'en': 'Feature not available on this system version',

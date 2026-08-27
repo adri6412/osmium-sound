@@ -2259,6 +2259,68 @@ def set_display_mode(mode):
     return {'success': True, 'mode': mode, 'message': msg}
 
 # ──────────────────────────────────────────────────────────────────
+#  Which on-screen interface runs: the Electron kiosk (historic) or the Qt
+#  one (draws straight on DRM/KMS, no X and no compositor). They are mutually
+#  exclusive — lightdm vs hifi-qt.service — and the switch is the same script
+#  that handles gui/headless, so the two settings can't fight each other.
+#
+#  ABSENT state means 'electron', the same fleet-safety default as display
+#  mode: a device that never chose must never change interface on its own
+#  because of an update.
+# ──────────────────────────────────────────────────────────────────
+UI_ENGINE_FILE = '/etc/hifi-player/ui-engine'
+UI_ENGINES = ('electron', 'qt')
+QT_UI_BIN = '/opt/hifi-qt/hifi-qt'
+
+def _qt_ui_installed():
+    return os.path.isfile(QT_UI_BIN) and os.access(QT_UI_BIN, os.X_OK)
+
+def get_ui_engine():
+    """Return { engine, engines }. `engines` is what this device can actually
+    run right now — the Qt option only appears once its files are installed,
+    so an older unit that hasn't received them yet shows a single choice
+    instead of a switch that would leave it with a black screen."""
+    engine = 'electron'
+    try:
+        with open(UI_ENGINE_FILE) as f:
+            if f.read().strip() == 'qt':
+                engine = 'qt'
+    except Exception:
+        pass
+    engines = ['electron'] + (['qt'] if _qt_ui_installed() else [])
+    # se l'interfaccia scelta è sparita (pacchetto rimosso), si dice la verità
+    if engine not in engines:
+        engine = 'electron'
+    return {'engine': engine, 'engines': engines}
+
+def set_ui_engine(engine):
+    """Switch Electron <-> Qt, live + persisted. Same update guard as the
+    display mode: swapping the on-screen interface mid-update would tear down
+    the session that is applying it."""
+    if engine not in UI_ENGINES:
+        return {'success': False, 'engine': get_ui_engine()['engine'],
+                'code': 'uiEngine.invalid', 'message': _t('uiEngine.invalid', _lang())}
+    if engine == 'qt' and not _qt_ui_installed():
+        return {'success': False, 'engine': get_ui_engine()['engine'],
+                'code': 'uiEngine.notInstalled', 'message': _t('uiEngine.notInstalled', _lang())}
+    if _update_in_progress():
+        return {'success': False, 'engine': get_ui_engine()['engine'],
+                'code': 'update.inProgressRetry', 'message': _t('update.inProgressRetry', _lang())}
+    try:
+        r = subprocess.run([DISPLAY_MODE_SCRIPT, 'engine', 'set', engine, '--live'],
+                           capture_output=True, text=True, timeout=30)
+        if r.returncode != 0:
+            log.error("set_ui_engine failed: %s", (r.stderr or '').strip())
+            return {'success': False, 'engine': get_ui_engine()['engine'],
+                    'code': 'uiEngine.changeFailed', 'message': _t('uiEngine.changeFailed', _lang())}
+    except Exception:
+        log.exception("set_ui_engine failed")
+        return {'success': False, 'engine': get_ui_engine()['engine'],
+                'code': 'uiEngine.changeFailed', 'message': _t('uiEngine.changeFailed', _lang())}
+    msg = _t('uiEngine.qtEnabled' if engine == 'qt' else 'uiEngine.electronEnabled', _lang())
+    return {'success': True, 'engine': engine, 'message': msg}
+
+# ──────────────────────────────────────────────────────────────────
 #  Player enabled/disabled — whether this device plays audio at all
 #  (squeezelite), orthogonal to display mode above (which only controls the
 #  on-screen kiosk). A "server only" unit keeps Lyrion + every hifi-* daemon
@@ -2727,6 +2789,38 @@ def set_vu_meter(enable):
 #  vu-meter-enabled: reachable from the companion app / web admin on a
 #  headless unit.
 # ──────────────────────────────────────────────────────────────────
+UI_LANGUAGE_FILE = '/etc/hifi-player/ui-language'
+UI_LANGUAGE_CHOICES = ('en', 'it')
+
+def get_ui_language():
+    """Return { language }. The on-device UI (both the Electron kiosk and the
+    native one) reads this file, so the language follows the device rather
+    than whichever UI happened to set it."""
+    lang = ''
+    try:
+        with open(UI_LANGUAGE_FILE) as f:
+            lang = f.read().strip().lower()
+    except Exception:
+        pass
+    return {'language': lang if lang in UI_LANGUAGE_CHOICES else ''}
+
+def set_ui_language(lang):
+    lang = (lang or '').strip().lower()
+    if lang not in UI_LANGUAGE_CHOICES:
+        return {'success': False, 'language': get_ui_language()['language'],
+                'code': 'prefs.saveFailed', 'message': _t('prefs.saveFailed', _lang())}
+    try:
+        os.makedirs(os.path.dirname(UI_LANGUAGE_FILE), exist_ok=True)
+        tmp = UI_LANGUAGE_FILE + '.tmp'
+        with open(tmp, 'w') as f:
+            f.write(lang + '\n')
+        os.replace(tmp, UI_LANGUAGE_FILE)
+    except Exception:
+        log.exception("set_ui_language: persist failed")
+        return {'success': False, 'language': get_ui_language()['language'],
+                'code': 'prefs.saveFailed', 'message': _t('prefs.saveFailed', _lang())}
+    return {'success': True, 'language': lang}
+
 NOWPLAYING_AUTOEXPAND_FILE = '/etc/hifi-player/nowplaying-autoexpand-seconds'
 NOWPLAYING_AUTOEXPAND_CHOICES = (0, 3, 5, 10, 15)
 
@@ -5620,6 +5714,15 @@ def api_set_display_mode():
     data = request.get_json(silent=True) or {}
     return jsonify(set_display_mode((data.get('mode') or '').strip()))
 
+@app.route('/ui_engine', methods=['GET'])
+def api_ui_engine():
+    return jsonify(get_ui_engine())
+
+@app.route('/ui_engine', methods=['POST'])
+def api_set_ui_engine():
+    data = request.get_json(silent=True) or {}
+    return jsonify(set_ui_engine((data.get('engine') or '').strip()))
+
 @app.route('/player_enabled', methods=['GET'])
 def api_player_enabled():
     return jsonify(get_player_enabled())
@@ -5668,6 +5771,15 @@ def api_vu_meter():
 def api_set_vu_meter():
     data = request.get_json(silent=True) or {}
     return jsonify(set_vu_meter(bool(data.get('enable'))))
+
+@app.route('/ui_language', methods=['GET'])
+def api_ui_language():
+    return jsonify(get_ui_language())
+
+@app.route('/ui_language', methods=['POST'])
+def api_set_ui_language():
+    data = request.get_json(silent=True) or {}
+    return jsonify(set_ui_language(data.get('language')))
 
 @app.route('/nowplaying_autoexpand', methods=['GET'])
 def api_nowplaying_autoexpand():

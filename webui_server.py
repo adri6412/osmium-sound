@@ -962,6 +962,8 @@ _AUTH_ROUTES = {
     ('/api/system/dsp_preset_delete', 'POST'): '/dsp_preset_delete',
     ('/api/system/display_mode', 'GET'): '/display_mode',
     ('/api/system/display_mode', 'POST'): '/display_mode',
+    ('/api/system/ui_engine', 'GET'): '/ui_engine',
+    ('/api/system/ui_engine', 'POST'): '/ui_engine',
     ('/api/system/player_enabled', 'GET'): '/player_enabled',
     ('/api/system/player_enabled', 'POST'): '/player_enabled',
     ('/api/system/ui_resolution', 'GET'): '/ui_resolution',
