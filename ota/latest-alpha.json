@@ -1,41 +1,41 @@
 {
-  "tag_name": "v2.5.24-dev.4-alpha2",
-  "name": "v2.5.24-dev.4-alpha2",
-  "body": "## What's new in v2.5.24-dev.4-alpha2\n\n- fix(ota): i file della nuova interfaccia non arrivavano sull'apparecchio\n",
+  "tag_name": "v2.5.24-dev.4-alpha3",
+  "name": "v2.5.24-dev.4-alpha3",
+  "body": "## What's new in v2.5.24-dev.4-alpha3\n\n- fix(ui): schermo nero passando alla nuova interfaccia \u2014 mancava chvt\n",
   "assets": [
     {
-      "name": "hifi-ui-v2.5.24-dev.4-alpha2.tar.gz",
-      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.24-dev.4-alpha2/hifi-ui-v2.5.24-dev.4-alpha2.tar.gz",
-      "size": 134698003
+      "name": "hifi-ui-v2.5.24-dev.4-alpha3.tar.gz",
+      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.24-dev.4-alpha3/hifi-ui-v2.5.24-dev.4-alpha3.tar.gz",
+      "size": 134700047
     },
     {
-      "name": "hifi-ui-v2.5.24-dev.4-alpha2.tar.gz.sha256",
-      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.24-dev.4-alpha2/hifi-ui-v2.5.24-dev.4-alpha2.tar.gz.sha256",
+      "name": "hifi-ui-v2.5.24-dev.4-alpha3.tar.gz.sha256",
+      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.24-dev.4-alpha3/hifi-ui-v2.5.24-dev.4-alpha3.tar.gz.sha256",
       "size": 102
     },
     {
-      "name": "hifi-system-v2.5.24-dev.4-alpha2.tar.gz",
-      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.24-dev.4-alpha2/hifi-system-v2.5.24-dev.4-alpha2.tar.gz",
-      "size": 5208565
+      "name": "hifi-system-v2.5.24-dev.4-alpha3.tar.gz",
+      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.24-dev.4-alpha3/hifi-system-v2.5.24-dev.4-alpha3.tar.gz",
+      "size": 5208354
     },
     {
-      "name": "hifi-system-v2.5.24-dev.4-alpha2.tar.gz.sha256",
-      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.24-dev.4-alpha2/hifi-system-v2.5.24-dev.4-alpha2.tar.gz.sha256",
+      "name": "hifi-system-v2.5.24-dev.4-alpha3.tar.gz.sha256",
+      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.24-dev.4-alpha3/hifi-system-v2.5.24-dev.4-alpha3.tar.gz.sha256",
       "size": 106
     },
     {
-      "name": "hifi-os-v2.5.24-dev.4-alpha2.tar.gz",
-      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.24-dev.4-alpha2/hifi-os-v2.5.24-dev.4-alpha2.tar.gz",
-      "size": 1398800
+      "name": "hifi-os-v2.5.24-dev.4-alpha3.tar.gz",
+      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.24-dev.4-alpha3/hifi-os-v2.5.24-dev.4-alpha3.tar.gz",
+      "size": 1398954
     },
     {
-      "name": "hifi-os-v2.5.24-dev.4-alpha2.tar.gz.sha256",
-      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.24-dev.4-alpha2/hifi-os-v2.5.24-dev.4-alpha2.tar.gz.sha256",
+      "name": "hifi-os-v2.5.24-dev.4-alpha3.tar.gz.sha256",
+      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.24-dev.4-alpha3/hifi-os-v2.5.24-dev.4-alpha3.tar.gz.sha256",
       "size": 102
     },
     {
-      "name": "hifi-os-v2.5.24-dev.4-alpha2.tar.gz.sha256.sig",
-      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.24-dev.4-alpha2/hifi-os-v2.5.24-dev.4-alpha2.tar.gz.sha256.sig",
+      "name": "hifi-os-v2.5.24-dev.4-alpha3.tar.gz.sha256.sig",
+      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.24-dev.4-alpha3/hifi-os-v2.5.24-dev.4-alpha3.tar.gz.sha256.sig",
       "size": 64
     }
   ]
