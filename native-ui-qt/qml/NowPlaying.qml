@@ -48,22 +48,29 @@ Item {
     Item {
         anchors.fill: parent
         clip: true
+        // Come Electron: bg-cover della copertina sulla tela (1024 quadrata,
+        // centrata), scale-125 (1280) e blur-lg = 16 punti. La sfocatura e'
+        // di 16 punti sullo schermo, non di piu': si devono intravedere le
+        // forme della copertina, e' cio' che da' profondita' al fondale.
+        // Si parte da 400 px (non 160: a 8x l'immagine era gia' impastata
+        // dal solo ingrandimento, sfocatura reale ~130 punti, fondale piatto)
+        // e 16 punti / (1280/400) = 5 px di sfocatura sulla sorgente.
         Image {
             id: bgSrc
             source: Player.artworkUrl
             asynchronous: true; visible: false
-            sourceSize.width: 160; sourceSize.height: 160
-            width: 160; height: 160
+            sourceSize.width: 400; sourceSize.height: 400
+            width: 400; height: 400
             fillMode: Image.PreserveAspectCrop
         }
         MultiEffect {
             source: bgSrc
             visible: bgSrc.status === Image.Ready
-            width: 160; height: 160
+            width: 400; height: 400
             x: 512 - 640; y: 300 - 640
-            scale: 8
+            scale: 3.2
             transformOrigin: Item.TopLeft
-            blurEnabled: true; blur: 0.5; blurMax: 32
+            blurEnabled: true; blur: 0.33; blurMax: 16
             opacity: 0.2
         }
     }
@@ -156,7 +163,11 @@ Item {
             wrapMode: Text.Wrap; maximumLineCount: 2; elide: Text.ElideRight
             lineHeight: 30; lineHeightMode: Text.FixedHeight
         }
-        Item { width: 1; height: 2 }
+        // 6 e non 2 (mt-0.5): misurato sull'apparecchio, a parita' di riga
+        // da 30 Chromium appoggia il glifo 4 punti piu' in basso di Qt, e
+        // tutto cio' che segue (artista, tempi, barra, comandi) stava 4-5
+        // punti piu' in alto che in Electron.
+        Item { width: 1; height: 6 }
         Text {
             width: parent.width; height: 28; verticalAlignment: Text.AlignVCenter
             text: Player.artist || Tr.t("player.unknownArtist")

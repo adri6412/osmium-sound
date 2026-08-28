@@ -228,11 +228,13 @@ Item {
                         required property var modelData
                         required property int index
                         readonly property real tw: (root.width - 32 - 24) / 3
-                        x: 16 + (index % 3) * (tw + 12); y: 16 + Math.floor(index / 3) * (113 + 12)
-                        width: tw; height: 113; radius: 12
+                        // py-7 (28) + icona 30 + mb-2.5 (10) + riga text-sm (20) + py-7 (28)
+                        // + 2 di bordo = 117: misurato 140 px a 720p in Electron (113 era 4 in meno)
+                        x: 16 + (index % 3) * (tw + 12); y: 16 + Math.floor(index / 3) * (117 + 12)
+                        width: tw; height: 117; radius: 12
                         color: tileTap.mix(Theme.surface, Theme.light); border.width: 1; border.color: Theme.border
-                        Icon { anchors.horizontalCenter: parent.horizontalCenter; y: 28; name: modelData.icon; size: 30; color: Theme.silver }
-                        Text { anchors.horizontalCenter: parent.horizontalCenter; y: 68; height: 17; verticalAlignment: Text.AlignVCenter; text: Tr.t(modelData.key); color: Theme.white; font.family: Theme.font; font.pixelSize: 14 }
+                        Icon { anchors.horizontalCenter: parent.horizontalCenter; y: 29; name: modelData.icon; size: 30; color: Theme.silver }
+                        Text { anchors.horizontalCenter: parent.horizontalCenter; y: 69; height: 20; verticalAlignment: Text.AlignVCenter; text: Tr.t(modelData.key); color: Theme.white; font.family: Theme.font; font.pixelSize: 14 }
                         Tap {
                             id: tileTap
                             onClicked: {

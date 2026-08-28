@@ -40,8 +40,12 @@ Item {
     // ─── il blocco centrale, centrato in verticale come nel JSX ────────────
     readonly property bool hasAlbum: Player.album !== ""
     readonly property bool hasChip: Player.chip !== ""
-    readonly property real infoH: titleText.lineCount * 19 + 2 + 16 + (hasAlbum ? 15 : 0) + (hasChip ? 20 : 0) + 4
-    readonly property real total: 270 + infoH + 25 + 64 + 32 + 32
+    // l'altezza VERA del blocco titolo/artista/album/etichetta/tempi/barra: un
+    // valore fisso non seguiva le righe (e con quelle nuove il blocco finiva 8
+    // punti troppo in basso, invece di salire come in Electron)
+    readonly property real infoH: info.height
+    // 270 copertina (8+250+12) + blocco info (tempi e barra compresi) + 64 trasporto + 32 + 32
+    readonly property real total: 270 + infoH + 64 + 32 + 32
     readonly property real y0: 40 + (600 - 40 - total) / 2
 
     // copertina 250 con ombra 0 8px 40px rgba(0,0,0,.7)
@@ -63,36 +67,40 @@ Item {
             text: Player.title || Tr.t("player.noTrack")
             color: Theme.white; font.family: Theme.font; font.pixelSize: 15; font.bold: true
             wrapMode: Text.Wrap; maximumLineCount: 2; elide: Text.ElideRight
-            lineHeight: 19; lineHeightMode: Text.FixedHeight
+            // interlinea "normal" di Chromium = 1,5: 15 px -> 22,5, 13 -> 19,5, 10 -> 15.
+            // Misurato a 720p: con 19/16/15/16/12/3 il blocco era 16 punti piu' corto
+            // di Electron, e il centraggio spostava copertina e titolo in basso e
+            // barra e comandi in alto.
+            lineHeight: 22; lineHeightMode: Text.FixedHeight
         }
         Item { width: 1; height: 2 }
         Text {
-            width: parent.width; height: 16; verticalAlignment: Text.AlignVCenter
+            width: parent.width; height: 19; verticalAlignment: Text.AlignVCenter
             text: Player.artist || Tr.t("player.unknownArtist")
             color: Theme.gold; font.family: Theme.font; font.pixelSize: 13; elide: Text.ElideRight
         }
         Text {
-            width: parent.width; height: 15; visible: root.hasAlbum; verticalAlignment: Text.AlignVCenter
+            width: parent.width; height: 16; visible: root.hasAlbum; verticalAlignment: Text.AlignVCenter
             text: Player.album; color: Theme.silverA(0.6); font.family: Theme.font; font.pixelSize: 12; elide: Text.ElideRight
         }
         Item { width: 1; height: 4; visible: root.hasChip }
         Rectangle {
             visible: root.hasChip
-            width: chipText.implicitWidth + 16; height: 16; radius: 4
+            width: chipText.implicitWidth + 16; height: 21; radius: 4
             color: Theme.wa(0.05); border.width: 1; border.color: Theme.wa(0.05)
             Text { id: chipText; anchors.centerIn: parent; text: Player.chip; color: Theme.silverA(0.5); font.family: Theme.font; font.pixelSize: 10; font.letterSpacing: 0.3 }
         }
         Item { width: 1; height: 4 }
         Item { width: 1; height: 4 }
         Item {                                         // tempi
-            width: parent.width; height: 12
+            width: parent.width; height: 15
             Text { anchors.left: parent.left; anchors.verticalCenter: parent.verticalCenter; text: Player.formatTime(Player.elapsed); color: Theme.silverA(0.5); font.family: Theme.mono; font.pixelSize: 10 }
             Text { anchors.right: parent.right; anchors.verticalCenter: parent.verticalCenter; text: Player.formatTime(Player.duration); color: Theme.silverA(0.5); font.family: Theme.mono; font.pixelSize: 10 }
         }
         Item { width: 1; height: 4 }
         Item {                                         // barra
             id: bar
-            width: parent.width; height: 3
+            width: parent.width; height: 4
             Rectangle { anchors.fill: parent; radius: 2; color: Theme.wa(0.12) }
             Item {
                 width: Player.duration > 0 ? parent.width * Math.max(0, Math.min(1, Player.elapsed / Player.duration)) : 0
