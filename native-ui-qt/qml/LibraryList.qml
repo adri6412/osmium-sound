@@ -78,12 +78,15 @@ Item {
                     anchors.fill: parent
                     visible: false
                     source: (row.v >= LibraryModel.Radios) ? root.iconUrl(row.icon) : ""
-                    asynchronous: true; cache: true
-                    sourceSize.width: Math.round(24 * root.devScale); sourceSize.height: Math.round(24 * root.devScale)
+                    asynchronous: true; cache: true; smooth: true
+                    sourceSize.width: Math.round(24 * root.devScale * 2); sourceSize.height: Math.round(24 * root.devScale * 2)
                     fillMode: Image.PreserveAspectCrop
+                    layer.enabled: true
+                    layer.smooth: true
+                    layer.textureSize: Qt.size(Math.ceil(24 * root.devScale * 2), Math.ceil(24 * root.devScale * 2))
                 }
-                Rectangle { id: rowMask; anchors.fill: parent; radius: 4; visible: false; layer.enabled: true
-                            layer.textureSize: Qt.size(Math.ceil(width * root.devScale), Math.ceil(height * root.devScale)) }
+                Rectangle { id: rowMask; anchors.fill: parent; radius: 4; visible: false; layer.enabled: true; layer.smooth: true
+                            layer.textureSize: Qt.size(Math.ceil(width * root.devScale * 2), Math.ceil(height * root.devScale * 2)) }
                 ShaderImage { anchors.fill: parent; source: rowImg; mask: rowMask; visible: rowImg.status === Image.Ready }
                 Icon {
                     anchors.centerIn: parent
@@ -168,11 +171,21 @@ Item {
                     source: card.art ? Api.lmsBase + "/music/" + card.art + "/cover_"
                             + Theme.coverPx(root.cardW) + "x" + Theme.coverPx(root.cardW) + "_o.jpg" : ""
                     asynchronous: true; cache: true; fillMode: Image.PreserveAspectCrop
-                    sourceSize.width: Math.round(root.cardW * root.devScale); sourceSize.height: Math.round(root.cardW * root.devScale)
+                    smooth: true
+                    // il doppio dei pixel dello schermo: si decodifica alla misura
+                    // nativa di quel che manda Lyrion e a rimpicciolire e' la scheda
+                    // video, come fa Chromium (chiedendo 1x riduceva Qt, e si perdeva)
+                    sourceSize.width: Math.round(root.cardW * root.devScale * 2); sourceSize.height: Math.round(root.cardW * root.devScale * 2)
+                    // 🚨 la texture che la mascheratura usa deve stare alla risoluzione
+                    // vera, se no la copertina viene rasterizzata alla misura in punti
+                    // e si vede seghettata (stesso difetto di icone e copertina grande)
+                    layer.enabled: true
+                    layer.smooth: true
+                    layer.textureSize: Qt.size(Math.ceil(root.cardW * root.devScale * 2), Math.ceil(root.cardW * root.devScale * 2))
                 }
                 // angoli tondi solo in alto (rounded-t-xl)
-                Rectangle { id: artMask; anchors.fill: parent; radius: 12; visible: false; layer.enabled: true
-                            layer.textureSize: Qt.size(Math.ceil(width * root.devScale), Math.ceil(height * root.devScale))
+                Rectangle { id: artMask; anchors.fill: parent; radius: 12; visible: false; layer.enabled: true; layer.smooth: true
+                            layer.textureSize: Qt.size(Math.ceil(width * root.devScale * 2), Math.ceil(height * root.devScale * 2))
                             Rectangle { anchors.bottom: parent.bottom; width: parent.width; height: 12 } }
                 ShaderImage { anchors.fill: parent; source: artImg; mask: artMask; visible: artImg.status === Image.Ready }
                 // shadow-lg = 0 10px 15px -3px + 0 4px 6px -4px, nero al 10 %
