@@ -104,11 +104,23 @@ OTA_CHANNELS = ('prod', 'dev', 'alpha')
 # out of the UI/API for every device except the owner's own, on purpose.
 OTA_ALPHA_MARKER_FILE = '/etc/hifi-player/ota-alpha-unlocked'
 OTA_APPDIR = '/opt/hifi-media-player'
-OTA_VERSION_FILE = os.path.join(OTA_APPDIR, 'UI_VERSION')
+# 🚨 Da 2.5.24 il canale "ui" porta l'interfaccia Qt (/opt/hifi-qt), non piu'
+# l'app Electron: la versione installata sta in un file suo, fuori dalle due
+# cartelle. Il vecchio percorso resta come ripiego per gli apparecchi che non
+# hanno ancora ricevuto questo aggiornamento.
+OTA_VERSION_FILE = '/etc/hifi-player/UI_VERSION'
+OTA_VERSION_FILE_LEGACY = os.path.join(OTA_APPDIR, 'UI_VERSION')
 OTA_SCRIPT = '/usr/local/sbin/hifi-ota-update.sh'
 OTA_STATUS_FILE = '/run/hifi-ota-status.json'
 # The UI release carries several tarballs; pick ours by name prefix.
-OTA_UI_PREFIX = 'hifi-ui-'
+# 🚨 Da 2.5.24 il pacchetto dell'interfaccia contiene Qt e si chiama
+# `hifi-qtui-`: il nome e' NUOVO di proposito, perche' l'aggiornatore
+# installato sugli apparecchi vecchi rifiuta un pacchetto senza Electron e
+# bloccherebbe l'intero aggiornamento. Non trovando `hifi-ui-` quegli
+# apparecchi considerano l'interfaccia aggiornata, applicano sistema e
+# sistema operativo, e al giro dopo — con l'aggiornatore nuovo — prendono
+# anche Qt. Il nome vecchio resta come ripiego per tornare indietro.
+OTA_UI_PREFIX = ('hifi-qtui-', 'hifi-ui-')
 
 # ──────────────────────────────────────────────────────────────────
 #  OTA update of the custom system components (Python API/daemons,
@@ -4125,11 +4137,16 @@ def get_bluetooth_now_playing():
 # ──────────────────────────────────────────────────────────────────
 
 def _installed_ui_version():
-    try:
-        with open(OTA_VERSION_FILE) as f:
-            return f.read().strip() or 'unknown'
-    except Exception:
-        return 'unknown'
+    # il file nuovo prima, quello vecchio come ripiego (apparecchi non ancora aggiornati)
+    for path in (OTA_VERSION_FILE, OTA_VERSION_FILE_LEGACY):
+        try:
+            with open(path) as f:
+                v = f.read().strip()
+            if v:
+                return v
+        except Exception:
+            pass
+    return 'unknown'
 
 def _version_tuple(v):
     """Best-effort numeric tuple from a version like 'v1.2.0' → (1, 2, 0)."""
@@ -4351,9 +4368,15 @@ def _check_release_update(current, prefix, channel=None):
     assets = release.get('assets', [])
 
     def _named(suffix):
-        return next((a for a in assets
-                     if a.get('name', '').startswith(prefix)
-                     and a.get('name', '').endswith(suffix)), None)
+        # `prefix` puo' essere una tupla: si prova nell'ordine dato, cosi' il
+        # nome nuovo vince su quello vecchio quando ci sono entrambi
+        for pfx in ((prefix,) if isinstance(prefix, str) else prefix):
+            a = next((a for a in assets
+                      if a.get('name', '').startswith(pfx)
+                      and a.get('name', '').endswith(suffix)), None)
+            if a:
+                return a
+        return None
 
     tarball = _named('.tar.gz')
     sha_asset = _named('.tar.gz.sha256')

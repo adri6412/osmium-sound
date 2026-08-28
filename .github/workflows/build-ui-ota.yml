@@ -183,10 +183,19 @@ jobs:
       - name: Package UI OTA bundle (tarball + sha256)
         id: pack
         run: |
+          # 🚨 Da 2.5.24 il canale "ui" porta l'interfaccia Qt (/opt/hifi-qt),
+          # non piu' l'app Electron: e' quella che si aggiorna d'ora in poi.
+          # hifi-ota-update.sh sull'apparecchio riconosce i due contenuti dal
+          # loro eseguibile (hifi-qt oppure hifi-media-player), quindi i
+          # pacchetti gia' pubblicati restano installabili.
           VERSION="${{ steps.ver.outputs.version }}"
-          printf '%s\n' "$VERSION" > dist/linux-unpacked/UI_VERSION
-          TAR="hifi-ui-${VERSION}.tar.gz"
-          tar czf "$TAR" -C dist/linux-unpacked .
+          [ -x qtui/hifi-qt ] || { echo "::error::qtui/hifi-qt mancante — l'interfaccia Qt non e' stata costruita" >&2; exit 1; }
+          printf '%s\n' "$VERSION" > qtui/UI_VERSION
+          # nome NUOVO: l'aggiornatore vecchio rifiuterebbe un pacchetto senza
+          # Electron e bloccherebbe tutto l'aggiornamento; non trovando
+          # `hifi-ui-` quegli apparecchi saltano il passo e lo prendono al giro dopo
+          TAR="hifi-qtui-${VERSION}.tar.gz"
+          tar czf "$TAR" -C qtui .
           sha256sum "$TAR" > "${TAR}.sha256"
           echo "tarball=$TAR" >> "$GITHUB_OUTPUT"
 
@@ -226,8 +235,7 @@ jobs:
           # sotto insieme agli altri .service: resta DISABILITATA finché non la
           # si sceglie, così un apparecchio che si aggiorna non cambia
           # interfaccia da solo.
-          mkdir -p "$ROOT/opt/hifi-qt"
-          cp -r qtui/. "$ROOT/opt/hifi-qt/"
+          # (l'interfaccia Qt non sta piu' qui: viaggia nel canale interfaccia)
           printf '%s\n' "$VERSION" > "$ROOT/SYSTEM_VERSION"
           TAR="hifi-system-${VERSION}.tar.gz"
           tar czf "$TAR" -C "$ROOT" .
