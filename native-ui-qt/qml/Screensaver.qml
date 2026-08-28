@@ -84,9 +84,13 @@ Item {
             anchors.horizontalCenter: parent.horizontalCenter
             y: parent.cy + 64 - 192 * 0.78
             spacing: 16
-            Text { text: Qt.formatTime(root.now, "HH"); color: Theme.white; font.family: Theme.font; font.pixelSize: 192; font.letterSpacing: 2 }
-            Text { text: ":"; color: Qt.rgba(1, 1, 1, root.now.getSeconds() % 2 === 0 ? 0.5 : 0.2); font.family: Theme.font; font.pixelSize: 160; anchors.baseline: clock.children[0].baseline; anchors.baselineOffset: -32 }
-            Text { text: Qt.formatTime(root.now, "mm"); color: Theme.white; font.family: Theme.font; font.pixelSize: 192; font.letterSpacing: 2 }
+            // 🚨 renderType a curve: a 192 px i campi di distanza (il modo predefinito
+            // di Qt) sono generati da un atlante a misura limitata e poi ingranditi,
+            // e i bordi delle cifre vengono morbidi. Le curve sono indipendenti dalla
+            // risoluzione, come il testo di Chromium.
+            Text { text: Qt.formatTime(root.now, "HH"); color: Theme.white; font.family: Theme.font; font.pixelSize: 192; font.letterSpacing: 2; renderType: Text.CurveRendering }
+            Text { text: ":"; color: Qt.rgba(1, 1, 1, root.now.getSeconds() % 2 === 0 ? 0.5 : 0.2); font.family: Theme.font; font.pixelSize: 160; anchors.baseline: clock.children[0].baseline; anchors.baselineOffset: -32; renderType: Text.CurveRendering }
+            Text { text: Qt.formatTime(root.now, "mm"); color: Theme.white; font.family: Theme.font; font.pixelSize: 192; font.letterSpacing: 2; renderType: Text.CurveRendering }
         }
         Text { anchors.horizontalCenter: parent.horizontalCenter; y: parent.cy + 64 + 32; height: 36; verticalAlignment: Text.AlignVCenter; text: Qt.formatTime(root.now, "ss"); color: Theme.goldA(0.8); font.family: Theme.mono; font.pixelSize: 30; font.letterSpacing: 6 }
         Text {
