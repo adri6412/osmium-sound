@@ -167,6 +167,13 @@ MESSAGES = {
     'displayMode.headlessEnabled': {'en': 'Headless mode enabled — the screen will turn off',
                                     'it': 'Modalità headless attivata — lo schermo verrà spento'},
 
+    # ── Interfaccia su schermo: quale delle due (Electron / Qt) ─────
+    'uiEngine.invalid': {'en': 'Invalid interface', 'it': 'Interfaccia non valida'},
+    'uiEngine.notInstalled': {'en': 'That interface is not installed on this device',
+                              'it': "Quell'interfaccia non è installata su questo dispositivo"},
+    'uiEngine.changeFailed': {'en': 'Interface change failed', 'it': "Cambio dell'interfaccia fallito"},
+    'uiEngine.electronEnabled': {'en': 'Electron interface enabled', 'it': 'Interfaccia Electron attivata'},
+    'uiEngine.qtEnabled': {'en': 'Qt interface enabled', 'it': 'Interfaccia Qt attivata'},
     # ── UI render resolution ────────────────────────────────────────
     'uiResolution.invalid': {'en': 'Invalid resolution', 'it': 'Risoluzione non valida'},
     'uiResolution.unavailable': {'en': 'Feature not available on this system version',
@@ -255,6 +262,8 @@ MESSAGES = {
     'update.alreadyInProgress': {'en': 'Update already in progress', 'it': 'Aggiornamento già in corso'},
     'update.planSaveFailed': {'en': 'Saving the update plan failed', 'it': 'Salvataggio del piano fallito'},
     'update.inProgress': {'en': 'Update in progress', 'it': 'Aggiornamento in corso'},
+    'update.liveSession': {'en': "This is a live session (running from the USB stick): updates can't be installed here — install Osmium Sound first",
+                           'it': 'Questa è una sessione live (avviata dalla chiavetta): qui gli aggiornamenti non si possono installare — prima installa Osmium Sound'},
     # ── Isolated update mode (stage-then-reboot-then-apply) ────────────
     'update.stagedPendingReboot': {
         'en': 'Update verified — the device will restart to apply it',

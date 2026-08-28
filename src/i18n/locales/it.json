@@ -735,7 +735,8 @@
       "failed": "Impossibile azzerare le credenziali dell'interfaccia web."
     },
     "about": {
-      "builtWith": "Realizzato con Electron, React e Tailwind CSS"
+      "builtWith": "Realizzato con Electron, React e Tailwind CSS",
+      "builtWithQt": "Realizzato con Qt 6 e QML"
     },
     "msg": {
       "apiUnavailable": "Errore: Server API non disponibile",

@@ -562,6 +562,26 @@ async function setMode(m) {
   else say(bodyMsg(r, t('settings.display.changeFailed')), true);
 }
 
+// ── Quale interfaccia gira sullo schermo ────────────────────────────
+// Electron (quella storica, dentro la sessione lightdm) oppure Qt (disegna
+// diritto su DRM/KMS). Il server filtra l'elenco: `engines` contiene "qt"
+// solo se i suoi file sono davvero installati, così un apparecchio che non ha
+// ancora ricevuto il pacchetto non mostra uno scambio che lo lascerebbe con
+// lo schermo nero.
+const engine = ref('');
+const engines = ref([]);
+async function loadEngine() {
+  const r = await api.sys('ui_engine');
+  if (r.ok) { engine.value = r.data.engine; engines.value = r.data.engines || []; }
+}
+async function setEngine(e) {
+  if (e === engine.value) return;
+  if (!confirm(t('settings.display.confirmEngine'))) return;
+  const r = await api.sysPost('ui_engine', { engine: e });
+  if (r.ok && r.data.success !== false) { engine.value = r.data.engine || e; say(bodyMsg(r, t('settings.display.engineChanged'))); }
+  else say(bodyMsg(r, t('settings.display.engineFailed')), true);
+}
+
 // ── Player enabled/disabled ─────────────────────────────────────────
 // Orthogonal to display mode above: whether this device plays audio at all
 // (squeezelite), for a "server only" unit that keeps Lyrion running but
@@ -1139,7 +1159,7 @@ async function saveBackupScheduled(v) {
 
 onMounted(async () => {
   loadNet(); loadIpv4(); loadAudio(); loadDsp(); loadFir(); loadToggles(); loadShell(); loadLms(); loadLyrion(); loadSkin(); loadPlayback();
-  loadMode(); loadPlayerEnabled(); loadUiRes(); loadUiRefresh(); loadPointer(); loadTimezone(); loadVuMeter(); loadAutoExpand(); loadChannel(); checkAll(); resumePlanIfRunning(); loadBackups(); loadTailscale(); loadDebugFlags();
+  loadMode(); loadEngine(); loadPlayerEnabled(); loadUiRes(); loadUiRefresh(); loadPointer(); loadTimezone(); loadVuMeter(); loadAutoExpand(); loadChannel(); checkAll(); resumePlanIfRunning(); loadBackups(); loadTailscale(); loadDebugFlags();
   timezonePoll = setInterval(pollTimezone, 10000);
   // Tell the global UpdateProgressOverlay (mounted in App.vue) that this page
   // owns the OTA modal while it's open, so the two never render on top of
@@ -1468,6 +1488,17 @@ onUnmounted(() => {
         <button v-else class="secondary" @click="setMode('headless')">{{ t('settings.display.switchToHeadless') }}</button>
       </div>
       <template v-if="mode !== 'headless'">
+        <div v-if="engines.length > 1" style="margin-top: 18px; padding-top: 16px; border-top: 1px solid rgba(255,255,255,0.1);">
+          <p class="sub">{{ t('settings.display.engineLabel') }}</p>
+          <p class="muted">{{ t('settings.display.engineHelp') }}</p>
+          <span class="seg">
+            <button v-for="e in engines" :key="e"
+                    :class="{ active: engine === e }" @click="setEngine(e)">
+              {{ t('settings.display.engine.' + e) }}
+            </button>
+          </span>
+        </div>
+
         <div style="margin-top: 18px; padding-top: 16px; border-top: 1px solid rgba(255,255,255,0.1);">
           <p class="sub">{{ t('settings.display.resolutionLabel') }}</p>
           <p class="muted">{{ t('settings.display.resolutionHelp') }}</p>

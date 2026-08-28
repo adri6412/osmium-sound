@@ -1,9 +1,16 @@
 #!/bin/sh
-# HiFi Player appliance — OTA update of the Electron UI.
+# HiFi Player appliance — OTA update of the on-screen interface.
 #
-# Downloads a new linux-unpacked tarball, verifies its sha256, atomically
-# replaces /opt/hifi-media-player (keeping one backup for rollback), re-applies
-# the chrome-sandbox SUID + /usr/bin symlink, and writes the new version.
+# 🚨 Da 2.5.24 il pacchetto di questo canale contiene l'interfaccia Qt
+# (/opt/hifi-qt): e' quella che si aggiorna d'ora in poi, e si chiama
+# `hifi-qtui-<versione>.tar.gz`. Il contenuto vecchio (l'app Electron
+# scompattata, /opt/hifi-media-player) resta riconosciuto, sia per i rilasci
+# gia' pubblicati sia per tornare indietro: si guarda che cosa c'e' dentro il
+# pacchetto e si installa di conseguenza.
+#
+# Scarica il tarball, ne verifica lo sha256, sostituisce la cartella giusta in
+# blocco (tenendo una copia per il ripristino) e scrive la nuova versione in
+# /etc/hifi-player/UI_VERSION, fuori da entrambe le cartelle.
 #
 # Split into two subcommands so download+verify (safe while the box is fully
 # live) is separate from apply (which only ever runs isolated under
@@ -45,6 +52,61 @@ case "$CMD" in
 esac
 APPDIR=/opt/hifi-media-player
 OLDDIR=/opt/hifi-media-player.old
+QTDIR=/opt/hifi-qt
+QTOLD=/opt/hifi-qt.old
+UI_VERSION_FILE=/etc/hifi-player/UI_VERSION
+ENGINE_FILE=/etc/hifi-player/ui-engine
+DISPLAY_MODE_SCRIPT=/usr/local/sbin/hifi-display-mode.sh
+
+# Sostituisce una cartella in blocco tenendo da parte la precedente.
+# $1 = nuova (gia' pronta), $2 = destinazione, $3 = copia di riserva
+swap_dir() {
+    rm -rf "$3"
+    if [ -d "$2" ]; then mv "$2" "$3" || return 1; fi
+    if ! mv "$1" "$2"; then
+        [ -d "$3" ] && mv "$3" "$2"
+        return 1
+    fi
+    return 0
+}
+
+# La versione dell'interfaccia sta FUORI dalle cartelle dei due contenuti, cosi'
+# vale per entrambi e sopravvive al passaggio dall'uno all'altro.
+write_ui_version() {
+    mkdir -p "$(dirname "$UI_VERSION_FILE")"
+    printf '%s\n' "$1" > "$UI_VERSION_FILE"
+}
+
+# Installa il contenuto gia' scompattato in $1, con versione $2.
+# Ritorna 0 se fatto, 1 se la sostituzione e' fallita, 2 se dentro non c'e'
+# nessuna interfaccia riconoscibile.
+install_payload() {
+    _new="$1"
+    _ver="$2"
+    if [ -x "$_new/hifi-qt" ]; then
+        swap_dir "$_new" "$QTDIR" "$QTOLD" || return 1
+        chmod 755 "$QTDIR/hifi-qt" 2>/dev/null || true
+        # 🚨 Se nessuno ha ancora scelto quale interfaccia mostrare, quella Qt
+        # appena installata diventa la predefinita: e' l'unico momento in cui si
+        # sa per certo che i suoi file ci sono. Una scelta gia' fatta — anche
+        # "electron" — NON si tocca mai.
+        if [ ! -f "$ENGINE_FILE" ] && [ -x "$DISPLAY_MODE_SCRIPT" ]; then
+            "$DISPLAY_MODE_SCRIPT" engine set qt >/dev/null 2>&1 || true
+        fi
+    elif [ -x "$_new/hifi-media-player" ]; then
+        swap_dir "$_new" "$APPDIR" "$OLDDIR" || return 1
+        if [ -f "$APPDIR/chrome-sandbox" ]; then
+            chown root:root "$APPDIR/chrome-sandbox"
+            chmod 4755 "$APPDIR/chrome-sandbox"
+        fi
+        ln -sf "$APPDIR/hifi-media-player" /usr/bin/hifi-media-player
+        printf '%s\n' "$_ver" > "$APPDIR/UI_VERSION"
+    else
+        return 2
+    fi
+    write_ui_version "$_ver"
+    return 0
+}
 STATUS=/run/hifi-ota-status.json
 STAGE_ROOT=/var/lib/hifi-player/update/staged/ui
 VERSION=unknown
@@ -147,8 +209,6 @@ apply)
     [ -n "$STAGED_DIR" ] || fail "Percorso staging mancante"
     [ "$(cat "$STAGED_DIR/STAGED" 2>/dev/null)" = "$VERSION" ] \
         || fail "Pacchetto UI mancante o non corrispondente in $STAGED_DIR"
-    [ -x "$NEWDIR/hifi-media-player" ] \
-        || fail "Bundle non valido: $NEWDIR/hifi-media-player mancante"
 
     # ── atomic swap (keep a single backup) ─────────────────────────
     # NEWDIR and APPDIR are assumed to be on the same filesystem (both under
@@ -156,23 +216,13 @@ apply)
     # atomic rename, not a cross-filesystem copy — revisit if /var/lib or
     # /opt is ever split onto its own mount.
     write_status applying 70 "Applicazione…"
-    rm -rf "$OLDDIR"
-    if [ -d "$APPDIR" ]; then
-        mv "$APPDIR" "$OLDDIR"
-    fi
-    if ! mv "$NEWDIR" "$APPDIR"; then
-        # restore backup on failure
-        [ -d "$OLDDIR" ] && mv "$OLDDIR" "$APPDIR"
-        fail "Sostituzione della cartella app fallita"
-    fi
-
-    # ── finalise (mirror 0300-app-install.hook.chroot) ─────────────
-    if [ -f "$APPDIR/chrome-sandbox" ]; then
-        chown root:root "$APPDIR/chrome-sandbox"
-        chmod 4755 "$APPDIR/chrome-sandbox"
-    fi
-    ln -sf "$APPDIR/hifi-media-player" /usr/bin/hifi-media-player
-    printf '%s\n' "$VERSION" > "$APPDIR/UI_VERSION"
+    # 🚨 Il pacchetto puo' contenere l'interfaccia Qt (da 2.5.24) oppure la
+    # vecchia app Electron: install_payload guarda che cosa c'e' dentro.
+    install_payload "$NEWDIR" "$VERSION"
+    case $? in
+        1) fail "Sostituzione dell'interfaccia fallita" ;;
+        2) fail "Bundle non valido: nessuna interfaccia dentro $NEWDIR" ;;
+    esac
 
     write_status 'done' 100 "Aggiornamento a $VERSION completato"
     ;;
@@ -228,25 +278,15 @@ full)
         fail "Bundle estratto corrotto: $corrupt"
     fi
 
-    [ -x "$NEWDIR/hifi-media-player" ] \
-        || fail "Bundle non valido: $NEWDIR/hifi-media-player mancante"
 
     write_status applying 80 "Applicazione…"
-    rm -rf "$OLDDIR"
-    if [ -d "$APPDIR" ]; then
-        mv "$APPDIR" "$OLDDIR"
-    fi
-    if ! mv "$NEWDIR" "$APPDIR"; then
-        [ -d "$OLDDIR" ] && mv "$OLDDIR" "$APPDIR"
-        fail "Sostituzione della cartella app fallita"
-    fi
-
-    if [ -f "$APPDIR/chrome-sandbox" ]; then
-        chown root:root "$APPDIR/chrome-sandbox"
-        chmod 4755 "$APPDIR/chrome-sandbox"
-    fi
-    ln -sf "$APPDIR/hifi-media-player" /usr/bin/hifi-media-player
-    printf '%s\n' "$VERSION" > "$APPDIR/UI_VERSION"
+    # 🚨 Il pacchetto puo' contenere l'interfaccia Qt (da 2.5.24) oppure la
+    # vecchia app Electron: install_payload guarda che cosa c'e' dentro.
+    install_payload "$NEWDIR" "$VERSION"
+    case $? in
+        1) fail "Sostituzione dell'interfaccia fallita" ;;
+        2) fail "Bundle non valido: nessuna interfaccia dentro $NEWDIR" ;;
+    esac
 
     write_status restarting 95 "Riavvio interfaccia…"
     rm -f "$TARBALL"
@@ -256,7 +296,13 @@ full)
     # still polling) — safe here because this path is only ever launched
     # under its own transient systemd-run unit (see apply_app_update() in
     # api_server.py), which survives the restart. Keep it last regardless.
-    systemctl restart lightdm || true
+    # si riavvia l'interfaccia che sta girando davvero: da 2.5.24 puo' essere
+    # quella Qt (hifi-qt), non piu' solo la sessione di lightdm con Electron
+    if systemctl is-active --quiet hifi-qt; then
+        systemctl restart hifi-qt || true
+    elif systemctl is-active --quiet lightdm; then
+        systemctl restart lightdm || true
+    fi
     ;;
 
 *)

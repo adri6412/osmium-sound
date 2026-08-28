@@ -13,14 +13,30 @@
 # gui — that default is the fleet-safety invariant: an existing configured unit
 # that never wrote the file must never drift into headless on an OS update.
 #
-# We switch by flipping the default target (systemctl set-default). We do NOT
-# enable/disable lightdm directly: lightdm is only ever pulled in by
-# graphical.target, so changing the default target is sufficient and never
-# fights the build-time enable or an OS-OTA migration.
+# We switch by flipping the default target (systemctl set-default). The
+# gui/headless switch does NOT enable/disable lightdm directly: lightdm is only
+# ever pulled in by graphical.target, so changing the default target is
+# sufficient and never fights the build-time enable or an OS-OTA migration.
+# (The engine switch below is the one exception, and it has to be: choosing
+# WHICH of the two on-screen interfaces graphical.target pulls in is exactly
+# an enable/disable of their two units.)
+#
+# Da 2.5.24 l'apparecchio ha DUE interfacce su schermo e questo script sceglie
+# anche quale delle due parte ("engine"):
+#   electron -> lightdm -> sessione kiosk -> app Electron (quella storica)
+#   qt       -> hifi-qt.service, che disegna diritto su DRM/KMS (eglfs), senza
+#               X ne' compositore
+# Le due si escludono: hifi-qt.service ha Conflicts=lightdm.service. La scelta
+# sta in /etc/hifi-player/ui-engine ("electron" | "qt"); ASSENTE = electron,
+# stessa invariante di sicurezza della modalita' schermo (un apparecchio gia'
+# configurato non deve cambiare interfaccia da solo per un aggiornamento).
+# In headless non parte nessuna delle due: il bersaglio e' multi-user.target.
 #
 # Usage:
 #   hifi-display-mode.sh get                 -> prints "gui" or "headless"
 #   hifi-display-mode.sh set gui|headless [--live]
+#   hifi-display-mode.sh engine              -> prints "electron" or "qt"
+#   hifi-display-mode.sh engine set electron|qt [--live]
 #
 # --live also switches the RUNNING session (systemctl isolate) after a short
 # delay, so a caller (api_server.py) can flush its HTTP response before X dies.
@@ -34,6 +50,8 @@ set -eu
 # stdout), not just diagnostic chatter. Redirecting it would silently break
 # the display-mode toggle.
 MODE_FILE=/etc/hifi-player/display-mode
+ENGINE_FILE=/etc/hifi-player/ui-engine
+QT_UI_BIN=/opt/hifi-qt/hifi-qt
 
 # L'ambiente X della sessione kiosk (autologin hifi = :0), solo per la ricerca
 # dell'output da spegnere in `set headless --live` qui sotto — stesso schema
@@ -80,6 +98,62 @@ target_for() {
         headless) echo multi-user.target ;;
         *)        die "invalid mode: $1" ;;
     esac
+}
+
+# Vero solo se la seconda interfaccia puo' DAVVERO partire: il programma
+# (pacchetto di sistema) piu' le librerie Qt (pacchetto OS). Arrivano da due
+# canali diversi e possono arrivare separate; con una meta' sola il programma
+# parte e muore subito, lasciando lo schermo nero. Il modulo grafico per
+# DRM/KMS e il modulo QML di base non sono librerie collegate, quindi vanno
+# cercati a parte.
+qt_ui_ready() {
+    [ -x "$QT_UI_BIN" ] || return 1
+    for _q in /usr/lib/*/qt6; do
+        if [ -e "$_q/plugins/platforms/libqeglfs.so" ] && [ -e "$_q/qml/QtQuick/libqtquick2plugin.so" ]; then
+            return 0
+        fi
+    done
+    return 1
+}
+
+get_engine() {
+    if [ -f "$ENGINE_FILE" ] && [ "$(cat "$ENGINE_FILE" 2>/dev/null)" = qt ]; then
+        echo qt
+    else
+        echo electron
+    fi
+}
+
+# Abilita l'unita' dell'interfaccia scelta e disabilita l'altra. Non tocca il
+# bersaglio di avvio: entrambe sono WantedBy=graphical.target, quindi in
+# headless restano ferme comunque.
+apply_engine() {
+    _eng="$1"
+    _live="${2:-0}"
+    if [ "$_eng" = qt ]; then
+        systemctl disable lightdm >/dev/null 2>&1 || true
+        systemctl enable hifi-qt >/dev/null 2>&1 || true
+    else
+        systemctl disable hifi-qt >/dev/null 2>&1 || true
+        systemctl enable lightdm >/dev/null 2>&1 || true
+    fi
+    [ "$_live" = 1 ] || return 0
+    [ "$(get_mode)" = gui ] || return 0
+    # Il cambio a caldo si fa in un'unita' transitoria dopo un attimo: chi
+    # chiama (api_server / webui) sta rispondendo a una richiesta HTTP e, se
+    # l'interfaccia che si sta spegnendo e' quella che l'ha inviata, la
+    # risposta deve uscire prima.
+    if [ "$_eng" = qt ]; then
+        _cmd="systemctl stop lightdm; systemctl start hifi-qt"
+    else
+        _cmd="systemctl stop hifi-qt; systemctl start lightdm"
+    fi
+    if command -v systemd-run >/dev/null 2>&1; then
+        systemd-run --collect --description="HiFi UI engine switch" \
+            /bin/sh -c "sleep 1; $_cmd" >/dev/null 2>&1 || true
+    else
+        /bin/sh -c "$_cmd" >/dev/null 2>&1 || true
+    fi
 }
 
 get_mode() {
@@ -143,7 +217,35 @@ case "${1:-}" in
 
         echo "$MODE"
         ;;
+    engine)
+        case "${2:-}" in
+            ''|get)
+                get_engine
+                ;;
+            set)
+                ENG="${3:-}"
+                [ "$ENG" = electron ] || [ "$ENG" = qt ] || die "usage: $0 engine set electron|qt [--live]"
+                LIVE=0
+                [ "${4:-}" = "--live" ] && LIVE=1
+                # Non si sceglie un'interfaccia che non c'e': su un apparecchio
+                # che non ha ancora ricevuto il pacchetto Qt il passaggio
+                # lascerebbe lo schermo nero al riavvio.
+                if [ "$ENG" = qt ] && ! qt_ui_ready; then
+                    die "interfaccia Qt non installata o incompleta (serve $QT_UI_BIN e le librerie Qt 6)"
+                fi
+                mkdir -p "$(dirname "$ENGINE_FILE")"
+                tmp="${ENGINE_FILE}.tmp.$$"
+                printf '%s\n' "$ENG" > "$tmp"
+                mv -f "$tmp" "$ENGINE_FILE"
+                apply_engine "$ENG" "$LIVE"
+                echo "$ENG"
+                ;;
+            *)
+                die "usage: $0 engine [get] | engine set electron|qt [--live]"
+                ;;
+        esac
+        ;;
     *)
-        die "usage: $0 get | set gui|headless [--live]"
+        die "usage: $0 get | set gui|headless [--live] | engine [get] | engine set electron|qt [--live]"
         ;;
 esac

@@ -486,7 +486,16 @@
       "playerOff": "Spento (solo server)",
       "confirmPlayerOff": "Questo dispositivo smetterà di riprodurre audio in locale. Lyrion Music Server e il controllo remoto continuano a funzionare. Continuare?",
       "playerChanged": "Stato di accensione del player modificato",
-      "playerChangeFailed": "Impossibile cambiare lo stato di accensione del player"
+      "playerChangeFailed": "Impossibile cambiare lo stato di accensione del player",
+      "engineLabel": "Interfaccia su schermo",
+      "engineHelp": "Quale delle due interfacce parte sullo schermo del dispositivo. Quella nuova (Qt) disegna direttamente sullo schermo, senza browser: consuma meno corrente e resta fluida anche sugli schermi 4K. La musica non si interrompe quando cambi.",
+      "engine": {
+        "electron": "Classica",
+        "qt": "Nuova (Qt)"
+      },
+      "confirmEngine": "L'interfaccia sullo schermo del dispositivo si chiude e riparte con quella scelta. La riproduzione continua. Vuoi procedere?",
+      "engineChanged": "Interfaccia cambiata",
+      "engineFailed": "Cambio dell'interfaccia fallito"
     },
     "timezone": {
       "hint": "Un'installazione pulita non ha modo di chiederlo, quindi parte da UTC — scegli qui quello reale del dispositivo.",

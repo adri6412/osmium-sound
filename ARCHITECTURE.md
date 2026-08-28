@@ -974,10 +974,26 @@ needs physical access.
 
 | Channel | Asset prefix | Updates | Verification | Script |
 |---|---|---|---|---|
-| UI | `hifi-ui-` | `/opt/hifi-media-player` (Electron) | sha256 | `hifi-ota-update.sh` |
+| UI | `hifi-qtui-` (era `hifi-ui-`) | `/opt/hifi-qt` (Qt) — i pacchetti col nome vecchio portano invece l'app Electron in `/opt/hifi-media-player`, e restano installabili | sha256 | `hifi-ota-update.sh` |
 | System | `hifi-system-` | Python API/daemons, helper scripts (`/usr/local/bin`, `/usr/local/sbin`), shared data (`/usr/local/share` — the LMS skin assets), systemd units, `/opt/hifi-webui` | sha256 | `hifi-system-update.sh` |
 | OS | `hifi-os-` | arbitrary root `apply.sh` | sha256 **+ Ed25519 signature** | `hifi-os-update.sh` |
 | Lyrion | — | Lyrion Music Server `.deb` | version match | `hifi-lyrion-update.sh` |
+
+Da 2.5.24 il canale UI porta **l'interfaccia Qt**, non piu' l'app Electron:
+l'apparecchio ha due interfacce su schermo e quella che si aggiorna e' la Qt.
+Il nome del file e' cambiato di proposito (`hifi-qtui-`): l'aggiornatore
+installato sugli apparecchi piu' vecchi pretende un pacchetto Electron e
+rifiuterebbe l'altro, bloccando l'intero aggiornamento; non trovando
+`hifi-ui-` quegli apparecchi considerano l'interfaccia gia' aggiornata,
+applicano sistema e sistema operativo, e al giro successivo — con
+l'aggiornatore nuovo — prendono anche la Qt. `hifi-ota-update.sh` riconosce i
+due contenuti dal loro eseguibile (`hifi-qt` oppure `hifi-media-player`) e
+installa nella cartella giusta; la versione dell'interfaccia sta ora in
+`/etc/hifi-player/UI_VERSION`, fuori da entrambe. Alla prima installazione
+della Qt, **se nessuno ha ancora scelto**, diventa lei l'interfaccia che parte
+(`/etc/hifi-player/ui-engine`); una scelta gia' fatta — anche "electron" — non
+viene mai toccata, e dalla pagina di amministrazione si torna indietro quando
+si vuole.
 
 Devices also pick a **release channel** (Settings → Updates, `GET/POST
 /ota_channel`, persisted in `/etc/hifi-player/ota-channel`): **Prod** follows

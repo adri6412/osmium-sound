@@ -104,11 +104,23 @@ OTA_CHANNELS = ('prod', 'dev', 'alpha')
 # out of the UI/API for every device except the owner's own, on purpose.
 OTA_ALPHA_MARKER_FILE = '/etc/hifi-player/ota-alpha-unlocked'
 OTA_APPDIR = '/opt/hifi-media-player'
-OTA_VERSION_FILE = os.path.join(OTA_APPDIR, 'UI_VERSION')
+# 🚨 Da 2.5.24 il canale "ui" porta l'interfaccia Qt (/opt/hifi-qt), non piu'
+# l'app Electron: la versione installata sta in un file suo, fuori dalle due
+# cartelle. Il vecchio percorso resta come ripiego per gli apparecchi che non
+# hanno ancora ricevuto questo aggiornamento.
+OTA_VERSION_FILE = '/etc/hifi-player/UI_VERSION'
+OTA_VERSION_FILE_LEGACY = os.path.join(OTA_APPDIR, 'UI_VERSION')
 OTA_SCRIPT = '/usr/local/sbin/hifi-ota-update.sh'
 OTA_STATUS_FILE = '/run/hifi-ota-status.json'
 # The UI release carries several tarballs; pick ours by name prefix.
-OTA_UI_PREFIX = 'hifi-ui-'
+# 🚨 Da 2.5.24 il pacchetto dell'interfaccia contiene Qt e si chiama
+# `hifi-qtui-`: il nome e' NUOVO di proposito, perche' l'aggiornatore
+# installato sugli apparecchi vecchi rifiuta un pacchetto senza Electron e
+# bloccherebbe l'intero aggiornamento. Non trovando `hifi-ui-` quegli
+# apparecchi considerano l'interfaccia aggiornata, applicano sistema e
+# sistema operativo, e al giro dopo — con l'aggiornatore nuovo — prendono
+# anche Qt. Il nome vecchio resta come ripiego per tornare indietro.
+OTA_UI_PREFIX = ('hifi-qtui-', 'hifi-ui-')
 
 # ──────────────────────────────────────────────────────────────────
 #  OTA update of the custom system components (Python API/daemons,
@@ -2259,6 +2271,78 @@ def set_display_mode(mode):
     return {'success': True, 'mode': mode, 'message': msg}
 
 # ──────────────────────────────────────────────────────────────────
+#  Which on-screen interface runs: the Electron kiosk (historic) or the Qt
+#  one (draws straight on DRM/KMS, no X and no compositor). They are mutually
+#  exclusive — lightdm vs hifi-qt.service — and the switch is the same script
+#  that handles gui/headless, so the two settings can't fight each other.
+#
+#  ABSENT state means 'electron', the same fleet-safety default as display
+#  mode: a device that never chose must never change interface on its own
+#  because of an update.
+# ──────────────────────────────────────────────────────────────────
+UI_ENGINE_FILE = '/etc/hifi-player/ui-engine'
+UI_ENGINES = ('electron', 'qt')
+QT_UI_BIN = '/opt/hifi-qt/hifi-qt'
+
+def _qt_ui_installed():
+    """Vero solo se la seconda interfaccia puo' DAVVERO partire su questo
+    apparecchio: il programma (dal pacchetto di sistema) e le librerie Qt che
+    gli servono (dal pacchetto OS, l'unico che puo' installare pacchetti). Le
+    due meta' viaggiano su canali diversi e possono arrivare separate: offrire
+    la scelta con una meta' sola lascerebbe lo schermo nero al riavvio.
+    Il modulo grafico che disegna su DRM/KMS e il modulo QML di base non sono
+    librerie collegate al programma, quindi vanno cercati a parte."""
+    if not (os.path.isfile(QT_UI_BIN) and os.access(QT_UI_BIN, os.X_OK)):
+        return False
+    return bool(glob.glob('/usr/lib/*/qt6/plugins/platforms/libqeglfs.so')
+                and glob.glob('/usr/lib/*/qt6/qml/QtQuick/libqtquick2plugin.so'))
+
+def get_ui_engine():
+    """Return { engine, engines }. `engines` is what this device can actually
+    run right now — the Qt option only appears once its files are installed,
+    so an older unit that hasn't received them yet shows a single choice
+    instead of a switch that would leave it with a black screen."""
+    engine = 'electron'
+    try:
+        with open(UI_ENGINE_FILE) as f:
+            if f.read().strip() == 'qt':
+                engine = 'qt'
+    except Exception:
+        pass
+    engines = ['electron'] + (['qt'] if _qt_ui_installed() else [])
+    # se l'interfaccia scelta è sparita (pacchetto rimosso), si dice la verità
+    if engine not in engines:
+        engine = 'electron'
+    return {'engine': engine, 'engines': engines}
+
+def set_ui_engine(engine):
+    """Switch Electron <-> Qt, live + persisted. Same update guard as the
+    display mode: swapping the on-screen interface mid-update would tear down
+    the session that is applying it."""
+    if engine not in UI_ENGINES:
+        return {'success': False, 'engine': get_ui_engine()['engine'],
+                'code': 'uiEngine.invalid', 'message': _t('uiEngine.invalid', _lang())}
+    if engine == 'qt' and not _qt_ui_installed():
+        return {'success': False, 'engine': get_ui_engine()['engine'],
+                'code': 'uiEngine.notInstalled', 'message': _t('uiEngine.notInstalled', _lang())}
+    if _update_in_progress():
+        return {'success': False, 'engine': get_ui_engine()['engine'],
+                'code': 'update.inProgressRetry', 'message': _t('update.inProgressRetry', _lang())}
+    try:
+        r = subprocess.run([DISPLAY_MODE_SCRIPT, 'engine', 'set', engine, '--live'],
+                           capture_output=True, text=True, timeout=30)
+        if r.returncode != 0:
+            log.error("set_ui_engine failed: %s", (r.stderr or '').strip())
+            return {'success': False, 'engine': get_ui_engine()['engine'],
+                    'code': 'uiEngine.changeFailed', 'message': _t('uiEngine.changeFailed', _lang())}
+    except Exception:
+        log.exception("set_ui_engine failed")
+        return {'success': False, 'engine': get_ui_engine()['engine'],
+                'code': 'uiEngine.changeFailed', 'message': _t('uiEngine.changeFailed', _lang())}
+    msg = _t('uiEngine.qtEnabled' if engine == 'qt' else 'uiEngine.electronEnabled', _lang())
+    return {'success': True, 'engine': engine, 'message': msg}
+
+# ──────────────────────────────────────────────────────────────────
 #  Player enabled/disabled — whether this device plays audio at all
 #  (squeezelite), orthogonal to display mode above (which only controls the
 #  on-screen kiosk). A "server only" unit keeps Lyrion + every hifi-* daemon
@@ -2727,6 +2811,38 @@ def set_vu_meter(enable):
 #  vu-meter-enabled: reachable from the companion app / web admin on a
 #  headless unit.
 # ──────────────────────────────────────────────────────────────────
+UI_LANGUAGE_FILE = '/etc/hifi-player/ui-language'
+UI_LANGUAGE_CHOICES = ('en', 'it')
+
+def get_ui_language():
+    """Return { language }. The on-device UI (both the Electron kiosk and the
+    native one) reads this file, so the language follows the device rather
+    than whichever UI happened to set it."""
+    lang = ''
+    try:
+        with open(UI_LANGUAGE_FILE) as f:
+            lang = f.read().strip().lower()
+    except Exception:
+        pass
+    return {'language': lang if lang in UI_LANGUAGE_CHOICES else ''}
+
+def set_ui_language(lang):
+    lang = (lang or '').strip().lower()
+    if lang not in UI_LANGUAGE_CHOICES:
+        return {'success': False, 'language': get_ui_language()['language'],
+                'code': 'prefs.saveFailed', 'message': _t('prefs.saveFailed', _lang())}
+    try:
+        os.makedirs(os.path.dirname(UI_LANGUAGE_FILE), exist_ok=True)
+        tmp = UI_LANGUAGE_FILE + '.tmp'
+        with open(tmp, 'w') as f:
+            f.write(lang + '\n')
+        os.replace(tmp, UI_LANGUAGE_FILE)
+    except Exception:
+        log.exception("set_ui_language: persist failed")
+        return {'success': False, 'language': get_ui_language()['language'],
+                'code': 'prefs.saveFailed', 'message': _t('prefs.saveFailed', _lang())}
+    return {'success': True, 'language': lang}
+
 NOWPLAYING_AUTOEXPAND_FILE = '/etc/hifi-player/nowplaying-autoexpand-seconds'
 NOWPLAYING_AUTOEXPAND_CHOICES = (0, 3, 5, 10, 15)
 
@@ -4021,11 +4137,16 @@ def get_bluetooth_now_playing():
 # ──────────────────────────────────────────────────────────────────
 
 def _installed_ui_version():
-    try:
-        with open(OTA_VERSION_FILE) as f:
-            return f.read().strip() or 'unknown'
-    except Exception:
-        return 'unknown'
+    # il file nuovo prima, quello vecchio come ripiego (apparecchi non ancora aggiornati)
+    for path in (OTA_VERSION_FILE, OTA_VERSION_FILE_LEGACY):
+        try:
+            with open(path) as f:
+                v = f.read().strip()
+            if v:
+                return v
+        except Exception:
+            pass
+    return 'unknown'
 
 def _version_tuple(v):
     """Best-effort numeric tuple from a version like 'v1.2.0' → (1, 2, 0)."""
@@ -4247,9 +4368,15 @@ def _check_release_update(current, prefix, channel=None):
     assets = release.get('assets', [])
 
     def _named(suffix):
-        return next((a for a in assets
-                     if a.get('name', '').startswith(prefix)
-                     and a.get('name', '').endswith(suffix)), None)
+        # `prefix` puo' essere una tupla: si prova nell'ordine dato, cosi' il
+        # nome nuovo vince su quello vecchio quando ci sono entrambi
+        for pfx in ((prefix,) if isinstance(prefix, str) else prefix):
+            a = next((a for a in assets
+                      if a.get('name', '').startswith(pfx)
+                      and a.get('name', '').endswith(suffix)), None)
+            if a:
+                return a
+        return None
 
     tarball = _named('.tar.gz')
     sha_asset = _named('.tar.gz.sha256')
@@ -4967,12 +5094,35 @@ def dismiss_update_plan():
 
 # ──────────────────────────────────────────────────────────────────
 #  Setup wizard: mandatory update gate, right after the network step.
-#  TEMPORARY (per explicit request): checks BOTH prod and dev, regardless of
-#  the device's own (always 'prod' this early) OTA channel setting -- a prod
-#  update applies automatically, a dev-only one needs the operator's
-#  confirmation on screen first. Drop the dev branch once this has shipped to
-#  production and prod-only checks are enough again.
+#  Checks the PROD channel only, regardless of the device's own OTA channel
+#  setting (always 'prod' this early): a fresh install must be on the current
+#  stable release before setup goes on. (Until 2026-08-28 this also checked
+#  dev, as a temporary measure from when the wizard only existed on dev
+#  builds -- a dev-only release then blocked setup on a stable install, and
+#  on a live boot of the very ISO we ship, which can't update at all.)
+#
+#  Skipped outright on a live session (boot=live): a "Try Osmium Sound" boot
+#  runs from the read-only squashfs with a RAM overlay, so nothing an update
+#  installs survives a reboot -- and the OS component even stages a reboot
+#  to apply itself (hifi-update-stage-resume.service, which deliberately
+#  doesn't run under boot=live). Demanding an update there only strands the
+#  operator on a step that can never complete.
 # ──────────────────────────────────────────────────────────────────
+PROC_CMDLINE = '/proc/cmdline'
+
+def _is_live_boot():
+    """True when this session booted from the live medium: the ISO's
+    bootloader always appends `boot=live` (distro/build-distro.sh), the same
+    token the systemd units gate on with ConditionKernelCommandLine=!boot=live.
+    Not the same thing as get_boot_mode() above -- that only tells the two
+    live menu entries apart ('installer' vs 'live') and answers 'live' on an
+    installed system as well."""
+    try:
+        with open(PROC_CMDLINE) as f:
+            return 'boot=live' in f.read().split()
+    except Exception:
+        return False
+
 def _channel_has_update(channel):
     """Returns (has_update, checked_ok). checked_ok is False only when EVERY
     component's check failed outright (network/API blip) -- distinct from a
@@ -4996,23 +5146,26 @@ def _channel_has_update(channel):
     return False, any_ok
 
 def wizard_update_check():
+    if _is_live_boot():
+        # Nothing to check: no network call, no retry loop in the wizard.
+        return {'available': False, 'live': True}
     prod_avail, prod_ok = _channel_has_update('prod')
     if prod_avail:
         return {'available': True, 'channel': 'prod', 'auto': True}
-    dev_avail, dev_ok = _channel_has_update('dev')
-    if dev_avail:
-        return {'available': True, 'channel': 'dev', 'auto': False}
-    if not prod_ok and not dev_ok:
-        # Neither channel could be checked at all -- report it distinctly so
-        # the wizard retries instead of treating "couldn't check" the same as
-        # "checked, nothing to update".
+    if not prod_ok:
+        # The check couldn't run at all -- report it distinctly so the wizard
+        # retries instead of treating "couldn't check" the same as "checked,
+        # nothing to update".
         return {'available': False, 'checkFailed': True}
     return {'available': False}
 
 def wizard_update_apply(channel):
-    if channel not in ('prod', 'dev'):
+    if channel != 'prod':
         return {'started': False, 'code': 'update.checkFailed',
                 'message': _t('update.checkFailed', _lang())}
+    if _is_live_boot():
+        return {'started': False, 'code': 'update.liveSession',
+                'message': _t('update.liveSession', _lang())}
     # Not a side-channel hack: this is a real, deliberate channel switch (the
     # same one Settings -> Updates would make), so the device legitimately
     # tracks whichever channel it was just updated from, same as if the
@@ -5620,6 +5773,15 @@ def api_set_display_mode():
     data = request.get_json(silent=True) or {}
     return jsonify(set_display_mode((data.get('mode') or '').strip()))
 
+@app.route('/ui_engine', methods=['GET'])
+def api_ui_engine():
+    return jsonify(get_ui_engine())
+
+@app.route('/ui_engine', methods=['POST'])
+def api_set_ui_engine():
+    data = request.get_json(silent=True) or {}
+    return jsonify(set_ui_engine((data.get('engine') or '').strip()))
+
 @app.route('/player_enabled', methods=['GET'])
 def api_player_enabled():
     return jsonify(get_player_enabled())
@@ -5668,6 +5830,15 @@ def api_vu_meter():
 def api_set_vu_meter():
     data = request.get_json(silent=True) or {}
     return jsonify(set_vu_meter(bool(data.get('enable'))))
+
+@app.route('/ui_language', methods=['GET'])
+def api_ui_language():
+    return jsonify(get_ui_language())
+
+@app.route('/ui_language', methods=['POST'])
+def api_set_ui_language():
+    data = request.get_json(silent=True) or {}
+    return jsonify(set_ui_language(data.get('language')))
 
 @app.route('/nowplaying_autoexpand', methods=['GET'])
 def api_nowplaying_autoexpand():

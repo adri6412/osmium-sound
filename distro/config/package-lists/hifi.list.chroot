@@ -197,3 +197,20 @@ radeontop
 # gpu_model()). Not pulled in by anything else, and not part of a minimal
 # Debian base.
 pciutils
+
+# ── seconda interfaccia su schermo (Qt 6 Quick, DRM/KMS diretto) ──────────
+# Alternativa a quella Electron, scelta da /etc/hifi-player/ui-engine: sulla
+# schermata "in riproduzione" consuma 3,3 W contro 4,9 e 175 MB contro 653, e
+# tiene il 4K. I file dell'interfaccia arrivano col pacchetto di sistema
+# (/opt/hifi-qt); qui ci sono solo le librerie. Stesso elenco della migrazione
+# OS 0056, che le installa sugli apparecchi già in campo.
+# kbd = chvt: l'unità porta in primo piano il terminale 1 prima di partire.
+# Non c'era, e senza di lui l'interfaccia non partiva proprio (schermo nero).
+kbd
+qt6-qpa-plugins
+qml6-module-qtquick
+qml6-module-qtquick-window
+qml6-module-qtquick-effects
+qml6-module-qtquick-shapes
+qml6-module-qtquick-vectorimage
+qml6-module-qtqml-workerscript

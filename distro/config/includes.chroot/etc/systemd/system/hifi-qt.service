@@ -1,0 +1,49 @@
+[Unit]
+Description=Osmium Sound — interfaccia Qt (DRM/KMS, eglfs)
+# Le due interfacce su schermo si escludono: quella Electron gira dentro la
+# sessione di lightdm, questa prende direttamente il DRM master. Quale delle
+# due parte lo decide /etc/hifi-player/ui-engine tramite hifi-display-mode.sh
+# (che abilita l'una e disabilita l'altra); Conflicts qui è la rete di
+# sicurezza se per qualsiasi motivo si trovassero attive entrambe.
+Conflicts=lightdm.service
+After=hifi-api.service hifi-vumeter.service
+# Come i display manager: si parte DOPO che plymouth ha lasciato lo schermo, se
+# no il primo tentativo muore con "setCrtc: Permission denied" (il DRM master
+# ce l'ha ancora lui) e si vede il nero finché Restart= non riprova.
+After=systemd-user-sessions.service plymouth-quit-wait.service
+# Nessun tetto ai tentativi: se il primo trova il DRM ancora occupato (scambio
+# a caldo dall'altra interfaccia), con il tetto di serie systemd si arrende
+# dopo 5 tentativi e lo schermo resta nero per sempre.
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+# Serve un TTY attivo: senza, il processo non ottiene il DRM master e non
+# riesce a impostare il modo video. È lo stesso schema di cage/weston.
+TTYPath=/dev/tty1
+TTYReset=yes
+TTYVHangup=yes
+StandardInput=tty-fail
+StandardOutput=journal
+StandardError=journal
+WorkingDirectory=/opt/hifi-qt
+Environment=QT_QPA_PLATFORM=eglfs
+Environment=QT_QPA_EGLFS_ALWAYS_SET_MODE=1
+Environment=QT_LOGGING_RULES=qt.qpa.input=false
+# Porta in primo piano il terminale 1, se no lo schermo continua a mostrare
+# quello che era attivo prima (di solito quello lasciato da lightdm) mentre
+# questa interfaccia disegna su uno non visibile.
+# 🚨 Il trattino non è un refuso: chvt sta nel pacchetto kbd, che l'apparecchio
+# di serie NON aveva. Senza trattino un chvt assente fa fallire l'unità con
+# 203/EXEC PRIMA di eseguire il programma — schermo nero e interfaccia che
+# "non parte", mentre avviata a mano dal terminale funziona. Il pacchetto ora
+# viene installato (lista dell'immagine + migrazione 0056), questo è il
+# paracadute per chi non l'ha ancora.
+ExecStartPre=-/usr/bin/chvt 1
+ExecStart=/opt/hifi-qt/hifi-qt --assets /opt/hifi-qt/assets --locales /opt/hifi-qt/locales
+Restart=on-failure
+RestartSec=3
+Nice=-5
+
+[Install]
+WantedBy=graphical.target

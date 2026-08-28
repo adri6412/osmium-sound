@@ -57,7 +57,10 @@ apply_system() {
 }
 
 apply_ui() {
-    f="hifi-ui-${VERSION}.tar.gz"
+    # da 2.5.24 il pacchetto dell'interfaccia contiene Qt e si chiama
+    # hifi-qtui-; il nome vecchio resta per i rilasci precedenti
+    f="hifi-qtui-${VERSION}.tar.gz"
+    curl -fsIL "${BASE}/${f}" >/dev/null 2>&1 || f="hifi-ui-${VERSION}.tar.gz"
     [ -x "$SBIN/hifi-ota-update.sh" ] || { echo "    $SBIN/hifi-ota-update.sh assente"; return 1; }
     sha="$(digest "$f")"
     [ -n "$sha" ] || { echo "    checksum mancante per $f"; return 1; }
