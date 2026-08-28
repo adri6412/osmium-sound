@@ -36,13 +36,25 @@ Item {
 
     function loadInfo() {
         Api.get(Api.srcBase + "/api/cd/info", function(ok, d) {
-            if (!ok || !d || typeof d !== "object" || d.no_disc) { root.haveDisc = false; return }
+            // disco tolto: lo stato della copia precedente non vale piu', e il
+            // prossimo disco dev'essere trattato come nuovo
+            if (!ok || !d || typeof d !== "object" || d.no_disc) {
+                root.haveDisc = false
+                if (!root.ripping) { root.discid = ""; root.state = ""; root.msg = "" }
+                return
+            }
             var id = String(d.discid || "")
             if (id !== root.discid) {
                 root.discid = id
                 root.artist = String(d.artist || ""); root.album = String(d.album || "")
                 root.tracks = (d.tracks || []).map(function(t) { return String(t.title || "") }).slice(0, 40)
                 root.destSel = 0
+                // 🚨 disco NUOVO: si azzera l'esito della copia precedente. Senza
+                // questo, dopo una copia riuscita lo stato restava "done" per
+                // sempre (l'interrogazione si ferma a fine copia) e cambiando CD
+                // compariva la schermata "gia' copiato" invece dell'elenco brani.
+                root.state = ""; root.msg = ""; root.progress = 0; root.curTrack = 0; root.total = 0
+                root.ripping = false
             }
             root.dests = (d.destinations || []).map(function(x) { return { id: String(x.source_id || ""), name: String(x.name || "") } })
             root.haveDisc = true

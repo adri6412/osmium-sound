@@ -249,9 +249,13 @@ void Player::updateArtwork() {
               QString::fromLatin1(QUrl::toPercentEncoding(m_playerId)) +
               "&size=" + QString::number(m_coverPx) + "&k=" +
               QString::number(qHash(key));
-    } else if (!m_coverId.isEmpty()) {
-        url = Api::instance()->lmsBase() + "/music/" + m_coverId + "/cover_" +
-              QString::number(m_coverPx) + "x" + QString::number(m_coverPx) + "_o.jpg";
+    } else if (!m_id.isEmpty()) {
+        // 🚨 come il kiosk Electron: `/music/<id del brano>/cover?size=N`, con
+        // coverid solo come marcatore per la cache. La forma
+        // `cover_<W>x<H>_o.jpg` lasciava nere le copertine che Lyrion non sa
+        // ridimensionare in quel modo.
+        url = Api::instance()->lmsBase() + "/music/" + m_id + "/cover?size=" + QString::number(m_coverPx);
+        if (!m_coverId.isEmpty()) url += "&coverid=" + QString::fromLatin1(QUrl::toPercentEncoding(m_coverId));
     }
     if (url != m_artworkUrl) { m_artworkUrl = url; emit artworkChanged(); }
 }

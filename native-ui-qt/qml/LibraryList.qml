@@ -166,10 +166,11 @@ Item {
                             Icon { anchors.centerIn: parent; name: "disc"; size: 40; color: Theme.silverA(0.2) } }
                 Image {
                     id: artImg; anchors.fill: parent; visible: false
-                    // la misura si sceglie in base allo schermo: 300 basta sulla
-                    // tela 1 a 1, a 4K una scheda e' larga il doppio abbondante
-                    source: card.art ? Api.lmsBase + "/music/" + card.art + "/cover_"
-                            + Theme.coverPx(root.cardW) + "x" + Theme.coverPx(root.cardW) + "_o.jpg" : ""
+                    // 🚨 stessa forma di indirizzo del kiosk Electron (`cover?size=`):
+                    // con `cover_<W>x<H>_o.jpg` alcune copertine restavano nere,
+                    // perche' Lyrion non sa sempre produrre quella variante.
+                    // La misura segue lo schermo: 300 sulla tela 1 a 1, fino a 1200 a 4K.
+                    source: card.art ? Api.lmsBase + "/music/" + card.art + "/cover?size=" + Theme.coverPx(root.cardW) : ""
                     asynchronous: true; cache: true; fillMode: Image.PreserveAspectCrop
                     smooth: true
                     // il doppio dei pixel dello schermo: si decodifica alla misura
