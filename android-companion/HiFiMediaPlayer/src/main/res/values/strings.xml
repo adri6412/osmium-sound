@@ -513,4 +513,30 @@
     <string name="settings_language_title">Language</string>
     <string name="settings_language_summary">Language used by this app</string>
     <string name="settings_language_system">System default</string>
+
+    <!-- This phone as a Lyrion player -->
+    <string name="pref_cat_local_player">This phone as a player</string>
+    <string name="settings_local_player_title">Play on this phone</string>
+    <string name="settings_local_player_summary">Show this phone among the players in Lyrion. Pick it from the player list to listen here.</string>
+    <string name="settings_local_player_name_title">Player name</string>
+    <string name="settings_local_player_name_summary">Name this phone appears under in Lyrion</string>
+    <string name="settings_local_player_quality_wifi_title">Quality on Wi-Fi</string>
+    <string name="settings_local_player_quality_mobile_title">Quality on mobile data</string>
+    <string name="settings_local_player_quality_summary">Lossless sounds best and plays gapless. Compressed uses far less data.</string>
+    <string name="settings_local_player_quality_lossless">Lossless (FLAC)</string>
+    <string name="settings_local_player_quality_compressed">Compressed (AAC/MP3, 320 kbps)</string>
+    <string name="settings_local_player_quality_data_saver">Data saver (MP3, 128 kbps)</string>
+    <string name="settings_local_player_no_flac">This phone has no FLAC decoder, so lossless is not available.</string>
+    <string name="local_player_quality_pending">The new quality starts with the next track.</string>
+    <string name="player_this_phone">this phone</string>
+
+    <!-- Connection wizard: which kind of server -->
+    <string name="wizard_step_title_mode">What are you connecting to?</string>
+    <string name="wizard_mode_prompt">Pick what this app should talk to. You can change it later by disconnecting.</string>
+    <string name="wizard_mode_osmium">Osmium Sound</string>
+    <string name="wizard_mode_osmium_summary">Scan the QR code your Osmium Sound device shows. Its own settings appear in this app.</string>
+    <string name="wizard_mode_standard">Another Lyrion server</string>
+    <string name="wizard_mode_standard_summary">Type the server address and port. The Osmium device settings stay hidden.</string>
+    <string name="wizard_change_mode">Change</string>
+    <string name="settings_server_address_required">Enter the server address, for example 192.168.0.10:9000</string>
 </resources>

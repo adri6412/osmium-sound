@@ -45,6 +45,7 @@ A complete source code archive matching this ISO can be provided upon written re
 | **ckChangeLog** | Apache-2.0 | cketti | In-app changelog display. [cketti/ckChangeLog](https://github.com/cketti/ckChangeLog) |
 | **RecyclerView-FastScroller** | Apache-2.0 | quiph | Fast-scroll UI widget. [quiph/RecyclerView-FastScroller](https://github.com/quiph/RecyclerView-FastScroller) |
 | **AndroidX libraries & Material Components** | Apache-2.0 | Google / AOSP | `core`, `palette`, `webkit`, `appcompat`, `activity`, `preference`, `media`, `material`. [developer.android.com/jetpack/androidx](https://developer.android.com/jetpack/androidx) |
+| **AndroidX Media3 (ExoPlayer)** | Apache-2.0 | Google / AOSP | `media3-exoplayer`, `media3-datasource`, `media3-extractor`: decodes the stream when the phone itself is the Lyrion player. [developer.android.com/media/media3](https://developer.android.com/media/media3) |
 
 ---
 

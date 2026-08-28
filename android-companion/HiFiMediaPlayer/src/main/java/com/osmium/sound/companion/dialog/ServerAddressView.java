@@ -47,21 +47,26 @@ import com.osmium.sound.companion.Util;
 import com.osmium.sound.companion.util.AfterTextChangedLister;
 
 /**
- * Walks the user through pairing with an appliance as a 3-step wizard:
- * scan the "Phone control" QR code, confirm the pairing it resolved to, then
- * (optionally) fill in LMS credentials/Wake-on-LAN before connecting.
+ * Walks the user through setting up a connection.
  * <p>
- * The server address can ONLY be set by scanning the QR code — there is
- * deliberately no manual host:port entry or network-discovery fallback.
- * Both of those would let the app connect to a server without ever going
- * through the appliance's pairing flow, so the app would end up "connected"
- * but without the pairing token that gates the appliance's DSP control API
- * (see sources_server.py's /api/pair/token and Preferences#setAppliancePairing).
+ * The first step asks what they are connecting to, because the two answers want
+ * different things:
+ * <ul>
+ *   <li>an <b>Osmium Sound</b> appliance is paired by scanning its "Phone
+ *       control" QR code, and only that way: typing a host by hand would connect
+ *       the app without the pairing token that gates the appliance's own API
+ *       (see sources_server.py's /api/pair/token and
+ *       {@link Preferences#setAppliancePairing}), leaving the appliance settings
+ *       visible but dead. Steps then run scan, confirm, ready;</li>
+ *   <li>any <b>other Lyrion server</b> has no QR code and no appliance API, so
+ *       the address is typed in and the appliance settings stay hidden. Steps
+ *       run mode, ready.</li>
+ * </ul>
  */
 public class ServerAddressView extends LinearLayout {
 
-    /** The three screens of the pairing wizard, shown one at a time. */
-    public enum Step { SCAN, CONFIRM, READY }
+    /** The screens of the wizard, shown one at a time. */
+    public enum Step { MODE, SCAN, CONFIRM, READY }
 
     /** Notified whenever the wizard advances/returns to a different step. */
     public interface StepListener {
@@ -72,6 +77,9 @@ public class ServerAddressView extends LinearLayout {
     private Preferences.ServerAddress serverAddress;
 
     private TextView stepIndicator;
+    private View modeGroup;
+    private MaterialButton modeOsmiumButton;
+    private MaterialButton modeStandardButton;
     private View scanGroup;
     private MaterialButton scanButton;
     private MaterialCardView confirmGroup;
@@ -91,6 +99,7 @@ public class ServerAddressView extends LinearLayout {
     private EditText macEditText;
 
     private Step currentStep;
+    private Preferences.ServerKind serverKind;
     private StepListener stepListener;
     private String pendingHostPort;
     private String pendingApi;
@@ -110,6 +119,11 @@ public class ServerAddressView extends LinearLayout {
         inflate(getContext(), R.layout.server_address_view, this);
         if (!isInEditMode()) {
             stepIndicator = findViewById(R.id.wizard_step_indicator);
+            modeGroup = findViewById(R.id.step_mode);
+            modeOsmiumButton = findViewById(R.id.mode_osmium_button);
+            modeOsmiumButton.setOnClickListener(view -> chooseServerKind(Preferences.ServerKind.OSMIUM));
+            modeStandardButton = findViewById(R.id.mode_standard_button);
+            modeStandardButton.setOnClickListener(view -> chooseServerKind(Preferences.ServerKind.STANDARD_LMS));
             scanGroup = findViewById(R.id.step_scan);
             scanButton = findViewById(R.id.scan_button);
             scanButton.setOnClickListener(view -> startQrScan());
@@ -120,6 +134,9 @@ public class ServerAddressView extends LinearLayout {
             confirmRescanButton = findViewById(R.id.confirm_rescan_button);
             confirmRescanButton.setOnClickListener(view -> startQrScan());
             readyGroup = findViewById(R.id.step_ready);
+            // Lets the choice be revisited without reinstalling; the address and
+            // any pairing stay put until a different kind is actually picked.
+            findViewById(R.id.change_mode_button).setOnClickListener(view -> setStep(Step.MODE));
             advancedOptionsToggle = findViewById(R.id.advanced_options_toggle);
             advancedOptionsGroup = findViewById(R.id.advanced_options_group);
             advancedOptionsToggle.setOnClickListener(view -> setAdvancedOptionsExpanded(
@@ -173,8 +190,24 @@ public class ServerAddressView extends LinearLayout {
                     }
                 });
 
+                serverKind = preferences.getServerKind();
                 setServerAddress(serverAddress.localAddress());
-                setStep(serverAddress.localAddress() != null ? Step.READY : Step.SCAN);
+                if (serverKind == null) {
+                    // Someone who paired before this choice existed was on an
+                    // appliance by definition: keep them there rather than
+                    // asking a question they have effectively already answered.
+                    if (serverAddress.localAddress() != null) {
+                        serverKind = Preferences.ServerKind.OSMIUM;
+                        preferences.setServerKind(serverKind);
+                    }
+                }
+                applyServerKind();
+                if (serverKind == null) {
+                    setStep(Step.MODE);
+                } else {
+                    setStep(serverAddress.localAddress() != null || isStandardLms()
+                            ? Step.READY : Step.SCAN);
+                }
             });
         }
     }
@@ -193,6 +226,11 @@ public class ServerAddressView extends LinearLayout {
         }
 
         String address = serverAddressEditText.getText().toString();
+        if (isStandardLms() && address.trim().isEmpty()) {
+            TextInputLayout serverAddressTil = findViewById(R.id.server_address_til);
+            serverAddressTil.setError(getResources().getString(R.string.settings_server_address_required));
+            return false;
+        }
         serverAddress.setAddress(address);
         serverAddress.userName = userNameEditText.getText().toString();
         serverAddress.password = passwordEditText.getText().toString();
@@ -201,6 +239,43 @@ public class ServerAddressView extends LinearLayout {
         preferences.saveServerAddress(serverAddress);
 
         return true;
+    }
+
+    private boolean isStandardLms() {
+        return serverKind == Preferences.ServerKind.STANDARD_LMS;
+    }
+
+    /** Records the answer to the first question and moves to the right step. */
+    private void chooseServerKind(Preferences.ServerKind kind) {
+        serverKind = kind;
+        preferences.setServerKind(kind);
+        applyServerKind();
+        if (kind == Preferences.ServerKind.OSMIUM) {
+            setStep(serverAddress.localAddress() != null ? Step.READY : Step.SCAN);
+        } else {
+            setStep(Step.READY);
+        }
+    }
+
+    /**
+     * The address field is read-only and opens the scanner for an appliance,
+     * and an ordinary text field for any other server.
+     */
+    private void applyServerKind() {
+        if (serverAddressEditText == null) return;
+        boolean standard = isStandardLms();
+        serverAddressEditText.setFocusable(standard);
+        serverAddressEditText.setFocusableInTouchMode(standard);
+        serverAddressEditText.setLongClickable(standard);
+        serverAddressEditText.setOnClickListener(standard ? null : view -> startQrScan());
+        TextInputLayout serverAddressTil = findViewById(R.id.server_address_til);
+        serverAddressTil.setEndIconMode(standard ? TextInputLayout.END_ICON_NONE
+                : TextInputLayout.END_ICON_CUSTOM);
+        if (standard) {
+            serverAddressTil.setHelperText(getResources().getString(R.string.settings_server_address_required));
+        } else {
+            serverAddressTil.setHelperText(null);
+        }
     }
 
     /** Registers a listener for step changes, and immediately reports the current step if known. */
@@ -226,17 +301,22 @@ public class ServerAddressView extends LinearLayout {
 
     private void setStep(Step step) {
         currentStep = step;
+        modeGroup.setVisibility(step == Step.MODE ? VISIBLE : GONE);
         scanGroup.setVisibility(step == Step.SCAN ? VISIBLE : GONE);
         confirmGroup.setVisibility(step == Step.CONFIRM ? VISIBLE : GONE);
         readyGroup.setVisibility(step == Step.READY ? VISIBLE : GONE);
 
         int titleRes = switch (step) {
+            case MODE -> R.string.wizard_step_title_mode;
             case SCAN -> R.string.wizard_step_title_scan;
             case CONFIRM -> R.string.wizard_step_title_confirm;
             case READY -> R.string.wizard_step_title_ready;
         };
-        int stepNumber = step.ordinal() + 1;
-        stepIndicator.setText(getResources().getString(R.string.wizard_step_label, stepNumber, Step.values().length,
+        // A plain Lyrion server skips scanning and confirming, so the count has
+        // to follow the path the user is actually on.
+        int totalSteps = isStandardLms() ? 2 : Step.values().length;
+        int stepNumber = isStandardLms() && step == Step.READY ? 2 : step.ordinal() + 1;
+        stepIndicator.setText(getResources().getString(R.string.wizard_step_label, stepNumber, totalSteps,
                 getResources().getString(titleRes)));
 
         if (stepListener != null) {

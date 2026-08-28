@@ -43,6 +43,14 @@ dependencies {
     // CometD/LMS protocol above. Used for multipart file upload/download.
     implementation 'com.squareup.okhttp3:okhttp:5.4.0'
 
+    // Audio engine for the "this phone is a player" mode: decodes the stream
+    // Lyrion sends over SlimProto. Not media3-session — this app drives the
+    // legacy MediaSessionCompat in SqueezeService, and two session owners would
+    // fight over the media buttons.
+    implementation 'androidx.media3:media3-exoplayer:1.11.0'
+    implementation 'androidx.media3:media3-datasource:1.11.0'
+    implementation 'androidx.media3:media3-extractor:1.11.0'
+
     // JVM tests
     testImplementation 'junit:junit:4.13.2'
 
@@ -59,8 +67,8 @@ android {
         minSdkVersion rootProject.minSdkVersion
         targetSdkVersion rootProject.targetSdkVersion
 
-        versionCode 23
-        versionName "1.0.7"
+        versionCode 24
+        versionName "1.0.8-svil1"
 
         vectorDrawables.useSupportLibrary = true
         multiDexEnabled true

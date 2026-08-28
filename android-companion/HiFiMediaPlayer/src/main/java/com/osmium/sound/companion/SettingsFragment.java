@@ -7,6 +7,8 @@ import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.content.ServiceConnection;
 import android.content.SharedPreferences;
+import android.media.MediaCodecList;
+import android.media.MediaFormat;
 import android.net.Uri;
 import android.os.Bundle;
 import android.os.Handler;
@@ -24,6 +26,7 @@ import androidx.appcompat.app.AppCompatDelegate;
 import androidx.core.os.LocaleListCompat;
 import androidx.fragment.app.DialogFragment;
 import androidx.preference.CheckBoxPreference;
+import androidx.preference.EditTextPreference;
 import androidx.preference.ListPreference;
 import androidx.preference.Preference;
 import androidx.preference.PreferenceFragmentCompat;
@@ -125,6 +128,7 @@ public class SettingsFragment  extends PreferenceFragmentCompat implements
         fillUserInterfacePreferences(preferences);
 
         fillScrobblePreferences(sharedPreferences);
+        fillLocalPlayerPreferences(preferences);
         fillDevicePlayerPreferences(preferences);
 
         fillDownloadPreferences(preferences);
@@ -132,6 +136,25 @@ public class SettingsFragment  extends PreferenceFragmentCompat implements
         fillPlaybackPreferences();
         fillLyrionRescanPreferences();
         fillLyrionSkinPreferences();
+
+        applyServerKind(preferences);
+    }
+
+    /**
+     * The appliance settings only mean anything against an Osmium Sound device:
+     * on a plain Lyrion server there is no appliance API behind them, so they
+     * are hidden rather than left to fail when tapped. Which server this is was
+     * decided in the connection wizard.
+     */
+    private void applyServerKind(Preferences preferences) {
+        boolean osmium = preferences.isOsmiumAppliance();
+        Preference osmiumScreen = requirePreference(KEY_OSMIUM_SOUND);
+        if (osmiumScreen != null) osmiumScreen.setVisible(osmium);
+        if (!osmium) {
+            // The web player skin also lives on the appliance's own service.
+            Preference skin = requirePreference(KEY_LYRION_SKIN);
+            if (skin != null) skin.setVisible(false);
+        }
     }
 
     // DSP/EQ is deliberately not wired up here — held back for a future paid
@@ -359,6 +382,40 @@ public class SettingsFragment  extends PreferenceFragmentCompat implements
                 editor.remove(Preferences.KEY_SCROBBLE);
                 editor.apply();
             }
+        }
+    }
+
+    /**
+     * Settings for "this phone is a player". Unlike the third-party player hooks
+     * below, this one is always shown: it needs nothing installed.
+     */
+    private void fillLocalPlayerPreferences(Preferences preferences) {
+        SwitchPreferenceCompat enabled = requirePreference(Preferences.KEY_LOCAL_PLAYER_ENABLED);
+        enabled.setChecked(preferences.isLocalPlayerEnabled());
+
+        EditTextPreference name = requirePreference(Preferences.KEY_LOCAL_PLAYER_NAME);
+        name.setText(preferences.getLocalPlayerName());
+        name.setOnPreferenceChangeListener(this);
+
+        fillEnumPreference(requirePreference(Preferences.KEY_LOCAL_PLAYER_QUALITY_WIFI),
+                Preferences.LocalPlayerQuality.class, preferences.getLocalPlayerQuality(false));
+        fillEnumPreference(requirePreference(Preferences.KEY_LOCAL_PLAYER_QUALITY_MOBILE),
+                Preferences.LocalPlayerQuality.class, preferences.getLocalPlayerQuality(true));
+
+        if (!hasFlacDecoder()) {
+            // Lossless would silently fall back to a transcoded stream, so say so.
+            ListPreference wifi = requirePreference(Preferences.KEY_LOCAL_PLAYER_QUALITY_WIFI);
+            wifi.setSummary(getString(R.string.settings_local_player_no_flac));
+        }
+    }
+
+    /** FLAC decoding is only guaranteed from API 27, and this app supports 26. */
+    private boolean hasFlacDecoder() {
+        try {
+            MediaFormat format = MediaFormat.createAudioFormat(MediaFormat.MIMETYPE_AUDIO_FLAC, 44100, 2);
+            return new MediaCodecList(MediaCodecList.REGULAR_CODECS).findDecoderForFormat(format) != null;
+        } catch (RuntimeException e) {
+            return false;
         }
     }
 
