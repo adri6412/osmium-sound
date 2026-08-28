@@ -4,7 +4,23 @@ set -e
 
 echo "I: [hifi] enabling graphical target + display manager"
 systemctl set-default graphical.target || true
-systemctl enable lightdm || true
+# 🚨 Da 2.5.24 l'interfaccia predefinita è quella Qt (hifi-qt.service, che
+# disegna da sé su DRM/KMS e non ha bisogno di lightdm). Si sceglie da quello
+# che c'è davvero dentro l'immagine: senza il programma Qt si resta su
+# Electron, altrimenti basterebbe un pacchetto non copiato per ritrovarsi con
+# lo schermo nero. Il passaggio all'una o all'altra resta possibile in ogni
+# momento (hifi-display-mode.sh engine set electron|qt), e la scelta scritta
+# in /etc/hifi-player/ui-engine è quella che l'aggiornamento non tocca mai.
+if [ -x /opt/hifi-qt/hifi-qt ]; then
+    echo "I: [hifi] on-screen UI = Qt (hifi-qt.service)"
+    mkdir -p /etc/hifi-player
+    printf 'qt\n' > /etc/hifi-player/ui-engine
+    systemctl enable hifi-qt.service || true
+    systemctl disable lightdm || true
+else
+    echo "I: [hifi] on-screen UI = Electron (nessun pacchetto Qt nell'immagine)"
+    systemctl enable lightdm || true
+fi
 # Sceglie il protocollo della sessione kiosk (Wayland dove c'è una GPU vera, X11
 # in VM/software, dove wlroots rifiuta il renderer GLES2 e il kiosk resterebbe a
 # schermo nero) e lo scrive per lightdm PRIMA che parta — vedi

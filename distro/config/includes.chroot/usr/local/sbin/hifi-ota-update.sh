@@ -55,6 +55,7 @@ OLDDIR=/opt/hifi-media-player.old
 QTDIR=/opt/hifi-qt
 QTOLD=/opt/hifi-qt.old
 UI_VERSION_FILE=/etc/hifi-player/UI_VERSION
+LEGACY_UI_VERSION_DIR=/opt/hifi-media-player
 ENGINE_FILE=/etc/hifi-player/ui-engine
 DISPLAY_MODE_SCRIPT=/usr/local/sbin/hifi-display-mode.sh
 
@@ -75,6 +76,13 @@ swap_dir() {
 write_ui_version() {
     mkdir -p "$(dirname "$UI_VERSION_FILE")"
     printf '%s\n' "$1" > "$UI_VERSION_FILE"
+    # 🚨 Copia nel posto vecchio: hifi-update-apply-runner.sh gia' installato
+    # sugli apparecchi rilegge DA LI' la versione per confermare che il passo
+    # sia andato a buon fine, e quello che gira durante l'aggiornamento e'
+    # sempre la versione precedente (si aggiorna solo al riavvio dopo). Senza
+    # questa riga un'interfaccia Qt installata benissimo risulterebbe fallita.
+    mkdir -p "$LEGACY_UI_VERSION_DIR" 2>/dev/null || true
+    printf '%s\n' "$1" > "$LEGACY_UI_VERSION_DIR/UI_VERSION" 2>/dev/null || true
 }
 
 # Installa il contenuto gia' scompattato in $1, con versione $2.
@@ -100,7 +108,6 @@ install_payload() {
             chmod 4755 "$APPDIR/chrome-sandbox"
         fi
         ln -sf "$APPDIR/hifi-media-player" /usr/bin/hifi-media-player
-        printf '%s\n' "$_ver" > "$APPDIR/UI_VERSION"
     else
         return 2
     fi
@@ -194,8 +201,13 @@ stage)
     fi
 
     # sanity-check the payload before it is trusted for later
-    [ -x "$PAYLOAD/hifi-media-player" ] \
-        || fail "Bundle non valido: $PAYLOAD/hifi-media-player mancante"
+    # 🚨 Il pacchetto puo' contenere l'interfaccia Qt (hifi-qt, da 2.5.24)
+    # oppure la vecchia app Electron (hifi-media-player): ne basta una. Il
+    # controllo qui deve restare identico a quello di install_payload, o un
+    # pacchetto buono viene rifiutato in fase di staging e blocca l'intero
+    # aggiornamento (system e os compresi, che si applicano dopo).
+    [ -x "$PAYLOAD/hifi-qt" ] || [ -x "$PAYLOAD/hifi-media-player" ] \
+        || fail "Bundle non valido: nessuna interfaccia dentro $PAYLOAD"
 
     rm -f "$TARBALL"
     printf '%s\n' "$VERSION" > "$WORKDIR/STAGED"

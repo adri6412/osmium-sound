@@ -64,78 +64,13 @@ jobs:
             exit 1
           fi
 
-      - name: Build the Qt on-screen interface (Debian trixie container)
-        # La seconda interfaccia dell'apparecchio (native-ui-qt/): disegna
-        # diritto su DRM/KMS con Qt 6 Quick, senza X e senza compositore.
-        # Va compilata contro le STESSE librerie del dispositivo (Debian 13,
-        # Qt 6.8): il runner è Ubuntu e le sue Qt sono un'altra versione, così
-        # il binario non partirebbe. Quindi si compila dentro un contenitore
-        # debian:trixie, che è esattamente l'immagine dell'apparecchio.
-        #
-        # Nello stesso contenitore si preparano anche i fotogrammi dell'intro
-        # (l'interfaccia Qt non ha un decodificatore video: mostra i JPEG dello
-        # stesso filmato che Electron riproduce) — un solo `apt-get` per
-        # entrambe le cose.
-        run: |
-          set -e
-          docker run --rm -v "$PWD:/w" -w /w debian:trixie bash -eu -c '
-            export DEBIAN_FRONTEND=noninteractive
-            apt-get update -qq
-            apt-get install -y --no-install-recommends \
-              build-essential pkg-config qt6-base-dev qt6-declarative-dev libdrm-dev ffmpeg > /dev/null
-            cd native-ui-qt && make -j"$(nproc)"
-          '
-          ls -l native-ui-qt/hifi-qt
-
-      - name: Assemble the Qt interface payload (/opt/hifi-qt)
-        # Sorgente unica per gli asset: quelli di Electron (src/assets). Le
-        # icone sono le stesse SVG di lucide che usa il kiosk, generate in
-        # native-ui-qt/icons: si copiano SOLO quelle citate dal QML (sono 1300,
-        # ~11 MB) e si fallisce se una citata non esiste, così un'icona vuota
-        # non arriva mai sull'apparecchio.
-        run: |
-          set -e
-          QT=qtui
-          rm -rf "$QT"
-          mkdir -p "$QT/qml" "$QT/icons" "$QT/assets/intro" "$QT/locales"
-          install -m755 native-ui-qt/hifi-qt "$QT/hifi-qt"
-          cp native-ui-qt/qml/*.qml "$QT/qml/"
-          MISSING=0
-          for n in $(grep -ohE '"[a-z0-9][a-z0-9-]*"' native-ui-qt/qml/*.qml | tr -d '"' | sort -u); do
-            if [ -f "native-ui-qt/icons/$n.svg" ]; then
-              cp "native-ui-qt/icons/$n.svg" "$QT/icons/"
-              [ -f "native-ui-qt/icons/$n-fill.svg" ] && cp "native-ui-qt/icons/$n-fill.svg" "$QT/icons/"
-            fi
-          done
-          # ogni `name:`/`icon:` del QML deve avere il suo file
-          for n in $(grep -ohE '(name|icon):\s*"[a-z0-9][a-z0-9-]*"' native-ui-qt/qml/*.qml \
-                     | grep -oE '"[a-z0-9][a-z0-9-]*"' | tr -d '"' | sort -u); do
-            if [ ! -f "$QT/icons/$n.svg" ] && [ -f "native-ui-qt/icons/$n.svg" ]; then
-              cp "native-ui-qt/icons/$n.svg" "$QT/icons/"
-            fi
-          done
-          cp src/assets/vu-meter-dials.png src/assets/vu-meter-bezel.png "$QT/assets/"
-          cp src/assets/ledbar/*.png "$QT/assets/"
-          docker run --rm -v "$PWD:/w" -w /w debian:trixie bash -eu -c '
-            export DEBIAN_FRONTEND=noninteractive
-            apt-get update -qq && apt-get install -y --no-install-recommends ffmpeg > /dev/null
-            ffmpeg -nostdin -loglevel error -i src/assets/intro.mp4 \
-              -vf "fps=15,scale=960:-2" -q:v 4 qtui/assets/intro/%03d.jpg
-          '
-          cp src/i18n/locales/en.json src/i18n/locales/it.json "$QT/locales/"
-          # le note di terze parti sono un array JS: lo stesso elenco che
-          # Settings.jsx rende in Electron, riusato senza duplicarlo
-          node -e '
-            const fs = require("fs");
-            const src = fs.readFileSync("src/data/thirdPartyNotices.js", "utf8")
-              .replace(/^export const thirdPartyNotices =/m, "module.exports =");
-            fs.writeFileSync("/tmp/tpn.cjs", src);
-            fs.writeFileSync("qtui/locales/third_party.json", JSON.stringify(require("/tmp/tpn.cjs")));
-          '
-          test -s "$QT/locales/third_party.json"
-          test "$(ls "$QT/assets/intro" | wc -l)" -gt 50 || { echo "::error::intro frames missing"; exit 1; }
-          du -sh "$QT"; ls "$QT/icons" | wc -l
-
+      - name: Build the Qt on-screen interface payload (/opt/hifi-qt)
+        # 🚨 Fonte unica con l'immagine ISO (build-iso.yml, lavoro qt-payload):
+        # compilazione su base Debian 13 dentro docker e composizione del
+        # pacchetto stanno in un solo script, cosi' l'aggiornamento e l'immagine
+        # non possono divergere. Questo lavoro NON gira dentro un contenitore:
+        # allo script serve docker.
+        run: bash native-ui-qt/ci/build-payload.sh qtui
       - name: Resolve version
         id: ver
         run: |
