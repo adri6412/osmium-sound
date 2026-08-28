@@ -19,8 +19,7 @@ Item {
     Item {
         width: 340; height: 40
         Rectangle { y: 39; width: 340; height: 1; color: Theme.borderA(0.6) }
-        Rectangle { id: dotGlow; x: 16; y: 16; width: 8; height: 8; radius: 4; color: Theme.goldA(0.8); visible: false; layer.enabled: true }
-        MultiEffect { source: dotGlow; x: 16; y: 16; width: 8; height: 8; blurEnabled: true; blur: 0.5; blurMax: 12; autoPaddingEnabled: true }
+        Glow { x: 20 - outer; y: 20 - outer; radius: 4; blur: 6; color: Theme.goldA(0.8) }
         Rectangle { x: 16; y: 16; width: 8; height: 8; radius: 4; color: Theme.gold }
         Text {
             x: 32; anchors.verticalCenter: parent.verticalCenter
@@ -127,8 +126,7 @@ Item {
         }
         Item {
             x: 144; y: 0; width: 52; height: 52
-            Rectangle { id: glowSrc; anchors.fill: parent; radius: 26; color: Theme.goldA(0.35); visible: false; layer.enabled: true }
-            MultiEffect { source: glowSrc; anchors.fill: parent; blurEnabled: true; blur: 0.5; blurMax: 24; autoPaddingEnabled: true }
+            Glow { anchors.centerIn: parent; radius: 26; blur: 18; color: Theme.goldA(0.35) }
             Rectangle { anchors.fill: parent; radius: 26; color: Theme.gold; scale: playTap.tapScale }
             Icon {
                 anchors.centerIn: parent; anchors.horizontalCenterOffset: Player.playing ? 0 : 1

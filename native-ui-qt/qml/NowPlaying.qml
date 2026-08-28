@@ -236,8 +236,7 @@ Item {
             Item {                                 // play, con alone 0 0 24px oro/40
                 id: playBtn
                 x: 66; y: controls.cy - 28; width: 56; height: 56
-                Rectangle { id: glowSrc; anchors.fill: parent; radius: 28; color: Theme.goldA(0.4); visible: false; layer.enabled: true }
-                MultiEffect { source: glowSrc; anchors.fill: parent; blurEnabled: true; blur: 0.6; blurMax: 32; autoPaddingEnabled: true }
+                Glow { anchors.centerIn: parent; radius: 28; blur: 24; color: Theme.goldA(0.4) }
                 Rectangle { anchors.fill: parent; radius: 28; color: Theme.gold; scale: playTap.tapScale }
                 Icon {
                     anchors.centerIn: parent
