@@ -530,6 +530,24 @@ public final class Preferences {
         editor.putString(prefix(serverAddress) + KEY_PASSWORD, serverAddress.password);
         editor.putBoolean(prefix(serverAddress) + KEY_WOL, serverAddress.wakeOnLan);
         editor.putString(prefix(serverAddress) + KEY_MAC, Util.formatMac(serverAddress.mac));
+
+        // The address above is filed under the Wi-Fi network it was set up on,
+        // which is what lets different networks have different servers. Off that
+        // network — mobile data, or a Tailscale tunnel from anywhere — there is
+        // no BSSID to look under, and without a copy in the unprefixed keys the
+        // app would decide it has never been configured at all. So the last
+        // server set up is also stored as the fallback for every other network.
+        if (serverAddress.bssId != null) {
+            // Same keys the reader looks under when there is no BSSID: address
+            // alone, without the network in front of it.
+            String withoutNetwork = serverAddress.localAddress() + "_";
+            editor.putString(KEY_SERVER_ADDRESS, serverAddress.address);
+            editor.putString(withoutNetwork + KEY_SERVER_NAME, serverAddress.serverName);
+            editor.putString(withoutNetwork + KEY_USERNAME, serverAddress.userName);
+            editor.putString(withoutNetwork + KEY_PASSWORD, serverAddress.password);
+            editor.putBoolean(withoutNetwork + KEY_WOL, serverAddress.wakeOnLan);
+            editor.putString(withoutNetwork + KEY_MAC, Util.formatMac(serverAddress.mac));
+        }
         editor.apply();
     }
 

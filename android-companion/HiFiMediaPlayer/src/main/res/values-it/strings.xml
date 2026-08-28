@@ -497,4 +497,5 @@
     <string name="wizard_mode_standard_summary">Scrivi indirizzo e porta del server. Le impostazioni dell\'apparecchio Osmium restano nascoste.</string>
     <string name="wizard_change_mode">Cambia</string>
     <string name="settings_server_address_required">Inserisci l\'indirizzo del server, per esempio 192.168.0.10:9000</string>
+    <string name="settings_server_address_remote_hint">Preso dal codice QR. Per usarlo fuori casa con Tailscale, sostituiscilo con il nome MagicDNS del server.</string>
 </resources>

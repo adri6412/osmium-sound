@@ -467,6 +467,9 @@ public class SettingsFragment  extends PreferenceFragmentCompat implements
 
     private void fillDisplayPreferences(Preferences preferences) {
         ListPreference onSelectThemePref = requirePreference(Preferences.KEY_ON_THEME_SELECT_ACTION);
+        // The app follows the appliance and is dark, full stop: offering a
+        // light theme that no longer exists would just be a dead switch.
+        onSelectThemePref.setVisible(false);
         ArrayList<String> entryValues = new ArrayList<>();
         ArrayList<String> entries = new ArrayList<>();
 

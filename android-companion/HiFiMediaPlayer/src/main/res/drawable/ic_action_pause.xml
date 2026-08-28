@@ -1,9 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+ Lucide "pause-fill", converted from native-ui-qt/icons/pause-fill.svg so the phone and
+ the appliance draw the same glyph. Regenerate with
+ android-companion/tools/lucide2vector.py rather than editing by hand.
+-->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
-    android:width="36dp"
-    android:height="36dp"
-    android:viewportWidth="24.0"
-    android:viewportHeight="24.0">
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24"
+    android:tint="?attr/colorControlNormal">
     <path
-        android:fillColor="#FFFFFF"
-        android:pathData="M6,19h4L10,5L6,5v14zM14,5v14h4L18,5h-4z"/>
+        android:pathData="M6.0,4.0 L10.0,4.0 L10.0,20.0 L6.0,20.0 Z"
+        android:fillColor="#FFFFFFFF" />
+    <path
+        android:pathData="M6.0,4.0 L10.0,4.0 L10.0,20.0 L6.0,20.0 Z"
+        android:strokeWidth="2"
+        android:strokeColor="#FFFFFFFF"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
+    <path
+        android:pathData="M14.0,4.0 L18.0,4.0 L18.0,20.0 L14.0,20.0 Z"
+        android:fillColor="#FFFFFFFF" />
+    <path
+        android:pathData="M14.0,4.0 L18.0,4.0 L18.0,20.0 L14.0,20.0 Z"
+        android:strokeWidth="2"
+        android:strokeColor="#FFFFFFFF"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
 </vector>

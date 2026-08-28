@@ -337,7 +337,13 @@ public class LocalPlayerController implements SlimProtoClient.Listener, SlimAudi
 
     @Override
     public void onAudg(SlimProtoMessages.Audg audg) {
-        if (engine != null) engine.setGain(audg.linearGain());
+        float gain = audg.linearGain();
+        if (gain == 0f) {
+            // Worth saying out loud: everything else looks like normal playback,
+            // and the server has simply set this player's volume to zero.
+            Log.w(TAG, "the server set this player's volume to zero: nothing will be heard");
+        }
+        if (engine != null) engine.setGain(gain);
     }
 
     @Override

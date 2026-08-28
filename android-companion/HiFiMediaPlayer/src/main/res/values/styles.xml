@@ -19,14 +19,31 @@
 <resources xmlns:android="http://schemas.android.com/apk/res/android">
     <!-- Text Styles. Apply these to the android:textAppearance attribute of the views. -->
 
-    <!-- Base styles that the rest of the app inherits from. -->
-    <style name="SqueezerTextAppearance" parent="@android:style/TextAppearance" />
-    <style name="SqueezerTextAppearance.XLarge" parent="@android:style/TextAppearance.Large">
-        <item name="android:textSize">44sp</item>
+    <!-- Base styles that the rest of the app inherits from.
+
+         They used to hang off @android:style/TextAppearance.*, which is the
+         framework's own scale from 2012 and the main reason the app read as old.
+         They now follow Material 3, sized like the appliance's UI, which uses
+         only two weights: regular and bold. -->
+    <style name="SqueezerTextAppearance" parent="TextAppearance.Material3.BodyMedium">
+        <item name="android:textColor">?attr/colorOnSurface</item>
     </style>
-    <style name="SqueezerTextAppearance.Large" parent="@android:style/TextAppearance.Large"/>
-    <style name="SqueezerTextAppearance.Medium" parent="@android:style/TextAppearance.Medium"/>
-    <style name="SqueezerTextAppearance.Small" parent="@android:style/TextAppearance.Small"/>
+    <style name="SqueezerTextAppearance.XLarge" parent="TextAppearance.Material3.DisplaySmall">
+        <item name="android:textSize">36sp</item>
+        <item name="android:textStyle">bold</item>
+    </style>
+    <style name="SqueezerTextAppearance.Large" parent="TextAppearance.Material3.TitleLarge">
+        <item name="android:textSize">18sp</item>
+        <item name="android:textColor">?attr/colorOnSurface</item>
+    </style>
+    <style name="SqueezerTextAppearance.Medium" parent="TextAppearance.Material3.BodyLarge">
+        <item name="android:textSize">16sp</item>
+        <item name="android:textColor">?attr/colorOnSurface</item>
+    </style>
+    <style name="SqueezerTextAppearance.Small" parent="TextAppearance.Material3.BodySmall">
+        <item name="android:textSize">12sp</item>
+        <item name="android:textColor">?attr/colorOnSurfaceVariant</item>
+    </style>
     <style name="SqueezerTextAppearance.ContextMenu" parent="@style/TextAppearance.AppCompat.Menu"/>
 
     <!-- List headers -->
@@ -35,8 +52,11 @@
     </style>
     <style name="SqueezerTextAppearance.ItemList.SubHeader" parent="SqueezerTextAppearance.Small"/>
 
-    <!-- Text in list items -->
-    <style name="SqueezerTextAppearance.ListItem.Primary" parent="SqueezerTextAppearance" />
+    <!-- Text in list items: 14sp is the appliance's dominant body size. -->
+    <style name="SqueezerTextAppearance.ListItem.Primary" parent="SqueezerTextAppearance">
+        <item name="android:textSize">14sp</item>
+        <item name="android:textColor">?attr/colorOnSurface</item>
+    </style>
     <style name="SqueezerTextAppearance.ListItem.Primary.Highlight" parent="SqueezerTextAppearance.ListItem.Primary">
         <item name="android:textStyle">bold</item>
     </style>
@@ -59,18 +79,27 @@
 
     <!-- Anywhere we want to display information about a song in an activity (and not in a list). -->
     <style name="SqueezerTextAppearance.SongInfo.Primary" parent="SqueezerTextAppearance.Medium"/>
-    <style name="SqueezerTextAppearance.SongInfo.Secondary" parent="SqueezerTextAppearance.Small"/>
+    <style name="SqueezerTextAppearance.SongInfo.Secondary" parent="SqueezerTextAppearance.Small">
+        <item name="android:textSize">14sp</item>
+    </style>
     <style name="SqueezerTextAppearance.SongInfo.Tertiary" parent="SqueezerTextAppearance.Small"/>
 
-    <!-- Text on the NowPlayingFragment. -->
-    <style name="SqueezerTextAppearance.NowPlaying.Primary" parent="SqueezerTextAppearance.SongInfo.Primary"/>
+    <!-- Text on the NowPlayingFragment: title 24 bold, as on the appliance. -->
+    <style name="SqueezerTextAppearance.NowPlaying.Primary" parent="SqueezerTextAppearance.SongInfo.Primary">
+        <item name="android:textSize">24sp</item>
+        <item name="android:textStyle">bold</item>
+    </style>
     <style name="SqueezerTextAppearance.NowPlaying.Secondary" parent="SqueezerTextAppearance.SongInfo.Secondary"/>
     <style name="SqueezerTextAppearance.NowPlaying.Tertiary" parent="SqueezerTextAppearance.SongInfo.Tertiary"/>
 
     <style name="SqueezerTextAppearance.NowPlaying.ComposerName" parent="SqueezerTextAppearance.NowPlaying.Primary"/>
     <style name="SqueezerTextAppearance.NowPlaying.SongName" parent="SqueezerTextAppearance.NowPlaying.Primary"/>
     <style name="SqueezerTextAppearance.NowPlaying.AlbumName" parent="SqueezerTextAppearance.NowPlaying.Secondary"/>
-    <style name="SqueezerTextAppearance.NowPlaying.ArtistName" parent="SqueezerTextAppearance.NowPlaying.Secondary"/>
+    <!-- The artist is the one line the appliance prints in gold. -->
+    <style name="SqueezerTextAppearance.NowPlaying.ArtistName" parent="SqueezerTextAppearance.NowPlaying.Secondary">
+        <item name="android:textSize">18sp</item>
+        <item name="android:textColor">@color/osmium_gold</item>
+    </style>
     <style name="SqueezerTextAppearance.NowPlaying.ConductorName" parent="SqueezerTextAppearance.NowPlaying.Secondary"/>
 
     <!-- Text on the NowPlayingFragment mini player. -->
@@ -106,7 +135,7 @@
         <item name="android:layout_height">48dp</item>
         <item name="android:ellipsize">end</item>
         <item name="android:maxLines">1</item>
-        <item name="android:textAppearance">?attr/textAppearanceSubtitle1</item>
+        <item name="android:textAppearance">?attr/textAppearanceTitleMedium</item>
     </style>
 
     <style name="SqueezerWidget.NowPlaying.ComposerName" parent="SqueezerWidget.SingleLine">
@@ -138,7 +167,9 @@
         <item name="android:layout_width">wrap_content</item>
         <item name="android:layout_height">wrap_content</item>
         <item name="android:text">0:00</item>
-        <item name="android:textAppearance">@style/SqueezerTextAppearance.NowPlaying.Tertiary</item>
+        <item name="android:textSize">12sp</item>
+        <item name="android:fontFamily">monospace</item>
+        <item name="android:textColor">@color/osmium_silver</item>
     </style>
 
     <style name="SqueezerWidget.NowPlayingMini.SongName" parent="SqueezerWidget.Marquee">
@@ -153,16 +184,27 @@
     </style>
 
     <!-- Media controller styles -->
-    <style name="ImageButton" parent="Widget.MaterialComponents.Button.TextButton">
+    <style name="ImageButton" parent="Widget.Material3.Button.TextButton">
         <item name="iconGravity">textStart</item>
         <item name="iconPadding">0dp</item>
+        <!-- Icons on the appliance are white outlines; gold is for accents. -->
+        <item name="iconTint">@android:color/white</item>
+        <item name="android:textColor">@android:color/white</item>
     </style>
 
     <!-- Media controller styles -->
-    <style name="SqueezerWidget.MediaButton" parent="ImageButton">
-        <item name="android:layout_width">0dp</item>
-        <item name="android:layout_height">52dp</item>
-        <item name="android:layout_weight">1</item>
+    <!-- Transport, laid out like the appliance: outline icons either side of a
+         filled gold circle. -->
+    <style name="SqueezerWidget.MediaButton" parent="Widget.Material3.Button.IconButton">
+        <item name="android:layout_width">wrap_content</item>
+        <item name="android:layout_height">48dp</item>
+        <item name="android:layout_marginHorizontal">4dp</item>
+        <item name="android:insetTop">0dp</item>
+        <item name="android:insetBottom">0dp</item>
+        <item name="iconSize">24dp</item>
+        <item name="iconTint">@android:color/white</item>
+        <item name="iconGravity">textStart</item>
+        <item name="iconPadding">0dp</item>
     </style>
 
     <style name="SqueezerWidget.MediaButton.Previous">
@@ -173,28 +215,63 @@
         <item name="icon">@drawable/ic_action_next</item>
     </style>
 
-    <style name="SqueezerWidget.MediaButton.Play">
+    <!-- The one element that says "Osmium" more than any other: a filled gold
+         circle with a black glyph, with a soft gold shadow under it. -->
+    <style name="SqueezerWidget.MediaButton.Play" parent="Widget.Material3.Button.Icon">
+        <item name="android:layout_width">64dp</item>
+        <item name="android:layout_height">64dp</item>
+        <item name="android:layout_marginHorizontal">12dp</item>
+        <item name="android:insetTop">0dp</item>
+        <item name="android:insetBottom">0dp</item>
+        <item name="android:padding">0dp</item>
         <item name="icon">@drawable/ic_action_play</item>
+        <item name="iconSize">28dp</item>
+        <item name="iconGravity">textStart</item>
+        <item name="iconPadding">0dp</item>
+        <item name="iconTint">@color/osmium_black</item>
+        <item name="backgroundTint">@color/osmium_gold</item>
+        <item name="cornerRadius">32dp</item>
+        <item name="android:elevation">8dp</item>
+        <item name="android:outlineSpotShadowColor">@color/osmium_gold</item>
+        <item name="android:outlineAmbientShadowColor">@color/osmium_gold</item>
     </style>
 
     <style name="SqueezerWidget.MediaButton.Shuffle">
         <item name="icon">@drawable/shuffle</item>
+        <item name="iconSize">20dp</item>
     </style>
 
     <style name="SqueezerWidget.MediaButton.Repeat">
         <item name="icon">@drawable/ic_repeat_white</item>
+        <item name="iconSize">20dp</item>
     </style>
 
     <!-- Cover art on the Now Playing widget -->
+    <!-- Rounded 16dp with a deep shadow, as on the appliance. -->
     <style name="SqueezerWidget.NowPlaying.CoverArt">
-        <item name="android:layout_marginStart">40dp</item>
-        <item name="android:layout_marginEnd">40dp</item>
+        <item name="android:layout_marginStart">24dp</item>
+        <item name="android:layout_marginEnd">24dp</item>
+        <item name="android:elevation">12dp</item>
+        <item name="shapeAppearance">@style/ShapeAppearance.Osmium.Large</item>
+    </style>
+
+    <!-- The little "DSF · 1bit · 2822kHz" pill under the track details. -->
+    <style name="SqueezerWidget.NowPlaying.FormatChip">
+        <item name="android:background">@drawable/format_chip_background</item>
+        <item name="android:paddingHorizontal">8dp</item>
+        <item name="android:paddingVertical">3dp</item>
+        <item name="android:textSize">12sp</item>
+        <item name="android:textColor">@color/osmium_silver</item>
     </style>
 
     <style name="SqueezerWidget.List"/>
 
+    <!-- Library rows: an 8dp surface card with a small gap, the way the
+         appliance draws its lists, instead of flat full-bleed rows. -->
     <style name="SqueezerWidget.List.Item">
-        <item name="android:background">?attr/selectableItemBackground</item>
+        <item name="android:background">@drawable/list_item_background</item>
+        <item name="android:layout_marginHorizontal">12dp</item>
+        <item name="android:layout_marginVertical">2dp</item>
         <item name="android:layout_height">wrap_content</item>
         <item name="android:layout_width">match_parent</item>
         <item name="android:minHeight">48dp</item>
@@ -216,9 +293,10 @@
     <style name="SqueezerWidget.Grid"/>
 
     <style name="SqueezerWidget.Grid.Item">
-        <item name="android:background">?attr/selectableItemBackground</item>
+        <item name="android:background">@drawable/grid_item_background</item>
         <item name="android:layout_height">wrap_content</item>
         <item name="android:layout_width">wrap_content</item>
+        <item name="android:layout_margin">6dp</item>
         <item name="android:padding">8dp</item>
         <item name="android:descendantFocusability">blocksDescendants</item>
     </style>
@@ -255,10 +333,12 @@
         <item name="android:background">#D4AF37</item>
     </style>
 
-    <!-- Gold Material Button Style -->
-    <style name="Widget.MaterialComponents.Button.Gold" parent="Widget.MaterialComponents.Button">
-        <item name="backgroundTint">#D4AF37</item>
-        <item name="android:textColor">#ffffff</item>
+    <!-- The device's primary button: gold with black on it, never white. -->
+    <style name="Widget.MaterialComponents.Button.Gold" parent="Widget.Material3.Button">
+        <item name="backgroundTint">@color/osmium_gold</item>
+        <item name="android:textColor">@color/osmium_black</item>
+        <item name="iconTint">@color/osmium_black</item>
+        <item name="shapeAppearance">@style/ShapeAppearance.Osmium.Small</item>
     </style>
 
     <!-- Toast -->
@@ -281,7 +361,7 @@
         <item name="android:gravity">center</item>
     </style>
 
-    <style name="CueText" parent="Widget.MaterialComponents.Button.TextButton.Dialog">
+    <style name="CueText" parent="Widget.Material3.Button.TextButton.Dialog">
     </style>
 
     <style name="RemoteButton" parent="Widget.AppCompat.ButtonBar">

@@ -173,7 +173,7 @@
 
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/confirm_rescan_button"
-                style="@style/Widget.MaterialComponents.Button.TextButton"
+                style="@style/Widget.Material3.Button.TextButton"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="4dp"
@@ -191,7 +191,7 @@
 
         <com.google.android.material.button.MaterialButton
             android:id="@+id/change_mode_button"
-            style="@style/Widget.MaterialComponents.Button.TextButton"
+            style="@style/Widget.Material3.Button.TextButton"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_gravity="end"
@@ -210,7 +210,7 @@
                 app:endIconDrawable="@drawable/ic_qr_code_scanner"
                 app:endIconMode="custom"
                 app:endIconContentDescription="@string/settings_scan_qr"
-                style="@style/Widget.MaterialComponents.TextInputLayout.FilledBox.ExposedDropdownMenu">
+                style="@style/Widget.Material3.TextInputLayout.FilledBox.ExposedDropdownMenu">
 
                 <AutoCompleteTextView
                     android:id="@+id/server_address"
@@ -222,7 +222,7 @@
 
         <com.google.android.material.button.MaterialButton
             android:id="@+id/advanced_options_toggle"
-            style="@style/Widget.MaterialComponents.Button.TextButton"
+            style="@style/Widget.Material3.Button.TextButton"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginTop="4dp"

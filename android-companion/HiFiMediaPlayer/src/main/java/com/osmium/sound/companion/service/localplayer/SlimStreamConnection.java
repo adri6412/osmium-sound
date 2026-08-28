@@ -27,7 +27,7 @@ import java.nio.charset.StandardCharsets;
  * pressure keeps the buffer genuinely full during playback instead of letting
  * the player race ahead and report zero.
  */
-final class SlimStreamConnection {
+final class SlimStreamConnection implements SlimStream {
 
     private static final String TAG = "SlimStream";
 
@@ -40,6 +40,12 @@ final class SlimStreamConnection {
     interface Callback {
         /** The stream's response headers, which the server wants back as RESP. */
         void onStreamHeaders(SlimStreamConnection connection, String headers);
+
+        /**
+         * The FLAC stream header seen at the start of this track, so it can be
+         * put back in front of a later stream that arrives without one.
+         */
+        void onFlacHeader(byte[] header);
 
         /** The socket delivered its last byte. */
         void onStreamSocketClosed(SlimStreamConnection connection);
@@ -70,6 +76,9 @@ final class SlimStreamConnection {
     private Thread reader;
     @Nullable
     private String authorization;
+    @Nullable
+    private byte[] flacPreamble;
+    private boolean bodyStarted;
 
     SlimStreamConnection(InetAddress address, int port, byte[] request, PlaybackSnapshot snapshot,
                          Callback callback) {
@@ -86,6 +95,17 @@ final class SlimStreamConnection {
      */
     void setAuthorization(@Nullable String basicAuthorization) {
         this.authorization = basicAuthorization;
+    }
+
+    /**
+     * The FLAC header from earlier in this track. Lyrion answers a seek by
+     * carrying on the transcode mid-stream: the body then starts on a frame,
+     * with no "fLaC" marker and no stream info, and a decoder that has not seen
+     * the header refuses it. Handing the header back first turns that into an
+     * ordinary stream again.
+     */
+    void setFlacPreamble(@Nullable byte[] preamble) {
+        this.flacPreamble = preamble;
     }
 
     /** Connects and starts filling the buffer. Returns once headers are in. */
@@ -120,6 +140,15 @@ final class SlimStreamConnection {
             if (headers == null) throw new IOException("stream closed before headers arrived");
         }
 
+        // Whatever comes back that is not a 2xx is an error page, not audio.
+        // Feeding it to the decoder produces a baffling "malformed container"
+        // instead of the plain truth, which is that the server refused.
+        int status = statusCode(headers);
+        Log.i(TAG, "stream response " + status + " from " + address.getHostAddress() + ":" + port);
+        if (status < 200 || status > 299) {
+            throw new IOException("the server answered " + status + " for this stream");
+        }
+
         callback.onStreamHeaders(this, headers);
 
         final InputStream body = in;
@@ -151,9 +180,20 @@ final class SlimStreamConnection {
     }
 
     private static boolean isUnauthorised(String headers) {
+        return statusCode(headers) == 401;
+    }
+
+    /** The status code from the response's first line, or -1 if unreadable. */
+    private static int statusCode(String headers) {
         int end = headers.indexOf('\n');
-        String statusLine = end > 0 ? headers.substring(0, end) : headers;
-        return statusLine.contains(" 401");
+        String statusLine = (end > 0 ? headers.substring(0, end) : headers).trim();
+        String[] parts = statusLine.split(" ");
+        if (parts.length < 2) return -1;
+        try {
+            return Integer.parseInt(parts[1]);
+        } catch (NumberFormatException e) {
+            return -1;
+        }
     }
 
     private static byte[] withAuthorization(byte[] request, String authorization) {
@@ -206,6 +246,43 @@ final class SlimStreamConnection {
     }
 
     private void append(byte[] chunk, int length) {
+        if (!bodyStarted && length >= 4) {
+            bodyStarted = true;
+            boolean hasMarker = chunk[0] == 'f' && chunk[1] == 'L' && chunk[2] == 'a' && chunk[3] == 'C';
+            if (hasMarker) {
+                byte[] header = readFlacHeader(chunk, length);
+                if (header != null) callback.onFlacHeader(header);
+            } else if (flacPreamble != null) {
+                Log.i(TAG, "stream starts mid-FLAC after a seek: putting the header back");
+                appendBytes(flacPreamble, flacPreamble.length);
+            }
+        }
+        appendBytes(chunk, length);
+    }
+
+    /**
+     * Copies out the "fLaC" marker and the metadata blocks that follow it, up to
+     * the first audio frame. Returns null if the chunk does not hold all of it,
+     * which in practice does not happen: the header is a few hundred bytes and
+     * the first read is tens of kilobytes.
+     */
+    @Nullable
+    private static byte[] readFlacHeader(byte[] chunk, int length) {
+        int pos = 4;
+        while (pos + 4 <= length) {
+            boolean last = (chunk[pos] & 0x80) != 0;
+            int blockSize = ((chunk[pos + 1] & 0xff) << 16)
+                    | ((chunk[pos + 2] & 0xff) << 8)
+                    | (chunk[pos + 3] & 0xff);
+            pos += 4 + blockSize;
+            if (last) {
+                return pos <= length ? java.util.Arrays.copyOf(chunk, pos) : null;
+            }
+        }
+        return null;
+    }
+
+    private void appendBytes(byte[] chunk, int length) {
         synchronized (lock) {
             for (int i = 0; i < length; i++) {
                 ring[tail] = chunk[i];
@@ -225,7 +302,8 @@ final class SlimStreamConnection {
      * the buffer is drained, which is the moment the server is waiting for to
      * hand us the next track.
      */
-    int read(byte[] buffer, int offset, int length) throws IOException {
+    @Override
+    public int read(byte[] buffer, int offset, int length) throws IOException {
         synchronized (lock) {
             while (count == 0) {
                 if (closed) throw new IOException("stream closed");

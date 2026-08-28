@@ -15,6 +15,11 @@ buildscript {
     }
     dependencies {
         classpath 'com.android.tools.build:gradle:8.13.0'
+        // Kotlin and the Compose compiler plugin, for the screens rewritten in
+        // Compose. AGP and Gradle stay where they are: they are pinned on
+        // purpose (see README) and Kotlin does not require moving them.
+        classpath 'org.jetbrains.kotlin:kotlin-gradle-plugin:2.3.21'
+        classpath 'org.jetbrains.kotlin:compose-compiler-gradle-plugin:2.3.21'
     }
 }
 

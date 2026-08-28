@@ -150,4 +150,25 @@
     <!-- Media button colors -->
     <color name="gold_button">#D4AF37</color>
 
+
+    <!-- Osmium Sound palette, identical to the appliance's own UI
+         (tailwind.config.js, native-ui-qt/qml/Theme.qml, native-ui/src/ui.h).
+         Do not invent new tints: the device only has these. -->
+    <color name="osmium_black">#000000</color>
+    <color name="osmium_dark">#0a0a0a</color>
+    <color name="osmium_panel">#0f0f0f</color>
+    <color name="osmium_surface">#161616</color>
+    <color name="osmium_gray">#1a1a1a</color>
+    <color name="osmium_light">#2a2a2a</color>
+    <color name="osmium_accent">#3a3a3a</color>
+    <color name="osmium_border">#252525</color>
+    <color name="osmium_gold">#d4af37</color>
+    <color name="osmium_gold_bright">#facc15</color>
+    <color name="osmium_gold_container">#33d4af37</color>
+    <color name="osmium_silver">#c0c0c0</color>
+    <color name="osmium_success">#10b981</color>
+    <color name="osmium_error">#ef4444</color>
+    <!-- Touch feedback is a neutral lift, never gold. -->
+    <color name="osmium_ripple">#1affffff</color>
+    <color name="osmium_track">#1affffff</color>
 </resources>

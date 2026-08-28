@@ -44,8 +44,16 @@ public class ThemeManager {
 
     /** Available themes. */
     public enum Theme implements EnumWithText {
-        LIGHT_DARKACTIONBAR(R.string.settings_theme_light, R.style.AppTheme_Light, AppCompatDelegate.MODE_NIGHT_NO),
-        DARK(R.string.settings_theme_dark, R.style.AppTheme, AppCompatDelegate.MODE_NIGHT_YES);
+        // The app has one look, dark, matching the appliance: both entries
+        // resolve to the same theme so a preference stored earlier still works.
+        //
+        // Night mode is deliberately left alone. AppTheme is already a dark
+        // Material 3 theme, so forcing MODE_NIGHT_YES would buy nothing and
+        // cost something real: on a phone set to light, AppCompat reacts to the
+        // mismatch by recreating the activity, which throws away anything the
+        // user was in the middle of — the pairing wizard included.
+        LIGHT_DARKACTIONBAR(R.string.settings_theme_light, R.style.AppTheme, AppCompatDelegate.MODE_NIGHT_FOLLOW_SYSTEM),
+        DARK(R.string.settings_theme_dark, R.style.AppTheme, AppCompatDelegate.MODE_NIGHT_FOLLOW_SYSTEM);
 
         @StringRes private final int labelId;
         @StyleRes public final int themeId;

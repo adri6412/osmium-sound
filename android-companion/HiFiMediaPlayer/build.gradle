@@ -6,6 +6,8 @@ buildscript {
 
 plugins {
     id 'com.android.application'
+    id 'org.jetbrains.kotlin.android'
+    id 'org.jetbrains.kotlin.plugin.compose'
     id 'com.github.triplet.play' version '3.7.0'
 }
 
@@ -43,6 +45,18 @@ dependencies {
     // CometD/LMS protocol above. Used for multipart file upload/download.
     implementation 'com.squareup.okhttp3:okhttp:5.4.0'
 
+    // Jetpack Compose, for the screens that carry the app's look: the rest of
+    // the app keeps its XML layouts and follows along through the Material 3
+    // theme in themes.xml.
+    implementation platform('androidx.compose:compose-bom:2026.06.01')
+    implementation 'androidx.compose.material3:material3'
+    implementation 'androidx.compose.ui:ui'
+    implementation 'androidx.compose.ui:ui-graphics'
+    implementation 'androidx.compose.ui:ui-tooling-preview'
+    implementation 'androidx.compose.runtime:runtime-livedata'
+    implementation 'androidx.activity:activity-compose:1.12.4'
+    debugImplementation 'androidx.compose.ui:ui-tooling'
+
     // Audio engine for the "this phone is a player" mode: decodes the stream
     // Lyrion sends over SlimProto. Not media3-session — this app drives the
     // legacy MediaSessionCompat in SqueezeService, and two session owners would
@@ -53,6 +67,10 @@ dependencies {
 
     // JVM tests
     testImplementation 'junit:junit:4.13.2'
+    // Android value classes the unit tests need to hand around (Uri and the
+    // like) are stubs off-device; mocking them keeps these tests on the JVM,
+    // where the instrumented source set is disabled.
+    testImplementation 'org.mockito:mockito-core:5.20.0'
 
     // Android instrumentation tests
     androidTestImplementation 'androidx.test:core:1.5.0'
@@ -67,8 +85,8 @@ android {
         minSdkVersion rootProject.minSdkVersion
         targetSdkVersion rootProject.targetSdkVersion
 
-        versionCode 26
-        versionName "1.0.8-svil3"
+        versionCode 27
+        versionName "1.0.8-svil4"
 
         vectorDrawables.useSupportLibrary = true
         multiDexEnabled true
@@ -80,6 +98,10 @@ android {
 
         sourceCompatibility JavaVersion.VERSION_17
         targetCompatibility JavaVersion.VERSION_17
+    }
+
+    kotlinOptions {
+        jvmTarget = '17'
     }
 
 
@@ -122,9 +144,16 @@ android {
     lint {
         lintConfig file('lint.xml')
     }
+
+    testOptions {
+        // Lets the JVM tests touch classes that call android.util.Log and
+        // friends without dragging in a device or Robolectric.
+        unitTests.returnDefaultValues = true
+    }
     namespace 'com.osmium.sound.companion'
     buildFeatures {
         buildConfig true
+        compose true
     }
 
     // Exclude deprecated androidTest folder (uses old androidx.test APIs)

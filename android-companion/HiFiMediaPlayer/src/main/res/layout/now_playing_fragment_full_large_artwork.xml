@@ -22,10 +22,11 @@
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="fill_parent"
     android:layout_height="fill_parent"
-    android:paddingStart="8dp"
-    android:paddingEnd="8dp">
+    android:paddingStart="16dp"
+    android:paddingEnd="16dp"
+    android:background="?android:attr/colorBackground">
 
-    <ImageView
+    <com.google.android.material.imageview.ShapeableImageView
         android:id="@+id/album"
         style="@style/SqueezerWidget.NowPlaying.CoverArt"
         android:layout_width="0dp"
@@ -36,7 +37,7 @@
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         android:layout_marginVertical="8dp"
-        android:scaleType="fitCenter"
+        android:scaleType="centerCrop"
         tools:src="@drawable/icon_album"/>
 
     <include layout="@layout/now_playing_include"
