@@ -31,12 +31,19 @@ Item {
                      : Player.otaKind === "os" ? "settings.updates.overlay.titleOs" : Player.otaKind === "lyrion" ? "settings.updates.overlay.titleLyrion" : "settings.updates.overlay.titleAll")
             color: Theme.white; font.family: Theme.font; font.pixelSize: 30; font.bold: true
         }
-        Text { x: parent.cx - 300; y: parent.cy - 12; width: 600; wrapMode: Text.Wrap; maximumLineCount: 2; elide: Text.ElideRight; horizontalAlignment: Text.AlignHCenter; text: Player.otaMessage; color: Theme.wa(0.9); font.family: Theme.font; font.pixelSize: 18 }
+        Text { x: parent.cx - 300; y: parent.cy - 12; width: 600; wrapMode: Text.Wrap; maximumLineCount: 2; elide: Text.ElideRight; horizontalAlignment: Text.AlignHCenter; text: Player.otaMessage; color: Theme.wa(0.7); font.family: Theme.font; font.pixelSize: 18 }
         Rectangle {
             visible: !root.done && !root.error
             x: parent.cx - 224; y: parent.cy + 56; width: 448; height: 12; radius: 6; color: Theme.gray
-            Rectangle { width: parent.width * Math.max(0, Math.min(100, Player.otaPercent)) / 100; height: 12; radius: 6; color: Theme.gold
-                        Behavior on width { NumberAnimation { duration: 400; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.easeOut } } }
+            // riempimento bg-hifi-accent; senza percentuale la barra e' piena e pulsa (animate-pulse: 1 -> .5 -> 1 in 2 s)
+            Rectangle { width: Player.otaPercent > 0 ? parent.width * Math.max(0, Math.min(100, Player.otaPercent)) / 100 : parent.width; height: 12; radius: 6; color: Theme.accent
+                        Behavior on width { NumberAnimation { duration: 400; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.easeOut } }
+                        SequentialAnimation on opacity {
+                            running: root.active && Player.otaPercent <= 0 && !root.done && !root.error; loops: Animation.Infinite
+                            NumberAnimation { from: 1; to: 0.5; duration: 1000; easing.type: Easing.BezierSpline; easing.bezierCurve: [0.4, 0, 0.6, 1, 1, 1] }
+                            NumberAnimation { from: 0.5; to: 1; duration: 1000; easing.type: Easing.BezierSpline; easing.bezierCurve: [0.4, 0, 0.6, 1, 1, 1] }
+                            onRunningChanged: if (!running) parent.opacity = 1
+                        } }
         }
         Text { visible: !root.done && !root.error && Player.otaPercent > 0; width: parent.width; y: parent.cy + 80; height: 32; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter; text: Player.otaPercent + "%"; color: Theme.accent; font.family: Theme.font; font.pixelSize: 24; font.bold: true }
         Rectangle {

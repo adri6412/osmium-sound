@@ -9,7 +9,7 @@ Item {
     height: visible ? 48 : 0
     Rectangle {
         x: 12; y: 8; width: parent.width - 24; height: 40; radius: 8
-        color: Theme.goldA(0.15); border.width: 1; border.color: Theme.goldA(0.3)
+        color: Theme.goldA(0.1); border.width: 1; border.color: Theme.goldA(0.3)
         Icon { x: 12; anchors.verticalCenter: parent.verticalCenter; name: "disc"; size: 18; color: Theme.gold }
         Text { x: 42; y: 4; height: 18; width: ripBtn.x - 50; verticalAlignment: Text.AlignVCenter; elide: Text.ElideRight; text: Tr.t("player.cd.detected"); color: Theme.white; font.family: Theme.font; font.pixelSize: 14 }
         Text { x: 42; y: 22; height: 16; width: ripBtn.x - 50; verticalAlignment: Text.AlignVCenter; elide: Text.ElideRight; text: (root.cd ? root.cd.artist : "") + " — " + (root.cd ? root.cd.album : ""); color: Theme.silverA(0.7); font.family: Theme.font; font.pixelSize: 12 }

@@ -119,8 +119,8 @@ Item {
                     Row {
                         id: filterRow
                         spacing: 4; height: parent.height
-                        Icon { name: "sliders"; size: 13; color: filterRow.parent.filtered ? Theme.gold : Theme.silverA(0.6); anchors.verticalCenter: parent.verticalCenter }
-                        Text { anchors.verticalCenter: parent.verticalCenter; color: Theme.silverA(0.6); font.family: Theme.font; font.pixelSize: 11
+                        Icon { name: "filter"; size: 13; color: filterRow.parent.filtered ? Theme.gold : Theme.silverA(0.6); anchors.verticalCenter: parent.verticalCenter }
+                        Text { anchors.verticalCenter: parent.verticalCenter; color: Theme.silverA(0.6); font.family: Theme.font; font.pixelSize: 12
                                text: filterRow.parent.filtered ? Tr.tf("player.discover.genresCount", "count", String(root.includedCount)).replace("{total}", String(root.genres.length)) : Tr.t("player.discover.genresAll") }
                     }
                     Tap { grow: 8; onClicked: { root.genrePanel = !root.genrePanel; if (root.genrePanel && root.genState === 0) root.loadGenres() } }
@@ -130,11 +130,11 @@ Item {
             // pannello dei generi
             Rectangle {
                 visible: root.genrePanel
-                width: parent.width; height: gcol.height + 24; radius: 12; color: "transparent"; border.width: 1; border.color: Theme.border
+                width: parent.width; height: gcol.height + 24; radius: 12; color: Theme.surface; border.width: 1; border.color: Theme.border
                 Column {
                     id: gcol
                     x: 12; y: 12; width: parent.width - 24; spacing: 12
-                    Text { visible: root.genState !== 2; height: 16; verticalAlignment: Text.AlignVCenter; text: Tr.t(root.genState === 3 ? "player.discover.genresError" : "player.discover.genresLoading"); color: Theme.silverA(0.5); font.family: Theme.font; font.pixelSize: 11 }
+                    Text { visible: root.genState !== 2; height: 16; verticalAlignment: Text.AlignVCenter; text: Tr.t(root.genState === 3 ? "player.discover.genresError" : "player.discover.genresLoading"); color: Theme.silverA(0.5); font.family: Theme.font; font.pixelSize: 12 }
                     Row {
                         visible: root.genState === 2; spacing: 8
                         Pill { label: Tr.t("player.discover.genresSelectAll"); px: 11; padX: 8; height: 24; color: Theme.dark; onClicked: { Player.cmd(["randomplaygenreselectall", "1"]); root.genres = root.genres.map(function(g) { return { name: g.name, included: true } }) } }
@@ -150,7 +150,7 @@ Item {
                                 required property int index
                                 width: ptext.implicitWidth + 24 + 18; height: 28; radius: 14; color: Theme.dark
                                 Text { id: ptext; x: 12; anchors.verticalCenter: parent.verticalCenter; text: modelData.name; color: Theme.silver; font.family: Theme.font; font.pixelSize: 12 }
-                                Icon { x: parent.width - 18; anchors.verticalCenter: parent.verticalCenter; name: "trash-2"; size: 12; color: Theme.silverA(0.5) }
+                                Icon { x: parent.width - 18; anchors.verticalCenter: parent.verticalCenter; name: "trash-2"; size: 12; color: Theme.silver }
                                 Tap {
                                     onClicked: (m) => {
                                         if (m.x > width - 20) { root.presetDel = index; return }
@@ -167,7 +167,7 @@ Item {
                         width: parent.width; height: 32; radius: 8; color: Theme.dark
                         Text { x: 8; width: parent.width - 128; anchors.verticalCenter: parent.verticalCenter; elide: Text.ElideRight; color: Theme.white; font.family: Theme.font; font.pixelSize: 12
                                text: root.presetDel >= 0 && root.presetDel < root.presets.length ? Tr.tf("player.discover.genresPresetDeleteConfirm", "name", root.presets[root.presetDel].name) : "" }
-                        Text { anchors.right: parent.right; anchors.rightMargin: 30; anchors.verticalCenter: parent.verticalCenter; text: Tr.t("player.discover.genresPresetDelete"); color: Theme.red300; font.family: Theme.font; font.pixelSize: 12
+                        Text { anchors.right: parent.right; anchors.rightMargin: 30; anchors.verticalCenter: parent.verticalCenter; text: Tr.t("player.discover.genresPresetDelete"); color: Theme.red400; font.family: Theme.font; font.pixelSize: 12
                                Tap { grow: 8; onClicked: { var p = root.presets.slice(); p.splice(root.presetDel, 1); root.presets = p; root.presetDel = -1; root.savePresets() } } }
                     }
                     Flow {
@@ -198,6 +198,7 @@ Item {
                         Rectangle {
                             id: saveBtn
                             width: saveText.implicitWidth + 24; height: 34; radius: 8; color: svTap.mix(Theme.light, Theme.accent)
+                            opacity: root.presetDraft && root.presets.length < 8 ? 1 : 0.5     // disabled:opacity-50
                             Text { id: saveText; anchors.centerIn: parent; text: Tr.t("player.discover.genresPresetSaveAs"); color: Theme.white; font.family: Theme.font; font.pixelSize: 12 }
                             Tap { id: svTap; onClicked: {
                                 if (!root.presetDraft || root.presets.length >= 8) return
@@ -219,20 +220,21 @@ Item {
                         required property var modelData
                         width: (parent.width - 24) / 3; height: 88; radius: 12
                         color: mxTap.mix(Theme.surface, Theme.light); border.width: 1; border.color: Theme.border
+                        opacity: Player.connected ? 1 : 0.4                                    // disabled:opacity-40
                         Icon { anchors.horizontalCenter: parent.horizontalCenter; y: 16; name: modelData.icon; size: 24; color: Theme.gold }
                         Text { anchors.horizontalCenter: parent.horizontalCenter; y: 48; height: 16; verticalAlignment: Text.AlignVCenter; text: Tr.t(modelData.key); color: Theme.white; font.family: Theme.font; font.pixelSize: 12 }
                         Tap { id: mxTap; onClicked: { Player.cmd(["randomplay", modelData.mode]); root.msg = Tr.t("player.discover.mixStarted") } }
                     }
                 }
             }
-            Text { visible: root.msg !== ""; width: parent.width; height: 24; verticalAlignment: Text.AlignVCenter; text: root.msg; color: Theme.silverA(0.6); font.family: Theme.font; font.pixelSize: 11 }
+            Text { visible: root.msg !== ""; width: parent.width; height: 24; verticalAlignment: Text.AlignVCenter; text: root.msg; color: Theme.silverA(0.6); font.family: Theme.font; font.pixelSize: 12 }
             Item { width: 1; height: 20 }
             // ── Don't Stop The Music ────────────────────────────────────────
             Rectangle {
                 visible: root.dstmAvailable
                 width: parent.width; height: 56; radius: 12; color: Theme.surface; border.width: 1; border.color: Theme.border
                 readonly property bool on: root.dstmProvider !== ""
-                Icon { x: 16; anchors.verticalCenter: parent.verticalCenter; name: "repeat"; size: 18; color: parent.on ? Theme.gold : Theme.silverA(0.5) }
+                Icon { x: 16; anchors.verticalCenter: parent.verticalCenter; name: "infinity"; size: 18; color: parent.on ? Theme.gold : Theme.silverA(0.5) }
                 Text { x: 46; y: 10; height: 20; width: parent.width - 116; verticalAlignment: Text.AlignVCenter; text: Tr.t("player.discover.dstm"); color: Theme.white; font.family: Theme.font; font.pixelSize: 14; elide: Text.ElideRight }
                 Text { x: 46; y: 30; height: 16; width: parent.width - 116; verticalAlignment: Text.AlignVCenter; elide: Text.ElideRight; color: Theme.silverA(0.5); font.family: Theme.font; font.pixelSize: 11
                        text: parent.on ? Tr.tf("player.discover.dstmOn", "provider", root.dstmProvider) : Tr.t("player.discover.dstmOff") }
@@ -278,11 +280,11 @@ Item {
                 Icon { x: 16; y: 18; name: "scroll-text"; size: 15; color: Theme.gold }
                 Text { x: 40; y: 16; height: 20; width: parent.width - 80; verticalAlignment: Text.AlignVCenter; elide: Text.ElideRight; text: Tr.tf("player.discover.bio", "artist", root.bioArtist); color: Theme.white; font.family: Theme.font; font.pixelSize: 14 }
                 Text { anchors.right: parent.right; anchors.rightMargin: 16; y: 16; height: 20; verticalAlignment: Text.AlignVCenter; text: root.bioOpen ? "−" : "+"; color: Theme.silverA(0.5); font.family: Theme.font; font.pixelSize: 11 }
-                Text { id: bioText; x: 16; y: 44; width: parent.width - 32; wrapMode: Text.Wrap; text: root.bio; color: Theme.silverA(0.8); font.family: Theme.font; font.pixelSize: 12; lineHeight: 18; lineHeightMode: Text.FixedHeight
+                Text { id: bioText; x: 16; y: 44; width: parent.width - 32; wrapMode: Text.Wrap; text: root.bio; color: Theme.silverA(0.8); font.family: Theme.font; font.pixelSize: 12; lineHeight: 19.5; lineHeightMode: Text.FixedHeight
                        maximumLineCount: root.bioOpen ? 1000 : 3; elide: Text.ElideRight }
                 Tap { onClicked: root.bioOpen = !root.bioOpen }
             }
-            Text { visible: root.similar.length === 0 && root.bio === ""; width: parent.width; wrapMode: Text.Wrap; maximumLineCount: 3; text: Tr.t("player.discover.hint"); color: Theme.silverA(0.4); font.family: Theme.font; font.pixelSize: 11 }
+            Text { visible: root.similar.length === 0 && root.bio === ""; width: parent.width; wrapMode: Text.Wrap; maximumLineCount: 3; text: Tr.t("player.discover.hint"); color: Theme.silverA(0.4); font.family: Theme.font; font.pixelSize: 12 }
         }
         ScrollBar_ { flick: page; x: page.width - 3 }
     }

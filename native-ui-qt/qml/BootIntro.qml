@@ -31,11 +31,11 @@ Item {
         }
     }
     Rectangle { anchors.fill: parent; color: Theme.black; opacity: root.fading ? 0 : 1
-                Behavior on opacity { NumberAnimation { duration: 600; onRunningChanged: if (!running && root.fading) root.active = false } } }
+                Behavior on opacity { NumberAnimation { duration: 600; easing.type: Easing.BezierSpline; easing.bezierCurve: [0.25, 0.1, 0.25, 1, 1, 1]; onRunningChanged: if (!running && root.fading) root.active = false } } }
     Item {
         anchors.fill: parent
         opacity: root.fading ? 0 : 1
-        Behavior on opacity { NumberAnimation { duration: 600 } }
+        Behavior on opacity { NumberAnimation { duration: 600; easing.type: Easing.BezierSpline; easing.bezierCurve: [0.25, 0.1, 0.25, 1, 1, 1] } }   // transition: opacity 600ms ease
         // un anello di immagini precaricate: quella mostrata e le successive
         Repeater {
             model: root.nframes > 0 ? root.ring : 0

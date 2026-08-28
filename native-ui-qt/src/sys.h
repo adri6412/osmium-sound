@@ -53,6 +53,9 @@ public:
     // senza passare da una texture — vedi Icon.qml per il perche'.
     Q_INVOKABLE QString tintedIcon(const QString &name, const QColor &color);
     void setIconDir(const QString &dir) { m_iconDir = dir; }
+    // box-shadow CSS (blur, spread, colore) per un rettangolo con angoli
+    // `radius`: un PNG 9-patch pre-sfocato in cache, da usare con BoxShadow.qml
+    Q_INVOKABLE QString boxShadow(qreal radius, qreal blur, qreal spread, const QColor &color);
     qint64 lastInput() const { return m_lastInput; }
     void noteInput();
 

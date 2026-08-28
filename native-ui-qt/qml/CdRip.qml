@@ -78,6 +78,7 @@ Item {
         anchors.centerIn: parent
         radius: 16; color: Theme.panel; border.width: 1; border.color: Theme.border
         opacity: root.fade; scale: sc.value * root.closeScale
+        BoxShadow { z: -1; targetX: 0; targetY: 0; targetW: parent.width; targetH: parent.height; radius: 16; blur: 50; spread: -12; offsetY: 25; color: Theme.blackA(0.25) }   // shadow-2xl
         MouseArea { anchors.fill: parent }
         Icon { x: 20; y: 22; name: "disc"; size: 16; color: Theme.gold }
         Text { x: 44; y: 16; height: 28; verticalAlignment: Text.AlignVCenter; text: Tr.t("player.cd.ripTitle"); color: Theme.white; font.family: Theme.font; font.pixelSize: 14; font.bold: true }
@@ -93,15 +94,20 @@ Item {
             visible: card.busyView
             anchors.fill: parent
             readonly property real cy: height / 2
-            Spinner { visible: root.ripping; active: root.open && root.ripping; x: parent.width / 2 - 20; y: parent.cy - 100; radius: 20 }
+            // in Electron e' l'icona Disc di lucide (40 px, oro) che gira in 2 s, non un anello
+            Icon {
+                visible: root.ripping; x: parent.width / 2 - 20; y: parent.cy - 100; name: "disc"; size: 40; color: Theme.gold
+                RotationAnimation on rotation { from: 0; to: 360; duration: 2000; loops: Animation.Infinite; running: root.open && root.ripping }
+            }
             Text { x: 24; y: parent.cy - 30; width: parent.width - 48; height: 36; wrapMode: Text.Wrap; maximumLineCount: 2; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter; text: root.msg; color: Theme.white; font.family: Theme.font; font.pixelSize: 14 }
             Rectangle {
                 visible: root.ripping
                 x: 40; y: parent.cy + 16; width: parent.width - 80; height: 8; radius: 4; color: Theme.wa(0.1)
-                Rectangle { width: parent.width * Math.max(0, Math.min(100, root.progress)) / 100; height: 8; radius: 4; color: Theme.gold }
+                Rectangle { width: parent.width * Math.max(0, Math.min(100, root.progress)) / 100; height: 8; radius: 4
+                            gradient: Gradient { orientation: Gradient.Horizontal; GradientStop { position: 0; color: Theme.gold } GradientStop { position: 1; color: Theme.yellow400 } } }   // from-hifi-gold to-yellow-400
             }
             Text { visible: root.ripping; width: parent.width; y: parent.cy + 32; height: 18; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter; text: Tr.tf("player.cd.ripProgress", "track", String(root.curTrack)).replace("{total}", String(root.total)); color: Theme.silverA(0.6); font.family: Theme.font; font.pixelSize: 12 }
-            Text { visible: root.state === "done"; width: parent.width; y: parent.cy + 16; height: 24; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter; text: Tr.t("player.cd.ripDone"); color: Theme.emerald; font.family: Theme.font; font.pixelSize: 14 }
+            Text { visible: root.state === "done"; width: parent.width; y: parent.cy + 16; height: 24; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter; text: Tr.t("player.cd.ripDone"); color: "#34d399"; font.family: Theme.font; font.pixelSize: 14 }
             Text { visible: root.state === "error"; x: 24; y: parent.cy + 16; width: parent.width - 48; wrapMode: Text.Wrap; maximumLineCount: 2; horizontalAlignment: Text.AlignHCenter; text: root.msg || Tr.t("player.cd.ripError"); color: Theme.red300; font.family: Theme.font; font.pixelSize: 14 }
             Rectangle {
                 visible: root.state === "done"
@@ -133,7 +139,7 @@ Item {
                     }
                 }
             }
-            Text { visible: !root.dests.length; x: 20; y: parent.height - parent.foot + 4; height: 36; verticalAlignment: Text.AlignVCenter; text: Tr.t("player.cd.noDestination"); color: "#fcd34d"; font.family: Theme.font; font.pixelSize: 12 }
+            Text { visible: !root.dests.length; x: 20; y: parent.height - parent.foot + 4; height: 36; verticalAlignment: Text.AlignVCenter; text: Tr.t("player.cd.noDestination"); color: Qt.rgba(252 / 255, 211 / 255, 77 / 255, 0.9); font.family: Theme.font; font.pixelSize: 12 }
             Item {
                 visible: root.dests.length > 0
                 x: 20; y: parent.height - parent.foot + 4; width: parent.width - 40; height: 36
@@ -154,7 +160,8 @@ Item {
             }
             Rectangle {
                 x: ejectBtn.x + ejectBtn.width + 8; y: ejectBtn.y; width: parent.width - 20 - x; height: 42; radius: 8
-                color: root.dests.length ? stTap.mix(Theme.gold, "#ca8a04") : Theme.goldA(0.4)
+                color: stTap.mix(Theme.gold, "#ca8a04")
+                opacity: root.dests.length ? 1 : 0.4              // disabled:opacity-40 su tutto, testo compreso
                 Text { anchors.centerIn: parent; text: Tr.t("player.cd.start"); color: Theme.black; font.family: Theme.font; font.pixelSize: 14; font.bold: true }
                 Tap { id: stTap; enabled: root.dests.length > 0; onClicked: root.startRip() }
             }

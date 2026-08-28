@@ -3,6 +3,7 @@
 // Now Playing (allora si toglie solo con un tocco). Dissolvenza di 1 s, sfondo
 // che si sposta fra 5 posizioni ogni 45 s, due punti che lampeggiano.
 import QtQuick
+import QtQuick.Shapes
 import Hifi.Ui
 
 Item {
@@ -49,15 +50,29 @@ Item {
     Timer { interval: 500; repeat: true; running: root.active; triggeredOnStart: true; onTriggered: root.now = new Date() }
 
     Rectangle { anchors.fill: parent; color: Qt.rgba(0, 0, 0, root.fade) }
-    Rectangle {
-        x: -parent.width / 2 + root.dx * parent.width; y: -parent.height / 2 + root.dy * parent.height
+    // bg-gradient-to-br su un elemento inset:-50% (largo il doppio della tela): la
+    // deriva x:'8%' e' relativa a QUELLO, quindi vale il 16 % della tela
+    Item {
+        id: driftBg
+        x: -parent.width / 2 + root.dx * parent.width * 2; y: -parent.height / 2 + root.dy * parent.height * 2
         width: parent.width * 2; height: parent.height * 2
         opacity: 0.2 * root.fade
-        gradient: Gradient {
-            orientation: Gradient.Vertical
-            GradientStop { position: 0; color: Theme.dark }
-            GradientStop { position: 0.5; color: Theme.black }
-            GradientStop { position: 1; color: Theme.gray }
+        Shape {
+            anchors.fill: parent
+            ShapePath {
+                strokeWidth: -1
+                fillGradient: LinearGradient {
+                    x1: 0; y1: 0; x2: driftBg.width; y2: driftBg.height
+                    GradientStop { position: 0; color: Theme.dark }
+                    GradientStop { position: 0.5; color: Theme.black }
+                    GradientStop { position: 1; color: Theme.gray }
+                }
+                startX: 0; startY: 0
+                PathLine { x: driftBg.width; y: 0 }
+                PathLine { x: driftBg.width; y: driftBg.height }
+                PathLine { x: 0; y: driftBg.height }
+                PathLine { x: 0; y: 0 }
+            }
         }
     }
     Item {
@@ -87,6 +102,7 @@ Item {
     }
     // il tocco sveglia sempre; il movimento del mouse solo se non e' voluto
     MouseArea {
+        cursorShape: Qt.BlankCursor                        // cursor-none
         anchors.fill: parent
         hoverEnabled: !root.manual
         onReleased: if (Sys.now() - root.shownAt > 400) root.hide()

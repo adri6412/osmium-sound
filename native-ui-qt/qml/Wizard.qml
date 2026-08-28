@@ -102,9 +102,10 @@ Item {
         property real side: 64
         property real iconPx: 32
         width: side; height: side
-        Rectangle { id: glowSrc; anchors.fill: parent; radius: 16; color: Theme.goldA(0.3); visible: false; layer.enabled: true }
-        MultiEffect { source: glowSrc; anchors.fill: parent; blurEnabled: true; blur: 0.6; blurMax: 40; autoPaddingEnabled: true }
-        Rectangle { anchors.fill: parent; radius: 16; gradient: Gradient { orientation: Gradient.Horizontal; GradientStop { position: 0; color: Theme.gold } GradientStop { position: 1; color: "#ca8a04" } } }
+        // shadow-[0_0_40px_rgba(212,175,55,0.3)]: box-shadow esatto, non la sfocatura di MultiEffect
+        BoxShadow { targetX: 0; targetY: 0; targetW: parent.width; targetH: parent.height; radius: 16; blur: 40; offsetY: 0; color: Theme.goldA(0.3) }
+        // bg-gradient-to-br from-hifi-gold to-yellow-600: diagonale
+        DiagonalFallback { anchors.fill: parent; radius: 16; from: Theme.gold; to: "#ca8a04" }
         Icon { anchors.centerIn: parent; name: "disc-3"; size: parent.iconPx; color: Theme.black }
     }
     component BigButton: Rectangle {
@@ -121,8 +122,12 @@ Item {
     component QrCorner: Rectangle {
         readonly property string value: "http://" + (root.ip || "hifiplayer.local")
         x: 1024 - 16 - width; y: 64; width: 124; height: 124 + 20; radius: 12; color: Theme.white
+        // shadow-lg: 0 10px 15px -3px + 0 4px 6px -4px, nero al 10 %
+        BoxShadow { z: -1; targetX: 0; targetY: 0; targetW: parent.width; targetH: parent.height; radius: 12; blur: 15; spread: -3; offsetY: 10; color: Theme.blackA(0.1) }
+        BoxShadow { z: -1; targetX: 0; targetY: 0; targetW: parent.width; targetH: parent.height; radius: 12; blur: 6; spread: -4; offsetY: 4; color: Theme.blackA(0.1) }
         QrCode { x: 10; y: 10; width: 104; height: 104; text: parent.value }
-        Text { x: 4; y: parent.height - 20; width: parent.width - 8; height: 16; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter; text: parent.value; elide: Text.ElideMiddle; color: Qt.rgba(0, 0, 0, 0.7); font.family: Theme.font; font.pixelSize: 10 }
+        Icon { x: 8; y: parent.height - 18; name: "smartphone"; size: 11; color: Theme.blackA(0.7) }   // icona Smartphone accanto all'indirizzo
+        Text { x: 20; y: parent.height - 20; width: parent.width - 24; height: 16; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter; text: parent.value; elide: Text.ElideMiddle; color: Qt.rgba(0, 0, 0, 0.7); font.family: Theme.font; font.pixelSize: 10 }
     }
 
     Rectangle { anchors.fill: parent; color: Theme.dark }
@@ -151,7 +156,7 @@ Item {
                     Text { id: addrText; y: 30; width: parent.width; height: 34; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter; text: "http://" + (root.ip || "hifiplayer.local"); color: Theme.black; font.family: Theme.font; font.pixelSize: 24; font.bold: true }
                 }
                 Rectangle {
-                    width: 380; height: tips.height + 24; radius: 12; color: Theme.goldA(0.15); border.width: 1; border.color: Theme.goldA(0.3)
+                    width: 380; height: tips.height + 24; radius: 12; color: Theme.goldA(0.1); border.width: 1; border.color: Theme.goldA(0.3)
                     Column { id: tips; x: 16; y: 12; width: parent.width - 32; spacing: 4
                              Text { text: Tr.up("wizard.qr.tipsLabel"); color: Theme.gold; font.family: Theme.font; font.pixelSize: 11; font.bold: true; font.letterSpacing: 0.5 }
                              Text { width: parent.width; wrapMode: Text.Wrap; text: Tr.t("wizard.qr.addressHint"); color: Theme.wa(0.9); font.family: Theme.font; font.pixelSize: 13; lineHeight: 18; lineHeightMode: Text.FixedHeight }
@@ -163,7 +168,11 @@ Item {
                 visible: !root.connected
                 x: 512 - 190; y: parent.ty0 + 182; width: 380
                 readonly property real formH: root.pick >= 0 ? 12 + 44 + 8 + 40 : 32
-                readonly property real listH: Math.max(42, Math.min(root.nets.length * 48, 600 - 16 - y - formH))
+                readonly property real listH: Math.max(44, Math.min(root.nets.length * 44, 600 - 16 - y - formH - 20))
+                // la scheda: bg-hifi-dark border border-white/10 rounded-2xl p-5
+                Rectangle { x: -20; y: -20; width: parent.width + 40; height: parent.listH + parent.formH + 40; radius: 16; color: Theme.dark; border.width: 1; border.color: Theme.wa(0.1) }
+                // la cornice dell'elenco: rounded-lg border border-white/10
+                Rectangle { visible: root.nets.length > 0; width: parent.width; height: parent.listH; radius: 8; color: "transparent"; border.width: 1; border.color: Theme.wa(0.1) }
                 Item {
                     visible: root.nets.length === 0
                     width: parent.width; height: 60
@@ -173,18 +182,23 @@ Item {
                 ListView {
                     id: netList
                     visible: root.nets.length > 0
-                    width: parent.width; height: parent.listH; clip: true; spacing: 6
+                    width: parent.width; height: parent.listH; clip: true; spacing: 0
                     model: root.nets
                     boundsBehavior: Flickable.StopAtBounds
                     delegate: Rectangle {
                         required property var modelData
                         required property int index
                         readonly property bool on: index === root.pick
-                        width: netList.width; height: 42; radius: 8
-                        color: on ? Theme.goldA(0.15) : Theme.surface; border.width: on ? 1 : 0; border.color: Theme.gold
+                        // righe senza fondo, divise da divide-white/5; la scelta e' oro/10 senza bordo
+                        width: netList.width; height: 44; radius: 8
+                        color: on ? Theme.goldA(0.1) : "transparent"
+                        Rectangle { visible: index < root.nets.length - 1; x: 0; y: 43; width: parent.width; height: 1; color: Theme.wa(0.05) }
                         Icon { x: 10; anchors.verticalCenter: parent.verticalCenter; name: "wifi"; size: 16; color: parent.on ? Theme.gold : Theme.silverA(0.6) }
                         Text { x: 36; width: parent.width - 86; anchors.verticalCenter: parent.verticalCenter; elide: Text.ElideRight; text: modelData.ssid; color: parent.on ? Theme.gold : Theme.white; font.family: Theme.font; font.pixelSize: 14 }
-                        Text { anchors.right: parent.right; anchors.rightMargin: 12; anchors.verticalCenter: parent.verticalCenter; text: modelData.signal + "%"; color: Theme.silverA(0.4); font.family: Theme.font; font.pixelSize: 11 }
+                        // lucchetto (12 px, opacity-60) per le reti protette, al posto del %
+                        Icon { anchors.right: parent.right; anchors.rightMargin: 12; anchors.verticalCenter: parent.verticalCenter; name: "lock"; size: 12
+                               visible: modelData.security !== "" && modelData.security !== "--" && modelData.security.toLowerCase() !== "none"
+                               color: parent.on ? Theme.goldA(0.6) : Theme.silverA(0.6) }
                         Tap { onClicked: { root.pick = root.pick === index ? -1 : index; root.pass = ""; root.wifiErr = "" } }
                     }
                 }
@@ -192,7 +206,7 @@ Item {
                     id: passField
                     visible: root.pick >= 0
                     y: parent.listH + 12; width: parent.width; height: 44; textSize: 16; padding: 14
-                    color: Theme.dark; restBorder: Theme.gold; password: true
+                    color: Theme.wa(0.05); restBorder: Theme.wa(0.1); focusColor: Theme.goldA(0.5); password: true   // bg-white/5, border-white/10, focus oro/50
                     text: root.pass; placeholder: Tr.t("wizard.wifi.passwordPlaceholder")
                     onTextEdited: (t) => root.pass = t
                     onAccepted: root.wifiConnect()
@@ -202,7 +216,7 @@ Item {
                 Text { visible: root.pick < 0 && !root.wifiErr && !(root.perror && root.stage === "failed"); y: parent.listH + 10; width: parent.width; height: 26; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter; text: Tr.t("wizard.wifi.rescan"); color: Theme.silverA(0.7); font.family: Theme.font; font.pixelSize: 13
                        Tap { grow: 10; onClicked: Api.post(Api.apiBase + "/provision_wifi_rescan", {}, function() { root.pollProvision() }) } }
             }
-            Text { visible: root.wifiErr !== "" || (root.perror !== "" && root.stage === "failed"); x: 512 - 190; y: 600 - 38; width: 380; height: 24; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter; text: root.wifiErr || root.perror; color: Theme.red300; font.family: Theme.font; font.pixelSize: 12 }
+            Text { visible: root.wifiErr !== "" || (root.perror !== "" && root.stage === "failed"); x: 512 - 190; y: 600 - 38; width: 380; height: 24; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter; text: root.wifiErr || root.perror; color: Theme.red400; font.family: Theme.font; font.pixelSize: 12 }
         }
         // ── installer ───────────────────────────────────────────────────────
         Item {
@@ -217,6 +231,7 @@ Item {
                 visible: !parent.busy && (root.step === 1 || root.step === 2)
                 anchors.fill: parent
                 Rectangle { y: 47; width: parent.width; height: 1; color: Theme.borderA(0.6) }
+                Glow { x: 24 + 4 - outer; y: 20 + 4 - outer; radius: 4; blur: 6; color: Theme.goldA(0.8) }   // shadow 0 0 6px oro/80
                 Rectangle { x: 24; y: 20; width: 8; height: 8; radius: 4; color: Theme.gold }
                 Text { x: 40; y: 0; height: 48; verticalAlignment: Text.AlignVCenter; text: "OSMIUM SOUND"; color: Theme.silverA(0.7); font.family: Theme.font; font.pixelSize: 11; font.bold: true; font.letterSpacing: 2.2 }
                 Rectangle { y: 600 - 56; width: parent.width; height: 1; color: Theme.borderA(0.6) }
@@ -269,7 +284,7 @@ Item {
                     y: parent.y0 + 86; width: parent.width; spacing: 10
                     Text { width: parent.width; height: 24; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter; text: root.disksLoading ? "Looking for disks…" : (root.disksErr || "No disks available."); color: Theme.silverA(0.6); font.family: Theme.font; font.pixelSize: 13 }
                     Spinner { visible: root.disksLoading; active: root.active && root.mode === 2 && root.step === 1; anchors.horizontalCenter: parent.horizontalCenter; radius: 12; thickness: 3 }
-                    Rectangle { visible: !root.disksLoading; anchors.horizontalCenter: parent.horizontalCenter; width: 140; height: 34; radius: 10; color: rfTap.mix(Theme.surface, Theme.light)
+                    Rectangle { visible: !root.disksLoading; anchors.horizontalCenter: parent.horizontalCenter; width: 140; height: 34; radius: 12; color: rfTap.mix(Theme.surface, Theme.light)
                                 Text { anchors.centerIn: parent; text: "Refresh list"; color: Theme.white; font.family: Theme.font; font.pixelSize: 13 }
                                 Tap { id: rfTap; onClicked: root.readDisks() } }
                 }
@@ -299,7 +314,7 @@ Item {
                 readonly property var dk: root.sel >= 0 && root.sel < root.disks.length ? root.disks[root.sel] : { path: "", model: "" }
                 Icon { x: 512 - 20; y: parent.y0; name: "alert-circle"; size: 40; color: "#fbbf24" }
                 Text { y: parent.y0 + 56; width: parent.width; height: 32; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter; text: "Confirm installation?"; color: Theme.white; font.family: Theme.font; font.pixelSize: 24; font.bold: true }
-                Rectangle { x: 512 - 256; y: parent.y0 + 104; width: 512; height: 92; radius: 16; color: Qt.rgba(0x78/255, 0x35/255, 0x0f/255, 0.16); border.width: 1; border.color: Qt.rgba(0xf5/255, 0x9e/255, 0x0b/255, 0.3)
+                Rectangle { x: 512 - 256; y: parent.y0 + 104; width: 512; height: 92; radius: 16; color: Qt.rgba(0x78/255, 0x35/255, 0x0f/255, 0.1); border.width: 1; border.color: Qt.rgba(0xf5/255, 0x9e/255, 0x0b/255, 0.3)
                             Text { x: 20; y: 18; width: parent.width - 40; height: 56; wrapMode: Text.Wrap; maximumLineCount: 3; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter
                                    text: "ALL DATA on " + (parent.parent.dk.model || parent.parent.dk.path) + " (" + parent.parent.dk.path + ") will be permanently erased. This cannot be undone."; color: "#fde68a"; font.family: Theme.font; font.pixelSize: 13 } }
                 BigButton { x: 512 - 256; y: parent.y0 + 220; width: 512; color: "#d97706"; fg: Theme.white; label: "Erase and install"

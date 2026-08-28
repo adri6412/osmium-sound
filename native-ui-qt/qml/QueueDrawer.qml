@@ -17,6 +17,7 @@ Rectangle {
     signal close()
     signal save()
     color: Theme.panel
+    BoxShadow { z: -1; targetX: 0; targetY: 0; targetW: parent.width; targetH: parent.height; radius: 0; blur: 50; spread: -12; offsetY: 25; color: Theme.blackA(0.25) }   // shadow-2xl
     Rectangle { width: 1; height: parent.height; color: Theme.border }
 
     function load() {
@@ -84,7 +85,7 @@ Rectangle {
                 x: row.swipeDx; y: row.dragDy; width: parent.width; height: parent.height; radius: 8
                 color: row.current ? Theme.goldA(0.15) : Theme.surface
                 border.width: row.current ? 1 : 0; border.color: Theme.goldA(0.3)
-                Icon { x: 12; anchors.verticalCenter: parent.verticalCenter; name: "grip-vertical"; size: 15; color: Theme.silverA(0.4) }
+                Icon { x: 12; anchors.verticalCenter: parent.verticalCenter; name: "grip-vertical"; size: 15; color: dragRow.active && dragRow.cur === row.index ? Theme.white : Theme.silverA(0.4) }   // active:text-white
                 Text {
                     x: 31; width: 24; anchors.verticalCenter: parent.verticalCenter; horizontalAlignment: Text.AlignHCenter
                     text: row.current ? "▶" : String(row.index + 1)
@@ -134,7 +135,7 @@ Rectangle {
         // barra di scorrimento 3 px #333
         Rectangle {
             visible: list.contentHeight > list.height
-            x: list.width - 3; width: 3; radius: 1; color: "#333333"
+            x: list.width - 3; width: 3; radius: 2; color: "#333333"
             height: Math.max(20, list.height * list.height / Math.max(1, list.contentHeight))
             y: (list.height - height) * (list.contentY / Math.max(1, list.contentHeight - list.height))
         }
@@ -196,19 +197,20 @@ Rectangle {
         Rectangle {
             id: saveBtn
             x: 12; y: 12; width: parent.width - 24 - 8 - 108; height: 42; radius: 8
+            // disabled:opacity-40 su TUTTO il pulsante: fondo, bordo, icona e testo al 40 %
             color: parent.has ? saveTap.mix(Theme.surface, Theme.light) : Qt.rgba(0x16/255, 0x16/255, 0x16/255, 0.4)
-            border.width: 1; border.color: Theme.border
+            border.width: 1; border.color: parent.has ? Theme.border : Theme.borderA(0.4)
             Row {
                 anchors.centerIn: parent; spacing: 8
-                Icon { name: "save"; size: 15; color: saveBtn.parent.has ? Theme.white : Theme.silverA(0.4); anchors.verticalCenter: parent.verticalCenter }
-                Text { text: Tr.t("player.saveAsPlaylist"); color: saveBtn.parent.has ? Theme.white : Theme.silverA(0.4); font.family: Theme.font; font.pixelSize: 14; anchors.verticalCenter: parent.verticalCenter }
+                Icon { name: "save"; size: 15; color: saveBtn.parent.has ? Theme.white : Theme.wa(0.4); anchors.verticalCenter: parent.verticalCenter }
+                Text { text: Tr.t("player.saveAsPlaylist"); color: saveBtn.parent.has ? Theme.white : Theme.wa(0.4); font.family: Theme.font; font.pixelSize: 14; anchors.verticalCenter: parent.verticalCenter }
             }
             Tap { id: saveTap; enabled: saveBtn.parent.has; onClicked: root.save() }
         }
         Rectangle {
             id: clearBtn
             x: parent.width - 12 - 108; y: 12; width: 108; height: 42; radius: 8
-            color: Theme.redA(parent.has ? 0.1 : 0.04); border.width: 1; border.color: Theme.redA(0.2)
+            color: Theme.redA(parent.has ? 0.1 : 0.04); border.width: 1; border.color: Theme.redA(parent.has ? 0.2 : 0.08)
             Row {
                 anchors.centerIn: parent; spacing: 8
                 Icon { name: "trash-2"; size: 15; color: clearBtn.parent.has ? Theme.red300 : Qt.rgba(0xfc/255, 0xa5/255, 0xa5/255, 0.4); anchors.verticalCenter: parent.verticalCenter }

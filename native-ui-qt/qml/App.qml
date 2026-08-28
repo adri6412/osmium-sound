@@ -105,9 +105,9 @@ Item {
     // ─── strati sovrapposti ────────────────────────────────────────────────
     Wizard { id: wizard; anchors.fill: parent; devScale: app.devicePixelScale }
     Dialogs { id: dialogs; anchors.fill: parent }
-    Toast { id: toast; anchors.fill: parent }
     OtaOverlay { id: ota; anchors.fill: parent }
     CdRip { id: cdrip; anchors.fill: parent }
+    Toast { id: toast; anchors.fill: parent }             // z-[10050]: sopra CD (z-70) e aggiornamento
     VirtualKeyboard { id: vk; anchors.fill: parent }
     Screensaver {
         id: screensaver

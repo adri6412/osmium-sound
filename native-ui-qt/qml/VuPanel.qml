@@ -26,14 +26,16 @@ Item {
             required property int index
             x: root.px0 + (index === 0 ? 335 : 944) * root.ps
             y: root.py0 + 461 * root.ps
-            Rectangle {                              // l'ago: 0,003 x 275 dell'artwork
-                width: 0.003 * 1280 * root.ps
+            Item {                                   // l'ago: 0,3 % dell'artwork ma almeno 2 punti (minWidth 2px), alto 275
+                id: needle
+                width: Math.max(2, 0.003 * 1280 * root.ps)
                 height: 275 * root.ps
                 x: -width / 2; y: -height
-                color: "#111111"
-                antialiasing: true
                 transformOrigin: Item.Bottom
                 rotation: index === 0 ? Vu.leftDeg : Vu.rightDeg
+                // shadow-[1px_0_3px_rgba(0,0,0,0.6)]: gira con l'ago
+                BoxShadow { targetX: 0; targetY: 0; targetW: needle.width; targetH: needle.height; radius: 0; blur: 3; offsetX: 1; offsetY: 0; color: Qt.rgba(0, 0, 0, 0.6) }
+                Rectangle { anchors.fill: parent; color: "#111111"; antialiasing: true }
             }
             Rectangle {                              // cappuccio del perno
                 width: 0.014 * 1280 * root.ps; height: width

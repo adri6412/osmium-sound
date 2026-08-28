@@ -97,17 +97,17 @@ Item {
             Text { anchors.right: parent.right; anchors.verticalCenter: parent.verticalCenter; text: Player.formatTime(Player.duration); color: Theme.silverA(0.5); font.family: Theme.mono; font.pixelSize: 10 }
         }
         Item { width: 1; height: 4 }
-        Item {                                         // barra
+        Item {                                         // barra: h-[3px] rounded-full, traccia bianco/5
             id: bar
-            width: parent.width; height: 4
-            Rectangle { anchors.fill: parent; radius: 2; color: Theme.wa(0.12) }
-            Item {
+            width: parent.width; height: 3
+            // (in Electron `bg-white/8` non esiste in Tailwind 3.3: resta il figlio bianco/5)
+            Rectangle { anchors.fill: parent; radius: 1.5; color: Theme.wa(0.05) }
+            // il riempimento e' scalato con scaleX: la rampa oro -> giallo si comprime
+            // e il giallo sta sempre sul bordo destro del riempimento
+            Rectangle {
                 width: Player.duration > 0 ? parent.width * Math.max(0, Math.min(1, Player.elapsed / Player.duration)) : 0
-                height: parent.height; clip: true
-                Rectangle {
-                    width: bar.width; height: parent.height; radius: 2
-                    gradient: Gradient { orientation: Gradient.Horizontal; GradientStop { position: 0; color: Theme.gold } GradientStop { position: 1; color: Theme.yellow400 } }
-                }
+                height: parent.height; radius: 1.5
+                gradient: Gradient { orientation: Gradient.Horizontal; GradientStop { position: 0; color: Theme.gold } GradientStop { position: 1; color: Theme.yellow400 } }
             }
             MouseArea { anchors.fill: parent; anchors.topMargin: -10; anchors.bottomMargin: -10; onClicked: (m) => Player.seekFraction(m.x / width) }
         }
@@ -145,6 +145,7 @@ Item {
     Item {
         id: secondary
         y: transport.y + 52 + 6; width: 340; height: 32
+        opacity: Player.connected ? 1 : 0.3            // disabled:opacity-30 senza player
         Item {
             x: 84; width: 28; height: 28
             Icon { anchors.centerIn: parent; name: "shuffle"; size: 16; color: Player.shuffle > 0 ? Theme.gold : shTap.mix(Theme.silverA(0.5), Theme.white) }
@@ -180,8 +181,10 @@ Item {
         Item {
             id: volBar
             x: 38; y: 14.5; width: 254; height: 3
-            Rectangle { anchors.fill: parent; radius: 2; color: Theme.border }
-            Rectangle { x: parent.width * volume.frac - 6.5; y: -5; width: 13; height: 13; radius: 6.5; color: Player.volumeFixed ? Theme.silverA(0.3) : Theme.gold }
+            Rectangle { anchors.fill: parent; radius: 2; color: Player.volumeFixed ? Theme.gray : Theme.border }   // .vol-slider:disabled -> #1a1a1a
+            // pomello: box-shadow 0 0 5px oro/50 (tolto se disabilitato, dove il pomello e' #555 pieno)
+            Glow { visible: !Player.volumeFixed; x: parent.width * volume.frac - outer; y: 1.5 - outer; radius: 6.5; blur: 5; color: Theme.goldA(0.5) }
+            Rectangle { x: parent.width * volume.frac - 6.5; y: -5; width: 13; height: 13; radius: 6.5; color: Player.volumeFixed ? "#555555" : Theme.gold }
             MouseArea {
                 anchors.fill: parent; anchors.margins: -12
                 enabled: !Player.volumeFixed

@@ -20,6 +20,9 @@ Item {
             font.family: Theme.font; font.pixelSize: 10; font.bold: true
         }
     }
+    // shadow-lg della bolla (48 px): 0 10px 15px -3px + 0 4px 6px -4px, nero al 10 %
+    BoxShadow { visible: root.down; targetX: -56; targetY: root.ratio * root.height - 24; targetW: 48; targetH: 48; radius: 24; blur: 15; spread: -3; offsetY: 10; color: Theme.blackA(0.1) }
+    BoxShadow { visible: root.down; targetX: -56; targetY: root.ratio * root.height - 24; targetW: 48; targetH: 48; radius: 24; blur: 6; spread: -4; offsetY: 4; color: Theme.blackA(0.1) }
     Rectangle {                                    // la bolla con la lettera
         visible: root.down
         x: -8 - 48; y: root.ratio * root.height - 24; width: 48; height: 48; radius: 24; color: Theme.gold

@@ -103,7 +103,7 @@ Item {
 
     Rectangle {
         anchors.fill: parent
-        color: Qt.rgba(0, 0, 0, 0.7 * root.fade)
+        color: Qt.rgba(0, 0, 0, (root.kind === 5 ? 0.8 : 0.7) * root.fade)   // bg-black/70, formattazione bg-black/80
         MouseArea { anchors.fill: parent; onClicked: root.backdrop() }
     }
 
@@ -120,6 +120,7 @@ Item {
         border.width: 1; border.color: root.kind === 4 ? Theme.wa(0.1) : Theme.accent
         opacity: root.fade
         scale: sc.value * root.closeScale
+        BoxShadow { z: -1; targetX: 0; targetY: 0; targetW: parent.width; targetH: parent.height; radius: 16; blur: 50; spread: -12; offsetY: 25; color: Theme.blackA(0.25) }   // shadow-2xl
         MouseArea { anchors.fill: parent }
 
         Item {
@@ -227,11 +228,11 @@ Item {
                             required property int index
                             readonly property bool sel: index === root.wifiSel
                             width: wifiList.width; height: 36
-                            Rectangle { anchors.fill: parent; color: Theme.goldA(0.15); visible: parent.sel }
-                            Rectangle { visible: index > 0; width: parent.width; height: 1; color: Theme.wa(0.1) }
+                            Rectangle { anchors.fill: parent; color: Theme.goldA(0.1); visible: parent.sel }        // bg-hifi-gold/10
+                            Rectangle { visible: index > 0; width: parent.width; height: 1; color: Theme.wa(0.05) }   // divide-white/5
                             Icon { x: 12; anchors.verticalCenter: parent.verticalCenter; name: "wifi"; size: 14; color: parent.sel ? Theme.gold : Theme.silver }
                             Text { x: 32; width: parent.width - 60; anchors.verticalCenter: parent.verticalCenter; text: modelData.ssid || ""; elide: Text.ElideRight; color: parent.sel ? Theme.gold : Theme.white; font.family: Theme.font; font.pixelSize: 14 }
-                            Icon { visible: !!modelData.security; x: parent.width - 20; anchors.verticalCenter: parent.verticalCenter; name: "lock"; size: 12; color: Theme.silverA(0.6) }
+                            Icon { visible: !!modelData.security; x: parent.width - 20; anchors.verticalCenter: parent.verticalCenter; name: "lock"; size: 12; color: parent.sel ? Theme.goldA(0.6) : Theme.silverA(0.6) }   // opacity-60 sul colore ereditato
                             Tap { onClicked: { root.wifiSel = index; root.ssid = modelData.ssid || ""; root.err = "" } }
                         }
                     }
@@ -241,7 +242,7 @@ Item {
                     id: ssidField
                     width: parent.width; height: 40; textSize: 14; padding: 12
                     text: root.ssid; placeholder: Tr.t("wizard.wifi.title")
-                    color: Theme.wa(0.05); restBorder: Theme.wa(0.1)
+                    color: Theme.wa(0.05); restBorder: Theme.wa(0.1); focusColor: Theme.goldA(0.5)   // focus:border-hifi-gold/50
                     onTextEdited: (t) => root.ssid = t
                 }
                 Item { width: 1; height: 8 }
@@ -249,21 +250,23 @@ Item {
                     id: passField
                     width: parent.width; height: 40; textSize: 14; padding: 12
                     text: root.pass; placeholder: Tr.t("wizard.wifi.passwordPlaceholder"); password: true
-                    color: Theme.wa(0.05); restBorder: Theme.wa(0.1)
+                    color: Theme.wa(0.05); restBorder: Theme.wa(0.1); focusColor: Theme.goldA(0.5)
                     onTextEdited: (t) => root.pass = t
                 }
-                Text { visible: root.err !== ""; width: parent.width; height: 20; verticalAlignment: Text.AlignVCenter; text: root.err; color: Theme.red300; font.family: Theme.font; font.pixelSize: 12 }
+                Text { visible: root.err !== ""; width: parent.width; height: 20; verticalAlignment: Text.AlignVCenter; text: root.err; color: Theme.red400; font.family: Theme.font; font.pixelSize: 12 }
                 Item { width: 1; height: 12 }
                 Row {
                     width: parent.width; spacing: 8
                     Rectangle {
-                        width: (parent.width - 8) / 2; height: 40; radius: 8; color: wcTap.mix(Theme.wa(0.05), Theme.wa(0.1)); border.width: 1; border.color: Theme.wa(0.1)
-                        Text { anchors.centerIn: parent; text: Tr.t("common.cancel"); color: Theme.white; font.family: Theme.font; font.pixelSize: 14 }
+                        // "Annulla": fondo trasparente, bordo bianco/10, testo silver
+                        width: (parent.width - 8) / 2; height: 40; radius: 8; color: wcTap.mix(Qt.rgba(1, 1, 1, 0), Theme.wa(0.1)); border.width: 1; border.color: Theme.wa(0.1)
+                        Text { anchors.centerIn: parent; text: Tr.t("common.cancel"); color: Theme.silver; font.family: Theme.font; font.pixelSize: 14 }
                         Tap { id: wcTap; onClicked: root.finishWifi(false) }
                     }
                     Rectangle {
                         width: (parent.width - 8) / 2; height: 40; radius: 8
-                        color: root.ssid ? woTap.mix(Theme.gold, "#ca8a04") : Theme.goldA(0.4)
+                        color: woTap.mix(Theme.gold, "#ca8a04")
+                        opacity: root.ssid ? 1 : 0.4                    // disabled:opacity-40 su fondo E testo
                         Text { anchors.centerIn: parent; text: Tr.t("wizard.connect"); color: Theme.black; font.family: Theme.font; font.pixelSize: 14; font.bold: true }
                         Tap { id: woTap; enabled: root.ssid !== ""; onClicked: root.finishWifi(true) }
                     }
@@ -336,7 +339,7 @@ Item {
                     Item { width: 1; height: 16 }
                     Text { height: 20; verticalAlignment: Text.AlignVCenter; text: Tr.tf("sources.internal.typeToConfirm", "label", root.flabel); color: Theme.silver; font.family: Theme.font; font.pixelSize: 14 }
                     Item { width: 1; height: 8 }
-                    TextField_ { width: parent.width; height: 48; text: root.ftyped; restBorder: Theme.redA(0.4); focusBorder: false; onTextEdited: (t) => root.ftyped = t }
+                    TextField_ { width: parent.width; height: 48; text: root.ftyped; restBorder: Theme.redA(0.4); focusBorder: true; focusColor: Theme.red400; onTextEdited: (t) => root.ftyped = t }   // focus:border-red-400
                     Item { width: 1; height: 24 }
                     Row {
                         width: parent.width; spacing: 12
@@ -358,7 +361,7 @@ Item {
                     width: parent.width
                     Spinner { anchors.horizontalCenter: parent.horizontalCenter; radius: 28; color: Theme.accent; active: root.kind === 5 && root.step === 2 }
                     Item { width: 1; height: 24 }
-                    Text { width: parent.width; height: 24; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter; text: root.fmsg; color: Theme.wa(0.9); font.family: Theme.font; font.pixelSize: 16 }
+                    Text { width: parent.width; height: 24; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter; text: root.fmsg; color: Theme.wa(0.8); font.family: Theme.font; font.pixelSize: 16 }
                     Item { width: 1; height: 24 }
                     Rectangle {
                         width: parent.width; height: 12; radius: 6; color: Theme.dark
@@ -371,7 +374,7 @@ Item {
                 Column {
                     visible: root.step >= 3
                     width: parent.width
-                    Icon { anchors.horizontalCenter: parent.horizontalCenter; name: root.step === 4 ? "alert-triangle" : "check-circle"; size: 48; color: root.step === 4 ? Theme.red500 : Theme.green500 }
+                    Icon { anchors.horizontalCenter: parent.horizontalCenter; name: root.step === 4 ? "alert-triangle" : "check-circle"; size: 56; color: root.step === 4 ? Theme.red500 : Theme.green500 }
                     Item { width: 1; height: 24 }
                     Text { width: parent.width; height: 28; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter; text: root.step === 4 ? Tr.t("common.error") : Tr.t("sources.internal.doneAdopted"); color: Theme.white; font.family: Theme.font; font.pixelSize: 18; font.bold: true }
                     Item { width: 1; height: 8 }

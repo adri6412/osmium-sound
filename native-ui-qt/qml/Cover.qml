@@ -11,10 +11,9 @@ Item {
     property real fallbackIcon: 40
     property color border: Theme.wa(0.08)
     readonly property bool ready: img.status === Image.Ready
-    Rectangle {
+    DiagonalFallback {                         // bg-gradient-to-br from-hifi-gray to-hifi-dark
         anchors.fill: parent
         radius: root.radius
-        color: Theme.gray
         visible: !root.ready
         Icon { anchors.centerIn: parent; name: "music"; size: root.fallbackIcon; color: Theme.silverA(0.2) }
     }

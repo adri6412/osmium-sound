@@ -10,6 +10,7 @@ Rectangle {
     width: 320
     height: 20 + 16 + 12 + (activeTimer ? 15 + 12 : 0) + 2 * 40 + 8 + 12 + 40 + 20
     radius: 16; color: Theme.panel; border.width: 1; border.color: Theme.border
+    BoxShadow { z: -1; targetX: 0; targetY: 0; targetW: parent.width; targetH: parent.height; radius: 16; blur: 50; spread: -12; offsetY: 25; color: Theme.blackA(0.25) }   // shadow-2xl
     MouseArea { anchors.fill: parent }          // non chiudere toccando il dialogo
     Icon { x: 20; y: 20; name: "moon"; size: 16; color: Theme.gold }
     Text { x: 44; y: 20; height: 16; verticalAlignment: Text.AlignVCenter; text: Tr.t("player.sleep"); color: Theme.white; font.family: Theme.font; font.pixelSize: 14; font.bold: true }

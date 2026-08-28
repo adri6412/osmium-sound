@@ -70,7 +70,8 @@ Item {
             x: 512 - 640; y: 300 - 640
             scale: 3.2
             transformOrigin: Item.TopLeft
-            blurEnabled: true; blur: 0.33; blurMax: 16
+            // blur-lg (16) e' applicato PRIMA di scale-125: 20 punti effettivi a schermo
+            blurEnabled: true; blur: 0.41; blurMax: 16
             opacity: 0.2
         }
     }
@@ -97,7 +98,7 @@ Item {
             id: clockText
             anchors.centerIn: parent
             text: Qt.formatTime(new Date(), "HH:mm")
-            color: Theme.white; font.family: Theme.font; font.pixelSize: 20; font.letterSpacing: 0.5
+            color: Theme.white; font.family: Theme.font; font.pixelSize: 20; font.letterSpacing: 0.5; font.weight: Font.Medium
             Timer { interval: 5000; running: root.shown; repeat: true; triggeredOnStart: true; onTriggered: clockText.text = Qt.formatTime(new Date(), "HH:mm") }
         }
         Tap { id: clockTap; onClicked: root.startScreensaver() }
@@ -144,6 +145,10 @@ Item {
         width: root.artSide; height: root.artSide
         source: Player.artworkUrl
         radius: 16; devScale: root.devScale
+        // Electron chiede `border-white/8`, che Tailwind 3.3 NON genera (la scala
+        // va di 5 in 5): resta il colore di preflight, un filo grigio chiaro pieno.
+        // E' cosi' che la si vede sull'apparecchio, quindi cosi' e' anche qui.
+        border: "#e5e7eb"
     }
     LedBar {
         x: root.pad + (root.leftW - root.ledW) / 2; y: root.artY + root.artSide + 32
@@ -200,16 +205,15 @@ Item {
             id: barBox
             width: parent.width; height: 6
             Rectangle { anchors.fill: parent; radius: 3; color: Theme.wa(0.10) }
-            Item {
+            // riempimento scalato con scaleX come in Electron: la rampa oro -> giallo si
+            // comprime, il giallo sta sempre sul bordo destro del riempimento
+            Rectangle {
                 width: Player.duration > 0 ? parent.width * Math.max(0, Math.min(1, Player.elapsed / Player.duration)) : 0
-                height: parent.height; clip: true
-                Rectangle {
-                    width: barBox.width; height: parent.height; radius: 3
-                    gradient: Gradient {
-                        orientation: Gradient.Horizontal
-                        GradientStop { position: 0; color: Theme.gold }
-                        GradientStop { position: 1; color: Theme.yellow400 }
-                    }
+                height: parent.height; radius: 3
+                gradient: Gradient {
+                    orientation: Gradient.Horizontal
+                    GradientStop { position: 0; color: Theme.gold }
+                    GradientStop { position: 1; color: Theme.yellow400 }
                 }
             }
             MouseArea {
@@ -268,8 +272,8 @@ Item {
                 id: volBar
                 x: parent.width - 180 + 25; y: controls.cy - 3; width: 155; height: 6
                 readonly property real frac: Math.max(0, Math.min(100, Player.volume)) / 100
+                // <input type=range> con appearance-none: traccia uniforme e pomello, NESSUNA parte riempita
                 Rectangle { anchors.fill: parent; radius: 3; color: Player.volumeFixed ? Theme.wa(0.05) : Theme.wa(0.10) }
-                Rectangle { width: parent.width * volBar.frac; height: parent.height; radius: 3; color: Player.volumeFixed ? Theme.silverA(0.3) : Theme.gold }
                 Rectangle { x: parent.width * volBar.frac - 8; y: -5; width: 16; height: 16; radius: 8; color: Player.volumeFixed ? Theme.silverA(0.3) : Theme.gold }
                 MouseArea {
                     anchors.fill: parent; anchors.margins: -14

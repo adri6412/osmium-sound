@@ -11,6 +11,7 @@ Rectangle {
     property bool password: false
     property bool focusBorder: true
     property color restBorder: Theme.border
+    property color focusColor: Theme.gold          // focus:border-hifi-gold (o oro/50 nel wizard Wi-Fi)
     property real textSize: 16
     property real padding: 16
     property alias input: input
@@ -19,7 +20,7 @@ Rectangle {
     signal accepted()
     radius: 8; color: Theme.dark
     border.width: 1
-    border.color: input.activeFocus && focusBorder ? Theme.gold : restBorder
+    border.color: input.activeFocus && focusBorder ? focusColor : restBorder
     function takeFocus() { input.forceActiveFocus() }
     function openVk() { if (!Sys.hasKeyboard) vkOpen(root) }
     // aggancio alla tastiera a schermo, fornito dalla radice

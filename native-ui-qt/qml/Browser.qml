@@ -146,7 +146,8 @@ Item {
                     readonly property color c: active ? Theme.white : tabTap.mix(Theme.silverA(0.5), Theme.white)
                     Icon { x: 16; anchors.verticalCenter: parent.verticalCenter; name: tabItem.modelData.icon; size: 14; color: tabItem.c }
                     Text { id: tabText; x: 36; anchors.verticalCenter: parent.verticalCenter; text: tabItem.label; color: tabItem.c; font.family: Theme.font; font.pixelSize: 12 }
-                    Rectangle { visible: tabItem.active; x: 8; y: 38; width: parent.width - 16; height: 2; radius: 1; color: Theme.gold }
+                    // rounded-t-sm: 2 px solo sui due angoli in alto
+                    Rectangle { visible: tabItem.active; x: 8; y: 38; width: parent.width - 16; height: 2; topLeftRadius: 2; topRightRadius: 2; color: Theme.gold }
                     Tap { id: tabTap; onClicked: root.openTab(tabItem.index) }
                 }
             }
@@ -293,8 +294,8 @@ Item {
                         Item {
                             visible: search.text !== ""
                             x: parent.width - 30; y: 7; width: 24; height: 24
-                            Icon { anchors.centerIn: parent; name: "x"; size: 14; color: Theme.silverA(0.5) }
-                            Tap { grow: 6; onClicked: { search.text = ""; Library.filter = "" } }
+                            Icon { anchors.centerIn: parent; name: "x"; size: 14; color: xTap.pressed ? Theme.white : Theme.silverA(0.5) }   // active:text-white
+                            Tap { id: xTap; grow: 6; onClicked: { search.text = ""; Library.filter = "" } }
                         }
                     }
                 }
@@ -311,7 +312,7 @@ Item {
                             ctx.open(Library.get(row).id, list.x + x, list.y + y)
                     }
                 }
-                Spinner { visible: Library.state === 1; active: root.visible && !(Ui.app && Ui.app.expanded); x: list.x + list.width / 2 - 18; y: list.y + 60 - 18 }
+                Spinner { visible: Library.state === 1; active: root.visible && !(Ui.app && Ui.app.expanded); radius: 20; x: list.x + list.width / 2 - 20; y: list.y + 60 - 20 }   // w-10 h-10
                 Column {
                     visible: Library.state === 3
                     x: list.x; y: list.y + 40; width: list.width; spacing: 12

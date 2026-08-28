@@ -455,6 +455,7 @@ Item {
             var d = cfg.disks[i]
             var tag = humanSize(d.size) + (d.adopted ? " · " + Tr.t("sources.internal.adoptedBadge") : d.hasData ? " · " + Tr.t("sources.internal.hasData") : "")
             var r = srcRow(d.model || d.path, tag, d.path, "", d.path, true); r.smin = i; r.hh = 60
+            r.extraTone = d.adopted ? "green" : d.hasData ? "dim" : ""   // badge: text-green-400 / silver/60
             if (!d.adopted) {
                 if (d.parts.length === 1) mini(r, Tr.t("sources.internal.adopt"), "disk_adopt", "accent", false)
                 mini(r, Tr.t("sources.internal.format"), "disk_format", "darkred", false, String(i))
@@ -606,8 +607,8 @@ Item {
             var hh = String(Math.floor(mins / 60) % 24).padStart(2, "0"), mm = String(mins % 60).padStart(2, "0")
             push({ type: "alarm", label: hh + ":" + mm, arg: a.id, on: a.on, act: "alarm_toggle", act2: "alarm_delete", hh: 48 })
         }
-        grid([cell(String(alarmH).padStart(2, "0"), "", false, "alarm_hour", { style: "border", hh: 52, mono: true }),
-              cell(String(alarmM).padStart(2, "0"), "", false, "alarm_min", { style: "border", hh: 52, mono: true }),
+        grid([cell(String(alarmH).padStart(2, "0"), "", false, "alarm_hour", { style: "border", hh: 52, mono: true, outline: true }),
+              cell(String(alarmM).padStart(2, "0"), "", false, "alarm_min", { style: "border", hh: 52, mono: true, outline: true }),   // border border-hifi-accent
               acell(Tr.t("settings.alarm.add"), "alarm_add", "gold", { bold: true, hh: 52, icon: "plus" })])
     }
     function secNetwork() {
@@ -616,7 +617,7 @@ Item {
             var cells = []
             for (var j = i; j < Math.min(cfg.ifaces.length, i + 2); j++) {
                 var f = cfg.ifaces[j]
-                cells.push({ type: "option", label: f.name, value: f.addr, arg: f.name, sel: f.active, act: "net_iface", hh: 60, mono: true, icon: f.wifi ? "wifi" : "network" })
+                cells.push({ type: "option", label: f.name, value: f.addr, arg: f.name, sel: f.active, act: "net_iface", hh: 60, mono: true, icon: f.wifi ? "wifi" : "network", valueAlpha: 0.75 })
             }
             if (cells.length === 1) cells.push({ type: "help", label: "" })
             grid(cells)
@@ -626,8 +627,8 @@ Item {
                 : wifi ? Tr.tf("settings.network.activeWifi", "ssid", cfg.netSsid).replace("{ip}", cfg.netIp)
                 : Tr.tf("settings.network.activeWired", "ip", cfg.netIp)
         var ai = info(Tr.t("settings.network.activeLabel"), act); ai.mono = true; ai.style = "row"; ai.icon = wifi ? "wifi" : "network"
-        grid([acell(Tr.t("settings.network.configureWifiButton"), "wifi_panel", "dark", { hh: 40, icon: "wifi" }),
-              acell(Tr.t("settings.network.useWiredButton"), "wired_dhcp", "dark", { hh: 40, icon: "network" })])
+        grid([acell(Tr.t("settings.network.configureWifiButton"), "wifi_panel", "light", { hh: 40, icon: "wifi" }),
+              acell(Tr.t("settings.network.useWiredButton"), "wired_dhcp", "light", { hh: 40, icon: "network" })])   // bg-hifi-light
         var ip = info(Tr.tf("settings.network.currentIp", "name", cfg.netDev || "—"), cfg.netIp || "—"); ip.mono = true; ip.style = "row"
         if (cfg.netSubnet) { ip.extra = Tr.tf("settings.network.typeSubnet", "type", wifi ? "wireless" : "wired").replace("{subnet}", cfg.netSubnet); ip.hh = 64 }
         note(Tr.t("settings.network.dhcpNotice"), "dark", "info", 12)
@@ -642,7 +643,7 @@ Item {
         if (!cfg.pairToken) { note(Tr.t("settings.webRemote.generatingToken"), "dark"); code(url); return }
         qr(JSON.stringify({ lms: url, api: ip + ":8080", token: cfg.pairToken }), Tr.t("settings.webRemote.scanHint"))
         code(url)
-        sep()
+        sep().tone = "light"                                 // border-t border-hifi-light/10
         help("settings.webRemote.revokeAllHelp", 12)
         var b = action(Tr.t("settings.webRemote.revokeAll"), "revoke_pair", "darkred"); b.icon = "trash-2"
     }
@@ -662,8 +663,8 @@ Item {
         if (cfg.shellUser) { help("settings.ssh.loginIs", 12); code("ssh " + cfg.shellUser + "@" + (cfg.deviceIp || cfg.localIp || "…")) }
         else help("settings.ssh.noLogin", 12)
         help("settings.ssh.sudoWarning", 12)
-        input(Tr.t("settings.ssh.usernamePlaceholder"), sshUser || cfg.shellUser, "ssh_user", false).hh = 50
-        input(Tr.t("settings.ssh.passwordPlaceholder"), sshPass, "ssh_pass", true).hh = 50
+        var su = input(Tr.t("settings.ssh.usernamePlaceholder"), sshUser || cfg.shellUser, "ssh_user", false); su.hh = 50; su.bg = "surface"   // SSH: bg-hifi-surface
+        var sp = input(Tr.t("settings.ssh.passwordPlaceholder"), sshPass, "ssh_pass", true); sp.hh = 50; sp.bg = "surface"
         var b = action(Tr.t(cfg.shellUser ? "settings.ssh.loginUpdate" : "settings.ssh.loginCreate"), "ssh_save", "gold"); b.bold = true; b.hh = 44; b.dim = sshPass.length < 8
     }
     function secPointer() {
@@ -708,7 +709,7 @@ Item {
     function secTimezone() {
         help("settings.timezone.help")
         var st = info(cfg.timezone || Tr.t("common.loading"), ""); st.icon = "clock"; st.style = "row"
-        var sel = option(cfg.timezone || Tr.t("common.loading"), "", "", false, "timezone"); sel.style = "border"; sel.icon = "chevron-down"; sel.hh = 44
+        var sel = option(cfg.timezone || Tr.t("common.loading"), "", "", false, "timezone"); sel.style = "border"; sel.icon = "chevron-down"; sel.hh = 44; sel.outline = true   // border border-hifi-accent
     }
     function secSysinfo() {
         info(Tr.t("settings.info.hostname"), cfg.hostname || Tr.t("settings.info.notAvailable")).style = "seg"
@@ -749,7 +750,7 @@ Item {
         var rb = action(Tr.t("settings.controls.reboot"), "reboot", "orange"); rb.icon = "rotate-cw"; rb.bold = true; rb.hh = 56
         var sd = action(Tr.t("settings.controls.shutdown"), "shutdown", "red"); sd.icon = "power"; sd.bold = true; sd.hh = 56
         var wr = action(Tr.t("settings.webuiReset.button"), "webui_reset", "dark"); wr.icon = "lock"; wr.bold = true; wr.hh = 56
-        sep()
+        sep().tone = "red"                                   // border-t border-red-500/20
         help("settings.factory.help", 12)
         var fr = action(Tr.t("settings.factory.button"), "factory_reset", "darkred"); fr.icon = "alert-triangle"; fr.bold = true; fr.hh = 56
     }
@@ -761,7 +762,7 @@ Item {
             var h = labelText(String(s.section || ""), 12); h.dim = true
             for (var j = 0; j < (s.entries || []).length; j++) {
                 var e = s.entries[j]
-                var r = info(String(e.name || ""), String(e.license || "")); r.mono = true; r.hh = 64
+                var r = info(String(e.name || ""), String(e.license || "")); r.mono = true; r.hh = 64; r.tone = "tp"   // nome bianco, licenza silver/80
                 var ver = String(e.version || ""), no = String(e.notes || "")
                 r.extra = ver && no ? ver + " — " + no : no || ver
                 if (!r.extra) r.hh = 44
@@ -1043,11 +1044,12 @@ Item {
                         required property var modelData
                         required property int index
                         width: parent.width; height: 72
-                        Rectangle { x: 2; y: 4; width: parent.width - 4; height: parent.height + 2; radius: 16; color: Qt.rgba(0, 0, 0, 0.35) }
+                        // shadow-hifi: 0 4px 20px nero/50 + inset 0 1px 0 bianco/10
+                        BoxShadow { targetX: 0; targetY: 0; targetW: parent.width; targetH: parent.height; radius: 16; blur: 20; offsetY: 4; color: Theme.blackA(0.5) }
                         Rectangle {
                             anchors.fill: parent; radius: 16
                             color: sTap.mix(Theme.gray, Theme.light); border.width: 1; border.color: Theme.accent
-                            Rectangle { x: 16; y: 1; width: parent.width - 32; height: 1; color: Theme.wa(0.1) }
+                            Rectangle { x: 10; y: 1; width: parent.width - 20; height: 1; color: Theme.wa(0.1) }   // il riflesso a tutta larghezza, dentro gli angoli
                             Rectangle { x: 16; y: 17; width: 38; height: 38; radius: 8; color: Theme.goldA(0.2)
                                         Icon { anchors.centerIn: parent; name: secRow.index === 14 && cfg.displayMode === "headless" ? "monitor-off" : secRow.modelData.icon; size: 22; color: Theme.gold } }
                             Text { x: 66; width: parent.width - 66 - 46; anchors.verticalCenter: parent.verticalCenter; text: Tr.t(secRow.modelData.key); elide: Text.ElideRight; color: Theme.white; font.family: Theme.font; font.pixelSize: 18 }
@@ -1075,6 +1077,8 @@ Item {
                 x: 32; y: secHead.y + secHead.height + 32; width: parent.width - 64
                 height: panelRows.height + 48
                 radius: 16; color: Theme.gray; border.width: 1; border.color: Theme.accent
+                BoxShadow { z: -1; targetX: 0; targetY: 0; targetW: parent.width; targetH: parent.height; radius: 16; blur: 20; offsetY: 4; color: Theme.blackA(0.5) }   // shadow-hifi
+                Rectangle { x: 10; y: 1; width: parent.width - 20; height: 1; color: Theme.wa(0.1) }
                 SettingsRows { id: panelRows; x: 24; y: 24; width: parent.width - 48; rows: root.rows }
             }
         }

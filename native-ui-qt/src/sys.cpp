@@ -8,6 +8,11 @@
 #include <QFile>
 #include <QGuiApplication>
 #include <QImage>
+#include <QPainter>
+#include <QCryptographicHash>
+#include <cmath>
+#include <algorithm>
+#include <vector>
 #include <QQuickWindow>
 #include <QTextStream>
 #include <QtDebug>
@@ -159,6 +164,96 @@ QString Sys::tintedIcon(const QString &name, const QColor &color) {
         out.write(svg); out.close();
         QFile::remove(path);
         QFile::rename(path + ".tmp", path);
+    }
+    const QString url = QUrl::fromLocalFile(path).toString();
+    m_tinted.insert(key, url);
+    return url;
+}
+
+// ─── box-shadow ──────────────────────────────────────────────────────────────
+// Un box-shadow CSS e' la sagoma (allargata di `spread`) sfocata con una
+// gaussiana di sigma blur/2. Qui la si calcola UNA volta per (raggio, blur,
+// spread, colore) in un'immagine 9-patch: angoli interi, centro di 3 px che
+// BorderImage stira a qualsiasi misura. Costa zero a ogni fotogramma — la
+// sfocatura di MultiEffect avrebbe una passata per scheda per fotogramma.
+// La gaussiana e' approssimata con tre box blur (Kutskir), che e' come fanno
+// anche i browser.
+static void boxBlur1D(std::vector<float> &src, std::vector<float> &dst, int w, int h, int r, bool horizontal) {
+    const float iarr = 1.0f / (r + r + 1);
+    if (horizontal) {
+        for (int y = 0; y < h; y++) {
+            const float *row = &src[y * w]; float *out = &dst[y * w];
+            float acc = 0;
+            for (int x = -r; x <= r; x++) acc += row[std::clamp(x, 0, w - 1)];
+            for (int x = 0; x < w; x++) {
+                out[x] = acc * iarr;
+                acc += row[std::clamp(x + r + 1, 0, w - 1)] - row[std::clamp(x - r, 0, w - 1)];
+            }
+        }
+    } else {
+        for (int x = 0; x < w; x++) {
+            float acc = 0;
+            for (int y = -r; y <= r; y++) acc += src[std::clamp(y, 0, h - 1) * w + x];
+            for (int y = 0; y < h; y++) {
+                dst[y * w + x] = acc * iarr;
+                acc += src[std::clamp(y + r + 1, 0, h - 1) * w + x] - src[std::clamp(y - r, 0, h - 1) * w + x];
+            }
+        }
+    }
+}
+
+QString Sys::boxShadow(qreal radius, qreal blur, qreal spread, const QColor &color) {
+    const QString key = QString("bs|%1|%2|%3|%4").arg(radius).arg(blur).arg(spread).arg(color.name(QColor::HexArgb));
+    auto it = m_tinted.constFind(key);
+    if (it != m_tinted.constEnd()) return *it;
+    if (m_iconCacheDir.isEmpty()) {
+        m_iconCacheDir = QStandardPaths::writableLocation(QStandardPaths::TempLocation)
+                         + "/hifi-qt-icons-" + QString::number(getuid());
+        QDir().mkpath(m_iconCacheDir);
+    }
+    const QString path = m_iconCacheDir + "/shadow-" + QString::fromLatin1(QCryptographicHash::hash(key.toUtf8(), QCryptographicHash::Md5).toHex().left(12)) + ".png";
+    if (!QFile::exists(path)) {
+        const double sigma = blur / 2.0;
+        const int margin = int(std::ceil(blur * 1.5)) + 1;          // coda della gaussiana
+        const double r = std::max(0.0, radius + spread);
+        const int core = 2 * int(std::ceil(r)) + 3;                 // angoli + 3 px stirabili
+        const int size = core + 2 * margin;
+        QImage shape(size, size, QImage::Format_ARGB32_Premultiplied);
+        shape.fill(Qt::transparent);
+        {
+            QPainter p(&shape);
+            p.setRenderHint(QPainter::Antialiasing);
+            p.setPen(Qt::NoPen); p.setBrush(Qt::white);
+            p.drawRoundedRect(QRectF(margin, margin, core, core), r, r);
+        }
+        std::vector<float> a(size * size), b(size * size);
+        for (int y = 0; y < size; y++) for (int x = 0; x < size; x++) a[y * size + x] = qAlpha(shape.pixel(x, y)) / 255.0f;
+        if (sigma > 0.01) {
+            // tre box blur che approssimano la gaussiana (Kutskir)
+            const int n = 3;
+            double wIdeal = std::sqrt(12.0 * sigma * sigma / n + 1.0);
+            int wl = int(std::floor(wIdeal)); if (wl % 2 == 0) wl--;
+            int wu = wl + 2;
+            double mIdeal = (12.0 * sigma * sigma - n * wl * wl - 4.0 * n * wl - 3.0 * n) / (-4.0 * wl - 4.0);
+            int m = int(std::round(mIdeal));
+            for (int i = 0; i < n; i++) {
+                int rr = ((i < m ? wl : wu) - 1) / 2;
+                boxBlur1D(a, b, size, size, rr, true);
+                boxBlur1D(b, a, size, size, rr, false);
+            }
+        }
+        QImage out(size, size, QImage::Format_ARGB32_Premultiplied);
+        const double ca = color.alphaF();
+        for (int y = 0; y < size; y++) {
+            QRgb *line = reinterpret_cast<QRgb *>(out.scanLine(y));
+            for (int x = 0; x < size; x++) {
+                double al = std::clamp(double(a[y * size + x]) * ca, 0.0, 1.0);
+                line[x] = qPremultiply(qRgba(color.red(), color.green(), color.blue(), int(std::lround(al * 255))));
+            }
+        }
+        out.save(path + ".tmp.png", "PNG");
+        QFile::remove(path);
+        QFile::rename(path + ".tmp.png", path);
     }
     const QString url = QUrl::fromLocalFile(path).toString();
     m_tinted.insert(key, url);

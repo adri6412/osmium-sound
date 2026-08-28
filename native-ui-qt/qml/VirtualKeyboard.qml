@@ -80,7 +80,10 @@ Item {
         x: (parent.width - width) / 2
         y: parent.height - sheetH + (1 - slide.value) * sheetH
         radius: 16; color: Theme.dark
-        Rectangle { width: parent.width; height: 1; color: Theme.accent }
+        opacity: root.fade                                 // la dissolvenza c'era ma non era legata a niente
+        BoxShadow { z: -1; targetX: 0; targetY: 0; targetW: parent.width; targetH: parent.height; radius: 16; blur: 50; spread: -12; offsetY: 25; color: Theme.blackA(0.25) }   // shadow-2xl
+        // border-t su rounded-t-2xl: la riga non esce dagli angoli
+        Rectangle { x: 16; width: parent.width - 32; height: 1; color: Theme.accent }
         MouseArea { anchors.fill: parent }
 
         Text { x: 16; y: 16; height: 16; verticalAlignment: Text.AlignVCenter; text: root.label; color: Theme.silver; font.family: Theme.font; font.pixelSize: 12 }
@@ -98,9 +101,12 @@ Item {
         }
         Rectangle {                                      // X
             x: parent.width - 16 - 36; y: 32; width: 36; height: 36; radius: 8; color: xTap.mix(Theme.light, Theme.accent)
+            scale: xTap.tapScale                            // whileTap 0.95
             Icon { anchors.centerIn: parent; name: "x"; size: 20; color: Theme.white }
-            Tap { id: xTap; onClicked: root.close(false) }
+            Tap { id: xTap; tap: 0.95; onClicked: root.close(false) }
         }
+        // il riquadro #1a1a1a (r8, padding 8) del contenitore .simple-keyboard
+        Rectangle { x: 16; y: keys.y - 8; width: sheet.width - 32; height: keys.height + 16; radius: 8; color: Theme.gray }
         // tasti
         Column {
             id: keys
@@ -120,16 +126,20 @@ Item {
                             readonly property bool fn: !!modelData.fn
                             width: krow.modelData.length === 1 ? keys.width : Math.round(krow.avail * (modelData.flex || 1) / krow.tot)
                             height: 40; radius: 6
-                            color: kTap.mix(fn ? "#4a4a4a" : Theme.light, "#5a5a5a"); border.width: 1; border.color: Theme.accent
+                            // tasti normali #2a2a2a -> #4a4a4a da premuti; i tasti funzione restano #4a4a4a;
+                            // lo shift attivo e' oro con testo nero (.hg-button.shift-active)
+                            readonly property bool shiftOn: modelData.fn === "shift" && root.shift
+                            color: shiftOn ? Theme.gold : fn ? "#4a4a4a" : kTap.mix(Theme.light, "#4a4a4a")
+                            border.width: 1; border.color: shiftOn ? Theme.gold : Theme.accent
                             scale: kTap.tapScale
-                            Text { anchors.centerIn: parent; text: modelData.fn === "space" ? Tr.t("keyboard.space") : (root.shift ? modelData.k.toUpperCase() : modelData.k); color: Theme.white; font.family: Theme.font; font.pixelSize: 15; font.bold: true }
+                            Text { anchors.centerIn: parent; text: modelData.fn === "space" ? Tr.t("keyboard.space") : (root.shift ? modelData.k.toUpperCase() : modelData.k); color: shiftOn ? Theme.black : Theme.white; font.family: Theme.font; font.pixelSize: 15; font.bold: true }
                             Tap {
                                 id: kTap; tap: 0.95
                                 onClicked: {
                                     if (modelData.fn === "shift") root.shift = !root.shift
                                     else if (modelData.fn === "bksp") root.backspace()
                                     else if (modelData.fn === "space") root.put(" ")
-                                    else { root.put(root.shift ? modelData.k.toUpperCase() : modelData.k); root.shift = false }
+                                    else root.put(root.shift ? modelData.k.toUpperCase() : modelData.k)   // lo shift resta finche' non lo si ritocca, come in Electron
                                 }
                             }
                         }
@@ -143,15 +153,17 @@ Item {
             x: 16; y: keys.y + keys.height + 8 + 12; height: 42; radius: 8
             width: 16 + 16 + 8 + clearText.implicitWidth + 8
             color: clTap.mix(Theme.light, Theme.accent)
+            scale: clTap.tapScale                           // whileTap 0.95
             Icon { x: 8; anchors.verticalCenter: parent.verticalCenter; name: "x"; size: 16; color: Theme.white }
             Text { id: clearText; x: 28; anchors.verticalCenter: parent.verticalCenter; text: Tr.t("keyboard.clear"); color: Theme.white; font.family: Theme.font; font.pixelSize: 14; font.bold: true }
-            Tap { id: clTap; onClicked: { root.text = ""; root.notify() } }
+            Tap { id: clTap; tap: 0.95; onClicked: { root.text = ""; root.notify() } }
         }
         Rectangle {
             x: clearBtn.x + clearBtn.width + 8; y: clearBtn.y; width: parent.width - 16 - x; height: 42; radius: 8
             color: okTap.mix(Theme.gold, "#ca8a04")
+            scale: okTap.tapScale                           // whileTap 0.95
             Text { anchors.centerIn: parent; text: Tr.t("keyboard.confirm"); color: Theme.black; font.family: Theme.font; font.pixelSize: 14; font.bold: true }
-            Tap { id: okTap; onClicked: root.close(true) }
+            Tap { id: okTap; tap: 0.95; onClicked: root.close(true) }
         }
     }
 }

@@ -28,8 +28,9 @@ Item {
         width: Math.min(320, 16 + 18 + 12 + msg.implicitWidth + 16); height: 48; radius: 12
         x: parent.width - 24 - width; y: parent.height - 24 - height + (1 - rise.value) * 12
         opacity: root.fade
+        scale: 0.95 + 0.05 * rise.value                    // scale 0.95 -> 1 -> 0.95
         color: "#2a2a2a"; border.width: 1; border.color: "#3a3a3a"
-        Rectangle { z: -1; x: 2; y: 6; width: parent.width; height: parent.height + 2; radius: 12; color: Qt.rgba(0, 0, 0, 0.43) }
+        BoxShadow { z: -1; targetX: 0; targetY: 0; targetW: parent.width; targetH: parent.height; radius: 12; blur: 50; spread: -12; offsetY: 25; color: Theme.blackA(0.25) }   // shadow-2xl
         Icon { x: 16; anchors.verticalCenter: parent.verticalCenter; name: "usb"; size: 18; color: Theme.gold }
         Text { id: msg; x: 46; width: parent.width - 62; anchors.verticalCenter: parent.verticalCenter; text: root.text; elide: Text.ElideRight; color: Theme.white; font.family: Theme.font; font.pixelSize: 14 }
         Tap { onClicked: root.close() }

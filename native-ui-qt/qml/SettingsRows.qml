@@ -30,7 +30,8 @@ Column {
         case "orange": c = "#ea580c"; break
         case "red": c = "#dc2626"; break
         case "dark": c = Theme.dark; break
-        case "darkred": c = Qt.rgba(0x7f/255, 0x1d/255, 0x1d/255, 0.4); break
+        case "light": c = Theme.light; break
+        case "darkred": c = Qt.rgba(0x7f/255, 0x1d/255, 0x1d/255, 0.3); break   // bg-red-900/30
         case "ghost": c = Qt.rgba(0, 0, 0, 0); break
         case "amber": c = "#d97706"; break
         case "goldsoft": c = Theme.goldA(0.2); break
@@ -97,11 +98,11 @@ Column {
         property var row: ({})
         width: m.icon ? 32 : miniText.implicitWidth + 24
         height: m.icon ? 32 : 28
-        radius: 6
-        color: mTap.mix(root.btnBg(m.style, m.dim), Theme.light)
-        Icon { visible: !!m.icon; anchors.centerIn: parent; name: m.icon || ""; size: 16; color: m.dim ? Qt.rgba(root.btnFg(m.style).r, root.btnFg(m.style).g, root.btnFg(m.style).b, 0.4) : root.btnFg(m.style) }
-        Text { id: miniText; visible: !m.icon; anchors.centerIn: parent; text: m.label || ""; font.family: Theme.font; font.pixelSize: 12
-               color: m.dim ? Qt.rgba(root.btnFg(m.style).r, root.btnFg(m.style).g, root.btnFg(m.style).b, 0.4) : root.btnFg(m.style) }
+        radius: m.icon ? 8 : 6                              // rounded-lg sul bottone icona, rounded-md sugli altri
+        color: mTap.mix(root.btnBg(m.style, false), Theme.light)
+        opacity: m.dim ? 0.5 : 1                            // disabled:opacity-50 su TUTTO il pulsante
+        Icon { visible: !!m.icon; anchors.centerIn: parent; name: m.icon || ""; size: 16; color: root.btnFg(m.style) }
+        Text { id: miniText; visible: !m.icon; anchors.centerIn: parent; text: m.label || ""; font.family: Theme.font; font.pixelSize: 12; color: root.btnFg(m.style) }
         Tap { id: mTap; enabled: !m.dim; grow: 4; onClicked: root.ctl.activate(row, m.act, m.arg) }
     }
     component MiniRow: Row {
@@ -123,7 +124,8 @@ Column {
         Text {
             property var row: ({})
             width: parent.width; wrapMode: Text.Wrap
-            text: row.label || ""; color: row.tone === "amber" ? "#fde68a" : Theme.silver
+            // gli aiuti piccoli (text-xs) in Electron sono silver/60, quelli da 14 silver pieno
+            text: row.label || ""; color: row.tone === "amber" ? "#fde68a" : (row.px === 12 ? Theme.silverA(0.6) : Theme.silver)
             font.family: Theme.font; font.pixelSize: row.px || 14
             lineHeight: (row.px || 14) + 6; lineHeightMode: Text.FixedHeight
             horizontalAlignment: row.center ? Text.AlignHCenter : Text.AlignLeft
@@ -136,10 +138,13 @@ Column {
             text: row.dim ? (row.label || "").toUpperCase() : (row.label || "")
             color: row.dim ? Theme.silverA(0.6) : Theme.white
             font.family: Theme.font; font.pixelSize: row.px || 16; elide: Text.ElideRight
+            font.letterSpacing: row.dim ? 0.3 : 0              // tracking-wide sulle etichette maiuscole
         }
     }
     Component { id: cSep
-        Rectangle { property var row: ({}); width: parent.width; height: 1; color: Qt.rgba(0x3a/255, 0x3a/255, 0x3a/255, 0.4) }
+        Rectangle { property var row: ({}); width: parent.width; height: 1
+                    // border-hifi-accent/40; "light" = border-hifi-light/10; "red" = border-red-500/20
+                    color: row.tone === "light" ? Qt.rgba(0x2a/255, 0x2a/255, 0x2a/255, 0.1) : row.tone === "red" ? Theme.redA(0.2) : Qt.rgba(0x3a/255, 0x3a/255, 0x3a/255, 0.4) }
     }
     Component { id: cNote
         Rectangle {
@@ -174,7 +179,7 @@ Column {
             Text {
                 x: info.pad; y: info.ty; width: (info.rightEdge - info.pad) / 2; height: info.lineH; verticalAlignment: Text.AlignVCenter
                 text: row.label || ""; elide: Text.ElideRight
-                color: row.tone === "gold" ? Theme.white : Theme.silver; font.family: Theme.font; font.pixelSize: row.px || 14
+                color: row.tone === "gold" || row.tone === "tp" ? Theme.white : Theme.silver; font.family: Theme.font; font.pixelSize: row.px || 14
             }
             Text {                                        // "-> ultima" (aggiornamenti)
                 id: extraSeg
@@ -187,7 +192,7 @@ Column {
                 x: info.pad + (info.rightEdge - info.pad) / 2; y: info.ty; height: info.lineH; verticalAlignment: Text.AlignVCenter
                 width: info.rightEdge - x - (extraSeg.visible ? extraSeg.width + 8 : 0)
                 horizontalAlignment: Text.AlignRight; elide: Text.ElideLeft
-                text: row.value || ""; color: (row.style === "row" || row.tone === "gold") ? Theme.gold : Theme.white
+                text: row.value || ""; color: (row.style === "row" || row.tone === "gold") ? Theme.gold : row.tone === "tp" ? Theme.silverA(0.8) : Theme.white
                 font.family: row.mono ? Theme.mono : Theme.font; font.pixelSize: row.px || 14
             }
             Icon { visible: !!row.icon; x: valText.x + valText.width - Math.min(valText.width, valText.implicitWidth) - 18; y: info.ty + info.lineH / 2 - 7; name: row.icon || ""; size: 14; color: Theme.gold }
@@ -239,11 +244,10 @@ Column {
                     var bg = op.fill ? (op.sel ? Theme.gold : (op.row.style === "seg" || op.row.style === "row") ? Theme.surface : Theme.light) : Theme.dark
                     return op.fill && !op.sel ? oTap.mix(bg, Theme.accent) : bg
                 }
-                border.width: op.row.style === "border" && op.sel ? 1 : 0; border.color: Theme.gold
-                readonly property color fg: {
-                    var c = op.fill ? (op.sel ? Theme.black : Theme.white) : (op.sel ? Theme.gold : Theme.white)
-                    return op.row.dim ? Qt.rgba(c.r, c.g, c.b, 0.4) : c
-                }
+                border.width: (op.row.style === "border" && op.sel) || !!op.row.outline ? 1 : 0
+                border.color: op.row.style === "border" && op.sel ? Theme.gold : Theme.accent   // `outline`: border border-hifi-accent sempre (ore/minuti sveglia, fuso)
+                opacity: op.row.dim ? 0.4 : 1                    // disabled:opacity-40 sull'intero pulsante
+                readonly property color fg: op.fill ? (op.sel ? Theme.black : Theme.white) : (op.sel ? Theme.gold : Theme.white)
                 // "select": chevron a destra; scelta riempita: spunta (Check 18)
                 Icon { visible: !!op.row.icon && op.row.style === "border"; x: parent.width - 28; anchors.verticalCenter: parent.verticalCenter; name: op.row.icon || ""; size: 16; color: Theme.silver }
                 Icon { visible: !!op.row.icon && op.row.style !== "border" && op.sel; x: parent.width - 33; anchors.verticalCenter: parent.verticalCenter; name: op.row.icon || ""; size: 18; color: parent.fg }
@@ -267,13 +271,14 @@ Column {
                     visible: !!op.row.value && op.row.style !== "row"
                     x: 16; y: 32; width: parent.width - 16 - 40; height: 18; verticalAlignment: Text.AlignVCenter
                     text: op.row.value || ""; elide: Text.ElideRight
-                    color: op.fill && op.sel ? Qt.rgba(0, 0, 0, 0.75) : Theme.silver
+                    // opacity-75 (interfaccia di rete non scelta) / opacity-70 (versione canale, IP trovato): bianco attenuato, non silver
+                    color: op.fill && op.sel ? Qt.rgba(0, 0, 0, 0.75) : (op.row.valueAlpha ? Theme.wa(op.row.valueAlpha) : Theme.silver)
                     font.family: op.row.mono ? Theme.mono : Theme.font; font.pixelSize: 12
                 }
                 Text {
                     visible: !!op.row.extra
                     anchors.right: parent.right; anchors.rightMargin: 12; anchors.verticalCenter: parent.verticalCenter
-                    text: op.row.extra || ""; color: op.fill && op.sel ? Qt.rgba(0, 0, 0, 0.7) : Theme.silverA(0.6)
+                    text: op.row.extra || ""; color: op.fill && op.sel ? Qt.rgba(0, 0, 0, 0.7) : Theme.wa(0.7)   // opacity-70 (versione canale, IP trovato)
                     font.family: Theme.mono; font.pixelSize: 12
                 }
             }
@@ -286,12 +291,13 @@ Column {
             property var row: ({})
             width: parent.width; height: row.hh || 44
             readonly property real px: row.px || ((row.hh || 0) >= 56 ? 16 : 14)
-            readonly property color fg: root.btnFg(row.style)
+            readonly property color fg: row.style === "darkred" ? "#fecaca" : root.btnFg(row.style)   // text-red-200 sul ripristino di fabbrica
+            opacity: row.dim ? 0.5 : 1                          // disabled:opacity-50 su tutto il pulsante
             Rectangle {
                 anchors.fill: parent; radius: 8
                 scale: aTap.tapScale
                 visible: ac.row.style !== "ghost"
-                color: aTap.mix(root.btnBg(ac.row.style, ac.row.dim), Theme.light)
+                color: aTap.mix(root.btnBg(ac.row.style, false), Theme.light)
                 border.width: ac.row.style === "darkred" ? 1 : 0; border.color: Theme.redA(0.4)
             }
             Row {
@@ -307,7 +313,7 @@ Column {
             id: inp
             property var row: ({})
             width: parent.width; height: row.hh || 46
-            color: Theme.surface; restBorder: Theme.accent
+            color: row.bg === "surface" ? Theme.surface : Theme.dark; restBorder: Theme.accent   // bg-hifi-dark (SSH: surface)
             text: row.value || ""; placeholder: row.label || ""; password: !!row.on
             onTextEdited: (t) => root.ctl.fieldSet(inp.row, t)
             onAccepted: root.ctl.fieldCommit(inp.row)
@@ -399,12 +405,12 @@ Column {
             width: parent.width
             height: headH + (open && row.children && row.children.length ? (nested ? 12 : 16) + inner.height + (nested ? 12 : 16) : 0)
             radius: nested ? 8 : 12
-            color: Qt.rgba(0x0f/255, 0x0f/255, 0x0f/255, nested ? 0.4 : 0.6)
+            color: Qt.rgba(0x0a/255, 0x0a/255, 0x0a/255, nested ? 0.4 : 0.6)     // bg-hifi-dark/60 (annidata /40)
             border.width: 1; border.color: Qt.rgba(0x3a/255, 0x3a/255, 0x3a/255, nested ? 0.4 : 0.6)
             Rectangle {                                    // intestazione (hover)
                 x: 0; y: 0; width: parent.width; height: bd.headH; radius: bd.radius
                 color: bTap.mix(Qt.rgba(0, 0, 0, 0), Qt.rgba(0x2a/255, 0x2a/255, 0x2a/255, 0.35))
-                Rectangle { x: bd.pad; y: (bd.headH - (bd.nested ? 28 : 36)) / 2; width: bd.nested ? 28 : 36; height: width; radius: bd.nested ? 6 : 8; color: Theme.goldA(0.2)
+                Rectangle { x: bd.pad; y: (bd.headH - (bd.nested ? 28 : 36)) / 2; width: bd.nested ? 28 : 36; height: width; radius: 8; color: Theme.goldA(0.2)   // rounded-lg anche annidata
                             Icon { anchors.centerIn: parent; name: bd.row.icon || ""; size: bd.nested ? 16 : 20; color: Theme.gold } }
                 Text {
                     x: bd.pad + (bd.nested ? 28 : 36) + 12; width: parent.width - x - bd.pad - 32
@@ -444,9 +450,9 @@ Column {
                 x: 12; y: sr.row.value || sr.row.sub2 ? 12 : 0; height: sr.row.value || sr.row.sub2 ? 20 : sr.height; spacing: 8
                 Text { id: nameText; anchors.verticalCenter: parent.verticalCenter; text: sr.row.label || ""; elide: Text.ElideRight
                        width: Math.min(implicitWidth, sr.rgt - 12 - (tagText.visible ? tagText.width + 8 : 0)); color: Theme.white; font.family: Theme.font; font.pixelSize: sr.row.px || 14 }
-                Text { id: tagText; visible: !!sr.row.extra; anchors.verticalCenter: parent.verticalCenter; anchors.verticalCenterOffset: 1; text: (sr.row.extra || "").toUpperCase(); color: Theme.goldA(0.8); font.family: Theme.font; font.pixelSize: 10; font.letterSpacing: 1 }
+                Text { id: tagText; visible: !!sr.row.extra; anchors.verticalCenter: parent.verticalCenter; anchors.verticalCenterOffset: 1; text: (sr.row.extra || "").toUpperCase(); color: sr.row.extraTone === "green" ? "#4ade80" : sr.row.extraTone === "dim" ? Theme.silverA(0.6) : Theme.goldA(0.8); font.family: Theme.font; font.pixelSize: 10; font.letterSpacing: 0.25 }
             }
-            Text { x: 12; y: 32; width: sr.rgt - 12; height: 16; verticalAlignment: Text.AlignVCenter; visible: !!sr.row.value; text: sr.row.value || ""; elide: Text.ElideMiddle; color: sr.row.danger ? Theme.red300 : Theme.silverA(0.7); font.family: Theme.font; font.pixelSize: 12 }
+            Text { x: 12; y: 32; width: sr.rgt - 12; height: 16; verticalAlignment: Text.AlignVCenter; visible: !!sr.row.value; text: sr.row.value || ""; elide: Text.ElideMiddle; color: sr.row.danger ? Theme.red400 : Theme.silverA(0.7); font.family: Theme.font; font.pixelSize: 12 }
             Text { x: 12; y: 48; width: sr.rgt - 12; height: 16; verticalAlignment: Text.AlignVCenter; visible: !!sr.row.sub2; text: sr.row.sub2 || ""; elide: Text.ElideRight; color: Theme.silverA(0.5); font.family: Theme.font; font.pixelSize: 12 }
         }
     }
@@ -514,7 +520,9 @@ Column {
         Rectangle {
             id: bx
             property var row: ({})
-            width: parent.width; height: boxRows.height + 24; radius: 8; color: Theme.dark
+            width: parent.width; height: boxRows.height + 24; radius: 8
+            color: row.tone === "browse" ? Qt.rgba(0x0a/255, 0x0a/255, 0x0a/255, 0.6) : Theme.dark
+            border.width: 1; border.color: row.tone === "browse" ? Theme.accent : Qt.rgba(0x3a/255, 0x3a/255, 0x3a/255, 0.4)   // border-hifi-accent/40
             Loader {
                 id: boxRows; x: 12; y: 12; width: parent.width - 24; source: "SettingsRows.qml"
                 onLoaded: { item.level = root.level; item.rows = Qt.binding(function() { return bx.row.children || [] }) }

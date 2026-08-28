@@ -66,7 +66,8 @@ Item {
             readonly property real iconW: v === LibraryModel.Artists || v === LibraryModel.Playlists ? 28
                                         : v === LibraryModel.Tracks || v === LibraryModel.PlaylistTracks ? 13
                                         : v === LibraryModel.Folders ? 15 : 24
-            Rectangle { anchors.fill: parent; radius: 8; color: rowTap.pressed && !rowTap.moved ? Theme.mix(Theme.surface, Theme.wa(0.05), 1) : Theme.surface }
+            // active:bg-hifi-light (bianco 5 % su #161616 era ~#161616: il tocco non si vedeva)
+            Rectangle { anchors.fill: parent; radius: 8; color: rowTap.pressed && !rowTap.moved ? Theme.light : Theme.surface }
             // icona a sinistra
             Item {
                 x: 12; anchors.verticalCenter: parent.verticalCenter; width: row.iconW; height: row.iconW
@@ -103,11 +104,13 @@ Item {
                 text: row.text; elide: Text.ElideRight
                 color: Theme.white; font.family: Theme.font; font.pixelSize: 14
             }
-            Rectangle {                                   // pulsante play a destra
+            Rectangle {                                   // pulsante play a destra (opacity-70, active:opacity-100)
+                id: rowPlay
                 visible: row.playBtn
                 x: parent.width - 12 - 28; anchors.verticalCenter: parent.verticalCenter; width: 28; height: 28; radius: 14
                 color: Theme.goldA(0.2)
-                Icon { anchors.centerIn: parent; anchors.horizontalCenterOffset: 1; name: "play"; filled: true; size: 12; color: Theme.gold }
+                opacity: rowTap.pressed && !rowTap.moved && rowTap.mouseX >= x ? 1 : 0.7
+                Icon { anchors.centerIn: parent; anchors.horizontalCenterOffset: 2; name: "play"; filled: true; size: 12; color: Theme.gold }
             }
             MouseArea {
                 id: rowTap
@@ -156,7 +159,7 @@ Item {
             Item {
                 id: artBox
                 width: root.cardW; height: root.cardW
-                Rectangle { anchors.fill: parent; radius: 12; color: Theme.gray; visible: artImg.status !== Image.Ready
+                DiagonalFallback { anchors.fill: parent; radius: 12; visible: artImg.status !== Image.Ready
                             Icon { anchors.centerIn: parent; name: "disc"; size: 40; color: Theme.silverA(0.2) } }
                 Image {
                     id: artImg; anchors.fill: parent; visible: false
@@ -172,9 +175,14 @@ Item {
                             layer.textureSize: Qt.size(Math.ceil(width * root.devScale), Math.ceil(height * root.devScale))
                             Rectangle { anchors.bottom: parent.bottom; width: parent.width; height: 12 } }
                 ShaderImage { anchors.fill: parent; source: artImg; mask: artMask; visible: artImg.status === Image.Ready }
+                // shadow-lg = 0 10px 15px -3px + 0 4px 6px -4px, nero al 10 %
+                BoxShadow { targetX: parent.width - 36; targetY: parent.height - 36; targetW: 30; targetH: 30; radius: 15; blur: 15; spread: -3; offsetY: 10; color: Theme.blackA(0.1) }
+                BoxShadow { targetX: parent.width - 36; targetY: parent.height - 36; targetW: 30; targetH: 30; radius: 15; blur: 6; spread: -4; offsetY: 4; color: Theme.blackA(0.1) }
                 Rectangle {
-                    x: parent.width - 6 - 30; y: parent.height - 6 - 30; width: 30; height: 30; radius: 15; color: Theme.blackA(0.6)
-                    Icon { anchors.centerIn: parent; anchors.horizontalCenterOffset: 1; name: "play"; filled: true; size: 14; color: Theme.white }
+                    x: parent.width - 6 - 30; y: parent.height - 6 - 30; width: 30; height: 30; radius: 15
+                    color: cardPlayTap.pressed ? Theme.gold : Theme.blackA(0.6)      // active:bg-hifi-gold active:text-black
+                    Icon { anchors.centerIn: parent; anchors.horizontalCenterOffset: 2; name: "play"; filled: true; size: 14; color: cardPlayTap.pressed ? Theme.black : Theme.white }
+                    Tap { id: cardPlayTap; onClicked: root.rowTap(card.index, true) }
                 }
             }
             Text { x: 8; y: artBox.height + 8; width: parent.width - 16; height: 16; verticalAlignment: Text.AlignVCenter; text: card.text; elide: Text.ElideRight; color: Theme.white; font.family: Theme.font; font.pixelSize: 12 }
