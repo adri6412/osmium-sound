@@ -55,6 +55,18 @@ Item {
         // Si parte da 400 px (non 160: a 8x l'immagine era gia' impastata
         // dal solo ingrandimento, sfocatura reale ~130 punti, fondale piatto)
         // e 16 punti / (1280/400) = 5 px di sfocatura sulla sorgente.
+        // 🚨 doppia immagine come nella copertina: le radio cambiano l'indirizzo
+        // ogni dieci secondi e, con una sola, mentre la nuova arriva il fondale
+        // spariva — il lampeggio periodico dell'intera schermata.
+        Image {
+            id: bgPrev
+            asynchronous: false; visible: false
+            sourceSize.width: 400; sourceSize.height: 400
+            width: 400; height: 400
+            fillMode: Image.PreserveAspectCrop
+            layer.enabled: true
+            layer.textureSize: Qt.size(400, 400)
+        }
         Image {
             id: bgSrc
             source: Player.artworkUrl
@@ -62,10 +74,13 @@ Item {
             sourceSize.width: 400; sourceSize.height: 400
             width: 400; height: 400
             fillMode: Image.PreserveAspectCrop
+            layer.enabled: true
+            layer.textureSize: Qt.size(400, 400)
+            onStatusChanged: if (status === Image.Ready) bgPrev.source = source
         }
         MultiEffect {
-            source: bgSrc
-            visible: bgSrc.status === Image.Ready
+            source: bgSrc.status === Image.Ready ? bgSrc : bgPrev
+            visible: bgSrc.status === Image.Ready || bgPrev.status === Image.Ready
             width: 400; height: 400
             x: 512 - 640; y: 300 - 640
             scale: 3.2
