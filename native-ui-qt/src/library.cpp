@@ -166,7 +166,12 @@ void LibraryModel::request(int view, const QVariant &p1, const QVariant &p2, con
     case Apps: params = {"apps", "0", "9999"}; break;
     case MenuHome: params = {"menu", "0", "999", "direct:1"}; break;
     case Menu: params = p1.toList(); if (!input.isEmpty()) params = substituteInput(params, input); break;
-    case PluginItems: params = {s1, "items", "0", "9999"}; if (!s2.isEmpty()) params << "item_id:" + s2; break;
+    // `search:` e' come chiede la ricerca dei plugin (xmlbrowser), non
+    // __TAGGEDINPUT__ del menu Jive
+    case PluginItems: params = {s1, "items", "0", "9999"};
+        if (!s2.isEmpty()) params << "item_id:" + s2;
+        if (!input.isEmpty()) params << "search:" + input;
+        break;
     default:
         beginResetModel(); m_items.clear(); m_order.clear(); endResetModel();
         m_state = 2; emit stateChanged(); emit countChanged(); emit loaded();
@@ -247,7 +252,12 @@ void LibraryModel::parse(int view, const QString &cmd, const QVariantMap &res) {
             o.text = str(it, "name"); if (o.text.isEmpty()) o.text = str(it, "title");
             o.icon = str(it, "icon");
             QString type = str(it, "type");
-            o.hasItems = it.value("hasitems").toInt() == 1 || type == "link";
+            // 🚨 Lyrion marca il nodo di ricerca con type:"search" ma gli mette
+            // ANCHE hasitems:1 (il suo ripiego "Bug 7684"): non e' un vero
+            // sottomenu. Entrandoci si manda al plugin una ricerca vuota, e
+            // alcuni (RadioNet) rispondono con un errore. Va chiesto il testo.
+            o.hasInput = type == "search";
+            o.hasItems = !o.hasInput && (it.value("hasitems").toInt() == 1 || type == "link");
             o.isAudio = it.value("isaudio").toInt() == 1 || type == "audio" || it.contains("play");
             break;
         }

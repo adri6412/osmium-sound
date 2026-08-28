@@ -58,6 +58,7 @@ Item {
             required property bool isDir
             required property bool hasItems
             required property bool isAudio
+            required property bool hasInput          // nodo che chiede del testo (ricerca dei plugin)
             width: listView.width; height: root.pitch - 4
             readonly property int v: root.view
             readonly property bool playBtn: v === LibraryModel.Artists || v === LibraryModel.Playlists || v === LibraryModel.Folders ||
@@ -94,7 +95,7 @@ Item {
                     name: row.v === LibraryModel.Artists ? "user" : row.v === LibraryModel.Playlists ? "list-music"
                         : row.v === LibraryModel.Folders ? (row.isDir ? "folder" : "music")
                         : row.v === LibraryModel.Radios ? "radio" : row.v === LibraryModel.Apps ? "app-window"
-                        : row.v === LibraryModel.PluginItems ? (row.hasItems ? "folder" : "music")
+                        : row.v === LibraryModel.PluginItems ? (row.hasInput ? "search" : row.hasItems ? "folder" : "music")   // lente sul nodo di ricerca, come Electron
                         : (row.v === LibraryModel.MenuHome || row.v === LibraryModel.Menu) ? ((row.go && row.go.length) ? "app-window" : "music") : "music"
                     size: row.v === LibraryModel.Artists ? 13 : row.v === LibraryModel.Playlists ? 14 : row.v === LibraryModel.Folders ? 15 : row.v === LibraryModel.Tracks || row.v === LibraryModel.PlaylistTracks ? 13 : 15
                     color: row.v === LibraryModel.Artists || row.v === LibraryModel.Playlists ? Theme.silver

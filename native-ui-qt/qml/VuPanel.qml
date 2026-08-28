@@ -13,7 +13,9 @@ Item {
     readonly property real px0: (width - pw) / 2
     readonly property real py0: (height - ph) / 2
 
-    Rectangle { x: root.px0; y: root.py0; width: root.pw; height: root.ph; color: Theme.dark }
+    // 🚨 niente riquadro di fondo: in Electron ci sono solo i due quadranti e la
+    // cornice, che ha gli angoli trasparenti — dietro si deve vedere il fondale
+    // del Now Playing. Il rettangolo scuro lo copriva con un riquadro nero.
     Image {
         x: root.px0; y: root.py0; width: root.pw; height: root.ph
         source: Sys.assets + "/vu-meter-dials.png"

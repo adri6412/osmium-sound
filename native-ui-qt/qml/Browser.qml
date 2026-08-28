@@ -19,6 +19,7 @@ Item {
     property bool msearchOpen: false
     property string msearchTitle: ""
     property var msearchGo: []
+    property var msearchPlugin: null      // { cmd, item } quando la ricerca e' di un plugin (Radio/App)
     property alias settingsTab: settingsTab
     property alias discoverTab: discoverTab
     x: 341; width: 1024 - 341; height: 600
@@ -87,7 +88,7 @@ Item {
         if (it.hasInput && it.go && it.go.length) {
             msearchOpen = true; msearch.text = ""
             msearchTitle = it.text || Tr.t("player.titles.search")
-            msearchGo = it.go
+            msearchGo = it.go; msearchPlugin = null
             msearch.takeFocus()
         } else if (it.go && it.go.length) goView(LibraryModel.Menu, it.text, it.go)
         else if (it.play && it.play.length) Player.cmd(it.play)
@@ -95,6 +96,12 @@ Item {
     }
     function submitMsearch() {
         if (!msearchOpen || !msearch.text) return
+        if (msearchPlugin) {                       // ricerca dentro un plugin (Radio/App)
+            var sameP = cur.view === LibraryModel.PluginItems && cur.p1 === msearchPlugin.cmd && cur.p2 === msearchPlugin.item
+            goView(LibraryModel.PluginItems, msearchTitle, msearchPlugin.cmd, msearchPlugin.item, msearch.text, sameP)
+            msearchOpen = true
+            return
+        }
         var same = cur.view === LibraryModel.Menu && JSON.stringify(cur.p1) === JSON.stringify(msearchGo)
         goView(LibraryModel.Menu, msearchTitle, msearchGo, "", msearch.text, same)
         msearchOpen = true
@@ -117,7 +124,13 @@ Item {
             if (onPlay && it.play && it.play.length) Player.cmd(it.play); else menuItemTap(it); break
         case LibraryModel.PluginItems: {
             var cmd = cur.p1
-            if (!onPlay && it.hasItems) goView(LibraryModel.PluginItems, it.text, cmd, it.id)
+            if (!onPlay && it.hasInput) {          // nodo di ricerca del plugin: si chiede il testo
+                msearchOpen = true; msearch.text = ""
+                msearchTitle = it.text || Tr.t("player.titles.search")
+                msearchGo = []; msearchPlugin = { cmd: cmd, item: it.id }
+                msearch.takeFocus()
+            }
+            else if (!onPlay && it.hasItems) goView(LibraryModel.PluginItems, it.text, cmd, it.id)
             else if (it.isAudio || onPlay) Player.cmd([cmd, "playlist", "play", "item_id:" + it.id])
             break
         }
