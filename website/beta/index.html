@@ -338,6 +338,41 @@
     }
     .lb-close:hover { color: var(--text); }
 
+    /* ── DOWNLOAD + KO-FI POPUP ──────────────────────── */
+    /* Same overlay as the lightbox. Every flasher/ISO button opens it first;
+       both answers start the download, the first one also opens Ko-fi. */
+    .dl-modal {
+      display: none; position: fixed; inset: 0; z-index: 9999;
+      background: rgba(0,0,0,0.82);
+      align-items: center; justify-content: center;
+      padding: 1rem;
+    }
+    .dl-modal.open { display: flex; }
+    .dl-modal-card {
+      position: relative; width: 100%; max-width: 440px;
+      background: var(--bg-card); border: 1px solid var(--border);
+      border-radius: 14px; padding: 2.25rem 1.75rem 1.5rem;
+      box-shadow: 0 24px 80px rgba(0,0,0,0.7);
+      text-align: center;
+    }
+    .dl-modal-close {
+      position: absolute; top: 0.55rem; right: 0.9rem;
+      font-size: 1.6rem; line-height: 1; color: var(--muted);
+      background: none; border: none; cursor: pointer; transition: color 0.2s;
+    }
+    .dl-modal-close:hover { color: var(--text); }
+    .dl-modal-logo { width: 56px; height: auto; display: block; margin: 0 auto 0.9rem; }
+    .dl-modal-card h3 { margin: 0 0 0.6rem; font-size: 1.2rem; font-weight: 700; }
+    .dl-modal-card > p { margin: 0 0 1.4rem; color: var(--muted); font-size: 0.92rem; line-height: 1.6; }
+    .dl-modal-actions { display: flex; flex-direction: column; gap: 0.7rem; }
+    .dl-modal-actions .btn-primary, .dl-modal-actions .btn-secondary { justify-content: center; }
+    .dl-modal-card .dl-modal-hint { margin: 1rem 0 0; font-size: 0.8rem; }
+    .dl-modal-card .dl-modal-file {
+      margin: 0.35rem 0 0; font-size: 0.78rem; opacity: 0.7;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      word-break: break-all;
+    }
+
     /* ── SPECS ───────────────────────────────────────── */
     #specs { border-top: 1px solid var(--border); }
     .specs-inner {
@@ -1163,6 +1198,28 @@
   <img id="lightboxImg" src="" alt="">
 </div>
 
+<!-- DOWNLOAD + KO-FI POPUP: the flasher/ISO buttons open this before downloading -->
+<div class="dl-modal" id="dlModal" role="dialog" aria-modal="true" aria-labelledby="dlModalTitle" aria-hidden="true">
+  <div class="dl-modal-card">
+    <button type="button" class="dl-modal-close" id="dlModalClose" aria-label="Close">&#215;</button>
+    <img class="dl-modal-logo" src="../kofi.png" alt="" width="56" height="45">
+    <h3 id="dlModalTitle" data-en="Care to support Osmium Sound?" data-it="Vuoi sostenere Osmium Sound?">Care to support Osmium Sound?</h3>
+    <p data-en="Osmium Sound is free and made in spare time. A small tip on Ko-fi helps pay for the servers and the hours that go into it. Either way, your download starts right away." data-it="Osmium Sound è gratuito ed è fatto nel tempo libero. Un piccolo contributo su Ko-fi aiuta a pagare i server e le ore che ci vogliono. In ogni caso il download parte subito.">Osmium Sound is free and made in spare time. A small tip on Ko-fi helps pay for the servers and the hours that go into it. Either way, your download starts right away.</p>
+    <div class="dl-modal-actions">
+      <a class="btn-primary" id="dlModalDonate" href="https://ko-fi.com/osmiumsound" target="_blank" rel="noopener">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>
+        <span data-en="Download and donate on Ko-fi" data-it="Scarica e dona su Ko-fi">Download and donate on Ko-fi</span>
+      </a>
+      <a class="btn-secondary" id="dlModalPlain" href="#install">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        <span data-en="Just download" data-it="Scarica soltanto">Just download</span>
+      </a>
+    </div>
+    <p class="dl-modal-hint" data-en="Ko-fi opens in a new tab; the file downloads here." data-it="Ko-fi si apre in una nuova scheda; il file si scarica qui.">Ko-fi opens in a new tab; the file downloads here.</p>
+    <p class="dl-modal-file" id="dlModalFile"></p>
+  </div>
+</div>
+
 <script>
   // ── Bilingual EN / IT support ────────────────────────────────
   const screens = [
@@ -1351,6 +1408,59 @@
     showFlasherFor(pick);
   }
   applyGate();
+
+  // Download popup: every flasher/ISO button first asks whether to leave a
+  // tip on Ko-fi. Both answers start the download; the first one also opens
+  // Ko-fi in a new tab through a real link, so no popup blocker gets in the
+  // way. Buttons without an href (before the privacy notice is accepted) are
+  // left alone, and so are ctrl/shift/middle clicks — those keep opening a
+  // new tab.
+  const dlModal = document.getElementById('dlModal');
+  if (dlModal) {
+    const dlDonate = document.getElementById('dlModalDonate');
+    const dlPlain  = document.getElementById('dlModalPlain');
+    const dlFile   = document.getElementById('dlModalFile');
+    const dlClose  = document.getElementById('dlModalClose');
+    let dlUrl = null, dlOpener = null;
+
+    function openDlModal(url, opener) {
+      dlUrl = url; dlOpener = opener;
+      dlPlain.setAttribute('href', url);
+      if (dlFile) dlFile.textContent = url.split('/').pop();
+      dlModal.classList.add('open');
+      dlModal.setAttribute('aria-hidden', 'false');
+      document.body.style.overflow = 'hidden';
+      dlDonate.focus();
+    }
+    function closeDlModal() {
+      if (!dlModal.classList.contains('open')) return;
+      dlModal.classList.remove('open');
+      dlModal.setAttribute('aria-hidden', 'true');
+      document.body.style.overflow = '';
+      dlUrl = null;
+      if (dlOpener) { dlOpener.focus(); dlOpener = null; }
+    }
+
+    document.querySelectorAll('.flasher-dl, #macIsoBtn, #isoDownloadBtn').forEach(a => {
+      a.addEventListener('click', e => {
+        const url = a.getAttribute('href');
+        if (!url || e.ctrlKey || e.metaKey || e.shiftKey || e.altKey) return;
+        e.preventDefault();
+        openDlModal(url, a);
+      });
+    });
+    // Ko-fi opens through the link itself; the download starts right after,
+    // once the new tab is already on its way.
+    dlDonate.addEventListener('click', () => {
+      const url = dlUrl;
+      closeDlModal();
+      if (url) setTimeout(() => window.location.assign(url), 0);
+    });
+    dlPlain.addEventListener('click', () => closeDlModal());   // its href is the file itself
+    dlClose.addEventListener('click', closeDlModal);
+    dlModal.addEventListener('click', e => { if (e.target === e.currentTarget) closeDlModal(); });
+    document.addEventListener('keydown', e => { if (e.key === 'Escape') closeDlModal(); });
+  }
 
   // Auto-advance
   function startAuto() { autoTimer = setInterval(() => goTo(current + 1), 4800); }
