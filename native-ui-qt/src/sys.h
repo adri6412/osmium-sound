@@ -45,6 +45,7 @@ public:
     Q_INVOKABLE bool setConf(const QString &name, const QString &value) const;
     Q_INVOKABLE bool shot(const QString &path) const;
     Q_INVOKABLE void rescanInput();
+    void noteRealKey();               // un tasto lettera premuto davvero
     Q_INVOKABLE void quit() const;
     Q_INVOKABLE qint64 now() const;                  // ms monotonici
     Q_INVOKABLE QString upper(const QString &s) const { return s.toUpper(); }
@@ -68,6 +69,7 @@ private:
     QString m_assets, m_configDir;
     QString m_iconDir, m_iconCacheDir;
     QHash<QString, QString> m_tinted;   // chiave nome|colore -> URL del file
+    bool m_realKeyPressed = false, m_inputLogged = false, m_loggedKb = false, m_loggedTouch = false;
     bool m_hasKeyboard = false, m_hasTouch = false, m_pointer = true, m_dev = false, m_startExpanded = false;
     QString m_forcedWizard;
     QFileSystemWatcher m_watch;

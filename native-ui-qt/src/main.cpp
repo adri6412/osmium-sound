@@ -49,8 +49,16 @@ protected:
     bool eventFilter(QObject *, QEvent *e) override {
         switch (e->type()) {
         case QEvent::MouseButtonPress: case QEvent::MouseMove: case QEvent::Wheel:
-        case QEvent::TouchBegin: case QEvent::TouchUpdate: case QEvent::KeyPress:
+        case QEvent::TouchBegin: case QEvent::TouchUpdate:
             m_sys->noteInput(); break;
+        case QEvent::KeyPress: {
+            m_sys->noteInput();
+            // solo le lettere: i tasti di un telecomando a infrarossi (cifre,
+            // frecce, invio) non sono "qualcuno sta scrivendo su una tastiera"
+            const int k = static_cast<QKeyEvent *>(e)->key();
+            if (k >= Qt::Key_A && k <= Qt::Key_Z) m_sys->noteRealKey();
+            break;
+        }
         default: break;
         }
         return false;

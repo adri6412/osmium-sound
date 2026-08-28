@@ -6,6 +6,9 @@
 #include <QUrl>
 #include <QElapsedTimer>
 #include <QFile>
+#include <QFileInfo>
+#include <QSet>
+#include <QRegularExpression>
 #include <QGuiApplication>
 #include <QImage>
 #include <QPainter>
@@ -49,30 +52,108 @@ static bool testBit(const unsigned long *arr, int bit) {
 // Stessa discriminante di input.c / main/inputDevices.js: una tastiera ha le
 // lettere vere, non solo tasti speciali (i controller touch compositi e la
 // PS/2 fantasma non contano).
+// ─── quale dispositivo e' "una tastiera su cui si puo' scrivere" ────────────
+// 🚨 Stessa regola di main/inputDevices.js del kiosk Electron, e per lo stesso
+// motivo: NON basta chiedere "esiste un dispositivo con i tasti", perche'
+//   - quasi tutti i controller dei touchscreen USB (ILITEK, eGalax, Elo,
+//     Weida, i pannelli HDMI stile WaveShare) sono dispositivi HID composti e
+//     accanto al digitalizzatore espongono una "tastiera";
+//   - il vecchio controller PS/2 di quasi tutte le schede x86 registra una
+//     "AT Translated Set 2 keyboard" anche senza niente attaccato.
+// Prendere per buone quelle due cose significa spegnere la tastiera a schermo
+// su un apparecchio che si usa SOLO col dito: nessun modo di scrivere.
+// Quindi: tastiera completa, su un bus a cui si attacca qualcosa (USB o
+// Bluetooth), e il cui pezzo di ferro non sia anche un touchscreen.
+// Le tastiere interne dei portatili (i8042/I2C/SPI) restano fuori di
+// proposito: le copre il tasto lettera premuto davvero (Sys::noteRealKey).
+static QString sysfsRead(const QString &path) {
+    QFile f(path);
+    if (!f.open(QIODevice::ReadOnly | QIODevice::Text)) return QString();
+    return QString::fromLatin1(f.readAll()).trimmed();
+}
+
+// I bitmap di sysfs sono parole esadecimali, la piu' significativa per prima.
+static bool sysfsBit(const QString &text, int bit) {
+    if (text.isEmpty()) return false;
+    const QStringList words = text.split(QRegularExpression("\\s+"), Qt::SkipEmptyParts);
+    const int wordBits = int(sizeof(unsigned long) * 8);
+    const int idx = words.size() - 1 - bit / wordBits;      // l'ultima parola sono i bit bassi
+    if (idx < 0 || idx >= words.size()) return false;
+    bool ok = false;
+    const qulonglong w = words.at(idx).toULongLong(&ok, 16);
+    return ok && ((w >> (bit % wordBits)) & 1ULL);
+}
+
+// Il pezzo di ferro a cui appartiene un dispositivo: un USB composto (touch +
+// "tastiera", oppure tastiera + touchpad, o un ricevitore senza fili) si
+// dirama in piu' dispositivi che pendono tutti dalla stessa cartella del
+// dispositivo USB (quella con idVendor; le interfacce hanno bInterfaceNumber).
+static QString physicalUnit(const QString &inputDir) {
+    QString dev = QFileInfo(inputDir + "/device").canonicalFilePath();
+    if (dev.isEmpty()) return inputDir;
+    static const QRegularExpression hci("^hci\\d+:\\d+$");
+    for (QString d = dev; d.length() > 1 && d != "/sys"; d = QFileInfo(d).path()) {
+        if (QFile::exists(d + "/idVendor")) return d;
+        if (hci.match(QFileInfo(d).fileName()).hasMatch()) return d;
+    }
+    return dev;
+}
+
 void Sys::rescanInput() {
+    // radice sovrascrivibile: serve alle prove con un finto albero sysfs
+    QString root = qEnvironmentVariable("HIFI_SYSFS_INPUT");
+    if (root.isEmpty()) root = "/sys/class/input";
     bool kb = false, touch = false;
-    QDir d("/dev/input");
-    for (const QString &name : d.entryList({"event*"}, QDir::System | QDir::Files | QDir::NoDotAndDotDot)) {
-        int fd = open(QString("/dev/input/" + name).toLocal8Bit().constData(), O_RDONLY | O_NONBLOCK | O_CLOEXEC);
-        if (fd < 0) continue;
-        unsigned long evbits[(EV_MAX + 8 * sizeof(long)) / (8 * sizeof(long))] = {0};
-        unsigned long keybits[(KEY_MAX + 8 * sizeof(long)) / (8 * sizeof(long))] = {0};
-        unsigned long absbits[(ABS_MAX + 8 * sizeof(long)) / (8 * sizeof(long))] = {0};
-        unsigned long relbits[(REL_MAX + 8 * sizeof(long)) / (8 * sizeof(long))] = {0};
-        ioctl(fd, EVIOCGBIT(0, sizeof evbits), evbits);
-        ioctl(fd, EVIOCGBIT(EV_KEY, sizeof keybits), keybits);
-        ioctl(fd, EVIOCGBIT(EV_ABS, sizeof absbits), absbits);
-        ioctl(fd, EVIOCGBIT(EV_REL, sizeof relbits), relbits);
-        close(fd);
-        bool hasAbs = testBit(evbits, EV_ABS) && (testBit(absbits, ABS_MT_POSITION_X) || testBit(absbits, ABS_X));
-        bool isTouch = hasAbs && testBit(keybits, BTN_TOUCH);
-        bool isMouse = testBit(evbits, EV_REL) && testBit(relbits, REL_X) && testBit(relbits, REL_Y) && testBit(keybits, BTN_LEFT);
-        bool isKey = testBit(evbits, EV_KEY) && testBit(keybits, KEY_A) && testBit(keybits, KEY_Z) && testBit(keybits, KEY_SPACE) && !isMouse;
-        if (isKey) kb = true;
+    struct Dev { bool isKeyboard, isTouch; int bus; QString unit; };
+    QList<Dev> devs;
+    const QStringList entries = QDir(root).entryList(QStringList("input*"), QDir::Dirs | QDir::NoDotAndDotDot);
+    for (const QString &e : entries) {
+        const QString dir = root + "/" + e;
+        const QString key = sysfsRead(dir + "/capabilities/key");
+        const QString abs = sysfsRead(dir + "/capabilities/abs");
+        const QString props = sysfsRead(dir + "/properties");
+        // tastiera completa: tutti i tasti da ESC a D (codici 1..31), come udev
+        bool isKeyboard = true;
+        for (int b = 1; b <= 31 && isKeyboard; b++) if (!sysfsBit(key, b)) isKeyboard = false;
+        // touchscreen: puntamento diretto, oppure X/Y assolute con BTN_TOUCH e
+        // senza cio' che ne farebbe un touchpad, una tavoletta o un mouse assoluto
+        bool isTouch;
+        if (sysfsBit(props, INPUT_PROP_DIRECT)) isTouch = true;
+        else if (sysfsBit(props, INPUT_PROP_POINTER)) isTouch = false;
+        else {
+            const bool xy = (sysfsBit(abs, ABS_X) && sysfsBit(abs, ABS_Y))
+                         || (sysfsBit(abs, ABS_MT_POSITION_X) && sysfsBit(abs, ABS_MT_POSITION_Y));
+            isTouch = xy && sysfsBit(key, BTN_TOUCH)
+                      && !sysfsBit(key, BTN_TOOL_FINGER) && !sysfsBit(key, BTN_TOOL_PEN)
+                      && !sysfsBit(key, BTN_STYLUS) && !sysfsBit(key, BTN_LEFT);
+        }
+        const int bus = sysfsRead(dir + "/id/bustype").toInt(nullptr, 16);
+        devs.append({ isKeyboard, isTouch, bus, physicalUnit(dir) });
         if (isTouch) touch = true;
     }
+    QSet<QString> touchUnits;
+    for (const Dev &d : devs) if (d.isTouch) touchUnits.insert(d.unit);
+    for (const Dev &d : devs)
+        if (d.isKeyboard && (d.bus == 0x03 || d.bus == 0x05) && !touchUnits.contains(d.unit)) kb = true;
+    if (m_realKeyPressed) kb = true;                 // qualcuno ha premuto una lettera vera
     if (qEnvironmentVariableIsSet("HIFI_NO_KEYBOARD")) kb = false;
     if (kb != m_hasKeyboard || touch != m_hasTouch) { m_hasKeyboard = kb; m_hasTouch = touch; emit hasKeyboardChanged(); }
+    // in chiaro nel giornale: e' la riga che spiega perche' la tastiera a
+    // schermo compare o no su un apparecchio in campo
+    if (!m_inputLogged || kb != m_loggedKb || touch != m_loggedTouch) {
+        m_inputLogged = true; m_loggedKb = kb; m_loggedTouch = touch;
+        qInfo("input: tastiera su cui scrivere=%s, touchscreen=%s (%lld dispositivi)",
+              kb ? "si" : "no", touch ? "si" : "no", (long long)devs.size());
+    }
+}
+
+// Un tasto lettera premuto davvero: copre le tastiere interne dei portatili,
+// che la regola sopra lascia fuori. La tastiera a schermo non passa di qui
+// (scrive nel campo senza generare eventi di tasto).
+void Sys::noteRealKey() {
+    if (m_realKeyPressed) return;
+    m_realKeyPressed = true;
+    if (!m_hasKeyboard) { m_hasKeyboard = true; emit hasKeyboardChanged(); }
 }
 
 void Sys::setPointerEnabled(bool on) {
