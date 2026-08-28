@@ -211,6 +211,14 @@ public final class Preferences {
     // Name this phone appears under in Lyrion.
     public static final String KEY_LOCAL_PLAYER_NAME = "squeezer.localplayer.name";
 
+    /**
+     * Where the server answers from outside the house — over Tailscale, its
+     * MagicDNS name. Deliberately not filed under the Wi-Fi network the way the
+     * ordinary address is: the whole point of it is the networks that are not
+     * home.
+     */
+    public static final String KEY_REMOTE_ADDRESS = "squeezer.remote_address";
+
     // Stream quality, chosen separately for Wi-Fi and mobile data.
     public static final String KEY_LOCAL_PLAYER_QUALITY_WIFI = "squeezer.localplayer.quality.wifi";
     public static final String KEY_LOCAL_PLAYER_QUALITY_MOBILE = "squeezer.localplayer.quality.mobile";
@@ -767,6 +775,26 @@ public final class Preferences {
     public boolean isOsmiumAppliance() {
         ServerKind kind = getServerKind();
         return kind == null ? getAppliancePairToken() != null : kind == ServerKind.OSMIUM;
+    }
+
+    /** The address to try when the usual one does not answer, or null. */
+    @Nullable
+    public String getRemoteAddress() {
+        return getStringPreference(KEY_REMOTE_ADDRESS);
+    }
+
+    /**
+     * Remembers the address that actually worked as the one to use on every
+     * network other than the Wi-Fi it was set up on. Coming home, the
+     * network-specific entry wins again, so the local address returns by itself.
+     */
+    public void rememberReachableAddress(ServerAddress serverAddress) {
+        String withoutNetwork = serverAddress.localAddress() + "_";
+        sharedPreferences.edit()
+                .putString(KEY_SERVER_ADDRESS, serverAddress.address)
+                .putString(withoutNetwork + KEY_USERNAME, serverAddress.userName)
+                .putString(withoutNetwork + KEY_PASSWORD, serverAddress.password)
+                .apply();
     }
 
     /** Whether this phone offers itself to Lyrion as a player. */

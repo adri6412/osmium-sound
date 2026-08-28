@@ -1,20 +1,27 @@
-Osmium Sound Companion is the official remote control app for your Osmium Sound hi-fi appliance. Pair instantly by scanning the QR code shown in Osmium Sound → Settings → Phone control, then control playback from anywhere on your local network.
+Osmium Sound Companion turns your phone into the remote control for your music — and, when you want it to, into one of the players.
 
-Features include:
+It works with an Osmium Sound hi-fi appliance and with any Lyrion Music Server on your network.
 
-&bull; Browse the library by album artist, all artists, composers, album, genre, year, playlist, favorites, or new music
-&bull; Playlist control (now playing, shuffle, repeat, save/clear/modify playlists)
-&bull; Manage players (names, synchronisation groups, sleep, alarms)
-&bull; Full library search
-&bull; Internet radio support (browse, staff picks, search)
-&bull; Browse music folders
-&bull; Library Views and Remote Music Libraries
-&bull; Automatic discovery of Osmium Sound appliances on the local network
-&bull; QR code pairing
-&bull; DSP settings and system administration controls
-&bull; Home Screen Widgets
-&bull; Alarm Clock management
-&bull; Add/remove music from favorites
-&bull; Display lyrics
+PLAY ON THE PHONE ITSELF
+The app can register with your server as a player of its own, so the phone appears in the player list next to the appliance and everything else in the house. Pick it and the music comes out of the phone's speaker or headphones, with no gap between tracks, while the queue and the volume stay under control from wherever you are. Choose lossless over Wi‑Fi and something lighter on mobile data, or turn the whole thing off if you never want it.
 
-Osmium Sound Companion is free and open source (Apache License 2.0), built on the android-squeezer project. It only talks to your own Osmium Sound appliance over your local network — no cloud service, no tracking, no ads.
+YOUR WHOLE LIBRARY
+Browse by album artist, artist, composer, album, genre, year, playlist, favourites or new music. Search the lot. Internet radio, music folders, library views and remote libraries are all there, along with lyrics and cover art.
+
+EVERY PLAYER IN THE HOUSE
+Switch between players, group them to play in sync, rename them, set sleep timers and alarms, and adjust the volume of one room or of a whole group.
+
+SET UP IN SECONDS
+With an Osmium Sound device, scan the QR code it shows under Settings and you are paired. With any other Lyrion server, type in its address and port. Away from home it works over a VPN such as Tailscale: put in the name your server has on the tunnel and everything behaves as it does on the sofa.
+
+WITH AN OSMIUM SOUND APPLIANCE
+Audio output, multiroom, updates, backup and restore, system settings and library rescan, all from the phone.
+
+ALSO INSIDE
+Home screen widgets, downloads for listening offline, alarm clock, favourites, and a dark interface built to match the appliance's own.
+
+Free and open source under the Apache License 2.0, built on the android-squeezer project by Kurt Aaholst and contributors. Osmium Sound is not affiliated with the Lyrion project.
+
+The app talks only to your own server, on your own network. No cloud service, no account, no tracking, no advertising.
+
+You need a Lyrion Music Server or an Osmium Sound appliance for the app to control.

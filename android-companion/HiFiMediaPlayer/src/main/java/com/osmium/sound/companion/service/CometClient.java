@@ -35,6 +35,9 @@ import org.eclipse.jetty.util.B64Code;
 
 import java.net.Authenticator;
 import java.net.PasswordAuthentication;
+import java.io.IOException;
+import java.net.InetSocketAddress;
+import java.net.Socket;
 import java.net.URI;
 import java.net.URL;
 import java.util.ArrayList;
@@ -208,7 +211,9 @@ class CometClient extends BaseClient {
         mBackgroundHandler.post(() -> {
             cleanupBayeuxClient();
 
-            final Preferences.ServerAddress serverAddress = HiFiMediaPlayer.getPreferences().getServerAddress();
+            final Preferences preferences = HiFiMediaPlayer.getPreferences();
+            final Preferences.ServerAddress serverAddress = preferences.getServerAddress();
+            useRemoteAddressIfHomeIsUnreachable(preferences, serverAddress);
             mConnectionState.initLastScan(serverAddress.lastScan);
             final String username = serverAddress.userName;
             final String password = serverAddress.password;
@@ -292,6 +297,37 @@ class CometClient extends BaseClient {
 
             mBayeuxClient.handshake();
         });
+    }
+
+    /**
+     * The pairing QR can only ever carry a local address, so from outside the
+     * house the stored one is unreachable however good the tunnel is. If the
+     * user gave an address for away-from-home — a Tailscale MagicDNS name —
+     * and the usual one does not answer, connect through that instead, and
+     * remember it for the networks that are not home.
+     */
+    private void useRemoteAddressIfHomeIsUnreachable(Preferences preferences,
+                                                     Preferences.ServerAddress serverAddress) {
+        String remote = preferences.getRemoteAddress();
+        if (remote == null || remote.trim().isEmpty()) return;
+        if (isReachable(serverAddress.host(), serverAddress.port())) return;
+
+        Log.i(TAG, serverAddress.address() + " does not answer: trying " + remote);
+        serverAddress.setAddress(remote);
+        if (isReachable(serverAddress.host(), serverAddress.port())) {
+            preferences.rememberReachableAddress(serverAddress);
+        }
+    }
+
+    /** A short knock on the door: this runs on the connect thread, not the UI. */
+    private static boolean isReachable(String host, int port) {
+        if (host == null) return false;
+        try (Socket socket = new Socket()) {
+            socket.connect(new InetSocketAddress(host, port), 1200);
+            return true;
+        } catch (IOException | IllegalArgumentException e) {
+            return false;
+        }
     }
 
     private void cleanupBayeuxClient() {

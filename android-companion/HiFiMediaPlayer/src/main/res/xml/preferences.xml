@@ -18,6 +18,97 @@
 <PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android"
     android:key="first_preferencescreen">
 
+    <!-- The appliance comes first and says so. Before, these lived near the
+         bottom behind a bare "Osmium Sound" line, and nothing told you that
+         what was inside belonged to the device rather than to the app. -->
+    <PreferenceCategory
+        android:key="squeezer.category.appliance"
+        android:title="@string/settings_category_appliance">
+
+        <PreferenceScreen
+            android:key="squeezer.osmium_sound"
+            android:icon="@drawable/ic_osmium_device"
+            android:title="@string/settings_category_osmium_sound"
+            android:summary="@string/settings_category_osmium_sound_summary">
+
+            <Preference
+                android:key="squeezer.audio_output.open"
+                android:icon="@drawable/ic_action_volume"
+                android:title="@string/settings_audio_output_title"
+                android:summary="@string/settings_audio_output_summary"/>
+
+            <Preference
+                android:key="squeezer.multiroom.open"
+                android:icon="@drawable/ic_speaker"
+                android:title="@string/settings_multiroom_title"
+                android:summary="@string/settings_multiroom_summary"/>
+
+            <Preference
+                android:key="squeezer.updates.open"
+                android:icon="@drawable/ic_download"
+                android:title="@string/settings_updates_title"
+                android:summary="@string/settings_updates_summary"/>
+
+            <Preference
+                android:key="squeezer.backup.open"
+                android:icon="@drawable/ic_save"
+                android:title="@string/settings_backup_title"
+                android:summary="@string/settings_backup_summary"/>
+
+            <Preference
+                android:key="squeezer.system_admin.open"
+                android:icon="@drawable/ic_settings"
+                android:title="@string/settings_system_admin_title"
+                android:summary="@string/settings_system_admin_summary"/>
+
+        <PreferenceCategory
+            android:title="@string/settings_category_lyrion_server">
+
+            <Preference
+                android:key="squeezer.lyrion_rescan.open"
+                android:title="@string/settings_lyrion_rescan_title"
+                android:summary="@string/settings_lyrion_rescan_summary"/>
+
+        <!-- Which look Lyrion's web player serves (Osmium / Material) — the
+             same chooser the kiosk and admin-webui offer in their Lyrion
+             section. Talks to sources_server's /api/lms_skin directly;
+             hidden at runtime when the appliance can't answer (older bundle,
+             not paired yet, or no local Lyrion to skin). -->
+            <Preference
+                android:key="squeezer.lyrion_skin.open"
+                android:title="@string/settings_lyrion_skin_title"
+                android:summary="@string/settings_lyrion_skin_summary"/>
+        </PreferenceCategory>
+        </PreferenceScreen>
+    </PreferenceCategory>
+
+    <!-- How the app reaches the server, including from outside the house. -->
+    <PreferenceCategory
+        android:key="squeezer.category.connection"
+        android:title="@string/settings_category_connection">
+
+        <Preference
+            android:key="squeezer.server_address.open"
+            android:icon="@drawable/ic_dns"
+            android:title="@string/settings_server_address_title"/>
+
+        <EditTextPreference
+            android:key="squeezer.remote_address"
+            android:icon="@drawable/ic_globe"
+            android:title="@string/settings_remote_address_title"
+            android:summary="@string/settings_remote_address_summary"/>
+    </PreferenceCategory>
+
+    <PreferenceCategory
+        android:key="squeezer.category.playback"
+        android:title="@string/settings_category_playback">
+
+        <Preference
+            android:key="squeezer.playback.open"
+            android:icon="@drawable/ic_action_play"
+            android:title="@string/settings_playback_open_title"
+            android:summary="@string/settings_playback_open_summary"/>
+
     <com.osmium.sound.companion.IntEditTextPreference
         android:key="squeezer.fadeInSecs"
         android:title="@string/settings_fadeinsecs_title"
@@ -31,6 +122,7 @@
     <CheckBoxPreference
         android:key="squeezer.restore_after_call"
         android:summary="@string/settings_restore_after_call"/>
+    </PreferenceCategory>
 
     <PreferenceCategory
         android:title="@string/settings_category_display">
@@ -219,68 +311,6 @@
          (see commit 1dd7868). DspSettingsActivity and its backend endpoints
          stay fully intact, just unreachable from this menu. -->
 
-    <!-- Osmium Sound: appliance settings that also exist in the web admin,
-         grouped under one submenu with the exact same section names/wording
-         as admin-webui's Settings.vue (see settings.sections.* in its i18n
-         locales), in the same relative order. Only sections with a working
-         Android equivalent are listed — no dead entries for the webui-only
-         sections (Network, Music sources, Services, Tailscale, Timezone,
-         Companion app, Web account, Language) that have no /api/system/*
-         proxy route reachable from here yet. -->
-    <PreferenceScreen
-        android:key="squeezer.osmium_sound"
-        android:title="@string/settings_category_osmium_sound">
 
-        <Preference
-            android:key="squeezer.audio_output.open"
-            android:title="@string/settings_audio_output_title"
-            android:summary="@string/settings_audio_output_summary"/>
 
-        <Preference
-            android:key="squeezer.multiroom.open"
-            android:title="@string/settings_multiroom_title"
-            android:summary="@string/settings_multiroom_summary"/>
-
-        <Preference
-            android:key="squeezer.updates.open"
-            android:title="@string/settings_updates_title"
-            android:summary="@string/settings_updates_summary"/>
-
-        <Preference
-            android:key="squeezer.backup.open"
-            android:title="@string/settings_backup_title"
-            android:summary="@string/settings_backup_summary"/>
-
-        <Preference
-            android:key="squeezer.system_admin.open"
-            android:title="@string/settings_system_admin_title"
-            android:summary="@string/settings_system_admin_summary"/>
-    </PreferenceScreen>
-
-    <PreferenceCategory
-        android:title="@string/settings_category_playback">
-
-        <Preference
-            android:key="squeezer.playback.open"
-            android:title="@string/settings_category_playback"/>
-    </PreferenceCategory>
-
-    <PreferenceCategory
-        android:title="@string/settings_category_lyrion_server">
-
-        <Preference
-            android:key="squeezer.lyrion_rescan.open"
-            android:title="@string/settings_lyrion_rescan_title"
-            android:summary="@string/settings_lyrion_rescan_summary"/>
-
-        <!-- Which look Lyrion's web player serves (Osmium / Material) — the
-             same chooser the kiosk and admin-webui offer in their Lyrion
-             section. Talks to sources_server's /api/lms_skin directly;
-             hidden at runtime when the appliance can't answer (older bundle,
-             not paired yet, or no local Lyrion to skin). -->
-        <Preference
-            android:key="squeezer.lyrion_skin.open"
-            android:title="@string/settings_lyrion_skin_title"
-            android:summary="@string/settings_lyrion_skin_summary"/>
-    </PreferenceCategory>
 </PreferenceScreen>

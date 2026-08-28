@@ -61,6 +61,7 @@ public class SettingsFragment  extends PreferenceFragmentCompat implements
     private final String TAG = "SettingsFragment";
 
     private static final String KEY_OSMIUM_SOUND = "squeezer.osmium_sound";
+    private static final String KEY_APPLIANCE_CATEGORY = "squeezer.category.appliance";
     private static final String KEY_LYRION_SKIN = "squeezer.lyrion_skin.open";
 
     // Progress polling for the web-player skin change (see
@@ -99,6 +100,16 @@ public class SettingsFragment  extends PreferenceFragmentCompat implements
         getPreferenceManager().setSharedPreferencesName(Preferences.NAME);
         setPreferencesFromResource(R.xml.preferences, rootKey);
 
+        // Inside a submenu the bar must say which submenu it is. The activity
+        // sets it when navigating, but not when the fragment is rebuilt — after
+        // a rotation, or when the system restores the screen — and a page
+        // headed "Settings" is exactly the confusion this reorganisation is
+        // meant to remove.
+        if (rootKey != null && getPreferenceScreen() != null
+                && getPreferenceScreen().getTitle() != null) {
+            requireActivity().setTitle(getPreferenceScreen().getTitle());
+        }
+
         // The "Osmium Sound" screen is a nested PreferenceScreen: when opened,
         // rootKey scopes findPreference() to just its own children, so only
         // wire up the preferences that actually live under it.
@@ -108,6 +119,10 @@ public class SettingsFragment  extends PreferenceFragmentCompat implements
             fillUpdatesPreferences();
             fillSystemAdminPreferences();
             fillMultiroomPreferences();
+            // The Lyrion entries moved in here: they act on the device's own
+            // server, so this is where someone looks for them.
+            fillLyrionRescanPreferences();
+            fillLyrionSkinPreferences();
             return;
         }
 
@@ -134,8 +149,7 @@ public class SettingsFragment  extends PreferenceFragmentCompat implements
         fillDownloadPreferences(preferences);
 
         fillPlaybackPreferences();
-        fillLyrionRescanPreferences();
-        fillLyrionSkinPreferences();
+        fillConnectionPreferences(preferences);
 
         applyServerKind(preferences);
     }
@@ -148,13 +162,49 @@ public class SettingsFragment  extends PreferenceFragmentCompat implements
      */
     private void applyServerKind(Preferences preferences) {
         boolean osmium = preferences.isOsmiumAppliance();
+        // Hide the heading too: a lone empty section headed "Your Osmium Sound
+        // device" on a plain Lyrion server is worse than no section at all.
+        Preference applianceCategory = requirePreference(KEY_APPLIANCE_CATEGORY);
+        if (applianceCategory != null) applianceCategory.setVisible(osmium);
         Preference osmiumScreen = requirePreference(KEY_OSMIUM_SOUND);
         if (osmiumScreen != null) osmiumScreen.setVisible(osmium);
-        if (!osmium) {
-            // The web player skin also lives on the appliance's own service.
-            Preference skin = requirePreference(KEY_LYRION_SKIN);
-            if (skin != null) skin.setVisible(false);
+    }
+
+    /**
+     * The address the app connects to, and the one to use from outside the
+     * house. The second is what makes Tailscale usable: the QR code can only
+     * ever carry a local address.
+     */
+    /**
+     * Whichever way a submenu is opened — a new fragment with its own root key,
+     * or this one swapping the screen underneath itself — the bar has to name
+     * the submenu rather than keep saying "Settings".
+     */
+    @Override
+    public void onNavigateToScreen(androidx.preference.PreferenceScreen screen) {
+        super.onNavigateToScreen(screen);
+        if (screen != null && screen.getTitle() != null) {
+            requireActivity().setTitle(screen.getTitle());
         }
+    }
+
+    private void fillConnectionPreferences(Preferences preferences) {
+        Preference address = requirePreference("squeezer.server_address.open");
+        Preferences.ServerAddress serverAddress = preferences.getServerAddress();
+        address.setSummary(serverAddress.localAddress() != null
+                ? serverAddress.localAddress()
+                : getString(R.string.settings_remote_address_unset));
+        address.setOnPreferenceClickListener(preference -> {
+            ConnectActivity.show(requireActivity());
+            return true;
+        });
+
+        EditTextPreference remote = requirePreference(Preferences.KEY_REMOTE_ADDRESS);
+        remote.setText(preferences.getRemoteAddress());
+        remote.setSummaryProvider(pref -> {
+            String value = preferences.getRemoteAddress();
+            return value != null ? value : getString(R.string.settings_remote_address_summary);
+        });
     }
 
     // DSP/EQ is deliberately not wired up here — held back for a future paid
