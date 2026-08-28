@@ -35,7 +35,41 @@
         android:textColor="?attr/colorPrimary"
         tools:text="Step 1 of 3 – Scan the QR code" />
 
-    <!-- Step 0: what are we connecting to? An Osmium Sound appliance pairs by
+    <!-- Step 0: language. Asked before anything else, in both languages at
+         once, because at this point we don't know which one the user reads.
+         The choice goes through AppCompatDelegate (per-app locale, same
+         mechanism as Settings → Display → Language) and is persisted by
+         AppCompat itself; Preferences only remembers that it was asked. -->
+    <LinearLayout
+        android:id="@+id/step_language"
+        android:orientation="vertical"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content">
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/wizard_language_prompt"
+            android:textAppearance="@style/SqueezerTextAppearance.Medium" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/language_italian_button"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            app:icon="@drawable/ic_translate"
+            android:text="@string/wizard_language_italian" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/language_english_button"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            app:icon="@drawable/ic_translate"
+            android:text="@string/wizard_language_english" />
+    </LinearLayout>
+
+    <!-- Step 1: what are we connecting to? An Osmium Sound appliance pairs by
          QR code and brings its own settings; any other Lyrion server is set up
          by hand and has none of them. -->
     <LinearLayout

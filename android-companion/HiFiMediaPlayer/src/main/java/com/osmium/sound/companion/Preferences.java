@@ -267,6 +267,8 @@ public final class Preferences {
      * Absent until the user has been through the connection wizard.
      */
     public static final String KEY_SERVER_KIND = "squeezer.server_kind";
+    /** Set once the wizard's language question was answered, or the language changed from Settings. */
+    public static final String KEY_LANGUAGE_CHOSEN = "squeezer.language_chosen";
 
     // Store a "mac id" for this app instance.
     private static final String KEY_MAC_ID = "squeezer.mac_id";
@@ -724,6 +726,19 @@ public final class Preferences {
 
     public void setServerKind(ServerKind kind) {
         sharedPreferences.edit().putString(KEY_SERVER_KIND, kind.name()).apply();
+    }
+
+    /**
+     * Whether the language question was ever answered — in the wizard's first
+     * step or from Settings → Display → Language. The chosen locale itself is
+     * kept by AppCompat (per-app locales); this only says "don't ask again".
+     */
+    public boolean isLanguageChosen() {
+        return sharedPreferences.getBoolean(KEY_LANGUAGE_CHOSEN, false);
+    }
+
+    public void setLanguageChosen(boolean chosen) {
+        sharedPreferences.edit().putBoolean(KEY_LANGUAGE_CHOSEN, chosen).apply();
     }
 
     /**
