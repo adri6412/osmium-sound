@@ -168,6 +168,7 @@ int main(int argc, char *argv[]) {
 
     Api api;
     Sys sys(assets);
+    sys.setIconDir(base + "/icons");
     sys.setForcedWizard(wizard);
     sys.setStartExpanded(expanded);
     I18n i18n(locales, sys.conf("ui-language", "en"));

@@ -8,7 +8,13 @@ import Hifi.Ui
 Item {
     id: root
     // fattore di scala e scarti, letti anche dal canale di collaudo (main.cpp)
-    readonly property real s: Math.min(width / Theme.canvasW, height / Theme.canvasH)
+    // La scala e' arrotondata in modo che la tela sia larga un numero INTERO di
+    // pixel (a 720p: 1229 invece di 1228,8). Cosi' gli strati cotti in texture
+    // alla risoluzione dello schermo (Now Playing con i VU, maschere) combaciano
+    // con la griglia dei pixel invece di essere ricampionati con uno scarto
+    // frazionario che sfoca tutto di un filo. In altezza lo scarto e' < 1 px
+    // sull'ultima riga, invisibile.
+    readonly property real s: Math.round(Math.min(width / Theme.canvasW, height / Theme.canvasH) * Theme.canvasW) / Theme.canvasW
     readonly property real ox: Math.floor((width - Theme.canvasW * s) / 2)
     readonly property real oy: Math.floor((height - Theme.canvasH * s) / 2)
     property alias app: canvas

@@ -40,14 +40,31 @@ QString kmsConfigFor(const QString &pref, const QString &card) {
             drmModeModeInfo *pre = &c->modes[0];
             for (int m = 0; m < c->count_modes; m++) if (c->modes[m].type & DRM_MODE_TYPE_PREFERRED) { pre = &c->modes[m]; break; }
             double aspect = (double)pre->hdisplay / pre->vdisplay;
-            drmModeModeInfo *best = nullptr;
+            // Stessa regola di best_real_mode() in hifi-ui-resolution.sh (la
+            // strada Wayland di Electron), cosi' le due interfacce finiscono
+            // sullo stesso modo video con la stessa impostazione:
+            //  1. il modo REALE piu' grande con altezza <= tetto e l'aspetto
+            //     del pannello (1 % di tolleranza), mai sotto 1024x600;
+            //  2. se non c'e' — pannelli 21:9 o 16:10, o monitor senza il
+            //     720p — il piu' PICCOLO tra quelli SOPRA al tetto, sempre con
+            //     l'aspetto del pannello: e' comunque una frazione dei pixel
+            //     del nativo (3440x1440 -> 2560x1080);
+            //  3. solo se il pannello non espone nessun modo piu' piccolo del
+            //     proprio, si resta sul nativo.
+            drmModeModeInfo *best = nullptr, *above = nullptr;
             for (int m = 0; m < c->count_modes; m++) {
                 drmModeModeInfo *mi = &c->modes[m];
-                if (mi->vdisplay > capH) continue;
+                if (mi->hdisplay < 1024 || mi->vdisplay < 600) continue;
+                if (mi->hdisplay >= pre->hdisplay && mi->vdisplay >= pre->vdisplay) continue;
                 double a = (double)mi->hdisplay / mi->vdisplay;
-                if (std::abs(a - aspect) > 0.02) continue;
-                if (!best || mi->vdisplay > best->vdisplay || (mi->vdisplay == best->vdisplay && mi->vrefresh > best->vrefresh)) best = mi;
+                if (a > aspect * 1.01 || a < aspect * 0.99) continue;
+                if (mi->vdisplay <= capH) {
+                    if (!best || mi->vdisplay > best->vdisplay || (mi->vdisplay == best->vdisplay && mi->vrefresh > best->vrefresh)) best = mi;
+                } else {
+                    if (!above || mi->vdisplay < above->vdisplay || (mi->vdisplay == above->vdisplay && mi->vrefresh > above->vrefresh)) above = mi;
+                }
             }
+            if (!best) best = above;
             if (best && !(best->hdisplay == pre->hdisplay && best->vdisplay == pre->vdisplay)) {
                 QString name = QString("%1%2").arg(connName(c->connector_type)).arg(c->connector_type_id);
                 QJsonObject o;

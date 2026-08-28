@@ -2,6 +2,8 @@
 #include <QCoreApplication>
 #include <QCursor>
 #include <QDir>
+#include <QStandardPaths>
+#include <QUrl>
 #include <QElapsedTimer>
 #include <QFile>
 #include <QGuiApplication>
@@ -116,4 +118,49 @@ void Sys::noteInput() {
     if (n - m_lastInput < 200) { m_lastInput = n; return; }   // non inondare i binding
     m_lastInput = n;
     emit lastInputChanged();
+}
+
+// ─── icone tinte ────────────────────────────────────────────────────────────
+// Le icone sono SVG lucide con stroke/fill "#ffffff" (gen-icons.mjs). Qui si
+// sostituisce il bianco col colore voluto e, se il colore ha trasparenza, la
+// si mette come stroke-opacity/fill-opacity sulla radice: e' PER FORMA, come fa
+// Chromium con currentColor + colore CSS con alpha (i tratti che si
+// sovrappongono si sommano, identico a Electron). Il file finisce in una
+// cartella temporanea e si genera una volta sola per coppia (icona, colore):
+// le coppie sono poche decine, nessun colore e' animato.
+QString Sys::tintedIcon(const QString &name, const QColor &color) {
+    if (name.isEmpty() || m_iconDir.isEmpty()) return QString();
+    const QString key = name + '|' + color.name(QColor::HexArgb);
+    auto it = m_tinted.constFind(key);
+    if (it != m_tinted.constEnd()) return *it;
+    if (m_iconCacheDir.isEmpty()) {
+        m_iconCacheDir = QStandardPaths::writableLocation(QStandardPaths::TempLocation)
+                         + "/hifi-qt-icons-" + QString::number(getuid());
+        QDir().mkpath(m_iconCacheDir);
+    }
+    const QString path = m_iconCacheDir + '/' + name + '-' + color.name(QColor::HexArgb).mid(1) + ".svg";
+    if (!QFile::exists(path)) {
+        QFile in(m_iconDir + '/' + name + ".svg");
+        if (!in.open(QIODevice::ReadOnly)) { qWarning("icona mancante: %s", qPrintable(in.fileName())); m_tinted.insert(key, QString()); return QString(); }
+        QByteArray svg = in.readAll();
+        svg.replace("#ffffff", color.name(QColor::HexRgb).toLatin1());
+        if (color.alphaF() < 0.999) {
+            // sulla radice <svg ...>: gli attributi si ereditano dalle forme
+            int gt = svg.indexOf('>');
+            int svgTag = svg.indexOf("<svg");
+            if (svgTag >= 0) gt = svg.indexOf('>', svgTag);
+            if (gt > 0) {
+                const QByteArray a = QByteArray::number(color.alphaF(), 'f', 3);
+                svg.insert(gt, " stroke-opacity=\"" + a + "\" fill-opacity=\"" + a + "\"");
+            }
+        }
+        QFile out(path + ".tmp");
+        if (!out.open(QIODevice::WriteOnly | QIODevice::Truncate)) { m_tinted.insert(key, QString()); return QString(); }
+        out.write(svg); out.close();
+        QFile::remove(path);
+        QFile::rename(path + ".tmp", path);
+    }
+    const QString url = QUrl::fromLocalFile(path).toString();
+    m_tinted.insert(key, url);
+    return url;
 }

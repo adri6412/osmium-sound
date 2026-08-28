@@ -3,6 +3,8 @@
 // quella a schermo), puntatore, fotografie dello schermo per il collaudo.
 #pragma once
 #include <QObject>
+#include <QColor>
+#include <QHash>
 #include <QFileSystemWatcher>
 #include <QTimer>
 
@@ -47,6 +49,10 @@ public:
     Q_INVOKABLE qint64 now() const;                  // ms monotonici
     Q_INVOKABLE QString upper(const QString &s) const { return s.toUpper(); }
     Q_INVOKABLE void log(const QString &s) const;
+    // Icona lucide gia' tinta (file SVG in cache): si disegna come vettore,
+    // senza passare da una texture — vedi Icon.qml per il perche'.
+    Q_INVOKABLE QString tintedIcon(const QString &name, const QColor &color);
+    void setIconDir(const QString &dir) { m_iconDir = dir; }
     qint64 lastInput() const { return m_lastInput; }
     void noteInput();
 
@@ -57,6 +63,8 @@ signals:
 
 private:
     QString m_assets, m_configDir;
+    QString m_iconDir, m_iconCacheDir;
+    QHash<QString, QString> m_tinted;   // chiave nome|colore -> URL del file
     bool m_hasKeyboard = false, m_hasTouch = false, m_pointer = true, m_dev = false, m_startExpanded = false;
     QString m_forcedWizard;
     QFileSystemWatcher m_watch;

@@ -1,10 +1,17 @@
 // Un'icona lucide, quella vera in SVG (stessa versione di Electron), tinta
-// del colore voluto. VectorImage la trasforma in geometria per la scheda
-// video: resta nitida a qualunque risoluzione.
+// del colore voluto e disegnata come VETTORE direttamente in pixel veri.
+//
+// 🚨 Niente texture intermedia, niente effetto. Prima l'icona passava da
+// VectorImage -> layer (texture) -> MultiEffect (tintura) -> schermo: a 720p
+// la tela e' scalata 1,2 e 60 icone su 74 finiscono a misure NON intere
+// (16 -> 19,2 px, 18 -> 21,6, 24 -> 28,8...), quindi la texture veniva
+// ricampionata con uno sfasamento frazionario — mezzo pixel di sfocatura su
+// tratti spessi 2,4 px, visibile. Chromium disegna il tracciato SVG in pixel
+// veri, senza passaggi: cosi' fa ora anche questa. In piu': niente memoria
+// video per le texture e niente passata di effetto.
+// La tintura la fa Sys.tintedIcon (SVG con il colore gia' dentro, in cache).
 import QtQuick
-import QtQuick.Effects
 import QtQuick.VectorImage
-import Hifi.Ui
 
 Item {
     id: root
@@ -15,27 +22,9 @@ Item {
     width: size
     height: size
     VectorImage {
-        id: img
         anchors.fill: parent
-        source: root.name ? "../icons/" + root.name + (root.filled ? "-fill" : "") + ".svg" : ""
+        source: root.name ? Sys.tintedIcon(root.name + (root.filled ? "-fill" : ""), root.color) : ""
         preferredRendererType: VectorImage.CurveRenderer
         fillMode: VectorImage.PreserveAspectFit
-        visible: false
-        // 🚨 MultiEffect ha bisogno della sorgente come texture, e se non gliela
-        // si misura la fa grande quanto l'icona in punti: a 4K veniva disegnata
-        // 20x20 e poi ingrandita 3,6 volte — icone sgranate. La geometria del
-        // VectorImage e' nitida a qualunque misura, e' il passaggio per
-        // l'effetto (che serve a tingerla) a perdere la risoluzione.
-        layer.enabled: true
-        layer.smooth: true
-        layer.textureSize: Qt.size(Math.ceil(root.size * Theme.dpr),
-                                   Math.ceil(root.size * Theme.dpr))
-    }
-    MultiEffect {
-        anchors.fill: parent
-        source: img
-        colorization: 1.0
-        colorizationColor: root.color
-        opacity: root.color.a
     }
 }
