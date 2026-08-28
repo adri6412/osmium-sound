@@ -61,6 +61,15 @@ Item {
         }, 6000)
     }
     function readProvision(d) {
+        // 🚨 Fine del primo avvio. Senza questo la schermata "apri in un
+        // browser" restava lì anche a configurazione finita, e per vedere
+        // l'interfaccia bisognava riavviare.
+        // Servono ENTRAMBE le condizioni, come in SetupWizard.jsx:
+        // get_provision_status() risponde `{pending: false}` senza `completed`
+        // anche solo mentre hifi-webui si riavvia, e quel lampo chiuderebbe il
+        // wizard a metà configurazione. In prova a secco (Sys.forcedWizard) la
+        // schermata deve restare, o non ci si potrebbe piu' guardare.
+        if (!dry && d.pending === false && d.completed === true) { root.mode = 0; return }
         stage = String(d.stage || ""); perror = d.error ? String(d.error) : ""
         var n = (d.networks || []).map(function(x) { return { ssid: String(x.ssid || ""), security: String(x.security || ""), signal: Number(x.signal || 0) } })
         if (n.length || !nets.length) nets = n
