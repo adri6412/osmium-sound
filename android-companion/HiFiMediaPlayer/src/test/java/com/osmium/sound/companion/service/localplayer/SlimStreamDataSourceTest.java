@@ -54,7 +54,7 @@ public class SlimStreamDataSourceTest {
         }
     }
 
-    @Test
+    @Test(timeout = 30_000)
     public void resumingWhereThePlayerLeftOffKeepsTheStreamIntact() throws IOException {
         byte[] audio = stream(400_000);
         SlimStreamDataSource source = new SlimStreamDataSource(new FakeStream(audio), () -> {});
@@ -77,7 +77,7 @@ public class SlimStreamDataSourceTest {
         assertArrayEquals("the decoder must see the original stream", audio, combined);
     }
 
-    @Test
+    @Test(timeout = 30_000)
     public void severalStopsAndResumesStillDeliverEveryByte() throws IOException {
         byte[] audio = stream(900_000);
         SlimStreamDataSource source = new SlimStreamDataSource(new FakeStream(audio), () -> {});
@@ -85,24 +85,27 @@ public class SlimStreamDataSourceTest {
         long position = 0;
 
         // Stop and resume the way the player does all through a track, each time
-        // coming back a little behind where the bytes actually got to.
-        while (true) {
+        // coming back a little behind where the bytes actually got to. Stepping
+        // back after the last read would mean reading the same tail forever, so
+        // the loop ends where the stream does.
+        boolean ended = false;
+        while (!ended) {
             source.open(new DataSpec.Builder().setUri(URI).setPosition(position).build());
             ByteArrayOutputStream chunk = new ByteArrayOutputStream();
-            copy(source, chunk, 150_000);
+            ended = copy(source, chunk, 150_000) == END_OF_STREAM;
             source.close();
 
             byte[] bytes = chunk.toByteArray();
             if (bytes.length == 0) break;
             System.arraycopy(bytes, 0, rebuilt, (int) position, bytes.length);
             position += bytes.length;
-            position -= Math.min(20_000, position);
+            if (!ended) position -= Math.min(20_000, position);
         }
 
         assertArrayEquals("every byte of the track reaches the decoder, in order", audio, rebuilt);
     }
 
-    @Test
+    @Test(timeout = 30_000)
     public void endOfInputIsReportedOnceAndOnlyAtTheEnd() throws IOException {
         byte[] audio = stream(50_000);
         int[] endings = {0};
@@ -115,7 +118,7 @@ public class SlimStreamDataSourceTest {
         assertEquals("the server is told exactly once that the track is drained", 1, endings[0]);
     }
 
-    @Test
+    @Test(timeout = 30_000)
     public void aResumeBeyondTheRewindWindowIsRefusedRatherThanFaked() throws IOException {
         byte[] audio = stream(2_000_000);
         SlimStreamDataSource source = new SlimStreamDataSource(new FakeStream(audio), () -> {});
@@ -132,7 +135,15 @@ public class SlimStreamDataSourceTest {
         }
     }
 
-    /** Reads up to {@code limit} bytes, stopping at the end of the stream. */
+    /** Returned by {@link #copy} when the source ran out rather than hit the limit. */
+    private static final long END_OF_STREAM = -1;
+
+    /**
+     * Reads up to {@code limit} bytes. Returns {@link #END_OF_STREAM} if the
+     * source ended, so a caller can tell "there is more, I stopped" from "there
+     * is nothing left" — the difference between a loop that ends and one that
+     * reads the same tail forever.
+     */
     private static long copy(SlimStreamDataSource source, ByteArrayOutputStream out, long limit)
             throws IOException {
         byte[] buffer = new byte[16 * 1024];
@@ -140,7 +151,7 @@ public class SlimStreamDataSourceTest {
         while (total < limit) {
             int want = (int) Math.min(buffer.length, limit - total);
             int read = source.read(buffer, 0, want);
-            if (read == C.RESULT_END_OF_INPUT) break;
+            if (read == C.RESULT_END_OF_INPUT) return END_OF_STREAM;
             out.write(buffer, 0, read);
             total += read;
         }

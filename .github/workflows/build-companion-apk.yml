@@ -165,6 +165,9 @@ jobs:
   test:
     name: Run Tests
     runs-on: ubuntu-latest
+    # These jobs cannot fail the release, so a hung test would otherwise sit
+    # there for the six-hour default before anyone noticed.
+    timeout-minutes: 30
     needs: build
 
     steps:
@@ -197,6 +200,7 @@ jobs:
   lint:
     name: Run Lint Check
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     needs: build
 
     steps:
