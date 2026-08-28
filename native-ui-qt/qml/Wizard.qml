@@ -53,6 +53,11 @@ Item {
             if (d.ip) ip = String(d.ip)
             wired = d.type === "wired"
             connected = !!d.connected && ip !== "" && ip.indexOf("127.") !== 0
+            // Ripiego come in InstallWizard.jsx: se lo stato di rete non porta
+            // l'indirizzo, il QR resterebbe senza numero da mostrare.
+            if (!ip) Api.get(Api.apiBase + "/system_info", function(ok2, d2) {
+                if (ok2 && d2 && d2.local_ip && d2.local_ip !== "Unknown") ip = String(d2.local_ip)
+            }, 6000)
         }, 6000)
     }
     function readProvision(d) {

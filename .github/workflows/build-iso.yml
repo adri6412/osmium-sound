@@ -36,8 +36,32 @@ permissions:
   contents: write
 
 jobs:
+  # 🚨 Lavoro a parte, sul runner nudo: costruisce l'interfaccia Qt che finisce
+  # in /opt/hifi-qt dentro l'immagine. Non puo' stare nel lavoro dell'immagine
+  # perche' quello gira DENTRO un contenitore debian:bookworm, e li' docker
+  # (che serve a compilare su base Debian 13) non c'e'. Stesso identico
+  # pacchetto dell'aggiornamento OTA: lo costruisce lo stesso script.
+  qt-payload:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Build the Qt on-screen interface payload
+        run: bash native-ui-qt/ci/build-payload.sh qtui
+
+      - name: Upload the Qt payload
+        uses: actions/upload-artifact@v4
+        with:
+          name: qt-payload
+          path: qtui
+          retention-days: 1
+          if-no-files-found: error
+
   build-iso:
     runs-on: ubuntu-latest
+    needs: qt-payload
     timeout-minutes: 120
     # The debian:bookworm container defaults `run:` steps to sh (dash), which
     # lacks `set -o pipefail`. Force bash for every step.
@@ -84,6 +108,19 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Fetch the Qt interface built by the qt-payload job
+        uses: actions/download-artifact@v8
+        with:
+          name: qt-payload
+          path: qtui
+
+      - name: Restore the executable bit (artifacts do not carry it)
+        run: |
+          set -eux
+          chmod 755 qtui/hifi-qt
+          if [ -f qtui/hifi-media-player ]; then chmod 755 qtui/hifi-media-player; fi
+          ls -l qtui | head
+
       - name: Build web-admin (Vue) — injected into the ISO by build-distro.sh
         # build-distro.sh itself refuses to inject a missing/empty dist, but
         # fail fast here too rather than burning ~15min of live-build first.
@@ -99,6 +136,9 @@ jobs:
         run: |
           set -euo pipefail
           ARGS="--app-dir $GITHUB_WORKSPACE/dist/linux-unpacked --app-version ${INPUT_TAG#v} --suite $INPUT_SUITE"
+          # l'interfaccia Qt e' quella predefinita da 2.5.24: senza di lei
+          # l'immagine partirebbe con Electron, quindi qui si pretende
+          ARGS="$ARGS --qt-dir $GITHUB_WORKSPACE/qtui"
           if [ -n "${INPUT_LYRION_URL}" ]; then
             ARGS="$ARGS --lyrion-url ${INPUT_LYRION_URL}"
           fi

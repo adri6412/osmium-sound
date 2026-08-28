@@ -53,6 +53,7 @@ if [ -n "${HIFI_APPLY_TEST_ROOT:-}" ]; then
     SYS_VERSION_FILE="$_R/SYSTEM_VERSION"
     OS_VERSION_FILE="$_R/OS_VERSION"
     UI_VERSION_FILE="$_R/UI_VERSION"
+    UI_VERSION_FILE_LEGACY="$_R/UI_VERSION"
     SYSTEMCTL="$_R/bin/systemctl-stub"
     PLYMOUTH="$_R/bin/plymouth-stub"
 else
@@ -67,7 +68,11 @@ else
     UI_SCRIPT=/usr/local/sbin/hifi-ota-update.sh
     SYS_VERSION_FILE=/etc/hifi-player/SYSTEM_VERSION
     OS_VERSION_FILE=/etc/hifi-player/OS_VERSION
-    UI_VERSION_FILE=/opt/hifi-media-player/UI_VERSION
+    # Da 2.5.24 la versione dell'interfaccia sta fuori dalle due cartelle
+    # (Qt ed Electron), cosi' vale per entrambe; il posto vecchio resta letto
+    # per gli apparecchi aggiornati prima del passaggio.
+    UI_VERSION_FILE=/etc/hifi-player/UI_VERSION
+    UI_VERSION_FILE_LEGACY=/opt/hifi-media-player/UI_VERSION
     SYSTEMCTL=systemctl
     PLYMOUTH=plymouth
     if [ -r /usr/local/sbin/hifi-log.sh ]; then
@@ -151,6 +156,7 @@ installed_version() {  # <kind>
         ui)     _f=$UI_VERSION_FILE ;;
         *)      echo unknown; return ;;
     esac
+    [ -r "$_f" ] || [ "$1" != ui ] || _f=$UI_VERSION_FILE_LEGACY
     if [ -r "$_f" ]; then
         head -n 1 "$_f" | tr -d ' \t\r\n'
     else

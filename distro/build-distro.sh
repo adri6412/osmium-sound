@@ -44,6 +44,7 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 CONFIG="$SCRIPT_DIR/config"
 APP_DIR=""
+QT_DIR=""            # pacchetto dell'interfaccia Qt (vuoto → cercato da solo)
 APP_VERSION=""
 STAGE="all"          # all | chroot | binary
 CLEAN_CACHE=0        # 1 → also wipe the Debian package cache
@@ -55,6 +56,7 @@ die()  { printf '\033[1;31m[hifi-build ERROR]\033[0m %s\n' "$*" >&2; exit 1; }
 while [ $# -gt 0 ]; do
     case "$1" in
         --app-dir) APP_DIR="$2"; shift 2 ;;
+        --qt-dir) QT_DIR="$2"; shift 2 ;;
         --app-version) APP_VERSION="$2"; shift 2 ;;
         --lyrion-url) LYRION_DEB_URL="$2"; shift 2 ;;
         --suite) DEBIAN_SUITE="$2"; shift 2 ;;
@@ -144,7 +146,38 @@ if [ -z "$APP_VERSION" ] && [ -f "$REPO_ROOT/package.json" ]; then
 fi
 [ -n "$APP_VERSION" ] || APP_VERSION="unknown"
 printf '%s\n' "$APP_VERSION" > "$APP_DEST/UI_VERSION"
+# 🚨 Da 2.5.24 la versione dell'interfaccia sta anche fuori dalle due cartelle
+# (Qt ed Electron), così vale per entrambe e sopravvive al passaggio dall'una
+# all'altra — è quella che legge l'aggiornatore. La copia qui sopra resta per
+# gli aggiornatori più vecchi.
+mkdir -p "$CONFIG/includes.chroot/etc/hifi-player"
+printf '%s\n' "$APP_VERSION" > "$CONFIG/includes.chroot/etc/hifi-player/UI_VERSION"
 log "Seeded UI_VERSION = $APP_VERSION"
+
+# ── seconda interfaccia (Qt), quella predefinita da 2.5.24 ──────────
+# La costruisce native-ui-qt/ci/build-payload.sh (in CI è un lavoro a parte,
+# perché serve docker); qui viene solo copiata dentro l'immagine. Se manca,
+# l'immagine parte con Electron: è l'hook 0400 a scegliere in base ai file
+# presenti, così non c'è modo di ritrovarsi con un motore attivo senza il
+# programma da avviare (schermo nero).
+QT_DEST="$CONFIG/includes.chroot/opt/hifi-qt"
+if [ -z "$QT_DIR" ]; then
+    for c in "$REPO_ROOT/qtui" "$QT_DEST"; do
+        [ -x "$c/hifi-qt" ] && QT_DIR="$c" && break
+    done
+fi
+if [ -n "$QT_DIR" ] && [ -x "$QT_DIR/hifi-qt" ]; then
+    log "Injecting Qt UI → includes.chroot/opt/hifi-qt (from $QT_DIR)"
+    if [ "$(cd "$QT_DIR" && pwd)" != "$(cd "$QT_DEST" 2>/dev/null && pwd)" ]; then
+        rm -rf "$QT_DEST"; mkdir -p "$QT_DEST"
+        cp -a "$QT_DIR/." "$QT_DEST/"
+    fi
+    chmod 755 "$QT_DEST/hifi-qt"
+    if [ -f "$QT_DEST/hifi-media-player" ]; then chmod 755 "$QT_DEST/hifi-media-player"; fi
+    printf '%s\n' "$APP_VERSION" > "$QT_DEST/UI_VERSION"
+else
+    log "Qt UI payload not found — the image will boot the Electron UI"
+fi
 
 log "Injecting canonical kiosk X session → includes.chroot/home/hifi/.xsession"
 # Single source of truth: the SAME file the OS-update OTA installs

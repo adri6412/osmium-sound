@@ -995,6 +995,28 @@ della Qt, **se nessuno ha ancora scelto**, diventa lei l'interfaccia che parte
 viene mai toccata, e dalla pagina di amministrazione si torna indietro quando
 si vuole.
 
+L'immagine ISO porta lo stesso identico pacchetto — lo costruisce
+`native-ui-qt/ci/build-payload.sh`, sorgente unica per aggiornamento e
+immagine — in `/opt/hifi-qt`, e parte con la Qt: l'hook
+`0400-enable-services` abilita `hifi-qt.service` e disabilita `lightdm`
+**solo se il programma c'e' davvero**, altrimenti l'immagine resta su
+Electron; cosi' un pacchetto non copiato non puo' tradursi in uno schermo
+nero. In CI il pacchetto lo costruisce un lavoro a parte (`qt-payload`),
+perche' quello dell'immagine gira dentro un contenitore e non ha docker.
+
+Due dettagli di compatibilita' hanno una scadenza. Dentro il pacchetto c'e'
+un file `hifi-media-player` di due righe: e' un ponte per gli apparecchi
+fermi alla 2.5.24-dev.4, la cui verifica in fase di staging pretende ancora
+quel nome e senza il quale rifiuterebbe il pacchetto bloccando **l'intero**
+aggiornamento, sistema e sistema operativo compresi. Chi installa guarda
+`hifi-qt` per primo, quindi il contenuto finisce comunque in `/opt/hifi-qt`.
+Per lo stesso motivo la versione dell'interfaccia viene scritta anche nel
+posto vecchio (`/opt/hifi-media-player/UI_VERSION`): l'esecutore
+dell'applicazione gia' installato sugli apparecchi rilegge da li' per
+confermare che il passo sia riuscito, e quello che gira durante un
+aggiornamento e' sempre la versione precedente. Entrambi si potranno togliere
+quando nessun apparecchio sara' piu' fermo a quelle versioni.
+
 Devices also pick a **release channel** (Settings → Updates, `GET/POST
 /ota_channel`, persisted in `/etc/hifi-player/ota-channel`): **Prod** follows
 `main` tags (`vX.Y.Z`, GitHub's `/releases/latest`); **Dev** follows `svil`

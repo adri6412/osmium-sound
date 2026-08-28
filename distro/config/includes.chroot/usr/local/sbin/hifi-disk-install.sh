@@ -5,8 +5,9 @@
 # status-file shape as hifi-format-disk.sh):
 #   hifi-disk-install.sh <device>
 #
-# This is the disk-install backend for the Electron installer UI
-# (src/pages/InstallWizard.jsx), which replaces Debian Installer entirely —
+# This is the disk-install backend for the installer UI on screen — Qt
+# (native-ui-qt/qml/Wizard.qml, mode 2) or Electron
+# (src/pages/InstallWizard.jsx) — which replaces Debian Installer entirely —
 # see distro/README.md. It:
 #   1. partitions the target disk (GPT: 1MiB bios_grub + 512MiB EFI + rest
 #      ext4 — same geometry the old d-i preseed used),
