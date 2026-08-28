@@ -1,41 +1,41 @@
 {
-  "tag_name": "v2.5.24-dev.4-alpha6",
-  "name": "v2.5.24-dev.4-alpha6",
-  "body": "## What's new in v2.5.24-dev.4-alpha6\n\n- fix(ui-qt): censimento degli effetti contro Electron \u2014 ombre, gradienti, alpha, stati\n- fix(ui-qt): alone del pulsante play come in Electron \u2014 gradiente radiale, non sfocatura\n- fix(ui-qt): fondale del Now Playing e misure come Electron, al pixel\n",
+  "tag_name": "v2.5.24-dev.4-alpha7",
+  "name": "v2.5.24-dev.4-alpha7",
+  "body": "## What's new in v2.5.24-dev.4-alpha7\n\n- fix(ui-qt): copertine che lampeggiano e si vedevano sgranate, tastiera nelle ricerche\n",
   "assets": [
     {
-      "name": "hifi-ui-v2.5.24-dev.4-alpha6.tar.gz",
-      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.24-dev.4-alpha6/hifi-ui-v2.5.24-dev.4-alpha6.tar.gz",
-      "size": 134700098
+      "name": "hifi-ui-v2.5.24-dev.4-alpha7.tar.gz",
+      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.24-dev.4-alpha7/hifi-ui-v2.5.24-dev.4-alpha7.tar.gz",
+      "size": 134699215
     },
     {
-      "name": "hifi-ui-v2.5.24-dev.4-alpha6.tar.gz.sha256",
-      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.24-dev.4-alpha6/hifi-ui-v2.5.24-dev.4-alpha6.tar.gz.sha256",
+      "name": "hifi-ui-v2.5.24-dev.4-alpha7.tar.gz.sha256",
+      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.24-dev.4-alpha7/hifi-ui-v2.5.24-dev.4-alpha7.tar.gz.sha256",
       "size": 102
     },
     {
-      "name": "hifi-system-v2.5.24-dev.4-alpha6.tar.gz",
-      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.24-dev.4-alpha6/hifi-system-v2.5.24-dev.4-alpha6.tar.gz",
-      "size": 5231825
+      "name": "hifi-system-v2.5.24-dev.4-alpha7.tar.gz",
+      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.24-dev.4-alpha7/hifi-system-v2.5.24-dev.4-alpha7.tar.gz",
+      "size": 5232803
     },
     {
-      "name": "hifi-system-v2.5.24-dev.4-alpha6.tar.gz.sha256",
-      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.24-dev.4-alpha6/hifi-system-v2.5.24-dev.4-alpha6.tar.gz.sha256",
+      "name": "hifi-system-v2.5.24-dev.4-alpha7.tar.gz.sha256",
+      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.24-dev.4-alpha7/hifi-system-v2.5.24-dev.4-alpha7.tar.gz.sha256",
       "size": 106
     },
     {
-      "name": "hifi-os-v2.5.24-dev.4-alpha6.tar.gz",
-      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.24-dev.4-alpha6/hifi-os-v2.5.24-dev.4-alpha6.tar.gz",
+      "name": "hifi-os-v2.5.24-dev.4-alpha7.tar.gz",
+      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.24-dev.4-alpha7/hifi-os-v2.5.24-dev.4-alpha7.tar.gz",
       "size": 1398958
     },
     {
-      "name": "hifi-os-v2.5.24-dev.4-alpha6.tar.gz.sha256",
-      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.24-dev.4-alpha6/hifi-os-v2.5.24-dev.4-alpha6.tar.gz.sha256",
+      "name": "hifi-os-v2.5.24-dev.4-alpha7.tar.gz.sha256",
+      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.24-dev.4-alpha7/hifi-os-v2.5.24-dev.4-alpha7.tar.gz.sha256",
       "size": 102
     },
     {
-      "name": "hifi-os-v2.5.24-dev.4-alpha6.tar.gz.sha256.sig",
-      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.24-dev.4-alpha6/hifi-os-v2.5.24-dev.4-alpha6.tar.gz.sha256.sig",
+      "name": "hifi-os-v2.5.24-dev.4-alpha7.tar.gz.sha256.sig",
+      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.24-dev.4-alpha7/hifi-os-v2.5.24-dev.4-alpha7.tar.gz.sha256.sig",
       "size": 64
     }
   ]
