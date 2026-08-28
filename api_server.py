@@ -5071,12 +5071,35 @@ def dismiss_update_plan():
 
 # ──────────────────────────────────────────────────────────────────
 #  Setup wizard: mandatory update gate, right after the network step.
-#  TEMPORARY (per explicit request): checks BOTH prod and dev, regardless of
-#  the device's own (always 'prod' this early) OTA channel setting -- a prod
-#  update applies automatically, a dev-only one needs the operator's
-#  confirmation on screen first. Drop the dev branch once this has shipped to
-#  production and prod-only checks are enough again.
+#  Checks the PROD channel only, regardless of the device's own OTA channel
+#  setting (always 'prod' this early): a fresh install must be on the current
+#  stable release before setup goes on. (Until 2026-08-28 this also checked
+#  dev, as a temporary measure from when the wizard only existed on dev
+#  builds -- a dev-only release then blocked setup on a stable install, and
+#  on a live boot of the very ISO we ship, which can't update at all.)
+#
+#  Skipped outright on a live session (boot=live): a "Try Osmium Sound" boot
+#  runs from the read-only squashfs with a RAM overlay, so nothing an update
+#  installs survives a reboot -- and the OS component even stages a reboot
+#  to apply itself (hifi-update-stage-resume.service, which deliberately
+#  doesn't run under boot=live). Demanding an update there only strands the
+#  operator on a step that can never complete.
 # ──────────────────────────────────────────────────────────────────
+PROC_CMDLINE = '/proc/cmdline'
+
+def _is_live_boot():
+    """True when this session booted from the live medium: the ISO's
+    bootloader always appends `boot=live` (distro/build-distro.sh), the same
+    token the systemd units gate on with ConditionKernelCommandLine=!boot=live.
+    Not the same thing as get_boot_mode() above -- that only tells the two
+    live menu entries apart ('installer' vs 'live') and answers 'live' on an
+    installed system as well."""
+    try:
+        with open(PROC_CMDLINE) as f:
+            return 'boot=live' in f.read().split()
+    except Exception:
+        return False
+
 def _channel_has_update(channel):
     """Returns (has_update, checked_ok). checked_ok is False only when EVERY
     component's check failed outright (network/API blip) -- distinct from a
@@ -5100,23 +5123,26 @@ def _channel_has_update(channel):
     return False, any_ok
 
 def wizard_update_check():
+    if _is_live_boot():
+        # Nothing to check: no network call, no retry loop in the wizard.
+        return {'available': False, 'live': True}
     prod_avail, prod_ok = _channel_has_update('prod')
     if prod_avail:
         return {'available': True, 'channel': 'prod', 'auto': True}
-    dev_avail, dev_ok = _channel_has_update('dev')
-    if dev_avail:
-        return {'available': True, 'channel': 'dev', 'auto': False}
-    if not prod_ok and not dev_ok:
-        # Neither channel could be checked at all -- report it distinctly so
-        # the wizard retries instead of treating "couldn't check" the same as
-        # "checked, nothing to update".
+    if not prod_ok:
+        # The check couldn't run at all -- report it distinctly so the wizard
+        # retries instead of treating "couldn't check" the same as "checked,
+        # nothing to update".
         return {'available': False, 'checkFailed': True}
     return {'available': False}
 
 def wizard_update_apply(channel):
-    if channel not in ('prod', 'dev'):
+    if channel != 'prod':
         return {'started': False, 'code': 'update.checkFailed',
                 'message': _t('update.checkFailed', _lang())}
+    if _is_live_boot():
+        return {'started': False, 'code': 'update.liveSession',
+                'message': _t('update.liveSession', _lang())}
     # Not a side-channel hack: this is a real, deliberate channel switch (the
     # same one Settings -> Updates would make), so the device legitimately
     # tracks whichever channel it was just updated from, same as if the

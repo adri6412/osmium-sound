@@ -262,6 +262,8 @@ MESSAGES = {
     'update.alreadyInProgress': {'en': 'Update already in progress', 'it': 'Aggiornamento già in corso'},
     'update.planSaveFailed': {'en': 'Saving the update plan failed', 'it': 'Salvataggio del piano fallito'},
     'update.inProgress': {'en': 'Update in progress', 'it': 'Aggiornamento in corso'},
+    'update.liveSession': {'en': "This is a live session (running from the USB stick): updates can't be installed here — install Osmium Sound first",
+                           'it': 'Questa è una sessione live (avviata dalla chiavetta): qui gli aggiornamenti non si possono installare — prima installa Osmium Sound'},
     # ── Isolated update mode (stage-then-reboot-then-apply) ────────────
     'update.stagedPendingReboot': {
         'en': 'Update verified — the device will restart to apply it',
