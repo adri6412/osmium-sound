@@ -65,12 +65,17 @@
             android:text="@string/wizard_mode_osmium_summary"
             android:textAppearance="@style/SqueezerTextAppearance.Medium" />
 
+        <!-- Stesso aspetto del pulsante sopra: nessuno stile esplicito. Prima
+             era Widget.Material3.Button.OutlinedButton sotto un tema
+             MaterialComponents: gli attributi Material 3 (colorOutline,
+             textAppearanceLabelLarge...) non esistono in quel tema, e il
+             risultato era un bordo magenta e un testo minuscolo. -->
         <com.google.android.material.button.MaterialButton
             android:id="@+id/mode_standard_button"
-            style="@style/Widget.Material3.Button.OutlinedButton"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="16dp"
+            app:icon="@drawable/ic_dns"
             android:text="@string/wizard_mode_standard" />
 
         <TextView
