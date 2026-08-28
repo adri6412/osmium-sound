@@ -21,7 +21,11 @@ Rectangle {
     radius: 8; color: Theme.dark
     border.width: 1
     border.color: input.activeFocus && focusBorder ? focusColor : restBorder
-    function takeFocus() { input.forceActiveFocus() }
+    // 🚨 mettere il fuoco da codice deve aprire ANCHE la tastiera a schermo:
+    // succede quando una voce di Lyrion chiede del testo (le ricerche dentro
+    // App/Radio) e quando si apre "salva come playlist". Prima compariva il
+    // campo col cursore lampeggiante e nessun modo di scrivere.
+    function takeFocus() { input.forceActiveFocus(); openVk() }
     function openVk() { if (!Sys.hasKeyboard) vkOpen(root) }
     // aggancio alla tastiera a schermo, fornito dalla radice
     property var vkOpen: function(field) { if (Ui.vk) Ui.vk.open(field) }
