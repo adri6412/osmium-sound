@@ -486,6 +486,10 @@
 
     <!-- Procedura di connessione: che tipo di server -->
     <string name="wizard_step_title_mode">A che cosa ti colleghi?</string>
+    <string name="wizard_step_title_language">Lingua / Language</string>
+    <string name="wizard_language_prompt">Scegli la lingua dell\'app. Puoi cambiarla in seguito nelle Impostazioni.\n\nChoose the language of the app. You can change it later in Settings.</string>
+    <string name="wizard_language_italian">Italiano</string>
+    <string name="wizard_language_english">English</string>
     <string name="wizard_mode_prompt">Scegli con che cosa deve parlare l\'app. Puoi cambiare in seguito, disconnettendoti.</string>
     <string name="wizard_mode_osmium">Osmium Sound</string>
     <string name="wizard_mode_osmium_summary">Inquadra il codice QR mostrato dal tuo apparecchio Osmium Sound. Le sue impostazioni compaiono in questa app.</string>

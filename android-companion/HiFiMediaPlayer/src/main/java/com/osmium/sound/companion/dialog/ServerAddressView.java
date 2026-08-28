@@ -29,6 +29,8 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.appcompat.app.AppCompatDelegate;
+import androidx.core.os.LocaleListCompat;
 import androidx.fragment.app.FragmentManager;
 
 import com.google.android.material.button.MaterialButton;
@@ -66,7 +68,7 @@ import com.osmium.sound.companion.util.AfterTextChangedLister;
 public class ServerAddressView extends LinearLayout {
 
     /** The screens of the wizard, shown one at a time. */
-    public enum Step { MODE, SCAN, CONFIRM, READY }
+    public enum Step { LANGUAGE, MODE, SCAN, CONFIRM, READY }
 
     /** Notified whenever the wizard advances/returns to a different step. */
     public interface StepListener {
@@ -77,6 +79,7 @@ public class ServerAddressView extends LinearLayout {
     private Preferences.ServerAddress serverAddress;
 
     private TextView stepIndicator;
+    private View languageGroup;
     private View modeGroup;
     private MaterialButton modeOsmiumButton;
     private MaterialButton modeStandardButton;
@@ -119,6 +122,9 @@ public class ServerAddressView extends LinearLayout {
         inflate(getContext(), R.layout.server_address_view, this);
         if (!isInEditMode()) {
             stepIndicator = findViewById(R.id.wizard_step_indicator);
+            languageGroup = findViewById(R.id.step_language);
+            findViewById(R.id.language_italian_button).setOnClickListener(view -> chooseLanguage("it"));
+            findViewById(R.id.language_english_button).setOnClickListener(view -> chooseLanguage("en"));
             modeGroup = findViewById(R.id.step_mode);
             modeOsmiumButton = findViewById(R.id.mode_osmium_button);
             modeOsmiumButton.setOnClickListener(view -> chooseServerKind(Preferences.ServerKind.OSMIUM));
@@ -202,11 +208,10 @@ public class ServerAddressView extends LinearLayout {
                     }
                 }
                 applyServerKind();
-                if (serverKind == null) {
-                    setStep(Step.MODE);
+                if (!preferences.isLanguageChosen()) {
+                    setStep(Step.LANGUAGE);
                 } else {
-                    setStep(serverAddress.localAddress() != null || isStandardLms()
-                            ? Step.READY : Step.SCAN);
+                    setStepAfterLanguage();
                 }
             });
         }
@@ -246,6 +251,27 @@ public class ServerAddressView extends LinearLayout {
     }
 
     /** Records the answer to the first question and moves to the right step. */
+    /** The step that follows the language question, given what is already known. */
+    private void setStepAfterLanguage() {
+        if (serverKind == null) {
+            setStep(Step.MODE);
+        } else {
+            setStep(serverAddress.localAddress() != null || isStandardLms() ? Step.READY : Step.SCAN);
+        }
+    }
+
+    private void chooseLanguage(String languageTag) {
+        // Remembered BEFORE switching: applying a per-app locale recreates the
+        // activity, and the rebuilt wizard must not ask again. The locale itself
+        // is stored by AppCompat (autoStoreLocales in the manifest), the same
+        // way Settings → Display → Language does it.
+        preferences.setLanguageChosen(true);
+        AppCompatDelegate.setApplicationLocales(LocaleListCompat.forLanguageTags(languageTag));
+        // No recreation follows when the language is already the current one:
+        // move on by hand.
+        setStepAfterLanguage();
+    }
+
     private void chooseServerKind(Preferences.ServerKind kind) {
         serverKind = kind;
         preferences.setServerKind(kind);
@@ -301,12 +327,14 @@ public class ServerAddressView extends LinearLayout {
 
     private void setStep(Step step) {
         currentStep = step;
+        languageGroup.setVisibility(step == Step.LANGUAGE ? VISIBLE : GONE);
         modeGroup.setVisibility(step == Step.MODE ? VISIBLE : GONE);
         scanGroup.setVisibility(step == Step.SCAN ? VISIBLE : GONE);
         confirmGroup.setVisibility(step == Step.CONFIRM ? VISIBLE : GONE);
         readyGroup.setVisibility(step == Step.READY ? VISIBLE : GONE);
 
         int titleRes = switch (step) {
+            case LANGUAGE -> R.string.wizard_step_title_language;
             case MODE -> R.string.wizard_step_title_mode;
             case SCAN -> R.string.wizard_step_title_scan;
             case CONFIRM -> R.string.wizard_step_title_confirm;
@@ -314,8 +342,9 @@ public class ServerAddressView extends LinearLayout {
         };
         // A plain Lyrion server skips scanning and confirming, so the count has
         // to follow the path the user is actually on.
-        int totalSteps = isStandardLms() ? 2 : Step.values().length;
-        int stepNumber = isStandardLms() && step == Step.READY ? 2 : step.ordinal() + 1;
+        // (language, kind, ready = 3 steps; the appliance path has all five).
+        int totalSteps = isStandardLms() ? 3 : Step.values().length;
+        int stepNumber = isStandardLms() && step == Step.READY ? 3 : step.ordinal() + 1;
         stepIndicator.setText(getResources().getString(R.string.wizard_step_label, stepNumber, totalSteps,
                 getResources().getString(titleRes)));
 

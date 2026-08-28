@@ -489,7 +489,7 @@ public class SettingsFragment  extends PreferenceFragmentCompat implements
         }
         onSelectThemePref.setOnPreferenceChangeListener(this);
 
-        fillLanguagePreference();
+        fillLanguagePreference(preferences);
 
         fillEnumPreference(requirePreference(Preferences.KEY_SCREENSAVER), Preferences.ScreensaverMode.class, preferences.getScreensaverMode());
         fillEnumPreference(requirePreference(Preferences.KEY_FULLSCREEN), Preferences.FullScreenMode.class,preferences.getFullScreenMode());
@@ -507,7 +507,7 @@ public class SettingsFragment  extends PreferenceFragmentCompat implements
      * SharedPreferences, so the picker still shows the truth when the user
      * changed the language from Android 13+'s own per-app language screen.
      */
-    private void fillLanguagePreference() {
+    private void fillLanguagePreference(Preferences preferences) {
         ListPreference languagePref = requirePreference(Preferences.KEY_LANGUAGE);
         String[] tags = {"", "it", "en"};
         String[] labels = {
@@ -526,6 +526,8 @@ public class SettingsFragment  extends PreferenceFragmentCompat implements
 
         languagePref.setOnPreferenceChangeListener((preference, newValue) -> {
             String value = String.valueOf(newValue);
+            // Answered here = the connection wizard must not ask its language step.
+            preferences.setLanguageChosen(true);
             AppCompatDelegate.setApplicationLocales(value.isEmpty()
                     ? LocaleListCompat.getEmptyLocaleList()
                     : LocaleListCompat.forLanguageTags(value));
