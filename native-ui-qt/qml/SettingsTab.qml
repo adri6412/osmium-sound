@@ -22,7 +22,9 @@ Item {
     property string pendAct: ""; property string pendArg: ""
     property int countdown: 0
     property int alarmH: 7; property int alarmM: 0
-    property bool autoCheck: true
+    // 🚨 persistente come in Electron (li' e' in localStorage): lo legge anche
+    // la barra dei tab per decidere se controllare gli aggiornamenti
+    property bool autoCheck: Sys.conf("ota-autocheck", "1") !== "0"
     property string smbHost: ""; property string smbShare: ""; property string smbUser: ""; property string smbPw: ""
     property bool smbRw: false; property bool smbShowPw: false
     property int band: -1; property int bandAdd: -1; property int bandShare: -1
@@ -872,7 +874,7 @@ Item {
             // il titolo porta la versione, come in Settings.jsx
             Ui.dialogs.text(Tr.tf("settings.updates.changelogTitle", "version", cfg.upd[0].latest || cfg.upd[0].cur), cfg.changelog)
             return
-        case "upd_autocheck": autoCheck = !autoCheck; break
+        case "upd_autocheck": autoCheck = !autoCheck; Sys.setConf("ota-autocheck", autoCheck ? "1" : "0"); if (Ui.app && Ui.app.main) Ui.app.main.browser.checkUpdates(); break
         case "wifi_panel":
             cfg.loadWifi()
             Ui.dialogs.wifi(cfg.wifi, function(ssid, pw) {

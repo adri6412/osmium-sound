@@ -24,6 +24,28 @@ Item {
     property alias discoverTab: discoverTab
     x: 341; width: 1024 - 341; height: 600
 
+    // ─── "Aggiornamento disponibile" sul tab delle impostazioni ────────────
+    // Come nel kiosk Electron: si guardano i tre componenti (interfaccia,
+    // sistema, sistema operativo) ogni quarto d'ora — non piu' spesso, perche'
+    // ogni giro passa da GitHub — e si rispetta l'interruttore "controlla
+    // aggiornamenti automaticamente".
+    property bool updateAvailable: false
+    property var updSeen: [false, false, false]
+    function checkUpdates() {
+        if (Sys.conf("ota-autocheck", "1") === "0") { updateAvailable = false; return }
+        var paths = ["/app_update/check", "/system_update/check", "/os_update/check"]
+        for (var i = 0; i < 3; i++) (function(i) {
+            Api.get(Api.apiBase + paths[i], function(ok, d) {
+                if (!ok || !d) return
+                var u = root.updSeen.slice()
+                u[i] = !!d.update_available
+                root.updSeen = u
+                root.updateAvailable = u[0] || u[1] || u[2]
+            }, 15000)
+        })(i)
+    }
+    Timer { interval: 15 * 60 * 1000; repeat: true; triggeredOnStart: true; running: true; onTriggered: root.checkUpdates() }
+
     readonly property var tabs: [
         { icon: "music", key: "player.tabs.music" }, { icon: "radio", key: "player.tabs.radio" },
         { icon: "app-window", key: "player.tabs.apps" }, { icon: "compass", key: "player.tabs.discover" },
@@ -155,10 +177,19 @@ Item {
                     required property int index
                     readonly property bool active: root.tab === index
                     readonly property string label: modelData.key ? Tr.t(modelData.key) : ""
-                    width: 46 + (label ? 6 + tabText.implicitWidth : 0); height: 40
+                    readonly property bool badge: modelData.icon === "settings" && root.updateAvailable
+                    width: 46 + (label ? 6 + tabText.implicitWidth : 0) + (badge ? 6 + updText.implicitWidth : 0); height: 40
                     readonly property color c: active ? Theme.white : tabTap.mix(Theme.silverA(0.5), Theme.white)
                     Icon { x: 16; anchors.verticalCenter: parent.verticalCenter; name: tabItem.modelData.icon; size: 14; color: tabItem.c }
                     Text { id: tabText; x: 36; anchors.verticalCenter: parent.verticalCenter; text: tabItem.label; color: tabItem.c; font.family: Theme.font; font.pixelSize: 12 }
+                    Text {
+                        id: updText
+                        visible: tabItem.badge
+                        x: 36 + (tabItem.label ? tabText.implicitWidth + 6 : 0)
+                        anchors.verticalCenter: parent.verticalCenter
+                        text: Tr.t("settings.updates.available"); color: Theme.gold
+                        font.family: Theme.font; font.pixelSize: 12; font.bold: true
+                    }
                     // rounded-t-sm: 2 px solo sui due angoli in alto
                     Rectangle { visible: tabItem.active; x: 8; y: 38; width: parent.width - 16; height: 2; topLeftRadius: 2; topRightRadius: 2; color: Theme.gold }
                     Tap { id: tabTap; onClicked: root.openTab(tabItem.index) }

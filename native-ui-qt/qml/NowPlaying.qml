@@ -241,6 +241,10 @@ Item {
             id: controls
             width: parent.width; height: 56
             readonly property real cy: 28
+            // 🚨 i cinque comandi erano attaccati (centri a 9/42/94/146/179 punti,
+            // come in Electron): su un touchscreen si toccava il vicino. Ora c'e'
+            // un passo di respiro in piu' fra uno e l'altro.
+            readonly property real g: 12
             Item {                                 // shuffle
                 x: 9 - 20; y: controls.cy - 20; width: 40; height: 40
                 Icon { anchors.centerIn: parent; name: "shuffle"; size: 18
@@ -248,13 +252,13 @@ Item {
                 Tap { id: shTap; onClicked: Player.cycleShuffle() }
             }
             Item {                                 // precedente (whileTap .9)
-                x: 30 + 12 - 22; y: controls.cy - 22; width: 44; height: 44
+                x: 30 + 12 - 22 + controls.g; y: controls.cy - 22; width: 44; height: 44
                 Icon { anchors.centerIn: parent; name: "skip-back"; size: 24; color: Theme.silver; scale: prevTap.tapScale }
                 Tap { id: prevTap; tap: 0.9; onClicked: Player.prev() }
             }
             Item {                                 // play, con alone 0 0 24px oro/40
                 id: playBtn
-                x: 66; y: controls.cy - 28; width: 56; height: 56
+                x: 66 + 2 * controls.g; y: controls.cy - 28; width: 56; height: 56
                 Glow { anchors.centerIn: parent; radius: 28; blur: 24; color: Theme.goldA(0.4) }
                 Rectangle { anchors.fill: parent; radius: 28; color: Theme.gold; scale: playTap.tapScale }
                 Icon {
@@ -266,12 +270,12 @@ Item {
                 Tap { id: playTap; tap: 0.95; grow: 4; onClicked: Player.togglePlay() }
             }
             Item {                                 // successivo
-                x: 134 + 12 - 22; y: controls.cy - 22; width: 44; height: 44
+                x: 134 + 12 - 22 + 3 * controls.g; y: controls.cy - 22; width: 44; height: 44
                 Icon { anchors.centerIn: parent; name: "skip-forward"; size: 24; color: Theme.silver; scale: nextTap.tapScale }
                 Tap { id: nextTap; tap: 0.9; onClicked: Player.next() }
             }
             Item {                                 // ripeti
-                x: 170 + 9 - 20; y: controls.cy - 20; width: 40; height: 40
+                x: 170 + 9 - 20 + 4 * controls.g; y: controls.cy - 20; width: 40; height: 40
                 Icon { anchors.centerIn: parent; name: Player.repeat === 1 ? "repeat-1" : "repeat"; size: 18
                        color: Player.repeat > 0 ? Theme.gold : rpTap.mix(Theme.silverA(0.6), Theme.white) }
                 Tap { id: rpTap; onClicked: Player.cycleRepeat() }
