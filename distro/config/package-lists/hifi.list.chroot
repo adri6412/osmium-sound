@@ -208,6 +208,9 @@ pciutils
 # Non c'era, e senza di lui l'interfaccia non partiva proprio (schermo nero).
 kbd
 qt6-qpa-plugins
+# 🚨 WebP, TIFF e compagnia: senza questi Qt non sa decodificare quelle
+# copertine e in griglia restavano nere, mentre Chromium le leggeva da sé.
+qt6-image-formats-plugins
 qml6-module-qtquick
 qml6-module-qtquick-window
 qml6-module-qtquick-effects

@@ -20,6 +20,15 @@ Item {
 
     property real fade: 0
     Behavior on fade { NumberAnimation { duration: 1000; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.easeInOut } }
+    // 🚨 Quando il fondo nero e' del tutto opaco, sotto non si vede piu' niente:
+    // App.qml nasconde le schermate, e con loro si spengono i VU (Vu.active
+    // segue `shown` di NowPlaying). Senza questo, con lo schermo coperto e la
+    // musica in riproduzione — il salvaschermo alzato a mano resta su —
+    // l'interfaccia continuava a ridisegnare gli aghi a piena velocita', con il
+    // consumo di quando e' in primo piano. Durante la dissolvenza (in entrata
+    // fino a 1, e per tutta l'uscita) resta invece tutto visibile, o si
+    // vedrebbe il nero al posto dell'app.
+    readonly property bool covering: active && !closing && fade >= 0.999
     function show(man) {
         if (active && !closing) return
         active = true; closing = false; manual = !!man

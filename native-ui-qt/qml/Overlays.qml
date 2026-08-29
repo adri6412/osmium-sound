@@ -48,7 +48,10 @@ Item {
         onTriggered: if (root.fade === 0 && !slide.running) { root.active = 0; root.leaving = 0 }
     }
 
-    visible: active !== 0
+    // impostata da App.qml quando il salvaschermo copre tutto: niente da
+    // disegnare sotto (vedi Screensaver.covering)
+    property bool covered: false
+    visible: active !== 0 && !covered
     // sfondo scuro: /60 per la coda, /70 per i dialoghi
     Rectangle {
         anchors.fill: parent

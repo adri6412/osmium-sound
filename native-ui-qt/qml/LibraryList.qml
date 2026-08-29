@@ -17,6 +17,20 @@ Item {
     readonly property real cardW: (width - 24) / 3
     readonly property real cardH: cardW + 48
     readonly property real devScale: Ui.app ? Ui.app.devicePixelScale : 1
+
+    // 🚨 UNA SOLA maschera (angoli tondi in alto) per tutte le schede della
+    // griglia: sono identiche, e prima ognuna si portava dietro la propria
+    // texture. A schermo grande erano megabyte per riquadro, buttati.
+    readonly property alias artMask: sharedArtMask
+    Rectangle {
+        id: sharedArtMask
+        width: Math.max(1, root.cardW); height: Math.max(1, root.cardW)
+        visible: false; radius: 12
+        layer.enabled: true; layer.smooth: true
+        layer.textureSize: Qt.size(Math.max(1, Math.ceil(root.cardW * root.devScale)),
+                                   Math.max(1, Math.ceil(root.cardW * root.devScale)))
+        Rectangle { anchors.bottom: parent.bottom; width: parent.width; height: 12 }
+    }
     function scrollToRow(row) {
         if (grid) gridView.positionViewAtIndex(row, GridView.Beginning)
         else listView.positionViewAtIndex(row, ListView.Beginning)
@@ -171,25 +185,29 @@ Item {
                     // con `cover_<W>x<H>_o.jpg` alcune copertine restavano nere,
                     // perche' Lyrion non sa sempre produrre quella variante.
                     // La misura segue lo schermo: 300 sulla tela 1 a 1, fino a 1200 a 4K.
-                    source: card.art ? Api.lmsBase + "/music/" + card.art + "/cover?size=" + Theme.coverPx(root.cardW) : ""
+                    readonly property int px: Theme.coverPx(root.cardW)
+                    source: card.art ? Api.lmsBase + "/music/" + card.art + "/cover?size=" + px : ""
                     asynchronous: true; cache: true; fillMode: Image.PreserveAspectCrop
                     smooth: true
-                    // il doppio dei pixel dello schermo: si decodifica alla misura
-                    // nativa di quel che manda Lyrion e a rimpicciolire e' la scheda
-                    // video, come fa Chromium (chiedendo 1x riduceva Qt, e si perdeva)
-                    sourceSize.width: Math.round(root.cardW * root.devScale * 2); sourceSize.height: Math.round(root.cardW * root.devScale * 2)
+                    // 🚨 Si decodifica ESATTAMENTE alla misura che Lyrion serve
+                    // (Theme.coverPx, al massimo 1200): chiedere il doppio dei pixel
+                    // dello schermo ingrandiva un'immagine che piu' dettaglio non ne
+                    // ha, e sprecava megabyte di memoria video per riquadro. E' da li'
+                    // che venivano le copertine nere a caso: finita la memoria della
+                    // scheda video, qualche texture non si alloca piu' e resta il vuoto
+                    // (ricaricando l'elenco ne toccavano altre, e sembrava casuale).
+                    sourceSize.width: artImg.px; sourceSize.height: artImg.px
                     // 🚨 la texture che la mascheratura usa deve stare alla risoluzione
-                    // vera, se no la copertina viene rasterizzata alla misura in punti
-                    // e si vede seghettata (stesso difetto di icone e copertina grande)
+                    // dello SCHERMO (non a quella in punti, o si vede seghettata; non al
+                    // doppio, o si spreca memoria video per un dettaglio che non c'e')
                     layer.enabled: true
                     layer.smooth: true
-                    layer.textureSize: Qt.size(Math.ceil(root.cardW * root.devScale * 2), Math.ceil(root.cardW * root.devScale * 2))
+                    layer.textureSize: Qt.size(Math.ceil(root.cardW * root.devScale), Math.ceil(root.cardW * root.devScale))
                 }
-                // angoli tondi solo in alto (rounded-t-xl)
-                Rectangle { id: artMask; anchors.fill: parent; radius: 12; visible: false; layer.enabled: true; layer.smooth: true
-                            layer.textureSize: Qt.size(Math.ceil(width * root.devScale * 2), Math.ceil(height * root.devScale * 2))
-                            Rectangle { anchors.bottom: parent.bottom; width: parent.width; height: 12 } }
-                ShaderImage { anchors.fill: parent; source: artImg; mask: artMask; visible: artImg.status === Image.Ready }
+                // angoli tondi solo in alto (rounded-t-xl): la maschera e' UNA SOLA per
+                // tutte le schede (sono identiche), non una per riquadro — vedi
+                // sharedArtMask in fondo al file
+                ShaderImage { anchors.fill: parent; source: artImg; mask: root.artMask; visible: artImg.status === Image.Ready }
                 // shadow-lg = 0 10px 15px -3px + 0 4px 6px -4px, nero al 10 %
                 BoxShadow { targetX: parent.width - 36; targetY: parent.height - 36; targetW: 30; targetH: 30; radius: 15; blur: 15; spread: -3; offsetY: 10; color: Theme.blackA(0.1) }
                 BoxShadow { targetX: parent.width - 36; targetY: parent.height - 36; targetW: 30; targetH: 30; radius: 15; blur: 6; spread: -4; offsetY: 4; color: Theme.blackA(0.1) }
