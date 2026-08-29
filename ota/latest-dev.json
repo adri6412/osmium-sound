@@ -1,41 +1,41 @@
 {
-  "tag_name": "v2.5.24-dev.6",
-  "name": "v2.5.24-dev.6",
-  "body": "## What's new in v2.5.24-dev.6\n\n- fix(ui-qt): il primo avvio si chiude da solo a configurazione finita\n",
+  "tag_name": "v2.5.24-dev.7",
+  "name": "v2.5.24-dev.7",
+  "body": "## What's new in v2.5.24-dev.7\n\n- fix(ui-qt): copertine nere e VU che macinavano sotto il salvaschermo\n",
   "assets": [
     {
-      "name": "hifi-qtui-v2.5.24-dev.6.tar.gz",
-      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.24-dev.6/hifi-qtui-v2.5.24-dev.6.tar.gz",
-      "size": 4830128
+      "name": "hifi-qtui-v2.5.24-dev.7.tar.gz",
+      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.24-dev.7/hifi-qtui-v2.5.24-dev.7.tar.gz",
+      "size": 4830737
     },
     {
-      "name": "hifi-qtui-v2.5.24-dev.6.tar.gz.sha256",
-      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.24-dev.6/hifi-qtui-v2.5.24-dev.6.tar.gz.sha256",
+      "name": "hifi-qtui-v2.5.24-dev.7.tar.gz.sha256",
+      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.24-dev.7/hifi-qtui-v2.5.24-dev.7.tar.gz.sha256",
       "size": 97
     },
     {
-      "name": "hifi-system-v2.5.24-dev.6.tar.gz",
-      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.24-dev.6/hifi-system-v2.5.24-dev.6.tar.gz",
-      "size": 416796
+      "name": "hifi-system-v2.5.24-dev.7.tar.gz",
+      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.24-dev.7/hifi-system-v2.5.24-dev.7.tar.gz",
+      "size": 416797
     },
     {
-      "name": "hifi-system-v2.5.24-dev.6.tar.gz.sha256",
-      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.24-dev.6/hifi-system-v2.5.24-dev.6.tar.gz.sha256",
+      "name": "hifi-system-v2.5.24-dev.7.tar.gz.sha256",
+      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.24-dev.7/hifi-system-v2.5.24-dev.7.tar.gz.sha256",
       "size": 99
     },
     {
-      "name": "hifi-os-v2.5.24-dev.6.tar.gz",
-      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.24-dev.6/hifi-os-v2.5.24-dev.6.tar.gz",
-      "size": 1398957
+      "name": "hifi-os-v2.5.24-dev.7.tar.gz",
+      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.24-dev.7/hifi-os-v2.5.24-dev.7.tar.gz",
+      "size": 1399221
     },
     {
-      "name": "hifi-os-v2.5.24-dev.6.tar.gz.sha256",
-      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.24-dev.6/hifi-os-v2.5.24-dev.6.tar.gz.sha256",
+      "name": "hifi-os-v2.5.24-dev.7.tar.gz.sha256",
+      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.24-dev.7/hifi-os-v2.5.24-dev.7.tar.gz.sha256",
       "size": 95
     },
     {
-      "name": "hifi-os-v2.5.24-dev.6.tar.gz.sha256.sig",
-      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.24-dev.6/hifi-os-v2.5.24-dev.6.tar.gz.sha256.sig",
+      "name": "hifi-os-v2.5.24-dev.7.tar.gz.sha256.sig",
+      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.24-dev.7/hifi-os-v2.5.24-dev.7.tar.gz.sha256.sig",
       "size": 64
     }
   ]
