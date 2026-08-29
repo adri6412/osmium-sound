@@ -44,8 +44,8 @@ Item {
         id: mainScreen
         anchors.fill: parent
         devScale: app.devicePixelScale
-        visible: (!app.expanded || npSpring.running) && !wizard.active
-        shown: !app.expanded
+        visible: (!app.expanded || npSpring.running) && !wizard.active && !screensaver.covering
+        shown: !app.expanded && !screensaver.covering
         onExpand: app.setExpanded(true)
         onOpenQueue: overlays.openQueue()
         onOpenSleep: overlays.openSleep()
@@ -54,8 +54,8 @@ Item {
         id: np
         width: parent.width; height: parent.height
         y: npSpring.value * height
-        visible: (app.expanded || npSpring.running) && !wizard.active
-        shown: app.expanded && !wizard.active
+        visible: (app.expanded || npSpring.running) && !wizard.active && !screensaver.covering
+        shown: app.expanded && !wizard.active && !screensaver.covering
         devScale: app.devicePixelScale
         viewVu: app.viewVu
         onCollapse: app.setExpanded(false)
@@ -70,6 +70,7 @@ Item {
 
     Overlays {
         id: overlays
+        covered: screensaver.covering
         anchors.fill: parent
         onSavedPlaylist: { app.setExpanded(false); mainScreen.showPlaylists() }
     }
