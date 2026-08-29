@@ -7,8 +7,16 @@
 #               can rewrite this to another Osmium device's IP ("follow" mode)
 #               so this player joins that device's LMS for multiroom grouping
 #               (api_server.py set_lms_role / GET+POST /lms_role).
+# -M OsmiumSound  overrides the model name squeezelite declares to Lyrion in its
+#               SlimProto handshake (ModelName=, default "SqueezeLite"): it is what
+#               the server shows under Settings > Player > Information and
+#               writes in its logs, so an Osmium unit is recognisable there and
+#               tellable apart from any other squeezelite on the same LAN. Purely
+#               cosmetic/diagnostic: the machine-readable Model=squeezelite field is
+#               hardcoded in the binary and untouched by -M, so plugins that key off
+#               it keep working. Unlike -n (renamable per device) this stays fixed.
 # -o default    uses the ALSA default device. The UI wizard rewrites this to a
 #               specific DAC. It uses the stable card *name*, e.g.
 #               -o hw:CARD=D50s,DEV=0  (NOT -o hw:1,0 — card numbers can change
 #               across reboots, the CARD= name does not). Run `aplay -l` to list.
-ARGS='-o default -D -v -C 5 -s 127.0.0.1 -n OsmiumSound'
+ARGS='-o default -D -v -C 5 -s 127.0.0.1 -n OsmiumSound -M OsmiumSound'
