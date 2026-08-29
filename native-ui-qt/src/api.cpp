@@ -10,9 +10,32 @@ static Api *g_api = nullptr;
 
 Api::Api(QObject *parent) : QObject(parent) {
     m_host = qEnvironmentVariable("HIFI_HOST", "127.0.0.1");
+    m_lmsHost = m_host;
     g_api = this;
     // una connessione riusata per richiesta consecutiva (keep-alive di Qt)
     m_nam.setTransferTimeout(8000);
+    // 🚨 Il ruolo (Lyrion proprio, oppure quello di un altro apparecchio che si
+    // segue) si cambia anche dalla pagina di amministrazione web, senza passare
+    // di qui: si ricontrolla ogni mezzo minuto, oltre che a richiesta.
+    m_lmsPoll.setInterval(15000);
+    connect(&m_lmsPoll, &QTimer::timeout, this, &Api::refreshLmsHost);
+    m_lmsPoll.start();
+    QTimer::singleShot(0, this, &Api::refreshLmsHost);
+}
+
+void Api::refreshLmsHost() {
+    request("GET", apiBase() + "/lms_role", {}, [this](bool ok, const QVariant &d, int) {
+        if (!ok) return;
+        const QVariantMap m = d.toMap();
+        const QString host = m.value("host").toString();
+        // "local" vuol dire il Lyrion di questo apparecchio: si torna a m_host
+        // (non a 127.0.0.1 fisso, o si romperebbe HIFI_HOST in sviluppo).
+        const QString want = (m.value("mode").toString() == "follow" && !host.isEmpty()) ? host : m_host;
+        if (want == m_lmsHost) return;
+        qInfo("lyrion: si passa a %s", qPrintable(want));
+        m_lmsHost = want;
+        emit lmsBaseChanged();
+    }, 6000);
 }
 
 Api *Api::instance() { return g_api; }

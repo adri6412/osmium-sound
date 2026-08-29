@@ -11,6 +11,7 @@ Item {
     property bool active: false
     property bool closing: false
     property bool shift: false
+    property bool sym: false          // strato dei simboli
     property bool password: false
     property string text: ""
     property string label: ""
@@ -26,7 +27,7 @@ Item {
     function openText(lbl, initial, pw, f) {
         label = lbl || Tr.t("keyboard.enterText")
         text = initial || ""; password = !!pw; cb = f; field = null
-        shift = false; closing = false; active = true
+        shift = false; sym = false; closing = false; active = true
         slide.set(0); slide.to = 1; fade = 1
         caretOn = true
     }
@@ -66,12 +67,23 @@ Item {
 
     MouseArea { anchors.fill: parent; onClicked: root.close(false) }
 
-    readonly property var rows: [
+    // 🚨 Due strati: lettere e simboli. Senza il secondo mancavano i due punti,
+    // la barra e la chiocciola — cioe' tutto quello che serve per scrivere un
+    // indirizzo, un percorso di rete o una porta, e quei campi si compilano
+    // proprio da qui. Il tasto in basso a sinistra passa dall'uno all'altro.
+    readonly property var letterRows: [
         [{k:"1"},{k:"2"},{k:"3"},{k:"4"},{k:"5"},{k:"6"},{k:"7"},{k:"8"},{k:"9"},{k:"0"}],
         [{k:"q"},{k:"w"},{k:"e"},{k:"r"},{k:"t"},{k:"y"},{k:"u"},{k:"i"},{k:"o"},{k:"p"}],
         [{k:"a"},{k:"s"},{k:"d"},{k:"f"},{k:"g"},{k:"h"},{k:"j"},{k:"k"},{k:"l"}],
         [{k:"⇧",fn:"shift",flex:1.5},{k:"z"},{k:"x"},{k:"c"},{k:"v"},{k:"b"},{k:"n"},{k:"m"},{k:"."},{k:"-"},{k:"⌫",fn:"bksp",flex:2.5}],
-        [{k:"space",fn:"space"}]]
+        [{k:"?#:",fn:"sym",flex:2},{k:"space",fn:"space",flex:8}]]
+    readonly property var symRows: [
+        [{k:"1"},{k:"2"},{k:"3"},{k:"4"},{k:"5"},{k:"6"},{k:"7"},{k:"8"},{k:"9"},{k:"0"}],
+        [{k:"@"},{k:"#"},{k:"€"},{k:"$"},{k:"%"},{k:"&"},{k:"*"},{k:"("},{k:")"},{k:"~"}],
+        [{k:"-"},{k:"_"},{k:"="},{k:"+"},{k:"/"},{k:"\\"},{k:"|"},{k:":"},{k:";"}],
+        [{k:"'"},{k:"\""},{k:","},{k:"."},{k:"!"},{k:"?"},{k:"<"},{k:">"},{k:"["},{k:"]"},{k:"⌫",fn:"bksp",flex:2.5}],
+        [{k:"ABC",fn:"sym",flex:2},{k:"space",fn:"space",flex:8}]]
+    readonly property var rows: sym ? symRows : letterRows
 
     Rectangle {
         id: sheet
@@ -132,14 +144,15 @@ Item {
                             color: shiftOn ? Theme.gold : fn ? "#4a4a4a" : kTap.mix(Theme.light, "#4a4a4a")
                             border.width: 1; border.color: shiftOn ? Theme.gold : Theme.accent
                             scale: kTap.tapScale
-                            Text { anchors.centerIn: parent; text: modelData.fn === "space" ? Tr.t("keyboard.space") : (root.shift ? modelData.k.toUpperCase() : modelData.k); color: shiftOn ? Theme.black : Theme.white; font.family: Theme.font; font.pixelSize: 15; font.bold: true }
+                            Text { anchors.centerIn: parent; text: modelData.fn === "space" ? Tr.t("keyboard.space") : (root.shift && !root.sym ? modelData.k.toUpperCase() : modelData.k); color: shiftOn ? Theme.black : Theme.white; font.family: Theme.font; font.pixelSize: 15; font.bold: true }
                             Tap {
                                 id: kTap; tap: 0.95
                                 onClicked: {
                                     if (modelData.fn === "shift") root.shift = !root.shift
+                                    else if (modelData.fn === "sym") root.sym = !root.sym
                                     else if (modelData.fn === "bksp") root.backspace()
                                     else if (modelData.fn === "space") root.put(" ")
-                                    else root.put(root.shift ? modelData.k.toUpperCase() : modelData.k)   // lo shift resta finche' non lo si ritocca, come in Electron
+                                    else root.put(root.shift && !root.sym ? modelData.k.toUpperCase() : modelData.k)   // lo shift resta finche' non lo si ritocca, come in Electron
                                 }
                             }
                         }

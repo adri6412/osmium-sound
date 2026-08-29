@@ -153,6 +153,8 @@ signals:
 
 private:
     void findPlayer();
+    void fetchLocalName();          // come ci chiamiamo su Lyrion (-n di squeezelite)
+    void onLmsHostChanged();        // si e' passati a un altro Lyrion: si ricomincia
     void pollStatus();
     void pollPrefs();
     void pollSettings();
@@ -169,7 +171,7 @@ private:
     bool m_statusInFlight = false, m_wantNow = false;
 
     bool m_connected = false;
-    QString m_playerName, m_playerId;
+    QString m_playerName, m_playerId, m_localName;
     QString m_title, m_artist, m_album, m_id, m_coverId, m_artworkUrlLms, m_type, m_bitrate, m_chip, m_currentTitle;
     QString m_artworkUrl, m_artKey;
     bool m_remote = false, m_qPcm = false, m_qHires = false, m_qDsd = false;

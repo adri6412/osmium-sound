@@ -846,7 +846,7 @@ Item {
         case "lms_rescan": lms(["rescan"]); say(Tr.t("settings.lyrion.rescanStarted")); break
         case "lms_url": case "smb_field": case "pick_new": case "ssh_user": case "ssh_pass": case "player_name": case "lms_host": return
         case "lms_role":
-            if (arg === "local") { post(A("/lms_role"), { mode: "local" }); cfg.lmsMode = "local"; say(Tr.t("settings.multiroom.role.saved")) }
+            if (arg === "local") { post(A("/lms_role"), { mode: "local" }); cfg.lmsMode = "local"; Api.refreshLmsHost(); say(Tr.t("settings.multiroom.role.saved")) }
             else { cfg.lmsMode = "follow"; cfg.loadDiscover() }
             break
         case "lms_pick": hostEdit = arg; break
@@ -854,7 +854,10 @@ Item {
         case "lms_apply": {
             var h = hostEdit || cfg.lmsHost
             if (!h) { say(Tr.t("settings.multiroom.role.hostRequired"), true); return }
-            post(A("/lms_role"), { mode: "follow", host: h }); cfg.lmsHost = h; say(Tr.t("settings.multiroom.role.saved")); break
+            // 🚨 l'interfaccia deve puntare SUBITO al Lyrion nuovo: senza questo
+            // resta su quello di prima fino al controllo periodico
+            post(A("/lms_role"), { mode: "follow", host: h }, function() { Api.refreshLmsHost() })
+            cfg.lmsHost = h; say(Tr.t("settings.multiroom.role.saved")); break
         }
         case "player_name_apply":
             if (!nameEdit) return

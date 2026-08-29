@@ -29,6 +29,8 @@ Player::Player(QObject *parent) : QObject(parent) {
 }
 
 void Player::start() {
+    connect(Api::instance(), &Api::lmsBaseChanged, this, &Player::onLmsHostChanged);
+    fetchLocalName();
     findPlayer();
     pollSettings();
     pollUsb();
@@ -52,7 +54,21 @@ void Player::findPlayer() {
         if (!ok) { if (m_connected) { m_connected = false; emit connectedChanged(); } return; }
         QVariantList loop = data.toMap().value("result").toMap().value("players_loop").toList();
         QString id, name;
-        for (const QVariant &p : loop) {                       // squeezelite locale: ip su loopback
+        // 🚨 Ci si riconosce dal NOME (quello dato a squeezelite con -n), come fa
+        // il kiosk Electron. L'indirizzo di partenza non basta: se l'apparecchio
+        // segue il Lyrion di un altro, il nostro squeezelite non arriva piu' da
+        // loopback ma dalla rete, e si finiva col pilotare il lettore altrui —
+        // now playing, copertine e liste erano di un altro apparecchio.
+        if (!m_localName.isEmpty()) {
+            for (const QVariant &p : loop) {
+                QVariantMap m = p.toMap();
+                if (m.value("name").toString() == m_localName && !m.value("playerid").toString().isEmpty()) {
+                    id = m.value("playerid").toString(); name = m.value("name").toString(); break;
+                }
+            }
+        }
+        for (const QVariant &p : loop) {                       // ripiego: squeezelite locale, ip su loopback
+            if (!id.isEmpty()) break;
             QVariantMap m = p.toMap();
             if (m.value("ip").toString().startsWith("127.0.0.1") && !m.value("playerid").toString().isEmpty()) {
                 id = m.value("playerid").toString(); name = m.value("name").toString(); break;
@@ -68,6 +84,33 @@ void Player::findPlayer() {
         m_connected = true;
         if (!was) { emit connectedChanged(); pollPrefs(); m_wantNow = true; }
     }, 4000);
+}
+
+// Il nome che questo apparecchio ha su Lyrion: lo tiene l'api_server (e' il -n
+// passato a squeezelite). Serve a riconoscere il PROPRIO lettore in un elenco
+// che, su un server condiviso, contiene anche quelli degli altri.
+void Player::fetchLocalName() {
+    Api *api = Api::instance();
+    api->request("GET", api->apiBase() + "/player_name", {}, [this](bool ok, const QVariant &d, int) {
+        if (!ok) return;
+        const QString n = d.toMap().value("name").toString();
+        if (n.isEmpty() || n == m_localName) return;
+        m_localName = n;
+        findPlayer();
+    }, 5000);
+}
+
+// L'apparecchio ha cambiato Lyrion (proprio ↔ quello di un altro): il lettore
+// va ritrovato la' dentro, e l'indirizzo della copertina rifatto da capo —
+// updateArtwork() salta il lavoro se la "chiave" non cambia, e la chiave non
+// contiene l'host.
+void Player::onLmsHostChanged() {
+    m_playerId.clear();
+    m_artKey.clear();
+    if (m_connected) { m_connected = false; emit connectedChanged(); }
+    m_wantNow = true;
+    fetchLocalName();
+    findPlayer();
 }
 
 static QString S(const QVariantMap &m, const char *k) { return m.value(k).toString(); }
