@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Album card: #161616, 12dp corners, hairline border, neutral ripple. -->
+<ripple xmlns:android="http://schemas.android.com/apk/res/android"
+    android:color="?attr/colorControlHighlight">
+    <item>
+        <shape android:shape="rectangle">
+            <solid android:color="@color/osmium_surface" />
+            <corners android:radius="12dp" />
+            <stroke android:width="1dp" android:color="@color/osmium_border" />
+        </shape>
+    </item>
+</ripple>

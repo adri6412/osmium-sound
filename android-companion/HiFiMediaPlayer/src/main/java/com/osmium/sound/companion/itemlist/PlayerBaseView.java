@@ -12,6 +12,7 @@ import com.osmium.sound.companion.framework.BaseActivity;
 import com.osmium.sound.companion.framework.ViewParamItemView;
 import com.osmium.sound.companion.model.Player;
 import com.osmium.sound.companion.model.PlayerState;
+import com.osmium.sound.companion.service.localplayer.LocalPlayerController;
 
 public abstract class PlayerBaseView extends ViewParamItemView<Player> {
     private static final Map<String, Integer> modelIcons = PlayerBaseView.initializeModelIcons();
@@ -47,7 +48,15 @@ public abstract class PlayerBaseView extends ViewParamItemView<Player> {
     @Override
     public void bindView(Player player) {
         super.bindView(player);
-        icon.setImageResource(getModelIcon(player.getModel()));
+        // This phone registers as a squeezelite player, so it is told apart by
+        // its id rather than its model.
+        if (LocalPlayerController.isThisPhone(player.getId())) {
+            icon.setImageResource(R.drawable.ic_squeezeplayer);
+            text1.setText(player.getName() + " ("
+                    + getActivity().getString(R.string.player_this_phone) + ")");
+        } else {
+            icon.setImageResource(getModelIcon(player.getModel()));
+        }
 
         PlayerState playerState = player.getPlayerState();
 

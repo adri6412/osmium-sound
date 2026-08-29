@@ -13,8 +13,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:minHeight="?attr/actionBarSize"
-            app:navigationIcon="@drawable/ic_keyboard_arrow_left"
-            app:title="@string/activity_settings_name" />
+            app:navigationIcon="@drawable/ic_keyboard_arrow_left" />
     </com.google.android.material.appbar.AppBarLayout>
 
     <androidx.fragment.app.FragmentContainerView

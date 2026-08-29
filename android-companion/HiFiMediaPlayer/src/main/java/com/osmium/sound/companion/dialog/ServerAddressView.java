@@ -29,6 +29,8 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.appcompat.app.AppCompatDelegate;
+import androidx.core.os.LocaleListCompat;
 import androidx.fragment.app.FragmentManager;
 
 import com.google.android.material.button.MaterialButton;
@@ -37,6 +39,9 @@ import com.google.android.material.checkbox.MaterialCheckBox;
 import com.google.android.material.textfield.TextInputLayout;
 import com.google.zxing.integration.android.IntentIntegrator;
 import com.google.zxing.integration.android.IntentResult;
+
+import android.os.Bundle;
+import android.os.Parcelable;
 
 import java.net.URI;
 
@@ -47,21 +52,26 @@ import com.osmium.sound.companion.Util;
 import com.osmium.sound.companion.util.AfterTextChangedLister;
 
 /**
- * Walks the user through pairing with an appliance as a 3-step wizard:
- * scan the "Phone control" QR code, confirm the pairing it resolved to, then
- * (optionally) fill in LMS credentials/Wake-on-LAN before connecting.
+ * Walks the user through setting up a connection.
  * <p>
- * The server address can ONLY be set by scanning the QR code — there is
- * deliberately no manual host:port entry or network-discovery fallback.
- * Both of those would let the app connect to a server without ever going
- * through the appliance's pairing flow, so the app would end up "connected"
- * but without the pairing token that gates the appliance's DSP control API
- * (see sources_server.py's /api/pair/token and Preferences#setAppliancePairing).
+ * The first step asks what they are connecting to, because the two answers want
+ * different things:
+ * <ul>
+ *   <li>an <b>Osmium Sound</b> appliance is paired by scanning its "Phone
+ *       control" QR code, and only that way: typing a host by hand would connect
+ *       the app without the pairing token that gates the appliance's own API
+ *       (see sources_server.py's /api/pair/token and
+ *       {@link Preferences#setAppliancePairing}), leaving the appliance settings
+ *       visible but dead. Steps then run scan, confirm, ready;</li>
+ *   <li>any <b>other Lyrion server</b> has no QR code and no appliance API, so
+ *       the address is typed in and the appliance settings stay hidden. Steps
+ *       run mode, ready.</li>
+ * </ul>
  */
 public class ServerAddressView extends LinearLayout {
 
-    /** The three screens of the pairing wizard, shown one at a time. */
-    public enum Step { SCAN, CONFIRM, READY }
+    /** The screens of the wizard, shown one at a time. */
+    public enum Step { LANGUAGE, MODE, SCAN, CONFIRM, READY }
 
     /** Notified whenever the wizard advances/returns to a different step. */
     public interface StepListener {
@@ -72,6 +82,10 @@ public class ServerAddressView extends LinearLayout {
     private Preferences.ServerAddress serverAddress;
 
     private TextView stepIndicator;
+    private View languageGroup;
+    private View modeGroup;
+    private MaterialButton modeOsmiumButton;
+    private MaterialButton modeStandardButton;
     private View scanGroup;
     private MaterialButton scanButton;
     private MaterialCardView confirmGroup;
@@ -91,6 +105,7 @@ public class ServerAddressView extends LinearLayout {
     private EditText macEditText;
 
     private Step currentStep;
+    private Preferences.ServerKind serverKind;
     private StepListener stepListener;
     private String pendingHostPort;
     private String pendingApi;
@@ -110,6 +125,14 @@ public class ServerAddressView extends LinearLayout {
         inflate(getContext(), R.layout.server_address_view, this);
         if (!isInEditMode()) {
             stepIndicator = findViewById(R.id.wizard_step_indicator);
+            languageGroup = findViewById(R.id.step_language);
+            findViewById(R.id.language_italian_button).setOnClickListener(view -> chooseLanguage("it"));
+            findViewById(R.id.language_english_button).setOnClickListener(view -> chooseLanguage("en"));
+            modeGroup = findViewById(R.id.step_mode);
+            modeOsmiumButton = findViewById(R.id.mode_osmium_button);
+            modeOsmiumButton.setOnClickListener(view -> chooseServerKind(Preferences.ServerKind.OSMIUM));
+            modeStandardButton = findViewById(R.id.mode_standard_button);
+            modeStandardButton.setOnClickListener(view -> chooseServerKind(Preferences.ServerKind.STANDARD_LMS));
             scanGroup = findViewById(R.id.step_scan);
             scanButton = findViewById(R.id.scan_button);
             scanButton.setOnClickListener(view -> startQrScan());
@@ -120,6 +143,9 @@ public class ServerAddressView extends LinearLayout {
             confirmRescanButton = findViewById(R.id.confirm_rescan_button);
             confirmRescanButton.setOnClickListener(view -> startQrScan());
             readyGroup = findViewById(R.id.step_ready);
+            // Lets the choice be revisited without reinstalling; the address and
+            // any pairing stay put until a different kind is actually picked.
+            findViewById(R.id.change_mode_button).setOnClickListener(view -> setStep(Step.MODE));
             advancedOptionsToggle = findViewById(R.id.advanced_options_toggle);
             advancedOptionsGroup = findViewById(R.id.advanced_options_group);
             advancedOptionsToggle.setOnClickListener(view -> setAdvancedOptionsExpanded(
@@ -173,9 +199,68 @@ public class ServerAddressView extends LinearLayout {
                     }
                 });
 
+                serverKind = preferences.getServerKind();
                 setServerAddress(serverAddress.localAddress());
-                setStep(serverAddress.localAddress() != null ? Step.READY : Step.SCAN);
+                if (serverKind == null) {
+                    // Someone who paired before this choice existed was on an
+                    // appliance by definition: keep them there rather than
+                    // asking a question they have effectively already answered.
+                    if (serverAddress.localAddress() != null) {
+                        serverKind = Preferences.ServerKind.OSMIUM;
+                        preferences.setServerKind(serverKind);
+                    }
+                }
+                applyServerKind();
+                if (!preferences.isLanguageChosen()) {
+                    setStep(Step.LANGUAGE);
+                } else {
+                    setStepAfterLanguage();
+                }
             });
+        }
+    }
+
+    /**
+     * The wizard has to survive the activity being rebuilt underneath it — the
+     * scanner comes back through a different activity, a language change
+     * recreates this one, and so does a rotation. Without this, a scan that had
+     * already resolved a pairing would flash the confirmation and then drop
+     * back to the scan step, because a fresh view starts the wizard over.
+     */
+    @Override
+    protected Parcelable onSaveInstanceState() {
+        Bundle state = new Bundle();
+        state.putParcelable("super", super.onSaveInstanceState());
+        if (currentStep != null) state.putString("step", currentStep.name());
+        state.putString("pendingHostPort", pendingHostPort);
+        state.putString("pendingApi", pendingApi);
+        state.putString("pendingToken", pendingToken);
+        return state;
+    }
+
+    @Override
+    protected void onRestoreInstanceState(Parcelable parcelable) {
+        if (!(parcelable instanceof Bundle state)) {
+            super.onRestoreInstanceState(parcelable);
+            return;
+        }
+        super.onRestoreInstanceState(state.getParcelable("super"));
+
+        pendingHostPort = state.getString("pendingHostPort");
+        pendingApi = state.getString("pendingApi");
+        pendingToken = state.getString("pendingToken");
+
+        String step = state.getString("step");
+        if (step == null) return;
+        try {
+            Step restored = Step.valueOf(step);
+            if (restored == Step.CONFIRM && pendingApi != null) {
+                confirmMessage.setText(getResources().getString(
+                        R.string.settings_pair_confirm_message, pendingApi));
+            }
+            setStep(restored);
+        } catch (IllegalArgumentException ignored) {
+            // A step that no longer exists: leave the wizard where it started.
         }
     }
 
@@ -193,7 +278,18 @@ public class ServerAddressView extends LinearLayout {
         }
 
         String address = serverAddressEditText.getText().toString();
+        if (isStandardLms() && address.trim().isEmpty()) {
+            TextInputLayout serverAddressTil = findViewById(R.id.server_address_til);
+            serverAddressTil.setError(getResources().getString(R.string.settings_server_address_required));
+            return false;
+        }
         serverAddress.setAddress(address);
+        // If the address was typed over the one the QR wrote — a tailnet name
+        // instead of the LAN address, say — the appliance's own API has to
+        // follow it, or the device settings would keep calling a host that only
+        // answers at home. The pairing token is unchanged: same appliance,
+        // reached another way.
+        followApplianceHost(serverAddress.host());
         serverAddress.userName = userNameEditText.getText().toString();
         serverAddress.password = passwordEditText.getText().toString();
         serverAddress.wakeOnLan = wakeOnLan.isChecked();
@@ -201,6 +297,80 @@ public class ServerAddressView extends LinearLayout {
         preferences.saveServerAddress(serverAddress);
 
         return true;
+    }
+
+    /** Points the appliance API at the same host as Lyrion, keeping its port. */
+    private void followApplianceHost(String host) {
+        if (host == null || isStandardLms()) return;
+        String api = preferences.getApplianceApiAddress();
+        String token = preferences.getAppliancePairToken();
+        if (api == null || token == null) return;
+        int colon = api.lastIndexOf(':');
+        String port = colon > 0 ? api.substring(colon) : "";
+        String updated = host + port;
+        if (!updated.equals(api)) {
+            preferences.setAppliancePairing(updated, token);
+        }
+    }
+
+    private boolean isStandardLms() {
+        return serverKind == Preferences.ServerKind.STANDARD_LMS;
+    }
+
+    /** Records the answer to the first question and moves to the right step. */
+    /** The step that follows the language question, given what is already known. */
+    private void setStepAfterLanguage() {
+        if (serverKind == null) {
+            setStep(Step.MODE);
+        } else {
+            setStep(serverAddress.localAddress() != null || isStandardLms() ? Step.READY : Step.SCAN);
+        }
+    }
+
+    private void chooseLanguage(String languageTag) {
+        // Remembered BEFORE switching: applying a per-app locale recreates the
+        // activity, and the rebuilt wizard must not ask again. The locale itself
+        // is stored by AppCompat (autoStoreLocales in the manifest), the same
+        // way Settings → Display → Language does it.
+        preferences.setLanguageChosen(true);
+        AppCompatDelegate.setApplicationLocales(LocaleListCompat.forLanguageTags(languageTag));
+        // No recreation follows when the language is already the current one:
+        // move on by hand.
+        setStepAfterLanguage();
+    }
+
+    private void chooseServerKind(Preferences.ServerKind kind) {
+        serverKind = kind;
+        preferences.setServerKind(kind);
+        applyServerKind();
+        if (kind == Preferences.ServerKind.OSMIUM) {
+            setStep(serverAddress.localAddress() != null ? Step.READY : Step.SCAN);
+        } else {
+            setStep(Step.READY);
+        }
+    }
+
+    /**
+     * The address field is read-only and opens the scanner for an appliance,
+     * and an ordinary text field for any other server.
+     */
+    private void applyServerKind() {
+        if (serverAddressEditText == null) return;
+        boolean standard = isStandardLms();
+        // Editable either way. Scanning stays the way an appliance is paired —
+        // that is what hands over the token — but the address it wrote is a LAN
+        // one, and from outside the house it is unreachable. Typing the tailnet
+        // name over it is exactly what LyrPlay asks its users to do.
+        serverAddressEditText.setFocusable(true);
+        serverAddressEditText.setFocusableInTouchMode(true);
+        serverAddressEditText.setLongClickable(true);
+        serverAddressEditText.setOnClickListener(null);
+        TextInputLayout serverAddressTil = findViewById(R.id.server_address_til);
+        serverAddressTil.setEndIconMode(standard ? TextInputLayout.END_ICON_NONE
+                : TextInputLayout.END_ICON_CUSTOM);
+        serverAddressTil.setHelperText(getResources().getString(standard
+                ? R.string.settings_server_address_required
+                : R.string.settings_server_address_remote_hint));
     }
 
     /** Registers a listener for step changes, and immediately reports the current step if known. */
@@ -226,17 +396,25 @@ public class ServerAddressView extends LinearLayout {
 
     private void setStep(Step step) {
         currentStep = step;
+        languageGroup.setVisibility(step == Step.LANGUAGE ? VISIBLE : GONE);
+        modeGroup.setVisibility(step == Step.MODE ? VISIBLE : GONE);
         scanGroup.setVisibility(step == Step.SCAN ? VISIBLE : GONE);
         confirmGroup.setVisibility(step == Step.CONFIRM ? VISIBLE : GONE);
         readyGroup.setVisibility(step == Step.READY ? VISIBLE : GONE);
 
         int titleRes = switch (step) {
+            case LANGUAGE -> R.string.wizard_step_title_language;
+            case MODE -> R.string.wizard_step_title_mode;
             case SCAN -> R.string.wizard_step_title_scan;
             case CONFIRM -> R.string.wizard_step_title_confirm;
             case READY -> R.string.wizard_step_title_ready;
         };
-        int stepNumber = step.ordinal() + 1;
-        stepIndicator.setText(getResources().getString(R.string.wizard_step_label, stepNumber, Step.values().length,
+        // A plain Lyrion server skips scanning and confirming, so the count has
+        // to follow the path the user is actually on.
+        // (language, kind, ready = 3 steps; the appliance path has all five).
+        int totalSteps = isStandardLms() ? 3 : Step.values().length;
+        int stepNumber = isStandardLms() && step == Step.READY ? 3 : step.ordinal() + 1;
+        stepIndicator.setText(getResources().getString(R.string.wizard_step_label, stepNumber, totalSteps,
                 getResources().getString(titleRes)));
 
         if (stepListener != null) {

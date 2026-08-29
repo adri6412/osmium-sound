@@ -32,7 +32,9 @@ hifi-media-player/
 - **Playback & queue control** — play/pause/skip, seek, shuffle/repeat, queue management
 - **Volume control**
 - **Library browsing** — artists, albums, playlists, radio, apps/plugins
-- **QR-code pairing** — scan the code from the device's Settings screen (or the web admin); it carries the device address, the pairing token and the Lyrion web-player URL, no manual entry
+- **Connection wizard** — first asks the language of the app (Italian or English, changeable later in Settings), then what you are connecting to: an Osmium Sound device (paired by QR code, appliance settings shown) or any other Lyrion server (host and port typed in, appliance settings hidden)
+- **QR-code pairing** — scan the code from the device's Settings screen (or the web admin); it carries the device address, the pairing token and the Lyrion web-player URL, no manual entry. Still the only way to set up an Osmium device: a typed-in address would leave the app connected but without the pairing token the appliance API needs
+- **This phone as a player** — the phone registers with Lyrion as a player of its own and renders the audio locally (SlimProto over TCP 3483 plus Media3/ExoPlayer). It shows up in the player list next to the appliance, plays gapless, follows the server's volume, and takes its stream quality from a per-network setting (lossless on Wi-Fi, compressed on mobile data by default)
 - **Appliance settings** (once paired): audio output, multiroom (follow another Osmium's Lyrion, player name), updates (check/"Update now", Prod/Dev channel, Lyrion updates, release notes), backup & restore, Lyrion library rescan, Lyrion web-player look (Osmium/Material), and a *System admin* screen: display mode (screen ⇄ headless), UI render resolution, panel refresh rate, analog VU meter on/off, SSH on/off (shows the login name), reboot/shutdown, system info
 - **Server discovery** on the local network
 - Dark theme matching the appliance's UI
@@ -45,6 +47,7 @@ hifi-media-player/
 - Build: Android Gradle Plugin 8.13, Gradle 8.13 (wrapper)
 - Communication:
   - **CometD (Bayeux over HTTP)** with Lyrion Music Server on `:9000` for library/playback;
+  - **SlimProto (TCP `:3483`)** with Lyrion, but only when "this phone as a player" is on: it is the protocol Lyrion drives its players with, and it carries the stream requests this app then fetches over HTTP. See `service/localplayer/`;
   - **HTTP to the appliance's sources service on `:8080`** (`sources_server.py`), authenticated with the pairing bearer token. That service exposes a deliberately limited proxy of the root-only system API (`/api/system/*` — see `_SYSTEM_PROXY_ROUTES` in `sources_server.py`) plus its own backup/restore and Lyrion-skin routes. The companion never talks to the loopback-only `api_server.py` directly, and it cannot reach factory reset, the shell/SSH account, network configuration or the web-admin account — see [SECURITY.md](SECURITY.md) and [ARCHITECTURE.md](ARCHITECTURE.md#pairing--security).
 - LAN-only — phone and appliance must be on the same local network (or a Tailscale tailnet the owner set up)
 

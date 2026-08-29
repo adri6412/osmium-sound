@@ -1,9 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+ Lucide "play-fill", converted from native-ui-qt/icons/play-fill.svg so the phone and
+ the appliance draw the same glyph. Regenerate with
+ android-companion/tools/lucide2vector.py rather than editing by hand.
+-->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
-    android:width="36dp"
-    android:height="36dp"
-    android:viewportWidth="24.0"
-    android:viewportHeight="24.0">
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24"
+    android:tint="?attr/colorControlNormal">
     <path
-        android:fillColor="#FFFFFF"
-        android:pathData="M8,5v14l11,-7z"/>
+        android:pathData="M5,3 L19,12 L5,21 L5,3 Z"
+        android:fillColor="#FFFFFFFF" />
+    <path
+        android:pathData="M5,3 L19,12 L5,21 L5,3 Z"
+        android:strokeWidth="2"
+        android:strokeColor="#FFFFFFFF"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
 </vector>

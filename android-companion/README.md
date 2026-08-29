@@ -22,7 +22,9 @@ additionally pairs with the appliance itself and exposes its settings.
 
 - Playback and queue control (play/pause/skip, seek, shuffle/repeat), volume
 - Library browsing (artists, albums, playlists, radio, apps/plugins), search, Discover/random mixes via Lyrion
+- **Connection wizard** — pick the app language (Italian / English) first, then choose between an Osmium Sound appliance (QR pairing, appliance settings) and any other Lyrion server (host:port, no appliance settings)
 - **QR-code pairing** — scan the code from the appliance's Settings screen or web admin; it carries host, pairing token and the Lyrion web-player URL
+- **This phone as a player** — registers with Lyrion over SlimProto (TCP 3483) and plays the audio on the phone with Media3/ExoPlayer: gapless, server volume, quality per network. See `HiFiMediaPlayer/src/main/java/com/osmium/sound/companion/service/localplayer/`
 - Appliance settings once paired (Settings → *Osmium Sound*): **audio output**, **multiroom** (follow another unit's Lyrion, player name), **updates** (check / "Update now", Prod/Dev channel, Lyrion updates, release notes), **backup & restore**, **system admin** (display mode screen ⇄ headless, UI render resolution, panel refresh rate, VU meter on/off, SSH on/off + login name, reboot/shutdown, system info); under *Lyrion server*: library rescan and the web-player look (Osmium / Material)
 - Server discovery and connection on the local network
 - Screen rotation and responsive layouts (phone/tablet); 10 UI languages

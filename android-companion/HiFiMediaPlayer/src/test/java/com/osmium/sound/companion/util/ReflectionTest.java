@@ -1,4 +1,4 @@
-package com.hifi.mediaplayer.util;
+package com.osmium.sound.companion.util;
 
 import junit.framework.TestCase;
 

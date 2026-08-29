@@ -1,91 +1,177 @@
 <?xml version="1.0" encoding="utf-8"?>
-<resources xmlns:android="http://schemas.android.com/apk/res/android">
-    <!-- Base application theme. -->
-    <style name="AppTheme" parent="Theme.MaterialComponents.NoActionBar">
-        <item name="alarm_dow_selected">@android:color/white</item>
+<!--
+ The app's Material 3 theme, in the appliance's colours.
 
-        <item name="colorPrimary">#D4AF37</item>
-        <item name="colorPrimaryVariant">@color/colorPrimaryVariantDark</item>
-        <item name="colorSecondary">#D4AF37</item>
-        <item name="colorSecondaryVariant">@color/colorSecondaryVariantDark</item>
-        <item name="colorAppBar">@color/colorAppBarDark</item>
+ The palette is not invented here: it is the same one the Osmium Sound device
+ draws with, defined identically in tailwind.config.js, native-ui-qt/qml/Theme.qml
+ and native-ui/src/ui.h. Two rules from that UI are easy to get wrong and worth
+ stating: gold is only ever accent and selection — the pressed state is a neutral
+ lift towards #2a2a2a — and nothing is rounder than 16dp except full circles.
+
+ There is one look, dark. AppTheme.Light survives only because ThemeManager and
+ the (now hidden) theme preference still name it.
+-->
+<resources xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <style name="AppTheme" parent="Theme.Material3.Dark.NoActionBar">
+        <item name="alarm_dow_selected">@color/osmium_gold</item>
+
+        <!-- Gold: accent and selection, nothing else. -->
+        <item name="colorPrimary">@color/osmium_gold</item>
+        <item name="colorOnPrimary">@color/osmium_black</item>
+        <item name="colorPrimaryContainer">@color/osmium_gold_container</item>
+        <item name="colorOnPrimaryContainer">@color/osmium_gold</item>
+        <item name="colorSecondary">@color/osmium_gold</item>
+        <item name="colorOnSecondary">@color/osmium_black</item>
+        <item name="colorSecondaryContainer">@color/osmium_gold_container</item>
+        <item name="colorOnSecondaryContainer">@color/osmium_gold</item>
+        <item name="colorTertiary">@color/osmium_silver</item>
+        <item name="colorOnTertiary">@color/osmium_dark</item>
+
+        <!-- Surfaces: #161616 is the workhorse (rows, album cards, tiles). -->
+        <item name="android:colorBackground">@color/osmium_dark</item>
+        <item name="colorOnBackground">@android:color/white</item>
+        <item name="colorSurface">@color/osmium_panel</item>
+        <item name="colorOnSurface">@android:color/white</item>
+        <item name="colorSurfaceVariant">@color/osmium_surface</item>
+        <item name="colorOnSurfaceVariant">@color/osmium_silver</item>
+        <item name="colorSurfaceContainerLowest">@color/osmium_dark</item>
+        <item name="colorSurfaceContainerLow">@color/osmium_panel</item>
+        <item name="colorSurfaceContainer">@color/osmium_surface</item>
+        <item name="colorSurfaceContainerHigh">@color/osmium_gray</item>
+        <item name="colorSurfaceContainerHighest">@color/osmium_light</item>
+        <item name="colorOutline">@color/osmium_accent</item>
+        <item name="colorOutlineVariant">@color/osmium_border</item>
+
+        <item name="colorError">@color/osmium_error</item>
+        <item name="colorOnError">@color/osmium_black</item>
+
+        <!-- The device never highlights with gold on touch: it lifts the surface. -->
+        <item name="colorControlHighlight">@color/osmium_ripple</item>
+
+        <item name="colorAppBar">@color/osmium_panel</item>
         <item name="appBarLayoutStyle">@style/AppBarStyle</item>
+        <item name="toolbarStyle">@style/Widget.Osmium.Toolbar</item>
         <item name="actionOverflowMenuStyle">@style/OverflowMenu</item>
         <item name="sliderStyle">@style/Widget.App.Slider</item>
         <item name="bottomSheetDialogTheme">@style/ThemeOverlay.Squeezer.BottomSheetDialog</item>
         <item name="materialButtonStyle">@style/Widget.MaterialComponents.Button.Gold</item>
+        <item name="materialCardViewStyle">@style/Widget.Osmium.CardView</item>
+        <item name="materialAlertDialogTheme">@style/ThemeOverlay.Osmium.Dialog</item>
+        <item name="preferenceTheme">@style/PreferenceTheme.Osmium</item>
+
+        <item name="shapeAppearanceCornerExtraSmall">@style/ShapeAppearance.Osmium.ExtraSmall</item>
+        <item name="shapeAppearanceCornerSmall">@style/ShapeAppearance.Osmium.Small</item>
+        <item name="shapeAppearanceCornerMedium">@style/ShapeAppearance.Osmium.Medium</item>
+        <item name="shapeAppearanceCornerLarge">@style/ShapeAppearance.Osmium.Large</item>
+        <item name="shapeAppearanceCornerExtraLarge">@style/ShapeAppearance.Osmium.Large</item>
 
         <item name="volume_panel_back_circle_color">@color/volume_panel_back_circle_color</item>
         <item name="currentTrackBackground">@drawable/current_track_background_dark</item>
+
+        <item name="android:statusBarColor">@color/osmium_dark</item>
+        <item name="android:navigationBarColor">@color/osmium_dark</item>
+        <item name="android:windowBackground">@color/osmium_dark</item>
     </style>
 
-    <style name="AppTheme.Light" parent="Theme.MaterialComponents.Light.NoActionBar">
-        <item name="alarm_dow_selected">@android:color/black</item>
+    <!-- Kept so ThemeManager and the stored preference still resolve; the app
+         has a single dark look, so this is the same theme. -->
+    <style name="AppTheme.Light" parent="AppTheme" />
 
-        <item name="colorPrimary">@color/colorPrimaryLight</item>
-        <item name="colorPrimaryVariant">@color/colorPrimaryVariantLight</item>
-        <item name="colorSecondary">#D4AF37</item>
-        <item name="colorSecondaryVariant">@color/colorSecondaryVariantLight</item>
-        <item name="colorAppBar">@color/colorAppBarLight</item>
-        <item name="appBarLayoutStyle">@style/AppBarStyle</item>
-        <item name="actionOverflowMenuStyle">@style/OverflowMenu</item>
-        <item name="sliderStyle">@style/Widget.App.Slider</item>
-        <item name="bottomSheetDialogTheme">@style/ThemeOverlay.Squeezer.BottomSheetDialog</item>
-        <item name="materialButtonStyle">@style/Widget.MaterialComponents.Button.Gold</item>
-
-        <item name="volume_panel_back_circle_color">@color/volume_panel_back_circle_color_light</item>
-        <item name="currentTrackBackground">@drawable/current_track_background_light</item>
+    <!-- Settings: section headings in gold, secondary text in silver, like the
+         appliance's own settings pages. -->
+    <style name="PreferenceTheme.Osmium" parent="PreferenceThemeOverlay">
+        <item name="preferenceCategoryTitleTextColor">@color/osmium_gold</item>
+        <item name="android:textColorSecondary">@color/osmium_silver</item>
     </style>
 
     <style name="AppBarStyle">
         <item name="android:background">?attr/colorAppBar</item>
-        <item name="titleTextColor">?attr/colorControlNormal</item>
-        <item name="subtitleTextColor">@color/material_on_primary_emphasis_medium</item>
+        <item name="android:elevation">0dp</item>
+        <item name="elevation">0dp</item>
+        <item name="liftOnScroll">false</item>
+    </style>
 
-        <item name="android:theme">@style/ThemeOverlay.MaterialComponents.Toolbar.Surface</item>
-        <item name="popupTheme">@style/ThemeOverlay.MaterialComponents.Toolbar.Popup.Primary</item>
+    <style name="Widget.Osmium.Toolbar" parent="Widget.Material3.Toolbar">
+        <item name="android:background">?attr/colorAppBar</item>
+        <item name="titleTextColor">@android:color/white</item>
+        <item name="subtitleTextColor">@color/osmium_silver</item>
+        <item name="popupTheme">@style/ThemeOverlay.Material3.Dark</item>
     </style>
 
     <style name="OverflowMenu" parent="Widget.AppCompat.Light.PopupMenu.Overflow">
         <item name="overlapAnchor">false</item>
     </style>
 
-    <style name="Widget.Squeezer.ToolBar.ExposedDropdownMenu" parent="Widget.MaterialComponents.TextInputLayout.OutlinedBox.ExposedDropdownMenu">
+    <style name="Widget.Squeezer.ToolBar.ExposedDropdownMenu" parent="Widget.Material3.TextInputLayout.OutlinedBox.ExposedDropdownMenu">
         <item name="boxStrokeColor">@android:color/transparent</item>
         <item name="boxStrokeWidth">0dp</item>
         <item name="shapeAppearance">@style/ShapeAppearance.App.SmallComponent</item>
     </style>
 
-    <style name="ShapeAppearance.App.SmallComponent" parent="ShapeAppearance.MaterialComponents.SmallComponent">
-        <item name="cornerSize">0dp</item>
+    <!-- The device's shape scale: 4, 8, 12, 16 and nothing rounder. -->
+    <style name="ShapeAppearance.Osmium.ExtraSmall" parent="ShapeAppearance.Material3.Corner.ExtraSmall">
+        <item name="cornerSize">4dp</item>
     </style>
 
-    <style name="Widget.App.Slider" parent="Widget.MaterialComponents.Slider">
-        <item name="trackHeight">2dp</item>
-        <item name="thumbRadius">6dp</item>
-        <item name="haloRadius">12dp</item>
-        <item name="trackColorInactive">@color/line_dark</item>
-        <item name="tickColorInactive">@color/line_dark</item>
-        <item name="materialThemeOverlay">@style/ThemeOverlay.App.Slider</item>
+    <style name="ShapeAppearance.Osmium.Small" parent="ShapeAppearance.Material3.Corner.Small">
+        <item name="cornerSize">8dp</item>
+    </style>
+
+    <style name="ShapeAppearance.Osmium.Medium" parent="ShapeAppearance.Material3.Corner.Medium">
+        <item name="cornerSize">12dp</item>
+    </style>
+
+    <style name="ShapeAppearance.Osmium.Large" parent="ShapeAppearance.Material3.Corner.Large">
+        <item name="cornerSize">16dp</item>
+    </style>
+
+    <style name="ShapeAppearance.App.SmallComponent" parent="ShapeAppearance.Material3.Corner.Small">
+        <item name="cornerSize">8dp</item>
+    </style>
+
+    <style name="Widget.Osmium.CardView" parent="Widget.Material3.CardView.Filled">
+        <item name="cardBackgroundColor">@color/osmium_surface</item>
+        <item name="cardCornerRadius">12dp</item>
+        <item name="cardElevation">0dp</item>
+        <item name="strokeColor">@color/osmium_border</item>
+        <item name="strokeWidth">1dp</item>
+    </style>
+
+    <style name="Widget.App.Slider" parent="Widget.Material3.Slider">
+        <item name="trackHeight">4dp</item>
+        <item name="thumbRadius">7dp</item>
+        <item name="haloRadius">14dp</item>
+        <item name="trackColorActive">@color/osmium_gold</item>
+        <item name="trackColorInactive">@color/osmium_track</item>
+        <item name="thumbColor">@color/osmium_gold</item>
+        <item name="tickColorInactive">@color/osmium_track</item>
     </style>
 
     <style name="ThemeOverlay.App.Slider" parent="">
-        <item name="colorPrimary">?attr/colorSecondary</item>
-        <item name="colorOnPrimary">?attr/colorSecondary</item>
-        <item name="colorOnSurface">?attr/colorSecondary</item>
+        <item name="colorPrimary">@color/osmium_gold</item>
+        <item name="colorOnPrimary">@color/osmium_black</item>
+        <item name="colorOnSurface">@color/osmium_gold</item>
     </style>
 
-    <style name="ThemeOverlay.Squeezer.BottomSheetDialog" parent="ThemeOverlay.MaterialComponents.BottomSheetDialog">
+    <style name="ThemeOverlay.Osmium.Dialog" parent="ThemeOverlay.Material3.MaterialAlertDialog">
+        <item name="colorSurface">@color/osmium_light</item>
+        <item name="colorSurfaceContainerHigh">@color/osmium_light</item>
+        <item name="shapeAppearanceCornerLarge">@style/ShapeAppearance.Osmium.Large</item>
+    </style>
+
+    <style name="ThemeOverlay.Squeezer.BottomSheetDialog" parent="ThemeOverlay.Material3.BottomSheetDialog">
         <item name="bottomSheetStyle">@style/ModalBottomSheetDialog</item>
     </style>
 
-    <style name="ModalBottomSheetDialog" parent="Widget.MaterialComponents.BottomSheet.Modal">
+    <style name="ModalBottomSheetDialog" parent="Widget.Material3.BottomSheet.Modal">
+        <item name="backgroundTint">@color/osmium_panel</item>
         <item name="shapeAppearance">@style/ShapeAppearance.Squeezer.LargeComponent</item>
         <item name="android:elevation">0dp</item>
         <item name="behavior_peekHeight">@dimen/bottom_sheet_peek_height</item>
     </style>
 
-    <style name="ShapeAppearance.Squeezer.LargeComponent" parent="ShapeAppearance.MaterialComponents.LargeComponent">
-        <item name="cornerSize">8dp</item>
+    <style name="ShapeAppearance.Squeezer.LargeComponent" parent="ShapeAppearance.Material3.Corner.Large">
+        <item name="cornerSize">16dp</item>
     </style>
 </resources>

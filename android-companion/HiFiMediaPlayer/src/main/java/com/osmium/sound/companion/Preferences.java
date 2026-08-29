@@ -21,6 +21,7 @@ import android.content.SharedPreferences;
 import android.content.res.Configuration;
 import android.net.wifi.WifiInfo;
 import android.net.wifi.WifiManager;
+import android.os.Build;
 import android.text.TextUtils;
 import android.util.Log;
 
@@ -28,6 +29,7 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
 import com.google.android.material.timepicker.MaterialTimePicker;
+import com.osmium.sound.companion.service.localplayer.SlimFormats;
 
 import org.json.JSONException;
 import org.json.JSONObject;
@@ -202,6 +204,25 @@ public final class Preferences {
     // Start squeezelite automatically if installed.
     public static final String KEY_SQUEEZELITE_ENABLED = "squeezer.squeezelite.enabled";
 
+    // This phone as a player: register with Lyrion over SlimProto and render the
+    // audio here. See service/localplayer.
+    public static final String KEY_LOCAL_PLAYER_ENABLED = "squeezer.localplayer.enabled";
+
+    // Name this phone appears under in Lyrion.
+    public static final String KEY_LOCAL_PLAYER_NAME = "squeezer.localplayer.name";
+
+    /**
+     * Where the server answers from outside the house — over Tailscale, its
+     * MagicDNS name. Deliberately not filed under the Wi-Fi network the way the
+     * ordinary address is: the whole point of it is the networks that are not
+     * home.
+     */
+    public static final String KEY_REMOTE_ADDRESS = "squeezer.remote_address";
+
+    // Stream quality, chosen separately for Wi-Fi and mobile data.
+    public static final String KEY_LOCAL_PLAYER_QUALITY_WIFI = "squeezer.localplayer.quality.wifi";
+    public static final String KEY_LOCAL_PLAYER_QUALITY_MOBILE = "squeezer.localplayer.quality.mobile";
+
     // Preferred UI theme.
     static final String KEY_ON_THEME_SELECT_ACTION = "squeezer.theme";
 
@@ -246,6 +267,16 @@ public final class Preferences {
     // Use SD-card (getExternalMediaDirs)
     static final String KEY_DOWNLOAD_USE_SD_CARD_SCREEN = "squeezer.download.use_sd_card.screen";
     static final String KEY_DOWNLOAD_USE_SD_CARD = "squeezer.download.use_sd_card";
+
+    /**
+     * Which kind of server this app was set up against: an Osmium Sound
+     * appliance (paired by QR code, with its own settings) or a plain Lyrion
+     * server (host and port typed in, and none of the appliance settings).
+     * Absent until the user has been through the connection wizard.
+     */
+    public static final String KEY_SERVER_KIND = "squeezer.server_kind";
+    /** Set once the wizard's language question was answered, or the language changed from Settings. */
+    public static final String KEY_LANGUAGE_CHOSEN = "squeezer.language_chosen";
 
     // Store a "mac id" for this app instance.
     private static final String KEY_MAC_ID = "squeezer.mac_id";
@@ -507,6 +538,24 @@ public final class Preferences {
         editor.putString(prefix(serverAddress) + KEY_PASSWORD, serverAddress.password);
         editor.putBoolean(prefix(serverAddress) + KEY_WOL, serverAddress.wakeOnLan);
         editor.putString(prefix(serverAddress) + KEY_MAC, Util.formatMac(serverAddress.mac));
+
+        // The address above is filed under the Wi-Fi network it was set up on,
+        // which is what lets different networks have different servers. Off that
+        // network — mobile data, or a Tailscale tunnel from anywhere — there is
+        // no BSSID to look under, and without a copy in the unprefixed keys the
+        // app would decide it has never been configured at all. So the last
+        // server set up is also stored as the fallback for every other network.
+        if (serverAddress.bssId != null) {
+            // Same keys the reader looks under when there is no BSSID: address
+            // alone, without the network in front of it.
+            String withoutNetwork = serverAddress.localAddress() + "_";
+            editor.putString(KEY_SERVER_ADDRESS, serverAddress.address);
+            editor.putString(withoutNetwork + KEY_SERVER_NAME, serverAddress.serverName);
+            editor.putString(withoutNetwork + KEY_USERNAME, serverAddress.userName);
+            editor.putString(withoutNetwork + KEY_PASSWORD, serverAddress.password);
+            editor.putBoolean(withoutNetwork + KEY_WOL, serverAddress.wakeOnLan);
+            editor.putString(withoutNetwork + KEY_MAC, Util.formatMac(serverAddress.mac));
+        }
         editor.apply();
     }
 
@@ -687,6 +736,119 @@ public final class Preferences {
 
     public boolean controlSqueezelite() {
         return (sharedPreferences.getBoolean(KEY_SQUEEZELITE_ENABLED, true));
+    }
+
+    /** The kind of server chosen in the wizard, or null if it never ran. */
+    @Nullable
+    public ServerKind getServerKind() {
+        String value = getStringPreference(KEY_SERVER_KIND);
+        if (value == null) return null;
+        try {
+            return ServerKind.valueOf(value);
+        } catch (IllegalArgumentException e) {
+            return null;
+        }
+    }
+
+    public void setServerKind(ServerKind kind) {
+        sharedPreferences.edit().putString(KEY_SERVER_KIND, kind.name()).apply();
+    }
+
+    /**
+     * Whether the language question was ever answered — in the wizard's first
+     * step or from Settings → Display → Language. The chosen locale itself is
+     * kept by AppCompat (per-app locales); this only says "don't ask again".
+     */
+    public boolean isLanguageChosen() {
+        return sharedPreferences.getBoolean(KEY_LANGUAGE_CHOSEN, false);
+    }
+
+    public void setLanguageChosen(boolean chosen) {
+        sharedPreferences.edit().putBoolean(KEY_LANGUAGE_CHOSEN, chosen).apply();
+    }
+
+    /**
+     * True when the app is talking to an Osmium Sound appliance, which is the
+     * only case where the appliance-specific settings mean anything. Servers
+     * paired before this choice existed were all appliances.
+     */
+    public boolean isOsmiumAppliance() {
+        ServerKind kind = getServerKind();
+        return kind == null ? getAppliancePairToken() != null : kind == ServerKind.OSMIUM;
+    }
+
+    /** The address to try when the usual one does not answer, or null. */
+    @Nullable
+    public String getRemoteAddress() {
+        return getStringPreference(KEY_REMOTE_ADDRESS);
+    }
+
+    /**
+     * Remembers the address that actually worked as the one to use on every
+     * network other than the Wi-Fi it was set up on. Coming home, the
+     * network-specific entry wins again, so the local address returns by itself.
+     */
+    public void rememberReachableAddress(ServerAddress serverAddress) {
+        String withoutNetwork = serverAddress.localAddress() + "_";
+        sharedPreferences.edit()
+                .putString(KEY_SERVER_ADDRESS, serverAddress.address)
+                .putString(withoutNetwork + KEY_USERNAME, serverAddress.userName)
+                .putString(withoutNetwork + KEY_PASSWORD, serverAddress.password)
+                .apply();
+    }
+
+    /** Whether this phone offers itself to Lyrion as a player. */
+    public boolean isLocalPlayerEnabled() {
+        return sharedPreferences.getBoolean(KEY_LOCAL_PLAYER_ENABLED, true);
+    }
+
+    /** Name shown in Lyrion; the device model unless the user picked one. */
+    public String getLocalPlayerName() {
+        String name = getStringPreference(KEY_LOCAL_PLAYER_NAME);
+        return name != null ? name : Build.MODEL;
+    }
+
+    public void setLocalPlayerName(String name) {
+        sharedPreferences.edit().putString(KEY_LOCAL_PLAYER_NAME, name).apply();
+    }
+
+    /**
+     * Stream quality for the network we are on. Lossless is the default over
+     * Wi-Fi and compressed over mobile data, where the bandwidth is the user's.
+     */
+    public LocalPlayerQuality getLocalPlayerQuality(boolean metered) {
+        String value = getStringPreference(metered
+                ? KEY_LOCAL_PLAYER_QUALITY_MOBILE : KEY_LOCAL_PLAYER_QUALITY_WIFI);
+        if (value == null) {
+            return metered ? LocalPlayerQuality.COMPRESSED : LocalPlayerQuality.LOSSLESS;
+        }
+        try {
+            return LocalPlayerQuality.valueOf(value);
+        } catch (IllegalArgumentException e) {
+            return LocalPlayerQuality.COMPRESSED;
+        }
+    }
+
+    /**
+     * Player id of this phone, as a MAC-shaped string. Written once by
+     * LocalPlayerIdentity and kept so that a reinstall does not orphan the
+     * player Lyrion already knows.
+     */
+    public String getLocalPlayerMac() {
+        return getStringPreference(KEY_MAC_ID);
+    }
+
+    public void setLocalPlayerMac(String mac) {
+        sharedPreferences.edit().putString(KEY_MAC_ID, mac).apply();
+    }
+
+    /** Opaque player uuid, hex encoded. */
+    public String getLocalPlayerUuid() {
+        return getStringPreference(KEY_UUID);
+    }
+
+    public void setLocalPlayerUuid(String uuid) {
+        sharedPreferences.edit().putString(KEY_UUID, uuid).apply();
     }
 
     /** Get the preferred album list layout. */
@@ -957,6 +1119,61 @@ public final class Preferences {
 
         TopBarSearch(int labelId) {
             this.labelId = labelId;
+        }
+
+        @Override
+        public String getText(Context context) {
+            return context.getString(labelId);
+        }
+    }
+
+    /** What the app is connected to, as chosen in the connection wizard. */
+    public enum ServerKind implements EnumWithText {
+        /** An Osmium Sound appliance: paired by QR code, appliance settings shown. */
+        OSMIUM(R.string.wizard_mode_osmium),
+        /** Any other Lyrion Music Server: host and port typed in, nothing else. */
+        STANDARD_LMS(R.string.wizard_mode_standard);
+
+        private final int labelId;
+
+        ServerKind(int labelId) {
+            this.labelId = labelId;
+        }
+
+        @Override
+        public String getText(Context context) {
+            return context.getString(labelId);
+        }
+    }
+
+    /**
+     * How good a stream this phone asks Lyrion for. The choice becomes the codec
+     * list sent with HELO, so the server transcodes whatever we leave out.
+     */
+    public enum LocalPlayerQuality implements EnumWithText {
+        LOSSLESS(R.string.settings_local_player_quality_lossless, SlimFormats.CODECS_LOSSLESS, 0),
+        COMPRESSED(R.string.settings_local_player_quality_compressed, SlimFormats.CODECS_COMPRESSED, 320),
+        DATA_SAVER(R.string.settings_local_player_quality_data_saver, SlimFormats.CODECS_DATA_SAVER, 128);
+
+        private final int labelId;
+        private final String[] codecs;
+        private final int maxBitrate;
+
+        LocalPlayerQuality(int labelId, String[] codecs, int maxBitrate) {
+            this.labelId = labelId;
+            this.codecs = codecs;
+            this.maxBitrate = maxBitrate;
+        }
+
+        /** Falls back to the lossy list on devices with no FLAC decoder. */
+        public String[] codecs(boolean hasFlacDecoder) {
+            if (this == LOSSLESS && !hasFlacDecoder) return SlimFormats.CODECS_LOSSLESS_NO_FLAC;
+            return codecs;
+        }
+
+        /** Server-side bitrate cap in kbps; 0 means no limit. */
+        public int maxBitrate() {
+            return maxBitrate;
         }
 
         @Override
