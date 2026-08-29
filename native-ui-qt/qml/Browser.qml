@@ -74,6 +74,11 @@ Item {
         loadTop()
         appear()
     }
+    // 🚨 Se l'apparecchio passa a un altro Lyrion (multiroom "segui", o server
+    // esterno), quello che si sta guardando e' l'elenco del server di prima:
+    // si riparte dalla home di quello nuovo.
+    Connections { target: Api; function onLmsBaseChanged() { root.navHome() } }
+
     function navHome() {
         nav = [{ view: LibraryModel.Home, title: Tr.t("player.titles.home"), p1: "", p2: "", input: "" }]
         msearchOpen = false; ctx.visible = false; search.text = ""
