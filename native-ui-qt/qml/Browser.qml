@@ -259,10 +259,17 @@ Item {
 
             // non ancora collegati a Lyrion (LyrionServer.jsx:1267)
             Column {
+                id: connCol
                 anchors.centerIn: parent; spacing: 16
                 visible: !Player.connected
-                Spinner { anchors.horizontalCenter: parent.horizontalCenter; radius: 24; active: !Player.connected && root.visible && !(Ui.app && Ui.app.expanded) }
-                Text { anchors.horizontalCenter: parent.horizontalCenter; text: Tr.t("player.connecting"); color: Theme.silver; font.family: Theme.font; font.pixelSize: 14 }
+                // 🚨 col server spento l'attesa non finisce mai: passato questo
+                // tempo la rotellina si ferma, se no la scena si ridisegna a ogni
+                // vsync all'infinito (il costo misurato sta in Spinner.qml)
+                property bool waiting: true
+                Timer { interval: 10000; running: connCol.visible && connCol.waiting; onTriggered: connCol.waiting = false }
+                Connections { target: Player; function onConnectedChanged() { if (Player.connected) connCol.waiting = true } }
+                Spinner { anchors.horizontalCenter: parent.horizontalCenter; radius: 24; visible: connCol.waiting; active: connCol.waiting && !Player.connected && root.visible && !(Ui.app && Ui.app.expanded) }
+                Text { anchors.horizontalCenter: parent.horizontalCenter; text: Tr.t(connCol.waiting ? "player.connecting" : "player.connectError"); color: Theme.silver; font.family: Theme.font; font.pixelSize: 14 }
             }
 
             // fascia "CD rilevato" in cima alla scheda Musica

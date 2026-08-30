@@ -39,6 +39,15 @@
 #      meno di un secondo e senza toccare né VT né DRM master -> X11.
 #      Altrimenti -> Wayland.
 #
+# QUANDO NON SERVE AFFATTO
+# Con l'interfaccia Qt (/etc/hifi-player/ui-engine = "qt") non c'è né lightdm né
+# una sessione kiosk: hifi-qt.service disegna diritto su DRM/KMS. Lì si esce
+# subito, perché il punto 5 costa fino a una ventina di secondi di avvio per una
+# scelta che nessuno andrà a leggere. L'unità NON va disabilitata: è la via di
+# rollback verso Electron, e appena ui-engine torna a "electron" questo script
+# ridecide al primo avvio. Nel frattempo 99-hifi-session.conf resta com'era, o
+# non esiste affatto — e in quel caso vale il default di base, la sessione X11.
+#
 # Il risultato finisce in un frammento SEPARATO di lightdm
 # (99-hifi-session.conf): i file in lightdm.conf.d si caricano in ordine
 # alfabetico e l'ultimo vince, quindi questo sovrascrive lo `user-session` di
@@ -49,6 +58,7 @@ set -eu
 
 CONF=/etc/lightdm/lightdm.conf.d/99-hifi-session.conf
 PREF_FILE=/etc/hifi-player/kiosk-session
+ENGINE_FILE=/etc/hifi-player/ui-engine
 WL_SESSION=hifi-kiosk-wayland
 X11_SESSION=hifi-kiosk
 
@@ -56,6 +66,14 @@ X11_SESSION=hifi-kiosk
 # per sostituzione di comando, e una riga di log finita là dentro diventerebbe
 # il valore di user-session.
 log() { printf 'I: [hifi-kiosk-session] %s\n' "$*" >&2; }
+
+# File assente = electron, stessa invariante di hifi-display-mode.sh: un
+# apparecchio già configurato non cambia interfaccia da solo.
+engine="$(tr -d '[:space:]' 2>/dev/null < "$ENGINE_FILE")" || engine=""
+if [ "$engine" = qt ]; then
+    log "interfaccia Qt (ui-engine=qt): nessuna sessione kiosk da scegliere"
+    exit 0
+fi
 
 # GPU virtuali/software: qui Wayland non si usa, punto. (simpledrm è il
 # framebuffer generico dell'EFI, senza alcuna accelerazione.)
