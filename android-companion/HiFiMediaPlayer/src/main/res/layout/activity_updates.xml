@@ -86,7 +86,7 @@
 
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/button_whats_new"
-                style="@style/Widget.MaterialComponents.Button.TextButton"
+                style="@style/Widget.Material3.Button.TextButton"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:visibility="gone"
@@ -100,7 +100,7 @@
 
                 <com.google.android.material.button.MaterialButton
                     android:id="@+id/button_check_core"
-                    style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                    style="@style/Widget.Material3.Button.OutlinedButton"
                     android:layout_width="0dp"
                     android:layout_weight="1"
                     android:layout_height="wrap_content"

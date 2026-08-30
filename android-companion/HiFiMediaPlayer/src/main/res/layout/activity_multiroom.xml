@@ -56,7 +56,7 @@
 
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/button_save_name"
-                style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                style="@style/Widget.Material3.Button.OutlinedButton"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="8dp"
@@ -197,7 +197,7 @@
 
                 <com.google.android.material.button.MaterialButton
                     android:id="@+id/button_scan"
-                    style="@style/Widget.MaterialComponents.Button.TextButton"
+                    style="@style/Widget.Material3.Button.TextButton"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:text="@string/settings_multiroom_role_scan" />
@@ -231,7 +231,7 @@
 
                 <com.google.android.material.button.MaterialButton
                     android:id="@+id/button_apply_host"
-                    style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                    style="@style/Widget.Material3.Button.OutlinedButton"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="8dp"

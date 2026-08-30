@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
- Lucide "repeat-1", converted from native-ui-qt/icons/repeat-1.svg so the phone and
+ Lucide "audio-lines", converted from native-ui-qt/icons/audio-lines.svg so the phone and
  the appliance draw the same glyph. Regenerate with
  android-companion/tools/lucide2vector.py rather than editing by hand.
 -->
@@ -11,31 +11,37 @@
     android:viewportHeight="24"
     android:tint="?attr/colorControlNormal">
     <path
-        android:pathData="m17 2 4 4-4 4"
+        android:pathData="M2 10v3"
         android:strokeWidth="2"
         android:strokeColor="#FFFFFFFF"
         android:strokeLineCap="round"
         android:strokeLineJoin="round" />
     <path
-        android:pathData="M3 11v-1a4 4 0 0 1 4-4h14"
+        android:pathData="M6 6v11"
         android:strokeWidth="2"
         android:strokeColor="#FFFFFFFF"
         android:strokeLineCap="round"
         android:strokeLineJoin="round" />
     <path
-        android:pathData="m7 22-4-4 4-4"
+        android:pathData="M10 3v18"
         android:strokeWidth="2"
         android:strokeColor="#FFFFFFFF"
         android:strokeLineCap="round"
         android:strokeLineJoin="round" />
     <path
-        android:pathData="M21 13v1a4 4 0 0 1-4 4H3"
+        android:pathData="M14 8v7"
         android:strokeWidth="2"
         android:strokeColor="#FFFFFFFF"
         android:strokeLineCap="round"
         android:strokeLineJoin="round" />
     <path
-        android:pathData="M11 10h1v4"
+        android:pathData="M18 5v13"
+        android:strokeWidth="2"
+        android:strokeColor="#FFFFFFFF"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
+    <path
+        android:pathData="M22 10v3"
         android:strokeWidth="2"
         android:strokeColor="#FFFFFFFF"
         android:strokeLineCap="round"

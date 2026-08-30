@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+ A library row: #161616 with 8dp corners, and a neutral ripple on touch.
+ The appliance never highlights with gold on press — it lifts the surface —
+ so the ripple colour comes from the theme's colorControlHighlight, which is a
+ translucent white.
+-->
+<ripple xmlns:android="http://schemas.android.com/apk/res/android"
+    android:color="?attr/colorControlHighlight">
+    <item>
+        <shape android:shape="rectangle">
+            <solid android:color="@color/osmium_surface" />
+            <corners android:radius="8dp" />
+        </shape>
+    </item>
+</ripple>

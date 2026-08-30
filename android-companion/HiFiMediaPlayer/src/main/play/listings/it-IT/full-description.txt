@@ -1,0 +1,27 @@
+Osmium Sound Companion trasforma il telefono nel telecomando della tua musica — e, quando vuoi, in uno dei lettori.
+
+Funziona con un apparecchio hi-fi Osmium Sound e con qualsiasi Lyrion Music Server presente nella tua rete.
+
+ASCOLTA SUL TELEFONO
+L'app può presentarsi al server come un lettore vero e proprio: il telefono compare nell'elenco dei lettori accanto all'apparecchio e a tutti gli altri di casa. Lo scegli e la musica esce dall'altoparlante o dalle cuffie del telefono, senza stacchi fra un brano e l'altro, mentre coda e volume restano comandabili da dove preferisci. Puoi tenere la qualità senza perdita in Wi‑Fi e una più leggera su rete mobile, oppure spegnere del tutto questa funzione se non ti serve.
+
+TUTTA LA TUA LIBRERIA
+Sfoglia per artista dell'album, artista, compositore, album, genere, anno, playlist, preferiti o novità. Cerca ovunque. Ci sono le radio in Internet, le cartelle musicali, le viste della libreria e le librerie remote, insieme ai testi e alle copertine.
+
+TUTTI I LETTORI DI CASA
+Passa da un lettore all'altro, raggruppali per farli suonare insieme, rinominali, imposta spegnimenti programmati e sveglie, regola il volume di una stanza o di un gruppo intero.
+
+CONFIGURAZIONE IN POCHI SECONDI
+Con un apparecchio Osmium Sound inquadri il codice QR che mostra nelle impostazioni e sei abbinato. Con qualunque altro server Lyrion scrivi indirizzo e porta. Fuori casa funziona attraverso una VPN come Tailscale: basta indicare il nome che il server ha sul tunnel e tutto si comporta come dal divano.
+
+CON UN APPARECCHIO OSMIUM SOUND
+Uscita audio, multiroom, aggiornamenti, backup e ripristino, impostazioni di sistema e nuova scansione della libreria, tutto dal telefono.
+
+C'È ANCHE
+Widget per la schermata iniziale, download per ascoltare senza rete, sveglia, preferiti e un'interfaccia scura pensata per somigliare a quella dell'apparecchio.
+
+Software libero e open source con licenza Apache 2.0, costruito sul progetto android-squeezer di Kurt Aaholst e collaboratori. Osmium Sound non è affiliata al progetto Lyrion.
+
+L'app parla soltanto con il tuo server, sulla tua rete. Nessun servizio in cloud, nessun account, nessun tracciamento, nessuna pubblicità.
+
+Per usarla serve un Lyrion Music Server o un apparecchio Osmium Sound da comandare.

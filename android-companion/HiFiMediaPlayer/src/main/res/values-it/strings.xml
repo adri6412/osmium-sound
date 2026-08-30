@@ -497,4 +497,16 @@
     <string name="wizard_mode_standard_summary">Scrivi indirizzo e porta del server. Le impostazioni dell\'apparecchio Osmium restano nascoste.</string>
     <string name="wizard_change_mode">Cambia</string>
     <string name="settings_server_address_required">Inserisci l\'indirizzo del server, per esempio 192.168.0.10:9000</string>
+    <string name="settings_server_address_remote_hint">Preso dal codice QR. Per usarlo fuori casa con Tailscale, sostituiscilo con il nome MagicDNS del server.</string>
+
+    <!-- Impostazioni riorganizzate: l'apparecchio non e' piu' in fondo -->
+    <string name="settings_category_appliance">Il tuo apparecchio Osmium Sound</string>
+    <string name="settings_category_osmium_sound_summary">Uscita audio, multiroom, aggiornamenti, backup e impostazioni di sistema dell\'apparecchio</string>
+    <string name="settings_category_connection">Connessione</string>
+    <string name="settings_server_address_title">Indirizzo del server</string>
+    <string name="settings_remote_address_title">Indirizzo da fuori casa</string>
+    <string name="settings_remote_address_summary">Nome o indirizzo a cui risponde il server attraverso una VPN: con Tailscale, il suo nome MagicDNS. Viene usato da solo quando l\'indirizzo di casa non risponde.</string>
+    <string name="settings_remote_address_unset">Non impostato</string>
+    <string name="settings_playback_open_title">Riproduzione</string>
+    <string name="settings_playback_open_summary">Dissolvenza incrociata, guadagno di riproduzione e il resto, sul lettore in uso</string>
 </resources>

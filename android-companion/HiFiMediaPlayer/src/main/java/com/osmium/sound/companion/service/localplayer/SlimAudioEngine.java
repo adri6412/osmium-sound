@@ -87,6 +87,10 @@ class SlimAudioEngine {
     @Nullable
     private SlimStreamConnection next;
 
+    /** The FLAC header of the track being played, kept for headerless seeks. */
+    @Nullable
+    private byte[] flacHeader;
+
     private boolean waitingForUnpause;
     private boolean thresholdReported;
     private boolean pendingTrackStart;
@@ -108,9 +112,10 @@ class SlimAudioEngine {
 
     private void createPlayer() {
         DefaultLoadControl loadControl = new DefaultLoadControl.Builder()
-                // Generous ahead-buffering: a phone on weak Wi-Fi should ride out
-                // a dropout rather than underrun and make the server stop.
-                .setBufferDurationsMs(30_000, 60_000, 2_500, 5_000)
+                // Enough to ride out a Wi-Fi dropout without holding minutes of
+                // audio in memory. The player stops loading when it reaches the
+                // ceiling and resumes later, which the data source handles.
+                .setBufferDurationsMs(15_000, 30_000, 2_500, 5_000)
                 .build();
         player = new ExoPlayer.Builder(context)
                 .setLooper(thread.getLooper())
@@ -180,6 +185,7 @@ class SlimAudioEngine {
             SlimStreamConnection connection = new SlimStreamConnection(address, port,
                     strm.httpHeader, snapshot, streamCallback);
             connection.setAuthorization(authorization);
+            if (strm.format == 'f') connection.setFlacPreamble(flacHeader);
             connector.execute(() -> {
                 try {
                     connection.open();
@@ -204,6 +210,8 @@ class SlimAudioEngine {
             return;
         }
         events.sendStat(SlimProtoCodec.STMc);
+        Log.i(TAG, "stream open: " + SlimFormats.formatName(strm.format)
+                + " autostart=" + strm.autostart + (append ? " (queued)" : " (now)"));
 
         MediaSource source = buildSource(sequence, strm.format, connection);
         if (append) {
@@ -324,7 +332,10 @@ class SlimAudioEngine {
     }
 
     private void applyVolume() {
-        if (player != null) player.setVolume(gainMuted ? 0f : gain);
+        if (player == null) return;
+        float volume = gainMuted ? 0f : gain;
+        Log.i(TAG, "volume -> " + volume + (gainMuted ? " (output disabled by the server)" : ""));
+        player.setVolume(volume);
     }
 
     boolean isRendering() {
@@ -337,6 +348,11 @@ class SlimAudioEngine {
         @Override
         public void onStreamHeaders(SlimStreamConnection connection, String headers) {
             handler.post(() -> events.sendResp(headers));
+        }
+
+        @Override
+        public void onFlacHeader(byte[] header) {
+            handler.post(() -> flacHeader = header);
         }
 
         @Override
@@ -376,6 +392,8 @@ class SlimAudioEngine {
     private final Player.Listener playerListener = new Player.Listener() {
         @Override
         public void onPlaybackStateChanged(int state) {
+            Log.i(TAG, "playback state " + state + " playWhenReady="
+                    + (player != null && player.getPlayWhenReady()));
             if (state == Player.STATE_READY && waitingForUnpause && !thresholdReported) {
                 // Buffered and holding: this is what the server is waiting for
                 // before it sends the unpause.
@@ -426,6 +444,7 @@ class SlimAudioEngine {
 
         @Override
         public void onPlayWhenReadyChanged(boolean playWhenReady, int reason) {
+            Log.i(TAG, "playWhenReady=" + playWhenReady + " reason=" + reason);
             if (!playWhenReady
                     && (reason == Player.PLAY_WHEN_READY_CHANGE_REASON_AUDIO_FOCUS_LOSS
                     || reason == Player.PLAY_WHEN_READY_CHANGE_REASON_AUDIO_BECOMING_NOISY)) {
@@ -437,7 +456,8 @@ class SlimAudioEngine {
 
         @Override
         public void onPlayerError(PlaybackException error) {
-            Log.w(TAG, "playback error: " + error.getErrorCodeName(), error);
+            Log.e(TAG, "playback failed: " + error.getErrorCodeName() + " — "
+                    + (error.getCause() != null ? error.getCause() : error.getMessage()), error);
             snapshot.errorCode = error.errorCode;
             events.sendStat(SlimProtoCodec.STMn);
             setRendering(false);

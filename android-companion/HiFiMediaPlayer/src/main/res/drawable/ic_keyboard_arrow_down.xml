@@ -1,10 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+ Lucide "chevron-down", converted from native-ui-qt/icons/chevron-down.svg so the phone and
+ the appliance draw the same glyph. Regenerate with
+ android-companion/tools/lucide2vector.py rather than editing by hand.
+-->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="24dp"
     android:height="24dp"
     android:viewportWidth="24"
     android:viewportHeight="24"
     android:tint="?attr/colorControlNormal">
-  <path
-      android:fillColor="#CC000000"
-      android:pathData="M7.41,8.59L12,13.17l4.59,-4.58L18,10l-6,6 -6,-6 1.41,-1.41z"/>
+    <path
+        android:pathData="m6 9 6 6 6-6"
+        android:strokeWidth="2"
+        android:strokeColor="#FFFFFFFF"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
 </vector>

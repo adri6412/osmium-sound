@@ -958,6 +958,14 @@ public class NowPlayingFragment extends Fragment  implements CallStateDialog.Cal
     public void onPrepareOptionsMenu(@NonNull Menu menu) {
         boolean connected = (mService != null) && mService.isConnected();
 
+        // The connection wizard hosts this fragment too, but there is no server
+        // behind it yet: the settings screen assumes one and falls over, so it
+        // has no business being reachable from there.
+        MenuItem menuItemSettings = menu.findItem(R.id.menu_item_settings);
+        if (menuItemSettings != null) {
+            menuItemSettings.setVisible(!(mActivity instanceof ConnectActivity));
+        }
+
         // These are all set at the same time, so one check is sufficient
         if (menuItemDisconnect != null) {
             // Set visibility and enabled state of menu items that are not player-specific.
@@ -1063,6 +1071,16 @@ public class NowPlayingFragment extends Fragment  implements CallStateDialog.Cal
 
             if (requireService().isConnectInProgress()) {
                 Log.v(TAG, "Connection is already in progress, connecting aborted");
+                return;
+            }
+
+            // Nothing to verify when there is no pairing: a plain Lyrion server
+            // has no appliance API behind it. Running the check anyway is worse
+            // than useless — if that server happens to be an appliance someone
+            // else owns, it answers 401 and the app throws away a perfectly good
+            // configuration and reopens the wizard.
+            if (!preferences.isOsmiumAppliance() || preferences.getAppliancePairToken() == null) {
+                startConnectIfStillAttached(autoConnect);
                 return;
             }
 

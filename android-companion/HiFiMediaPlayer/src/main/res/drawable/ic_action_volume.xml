@@ -1,9 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+ Lucide "volume-2", converted from native-ui-qt/icons/volume-2.svg so the phone and
+ the appliance draw the same glyph. Regenerate with
+ android-companion/tools/lucide2vector.py rather than editing by hand.
+-->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="24dp"
     android:height="24dp"
     android:viewportWidth="24"
-    android:viewportHeight="24">
+    android:viewportHeight="24"
+    android:tint="?attr/colorControlNormal">
     <path
-        android:fillColor="@android:color/white"
-        android:pathData="M3,9v6h4l5,5V4L7,9H3zm13.5,3c0,-1.77 -1.02,-3.29 -2.5,-4.03v8.05c1.48,-0.73 2.5,-2.26 2.5,-4.02zM14,3.23v2.06c2.89,0.86 5,3.54 5,6.71s-2.11,5.85 -5,6.71v2.06c4.01,-0.91 7,-4.49 7,-8.77s-2.99,-7.86 -7,-8.77z" />
+        android:pathData="M11,5 L6,9 L2,9 L2,15 L6,15 L11,19 L11,5 Z"
+        android:strokeWidth="2"
+        android:strokeColor="#FFFFFFFF"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
+    <path
+        android:pathData="M15.54 8.46a5 5 0 0 1 0 7.07"
+        android:strokeWidth="2"
+        android:strokeColor="#FFFFFFFF"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
+    <path
+        android:pathData="M19.07 4.93a10 10 0 0 1 0 14.14"
+        android:strokeWidth="2"
+        android:strokeColor="#FFFFFFFF"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
 </vector>

@@ -267,7 +267,7 @@
 
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/button_reboot"
-                style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                style="@style/Widget.Material3.Button.OutlinedButton"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:text="@string/settings_reboot_button"
@@ -275,7 +275,7 @@
 
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/button_shutdown"
-                style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                style="@style/Widget.Material3.Button.OutlinedButton"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:text="@string/settings_shutdown_button" />

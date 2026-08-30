@@ -1,9 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+ Lucide "skip-forward", converted from native-ui-qt/icons/skip-forward.svg so the phone and
+ the appliance draw the same glyph. Regenerate with
+ android-companion/tools/lucide2vector.py rather than editing by hand.
+-->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
-    android:width="36dp"
-    android:height="36dp"
-    android:viewportWidth="24.0"
-    android:viewportHeight="24.0">
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24"
+    android:tint="?attr/colorControlNormal">
     <path
-        android:fillColor="#FFFFFF"
-        android:pathData="M6,18l8.5,-6L6,6v12zM16,6v12h2V6h-2z"/>
+        android:pathData="M5,4 L15,12 L5,20 L5,4 Z"
+        android:strokeWidth="2"
+        android:strokeColor="#FFFFFFFF"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
+    <path
+        android:pathData="M19,5 L19,19"
+        android:strokeWidth="2"
+        android:strokeColor="#FFFFFFFF"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
 </vector>

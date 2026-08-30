@@ -1,26 +1,43 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+ Lucide "shuffle", converted from native-ui-qt/icons/shuffle.svg so the phone and
+ the appliance draw the same glyph. Regenerate with
+ android-companion/tools/lucide2vector.py rather than editing by hand.
+-->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="24dp"
     android:height="24dp"
-    android:viewportWidth="100"
-    android:viewportHeight="100">
+    android:viewportWidth="24"
+    android:viewportHeight="24"
+    android:tint="?attr/colorControlNormal">
     <path
-        android:pathData="m62.934,19.212h-43.672a4.504,4.504 0,0 0,0 9h43.672a4.504,4.504 0,1 0,0 -9z"
-        android:strokeWidth="0.2"
-        android:fillAlpha="0.4"
-        android:fillColor="@color/white"/>
+        android:pathData="M2 18h1.4c1.3 0 2.5-.6 3.3-1.7l6.1-8.6c.7-1.1 2-1.7 3.3-1.7H22"
+        android:strokeWidth="2"
+        android:strokeColor="#FFFFFFFF"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
     <path
-        android:pathData="m80.328,36.772h-43.672a4.504,4.504 0,1 0,0 9h43.672a4.504,4.504 0,0 0,0 -9z"
-        android:strokeWidth="0.2"
-        android:fillAlpha="0.4"
-        android:fillColor="@color/white"/>
+        android:pathData="m18 2 4 4-4 4"
+        android:strokeWidth="2"
+        android:strokeColor="#FFFFFFFF"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
     <path
-        android:pathData="m62.794,54.238h-43.672a4.504,4.504 0,1 0,0 9h43.672a4.504,4.504 0,0 0,0 -9z"
-        android:strokeWidth="0.2"
-        android:fillAlpha="0.4"
-        android:fillColor="@color/white"/>
+        android:pathData="M2 6h1.9c1.5 0 2.9.9 3.6 2.2"
+        android:strokeWidth="2"
+        android:strokeColor="#FFFFFFFF"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
     <path
-        android:pathData="m80.328,71.812h-43.672a4.504,4.504 0,0 0,0 9h43.672a4.504,4.504 0,0 0,0 -9z"
-        android:strokeWidth="0.2"
-        android:fillAlpha="0.4"
-        android:fillColor="@color/white"/>
+        android:pathData="M22 18h-5.9c-1.3 0-2.6-.7-3.3-1.8l-.5-.8"
+        android:strokeWidth="2"
+        android:strokeColor="#FFFFFFFF"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
+    <path
+        android:pathData="m18 14 4 4-4 4"
+        android:strokeWidth="2"
+        android:strokeColor="#FFFFFFFF"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
 </vector>

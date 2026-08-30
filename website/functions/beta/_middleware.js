@@ -7,9 +7,21 @@
 // Set them as "Secret" values for both Production and Preview environments,
 // then redeploy (or retrigger via workflow_dispatch on deploy-pages.yml).
 
+// La beta è finita (2026-08-28): l'indice di /beta rimanda al sito pubblico,
+// e lo fa QUI, prima della password — altrimenti chi arriva da un vecchio
+// link o QR vede solo la richiesta di credenziali e non il rimando.
+// beta/index.html fa la stessa cosa lato browser, come riserva. Il resto
+// della cartella (manuale, privacy, immagini) resta protetto com'era.
+const PUBLIC_SITE = 'https://osmiumsound.it/';
+const RETIRED_PATHS = new Set(['/beta', '/beta/', '/beta/index.html']);
+
 export async function onRequest(context) {
   const { request, env } = context;
   const { BETA_USER, BETA_PASSWORD } = env;
+
+  if (RETIRED_PATHS.has(new URL(request.url).pathname)) {
+    return Response.redirect(PUBLIC_SITE, 302);
+  }
 
   if (!BETA_USER || !BETA_PASSWORD) {
     return new Response('Beta auth is not configured (missing BETA_USER/BETA_PASSWORD).', { status: 500 });

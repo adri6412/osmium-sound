@@ -21,6 +21,8 @@
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
+    android:background="@color/osmium_panel"
+    android:paddingBottom="4dp"
     xmlns:app="http://schemas.android.com/apk/res-auto">
 
     <com.google.android.material.progressindicator.LinearProgressIndicator
@@ -29,11 +31,15 @@
         android:layout_height="wrap_content"
         app:layout_constraintTop_toTopOf="parent"
         app:layout_constraintStart_toStartOf="parent"
-        app:trackThickness="2dp"/>
+        app:trackThickness="2dp"
+        app:trackColor="@color/osmium_track"
+        app:indicatorColor="@color/osmium_gold"
+        app:trackCornerRadius="1dp"/>
 
-    <ImageView
+    <com.google.android.material.imageview.ShapeableImageView
         android:id="@+id/album"
         style="@style/SqueezerWidget.List.CoverArt"
+        app:shapeAppearance="@style/ShapeAppearance.Osmium.Small"
         android:layout_width="@dimen/album_art_icon_size"
         android:layout_height="@dimen/album_art_icon_size"
         app:layout_constraintTop_toBottomOf="@id/progressbar"

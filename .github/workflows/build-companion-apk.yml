@@ -45,6 +45,19 @@ jobs:
           KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
 
+      # The Play Store takes an App Bundle, not an APK. It is built with the
+      # same release key as the APK and kept as a workflow artifact only: no
+      # automatic publishing, no attaching it to the GitHub Release, because
+      # the store listing is a deliberate step someone takes by hand.
+      - name: Build release bundle (Play Store)
+        run: |
+          cd android-companion
+          ./gradlew bundleRelease
+        env:
+          KEY_STORE_PASSWORD: ${{ secrets.KEY_STORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+
       - name: Generate version from tag
         id: version
         run: |
@@ -57,6 +70,14 @@ jobs:
           mkdir -p release-artifacts
           cp android-companion/HiFiMediaPlayer/build/outputs/apk/release/*.apk release-artifacts/HiFiMediaPlayer-${{ steps.version.outputs.version }}-release.apk 2>/dev/null || true
           ls -lah release-artifacts/
+
+      - name: Upload bundle as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: companion-bundle-${{ steps.version.outputs.version }}
+          path: android-companion/HiFiMediaPlayer/build/outputs/bundle/release/*.aab
+          if-no-files-found: error
+          retention-days: 30
 
       - name: Create GitHub Release
         # v2: make_latest isn't a valid input on v1 (build-ui-ota.yml is
@@ -144,6 +165,9 @@ jobs:
   test:
     name: Run Tests
     runs-on: ubuntu-latest
+    # These jobs cannot fail the release, so a hung test would otherwise sit
+    # there for the six-hour default before anyone noticed.
+    timeout-minutes: 30
     needs: build
 
     steps:
@@ -176,6 +200,7 @@ jobs:
   lint:
     name: Run Lint Check
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     needs: build
 
     steps:

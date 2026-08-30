@@ -40,6 +40,9 @@ import com.google.android.material.textfield.TextInputLayout;
 import com.google.zxing.integration.android.IntentIntegrator;
 import com.google.zxing.integration.android.IntentResult;
 
+import android.os.Bundle;
+import android.os.Parcelable;
+
 import java.net.URI;
 
 import com.osmium.sound.companion.Preferences;
@@ -217,6 +220,50 @@ public class ServerAddressView extends LinearLayout {
         }
     }
 
+    /**
+     * The wizard has to survive the activity being rebuilt underneath it — the
+     * scanner comes back through a different activity, a language change
+     * recreates this one, and so does a rotation. Without this, a scan that had
+     * already resolved a pairing would flash the confirmation and then drop
+     * back to the scan step, because a fresh view starts the wizard over.
+     */
+    @Override
+    protected Parcelable onSaveInstanceState() {
+        Bundle state = new Bundle();
+        state.putParcelable("super", super.onSaveInstanceState());
+        if (currentStep != null) state.putString("step", currentStep.name());
+        state.putString("pendingHostPort", pendingHostPort);
+        state.putString("pendingApi", pendingApi);
+        state.putString("pendingToken", pendingToken);
+        return state;
+    }
+
+    @Override
+    protected void onRestoreInstanceState(Parcelable parcelable) {
+        if (!(parcelable instanceof Bundle state)) {
+            super.onRestoreInstanceState(parcelable);
+            return;
+        }
+        super.onRestoreInstanceState(state.getParcelable("super"));
+
+        pendingHostPort = state.getString("pendingHostPort");
+        pendingApi = state.getString("pendingApi");
+        pendingToken = state.getString("pendingToken");
+
+        String step = state.getString("step");
+        if (step == null) return;
+        try {
+            Step restored = Step.valueOf(step);
+            if (restored == Step.CONFIRM && pendingApi != null) {
+                confirmMessage.setText(getResources().getString(
+                        R.string.settings_pair_confirm_message, pendingApi));
+            }
+            setStep(restored);
+        } catch (IllegalArgumentException ignored) {
+            // A step that no longer exists: leave the wizard where it started.
+        }
+    }
+
     private boolean checkMac() {
         macDirty = true;
         String mac = macEditText.getText().toString();
@@ -237,6 +284,12 @@ public class ServerAddressView extends LinearLayout {
             return false;
         }
         serverAddress.setAddress(address);
+        // If the address was typed over the one the QR wrote — a tailnet name
+        // instead of the LAN address, say — the appliance's own API has to
+        // follow it, or the device settings would keep calling a host that only
+        // answers at home. The pairing token is unchanged: same appliance,
+        // reached another way.
+        followApplianceHost(serverAddress.host());
         serverAddress.userName = userNameEditText.getText().toString();
         serverAddress.password = passwordEditText.getText().toString();
         serverAddress.wakeOnLan = wakeOnLan.isChecked();
@@ -244,6 +297,20 @@ public class ServerAddressView extends LinearLayout {
         preferences.saveServerAddress(serverAddress);
 
         return true;
+    }
+
+    /** Points the appliance API at the same host as Lyrion, keeping its port. */
+    private void followApplianceHost(String host) {
+        if (host == null || isStandardLms()) return;
+        String api = preferences.getApplianceApiAddress();
+        String token = preferences.getAppliancePairToken();
+        if (api == null || token == null) return;
+        int colon = api.lastIndexOf(':');
+        String port = colon > 0 ? api.substring(colon) : "";
+        String updated = host + port;
+        if (!updated.equals(api)) {
+            preferences.setAppliancePairing(updated, token);
+        }
     }
 
     private boolean isStandardLms() {
@@ -290,18 +357,20 @@ public class ServerAddressView extends LinearLayout {
     private void applyServerKind() {
         if (serverAddressEditText == null) return;
         boolean standard = isStandardLms();
-        serverAddressEditText.setFocusable(standard);
-        serverAddressEditText.setFocusableInTouchMode(standard);
-        serverAddressEditText.setLongClickable(standard);
-        serverAddressEditText.setOnClickListener(standard ? null : view -> startQrScan());
+        // Editable either way. Scanning stays the way an appliance is paired —
+        // that is what hands over the token — but the address it wrote is a LAN
+        // one, and from outside the house it is unreachable. Typing the tailnet
+        // name over it is exactly what LyrPlay asks its users to do.
+        serverAddressEditText.setFocusable(true);
+        serverAddressEditText.setFocusableInTouchMode(true);
+        serverAddressEditText.setLongClickable(true);
+        serverAddressEditText.setOnClickListener(null);
         TextInputLayout serverAddressTil = findViewById(R.id.server_address_til);
         serverAddressTil.setEndIconMode(standard ? TextInputLayout.END_ICON_NONE
                 : TextInputLayout.END_ICON_CUSTOM);
-        if (standard) {
-            serverAddressTil.setHelperText(getResources().getString(R.string.settings_server_address_required));
-        } else {
-            serverAddressTil.setHelperText(null);
-        }
+        serverAddressTil.setHelperText(getResources().getString(standard
+                ? R.string.settings_server_address_required
+                : R.string.settings_server_address_remote_hint));
     }
 
     /** Registers a listener for step changes, and immediately reports the current step if known. */
