@@ -1211,7 +1211,7 @@ def set_audio_device(device):
         with open(SQUEEZELITE_DEFAULT) as f:
             content = f.read()
     except Exception:
-        content = "ARGS='-o default -D -v -C 5 -s 127.0.0.1 -n HiFiPlayer'\n"
+        content = "ARGS='-o default -D -v -C 5 -s 127.0.0.1 -n OsmiumSound -M OsmiumSound'\n"
 
     m = re.search(r"ARGS=(['\"])(.*?)\1", content)
     if m:
@@ -1226,7 +1226,7 @@ def set_audio_device(device):
             args = re.sub(r'(-o\s+\S+)', r'\1 -D', args, count=1)
         content = content[:m.start()] + f"ARGS='{args}'" + content[m.end():]
     else:
-        content += f"\nARGS='-o {device} -D -v -C 5 -s 127.0.0.1 -n HiFiPlayer'\n"
+        content += f"\nARGS='-o {device} -D -v -C 5 -s 127.0.0.1 -n OsmiumSound -M OsmiumSound'\n"
 
     try:
         with open(SQUEEZELITE_DEFAULT, 'w') as f:
