@@ -55,6 +55,22 @@ function isBot(userAgent) {
   return BOT_PATTERNS.some((p) => p.test(userAgent));
 }
 
+// Seconda strada, indipendente dalla cache: gli header che un browser manda
+// sempre quando apre una pagina. Chrome, Firefox e Safari mandano la terna
+// Fetch Metadata (sec-fetch-*); tutti mandano comunque Accept: text/html
+// insieme a Accept-Language e Accept-Encoding. curl, python-requests e gli
+// scraper artigianali quasi mai. Serve perche' la conferma tramite immagini
+// (confirmBrowser) scatta solo quando la richiesta sfugge alla cache di
+// Cloudflare: se l'immagine e' gia' in cache, la funzione non viene eseguita.
+function looksLikeBrowserRequest(request) {
+  const h = request.headers;
+  if (h.get("sec-fetch-dest") === "document" && h.get("sec-fetch-mode") === "navigate") {
+    return true;
+  }
+  const accept = h.get("accept") || "";
+  return accept.includes("text/html") && !!h.get("accept-language") && !!h.get("accept-encoding");
+}
+
 function getCountry(request) {
   return request.cf?.country || "XX";
 }
@@ -102,7 +118,7 @@ async function logPageView(db, { ip, user_agent, path, country, is_bot, asn, as_
 
 // Dedupe solo per IP (non per pagina): una persona che naviga piu' pagine
 // nella stessa finestra di sessione conta come 1 sola visita.
-async function logVisit(db, { ip, user_agent, country, is_bot, asn, as_org }) {
+async function logVisit(db, { ip, user_agent, country, is_bot, asn, as_org, browser_confirmed }) {
   const now = Date.now();
   const windowStart = now - SESSION_WINDOW_MS;
 
@@ -118,9 +134,9 @@ async function logVisit(db, { ip, user_agent, country, is_bot, asn, as_org }) {
     ).bind(now, existing.id).run();
   } else {
     await db.prepare(
-      `INSERT INTO site_visits (ip, user_agent, country, is_bot, asn, as_org, page_count, first_seen, last_seen)
-       VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?, ?)`
-    ).bind(ip, user_agent, country, is_bot, asn, as_org, now, now).run();
+      `INSERT INTO site_visits (ip, user_agent, country, is_bot, asn, as_org, browser_confirmed, page_count, first_seen, last_seen)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)`
+    ).bind(ip, user_agent, country, is_bot, asn, as_org, browser_confirmed, now, now).run();
   }
 }
 
@@ -171,7 +187,10 @@ export async function onRequest(context) {
       // Scaricare un APK o controllare il repository F-Droid non e' una visita
       // al sito: non apre (ne' prolunga) una sessione.
       if (isPage) {
-        waitUntil(logVisit(env.DB, { ip, user_agent, country, is_bot: ua_bot, asn, as_org }));
+        waitUntil(logVisit(env.DB, {
+          ip, user_agent, country, is_bot: ua_bot, asn, as_org,
+          browser_confirmed: looksLikeBrowserRequest(request) ? 1 : 0,
+        }));
       }
     }
   } catch (err) {
