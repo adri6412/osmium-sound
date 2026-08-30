@@ -135,7 +135,7 @@ async function logVisit(db, { ip, user_agent, country, is_bot, asn, as_org, brow
   } else {
     await db.prepare(
       `INSERT INTO site_visits (ip, user_agent, country, is_bot, asn, as_org, browser_confirmed, page_count, first_seen, last_seen)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)`
+       VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?, ?)`
     ).bind(ip, user_agent, country, is_bot, asn, as_org, browser_confirmed, now, now).run();
   }
 }
