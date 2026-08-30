@@ -1,41 +1,41 @@
 {
-  "tag_name": "v2.5.24-dev.4-alpha10",
-  "name": "v2.5.24-dev.4-alpha10",
-  "body": "## What's new in v2.5.24-dev.4-alpha10\n\n- fix(ui-qt): via il riquadro nero dietro i VU, e la ricerca dei plugin (RadioNet)\n- fix(setup): il wizard non pretende aggiornamenti in live, e guarda solo prod\n",
+  "tag_name": "v2.5.24-dev.9-alpha1",
+  "name": "v2.5.24-dev.9-alpha1",
+  "body": "## What's new in v2.5.24-dev.9-alpha1\n\n- perf: meno lavoro inutile in interfaccia e demoni, piu' correzioni squeezelite\n- fix(sito): ripristina la registrazione delle visite (segnaposto di troppo)\n- fix(sito): conferma browser anche dagli header, non solo dalle immagini\n- fix(sito): riconoscimento bot pi\u00f9 severo e rete di provenienza\n- fix(sito): il crawler di Facebook non conta pi\u00f9 come visitatore\n- feat(sito): la pagina Facebook in home page\n- fix(sito): il download dell'app per il telefono punta alla 1.0.8\n- feat(audio): il player si presenta a Lyrion come OsmiumSound, non SqueezeLite\n- fix(ui-qt): il server Lyrion esterno viene seguito davvero, e simboli sulla tastiera\n- fix(ui-qt): copertine nere e VU che macinavano sotto il salvaschermo\n- fix(ui-qt): il primo avvio si chiude da solo a configurazione finita\n- fix(ota+iso): l'aggiornamento accetta il pacchetto Qt, e la ISO parte con Qt\n- feat(ota): l'aggiornamento dell'interfaccia porta Qt, che diventa la predefinita\n- feat(ui-qt): \"Aggiornamento disponibile\" sul tab impostazioni, e comandi distanziati\n- fix(ui-qt): via il riquadro nero dietro i VU, e la ricerca dei plugin (RadioNet)\n- fix(setup): il wizard non pretende aggiornamenti in live, e guarda solo prod\n- fix(ui-qt): copertine nere in griglia, e \"gi\u00e0 copiato\" cambiando CD\n- fix(ui-qt): la tastiera a schermo spariva dove il touchscreen si finge tastiera\n- fix(ui-qt): cifre dell'orologio del salvaschermo disegnate a curve\n- fix(ui-qt): anche il fondale del Now Playing smette di lampeggiare\n- fix(ui-qt): copertine della griglia album nitide come quella grande\n- fix(ui-qt): copertine che lampeggiano e si vedevano sgranate, tastiera nelle ricerche\n- fix(ui-qt): censimento degli effetti contro Electron \u2014 ombre, gradienti, alpha, stati\n- fix(ui-qt): alone del pulsante play come in Electron \u2014 gradiente radiale, non sfocatura\n- fix(ui-qt): fondale del Now Playing e misure come Electron, al pixel\n- fix(ui-qt): icone nitide a 720p \u2014 vettori disegnati diritti, senza texture\n- feat(companion): il wizard chiede la lingua come primo passo \u2014 1.0.8-svil3\n- fix(companion): pulsante \"Un altro server Lyrion\" uguale a quello Osmium \u2014 1.0.8-svil2\n- fix(companion): pulsante \"Un altro server Lyrion\" uguale a quello Osmium\n- feat(companion): il telefono diventa un lettore Lyrion, e il wizard chiede a che cosa ti colleghi \u2014 1.0.8-svil1\n- fix(ui-qt): griglia album a tre colonne, come Electron\n- fix(ui-qt): icone e copertine alla risoluzione dello schermo, e un terzo di consumo in meno\n- fix(ui): schermo nero passando alla nuova interfaccia \u2014 mancava chvt\n- fix(ota): i file della nuova interfaccia non arrivavano sull'apparecchio\n- feat(ui): seconda interfaccia su schermo in Qt/QML, scelta dalla pagina web\n- feat(webui): indirizzo IP fisso del dispositivo, solo da web admin\n- fix(kiosk): tastiera a schermo assente sui touch senza tastiera \u2014 i controller touch compositi e il PS/2 fantasma non contano pi\u00f9 come tastiera\n- feat(tools): mem-report.sh \u2014 fotografia PSS del dispositivo\n- feat(os): OTA 0055 \u2014 tetti al journal persistente\n- perf(kiosk): meno RAM per Electron \u2014 --no-zygote, low-end-device-mode, tetti V8\n- fix(lyrion): RadioNet search opens the search bar instead of erroring\n- fix(sito): blocco Flasher \u2014 testo introduttivo senza tecnicismi\n- feat(sito): blocco Flasher \u2014 rileva l'OS e mostra solo il download giusto; su macOS ISO + balenaEtcher\n- fix(sito): disclaimer hardware \u2014 tolto il riferimento ai Mac Intel, restano solo i Chromebook\n- fix(rete): OTA 0054 \u2014 power saving delle NIC disattivato (Wi-Fi PS, EEE, runtime PM)\n",
   "assets": [
     {
-      "name": "hifi-ui-v2.5.24-dev.4-alpha10.tar.gz",
-      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.24-dev.4-alpha10/hifi-ui-v2.5.24-dev.4-alpha10.tar.gz",
-      "size": 134698415
+      "name": "hifi-qtui-v2.5.24-dev.9-alpha1.tar.gz",
+      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.24-dev.9-alpha1/hifi-qtui-v2.5.24-dev.9-alpha1.tar.gz",
+      "size": 4834967
     },
     {
-      "name": "hifi-ui-v2.5.24-dev.4-alpha10.tar.gz.sha256",
-      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.24-dev.4-alpha10/hifi-ui-v2.5.24-dev.4-alpha10.tar.gz.sha256",
-      "size": 103
+      "name": "hifi-qtui-v2.5.24-dev.9-alpha1.tar.gz.sha256",
+      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.24-dev.9-alpha1/hifi-qtui-v2.5.24-dev.9-alpha1.tar.gz.sha256",
+      "size": 104
     },
     {
-      "name": "hifi-system-v2.5.24-dev.4-alpha10.tar.gz",
-      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.24-dev.4-alpha10/hifi-system-v2.5.24-dev.4-alpha10.tar.gz",
-      "size": 5244690
+      "name": "hifi-system-v2.5.24-dev.9-alpha1.tar.gz",
+      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.24-dev.9-alpha1/hifi-system-v2.5.24-dev.9-alpha1.tar.gz",
+      "size": 419023
     },
     {
-      "name": "hifi-system-v2.5.24-dev.4-alpha10.tar.gz.sha256",
-      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.24-dev.4-alpha10/hifi-system-v2.5.24-dev.4-alpha10.tar.gz.sha256",
-      "size": 107
+      "name": "hifi-system-v2.5.24-dev.9-alpha1.tar.gz.sha256",
+      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.24-dev.9-alpha1/hifi-system-v2.5.24-dev.9-alpha1.tar.gz.sha256",
+      "size": 106
     },
     {
-      "name": "hifi-os-v2.5.24-dev.4-alpha10.tar.gz",
-      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.24-dev.4-alpha10/hifi-os-v2.5.24-dev.4-alpha10.tar.gz",
-      "size": 1398960
+      "name": "hifi-os-v2.5.24-dev.9-alpha1.tar.gz",
+      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.24-dev.9-alpha1/hifi-os-v2.5.24-dev.9-alpha1.tar.gz",
+      "size": 1402477
     },
     {
-      "name": "hifi-os-v2.5.24-dev.4-alpha10.tar.gz.sha256",
-      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.24-dev.4-alpha10/hifi-os-v2.5.24-dev.4-alpha10.tar.gz.sha256",
-      "size": 103
+      "name": "hifi-os-v2.5.24-dev.9-alpha1.tar.gz.sha256",
+      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.24-dev.9-alpha1/hifi-os-v2.5.24-dev.9-alpha1.tar.gz.sha256",
+      "size": 102
     },
     {
-      "name": "hifi-os-v2.5.24-dev.4-alpha10.tar.gz.sha256.sig",
-      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.24-dev.4-alpha10/hifi-os-v2.5.24-dev.4-alpha10.tar.gz.sha256.sig",
+      "name": "hifi-os-v2.5.24-dev.9-alpha1.tar.gz.sha256.sig",
+      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.24-dev.9-alpha1/hifi-os-v2.5.24-dev.9-alpha1.tar.gz.sha256.sig",
       "size": 64
     }
   ]
