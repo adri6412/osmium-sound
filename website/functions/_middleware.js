@@ -5,14 +5,18 @@
 //
 // Richiede il binding D1 "DB" sul progetto Pages (Settings → Functions →
 // D1 database bindings), puntato allo stesso database "osmium-downloads"
-// usato da osmium-iso-tracker. Tabella: page_views (vedi schema_pageviews.sql
-// nel repo osmium-iso-tracker).
+// usato da osmium-iso-tracker. Tabelle: page_views (una riga per pagina,
+// vedi schema_pageviews.sql) e site_visits (una riga per IP, indipendente
+// dalla pagina — usata per il conteggio "visite uniche"; vedi
+// schema_visits.sql), entrambe nel repo osmium-iso-tracker.
 
 const SESSION_WINDOW_MS = 30 * 60 * 1000;
 const BOT_PATTERNS = [
   /bot/i, /crawl/i, /spider/i, /scrap/i, /wget/i, /curl/i,
   /python-requests/i, /httpclient/i, /go-http-client/i, /java\//i,
   /libwww/i, /httpx/i, /okhttp/i, /aria2/i, /axios/i,
+  // Anteprime dei link sui social: non hanno "bot" nello user-agent
+  /facebookexternalhit/i,
 ];
 
 // Estensioni statiche da non contare come "visita a una pagina"
@@ -57,6 +61,30 @@ async function logPageView(db, { ip, user_agent, path, country, is_bot }) {
   }
 }
 
+// Dedupe solo per IP (non per pagina): una persona che naviga piu' pagine
+// nella stessa finestra di sessione conta come 1 sola visita.
+async function logVisit(db, { ip, user_agent, country, is_bot }) {
+  const now = Date.now();
+  const windowStart = now - SESSION_WINDOW_MS;
+
+  const existing = await db.prepare(
+    `SELECT id FROM site_visits
+     WHERE ip = ? AND last_seen > ?
+     ORDER BY last_seen DESC LIMIT 1`
+  ).bind(ip, windowStart).first();
+
+  if (existing) {
+    await db.prepare(
+      `UPDATE site_visits SET last_seen = ?, page_count = page_count + 1 WHERE id = ?`
+    ).bind(now, existing.id).run();
+  } else {
+    await db.prepare(
+      `INSERT INTO site_visits (ip, user_agent, country, is_bot, page_count, first_seen, last_seen)
+       VALUES (?, ?, ?, ?, 1, ?, ?)`
+    ).bind(ip, user_agent, country, is_bot, now, now).run();
+  }
+}
+
 export async function onRequest(context) {
   const { request, env, waitUntil } = context;
   const response = await context.next();
@@ -69,15 +97,13 @@ export async function onRequest(context) {
       !ASSET_EXTENSIONS.test(url.pathname);
 
     if (trackable && env.DB) {
-      waitUntil(
-        logPageView(env.DB, {
-          ip: getIP(request),
-          user_agent: request.headers.get("user-agent") || "",
-          path: url.pathname,
-          country: getCountry(request),
-          is_bot: isBot(request.headers.get("user-agent") || "") ? 1 : 0,
-        })
-      );
+      const ip = getIP(request);
+      const user_agent = request.headers.get("user-agent") || "";
+      const country = getCountry(request);
+      const is_bot = isBot(user_agent) ? 1 : 0;
+
+      waitUntil(logPageView(env.DB, { ip, user_agent, path: url.pathname, country, is_bot }));
+      waitUntil(logVisit(env.DB, { ip, user_agent, country, is_bot }));
     }
   } catch (err) {
     console.error("page_views tracking error:", err.message);
