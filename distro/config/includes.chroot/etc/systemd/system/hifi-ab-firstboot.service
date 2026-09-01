@@ -1,11 +1,16 @@
 [Unit]
 Description=Osmium Sound — primo avvio di un'immagine su apparecchio convertito (unione account)
+# /data e l'overlay di /etc li monta l'initramfs prima di PID 1: nessuna
+# dipendenza da local-fs.target (che, via udev → tmpfiles-dev-early → sysusers,
+# creerebbe un ciclo con il Before=systemd-sysusers qui sotto e systemd
+# salterebbe l'unità).
 DefaultDependencies=no
 ConditionPathExists=/usr/lib/osmium/IMAGE_VERSION
 ConditionPathExists=/data/etc/accounts-extra
 ConditionPathExists=!/data/etc/upper/.hifi-accounts-merged
-After=local-fs.target
-Before=sysinit.target systemd-sysusers.service
+After=systemd-remount-fs.service
+Before=sysinit.target systemd-sysusers.service shutdown.target
+Conflicts=shutdown.target
 
 [Service]
 Type=oneshot

@@ -128,6 +128,10 @@ in_chroot apt-mark manual busybox rauc rauc-service zstd >/dev/null 2>&1 || true
 in_chroot apt-get -y -q autoremove --purge >/dev/null || true
 in_chroot dpkg -s busybox >/dev/null 2>&1 || die "busybox mancante nel chroot: l'initrd non avrebbe grep/sed/cp"
 in_chroot systemctl mask apt-daily.timer apt-daily-upgrade.timer apt-daily.service apt-daily-upgrade.service >/dev/null 2>&1 || true
+# grub-common.service scrive /boot/grub/grubenv ("record successful boot"): su
+# una root in sola lettura fallisce a ogni avvio, e l'ambiente GRUB che conta
+# è quello del selettore sulla ESP.
+in_chroot systemctl mask grub-common.service grub-initrd-fallback.service >/dev/null 2>&1 || true
 
 # ── 2. ciò che in un'immagine non ha senso ─────────────────────────────
 log "rimozione degli hook apt/kernel e dei marcatori legacy"
