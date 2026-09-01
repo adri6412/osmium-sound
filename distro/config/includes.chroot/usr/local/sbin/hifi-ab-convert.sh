@@ -36,7 +36,11 @@ have_layout() {
 }
 root_uuid() { blkid -o value -s UUID "$(ab_root_dev)" 2>/dev/null; }
 default_cmdline() {
-    sed -n 's/^GRUB_CMDLINE_LINUX_DEFAULT="\(.*\)"$/\1/p' /etc/default/grub 2>/dev/null | tail -n 1
+    # entrambe le variabili, come fa 10_linux per la voce normale (GRUB_CMDLINE_LINUX
+    # porta i parametri propri dell'apparecchio, es. una console seriale)
+    _a=$(sed -n 's/^GRUB_CMDLINE_LINUX="\(.*\)"$/\1/p' /etc/default/grub 2>/dev/null | tail -n 1)
+    _b=$(sed -n 's/^GRUB_CMDLINE_LINUX_DEFAULT="\(.*\)"$/\1/p' /etc/default/grub 2>/dev/null | tail -n 1)
+    printf '%s %s\n' "$_a" "$_b" | sed 's/^ *//; s/ *$//'
 }
 grub_cmdline_add() {  # <token>... in GRUB_CMDLINE_LINUX; 0 se ha cambiato qualcosa
     _f=/etc/default/grub
