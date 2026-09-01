@@ -171,8 +171,11 @@ mkdir -p "$CH/var/lib/hifi-player" "$CH/var/log/hifi" "$CH/mnt" "$CH/media"
 
 # ── 5. RAUC: keyring; marcatori di versione fuori da /etc ────────────────
 log "RAUC keyring, IMAGE_VERSION, elenco pacchetti"
-mkdir -p "$CH/etc/rauc" "$CH/usr/lib/osmium"
+mkdir -p "$CH/etc/rauc" "$CH/usr/lib/osmium" "$CH/etc/modules-load.d"
 install -m 0644 "$KEYRING" "$CH/etc/rauc/keyring.pem"
+# nbd: lo streaming HTTP di RAUC (rauc install https://…) crea un device NBD;
+# caricato all'avvio così anche un `rauc install <url>` a mano funziona.
+printf '# Osmium Sound: streaming dei bundle RAUC (rauc install https://...)\nnbd\n' > "$CH/etc/modules-load.d/hifi-rauc.conf"
 printf '%s\n' "$VERSION" > "$CH/usr/lib/osmium/IMAGE_VERSION"
 # shellcheck disable=SC2016  # le ${} sono per dpkg-query, non per la shell
 in_chroot dpkg-query -W -f='${Package}\t${Version}\n' | sort > "$CH/usr/lib/osmium/packages.txt"
