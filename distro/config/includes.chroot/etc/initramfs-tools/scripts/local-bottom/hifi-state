@@ -29,7 +29,10 @@ done
 [ -n "$slot" ] || exit 0
 [ -f "${rootmnt}/usr/lib/osmium/IMAGE_VERSION" ] || exit 0
 
-rootdev=$(readlink -f "${ROOT}")
+# device della root: dal mount di ${rootmnt} (ROOT non è garantita agli hook)
+rootdev=$(awk -v m="${rootmnt}" '$2 == m { d = $1 } END { print d }' /proc/mounts 2>/dev/null)
+[ -n "$rootdev" ] || rootdev=$(readlink -f "${ROOT:-}" 2>/dev/null)
+rootdev=$(readlink -f "$rootdev" 2>/dev/null || echo "$rootdev")
 name=${rootdev#/dev/}
 disk=$(basename "$(readlink -f "/sys/class/block/$name/..")")
 find_part() {

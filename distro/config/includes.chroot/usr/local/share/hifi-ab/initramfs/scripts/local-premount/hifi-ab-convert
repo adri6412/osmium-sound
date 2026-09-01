@@ -42,9 +42,24 @@ say() {
 }
 progress() { plymouth system-update --progress="$1" 2>/dev/null || true; }
 
-rootdev=$(readlink -f "${ROOT}")
+# Il device della root si ricava dalla riga di comando (root=UUID=… ecc.):
+# la variabile ROOT dell'initramfs non è garantita nell'ambiente degli hook.
+rootspec=
+for x in $cmdline; do
+    case "$x" in root=*) rootspec=${x#root=} ;; esac
+done
+case "$rootspec" in
+    UUID=*)      rootdev=$(blkid -U "${rootspec#UUID=}" 2>/dev/null) ;;
+    PARTUUID=*)  rootdev=$(readlink -f "/dev/disk/by-partuuid/${rootspec#PARTUUID=}" 2>/dev/null) ;;
+    LABEL=*)     rootdev=$(blkid -L "${rootspec#LABEL=}" 2>/dev/null) ;;
+    PARTLABEL=*) rootdev=$(readlink -f "/dev/disk/by-partlabel/${rootspec#PARTLABEL=}" 2>/dev/null) ;;
+    /dev/*)      rootdev=$(readlink -f "$rootspec" 2>/dev/null) ;;
+    *)           rootdev=$(readlink -f "${ROOT:-}" 2>/dev/null) ;;
+esac
+[ -n "$rootdev" ] && [ -b "$rootdev" ] || rootdev=
 name=${rootdev#/dev/}
-disk=$(basename "$(readlink -f "/sys/class/block/$name/..")")
+disk=
+[ -n "$name" ] && disk=$(basename "$(readlink -f "/sys/class/block/$name/..")")
 diskdev="/dev/$disk"
 part_dev() {  # numero -> /dev/...
     for d in /sys/class/block/"$disk"*; do
@@ -57,7 +72,9 @@ part_dev() {  # numero -> /dev/...
 # Scrive l'esito dove sopravvive: sulla ESP (abconvert.state) e in /run.
 finish_state() {  # <stato> <messaggio>
     echo "hifi-ab: esito=$1 $2" >> "$LOG"
-    esp=$(part_dev 2) || esp=
+    esp=$(part_dev 2 2>/dev/null) || esp=
+    # senza disco noto (root non risolta) si cerca la ESP per etichetta
+    [ -n "$esp" ] || esp=$(blkid -L EFI 2>/dev/null | head -n 1)
     if [ -n "$esp" ]; then
         mkdir -p /run/hifi-esp
         if mount -t vfat -o umask=0077 "$esp" /run/hifi-esp 2>/dev/null; then
@@ -79,8 +96,9 @@ bail() {  # <messaggio> — non converte, l'avvio prosegue
 : > "$LOG"
 say "controllo preliminare"
 progress 2
+[ -n "$rootdev" ] || bail "device di root non risolto (root=$rootspec)"
 have_uuid=$(blkid -o value -s UUID "$rootdev" 2>/dev/null || true)
-if [ -z "$want_uuid" ] || [ "$have_uuid" != "$want_uuid" ]; then bail "UUID root $have_uuid diverso da quello atteso $want_uuid"; fi
+if [ -z "$want_uuid" ] || [ "$have_uuid" != "$want_uuid" ]; then bail "UUID root '$have_uuid' ($rootdev) diverso da quello atteso $want_uuid"; fi
 [ "$(blkid -o value -s TYPE "$rootdev" 2>/dev/null)" = "ext4" ] || bail "la root non è ext4"
 [ "$(cat "/sys/class/block/$name/partition" 2>/dev/null)" = "3" ] || bail "la root non è la partizione 3"
 nparts=0
