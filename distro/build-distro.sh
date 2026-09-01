@@ -17,6 +17,11 @@
 #   --stage all      (default) full build: bootstrap + chroot + binary
 #   --stage chroot   rebuild chroot + binary (keep bootstrap & pkg cache)
 #   --stage binary   rebuild ONLY the binary/ISO (reuse existing chroot)
+#   --stage image    bootstrap + chroot, NO ISO: then hands the chroot to
+#                    build-image.sh, which turns it into the read-only slot
+#                    image + signed RAUC bundle (schema A/B). Extra options
+#                    for that step go through the environment, see
+#                    build-image.sh (RAUC_CERT, RAUC_KEY, IMAGE_OUT, ...).
 #
 # Typical loop while iterating on boot menus / splash / ISO layout:
 #   sudo ./build-distro.sh --app-dir … --stage all      # once
@@ -69,8 +74,8 @@ while [ $# -gt 0 ]; do
 done
 
 case "$STAGE" in
-    all|chroot|binary) ;;
-    *) die "Invalid --stage '$STAGE' (use: all | chroot | binary)." ;;
+    all|chroot|binary|image) ;;
+    *) die "Invalid --stage '$STAGE' (use: all | chroot | binary | image)." ;;
 esac
 
 # Stessa ragione, ma per chi passa --suite a mano: meglio fermarsi qui che
@@ -353,6 +358,20 @@ else
     log "WARNING: $OTA_PUBKEY_SRC missing — OS OTA updates will be refused on this image."
 fi
 
+# RAUC keyring (CA pubblica): l'immagine la porta in /etc/rauc/keyring.pem
+# (build-image.sh) e il pacchetto di sistema in /usr/local/share/hifi-ab/
+# per gli apparecchi legacy che si convertono. Stessa fonte per entrambi:
+# distro/rauc-keys/keyring.pem (vedi gen-rauc-ca.sh).
+RAUC_KEYRING_SRC="$SCRIPT_DIR/rauc-keys/keyring.pem"
+if [ -f "$RAUC_KEYRING_SRC" ]; then
+    mkdir -p "$CONFIG/includes.chroot/usr/local/share/hifi-ab"
+    cp -f "$RAUC_KEYRING_SRC" "$CONFIG/includes.chroot/usr/local/share/hifi-ab/keyring.pem"
+    chmod 644 "$CONFIG/includes.chroot/usr/local/share/hifi-ab/keyring.pem"
+    log "Baked RAUC keyring → /usr/local/share/hifi-ab/keyring.pem"
+else
+    log "WARNING: $RAUC_KEYRING_SRC missing — RAUC image bundles will be refused."
+fi
+
 log "Lyrion Music Server will be downloaded on-demand by hook 0050 (during chroot build)"
 # Not staged in includes.chroot — downloaded during the chroot build by hook 0050,
 # installed, and the .deb file is removed. The installed package (dpkg metadata)
@@ -431,7 +450,7 @@ case "$STAGE" in
         log "Cleaning chroot + binary artefacts (keeping package cache)…"
         lb clean --chroot --binary >/dev/null 2>&1 || true
         ;;
-    chroot)
+    chroot|image)
         log "Cleaning chroot + binary artefacts (keeping bootstrap + cache)…"
         lb clean --chroot --binary >/dev/null 2>&1 || true
         ;;
@@ -502,6 +521,16 @@ case "$STAGE" in
     binary)
         log "Building ONLY the binary stage (fast re-spin)…"
         lb binary
+        ;;
+    image)
+        log "Building bootstrap + chroot (no ISO), then the RAUC slot image…"
+        lb bootstrap
+        lb chroot
+        log "Handing the chroot to build-image.sh…"
+        IMAGE_VERSION="${IMAGE_VERSION:-$APP_VERSION}" \
+            "$SCRIPT_DIR/build-image.sh" --chroot "$SCRIPT_DIR/chroot" --version "${IMAGE_VERSION:-$APP_VERSION}"
+        log "DONE ✓  RAUC image built (see build-image.sh output above)"
+        exit 0
         ;;
 esac
 

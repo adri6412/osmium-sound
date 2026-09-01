@@ -1,0 +1,14 @@
+[Unit]
+Description=Osmium Sound — installa Lyrion Music Server su /data se manca (slot immagine)
+ConditionPathExists=/usr/lib/osmium/IMAGE_VERSION
+ConditionPathExists=!/data/lyrion/current/usr/sbin/squeezeboxserver
+After=network-online.target hifi-rauc-config.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/hifi-lyrion-ensure.sh
+TimeoutStartSec=1800
+
+[Install]
+WantedBy=multi-user.target

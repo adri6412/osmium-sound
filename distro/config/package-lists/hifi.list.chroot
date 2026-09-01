@@ -217,3 +217,11 @@ qml6-module-qtquick-effects
 qml6-module-qtquick-shapes
 qml6-module-qtquick-vectorimage
 qml6-module-qtqml-workerscript
+
+# ── schema A/B (RAUC) ──────────────────────────────────────────────────
+# rauc scrive lo slot inattivo dal bundle immagine e tiene ORDER/TRY nel
+# grubenv della ESP; rauc-service è il demone D-Bus che l'API interroga.
+# zstd comprime l'initrd dell'immagine (COMPRESS=zstd) e gli artefatti.
+rauc
+rauc-service
+zstd

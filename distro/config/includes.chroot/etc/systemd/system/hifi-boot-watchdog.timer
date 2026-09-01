@@ -1,0 +1,10 @@
+[Unit]
+Description=Osmium Sound — watchdog software degli avvii di prova A/B (10 min dopo l'avvio)
+ConditionPathExists=/etc/rauc/system.conf
+
+[Timer]
+OnBootSec=10min
+AccuracySec=30s
+
+[Install]
+WantedBy=timers.target

@@ -1,0 +1,13 @@
+[Unit]
+Description=Osmium Sound — dichiara buono l'avvio (rauc status mark-good)
+ConditionPathExists=/etc/rauc/system.conf
+After=multi-user.target hifi-api.service hifi-rauc-config.service
+Wants=hifi-rauc-config.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/hifi-boot-health.sh
+TimeoutStartSec=400
+
+[Install]
+WantedBy=multi-user.target

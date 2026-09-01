@@ -1,0 +1,16 @@
+[Unit]
+Description=Osmium Sound — primo avvio di un'immagine su apparecchio convertito (unione account)
+DefaultDependencies=no
+ConditionPathExists=/usr/lib/osmium/IMAGE_VERSION
+ConditionPathExists=/data/etc/accounts-extra
+ConditionPathExists=!/data/etc/upper/.hifi-accounts-merged
+After=local-fs.target
+Before=sysinit.target systemd-sysusers.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/local/sbin/hifi-ab-firstboot.sh
+
+[Install]
+WantedBy=sysinit.target

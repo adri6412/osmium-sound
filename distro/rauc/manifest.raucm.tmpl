@@ -1,0 +1,16 @@
+[update]
+compatible=osmium-x86_64
+version=@VERSION@
+description=Osmium Sound image @VERSION@
+
+[bundle]
+format=verity
+
+[hooks]
+filename=hook.sh
+hooks=install-check
+
+[image.rootfs]
+filename=rootfs.ext4
+adaptive=block-hash-index
+hooks=post-install

@@ -1,0 +1,108 @@
+#!/bin/sh
+# shellcheck disable=SC2154,SC1091  # rootmnt/ROOT li imposta l'init dell'initramfs; /scripts/functions esiste solo lì
+# Osmium Sound — stato persistente per la root read-only degli slot RAUC.
+#
+# Gira nell'initramfs dopo che la root è montata (in sola lettura) su
+# ${rootmnt} e PRIMA che parta systemd, così PID 1 nasce già con:
+#   /etc   = overlayfs (lower = immagine, upper/work su /data/etc)
+#   /var   = bind di /data/var   (seminato dall'immagine al primo avvio)
+#   /home  = bind di /data/home  (idem)
+#   /boot/efi = la ESP dello stesso disco (grubenv di RAUC)
+# e con /etc/machine-id già presente nell'upper: se mancasse, systemd
+# tratterebbe l'avvio come "primo avvio" e riapplicherebbe i preset.
+#
+# È un no-op ovunque non sia uno slot immagine: senza rauc.slot= sulla riga
+# di comando del kernel (o senza il marcatore dell'immagine) esce subito, e
+# la root legacy scrivibile non viene toccata.
+PREREQ=""
+prereqs() { echo "$PREREQ"; }
+case "${1:-}" in
+    prereqs) prereqs; exit 0 ;;
+esac
+. /scripts/functions
+
+slot=
+read -r cmdline < /proc/cmdline || cmdline=
+for x in $cmdline; do
+    case "$x" in rauc.slot=*) slot="${x#rauc.slot=}" ;; esac
+done
+[ -n "$slot" ] || exit 0
+[ -f "${rootmnt}/usr/lib/osmium/IMAGE_VERSION" ] || exit 0
+
+rootdev=$(readlink -f "${ROOT}")
+name=${rootdev#/dev/}
+disk=$(basename "$(readlink -f "/sys/class/block/$name/..")")
+find_part() {
+    for d in /sys/class/block/"$disk"*; do
+        [ -f "$d/partition" ] || continue
+        if grep -qx "PARTNAME=$1" "$d/uevent" 2>/dev/null; then
+            echo "/dev/$(basename "$d")"
+            return 0
+        fi
+    done
+    return 1
+}
+datadev=$(find_part hifi-data) || datadev=
+espdev=$(find_part "EFI System") || espdev=
+
+modprobe overlay 2>/dev/null || true
+D="${rootmnt}/data"
+mounted=0
+if [ -n "$datadev" ]; then
+    fsck.ext4 -p "$datadev" >/dev/null 2>&1 || true
+    if mount -t ext4 -o noatime "$datadev" "$D"; then
+        mounted=1
+    fi
+fi
+if [ "$mounted" = 0 ]; then
+    log_warning_msg "hifi-state: partizione hifi-data non disponibile — stato volatile (tmpfs)"
+    mount -t tmpfs -o mode=0755 tmpfs "$D"
+fi
+mkdir -p "$D/etc/upper" "$D/etc/work" "$D/var" "$D/home" "$D/rauc" "$D/lyrion"
+
+# /var e /home: copia dall'immagine al primo avvio, poi solo le voci nuove
+# (cp -an) quando cambia la versione dell'immagine — lo stato esistente non
+# viene mai toccato.
+imgver=$(cat "${rootmnt}/usr/lib/osmium/IMAGE_VERSION" 2>/dev/null || echo unknown)
+if [ ! -f "$D/var/.hifi-seeded" ]; then
+    cp -a "${rootmnt}/var/." "$D/var/" 2>/dev/null || log_warning_msg "hifi-state: copia iniziale di /var incompleta"
+    : > "$D/var/.hifi-seeded"
+elif [ "$(cat "$D/var/.hifi-image-version" 2>/dev/null)" != "$imgver" ]; then
+    cp -an "${rootmnt}/var/." "$D/var/" 2>/dev/null || true
+fi
+printf '%s\n' "$imgver" > "$D/var/.hifi-image-version"
+if [ ! -f "$D/home/.hifi-seeded" ]; then
+    cp -a "${rootmnt}/home/." "$D/home/" 2>/dev/null || true
+    : > "$D/home/.hifi-seeded"
+fi
+
+mid="$D/etc/upper/machine-id"
+if [ ! -s "$mid" ]; then
+    if [ -s "${rootmnt}/etc/machine-id" ]; then
+        cp "${rootmnt}/etc/machine-id" "$mid"
+    else
+        tr -d '-' < /proc/sys/kernel/random/uuid > "$mid"
+    fi
+    chmod 0444 "$mid"
+fi
+
+mount -t overlay overlay \
+    -o "lowerdir=${rootmnt}/etc,upperdir=$D/etc/upper,workdir=$D/etc/work" \
+    "${rootmnt}/etc" || log_warning_msg "hifi-state: overlay su /etc fallito — /etc resta in sola lettura"
+mount --bind "$D/var" "${rootmnt}/var" || log_warning_msg "hifi-state: bind di /var fallito"
+mount --bind "$D/home" "${rootmnt}/home" || log_warning_msg "hifi-state: bind di /home fallito"
+
+if [ -n "$espdev" ]; then
+    mkdir -p "${rootmnt}/boot/efi"
+    mount -t vfat -o umask=0077 "$espdev" "${rootmnt}/boot/efi" \
+        || log_warning_msg "hifi-state: ESP $espdev non montata"
+fi
+
+mkdir -p /run/hifi-state
+printf '%s\n' "$rootdev" > /run/hifi-state/root
+printf '%s\n' "/dev/$disk" > /run/hifi-state/disk
+printf '%s\n' "$slot" > /run/hifi-state/slot
+printf '%s\n' "$datadev" > /run/hifi-state/data
+printf '%s\n' "$espdev" > /run/hifi-state/esp
+printf '%s\n' "$mounted" > /run/hifi-state/data-mounted
+exit 0

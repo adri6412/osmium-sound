@@ -1,0 +1,17 @@
+[Unit]
+Description=Osmium Sound — completa la conversione A/B (fase 3: RAUC, grubenv, riga di comando)
+# Sulla root legacy, al primo avvio dopo che l'initrd di conversione ha creato
+# le partizioni. Lo script esce subito se il layout A/B non c'è.
+ConditionPathExists=!/etc/rauc/system.conf
+ConditionPathExists=!/usr/lib/osmium/IMAGE_VERSION
+ConditionKernelCommandLine=!boot=live
+After=local-fs.target
+Before=hifi-api.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/hifi-ab-convert.sh finish
+TimeoutStartSec=300
+
+[Install]
+WantedBy=multi-user.target

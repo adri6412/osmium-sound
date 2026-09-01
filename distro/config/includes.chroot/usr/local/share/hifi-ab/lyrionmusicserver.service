@@ -1,0 +1,30 @@
+[Unit]
+Description=Lyrion Music Server
+# Copia dell'unità del .deb (9.x) per gli slot immagine: i file del server
+# stanno su /data/lyrion/current (symlink dai percorsi canonici), quindi
+# finché il canale Lyrion non li ha installati l'unità non parte.
+ConditionPathExists=/data/lyrion/current/usr/sbin/squeezeboxserver
+After=network.target
+After=network-online.target
+
+[Service]
+Environment="PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin"
+Environment="LOGDIR=/var/log/squeezeboxserver/"
+Environment="PREFSDIR=/var/lib/squeezeboxserver/prefs"
+Environment="CACHEDIR=/var/lib/squeezeboxserver/cache"
+Environment="CHARSET=utf8"
+EnvironmentFile=-/etc/default/lyrionmusicserver
+User=squeezeboxserver
+LogsDirectory=squeezeboxserver
+LogsDirectoryMode=0755
+IgnoreSIGPIPE=no
+Restart=no
+ExecStart=/usr/sbin/squeezeboxserver --prefsdir $PREFSDIR --logdir $LOGDIR --cachedir $CACHEDIR --charset $CHARSET $SLIMOPTIONS
+KillMode=control-group
+KillSignal=SIGTERM
+SendSIGHUP=no
+TimeoutStopSec=30
+SendSIGKILL=Yes
+
+[Install]
+WantedBy=multi-user.target

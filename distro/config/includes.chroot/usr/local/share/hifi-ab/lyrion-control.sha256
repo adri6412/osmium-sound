@@ -1,0 +1,11 @@
+# Osmium Sound — hash sha256 degli script di controllo (preinst/postinst/prerm/postrm)
+# dei .deb di Lyrion che l'aggiornatore conosce e sa riprodurre a mano
+# (hifi-lyrion-update.sh, modalità immagine). Un .deb con script diversi
+# viene TRATTENUTO finché non lo si è esaminato: il postinst può contenere
+# migrazioni (al 9.0 spostava /var/lib/squeezeboxserver → lyrionmusicserver)
+# che su una root read-only vanno rifatte nell'aggiornatore.
+# Lyrion 9.1.0 e 9.2.0 (identici)
+218f14d2f3060be7107a76699ef5b33496e56d972aad1639edd6766f1336a04b  preinst
+29634d208b1e20a2b9fb74beac7b3b4ea91f193d3da98b1ef7317c6d4214699b  postinst
+d60a7bf4605db1192d6c00704a8d801fd6db88f9025e3f877481ff0f404bdd9b  prerm
+ebfa11b9a8ea4e700f44795b09f896bd60c90e362c918daef431d85b5aa2daab  postrm

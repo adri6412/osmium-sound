@@ -1,0 +1,17 @@
+#!/bin/sh
+# Osmium Sound — porta nell'initrd di conversione gli strumenti per
+# restringere la root e riscrivere la GPT (vedi scripts/local-premount/hifi-ab-convert).
+PREREQ=""
+prereqs() { echo "$PREREQ"; }
+case "${1:-}" in
+    prereqs) prereqs; exit 0 ;;
+esac
+# shellcheck disable=SC1091  # esiste solo sull'apparecchio
+. /usr/share/initramfs-tools/hook-functions
+
+for b in sfdisk resize2fs mke2fs e2fsck tune2fs dumpe2fs blkid partx blockdev; do
+    p=$(command -v "$b" 2>/dev/null) || { echo "W: hifi-ab: $b non trovato" >&2; continue; }
+    copy_exec "$p"
+done
+manual_add_modules ext4 vfat nls_cp437 nls_ascii nls_utf8
+exit 0

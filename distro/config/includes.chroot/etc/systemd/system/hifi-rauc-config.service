@@ -1,0 +1,17 @@
+[Unit]
+Description=Osmium Sound — configurazione RAUC (system.conf dai device reali, ESP e /data montate)
+# No-op silenzioso dove il layout A/B non esiste (root legacy non convertita).
+DefaultDependencies=no
+After=local-fs.target
+Before=rauc.service hifi-boot-health.service hifi-api.service sysinit.target
+ConditionPathExists=|/usr/lib/osmium/IMAGE_VERSION
+ConditionPathExists=|/etc/rauc/keyring.pem
+ConditionPathExists=|/usr/local/share/hifi-ab/keyring.pem
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/local/sbin/hifi-rauc-config.sh
+
+[Install]
+WantedBy=sysinit.target

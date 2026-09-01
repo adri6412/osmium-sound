@@ -1,0 +1,226 @@
+name: Build A/B (RAUC) test package (manual)
+
+# Costruisce, per la prova sul campo dello schema A/B, tutto ciò che serve a
+# convertire un apparecchio legacy e ad avviare la prima immagine:
+#   • hifi-system-<ver>.tar.gz   componenti di sistema (script hifi-ab-*, unità, API)
+#   • hifi-os-<ver>.tar.gz       payload OS (migrazione 0061), firmato Ed25519 se la chiave c'è
+#   • hifi-image-<ver>.raucb     immagine RAUC dello slot (build-distro.sh --stage image)
+#   • osmium-ab-test-<ver>.tar   il tutto + driver offline (distro/ab-test/)
+# Solo artefatti: nessuna Release, nessun tag, nessun manifest OTA.
+#
+#   Actions → "Build A/B (RAUC) test package (manual)" → Run workflow
+#     • version : es. v2.5.24-ab.1 (solo etichetta degli artefatti)
+#     • suite   : trixie
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Etichetta di versione degli artefatti (es. v2.5.24-ab.1)'
+        required: true
+        type: string
+      suite:
+        description: 'Debian suite'
+        required: false
+        type: string
+        default: 'trixie'
+
+permissions:
+  contents: read
+
+jobs:
+  qt-payload:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v7
+      - name: Build the Qt on-screen interface payload
+        run: bash native-ui-qt/ci/build-payload.sh qtui
+      - uses: actions/upload-artifact@v4
+        with:
+          name: qt-payload
+          path: qtui
+          retention-days: 1
+          if-no-files-found: error
+
+  bundles:
+    # Stessi passi di build-ui-ota.yml per system + OS (senza il canale UI:
+    # l'interfaccia Qt viaggia dentro l'immagine).
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      - name: Build web-admin (Vue)
+        run: |
+          (cd admin-webui && npm ci && npm run build)
+          test -f admin-webui/dist/index.html
+      - name: Lint + idempotency test for the OS payload
+        run: |
+          set -e
+          command -v shellcheck >/dev/null || { sudo apt-get update -qq && sudo apt-get install -y shellcheck >/dev/null; }
+          shellcheck -s sh distro/os-update/apply.sh distro/os-update/lib.sh distro/os-update/apply.d/*.sh \
+            distro/config/includes.chroot/usr/local/sbin/hifi-ab-*.sh \
+            distro/config/includes.chroot/usr/local/sbin/hifi-rauc-config.sh \
+            distro/config/includes.chroot/usr/local/sbin/hifi-boot-health.sh \
+            distro/config/includes.chroot/usr/local/sbin/hifi-boot-watchdog.sh \
+            distro/config/includes.chroot/usr/local/sbin/hifi-lyrion-update.sh \
+            distro/config/includes.chroot/usr/local/sbin/hifi-lyrion-ensure.sh \
+            distro/config/includes.chroot/etc/initramfs-tools/scripts/local-bottom/hifi-state \
+            distro/config/includes.chroot/usr/local/share/hifi-ab/initramfs/hooks/hifi-ab \
+            distro/config/includes.chroot/usr/local/share/hifi-ab/initramfs/scripts/local-premount/hifi-ab-convert
+          sudo apt-get install -y grub-common >/dev/null 2>&1 || true
+          if command -v grub-script-check >/dev/null; then
+            grub-script-check distro/config/includes.chroot/usr/local/share/hifi-ab/grub-selector.cfg.tmpl
+            sed 's/@KVER@/0/; s/@CMDLINE@/quiet/' distro/config/includes.chroot/usr/local/share/hifi-ab/slot-grub.cfg.tmpl | grub-script-check
+          fi
+          rm -rf distro/os-update/files/hifi-lms-skin
+          cp -r distro/config/includes.chroot/usr/local/share/hifi-lms-skin distro/os-update/files/
+          export HIFI_OS_VERSION=ci-test HIFI_PAYLOAD_DIR="$PWD/distro/os-update" HIFI_OS_NO_APT=1
+          rm -f "$HIFI_PAYLOAD_DIR/REBOOT"
+          sudo -E sh "$HIFI_PAYLOAD_DIR/apply.sh"
+          OUT2="$(sudo -E sh "$HIFI_PAYLOAD_DIR/apply.sh")"
+          echo "$OUT2" | grep -q 'SUMMARY: changed=0 failed=0 ' || { echo "FAIL: non idempotente"; exit 1; }
+          echo "$OUT2" | grep -q 'reboot=no' || { echo "FAIL: reboot spurio"; exit 1; }
+      - name: Package system bundle
+        run: |
+          set -e
+          VERSION="${{ inputs.version }}"
+          ROOT=sysbundle; rm -rf "$ROOT"
+          mkdir -p "$ROOT/usr/local/bin" "$ROOT/usr/local/sbin" "$ROOT/etc/systemd/system" "$ROOT/usr/local/share" "$ROOT/opt/hifi-webui/dist"
+          cp api_server.py vu_meter_daemon.py sources_server.py webui_server.py hifi_logging.py hifi_backup.py hifi_i18n.py "$ROOT/usr/local/bin/"
+          cp -r admin-webui/dist/. "$ROOT/opt/hifi-webui/dist/"
+          cp distro/config/includes.chroot/usr/local/sbin/*.sh distro/config/includes.chroot/usr/local/sbin/*.py "$ROOT/usr/local/sbin/"
+          cp -r distro/config/includes.chroot/usr/local/share/hifi-lms-skin "$ROOT/usr/local/share/"
+          cp -r distro/config/includes.chroot/usr/local/share/hifi-ab "$ROOT/usr/local/share/"
+          # keyring RAUC (CA pubblica): serve agli apparecchi legacy per accettare la prima immagine
+          cp distro/rauc-keys/keyring.pem "$ROOT/usr/local/share/hifi-ab/keyring.pem"
+          cp distro/config/includes.chroot/etc/systemd/system/*.service distro/config/includes.chroot/etc/systemd/system/*.timer "$ROOT/etc/systemd/system/" 2>/dev/null || true
+          printf '%s\n' "$VERSION" > "$ROOT/SYSTEM_VERSION"
+          tar czf "hifi-system-${VERSION}.tar.gz" -C "$ROOT" .
+          sha256sum "hifi-system-${VERSION}.tar.gz" > "hifi-system-${VERSION}.tar.gz.sha256"
+      - name: Package OS payload (signed if the key is available)
+        env:
+          OTA_SIGNING_KEY: ${{ secrets.OTA_SIGNING_KEY }}
+        run: |
+          set -e
+          VERSION="${{ inputs.version }}"
+          SRC=distro/os-update
+          printf '%s\n' "$VERSION" > "$SRC/OS_VERSION"
+          TAR="hifi-os-${VERSION}.tar.gz"
+          tar czf "$TAR" -C "$SRC" --exclude=README.md --exclude=.hifi-state --exclude=REBOOT .
+          DIGEST=$(sha256sum "$TAR" | awk '{print $1}')
+          printf '%s  %s\n' "$DIGEST" "$TAR" > "${TAR}.sha256"
+          if [ -n "$OTA_SIGNING_KEY" ]; then
+            printf '%s' "$OTA_SIGNING_KEY" > /tmp/ota-key.pem
+            openssl pkeyutl -sign -inkey /tmp/ota-key.pem -rawin -in "${TAR}.sha256" -out "${TAR}.sha256.sig"
+            rm -f /tmp/ota-key.pem
+          fi
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ab-bundles
+          path: |
+            hifi-system-*.tar.gz*
+            hifi-os-*.tar.gz*
+          retention-days: 14
+          if-no-files-found: error
+
+  image:
+    runs-on: ubuntu-latest
+    needs: qt-payload
+    timeout-minutes: 120
+    defaults:
+      run:
+        shell: bash
+    container:
+      image: debian:trixie
+      options: --privileged
+      volumes:
+        - /mnt:/mnt
+    steps:
+      - name: Install base tooling
+        run: |
+          set -eux
+          export DEBIAN_FRONTEND=noninteractive
+          apt-get update -qq
+          apt-get install -y --no-install-recommends \
+            ca-certificates curl git xz-utils sudo python3 build-essential \
+            live-build imagemagick xorriso debootstrap debian-archive-keyring rsync fakeroot \
+            cpio gzip squashfs-tools dosfstools mtools isolinux syslinux-common \
+            rauc e2fsprogs zstd grub-common openssl
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      - run: npm ci
+      - name: Build renderer + unpacked Electron app
+        run: |
+          npm run build
+          npx electron-builder --linux dir
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - uses: actions/download-artifact@v8
+        with:
+          name: qt-payload
+          path: qtui
+      - run: chmod 755 qtui/hifi-qt
+      - name: Build web-admin (Vue)
+        run: (cd admin-webui && npm ci && npm run build)
+      - name: Build the RAUC slot image (live-build chroot → rootfs.ext4 → bundle)
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
+          INPUT_SUITE: ${{ inputs.suite }}
+          RAUC_SIGNING_CERT: ${{ secrets.RAUC_SIGNING_CERT }}
+          RAUC_SIGNING_KEY: ${{ secrets.RAUC_SIGNING_KEY }}
+        run: |
+          set -euo pipefail
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          mkdir -p /mnt/image-out
+          export IMAGE_OUT=/mnt/image-out IMAGE_WORK=/mnt
+          chmod +x distro/build-distro.sh distro/build-image.sh
+          cd distro
+          ./build-distro.sh --stage image --suite "$INPUT_SUITE" \
+            --app-dir "$GITHUB_WORKSPACE/dist/linux-unpacked" --qt-dir "$GITHUB_WORKSPACE/qtui" \
+            --app-version "${INPUT_VERSION#v}"
+          ls -lh /mnt/image-out
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ab-image
+          path: /mnt/image-out/hifi-image-*
+          retention-days: 14
+          if-no-files-found: error
+
+  package:
+    runs-on: ubuntu-latest
+    needs: [bundles, image]
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
+        with:
+          name: ab-bundles
+          path: in
+      - uses: actions/download-artifact@v8
+        with:
+          name: ab-image
+          path: in
+      - name: Compose the offline test package
+        run: |
+          set -e
+          VERSION="${{ inputs.version }}"
+          ls -la in
+          bash distro/ab-test/make-package.sh "$VERSION" \
+            "in/hifi-system-${VERSION}.tar.gz" "in/hifi-os-${VERSION}.tar.gz" \
+            "$(ls in/hifi-image-*.raucb | head -n 1)" out
+      - uses: actions/upload-artifact@v4
+        with:
+          name: osmium-ab-test-${{ inputs.version }}
+          path: out/osmium-ab-test-${{ inputs.version }}.tar*
+          retention-days: 14
+          if-no-files-found: error

@@ -1,0 +1,157 @@
+#!/bin/sh
+# Osmium Sound — prova OFFLINE della conversione A/B (RAUC) per __VERSION__.
+#
+# Da copiare sull'apparecchio insieme ai file della stessa cartella:
+#     hifi-system-__VERSION__.tar.gz   componenti di sistema (script hifi-ab-*, unità, API)
+#     hifi-os-__VERSION__.tar.gz       payload OS (migrazione 0061: pacchetto rauc, unità)
+#     hifi-image-__VERSION__.raucb     immagine RAUC dello slot B
+# e da lanciare come root, più volte, una per passo:
+#     sudo sh osmium-ab-test.sh            fa il passo giusto in base allo stato
+#     sudo sh osmium-ab-test.sh status     solo lo stato
+#     sudo sh osmium-ab-test.sh --yes      non chiede conferma prima dei riavvii
+#
+# Passi (tre riavvii in tutto, lo stato vive sulla ESP e sopravvive a tutto):
+#   1. none      → installa system + OS come farebbe l'OTA, pre-verifiche,
+#                  pulizia, `prepare` (initrd dedicato + voce GRUB one-shot)  → RIAVVIO
+#   2. prepared  → [l'initrd restringe la root, crea B e dati: 1-5 min, NON spegnere]
+#   3. converted → `finish` (di norma lo fa da solo hifi-ab-finish.service all'avvio)
+#   4. ready     → semina /data, `rauc install` nello slot B, selettore sulla ESP → RIAVVIO
+#   5. installed → parte l'immagine da B; se non si dichiara buona in 10 min si torna qui
+set -u
+VERSION="__VERSION__"
+DIR=$(cd "$(dirname "$0")" && pwd)
+SBIN=/usr/local/sbin
+LOG=/var/log/hifi/ab-test.log
+YES=0
+STEP=auto
+for a in "$@"; do
+    case "$a" in
+        --yes|-y) YES=1 ;;
+        status|bundles|precheck|prepare|finish|install|auto) STEP="$a" ;;
+        *) echo "argomento sconosciuto: $a" >&2; exit 64 ;;
+    esac
+done
+[ "$(id -u)" -eq 0 ] || { echo "Esegui come root:  sudo sh $0" >&2; exit 1; }
+mkdir -p "$(dirname "$LOG")"
+
+main() {
+    say() { printf '\n==> %s\n' "$*"; }
+    ask_reboot() {
+        if [ "$YES" = 1 ]; then systemctl reboot; fi
+        printf 'Riavviare adesso? [s/N] '
+        read -r ans
+        case "$ans" in s|S|y|Y) systemctl reboot ;; *) echo "Riavvia tu quando vuoi: sudo systemctl reboot" ;; esac
+    }
+    state() {
+        if [ -x "$SBIN/hifi-ab-lib.sh" ] || [ -f "$SBIN/hifi-ab-lib.sh" ]; then
+            # shellcheck disable=SC1091
+            . "$SBIN/hifi-ab-lib.sh"
+            ab_mount_esp 2>/dev/null || true
+            ab_state_get
+        else
+            echo none
+        fi
+    }
+    is_image() { [ -f /usr/lib/osmium/IMAGE_VERSION ]; }
+
+    step_bundles() {
+        say "Componenti di sistema $VERSION (come il passo 'system' dell'OTA)"
+        f="$DIR/hifi-system-$VERSION.tar.gz"
+        [ -f "$f" ] || { echo "manca $f" >&2; return 1; }
+        S=/var/lib/hifi-player/update/staged/system/$VERSION
+        rm -rf "$S"; mkdir -p "$S/root"
+        tar xzf "$f" -C "$S/root"
+        printf '%s\n' "$VERSION" > "$S/STAGED"
+        sh "$SBIN/hifi-system-update.sh" apply "$S" "$VERSION" || return 1
+        systemctl daemon-reload
+        for svc in hifi-api hifi-webui hifi-sources; do systemctl restart "$svc" 2>/dev/null || true; done
+        say "Payload OS $VERSION (come il passo 'os' dell'OTA: migrazioni fino alla 0061)"
+        f="$DIR/hifi-os-$VERSION.tar.gz"
+        [ -f "$f" ] || { echo "manca $f" >&2; return 1; }
+        O=/var/lib/hifi-player/update/staged/os/$VERSION
+        rm -rf "$O"; mkdir -p "$O/payload"
+        tar xzf "$f" -C "$O/payload"
+        printf '%s\n' "$VERSION" > "$O/STAGED"
+        sh "$SBIN/hifi-os-update.sh" apply "$O" "$VERSION" || return 1
+        systemctl daemon-reload
+        return 0
+    }
+
+    step_status() {
+        say "Stato"
+        if [ -x "$SBIN/hifi-ab-convert.sh" ]; then "$SBIN/hifi-ab-convert.sh" status; else echo "script hifi-ab non ancora installati (stato none)"; fi
+        [ -f /run/hifi-ab-precheck.json ] && { echo "--- pre-verifiche ---"; cat /run/hifi-ab-precheck.json; }
+        if is_image; then
+            say "Sono l'immagine $(cat /usr/lib/osmium/IMAGE_VERSION) sullo slot $(sed -n 's/.*rauc\.slot=\([AB]\).*/\1/p' /proc/cmdline)"
+            rauc status 2>/dev/null || true
+            systemctl is-active hifi-boot-health.service >/dev/null 2>&1 && echo "avvio dichiarato buono: $( [ -f /run/hifi-boot-good ] && echo sì || echo 'non ancora' )"
+        fi
+    }
+
+    case "$STEP" in
+        status) step_status; return 0 ;;
+        bundles) step_bundles; return $? ;;
+        precheck) "$SBIN/hifi-ab-precheck.sh"; return $? ;;
+        prepare) "$SBIN/hifi-ab-convert.sh" cleanup; "$SBIN/hifi-ab-convert.sh" prepare && ask_reboot; return $? ;;
+        finish) "$SBIN/hifi-ab-convert.sh" finish; return $? ;;
+        install) "$SBIN/hifi-ab-convert.sh" install "$DIR/hifi-image-$VERSION.raucb" && ask_reboot; return $? ;;
+    esac
+
+    # ── automatico: il passo giusto in base allo stato ─────────────────────
+    if is_image; then
+        step_status
+        echo
+        echo "L'immagine è in funzione. Per tornare al legacy: sudo rauc status mark-bad booted && sudo reboot"
+        return 0
+    fi
+    st=$(state)
+    say "stato attuale: $st"
+    case "$st" in
+        none|failed)
+            [ -x "$SBIN/hifi-ab-convert.sh" ] || step_bundles || return 1
+            [ -f "$SBIN/hifi-ab-precheck.sh" ] || { echo "script hifi-ab assenti dopo l'installazione del pacchetto di sistema" >&2; exit 1; }
+            [ "$st" = failed ] && { echo "--- tentativo precedente fallito: log sulla ESP ---"; tail -n 20 /boot/efi/EFI/debian/abconvert.log 2>/dev/null; }
+            "$SBIN/hifi-ab-convert.sh" cleanup
+            if ! "$SBIN/hifi-ab-precheck.sh"; then
+                echo "Questo apparecchio non è convertibile (vedi motivi sopra). Nulla è stato cambiato." >&2
+                return 1
+            fi
+            say "prepare: initrd dedicato + voce GRUB one-shot (l'initrd di produzione e la ESP non vengono toccati)"
+            "$SBIN/hifi-ab-convert.sh" prepare || return 1
+            say "Al prossimo avvio la root viene ristretta e nascono B e dati (1-5 min, NON spegnere). Poi rilancia questo script."
+            ask_reboot
+            ;;
+        prepared)
+            echo "La conversione è armata per il prossimo avvio: riavvia e rilancia questo script."
+            ask_reboot
+            ;;
+        converted)
+            say "finish (di norma lo fa hifi-ab-finish.service all'avvio)"
+            "$SBIN/hifi-ab-convert.sh" finish || return 1
+            step_status
+            echo "Ora: sudo sh $0   (installa l'immagine nello slot B)"
+            ;;
+        ready)
+            say "install: semina /data, scrive lo slot B, attiva il selettore"
+            "$SBIN/hifi-ab-convert.sh" install "$DIR/hifi-image-$VERSION.raucb" || return 1
+            step_status
+            say "Riavvio: parte l'immagine dallo slot B. Se non si dichiara buona entro 10 minuti si torna qui da soli."
+            ask_reboot
+            ;;
+        installed)
+            step_status
+            echo "Immagine installata in B e selettore attivo: riavvia per provarla. Se sei ancora qui dopo un riavvio, B non è partito: guarda 'rauc status'."
+            ask_reboot
+            ;;
+        *)
+            step_status
+            ;;
+    esac
+    return 0
+}
+
+# tutto ciò che stampa finisce anche in $LOG (POSIX: niente process substitution)
+rcfile=$(mktemp /tmp/ab-test.rc.XXXXXX)
+{ main; echo $? > "$rcfile"; } 2>&1 | tee -a "$LOG"
+rc=$(cat "$rcfile" 2>/dev/null || echo 1); rm -f "$rcfile"
+exit "$rc"

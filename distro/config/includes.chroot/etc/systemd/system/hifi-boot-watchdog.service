@@ -1,0 +1,7 @@
+[Unit]
+Description=Osmium Sound — watchdog software degli avvii di prova A/B
+ConditionPathExists=/etc/rauc/system.conf
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/hifi-boot-watchdog.sh

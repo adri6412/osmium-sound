@@ -1,0 +1,25 @@
+# Osmium Sound — configurazione RAUC dell'apparecchio.
+# GENERATO A OGNI AVVIO da /usr/local/sbin/hifi-rauc-config.sh (i device
+# cambiano nome tra eMMC, SATA e NVMe): non modificare a mano.
+[system]
+compatible=osmium-x86_64
+bootloader=grub
+grubenv=/boot/efi/EFI/debian/grubenv
+data-directory=/data/rauc
+bundle-formats=-plain
+
+[keyring]
+path=/etc/rauc/keyring.pem
+use-bundle-signing-time=true
+
+[slot.rootfs.0]
+device=@SLOT_A@
+type=ext4
+bootname=A
+resize=true
+
+[slot.rootfs.1]
+device=@SLOT_B@
+type=ext4
+bootname=B
+resize=true

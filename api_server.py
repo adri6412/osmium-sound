@@ -4168,7 +4168,63 @@ def get_bluetooth_now_playing():
 #  OTA update helpers
 # ──────────────────────────────────────────────────────────────────
 
+# ── modalità immagine (schema A/B con RAUC) ───────────────────────────
+# Su uno slot immagine (root in sola lettura, costruita da distro/build-image.sh)
+# UI, componenti di sistema e OS viaggiano tutti nel bundle RAUC: i tre
+# canali legacy non hanno più senso e la versione "installata" è una sola.
+# Il marcatore sta fuori da /etc di proposito (l'upper dell'overlay potrebbe
+# ombreggiare qualunque cosa sotto /etc).
+IMAGE_VERSION_FILE = '/usr/lib/osmium/IMAGE_VERSION'
+LYRION_DATA_VERSION_FILE = '/data/lyrion/current/VERSION'
+AB_STATE_FILE = '/boot/efi/EFI/debian/abconvert.state'
+AB_PRECHECK_FILE = '/run/hifi-ab-precheck.json'
+RAUC_SYSTEM_CONF = '/etc/rauc/system.conf'
+
+def _image_mode():
+    return os.path.exists(IMAGE_VERSION_FILE)
+
+def _image_version():
+    return _read_version_file(IMAGE_VERSION_FILE)
+
+def _booted_slot():
+    try:
+        with open(PROC_CMDLINE) as f:
+            for tok in f.read().split():
+                if tok.startswith('rauc.slot='):
+                    return tok.split('=', 1)[1]
+    except Exception:
+        pass
+    return None
+
+def ab_status():
+    """Stato dello schema A/B per l'interfaccia e per la prova sul campo:
+    modalità immagine, slot avviato, stato della conversione (ESP), esito
+    delle pre-verifiche e `rauc status` in JSON quando RAUC è configurato."""
+    out = {'image_mode': _image_mode(), 'image_version': _image_version() if _image_mode() else None,
+           'booted_slot': _booted_slot(), 'rauc_configured': os.path.exists(RAUC_SYSTEM_CONF),
+           'state': None, 'precheck': None, 'rauc': None}
+    try:
+        with open(AB_STATE_FILE) as f:
+            out['state'] = f.read().strip() or None
+    except Exception:
+        pass
+    try:
+        with open(AB_PRECHECK_FILE) as f:
+            out['precheck'] = json.load(f)
+    except Exception:
+        pass
+    if out['rauc_configured']:
+        try:
+            r = _run(['rauc', 'status', '--output-format=json'], timeout=20)
+            if r.returncode == 0 and r.stdout.strip():
+                out['rauc'] = json.loads(r.stdout)
+        except Exception:
+            log.exception("ab_status: rauc status failed")
+    return out
+
 def _installed_ui_version():
+    if _image_mode():
+        return _image_version()
     # il file nuovo prima, quello vecchio come ripiego (apparecchi non ancora aggiornati)
     for path in (OTA_VERSION_FILE, OTA_VERSION_FILE_LEGACY):
         try:
@@ -4383,6 +4439,12 @@ def _check_release_update(current, prefix, channel=None):
     one to check prod/dev independently of whatever the device's own channel
     setting happens to be, without touching it."""
     channel = channel or get_ota_channel()
+    if _image_mode():
+        # Slot immagine: i canali legacy (ui/system/os) non esistono più, si
+        # aggiorna solo l'immagine intera (bundle RAUC). Stesso segnale
+        # `blocked` che le UI già gestiscono come "niente da fare qui".
+        return {'current': current, 'latest': None, 'channel': channel,
+                'update_available': False, 'blocked': 'image'}
     if _debian_codename() in _OTA_BLOCKED_CODENAMES:
         # Deliberately not `error`: build_update_plan()/_plan_step_from_info()
         # treat that as a failed check and report it; this is a clean,
@@ -4505,6 +4567,8 @@ def app_update_status():
 #  OTA update of the custom system components
 # ──────────────────────────────────────────────────────────────────
 def _installed_system_version():
+    if _image_mode():
+        return _image_version()
     return _read_version_file(SYS_VERSION_FILE)
 
 def check_system_update():
@@ -4562,6 +4626,8 @@ def system_update_status():
 #  OTA update of the operating system (signed bundle + apply.sh)
 # ──────────────────────────────────────────────────────────────────
 def _installed_os_version():
+    if _image_mode():
+        return _image_version()
     return _read_version_file(OS_VERSION_FILE)
 
 def check_os_update():
@@ -5210,6 +5276,9 @@ def wizard_update_apply(channel):
 # ──────────────────────────────────────────────────────────────────
 
 def _lyrion_installed_version():
+    if _image_mode():
+        # su /data, scompattato da hifi-lyrion-update.sh: niente dpkg
+        return _read_version_file(LYRION_DATA_VERSION_FILE)
     try:
         r = _run(['dpkg-query', '-W', '-f=${Version}', LYRION_PKG])
         if r.returncode == 0 and r.stdout.strip():
@@ -5908,6 +5977,10 @@ def api_factory_reset():
 @app.route('/webui_reset_credentials', methods=['POST'])
 def api_webui_reset_credentials():
     return jsonify(webui_reset_credentials())
+
+@app.route('/ab_status', methods=['GET'])
+def api_ab_status():
+    return jsonify(ab_status())
 
 @app.route('/ota_channel', methods=['GET'])
 def api_ota_channel():

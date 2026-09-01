@@ -1,0 +1,168 @@
+#!/bin/sh
+# shellcheck disable=SC2154,SC1091  # ROOT lo imposta l'init dell'initramfs; /scripts/functions esiste solo lì
+# Osmium Sound — conversione del disco allo schema A/B, eseguita UNA volta
+# dall'initrd dedicato (avvio one-shot via grub-reboot), con la root ancora
+# smontata:
+#   1. e2fsck -f della root legacy
+#   2. resize2fs a SLOT_MIB            <- unica finestra non atomica
+#   3. GPT modificata SUL POSTO (sfdisk -d → modifica → sfdisk): p3 ridotta e
+#      rinominata hifi-root-a, p4 hifi-root-b, p5 hifi-data. I GUID di disco e
+#      partizioni restano quelli di prima: la voce di avvio EFI li incorpora.
+#   4. mke2fs su hifi-data, e2fsck finale, esito su ESP e /data
+# Poi l'avvio prosegue normalmente sulla root legacy (root=UUID= invariato).
+# Qualsiasi errore PRIMA del resize lascia il disco com'era; un'interruzione
+# tra resize e sfdisk lascia solo un filesystem più piccolo della partizione.
+# Agisce SOLO se la riga di comando porta hifi.abconvert=1 e l'UUID indicato
+# in hifi.abconvert.uuid= è quello della root che sta per essere montata.
+PREREQ=""
+prereqs() { echo "$PREREQ"; }
+case "${1:-}" in
+    prereqs) prereqs; exit 0 ;;
+esac
+. /scripts/functions
+
+conv=0; want_uuid=; slot_mib=4608; slotb_mib=4096
+read -r cmdline < /proc/cmdline || cmdline=
+for x in $cmdline; do
+    case "$x" in
+        hifi.abconvert=1) conv=1 ;;
+        hifi.abconvert.uuid=*) want_uuid=${x#hifi.abconvert.uuid=} ;;
+        hifi.abconvert.slot_mib=*) slot_mib=${x#hifi.abconvert.slot_mib=} ;;
+        hifi.abconvert.slotb_mib=*) slotb_mib=${x#hifi.abconvert.slotb_mib=} ;;
+    esac
+done
+[ "$conv" = 1 ] || exit 0
+
+LOG=/run/hifi-abconvert.log
+say() {
+    echo "hifi-ab: $*" >> "$LOG"
+    log_begin_msg "hifi-ab: $*"
+    log_end_msg
+    plymouth display-message --text="Osmium Sound: $*" 2>/dev/null || true
+}
+progress() { plymouth system-update --progress="$1" 2>/dev/null || true; }
+
+rootdev=$(readlink -f "${ROOT}")
+name=${rootdev#/dev/}
+disk=$(basename "$(readlink -f "/sys/class/block/$name/..")")
+diskdev="/dev/$disk"
+part_dev() {  # numero -> /dev/...
+    for d in /sys/class/block/"$disk"*; do
+        [ -f "$d/partition" ] || continue
+        [ "$(cat "$d/partition")" = "$1" ] && { echo "/dev/$(basename "$d")"; return 0; }
+    done
+    return 1
+}
+
+# Scrive l'esito dove sopravvive: sulla ESP (abconvert.state) e in /run.
+finish_state() {  # <stato> <messaggio>
+    echo "hifi-ab: esito=$1 $2" >> "$LOG"
+    esp=$(part_dev 2) || esp=
+    if [ -n "$esp" ]; then
+        mkdir -p /run/hifi-esp
+        if mount -t vfat -o umask=0077 "$esp" /run/hifi-esp 2>/dev/null; then
+            mkdir -p /run/hifi-esp/EFI/debian
+            printf '%s\n' "$1" > /run/hifi-esp/EFI/debian/abconvert.state.new \
+                && mv -f /run/hifi-esp/EFI/debian/abconvert.state.new /run/hifi-esp/EFI/debian/abconvert.state
+            cp "$LOG" /run/hifi-esp/EFI/debian/abconvert.log 2>/dev/null || true
+            sync
+            umount /run/hifi-esp
+        fi
+    fi
+}
+bail() {  # <messaggio> — non converte, l'avvio prosegue
+    say "conversione NON eseguita: $1"
+    finish_state failed "$1"
+    exit 0
+}
+
+: > "$LOG"
+say "controllo preliminare"
+progress 2
+have_uuid=$(blkid -o value -s UUID "$rootdev" 2>/dev/null || true)
+if [ -z "$want_uuid" ] || [ "$have_uuid" != "$want_uuid" ]; then bail "UUID root $have_uuid diverso da quello atteso $want_uuid"; fi
+[ "$(blkid -o value -s TYPE "$rootdev" 2>/dev/null)" = "ext4" ] || bail "la root non è ext4"
+[ "$(cat "/sys/class/block/$name/partition" 2>/dev/null)" = "3" ] || bail "la root non è la partizione 3"
+nparts=0
+for d in /sys/class/block/"$disk"*; do [ -f "$d/partition" ] && nparts=$((nparts + 1)); done
+[ "$nparts" = 3 ] || bail "il disco ha $nparts partizioni, attese 3"
+case "$slot_mib" in ''|*[!0-9]*) bail "slot_mib non valido: $slot_mib" ;; esac
+case "$slotb_mib" in ''|*[!0-9]*) bail "slotb_mib non valido: $slotb_mib" ;; esac
+
+say "verifica del filesystem (1/4)"
+progress 5
+e2fsck -f -y "$rootdev" >> "$LOG" 2>&1
+rc=$?
+[ "$rc" -lt 4 ] || bail "e2fsck ha trovato errori non riparabili (rc=$rc)"
+
+# Il journal ext4 (1 GiB su questi dischi) conta per intero nella dimensione
+# minima: si toglie prima del resize e se ne ricrea uno piccolo dopo. È
+# reversibile e non tocca i dati (filesystem appena controllato e smontato).
+if dumpe2fs -h "$rootdev" 2>/dev/null | grep -q '^Filesystem features:.*has_journal'; then
+    tune2fs -O ^has_journal "$rootdev" >> "$LOG" 2>&1 || bail "impossibile rimuovere il journal"
+fi
+blksz=$(dumpe2fs -h "$rootdev" 2>/dev/null | sed -n 's/^Block size: *//p')
+minblk=$(resize2fs -P "$rootdev" 2>>"$LOG" | sed -n 's/.*: *\([0-9]*\)$/\1/p')
+if [ -z "$blksz" ] || [ -z "$minblk" ]; then
+    tune2fs -j "$rootdev" >> "$LOG" 2>&1 || true
+    bail "impossibile stimare la dimensione minima del filesystem"
+fi
+min_mib=$(( minblk * blksz / 1048576 + 1 ))
+if [ $(( min_mib + 192 )) -gt "$slot_mib" ]; then
+    tune2fs -j "$rootdev" >> "$LOG" 2>&1 || true
+    bail "la root occupa almeno ${min_mib} MiB: non entra in uno slot da ${slot_mib} MiB"
+fi
+
+say "riduzione della partizione di sistema (2/4) — NON SPEGNERE"
+progress 10
+if ! resize2fs "$rootdev" "${slot_mib}M" >> "$LOG" 2>&1; then
+    e2fsck -f -y "$rootdev" >> "$LOG" 2>&1 || true
+    tune2fs -j "$rootdev" >> "$LOG" 2>&1 || true
+    bail "resize2fs fallito (vedi abconvert.log sulla ESP)"
+fi
+# journal nuovo, piccolo (64 MiB): la root legacy resta Debian normale
+tune2fs -j -J size=64 "$rootdev" >> "$LOG" 2>&1 || tune2fs -j "$rootdev" >> "$LOG" 2>&1 || true
+progress 60
+
+say "nuova tabella delle partizioni (3/4)"
+dump=/run/hifi-gpt.dump
+sfdisk -d "$diskdev" > "$dump" 2>>"$LOG" || bail "sfdisk -d fallito"
+sect=$(( slot_mib * 2048 ))
+sectb=$(( slotb_mib * 2048 ))
+p3line=$(grep -E "^${rootdev}[[:space:]]*:" "$dump") || bail "partizione 3 non trovata nel dump GPT"
+p3start=$(printf '%s\n' "$p3line" | sed -n 's/.*start= *\([0-9]*\).*/\1/p')
+p3size=$(printf '%s\n' "$p3line" | sed -n 's/.*size= *\([0-9]*\).*/\1/p')
+if [ -z "$p3start" ] || [ -z "$p3size" ]; then bail "dump GPT illeggibile"; fi
+[ "$p3size" -gt $(( sect + sectb + 2048 )) ] || bail "la partizione 3 (${p3size} settori) non basta per due slot più i dati"
+p4start=$(( p3start + sect ))
+p5start=$(( p4start + sectb ))
+LINUX=0FC63DAF-8483-4772-8E79-3D69D8477DE4
+{
+    grep -vE "^${rootdev}[[:space:]]*:" "$dump"
+    printf '%s\n' "$p3line" | sed "s/size= *[0-9]*/size= $sect/; s/name=\"[^\"]*\"/name=\"hifi-root-a\"/"
+    printf 'start= %s, size= %s, type=%s, name="hifi-root-b"\n' "$p4start" "$sectb" "$LINUX"
+    printf 'start= %s, type=%s, name="hifi-data"\n' "$p5start" "$LINUX"
+} > "$dump.new"
+cat "$dump.new" >> "$LOG"
+if ! sfdisk --no-reread --wipe never --wipe-partitions never "$diskdev" < "$dump.new" >> "$LOG" 2>&1; then
+    bail "sfdisk ha rifiutato la nuova tabella (filesystem già ridotto: si può riprovare)"
+fi
+partx -u "$diskdev" >> "$LOG" 2>&1 || blockdev --rereadpt "$diskdev" >> "$LOG" 2>&1 || true
+udevadm settle --timeout=15 2>/dev/null || true
+p4=$(part_dev 4) || bail "partizione 4 non comparsa dopo la riscrittura GPT"
+p5=$(part_dev 5) || bail "partizione 5 non comparsa dopo la riscrittura GPT"
+progress 80
+
+say "preparazione della partizione dati (4/4)"
+mke2fs -F -q -L hifi-data -O metadata_csum_seed "$p5" >> "$LOG" 2>&1 || bail "mke2fs su $p5 fallito"
+e2fsck -f -y "$rootdev" >> "$LOG" 2>&1 || true
+mkdir -p /run/hifi-data
+if mount -t ext4 "$p5" /run/hifi-data 2>>"$LOG"; then
+    mkdir -p /run/hifi-data/log
+    cp "$LOG" /run/hifi-data/log/abconvert.log 2>/dev/null || true
+    umount /run/hifi-data
+fi
+say "conversione completata: p3=${rootdev} A, p4=${p4} B, p5=${p5} dati"
+progress 100
+finish_state converted "ok"
+exit 0
