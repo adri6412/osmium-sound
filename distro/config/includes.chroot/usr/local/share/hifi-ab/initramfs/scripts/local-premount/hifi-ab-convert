@@ -121,7 +121,7 @@ say "verifica del filesystem (1/4)"
 progress 5
 "$E2FSCK" -f -y "$rootdev" >> "$LOG" 2>&1
 rc=$?
-[ "$rc" -lt 4 ] || bail ""$E2FSCK" ha trovato errori non riparabili (rc=$rc)"
+[ "$rc" -lt 4 ] || bail "e2fsck ha trovato errori non riparabili (rc=$rc)"
 
 # Il journal ext4 (1 GiB su questi dischi) conta per intero nella dimensione
 # minima: si toglie prima del resize e se ne ricrea uno piccolo dopo. È
@@ -146,7 +146,7 @@ progress 10
 if ! "$RESIZE2FS" "$rootdev" "${slot_mib}M" >> "$LOG" 2>&1; then
     "$E2FSCK" -f -y "$rootdev" >> "$LOG" 2>&1 || true
     "$TUNE2FS" -j "$rootdev" >> "$LOG" 2>&1 || true
-    bail ""$RESIZE2FS" fallito (vedi abconvert.log sulla ESP)"
+    bail "resize2fs fallito (vedi abconvert.log sulla ESP)"
 fi
 # journal nuovo, piccolo (64 MiB): la root legacy resta Debian normale
 "$TUNE2FS" -j -J size=64 "$rootdev" >> "$LOG" 2>&1 || "$TUNE2FS" -j "$rootdev" >> "$LOG" 2>&1 || true
@@ -154,7 +154,7 @@ progress 60
 
 say "nuova tabella delle partizioni (3/4)"
 dump=/run/hifi-gpt.dump
-"$SFDISK" -d "$diskdev" > "$dump" 2>>"$LOG" || bail ""$SFDISK" -d fallito"
+"$SFDISK" -d "$diskdev" > "$dump" 2>>"$LOG" || bail "sfdisk -d fallito"
 sect=$(( slot_mib * 2048 ))
 sectb=$(( slotb_mib * 2048 ))
 p3line=$(grep -E "^${rootdev}[[:space:]]*:" "$dump") || bail "partizione 3 non trovata nel dump GPT"
@@ -173,7 +173,7 @@ LINUX=0FC63DAF-8483-4772-8E79-3D69D8477DE4
 } > "$dump.new"
 cat "$dump.new" >> "$LOG"
 if ! "$SFDISK" --no-reread --wipe never --wipe-partitions never "$diskdev" < "$dump.new" >> "$LOG" 2>&1; then
-    bail ""$SFDISK" ha rifiutato la nuova tabella (filesystem già ridotto: si può riprovare)"
+    bail "sfdisk ha rifiutato la nuova tabella (filesystem già ridotto: si può riprovare)"
 fi
 "$PARTX" -u "$diskdev" >> "$LOG" 2>&1 || "$BLOCKDEV" --rereadpt "$diskdev" >> "$LOG" 2>&1 || true
 udevadm settle --timeout=15 2>/dev/null || true
@@ -183,7 +183,7 @@ progress 80
 
 say "preparazione della partizione dati (4/4)"
 # -t ext4 esplicito: nell'initrd non c'è /etc/mke2fs.conf e "$MKE2FS" cadrebbe su ext2
-"$MKE2FS" -t ext4 -F -q -L hifi-data -O metadata_csum_seed "$p5" >> "$LOG" 2>&1 || bail ""$MKE2FS" su $p5 fallito"
+"$MKE2FS" -t ext4 -F -q -L hifi-data -O metadata_csum_seed "$p5" >> "$LOG" 2>&1 || bail "mke2fs su $p5 fallito"
 "$E2FSCK" -f -y "$rootdev" >> "$LOG" 2>&1 || true
 mkdir -p /run/hifi-data
 if mount -t ext4 "$p5" /run/hifi-data 2>>"$LOG"; then
