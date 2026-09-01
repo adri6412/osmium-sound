@@ -1,7 +1,8 @@
 [Unit]
-Description=Osmium Sound — dopo la conversione A/B avvia l'aggiornamento all'immagine (slot B)
-ConditionPathExists=/var/lib/hifi-player/ab/finished
-ConditionPathExists=!/var/lib/hifi-player/ab/image-kicked
+Description=Osmium Sound — continua la catena di aggiornamento A/B (kickoff legacy / immagine slot B)
+# I marcatori (finished/image-kicked/kickoff-done) li valuta lo script:
+# questa unità parte anche sul legacy non convertito per continuare da sola
+# la catena dopo il primo giro fatto dal runner vecchio (2.5.23).
 ConditionPathExists=!/usr/lib/osmium/IMAGE_VERSION
 ConditionKernelCommandLine=!boot=live
 After=hifi-ab-finish.service hifi-api.service network-online.target

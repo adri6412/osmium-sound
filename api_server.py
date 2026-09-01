@@ -222,6 +222,10 @@ UPDATE_PLAN_ORDER = ('system', 'os', 'ui', 'image')
 # reboots. After this it is cleared automatically, so a plan/outcome
 # nobody dismissed cannot keep re-opening the overlay forever.
 UPDATE_PLAN_TTL = 900
+# A 'phase=applying' left behind across the conversion-chain reboots (armed
+# on purpose by the apply runner so the kiosk shows one continuous update)
+# must still expire if the chain dies, or the overlay would spin forever.
+UPDATE_APPLYING_TTL = 2 * 3600
 # The plan file is whitespace-separated and parsed by /bin/sh, so every
 # field must be whitespace-free. Versions also land in a file name.
 _SAFE_VERSION_RE = re.compile(r'^[0-9A-Za-z._-]+$')
@@ -4193,6 +4197,13 @@ RAUC_SYSTEM_CONF = '/etc/rauc/system.conf'
 def _image_mode():
     return os.path.exists(IMAGE_VERSION_FILE)
 
+def _ab_ready():
+    """Converted to the A/B layout (RAUC configured) but possibly still
+    running the legacy root: from here on the image channel is the only
+    one that makes sense — legacy bundles would patch a root the next
+    image install overwrites."""
+    return os.path.exists(RAUC_SYSTEM_CONF)
+
 def _image_version():
     return _read_version_file(IMAGE_VERSION_FILE)
 
@@ -4449,10 +4460,12 @@ def _check_release_update(current, prefix, channel=None, suffix='.tar.gz', image
     one to check prod/dev independently of whatever the device's own channel
     setting happens to be, without touching it."""
     channel = channel or get_ota_channel()
-    if _image_mode() and not image:
-        # Slot immagine: i canali legacy (ui/system/os) non esistono più, si
-        # aggiorna solo l'immagine intera (bundle RAUC). Stesso segnale
-        # `blocked` che le UI già gestiscono come "niente da fare qui".
+    if (_image_mode() or _ab_ready()) and not image:
+        # Slot immagine — o legacy già convertito allo schema A/B (system.conf
+        # presente): i canali legacy (ui/system/os) non esistono più, si
+        # aggiorna solo l'immagine intera (bundle RAUC). Senza questo blocco il
+        # piano post-conversione si portava dietro uno step `ui` inutile (la UI
+        # arriva con l'immagine) e Impostazioni mostrava aggiornamenti fantasma.
         return {'current': current, 'latest': None, 'channel': channel,
                 'update_available': False, 'blocked': 'image'}
     if _debian_codename() in _OTA_BLOCKED_CODENAMES:
@@ -5143,6 +5156,11 @@ def update_plan_status():
         if phase in ('done', 'error') and time.time() - ts > UPDATE_PLAN_TTL:
             _clear_update_state()
             _clear_update_plan()
+        elif phase == 'applying' and time.time() - ts > UPDATE_APPLYING_TTL:
+            # Stale: the isolated session (or the A/B conversion chain that
+            # deliberately leaves 'applying' across its reboots) never came
+            # back to finish. Clear it instead of spinning forever.
+            _clear_update_state()
         elif phase == 'applying':
             return {'state': 'applying',
                     'message': _runner_message(state_info, _t('update.applying', _lang())),

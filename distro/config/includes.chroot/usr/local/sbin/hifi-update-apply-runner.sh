@@ -297,6 +297,7 @@ if [ -x "$AB_CONVERT" ] && [ -x "$AB_PRECHECK" ] && [ ! -f "$RAUC_CONF" ] && [ !
         log "A/B: pre-verifiche superate — preparo la conversione (initrd dedicato + grub-reboot)"
         if "$AB_CONVERT" prepare; then
             log "A/B: conversione armata per il prossimo avvio"
+            ab_armed=1
         else
             log "A/B: prepare fallito — l'apparecchio resta legacy"
         fi
@@ -309,7 +310,16 @@ fi
 log "update-mode session complete — returning to normal boot"
 rm -rf "$STAGE_ROOT"
 rm -f "$PLAN"
-write_state 'done' "Update complete" update.applyDone
+if [ "${ab_armed:-0}" = 1 ]; then
+    # La catena continua da sola dopo il riavvio (conversione → finish →
+    # hifi-ab-image → immagine): niente "completato" a metà strada — il kiosk
+    # tiene un unico aggiornamento a schermo finché il piano immagine non
+    # prende il posto di questo stato (apply_all lo azzera; l'API lo fa
+    # comunque scadere dopo 2 ore se la catena muore).
+    write_state applying "Switching to the new system — the device will restart on its own" update.ab.converting
+else
+    write_state 'done' "Update complete" update.applyDone
+fi
 splash_progress 100
 
 if ! rm -f "$SYSTEM_UPDATE_LINK"; then

@@ -267,7 +267,7 @@ check "ab convertible: system+os applied, ui skipped, conversion armed" \
       "system apply $ROOT/update/staged/system/v2 v2 os apply $ROOT/update/staged/os/v2 v2 precheck convert cleanup convert prepare" \
       "$(calls)"
 check "ab convertible: legacy UI left as is" "old" "$(installed UI_VERSION)"
-check "ab convertible: state done with translation key" "done update.applyDone" \
+check "ab convertible: state stays applying (continuous overlay)" "applying update.ab.converting" \
       "$(state_of phase) $(state_of key)"
 
 setup
