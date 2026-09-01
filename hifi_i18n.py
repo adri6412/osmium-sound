@@ -304,9 +304,18 @@ MESSAGES = {
                                    'it': "Installazione dell'immagine di sistema fallita (rauc rc={rc})"},
     'update.image.selectorFailed': {'en': 'Writing the A/B boot selector failed',
                                     'it': 'Scrittura del selettore di avvio A/B fallita'},
+    'update.ab.noSpace': {
+        'en': 'Update failed: not enough space to switch to the new system layout — free at least {needed} MiB on this {disk} MiB disk (8 GB or more is recommended)',
+        'it': 'Aggiornamento non riuscito: spazio insufficiente per passare al nuovo schema di sistema — libera almeno {needed} MiB su questo disco da {disk} MiB (consigliati 8 GB o più)'},
     'update.ab.notConvertible': {
-        'en': 'Update complete. This device stays on the old layout: {reason}',
-        'it': 'Aggiornamento completato. Questo apparecchio resta sullo schema vecchio: {reason}'},
+        'en': 'Update failed: this device cannot switch to the new system layout: {reason}',
+        'it': 'Aggiornamento non riuscito: questo apparecchio non può passare al nuovo schema di sistema: {reason}'},
+    'update.ab.prepareFailed': {
+        'en': 'Update failed: the switch to the new system layout could not be prepared',
+        'it': 'Aggiornamento non riuscito: non è stato possibile preparare il passaggio al nuovo schema di sistema'},
+    'update.apply.stuckUpdateMode': {
+        'en': 'Could not leave update mode: restart the device and try again',
+        'it': "Non è stato possibile uscire dalla modalità aggiornamento: riavvia l'apparecchio e riprova"},
     'update.ab.converting': {'en': 'Switching to the new system — the device will restart on its own',
                              'it': 'Passaggio al nuovo sistema — l\'apparecchio si riavvierà da solo'},
     'update.image.kickFailed': {'en': 'The system image update could not be started — try "Update now" again',

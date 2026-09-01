@@ -278,40 +278,57 @@ for kind in system os ui; do
     splash_progress $(( done_count * 100 / total ))
 done
 
-# ── schema A/B: se questo legacy può essere convertito, arma la conversione ──
-# Il pacchetto di sistema/OS appena applicato ha portato gli script hifi-ab-*
-# e il pacchetto rauc (0061). Le pre-verifiche decidono; se passano, `prepare`
-# costruisce l'initrd dedicato e imposta grub-reboot: il riavvio qui sotto
-# entra nell'initrd di conversione (root ristretta, slot B e /data), poi la
-# root legacy riparte, `finish` configura RAUC e hifi-ab-image avvia
-# l'aggiornamento all'immagine. Chi non passa le pre-verifiche resta com'è.
+# ── A/B layout: arm the conversion when this legacy device can take it ──
+# The system/OS bundle just applied brought the hifi-ab-* scripts and the rauc
+# package (0061). The pre-checks decide; when they pass, `prepare` builds the
+# dedicated initrd and sets grub-reboot, so the reboot below enters the
+# conversion initrd (shrunk root, slot B and /data), then the legacy root comes
+# back up, `finish` configures RAUC and hifi-ab-image starts the image update.
+# When they don't pass the update is reported as FAILED (owner's call): the
+# components did land, but the device did not move to the new layout and
+# saying "complete" would hide that.
 if [ -x "$AB_CONVERT" ] && [ -x "$AB_PRECHECK" ] && [ ! -f "$RAUC_CONF" ] && [ ! -f "$IMAGE_VERSION_FILE" ]; then
     splash_progress 100
     if ab_will_convert; then
         "$AB_CONVERT" cleanup >/dev/null 2>&1 || true
     else
-        # Non ci sta: la root legacy diventa lo slot A e resize2fs non scende
-        # sotto ~1,55 volte l'occupato, quindi l'unica leva è liberare spazio.
-        # La pulizia profonda toglie doc/man/lingue, i firmware di schede che
-        # questo apparecchio non ha, la cache di Lyrion e (solo con la UI Qt)
-        # Electron: su un disco da 8 GB è ciò che fa la differenza fra
-        # convertire e restare legacy. Poi si riprova.
-        log "A/B: pre-verifiche non superate — pulizia profonda e secondo tentativo"
+        # It does not fit: the legacy root becomes slot A and resize2fs never
+        # goes below ~1.55x what is in use, so the only lever is freeing space.
+        # The deep cleanup drops docs/man/languages, firmware for hardware this
+        # device does not have, the Lyrion cache and (only with the Qt UI)
+        # Electron: on an 8 GB disk that is what decides between converting and
+        # staying legacy. Then we try again.
+        log "A/B: pre-checks failed — deep cleanup, then a second attempt"
         "$AB_CONVERT" cleanup --deep >/dev/null 2>&1 || true
         _ab_convertible=""
     fi
     if ab_will_convert; then
-        log "A/B: pre-verifiche superate — preparo la conversione (initrd dedicato + grub-reboot)"
+        log "A/B: pre-checks passed — arming the conversion (dedicated initrd + grub-reboot)"
         if "$AB_CONVERT" prepare; then
-            log "A/B: conversione armata per il prossimo avvio"
+            log "A/B: conversion armed for the next boot"
             ab_armed=1
         else
-            log "A/B: prepare fallito — l'apparecchio resta legacy"
+            log "A/B: prepare failed — the device stays legacy"
+            ab_fail_msg="Update failed: the switch to the new A/B layout could not be prepared"
+            ab_fail_key=update.ab.prepareFailed
+            ab_fail_params='{}'
         fi
     else
         ab_reason=$(sed -n 's/.*"reasons":"\([^"]*\)".*/\1/p' "$AB_PRECHECK_JSON" 2>/dev/null | cut -c1-300)
         [ -n "$ab_reason" ] || ab_reason="pre-checks not passed"
-        log "A/B: pre-verifiche non superate — l'apparecchio resta legacy ($ab_reason)"
+        ab_free=$(sed -n 's/.*"free_needed_mib":\([0-9]*\).*/\1/p' "$AB_PRECHECK_JSON" 2>/dev/null)
+        ab_disk=$(sed -n 's/.*"disk_mib":\([0-9]*\).*/\1/p' "$AB_PRECHECK_JSON" 2>/dev/null)
+        if [ "${ab_free:-0}" -gt 0 ] 2>/dev/null; then
+            # short, actionable text: how many MiB are missing, on which disk
+            ab_fail_msg="Update failed: not enough space for the new A/B layout — free at least ${ab_free} MiB on this ${ab_disk:-0} MiB disk"
+            ab_fail_key=update.ab.noSpace
+            ab_fail_params="{\"needed\":${ab_free},\"disk\":${ab_disk:-0}}"
+        else
+            ab_fail_msg="Update failed: this device cannot switch to the new A/B layout: $ab_reason"
+            ab_fail_key=update.ab.notConvertible
+            ab_fail_params="{\"reason\":\"$ab_reason\"}"
+        fi
+        log "A/B: pre-checks failed — the device stays legacy ($ab_reason)"
     fi
 fi
 
@@ -319,18 +336,20 @@ fi
 log "update-mode session complete — returning to normal boot"
 rm -rf "$STAGE_ROOT"
 rm -f "$PLAN"
-if [ -n "${ab_reason:-}" ]; then
-    # Aggiornamento riuscito, ma il passaggio allo schema A/B non si è potuto
-    # fare: va detto, altrimenti l'apparecchio risulta "aggiornato" e basta e
-    # il motivo lo si scopre solo nei log.
-    write_state 'done' "Update complete — the device stays on the old layout: $ab_reason" \
-        update.ab.notConvertible "{\"reason\":\"$ab_reason\"}"
+if [ -n "${ab_fail_key:-}" ]; then
+    # The components landed, but the device could not move to the A/B layout.
+    # That is reported as a failed update, not as "complete" with a footnote:
+    # otherwise a device that will never convert looks perfectly updated. The
+    # box still reboots normally right below — nothing is left half-applied.
+    write_state error "$ab_fail_msg" "$ab_fail_key" "$ab_fail_params"
+    write_error '' "$ab_fail_msg" "$ab_fail_key" "$ab_fail_params"
+    splash_error
 elif [ "${ab_armed:-0}" = 1 ]; then
-    # La catena continua da sola dopo il riavvio (conversione → finish →
-    # hifi-ab-image → immagine): niente "completato" a metà strada — il kiosk
-    # tiene un unico aggiornamento a schermo finché il piano immagine non
-    # prende il posto di questo stato (apply_all lo azzera; l'API lo fa
-    # comunque scadere dopo 2 ore se la catena muore).
+    # The chain carries on by itself after the reboot (conversion -> finish ->
+    # hifi-ab-image -> image): no "complete" halfway through, so the kiosk
+    # keeps one single update on screen until the image plan takes over this
+    # state (apply_all clears it; the API expires it after 2 hours anyway if
+    # the chain dies).
     write_state applying "Switching to the new system — the device will restart on its own" update.ab.converting
 else
     write_state 'done' "Update complete" update.applyDone
@@ -339,8 +358,8 @@ splash_progress 100
 
 if ! rm -f "$SYSTEM_UPDATE_LINK"; then
     log "could not remove $SYSTEM_UPDATE_LINK — next boot would re-enter update mode"
-    write_state error "Impossibile disattivare la modalità update ($SYSTEM_UPDATE_LINK)"
-    write_error '' "Impossibile rimuovere $SYSTEM_UPDATE_LINK dopo un aggiornamento riuscito"
+    write_state error "Could not leave update mode ($SYSTEM_UPDATE_LINK)" update.apply.stuckUpdateMode
+    write_error '' "Could not remove $SYSTEM_UPDATE_LINK after a successful update" update.apply.stuckUpdateMode
     splash_error
     exit 1
 fi

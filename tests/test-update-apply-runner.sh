@@ -241,7 +241,7 @@ ab_stubs() {  # <precheck-exit-code>
     cat > "$ROOT/sbin/hifi-ab-precheck.sh" <<EOF
 #!/bin/sh
 printf 'precheck\n' >> "$ROOT/calls"
-printf '{"convertible":false,"reasons":"disco troppo piccolo"}\n' > "$ROOT/hifi-ab-precheck.json"
+printf '{"convertible":false,"reasons":"not enough space","free_needed_mib":470,"disk_mib":6208}\n' > "$ROOT/hifi-ab-precheck.json"
 exit $1
 EOF
     cat > "$ROOT/sbin/hifi-ab-convert.sh" <<EOF
@@ -285,10 +285,12 @@ check "ab not convertible: ui applied, pre-check retried after cleanup, no prepa
       "system apply $ROOT/update/staged/system/v2 v2 os apply $ROOT/update/staged/os/v2 v2 precheck ui apply $ROOT/update/staged/ui/v2 v2 convert cleanup --deep precheck" \
       "$(calls)"
 check "ab not convertible: UI landed" "v2" "$(installed UI_VERSION)"
-check "ab not convertible: reason surfaced in the final state" "update.ab.notConvertible" \
-      "$(state_of key)"
-check "ab not convertible: the reason itself is carried" "disco troppo piccolo" \
-      "$(state_of params | sed -n 's/.*"reason":"\([^"]*\)".*/\1/p')"
+check "ab not convertible: the update is reported as failed" "error update.ab.noSpace" \
+      "$(state_of phase) $(state_of key)"
+check "ab not convertible: how much to free is carried" "470 6208" \
+      "$(state_of params | sed -n 's/.*"needed":\([0-9]*\),"disk":\([0-9]*\).*/\1 \2/p')"
+check "ab not convertible: the error file names the failure too" "update.ab.noSpace" \
+      "$(sed -n 's/.*"key":"\([^"]*\)".*/\1/p' "$ROOT/update/error.json")"
 
 # already an image (or RAUC configured): the A/B block must stay out of the way
 setup
