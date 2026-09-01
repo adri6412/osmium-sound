@@ -34,6 +34,16 @@ done
 [ "$conv" = 1 ] || exit 0
 
 LOG=/run/hifi-abconvert.log
+# Strumenti per percorso assoluto: nell'initrd BusyBox registra i propri applet
+# (mke2fs, blkid, …) e nel PATH possono vincere sui binari veri copiati
+# dall'hook — sul Dell ha risposto il mke2fs di BusyBox, che non conosce -t.
+MKE2FS=/usr/sbin/mke2fs; E2FSCK=/usr/sbin/e2fsck; RESIZE2FS=/usr/sbin/resize2fs
+TUNE2FS=/usr/sbin/tune2fs; DUMPE2FS=/usr/sbin/dumpe2fs; SFDISK=/usr/sbin/sfdisk
+BLKID=/usr/sbin/blkid; PARTX=/usr/bin/partx; BLOCKDEV=/usr/sbin/blockdev
+for t in MKE2FS E2FSCK RESIZE2FS TUNE2FS DUMPE2FS SFDISK BLKID PARTX BLOCKDEV; do
+    eval "v=\$$t"
+    [ -x "$v" ] || eval "$t=\$(basename \"$v\")"
+done
 say() {
     echo "hifi-ab: $*" >> "$LOG"
     log_begin_msg "hifi-ab: $*"
@@ -49,9 +59,9 @@ for x in $cmdline; do
     case "$x" in root=*) rootspec=${x#root=} ;; esac
 done
 case "$rootspec" in
-    UUID=*)      rootdev=$(blkid -U "${rootspec#UUID=}" 2>/dev/null) ;;
+    UUID=*)      rootdev=$("$BLKID" -U "${rootspec#UUID=}" 2>/dev/null) ;;
     PARTUUID=*)  rootdev=$(readlink -f "/dev/disk/by-partuuid/${rootspec#PARTUUID=}" 2>/dev/null) ;;
-    LABEL=*)     rootdev=$(blkid -L "${rootspec#LABEL=}" 2>/dev/null) ;;
+    LABEL=*)     rootdev=$("$BLKID" -L "${rootspec#LABEL=}" 2>/dev/null) ;;
     PARTLABEL=*) rootdev=$(readlink -f "/dev/disk/by-partlabel/${rootspec#PARTLABEL=}" 2>/dev/null) ;;
     /dev/*)      rootdev=$(readlink -f "$rootspec" 2>/dev/null) ;;
     *)           rootdev=$(readlink -f "${ROOT:-}" 2>/dev/null) ;;
@@ -74,7 +84,7 @@ finish_state() {  # <stato> <messaggio>
     echo "hifi-ab: esito=$1 $2" >> "$LOG"
     esp=$(part_dev 2 2>/dev/null) || esp=
     # senza disco noto (root non risolta) si cerca la ESP per etichetta
-    [ -n "$esp" ] || esp=$(blkid -L EFI 2>/dev/null | head -n 1)
+    [ -n "$esp" ] || esp=$("$BLKID" -L EFI 2>/dev/null | head -n 1)
     if [ -n "$esp" ]; then
         mkdir -p /run/hifi-esp
         if mount -t vfat -o umask=0077 "$esp" /run/hifi-esp 2>/dev/null; then
@@ -97,9 +107,9 @@ bail() {  # <messaggio> — non converte, l'avvio prosegue
 say "controllo preliminare"
 progress 2
 [ -n "$rootdev" ] || bail "device di root non risolto (root=$rootspec)"
-have_uuid=$(blkid -o value -s UUID "$rootdev" 2>/dev/null || true)
+have_uuid=$("$BLKID" -o value -s UUID "$rootdev" 2>/dev/null || true)
 if [ -z "$want_uuid" ] || [ "$have_uuid" != "$want_uuid" ]; then bail "UUID root '$have_uuid' ($rootdev) diverso da quello atteso $want_uuid"; fi
-[ "$(blkid -o value -s TYPE "$rootdev" 2>/dev/null)" = "ext4" ] || bail "la root non è ext4"
+[ "$("$BLKID" -o value -s TYPE "$rootdev" 2>/dev/null)" = "ext4" ] || bail "la root non è ext4"
 [ "$(cat "/sys/class/block/$name/partition" 2>/dev/null)" = "3" ] || bail "la root non è la partizione 3"
 nparts=0
 for d in /sys/class/block/"$disk"*; do [ -f "$d/partition" ] && nparts=$((nparts + 1)); done
@@ -109,42 +119,42 @@ case "$slotb_mib" in ''|*[!0-9]*) bail "slotb_mib non valido: $slotb_mib" ;; esa
 
 say "verifica del filesystem (1/4)"
 progress 5
-e2fsck -f -y "$rootdev" >> "$LOG" 2>&1
+"$E2FSCK" -f -y "$rootdev" >> "$LOG" 2>&1
 rc=$?
-[ "$rc" -lt 4 ] || bail "e2fsck ha trovato errori non riparabili (rc=$rc)"
+[ "$rc" -lt 4 ] || bail ""$E2FSCK" ha trovato errori non riparabili (rc=$rc)"
 
 # Il journal ext4 (1 GiB su questi dischi) conta per intero nella dimensione
 # minima: si toglie prima del resize e se ne ricrea uno piccolo dopo. È
 # reversibile e non tocca i dati (filesystem appena controllato e smontato).
-if dumpe2fs -h "$rootdev" 2>/dev/null | grep -q '^Filesystem features:.*has_journal'; then
-    tune2fs -O ^has_journal "$rootdev" >> "$LOG" 2>&1 || bail "impossibile rimuovere il journal"
+if "$DUMPE2FS" -h "$rootdev" 2>/dev/null | grep -q '^Filesystem features:.*has_journal'; then
+    "$TUNE2FS" -O ^has_journal "$rootdev" >> "$LOG" 2>&1 || bail "impossibile rimuovere il journal"
 fi
-blksz=$(dumpe2fs -h "$rootdev" 2>/dev/null | sed -n 's/^Block size: *//p')
-minblk=$(resize2fs -P "$rootdev" 2>>"$LOG" | sed -n 's/.*: *\([0-9]*\)$/\1/p')
+blksz=$("$DUMPE2FS" -h "$rootdev" 2>/dev/null | sed -n 's/^Block size: *//p')
+minblk=$("$RESIZE2FS" -P "$rootdev" 2>>"$LOG" | sed -n 's/.*: *\([0-9]*\)$/\1/p')
 if [ -z "$blksz" ] || [ -z "$minblk" ]; then
-    tune2fs -j "$rootdev" >> "$LOG" 2>&1 || true
+    "$TUNE2FS" -j "$rootdev" >> "$LOG" 2>&1 || true
     bail "impossibile stimare la dimensione minima del filesystem"
 fi
 min_mib=$(( minblk * blksz / 1048576 + 1 ))
 if [ $(( min_mib + 192 )) -gt "$slot_mib" ]; then
-    tune2fs -j "$rootdev" >> "$LOG" 2>&1 || true
+    "$TUNE2FS" -j "$rootdev" >> "$LOG" 2>&1 || true
     bail "la root occupa almeno ${min_mib} MiB: non entra in uno slot da ${slot_mib} MiB"
 fi
 
 say "riduzione della partizione di sistema (2/4) — NON SPEGNERE"
 progress 10
-if ! resize2fs "$rootdev" "${slot_mib}M" >> "$LOG" 2>&1; then
-    e2fsck -f -y "$rootdev" >> "$LOG" 2>&1 || true
-    tune2fs -j "$rootdev" >> "$LOG" 2>&1 || true
-    bail "resize2fs fallito (vedi abconvert.log sulla ESP)"
+if ! "$RESIZE2FS" "$rootdev" "${slot_mib}M" >> "$LOG" 2>&1; then
+    "$E2FSCK" -f -y "$rootdev" >> "$LOG" 2>&1 || true
+    "$TUNE2FS" -j "$rootdev" >> "$LOG" 2>&1 || true
+    bail ""$RESIZE2FS" fallito (vedi abconvert.log sulla ESP)"
 fi
 # journal nuovo, piccolo (64 MiB): la root legacy resta Debian normale
-tune2fs -j -J size=64 "$rootdev" >> "$LOG" 2>&1 || tune2fs -j "$rootdev" >> "$LOG" 2>&1 || true
+"$TUNE2FS" -j -J size=64 "$rootdev" >> "$LOG" 2>&1 || "$TUNE2FS" -j "$rootdev" >> "$LOG" 2>&1 || true
 progress 60
 
 say "nuova tabella delle partizioni (3/4)"
 dump=/run/hifi-gpt.dump
-sfdisk -d "$diskdev" > "$dump" 2>>"$LOG" || bail "sfdisk -d fallito"
+"$SFDISK" -d "$diskdev" > "$dump" 2>>"$LOG" || bail ""$SFDISK" -d fallito"
 sect=$(( slot_mib * 2048 ))
 sectb=$(( slotb_mib * 2048 ))
 p3line=$(grep -E "^${rootdev}[[:space:]]*:" "$dump") || bail "partizione 3 non trovata nel dump GPT"
@@ -162,19 +172,19 @@ LINUX=0FC63DAF-8483-4772-8E79-3D69D8477DE4
     printf 'start= %s, type=%s, name="hifi-data"\n' "$p5start" "$LINUX"
 } > "$dump.new"
 cat "$dump.new" >> "$LOG"
-if ! sfdisk --no-reread --wipe never --wipe-partitions never "$diskdev" < "$dump.new" >> "$LOG" 2>&1; then
-    bail "sfdisk ha rifiutato la nuova tabella (filesystem già ridotto: si può riprovare)"
+if ! "$SFDISK" --no-reread --wipe never --wipe-partitions never "$diskdev" < "$dump.new" >> "$LOG" 2>&1; then
+    bail ""$SFDISK" ha rifiutato la nuova tabella (filesystem già ridotto: si può riprovare)"
 fi
-partx -u "$diskdev" >> "$LOG" 2>&1 || blockdev --rereadpt "$diskdev" >> "$LOG" 2>&1 || true
+"$PARTX" -u "$diskdev" >> "$LOG" 2>&1 || "$BLOCKDEV" --rereadpt "$diskdev" >> "$LOG" 2>&1 || true
 udevadm settle --timeout=15 2>/dev/null || true
 p4=$(part_dev 4) || bail "partizione 4 non comparsa dopo la riscrittura GPT"
 p5=$(part_dev 5) || bail "partizione 5 non comparsa dopo la riscrittura GPT"
 progress 80
 
 say "preparazione della partizione dati (4/4)"
-# -t ext4 esplicito: nell'initrd non c'è /etc/mke2fs.conf e mke2fs cadrebbe su ext2
-mke2fs -t ext4 -F -q -L hifi-data -O metadata_csum_seed "$p5" >> "$LOG" 2>&1 || bail "mke2fs su $p5 fallito"
-e2fsck -f -y "$rootdev" >> "$LOG" 2>&1 || true
+# -t ext4 esplicito: nell'initrd non c'è /etc/mke2fs.conf e "$MKE2FS" cadrebbe su ext2
+"$MKE2FS" -t ext4 -F -q -L hifi-data -O metadata_csum_seed "$p5" >> "$LOG" 2>&1 || bail ""$MKE2FS" su $p5 fallito"
+"$E2FSCK" -f -y "$rootdev" >> "$LOG" 2>&1 || true
 mkdir -p /run/hifi-data
 if mount -t ext4 "$p5" /run/hifi-data 2>>"$LOG"; then
     mkdir -p /run/hifi-data/log
