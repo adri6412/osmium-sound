@@ -37,12 +37,12 @@ LOG=/run/hifi-abconvert.log
 # Strumenti per percorso assoluto: nell'initrd BusyBox registra i propri applet
 # (mke2fs, blkid, …) e nel PATH possono vincere sui binari veri copiati
 # dall'hook — sul Dell ha risposto il mke2fs di BusyBox, che non conosce -t.
-MKE2FS=/usr/sbin/mke2fs; E2FSCK=/usr/sbin/e2fsck; RESIZE2FS=/usr/sbin/resize2fs
-TUNE2FS=/usr/sbin/tune2fs; DUMPE2FS=/usr/sbin/dumpe2fs; SFDISK=/usr/sbin/sfdisk
-BLKID=/usr/sbin/blkid; PARTX=/usr/bin/partx; BLOCKDEV=/usr/sbin/blockdev
+MKE2FS=/usr/sbin/hifi-mke2fs; E2FSCK=/usr/sbin/hifi-e2fsck; RESIZE2FS=/usr/sbin/hifi-resize2fs
+TUNE2FS=/usr/sbin/hifi-tune2fs; DUMPE2FS=/usr/sbin/hifi-dumpe2fs; SFDISK=/usr/sbin/hifi-sfdisk
+BLKID=/usr/sbin/hifi-blkid; PARTX=/usr/sbin/hifi-partx; BLOCKDEV=/usr/sbin/hifi-blockdev
 for t in MKE2FS E2FSCK RESIZE2FS TUNE2FS DUMPE2FS SFDISK BLKID PARTX BLOCKDEV; do
     eval "v=\$$t"
-    [ -x "$v" ] || eval "$t=\$(basename \"$v\")"
+    [ -x "$v" ] || eval "$t=\$(basename \"$v\" | sed 's/^hifi-//')"
 done
 say() {
     echo "hifi-ab: $*" >> "$LOG"

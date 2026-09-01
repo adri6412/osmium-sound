@@ -9,9 +9,14 @@ esac
 # shellcheck disable=SC1091  # esiste solo sull'apparecchio
 . /usr/share/initramfs-tools/hook-functions
 
+# Con un nome proprio (hifi-*): l'hook zz-busybox di initramfs-tools gira PRIMA
+# di questo e registra i suoi applet (mke2fs, blkid, tune2fs…) agli stessi
+# percorsi; copy_exec non sovrascrive un file già presente, e il mke2fs di
+# BusyBox non conosce -t (successo sul Dell). Lo script li chiama per nome.
 for b in sfdisk resize2fs mke2fs e2fsck tune2fs dumpe2fs blkid partx blockdev; do
     p=$(command -v "$b" 2>/dev/null) || { echo "W: hifi-ab: $b non trovato" >&2; continue; }
-    copy_exec "$p"
+    p=$(readlink -f "$p")
+    copy_exec "$p" "/usr/sbin/hifi-$b"
 done
 # mke2fs -t ext4 legge le definizioni da /etc/mke2fs.conf: senza, nell'initrd
 # fallisce ("Filesystem type ext4 not defined") — successo sul Dell, 2026-09-01.

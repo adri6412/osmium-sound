@@ -134,7 +134,7 @@ cmd_prepare() {
         tail -n 20 "$LOCAL/mkinitramfs.log" >&2
         die "mkinitramfs fallito"
     fi
-    for must in scripts/local-premount/hifi-ab-convert sbin/sfdisk sbin/resize2fs sbin/mke2fs sbin/e2fsck; do
+    for must in scripts/local-premount/hifi-ab-convert sbin/hifi-sfdisk sbin/hifi-resize2fs sbin/hifi-mke2fs sbin/hifi-e2fsck; do
         lsinitramfs "$CONV_INITRD" | grep -qE "(^|/)${must}$" \
             || die "l'initrd di conversione non contiene $must"
     done
@@ -213,12 +213,14 @@ cmd_finish() {
         printf 'PARTLABEL=hifi-data  /data  ext4  defaults,noatime,nofail  0  2\n' >> /etc/fstab
         systemctl daemon-reload 2>/dev/null || true
     fi
-    systemctl enable hifi-rauc-config.service hifi-boot-health.service hifi-boot-watchdog.timer >/dev/null 2>&1 || true
-    systemctl start hifi-boot-health.service >/dev/null 2>&1 || true
     mkdir -p "$LOCAL"
     date -u +%Y-%m-%dT%H:%M:%SZ > "$LOCAL/finished"
     ab_state_set ready
     ab_log "conversione completata: pronto per la prima immagine (install <bundle>)"
+    systemctl enable hifi-rauc-config.service hifi-boot-health.service hifi-boot-watchdog.timer hifi-ab-image.service >/dev/null 2>&1 || true
+    # --no-block: la salute aspetta hifi-api, che parte DOPO questa unità
+    # (Before=hifi-api): un avvio bloccante qui era uno stallo fino al timeout.
+    systemctl start --no-block hifi-boot-health.service >/dev/null 2>&1 || true
     return 0
 }
 

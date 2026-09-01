@@ -13,7 +13,7 @@ Before=hifi-api.service
 [Service]
 Type=oneshot
 ExecStart=/usr/local/sbin/hifi-ab-convert.sh finish
-TimeoutStartSec=300
+TimeoutStartSec=900
 
 [Install]
 WantedBy=multi-user.target
