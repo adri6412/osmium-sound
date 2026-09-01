@@ -261,7 +261,7 @@ if [ "$overall" = finished ] && [ "$already_finished" -eq 0 ]; then
             mkdir -p "$UPDATE_DIR"
             _tmp=$(mktemp "${STATE_FILE}.XXXXXX") || _tmp=""
             if [ -n "$_tmp" ]; then
-                { echo 'phase=staged'; echo "ts=$(date +%s)"; echo 'message=Immagine installata, riavvio sul nuovo sistema'; } > "$_tmp"
+                { echo 'phase=staged'; echo "ts=$(date +%s)"; echo 'message=System image installed, restarting into the new system'; echo 'key=update.image.rebooting'; } > "$_tmp"
                 chmod 644 "$_tmp"; mv -f "$_tmp" "$STATE_FILE"
             fi
             sync
@@ -275,7 +275,8 @@ if [ "$overall" = finished ] && [ "$already_finished" -eq 0 ]; then
             {
                 echo 'phase=staged'
                 echo "ts=$(date +%s)"
-                echo 'message=Aggiornamento verificato, riavvio in corso'
+                echo 'message=Update verified, restarting to apply it'
+                echo 'key=update.stagedRebooting'
             } > "$_tmp"
             chmod 644 "$_tmp"
             mv -f "$_tmp" "$STATE_FILE"

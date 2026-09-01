@@ -710,6 +710,7 @@
         "titleUi": "Aggiornamento interfaccia",
         "titleSystem": "Aggiornamento componenti di sistema",
         "titleOs": "Aggiornamento sistema operativo",
+        "titleImage": "Aggiornamento immagine di sistema",
         "titleLyrion": "Aggiornamento Lyrion",
         "done": "Completato",
         "keepPowered": "Non spegnere il dispositivo durante l'aggiornamento.",

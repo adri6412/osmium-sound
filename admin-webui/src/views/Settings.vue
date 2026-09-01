@@ -727,7 +727,7 @@ const updBusy = ref(false);
 const kinds = { ui: 'app', system: 'system', os: 'os' };
 const kindLabels = computed(() => ({
   ui: t('settings.updates.kindUi'), system: t('settings.updates.kindSystem'),
-  os: t('settings.updates.kindOs'),
+  os: t('settings.updates.kindOs'), image: t('settings.updates.kindImage'),
 }));
 // Blocking overlay state — mirrors the kiosk's forced update modal: while an
 // apply is running nothing else is clickable, so double-applies can't happen.

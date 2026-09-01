@@ -275,6 +275,46 @@ MESSAGES = {
     'update.applyError': {'en': 'The update could not be applied',
                           'it': "Non è stato possibile applicare l'aggiornamento"},
 
+    # ── Messages written by the shell side of the updater (stage/apply
+    # runners, hifi-image-update.sh) as a `key` + `params` next to their
+    # plain-English text, and translated here for whichever frontend polls
+    # /update/status — so the kiosk in Italian and the web admin in English
+    # both read the same step in their own language. ──
+    'update.stagedRebooting': {'en': 'Update verified — restarting to apply it',
+                               'it': 'Aggiornamento verificato, riavvio in corso'},
+    'update.image.rebooting': {'en': 'System image installed — restarting into the new system',
+                               'it': 'Immagine di sistema installata, riavvio sul nuovo sistema'},
+    'update.image.seed': {'en': 'Copying your settings to the data partition…',
+                          'it': 'Copia delle impostazioni sulla partizione dati…'},
+    'update.image.install': {'en': 'Installing system image {version} into the standby slot…',
+                             'it': "Installazione dell'immagine di sistema {version} nello slot di riserva…"},
+    'update.image.write': {'en': 'Writing system image {version}… {pct}%',
+                           'it': "Scrittura dell'immagine di sistema {version}… {pct}%"},
+    'update.image.selector': {'en': 'Enabling the A/B boot selector…',
+                              'it': 'Attivazione del selettore di avvio A/B…'},
+    'update.image.staged': {'en': 'System image {version} installed — the new system starts at the next restart',
+                            'it': 'Immagine di sistema {version} installata: al riavvio parte il nuovo sistema'},
+    'update.image.ready': {'en': 'System image {version} ready', 'it': 'Immagine di sistema {version} pronta'},
+    'update.image.badSource': {'en': 'Invalid system image source', 'it': "Sorgente dell'immagine di sistema non valida"},
+    'update.image.notConverted': {'en': 'RAUC is not configured: the device has not been converted to the A/B layout yet',
+                                  'it': "RAUC non configurato: l'apparecchio non è ancora convertito allo schema A/B"},
+    'update.image.seedFailed': {'en': 'Copying the settings to the data partition failed',
+                                'it': 'Copia delle impostazioni sulla partizione dati fallita'},
+    'update.image.installFailed': {'en': 'Installing the system image failed (rauc rc={rc})',
+                                   'it': "Installazione dell'immagine di sistema fallita (rauc rc={rc})"},
+    'update.image.selectorFailed': {'en': 'Writing the A/B boot selector failed',
+                                    'it': 'Scrittura del selettore di avvio A/B fallita'},
+    'update.apply.noPlan': {'en': 'No update plan found in update mode — unexpected state',
+                            'it': 'Nessun piano di aggiornamento trovato in modalità update — stato inatteso'},
+    'update.apply.emptyPlan': {'en': 'The update plan has no components — unexpected state',
+                               'it': 'Il piano di aggiornamento non contiene componenti — stato inatteso'},
+    'update.apply.notStaged': {'en': "Step '{kind}' was not completed during staging (state: {state})",
+                               'it': "Passo '{kind}' non risulta completato in fase di staging (stato: {state})"},
+    'update.apply.stagedMissing': {'en': 'Staged package missing for {kind} {version}',
+                                   'it': 'Pacchetto staged mancante per {kind} {version}'},
+    'update.apply.failed': {'en': 'Applying {kind} {version} failed after {attempts} attempts (rc={rc})',
+                            'it': 'Applicazione di {kind} {version} fallita dopo {attempts} tentativi (rc={rc})'},
+
     # ── Disk install (bare-metal installer) + guided room correction ──
     'install.enumFailed': {'en': 'Disk enumeration failed', 'it': 'Enumerazione dischi fallita'},
     'install.invalidDisk': {'en': 'Invalid disk', 'it': 'Disco non valido'},

@@ -22,14 +22,19 @@ if [ -r /usr/local/sbin/hifi-log.sh ]; then
     hifi_log_init hifi-image-update
 fi
 
+# write_status <state> <progress> <message-en> [key] [params-json]
+# Il testo è inglese e serve da ripiego/log; `key` + `params` sono la chiave
+# di hifi_i18n.py che l'API traduce nella lingua di chi interroga
+# /update/status (kiosk, web admin), così i messaggi escono in en+it.
 write_status() {
-    state="$1"; progress="$2"; msg="$3"
+    state="$1"; progress="$2"; msg="$3"; key="${4:-}"; params="${5:-}"
+    [ -n "$params" ] || params='{}'
     esc=$(printf '%s' "$msg" | sed 's/\\/\\\\/g; s/"/\\"/g')
-    printf '{"state":"%s","progress":%s,"version":"%s","message":"%s"}\n' \
-        "$state" "$progress" "$VERSION" "$esc" > "$STATUS"
+    printf '{"state":"%s","progress":%s,"version":"%s","message":"%s","key":"%s","params":%s}\n' \
+        "$state" "$progress" "$VERSION" "$esc" "$key" "$params" > "$STATUS"
 }
-fail() {
-    write_status error 0 "$1"
+fail() {  # <message-en> [key] [params-json]
+    write_status error 0 "$1" "${2:-}" "${3:-}"
     echo "E: [hifi-image] $1" >&2
     exit 1
 }
@@ -38,15 +43,15 @@ case "$CMD" in
 stage)
     SRC="${2:-}"
     VERSION="${3:-unknown}"
-    [ -n "$SRC" ] || fail "URL o file del bundle mancante"
-    case "$VERSION" in ''|*[!0-9A-Za-z._-]*) fail "Versione non valida" ;; esac
+    [ -n "$SRC" ] || fail "Bundle URL or file missing" update.image.badSource
+    case "$VERSION" in ''|*[!0-9A-Za-z._-]*) fail "Invalid version" ;; esac
     case "$SRC" in
         https://*) modprobe nbd 2>/dev/null || true ;;
         http://*)  modprobe nbd 2>/dev/null || true ;;
-        /*) [ -f "$SRC" ] || fail "Bundle non trovato: $SRC" ;;
-        *) fail "Sorgente non valida: $SRC" ;;
+        /*) [ -f "$SRC" ] || fail "Bundle not found: $SRC" update.image.badSource ;;
+        *) fail "Invalid source: $SRC" update.image.badSource ;;
     esac
-    [ -f /etc/rauc/system.conf ] || fail "RAUC non configurato: apparecchio non ancora convertito allo schema A/B"
+    [ -f /etc/rauc/system.conf ] || fail "RAUC is not configured: device not yet converted to the A/B layout" update.image.notConverted
     legacy=0
     [ -f /usr/lib/osmium/IMAGE_VERSION ] || legacy=1
 
@@ -54,27 +59,30 @@ stage)
     rm -rf "$WORKDIR"; mkdir -p "$WORKDIR"
 
     if [ "$legacy" = 1 ]; then
-        write_status applying 5 "Copia dello stato sulla partizione dati…"
-        /usr/local/sbin/hifi-ab-seed.sh || fail "Copia dello stato su /data fallita"
+        write_status applying 5 "Copying your settings to the data partition…" update.image.seed
+        /usr/local/sbin/hifi-ab-seed.sh || fail "Copying the settings to the data partition failed" update.image.seedFailed
     fi
 
-    write_status downloading 10 "Installazione dell'immagine $VERSION nello slot inattivo…"
+    VJ="{\"version\":\"$VERSION\"}"
+    write_status downloading 10 "Installing system image $VERSION into the standby slot…" update.image.install "$VJ"
     rcfile="$WORKDIR/rauc.rc"
     { rauc install "$SRC" 2>&1; echo "$?" > "$rcfile"; } | while IFS= read -r line; do
         printf '%s\n' "$line"
         case "$line" in
             *%*)
                 pct=$(printf '%s' "$line" | sed -n 's/^[[:space:]]*\([0-9]\{1,3\}\)%.*/\1/p')
-                [ -n "$pct" ] && write_status downloading $(( 10 + pct * 80 / 100 )) "$(printf '%s' "$line" | sed 's/^[[:space:]]*//' | cut -c1-120)"
+                [ -n "$pct" ] && write_status downloading $(( 10 + pct * 80 / 100 )) "Writing system image $VERSION… ${pct}%" \
+                    update.image.write "{\"version\":\"$VERSION\",\"pct\":$pct}"
                 ;;
         esac
     done
     rc=$(cat "$rcfile" 2>/dev/null || echo 1)
-    [ "$rc" = 0 ] || fail "rauc install fallito (rc=$rc): vedi /var/log/hifi/hifi-image-update.log"
+    case "$rc" in ''|*[!0-9]*) rc=1 ;; esac
+    [ "$rc" = 0 ] || fail "rauc install failed (rc=$rc): see /var/log/hifi/hifi-image-update.log" update.image.installFailed "{\"rc\":$rc}"
 
     if [ "$legacy" = 1 ]; then
-        write_status applying 92 "Attivazione del selettore di avvio A/B…"
-        /usr/local/sbin/hifi-ab-convert.sh select || fail "Scrittura del selettore sulla ESP fallita"
+        write_status applying 92 "Enabling the A/B boot selector…" update.image.selector
+        /usr/local/sbin/hifi-ab-convert.sh select || fail "Writing the A/B boot selector to the ESP failed" update.image.selectorFailed
         /usr/local/sbin/hifi-ab-seed.sh >/dev/null 2>&1 || true
         # shellcheck source=distro/config/includes.chroot/usr/local/sbin/hifi-ab-lib.sh
         # shellcheck disable=SC1091
@@ -83,13 +91,13 @@ stage)
         ab_state_set installed
     fi
     printf '%s\n' "$VERSION" > "$WORKDIR/STAGED"
-    write_status staged 100 "Immagine $VERSION installata: al riavvio parte il nuovo sistema"
+    write_status staged 100 "System image $VERSION installed: the new system starts at the next restart" update.image.staged "$VJ"
     ;;
 apply)
     # Niente da fare: RAUC ha già scritto lo slot e impostato il primario; il
     # sequencer riavvia e il selettore GRUB fa il resto.
     VERSION="${3:-unknown}"
-    write_status 'done' 100 "Immagine $VERSION pronta"
+    write_status 'done' 100 "System image $VERSION ready" update.image.ready "{\"version\":\"$VERSION\"}"
     ;;
 *)
     echo "Uso: $0 stage <url|file> <versione> | apply <staged_dir> <versione>" >&2

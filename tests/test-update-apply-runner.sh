@@ -233,5 +233,84 @@ run_runner || true
 check "ssh: started when already enabled" "start ssh.service" \
       "$(grep '^start ssh.service$' "$ROOT/systemctl-calls" || true)"
 
+
+# ── 7. A/B conversion: one single upgrade — the UI step is skipped when the
+#      box is about to convert (the image brings the interface), and the
+#      conversion is armed after the last step ─────────────────────────────
+ab_stubs() {  # <precheck-exit-code>
+    cat > "$ROOT/sbin/hifi-ab-precheck.sh" <<EOF
+#!/bin/sh
+printf 'precheck\n' >> "$ROOT/calls"
+exit $1
+EOF
+    cat > "$ROOT/sbin/hifi-ab-convert.sh" <<EOF
+#!/bin/sh
+printf 'convert %s\n' "\$1" >> "$ROOT/calls"
+exit 0
+EOF
+    chmod +x "$ROOT/sbin/hifi-ab-precheck.sh" "$ROOT/sbin/hifi-ab-convert.sh"
+}
+
+setup
+stub system ok; stub os ok; stub ui ok
+stage_dir system v2; stage_dir os v2; stage_dir ui v2
+ab_stubs 0
+write_plan <<EOF
+step system done 1 v2 https://e/sys.tgz aaaa -
+step os done 1 v2 https://e/os.tgz bbbb https://e/os.sig
+step ui done 1 v2 https://e/ui.tgz cccc -
+EOF
+rc=0
+run_runner || rc=$?
+check "ab convertible: exits 0" "0" "$rc"
+check "ab convertible: system+os applied, ui skipped, conversion armed" \
+      "system apply $ROOT/update/staged/system/v2 v2 os apply $ROOT/update/staged/os/v2 v2 precheck convert cleanup convert prepare" \
+      "$(calls)"
+check "ab convertible: legacy UI left as is" "old" "$(installed UI_VERSION)"
+check "ab convertible: state done with translation key" "done update.applyDone" \
+      "$(state_of phase) $(state_of key)"
+
+setup
+stub system ok; stub os ok; stub ui ok
+stage_dir system v2; stage_dir os v2; stage_dir ui v2
+ab_stubs 1
+write_plan <<EOF
+step system done 1 v2 https://e/sys.tgz aaaa -
+step os done 1 v2 https://e/os.tgz bbbb https://e/os.sig
+step ui done 1 v2 https://e/ui.tgz cccc -
+EOF
+run_runner || true
+check "ab not convertible: ui applied, pre-check retried after cleanup, no prepare" \
+      "system apply $ROOT/update/staged/system/v2 v2 os apply $ROOT/update/staged/os/v2 v2 precheck ui apply $ROOT/update/staged/ui/v2 v2 convert cleanup precheck" \
+      "$(calls)"
+check "ab not convertible: UI landed" "v2" "$(installed UI_VERSION)"
+
+# already an image (or RAUC configured): the A/B block must stay out of the way
+setup
+stub system ok; stub os ok; stub ui ok
+stage_dir system v2; stage_dir os v2; stage_dir ui v2
+ab_stubs 0
+mkdir -p "$ROOT/etc/rauc"; : > "$ROOT/etc/rauc/system.conf"
+write_plan <<EOF
+step system done 1 v2 https://e/sys.tgz aaaa -
+step ui done 1 v2 https://e/ui.tgz cccc -
+EOF
+run_runner || true
+check "ab already configured: no pre-check, ui applied" \
+      "system apply $ROOT/update/staged/system/v2 v2 ui apply $ROOT/update/staged/ui/v2 v2" "$(calls)"
+
+# a failing step reports a translation key next to its English text
+setup
+stub system fail
+stage_dir system v2
+write_plan <<EOF
+step system done 1 v2 https://e/sys.tgz aaaa -
+EOF
+run_runner || true
+check "failed step: error.json carries the key" "update.apply.failed" \
+      "$(sed -n 's/.*"key":"\([^"]*\)".*/\1/p' "$ROOT/update/error.json")"
+check "failed step: params name the kind" "yes" \
+      "$(grep -q '"params":{"kind":"system","version":"v2"' "$ROOT/update/error.json" && echo yes || echo no)"
+
 printf '\n%d passed, %d failed\n' "$pass" "$fail"
 [ "$fail" -eq 0 ]

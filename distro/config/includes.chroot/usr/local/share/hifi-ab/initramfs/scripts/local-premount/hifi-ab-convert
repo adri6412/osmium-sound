@@ -98,70 +98,70 @@ finish_state() {  # <stato> <messaggio>
     fi
 }
 bail() {  # <messaggio> — non converte, l'avvio prosegue
-    say "conversione NON eseguita: $1"
+    say "conversion NOT performed: $1"
     finish_state failed "$1"
     exit 0
 }
 
 : > "$LOG"
-say "controllo preliminare"
+say "preliminary checks"
 progress 2
-[ -n "$rootdev" ] || bail "device di root non risolto (root=$rootspec)"
+[ -n "$rootdev" ] || bail "root device not resolved (root=$rootspec)"
 have_uuid=$("$BLKID" -o value -s UUID "$rootdev" 2>/dev/null || true)
-if [ -z "$want_uuid" ] || [ "$have_uuid" != "$want_uuid" ]; then bail "UUID root '$have_uuid' ($rootdev) diverso da quello atteso $want_uuid"; fi
-[ "$("$BLKID" -o value -s TYPE "$rootdev" 2>/dev/null)" = "ext4" ] || bail "la root non è ext4"
-[ "$(cat "/sys/class/block/$name/partition" 2>/dev/null)" = "3" ] || bail "la root non è la partizione 3"
+if [ -z "$want_uuid" ] || [ "$have_uuid" != "$want_uuid" ]; then bail "root UUID '$have_uuid' ($rootdev) differs from the expected $want_uuid"; fi
+[ "$("$BLKID" -o value -s TYPE "$rootdev" 2>/dev/null)" = "ext4" ] || bail "the root filesystem is not ext4"
+[ "$(cat "/sys/class/block/$name/partition" 2>/dev/null)" = "3" ] || bail "the root is not partition 3"
 nparts=0
 for d in /sys/class/block/"$disk"*; do [ -f "$d/partition" ] && nparts=$((nparts + 1)); done
-[ "$nparts" = 3 ] || bail "il disco ha $nparts partizioni, attese 3"
-case "$slot_mib" in ''|*[!0-9]*) bail "slot_mib non valido: $slot_mib" ;; esac
-case "$slotb_mib" in ''|*[!0-9]*) bail "slotb_mib non valido: $slotb_mib" ;; esac
+[ "$nparts" = 3 ] || bail "the disk has $nparts partitions, expected 3"
+case "$slot_mib" in ''|*[!0-9]*) bail "invalid slot_mib: $slot_mib" ;; esac
+case "$slotb_mib" in ''|*[!0-9]*) bail "invalid slotb_mib: $slotb_mib" ;; esac
 
-say "verifica del filesystem (1/4)"
+say "checking the filesystem (1/4)"
 progress 5
 "$E2FSCK" -f -y "$rootdev" >> "$LOG" 2>&1
 rc=$?
-[ "$rc" -lt 4 ] || bail "e2fsck ha trovato errori non riparabili (rc=$rc)"
+[ "$rc" -lt 4 ] || bail "e2fsck found unrepairable errors (rc=$rc)"
 
 # Il journal ext4 (1 GiB su questi dischi) conta per intero nella dimensione
 # minima: si toglie prima del resize e se ne ricrea uno piccolo dopo. È
 # reversibile e non tocca i dati (filesystem appena controllato e smontato).
 if "$DUMPE2FS" -h "$rootdev" 2>/dev/null | grep -q '^Filesystem features:.*has_journal'; then
-    "$TUNE2FS" -O ^has_journal "$rootdev" >> "$LOG" 2>&1 || bail "impossibile rimuovere il journal"
+    "$TUNE2FS" -O ^has_journal "$rootdev" >> "$LOG" 2>&1 || bail "could not remove the journal"
 fi
 blksz=$("$DUMPE2FS" -h "$rootdev" 2>/dev/null | sed -n 's/^Block size: *//p')
 minblk=$("$RESIZE2FS" -P "$rootdev" 2>>"$LOG" | sed -n 's/.*: *\([0-9]*\)$/\1/p')
 if [ -z "$blksz" ] || [ -z "$minblk" ]; then
     "$TUNE2FS" -j "$rootdev" >> "$LOG" 2>&1 || true
-    bail "impossibile stimare la dimensione minima del filesystem"
+    bail "could not estimate the minimum filesystem size"
 fi
 min_mib=$(( minblk * blksz / 1048576 + 1 ))
 if [ $(( min_mib + 192 )) -gt "$slot_mib" ]; then
     "$TUNE2FS" -j "$rootdev" >> "$LOG" 2>&1 || true
-    bail "la root occupa almeno ${min_mib} MiB: non entra in uno slot da ${slot_mib} MiB"
+    bail "the root needs at least ${min_mib} MiB: it does not fit a ${slot_mib} MiB slot"
 fi
 
-say "riduzione della partizione di sistema (2/4) — NON SPEGNERE"
+say "shrinking the system partition (2/4) — DO NOT POWER OFF"
 progress 10
 if ! "$RESIZE2FS" "$rootdev" "${slot_mib}M" >> "$LOG" 2>&1; then
     "$E2FSCK" -f -y "$rootdev" >> "$LOG" 2>&1 || true
     "$TUNE2FS" -j "$rootdev" >> "$LOG" 2>&1 || true
-    bail "resize2fs fallito (vedi abconvert.log sulla ESP)"
+    bail "resize2fs failed (see abconvert.log on the ESP)"
 fi
 # journal nuovo, piccolo (64 MiB): la root legacy resta Debian normale
 "$TUNE2FS" -j -J size=64 "$rootdev" >> "$LOG" 2>&1 || "$TUNE2FS" -j "$rootdev" >> "$LOG" 2>&1 || true
 progress 60
 
-say "nuova tabella delle partizioni (3/4)"
+say "writing the new partition table (3/4)"
 dump=/run/hifi-gpt.dump
-"$SFDISK" -d "$diskdev" > "$dump" 2>>"$LOG" || bail "sfdisk -d fallito"
+"$SFDISK" -d "$diskdev" > "$dump" 2>>"$LOG" || bail "sfdisk -d failed"
 sect=$(( slot_mib * 2048 ))
 sectb=$(( slotb_mib * 2048 ))
-p3line=$(grep -E "^${rootdev}[[:space:]]*:" "$dump") || bail "partizione 3 non trovata nel dump GPT"
+p3line=$(grep -E "^${rootdev}[[:space:]]*:" "$dump") || bail "partition 3 not found in the GPT dump"
 p3start=$(printf '%s\n' "$p3line" | sed -n 's/.*start= *\([0-9]*\).*/\1/p')
 p3size=$(printf '%s\n' "$p3line" | sed -n 's/.*size= *\([0-9]*\).*/\1/p')
-if [ -z "$p3start" ] || [ -z "$p3size" ]; then bail "dump GPT illeggibile"; fi
-[ "$p3size" -gt $(( sect + sectb + 2048 )) ] || bail "la partizione 3 (${p3size} settori) non basta per due slot più i dati"
+if [ -z "$p3start" ] || [ -z "$p3size" ]; then bail "unreadable GPT dump"; fi
+[ "$p3size" -gt $(( sect + sectb + 2048 )) ] || bail "partition 3 (${p3size} sectors) is too small for two slots plus data"
 p4start=$(( p3start + sect ))
 p5start=$(( p4start + sectb ))
 LINUX=0FC63DAF-8483-4772-8E79-3D69D8477DE4
@@ -173,17 +173,17 @@ LINUX=0FC63DAF-8483-4772-8E79-3D69D8477DE4
 } > "$dump.new"
 cat "$dump.new" >> "$LOG"
 if ! "$SFDISK" --no-reread --wipe never --wipe-partitions never "$diskdev" < "$dump.new" >> "$LOG" 2>&1; then
-    bail "sfdisk ha rifiutato la nuova tabella (filesystem già ridotto: si può riprovare)"
+    bail "sfdisk rejected the new table (filesystem already shrunk: safe to retry)"
 fi
 "$PARTX" -u "$diskdev" >> "$LOG" 2>&1 || "$BLOCKDEV" --rereadpt "$diskdev" >> "$LOG" 2>&1 || true
 udevadm settle --timeout=15 2>/dev/null || true
-p4=$(part_dev 4) || bail "partizione 4 non comparsa dopo la riscrittura GPT"
-p5=$(part_dev 5) || bail "partizione 5 non comparsa dopo la riscrittura GPT"
+p4=$(part_dev 4) || bail "partition 4 did not appear after rewriting the GPT"
+p5=$(part_dev 5) || bail "partition 5 did not appear after rewriting the GPT"
 progress 80
 
-say "preparazione della partizione dati (4/4)"
+say "preparing the data partition (4/4)"
 # -t ext4 esplicito: nell'initrd non c'è /etc/mke2fs.conf e "$MKE2FS" cadrebbe su ext2
-"$MKE2FS" -t ext4 -F -q -L hifi-data -O metadata_csum_seed "$p5" >> "$LOG" 2>&1 || bail "mke2fs su $p5 fallito"
+"$MKE2FS" -t ext4 -F -q -L hifi-data -O metadata_csum_seed "$p5" >> "$LOG" 2>&1 || bail "mke2fs on $p5 failed"
 "$E2FSCK" -f -y "$rootdev" >> "$LOG" 2>&1 || true
 mkdir -p /run/hifi-data
 if mount -t ext4 "$p5" /run/hifi-data 2>>"$LOG"; then
@@ -191,7 +191,7 @@ if mount -t ext4 "$p5" /run/hifi-data 2>>"$LOG"; then
     cp "$LOG" /run/hifi-data/log/abconvert.log 2>/dev/null || true
     umount /run/hifi-data
 fi
-say "conversione completata: p3=${rootdev} A, p4=${p4} B, p5=${p5} dati"
+say "conversion complete: p3=${rootdev} A, p4=${p4} B, p5=${p5} data"
 progress 100
 finish_state converted "ok"
 exit 0

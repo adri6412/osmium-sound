@@ -21,6 +21,7 @@ import io
 import glob
 from hifi_logging import get_logger
 from hifi_i18n import t as _t
+from hifi_i18n import MESSAGES as _I18N_MESSAGES
 
 app = Flask(__name__)
 # This API is bound to 127.0.0.1 only (see the bottom of this file) and has no
@@ -4908,6 +4909,28 @@ def _read_update_state():
         info['ts'] = 0
     return info
 
+def _runner_message(info, fallback=''):
+    """User-facing text for a record the shell side wrote (the k=v state file,
+    error.json, or a /run/hifi-*-status.json): the runners put a translation
+    `key` plus `params` (a JSON object, or a string holding one) next to their
+    plain-English `message`. A known key wins — translated into the caller's
+    language — so the kiosk in Italian and the web admin in English read the
+    same step in their own words; anything else falls back to the raw text."""
+    if not isinstance(info, dict):
+        return fallback
+    key = info.get('key')
+    if key and key in _I18N_MESSAGES:
+        params = info.get('params') or {}
+        if isinstance(params, str):
+            try:
+                params = json.loads(params)
+            except ValueError:
+                params = {}
+        if not isinstance(params, dict):
+            params = {}
+        return _t(key, _lang(), **params)
+    return info.get('message') or fallback
+
 def _clear_update_state():
     for f in (UPDATE_STATE_FILE, UPDATE_ERROR_FILE):
         try:
@@ -5122,16 +5145,16 @@ def update_plan_status():
             _clear_update_plan()
         elif phase == 'applying':
             return {'state': 'applying',
-                    'message': state_info.get('message') or _t('update.applying', _lang()),
+                    'message': _runner_message(state_info, _t('update.applying', _lang())),
                     'finished': None}
         elif phase == 'done':
             return {'state': 'done',
-                    'message': state_info.get('message') or _t('update.applyDone', _lang()),
+                    'message': _runner_message(state_info, _t('update.applyDone', _lang())),
                     'finished': ts}
         else:
             err = _read_update_error() or {}
             return {'state': 'apply_error', 'kind': err.get('channel', ''),
-                    'message': (err.get('message') or state_info.get('message')
+                    'message': (_runner_message(err) or _runner_message(state_info)
                                 or _t('update.applyError', _lang())),
                     'finished': ts}
 
@@ -5187,7 +5210,7 @@ def update_plan_status():
         if live.get('version') == current['version']:
             step_state = live.get('state') or ''
             progress = live.get('progress') if isinstance(live.get('progress'), (int, float)) else None
-            message = live.get('message') or ''
+            message = _runner_message(live)
         else:
             step_state = 'starting'
 

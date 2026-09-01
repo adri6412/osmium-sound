@@ -31,7 +31,7 @@ let pollTimer = null;
 let interruptedStreak = 0;
 const MAX_INTERRUPTED_POLLS = 60; // ~2 minutes at 2s/poll
 
-const kindLabels = { ui: () => t('settings.updates.kindUi'), system: () => t('settings.updates.kindSystem'), os: () => t('settings.updates.kindOs') };
+const kindLabels = { ui: () => t('settings.updates.kindUi'), system: () => t('settings.updates.kindSystem'), os: () => t('settings.updates.kindOs'), image: () => t('settings.updates.kindImage') };
 
 function onSettingsActive(e) { settingsActive.value = !!e.detail; }
 

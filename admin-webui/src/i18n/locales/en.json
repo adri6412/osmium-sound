@@ -533,6 +533,7 @@
       "kindUi": "Interface",
       "kindSystem": "System",
       "kindOs": "Operating system",
+      "kindImage": "System image",
       "updating": "Updating {label}",
       "whatsNew": "What's new",
       "changelogTitle": "What's new in {version}",

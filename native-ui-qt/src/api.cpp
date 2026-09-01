@@ -44,6 +44,7 @@ void Api::request(const QString &method, const QString &url, const QByteArray &b
     QNetworkRequest req{QUrl(url)};
     req.setTransferTimeout(timeoutMs);
     req.setAttribute(QNetworkRequest::RedirectPolicyAttribute, QNetworkRequest::NoLessSafeRedirectPolicy);
+    req.setRawHeader("X-UI-Lang", m_lang.toUtf8());
     if (!body.isEmpty() || method == "POST")
         req.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
     QNetworkReply *rep = m_nam.sendCustomRequest(req, method.toUtf8(), body);

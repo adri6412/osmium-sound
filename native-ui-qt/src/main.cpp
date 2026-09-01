@@ -180,6 +180,8 @@ int main(int argc, char *argv[]) {
     sys.setForcedWizard(wizard);
     sys.setStartExpanded(expanded);
     I18n i18n(locales, sys.conf("ui-language", "en"));
+    api.setLang(i18n.lang());
+    QObject::connect(&i18n, &I18n::langChanged, &api, [&api, &i18n]() { api.setLang(i18n.lang()); });
     Player player;
     VuMeter vu;
     LibraryModel library;
