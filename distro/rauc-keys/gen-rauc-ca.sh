@@ -41,7 +41,11 @@ openssl req -newkey rsa:4096 -nodes -sha256 \
     -subj "/O=Osmium Sound/CN=Osmium Sound RAUC signing ($LABEL)" \
     -keyout signing-key.pem -out signing.csr
 
-printf 'basicConstraints=CA:FALSE\nkeyUsage=critical,digitalSignature\nextendedKeyUsage=codeSigning\nsubjectKeyIdentifier=hash\nauthorityKeyIdentifier=keyid\n' > ext.cnf
+# Nessun extendedKeyUsage di proposito: RAUC verifica la firma CMS con lo
+# scopo predefinito di OpenSSL (S/MIME) e un certificato con EKU=codeSigning
+# soltanto viene rifiutato ("unsuitable certificate purpose"); senza EKU vale
+# per qualunque scopo, compreso check-purpose=codesign se un giorno lo si attiva.
+printf 'basicConstraints=CA:FALSE\nkeyUsage=critical,digitalSignature\nsubjectKeyIdentifier=hash\nauthorityKeyIdentifier=keyid\n' > ext.cnf
 openssl x509 -req -sha256 -days "$DAYS" -in signing.csr \
     -CA ca.pem -CAkey ca-key.pem -CAcreateserial -extfile ext.cnf \
     -out signing-cert.pem
