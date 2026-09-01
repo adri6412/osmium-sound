@@ -60,7 +60,8 @@ if [ -n "$disk" ]; then
     uuid=$(blkid -o value -s UUID "$rootdev" 2>/dev/null || true)
     blksz=$(dumpe2fs -h "$rootdev" 2>/dev/null | sed -n 's/^Block size: *//p')
     minblk=$(resize2fs -P "$rootdev" 2>/dev/null | sed -n 's/.*: *\([0-9]*\)$/\1/p')
-    jsize=$(dumpe2fs -h "$rootdev" 2>/dev/null | sed -n 's/^Journal size: *\([0-9]*\)M$/\1/p')
+    # e2fsprogs 1.47 la chiama "Total journal size", le versioni prima "Journal size"
+    jsize=$(dumpe2fs -h "$rootdev" 2>/dev/null | sed -n 's/^\(Total \)\{0,1\}[Jj]ournal size: *\([0-9]*\)M$/\2/p' | head -n 1)
     if [ -n "$blksz" ] && [ -n "$minblk" ]; then
         root_min_mib=$(( minblk * blksz / 1048576 + 1 - ${jsize:-0} + 64 ))
     else
@@ -86,7 +87,6 @@ fi
 for t in rauc grub-editenv grub-reboot mkinitramfs sfdisk resize2fs update-grub busybox; do
     command -v "$t" >/dev/null 2>&1 || add "manca $t"
 done
-grep -q '^GRUB_DEFAULT=saved' /etc/default/grub 2>/dev/null || add "GRUB_DEFAULT non è 'saved' (grub-reboot non funzionerebbe)"
 [ -f "/boot/vmlinuz-$(uname -r)" ] || add "kernel in uso ($(uname -r)) non presente in /boot"
 if command -v fuser >/dev/null 2>&1 && fuser /var/lib/dpkg/lock-frontend >/dev/null 2>&1; then
     add "apt/dpkg in esecuzione"

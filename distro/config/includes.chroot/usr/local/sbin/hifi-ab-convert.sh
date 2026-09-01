@@ -137,6 +137,16 @@ cmd_prepare() {
     done
 
     ab_log "voce GRUB one-shot 'hifi-ab-convert'"
+    # grub-reboot funziona solo con GRUB_DEFAULT=saved (00_header legge next_entry
+    # dal grubenv): le ISO recenti non lo impostano, quindi lo si garantisce qui.
+    if ! grep -q '^GRUB_DEFAULT=saved$' /etc/default/grub 2>/dev/null; then
+        if grep -q '^GRUB_DEFAULT=' /etc/default/grub 2>/dev/null; then
+            sed -i 's/^GRUB_DEFAULT=.*/GRUB_DEFAULT=saved/' /etc/default/grub
+        else
+            printf 'GRUB_DEFAULT=saved\n' >> /etc/default/grub
+        fi
+    fi
+    grep -q '^GRUB_SAVEDEFAULT=' /etc/default/grub 2>/dev/null || printf 'GRUB_SAVEDEFAULT=false\n' >> /etc/default/grub
     cat > "$GRUBD" <<GRUBEOF
 #!/bin/sh
 exec tail -n +3 \$0
