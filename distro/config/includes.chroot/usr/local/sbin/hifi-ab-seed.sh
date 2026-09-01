@@ -76,7 +76,8 @@ for d in lib/hifi-player lib/squeezeboxserver lib/lyrionmusicserver lib/bluetoot
     cp -au "/var/$d/." "$D/var/$d/" 2>/dev/null || ab_warn "copia di /var/$d incompleta"
 done
 rm -rf "$D/var/lib/hifi-player/update" 2>/dev/null || true
-: > "$D/var/.hifi-seeded"
+# nessun marcatore: al primo avvio l'initramfs aggiunge (senza sovrascrivere)
+# la /var dell'immagine — dpkg, systemd, cache — a quella seminata qui
 
 # ── /home: la .config di hifi (stato Electron) e le home degli utenti wizard ──
 if [ -d /home/hifi/.config ]; then
