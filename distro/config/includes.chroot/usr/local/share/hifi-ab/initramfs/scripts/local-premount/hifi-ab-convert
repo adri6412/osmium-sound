@@ -172,7 +172,8 @@ p5=$(part_dev 5) || bail "partizione 5 non comparsa dopo la riscrittura GPT"
 progress 80
 
 say "preparazione della partizione dati (4/4)"
-mke2fs -F -q -L hifi-data -O metadata_csum_seed "$p5" >> "$LOG" 2>&1 || bail "mke2fs su $p5 fallito"
+# -t ext4 esplicito: nell'initrd non c'è /etc/mke2fs.conf e mke2fs cadrebbe su ext2
+mke2fs -t ext4 -F -q -L hifi-data -O metadata_csum_seed "$p5" >> "$LOG" 2>&1 || bail "mke2fs su $p5 fallito"
 e2fsck -f -y "$rootdev" >> "$LOG" 2>&1 || true
 mkdir -p /run/hifi-data
 if mount -t ext4 "$p5" /run/hifi-data 2>>"$LOG"; then
