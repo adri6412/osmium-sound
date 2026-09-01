@@ -119,6 +119,9 @@ cmd_prepare() {
     systemctl stop unattended-upgrades.service >/dev/null 2>&1 || true
 
     ab_log "initrd dedicato di conversione ($kver)"
+    # mkinitramfs ignora in silenzio gli hook non eseguibili (il pacchetto di
+    # sistema non conserva i bit di esecuzione sotto /usr/local/share)
+    chmod +x "$AB_SHARE/initramfs/hooks/hifi-ab" "$AB_SHARE/initramfs/scripts/local-premount/hifi-ab-convert"
     rm -f "$CONV_INITRD"
     if ! mkinitramfs -d "$AB_SHARE/initramfs" -o "$CONV_INITRD" "$kver" >"$LOCAL/mkinitramfs.log" 2>&1; then
         tail -n 20 "$LOCAL/mkinitramfs.log" >&2

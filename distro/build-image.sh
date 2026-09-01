@@ -181,6 +181,12 @@ in_chroot dpkg-query -W -f='${Package}\t${Version}\n' | sort > "$CH/usr/lib/osmi
 
 # ── 6. initrd: overlay/vfat, tutti i moduli, zstd, plymouth ──────────────
 log "initrd dell'immagine (MODULES=most, zstd, plymouth)"
+# Il repo non conserva i bit di esecuzione (core.filemode=false, file nati su
+# Windows): mkinitramfs IGNORA in silenzio gli hook non eseguibili, e gli
+# script hifi-* vanno resi eseguibili come fa l'hook 0300 per quelli legacy.
+chmod +x "$CH/etc/initramfs-tools/hooks/hifi-state" "$CH/etc/initramfs-tools/scripts/local-bottom/hifi-state" \
+    "$SHARE/initramfs/hooks/hifi-ab" "$SHARE/initramfs/scripts/local-premount/hifi-ab-convert"
+chmod +x "$CH"/usr/local/sbin/hifi-*.sh "$CH"/usr/local/sbin/hifi-*.py "$CH"/usr/local/bin/*.py 2>/dev/null || true
 mkdir -p "$CH/etc/initramfs-tools/conf.d"
 cat > "$CH/etc/initramfs-tools/conf.d/hifi-image.conf" <<'CONF'
 # Osmium Sound — initrd degli slot immagine: costruito in fabbrica, deve
