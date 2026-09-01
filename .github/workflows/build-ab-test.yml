@@ -12,12 +12,17 @@ name: Build A/B (RAUC) test package (manual)
 #     • version : es. v2.5.24-ab.1 (solo etichetta degli artefatti)
 #     • suite   : trixie
 
+# Il lancio manuale (workflow_dispatch) funziona solo per i workflow presenti
+# sul ramo predefinito: finché questo vive solo su rauc-ab parte a ogni push
+# del ramo, con etichetta v<package.json>-ab.<numero run>.
 on:
+  push:
+    branches: ['rauc-ab']
   workflow_dispatch:
     inputs:
       version:
-        description: 'Etichetta di versione degli artefatti (es. v2.5.24-ab.1)'
-        required: true
+        description: 'Etichetta di versione degli artefatti (vuota = v<package.json>-ab.<run>)'
+        required: false
         type: string
       suite:
         description: 'Debian suite'
@@ -43,10 +48,27 @@ jobs:
           retention-days: 1
           if-no-files-found: error
 
+  version:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      version: ${{ steps.v.outputs.version }}
+    steps:
+      - uses: actions/checkout@v7
+      - id: v
+        run: |
+          V="${{ inputs.version }}"
+          if [ -z "$V" ]; then
+            V="v$(sed -n 's/.*"version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' package.json | head -n1)-ab.${{ github.run_number }}"
+          fi
+          echo "version=$V" >> "$GITHUB_OUTPUT"
+          echo "etichetta: $V"
+
   bundles:
     # Stessi passi di build-ui-ota.yml per system + OS (senza il canale UI:
     # l'interfaccia Qt viaggia dentro l'immagine).
     runs-on: ubuntu-latest
+    needs: version
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v7
@@ -88,7 +110,7 @@ jobs:
       - name: Package system bundle
         run: |
           set -e
-          VERSION="${{ inputs.version }}"
+          VERSION="${{ needs.version.outputs.version }}"
           ROOT=sysbundle; rm -rf "$ROOT"
           mkdir -p "$ROOT/usr/local/bin" "$ROOT/usr/local/sbin" "$ROOT/etc/systemd/system" "$ROOT/usr/local/share" "$ROOT/opt/hifi-webui/dist"
           cp api_server.py vu_meter_daemon.py sources_server.py webui_server.py hifi_logging.py hifi_backup.py hifi_i18n.py "$ROOT/usr/local/bin/"
@@ -107,7 +129,7 @@ jobs:
           OTA_SIGNING_KEY: ${{ secrets.OTA_SIGNING_KEY }}
         run: |
           set -e
-          VERSION="${{ inputs.version }}"
+          VERSION="${{ needs.version.outputs.version }}"
           SRC=distro/os-update
           printf '%s\n' "$VERSION" > "$SRC/OS_VERSION"
           TAR="hifi-os-${VERSION}.tar.gz"
@@ -130,7 +152,7 @@ jobs:
 
   image:
     runs-on: ubuntu-latest
-    needs: qt-payload
+    needs: [qt-payload, version]
     timeout-minutes: 120
     defaults:
       run:
@@ -174,8 +196,8 @@ jobs:
         run: (cd admin-webui && npm ci && npm run build)
       - name: Build the RAUC slot image (live-build chroot → rootfs.ext4 → bundle)
         env:
-          INPUT_VERSION: ${{ inputs.version }}
-          INPUT_SUITE: ${{ inputs.suite }}
+          INPUT_VERSION: ${{ needs.version.outputs.version }}
+          INPUT_SUITE: ${{ inputs.suite || 'trixie' }}
           RAUC_SIGNING_CERT: ${{ secrets.RAUC_SIGNING_CERT }}
           RAUC_SIGNING_KEY: ${{ secrets.RAUC_SIGNING_KEY }}
         run: |
@@ -198,7 +220,7 @@ jobs:
 
   package:
     runs-on: ubuntu-latest
-    needs: [bundles, image]
+    needs: [bundles, image, version]
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v7
@@ -213,14 +235,14 @@ jobs:
       - name: Compose the offline test package
         run: |
           set -e
-          VERSION="${{ inputs.version }}"
+          VERSION="${{ needs.version.outputs.version }}"
           ls -la in
           bash distro/ab-test/make-package.sh "$VERSION" \
             "in/hifi-system-${VERSION}.tar.gz" "in/hifi-os-${VERSION}.tar.gz" \
             "$(ls in/hifi-image-*.raucb | head -n 1)" out
       - uses: actions/upload-artifact@v4
         with:
-          name: osmium-ab-test-${{ inputs.version }}
-          path: out/osmium-ab-test-${{ inputs.version }}.tar*
+          name: osmium-ab-test-${{ needs.version.outputs.version }}
+          path: out/osmium-ab-test-${{ needs.version.outputs.version }}.tar*
           retention-days: 14
           if-no-files-found: error
