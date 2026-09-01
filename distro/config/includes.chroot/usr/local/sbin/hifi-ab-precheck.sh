@@ -83,7 +83,7 @@ if [ -n "$disk" ]; then
     fi
 fi
 
-for t in rauc grub-editenv grub-reboot mkinitramfs sfdisk resize2fs update-grub; do
+for t in rauc grub-editenv grub-reboot mkinitramfs sfdisk resize2fs update-grub busybox; do
     command -v "$t" >/dev/null 2>&1 || add "manca $t"
 done
 grep -q '^GRUB_DEFAULT=saved' /etc/default/grub 2>/dev/null || add "GRUB_DEFAULT non è 'saved' (grub-reboot non funzionerebbe)"

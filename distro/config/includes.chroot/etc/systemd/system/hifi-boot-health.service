@@ -1,7 +1,7 @@
 [Unit]
 Description=Osmium Sound — dichiara buono l'avvio (rauc status mark-good)
 ConditionPathExists=/etc/rauc/system.conf
-After=multi-user.target hifi-api.service hifi-rauc-config.service
+After=network.target hifi-api.service hifi-rauc-config.service
 Wants=hifi-rauc-config.service
 
 [Service]

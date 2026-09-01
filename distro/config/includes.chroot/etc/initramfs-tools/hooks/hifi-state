@@ -1,0 +1,17 @@
+#!/bin/sh
+# Osmium Sound — strumenti per scripts/local-bottom/hifi-state: il fsck di
+# /data (l'hook standard `fsck` sceglie i binari dal fstab, che sugli slot
+# immagine non elenca nessun ext4) e il modulo overlay.
+PREREQ=""
+prereqs() { echo "$PREREQ"; }
+case "${1:-}" in
+    prereqs) prereqs; exit 0 ;;
+esac
+# shellcheck disable=SC1091  # esiste solo sull'apparecchio
+. /usr/share/initramfs-tools/hook-functions
+for b in e2fsck fsck.ext4; do
+    p=$(command -v "$b" 2>/dev/null) || continue
+    copy_exec "$p"
+done
+manual_add_modules overlay vfat nls_cp437 nls_ascii nls_utf8
+exit 0

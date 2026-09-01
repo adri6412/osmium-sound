@@ -27,14 +27,15 @@ copy_etc() {  # <percorso relativo a /etc> (file, dir o symlink)
 }
 for f in hifi-player hifi-sources.json hifi-pairing-tokens.json \
          NetworkManager/system-connections hostname hosts machine-id \
-         timezone localtime default/squeezelite default/lyrionmusicserver \
-         samba/hifi-shares.conf avahi/services/hifi-smb.service camilladsp \
-         squeezeboxserver logrotate.d/lyrionmusicserver; do
+         timezone localtime default/squeezelite \
+         samba/hifi-shares.conf avahi/services/hifi-smb.service camilladsp; do
     copy_etc "$f"
 done
 for k in /etc/ssh/ssh_host_*; do
     [ -e "$k" ] && copy_etc "ssh/$(basename "$k")"
 done
+# /etc/squeezeboxserver e /etc/default/lyrionmusicserver NON vanno nell'upper:
+# nell'immagine sono symlink verso /data/lyrion/current (copiati là sotto).
 # I marcatori di versione legacy non hanno senso su un'immagine (li legge
 # /usr/lib/osmium/IMAGE_VERSION) e ombreggerebbero: via dall'upper.
 rm -f "$U/hifi-player/OS_VERSION" "$U/hifi-player/SYSTEM_VERSION" "$U/hifi-player/UI_VERSION"

@@ -20,7 +20,11 @@
 # Idempotente: ensure_pkg è un no-op a pacchetto presente; le unità vengono
 # abilitate solo se esistono e non lo sono già. Nessun request_reboot.
 if command -v apt-get >/dev/null 2>&1 && [ -f /etc/debian_version ]; then
-    ensure_pkg rauc || log_warn "rauc non installabile ora: la conversione A/B resterà in attesa"
+    if ! ensure_pkg rauc && [ "${HIFI_OS_NO_APT:-0}" != 1 ]; then
+        # elenchi apt assenti o vecchi (la pulizia pre-conversione li toglie): un giro e si riprova
+        DEBIAN_FRONTEND=noninteractive apt-get update -qq >/dev/null 2>&1 || true
+        ensure_pkg rauc || log_warn "rauc non installabile ora: la conversione A/B resterà in attesa"
+    fi
     ensure_pkg rauc-service || true
 fi
 

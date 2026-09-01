@@ -225,3 +225,7 @@ qml6-module-qtqml-workerscript
 rauc
 rauc-service
 zstd
+# busybox: nell'initrd fornisce grep/sed/cp/tr agli script hifi-state e
+# hifi-ab-convert (klibc da solo non li ha). Nella ISO arrivava già come
+# dipendenza di live-boot; nell'immagine live-boot non c'è.
+busybox

@@ -75,7 +75,7 @@ cleanup() {
     for m in "$CH/dev" "$CH/sys" "$CH/proc" "$CH/run"; do
         mountpoint -q "$m" && umount -R "$m" 2>/dev/null
     done
-    rm -f "$CH/usr/sbin/policy-rc.d.hifi-image" 2>/dev/null
+    rm -f "$CH/usr/sbin/policy-rc.d" 2>/dev/null
     if [ -f "$WORK/resolv.conf.orig" ]; then cp -a "$WORK/resolv.conf.orig" "$CH/etc/resolv.conf"; else rm -f "$CH/etc/resolv.conf.hifi-tmp"; fi
     rm -rf "$WORK"
 }
@@ -111,13 +111,18 @@ done
 if [ ${#purge[@]} -gt 0 ]; then
     in_chroot apt-get -y -q purge "${purge[@]}" >/dev/null
 fi
+# busybox è ciò che dà all'initrd grep/sed/cp/tr (klibc da solo non li ha):
+# nel chroot arriva come dipendenza di live-boot, che qui viene tolto, quindi
+# va tenuto esplicitamente. e2fsprogs per il fsck di /data nell'initrd.
 missing=()
-for p in rauc rauc-service zstd; do in_chroot dpkg -s "$p" >/dev/null 2>&1 || missing+=("$p"); done
+for p in rauc rauc-service zstd busybox e2fsprogs initramfs-tools; do in_chroot dpkg -s "$p" >/dev/null 2>&1 || missing+=("$p"); done
 if [ ${#missing[@]} -gt 0 ]; then
     in_chroot apt-get -q update >/dev/null
     in_chroot apt-get -y -q install --no-install-recommends "${missing[@]}" >/dev/null
 fi
+in_chroot apt-mark manual busybox rauc rauc-service zstd >/dev/null 2>&1 || true
 in_chroot apt-get -y -q autoremove --purge >/dev/null || true
+in_chroot dpkg -s busybox >/dev/null 2>&1 || die "busybox mancante nel chroot: l'initrd non avrebbe grep/sed/cp"
 in_chroot systemctl mask apt-daily.timer apt-daily-upgrade.timer apt-daily.service apt-daily-upgrade.service >/dev/null 2>&1 || true
 
 # ── 2. ciò che in un'immagine non ha senso ─────────────────────────────
@@ -199,6 +204,8 @@ in_chroot update-initramfs -u -k "$KVER" >/dev/null || die "update-initramfs fal
 [ -s "$CH/boot/initrd.img-$KVER" ] || die "initrd non prodotto"
 in_chroot lsinitramfs "/boot/initrd.img-$KVER" | grep -q "scripts/local-bottom/hifi-state" || die "l'initrd non contiene hifi-state"
 in_chroot lsinitramfs "/boot/initrd.img-$KVER" | grep -q "overlay.ko" || die "l'initrd non contiene overlay.ko"
+in_chroot lsinitramfs "/boot/initrd.img-$KVER" | grep -qE "bin/busybox$" || die "l'initrd non contiene busybox"
+in_chroot lsinitramfs "/boot/initrd.img-$KVER" | grep -qE "sbin/e2fsck$" || die "l'initrd non contiene e2fsck"
 
 # ── 7. grub.cfg statico dello slot; fstab; machine-id vuoto ───────────────
 log "grub.cfg dello slot (kernel $KVER), fstab, machine-id"
@@ -260,7 +267,7 @@ install -m 0755 "$SCRIPT_DIR/rauc/hook.sh" "$B/hook.sh"
 mv "$EXT4" "$B/rootfs.ext4"
 RAUCB="$OUT/hifi-image-${VERSION}.raucb"
 rm -f "$RAUCB"
-rauc bundle --cert "$CERT" --key "$KEY" --keyring "$KEYRING" "$B" "$RAUCB" || die "rauc bundle fallito"
+rauc bundle --cert "$CERT" --key "$KEY" --signing-keyring "$KEYRING" "$B" "$RAUCB" || die "rauc bundle fallito"
 rauc info --keyring "$KEYRING" "$RAUCB" > "$OUT/hifi-image-${VERSION}.info.txt" || die "il bundle non si verifica con la keyring $KEYRING"
 ( cd "$OUT" && sha256sum "$(basename "$RAUCB")" > "$(basename "$RAUCB").sha256" )
 if [ "$KEEP_EXT4" = 1 ]; then
