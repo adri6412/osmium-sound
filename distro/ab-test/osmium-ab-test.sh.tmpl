@@ -53,6 +53,15 @@ main() {
         fi
     }
     is_image() { [ -f /usr/lib/osmium/IMAGE_VERSION ]; }
+    # Dove sta il bundle immagine: nella cartella del pacchetto, oppure in /data
+    # (dopo la conversione la root legacy è stretta: 1,3 GB non ci stanno più).
+    find_bundle() {
+        for c in "$DIR/hifi-image-$VERSION.raucb" /data/ab/hifi-image-"$VERSION".raucb /data/hifi-image-"$VERSION".raucb /var/tmp/hifi-image-"$VERSION".raucb; do
+            [ -f "$c" ] && { echo "$c"; return 0; }
+        done
+        echo "Bundle hifi-image-$VERSION.raucb non trovato: copialo in /data/ab/ (sudo install -d -o \$USER /data/ab) e rilancia" >&2
+        return 1
+    }
 
     wait_apt_idle() {
         # Su un'installazione fresca hifi-firstboot sta installando Lyrion con apt:
@@ -108,7 +117,7 @@ main() {
         precheck) "$SBIN/hifi-ab-precheck.sh"; return $? ;;
         prepare) "$SBIN/hifi-ab-convert.sh" cleanup; "$SBIN/hifi-ab-convert.sh" prepare && ask_reboot; return $? ;;
         finish) "$SBIN/hifi-ab-convert.sh" finish; return $? ;;
-        install) "$SBIN/hifi-ab-convert.sh" install "$DIR/hifi-image-$VERSION.raucb" && ask_reboot; return $? ;;
+        install) b=$(find_bundle) || return 1; "$SBIN/hifi-ab-convert.sh" install "$b" && ask_reboot; return $? ;;
     esac
 
     # ── automatico: il passo giusto in base allo stato ─────────────────────
@@ -126,6 +135,9 @@ main() {
             [ -f "$SBIN/hifi-ab-precheck.sh" ] || { echo "script hifi-ab assenti dopo l'installazione del pacchetto di sistema" >&2; exit 1; }
             [ "$st" = failed ] && { echo "--- tentativo precedente fallito: log sulla ESP ---"; tail -n 20 /boot/efi/EFI/debian/abconvert.log 2>/dev/null; }
             wait_apt_idle || return 1
+            if [ -f "$DIR/hifi-image-$VERSION.raucb" ] && [ "$(stat -c %d "$DIR")" = "$(stat -c %d /)" ]; then
+                echo "NOTA: il bundle immagine (1,3 GB) sta sulla root e pesa sulla stima di spazio: se le pre-verifiche bocciano, rimuovilo da qui e ricopialo in /data/ab/ dopo la conversione."
+            fi
             "$SBIN/hifi-ab-convert.sh" cleanup
             if ! "$SBIN/hifi-ab-precheck.sh"; then
                 echo "Questo apparecchio non è convertibile (vedi motivi sopra). Nulla è stato cambiato." >&2
@@ -148,7 +160,8 @@ main() {
             ;;
         ready)
             say "install: semina /data, scrive lo slot B, attiva il selettore"
-            "$SBIN/hifi-ab-convert.sh" install "$DIR/hifi-image-$VERSION.raucb" || return 1
+            b=$(find_bundle) || return 1
+            "$SBIN/hifi-ab-convert.sh" install "$b" || return 1
             step_status
             say "Riavvio: parte l'immagine dallo slot B. Se non si dichiara buona entro 10 minuti si torna qui da soli."
             ask_reboot

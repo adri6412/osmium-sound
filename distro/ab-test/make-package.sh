@@ -36,6 +36,13 @@ Come si usa (sull'apparecchio, via SSH, come root)
      Se B non si dichiara "buona" entro 10 minuti, l'apparecchio riavvia da solo e
      torna alla root legacy (che è ancora lì, intatta): rilancia lo script per vedere perché.
 
+Spazio sulla root (apparecchi con disco da 16 GB)
+  La pre-verifica misura quanto la root può restringersi (stima di resize2fs, prudente).
+  Il bundle immagine da 1,3 GB copiato nella home CONTA: se la pre-verifica boccia per
+  spazio, cancellalo dalla cartella, rilancia lo script (passo 2) e dopo la conversione
+  ricopialo in /data/ab/ (sudo install -d -o \$USER /data/ab): il passo 3 lo trova da solo lì.
+  Altre cose che liberano spazio: kernel di prova (apt purge), /var/lib/squeezeboxserver/cache.
+
 Comandi utili
   sudo sh osmium-ab-test.sh status        stato, layout, grubenv, rauc
   sudo hifi-ab-precheck.sh                perché (non) si può convertire

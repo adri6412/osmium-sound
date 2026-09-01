@@ -78,8 +78,11 @@ if [ -n "$disk" ]; then
         slot_a_mib=$(( (root_min_mib + 256 + 7) / 8 * 8 ))
     fi
     need=$(( 1 + 512 + slot_a_mib + AB_SLOT_B_MIB + 3072 ))
-    [ "$disk_mib" -ge "$need" ] \
-        || add "la root occupa almeno ${root_min_mib} MiB: con uno slot A da ${slot_a_mib} MiB e uno B da ${AB_SLOT_B_MIB} resterebbero meno di 3 GiB per i dati su un disco da ${disk_mib} MiB (pulizia: hifi-ab-convert.sh cleanup)"
+    if [ "$disk_mib" -lt "$need" ]; then
+        # i colpevoli tipici: pacchetti/bundle copiati nella home, kernel di prova
+        big=$(find / -xdev -type f -size +300M ! -path '/usr/*' ! -path '/opt/*' 2>/dev/null | head -n 4 | tr '\n' ' ')
+        add "la root occupa almeno ${root_min_mib} MiB: con uno slot A da ${slot_a_mib} MiB e uno B da ${AB_SLOT_B_MIB} resterebbero meno di 3 GiB per i dati su un disco da ${disk_mib} MiB (pulizia: hifi-ab-convert.sh cleanup${big:+; file grandi da spostare via: $big})"
+    fi
 
     # lo stub GRUB sulla ESP dev'essere quello che conosciamo (o già il nostro selettore)
     if mountpoint -q "$AB_ESP_MNT" && [ -f "$AB_STUB" ]; then
