@@ -11,19 +11,18 @@
 #
 # Opzioni / ambiente:
 #   --out DIR         cartella di uscita          (IMAGE_OUT, default: radice repo)
-#   --size-mib N      dimensione dell'immagine    (IMAGE_SIZE_MIB, default 3584:
-#                     deve stare nello slot più piccolo, 4096 MiB; RAUC poi la
-#                     allarga a tutta la partizione con resize=true)
+#   (root in SQUASHFS, zstd: ~1,1 GB per 2,7 GiB di contenuto; lo slot RAUC è
+#    `raw` e la partizione minima è AB_SLOT_B_MIB=1792 — vedi hifi-ab-lib.sh)
 #   --cert F --key F  certificato/chiave di firma (RAUC_CERT / RAUC_KEY; PEM o
 #                     contenuto PEM in RAUC_SIGNING_CERT / RAUC_SIGNING_KEY)
 #   --keyring F       CA con cui verificare       (default distro/rauc-keys/keyring.pem)
-#   --keep-ext4       lascia anche rootfs.ext4.zst accanto al bundle
+#   --keep-rootfs     lascia anche rootfs.squashfs accanto al bundle
 #
 # Cosa fa (in ordine): via i pacchetti solo-live e apt automatico; rauc/zstd
 # presenti; Lyrion come symlink verso /data/lyrion/current; utenti a UID fisso
-# (sysusers); marcatori di versione fuori da /etc; initrd con overlay/zstd/
-# plymouth; grub.cfg statico dello slot; fstab dell'immagine; pulizia; mke2fs -d
-# riproducibile; rauc bundle + verifica contro la keyring.
+# (sysusers); marcatori di versione fuori da /etc; initrd con overlay/squashfs/
+# zstd/plymouth; grub.cfg statico dello slot; fstab dell'immagine; pulizia;
+# mksquashfs riproducibile; rauc bundle + verifica contro la keyring.
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -31,13 +30,11 @@ REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 CH=""
 VERSION="${IMAGE_VERSION:-}"
 OUT="${IMAGE_OUT:-$REPO_ROOT}"
-SIZE_MIB="${IMAGE_SIZE_MIB:-3584}"
+SLOT_MIB="${AB_SLOT_B_MIB:-1792}"      # lo slot più piccolo: l'immagine deve starci con margine
 CERT="${RAUC_CERT:-}"
 KEY="${RAUC_KEY:-}"
 KEYRING="${RAUC_KEYRING:-$SCRIPT_DIR/rauc-keys/keyring.pem}"
 KEEP_EXT4=0
-FS_UUID="5f3c2b5e-0a9b-4e4f-9d1a-0b5c3a7e2d11"   # fisso: lo cambia l'hook slot-post-install
-HASH_SEED="9b1f4d2a-6c3e-4a8b-b2d7-1e0f5a6c7d8e"
 export SOURCE_DATE_EPOCH="${SOURCE_DATE_EPOCH:-$(git -C "$REPO_ROOT" log -1 --format=%ct 2>/dev/null || date +%s)}"
 
 log() { printf '\033[1;36m[hifi-image]\033[0m %s\n' "$*"; }
@@ -48,11 +45,10 @@ while [ $# -gt 0 ]; do
         --chroot) CH="$2"; shift 2 ;;
         --version) VERSION="$2"; shift 2 ;;
         --out) OUT="$2"; shift 2 ;;
-        --size-mib) SIZE_MIB="$2"; shift 2 ;;
         --cert) CERT="$2"; shift 2 ;;
         --key) KEY="$2"; shift 2 ;;
         --keyring) KEYRING="$2"; shift 2 ;;
-        --keep-ext4) KEEP_EXT4=1; shift ;;
+        --keep-rootfs|--keep-ext4) KEEP_EXT4=1; shift ;;
         -h|--help) grep '^#' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
         *) die "argomento sconosciuto: $1" ;;
     esac
@@ -63,7 +59,7 @@ CH="$(cd "$CH" && pwd)"
 [ -n "$VERSION" ] || die "--version mancante"
 [ -x "$CH/usr/local/bin/api_server.py" ] || die "$CH non sembra il chroot dell'apparecchio"
 [ -f "$KEYRING" ] || die "keyring RAUC mancante: $KEYRING"
-for t in mke2fs rauc zstd e2fsck; do command -v "$t" >/dev/null || die "manca $t sull'host di build"; done
+for t in mksquashfs rauc zstd; do command -v "$t" >/dev/null || die "manca $t sull'host di build"; done
 mkdir -p "$OUT"
 SHARE="$CH/usr/local/share/hifi-ab"
 [ -f "$SHARE/slot-grub.cfg.tmpl" ] || die "manca $SHARE/slot-grub.cfg.tmpl nel chroot"
@@ -211,7 +207,7 @@ MODULES=most
 COMPRESS=zstd
 FRAMEBUFFER=y
 CONF
-for m in overlay vfat nls_cp437 nls_ascii nls_utf8 ext4; do
+for m in overlay squashfs vfat nls_cp437 nls_ascii nls_utf8 ext4; do
     grep -qx "$m" "$CH/etc/initramfs-tools/modules" 2>/dev/null || echo "$m" >> "$CH/etc/initramfs-tools/modules"
 done
 kvers=$(find "$CH/boot" -maxdepth 1 -name 'vmlinuz-*' | sed 's|.*/vmlinuz-||' | sort -V)
@@ -252,7 +248,7 @@ if command -v grub-script-check >/dev/null 2>&1; then grub-script-check "$CH/boo
 # /vmlinuz e /initrd.img (symlink Debian) restano: comodi per il ramo legacy del selettore
 cat > "$CH/etc/fstab" <<'FSTAB'
 # /etc/fstab — immagine Osmium Sound (slot A/B, root in sola lettura).
-# La root, /data (PARTLABEL hifi-data, stesso disco), l'overlay di /etc, i bind
+# La root (squashfs, sola lettura), /data (PARTLABEL hifi-data, stesso disco), l'overlay di /etc, i bind
 # di /var e /home e la ESP su /boot/efi li monta l'initramfs
 # (scripts/local-bottom/hifi-state) PRIMA che parta systemd: qui restano solo
 # i punti di montaggio effimeri.
@@ -279,36 +275,39 @@ if [ "${IMAGE_NO_MOUNTS:-0}" != 1 ]; then
 fi
 
 used_mib=$(du -sxm "$CH" | cut -f1)
-budget=$(( SIZE_MIB * 90 / 100 ))
-log "contenuto immagine: ${used_mib} MiB (immagine ${SIZE_MIB} MiB, tetto ${budget})"
-if [ "$used_mib" -gt "$budget" ]; then
-    du -xm --max-depth=2 "$CH" | sort -n | tail -n 15 >&2
-    die "l'immagine supera il tetto: ${used_mib} > ${budget} MiB"
-fi
+log "contenuto immagine: ${used_mib} MiB"
 
-# ── 9. rootfs.ext4 riproducibile ─────────────────────────────────────────
-log "mke2fs -d (ext4, ${SIZE_MIB} MiB, metadata_csum_seed)"
-EXT4="$WORK/rootfs.ext4"
-rm -f "$EXT4"
-E2FSPROGS_FAKE_TIME="$SOURCE_DATE_EPOCH" mke2fs -F -q -t ext4 -L hifi-root -m 0 \
-    -U "$FS_UUID" -O metadata_csum_seed,^64bit \
-    -E "hash_seed=$HASH_SEED,lazy_itable_init=0,lazy_journal_init=0,root_owner=0:0" \
-    -d "$CH" "$EXT4" "${SIZE_MIB}M" || die "mke2fs fallito"
-e2fsck -fn "$EXT4" >/dev/null 2>&1 || die "e2fsck sull'immagine appena creata ha trovato errori"
+# ── 9. rootfs.squashfs (sola lettura, zstd) ───────────────────────────────
+# Squashfs invece di ext4: la root è comunque in sola lettura e così pesa un
+# terzo (slot da 1,75 GiB invece di 4). Il prezzo: ogni aggiornamento è un
+# download intero (~1 GB, i delta a blocchi non mordono su dati compressi) e
+# niente `remount,rw` di prova. zstd: decompressione leggera anche sul J4105.
+log "mksquashfs (zstd, blocchi da 256K)"
+SQ="$WORK/rootfs.squashfs"
+rm -f "$SQ"
+SOURCE_DATE_EPOCH="$SOURCE_DATE_EPOCH" mksquashfs "$CH" "$SQ" -comp zstd -Xcompression-level 15 -b 256K \
+    -noappend -no-progress -xattrs -no-recovery >/dev/null || die "mksquashfs fallito"
+sq_mib=$(du -m "$SQ" | cut -f1)
+budget=$(( SLOT_MIB * 90 / 100 ))
+log "rootfs.squashfs: ${sq_mib} MiB (slot minimo ${SLOT_MIB} MiB, tetto ${budget})"
+if [ "$sq_mib" -gt "$budget" ]; then
+    du -xm --max-depth=2 "$CH" | sort -n | tail -n 15 >&2
+    die "l'immagine supera il tetto: ${sq_mib} > ${budget} MiB"
+fi
 
 # ── 10. bundle RAUC ─────────────────────────────────────────────────────
 log "rauc bundle (verity, adaptive block-hash-index)"
 B="$WORK/bundle"; mkdir -p "$B"
 sed -e "s|@VERSION@|$VERSION|g" "$SCRIPT_DIR/rauc/manifest.raucm.tmpl" > "$B/manifest.raucm"
 install -m 0755 "$SCRIPT_DIR/rauc/hook.sh" "$B/hook.sh"
-mv "$EXT4" "$B/rootfs.ext4"
+mv "$SQ" "$B/rootfs.squashfs"
 RAUCB="$OUT/hifi-image-${VERSION}.raucb"
 rm -f "$RAUCB"
 rauc bundle --cert "$CERT" --key "$KEY" --signing-keyring "$KEYRING" "$B" "$RAUCB" || die "rauc bundle fallito"
 rauc info --keyring "$KEYRING" "$RAUCB" > "$OUT/hifi-image-${VERSION}.info.txt" || die "il bundle non si verifica con la keyring $KEYRING"
 ( cd "$OUT" && sha256sum "$(basename "$RAUCB")" > "$(basename "$RAUCB").sha256" )
 if [ "$KEEP_EXT4" = 1 ]; then
-    zstd -q -T0 -10 --force -o "$OUT/hifi-image-${VERSION}.rootfs.ext4.zst" "$B/rootfs.ext4"
+    cp "$B/rootfs.squashfs" "$OUT/hifi-image-${VERSION}.rootfs.squashfs"
 fi
 cp "$CH/usr/lib/osmium/BUILD_INFO" "$OUT/hifi-image-${VERSION}.build-info.txt"
 log "DONE ✓  $RAUCB"

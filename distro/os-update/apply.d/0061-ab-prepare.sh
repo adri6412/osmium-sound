@@ -28,7 +28,7 @@ if command -v apt-get >/dev/null 2>&1 && [ -f /etc/debian_version ]; then
     ensure_pkg rauc-service || true
 fi
 
-for u in hifi-rauc-config.service hifi-ab-finish.service hifi-boot-health.service hifi-boot-watchdog.timer; do
+for u in hifi-rauc-config.service hifi-ab-finish.service hifi-ab-image.service hifi-boot-health.service hifi-boot-watchdog.timer; do
     [ -f "/etc/systemd/system/$u" ] || continue
     if ! systemctl is-enabled --quiet "$u" 2>/dev/null; then
         if systemctl enable "$u" >/dev/null 2>&1; then

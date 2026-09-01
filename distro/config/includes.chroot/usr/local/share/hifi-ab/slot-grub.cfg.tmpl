@@ -24,6 +24,6 @@ set slotarg=
 if [ -n "$rauc_slot" ]; then
     set slotarg="rauc.slot=$rauc_slot"
 fi
-linux /boot/vmlinuz-@KVER@ $rootarg ro $slotarg panic=10 @CMDLINE@
+linux /boot/vmlinuz-@KVER@ $rootarg ro rootfstype=squashfs $slotarg panic=10 @CMDLINE@
 initrd /boot/initrd.img-@KVER@
 boot

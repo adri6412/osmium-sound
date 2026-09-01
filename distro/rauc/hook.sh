@@ -3,9 +3,8 @@
 #
 #   install-check      rifiuta il bundle se non è per questo hardware o se
 #                      l'apparecchio non ha il layout A/B (partizione dati).
-#   slot-post-install  dopo la scrittura dello slot: UUID ext4 nuovo, così A e B
-#                      (scritti dalla stessa immagine) non si confondono in
-#                      /dev/disk/by-uuid. Istantaneo grazie a metadata_csum_seed.
+#   slot-post-install  dopo la scrittura dello slot: con la root squashfs non
+#                      c'è nulla da fare (resta per gli slot ext4 legacy).
 set -eu
 
 case "${1:-}" in
@@ -23,9 +22,12 @@ slot-post-install)
     case "${RAUC_SLOT_CLASS:-}" in
     rootfs)
         dev="${RAUC_SLOT_DEVICE:?}"
-        # tune2fs vuole un filesystem "appena controllato" prima di cambiare UUID
-        e2fsck -fy "$dev" >/dev/null 2>&1 || true
-        tune2fs -U random "$dev" >/dev/null 2>&1 || echo "avviso: tune2fs -U su $dev fallito (non bloccante)" >&2
+        # Lo slot è uno squashfs scritto raw: niente da fare. Solo se (per
+        # qualche motivo) dentro c'è un ext4 gli si dà un UUID nuovo.
+        if [ "$(blkid -o value -s TYPE "$dev" 2>/dev/null)" = ext4 ]; then
+            e2fsck -fy "$dev" >/dev/null 2>&1 || true
+            tune2fs -U random "$dev" >/dev/null 2>&1 || echo "avviso: tune2fs -U su $dev fallito (non bloccante)" >&2
+        fi
         ;;
     esac
     ;;

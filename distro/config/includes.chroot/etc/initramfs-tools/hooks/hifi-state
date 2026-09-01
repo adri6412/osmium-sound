@@ -13,5 +13,5 @@ for b in e2fsck fsck.ext4; do
     p=$(command -v "$b" 2>/dev/null) || continue
     copy_exec "$p"
 done
-manual_add_modules overlay vfat nls_cp437 nls_ascii nls_utf8
+manual_add_modules overlay squashfs vfat nls_cp437 nls_ascii nls_utf8
 exit 0

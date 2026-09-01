@@ -1,0 +1,16 @@
+[Unit]
+Description=Osmium Sound — dopo la conversione A/B avvia l'aggiornamento all'immagine (slot B)
+ConditionPathExists=/var/lib/hifi-player/ab/finished
+ConditionPathExists=!/var/lib/hifi-player/ab/image-kicked
+ConditionPathExists=!/usr/lib/osmium/IMAGE_VERSION
+ConditionKernelCommandLine=!boot=live
+After=hifi-ab-finish.service hifi-api.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/hifi-ab-image.sh
+TimeoutStartSec=3000
+
+[Install]
+WantedBy=multi-user.target

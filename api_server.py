@@ -144,6 +144,12 @@ OS_VERSION_FILE = '/etc/hifi-player/OS_VERSION'
 OS_SCRIPT = '/usr/local/sbin/hifi-os-update.sh'
 OS_STATUS_FILE = '/run/hifi-os-status.json'
 OS_PREFIX = 'hifi-os-'
+# Immagine RAUC (schema A/B): un solo bundle che porta UI + componenti di
+# sistema + OS; lo installa RAUC nello slot inattivo in streaming dall'asset
+# della Release, senza passare dal disco (vedi hifi-image-update.sh).
+IMAGE_PREFIX = 'hifi-image-'
+IMAGE_STATUS_FILE = '/run/hifi-image-status.json'
+IMAGE_SCRIPT = '/usr/local/sbin/hifi-image-update.sh'
 
 # ──────────────────────────────────────────────────────────────────
 #  Installer (src/pages/InstallWizard.jsx): backend for the "Install
@@ -206,7 +212,10 @@ UPDATE_STAGE_RUNNER_UNIT = 'hifi-update-stage'
 SYSTEM_UPDATE_LINK = '/system-update'
 # Canonical order. system first (it delivers the API, daemons, helper
 # scripts and units everything else relies on), os second, ui last.
-UPDATE_PLAN_ORDER = ('system', 'os', 'ui')
+# 'image' per ultimo: sugli apparecchi non ancora convertiti non è mai offerto
+# (check_image_update), su quelli convertiti o già immagine è l'unico passo
+# che conta e supera gli altri (il riavvio va direttamente sul nuovo slot).
+UPDATE_PLAN_ORDER = ('system', 'os', 'ui', 'image')
 # How long a finished/failed outcome stays readable so clients can show it
 # — including a kiosk that only comes back up after both update-mode
 # reboots. After this it is cleared automatically, so a plan/outcome
@@ -4430,7 +4439,7 @@ def _debian_codename():
 # from the new (Debian 13) ISO instead of trying to update in place.
 _OTA_BLOCKED_CODENAMES = ('bookworm',)
 
-def _check_release_update(current, prefix, channel=None):
+def _check_release_update(current, prefix, channel=None, suffix='.tar.gz', image=False):
     """Look at the relevant GitHub Release and return update info for the asset
     whose name starts with `prefix` (e.g. 'hifi-ui-' or 'hifi-system-').
 
@@ -4439,7 +4448,7 @@ def _check_release_update(current, prefix, channel=None):
     one to check prod/dev independently of whatever the device's own channel
     setting happens to be, without touching it."""
     channel = channel or get_ota_channel()
-    if _image_mode():
+    if _image_mode() and not image:
         # Slot immagine: i canali legacy (ui/system/os) non esistono più, si
         # aggiorna solo l'immagine intera (bundle RAUC). Stesso segnale
         # `blocked` che le UI già gestiscono come "niente da fare qui".
@@ -4472,9 +4481,9 @@ def _check_release_update(current, prefix, channel=None):
                 return a
         return None
 
-    tarball = _named('.tar.gz')
-    sha_asset = _named('.tar.gz.sha256')
-    sig_asset = _named('.tar.gz.sha256.sig')
+    tarball = _named(suffix)
+    sha_asset = _named(suffix + '.sha256')
+    sig_asset = _named(suffix + '.sha256.sig')
 
     return {
         'current': current,
@@ -4490,6 +4499,26 @@ def _check_release_update(current, prefix, channel=None):
 
 def check_app_update():
     return _check_release_update(_installed_ui_version(), OTA_UI_PREFIX)
+
+def _installed_image_version():
+    """Versione dell'immagine in uso; su una root legacy già convertita (RAUC
+    configurato ma nessuna immagine ancora installata) è 'unknown', così la
+    prima immagine risulta sempre "più nuova"."""
+    if _image_mode():
+        return _image_version()
+    return 'unknown'
+
+def check_image_update(channel=None):
+    """Bundle immagine RAUC: offerto solo dove RAUC è configurato (apparecchio
+    convertito allo schema A/B, oppure già in modalità immagine). Un legacy non
+    convertito non lo vede: prima passa dal pacchetto 1 (system+OS) che, se le
+    pre-verifiche lo permettono, converte le partizioni."""
+    channel = channel or get_ota_channel()
+    if not os.path.exists(RAUC_SYSTEM_CONF):
+        return {'current': 'unknown', 'latest': None, 'channel': channel,
+                'update_available': False}
+    return _check_release_update(_installed_image_version(), IMAGE_PREFIX, channel,
+                                 suffix='.raucb', image=True)
 
 def _fetch_sha256(sha_url):
     """Download the .sha256 sidecar and return just the hex digest.
@@ -4791,6 +4820,7 @@ _PLAN_KINDS = {
     'system': (lambda: check_system_update(), SYS_STATUS_FILE, lambda: _installed_system_version()),
     'os':     (lambda: check_os_update(),     OS_STATUS_FILE,  lambda: _installed_os_version()),
     'ui':     (lambda: check_app_update(),    OTA_STATUS_FILE, lambda: _installed_ui_version()),
+    'image':  (lambda: check_image_update(),  IMAGE_STATUS_FILE, lambda: _installed_image_version()),
 }
 
 def _read_update_plan():
@@ -4944,6 +4974,8 @@ def build_update_plan():
     steps = []
     errors = []
     for kind in UPDATE_PLAN_ORDER:
+        if kind not in _PLAN_KINDS:
+            continue
         check_fn = _PLAN_KINDS[kind][0]
         try:
             info = check_fn()
@@ -5977,6 +6009,10 @@ def api_factory_reset():
 @app.route('/webui_reset_credentials', methods=['POST'])
 def api_webui_reset_credentials():
     return jsonify(webui_reset_credentials())
+
+@app.route('/image_update/check', methods=['GET'])
+def api_image_update_check():
+    return jsonify(check_image_update())
 
 @app.route('/ab_status', methods=['GET'])
 def api_ab_status():

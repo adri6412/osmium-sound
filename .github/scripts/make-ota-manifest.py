@@ -34,6 +34,9 @@ def main():
         systar, systar + ".sha256",
         ostar, ostar + ".sha256", ostar + ".sha256.sig",
     ]
+    # Asset in più (l'immagine RAUC hifi-image-<ver>.raucb e il suo .sha256):
+    # elenco separato da spazi in EXTRA_ASSETS, aggiunto dal job che li carica.
+    names += [n for n in os.environ.get("EXTRA_ASSETS", "").split() if n]
     assets = []
     for n in names:
         try:

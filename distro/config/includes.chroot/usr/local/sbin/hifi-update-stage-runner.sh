@@ -67,6 +67,7 @@ if [ -n "${HIFI_UPDATE_TEST_ROOT:-}" ]; then
     SYS_SCRIPT="$_R/sbin/hifi-system-update.sh"
     OS_SCRIPT="$_R/sbin/hifi-os-update.sh"
     UI_SCRIPT="$_R/sbin/hifi-ota-update.sh"
+    IMG_SCRIPT="$_R/sbin/hifi-image-update.sh"
     HIFI_RUNNER_PRIVATE=1
 else
     UPDATE_DIR=/var/lib/hifi-player/update
@@ -77,6 +78,7 @@ else
     SYS_SCRIPT=/usr/local/sbin/hifi-system-update.sh
     OS_SCRIPT=/usr/local/sbin/hifi-os-update.sh
     UI_SCRIPT=/usr/local/sbin/hifi-ota-update.sh
+    IMG_SCRIPT=/usr/local/sbin/hifi-image-update.sh
     # The log helper is sourced defensively: under `set -e` a missing or
     # unreadable /usr/local/sbin/hifi-log.sh would abort this script before it
     # could record anything at all — exactly the silent failure mode this
@@ -175,6 +177,7 @@ run_step() {  # <kind> <version> <url> <sha> <sig>
         system) "$SYS_SCRIPT" stage "$3" "$4" "$2" ;;
         os)     "$OS_SCRIPT"  stage "$3" "$4" "$5" "$2" ;;
         ui)     "$UI_SCRIPT"  stage "$3" "$4" "$2" ;;
+        image)  "$IMG_SCRIPT" stage "$3" "$2" ;;
         *)      return 64 ;;
     esac
 }
@@ -249,6 +252,22 @@ if [ "$overall" = finished ] && [ "$already_finished" -eq 0 ]; then
         # Test hook: record the intent instead of touching the real machine.
         : > "${PLAN}.would-reboot"
     else
+        # Con uno step `image` (schema A/B) RAUC ha già scritto lo slot inattivo e
+        # lo ha reso primario: si riavvia e il selettore GRUB fa partire il nuovo
+        # sistema. Niente /system-update: la sessione isolata di apply servirebbe
+        # solo ai componenti legacy, che il nuovo slot rende comunque superati.
+        if awk '$1=="step" && $2=="image" { f=1 } END { exit !f }' "$PLAN"; then
+            log "image staged — rebooting into the new slot (no update-mode session)"
+            mkdir -p "$UPDATE_DIR"
+            _tmp=$(mktemp "${STATE_FILE}.XXXXXX") || _tmp=""
+            if [ -n "$_tmp" ]; then
+                { echo 'phase=staged'; echo "ts=$(date +%s)"; echo 'message=Immagine installata, riavvio sul nuovo sistema'; } > "$_tmp"
+                chmod 644 "$_tmp"; mv -f "$_tmp" "$STATE_FILE"
+            fi
+            sync
+            systemctl reboot || log "systemctl reboot failed"
+            exit 0
+        fi
         log "all components staged — entering update mode"
         mkdir -p "$UPDATE_DIR"
         _tmp=$(mktemp "${STATE_FILE}.XXXXXX") || _tmp=""

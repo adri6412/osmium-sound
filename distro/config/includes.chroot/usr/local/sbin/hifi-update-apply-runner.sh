@@ -230,6 +230,29 @@ for kind in system os ui; do
     splash_progress $(( done_count * 100 / total ))
 done
 
+# ── schema A/B: se questo legacy può essere convertito, arma la conversione ──
+# Il pacchetto di sistema/OS appena applicato ha portato gli script hifi-ab-*
+# e il pacchetto rauc (0061). Le pre-verifiche decidono; se passano, `prepare`
+# costruisce l'initrd dedicato e imposta grub-reboot: il riavvio qui sotto
+# entra nell'initrd di conversione (root ristretta, slot B e /data), poi la
+# root legacy riparte, `finish` configura RAUC e hifi-ab-image avvia
+# l'aggiornamento all'immagine. Chi non passa le pre-verifiche resta com'è.
+if [ -z "${HIFI_APPLY_TEST_ROOT:-}" ] && [ -x /usr/local/sbin/hifi-ab-convert.sh ] \
+   && [ ! -f /etc/rauc/system.conf ] && [ ! -f /usr/lib/osmium/IMAGE_VERSION ]; then
+    splash_progress 100
+    /usr/local/sbin/hifi-ab-convert.sh cleanup >/dev/null 2>&1 || true
+    if /usr/local/sbin/hifi-ab-precheck.sh >/dev/null 2>&1; then
+        log "A/B: pre-verifiche superate — preparo la conversione (initrd dedicato + grub-reboot)"
+        if /usr/local/sbin/hifi-ab-convert.sh prepare; then
+            log "A/B: conversione armata per il prossimo avvio"
+        else
+            log "A/B: prepare fallito — l'apparecchio resta legacy"
+        fi
+    else
+        log "A/B: pre-verifiche non superate — l'apparecchio resta legacy ($(cut -c1-200 /run/hifi-ab-precheck.json 2>/dev/null))"
+    fi
+fi
+
 # ── every component landed — clear the flag and go back to normal ──────
 log "update-mode session complete — returning to normal boot"
 rm -rf "$STAGE_ROOT"
