@@ -65,9 +65,44 @@ stage)
 
     VJ="{\"version\":\"$VERSION\"}"
     write_status downloading 10 "Installing system image $VERSION into the standby slot…" update.image.install "$VJ"
+
+    # Avanzamento reale. RAUC stampa "46% Copying image to rootfs.1" una volta
+    # sola e poi tace per tutta la copia (20-30 minuti in streaming): la barra
+    # resterebbe ferma. Si misura invece quanto è stato scritto sullo slot di
+    # destinazione (settori scritti in /sys/class/block/<part>/stat, nessun
+    # altro scrive lì) rispetto alla dimensione dell'immagine dichiarata nel
+    # manifest del bundle. Se una delle due misure manca si ripiega sulle
+    # percentuali grossolane di RAUC.
+    # shellcheck source=distro/config/includes.chroot/usr/local/sbin/hifi-ab-lib.sh
+    # shellcheck disable=SC1091
+    . /usr/local/sbin/hifi-ab-lib.sh
+    slot_dev=""
+    case "$(ab_booted_slot 2>/dev/null || true)" in
+        A) slot_dev=$(ab_part_by_name hifi-root-b 2>/dev/null || true) ;;
+        B) slot_dev=$(ab_part_by_name hifi-root-a 2>/dev/null || true) ;;
+    esac
+    img_bytes=$(rauc info --output-format=json "$SRC" 2>/dev/null | python3 -c '
+import json, sys
+def sizes(o):
+    if isinstance(o, dict):
+        if isinstance(o.get("size"), int) and "filename" in o:
+            yield o["size"]
+        for v in o.values():
+            yield from sizes(v)
+    elif isinstance(o, list):
+        for v in o:
+            yield from sizes(v)
+print(sum(sizes(json.load(sys.stdin).get("images", []))))' 2>/dev/null || echo 0)
+    case "$img_bytes" in ''|*[!0-9]*) img_bytes=0 ;; esac
+    written_sectors() { awk '{print $7}' "/sys/class/block/${slot_dev#/dev/}/stat" 2>/dev/null || echo 0; }
+    base_sectors=0
+    [ -n "$slot_dev" ] && base_sectors=$(written_sectors)
+    echo "I: [hifi-image] slot di destinazione ${slot_dev:-?}, immagine ${img_bytes} byte"
+
     rcfile="$WORKDIR/rauc.rc"
     { rauc install "$SRC" 2>&1; echo "$?" > "$rcfile"; } | while IFS= read -r line; do
         printf '%s\n' "$line"
+        [ "$img_bytes" -gt 0 ] && [ -n "$slot_dev" ] && continue
         case "$line" in
             *%*)
                 pct=$(printf '%s' "$line" | sed -n 's/^[[:space:]]*\([0-9]\{1,3\}\)%.*/\1/p')
@@ -75,7 +110,24 @@ stage)
                     update.image.write "{\"version\":\"$VERSION\",\"pct\":$pct}"
                 ;;
         esac
+    done &
+    pipe_pid=$!
+    last_pct=-1
+    while kill -0 "$pipe_pid" 2>/dev/null; do
+        sleep 3
+        [ "$img_bytes" -gt 0 ] && [ -n "$slot_dev" ] || continue
+        now=$(written_sectors)
+        case "$now" in ''|*[!0-9]*) continue ;; esac
+        pct=$(( (now - base_sectors) * 512 * 100 / img_bytes ))
+        [ "$pct" -gt 99 ] && pct=99
+        [ "$pct" -lt 0 ] && pct=0
+        if [ "$pct" != "$last_pct" ]; then
+            last_pct=$pct
+            write_status downloading $(( 10 + pct * 80 / 100 )) "Writing system image $VERSION… ${pct}%" \
+                update.image.write "{\"version\":\"$VERSION\",\"pct\":$pct}"
+        fi
     done
+    wait "$pipe_pid" 2>/dev/null || true
     rc=$(cat "$rcfile" 2>/dev/null || echo 1)
     case "$rc" in ''|*[!0-9]*) rc=1 ;; esac
     [ "$rc" = 0 ] || fail "rauc install failed (rc=$rc): see /var/log/hifi/hifi-image-update.log" update.image.installFailed "{\"rc\":$rc}"
@@ -84,9 +136,6 @@ stage)
         write_status applying 92 "Enabling the A/B boot selector…" update.image.selector
         /usr/local/sbin/hifi-ab-convert.sh select || fail "Writing the A/B boot selector to the ESP failed" update.image.selectorFailed
         /usr/local/sbin/hifi-ab-seed.sh >/dev/null 2>&1 || true
-        # shellcheck source=distro/config/includes.chroot/usr/local/sbin/hifi-ab-lib.sh
-        # shellcheck disable=SC1091
-        . /usr/local/sbin/hifi-ab-lib.sh
         ab_mount_esp 2>/dev/null || true
         ab_state_set installed
     fi
