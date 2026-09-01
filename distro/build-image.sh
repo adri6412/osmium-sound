@@ -30,7 +30,8 @@ REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 CH=""
 VERSION="${IMAGE_VERSION:-}"
 OUT="${IMAGE_OUT:-$REPO_ROOT}"
-SLOT_MIB="${AB_SLOT_B_MIB:-1792}"      # lo slot più piccolo: l'immagine deve starci con margine
+SLOT_MIB="${AB_SLOT_B_MIB:-1280}"      # lo slot più piccolo: l'immagine deve starci con margine
+                                       # (valore vero: AB_SLOT_B_MIB in hifi-ab-lib.sh, verificato più sotto)
 CERT="${RAUC_CERT:-}"
 KEY="${RAUC_KEY:-}"
 KEYRING="${RAUC_KEYRING:-$SCRIPT_DIR/rauc-keys/keyring.pem}"
@@ -189,6 +190,40 @@ in_chroot dpkg-query -W -f='${Package}\n${Provides}\n' \
     echo "kernel=$(find "$CH/boot" -maxdepth 1 -name 'vmlinuz-*' | sed 's|.*/vmlinuz-||' | sort -V | tail -n 1)"
 } > "$CH/usr/lib/osmium/BUILD_INFO"
 
+# ── 5b. peso morto: firmware impossibili e la UI Electron ────────────────
+# Misurato sull'immagine 2.5.24-dev.9-alpha2 (2715 MiB di contenuto): 855 MiB
+# erano firmware e 354 la UI Electron. Qui si toglie ciò che su un mini PC x86
+# audio non può servire, e l'interfaccia Electron, che dall'immagine in poi è
+# sostituita da quella Qt (l'unica installata: vedi ui-engine qui sotto).
+# NON si tocca amdgpu/radeon: esistono mini PC AMD e restare senza driver
+# video sarebbe un guasto grave. Restano fuori dall'INITRD (vedi hook
+# zz-hifi-slim più sotto), dove non servono a nessuno.
+# La taglia dello slot vive in hifi-ab-lib.sh (la usano pre-verifica, initrd e
+# installer): se qui se ne usasse un'altra, il tetto sull'immagine sarebbe
+# calcolato su una partizione che nessuno crea davvero.
+lib_slot=$(sed -n 's/^AB_SLOT_B_MIB="\${AB_SLOT_B_MIB:-\([0-9]*\)}"/\1/p' "$CH/usr/local/sbin/hifi-ab-lib.sh" 2>/dev/null | head -n 1)
+if [ -n "$lib_slot" ] && [ "$lib_slot" != "$SLOT_MIB" ]; then
+    die "taglia dello slot incoerente: build-image=$SLOT_MIB, hifi-ab-lib.sh=$lib_slot"
+fi
+
+log "rimozione dei firmware non pertinenti e della UI Electron"
+fw_before=$(du -sxm "$CH/usr/lib/firmware" 2>/dev/null | cut -f1)
+for d in netronome nvidia mrvl liquidio cxgb3 cxgb4 bnx2x qed mellanox mlxsw \
+         dpaa2 imx qcom powervr myricom qlogic tehuti ueagle-atm; do
+    rm -rf "${CH:?}/usr/lib/firmware/$d"
+done
+log "firmware: da ${fw_before:-?} a $(du -sxm "$CH/usr/lib/firmware" 2>/dev/null | cut -f1) MiB"
+rm -rf "${CH:?}/opt/hifi-media-player" "${CH:?}/opt/hifi-media-player.old"
+# L'immagine ha una sola interfaccia: quella Qt. La scelta sta in
+# /etc/hifi-player/ui-engine, che su un apparecchio convertito arriva
+# dall'overlay del legacy e può dire "electron": chi la legge deve ripiegare
+# su qt quando Electron non c'è (api_server.get_ui_engine, hifi-display-mode,
+# hifi-ab-firstboot), e qui si semina comunque il valore giusto nel lower.
+mkdir -p "$CH/etc/hifi-player"
+printf 'qt
+' > "$CH/etc/hifi-player/ui-engine"
+[ -x "$CH/opt/hifi-qt/hifi-qt" ] || die "manca /opt/hifi-qt/hifi-qt: senza Electron l'immagine resterebbe senza interfaccia"
+
 # ── 6. initrd: overlay/vfat, tutti i moduli, zstd, plymouth ──────────────
 log "initrd dell'immagine (MODULES=most, zstd, plymouth)"
 # Il repo non conserva i bit di esecuzione (core.filemode=false, file nati su
@@ -210,6 +245,33 @@ CONF
 for m in overlay squashfs vfat nls_cp437 nls_ascii nls_utf8 ext4; do
     grep -qx "$m" "$CH/etc/initramfs-tools/modules" 2>/dev/null || echo "$m" >> "$CH/etc/initramfs-tools/modules"
 done
+# MODULES=most porta dentro quasi tutti i driver e con loro i loro firmware:
+# nell'immagine misurata erano 201 MiB su 304 dell'initrd scompattato (80 di
+# amdgpu, 63 di nvidia, 25 di netronome). Nell'initrd non servono: lì si deve
+# solo montare la root, e le GPU prendono il firmware dal sistema vero dopo il
+# pivot. Si tengono i firmware degli Intel (i915/xe: plymouth disegna la
+# schermata di avvio con KMS) e tutto il resto se ne va, moduli GPU compresi
+# così nessun driver fallisce la sonda per firmware mancante e riprova più
+# tardi dalla root vera.
+cat > "$CH/usr/share/initramfs-tools/hooks/zz-hifi-slim" <<'HOOK'
+#!/bin/sh
+# Osmium Sound — trims the initramfs: GPU/server firmware has no job before
+# the root is mounted (see build-image.sh). Runs last (zz-) so everything
+# else has already been copied in.
+PREREQ=""
+prereqs() { echo "$PREREQ"; }
+case "${1:-}" in prereqs) prereqs; exit 0 ;; esac
+. /usr/share/initramfs-tools/hook-functions
+for d in amdgpu radeon nvidia amd nouveau; do
+    rm -rf "$DESTDIR/usr/lib/firmware/$d" "$DESTDIR/lib/firmware/$d"
+done
+for m in amdgpu radeon nouveau nvidia; do
+    find "$DESTDIR" -name "$m.ko*" -delete 2>/dev/null || true
+done
+exit 0
+HOOK
+chmod +x "$CH/usr/share/initramfs-tools/hooks/zz-hifi-slim"
+
 kvers=$(find "$CH/boot" -maxdepth 1 -name 'vmlinuz-*' | sed 's|.*/vmlinuz-||' | sort -V)
 KVER=$(printf '%s\n' "$kvers" | tail -n 1)
 [ -n "$KVER" ] || die "nessun kernel in $CH/boot"

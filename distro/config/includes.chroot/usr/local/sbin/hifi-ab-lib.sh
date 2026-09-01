@@ -7,12 +7,17 @@
 # Layout GPT di riferimento (identico per ISO nuove e apparecchi convertiti):
 #   p1 "BIOS boot"    1 MiB      inerte
 #   p2 "EFI System"   512 MiB    shim+grub Debian, selettore, grubenv
-#   p3 hifi-root-a    dinamica (convertiti) / 1792 (nuovi)     slot A
-#   p4 hifi-root-b    1792 MiB                                  slot B
+#   p3 hifi-root-a    dinamica (convertiti) / 1280 (nuovi)     slot A
+#   p4 hifi-root-b    1280 MiB                                  slot B
 #   p5 hifi-data      resto      stato persistente (/data)
 
-# Lo slot B (e ogni slot di un'installazione nuova) è da 1792 MiB: l'immagine è
-# uno squashfs da ~1,3 GB scritto raw.
+# Lo slot B (e ogni slot di un'installazione nuova) è da 1280 MiB: l'immagine è
+# uno squashfs da ~850 MiB scritto raw (misurata il 2026-09-01 dopo il
+# dimagrimento: firmware impossibili, firmware GPU fuori dall'initrd e UI
+# Electron tolti — vedi build-image.sh). Il tetto in build è il 90% dello
+# slot, quindi c'è oltre un terzo di margine per crescere; la taglia però
+# resta scolpita nelle partizioni di chi installa oggi, e allargarla dopo
+# vorrebbe dire ripartizionare: non stringerla oltre senza motivo serio.
 #
 # 🚨 Lo slot A degli apparecchi CONVERTITI è la root legacy ristretta, quindi
 # NON è una taglia fissa: si dimensiona sul minimo che resize2fs riesce a
@@ -23,12 +28,12 @@
 # Quindi l'unica leva per far entrare la conversione su un disco piccolo è
 # liberare spazio PRIMA (`hifi-ab-convert.sh cleanup --deep`).
 #
-# Conti per un disco da 8 GB (7456 MiB): 1+512 di testa, slot B 1792, dati
-# almeno 1536 → allo slot A restano ~3600 MiB, cioè una root legacy che occupa
-# al massimo ~2,2 GiB. Un'installazione NUOVA da ISO non ha questo vincolo
-# (slot da 1792 entrambi, ~3,3 GiB ai dati).
+# Conti per un disco da 8 GB (7456 MiB): 1+512 di testa, slot B 1280, dati
+# almeno 1536 → allo slot A restano ~4100 MiB, cioè una root legacy che occupa
+# al massimo ~2,5 GiB, e ai dati ne restano ~2050. Un'installazione NUOVA da
+# ISO non ha questo vincolo: slot da 1280 entrambi e ~4,3 GiB ai dati.
 AB_SLOT_MIB="${AB_SLOT_MIB:-5120}"       # solo ripiego se manca la stima
-AB_SLOT_B_MIB="${AB_SLOT_B_MIB:-1792}"
+AB_SLOT_B_MIB="${AB_SLOT_B_MIB:-1280}"
 AB_SLOT_A_MARGIN_MIB="${AB_SLOT_A_MARGIN_MIB:-384}"      # margine preferito
 AB_SLOT_A_MARGIN_MIN_MIB="${AB_SLOT_A_MARGIN_MIN_MIB:-192}"  # margine minimo
 AB_DATA_MIN_MIB="${AB_DATA_MIN_MIB:-1536}"

@@ -2297,6 +2297,16 @@ def set_display_mode(mode):
 UI_ENGINE_FILE = '/etc/hifi-player/ui-engine'
 UI_ENGINES = ('electron', 'qt')
 QT_UI_BIN = '/opt/hifi-qt/hifi-qt'
+ELECTRON_UI_DIR = '/opt/hifi-media-player'
+
+def _electron_ui_installed():
+    """The image ships the Qt interface only — Electron was 354 MiB of the
+    2715 and went out to make room for /data. So Electron is no longer a given:
+    it must be probed exactly like Qt, or a converted device whose /etc still
+    says "electron" (the overlay carries the legacy setting over) would be
+    offered an interface that isn't there and would come back to a black
+    screen."""
+    return os.path.isdir(ELECTRON_UI_DIR)
 
 def _qt_ui_installed():
     """Vero solo se la seconda interfaccia puo' DAVVERO partire su questo
@@ -2323,10 +2333,12 @@ def get_ui_engine():
                 engine = 'qt'
     except Exception:
         pass
-    engines = ['electron'] + (['qt'] if _qt_ui_installed() else [])
-    # se l'interfaccia scelta è sparita (pacchetto rimosso), si dice la verità
+    engines = (['electron'] if _electron_ui_installed() else []) \
+        + (['qt'] if _qt_ui_installed() else [])
+    # the chosen interface is gone (package removed, or an image that only
+    # ships one of the two): say what is actually there
     if engine not in engines:
-        engine = 'electron'
+        engine = engines[0] if engines else 'electron'
     return {'engine': engine, 'engines': engines}
 
 def set_ui_engine(engine):
@@ -2336,7 +2348,8 @@ def set_ui_engine(engine):
     if engine not in UI_ENGINES:
         return {'success': False, 'engine': get_ui_engine()['engine'],
                 'code': 'uiEngine.invalid', 'message': _t('uiEngine.invalid', _lang())}
-    if engine == 'qt' and not _qt_ui_installed():
+    if (engine == 'qt' and not _qt_ui_installed()) \
+       or (engine == 'electron' and not _electron_ui_installed()):
         return {'success': False, 'engine': get_ui_engine()['engine'],
                 'code': 'uiEngine.notInstalled', 'message': _t('uiEngine.notInstalled', _lang())}
     if _update_in_progress():

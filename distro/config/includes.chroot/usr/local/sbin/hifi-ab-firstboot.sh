@@ -64,10 +64,19 @@ for p in /var/lib/squeezeboxserver /var/lib/lyrionmusicserver /var/log/squeezebo
 done
 usermod -aG audio,cdrom squeezeboxserver 2>/dev/null || true
 
-# interfaccia: l'immagine parte con Qt; se il legacy usava Electron si rispetta
+# Interface: the image ships the Qt one only (Electron was dropped to make
+# room). A converted device brings its own /etc through the overlay, so the
+# setting may still say "electron": honour it only if Electron is really
+# installed, otherwise rewrite it to qt — leaving it would mean a black screen
+# on the first boot of the new system.
 eng=$(cat /etc/hifi-player/ui-engine 2>/dev/null || echo qt)
-if [ "$eng" = electron ] && [ -x /usr/local/sbin/hifi-display-mode.sh ]; then
-    /usr/local/sbin/hifi-display-mode.sh engine set electron >/dev/null 2>&1 || true
+if [ "$eng" = electron ]; then
+    if [ -d /opt/hifi-media-player ] && [ -x /usr/local/sbin/hifi-display-mode.sh ]; then
+        /usr/local/sbin/hifi-display-mode.sh engine set electron >/dev/null 2>&1 || true
+    else
+        printf 'qt\n' > /etc/hifi-player/ui-engine
+        ab_log "Electron non è nell'immagine: interfaccia riportata a Qt"
+    fi
 fi
 
 date -u +%Y-%m-%dT%H:%M:%SZ > "$M"

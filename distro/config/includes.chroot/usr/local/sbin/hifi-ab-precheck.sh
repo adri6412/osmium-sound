@@ -76,6 +76,8 @@ if [ -n "$disk" ]; then
     root_min_mib=$(ab_root_min_mib "$rootdev")
     a_max=$(( avail - AB_SLOT_B_MIB - AB_DATA_MIN_MIB ))
     slot_a_mib=$(( root_min_mib + AB_SLOT_A_MARGIN_MIB ))
+    # never smaller than an image slot: an image has to fit in here as well
+    [ "$slot_a_mib" -lt "$AB_SLOT_B_MIB" ] && slot_a_mib=$AB_SLOT_B_MIB
     [ "$slot_a_mib" -gt "$a_max" ] && slot_a_mib=$a_max
     slot_a_mib=$(( slot_a_mib / 8 * 8 ))
     data_mib=$(( avail - slot_a_mib - AB_SLOT_B_MIB ))

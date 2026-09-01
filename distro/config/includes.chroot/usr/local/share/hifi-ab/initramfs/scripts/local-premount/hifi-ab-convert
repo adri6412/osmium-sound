@@ -21,7 +21,7 @@ case "${1:-}" in
 esac
 . /scripts/functions
 
-conv=0; want_uuid=; slot_mib=0; slotb_mib=1792; datamin_mib=1536
+conv=0; want_uuid=; slot_mib=0; slotb_mib=1280; datamin_mib=1536
 read -r cmdline < /proc/cmdline || cmdline=
 for x in $cmdline; do
     case "$x" in
@@ -154,6 +154,9 @@ avail_mib=0
 if [ "$avail_mib" -gt 0 ]; then
     a_max=$(( avail_mib - slotb_mib - datamin_mib ))
     want=$(( min_mib + 384 ))
+    # never smaller than an image slot: a future image has to fit in here too,
+    # once this slot stops holding the shrunk legacy root
+    [ "$want" -lt "$slotb_mib" ] && want=$slotb_mib
     [ "$want" -gt "$a_max" ] && want=$a_max
     slot_mib=$(( want / 8 * 8 ))
 fi
