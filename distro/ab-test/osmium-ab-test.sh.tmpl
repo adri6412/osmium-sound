@@ -54,7 +54,21 @@ main() {
     }
     is_image() { [ -f /usr/lib/osmium/IMAGE_VERSION ]; }
 
+    wait_apt_idle() {
+        # Su un'installazione fresca hifi-firstboot sta installando Lyrion con apt:
+        # le pre-verifiche rifiutano un dpkg occupato, quindi si aspetta (max 30 min).
+        n=0
+        while systemctl is-active --quiet hifi-firstboot.service 2>/dev/null \
+              || { command -v fuser >/dev/null 2>&1 && fuser /var/lib/dpkg/lock-frontend >/dev/null 2>&1; }; do
+            [ "$n" = 0 ] && echo "apt/dpkg occupato (hifi-firstboot o aggiornamenti): aspetto…"
+            n=$((n + 1)); [ "$n" -gt 180 ] && { echo "apt ancora occupato dopo 30 min" >&2; return 1; }
+            sleep 10
+        done
+        return 0
+    }
+
     step_bundles() {
+        wait_apt_idle || return 1
         say "Componenti di sistema $VERSION (come il passo 'system' dell'OTA)"
         f="$DIR/hifi-system-$VERSION.tar.gz"
         [ -f "$f" ] || { echo "manca $f" >&2; return 1; }
@@ -111,6 +125,7 @@ main() {
             [ -x "$SBIN/hifi-ab-convert.sh" ] || step_bundles || return 1
             [ -f "$SBIN/hifi-ab-precheck.sh" ] || { echo "script hifi-ab assenti dopo l'installazione del pacchetto di sistema" >&2; exit 1; }
             [ "$st" = failed ] && { echo "--- tentativo precedente fallito: log sulla ESP ---"; tail -n 20 /boot/efi/EFI/debian/abconvert.log 2>/dev/null; }
+            wait_apt_idle || return 1
             "$SBIN/hifi-ab-convert.sh" cleanup
             if ! "$SBIN/hifi-ab-precheck.sh"; then
                 echo "Questo apparecchio non è convertibile (vedi motivi sopra). Nulla è stato cambiato." >&2
