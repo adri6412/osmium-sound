@@ -90,10 +90,14 @@ if [ -z "$CERT" ] || [ -z "$KEY" ]; then
 fi
 
 # ── chroot pronto per apt/systemctl/update-initramfs ────────────────────
-mount -t proc proc "$CH/proc"
-mount --rbind /sys "$CH/sys"; mount --make-rslave "$CH/sys"
-mount --rbind /dev "$CH/dev"; mount --make-rslave "$CH/dev"
-mount -t tmpfs tmpfs "$CH/run"
+# IMAGE_NO_MOUNTS=1: ambienti senza CAP_SYS_ADMIN (container di sviluppo);
+# apt e update-initramfs nel chroot funzionano lo stesso per i nostri passi.
+if [ "${IMAGE_NO_MOUNTS:-0}" != 1 ]; then
+    mount -t proc proc "$CH/proc"
+    mount --rbind /sys "$CH/sys"; mount --make-rslave "$CH/sys"
+    mount --rbind /dev "$CH/dev"; mount --make-rslave "$CH/dev"
+    mount -t tmpfs tmpfs "$CH/run"
+fi
 if [ -e "$CH/etc/resolv.conf" ] || [ -L "$CH/etc/resolv.conf" ]; then cp -a "$CH/etc/resolv.conf" "$WORK/resolv.conf.orig"; fi
 rm -f "$CH/etc/resolv.conf"; cp /etc/resolv.conf "$CH/etc/resolv.conf"
 printf '#!/bin/sh\nexit 101\n' > "$CH/usr/sbin/policy-rc.d"; chmod +x "$CH/usr/sbin/policy-rc.d"
@@ -250,7 +254,9 @@ find "$CH/var/log" -type f -exec truncate -s 0 {} + 2>/dev/null || true
 rm -rf "$CH"/tmp/* "$CH"/var/tmp/* "$CH"/root/.cache "$CH"/root/.bash_history
 rm -f "$CH/usr/sbin/policy-rc.d"
 if [ -f "$WORK/resolv.conf.orig" ]; then cp -a "$WORK/resolv.conf.orig" "$CH/etc/resolv.conf"; rm -f "$WORK/resolv.conf.orig"; else rm -f "$CH/etc/resolv.conf"; ln -s /run/NetworkManager/resolv.conf "$CH/etc/resolv.conf"; fi
-for m in "$CH/run" "$CH/dev" "$CH/sys" "$CH/proc"; do umount -R "$m"; done
+if [ "${IMAGE_NO_MOUNTS:-0}" != 1 ]; then
+    for m in "$CH/run" "$CH/dev" "$CH/sys" "$CH/proc"; do umount -R "$m"; done
+fi
 
 used_mib=$(du -sxm "$CH" | cut -f1)
 budget=$(( SIZE_MIB * 90 / 100 ))
