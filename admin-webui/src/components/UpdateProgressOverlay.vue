@@ -95,7 +95,7 @@ onUnmounted(() => {
 
 <template>
   <div v-if="applying.active && !settingsActive" class="overlay">
-    <div class="card" style="width: 340px; text-align: center;">
+    <div class="card" style="width: 340px; max-width: 92vw; text-align: center;">
       <template v-if="applying.state !== 'done' && applying.state !== 'error' && applying.state !== 'apply_error' && applying.state !== 'interrupted'">
         <div class="spinner"></div>
         <h3 style="justify-content: center;">{{ t('settings.updates.updating', { label: applying.kind ? kindLabels[applying.kind]?.() : '' }) }}</h3>

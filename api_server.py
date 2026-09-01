@@ -1211,7 +1211,7 @@ def set_audio_device(device):
         with open(SQUEEZELITE_DEFAULT) as f:
             content = f.read()
     except Exception:
-        content = "ARGS='-o default -D -v -C 5 -s 127.0.0.1 -n OsmiumSound -M OsmiumSound'\n"
+        content = "ARGS='-o default -D -v -C 5 -s 127.0.0.1 -n OsmiumSound -M Osmium'\n"
 
     m = re.search(r"ARGS=(['\"])(.*?)\1", content)
     if m:
@@ -1226,7 +1226,7 @@ def set_audio_device(device):
             args = re.sub(r'(-o\s+\S+)', r'\1 -D', args, count=1)
         content = content[:m.start()] + f"ARGS='{args}'" + content[m.end():]
     else:
-        content += f"\nARGS='-o {device} -D -v -C 5 -s 127.0.0.1 -n OsmiumSound -M OsmiumSound'\n"
+        content += f"\nARGS='-o {device} -D -v -C 5 -s 127.0.0.1 -n OsmiumSound -M Osmium'\n"
 
     try:
         with open(SQUEEZELITE_DEFAULT, 'w') as f:
@@ -2554,6 +2554,11 @@ def set_ui_refresh(mode):
 #  loop, so killing the process is all it takes: it comes back ~3s later with
 #  whatever OS state changed underneath it. A headless unit has no such
 #  process and this is a harmless no-op there.
+#
+#  🚨 Da 2.5.24 le interfacce su schermo sono due e si riavviano in modi
+#  diversi: la Qt non gira dentro nessuna sessione con ciclo di rilancio, e'
+#  un'unita' systemd tutta sua (hifi-qt.service), quindi un pkill sul processo
+#  Electron su quegli apparecchi non fa assolutamente niente.
 # ──────────────────────────────────────────────────────────────────
 # `pkill -x` matches the kernel's `comm`, which is capped at 15 characters:
 # "hifi-media-player" is 17, so the obvious pattern matches NOTHING (procps
@@ -2562,9 +2567,11 @@ def set_ui_refresh(mode):
 # here, it would also match any shell or script with the app name on its
 # command line, including the OTA updater.
 KIOSK_COMM = 'hifi-media-play'  # 'hifi-media-player' truncated to comm's 15 chars
+QT_UI_UNIT = 'hifi-qt.service'
 
 def restart_kiosk_ui(delay=1.5):
-    """Kill the on-screen Electron kiosk; its session loop relaunches it.
+    """Restart whichever on-screen interface this device runs (Electron kiosk
+    or Qt), so it picks up the OS state that just changed underneath it.
 
     Deferred onto a timer because the caller is usually serving a request that
     the kiosk itself made (on-device Settings): killing it inline would tear
@@ -2572,12 +2579,37 @@ def restart_kiosk_ui(delay=1.5):
     come back up reporting the change as failed. Same reason
     hifi-ui-resolution.sh delays its lightdm restart.
     """
-    def _kill():
+    def _restart_qt():
+        # try-restart e non restart: in modalita' headless non gira nessuna
+        # interfaccia, e un restart la avvierebbe — riaccendendo uno schermo
+        # che l'utente ha spento di proposito. Stessa scelta di
+        # hifi-ui-resolution.sh. Il codice d'uscita si ignora: sugli
+        # apparecchi Electron l'unita' non esiste nemmeno.
+        _run(['systemctl', 'try-restart', QT_UI_UNIT], timeout=30)
+
+    def _kill_electron():
+        subprocess.run(['pkill', '-x', KIOSK_COMM], capture_output=True, timeout=10)
+
+    def _restart():
         try:
-            subprocess.run(['pkill', '-x', KIOSK_COMM], capture_output=True, timeout=10)
+            engine = get_ui_engine()['engine']
         except Exception:
-            log.exception("restart_kiosk_ui failed")
-    t = threading.Timer(delay, _kill)
+            log.exception("restart_kiosk_ui: interfaccia in uso non determinabile")
+            engine = None
+        # Motore ignoto: si tentano tutte e due le strade. Ognuna e' innocua
+        # quando tocca all'altra (unita' assente / processo assente), mentre
+        # non riavviare l'interfaccia lascerebbe a schermo lo stato vecchio.
+        steps = []
+        if engine in (None, 'qt'):
+            steps.append(_restart_qt)
+        if engine in (None, 'electron'):
+            steps.append(_kill_electron)
+        for step in steps:
+            try:
+                step()
+            except Exception:
+                log.exception("restart_kiosk_ui failed")
+    t = threading.Timer(delay, _restart)
     t.daemon = True
     t.start()
 
@@ -2761,9 +2793,9 @@ def set_timezone(tz):
         time.tzset()
     except Exception:
         pass
-    # And the kiosk's Electron/Chromium process resolves its timezone (ICU)
-    # once at startup and never re-reads it, so the on-screen clock would keep
-    # showing the old offset until the next reboot.
+    # And the on-screen interface resolves its timezone once at startup and
+    # never re-reads it (Chromium through ICU, Qt through its own cache), so
+    # the clock would keep showing the old offset until the next reboot.
     restart_kiosk_ui()
     return {'success': True, 'timezone': tz,
             'message': _t('timezone.updated', _lang(), tz=tz)}

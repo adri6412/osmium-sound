@@ -162,9 +162,48 @@ label.upload-btn:hover { filter: brightness(1.1); }
 .acc .acc { background: var(--surface); }
 .acc .chev { color: var(--silver); font-size: 18px; flex: 0 0 auto; }
 
-.seg { display: inline-flex; border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
-.seg button { border-radius: 0; background: transparent; color: var(--silver); font-weight: 500; padding: 9px 16px; }
+/* Segmented control: one row of joined buttons, as wide as its labels. The
+   container background is the colour the 1px gaps show once it wraps on a
+   phone (see below) -- there are no gaps here, so it never shows. Painting the
+   buttons (rather than leaving them transparent) is what makes that work; it
+   is the --surface every .seg in this app sits on, cards and the modal cards
+   in SourcesPanel/Setup alike, so nothing changes where it doesn't wrap. */
+.seg {
+  display: inline-flex; max-width: 100%;
+  background: var(--border);
+  border: 1px solid var(--border); border-radius: 10px; overflow: hidden;
+  margin-bottom: 12px;
+}
+.seg button { border-radius: 0; background: var(--surface); color: var(--silver); font-weight: 500; padding: 9px 16px; }
 .seg button.active { background: var(--gold); color: #111; font-weight: 600; }
+/* Inside a flex row the seg is one item among others; the row owns the spacing. */
+.between > .seg, .row > .seg { margin-bottom: 0; }
+
+/* Phones. A five-way control (Playback -> track transition) is wider than the
+   screen, and as one unbreakable row it ran off the card and dragged the whole
+   page sideways with it. Let it wrap; the buttons of each wrapped row stretch
+   to fill it so no bare strip is left at the end of a short last row, and the
+   1px gaps become the dividers -- including between the rows, which a
+   border-left per button would not draw (it would draw none there and a stray
+   one at the start of every row after the first).
+   Only below the .wrap column width: above it every seg already fits on one
+   line, and stretching there would re-size each control to the full width of
+   its card, wrapped, for no reason. */
+@media (max-width: 760px) {
+  .seg { flex-wrap: wrap; gap: 1px; }
+  .seg button { flex: 1 1 auto; }
+}
+/* A label and a multi-option seg each want the whole width of a phone; side by
+   side, the last option ended up cut off by the screen edge (Updates ->
+   release channel). Opt a row into stacking with this class rather than
+   wrapping every .between: a flex line breaks on the items' *unshrunk* widths,
+   so a blanket `flex-wrap: wrap` would also drop the trailing toggle of every
+   label+description row onto its own line long before that row was actually
+   too narrow for it. */
+@media (max-width: 560px) {
+  .between.stack-narrow { flex-wrap: wrap; }
+  .between.stack-narrow > * { flex-basis: 100%; }
+}
 
 .qrbox { display: inline-flex; flex-direction: column; align-items: center; background: #fff; border-radius: 14px; padding: 14px; }
 .qrbox img { display: block; width: 190px; height: 190px; }

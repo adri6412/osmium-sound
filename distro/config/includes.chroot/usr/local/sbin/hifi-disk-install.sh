@@ -187,7 +187,11 @@ chroot "$TARGET" /bin/sh -c 'systemd-machine-id-setup' >/dev/null 2>&1 || true
 # derived from the machine-id this script just regenerated above, so it's
 # already unique and won't collide with any other unit from the same ISO.
 SQ_DEFAULT_INSTALL="$TARGET/etc/default/squeezelite"
-if [ -f "$SQ_DEFAULT_INSTALL" ] && ! grep -qE '(^|[[:space:]])-m([[:space:]]|$)' "$SQ_DEFAULT_INSTALL" 2>/dev/null; then
+# The -m test accepts the opening quote as a boundary because the sed below
+# prepends (ARGS='-m .. -o ..') — see 0042 for the duplicate-flag bug that a
+# plain (^|[[:space:]])-m caused there.
+if [ -f "$SQ_DEFAULT_INSTALL" ] && grep -q '^ARGS=' "$SQ_DEFAULT_INSTALL" 2>/dev/null \
+   && ! grep '^ARGS=' "$SQ_DEFAULT_INSTALL" | grep -qE "(^ARGS=['\"]|[[:space:]])-m[[:space:]]"; then
     INSTALL_MAC_SEED="$(cat "$TARGET/etc/machine-id" 2>/dev/null || true)"
     [ -n "$INSTALL_MAC_SEED" ] || INSTALL_MAC_SEED="hifi-install-fallback-$$"
     INSTALL_MAC_HASH="$(printf '%s' "$INSTALL_MAC_SEED" | md5sum | cut -c1-12)"

@@ -905,6 +905,48 @@ def _ignored_usb_ids():
     return partuuids, fsuuids
 
 
+_SYS_BLOCK = "/sys/class/block"
+
+
+def _block_fingerprint():
+    """Cheap summary of what the kernel currently has as block devices: every
+    name under /sys/class/block plus its size and removable flag. It changes
+    on any plug, unplug or repartition, and costs a handful of reads from a
+    virtual filesystem instead of a process.
+
+    Returns None when /sys can't be read at all -- callers must then fall
+    back to the real scan, never treat it as "nothing changed"."""
+    try:
+        names = sorted(os.listdir(_SYS_BLOCK))
+    except OSError:
+        return None
+    out = []
+    for name in names:
+        attrs = []
+        for attr in ("size", "removable"):
+            try:
+                with open(os.path.join(_SYS_BLOCK, name, attr)) as f:
+                    attrs.append(f.read().strip())
+            except OSError:
+                # Partitions have no `removable`, and a device can vanish
+                # mid-listing; either way its absence is part of the state.
+                attrs.append("")
+        out.append(name + ":" + ",".join(attrs))
+    return "|".join(out)
+
+
+# Last successful _usb_scan() result and the _block_fingerprint() it was taken
+# with. Both None at startup, so the first tick always runs a real scan.
+_usb_scan_cache = None
+_usb_scan_fingerprint = None
+_usb_scan_ts = 0.0
+# The cache is also refreshed on a timer even when the fingerprint is
+# unchanged: if lsblk once caught a device mid-enumeration (blank FSTYPE on a
+# perfectly good filesystem), sysfs never changes again afterwards, and
+# without this the stick would stay "needs formatting" until reboot.
+_USB_SCAN_MAX_AGE = 60
+
+
 def _usb_scan():
     """Every USB block device that could carry a filesystem, no adopted/
     ignored filtering → [{path,name,fstype,label,size,uuid,partuuid}].
@@ -915,15 +957,30 @@ def _usb_scan():
     alongside its real data partition, and it's never a legitimate music
     source.
 
+    lsblk only runs when _block_fingerprint() differs from the previous call
+    (or can't be computed, or the cache is too old): usb_monitor calls this
+    every 4 seconds forever, and forking lsblk to be told nothing happened was
+    a constant slice of the appliance's idle CPU. Detection latency is
+    unchanged -- the fingerprint moves in the same tick the device appears or
+    disappears.
+
     Returns None -- not [] -- when the scan itself failed (lsblk missing,
     timed out, unparseable output). "The scan did not work" and "no USB
     device is plugged in" must never collapse into the same value now that
     usb_sync() *removes* things for devices it no longer sees."""
+    global _usb_scan_cache, _usb_scan_fingerprint, _usb_scan_ts
+    fingerprint = _block_fingerprint()
+    if (fingerprint is not None
+            and fingerprint == _usb_scan_fingerprint
+            and _usb_scan_cache is not None
+            and time.monotonic() - _usb_scan_ts < _USB_SCAN_MAX_AGE):
+        return list(_usb_scan_cache)
     try:
         r = _run(["lsblk", "-J", "-o",
                   "PATH,NAME,TYPE,FSTYPE,LABEL,SIZE,TRAN,UUID,PARTUUID,PARTTYPENAME"], timeout=10)
         data = json.loads(r.stdout or "{}")
     except Exception:
+        _usb_scan_fingerprint = None
         return None
     out = []
     for dev in data.get("blockdevices", []):
@@ -934,7 +991,10 @@ def _usb_scan():
             out.extend(p for p in kids if p.get("type") == "part" and not _is_efi_partition(p))
         else:
             out.append(dev)
-    return out
+    _usb_scan_cache = out
+    _usb_scan_fingerprint = fingerprint
+    _usb_scan_ts = time.monotonic()
+    return list(out)
 
 
 def _usb_raw_partitions():

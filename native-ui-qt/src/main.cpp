@@ -235,12 +235,16 @@ int main(int argc, char *argv[]) {
         QObject::connect(&fpsLog, &QTimer::timeout, [&]() { qInfo("fps: %.1f", frames / 5.0); frames = 0; });
         fpsLog.start(5000);
     }
+    // 🚨 solo in collaudo: in produzione questo timer si sveglierebbe 5 volte al
+    // secondo per non fare niente (lo scatto via SIGUSR1 serve solo qui)
     QTimer poll;
-    QObject::connect(&poll, &QTimer::timeout, [&]() {
-        if (g_shot) { g_shot = 0; sys.shot("/tmp/hifi-qt.png"); }
-        if (sys.devMode()) cmdfilePoll();
-    });
-    poll.start(200);
+    if (sys.devMode()) {
+        QObject::connect(&poll, &QTimer::timeout, [&]() {
+            if (g_shot) { g_shot = 0; sys.shot("/tmp/hifi-qt.png"); }
+            cmdfilePoll();
+        });
+        poll.start(200);
+    }
 
     bool ok = false;
     int secs = qEnvironmentVariableIntValue("HIFI_QT_SECONDS", &ok);
