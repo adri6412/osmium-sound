@@ -21,7 +21,7 @@ case "${1:-}" in
 esac
 . /scripts/functions
 
-conv=0; want_uuid=; slot_mib=4608; slotb_mib=4096
+conv=0; want_uuid=; slot_mib=5120; slotb_mib=4096
 read -r cmdline < /proc/cmdline || cmdline=
 for x in $cmdline; do
     case "$x" in

@@ -7,15 +7,17 @@
 # Layout GPT di riferimento (identico per ISO nuove e apparecchi convertiti):
 #   p1 "BIOS boot"    1 MiB      inerte
 #   p2 "EFI System"   512 MiB    shim+grub Debian, selettore, grubenv
-#   p3 hifi-root-a    4608 MiB (convertiti) / 4096 (nuovi)   slot A
+#   p3 hifi-root-a    5120 MiB (convertiti) / 4096 (nuovi)   slot A
 #   p4 hifi-root-b    4096 MiB                                 slot B
 #   p5 hifi-data      resto      stato persistente (/data)
 
 # Slot A degli apparecchi CONVERTITI = la root legacy ristretta: le serve più
-# spazio (Debian scrivibile, dati Lyrion ancora dentro) di quanto ne prenda
-# un'immagine. Lo slot B (e ogni slot di un'installazione nuova) è da 4096 MiB;
-# l'immagine è da 3584 MiB e RAUC la allarga alla partizione (resize=true).
-AB_SLOT_MIB="${AB_SLOT_MIB:-4608}"
+# spazio (Debian scrivibile, dati Lyrion ancora dentro, journal, margine per il
+# resize2fs, che è il passo delicato) di quanto ne prenda un'immagine: 5120 MiB.
+# Lo slot B (e ogni slot di un'installazione nuova) è da 4096 MiB; l'immagine è
+# da 3584 MiB e RAUC la allarga alla partizione (resize=true). Su una eMMC da
+# 16 GB restano ~5 GiB a /data.
+AB_SLOT_MIB="${AB_SLOT_MIB:-5120}"
 AB_SLOT_B_MIB="${AB_SLOT_B_MIB:-4096}"
 AB_ESP_MNT=/boot/efi
 AB_ESP_DIR="$AB_ESP_MNT/EFI/debian"
