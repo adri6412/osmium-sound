@@ -35,11 +35,12 @@ rootdev=$(awk -v m="${rootmnt}" '$2 == m { d = $1 } END { print d }' /proc/mount
 rootdev=$(readlink -f "$rootdev" 2>/dev/null || echo "$rootdev")
 name=${rootdev#/dev/}
 disk=$(basename "$(readlink -f "/sys/class/block/$name/..")")
-find_part() {
+find_part() {  # nome GPT -> /dev/…  (blkid legge la GPT: l'uevent non ha PARTNAME)
     for d in /sys/class/block/"$disk"*; do
         [ -f "$d/partition" ] || continue
-        if grep -qx "PARTNAME=$1" "$d/uevent" 2>/dev/null; then
-            echo "/dev/$(basename "$d")"
+        dev="/dev/$(basename "$d")"
+        if [ "$(blkid -o value -s PARTLABEL "$dev" 2>/dev/null)" = "$1" ]; then
+            echo "$dev"
             return 0
         fi
     done

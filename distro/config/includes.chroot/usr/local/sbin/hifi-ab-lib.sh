@@ -57,15 +57,18 @@ ab_disk() {
     printf '/dev/%s\n' "$(basename "$_p")"
 }
 
-# Partizione del disco di root con un dato nome GPT (PARTNAME dal kernel,
-# niente udev): ab_part_by_name hifi-data -> /dev/mmcblk0p5
+# Partizione del disco di root con un dato nome GPT: ab_part_by_name hifi-data
+# -> /dev/mmcblk0p5. Si legge la GPT con blkid (PARTLABEL): l'uevent del kernel
+# non porta PARTNAME per le partizioni aggiunte con partx, e i symlink udev
+# by-partlabel non distinguono il disco.
 ab_part_by_name() {
     _disk=$(ab_disk) || return 1
     _dn=${_disk#/dev/}
     for _s in /sys/class/block/"$_dn"*; do
         [ -f "$_s/partition" ] || continue
-        if grep -qx "PARTNAME=$1" "$_s/uevent" 2>/dev/null; then
-            printf '/dev/%s\n' "$(basename "$_s")"
+        _dev="/dev/$(basename "$_s")"
+        if [ "$(blkid -o value -s PARTLABEL "$_dev" 2>/dev/null)" = "$1" ]; then
+            printf '%s\n' "$_dev"
             return 0
         fi
     done
