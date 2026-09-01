@@ -110,6 +110,9 @@ cmd_prepare() {
     if ! /usr/local/sbin/hifi-ab-precheck.sh; then
         die "pre-verifiche non superate: l'apparecchio resta legacy"
     fi
+    # lo slot A lo dimensiona la pre-verifica (stima di resize2fs + margine)
+    slot_a=$(sed -n 's/.*"slot_mib":\([0-9]*\).*/\1/p' /run/hifi-ab-precheck.json 2>/dev/null)
+    [ -n "$slot_a" ] || slot_a=$AB_SLOT_MIB
     kver=$(uname -r)
     uuid=$(root_uuid)
     [ -n "$uuid" ] || die "UUID root sconosciuto"
@@ -154,7 +157,7 @@ menuentry 'Osmium Sound — conversione A/B' --id hifi-ab-convert --class osmium
 	insmod part_gpt
 	insmod ext2
 	search --no-floppy --fs-uuid --set=root $uuid
-	linux /boot/vmlinuz-$kver root=UUID=$uuid ro hifi.abconvert=1 hifi.abconvert.uuid=$uuid hifi.abconvert.slot_mib=$AB_SLOT_MIB hifi.abconvert.slotb_mib=$AB_SLOT_B_MIB panic=30 $(default_cmdline)
+	linux /boot/vmlinuz-$kver root=UUID=$uuid ro hifi.abconvert=1 hifi.abconvert.uuid=$uuid hifi.abconvert.slot_mib=$slot_a hifi.abconvert.slotb_mib=$AB_SLOT_B_MIB panic=30 $(default_cmdline)
 	initrd $CONV_INITRD
 }
 GRUBEOF
@@ -167,7 +170,7 @@ GRUBEOF
     ab_mount_esp || die "ESP non montabile"
     ab_state_set prepared
     sync
-    ab_log "pronto: al prossimo avvio la root viene ristretta a ${AB_SLOT_MIB} MiB e nascono gli slot B e dati (1-5 min, NON spegnere)"
+    ab_log "pronto: al prossimo avvio la root viene ristretta a ${slot_a} MiB e nascono gli slot B (${AB_SLOT_B_MIB} MiB) e dati (1-5 min, NON spegnere)"
     if [ "$reboot" = 1 ]; then
         systemctl reboot
     fi
