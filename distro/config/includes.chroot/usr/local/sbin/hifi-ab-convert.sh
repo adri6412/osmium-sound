@@ -185,6 +185,13 @@ cmd_finish() {
         [ "$st" = prepared ] && ab_warn "layout A/B assente dopo l'avvio di conversione: vedi $AB_ESP_DIR/abconvert.log"
         exit 0
     fi
+    # hifi-data senza filesystem (mke2fs fallito nell'initrd): si formatta qui,
+    # dove mke2fs.conf c'è di sicuro — la partizione è vuota per costruzione
+    _data=$(ab_part_by_name hifi-data)
+    if [ -z "$(blkid -o value -s TYPE "$_data" 2>/dev/null)" ]; then
+        ab_log "hifi-data ($_data) senza filesystem: la formatto ext4"
+        mkfs.ext4 -q -F -L hifi-data -O metadata_csum_seed "$_data" || die "mkfs.ext4 su $_data fallito"
+    fi
     /usr/local/sbin/hifi-rauc-config.sh
     [ -f "$AB_RAUC_CONF" ] || die "system.conf non generato"
     ab_mount_esp || die "ESP non montabile"
@@ -209,6 +216,7 @@ cmd_finish() {
     systemctl enable hifi-rauc-config.service hifi-boot-health.service hifi-boot-watchdog.timer >/dev/null 2>&1 || true
     systemctl start hifi-boot-health.service >/dev/null 2>&1 || true
     mkdir -p "$LOCAL"
+    date -u +%Y-%m-%dT%H:%M:%SZ > "$LOCAL/finished"
     ab_state_set ready
     ab_log "conversione completata: pronto per la prima immagine (install <bundle>)"
     return 0

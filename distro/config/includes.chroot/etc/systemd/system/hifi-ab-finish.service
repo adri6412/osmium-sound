@@ -2,7 +2,9 @@
 Description=Osmium Sound — completa la conversione A/B (fase 3: RAUC, grubenv, riga di comando)
 # Sulla root legacy, al primo avvio dopo che l'initrd di conversione ha creato
 # le partizioni. Lo script esce subito se il layout A/B non c'è.
-ConditionPathExists=!/etc/rauc/system.conf
+# marcatore scritto da `finish` stesso (non system.conf: quello lo scrive anche
+# hifi-rauc-config.service appena vede le partizioni, e bloccherebbe finish)
+ConditionPathExists=!/var/lib/hifi-player/ab/finished
 ConditionPathExists=!/usr/lib/osmium/IMAGE_VERSION
 ConditionKernelCommandLine=!boot=live
 After=local-fs.target

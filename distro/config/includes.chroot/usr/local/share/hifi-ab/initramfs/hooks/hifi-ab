@@ -13,5 +13,10 @@ for b in sfdisk resize2fs mke2fs e2fsck tune2fs dumpe2fs blkid partx blockdev; d
     p=$(command -v "$b" 2>/dev/null) || { echo "W: hifi-ab: $b non trovato" >&2; continue; }
     copy_exec "$p"
 done
+# mke2fs -t ext4 legge le definizioni da /etc/mke2fs.conf: senza, nell'initrd
+# fallisce ("Filesystem type ext4 not defined") — successo sul Dell, 2026-09-01.
+if [ -f /etc/mke2fs.conf ]; then
+    copy_file config /etc/mke2fs.conf
+fi
 manual_add_modules ext4 vfat nls_cp437 nls_ascii nls_utf8
 exit 0

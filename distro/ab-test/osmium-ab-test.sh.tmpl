@@ -132,6 +132,13 @@ main() {
     case "$st" in
         none|failed)
             [ -x "$SBIN/hifi-ab-convert.sh" ] || step_bundles || return 1
+            if lsblk -no PARTLABEL 2>/dev/null | grep -qx hifi-data; then
+                say "le partizioni A/B esistono già (conversione fatta, esito '$st'): completo con finish"
+                "$SBIN/hifi-ab-convert.sh" finish || return 1
+                step_status
+                echo "Ora: sudo sh $0   (installa l'immagine nello slot B)"
+                return 0
+            fi
             [ -f "$SBIN/hifi-ab-precheck.sh" ] || { echo "script hifi-ab assenti dopo l'installazione del pacchetto di sistema" >&2; exit 1; }
             [ "$st" = failed ] && { echo "--- tentativo precedente fallito: log sulla ESP ---"; tail -n 20 /boot/efi/EFI/debian/abconvert.log 2>/dev/null; }
             wait_apt_idle || return 1
