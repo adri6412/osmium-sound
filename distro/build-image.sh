@@ -176,6 +176,13 @@ install -m 0644 "$KEYRING" "$CH/etc/rauc/keyring.pem"
 printf '%s\n' "$VERSION" > "$CH/usr/lib/osmium/IMAGE_VERSION"
 # shellcheck disable=SC2016  # le ${} sono per dpkg-query, non per la shell
 in_chroot dpkg-query -W -f='${Package}\t${Version}\n' | sort > "$CH/usr/lib/osmium/packages.txt"
+# Nomi soddisfatti dall'immagine: pacchetti installati E i loro Provides
+# (es. libgcc-s1 fornisce libgcc1, che i .deb di Lyrion elencano ancora):
+# è l'elenco contro cui l'aggiornatore Lyrion controlla le dipendenze.
+# shellcheck disable=SC2016
+in_chroot dpkg-query -W -f='${Package}\n${Provides}\n' \
+    | tr ',' '\n' | sed 's/([^)]*)//g; s/^[[:space:]]*//; s/[[:space:]]*$//' | grep -v '^$' | sort -u \
+    > "$CH/usr/lib/osmium/packages-provided.txt"
 {
     echo "version=$VERSION"
     echo "built=$(date -u -d "@$SOURCE_DATE_EPOCH" +%Y-%m-%dT%H:%M:%SZ)"

@@ -63,10 +63,15 @@ if [ -f /usr/lib/osmium/IMAGE_VERSION ]; then
     [ -n "$ver" ] || fail "Impossibile leggere la versione dal .deb"
     write_status verifying 58 "Verifica compatibilità con l'immagine…"
 
-    # 1) dipendenze: tutte già nell'immagine (packages.txt scritto in build)
+    # 1) dipendenze: tutte già nell'immagine — per nome di pacchetto o per
+    #    nome virtuale (Provides: es. libgcc1 ← libgcc-s1), elenco scritto in build
+    PROVIDED=/usr/lib/osmium/packages-provided.txt
     missing=""
     for d in $(dpkg-deb -f "$DEB" Depends 2>/dev/null | tr ',' '\n' | sed 's/|.*//; s/(.*//; s/^[[:space:]]*//; s/[[:space:]]*$//' | grep -v '^$'); do
-        grep -q "^$d	" /usr/lib/osmium/packages.txt 2>/dev/null || missing="$missing $d"
+        if grep -qx "$d" "$PROVIDED" 2>/dev/null || grep -q "^$d	" /usr/lib/osmium/packages.txt 2>/dev/null; then
+            continue
+        fi
+        missing="$missing $d"
     done
     [ -z "$missing" ] || hold "dipendenze assenti dall'immagine:$missing"
 
