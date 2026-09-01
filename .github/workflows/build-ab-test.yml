@@ -172,7 +172,7 @@ jobs:
             ca-certificates curl git xz-utils sudo python3 build-essential \
             live-build imagemagick xorriso debootstrap debian-archive-keyring rsync fakeroot \
             cpio gzip squashfs-tools dosfstools mtools isolinux syslinux-common \
-            rauc e2fsprogs zstd grub-common openssl
+            rauc e2fsprogs zstd grub-common openssl initramfs-tools-core cpio
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0

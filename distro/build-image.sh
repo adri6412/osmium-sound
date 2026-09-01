@@ -200,12 +200,23 @@ if [ "$(printf '%s\n' "$kvers" | wc -l)" -gt 1 ]; then
         in_chroot apt-get -y -q purge "linux-image-$k" >/dev/null 2>&1 || rm -f "$CH/boot/vmlinuz-$k" "$CH/boot/initrd.img-$k"
     done
 fi
-in_chroot update-initramfs -u -k "$KVER" >/dev/null || die "update-initramfs fallito"
+rm -f "$CH/boot/initrd.img-$KVER"
+in_chroot update-initramfs -c -k "$KVER" 2>&1 | tail -n 20 || true
 [ -s "$CH/boot/initrd.img-$KVER" ] || die "initrd non prodotto"
-in_chroot lsinitramfs "/boot/initrd.img-$KVER" | grep -q "scripts/local-bottom/hifi-state" || die "l'initrd non contiene hifi-state"
-in_chroot lsinitramfs "/boot/initrd.img-$KVER" | grep -q "overlay.ko" || die "l'initrd non contiene overlay.ko"
-in_chroot lsinitramfs "/boot/initrd.img-$KVER" | grep -qE "bin/busybox$" || die "l'initrd non contiene busybox"
-in_chroot lsinitramfs "/boot/initrd.img-$KVER" | grep -qE "sbin/e2fsck$" || die "l'initrd non contiene e2fsck"
+ls -la "$CH/boot/"
+# L'initrd viene letto dall'HOST (initramfs-tools-core + zstd sull'host di
+# build): lsinitramfs dentro il chroot ha dato "unmkinitramfs: zstd failed"
+# in CI, e comunque un elenco fatto da fuori è una verifica più onesta.
+if command -v lsinitramfs >/dev/null 2>&1; then
+    LSINIT="lsinitramfs $CH/boot/initrd.img-$KVER"
+else
+    LSINIT="in_chroot lsinitramfs /boot/initrd.img-$KVER"
+fi
+$LSINIT > "$WORK/initrd.list" 2> "$WORK/initrd.err" || { cat "$WORK/initrd.err" >&2; die "impossibile elencare l'initrd"; }
+log "initrd: $(wc -l < "$WORK/initrd.list") voci, $(du -h "$CH/boot/initrd.img-$KVER" | cut -f1)"
+for must in "scripts/local-bottom/hifi-state" "overlay.ko" "bin/busybox\$" "sbin/e2fsck\$" "bin/plymouth\$"; do
+    grep -qE "$must" "$WORK/initrd.list" || { grep -E "hifi|busybox|e2fsck|overlay|plymouth" "$WORK/initrd.list" | head -n 20 >&2; die "l'initrd non contiene $must"; }
+done
 
 # ── 7. grub.cfg statico dello slot; fstab; machine-id vuoto ───────────────
 log "grub.cfg dello slot (kernel $KVER), fstab, machine-id"
