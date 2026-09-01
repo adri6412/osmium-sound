@@ -76,11 +76,19 @@ stage)
     # shellcheck source=distro/config/includes.chroot/usr/local/sbin/hifi-ab-lib.sh
     # shellcheck disable=SC1091
     . /usr/local/sbin/hifi-ab-lib.sh
+    # Slot di destinazione = la partizione hifi-root-* che NON è la root in
+    # uso. Non si usa `rauc.slot=` dalla cmdline: sul primo avvio dopo la
+    # conversione non c'è ancora (lo aggiunge finish in quello stesso boot) e
+    # la misura restava muta.
     slot_dev=""
-    case "$(ab_booted_slot 2>/dev/null || true)" in
-        A) slot_dev=$(ab_part_by_name hifi-root-b 2>/dev/null || true) ;;
-        B) slot_dev=$(ab_part_by_name hifi-root-a 2>/dev/null || true) ;;
-    esac
+    _root=$(ab_root_dev 2>/dev/null || true)
+    _pa=$(ab_part_by_name hifi-root-a 2>/dev/null || true)
+    _pb=$(ab_part_by_name hifi-root-b 2>/dev/null || true)
+    if [ -n "$_pa" ] && [ -n "$_root" ] && [ "$_root" = "$_pb" ]; then
+        slot_dev=$_pa
+    elif [ -n "$_pb" ] && [ "$_root" != "$_pb" ]; then
+        slot_dev=$_pb
+    fi
     img_bytes=$(rauc info --output-format=json "$SRC" 2>/dev/null | python3 -c '
 import json, sys
 def sizes(o):
