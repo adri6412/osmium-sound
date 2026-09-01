@@ -17,14 +17,15 @@ reasons=""
 add() { reasons="${reasons}${reasons:+; }$1"; }
 json_out() {  # <convertible 0|1> <converted 0|1>
     _r=$(printf '%s' "$reasons" | sed 's/\\/\\\\/g; s/"/\\"/g')
-    printf '{"convertible":%s,"converted":%s,"reasons":"%s","disk":"%s","disk_mib":%s,"root_min_mib":%s,"slot_mib":%s,"state":"%s"}\n' \
+    printf '{"convertible":%s,"converted":%s,"reasons":"%s","disk":"%s","disk_mib":%s,"root_min_mib":%s,"slot_mib":%s,"data_mib":%s,"free_needed_mib":%s,"state":"%s"}\n' \
         "$( [ "$1" = 1 ] && echo true || echo false)" "$( [ "$2" = 1 ] && echo true || echo false)" \
-        "$_r" "${disk:-}" "${disk_mib:-0}" "${root_min_mib:-0}" "${slot_a_mib:-$AB_SLOT_MIB}" "$(ab_state_get)" > "$OUT.new" 2>/dev/null \
+        "$_r" "${disk:-}" "${disk_mib:-0}" "${root_min_mib:-0}" "${slot_a_mib:-$AB_SLOT_MIB}" \
+        "${data_mib:-0}" "${free_needed_mib:-0}" "$(ab_state_get)" > "$OUT.new" 2>/dev/null \
         && mv -f "$OUT.new" "$OUT"
 }
 
 disk=$(ab_disk 2>/dev/null) || disk=
-disk_mib=0; root_min_mib=0; slot_a_mib=$AB_SLOT_MIB
+disk_mib=0; root_min_mib=0; slot_a_mib=$AB_SLOT_MIB; data_mib=0; free_needed_mib=0
 ab_mount_esp 2>/dev/null || true
 
 if [ -n "$disk" ] && ab_part_by_name hifi-data >/dev/null 2>&1; then
@@ -50,45 +51,64 @@ if [ -n "$disk" ]; then
     esp=$(ab_part_by_name "EFI System" 2>/dev/null) || esp=
     [ "$(ab_part_num "$esp" 2>/dev/null)" = 2 ] || add "ESP non trovata come partizione 2"
     disk_mib=$(( $(blockdev --getsize64 "$disk" 2>/dev/null || echo 0) / 1048576 ))
-    need=$(( 1 + 512 + AB_SLOT_MIB + AB_SLOT_B_MIB + 3072 ))
-    [ "$disk_mib" -ge "$need" ] || add "disco da ${disk_mib} MiB: ne servono almeno ${need}"
-    slot_a_mib=$AB_SLOT_MIB
     [ "$(blkid -o value -s TYPE "$rootdev" 2>/dev/null)" = ext4 ] || add "la root non è ext4"
-
-    # spazio: stima resize2fs -P (funziona anche a filesystem montato) AL NETTO
-    # del journal (l'initrd di conversione lo toglie prima del resize e ne
-    # ricrea uno da 64 MiB), ripiego su df
     uuid=$(blkid -o value -s UUID "$rootdev" 2>/dev/null || true)
-    blksz=$(dumpe2fs -h "$rootdev" 2>/dev/null | sed -n 's/^Block size: *//p')
-    minblk=$(resize2fs -P "$rootdev" 2>/dev/null | sed -n 's/.*: *\([0-9]*\)$/\1/p')
-    # e2fsprogs 1.47 la chiama "Total journal size", le versioni prima "Journal size"
-    jsize=$(dumpe2fs -h "$rootdev" 2>/dev/null | sed -n 's/^\(Total \)\{0,1\}[Jj]ournal size: *\([0-9]*\)M$/\2/p' | head -n 1)
-    if [ -n "$blksz" ] && [ -n "$minblk" ]; then
-        root_min_mib=$(( minblk * blksz / 1048576 + 1 - ${jsize:-0} + 64 ))
+
+    # ── spazio ────────────────────────────────────────────────────────────
+    # Lo slot A NON ha una taglia fissa: è la root legacy ristretta al minimo
+    # che resize2fs concede (ab_root_min_mib, ~1,55 volte l'occupato: misurato,
+    # e non migliora ripetendo il resize) più un margine. Tutto il resto va a
+    # /data. Quindi su un disco piccolo la domanda non è "che taglia scelgo"
+    # ma "quanto devo liberare": lo dice free_needed_mib, e la pulizia
+    # profonda (hifi-ab-convert.sh cleanup --deep) prova a farlo da sola.
+    # Spazio da spartire = dall'inizio della root alla fine del disco. NON è
+    # "disco meno 513": se qualcuno allarga il disco (macchina virtuale) lo
+    # spazio nuovo sta in coda alla partizione 3 e va contato, e se la testa
+    # del disco è diversa dallo standard il conto resta giusto lo stesso.
+    p3start=$(cat "/sys/class/block/${rootdev#/dev/}/start" 2>/dev/null || echo 0)
+    if [ "${p3start:-0}" -gt 0 ]; then
+        avail=$(( disk_mib - p3start / 2048 - 1 ))
     else
-        root_min_mib=$(( $(df -Pm / | awk 'NR==2{print $3}') * 115 / 100 ))
+        avail=$(( disk_mib - AB_HEAD_MIB ))
     fi
-    # La stima di resize2fs è prudente (gruppi flex_bg interi, tabelle inode): è
-    # anche il minimo che resize2fs FA RISPETTARE, quindi lo slot A dei convertiti
-    # si dimensiona su di essa — almeno AB_SLOT_MIB, altrimenti stima + 256 MiB,
-    # a multipli di 8 — purché a /data restino almeno 3 GiB. Le installazioni
-    # nuove non c'entrano: là gli slot sono da AB_SLOT_B_MIB.
-    slot_a_mib=$AB_SLOT_MIB
-    if [ $(( root_min_mib + 256 )) -gt "$slot_a_mib" ]; then
-        slot_a_mib=$(( (root_min_mib + 256 + 7) / 8 * 8 ))
-    fi
-    need=$(( 1 + 512 + slot_a_mib + AB_SLOT_B_MIB + 3072 ))
-    if [ "$disk_mib" -lt "$need" ]; then
-        # i colpevoli tipici: pacchetti/bundle copiati nella home, kernel di prova
-        big=$(find / -xdev -type f -size +300M ! -path '/usr/*' ! -path '/opt/*' 2>/dev/null | head -n 4 | tr '\n' ' ')
-        add "la root occupa almeno ${root_min_mib} MiB: con uno slot A da ${slot_a_mib} MiB e uno B da ${AB_SLOT_B_MIB} resterebbero meno di 3 GiB per i dati su un disco da ${disk_mib} MiB (pulizia: hifi-ab-convert.sh cleanup${big:+; file grandi da spostare via: $big})"
+    root_min_mib=$(ab_root_min_mib "$rootdev")
+    a_max=$(( avail - AB_SLOT_B_MIB - AB_DATA_MIN_MIB ))
+    slot_a_mib=$(( root_min_mib + AB_SLOT_A_MARGIN_MIB ))
+    [ "$slot_a_mib" -gt "$a_max" ] && slot_a_mib=$a_max
+    slot_a_mib=$(( slot_a_mib / 8 * 8 ))
+    data_mib=$(( avail - slot_a_mib - AB_SLOT_B_MIB ))
+    room=$(( root_min_mib + AB_SLOT_A_MARGIN_MIN_MIB ))
+    if [ "$a_max" -lt "$AB_SLOT_B_MIB" ]; then
+        # nemmeno due slot più i dati: disco troppo piccolo, punto.
+        need=$(( disk_mib - avail + AB_SLOT_B_MIB * 2 + AB_DATA_MIN_MIB ))
+        add "disco da ${disk_mib} MiB: per lo schema A/B ne servono almeno ${need} (8 GB)"
+        data_mib=0
+    elif [ "$room" -gt "$a_max" ]; then
+        free_needed_mib=$(( (room - a_max) * 100 / AB_RESIZE_TAX + 1 ))
+        big=$(find / -xdev -type f -size +300M ! -path '/usr/*' ! -path '/opt/*' 2>/dev/null | head -n 3 | tr '\n' ' ')
+        add "la root non si restringe abbastanza: occupa $(df -Pm / | awk 'NR==2{print $3}') MiB (minimo tecnico ${root_min_mib} MiB) e su un disco da ${disk_mib} MiB lo slot A può arrivare a ${a_max} MiB, lasciando ${AB_SLOT_B_MIB} allo slot B e ${AB_DATA_MIN_MIB} ai dati: bisogna liberare almeno ${free_needed_mib} MiB (pulizia: hifi-ab-convert.sh cleanup --deep${big:+; file grandi da spostare via: $big})"
+        data_mib=0
     fi
 
     # lo stub GRUB sulla ESP dev'essere quello che conosciamo (o già il nostro selettore)
     if mountpoint -q "$AB_ESP_MNT" && [ -f "$AB_STUB" ]; then
-        stub=$(sed 's/[[:space:]]*$//' "$AB_STUB" | grep -v '^$' | tr '\n' '|')
-        if ! grep -q 'selettore di avvio A/B' "$AB_STUB" \
-           && [ "$stub" != "search.fs_uuid $uuid root|set prefix=(\$root)'/boot/grub'|configfile \$prefix/grub.cfg|" ]; then
+        # Lo stub scritto da grub-install è di tre righe, ma la prima può avere
+        # in coda gli "hint" di ricerca (search.fs_uuid <uuid> root hd0,gpt3):
+        # ci sono su alcune installazioni e non su altre, quindi si confronta
+        # riga per riga tollerando la coda — con l'uguaglianza secca gli
+        # apparecchi con hint restavano legacy senza un vero motivo (visto
+        # sulla VM di collaudo il 2026-09-01).
+        stub=$(sed 's/[[:space:]]*$//' "$AB_STUB" | grep -v '^$')
+        s1=$(printf '%s\n' "$stub" | sed -n 1p)
+        s2=$(printf '%s\n' "$stub" | sed -n 2p)
+        s3=$(printf '%s\n' "$stub" | sed -n 3p)
+        nl=$(printf '%s\n' "$stub" | wc -l)
+        stub_ok=1
+        [ "$nl" = 3 ] || stub_ok=0
+        case "$s1" in "search.fs_uuid $uuid root"|"search.fs_uuid $uuid root "*) ;; *) stub_ok=0 ;; esac
+        [ "$s2" = "set prefix=(\$root)'/boot/grub'" ] || stub_ok=0
+        [ "$s3" = 'configfile $prefix/grub.cfg' ] || stub_ok=0
+        if ! grep -q 'selettore di avvio A/B' "$AB_STUB" && [ "$stub_ok" = 0 ]; then
             add "stub GRUB sulla ESP non riconosciuto"
         fi
         avail=$(df -Pm "$AB_ESP_MNT" | awk 'NR==2{print $4}')
@@ -107,7 +127,7 @@ if command -v fuser >/dev/null 2>&1 && fuser /var/lib/dpkg/lock-frontend >/dev/n
 fi
 
 if [ -z "$reasons" ]; then
-    echo "convertibile: disco $disk (${disk_mib} MiB), root minima ${root_min_mib} MiB → slot A ${slot_a_mib} MiB, slot B ${AB_SLOT_B_MIB} MiB, dati $(( disk_mib - 513 - slot_a_mib - AB_SLOT_B_MIB )) MiB"
+    echo "convertibile: disco $disk (${disk_mib} MiB), root minima ${root_min_mib} MiB → slot A ${slot_a_mib} MiB, slot B ${AB_SLOT_B_MIB} MiB, dati ${data_mib} MiB"
     json_out 1 0
     exit 0
 fi

@@ -241,11 +241,12 @@ ab_stubs() {  # <precheck-exit-code>
     cat > "$ROOT/sbin/hifi-ab-precheck.sh" <<EOF
 #!/bin/sh
 printf 'precheck\n' >> "$ROOT/calls"
+printf '{"convertible":false,"reasons":"disco troppo piccolo"}\n' > "$ROOT/hifi-ab-precheck.json"
 exit $1
 EOF
     cat > "$ROOT/sbin/hifi-ab-convert.sh" <<EOF
 #!/bin/sh
-printf 'convert %s\n' "\$1" >> "$ROOT/calls"
+printf 'convert %s\n' "\$*" >> "$ROOT/calls"
 exit 0
 EOF
     chmod +x "$ROOT/sbin/hifi-ab-precheck.sh" "$ROOT/sbin/hifi-ab-convert.sh"
@@ -281,9 +282,13 @@ step ui done 1 v2 https://e/ui.tgz cccc -
 EOF
 run_runner || true
 check "ab not convertible: ui applied, pre-check retried after cleanup, no prepare" \
-      "system apply $ROOT/update/staged/system/v2 v2 os apply $ROOT/update/staged/os/v2 v2 precheck ui apply $ROOT/update/staged/ui/v2 v2 convert cleanup precheck" \
+      "system apply $ROOT/update/staged/system/v2 v2 os apply $ROOT/update/staged/os/v2 v2 precheck ui apply $ROOT/update/staged/ui/v2 v2 convert cleanup --deep precheck" \
       "$(calls)"
 check "ab not convertible: UI landed" "v2" "$(installed UI_VERSION)"
+check "ab not convertible: reason surfaced in the final state" "update.ab.notConvertible" \
+      "$(state_of key)"
+check "ab not convertible: the reason itself is carried" "disco troppo piccolo" \
+      "$(state_of params | sed -n 's/.*"reason":"\([^"]*\)".*/\1/p')"
 
 # already an image (or RAUC configured): the A/B block must stay out of the way
 setup

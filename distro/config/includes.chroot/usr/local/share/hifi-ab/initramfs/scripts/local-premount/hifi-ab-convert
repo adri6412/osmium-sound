@@ -21,13 +21,14 @@ case "${1:-}" in
 esac
 . /scripts/functions
 
-conv=0; want_uuid=; slot_mib=5120; slotb_mib=1792
+conv=0; want_uuid=; slot_mib=0; slotb_mib=1792; datamin_mib=1536
 read -r cmdline < /proc/cmdline || cmdline=
 for x in $cmdline; do
     case "$x" in
         hifi.abconvert=1) conv=1 ;;
         hifi.abconvert.uuid=*) want_uuid=${x#hifi.abconvert.uuid=} ;;
         hifi.abconvert.slot_mib=*) slot_mib=${x#hifi.abconvert.slot_mib=} ;;
+        hifi.abconvert.datamin_mib=*) datamin_mib=${x#hifi.abconvert.datamin_mib=} ;;
         hifi.abconvert.slotb_mib=*) slotb_mib=${x#hifi.abconvert.slotb_mib=} ;;
     esac
 done
@@ -116,6 +117,7 @@ for d in /sys/class/block/"$disk"*; do [ -f "$d/partition" ] && nparts=$((nparts
 [ "$nparts" = 3 ] || bail "the disk has $nparts partitions, expected 3"
 case "$slot_mib" in ''|*[!0-9]*) bail "invalid slot_mib: $slot_mib" ;; esac
 case "$slotb_mib" in ''|*[!0-9]*) bail "invalid slotb_mib: $slotb_mib" ;; esac
+case "$datamin_mib" in ''|*[!0-9]*) bail "invalid datamin_mib: $datamin_mib" ;; esac
 
 say "checking the filesystem (1/4)"
 progress 5
@@ -136,10 +138,30 @@ if [ -z "$blksz" ] || [ -z "$minblk" ]; then
     bail "could not estimate the minimum filesystem size"
 fi
 min_mib=$(( minblk * blksz / 1048576 + 1 ))
-if [ $(( min_mib + 192 )) -gt "$slot_mib" ]; then
-    "$TUNE2FS" -j "$rootdev" >> "$LOG" 2>&1 || true
-    bail "the root needs at least ${min_mib} MiB: it does not fit a ${slot_mib} MiB slot"
+
+# Slot A: si decide QUI, sul posto, non a tavolino. Lo spazio da spartire va
+# dall'inizio della root alla fine del disco (meno 1 MiB per la GPT di scorta),
+# così conta anche l'eventuale spazio di un disco allargato dopo
+# l'installazione, che sta in coda alla partizione 3. Lo slot A prende il
+# minimo del filesystem più un margine, lo slot B la sua taglia fissa, i dati
+# il resto — che non può scendere sotto datamin_mib. Il valore passato dalla
+# pre-verifica resta solo come ripiego: fra quel calcolo e questo avvio la
+# root può essere cambiata (pulizia profonda compresa).
+_dsect=$(cat "/sys/class/block/$disk/size" 2>/dev/null || echo 0)
+_pstart=$(cat "/sys/class/block/$name/start" 2>/dev/null || echo 0)
+avail_mib=0
+[ "$_dsect" -gt "$_pstart" ] && avail_mib=$(( (_dsect - _pstart) / 2048 - 1 ))
+if [ "$avail_mib" -gt 0 ]; then
+    a_max=$(( avail_mib - slotb_mib - datamin_mib ))
+    want=$(( min_mib + 384 ))
+    [ "$want" -gt "$a_max" ] && want=$a_max
+    slot_mib=$(( want / 8 * 8 ))
 fi
+if [ "$slot_mib" -le 0 ] || [ $(( min_mib + 192 )) -gt "$slot_mib" ]; then
+    "$TUNE2FS" -j "$rootdev" >> "$LOG" 2>&1 || true
+    bail "the root does not shrink enough: it needs ${min_mib} MiB and slot A can only reach ${slot_mib} MiB here (disk too small: free space on the root first)"
+fi
+echo "I: slot A ${slot_mib} MiB (fs min ${min_mib}), slot B ${slotb_mib}, data $(( avail_mib - slot_mib - slotb_mib )) MiB" >> "$LOG"
 
 say "shrinking the system partition (2/4) — DO NOT POWER OFF"
 progress 10
@@ -161,7 +183,10 @@ p3line=$(grep -E "^${rootdev}[[:space:]]*:" "$dump") || bail "partition 3 not fo
 p3start=$(printf '%s\n' "$p3line" | sed -n 's/.*start= *\([0-9]*\).*/\1/p')
 p3size=$(printf '%s\n' "$p3line" | sed -n 's/.*size= *\([0-9]*\).*/\1/p')
 if [ -z "$p3start" ] || [ -z "$p3size" ]; then bail "unreadable GPT dump"; fi
-[ "$p3size" -gt $(( sect + sectb + 2048 )) ] || bail "partition 3 (${p3size} sectors) is too small for two slots plus data"
+# la partizione dati prende dalla fine dello slot B alla fine del disco
+_tail=$(( _dsect - p3start - sect - sectb - 2048 ))
+[ "$_tail" -ge $(( datamin_mib * 2048 )) ] \
+    || bail "not enough room after the two slots for ${datamin_mib} MiB of data (${_tail} sectors left)"
 p4start=$(( p3start + sect ))
 p5start=$(( p4start + sectb ))
 LINUX=0FC63DAF-8483-4772-8E79-3D69D8477DE4
@@ -183,7 +208,7 @@ progress 80
 
 say "preparing the data partition (4/4)"
 # -t ext4 esplicito: nell'initrd non c'è /etc/mke2fs.conf e "$MKE2FS" cadrebbe su ext2
-"$MKE2FS" -t ext4 -F -q -L hifi-data -O metadata_csum_seed "$p5" >> "$LOG" 2>&1 || bail "mke2fs on $p5 failed"
+"$MKE2FS" -t ext4 -F -q -m 1 -L hifi-data -O metadata_csum_seed "$p5" >> "$LOG" 2>&1 || bail "mke2fs on $p5 failed"
 "$E2FSCK" -f -y "$rootdev" >> "$LOG" 2>&1 || true
 mkdir -p /run/hifi-data
 if mount -t ext4 "$p5" /run/hifi-data 2>>"$LOG"; then

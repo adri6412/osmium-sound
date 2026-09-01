@@ -304,6 +304,9 @@ MESSAGES = {
                                    'it': "Installazione dell'immagine di sistema fallita (rauc rc={rc})"},
     'update.image.selectorFailed': {'en': 'Writing the A/B boot selector failed',
                                     'it': 'Scrittura del selettore di avvio A/B fallita'},
+    'update.ab.notConvertible': {
+        'en': 'Update complete. This device stays on the old layout: {reason}',
+        'it': 'Aggiornamento completato. Questo apparecchio resta sullo schema vecchio: {reason}'},
     'update.ab.converting': {'en': 'Switching to the new system — the device will restart on its own',
                              'it': 'Passaggio al nuovo sistema — l\'apparecchio si riavvierà da solo'},
     'update.image.kickFailed': {'en': 'The system image update could not be started — try "Update now" again',

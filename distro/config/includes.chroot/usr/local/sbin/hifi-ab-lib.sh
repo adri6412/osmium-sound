@@ -7,18 +7,33 @@
 # Layout GPT di riferimento (identico per ISO nuove e apparecchi convertiti):
 #   p1 "BIOS boot"    1 MiB      inerte
 #   p2 "EFI System"   512 MiB    shim+grub Debian, selettore, grubenv
-#   p3 hifi-root-a    5120 MiB (convertiti) / 4096 (nuovi)   slot A
-#   p4 hifi-root-b    1792 MiB                                 slot B
+#   p3 hifi-root-a    dinamica (convertiti) / 1792 (nuovi)     slot A
+#   p4 hifi-root-b    1792 MiB                                  slot B
 #   p5 hifi-data      resto      stato persistente (/data)
 
-# Slot A degli apparecchi CONVERTITI = la root legacy ristretta: le serve più
-# spazio (Debian scrivibile, dati Lyrion ancora dentro, journal, margine per il
-# resize2fs, che è il passo delicato) di quanto ne prenda un'immagine: 5120 MiB.
 # Lo slot B (e ogni slot di un'installazione nuova) è da 1792 MiB: l'immagine è
-# uno squashfs da ~1,1 GB scritto raw. Su una eMMC da 16 GB restano ~7 GiB a
-# /data; su una da 8 GB (installazione nuova) ~3,3 GiB.
-AB_SLOT_MIB="${AB_SLOT_MIB:-5120}"
+# uno squashfs da ~1,3 GB scritto raw.
+#
+# 🚨 Lo slot A degli apparecchi CONVERTITI è la root legacy ristretta, quindi
+# NON è una taglia fissa: si dimensiona sul minimo che resize2fs riesce a
+# raggiungere più un margine. Misurato il 2026-09-01 (banco + Dell + VM):
+# quel minimo vale circa 1,55 volte lo spazio davvero occupato, non dipende
+# dalla dimensione del filesystem né dal journal né dai blocchi riservati, e
+# NON scende ripetendo `resize2fs -M` (passate successive guadagnano <1%).
+# Quindi l'unica leva per far entrare la conversione su un disco piccolo è
+# liberare spazio PRIMA (`hifi-ab-convert.sh cleanup --deep`).
+#
+# Conti per un disco da 8 GB (7456 MiB): 1+512 di testa, slot B 1792, dati
+# almeno 1536 → allo slot A restano ~3600 MiB, cioè una root legacy che occupa
+# al massimo ~2,2 GiB. Un'installazione NUOVA da ISO non ha questo vincolo
+# (slot da 1792 entrambi, ~3,3 GiB ai dati).
+AB_SLOT_MIB="${AB_SLOT_MIB:-5120}"       # solo ripiego se manca la stima
 AB_SLOT_B_MIB="${AB_SLOT_B_MIB:-1792}"
+AB_SLOT_A_MARGIN_MIB="${AB_SLOT_A_MARGIN_MIB:-384}"      # margine preferito
+AB_SLOT_A_MARGIN_MIN_MIB="${AB_SLOT_A_MARGIN_MIN_MIB:-192}"  # margine minimo
+AB_DATA_MIN_MIB="${AB_DATA_MIN_MIB:-1536}"
+AB_HEAD_MIB="${AB_HEAD_MIB:-513}"        # p1 (1 MiB) + ESP (512 MiB)
+AB_RESIZE_TAX="${AB_RESIZE_TAX:-155}"    # minimo resize2fs ≈ occupato × 1,55
 AB_ESP_MNT=/boot/efi
 AB_ESP_DIR="$AB_ESP_MNT/EFI/debian"
 AB_GRUBENV="$AB_ESP_DIR/grubenv"
@@ -34,7 +49,35 @@ AB_DATA_MNT=/data
 AB_IMAGE_MARKER=/usr/lib/osmium/IMAGE_VERSION
 
 ab_log() { printf 'I: [hifi-ab] %s\n' "$*" >&2; }
+
 ab_warn() { printf 'W: [hifi-ab] %s\n' "$*" >&2; }
+
+# Tetto (MiB) dello slot A su questo disco: tutto meno testa, slot B e la quota
+# minima dei dati. Se la root non ci sta sotto, la conversione non si fa.
+ab_slot_a_max_mib() {
+    _dk=$(ab_disk 2>/dev/null) || return 1
+    _sz=$(blockdev --getsize64 "$_dk" 2>/dev/null || echo 0)
+    echo $(( _sz / 1048576 - AB_HEAD_MIB - AB_SLOT_B_MIB - AB_DATA_MIN_MIB ))
+}
+
+# Minimo (MiB) a cui resize2fs accetta di ridurre la root, al netto del journal
+# (l'initrd di conversione lo toglie prima del resize e ne rimette uno da 64) e
+# con 64 MiB di guardia. È il numero che comanda: resize2fs RIFIUTA di scendere
+# sotto, quindi lo slot A dei convertiti non può essere più piccolo di così.
+ab_root_min_mib() {  # [devroot]
+    _d=${1:-$(ab_root_dev 2>/dev/null)}
+    [ -n "$_d" ] || return 1
+    _b=$(dumpe2fs -h "$_d" 2>/dev/null | sed -n 's/^Block size: *//p')
+    _m=$(resize2fs -P "$_d" 2>/dev/null | sed -n 's/.*: *\([0-9]*\)$/\1/p')
+    # e2fsprogs 1.47 la chiama "Total journal size", prima era "Journal size"
+    _j=$(dumpe2fs -h "$_d" 2>/dev/null | sed -n 's/^\(Total \)\{0,1\}[Jj]ournal size: *\([0-9]*\)M$/\2/p' | head -n 1)
+    if [ -n "$_b" ] && [ -n "$_m" ]; then
+        echo $(( _m * _b / 1048576 + 1 - ${_j:-0} + 64 ))
+    else
+        echo $(( $(df -Pm / | awk 'NR==2{print $3}') * AB_RESIZE_TAX / 100 ))
+    fi
+}
+
 
 # Dispositivo a blocchi della root (es. /dev/mmcblk0p3), anche sotto overlay.
 ab_root_dev() {

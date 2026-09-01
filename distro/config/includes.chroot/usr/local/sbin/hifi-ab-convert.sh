@@ -84,9 +84,51 @@ cmd_status() {
     return 0
 }
 
-cmd_cleanup() {
+# Passi della pulizia profonda, dal più innocuo al più invasivo. Servono solo
+# sui dischi piccoli: la root legacy diventa lo slot A e resize2fs non scende
+# sotto ~1,55 volte l'occupato, quindi ogni MiB liberato qui vale ~1,5 MiB in
+# più per /data. Si tocca solo roba che l'immagine non ha comunque (doc, man,
+# lingue) o che si ricrea da sola (cache di Lyrion); Electron va via soltanto
+# se l'interfaccia in uso è quella Qt. Mai i firmware Wi-Fi/Bluetooth: servono
+# a questo stesso avvio per scaricare l'immagine.
+deep_step() {  # <passo>
+    case "$1" in
+        docs)
+            rm -rf /usr/share/doc/* /usr/share/man/* /usr/share/info/* \
+                   /usr/share/doc-base/* /usr/share/lintian/* 2>/dev/null || true
+            find /usr/share/locale -mindepth 1 -maxdepth 1 -type d \
+                 ! -name 'en*' ! -name 'it*' ! -name C -exec rm -rf {} + 2>/dev/null || true
+            ;;
+        firmware)
+            for d in amdgpu radeon nvidia mellanox qed bnx2x liquidio netronome \
+                     cxgb3 cxgb4 dpaa2 myricom qlogic; do
+                rm -rf "/usr/lib/firmware/$d" 2>/dev/null || true
+            done
+            ;;
+        lmscache)
+            rm -rf /var/lib/squeezeboxserver/cache/* 2>/dev/null || true
+            ;;
+        electron)
+            if [ "$(cat /etc/hifi-player/ui-engine 2>/dev/null)" != electron ] \
+               && [ -d /opt/hifi-qt ]; then
+                rm -rf /opt/hifi-media-player 2>/dev/null || true
+            fi
+            ;;
+    esac
+}
+
+cmd_cleanup() {  # [--deep [minimo_MiB_da_raggiungere]]
     need_root
     ab_is_image && die "sono un'immagine: niente da pulire"
+    deep=0; target=0
+    while [ $# -gt 0 ]; do
+        case "$1" in
+            --deep) deep=1 ;;
+            ''|*[!0-9]*) ;;
+            *) target=$1 ;;
+        esac
+        shift
+    done
     before=$(df -Pm / | awk 'NR==2{print $3}')
     apt-get clean >/dev/null 2>&1 || true
     rm -rf /var/lib/apt/lists/* /var/cache/apt/*.bin 2>/dev/null || true
@@ -94,8 +136,26 @@ cmd_cleanup() {
     rm -rf /var/lib/hifi-player/update/staged 2>/dev/null || true
     DEBIAN_FRONTEND=noninteractive apt-get -y autoremove --purge >/dev/null 2>&1 || true
     journalctl --vacuum-size=32M >/dev/null 2>&1 || true
+
+    if [ "$deep" = 1 ]; then
+        if [ "$target" -le 0 ]; then
+            _amax=$(ab_slot_a_max_mib 2>/dev/null || echo 0)
+            target=$(( _amax - AB_SLOT_A_MARGIN_MIN_MIB ))
+        fi
+        for step in docs firmware lmscache electron; do
+            _now=$(ab_root_min_mib 2>/dev/null || echo 0)
+            if [ "$target" -gt 0 ] && [ "$_now" -gt 0 ] && [ "$_now" -le "$target" ]; then
+                ab_log "pulizia profonda: basta così (minimo root ${_now} MiB, tetto ${target})"
+                break
+            fi
+            _u=$(df -Pm / | awk 'NR==2{print $3}')
+            deep_step "$step"
+            ab_log "pulizia profonda [$step]: liberati $(( _u - $(df -Pm / | awk 'NR==2{print $3}') )) MiB"
+        done
+    fi
+
     after=$(df -Pm / | awk 'NR==2{print $3}')
-    ab_log "pulizia: root da ${before} a ${after} MiB usati"
+    ab_log "pulizia: root da ${before} a ${after} MiB usati (minimo tecnico $(ab_root_min_mib 2>/dev/null || echo '?') MiB)"
     return 0
 }
 
@@ -157,7 +217,7 @@ menuentry 'Osmium Sound — conversione A/B' --id hifi-ab-convert --class osmium
 	insmod part_gpt
 	insmod ext2
 	search --no-floppy --fs-uuid --set=root $uuid
-	linux /boot/vmlinuz-$kver root=UUID=$uuid ro hifi.abconvert=1 hifi.abconvert.uuid=$uuid hifi.abconvert.slot_mib=$slot_a hifi.abconvert.slotb_mib=$AB_SLOT_B_MIB panic=30 $(default_cmdline)
+	linux /boot/vmlinuz-$kver root=UUID=$uuid ro hifi.abconvert=1 hifi.abconvert.uuid=$uuid hifi.abconvert.slot_mib=$slot_a hifi.abconvert.slotb_mib=$AB_SLOT_B_MIB hifi.abconvert.datamin_mib=$AB_DATA_MIN_MIB panic=30 $(default_cmdline)
 	initrd $CONV_INITRD
 }
 GRUBEOF
@@ -295,11 +355,11 @@ cmd_install() {
 
 case "$CMD" in
     status)           cmd_status ;;
-    cleanup)          cmd_cleanup ;;
+    cleanup)          shift; cmd_cleanup "$@" ;;
     prepare)          cmd_prepare "$@" ;;
     finish)           cmd_finish ;;
     install)          cmd_install "$@" ;;
     select)           cmd_select ;;
     restore-selector) cmd_restore_selector ;;
-    *) echo "uso: $0 status|cleanup|prepare [--reboot]|finish|install <bundle> [--reboot]|select|restore-selector" >&2; exit 64 ;;
+    *) echo "uso: $0 status|cleanup [--deep]|prepare [--reboot]|finish|install <bundle> [--reboot]|select|restore-selector" >&2; exit 64 ;;
 esac

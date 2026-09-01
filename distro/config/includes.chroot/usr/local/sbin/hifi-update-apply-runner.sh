@@ -58,6 +58,7 @@ if [ -n "${HIFI_APPLY_TEST_ROOT:-}" ]; then
     PLYMOUTH="$_R/bin/plymouth-stub"
     AB_CONVERT="$_R/sbin/hifi-ab-convert.sh"
     AB_PRECHECK="$_R/sbin/hifi-ab-precheck.sh"
+    AB_PRECHECK_JSON="$_R/hifi-ab-precheck.json"
     RAUC_CONF="$_R/etc/rauc/system.conf"
     IMAGE_VERSION_FILE="$_R/IMAGE_VERSION"
 else
@@ -81,6 +82,7 @@ else
     PLYMOUTH=plymouth
     AB_CONVERT=/usr/local/sbin/hifi-ab-convert.sh
     AB_PRECHECK=/usr/local/sbin/hifi-ab-precheck.sh
+    AB_PRECHECK_JSON=/run/hifi-ab-precheck.json
     RAUC_CONF=/etc/rauc/system.conf
     IMAGE_VERSION_FILE=/usr/lib/osmium/IMAGE_VERSION
     if [ -r /usr/local/sbin/hifi-log.sh ]; then
@@ -285,12 +287,17 @@ done
 # l'aggiornamento all'immagine. Chi non passa le pre-verifiche resta com'è.
 if [ -x "$AB_CONVERT" ] && [ -x "$AB_PRECHECK" ] && [ ! -f "$RAUC_CONF" ] && [ ! -f "$IMAGE_VERSION_FILE" ]; then
     splash_progress 100
-    # La pulizia (cache apt, /opt/*.old, kernel vecchi, journal) può far
-    # rientrare nel limite una root che alla prima pre-verifica non ci stava.
     if ab_will_convert; then
         "$AB_CONVERT" cleanup >/dev/null 2>&1 || true
     else
-        "$AB_CONVERT" cleanup >/dev/null 2>&1 || true
+        # Non ci sta: la root legacy diventa lo slot A e resize2fs non scende
+        # sotto ~1,55 volte l'occupato, quindi l'unica leva è liberare spazio.
+        # La pulizia profonda toglie doc/man/lingue, i firmware di schede che
+        # questo apparecchio non ha, la cache di Lyrion e (solo con la UI Qt)
+        # Electron: su un disco da 8 GB è ciò che fa la differenza fra
+        # convertire e restare legacy. Poi si riprova.
+        log "A/B: pre-verifiche non superate — pulizia profonda e secondo tentativo"
+        "$AB_CONVERT" cleanup --deep >/dev/null 2>&1 || true
         _ab_convertible=""
     fi
     if ab_will_convert; then
@@ -302,7 +309,9 @@ if [ -x "$AB_CONVERT" ] && [ -x "$AB_PRECHECK" ] && [ ! -f "$RAUC_CONF" ] && [ !
             log "A/B: prepare fallito — l'apparecchio resta legacy"
         fi
     else
-        log "A/B: pre-verifiche non superate — l'apparecchio resta legacy ($(cut -c1-200 /run/hifi-ab-precheck.json 2>/dev/null))"
+        ab_reason=$(sed -n 's/.*"reasons":"\([^"]*\)".*/\1/p' "$AB_PRECHECK_JSON" 2>/dev/null | cut -c1-300)
+        [ -n "$ab_reason" ] || ab_reason="pre-checks not passed"
+        log "A/B: pre-verifiche non superate — l'apparecchio resta legacy ($ab_reason)"
     fi
 fi
 
@@ -310,7 +319,13 @@ fi
 log "update-mode session complete — returning to normal boot"
 rm -rf "$STAGE_ROOT"
 rm -f "$PLAN"
-if [ "${ab_armed:-0}" = 1 ]; then
+if [ -n "${ab_reason:-}" ]; then
+    # Aggiornamento riuscito, ma il passaggio allo schema A/B non si è potuto
+    # fare: va detto, altrimenti l'apparecchio risulta "aggiornato" e basta e
+    # il motivo lo si scopre solo nei log.
+    write_state 'done' "Update complete — the device stays on the old layout: $ab_reason" \
+        update.ab.notConvertible "{\"reason\":\"$ab_reason\"}"
+elif [ "${ab_armed:-0}" = 1 ]; then
     # La catena continua da sola dopo il riavvio (conversione → finish →
     # hifi-ab-image → immagine): niente "completato" a metà strada — il kiosk
     # tiene un unico aggiornamento a schermo finché il piano immagine non
