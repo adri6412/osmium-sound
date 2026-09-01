@@ -1557,7 +1557,7 @@ onUnmounted(() => {
 
     <!-- Updates -->
     <div class="card" v-if="open === 'updates'">
-      <div class="between item">
+      <div class="between item stack-narrow">
         <span>{{ t('settings.updates.channel') }}
           <span class="pill" :class="{ gold: channel !== 'prod' }">{{ otaChannelLabel(channel) }}</span>
         </span>
@@ -1667,7 +1667,7 @@ onUnmounted(() => {
 
     <!-- device-rebooting overlay: reboot / factory reset / a restore that reboots -->
     <div v-if="rebootWait.active" class="overlay">
-      <div class="card" style="width: 340px; text-align: center;">
+      <div class="card" style="width: 340px; max-width: 92vw; text-align: center;">
         <div class="spinner"></div>
         <h3 style="justify-content: center;">{{ t('settings.system.rebootWaitTitle') }}</h3>
         <p class="sub">{{ rebootWait.phase === 'going-down' ? t('settings.system.rebootGoingDown') : t('settings.system.rebootComingBack') }}</p>
@@ -1677,7 +1677,7 @@ onUnmounted(() => {
 
     <!-- forced blocking update modal (kiosk-style) -->
     <div v-if="applying.active" class="overlay">
-      <div class="card" style="width: 340px; text-align: center;">
+      <div class="card" style="width: 340px; max-width: 92vw; text-align: center;">
         <template v-if="applying.state !== 'done' && applying.state !== 'error' && applying.state !== 'apply_error'">
           <div class="spinner"></div>
           <h3 style="justify-content: center;">{{ t('settings.updates.updating', { label: applying.label }) }}</h3>

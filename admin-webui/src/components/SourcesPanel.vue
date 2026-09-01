@@ -667,7 +667,7 @@ onUnmounted(() => {
 
     <!-- Format wizard -->
     <div v-if="wizardDisk" class="overlay">
-      <div class="card" style="width: 360px;">
+      <div class="card" style="width: 360px; max-width: calc(100vw - 32px);">
         <template v-if="wizardStep === 'choose'">
           <h3>{{ t('settings.sources.wizardTitle') }}</h3>
           <p class="sub">{{ wizardDisk.model || wizardDisk.path }} · {{ fmtSize(wizardDisk.size) }}</p>
