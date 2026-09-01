@@ -11,7 +11,7 @@
 #
 # Opzioni / ambiente:
 #   --out DIR         cartella di uscita          (IMAGE_OUT, default: radice repo)
-#   (root in SQUASHFS, zstd: ~1,1 GB per 2,7 GiB di contenuto; lo slot RAUC è
+#   (root in SQUASHFS gzip: ~1,2 GB per 2,7 GiB di contenuto; lo slot RAUC è
 #    `raw` e la partizione minima è AB_SLOT_B_MIB=1792 — vedi hifi-ab-lib.sh)
 #   --cert F --key F  certificato/chiave di firma (RAUC_CERT / RAUC_KEY; PEM o
 #                     contenuto PEM in RAUC_SIGNING_CERT / RAUC_SIGNING_KEY)
@@ -277,16 +277,35 @@ fi
 used_mib=$(du -sxm "$CH" | cut -f1)
 log "contenuto immagine: ${used_mib} MiB"
 
-# ── 9. rootfs.squashfs (sola lettura, zstd) ───────────────────────────────
+# ── 9. rootfs.squashfs (sola lettura, gzip) ───────────────────────────────
 # Squashfs invece di ext4: la root è comunque in sola lettura e così pesa un
 # terzo (slot da 1,75 GiB invece di 4). Il prezzo: ogni aggiornamento è un
-# download intero (~1 GB, i delta a blocchi non mordono su dati compressi) e
-# niente `remount,rw` di prova. zstd: decompressione leggera anche sul J4105.
-log "mksquashfs (zstd, blocchi da 256K)"
+# download intero (~1,2 GB, i delta a blocchi non mordono su dati compressi) e
+# niente `remount,rw` di prova.
+# 🚨 Compressione GZIP, non zstd: il kernel e l'initrd dello slot li legge GRUB
+# (`configfile (slot)/boot/grub/grub.cfg` dal selettore sulla ESP) e il modulo
+# squash4 di GRUB 2.12 (Debian trixie, 2.12-9+deb13u2) apre solo gzip e xz:
+# con zstd o lz4 risponde "unknown filesystem", lo slot non parte mai e il
+# selettore ricade sull'altro (visto sul Dell il 2026-09-01, verificato con
+# grub-fstest). xz sarebbe più piccolo ma la decompressione a runtime pesa
+# troppo sul J4105; gzip -9 costa ~10% di spazio in più di zstd.
+log "mksquashfs (gzip -9, blocchi da 256K)"
 SQ="$WORK/rootfs.squashfs"
 rm -f "$SQ"
-SOURCE_DATE_EPOCH="$SOURCE_DATE_EPOCH" mksquashfs "$CH" "$SQ" -comp zstd -Xcompression-level 15 -b 256K \
+SOURCE_DATE_EPOCH="$SOURCE_DATE_EPOCH" mksquashfs "$CH" "$SQ" -comp gzip -Xcompression-level 9 -b 256K \
     -noappend -no-progress -xattrs -no-recovery >/dev/null || die "mksquashfs fallito"
+# Prova del nove con lo stesso codice squash4 di GRUB: se grub-fstest non apre
+# il grub.cfg dello slot, neanche grubx64.efi lo farà. Id compressione nel
+# superblocco (offset 20): 1=gzip 4=xz leggibili; 6=zstd 5=lz4 no.
+sq_comp=$(od -An -tu2 -j20 -N2 "$SQ" | tr -d ' ')
+case "$sq_comp" in 1|4) ;; *) die "rootfs.squashfs con compressione id=$sq_comp: GRUB squash4 legge solo gzip(1)/xz(4)";; esac
+if command -v grub-fstest >/dev/null; then
+    grub-fstest "$SQ" cat /boot/grub/grub.cfg 2>&1 | grep -q '^linux ' \
+        || die "grub-fstest non legge /boot/grub/grub.cfg dal rootfs.squashfs: GRUB non avvierebbe lo slot"
+    log "grub-fstest: il grub.cfg dello slot è leggibile dal squash4 di GRUB"
+else
+    log "ATTENZIONE: grub-fstest assente sull'host, salto la verifica di lettura GRUB del squashfs"
+fi
 sq_mib=$(du -m "$SQ" | cut -f1)
 budget=$(( SLOT_MIB * 90 / 100 ))
 log "rootfs.squashfs: ${sq_mib} MiB (slot minimo ${SLOT_MIB} MiB, tetto ${budget})"
