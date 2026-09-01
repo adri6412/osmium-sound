@@ -204,7 +204,9 @@ jobs:
           set -euo pipefail
           git config --global --add safe.directory "$GITHUB_WORKSPACE"
           mkdir -p /mnt/image-out
-          export IMAGE_OUT=/mnt/image-out IMAGE_WORK=/mnt
+          # IMAGE_VERSION con la "v" davanti (come i tag): build-distro.sh la passa
+          # a build-image.sh, altrimenti userebbe --app-version senza "v".
+          export IMAGE_OUT=/mnt/image-out IMAGE_WORK=/mnt IMAGE_VERSION="$INPUT_VERSION"
           chmod +x distro/build-distro.sh distro/build-image.sh
           cd distro
           ./build-distro.sh --stage image --suite "$INPUT_SUITE" \
