@@ -84,6 +84,12 @@ export const api = {
     req('/api/provision/claim_mode', { method: 'POST', body: { mode, source: 'web' } }),
   provisionFinalize: () => req('/api/provision/finalize', { method: 'POST' }),
 
+  // installer (sessione live avviata dalla voce "Installa"): il backend
+  // inoltra ad api_server, che fa il lavoro vero
+  installDisks: () => req('/api/provision/install_disks'),
+  installStart: (device) => req('/api/provision/install_start', { method: 'POST', body: { device } }),
+  installStatus: () => req('/api/provision/install_status'),
+
   // system (proxied to api_server through webui_server)
   sys: (p) => req('/api/system/' + p),
   sysPost: (p, body) => req('/api/system/' + p, { method: 'POST', body }),

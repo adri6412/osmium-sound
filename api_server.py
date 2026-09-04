@@ -4806,6 +4806,21 @@ def list_install_disks():
         path = dev.get('path')
         if not path or path == medium_disk:
             continue
+        # 🚨 Nothing you can install onto has zero bytes. Loading the nbd
+        # module — which RAUC needs to stream an image — makes the kernel
+        # create sixteen empty /dev/nbdN devices, and lsblk reports every one
+        # of them as a disk: the installer's picker filled up with
+        # "/dev/nbd2 · 0.0 GB" entries and the real disk was lost among them.
+        # Same for zram, loop and ram devices, which are memory, not storage.
+        try:
+            _size = int(dev.get('size') or 0)
+        except (TypeError, ValueError):
+            _size = 0
+        if _size <= 0:
+            continue
+        _name = path.rsplit('/', 1)[-1]
+        if _name.startswith(('nbd', 'zram', 'ram', 'loop', 'dm-')):
+            continue
         disks.append({
             'path': path,
             'size': dev.get('size'),

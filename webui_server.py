@@ -1155,6 +1155,13 @@ def auth_status():
         'has_account': _get_user() is not None,
         'logged_in': _logged_in(),
         'provisioning': _provisioning(),
+        # 🚨 A live session booted from the "Install" menu entry has no account
+        # and no provisioning marker — the image the ISO now boots from is a
+        # slot image, and build-image.sh strips that marker on purpose. Without
+        # this the browser reaching the QR address landed on the login form of
+        # a system that is not installed yet. The installer is a boot mode, not
+        # a stored state, so it is answered from the kernel command line.
+        'installer': _boot_mode() == 'installer',
     })
 
 

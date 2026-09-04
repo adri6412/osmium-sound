@@ -5,6 +5,7 @@ import Login from './views/Login.vue';
 import Dashboard from './views/Dashboard.vue';
 import Settings from './views/Settings.vue';
 import Setup from './views/Setup.vue';
+import Install from './views/Install.vue';
 import { api } from './api.js';
 import './style.css';
 
@@ -14,6 +15,7 @@ const router = createRouter({
     { path: '/', component: Dashboard, meta: { auth: true } },
     { path: '/login', component: Login },
     { path: '/setup', component: Setup },
+    { path: '/install', component: Install },
     { path: '/settings', component: Settings, meta: { auth: true } },
   ],
 });
@@ -28,6 +30,11 @@ router.beforeEach(async (to) => {
   // `undefined` and `!data.has_account` sends the visitor into the pre-auth
   // setup wizard instead.
   if (!ok) return '/login';
+  // Sessione live avviata per installare: qui non c'è un sistema da
+  // amministrare, c'è un disco da preparare. Senza questo il browser che
+  // seguiva il QR dell'installer finiva sul modulo di accesso di un
+  // apparecchio che non esiste ancora.
+  if (data.installer) return to.path === '/install' ? true : '/install';
   if (data.logged_in) return true;
   if (!data.has_account || data.provisioning) return '/setup';
   return '/login';
