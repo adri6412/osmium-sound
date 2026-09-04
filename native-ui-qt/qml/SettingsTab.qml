@@ -18,15 +18,31 @@ Item {
     // ─── stato locale della sezione aperta (S.*) ───────────────────────────
     property string audioSel: ""
     property string sshUser: ""; property string sshPass: ""
-    property string nameEdit: ""; property string hostEdit: ""; property string urlEdit: ""
+    property string nameEdit: ""; property string hostEdit: ""
     property string pendAct: ""; property string pendArg: ""
     property int countdown: 0
     property int alarmH: 7; property int alarmM: 0
     // 🚨 persistente come in Electron (li' e' in localStorage): lo legge anche
     // la barra dei tab per decidere se controllare gli aggiornamenti
     property bool autoCheck: Sys.conf("ota-autocheck", "1") !== "0"
-    property string smbHost: ""; property string smbShare: ""; property string smbUser: ""; property string smbPw: ""
-    property bool smbRw: false; property bool smbShowPw: false
+    property bool smbShowPw: false
+    // Procedura guidata "aggiungi una cartella di rete". Sostituisce le quattro
+    // caselle vuote (server/share/utente/password), che sono inutilizzabili per
+    // chi non sa gia' cos'e' una condivisione SMB: prima si cercano da soli i
+    // dispositivi in rete, come fa la lista Wi-Fi qui accanto, poi si tocca la
+    // cartella. Scrivere tutto a mano resta, ma come ripiego.
+    property int wiz: -1                 // -1 spenta; 0 cerca, 1 cartella, 2 conferma
+    property bool wizManual: false
+    property string wizHost: ""; property string wizName: ""; property string wizShare: ""
+    property string wizUser: ""; property string wizPw: ""
+    property bool wizRw: false; property bool wizBusy: false
+    property string wizErr: ""; property string wizDetail: ""; property bool wizDetailOpen: false
+    property var wizShares: []           // [{name, comment}]
+    property bool wizNeedsAuth: false
+    property bool wizCanList: true       // le condivisioni di questo server si possono leggere
+    property bool wizNoClient: false     // ...perche' l'apparecchio non ha smbclient
+    property string scanState: ""; property int scanPct: 0
+    property var scanHosts: []           // [{ip, name}]
     property int band: -1; property int bandAdd: -1; property int bandShare: -1
     property string brId: ""; property bool brBusy: false
     property int pickOwner: 0; property string pickNew: ""; property bool pickBusy: false
@@ -36,7 +52,6 @@ Item {
 
     readonly property var secs: [
         { icon: "globe", key: "settings.sections.language" },
-        { icon: "network", key: "settings.sections.lyrion" },
         { icon: "hard-drive", key: "settings.sections.sources" },
         { icon: "volume-2", key: "settings.sections.audio" },
         { icon: "sliders", key: "settings.sections.playback" },
@@ -87,7 +102,6 @@ Item {
         property var upd: [{cur: "", latest: "", avail: false}, {cur: "", latest: "", avail: false}, {cur: "", latest: "", avail: false}]
         property string otaState: ""; property string otaMsg: ""; property int otaPct: 0
         property string changelog: ""
-        property int rescan: 0; property int rescanDone: 0; property int rescanTotal: 0
         property var sources: []                                    // oggetti /api/sources
         property var usb: []                                        // chiavette da sistemare
         property var disks: []                                      // dischi interni
@@ -196,7 +210,6 @@ Item {
                     if (String(p.playerid) === Player.playerId) continue
                     out.push({ id: String(p.playerid), name: String(p.name || ""), sync: false })
                 }
-                rescan = Number(r.rescan || 0); rescanDone = Number(r.progressdone || 0); rescanTotal = Number(r.progresstotal || 0)
                 if (out.length) Player.query(["status", "-", "1"], function(ok2, r2) {
                     var sl = ok2 && r2 && r2.sync_slaves ? String(r2.sync_slaves) : ""
                     for (var i = 0; i < out.length; i++) out[i].sync = sl.indexOf(out[i].id) >= 0
@@ -270,6 +283,16 @@ Item {
     function post(url, body, cb) { Api.post(url, body || {}, function(ok, d, st) { if (cb) cb(ok, d, st); cfg.load() }, 12000) }
     function send(method, url, body) { Api.send(method, url, body || {}, function() { cfg.load() }, 12000) }
     function lms(params) { Player.cmd(params); reloadLater.restart() }
+
+    // Switching between this device's own Lyrion and one on the network only
+    // half-applies while the box is running (squeezelite reconnects, but the
+    // services around it — and every address already resolved — do not), so
+    // the change is confirmed as a restart and the reboot follows the POST.
+    function askRoleReboot(apply) {
+        Ui.dialogs.confirm(Tr.t("settings.multiroom.role.rebootWarning"),
+                           Tr.t("settings.controls.reboot"), false,
+                           function(ok) { if (ok) apply() })
+    }
     Timer { id: reloadLater; interval: 400; onTriggered: cfg.load() }
     function setPref(name, value) { Player.cmd(["playerpref", name, value]) }
 
@@ -280,12 +303,112 @@ Item {
         active = i; msg = ""; pendAct = ""; countdown = 0
         audioSel = ""; sshUser = ""; sshPass = ""; nameEdit = ""; hostEdit = ""
         band = -1; bandAdd = -1; bandShare = -1; brId = ""; pickOwner = 0; pickNew = ""
-        if (i === 15 && timezones.length === 0) Api.get(cfg.api("/timezones"), function(ok, d) { if (ok && d && d.timezones) { timezones = d.timezones.map(String); rebuild() } })
-        if (i === 8) cfg.mintToken()
-        if (i === 5 && cfg.lmsMode === "follow") cfg.loadDiscover()
-        if (i === 19 && !thirdParty) { try { thirdParty = JSON.parse(Sys.readFile(I18n.dir + "/third_party.json")) } catch (e) { thirdParty = null } }
+        wizReset()
+        if (i === 14 && timezones.length === 0) Api.get(cfg.api("/timezones"), function(ok, d) { if (ok && d && d.timezones) { timezones = d.timezones.map(String); rebuild() } })
+        if (i === 7) cfg.mintToken()
+        if (i === 4 && cfg.lmsMode === "follow") cfg.loadDiscover()
+        if (i === 18 && !thirdParty) { try { thirdParty = JSON.parse(Sys.readFile(I18n.dir + "/third_party.json")) } catch (e) { thirdParty = null } }
         rebuild(); page.contentY = 0; appear()
     }
+    // ─── procedura guidata "cartella di rete" ──────────────────────────────
+    function wizReset() {
+        wiz = -1; wizManual = false; wizHost = ""; wizName = ""; wizShare = ""
+        wizUser = ""; wizPw = ""; wizRw = false; wizBusy = false
+        wizErr = ""; wizDetail = ""; wizDetailOpen = false
+        wizShares = []; wizNeedsAuth = false; wizCanList = true; wizNoClient = false
+        scanState = ""; scanPct = 0; scanHosts = []
+        scanPoll.stop()
+    }
+    function wizOpen() { wizReset(); wiz = 0; wizScan() }
+    function wizScan() {
+        wizManual = false; wizErr = ""; wizDetail = ""
+        scanState = "running"; scanPct = 0; scanHosts = []
+        Api.post(cfg.src("/api/sources/smb/discover"), {}, function() { scanPoll.restart(); wizPoll() }, 10000)
+        rebuild()
+    }
+    function wizPoll() {
+        Api.get(cfg.src("/api/sources/smb/discover"), function(ok, d) {
+            if (!ok || !d || typeof d !== "object") return
+            scanState = String(d.state || ""); scanPct = Number(d.progress || 0)
+            scanHosts = (d.hosts || []).map(function(h) {
+                return { ip: String(h.ip || ""), name: String(h.name || "") } })
+            // Senza smbclient (apparecchio non ancora aggiornato) le cartelle
+            // non si possono elencare: si passa a scriverne il nome.
+            if (d.tools && d.tools.shares === false) { wizCanList = false; wizNoClient = true }
+            if (scanState !== "running") scanPoll.stop()
+            if (wiz === 0) rebuild()
+        }, 8000)
+    }
+    Timer { id: scanPoll; interval: 900; repeat: true; onTriggered: root.wizPoll() }
+
+    function wizHostName(ip) {
+        for (var i = 0; i < scanHosts.length; i++) if (scanHosts[i].ip === ip) return scanHosts[i].name
+        return ""
+    }
+    function wizFail(d, fallbackKey) {
+        wizErr = (d && d.message) ? String(d.message) : Tr.t(fallbackKey)
+        wizDetail = (d && d.detail) ? String(d.detail) : ""
+        wizDetailOpen = false
+    }
+    function wizPickHost(ip, name) {
+        scanPoll.stop()
+        wizHost = ip; wizName = name || ip; wizShare = ""; wizShares = []
+        wizNeedsAuth = false; wizErr = ""; wizDetail = ""; wiz = 1
+        if (wizCanList) wizLoadShares(); else rebuild()
+    }
+    function wizLoadShares() {
+        wizBusy = true; wizErr = ""; wizDetail = ""; rebuild()
+        Api.post(cfg.src("/api/sources/smb/shares"),
+                 { server: wizHost, username: wizUser, password: wizPw },
+                 function(ok, d) {
+                     wizBusy = false
+                     if (!ok || !d || typeof d !== "object" || d.success === false) {
+                         wizFail(d, "sources.wizard.listFailed")
+                         // Password sbagliata: si resta sul passo che l'ha
+                         // chiesta. Solo un guasto vero fa passare al ripiego
+                         // di scrivere il nome della cartella a mano.
+                         if (d && d.code === "msg.smbBadCredentials") wizNeedsAuth = true
+                         else wizCanList = false
+                         rebuild(); return
+                     }
+                     wizNeedsAuth = !!d.needs_auth
+                     wizShares = (d.shares || []).map(function(x) {
+                         return { name: String(x.name || ""), comment: String(x.comment || "") } })
+                     rebuild()
+                 }, 40000)
+    }
+    function wizPickShare(name) {
+        wizShare = name; wizErr = ""; wizDetail = ""; wizBusy = true; rebuild()
+        Api.post(cfg.src("/api/sources/smb/test"),
+                 { server: wizHost, share: name, username: wizUser, password: wizPw },
+                 function(ok, d) {
+                     wizBusy = false
+                     if (ok && d && typeof d === "object" && d.success !== false) { wiz = 2; rebuild(); return }
+                     wizFail(d, "sources.wizard.openFailed")
+                     // Una password sbagliata si corregge sul passo che l'ha
+                     // chiesta, non alla fine con un "mount fallito".
+                     if (d && d.code === "msg.smbBadCredentials") wizNeedsAuth = true
+                     rebuild()
+                 }, 40000)
+    }
+    function wizAdd() {
+        if (!wizHost || !wizShare) return
+        var label = (wizName || wizHost) + " / " + wizShare
+        wizBusy = true; wizErr = ""; wizDetail = ""; rebuild()
+        Api.post(cfg.src("/api/sources/smb"),
+                 { server: wizHost, share: wizShare, username: wizUser, password: wizPw, rw: wizRw },
+                 function(ok, d) {
+                     wizBusy = false
+                     if (ok && d && typeof d === "object" && d.success !== false) {
+                         wizReset(); band = 0; cfg.load()
+                         say(Tr.tf("sources.wizard.added", "name", label))
+                         return
+                     }
+                     wizFail(d, "sources.wizard.openFailed")
+                     rebuild()
+                 }, 60000)
+    }
+
     function appear() { fadeAnim.restart() }
     NumberAnimation { id: fadeAnim; target: body; property: "opacity"; from: 0; to: 1; duration: 120; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.easeOut }
     Keys.onEscapePressed: if (active >= 0) goRoot()
@@ -337,25 +460,24 @@ Item {
         if (active >= 0) {
             switch (active) {
             case 0: secLanguage(); break
-            case 1: secLyrion(); break
-            case 2: secSources(); break
-            case 3: secAudio(); break
-            case 4: secPlayback(); break
-            case 5: secMultiroom(); break
-            case 6: secAlarm(); break
-            case 7: secNetwork(); break
-            case 8: secWebremote(); break
-            case 9: secWebremoteIos(); break
-            case 10: secSsh(); break
-            case 11: secPointer(); break
-            case 12: secUires(); break
-            case 13: secUirefresh(); break
-            case 14: secDisplaymode(); break
-            case 15: secTimezone(); break
-            case 16: secSysinfo(); break
-            case 17: secUpdates(); break
-            case 18: secSysctl(); break
-            case 19: secThirdparty(); break
+            case 1: secSources(); break
+            case 2: secAudio(); break
+            case 3: secPlayback(); break
+            case 4: secMultiroom(); break
+            case 5: secAlarm(); break
+            case 6: secNetwork(); break
+            case 7: secWebremote(); break
+            case 8: secWebremoteIos(); break
+            case 9: secSsh(); break
+            case 10: secPointer(); break
+            case 11: secUires(); break
+            case 12: secUirefresh(); break
+            case 13: secDisplaymode(); break
+            case 14: secTimezone(); break
+            case 15: secSysinfo(); break
+            case 16: secUpdates(); break
+            case 17: secSysctl(); break
+            case 18: secThirdparty(); break
             }
             if (msg) note(msg, msgErr ? "red" : "dark")
         }
@@ -368,23 +490,6 @@ Item {
         var cur = I18n.lang
         var r = option("English", "", "en", cur === "en", "lang"); r.hh = 52; r.icon = "check"
         r = option("Italiano", "", "it", cur === "it", "lang"); r.hh = 52; r.icon = "check"
-    }
-    function secLyrion() {
-        label("settings.lyrion.urlLabel"); help("settings.lyrion.urlHelp")
-        input("http://localhost:9000", urlEdit || "http://localhost:9000", "lms_url", false).hh = 50
-        sep()
-        label("settings.lyrion.skinLabel"); help("settings.lyrion.skinHint")
-        grid([cell(Tr.t("settings.lyrion.skinOsmium"), "osmium", cfg.lmsSkin === "osmium", "lms_skin", { hh: 48 }),
-              cell(Tr.t("settings.lyrion.skinMaterial"), "material", cfg.lmsSkin === "material", "lms_skin", { hh: 48 })])
-        if (!cfg.lmsSkin || cfg.lmsSkin === "unset") help("settings.lyrion.skinUnset")
-        if (cfg.skinState && cfg.skinState !== "done" && cfg.skinState !== "idle") {
-            var err = cfg.skinState === "error"
-            note(cfg.skinMsg || Tr.t(err ? "settings.lyrion.skinFailed" : "settings.lyrion.skinInstalling"), err ? "red" : "dark")
-        }
-        sep()
-        label("settings.lyrion.rescanLabel"); help("settings.lyrion.rescanHelp")
-        var b = action(Tr.t(cfg.rescan ? "settings.lyrion.rescanning" : "settings.lyrion.rescan"), "lms_rescan", "accent"); b.icon = "rotate-cw"; b.hh = 48
-        if (cfg.rescan && cfg.rescanTotal > 0) note(cfg.rescanDone + " / " + cfg.rescanTotal, "dark")
     }
     function folderPicker(pickLabel) {
         box(function() {
@@ -444,12 +549,13 @@ Item {
         }
     }
     function bandAddSmb() {
-        grid([{ type: "input", label: Tr.t("sources.server"), value: smbHost, act: "smb_field", arg: "h" },
-              { type: "input", label: Tr.t("sources.share"), value: smbShare, act: "smb_field", arg: "s" }])
-        grid([{ type: "input", label: Tr.t("sources.user"), value: smbUser, act: "smb_field", arg: "u" },
-              { type: "input", label: Tr.t("sources.pass"), value: smbPw, act: "smb_field", arg: "p", on: true }])
-        check(Tr.t("sources.smbRw"), smbRw, "smb_rw")
-        var add = action(Tr.t("sources.mountAndAdd"), "smb_add", "accent"); add.icon = "plus"; add.hh = 46; add.dim = !smbHost || !smbShare
+        // Niente piu' caselle qui dentro: si entra nella procedura guidata, che
+        // cerca i dispositivi da sola e chiede una cosa per volta.
+        help("sources.wizard.intro", 13)
+        var go = action(Tr.t("sources.wizard.searchButton"), "wiz_open", "gold")
+        go.icon = "search"; go.hh = 52; go.bold = true
+        var mr = miniRow()
+        mini(mr, Tr.t("sources.wizard.typeItMyself"), "wiz_manual_open", "accent", false, "")
     }
     function bandAddInternal() {
         if (!cfg.disks.length) { help("sources.internal.none"); return }
@@ -490,8 +596,115 @@ Item {
         var b = bandRow("folder-plus", Tr.t("sources.shareLocal"), "", bandShare === 0, "band_share", "0", true)
         if (bandShare === 0) { begin(b.children); help("sources.localSambaHint"); folderPicker(Tr.t("sources.shareThisFolder")); end() }
     }
+    // ─── la procedura guidata, un passo per schermata ──────────────────────
+    function wizPage() {
+        labelText(Tr.t("sources.wizard.title"), 18)
+        if (wiz === 0) wizStepFind()
+        else if (wiz === 1) wizStepShare()
+        else wizStepConfirm()
+        if (wizErr) {
+            note(wizErr, "darkred", "alert-triangle", 14)
+            if (wizDetail) {
+                // Il testo grezzo di mount.cifs resta raggiungibile, ma non e'
+                // mai l'unica cosa sullo schermo: era il vecchio comportamento.
+                var dr = miniRow()
+                mini(dr, Tr.t(wizDetailOpen ? "sources.wizard.hideDetail" : "sources.wizard.showDetail"), "wiz_detail", "accent", false, "")
+                if (wizDetailOpen) code(wizDetail)
+            }
+        }
+        var nav = miniRow()
+        mini(nav, Tr.t("common.cancel"), "wiz_close", "accent", false, "")
+        if (wiz > 0) mini(nav, Tr.t("sources.wizard.back"), "wiz_back", "accent", wizBusy, "")
+    }
+    function wizStepFind() {
+        if (wizManual) {
+            help("sources.wizard.manualHint", 13)
+            input(Tr.t("sources.wizard.addressLabel"), wizHost, "wiz_field", false, "h")
+            var go = action(Tr.t("sources.wizard.continue"), "wiz_host_manual", "gold")
+            go.hh = 52; go.bold = true; go.dim = !wizHost
+            var m0 = miniRow()
+            mini(m0, Tr.t("sources.wizard.searchAgain"), "wiz_rescan", "accent", false, "")
+            return
+        }
+        if (scanState === "running") {
+            var p = info(Tr.t("sources.wizard.searching"), scanPct + "%"); p.style = "seg"; p.hh = 30
+        }
+        if (scanHosts.length) {
+            label("sources.wizard.foundTitle", 15)
+            for (var i = 0; i < scanHosts.length; i++) {
+                var h = scanHosts[i]
+                // Nome in evidenza e indirizzo sotto: chi cerca "SYNOLOGY" non
+                // deve leggere quattro numeri per riconoscerlo.
+                var r = option(h.name || h.ip, h.name ? h.ip : "", h.ip, false, "wiz_host"); r.hh = 62
+            }
+        } else if (scanState !== "running") {
+            note(Tr.t("sources.wizard.nothingFound"), "dark")
+        }
+        var mr = miniRow()
+        mini(mr, Tr.t("sources.wizard.searchAgain"), "wiz_rescan", "accent", scanState === "running", "")
+        mini(mr, Tr.t("sources.wizard.typeItMyself"), "wiz_manual", "goldsoft", false, "")
+    }
+    function wizStepShare() {
+        helpText(Tr.tf("sources.wizard.onDevice", "device", wizName || wizHost), 13)
+        if (wizNeedsAuth || wizUser) {
+            help("sources.wizard.authHint", 13)
+            grid([{ type: "input", label: Tr.t("sources.user"), value: wizUser, act: "wiz_field", arg: "u" },
+                  { type: "input", label: Tr.t("sources.pass"), value: wizPw, act: "wiz_field", arg: "p", on: true }])
+            var lg = action(Tr.t("sources.wizard.signIn"), "wiz_auth", "gold")
+            lg.hh = 48; lg.dim = wizBusy || !wizUser
+        }
+        if (wizBusy) { help("sources.wizard.loadingShares", 13); return }
+        if (!wizCanList) {
+            // Perche' non c'e' un elenco da toccare: senza questa riga si
+            // finiva su una casella vuota senza sapere il motivo.
+            if (wizNoClient) help("sources.wizard.noClientHint", 13)
+            help("sources.wizard.typeShareHint", 13)
+            input(Tr.t("sources.wizard.shareLabel"), wizShare, "wiz_field", false, "s")
+            var c = action(Tr.t("sources.wizard.continue"), "wiz_share_manual", "gold")
+            c.hh = 52; c.bold = true; c.dim = !wizShare
+            return
+        }
+        if (!wizShares.length) {
+            if (!wizNeedsAuth) note(Tr.t("sources.wizard.noShares"), "dark")
+        } else {
+            label("sources.wizard.pickShare", 15)
+            for (var i = 0; i < wizShares.length; i++) {
+                var sh = wizShares[i]
+                var rr = option(sh.name, sh.comment, sh.name, wizShare === sh.name, "wiz_share"); rr.hh = 58
+            }
+        }
+        var mr = miniRow()
+        if (!wizNeedsAuth && !wizUser) mini(mr, Tr.t("sources.wizard.needPassword"), "wiz_needauth", "accent", false, "")
+        mini(mr, Tr.t("sources.wizard.typeItMyself"), "wiz_share_type", "accent", false, "")
+    }
+    function wizStepConfirm() {
+        var d = info(Tr.t("sources.wizard.device"), wizName || wizHost); d.hh = 44
+        var f = info(Tr.t("sources.wizard.folder"), wizShare); f.hh = 44
+        if (wizUser) { var u = info(Tr.t("sources.user"), wizUser); u.hh = 40 }
+        help("sources.wizard.writeHint", 13)
+        check(Tr.t("sources.wizard.allowWrite"), wizRw, "wiz_rw")
+        var add = action(Tr.t("sources.wizard.addNow"), "wiz_add", "gold")
+        add.icon = "plus"; add.hh = 54; add.bold = true; add.dim = wizBusy
+        if (wizBusy) help("sources.mounting", 13)
+    }
+    // Prima sorgente: invece di "Nessuna sorgente" si chiede dov'e' la musica,
+    // in parole di tutti i giorni, e ogni risposta porta dritta al pezzo giusto.
+    function sourcesWhere() {
+        label("sources.where.title", 18)
+        help("sources.where.hint", 13)
+        var picks = [["sources.where.network", "sources.where.networkHint", "where_net"],
+                     ["sources.where.disk", "sources.where.diskHint", "where_disk"],
+                     ["sources.where.local", "sources.where.localHint", "where_local"]]
+        for (var i = 0; i < picks.length; i++) {
+            var r = option(Tr.t(picks[i][0]), Tr.t(picks[i][1]), "", false, picks[i][2])
+            r.hh = 72; r.style = "border"; r.icon = "chevron-right"
+        }
+        sep()
+    }
     function secSources() {
+        if (wiz >= 0) { wizPage(); return }
         help("settings.sources.help"); help("sources.autoApplyHint", 12)
+        if (!cfg.sources.length) sourcesWhere()
         var sum = cfg.sources.length ? Tr.tf("sources.countSummary", "count", String(cfg.sources.length)) : Tr.t("sources.none")
         var b0 = bandRow("library", Tr.t("sources.active"), sum, band === 0, "band", "0", false)
         if (band === 0) { begin(b0.children); bandActiveSources(); end() }
@@ -595,6 +808,17 @@ Item {
             var app = action(Tr.t("settings.multiroom.role.apply"), "lms_apply", "gold"); app.bold = true; app.hh = 44; app.dim = !hv
         }
         sep()
+        // Look of the server's own web player (used to be its own "Lyrion
+        // Configuration" section, dropped along with the manual server URL).
+        label("settings.lyrion.skinLabel"); help("settings.lyrion.skinHint", 12)
+        grid([cell(Tr.t("settings.lyrion.skinOsmium"), "osmium", cfg.lmsSkin === "osmium", "lms_skin", { hh: 48 }),
+              cell(Tr.t("settings.lyrion.skinMaterial"), "material", cfg.lmsSkin === "material", "lms_skin", { hh: 48 })])
+        if (!cfg.lmsSkin || cfg.lmsSkin === "unset") help("settings.lyrion.skinUnset", 12)
+        if (cfg.skinState && cfg.skinState !== "done" && cfg.skinState !== "idle") {
+            var serr = cfg.skinState === "error"
+            note(cfg.skinMsg || Tr.t(serr ? "settings.lyrion.skinFailed" : "settings.lyrion.skinInstalling"), serr ? "red" : "dark")
+        }
+        sep()
         if (!havePlayer) { note(Tr.t("settings.playback.noPlayer"), "dark"); return }
         if (!cfg.players.length) { note(Tr.t("settings.multiroom.noOthers"), "dark"); return }
         for (var p = 0; p < cfg.players.length; p++) {
@@ -641,7 +865,13 @@ Item {
         var ip = cfg.deviceIp || cfg.netIp
         var usable = ip && ip.indexOf("127.") !== 0
         if (!usable) { note(Tr.t("settings.webRemote.noIp"), "dark"); return }
-        var url = "http://" + ip + ":9000/material/" + (cfg.lmsSkin === "osmium" ? "?defaultTheme=dark/Osmium" : "")
+        // Following another server? Then the music lives THERE, so the link
+        // has to go there — bare root, because the skin choice below only
+        // applies to this device's own server and /material/ may not even
+        // exist on the other one (the root always serves its default skin).
+        var url = cfg.lmsHost
+            ? "http://" + cfg.lmsHost + ":9000"
+            : "http://" + ip + ":9000/material/" + (cfg.lmsSkin === "osmium" ? "?defaultTheme=dark/Osmium" : "")
         if (!cfg.pairToken) { note(Tr.t("settings.webRemote.generatingToken"), "dark"); code(url); return }
         qr(JSON.stringify({ lms: url, api: ip + ":8080", token: cfg.pairToken }), Tr.t("settings.webRemote.scanHint"))
         code(url)
@@ -775,14 +1005,16 @@ Item {
     // ─── campi di testo ────────────────────────────────────────────────────
     function fieldSet(row, text) {
         switch (row.act) {
-        case "smb_field":
-            if (row.arg === "h") smbHost = text; else if (row.arg === "s") smbShare = text; else if (row.arg === "u") smbUser = text; else smbPw = text
+        case "wiz_field":
+            if (row.arg === "h") wizHost = text
+            else if (row.arg === "s") wizShare = text
+            else if (row.arg === "u") wizUser = text
+            else wizPw = text
             break
         case "ssh_user": sshUser = text; break
         case "ssh_pass": sshPass = text; break
         case "player_name": nameEdit = text; break
         case "lms_host": hostEdit = text; break
-        case "lms_url": urlEdit = text; break
         case "pick_new": pickNew = text; break
         }
         // le righe dipendenti (pulsante "applica" attivo/spento) si rifanno subito
@@ -843,21 +1075,49 @@ Item {
             post(A("/set_audio_device"), { device: audioSel }); cfg.audioCur = audioSel; say(Tr.t("settings.audio.updated")); break
         case "audio_refresh": cfg.load(); break
         case "lms_skin": post(S("/api/lms_skin"), { skin: arg }); cfg.lmsSkin = arg; say(Tr.t("settings.lyrion.skinApplying")); break
-        case "lms_rescan": lms(["rescan"]); say(Tr.t("settings.lyrion.rescanStarted")); break
-        case "lms_url": case "smb_field": case "pick_new": case "ssh_user": case "ssh_pass": case "player_name": case "lms_host": return
+        case "wiz_field": case "pick_new": case "ssh_user": case "ssh_pass": case "player_name": case "lms_host": return
         case "lms_role":
-            if (arg === "local") { post(A("/lms_role"), { mode: "local" }); cfg.lmsMode = "local"; Api.refreshLmsHost(); say(Tr.t("settings.multiroom.role.saved")) }
-            else { cfg.lmsMode = "follow"; cfg.loadDiscover() }
-            break
+            if (arg !== "local") { cfg.lmsMode = "follow"; cfg.loadDiscover(); break }
+            // Already on this device's own server: only the toggle moves back,
+            // nothing to apply and nothing to reboot for.
+            if (!cfg.lmsHost) { cfg.lmsMode = "local"; break }
+            askRoleReboot(function() {
+                post(A("/lms_role"), { mode: "local" }, function(ok, d) {
+                    // 🚨 The outcome decides: this used to fire and forget, so
+                    // a refused or unanswered change still said "saved" and
+                    // left the owner sure the device was on its own server
+                    // when it was not. Now nothing moves — and nothing
+                    // reboots — unless the server confirms it.
+                    if (!ok || (d && d.success === false)) {
+                        say((d && d.message) || Tr.t("settings.multiroom.role.failed"), true)
+                        return
+                    }
+                    Api.refreshLmsHost()
+                    cfg.lmsMode = "local"; cfg.lmsHost = ""
+                    say(Tr.t("settings.msg.rebooting"))
+                    post(A("/reboot"), {})
+                })
+            })
+            return
         case "lms_pick": hostEdit = arg; break
         case "lms_discover": cfg.loadDiscover(); say(Tr.t("common.loading")); break
         case "lms_apply": {
             var h = hostEdit || cfg.lmsHost
             if (!h) { say(Tr.t("settings.multiroom.role.hostRequired"), true); return }
-            // 🚨 l'interfaccia deve puntare SUBITO al Lyrion nuovo: senza questo
-            // resta su quello di prima fino al controllo periodico
-            post(A("/lms_role"), { mode: "follow", host: h }, function() { Api.refreshLmsHost() })
-            cfg.lmsHost = h; say(Tr.t("settings.multiroom.role.saved")); break
+            if (h === cfg.lmsHost) { say(Tr.t("settings.multiroom.role.saved")); return }
+            askRoleReboot(function() {
+                post(A("/lms_role"), { mode: "follow", host: h }, function(ok, d) {
+                    if (!ok || (d && d.success === false)) {
+                        say((d && d.message) || Tr.t("settings.multiroom.role.failed"), true)
+                        return
+                    }
+                    Api.refreshLmsHost()
+                    cfg.lmsHost = h; cfg.lmsMode = "follow"
+                    say(Tr.t("settings.msg.rebooting"))
+                    post(A("/reboot"), {})
+                })
+            })
+            return
         }
         case "player_name_apply":
             if (!nameEdit) return
@@ -896,11 +1156,32 @@ Item {
         }
         case "src_del": send("DELETE", S("/api/sources/" + arg), {}); break
         case "usb_retry": post(S("/api/usb/adopt"), { device: arg }); say(Tr.t("sources.internal.adopting")); break
-        case "smb_rw": smbRw = !smbRw; break
-        case "smb_add":
-            if (!smbHost || !smbShare) return
-            post(S("/api/sources/smb"), { server: smbHost, share: smbShare, username: smbUser, password: smbPw, rw: smbRw })
-            say(Tr.t("sources.mounting")); smbPw = ""; break
+        // ── procedura guidata "cartella di rete" ────────────────────────
+        case "where_net": band = 1; bandAdd = 0; wizOpen(); return
+        case "where_disk": band = 1; bandAdd = 1; break
+        case "where_local": band = 1; bandAdd = 2; pickOwner = 1; pickBrowse(""); break
+        case "wiz_open": wizOpen(); return
+        case "wiz_manual_open": wizReset(); wiz = 0; wizManual = true; break
+        case "wiz_close": wizReset(); break
+        case "wiz_back":
+            wizErr = ""; wizDetail = ""
+            if (wiz === 2) wiz = 1
+            else if (wiz === 1) { wiz = 0; if (!wizManual && scanState !== "done") wizScan() }
+            break
+        case "wiz_rescan": wizScan(); return
+        case "wiz_manual": wizManual = true; wizErr = ""; wizDetail = ""; break
+        case "wiz_host": if (!arg) return; wizPickHost(arg, wizHostName(arg)); return
+        case "wiz_host_manual": if (!wizHost) return; wizPickHost(wizHost, wizHost); return
+        case "wiz_needauth": wizNeedsAuth = true; break
+        case "wiz_auth": if (!wizUser) return; wizLoadShares(); return
+        case "wiz_share": if (!arg) return; wizPickShare(arg); return
+        // Il nome scritto a mano non passa dalla prova: la conferma finale e'
+        // il mount stesso, che e' comunque il controllo di ultima istanza.
+        case "wiz_share_manual": if (!wizShare) return; wiz = 2; break
+        case "wiz_share_type": wizCanList = false; wizErr = ""; wizDetail = ""; break
+        case "wiz_rw": wizRw = !wizRw; break
+        case "wiz_add": wizAdd(); return
+        case "wiz_detail": wizDetailOpen = !wizDetailOpen; break
         case "disk_adopt": {
             var dev = arg
             for (var d = 0; d < cfg.disks.length; d++) if (cfg.disks[d].path === arg && cfg.disks[d].parts.length === 1) dev = cfg.disks[d].parts[0].path

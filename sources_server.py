@@ -28,9 +28,12 @@ import tarfile
 import hashlib
 import secrets
 import shutil
+import stat
 import tempfile
 import urllib.request
 import urllib.error
+import ipaddress
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 
 import hifi_backup as hb
@@ -78,14 +81,46 @@ INTERNAL_MOUNT_ROOT = "/mnt/hifi-internal"
 # PARTUUID/UUID. This is the only mountpoint a USB stick ever gets — see the
 # USB drives section below.
 USB_ADOPTED_ROOT = "/mnt/hifi-usb"
+# The data partition of the A/B layout, and the folder on it that holds music
+# kept on the appliance itself. On an image slot this is the ONLY place a
+# local library can live: everything else is either read-only or thrown away
+# at the next boot. hifi-ab-media.py moves the folders of a converted device
+# in here, and _ensure_music_root() makes it for the ones installed from the
+# ISO, so "add a local folder" has somewhere to point at.
+DATA_MNT = "/data"
+DATA_MUSIC_ROOT = "/data/music"
+IMAGE_MARKER = "/usr/lib/osmium/IMAGE_VERSION"
 # Local music folders may only be added from these base directories. This
 # keeps the (root-privileged) service from being pointed at arbitrary paths
 # such as /etc or /root via the add-local-source API.
-ALLOWED_LOCAL_ROOTS = ("/mnt", "/media", "/srv", "/home", MOUNT_ROOT, INTERNAL_MOUNT_ROOT, USB_ADOPTED_ROOT)
+#
+# 🚨 On an A/B image slot the list is shorter, and it has to be: the system is
+# a read-only squashfs, /mnt and /media are tmpfs and /srv comes from the
+# image. Offering those would mean a share people copy a library into that
+# fills the RAM and is empty again at the next boot, or a folder that cannot
+# be written at all — so what is left is /data/music, /home (bind-mounted from
+# /data) and the roots where disks and network shares are mounted.
+ALLOWED_LOCAL_ROOTS = (
+    (DATA_MUSIC_ROOT, "/home") if os.path.exists(IMAGE_MARKER)
+    else (DATA_MUSIC_ROOT, "/mnt", "/media", "/srv", "/home")
+) + (MOUNT_ROOT, INTERNAL_MOUNT_ROOT, USB_ADOPTED_ROOT)
 LYRION_SERVICE = "lyrionmusicserver.service"
 SAMBA_SHARES_FILE = "/etc/samba/hifi-shares.conf"
 SAMBA_CRED_FILE = "/etc/hifi-player/samba-cred.json"
 SAMBA_USER = "hifimusic"
+# Group shared by the two accounts that write into the same folders: the Samba
+# forced user above and Lyrion (squeezeboxserver).
+#
+# 🚨 Without it the two fought over ownership of any folder that is both a
+# network share and something Lyrion writes into — a playlist folder shared
+# over SMB is exactly that. Whichever was configured last chowned the folder to
+# itself and the other one lost write access, so either "save queue as
+# playlist" silently stopped working, or playlists could be copied in from a PC
+# and edited but never deleted again ("you don't have permission"), leaving
+# `sudo rm` over SSH as the only way. The image seeds the same group through
+# sysusers.d/osmium.conf; this is the runtime equivalent for devices that
+# predate it.
+SHARE_GROUP = "hifishare"
 # LAN discovery for those shares (see _publish_smb_discovery): a Bonjour record
 # for macOS/Linux and the wsdd2 daemon (WS-Discovery + LLMNR) for Windows. Both
 # are published only while the shares actually exist.
@@ -192,7 +227,12 @@ def _run_json(cmd, timeout=30):
 
 # ─────────────────────────── SMB mounting ───────────────────────────
 def mount_smb(src):
-    """Mount one SMB source. Returns (ok, message).
+    """Mount one SMB source. Returns (ok, message, detail).
+
+    `message` is always something the owner can act on ("Wrong username or
+    password"); `detail` carries the raw mount.cifs output for the UI's
+    "technical details" line -- handing someone NT_STATUS_LOGON_FAILURE as
+    the whole error is exactly what this replaces.
 
     Read-only by default (matches "add a NAS folder to browse into the
     library" — most SMB sources are someone else's existing music
@@ -208,7 +248,7 @@ def mount_smb(src):
     password = src.get("password", "")
     for value in (server, share, username, password):
         if not _field_ok(value):
-            return False, _ht('mount.invalidFields', _hlang())
+            return False, _ht('mount.invalidFields', _hlang()), ""
 
     # The mountpoint is derived from user-supplied server/share; resolve it and
     # make sure it can never escape MOUNT_ROOT before we create or mount onto it.
@@ -217,11 +257,11 @@ def mount_smb(src):
     # Strictly below the root: the slug is never empty, so a mountpoint equal
     # to MOUNT_ROOT itself could only be a bug, never a legitimate share.
     if not mountpoint.startswith(root + os.sep):
-        return False, _ht('mount.invalidMountpoint', _hlang())
+        return False, _ht('mount.invalidMountpoint', _hlang()), ""
     os.makedirs(mountpoint, exist_ok=True)
 
     if os.path.ismount(mountpoint):
-        return True, _ht('mount.alreadyMounted', _hlang())
+        return True, _ht('mount.alreadyMounted', _hlang()), ""
 
     # mount.cifs against an unreachable/silently-dropping host can block the
     # kernel-level mount() syscall in uninterruptible sleep (D state) for far
@@ -230,11 +270,8 @@ def mount_smb(src):
     # indefinitely, wedging the request. A plain TCP probe on the SMB port
     # first fails fast (5s) instead of ever reaching that risky call when the
     # server just isn't there.
-    try:
-        with socket.create_connection((server, 445), timeout=5):
-            pass
-    except OSError:
-        return False, _ht('mount.smbUnreachable', _hlang(), server=server)
+    if not _smb_reachable(server):
+        return False, _ht('mount.smbUnreachable', _hlang(), server=server), ""
 
     unc = f"//{server}/{share}"
     if src.get("rw"):
@@ -261,9 +298,10 @@ def mount_smb(src):
             opts = f"{base_opts}{cred_opt},vers={vers}"
             r = _run(["mount", "-t", "cifs", unc, mountpoint, "-o", opts])
             if r.returncode == 0:
-                return True, _ht('mount.mountedSmb', _hlang(), vers=vers)
+                return True, _ht('mount.mountedSmb', _hlang(), vers=vers), ""
             last = (r.stderr or r.stdout).strip()
-        return False, last or _ht('mount.genericFailed', _hlang())
+        code = _smb_reason(last)
+        return False, (_m(code) if code else _ht('mount.genericFailed', _hlang())), last
     finally:
         if cred_path:
             try:
@@ -519,20 +557,114 @@ def _existing_adopted_source(source_type, partuuid, fsuuid):
     return None
 
 
+def _in_group(user, gid):
+    """True if `user` is in the group `gid` (primary or supplementary), None if
+    there is no such user. grp's member list alone is not enough: it does not
+    list users whose *primary* group it is."""
+    import pwd
+    try:
+        ent = pwd.getpwnam(user)
+    except KeyError:
+        return None
+    try:
+        return gid in os.getgrouplist(user, ent.pw_gid)
+    except Exception:
+        return False
+
+
+_share_group_gid = None       # last resolved gid, None until we have one
+_share_group_done = False     # group exists AND both memberships confirmed
+_share_group_next_try = 0.0   # don't re-run groupadd/usermod on every call
+
+
+def _ensure_share_group():
+    """Ensure SHARE_GROUP exists and both writers belong to it. Returns its
+    gid, or None while there isn't one.
+
+    Called from the ownership path, which runs on every mount and every share
+    regeneration, so once everything is in place this is a single flag test —
+    and while something is still missing (Lyrion not installed yet, an /etc
+    that would not take the write) it retries at most once a minute instead of
+    forking groupadd/usermod each time.
+
+    Adding Lyrion to the group also restarts it, in the background: a running
+    process keeps the supplementary groups it was started with, so until it
+    restarts it still cannot write into a folder that is now handed to it
+    through the group. That happens once in a device's life."""
+    global _share_group_gid, _share_group_done, _share_group_next_try
+    if _share_group_done:
+        return _share_group_gid
+    now = time.time()
+    if now < _share_group_next_try:
+        return _share_group_gid
+    _share_group_next_try = now + 60
+
+    import grp
+    try:
+        ent = grp.getgrnam(SHARE_GROUP)
+    except KeyError:
+        _run(["groupadd", "-r", SHARE_GROUP], timeout=10)
+        try:
+            ent = grp.getgrnam(SHARE_GROUP)
+        except KeyError:
+            print(f"[sources] group {SHARE_GROUP} could not be created")
+            return _share_group_gid
+    gid = _share_group_gid = ent.gr_gid
+
+    complete = True
+    lyrion_added = False
+    for user in (SAMBA_USER, "squeezeboxserver"):
+        member = _in_group(user, gid)
+        if member:
+            continue
+        if member is None:
+            # No such user yet — Lyrion is installed on demand, so this is the
+            # normal state of a device that follows another server. Try again.
+            complete = False
+            continue
+        if _run(["usermod", "-aG", SHARE_GROUP, user], timeout=10).returncode == 0:
+            print(f"[sources] added {user} to group {SHARE_GROUP}")
+            lyrion_added = lyrion_added or user == "squeezeboxserver"
+        else:
+            complete = False
+    if lyrion_added:
+        threading.Thread(target=_restart_lyrion_for_group, daemon=True,
+                         name="lyrion-group-restart").start()
+    _share_group_done = complete
+    return gid
+
+
+def _restart_lyrion_for_group():
+    """Restart Lyrion so it picks up its new SHARE_GROUP membership — but only
+    if it is actually running, and never at the cost of a silent failure."""
+    try:
+        if _run(["systemctl", "is-active", "--quiet", LYRION_SERVICE], timeout=10).returncode != 0:
+            return
+        print(f"[sources] restarting {LYRION_SERVICE} to pick up group {SHARE_GROUP}")
+        _run(["systemctl", "restart", LYRION_SERVICE], timeout=120)
+    except Exception as e:
+        print(f"[sources] lyrion restart for {SHARE_GROUP} failed: {e}")
+
+
 def _ensure_samba_uid_gid():
-    """Ensure the dedicated music/Samba user exists; return its (uid, gid).
-    exFAT/vfat mount options require numeric ids, not a username."""
+    """Ensure the dedicated music/Samba user exists; return the (uid, gid)
+    shared folders are owned by. exFAT/vfat mount options require numeric ids,
+    not a username.
+
+    The gid is SHARE_GROUP's, not hifimusic's own: see the constant. Falling
+    back to the user's primary group keeps a device where the group cannot be
+    created behaving exactly as before."""
     import pwd
     try:
         ent = pwd.getpwnam(SAMBA_USER)
-        return ent.pw_uid, ent.pw_gid
     except KeyError:
         _run(["useradd", "-r", "-M", "-s", "/usr/sbin/nologin", "-N", SAMBA_USER], timeout=10)
-    try:
-        ent = pwd.getpwnam(SAMBA_USER)
-        return ent.pw_uid, ent.pw_gid
-    except KeyError:
-        return 0, 0
+        try:
+            ent = pwd.getpwnam(SAMBA_USER)
+        except KeyError:
+            return 0, 0
+    gid = _ensure_share_group()
+    return ent.pw_uid, (ent.pw_gid if gid is None else gid)
 
 
 def _samba_account_exists():
@@ -667,23 +799,85 @@ def _publish_smb_discovery(enabled):
         print(f"[sources] {WSDD_UNIT}: {e}")
 
 
+def _share_group_name():
+    """Name of SHARE_GROUP for smb.conf's force group, or None."""
+    import grp
+    gid = _ensure_share_group()
+    if gid is None:
+        return None
+    try:
+        return grp.getgrgid(gid).gr_name
+    except KeyError:
+        return None
+
+
+def _ensure_music_root():
+    """Make /data/music on a device that has a data partition, owned by the
+    shared group and setgid, so both Samba (as hifimusic) and Lyrion can write
+    inside it and anything created there keeps that group -- the same
+    treatment a published local folder gets in api_add_local().
+
+    Only when /data is really mounted: on a device still on the old single-root
+    layout that path means nothing, and an empty folder of that name would show
+    up in the picker as a place to put music that is not one."""
+    if not os.path.ismount(DATA_MNT):
+        return
+    try:
+        os.makedirs(DATA_MUSIC_ROOT, exist_ok=True)
+        gid = _ensure_share_group()
+        if gid is not None:
+            os.chown(DATA_MUSIC_ROOT, 0, gid)
+        os.chmod(DATA_MUSIC_ROOT, 0o2775)
+    except OSError as e:
+        print(f"[sources] {DATA_MUSIC_ROOT}: {e}")
+
+
+def _samba_share_block(share, path, group):
+    """The smb.conf stanza for one published folder, as a list of lines."""
+    lines = [
+        f"\n[{share}]",
+        f"   path = {path}",
+        "   read only = no",
+        "   browseable = yes",
+        f"   valid users = {SAMBA_USER}",
+        f"   force user = {SAMBA_USER}",
+    ]
+    if group:
+        # Everything created here lands in the group Lyrion is in too, so the
+        # two can edit and delete each other's files (see SHARE_GROUP).
+        lines.append(f"   force group = {group}")
+    # `force ...` (OR'd on after the mask) rather than the mask alone: a
+    # Windows client that asks for 0644/0755 must still end up group-writable,
+    # and the setgid bit has to survive into new subfolders so the whole tree
+    # keeps the shared group.
+    lines += [
+        "   create mask = 0664",
+        "   force create mode = 0664",
+        "   directory mask = 2775",
+        "   force directory mode = 2775",
+        # 🚨 The reason "copying works, editing works, deleting says you don't
+        # have permission". Samba reports a file the connecting user cannot
+        # write as DOS READ ONLY, and with the default (no) it then refuses to
+        # delete it — which is every file written by the *other* account, e.g.
+        # a playlist Lyrion saved into a folder that is also a share. Unix
+        # permissions still decide: this only stops Samba from vetoing a delete
+        # the filesystem itself allows.
+        "   delete readonly = yes",
+    ]
+    return lines
+
+
 def regen_samba_shares():
     """Rewrite the included shares file and start/stop smbd accordingly."""
     disks = _adopted_disk_sources()
+    group = _share_group_name()
     lines = []
     for src in disks:
         share = src.get("share") or "Musica"
         mp = src.get("mountpoint") or src.get("path")  # "path" for a shared local folder
         if not mp:
             continue
-        lines.append(f"\n[{share}]")
-        lines.append(f"   path = {mp}")
-        lines.append("   read only = no")
-        lines.append("   browseable = yes")
-        lines.append(f"   valid users = {SAMBA_USER}")
-        lines.append(f"   force user = {SAMBA_USER}")
-        lines.append("   create mask = 0664")
-        lines.append("   directory mask = 0775")
+        lines += _samba_share_block(share, mp, group)
 
     os.makedirs(os.path.dirname(SAMBA_SHARES_FILE), exist_ok=True)
     tmp = SAMBA_SHARES_FILE + ".tmp"
@@ -785,7 +979,7 @@ def remount_all():
         t = src.get("type")
         try:
             if t == "smb":
-                mount_smb(src)
+                mount_smb(src)  # (ok, msg, detail); the loop retries
             elif t == "internal":
                 mount_internal(src)
             elif t == "usb":
@@ -1358,28 +1552,95 @@ def _squeezebox_ids():
         return None, None
 
 
+# Playlist files: what the separator normaliser and the permission repair
+# below recognise. Lyrion reads all of these out of the playlist folder.
+PLAYLIST_EXTS = (".m3u", ".m3u8", ".pls", ".xspf")
+
+
+def _fix_playlist_perms(root, limit=5000):
+    """Hand what is already inside the playlist folder to the shared group.
+
+    Without this, only files created *after* the folder was fixed up are
+    shared-group ones: playlists Lyrion had already saved (or an earlier owner
+    left) stay unreadable/undeletable from a PC. Deliberately narrow — it only
+    touches directories (to carry the group and setgid down the tree) and files
+    that are actually playlists, never the user's music — and bounded, so
+    pointing the playlist folder at a whole library cannot turn this into a
+    minutes-long walk."""
+    uid, gid = _ensure_samba_uid_gid()
+    seen = 0
+    for dirpath, dirnames, filenames in os.walk(root):
+        for name in dirnames + filenames:
+            seen += 1
+            if seen > limit:
+                return
+            path = os.path.join(dirpath, name)
+            try:
+                st = os.lstat(path)
+                if stat.S_ISDIR(st.st_mode):
+                    want = (st.st_mode & 0o7777) | 0o2775
+                elif name.lower().endswith(PLAYLIST_EXTS):
+                    want = (st.st_mode & 0o7777) | 0o0664
+                else:
+                    continue
+                if st.st_gid != gid:
+                    os.chown(path, st.st_uid, gid)
+                if (st.st_mode & 0o7777) != want:
+                    os.chmod(path, want)
+            except OSError:
+                pass    # FAT/exFAT/NTFS carry no POSIX ownership; a race is fine
+
+
 def _make_playlist_folder(target):
-    """Create `target` if needed and hand it to the Lyrion user, so "save queue
-    as playlist" can actually write there. Shared by the automatic provisioning
-    below and the user-picked folder (/api/playlistdir)."""
-    uid, gid = _squeezebox_ids()
+    """Create `target` if needed and make it writable by BOTH Lyrion and the
+    network shares, so "save queue as playlist" works AND the same folder can
+    be published over SMB to drop playlists into — and delete them again.
+
+    🚨 Owned by the share user with SHARE_GROUP and the setgid bit, not by
+    Lyrion alone. Handing it to Lyrion is what used to make the folder
+    unshareable, and sharing it first is what used to stop Lyrion saving into
+    it; the two chowns fought and whoever ran last won. setgid means everything
+    created inside — by Lyrion or over the network — stays in the group both
+    accounts belong to.
+
+    Shared by the automatic provisioning below and the user-picked folder
+    (/api/playlistdir)."""
+    uid, gid = _ensure_samba_uid_gid()
     try:
         os.makedirs(target, exist_ok=True)
-        if uid is not None:
-            os.chown(target, uid, gid)
-    except Exception as e:
+    except OSError as e:
         print(f"[sources] playlistdir mkdir failed: {e}")
         return False
+    try:
+        os.chown(target, uid, gid)
+        os.chmod(target, 0o2775)
+        _fix_playlist_perms(target)
+    except OSError as e:
+        # FAT/exFAT/NTFS have no POSIX ownership to set — the uid/gid/fmask
+        # mount options already grant both accounts access there. Not a
+        # failure: refusing the folder over this is what used to stop a
+        # playlist folder on a Windows-formatted disk from working at all.
+        print(f"[sources] playlistdir {target}: ownership not settable ({e})")
     return os.path.isdir(target)
 
 
 def _provision_playlistdir(data):
     """Given the loaded prefs dict, make sure `playlistdir` points at an
-    existing, writable folder (creating/chowning it). Returns the (possibly
-    updated) dict and a bool telling whether anything changed."""
+    existing, writable folder (creating it, and handing it to Lyrion and the
+    shares). Returns the (possibly updated) dict and a bool telling whether the
+    *pref* changed — the folder itself is re-asserted either way."""
     cur = (data.get("playlistdir") or "").strip()
-    if cur and os.path.isdir(cur) and os.access(cur, os.W_OK):
-        return data, False
+    if cur and os.path.isdir(cur):
+        # Re-assert ownership/permissions on every pass: idempotent and cheap,
+        # and it is the only thing that reaches a device set up before the
+        # shared group existed (its folder is writable, so the check below
+        # would otherwise return "nothing to do" forever). It is also what
+        # repairs the folder after an A/B conversion, whose first boot chowns
+        # all of /var/lib/squeezeboxserver back to squeezeboxserver:nogroup
+        # (hifi-ab-firstboot.sh) before this service ever starts.
+        _make_playlist_folder(cur)
+        if os.access(cur, os.W_OK):
+            return data, False
     target = cur or DEFAULT_PLAYLISTDIR
     if not _make_playlist_folder(target):
         return data, False
@@ -1423,6 +1684,155 @@ def ensure_playlistdir():
     finally:
         _run(["systemctl", "start", LYRION_SERVICE], timeout=60)
     print(f"[sources] playlistdir set to {data.get('playlistdir')}")
+
+
+# ── Playlist separators: Windows "\\" in a playlist copied onto the box ─────
+#
+# Reported by an owner who builds playlists in MusicBee on Windows and copies
+# them across (as they did on Daphile and DietPi before): after the find and
+# replace that fixes the NAS prefix, what is left is a working but ugly mix of
+# "/" and "\\" in the same file, and the ones with a backslash simply do not
+# play. Rewriting them by hand in a text editor is exactly the chore the
+# appliance should be doing itself, so it does: inside the playlist folder —
+# and only there — a Windows separator is turned into a Unix one.
+#
+# Deliberately nothing more than that. Translating a NAS or drive-letter prefix
+# to wherever that music actually lives on this box is a guess, and a wrong
+# guess is worse than the entry the owner can see is wrong.
+NORMALIZE_EXTS = (".m3u", ".m3u8", ".pls")
+# Enough for a very long playlist, small enough that something that is not one
+# (a stray file with a playlist extension) is never slurped into memory.
+NORMALIZE_MAX_BYTES = 8 * 1024 * 1024
+# A file still being written over SMB must not be rewritten mid-copy.
+NORMALIZE_SETTLE_S = 15
+NORMALIZE_INTERVAL_S = 60
+_URL_LINE_RE = re.compile(rb"^[A-Za-z][A-Za-z0-9+.\-]*://")
+_PLS_ENTRY_RE = re.compile(rb"^\s*[Ff]ile\d+\s*=")
+# path -> (mtime_ns, size) of the last content this loop looked at, so an
+# unchanged folder costs one stat() per file per pass and nothing else.
+_playlist_seen = {}
+
+
+def _normalize_playlist_bytes(raw, is_pls):
+    """Turn Windows separators into Unix ones on the path lines of a playlist.
+    Returns (new_bytes, changed).
+
+    Byte-level on purpose: a .m3u carries no encoding declaration and is as
+    likely to be cp1252 as UTF-8, but 0x5C is the backslash in every one of
+    them and can never be a continuation byte of a UTF-8 sequence. So this
+    cannot corrupt an encoding it does not understand.
+    """
+    out = []
+    changed = False
+    for line in raw.split(b"\n"):
+        core = line.rstrip(b"\r")
+        tail = line[len(core):]
+        if is_pls:
+            # .pls is an ini file: only the FileN= values are paths.
+            m = _PLS_ENTRY_RE.match(core)
+            if not m:
+                out.append(line)
+                continue
+            start = m.end()
+        else:
+            # .m3u/.m3u8: "#EXTINF:…" and friends are directives, not paths.
+            stripped = core.strip()
+            if not stripped or stripped.startswith(b"#"):
+                out.append(line)
+                continue
+            start = 0
+        head, value = core[:start], core[start:]
+        if b"\\" not in value or _URL_LINE_RE.match(value.strip()):
+            out.append(line)
+            continue
+        out.append(head + value.replace(b"\\", b"/") + tail)
+        changed = True
+    return b"\n".join(out), changed
+
+
+def _normalize_playlist_file(path):
+    """Rewrite one playlist in place if it has Windows separators. Atomic, and
+    the replacement keeps the original's owner and mode — the folder is shared
+    over SMB and a playlist that suddenly belonged to root would be the very
+    "you don't have permission to delete this" the shared group exists to
+    avoid. Returns True if the file was changed."""
+    try:
+        with open(path, "rb") as f:
+            raw = f.read()
+    except OSError:
+        return False
+    new, changed = _normalize_playlist_bytes(raw, path.lower().endswith(".pls"))
+    if not changed:
+        return False
+    tmp = None
+    try:
+        st = os.stat(path)
+        fd, tmp = tempfile.mkstemp(dir=os.path.dirname(path), prefix=".hifi-pl-")
+        with os.fdopen(fd, "wb") as f:
+            f.write(new)
+        try:
+            os.chown(tmp, st.st_uid, st.st_gid)
+            os.chmod(tmp, stat.S_IMODE(st.st_mode))
+        except OSError:
+            pass        # FAT/exFAT/NTFS: ownership comes from the mount
+        os.replace(tmp, path)
+        tmp = None
+    except OSError as e:
+        print(f"[sources] playlist rewrite failed for {path}: {e}")
+        return False
+    finally:
+        if tmp:
+            try:
+                os.unlink(tmp)
+            except OSError:
+                pass
+    print(f"[sources] playlist {path}: Windows path separators converted")
+    return True
+
+
+def _normalize_playlists(root):
+    """One pass over the playlist folder."""
+    now = time.time()
+    seen = {}
+    for dirpath, _dirnames, filenames in os.walk(root):
+        for name in filenames:
+            if not name.lower().endswith(NORMALIZE_EXTS):
+                continue
+            path = os.path.join(dirpath, name)
+            try:
+                st = os.stat(path)
+            except OSError:
+                continue
+            if not stat.S_ISREG(st.st_mode) or st.st_size > NORMALIZE_MAX_BYTES:
+                continue
+            if now - st.st_mtime < NORMALIZE_SETTLE_S:
+                continue            # still landing, look again next pass
+            key = (st.st_mtime_ns, st.st_size)
+            if _playlist_seen.get(path) == key:
+                seen[path] = key
+                continue
+            if _normalize_playlist_file(path):
+                try:
+                    st = os.stat(path)
+                    key = (st.st_mtime_ns, st.st_size)
+                except OSError:
+                    continue
+            seen[path] = key
+    # Rebuilt rather than updated, so playlists the owner deletes don't keep
+    # an entry here for the life of the process.
+    _playlist_seen.clear()
+    _playlist_seen.update(seen)
+
+
+def playlist_normalizer_loop():
+    while True:
+        try:
+            root = (_get_lms_pref("playlistdir") or "").strip()
+            if root and os.path.isdir(root):
+                _normalize_playlists(root)
+        except Exception as e:
+            print(f"[sources] playlist normaliser: {e}")
+        time.sleep(NORMALIZE_INTERVAL_S)
 
 
 # Tailscale's CGNAT range (100.64.0.0/10) isn't RFC1918, so appending it to
@@ -2459,6 +2869,11 @@ def current_paths(state):
     paths = []
     for src in state.get("sources", []):
         if src.get("pending_activation"):
+            continue
+        # A source published purely as a network share (the playlist folder —
+        # see api_add_local) is not a music folder; it must never reach
+        # Lyrion's mediadirs, by this path or any other.
+        if src.get("media") is False:
             continue
         t = src.get("type")
         if t == "smb":
@@ -3950,6 +4365,545 @@ def _fs_usage(path):
     return {"total": total, "free": st.f_bavail * st.f_frsize}
 
 
+# ───────────────────── SMB: plain-language failures ──────────────────
+# "Add a network folder" used to hand the owner mount.cifs' own stderr:
+# NT_STATUS_LOGON_FAILURE as the whole error message tells a normal person
+# nothing, and it is the single most common thing to get wrong (a typo in the
+# password). Everything below maps the raw text onto a sentence that says
+# what to fix; the raw text still travels as `detail`, which the UI keeps
+# behind a "technical details" line for us.
+def _smb_reason(text):
+    """i18n key for a mount.cifs/smbclient failure, or None when unrecognised."""
+    t = (text or "").upper()
+    pairs = (
+        ("msg.smbBadCredentials", ("LOGON_FAILURE", "ACCESS_DENIED", "WRONG_PASSWORD",
+                                   "NO_SUCH_USER", "PERMISSION DENIED", "MOUNT ERROR(13)")),
+        ("msg.smbPasswordExpired", ("PASSWORD_EXPIRED", "PASSWORD_MUST_CHANGE")),
+        ("msg.smbAccountLocked", ("ACCOUNT_LOCKED_OUT", "ACCOUNT_DISABLED")),
+        ("msg.smbNoSuchShare", ("BAD_NETWORK_NAME", "OBJECT_NAME_NOT_FOUND",
+                                "OBJECT_PATH_NOT_FOUND", "MOUNT ERROR(2)")),
+        ("msg.smbUnreachable", ("HOST_UNREACHABLE", "NETWORK_UNREACHABLE", "CONNECTION_REFUSED",
+                                "CONNECTION_RESET", "IO_TIMEOUT", "TIMED OUT", "HOST_DOWN",
+                                "NO ROUTE TO HOST", "HOST IS DOWN", "UNABLE TO CONNECT",
+                                "COULD NOT RESOLVE", "NAME_NOT_FOUND", "MOUNT ERROR(112)")),
+        ("msg.smbProtocol", ("PROTOCOL NEGOTIATION", "NT_STATUS_INVALID_NETWORK_RESPONSE",
+                             "NOT_SUPPORTED")),
+    )
+    for code, needles in pairs:
+        if any(n in t for n in needles):
+            return code
+    return None
+
+
+def _err_detail(key, status, detail="", message="", **fields):
+    """_err() plus the raw tool output. Same shape as every other failure here
+    (stable `code` + already-translated `message`), with `detail` as an extra
+    the UI may show or hide -- it must never be the only thing on screen."""
+    body = {"success": False, "code": key,
+            "message": message or _m(key, detail=detail, **fields)}
+    if detail:
+        body["detail"] = detail[:800]
+    return jsonify(body), status
+
+
+def _smb_reachable(server, timeout=5):
+    """Fast TCP probe on 445. mount.cifs against a host that silently drops
+    packets can wedge the mount() syscall in uninterruptible sleep for
+    minutes -- see mount_smb() -- and smbclient is no better, so every path
+    that talks to a server checks here first."""
+    try:
+        with socket.create_connection((server, 445), timeout=timeout):
+            return True
+    except OSError:
+        return False
+
+
+# ───────────────────── SMB discovery (network scan) ──────────────────
+# Four empty boxes (server, share, user, password) are unusable by someone who
+# does not already know what an SMB share is. These helpers find the file
+# servers on the LAN the way every other music player does, so the wizard can
+# offer a list to tap and keep typing as the fallback.
+#
+# Three independent probes merged by IP, because no single one sees every kind
+# of server:
+#   * mDNS/Bonjour (avahi-browse)  — NAS boxes, macOS, Linux
+#   * NetBIOS broadcast (nmblookup) — Windows and Samba
+#   * a TCP-445 sweep of our own /24 — everything else, including hosts with
+#     NetBIOS off and mDNS filtered, which is most modern NAS boxes
+_SMB_SCAN_MAX_HOSTS = 512    # ceiling on the sweep; a /24 is 254
+_smb_scan = {"state": "idle", "progress": 0, "hosts": [], "finished": 0.0, "tools": {}}
+_smb_scan_lock = threading.Lock()
+
+
+def _have(cmd):
+    return shutil.which(cmd) is not None
+
+
+def _smb_scan_set(**fields):
+    with _smb_scan_lock:
+        _smb_scan.update(fields)
+
+
+def _smb_scan_add(ip, name="", source=""):
+    """Merge one finding into the live list. Every probe calls this as it goes,
+    so the wizard's poll sees hosts appear one by one instead of waiting for
+    the slowest probe to finish."""
+    if not ip:
+        return
+    with _smb_scan_lock:
+        for h in _smb_scan["hosts"]:
+            if h["ip"] == ip:
+                if name and not h.get("name"):
+                    h["name"] = name
+                if source and source not in h["sources"]:
+                    h["sources"].append(source)
+                return
+        _smb_scan["hosts"].append({"ip": ip, "name": name or "",
+                                   "sources": [source] if source else []})
+
+
+def _unescape_avahi(name):
+    """avahi-browse -p escapes its fields: "\\032" for a space, "\\." for a dot."""
+    out = re.sub(r"\\(\d{3})", lambda m: chr(int(m.group(1))), name or "")
+    return out.replace("\\.", ".").strip()
+
+
+def _smb_probe_mdns():
+    """=;eth0;IPv4;NAS;_smb._tcp;local;nas.local;192.168.0.10;445;"..." """
+    if not _have("avahi-browse"):
+        return
+    try:
+        r = _run(["avahi-browse", "-rpt", "_smb._tcp"], timeout=12)
+    except Exception:
+        return
+    for line in (r.stdout or "").splitlines():
+        if not line.startswith("="):
+            continue
+        f = line.split(";")
+        if len(f) < 8 or f[2] != "IPv4":
+            continue
+        _smb_scan_add(f[7].strip(), _unescape_avahi(f[3]), "mdns")
+
+
+def _smb_probe_netbios():
+    """What Windows itself uses to fill its "Network" folder. nmblookup comes
+    with the samba package, already installed for our own shares."""
+    if not _have("nmblookup"):
+        return
+    try:
+        r = _run(["nmblookup", "-S", "--", "*"], timeout=12)
+    except Exception:
+        return
+    ip = ""
+    for line in (r.stdout or "").splitlines():
+        m = re.match(r"^(\d+\.\d+\.\d+\.\d+)\s+\*<00>", line)
+        if m:
+            ip = m.group(1)
+            _smb_scan_add(ip, "", "netbios")
+            continue
+        m = re.match(r"^\s+(\S+)\s+<20>", line)   # <20> = the file-server service
+        if m and ip:
+            _smb_scan_add(ip, m.group(1), "netbios")
+
+
+def _scan_targets():
+    """(our own addresses, addresses to sweep).
+
+    Anything wider than a /24 is narrowed to the /24 around our own address: a
+    /16 is 65k probes, which is a port scanner, not a setup wizard."""
+    selves, targets = set(), []
+    for link in _run_json(["ip", "-j", "-4", "addr", "show"], timeout=5) or []:
+        if link.get("link_type") == "loopback":
+            continue
+        for a in link.get("addr_info") or []:
+            addr = a.get("local") or ""
+            if not addr or addr.startswith("127.") or addr.startswith("169.254."):
+                continue
+            selves.add(addr)
+            try:
+                net = ipaddress.ip_network(
+                    "%s/%d" % (addr, max(int(a.get("prefixlen") or 24), 24)), strict=False)
+            except ValueError:
+                continue
+            for host in net.hosts():
+                if len(targets) >= _SMB_SCAN_MAX_HOSTS:
+                    break
+                targets.append(str(host))
+    return selves, [t for t in dict.fromkeys(targets) if t not in selves]
+
+
+def _smb_probe_ports(targets):
+    """A plain TCP connect on 445 -- the only probe that finds a server with
+    NetBIOS off and mDNS filtered."""
+    done = [0]
+    total = max(1, len(targets))
+
+    def probe(ip):
+        try:
+            with socket.create_connection((ip, 445), timeout=0.6):
+                _smb_scan_add(ip, "", "port")
+        except OSError:
+            pass
+        # Racy on purpose: the only consumer is the progress bar, and a lock
+        # per probe would cost more than the number it produces is worth.
+        done[0] += 1
+        if done[0] % 8 == 0:
+            _smb_scan_set(progress=min(90, 20 + int(70 * done[0] / total)))
+
+    with ThreadPoolExecutor(max_workers=64) as pool:
+        list(pool.map(probe, targets))
+
+
+def _smb_resolve_names():
+    """Put a name on the hosts only the port sweep found: NetBIOS first (it is
+    the name the owner sees on their own PC), then reverse DNS, else nothing
+    and the UI shows the address."""
+    with _smb_scan_lock:
+        unnamed = [h["ip"] for h in _smb_scan["hosts"] if not h.get("name")]
+    if not unnamed:
+        return
+
+    def name_of(ip):
+        if _have("nmblookup"):
+            try:
+                r = _run(["nmblookup", "-A", ip], timeout=4)
+                for line in (r.stdout or "").splitlines():
+                    m = re.match(r"^\s+(\S+)\s+<20>", line)
+                    if m:
+                        return m.group(1)
+            except Exception:
+                pass
+        try:
+            return socket.gethostbyaddr(ip)[0].split(".")[0]
+        except OSError:
+            return ""
+
+    with ThreadPoolExecutor(max_workers=16) as pool:
+        for ip, name in zip(unnamed, pool.map(name_of, unnamed)):
+            if name:
+                _smb_scan_add(ip, name, "")
+
+
+def _smb_scan_worker():
+    try:
+        _smb_scan_set(state="running", progress=5)
+        selves, targets = _scan_targets()
+        _smb_probe_mdns()
+        _smb_scan_set(progress=15)
+        _smb_probe_netbios()
+        _smb_scan_set(progress=20)
+        _smb_probe_ports(targets)
+        _smb_scan_set(progress=92)
+        # This appliance shares its own music over SMB, so it answers all three
+        # probes. Offering someone their own player as the NAS they are looking
+        # for is the fastest way to lose them.
+        with _smb_scan_lock:
+            _smb_scan["hosts"] = [h for h in _smb_scan["hosts"] if h["ip"] not in selves]
+        _smb_resolve_names()
+    except Exception as e:
+        print(f"[sources] smb scan failed: {e}")
+    finally:
+        _smb_scan_set(state="done", progress=100, finished=time.time())
+
+
+def _smb_cred_file(username, password):
+    """Credentials in a 0600 temp file. NEVER on the command line: argv is
+    readable through /proc, so -U user%pass would put the NAS password in
+    `ps aux` for every account on the box. Same reason mount_smb() writes a
+    credentials= file instead of using -o."""
+    fd, path = tempfile.mkstemp(prefix="hifi-smb-cred-")
+    with os.fdopen(fd, "w") as f:
+        f.write(f"username={username}\npassword={password}\n")
+    os.chmod(path, 0o600)
+    return path
+
+
+def _smbclient(args, username, password, timeout=25):
+    cred = None
+    try:
+        cmd = ["smbclient"]
+        if username:
+            cred = _smb_cred_file(username, password)
+            cmd += ["-A", cred]
+        else:
+            cmd += ["-N"]
+        return _run(cmd + args, timeout=timeout)
+    except subprocess.TimeoutExpired:
+        return subprocess.CompletedProcess(args, 1, "", "connection timed out")
+    finally:
+        if cred:
+            try:
+                os.remove(cred)
+            except OSError:
+                pass
+
+
+# Shares nobody browsing for music ever wants, plus the "$" convention for
+# hidden/administrative ones.
+_SMB_HIDDEN_SHARES = {"ipc$", "print$", "admin$", "netlogon", "sysvol"}
+
+
+def _smb_list_shares(server, username, password):
+    """(shares, code, detail) -- `code` is None on success, otherwise an i18n
+    key. msg.smbNeedsAuth is the interesting one: it means the server refused
+    an anonymous listing, which is what tells the wizard to ask for a
+    password instead of declaring failure."""
+    if not _have("smbclient"):
+        return [], "msg.smbNoClient", ""
+    # -g is the machine-readable listing ("Disk|Music|comment"), far steadier
+    # than parsing the column layout. The NT1 retry is for old NAS boxes and
+    # Windows shares still on SMB1, the same ladder mount_smb() walks down.
+    last = ""
+    for extra in ([], ["-m", "NT1"]):
+        r = _smbclient(["-L", server, "-g"] + extra, username, password)
+        out = r.stdout or ""
+        if r.returncode == 0 and "|" in out:
+            shares = []
+            for line in out.splitlines():
+                parts = line.split("|")
+                if len(parts) < 2 or parts[0].strip() != "Disk":
+                    continue
+                name = parts[1].strip()
+                if not name or name.endswith("$") or name.lower() in _SMB_HIDDEN_SHARES:
+                    continue
+                shares.append({"name": name,
+                               "comment": parts[2].strip() if len(parts) > 2 else ""})
+            return shares, None, ""
+        last = ((r.stderr or "") + out).strip()
+        code = _smb_reason(last)
+        if code == "msg.smbBadCredentials":
+            # Anonymous refused is not a failure: it is the server asking who
+            # we are, and the wizard has a step for exactly that.
+            return [], ("msg.smbNeedsAuth" if not username else code), last
+        if code and code != "msg.smbProtocol":
+            return [], code, last
+    return [], "msg.smbListFailed", last
+
+
+# ───────────────────── File manager (web admin) ──────────────────────
+# The sources page can add a folder, but there was no way to tidy what is
+# inside one without mounting the share from a PC. These helpers are the small
+# file manager behind the web admin's Files view -- list, new folder, rename,
+# copy, move, delete -- confined to the very same roots the folder pickers
+# already offer, and never on top of a source's own mountpoint.
+_FILE_JOBS = {}
+_file_jobs_lock = threading.Lock()
+_FILE_JOB_TTL = 600          # a finished job stays readable this long
+_FILE_MAX_ITEMS = 500        # per request; the UI selects, it does not script
+
+
+def _fs_readonly(path):
+    """True when the filesystem holding `path` is mounted read-only -- a NAS
+    added as a read-only source, or the image's own squashfs. os.access() is
+    not enough on its own: root passes the permission check and then the write
+    fails at the syscall."""
+    try:
+        return bool(os.statvfs(path).f_flag & os.ST_RDONLY)
+    except OSError:
+        return False
+
+
+def _writable(path):
+    return not _fs_readonly(path) and os.access(path, os.W_OK)
+
+
+def _protected_paths():
+    """Paths the file manager must never rename, move or delete: the allowed
+    roots themselves, every source's own mountpoint/path, and the playlist
+    folder. Deleting one of these does not remove a source, it only breaks
+    it -- and an empty mountpoint left behind looks exactly like a NAS that
+    lost its music."""
+    out = {os.path.realpath(r) for r in _BROWSE_ROOTS}
+    out.add(os.path.realpath(DEFAULT_PLAYLISTDIR))
+    try:
+        for s in load_state().get("sources") or []:
+            for p in (s.get("mountpoint"), s.get("path")):
+                if p:
+                    out.add(os.path.realpath(p))
+    except Exception:
+        pass
+    return out
+
+
+def _claim_for_share(path):
+    """Hand a newly written file or folder to the group Samba and Lyrion
+    share, so what the file manager creates stays writable from a PC too --
+    without this the two fight over ownership exactly as described at
+    SHARE_GROUP."""
+    uid, gid = _ensure_samba_uid_gid()
+    if not gid:
+        return
+    try:
+        st = os.lstat(path)
+        if stat.S_ISLNK(st.st_mode):
+            return
+        if st.st_gid != gid:
+            os.chown(path, st.st_uid, gid)
+        want = (st.st_mode & 0o7777) | (0o2775 if stat.S_ISDIR(st.st_mode) else 0o0664)
+        if (st.st_mode & 0o7777) != want:
+            os.chmod(path, want)
+    except OSError:
+        pass    # FAT/exFAT/NTFS carry no POSIX ownership, and a race is fine
+
+
+# The top level of the file manager is the allowed roots themselves. Showing
+# them as raw paths ("/mnt/hifi-sources") is the sort of thing this whole
+# redesign is against, so the ones we own get a name in the owner's language.
+_ROOT_LABELS = (
+    (DATA_MUSIC_ROOT, "files.rootMusic"),
+    (MOUNT_ROOT, "files.rootNetwork"),
+    (INTERNAL_MOUNT_ROOT, "files.rootInternal"),
+    (USB_ADOPTED_ROOT, "files.rootUsb"),
+    (DEFAULT_PLAYLISTDIR, "files.rootPlaylists"),
+    ("/home", "files.rootHome"),
+)
+
+
+def _root_label(path):
+    real = os.path.realpath(path)
+    for root, key in _ROOT_LABELS:
+        if os.path.realpath(root) == real:
+            return _m(key)
+    return os.path.basename(real) or real
+
+
+def _safe_name(name):
+    """A single path component the user typed. Rejects separators, the dot
+    entries and leading dots (which would make the result invisible in every
+    listing, including this one)."""
+    n = (name or "").strip()
+    if not n or len(n) > 255 or "/" in n or "\0" in n or n.startswith("."):
+        return None
+    return n
+
+
+def _unique_name(path):
+    """"Album (2)" rather than a silent overwrite: there is no undo here, and
+    losing a folder of FLACs to a name clash is not a recoverable mistake."""
+    if os.path.isdir(path):
+        base, ext = path, ""
+    else:
+        base, ext = os.path.splitext(path)
+    for n in range(2, 1000):
+        cand = f"{base} ({n}){ext}"
+        if not os.path.lexists(cand):
+            return cand
+    return f"{base} ({secrets.token_hex(4)}){ext}"
+
+
+def _tree_size(path):
+    try:
+        if os.path.islink(path) or not os.path.isdir(path):
+            return os.path.getsize(path)
+    except OSError:
+        return 0
+    total = 0
+    for dirpath, _dirs, files in os.walk(path):
+        for f in files:
+            try:
+                total += os.path.getsize(os.path.join(dirpath, f))
+            except OSError:
+                pass
+    return total
+
+
+def _file_job_new(op):
+    jid = secrets.token_hex(8)
+    now = time.time()
+    with _file_jobs_lock:
+        for k in [k for k, v in _FILE_JOBS.items()
+                  if v.get("finished") and now - v["finished"] > _FILE_JOB_TTL]:
+            _FILE_JOBS.pop(k, None)
+        _FILE_JOBS[jid] = {"id": jid, "op": op, "state": "running", "progress": 0,
+                           "current": "", "total": 0, "done": 0, "code": "",
+                           "detail": "", "finished": 0.0}
+    return jid
+
+
+def _file_job_set(jid, **fields):
+    with _file_jobs_lock:
+        job = _FILE_JOBS.get(jid)
+        if job:
+            job.update(fields)
+
+
+def _copy_tree(src, dst, bump):
+    """Recursive copy that reports as it goes. shutil.copytree() would be
+    shorter but gives no progress, and copying a 200 GB library with a frozen
+    bar looks exactly like a hang."""
+    if os.path.isdir(src) and not os.path.islink(src):
+        os.makedirs(dst, exist_ok=True)
+        _claim_for_share(dst)
+        for name in sorted(os.listdir(src)):
+            _copy_tree(os.path.join(src, name), os.path.join(dst, name), bump)
+        return
+    shutil.copy2(src, dst, follow_symlinks=False)
+    _claim_for_share(dst)
+    try:
+        bump(os.path.getsize(dst), os.path.basename(dst))
+    except OSError:
+        bump(0, os.path.basename(dst))
+
+
+def _file_worker(jid, op, paths, dest):
+    """One copy/move/delete job. Runs in a thread because a move across
+    filesystems (NAS -> internal disk) is a full copy, and the request would
+    otherwise time out long before it finished."""
+    counted = op in ("copy", "move")
+    total = sum(_tree_size(p) for p in paths) if counted else len(paths)
+    _file_job_set(jid, total=total)
+    state = {"done": 0}
+
+    def bump(n, name):
+        state["done"] += n
+        _file_job_set(jid, done=state["done"], current=name,
+                      progress=min(99, int(100 * state["done"] / total)) if total else 99)
+
+    try:
+        for p in paths:
+            name = os.path.basename(p.rstrip("/"))
+            target = os.path.join(dest, name) if dest else ""
+            if target and os.path.lexists(target):
+                target = _unique_name(target)
+            if op == "copy":
+                _copy_tree(p, target, bump)
+            elif op == "move":
+                try:
+                    os.rename(p, target)      # same filesystem: instant
+                    _claim_for_share(target)
+                    bump(_tree_size(target), name)
+                except OSError:
+                    # Crossing filesystems (EXDEV) or a busy mount: copy, then
+                    # remove the original only once the copy is complete.
+                    _copy_tree(p, target, bump)
+                    if os.path.isdir(p) and not os.path.islink(p):
+                        shutil.rmtree(p, ignore_errors=True)
+                    else:
+                        os.remove(p)
+            else:
+                if os.path.isdir(p) and not os.path.islink(p):
+                    shutil.rmtree(p)
+                else:
+                    os.remove(p)
+                bump(1, name)
+        _file_job_set(jid, state="done", progress=100, current="")
+    except OSError as e:
+        _file_job_set(jid, state="error", code="msg.fileOpFailed",
+                      detail=_oserror_detail(e))
+    except Exception as e:
+        _file_job_set(jid, state="error", code="msg.fileOpFailed", detail=str(e)[:200])
+    finally:
+        _file_job_set(jid, finished=time.time())
+        # Anything the owner just moved around may be inside a media folder,
+        # and Lyrion has no idea files changed under it -- see
+        # _lyrion_wait_and_rescan()'s docstring for why nothing rescans by
+        # itself here.
+        try:
+            _lyrion_rescan()
+        except Exception:
+            pass
+
+
 # ─────────────────────────── HTTP API ───────────────────────────────
 @app.route("/api/sources", methods=["GET"])
 def api_list():
@@ -4108,9 +5062,22 @@ def api_add_local():
     samba = bool(data.get("samba"))
     if not path:
         return _err("msg.pathMissing", 400)
-    path = _local_path_allowed(path)
-    if not path:
-        return _err("msg.pathNotAllowed", 400)
+    # The appliance's own playlist folder is the one exception to the
+    # confinement, exactly as in api_playlistdir_set(): it lives under /var/lib
+    # (ours, not user-picked) so it is outside ALLOWED_LOCAL_ROOTS on purpose,
+    # but the folder picker offers it — _BROWSE_ROOTS includes it — and an
+    # owner who wants to copy playlists onto the box from a PC has to be able
+    # to publish it. Refusing it here is what produced "it pops up as a
+    # possible location but selecting it says the folder is not available".
+    # Either way what goes on is our own constant or the confined path, never
+    # the request's string.
+    is_playlistdir = os.path.realpath(path) == os.path.realpath(DEFAULT_PLAYLISTDIR)
+    if is_playlistdir:
+        path = DEFAULT_PLAYLISTDIR
+    else:
+        path = _local_path_allowed(path)
+        if not path:
+            return _err("msg.pathNotAllowed", 400)
     if not os.path.isdir(path):
         if not samba:
             return _err("msg.folderMissing", 400, path=path)
@@ -4123,6 +5090,15 @@ def api_add_local():
         state = load_state()
         sid = _slug("local", os.path.basename(path.rstrip("/")))
         src = {"id": sid, "type": "local", "name": path, "path": path}
+        if is_playlistdir:
+            # Publishing the playlist folder is not the same as adding a music
+            # folder: Lyrion already reads playlists from it through the
+            # `playlistdir` pref, and handing it over as a media directory too
+            # would have it scan the same files a second time. current_paths()
+            # honours this flag, so the entry stays out of mediadirs for good
+            # (including the restart-based apply path) instead of being pushed
+            # once and silently dropped on the next Apply.
+            src["media"] = False
         if samba:
             uid, gid = _ensure_samba_uid_gid()
             try:
@@ -4134,13 +5110,18 @@ def api_add_local():
             src["samba"] = True
             src["share"] = (existing or {}).get("share") or _share_name(os.path.basename(path.rstrip("/")))
         state["sources"] = [s for s in state["sources"] if s.get("id") != sid]
-        state["sources"].append(src)
+        # Publishing is the only thing the playlist folder can be added FOR
+        # (it is never a music folder), so picking it with sharing off means
+        # "stop sharing it", not "keep a row that does nothing".
+        if not (is_playlistdir and not samba):
+            state["sources"].append(src)
         save_state(state)
         # Always regenerate, not just when samba=True now: re-adding the
         # same path with the box unchecked must also drop a share it had
         # from a previous add.
         regen_samba_shares()
-    _lyrion_push_live(add_paths=[path])
+    if not is_playlistdir:
+        _lyrion_push_live(add_paths=[path])
     return jsonify({"success": True})
 
 
@@ -4248,9 +5229,10 @@ def api_add_smb():
         # this, so it can't reach Lyrion by any path until api_set_subpath()
         # clears the flag -- see current_paths()'s docstring.
         src["pending_activation"] = True
-    ok, msg = mount_smb(src)
+    ok, msg, detail = mount_smb(src)
     if not ok:
-        return _err("msg.mountFailed", 400, detail=msg)
+        return _err_detail(_smb_reason(detail) or "msg.mountFailed", 400,
+                           detail=detail, message=msg)
     with _lock:
         state = load_state()
         state["sources"] = [s for s in state["sources"] if s.get("id") != sid]
@@ -4260,6 +5242,273 @@ def api_add_smb():
         _lyrion_push_live(add_paths=[src["mountpoint"]])
     return jsonify({"success": True, "message": msg, "id": sid,
                     "mountpoint": src["mountpoint"], "pending_activation": defer})
+
+
+def _host_ok(value):
+    """A host name or IP literal and nothing else: this string becomes both an
+    argv element and half of a UNC path, so it is stricter than _field_ok()."""
+    v = (value or "").strip()
+    return bool(re.fullmatch(r"[A-Za-z0-9._:-]{1,255}", v)) and not v.startswith("-")
+
+
+@app.route("/api/sources/smb/discover", methods=["POST"])
+def api_smb_discover_start():
+    """Start the LAN scan. Returns immediately: the sweep takes seconds, and
+    the wizard shows its results filling in live via the GET below."""
+    denied = _require_pair_token()
+    if denied:
+        return denied
+    with _smb_scan_lock:
+        if _smb_scan["state"] == "running":
+            return jsonify({"success": True, "state": "running"})
+        _smb_scan.update({"state": "running", "progress": 0, "hosts": [], "finished": 0.0,
+                          # What the UI may offer: without smbclient it must
+                          # ask the owner to type the folder name instead of
+                          # listing what the server has. Both tools arrive with
+                          # the image, so a device that has not been updated
+                          # yet still gets the host list, just not the shares.
+                          "tools": {"shares": _have("smbclient"),
+                                    "mdns": _have("avahi-browse")}})
+    threading.Thread(target=_smb_scan_worker, daemon=True).start()
+    return jsonify({"success": True, "state": "running"}), 202
+
+
+@app.route("/api/sources/smb/discover", methods=["GET"])
+def api_smb_discover_status():
+    denied = _require_pair_token()
+    if denied:
+        return denied
+    with _smb_scan_lock:
+        hosts = [dict(h) for h in _smb_scan["hosts"]]
+        state, progress = _smb_scan["state"], _smb_scan["progress"]
+        tools = dict(_smb_scan.get("tools") or {})
+    # Named hosts first: an owner looking for "SYNOLOGY" should not have to
+    # read past four bare addresses to find it.
+    hosts.sort(key=lambda h: (not h.get("name"), (h.get("name") or "").lower(),
+                              [int(p) for p in h["ip"].split(".")]))
+    return jsonify({"success": True, "state": state, "progress": progress,
+                    "hosts": hosts, "tools": tools})
+
+
+@app.route("/api/sources/smb/shares", methods=["POST"])
+def api_smb_shares():
+    """The shared folders one server offers. `needs_auth` in the reply is the
+    wizard's cue to ask for a username and password rather than to give up."""
+    denied = _require_pair_token()
+    if denied:
+        return denied
+    data = request.get_json(silent=True) or {}
+    server = (data.get("server") or "").strip().strip("/")
+    username = (data.get("username") or "").strip()
+    password = data.get("password") or ""
+    if not _host_ok(server):
+        return _err("msg.smbFieldsRequired", 400)
+    if not _field_ok(username) or not _field_ok(password):
+        return _err("msg.smbFieldsRequired", 400)
+    if not _smb_reachable(server):
+        return _err("msg.smbUnreachable", 400, server=server)
+    shares, code, detail = _smb_list_shares(server, username, password)
+    if code == "msg.smbNeedsAuth":
+        return jsonify({"success": True, "needs_auth": True, "shares": []})
+    if code:
+        return _err_detail(code, 400, detail=detail)
+    return jsonify({"success": True, "needs_auth": False, "shares": shares})
+
+
+@app.route("/api/sources/smb/test", methods=["POST"])
+def api_smb_test():
+    """Try one share without mounting it, so the wizard can fail on the step
+    that caused the problem (wrong password on the password step) instead of
+    on a final "mount failed" the owner cannot place."""
+    denied = _require_pair_token()
+    if denied:
+        return denied
+    data = request.get_json(silent=True) or {}
+    server = (data.get("server") or "").strip().strip("/")
+    share = (data.get("share") or "").strip().strip("/")
+    username = (data.get("username") or "").strip()
+    password = data.get("password") or ""
+    if not _host_ok(server) or not share:
+        return _err("msg.smbFieldsRequired", 400)
+    for value in (share, username, password):
+        if not _field_ok(value):
+            return _err("msg.smbFieldsRequired", 400)
+    if not _smb_reachable(server):
+        return _err("msg.smbUnreachable", 400, server=server)
+    if not _have("smbclient"):
+        # No client to probe with: let the caller go straight to the mount,
+        # which is the check of last resort anyway.
+        return jsonify({"success": True, "checked": False})
+    r = _smbclient(["//%s/%s" % (server, share), "-c", "ls"], username, password)
+    if r.returncode == 0:
+        return jsonify({"success": True, "checked": True})
+    raw = ((r.stderr or "") + (r.stdout or "")).strip()
+    return _err_detail(_smb_reason(raw) or "msg.smbTestFailed", 400, detail=raw)
+
+
+# ── File manager ────────────────────────────────────────────────────
+# Deliberately under /api/local/, next to the folder picker's own browse and
+# mkdir: webui_server.py already forwards that whole prefix for the web admin
+# (/api/system/local/<path:rest>) and for the paired phone
+# (_SOURCES_FWD_PREFIXES), so none of this needs a new door opening in the
+# proxy. The same reason the ops below are all POST: that forward carries
+# GET and POST only.
+@app.route("/api/local/list", methods=["GET"])
+def api_files_list():
+    """Files *and* folders under one path, with sizes -- api_browse_local()
+    lists directories only, because a folder picker has no use for the rest."""
+    denied = _require_pair_token()
+    if denied:
+        return denied
+    rel = (request.args.get("path") or "").strip()
+    cand = _under_roots(rel, _BROWSE_ROOTS) if rel else None
+    if cand is None:
+        roots = [{"name": _root_label(r), "path": r, "dir": True, "size": 0, "mtime": 0}
+                 for r in sorted({os.path.realpath(x) for x in _BROWSE_ROOTS
+                                  if os.path.isdir(x)})]
+        return jsonify({"success": True, "path": "", "parent": "", "writable": False,
+                        "protected": True, "entries": roots})
+    if not os.path.isdir(cand):
+        return _err("msg.folderMissing", 400, path=rel)
+    entries = []
+    try:
+        for e in os.scandir(cand):
+            if e.name.startswith("."):
+                continue        # dotfiles are never the music someone came for
+            try:
+                st = e.stat(follow_symlinks=False)
+                is_dir = e.is_dir(follow_symlinks=False)
+            except OSError:
+                continue
+            entries.append({"name": e.name, "path": os.path.join(cand, e.name),
+                            "dir": is_dir, "size": 0 if is_dir else st.st_size,
+                            "mtime": int(st.st_mtime)})
+    except OSError as e:
+        return _err_detail("msg.fileOpFailed", 400, detail=_oserror_detail(e))
+    entries.sort(key=lambda x: (not x["dir"], x["name"].lower()))
+    parent = os.path.dirname(cand.rstrip("/")) or "/"
+    if parent == cand or _under_roots(parent, _BROWSE_ROOTS) is None:
+        parent = ""             # at a root: one step up is the virtual top level
+    return jsonify({"success": True, "path": cand, "parent": parent,
+                    "writable": _writable(cand),
+                    "protected": os.path.realpath(cand) in _protected_paths(),
+                    "entries": entries})
+
+
+def _file_op_targets(data, need_dest):
+    """Validate one copy/move/delete request. Returns (paths, dest, error) --
+    every path resolved and confined by _local_path_allowed(), nothing that is
+    a source's own mountpoint, and a destination that can really be written."""
+    raw = data.get("paths")
+    if isinstance(raw, str):
+        raw = [raw]
+    if not isinstance(raw, list) or not raw or len(raw) > _FILE_MAX_ITEMS:
+        return None, None, _err("msg.pathMissing", 400)
+    protected = _protected_paths()
+    paths = []
+    for item in raw:
+        p = _local_path_allowed(item) if isinstance(item, str) else None
+        if not p or not os.path.lexists(p):
+            return None, None, _err("msg.pathNotAllowed", 400)
+        if os.path.realpath(p) in protected:
+            return None, None, _err("msg.fileProtected", 400)
+        paths.append(p)
+    dest = None
+    if need_dest:
+        dest = _local_path_allowed(data.get("dest") or "")
+        if not dest or not os.path.isdir(dest):
+            return None, None, _err("msg.folderMissing", 400,
+                                    path=str(data.get("dest") or ""))
+        if not _writable(dest):
+            return None, None, _err("msg.fileReadOnly", 400)
+        for p in paths:
+            # Copying a folder into itself never terminates.
+            if dest == p or dest.startswith(p + os.sep):
+                return None, None, _err("msg.fileIntoItself", 400)
+    else:
+        for p in paths:
+            if not _writable(os.path.dirname(p)):
+                return None, None, _err("msg.fileReadOnly", 400)
+    return paths, dest, None
+
+
+def _files_start(op):
+    denied = _require_pair_token()
+    if denied:
+        return denied
+    data = request.get_json(silent=True) or {}
+    paths, dest, err = _file_op_targets(data, need_dest=op in ("copy", "move"))
+    if err:
+        return err
+    if op == "move":
+        for p in paths:
+            if not _writable(os.path.dirname(p)):
+                return _err("msg.fileReadOnly", 400)   # the original has to go too
+    jid = _file_job_new(op)
+    threading.Thread(target=_file_worker, args=(jid, op, paths, dest), daemon=True).start()
+    return jsonify({"success": True, "job": jid}), 202
+
+
+@app.route("/api/local/copy", methods=["POST"])
+def api_files_copy():
+    return _files_start("copy")
+
+
+@app.route("/api/local/move", methods=["POST"])
+def api_files_move():
+    return _files_start("move")
+
+
+@app.route("/api/local/delete", methods=["POST"])
+def api_files_delete():
+    # POST, not DELETE: the web admin's forwarder carries GET and POST only.
+    return _files_start("delete")
+
+
+@app.route("/api/local/rename", methods=["POST"])
+def api_files_rename():
+    denied = _require_pair_token()
+    if denied:
+        return denied
+    data = request.get_json(silent=True) or {}
+    src = _local_path_allowed((data.get("path") or "").strip())
+    name = _safe_name(data.get("name"))
+    if not src or not os.path.lexists(src):
+        return _err("msg.pathNotAllowed", 400)
+    if not name:
+        return _err("msg.badName", 400)
+    if os.path.realpath(src) in _protected_paths():
+        return _err("msg.fileProtected", 400)
+    parent = os.path.dirname(src)
+    if not _writable(parent):
+        return _err("msg.fileReadOnly", 400)
+    target = _local_path_allowed(os.path.join(parent, name))
+    if not target:
+        return _err("msg.pathNotAllowed", 400)
+    if os.path.lexists(target):
+        return _err("msg.fileExists", 400, name=name)
+    try:
+        os.rename(src, target)
+    except OSError as e:
+        return _err_detail("msg.fileOpFailed", 400, detail=_oserror_detail(e))
+    _claim_for_share(target)
+    _lyrion_rescan()
+    return jsonify({"success": True, "path": target})
+
+
+@app.route("/api/local/job", methods=["GET"])
+def api_files_job():
+    denied = _require_pair_token()
+    if denied:
+        return denied
+    with _file_jobs_lock:
+        job = dict(_FILE_JOBS.get(request.args.get("id") or "") or {})
+    if not job:
+        return _err("msg.jobNotFound", 404)
+    job["success"] = True
+    if job.get("code"):
+        job["message"] = _m(job["code"])
+    return jsonify(job)
 
 
 @app.route("/api/sources/<sid>/rw", methods=["POST"])
@@ -5247,7 +6496,7 @@ SOURCES_I18N = {
         "sources.apply": "Apply & rescan library",
         "sources.applyHint": "Saves the sources above and rescans the music library.",
         "sources.playlistdirTitle": "Playlist folder",
-        "sources.playlistdirHint": "Where Lyrion saves the playlists you create from the player. The default is fine for most setups — pick a folder on your own disk if you want the playlists next to your music.",
+        "sources.playlistdirHint": "Where Lyrion saves the playlists you create from the player. The default is fine for most setups — pick a folder on your own disk if you want the playlists next to your music. Whichever folder you pick, you can also add it as a folder above and share it on the network, to copy playlists onto the device from a PC.",
         "sources.playlistdirCurrent": "Current folder",
         "sources.playlistdirUse": "Use this folder",
         "sources.playlistdirDefault": "Restore default",
@@ -5352,6 +6601,32 @@ SOURCES_I18N = {
         "msg.ripInProgress": "A rip is already running.",
         "msg.noWritableTarget": "No writable destination: adopt an internal disk first.",
         "msg.sambaMissing": "Samba is not installed.",
+
+        # ── Network folders: what went wrong, in words ──────────────
+        "msg.smbBadCredentials": "Wrong username or password for this device.",
+        "msg.smbPasswordExpired": "That account's password has expired — change it on the device that shares the folder.",
+        "msg.smbAccountLocked": "That account is locked or disabled on the device that shares the folder.",
+        "msg.smbNoSuchShare": "There is no shared folder with this name on that device.",
+        "msg.smbUnreachable": "{server} is not answering. Check that it is switched on and on the same network.",
+        "msg.smbProtocol": "This device speaks a version of file sharing the player cannot use.",
+        "msg.smbNeedsAuth": "This device asks who you are: enter the username and password you use on it.",
+        "msg.smbNoClient": "This player cannot list shared folders yet — update it, or type the folder name yourself.",
+        "msg.smbListFailed": "Could not read the list of shared folders from this device.",
+        "msg.smbTestFailed": "Could not open this shared folder.",
+        # ── File manager ───────────────────────────────────────────
+        "msg.fileProtected": "This folder is a music source: remove it from the sources list instead of deleting it here.",
+        "msg.fileReadOnly": "This folder cannot be changed: it is read-only.",
+        "msg.fileIntoItself": "A folder cannot be copied into itself.",
+        "msg.fileExists": "\u201c{name}\u201d already exists here.",
+        "msg.badName": "Invalid name.",
+        "msg.fileOpFailed": "The operation did not finish: {detail}",
+        "msg.jobNotFound": "This operation is no longer available.",
+        "files.rootMusic": "Music on this player",
+        "files.rootNetwork": "Network folders",
+        "files.rootInternal": "Internal disks",
+        "files.rootUsb": "USB drives",
+        "files.rootPlaylists": "Playlists",
+        "files.rootHome": "Personal folders",
     },
     "it": {
         "sources.title": "Sorgenti musicali",
@@ -5394,7 +6669,7 @@ SOURCES_I18N = {
         "sources.apply": "Applica e scansiona libreria",
         "sources.applyHint": "Salva le sorgenti qui sopra e riscansiona la libreria musicale.",
         "sources.playlistdirTitle": "Cartella playlist",
-        "sources.playlistdirHint": "Dove Lyrion salva le playlist che crei dal player. Per la maggior parte dei casi va bene quella predefinita — scegli una cartella sul tuo disco se le vuoi vicino alla musica.",
+        "sources.playlistdirHint": "Dove Lyrion salva le playlist che crei dal player. Per la maggior parte dei casi va bene quella predefinita — scegli una cartella sul tuo disco se le vuoi vicino alla musica. Qualunque cartella scegli, puoi anche aggiungerla qui sopra e condividerla in rete, per copiarci dentro le playlist da un PC.",
         "sources.playlistdirCurrent": "Cartella attuale",
         "sources.playlistdirUse": "Usa questa cartella",
         "sources.playlistdirDefault": "Ripristina predefinita",
@@ -5495,6 +6770,32 @@ SOURCES_I18N = {
         "msg.ripInProgress": "Rip già in corso.",
         "msg.noWritableTarget": "Nessuna destinazione scrivibile: adotta un disco interno.",
         "msg.sambaMissing": "Samba non installato.",
+
+        # ── Network folders: what went wrong, in words ──────────────
+        "msg.smbBadCredentials": "Nome utente o password non corretti per questo dispositivo.",
+        "msg.smbPasswordExpired": "La password di questo account è scaduta: cambiala sul dispositivo che condivide la cartella.",
+        "msg.smbAccountLocked": "Questo account è bloccato o disattivato sul dispositivo che condivide la cartella.",
+        "msg.smbNoSuchShare": "Su quel dispositivo non c'è nessuna cartella condivisa con questo nome.",
+        "msg.smbUnreachable": "{server} non risponde. Controlla che sia acceso e sulla stessa rete.",
+        "msg.smbProtocol": "Questo dispositivo usa una versione della condivisione file che il lettore non sa usare.",
+        "msg.smbNeedsAuth": "Questo dispositivo chiede chi sei: inserisci il nome utente e la password che usi su di esso.",
+        "msg.smbNoClient": "Questo lettore non sa ancora elencare le cartelle condivise: aggiornalo, oppure scrivi tu il nome della cartella.",
+        "msg.smbListFailed": "Non è stato possibile leggere l'elenco delle cartelle condivise di questo dispositivo.",
+        "msg.smbTestFailed": "Non è stato possibile aprire questa cartella condivisa.",
+        # ── File manager ───────────────────────────────────────────
+        "msg.fileProtected": "Questa cartella è una sorgente musicale: toglila dall'elenco delle sorgenti invece di cancellarla da qui.",
+        "msg.fileReadOnly": "Questa cartella non si può modificare: è in sola lettura.",
+        "msg.fileIntoItself": "Una cartella non si può copiare dentro sé stessa.",
+        "msg.fileExists": "\u201c{name}\u201d esiste già qui.",
+        "msg.badName": "Nome non valido.",
+        "msg.fileOpFailed": "L'operazione non è stata completata: {detail}",
+        "msg.jobNotFound": "Questa operazione non è più disponibile.",
+        "files.rootMusic": "Musica su questo apparecchio",
+        "files.rootNetwork": "Cartelle di rete",
+        "files.rootInternal": "Dischi interni",
+        "files.rootUsb": "Chiavette USB",
+        "files.rootPlaylists": "Playlist",
+        "files.rootHome": "Cartelle personali",
     },
 }
 DEFAULT_LANG = "en"
@@ -5502,11 +6803,21 @@ DEFAULT_LANG = "en"
 
 def _req_lang():
     """Language for this request: explicit ?lang= wins (the web admin and the
-    kiosk QR both pass their own), then the browser's Accept-Language, then the
-    appliance default. Mirrors how src/i18n/index.jsx picks a locale."""
+    kiosk QR both pass their own), then the X-UI-Lang header our own frontends
+    send, then the browser's Accept-Language, then the appliance default.
+    Mirrors how src/i18n/index.jsx picks a locale.
+
+    X-UI-Lang matters more than it looks: the Qt kiosk and the web admin both
+    send it (and nothing else), so without it every `message` in this
+    catalog -- including every "wrong username or password" -- reached an
+    Italian owner in English."""
     # What gets returned is always one of our own catalog's keys, never the
     # request's string itself (it ends up in the page's <html lang=...>).
     wanted = (request.args.get("lang") or "").strip().lower()[:2]
+    for code in SOURCES_I18N:
+        if code == wanted:
+            return code
+    wanted = (request.headers.get("X-UI-Lang") or "").strip().lower()[:2]
     for code in SOURCES_I18N:
         if code == wanted:
             return code
@@ -6076,11 +7387,29 @@ if __name__ == "__main__":
         print(f"[sources] _migrate_stale_usb_sources error: {e}")
     # Watch for completed disk-format jobs and adopt the resulting partition.
     threading.Thread(target=_format_watcher, daemon=True, name="format-watcher").start()
-    # Make sure Lyrion has a writable playlist folder ("save as playlist")
+    # The group the network shares and Lyrion have in common. Done here, before
+    # anything that owns a folder, so the one restart it may cost (Lyrion only
+    # picks up a new supplementary group when it starts) lands at boot rather
+    # than in the middle of a listening session.
+    try:
+        _ensure_share_group()
+    except Exception as e:
+        print(f"[sources] _ensure_share_group error: {e}")
+    # The one place local music can live on the A/B layout (see
+    # DATA_MUSIC_ROOT). After _ensure_share_group(), whose gid it takes.
+    try:
+        _ensure_music_root()
+    except Exception as e:
+        print(f"[sources] _ensure_music_root error: {e}")
+    # Make sure Lyrion has a writable playlist folder ("save as playlist"),
+    # owned so that a PC on the network can write into it too.
     try:
         ensure_playlistdir()
     except Exception as e:
         print(f"[sources] ensure_playlistdir error: {e}")
+    # Fix up Windows path separators in playlists dropped into that folder.
+    threading.Thread(target=playlist_normalizer_loop, daemon=True,
+                     name="playlist-normalizer").start()
     # Let Tailscale-only clients (e.g. Lyrplay, or Server settings from the
     # phone) through Lyrion's own IP-based access controls.
     try:

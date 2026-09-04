@@ -6,6 +6,7 @@ import Dashboard from './views/Dashboard.vue';
 import Settings from './views/Settings.vue';
 import Setup from './views/Setup.vue';
 import Install from './views/Install.vue';
+import Files from './views/Files.vue';
 import { api } from './api.js';
 import './style.css';
 
@@ -17,6 +18,7 @@ const router = createRouter({
     { path: '/setup', component: Setup },
     { path: '/install', component: Install },
     { path: '/settings', component: Settings, meta: { auth: true } },
+    { path: '/files', component: Files, meta: { auth: true } },
   ],
 });
 

@@ -108,7 +108,51 @@
     "shareNone": "Nessuna condivisione attiva.",
     "shareCount": "{count} condivise",
     "shareLocal": "Condividi una cartella locale",
-    "shareThisFolder": "Condividi questa cartella"
+    "shareThisFolder": "Condividi questa cartella",
+    "wizard": {
+      "title": "Aggiungi una cartella di rete",
+      "intro": "La musica tenuta su un NAS o su un altro computer. Il lettore la cerca da solo sulla tua rete: a te basta scegliere.",
+      "searchButton": "Cerca sulla mia rete",
+      "searching": "Cerco i dispositivi sulla tua rete…",
+      "foundTitle": "Trovati sulla rete",
+      "nothingFound": "Non ho trovato niente. Controlla che l'altro dispositivo sia acceso e sulla stessa rete, oppure scrivi tu il suo indirizzo.",
+      "searchAgain": "Cerca ancora",
+      "typeItMyself": "Lo scrivo io",
+      "manualHint": "Il nome o l'indirizzo del dispositivo che contiene la musica — per esempio nas.local oppure 192.168.1.20.",
+      "addressLabel": "Nome o indirizzo",
+      "continue": "Avanti",
+      "back": "Indietro",
+      "onDevice": "Su {device}",
+      "authHint": "Questo dispositivo vuole sapere chi sei. Usa lo stesso nome utente e la stessa password che usi su di esso.",
+      "signIn": "Accedi",
+      "loadingShares": "Leggo le cartelle condivise…",
+      "pickShare": "Scegli la cartella con la tua musica",
+      "noShares": "Questo dispositivo non condivide nessuna cartella.",
+      "needPassword": "Chiede una password",
+      "typeShareHint": "Scrivi il nome della cartella condivisa esattamente come appare sull'altro dispositivo.",
+      "shareLabel": "Nome della cartella condivisa",
+      "device": "Dispositivo",
+      "folder": "Cartella",
+      "writeHint": "Lascialo spento se la cartella deve solo essere ascoltata. Accendilo per permettere al lettore di salvarci dentro: serve per copiarci i CD.",
+      "allowWrite": "Permetti al lettore di scrivere in questa cartella",
+      "addNow": "Aggiungi questa cartella",
+      "added": "{name} aggiunta: sto leggendo la musica.",
+      "listFailed": "Non sono riuscito a leggere le cartelle condivise di questo dispositivo.",
+      "openFailed": "Non sono riuscito ad aprire questa cartella.",
+      "showDetail": "Dettagli tecnici",
+      "hideDetail": "Nascondi i dettagli",
+      "noClientHint": "Questo lettore non sa ancora leggere l'elenco delle cartelle condivise: aggiornalo e la prossima volta te le proporrà."
+    },
+    "where": {
+      "title": "Dove si trova la tua musica?",
+      "hint": "Scegli dove la tieni: al resto pensa il lettore.",
+      "disk": "Su un disco dentro il lettore o collegato a lui",
+      "diskHint": "Chiavette USB e dischi interni",
+      "network": "Su un NAS o un computer della mia rete",
+      "networkHint": "Il lettore li cerca da solo",
+      "local": "È già dentro il lettore",
+      "localHint": "Una cartella di questo apparecchio"
+    }
   },
   "usbToast": {
     "mounted": "\"{label}\" collegata e pronta"
@@ -333,7 +377,6 @@
     "loadingSystem": "Caricamento dati di sistema...",
     "apiUnavailable": "⚠️ Server API non disponibile",
     "sections": {
-      "lyrion": "Configurazione Lyrion",
       "sources": "Sorgenti musicali",
       "audio": "Uscita Audio (DAC)",
       "playback": "Riproduzione",
@@ -459,6 +502,7 @@
         "hostPlaceholder": "Indirizzo IP, es. 192.168.1.50",
         "hostRequired": "Inserisci l'indirizzo IP del dispositivo da seguire.",
         "apply": "Applica",
+        "rebootWarning": "Cambiare il server musicale richiede un riavvio per avere effetto. Riavviare ora?",
         "saved": "Server Lyrion aggiornato.",
         "failed": "Impossibile aggiornare il server Lyrion.",
         "discoveredLabel": "Dispositivi trovati in rete",
@@ -595,8 +639,6 @@
       "failed": "Impossibile cambiare il fuso orario."
     },
     "lyrion": {
-      "urlLabel": "URL Lyrion Server",
-      "urlHelp": "Inserisci l'indirizzo del tuo Lyrion Media Server (es. http://192.168.1.100:9000)",
       "skinLabel": "Aspetto del player web",
       "skinHint": "L'aspetto del player web di Lyrion (la pagina che apri da browser o telefono). Osmium è coerente con l'interfaccia di questo dispositivo.",
       "skinOsmium": "Osmium",
@@ -604,14 +646,7 @@
       "skinUnset": "Nessuna skin scelta finora — il player web usa ancora l'aspetto originale di Lyrion. Scegline una per cambiare.",
       "skinInstalling": "Installazione dell'interfaccia web Material…",
       "skinApplying": "Applicazione della skin…",
-      "skinFailed": "Impossibile applicare la skin. Controlla la connessione di rete e riprova.",
-      "rescanLabel": "Libreria musicale",
-      "rescanHelp": "Ricontrolla le cartelle musicali per trovare brani nuovi o modificati.",
-      "rescan": "Scansiona libreria",
-      "rescanning": "Scansione in corso…",
-      "rescanStarted": "Scansione della libreria avviata.",
-      "rescanDone": "Scansione completata.",
-      "rescanFailed": "Avvio della scansione fallito."
+      "skinFailed": "Impossibile applicare la skin. Controlla la connessione di rete e riprova."
     },
     "sources": {
       "help": "Aggiungi le cartelle musicali: chiavette/dischi USB (montati in automatico), cartelle di rete (SMB) o locali. Le modifiche hanno effetto subito."

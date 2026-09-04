@@ -148,8 +148,19 @@ export const api = {
   sourcesAddLocal: (path, samba = false) => req('/api/system/sources/local', { method: 'POST', body: { path, samba } }),
   localBrowse: (path = '') => req('/api/system/local/browse?path=' + encodeURIComponent(path)),
   localMkdir: (path, name) => req('/api/system/local/mkdir', { method: 'POST', body: { path, name } }),
-  sourcesAddSmb: ({ server, share, username, password, rw }) =>
-    req('/api/system/sources/smb', { method: 'POST', body: { server, share, username, password, rw } }),
+  sourcesAddSmb: ({ server, share, username, password, rw, defer_activation }) =>
+    req('/api/system/sources/smb', { method: 'POST', body: { server, share, username, password, rw, defer_activation } }),
+  // Guided "add a network folder": the appliance looks for file servers on the
+  // LAN (mDNS + NetBIOS + a 445 sweep) and lists what each one shares, so the
+  // owner picks from a list instead of typing a share name they have never
+  // seen. All three live under /api/sources/, which webui_server already
+  // forwards — see the comment above sourcesList.
+  smbDiscoverStart: () => req('/api/system/sources/smb/discover', { method: 'POST' }),
+  smbDiscoverStatus: () => req('/api/system/sources/smb/discover'),
+  smbShares: ({ server, username, password }) =>
+    req('/api/system/sources/smb/shares', { method: 'POST', body: { server, username, password } }),
+  smbTest: ({ server, share, username, password }) =>
+    req('/api/system/sources/smb/test', { method: 'POST', body: { server, share, username, password } }),
   sourcesSetRw: (id, rw) => req('/api/system/sources/' + id + '/rw', { method: 'POST', body: { rw } }),
   sourcesSetSubpath: (id, subpath) => req('/api/system/sources/' + id + '/subpath', { method: 'POST', body: { subpath } }),
   sourcesBrowse: (id, path = '') => req('/api/system/sources/' + id + '/browse?path=' + encodeURIComponent(path)),
@@ -168,4 +179,15 @@ export const api = {
   internalFormatStatus: () => req('/api/system/internal/format/status'),
   internalSmb: () => req('/api/system/internal/smb'),
   internalSmbRegenerate: () => req('/api/system/internal/smb/regenerate', { method: 'POST' }),
+
+  // File manager (Files.vue). Under /api/system/local/ for the same reason as
+  // the sources calls above: webui_server forwards that whole prefix, and it
+  // carries GET and POST only — which is why deleting is a POST.
+  filesList: (path = '') => req('/api/system/local/list?path=' + encodeURIComponent(path)),
+  filesMkdir: (path, name) => req('/api/system/local/mkdir', { method: 'POST', body: { path, name } }),
+  filesRename: (path, name) => req('/api/system/local/rename', { method: 'POST', body: { path, name } }),
+  filesCopy: (paths, dest) => req('/api/system/local/copy', { method: 'POST', body: { paths, dest } }),
+  filesMove: (paths, dest) => req('/api/system/local/move', { method: 'POST', body: { paths, dest } }),
+  filesDelete: (paths) => req('/api/system/local/delete', { method: 'POST', body: { paths } }),
+  filesJob: (id) => req('/api/system/local/job?id=' + encodeURIComponent(id)),
 };

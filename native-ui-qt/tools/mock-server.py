@@ -17,6 +17,13 @@ STATE = {
     "lms_mode": "local", "lms_host": "", "tz": "Europe/Rome", "device_name": "Osmium", "ota_channel": "dev", "lyrion_channel": "release",
     "audio": "hw:CARD=DAC,DEV=0", "shell_user": "", "pldir": "/srv/music/playlist", "skin": "osmium", "fmt": {"state": "idle"},
     "install": {"state": "idle"}, "cd": {"no_disc": True}, "cdrip": {"state": "idle"},
+    # Ricerca dei dispositivi in rete: uno con nome mDNS, uno che chiede la
+    # password (192.168.0.60) e uno trovato solo dalla sonda sulla porta.
+    "smbscan": {"t0": 0.0, "hosts": [
+        {"ip": "192.168.0.50", "name": "SYNOLOGY", "sources": ["mdns", "port"]},
+        {"ip": "192.168.0.60", "name": "PC-SALOTTO", "sources": ["netbios"]},
+        {"ip": "192.168.0.77", "name": "", "sources": ["port"]},
+    ]},
 }
 ARTISTS = ["Toto", "Pink Floyd", "Dire Straits", "Ludovico Einaudi", "Ólafur Arnalds", "¡Uno!", "03 Greedo", "Daft Punk", "Miles Davis", "Nils Frahm", "Radiohead", "Beethoven"]
 ALBUMS = [(i + 1, f"Album {i + 1} — {a}", a, (i % 12) + 1) for i, a in enumerate(ARTISTS * 2)]
@@ -176,6 +183,17 @@ class H(BaseHTTPRequestHandler):
                 "/api/internal/smb": {"enabled": True, "host": "osmium", "ip": "192.168.0.133", "username": "osmium", "password": "segreto123", "shares": ["Musica", "Import"]},
                 "/api/internal/format/status": STATE["fmt"],
             }
+            if u.path == "/api/sources/smb/discover":
+                # La ricerca vera impiega qualche secondo e la lista si riempie
+                # mentre gira: qui si simula col tempo trascorso, se no la
+                # schermata "sto cercando" non si vedrebbe mai.
+                sc = STATE["smbscan"]
+                el = time.time() - sc["t0"]
+                hosts = sc["hosts"][:1 + int(el)]
+                done = el >= len(sc["hosts"])
+                return self._json({"success": True, "state": "done" if done else "running",
+                                   "progress": 100 if done else min(95, int(el * 30)),
+                                   "hosts": hosts, "tools": {"shares": True, "mdns": True}})
             if u.path == "/api/cd/info": return self._json(STATE["cd"])
             if u.path == "/api/cd/rip/status": return self._json(STATE["cdrip"])
             if u.path in table: return self._json(table[u.path])
@@ -212,6 +230,27 @@ class H(BaseHTTPRequestHandler):
             if u.path == "/mock/ota": STATE["ota"] = data
         if port == 8080:
             if u.path == "/api/pair/token": return self._json({"token": "abc123def456"})
+            if u.path == "/api/sources/smb/discover":
+                STATE["smbscan"]["t0"] = time.time()
+                return self._json({"success": True, "state": "running"}, 202)
+            if u.path == "/api/sources/smb/shares":
+                # 192.168.0.60 chiede le credenziali: e' il ramo che serve per
+                # provare il passo "accedi" senza un NAS vero.
+                if data.get("server") == "192.168.0.60" and not data.get("username"):
+                    return self._json({"success": True, "needs_auth": True, "shares": []})
+                if data.get("server") == "192.168.0.60" and data.get("password") != "segreto":
+                    return self._json({"success": False, "code": "msg.smbBadCredentials",
+                                       "message": "Nome utente o password non corretti per questo dispositivo.",
+                                       "detail": "session setup failed: NT_STATUS_LOGON_FAILURE"}, 400)
+                return self._json({"success": True, "needs_auth": False,
+                                   "shares": [{"name": "Musica", "comment": "La musica di casa"},
+                                              {"name": "Backup", "comment": ""}]})
+            if u.path == "/api/sources/smb/test":
+                if data.get("share") == "Backup":
+                    return self._json({"success": False, "code": "msg.smbNoSuchShare",
+                                       "message": "Su quel dispositivo non c\u2019\u00e8 nessuna cartella condivisa con questo nome.",
+                                       "detail": "tree connect failed: NT_STATUS_BAD_NETWORK_NAME"}, 400)
+                return self._json({"success": True, "checked": True})
             if u.path == "/api/cd/rip":
                 STATE["cdrip"] = {"state": "ripping", "message": "Copia in corso", "progress": 30, "track": 2, "total": len(data.get("tracks", []))}
                 threading.Timer(6.0, lambda: STATE.__setitem__("cdrip", {"state": "done", "message": "Copia completata", "progress": 100})).start()

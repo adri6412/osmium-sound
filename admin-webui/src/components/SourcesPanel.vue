@@ -12,12 +12,14 @@
 // "Apply & rescan" button: sources_server.py pushes every edit into Lyrion's
 // live mediadirs and rescans on its own (_lyrion_push_live()), without the
 // service restart that would cut off whatever is playing.
-import { ref, reactive, computed, onMounted, onUnmounted } from 'vue';
+import { ref, reactive, computed, onMounted, onUnmounted, onBeforeUnmount } from 'vue';
 import { api } from '../api.js';
 import { useI18n } from '../i18n';
 import FolderPicker from './FolderPicker.vue';
+import { useRouter } from 'vue-router';
 
 const { t } = useI18n();
+const router = useRouter();
 
 const msg = ref('');
 const err = ref(false);
@@ -35,7 +37,14 @@ const open = ref('');
 const openAdd = ref('');     // 'smb' | 'internal' | 'local'
 const openShare = ref('');   // 'local'
 function toggle(k) { open.value = open.value === k ? '' : k; }
-function toggleAdd(k) { openAdd.value = openAdd.value === k ? '' : k; }
+function toggleAdd(k) {
+  const opening = openAdd.value !== k;
+  openAdd.value = opening ? k : '';
+  // Opening "network folder" starts the LAN scan straight away: the list is
+  // the point of the redesign, and waiting for a button to start it would put
+  // the empty state back where the four boxes used to be.
+  if (k === 'smb') { wizReset(); if (opening) wizScan(); }
+}
 function toggleShare(k) { openShare.value = openShare.value === k ? '' : k; }
 
 // ── Active sources + USB needing attention ───────────────────────────
@@ -164,32 +173,125 @@ async function addLocal(path, samba) {
   busy.value = false;
 }
 
-const smb = reactive({ server: '', share: '', username: '', password: '', rw: false });
-async function addSmb() {
-  if (!smb.server.trim() || !smb.share.trim()) return;
-  busy.value = true;
+// ── Guided "add a network folder" ─────────────────────────────────────
+// Four empty boxes (server, share, user, password) are unusable by anyone who
+// does not already know what an SMB share is. The appliance now looks for the
+// file servers on the LAN itself and reads back what each one shares, so this
+// is a list to pick from; typing it all in survives as the fallback, one
+// field at a time. Same endpoints and same steps as the kiosk's own wizard.
+const wiz = reactive({
+  step: 0,               // 0 find a device, 1 pick a folder, 2 confirm
+  manual: false,         // "I'll type it myself"
+  host: '', name: '', share: '',
+  username: '', password: '',
+  rw: false,
+  busy: false,
+  err: '', detail: '', detailOpen: false,
+  needsAuth: false,
+  canList: true,         // false when the shares of this server cannot be read
+  noClient: false,       // ...because this appliance has no smbclient at all
+});
+const scan = reactive({ state: '', progress: 0, hosts: [] });
+const wizShares = ref([]);
+let scanTimer = null;
+
+function wizStopScan() {
+  if (scanTimer) { clearInterval(scanTimer); scanTimer = null; }
+}
+function wizReset() {
+  wizStopScan();
+  Object.assign(wiz, { step: 0, manual: false, host: '', name: '', share: '',
+                       username: '', password: '', rw: false, busy: false,
+                       err: '', detail: '', detailOpen: false,
+                       needsAuth: false, canList: true, noClient: false });
+  Object.assign(scan, { state: '', progress: 0, hosts: [] });
+  wizShares.value = [];
+}
+function wizFail(data, fallbackKey) {
+  wiz.err = (data && data.message) || t(fallbackKey);
+  wiz.detail = (data && data.detail) || '';
+  wiz.detailOpen = false;
+}
+async function wizScan() {
+  wiz.manual = false; wiz.err = ''; wiz.detail = '';
+  Object.assign(scan, { state: 'running', progress: 0, hosts: [] });
+  await api.smbDiscoverStart();
+  await wizPoll();
+  wizStopScan();
+  scanTimer = setInterval(wizPoll, 900);
+}
+async function wizPoll() {
+  const r = await api.smbDiscoverStatus();
+  if (!r.ok) { wizStopScan(); return; }
+  scan.state = r.data.state || '';
+  scan.progress = Number(r.data.progress || 0);
+  scan.hosts = r.data.hosts || [];
+  // Without smbclient (a device that has not taken the new image yet) the
+  // shares cannot be listed, so the flow falls back to typing the name.
+  if (r.data.tools && r.data.tools.shares === false) { wiz.canList = false; wiz.noClient = true; }
+  if (scan.state !== 'running') wizStopScan();
+}
+async function wizPickHost(host) {
+  wizStopScan();
+  wiz.host = host.ip; wiz.name = host.name || host.ip;
+  wiz.share = ''; wizShares.value = []; wiz.needsAuth = false;
+  wiz.err = ''; wiz.detail = ''; wiz.step = 1;
+  if (wiz.canList) await wizLoadShares();
+}
+async function wizLoadShares() {
+  wiz.busy = true; wiz.err = ''; wiz.detail = '';
+  const r = await api.smbShares({ server: wiz.host, username: wiz.username, password: wiz.password });
+  wiz.busy = false;
+  if (!r.ok || !r.data || r.data.success === false) {
+    wizFail(r.data, 'settings.sources.wizListFailed');
+    // A wrong password keeps the owner on the step that asked for it; only a
+    // real failure falls back to typing the folder name.
+    if (r.data && r.data.code === 'msg.smbBadCredentials') wiz.needsAuth = true;
+    else wiz.canList = false;
+    return;
+  }
+  wiz.needsAuth = !!r.data.needs_auth;
+  wizShares.value = r.data.shares || [];
+}
+async function wizPickShare(name) {
+  wiz.share = name; wiz.err = ''; wiz.detail = ''; wiz.busy = true;
+  const r = await api.smbTest({ server: wiz.host, share: name,
+                                username: wiz.username, password: wiz.password });
+  wiz.busy = false;
+  if (r.ok && r.data && r.data.success !== false) { wiz.step = 2; return; }
+  wizFail(r.data, 'settings.sources.wizOpenFailed');
+  // A wrong password is fixed on the step that asked for it, not at the end
+  // under a "mount failed" the owner cannot place.
+  if (r.data && r.data.code === 'msg.smbBadCredentials') { wiz.needsAuth = true; wiz.step = 1; }
+}
+async function wizAdd() {
+  if (!wiz.host || !wiz.share) return;
+  wiz.busy = true; wiz.err = ''; wiz.detail = '';
   say(t('settings.sources.mounting'));
   // defer_activation: mount only, don't hand the share to Lyrion yet -- the
   // user still needs to pick "whole share" or a subfolder below, through the
   // same browse/subpath endpoints as "Pick a subfolder" on an existing
   // source (see sources_server.py's api_add_smb()/api_set_subpath()).
-  const r = await api.sourcesAddSmb({ ...smb, defer_activation: true });
-  if (!r.ok) {
+  const r = await api.sourcesAddSmb({
+    server: wiz.host, share: wiz.share, username: wiz.username,
+    password: wiz.password, rw: wiz.rw, defer_activation: true,
+  });
+  wiz.busy = false;
+  if (!r.ok || (r.data && r.data.success === false)) {
+    wizFail(r.data, 'common.error');
     say((r.data && r.data.message) || t('common.error'), true);
-    busy.value = false;
     return;
   }
-  smb.server = ''; smb.share = ''; smb.username = ''; smb.password = ''; smb.rw = false;
+  const id = r.data.id;
+  wizReset();
   await loadSources();
   loadSmbCard();
-  const added = sources.value.find((s) => s.id === r.data.id);
-  if (added) {
-    open.value = 'active';
-    openBrowse(added);
-  }
+  const added = sources.value.find((x) => x.id === id);
+  if (added) { open.value = 'active'; openBrowse(added); }
   say(t('settings.sources.chooseFolderHint'));
-  busy.value = false;
 }
+
+onBeforeUnmount(wizStopScan);
 
 // ── Playlist folder ───────────────────────────────────────────────────
 // Where Lyrion saves playlists created from the player. The appliance
@@ -449,32 +551,131 @@ onUnmounted(() => {
             <span>{{ t('settings.sources.addSmb') }}</span>
             <span class="chev">{{ openAdd === 'smb' ? '⌄' : '›' }}</span>
           </div>
+          <!-- Guided flow: find the device, pick the folder, confirm. -->
           <div v-if="openAdd === 'smb'" class="acc-body">
-            <div class="row">
-              <div style="flex: 1;">
-                <label>{{ t('settings.sources.server') }}</label>
-                <input v-model="smb.server" type="text" placeholder="192.168.0.20" />
+            <p class="sub">{{ t('settings.sources.wizIntro') }}</p>
+
+            <!-- 1. which device -->
+            <template v-if="wiz.step === 0">
+              <template v-if="!wiz.manual">
+                <p v-if="scan.state === 'running'" class="sub">
+                  {{ t('settings.sources.wizSearching') }} — {{ scan.progress }}%
+                </p>
+                <div v-for="h in scan.hosts" :key="h.ip" class="net between" @click="wizPickHost(h)">
+                  <span>
+                    <span style="display: block;">{{ h.name || h.ip }}</span>
+                    <span v-if="h.name" class="muted">{{ h.ip }}</span>
+                  </span>
+                  <span class="chev">›</span>
+                </div>
+                <p v-if="!scan.hosts.length && scan.state !== 'running'" class="sub">
+                  {{ t('settings.sources.wizNothing') }}
+                </p>
+                <div class="row" style="margin-top: 10px;">
+                  <button class="ghost" :disabled="scan.state === 'running'" @click="wizScan">
+                    {{ t('settings.sources.wizSearchAgain') }}
+                  </button>
+                  <button class="ghost" @click="wiz.manual = true">{{ t('settings.sources.wizTypeIt') }}</button>
+                </div>
+              </template>
+              <template v-else>
+                <label>{{ t('settings.sources.wizAddress') }}</label>
+                <input v-model="wiz.host" type="text" placeholder="192.168.0.20" />
+                <p class="sub">{{ t('settings.sources.wizManualHint') }}</p>
+                <div class="row">
+                  <button :disabled="!wiz.host.trim()" @click="wizPickHost({ ip: wiz.host.trim(), name: '' })">
+                    {{ t('settings.sources.wizContinue') }}
+                  </button>
+                  <button class="ghost" @click="wizScan">{{ t('settings.sources.wizSearchAgain') }}</button>
+                </div>
+              </template>
+            </template>
+
+            <!-- 2. which shared folder -->
+            <template v-else-if="wiz.step === 1">
+              <p class="sub">{{ t('settings.sources.wizOnDevice', { device: wiz.name || wiz.host }) }}</p>
+              <template v-if="wiz.needsAuth || wiz.username">
+                <p class="sub">{{ t('settings.sources.wizAuthHint') }}</p>
+                <div class="row">
+                  <div style="flex: 1;">
+                    <label>{{ t('settings.sources.user') }}</label>
+                    <input v-model="wiz.username" type="text" :placeholder="t('settings.sources.userPlaceholder')" />
+                  </div>
+                  <div style="flex: 1;">
+                    <label>{{ t('settings.sources.pass') }}</label>
+                    <input v-model="wiz.password" type="password" placeholder="••••••" />
+                  </div>
+                </div>
+                <button style="margin-bottom: 10px;" :disabled="wiz.busy || !wiz.username" @click="wizLoadShares">
+                  {{ t('settings.sources.wizSignIn') }}
+                </button>
+              </template>
+              <p v-if="wiz.busy" class="sub">{{ t('settings.sources.wizLoadingShares') }}</p>
+              <template v-else-if="!wiz.canList">
+                <label>{{ t('settings.sources.wizShareLabel') }}</label>
+                <input v-model="wiz.share" type="text" :placeholder="t('settings.sources.sharePlaceholder')" />
+                <p class="sub">
+                  <template v-if="wiz.noClient">{{ t('settings.sources.wizNoClientHint') }} </template>
+                  {{ t('settings.sources.wizTypeShareHint') }}
+                </p>
+                <button :disabled="!wiz.share.trim()" @click="wiz.step = 2">{{ t('settings.sources.wizContinue') }}</button>
+              </template>
+              <template v-else>
+                <div v-for="sh in wizShares" :key="sh.name" class="net between" @click="wizPickShare(sh.name)">
+                  <span>
+                    <span style="display: block;">{{ sh.name }}</span>
+                    <span v-if="sh.comment" class="muted">{{ sh.comment }}</span>
+                  </span>
+                  <span class="chev">›</span>
+                </div>
+                <p v-if="!wizShares.length && !wiz.needsAuth" class="sub">{{ t('settings.sources.wizNoShares') }}</p>
+                <div class="row" style="margin-top: 10px;">
+                  <button v-if="!wiz.needsAuth && !wiz.username" class="ghost" @click="wiz.needsAuth = true">
+                    {{ t('settings.sources.wizNeedPassword') }}
+                  </button>
+                  <button class="ghost" @click="wiz.canList = false">{{ t('settings.sources.wizTypeIt') }}</button>
+                </div>
+              </template>
+            </template>
+
+            <!-- 3. confirm -->
+            <template v-else>
+              <div class="pathlist">
+                <span class="muted">{{ t('settings.sources.wizDevice') }}</span><span>{{ wiz.name || wiz.host }}</span>
+                <span class="muted">{{ t('settings.sources.wizFolder') }}</span><span>{{ wiz.share }}</span>
+                <template v-if="wiz.username">
+                  <span class="muted">{{ t('settings.sources.user') }}</span><span>{{ wiz.username }}</span>
+                </template>
               </div>
-              <div style="flex: 1;">
-                <label>{{ t('settings.sources.share') }}</label>
-                <input v-model="smb.share" type="text" :placeholder="t('settings.sources.sharePlaceholder')" />
+              <div class="net between" style="margin-top: 10px;">
+                <span>
+                  <span style="display: block;">{{ t('settings.sources.wizAllowWrite') }}</span>
+                  <span class="muted">{{ t('settings.sources.wizWriteHint') }}</span>
+                </span>
+                <input v-model="wiz.rw" type="checkbox" style="width: auto;" />
               </div>
+              <button style="margin-top: 10px;" :disabled="wiz.busy" @click="wizAdd">
+                {{ t('settings.sources.wizAddNow') }}
+              </button>
+            </template>
+
+            <!-- what went wrong, in words; the raw tool output stays reachable
+                 but is never the only thing on screen -->
+            <div v-if="wiz.err" class="msg err" style="margin-top: 10px;">
+              {{ wiz.err }}
+              <template v-if="wiz.detail">
+                <button class="ghost fit" style="margin-left: 8px;" @click="wiz.detailOpen = !wiz.detailOpen">
+                  {{ t(wiz.detailOpen ? 'settings.sources.wizHideDetail' : 'settings.sources.wizShowDetail') }}
+                </button>
+                <pre v-if="wiz.detailOpen" class="mono" style="white-space: pre-wrap; margin: 8px 0 0;">{{ wiz.detail }}</pre>
+              </template>
             </div>
-            <div class="row">
-              <div style="flex: 1;">
-                <label>{{ t('settings.sources.user') }}</label>
-                <input v-model="smb.username" type="text" :placeholder="t('settings.sources.userPlaceholder')" />
-              </div>
-              <div style="flex: 1;">
-                <label>{{ t('settings.sources.pass') }}</label>
-                <input v-model="smb.password" type="password" placeholder="••••••" />
-              </div>
+            <div v-if="wiz.step > 0" class="row" style="margin-top: 10px;">
+              <button class="ghost fit" :disabled="wiz.busy" @click="wiz.step = wiz.step - 1; wiz.err = ''">
+                {{ t('common.back') }}
+              </button>
+              <button class="ghost fit" @click="wizReset(); wizScan()">{{ t('settings.sources.wizStartOver') }}</button>
             </div>
-            <div class="net between" style="margin-top: 8px;">
-              <span class="muted">{{ t('settings.sources.smbRw') }}</span>
-              <input v-model="smb.rw" type="checkbox" style="width: auto;" />
-            </div>
-            <button style="margin-top: 8px;" :disabled="busy" @click="addSmb">{{ t('settings.sources.mountAndAdd') }}</button>
           </div>
         </div>
 
@@ -628,6 +829,18 @@ onUnmounted(() => {
             />
           </div>
         </div>
+      </div>
+    </div>
+
+    <!-- File manager: tidying what is inside a folder is a different job from
+         choosing which folders count as sources, so it gets its own page. -->
+    <div class="acc">
+      <div class="net between" @click="router.push('/files')">
+        <span>
+          <span style="display: block;">{{ t('files.open') }}</span>
+          <span class="muted">{{ t('files.hint') }}</span>
+        </span>
+        <span class="chev">›</span>
       </div>
     </div>
 

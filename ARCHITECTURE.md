@@ -83,13 +83,26 @@ flowchart TB
 
 ## Multiroom
 
-Each device always runs its own local squeezelite + Lyrion — LMS instances
-don't cross-discover each other. "Follow" mode (`GET/POST /lms_role` in
-`api_server.py`) rewrites the local squeezelite's `-s <host>` argument to
-point at *another* Osmium device's Lyrion instance and restarts the service,
-so grouping/sync happens natively inside that one LMS. `GET /discover_lms`
-finds candidate servers on the LAN using the real Slim/Squeezebox discovery
-protocol (UDP broadcast, port 3483) — no manual IP entry needed.
+Each device runs its own squeezelite, and its own Lyrion unless it follows
+another device's — LMS instances don't cross-discover each other. "Follow"
+mode (`GET/POST /lms_role` in `api_server.py`) rewrites the local
+squeezelite's `-s <host>` argument to point at *another* Osmium device's
+Lyrion instance and restarts the service, so grouping/sync happens natively
+inside that one LMS. It also stops **and disables** this device's own
+`lyrionmusicserver`: left running it keeps answering on `127.0.0.1:9000`, and
+whatever reaches loopback before the role has been read — the kiosk resolves
+the server address asynchronously at startup — ends up on the local, empty
+server instead of the one being followed. Choosing "this device" again
+re-enables and starts it. Devices that were *already* following are caught by
+`hifi-lyrion-ensure.service`, which enforces the same rule at every boot,
+ordered before `lyrionmusicserver` so the server never even starts on the boot
+that applies it. That has to live in the image rather than in an OS migration:
+the A/B conversion seeds the `/etc` overlay from an allow-list that does not
+carry unit enablement, so a device's own `disable` would come back with the
+next image anyway.
+`GET /discover_lms` finds candidate servers on the LAN using the real
+Slim/Squeezebox discovery protocol (UDP broadcast, port 3483) — no manual IP
+entry needed.
 `GET/POST /player_name` names each device so grouped players are easy to
 tell apart in the Lyrion UI.
 
@@ -274,6 +287,7 @@ Called via [`src/utils/api.js`](src/utils/api.js) (`apiGet`/`apiPost`,
 ```
 GET  /system_info            hostname, platform, arch, versions (UI/System/OS), display/player state
 GET  /system_stats           CPU/memory/temperature/GPU load for the Debug card and the kiosk
+                             (disk = the data partition, not the read-only image slot)
 GET  /network_info, /network_status, /wifi_scan
 POST /wifi_connect, /wired_dhcp, /configure_network
 GET  /audio_devices           detected DACs/outputs (stable ALSA card names)
@@ -429,12 +443,22 @@ GET    /                           🔒   the sources SPA page itself
 GET    /api/sources                🔒   list configured sources
 POST   /api/sources/local          🔒   add a rootfs folder as a source ({samba: true} also shares it over SMB, creating it if missing)
 POST   /api/sources/smb            🔒   add an SMB source
+POST   /api/sources/smb/discover   🔒   start the LAN scan for file servers (background thread)
+GET    /api/sources/smb/discover   🔒   poll it — hosts appear as they are found
+POST   /api/sources/smb/shares     🔒   list one server's shared folders (`needs_auth: true` = ask for a password, not a failure)
+POST   /api/sources/smb/test       🔒   try one share without mounting, so the wizard fails on the step that caused it
 POST   /api/sources/<id>/rw        🔒   flip an SMB source read-only/read-write (applied at next boot, not live)
 POST   /api/sources/<id>/subpath   🔒   scan only a subfolder of a mounted source, instead of the whole mount
 GET    /api/sources/<id>/browse    🔒   list subfolders under a source's mount (the subpath picker)
 DELETE /api/sources/<id>           🔒   remove a source (a.k.a. "un-adopt")
 GET    /api/local/browse           🔒   browse the rootfs (source-independent — no source exists yet at add time)
 POST   /api/local/mkdir            🔒   create a folder to share/scan (confined to ALLOWED_LOCAL_ROOTS)
+GET    /api/local/list             🔒   files *and* folders under a path, with sizes (the web admin's file manager)
+POST   /api/local/rename           🔒   rename one entry
+POST   /api/local/copy             🔒   copy into a folder (async job)
+POST   /api/local/move             🔒   move into a folder (async job; rename when it can, copy+remove across filesystems)
+POST   /api/local/delete           🔒   delete (async job) — POST, because the web admin's forwarder carries GET/POST only
+GET    /api/local/job              🔒   poll one copy/move/delete job
 POST   /api/apply                  🔒   push current source config to Lyrion
 GET/POST /api/playlistdir          🔒   where Lyrion saves playlists (Sources → Advanced)
 GET/POST /api/lms_skin             🔒   web-player skin choice (osmium | material); POST starts a background job
@@ -473,6 +497,71 @@ for LAN callers (the phone app), waived for the local kiosk." The two
 must literally be localhost, full stop) since they mint/revoke the very
 token the others check — a LAN caller can never satisfy it, kiosk or not.
 
+#### Adding a network folder: the guided flow
+
+Four empty boxes (server, share, user, password) are unusable by anyone who
+does not already know what an SMB share is, and a failure used to be reported
+as mount.cifs' own `NT_STATUS_LOGON_FAILURE`. Both frontends
+(`native-ui-qt/qml/SettingsTab.qml`, `admin-webui/src/components/SourcesPanel.vue`)
+now walk the same three steps over the endpoints above — find a device, pick a
+shared folder, confirm — with typing it all in as the fallback.
+
+The scan merges three probes by IP, because no single one sees every kind of
+server: mDNS/Bonjour (`avahi-browse`, from `avahi-utils`), NetBIOS broadcast
+(`nmblookup`, from `samba`), and a TCP-445 sweep of our own /24 (anything
+wider is narrowed to the /24 around our own address — a /16 is 65k probes).
+Share listing is `smbclient -L -g`. Both `smbclient` and `avahi-utils` ship
+with the image; where they are missing the flow still lists hosts and falls
+back to typing the folder name, so a device that has not taken the new image
+is not left with a dead page.
+
+Failures are mapped onto a sentence the owner can act on (`_smb_reason()` in
+`sources_server.py`, catalogued in `SOURCES_I18N` in both languages); the raw
+tool output still travels as `detail`, which the UI keeps behind a "technical
+details" line and never shows on its own.
+
+#### File manager (web admin only)
+
+`admin-webui/src/views/Files.vue` over the `/api/local/*` routes above: list,
+new folder, rename, copy, cut, paste, delete, with a clipboard and a progress
+bar for the long jobs. Every path goes through the same `_local_path_allowed()`
+confinement the folder pickers use; on top of that the service refuses to
+rename, move or delete an allowed root, a source's own mountpoint or the
+playlist folder (`_protected_paths()`), and refuses any write on a read-only
+mount. What it writes is handed to `SHARE_GROUP`, so the files stay writable
+from a PC over Samba. There is no file manager on the kiosk on purpose:
+copy/cut/rename with no keyboard, on a screen across the room, is not a job
+anyone wants to do from the sofa.
+
+#### Local folders, and where they may live
+
+A `local` source is an ordinary folder of the appliance itself, and which ones
+are allowed depends on the layout. On the old single-root system that is
+`/srv`, `/mnt`, `/media` or `/home`; on an A/B image slot none of those is a
+place where anything lasts — `/` is a read-only squashfs and `/mnt`/`/media`
+are tmpfs, emptied at every boot — so `ALLOWED_LOCAL_ROOTS` becomes
+`/data/music` (created by `_ensure_music_root()` as `root:hifishare` mode
+`2775`, like a share), `/home` (bind-mounted from `/data/home`) and the mount
+roots where disks and network shares appear. `current_paths()` re-validates
+every stored source against that list before handing it to Lyrion, so the
+constant also decides whether a restored or migrated path survives.
+
+A device converting to the A/B layout takes those folders with it.
+`hifi-ab-media.py move` runs just before the image is installed (from
+`hifi-image-update.sh`, and from `hifi-ab-convert.sh install`): it moves each
+folder of the root filesystem to `/data/music/<name>` and repoints
+`hifi-sources.json`, the Samba shares file and Lyrion's
+`mediadirs`/`playlistdir` at it — `/data` is mounted at the same path on the
+legacy root, so the new one is valid on both sides of the switch, a rollback
+to slot A included (a symlink left behind covers anything that still names the
+old path). Folders under `/home` are copied instead and keep their path, since
+the image binds `/home` from `/data`. It must run **before**
+`hifi-ab-seed.sh`, which copies exactly those pointers onto `/data`; the first
+boot of the image renumbers the owners (`hifi-ab-firstboot.sh` — the legacy
+`hifimusic`/`hifishare` ids were dynamic, the image's are fixed); and a
+factory reset keeps `/data/music`, because it resets settings, not the owner's
+music.
+
 #### Sharing a source over SMB
 
 `samba` is in the image but its units ship **disabled**
@@ -494,6 +583,19 @@ rotates it. It is a Samba-only credential — no shell, no sudo, unrelated to
 both the kiosk `hifi` user and the SSH login. A restore has to re-run
 `smbpasswd` from the restored credential file, otherwise `smbd` would keep
 authenticating with its own old password against a newly restored one.
+
+`hifimusic` and Lyrion's own `squeezeboxserver` share a group, `hifishare`
+(GID 902, seeded by `usr/lib/sysusers.d/osmium.conf` and created at runtime by
+`_ensure_share_group()` for devices that predate it), and every published
+folder is `hifimusic:hifishare` mode `2775`. Without it the two accounts fought
+over any folder both write into — a playlist folder that is also a share is
+exactly that — and whichever was configured last chowned it to itself. The
+share stanza (`_samba_share_block()`) carries the same rule: `force group`,
+`force create mode = 0664`, `force directory mode = 2775` so setgid survives
+into new subfolders, and `delete readonly = yes`, without which Samba reports
+any file written by the *other* account as DOS READ ONLY and refuses to delete
+it even when the filesystem allows it — the reported "I can copy and edit but
+deleting says I don't have permission, `sudo rm` over SSH is the only way".
 
 ### Lyrion JSON-RPC — `src/utils/lyrionApi.js` (port 9000)
 
@@ -836,7 +938,20 @@ none at all when nothing has to change.
 
 The playlist folder — the last thing that wizard used to ask for — is now
 `GET/POST /api/playlistdir`, wired into Sources → Advanced in all three
-front-ends on top of the same folder picker the local-source flow uses.
+front-ends on top of the same folder picker the local-source flow uses. It is
+owned like a share (see [Sharing a source over SMB](#sharing-a-source-over-smb)) so it can also
+be published on the network to copy playlists onto the device: the appliance's
+own default (`/var/lib/squeezeboxserver/playlists`) lives outside
+`ALLOWED_LOCAL_ROOTS`, so `api_add_local()` special-cases it exactly as
+`api_playlistdir_set()` does, and flags the resulting source `media: false` so
+it is published but never handed to Lyrion as a music folder.
+
+Playlists dropped into that folder from a Windows PC are normalised in place
+by a background pass (`playlist_normalizer_loop()`, once a minute): Windows
+`\` separators on the path lines of `.m3u`/`.m3u8`/`.pls` become `/`.
+Byte-level, so a file in an unknown 8-bit encoding cannot be corrupted;
+directives, URLs and `.pls` keys other than `FileN=` are left alone; nothing
+tries to guess where a NAS or drive-letter prefix maps to on this device.
 
 ## Display mode & player on/off
 
