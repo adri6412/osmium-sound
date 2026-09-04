@@ -3,6 +3,10 @@ Description=Osmium Sound — dichiara buono l'avvio (rauc status mark-good)
 ConditionPathExists=/etc/rauc/system.conf
 After=network.target hifi-api.service hifi-rauc-config.service
 Wants=hifi-rauc-config.service
+# In una sessione live non c'è niente da configurare né da sorvegliare:
+# la ISO a filesystem unico avvia la stessa immagine degli apparecchi,
+# quindi senza questa riga queste unità partirebbero anche lì.
+ConditionKernelCommandLine=!boot=live
 
 [Service]
 Type=oneshot

@@ -22,6 +22,7 @@
 #include "sys.h"
 #include "vumeter.h"
 #include <QFile>
+#include <QRegularExpression>
 #include <QFont>
 #include <QFontDatabase>
 #include <QGuiApplication>
@@ -166,6 +167,22 @@ int main(int argc, char *argv[]) {
         else if (args[i] == "--locales" && i + 1 < args.size()) locales = args[++i];
         else if (args[i] == "--expanded") expanded = true;
         else if (args[i] == "--wizard" && i + 1 < args.size()) wizard = args[++i];
+    }
+
+    // Modalita' installer decisa dalla riga di comando del kernel, come fa
+    // l'app Electron con /boot_mode: la voce "Installa" del menu della ISO
+    // aggiunge hifi.installer=1. Serve perche' la ISO a filesystem unico non
+    // ha piu' un sistema live separato in cui mettere un'unita' diversa: c'e'
+    // solo l'immagine, e l'unica differenza fra "installa" e "prova" e' questa
+    // parola sulla riga di comando. L'argomento --wizard, se passato a mano,
+    // resta prioritario (serve in sviluppo).
+    if (wizard.isEmpty()) {
+        QFile cmdline("/proc/cmdline");
+        if (cmdline.open(QIODevice::ReadOnly | QIODevice::Text)) {
+            const QString c = QString::fromUtf8(cmdline.readAll());
+            if (c.split(QRegularExpression("\\s+")).contains("hifi.installer=1"))
+                wizard = "install";
+        }
     }
 
     // Il carattere dell'apparecchio: DejaVu Sans (il body stack di Electron

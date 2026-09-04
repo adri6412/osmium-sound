@@ -1,6 +1,10 @@
 [Unit]
 Description=Osmium Sound — watchdog software degli avvii di prova A/B
 ConditionPathExists=/etc/rauc/system.conf
+# In una sessione live non c'è niente da configurare né da sorvegliare:
+# la ISO a filesystem unico avvia la stessa immagine degli apparecchi,
+# quindi senza questa riga queste unità partirebbero anche lì.
+ConditionKernelCommandLine=!boot=live
 
 [Service]
 Type=oneshot

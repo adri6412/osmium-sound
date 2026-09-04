@@ -82,9 +82,39 @@ write_status running 2 "Preparing…"
 log() { echo "I: [hifi-install] $*"; }
 
 # ─────────────────────────── A/B layout, when the medium carries one ────
+# Dove sta l'immagine di sistema sul supporto. Due forme, in ordine:
+#   live/01-image.squashfs  la ISO a filesystem unico: il sistema live È
+#                           l'immagine, e l'installer copia nello slot proprio
+#                           il file da cui ha avviato — nessuna duplicazione
+#   osmium/rootfs.squashfs  la ISO che porta l'immagine come file a parte
+# In entrambi i casi il file viene aperto e interrogato più sotto, quindi un
+# nome giusto su un contenuto sbagliato non passa comunque.
+looks_like_image() {  # <file squashfs> — c'è dentro un sistema Osmium?
+    mkdir -p /run/hifi-imgtest
+    umount /run/hifi-imgtest 2>/dev/null || true
+    mount -o loop,ro "$1" /run/hifi-imgtest 2>/dev/null || return 1
+    _ok=1
+    [ -s /run/hifi-imgtest/usr/lib/osmium/IMAGE_VERSION ] || _ok=0
+    umount /run/hifi-imgtest 2>/dev/null || true
+    return $(( 1 - _ok ))
+}
+
 AB_IMAGE=""
 for base in /run/live/medium /lib/live/mount/medium; do
-    [ -f "$base/osmium/rootfs.squashfs" ] && AB_IMAGE="$base/osmium/rootfs.squashfs" && break
+    # In ordine: la ISO a filesystem unico (il sistema live È l'immagine, e si
+    # copia nello slot proprio il file da cui si è avviato), la ISO che porta
+    # l'immagine come file a parte, e infine il filesystem live stesso — che
+    # però viene accettato solo dopo averlo aperto e trovato dentro un sistema
+    # Osmium, perché sulla ISO storica quello stesso nome contiene il sistema
+    # live e basta, e va installato nel modo vecchio.
+    for cand in "$base/live/01-image.squashfs" "$base/osmium/rootfs.squashfs"; do
+        [ -f "$cand" ] && { AB_IMAGE="$cand"; break; }
+    done
+    if [ -z "$AB_IMAGE" ] && [ -f "$base/live/filesystem.squashfs" ] \
+       && looks_like_image "$base/live/filesystem.squashfs"; then
+        AB_IMAGE="$base/live/filesystem.squashfs"
+    fi
+    [ -n "$AB_IMAGE" ] && break
 done
 
 # Copies <file> to <block device> with dd, reporting real progress: the UI must

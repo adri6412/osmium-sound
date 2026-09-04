@@ -4208,7 +4208,19 @@ AB_PRECHECK_FILE = '/run/hifi-ab-precheck.json'
 RAUC_SYSTEM_CONF = '/etc/rauc/system.conf'
 
 def _image_mode():
-    return os.path.exists(IMAGE_VERSION_FILE)
+    """True on a device whose root IS a slot image.
+
+    🚨 A live session is never one, even when it boots from the very same
+    squashfs: the ISO is about to carry the image itself as its live
+    filesystem, so the marker file is present there too. Without this a live
+    session would block its own update channels and answer questions about
+    slots it does not have."""
+    if not os.path.exists(IMAGE_VERSION_FILE):
+        return False
+    try:
+        return not _is_live_boot()
+    except Exception:
+        return True
 
 def _ab_ready():
     """Converted to the A/B layout (RAUC configured) but possibly still

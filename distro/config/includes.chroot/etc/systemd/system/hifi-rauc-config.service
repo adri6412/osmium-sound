@@ -8,6 +8,10 @@ Conflicts=shutdown.target
 ConditionPathExists=|/usr/lib/osmium/IMAGE_VERSION
 ConditionPathExists=|/etc/rauc/keyring.pem
 ConditionPathExists=|/usr/local/share/hifi-ab/keyring.pem
+# In una sessione live non c'è niente da configurare né da sorvegliare:
+# la ISO a filesystem unico avvia la stessa immagine degli apparecchi,
+# quindi senza questa riga queste unità partirebbero anche lì.
+ConditionKernelCommandLine=!boot=live
 
 [Service]
 Type=oneshot

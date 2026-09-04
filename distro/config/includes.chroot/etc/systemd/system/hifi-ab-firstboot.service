@@ -11,6 +11,10 @@ ConditionPathExists=!/data/etc/upper/.hifi-accounts-merged
 After=systemd-remount-fs.service
 Before=sysinit.target systemd-sysusers.service shutdown.target
 Conflicts=shutdown.target
+# In una sessione live non c'è niente da configurare né da sorvegliare:
+# la ISO a filesystem unico avvia la stessa immagine degli apparecchi,
+# quindi senza questa riga queste unità partirebbero anche lì.
+ConditionKernelCommandLine=!boot=live
 
 [Service]
 Type=oneshot

@@ -40,6 +40,8 @@ KEY="${RAUC_KEY:-}"
 KEYRING="${RAUC_KEYRING:-$SCRIPT_DIR/rauc-keys/keyring.pem}"
 KEEP_EXT4=0
 NO_BUNDLE=0
+CHROOT_ONLY=0
+LIVE_CAPABLE=0
 export SOURCE_DATE_EPOCH="${SOURCE_DATE_EPOCH:-$(git -C "$REPO_ROOT" log -1 --format=%ct 2>/dev/null || date +%s)}"
 
 log() { printf '\033[1;36m[hifi-image]\033[0m %s\n' "$*"; }
@@ -55,6 +57,16 @@ while [ $# -gt 0 ]; do
         --keyring) KEYRING="$2"; shift 2 ;;
         --keep-rootfs|--keep-ext4) KEEP_EXT4=1; shift ;;
         --no-bundle) NO_BUNDLE=1; KEEP_EXT4=1; shift ;;
+        # Solo il post-processing del chroot: niente squashfs, niente bundle.
+        # Lo usa la ISO a filesystem unico, dove è live-build a comprimere il
+        # chroot — e quello squashfs È l'immagine, la stessa che l'installer
+        # copia nello slot A.
+        --chroot-only) CHROOT_ONLY=1; NO_BUNDLE=1; shift ;;
+        # Tiene live-boot dentro l'immagine: serve perché lo stesso squashfs
+        # deve poter avviare la sessione live della ISO. È inerte su un
+        # apparecchio installato — i suoi script si attivano solo con
+        # boot=live sulla riga di comando.
+        --live-capable) LIVE_CAPABLE=1; shift ;;
         -h|--help) grep '^#' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
         *) die "argomento sconosciuto: $1" ;;
     esac
@@ -113,7 +125,13 @@ in_chroot() {
 # ── 1. pacchetti: via quelli solo-live e l'apt automatico; dentro rauc/zstd ──
 log "pacchetti: rimozione live-*/unattended, verifica rauc/zstd"
 purge=()
-for p in live-boot live-boot-initramfs-tools live-config live-config-systemd live-tools unattended-upgrades apt-listchanges; do
+_purge_list="live-boot live-boot-initramfs-tools live-config live-config-systemd live-tools unattended-upgrades apt-listchanges"
+if [ "$LIVE_CAPABLE" = 1 ]; then
+    log "immagine avviabile anche in live: live-boot resta dentro"
+    _purge_list="unattended-upgrades apt-listchanges"
+fi
+# shellcheck disable=SC2086  # elenco di pacchetti
+for p in $_purge_list; do
     in_chroot dpkg -s "$p" >/dev/null 2>&1 && purge+=("$p")
 done
 if [ ${#purge[@]} -gt 0 ]; then
@@ -399,6 +417,11 @@ fi
 
 used_mib=$(du -sxm "$CH" | cut -f1)
 log "contenuto immagine: ${used_mib} MiB"
+
+if [ "$CHROOT_ONLY" = 1 ]; then
+    log "DONE ✓  chroot pronto come immagine (niente squashfs: lo fa live-build)"
+    exit 0
+fi
 
 # ── 9. rootfs.squashfs (sola lettura, gzip) ───────────────────────────────
 # Squashfs invece di ext4: la root è comunque in sola lettura e così pesa un

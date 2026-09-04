@@ -78,9 +78,17 @@ while [ $# -gt 0 ]; do
     esac
 done
 
+# 🚨 La compressione del filesystem live. Normalmente xz, che comprime di
+# più. Ma nella ISO a filesystem unico quello stesso squashfs finisce nello
+# slot A e lo legge GRUB per avviarlo: il modulo squash4 di GRUB apre solo
+# gzip e xz, e xz costa troppo in decompressione a ogni accesso a /usr su un
+# J4105. Quindi lì è gzip, come per l'immagine OTA.
+LB_COMPRESSION=xz
+[ "$STAGE" = iso-image ] && LB_COMPRESSION=gzip
+
 case "$STAGE" in
-    all|chroot|binary|image) ;;
-    *) die "Invalid --stage '$STAGE' (use: all | chroot | binary | image)." ;;
+    all|chroot|binary|image|iso-image) ;;
+    *) die "Invalid --stage '$STAGE' (use: all | chroot | binary | image | iso-image)." ;;
 esac
 
 # Stessa ragione, ma per chi passa --suite a mano: meglio fermarsi qui che
@@ -504,7 +512,7 @@ if [ "$STAGE" != "binary" ]; then
         --iso-volume "OSMIUM_SOUND" \
         --memtest none \
         --apt-recommends false \
-        --compression xz
+        --compression "$LB_COMPRESSION"
 else
     [ -d config/bootstrap ] \
         || die "--stage binary but no live-build config found. Run '--stage all' first."
@@ -525,6 +533,25 @@ case "$STAGE" in
         ;;
     binary)
         log "Building ONLY the binary stage (fast re-spin)…"
+        lb binary
+        ;;
+    iso-image)
+        # 🚨 La ISO a filesystem unico: il sistema live È l'immagine. Si
+        # costruisce un solo chroot, lo si post-processa come immagine (con
+        # live-boot dentro, inerte senza boot=live) e poi live-build lo
+        # comprime UNA volta sola. Quello squashfs fa due mestieri: filesystem
+        # della sessione live e contenuto dello slot A, che l'installer copia
+        # a blocchi dal supporto stesso. Prima la ISO portava due sistemi quasi
+        # identici e pesava ~1,9 GiB; così ne porta uno.
+        log "Building the single-filesystem ISO (chroot → image → one squashfs)…"
+        lb bootstrap
+        lb chroot
+        log "Handing the chroot to build-image.sh (post-processing only)…"
+        # shellcheck disable=SC2097,SC2098
+        IMAGE_VERSION="${IMAGE_VERSION:-$APP_VERSION}" \
+            "$SCRIPT_DIR/build-image.sh" --chroot "$SCRIPT_DIR/chroot" \
+                --version "${IMAGE_VERSION:-$APP_VERSION}" --chroot-only --live-capable
+        log "Compressing it once, as the live filesystem AND as the slot image…"
         lb binary
         ;;
     image)
