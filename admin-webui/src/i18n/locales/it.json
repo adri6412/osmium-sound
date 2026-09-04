@@ -695,6 +695,20 @@
     "selectedOne": "1 selezionato",
     "confirmDeleteOne": "Elimino “{name}”? Non si può tornare indietro.",
     "copiedReadyOne": "“{name}” pronto da copiare.",
-    "cutReadyOne": "“{name}” pronto da spostare."
+    "cutReadyOne": "“{name}” pronto da spostare.",
+    "freeOf": "{free} liberi di {total}",
+    "noDisks": "nessun disco aggiunto",
+    "diskCount": "{count} dischi",
+    "diskCountOne": "1 disco",
+    "noShares": "nessuna cartella di rete",
+    "shareCount": "{count} cartelle di rete",
+    "shareCountOne": "1 cartella di rete",
+    "noUsb": "nessuna chiavetta",
+    "usbCount": "{count} chiavette",
+    "usbCountOne": "1 chiavetta",
+    "noPlaylists": "nessuna playlist",
+    "playlistCount": "{count} playlist",
+    "playlistCountOne": "1 playlist",
+    "emptyFolder": "vuota"
   }
 }

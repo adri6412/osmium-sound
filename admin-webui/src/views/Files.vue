@@ -133,15 +133,38 @@ function glyph(e) {
   if (PLAYLIST.test(e.name)) return 'list-music';
   return 'file';
 }
-function placeGlyph(p) {
-  const n = (p.path || '').toLowerCase();
-  if (n.includes('hifi-sources')) return 'network';
-  if (n.includes('hifi-usb')) return 'usb';
-  if (n.includes('hifi-internal')) return 'hard-drive';
-  if (n.includes('playlist')) return 'list-music';
-  if (n.startsWith('/home')) return 'home';
-  if (n.includes('music')) return 'music';
-  return 'folder';
+const KIND_GLYPH = {
+  music: 'music', internal: 'hard-drive', network: 'network',
+  usb: 'usb', playlists: 'list-music', home: 'home',
+};
+function placeGlyph(p) { return KIND_GLYPH[p.kind] || 'folder'; }
+
+function gb(n) {
+  const v = Number(n) || 0;
+  if (v >= 1024 ** 4) return `${(v / 1024 ** 4).toFixed(1)} TB`;
+  if (v >= 10 * 1024 ** 3) return `${Math.round(v / 1024 ** 3)} GB`;
+  if (v >= 1024 ** 3) return `${(v / 1024 ** 3).toFixed(1)} GB`;
+  return `${Math.round(v / 1024 ** 2)} MB`;
+}
+// What each place actually holds — the line that tells "Music on this player"
+// (the appliance's own few gigabytes) from "Internal disks" (a mount point
+// that is empty until you adopt a disk).
+const KIND_COUNT = { internal: 'files.disk', network: 'files.share',
+                     usb: 'files.usb', playlists: 'files.playlist' };
+const KIND_EMPTY = { internal: 'files.noDisks', network: 'files.noShares',
+                     usb: 'files.noUsb', playlists: 'files.noPlaylists' };
+function placeSub(p) {
+  if (p.usage && p.usage.total) {
+    return t('files.freeOf', { free: gb(p.usage.free), total: gb(p.usage.total) });
+  }
+  const n = Number(p.count) || 0;
+  if (!n) return t(KIND_EMPTY[p.kind] || 'files.emptyFolder');
+  const key = KIND_COUNT[p.kind];
+  return key ? plural(key + 'Count', n) : plural('files.items', n);
+}
+function placeFull(p) {
+  if (!p.usage || !p.usage.total) return 0;
+  return Math.min(100, Math.round(100 * (p.usage.total - p.usage.free) / p.usage.total));
 }
 function fmtSize(e) {
   if (e.dir) return '';
@@ -334,6 +357,18 @@ onBeforeUnmount(stopJob);
         <div v-else-if="!entries.length" class="fm-empty">
           <Icon name="folder-open" :size="40" />
           <span>{{ t('files.empty') }}</span>
+        </div>
+
+        <!-- first screen: a card per place -->
+        <div v-else-if="atRoot" class="fm-drives">
+          <div v-for="p in entries" :key="p.path" class="fm-drive" @click="load(p.path)">
+            <Icon class="gl" :name="placeGlyph(p)" :size="26" />
+            <span class="tx">
+              <span class="nm">{{ p.name }}</span>
+              <span class="st">{{ placeSub(p) }}</span>
+              <span v-if="placeFull(p)" class="bar"><i :style="{ width: placeFull(p) + '%' }"></i></span>
+            </span>
+          </div>
         </div>
 
         <!-- tiles -->

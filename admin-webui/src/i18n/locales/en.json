@@ -695,6 +695,20 @@
     "selectedOne": "1 selected",
     "confirmDeleteOne": "Delete “{name}”? This cannot be undone.",
     "copiedReadyOne": "“{name}” ready to copy.",
-    "cutReadyOne": "“{name}” ready to move."
+    "cutReadyOne": "“{name}” ready to move.",
+    "freeOf": "{free} free of {total}",
+    "noDisks": "no disk added yet",
+    "diskCount": "{count} disks",
+    "diskCountOne": "1 disk",
+    "noShares": "no network folder yet",
+    "shareCount": "{count} network folders",
+    "shareCountOne": "1 network folder",
+    "noUsb": "no USB drive",
+    "usbCount": "{count} USB drives",
+    "usbCountOne": "1 USB drive",
+    "noPlaylists": "no playlist yet",
+    "playlistCount": "{count} playlists",
+    "playlistCountOne": "1 playlist",
+    "emptyFolder": "empty"
   }
 }

@@ -389,3 +389,23 @@ h2.page { font-size: 20px; margin: 10px 0 4px; }
   display: flex; gap: 14px; margin-top: 12px; padding-top: 10px;
   border-top: 1px solid var(--border); color: var(--muted); font-size: 12px;
 }
+
+/* The first screen: not five identical folders but a card per place, the way
+   "This PC" shows drives — the icon says what kind of thing it is and the
+   line under the name says what is actually in it (room left for the
+   player's own storage, how many disks or shares for the mount points).
+   Without that second line "Music on this player" and "Internal disks" read
+   as the same thing, which is exactly what was reported. */
+.fm-drives { display: grid; gap: 10px; grid-template-columns: repeat(auto-fill, minmax(216px, 1fr)); }
+.fm-drive {
+  display: flex; align-items: center; gap: 13px;
+  padding: 15px 14px; border-radius: 12px; cursor: pointer; text-align: left;
+  background: var(--panel); border: 1px solid var(--border); color: var(--text);
+}
+.fm-drive:hover { background: var(--light); border-color: rgba(212, 175, 55, 0.35); }
+.fm-drive .gl { color: var(--gold); }
+.fm-drive .tx { min-width: 0; }
+.fm-drive .nm { display: block; font-size: 14px; font-weight: 600; line-height: 1.25; }
+.fm-drive .st { display: block; margin-top: 3px; font-size: 12px; color: var(--muted); }
+.fm-drive .bar { margin-top: 7px; height: 3px; border-radius: 2px; background: var(--light); overflow: hidden; }
+.fm-drive .bar i { display: block; height: 100%; background: var(--gold); }

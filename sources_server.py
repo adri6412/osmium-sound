@@ -4749,19 +4749,54 @@ def _claim_for_share(path):
 # The top level of the file manager is the allowed roots themselves. Showing
 # them as raw paths ("/mnt/hifi-sources") is the sort of thing this whole
 # redesign is against, so the ones we own get a name in the owner's language.
+# The `kind` is what tells the two look-alikes apart on screen: "Music on this
+# player" is the appliance's OWN storage (a folder on the data partition, a
+# few gigabytes, the one shared over SMB), while "Internal disks" is only the
+# place extra disks get mounted -- so the first is answered with how much room
+# is left and the second with how many disks are actually there. Named
+# side by side with nothing else, they read as the same thing.
 _ROOT_LABELS = (
-    (DATA_MUSIC_ROOT, "files.rootMusic"),
-    (MOUNT_ROOT, "files.rootNetwork"),
-    (INTERNAL_MOUNT_ROOT, "files.rootInternal"),
-    (USB_ADOPTED_ROOT, "files.rootUsb"),
-    (DEFAULT_PLAYLISTDIR, "files.rootPlaylists"),
-    ("/home", "files.rootHome"),
+    (DATA_MUSIC_ROOT, "files.rootMusic", "music"),
+    (MOUNT_ROOT, "files.rootNetwork", "network"),
+    (INTERNAL_MOUNT_ROOT, "files.rootInternal", "internal"),
+    (USB_ADOPTED_ROOT, "files.rootUsb", "usb"),
+    (DEFAULT_PLAYLISTDIR, "files.rootPlaylists", "playlists"),
+    ("/home", "files.rootHome", "home"),
 )
+
+
+def _root_kind(path):
+    real = os.path.realpath(path)
+    for root, _key, kind in _ROOT_LABELS:
+        if os.path.realpath(root) == real:
+            return kind
+    return "other"
+
+
+def _root_entry(path):
+    """One card of the file manager's first screen.
+
+    Free space only for the appliance's own music folder: the playlist folder
+    lives on that same partition, so reporting it there would print the very
+    same number twice and put the two back to being indistinguishable. The
+    mount roots get a count instead -- their filesystem is a tmpfs whose size
+    says nothing about the disks mounted under it."""
+    kind = _root_kind(path)
+    entry = {"name": _root_label(path), "path": path, "dir": True,
+             "size": 0, "mtime": 0, "kind": kind}
+    if kind == "music":
+        entry["usage"] = _fs_usage(path)
+    else:
+        try:
+            entry["count"] = sum(1 for e in os.scandir(path) if not e.name.startswith("."))
+        except OSError:
+            entry["count"] = 0
+    return entry
 
 
 def _root_label(path):
     real = os.path.realpath(path)
-    for root, key in _ROOT_LABELS:
+    for root, key, _kind in _ROOT_LABELS:
         if os.path.realpath(root) == real:
             return _m(key)
     return os.path.basename(real) or real
@@ -5381,7 +5416,7 @@ def api_files_list():
     rel = (request.args.get("path") or "").strip()
     cand = _under_roots(rel, _FILE_ROOTS) if rel else None
     if cand is None:
-        roots = [{"name": _root_label(r), "path": r, "dir": True, "size": 0, "mtime": 0}
+        roots = [_root_entry(r)
                  for r in sorted({os.path.realpath(x) for x in _FILE_ROOTS
                                   if os.path.isdir(x)})]
         return jsonify({"success": True, "path": "", "parent": "", "writable": False,
