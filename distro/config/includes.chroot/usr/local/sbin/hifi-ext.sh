@@ -4,6 +4,8 @@
 #   hifi-ext.sh add [--dry-run] <package>...   resolve, download, install
 #   hifi-ext.sh list                           what is installed and its state
 #   hifi-ext.sh remove <name>                  drop an add-on
+#   hifi-ext.sh upgrade [<name>...]            rebuild against today's archive,
+#                                              i.e. pull newer versions
 #   hifi-ext.sh refresh                        re-resolve everything against the
 #                                              image that is running now
 #
@@ -238,6 +240,12 @@ build_ext() {  # <name> <dry-run 0|1> <package>...
         log "dry run: nothing installed"
         return 0
     fi
+    # 🚨 Se l'estensione è già montata, il suo albero è un lowerdir vivo di
+    # overlayfs: sostituirglielo sotto i piedi è comportamento indefinito.
+    # Si smonta prima, si ricostruisce, e apply_now rimonta.
+    if [ -d "$EXT_DIR/$_name" ]; then
+        systemd-sysext unmerge >/dev/null 2>&1 || true
+    fi
     _new="$_w/root"
     mkdir -p "$_new"
     for _d in $_debs; do
@@ -326,6 +334,42 @@ cmd_list() {
     done
 }
 
+# "apt install <pacchetto>" di nuovo aggiorna quel pacchetto, perché la
+# risoluzione parte sempre dall'archivio di oggi. Questo fa lo stesso per gli
+# add-on già installati, senza doverne ricordare i nomi: ricostruisce ognuno
+# dalla propria richiesta e si ritrova le versioni nuove. È ciò che una persona
+# intende con "apt upgrade" su questo apparecchio — il sistema operativo, che
+# non si aggiorna a pacchetti, resta fuori.
+cmd_upgrade() {
+    need_root; require_image; lock
+    _any=0; _changed=0
+    [ -d "$META_DIR" ] || { log "no add-ons"; return 0; }
+    for _m in "$META_DIR"/*/request.json; do
+        [ -f "$_m" ] || continue
+        _n=$(json_get "$_m" name); _p=$(json_get "$_m" packages)
+        [ -n "$_n" ] || continue
+        if [ $# -gt 0 ]; then
+            _want=0
+            for _a in "$@"; do [ "$_a" = "$_n" ] && _want=1; done
+            [ "$_want" = 1 ] || continue
+        fi
+        _any=1
+        log "add-on '$_n': rebuilding from today's archive"
+        rc=0
+        # shellcheck disable=SC2086
+        build_ext "$_n" 0 $_p || rc=$?
+        case "$rc" in
+            0) _changed=1 ;;
+            2) log "add-on '$_n': the image now provides it — removed"
+               rm -rf "${EXT_DIR:?}/$_n" "${META_DIR:?}/$_n"; _changed=1 ;;
+            *) warn "add-on '$_n' could not be rebuilt: it stays as it was" ;;
+        esac
+    done
+    [ "$_any" = 1 ] || log "nothing to upgrade"
+    [ "$_changed" = 1 ] && apply_now
+    return 0
+}
+
 # Called at boot by hifi-ext-refresh.service after an image update: every add-on
 # whose pin no longer matches is resolved again against the image that is now
 # running. What could not be rebuilt stays out — systemd refuses it anyway, so a
@@ -361,8 +405,9 @@ cmd_refresh() {
 
 case "${1:-}" in
     add)     shift; cmd_add "$@" ;;
+    upgrade) shift; cmd_upgrade "$@" ;;
     remove)  shift; cmd_remove "$@" ;;
     list)    cmd_list ;;
     refresh) cmd_refresh ;;
-    *) echo "usage: $0 add [--dry-run] <package>... | list | remove <name> | refresh" >&2; exit 64 ;;
+    *) echo "usage: $0 add [--dry-run] <package>... | list | remove <name> | upgrade [<name>...] | refresh" >&2; exit 64 ;;
 esac

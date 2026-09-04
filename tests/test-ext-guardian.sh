@@ -129,6 +129,21 @@ out=$(run add fake); rc=$?
 check "live lock: refused" "1" "$rc"
 contains "live lock: names the owner" "$out" "in progress"
 
+# ── 7b. upgrading an add-on rebuilds it from the same request ───────────────
+setup
+printf 'usr/bin/newtool\n' > "$ROOT/deb.list"
+run add fake >/dev/null 2>&1
+rel="$ROOT/var/lib/extensions/fake/usr/lib/extension-release.d/extension-release.fake"
+before=$(cat "$rel")
+out=$(run upgrade); rc=$?
+check "upgrade: exits 0" "0" "$rc"
+check "upgrade: the add-on is still there" "yes" \
+      "$([ -f "$ROOT/var/lib/extensions/fake/usr/bin/newtool" ] && echo yes || echo no)"
+check "upgrade: still pinned to this image" "$before" "$(cat "$rel")"
+contains "upgrade: says what it rebuilt" "$out" "today's archive"
+out=$(run upgrade nosuchaddon)
+contains "upgrade of an unknown name: nothing to do" "$out" "nothing to upgrade"
+
 # ── 8. `apt remove <package>` passes a package name, not the add-on name ────
 setup
 printf 'usr/bin/newtool\n' > "$ROOT/deb.list"

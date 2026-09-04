@@ -62,9 +62,13 @@ case "$verb" in
         exec "$EXT" remove $pkgs
         ;;
     upgrade|full-upgrade|dist-upgrade)
-        note "On this system the operating system is updated as a whole image, not package by package."
-        note "Use Settings -> Updates (or the 'Update now' button). Add-ons follow with: hifi-ext.sh refresh"
-        exit 1
+        # Metà della richiesta si può esaudire e metà no, quindi si fa la metà
+        # che si può e si dice chiaramente dell'altra: il sistema operativo qui
+        # non si aggiorna pacchetto per pacchetto, gli add-on sì.
+        note "The operating system here is updated as a whole image, not package by package: use Settings -> Updates."
+        note "Upgrading the add-ons you installed, though — that part I can do."
+        # shellcheck disable=SC2086
+        exec "$EXT" upgrade $pkgs
         ;;
     *)
         # search, show, list, policy, update, depends... — the real apt

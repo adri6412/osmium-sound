@@ -45,10 +45,13 @@ run remove mc >/dev/null
 check "remove routes to the add-on manager" "EXT remove mc" "$(calls)"
 
 setup
-run upgrade >/dev/null; rc=$?
-check "upgrade: refused" "1" "$rc"
-check "upgrade: nothing was run" "" "$(calls)"
-if grep -q "whole image" "$ROOT/err"; then ok "upgrade: explains how updates work"; else bad "upgrade: no explanation"; fi
+run upgrade >/dev/null
+check "upgrade: the add-ons are upgraded" "EXT upgrade" "$(calls)"
+if grep -q "whole image" "$ROOT/err"; then ok "upgrade: says the OS is not upgraded package by package"; else bad "upgrade: no explanation"; fi
+
+setup
+run upgrade mc >/dev/null
+check "upgrade of one package: passed on" "EXT upgrade mc" "$(calls)"
 
 setup
 run search mc >/dev/null
