@@ -274,6 +274,10 @@ log "initrd dell'immagine (MODULES=most, zstd, plymouth)"
 chmod +x "$CH/etc/initramfs-tools/hooks/hifi-state" "$CH/etc/initramfs-tools/scripts/local-bottom/hifi-state" \
     "$SHARE/initramfs/hooks/hifi-ab" "$SHARE/initramfs/scripts/local-premount/hifi-ab-convert"
 chmod +x "$CH"/usr/local/sbin/hifi-*.sh "$CH"/usr/local/sbin/hifi-*.py "$CH"/usr/local/bin/*.py 2>/dev/null || true
+# the apt shim (/usr/local/bin/apt, ahead of /usr/bin in PATH and in sudo's
+# secure_path): without the exec bit `apt install` would reach the real apt
+chmod +x "$CH/usr/local/bin/apt" 2>/dev/null || true
+[ -x "$CH/usr/local/bin/apt" ] || die "manca /usr/local/bin/apt (dirottamento di apt sugli add-on)"
 mkdir -p "$CH/etc/initramfs-tools/conf.d"
 cat > "$CH/etc/initramfs-tools/conf.d/hifi-image.conf" <<'CONF'
 # Osmium Sound — initrd degli slot immagine: costruito in fabbrica, deve

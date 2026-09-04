@@ -43,6 +43,9 @@ LOCK=/run/hifi-ext.lock
 # Prefix for the "does the system already ship this file" test. Empty in
 # production (real absolute paths); the tests point it at their sandbox.
 SYSROOT=""
+# 🚨 The REAL apt-get, by absolute path: /usr/local/bin/apt-get is the shim that
+# routes installs back here, so a PATH lookup would loop forever.
+APT_GET=/usr/bin/apt-get
 
 # Test hook: same shape as the update runners. Everything the script touches is
 # redirected into a sandbox, so the guardian can be exercised for real —
@@ -56,6 +59,7 @@ if [ -n "${HIFI_EXT_TEST_ROOT:-}" ]; then
     META_DIR="$_R/var/lib/hifi-player/ext"
     LOCK="$_R/hifi-ext.lock"
     SYSROOT="$_R"
+    APT_GET=apt-get          # the tests put their stub first in PATH
 fi
 
 # 🚨 Only redirect into the log when nobody is watching. hifi_log_init sends
@@ -134,11 +138,16 @@ apt_resolve() {  # <workdir> <package>... -> .debs in <workdir>/cache/archives
     _opts="$_opts -o Dir::Cache=$_w/cache -o Dir::Cache::archives=$_w/cache/archives"
     _opts="$_opts -o APT::Install-Recommends=false -o APT::Get::Assume-Yes=true -o Acquire::Retries=3"
     # shellcheck disable=SC2086  # $_opts is a deliberate word list, no spaces in the paths
-    apt-get -qq $_opts update >>"$_w/apt.log" 2>&1 \
+    "$APT_GET" -qq $_opts update >>"$_w/apt.log" 2>&1 \
         || die "package lists could not be refreshed (no network?) — see $_w/apt.log"
     # shellcheck disable=SC2086
-    apt-get -qq $_opts install --download-only "$@" >>"$_w/apt.log" 2>&1 \
+    "$APT_GET" -qq $_opts install --download-only "$@" >>"$_w/apt.log" 2>&1 \
         || die "cannot be installed on this image: $(sed -n 's/^E: //p' "$_w/apt.log" | head -n 3 | tr '\n' ' ')"
+    # a .deb given by path is used by apt where it lies, not copied into the
+    # archive: bring it along or the add-on would miss the very package asked for
+    for _a in "$@"; do
+        case "$_a" in *.deb) [ -f "$_a" ] && cp -f "$_a" "$_w/cache/archives/" ;; esac
+    done
 }
 
 # ── the guardian: an add-on may only ADD ────────────────────────────────────
@@ -264,10 +273,36 @@ cmd_add() {
     log "add-on '$_name' installed and active"
 }
 
+# Takes an add-on name or, because that is what `apt remove` passes, the name of
+# a package inside one. Removing one package out of several rebuilds the add-on
+# from the remaining request — which is possible only because the request is
+# what gets stored, not just the result.
 cmd_remove() {
     need_root; lock
     _name=$(sane_name "${1:-}") || die "usage: $0 remove <name>"
-    [ -d "$EXT_DIR/$_name" ] || [ -d "$META_DIR/$_name" ] || die "no add-on named '$_name'"
+    if [ ! -d "$META_DIR/$_name" ] && [ ! -d "$EXT_DIR/$_name" ]; then
+        for _m in "$META_DIR"/*/request.json; do
+            [ -f "$_m" ] || continue
+            _p=$(json_get "$_m" packages)
+            for _one in $_p; do
+                [ "$_one" = "$_name" ] || continue
+                _owner=$(json_get "$_m" name)
+                # shellcheck disable=SC2086  # the split is what turns the list into lines
+                _rest=$(printf '%s\n' $_p | grep -vx "$_name" | tr '\n' ' ')
+                if [ -z "$(printf '%s' "$_rest" | tr -d ' ')" ]; then
+                    _name=$_owner
+                else
+                    log "'$_name' is part of add-on '$_owner': rebuilding it without that package"
+                    # shellcheck disable=SC2086
+                    build_ext "$_owner" 0 $_rest && apply_now
+                    log "add-on '$_owner' rebuilt without '$_name'"
+                    return 0
+                fi
+                break
+            done
+        done
+    fi
+    [ -d "$EXT_DIR/$_name" ] || [ -d "$META_DIR/$_name" ] || die "no add-on or add-on package named '$_name'"
     rm -rf "${EXT_DIR:?}/$_name" "${META_DIR:?}/$_name"
     apply_now
     log "add-on '$_name' removed (its files under /etc and /var are left alone)"

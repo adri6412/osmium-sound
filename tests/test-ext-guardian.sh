@@ -129,7 +129,24 @@ out=$(run add fake); rc=$?
 check "live lock: refused" "1" "$rc"
 contains "live lock: names the owner" "$out" "in progress"
 
-# ── 8. removal ──────────────────────────────────────────────────────────────
+# ── 8. `apt remove <package>` passes a package name, not the add-on name ────
+setup
+printf 'usr/bin/newtool\n' > "$ROOT/deb.list"
+run add alpha beta >/dev/null 2>&1        # one add-on named after the first
+out=$(run remove beta); rc=$?
+check "remove by package: rebuilt without it" "0" "$rc"
+contains "remove by package: says what it did" "$out" "without"
+contains "remove by package: the request lost it" \
+         "$(cat "$ROOT/var/lib/hifi-player/ext/alpha/request.json")" '"packages":"alpha"'
+
+setup
+printf 'usr/bin/newtool\n' > "$ROOT/deb.list"
+run add solo >/dev/null 2>&1
+run remove solo >/dev/null 2>&1
+check "remove by package: the last one drops the add-on" "no" \
+      "$([ -d "$ROOT/var/lib/extensions/solo" ] && echo yes || echo no)"
+
+# ── 9. removal ──────────────────────────────────────────────────────────────
 run remove fake >/dev/null 2>&1
 check "remove: extension gone" "no" \
       "$([ -d "$ROOT/var/lib/extensions/fake" ] && echo yes || echo no)"

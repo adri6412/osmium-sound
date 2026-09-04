@@ -198,6 +198,8 @@ jobs:
           sh tests/test-update-apply-runner.sh
           echo "== add-on guardian (shell) =="
           sh tests/test-ext-guardian.sh
+          echo "== apt shim (shell) =="
+          sh tests/test-apt-shim.sh
           echo "== update plan (python) =="
           python3 -m pip install --quiet flask flask-cors
           python3 tests/test_update_plan.py
@@ -269,8 +271,9 @@ jobs:
             distro/config/includes.chroot/usr/local/sbin/hifi-ab-image.sh \
             distro/config/includes.chroot/usr/local/sbin/hifi-image-update.sh \
             distro/config/includes.chroot/usr/local/sbin/hifi-ext.sh \
+            distro/config/includes.chroot/usr/local/bin/apt \
             tests/test-update-stage-runner.sh tests/test-update-apply-runner.sh \
-            tests/test-ext-guardian.sh
+            tests/test-ext-guardian.sh tests/test-apt-shim.sh
           echo "== idempotency (run apply.sh twice) =="
           export HIFI_OS_VERSION=ci-test
           export HIFI_PAYLOAD_DIR="$PWD/distro/os-update"

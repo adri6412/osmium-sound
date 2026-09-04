@@ -1,0 +1,73 @@
+#!/bin/sh
+# Osmium Sound — apt on an image system.
+#
+# Installed as /usr/local/bin/apt and /usr/local/bin/apt-get, which come before
+# /usr/bin in PATH (and in sudo's secure_path), so `apt install mc` keeps being
+# the command people already know. On an image system /usr is a read-only
+# squashfs that the next update replaces whole, so a real install would vanish
+# and leave dpkg's database describing files that no longer exist. Instead the
+# verbs that change the system are routed to hifi-ext.sh, which resolves the
+# dependencies with the real apt and delivers them as a system extension that
+# survives updates (see hifi-ext.sh for the whole story).
+#
+# Everything else — search, show, list, policy, update — is the real apt,
+# untouched. On a legacy (non-image) system this script does nothing at all and
+# hands over to the real binary, so the ISO and the pre-conversion appliances
+# behave exactly as before.
+set -eu
+
+# Test hook, same shape as the other scripts: everything is looked up under a
+# sandbox so the routing can be exercised without a Debian system underneath.
+_R=${HIFI_APT_TEST_ROOT:-}
+REAL=$_R/usr/bin/${0##*/}
+[ -x "$REAL" ] || REAL=$_R/usr/bin/apt-get
+EXT=$_R/usr/local/sbin/hifi-ext.sh
+IMAGE_MARKER=$_R/usr/lib/osmium/IMAGE_VERSION
+
+# Not an image, or the owner explicitly asked for the real thing
+if [ ! -f "$IMAGE_MARKER" ] || [ "${HIFI_APT_REAL:-0}" = 1 ] || [ ! -x "$EXT" ]; then
+    exec "$REAL" "$@"
+fi
+
+note() { printf '\033[1;36m%s\033[0m\n' "$*" >&2; }
+
+# First non-option argument is the verb
+verb=""
+for a in "$@"; do
+    case "$a" in -*) ;; *) verb=$a; break ;; esac
+done
+
+# Arguments after the verb that are not options: the package names
+pkgs=""
+seen=0
+for a in "$@"; do
+    case "$a" in
+        -*) continue ;;
+    esac
+    if [ "$seen" = 0 ] && [ "$a" = "$verb" ]; then seen=1; continue; fi
+    [ "$seen" = 1 ] && pkgs="$pkgs $a"
+done
+
+case "$verb" in
+    install|reinstall)
+        [ -n "$pkgs" ] || exec "$REAL" "$@"
+        note "This is an image system: installing as an add-on, so it survives system updates."
+        note "(system files are never modified; 'hifi-ext.sh list' shows what is installed)"
+        # shellcheck disable=SC2086  # deliberate word splitting of the name list
+        exec "$EXT" add $pkgs
+        ;;
+    remove|purge|autoremove)
+        [ -n "$pkgs" ] || { note "nothing to remove (add-ons are listed by 'hifi-ext.sh list')"; exit 0; }
+        # shellcheck disable=SC2086
+        exec "$EXT" remove $pkgs
+        ;;
+    upgrade|full-upgrade|dist-upgrade)
+        note "On this system the operating system is updated as a whole image, not package by package."
+        note "Use Settings -> Updates (or the 'Update now' button). Add-ons follow with: hifi-ext.sh refresh"
+        exit 1
+        ;;
+    *)
+        # search, show, list, policy, update, depends... — the real apt
+        exec "$REAL" "$@"
+        ;;
+esac
