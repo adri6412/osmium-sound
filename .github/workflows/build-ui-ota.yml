@@ -572,6 +572,13 @@ jobs:
         with:
           name: ota-bundles
           path: .
+      # NB: every line inside `files:` below is a glob, not a place for
+      # comments — a commented line there is looked up as a filename and,
+      # with fail_on_unmatched_files, fails the step. Hence this note lives
+      # here. The build-info is attached because on an A/B system the kernel
+      # ships inside the image and is never upgraded on the device, so the only
+      # honest answer to "what is my fleet running" is what was recorded when
+      # the image was built.
       - name: Attach the image to the Release
         uses: softprops/action-gh-release@v2
         with:
@@ -582,10 +589,6 @@ jobs:
             hifi-image-*.raucb
             hifi-image-*.raucb.sha256
             hifi-image-*.info.txt
-            # which kernel (and which Debian, and which commit) this image
-            # carries: on an A/B system the kernel ships inside the image and
-            # is never upgraded on the device, so the only honest answer to
-            # "what is my fleet running" is the one recorded at build time
             hifi-image-*.build-info.txt
       - name: Rebuild the OTA Pages manifest with the image asset
         id: manifest
