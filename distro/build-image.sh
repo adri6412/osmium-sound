@@ -77,7 +77,15 @@ CH="$(cd "$CH" && pwd)"
 [ -n "$VERSION" ] || die "--version mancante"
 [ -x "$CH/usr/local/bin/api_server.py" ] || die "$CH non sembra il chroot dell'apparecchio"
 [ -f "$KEYRING" ] || die "keyring RAUC mancante: $KEYRING"
-for t in mksquashfs rauc zstd; do command -v "$t" >/dev/null || die "manca $t sull'host di build"; done
+# Gli strumenti dell'host servono solo per i pezzi che si costruiscono davvero:
+# in --chroot-only comprime live-build, e senza bundle non c'è niente da
+# firmare. Pretenderli comunque faceva fallire la ISO a filesystem unico prima
+# ancora di iniziare, per la mancanza di un rauc che non avrebbe usato.
+_need_host="zstd"
+[ "$CHROOT_ONLY" = 1 ] || _need_host="$_need_host mksquashfs"
+[ "$NO_BUNDLE" = 1 ] || _need_host="$_need_host rauc"
+# shellcheck disable=SC2086  # elenco di strumenti costruito qui sopra
+for t in $_need_host; do command -v "$t" >/dev/null || die "manca $t sull'host di build"; done
 mkdir -p "$OUT"
 SHARE="$CH/usr/local/share/hifi-ab"
 [ -f "$SHARE/slot-grub.cfg.tmpl" ] || die "manca $SHARE/slot-grub.cfg.tmpl nel chroot"

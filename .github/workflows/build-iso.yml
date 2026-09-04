@@ -168,7 +168,8 @@ jobs:
             python3 build-essential \
             live-build imagemagick xorriso debootstrap \
             debian-archive-keyring rsync fakeroot \
-            cpio gzip squashfs-tools dosfstools mtools isolinux syslinux-common
+            cpio gzip squashfs-tools dosfstools mtools isolinux syslinux-common \
+            zstd e2fsprogs grub-common initramfs-tools-core
 
       - name: Checkout repository
         uses: actions/checkout@v7
