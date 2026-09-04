@@ -5204,6 +5204,22 @@ def update_plan_status():
         _clear_update_plan()
         return {'state': 'idle'}
 
+    # An image step has no apply phase: the reboot IS the apply, so nobody
+    # ever rewrites the state file afterwards the way the apply runner does
+    # for the legacy channels. Once the image now running is the one this plan
+    # staged, the update is over — without this the screen sits on "the device
+    # will restart to apply it" for good, on a device that already restarted
+    # and is running exactly what was asked for (seen on the Dell going to
+    # alpha3). Retiring the plan here is also what stops it from re-opening
+    # the overlay at every boot.
+    if state == 'finished' and _image_mode():
+        _img_step = next((st for st in plan['steps'] if st['kind'] == 'image'), None)
+        if _img_step and _img_step.get('version') == _image_version():
+            _clear_update_plan()
+            return {'state': 'done',
+                    'message': _t('update.applyDone', _lang()),
+                    'finished': plan.get('finished')}
+
     # Every step has staged; the stage runner is about to (or already did)
     # create /system-update and reboot into the isolated apply session. There
     # is nothing left to poll here until the box comes back — the state-file
