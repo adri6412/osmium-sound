@@ -66,6 +66,10 @@ jobs:
   # signing keys — the installer copies those blocks straight into the slot.
   image:
     runs-on: ubuntu-latest
+    # 🚨 It consumes the qt-payload artifact, so it cannot start beside the job
+    # that produces it: without this the download fails with "Artifact not
+    # found" a minute into the run.
+    needs: qt-payload
     timeout-minutes: 120
     defaults:
       run:
