@@ -1,6 +1,15 @@
 # shellcheck shell=sh
 # 0061 — prerequisiti dello schema A/B (RAUC) sugli apparecchi già installati.
 #
+# 🚨 CONTRATTO: questa migrazione non si toglie MAI, come apply.sh non si
+# accorcia mai. Un apparecchio può restare spento un anno e poi saltare dritto
+# all'ultima versione — non esiste replay delle versioni intermedie — quindi
+# ogni release deve continuare a portarsi dietro la conversione allo schema
+# A/B, altrimenti chi è ancora sul vecchio sistema ci resta per sempre. E non
+# se ne accorgerebbe nessuno: gli apparecchi già convertiti non usano più
+# niente di tutto questo. La CI lo verifica sul pacchetto prodotto — vedi
+# "The migration to A/B must never fall out of a release" in build-ui-ota.yml.
+#
 # PERCHÉ
 # Il nuovo sistema di aggiornamento tiene due copie del sistema (slot A e B) e
 # passa dall'una all'altra a ogni aggiornamento, con ritorno automatico se la
