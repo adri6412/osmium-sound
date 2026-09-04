@@ -601,3 +601,39 @@ jobs:
           keep_files: true
           enable_jekyll: false
           commit_message: "ota: manifest ${{ github.ref_name }} (+ immagine RAUC)"
+
+  # 🚨 A release has to serve BOTH worlds, always. We cannot know when a given
+  # owner will update, or whether they will have migrated by then: a device
+  # still on the old layout looks for hifi-qtui/system/os tarballs, one already
+  # on A/B looks for the .raucb, and whichever family is missing makes that
+  # half of the fleet see "you are up to date" forever. It is a silent failure
+  # — nothing errors, the update simply never appears — and it nearly shipped
+  # tonight, when the image job stopped and the release stayed published with
+  # the legacy bundles alone. So the run does not end green unless every asset
+  # a device could be looking for is actually on the release.
+  verify-release:
+    runs-on: ubuntu-latest
+    needs: [build-ui-ota, image, publish-image]
+    if: ${{ always() && startsWith(github.ref, 'refs/tags/') && !contains(github.ref, 'companion') }}
+    steps:
+      - name: Both the old and the new devices must find their update
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          ASSETS=$(gh release view "$TAG" -R "${{ github.repository }}" --json assets -q '.assets[].name' || true)
+          echo "$ASSETS"
+          MISSING=""
+          for want in \
+            "hifi-qtui-$TAG.tar.gz" "hifi-qtui-$TAG.tar.gz.sha256" \
+            "hifi-system-$TAG.tar.gz" "hifi-system-$TAG.tar.gz.sha256" \
+            "hifi-os-$TAG.tar.gz" "hifi-os-$TAG.tar.gz.sha256" "hifi-os-$TAG.tar.gz.sha256.sig" \
+            "hifi-image-$TAG.raucb" "hifi-image-$TAG.raucb.sha256" ; do
+            printf '%s\n' "$ASSETS" | grep -qx -- "$want" || MISSING="$MISSING $want"
+          done
+          if [ -n "$MISSING" ]; then
+            echo "::error::release $TAG is incomplete:$MISSING — devices on the old layout and devices already on A/B must BOTH find their update in every release"
+            exit 1
+          fi
+          echo "release $TAG serves both the old and the new layout"
