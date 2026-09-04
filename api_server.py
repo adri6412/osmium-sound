@@ -5715,9 +5715,30 @@ def roomcorr_discard():
 def api_check():
     return jsonify({"message": "ok"})
 
+def _ui_update_check(check_fn):
+    """What the three update cards on screen should show.
+
+    On an image system the interface, the system components and the OS are no
+    longer three things that update on their own: they are one image. The
+    legacy checks correctly answer "blocked" there, but the three frontends
+    only ever ask those three, so a perfectly available image update showed up
+    as "everything up to date" — the appliance knew, the screen did not (seen
+    on the Dell with alpha3 already published). So in image mode all three
+    answer with the image check. It is the same version in all three rows
+    because it is the same image, and the changelog rides along on the first.
+
+    The plan builder keeps calling check_app/system/os_update directly, so it
+    still sees "blocked" and does not try to stage a .raucb as a tarball.
+    """
+    if _image_mode():
+        info = dict(check_image_update())
+        info['kind'] = 'image'
+        return info
+    return check_fn()
+
 @app.route('/app_update/check', methods=['GET'])
 def api_app_update_check():
-    return jsonify(check_app_update())
+    return jsonify(_ui_update_check(check_app_update))
 
 @app.route('/app_update/apply', methods=['POST'])
 def api_app_update_apply():
@@ -5729,7 +5750,7 @@ def api_app_update_status():
 
 @app.route('/system_update/check', methods=['GET'])
 def api_system_update_check():
-    return jsonify(check_system_update())
+    return jsonify(_ui_update_check(check_system_update))
 
 @app.route('/system_update/apply', methods=['POST'])
 def api_system_update_apply():
@@ -5741,7 +5762,7 @@ def api_system_update_status():
 
 @app.route('/os_update/check', methods=['GET'])
 def api_os_update_check():
-    return jsonify(check_os_update())
+    return jsonify(_ui_update_check(check_os_update))
 
 @app.route('/os_update/apply', methods=['POST'])
 def api_os_update_apply():
