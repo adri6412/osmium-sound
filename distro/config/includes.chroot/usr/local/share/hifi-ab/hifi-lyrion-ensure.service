@@ -1,14 +1,18 @@
 [Unit]
-Description=Osmium Sound — installa Lyrion Music Server su /data se manca (slot immagine)
+Description=Osmium Sound — Lyrion on /data when missing, and off while following another server
 ConditionPathExists=/usr/lib/osmium/IMAGE_VERSION
-ConditionPathExists=!/data/lyrion/current/usr/sbin/squeezeboxserver
-# 🚨 Il primo avvio NON scarica Lyrion da solo: lo fa il wizard, che prima
-# chiede se il server lo fa questo apparecchio o se ne segue uno in rete.
-# Finché la configurazione è da fare questa unità sta ferma; lo script
-# ricontrolla la stessa cosa, e in più salta gli apparecchi in modalità
-# "segui". Una sessione live non deve scaricare niente in memoria.
+# 🚨 The first boot does NOT download Lyrion on its own: the setup wizard does,
+# after asking whether this device is the server or follows one on the network.
+# While the setup is still pending this unit stays put; the script re-checks the
+# same thing. A live session must not download anything into RAM.
 ConditionKernelCommandLine=!boot=live
 ConditionPathExists=!/etc/hifi-player/provisioning-pending
+# 🚨 It also runs when Lyrion IS installed (it used to be skipped then), because
+# its second job is to keep the local server off on a device that follows
+# another one — the rule api_server.py applies when the choice is made, enforced
+# here at boot for devices that were already following. Ordered before the
+# server so on the boot that first applies it, the server never starts at all.
+Before=lyrionmusicserver.service
 After=network-online.target hifi-rauc-config.service
 Wants=network-online.target
 

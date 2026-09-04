@@ -197,6 +197,14 @@ in_chroot id squeezeboxserver >/dev/null || die "utente squeezeboxserver non cre
 for d in var/lib/squeezeboxserver var/lib/squeezeboxserver/prefs var/lib/squeezeboxserver/cache var/lib/squeezeboxserver/playlists var/log/squeezeboxserver; do
     mkdir -p "$CH/$d"; in_chroot chown squeezeboxserver:nogroup "/$d"
 done
+# The playlist folder is the only one of these the owner can also publish on
+# the network (Sources -> playlist folder), so it belongs to the share user
+# with the shared group and the setgid bit: that way Lyrion (a member of the
+# group) and Samba can both create, edit and DELETE in it. See
+# sysusers.d/osmium.conf, and _make_playlist_folder in sources_server.py which
+# re-asserts the same state on every start.
+in_chroot chown hifimusic:hifishare /var/lib/squeezeboxserver/playlists
+in_chroot chmod 2775 /var/lib/squeezeboxserver/playlists
 mkdir -p "$CH/var/lib/hifi-player" "$CH/var/log/hifi" "$CH/mnt" "$CH/media"
 
 # ── 5. RAUC: keyring; marcatori di versione fuori da /etc ────────────────
@@ -482,7 +490,7 @@ if [ "$NO_BUNDLE" = 1 ]; then
     exit 0
 fi
 
-log "rauc bundle (verity, adaptive block-hash-index)"
+log "rauc bundle (verity)"
 B="$WORK/bundle"; mkdir -p "$B"
 sed -e "s|@VERSION@|$VERSION|g" "$SCRIPT_DIR/rauc/manifest.raucm.tmpl" > "$B/manifest.raucm"
 install -m 0755 "$SCRIPT_DIR/rauc/hook.sh" "$B/hook.sh"

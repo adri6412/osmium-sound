@@ -14,19 +14,20 @@ set -u
 . /usr/local/sbin/hifi-ab-lib.sh
 
 OUT=/run/hifi-ab-precheck.json
+AB_MEDIA=${HIFI_AB_MEDIA:-/usr/local/sbin/hifi-ab-media.py}
 reasons=""
 add() { reasons="${reasons}${reasons:+; }$1"; }
 json_out() {  # <convertible 0|1> <converted 0|1>
     _r=$(printf '%s' "$reasons" | sed 's/\\/\\\\/g; s/"/\\"/g')
-    printf '{"convertible":%s,"converted":%s,"reasons":"%s","disk":"%s","disk_mib":%s,"root_min_mib":%s,"slot_mib":%s,"data_mib":%s,"free_needed_mib":%s,"state":"%s"}\n' \
+    printf '{"convertible":%s,"converted":%s,"reasons":"%s","disk":"%s","disk_mib":%s,"root_min_mib":%s,"slot_mib":%s,"data_mib":%s,"free_needed_mib":%s,"media_mib":%s,"media_needed_mib":%s,"state":"%s"}\n' \
         "$( [ "$1" = 1 ] && echo true || echo false)" "$( [ "$2" = 1 ] && echo true || echo false)" \
         "$_r" "${disk:-}" "${disk_mib:-0}" "${root_min_mib:-0}" "${slot_a_mib:-$AB_SLOT_MIB}" \
-        "${data_mib:-0}" "${free_needed_mib:-0}" "$(ab_state_get)" > "$OUT.new" 2>/dev/null \
+        "${data_mib:-0}" "${free_needed_mib:-0}" "${media_mib:-0}" "${media_needed_mib:-0}" "$(ab_state_get)" > "$OUT.new" 2>/dev/null \
         && mv -f "$OUT.new" "$OUT"
 }
 
 disk=$(ab_disk 2>/dev/null) || disk=
-disk_mib=0; root_min_mib=0; slot_a_mib=$AB_SLOT_MIB; data_mib=0; free_needed_mib=0
+disk_mib=0; root_min_mib=0; slot_a_mib=$AB_SLOT_MIB; data_mib=0; free_needed_mib=0; media_mib=0; media_needed_mib=0
 ab_mount_esp 2>/dev/null || true
 
 if [ -n "$disk" ] && ab_part_by_name hifi-data >/dev/null 2>&1; then
@@ -93,6 +94,25 @@ if [ -n "$disk" ]; then
         big=$(find / -xdev -type f -size +300M ! -path '/usr/*' ! -path '/opt/*' 2>/dev/null | head -n 3 | tr '\n' ' ')
         add "not enough space: free at least ${free_needed_mib} MiB (the root uses $(df -Pm / | awk 'NR==2{print $3}') MiB, cannot shrink below ${root_min_mib} MiB, and slot A can only reach ${a_max} MiB on a ${disk_mib} MiB disk)${big:+; large files to move away: $big}"
         data_mib=0
+    fi
+
+    # ── music kept in a folder of the root filesystem ─────────────────────
+    # A source can be an ordinary folder of the root (Music Sources allows
+    # /srv, /mnt, /media and /home), and on the image none of those survives:
+    # hifi-ab-media.py moves them onto /data during the switch. Those same
+    # bytes are ALSO inside the root minimum above, so they are paid for
+    # twice on the way over and no cleanup can free them — better to say so
+    # here than to stop half-way through the update.
+    if [ "$data_mib" -gt 0 ] && [ -x "$AB_MEDIA" ]; then
+        media_mib=$("$AB_MEDIA" scan --mib 2>/dev/null || echo 0)
+        case "$media_mib" in ''|*[!0-9]*) media_mib=0 ;; esac
+        if [ "$media_mib" -gt 0 ] && [ $(( media_mib + 256 )) -gt "$data_mib" ]; then
+            # Its own number, like free_needed_mib: the apply runner turns it
+            # into a message in the owner's language instead of quoting this
+            # English reason at them.
+            media_needed_mib=$(( media_mib + 256 - data_mib ))
+            add "the music kept in folders of the system disk (${media_mib} MiB) does not fit in the ${data_mib} MiB the new layout leaves for data: move that library to a USB or internal disk first"
+        fi
     fi
 
     # the GRUB stub on the ESP must be the one we know (or our selector already)

@@ -12,5 +12,15 @@ hooks=install-check
 
 [image.rootfs]
 filename=rootfs.squashfs
-adaptive=block-hash-index
 hooks=post-install
+# No `adaptive=block-hash-index` here, on purpose. Adaptive updates reuse the
+# 4 KiB blocks a device already has, which pays off on an ext4 image but not
+# on ours: measured on two consecutive published bundles, only 1.49% of the
+# blocks of the new squashfs are found in the previous one (0.00% five builds
+# apart), because compressed squashfs blocks do not sit on 4 KiB boundaries
+# and the whole layout shifts as soon as one file changes. What it cost us:
+# RAUC hashes the whole target slot (and the active one) to build the indexes
+# before copying, then copies the image with one 4096-byte read and one
+# 4096-byte write per block - 243,505 of each for a ~950 MiB image - instead
+# of splicing it 1 MiB at a time. Re-enable it only if the image ever becomes
+# block-stable between builds (a reproducible mksquashfs, no fragments).

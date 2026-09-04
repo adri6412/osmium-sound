@@ -125,6 +125,12 @@ python3-numpy
 # Network shares (SMB mounting for music sources + serving internal disks)
 cifs-utils
 samba
+# The client half, for the guided "add a network folder" flow: `smbclient -L`
+# is what lists the shared folders a NAS offers, so the wizard can show them
+# as a list to pick from instead of asking someone to type a share name they
+# have never seen. sources_server.py degrades to manual entry without it, so
+# a device that has not taken the new image yet still works.
+smbclient
 exfatprogs
 # NTFS adopted-disk fallback (see os-update/apply.d/0053-ntfs-support.sh):
 # sources_server.py mounts NTFS disks with the in-kernel ntfs3 driver first,
@@ -148,6 +154,10 @@ dosfstools
 # mDNS/Bonjour discovery (also installed via OTA 0016 on existing systems, but
 # fresh ISOs should ship it too so \\hifiplayer.local resolves out of the box)
 avahi-daemon
+# The browse side of the same protocol: `avahi-browse _smb._tcp` is how the
+# sources wizard finds NAS boxes, Macs and Linux machines that announce their
+# shares over mDNS. The daemon above only publishes ours.
+avahi-utils
 
 # Lyrion Music Server runtime dependencies (the .deb is installed via hook 0050)
 perl
@@ -229,3 +239,18 @@ zstd
 # hifi-ab-convert (klibc da solo non li ha). Nella ISO arrivava già come
 # dipendenza di live-boot; nell'immagine live-boot non c'è.
 busybox
+
+# Compressed swap in RAM. The appliance has no disk swap at all, and with none
+# the kernel reclaims program text under memory pressure instead, which
+# livelocks the whole box — see /etc/systemd/zram-generator.conf for the full
+# story and the field report (a background Bliss analysis froze the machine).
+# The generator is a plain systemd generator, no daemon and no boot cost.
+systemd-zram-generator
+
+# Network-interface power saving off (hifi-nic-powersave-off.sh): `iw` for
+# 802.11 power save, `ethtool` for Ethernet EEE. Neither is in the base image
+# and neither is pulled in by anything else. Without them the box goes deaf to
+# unsolicited LAN traffic after hours of idle — Lyrion's :9000 stops answering
+# LAN clients while the box itself keeps working.
+iw
+ethtool

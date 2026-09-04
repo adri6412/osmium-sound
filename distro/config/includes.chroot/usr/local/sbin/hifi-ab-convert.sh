@@ -340,8 +340,25 @@ cmd_install() {
         http://*|https://*) modprobe nbd 2>/dev/null || true ;;
         *) [ -f "$bundle" ] || die "bundle non trovato: $bundle" ;;
     esac
+    # Prima la musica, poi le impostazioni: le cartelle di musica o playlist
+    # che stanno sulla root (sorgenti locali: /srv, /mnt, /media, /home) vanno
+    # su /data adesso, perché la semina qui sotto copia i puntamenti verso di
+    # loro (sorgenti, condivisioni Samba, preferenze di Lyrion).
+    if [ -x /usr/local/sbin/hifi-ab-media.py ]; then
+        ab_log "musica e playlist della root legacy verso /data"
+        /usr/local/sbin/hifi-ab-media.py move || die "spostamento della musica su /data fallito"
+    fi
     ab_log "semina di /data dalla root legacy"
     /usr/local/sbin/hifi-ab-seed.sh || die "semina fallita"
+    # Same reason as in hifi-image-update.sh: streaming asks the network for
+    # one piece per read, and the kernel default (128 KiB) makes that
+    # latency-bound. Tune the queues as soon as RAUC creates the devices.
+    case "$bundle" in
+        http://*|https://*)
+            [ -x /usr/local/sbin/hifi-stream-tune.sh ] && \
+                /usr/local/sbin/hifi-stream-tune.sh watch 1800 &
+            ;;
+    esac
     ab_log "rauc install $bundle (scrive lo slot B, il sistema in uso non cambia)"
     rauc install "$bundle" || die "rauc install fallito"
     if ! grub-editenv "$AB_GRUBENV" list 2>/dev/null | grep -q '^ORDER=B A'; then

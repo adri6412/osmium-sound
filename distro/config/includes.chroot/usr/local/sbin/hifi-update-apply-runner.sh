@@ -318,11 +318,23 @@ if [ -x "$AB_CONVERT" ] && [ -x "$AB_PRECHECK" ] && [ ! -f "$RAUC_CONF" ] && [ !
         [ -n "$ab_reason" ] || ab_reason="pre-checks not passed"
         ab_free=$(sed -n 's/.*"free_needed_mib":\([0-9]*\).*/\1/p' "$AB_PRECHECK_JSON" 2>/dev/null)
         ab_disk=$(sed -n 's/.*"disk_mib":\([0-9]*\).*/\1/p' "$AB_PRECHECK_JSON" 2>/dev/null)
+        ab_music_short=$(sed -n 's/.*"media_needed_mib":\([0-9]*\).*/\1/p' "$AB_PRECHECK_JSON" 2>/dev/null)
         if [ "${ab_free:-0}" -gt 0 ] 2>/dev/null; then
             # short, actionable text: how many MiB are missing, on which disk
             ab_fail_msg="Update failed: not enough space for the new A/B layout — free at least ${ab_free} MiB on this ${ab_disk:-0} MiB disk"
             ab_fail_key=update.ab.noSpace
             ab_fail_params="{\"needed\":${ab_free},\"disk\":${ab_disk:-0}}"
+        elif [ "${ab_music_short:-0}" -gt 0 ] 2>/dev/null; then
+            # Music kept in a folder of the system disk: it has to move onto
+            # the data partition with the conversion (hifi-ab-media.py) and it
+            # does not fit. Nothing the device can free by itself, and telling
+            # the owner "free 40 GB" would be misleading — the fix is to put
+            # that library on a disk of its own.
+            ab_music=$(sed -n 's/.*"media_mib":\([0-9]*\).*/\1/p' "$AB_PRECHECK_JSON" 2>/dev/null)
+            ab_data=$(sed -n 's/.*"data_mib":\([0-9]*\).*/\1/p' "$AB_PRECHECK_JSON" 2>/dev/null)
+            ab_fail_msg="Update failed: the music kept in folders on the system disk (${ab_music:-0} MiB) does not fit in the ${ab_data:-0} MiB the new layout leaves for data — move it onto a USB or internal disk first"
+            ab_fail_key=update.ab.musicOnSystemDisk
+            ab_fail_params="{\"music\":${ab_music:-0},\"data\":${ab_data:-0}}"
         else
             ab_fail_msg="Update failed: this device cannot switch to the new A/B layout: $ab_reason"
             ab_fail_key=update.ab.notConvertible

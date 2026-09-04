@@ -64,6 +64,30 @@ for p in /var/lib/squeezeboxserver /var/lib/lyrionmusicserver /var/log/squeezebo
 done
 usermod -aG audio,cdrom squeezeboxserver 2>/dev/null || true
 
+# ── musica portata su /data: numeri legacy → numeri fissi dell'immagine ──
+# Le cartelle di musica o playlist che stavano sulla root le ha spostate
+# hifi-ab-media.py in /data/music, con i proprietari di allora: hifimusic e il
+# gruppo condiviso li creava sources_server.py con numeri dinamici, l'immagine
+# li ha fissi (sysusers.d). Senza rinumerarli la condivisione di rete non
+# saprebbe più scrivere là dentro e le cartelle non leggibili a tutti
+# resterebbero chiuse a Lyrion. Si tocca solo ciò che ha davvero i numeri
+# vecchi, e una volta sola per partizione dati.
+remap_ids() {  # <cartella> <uid vecchio> <uid nuovo> <gid vecchio> <gid nuovo>
+    [ -d "$1" ] || return 0
+    if [ -n "$2" ] && [ -n "$3" ] && [ "$2" != "$3" ]; then
+        find "$1" -uid "$2" -exec chown "$3" {} + 2>/dev/null || true
+    fi
+    if [ -n "$4" ] && [ -n "$5" ] && [ "$4" != "$5" ]; then
+        find "$1" -gid "$4" -exec chgrp "$5" {} + 2>/dev/null || true
+    fi
+}
+if [ -d /data/music ]; then
+    remap_ids /data/music \
+        "$(cat "$X/legacy-hifimusic-uid" 2>/dev/null || true)" "$(id -u hifimusic 2>/dev/null || true)" \
+        "$(cat "$X/legacy-hifishare-gid" 2>/dev/null || true)" "$(getent group hifishare 2>/dev/null | cut -d: -f3)"
+    remap_ids /data/music "$(cat "$X/legacy-squeezeboxserver-uid" 2>/dev/null || true)" "$newuid" "" ""
+fi
+
 # Interface: the image ships the Qt one only (Electron was dropped to make
 # room). A converted device brings its own /etc through the overlay, so the
 # setting may still say "electron": honour it only if Electron is really

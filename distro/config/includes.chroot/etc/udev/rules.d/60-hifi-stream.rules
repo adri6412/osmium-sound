@@ -1,0 +1,16 @@
+# Osmium Sound — bigger reads for RAUC's HTTP streaming.
+#
+# RAUC turns every NBD read request into one HTTP Range request of exactly
+# that size, so the kernel's 128 KiB default makes a bundle download
+# latency-bound (measured: ~1 MiB/s with 128 KiB requests, ~5.5 MiB/s with
+# 1 MiB ones, same file, same host). Raise the read-ahead and the maximum
+# request size as soon as the devices appear.
+#
+# hifi-stream-tune.sh does the same thing from the updater itself, because a
+# device still running the previous system does not have this file yet (the
+# system OTA package cannot add files under /etc/udev). This rule is what
+# covers a hand-run `rauc install <url>` on an installed image.
+ACTION=="add|change", SUBSYSTEM=="block", KERNEL=="nbd*", \
+    ATTR{queue/max_sectors_kb}="2048", ATTR{queue/read_ahead_kb}="8192"
+ACTION=="add|change", SUBSYSTEM=="block", KERNEL=="dm-*", ENV{DM_NAME}=="rauc-*", \
+    ATTR{queue/read_ahead_kb}="8192"

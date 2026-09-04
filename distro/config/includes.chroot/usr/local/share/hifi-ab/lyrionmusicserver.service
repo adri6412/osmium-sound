@@ -6,6 +6,11 @@ Description=Lyrion Music Server
 ConditionPathExists=/data/lyrion/current/usr/sbin/squeezeboxserver
 After=network.target
 After=network-online.target
+# Ceiling for the Restart=on-failure below (these two belong in [Unit], not
+# [Service]): five restarts in five minutes, then stop trying — a server that
+# cannot stay up must not spin forever.
+StartLimitIntervalSec=300
+StartLimitBurst=5
 
 [Service]
 Environment="PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin"
@@ -18,13 +23,64 @@ User=squeezeboxserver
 LogsDirectory=squeezeboxserver
 LogsDirectoryMode=0755
 IgnoreSIGPIPE=no
-Restart=no
 ExecStart=/usr/sbin/squeezeboxserver --prefsdir $PREFSDIR --logdir $LOGDIR --cachedir $CACHEDIR --charset $CHARSET $SLIMOPTIONS
 KillMode=control-group
 KillSignal=SIGTERM
 SendSIGHUP=no
 TimeoutStopSec=30
 SendSIGKILL=Yes
+
+# Playlists Lyrion writes must stay writable by the network shares too: the
+# playlist folder is owned by the share user and carries the shared group with
+# setgid (sources_server.py's _make_playlist_folder), so a group-writable
+# umask is what lets a playlist saved from the player be edited — and deleted —
+# from a PC over SMB instead of only with `sudo rm` over SSH.
+UMask=0002
+
+# ── Resource control: a background library analysis must not take the box down
+#
+# Field report: with the Bliss plugin analysing the library, playback stopped
+# at the end of a track, the screen showed "server not available", the web
+# admin ground to a halt and the only way out was a power cycle — with nothing
+# in the journal, because journald was stalled along with everything else.
+#
+# The analyser runs inside this service's process tree (one decoder thread per
+# core, whole tracks decoded in memory), and this unit had no resource control
+# at all, so it could take every core, the whole disk queue and all of RAM.
+# Memory is what turns that into a freeze rather than a slow patch: see
+# /etc/systemd/zram-generator.conf. These caps keep the damage inside this
+# cgroup, so the worst case is "the analysis died", not "the appliance died".
+#
+# 🚨 Note the weights are what actually order this service against the others.
+# squeezelite's Nice=-10 does NOT protect it from Lyrion: on cgroup v2 a nice
+# value only orders tasks *within* one cgroup, and every service gets its own.
+MemoryAccounting=yes
+# Soft ceiling: past this the kernel reclaims this cgroup's own pages hard
+# instead of the rest of the system's. Chosen above what a large library scan
+# actually needs, so a normal scan never notices it.
+MemoryHigh=50%
+# Hard ceiling: past this the cgroup's OOM killer picks the biggest process in
+# here — the analyser. Deliberately not higher: on a 4 GB unit this is 2.8 GB,
+# which leaves the rest of the system its ~800 MB and still sits far above what
+# even a large library scan actually uses.
+MemoryMax=70%
+# …and when that happens, keep serving music: the default (OOMPolicy=stop)
+# would tear down the whole music server because a child was killed.
+OOMPolicy=continue
+CPUAccounting=yes
+IOAccounting=yes
+# Only matters under contention, and under contention we want the audio path,
+# the screen and the web admin to win. An idle box still gives Lyrion every
+# core it asks for.
+CPUWeight=40
+IOWeight=40
+
+# If Lyrion itself is the process that dies (OOM kill, crash), come back
+# instead of leaving the appliance with "server not available" until someone
+# power-cycles it. A clean stop (our own systemctl stop, a shutdown) exits
+# successfully and is left alone.
+Restart=on-failure
+RestartSec=10
 
 [Install]
 WantedBy=multi-user.target

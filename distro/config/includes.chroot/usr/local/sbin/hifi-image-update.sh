@@ -59,6 +59,18 @@ stage)
     rm -rf "$WORKDIR"; mkdir -p "$WORKDIR"
 
     if [ "$legacy" = 1 ]; then
+        # Before the settings, the music. A source can be a folder of the root
+        # filesystem (/srv, /mnt, /media, /home): on the image that folder is
+        # not there any more, so it moves onto /data now — and the seed just
+        # below copies the pointers to it (sources, Samba, Lyrion's prefs),
+        # which is why this has to run first. Failing here stops the update on
+        # purpose: the device stays legacy, with its music untouched, rather
+        # than switching to a system where the library is gone.
+        if [ -x /usr/local/sbin/hifi-ab-media.py ]; then
+            write_status applying 3 "Moving your music onto the data partition…" update.image.media
+            /usr/local/sbin/hifi-ab-media.py move \
+                || fail "Moving the music folders to the data partition failed" update.image.mediaFailed
+        fi
         write_status applying 5 "Copying your settings to the data partition…" update.image.seed
         /usr/local/sbin/hifi-ab-seed.sh || fail "Copying the settings to the data partition failed" update.image.seedFailed
     fi
@@ -107,6 +119,24 @@ print(sum(sizes(json.load(sys.stdin).get("images", []))))' 2>/dev/null || echo 0
     [ -n "$slot_dev" ] && base_sectors=$(written_sectors)
     echo "I: [hifi-image] slot di destinazione ${slot_dev:-?}, immagine ${img_bytes} byte"
 
+    # RAUC streams the bundle through an NBD device and issues ONE HTTP range
+    # request per read (src/nbd.c, start_read): with the kernel defaults those
+    # are 128 KiB, which makes the download bound by the round trip and not by
+    # the line — measured, 128 KiB requests give ~1 MiB/s against our release
+    # assets while 1 MiB ones give ~5.5 MiB/s on the same file. The helper
+    # raises the read-ahead on the devices as soon as RAUC creates them and,
+    # when the transfer is over, writes down how large the requests really
+    # were, so every update in the field carries its own measurement.
+    tune_pid=""
+    case "$SRC" in
+        http://*|https://*)
+            if [ -x /usr/local/sbin/hifi-stream-tune.sh ]; then
+                /usr/local/sbin/hifi-stream-tune.sh watch 1800 &
+                tune_pid=$!
+            fi
+            ;;
+    esac
+
     rcfile="$WORKDIR/rauc.rc"
     { rauc install "$SRC" 2>&1; echo "$?" > "$rcfile"; } | while IFS= read -r line; do
         printf '%s\n' "$line"
@@ -139,6 +169,18 @@ print(sum(sizes(json.load(sys.stdin).get("images", []))))' 2>/dev/null || echo 0
     wait "$pipe_pid" 2>/dev/null || true
     rc=$(cat "$rcfile" 2>/dev/null || echo 1)
     case "$rc" in ''|*[!0-9]*) rc=1 ;; esac
+    if [ -n "$tune_pid" ]; then
+        # The watcher stops on its own once RAUC disconnects the NBD device;
+        # give it a couple of polls to notice before taking it down, so its
+        # summary line makes it into the log.
+        i=0
+        while kill -0 "$tune_pid" 2>/dev/null && [ "$i" -lt 10 ]; do sleep 1; i=$(( i + 1 )); done
+        kill "$tune_pid" 2>/dev/null || true
+        wait "$tune_pid" 2>/dev/null || true
+        if [ -r /run/hifi-stream-tune.summary ]; then
+            echo "I: [hifi-image] $(cat /run/hifi-stream-tune.summary)"
+        fi
+    fi
     [ "$rc" = 0 ] || fail "rauc install failed (rc=$rc): see /var/log/hifi/hifi-image-update.log" update.image.installFailed "{\"rc\":$rc}"
 
     if [ "$legacy" = 1 ]; then

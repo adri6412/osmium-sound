@@ -27,6 +27,15 @@ while :; do
     fi
     sleep 5
 done
+# /data on tmpfs: the initramfs could not mount the data partition, so this
+# boot is running on the image's factory /etc and everything written during it
+# is lost at the next one. The other slot would not fix a data partition, so
+# the boot is still marked good rather than rolled back — but it must not pass
+# silently, because from the outside it just looks like settings that "went
+# back on their own".
+if [ "$(cat /run/hifi-state/data-mounted 2>/dev/null)" = "0" ]; then
+    ab_warn "data partition not mounted: /data is a tmpfs, this boot runs on factory settings and any change made now will be lost"
+fi
 if rauc status mark-good >/dev/null 2>&1; then
     : > /run/hifi-boot-good
     ab_log "avvio dichiarato buono (slot $(ab_booted_slot 2>/dev/null || echo legacy))"

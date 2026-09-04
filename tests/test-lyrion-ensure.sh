@@ -24,18 +24,36 @@ cat > "$T/fake-update" <<'FAKE'
 echo "$@" > "$HIFI_TEST_MARK"
 FAKE
 chmod +x "$T/fake-update"
+# Stand-in systemctl: records the calls, and answers is-enabled/is-active from
+# UNIT_ENABLED/UNIT_ACTIVE so both "still on" and "already off" can be tested.
+cat > "$T/fake-systemctl" <<'FAKE'
+#!/bin/sh
+echo "$@" >> "$HIFI_TEST_SYSCTL"
+case "$1" in
+    is-enabled) exit "${UNIT_ENABLED:-0}" ;;
+    is-active)  exit "${UNIT_ACTIVE:-0}" ;;
+esac
+exit 0
+FAKE
+chmod +x "$T/fake-systemctl"
 
 run() {  # <cmdline file>  -> "installed" | "skipped"
-    rm -f "$T/mark"
+    rm -f "$T/mark"; : > "$T/systemctl-calls"
     HIFI_IMAGE_VERSION_FILE="$T/usr/lib/osmium/IMAGE_VERSION" \
     HIFI_LYRION_CURRENT="$T/lyrion/current" \
     HIFI_CMDLINE="$1" \
     HIFI_CONFIG_DIR="$T/etc/hifi-player" \
     HIFI_SQ_DEFAULT="$T/etc/default/squeezelite" \
     HIFI_LYRION_UPDATE="$T/fake-update" \
+    HIFI_SYSTEMCTL="$T/fake-systemctl" \
+    HIFI_TEST_SYSCTL="$T/systemctl-calls" \
     HIFI_TEST_MARK="$T/mark" \
         sh "$S" >/dev/null 2>&1
     [ -f "$T/mark" ] && echo installed || echo skipped
+}
+disabled() {  # -> "disabled" | "untouched": did it turn the local server off?
+    grep -q '^disable --now lyrionmusicserver$' "$T/systemctl-calls" 2>/dev/null \
+        && echo disabled || echo untouched
 }
 expect() { if [ "$2" = "$3" ]; then ok; else bad "$1: atteso $3, ottenuto $2"; fi; }
 
@@ -57,7 +75,23 @@ expect "apparecchio configurato senza server: lo installa" "$(run "$T/cmdline-in
 # ── segue il server di un'altra stanza: non gliene serve uno ─────────
 echo "ARGS='-o default -v -s 192.168.0.50 -n OsmiumSound'" > "$T/etc/default/squeezelite"
 expect "in modalità segui non scarica niente" "$(run "$T/cmdline-installed")" skipped
+
+# ...e in più spegne quello locale, che altrimenti risponde su
+# 127.0.0.1:9000 e si prende i collegamenti destinati all'altro.
+expect "in modalità segui spegne il server locale" "$(disabled)" disabled
+# An image slot gets no OS migrations, so this is the only thing that reaches a
+# device that was ALREADY following: it must not skip because Lyrion is there.
+touch "$T/lyrion/current/usr/sbin/squeezeboxserver"; chmod +x "$T/lyrion/current/usr/sbin/squeezeboxserver"
+run "$T/cmdline-installed" >/dev/null
+expect "lo spegne anche se il server è installato" "$(disabled)" disabled
+rm -f "$T/lyrion/current/usr/sbin/squeezeboxserver"
+# Already off: nothing to do, so no needless disable on every single boot.
+UNIT_ENABLED=1 UNIT_ACTIVE=1 run "$T/cmdline-installed" >/dev/null
+expect "se è già spento non lo tocca" "$(disabled)" untouched
+
 echo "ARGS='-o default -v -s 127.0.0.1 -n OsmiumSound'" > "$T/etc/default/squeezelite"
+run "$T/cmdline-installed" >/dev/null
+expect "in modalità locale non spegne niente" "$(disabled)" untouched
 
 # ── già installato: no-op ────────────────────────────────────────────
 touch "$T/lyrion/current/usr/sbin/squeezeboxserver"; chmod +x "$T/lyrion/current/usr/sbin/squeezeboxserver"
@@ -79,6 +113,12 @@ if grep -q 'ConditionKernelCommandLine=!boot=live' "$U"; then ok; else
    bad "l'unità non salta le sessioni live"; fi
 if grep -q 'ConditionPathExists=!/etc/hifi-player/provisioning-pending' "$U"; then ok; else
    bad "l'unità non aspetta la fine della configurazione"; fi
+# The unit must run even with Lyrion installed (that is the "already
+# following" case), and before the server it may have to switch off.
+if grep -q 'ConditionPathExists=!/data/lyrion/current' "$U"; then
+   bad "l'unità salta gli apparecchi col server installato: non spegnerebbe mai quello locale"; else ok; fi
+if grep -q '^Before=lyrionmusicserver.service' "$U"; then ok; else
+   bad "l'unità non è ordinata prima del server locale"; fi
 
 echo "$pass passed, $fail failed"
 [ "$fail" -eq 0 ]

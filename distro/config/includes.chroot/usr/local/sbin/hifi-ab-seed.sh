@@ -68,6 +68,13 @@ while IFS=: read -r gname _ _ members; do
 done < /etc/group
 chmod 600 "$D/etc/accounts-extra/shadow" "$D/etc/accounts-extra/gshadow"
 printf '%s\n' "$(id -u squeezeboxserver 2>/dev/null || echo 103)" > "$D/etc/accounts-extra/legacy-squeezeboxserver-uid"
+# Anche i numeri di hifimusic e del gruppo condiviso: sul legacy li assegna
+# sources_server.py quando crea la prima condivisione, quindi variano da
+# apparecchio ad apparecchio, mentre l'immagine li ha fissi (sysusers.d). La
+# musica portata su /data resta con i numeri di qui: al primo avvio
+# hifi-ab-firstboot.sh la rinumera leggendo questi due file.
+printf '%s\n' "$(id -u hifimusic 2>/dev/null || true)" > "$D/etc/accounts-extra/legacy-hifimusic-uid"
+printf '%s\n' "$(getent group hifishare 2>/dev/null | cut -d: -f3)" > "$D/etc/accounts-extra/legacy-hifishare-gid"
 
 # ── /var ──────────────────────────────────────────────────────────────
 for d in lib/hifi-player lib/squeezeboxserver lib/lyrionmusicserver lib/bluetooth lib/samba lib/NetworkManager log/hifi; do

@@ -237,11 +237,12 @@ check "ssh: started when already enabled" "start ssh.service" \
 # ── 7. A/B conversion: one single upgrade — the UI step is skipped when the
 #      box is about to convert (the image brings the interface), and the
 #      conversion is armed after the last step ─────────────────────────────
-ab_stubs() {  # <precheck-exit-code>
+ab_stubs() {  # <precheck-exit-code> [verdict-json]
+    _json=${2:-'{"convertible":false,"reasons":"not enough space","free_needed_mib":470,"disk_mib":6208}'}
     cat > "$ROOT/sbin/hifi-ab-precheck.sh" <<EOF
 #!/bin/sh
 printf 'precheck\n' >> "$ROOT/calls"
-printf '{"convertible":false,"reasons":"not enough space","free_needed_mib":470,"disk_mib":6208}\n' > "$ROOT/hifi-ab-precheck.json"
+printf '%s\n' '$_json' > "$ROOT/hifi-ab-precheck.json"
 exit $1
 EOF
     cat > "$ROOT/sbin/hifi-ab-convert.sh" <<EOF
@@ -291,6 +292,23 @@ check "ab not convertible: how much to free is carried" "470 6208" \
       "$(state_of params | sed -n 's/.*"needed":\([0-9]*\),"disk":\([0-9]*\).*/\1 \2/p')"
 check "ab not convertible: the error file names the failure too" "update.ab.noSpace" \
       "$(sed -n 's/.*"key":"\([^"]*\)".*/\1/p' "$ROOT/update/error.json")"
+
+# The music kept in a folder of the system disk has to move onto the data
+# partition with the conversion, and it does not fit. Its own message: no
+# amount of cleaning up frees those bytes, so "free 8 GB" would send the owner
+# chasing the wrong thing.
+setup
+stub system ok; stub os ok; stub ui ok
+stage_dir system v2; stage_dir os v2; stage_dir ui v2
+ab_stubs 1 '{"convertible":false,"reasons":"the music kept in folders of the system disk does not fit","free_needed_mib":0,"disk_mib":30000,"data_mib":4000,"media_mib":12000,"media_needed_mib":8256}'
+write_plan <<EOF
+step system done 1 v2 https://e/sys.tgz aaaa -
+EOF
+run_runner || true
+check "music on the system disk: its own failure, not 'free some space'" \
+      "error update.ab.musicOnSystemDisk" "$(state_of phase) $(state_of key)"
+check "music on the system disk: how much music, and how much room" "12000 4000" \
+      "$(state_of params | sed -n 's/.*"music":\([0-9]*\),"data":\([0-9]*\).*/\1 \2/p')"
 
 # already an image (or RAUC configured): the A/B block must stay out of the way
 setup

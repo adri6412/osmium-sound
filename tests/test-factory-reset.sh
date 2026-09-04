@@ -35,7 +35,7 @@ seed_data() {  # <dir>  — una partizione dati vissuta
     d="$1"; rm -rf "$d"
     mkdir -p "$d/etc/upper/hifi-player" "$d/etc/upper/NetworkManager/system-connections" \
              "$d/etc/work" "$d/var/lib/hifi-player" "$d/home/hifi" \
-             "$d/lyrion/current/usr/sbin" "$d/rauc"
+             "$d/lyrion/current/usr/sbin" "$d/rauc" "$d/music/musica"
     echo deadbeefdeadbeefdeadbeefdeadbeef > "$d/etc/upper/machine-id"
     echo db          > "$d/etc/upper/hifi-player/webui.db"
     echo it          > "$d/etc/upper/hifi-player/ui-language"
@@ -45,6 +45,7 @@ seed_data() {  # <dir>  — una partizione dati vissuta
     echo musica      > "$d/home/hifi/.bash_history"
     echo binario     > "$d/lyrion/current/usr/sbin/squeezeboxserver"
     echo slotstatus  > "$d/rauc/slot.status"
+    echo traccia     > "$d/music/musica/a.flac"
     echo v1          > "$d/var/.hifi-image-version"
 }
 
@@ -70,6 +71,9 @@ absent "la cartella personale se ne va"         "$T/b/home/hifi/.bash_history"
 absent "il marcatore stesso se ne va"           "$T/b/.factory-reset"
 exists "Lyrion resta installato"                "$T/b/lyrion/current/usr/sbin/squeezeboxserver"
 exists "la contabilità di RAUC resta"           "$T/b/rauc/slot.status"
+# La musica portata qui dalla root al passaggio A/B (hifi-ab-media.py) è
+# dell'utente: un ripristino azzera le impostazioni, non la discoteca.
+exists "la musica dell'utente resta"            "$T/b/music/musica/a.flac"
 exists "l'identità del player resta"            "$T/b/etc/upper/machine-id"
 check  "…ed è la stessa di prima" \
        "$(cat "$T/b/etc/upper/machine-id")" "deadbeefdeadbeefdeadbeefdeadbeef"

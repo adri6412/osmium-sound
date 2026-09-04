@@ -46,22 +46,35 @@ find_part() {  # nome GPT -> /dev/…  (blkid legge la GPT: l'uevent non ha PART
     done
     return 1
 }
-datadev=$(find_part hifi-data) || datadev=
-espdev=$(find_part "EFI System") || espdev=
-
 modprobe overlay 2>/dev/null || true
 D="${rootmnt}/data"
+datadev=
 mounted=0
-if [ -n "$datadev" ]; then
-    fsck.ext4 -p "$datadev" >/dev/null 2>&1 || true
-    if mount -t ext4 -o noatime "$datadev" "$D"; then
-        mounted=1
+# 🚨 Worth waiting for, and worth retrying: falling back to tmpfs means the
+# whole boot runs on the image's factory /etc — every setting the owner made
+# reverted for that session (the server they follow, the network, the player
+# name), and anything they change during it lost at the next boot, when the
+# real partition is back and still holds the old values. That reads exactly
+# like "sometimes at startup it goes back to the other server". The partition
+# can simply not be there yet: the kernel finds the root first, and on slower
+# controllers the rest of the table lands a moment later.
+attempt=0
+while [ "$attempt" -lt 15 ] && [ "$mounted" = 0 ]; do
+    if [ "$attempt" -gt 0 ]; then
+        udevadm settle --timeout=1 >/dev/null 2>&1 || true
+        sleep 1
     fi
-fi
+    attempt=$((attempt + 1))
+    [ -n "$datadev" ] || datadev=$(find_part hifi-data || true)
+    [ -n "$datadev" ] || continue
+    fsck.ext4 -p "$datadev" >/dev/null 2>&1 || true
+    mount -t ext4 -o noatime "$datadev" "$D" && mounted=1
+done
 if [ "$mounted" = 0 ]; then
-    log_warning_msg "hifi-state: partizione hifi-data non disponibile — stato volatile (tmpfs)"
+    log_warning_msg "hifi-state: partizione hifi-data non disponibile dopo ${attempt} tentativi — stato volatile (tmpfs), le impostazioni di questo avvio NON verranno conservate"
     mount -t tmpfs -o mode=0755 tmpfs "$D"
 fi
+espdev=$(find_part "EFI System") || espdev=
 # ── ripristino di fabbrica ────────────────────────────────────────────
 # La cancellazione della partizione dati avviene QUI, non da sistema acceso:
 # in /data ci sono l'upper di /etc e gli innesti di /var e /home, e un rm -rf
@@ -70,7 +83,12 @@ fi
 # l'overlay non è ancora montato e nessuno tiene aperto niente, quindi la
 # cancellazione è una cosa sola: o è avvenuta o non è avvenuta.
 #
-# Si salvano tre cose. lyrion/ perché altrimenti l'apparecchio resta senza
+# Si salvano quattro cose. music/ perché è la musica di chi possiede
+# l'apparecchio: ci finisce quella che stava in una cartella della root al
+# passaggio al nuovo schema (hifi-ab-media.py) e quella copiata dopo sulle
+# condivisioni di rete. Un ripristino di fabbrica rimette a posto le
+# impostazioni, non cancella la discoteca: la sorgente andrà riaggiunta, i
+# file no. lyrion/ perché altrimenti l'apparecchio resta senza
 # server musicale finché non raggiunge internet per riscaricare il pacchetto
 # (le sue preferenze e cache stanno in /var e se ne vanno comunque: Lyrion
 # riparte come nuovo lo stesso). rauc/ è contabilità che non c'è motivo di
@@ -84,7 +102,7 @@ if [ "$mounted" = 1 ] && [ -e "$D/.factory-reset" ]; then
     for entry in "$D"/* "$D"/.[!.]* "$D"/..?*; do
         [ -e "$entry" ] || continue          # glob senza corrispondenze
         case "${entry##*/}" in
-            lyrion|rauc) continue ;;
+            music|lyrion|rauc) continue ;;
         esac
         rm -rf "$entry"
     done
