@@ -1,12 +1,12 @@
 {
   "tag_name": "v2.5.24-dev.9-alpha4",
   "name": "v2.5.24-dev.9-alpha4",
-  "body": "## What's new in v2.5.24-dev.9-alpha4\n\n- ci: the ISO size guard killed the job after a good ISO was built\n- ab: three hardware assumptions the migration could not survive\n- ext: log to file only for the refresh service, not for typed commands\n- api: an image update has to close itself, the reboot is the apply\n- ci: publish the image build-info, so the kernel a release ships is visible\n",
+  "body": "## What's new in v2.5.24-dev.9-alpha4\n\n- Minor fixes and internal improvements.\n",
   "assets": [
     {
       "name": "hifi-qtui-v2.5.24-dev.9-alpha4.tar.gz",
       "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.24-dev.9-alpha4/hifi-qtui-v2.5.24-dev.9-alpha4.tar.gz",
-      "size": 4838609
+      "size": 4835923
     },
     {
       "name": "hifi-qtui-v2.5.24-dev.9-alpha4.tar.gz.sha256",
@@ -16,7 +16,7 @@
     {
       "name": "hifi-system-v2.5.24-dev.9-alpha4.tar.gz",
       "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.24-dev.9-alpha4/hifi-system-v2.5.24-dev.9-alpha4.tar.gz",
-      "size": 465426
+      "size": 468860
     },
     {
       "name": "hifi-system-v2.5.24-dev.9-alpha4.tar.gz.sha256",
@@ -26,7 +26,7 @@
     {
       "name": "hifi-os-v2.5.24-dev.9-alpha4.tar.gz",
       "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.24-dev.9-alpha4/hifi-os-v2.5.24-dev.9-alpha4.tar.gz",
-      "size": 1403979
+      "size": 1403716
     },
     {
       "name": "hifi-os-v2.5.24-dev.9-alpha4.tar.gz.sha256",
