@@ -1,12 +1,12 @@
 {
   "tag_name": "v2.5.24-dev.9-alpha3",
   "name": "v2.5.24-dev.9-alpha3",
-  "body": "## What's new in v2.5.24-dev.9-alpha3\n\n- iso: install the A/B layout straight from the medium, with no network at all\n- ext: keep 'apt install' as the command people already know\n- ext: talk to the terminal, and do not let a killed run lock the command out\n",
+  "body": "## What's new in v2.5.24-dev.9-alpha3\n\n- ci: the migration check reported every file as missing (pipefail + SIGPIPE)\n- ci: a release must serve both the old and the new layout, or it fails\n- api: a device mid-migration must see the image update too\n- os-update: write the never-remove-the-migration contract where it will be read\n- ci: refuse to publish a release that lost the A/B migration\n- api: show the image update on the three update cards, not just in the API\n- iso: install the A/B layout straight from the medium, with no network at all\n- ext: keep 'apt install' as the command people already know\n- ext: talk to the terminal, and do not let a killed run lock the command out\n",
   "assets": [
     {
       "name": "hifi-qtui-v2.5.24-dev.9-alpha3.tar.gz",
       "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.24-dev.9-alpha3/hifi-qtui-v2.5.24-dev.9-alpha3.tar.gz",
-      "size": 4835905
+      "size": 4835972
     },
     {
       "name": "hifi-qtui-v2.5.24-dev.9-alpha3.tar.gz.sha256",
@@ -16,7 +16,7 @@
     {
       "name": "hifi-system-v2.5.24-dev.9-alpha3.tar.gz",
       "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.24-dev.9-alpha3/hifi-system-v2.5.24-dev.9-alpha3.tar.gz",
-      "size": 467341
+      "size": 467869
     },
     {
       "name": "hifi-system-v2.5.24-dev.9-alpha3.tar.gz.sha256",
@@ -26,7 +26,7 @@
     {
       "name": "hifi-os-v2.5.24-dev.9-alpha3.tar.gz",
       "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.24-dev.9-alpha3/hifi-os-v2.5.24-dev.9-alpha3.tar.gz",
-      "size": 1403460
+      "size": 1403720
     },
     {
       "name": "hifi-os-v2.5.24-dev.9-alpha3.tar.gz.sha256",
@@ -37,16 +37,6 @@
       "name": "hifi-os-v2.5.24-dev.9-alpha3.tar.gz.sha256.sig",
       "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.24-dev.9-alpha3/hifi-os-v2.5.24-dev.9-alpha3.tar.gz.sha256.sig",
       "size": 64
-    },
-    {
-      "name": "hifi-image-v2.5.24-dev.9-alpha3.raucb",
-      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.24-dev.9-alpha3/hifi-image-v2.5.24-dev.9-alpha3.raucb",
-      "size": 938457789
-    },
-    {
-      "name": "hifi-image-v2.5.24-dev.9-alpha3.raucb.sha256",
-      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.24-dev.9-alpha3/hifi-image-v2.5.24-dev.9-alpha3.raucb.sha256",
-      "size": 104
     }
   ]
 }
