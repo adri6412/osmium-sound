@@ -37,6 +37,16 @@
       "name": "hifi-os-v2.5.24-dev.9-alpha5.tar.gz.sha256.sig",
       "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.24-dev.9-alpha5/hifi-os-v2.5.24-dev.9-alpha5.tar.gz.sha256.sig",
       "size": 64
+    },
+    {
+      "name": "hifi-image-v2.5.24-dev.9-alpha5.raucb",
+      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.24-dev.9-alpha5/hifi-image-v2.5.24-dev.9-alpha5.raucb",
+      "size": 1007614653
+    },
+    {
+      "name": "hifi-image-v2.5.24-dev.9-alpha5.raucb.sha256",
+      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.24-dev.9-alpha5/hifi-image-v2.5.24-dev.9-alpha5.raucb.sha256",
+      "size": 104
     }
   ]
 }
