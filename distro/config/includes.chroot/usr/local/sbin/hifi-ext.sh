@@ -62,13 +62,14 @@ if [ -n "${HIFI_EXT_TEST_ROOT:-}" ]; then
     APT_GET=apt-get          # the tests put their stub first in PATH
 fi
 
-# 🚨 Only redirect into the log when nobody is watching. hifi_log_init sends
-# stdout and stderr to /var/log/hifi, which is right for the refresh service but
-# wrong for a command someone types: the first run on the appliance printed
-# absolutely nothing, so it looked hung, and interrupting it left the lock
-# behind — after which every later run refused, silently. Interactive runs talk
-# to the terminal; the service still gets its log (and the journal).
-if [ ! -t 1 ] && [ -r /usr/local/sbin/hifi-log.sh ]; then
+# 🚨 Only the refresh service logs to file. hifi_log_init sends stdout and
+# stderr to /var/log/hifi, which is right for something systemd runs and wrong
+# for anything a person types: the first run on the appliance printed absolutely
+# nothing, looked hung, and interrupting it left the lock behind — after which
+# every later run refused, silently. Keying it on "is stdout a terminal" was not
+# enough either: `hifi-ext.sh list` over ssh without a tty, or through a pipe,
+# went silent again. So the rule is the verb, not the terminal.
+if [ "${1:-}" = refresh ] && [ -r /usr/local/sbin/hifi-log.sh ]; then
     # shellcheck source=distro/config/includes.chroot/usr/local/sbin/hifi-log.sh
     # shellcheck disable=SC1091
     . /usr/local/sbin/hifi-log.sh
