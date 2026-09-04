@@ -182,6 +182,47 @@ jobs:
           sha256sum "$TAR" > "${TAR}.sha256"
           echo "tarball=$TAR" >> "$GITHUB_OUTPUT"
 
+      - name: The migration to A/B must never fall out of a release
+        # 🚨 A device can sit switched off for a year and then jump straight to
+        # the newest release: there is no replay of the versions in between.
+        # So EVERY release has to carry the conversion with it, exactly like
+        # apply.sh has to stay cumulative. If these files ever stop shipping,
+        # every appliance still on the old layout is stranded there for good --
+        # and nothing else would notice, because converted devices do not use
+        # them. Hence a hard check on the packaged tarball, not on the repo.
+        run: |
+          set -euo pipefail
+          TAR="${{ steps.packsys.outputs.tarball }}"
+          [ -f "$TAR" ] || { echo "::error::system tarball missing"; exit 1; }
+          MISSING=""
+          for f in \
+            ./usr/local/sbin/hifi-ab-precheck.sh \
+            ./usr/local/sbin/hifi-ab-convert.sh \
+            ./usr/local/sbin/hifi-ab-seed.sh \
+            ./usr/local/sbin/hifi-ab-firstboot.sh \
+            ./usr/local/sbin/hifi-ab-image.sh \
+            ./usr/local/sbin/hifi-ab-lib.sh \
+            ./usr/local/sbin/hifi-image-update.sh \
+            ./usr/local/share/hifi-ab/grub-selector.cfg.tmpl \
+            ./usr/local/share/hifi-ab/system.conf.tmpl \
+            ./usr/local/share/hifi-ab/keyring.pem \
+            ./usr/local/share/hifi-ab/initramfs/hooks/hifi-ab \
+            ./usr/local/share/hifi-ab/initramfs/scripts/local-premount/hifi-ab-convert \
+            ./etc/systemd/system/hifi-ab-finish.service \
+            ./etc/systemd/system/hifi-ab-image.service ; do
+            tar tzf "$TAR" | grep -qx -- "$f" || MISSING="$MISSING $f"
+          done
+          if [ -n "$MISSING" ]; then
+            echo "::error::the system bundle no longer carries the A/B migration:$MISSING"
+            exit 1
+          fi
+          # and the OS payload must still arm it
+          grep -q 'hifi-ab-convert.sh' distro/config/includes.chroot/usr/local/sbin/hifi-update-apply-runner.sh \
+            || { echo "::error::the apply runner no longer arms the A/B conversion"; exit 1; }
+          [ -s distro/os-update/apply.d/0061-ab-prepare.sh ] \
+            || { echo "::error::apply.d/0061-ab-prepare.sh is gone: legacy devices would never get rauc"; exit 1; }
+          echo "migration present in $TAR"
+
       - name: Test the OTA update sequencer + system settings
         # The two-phase sequencer is what keeps a multi-component update from
         # stopping half-way (a restarted hifi-api mid-stage, an interrupted
