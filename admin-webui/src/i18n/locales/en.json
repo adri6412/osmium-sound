@@ -676,13 +676,25 @@
     "delete": "Delete",
     "newFolder": "New folder",
     "newFolderName": "Name of the new folder",
-    "confirmDelete": "Delete {count} item(s)? This cannot be undone.",
+    "confirmDelete": "Delete {count} items? This cannot be undone.",
     "readOnly": "This folder cannot be changed: it is read-only.",
     "working": "Working…",
     "done": "Done.",
     "opFailed": "The operation did not finish.",
     "open": "Manage files",
-    "copiedReady": "{count} item(s) ready to copy.",
-    "cutReady": "{count} item(s) ready to move."
+    "copiedReady": "{count} items ready to copy.",
+    "cutReady": "{count} items ready to move.",
+    "places": "Places",
+    "viewGrid": "Icons",
+    "viewList": "Details",
+    "create": "Create",
+    "selectAll": "Select all",
+    "clearSel": "Clear selection",
+    "items": "{count} items",
+    "itemsOne": "1 item",
+    "selectedOne": "1 selected",
+    "confirmDeleteOne": "Delete “{name}”? This cannot be undone.",
+    "copiedReadyOne": "“{name}” ready to copy.",
+    "cutReadyOne": "“{name}” ready to move."
   }
 }

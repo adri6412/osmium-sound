@@ -683,6 +683,18 @@
     "opFailed": "L'operazione non è stata completata.",
     "open": "Gestisci i file",
     "copiedReady": "{count} elementi pronti da copiare.",
-    "cutReady": "{count} elementi pronti da spostare."
+    "cutReady": "{count} elementi pronti da spostare.",
+    "places": "Posizioni",
+    "viewGrid": "Icone",
+    "viewList": "Dettagli",
+    "create": "Crea",
+    "selectAll": "Seleziona tutto",
+    "clearSel": "Deseleziona",
+    "items": "{count} elementi",
+    "itemsOne": "1 elemento",
+    "selectedOne": "1 selezionato",
+    "confirmDeleteOne": "Elimino “{name}”? Non si può tornare indietro.",
+    "copiedReadyOne": "“{name}” pronto da copiare.",
+    "cutReadyOne": "“{name}” pronto da spostare."
   }
 }

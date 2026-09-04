@@ -235,3 +235,157 @@ ol.steps li { margin-bottom: 8px; }
 @keyframes spin { to { transform: rotate(360deg); } }
 .backlink { display: inline-flex; align-items: center; gap: 6px; margin-bottom: 4px; font-size: 14px; }
 h2.page { font-size: 20px; margin: 10px 0 4px; }
+
+/* ── File manager ──────────────────────────────────────────────────────
+   A graphical file explorer, in the same gold-on-near-black language as the
+   rest: a places rail on the left, a path bar across the top, and folders as
+   tiles you can see rather than as rows of text. Below 760px the rail turns
+   into a scrolling strip of chips, which is the only way it fits a phone
+   without taking the whole first screen. */
+.ic { flex: 0 0 auto; vertical-align: -0.15em; }
+
+.fm { display: grid; grid-template-columns: 178px 1fr; gap: 14px; align-items: start; }
+/* 🚨 A grid item defaults to min-width:auto, so the places rail — a flex row
+   on a phone — sizes to its content and drags the whole page sideways
+   instead of scrolling inside its own column. */
+.fm > * { min-width: 0; }
+@media (max-width: 760px) { .fm { grid-template-columns: 1fr; } }
+
+.fm-side { display: flex; flex-direction: column; gap: 2px; }
+@media (max-width: 760px) {
+  /* A horizontal strip: the places stay one tap away without pushing the
+     files themselves off the first screen. */
+  .fm-side { flex-direction: row; overflow-x: auto; padding-bottom: 4px; gap: 6px; }
+  /* 🚨 width:100% below is for the rail; kept here every chip would be as
+     wide as the strip, so one place filled the screen and the rest lived off
+     the right edge. */
+  .fm-side .fm-place { flex: 0 0 auto; width: auto; }
+}
+.fm-side .lbl {
+  font-size: 11px; letter-spacing: 1.4px; text-transform: uppercase;
+  color: var(--muted); padding: 2px 8px 6px;
+}
+@media (max-width: 760px) { .fm-side .lbl { display: none; } }
+.fm-place {
+  display: flex; align-items: center; gap: 9px;
+  padding: 8px 10px; border-radius: 9px; cursor: pointer;
+  color: var(--silver); font-size: 13px; line-height: 1.2;
+  border: 1px solid transparent; background: transparent;
+  text-align: left; width: 100%; font-weight: 500;
+}
+.fm-place:hover { background: var(--light); color: var(--text); }
+.fm-place.on { background: var(--gold-dim); border-color: rgba(212, 175, 55, 0.4); color: var(--gold); }
+.fm-place span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* Path bar — the breadcrumb, as a control rather than a sentence. */
+.fm-bar {
+  display: flex; align-items: center; gap: 8px; margin-bottom: 10px;
+}
+.fm-path {
+  flex: 1 1 auto; min-width: 0;
+  display: flex; align-items: center; gap: 2px; flex-wrap: wrap;
+  background: var(--panel); border: 1px solid var(--border);
+  border-radius: 10px; padding: 6px 8px; min-height: 38px;
+}
+.fm-crumb {
+  background: transparent; border: 0; color: var(--silver);
+  padding: 3px 7px; border-radius: 7px; font-size: 13px; cursor: pointer;
+  font-weight: 500; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.fm-crumb:hover { background: var(--light); color: var(--text); }
+.fm-crumb.here { color: var(--gold); cursor: default; }
+.fm-crumb.here:hover { background: transparent; }
+.fm-path .sep { color: var(--muted); font-size: 12px; }
+
+/* Square icon buttons: up, and the view switch. */
+.fm-ib {
+  flex: 0 0 auto; width: 38px; height: 38px; padding: 0;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: var(--panel); color: var(--silver);
+  border: 1px solid var(--border); border-radius: 10px; cursor: pointer;
+}
+.fm-ib:hover:not(:disabled) { background: var(--light); color: var(--text); }
+.fm-ib.on { background: var(--gold-dim); border-color: rgba(212, 175, 55, 0.45); color: var(--gold); }
+.fm-ib:disabled { opacity: 0.4; cursor: default; }
+.fm-views { display: flex; gap: 4px; flex: 0 0 auto; }
+
+/* Action bar. Buttons keep their label on a wide screen and drop to the icon
+   alone on a phone, where six labelled buttons would wrap into three rows. */
+.fm-tools { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
+.fm-tools button {
+  display: inline-flex; align-items: center; gap: 7px;
+  padding: 8px 12px; font-size: 13px; font-weight: 500;
+  background: var(--panel); color: var(--silver);
+  border: 1px solid var(--border); border-radius: 9px;
+}
+.fm-tools button:hover:not(:disabled) { background: var(--light); color: var(--text); filter: none; }
+.fm-tools button:disabled { opacity: 0.4; }
+.fm-tools button.danger { color: #f0b4b4; }
+.fm-tools button.primary { color: var(--gold); border-color: rgba(212, 175, 55, 0.4); }
+@media (max-width: 560px) { .fm-tools button .t { display: none; } }
+
+/* Tiles. */
+.fm-grid {
+  display: grid; gap: 8px;
+  /* 96px is what puts three tiles across a 360px phone; wider and it drops
+     to two, which reads as a list with pictures rather than as an explorer. */
+  grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
+}
+.fm-tile {
+  position: relative; display: flex; flex-direction: column; align-items: center;
+  gap: 7px; padding: 13px 6px 10px; border-radius: 11px; cursor: pointer;
+  border: 1px solid transparent; background: var(--panel);
+  color: var(--text); text-align: center;
+}
+.fm-tile:hover { background: var(--light); }
+.fm-tile.sel { background: var(--gold-dim); border-color: rgba(212, 175, 55, 0.45); }
+.fm-tile .gl { color: var(--gold); }
+.fm-tile .gl.file { color: var(--muted); }
+.fm-tile .nm {
+  font-size: 12.5px; line-height: 1.3; width: 100%;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+  overflow: hidden; overflow-wrap: anywhere;
+}
+
+/* Rows (the detail view). */
+.fm-list { display: flex; flex-direction: column; }
+.fm-row {
+  display: flex; align-items: center; gap: 10px;
+  padding: 9px 10px; border-radius: 9px; cursor: pointer;
+  border: 1px solid transparent; background: transparent; color: var(--text);
+  width: 100%; text-align: left; font-size: 13.5px;
+}
+.fm-row:hover { background: var(--light); }
+.fm-row.sel { background: var(--gold-dim); border-color: rgba(212, 175, 55, 0.45); }
+.fm-row .gl { color: var(--gold); }
+.fm-row .gl.file { color: var(--muted); }
+.fm-row .nm { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fm-row .meta { flex: 0 0 auto; color: var(--muted); font-size: 12px; }
+@media (max-width: 560px) { .fm-row .meta.date { display: none; } }
+
+/* The selection checkbox, in the corner of a tile and at the head of a row.
+   Always drawn (not hover-only): on a touch screen there is no hover, and a
+   control you cannot see is a control that does not exist. */
+.fm-pick {
+  flex: 0 0 auto; width: 18px; height: 18px; border-radius: 5px;
+  border: 1px solid var(--light); background: var(--bg);
+  display: inline-flex; align-items: center; justify-content: center;
+  color: transparent; cursor: pointer; padding: 0;
+}
+.fm-pick.on { background: var(--gold); border-color: var(--gold); color: #111; }
+.fm-tile .fm-pick { position: absolute; top: 7px; left: 7px; }
+
+.fm-empty {
+  display: flex; flex-direction: column; align-items: center; gap: 10px;
+  padding: 34px 10px; color: var(--muted); font-size: 13px; text-align: center;
+}
+.fm-empty .ic { color: var(--light); }
+
+/* Progress of a copy/move/delete. */
+.fm-prog { height: 4px; border-radius: 2px; background: var(--light); overflow: hidden; margin-top: 8px; }
+.fm-prog i { display: block; height: 100%; background: var(--gold); }
+/* The count line every file manager has along the bottom. */
+.fm-status {
+  display: flex; gap: 14px; margin-top: 12px; padding-top: 10px;
+  border-top: 1px solid var(--border); color: var(--muted); font-size: 12px;
+}
