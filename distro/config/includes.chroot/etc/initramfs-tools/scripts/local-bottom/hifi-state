@@ -62,6 +62,44 @@ if [ "$mounted" = 0 ]; then
     log_warning_msg "hifi-state: partizione hifi-data non disponibile — stato volatile (tmpfs)"
     mount -t tmpfs -o mode=0755 tmpfs "$D"
 fi
+# ── ripristino di fabbrica ────────────────────────────────────────────
+# La cancellazione della partizione dati avviene QUI, non da sistema acceso:
+# in /data ci sono l'upper di /etc e gli innesti di /var e /home, e un rm -rf
+# a caldo taglierebbe il ramo su cui il sistema è seduto, a metà strada.
+# hifi-factory-reset.sh lascia solo un marcatore e riavvia; a questo punto
+# l'overlay non è ancora montato e nessuno tiene aperto niente, quindi la
+# cancellazione è una cosa sola: o è avvenuta o non è avvenuta.
+#
+# Si salvano tre cose. lyrion/ perché altrimenti l'apparecchio resta senza
+# server musicale finché non raggiunge internet per riscaricare il pacchetto
+# (le sue preferenze e cache stanno in /var e se ne vanno comunque: Lyrion
+# riparte come nuovo lo stesso). rauc/ è contabilità che non c'è motivo di
+# buttare. Il machine-id perché da lui deriva il MAC di squeezelite, cioè
+# l'identità del player su LMS: un ripristino serve quasi sempre a risolvere
+# un problema, non a cambiare proprietario, e ricomparire come apparecchio
+# sconosciuto farebbe perdere al server tutte le impostazioni di quel player.
+if [ "$mounted" = 1 ] && [ -e "$D/.factory-reset" ]; then
+    log_begin_msg "Osmium Sound: factory reset, erasing the data partition"
+    saved_mid=$(cat "$D/etc/upper/machine-id" 2>/dev/null || true)
+    for entry in "$D"/* "$D"/.[!.]* "$D"/..?*; do
+        [ -e "$entry" ] || continue          # glob senza corrispondenze
+        case "${entry##*/}" in
+            lyrion|rauc) continue ;;
+        esac
+        rm -rf "$entry"
+    done
+    mkdir -p "$D/etc/upper/hifi-player"
+    if [ -n "$saved_mid" ]; then
+        printf '%s\n' "$saved_mid" > "$D/etc/upper/machine-id"
+        chmod 0444 "$D/etc/upper/machine-id"
+    fi
+    # Stesso marcatore che l'installer semina su un apparecchio nuovo: senza,
+    # si riparte da una /data vuota ma senza wizard di configurazione.
+    printf 'pending\n' > "$D/etc/upper/hifi-player/provisioning-pending"
+    sync
+    log_end_msg
+fi
+
 mkdir -p "$D/etc/upper" "$D/etc/work" "$D/var" "$D/home" "$D/rauc" "$D/lyrion"
 
 # /var e /home: al primo avvio di OGNI versione dell'immagine si copiano le
