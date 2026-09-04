@@ -265,13 +265,30 @@ install_ab() {
     # canonical path", so the install died at the very last step. The modules
     # copied to ESP/grub are never read (the Debian binary is monolithic and
     # signed); they only cost a few MB of a 512 MiB partition.
-    grub-install --target=x86_64-efi --efi-directory="$_esp" --boot-directory="$_esp" \
-        --bootloader-id=debian --recheck >>"$UNSQUASHFS_LOG" 2>&1 \
-        || fail_log "grub-install (UEFI) failed" "$UNSQUASHFS_LOG"
+    _grub_install() {
+        grub-install --target=x86_64-efi --efi-directory="$_esp" \
+            --boot-directory="$_esp" --bootloader-id=debian --recheck "$@" \
+            >>"$UNSQUASHFS_LOG" 2>&1
+    }
+    # Writing the firmware boot entry is the one step that depends on the
+    # machine rather than on the disk, and it is the one we can live without:
+    # virtual firmwares (VMware among them) refuse efivars writes often enough
+    # that failing here would mean refusing to install on a perfectly good
+    # machine. Drop to --no-nvram and let the removable path below carry the
+    # boot, which every firmware looks at.
+    _nvram=1
+    if ! _grub_install; then
+        log "WARNING: registering the firmware boot entry failed; retrying without it"
+        _nvram=0
+        _grub_install --no-nvram || fail_log "grub-install (UEFI) failed" "$UNSQUASHFS_LOG"
+    fi
     # Fallback removable path: some firmwares lose NVRAM entries
-    grub-install --target=x86_64-efi --efi-directory="$_esp" --boot-directory="$_esp" \
-        --bootloader-id=debian --recheck --removable >>"$UNSQUASHFS_LOG" 2>&1 \
+    _grub_install --removable --no-nvram \
         || log "WARNING: the removable-media fallback install failed (non-fatal)"
+    if [ "$_nvram" = 0 ] && [ ! -e "$_esp/EFI/BOOT/BOOTX64.EFI" ] \
+       && [ ! -e "$_esp/EFI/BOOT/bootx64.efi" ]; then
+        fail_log "the firmware boot entry could not be written and the removable fallback is missing" "$UNSQUASHFS_LOG"
+    fi
     [ -e "$_esp/EFI/debian/grubx64.efi" ] || [ -e "$_esp/EFI/debian/shimx64.efi" ] \
         || fail "grub-install wrote no boot files under EFI/debian"
 
