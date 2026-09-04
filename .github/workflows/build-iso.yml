@@ -251,12 +251,18 @@ jobs:
           [ -n "$ISO" ] || exit 0
           SZ=$(stat -c %s "$ISO")
           echo "ISO size: $((SZ / 1048576)) MiB"
-          # A GitHub release asset cannot exceed 2 GiB. Carrying the system
-          # image costs ~900 MiB, so there is room but not much: fail here with
-          # the number rather than at upload time with a generic API error.
-          if [ "$SZ" -gt 2040109465 ]; then
+          # A GitHub release asset cannot exceed 2 GiB (2147483648 bytes), and
+          # carrying the system image costs ~950 MiB of the total. The hard
+          # stop is the real limit, not a made-up margin: the first version of
+          # this check refused a 1978 MiB ISO that GitHub would have taken
+          # perfectly well. Past 1900 MiB it only warns — that is the point
+          # where the next growth spurt runs out of room and the ISO has to go
+          # to R2 instead.
+          if [ "$SZ" -gt 2147483648 ]; then
             echo "::error::ISO is $((SZ / 1048576)) MiB — over the 2 GiB limit for a release asset. Trim the image or publish it to R2 instead."
             exit 1
+          elif [ "$SZ" -gt 1992294400 ]; then
+            echo "::warning::ISO is $((SZ / 1048576)) MiB, close to the 2048 MiB ceiling for a release asset — plan the move to R2."
           fi
 
       - name: Locate + checksum + sign the ISO
