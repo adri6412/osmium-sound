@@ -1,12 +1,12 @@
 {
   "tag_name": "v2.5.24-dev.9-alpha3",
   "name": "v2.5.24-dev.9-alpha3",
-  "body": "## What's new in v2.5.24-dev.9-alpha3\n\n- ext: keep 'apt install' as the command people already know\n- ext: talk to the terminal, and do not let a killed run lock the command out\n",
+  "body": "## What's new in v2.5.24-dev.9-alpha3\n\n- iso: install the A/B layout straight from the medium, with no network at all\n- ext: keep 'apt install' as the command people already know\n- ext: talk to the terminal, and do not let a killed run lock the command out\n",
   "assets": [
     {
       "name": "hifi-qtui-v2.5.24-dev.9-alpha3.tar.gz",
       "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.24-dev.9-alpha3/hifi-qtui-v2.5.24-dev.9-alpha3.tar.gz",
-      "size": 4838594
+      "size": 4835905
     },
     {
       "name": "hifi-qtui-v2.5.24-dev.9-alpha3.tar.gz.sha256",
@@ -16,7 +16,7 @@
     {
       "name": "hifi-system-v2.5.24-dev.9-alpha3.tar.gz",
       "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.24-dev.9-alpha3/hifi-system-v2.5.24-dev.9-alpha3.tar.gz",
-      "size": 461081
+      "size": 467341
     },
     {
       "name": "hifi-system-v2.5.24-dev.9-alpha3.tar.gz.sha256",
@@ -26,7 +26,7 @@
     {
       "name": "hifi-os-v2.5.24-dev.9-alpha3.tar.gz",
       "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.24-dev.9-alpha3/hifi-os-v2.5.24-dev.9-alpha3.tar.gz",
-      "size": 1403686
+      "size": 1403460
     },
     {
       "name": "hifi-os-v2.5.24-dev.9-alpha3.tar.gz.sha256",
