@@ -78,7 +78,10 @@ MESSAGES = {
     'lms.serverSetRestartFailed': {'en': 'Server set ({target}); restart failed',
                                    'it': 'Server impostato ({target}); riavvio non riuscito'},
     'lms.localRestored': {'en': 'Local Lyrion server restored', 'it': 'Ripristinato il server Lyrion locale'},
-    'lms.serverSet': {'en': 'Lyrion server set to {target}', 'it': 'Server Lyrion impostato su {target}'},
+    'lms.volatileBoot': {'en': 'Warning: this device started without its data partition, so the choice will be lost at the next restart. Restart it and set it again.',
+                         'it': 'Attenzione: questo apparecchio è partito senza la sua partizione dati, quindi la scelta andrà persa al prossimo riavvio. Riavvialo e rifai la scelta.'},
+    'lms.serverSet': {'en': 'Lyrion server set to {target}; this device\'s own server has been switched off',
+                      'it': 'Server Lyrion impostato su {target}; il server di questo apparecchio è stato spento'},
 
     # ── Player name ──────────────────────────────────────────────────
     'player.invalidName': {'en': 'Invalid name: letters, numbers, dot, dash and underscore only, '
@@ -284,6 +287,8 @@ MESSAGES = {
                                'it': 'Aggiornamento verificato, riavvio in corso'},
     'update.image.rebooting': {'en': 'System image installed — restarting into the new system',
                                'it': 'Immagine di sistema installata, riavvio sul nuovo sistema'},
+    'update.image.media': {'en': 'Moving your music onto the data partition…',
+                           'it': 'Spostamento della musica sulla partizione dati…'},
     'update.image.seed': {'en': 'Copying your settings to the data partition…',
                           'it': 'Copia delle impostazioni sulla partizione dati…'},
     'update.image.install': {'en': 'Installing system image {version} into the standby slot…',
@@ -298,6 +303,8 @@ MESSAGES = {
     'update.image.badSource': {'en': 'Invalid system image source', 'it': "Sorgente dell'immagine di sistema non valida"},
     'update.image.notConverted': {'en': 'RAUC is not configured: the device has not been converted to the A/B layout yet',
                                   'it': "RAUC non configurato: l'apparecchio non è ancora convertito allo schema A/B"},
+    'update.image.mediaFailed': {'en': 'Moving the music folders to the data partition failed',
+                                 'it': 'Spostamento delle cartelle di musica sulla partizione dati fallito'},
     'update.image.seedFailed': {'en': 'Copying the settings to the data partition failed',
                                 'it': 'Copia delle impostazioni sulla partizione dati fallita'},
     'update.image.installFailed': {'en': 'Installing the system image failed (rauc rc={rc})',
@@ -305,8 +312,14 @@ MESSAGES = {
     'update.image.selectorFailed': {'en': 'Writing the A/B boot selector failed',
                                     'it': 'Scrittura del selettore di avvio A/B fallita'},
     'update.ab.noSpace': {
-        'en': 'Update failed: not enough space to switch to the new system layout — free at least {needed} MiB on this {disk} MiB disk (8 GB or more is recommended)',
-        'it': 'Aggiornamento non riuscito: spazio insufficiente per passare al nuovo schema di sistema — libera almeno {needed} MiB su questo disco da {disk} MiB (consigliati 8 GB o più)'},
+        'en': 'Update failed: not enough space to switch to the new system layout — free at least {needed} MiB on this {disk} MiB disk (8 GB or more is recommended), then restart: the device picks the switch up again on its own',
+        'it': 'Aggiornamento non riuscito: spazio insufficiente per passare al nuovo schema di sistema — libera almeno {needed} MiB su questo disco da {disk} MiB (consigliati 8 GB o più), poi riavvia: il passaggio riparte da solo'},
+    'update.ab.musicOnSystemDisk': {
+        'en': 'Update failed: the music kept in folders on the system disk ({music} MiB) does not fit in the {data} MiB the new system leaves for your data. Move it onto a USB or internal disk and restart: the device picks the switch up again on its own',
+        'it': 'Aggiornamento non riuscito: la musica tenuta in cartelle del disco di sistema ({music} MiB) non entra nei {data} MiB che il nuovo sistema lascia ai dati. Spostala su un disco USB o interno e riavvia: il passaggio riparte da solo'},
+    'update.ab.armed': {
+        'en': 'Ready to switch to the new system: it happens at the next restart',
+        'it': 'Tutto pronto per il passaggio al nuovo sistema: avverrà al prossimo riavvio'},
     'update.ab.notConvertible': {
         'en': 'Update failed: this device cannot switch to the new system layout: {reason}',
         'it': 'Aggiornamento non riuscito: questo apparecchio non può passare al nuovo schema di sistema: {reason}'},

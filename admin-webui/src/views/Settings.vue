@@ -418,18 +418,39 @@ async function setTailscale(v) {
 // follow another" read as jargon). The wire protocol keeps the original
 // 'local'/'follow' role names — squeezelite's -s argument is what actually
 // changes, see api_server.set_lms_role.
-const lms = reactive({ mode: 'local', host: '', servers: [] });
+// mode/host are what the form shows (the External button and the address
+// field write to them before anything is applied); savedMode/savedHost are
+// what the device actually runs, so "did this really change?" can be asked.
+const lms = reactive({ mode: 'local', host: '', servers: [], savedMode: 'local', savedHost: '' });
 async function loadLms() {
   const r = await api.sys('lms_role');
-  if (r.ok) { lms.mode = r.data.mode || 'local'; lms.host = r.data.host || ''; }
+  if (r.ok) {
+    lms.mode = r.data.mode || 'local';
+    lms.host = r.data.host || '';
+    lms.savedMode = lms.mode;
+    lms.savedHost = lms.host;
+  }
 }
 async function discoverLms() {
   say(t('settings.lyrion.searching'));
   const r = await api.sys('discover_lms'); if (r.ok) { lms.servers = r.data.servers || []; say(''); }
 }
+// Switching between this device's own server and one on the network only
+// half-applies on a running box, so the change ends in a reboot — asked for
+// up front, and skipped entirely when the choice is already the live one.
 async function applyLmsRole(mode, hostArg) {
-  const r = await api.sysPost('lms_role', { mode, host: hostArg || lms.host || null });
-  say(bodyMsg(r, t('settings.lyrion.roleUpdated')), !(r.ok && r.data.success !== false)); loadLms();
+  const target = mode === 'follow' ? (hostArg || lms.host || null) : null;
+  const unchanged = mode === 'local'
+    ? lms.savedMode !== 'follow'
+    : (lms.savedMode === 'follow' && target === lms.savedHost);
+  if (unchanged) { lms.mode = mode; return; }
+  if (!confirm(t('settings.lyrion.rebootWarning'))) return;
+  const r = await api.sysPost('lms_role', { mode, host: target });
+  const ok = r.ok && r.data.success !== false;
+  say(bodyMsg(r, t('settings.lyrion.roleUpdated')), !ok);
+  if (!ok) { loadLms(); return; }
+  await api.sysPost('reboot', {});
+  waitForReboot();
 }
 
 // Install/update of Lyrion itself. This used to sit on the Updates page next to
@@ -545,8 +566,12 @@ async function pickSkin(v) {
 
 // Where LMS links should land: Material's page once a skin choice exists
 // (with the Osmium theme pre-selected for new browsers), the bare root
-// (classic skin) on legacy/unset devices.
+// (classic skin) on legacy/unset devices. On a device that follows another
+// server the music lives THERE, so the link follows it — bare root, because
+// the skin choice only applies to this device's own server and /material/
+// need not exist on the other one (a server's root serves its default skin).
 const lmsUrl = computed(() => {
+  if (lms.savedMode === 'follow' && lms.savedHost) return `http://${lms.savedHost}:9000`;
   if (skin.choice === 'osmium') return `http://${host}:9000/material/?defaultTheme=dark/Osmium`;
   if (skin.choice === 'material') return `http://${host}:9000/material/`;
   return `http://${host}:9000`;

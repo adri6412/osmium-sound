@@ -55,3 +55,10 @@ DEPLOY-CHEATSHEET.html
 # the artwork's editing history, not something the build consumes — only the
 # exported assets under assets/ are.
 statusbarflat.zip
+
+# Buildroot/Yocto appliance port experiment: huge build trees, never committed.
+appliance-test/
+# Immagine disco del porting Buildroot, scaricata qui per le prove QEMU/VMware.
+disk.img
+disk.img.zst
+osmium-appliance.vmdk

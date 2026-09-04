@@ -8,16 +8,24 @@
 
 static Api *g_api = nullptr;
 
+// Retry interval for /lms_role before and after the first answer.
+static const int LMS_POLL_FAST = 1000;
+static const int LMS_POLL_SLOW = 15000;
+
 Api::Api(QObject *parent) : QObject(parent) {
     m_host = qEnvironmentVariable("HIFI_HOST", "127.0.0.1");
     m_lmsHost = m_host;
     g_api = this;
     // una connessione riusata per richiesta consecutiva (keep-alive di Qt)
     m_nam.setTransferTimeout(8000);
-    // 🚨 Il ruolo (Lyrion proprio, oppure quello di un altro apparecchio che si
-    // segue) si cambia anche dalla pagina di amministrazione web, senza passare
-    // di qui: si ricontrolla ogni mezzo minuto, oltre che a richiesta.
-    m_lmsPoll.setInterval(15000);
+    // 🚨 The role (own Lyrion, or another device's) is also changed from the
+    // web admin page without going through here, so it is re-read on a timer
+    // as well as on demand. Fast until the first answer, then slow: at boot
+    // this runs before hifi-api is up, and until the role is known everything
+    // Lyrion-side points at loopback — on a unit that follows another server
+    // that is the wrong one — which is how a startup ends up on the local
+    // server even though an external one was chosen.
+    m_lmsPoll.setInterval(LMS_POLL_FAST);
     connect(&m_lmsPoll, &QTimer::timeout, this, &Api::refreshLmsHost);
     m_lmsPoll.start();
     QTimer::singleShot(0, this, &Api::refreshLmsHost);
@@ -26,6 +34,10 @@ Api::Api(QObject *parent) : QObject(parent) {
 void Api::refreshLmsHost() {
     request("GET", apiBase() + "/lms_role", {}, [this](bool ok, const QVariant &d, int) {
         if (!ok) return;
+        if (!m_lmsResolved) {           // answered: back off to the watch interval
+            m_lmsResolved = true;
+            m_lmsPoll.setInterval(LMS_POLL_SLOW);
+        }
         const QVariantMap m = d.toMap();
         const QString host = m.value("host").toString();
         // "local" vuol dire il Lyrion di questo apparecchio: si torna a m_host

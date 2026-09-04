@@ -259,11 +259,6 @@ const Settings = ({ initialSection, onSectionConsumed } = {}) => {
   const [lyrionStatus, setLyrionStatus] = useState(null);
   const lyrionPollRef = useRef(null);
 
-  // Library rescan state
-  const [isRescanning, setIsRescanning] = useState(false);
-  const [rescanMessage, setRescanMessage] = useState('');
-  const rescanPollRef = useRef(null);
-
   // OS (signed) update state
   const [osUpdate, setOsUpdate] = useState(null);
   const [isCheckingOs, setIsCheckingOs] = useState(false);
@@ -406,7 +401,6 @@ const Settings = ({ initialSection, onSectionConsumed } = {}) => {
   const [newAlarmMin, setNewAlarmMin] = useState(0);
 
   // Refs for input fields with automatic keyboard
-  const lyrionUrlRef = useKeyboardInput(lyrionUrl, setLyrionUrl);
   const followHostRef = useKeyboardInput(followHostInput, setFollowHostInput);
   const playerNameRef = useKeyboardInput(playerNameInput, setPlayerNameInput);
   const shellUserRef = useKeyboardInput(shellUser, setShellUser);
@@ -1241,7 +1235,7 @@ const Settings = ({ initialSection, onSectionConsumed } = {}) => {
   useEffect(() => {
     // Also needed on custom-web-remote: webRemoteUrl/the pairing QR append
     // ?defaultTheme=dark/Osmium once that's the active skin.
-    if (activeSection !== 'custom-lyrion' && activeSection !== 'custom-web-remote') return;
+    if (activeSection !== 'custom-multiroom' && activeSection !== 'custom-web-remote') return;
     loadSkinChoice();
   }, [activeSection]);
 
@@ -1340,7 +1334,6 @@ const Settings = ({ initialSection, onSectionConsumed } = {}) => {
       if (systemPollRef.current) clearInterval(systemPollRef.current);
       if (lyrionPollRef.current) clearInterval(lyrionPollRef.current);
       if (osPollRef.current) clearInterval(osPollRef.current);
-      if (rescanPollRef.current) clearInterval(rescanPollRef.current);
       if (planPollRef.current) clearInterval(planPollRef.current);
     };
   }, []);
@@ -1819,51 +1812,6 @@ const Settings = ({ initialSection, onSectionConsumed } = {}) => {
     }
   };
 
-  // Keyboard input handlers that work with the virtual keyboard
-  const handleLyrionUrlChange = (e) => {
-    setLyrionUrl(e.target.value);
-    localStorage.setItem('lyrionUrl', e.target.value);
-  };
-
-  // Trigger an incremental library rescan on the Lyrion server, then poll
-  // serverstatus until the scan finishes so we can show progress / completion.
-  const handleRescanLibrary = async () => {
-    if (rescanPollRef.current) return; // already running
-    setIsRescanning(true);
-    setRescanMessage(t('settings.lyrion.rescanStarted'));
-    try {
-      lyrionApi.setBaseUrl(lyrionUrl);
-      await lyrionApi.rescanLibrary();
-    } catch (_) {
-      setIsRescanning(false);
-      setRescanMessage(t('settings.lyrion.rescanFailed'));
-      return;
-    }
-
-    const startedAt = Date.now();
-    let sawScanning = false;
-    rescanPollRef.current = setInterval(async () => {
-      try {
-        const p = await lyrionApi.getRescanProgress();
-        if (p.scanning) {
-          sawScanning = true;
-          setRescanMessage(
-            p.total > 0
-              ? `${t('settings.lyrion.rescanning')} ${p.done}/${p.total}`
-              : t('settings.lyrion.rescanning')
-          );
-        } else if (sawScanning || Date.now() - startedAt > 5000) {
-          // Either we watched the scan run to completion, or it never reported
-          // as scanning within 5s (nothing to do / instant incremental scan).
-          clearInterval(rescanPollRef.current);
-          rescanPollRef.current = null;
-          setIsRescanning(false);
-          setRescanMessage(t('settings.lyrion.rescanDone'));
-        }
-      } catch (_) {}
-    }, 1500);
-  };
-
   const loadSystemData = async () => {
     setIsLoading(true);
     try {
@@ -2094,11 +2042,6 @@ const Settings = ({ initialSection, onSectionConsumed } = {}) => {
       title: t('settings.sections.language'),
       icon: Globe,
       content: 'custom-language'
-    },
-    {
-      title: t('settings.sections.lyrion'),
-      icon: Network,
-      content: 'custom-lyrion'
     },
     {
       title: t('settings.sections.sources'),
@@ -2369,104 +2312,6 @@ const Settings = ({ initialSection, onSectionConsumed } = {}) => {
                   <div className="space-y-4">
                     <p className="text-sm text-hifi-silver">{t('settings.language.help')}</p>
                     <LanguageSelector variant="list" />
-                  </div>
-                )}
-
-                {/* Custom Lyrion Section */}
-                {section.content === 'custom-lyrion' && (
-                  <div className="space-y-4">
-                    <div className="space-y-3">
-                      <label className="text-white font-medium">{t('settings.lyrion.urlLabel')}</label>
-                      <p className="text-sm text-hifi-silver mb-2">{t('settings.lyrion.urlHelp')}</p>
-                      <div
-                        onClick={() => showKeyboard(lyrionUrlRef, lyrionUrl)}
-                        className="cursor-pointer"
-                      >
-                        <input
-                          ref={lyrionUrlRef}
-                          type="text"
-                          value={lyrionUrl}
-                          onChange={handleLyrionUrlChange}
-                          className="w-full bg-hifi-dark border border-hifi-accent rounded-lg px-4 py-3 text-white focus:outline-none focus:border-hifi-gold cursor-pointer"
-                          placeholder="http://localhost:9000"
-                        />
-                      </div>
-                    </div>
-
-                    {/* Web player skin (Osmium vs stock Material) */}
-                    {skinChoice !== undefined && (
-                      <div className="space-y-3 pt-2 border-t border-hifi-accent/40">
-                        <label className="text-white font-medium">{t('settings.lyrion.skinLabel')}</label>
-                        <p className="text-sm text-hifi-silver mb-2">{t('settings.lyrion.skinHint')}</p>
-                        <div className="flex gap-2">
-                          <motion.button
-                            onClick={() => pickSkin('osmium')}
-                            disabled={skinBusy}
-                            className={`flex-1 py-3 rounded-lg font-medium transition-colors ${
-                              skinChoice === 'osmium'
-                                ? 'bg-hifi-gold text-black'
-                                : 'bg-hifi-light text-white hover:bg-hifi-accent'
-                            }`}
-                            whileTap={{ scale: skinBusy ? 1 : 0.95 }}
-                          >
-                            {t('settings.lyrion.skinOsmium')}
-                          </motion.button>
-                          <motion.button
-                            onClick={() => pickSkin('material')}
-                            disabled={skinBusy}
-                            className={`flex-1 py-3 rounded-lg font-medium transition-colors ${
-                              skinChoice === 'material'
-                                ? 'bg-hifi-gold text-black'
-                                : 'bg-hifi-light text-white hover:bg-hifi-accent'
-                            }`}
-                            whileTap={{ scale: skinBusy ? 1 : 0.95 }}
-                          >
-                            {t('settings.lyrion.skinMaterial')}
-                          </motion.button>
-                        </div>
-                        {skinChoice === 'unset' && (
-                          <p className="text-sm text-hifi-silver/70">{t('settings.lyrion.skinUnset')}</p>
-                        )}
-                        {skinBusy && (
-                          <div className="flex items-center space-x-2 text-sm text-hifi-silver">
-                            <Loader2 size={16} className="animate-spin" />
-                            <span>{skinMessage}</span>
-                          </div>
-                        )}
-                        {!skinBusy && skinMessage && (
-                          <div className="rounded-lg p-3 text-center text-sm bg-red-900/20 text-red-300 border border-red-500/30">
-                            {skinMessage}
-                          </div>
-                        )}
-                      </div>
-                    )}
-
-                    {/* Library rescan */}
-                    <div className="space-y-3 pt-2 border-t border-hifi-accent/40">
-                      <label className="text-white font-medium">{t('settings.lyrion.rescanLabel')}</label>
-                      <p className="text-sm text-hifi-silver mb-2">{t('settings.lyrion.rescanHelp')}</p>
-                      <motion.button
-                        onClick={handleRescanLibrary}
-                        disabled={isRescanning}
-                        className="w-full bg-hifi-accent hover:bg-hifi-light disabled:bg-hifi-dark text-white py-3 rounded-lg font-medium flex items-center justify-center space-x-2 transition-colors"
-                        whileTap={{ scale: isRescanning ? 1 : 0.95 }}
-                      >
-                        {isRescanning
-                          ? <Loader2 size={18} className="animate-spin" />
-                          : <RotateCw size={18} />}
-                        <span>{isRescanning ? t('settings.lyrion.rescanning') : t('settings.lyrion.rescan')}</span>
-                      </motion.button>
-
-                      {rescanMessage && (
-                        <div className={`rounded-lg p-3 text-center text-sm ${
-                          isErrorMsg(rescanMessage)
-                            ? 'bg-red-900/20 text-red-300 border border-red-500/30'
-                            : 'bg-hifi-dark text-hifi-silver'
-                        }`}>
-                          {rescanMessage}
-                        </div>
-                      )}
-                    </div>
                   </div>
                 )}
 
@@ -3207,6 +3052,55 @@ const Settings = ({ initialSection, onSectionConsumed } = {}) => {
                         </div>
                       )}
                     </div>
+
+                    {/* Web player skin (Osmium vs stock Material) — the look of
+                        the server's own web interface, not of this screen. */}
+                    {skinChoice !== undefined && (
+                      <div className="space-y-3 bg-hifi-dark rounded-lg p-4 border border-hifi-accent/40">
+                        <label className="text-white font-medium">{t('settings.lyrion.skinLabel')}</label>
+                        <p className="text-xs text-hifi-silver">{t('settings.lyrion.skinHint')}</p>
+                        <div className="flex gap-2">
+                          <motion.button
+                            onClick={() => pickSkin('osmium')}
+                            disabled={skinBusy}
+                            className={`flex-1 py-3 rounded-lg font-medium transition-colors ${
+                              skinChoice === 'osmium'
+                                ? 'bg-hifi-gold text-black'
+                                : 'bg-hifi-surface text-white hover:bg-hifi-light/40'
+                            }`}
+                            whileTap={{ scale: skinBusy ? 1 : 0.95 }}
+                          >
+                            {t('settings.lyrion.skinOsmium')}
+                          </motion.button>
+                          <motion.button
+                            onClick={() => pickSkin('material')}
+                            disabled={skinBusy}
+                            className={`flex-1 py-3 rounded-lg font-medium transition-colors ${
+                              skinChoice === 'material'
+                                ? 'bg-hifi-gold text-black'
+                                : 'bg-hifi-surface text-white hover:bg-hifi-light/40'
+                            }`}
+                            whileTap={{ scale: skinBusy ? 1 : 0.95 }}
+                          >
+                            {t('settings.lyrion.skinMaterial')}
+                          </motion.button>
+                        </div>
+                        {skinChoice === 'unset' && (
+                          <p className="text-xs text-hifi-silver/70">{t('settings.lyrion.skinUnset')}</p>
+                        )}
+                        {skinBusy && (
+                          <div className="flex items-center space-x-2 text-sm text-hifi-silver">
+                            <Loader2 size={16} className="animate-spin" />
+                            <span>{skinMessage}</span>
+                          </div>
+                        )}
+                        {!skinBusy && skinMessage && (
+                          <div className="rounded-lg p-3 text-center text-sm bg-red-900/20 text-red-300 border border-red-500/30">
+                            {skinMessage}
+                          </div>
+                        )}
+                      </div>
+                    )}
 
                     {!playerMac && (
                       <div className="rounded-lg p-3 text-center text-sm bg-hifi-dark text-hifi-silver">

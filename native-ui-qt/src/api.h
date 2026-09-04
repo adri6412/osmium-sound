@@ -67,6 +67,7 @@ private:
     QString m_host;
     QString m_lmsHost;              // loopback, o l'apparecchio che si segue
     QTimer m_lmsPoll;               // il ruolo si cambia anche dal web: si ricontrolla
+    bool m_lmsResolved = false;     // true once /lms_role has answered at least once
     QNetworkAccessManager m_nam;
     QJSEngine *m_engine = nullptr;
     QString m_lang = "en";

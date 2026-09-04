@@ -205,6 +205,7 @@ jobs:
             ./usr/local/sbin/hifi-ab-precheck.sh \
             ./usr/local/sbin/hifi-ab-convert.sh \
             ./usr/local/sbin/hifi-ab-seed.sh \
+            ./usr/local/sbin/hifi-ab-media.py \
             ./usr/local/sbin/hifi-ab-firstboot.sh \
             ./usr/local/sbin/hifi-ab-image.sh \
             ./usr/local/sbin/hifi-ab-lib.sh \
@@ -251,6 +252,12 @@ jobs:
           bash tests/test-factory-reset.sh
           echo "== lyrion bootstrap (shell) =="
           bash tests/test-lyrion-ensure.sh
+          echo "== streaming read-ahead (shell) =="
+          bash tests/test-stream-tune.sh
+          echo "== music off the legacy root (shell) =="
+          bash tests/test-ab-media.sh
+          echo "== second chance at the A/B switch (shell) =="
+          bash tests/test-ab-image.sh
           echo "== update plan (python) =="
           python3 -m pip install --quiet flask flask-cors
           python3 tests/test_update_plan.py
@@ -258,6 +265,8 @@ jobs:
           python3 tests/test_timezone.py
           echo "== static IPv4 (python) =="
           python3 tests/test_static_ipv4.py
+          echo "== lyrion server role (python) =="
+          python3 tests/test_lms_role.py
 
       - name: Stage LMS skin assets into the OS payload
         # apply.d/0048-lms-skin-assets.sh installs these; they are deliberately
@@ -321,6 +330,7 @@ jobs:
             distro/config/includes.chroot/usr/local/sbin/hifi-ab-firstboot.sh \
             distro/config/includes.chroot/usr/local/sbin/hifi-ab-image.sh \
             distro/config/includes.chroot/usr/local/sbin/hifi-image-update.sh \
+            distro/config/includes.chroot/usr/local/sbin/hifi-stream-tune.sh \
             distro/config/includes.chroot/usr/local/sbin/hifi-ext.sh \
             distro/config/includes.chroot/usr/local/bin/apt \
             distro/config/includes.chroot/usr/local/sbin/hifi-factory-reset.sh \
@@ -328,7 +338,8 @@ jobs:
             tests/test-update-stage-runner.sh tests/test-update-apply-runner.sh \
             distro/config/includes.chroot/usr/local/sbin/hifi-lyrion-ensure.sh \
             tests/test-ext-guardian.sh tests/test-apt-shim.sh tests/test-factory-reset.sh \
-            tests/test-lyrion-ensure.sh
+            tests/test-lyrion-ensure.sh tests/test-stream-tune.sh tests/test-ab-media.sh \
+            tests/test-ab-image.sh distro/config/includes.chroot/usr/local/sbin/hifi-ab-image.sh
           echo "== idempotency (run apply.sh twice) =="
           export HIFI_OS_VERSION=ci-test
           export HIFI_PAYLOAD_DIR="$PWD/distro/os-update"
