@@ -21,7 +21,8 @@
 #                    build-image.sh, which turns it into the read-only slot
 #                    image + signed RAUC bundle (schema A/B). Extra options
 #                    for that step go through the environment, see
-#                    build-image.sh (RAUC_CERT, RAUC_KEY, IMAGE_OUT, ...).
+#                    build-image.sh (RAUC_CERT, RAUC_KEY, IMAGE_OUT, ...),
+#                    tranne --no-bundle che si passa qui e viene inoltrato.
 #
 # Typical loop while iterating on boot menus / splash / ISO layout:
 #   sudo ./build-distro.sh --app-dir … --stage all      # once
@@ -66,6 +67,10 @@ while [ $# -gt 0 ]; do
         --lyrion-url) LYRION_DEB_URL="$2"; shift 2 ;;
         --suite) DEBIAN_SUITE="$2"; shift 2 ;;
         --stage) STAGE="$2"; shift 2 ;;
+        # passed straight through to build-image.sh: stop at the squashfs, no
+        # bundle and no signing keys (what the ISO needs — it copies those
+        # blocks into slot A itself)
+        --no-bundle) IMAGE_ARGS="${IMAGE_ARGS:-} --no-bundle"; shift ;;
         --clean-cache) CLEAN_CACHE=1; shift ;;
         -h|--help)
             grep '^#' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
@@ -527,8 +532,10 @@ case "$STAGE" in
         lb bootstrap
         lb chroot
         log "Handing the chroot to build-image.sh…"
+        # shellcheck disable=SC2097,SC2098  # the prefix is the child's env, the fallback is the outer value
+        # shellcheck disable=SC2086          # IMAGE_ARGS is a deliberate word list
         IMAGE_VERSION="${IMAGE_VERSION:-$APP_VERSION}" \
-            "$SCRIPT_DIR/build-image.sh" --chroot "$SCRIPT_DIR/chroot" --version "${IMAGE_VERSION:-$APP_VERSION}"
+            "$SCRIPT_DIR/build-image.sh" --chroot "$SCRIPT_DIR/chroot" --version "${IMAGE_VERSION:-$APP_VERSION}" ${IMAGE_ARGS:-}
         log "DONE ✓  RAUC image built (see build-image.sh output above)"
         exit 0
         ;;

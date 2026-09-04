@@ -17,6 +17,9 @@
 #                     contenuto PEM in RAUC_SIGNING_CERT / RAUC_SIGNING_KEY)
 #   --keyring F       CA con cui verificare       (default distro/rauc-keys/keyring.pem)
 #   --keep-rootfs     lascia anche rootfs.squashfs accanto al bundle
+#   --no-bundle       si ferma al rootfs.squashfs: niente bundle, niente firma
+#                     (è ciò che serve alla ISO, che l'immagine se la copia a
+#                      blocchi nello slot A e non ha bisogno di RAUC)
 #
 # Cosa fa (in ordine): via i pacchetti solo-live e apt automatico; rauc/zstd
 # presenti; Lyrion come symlink verso /data/lyrion/current; utenti a UID fisso
@@ -36,6 +39,7 @@ CERT="${RAUC_CERT:-}"
 KEY="${RAUC_KEY:-}"
 KEYRING="${RAUC_KEYRING:-$SCRIPT_DIR/rauc-keys/keyring.pem}"
 KEEP_EXT4=0
+NO_BUNDLE=0
 export SOURCE_DATE_EPOCH="${SOURCE_DATE_EPOCH:-$(git -C "$REPO_ROOT" log -1 --format=%ct 2>/dev/null || date +%s)}"
 
 log() { printf '\033[1;36m[hifi-image]\033[0m %s\n' "$*"; }
@@ -50,6 +54,7 @@ while [ $# -gt 0 ]; do
         --key) KEY="$2"; shift 2 ;;
         --keyring) KEYRING="$2"; shift 2 ;;
         --keep-rootfs|--keep-ext4) KEEP_EXT4=1; shift ;;
+        --no-bundle) NO_BUNDLE=1; KEEP_EXT4=1; shift ;;
         -h|--help) grep '^#' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
         *) die "argomento sconosciuto: $1" ;;
     esac
@@ -79,7 +84,9 @@ cleanup() {
 trap cleanup EXIT
 if [ -z "$CERT" ] && [ -n "${RAUC_SIGNING_CERT:-}" ]; then printf '%s' "$RAUC_SIGNING_CERT" > "$WORK/cert.pem"; CERT="$WORK/cert.pem"; fi
 if [ -z "$KEY" ] && [ -n "${RAUC_SIGNING_KEY:-}" ]; then printf '%s' "$RAUC_SIGNING_KEY" > "$WORK/key.pem"; KEY="$WORK/key.pem"; chmod 600 "$KEY"; fi
-if [ -z "$CERT" ] || [ -z "$KEY" ]; then
+if [ "$NO_BUNDLE" = 1 ]; then
+    : # nessun bundle da firmare: le chiavi non servono affatto
+elif [ -z "$CERT" ] || [ -z "$KEY" ]; then
     log "ATTENZIONE: nessuna chiave di firma — bundle firmato con una chiave usa-e-getta (gli apparecchi lo RIFIUTERANNO)"
     openssl req -x509 -newkey rsa:2048 -nodes -sha256 -days 2 -subj "/O=throwaway/CN=throwaway" \
         -keyout "$WORK/key.pem" -out "$WORK/cert.pem" >/dev/null 2>&1
@@ -422,7 +429,20 @@ if [ "$sq_mib" -gt "$budget" ]; then
     die "l'immagine supera il tetto: ${sq_mib} > ${budget} MiB"
 fi
 
-# ── 10. bundle RAUC ─────────────────────────────────────────────────────
+# ── 10. bundle RAUC (o solo il rootfs, per la ISO) ───────────────────────
+if [ "$NO_BUNDLE" = 1 ]; then
+    # La ISO non ha bisogno né del bundle né della firma: l'installer copia il
+    # rootfs.squashfs a blocchi dentro lo slot A. Così il workflow della ISO
+    # non deve maneggiare le chiavi RAUC.
+    SQ_OUT="$OUT/hifi-image-${VERSION}.rootfs.squashfs"
+    mv "$SQ" "$SQ_OUT"
+    ( cd "$OUT" && sha256sum "$(basename "$SQ_OUT")" > "$(basename "$SQ_OUT").sha256" )
+    cp "$CH/usr/lib/osmium/BUILD_INFO" "$OUT/hifi-image-${VERSION}.build-info.txt"
+    log "DONE ✓  $SQ_OUT (senza bundle)"
+    ls -lh "$OUT"/hifi-image-"${VERSION}".*
+    exit 0
+fi
+
 log "rauc bundle (verity, adaptive block-hash-index)"
 B="$WORK/bundle"; mkdir -p "$B"
 sed -e "s|@VERSION@|$VERSION|g" "$SCRIPT_DIR/rauc/manifest.raucm.tmpl" > "$B/manifest.raucm"

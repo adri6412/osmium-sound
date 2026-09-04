@@ -59,9 +59,78 @@ jobs:
           retention-days: 1
           if-no-files-found: error
 
+  # The system image that the installer writes into slot A. Built in its own
+  # chroot (trixie, privileged) exactly like the OTA one: it CANNOT be carved
+  # out of the ISO's live filesystem, which keeps live-boot and Electron and is
+  # a different system. --no-bundle stops at the squashfs, so this job needs no
+  # signing keys — the installer copies those blocks straight into the slot.
+  image:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    defaults:
+      run:
+        shell: bash
+    container:
+      image: debian:trixie
+      options: --privileged
+      volumes:
+        - /mnt:/mnt
+    steps:
+      - name: Install base tooling
+        run: |
+          set -eux
+          export DEBIAN_FRONTEND=noninteractive
+          apt-get update -qq
+          apt-get install -y --no-install-recommends \
+            ca-certificates curl git xz-utils sudo python3 build-essential \
+            live-build imagemagick xorriso debootstrap debian-archive-keyring rsync fakeroot \
+            cpio gzip squashfs-tools dosfstools mtools isolinux syslinux-common \
+            rauc e2fsprogs zstd grub-common openssl initramfs-tools-core
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      - run: npm ci
+      - name: Build renderer + unpacked Electron app
+        run: |
+          npm run build
+          npx electron-builder --linux dir
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - uses: actions/download-artifact@v8
+        with:
+          name: qt-payload
+          path: qtui
+      - run: chmod 755 qtui/hifi-qt
+      - name: Build web-admin (Vue)
+        run: (cd admin-webui && npm ci && npm run build)
+      - name: Build the system image (no bundle, no signing)
+        env:
+          INPUT_TAG: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          mkdir -p /mnt/image-out
+          export IMAGE_OUT=/mnt/image-out IMAGE_WORK=/mnt IMAGE_VERSION="$INPUT_TAG"
+          chmod +x distro/build-distro.sh distro/build-image.sh
+          cd distro
+          ./build-distro.sh --stage image --suite trixie --no-bundle \
+            --app-dir "$GITHUB_WORKSPACE/dist/linux-unpacked" --qt-dir "$GITHUB_WORKSPACE/qtui" \
+            --app-version "${INPUT_TAG#v}"
+          ls -lh /mnt/image-out
+      - uses: actions/upload-artifact@v4
+        with:
+          name: iso-system-image
+          path: /mnt/image-out/hifi-image-*.rootfs.squashfs*
+          retention-days: 3
+          if-no-files-found: error
+
   build-iso:
     runs-on: ubuntu-latest
-    needs: qt-payload
+    needs: [qt-payload, image]
     timeout-minutes: 120
     # The debian:bookworm container defaults `run:` steps to sh (dash), which
     # lacks `set -o pipefail`. Force bash for every step.
@@ -132,6 +201,22 @@ jobs:
             exit 1
           fi
 
+      - name: Put the system image on the ISO
+        uses: actions/download-artifact@v8
+        with:
+          name: iso-system-image
+          path: /tmp/sysimage
+      - name: Stage it where live-build picks it up
+        run: |
+          set -euo pipefail
+          mkdir -p distro/config/includes.binary/osmium
+          SQ=$(ls -1 /tmp/sysimage/hifi-image-*.rootfs.squashfs | head -n 1)
+          [ -s "$SQ" ] || { echo "::error::the system image is missing"; exit 1; }
+          cp "$SQ" distro/config/includes.binary/osmium/rootfs.squashfs
+          ( cd distro/config/includes.binary/osmium \
+            && sha256sum rootfs.squashfs > rootfs.squashfs.sha256 )
+          ls -lh distro/config/includes.binary/osmium/
+
       - name: Build installer ISO (live-build, as root)
         run: |
           set -euo pipefail
@@ -150,6 +235,21 @@ jobs:
           INPUT_TAG: ${{ inputs.tag }}
           INPUT_SUITE: ${{ inputs.suite }}
           INPUT_LYRION_URL: ${{ inputs.lyrion_url }}
+
+      - name: Refuse an ISO too large to publish
+        run: |
+          set -euo pipefail
+          ISO=$(ls -1 distro/*.iso *.iso 2>/dev/null | head -n 1)
+          [ -n "$ISO" ] || exit 0
+          SZ=$(stat -c %s "$ISO")
+          echo "ISO size: $((SZ / 1048576)) MiB"
+          # A GitHub release asset cannot exceed 2 GiB. Carrying the system
+          # image costs ~900 MiB, so there is room but not much: fail here with
+          # the number rather than at upload time with a generic API error.
+          if [ "$SZ" -gt 2040109465 ]; then
+            echo "::error::ISO is $((SZ / 1048576)) MiB — over the 2 GiB limit for a release asset. Trim the image or publish it to R2 instead."
+            exit 1
+          fi
 
       - name: Locate + checksum + sign the ISO
         id: iso
