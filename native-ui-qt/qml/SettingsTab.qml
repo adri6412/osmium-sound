@@ -455,7 +455,22 @@ Item {
     function pref(which) { return which === "transition" ? Player.prefTransitionType : which === "duration" ? Player.prefTransitionDur : Player.prefReplayGain }
     readonly property bool havePlayer: Player.connected
 
+    // 🚨 Rebuilding the rows destroys the very field the on-screen keyboard is
+    // typing into: SettingsRows' Repeater gets a brand new array, so every
+    // delegate is recreated while the keyboard still points at the old one.
+    // From that moment the keys only reached its own preview and confirming
+    // left the box empty — and one character was enough to trigger it, since
+    // fieldSet() restarts dimRefresh (150 ms). In Electron the input is the
+    // same DOM node for the whole edit; the equivalent here is to hold the
+    // rebuilds back until the keyboard closes.
+    property bool rebuildPending: false
+    Connections {
+        target: Ui.vk
+        function onActiveChanged() { if (Ui.vk && !Ui.vk.active && root.rebuildPending) root.rebuild() }
+    }
     function rebuild() {
+        if (Ui.vk && Ui.vk.active) { rebuildPending = true; return }
+        rebuildPending = false
         _stack = []; _cur = []
         if (active >= 0) {
             switch (active) {

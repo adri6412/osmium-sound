@@ -37,6 +37,10 @@ Item {
     }
     function close(confirmed) {
         if (!active || closing) return
+        // What is typed reaches the field on close too, not only key by key
+        // (flushSync() in KeyboardContext.jsx): if a keystroke did not make it
+        // through, confirming still commits the final text.
+        flush()
         closing = true; closedOk = confirmed
         slide.to = 0; fade = 0
     }
@@ -46,11 +50,12 @@ Item {
         onTriggered: if (!slide.running && slide.value === 0) {
             root.active = false; root.closing = false
             var f = root.cb, t = root.text, ok = root.closedOk
-            root.cb = null
+            root.cb = null; root.field = null
             if (f) f(ok, t)
         }
     }
-    function notify() { if (field) { field.text = text; field.textEdited(text) } if (cb && !field) cb(false, text) }
+    function flush() { if (field) { field.text = text; field.textEdited(text) } }
+    function notify() { flush(); if (cb && !field) cb(false, text) }
     function put(s) { text += s; notify() }
     function backspace() { text = text.slice(0, -1); notify() }
     property bool caretOn: true
