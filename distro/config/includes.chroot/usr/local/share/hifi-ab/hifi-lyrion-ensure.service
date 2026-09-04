@@ -2,6 +2,13 @@
 Description=Osmium Sound — installa Lyrion Music Server su /data se manca (slot immagine)
 ConditionPathExists=/usr/lib/osmium/IMAGE_VERSION
 ConditionPathExists=!/data/lyrion/current/usr/sbin/squeezeboxserver
+# 🚨 Il primo avvio NON scarica Lyrion da solo: lo fa il wizard, che prima
+# chiede se il server lo fa questo apparecchio o se ne segue uno in rete.
+# Finché la configurazione è da fare questa unità sta ferma; lo script
+# ricontrolla la stessa cosa, e in più salta gli apparecchi in modalità
+# "segui". Una sessione live non deve scaricare niente in memoria.
+ConditionKernelCommandLine=!boot=live
+ConditionPathExists=!/etc/hifi-player/provisioning-pending
 After=network-online.target hifi-rauc-config.service
 Wants=network-online.target
 
