@@ -5727,10 +5727,16 @@ def _ui_update_check(check_fn):
     answer with the image check. It is the same version in all three rows
     because it is the same image, and the changelog rides along on the first.
 
+    The same holds for a device that has been converted but is still booting
+    its old root while it waits for the first image (system.conf present,
+    IMAGE_VERSION not yet): its legacy channels are blocked too, so without
+    this it would show nothing at all in the very window where the image is
+    what it needs.
+
     The plan builder keeps calling check_app/system/os_update directly, so it
     still sees "blocked" and does not try to stage a .raucb as a tarball.
     """
-    if _image_mode():
+    if _image_mode() or _ab_ready():
         info = dict(check_image_update())
         info['kind'] = 'image'
         return info
