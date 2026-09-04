@@ -49,7 +49,7 @@ if [ -n "$disk" ]; then
     [ "$n" = 3 ] || add "non-standard layout: $n partitions (3 expected)"
     rootdev=$(ab_root_dev 2>/dev/null) || rootdev=
     [ "$(ab_part_num "$rootdev" 2>/dev/null)" = 3 ] || add "the root is not partition 3"
-    esp=$(ab_part_by_name "EFI System" 2>/dev/null) || esp=
+    esp=$(ab_esp_dev 2>/dev/null) || esp=
     [ "$(ab_part_num "$esp" 2>/dev/null)" = 2 ] || add "no EFI System partition as partition 2"
     disk_mib=$(( $(blockdev --getsize64 "$disk" 2>/dev/null || echo 0) / 1048576 ))
     [ "$(blkid -o value -s TYPE "$rootdev" 2>/dev/null)" = ext4 ] || add "the root filesystem is not ext4"

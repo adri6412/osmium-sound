@@ -147,10 +147,24 @@ min_mib=$(( minblk * blksz / 1048576 + 1 ))
 # il resto — che non può scendere sotto datamin_mib. Il valore passato dalla
 # pre-verifica resta solo come ripiego: fra quel calcolo e questo avvio la
 # root può essere cambiata (pulizia profonda compresa).
-_dsect=$(cat "/sys/class/block/$disk/size" 2>/dev/null || echo 0)
-_pstart=$(cat "/sys/class/block/$name/start" 2>/dev/null || echo 0)
+# 🚨 Two different units meet here. /sys/class/block/*/{size,start} are ALWAYS
+# in 512-byte sectors, whatever the disk is; sfdisk speaks the disk's LOGICAL
+# sector size. They coincide on every 512e/512n drive — which is everything we
+# have tested — and differ by 8x on a 4Kn one, where writing MiB*2048 as a
+# size would ask for eight times the space and sfdisk would refuse (or, worse,
+# lay the partitions out wrong). So: read the logical size, convert the sysfs
+# numbers into it, and express every partition in logical sectors.
+_lss=$("$BLOCKDEV" --getss "$diskdev" 2>/dev/null || echo 512)
+case "$_lss" in ''|*[!0-9]*|0) _lss=512 ;; esac
+per_mib=$(( 1048576 / _lss ))
+[ "$per_mib" -ge 1 ] || bail "logical sector size ${_lss} is larger than a MiB: unsupported"
+_dsect=$(cat "/sys/class/block/$disk/size" 2>/dev/null || echo 0)   # 512-byte units
+_pstart=$(cat "/sys/class/block/$name/start" 2>/dev/null || echo 0) # 512-byte units
+_dsect=$(( _dsect * 512 / _lss ))     # -> logical sectors, like sfdisk
+_pstart=$(( _pstart * 512 / _lss ))
 avail_mib=0
-[ "$_dsect" -gt "$_pstart" ] && avail_mib=$(( (_dsect - _pstart) / 2048 - 1 ))
+[ "$_dsect" -gt "$_pstart" ] && avail_mib=$(( (_dsect - _pstart) / per_mib - 1 ))
+[ "$_lss" = 512 ] || echo "I: logical sector size ${_lss} bytes" >> "$LOG"
 if [ "$avail_mib" -gt 0 ]; then
     a_max=$(( avail_mib - slotb_mib - datamin_mib ))
     want=$(( min_mib + 384 ))
@@ -180,15 +194,15 @@ progress 60
 say "writing the new partition table (3/4)"
 dump=/run/hifi-gpt.dump
 "$SFDISK" -d "$diskdev" > "$dump" 2>>"$LOG" || bail "sfdisk -d failed"
-sect=$(( slot_mib * 2048 ))
-sectb=$(( slotb_mib * 2048 ))
+sect=$(( slot_mib * per_mib ))
+sectb=$(( slotb_mib * per_mib ))
 p3line=$(grep -E "^${rootdev}[[:space:]]*:" "$dump") || bail "partition 3 not found in the GPT dump"
 p3start=$(printf '%s\n' "$p3line" | sed -n 's/.*start= *\([0-9]*\).*/\1/p')
 p3size=$(printf '%s\n' "$p3line" | sed -n 's/.*size= *\([0-9]*\).*/\1/p')
 if [ -z "$p3start" ] || [ -z "$p3size" ]; then bail "unreadable GPT dump"; fi
 # la partizione dati prende dalla fine dello slot B alla fine del disco
-_tail=$(( _dsect - p3start - sect - sectb - 2048 ))
-[ "$_tail" -ge $(( datamin_mib * 2048 )) ] \
+_tail=$(( _dsect - p3start - sect - sectb - per_mib ))
+[ "$_tail" -ge $(( datamin_mib * per_mib )) ] \
     || bail "not enough room after the two slots for ${datamin_mib} MiB of data (${_tail} sectors left)"
 p4start=$(( p3start + sect ))
 p5start=$(( p4start + sectb ))

@@ -11,7 +11,7 @@ set -eu
 A=$(ab_part_by_name hifi-root-a) || A=
 B=$(ab_part_by_name hifi-root-b) || B=
 DATA=$(ab_part_by_name hifi-data) || DATA=
-ESP=$(ab_part_by_name "EFI System") || ESP=
+ESP=$(ab_esp_dev) || ESP=
 if [ -z "$A" ] || [ -z "$B" ] || [ -z "$DATA" ] || [ -z "$ESP" ]; then
     ab_log "layout A/B assente su $(ab_disk 2>/dev/null || echo '?'): niente da configurare"
     exit 0

@@ -244,8 +244,11 @@ mkdir -p "$CH/var/lib/extensions" "$CH/usr/share/factory/var/lib/hifi-player/ext
 # erano firmware e 354 la UI Electron. Qui si toglie ciò che su un mini PC x86
 # audio non può servire, e l'interfaccia Electron, che dall'immagine in poi è
 # sostituita da quella Qt (l'unica installata: vedi ui-engine qui sotto).
-# NON si tocca amdgpu/radeon: esistono mini PC AMD e restare senza driver
-# video sarebbe un guasto grave. Restano fuori dall'INITRD (vedi hook
+# 🚨 Regola: non si tocca MAI un firmware Wi-Fi o Bluetooth. È da lì che
+# l'apparecchio riceve gli aggiornamenti: toglierne uno a un apparecchio che
+# lo usa lo isola per sempre, e su una macchina senza tastiera non si recupera.
+# Per lo stesso motivo restano amdgpu/radeon: esistono mini PC AMD e perdere il
+# driver video è un guasto grave. Quelli restano solo fuori dall'INITRD (hook
 # zz-hifi-slim più sotto), dove non servono a nessuno.
 # La taglia dello slot vive in hifi-ab-lib.sh (la usano pre-verifica, initrd e
 # installer): se qui se ne usasse un'altra, il tetto sull'immagine sarebbe
@@ -257,7 +260,12 @@ fi
 
 log "rimozione dei firmware non pertinenti e della UI Electron"
 fw_before=$(du -sxm "$CH/usr/lib/firmware" 2>/dev/null | cut -f1)
-for d in netronome nvidia mrvl liquidio cxgb3 cxgb4 bnx2x qed mellanox mlxsw \
+# Schede di rete da datacenter, GPU discrete e piattaforme ARM: su un mini PC
+# x86 audio non possono esistere. `mrvl` NON è in elenco pur essendo grosso
+# (68 MiB): è il Wi-Fi Marvell di certi tablet e box x86, e vale la regola qui
+# sopra. `qcom` sì: sono blob di piattaforma Snapdragon — il Wi-Fi Qualcomm sta
+# in ath10k/ath11k/ath12k e il Bluetooth in qca/, che restano.
+for d in netronome nvidia liquidio cxgb3 cxgb4 bnx2x qed mellanox mlxsw \
          dpaa2 imx qcom powervr myricom qlogic tehuti ueagle-atm; do
     rm -rf "${CH:?}/usr/lib/firmware/$d"
 done

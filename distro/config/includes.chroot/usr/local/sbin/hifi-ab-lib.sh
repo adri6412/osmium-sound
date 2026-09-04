@@ -141,9 +141,29 @@ ab_booted_slot() {
 }
 
 # Monta la ESP e /data se non lo sono già (idempotente).
+# La ESP di questo disco. Prima per etichetta, come la scrive il nostro
+# installer da sempre; poi per TIPO di partizione GPT, che è uno standard e non
+# dipende da chi ha partizionato — un apparecchio installato con il vecchio
+# Debian Installer non ha etichette e verrebbe altrimenti escluso dalla
+# conversione senza una vera ragione.
+ab_esp_dev() {
+    ab_part_by_name "EFI System" 2>/dev/null && return 0
+    _dk=$(ab_disk 2>/dev/null) || return 1
+    _dn=${_dk#/dev/}
+    for _s in /sys/class/block/"$_dn"*; do
+        [ -f "$_s/partition" ] || continue
+        _d="/dev/$(basename "$_s")"
+        case "$(blkid -o value -s PARTTYPE "$_d" 2>/dev/null)" in
+            c12a7328-f81f-11d2-ba4b-00a0c93ec93b|C12A7328-F81F-11D2-BA4B-00A0C93EC93B)
+                printf '%s\n' "$_d"; return 0 ;;
+        esac
+    done
+    return 1
+}
+
 ab_mount_esp() {
     mountpoint -q "$AB_ESP_MNT" && return 0
-    _esp=$(ab_part_by_name "EFI System") || return 1
+    _esp=$(ab_esp_dev) || return 1
     mkdir -p "$AB_ESP_MNT"
     mount -t vfat -o umask=0077 "$_esp" "$AB_ESP_MNT"
 }
