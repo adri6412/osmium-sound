@@ -1,0 +1,19 @@
+[Unit]
+Description=Osmium Sound — rebuild user add-ons for the image that is running now
+Documentation=man:systemd-sysext(8)
+# Only on image systems, and only once there is a network to re-download with.
+ConditionPathExists=/usr/lib/osmium/IMAGE_VERSION
+ConditionPathExists=/var/lib/hifi-player/ext
+After=systemd-sysext.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/hifi-ext.sh refresh
+# An add-on that cannot be rebuilt is not a boot failure: it stays disabled and
+# hifi-ext.sh list says so. systemd refuses a stale extension by itself.
+SuccessExitStatus=0 1
+TimeoutStartSec=900
+
+[Install]
+WantedBy=multi-user.target

@@ -143,6 +143,7 @@ cmd_cleanup() {  # [--deep [minimo_MiB_da_raggiungere]]
             target=$(( _amax - AB_SLOT_A_MARGIN_MIN_MIB ))
         fi
         for step in docs firmware lmscache electron; do
+            # shellcheck disable=SC2119  # the device argument is optional
             _now=$(ab_root_min_mib 2>/dev/null || echo 0)
             if [ "$target" -gt 0 ] && [ "$_now" -gt 0 ] && [ "$_now" -le "$target" ]; then
                 ab_log "pulizia profonda: basta così (minimo root ${_now} MiB, tetto ${target})"
@@ -155,7 +156,9 @@ cmd_cleanup() {  # [--deep [minimo_MiB_da_raggiungere]]
     fi
 
     after=$(df -Pm / | awk 'NR==2{print $3}')
-    ab_log "pulizia: root da ${before} a ${after} MiB usati (minimo tecnico $(ab_root_min_mib 2>/dev/null || echo '?') MiB)"
+    # shellcheck disable=SC2119  # the device argument is optional
+    _min=$(ab_root_min_mib 2>/dev/null || echo '?')
+    ab_log "pulizia: root da ${before} a ${after} MiB usati (minimo tecnico ${_min} MiB)"
     return 0
 }
 

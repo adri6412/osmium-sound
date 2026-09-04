@@ -123,7 +123,8 @@ print(sum(sizes(json.load(sys.stdin).get("images", []))))' 2>/dev/null || echo 0
     last_pct=-1
     while kill -0 "$pipe_pid" 2>/dev/null; do
         sleep 3
-        [ "$img_bytes" -gt 0 ] && [ -n "$slot_dev" ] || continue
+        [ "$img_bytes" -gt 0 ] || continue
+        [ -n "$slot_dev" ] || continue
         now=$(written_sectors)
         case "$now" in ''|*[!0-9]*) continue ;; esac
         pct=$(( (now - base_sectors) * 512 * 100 / img_bytes ))

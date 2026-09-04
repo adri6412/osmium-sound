@@ -190,6 +190,29 @@ in_chroot dpkg-query -W -f='${Package}\n${Provides}\n' \
     echo "kernel=$(find "$CH/boot" -maxdepth 1 -name 'vmlinuz-*' | sed 's|.*/vmlinuz-||' | sort -V | tail -n 1)"
 } > "$CH/usr/lib/osmium/BUILD_INFO"
 
+# Package database of THIS image: hifi-ext.sh hands it to apt as the "already
+# installed" set when it resolves an add-on. It cannot use /var/lib/dpkg/status
+# on the device — /var lives on /data and still describes the first image ever
+# installed there, so resolving against it would pull half the system down.
+cp "$CH/var/lib/dpkg/status" "$CH/usr/lib/osmium/dpkg-status"
+
+# SYSEXT_LEVEL is what pins an add-on to this exact image: systemd-sysext only
+# merges extensions whose extension-release declares the same level, so one
+# built for an older image is refused at boot instead of being layered over a
+# system it was never resolved against (hifi-ext.sh refresh then rebuilds it).
+if grep -q '^SYSEXT_LEVEL=' "$CH/usr/lib/os-release" 2>/dev/null; then
+    sed -i "s|^SYSEXT_LEVEL=.*|SYSEXT_LEVEL=$VERSION|" "$CH/usr/lib/os-release"
+else
+    printf 'SYSEXT_LEVEL=%s\n' "$VERSION" >> "$CH/usr/lib/os-release"
+fi
+# Without these two enabled, add-ons would be built and then never merged.
+in_chroot systemctl enable systemd-sysext.service hifi-ext-refresh.service >/dev/null 2>&1 || true
+[ -e "$CH/etc/systemd/system/multi-user.target.wants/hifi-ext-refresh.service" ] \
+    || die "hifi-ext-refresh.service non abilitata: gli add-on non verrebbero ricostruiti dopo un aggiornamento"
+in_chroot systemctl is-enabled systemd-sysext.service >/dev/null 2>&1 \
+    || die "systemd-sysext.service non abilitata: gli add-on non verrebbero mai montati"
+mkdir -p "$CH/var/lib/extensions" "$CH/usr/share/factory/var/lib/hifi-player/ext"
+
 # ── 5b. peso morto: firmware impossibili e la UI Electron ────────────────
 # Misurato sull'immagine 2.5.24-dev.9-alpha2 (2715 MiB di contenuto): 855 MiB
 # erano firmware e 354 la UI Electron. Qui si toglie ciò che su un mini PC x86

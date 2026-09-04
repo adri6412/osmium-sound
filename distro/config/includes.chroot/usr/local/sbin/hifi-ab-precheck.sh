@@ -112,6 +112,7 @@ if [ -n "$disk" ]; then
         [ "$nl" = 3 ] || stub_ok=0
         case "$s1" in "search.fs_uuid $uuid root"|"search.fs_uuid $uuid root "*) ;; *) stub_ok=0 ;; esac
         [ "$s2" = "set prefix=(\$root)'/boot/grub'" ] || stub_ok=0
+        # shellcheck disable=SC2016  # $prefix is GRUB's own variable, literal here
         [ "$s3" = 'configfile $prefix/grub.cfg' ] || stub_ok=0
         # marker of our own selector, in either language (the template header)
         if ! grep -qE 'selettore di avvio A/B|A/B boot selector' "$AB_STUB" && [ "$stub_ok" = 0 ]; then
