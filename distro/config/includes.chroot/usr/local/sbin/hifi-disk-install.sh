@@ -247,6 +247,15 @@ install_ab() {
         sed "s/^ARGS=\(['\"]\)\(.*\)\1\$/ARGS=\1-m $_mac \2\1/" \
             /run/hifi-img/etc/default/squeezelite > "$_d/etc/upper/default/squeezelite"
     fi
+    # 🚨 First-run setup. On the legacy ISO this marker was baked into /etc by
+    # build-distro.sh and came across with the copied filesystem; the image
+    # deliberately ships without it (build-image.sh deletes it), because it is
+    # per-device state and /etc is a read-only lower layer here. Nobody was
+    # putting it back, so a freshly installed unit booted straight past the
+    # wizard: no hotspot, no language or network step, and the browser landed
+    # on a bare "create the admin account" page.
+    mkdir -p "$_d/etc/upper/hifi-player"
+    printf 'pending\n' > "$_d/etc/upper/hifi-player/provisioning-pending"
     sync
     umount "$_d" 2>/dev/null || true
     umount /run/hifi-img 2>/dev/null || true
