@@ -205,12 +205,28 @@ if grep -q '^SYSEXT_LEVEL=' "$CH/usr/lib/os-release" 2>/dev/null; then
 else
     printf 'SYSEXT_LEVEL=%s\n' "$VERSION" >> "$CH/usr/lib/os-release"
 fi
-# Without these two enabled, add-ons would be built and then never merged.
-in_chroot systemctl enable systemd-sysext.service hifi-ext-refresh.service >/dev/null 2>&1 || true
+# Senza queste due unità gli add-on verrebbero costruiti e poi mai montati.
+# Si abilitano UNA ALLA VOLTA: in blocco, se una fallisce, systemctl non
+# installa nemmeno l'altra e l'errore resta nascosto (è successo alla prima
+# build). L'esito di systemctl viene riportato nel messaggio, non ingoiato.
+_out=$(in_chroot systemctl enable hifi-ext-refresh.service 2>&1) \
+    || die "systemctl enable hifi-ext-refresh.service: $_out"
+if ! _out=$(in_chroot systemctl enable systemd-sysext.service 2>&1); then
+    # alcune build di systemd la distribuiscono senza sezione [Install]:
+    # in quel caso il collegamento si fa a mano, il risultato è lo stesso
+    log "systemd-sysext.service non abilitabile con systemctl ($_out), collegamento a mano"
+    [ -e "$CH/usr/lib/systemd/system/systemd-sysext.service" ] \
+        || die "systemd-sysext.service non esiste in questa immagine: systemd troppo vecchio per gli add-on"
+    mkdir -p "$CH/etc/systemd/system/sysinit.target.wants"
+    ln -sf /usr/lib/systemd/system/systemd-sysext.service \
+        "$CH/etc/systemd/system/sysinit.target.wants/systemd-sysext.service"
+fi
 [ -e "$CH/etc/systemd/system/multi-user.target.wants/hifi-ext-refresh.service" ] \
     || die "hifi-ext-refresh.service non abilitata: gli add-on non verrebbero ricostruiti dopo un aggiornamento"
-in_chroot systemctl is-enabled systemd-sysext.service >/dev/null 2>&1 \
-    || die "systemd-sysext.service non abilitata: gli add-on non verrebbero mai montati"
+if ! in_chroot systemctl is-enabled systemd-sysext.service >/dev/null 2>&1 \
+   && [ ! -e "$CH/etc/systemd/system/sysinit.target.wants/systemd-sysext.service" ]; then
+    die "systemd-sysext.service non abilitata: gli add-on non verrebbero mai montati"
+fi
 mkdir -p "$CH/var/lib/extensions" "$CH/usr/share/factory/var/lib/hifi-player/ext"
 
 # ── 5b. peso morto: firmware impossibili e la UI Electron ────────────────
