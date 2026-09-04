@@ -19,9 +19,16 @@ check() { if [ "$2" = "$3" ]; then ok "$1"; else bad "$1 (expected '$2', got '$3
 ROOT=$(mktemp -d "${TMPDIR:-/tmp}/hifi-apt-shim-test.XXXXXX")
 trap 'rm -rf "$ROOT"' EXIT INT TERM
 
-setup() {  # [--legacy]
-    rm -rf "$ROOT"; mkdir -p "$ROOT/usr/bin" "$ROOT/usr/local/sbin" "$ROOT/usr/lib/osmium"
+setup() {  # [--legacy|--chroot|--live]
+    rm -rf "$ROOT"; mkdir -p "$ROOT/usr/bin" "$ROOT/usr/local/sbin" "$ROOT/usr/lib/osmium" "$ROOT/proc"
     [ "${1:-}" = "--legacy" ] || printf 'v2.5.24-test\n' > "$ROOT/usr/lib/osmium/IMAGE_VERSION"
+    # systemd in esecuzione = non siamo in un chroot di costruzione
+    [ "${1:-}" = "--chroot" ] || mkdir -p "$ROOT/run/systemd/system"
+    if [ "${1:-}" = "--live" ]; then
+        printf 'BOOT_IMAGE=/live/vmlinuz boot=live components quiet\n' > "$ROOT/proc/cmdline"
+    else
+        printf 'BOOT_IMAGE=/boot/vmlinuz root=PARTUUID=x ro rauc.slot=A\n' > "$ROOT/proc/cmdline"
+    fi
     for n in apt apt-get; do
         printf '#!/bin/sh\nprintf "REAL %%s %%s\\n" "%s" "$*" >> "%s"\n' "$n" "$ROOT/calls" > "$ROOT/usr/bin/$n"
     done
@@ -29,6 +36,9 @@ setup() {  # [--legacy]
     chmod +x "$ROOT/usr/bin"/* "$ROOT/usr/local/sbin/hifi-ext.sh"
     : > "$ROOT/calls"
 }
+# La shim pretende anche che systemd stia girando (cioè: non siamo in un
+# chroot di costruzione) e che non sia una sessione live. Nel banco di prova si
+# simulano entrambe le cose con /proc e /run del sistema di prova.
 run()   { HIFI_APT_TEST_ROOT="$ROOT" sh "$SHIM" "$@" 2>"$ROOT/err"; }
 calls() { tr '\n' '|' < "$ROOT/calls" | sed 's/|$//'; }
 
@@ -64,6 +74,19 @@ check "update reaches the real apt" "REAL apt update" "$(calls)"
 setup --legacy
 run install mc >/dev/null
 check "legacy system: the shim steps aside" "REAL apt install mc" "$(calls)"
+
+# 🚨 Dentro il chroot di costruzione il marcatore dell'immagine c'è già, ma
+# systemd non gira: se la shim intervenisse dirotterebbe le installazioni di
+# live-build su hifi-ext — che è esattamente ciò che ha fatto fallire la prima
+# ISO a filesystem unico.
+setup --chroot
+run install mc >/dev/null
+check "build chroot: the shim must not intervene" "REAL apt install mc" "$(calls)"
+
+# In una sessione live un pacchetto vivrebbe in RAM fino al riavvio: apt vero.
+setup --live
+run install mc >/dev/null
+check "live session: the shim steps aside" "REAL apt install mc" "$(calls)"
 
 setup
 HIFI_APT_REAL=1 HIFI_APT_TEST_ROOT="$ROOT" sh "$SHIM" install mc >/dev/null 2>&1

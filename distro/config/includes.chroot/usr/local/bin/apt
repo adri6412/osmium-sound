@@ -23,9 +23,21 @@ REAL=$_R/usr/bin/${0##*/}
 [ -x "$REAL" ] || REAL=$_R/usr/bin/apt-get
 EXT=$_R/usr/local/sbin/hifi-ext.sh
 IMAGE_MARKER=$_R/usr/lib/osmium/IMAGE_VERSION
+RUNNING_MARK=$_R/run/systemd/system
+CMDLINE=$_R/proc/cmdline
 
-# Not an image, or the owner explicitly asked for the real thing
-if [ ! -f "$IMAGE_MARKER" ] || [ "${HIFI_APT_REAL:-0}" = 1 ] || [ ! -x "$EXT" ]; then
+# 🚨 Si interviene SOLO su un apparecchio vero e avviato. Il marcatore
+# dell'immagine da solo non basta: esiste anche dentro il chroot di
+# costruzione, dove live-build e build-image.sh chiamano apt-get con questo
+# stesso PATH — e la shim ha dirottato la loro installazione su hifi-ext,
+# facendo fallire la ISO ("invalid add-on name: APT::Install-Recommends=false")
+# e degradando in silenzio la rimozione dei kernel vecchi. `/run/systemd/system`
+# è la prova che systemd sta girando davvero, quindi che non siamo in un
+# chroot. In una sessione live si sta da parte comunque: lì un pacchetto
+# installato vive nella RAM fino al riavvio, e il posto giusto è apt vero.
+if [ ! -f "$IMAGE_MARKER" ] || [ ! -d "$RUNNING_MARK" ] \
+   || grep -qw boot=live "$CMDLINE" 2>/dev/null \
+   || [ "${HIFI_APT_REAL:-0}" = 1 ] || [ ! -x "$EXT" ]; then
     exec "$REAL" "$@"
 fi
 
