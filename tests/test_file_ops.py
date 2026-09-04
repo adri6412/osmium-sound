@@ -25,17 +25,18 @@ class FileOpsBase(unittest.TestCase):
             f.write(b"y" * 512)
         os.makedirs(os.path.join(self.root, "Dest"))
 
-        self._saved = (ss.ALLOWED_LOCAL_ROOTS, ss._BROWSE_ROOTS,
+        self._saved = (ss.ALLOWED_LOCAL_ROOTS, ss._BROWSE_ROOTS, ss._FILE_ROOTS,
                        ss._ensure_samba_uid_gid, ss._lyrion_rescan, ss.load_state)
         ss.ALLOWED_LOCAL_ROOTS = (self.root,)
         ss._BROWSE_ROOTS = (self.root,)
+        ss._FILE_ROOTS = (self.root,)
         ss._ensure_samba_uid_gid = lambda: (0, 0)   # no useradd from a test
         ss._lyrion_rescan = lambda: None
         ss.load_state = lambda: {"sources": []}
 
     def tearDown(self):
-        (ss.ALLOWED_LOCAL_ROOTS, ss._BROWSE_ROOTS, ss._ensure_samba_uid_gid,
-         ss._lyrion_rescan, ss.load_state) = self._saved
+        (ss.ALLOWED_LOCAL_ROOTS, ss._BROWSE_ROOTS, ss._FILE_ROOTS,
+         ss._ensure_samba_uid_gid, ss._lyrion_rescan, ss.load_state) = self._saved
         shutil.rmtree(self.tmp, ignore_errors=True)
 
     def targets(self, data, need_dest=False):
@@ -98,6 +99,24 @@ class ProtectedPathTests(FileOpsBase):
             {"paths": [os.path.join(self.root, "Album")]}, need_dest=False)
         self.assertIsNone(err)
         self.assertEqual(len(paths), 1)
+
+
+class HomeIsNotOfferedTests(unittest.TestCase):
+    """/home holds the appliance's own accounts, not anybody's music. It stays
+    addable as a source (the folder pickers still offer it) but the file
+    manager neither lists it nor touches it -- beside "Music on this player"
+    it only made the owner wonder which of the two was theirs."""
+
+    def test_home_is_browsable_but_not_a_file_manager_root(self):
+        self.assertIn("/home", ss._BROWSE_ROOTS)
+        self.assertNotIn("/home", ss._FILE_ROOTS)
+
+    def test_the_file_manager_refuses_a_path_under_home(self):
+        # What it will not show, it must not delete either.
+        self.assertIsNone(ss._file_path_allowed("/home/hifi/Music"))
+
+    def test_every_other_root_survived(self):
+        self.assertEqual(set(ss._BROWSE_ROOTS) - set(ss._FILE_ROOTS), {"/home"})
 
 
 class NameTests(unittest.TestCase):

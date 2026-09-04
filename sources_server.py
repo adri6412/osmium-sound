@@ -5129,6 +5129,24 @@ def api_add_local():
 # end up under (see _local_path_allowed()) plus the appliance's own default
 # playlist folder, which api_playlistdir_set() accepts on its own.
 _BROWSE_ROOTS = ALLOWED_LOCAL_ROOTS + (DEFAULT_PLAYLISTDIR,)
+# What the file manager shows and may touch. Deliberately shorter than
+# _BROWSE_ROOTS: /home holds the appliance's own accounts (hifi, and whatever
+# the wizard made for SSH), nobody keeps their music there, and offering it
+# beside "Music on this player" only made the owner wonder which of the two
+# was theirs. The folder pickers keep the full list, so a library that really
+# does live under a home can still be ADDED as a source -- it just isn't one
+# of the places this file manager opens on.
+_FILE_ROOTS = tuple(r for r in _BROWSE_ROOTS if r != "/home")
+
+
+def _file_path_allowed(path):
+    """Confine a file-manager path to _FILE_ROOTS. Separate from
+    _local_path_allowed() on purpose: what the manager will not show, it must
+    not touch either -- a path it hides but still deletes is worse than one it
+    simply does not offer."""
+    if not path or not isinstance(path, str):
+        return None
+    return _under_roots(path, _FILE_ROOTS)
 
 
 @app.route("/api/local/browse", methods=["GET"])
@@ -5361,10 +5379,10 @@ def api_files_list():
     if denied:
         return denied
     rel = (request.args.get("path") or "").strip()
-    cand = _under_roots(rel, _BROWSE_ROOTS) if rel else None
+    cand = _under_roots(rel, _FILE_ROOTS) if rel else None
     if cand is None:
         roots = [{"name": _root_label(r), "path": r, "dir": True, "size": 0, "mtime": 0}
-                 for r in sorted({os.path.realpath(x) for x in _BROWSE_ROOTS
+                 for r in sorted({os.path.realpath(x) for x in _FILE_ROOTS
                                   if os.path.isdir(x)})]
         return jsonify({"success": True, "path": "", "parent": "", "writable": False,
                         "protected": True, "entries": roots})
@@ -5387,7 +5405,7 @@ def api_files_list():
         return _err_detail("msg.fileOpFailed", 400, detail=_oserror_detail(e))
     entries.sort(key=lambda x: (not x["dir"], x["name"].lower()))
     parent = os.path.dirname(cand.rstrip("/")) or "/"
-    if parent == cand or _under_roots(parent, _BROWSE_ROOTS) is None:
+    if parent == cand or _under_roots(parent, _FILE_ROOTS) is None:
         parent = ""             # at a root: one step up is the virtual top level
     return jsonify({"success": True, "path": cand, "parent": parent,
                     "writable": _writable(cand),
@@ -5407,7 +5425,7 @@ def _file_op_targets(data, need_dest):
     protected = _protected_paths()
     paths = []
     for item in raw:
-        p = _local_path_allowed(item) if isinstance(item, str) else None
+        p = _file_path_allowed(item)
         if not p or not os.path.lexists(p):
             return None, None, _err("msg.pathNotAllowed", 400)
         if os.path.realpath(p) in protected:
@@ -5415,7 +5433,7 @@ def _file_op_targets(data, need_dest):
         paths.append(p)
     dest = None
     if need_dest:
-        dest = _local_path_allowed(data.get("dest") or "")
+        dest = _file_path_allowed(data.get("dest") or "")
         if not dest or not os.path.isdir(dest):
             return None, None, _err("msg.folderMissing", 400,
                                     path=str(data.get("dest") or ""))
@@ -5471,7 +5489,7 @@ def api_files_rename():
     if denied:
         return denied
     data = request.get_json(silent=True) or {}
-    src = _local_path_allowed((data.get("path") or "").strip())
+    src = _file_path_allowed((data.get("path") or "").strip())
     name = _safe_name(data.get("name"))
     if not src or not os.path.lexists(src):
         return _err("msg.pathNotAllowed", 400)
@@ -5482,7 +5500,7 @@ def api_files_rename():
     parent = os.path.dirname(src)
     if not _writable(parent):
         return _err("msg.fileReadOnly", 400)
-    target = _local_path_allowed(os.path.join(parent, name))
+    target = _file_path_allowed(os.path.join(parent, name))
     if not target:
         return _err("msg.pathNotAllowed", 400)
     if os.path.lexists(target):
