@@ -194,6 +194,12 @@ jobs:
           set -euo pipefail
           TAR="${{ steps.packsys.outputs.tarball }}"
           [ -f "$TAR" ] || { echo "::error::system tarball missing"; exit 1; }
+          # 🚨 The listing goes to a FILE, and grep reads that file. With
+          # `tar tzf ... | grep -q`, grep leaves as soon as it matches, tar dies
+          # of SIGPIPE, and under `set -o pipefail` the pipeline reports failure
+          # precisely when the file WAS found — which is how this check first
+          # reported every single file as missing.
+          tar tzf "$TAR" > /tmp/sysbundle.list
           MISSING=""
           for f in \
             ./usr/local/sbin/hifi-ab-precheck.sh \
@@ -210,7 +216,7 @@ jobs:
             ./usr/local/share/hifi-ab/initramfs/scripts/local-premount/hifi-ab-convert \
             ./etc/systemd/system/hifi-ab-finish.service \
             ./etc/systemd/system/hifi-ab-image.service ; do
-            tar tzf "$TAR" | grep -qx -- "$f" || MISSING="$MISSING $f"
+            grep -qx -- "$f" /tmp/sysbundle.list || MISSING="$MISSING $f"
           done
           if [ -n "$MISSING" ]; then
             echo "::error::the system bundle no longer carries the A/B migration:$MISSING"
@@ -622,15 +628,15 @@ jobs:
           TAG: ${{ github.ref_name }}
         run: |
           set -euo pipefail
-          ASSETS=$(gh release view "$TAG" -R "${{ github.repository }}" --json assets -q '.assets[].name' || true)
-          echo "$ASSETS"
+          gh release view "$TAG" -R "${{ github.repository }}" --json assets -q '.assets[].name' > /tmp/assets.list || true
+          cat /tmp/assets.list
           MISSING=""
           for want in \
             "hifi-qtui-$TAG.tar.gz" "hifi-qtui-$TAG.tar.gz.sha256" \
             "hifi-system-$TAG.tar.gz" "hifi-system-$TAG.tar.gz.sha256" \
             "hifi-os-$TAG.tar.gz" "hifi-os-$TAG.tar.gz.sha256" "hifi-os-$TAG.tar.gz.sha256.sig" \
             "hifi-image-$TAG.raucb" "hifi-image-$TAG.raucb.sha256" ; do
-            printf '%s\n' "$ASSETS" | grep -qx -- "$want" || MISSING="$MISSING $want"
+            grep -qx -- "$want" /tmp/assets.list || MISSING="$MISSING $want"
           done
           if [ -n "$MISSING" ]; then
             echo "::error::release $TAG is incomplete:$MISSING — devices on the old layout and devices already on A/B must BOTH find their update in every release"
