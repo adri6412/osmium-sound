@@ -239,7 +239,11 @@ jobs:
       - name: Refuse an ISO too large to publish
         run: |
           set -euo pipefail
-          ISO=$(ls -1 distro/*.iso *.iso 2>/dev/null | head -n 1)
+          # find, not ls in a pipeline: `ls a/*.iso *.iso` returns 2 when one
+          # of the two patterns matches nothing, and under `set -o pipefail`
+          # that killed the job right after a perfectly good ISO had been
+          # built. find reports nothing and exits 0.
+          ISO=$(find . -maxdepth 2 -name '*.iso' -print -quit 2>/dev/null || true)
           [ -n "$ISO" ] || exit 0
           SZ=$(stat -c %s "$ISO")
           echo "ISO size: $((SZ / 1048576)) MiB"
