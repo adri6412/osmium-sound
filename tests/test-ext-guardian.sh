@@ -43,7 +43,12 @@ EOF
 case "\$1" in
     -c) awk '{printf "-rw-r--r-- root/root 10 2026-01-01 00:00 ./%s\n", \$0}' "$ROOT/deb.list" ;;
     -f) case "\$3" in Package) echo fake ;; Version) echo 1.0 ;; *) echo "" ;; esac ;;
-    -e) mkdir -p "\$3"; [ -f "$ROOT/have-postinst" ] && printf '#!/bin/sh\n' > "\$3/postinst"; exit 0 ;;
+    -e) mkdir -p "\$3"
+        if [ -f "$ROOT/have-postinst" ]; then
+          printf '#!/bin/sh\necho "\$1" > "%s/postinst-ran"\n[ -f "%s/postinst-fails" ] && exit 1\nexit 0\n' "$ROOT" "$ROOT" > "\$3/postinst"
+          chmod +x "\$3/postinst"
+        fi
+        exit 0 ;;
     -x) while read -r f; do mkdir -p "\$3/\$(dirname "\$f")"; : > "\$3/\$f"; done < "$ROOT/deb.list" ;;
 esac
 exit 0
@@ -96,11 +101,24 @@ check "side files: /etc content placed on the live system" "yes" \
 check "side files: not left inside the extension" "no" \
       "$([ -d "$ROOT/var/lib/extensions/fake/etc" ] && echo yes || echo no)"
 
-# ── 5. maintainer scripts are never run, but they are called out ────────────
+# ── 5. 🚨 the postinst runs, and after the files are in place ───────────────
+# A postinst is where a package registers a shell in /etc/shells, enables a
+# unit, picks an alternative: skipping it leaves the package installed but not
+# working, in ways nobody notices until later. It has to run — and after the
+# merge, or it would not find the files it talks about.
 setup
 printf 'usr/bin/newtool\n' > "$ROOT/deb.list"; : > "$ROOT/have-postinst"
 out=$(run add fake)
-contains "maintainer scripts: warned about, not executed" "$out" "postinst will NOT be run"
+check "maintainer scripts: the postinst ran" "configure" "$(cat "$ROOT/postinst-ran" 2>/dev/null)"
+check "maintainer scripts: it ran after the merge" "yes" \
+      "$([ -f "$ROOT/var/lib/extensions/fake/usr/bin/newtool" ] && echo yes || echo no)"
+
+# e uno che fallisce non deve far saltare l'add-on: si avvisa e si tiene
+setup
+printf 'usr/bin/newtool\n' > "$ROOT/deb.list"; : > "$ROOT/have-postinst"; : > "$ROOT/postinst-fails"
+out=$(run add fake); rc=$?
+check "a failing postinst: the add-on stays installed" "0" "$rc"
+contains "a failing postinst: says what may be missing" "$out" "may be missing"
 
 # ── 6. after an image update the add-on is rebuilt and re-pinned ────────────
 setup

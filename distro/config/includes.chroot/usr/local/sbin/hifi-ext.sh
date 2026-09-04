@@ -174,12 +174,57 @@ check_deb() {  # <deb> <extension name> <workdir>
     done
     [ -z "$_bad_path" ] || die "$(basename "$_deb") writes outside /usr, /opt, /etc and /var:$_bad_path"
     [ -z "$_shadow" ] || die "$(basename "$_deb") would cover files the system already ships, which would freeze them at this version:$_shadow"
-    if dpkg-deb -e "$_deb" "$_cw/ctl" 2>/dev/null; then
+    # Gli script di manutenzione si conservano: servono dopo, quando i file
+    # sono al loro posto (vedi run_maintscripts). Uno per pacchetto.
+    _pkg=$(dpkg-deb -f "$_deb" Package 2>/dev/null || basename "$_deb")
+    if dpkg-deb -e "$_deb" "$_cw/ctl/$_pkg" 2>/dev/null; then
         for _s in preinst postinst prerm postrm; do
-            [ -f "$_cw/ctl/$_s" ] && warn "$(basename "$_deb"): $_s will NOT be run (add-ons never execute maintainer scripts)"
+            [ -f "$_cw/ctl/$_pkg/$_s" ] && log "  $_pkg ships a $_s: it will run once the files are in place"
         done
-        rm -rf "$_cw/ctl"
     fi
+}
+
+# ── script di manutenzione ──────────────────────────────────────────────────
+# 🚨 Prima non venivano eseguiti affatto, e per un pacchetto qualsiasi va bene:
+# le librerie le sistema ldconfig, utenti e cartelle li fanno sysusers/tmpfiles.
+# Ma un postinst fa anche cose che nient'altro fa — registra la shell in
+# /etc/shells, abilita un'unità systemd, sceglie un'alternativa, genera una
+# configurazione da modello — e senza quelle il pacchetto è installato ma non
+# funziona, in modi che l'utente scopre più tardi.
+#
+# Quindi si eseguono, con tre accortezze: DOPO il montaggio dell'estensione
+# (altrimenti lo script non trova i file di cui parla), in modo NON fatale (un
+# fallimento è un avviso, non fa saltare l'add-on: /usr è in sola lettura e
+# qualche script prova a scriverci), e con l'ambiente che dpkg garantisce.
+run_maintscripts() {  # <cartella script> <fase: install|configure|remove>
+    _sd=$1; _phase=$2
+    [ -d "$_sd" ] || return 0
+    for _pd in "$_sd"/*; do
+        [ -d "$_pd" ] || continue
+        _pkg=$(basename "$_pd")
+        case "$_phase" in
+            install)   _scripts="preinst" ;;
+            configure) _scripts="postinst" ;;
+            remove)    _scripts="prerm postrm" ;;
+            *) return 0 ;;
+        esac
+        for _s in $_scripts; do
+            [ -f "$_pd/$_s" ] || continue
+            chmod +x "$_pd/$_s" 2>/dev/null || true
+            _arg=$_phase
+            [ "$_s" = postinst ] && _arg=configure
+            [ "$_s" = preinst ] && _arg=install
+            [ "$_s" = prerm ] || [ "$_s" = postrm ] && _arg=remove
+            if DEBIAN_FRONTEND=noninteractive DPKG_MAINTSCRIPT_PACKAGE="$_pkg" \
+               DPKG_MAINTSCRIPT_NAME="$_s" DPKG_MAINTSCRIPT_ARCH=amd64 \
+               PATH=/usr/sbin:/usr/bin:/sbin:/bin \
+               "$_pd/$_s" "$_arg" >>"${LOGF:-/dev/null}" 2>&1; then
+                log "  $_pkg: $_s $_arg ran"
+            else
+                warn "$_pkg: $_s $_arg failed — the add-on stays installed, but something that script was meant to set up may be missing"
+            fi
+        done
+    done
 }
 
 # Files a .deb puts outside /usr and /opt: sysext does not merge those, and /etc
@@ -251,6 +296,8 @@ build_ext() {  # <name> <dry-run 0|1> <package>...
     for _d in $_debs; do
         dpkg-deb -x "$_d" "$_new" || die "could not unpack $(basename "$_d")"
     done
+    # preinst prima che i file siano visibili, come fa dpkg
+    run_maintscripts "$_w/ctl" install
     place_side_files "$_new"
     write_release "$_new" "$_name"
     rm -rf "${EXT_DIR:?}/$_name"
@@ -264,8 +311,24 @@ build_ext() {  # <name> <dry-run 0|1> <package>...
     # the right ones and the rebuild needs no network
     mkdir -p "$META_DIR/$_name/debs"
     cp -f "$_w"/cache/archives/*.deb "$META_DIR/$_name/debs/" 2>/dev/null || true
+    # gli script restano accanto all'add-on: servono alla rimozione e a ogni
+    # ricostruzione (dopo un aggiornamento dell'immagine vanno rieseguiti)
+    rm -rf "$META_DIR/$_name/scripts"
+    if [ -d "$_w/ctl" ]; then
+        cp -a "$_w/ctl" "$META_DIR/$_name/scripts" 2>/dev/null || true
+    fi
     rm -rf "$_w"
     return 0
+}
+
+# Montare e poi far girare i postinst: i file devono essere al loro posto prima
+# che uno script vada a cercarli.
+apply_and_configure() {  # <nome add-on>
+    apply_now
+    run_maintscripts "$META_DIR/$1/scripts" configure
+    # un postinst può aver messo un'unità: ricaricare e basta, non si avvia
+    # niente di propria iniziativa
+    systemctl daemon-reload >/dev/null 2>&1 || true
 }
 
 cmd_add() {
@@ -278,7 +341,7 @@ cmd_add() {
     build_ext "$_name" "$_dry" "$@" || rc=$?
     [ "$rc" = 2 ] && return 0
     [ "$_dry" = 1 ] && return 0
-    apply_now
+    apply_and_configure "$_name"
     log "add-on '$_name' installed and active"
 }
 
@@ -312,6 +375,7 @@ cmd_remove() {
         done
     fi
     [ -d "$EXT_DIR/$_name" ] || [ -d "$META_DIR/$_name" ] || die "no add-on or add-on package named '$_name'"
+    run_maintscripts "$META_DIR/$_name/scripts" remove
     rm -rf "${EXT_DIR:?}/$_name" "${META_DIR:?}/$_name"
     apply_now
     log "add-on '$_name' removed (its files under /etc and /var are left alone)"
@@ -366,7 +430,14 @@ cmd_upgrade() {
         esac
     done
     [ "$_any" = 1 ] || log "nothing to upgrade"
-    [ "$_changed" = 1 ] && apply_now
+    if [ "$_changed" = 1 ]; then
+        apply_now
+        for _m in "$META_DIR"/*/request.json; do
+            [ -f "$_m" ] || continue
+            run_maintscripts "$(dirname "$_m")/scripts" configure
+        done
+        systemctl daemon-reload >/dev/null 2>&1 || true
+    fi
     return 0
 }
 
@@ -399,7 +470,14 @@ cmd_refresh() {
                    "$_n" "$_p" "$_i" > "$META_DIR/$_n/request.json" ;;
         esac
     done
-    [ "$_changed" = 1 ] && apply_now
+    if [ "$_changed" = 1 ]; then
+        apply_now
+        for _m in "$META_DIR"/*/request.json; do
+            [ -f "$_m" ] || continue
+            run_maintscripts "$(dirname "$_m")/scripts" configure
+        done
+        systemctl daemon-reload >/dev/null 2>&1 || true
+    fi
     return 0
 }
 
