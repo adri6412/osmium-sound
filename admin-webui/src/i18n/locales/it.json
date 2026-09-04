@@ -342,7 +342,11 @@
       "wizOpenFailed": "Non sono riuscito ad aprire questa cartella.",
       "wizShowDetail": "Dettagli tecnici",
       "wizHideDetail": "Nascondi i dettagli",
-      "wizNoClientHint": "Questo lettore non sa ancora leggere l'elenco delle cartelle condivise: aggiornalo e la prossima volta te le proporrà."
+      "wizNoClientHint": "Questo lettore non sa ancora leggere l'elenco delle cartelle condivise: aggiornalo e la prossima volta te le proporrà.",
+      "addSmbHint": "Su un NAS o un computer della tua rete",
+      "addInternalHint": "Un disco dentro questo lettore",
+      "addLocalHint": "Una cartella già su questo apparecchio",
+      "noneSummary": "Nessuna sorgente"
     },
     "dsp": {
       "unavailable": "DSP non disponibile su questo dispositivo.",
@@ -709,6 +713,7 @@
     "noPlaylists": "nessuna playlist",
     "playlistCount": "{count} playlist",
     "playlistCountOne": "1 playlist",
-    "emptyFolder": "vuota"
+    "emptyFolder": "vuota",
+    "menuHint": "Rinomina, sposta o cancella quello che sta nelle cartelle della musica"
   }
 }

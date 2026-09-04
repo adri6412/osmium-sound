@@ -16,6 +16,7 @@ import { ref, reactive, computed, onMounted, onUnmounted, onBeforeUnmount } from
 import { api } from '../api.js';
 import { useI18n } from '../i18n';
 import FolderPicker from './FolderPicker.vue';
+import Icon from './Icon.vue';
 import { useRouter } from 'vue-router';
 
 const { t } = useI18n();
@@ -31,21 +32,47 @@ function say(m, isErr = false) {
 
 const busy = ref(false);
 
-// One band open at a time; the two container bands ("add source", "shared
-// folders") hold their own single-open sub-band.
-const open = ref('');
-const openAdd = ref('');     // 'smb' | 'internal' | 'local'
-const openShare = ref('');   // 'local'
-function toggle(k) { open.value = open.value === k ? '' : k; }
-function toggleAdd(k) {
-  const opening = openAdd.value !== k;
-  openAdd.value = opening ? k : '';
-  // Opening "network folder" starts the LAN scan straight away: the list is
+// One screen at a time, with a way back — not bands that unfold under each
+// other. Four sections' worth of accordion pushed everything below it off the
+// screen, and the nested ones ("add source" holding three more) left the
+// owner reading a folded map. `nav` is where we are: [] is the menu,
+// ['add','smb'] is the network-folder flow inside "Add source".
+const nav = ref([]);
+const page = computed(() => nav.value.join('/'));
+
+const PAGE_TITLE = {
+  active: 'settings.sources.active',
+  add: 'settings.sources.addSource',
+  'add/smb': 'settings.sources.addSmb',
+  'add/internal': 'settings.sources.internalTitle',
+  'add/local': 'settings.sources.addLocal',
+  playlist: 'settings.sources.playlistdirTitle',
+  share: 'settings.sources.shareTitle',
+  'share/local': 'settings.sources.shareLocal',
+};
+const pageTitle = computed(() => t(PAGE_TITLE[page.value] || 'settings.sections.sources.label'));
+// What "back" goes to, named — "‹ Add source" says more than a bare arrow.
+const backTitle = computed(() => {
+  const up = nav.value.slice(0, -1).join('/');
+  return up ? t(PAGE_TITLE[up]) : t('settings.sections.sources.label');
+});
+
+function go(key) {
+  nav.value = [...nav.value, key];
+  // Entering "network folder" starts the LAN scan straight away: the list is
   // the point of the redesign, and waiting for a button to start it would put
   // the empty state back where the four boxes used to be.
-  if (k === 'smb') { wizReset(); if (opening) wizScan(); }
+  if (page.value === 'add/smb') { wizReset(); wizScan(); }
 }
-function toggleShare(k) { openShare.value = openShare.value === k ? '' : k; }
+function back() {
+  const leaving = page.value;
+  nav.value = nav.value.slice(0, -1);
+  if (leaving === 'add/smb') { wizStopScan(); wizReset(); }
+  msg.value = '';
+}
+function openPage(path) {            // jump straight to a screen
+  nav.value = path ? path.split('/') : [];
+}
 
 // ── Active sources + USB needing attention ───────────────────────────
 const sources = ref([]);
@@ -287,7 +314,7 @@ async function wizAdd() {
   await loadSources();
   loadSmbCard();
   const added = sources.value.find((x) => x.id === id);
-  if (added) { open.value = 'active'; openBrowse(added); }
+  if (added) { openPage('active'); openBrowse(added); }
   say(t('settings.sources.chooseFolderHint'));
 }
 
@@ -452,18 +479,71 @@ onUnmounted(() => {
 
 <template>
   <div>
-    <p class="muted">{{ t('settings.sources.autoApplyHint') }}</p>
+    <!-- Where we are, and the way back. One screen at a time: bands unfolding
+         under each other pushed everything below them off the page, and the
+         nested ones left the owner reading a folded map. -->
+    <template v-if="page">
+      <a class="backlink" href="#" @click.prevent="back">‹ {{ backTitle }}</a>
+      <h3 class="sec-title">{{ pageTitle }}</h3>
+    </template>
+    <p v-else class="muted">{{ t('settings.sources.autoApplyHint') }}</p>
+
+    <div v-if="!page">
+      <div class="net between" @click="go('active')">
+        <span class="menu-l">
+          <Icon class="gl" name="library" :size="19" />
+          <span>
+            <span style="display: block;">{{ t('settings.sources.active') }}</span>
+            <span class="muted">{{ sources.length ? t('settings.sources.countSummary', { count: sources.length }) : t('settings.sources.noneSummary') }}</span>
+          </span>
+        </span>
+        <span class="chev">›</span>
+      </div>
+      <div class="net between" @click="go('add')">
+        <span class="menu-l">
+          <Icon class="gl" name="plus" :size="19" />
+          <span>
+            <span style="display: block;">{{ t('settings.sources.addSource') }}</span>
+            <span class="muted">{{ t('settings.sources.addSourceHint') }}</span>
+          </span>
+        </span>
+        <span class="chev">›</span>
+      </div>
+      <div class="net between" @click="go('playlist')">
+        <span class="menu-l">
+          <Icon class="gl" name="list-music" :size="19" />
+          <span>
+            <span style="display: block;">{{ t('settings.sources.playlistdirTitle') }}</span>
+            <span class="muted" style="word-break: break-all;">{{ playlistdir || t('settings.sources.playlistdirUnset') }}</span>
+          </span>
+        </span>
+        <span class="chev">›</span>
+      </div>
+      <div class="net between" @click="go('share')">
+        <span class="menu-l">
+          <Icon class="gl" name="share-2" :size="19" />
+          <span>
+            <span style="display: block;">{{ t('settings.sources.shareTitle') }}</span>
+            <span class="muted">{{ shares.length ? t('settings.sources.shareCount', { count: shares.length }) : t('settings.sources.shareNone') }}</span>
+          </span>
+        </span>
+        <span class="chev">›</span>
+      </div>
+      <div class="net between" @click="router.push('/files')">
+        <span class="menu-l">
+          <Icon class="gl" name="folder-open" :size="19" />
+          <span>
+            <span style="display: block;">{{ t('files.open') }}</span>
+            <span class="muted">{{ t('files.menuHint') }}</span>
+          </span>
+        </span>
+        <span class="chev">›</span>
+      </div>
+    </div>
 
     <!-- ── Active sources ─────────────────────────────────────────── -->
-    <div class="acc" :class="{ open: open === 'active' }">
-      <div class="net between" @click="toggle('active')">
-        <span>
-          <span style="display: block;">{{ t('settings.sources.active') }}</span>
-          <span class="muted">{{ sources.length ? t('settings.sources.countSummary', { count: sources.length }) : t('settings.sources.none') }}</span>
-        </span>
-        <span class="chev">{{ open === 'active' ? '⌄' : '›' }}</span>
-      </div>
-      <div v-if="open === 'active'" class="acc-body">
+    <div v-else-if="page === 'active'">
+      <div>
         <p v-if="!sources.length" class="sub">{{ t('settings.sources.none') }}</p>
         <template v-for="s in sources" :key="s.id">
           <div class="net between" style="align-items: center; gap: 16px; flex-wrap: wrap;">
@@ -536,23 +616,46 @@ onUnmounted(() => {
     </div>
 
     <!-- ── Add source ─────────────────────────────────────────────── -->
-    <div class="acc" :class="{ open: open === 'add' }">
-      <div class="net between" @click="toggle('add')">
-        <span>
-          <span style="display: block;">{{ t('settings.sources.addSource') }}</span>
-          <span class="muted">{{ t('settings.sources.addSourceHint') }}</span>
-        </span>
-        <span class="chev">{{ open === 'add' ? '⌄' : '›' }}</span>
-      </div>
-      <div v-if="open === 'add'" class="acc-body">
-        <!-- Network folder (SMB) -->
-        <div class="acc" :class="{ open: openAdd === 'smb' }">
-          <div class="net between" @click="toggleAdd('smb')">
-            <span>{{ t('settings.sources.addSmb') }}</span>
-            <span class="chev">{{ openAdd === 'smb' ? '⌄' : '›' }}</span>
+    <div v-else-if="page.startsWith('add')">
+      <div>
+        <!-- Which kind. Three choices, in the words someone would use for
+             where their music actually is. -->
+        <div v-if="page === 'add'">
+          <div class="net between" @click="go('smb')">
+            <span class="menu-l">
+              <Icon class="gl" name="network" :size="19" />
+              <span>
+                <span style="display: block;">{{ t('settings.sources.addSmb') }}</span>
+                <span class="muted">{{ t('settings.sources.addSmbHint') }}</span>
+              </span>
+            </span>
+            <span class="chev">›</span>
           </div>
-          <!-- Guided flow: find the device, pick the folder, confirm. -->
-          <div v-if="openAdd === 'smb'" class="acc-body">
+          <div class="net between" @click="go('internal')">
+            <span class="menu-l">
+              <Icon class="gl" name="hard-drive" :size="19" />
+              <span>
+                <span style="display: block;">{{ t('settings.sources.internalTitle') }}</span>
+                <span class="muted">{{ t('settings.sources.addInternalHint') }}</span>
+              </span>
+            </span>
+            <span class="chev">›</span>
+          </div>
+          <div class="net between" @click="go('local')">
+            <span class="menu-l">
+              <Icon class="gl" name="folder-plus" :size="19" />
+              <span>
+                <span style="display: block;">{{ t('settings.sources.addLocal') }}</span>
+                <span class="muted">{{ t('settings.sources.addLocalHint') }}</span>
+              </span>
+            </span>
+            <span class="chev">›</span>
+          </div>
+        </div>
+
+        <!-- Network folder (SMB) -->
+        <div v-else-if="page === 'add/smb'">
+          <div>
             <p class="sub">{{ t('settings.sources.wizIntro') }}</p>
 
             <!-- 1. which device -->
@@ -680,12 +783,8 @@ onUnmounted(() => {
         </div>
 
         <!-- Internal disks -->
-        <div class="acc" :class="{ open: openAdd === 'internal' }">
-          <div class="net between" @click="toggleAdd('internal')">
-            <span>{{ t('settings.sources.internalTitle') }}</span>
-            <span class="chev">{{ openAdd === 'internal' ? '⌄' : '›' }}</span>
-          </div>
-          <div v-if="openAdd === 'internal'" class="acc-body">
+        <div v-else-if="page === 'add/internal'">
+          <div>
             <p v-if="!internalDisks.length" class="sub">{{ t('settings.sources.internalNone') }}</p>
             <template v-for="dk in internalDisks" :key="dk.path">
               <div class="net between" style="align-items: flex-start;">
@@ -719,12 +818,8 @@ onUnmounted(() => {
 
         <!-- Local folder — file-browser picker (mirrors Lyrion's own folder
              picker) instead of a free-text path box. -->
-        <div class="acc" :class="{ open: openAdd === 'local' }">
-          <div class="net between" @click="toggleAdd('local')">
-            <span>{{ t('settings.sources.addLocal') }}</span>
-            <span class="chev">{{ openAdd === 'local' ? '⌄' : '›' }}</span>
-          </div>
-          <div v-if="openAdd === 'local'" class="acc-body">
+        <div v-else-if="page === 'add/local'">
+          <div>
             <FolderPicker
               :pick-label="t('settings.sources.useThisFolder')"
               :busy="busy"
@@ -737,15 +832,8 @@ onUnmounted(() => {
     </div>
 
     <!-- ── Playlist folder ────────────────────────────────────────── -->
-    <div class="acc" :class="{ open: open === 'playlist' }">
-      <div class="net between" @click="toggle('playlist')">
-        <span>
-          <span style="display: block;">{{ t('settings.sources.playlistdirTitle') }}</span>
-          <span class="muted" style="word-break: break-all;">{{ playlistdir || t('settings.sources.playlistdirUnset') }}</span>
-        </span>
-        <span class="chev">{{ open === 'playlist' ? '⌄' : '›' }}</span>
-      </div>
-      <div v-if="open === 'playlist'" class="acc-body">
+    <div v-else-if="page === 'playlist'">
+      <div>
         <p class="muted">{{ t('settings.sources.playlistdirHint') }}</p>
         <div class="net between" style="align-items: center; gap: 12px; flex-wrap: wrap;">
           <div class="muted" style="min-width: 220px; word-break: break-all;">
@@ -776,15 +864,8 @@ onUnmounted(() => {
     </div>
 
     <!-- ── Shared folders (what this player publishes on the network) ─ -->
-    <div class="acc" :class="{ open: open === 'share' }">
-      <div class="net between" @click="toggle('share')">
-        <span>
-          <span style="display: block;">{{ t('settings.sources.shareTitle') }}</span>
-          <span class="muted">{{ shares.length ? t('settings.sources.shareCount', { count: shares.length }) : t('settings.sources.shareNone') }}</span>
-        </span>
-        <span class="chev">{{ open === 'share' ? '⌄' : '›' }}</span>
-      </div>
-      <div v-if="open === 'share'" class="acc-body">
+    <div v-else-if="page.startsWith('share')">
+      <div v-if="page === 'share'">
         <p class="muted">{{ t('settings.sources.shareHint') }}</p>
         <p v-if="smbCard && !smbCard.installed" class="sub" style="color: var(--danger);">{{ t('settings.sources.needOsUpdate') }}</p>
         <template v-else-if="shares.length">
@@ -814,12 +895,16 @@ onUnmounted(() => {
 
         <!-- Share a local folder: same picker as "add local folder", with the
              Samba flag set so music can be copied onto it from a PC. -->
-        <div class="acc" :class="{ open: openShare === 'local' }">
-          <div class="net between" @click="toggleShare('local')">
+        <div class="net between" @click="go('local')">
+          <span class="menu-l">
+            <Icon class="gl" name="folder-plus" :size="19" />
             <span>{{ t('settings.sources.shareLocal') }}</span>
-            <span class="chev">{{ openShare === 'local' ? '⌄' : '›' }}</span>
-          </div>
-          <div v-if="openShare === 'local'" class="acc-body">
+          </span>
+          <span class="chev">›</span>
+        </div>
+      </div>
+      <div v-else-if="page === 'share/local'">
+        <div>
             <p class="muted">{{ t('settings.sources.localSambaHint') }}</p>
             <FolderPicker
               :pick-label="t('settings.sources.shareThisFolder')"
@@ -827,20 +912,7 @@ onUnmounted(() => {
               @pick="(p) => addLocal(p, true)"
               @error="(m) => say(m, true)"
             />
-          </div>
         </div>
-      </div>
-    </div>
-
-    <!-- File manager: tidying what is inside a folder is a different job from
-         choosing which folders count as sources, so it gets its own page. -->
-    <div class="acc">
-      <div class="net between" @click="router.push('/files')">
-        <span>
-          <span style="display: block;">{{ t('files.open') }}</span>
-          <span class="muted">{{ t('files.hint') }}</span>
-        </span>
-        <span class="chev">›</span>
       </div>
     </div>
 

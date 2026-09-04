@@ -6,6 +6,10 @@
 // below is authored here — no value from the appliance or the network ever
 // reaches Icon.vue's v-html.
 export const icons = {
+  'library':
+    '<path d="m16 6 4 14"/><path d="M12 6v14"/><path d="M8 8v12"/><path d="M4 4v16"/>',
+  'share-2':
+    '<circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" x2="15.42" y1="13.51" y2="17.49"/><line x1="15.41" x2="8.59" y1="6.51" y2="10.49"/>',
   'check':
     '<path d="M20 6 9 17l-5-5"/>',
   'chevron-left':

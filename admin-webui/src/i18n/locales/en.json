@@ -342,7 +342,11 @@
       "wizOpenFailed": "Could not open this folder.",
       "wizShowDetail": "Technical details",
       "wizHideDetail": "Hide details",
-      "wizNoClientHint": "This player cannot read the list of shared folders yet: update it and it will offer them next time."
+      "wizNoClientHint": "This player cannot read the list of shared folders yet: update it and it will offer them next time.",
+      "addSmbHint": "On a NAS or a computer on your network",
+      "addInternalHint": "A disk inside this player",
+      "addLocalHint": "A folder already on this player",
+      "noneSummary": "No sources yet"
     },
     "dsp": {
       "unavailable": "DSP is not available on this device.",
@@ -709,6 +713,7 @@
     "noPlaylists": "no playlist yet",
     "playlistCount": "{count} playlists",
     "playlistCountOne": "1 playlist",
-    "emptyFolder": "empty"
+    "emptyFolder": "empty",
+    "menuHint": "Rename, move or delete what is in the music folders"
   }
 }

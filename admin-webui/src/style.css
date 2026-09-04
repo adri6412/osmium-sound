@@ -409,3 +409,10 @@ h2.page { font-size: 20px; margin: 10px 0 4px; }
 .fm-drive .st { display: block; margin-top: 3px; font-size: 12px; color: var(--muted); }
 .fm-drive .bar { margin-top: 7px; height: 3px; border-radius: 2px; background: var(--light); overflow: hidden; }
 .fm-drive .bar i { display: block; height: 100%; background: var(--gold); }
+
+/* Sources, as screens instead of bands. A menu row carries its icon and a
+   line of what it is; the title of the screen you are on sits under the way
+   back, so "where am I" is answered without unfolding anything. */
+.sec-title { font-size: 16px; font-weight: 600; margin: 2px 0 12px; }
+.menu-l { display: flex; align-items: center; gap: 11px; min-width: 0; }
+.menu-l .gl { color: var(--gold); }
