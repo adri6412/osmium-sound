@@ -19,6 +19,7 @@ class Sys : public QObject {
     Q_PROPERTY(QString configDir READ configDir CONSTANT)
     Q_PROPERTY(bool devMode READ devMode CONSTANT)
     Q_PROPERTY(QString forcedWizard READ forcedWizard CONSTANT)
+    Q_PROPERTY(bool wizardDry READ wizardDry CONSTANT)
     Q_PROPERTY(bool startExpanded READ startExpanded CONSTANT)
     Q_PROPERTY(qint64 lastInput READ lastInput NOTIFY lastInputChanged)
 public:
@@ -32,7 +33,8 @@ public:
     QString configDir() const { return m_configDir; }
     bool devMode() const { return m_dev; }
     QString forcedWizard() const { return m_forcedWizard; }
-    void setForcedWizard(const QString &w) { m_forcedWizard = w; }
+    void setForcedWizard(const QString &w, bool dry = false) { m_forcedWizard = w; m_wizardDry = dry; }
+    bool wizardDry() const { return m_wizardDry; }
     bool startExpanded() const { return m_startExpanded; }
     void setStartExpanded(bool b) { m_startExpanded = b; }
 
@@ -72,6 +74,7 @@ private:
     bool m_realKeyPressed = false, m_inputLogged = false, m_loggedKb = false, m_loggedTouch = false;
     bool m_hasKeyboard = false, m_hasTouch = false, m_pointer = true, m_dev = false, m_startExpanded = false;
     QString m_forcedWizard;
+    bool m_wizardDry = false;
     QFileSystemWatcher m_watch;
     QTimer m_rescan;
     QQuickWindow *m_win = nullptr;

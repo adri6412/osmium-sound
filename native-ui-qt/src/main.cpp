@@ -160,13 +160,13 @@ int main(int argc, char *argv[]) {
 
     const QString base = QCoreApplication::applicationDirPath();
     QString assets = base + "/assets", locales = base + "/locales", wizard;
-    bool expanded = false;
+    bool expanded = false, wizardDry = false;
     QStringList args = app.arguments();
     for (int i = 1; i < args.size(); i++) {
         if (args[i] == "--assets" && i + 1 < args.size()) assets = args[++i];
         else if (args[i] == "--locales" && i + 1 < args.size()) locales = args[++i];
         else if (args[i] == "--expanded") expanded = true;
-        else if (args[i] == "--wizard" && i + 1 < args.size()) wizard = args[++i];
+        else if (args[i] == "--wizard" && i + 1 < args.size()) { wizard = args[++i]; wizardDry = true; }
     }
 
     // Modalita' installer decisa dalla riga di comando del kernel, come fa
@@ -180,8 +180,13 @@ int main(int argc, char *argv[]) {
         QFile cmdline("/proc/cmdline");
         if (cmdline.open(QIODevice::ReadOnly | QIODevice::Text)) {
             const QString c = QString::fromUtf8(cmdline.readAll());
+            // 🚨 Not a dry run: this one really installs. forcedWizard was
+            // born for --wizard, which only exists so a developer can look at
+            // the screens, and it puts the wizard in preview mode -- so on a
+            // real ISO the kiosk's "Erase and install" button answered
+            // "Forced preview - install not started" and did nothing.
             if (c.split(QRegularExpression("\\s+")).contains("hifi.installer=1"))
-                wizard = "install";
+                { wizard = "install"; wizardDry = false; }
         }
     }
 
@@ -194,7 +199,7 @@ int main(int argc, char *argv[]) {
     Api api;
     Sys sys(assets);
     sys.setIconDir(base + "/icons");
-    sys.setForcedWizard(wizard);
+    sys.setForcedWizard(wizard, wizardDry);
     sys.setStartExpanded(expanded);
     I18n i18n(locales, sys.conf("ui-language", "en"));
     api.setLang(i18n.lang());

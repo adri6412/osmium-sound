@@ -52,6 +52,19 @@ fail() {
     exit 1
 }
 
+# Same, but carrying the tail of a command's own output. 🚨 The kiosk has no
+# shell and the web installer runs on another machine: pointing at a log file
+# nobody can open turns every failure into a blind one.
+fail_log() {
+    _msg="$1"; _lf="$2"
+    _tail=$(sed -e 's/[[:space:]]*$//' -e '/^$/d' "$_lf" 2>/dev/null | tail -n 2 | tr '\n' ' ')
+    # An `&&` here would be the last word of the function under `set -e`: an
+    # empty log would end the script without ever writing the error status,
+    # and the installer would sit at "running" for ever.
+    if [ -n "$_tail" ]; then _msg="$_msg: $_tail"; fi
+    fail "$_msg"
+}
+
 cleanup() {
     umount -R "$TARGET/boot/efi" 2>/dev/null || true
     umount -R "$TARGET/dev" 2>/dev/null || true
@@ -140,6 +153,9 @@ install_ab() {
     # shellcheck source=distro/config/includes.chroot/usr/local/sbin/hifi-ab-lib.sh
     # shellcheck disable=SC1091
     . /usr/local/sbin/hifi-ab-lib.sh
+
+    [ -d /sys/firmware/efi ] \
+        || fail "This machine booted in legacy BIOS mode. Osmium Sound installs in UEFI mode only: enable UEFI in the firmware settings and boot the installer again."
 
     _img_bytes=$(stat -c %s "$AB_IMAGE" 2>/dev/null || echo 0)
     [ "$_img_bytes" -gt 0 ] || fail "the system image on the boot medium is empty"
@@ -242,12 +258,18 @@ install_ab() {
     # Straight from the live system: same Debian packages as the image, and
     # nothing here needs a chroot — the slot is a read-only squashfs and the
     # boot menu of each slot ships inside it, so there is no update-grub to run.
-    _gb=/run/hifi-grub-boot; rm -rf "$_gb"; mkdir -p "$_gb"
-    grub-install --target=x86_64-efi --efi-directory="$_esp" --boot-directory="$_gb" \
+    : > "$UNSQUASHFS_LOG"
+    # 🚨 The boot directory goes on the ESP, not under /run. grub-install
+    # probes it to work out which filesystem the EFI stub must search for, and
+    # a tmpfs has no device to name: grub-probe stops with "failed to get
+    # canonical path", so the install died at the very last step. The modules
+    # copied to ESP/grub are never read (the Debian binary is monolithic and
+    # signed); they only cost a few MB of a 512 MiB partition.
+    grub-install --target=x86_64-efi --efi-directory="$_esp" --boot-directory="$_esp" \
         --bootloader-id=debian --recheck >>"$UNSQUASHFS_LOG" 2>&1 \
-        || fail "grub-install (UEFI) failed — see $UNSQUASHFS_LOG"
+        || fail_log "grub-install (UEFI) failed" "$UNSQUASHFS_LOG"
     # Fallback removable path: some firmwares lose NVRAM entries
-    grub-install --target=x86_64-efi --efi-directory="$_esp" --boot-directory="$_gb" \
+    grub-install --target=x86_64-efi --efi-directory="$_esp" --boot-directory="$_esp" \
         --bootloader-id=debian --recheck --removable >>"$UNSQUASHFS_LOG" 2>&1 \
         || log "WARNING: the removable-media fallback install failed (non-fatal)"
     [ -e "$_esp/EFI/debian/grubx64.efi" ] || [ -e "$_esp/EFI/debian/shimx64.efi" ] \
@@ -357,7 +379,8 @@ while kill -0 "$US_PID" 2>/dev/null; do
 done
 wait "$US_PID"
 US_STATUS=$?
-[ "$US_STATUS" -eq 0 ] || fail "copying the system failed (unsquashfs exit $US_STATUS) — see $UNSQUASHFS_LOG"
+[ "$US_STATUS" -eq 0 ] \
+    || fail_log "copying the system failed (unsquashfs exit $US_STATUS)" "$UNSQUASHFS_LOG"
 
 write_status running 82 "Configuring the system…"
 
