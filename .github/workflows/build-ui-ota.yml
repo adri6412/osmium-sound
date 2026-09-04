@@ -409,6 +409,17 @@ jobs:
         if: github.ref_type == 'tag'
         uses: softprops/action-gh-release@v2
         with:
+          # 🚨 Born as a DRAFT, and it stays one until the image is attached
+          # too. This job ends ~35 minutes before the image job does, and until
+          # today the release (and the OTA manifest) went out the moment it
+          # finished: a device still on the old layout would see the update,
+          # apply it, convert itself — and then look for an image that did not
+          # exist yet. A draft is invisible to the API the devices read, so
+          # nobody sees a release that cannot be completed. publish-image
+          # un-drafts it; if the image fails, the release simply never appears.
+          # Companion tags have no image step, so they are published straight
+          # away or they would stay a draft for ever.
+          draft: ${{ !contains(github.ref_name, 'companion') }}
           # A tag with a hyphen (e.g. v2.5.7-dev.1) is a prerelease → the dev
           # OTA channel. GitHub's /releases/latest (used by the prod channel)
           # ignores prereleases, so dev builds never reach prod devices.
@@ -454,8 +465,12 @@ jobs:
       # redeploys on its own from here; see OTA_MANIFEST_BASE in
       # api_server.py for why GitHub Pages itself is no longer in the loop
       # (its custom-domain cert got permanently stuck).
+      # Same reason as the draft above: the manifest is what a device actually
+      # reads, so it must not name a release that is still missing half of
+      # itself. For a tag that will get an image, publish-image pushes it at
+      # the end instead.
       - name: Push OTA manifest to gh-pages branch
-        if: github.ref_type == 'tag'
+        if: ${{ github.ref_type == 'tag' && contains(github.ref_name, 'companion') }}
         uses: peaceiris/actions-gh-pages@v4
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
@@ -590,6 +605,16 @@ jobs:
             hifi-image-*.raucb.sha256
             hifi-image-*.info.txt
             hifi-image-*.build-info.txt
+      - name: The release is complete — make it visible
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          # Both worlds are on it now (the legacy bundles from the first job,
+          # the image from this one), so the devices may see it.
+          gh release edit "${GITHUB_REF_NAME}" -R "${{ github.repository }}" --draft=false
+          echo "release ${GITHUB_REF_NAME} published"
+
       - name: Rebuild the OTA Pages manifest with the image asset
         id: manifest
         run: |
@@ -650,4 +675,9 @@ jobs:
             echo "::error::release $TAG is incomplete:$MISSING — devices on the old layout and devices already on A/B must BOTH find their update in every release"
             exit 1
           fi
-          echo "release $TAG serves both the old and the new layout"
+          DRAFT=$(gh release view "$TAG" -R "${{ github.repository }}" --json isDraft -q .isDraft)
+          if [ "$DRAFT" != "false" ]; then
+            echo "::error::release $TAG is still a draft — it would be invisible to every device"
+            exit 1
+          fi
+          echo "release $TAG serves both the old and the new layout, and is visible"

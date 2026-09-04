@@ -352,6 +352,21 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Read the release's current visibility
+        id: relstate
+        if: ${{ inputs.make_release }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          # false when the release does not exist yet: then this job creates it
+          # and a visible release is the historical behaviour for an ISO-only
+          # publish.
+          D=$(gh release view "${{ inputs.tag }}" -R "${{ github.repository }}" --json isDraft -q .isDraft 2>/dev/null || echo false)
+          [ "$D" = "true" ] || D=false
+          echo "is_draft=$D" >> "$GITHUB_OUTPUT"
+          echo "release ${{ inputs.tag }}: draft=$D (left as it is)"
+
       - name: Publish ISO to GitHub Release
         if: ${{ inputs.make_release }}
         uses: softprops/action-gh-release@v2
@@ -367,6 +382,14 @@ jobs:
           # is a prerelease, so it never becomes /releases/latest and can't
           # be mistaken for a stable prod release by the OTA fallback path.
           prerelease: ${{ contains(inputs.tag, '-') }}
+          # 🚨 Attaching an ISO must not decide whether a release is visible.
+          # The OTA build keeps it a draft until the system image is on it too,
+          # and this job can perfectly well run while that is still building;
+          # left alone, the action would clear the draft flag and expose a
+          # release whose image does not exist yet. It must not re-draft an
+          # already published one either, which is why the state is read first
+          # and handed back unchanged rather than decided here.
+          draft: ${{ steps.relstate.outputs.is_draft }}
           files: |
             ${{ steps.iso.outputs.iso }}
             ${{ steps.iso.outputs.iso }}.sha256
