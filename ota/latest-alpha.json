@@ -1,51 +1,51 @@
 {
-  "tag_name": "v2.5.24-dev.9-alpha8",
-  "name": "v2.5.24-dev.9-alpha8",
-  "body": "## What's new in v2.5.24-dev.9-alpha8\n\n- factory reset: erase the data partition instead of a list of files\n- site: count visits by network, not by user-agent alone\n- installer: a freshly installed unit must still meet the setup wizard\n- ci: drop the A/B field-test package workflow\n- installer: a firmware that refuses to record a boot entry is not a failed install\n- installer: the kiosk button must install, and grub-install needs a real filesystem\n",
+  "tag_name": "v2.5.24-dev.9-alpha9",
+  "name": "v2.5.24-dev.9-alpha9",
+  "body": "## What's new in v2.5.24-dev.9-alpha9\n\n- lyrion: the wizard installs the music server, not the first boot\n",
   "assets": [
     {
-      "name": "hifi-qtui-v2.5.24-dev.9-alpha8.tar.gz",
-      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.24-dev.9-alpha8/hifi-qtui-v2.5.24-dev.9-alpha8.tar.gz",
-      "size": 4839316
+      "name": "hifi-qtui-v2.5.24-dev.9-alpha9.tar.gz",
+      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.24-dev.9-alpha9/hifi-qtui-v2.5.24-dev.9-alpha9.tar.gz",
+      "size": 4839262
     },
     {
-      "name": "hifi-qtui-v2.5.24-dev.9-alpha8.tar.gz.sha256",
-      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.24-dev.9-alpha8/hifi-qtui-v2.5.24-dev.9-alpha8.tar.gz.sha256",
+      "name": "hifi-qtui-v2.5.24-dev.9-alpha9.tar.gz.sha256",
+      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.24-dev.9-alpha9/hifi-qtui-v2.5.24-dev.9-alpha9.tar.gz.sha256",
       "size": 104
     },
     {
-      "name": "hifi-system-v2.5.24-dev.9-alpha8.tar.gz",
-      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.24-dev.9-alpha8/hifi-system-v2.5.24-dev.9-alpha8.tar.gz",
-      "size": 471832
+      "name": "hifi-system-v2.5.24-dev.9-alpha9.tar.gz",
+      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.24-dev.9-alpha9/hifi-system-v2.5.24-dev.9-alpha9.tar.gz",
+      "size": 472649
     },
     {
-      "name": "hifi-system-v2.5.24-dev.9-alpha8.tar.gz.sha256",
-      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.24-dev.9-alpha8/hifi-system-v2.5.24-dev.9-alpha8.tar.gz.sha256",
+      "name": "hifi-system-v2.5.24-dev.9-alpha9.tar.gz.sha256",
+      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.24-dev.9-alpha9/hifi-system-v2.5.24-dev.9-alpha9.tar.gz.sha256",
       "size": 106
     },
     {
-      "name": "hifi-os-v2.5.24-dev.9-alpha8.tar.gz",
-      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.24-dev.9-alpha8/hifi-os-v2.5.24-dev.9-alpha8.tar.gz",
-      "size": 1403970
+      "name": "hifi-os-v2.5.24-dev.9-alpha9.tar.gz",
+      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.24-dev.9-alpha9/hifi-os-v2.5.24-dev.9-alpha9.tar.gz",
+      "size": 1403972
     },
     {
-      "name": "hifi-os-v2.5.24-dev.9-alpha8.tar.gz.sha256",
-      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.24-dev.9-alpha8/hifi-os-v2.5.24-dev.9-alpha8.tar.gz.sha256",
+      "name": "hifi-os-v2.5.24-dev.9-alpha9.tar.gz.sha256",
+      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.24-dev.9-alpha9/hifi-os-v2.5.24-dev.9-alpha9.tar.gz.sha256",
       "size": 102
     },
     {
-      "name": "hifi-os-v2.5.24-dev.9-alpha8.tar.gz.sha256.sig",
-      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.24-dev.9-alpha8/hifi-os-v2.5.24-dev.9-alpha8.tar.gz.sha256.sig",
+      "name": "hifi-os-v2.5.24-dev.9-alpha9.tar.gz.sha256.sig",
+      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.24-dev.9-alpha9/hifi-os-v2.5.24-dev.9-alpha9.tar.gz.sha256.sig",
       "size": 64
     },
     {
-      "name": "hifi-image-v2.5.24-dev.9-alpha8.raucb",
-      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.24-dev.9-alpha8/hifi-image-v2.5.24-dev.9-alpha8.raucb",
-      "size": 1007626941
+      "name": "hifi-image-v2.5.24-dev.9-alpha9.raucb",
+      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.24-dev.9-alpha9/hifi-image-v2.5.24-dev.9-alpha9.raucb",
+      "size": 1007631037
     },
     {
-      "name": "hifi-image-v2.5.24-dev.9-alpha8.raucb.sha256",
-      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.24-dev.9-alpha8/hifi-image-v2.5.24-dev.9-alpha8.raucb.sha256",
+      "name": "hifi-image-v2.5.24-dev.9-alpha9.raucb.sha256",
+      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.24-dev.9-alpha9/hifi-image-v2.5.24-dev.9-alpha9.raucb.sha256",
       "size": 104
     }
   ]
