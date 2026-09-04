@@ -215,16 +215,19 @@ if ! _out=$(in_chroot systemctl enable systemd-sysext.service 2>&1); then
     # alcune build di systemd la distribuiscono senza sezione [Install]:
     # in quel caso il collegamento si fa a mano, il risultato è lo stesso
     log "systemd-sysext.service non abilitabile con systemctl ($_out), collegamento a mano"
-    [ -e "$CH/usr/lib/systemd/system/systemd-sysext.service" ] \
+    [ -f "$CH/usr/lib/systemd/system/systemd-sysext.service" ] \
         || die "systemd-sysext.service non esiste in questa immagine: systemd troppo vecchio per gli add-on"
     mkdir -p "$CH/etc/systemd/system/sysinit.target.wants"
     ln -sf /usr/lib/systemd/system/systemd-sysext.service \
         "$CH/etc/systemd/system/sysinit.target.wants/systemd-sysext.service"
 fi
-[ -e "$CH/etc/systemd/system/multi-user.target.wants/hifi-ext-refresh.service" ] \
+# 🚨 -L, non -e: il collegamento creato dentro il chroot punta a un percorso
+# assoluto (/etc/systemd/system/...), che visto dall'host è pendente — con -e
+# il controllo fallisce anche quando l'unità è abilitata benissimo.
+[ -L "$CH/etc/systemd/system/multi-user.target.wants/hifi-ext-refresh.service" ] \
     || die "hifi-ext-refresh.service non abilitata: gli add-on non verrebbero ricostruiti dopo un aggiornamento"
 if ! in_chroot systemctl is-enabled systemd-sysext.service >/dev/null 2>&1 \
-   && [ ! -e "$CH/etc/systemd/system/sysinit.target.wants/systemd-sysext.service" ]; then
+   && [ ! -L "$CH/etc/systemd/system/sysinit.target.wants/systemd-sysext.service" ]; then
     die "systemd-sysext.service non abilitata: gli add-on non verrebbero mai montati"
 fi
 mkdir -p "$CH/var/lib/extensions" "$CH/usr/share/factory/var/lib/hifi-player/ext"
