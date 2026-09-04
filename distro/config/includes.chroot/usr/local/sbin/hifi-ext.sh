@@ -58,7 +58,13 @@ if [ -n "${HIFI_EXT_TEST_ROOT:-}" ]; then
     SYSROOT="$_R"
 fi
 
-if [ -r /usr/local/sbin/hifi-log.sh ]; then
+# 🚨 Only redirect into the log when nobody is watching. hifi_log_init sends
+# stdout and stderr to /var/log/hifi, which is right for the refresh service but
+# wrong for a command someone types: the first run on the appliance printed
+# absolutely nothing, so it looked hung, and interrupting it left the lock
+# behind — after which every later run refused, silently. Interactive runs talk
+# to the terminal; the service still gets its log (and the journal).
+if [ ! -t 1 ] && [ -r /usr/local/sbin/hifi-log.sh ]; then
     # shellcheck source=distro/config/includes.chroot/usr/local/sbin/hifi-log.sh
     # shellcheck disable=SC1091
     . /usr/local/sbin/hifi-log.sh
@@ -86,11 +92,19 @@ json_get() {  # <file> <key> — the metadata is one-line JSON, like /run/hifi-*
     sed -n "s/.*\"$2\":\"\([^\"]*\)\".*/\1/p" "$1" 2>/dev/null | head -n 1
 }
 
+# The lock carries the pid of its owner: a run killed outright (or a terminal
+# closed mid-download) used to leave a file behind that locked the command out
+# for good, with no way to tell a live run from a dead one.
 lock() {
-    # shellcheck disable=SC2188  # noclobber test, the redirect is the point
-    if ! (set -C; : > "$LOCK") 2>/dev/null; then
-        die "another hifi-ext run is in progress ($LOCK)"
+    if [ -f "$LOCK" ]; then
+        _owner=$(head -n 1 "$LOCK" 2>/dev/null | tr -dc '0-9')
+        if [ -n "$_owner" ] && kill -0 "$_owner" 2>/dev/null; then
+            die "another hifi-ext run is in progress (pid $_owner)"
+        fi
+        warn "stale lock from pid ${_owner:-?} — taking over"
+        rm -f "$LOCK"
     fi
+    echo $$ > "$LOCK"
     trap 'rm -f "$LOCK"' EXIT INT TERM
 }
 

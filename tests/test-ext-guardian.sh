@@ -115,7 +115,21 @@ contains "refresh: re-pinned to the new image" \
          "SYSEXT_LEVEL=v2.5.25-test"
 contains "refresh: listed as active again" "$(run list)" "active"
 
-# ── 7. removal ──────────────────────────────────────────────────────────────
+# ── 7. a lock left behind by a killed run must not block the next one ───────
+setup
+printf 'usr/bin/newtool\n' > "$ROOT/deb.list"
+echo 999999 > "$ROOT/hifi-ext.lock"          # pid that cannot be alive
+out=$(run add fake); rc=$?
+check "stale lock: taken over instead of refusing" "0" "$rc"
+contains "stale lock: says so" "$out" "stale lock"
+setup
+printf 'usr/bin/newtool\n' > "$ROOT/deb.list"
+echo $$ > "$ROOT/hifi-ext.lock"              # a pid that IS alive
+out=$(run add fake); rc=$?
+check "live lock: refused" "1" "$rc"
+contains "live lock: names the owner" "$out" "in progress"
+
+# ── 8. removal ──────────────────────────────────────────────────────────────
 run remove fake >/dev/null 2>&1
 check "remove: extension gone" "no" \
       "$([ -d "$ROOT/var/lib/extensions/fake" ] && echo yes || echo no)"
