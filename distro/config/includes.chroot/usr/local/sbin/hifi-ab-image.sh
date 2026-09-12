@@ -31,6 +31,9 @@ IMAGE_VERSION_FILE=${HIFI_IMAGE_VERSION_FILE:-/usr/lib/osmium/IMAGE_VERSION}
 AB_GRUBD=${HIFI_AB_GRUBD:-/etc/grub.d/45_hifi_abconvert}
 MARK_IMAGE="$LOCAL/image-kicked"
 MARK_KICKOFF="$LOCAL/kickoff-done"
+MARK_REBOOT="$LOCAL/armed-reboot-done"
+# Dove si vede se sta uscendo audio davvero (sovrascrivibile dalla prova).
+PCM_GLOB=${HIFI_AB_PCM_GLOB:-/proc/asound/card*/pcm*p/sub*/status}
 UPDATE_DIR=${HIFI_UPDATE_DIR:-/var/lib/hifi-player/update}
 STATE_FILE="$UPDATE_DIR/state"
 ERROR_FILE="$UPDATE_DIR/error.json"
@@ -54,10 +57,13 @@ write_error_state() {  # <message-en> <key>
 
 [ -f "$IMAGE_VERSION_FILE" ] && exit 0
 
-# Arma la conversione per il PROSSIMO riavvio, senza provocarlo: `prepare`
-# imposta una voce GRUB una tantum, quindi si converte quando l'apparecchio
-# viene riavviato per i fatti suoi (o al prossimo aggiornamento, che riavvia
-# comunque). Riavviare qui, di sorpresa, interromperebbe la musica.
+# Arma la conversione per il PROSSIMO riavvio: `prepare` imposta una voce GRUB
+# una tantum. Il riavvio lo provoca reboot_for_conversion() qui sotto, che
+# prima guarda se c'e' qualcuno che ascolta.
+# 1 solo quando la conversione è stata armata IN QUESTO giro: è la condizione
+# del riavvio qui sotto. "Lo snippet GRUB c'è" non basta — dopo un avvio che
+# non ha convertito resterebbe lì, e si riavvierebbe per niente.
+armed_now=0
 arm_conversion() {
     [ -x "$AB_CONVERT" ] || return 0
     [ -f "$RAUC_CONF" ] && return 0
@@ -67,17 +73,71 @@ arm_conversion() {
     if "$AB_PRECHECK" >/dev/null 2>&1; then
         if "$AB_CONVERT" prepare >/dev/null 2>&1; then
             log "conversione A/B armata: verrà eseguita al prossimo riavvio"
-            # Detto anche a chi guarda lo schermo o il web admin: qui non si
-            # riavvia di sorpresa, quindi senza una riga il proprietario che ha
-            # appena liberato spazio non ha modo di sapere che la sua mossa è
-            # servita.
+            # Detto anche a chi guarda lo schermo o il web admin: se il
+            # riavvio qui sotto non si può fare (sta suonando), il proprietario
+            # che ha appena liberato spazio deve poter sapere che la sua mossa
+            # è servita e che manca solo un riavvio.
             write_state_done "Ready to switch to the new system at the next restart" update.ab.armed
+            armed_now=1
+            return 0
         else
             log "conversione A/B: prepare fallito, si riprova al prossimo avvio"
         fi
     else
         log "conversione A/B non possibile: $(sed -n 's/.*"reasons":"\([^"]*\)".*/\1/p' "$AB_PRECHECK_JSON" 2>/dev/null | cut -c1-160)"
     fi
+}
+
+# 🚨 Armare non basta. La conversione avviene al riavvio, e un apparecchio che
+# nessuno spegne resta armato all'infinito: visto sul campo con la dev.10 —
+# aggiornato, armato, e ancora su root singola finché il proprietario non l'ha
+# riavviato a mano. Il runner degli aggiornamenti un riavvio ce l'ha (chiude
+# lui la sessione), ma qui ci si arriva proprio quando il runner era quello
+# VECCHIO, che di A/B non sapeva nulla — cioè per OGNI apparecchio ancora da
+# convertire, visto che il blocco A/B nel runner esiste solo dalla 2.5.24-dev.10
+# in avanti. Senza questo riavvio la flotta resta ferma ad aspettare che
+# qualcuno stacchi la corrente.
+#
+# Due paletti, perché resta un lettore musicale:
+#   * mai mentre suona — /proc/asound dice se sta uscendo audio davvero, per
+#     qualunque sorgente, e chi sta ascoltando non si vede troncare il brano.
+#     Chi non ascolta non si accorge di niente: la riproduzione viene comunque
+#     ripresa al riavvio (hifi-capture-playback-state.py).
+#   * una volta sola per apparecchio (MARK_REBOOT). Se la conversione fallisse
+#     e si riarmasse da sola, un riavvio a ogni avvio sarebbe un ciclo senza
+#     fine — e su un apparecchio senza schermo non se ne accorgerebbe nessuno
+#     finché non smette di suonare per sempre.
+audio_running() {
+    for _st in $PCM_GLOB; do
+        [ -r "$_st" ] || continue
+        grep -q '^state: RUNNING' "$_st" 2>/dev/null && return 0
+    done
+    return 1
+}
+
+reboot_for_conversion() {
+    [ "$armed_now" = 1 ] || return 0      # armata adesso, o non c'è niente da completare
+    [ -f "$RAUC_CONF" ] && return 0
+    if [ -f "$MARK_REBOOT" ]; then
+        log "conversione armata: riavvio automatico già tentato una volta, non si insiste"
+        return 0
+    fi
+    if audio_running; then
+        log "conversione armata: sta suonando, si converte al prossimo riavvio"
+        return 0
+    fi
+    # Un attimo perché il resto dell'avvio si assesti, poi si ricontrolla:
+    # qualcuno può aver premuto play nel frattempo.
+    sleep "${HIFI_AB_REBOOT_DELAY:-20}"
+    if audio_running; then
+        log "conversione armata: è partita la musica, riavvio rimandato"
+        return 0
+    fi
+    mkdir -p "$LOCAL"
+    date -u +%Y-%m-%dT%H:%M:%SZ > "$MARK_REBOOT"
+    log "conversione armata: riavvio per completarla"
+    write_state_done "Restarting to switch to the new system" update.ab.rebooting
+    ${HIFI_REBOOT_CMD:-systemctl reboot} || log "riavvio fallito"
 }
 
 MODE=""
@@ -100,6 +160,7 @@ else
     # quello che mi ha chiesto e non è cambiato niente". Costa una pre-verifica
     # per avvio, e solo finché l'apparecchio non è convertito.
     arm_conversion
+    reboot_for_conversion
     exit 0
 fi
 
@@ -135,6 +196,7 @@ while :; do
             log "kickoff: niente da aggiornare, l'apparecchio è già all'ultima versione"
             arm_conversion
             mkdir -p "$LOCAL"; date -u +%Y-%m-%dT%H:%M:%SZ > "$MARK_KICKOFF"
+            reboot_for_conversion
             exit 0 ;;
         esac
     fi

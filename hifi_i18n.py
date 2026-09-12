@@ -329,6 +329,9 @@ MESSAGES = {
     'update.apply.stuckUpdateMode': {
         'en': 'Could not leave update mode: restart the device and try again',
         'it': "Non è stato possibile uscire dalla modalità aggiornamento: riavvia l'apparecchio e riprova"},
+    'update.ab.rebooting': {
+        'en': 'Restarting now to switch to the new system',
+        'it': 'Riavvio in corso per passare al nuovo sistema'},
     'update.ab.converting': {'en': 'Switching to the new system — the device will restart on its own',
                              'it': 'Passaggio al nuovo sistema — l\'apparecchio si riavvierà da solo'},
     'update.image.kickFailed': {'en': 'The system image update could not be started — try "Update now" again',
