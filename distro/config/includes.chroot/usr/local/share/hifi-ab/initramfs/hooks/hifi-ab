@@ -1,25 +1,27 @@
 #!/bin/sh
-# Osmium Sound — porta nell'initrd di conversione gli strumenti per
-# restringere la root e riscrivere la GPT (vedi scripts/local-premount/hifi-ab-convert).
+# Osmium Sound — puts into the conversion initrd the tools needed to shrink the
+# root and rewrite the GPT (see scripts/local-premount/hifi-ab-convert).
 PREREQ=""
 prereqs() { echo "$PREREQ"; }
 case "${1:-}" in
     prereqs) prereqs; exit 0 ;;
 esac
-# shellcheck disable=SC1091  # esiste solo sull'apparecchio
+# shellcheck disable=SC1091  # only exists on the appliance
 . /usr/share/initramfs-tools/hook-functions
 
-# Con un nome proprio (hifi-*): l'hook zz-busybox di initramfs-tools gira PRIMA
-# di questo e registra i suoi applet (mke2fs, blkid, tune2fs…) agli stessi
-# percorsi; copy_exec non sovrascrive un file già presente, e il mke2fs di
-# BusyBox non conosce -t (successo sul Dell). Lo script li chiama per nome.
+# Under their own names (hifi-*): initramfs-tools' zz-busybox hook runs BEFORE
+# this one and registers its applets (mke2fs, blkid, tune2fs...) at the very
+# same paths; copy_exec does not overwrite a file that is already there, and
+# BusyBox's mke2fs does not know -t (seen on the Dell). The script calls them
+# by these names.
 for b in sfdisk resize2fs mke2fs e2fsck tune2fs dumpe2fs blkid partx blockdev; do
     p=$(command -v "$b" 2>/dev/null) || { echo "W: hifi-ab: $b non trovato" >&2; continue; }
     p=$(readlink -f "$p")
     copy_exec "$p" "/usr/sbin/hifi-$b"
 done
-# mke2fs -t ext4 legge le definizioni da /etc/mke2fs.conf: senza, nell'initrd
-# fallisce ("Filesystem type ext4 not defined") — successo sul Dell, 2026-09-01.
+# mke2fs -t ext4 reads its definitions from /etc/mke2fs.conf: without it, in
+# the initrd it fails ("Filesystem type ext4 not defined") — seen on the Dell,
+# 2026-09-01.
 if [ -f /etc/mke2fs.conf ]; then
     copy_file config /etc/mke2fs.conf
 fi

@@ -1,19 +1,19 @@
 #!/bin/sh
-# shellcheck disable=SC2154,SC1091  # rootmnt/ROOT li imposta l'init dell'initramfs; /scripts/functions esiste solo lì
-# Osmium Sound — stato persistente per la root read-only degli slot RAUC.
+# shellcheck disable=SC2154,SC1091  # rootmnt/ROOT are set by the initramfs init; /scripts/functions only exists there
+# Osmium Sound — persistent state for the read-only root of a RAUC slot.
 #
-# Gira nell'initramfs dopo che la root è montata (in sola lettura) su
-# ${rootmnt} e PRIMA che parta systemd, così PID 1 nasce già con:
-#   /etc   = overlayfs (lower = immagine, upper/work su /data/etc)
-#   /var   = bind di /data/var   (seminato dall'immagine al primo avvio)
-#   /home  = bind di /data/home  (idem)
-#   /boot/efi = la ESP dello stesso disco (grubenv di RAUC)
-# e con /etc/machine-id già presente nell'upper: se mancasse, systemd
-# tratterebbe l'avvio come "primo avvio" e riapplicherebbe i preset.
+# Runs in the initramfs after the root is mounted (read-only) on ${rootmnt} and
+# BEFORE systemd starts, so PID 1 comes up already holding:
+#   /etc   = overlayfs (lower = the image, upper/work on /data/etc)
+#   /var   = bind mount of /data/var   (seeded from the image at first boot)
+#   /home  = bind mount of /data/home  (same)
+#   /boot/efi = the ESP of this same disk (RAUC's grubenv)
+# and with /etc/machine-id already in the upper layer: were it missing, systemd
+# would treat the boot as a "first boot" and re-apply its presets.
 #
-# È un no-op ovunque non sia uno slot immagine: senza rauc.slot= sulla riga
-# di comando del kernel (o senza il marcatore dell'immagine) esce subito, e
-# la root legacy scrivibile non viene toccata.
+# A no-op anywhere that is not an image slot: with no rauc.slot= on the kernel
+# command line (or no image marker) it exits at once, and a writable legacy
+# root is never touched.
 PREREQ=""
 prereqs() { echo "$PREREQ"; }
 case "${1:-}" in
@@ -29,7 +29,7 @@ done
 [ -n "$slot" ] || exit 0
 [ -f "${rootmnt}/usr/lib/osmium/IMAGE_VERSION" ] || exit 0
 
-# device della root: dal mount di ${rootmnt} (ROOT non è garantita agli hook)
+# the root device: from the mount of ${rootmnt} (ROOT is not guaranteed to hooks)
 rootdev=$(awk -v m="${rootmnt}" '$2 == m { d = $1 } END { print d }' /proc/mounts 2>/dev/null)
 [ -n "$rootdev" ] || rootdev=$(readlink -f "${ROOT:-}" 2>/dev/null)
 rootdev=$(readlink -f "$rootdev" 2>/dev/null || echo "$rootdev")
@@ -75,32 +75,32 @@ if [ "$mounted" = 0 ]; then
     mount -t tmpfs -o mode=0755 tmpfs "$D"
 fi
 espdev=$(find_part "EFI System") || espdev=
-# ── ripristino di fabbrica ────────────────────────────────────────────
-# La cancellazione della partizione dati avviene QUI, non da sistema acceso:
-# in /data ci sono l'upper di /etc e gli innesti di /var e /home, e un rm -rf
-# a caldo taglierebbe il ramo su cui il sistema è seduto, a metà strada.
-# hifi-factory-reset.sh lascia solo un marcatore e riavvia; a questo punto
-# l'overlay non è ancora montato e nessuno tiene aperto niente, quindi la
-# cancellazione è una cosa sola: o è avvenuta o non è avvenuta.
+# ── factory reset ──────────────────────────────────────────────────────
+# Erasing the data partition happens HERE, not on a running system: /data holds
+# the upper layer of /etc and the grafts of /var and /home, so an rm -rf while
+# the system is up would saw off the branch it is sitting on, halfway through.
+# hifi-factory-reset.sh only leaves a marker and reboots; at this point the
+# overlay is not mounted yet and nothing holds anything open, so the erase is
+# one single thing: either it happened or it did not.
 #
-# Si salvano quattro cose. music/ perché è la musica di chi possiede
-# l'apparecchio: ci finisce quella che stava in una cartella della root al
-# passaggio al nuovo schema (hifi-ab-media.py) e quella copiata dopo sulle
-# condivisioni di rete. Un ripristino di fabbrica rimette a posto le
-# impostazioni, non cancella la discoteca: la sorgente andrà riaggiunta, i
-# file no. lyrion/ perché altrimenti l'apparecchio resta senza
-# server musicale finché non raggiunge internet per riscaricare il pacchetto
-# (le sue preferenze e cache stanno in /var e se ne vanno comunque: Lyrion
-# riparte come nuovo lo stesso). rauc/ è contabilità che non c'è motivo di
-# buttare. Il machine-id perché da lui deriva il MAC di squeezelite, cioè
-# l'identità del player su LMS: un ripristino serve quasi sempre a risolvere
-# un problema, non a cambiare proprietario, e ricomparire come apparecchio
-# sconosciuto farebbe perdere al server tutte le impostazioni di quel player.
+# Four things are kept. music/ because it is the owner's music: it holds
+# whatever lived in a folder of the root at the move to the new layout
+# (hifi-ab-media.py) and whatever was copied onto the network shares later. A
+# factory reset puts the settings back, it does not throw away the record
+# collection: the source will have to be added again, the files will not.
+# lyrion/ because otherwise the device is left with no music server until it
+# can reach the internet to download the package again (its preferences and
+# caches live in /var and go anyway: Lyrion comes back as new either way).
+# rauc/ is bookkeeping there is no reason to bin. The machine-id because
+# squeezelite's MAC derives from it — that is the player's identity on LMS: a
+# reset is almost always meant to fix a problem, not to change owner, and
+# coming back as an unknown device would lose every setting the server holds
+# for that player.
 if [ "$mounted" = 1 ] && [ -e "$D/.factory-reset" ]; then
     log_begin_msg "Osmium Sound: factory reset, erasing the data partition"
     saved_mid=$(cat "$D/etc/upper/machine-id" 2>/dev/null || true)
     for entry in "$D"/* "$D"/.[!.]* "$D"/..?*; do
-        [ -e "$entry" ] || continue          # glob senza corrispondenze
+        [ -e "$entry" ] || continue          # glob with no matches
         case "${entry##*/}" in
             music|lyrion|rauc) continue ;;
         esac
@@ -111,8 +111,8 @@ if [ "$mounted" = 1 ] && [ -e "$D/.factory-reset" ]; then
         printf '%s\n' "$saved_mid" > "$D/etc/upper/machine-id"
         chmod 0444 "$D/etc/upper/machine-id"
     fi
-    # Stesso marcatore che l'installer semina su un apparecchio nuovo: senza,
-    # si riparte da una /data vuota ma senza wizard di configurazione.
+    # The same marker the installer seeds on a new device: without it the
+    # device restarts from an empty /data but with no setup wizard.
     printf 'pending\n' > "$D/etc/upper/hifi-player/provisioning-pending"
     sync
     log_end_msg
@@ -120,11 +120,11 @@ fi
 
 mkdir -p "$D/etc/upper" "$D/etc/work" "$D/var" "$D/home" "$D/rauc" "$D/lyrion"
 
-# /var e /home: al primo avvio di OGNI versione dell'immagine si copiano le
-# voci dell'immagine che su /data ancora mancano (cp -an: mai sovrascrivere).
-# Vale sia per la partizione appena creata sia per quella già seminata dalla
-# root legacy (hifi-ab-seed.sh): lo stato esistente non viene toccato, il
-# database dpkg, /var/lib/systemd ecc. dell'immagine arrivano comunque.
+# /var and /home: at the first boot of EVERY image version, the image's own
+# entries that /data is still missing are copied in (cp -an: never overwrite).
+# That holds both for a partition just created and for one already seeded from
+# the legacy root (hifi-ab-seed.sh): existing state is left alone, while the
+# image's dpkg database, /var/lib/systemd and so on arrive all the same.
 imgver=$(cat "${rootmnt}/usr/lib/osmium/IMAGE_VERSION" 2>/dev/null || echo unknown)
 if [ "$(cat "$D/var/.hifi-image-version" 2>/dev/null)" != "$imgver" ]; then
     cp -an "${rootmnt}/var/." "$D/var/" 2>/dev/null || log_warning_msg "hifi-state: copia di /var incompleta"

@@ -1,19 +1,21 @@
 #!/bin/sh
-# shellcheck disable=SC2154,SC1091  # ROOT lo imposta l'init dell'initramfs; /scripts/functions esiste solo lì
-# Osmium Sound — conversione del disco allo schema A/B, eseguita UNA volta
-# dall'initrd dedicato (avvio one-shot via grub-reboot), con la root ancora
-# smontata:
-#   1. e2fsck -f della root legacy
-#   2. resize2fs a SLOT_MIB            <- unica finestra non atomica
-#   3. GPT modificata SUL POSTO (sfdisk -d → modifica → sfdisk): p3 ridotta e
-#      rinominata hifi-root-a, p4 hifi-root-b, p5 hifi-data. I GUID di disco e
-#      partizioni restano quelli di prima: la voce di avvio EFI li incorpora.
-#   4. mke2fs su hifi-data, e2fsck finale, esito su ESP e /data
-# Poi l'avvio prosegue normalmente sulla root legacy (root=UUID= invariato).
-# Qualsiasi errore PRIMA del resize lascia il disco com'era; un'interruzione
-# tra resize e sfdisk lascia solo un filesystem più piccolo della partizione.
-# Agisce SOLO se la riga di comando porta hifi.abconvert=1 e l'UUID indicato
-# in hifi.abconvert.uuid= è quello della root che sta per essere montata.
+# shellcheck disable=SC2154,SC1091  # ROOT is set by the initramfs init; /scripts/functions only exists there
+# Osmium Sound — converting the disk to the A/B layout, run ONCE by the
+# dedicated initrd (a one-shot boot through grub-reboot), with the root still
+# unmounted:
+#   1. e2fsck -f of the legacy root
+#   2. resize2fs down to SLOT_MIB      <- the only non-atomic window
+#   3. the GPT edited IN PLACE (sfdisk -d -> edit -> sfdisk): p3 shrunk and
+#      renamed hifi-root-a, p4 hifi-root-b, p5 hifi-data. The disk and
+#      partition GUIDs stay as they were: the EFI boot entry embeds them.
+#   4. mke2fs on hifi-data, a final e2fsck, the outcome written to the ESP
+#      and to /data
+# The boot then carries on normally on the legacy root (root=UUID= unchanged).
+# Any error BEFORE the resize leaves the disk as it was; an interruption
+# between the resize and sfdisk leaves only a filesystem smaller than its
+# partition. It acts ONLY when the command line carries hifi.abconvert=1 and
+# the UUID given in hifi.abconvert.uuid= is that of the root about to be
+# mounted.
 PREREQ=""
 prereqs() { echo "$PREREQ"; }
 case "${1:-}" in
@@ -35,9 +37,10 @@ done
 [ "$conv" = 1 ] || exit 0
 
 LOG=/run/hifi-abconvert.log
-# Strumenti per percorso assoluto: nell'initrd BusyBox registra i propri applet
-# (mke2fs, blkid, …) e nel PATH possono vincere sui binari veri copiati
-# dall'hook — sul Dell ha risposto il mke2fs di BusyBox, che non conosce -t.
+# The tools by absolute path: in the initrd BusyBox registers its own applets
+# (mke2fs, blkid, ...) and in the PATH they can beat the real binaries the hook
+# copied in — on the Dell it was BusyBox's mke2fs that answered, and that one
+# does not know -t.
 MKE2FS=/usr/sbin/hifi-mke2fs; E2FSCK=/usr/sbin/hifi-e2fsck; RESIZE2FS=/usr/sbin/hifi-resize2fs
 TUNE2FS=/usr/sbin/hifi-tune2fs; DUMPE2FS=/usr/sbin/hifi-dumpe2fs; SFDISK=/usr/sbin/hifi-sfdisk
 BLKID=/usr/sbin/hifi-blkid; PARTX=/usr/sbin/hifi-partx; BLOCKDEV=/usr/sbin/hifi-blockdev
@@ -53,8 +56,8 @@ say() {
 }
 progress() { plymouth system-update --progress="$1" 2>/dev/null || true; }
 
-# Il device della root si ricava dalla riga di comando (root=UUID=… ecc.):
-# la variabile ROOT dell'initramfs non è garantita nell'ambiente degli hook.
+# The root device is taken from the command line (root=UUID=... and so on):
+# the initramfs ROOT variable is not guaranteed in a hook's environment.
 rootspec=
 for x in $cmdline; do
     case "$x" in root=*) rootspec=${x#root=} ;; esac
@@ -82,9 +85,9 @@ part_dev() {  # numero -> /dev/...
 
 # Scrive l'esito dove sopravvive: sulla ESP (abconvert.state) e in /run.
 finish_state() {  # <stato> <messaggio>
-    echo "hifi-ab: esito=$1 $2" >> "$LOG"
+    echo "hifi-ab: outcome=$1 $2" >> "$LOG"
     esp=$(part_dev 2 2>/dev/null) || esp=
-    # senza disco noto (root non risolta) si cerca la ESP per etichetta
+    # with no known disk (the root never resolved) find the ESP by label
     [ -n "$esp" ] || esp=$("$BLKID" -L EFI 2>/dev/null | head -n 1)
     if [ -n "$esp" ]; then
         mkdir -p /run/hifi-esp
@@ -125,9 +128,10 @@ progress 5
 rc=$?
 [ "$rc" -lt 4 ] || bail "e2fsck found unrepairable errors (rc=$rc)"
 
-# Il journal ext4 (1 GiB su questi dischi) conta per intero nella dimensione
-# minima: si toglie prima del resize e se ne ricrea uno piccolo dopo. È
-# reversibile e non tocca i dati (filesystem appena controllato e smontato).
+# The ext4 journal (1 GiB on these disks) counts in full towards the minimum
+# size: it is removed before the resize and a small one is made afterwards.
+# That is reversible and does not touch the data (the filesystem has just been
+# checked and is unmounted).
 if "$DUMPE2FS" -h "$rootdev" 2>/dev/null | grep -q '^Filesystem features:.*has_journal'; then
     "$TUNE2FS" -O ^has_journal "$rootdev" >> "$LOG" 2>&1 || bail "could not remove the journal"
 fi
@@ -139,14 +143,14 @@ if [ -z "$blksz" ] || [ -z "$minblk" ]; then
 fi
 min_mib=$(( minblk * blksz / 1048576 + 1 ))
 
-# Slot A: si decide QUI, sul posto, non a tavolino. Lo spazio da spartire va
-# dall'inizio della root alla fine del disco (meno 1 MiB per la GPT di scorta),
-# così conta anche l'eventuale spazio di un disco allargato dopo
-# l'installazione, che sta in coda alla partizione 3. Lo slot A prende il
-# minimo del filesystem più un margine, lo slot B la sua taglia fissa, i dati
-# il resto — che non può scendere sotto datamin_mib. Il valore passato dalla
-# pre-verifica resta solo come ripiego: fra quel calcolo e questo avvio la
-# root può essere cambiata (pulizia profonda compresa).
+# Slot A: decided HERE, on the spot, not worked out in advance. The space to
+# share out runs from the start of the root to the end of the disk (less 1 MiB
+# for the backup GPT), so it also counts whatever space a disk grown after
+# installation has, which sits after partition 3. Slot A takes the filesystem's
+# minimum plus a margin, slot B its fixed size, the data the rest — which may
+# not fall below datamin_mib. The value handed over by the pre-check is kept
+# only as a fallback: between that calculation and this boot the root may well
+# have changed (the deep cleanup included).
 # 🚨 Two different units meet here. /sys/class/block/*/{size,start} are ALWAYS
 # in 512-byte sectors, whatever the disk is; sfdisk speaks the disk's LOGICAL
 # sector size. They coincide on every 512e/512n drive — which is everything we
@@ -200,7 +204,7 @@ p3line=$(grep -E "^${rootdev}[[:space:]]*:" "$dump") || bail "partition 3 not fo
 p3start=$(printf '%s\n' "$p3line" | sed -n 's/.*start= *\([0-9]*\).*/\1/p')
 p3size=$(printf '%s\n' "$p3line" | sed -n 's/.*size= *\([0-9]*\).*/\1/p')
 if [ -z "$p3start" ] || [ -z "$p3size" ]; then bail "unreadable GPT dump"; fi
-# la partizione dati prende dalla fine dello slot B alla fine del disco
+# the data partition runs from the end of slot B to the end of the disk
 _tail=$(( _dsect - p3start - sect - sectb - per_mib ))
 [ "$_tail" -ge $(( datamin_mib * per_mib )) ] \
     || bail "not enough room after the two slots for ${datamin_mib} MiB of data (${_tail} sectors left)"
@@ -224,7 +228,7 @@ p5=$(part_dev 5) || bail "partition 5 did not appear after rewriting the GPT"
 progress 80
 
 say "preparing the data partition (4/4)"
-# -t ext4 esplicito: nell'initrd non c'è /etc/mke2fs.conf e "$MKE2FS" cadrebbe su ext2
+# -t ext4 spelled out: the initrd has no /etc/mke2fs.conf and "$MKE2FS" would fall back to ext2
 "$MKE2FS" -t ext4 -F -q -m 1 -L hifi-data -O metadata_csum_seed "$p5" >> "$LOG" 2>&1 || bail "mke2fs on $p5 failed"
 "$E2FSCK" -f -y "$rootdev" >> "$LOG" 2>&1 || true
 mkdir -p /run/hifi-data

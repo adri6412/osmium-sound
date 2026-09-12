@@ -6,9 +6,9 @@ ConditionPathExists=/usr/lib/osmium/IMAGE_VERSION
 ConditionPathExists=/var/lib/hifi-player/ext
 After=systemd-sysext.service network-online.target
 Wants=network-online.target
-# In una sessione live non c'è niente da configurare né da sorvegliare:
-# la ISO a filesystem unico avvia la stessa immagine degli apparecchi,
-# quindi senza questa riga queste unità partirebbero anche lì.
+# A live session has nothing to configure and nothing to watch over: the
+# single-filesystem ISO boots the very same image the appliances run, so
+# without this line these units would start there too.
 ConditionKernelCommandLine=!boot=live
 
 [Service]

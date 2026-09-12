@@ -29,7 +29,7 @@ sudo cp "$LOCALES_SRC"/*.json "$LOCALES/"
 
 sudo tee /etc/systemd/system/hifi-qt.service >/dev/null <<UNIT
 [Unit]
-Description=Osmium Sound — interfaccia Qt (DRM/KMS, eglfs)
+Description=Osmium Sound — Qt on-screen interface (DRM/KMS, eglfs)
 After=hifi-api.service hifi-vumeter.service
 After=systemd-user-sessions.service plymouth-quit-wait.service
 Conflicts=lightdm.service hifi-native-ui.service
