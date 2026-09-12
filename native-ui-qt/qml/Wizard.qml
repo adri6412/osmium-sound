@@ -38,7 +38,7 @@ Item {
     property int countdown: 0
 
     Component.onCompleted: {
-        if (Sys.forcedWizard) { dry = true; mode = Sys.forcedWizard === "install" ? 2 : 1; start(); return }
+        if (Sys.forcedWizard) { dry = Sys.wizardDry; mode = Sys.forcedWizard === "install" ? 2 : 1; start(); return }
         Api.get(Api.apiBase + "/boot_mode", function(ok, d) {
             if (ok && d && d.mode === "installer") { mode = 2; start(); return }
             Api.get(Api.apiBase + "/provision_status", function(ok2, d2) {

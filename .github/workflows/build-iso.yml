@@ -31,6 +31,11 @@ on:
         required: false
         type: string
         default: 'trixie'
+      single_squashfs:
+        description: 'ISO a filesystem unico (il sistema live È l immagine, ~900 MiB in meno) — NON ancora collaudata su hardware'
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -59,9 +64,87 @@ jobs:
           retention-days: 1
           if-no-files-found: error
 
+  # The system image that the installer writes into slot A. Built in its own
+  # chroot (trixie, privileged) exactly like the OTA one: it CANNOT be carved
+  # out of the ISO's live filesystem, which keeps live-boot and Electron and is
+  # a different system. --no-bundle stops at the squashfs, so this job needs no
+  # signing keys — the installer copies those blocks straight into the slot.
+  image:
+    # Serve solo alla ISO storica, che porta l'immagine come file a parte.
+    # Nella ISO a filesystem unico il chroot stesso diventa l'immagine e
+    # live-build lo comprime una volta sola.
+    if: ${{ !inputs.single_squashfs }}
+    runs-on: ubuntu-latest
+    # 🚨 It consumes the qt-payload artifact, so it cannot start beside the job
+    # that produces it: without this the download fails with "Artifact not
+    # found" a minute into the run.
+    needs: qt-payload
+    timeout-minutes: 120
+    defaults:
+      run:
+        shell: bash
+    container:
+      image: debian:trixie
+      options: --privileged
+      volumes:
+        - /mnt:/mnt
+    steps:
+      - name: Install base tooling
+        run: |
+          set -eux
+          export DEBIAN_FRONTEND=noninteractive
+          apt-get update -qq
+          apt-get install -y --no-install-recommends \
+            ca-certificates curl git xz-utils sudo python3 build-essential \
+            live-build imagemagick xorriso debootstrap debian-archive-keyring rsync fakeroot \
+            cpio gzip squashfs-tools dosfstools mtools isolinux syslinux-common \
+            rauc e2fsprogs zstd grub-common openssl initramfs-tools-core
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      - run: npm ci
+      - name: Build renderer + unpacked Electron app
+        run: |
+          npm run build
+          npx electron-builder --linux dir
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - uses: actions/download-artifact@v8
+        with:
+          name: qt-payload
+          path: qtui
+      - run: chmod 755 qtui/hifi-qt
+      - name: Build web-admin (Vue)
+        run: (cd admin-webui && npm ci && npm run build)
+      - name: Build the system image (no bundle, no signing)
+        env:
+          INPUT_TAG: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          mkdir -p /mnt/image-out
+          export IMAGE_OUT=/mnt/image-out IMAGE_WORK=/mnt IMAGE_VERSION="$INPUT_TAG"
+          chmod +x distro/build-distro.sh distro/build-image.sh
+          cd distro
+          ./build-distro.sh --stage image --suite trixie --no-bundle \
+            --app-dir "$GITHUB_WORKSPACE/dist/linux-unpacked" --qt-dir "$GITHUB_WORKSPACE/qtui" \
+            --app-version "${INPUT_TAG#v}"
+          ls -lh /mnt/image-out
+      - uses: actions/upload-artifact@v4
+        with:
+          name: iso-system-image
+          path: /mnt/image-out/hifi-image-*.rootfs.squashfs*
+          retention-days: 3
+          if-no-files-found: error
+
   build-iso:
     runs-on: ubuntu-latest
-    needs: qt-payload
+    needs: [qt-payload, image]
+    if: ${{ always() && needs.qt-payload.result == 'success' && (inputs.single_squashfs || needs.image.result == 'success') }}
     timeout-minutes: 120
     # The debian:bookworm container defaults `run:` steps to sh (dash), which
     # lacks `set -o pipefail`. Force bash for every step.
@@ -85,7 +168,8 @@ jobs:
             python3 build-essential \
             live-build imagemagick xorriso debootstrap \
             debian-archive-keyring rsync fakeroot \
-            cpio gzip squashfs-tools dosfstools mtools isolinux syslinux-common
+            cpio gzip squashfs-tools dosfstools mtools isolinux syslinux-common \
+            zstd e2fsprogs grub-common initramfs-tools-core
 
       - name: Checkout repository
         uses: actions/checkout@v7
@@ -132,6 +216,24 @@ jobs:
             exit 1
           fi
 
+      - name: Put the system image on the ISO
+        if: ${{ !inputs.single_squashfs }}
+        uses: actions/download-artifact@v8
+        with:
+          name: iso-system-image
+          path: /tmp/sysimage
+      - name: Stage it where live-build picks it up
+        if: ${{ !inputs.single_squashfs }}
+        run: |
+          set -euo pipefail
+          mkdir -p distro/config/includes.binary/osmium
+          SQ=$(ls -1 /tmp/sysimage/hifi-image-*.rootfs.squashfs | head -n 1)
+          [ -s "$SQ" ] || { echo "::error::the system image is missing"; exit 1; }
+          cp "$SQ" distro/config/includes.binary/osmium/rootfs.squashfs
+          ( cd distro/config/includes.binary/osmium \
+            && sha256sum rootfs.squashfs > rootfs.squashfs.sha256 )
+          ls -lh distro/config/includes.binary/osmium/
+
       - name: Build installer ISO (live-build, as root)
         run: |
           set -euo pipefail
@@ -142,14 +244,46 @@ jobs:
           if [ -n "${INPUT_LYRION_URL}" ]; then
             ARGS="$ARGS --lyrion-url ${INPUT_LYRION_URL}"
           fi
-          chmod +x distro/build-distro.sh
+          if [ "${INPUT_SINGLE}" = "true" ]; then
+            # Un solo filesystem: il chroot viene post-processato come immagine
+            # e compresso una volta sola, e quello squashfs fa sia da sistema
+            # live sia da contenuto dello slot A.
+            ARGS="$ARGS --stage iso-image"
+          fi
+          chmod +x distro/build-distro.sh distro/build-image.sh
           cd distro
           # Already root inside the container — no sudo needed.
-          ISO_NAME="hifi-player-${INPUT_TAG}.iso" ./build-distro.sh $ARGS
+          ISO_NAME="hifi-player-${INPUT_TAG}.iso" IMAGE_VERSION="${INPUT_TAG}" ./build-distro.sh $ARGS
         env:
           INPUT_TAG: ${{ inputs.tag }}
           INPUT_SUITE: ${{ inputs.suite }}
           INPUT_LYRION_URL: ${{ inputs.lyrion_url }}
+          INPUT_SINGLE: ${{ inputs.single_squashfs }}
+
+      - name: Refuse an ISO too large to publish
+        run: |
+          set -euo pipefail
+          # find, not ls in a pipeline: `ls a/*.iso *.iso` returns 2 when one
+          # of the two patterns matches nothing, and under `set -o pipefail`
+          # that killed the job right after a perfectly good ISO had been
+          # built. find reports nothing and exits 0.
+          ISO=$(find . -maxdepth 2 -name '*.iso' -print -quit 2>/dev/null || true)
+          [ -n "$ISO" ] || exit 0
+          SZ=$(stat -c %s "$ISO")
+          echo "ISO size: $((SZ / 1048576)) MiB"
+          # A GitHub release asset cannot exceed 2 GiB (2147483648 bytes), and
+          # carrying the system image costs ~950 MiB of the total. The hard
+          # stop is the real limit, not a made-up margin: the first version of
+          # this check refused a 1978 MiB ISO that GitHub would have taken
+          # perfectly well. Past 1900 MiB it only warns — that is the point
+          # where the next growth spurt runs out of room and the ISO has to go
+          # to R2 instead.
+          if [ "$SZ" -gt 2147483648 ]; then
+            echo "::error::ISO is $((SZ / 1048576)) MiB — over the 2 GiB limit for a release asset. Trim the image or publish it to R2 instead."
+            exit 1
+          elif [ "$SZ" -gt 1992294400 ]; then
+            echo "::warning::ISO is $((SZ / 1048576)) MiB, close to the 2048 MiB ceiling for a release asset — plan the move to R2."
+          fi
 
       - name: Locate + checksum + sign the ISO
         id: iso
@@ -219,6 +353,21 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Read the release's current visibility
+        id: relstate
+        if: ${{ inputs.make_release }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          # false when the release does not exist yet: then this job creates it
+          # and a visible release is the historical behaviour for an ISO-only
+          # publish.
+          D=$(gh release view "${{ inputs.tag }}" -R "${{ github.repository }}" --json isDraft -q .isDraft 2>/dev/null || echo false)
+          [ "$D" = "true" ] || D=false
+          echo "is_draft=$D" >> "$GITHUB_OUTPUT"
+          echo "release ${{ inputs.tag }}: draft=$D (left as it is)"
+
       - name: Publish ISO to GitHub Release
         if: ${{ inputs.make_release }}
         uses: softprops/action-gh-release@v2
@@ -234,6 +383,14 @@ jobs:
           # is a prerelease, so it never becomes /releases/latest and can't
           # be mistaken for a stable prod release by the OTA fallback path.
           prerelease: ${{ contains(inputs.tag, '-') }}
+          # 🚨 Attaching an ISO must not decide whether a release is visible.
+          # The OTA build keeps it a draft until the system image is on it too,
+          # and this job can perfectly well run while that is still building;
+          # left alone, the action would clear the draft flag and expose a
+          # release whose image does not exist yet. It must not re-draft an
+          # already published one either, which is why the state is read first
+          # and handed back unchanged rather than decided here.
+          draft: ${{ steps.relstate.outputs.is_draft }}
           files: |
             ${{ steps.iso.outputs.iso }}
             ${{ steps.iso.outputs.iso }}.sha256

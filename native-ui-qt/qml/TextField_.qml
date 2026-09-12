@@ -29,6 +29,11 @@ Rectangle {
     function openVk() { if (!Sys.hasKeyboard) vkOpen(root) }
     // aggancio alla tastiera a schermo, fornito dalla radice
     property var vkOpen: function(field) { if (Ui.vk) Ui.vk.open(field) }
+    // 🚨 If the field goes away while the on-screen keyboard is typing into it
+    // (a list rebuilt from scratch, a row scrolled out), the keyboard must not
+    // stay attached to a destroyed object: writing into one silently does
+    // nothing, so the text would be lost without a single error.
+    Component.onDestruction: if (Ui.vk && Ui.vk.field === root) Ui.vk.field = null
 
     TextInput {
         id: input

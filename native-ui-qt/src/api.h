@@ -58,12 +58,17 @@ signals:
 public:
     QNetworkAccessManager *nam() { return &m_nam; }
     void setEngine(QJSEngine *e) { m_engine = e; }
+    // Lingua della UI, mandata come X-UI-Lang: l'api_server traduce in quella
+    // lingua i testi che compone lui (esiti, passi dell'aggiornamento).
+    void setLang(const QString &l) { m_lang = (l == "it") ? "it" : "en"; }
     QJSEngine *engine() const { return m_engine; }
 
 private:
     QString m_host;
     QString m_lmsHost;              // loopback, o l'apparecchio che si segue
     QTimer m_lmsPoll;               // il ruolo si cambia anche dal web: si ricontrolla
+    bool m_lmsResolved = false;     // true once /lms_role has answered at least once
     QNetworkAccessManager m_nam;
     QJSEngine *m_engine = nullptr;
+    QString m_lang = "en";
 };

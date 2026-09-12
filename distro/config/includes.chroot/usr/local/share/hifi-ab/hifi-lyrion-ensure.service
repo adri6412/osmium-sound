@@ -1,0 +1,25 @@
+[Unit]
+Description=Osmium Sound — Lyrion on /data when missing, and off while following another server
+ConditionPathExists=/usr/lib/osmium/IMAGE_VERSION
+# 🚨 The first boot does NOT download Lyrion on its own: the setup wizard does,
+# after asking whether this device is the server or follows one on the network.
+# While the setup is still pending this unit stays put; the script re-checks the
+# same thing. A live session must not download anything into RAM.
+ConditionKernelCommandLine=!boot=live
+ConditionPathExists=!/etc/hifi-player/provisioning-pending
+# 🚨 It also runs when Lyrion IS installed (it used to be skipped then), because
+# its second job is to keep the local server off on a device that follows
+# another one — the rule api_server.py applies when the choice is made, enforced
+# here at boot for devices that were already following. Ordered before the
+# server so on the boot that first applies it, the server never starts at all.
+Before=lyrionmusicserver.service
+After=network-online.target hifi-rauc-config.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/hifi-lyrion-ensure.sh
+TimeoutStartSec=1800
+
+[Install]
+WantedBy=multi-user.target

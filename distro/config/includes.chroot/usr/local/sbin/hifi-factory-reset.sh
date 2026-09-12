@@ -19,6 +19,7 @@
 set -u
 
 # shellcheck source=distro/config/includes.chroot/usr/local/sbin/hifi-log.sh
+# shellcheck disable=SC1091  # percorso assoluto, esiste solo sull'apparecchio
 . /usr/local/sbin/hifi-log.sh
 hifi_log_init hifi-factory-reset
 
@@ -54,6 +55,31 @@ if command -v tailscale >/dev/null 2>&1; then
     tailscale logout 2>/dev/null || true
 fi
 
+# ── image mode: hand the whole data partition to the initramfs ───────
+# On an image system every piece of user state lives on /data -- the writable
+# layer of /etc, and /var and /home themselves. Erasing that partition IS the
+# factory state, and it is what the file-by-file list below has always been an
+# approximation of: the list forgets things (kiosk language, view preferences),
+# an empty partition cannot. It cannot be done from here, though, because the
+# running system is standing on it; the initramfs erases it on the next boot,
+# before the overlay is assembled, keeping lyrion/ (or the box would have no
+# music server until it can reach the internet again), rauc/ and the machine-id
+# that the player's identity on LMS derives from.
+#
+# The fallback matters: if the data partition is not mounted (it failed to come
+# up and the state is a tmpfs), the marker would vanish with the reboot and the
+# reset would silently not happen -- so in that case the legacy wipe below runs
+# instead, on what state there is.
+if [ -f /usr/lib/osmium/IMAGE_VERSION ] \
+   && [ "$(cat /run/hifi-state/data-mounted 2>/dev/null)" = "1" ]; then
+    log "image mode: the data partition will be erased at the next boot"
+    printf 'requested by hifi-factory-reset\n' > /data/.factory-reset
+    sync
+    log "rebooting"
+    systemctl reboot 2>/dev/null || reboot
+    exit 0
+fi
+
 # ── 2) wipe user state + settings ────────────────────────────────────
 log "removing user settings"
 # /etc/hifi-player: keep the OTA baseline + public key + channel; drop the rest,
@@ -61,9 +87,14 @@ log "removing user settings"
 # github-support-pat is a leftover of the retired vendor remote-support flow
 # (nothing re-provisions it any more); wiping it here is just cleanup on
 # devices that still have one from an older release.
+# NOT in this list on purpose: ui-engine and kiosk-session say which interface
+# stack this machine runs, not what the owner likes, and resetting them can
+# leave a box with a black screen.
 for f in display-mode ui-resolution pointer-enabled dsp.json dsp-presets.json bluetooth.json \
          samba-cred.json provisioning-state.json webui.db webui-secret.key \
-         github-support-pat lyrion-channel lms-skin; do
+         github-support-pat lyrion-channel lms-skin \
+         ui-language ui-refresh nowplaying-view nowplaying-autoexpand-seconds \
+         ota-autocheck player-enabled vu-meter-enabled; do
     rm -f "/etc/hifi-player/$f" 2>/dev/null || true
 done
 # Reset the OTA channel to the stable default (factory semantics).
@@ -77,7 +108,7 @@ printf 'prod\n' > /etc/hifi-player/ota-channel 2>/dev/null || true
 # recorded in /etc/hifi-player/shell-account (name only, never a secret).
 SHELL_ACCOUNT_FILE=/etc/hifi-player/shell-account
 if [ -f "$SHELL_ACCOUNT_FILE" ]; then
-    shell_user=$(cat "$SHELL_ACCOUNT_FILE" 2>/dev/null | tr -d '\n\r ')
+    shell_user=$(tr -d '\n\r ' < "$SHELL_ACCOUNT_FILE" 2>/dev/null)
     case "$shell_user" in
         ''|root|hifi|support|hifimusic) : ;;   # never touch system accounts
         *)

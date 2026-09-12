@@ -28,7 +28,7 @@ Item {
             width: parent.width; y: parent.cy - 56; height: 36; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter
             text: root.done ? Tr.t("settings.updates.overlay.done")
                 : Tr.t(Player.otaKind === "ui" ? "settings.updates.overlay.titleUi" : Player.otaKind === "system" ? "settings.updates.overlay.titleSystem"
-                     : Player.otaKind === "os" ? "settings.updates.overlay.titleOs" : Player.otaKind === "lyrion" ? "settings.updates.overlay.titleLyrion" : "settings.updates.overlay.titleAll")
+                     : Player.otaKind === "os" ? "settings.updates.overlay.titleOs" : Player.otaKind === "image" ? "settings.updates.overlay.titleImage" : Player.otaKind === "lyrion" ? "settings.updates.overlay.titleLyrion" : "settings.updates.overlay.titleAll")
             color: Theme.white; font.family: Theme.font; font.pixelSize: 30; font.bold: true
         }
         Text { x: parent.cx - 300; y: parent.cy - 12; width: 600; wrapMode: Text.Wrap; maximumLineCount: 2; elide: Text.ElideRight; horizontalAlignment: Text.AlignHCenter; text: Player.otaMessage; color: Theme.wa(0.7); font.family: Theme.font; font.pixelSize: 18 }

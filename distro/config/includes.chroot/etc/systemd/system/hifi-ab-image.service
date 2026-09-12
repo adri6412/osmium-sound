@@ -1,0 +1,17 @@
+[Unit]
+Description=Osmium Sound — continua la catena di aggiornamento A/B (kickoff legacy / immagine slot B)
+# I marcatori (finished/image-kicked/kickoff-done) li valuta lo script:
+# questa unità parte anche sul legacy non convertito per continuare da sola
+# la catena dopo il primo giro fatto dal runner vecchio (2.5.23).
+ConditionPathExists=!/usr/lib/osmium/IMAGE_VERSION
+ConditionKernelCommandLine=!boot=live
+After=hifi-ab-finish.service hifi-api.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/hifi-ab-image.sh
+TimeoutStartSec=3000
+
+[Install]
+WantedBy=multi-user.target

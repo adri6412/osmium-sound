@@ -1,0 +1,74 @@
+# Osmium Sound — selettore di avvio A/B (versione 1).
+#
+# Questo file di testo sta sulla ESP in /EFI/debian/grub.cfg, al posto dello
+# stub di 3 righe che scrive grub-install, e viene letto dal grubx64.efi
+# Debian firmato (che resta INTATTO: qui non si tocca mai il binario del
+# bootloader, solo la sua configurazione). Sceglie lo slot da avviare come il
+# contrib/grub.conf di RAUC, con le variabili ORDER / A_OK / A_TRY / B_OK /
+# B_TRY tenute in /EFI/debian/grubenv, e poi passa la mano al grub.cfg dello
+# slot scelto — che sia lo script statico di un'immagine RAUC o il grub.cfg
+# Debian di una root legacy convertita.
+#
+# L'ULTIMO ramo è, byte per byte, lo stub di oggi: se qualcosa qui sopra non
+# torna (grubenv assente o illeggibile, partizioni mancanti, entrambi gli
+# slot che rifiutano di partire) si avvia come si è sempre avviato.
+#
+# Reso da hifi-ab-convert.sh / hifi-disk-install.sh: @LEGACY_UUID@ è l'UUID
+# ext4 della root legacy (o dello slot A su un'installazione nuova).
+# Sorgente: distro/config/includes.chroot/usr/local/share/hifi-ab/grub-selector.cfg.tmpl
+set legacy_uuid=@LEGACY_UUID@
+set envfile=($root)/EFI/debian/grubenv
+set ab=0
+set disk=
+regexp --set=1:disk '^\(?(hd[0-9]+),' "$root"
+if [ -n "$disk" -a -e ($root)/EFI/debian/ab-enabled -a -e ($root)/EFI/debian/grubenv ]; then
+    set ORDER="A B"
+    set A_OK=1
+    set A_TRY=0
+    set B_OK=0
+    set B_TRY=0
+    if load_env --file=$envfile ORDER A_OK A_TRY B_OK B_TRY; then
+        set ab=1
+    fi
+fi
+if [ "$ab" = 1 ]; then
+    for pass in 1 2; do
+        for S in $ORDER; do
+            set ok=0
+            set try=1
+            set part=
+            if [ "$S" = "A" ]; then set ok="$A_OK"; set try="$A_TRY"; set part=gpt3; fi
+            if [ "$S" = "B" ]; then set ok="$B_OK"; set try="$B_TRY"; set part=gpt4; fi
+            if [ -n "$part" -a "$ok" = 1 -a "$try" = 0 ]; then
+                if [ "$S" = "A" ]; then set A_TRY=1; fi
+                if [ "$S" = "B" ]; then set B_TRY=1; fi
+                save_env --file=$envfile A_TRY B_TRY
+                set slot_partuuid=
+                set slot_fsuuid=
+                probe --set=slot_partuuid --part-uuid ($disk,$part)
+                probe --set=slot_fsuuid --fs-uuid ($disk,$part)
+                set rauc_slot="$S"
+                export rauc_slot slot_partuuid slot_fsuuid
+                if [ -e ($disk,$part)/boot/grub/grub.cfg ]; then
+                    set root=($disk,$part)
+                    set prefix=($root)/boot/grub
+                    configfile $prefix/grub.cfg
+                fi
+                # Si arriva qui solo se lo slot non è partito: avanti col prossimo.
+            fi
+        done
+        # Nessuno slot idoneo: si ridà una possibilità a entrambi (e la volta
+        # dopo tocca all'altro), invece di fermarsi a un menu che nessuno vede.
+        set A_TRY=0
+        set B_TRY=0
+        save_env --file=$envfile A_TRY B_TRY
+    done
+fi
+# ── ramo legacy: lo stub di grub-install, invariato ──────────────────────
+search.fs_uuid $legacy_uuid root
+set prefix=($root)/boot/grub
+configfile $prefix/grub.cfg
+# Se anche questo fallisce (root legacy sovrascritta e due immagini rotte) è
+# meglio riavviare che restare al prompt su un apparecchio senza tastiera.
+sleep 10
+reboot

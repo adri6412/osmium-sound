@@ -78,7 +78,10 @@ MESSAGES = {
     'lms.serverSetRestartFailed': {'en': 'Server set ({target}); restart failed',
                                    'it': 'Server impostato ({target}); riavvio non riuscito'},
     'lms.localRestored': {'en': 'Local Lyrion server restored', 'it': 'Ripristinato il server Lyrion locale'},
-    'lms.serverSet': {'en': 'Lyrion server set to {target}', 'it': 'Server Lyrion impostato su {target}'},
+    'lms.volatileBoot': {'en': 'Warning: this device started without its data partition, so the choice will be lost at the next restart. Restart it and set it again.',
+                         'it': 'Attenzione: questo apparecchio è partito senza la sua partizione dati, quindi la scelta andrà persa al prossimo riavvio. Riavvialo e rifai la scelta.'},
+    'lms.serverSet': {'en': 'Lyrion server set to {target}; this device\'s own server has been switched off',
+                      'it': 'Server Lyrion impostato su {target}; il server di questo apparecchio è stato spento'},
 
     # ── Player name ──────────────────────────────────────────────────
     'player.invalidName': {'en': 'Invalid name: letters, numbers, dot, dash and underscore only, '
@@ -274,6 +277,72 @@ MESSAGES = {
     'update.applyDone': {'en': 'Update applied successfully', 'it': 'Aggiornamento applicato con successo'},
     'update.applyError': {'en': 'The update could not be applied',
                           'it': "Non è stato possibile applicare l'aggiornamento"},
+
+    # ── Messages written by the shell side of the updater (stage/apply
+    # runners, hifi-image-update.sh) as a `key` + `params` next to their
+    # plain-English text, and translated here for whichever frontend polls
+    # /update/status — so the kiosk in Italian and the web admin in English
+    # both read the same step in their own language. ──
+    'update.stagedRebooting': {'en': 'Update verified — restarting to apply it',
+                               'it': 'Aggiornamento verificato, riavvio in corso'},
+    'update.image.rebooting': {'en': 'System image installed — restarting into the new system',
+                               'it': 'Immagine di sistema installata, riavvio sul nuovo sistema'},
+    'update.image.media': {'en': 'Moving your music onto the data partition…',
+                           'it': 'Spostamento della musica sulla partizione dati…'},
+    'update.image.seed': {'en': 'Copying your settings to the data partition…',
+                          'it': 'Copia delle impostazioni sulla partizione dati…'},
+    'update.image.install': {'en': 'Installing system image {version} into the standby slot…',
+                             'it': "Installazione dell'immagine di sistema {version} nello slot di riserva…"},
+    'update.image.write': {'en': 'Writing system image {version}… {pct}%',
+                           'it': "Scrittura dell'immagine di sistema {version}… {pct}%"},
+    'update.image.selector': {'en': 'Enabling the A/B boot selector…',
+                              'it': 'Attivazione del selettore di avvio A/B…'},
+    'update.image.staged': {'en': 'System image {version} installed — the new system starts at the next restart',
+                            'it': 'Immagine di sistema {version} installata: al riavvio parte il nuovo sistema'},
+    'update.image.ready': {'en': 'System image {version} ready', 'it': 'Immagine di sistema {version} pronta'},
+    'update.image.badSource': {'en': 'Invalid system image source', 'it': "Sorgente dell'immagine di sistema non valida"},
+    'update.image.notConverted': {'en': 'RAUC is not configured: the device has not been converted to the A/B layout yet',
+                                  'it': "RAUC non configurato: l'apparecchio non è ancora convertito allo schema A/B"},
+    'update.image.mediaFailed': {'en': 'Moving the music folders to the data partition failed',
+                                 'it': 'Spostamento delle cartelle di musica sulla partizione dati fallito'},
+    'update.image.seedFailed': {'en': 'Copying the settings to the data partition failed',
+                                'it': 'Copia delle impostazioni sulla partizione dati fallita'},
+    'update.image.installFailed': {'en': 'Installing the system image failed (rauc rc={rc})',
+                                   'it': "Installazione dell'immagine di sistema fallita (rauc rc={rc})"},
+    'update.image.selectorFailed': {'en': 'Writing the A/B boot selector failed',
+                                    'it': 'Scrittura del selettore di avvio A/B fallita'},
+    'update.ab.noSpace': {
+        'en': 'Update failed: not enough space to switch to the new system layout — free at least {needed} MiB on this {disk} MiB disk (8 GB or more is recommended), then restart: the device picks the switch up again on its own',
+        'it': 'Aggiornamento non riuscito: spazio insufficiente per passare al nuovo schema di sistema — libera almeno {needed} MiB su questo disco da {disk} MiB (consigliati 8 GB o più), poi riavvia: il passaggio riparte da solo'},
+    'update.ab.musicOnSystemDisk': {
+        'en': 'Update failed: the music kept in folders on the system disk ({music} MiB) does not fit in the {data} MiB the new system leaves for your data. Move it onto a USB or internal disk and restart: the device picks the switch up again on its own',
+        'it': 'Aggiornamento non riuscito: la musica tenuta in cartelle del disco di sistema ({music} MiB) non entra nei {data} MiB che il nuovo sistema lascia ai dati. Spostala su un disco USB o interno e riavvia: il passaggio riparte da solo'},
+    'update.ab.armed': {
+        'en': 'Ready to switch to the new system: it happens at the next restart',
+        'it': 'Tutto pronto per il passaggio al nuovo sistema: avverrà al prossimo riavvio'},
+    'update.ab.notConvertible': {
+        'en': 'Update failed: this device cannot switch to the new system layout: {reason}',
+        'it': 'Aggiornamento non riuscito: questo apparecchio non può passare al nuovo schema di sistema: {reason}'},
+    'update.ab.prepareFailed': {
+        'en': 'Update failed: the switch to the new system layout could not be prepared',
+        'it': 'Aggiornamento non riuscito: non è stato possibile preparare il passaggio al nuovo schema di sistema'},
+    'update.apply.stuckUpdateMode': {
+        'en': 'Could not leave update mode: restart the device and try again',
+        'it': "Non è stato possibile uscire dalla modalità aggiornamento: riavvia l'apparecchio e riprova"},
+    'update.ab.converting': {'en': 'Switching to the new system — the device will restart on its own',
+                             'it': 'Passaggio al nuovo sistema — l\'apparecchio si riavvierà da solo'},
+    'update.image.kickFailed': {'en': 'The system image update could not be started — try "Update now" again',
+                                'it': 'Impossibile avviare l\'aggiornamento dell\'immagine di sistema — riprova con "Aggiorna ora"'},
+    'update.apply.noPlan': {'en': 'No update plan found in update mode — unexpected state',
+                            'it': 'Nessun piano di aggiornamento trovato in modalità update — stato inatteso'},
+    'update.apply.emptyPlan': {'en': 'The update plan has no components — unexpected state',
+                               'it': 'Il piano di aggiornamento non contiene componenti — stato inatteso'},
+    'update.apply.notStaged': {'en': "Step '{kind}' was not completed during staging (state: {state})",
+                               'it': "Passo '{kind}' non risulta completato in fase di staging (stato: {state})"},
+    'update.apply.stagedMissing': {'en': 'Staged package missing for {kind} {version}',
+                                   'it': 'Pacchetto staged mancante per {kind} {version}'},
+    'update.apply.failed': {'en': 'Applying {kind} {version} failed after {attempts} attempts (rc={rc})',
+                            'it': 'Applicazione di {kind} {version} fallita dopo {attempts} tentativi (rc={rc})'},
 
     # ── Disk install (bare-metal installer) + guided room correction ──
     'install.enumFailed': {'en': 'Disk enumeration failed', 'it': 'Enumerazione dischi fallita'},

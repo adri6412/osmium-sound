@@ -1155,6 +1155,13 @@ def auth_status():
         'has_account': _get_user() is not None,
         'logged_in': _logged_in(),
         'provisioning': _provisioning(),
+        # 🚨 A live session booted from the "Install" menu entry has no account
+        # and no provisioning marker — the image the ISO now boots from is a
+        # slot image, and build-image.sh strips that marker on purpose. Without
+        # this the browser reaching the QR address landed on the login form of
+        # a system that is not installed yet. The installer is a boot mode, not
+        # a stored state, so it is answered from the kernel command line.
+        'installer': _boot_mode() == 'installer',
     })
 
 
@@ -1828,8 +1835,14 @@ def _handle_proxy(local_path, method):
     data, status = _proxy(API_BASE, api_path, method=method, body=body,
                           timeout=220 if 'debug_kdump' in api_path  # may apt-get install kdump-tools
                           else 200 if 'tailscale_install' in api_path
+                          # Joining a Wi-Fi network or bringing the cable up
+                          # ends in a DHCP wait, so these outlast the default
+                          # budget on any slow network — and cutting them off
+                          # here reported a failure for a join that then
+                          # completed, leaving the UI and the box disagreeing.
                           else 90 if 'apply' in api_path or 'dsp' in api_path
                           or 'tailscale' in api_path or 'ssh' in api_path
+                          or 'wifi_connect' in api_path or 'wired_dhcp' in api_path
                           or 'debug_plymouth' in api_path else 15)
     return jsonify(data), status
 
@@ -1910,7 +1923,10 @@ def _forward_to(base, path, timeout=120, service_label='servizio'):
     qs = request.query_string.decode('utf-8')
     url = f'{base}{path}' + (f'?{qs}' if qs else '')
     req = urllib.request.Request(url, method=request.method)
-    for h in ('Authorization', 'Content-Type'):
+    # X-UI-Lang/Accept-Language ride along so the forwarded service answers in
+    # the language the owner picked: without them every `message` from
+    # sources_server came back in English, whatever the admin page was set to.
+    for h in ('Authorization', 'Content-Type', 'X-UI-Lang', 'Accept-Language'):
         v = request.headers.get(h)
         if v:
             req.add_header(h, v)

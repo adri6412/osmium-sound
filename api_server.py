@@ -21,6 +21,7 @@ import io
 import glob
 from hifi_logging import get_logger
 from hifi_i18n import t as _t
+from hifi_i18n import MESSAGES as _I18N_MESSAGES
 
 app = Flask(__name__)
 # This API is bound to 127.0.0.1 only (see the bottom of this file) and has no
@@ -144,6 +145,12 @@ OS_VERSION_FILE = '/etc/hifi-player/OS_VERSION'
 OS_SCRIPT = '/usr/local/sbin/hifi-os-update.sh'
 OS_STATUS_FILE = '/run/hifi-os-status.json'
 OS_PREFIX = 'hifi-os-'
+# Immagine RAUC (schema A/B): un solo bundle che porta UI + componenti di
+# sistema + OS; lo installa RAUC nello slot inattivo in streaming dall'asset
+# della Release, senza passare dal disco (vedi hifi-image-update.sh).
+IMAGE_PREFIX = 'hifi-image-'
+IMAGE_STATUS_FILE = '/run/hifi-image-status.json'
+IMAGE_SCRIPT = '/usr/local/sbin/hifi-image-update.sh'
 
 # ──────────────────────────────────────────────────────────────────
 #  Installer (src/pages/InstallWizard.jsx): backend for the "Install
@@ -206,12 +213,19 @@ UPDATE_STAGE_RUNNER_UNIT = 'hifi-update-stage'
 SYSTEM_UPDATE_LINK = '/system-update'
 # Canonical order. system first (it delivers the API, daemons, helper
 # scripts and units everything else relies on), os second, ui last.
-UPDATE_PLAN_ORDER = ('system', 'os', 'ui')
+# 'image' per ultimo: sugli apparecchi non ancora convertiti non è mai offerto
+# (check_image_update), su quelli convertiti o già immagine è l'unico passo
+# che conta e supera gli altri (il riavvio va direttamente sul nuovo slot).
+UPDATE_PLAN_ORDER = ('system', 'os', 'ui', 'image')
 # How long a finished/failed outcome stays readable so clients can show it
 # — including a kiosk that only comes back up after both update-mode
 # reboots. After this it is cleared automatically, so a plan/outcome
 # nobody dismissed cannot keep re-opening the overlay forever.
 UPDATE_PLAN_TTL = 900
+# A 'phase=applying' left behind across the conversion-chain reboots (armed
+# on purpose by the apply runner so the kiosk shows one continuous update)
+# must still expire if the chain dies, or the overlay would spin forever.
+UPDATE_APPLYING_TTL = 2 * 3600
 # The plan file is whitespace-separated and parsed by /bin/sh, so every
 # field must be whitespace-free. Versions also land in a file name.
 _SAFE_VERSION_RE = re.compile(r'^[0-9A-Za-z._-]+$')
@@ -230,6 +244,7 @@ _SAFE_SHA_RE = re.compile(r'^[0-9a-fA-F]{64}$')
 # ──────────────────────────────────────────────────────────────────
 LYRION_DOWNLOADS_PAGE = os.environ.get('HIFI_LYRION_PAGE', 'https://lyrion.org/downloads')
 LYRION_PKG = 'lyrionmusicserver'
+LYRION_UNIT = 'lyrionmusicserver'
 LYRION_SCRIPT = '/usr/local/sbin/hifi-lyrion-update.sh'
 LYRION_STATUS_FILE = '/run/hifi-lyrion-status.json'
 LYRION_CHANNEL_FILE = '/etc/hifi-player/lyrion-channel'
@@ -359,23 +374,129 @@ def get_system_info():
             'error': _t('system.infoFetchFailed', _lang())
         }
 
-def _cpu_temp_c():
-    """Highest reading across /sys/class/thermal/thermal_zone* (usually the
-    CPU package sensor), in whole °C. None if no thermal zone is exposed."""
-    best = None
+def _sysfs(path):
+    """First line of a sysfs attribute, stripped. None when unreadable."""
     try:
-        for zone in glob.glob('/sys/class/thermal/thermal_zone*/temp'):
-            try:
-                with open(zone) as f:
-                    millideg = int(f.read().strip())
-            except Exception:
-                continue
-            c = millideg / 1000.0
-            if best is None or c > best:
-                best = c
+        with open(path) as f:
+            return f.readline().strip()
     except Exception:
-        pass
-    return round(best, 1) if best is not None else None
+        return None
+
+
+def _sysfs_temp_c(path):
+    """A sysfs millidegree attribute as °C, None when unreadable or outside
+    the range a real silicon sensor can report. The bounds are not cosmetic:
+    an ACPI zone with nothing behind it happily reads back 0 or 216.8 °C
+    (0xFFFF millidegrees), and the old "hottest zone wins" pick would put
+    exactly that on the dashboard."""
+    raw = _sysfs(path)
+    if raw is None:
+        return None
+    try:
+        c = int(raw) / 1000.0
+    except ValueError:
+        return None
+    return c if 5.0 <= c <= 125.0 else None
+
+
+THERMAL_ZONE_GLOB = '/sys/class/thermal/thermal_zone*'
+HWMON_GLOB = '/sys/class/hwmon/hwmon*'
+DRM_HWMON_TEMP_GLOB = '/sys/class/drm/card[0-9]/device/hwmon/hwmon*/temp*_input'
+
+# Zone types that really are the CPU die/package, in order of preference (not
+# of expected value).
+_CPU_ZONE_TYPES = ('x86_pkg_temp', 'coretemp', 'k10temp', 'zenpower',
+                   'cpu_thermal', 'cpu-thermal', 'soc_thermal', 'tcpu')
+
+# Zones that certainly do NOT measure the CPU. A mini PC lists half a dozen of
+# them (chipset, Wi-Fi card, NVMe, iGPU) and any one can be the hottest thing
+# in the box, so a plain max() over every zone reports some other component's
+# temperature under the "Temperature" label.
+_NON_CPU_ZONE_HINTS = ('pch', 'nvme', 'iwlwifi', 'wifi', 'wlan', 'gpu',
+                       'int3400', 'battery', 'charger', 'ambient', 'skin')
+
+# The same die sensors read straight from hwmon, for kernels that expose them
+# there without registering a thermal zone.
+_CPU_HWMON_NAMES = ('coretemp', 'k10temp', 'zenpower')
+
+
+def _cpu_temp_c():
+    """CPU temperature in °C (one decimal), None when the box exposes no CPU
+    sensor at all.
+
+    Chosen BY SENSOR NAME. This used to be the highest reading across every
+    thermal zone, which is only the CPU by luck: on a machine whose chipset,
+    Wi-Fi card or iGPU runs hotter than the die, that maximum silently became
+    some other chip's temperature."""
+    zones = []
+    for zone in glob.glob(THERMAL_ZONE_GLOB):
+        ztype = (_sysfs(os.path.join(zone, 'type')) or '').lower()
+        c = _sysfs_temp_c(os.path.join(zone, 'temp'))
+        if c is not None:
+            zones.append((ztype, c))
+
+    for name in _CPU_ZONE_TYPES:
+        # Several packages/cores can expose the same sensor type; the hottest
+        # of them is the one that matters.
+        matches = [c for ztype, c in zones if ztype.startswith(name)]
+        if matches:
+            return round(max(matches), 1)
+
+    # Before acpitz, not after: acpitz is an ACPI zone that on most boards
+    # tracks the board, while a coretemp hwmon is the die itself.
+    hwmon = _cpu_hwmon_temp_c()
+    if hwmon is not None:
+        return hwmon
+
+    fallback = [c for ztype, c in zones if ztype.startswith('acpitz')]
+    if not fallback:
+        # Bare ACPI names ('tz00' and friends): the hottest zone that is at
+        # least not a component we can name, rather than no reading at all.
+        fallback = [c for ztype, c in zones
+                    if not any(h in ztype for h in _NON_CPU_ZONE_HINTS)]
+    return round(max(fallback), 1) if fallback else None
+
+
+def _cpu_hwmon_temp_c():
+    """coretemp/k10temp read straight from hwmon: 'Package id 0' (Intel) or
+    'Tdie'/'Tctl' (AMD) when labelled, else the hottest core."""
+    for hwmon in sorted(glob.glob(HWMON_GLOB)):
+        if (_sysfs(os.path.join(hwmon, 'name')) or '').lower() not in _CPU_HWMON_NAMES:
+            continue
+        package = core = None
+        for entry in sorted(glob.glob(os.path.join(hwmon, 'temp*_input'))):
+            c = _sysfs_temp_c(entry)
+            if c is None:
+                continue
+            label = (_sysfs(entry.replace('_input', '_label')) or '').lower()
+            if label.startswith('package') or label in ('tdie', 'tctl'):
+                package = c if package is None else max(package, c)
+            core = c if core is None else max(core, c)
+        if package is not None:
+            return round(package, 1)
+        if core is not None:
+            return round(core, 1)
+    return None
+
+
+def _gpu_temp_c():
+    """GPU temperature in whole °C, None when the GPU has no sensor of its
+    own — which is the normal case for an Intel iGPU: it shares the CPU die,
+    so the package sensor already covers it and only discrete cards (and
+    amdgpu) publish a hwmon of their own under the DRM device."""
+    for entry in sorted(glob.glob(DRM_HWMON_TEMP_GLOB)):
+        label = (_sysfs(entry.replace('_input', '_label')) or '').lower()
+        if label in ('junction', 'mem', 'vrm', 'vram'):
+            continue  # hotspot/memory sensors, not the GPU core
+        c = _sysfs_temp_c(entry)
+        if c is not None:
+            return round(c, 1)
+    for zone in glob.glob(THERMAL_ZONE_GLOB):
+        if 'gpu' in (_sysfs(os.path.join(zone, 'type')) or '').lower():
+            c = _sysfs_temp_c(os.path.join(zone, 'temp'))
+            if c is not None:
+                return round(c, 1)
+    return None
 
 _gpu_warned = False  # log the first failure only -- this polls every 5s forever
 
@@ -469,6 +590,25 @@ def _amd_gpu_busy_pct():
         return None
 
 
+DATA_MOUNT = '/data'
+
+
+def _disk_path():
+    """The filesystem whose fill level actually means something to the owner.
+
+    On an image system / IS the squashfs slot: read-only, packed full at build
+    time, so it reports 100% forever and says nothing about the box. Everything
+    that grows -- music, Lyrion, /var, /home, the whole writable layer -- lives
+    on the data partition, so that is the disk to report. A legacy install has
+    no separate /data and keeps answering for /."""
+    try:
+        if os.path.ismount(DATA_MOUNT):
+            return DATA_MOUNT
+    except Exception:
+        pass
+    return '/'
+
+
 def get_system_stats():
     """CPU/RAM/disk/temperature/GPU snapshot for the admin dashboard. All
     fields are best-effort and independently None-able -- one missing sensor
@@ -484,23 +624,27 @@ def get_system_stats():
         # the dashboard already polls this endpoint only every 5s.
         cpu_pct = psutil.cpu_percent(interval=1.0)
         vm = psutil.virtual_memory()
-        du = shutil.disk_usage('/')
+        path = _disk_path()
+        du = shutil.disk_usage(path)
         return {
             'cpu_percent': cpu_pct,
             'ram_percent': vm.percent,
             'ram_used_mb': round(vm.used / 1024 / 1024),
             'ram_total_mb': round(vm.total / 1024 / 1024),
+            'disk_path': path,
             'disk_percent': round(du.used / du.total * 100, 1) if du.total else None,
             'disk_used_gb': round(du.used / 1024 / 1024 / 1024, 1),
             'disk_total_gb': round(du.total / 1024 / 1024 / 1024, 1),
             'temp_c': _cpu_temp_c(),
             'gpu_percent': _gpu_busy_pct(),
+            'gpu_temp_c': _gpu_temp_c(),
         }
     except Exception:
         log.exception("get_system_stats failed")
         return {'cpu_percent': None, 'ram_percent': None, 'ram_used_mb': None,
-                'ram_total_mb': None, 'disk_percent': None, 'disk_used_gb': None,
-                'disk_total_gb': None, 'temp_c': None, 'gpu_percent': None}
+                'ram_total_mb': None, 'disk_path': None, 'disk_percent': None,
+                'disk_used_gb': None, 'disk_total_gb': None, 'temp_c': None,
+                'gpu_percent': None, 'gpu_temp_c': None}
 
 _IFACE_RE = re.compile(r'^[A-Za-z0-9][A-Za-z0-9._-]*$')
 
@@ -786,6 +930,132 @@ def wifi_scan():
         return {'networks': [], 'error': _t('network.scanFailed', _lang())}
     return {'networks': networks}
 
+def _scan_security(ssid):
+    """The SECURITY column NetworkManager reports for this SSID, or None when
+    the SSID isn't in its scan list at all. '' is a meaningful answer — an
+    open network — so "never seen" has to stay distinguishable from it."""
+    try:
+        r = _run(['nmcli', '-t', '-f', 'SSID,SECURITY', 'device', 'wifi', 'list'])
+        for line in r.stdout.strip().split('\n'):
+            parts = _terse_split(line)
+            if len(parts) >= 2 and parts[0] == ssid:
+                return parts[1].strip()
+    except Exception:
+        pass
+    return None
+
+
+def _wifi_security_args(ssid, password):
+    """`nmcli connection add` arguments for this network's security.
+
+    `nmcli device wifi connect` takes these from the access point itself, so
+    building the profile by hand (see _wifi_join) means working out the key
+    management here: a WPA3-only AP needs `sae`, WEP needs a key or a
+    passphrase rather than a PSK, and a network that really is open must carry
+    no security setting at all. Anything else — including an SSID missing from
+    the scan list — falls back to WPA-PSK, which is what home networks use."""
+    if not password:
+        return []
+    sec = _scan_security(ssid)
+    if sec == '':          # seen in the scan, and reported as open
+        return []
+    sec = (sec or '').upper()
+    if 'WEP' in sec:
+        # Same rule nmcli uses: a value of exactly key length is a raw key,
+        # anything else is a passphrase (1 = key, 2 = passphrase).
+        is_key = re.fullmatch(r'[0-9a-fA-F]{10}|[0-9a-fA-F]{26}|.{5}|.{13}', password)
+        return ['802-11-wireless-security.key-mgmt', 'none',
+                '802-11-wireless-security.wep-key0', password,
+                '802-11-wireless-security.wep-key-type', '1' if is_key else '2']
+    # A WPA2/WPA3 transition AP advertises both and still takes wpa-psk; only
+    # a WPA3-only one has to be joined with SAE.
+    if 'WPA3' in sec and 'WPA2' not in sec and 'WPA1' not in sec:
+        return ['802-11-wireless-security.key-mgmt', 'sae',
+                '802-11-wireless-security.psk', password]
+    return ['802-11-wireless-security.key-mgmt', 'wpa-psk',
+            '802-11-wireless-security.psk', password]
+
+
+def _wifi_profile_exists(ssid):
+    """True when NetworkManager already has a Wi-Fi profile under this name —
+    which is what both nmcli and we name a profile after its SSID."""
+    return ssid in _connection_ids_for_device_type('wifi')
+
+
+def _preserved_ipv4_args(conn):
+    """`connection add` arguments that carry a profile's fixed address over to
+    the profile that replaces it.
+
+    Rebuilding the profile is what makes the join work at all (see _wifi_join),
+    but on its own it would quietly drop a fixed address the owner had set on
+    that same Wi-Fi network: the box would come back over DHCP at a different
+    address, which on a headless unit is indistinguishable from it having
+    disappeared. Only a 'manual' profile has anything worth carrying — a DHCP
+    one is already what a fresh profile does."""
+    cfg = _nm_connection_ipv4(conn)
+    if cfg.get('method') != 'manual' or not cfg.get('address'):
+        return []
+    args = ['ipv4.method', 'manual',
+            'ipv4.addresses', f"{cfg['address']}/{cfg.get('prefix') or 24}"]
+    if cfg.get('gateway'):
+        args += ['ipv4.gateway', cfg['gateway']]
+    if cfg.get('dns'):
+        args += ['ipv4.dns', ' '.join(cfg['dns'][:3]), 'ipv4.ignore-auto-dns', 'yes']
+    return args
+
+
+def _wifi_join(ssid, password, dev):
+    """Join `ssid`, returning the CompletedProcess of the step that decided it.
+
+    When a password is given the connection profile is built here
+    (`connection add` + `connection up`) rather than through the
+    `nmcli device wifi connect` shorthand. The shorthand only works the first
+    time a network is used: once a profile for that SSID exists it pushes the
+    new password into that profile as a bare `psk` with no `key-mgmt`, and
+    NetworkManager rejects the whole update with
+    "802-11-wireless-security.key-mgmt: property is missing" (issue #98).
+    Re-joining a network the box had already been on — exactly what someone
+    does after a spell on the cable — therefore always failed, and no amount
+    of retyping the password could help. Dropping the stale profile first and
+    spelling out key-mgmt ourselves removes both halves of that.
+
+    With no password there is nothing to write, so a saved profile is
+    activated as it stands (its stored secret is still good) and only a
+    network we have no profile for goes through the shorthand."""
+    if not password:
+        if _wifi_profile_exists(ssid):
+            return _run(['nmcli', 'connection', 'up', 'id', ssid], timeout=45)
+        return _run(['nmcli', 'device', 'wifi', 'connect', ssid], timeout=45)
+
+    sec_args = _wifi_security_args(ssid, password)
+    # Read before the delete, write back into the replacement: the admin web UI
+    # can put a fixed address on a Wi-Fi profile too, and it lives on the very
+    # profile being rebuilt here.
+    ip_args = _preserved_ipv4_args(ssid) if _wifi_profile_exists(ssid) else []
+    _run(['nmcli', 'connection', 'delete', 'id', ssid])   # clear any stale profile
+    add = ['nmcli', 'connection', 'add', 'type', 'wifi', 'con-name', ssid, 'ssid', ssid]
+    if dev:
+        add += ['ifname', dev]
+    r = _run(add + sec_args + ip_args)
+    if r.returncode != 0:
+        return r
+    # Association can still fail transiently on marginal signal, so one retry
+    # before calling it a failure (same reasoning as webui_server.py's
+    # _connect_wifi). Kept to two attempts on purpose: the admin web UI proxies
+    # this call and gives up on the whole request after 90s.
+    for attempt in range(2):
+        r = _run(['nmcli', 'connection', 'up', 'id', ssid], timeout=30)
+        if r.returncode == 0:
+            return r
+        if attempt == 0:
+            time.sleep(2)
+    # Don't leave a profile that can't associate lying around: it would be the
+    # stale profile the next attempt trips over, and until then NetworkManager
+    # keeps retrying it with a password we already know doesn't work.
+    _run(['nmcli', 'connection', 'delete', 'id', ssid])
+    return r
+
+
 def wifi_connect(ssid, password):
     if not ssid:
         return {'success': False, 'code': 'network.ssidMissing', 'message': _t('network.ssidMissing', _lang())}
@@ -798,11 +1068,10 @@ def wifi_connect(ssid, password):
         if value and not safe_arg.fullmatch(value):
             return {'success': False, 'code': 'network.invalidField',
                     'message': _t('network.invalidField', _lang(), label=label)}
-    cmd = ['nmcli', 'device', 'wifi', 'connect', ssid]
-    if password:
-        cmd += ['password', password]
+    dev = _first_device_of_type('wifi')
+    _ensure_networkmanager_state(dev)
     try:
-        r = _run(cmd, timeout=45)
+        r = _wifi_join(ssid, password, dev)
     except subprocess.TimeoutExpired:
         return {'success': False, 'code': 'network.connectTimeout',
                 'message': _t('network.connectTimeout', _lang())}
@@ -811,9 +1080,12 @@ def wifi_connect(ssid, password):
         return {'success': False, 'code': 'network.connectFailed',
                 'message': _t('network.connectFailed', _lang())}
     if r.returncode == 0:
-        device, _ = _active_device() or (None, None)
         msg = _t('network.connected', _lang(), ssid=ssid)
-        ip = _ensure_dhcp_ip(device) if device else None
+        # The Wi-Fi interface by name, not _active_device(): that one prefers
+        # Ethernet, so on a box joining Wi-Fi while still cabled it handed back
+        # the *wired* address — and the exclusivity flip below then unplugged
+        # the cable on the strength of the cable's own IP.
+        ip = _ensure_dhcp_ip(dev) if dev else None
         # Only make Wi-Fi exclusive once it actually has a working IP — never
         # turn Ethernet off on the strength of an nmcli command that merely
         # returned success, which would risk stranding the box with neither
@@ -1266,6 +1538,36 @@ def get_lms_role():
         return {'mode': 'local', 'host': None}
     return {'mode': 'follow', 'host': host}
 
+def _set_local_lyrion_enabled(enable):
+    """Start+enable, or stop+disable, this device's OWN Lyrion Music Server.
+
+    Following another server does not merely make the local one redundant: as
+    long as it keeps running it still answers on 127.0.0.1:9000, and anything
+    that reaches loopback before it has read this role talks to that empty
+    local server instead of the one being followed. The kiosk resolves the
+    server address asynchronously at startup (Api::refreshLmsHost), so on a
+    boot where the answer is late it latches onto the local one — which is the
+    "sometimes it connects to the local server anyway" owners report. Stopping
+    it is not enough on its own: without `disable` the unit comes straight back
+    at the next boot, so the choice would only hold until the next restart.
+
+    Best effort: the role itself is already persisted in
+    /etc/default/squeezelite by the time this runs, and a device that never
+    installed Lyrion has a unit that cannot start (ConditionPathExists on
+    /data/lyrion/current) or no unit at all — neither is a reason to report the
+    role change as failed.
+    """
+    action = ['enable', '--now'] if enable else ['disable', '--now']
+    try:
+        r = _run(['systemctl'] + action + [LYRION_UNIT], timeout=60)
+        if r.returncode != 0:
+            log.warning("set_lms_role: systemctl %s %s failed: %s",
+                        action[0], LYRION_UNIT, (r.stderr or '').strip())
+        return r.returncode == 0
+    except Exception:
+        log.exception("set_lms_role: systemctl %s %s failed", action[0], LYRION_UNIT)
+        return False
+
 def set_lms_role(mode, host):
     if mode == 'local':
         target = '127.0.0.1'
@@ -1286,6 +1588,10 @@ def set_lms_role(mode, host):
         return {'success': False, 'code': 'lms.sqConfigMissing',
                 'message': _t('lms.sqConfigMissing', _lang())}
     _write_sq_args(_sq_set_s(args, target))
+    # Before the player restart below, so squeezelite comes back up with the
+    # local server already stopped (following) or already running (standalone)
+    # and can only land on the one that was just chosen.
+    _set_local_lyrion_enabled(mode == 'local')
 
     try:
         r = _restart_squeezelite_if_enabled()
@@ -1299,6 +1605,13 @@ def set_lms_role(mode, host):
                 'message': _t('lms.serverSetRestartFailed', _lang(), target=target)}
     msg = (_t('lms.localRestored', _lang()) if mode == 'local'
            else _t('lms.serverSet', _lang(), target=target))
+    # A boot that came up without its data partition writes to a tmpfs /etc:
+    # the change applies right now and is gone at the next restart, with the
+    # previous choice back — which is exactly how "I set it back and at
+    # startup it is on the other server again" happens. Say so instead of
+    # reporting a clean success.
+    if _data_partition_mounted() is False:
+        msg = msg + ' — ' + _t('lms.volatileBoot', _lang())
     return {'success': True, 'host': target if mode == 'follow' else None, 'message': msg}
 
 # ── Player name (-n) — every device ships as "OsmiumSound" by default, which
@@ -1822,6 +2135,11 @@ SUPPORT_LOG_DIR = '/var/log/hifi'
 SUPPORT_JOURNAL_UNITS = [
     'hifi-api', 'hifi-webui', 'hifi-sources', 'hifi-vumeter', 'hifi-firstboot',
     'hifi-quiesce-audio-shutdown', 'squeezelite', 'lyrionmusicserver',
+    # Says whether this boot came up with its data partition — a boot that
+    # fell back to a tmpfs /data runs on the image's factory settings and
+    # silently drops everything written during it, which from the outside
+    # looks like settings reverting on their own.
+    'hifi-boot-health',
     'bluetooth', 'NetworkManager',
 ]
 # Config worth including — never secrets/keys. Mirrors the allow-list spirit of
@@ -2283,6 +2601,16 @@ def set_display_mode(mode):
 UI_ENGINE_FILE = '/etc/hifi-player/ui-engine'
 UI_ENGINES = ('electron', 'qt')
 QT_UI_BIN = '/opt/hifi-qt/hifi-qt'
+ELECTRON_UI_DIR = '/opt/hifi-media-player'
+
+def _electron_ui_installed():
+    """The image ships the Qt interface only — Electron was 354 MiB of the
+    2715 and went out to make room for /data. So Electron is no longer a given:
+    it must be probed exactly like Qt, or a converted device whose /etc still
+    says "electron" (the overlay carries the legacy setting over) would be
+    offered an interface that isn't there and would come back to a black
+    screen."""
+    return os.path.isdir(ELECTRON_UI_DIR)
 
 def _qt_ui_installed():
     """Vero solo se la seconda interfaccia puo' DAVVERO partire su questo
@@ -2309,10 +2637,12 @@ def get_ui_engine():
                 engine = 'qt'
     except Exception:
         pass
-    engines = ['electron'] + (['qt'] if _qt_ui_installed() else [])
-    # se l'interfaccia scelta è sparita (pacchetto rimosso), si dice la verità
+    engines = (['electron'] if _electron_ui_installed() else []) \
+        + (['qt'] if _qt_ui_installed() else [])
+    # the chosen interface is gone (package removed, or an image that only
+    # ships one of the two): say what is actually there
     if engine not in engines:
-        engine = 'electron'
+        engine = engines[0] if engines else 'electron'
     return {'engine': engine, 'engines': engines}
 
 def set_ui_engine(engine):
@@ -2322,7 +2652,8 @@ def set_ui_engine(engine):
     if engine not in UI_ENGINES:
         return {'success': False, 'engine': get_ui_engine()['engine'],
                 'code': 'uiEngine.invalid', 'message': _t('uiEngine.invalid', _lang())}
-    if engine == 'qt' and not _qt_ui_installed():
+    if (engine == 'qt' and not _qt_ui_installed()) \
+       or (engine == 'electron' and not _electron_ui_installed()):
         return {'success': False, 'engine': get_ui_engine()['engine'],
                 'code': 'uiEngine.notInstalled', 'message': _t('uiEngine.notInstalled', _lang())}
     if _update_in_progress():
@@ -4168,7 +4499,96 @@ def get_bluetooth_now_playing():
 #  OTA update helpers
 # ──────────────────────────────────────────────────────────────────
 
+# ── modalità immagine (schema A/B con RAUC) ───────────────────────────
+# Su uno slot immagine (root in sola lettura, costruita da distro/build-image.sh)
+# UI, componenti di sistema e OS viaggiano tutti nel bundle RAUC: i tre
+# canali legacy non hanno più senso e la versione "installata" è una sola.
+# Il marcatore sta fuori da /etc di proposito (l'upper dell'overlay potrebbe
+# ombreggiare qualunque cosa sotto /etc).
+IMAGE_VERSION_FILE = '/usr/lib/osmium/IMAGE_VERSION'
+LYRION_DATA_VERSION_FILE = '/data/lyrion/current/VERSION'
+AB_STATE_FILE = '/boot/efi/EFI/debian/abconvert.state'
+AB_PRECHECK_FILE = '/run/hifi-ab-precheck.json'
+RAUC_SYSTEM_CONF = '/etc/rauc/system.conf'
+
+def _image_mode():
+    """True on a device whose root IS a slot image.
+
+    🚨 A live session is never one, even when it boots from the very same
+    squashfs: the ISO is about to carry the image itself as its live
+    filesystem, so the marker file is present there too. Without this a live
+    session would block its own update channels and answer questions about
+    slots it does not have."""
+    if not os.path.exists(IMAGE_VERSION_FILE):
+        return False
+    try:
+        return not _is_live_boot()
+    except Exception:
+        return True
+
+def _ab_ready():
+    """Converted to the A/B layout (RAUC configured) but possibly still
+    running the legacy root: from here on the image channel is the only
+    one that makes sense — legacy bundles would patch a root the next
+    image install overwrites."""
+    return os.path.exists(RAUC_SYSTEM_CONF)
+
+def _image_version():
+    return _read_version_file(IMAGE_VERSION_FILE)
+
+def _booted_slot():
+    try:
+        with open(PROC_CMDLINE) as f:
+            for tok in f.read().split():
+                if tok.startswith('rauc.slot='):
+                    return tok.split('=', 1)[1]
+    except Exception:
+        pass
+    return None
+
+def _data_partition_mounted():
+    """True/False from the initramfs state file, None when it says nothing."""
+    try:
+        with open('/run/hifi-state/data-mounted') as f:
+            flag = f.read().strip()
+    except Exception:
+        return None
+    return flag == '1' if flag in ('0', '1') else None
+
+def ab_status():
+    """Stato dello schema A/B per l'interfaccia e per la prova sul campo:
+    modalità immagine, slot avviato, stato della conversione (ESP), esito
+    delle pre-verifiche e `rauc status` in JSON quando RAUC è configurato."""
+    out = {'image_mode': _image_mode(), 'image_version': _image_version() if _image_mode() else None,
+           'booted_slot': _booted_slot(), 'rauc_configured': os.path.exists(RAUC_SYSTEM_CONF),
+           'state': None, 'precheck': None, 'rauc': None,
+           # False = the initramfs fell back to a tmpfs /data (see the
+           # local-bottom hifi-state hook): this boot is running on the
+           # image's factory /etc and nothing written now survives a reboot.
+           # None on a device that predates the flag, or a legacy layout.
+           'data_mounted': _data_partition_mounted()}
+    try:
+        with open(AB_STATE_FILE) as f:
+            out['state'] = f.read().strip() or None
+    except Exception:
+        pass
+    try:
+        with open(AB_PRECHECK_FILE) as f:
+            out['precheck'] = json.load(f)
+    except Exception:
+        pass
+    if out['rauc_configured']:
+        try:
+            r = _run(['rauc', 'status', '--output-format=json'], timeout=20)
+            if r.returncode == 0 and r.stdout.strip():
+                out['rauc'] = json.loads(r.stdout)
+        except Exception:
+            log.exception("ab_status: rauc status failed")
+    return out
+
 def _installed_ui_version():
+    if _image_mode():
+        return _image_version()
     # il file nuovo prima, quello vecchio come ripiego (apparecchi non ancora aggiornati)
     for path in (OTA_VERSION_FILE, OTA_VERSION_FILE_LEGACY):
         try:
@@ -4374,7 +4794,7 @@ def _debian_codename():
 # from the new (Debian 13) ISO instead of trying to update in place.
 _OTA_BLOCKED_CODENAMES = ('bookworm',)
 
-def _check_release_update(current, prefix, channel=None):
+def _check_release_update(current, prefix, channel=None, suffix='.tar.gz', image=False):
     """Look at the relevant GitHub Release and return update info for the asset
     whose name starts with `prefix` (e.g. 'hifi-ui-' or 'hifi-system-').
 
@@ -4383,6 +4803,14 @@ def _check_release_update(current, prefix, channel=None):
     one to check prod/dev independently of whatever the device's own channel
     setting happens to be, without touching it."""
     channel = channel or get_ota_channel()
+    if (_image_mode() or _ab_ready()) and not image:
+        # Slot immagine — o legacy già convertito allo schema A/B (system.conf
+        # presente): i canali legacy (ui/system/os) non esistono più, si
+        # aggiorna solo l'immagine intera (bundle RAUC). Senza questo blocco il
+        # piano post-conversione si portava dietro uno step `ui` inutile (la UI
+        # arriva con l'immagine) e Impostazioni mostrava aggiornamenti fantasma.
+        return {'current': current, 'latest': None, 'channel': channel,
+                'update_available': False, 'blocked': 'image'}
     if _debian_codename() in _OTA_BLOCKED_CODENAMES:
         # Deliberately not `error`: build_update_plan()/_plan_step_from_info()
         # treat that as a failed check and report it; this is a clean,
@@ -4410,9 +4838,9 @@ def _check_release_update(current, prefix, channel=None):
                 return a
         return None
 
-    tarball = _named('.tar.gz')
-    sha_asset = _named('.tar.gz.sha256')
-    sig_asset = _named('.tar.gz.sha256.sig')
+    tarball = _named(suffix)
+    sha_asset = _named(suffix + '.sha256')
+    sig_asset = _named(suffix + '.sha256.sig')
 
     return {
         'current': current,
@@ -4428,6 +4856,26 @@ def _check_release_update(current, prefix, channel=None):
 
 def check_app_update():
     return _check_release_update(_installed_ui_version(), OTA_UI_PREFIX)
+
+def _installed_image_version():
+    """Versione dell'immagine in uso; su una root legacy già convertita (RAUC
+    configurato ma nessuna immagine ancora installata) è 'unknown', così la
+    prima immagine risulta sempre "più nuova"."""
+    if _image_mode():
+        return _image_version()
+    return 'unknown'
+
+def check_image_update(channel=None):
+    """Bundle immagine RAUC: offerto solo dove RAUC è configurato (apparecchio
+    convertito allo schema A/B, oppure già in modalità immagine). Un legacy non
+    convertito non lo vede: prima passa dal pacchetto 1 (system+OS) che, se le
+    pre-verifiche lo permettono, converte le partizioni."""
+    channel = channel or get_ota_channel()
+    if not os.path.exists(RAUC_SYSTEM_CONF):
+        return {'current': 'unknown', 'latest': None, 'channel': channel,
+                'update_available': False}
+    return _check_release_update(_installed_image_version(), IMAGE_PREFIX, channel,
+                                 suffix='.raucb', image=True)
 
 def _fetch_sha256(sha_url):
     """Download the .sha256 sidecar and return just the hex digest.
@@ -4505,6 +4953,8 @@ def app_update_status():
 #  OTA update of the custom system components
 # ──────────────────────────────────────────────────────────────────
 def _installed_system_version():
+    if _image_mode():
+        return _image_version()
     return _read_version_file(SYS_VERSION_FILE)
 
 def check_system_update():
@@ -4562,6 +5012,8 @@ def system_update_status():
 #  OTA update of the operating system (signed bundle + apply.sh)
 # ──────────────────────────────────────────────────────────────────
 def _installed_os_version():
+    if _image_mode():
+        return _image_version()
     return _read_version_file(OS_VERSION_FILE)
 
 def check_os_update():
@@ -4672,6 +5124,21 @@ def list_install_disks():
         path = dev.get('path')
         if not path or path == medium_disk:
             continue
+        # 🚨 Nothing you can install onto has zero bytes. Loading the nbd
+        # module — which RAUC needs to stream an image — makes the kernel
+        # create sixteen empty /dev/nbdN devices, and lsblk reports every one
+        # of them as a disk: the installer's picker filled up with
+        # "/dev/nbd2 · 0.0 GB" entries and the real disk was lost among them.
+        # Same for zram, loop and ram devices, which are memory, not storage.
+        try:
+            _size = int(dev.get('size') or 0)
+        except (TypeError, ValueError):
+            _size = 0
+        if _size <= 0:
+            continue
+        _name = path.rsplit('/', 1)[-1]
+        if _name.startswith(('nbd', 'zram', 'ram', 'loop', 'dm-')):
+            continue
         disks.append({
             'path': path,
             'size': dev.get('size'),
@@ -4725,6 +5192,7 @@ _PLAN_KINDS = {
     'system': (lambda: check_system_update(), SYS_STATUS_FILE, lambda: _installed_system_version()),
     'os':     (lambda: check_os_update(),     OS_STATUS_FILE,  lambda: _installed_os_version()),
     'ui':     (lambda: check_app_update(),    OTA_STATUS_FILE, lambda: _installed_ui_version()),
+    'image':  (lambda: check_image_update(),  IMAGE_STATUS_FILE, lambda: _installed_image_version()),
 }
 
 def _read_update_plan():
@@ -4812,6 +5280,28 @@ def _read_update_state():
         info['ts'] = 0
     return info
 
+def _runner_message(info, fallback=''):
+    """User-facing text for a record the shell side wrote (the k=v state file,
+    error.json, or a /run/hifi-*-status.json): the runners put a translation
+    `key` plus `params` (a JSON object, or a string holding one) next to their
+    plain-English `message`. A known key wins — translated into the caller's
+    language — so the kiosk in Italian and the web admin in English read the
+    same step in their own words; anything else falls back to the raw text."""
+    if not isinstance(info, dict):
+        return fallback
+    key = info.get('key')
+    if key and key in _I18N_MESSAGES:
+        params = info.get('params') or {}
+        if isinstance(params, str):
+            try:
+                params = json.loads(params)
+            except ValueError:
+                params = {}
+        if not isinstance(params, dict):
+            params = {}
+        return _t(key, _lang(), **params)
+    return info.get('message') or fallback
+
 def _clear_update_state():
     for f in (UPDATE_STATE_FILE, UPDATE_ERROR_FILE):
         try:
@@ -4878,6 +5368,8 @@ def build_update_plan():
     steps = []
     errors = []
     for kind in UPDATE_PLAN_ORDER:
+        if kind not in _PLAN_KINDS:
+            continue
         check_fn = _PLAN_KINDS[kind][0]
         try:
             info = check_fn()
@@ -5022,18 +5514,23 @@ def update_plan_status():
         if phase in ('done', 'error') and time.time() - ts > UPDATE_PLAN_TTL:
             _clear_update_state()
             _clear_update_plan()
+        elif phase == 'applying' and time.time() - ts > UPDATE_APPLYING_TTL:
+            # Stale: the isolated session (or the A/B conversion chain that
+            # deliberately leaves 'applying' across its reboots) never came
+            # back to finish. Clear it instead of spinning forever.
+            _clear_update_state()
         elif phase == 'applying':
             return {'state': 'applying',
-                    'message': state_info.get('message') or _t('update.applying', _lang()),
+                    'message': _runner_message(state_info, _t('update.applying', _lang())),
                     'finished': None}
         elif phase == 'done':
             return {'state': 'done',
-                    'message': state_info.get('message') or _t('update.applyDone', _lang()),
+                    'message': _runner_message(state_info, _t('update.applyDone', _lang())),
                     'finished': ts}
         else:
             err = _read_update_error() or {}
             return {'state': 'apply_error', 'kind': err.get('channel', ''),
-                    'message': (err.get('message') or state_info.get('message')
+                    'message': (_runner_message(err) or _runner_message(state_info)
                                 or _t('update.applyError', _lang())),
                     'finished': ts}
 
@@ -5051,6 +5548,22 @@ def update_plan_status():
     if plan.get('finished') and time.time() - plan['finished'] > UPDATE_PLAN_TTL:
         _clear_update_plan()
         return {'state': 'idle'}
+
+    # An image step has no apply phase: the reboot IS the apply, so nobody
+    # ever rewrites the state file afterwards the way the apply runner does
+    # for the legacy channels. Once the image now running is the one this plan
+    # staged, the update is over — without this the screen sits on "the device
+    # will restart to apply it" for good, on a device that already restarted
+    # and is running exactly what was asked for (seen on the Dell going to
+    # alpha3). Retiring the plan here is also what stops it from re-opening
+    # the overlay at every boot.
+    if state == 'finished' and _image_mode():
+        _img_step = next((st for st in plan['steps'] if st['kind'] == 'image'), None)
+        if _img_step and _img_step.get('version') == _image_version():
+            _clear_update_plan()
+            return {'state': 'done',
+                    'message': _t('update.applyDone', _lang()),
+                    'finished': plan.get('finished')}
 
     # Every step has staged; the stage runner is about to (or already did)
     # create /system-update and reboot into the isolated apply session. There
@@ -5089,7 +5602,7 @@ def update_plan_status():
         if live.get('version') == current['version']:
             step_state = live.get('state') or ''
             progress = live.get('progress') if isinstance(live.get('progress'), (int, float)) else None
-            message = live.get('message') or ''
+            message = _runner_message(live)
         else:
             step_state = 'starting'
 
@@ -5210,6 +5723,9 @@ def wizard_update_apply(channel):
 # ──────────────────────────────────────────────────────────────────
 
 def _lyrion_installed_version():
+    if _image_mode():
+        # su /data, scompattato da hifi-lyrion-update.sh: niente dpkg
+        return _read_version_file(LYRION_DATA_VERSION_FILE)
     try:
         r = _run(['dpkg-query', '-W', '-f=${Version}', LYRION_PKG])
         if r.returncode == 0 and r.stdout.strip():
@@ -5560,9 +6076,36 @@ def roomcorr_discard():
 def api_check():
     return jsonify({"message": "ok"})
 
+def _ui_update_check(check_fn):
+    """What the three update cards on screen should show.
+
+    On an image system the interface, the system components and the OS are no
+    longer three things that update on their own: they are one image. The
+    legacy checks correctly answer "blocked" there, but the three frontends
+    only ever ask those three, so a perfectly available image update showed up
+    as "everything up to date" — the appliance knew, the screen did not (seen
+    on the Dell with alpha3 already published). So in image mode all three
+    answer with the image check. It is the same version in all three rows
+    because it is the same image, and the changelog rides along on the first.
+
+    The same holds for a device that has been converted but is still booting
+    its old root while it waits for the first image (system.conf present,
+    IMAGE_VERSION not yet): its legacy channels are blocked too, so without
+    this it would show nothing at all in the very window where the image is
+    what it needs.
+
+    The plan builder keeps calling check_app/system/os_update directly, so it
+    still sees "blocked" and does not try to stage a .raucb as a tarball.
+    """
+    if _image_mode() or _ab_ready():
+        info = dict(check_image_update())
+        info['kind'] = 'image'
+        return info
+    return check_fn()
+
 @app.route('/app_update/check', methods=['GET'])
 def api_app_update_check():
-    return jsonify(check_app_update())
+    return jsonify(_ui_update_check(check_app_update))
 
 @app.route('/app_update/apply', methods=['POST'])
 def api_app_update_apply():
@@ -5574,7 +6117,7 @@ def api_app_update_status():
 
 @app.route('/system_update/check', methods=['GET'])
 def api_system_update_check():
-    return jsonify(check_system_update())
+    return jsonify(_ui_update_check(check_system_update))
 
 @app.route('/system_update/apply', methods=['POST'])
 def api_system_update_apply():
@@ -5586,7 +6129,7 @@ def api_system_update_status():
 
 @app.route('/os_update/check', methods=['GET'])
 def api_os_update_check():
-    return jsonify(check_os_update())
+    return jsonify(_ui_update_check(check_os_update))
 
 @app.route('/os_update/apply', methods=['POST'])
 def api_os_update_apply():
@@ -5908,6 +6451,14 @@ def api_factory_reset():
 @app.route('/webui_reset_credentials', methods=['POST'])
 def api_webui_reset_credentials():
     return jsonify(webui_reset_credentials())
+
+@app.route('/image_update/check', methods=['GET'])
+def api_image_update_check():
+    return jsonify(check_image_update())
+
+@app.route('/ab_status', methods=['GET'])
+def api_ab_status():
+    return jsonify(ab_status())
 
 @app.route('/ota_channel', methods=['GET'])
 def api_ota_channel():

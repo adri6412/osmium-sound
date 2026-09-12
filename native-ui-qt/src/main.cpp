@@ -22,6 +22,7 @@
 #include "sys.h"
 #include "vumeter.h"
 #include <QFile>
+#include <QRegularExpression>
 #include <QFont>
 #include <QFontDatabase>
 #include <QGuiApplication>
@@ -159,13 +160,34 @@ int main(int argc, char *argv[]) {
 
     const QString base = QCoreApplication::applicationDirPath();
     QString assets = base + "/assets", locales = base + "/locales", wizard;
-    bool expanded = false;
+    bool expanded = false, wizardDry = false;
     QStringList args = app.arguments();
     for (int i = 1; i < args.size(); i++) {
         if (args[i] == "--assets" && i + 1 < args.size()) assets = args[++i];
         else if (args[i] == "--locales" && i + 1 < args.size()) locales = args[++i];
         else if (args[i] == "--expanded") expanded = true;
-        else if (args[i] == "--wizard" && i + 1 < args.size()) wizard = args[++i];
+        else if (args[i] == "--wizard" && i + 1 < args.size()) { wizard = args[++i]; wizardDry = true; }
+    }
+
+    // Modalita' installer decisa dalla riga di comando del kernel, come fa
+    // l'app Electron con /boot_mode: la voce "Installa" del menu della ISO
+    // aggiunge hifi.installer=1. Serve perche' la ISO a filesystem unico non
+    // ha piu' un sistema live separato in cui mettere un'unita' diversa: c'e'
+    // solo l'immagine, e l'unica differenza fra "installa" e "prova" e' questa
+    // parola sulla riga di comando. L'argomento --wizard, se passato a mano,
+    // resta prioritario (serve in sviluppo).
+    if (wizard.isEmpty()) {
+        QFile cmdline("/proc/cmdline");
+        if (cmdline.open(QIODevice::ReadOnly | QIODevice::Text)) {
+            const QString c = QString::fromUtf8(cmdline.readAll());
+            // 🚨 Not a dry run: this one really installs. forcedWizard was
+            // born for --wizard, which only exists so a developer can look at
+            // the screens, and it puts the wizard in preview mode -- so on a
+            // real ISO the kiosk's "Erase and install" button answered
+            // "Forced preview - install not started" and did nothing.
+            if (c.split(QRegularExpression("\\s+")).contains("hifi.installer=1"))
+                { wizard = "install"; wizardDry = false; }
+        }
     }
 
     // Il carattere dell'apparecchio: DejaVu Sans (il body stack di Electron
@@ -177,9 +199,11 @@ int main(int argc, char *argv[]) {
     Api api;
     Sys sys(assets);
     sys.setIconDir(base + "/icons");
-    sys.setForcedWizard(wizard);
+    sys.setForcedWizard(wizard, wizardDry);
     sys.setStartExpanded(expanded);
     I18n i18n(locales, sys.conf("ui-language", "en"));
+    api.setLang(i18n.lang());
+    QObject::connect(&i18n, &I18n::langChanged, &api, [&api, &i18n]() { api.setLang(i18n.lang()); });
     Player player;
     VuMeter vu;
     LibraryModel library;

@@ -43,6 +43,16 @@ def get_logger(name, echo=True, level=logging.INFO):
     except OSError:
         pass  # e.g. local dev without root / without the dir — console still works
 
+    # 🚨 A logger with no handlers and propagate=False falls through to
+    # logging's lastResort handler, which writes to sys.stderr — and
+    # tee_stdio_to_file() has just made sys.stderr write back into this
+    # logger. One print() then recurses until the interpreter dies with
+    # "lost sys.stderr". Only reachable when the file handler could not be
+    # created (an unwritable LOG_DIR, or a dev checkout), which is exactly
+    # when the daemon most needs its output to still come out.
+    if not logger.handlers:
+        logger.addHandler(logging.NullHandler())
+
     logger.propagate = False
     return logger
 

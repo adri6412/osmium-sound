@@ -119,8 +119,14 @@ qt_ui_ready() {
 get_engine() {
     if [ -f "$ENGINE_FILE" ] && [ "$(cat "$ENGINE_FILE" 2>/dev/null)" = qt ]; then
         echo qt
-    else
+    elif [ -d /opt/hifi-media-player ]; then
         echo electron
+    else
+        # Image slots ship the Qt interface only (Electron was dropped to make
+        # room for /data). A converted device carries its old /etc over, so the
+        # file can still say "electron": answering that here would start a
+        # session that cannot exist — black screen. Qt is the only truth left.
+        echo qt
     fi
 }
 
