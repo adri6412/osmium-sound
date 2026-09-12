@@ -43,7 +43,11 @@ EOF
 case "\$1" in
     -c) awk '{printf "-rw-r--r-- root/root 10 2026-01-01 00:00 ./%s\n", \$0}' "$ROOT/deb.list" ;;
     -f) case "\$3" in Package) echo fake ;; Version) echo 1.0 ;; *) echo "" ;; esac ;;
-    -e) mkdir -p "\$3"
+    # Like the real one: only the last directory is created, a missing parent
+    # is an error. A mkdir -p here is exactly what hid the bug where no
+    # maintainer script ever ran on a real device.
+    -e) [ -d "\$(dirname "\$3")" ] || { echo "dpkg-deb: failed to create directory" >&2; exit 2; }
+        mkdir "\$3"
         if [ -f "$ROOT/have-postinst" ]; then
           printf '#!/bin/sh\necho "\$1" > "%s/postinst-ran"\n[ -f "%s/postinst-fails" ] && exit 1\nexit 0\n' "$ROOT" "$ROOT" > "\$3/postinst"
           chmod +x "\$3/postinst"
@@ -91,6 +95,30 @@ printf 'srv/weird/file\n' > "$ROOT/deb.list"
 out=$(run add fake); rc=$?
 check "stray path: refused" "1" "$rc"
 contains "stray path: says where" "$out" "srv/weird/file"
+
+# ── 3b. 🚨 merged /usr: lib/, bin/, sbin/ are the /usr paths they alias ─────
+# Docker's own containerd.io ships lib/systemd/system/containerd.service. On
+# this system /lib is a symlink into /usr, so dpkg would put it in /usr/lib —
+# refusing it rejected a package that installs fine, and leaving it outside
+# usr/ would make the unit invisible to systemd-sysext.
+setup
+printf 'usr/bin/containerd\nlib/systemd/system/containerd.service\nsbin/runc-helper\n' > "$ROOT/deb.list"
+out=$(run add fake); rc=$?
+check "merged /usr: a lib/ path is accepted" "0" "$rc"
+check "merged /usr: the unit lands under usr/lib, where sysext sees it" "yes" \
+      "$([ -f "$ROOT/var/lib/extensions/fake/usr/lib/systemd/system/containerd.service" ] && echo yes || echo no)"
+check "merged /usr: sbin/ folded into usr/sbin too" "yes" \
+      "$([ -f "$ROOT/var/lib/extensions/fake/usr/sbin/runc-helper" ] && echo yes || echo no)"
+check "merged /usr: no stray lib/ left beside usr/" "no" \
+      "$([ -e "$ROOT/var/lib/extensions/fake/lib" ] && echo yes || echo no)"
+
+# and an aliased path still cannot cover a file the image ships under /usr
+setup
+: > "$ROOT/usr/bin/already-here"
+printf 'bin/already-here\n' > "$ROOT/deb.list"
+out=$(run add fake); rc=$?
+check "merged /usr: bin/ over an image /usr/bin file is still refused" "1" "$rc"
+contains "merged /usr: and it names the /usr path" "$out" "usr/bin/already-here"
 
 # ── 4. /etc content is copied out (sysext only merges /usr and /opt) ────────
 setup
