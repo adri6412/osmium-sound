@@ -2140,6 +2140,11 @@ SUPPORT_JOURNAL_UNITS = [
     # silently drops everything written during it, which from the outside
     # looks like settings reverting on their own.
     'hifi-boot-health',
+    # The A/B chain. Without these a device that did not convert looks exactly
+    # like one that did nothing: the units enabled by the 0061 migration are
+    # where the conversion is armed and carried out, and a bundle that does not
+    # name them leaves "why is it still on the old layout" unanswerable.
+    'hifi-rauc-config', 'hifi-ab-finish', 'hifi-ab-image', 'hifi-ab-firstboot',
     'bluetooth', 'NetworkManager',
 ]
 # Config worth including — never secrets/keys. Mirrors the allow-list spirit of
@@ -2193,6 +2198,55 @@ def _support_services_snapshot():
     return '\n'.join(lines) + '\n'
 
 
+def _support_ab_snapshot():
+    """The A/B picture: image mode, booted slot, conversion state, and the
+    pre-check verdict.
+
+    🚨 The pre-check is RUN when its JSON is not there. That file lives in
+    /run, so it is gone after every reboot, and it is the only thing that says
+    why a device stayed on the old layout — a bundle collected the morning
+    after an update would otherwise carry no answer at all. Running it is safe:
+    it reports and changes nothing (see hifi-ab-precheck.sh)."""
+    out = {}
+    try:
+        out = ab_status()
+    except Exception as e:
+        return {'error': f'ab_status failed: {e}'}
+    if not out.get('precheck') and not out.get('image_mode'):
+        try:
+            r = subprocess.run([AB_PRECHECK_SCRIPT], capture_output=True, text=True, timeout=180)
+            out['precheck_run'] = {'exit': r.returncode,
+                                   'verdict': (r.stdout or r.stderr or '').strip()[:600]}
+            with open(AB_PRECHECK_FILE) as f:
+                out['precheck'] = json.load(f)
+        except Exception as e:
+            out['precheck_run'] = {'error': str(e)}
+    return out
+
+
+def _support_disks_snapshot():
+    """Partition table, mounts and free space.
+
+    The A/B conversion is a question about the disk — how many partitions,
+    which one is the root, is there an ESP, how much room is left — and none of
+    it was in the bundle, so every answer had to be asked of the owner by hand."""
+    out = []
+    for label, cmd in (
+            ('lsblk', ['lsblk', '-o', 'NAME,MAJ:MIN,RM,SIZE,RO,TYPE,FSTYPE,PARTLABEL,MOUNTPOINT']),
+            ('df', ['df', '-hT']),
+            ('findmnt', ['findmnt', '--real', '-o', 'TARGET,SOURCE,FSTYPE,OPTIONS']),
+            ('partitions', ['sfdisk', '-l']),
+            ('efi', ['test', '-d', '/sys/firmware/efi'])):
+        out.append(f'== {label} ==')
+        try:
+            r = subprocess.run(cmd, capture_output=True, text=True, timeout=20)
+            out.append((r.stdout or '').rstrip() or f'(exit {r.returncode}) {(r.stderr or "").strip()[:200]}')
+        except Exception as e:
+            out.append(f'({label} failed: {e})')
+        out.append('')
+    return '\n'.join(out) + '\n'
+
+
 def _support_bundle_build():
     """Build the support zip in memory. Every section is best-effort: one
     failing piece (e.g. journalctl unavailable) must never abort the rest."""
@@ -2213,6 +2267,15 @@ def _support_bundle_build():
 
         z.writestr('system_info.json', json.dumps(get_system_info(), indent=2))
         z.writestr('services.txt', _support_services_snapshot())
+
+        try:
+            z.writestr('ab_status.json', json.dumps(_support_ab_snapshot(), indent=2))
+        except Exception as e:
+            z.writestr('ab_status.json', json.dumps({'error': str(e)}))
+        try:
+            z.writestr('disks.txt', _support_disks_snapshot())
+        except Exception as e:
+            z.writestr('disks.txt', f'(disks snapshot failed: {e})\n')
 
         for fpath in SUPPORT_CONFIG_FILES:
             try:
@@ -4509,6 +4572,7 @@ IMAGE_VERSION_FILE = '/usr/lib/osmium/IMAGE_VERSION'
 LYRION_DATA_VERSION_FILE = '/data/lyrion/current/VERSION'
 AB_STATE_FILE = '/boot/efi/EFI/debian/abconvert.state'
 AB_PRECHECK_FILE = '/run/hifi-ab-precheck.json'
+AB_PRECHECK_SCRIPT = '/usr/local/sbin/hifi-ab-precheck.sh'
 RAUC_SYSTEM_CONF = '/etc/rauc/system.conf'
 
 def _image_mode():
