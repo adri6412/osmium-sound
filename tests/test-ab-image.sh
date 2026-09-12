@@ -36,7 +36,14 @@ printf '{"convertible":false,"reasons":"the music does not fit","media_needed_mi
     > "$HIFI_TEST_PRECHECK_JSON"
 exit "${PRECHECK_RC:-1}"
 FAKE
-chmod +x "$T/sbin/hifi-ab-convert.sh" "$T/sbin/hifi-ab-precheck.sh"
+# Il riavvio finto: si registra invece di spegnere il portatile di chi lancia
+# la prova. Senza HIFI_REBOOT_CMD questo test riavvierebbe la macchina di CI.
+cat > "$T/sbin/fake-reboot.sh" <<'FAKE'
+#!/bin/sh
+printf 'reboot\n' >> "$HIFI_TEST_CALLS"
+FAKE
+chmod +x "$T/sbin/hifi-ab-convert.sh" "$T/sbin/hifi-ab-precheck.sh" "$T/sbin/fake-reboot.sh"
+mkdir -p "$T/pcm/sub0"
 
 run() {  # -> le chiamate fatte, su una riga
     : > "$T/calls"
@@ -52,6 +59,9 @@ run() {  # -> le chiamate fatte, su una riga
     HIFI_API_BASE="http://127.0.0.1:9/api" \
     HIFI_TEST_CALLS="$T/calls" \
     HIFI_TEST_PRECHECK_JSON="$T/precheck.json" \
+    HIFI_REBOOT_CMD="$T/sbin/fake-reboot.sh" \
+    HIFI_AB_REBOOT_DELAY=0 \
+    HIFI_AB_PCM_GLOB="$T/pcm/*/status" \
         timeout 20 sh "$S" >/dev/null 2>&1
     tr '\n' ' ' < "$T/calls" | sed 's/ *$//'
 }
@@ -64,10 +74,29 @@ expect "rifiuto: ci riprova al prossimo avvio"        "$(run 1)" "precheck"
 expect "…e non arma niente"                           "$([ -f "$T/etc/45_hifi_abconvert" ] && echo si || echo no)" no
 
 # ── il proprietario ha tolto la musica dal disco di sistema ───────────
-expect "ora passa: arma la conversione"               "$(run 0)" "precheck convert prepare"
-# e lo dice: senza riavvio di sorpresa, questa riga è l'unico modo che ha di
-# sapere che la sua mossa è servita
-expect "…e lo scrive dove l'interfaccia lo legge"     "$(sed -n 's/^key=//p' "$T/update/state" 2>/dev/null)" update.ab.armed
+# e non si ferma ad aspettare: la conversione avviene al riavvio, quindi il
+# riavvio se lo dà da solo. Senza, l'apparecchio resta armato finché non lo
+# spegne qualcuno — visto sul campo con la 2.5.24-dev.10.
+expect "ora passa: arma e riavvia per completarla"    "$(run 0)" "precheck convert prepare reboot"
+expect "…e lo scrive dove l'interfaccia lo legge"     "$(sed -n 's/^key=//p' "$T/update/state" 2>/dev/null)" update.ab.rebooting
+rm -f "$T/local/armed-reboot-done" "$T/etc/45_hifi_abconvert"
+
+# ── mai mentre suona: chi ascolta non si vede troncare il brano (e senza
+#    riavvio la conversione avviene comunque al successivo) ─────────────
+printf 'state: RUNNING\n' > "$T/pcm/sub0/status"
+expect "sta suonando: arma ma non riavvia"            "$(run 0)" "precheck convert prepare"
+expect "…e resta armata per il prossimo riavvio"      "$(sed -n 's/^key=//p' "$T/update/state" 2>/dev/null)" update.ab.armed
+rm -f "$T/pcm/sub0/status" "$T/etc/45_hifi_abconvert"
+
+# ── un riavvio solo: se la conversione fallisse e si riarmasse da sola, un
+#    riavvio a ogni avvio sarebbe un ciclo senza fine su un apparecchio che
+#    spesso non ha nemmeno uno schermo ─────────────────────────────────
+: > "$T/local/armed-reboot-done"
+expect "già riavviato una volta: non insiste"         "$(run 0)" "precheck convert prepare"
+rm -f "$T/local/armed-reboot-done" "$T/etc/45_hifi_abconvert"
+
+# ── rifiuto: non si arma e quindi non si riavvia ──────────────────────
+expect "pre-verifica negativa: nessun riavvio"        "$(run 1)" "precheck"
 
 # ── conversione già armata: non si rifà l'initrd a ogni avvio ─────────
 : > "$T/etc/45_hifi_abconvert"
