@@ -1,42 +1,52 @@
 {
-  "tag_name": "v2.5.24-dev.9",
-  "name": "v2.5.24-dev.9",
-  "body": "## What's new in v2.5.24-dev.9\n\n- fix(webui): le impostazioni non escono piu' dallo schermo del telefono\n- fix(sito): ripristina la registrazione delle visite (segnaposto di troppo)\n- fix(sito): conferma browser anche dagli header, non solo dalle immagini\n- fix(sito): riconoscimento bot pi\u00f9 severo e rete di provenienza\n- fix(sito): il crawler di Facebook non conta pi\u00f9 come visitatore\n- feat(companion): l'apparecchio in cima alle impostazioni, e l'indirizzo per Tailscale \u2014 1.0.8-svil5\n- fix(companion): il test dello stream non finiva mai, e bloccava la CI\n- feat(companion): aspetto Osmium e riproduzione locale che suona davvero \u2014 1.0.8-svil4\n- feat(companion): il wizard chiede la lingua come primo passo \u2014 1.0.8-svil3\n",
+  "tag_name": "v2.5.24-dev.10",
+  "name": "v2.5.24-dev.10",
+  "body": "## What's new in v2.5.24-dev.10\n\n- site: count visits by network, not by user-agent alone\n",
   "assets": [
     {
-      "name": "hifi-qtui-v2.5.24-dev.9.tar.gz",
-      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.24-dev.9/hifi-qtui-v2.5.24-dev.9.tar.gz",
-      "size": 4835011
+      "name": "hifi-qtui-v2.5.24-dev.10.tar.gz",
+      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.24-dev.10/hifi-qtui-v2.5.24-dev.10.tar.gz",
+      "size": 4844311
     },
     {
-      "name": "hifi-qtui-v2.5.24-dev.9.tar.gz.sha256",
-      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.24-dev.9/hifi-qtui-v2.5.24-dev.9.tar.gz.sha256",
-      "size": 97
+      "name": "hifi-qtui-v2.5.24-dev.10.tar.gz.sha256",
+      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.24-dev.10/hifi-qtui-v2.5.24-dev.10.tar.gz.sha256",
+      "size": 98
     },
     {
-      "name": "hifi-system-v2.5.24-dev.9.tar.gz",
-      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.24-dev.9/hifi-system-v2.5.24-dev.9.tar.gz",
-      "size": 419144
+      "name": "hifi-system-v2.5.24-dev.10.tar.gz",
+      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.24-dev.10/hifi-system-v2.5.24-dev.10.tar.gz",
+      "size": 525601
     },
     {
-      "name": "hifi-system-v2.5.24-dev.9.tar.gz.sha256",
-      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.24-dev.9/hifi-system-v2.5.24-dev.9.tar.gz.sha256",
-      "size": 99
+      "name": "hifi-system-v2.5.24-dev.10.tar.gz.sha256",
+      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.24-dev.10/hifi-system-v2.5.24-dev.10.tar.gz.sha256",
+      "size": 100
     },
     {
-      "name": "hifi-os-v2.5.24-dev.9.tar.gz",
-      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.24-dev.9/hifi-os-v2.5.24-dev.9.tar.gz",
-      "size": 1402484
+      "name": "hifi-os-v2.5.24-dev.10.tar.gz",
+      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.24-dev.10/hifi-os-v2.5.24-dev.10.tar.gz",
+      "size": 1403956
     },
     {
-      "name": "hifi-os-v2.5.24-dev.9.tar.gz.sha256",
-      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.24-dev.9/hifi-os-v2.5.24-dev.9.tar.gz.sha256",
-      "size": 95
+      "name": "hifi-os-v2.5.24-dev.10.tar.gz.sha256",
+      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.24-dev.10/hifi-os-v2.5.24-dev.10.tar.gz.sha256",
+      "size": 96
     },
     {
-      "name": "hifi-os-v2.5.24-dev.9.tar.gz.sha256.sig",
-      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.24-dev.9/hifi-os-v2.5.24-dev.9.tar.gz.sha256.sig",
+      "name": "hifi-os-v2.5.24-dev.10.tar.gz.sha256.sig",
+      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.24-dev.10/hifi-os-v2.5.24-dev.10.tar.gz.sha256.sig",
       "size": 64
+    },
+    {
+      "name": "hifi-image-v2.5.24-dev.10.raucb",
+      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.24-dev.10/hifi-image-v2.5.24-dev.10.raucb",
+      "size": 1001732758
+    },
+    {
+      "name": "hifi-image-v2.5.24-dev.10.raucb.sha256",
+      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.24-dev.10/hifi-image-v2.5.24-dev.10.raucb.sha256",
+      "size": 98
     }
   ]
 }
