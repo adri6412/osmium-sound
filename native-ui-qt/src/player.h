@@ -18,6 +18,11 @@ class Player : public QObject {
     Q_PROPERTY(bool connected READ connected NOTIFY connectedChanged)
     Q_PROPERTY(QString playerName READ playerName NOTIFY connectedChanged)
     Q_PROPERTY(QString playerId READ playerId NOTIFY connectedChanged)
+    // The device's own player (matched by name) as opposed to the one being
+    // driven: the user may pick another player on the same Lyrion (#99).
+    Q_PROPERTY(QString ownPlayerId READ ownPlayerId NOTIFY playerChanged)
+    Q_PROPERTY(QString ownPlayerName READ ownPlayerName NOTIFY playerChanged)
+    Q_PROPERTY(bool isOwn READ isOwn NOTIFY playerChanged)
     // brano
     Q_PROPERTY(QString title READ title NOTIFY metaChanged)
     Q_PROPERTY(QString artist READ artist NOTIFY metaChanged)
@@ -70,6 +75,9 @@ public:
     bool connected() const { return m_connected; }
     QString playerName() const { return m_playerName; }
     QString playerId() const { return m_playerId; }
+    QString ownPlayerId() const { return m_ownId; }
+    QString ownPlayerName() const { return m_ownName; }
+    bool isOwn() const { return m_pinnedId.isEmpty(); }
     QString title() const { return m_title; }
     QString artist() const { return m_artist; }
     QString album() const { return m_album; }
@@ -125,6 +133,11 @@ public:
     Q_INVOKABLE void setRepeat(int m);
     Q_INVOKABLE void setSleep(int seconds);
     // Comando qualsiasi al player, es. ["playlistcontrol","cmd:load","album_id:12"].
+    // Drive another player on the same Lyrion (empty id or our own = back to
+    // this device); the choice lives in memory only, a reboot starts on our own.
+    Q_INVOKABLE void selectPlayer(const QString &id, const QString &name);
+    // The server's players for the picker: cb(ok, [{id, name, isOwn, connected}])
+    Q_INVOKABLE void players(const QJSValue &cb);
     Q_INVOKABLE void cmd(const QVariantList &params);
     // Interrogazione con risposta: cb(ok, result) dove result e' `result` del JSON-RPC.
     Q_INVOKABLE void query(const QVariantList &params, const QJSValue &cb);
@@ -140,6 +153,7 @@ public:
 
 signals:
     void connectedChanged();
+    void playerChanged();         // the player being driven, or our own, changed
     void metaChanged();
     void artworkChanged();
     void coverPxChanged();
@@ -153,6 +167,7 @@ signals:
 
 private:
     void findPlayer();
+    void switchTo(const QString &id, const QString &name);   // drive this player from now on
     void fetchLocalName();          // come ci chiamiamo su Lyrion (-n di squeezelite)
     void onLmsHostChanged();        // si e' passati a un altro Lyrion: si ricomincia
     void pollStatus();
@@ -177,6 +192,8 @@ private:
     // Lyrion yet, and some other player took its place): keep looking for
     // our own and switch over as soon as it shows up.
     bool m_playerProvisional = false;
+    QString m_ownId, m_ownName;     // our own player, once seen on the list
+    QString m_pinnedId;             // the player the user chose to drive (empty = our own)
     qint64 m_lookupSince = 0, m_lastFind = 0, m_lastNameFetch = 0;
     QString m_title, m_artist, m_album, m_id, m_coverId, m_artworkUrlLms, m_type, m_bitrate, m_chip, m_currentTitle;
     QString m_artworkUrl, m_artKey;

@@ -258,6 +258,7 @@ int main(int argc, char *argv[]) {
     VuMeter vu;
     LibraryModel library;
     QObject::connect(&player, &Player::connectedChanged, &library, [&]() { library.setProperty("playerId", player.playerId()); });
+    QObject::connect(&player, &Player::playerChanged, &library, [&]() { library.setProperty("playerId", player.playerId()); });
 
     qmlRegisterType<Spring>("Hifi", 1, 0, "Spring");
     qmlRegisterType<QrItem>("Hifi", 1, 0, "QrCode");

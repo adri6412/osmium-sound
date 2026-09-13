@@ -29,6 +29,25 @@ Item {
         expanded = Sys.startExpanded
     }
 
+    // Choose the player to drive (#99): the server's list, this device's own
+    // first; the choice is not persisted, a reboot starts on our own.
+    function openPlayerPicker() {
+        Player.players(function(ok, list) {
+            if (!ok) return
+            list = list || []
+            list.sort(function(a, b) { return (b.isOwn ? 1 : 0) - (a.isOwn ? 1 : 0) })
+            if (list.length <= 1) { toast.show(Tr.t("player.noOtherPlayers")); return }
+            var labels = [], cur = -1
+            for (var i = 0; i < list.length; i++) {
+                labels.push(list[i].isOwn ? list[i].name + " · " + Tr.t("player.thisDevice") : list[i].name)
+                if (list[i].id === Player.playerId) cur = i
+            }
+            dialogs.pick(Tr.t("player.selectPlayer"), labels, cur, function(i) {
+                if (i >= 0 && i < list.length) Player.selectPlayer(list[i].isOwn ? "" : list[i].id, list[i].name)
+            })
+        })
+    }
+
     // per il canale di collaudo (eval): app.settings.openSection(n) ecc.
     readonly property var settings: Ui.settings
     readonly property var main: mainScreen
@@ -49,6 +68,7 @@ Item {
         onExpand: app.setExpanded(true)
         onOpenQueue: overlays.openQueue()
         onOpenSleep: overlays.openSleep()
+        onOpenPlayerPicker: app.openPlayerPicker()
     }
     NowPlaying {
         id: np
@@ -61,6 +81,7 @@ Item {
         onCollapse: app.setExpanded(false)
         onOpenQueue: overlays.openQueue()
         onOpenSleep: overlays.openSleep()
+        onOpenPlayerPicker: app.openPlayerPicker()
         onStartScreensaver: screensaver.show(true)
         onToggleView: { app.viewVu = !app.viewVu; Sys.setConf("nowplaying-view", app.viewVu ? "vu" : "lyrics") }
     }
@@ -93,7 +114,9 @@ Item {
     }
     Timer {
         interval: 500; repeat: true
-        running: Player.autoexpandSecs > 0 && Player.playing && !app.expanded && Player.connected && !wizard.active
+        // only for this device's own playback: a phone across the house
+        // changing track is no reason to pop the player open (#99)
+        running: Player.autoexpandSecs > 0 && Player.playing && !app.expanded && Player.connected && Player.isOwn && !wizard.active
         onTriggered: {
             if (mainScreen.browsing) return
             var key = Player.title + "|" + Player.artist + "|" + Player.album

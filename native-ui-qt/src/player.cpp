@@ -80,6 +80,22 @@ void Player::findPlayer() {
                 }
             }
         }
+        if (matched && (id != m_ownId || name != m_ownName)) { m_ownId = id; m_ownName = name; emit playerChanged(); }
+        // The user is driving another player: keep it as long as it is on the
+        // list; once it is gone (phone disconnected) go back to our own.
+        if (!m_pinnedId.isEmpty()) {
+            for (const QVariant &p : loop) {
+                QVariantMap m = p.toMap();
+                if (m.value("playerid").toString() == m_pinnedId) {
+                    if (!m_connected) switchTo(m_pinnedId, m.value("name").toString());
+                    return;
+                }
+            }
+            qInfo("player: \"%s\" left Lyrion, back to our own player", qPrintable(m_pinnedId));
+            m_pinnedId.clear();
+            emit playerChanged();
+            if (!matched) { if (m_connected) { m_connected = false; emit connectedChanged(); } return; }
+        }
         if (!matched) {
             // Our own player is not on the list (yet). While we are already on
             // a stand-in, keep it; otherwise, if we know our name, give
@@ -103,13 +119,53 @@ void Player::findPlayer() {
         }
         m_playerProvisional = !matched;
         if (m_connected && id == m_playerId) return;
-        bool was = m_connected;
-        if (was) qInfo("player: switching to own player \"%s\"", qPrintable(name));
-        m_playerId = id; m_playerName = name.isEmpty() ? id : name;
-        m_connected = true;
-        m_artKey.clear();
-        emit connectedChanged(); pollPrefs(); m_wantNow = true;
+        if (m_connected) qInfo("player: switching to own player \"%s\"", qPrintable(name));
+        switchTo(id, name);
     }, 4000);
+}
+
+// The player we drive from now on: everything that was cached for the old
+// one (artwork key above all) starts over, the status is fetched right away.
+void Player::switchTo(const QString &id, const QString &name) {
+    m_playerId = id; m_playerName = name.isEmpty() ? id : name;
+    m_connected = true;
+    m_artKey.clear();
+    emit connectedChanged(); emit playerChanged();
+    pollPrefs(); m_wantNow = true;
+}
+
+void Player::selectPlayer(const QString &id, const QString &name) {
+    if (id.isEmpty() || id == m_ownId) {
+        if (m_pinnedId.isEmpty()) return;
+        m_pinnedId.clear();
+        qInfo("player: back to our own player");
+        if (!m_ownId.isEmpty()) switchTo(m_ownId, m_ownName);
+        else { m_connected = false; emit connectedChanged(); emit playerChanged(); findPlayer(); }
+        return;
+    }
+    if (id == m_pinnedId) return;
+    m_pinnedId = id;
+    m_playerProvisional = false;      // a deliberate choice is never a stand-in
+    qInfo("player: driving \"%s\" (%s)", qPrintable(name), qPrintable(id));
+    switchTo(id, name);
+}
+
+void Player::players(const QJSValue &cb) {
+    QJSValue f = cb;
+    Api::instance()->lmsRequest("", {"players", "0", "50"}, [this, f](bool ok, const QVariant &data, int) mutable {
+        QVariantList out;
+        for (const QVariant &p : data.toMap().value("result").toMap().value("players_loop").toList()) {
+            QVariantMap m = p.toMap();
+            const QString pid = m.value("playerid").toString();
+            if (pid.isEmpty()) continue;
+            QVariantMap e;
+            e["id"] = pid; e["name"] = m.value("name").toString();
+            e["isOwn"] = !m_ownId.isEmpty() ? pid == m_ownId : m.value("name").toString() == m_localName;
+            e["connected"] = m.value("connected").toInt() != 0;
+            out << e;
+        }
+        callJs(f, {ok, QVariant(out)});
+    }, 8000);
 }
 
 // Il nome che questo apparecchio ha su Lyrion: lo tiene l'api_server (e' il -n
@@ -138,6 +194,8 @@ void Player::onLmsHostChanged() {
     m_playerId.clear();
     m_artKey.clear();
     m_playerProvisional = false;
+    m_pinnedId.clear(); m_ownId.clear(); m_ownName.clear();
+    emit playerChanged();
     m_lookupSince = m_clock.elapsed();
     if (m_connected) { m_connected = false; emit connectedChanged(); }
     m_wantNow = true;
@@ -162,7 +220,7 @@ void Player::pollStatus() {
         // rename), treat the current player as a stand-in: the tick goes back
         // to looking for our own one.
         const QString owner = S(r, "player_name");
-        if (!m_playerProvisional && !m_localName.isEmpty() && !owner.isEmpty() && owner != m_localName) {
+        if (m_pinnedId.isEmpty() && !m_playerProvisional && !m_localName.isEmpty() && !owner.isEmpty() && owner != m_localName) {
             qInfo("player: status belongs to \"%s\", we are \"%s\": looking for our own player again", qPrintable(owner), qPrintable(m_localName));
             m_playerProvisional = true;
         }

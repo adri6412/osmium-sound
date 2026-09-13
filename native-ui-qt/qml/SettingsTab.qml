@@ -207,7 +207,7 @@ Item {
                 var out = []
                 for (var i = 0; i < (r.players_loop || []).length; i++) {
                     var p = r.players_loop[i]
-                    if (String(p.playerid) === Player.playerId) continue
+                    if (String(p.playerid) === (Player.ownPlayerId || Player.playerId)) continue
                     out.push({ id: String(p.playerid), name: String(p.name || ""), sync: false })
                 }
                 if (out.length) Player.query(["status", "-", "1"], function(ok2, r2) {
@@ -273,6 +273,7 @@ Item {
         function onModeChanged() { if (root.active >= 0) root.rebuild() }
         function onSettingsChanged() { if (root.active >= 0) root.rebuild() }
         function onConnectedChanged() { if (root.active >= 0) root.rebuild() }
+        function onPlayerChanged() { if (root.active >= 0) root.rebuild() }
     }
     signal dataChanged()
     onDataChanged: {
@@ -759,8 +760,18 @@ Item {
         grid([acell(Tr.t("settings.audio.refreshList"), "audio_refresh", "accent", { icon: "rotate-cw", hh: 48 }),
               acell(Tr.t("settings.audio.setOutput"), "audio_apply", "gold", { icon: "volume-2", bold: true, hh: 48 })])
     }
+    // Playback prefs, alarms and the sync group are THIS device's: while
+    // another player is being driven they are hidden behind a note (#99),
+    // so nothing gets written to somebody's phone
+    function remoteNote() {
+        if (Player.isOwn) return false
+        note(Tr.tf("settings.remotePlayer.note", "name", Player.playerName), "dark", "speaker")
+        action(Tr.t("settings.remotePlayer.back"), "player_back", "gold")
+        return true
+    }
     function secPlayback() {
         help("settings.playback.help")
+        if (remoteNote()) return
         if (!havePlayer) note(Tr.t("settings.playback.noPlayer"), "dark")
         label("settings.playback.transition", 14)
         var TR = ["settings.playback.transNone", "settings.playback.transCrossfade", "settings.playback.transFadeIn", "settings.playback.transFadeOut", "settings.playback.transFadeInOut"]
@@ -834,6 +845,7 @@ Item {
             note(cfg.skinMsg || Tr.t(serr ? "settings.lyrion.skinFailed" : "settings.lyrion.skinInstalling"), serr ? "red" : "dark")
         }
         sep()
+        if (remoteNote()) return
         if (!havePlayer) { note(Tr.t("settings.playback.noPlayer"), "dark"); return }
         if (!cfg.players.length) { note(Tr.t("settings.multiroom.noOthers"), "dark"); return }
         for (var p = 0; p < cfg.players.length; p++) {
@@ -842,6 +854,7 @@ Item {
     }
     function secAlarm() {
         help("settings.alarm.help")
+        if (remoteNote()) return
         if (!havePlayer) { note(Tr.t("settings.playback.noPlayer"), "dark"); return }
         for (var i = 0; i < cfg.alarms.length; i++) {
             var a = cfg.alarms[i], mins = Math.floor(a.time / 60)
@@ -1134,6 +1147,7 @@ Item {
             })
             return
         }
+        case "player_back": Player.selectPlayer("", ""); break
         case "player_name_apply":
             if (!nameEdit) return
             post(A("/device_name"), { name: nameEdit }); cfg.deviceName = nameEdit; say(Tr.t("settings.multiroom.name.saved")); break

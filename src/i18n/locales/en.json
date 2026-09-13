@@ -343,6 +343,11 @@
     "repeat": "Repeat",
     "queue": "Queue",
     "queueEmpty": "The queue is empty",
+    "selectPlayer": "Player to control",
+    "thisDevice": "this device",
+    "controlling": "Controlling {{name}}",
+    "noOtherPlayers": "No other player on this Lyrion",
+    "backToOwn": "Back to this device",
     "addToQueue": "Add to queue",
     "playNext": "Play next",
     "saveAsPlaylist": "Save as playlist",
@@ -400,6 +405,10 @@
     },
     "language": {
       "help": "Choose the interface language."
+    },
+    "remotePlayer": {
+      "note": "You are controlling «{{name}}». These settings belong to this device: go back to its own player to change them.",
+      "back": "Back to this device"
     },
     "playback": {
       "help": "Playback options applied to the active player: track transitions (crossfade/gapless) and volume normalisation (ReplayGain).",

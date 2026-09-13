@@ -10,11 +10,14 @@ Item {
     id: root
     property real devScale: 1
     property bool viewVu: true                         // scelta dell'utente
-    readonly property bool effVu: viewVu && Player.vuEnabled
+    // the VU needles come from this device's own DAC: meaningless while
+    // driving another player (#99)
+    readonly property bool effVu: viewVu && Player.vuEnabled && Player.isOwn
     property bool shown: false                         // a video (VU attivi solo qui)
     signal collapse()
     signal openQueue()
     signal openSleep()
+    signal openPlayerPicker()
     signal startScreensaver()
     signal toggleView()
 
@@ -121,12 +124,19 @@ Item {
     Text {
         anchors.horizontalCenter: parent.horizontalCenter
         y: 31 - height / 2
-        text: Tr.up("player.nowPlaying")
-        color: Theme.silverA(0.7); font.family: Theme.font; font.pixelSize: 10; font.letterSpacing: 2.5
+        text: Player.isOwn ? Tr.up("player.nowPlaying") : Tr.tf("player.controlling", "name", Player.playerName).toUpperCase()
+        color: Player.isOwn ? Theme.silverA(0.7) : Theme.gold; font.family: Theme.font; font.pixelSize: 10; font.letterSpacing: 2.5
+    }
+    RoundButton {                                 // player da pilotare (#99)
+        x: 1024 - root.pad - 34 * 4 - 24; y: 14; width: 34; height: 34; icon: "speaker"; iconSize: 18
+        bg: Player.isOwn ? Theme.wa(0.10) : Theme.goldA(0.3)
+        bgPress: Player.isOwn ? Theme.wa(0.20) : Theme.goldA(0.3)
+        fg: Player.isOwn ? Theme.white : Theme.gold
+        onClicked: root.openPlayerPicker()
     }
     RoundButton {                                 // VU <-> testi (nascosto se i VU sono spenti)
         x: 1024 - root.pad - 34 * 3 - 16; y: 14; width: 34; height: 34
-        visible: Player.vuEnabled
+        visible: Player.vuEnabled && Player.isOwn
         icon: root.viewVu ? "mic-2" : "audio-lines"; iconSize: 18
         onClicked: root.toggleView()
     }
@@ -168,6 +178,10 @@ Item {
     LedBar {
         x: root.pad + (root.leftW - root.ledW) / 2; y: root.artY + root.artSide + 32
         width: root.ledW; devScale: root.devScale
+        // BitPerfect / ReplayGain describe THIS device's signal path: off
+        // while driving another player (the format LEDs stay, they are the
+        // stream's)
+        mode: Player.isOwn ? Player.ledMode : 0
     }
 
     // ─── colonna di destra ─────────────────────────────────────────────────

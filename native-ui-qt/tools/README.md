@@ -19,7 +19,9 @@ un finto apparecchio in Python.
   evento e l'altro, e i trascinamenti non diventavano mai scorrimenti. Il primo evento dopo l'avvio
   puo' andare perso (stato del puntatore su xcb): premettere un `move`.
 - `mock-server.py` — scenari via ambiente: `MOCK_LONG_QUEUE=1` (40 brani in coda),
-  `MOCK_SHARED_LMS=N` (Lyrion altrui: prima solo un telefono, il nostro "Osmium" compare dopo N s).
+  `MOCK_SHARED_LMS=N` (Lyrion altrui: prima solo un telefono, il nostro "Osmium" compare dopo N s),
+  `MOCK_PLAYERS=1` (altri due player sul server, ognuno col suo now playing: per il selettore di player;
+  riavviare il mock senza la variabile simula il telefono che se ne va).
 - `devrun.sh` — sul Dell: ferma la UI in C e avvia hifi-qt su eglfs (`MODE=720`);
   `devrun.sh stop` ripristina. Lo stesso canale `/tmp/hifi-qt.cmd` e `kill -USR1` → `/tmp/hifi-qt.png`.
 - `../sync.sh` — copia sorgenti+icone sul Dell e compila là.

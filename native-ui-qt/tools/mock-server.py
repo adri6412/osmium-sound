@@ -38,13 +38,25 @@ T0 = time.time()
 #                            carries its own player_name
 if os.environ.get("MOCK_LONG_QUEUE"):
     QUEUE = [(f"{t[0]} ({i + 1})", t[1], t[2]) for i in range(8) for t in QUEUE]
+#   MOCK_PLAYERS=1           two more players on the server (a phone and
+#                            "Cucina"), each with its own now playing, for
+#                            the player picker
 SHARED_LMS = float(os.environ.get("MOCK_SHARED_LMS", "0") or 0)
+EXTRA_PLAYERS = [
+    {"playerid": "de:ad:be:ef:00:01", "name": "iPhone di Ale", "ip": "192.168.0.23:51234", "connected": 1},
+    {"playerid": "de:ad:be:ef:00:02", "name": "Cucina", "ip": "192.168.0.31:3483", "connected": 1},
+] if os.environ.get("MOCK_PLAYERS") else []
+# what the other players are doing (status for a playerid that is not ours)
+OTHER = {
+    "de:ad:be:ef:00:01": {"title": "Blue in Green", "artist": "Miles Davis", "album": "Kind of Blue", "volume": 22, "mode": "play"},
+    "de:ad:be:ef:00:02": {"title": "Re", "artist": "Nils Frahm", "album": "Felt", "volume": 65, "mode": "pause"},
+}
 PHONE = {"playerid": "de:ad:be:ef:00:01", "name": "iPhone di Ale", "ip": "192.168.0.23:51234", "connected": 1}
 OWN = {"playerid": "aa:bb:cc:dd:ee:ff", "name": "Osmium", "ip": "127.0.0.1:41234", "connected": 1}
 
 def players_now():
     if not SHARED_LMS:
-        return [OWN]
+        return [OWN] + EXTRA_PLAYERS
     own = dict(OWN, ip="192.168.0.40:41234")
     return [PHONE, own] if time.time() - T0 >= SHARED_LMS else [PHONE]
 
@@ -60,7 +72,17 @@ def rpc(player, params):
         pl = players_now()
         r = {"count": len(pl), "players_loop": pl}
     elif cmd == "status":
-        if len(params) > 1 and params[1] == "-":
+        if len(params) > 1 and params[1] == "-" and player in OTHER:
+            # a player that left the server answers nothing, like Lyrion does
+            if not any(p["playerid"] == player for p in players_now()):
+                return {}
+            o = OTHER[player]
+            owner = next((p["name"] for p in players_now() if p["playerid"] == player), player)
+            r = {"player_name": owner, "mode": o["mode"], "time": 42.0, "duration": 300.0, "mixer volume": o["volume"],
+                 "playlist_cur_index": 0, "playlist_tracks": 1, "playlist repeat": 0, "playlist shuffle": 0, "will_sleep_in": 0,
+                 "playlist_loop": [{"id": 2001, "title": o["title"], "artist": o["artist"], "album": o["album"], "coverid": "1001",
+                                    "bitrate": "1411kbps", "type": "flc", "samplesize": 16, "samplerate": 44100, "duration": 300.0, "remote": 0}]}
+        elif len(params) > 1 and params[1] == "-":
             t = QUEUE[STATE["index"] % len(QUEUE)]
             owner = next((p["name"] for p in players_now() if p["playerid"] == player), "Osmium")
             r = {"player_name": owner, "mode": STATE["mode"], "time": STATE["time"], "duration": STATE["duration"], "mixer volume": STATE["volume"],
@@ -73,6 +95,11 @@ def rpc(player, params):
                  "playlist_loop": [{"id": 1001 + i, "title": q[0], "artist": q[1], "album": q[2], "playlist index": i} for i, q in enumerate(QUEUE)]}
     elif cmd == "playerpref":
         r = {"_p2": STATE["prefs"].get(params[1], "0")}
+    elif player in OTHER and cmd in ("play", "pause", "mixer"):
+        o = OTHER[player]
+        if cmd == "play": o["mode"] = "play"
+        elif cmd == "pause": o["mode"] = "pause" if params[1:2] == ["1"] else "play"
+        else: o["volume"] = int(params[2])
     elif cmd == "play": STATE["mode"] = "play"
     elif cmd == "pause": STATE["mode"] = "pause" if params[1:2] == ["1"] else "play"
     elif cmd == "time": STATE["time"] = float(params[1])
