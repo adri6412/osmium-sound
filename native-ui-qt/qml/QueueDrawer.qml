@@ -30,9 +30,16 @@ Rectangle {
                 qmodel.append({ id: String(it.id), title: String(it.title || it.track || "—"), artist: String(it.artist || "") })
             }
             root.cur = r.playlist_cur_index !== undefined ? Number(r.playlist_cur_index) : -1
+            // on opening, the queue lands on the current track like Material
+            // Skin does: with 200 tracks queued the one playing is not on top
+            Qt.callLater(function() { if (root.cur >= 0) list.positionViewAtIndex(root.cur, ListView.Center) })
         })
     }
     Connections { target: Player; function onControlsChanged() { if (root.visible) root.cur = Player.index } }
+    // the current track changes while the queue is open (track end, jump):
+    // the list follows it, as long as nobody is touching it meanwhile (#100)
+    onCurChanged: if (visible && cur >= 0 && !list.dragging && !list.flicking && !dragRow.active)
+                      list.positionViewAtIndex(cur, ListView.Contain)
 
     // intestazione h-12
     Item {
@@ -106,20 +113,31 @@ Rectangle {
                 anchors.fill: parent
                 enabled: root.interactive
                 property real x0: 0; property real y0: 0; property bool horiz: false; property bool decided: false
+                // 🚨 preventStealing must NOT be a constant true: when the child
+                // still keeps the grab on the first move, the ListView gives the
+                // gesture up for good (lastPosTime = -1 in filterPointerEvent),
+                // and releasing the grab later does not revive it. With a fixed
+                // true the queue never scrolled under a finger (#100); it only
+                // worked on rows where an earlier attempt had already flipped it
+                // to false. So start without the grab and take it only once the
+                // gesture turns out horizontal (swipe to remove) or starts on
+                // the handle; vertical gestures are the list's to take.
+                preventStealing: false
                 onPressed: (m) => {
                     x0 = m.x; y0 = m.y; horiz = false; decided = false
-                    // coordinate di scena: quelle relative alla riga si spostano
-                    // insieme alla riga durante il riordino e falsavano la corsa
-                    if (m.x < 31) { dragRow.start(row.index, mapToItem(null, m.x, m.y).y); m.accepted = true }
+                    // scene coordinates: row-relative ones move together with the
+                    // row while reordering and skewed the travel
+                    if (m.x < 31) { preventStealing = true; dragRow.start(row.index, mapToItem(null, m.x, m.y).y); m.accepted = true }
                 }
                 onPositionChanged: (m) => {
                     if (dragRow.active) { dragRow.update(mapToItem(null, m.x, m.y).y); return }
                     var dx = m.x - x0, dy = m.y - y0
-                    if (!decided && (Math.abs(dx) >= 10 || Math.abs(dy) >= 10)) { decided = true; horiz = Math.abs(dx) > Math.abs(dy) }
+                    if (!decided && (Math.abs(dx) >= 10 || Math.abs(dy) >= 10)) {
+                        decided = true; horiz = Math.abs(dx) > Math.abs(dy)
+                        if (horiz) preventStealing = true
+                    }
                     if (decided && horiz) row.swipeDx = Math.min(0, dx)
-                    else if (decided && !horiz) { preventStealing = false }
                 }
-                preventStealing: true
                 onReleased: (m) => {
                     if (decided && horiz) {
                         if (row.swipeDx < -96) { Player.cmd(["playlist", "delete", String(row.index)]); Qt.callLater(root.load) }
@@ -128,8 +146,10 @@ Rectangle {
                         Player.cmd(["playlist", "index", String(row.index)])
                         root.cur = row.index
                     }
+                    preventStealing = false
                 }
-                onCanceled: row.swipeDx = 0
+                // the list took the gesture over (vertical scroll)
+                onCanceled: { row.swipeDx = 0; preventStealing = false }
             }
         }
         // barra di scorrimento 3 px #333

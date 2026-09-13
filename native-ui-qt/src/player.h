@@ -172,6 +172,12 @@ private:
 
     bool m_connected = false;
     QString m_playerName, m_playerId, m_localName;
+    // #99: the player in use was picked WITHOUT matching our own name (the
+    // name was not known yet, or our squeezelite had not registered with
+    // Lyrion yet, and some other player took its place): keep looking for
+    // our own and switch over as soon as it shows up.
+    bool m_playerProvisional = false;
+    qint64 m_lookupSince = 0, m_lastFind = 0, m_lastNameFetch = 0;
     QString m_title, m_artist, m_album, m_id, m_coverId, m_artworkUrlLms, m_type, m_bitrate, m_chip, m_currentTitle;
     QString m_artworkUrl, m_artKey;
     bool m_remote = false, m_qPcm = false, m_qHires = false, m_qDsd = false;

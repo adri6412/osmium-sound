@@ -13,6 +13,10 @@ Player::Player(QObject *parent) : QObject(parent) {
         qint64 now = m_clock.elapsed();
         if (!m_connected && now - m_lastStatus >= 2000) { m_lastStatus = now; findPlayer(); }
         else if (m_connected && !m_statusInFlight && (m_wantNow || now - m_lastStatus >= 1000)) { m_wantNow = false; m_lastStatus = now; pollStatus(); }
+        // #99: on a stand-in player, keep looking for our own one until it is
+        // there; and re-read our name while it is unknown or has changed
+        if (m_connected && m_playerProvisional && now - m_lastFind >= 3000) findPlayer();
+        if ((m_localName.isEmpty() || m_playerProvisional) && now - m_lastNameFetch >= 5000) fetchLocalName();
         if (m_connected && now - m_lastPrefs >= 5000) { m_lastPrefs = now; pollPrefs(); }
         if (now - m_lastSettings >= 5000) { m_lastSettings = now; pollSettings(); }
         if (now - m_lastUsb >= 4000) { m_lastUsb = now; pollUsb(); }
@@ -30,6 +34,7 @@ Player::Player(QObject *parent) : QObject(parent) {
 
 void Player::start() {
     connect(Api::instance(), &Api::lmsBaseChanged, this, &Player::onLmsHostChanged);
+    m_lookupSince = m_clock.elapsed();
     fetchLocalName();
     findPlayer();
     pollSettings();
@@ -49,11 +54,19 @@ void Player::callJs(QJSValue cb, const QVariantList &args) {
 }
 
 // ─── player locale ─────────────────────────────────────────────────────────
+// How long, after start-up or a change of Lyrion, we wait for our own player
+// to register before falling back to someone else's (#99). On its own Lyrion
+// the match is immediate; on somebody else's, squeezelite comes up after the
+// UI and needs a few seconds to connect.
+static const qint64 kOwnPlayerGraceMs = 30000;
+
 void Player::findPlayer() {
-    Api::instance()->lmsRequest("", {"players", "0", "20"}, [this](bool ok, const QVariant &data, int) {
+    m_lastFind = m_clock.elapsed();
+    Api::instance()->lmsRequest("", {"players", "0", "50"}, [this](bool ok, const QVariant &data, int) {
         if (!ok) { if (m_connected) { m_connected = false; emit connectedChanged(); } return; }
         QVariantList loop = data.toMap().value("result").toMap().value("players_loop").toList();
         QString id, name;
+        bool matched = false;
         // 🚨 Ci si riconosce dal NOME (quello dato a squeezelite con -n), come fa
         // il kiosk Electron. L'indirizzo di partenza non basta: se l'apparecchio
         // segue il Lyrion di un altro, il nostro squeezelite non arriva piu' da
@@ -63,26 +76,39 @@ void Player::findPlayer() {
             for (const QVariant &p : loop) {
                 QVariantMap m = p.toMap();
                 if (m.value("name").toString() == m_localName && !m.value("playerid").toString().isEmpty()) {
-                    id = m.value("playerid").toString(); name = m.value("name").toString(); break;
+                    id = m.value("playerid").toString(); name = m.value("name").toString(); matched = true; break;
                 }
             }
         }
-        for (const QVariant &p : loop) {                       // ripiego: squeezelite locale, ip su loopback
-            if (!id.isEmpty()) break;
-            QVariantMap m = p.toMap();
-            if (m.value("ip").toString().startsWith("127.0.0.1") && !m.value("playerid").toString().isEmpty()) {
-                id = m.value("playerid").toString(); name = m.value("name").toString(); break;
+        if (!matched) {
+            // Our own player is not on the list (yet). While we are already on
+            // a stand-in, keep it; otherwise, if we know our name, give
+            // squeezelite time to register instead of grabbing whatever is
+            // first — on a shared Lyrion that was somebody's phone, and the
+            // kiosk kept driving it until the next reboot (#99).
+            if (m_connected) return;
+            if (!m_localName.isEmpty() && m_clock.elapsed() - m_lookupSince < kOwnPlayerGraceMs) return;
+            for (const QVariant &p : loop) {                       // ripiego: squeezelite locale, ip su loopback
+                QVariantMap m = p.toMap();
+                if (m.value("ip").toString().startsWith("127.0.0.1") && !m.value("playerid").toString().isEmpty()) {
+                    id = m.value("playerid").toString(); name = m.value("name").toString(); break;
+                }
             }
+            if (id.isEmpty() && !loop.isEmpty()) {
+                QVariantMap m = loop.first().toMap();
+                id = m.value("playerid").toString(); name = m.value("name").toString();
+            }
+            if (id.isEmpty()) return;
+            qInfo("player: own player \"%s\" not on Lyrion, using \"%s\" meanwhile", qPrintable(m_localName), qPrintable(name));
         }
-        if (id.isEmpty() && !loop.isEmpty()) {
-            QVariantMap m = loop.first().toMap();
-            id = m.value("playerid").toString(); name = m.value("name").toString();
-        }
-        if (id.isEmpty()) { if (m_connected) { m_connected = false; emit connectedChanged(); } return; }
+        m_playerProvisional = !matched;
+        if (m_connected && id == m_playerId) return;
         bool was = m_connected;
+        if (was) qInfo("player: switching to own player \"%s\"", qPrintable(name));
         m_playerId = id; m_playerName = name.isEmpty() ? id : name;
         m_connected = true;
-        if (!was) { emit connectedChanged(); pollPrefs(); m_wantNow = true; }
+        m_artKey.clear();
+        emit connectedChanged(); pollPrefs(); m_wantNow = true;
     }, 4000);
 }
 
@@ -90,12 +116,16 @@ void Player::findPlayer() {
 // passato a squeezelite). Serve a riconoscere il PROPRIO lettore in un elenco
 // che, su un server condiviso, contiene anche quelli degli altri.
 void Player::fetchLocalName() {
+    m_lastNameFetch = m_clock.elapsed();
     Api *api = Api::instance();
     api->request("GET", api->apiBase() + "/player_name", {}, [this](bool ok, const QVariant &d, int) {
         if (!ok) return;
         const QString n = d.toMap().value("name").toString();
         if (n.isEmpty() || n == m_localName) return;
         m_localName = n;
+        // a new name (first read, or renamed from the settings): whatever we
+        // are on now is only a stand-in until the player with THIS name is found
+        m_playerProvisional = true;
         findPlayer();
     }, 5000);
 }
@@ -107,6 +137,8 @@ void Player::fetchLocalName() {
 void Player::onLmsHostChanged() {
     m_playerId.clear();
     m_artKey.clear();
+    m_playerProvisional = false;
+    m_lookupSince = m_clock.elapsed();
     if (m_connected) { m_connected = false; emit connectedChanged(); }
     m_wantNow = true;
     fetchLocalName();
@@ -125,6 +157,15 @@ void Player::pollStatus() {
             return;
         }
         if (!m_connected) { m_connected = true; emit connectedChanged(); }
+        // #99: Lyrion names, in every status, the player it belongs to. If that
+        // is not us (stale pick from before our squeezelite registered, or a
+        // rename), treat the current player as a stand-in: the tick goes back
+        // to looking for our own one.
+        const QString owner = S(r, "player_name");
+        if (!m_playerProvisional && !m_localName.isEmpty() && !owner.isEmpty() && owner != m_localName) {
+            qInfo("player: status belongs to \"%s\", we are \"%s\": looking for our own player again", qPrintable(owner), qPrintable(m_localName));
+            m_playerProvisional = true;
+        }
         bool playing = S(r, "mode") == "play";
         double elapsed = r.value("time").toDouble(), duration = r.value("duration").toDouble();
         int volume = r.value("mixer volume").toInt(), index = r.value("playlist_cur_index").toInt();

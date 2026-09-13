@@ -29,6 +29,24 @@ ARTISTS = ["Toto", "Pink Floyd", "Dire Straits", "Ludovico Einaudi", "Ólafur Ar
 ALBUMS = [(i + 1, f"Album {i + 1} — {a}", a, (i % 12) + 1) for i, a in enumerate(ARTISTS * 2)]
 QUEUE = [("Rosanna", "TOTO", "TOTO IV"), ("Africa", "TOTO", "TOTO IV"), ("Hold the Line", "TOTO", "Toto"), ("Time", "Pink Floyd", "The Dark Side of the Moon"), ("Money", "Pink Floyd", "The Dark Side of the Moon")]
 T0 = time.time()
+# Scenarios (env):
+#   MOCK_LONG_QUEUE=1        40 tracks in the queue (scrolling tests, #100)
+#   MOCK_SHARED_LMS=N        somebody else's Lyrion (#99): the list holds a
+#                            phone player from the start, our "Osmium" only
+#                            shows up N seconds after the mock started (LAN
+#                            address, not loopback); the status of the phone
+#                            carries its own player_name
+if os.environ.get("MOCK_LONG_QUEUE"):
+    QUEUE = [(f"{t[0]} ({i + 1})", t[1], t[2]) for i in range(8) for t in QUEUE]
+SHARED_LMS = float(os.environ.get("MOCK_SHARED_LMS", "0") or 0)
+PHONE = {"playerid": "de:ad:be:ef:00:01", "name": "iPhone di Ale", "ip": "192.168.0.23:51234", "connected": 1}
+OWN = {"playerid": "aa:bb:cc:dd:ee:ff", "name": "Osmium", "ip": "127.0.0.1:41234", "connected": 1}
+
+def players_now():
+    if not SHARED_LMS:
+        return [OWN]
+    own = dict(OWN, ip="192.168.0.40:41234")
+    return [PHONE, own] if time.time() - T0 >= SHARED_LMS else [PHONE]
 
 def status_now():
     if STATE["mode"] == "play":
@@ -39,11 +57,13 @@ def rpc(player, params):
     cmd = params[0] if params else ""
     r = {}
     if cmd == "players":
-        r = {"count": 1, "players_loop": [{"playerid": "aa:bb:cc:dd:ee:ff", "name": "Osmium", "ip": "127.0.0.1:41234", "connected": 1}]}
+        pl = players_now()
+        r = {"count": len(pl), "players_loop": pl}
     elif cmd == "status":
         if len(params) > 1 and params[1] == "-":
             t = QUEUE[STATE["index"] % len(QUEUE)]
-            r = {"mode": STATE["mode"], "time": STATE["time"], "duration": STATE["duration"], "mixer volume": STATE["volume"],
+            owner = next((p["name"] for p in players_now() if p["playerid"] == player), "Osmium")
+            r = {"player_name": owner, "mode": STATE["mode"], "time": STATE["time"], "duration": STATE["duration"], "mixer volume": STATE["volume"],
                  "playlist_cur_index": STATE["index"], "playlist_tracks": len(QUEUE), "playlist repeat": STATE["repeat"],
                  "playlist shuffle": STATE["shuffle"], "will_sleep_in": STATE["sleep"],
                  "playlist_loop": [{"id": 1001 + STATE["index"], "title": t[0], "artist": t[1], "album": t[2], "coverid": "1001",
