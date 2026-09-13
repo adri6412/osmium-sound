@@ -88,6 +88,7 @@ Item {
         property string displayMode: "gui"; property string uiResolution: "auto"; property string uiRefresh: "native"; property bool uiRefreshSupported: false
         property string timezone: ""
         property bool vuMeter: true; property int autoexpand: 0; property bool playerEnabled: true
+        property var vuStyles: []                                   // [{id, name:{en,it}}]; the choice is Player.vuStyle
         property string otaChannel: "prod"; property var otaChannels: ["prod", "dev"]
         property string audioCur: ""; property var audio: []          // [{id,name}]
         property string lmsMode: "local"; property string lmsHost: ""; property string playerName: ""; property string lyrionChannel: "release"
@@ -138,6 +139,7 @@ Item {
             get(api("/ssh_status"), function(d) { sshEnabled = !!d.enabled; sshAvailable = !!d.available; sshActive = !!d.active })
             get(api("/pointer_status"), function(d) { pointerEnabled = d.enabled !== false; pointerAvailable = d.available !== false })
             get(api("/vu_meter"), function(d) { vuMeter = d.enabled !== false })
+            get(api("/vu_style"), function(d) { vuStyles = d.styles || [] })
             get(api("/player_enabled"), function(d) { playerEnabled = d.enabled !== false })
             get(api("/ui_refresh"), function(d) { uiRefreshSupported = !!d.supported; uiRefresh = str(d, "mode", "native") })
             get(api("/nowplaying_autoexpand"), function(d) { autoexpand = Number(d.seconds || 0) })
@@ -771,7 +773,30 @@ Item {
     }
     function secPlayback() {
         help("settings.playback.help")
-        if (remoteNote()) return
+        // The player prefs below belong to this device's player: hidden while
+        // another one is driven (#99). The VU meters and the auto-open are
+        // about this screen, so they stay reachable either way.
+        if (!remoteNote()) playerPrefs()
+        toggle(Tr.t("settings.playback.vuMeter"), Tr.t("settings.playback.vuMeterHelp"), cfg.vuMeter, "vumeter")
+        if (cfg.vuMeter && cfg.vuStyles.length > 1) {
+            label("settings.playback.vuStyle", 14); help("settings.playback.vuStyleHelp", 12)
+            var lang = I18n.lang, st = []
+            for (var v = 0; v < cfg.vuStyles.length; v++) {
+                var nm = cfg.vuStyles[v].name || {}
+                st.push(cell(String(nm[lang] || nm.en || cfg.vuStyles[v].id), cfg.vuStyles[v].id,
+                             Player.vuStyle === cfg.vuStyles[v].id, "vu_style", { hh: 44 }))
+                if (st.length === 2 || v === cfg.vuStyles.length - 1) {
+                    if (st.length === 1) st.push({ type: "help", label: "" })
+                    grid(st); st = []
+                }
+            }
+        }
+        label("settings.playback.autoExpand", 14); help("settings.playback.autoExpandHelp", 12)
+        var AE = [0, 3, 5, 10, 15], ae = []
+        for (var m = 0; m < 5; m++) ae.push(cell(AE[m] === 0 ? Tr.t("settings.playback.rgOff") : AE[m] + "s", String(AE[m]), cfg.autoexpand === AE[m], "autoexpand", { hh: 44 }))
+        grid(ae)
+    }
+    function playerPrefs() {
         if (!havePlayer) note(Tr.t("settings.playback.noPlayer"), "dark")
         label("settings.playback.transition", 14)
         var TR = ["settings.playback.transNone", "settings.playback.transCrossfade", "settings.playback.transFadeIn", "settings.playback.transFadeOut", "settings.playback.transFadeInOut"]
@@ -792,11 +817,6 @@ Item {
             grid([cell(Tr.t(RG[k]), String(k), pref("rg") === String(k), "replaygain", { hh: 44, dim: !havePlayer }),
                   cell(Tr.t(RG[k + 1]), String(k + 1), pref("rg") === String(k + 1), "replaygain", { hh: 44, dim: !havePlayer })])
         toggle(Tr.t("settings.playback.fixedVolume"), Tr.t("settings.playback.fixedVolumeHelp"), Player.prefDigitalVol === "0", "fixedvol").dim = !havePlayer
-        toggle(Tr.t("settings.playback.vuMeter"), Tr.t("settings.playback.vuMeterHelp"), cfg.vuMeter, "vumeter")
-        label("settings.playback.autoExpand", 14); help("settings.playback.autoExpandHelp", 12)
-        var AE = [0, 3, 5, 10, 15], ae = []
-        for (var m = 0; m < 5; m++) ae.push(cell(AE[m] === 0 ? Tr.t("settings.playback.rgOff") : AE[m] + "s", String(AE[m]), cfg.autoexpand === AE[m], "autoexpand", { hh: 44 }))
-        grid(ae)
     }
     function secMultiroom() {
         help("settings.multiroom.help")
@@ -1092,6 +1112,7 @@ Item {
             })
             return
         case "vumeter": post(A("/vu_meter"), { enable: !row.on }); cfg.vuMeter = !row.on; Player.vuEnabled = cfg.vuMeter; break
+        case "vu_style": post(A("/vu_style"), { style: arg }); Player.vuStyle = arg; break
         case "autoexpand": post(A("/nowplaying_autoexpand"), { seconds: parseInt(arg) }); cfg.autoexpand = parseInt(arg); Player.refreshSettings(); break
         case "transition": setPref("transitionType", arg); Player.refreshPrefs(); say(Tr.t("settings.playback.saved")); break
         case "transdur": setPref("transitionDuration", arg); Player.refreshPrefs(); say(Tr.t("settings.playback.saved")); break

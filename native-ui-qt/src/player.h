@@ -62,6 +62,8 @@ class Player : public QObject {
     Q_PROPERTY(QString prefDigitalVol READ prefDigitalVol NOTIFY modeChanged)
     // impostazioni lette dal api_server
     Q_PROPERTY(bool vuEnabled READ vuEnabled WRITE setVuEnabled NOTIFY settingsChanged)
+    // the VU meter skin (a folder in assets/vu/), chosen in Settings → Playback
+    Q_PROPERTY(QString vuStyle READ vuStyle WRITE setVuStyle NOTIFY settingsChanged)
     Q_PROPERTY(int autoexpandSecs READ autoexpandSecs NOTIFY settingsChanged)
     // aggiornamento in corso
     Q_PROPERTY(QString otaState READ otaState NOTIFY otaChanged)
@@ -112,6 +114,8 @@ public:
     QString prefDigitalVol() const { return m_prefDigVol; }
     bool vuEnabled() const { return m_vuEnabled; }
     void setVuEnabled(bool on);
+    QString vuStyle() const { return m_vuStyle; }
+    void setVuStyle(const QString &style);
     int autoexpandSecs() const { return m_autoexpand; }
     QString otaState() const { return m_otaState; }
     QString otaMessage() const { return m_otaMsg; }
@@ -207,6 +211,7 @@ private:
     bool m_volumeFixed = false;
     QString m_prefRg = "0", m_prefTrType = "0", m_prefTrDur = "0", m_prefDigVol = "1";
     bool m_vuEnabled = true;
+    QString m_vuStyle = "classic";
     int m_autoexpand = 0;
     QString m_otaState = "idle", m_otaMsg, m_otaKind;
     int m_otaPct = 0;

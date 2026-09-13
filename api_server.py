@@ -3278,6 +3278,78 @@ def set_vu_meter(enable):
     return {'success': True, 'enabled': enable}
 
 # ──────────────────────────────────────────────────────────────────
+#  VU meter skin: which look the kiosk's analog meters wear. Each skin is
+#  a folder the on-screen interface ships in its assets (skin.json plus
+#  images, built with native-ui-qt/tools/vu-skin-build.py), so adding one
+#  is dropping a folder in: the list below is read from disk, never kept
+#  by hand. Persisted like the on/off switch above, so the web admin can
+#  change it too; ABSENT (or a skin no longer installed) means "classic".
+# ──────────────────────────────────────────────────────────────────
+VU_STYLE_FILE = '/etc/hifi-player/vu-style'
+VU_SKINS_DIR = os.environ.get('HIFI_VU_SKINS_DIR', '/opt/hifi-qt/assets/vu')
+VU_STYLE_DEFAULT = 'classic'
+_VU_STYLE_RE = re.compile(r'^[a-z0-9][a-z0-9_-]{0,40}$')
+
+def list_vu_styles():
+    """The installed skins, [{id, name:{en,it}}], in their declared order
+    (classic first). A folder whose skin.json does not parse is skipped:
+    offering a look the kiosk would then refuse to draw helps no one."""
+    styles = []
+    try:
+        names = sorted(os.listdir(VU_SKINS_DIR))
+    except OSError:
+        names = []
+    for sid in names:
+        if not _VU_STYLE_RE.match(sid):
+            continue
+        try:
+            with open(os.path.join(VU_SKINS_DIR, sid, 'skin.json'), encoding='utf-8') as f:
+                meta = json.load(f)
+        except (OSError, ValueError):
+            continue
+        name = meta.get('name') if isinstance(meta, dict) else None
+        if not isinstance(name, dict):
+            name = {'en': sid, 'it': sid}
+        styles.append({'id': sid, 'name': {'en': str(name.get('en') or sid), 'it': str(name.get('it') or name.get('en') or sid)},
+                       'order': meta.get('order', 50) if isinstance(meta.get('order', 50), int) else 50})
+    if not any(st['id'] == VU_STYLE_DEFAULT for st in styles):
+        # the interface draws the classic look even without its folder
+        styles.append({'id': VU_STYLE_DEFAULT, 'name': {'en': 'Classic', 'it': 'Classico'}, 'order': 0})
+    styles.sort(key=lambda st: (st['order'], st['id']))
+    return [{'id': st['id'], 'name': st['name']} for st in styles]
+
+def get_vu_style():
+    """Return { style, styles }."""
+    styles = list_vu_styles()
+    style = VU_STYLE_DEFAULT
+    try:
+        with open(VU_STYLE_FILE) as f:
+            style = f.read().strip() or VU_STYLE_DEFAULT
+    except Exception:
+        pass
+    if not any(st['id'] == style for st in styles):
+        style = VU_STYLE_DEFAULT
+    return {'style': style, 'styles': styles}
+
+def set_vu_style(style):
+    """Persist the skin choice. Only an installed skin is accepted."""
+    style = str(style or '').strip()
+    if not _VU_STYLE_RE.match(style) or not any(st['id'] == style for st in list_vu_styles()):
+        return {'success': False, 'style': get_vu_style()['style'],
+                'code': 'prefs.vuStyleUnknown', 'message': _t('prefs.vuStyleUnknown', _lang())}
+    try:
+        os.makedirs(os.path.dirname(VU_STYLE_FILE), exist_ok=True)
+        tmp = VU_STYLE_FILE + '.tmp'
+        with open(tmp, 'w') as f:
+            f.write(style + '\n')
+        os.replace(tmp, VU_STYLE_FILE)
+    except Exception:
+        log.exception("set_vu_style: persist failed")
+        return {'success': False, 'style': get_vu_style()['style'],
+                'code': 'prefs.saveFailed', 'message': _t('prefs.saveFailed', _lang())}
+    return {'success': True, 'style': style}
+
+# ──────────────────────────────────────────────────────────────────
 #  Now-playing auto-expand (kiosk-only UI behaviour, like the VU meter
 #  above): how long after a song starts playing the kiosk should
 #  automatically open the fullscreen now-playing view on its own, if the
@@ -6525,6 +6597,15 @@ def api_list_timezones():
 @app.route('/vu_meter', methods=['GET'])
 def api_vu_meter():
     return jsonify(get_vu_meter())
+
+@app.route('/vu_style', methods=['GET'])
+def api_vu_style():
+    return jsonify(get_vu_style())
+
+@app.route('/vu_style', methods=['POST'])
+def api_set_vu_style():
+    data = request.get_json(silent=True) or {}
+    return jsonify(set_vu_style(data.get('style')))
 
 @app.route('/vu_meter', methods=['POST'])
 def api_set_vu_meter():

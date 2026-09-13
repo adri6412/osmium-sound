@@ -430,6 +430,8 @@
       "fixedVolumeHelp": "Esclude completamente il controllo volume digitale del player: l'uscita è sempre al 100%. Necessario per la riproduzione bit-perfect; disattivalo per tornare a usare il cursore del volume a schermo.",
       "vuMeter": "VU meter animati",
       "vuMeterHelp": "Il quadrante VU nella schermata \"in riproduzione\" si aggiorna in tempo reale con il livello audio. Disattivalo per ridurre il carico sulla GPU su hardware più limitato.",
+      "vuStyle": "Stile dei VU meter",
+      "vuStyleHelp": "L'aspetto degli strumenti nella schermata \"in riproduzione\".",
       "autoExpand": "Apertura automatica in riproduzione",
       "autoExpandHelp": "Quando parte un brano, apre automaticamente la schermata a schermo intero \"in riproduzione\" dopo questi secondi. Si apre una sola volta per brano: se poi navighi altrove di tua scelta, resta ferma."
     },

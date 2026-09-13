@@ -12,7 +12,7 @@ COVER = os.environ.get("MOCK_COVER", os.path.join(HERE, "..", "..", "logo osmium
 STATE = {
     "mode": "play", "time": 116.0, "duration": 330.0, "volume": 40, "index": 2, "shuffle": 0, "repeat": 0, "sleep": 0,
     "prefs": {"replayGainMode": "0", "transitionType": "0", "transitionDuration": "0", "digitalVolumeControl": "1"},
-    "vu": True, "autoexpand": 0, "ota": {"state": "idle"}, "lang": "it",
+    "vu": True, "vu_style": os.environ.get("MOCK_VU_STYLE", "classic"), "autoexpand": 0, "ota": {"state": "idle"}, "lang": "it",
     "display_mode": "gui", "ui_resolution": "auto", "ui_refresh": "native", "pointer": True, "ssh": False, "player_enabled": True,
     "lms_mode": "local", "lms_host": "", "tz": "Europe/Rome", "device_name": "Osmium", "ota_channel": "dev", "lyrion_channel": "release",
     "audio": "hw:CARD=DAC,DEV=0", "shell_user": "", "pldir": "/srv/music/playlist", "skin": "osmium", "fmt": {"state": "idle"},
@@ -179,6 +179,8 @@ class H(BaseHTTPRequestHandler):
         if port == 8000:
             table = {
                 "/vu_meter": {"enabled": STATE["vu"]}, "/nowplaying_autoexpand": {"seconds": STATE["autoexpand"]},
+                "/vu_style": {"style": STATE["vu_style"], "styles": [{"id": "classic", "name": {"en": "Classic", "it": "Classico"}},
+                                                                  {"id": "modulometer", "name": {"en": "Modulometer", "it": "Modulometro"}}]},
                 "/update/status": STATE["ota"], "/boot_mode": {"mode": "live"}, "/provision_status": {"pending": False, "completed": True},
                 "/player_name": {"name": "Osmium"}, "/ui_language": {"lang": STATE["lang"]},
                 "/display_mode": {"mode": STATE["display_mode"]}, "/ui_resolution": {"mode": STATE["ui_resolution"]}, "/ui_refresh": {"supported": True, "mode": STATE["ui_refresh"]},
@@ -255,6 +257,7 @@ class H(BaseHTTPRequestHandler):
         except Exception: data = {}
         if port == 8000:
             if u.path == "/vu_meter": STATE["vu"] = bool(data.get("enable", data.get("enabled", True)))
+            if u.path == "/vu_style": STATE["vu_style"] = str(data.get("style") or "classic")
             if u.path == "/nowplaying_autoexpand": STATE["autoexpand"] = int(data.get("seconds", 0))
             if u.path == "/ui_language": STATE["lang"] = data.get("lang", "en")
             if u.path == "/display_mode": STATE["display_mode"] = data.get("mode", "gui")

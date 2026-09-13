@@ -296,12 +296,25 @@ void Player::pollSettings() {
         bool v = d.toMap().value("enabled", true).toBool();
         if (v != m_vuEnabled) { m_vuEnabled = v; emit settingsChanged(); }
     }, 3000);
+    a->request("GET", a->apiBase() + "/vu_style", {}, [this](bool ok, const QVariant &d, int) {
+        if (!ok || d.typeId() != QMetaType::QVariantMap) return;
+        const QString v = d.toMap().value("style").toString();
+        if (!v.isEmpty() && v != m_vuStyle) { m_vuStyle = v; emit settingsChanged(); }
+    }, 3000);
 }
 void Player::refreshSettings() { pollSettings(); }
 
 void Player::setVuEnabled(bool on) {
     if (m_vuEnabled == on) return;
     m_vuEnabled = on;
+    emit settingsChanged();
+}
+
+// Optimistic: the Now Playing screen switches skin right away, the next poll
+// confirms what the api_server actually stored.
+void Player::setVuStyle(const QString &style) {
+    if (style.isEmpty() || m_vuStyle == style) return;
+    m_vuStyle = style;
     emit settingsChanged();
 }
 

@@ -430,6 +430,8 @@
       "fixedVolumeHelp": "Bypasses the player's digital volume control entirely — output is always at 100%. Required for bit-perfect playback; turn it off to use the on-screen volume slider again.",
       "vuMeter": "Animated VU meters",
       "vuMeterHelp": "The VU dial in the \"now playing\" screen updates live with the audio level. Turn it off to reduce GPU load on more limited hardware.",
+      "vuStyle": "VU meter style",
+      "vuStyleHelp": "The look of the meters in the \"now playing\" screen.",
       "autoExpand": "Auto-open now playing",
       "autoExpandHelp": "When a song starts playing, automatically open the fullscreen now-playing view after this many seconds. It only opens once per song — if you navigate away yourself, it stays put."
     },

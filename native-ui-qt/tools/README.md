@@ -24,6 +24,12 @@ un finto apparecchio in Python.
   riavviare il mock senza la variabile simula il telefono che se ne va).
 - `devrun.sh` — sul Dell: ferma la UI in C e avvia hifi-qt su eglfs (`MODE=720`);
   `devrun.sh stop` ripristina. Lo stesso canale `/tmp/hifi-qt.cmd` e `kill -USR1` → `/tmp/hifi-qt.png`.
+- `vu-skin-build.py` — builds a VU meter skin (`assets/vu/<id>/`) from a designer's layered PNGs:
+  `measure` finds each dial's pivot and the scale's end angles, `build` flattens the layers and writes
+  `skin.json`. The skin then shows up by itself in Settings → Playback (kiosk and web admin).
+  Needs Pillow + numpy (`python3 -m venv` in the scratchpad). The Modulometer skin came from
+  `VU Nagra.zip` with: `--needle-pivot 13.75,577 --meter 755.22,984.77 --meter 2098.24,994.79
+  --angles=-46.5,47.2` (source-artwork pixels).
 - `../sync.sh` — copia sorgenti+icone sul Dell e compila là.
 - `../install.sh` — installa in /opt/hifi-qt e registra l'unità systemd (vedi file).
 

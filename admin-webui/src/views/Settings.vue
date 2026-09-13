@@ -11,7 +11,7 @@ import SourcesPanel from '../components/SourcesPanel.vue';
 const host = location.hostname;
 const route = useRoute();
 const router = useRouter();
-const { t } = useI18n();
+const { t, lang } = useI18n();
 
 // ── kiosk-like submenu navigation ────────────────────────────────
 const sections = computed(() => [
@@ -706,6 +706,24 @@ async function setVuMeter(enable) {
   else say(bodyMsg(r, t('settings.playback.vuMeterFailed')), true);
 }
 
+// ── VU meter style ─────────────────────────────────────────────────
+// The skins the on-screen interface has installed, as the device lists them
+// (a new one appears here without touching this page). Names come in both
+// languages from the skin itself.
+const vuStyle = ref('classic');
+const vuStyles = ref([]);
+async function loadVuStyle() {
+  const r = await api.sys('vu_style');
+  if (r.ok) { vuStyle.value = r.data.style || 'classic'; vuStyles.value = r.data.styles || []; }
+}
+function vuStyleName(st) { return (st.name && (st.name[lang.value] || st.name.en)) || st.id; }
+async function setVuStyle(style) {
+  if (style === vuStyle.value) return;
+  const r = await api.sysPost('vu_style', { style });
+  if (r.ok && r.data.success !== false) { vuStyle.value = r.data.style; say(bodyMsg(r, t('settings.playback.vuStyleChanged'))); }
+  else say(bodyMsg(r, t('settings.playback.vuMeterFailed')), true);
+}
+
 // ── Mouse pointer (cursor) — mirrors the kiosk's Settings.jsx pointer
 // toggle. Shown by default (the on-device QR/Wi-Fi wizard needs a visible
 // cursor); a touchscreen owner can hide it here or from the kiosk itself.
@@ -1184,7 +1202,7 @@ async function saveBackupScheduled(v) {
 
 onMounted(async () => {
   loadNet(); loadIpv4(); loadAudio(); loadDsp(); loadFir(); loadToggles(); loadShell(); loadLms(); loadLyrion(); loadSkin(); loadPlayback();
-  loadMode(); loadEngine(); loadPlayerEnabled(); loadUiRes(); loadUiRefresh(); loadPointer(); loadTimezone(); loadVuMeter(); loadAutoExpand(); loadChannel(); checkAll(); resumePlanIfRunning(); loadBackups(); loadTailscale(); loadDebugFlags();
+  loadMode(); loadEngine(); loadPlayerEnabled(); loadUiRes(); loadUiRefresh(); loadPointer(); loadTimezone(); loadVuMeter(); loadVuStyle(); loadAutoExpand(); loadChannel(); checkAll(); resumePlanIfRunning(); loadBackups(); loadTailscale(); loadDebugFlags();
   timezonePoll = setInterval(pollTimezone, 10000);
   // Tell the global UpdateProgressOverlay (mounted in App.vue) that this page
   // owns the OTA modal while it's open, so the two never render on top of
@@ -1491,6 +1509,13 @@ onUnmounted(() => {
           <button :class="{ active: vuMeter }" @click="setVuMeter(true)">{{ t('settings.playback.vuMeterOn') }}</button>
           <button :class="{ active: !vuMeter }" @click="setVuMeter(false)">{{ t('settings.playback.vuMeterOff') }}</button>
         </span>
+        <template v-if="vuMeter && vuStyles.length > 1">
+          <p class="sub" style="margin-top: 14px;">{{ t('settings.playback.vuStyleLabel') }}</p>
+          <p class="muted">{{ t('settings.playback.vuStyleHelp') }}</p>
+          <span class="seg">
+            <button v-for="st in vuStyles" :key="st.id" :class="{ active: vuStyle === st.id }" @click="setVuStyle(st.id)">{{ vuStyleName(st) }}</button>
+          </span>
+        </template>
       </div>
 
       <div style="margin-top: 18px; padding-top: 16px; border-top: 1px solid rgba(255,255,255,0.1);">

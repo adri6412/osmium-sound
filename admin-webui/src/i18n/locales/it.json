@@ -476,7 +476,10 @@
       "vuMeterOn": "Attivo",
       "vuMeterOff": "Disattivo",
       "vuMeterChanged": "Preferenza VU meter salvata",
-      "vuMeterFailed": "Salvataggio preferenza fallito"
+      "vuMeterFailed": "Salvataggio preferenza fallito",
+      "vuStyleLabel": "Stile dei VU meter",
+      "vuStyleHelp": "L'aspetto degli strumenti nella schermata \"in riproduzione\" dell'apparecchio.",
+      "vuStyleChanged": "Stile dei VU meter salvato"
     },
     "display": {
       "currentLabel": "Attuale",

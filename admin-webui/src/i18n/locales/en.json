@@ -476,7 +476,10 @@
       "vuMeterOn": "On",
       "vuMeterOff": "Off",
       "vuMeterChanged": "VU meter preference saved",
-      "vuMeterFailed": "Could not save the preference"
+      "vuMeterFailed": "Could not save the preference",
+      "vuStyleLabel": "VU meter style",
+      "vuStyleHelp": "The look of the meters in the \"now playing\" screen on the device.",
+      "vuStyleChanged": "VU meter style saved"
     },
     "display": {
       "currentLabel": "Current",
