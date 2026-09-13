@@ -94,6 +94,9 @@ def rpc(player, params):
             r = {"playlist_cur_index": STATE["index"], "playlist_tracks": len(QUEUE),
                  "playlist_loop": [{"id": 1001 + i, "title": q[0], "artist": q[1], "album": q[2], "playlist index": i} for i, q in enumerate(QUEUE)]}
     elif cmd == "playerpref":
+        # ["playerpref", name, "?"] reads, ["playerpref", name, value] writes (as Lyrion)
+        if len(params) > 2 and params[2] != "?":
+            STATE["prefs"][params[1]] = str(params[2])
         r = {"_p2": STATE["prefs"].get(params[1], "0")}
     elif player in OTHER and cmd in ("play", "pause", "mixer"):
         o = OTHER[player]

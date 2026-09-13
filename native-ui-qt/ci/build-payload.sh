@@ -49,7 +49,10 @@ done
 # api_server lists what is in there, so a new skin needs no other change.
 cp -r native-ui-qt/assets/vu "$QT/assets/"
 test -s "$QT/assets/vu/classic/skin.json" || { echo "::error::VU skins missing"; exit 1; }
-cp src/assets/ledbar/*.png "$QT/assets/"
+# the status plate under the cover (V3 bis, without DSP): Qt-only artwork.
+# src/assets/ledbar keeps the old plate for the Electron app the ISO still builds.
+cp native-ui-qt/assets/ledbar/*.png "$QT/assets/"
+test -s "$QT/assets/led-bar-base.png" || { echo "::error::status plate artwork missing"; exit 1; }
 docker run --rm -e QT="$QT" -v "$PWD:/w" -w /w debian:trixie bash -eu -c '
   export DEBIAN_FRONTEND=noninteractive
   apt-get update -qq && apt-get install -y --no-install-recommends ffmpeg > /dev/null
