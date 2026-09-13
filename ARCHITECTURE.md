@@ -1016,12 +1016,23 @@ outside. The UI-resolution and refresh-rate settings apply in both sessions
 
 ## OTA update system
 
-Four independent channels, all served from GitHub Releases and applied as
-root by helper scripts in `/usr/local/sbin/` (invoked from `api_server.py`
+Four independent channels, described by a static manifest per release
+channel (`latest-<channel>.json` on Cloudflare Pages, mirrored for prod at
+`https://file.osmiumsound.it/ota/latest-prod.json`) and applied as root by
+helper scripts in `/usr/local/sbin/` (invoked from `api_server.py`
 via `systemd-run --no-block --collect`, so the updater survives any service
 restart — e.g. lightdm — its own payload triggers). Each channel writes live
 progress to `/run/hifi-*-status.json`, polled by the UI via
 `GET /{app,system,os,lyrion}_update/status`.
+
+Where the payloads live: **stable** releases (`vX.Y.Z`) are downloaded from
+`https://file.osmiumsound.it/ota/<tag>/<asset>` (Cloudflare R2, the same host
+as the install ISO and the flasher; the release workflow uploads them and
+verifies every URL and range support before the manifest goes out), with the
+GitHub Release kept complete as the mirror and as the fallback of devices
+that reach neither manifest. **dev/alpha** builds stay on GitHub Releases
+only. Asset names are identical on both hosts: the OS signature check on the
+device rebuilds the signed sidecar from `hifi-os-<tag>.tar.gz`.
 
 Each of `hifi-ota-update.sh`, `hifi-system-update.sh` and `hifi-os-update.sh`
 now exposes three subcommands, not one:

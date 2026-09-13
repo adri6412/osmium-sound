@@ -91,6 +91,13 @@ OTA_REPO = os.environ.get('HIFI_OTA_REPO', 'adri6412/hifi-media-player')
 # that fallback, then use the fast path again from then on.
 OTA_MANIFEST_BASE = os.environ.get('HIFI_OTA_MANIFEST_BASE',
                                    'https://osmium-sound.pages.dev/ota')
+# Stable releases are served from file.osmiumsound.it (Cloudflare R2, the
+# host the ISO and the flasher come from) and the release workflow drops a
+# copy of the prod manifest next to the payloads. Read that copy when Pages
+# is unreachable, before resorting to the rate-limited GitHub API. Prod only:
+# dev/alpha builds live on GitHub alone.
+OTA_PROD_MIRROR_BASE = os.environ.get('HIFI_OTA_PROD_MIRROR_BASE',
+                                      'https://file.osmiumsound.it/ota')
 # OTA release channel: 'prod' tracks GitHub's /releases/latest (stable releases
 # only); 'dev' tracks the newest release including prereleases (vX.Y.Z-dev.N).
 # 'alpha' tracks the newest release of ANY kind, including private test tags cut
@@ -4763,10 +4770,11 @@ _RELEASE_CACHE_TTL = 60    # seconds
 # cheap anyway.
 _RELEASE_CACHE_LOCK = threading.Lock()
 
-def _fetch_pages_manifest(channel):
-    """Read the channel's static manifest from GitHub Pages. Returns a release-
+def _fetch_pages_manifest(channel, base=None):
+    """Read the channel's static manifest from GitHub Pages (or from `base`,
+    the file.osmiumsound.it mirror of the prod manifest). Returns a release-
     shaped dict ({tag_name, assets:[…]}) or None if unavailable/empty."""
-    url = f'{OTA_MANIFEST_BASE}/latest-{channel}.json'
+    url = f'{base or OTA_MANIFEST_BASE}/latest-{channel}.json'
     req = urllib.request.Request(url, headers={'User-Agent': 'hifi-player-ota'})
     with urllib.request.urlopen(req, timeout=15) as resp:
         release = json.load(resp)
@@ -4824,7 +4832,18 @@ def _fetch_release(channel):
         except Exception:
             log.warning("Pages manifest fetch failed for channel %s; falling back to API", channel)
 
-        # 2. Fallback: the rate-limited GitHub REST API.
+        # 2. Stable channel: the copy of the manifest next to the payloads on
+        #    file.osmiumsound.it (same host the download comes from anyway).
+        if channel == 'prod':
+            try:
+                release = _fetch_pages_manifest(channel, OTA_PROD_MIRROR_BASE)
+                if release:
+                    _RELEASE_CACHE[channel] = (now, release)
+                    return release
+            except Exception:
+                log.warning("mirror manifest fetch failed for channel prod; falling back to API")
+
+        # 3. Fallback: the rate-limited GitHub REST API.
         try:
             release = _fetch_github_api_release(channel)
         except Exception:

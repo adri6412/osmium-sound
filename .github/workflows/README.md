@@ -7,7 +7,7 @@ storage housekeeping. Tag/branch conventions and the release channels are in
 
 | Workflow | Trigger | Produces |
 |---|---|---|
-| [`build-ui-ota.yml`](build-ui-ota.yml) | push of a `v*` tag (not `companion-*`); manual | OTA bundles `hifi-ui-`, `hifi-system-`, `hifi-os-` (+ sha256, OS signature), offline dev installer, GitHub Release, OTA manifest on `gh-pages` |
+| [`build-ui-ota.yml`](build-ui-ota.yml) | push of a `v*` tag (not `companion-*`); manual | OTA bundles `hifi-ui-`, `hifi-system-`, `hifi-os-` (+ sha256, OS signature), offline dev installer, GitHub Release, stable payloads also on `file.osmiumsound.it/ota/<tag>/`, OTA manifest on `gh-pages` (+ prod copy on file.osmiumsound.it) |
 | [`build-iso.yml`](build-iso.yml) | manual (`workflow_dispatch`, tag as input) | `hifi-player-<tag>.iso` + `.sha256` + `.sha256.sig` + `latest.json` (artifact; optionally attached to the Release) |
 | [`build-companion-apk.yml`](build-companion-apk.yml) | push of a `companion-v*` tag; manual | signed APK, GitHub Release, unit-test/lint reports, self-hosted F-Droid repos on `gh-pages` |
 | [`build-flasher.yml`](build-flasher.yml) | manual | Osmium Flasher binaries (Windows `.exe`, Linux `.run`) as artifacts |
@@ -52,7 +52,13 @@ or a manual run (artifacts only, no Release).
 9. Generates the offline dev installer `hifi-install-<ver>.sh`
    (`distro/dev-installer/install.sh.tmpl`): applies the same bundles over
    SSH, bypassing the rate-limited GitHub REST API during heavy dev iteration.
-10. Publishes everything to the GitHub Release for the tag.
+10. Publishes everything to the GitHub Release for the tag; for a **stable**
+    tag it also uploads the same files to `file.osmiumsound.it/ota/<tag>/`
+    (Cloudflare R2, secrets `R2_ENDPOINT` / `R2_ACCESS_KEY_ID` /
+    `R2_SECRET_ACCESS_KEY`), checks every public URL, and points the prod
+    manifest at that host; `verify-release` then re-checks the nine files,
+    range requests on the `.raucb`, and the mirrored manifest. dev/alpha
+    builds stay on GitHub only.
     `prerelease: ${{ contains(github.ref_name, '-') }}` — any tag with a hyphen
     (`-dev.N`, `-alphaM`) is a **prerelease**, which `/releases/latest` ignores,
     so prod devices never see it.

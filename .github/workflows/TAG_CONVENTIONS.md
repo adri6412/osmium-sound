@@ -20,8 +20,10 @@ only fires on `companion-v*`. Tag names are case-sensitive.
 ## Branches & OTA channels
 
 - **`main` = production.** Stable tags `vX.Y.Z` are cut from here. They publish a
-  normal GitHub Release, which the appliance sees via `GET /releases/latest`
-  (the **prod** channel, `ota/latest-prod.json`).
+  normal GitHub Release and upload the same payloads to
+  `https://file.osmiumsound.it/ota/<tag>/`, which is where the **prod** channel
+  downloads from (`ota/latest-prod.json` points there; the GitHub Release is
+  the mirror and the API fallback).
 - **`svil` = development.** Day-to-day work. Prerelease tags `vX.Y.Z-dev.N` are
   cut from here. Because the tag has a hyphen, `build-ui-ota.yml` marks the
   release as a **prerelease**, which `/releases/latest` ignores — so prod
