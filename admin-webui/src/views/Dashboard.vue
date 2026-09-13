@@ -55,6 +55,31 @@ onUnmounted(() => {
 // Busy % and temperature side by side, whichever of the two this hardware
 // exposes: an Intel iGPU has no thermal sensor of its own (it shares the CPU
 // package one), and a machine without intel_gpu_top/radeontop has no busy %.
+// GB as the owner reads them: one decimal only where whole numbers would
+// lie (a nearly full disk rounding to "0 GB"), TB past a thousand. Mirrors
+// SourcesPanel's fmtBytes, but the stats endpoint already reports GB.
+function fmtGb(gb) {
+  const n = Number(gb);
+  if (!Number.isFinite(n) || n < 0) return '—';
+  if (n >= 1000) return (n / 1024).toFixed(1) + ' TB';
+  return n >= 10 ? Math.round(n) + ' GB' : n.toFixed(1) + ' GB';
+}
+
+// The three figures behind "how much room do I have": what the system took
+// for itself (boot partition + the two image slots — space the owner can
+// never fill with music), what is still writable in the data partition, and
+// the disk as a whole. On a legacy install the system and the music share
+// one filesystem, so disk_system_gb comes back null and that row is left
+// out rather than showing a number that means nothing.
+const diskFree = computed(() => {
+  if (stats.value.disk_free_gb == null) return '—';
+  if (stats.value.disk_total_gb == null) return fmtGb(stats.value.disk_free_gb);
+  return t('dashboard.diskFreeOf', {
+    free: fmtGb(stats.value.disk_free_gb),
+    total: fmtGb(stats.value.disk_total_gb),
+  });
+});
+
 const gpu = computed(() => [
   stats.value.gpu_percent != null ? `${stats.value.gpu_percent}%` : null,
   stats.value.gpu_temp_c != null ? `${stats.value.gpu_temp_c}°C` : null,
@@ -90,8 +115,14 @@ const gpu = computed(() => [
     <div class="between item"><span class="muted">{{ t('dashboard.ram') }}</span>
       <span class="silver">{{ stats.ram_percent != null ? stats.ram_percent + '%' : '—' }}</span>
     </div>
-    <div class="between item"><span class="muted">{{ t('dashboard.disk') }}</span>
-      <span class="silver">{{ stats.disk_percent != null ? stats.disk_percent + '%' : '—' }}</span>
+    <div class="between item" v-if="stats.disk_system_gb != null"><span class="muted">{{ t('dashboard.diskSystem') }}</span>
+      <span class="silver">{{ fmtGb(stats.disk_system_gb) }}</span>
+    </div>
+    <div class="between item"><span class="muted">{{ t('dashboard.diskFree') }}</span>
+      <span class="silver">{{ diskFree }}</span>
+    </div>
+    <div class="between item" v-if="stats.disk_device_gb != null"><span class="muted">{{ t('dashboard.diskTotal') }}</span>
+      <span class="silver">{{ fmtGb(stats.disk_device_gb) }}</span>
     </div>
     <div class="between item"><span class="muted">{{ t('dashboard.temperature') }}</span>
       <span class="silver">{{ stats.temp_c != null ? stats.temp_c + '°C' : '—' }}</span>

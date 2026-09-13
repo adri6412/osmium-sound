@@ -91,7 +91,10 @@
     "onscreen": "Su schermo",
     "cpu": "CPU",
     "ram": "RAM",
-    "disk": "Disco",
+    "diskSystem": "Riservato al sistema",
+    "diskFree": "Libero per la tua musica",
+    "diskFreeOf": "{free} di {total}",
+    "diskTotal": "Disco",
     "temperature": "Temperatura CPU",
     "gpu": "GPU"
   },

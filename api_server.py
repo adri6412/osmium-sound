@@ -616,6 +616,31 @@ def _disk_path():
     return '/'
 
 
+def _whole_disk_bytes(path):
+    """Size of the physical disk the given filesystem sits on, in bytes.
+
+    The owner thinks in terms of the disk they bought, not of partitions:
+    to answer "how much did the system take and how much is left for my
+    music" we need the whole device, not just the mounted filesystem. Read
+    it from sysfs (the mount's device -> the partition's parent disk -> its
+    size in 512-byte sectors), so no external tool has to be installed.
+    None when it can't be resolved (a network mount, a container, an
+    unusual device-mapper setup): the caller then omits the breakdown
+    rather than inventing numbers."""
+    try:
+        st = os.stat(path)
+        node = os.path.realpath('/sys/dev/block/%d:%d' % (os.major(st.st_dev), os.minor(st.st_dev)))
+        # a partition carries this file and hangs under its disk; a mount
+        # straight on a whole device (or on an LVM/loop node) does not
+        if os.path.exists(os.path.join(node, 'partition')):
+            node = os.path.dirname(node)
+        with open(os.path.join(node, 'size'), encoding='utf-8') as f:
+            size = int(f.read().strip()) * 512
+        return size if size > 0 else None
+    except Exception:
+        return None
+
+
 def get_system_stats():
     """CPU/RAM/disk/temperature/GPU snapshot for the admin dashboard. All
     fields are best-effort and independently None-able -- one missing sensor
@@ -633,6 +658,17 @@ def get_system_stats():
         vm = psutil.virtual_memory()
         path = _disk_path()
         du = shutil.disk_usage(path)
+        # How the disk is split, in the terms the owner cares about: the
+        # image slots and the boot partition are gone for good (the system
+        # keeps two full copies of itself so an update can fail safely), the
+        # data partition is theirs. Everything on the device that is not the
+        # reported filesystem counts as the system's share; on a legacy
+        # install, where / holds both the system and the music, the split
+        # cannot be drawn and stays None instead of being guessed.
+        whole = _whole_disk_bytes(path)
+        system = whole - du.total if whole and whole > du.total else None
+        if path == '/' and system is not None and not os.path.ismount(DATA_MOUNT):
+            system = None
         return {
             'cpu_percent': cpu_pct,
             'ram_percent': vm.percent,
@@ -642,6 +678,11 @@ def get_system_stats():
             'disk_percent': round(du.used / du.total * 100, 1) if du.total else None,
             'disk_used_gb': round(du.used / 1024 / 1024 / 1024, 1),
             'disk_total_gb': round(du.total / 1024 / 1024 / 1024, 1),
+            # what is still writable by the owner (statvfs' available, so the
+            # filesystem's root reserve is not promised to them)
+            'disk_free_gb': round(du.free / 1024 / 1024 / 1024, 1),
+            'disk_system_gb': round(system / 1024 / 1024 / 1024, 1) if system is not None else None,
+            'disk_device_gb': round(whole / 1024 / 1024 / 1024, 1) if whole else None,
             'temp_c': _cpu_temp_c(),
             'gpu_percent': _gpu_busy_pct(),
             'gpu_temp_c': _gpu_temp_c(),
@@ -650,7 +691,8 @@ def get_system_stats():
         log.exception("get_system_stats failed")
         return {'cpu_percent': None, 'ram_percent': None, 'ram_used_mb': None,
                 'ram_total_mb': None, 'disk_path': None, 'disk_percent': None,
-                'disk_used_gb': None, 'disk_total_gb': None, 'temp_c': None,
+                'disk_used_gb': None, 'disk_total_gb': None, 'disk_free_gb': None,
+                'disk_system_gb': None, 'disk_device_gb': None, 'temp_c': None,
                 'gpu_percent': None, 'gpu_temp_c': None}
 
 _IFACE_RE = re.compile(r'^[A-Za-z0-9][A-Za-z0-9._-]*$')
