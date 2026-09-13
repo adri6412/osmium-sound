@@ -182,7 +182,7 @@ usr_path() {  # <path relative to />
 # it, and the add-on is "installed" with its unit or its binary missing.
 usrmerge_tree() {  # <unpacked root>
     for _a in bin sbin lib lib32 lib64 libx32; do
-        [ -d "$1/$_a" ] && [ ! -L "$1/$_a" ] || continue
+        if [ ! -d "$1/$_a" ] || [ -L "$1/$_a" ]; then continue; fi
         mkdir -p "$1/usr/$_a"
         cp -a "$1/$_a/." "$1/usr/$_a/" || die "could not move $_a/ into usr/$_a/"
         rm -rf "${1:?}/$_a"
