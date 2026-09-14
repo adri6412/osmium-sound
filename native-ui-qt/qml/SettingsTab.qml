@@ -359,38 +359,67 @@ Item {
         wizNeedsAuth = false; wizErr = ""; wizDetail = ""; wiz = 1
         if (wizCanList) wizLoadShares(); else rebuild()
     }
+    // Username and password are asked in a window, only when the device (or
+    // the folder) turns out to want them: there are no fields to fill in on
+    // the page. `refused` = the previous attempt was turned down, and the
+    // window says so. Cancel leaves the step as it is.
+    function wizAskAuth(refused, retry) {
+        if (wiz < 0 || !Ui.dialogs) return
+        var dev = wizName || wizHost
+        Ui.dialogs.login(Tr.tf("sources.wizard.signInTo", "device", dev),
+                         Tr.t("sources.wizard.authHint"), wizUser,
+                         refused ? Tr.t("sources.wizard.wrongPassword") : "",
+                         function(u, p) {
+                             if (u === null || wiz < 0) return
+                             wizUser = u; wizPw = p; wizNeedsAuth = true
+                             retry()
+                         })
+    }
     function wizLoadShares() {
         wizBusy = true; wizErr = ""; wizDetail = ""; rebuild()
+        var tried = wizUser !== ""
         Api.post(cfg.src("/api/sources/smb/shares"),
                  { server: wizHost, username: wizUser, password: wizPw },
                  function(ok, d) {
                      wizBusy = false
+                     if (wiz !== 1) return
                      if (!ok || !d || typeof d !== "object" || d.success === false) {
+                         // Wrong password: ask again. Only a real failure
+                         // falls back to typing the folder name by hand.
+                         if (d && d.code === "msg.smbBadCredentials") {
+                             wizNeedsAuth = true; rebuild()
+                             wizAskAuth(tried, wizLoadShares)
+                             return
+                         }
                          wizFail(d, "sources.wizard.listFailed")
-                         // Password sbagliata: si resta sul passo che l'ha
-                         // chiesta. Solo un guasto vero fa passare al ripiego
-                         // di scrivere il nome della cartella a mano.
-                         if (d && d.code === "msg.smbBadCredentials") wizNeedsAuth = true
-                         else wizCanList = false
+                         wizCanList = false
                          rebuild(); return
                      }
                      wizNeedsAuth = !!d.needs_auth
                      wizShares = (d.shares || []).map(function(x) {
                          return { name: String(x.name || ""), comment: String(x.comment || "") } })
                      rebuild()
+                     // the list itself is behind a login
+                     if (d.needs_auth && !wizShares.length) wizAskAuth(tried, wizLoadShares)
                  }, 40000)
     }
     function wizPickShare(name) {
         wizShare = name; wizErr = ""; wizDetail = ""; wizBusy = true; rebuild()
+        var tried = wizUser !== ""
         Api.post(cfg.src("/api/sources/smb/test"),
                  { server: wizHost, share: name, username: wizUser, password: wizPw },
                  function(ok, d) {
                      wizBusy = false
+                     if (wiz !== 1) return
                      if (ok && d && typeof d === "object" && d.success !== false) { wiz = 2; rebuild(); return }
+                     // A folder that wants a login asks for it right here,
+                     // not with an error and not at the end as a failed mount.
+                     if (d && d.code === "msg.smbBadCredentials") {
+                         wizNeedsAuth = true; rebuild()
+                         wizAskAuth(tried, function() { wizPickShare(name) })
+                         return
+                     }
                      wizFail(d, "sources.wizard.openFailed")
-                     // Una password sbagliata si corregge sul passo che l'ha
-                     // chiesta, non alla fine con un "mount fallito".
-                     if (d && d.code === "msg.smbBadCredentials") wizNeedsAuth = true
                      rebuild()
                  }, 40000)
     }
@@ -405,6 +434,12 @@ Item {
                      if (ok && d && typeof d === "object" && d.success !== false) {
                          wizReset(); band = 0; cfg.load()
                          say(Tr.tf("sources.wizard.added", "name", label))
+                         return
+                     }
+                     if (wiz < 0) return
+                     if (d && d.code === "msg.smbBadCredentials") {
+                         wiz = 1; wizNeedsAuth = true; rebuild()
+                         wizAskAuth(wizUser !== "", function() { wizPickShare(wizShare) })
                          return
                      }
                      wizFail(d, "sources.wizard.openFailed")
@@ -664,12 +699,9 @@ Item {
     }
     function wizStepShare() {
         helpText(Tr.tf("sources.wizard.onDevice", "device", wizName || wizHost), 13)
-        if (wizNeedsAuth || wizUser) {
-            help("sources.wizard.authHint", 13)
-            grid([{ type: "input", label: Tr.t("sources.user"), value: wizUser, act: "wiz_field", arg: "u" },
-                  { type: "input", label: Tr.t("sources.pass"), value: wizPw, act: "wiz_field", arg: "p", on: true }])
-            var lg = action(Tr.t("sources.wizard.signIn"), "wiz_auth", "gold")
-            lg.hh = 48; lg.dim = wizBusy || !wizUser
+        if (wizUser) {
+            var who = info(Tr.t("sources.wizard.userLabel"), wizUser); who.style = "seg"; who.hh = 32; who.mono = true
+            mini(who, Tr.t("sources.wizard.changeUser"), "wiz_needauth", "accent", wizBusy, "")
         }
         if (wizBusy) { help("sources.wizard.loadingShares", 13); return }
         if (!wizCanList) {
@@ -692,13 +724,13 @@ Item {
             }
         }
         var mr = miniRow()
-        if (!wizNeedsAuth && !wizUser) mini(mr, Tr.t("sources.wizard.needPassword"), "wiz_needauth", "accent", false, "")
+        if (!wizUser) mini(mr, Tr.t("sources.wizard.needPassword"), "wiz_needauth", "accent", wizBusy, "")
         mini(mr, Tr.t("sources.wizard.typeItMyself"), "wiz_share_type", "accent", false, "")
     }
     function wizStepConfirm() {
         var d = info(Tr.t("sources.wizard.device"), wizName || wizHost); d.hh = 44
         var f = info(Tr.t("sources.wizard.folder"), wizShare); f.hh = 44
-        if (wizUser) { var u = info(Tr.t("sources.user"), wizUser); u.hh = 40 }
+        if (wizUser) { var u = info(Tr.t("sources.wizard.userLabel"), wizUser); u.hh = 40 }
         help("sources.wizard.writeHint", 13)
         check(Tr.t("sources.wizard.allowWrite"), wizRw, "wiz_rw")
         var add = action(Tr.t("sources.wizard.addNow"), "wiz_add", "gold")
@@ -777,24 +809,40 @@ Item {
         // another one is driven (#99). The VU meters and the auto-open are
         // about this screen, so they stay reachable either way.
         if (!remoteNote()) playerPrefs()
+        vuBand()
+        label("settings.playback.autoExpand", 14); help("settings.playback.autoExpandHelp", 12)
+        var AE = [0, 3, 5, 10, 15], ae = []
+        for (var m = 0; m < 5; m++) ae.push(cell(AE[m] === 0 ? Tr.t("settings.playback.rgOff") : AE[m] + "s", String(AE[m]), cfg.autoexpand === AE[m], "autoexpand", { hh: 44 }))
+        grid(ae)
+    }
+    // The VU meters get a band of their own: the switch, then the looks to
+    // choose from, each with a still preview of the meters
+    function vuBand() {
+        var lang = I18n.lang, cur = ""
+        for (var i = 0; i < cfg.vuStyles.length; i++) {
+            if (cfg.vuStyles[i].id !== Player.vuStyle) continue
+            var n0 = cfg.vuStyles[i].name || {}
+            cur = String(n0[lang] || n0.en || cfg.vuStyles[i].id)
+        }
+        var sum = !cfg.vuMeter ? Tr.t("settings.playback.vuOff") : cur ? Tr.tf("settings.playback.vuOnStyle", "style", cur) : ""
+        var vb = bandRow("gauge", Tr.t("settings.playback.vuSection"), sum, band === 0, "band", "0", false)
+        if (band !== 0) return
+        begin(vb.children)
         toggle(Tr.t("settings.playback.vuMeter"), Tr.t("settings.playback.vuMeterHelp"), cfg.vuMeter, "vumeter")
         if (cfg.vuMeter && cfg.vuStyles.length > 1) {
             label("settings.playback.vuStyle", 14); help("settings.playback.vuStyleHelp", 12)
-            var lang = I18n.lang, st = []
+            var st = []
             for (var v = 0; v < cfg.vuStyles.length; v++) {
                 var nm = cfg.vuStyles[v].name || {}
-                st.push(cell(String(nm[lang] || nm.en || cfg.vuStyles[v].id), cfg.vuStyles[v].id,
-                             Player.vuStyle === cfg.vuStyles[v].id, "vu_style", { hh: 44 }))
+                st.push({ type: "vuskin", label: String(nm[lang] || nm.en || cfg.vuStyles[v].id), arg: cfg.vuStyles[v].id,
+                          sel: Player.vuStyle === cfg.vuStyles[v].id, act: "vu_style" })
                 if (st.length === 2 || v === cfg.vuStyles.length - 1) {
                     if (st.length === 1) st.push({ type: "help", label: "" })
                     grid(st); st = []
                 }
             }
         }
-        label("settings.playback.autoExpand", 14); help("settings.playback.autoExpandHelp", 12)
-        var AE = [0, 3, 5, 10, 15], ae = []
-        for (var m = 0; m < 5; m++) ae.push(cell(AE[m] === 0 ? Tr.t("settings.playback.rgOff") : AE[m] + "s", String(AE[m]), cfg.autoexpand === AE[m], "autoexpand", { hh: 44 }))
-        grid(ae)
+        end()
     }
     function playerPrefs() {
         if (!havePlayer) note(Tr.t("settings.playback.noPlayer"), "dark")
@@ -1056,8 +1104,6 @@ Item {
         case "wiz_field":
             if (row.arg === "h") wizHost = text
             else if (row.arg === "s") wizShare = text
-            else if (row.arg === "u") wizUser = text
-            else wizPw = text
             break
         case "ssh_user": sshUser = text; break
         case "ssh_pass": sshPass = text; break
@@ -1222,8 +1268,11 @@ Item {
         case "wiz_manual": wizManual = true; wizErr = ""; wizDetail = ""; break
         case "wiz_host": if (!arg) return; wizPickHost(arg, wizHostName(arg)); return
         case "wiz_host_manual": if (!wizHost) return; wizPickHost(wizHost, wizHost); return
-        case "wiz_needauth": wizNeedsAuth = true; break
-        case "wiz_auth": if (!wizUser) return; wizLoadShares(); return
+        case "wiz_needauth":
+            // with no list yet the new login is for reading it; otherwise the
+            // next tap on a folder uses it
+            wizAskAuth(false, function() { if (wizCanList && !wizShares.length) wizLoadShares(); else rebuild() })
+            return
         case "wiz_share": if (!arg) return; wizPickShare(arg); return
         // Il nome scritto a mano non passa dalla prova: la conferma finale e'
         // il mount stesso, che e' comunque il controllo di ultima istanza.

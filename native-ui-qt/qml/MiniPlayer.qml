@@ -20,29 +20,29 @@ Item {
     Item {
         width: 340; height: 40
         Rectangle { y: 39; width: 340; height: 1; color: Theme.borderA(0.6) }
-        Glow { x: 20 - outer; y: 20 - outer; radius: 4; blur: 6; color: Theme.goldA(0.8) }
-        Rectangle { x: 16; y: 16; width: 8; height: 8; radius: 4; color: Theme.gold }
-        Text {
-            x: 32; anchors.verticalCenter: parent.verticalCenter
-            text: "OSMIUM SOUND"; color: Theme.silverA(0.8)
-            font.family: Theme.font; font.pixelSize: 11; font.bold: true; font.letterSpacing: 2
-        }
         // the player being driven: a tap picks another one on the same
         // Lyrion (#99); gold while it is not this device's own
-        Item {
-            x: 170; width: 98; height: 40
+        Rectangle {
+            id: pickerPill
+            readonly property color fg: Player.isOwn ? Theme.silver : Theme.gold
+            x: 10; y: 4; height: 32; radius: 16
+            width: Math.min(10 + 16 + 8 + nameText.implicitWidth + 6 + 14 + 12, 252)
             visible: Player.connected
+            color: nameTap.mix(Theme.wa(0.05), Theme.wa(0.12))
+            border.width: 1; border.color: Player.isOwn ? Theme.wa(0.08) : Theme.goldA(0.4)
+            Icon { x: 10; anchors.verticalCenter: parent.verticalCenter; name: "speaker"; size: 16; color: pickerPill.fg }
             Text {
-                x: 4; width: 78; height: 40; horizontalAlignment: Text.AlignRight; verticalAlignment: Text.AlignVCenter
-                text: Player.playerName; elide: Text.ElideLeft
-                color: Player.isOwn ? nameTap.mix(Theme.silverA(0.5), Theme.white) : Theme.gold
-                font.family: Theme.font; font.pixelSize: 10
+                id: nameText
+                x: 34; width: pickerPill.width - x - 6 - 14 - 12; height: parent.height; verticalAlignment: Text.AlignVCenter
+                text: Player.playerName; elide: Text.ElideRight
+                color: Player.isOwn ? Theme.white : Theme.gold
+                font.family: Theme.font; font.pixelSize: 14
             }
-            Icon { x: 84; anchors.verticalCenter: parent.verticalCenter; name: "chevron-down"; size: 12; color: Player.isOwn ? Theme.silverA(0.5) : Theme.gold }
-            Tap { id: nameTap; onClicked: root.openPlayerPicker() }
+            Icon { x: pickerPill.width - 12 - 14; anchors.verticalCenter: parent.verticalCenter; name: "chevron-down"; size: 14; color: pickerPill.fg }
+            Tap { id: nameTap; grow: 4; onClicked: root.openPlayerPicker() }
         }
-        Rectangle { x: 272; y: 17; width: 6; height: 6; radius: 3; color: Player.connected ? Theme.emerald : Theme.redA(0.7) }
-        RoundButton { x: 286; y: 1; width: 38; height: 38; icon: "chevron-up"; iconSize: 22; visible: Player.connected; onClicked: root.expand() }
+        Rectangle { x: 270; y: 17; width: 6; height: 6; radius: 3; color: Player.connected ? Theme.emerald : Theme.redA(0.7) }
+        RoundButton { x: 284; y: 3; width: 48; height: 34; icon: "chevron-up"; iconSize: 28; grow: 3; visible: Player.connected; onClicked: root.expand() }
     }
 
     // ─── il blocco centrale, centrato in verticale come nel JSX ────────────

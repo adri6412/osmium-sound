@@ -84,6 +84,7 @@ Column {
                     case "check": return cCheck
                     case "grid": return cGrid
                     case "box": return cBox
+                    case "vuskin": return cVuSkin
                     }
                     return cHelp
                 }
@@ -484,6 +485,36 @@ Column {
             }
             Text { id: ckText; x: 24; width: parent.width - 24; wrapMode: Text.Wrap; text: ck.row.label || ""; color: Theme.silver; font.family: Theme.font; font.pixelSize: 14; lineHeight: 20; lineHeightMode: Text.FixedHeight }
             Tap { onClicked: root.ctl.activate(ck.row, ck.row.act) }
+        }
+    }
+    // a VU look to choose: a still preview of the meters with its name below
+    Component { id: cVuSkin
+        Item {
+            id: vs
+            property var row: ({})
+            readonly property bool sel: !!row.sel
+            width: parent.width
+            height: 8 + pv.height + 36
+            Rectangle {
+                anchors.fill: parent; radius: 8
+                scale: vsTap.tapScale
+                color: vs.sel ? Theme.goldA(0.1) : vsTap.mix(Theme.dark, Theme.light)
+                border.width: vs.sel ? 2 : 1; border.color: vs.sel ? Theme.gold : Theme.accent
+                VuPanel {
+                    id: pv
+                    x: 8; y: 8; width: parent.width - 16; height: Math.round(width * 675 / 1280)
+                    style: vs.row.arg || ""
+                    levels: [62, 55]
+                    devScale: root.ctl ? root.ctl.devScale : 1
+                }
+                Text {
+                    x: 12; y: pv.y + pv.height; width: parent.width - 24 - (vs.sel ? 22 : 0); height: 36; verticalAlignment: Text.AlignVCenter
+                    text: vs.row.label || ""; elide: Text.ElideRight
+                    color: vs.sel ? Theme.gold : Theme.white; font.family: Theme.font; font.pixelSize: 14; font.bold: vs.sel
+                }
+                Icon { visible: vs.sel; x: parent.width - 30; y: pv.y + pv.height + 9; name: "check-circle-2"; size: 18; color: Theme.gold }
+            }
+            Tap { id: vsTap; tap: 0.97; onClicked: root.ctl.activate(vs.row, vs.row.act) }
         }
     }
     // scelte affiancate: le celle sulla stessa riga, alte quanto la piu' alta

@@ -1,5 +1,6 @@
 // Finestre modali sopra tutta la schermata (dialog.c): conferma, scelta da
-// elenco, testo lungo, pannello Wi-Fi, procedura di formattazione. Un solo
+// elenco, testo lungo, pannello Wi-Fi, procedura di formattazione, accesso a
+// una cartella di rete. Un solo
 // meccanismo: fondo nero/70, scheda che entra con la molla 550/30 da 0,92 e
 // dissolvenza 0,3 s; in uscita 0,2 s.
 import QtQuick
@@ -8,7 +9,7 @@ import Hifi.Ui
 
 Item {
     id: root
-    property int kind: 0            // 0 nessuno 1 conferma 2 scelta 3 testo 4 wifi 5 formattazione
+    property int kind: 0            // 0 nessuno 1 conferma 2 scelta 3 testo 4 wifi 5 formattazione 6 accesso
     readonly property bool active: kind !== 0
     property bool closing: false
     visible: active
@@ -33,6 +34,9 @@ Item {
     property string fdev: ""; property string fmodel: ""; property string fsize: ""; property string fconfirm: ""
     property string ffs: "ext4"; property string flabel: "Musica"; property string ftyped: ""; property string fmsg: ""
     property int fpct: 0
+    // accesso (cartella di rete): nome utente e password
+    property string luser: ""
+    property string lpass: ""
 
     Spring { id: sc; stiffness: 550; damping: 30 }
     property real fade: 0
@@ -65,6 +69,13 @@ Item {
         fsize = gb >= 1000 ? (gb / 1024).toFixed(1) + " TB" : gb >= 10 ? Math.round(gb) + " GB" : gb.toFixed(1) + " GB"
         ffs = "ext4"; flabel = "Musica"; ftyped = ""; fmsg = ""; fpct = 0; cb = f
     }
+    // Asks for the username and password of a network device. `f(user, pass)`
+    // on "sign in", `f(null, null)` on cancel; `error` is shown under the
+    // fields (the previous attempt was refused).
+    function login(t, b, user, error, f) {
+        openCommon(6); title = t || ""; body = b || ""
+        luser = user || ""; lpass = ""; err = error || ""; cb = f
+    }
     function formatStatus(state, msg, pct) {
         if (kind !== 5 || step < 2) return
         fmsg = msg || ""; fpct = pct || 0
@@ -82,10 +93,12 @@ Item {
     function finishOk(ok) { var f = cb; close(); if (f) f(ok) }
     function finishPick(i) { var f = cb; close(); if (f) f(i) }
     function finishWifi(ok) { var f = cb; var s = ssid, p = pass; close(); if (f) f(ok ? s : null, ok ? p : null) }
+    function finishLogin(ok) { var f = cb; var u = luser.trim(), p = lpass; close(); if (f) f(ok ? u : null, ok ? p : null) }
     function backdrop() {
         if (kind === 1) finishOk(false)
         else if (kind === 2) finishPick(-1)
         else if (kind === 4) finishWifi(false)
+        else if (kind === 6) finishLogin(false)
         else if (kind === 5) { if (step <= 1) close() }
         else close()
     }
@@ -95,7 +108,9 @@ Item {
     Keys.onPressed: (e) => {
         if (e.key === Qt.Key_Escape) { if (kind === 5 && step === 2) return; backdrop(); e.accepted = true }
         else if (e.key === Qt.Key_Return || e.key === Qt.Key_Enter) {
-            if (kind === 1) finishOk(true); else if (kind === 4 && ssid) finishWifi(true); else if (kind !== 5) close()
+            if (kind === 1) finishOk(true); else if (kind === 4 && ssid) finishWifi(true)
+            else if (kind === 6) { if (luser.trim()) finishLogin(true) }
+            else if (kind !== 5) close()
             e.accepted = true
         }
     }
@@ -127,7 +142,7 @@ Item {
             id: content
             x: card.ipad; y: card.ipad
             width: card.width - 2 * card.ipad
-            implicitHeight: 2 * card.ipad + (root.kind === 1 ? confirmBox.height : root.kind === 2 ? pickBox.height : root.kind === 3 ? textBox.height : root.kind === 4 ? wifiBox.height : fmtBox.height)
+            implicitHeight: 2 * card.ipad + (root.kind === 1 ? confirmBox.height : root.kind === 2 ? pickBox.height : root.kind === 3 ? textBox.height : root.kind === 4 ? wifiBox.height : root.kind === 6 ? loginBox.height : fmtBox.height)
 
             // 1) conferma: max-w-md, testo 18, Annulla + azione 48
             Column {
@@ -269,6 +284,51 @@ Item {
                         opacity: root.ssid ? 1 : 0.4                    // disabled:opacity-40 su fondo E testo
                         Text { anchors.centerIn: parent; text: Tr.t("wizard.connect"); color: Theme.black; font.family: Theme.font; font.pixelSize: 14; font.bold: true }
                         Tap { id: woTap; enabled: root.ssid !== ""; onClicked: root.finishWifi(true) }
+                    }
+                }
+            }
+
+            // 6) accesso a una cartella di rete: nome utente, password, Annulla / Accedi
+            Column {
+                id: loginBox
+                visible: root.kind === 6
+                width: parent.width
+                Row {
+                    spacing: 8
+                    Icon { name: "lock"; size: 18; color: Theme.gold; anchors.verticalCenter: parent.verticalCenter }
+                    Text { width: loginBox.width - 26; height: 28; verticalAlignment: Text.AlignVCenter; text: root.title; elide: Text.ElideRight; color: Theme.white; font.family: Theme.font; font.pixelSize: 18; font.bold: true }
+                }
+                Item { width: 1; height: 8 }
+                Text { width: parent.width; text: root.body; wrapMode: Text.Wrap; color: Theme.silver; font.family: Theme.font; font.pixelSize: 14; lineHeight: 20; lineHeightMode: Text.FixedHeight }
+                Item { width: 1; height: 16 }
+                TextField_ {
+                    width: parent.width; height: 46; textSize: 14; padding: 12
+                    text: root.luser; placeholder: Tr.t("sources.wizard.userLabel"); restBorder: Theme.accent
+                    onTextEdited: (t) => { root.luser = t; root.err = "" }
+                }
+                Item { width: 1; height: 8 }
+                TextField_ {
+                    width: parent.width; height: 46; textSize: 14; padding: 12
+                    text: root.lpass; placeholder: Tr.t("sources.pass"); password: true; restBorder: Theme.accent
+                    onTextEdited: (t) => { root.lpass = t; root.err = "" }
+                    onAccepted: if (root.luser.trim()) root.finishLogin(true)
+                }
+                Item { width: 1; height: 8; visible: root.err !== "" }
+                Text { visible: root.err !== ""; width: parent.width; wrapMode: Text.Wrap; text: root.err; color: Theme.red400; font.family: Theme.font; font.pixelSize: 13; lineHeight: 18; lineHeightMode: Text.FixedHeight }
+                Item { width: 1; height: 20 }
+                Row {
+                    width: parent.width; spacing: 12
+                    Rectangle {
+                        width: (parent.width - 12) / 2; height: 48; radius: 8; color: lcTap.mix(Theme.accent, Theme.dark)
+                        Text { anchors.centerIn: parent; text: Tr.t("common.cancel"); color: Theme.white; font.family: Theme.font; font.pixelSize: 16 }
+                        Tap { id: lcTap; onClicked: root.finishLogin(false) }
+                    }
+                    Rectangle {
+                        width: (parent.width - 12) / 2; height: 48; radius: 8
+                        color: loTap.mix(Theme.gold, "#ca8a04")
+                        opacity: root.luser.trim() ? 1 : 0.4
+                        Text { anchors.centerIn: parent; text: Tr.t("sources.wizard.signIn"); color: Theme.black; font.family: Theme.font; font.pixelSize: 16; font.bold: true }
+                        Tap { id: loTap; enabled: root.luser.trim() !== ""; onClicked: root.finishLogin(true) }
                     }
                 }
             }

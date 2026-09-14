@@ -14,6 +14,10 @@ Item {
     id: root
     property real devScale: 1
     property string style: Player.vuStyle
+    // [left, right] (0..100) holds the needles still instead of following
+    // the audio: the preview in Settings → Playback draws once and never
+    // repaints with the music
+    property var levels: null
 
     // The original skin, also the fallback when the chosen one is missing or
     // its skin.json does not parse (a skin removed by an update, a typo).
@@ -62,7 +66,7 @@ Item {
             id: meter
             required property int index
             readonly property var n: root.skin.needle
-            readonly property real deg: root.angle(index === 0 ? Vu.left : Vu.right)
+            readonly property real deg: root.angle(root.levels ? root.levels[index] : index === 0 ? Vu.left : Vu.right)
             x: root.px0 + root.skin.meters[index][0] * root.ps
             y: root.py0 + root.skin.meters[index][1] * root.ps
 

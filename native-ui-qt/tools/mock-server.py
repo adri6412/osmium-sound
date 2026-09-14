@@ -299,6 +299,14 @@ class H(BaseHTTPRequestHandler):
                                    "shares": [{"name": "Musica", "comment": "La musica di casa"},
                                               {"name": "Backup", "comment": ""}]})
             if u.path == "/api/sources/smb/test":
+                # "Musica" on SYNOLOGY (192.168.0.50) lists as a guest but only
+                # opens with a login: the case where the folder, not the
+                # device, asks for the password.
+                if data.get("server") == "192.168.0.50" and data.get("share") == "Musica" and \
+                        (data.get("username") != "casa" or data.get("password") != "segreto"):
+                    return self._json({"success": False, "code": "msg.smbBadCredentials",
+                                       "message": "Nome utente o password non corretti per questo dispositivo.",
+                                       "detail": "tree connect failed: NT_STATUS_ACCESS_DENIED"}, 400)
                 if data.get("share") == "Backup":
                     return self._json({"success": False, "code": "msg.smbNoSuchShare",
                                        "message": "Su quel dispositivo non c\u2019\u00e8 nessuna cartella condivisa con questo nome.",
