@@ -483,7 +483,22 @@
       "vuMeterFailed": "Salvataggio preferenza fallito",
       "vuStyleLabel": "Stile dei VU meter",
       "vuStyleHelp": "L'aspetto degli strumenti nella schermata \"in riproduzione\" dell'apparecchio.",
-      "vuStyleChanged": "Stile dei VU meter salvato"
+      "vuStyleChanged": "Stile dei VU meter salvato",
+      "vuStoreLabel": "Altri VU meter da scaricare",
+      "vuStoreHelp": "Nuovi aspetti pubblicati da Osmium Sound. L'apparecchio li scarica da solo, li tiene aggiornati e li mostra tra gli stili qui sopra.",
+      "vuStoreLoading": "Caricamento dell'elenco…",
+      "vuStoreEmpty": "Al momento non ci sono altri VU meter da scaricare.",
+      "vuStoreCheck": "Controlla di nuovo",
+      "vuStoreInstall": "Scarica",
+      "vuStoreUpdate": "Aggiorna",
+      "vuStoreRemove": "Rimuovi",
+      "vuStoreDownloading": "Download in corso…",
+      "vuStoreInstalling": "Installazione…",
+      "vuStoreUnsupported": "Serve un aggiornamento",
+      "vuStoreNew": "Nuovo",
+      "vuStoreNewVersion": "Nuova versione",
+      "vuStoreRemoveConfirm": "Rimuovere il VU meter «{name}» dall'apparecchio? Potrai scaricarlo di nuovo in seguito.",
+      "vuStoreFailed": "Operazione non riuscita"
     },
     "display": {
       "currentLabel": "Attuale",
