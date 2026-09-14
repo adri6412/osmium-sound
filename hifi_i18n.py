@@ -405,6 +405,9 @@ MESSAGES = {
                               'it': 'Disco non montato: {disks}. Verifica il collegamento prima di applicare.'},
     'lyrion.applied': {'en': '{count} source(s) applied. Lyrion restarted and scanning.',
                        'it': '{count} sorgenti applicate. Lyrion riavviato e in scansione.'},
+    'lyrion.appliedLive': {'en': '{count} source(s) applied.', 'it': '{count} sorgenti applicate.'},
+    'lyrion.applyBackground': {'en': 'Lyrion is not answering yet: the sources will be applied as soon as it restarts.',
+                               'it': 'Lyrion non risponde ancora: le sorgenti verranno applicate appena si riavvia.'},
 
     # ── sources_server.py: backup creation ──────────────────────────
     'backup.systemUpdateRequired': {'en': 'A system update is required',

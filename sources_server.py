@@ -3037,12 +3037,7 @@ def apply_to_lyrion(state):
     # Warn if an adopted internal/USB source is not mounted: applying would
     # hand an empty mountpoint to Lyrion and clear the library. The user must
     # re-attach the disk or remove the source.
-    unmounted_disks = []
-    for src in state.get("sources", []):
-        if src.get("type") in ("internal", "usb"):
-            mp = src.get("mountpoint")
-            if not mp or not os.path.ismount(mp):
-                unmounted_disks.append(src.get("name") or "disco")
+    unmounted_disks = _unmounted_adopted_disks(state)
     if unmounted_disks:
         return False, _ht('lyrion.diskNotMounted', _hlang(), disks=", ".join(unmounted_disks))
 
@@ -3096,6 +3091,60 @@ def apply_to_lyrion(state):
         save_state(fresh)
 
     return True, _ht('lyrion.applied', _hlang(), count=len(paths))
+
+
+def _unmounted_adopted_disks(state):
+    return [src.get("name") or "disco" for src in state.get("sources", [])
+            if src.get("type") in ("internal", "usb")
+            and not (src.get("mountpoint") and os.path.ismount(src["mountpoint"]))]
+
+
+def apply_to_lyrion_live(state):
+    """apply_to_lyrion() without stopping Lyrion: the list of music folders is
+    rebuilt from state the same way, but set over JSON-RPC, and a rescan is
+    asked for only when that list actually changed.
+
+    The first-run wizard ends its sources step with an apply as a safety net,
+    in case one of the live pushes made while adding sources missed (Lyrion
+    still restarting after its plugins were installed). The restart-based
+    apply made that "Done, continue" button hang for up to two minutes —
+    stop, start, then up to thirty rescan attempts — on a Lyrion that almost
+    always already had every folder. Raises when Lyrion cannot be reached, so
+    the caller can fall back to the restart-based apply."""
+    with _lock:
+        if _sync_from_lyrion(state):
+            save_state(state)
+    unmounted = _unmounted_adopted_disks(state)
+    if unmounted:
+        return False, _ht('lyrion.diskNotMounted', _hlang(), disks=", ".join(unmounted))
+    paths = current_paths(state)
+    live = _lyrion_request(["pref", "mediadirs", "?"]).get("_p2")
+    if not isinstance(live, list):
+        live = [live] if live else []
+    if live != paths:
+        _lyrion_request(["pref", "mediadirs", paths])
+        _lyrion_rescan()
+    with _lock:
+        fresh = load_state()
+        for src in fresh.get("sources", []):
+            src.pop("subpath_pending", None)
+        save_state(fresh)
+    return True, _ht('lyrion.appliedLive', _hlang(), count=len(paths))
+
+
+_APPLY_BG_LOCK = threading.Lock()
+
+
+def _apply_to_lyrion_background():
+    if not _APPLY_BG_LOCK.acquire(blocking=False):
+        return  # one restart-based apply at a time is plenty
+    try:
+        ok, msg = apply_to_lyrion(load_state())
+        print(f"[sources] background apply: ok={ok} {msg}")
+    except Exception as e:
+        print(f"[sources] background apply failed: {e}")
+    finally:
+        _APPLY_BG_LOCK.release()
 
 
 # ─────────────────────────── Backup / restore ────────────────────────
@@ -5769,7 +5818,20 @@ def api_apply():
     denied = _require_pair_token()
     if denied:
         return denied
+    data = request.get_json(silent=True) or {}
     state = load_state()
+    if data.get("live"):
+        # Answer in seconds: set the folders over JSON-RPC, and only when
+        # Lyrion does not answer at all fall back to the restart-based apply,
+        # in the background, so nobody waits on it.
+        try:
+            ok, msg = apply_to_lyrion_live(state)
+        except Exception as e:
+            print(f"[sources] live apply failed, restarting Lyrion in the background: {e}")
+            threading.Thread(target=_apply_to_lyrion_background, daemon=True).start()
+            return jsonify({"success": True, "background": True,
+                            "message": _ht('lyrion.applyBackground', _hlang())}), 202
+        return jsonify({"success": ok, "message": msg}), (200 if ok else 500)
     ok, msg = apply_to_lyrion(state)
     return jsonify({"success": ok, "message": msg}), (200 if ok else 500)
 
