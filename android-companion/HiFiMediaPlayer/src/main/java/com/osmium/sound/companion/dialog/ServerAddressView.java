@@ -17,8 +17,11 @@
 package com.osmium.sound.companion.dialog;
 
 import android.app.Activity;
+import android.content.ActivityNotFoundException;
 import android.content.Context;
 import android.content.Intent;
+import android.net.Uri;
+import android.provider.Settings;
 import android.text.Editable;
 import android.util.AttributeSet;
 import android.view.View;
@@ -36,14 +39,14 @@ import androidx.fragment.app.FragmentManager;
 import com.google.android.material.button.MaterialButton;
 import com.google.android.material.card.MaterialCardView;
 import com.google.android.material.checkbox.MaterialCheckBox;
+import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 import com.google.android.material.textfield.TextInputLayout;
+import com.google.zxing.client.android.Intents;
 import com.google.zxing.integration.android.IntentIntegrator;
 import com.google.zxing.integration.android.IntentResult;
 
 import android.os.Bundle;
 import android.os.Parcelable;
-
-import java.net.URI;
 
 import com.osmium.sound.companion.Preferences;
 import com.osmium.sound.companion.R;
@@ -146,6 +149,13 @@ public class ServerAddressView extends LinearLayout {
             // Lets the choice be revisited without reinstalling; the address and
             // any pairing stay put until a different kind is actually picked.
             findViewById(R.id.change_mode_button).setOnClickListener(view -> setStep(Step.MODE));
+            // Without this the scan step was a dead end: the system back button
+            // leaves the activity instead of returning to the kind question.
+            findViewById(R.id.scan_change_mode_button).setOnClickListener(view -> setStep(Step.MODE));
+            findViewById(R.id.scan_help_button).setOnClickListener(view -> showHelp());
+            findViewById(R.id.ready_help_button).setOnClickListener(view -> showHelp());
+            findViewById(R.id.no_device_button).setOnClickListener(view -> openUrl(
+                    getResources().getString(R.string.wizard_no_device_url)));
             advancedOptionsToggle = findViewById(R.id.advanced_options_toggle);
             advancedOptionsGroup = findViewById(R.id.advanced_options_group);
             advancedOptionsToggle.setOnClickListener(view -> setAdvancedOptionsExpanded(
@@ -161,13 +171,9 @@ public class ServerAddressView extends LinearLayout {
                     }
                 }
 
+                // Editable or not, and with which helper text, is decided by
+                // applyServerKind() below.
                 serverAddressEditText = findViewById(R.id.server_address);
-                // Read-only: the only way to (re)set the server address is scanning the
-                // appliance's pairing QR (see class doc). Tapping the field itself
-                // also starts a scan, same as the end icon.
-                serverAddressEditText.setFocusable(false);
-                serverAddressEditText.setLongClickable(false);
-                serverAddressEditText.setOnClickListener(view -> startQrScan());
                 TextInputLayout serverAddressTil = findViewById(R.id.server_address_til);
                 serverAddressTil.setEndIconOnClickListener(view -> startQrScan());
                 userNameEditText = findViewById(R.id.username);
@@ -424,10 +430,10 @@ public class ServerAddressView extends LinearLayout {
 
     /**
      * Launches the ZXing scanner activity to read the QR code shown on the appliance
-     * (Settings -> Phone control). Camera permission is requested by the scanner
+     * (Settings -> Android Companion). Camera permission is requested by the scanner
      * activity itself if needed. Uses the classic startActivityForResult-based
      * IntentIntegrator (not the newer Activity Result API) because ServerAddressView
-     * is a plain View inflated asynchronously ÔÇö it has no safe point to register an
+     * is a plain View inflated asynchronously — it has no safe point to register an
      * ActivityResultLauncher before the host Activity leaves the STARTED state.
      */
     private void startQrScan() {
@@ -439,7 +445,49 @@ public class ServerAddressView extends LinearLayout {
         integrator.setPrompt(getResources().getString(R.string.settings_scan_qr_prompt));
         integrator.setBeepEnabled(false);
         integrator.setOrientationLocked(true);
+        // The scanner's own dialog for a refused camera speaks of a camera
+        // "problem"; close quietly instead and explain it here (see
+        // handleActivityResult).
+        integrator.addExtra(Intents.Scan.SHOW_MISSING_CAMERA_PERMISSION_DIALOG, false);
         integrator.initiateScan();
+    }
+
+    /** Where to find the QR code and what to check when the connection fails. */
+    private void showHelp() {
+        FragmentManager fragmentManager = ((AppCompatActivity) getContext()).getSupportFragmentManager();
+        InfoDialog.show(fragmentManager, R.string.wizard_help_title, R.string.wizard_help_text);
+    }
+
+    private void openUrl(String url) {
+        try {
+            getContext().startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(url)));
+        } catch (ActivityNotFoundException e) {
+            Toast.makeText(getContext(), url, Toast.LENGTH_LONG).show();
+        }
+    }
+
+    private void showCameraDenied() {
+        new MaterialAlertDialogBuilder(getContext())
+                .setTitle(R.string.wizard_camera_denied_title)
+                .setMessage(R.string.wizard_camera_denied)
+                .setPositiveButton(R.string.wizard_open_settings, (dialog, which) -> {
+                    try {
+                        getContext().startActivity(new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                                Uri.fromParts("package", getContext().getPackageName(), null)));
+                    } catch (ActivityNotFoundException ignored) {
+                        // No settings screen for apps on this device: nothing better to offer.
+                    }
+                })
+                .setNegativeButton(android.R.string.cancel, null)
+                .show();
+    }
+
+    private void showScanFailed() {
+        new MaterialAlertDialogBuilder(getContext())
+                .setMessage(R.string.settings_scan_qr_failed)
+                .setPositiveButton(android.R.string.ok, null)
+                .setNeutralButton(R.string.wizard_help, (dialog, which) -> showHelp())
+                .show();
     }
 
     /**
@@ -454,7 +502,11 @@ public class ServerAddressView extends LinearLayout {
         }
         String contents = result.getContents();
         if (contents == null) {
-            return true; // user cancelled the scan, stay on the current step
+            Intent original = result.getOriginalIntent();
+            if (original != null && original.getBooleanExtra(Intents.Scan.MISSING_CAMERA_PERMISSION, false)) {
+                showCameraDenied();
+            }
+            return true; // stay on the current step
         }
 
         String lms = contents;
@@ -467,9 +519,9 @@ public class ServerAddressView extends LinearLayout {
             token = pairing.optString("token", null);
         }
 
-        String hostPort = parseHostPortFromQr(lms);
+        String hostPort = PairingQr.hostPort(lms);
         if (hostPort == null) {
-            Toast.makeText(getContext(), R.string.settings_scan_qr_failed, Toast.LENGTH_LONG).show();
+            showScanFailed();
             return true;
         }
         if (api != null && token != null && preferences != null) {
@@ -519,36 +571,6 @@ public class ServerAddressView extends LinearLayout {
         } catch (org.json.JSONException e) {
             return null;
         }
-    }
-
-    /**
-     * Extracts a "host:port" (or bare host) string from scanned QR content. The
-     * appliance's own QR codes (e.g. Settings -> Phone control) encode a full URL
-     * like "http://192.168.1.50:9000/material/"; a plain "host" or "host:port" QR
-     * is also accepted as-is.
-     */
-    private static String parseHostPortFromQr(String content) {
-        if (content == null) {
-            return null;
-        }
-        content = content.trim();
-        if (content.isEmpty()) {
-            return null;
-        }
-        if (content.matches("(?i)^[a-z][a-z0-9+.-]*://.*")) {
-            try {
-                URI uri = URI.create(content);
-                String host = uri.getHost();
-                if (host == null) {
-                    return null;
-                }
-                int port = uri.getPort();
-                return port > 0 ? (host + ":" + port) : host;
-            } catch (Exception e) {
-                return null;
-            }
-        }
-        return content;
     }
 
     private void setServerAddress(String address) {
