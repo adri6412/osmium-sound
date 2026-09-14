@@ -96,8 +96,20 @@ jobs:
         run: |
           set -e
           CUR="${{ steps.ver.outputs.version }}"
-          PREV="$(gh release list --repo "${{ github.repository }}" --limit 1 \
-                    --json tagName --jq '.[0].tagName' 2>/dev/null || true)"
+          # The previous release of the same line: for a stable tag the
+          # previous STABLE one, which is what its devices come from (v2.5.24's
+          # notes listed only the two commits after the last alpha instead of
+          # everything since v2.5.23). Never a companion-* release, and never
+          # this tag itself (a rerun finds its own release already published).
+          case "$CUR" in
+            *-*) ONLY_STABLE=false ;;
+            *)   ONLY_STABLE=true ;;
+          esac
+          PREV="$(gh release list --repo "${{ github.repository }}" --limit 100 \
+                    --json tagName,isPrerelease \
+                    --jq "[.[] | select(.tagName | startswith(\"v\")) | select(.tagName != \"$CUR\")
+                            | select(($ONLY_STABLE | not) or (.isPrerelease | not))][0].tagName // empty" \
+                    2>/dev/null || true)"
           if [ -n "$PREV" ] && git rev-parse -q --verify "refs/tags/$PREV" >/dev/null; then
             RANGE="refs/tags/$PREV..HEAD"
           else
@@ -663,9 +675,15 @@ jobs:
             [ -f "$f" ] || { echo "::error::$f is missing from the build output"; exit 1; }
             aws s3 cp "$f" "s3://$R2_BUCKET/ota/$TAG/$f" --endpoint-url "$R2_ENDPOINT" \
               --content-type "$(ctype "$f")" --cache-control "public, max-age=31536000, immutable" --only-show-errors
-            # what a device will actually see, not what the API said
-            curl -fsSI --retry 3 "$PUBLIC_BASE/ota/$TAG/$f" >/dev/null \
-              || { echo "::error::$PUBLIC_BASE/ota/$TAG/$f is not served after the upload"; exit 1; }
+            # Checked through R2's own API, not the public host: Cloudflare
+            # answers 403 to GitHub's runners on file.osmiumsound.it (v2.5.24
+            # stopped at the first file although the upload had worked). The
+            # public host is probed by verify-release, where a 403 is a warning.
+            SIZE=$(aws s3api head-object --bucket "$R2_BUCKET" --key "ota/$TAG/$f" --endpoint-url "$R2_ENDPOINT" \
+                     --query ContentLength --output text) \
+              || { echo "::error::ota/$TAG/$f is not in the bucket after the upload"; exit 1; }
+            [ "$SIZE" = "$(stat -c %s "$f")" ] \
+              || { echo "::error::ota/$TAG/$f is $SIZE bytes in the bucket, $(stat -c %s "$f") here"; exit 1; }
           done
           echo "stable release $TAG is on $PUBLIC_BASE/ota/$TAG/"
       - name: Rebuild the OTA Pages manifest with the image asset
@@ -702,7 +720,9 @@ jobs:
           set -euo pipefail
           aws s3 cp manifest-out/latest-prod.json "s3://$R2_BUCKET/ota/latest-prod.json" --endpoint-url "$R2_ENDPOINT" \
             --content-type application/json --cache-control no-cache --only-show-errors
-          curl -fsS --retry 3 https://file.osmiumsound.it/ota/latest-prod.json | python3 -c 'import json,sys; d=json.load(sys.stdin); print("mirror manifest:", d["tag_name"])'
+          # read back through the API, for the same reason as the upload check
+          aws s3api get-object --bucket "$R2_BUCKET" --key ota/latest-prod.json --endpoint-url "$R2_ENDPOINT" /tmp/mirror.json >/dev/null
+          python3 -c 'import json; d=json.load(open("/tmp/mirror.json")); print("mirror manifest:", d["tag_name"])'
       - name: Publish the manifest
         uses: peaceiris/actions-gh-pages@v4
         with:
@@ -732,6 +752,12 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG: ${{ github.ref_name }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: auto
+          AWS_EC2_METADATA_DISABLED: "true"
+          R2_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
+          R2_BUCKET: osmium-sound-iso-beta
         run: |
           set -euo pipefail
           gh release view "$TAG" -R "${{ github.repository }}" --json assets -q '.assets[].name' > /tmp/assets.list || true
@@ -759,6 +785,11 @@ jobs:
           # (rauc streams it), and the manifest a stable device reads must
           # point at that host — otherwise the fleet gets "up to date" forever
           # or, worse, a manifest full of dead links.
+          #
+          # Checked through R2's S3 API, the bucket file.osmiumsound.it serves:
+          # Cloudflare answers 403 to GitHub's runners on the public host (this
+          # is what failed v2.5.24 with every file in place). The public host is
+          # still probed at the end, where only a 403 is forgiven.
           case "$TAG" in *-*) exit 0 ;; esac
           BASE="https://file.osmiumsound.it/ota/$TAG"
           MISSING=""
@@ -767,18 +798,20 @@ jobs:
             "hifi-system-$TAG.tar.gz" "hifi-system-$TAG.tar.gz.sha256" \
             "hifi-os-$TAG.tar.gz" "hifi-os-$TAG.tar.gz.sha256" "hifi-os-$TAG.tar.gz.sha256.sig" \
             "hifi-image-$TAG.raucb" "hifi-image-$TAG.raucb.sha256" ; do
-            curl -fsSI --retry 3 "$BASE/$want" >/dev/null || MISSING="$MISSING $want"
+            aws s3api head-object --bucket "$R2_BUCKET" --key "ota/$TAG/$want" --endpoint-url "$R2_ENDPOINT" >/dev/null 2>&1 \
+              || MISSING="$MISSING $want"
           done
           if [ -n "$MISSING" ]; then
             echo "::error::release $TAG is incomplete on file.osmiumsound.it:$MISSING"
             exit 1
           fi
-          CODE=$(curl -s -o /dev/null -w '%{http_code}' -r 0-1023 "$BASE/hifi-image-$TAG.raucb")
-          if [ "$CODE" != "206" ]; then
-            echo "::error::$BASE/hifi-image-$TAG.raucb does not serve range requests (HTTP $CODE): rauc cannot stream it"
+          RANGE=$(aws s3api get-object --bucket "$R2_BUCKET" --key "ota/$TAG/hifi-image-$TAG.raucb" --range bytes=0-1023 \
+                    --endpoint-url "$R2_ENDPOINT" /tmp/range.bin --query ContentRange --output text 2>/dev/null || true)
+          if [ -z "$RANGE" ] || [ "$RANGE" = None ] || [ "$(stat -c %s /tmp/range.bin 2>/dev/null || echo 0)" != 1024 ]; then
+            echo "::error::hifi-image-$TAG.raucb does not serve range requests (Content-Range: ${RANGE:-none}): rauc cannot stream it"
             exit 1
           fi
-          curl -fsS --retry 3 https://file.osmiumsound.it/ota/latest-prod.json > /tmp/mirror.json
+          aws s3api get-object --bucket "$R2_BUCKET" --key ota/latest-prod.json --endpoint-url "$R2_ENDPOINT" /tmp/mirror.json >/dev/null
           python3 - "$TAG" "$BASE" <<'PY'
           import json, sys
           tag, base = sys.argv[1], sys.argv[2]
@@ -789,4 +822,15 @@ jobs:
               sys.exit(1)
           print(f"mirror manifest {tag}: {len(d['assets'])} assets on {base}")
           PY
+          # The public host, best effort from here: 403 is Cloudflare turning
+          # the runner away (devices on home connections are served); anything
+          # else means the bucket is not published the way devices need.
+          for url in "$BASE/hifi-image-$TAG.raucb" https://file.osmiumsound.it/ota/latest-prod.json; do
+            CODE=$(curl -s -o /dev/null -I -w '%{http_code}' "$url" || true)
+            case "$CODE" in
+              200) : ;;
+              403) echo "::warning::$url answered 403 to this runner (Cloudflare); checked through the R2 API instead" ;;
+              *)   echo "::error::$url answered HTTP ${CODE:-no answer}"; exit 1 ;;
+            esac
+          done
           echo "release $TAG is complete on file.osmiumsound.it"
