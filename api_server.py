@@ -1581,6 +1581,35 @@ def _current_lms_host():
             return m.group(1)
     return '127.0.0.1'
 
+# A DNS name for an external Lyrion server (nas.lan, lms.example.com,
+# osmium.local). Letters, digits and hyphens per label only: the name ends up
+# inside squeezelite's ARGS='...' line, so no quote, space or shell character
+# may get through.
+_HOSTNAME_LABEL_RE = re.compile(r'^(?!-)[a-z0-9-]{1,63}(?<!-)$')
+
+def _valid_hostname(name):
+    if not isinstance(name, str) or not name or len(name) > 253:
+        return False
+    labels = name.split('.')
+    # All-numeric names are malformed IPv4 addresses, not host names.
+    if all(l.isdigit() for l in labels):
+        return False
+    return all(_HOSTNAME_LABEL_RE.match(l) for l in labels)
+
+def _resolves(name, timeout=5):
+    """True if the name resolves to an address, giving up after `timeout` s
+    (getaddrinfo has no timeout of its own and a dead DNS can hang for 30 s)."""
+    result = []
+    def lookup():
+        try:
+            result.append(bool(socket.getaddrinfo(name, 9000, proto=socket.IPPROTO_TCP)))
+        except OSError:
+            result.append(False)
+    th = threading.Thread(target=lookup, daemon=True)
+    th.start()
+    th.join(timeout)
+    return bool(result and result[0])
+
 def get_lms_role():
     host = _current_lms_host()
     if host == '127.0.0.1':
@@ -1621,12 +1650,19 @@ def set_lms_role(mode, host):
     if mode == 'local':
         target = '127.0.0.1'
     elif mode == 'follow':
-        if not _valid_ipv4(host):
-            return {'success': False, 'code': 'lms.invalidIp',
-                    'message': _t('lms.invalidIp', _lang(), host=host)}
-        if host == '127.0.0.1':
+        host = host.strip().rstrip('.').lower() if isinstance(host, str) else host
+        if not (_valid_ipv4(host) or _valid_hostname(host)):
+            return {'success': False, 'code': 'lms.invalidHost',
+                    'message': _t('lms.invalidHost', _lang(), host=host)}
+        if host in ('127.0.0.1', 'localhost'):
             return {'success': False, 'code': 'lms.useLocalMode',
                     'message': _t('lms.useLocalMode', _lang())}
+        # squeezelite resolves the name once when it starts; a typo would only
+        # show after the reboot the owner is asked for next, as a player that
+        # never connects. Check it here while there is still a form to fix it.
+        if not _valid_ipv4(host) and not _resolves(host):
+            return {'success': False, 'code': 'lms.hostNotFound',
+                    'message': _t('lms.hostNotFound', _lang(), host=host)}
         target = host
     else:
         return {'success': False, 'code': 'lms.invalidMode',

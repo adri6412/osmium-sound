@@ -245,6 +245,9 @@ async function loadPlayback() {
     if (dvc != null) digitalVolumeControl.value = String(dvc);
   } catch (_) { playbackMac.value = null; }
 }
+// The page loads everything once on mount; a player that connected to Lyrion
+// afterwards would stay "not found" until a reload. Look again on opening.
+watch(open, (k) => { if (k === 'playback') loadPlayback(); });
 function setTransitionType(v) {
   transitionType.value = v;
   if (playbackMac.value) api.lyrionSetPref(playbackMac.value, 'transitionType', v);

@@ -2206,8 +2206,29 @@ def lyrion_proxy():
     if denied:
         return denied
     body = request.get_json(silent=True) or {}
-    data, status = _proxy(LYRION_BASE, '/jsonrpc.js', method='POST', body=body, timeout=20)
+    data, status = _proxy(_lyrion_base(), '/jsonrpc.js', method='POST', body=body, timeout=20)
     return jsonify(data), status
+
+
+def _lyrion_base():
+    """The Lyrion this device actually plays from, same as the kiosk.
+
+    A device set to follow another server stops its own Lyrion (see
+    api_server's _set_local_lyrion_enabled), so loopback has nobody answering,
+    or an empty server: the Playback section then reported "no active player"
+    while music was playing. api_server's /lms_role reads squeezelite's -s,
+    which is what the player really connects to.
+    """
+    role, status = _proxy(API_BASE, '/lms_role', timeout=5)
+    if status != 200 or not isinstance(role, dict):
+        return LYRION_BASE
+    host = role.get('host')
+    # An IPv4 address or a DNS name (api_server validates both on save); the
+    # character check keeps anything else out of the URL.
+    if role.get('mode') == 'follow' and isinstance(host, str) \
+            and re.fullmatch(r'[A-Za-z0-9](?:[A-Za-z0-9.-]{0,251}[A-Za-z0-9])?', host):
+        return f'http://{host}:9000'
+    return LYRION_BASE
 
 
 # ── captive portal minimal page + SPA serving ────────────────────────

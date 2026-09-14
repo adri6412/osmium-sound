@@ -99,10 +99,42 @@ class LmsRoleTestCase(unittest.TestCase):
     # ── refusals leave both the args and the service alone ───────────
 
     def test_invalid_host_touches_nothing(self):
-        result = api_server.set_lms_role('follow', 'not-an-ip')
-        self.assertFalse(result['success'])
+        for bad in ("nas'; reboot", 'nas lan', '-s', 'nas..lan', '999.1.1.1', '', None):
+            result = api_server.set_lms_role('follow', bad)
+            self.assertFalse(result['success'], bad)
+            self.assertEqual(result['code'], 'lms.invalidHost', bad)
         self.assertEqual(self.calls, [])
         self.assertEqual(self._args(), DEFAULT_ARGS)
+
+    def test_unresolvable_name_touches_nothing(self):
+        self._patch('_resolves', lambda name: False)
+        result = api_server.set_lms_role('follow', 'nas.lan')
+        self.assertFalse(result['success'])
+        self.assertEqual(result['code'], 'lms.hostNotFound')
+        self.assertEqual(self.calls, [])
+        self.assertEqual(self._args(), DEFAULT_ARGS)
+
+    def test_localhost_name_refused(self):
+        result = api_server.set_lms_role('follow', 'localhost')
+        self.assertFalse(result['success'])
+        self.assertEqual(result['code'], 'lms.useLocalMode')
+        self.assertEqual(self.calls, [])
+
+    # ── a DNS name instead of an IP ──────────────────────────────────
+
+    def test_follow_accepts_a_dns_name(self):
+        self._patch('_resolves', lambda name: True)
+        result = api_server.set_lms_role('follow', ' NAS.Local. ')
+        self.assertTrue(result['success'])
+        self.assertEqual(result['host'], 'nas.local')
+        self.assertIn('-s nas.local ', self._args())
+        self.assertEqual(api_server.get_lms_role(), {'mode': 'follow', 'host': 'nas.local'})
+
+    def test_ip_address_is_not_looked_up(self):
+        def boom(name):
+            raise AssertionError('an IP address must not go through DNS')
+        self._patch('_resolves', boom)
+        self.assertTrue(api_server.set_lms_role('follow', '192.168.1.50')['success'])
 
     def test_follow_on_loopback_refused(self):
         result = api_server.set_lms_role('follow', '127.0.0.1')

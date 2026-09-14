@@ -251,7 +251,7 @@ async function finish() {
         </div>
         <p v-if="!lmsServers.length" class="muted">{{ lmsBusy ? t('setup.lyrionSearching') : t('setup.lyrionNoneFound') }}</p>
         <label>{{ t('setup.lyrionServerIp') }}</label>
-        <input v-model="lmsHost" placeholder="192.168.1.10" />
+        <input v-model="lmsHost" placeholder="192.168.1.10 / nas.local" />
         <div class="row" style="margin-top: 10px;">
           <button class="secondary" :disabled="lmsBusy" @click="discoverLms">{{ t('setup.lyrionSearch') }}</button>
           <button :disabled="lmsBusy || !lmsHost" @click="useExternalLms">{{ t('setup.lyrionUseExternal') }}</button>

@@ -68,7 +68,10 @@ MESSAGES = {
     'audio.defaultDeviceName': {'en': 'System default', 'it': 'Predefinito di sistema'},
 
     # ── Multiroom / Lyrion server role ──────────────────────────────
-    'lms.invalidIp': {'en': 'Invalid IP address: {host}', 'it': 'Indirizzo IP non valido: {host}'},
+    'lms.invalidHost': {'en': 'Invalid server address: {host}. Use an IP address (192.168.1.50) or a name (nas.local)',
+                        'it': 'Indirizzo del server non valido: {host}. Usa un indirizzo IP (192.168.1.50) o un nome (nas.local)'},
+    'lms.hostNotFound': {'en': 'No device called {host} was found on the network. Check the name, or use its IP address',
+                         'it': 'Nessun dispositivo chiamato {host} trovato sulla rete. Controlla il nome, oppure usa il suo indirizzo IP'},
     'lms.useLocalMode': {'en': 'Use "This device" mode for the local server',
                          'it': 'Usa la modalità "Questo dispositivo" per il server locale'},
     'lms.invalidMode': {'en': 'Invalid mode: {mode}', 'it': 'Modalità non valida: {mode}'},

@@ -426,3 +426,20 @@ h2.page { font-size: 20px; margin: 10px 0 4px; }
 .vu-preview img { width: 100%; height: 100%; object-fit: contain; display: block; }
 .vu-badge { position: absolute; top: 8px; left: 8px; background: var(--gold); color: #111; font-weight: 600; }
 .vu-card button { margin-top: 4px; }
+
+/* Dashboard disk space: one bar plus a table whose rows add up to the disk. */
+.du-bar { display: flex; height: 12px; border-radius: 99px; overflow: hidden; background: var(--light); margin: 12px 0 6px; }
+.du-bar > span { display: block; height: 100%; }
+.du-system { background: #7a7a7a; }
+.du-used, .du-usedShared { background: var(--gold); }
+.du-free { background: var(--light); }
+.du-wrap { overflow-x: auto; }
+table.du { width: 100%; border-collapse: collapse; font-size: 14px; }
+table.du th { font-size: 12px; font-weight: 500; color: var(--muted); text-align: left; padding: 8px 4px; border-bottom: 1px solid var(--border); }
+table.du td { padding: 10px 4px; border-bottom: 1px solid var(--border); vertical-align: top; }
+table.du .num { text-align: right; white-space: nowrap; padding-left: 12px; }
+table.du tfoot td { border-bottom: 0; font-weight: 600; }
+.du-name { display: flex; align-items: center; gap: 8px; }
+.du-swatch { width: 10px; height: 10px; border-radius: 3px; flex: none; }
+.du-swatch.du-free { border: 1px solid #555; }
+.du-desc { display: block; font-size: 12px; margin: 3px 0 0 18px; line-height: 1.35; }

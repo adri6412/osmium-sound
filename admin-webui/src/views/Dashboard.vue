@@ -65,20 +65,41 @@ function fmtGb(gb) {
   return n >= 10 ? Math.round(n) + ' GB' : n.toFixed(1) + ' GB';
 }
 
-// The three figures behind "how much room do I have": what the system took
-// for itself (boot partition + the two image slots — space the owner can
-// never fill with music), what is still writable in the data partition, and
-// the disk as a whole. On a legacy install the system and the music share
-// one filesystem, so disk_system_gb comes back null and that row is left
-// out rather than showing a number that means nothing.
-const diskFree = computed(() => {
-  if (stats.value.disk_free_gb == null) return '—';
-  if (stats.value.disk_total_gb == null) return fmtGb(stats.value.disk_free_gb);
-  return t('dashboard.diskFreeOf', {
-    free: fmtGb(stats.value.disk_free_gb),
-    total: fmtGb(stats.value.disk_total_gb),
-  });
+// "How much room do I have", as one table whose rows add up to the disk:
+// what the system took for itself (boot partition + the two image slots —
+// space the owner can never fill with music), what is already used in the
+// data partition, and what is still free. Used is total minus free, so the
+// filesystem's own reserve lands there and the rows really do add up. On a
+// legacy install the system and the music share one filesystem:
+// disk_system_gb comes back null and the table has two rows over that
+// filesystem instead of inventing a split.
+const disk = computed(() => {
+  const st = stats.value;
+  if (st.disk_free_gb == null || st.disk_total_gb == null) return null;
+  const split = st.disk_system_gb != null && st.disk_device_gb != null;
+  const total = split ? st.disk_device_gb : st.disk_total_gb;
+  if (!(total > 0)) return null;
+  const used = Math.max(0, st.disk_total_gb - st.disk_free_gb);
+  const rows = [];
+  if (split) rows.push({ key: 'system', gb: st.disk_system_gb });
+  rows.push({ key: split ? 'used' : 'usedShared', gb: used });
+  rows.push({ key: 'free', gb: st.disk_free_gb });
+  for (const r of rows) r.pct = Math.min(100, Math.max(0, (r.gb / total) * 100));
+  // Whole percentages that still add up to 100 (largest remainder), or the
+  // table reads 45 + 12 + 44 = 101%.
+  const floors = rows.map((r) => Math.floor(r.pct));
+  let left = 100 - floors.reduce((a, b) => a + b, 0);
+  rows.map((r, i) => i).sort((a, b) => (rows[b].pct - floors[b]) - (rows[a].pct - floors[a]))
+    .forEach((i) => { rows[i].share = floors[i] + (left-- > 0 ? 1 : 0); });
+  return { rows, total };
 });
+const pctLabel = (r) => (r.share === 0 && r.gb > 0 ? '<1%' : r.share + '%');
+// In this table the parts carry a decimal, so the total does too (6.6 + 1.7
+// + 6.4 is 14.7, not "15"); only past 100 GB are whole numbers exact enough.
+function fmtDiskGb(gb) {
+  const n = Number(gb);
+  return Number.isFinite(n) && n >= 10 && n < 100 ? n.toFixed(1) + ' GB' : fmtGb(n);
+}
 
 const gpu = computed(() => [
   stats.value.gpu_percent != null ? `${stats.value.gpu_percent}%` : null,
@@ -115,20 +136,38 @@ const gpu = computed(() => [
     <div class="between item"><span class="muted">{{ t('dashboard.ram') }}</span>
       <span class="silver">{{ stats.ram_percent != null ? stats.ram_percent + '%' : '—' }}</span>
     </div>
-    <div class="between item" v-if="stats.disk_system_gb != null"><span class="muted">{{ t('dashboard.diskSystem') }}</span>
-      <span class="silver">{{ fmtGb(stats.disk_system_gb) }}</span>
-    </div>
-    <div class="between item"><span class="muted">{{ t('dashboard.diskFree') }}</span>
-      <span class="silver">{{ diskFree }}</span>
-    </div>
-    <div class="between item" v-if="stats.disk_device_gb != null"><span class="muted">{{ t('dashboard.diskTotal') }}</span>
-      <span class="silver">{{ fmtGb(stats.disk_device_gb) }}</span>
-    </div>
     <div class="between item"><span class="muted">{{ t('dashboard.temperature') }}</span>
       <span class="silver">{{ stats.temp_c != null ? stats.temp_c + '°C' : '—' }}</span>
     </div>
     <div class="between item" v-if="gpu"><span class="muted">{{ t('dashboard.gpu') }}</span>
       <span class="silver">{{ gpu }}</span>
+    </div>
+  </div>
+
+  <div class="card" v-if="disk">
+    <h3><span class="dot"></span>{{ t('dashboard.disk.title') }}</h3>
+    <div class="du-bar" role="img" :aria-label="disk.rows.map(r => t('dashboard.disk.' + r.key) + ' ' + fmtDiskGb(r.gb)).join(', ')">
+      <span v-for="r in disk.rows" :key="r.key" :class="'du-' + r.key" :style="{ width: r.pct + '%' }"></span>
+    </div>
+    <div class="du-wrap">
+      <table class="du">
+        <thead>
+          <tr><th></th><th class="num">{{ t('dashboard.disk.space') }}</th><th class="num">{{ t('dashboard.disk.share') }}</th></tr>
+        </thead>
+        <tbody>
+          <tr v-for="r in disk.rows" :key="r.key">
+            <td>
+              <span class="du-name"><span class="du-swatch" :class="'du-' + r.key"></span>{{ t('dashboard.disk.' + r.key) }}</span>
+              <span class="muted du-desc">{{ t('dashboard.disk.' + r.key + 'Desc') }}</span>
+            </td>
+            <td class="num silver">{{ fmtDiskGb(r.gb) }}</td>
+            <td class="num muted">{{ pctLabel(r) }}</td>
+          </tr>
+        </tbody>
+        <tfoot>
+          <tr><td>{{ t('dashboard.disk.total') }}</td><td class="num">{{ fmtDiskGb(disk.total) }}</td><td class="num muted">100%</td></tr>
+        </tfoot>
+      </table>
     </div>
   </div>
 </template>
