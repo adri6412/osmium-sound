@@ -38,6 +38,7 @@ import android.view.MenuItem;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.Toast;
 import android.widget.AutoCompleteTextView;
 import android.widget.Button;
 import android.widget.ImageView;
@@ -55,6 +56,8 @@ import androidx.fragment.app.Fragment;
 
 import com.google.android.material.button.MaterialButton;
 import com.google.android.material.dialog.MaterialAlertDialogBuilder;
+
+import org.json.JSONObject;
 import com.google.android.material.slider.Slider;
 
 import java.util.Arrays;
@@ -966,6 +969,16 @@ public class NowPlayingFragment extends Fragment  implements CallStateDialog.Cal
             menuItemSettings.setVisible(!(mActivity instanceof ConnectActivity));
         }
 
+        // Power off the Osmium Sound device: only against a paired appliance,
+        // where /api/system/shutdown exists and the token authorises it.
+        MenuItem menuItemShutdown = menu.findItem(R.id.menu_item_appliance_shutdown);
+        if (menuItemShutdown != null) {
+            Preferences preferences = HiFiMediaPlayer.getPreferences();
+            String token = preferences.getAppliancePairToken();
+            menuItemShutdown.setVisible(!(mActivity instanceof ConnectActivity)
+                    && preferences.isOsmiumAppliance() && token != null && !token.isEmpty());
+        }
+
         // These are all set at the same time, so one check is sufficient
         if (menuItemDisconnect != null) {
             // Set visibility and enabled state of menu items that are not player-specific.
@@ -1025,6 +1038,9 @@ public class NowPlayingFragment extends Fragment  implements CallStateDialog.Cal
         } else if (itemId == R.id.menu_item_disconnect) {
             requireService().disconnect();
             return true;
+        } else if (itemId == R.id.menu_item_appliance_shutdown) {
+            confirmApplianceShutdown();
+            return true;
         } else if (itemId == R.id.menu_item_stop_server) {
             ConfirmDialog.show(getParentFragmentManager(), this, R.string.menu_item_stop_server, requireService()::stopServer);
             return true;
@@ -1047,6 +1063,34 @@ public class NowPlayingFragment extends Fragment  implements CallStateDialog.Cal
         }
 
         return super.onOptionsItemSelected(item);
+    }
+
+    private void confirmApplianceShutdown() {
+        new MaterialAlertDialogBuilder(mActivity)
+                .setTitle(R.string.appliance_shutdown_title)
+                .setMessage(R.string.settings_shutdown_confirm)
+                .setNegativeButton(android.R.string.cancel, null)
+                .setPositiveButton(R.string.settings_shutdown_button, (dialog, which) ->
+                        ApplianceHttpClient.postJson("/api/system/shutdown", null, new ApplianceHttpClient.JsonCallback() {
+                            @Override
+                            public void onSuccess(JSONObject body) {
+                                if (!isAdded()) return;
+                                String message = body.optString("message", "");
+                                if (message.isEmpty()) {
+                                    message = getString(body.optBoolean("success", true)
+                                            ? R.string.appliance_shutdown_started : R.string.appliance_shutdown_failed);
+                                }
+                                Toast.makeText(mActivity, message, Toast.LENGTH_LONG).show();
+                            }
+
+                            @Override
+                            public void onFailure(String message) {
+                                if (!isAdded()) return;
+                                Toast.makeText(mActivity, getString(R.string.appliance_shutdown_failed) + ": " + message,
+                                        Toast.LENGTH_LONG).show();
+                            }
+                        }))
+                .show();
     }
 
         private void setTopBarSearchDefaultText(String initialText) {

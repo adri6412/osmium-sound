@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Text and divider styles for the appliance settings screens (see
+     ApplianceSettingsActivity), matching the look SystemAdminActivity and
+     MultiroomActivity already had. -->
+<resources>
+    <dimen name="appliance_qr_size">220dp</dimen>
+
+    <style name="ApplianceTitle">
+        <item name="android:layout_width">match_parent</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:textColor">@android:color/white</item>
+        <item name="android:textStyle">bold</item>
+        <item name="android:layout_marginBottom">4dp</item>
+    </style>
+
+    <style name="ApplianceHelp">
+        <item name="android:layout_width">match_parent</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:textColor">@color/hifiSilver</item>
+        <item name="android:layout_marginBottom">8dp</item>
+    </style>
+
+    <style name="ApplianceDivider">
+        <item name="android:layout_width">match_parent</item>
+        <item name="android:layout_height">1dp</item>
+        <item name="android:background">?android:attr/listDivider</item>
+        <item name="android:layout_marginTop">16dp</item>
+        <item name="android:layout_marginBottom">16dp</item>
+    </style>
+</resources>

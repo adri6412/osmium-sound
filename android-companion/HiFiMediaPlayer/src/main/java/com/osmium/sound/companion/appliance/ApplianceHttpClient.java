@@ -136,6 +136,11 @@ public final class ApplianceHttpClient {
         enqueueJson(authedRequest(path).post(body).build(), callback);
     }
 
+    /** Generic DELETE, for the sources_server routes that remove something (a source, a stored backup). */
+    public static void deleteJson(String path, JsonCallback callback) {
+        enqueueJson(authedRequest(path).delete().build(), callback);
+    }
+
     public static void dspStatus(JsonCallback callback) {
         enqueueJson(authedRequest("/api/dsp/status").get().build(), callback);
     }
@@ -357,7 +362,15 @@ public final class ApplianceHttpClient {
 
     /** Streams the backup tarball to the caller-supplied OutputStream (e.g. from CreateDocument). */
     public static void backupDownload(OutputStream destination, JsonCallback callback) {
-        Request request = authedRequest("/api/backup").get().build();
+        backupDownload(null, destination, callback);
+    }
+
+    /**
+     * Streams one stored backup (`genId`, as listed by /api/backup/list) — or,
+     * with a null id, a fresh non-secret one built on the spot.
+     */
+    public static void backupDownload(@androidx.annotation.Nullable String genId, OutputStream destination, JsonCallback callback) {
+        Request request = authedRequest(genId != null ? "/api/backup/" + genId : "/api/backup").get().build();
         client.newCall(request).enqueue(new Callback() {
             @Override
             public void onFailure(Call call, IOException e) {
@@ -388,6 +401,15 @@ public final class ApplianceHttpClient {
 
     /** Uploads a backup tarball picked via ActivityResultContracts.OpenDocument() to restore it. */
     public static void restoreUpload(Uri fileUri, ContentResolver resolver, JsonCallback callback) {
+        restoreUpload(fileUri, resolver, "", callback);
+    }
+
+    /**
+     * Same, with the passphrase an encrypted backup was made with (empty for a
+     * plain one). The restore then runs in the background on the appliance —
+     * follow it with /api/restore/status.
+     */
+    public static void restoreUpload(Uri fileUri, ContentResolver resolver, String passphrase, JsonCallback callback) {
         try {
             InputStream in = resolver.openInputStream(fileUri);
             if (in == null) {
@@ -396,10 +418,13 @@ public final class ApplianceHttpClient {
             }
             byte[] data = readAll(in);
             RequestBody fileBody = RequestBody.create(data, MediaType.get("application/gzip"));
-            RequestBody multipart = new MultipartBody.Builder()
+            MultipartBody.Builder form = new MultipartBody.Builder()
                     .setType(MultipartBody.FORM)
-                    .addFormDataPart("file", "restore.tar.gz", fileBody)
-                    .build();
+                    .addFormDataPart("file", "restore.tar.gz", fileBody);
+            if (passphrase != null && !passphrase.isEmpty()) {
+                form.addFormDataPart("passphrase", passphrase);
+            }
+            RequestBody multipart = form.build();
             enqueueJson(authedRequest("/api/restore").post(multipart).build(), callback);
         } catch (IOException e) {
             callback.onFailure(e.getMessage());

@@ -1,0 +1,114 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Body of DisplayActivity: the web admin's Settings → Display card. -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:orientation="vertical"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content">
+
+    <TextView
+        android:id="@+id/display_mode_current"
+        style="@style/ApplianceHelp" />
+
+    <com.google.android.material.button.MaterialButton
+        android:id="@+id/button_display_mode"
+        style="@style/Widget.Material3.Button.OutlinedButton"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:visibility="gone" />
+
+    <!-- Everything down to the pointer only means something while the
+         on-screen interface runs. -->
+    <LinearLayout
+        android:id="@+id/display_screen_block"
+        android:orientation="vertical"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:visibility="gone">
+
+        <LinearLayout
+            android:id="@+id/display_engine_block"
+            android:orientation="vertical"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:visibility="gone">
+            <View style="@style/ApplianceDivider" />
+            <TextView style="@style/ApplianceTitle" android:text="@string/appliance_display_engine_label" />
+            <TextView style="@style/ApplianceHelp" android:text="@string/appliance_display_engine_help" />
+            <RadioGroup
+                android:id="@+id/display_engine_group"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/display_resolution_block"
+            android:orientation="vertical"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:visibility="gone">
+            <View style="@style/ApplianceDivider" />
+            <TextView style="@style/ApplianceTitle" android:text="@string/appliance_display_resolution_label" />
+            <TextView style="@style/ApplianceHelp" android:text="@string/appliance_display_resolution_help" />
+            <RadioGroup
+                android:id="@+id/display_resolution_group"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/display_refresh_block"
+            android:orientation="vertical"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:visibility="gone">
+            <View style="@style/ApplianceDivider" />
+            <TextView style="@style/ApplianceTitle" android:text="@string/settings_ui_refresh_title" />
+            <TextView style="@style/ApplianceHelp" android:text="@string/settings_ui_refresh_summary" />
+            <TextView
+                android:id="@+id/display_refresh_unsupported"
+                style="@style/ApplianceHelp"
+                android:text="@string/settings_ui_refresh_unsupported"
+                android:visibility="gone" />
+            <RadioGroup
+                android:id="@+id/display_refresh_group"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/display_pointer_block"
+            android:orientation="vertical"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:visibility="gone">
+            <View style="@style/ApplianceDivider" />
+            <TextView style="@style/ApplianceTitle" android:text="@string/appliance_display_pointer_label" />
+            <TextView style="@style/ApplianceHelp" android:text="@string/appliance_display_pointer_help" />
+            <TextView
+                android:id="@+id/display_pointer_unavailable"
+                style="@style/ApplianceHelp"
+                android:text="@string/appliance_display_pointer_unavailable"
+                android:visibility="gone" />
+            <RadioGroup
+                android:id="@+id/display_pointer_group"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content" />
+        </LinearLayout>
+    </LinearLayout>
+
+    <LinearLayout
+        android:id="@+id/display_player_block"
+        android:orientation="vertical"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:visibility="gone">
+        <View style="@style/ApplianceDivider" />
+        <TextView style="@style/ApplianceTitle" android:text="@string/appliance_display_player_label" />
+        <TextView style="@style/ApplianceHelp" android:text="@string/appliance_display_player_help" />
+        <RadioGroup
+            android:id="@+id/display_player_group"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content" />
+    </LinearLayout>
+
+</LinearLayout>

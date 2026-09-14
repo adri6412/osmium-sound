@@ -38,6 +38,14 @@
         android:icon="@drawable/ic_menu_choose_player"
         app:showAsAction="ifRoom|withText"/>
 
+    <!-- Turns the Osmium Sound device itself off (the OS, not just Lyrion).
+         Only shown once the app is paired with one. -->
+    <item
+        android:id="@+id/menu_item_appliance_shutdown"
+        android:title="@string/appliance_shutdown_title"
+        android:icon="@drawable/ic_action_power_settings_new"
+        app:showAsAction="always"/>
+
     <item
         android:id="@+id/menu_item_alarm"
         android:title="@string/ALARM"

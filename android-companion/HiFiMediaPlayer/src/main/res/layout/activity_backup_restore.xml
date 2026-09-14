@@ -1,83 +1,93 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- Body of BackupRestoreActivity (inflated into appliance_settings_screen):
+     the web admin's Settings → Backup & restore card. -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:orientation="vertical"
     android:layout_width="match_parent"
-    android:layout_height="match_parent">
+    android:layout_height="wrap_content">
 
-    <com.google.android.material.appbar.AppBarLayout
+    <TextView style="@style/ApplianceHelp" android:text="@string/appliance_backup_hint" />
+
+    <com.google.android.material.textfield.TextInputLayout
         android:layout_width="match_parent"
-        android:layout_height="wrap_content">
-        <com.google.android.material.appbar.MaterialToolbar
-            android:id="@+id/toolbar"
+        android:layout_height="wrap_content"
+        android:hint="@string/appliance_backup_passphrase">
+        <com.google.android.material.textfield.TextInputEditText
+            android:id="@+id/backup_passphrase"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:minHeight="?attr/actionBarSize"
-            app:navigationIcon="@drawable/ic_keyboard_arrow_left"
-            app:title="@string/settings_backup_title" />
-    </com.google.android.material.appbar.AppBarLayout>
+            android:inputType="textPassword"
+            android:autofillHints="password" />
+    </com.google.android.material.textfield.TextInputLayout>
 
-    <ScrollView
-        android:id="@+id/backup_restore_container"
+    <TextView
+        style="@style/ApplianceHelp"
+        android:layout_marginTop="4dp"
+        android:text="@string/appliance_backup_passphrase_hint" />
+
+    <com.google.android.material.button.MaterialButton
+        android:id="@+id/button_backup_create"
         android:layout_width="match_parent"
-        android:layout_height="match_parent">
+        android:layout_height="wrap_content"
+        android:text="@string/appliance_backup_create" />
 
+    <com.google.android.material.button.MaterialButton
+        android:id="@+id/button_export_backup"
+        style="@style/Widget.Material3.Button.OutlinedButton"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="@string/appliance_backup_download_now" />
+
+    <com.google.android.material.button.MaterialButton
+        android:id="@+id/button_restore_backup"
+        style="@style/Widget.Material3.Button.OutlinedButton"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="@string/appliance_backup_restore_from_file" />
+
+    <LinearLayout
+        android:id="@+id/backup_scheduled_block"
+        android:orientation="vertical"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:visibility="gone">
+        <View style="@style/ApplianceDivider" />
         <LinearLayout
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content">
+            <TextView
+                android:layout_width="0dp"
+                android:layout_weight="1"
+                android:layout_height="wrap_content"
+                android:text="@string/appliance_backup_scheduled" />
+            <com.google.android.material.switchmaterial.SwitchMaterial
+                android:id="@+id/switch_backup_scheduled"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content" />
+        </LinearLayout>
+        <TextView style="@style/ApplianceHelp" android:text="@string/appliance_backup_scheduled_hint" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:id="@+id/backup_list_block"
+        android:orientation="vertical"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:visibility="gone">
+        <View style="@style/ApplianceDivider" />
+        <TextView style="@style/ApplianceTitle" android:text="@string/appliance_backup_stored" />
+        <TextView
+            android:id="@+id/backup_none"
+            style="@style/ApplianceHelp"
+            android:text="@string/appliance_backup_none"
+            android:visibility="gone" />
+        <LinearLayout
+            android:id="@+id/backup_list"
             android:orientation="vertical"
             android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:padding="16dp">
-
-            <TextView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="@string/settings_backup_export_help"
-                android:textColor="@color/hifiSilver"
-                android:layout_marginBottom="12dp" />
-
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/button_export_backup"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="@string/settings_backup_export_button" />
-
-            <View
-                android:layout_width="match_parent"
-                android:layout_height="1dp"
-                android:background="?android:attr/listDivider"
-                android:layout_marginTop="24dp"
-                android:layout_marginBottom="24dp" />
-
-            <TextView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="@string/settings_backup_restore_help"
-                android:textColor="@color/hifiSilver"
-                android:layout_marginBottom="12dp" />
-
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/button_restore_backup"
-                style="@style/Widget.Material3.Button.OutlinedButton"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="@string/settings_backup_restore_button" />
-
-            <ProgressBar
-                android:id="@+id/backup_progress"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_gravity="center"
-                android:layout_marginTop="24dp"
-                android:visibility="gone" />
-
-            <TextView
-                android:id="@+id/backup_message"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="16dp"
-                android:textColor="@android:color/white" />
-
-        </LinearLayout>
-    </ScrollView>
+            android:layout_height="wrap_content" />
+    </LinearLayout>
 
 </LinearLayout>

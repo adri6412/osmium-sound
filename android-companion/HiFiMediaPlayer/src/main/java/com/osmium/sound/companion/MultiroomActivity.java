@@ -19,6 +19,7 @@ import androidx.activity.EdgeToEdge;
 import androidx.appcompat.app.AppCompatActivity;
 
 import com.google.android.material.button.MaterialButton;
+import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 
 import org.json.JSONArray;
 import org.json.JSONObject;
@@ -48,7 +49,6 @@ import com.osmium.sound.companion.widget.ViewUtilities;
 public class MultiroomActivity extends AppCompatActivity {
     private final ThemeManager mThemeManager = new ThemeManager();
 
-    private EditText nameField;
     private RadioGroup roleGroup;
     private View internalSection;
     private View followSection;
@@ -59,7 +59,9 @@ public class MultiroomActivity extends AppCompatActivity {
     private TextView messageView;
     private boolean suppressRoleEvent;
     private boolean suppressDiscoveredEvent;
-    private String currentName = "OsmiumSound";
+    // What the device actually runs, so "did this really change?" can be asked.
+    private String savedMode = "local";
+    private String savedHost = "";
 
     // Internal-server (Lyrion build) state.
     private View channelSection;
@@ -90,7 +92,6 @@ public class MultiroomActivity extends AppCompatActivity {
         ViewUtilities.setInsetsListener(findViewById(R.id.toolbar), true, false, false);
         ViewUtilities.setInsetsListener(findViewById(R.id.multiroom_container), false, true, false);
 
-        nameField = findViewById(R.id.multiroom_name_field);
         roleGroup = findViewById(R.id.multiroom_role_group);
         internalSection = findViewById(R.id.multiroom_internal_section);
         followSection = findViewById(R.id.multiroom_follow_section);
@@ -108,7 +109,6 @@ public class MultiroomActivity extends AppCompatActivity {
         lyrionProgress = findViewById(R.id.lyrion_progress);
         installButton = findViewById(R.id.button_install_lyrion);
 
-        findViewById(R.id.button_save_name).setOnClickListener(v -> saveName());
         findViewById(R.id.button_scan).setOnClickListener(v -> scan());
         findViewById(R.id.button_apply_host).setOnClickListener(v -> applyHost());
         installButton.setOnClickListener(v -> installLyrion());
@@ -125,7 +125,6 @@ public class MultiroomActivity extends AppCompatActivity {
             applyChannel(channelIdToName(checkedId));
         });
 
-        loadPlayerName();
         loadRole();
         loadLyrionChannel();
         loadLyrionState();
@@ -319,50 +318,13 @@ public class MultiroomActivity extends AppCompatActivity {
         super.onDestroy();
     }
 
-    private void loadPlayerName() {
-        ApplianceHttpClient.deviceName(new ApplianceHttpClient.JsonCallback() {
-            @Override
-            public void onSuccess(JSONObject body) {
-                currentName = body.optString("name", "OsmiumSound");
-                nameField.setText(currentName);
-            }
-
-            @Override
-            public void onFailure(String message) {
-                showMessage(getString(R.string.settings_multiroom_name_failed) + ": " + message);
-            }
-        });
-    }
-
-    private void saveName() {
-        String name = nameField.getText().toString().trim();
-        if (name.isEmpty() || name.equals(currentName)) return;
-        setBusy(true);
-        ApplianceHttpClient.setDeviceName(name, new ApplianceHttpClient.JsonCallback() {
-            @Override
-            public void onSuccess(JSONObject body) {
-                setBusy(false);
-                if (body.optBoolean("success", true)) {
-                    currentName = name;
-                    showMessage(body.optString("message", getString(R.string.settings_multiroom_name_saved)));
-                } else {
-                    showMessage(body.optString("message", getString(R.string.settings_multiroom_name_failed)));
-                }
-            }
-
-            @Override
-            public void onFailure(String message) {
-                setBusy(false);
-                showMessage(getString(R.string.settings_multiroom_name_failed) + ": " + message);
-            }
-        });
-    }
-
     private void loadRole() {
         ApplianceHttpClient.lmsRole(new ApplianceHttpClient.JsonCallback() {
             @Override
             public void onSuccess(JSONObject body) {
                 boolean follow = "follow".equals(body.optString("mode", "local"));
+                savedMode = follow ? "follow" : "local";
+                savedHost = body.optString("host", "");
                 suppressRoleEvent = true;
                 roleGroup.check(follow ? R.id.radio_role_follow : R.id.radio_role_local);
                 suppressRoleEvent = false;
@@ -420,9 +382,8 @@ public class MultiroomActivity extends AppCompatActivity {
             if (suppressDiscoveredEvent) return;
             RadioButton checked = group.findViewById(checkedId);
             if (checked == null) return;
-            String ip = (String) checked.getTag();
-            hostField.setText(ip);
-            applyRole("follow", ip);
+            // Fills the address in, like the web admin; Apply confirms it.
+            hostField.setText((String) checked.getTag());
         });
     }
 
@@ -435,23 +396,67 @@ public class MultiroomActivity extends AppCompatActivity {
         applyRole("follow", host);
     }
 
+    /**
+     * Switching servers only half-applies on a running box, so it ends in a
+     * reboot — asked for up front, and skipped when the choice is already the
+     * live one. Same flow as the web admin's applyLmsRole().
+     */
     private void applyRole(String mode, String host) {
+        String target = "follow".equals(mode) ? host : null;
+        boolean unchanged = "local".equals(mode)
+                ? !"follow".equals(savedMode)
+                : "follow".equals(savedMode) && target != null && target.equals(savedHost);
+        if (unchanged) return;
+        new MaterialAlertDialogBuilder(this)
+                .setMessage(R.string.appliance_lyrion_reboot_warning)
+                .setNegativeButton(android.R.string.cancel, (d, w) -> restoreRole())
+                .setOnCancelListener(d -> restoreRole())
+                .setPositiveButton(R.string.settings_reboot_button, (d, w) -> doApplyRole(mode, target))
+                .show();
+    }
+
+    /** Puts the radios back on what the device really runs after a cancelled switch. */
+    private void restoreRole() {
+        boolean follow = "follow".equals(savedMode);
+        if (follow == (roleGroup.getCheckedRadioButtonId() == R.id.radio_role_follow)) return;
+        suppressRoleEvent = true;
+        roleGroup.check(follow ? R.id.radio_role_follow : R.id.radio_role_local);
+        suppressRoleEvent = false;
+        showRoleSection(follow);
+    }
+
+    private void doApplyRole(String mode, String host) {
         setBusy(true);
         ApplianceHttpClient.setLmsRole(mode, host, new ApplianceHttpClient.JsonCallback() {
             @Override
             public void onSuccess(JSONObject body) {
-                setBusy(false);
-                if (body.optBoolean("success", true)) {
-                    showMessage(body.optString("message", getString(R.string.settings_multiroom_role_saved)));
-                } else {
+                if (!body.optBoolean("success", true)) {
+                    setBusy(false);
                     showMessage(body.optString("message", getString(R.string.settings_multiroom_role_failed)));
+                    loadRole();
+                    return;
                 }
+                ApplianceHttpClient.postJson("/api/system/reboot", null, new ApplianceHttpClient.JsonCallback() {
+                    @Override
+                    public void onSuccess(JSONObject rebootBody) {
+                        setBusy(false);
+                        showMessage(getString(R.string.appliance_rebooting));
+                    }
+
+                    @Override
+                    public void onFailure(String message) {
+                        // The box may drop the connection as it goes down.
+                        setBusy(false);
+                        showMessage(getString(R.string.appliance_rebooting));
+                    }
+                });
             }
 
             @Override
             public void onFailure(String message) {
                 setBusy(false);
                 showMessage(getString(R.string.settings_multiroom_role_failed) + ": " + message);
+                loadRole();
             }
         });
     }

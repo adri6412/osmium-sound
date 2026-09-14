@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Settings → Osmium Sound → iPhone / iPad: the web admin's LyrPlay card. -->
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content">
+
+    <LinearLayout
+        android:orientation="vertical"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:paddingStart="24dp"
+        android:paddingEnd="24dp"
+        android:paddingTop="8dp">
+
+        <TextView style="@style/ApplianceHelp" android:text="@string/appliance_lyrplay_hint" />
+
+        <ImageView
+            android:id="@+id/lyrplay_qr"
+            android:layout_width="@dimen/appliance_qr_size"
+            android:layout_height="@dimen/appliance_qr_size"
+            android:layout_gravity="center_horizontal"
+            android:layout_marginTop="8dp"
+            android:layout_marginBottom="8dp"
+            android:contentDescription="@string/appliance_section_lyrplay" />
+
+        <TextView style="@style/ApplianceHelp" android:text="@string/appliance_lyrplay_disclaimer" />
+    </LinearLayout>
+</ScrollView>
