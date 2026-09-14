@@ -33,9 +33,9 @@
         android:textAppearance="@style/SqueezerTextAppearance.Medium"
         android:textStyle="bold"
         android:textColor="?attr/colorPrimary"
-        tools:text="Step 1 of 3 – Scan the QR code" />
+        tools:text="Step 3 of 5 – Scan the QR code" />
 
-    <!-- Step 0: language. Asked before anything else, in both languages at
+    <!-- Language. Asked before anything else, in both languages at
          once, because at this point we don't know which one the user reads.
          The choice goes through AppCompatDelegate (per-app locale, same
          mechanism as Settings → Display → Language) and is persisted by
@@ -69,9 +69,10 @@
             android:text="@string/wizard_language_english" />
     </LinearLayout>
 
-    <!-- Step 1: what are we connecting to? An Osmium Sound appliance pairs by
-         QR code and brings its own settings; any other Lyrion server is set up
-         by hand and has none of them. -->
+    <!-- Server kind: what are we connecting to? An Osmium Sound appliance pairs
+         by QR code and brings its own settings; any other Lyrion server is set up
+         by hand and has none of them. This is the first step shown in the chosen
+         language, so it is also where the app says it needs one of the two. -->
     <LinearLayout
         android:id="@+id/step_mode"
         android:orientation="vertical"
@@ -81,6 +82,14 @@
         <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
+            android:text="@string/wizard_requirement"
+            android:textAppearance="@style/SqueezerTextAppearance.Medium"
+            android:textStyle="bold" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
             android:text="@string/wizard_mode_prompt"
             android:textAppearance="@style/SqueezerTextAppearance.Medium" />
 
@@ -118,9 +127,17 @@
             android:layout_marginTop="4dp"
             android:text="@string/wizard_mode_standard_summary"
             android:textAppearance="@style/SqueezerTextAppearance.Medium" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/no_device_button"
+            style="@style/Widget.Material3.Button.TextButton"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:text="@string/wizard_no_device" />
     </LinearLayout>
 
-    <!-- Step 1: scan the appliance's pairing QR code. -->
+    <!-- Scan the appliance's pairing QR code. -->
     <LinearLayout
         android:id="@+id/step_scan"
         android:orientation="vertical"
@@ -141,9 +158,35 @@
             android:layout_marginTop="16dp"
             app:icon="@drawable/ic_qr_code_scanner"
             android:text="@string/settings_scan_qr" />
+
+        <LinearLayout
+            android:orientation="horizontal"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp">
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/scan_change_mode_button"
+                style="@style/Widget.Material3.Button.TextButton"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/wizard_change_mode" />
+
+            <Space
+                android:layout_width="0dp"
+                android:layout_height="0dp"
+                android:layout_weight="1" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/scan_help_button"
+                style="@style/Widget.Material3.Button.TextButton"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/wizard_help" />
+        </LinearLayout>
     </LinearLayout>
 
-    <!-- Step 2: confirm the pairing resolved from the QR code before it's applied. -->
+    <!-- Confirm the pairing resolved from the QR code before it's applied. -->
     <com.google.android.material.card.MaterialCardView
         android:id="@+id/step_confirm"
         android:layout_width="match_parent"
@@ -181,7 +224,7 @@
         </LinearLayout>
     </com.google.android.material.card.MaterialCardView>
 
-    <!-- Step 3: paired address, with LMS credentials/Wake-on-LAN collapsed by default. -->
+    <!-- Ready: the address, with LMS credentials/Wake-on-LAN collapsed by default. -->
     <LinearLayout
         android:id="@+id/step_ready"
         android:orientation="vertical"
@@ -189,13 +232,30 @@
         android:layout_height="wrap_content"
         android:visibility="gone">
 
-        <com.google.android.material.button.MaterialButton
-            android:id="@+id/change_mode_button"
-            style="@style/Widget.Material3.Button.TextButton"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_gravity="end"
-            android:text="@string/wizard_change_mode" />
+        <LinearLayout
+            android:orientation="horizontal"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content">
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/ready_help_button"
+                style="@style/Widget.Material3.Button.TextButton"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/wizard_help" />
+
+            <Space
+                android:layout_width="0dp"
+                android:layout_height="0dp"
+                android:layout_weight="1" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/change_mode_button"
+                style="@style/Widget.Material3.Button.TextButton"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/wizard_change_mode" />
+        </LinearLayout>
 
         <com.google.android.material.card.MaterialCardView
             android:layout_width="match_parent"

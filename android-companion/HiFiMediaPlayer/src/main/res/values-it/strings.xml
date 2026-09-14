@@ -29,8 +29,8 @@
 
     <string name="settings_serveraddr_hint">Apparecchio associato</string>
     <string name="settings_scan_qr">Scansiona codice QR</string>
-    <string name="settings_scan_qr_prompt">Inquadra il codice QR mostrato in Osmium Sound → Impostazioni → Controllo da telefono</string>
-    <string name="settings_scan_qr_failed">Impossibile leggere un indirizzo server da quel codice QR</string>
+    <string name="settings_scan_qr_prompt">Inquadra il codice QR mostrato in Osmium Sound → Impostazioni → Companion Android</string>
+    <string name="settings_scan_qr_failed">Questo non è il codice QR di Osmium Sound. Inquadra quello mostrato dall\'apparecchio in Impostazioni → Companion Android.</string>
     <string name="settings_pair_confirm_title">Associare a questo apparecchio?</string>
     <string name="settings_pair_confirm_message">Questo codice QR associa l\'app all\'apparecchio all\'indirizzo %1$s. Una volta associato, questo telefono potrà controllarlo da remoto — incluso riavvio, SSH e backup/ripristino. Continua solo se hai inquadrato il codice dallo schermo dell\'apparecchio.</string>
     <string name="settings_pair_confirm_button">Associa</string>
@@ -131,7 +131,7 @@
 
     <string name="connecting_text">Connessione in corso</string>
     <string name="connecting_to_text">Connessione a Lyrion Music Server su %s</string>
-    <string name="connection_failed_text">Connessione fallita.</string>
+    <string name="connection_failed_text">Connessione non riuscita. Controlla che il server sia acceso e nella stessa rete di questo telefono.</string>
     <string name="login_failed_text">Accesso fallito. Verifica che nome utente e password siano corretti.</string>
     <string name="invalid_url_text">Inserisci un indirizzo valido.</string>
     <string name="disconnected_text">Disconnesso.</string>
@@ -498,6 +498,29 @@
     <string name="wizard_change_mode">Cambia</string>
     <string name="settings_server_address_required">Inserisci l\'indirizzo del server, per esempio 192.168.0.10:9000</string>
     <string name="settings_server_address_remote_hint">Preso dal codice QR. Per usarlo fuori casa con Tailscale, sostituiscilo con il nome MagicDNS del server.</string>
+
+    <!-- Procedura di connessione: che cosa serve, e aiuto quando non funziona -->
+    <string name="wizard_toolbar_setup">Configurazione</string>
+    <string name="wizard_requirement">Questa app è un telecomando. Serve un apparecchio Osmium Sound o un Lyrion Music Server già acceso nella rete di casa: da sola non ha musica da suonare.</string>
+    <string name="wizard_no_device">Non hai ancora nessuno dei due?</string>
+    <string name="wizard_help">Problemi con il collegamento?</string>
+    <string name="wizard_help_title">Problemi con il collegamento</string>
+    <string name="wizard_help_text"><![CDATA[<b>Dov\'è il codice QR?</b><br>
+Sullo schermo di Osmium Sound: Impostazioni → Companion Android.<br>
+Apparecchio senza schermo: apri <i>http://hifiplayer.local</i> (o l\'indirizzo IP dell\'apparecchio) nel browser, poi Impostazioni → App companion → Genera QR di associazione.<br><br>
+<b>La fotocamera non si apre</b><br>
+Consenti la fotocamera a questa app nelle impostazioni di Android.<br><br>
+<b>La connessione non riesce</b><br>
+• L\'apparecchio deve essere acceso.<br>
+• Il telefono deve essere nella stessa rete Wi-Fi dell\'apparecchio.<br>
+• Fuori casa, collegati con Tailscale e usa l\'indirizzo da fuori casa.<br><br>
+<b>Non hai un apparecchio Osmium Sound?</b><br>
+Torna indietro e scegli \"Un altro server Lyrion\", poi scrivi il suo indirizzo, per esempio 192.168.0.10:9000.<br><br>
+Serve altro aiuto? Scrivi a support@osmiumsound.it]]></string>
+    <string name="wizard_camera_denied_title">Fotocamera non consentita</string>
+    <string name="wizard_camera_denied">Per inquadrare il codice QR l\'app ha bisogno della fotocamera. Consentila nelle impostazioni di Android, poi riprova.</string>
+    <string name="wizard_open_settings">Apri impostazioni</string>
+    <string name="wizard_connected">Connesso a %1$s</string>
 
     <!-- Impostazioni riorganizzate: l'apparecchio non e' piu' in fondo -->
     <string name="settings_category_appliance">Il tuo apparecchio Osmium Sound</string>
