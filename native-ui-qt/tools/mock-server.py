@@ -183,7 +183,11 @@ class H(BaseHTTPRequestHandler):
             table = {
                 "/vu_meter": {"enabled": STATE["vu"]}, "/nowplaying_autoexpand": {"seconds": STATE["autoexpand"]},
                 "/vu_style": {"style": STATE["vu_style"], "styles": [{"id": "classic", "name": {"en": "Classic", "it": "Classico"}},
-                                                                  {"id": "modulometer", "name": {"en": "Modulometer", "it": "Modulometro"}}]},
+                                                                  {"id": "modulometer", "name": {"en": "Modulometer", "it": "Modulometro"}},
+                                                                  {"id": "amber", "name": {"en": "Amber", "it": "Ambra"}},
+                                                                  {"id": "ice-blue", "name": {"en": "Ice Blue", "it": "Blu ghiaccio"}},
+                                                                  {"id": "exposed", "name": {"en": "Exposed", "it": "A vista"}},
+                                                                  {"id": "panoramic", "name": {"en": "Panoramic", "it": "Panoramico"}}]},
                 "/update/status": STATE["ota"], "/boot_mode": {"mode": "live"}, "/provision_status": {"pending": False, "completed": True},
                 "/player_name": {"name": "Osmium"}, "/ui_language": {"lang": STATE["lang"]},
                 "/display_mode": {"mode": STATE["display_mode"]}, "/ui_resolution": {"mode": STATE["ui_resolution"]}, "/ui_refresh": {"supported": True, "mode": STATE["ui_refresh"]},

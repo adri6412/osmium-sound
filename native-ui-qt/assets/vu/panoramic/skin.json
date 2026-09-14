@@ -1,0 +1,34 @@
+{
+  "name": {
+    "en": "Panoramic",
+    "it": "Panoramico"
+  },
+  "order": 60,
+  "size": [
+    2048,
+    1080
+  ],
+  "under": "under.png",
+  "over": "over.png",
+  "needle": {
+    "image": "needle.png",
+    "width": 28.74,
+    "height": 576.31,
+    "pivotX": 13.58,
+    "pivotY": 1282.95
+  },
+  "meters": [
+    [
+      511.44,
+      1586.2
+    ],
+    [
+      1506.66,
+      1586.05
+    ]
+  ],
+  "angles": [
+    -17.55,
+    18.3
+  ]
+}

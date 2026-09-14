@@ -15,10 +15,22 @@ All positions are given in SOURCE-artwork pixels; the tool scales them to the
 output width and writes them into skin.json.
 
   build   vu-skin-build.py build OUT_DIR --name-en .. --name-it .. \\
-            --under back.png --under dials.png --over frame.png \\
+            --under back.png --under dials.png --over coil.png --over frame.png \\
             --needle needle.png --needle-pivot X,Y \\
             --meter X,Y --meter X,Y --angles=MIN,MAX [--width 2048] [--order N]
           (write --angles with "=": a leading minus is otherwise read as an option)
+
+  needle  vu-skin-build.py needle needles.png --x X0,X1 --top Y --cut Y --to Y \\
+            --out needle.png --rest coil.png
+          For artwork that draws both needles, with their coils, in one layer
+          at rest (straight up): cuts the left needle out of columns X0..X1
+          from row TOP down to row CUT (where the collar begins) and stretches
+          its last row down to row TO, past the pivot, so the needle always
+          runs on behind the coil. Everything from row CUT down, for both
+          dials, goes to --rest: pass it to build as an --over below the
+          frame, the coil stays still while the needle turns behind it.
+          Prints the --needle-pivot to pass to build for a pivot at AXIS,PY:
+          AXIS-X0, PY-TOP.
 
   measure vu-skin-build.py measure dials.png --range X0,X1 [--range X0,X1]
           Finds each dial's pivot as the centre of its main scale arc and
@@ -52,9 +64,12 @@ def build(args):
         elif im.size != size:
             sys.exit(f'{path}: {im.size} differs from {size}, every layer must share one canvas')
         under.alpha_composite(im)
-    over = Image.open(args.over).convert('RGBA')
-    if over.size != size:
-        sys.exit(f'{args.over}: {over.size} differs from {size}')
+    over = Image.new('RGBA', size)
+    for path in args.over:
+        im = Image.open(path).convert('RGBA')
+        if im.size != size:
+            sys.exit(f'{path}: {im.size} differs from {size}')
+        over.alpha_composite(im)
     k = args.width / size[0]
     out_size = (args.width, round(size[1] * k))
     os.makedirs(args.out, exist_ok=True)
@@ -80,6 +95,21 @@ def build(args):
         f.write('\n')
     for n in ('under.png', 'over.png', 'needle.png', 'skin.json'):
         print(f'{n:11s} {os.path.getsize(os.path.join(args.out, n)) // 1024} KiB')
+
+
+def needle(args):
+    a = np.array(Image.open(args.layer).convert('RGBA'))
+    (x0, x1), top, cut, to = (int(v) for v in args.x), args.top, args.cut, args.to
+    if not top < cut < to:
+        sys.exit('need TOP < CUT < TO')
+    sprite = np.zeros((to - top, x1 - x0, 4), np.uint8)
+    sprite[:cut - top] = a[top:cut, x0:x1]
+    sprite[cut - top:] = a[cut - 1, x0:x1]
+    Image.fromarray(sprite).save(args.out, optimize=True)
+    rest = a.copy()
+    rest[:cut] = 0
+    Image.fromarray(rest).save(args.rest, optimize=True)
+    print(f'{args.out}: {x1 - x0}x{to - top}, origin {x0},{top} -> --needle-pivot AXIS-{x0},PIVOT_Y-{top}')
 
 
 def kasa(x, y):
@@ -146,18 +176,26 @@ def main():
     b.add_argument('--name-en', required=True)
     b.add_argument('--name-it', required=True)
     b.add_argument('--under', action='append', required=True, help='bottom to top, repeatable')
-    b.add_argument('--over', required=True)
+    b.add_argument('--over', action='append', required=True, help='bottom to top, repeatable')
     b.add_argument('--needle', required=True)
     b.add_argument('--needle-pivot', type=pair, required=True, help='rotation centre inside needle.png')
     b.add_argument('--meter', type=pair, action='append', required=True, help='pivot of each dial, left first')
     b.add_argument('--angles', type=pair, required=True, help='needle angle at level 0 and at level 100')
     b.add_argument('--width', type=int, default=2048)
     b.add_argument('--order', type=int, default=50)
+    n = sub.add_parser('needle')
+    n.add_argument('layer')
+    n.add_argument('--x', type=pair, required=True, help='column span of the left needle')
+    n.add_argument('--top', type=int, required=True, help='first row of the needle')
+    n.add_argument('--cut', type=int, required=True, help='first row of the collar / coil')
+    n.add_argument('--to', type=int, required=True, help='stretch the shaft down to this row (past the pivot)')
+    n.add_argument('--out', required=True)
+    n.add_argument('--rest', required=True)
     m = sub.add_parser('measure')
     m.add_argument('dials')
     m.add_argument('--range', type=pair, action='append', required=True, help='x span of one dial')
     args = p.parse_args()
-    build(args) if args.cmd == 'build' else measure(args)
+    {'build': build, 'needle': needle, 'measure': measure}[args.cmd](args)
 
 
 if __name__ == '__main__':

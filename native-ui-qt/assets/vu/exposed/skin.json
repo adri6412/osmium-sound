@@ -1,0 +1,34 @@
+{
+  "name": {
+    "en": "Exposed",
+    "it": "A vista"
+  },
+  "order": 50,
+  "size": [
+    2048,
+    1080
+  ],
+  "under": "under.png",
+  "over": "over.png",
+  "needle": {
+    "image": "needle.png",
+    "width": 57.49,
+    "height": 481.46,
+    "pivotX": 21.92,
+    "pivotY": 422.24
+  },
+  "meters": [
+    [
+      540.95,
+      652.19
+    ],
+    [
+      1496.14,
+      652.76
+    ]
+  ],
+  "angles": [
+    -39.5,
+    41.8
+  ]
+}
