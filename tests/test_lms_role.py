@@ -86,8 +86,11 @@ class LmsRoleTestCase(unittest.TestCase):
         self.assertTrue(result['success'])
         self.assertIsNone(result['host'])
         self.assertIn('-s 127.0.0.1', self._args())
+        # reset-failed first: the setup stops and starts Lyrion often enough
+        # to hit the unit's start limit, which would refuse this start
         self.assertEqual(self._systemctl(api_server.LYRION_UNIT),
-                         [['systemctl', 'enable', '--now', api_server.LYRION_UNIT]])
+                         [['systemctl', 'reset-failed', api_server.LYRION_UNIT],
+                          ['systemctl', 'enable', '--now', api_server.LYRION_UNIT]])
 
     def test_role_survives_a_reread(self):
         api_server.set_lms_role('follow', '192.168.1.50')

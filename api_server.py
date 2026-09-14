@@ -1637,6 +1637,11 @@ def _set_local_lyrion_enabled(enable):
     """
     action = ['enable', '--now'] if enable else ['disable', '--now']
     try:
+        if enable:
+            # A deliberate start must not be vetoed by the unit's crash-loop
+            # limit (five starts in five minutes), which counts every stop and
+            # start the setup does too — see sources_server._systemctl_lyrion.
+            _run(['systemctl', 'reset-failed', LYRION_UNIT], timeout=15)
         r = _run(['systemctl'] + action + [LYRION_UNIT], timeout=60)
         if r.returncode != 0:
             log.warning("set_lms_role: systemctl %s %s failed: %s",
@@ -1830,6 +1835,7 @@ def _apply_hostname(name):
         # running: never turn on a local Lyrion instance the user has off
         # (e.g. this box follows an external server elsewhere on the LAN).
         if _run(['systemctl', 'is-active', '--quiet', 'lyrionmusicserver'], timeout=10).returncode == 0:
+            _run(['systemctl', 'reset-failed', 'lyrionmusicserver'], timeout=15)
             _run(['systemctl', 'restart', 'lyrionmusicserver'], timeout=30)
     except Exception:
         log.exception("_apply_hostname: lyrionmusicserver restart failed")

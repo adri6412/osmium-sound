@@ -215,6 +215,28 @@ def _run(cmd, timeout=30):
     return subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
 
 
+def _systemctl_lyrion(action, timeout=60):
+    """systemctl start/restart/stop for Lyrion. A deliberate (re)start first
+    clears the unit's start-rate counter.
+
+    The unit allows five starts in five minutes (StartLimitBurst), meant to
+    stop a server that keeps crashing from spinning forever. But systemd counts
+    OUR starts too, and the first-run setup takes Lyrion down and up that many
+    times on its own: boot, remote-access prefs, skin, plugins, playlist
+    folder, sources. The sixth was refused with start-limit-hit and Lyrion
+    stayed off until the next reboot, right when the wizard sends the owner to
+    its web player (reproduced on a fresh install: six restarts in a row, the
+    sixth fails). reset-failed before a start we mean keeps the crash-loop
+    guard for Restart=on-failure while never letting it veto an intentional
+    start."""
+    if action in ("start", "restart"):
+        try:
+            _run(["systemctl", "reset-failed", LYRION_SERVICE], timeout=15)
+        except Exception:
+            pass
+    return _run(["systemctl", action, LYRION_SERVICE], timeout=timeout)
+
+
 def _run_json(cmd, timeout=30):
     r = _run(cmd, timeout=timeout)
     if r.returncode != 0:
@@ -641,7 +663,7 @@ def _restart_lyrion_for_group():
         if _run(["systemctl", "is-active", "--quiet", LYRION_SERVICE], timeout=10).returncode != 0:
             return
         print(f"[sources] restarting {LYRION_SERVICE} to pick up group {SHARE_GROUP}")
-        _run(["systemctl", "restart", LYRION_SERVICE], timeout=120)
+        _systemctl_lyrion("restart", timeout=120)
     except Exception as e:
         print(f"[sources] lyrion restart for {SHARE_GROUP} failed: {e}")
 
@@ -1505,7 +1527,7 @@ def _ensure_prefs():
     prefs = _find_prefs()
     if prefs:
         return prefs
-    _run(["systemctl", "start", LYRION_SERVICE], timeout=30)
+    _systemctl_lyrion("start", timeout=30)
     for _ in range(20):  # up to ~40s
         time.sleep(2)
         prefs = _find_prefs()
@@ -1682,7 +1704,7 @@ def ensure_playlistdir():
     except Exception as e:
         print(f"[sources] playlistdir prefs write failed: {e}")
     finally:
-        _run(["systemctl", "start", LYRION_SERVICE], timeout=60)
+        _systemctl_lyrion("start")
     print(f"[sources] playlistdir set to {data.get('playlistdir')}")
 
 
@@ -1929,7 +1951,7 @@ def ensure_lms_trusted_networks():
     except Exception as e:
         print(f"[sources] lms trusted-networks prefs write failed: {e}")
     finally:
-        _run(["systemctl", "start", LYRION_SERVICE], timeout=60)
+        _systemctl_lyrion("start")
 
 
 # ─────────────────────────── LMS skin (Osmium / Material) ───────────────────
@@ -3064,7 +3086,7 @@ def apply_to_lyrion(state):
         except Exception:
             pass
     finally:
-        _run(["systemctl", "start", LYRION_SERVICE], timeout=60)
+        _systemctl_lyrion("start")
 
     # The docstring says "restart + rescan", but starting the service back up
     # does NOT rescan by itself -- Lyrion has no idea mediadirs changed, since
@@ -3359,7 +3381,7 @@ def _stop_lyrion():
 
 
 def _start_lyrion():
-    _run(["systemctl", "start", "lyrionmusicserver"], timeout=60)
+    _systemctl_lyrion("start")
 
 
 def _lyrion_cache_dir():
