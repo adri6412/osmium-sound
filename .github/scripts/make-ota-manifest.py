@@ -28,12 +28,21 @@ def main():
                 body = f.read()
         except OSError:
             pass
-    base = f"https://github.com/{repo}/releases/download/{version}"
+    # Where the devices download from. GitHub's release CDN by default;
+    # OTA_ASSET_BASE overrides it (the stable channel is served from
+    # file.osmiumsound.it, the same host as the ISO manifest — see
+    # make-iso-manifest.py). Only the URLs change: the asset names must stay
+    # as they are, the OS signature is bound to the file name on the device.
+    base = os.environ.get("OTA_ASSET_BASE") or f"https://github.com/{repo}/releases/download/{version}"
+    base = base.rstrip("/")
     names = [
         uitar, uitar + ".sha256",
         systar, systar + ".sha256",
         ostar, ostar + ".sha256", ostar + ".sha256.sig",
     ]
+    # Asset in più (l'immagine RAUC hifi-image-<ver>.raucb e il suo .sha256):
+    # elenco separato da spazi in EXTRA_ASSETS, aggiunto dal job che li carica.
+    names += [n for n in os.environ.get("EXTRA_ASSETS", "").split() if n]
     assets = []
     for n in names:
         try:

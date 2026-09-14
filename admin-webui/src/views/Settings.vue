@@ -11,7 +11,7 @@ import SourcesPanel from '../components/SourcesPanel.vue';
 const host = location.hostname;
 const route = useRoute();
 const router = useRouter();
-const { t } = useI18n();
+const { t, lang } = useI18n();
 
 // ── kiosk-like submenu navigation ────────────────────────────────
 const sections = computed(() => [
@@ -149,6 +149,48 @@ async function wired() {
   else say(bodyMsg(r, t('settings.network.wiredFailed')), true);
 }
 
+// ── fixed (static) IPv4 address ──────────────────────────────────
+// Deliberately webui-only: there is no equivalent on the kiosk screen, where
+// a mistyped address would strand a headless box with no way to tell the
+// owner where it went. The backend edits the NetworkManager profile (see
+// api_server.py's set_ipv4_config), so the address survives a reboot.
+const ipv4 = ref({ mode: 'auto', device: '', address: '', prefix: 24, gateway: '', dns: [] });
+const ipForm = ref({ mode: 'auto', address: '', prefix: 24, gateway: '', dns: '' });
+const ipBusy = ref(false);
+async function loadIpv4() {
+  const r = await api.sys('ipv4_config');
+  if (!r.ok || r.data.success === false) return;
+  ipv4.value = r.data;
+  // For a DHCP box the backend hands back the *live* lease, so switching to
+  // a fixed address starts from a configuration already known to work.
+  ipForm.value = {
+    mode: r.data.mode || 'auto',
+    address: r.data.address || '',
+    prefix: r.data.prefix || 24,
+    gateway: r.data.gateway || '',
+    dns: (r.data.dns || []).join(', '),
+  };
+}
+async function saveIpv4() {
+  if (ipForm.value.mode === 'manual' && !confirm(t('settings.network.staticConfirm', { address: ipForm.value.address }))) return;
+  ipBusy.value = true;
+  const r = await api.sysPost('ipv4_config', {
+    mode: ipForm.value.mode,
+    address: ipForm.value.address.trim(),
+    prefix: Number(ipForm.value.prefix),
+    gateway: ipForm.value.gateway.trim(),
+    dns: ipForm.value.dns,
+  });
+  ipBusy.value = false;
+  if (!r.ok || r.data.success === false) { say(bodyMsg(r, t('settings.network.staticFailed')), true); return; }
+  say(bodyMsg(r, t('settings.network.staticApplying')));
+  // The address change tears down the connection this page is talking over,
+  // so nothing here can confirm the result — re-reading only works if the
+  // browser is still on the old address. Give NM time, then try once; the
+  // owner reconnects at the new address either way.
+  setTimeout(() => { loadNet(); loadIpv4(); }, 8000);
+}
+
 // ── audio + device name ────────────────────────────────────────────
 // device_name renames BOTH the Linux hostname (so <name>.local updates
 // live) and the squeezelite/Bluetooth player name together — see
@@ -203,6 +245,9 @@ async function loadPlayback() {
     if (dvc != null) digitalVolumeControl.value = String(dvc);
   } catch (_) { playbackMac.value = null; }
 }
+// The page loads everything once on mount; a player that connected to Lyrion
+// afterwards would stay "not found" until a reload. Look again on opening.
+watch(open, (k) => { if (k === 'playback') loadPlayback(); });
 function setTransitionType(v) {
   transitionType.value = v;
   if (playbackMac.value) api.lyrionSetPref(playbackMac.value, 'transitionType', v);
@@ -376,18 +421,39 @@ async function setTailscale(v) {
 // follow another" read as jargon). The wire protocol keeps the original
 // 'local'/'follow' role names — squeezelite's -s argument is what actually
 // changes, see api_server.set_lms_role.
-const lms = reactive({ mode: 'local', host: '', servers: [] });
+// mode/host are what the form shows (the External button and the address
+// field write to them before anything is applied); savedMode/savedHost are
+// what the device actually runs, so "did this really change?" can be asked.
+const lms = reactive({ mode: 'local', host: '', servers: [], savedMode: 'local', savedHost: '' });
 async function loadLms() {
   const r = await api.sys('lms_role');
-  if (r.ok) { lms.mode = r.data.mode || 'local'; lms.host = r.data.host || ''; }
+  if (r.ok) {
+    lms.mode = r.data.mode || 'local';
+    lms.host = r.data.host || '';
+    lms.savedMode = lms.mode;
+    lms.savedHost = lms.host;
+  }
 }
 async function discoverLms() {
   say(t('settings.lyrion.searching'));
   const r = await api.sys('discover_lms'); if (r.ok) { lms.servers = r.data.servers || []; say(''); }
 }
+// Switching between this device's own server and one on the network only
+// half-applies on a running box, so the change ends in a reboot — asked for
+// up front, and skipped entirely when the choice is already the live one.
 async function applyLmsRole(mode, hostArg) {
-  const r = await api.sysPost('lms_role', { mode, host: hostArg || lms.host || null });
-  say(bodyMsg(r, t('settings.lyrion.roleUpdated')), !(r.ok && r.data.success !== false)); loadLms();
+  const target = mode === 'follow' ? (hostArg || lms.host || null) : null;
+  const unchanged = mode === 'local'
+    ? lms.savedMode !== 'follow'
+    : (lms.savedMode === 'follow' && target === lms.savedHost);
+  if (unchanged) { lms.mode = mode; return; }
+  if (!confirm(t('settings.lyrion.rebootWarning'))) return;
+  const r = await api.sysPost('lms_role', { mode, host: target });
+  const ok = r.ok && r.data.success !== false;
+  say(bodyMsg(r, t('settings.lyrion.roleUpdated')), !ok);
+  if (!ok) { loadLms(); return; }
+  await api.sysPost('reboot', {});
+  waitForReboot();
 }
 
 // Install/update of Lyrion itself. This used to sit on the Updates page next to
@@ -503,8 +569,12 @@ async function pickSkin(v) {
 
 // Where LMS links should land: Material's page once a skin choice exists
 // (with the Osmium theme pre-selected for new browsers), the bare root
-// (classic skin) on legacy/unset devices.
+// (classic skin) on legacy/unset devices. On a device that follows another
+// server the music lives THERE, so the link follows it — bare root, because
+// the skin choice only applies to this device's own server and /material/
+// need not exist on the other one (a server's root serves its default skin).
 const lmsUrl = computed(() => {
+  if (lms.savedMode === 'follow' && lms.savedHost) return `http://${lms.savedHost}:9000`;
   if (skin.choice === 'osmium') return `http://${host}:9000/material/?defaultTheme=dark/Osmium`;
   if (skin.choice === 'material') return `http://${host}:9000/material/`;
   return `http://${host}:9000`;
@@ -518,6 +588,26 @@ async function setMode(m) {
   const r = await api.sysPost('display_mode', { mode: m });
   if (r.ok && r.data.success !== false) { mode.value = r.data.mode || m; say(bodyMsg(r, t('settings.display.changed'))); }
   else say(bodyMsg(r, t('settings.display.changeFailed')), true);
+}
+
+// ── Quale interfaccia gira sullo schermo ────────────────────────────
+// Electron (quella storica, dentro la sessione lightdm) oppure Qt (disegna
+// diritto su DRM/KMS). Il server filtra l'elenco: `engines` contiene "qt"
+// solo se i suoi file sono davvero installati, così un apparecchio che non ha
+// ancora ricevuto il pacchetto non mostra uno scambio che lo lascerebbe con
+// lo schermo nero.
+const engine = ref('');
+const engines = ref([]);
+async function loadEngine() {
+  const r = await api.sys('ui_engine');
+  if (r.ok) { engine.value = r.data.engine; engines.value = r.data.engines || []; }
+}
+async function setEngine(e) {
+  if (e === engine.value) return;
+  if (!confirm(t('settings.display.confirmEngine'))) return;
+  const r = await api.sysPost('ui_engine', { engine: e });
+  if (r.ok && r.data.success !== false) { engine.value = r.data.engine || e; say(bodyMsg(r, t('settings.display.engineChanged'))); }
+  else say(bodyMsg(r, t('settings.display.engineFailed')), true);
 }
 
 // ── Player enabled/disabled ─────────────────────────────────────────
@@ -619,6 +709,60 @@ async function setVuMeter(enable) {
   else say(bodyMsg(r, t('settings.playback.vuMeterFailed')), true);
 }
 
+// ── VU meter style ─────────────────────────────────────────────────
+// The skins the on-screen interface has installed, as the device lists them
+// (a new one appears here without touching this page). Names come in both
+// languages from the skin itself.
+const vuStyle = ref('classic');
+const vuStyles = ref([]);
+async function loadVuStyle() {
+  const r = await api.sys('vu_style');
+  if (r.ok) { vuStyle.value = r.data.style || 'classic'; vuStyles.value = r.data.styles || []; }
+}
+function vuStyleName(st) { return (st.name && (st.name[lang.value] || st.name.en)) || st.id; }
+async function setVuStyle(style) {
+  if (style === vuStyle.value) return;
+  const r = await api.sysPost('vu_style', { style });
+  if (r.ok && r.data.success !== false) { vuStyle.value = r.data.style; say(bodyMsg(r, t('settings.playback.vuStyleChanged'))); }
+  else say(bodyMsg(r, t('settings.playback.vuMeterFailed')), true);
+}
+
+// ── VU meter store ─────────────────────────────────────────────────
+// More looks published by Osmium Sound, downloaded by the device itself (the
+// list is signed and checked there). Re-read while the device checks the
+// list or installs a skin; a finished install refreshes the styles above.
+const vuStore = reactive({ skins: [], checking: false, busy: false, error: null, loaded: false });
+let vuStorePoll = null;
+async function loadVuStore(markSeen) {
+  const r = await api.sys('vu_store');
+  if (!r.ok) { vuStore.loaded = true; vuStore.checking = false; vuStore.busy = false; return; }
+  const wasBusy = vuStore.busy;
+  Object.assign(vuStore, { skins: r.data.skins || [], checking: !!r.data.checking, busy: !!r.data.busy, error: r.data.error || null, loaded: true });
+  if (wasBusy && !vuStore.busy) loadVuStyle();
+  if (markSeen && vuStore.skins.length) api.sysPost('vu_store/seen', {});
+  if ((vuStore.checking || vuStore.busy) && !vuStorePoll) vuStorePoll = setInterval(() => loadVuStore(false), 1500);
+  if (!vuStore.checking && !vuStore.busy && vuStorePoll) { clearInterval(vuStorePoll); vuStorePoll = null; }
+}
+function vuStoreSize(bytes) {
+  return (Number(bytes || 0) / 1048576).toLocaleString(lang.value, { maximumFractionDigits: 1, minimumFractionDigits: 1 }) + ' MB';
+}
+async function installVuSkin(sk) {
+  const r = await api.sysPost('vu_store/install', { id: sk.id });
+  if (!r.ok || r.data.success === false) say(bodyMsg(r, t('settings.playback.vuStoreFailed')), true);
+  loadVuStore(false);
+}
+async function removeVuSkin(sk) {
+  if (!window.confirm(t('settings.playback.vuStoreRemoveConfirm', { name: vuStyleName(sk) }))) return;
+  const r = await api.sysPost('vu_store/remove', { id: sk.id });
+  if (!r.ok || r.data.success === false) say(bodyMsg(r, t('settings.playback.vuStoreFailed')), true);
+  loadVuStyle(); loadVuStore(false);
+}
+async function checkVuStore() {
+  await api.sysPost('vu_store/check', {});
+  vuStore.checking = true;
+  loadVuStore(false);
+}
+
 // ── Mouse pointer (cursor) — mirrors the kiosk's Settings.jsx pointer
 // toggle. Shown by default (the on-device QR/Wi-Fi wizard needs a visible
 // cursor); a touchscreen owner can hide it here or from the kiosk itself.
@@ -665,7 +809,7 @@ const updBusy = ref(false);
 const kinds = { ui: 'app', system: 'system', os: 'os' };
 const kindLabels = computed(() => ({
   ui: t('settings.updates.kindUi'), system: t('settings.updates.kindSystem'),
-  os: t('settings.updates.kindOs'),
+  os: t('settings.updates.kindOs'), image: t('settings.updates.kindImage'),
 }));
 // Blocking overlay state — mirrors the kiosk's forced update modal: while an
 // apply is running nothing else is clickable, so double-applies can't happen.
@@ -1096,8 +1240,8 @@ async function saveBackupScheduled(v) {
 }
 
 onMounted(async () => {
-  loadNet(); loadAudio(); loadDsp(); loadFir(); loadToggles(); loadShell(); loadLms(); loadLyrion(); loadSkin(); loadPlayback();
-  loadMode(); loadPlayerEnabled(); loadUiRes(); loadUiRefresh(); loadPointer(); loadTimezone(); loadVuMeter(); loadAutoExpand(); loadChannel(); checkAll(); resumePlanIfRunning(); loadBackups(); loadTailscale(); loadDebugFlags();
+  loadNet(); loadIpv4(); loadAudio(); loadDsp(); loadFir(); loadToggles(); loadShell(); loadLms(); loadLyrion(); loadSkin(); loadPlayback();
+  loadMode(); loadEngine(); loadPlayerEnabled(); loadUiRes(); loadUiRefresh(); loadPointer(); loadTimezone(); loadVuMeter(); loadVuStyle(); loadVuStore(true); loadAutoExpand(); loadChannel(); checkAll(); resumePlanIfRunning(); loadBackups(); loadTailscale(); loadDebugFlags();
   timezonePoll = setInterval(pollTimezone, 10000);
   // Tell the global UpdateProgressOverlay (mounted in App.vue) that this page
   // owns the OTA modal while it's open, so the two never render on top of
@@ -1106,7 +1250,7 @@ onMounted(async () => {
 });
 onUnmounted(() => {
   if (lyrionPoll) clearInterval(lyrionPoll); if (skinPoll) clearInterval(skinPoll); if (tailscalePoll) clearInterval(tailscalePoll);
-  if (timezonePoll) clearInterval(timezonePoll);
+  if (timezonePoll) clearInterval(timezonePoll); if (vuStorePoll) clearInterval(vuStorePoll);
   window.dispatchEvent(new CustomEvent('hifi-settings-active', { detail: false }));
 });
 </script>
@@ -1151,6 +1295,36 @@ onUnmounted(() => {
         <label>{{ t('settings.network.passwordLabel') }}</label><input v-model="wifiPass" type="password" />
         <div style="margin-top: 12px;"><button :disabled="netBusy" @click="connectWifi">{{ t('settings.network.connect') }}</button></div>
       </template>
+
+      <!-- Fixed (static) address. Applies to whichever interface is carrying
+           traffic right now, wired or Wi-Fi (named below). -->
+      <div style="margin-top: 18px; padding-top: 16px; border-top: 1px solid rgba(255,255,255,0.1);">
+        <p class="sub">{{ t('settings.network.addressTitle') }}</p>
+        <p class="muted">{{ t('settings.network.addressHint') }}</p>
+        <span class="seg">
+          <button :class="{ active: ipForm.mode === 'auto' }" @click="ipForm.mode = 'auto'">{{ t('settings.network.modeAuto') }}</button>
+          <button :class="{ active: ipForm.mode === 'manual' }" @click="ipForm.mode = 'manual'">{{ t('settings.network.modeStatic') }}</button>
+        </span>
+        <template v-if="ipForm.mode === 'manual'">
+          <label>{{ t('settings.network.addressLabel') }}</label>
+          <input v-model="ipForm.address" placeholder="192.168.1.50" inputmode="decimal" />
+          <label>{{ t('settings.network.prefixLabel') }}</label>
+          <input v-model="ipForm.prefix" type="number" min="1" max="30" />
+          <p class="muted">{{ t('settings.network.prefixHint') }}</p>
+          <label>{{ t('settings.network.gatewayLabel') }}</label>
+          <input v-model="ipForm.gateway" placeholder="192.168.1.1" inputmode="decimal" />
+          <label>{{ t('settings.network.dnsLabel') }}</label>
+          <input v-model="ipForm.dns" placeholder="192.168.1.1, 1.1.1.1" />
+          <p class="muted">{{ t('settings.network.dnsHint') }}</p>
+          <p class="muted">{{ t('settings.network.staticWarn') }}</p>
+        </template>
+        <div style="margin-top: 12px;">
+          <button :disabled="ipBusy" @click="saveIpv4">{{ t('common.save') }}</button>
+        </div>
+        <p class="muted" v-if="ipv4.device" style="margin-top: 8px;">
+          {{ t('settings.network.appliesTo', { device: ipv4.device }) }}
+        </p>
+      </div>
     </div>
 
     <!-- Audio -->
@@ -1374,6 +1548,41 @@ onUnmounted(() => {
           <button :class="{ active: vuMeter }" @click="setVuMeter(true)">{{ t('settings.playback.vuMeterOn') }}</button>
           <button :class="{ active: !vuMeter }" @click="setVuMeter(false)">{{ t('settings.playback.vuMeterOff') }}</button>
         </span>
+        <template v-if="vuMeter && vuStyles.length > 1">
+          <p class="sub" style="margin-top: 14px;">{{ t('settings.playback.vuStyleLabel') }}</p>
+          <p class="muted">{{ t('settings.playback.vuStyleHelp') }}</p>
+          <span class="seg">
+            <button v-for="st in vuStyles" :key="st.id" :class="{ active: vuStyle === st.id }" @click="setVuStyle(st.id)">{{ vuStyleName(st) }}</button>
+          </span>
+        </template>
+
+        <p class="sub" style="margin-top: 14px;">{{ t('settings.playback.vuStoreLabel') }}</p>
+        <p class="muted">{{ t('settings.playback.vuStoreHelp') }}</p>
+        <p v-if="vuStore.error" class="muted" style="color: #f0b4b4;">{{ vuStore.error.message }}</p>
+        <p v-if="!vuStore.skins.length && (!vuStore.loaded || vuStore.checking)" class="muted">{{ t('settings.playback.vuStoreLoading') }}</p>
+        <p v-else-if="!vuStore.skins.length && !vuStore.error" class="muted">{{ t('settings.playback.vuStoreEmpty') }}</p>
+        <div class="vu-store">
+          <div v-for="sk in vuStore.skins" :key="sk.id" class="vu-card" :class="{ fresh: sk.new }">
+            <div class="vu-preview">
+              <img v-if="sk.preview" :src="sk.preview" :alt="vuStyleName(sk)" />
+              <span v-if="sk.new" class="pill gold vu-badge">{{ t('settings.playback.vuStoreNew') }}</span>
+              <span v-else-if="sk.update" class="pill gold vu-badge">{{ t('settings.playback.vuStoreNewVersion') }}</span>
+            </div>
+            <strong>{{ vuStyleName(sk) }}</strong>
+            <span class="muted">{{ [sk.author, vuStoreSize(sk.size)].filter(Boolean).join(' · ') }}</span>
+            <span v-if="sk.jobError" class="muted" style="color: #f0b4b4;">{{ sk.jobError.message }}</span>
+            <button v-if="sk.job === 'downloading' || sk.job === 'installing'" disabled>
+              {{ sk.job === 'downloading' ? t('settings.playback.vuStoreDownloading') : t('settings.playback.vuStoreInstalling') }}
+            </button>
+            <button v-else-if="!sk.supported" class="secondary" disabled>{{ t('settings.playback.vuStoreUnsupported') }}</button>
+            <button v-else-if="sk.update" @click="installVuSkin(sk)">{{ t('settings.playback.vuStoreUpdate') }}</button>
+            <button v-else-if="sk.installed" class="danger" @click="removeVuSkin(sk)">{{ t('settings.playback.vuStoreRemove') }}</button>
+            <button v-else @click="installVuSkin(sk)">{{ t('settings.playback.vuStoreInstall') }}</button>
+          </div>
+        </div>
+        <button v-if="vuStore.loaded && !vuStore.checking && !vuStore.busy" class="ghost" style="margin-top: 10px;" @click="checkVuStore">
+          {{ t('settings.playback.vuStoreCheck') }}
+        </button>
       </div>
 
       <div style="margin-top: 18px; padding-top: 16px; border-top: 1px solid rgba(255,255,255,0.1);">
@@ -1396,6 +1605,17 @@ onUnmounted(() => {
         <button v-else class="secondary" @click="setMode('headless')">{{ t('settings.display.switchToHeadless') }}</button>
       </div>
       <template v-if="mode !== 'headless'">
+        <div v-if="engines.length > 1" style="margin-top: 18px; padding-top: 16px; border-top: 1px solid rgba(255,255,255,0.1);">
+          <p class="sub">{{ t('settings.display.engineLabel') }}</p>
+          <p class="muted">{{ t('settings.display.engineHelp') }}</p>
+          <span class="seg">
+            <button v-for="e in engines" :key="e"
+                    :class="{ active: engine === e }" @click="setEngine(e)">
+              {{ t('settings.display.engine.' + e) }}
+            </button>
+          </span>
+        </div>
+
         <div style="margin-top: 18px; padding-top: 16px; border-top: 1px solid rgba(255,255,255,0.1);">
           <p class="sub">{{ t('settings.display.resolutionLabel') }}</p>
           <p class="muted">{{ t('settings.display.resolutionHelp') }}</p>
@@ -1454,7 +1674,7 @@ onUnmounted(() => {
 
     <!-- Updates -->
     <div class="card" v-if="open === 'updates'">
-      <div class="between item">
+      <div class="between item stack-narrow">
         <span>{{ t('settings.updates.channel') }}
           <span class="pill" :class="{ gold: channel !== 'prod' }">{{ otaChannelLabel(channel) }}</span>
         </span>
@@ -1564,7 +1784,7 @@ onUnmounted(() => {
 
     <!-- device-rebooting overlay: reboot / factory reset / a restore that reboots -->
     <div v-if="rebootWait.active" class="overlay">
-      <div class="card" style="width: 340px; text-align: center;">
+      <div class="card" style="width: 340px; max-width: 92vw; text-align: center;">
         <div class="spinner"></div>
         <h3 style="justify-content: center;">{{ t('settings.system.rebootWaitTitle') }}</h3>
         <p class="sub">{{ rebootWait.phase === 'going-down' ? t('settings.system.rebootGoingDown') : t('settings.system.rebootComingBack') }}</p>
@@ -1574,7 +1794,7 @@ onUnmounted(() => {
 
     <!-- forced blocking update modal (kiosk-style) -->
     <div v-if="applying.active" class="overlay">
-      <div class="card" style="width: 340px; text-align: center;">
+      <div class="card" style="width: 340px; max-width: 92vw; text-align: center;">
         <template v-if="applying.state !== 'done' && applying.state !== 'error' && applying.state !== 'apply_error'">
           <div class="spinner"></div>
           <h3 style="justify-content: center;">{{ t('settings.updates.updating', { label: applying.label }) }}</h3>

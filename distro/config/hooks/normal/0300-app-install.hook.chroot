@@ -32,6 +32,22 @@ chmod +x /usr/local/sbin/hifi-ota-update.sh /usr/local/sbin/hifi-lyrion-update.s
 echo "I: [hifi] seeding UI_VERSION if missing"
 [ -f "$APPDIR/UI_VERSION" ] || echo "unknown" > "$APPDIR/UI_VERSION"
 
+# 🚨 Il permesso di esecuzione va rimesso qui: in CI il pacchetto Qt arriva
+# come artefatto e gli artefatti non lo conservano. Deve succedere prima del
+# hook 0400, che sceglie l'interfaccia predefinita guardando proprio se il
+# programma e' eseguibile.
+if [ -f /opt/hifi-qt/hifi-qt ]; then
+    echo "I: [hifi] finalising the Qt on-screen UI"
+    chmod 755 /opt/hifi-qt/hifi-qt
+    if [ -f /opt/hifi-qt/hifi-media-player ]; then
+        chmod 755 /opt/hifi-qt/hifi-media-player
+    fi
+    mkdir -p /etc/hifi-player
+    if [ ! -f /etc/hifi-player/UI_VERSION ] && [ -f "$APPDIR/UI_VERSION" ]; then
+        cp "$APPDIR/UI_VERSION" /etc/hifi-player/UI_VERSION
+    fi
+fi
+
 echo "I: [hifi] seeding SYSTEM_VERSION if missing"
 mkdir -p /etc/hifi-player
 [ -f /etc/hifi-player/SYSTEM_VERSION ] || echo "unknown" > /etc/hifi-player/SYSTEM_VERSION

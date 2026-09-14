@@ -64,6 +64,13 @@ jobs:
             exit 1
           fi
 
+      - name: Build the Qt on-screen interface payload (/opt/hifi-qt)
+        # 🚨 Fonte unica con l'immagine ISO (build-iso.yml, lavoro qt-payload):
+        # compilazione su base Debian 13 dentro docker e composizione del
+        # pacchetto stanno in un solo script, cosi' l'aggiornamento e l'immagine
+        # non possono divergere. Questo lavoro NON gira dentro un contenitore:
+        # allo script serve docker.
+        run: bash native-ui-qt/ci/build-payload.sh qtui
       - name: Resolve version
         id: ver
         run: |
@@ -111,10 +118,19 @@ jobs:
       - name: Package UI OTA bundle (tarball + sha256)
         id: pack
         run: |
+          # 🚨 Da 2.5.24 il canale "ui" porta l'interfaccia Qt (/opt/hifi-qt),
+          # non piu' l'app Electron: e' quella che si aggiorna d'ora in poi.
+          # hifi-ota-update.sh sull'apparecchio riconosce i due contenuti dal
+          # loro eseguibile (hifi-qt oppure hifi-media-player), quindi i
+          # pacchetti gia' pubblicati restano installabili.
           VERSION="${{ steps.ver.outputs.version }}"
-          printf '%s\n' "$VERSION" > dist/linux-unpacked/UI_VERSION
-          TAR="hifi-ui-${VERSION}.tar.gz"
-          tar czf "$TAR" -C dist/linux-unpacked .
+          [ -x qtui/hifi-qt ] || { echo "::error::qtui/hifi-qt mancante — l'interfaccia Qt non e' stata costruita" >&2; exit 1; }
+          printf '%s\n' "$VERSION" > qtui/UI_VERSION
+          # nome NUOVO: l'aggiornatore vecchio rifiuterebbe un pacchetto senza
+          # Electron e bloccherebbe tutto l'aggiornamento; non trovando
+          # `hifi-ui-` quegli apparecchi saltano il passo e lo prendono al giro dopo
+          TAR="hifi-qtui-${VERSION}.tar.gz"
+          tar czf "$TAR" -C qtui .
           sha256sum "$TAR" > "${TAR}.sha256"
           echo "tarball=$TAR" >> "$GITHUB_OUTPUT"
 
@@ -144,13 +160,75 @@ jobs:
           # into Lyrion's prefs by sources_server.py's lms_skin logic.
           mkdir -p "$ROOT/usr/local/share"
           cp -r distro/config/includes.chroot/usr/local/share/hifi-lms-skin "$ROOT/usr/local/share/"
-          # systemd units
+          # Schema A/B (RAUC): template del selettore GRUB e di system.conf, initrd
+          # di conversione, keyring pubblica con cui l'apparecchio accetta i bundle.
+          cp -r distro/config/includes.chroot/usr/local/share/hifi-ab "$ROOT/usr/local/share/"
+          cp distro/rauc-keys/keyring.pem "$ROOT/usr/local/share/hifi-ab/keyring.pem"
+          # systemd units (+ timer)
           cp distro/config/includes.chroot/etc/systemd/system/*.service "$ROOT/etc/systemd/system/"
+          cp distro/config/includes.chroot/etc/systemd/system/*.timer "$ROOT/etc/systemd/system/" 2>/dev/null || true
+          # Interfaccia Qt (seconda interfaccia su schermo, scelta da
+          # /etc/hifi-player/ui-engine). Sta nel pacchetto di SISTEMA e non in
+          # quello UI perché il bundle "ui" viene scompattato per intero su
+          # /opt/hifi-media-player (è l'app Electron e basta), mentre questo
+          # arriva con i suoi percorsi. Il file dell'unità è già incluso qui
+          # sotto insieme agli altri .service: resta DISABILITATA finché non la
+          # si sceglie, così un apparecchio che si aggiorna non cambia
+          # interfaccia da solo.
+          # (l'interfaccia Qt non sta piu' qui: viaggia nel canale interfaccia)
           printf '%s\n' "$VERSION" > "$ROOT/SYSTEM_VERSION"
           TAR="hifi-system-${VERSION}.tar.gz"
           tar czf "$TAR" -C "$ROOT" .
           sha256sum "$TAR" > "${TAR}.sha256"
           echo "tarball=$TAR" >> "$GITHUB_OUTPUT"
+
+      - name: The migration to A/B must never fall out of a release
+        # 🚨 A device can sit switched off for a year and then jump straight to
+        # the newest release: there is no replay of the versions in between.
+        # So EVERY release has to carry the conversion with it, exactly like
+        # apply.sh has to stay cumulative. If these files ever stop shipping,
+        # every appliance still on the old layout is stranded there for good --
+        # and nothing else would notice, because converted devices do not use
+        # them. Hence a hard check on the packaged tarball, not on the repo.
+        run: |
+          set -euo pipefail
+          TAR="${{ steps.packsys.outputs.tarball }}"
+          [ -f "$TAR" ] || { echo "::error::system tarball missing"; exit 1; }
+          # 🚨 The listing goes to a FILE, and grep reads that file. With
+          # `tar tzf ... | grep -q`, grep leaves as soon as it matches, tar dies
+          # of SIGPIPE, and under `set -o pipefail` the pipeline reports failure
+          # precisely when the file WAS found — which is how this check first
+          # reported every single file as missing.
+          tar tzf "$TAR" > /tmp/sysbundle.list
+          MISSING=""
+          for f in \
+            ./usr/local/sbin/hifi-ab-precheck.sh \
+            ./usr/local/sbin/hifi-ab-convert.sh \
+            ./usr/local/sbin/hifi-ab-seed.sh \
+            ./usr/local/sbin/hifi-ab-media.py \
+            ./usr/local/sbin/hifi-ab-firstboot.sh \
+            ./usr/local/sbin/hifi-ab-image.sh \
+            ./usr/local/sbin/hifi-ab-lib.sh \
+            ./usr/local/sbin/hifi-image-update.sh \
+            ./usr/local/share/hifi-ab/grub-selector.cfg.tmpl \
+            ./usr/local/share/hifi-ab/system.conf.tmpl \
+            ./usr/local/share/hifi-ab/keyring.pem \
+            ./usr/local/share/hifi-ab/initramfs/hooks/hifi-ab \
+            ./usr/local/share/hifi-ab/initramfs/scripts/local-premount/hifi-ab-convert \
+            ./etc/systemd/system/hifi-ab-finish.service \
+            ./etc/systemd/system/hifi-ab-image.service ; do
+            grep -qx -- "$f" /tmp/sysbundle.list || MISSING="$MISSING $f"
+          done
+          if [ -n "$MISSING" ]; then
+            echo "::error::the system bundle no longer carries the A/B migration:$MISSING"
+            exit 1
+          fi
+          # and the OS payload must still arm it
+          grep -q 'hifi-ab-convert.sh' distro/config/includes.chroot/usr/local/sbin/hifi-update-apply-runner.sh \
+            || { echo "::error::the apply runner no longer arms the A/B conversion"; exit 1; }
+          [ -s distro/os-update/apply.d/0061-ab-prepare.sh ] \
+            || { echo "::error::apply.d/0061-ab-prepare.sh is gone: legacy devices would never get rauc"; exit 1; }
+          echo "migration present in $TAR"
 
       - name: Test the OTA update sequencer + system settings
         # The two-phase sequencer is what keeps a multi-component update from
@@ -166,11 +244,29 @@ jobs:
           sh tests/test-update-stage-runner.sh
           echo "== apply sequencer (shell) =="
           sh tests/test-update-apply-runner.sh
+          echo "== add-on guardian (shell) =="
+          sh tests/test-ext-guardian.sh
+          echo "== apt shim (shell) =="
+          sh tests/test-apt-shim.sh
+          echo "== factory reset (shell) =="
+          bash tests/test-factory-reset.sh
+          echo "== lyrion bootstrap (shell) =="
+          bash tests/test-lyrion-ensure.sh
+          echo "== streaming read-ahead (shell) =="
+          bash tests/test-stream-tune.sh
+          echo "== music off the legacy root (shell) =="
+          bash tests/test-ab-media.sh
+          echo "== second chance at the A/B switch (shell) =="
+          bash tests/test-ab-image.sh
           echo "== update plan (python) =="
           python3 -m pip install --quiet flask flask-cors
           python3 tests/test_update_plan.py
           echo "== timezone (python) =="
           python3 tests/test_timezone.py
+          echo "== static IPv4 (python) =="
+          python3 tests/test_static_ipv4.py
+          echo "== lyrion server role (python) =="
+          python3 tests/test_lms_role.py
 
       - name: Stage LMS skin assets into the OS payload
         # apply.d/0048-lms-skin-assets.sh installs these; they are deliberately
@@ -227,7 +323,23 @@ jobs:
             distro/config/includes.chroot/usr/local/sbin/hifi-os-update.sh \
             distro/config/includes.chroot/usr/local/sbin/hifi-ota-enroll-key.sh \
             distro/config/includes.chroot/usr/local/sbin/hifi-ota-alpha-toggle.sh \
-            tests/test-update-stage-runner.sh tests/test-update-apply-runner.sh
+            distro/config/includes.chroot/usr/local/sbin/hifi-ab-lib.sh \
+            distro/config/includes.chroot/usr/local/sbin/hifi-ab-precheck.sh \
+            distro/config/includes.chroot/usr/local/sbin/hifi-ab-convert.sh \
+            distro/config/includes.chroot/usr/local/sbin/hifi-ab-seed.sh \
+            distro/config/includes.chroot/usr/local/sbin/hifi-ab-firstboot.sh \
+            distro/config/includes.chroot/usr/local/sbin/hifi-ab-image.sh \
+            distro/config/includes.chroot/usr/local/sbin/hifi-image-update.sh \
+            distro/config/includes.chroot/usr/local/sbin/hifi-stream-tune.sh \
+            distro/config/includes.chroot/usr/local/sbin/hifi-ext.sh \
+            distro/config/includes.chroot/usr/local/bin/apt \
+            distro/config/includes.chroot/usr/local/sbin/hifi-factory-reset.sh \
+            distro/config/includes.chroot/etc/initramfs-tools/scripts/local-bottom/hifi-state \
+            tests/test-update-stage-runner.sh tests/test-update-apply-runner.sh \
+            distro/config/includes.chroot/usr/local/sbin/hifi-lyrion-ensure.sh \
+            tests/test-ext-guardian.sh tests/test-apt-shim.sh tests/test-factory-reset.sh \
+            tests/test-lyrion-ensure.sh tests/test-stream-tune.sh tests/test-ab-media.sh \
+            tests/test-ab-image.sh distro/config/includes.chroot/usr/local/sbin/hifi-ab-image.sh
           echo "== idempotency (run apply.sh twice) =="
           export HIFI_OS_VERSION=ci-test
           export HIFI_PAYLOAD_DIR="$PWD/distro/os-update"
@@ -294,27 +406,33 @@ jobs:
           chmod +x "$OUT"
           echo "installer=$OUT" >> "$GITHUB_OUTPUT"
 
-      - name: Publish to GitHub Release
-        if: github.ref_type == 'tag'
-        uses: softprops/action-gh-release@v2
+      - name: Keep the bundles + Qt payload for the image job
+        uses: actions/upload-artifact@v4
         with:
-          # A tag with a hyphen (e.g. v2.5.7-dev.1) is a prerelease → the dev
-          # OTA channel. GitHub's /releases/latest (used by the prod channel)
-          # ignores prereleases, so dev builds never reach prod devices.
-          prerelease: ${{ contains(github.ref_name, '-') }}
-          body_path: ${{ steps.changelog.outputs.file }}
-          # The installer glob matches only on dev tags (built above); on prod
-          # tags it matches nothing and is silently skipped.
-          fail_on_unmatched_files: false
-          files: |
-            ${{ steps.pack.outputs.tarball }}
-            ${{ steps.pack.outputs.tarball }}.sha256
-            ${{ steps.packsys.outputs.tarball }}
-            ${{ steps.packsys.outputs.tarball }}.sha256
-            ${{ steps.packos.outputs.tarball }}
-            ${{ steps.packos.outputs.tarball }}.sha256
-            ${{ steps.packos.outputs.tarball }}.sha256.sig
+          name: ota-bundles
+          path: |
+            hifi-qtui-*.tar.gz*
+            hifi-system-*.tar.gz*
+            hifi-os-*.tar.gz*
             hifi-install-*.sh
+            CHANGELOG_RELEASE.md
+          retention-days: 3
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        with:
+          name: qt-payload
+          path: qtui
+          retention-days: 1
+          if-no-files-found: error
+
+      # 🚨 Qui NON si pubblica più niente. Questo lavoro finisce ~35 minuti
+      # prima dell'immagine, e pubblicare qui significava mostrare alla flotta
+      # una release che un apparecchio ancora sul vecchio schema poteva
+      # applicare, convertendosi, per poi cercare un'immagine che non esisteva
+      # ancora. La bozza sembrava la risposta, ma una release in bozza non è
+      # raggiungibile per tag dall'API e l'azione ne creava una seconda,
+      # vuota. Quindi: la release NASCE alla fine, già completa, nel lavoro
+      # publish-image — che riceve questi stessi file come artefatto.
 
       # Publish a static release manifest to GitHub Pages so the appliance's
       # update check reads from a CDN (not rate-limited) instead of the
@@ -343,8 +461,12 @@ jobs:
       # redeploys on its own from here; see OTA_MANIFEST_BASE in
       # api_server.py for why GitHub Pages itself is no longer in the loop
       # (its custom-domain cert got permanently stuck).
+      # Il manifest è ciò che l'apparecchio legge davvero, quindi non deve
+      # nominare una release che ancora non esiste: per i tag che avranno
+      # un'immagine lo pubblica il lavoro finale, insieme alla release. Qui
+      # resta solo per i companion, che un'immagine non ce l'hanno.
       - name: Push OTA manifest to gh-pages branch
-        if: github.ref_type == 'tag'
+        if: ${{ github.ref_type == 'tag' && contains(github.ref_name, 'companion') }}
         uses: peaceiris/actions-gh-pages@v4
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
@@ -367,3 +489,304 @@ jobs:
             ${{ steps.packos.outputs.tarball }}.sha256
             ${{ steps.packos.outputs.tarball }}.sha256.sig
           retention-days: 7
+
+  # ── Immagine RAUC (schema A/B): squashfs + bundle firmato, allegata alla stessa Release ──
+  # In un container Debian 13 (live-build, rauc 1.13). Parte dopo il job dei
+  # bundle (riusa il payload Qt) e alla fine RIPUBBLICA il manifest del canale
+  # con l'asset hifi-image-<ver>.raucb: gli apparecchi convertiti lo vedono
+  # come step `image` (RAUC lo installa in streaming), i legacy lo ignorano.
+  image:
+    runs-on: ubuntu-latest
+    needs: build-ui-ota
+    if: ${{ !contains(github.ref, 'companion') }}
+    timeout-minutes: 120
+    defaults:
+      run:
+        shell: bash
+    container:
+      image: debian:trixie
+      options: --privileged
+      volumes:
+        - /mnt:/mnt
+    steps:
+      - name: Install base tooling
+        run: |
+          set -eux
+          export DEBIAN_FRONTEND=noninteractive
+          apt-get update -qq
+          apt-get install -y --no-install-recommends \
+            ca-certificates curl git xz-utils sudo python3 build-essential \
+            live-build imagemagick xorriso debootstrap debian-archive-keyring rsync fakeroot \
+            cpio gzip squashfs-tools dosfstools mtools isolinux syslinux-common \
+            rauc e2fsprogs zstd grub-common openssl initramfs-tools-core
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      - run: npm ci
+      - name: Build renderer + unpacked Electron app
+        run: |
+          npm run build
+          npx electron-builder --linux dir
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - uses: actions/download-artifact@v8
+        with:
+          name: qt-payload
+          path: qtui
+      - run: chmod 755 qtui/hifi-qt
+      - name: Build web-admin (Vue)
+        run: (cd admin-webui && npm ci && npm run build)
+      - name: Resolve version
+        id: ver
+        run: |
+          if [ "${GITHUB_REF_TYPE}" = "tag" ]; then V="${GITHUB_REF_NAME}"; else V="$(node -p "require('./package.json').version")-ci"; fi
+          echo "version=$V" >> "$GITHUB_OUTPUT"
+      - name: Build the RAUC slot image
+        env:
+          INPUT_VERSION: ${{ steps.ver.outputs.version }}
+          RAUC_SIGNING_CERT: ${{ secrets.RAUC_SIGNING_CERT }}
+          RAUC_SIGNING_KEY: ${{ secrets.RAUC_SIGNING_KEY }}
+        run: |
+          set -euo pipefail
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          mkdir -p /mnt/image-out
+          export IMAGE_OUT=/mnt/image-out IMAGE_WORK=/mnt IMAGE_VERSION="$INPUT_VERSION"
+          chmod +x distro/build-distro.sh distro/build-image.sh
+          cd distro
+          ./build-distro.sh --stage image --suite trixie \
+            --app-dir "$GITHUB_WORKSPACE/dist/linux-unpacked" --qt-dir "$GITHUB_WORKSPACE/qtui" \
+            --app-version "${INPUT_VERSION#v}"
+          ls -lh /mnt/image-out
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ab-image
+          path: /mnt/image-out/hifi-image-*
+          retention-days: 14
+          if-no-files-found: error
+
+  # Unico punto in cui una release viene creata: quando c'è tutto.
+  publish-image:
+    runs-on: ubuntu-latest
+    needs: [build-ui-ota, image]
+    # Gira anche quando l'immagine è stata saltata — i tag del companion non ne
+    # hanno una — perché da qui in poi questo è l'UNICO punto che pubblica: se
+    # non girasse, quelle release non nascerebbero affatto. Non gira invece se
+    # l'immagine è FALLITA: una release a metà non deve esistere.
+    if: ${{ always() && github.ref_type == 'tag' && needs.build-ui-ota.result == 'success' && (needs.image.result == 'success' || needs.image.result == 'skipped') }}
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
+        # assente sui tag del companion, dove il lavoro dell'immagine non gira
+        continue-on-error: true
+        with:
+          name: ab-image
+          path: .
+      - uses: actions/download-artifact@v8
+        with:
+          name: ota-bundles
+          path: .
+      # NB: every line inside `files:` below is a glob, not a place for
+      # comments — a commented line there is looked up as a filename and,
+      # with fail_on_unmatched_files, fails the step. Hence this note lives
+      # here. The build-info is attached because on an A/B system the kernel
+      # ships inside the image and is never upgraded on the device, so the only
+      # honest answer to "what is my fleet running" is what was recorded when
+      # the image was built.
+      - name: Create the release, complete, in one go
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          prerelease: ${{ contains(github.ref_name, '-') }}
+          body_path: CHANGELOG_RELEASE.md
+          # Le due famiglie insieme: i pacchetti per chi è ancora sul vecchio
+          # schema e l'immagine per chi è già A/B. Una release a metà non deve
+          # esistere affatto, perché metà della flotta non potrebbe usarla.
+          fail_on_unmatched_files: false
+          files: |
+            hifi-qtui-*.tar.gz
+            hifi-qtui-*.tar.gz.sha256
+            hifi-system-*.tar.gz
+            hifi-system-*.tar.gz.sha256
+            hifi-os-*.tar.gz
+            hifi-os-*.tar.gz.sha256
+            hifi-os-*.tar.gz.sha256.sig
+            hifi-install-*.sh
+            hifi-image-*.raucb
+            hifi-image-*.raucb.sha256
+            hifi-image-*.info.txt
+            hifi-image-*.build-info.txt
+      # Stable releases are ALSO served from file.osmiumsound.it (Cloudflare
+      # R2, the host the ISO and the flasher already come from): GitHub's
+      # release CDN resets connections from some networks and is slow for the
+      # range-streamed .raucb install. The GitHub Release above stays complete
+      # as the mirror and as the fallback of devices that cannot reach the
+      # manifest. dev/alpha builds stay on GitHub only.
+      # Layout: ota/<tag>/<asset>, asset names untouched (the OS signature is
+      # bound to the file name on the device). Immutable per tag, so the CDN
+      # may cache the payloads for good; the manifest below goes out no-cache.
+      # A missing upload fails the job: the manifest must never point at a
+      # file that is not there.
+      - name: Upload the stable release to file.osmiumsound.it
+        if: ${{ !contains(github.ref_name, '-') }}
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: auto
+          AWS_EC2_METADATA_DISABLED: "true"
+          R2_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
+          R2_BUCKET: osmium-sound-iso-beta
+          PUBLIC_BASE: https://file.osmiumsound.it
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          if [ -z "$AWS_ACCESS_KEY_ID" ] || [ -z "$AWS_SECRET_ACCESS_KEY" ] || [ -z "$R2_ENDPOINT" ]; then
+            echo "::error::R2 secrets (R2_ACCESS_KEY_ID / R2_SECRET_ACCESS_KEY / R2_ENDPOINT) are not set: a stable release cannot be published"
+            exit 1
+          fi
+          ctype() {
+            case "$1" in
+              *.tar.gz) echo application/gzip ;;
+              *.sha256|*.txt) echo text/plain ;;
+              *) echo application/octet-stream ;;
+            esac
+          }
+          for f in hifi-qtui-"$TAG".tar.gz hifi-qtui-"$TAG".tar.gz.sha256 \
+                   hifi-system-"$TAG".tar.gz hifi-system-"$TAG".tar.gz.sha256 \
+                   hifi-os-"$TAG".tar.gz hifi-os-"$TAG".tar.gz.sha256 hifi-os-"$TAG".tar.gz.sha256.sig \
+                   hifi-image-"$TAG".raucb hifi-image-"$TAG".raucb.sha256 \
+                   hifi-image-"$TAG".info.txt hifi-image-"$TAG".build-info.txt; do
+            [ -f "$f" ] || { echo "::error::$f is missing from the build output"; exit 1; }
+            aws s3 cp "$f" "s3://$R2_BUCKET/ota/$TAG/$f" --endpoint-url "$R2_ENDPOINT" \
+              --content-type "$(ctype "$f")" --cache-control "public, max-age=31536000, immutable" --only-show-errors
+            # what a device will actually see, not what the API said
+            curl -fsSI --retry 3 "$PUBLIC_BASE/ota/$TAG/$f" >/dev/null \
+              || { echo "::error::$PUBLIC_BASE/ota/$TAG/$f is not served after the upload"; exit 1; }
+          done
+          echo "stable release $TAG is on $PUBLIC_BASE/ota/$TAG/"
+      - name: Rebuild the OTA Pages manifest with the image asset
+        id: manifest
+        run: |
+          set -e
+          V="${GITHUB_REF_NAME}"
+          case "$V" in
+            *-alpha[0-9]*) CH=alpha ;;
+            *-*)           CH=dev ;;
+            *)             CH=prod ;;
+          esac
+          # stable: the manifest sends the devices to file.osmiumsound.it
+          # (uploaded and checked in the step above); dev/alpha: GitHub
+          if [ "$CH" = prod ]; then export OTA_ASSET_BASE="https://file.osmiumsound.it/ota/$V"; fi
+          UI=$(ls hifi-qtui-*.tar.gz hifi-ui-*.tar.gz 2>/dev/null | head -n 1)
+          RAUCB=$(ls hifi-image-*.raucb | head -n 1)
+          EXTRA_ASSETS="$RAUCB $RAUCB.sha256" python3 .github/scripts/make-ota-manifest.py \
+            "$V" "${{ github.repository }}" "$CH" "$UI" "hifi-system-$V.tar.gz" "hifi-os-$V.tar.gz" CHANGELOG_RELEASE.md
+          cat "manifest-out/latest-$CH.json"
+      # A copy of the stable manifest next to the payloads: a device that has
+      # this release (api_server: OTA_PROD_MIRROR_BASE) reads it when the
+      # Pages manifest is unreachable, before resorting to the GitHub API.
+      - name: Mirror the stable manifest next to the payloads
+        if: ${{ !contains(github.ref_name, '-') }}
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: auto
+          AWS_EC2_METADATA_DISABLED: "true"
+          R2_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
+          R2_BUCKET: osmium-sound-iso-beta
+        run: |
+          set -euo pipefail
+          aws s3 cp manifest-out/latest-prod.json "s3://$R2_BUCKET/ota/latest-prod.json" --endpoint-url "$R2_ENDPOINT" \
+            --content-type application/json --cache-control no-cache --only-show-errors
+          curl -fsS --retry 3 https://file.osmiumsound.it/ota/latest-prod.json | python3 -c 'import json,sys; d=json.load(sys.stdin); print("mirror manifest:", d["tag_name"])'
+      - name: Publish the manifest
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./manifest-out
+          publish_branch: gh-pages
+          destination_dir: ota
+          keep_files: true
+          enable_jekyll: false
+          commit_message: "ota: manifest ${{ github.ref_name }} (+ immagine RAUC)"
+
+  # 🚨 A release has to serve BOTH worlds, always. We cannot know when a given
+  # owner will update, or whether they will have migrated by then: a device
+  # still on the old layout looks for hifi-qtui/system/os tarballs, one already
+  # on A/B looks for the .raucb, and whichever family is missing makes that
+  # half of the fleet see "you are up to date" forever. It is a silent failure
+  # — nothing errors, the update simply never appears — and it nearly shipped
+  # tonight, when the image job stopped and the release stayed published with
+  # the legacy bundles alone. So the run does not end green unless every asset
+  # a device could be looking for is actually on the release.
+  verify-release:
+    runs-on: ubuntu-latest
+    needs: [build-ui-ota, image, publish-image]
+    if: ${{ always() && startsWith(github.ref, 'refs/tags/') && !contains(github.ref, 'companion') }}
+    steps:
+      - name: Both the old and the new devices must find their update
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          gh release view "$TAG" -R "${{ github.repository }}" --json assets -q '.assets[].name' > /tmp/assets.list || true
+          cat /tmp/assets.list
+          MISSING=""
+          for want in \
+            "hifi-qtui-$TAG.tar.gz" "hifi-qtui-$TAG.tar.gz.sha256" \
+            "hifi-system-$TAG.tar.gz" "hifi-system-$TAG.tar.gz.sha256" \
+            "hifi-os-$TAG.tar.gz" "hifi-os-$TAG.tar.gz.sha256" "hifi-os-$TAG.tar.gz.sha256.sig" \
+            "hifi-image-$TAG.raucb" "hifi-image-$TAG.raucb.sha256" ; do
+            grep -qx -- "$want" /tmp/assets.list || MISSING="$MISSING $want"
+          done
+          if [ -n "$MISSING" ]; then
+            echo "::error::release $TAG is incomplete:$MISSING — devices on the old layout and devices already on A/B must BOTH find their update in every release"
+            exit 1
+          fi
+          DRAFT=$(gh release view "$TAG" -R "${{ github.repository }}" --json isDraft -q .isDraft 2>/dev/null || echo true)
+          if [ "$DRAFT" != "false" ]; then
+            echo "::error::release $TAG is not visible to the devices (draft, or missing)"
+            exit 1
+          fi
+          echo "release $TAG serves both the old and the new layout, and is visible"
+          # Stable releases are downloaded from file.osmiumsound.it: the same
+          # nine files must answer there, the .raucb must take range requests
+          # (rauc streams it), and the manifest a stable device reads must
+          # point at that host — otherwise the fleet gets "up to date" forever
+          # or, worse, a manifest full of dead links.
+          case "$TAG" in *-*) exit 0 ;; esac
+          BASE="https://file.osmiumsound.it/ota/$TAG"
+          MISSING=""
+          for want in \
+            "hifi-qtui-$TAG.tar.gz" "hifi-qtui-$TAG.tar.gz.sha256" \
+            "hifi-system-$TAG.tar.gz" "hifi-system-$TAG.tar.gz.sha256" \
+            "hifi-os-$TAG.tar.gz" "hifi-os-$TAG.tar.gz.sha256" "hifi-os-$TAG.tar.gz.sha256.sig" \
+            "hifi-image-$TAG.raucb" "hifi-image-$TAG.raucb.sha256" ; do
+            curl -fsSI --retry 3 "$BASE/$want" >/dev/null || MISSING="$MISSING $want"
+          done
+          if [ -n "$MISSING" ]; then
+            echo "::error::release $TAG is incomplete on file.osmiumsound.it:$MISSING"
+            exit 1
+          fi
+          CODE=$(curl -s -o /dev/null -w '%{http_code}' -r 0-1023 "$BASE/hifi-image-$TAG.raucb")
+          if [ "$CODE" != "206" ]; then
+            echo "::error::$BASE/hifi-image-$TAG.raucb does not serve range requests (HTTP $CODE): rauc cannot stream it"
+            exit 1
+          fi
+          curl -fsS --retry 3 https://file.osmiumsound.it/ota/latest-prod.json > /tmp/mirror.json
+          python3 - "$TAG" "$BASE" <<'PY'
+          import json, sys
+          tag, base = sys.argv[1], sys.argv[2]
+          d = json.load(open('/tmp/mirror.json'))
+          bad = [a['browser_download_url'] for a in d['assets'] if not a['browser_download_url'].startswith(base + '/')]
+          if d.get('tag_name') != tag or bad:
+              print(f"::error::mirror manifest is wrong: tag_name={d.get('tag_name')} off-host={bad}")
+              sys.exit(1)
+          print(f"mirror manifest {tag}: {len(d['assets'])} assets on {base}")
+          PY
+          echo "release $TAG is complete on file.osmiumsound.it"

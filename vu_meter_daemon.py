@@ -524,6 +524,23 @@ class BluetoothTapReader:
         return visualizer._stereo_levels_from_values_py(list(samples))
 
 
+# Main-loop cadence. Full rate whenever something is actually feeding the
+# meters; slower once playback has been sitting still for a while, since a UI
+# left on Now Playing keeps a client connected for the whole pause and every
+# one of those frames carries the same zeroed levels. The idle rate is kept
+# deliberately close to full rate: resuming costs at most one idle tick before
+# the loop is back at 30 fps, and both clients already throttle incoming
+# levels to 20 Hz and interpolate the needle with their own spring, so that
+# tick is shorter than anything the needle can render.
+_FRAME_INTERVAL = 0.033
+_IDLE_INTERVAL = 0.1
+# Idle frames served at full rate before slowing down. The needle must first
+# receive the zeroed levels (read_audio_data only zeroes them after
+# same_index_count > 10, i.e. ~0.33s into the pause), and this also keeps the
+# short buffer stalls between tracks from flapping the cadence.
+_IDLE_SETTLE_FRAMES = 15
+
+
 async def vu_meter_server(websocket, path=None):
     """WebSocket handler to stream VU meter data.
 
@@ -546,10 +563,14 @@ async def vu_meter_server(websocket, path=None):
         left, right = stereo_levels
         return json.dumps({"levels_l": left, "levels_r": right, "active": active})
 
+    # Consecutive frames with no source feeding the meters. Only the branches
+    # below that actually found a live source reset it, so any signal at all
+    # puts the very next sleep back at full rate.
+    idle_frames = 0
+
     try:
         while True:
-            # 30 fps = ~0.033s sleep
-            await asyncio.sleep(0.033)
+            await asyncio.sleep(_IDLE_INTERVAL if idle_frames > _IDLE_SETTLE_FRAMES else _FRAME_INTERVAL)
 
             levels = viz.read_audio_data()
             # same_index_count > 10 means squeezelite's buffer isn't moving
@@ -559,15 +580,19 @@ async def vu_meter_server(websocket, path=None):
             sq_active = levels is not None and viz.same_index_count <= 10
 
             if sq_active:
+                idle_frames = 0
                 active = any(l > 0 for l in levels[0]) or any(l > 0 for l in levels[1])
                 await websocket.send(_payload(levels, active))
                 continue
 
             bt_levels = bt_tap.read_levels(viz)
             if bt_levels is not None:
+                idle_frames = 0
                 active = any(l > 0 for l in bt_levels[0]) or any(l > 0 for l in bt_levels[1])
                 await websocket.send(_payload(bt_levels, active))
                 continue
+
+            idle_frames += 1
 
             if levels is None:
                 # Shared memory not found or error, send zeros

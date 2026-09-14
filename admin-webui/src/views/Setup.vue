@@ -143,8 +143,12 @@ async function chooseSkin(v) {
 }
 
 // Where "Open Lyrion" should land: Material's page once a skin choice exists,
-// the bare root (classic skin) on legacy/unset devices.
+// the bare root (classic skin) on legacy/unset devices. When this device
+// follows a server on the network the music is on THAT one, so the link goes
+// there instead — bare root, since the skin choice above only applies to this
+// device's own server and /material/ need not exist on the other one.
 const lmsUrl = computed(() => {
+  if (lmsMode.value === 'follow' && lmsHost.value) return `http://${lmsHost.value}:9000`;
   if (skinChoice.value === 'osmium') return `http://${host.value}:9000/material/?defaultTheme=dark/Osmium`;
   if (skinChoice.value === 'material') return `http://${host.value}:9000/material/`;
   return `http://${host.value}:9000`;
@@ -247,7 +251,7 @@ async function finish() {
         </div>
         <p v-if="!lmsServers.length" class="muted">{{ lmsBusy ? t('setup.lyrionSearching') : t('setup.lyrionNoneFound') }}</p>
         <label>{{ t('setup.lyrionServerIp') }}</label>
-        <input v-model="lmsHost" placeholder="192.168.1.10" />
+        <input v-model="lmsHost" placeholder="192.168.1.10 / nas.local" />
         <div class="row" style="margin-top: 10px;">
           <button class="secondary" :disabled="lmsBusy" @click="discoverLms">{{ t('setup.lyrionSearch') }}</button>
           <button :disabled="lmsBusy || !lmsHost" @click="useExternalLms">{{ t('setup.lyrionUseExternal') }}</button>

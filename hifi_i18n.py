@@ -30,6 +30,30 @@ MESSAGES = {
     'network.wiredConnected': {'en': 'Connected via cable', 'it': 'Connesso via cavo'},
     'network.cableNotConnected': {'en': 'Cable not connected', 'it': 'Cavo non connesso'},
 
+    # ── Fixed (static) IPv4 address ─────────────────────────────────
+    'network.noActiveConnection': {'en': 'No active network connection',
+                                   'it': 'Nessuna connessione di rete attiva'},
+    'network.noProfile': {'en': 'No network profile found for {device}',
+                          'it': 'Nessun profilo di rete trovato per {device}'},
+    'network.invalidMode': {'en': 'Invalid mode: {mode}', 'it': 'Modalità non valida: {mode}'},
+    'network.invalidAddress': {'en': 'Invalid IP address: {address}',
+                               'it': 'Indirizzo IP non valido: {address}'},
+    'network.invalidPrefix': {'en': 'Invalid network prefix: {prefix} (use 1–30)',
+                              'it': 'Prefisso di rete non valido: {prefix} (usa 1–30)'},
+    'network.unusableAddress': {'en': '{address} cannot be assigned to this device',
+                                'it': '{address} non può essere assegnato a questo dispositivo'},
+    'network.invalidGateway': {'en': 'Invalid gateway: {gateway}',
+                               'it': 'Gateway non valido: {gateway}'},
+    'network.gatewayOutsideSubnet': {'en': 'The gateway {gateway} is not in the same network as {address}/{prefix}',
+                                     'it': 'Il gateway {gateway} non è nella stessa rete di {address}/{prefix}'},
+    'network.invalidDns': {'en': 'Invalid DNS address: {dns}', 'it': 'Indirizzo DNS non valido: {dns}'},
+    'network.ipv4ApplyFailed': {'en': 'Could not apply the network settings',
+                                'it': 'Impossibile applicare le impostazioni di rete'},
+    'network.staticApplying': {'en': 'Applying the fixed address {address} — reconnect there in a few seconds',
+                               'it': 'Sto applicando l\'indirizzo fisso {address} — ricollegati lì tra qualche secondo'},
+    'network.dhcpApplying': {'en': 'Switching back to an automatic address — the device address may change',
+                             'it': 'Torno all\'indirizzo automatico — l\'indirizzo del dispositivo può cambiare'},
+
     # ── Audio output (DAC) ──────────────────────────────────────────
     'audio.deviceMissing': {'en': 'Missing device', 'it': 'Device mancante'},
     'audio.invalidDevice': {'en': 'Invalid audio device: {device}', 'it': 'Dispositivo audio non valido: {device}'},
@@ -44,7 +68,10 @@ MESSAGES = {
     'audio.defaultDeviceName': {'en': 'System default', 'it': 'Predefinito di sistema'},
 
     # ── Multiroom / Lyrion server role ──────────────────────────────
-    'lms.invalidIp': {'en': 'Invalid IP address: {host}', 'it': 'Indirizzo IP non valido: {host}'},
+    'lms.invalidHost': {'en': 'Invalid server address: {host}. Use an IP address (192.168.1.50) or a name (nas.local)',
+                        'it': 'Indirizzo del server non valido: {host}. Usa un indirizzo IP (192.168.1.50) o un nome (nas.local)'},
+    'lms.hostNotFound': {'en': 'No device called {host} was found on the network. Check the name, or use its IP address',
+                         'it': 'Nessun dispositivo chiamato {host} trovato sulla rete. Controlla il nome, oppure usa il suo indirizzo IP'},
     'lms.useLocalMode': {'en': 'Use "This device" mode for the local server',
                          'it': 'Usa la modalità "Questo dispositivo" per il server locale'},
     'lms.invalidMode': {'en': 'Invalid mode: {mode}', 'it': 'Modalità non valida: {mode}'},
@@ -54,7 +81,10 @@ MESSAGES = {
     'lms.serverSetRestartFailed': {'en': 'Server set ({target}); restart failed',
                                    'it': 'Server impostato ({target}); riavvio non riuscito'},
     'lms.localRestored': {'en': 'Local Lyrion server restored', 'it': 'Ripristinato il server Lyrion locale'},
-    'lms.serverSet': {'en': 'Lyrion server set to {target}', 'it': 'Server Lyrion impostato su {target}'},
+    'lms.volatileBoot': {'en': 'Warning: this device started without its data partition, so the choice will be lost at the next restart. Restart it and set it again.',
+                         'it': 'Attenzione: questo apparecchio è partito senza la sua partizione dati, quindi la scelta andrà persa al prossimo riavvio. Riavvialo e rifai la scelta.'},
+    'lms.serverSet': {'en': 'Lyrion server set to {target}; this device\'s own server has been switched off',
+                      'it': 'Server Lyrion impostato su {target}; il server di questo apparecchio è stato spento'},
 
     # ── Player name ──────────────────────────────────────────────────
     'player.invalidName': {'en': 'Invalid name: letters, numbers, dot, dash and underscore only, '
@@ -131,6 +161,25 @@ MESSAGES = {
 
     # ── Mouse pointer / misc preferences ────────────────────────────
     'prefs.saveFailed': {'en': 'Could not save the preference', 'it': 'Impossibile salvare la preferenza'},
+    'prefs.vuStyleUnknown': {'en': 'That VU meter style is not installed', 'it': 'Questo stile di VU meter non è installato'},
+    # ── VU meter store ──────────────────────────────────────────────
+    'vuStore.catalogUnavailable': {'en': 'Could not reach the list of VU meters to download — check the Internet connection',
+                                   'it': "Impossibile leggere l'elenco dei VU meter da scaricare — controlla la connessione a Internet"},
+    'vuStore.signatureInvalid': {'en': 'The list of VU meters did not pass the security check and was ignored',
+                                 'it': "L'elenco dei VU meter non ha superato il controllo di sicurezza ed è stato ignorato"},
+    'vuStore.catalogInvalid': {'en': 'The list of VU meters could not be read', 'it': "Impossibile leggere l'elenco dei VU meter"},
+    'vuStore.unknown': {'en': 'That VU meter is not available for download', 'it': 'Questo VU meter non è disponibile da scaricare'},
+    'vuStore.builtin': {'en': 'This VU meter is already on the device', 'it': "Questo VU meter è già presente nell'apparecchio"},
+    'vuStore.unsupported': {'en': 'This VU meter needs a newer version of the device software',
+                            'it': "Questo VU meter richiede un aggiornamento dell'apparecchio"},
+    'vuStore.busy': {'en': 'Already in progress', 'it': 'Operazione già in corso'},
+    'vuStore.downloadFailed': {'en': 'Download failed — check the Internet connection',
+                               'it': 'Download non riuscito — controlla la connessione a Internet'},
+    'vuStore.verifyFailed': {'en': 'The downloaded file is damaged and was discarded', 'it': 'Il file scaricato è danneggiato ed è stato scartato'},
+    'vuStore.invalidPackage': {'en': 'This VU meter package is not valid', 'it': 'Il pacchetto di questo VU meter non è valido'},
+    'vuStore.installFailed': {'en': 'Could not install the VU meter', 'it': 'Impossibile installare il VU meter'},
+    'vuStore.notInstalled': {'en': 'That VU meter was not downloaded', 'it': 'Questo VU meter non è stato scaricato'},
+    'vuStore.removeFailed': {'en': 'Could not remove the VU meter', 'it': 'Impossibile rimuovere il VU meter'},
     'pointer.shown': {'en': 'Mouse pointer shown', 'it': 'Puntatore mouse attivato'},
     'pointer.hidden': {'en': 'Mouse pointer hidden', 'it': 'Puntatore mouse disattivato'},
 
@@ -143,6 +192,13 @@ MESSAGES = {
     'displayMode.headlessEnabled': {'en': 'Headless mode enabled — the screen will turn off',
                                     'it': 'Modalità headless attivata — lo schermo verrà spento'},
 
+    # ── Interfaccia su schermo: quale delle due (Electron / Qt) ─────
+    'uiEngine.invalid': {'en': 'Invalid interface', 'it': 'Interfaccia non valida'},
+    'uiEngine.notInstalled': {'en': 'That interface is not installed on this device',
+                              'it': "Quell'interfaccia non è installata su questo dispositivo"},
+    'uiEngine.changeFailed': {'en': 'Interface change failed', 'it': "Cambio dell'interfaccia fallito"},
+    'uiEngine.electronEnabled': {'en': 'Electron interface enabled', 'it': 'Interfaccia Electron attivata'},
+    'uiEngine.qtEnabled': {'en': 'Qt interface enabled', 'it': 'Interfaccia Qt attivata'},
     # ── UI render resolution ────────────────────────────────────────
     'uiResolution.invalid': {'en': 'Invalid resolution', 'it': 'Risoluzione non valida'},
     'uiResolution.unavailable': {'en': 'Feature not available on this system version',
@@ -231,6 +287,8 @@ MESSAGES = {
     'update.alreadyInProgress': {'en': 'Update already in progress', 'it': 'Aggiornamento già in corso'},
     'update.planSaveFailed': {'en': 'Saving the update plan failed', 'it': 'Salvataggio del piano fallito'},
     'update.inProgress': {'en': 'Update in progress', 'it': 'Aggiornamento in corso'},
+    'update.liveSession': {'en': "This is a live session (running from the USB stick): updates can't be installed here — install Osmium Sound first",
+                           'it': 'Questa è una sessione live (avviata dalla chiavetta): qui gli aggiornamenti non si possono installare — prima installa Osmium Sound'},
     # ── Isolated update mode (stage-then-reboot-then-apply) ────────────
     'update.stagedPendingReboot': {
         'en': 'Update verified — the device will restart to apply it',
@@ -241,6 +299,75 @@ MESSAGES = {
     'update.applyDone': {'en': 'Update applied successfully', 'it': 'Aggiornamento applicato con successo'},
     'update.applyError': {'en': 'The update could not be applied',
                           'it': "Non è stato possibile applicare l'aggiornamento"},
+
+    # ── Messages written by the shell side of the updater (stage/apply
+    # runners, hifi-image-update.sh) as a `key` + `params` next to their
+    # plain-English text, and translated here for whichever frontend polls
+    # /update/status — so the kiosk in Italian and the web admin in English
+    # both read the same step in their own language. ──
+    'update.stagedRebooting': {'en': 'Update verified — restarting to apply it',
+                               'it': 'Aggiornamento verificato, riavvio in corso'},
+    'update.image.rebooting': {'en': 'System image installed — restarting into the new system',
+                               'it': 'Immagine di sistema installata, riavvio sul nuovo sistema'},
+    'update.image.media': {'en': 'Moving your music onto the data partition…',
+                           'it': 'Spostamento della musica sulla partizione dati…'},
+    'update.image.seed': {'en': 'Copying your settings to the data partition…',
+                          'it': 'Copia delle impostazioni sulla partizione dati…'},
+    'update.image.install': {'en': 'Installing system image {version} into the standby slot…',
+                             'it': "Installazione dell'immagine di sistema {version} nello slot di riserva…"},
+    'update.image.write': {'en': 'Writing system image {version}… {pct}%',
+                           'it': "Scrittura dell'immagine di sistema {version}… {pct}%"},
+    'update.image.selector': {'en': 'Enabling the A/B boot selector…',
+                              'it': 'Attivazione del selettore di avvio A/B…'},
+    'update.image.staged': {'en': 'System image {version} installed — the new system starts at the next restart',
+                            'it': 'Immagine di sistema {version} installata: al riavvio parte il nuovo sistema'},
+    'update.image.ready': {'en': 'System image {version} ready', 'it': 'Immagine di sistema {version} pronta'},
+    'update.image.badSource': {'en': 'Invalid system image source', 'it': "Sorgente dell'immagine di sistema non valida"},
+    'update.image.notConverted': {'en': 'RAUC is not configured: the device has not been converted to the A/B layout yet',
+                                  'it': "RAUC non configurato: l'apparecchio non è ancora convertito allo schema A/B"},
+    'update.image.mediaFailed': {'en': 'Moving the music folders to the data partition failed',
+                                 'it': 'Spostamento delle cartelle di musica sulla partizione dati fallito'},
+    'update.image.seedFailed': {'en': 'Copying the settings to the data partition failed',
+                                'it': 'Copia delle impostazioni sulla partizione dati fallita'},
+    'update.image.installFailed': {'en': 'Installing the system image failed (rauc rc={rc})',
+                                   'it': "Installazione dell'immagine di sistema fallita (rauc rc={rc})"},
+    'update.image.selectorFailed': {'en': 'Writing the A/B boot selector failed',
+                                    'it': 'Scrittura del selettore di avvio A/B fallita'},
+    'update.ab.noSpace': {
+        'en': 'Update failed: not enough space to switch to the new system layout — free at least {needed} MiB on this {disk} MiB disk (8 GB or more is recommended), then restart: the device picks the switch up again on its own',
+        'it': 'Aggiornamento non riuscito: spazio insufficiente per passare al nuovo schema di sistema — libera almeno {needed} MiB su questo disco da {disk} MiB (consigliati 8 GB o più), poi riavvia: il passaggio riparte da solo'},
+    'update.ab.musicOnSystemDisk': {
+        'en': 'Update failed: the music kept in folders on the system disk ({music} MiB) does not fit in the {data} MiB the new system leaves for your data. Move it onto a USB or internal disk and restart: the device picks the switch up again on its own',
+        'it': 'Aggiornamento non riuscito: la musica tenuta in cartelle del disco di sistema ({music} MiB) non entra nei {data} MiB che il nuovo sistema lascia ai dati. Spostala su un disco USB o interno e riavvia: il passaggio riparte da solo'},
+    'update.ab.armed': {
+        'en': 'Ready to switch to the new system: it happens at the next restart',
+        'it': 'Tutto pronto per il passaggio al nuovo sistema: avverrà al prossimo riavvio'},
+    'update.ab.notConvertible': {
+        'en': 'Update failed: this device cannot switch to the new system layout: {reason}',
+        'it': 'Aggiornamento non riuscito: questo apparecchio non può passare al nuovo schema di sistema: {reason}'},
+    'update.ab.prepareFailed': {
+        'en': 'Update failed: the switch to the new system layout could not be prepared',
+        'it': 'Aggiornamento non riuscito: non è stato possibile preparare il passaggio al nuovo schema di sistema'},
+    'update.apply.stuckUpdateMode': {
+        'en': 'Could not leave update mode: restart the device and try again',
+        'it': "Non è stato possibile uscire dalla modalità aggiornamento: riavvia l'apparecchio e riprova"},
+    'update.ab.rebooting': {
+        'en': 'Restarting now to switch to the new system',
+        'it': 'Riavvio in corso per passare al nuovo sistema'},
+    'update.ab.converting': {'en': 'Switching to the new system — the device will restart on its own',
+                             'it': 'Passaggio al nuovo sistema — l\'apparecchio si riavvierà da solo'},
+    'update.image.kickFailed': {'en': 'The system image update could not be started — try "Update now" again',
+                                'it': 'Impossibile avviare l\'aggiornamento dell\'immagine di sistema — riprova con "Aggiorna ora"'},
+    'update.apply.noPlan': {'en': 'No update plan found in update mode — unexpected state',
+                            'it': 'Nessun piano di aggiornamento trovato in modalità update — stato inatteso'},
+    'update.apply.emptyPlan': {'en': 'The update plan has no components — unexpected state',
+                               'it': 'Il piano di aggiornamento non contiene componenti — stato inatteso'},
+    'update.apply.notStaged': {'en': "Step '{kind}' was not completed during staging (state: {state})",
+                               'it': "Passo '{kind}' non risulta completato in fase di staging (stato: {state})"},
+    'update.apply.stagedMissing': {'en': 'Staged package missing for {kind} {version}',
+                                   'it': 'Pacchetto staged mancante per {kind} {version}'},
+    'update.apply.failed': {'en': 'Applying {kind} {version} failed after {attempts} attempts (rc={rc})',
+                            'it': 'Applicazione di {kind} {version} fallita dopo {attempts} tentativi (rc={rc})'},
 
     # ── Disk install (bare-metal installer) + guided room correction ──
     'install.enumFailed': {'en': 'Disk enumeration failed', 'it': 'Enumerazione dischi fallita'},
@@ -278,6 +405,9 @@ MESSAGES = {
                               'it': 'Disco non montato: {disks}. Verifica il collegamento prima di applicare.'},
     'lyrion.applied': {'en': '{count} source(s) applied. Lyrion restarted and scanning.',
                        'it': '{count} sorgenti applicate. Lyrion riavviato e in scansione.'},
+    'lyrion.appliedLive': {'en': '{count} source(s) applied.', 'it': '{count} sorgenti applicate.'},
+    'lyrion.applyBackground': {'en': 'Lyrion is not answering yet: the sources will be applied as soon as it restarts.',
+                               'it': 'Lyrion non risponde ancora: le sorgenti verranno applicate appena si riavvia.'},
 
     # ── sources_server.py: backup creation ──────────────────────────
     'backup.systemUpdateRequired': {'en': 'A system update is required',

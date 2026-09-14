@@ -3,7 +3,8 @@ import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import { exec } from 'child_process';
 import { promisify } from 'util';
-import { appendFileSync, readFileSync, readdirSync } from 'fs';
+import { appendFileSync, readFileSync } from 'fs';
+import { listInputDevices, hasTypableKeyboard, describeInputDevices } from './inputDevices.js';
 
 const execAsync = promisify(exec);
 
@@ -366,33 +367,45 @@ ipcMain.handle('hide-global-keyboard', async () => {
 
 /**
  * Physical keyboard presence, for the on-screen (simple-keyboard) auto-show
- * in App.jsx — a plugged-in USB keyboard should suppress it, and unplugging
- * one should bring it back, live, without a restart. There's no renderer-side
- * HID enumeration API in Chromium/Electron, so this reads real hardware
- * state from the main process instead: udev symlinks any device it
- * recognizes as a keyboard (USB or PS/2) to `*-event-kbd` under
- * /dev/input/by-id (falling back to /dev/input/by-path for devices with no
- * stable by-id link). Polled rather than watched — fs.watch on these dirs is
- * unreliable across filesystems/distros, and this isn't latency-sensitive.
+ * in App.jsx — a plugged-in USB/Bluetooth keyboard should suppress it, and
+ * unplugging one should bring it back, live, without a restart. There's no
+ * renderer-side HID enumeration API in Chromium/Electron, so this reads real
+ * hardware state from the main process: the kernel's view of every input
+ * device in sysfs. What does and doesn't count as a keyboard lives in
+ * inputDevices.js — touchscreen controllers with a bogus keyboard collection
+ * and the phantom PS/2 keyboard of most x86 boards notably don't, both of
+ * which used to hide the on-screen keyboard on touch-only appliances.
+ * Polled rather than watched — fs.watch on sysfs is unreliable, and this
+ * isn't latency-sensitive.
+ *
+ * Every change of the verdict (startup, plug, unplug) is appended to
+ * input-devices.log next to renderer-console.log, together with the device
+ * list it was derived from: on a touch-only appliance "the keyboard doesn't
+ * appear" is otherwise impossible to diagnose without ssh + udevadm.
  */
-const KBD_DEVICE_DIRS = ['/dev/input/by-id', '/dev/input/by-path'];
 let lastPhysicalKeyboard = null;
+let inputDevicesLogLines = 0;
+const INPUT_DEVICES_LOG_MAX_LINES = 200; // a flapping USB device must not fill the disk
 
 function hasPhysicalKeyboardNow() {
-  for (const dir of KBD_DEVICE_DIRS) {
-    try {
-      if (readdirSync(dir).some((f) => f.endsWith('-event-kbd'))) return true;
-    } catch (_) { /* dir may not exist, e.g. dev build off-target */ }
-  }
-  return false;
+  return hasTypableKeyboard(listInputDevices());
 }
 
 ipcMain.handle('get-physical-keyboard', () => hasPhysicalKeyboardNow());
 
 function pollPhysicalKeyboard() {
-  const now = hasPhysicalKeyboardNow();
+  const devices = listInputDevices();
+  const now = hasTypableKeyboard(devices);
   if (now === lastPhysicalKeyboard) return;
   lastPhysicalKeyboard = now;
+  if (inputDevicesLogLines++ < INPUT_DEVICES_LOG_MAX_LINES) {
+    try {
+      appendFileSync(
+        join(app.getPath('logs'), 'input-devices.log'),
+        `${new Date().toISOString()} physical keyboard: ${now ? 'present' : 'absent'} — ${describeInputDevices(devices)}\n`
+      );
+    } catch (_) {}
+  }
   if (mainWindow && !mainWindow.isDestroyed()) {
     mainWindow.webContents.send('physical-keyboard-changed', now);
   }

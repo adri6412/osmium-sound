@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import { isCharacterKey } from '../utils/physicalKeyboard';
 
 // Split into two contexts on purpose. `showKeyboard`/`hideKeyboard`/etc. are
 // stable action references that most consumers (App.jsx, Settings.jsx) only
@@ -123,6 +124,23 @@ export const KeyboardProvider = ({ children }) => {
     if (isVisibleRef.current) hideKeyboard();
     else showKeyboard(null, '');
   }, [hideKeyboard, showKeyboard]);
+
+  // A real character key pressed while the on-screen keyboard is open means
+  // there IS a physical keyboard after all (internal laptop keyboards aren't
+  // reported by the main process — see src/utils/physicalKeyboard.js). Close
+  // the on-screen one *before* the character lands in the field: this runs
+  // in the capture phase of keydown, hideKeyboard() flushes whatever was
+  // typed on-screen into the field synchronously, and only then does the
+  // browser append the physical character — nothing is lost either way.
+  // Leaving it open would be worse: its own preview value, now stale, would
+  // overwrite the physically typed text on its next flush.
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (isVisibleRef.current && isCharacterKey(e)) hideKeyboard();
+    };
+    document.addEventListener('keydown', handleKeyDown, true);
+    return () => document.removeEventListener('keydown', handleKeyDown, true);
+  }, [hideKeyboard]);
 
   // Listen for global shortcut toggle
   useEffect(() => {

@@ -1,0 +1,29 @@
+# Osmium Sound — booting one RAUC image slot.
+#
+# A static GRUB script (no menu, no update-grub at runtime): the ESP's A/B
+# selector loads it with `configfile` after exporting rauc_slot and the
+# PARTUUID of the slot it picked. Generated at build time by
+# distro/build-image.sh from usr/local/share/hifi-ab/slot-grub.cfg.tmpl
+set timeout=0
+set timeout_style=hidden
+set gfxpayload=keep
+if [ -z "$slot_partuuid" ]; then
+    # Booted with no selector (testing a cloned disk): take the PARTUUID of
+    # the partition this very file is being read from.
+    probe --set=slot_partuuid --part-uuid $root
+fi
+if [ -n "$slot_partuuid" ]; then
+    set rootarg="root=PARTUUID=$slot_partuuid"
+else
+    if [ -z "$slot_fsuuid" ]; then
+        probe --set=slot_fsuuid --fs-uuid $root
+    fi
+    set rootarg="root=UUID=$slot_fsuuid"
+fi
+set slotarg=
+if [ -n "$rauc_slot" ]; then
+    set slotarg="rauc.slot=$rauc_slot"
+fi
+linux /boot/vmlinuz-@KVER@ $rootarg ro rootfstype=squashfs $slotarg panic=10 @CMDLINE@
+initrd /boot/initrd.img-@KVER@
+boot

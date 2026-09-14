@@ -1,0 +1,22 @@
+[Unit]
+Description=Osmium Sound — RAUC configuration (system.conf from the real devices, ESP and /data mounted)
+# A silent no-op wherever there is no A/B layout (an unconverted legacy root).
+DefaultDependencies=no
+After=systemd-remount-fs.service local-fs.target
+Before=rauc.service hifi-boot-health.service hifi-api.service shutdown.target
+Conflicts=shutdown.target
+ConditionPathExists=|/usr/lib/osmium/IMAGE_VERSION
+ConditionPathExists=|/etc/rauc/keyring.pem
+ConditionPathExists=|/usr/local/share/hifi-ab/keyring.pem
+# A live session has nothing to configure and nothing to watch over: the
+# single-filesystem ISO boots the very same image the appliances run, so
+# without this line these units would start there too.
+ConditionKernelCommandLine=!boot=live
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/local/sbin/hifi-rauc-config.sh
+
+[Install]
+WantedBy=multi-user.target

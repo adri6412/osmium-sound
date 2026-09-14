@@ -484,7 +484,7 @@ const LyrionServer = () => {
     menuSearch, setMenuSearch, searchText, setSearchText, menuBase,
     listScrollRef, handleLibraryScroll,
     navigateTo, goBack, goHome, goToBreadcrumb, handlePlayItem,
-    resolveMenuIcon, handleMenuItem, submitMenuSearch, openTabView,
+    resolveMenuIcon, handleMenuItem, handlePluginItem, submitMenuSearch, openTabView,
   } = useLyrionPlayer();
 
   // Now-playing cover, remote-track case only: hash-deduped, shared by the
@@ -1181,23 +1181,25 @@ const LyrionServer = () => {
             if (currentView === 'plugin_items') {
               const params = navigationStack[navigationStack.length - 1].params;
               const pluginCmd = params?.pluginCmd;
+              const isSearch = item.type === 'search';
+              // LMS's "Bug 7684" fallback stamps hasitems:1 on a search node too
+              // (it isn't a real submenu) — handlePluginItem checks isSearch first.
               const hasItems = item.hasitems === 1 || item.type === 'link';
               const isAudio  = item.isaudio === 1 || item.type === 'audio';
               return (
                 <li key={idx}
-                  onClick={() => {
-                    if (hasItems) navigateTo('plugin_items', item.name || item.title, { pluginCmd, itemId: item.id });
-                    else if (isAudio || item.play) handleAction(() => lyrionApi.playPluginItem(activePlayer.playerid, pluginCmd, item.id || item.play));
-                  }}
+                  onClick={() => handlePluginItem(item, pluginCmd)}
                   className="flex items-center justify-between px-3 py-3 bg-hifi-surface hover:bg-hifi-light rounded-lg group cursor-pointer border border-transparent hover:border-hifi-border transition-colors">
                   <div className="flex items-center space-x-3 min-w-0">
                     {item.icon
                       ? <img src={safeUrl(item.icon.startsWith('http') ? item.icon : `${serverUrl}/${item.icon}`)}
                           className="w-6 h-6 rounded flex-shrink-0" alt="" loading="lazy" decoding="async"
                           onError={(e) => { e.target.style.display = 'none'; }} />
-                      : hasItems
-                        ? <Folder size={15} className="text-hifi-silver/60 flex-shrink-0" />
-                        : <Music size={15} className="text-hifi-silver/60 flex-shrink-0" />
+                      : isSearch
+                        ? <Search size={15} className="text-hifi-silver/60 flex-shrink-0" />
+                        : hasItems
+                          ? <Folder size={15} className="text-hifi-silver/60 flex-shrink-0" />
+                          : <Music size={15} className="text-hifi-silver/60 flex-shrink-0" />
                     }
                     <span className="text-sm text-white truncate">{item.name || item.title}</span>
                   </div>

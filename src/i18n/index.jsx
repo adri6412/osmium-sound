@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useCallback, useMemo } from 'react';
+import React, { createContext, useContext, useState, useCallback, useEffect, useMemo } from 'react';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Lightweight i18n (no external dependency).
@@ -41,6 +41,10 @@ const getNested = (obj, key) =>
 
 const I18nContext = createContext(null);
 
+// La lingua è un'impostazione DEL DISPOSITIVO, non di questa UI: sta in
+// /etc/hifi-player/ui-language (API /ui_language) e la legge anche l'altra
+// interfaccia on-device. localStorage resta come copia locale, così la
+// partenza è immediata e un'API assente non lascia l'app senza lingua.
 export const I18nProvider = ({ children }) => {
   const [lang, setLangState] = useState(() => {
     const saved = localStorage.getItem('appLanguage');
@@ -48,10 +52,31 @@ export const I18nProvider = ({ children }) => {
     return locales[DEFAULT_LANG] ? DEFAULT_LANG : (Object.keys(locales)[0] || DEFAULT_LANG);
   });
 
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        const res = await fetch('http://localhost:8000/ui_language');
+        const data = await res.json();
+        const l = data && data.language;
+        if (alive && l && locales[l]) {
+          localStorage.setItem('appLanguage', l);
+          setLangState(l);
+        }
+      } catch (_) { /* API assente: resta la copia locale */ }
+    })();
+    return () => { alive = false; };
+  }, []);
+
   const setLang = useCallback((l) => {
     if (!locales[l]) return;
     localStorage.setItem('appLanguage', l);
     setLangState(l);
+    fetch('http://localhost:8000/ui_language', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ language: l }),
+    }).catch(() => { /* la scelta resta comunque valida in questa UI */ });
   }, []);
 
   // Translate a dotted key, with optional {placeholder} interpolation.

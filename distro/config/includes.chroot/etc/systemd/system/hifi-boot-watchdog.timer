@@ -1,0 +1,14 @@
+[Unit]
+Description=Osmium Sound — software watchdog for A/B trial boots (10 min after boot)
+ConditionPathExists=/etc/rauc/system.conf
+# A live session has nothing to configure and nothing to watch over: the
+# single-filesystem ISO boots the very same image the appliances run, so
+# without this line these units would start there too.
+ConditionKernelCommandLine=!boot=live
+
+[Timer]
+OnBootSec=10min
+AccuracySec=30s
+
+[Install]
+WantedBy=timers.target

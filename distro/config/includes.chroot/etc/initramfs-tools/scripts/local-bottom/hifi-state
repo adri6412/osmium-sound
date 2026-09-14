@@ -1,0 +1,164 @@
+#!/bin/sh
+# shellcheck disable=SC2154,SC1091  # rootmnt/ROOT are set by the initramfs init; /scripts/functions only exists there
+# Osmium Sound — persistent state for the read-only root of a RAUC slot.
+#
+# Runs in the initramfs after the root is mounted (read-only) on ${rootmnt} and
+# BEFORE systemd starts, so PID 1 comes up already holding:
+#   /etc   = overlayfs (lower = the image, upper/work on /data/etc)
+#   /var   = bind mount of /data/var   (seeded from the image at first boot)
+#   /home  = bind mount of /data/home  (same)
+#   /boot/efi = the ESP of this same disk (RAUC's grubenv)
+# and with /etc/machine-id already in the upper layer: were it missing, systemd
+# would treat the boot as a "first boot" and re-apply its presets.
+#
+# A no-op anywhere that is not an image slot: with no rauc.slot= on the kernel
+# command line (or no image marker) it exits at once, and a writable legacy
+# root is never touched.
+PREREQ=""
+prereqs() { echo "$PREREQ"; }
+case "${1:-}" in
+    prereqs) prereqs; exit 0 ;;
+esac
+. /scripts/functions
+
+slot=
+read -r cmdline < /proc/cmdline || cmdline=
+for x in $cmdline; do
+    case "$x" in rauc.slot=*) slot="${x#rauc.slot=}" ;; esac
+done
+[ -n "$slot" ] || exit 0
+[ -f "${rootmnt}/usr/lib/osmium/IMAGE_VERSION" ] || exit 0
+
+# the root device: from the mount of ${rootmnt} (ROOT is not guaranteed to hooks)
+rootdev=$(awk -v m="${rootmnt}" '$2 == m { d = $1 } END { print d }' /proc/mounts 2>/dev/null)
+[ -n "$rootdev" ] || rootdev=$(readlink -f "${ROOT:-}" 2>/dev/null)
+rootdev=$(readlink -f "$rootdev" 2>/dev/null || echo "$rootdev")
+name=${rootdev#/dev/}
+disk=$(basename "$(readlink -f "/sys/class/block/$name/..")")
+find_part() {  # nome GPT -> /dev/…  (blkid legge la GPT: l'uevent non ha PARTNAME)
+    for d in /sys/class/block/"$disk"*; do
+        [ -f "$d/partition" ] || continue
+        dev="/dev/$(basename "$d")"
+        if [ "$(blkid -o value -s PARTLABEL "$dev" 2>/dev/null)" = "$1" ]; then
+            echo "$dev"
+            return 0
+        fi
+    done
+    return 1
+}
+modprobe overlay 2>/dev/null || true
+D="${rootmnt}/data"
+datadev=
+mounted=0
+# 🚨 Worth waiting for, and worth retrying: falling back to tmpfs means the
+# whole boot runs on the image's factory /etc — every setting the owner made
+# reverted for that session (the server they follow, the network, the player
+# name), and anything they change during it lost at the next boot, when the
+# real partition is back and still holds the old values. That reads exactly
+# like "sometimes at startup it goes back to the other server". The partition
+# can simply not be there yet: the kernel finds the root first, and on slower
+# controllers the rest of the table lands a moment later.
+attempt=0
+while [ "$attempt" -lt 15 ] && [ "$mounted" = 0 ]; do
+    if [ "$attempt" -gt 0 ]; then
+        udevadm settle --timeout=1 >/dev/null 2>&1 || true
+        sleep 1
+    fi
+    attempt=$((attempt + 1))
+    [ -n "$datadev" ] || datadev=$(find_part hifi-data || true)
+    [ -n "$datadev" ] || continue
+    fsck.ext4 -p "$datadev" >/dev/null 2>&1 || true
+    mount -t ext4 -o noatime "$datadev" "$D" && mounted=1
+done
+if [ "$mounted" = 0 ]; then
+    log_warning_msg "hifi-state: partizione hifi-data non disponibile dopo ${attempt} tentativi — stato volatile (tmpfs), le impostazioni di questo avvio NON verranno conservate"
+    mount -t tmpfs -o mode=0755 tmpfs "$D"
+fi
+espdev=$(find_part "EFI System") || espdev=
+# ── factory reset ──────────────────────────────────────────────────────
+# Erasing the data partition happens HERE, not on a running system: /data holds
+# the upper layer of /etc and the grafts of /var and /home, so an rm -rf while
+# the system is up would saw off the branch it is sitting on, halfway through.
+# hifi-factory-reset.sh only leaves a marker and reboots; at this point the
+# overlay is not mounted yet and nothing holds anything open, so the erase is
+# one single thing: either it happened or it did not.
+#
+# Four things are kept. music/ because it is the owner's music: it holds
+# whatever lived in a folder of the root at the move to the new layout
+# (hifi-ab-media.py) and whatever was copied onto the network shares later. A
+# factory reset puts the settings back, it does not throw away the record
+# collection: the source will have to be added again, the files will not.
+# lyrion/ because otherwise the device is left with no music server until it
+# can reach the internet to download the package again (its preferences and
+# caches live in /var and go anyway: Lyrion comes back as new either way).
+# rauc/ is bookkeeping there is no reason to bin. The machine-id because
+# squeezelite's MAC derives from it — that is the player's identity on LMS: a
+# reset is almost always meant to fix a problem, not to change owner, and
+# coming back as an unknown device would lose every setting the server holds
+# for that player.
+if [ "$mounted" = 1 ] && [ -e "$D/.factory-reset" ]; then
+    log_begin_msg "Osmium Sound: factory reset, erasing the data partition"
+    saved_mid=$(cat "$D/etc/upper/machine-id" 2>/dev/null || true)
+    for entry in "$D"/* "$D"/.[!.]* "$D"/..?*; do
+        [ -e "$entry" ] || continue          # glob with no matches
+        case "${entry##*/}" in
+            music|lyrion|rauc) continue ;;
+        esac
+        rm -rf "$entry"
+    done
+    mkdir -p "$D/etc/upper/hifi-player"
+    if [ -n "$saved_mid" ]; then
+        printf '%s\n' "$saved_mid" > "$D/etc/upper/machine-id"
+        chmod 0444 "$D/etc/upper/machine-id"
+    fi
+    # The same marker the installer seeds on a new device: without it the
+    # device restarts from an empty /data but with no setup wizard.
+    printf 'pending\n' > "$D/etc/upper/hifi-player/provisioning-pending"
+    sync
+    log_end_msg
+fi
+
+mkdir -p "$D/etc/upper" "$D/etc/work" "$D/var" "$D/home" "$D/rauc" "$D/lyrion"
+
+# /var and /home: at the first boot of EVERY image version, the image's own
+# entries that /data is still missing are copied in (cp -an: never overwrite).
+# That holds both for a partition just created and for one already seeded from
+# the legacy root (hifi-ab-seed.sh): existing state is left alone, while the
+# image's dpkg database, /var/lib/systemd and so on arrive all the same.
+imgver=$(cat "${rootmnt}/usr/lib/osmium/IMAGE_VERSION" 2>/dev/null || echo unknown)
+if [ "$(cat "$D/var/.hifi-image-version" 2>/dev/null)" != "$imgver" ]; then
+    cp -an "${rootmnt}/var/." "$D/var/" 2>/dev/null || log_warning_msg "hifi-state: copia di /var incompleta"
+    cp -an "${rootmnt}/home/." "$D/home/" 2>/dev/null || true
+    printf '%s\n' "$imgver" > "$D/var/.hifi-image-version"
+fi
+
+mid="$D/etc/upper/machine-id"
+if [ ! -s "$mid" ]; then
+    if [ -s "${rootmnt}/etc/machine-id" ]; then
+        cp "${rootmnt}/etc/machine-id" "$mid"
+    else
+        tr -d '-' < /proc/sys/kernel/random/uuid > "$mid"
+    fi
+    chmod 0444 "$mid"
+fi
+
+mount -t overlay overlay \
+    -o "lowerdir=${rootmnt}/etc,upperdir=$D/etc/upper,workdir=$D/etc/work" \
+    "${rootmnt}/etc" || log_warning_msg "hifi-state: overlay su /etc fallito — /etc resta in sola lettura"
+mount --bind "$D/var" "${rootmnt}/var" || log_warning_msg "hifi-state: bind di /var fallito"
+mount --bind "$D/home" "${rootmnt}/home" || log_warning_msg "hifi-state: bind di /home fallito"
+
+if [ -n "$espdev" ]; then
+    mkdir -p "${rootmnt}/boot/efi"
+    mount -t vfat -o umask=0077 "$espdev" "${rootmnt}/boot/efi" \
+        || log_warning_msg "hifi-state: ESP $espdev non montata"
+fi
+
+mkdir -p /run/hifi-state
+printf '%s\n' "$rootdev" > /run/hifi-state/root
+printf '%s\n' "/dev/$disk" > /run/hifi-state/disk
+printf '%s\n' "$slot" > /run/hifi-state/slot
+printf '%s\n' "$datadev" > /run/hifi-state/data
+printf '%s\n' "$espdev" > /run/hifi-state/esp
+printf '%s\n' "$mounted" > /run/hifi-state/data-mounted
+exit 0

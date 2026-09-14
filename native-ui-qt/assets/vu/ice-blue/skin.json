@@ -1,0 +1,34 @@
+{
+  "name": {
+    "en": "Ice Blue",
+    "it": "Blu ghiaccio"
+  },
+  "order": 40,
+  "size": [
+    2048,
+    1080
+  ],
+  "under": "under.png",
+  "over": "over.png",
+  "needle": {
+    "image": "needle.png",
+    "width": 240.73,
+    "height": 438.34,
+    "pivotX": 115.33,
+    "pivotY": 382.23
+  },
+  "meters": [
+    [
+      534.16,
+      648.11
+    ],
+    [
+      1487.02,
+      648.11
+    ]
+  ],
+  "angles": [
+    -43.3,
+    44.3
+  ]
+}

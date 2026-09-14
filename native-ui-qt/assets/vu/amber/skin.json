@@ -1,0 +1,34 @@
+{
+  "name": {
+    "en": "Amber",
+    "it": "Ambra"
+  },
+  "order": 30,
+  "size": [
+    2048,
+    1080
+  ],
+  "under": "under.png",
+  "over": "over.png",
+  "needle": {
+    "image": "needle.png",
+    "width": 240.73,
+    "height": 438.34,
+    "pivotX": 115.33,
+    "pivotY": 388.38
+  },
+  "meters": [
+    [
+      532.35,
+      654.26
+    ],
+    [
+      1486.69,
+      654.45
+    ]
+  ],
+  "angles": [
+    -41.8,
+    43.8
+  ]
+}

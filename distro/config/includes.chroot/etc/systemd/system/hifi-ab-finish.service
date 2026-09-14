@@ -1,0 +1,20 @@
+[Unit]
+Description=Osmium Sound — finish the A/B conversion (step 3: RAUC, grubenv, kernel command line)
+# On the legacy root, at the first boot after the conversion initrd created
+# the partitions. The script exits at once when there is no A/B layout.
+# The marker is written by `finish` itself (not system.conf: that one is also
+# written by hifi-rauc-config.service as soon as it sees the partitions, and
+# would block finish)
+ConditionPathExists=!/var/lib/hifi-player/ab/finished
+ConditionPathExists=!/usr/lib/osmium/IMAGE_VERSION
+ConditionKernelCommandLine=!boot=live
+After=local-fs.target
+Before=hifi-api.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/hifi-ab-convert.sh finish
+TimeoutStartSec=900
+
+[Install]
+WantedBy=multi-user.target

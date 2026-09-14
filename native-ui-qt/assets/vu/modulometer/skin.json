@@ -1,0 +1,34 @@
+{
+  "name": {
+    "en": "Modulometer",
+    "it": "Modulometro"
+  },
+  "order": 20,
+  "size": [
+    2048,
+    1080
+  ],
+  "under": "under.png",
+  "over": "over.png",
+  "needle": {
+    "image": "needle.png",
+    "width": 25.87,
+    "height": 418.22,
+    "pivotX": 9.88,
+    "pivotY": 414.63
+  },
+  "meters": [
+    [
+      542.7,
+      707.65
+    ],
+    [
+      1507.79,
+      714.85
+    ]
+  ],
+  "angles": [
+    -46.5,
+    47.2
+  ]
+}

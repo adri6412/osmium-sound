@@ -117,8 +117,10 @@ export function useLyrionPlayer() {
   // scroll). Reset back to the first page whenever the list contents change.
   const [visibleCount, setVisibleCount] = useState(LIST_PAGE);
   const [navigationStack, setNavigationStack] = useState([{ view: 'home', title: t('player.titles.home'), params: null }]);
-  // Search prompt for Lyrion menu items that require text input (e.g. TuneIn / global search)
-  const [menuSearch, setMenuSearch] = useState(null); // { action, title }
+  // Search prompt for Lyrion menu items that require text input (e.g. TuneIn / global search).
+  // Shape is either { kind: 'menu', action, title } (menu/menu_home view) or
+  // { kind: 'plugin', pluginCmd, itemId, title } (plugin_items view, e.g. RadioNet).
+  const [menuSearch, setMenuSearch] = useState(null);
   const [searchText, setSearchText] = useState('');
   // `base` object from the last Lyrion menu response (Jive base+item action model)
   const menuBaseRef = useRef(null);
@@ -475,7 +477,7 @@ export function useLyrionPlayer() {
       return items;
     }
     if (view === 'plugin_items') {
-      const r = await lyrionApi.getPluginItems(activePlayer?.playerid, params.pluginCmd, 9999, 0, params.itemId);
+      const r = await lyrionApi.getPluginItems(activePlayer?.playerid, params.pluginCmd, 9999, 0, params.itemId, params.search);
       // Radio/Apps plugin sub-menus (xmlbrowser "<cmd> items") reply under
       // "loop_loop" regardless of cmd — same LMS naming quirk as radioss_loop.
       return r?.loop_loop || r?.item_loop || r?.[`${params.pluginCmd}_loop`] || [];
@@ -556,7 +558,7 @@ export function useLyrionPlayer() {
     const doAct = lyrionApi.resolveMenuAction(base, item, 'do');
     if (item.input && go) {                 // needs text input → search bar
       setSearchText('');
-      setMenuSearch({ action: go, title: item.text || item.name || t('player.titles.search') });
+      setMenuSearch({ kind: 'menu', action: go, title: item.text || item.name || t('player.titles.search') });
     } else if (go) {                        // submenu (or play-on-go leaf) → drill in
       setMenuSearch(null);                  // leaving any open search context behind
       navigateTo('menu', item.text || item.name || '…', { action: go });
@@ -564,6 +566,27 @@ export function useLyrionPlayer() {
       handleAction(() => lyrionApi.menuDo(activePlayer.playerid, play));
     } else if (doAct) {                     // toggle / settings action
       handleAction(() => lyrionApi.menuDo(activePlayer.playerid, doAct));
+    }
+  };
+
+  // Radio/Apps plugin sub-menus (xmlbrowser "<cmd> items", e.g. RadioNet) don't
+  // use the Jive base+item action model handleMenuItem relies on — LMS instead
+  // marks a search-input node with `type: 'search'`, and (via its "Bug 7684"
+  // fallback) also sets `hasitems: 1` on it even though it isn't a real
+  // submenu. Drilling in with no query would send the plugin an empty search
+  // term, which some plugins (RadioNet) choke on — see submitMenuSearch.
+  const handlePluginItem = (item, pluginCmd) => {
+    if (!activePlayer) return;
+    const hasItems = item.hasitems === 1 || item.type === 'link';
+    const isAudio = item.isaudio === 1 || item.type === 'audio';
+    if (item.type === 'search') {
+      setSearchText('');
+      setMenuSearch({ kind: 'plugin', pluginCmd, itemId: item.id, title: item.name || item.title || t('player.titles.search') });
+    } else if (hasItems) {
+      setMenuSearch(null);
+      navigateTo('plugin_items', item.name || item.title, { pluginCmd, itemId: item.id });
+    } else if (isAudio || item.play) {
+      handleAction(() => lyrionApi.playPluginItem(activePlayer.playerid, pluginCmd, item.id || item.play));
     }
   };
 
@@ -578,10 +601,16 @@ export function useLyrionPlayer() {
     // it and choke on a blank term, surfacing a raw network-error string as
     // the first "result" instead of just returning nothing.
     if (!q) return;
+    const top = navigationStack[navigationStack.length - 1];
+    if (menuSearch.kind === 'plugin') {
+      const { pluginCmd, itemId, title } = menuSearch;
+      const isSameSearch = top?.view === 'plugin_items' && top?.params?.pluginCmd === pluginCmd && top?.params?.itemId === itemId;
+      navigateTo('plugin_items', title, { pluginCmd, itemId, search: q }, { replace: isSameSearch });
+      return;
+    }
     const { action, title } = menuSearch;
     // Re-searching from the results screen replaces that entry instead of
     // stacking a fresh breadcrumb crumb per query.
-    const top = navigationStack[navigationStack.length - 1];
     const isSameSearch = top?.view === 'menu' && top?.params?.action === action;
     navigateTo('menu', title, { action, input: q }, { replace: isSameSearch });
   };
@@ -763,6 +792,6 @@ export function useLyrionPlayer() {
     menuBase: menuBaseRef.current,
     listScrollRef, handleLibraryScroll,
     navigateTo, goBack, goHome, goToBreadcrumb, handlePlayItem,
-    resolveMenuIcon, handleMenuItem, submitMenuSearch, openTabView,
+    resolveMenuIcon, handleMenuItem, handlePluginItem, submitMenuSearch, openTabView,
   };
 }

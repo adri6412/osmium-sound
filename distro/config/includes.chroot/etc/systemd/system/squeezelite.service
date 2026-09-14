@@ -29,5 +29,19 @@ Nice=-10
 IOSchedulingClass=realtime
 IOSchedulingPriority=0
 
+# 🚨 Nice= and the I/O class alone were NOT enough, and the reason is cgroup v2:
+# a nice value only orders tasks *within* one cgroup, and systemd gives every
+# service its own. So squeezelite's -10 never competed with Lyrion at all —
+# which is how a background library analysis (the Bliss plugin, running inside
+# lyrionmusicserver.service) could starve playback until the track ended and
+# nothing else played. The weights below are what actually settle that, and
+# they are the counterpart to the deliberately low ones in
+# lyrionmusicserver.service. They only bite under contention: on an idle box
+# every service still gets whatever it asks for.
+CPUAccounting=yes
+IOAccounting=yes
+CPUWeight=1000
+IOWeight=1000
+
 [Install]
 WantedBy=multi-user.target

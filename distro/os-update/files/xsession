@@ -58,12 +58,21 @@ APP="$(command -v hifi-media-player || true)"
 # The "hifi" user's PAM nice ceiling is raised for this in
 # /etc/security/limits.d/10-hifi-kiosk-nice.conf; without it this silently
 # runs at nice 0 (nice(1) warns to stderr but still execs the app).
+# RAM containment flags — keep in sync with kiosk-wayland-launch (the Wayland
+# session), where the reasoning is documented in full: --no-zygote drops the
+# two zygote processes (sandbox is already off), low-end-device-mode shrinks
+# Chromium's caches, --js-flags caps the V8 old heap and shrinks the young
+# generation. (--in-process-gpu was tried and deliberately rejected — see
+# kiosk-wayland-launch.)
 while true; do
     nice -n -5 "$APP" \
         --no-sandbox \
         --disable-dev-shm-usage \
+        --no-zygote \
+        --enable-low-end-device-mode \
         --enable-features=UseOzonePlatform \
         --ozone-platform=x11 \
+        --js-flags='--max-old-space-size=256 --max-semi-space-size=2' \
         --start-fullscreen
     echo "hifi kiosk exited ($?) — relaunching in 3s" >&2
     sleep 3

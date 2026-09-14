@@ -108,7 +108,55 @@
     "shareNone": "Nessuna condivisione attiva.",
     "shareCount": "{count} condivise",
     "shareLocal": "Condividi una cartella locale",
-    "shareThisFolder": "Condividi questa cartella"
+    "shareThisFolder": "Condividi questa cartella",
+    "wizard": {
+      "title": "Aggiungi una cartella di rete",
+      "intro": "La musica tenuta su un NAS o su un altro computer. Il lettore la cerca da solo sulla tua rete: a te basta scegliere.",
+      "searchButton": "Cerca sulla mia rete",
+      "searching": "Cerco i dispositivi sulla tua rete…",
+      "foundTitle": "Trovati sulla rete",
+      "nothingFound": "Non ho trovato niente. Controlla che l'altro dispositivo sia acceso e sulla stessa rete, oppure scrivi tu il suo indirizzo.",
+      "searchAgain": "Cerca ancora",
+      "typeItMyself": "Lo scrivo io",
+      "manualHint": "Il nome o l'indirizzo del dispositivo che contiene la musica — per esempio nas.local oppure 192.168.1.20.",
+      "addressLabel": "Nome o indirizzo",
+      "continue": "Avanti",
+      "back": "Indietro",
+      "onDevice": "Su {device}",
+      "authHint": "Questo dispositivo vuole sapere chi sei. Usa lo stesso nome utente e la stessa password che usi su di esso.",
+      "signIn": "Accedi",
+      "signInTo": "Accedi a {device}",
+      "userLabel": "Nome utente",
+      "wrongPassword": "Nome utente o password sbagliati. Riprova.",
+      "changeUser": "Cambia",
+      "loadingShares": "Leggo le cartelle condivise…",
+      "pickShare": "Scegli la cartella con la tua musica",
+      "noShares": "Questo dispositivo non condivide nessuna cartella.",
+      "needPassword": "Chiede una password",
+      "typeShareHint": "Scrivi il nome della cartella condivisa esattamente come appare sull'altro dispositivo.",
+      "shareLabel": "Nome della cartella condivisa",
+      "device": "Dispositivo",
+      "folder": "Cartella",
+      "writeHint": "Lascialo spento se la cartella deve solo essere ascoltata. Accendilo per permettere al lettore di salvarci dentro: serve per copiarci i CD.",
+      "allowWrite": "Permetti al lettore di scrivere in questa cartella",
+      "addNow": "Aggiungi questa cartella",
+      "added": "{name} aggiunta: sto leggendo la musica.",
+      "listFailed": "Non sono riuscito a leggere le cartelle condivise di questo dispositivo.",
+      "openFailed": "Non sono riuscito ad aprire questa cartella.",
+      "showDetail": "Dettagli tecnici",
+      "hideDetail": "Nascondi i dettagli",
+      "noClientHint": "Questo lettore non sa ancora leggere l'elenco delle cartelle condivise: aggiornalo e la prossima volta te le proporrà."
+    },
+    "where": {
+      "title": "Dove si trova la tua musica?",
+      "hint": "Scegli dove la tieni: al resto pensa il lettore.",
+      "disk": "Su un disco dentro il lettore o collegato a lui",
+      "diskHint": "Chiavette USB e dischi interni",
+      "network": "Su un NAS o un computer della mia rete",
+      "networkHint": "Il lettore li cerca da solo",
+      "local": "È già dentro il lettore",
+      "localHint": "Una cartella di questo apparecchio"
+    }
   },
   "usbToast": {
     "mounted": "\"{label}\" collegata e pronta"
@@ -210,7 +258,7 @@
       "external": "Esterno",
       "externalHint": "Scegli il server trovato sulla rete, oppure digita il suo indirizzo.",
       "noneFound": "Nessun server Lyrion trovato sulla rete al momento.",
-      "hostPlaceholder": "Indirizzo IP, es. 192.168.1.50",
+      "hostPlaceholder": "IP o nome, es. 192.168.1.50 o nas.local",
       "search": "Cerca di nuovo",
       "useExternal": "Usa questo server",
       "externalApplied": "Questo dispositivo ora usa quel server.",
@@ -299,6 +347,11 @@
     "repeat": "Ripeti",
     "queue": "Coda",
     "queueEmpty": "La coda è vuota",
+    "selectPlayer": "Player da controllare",
+    "thisDevice": "questo apparecchio",
+    "controlling": "Stai pilotando {{name}}",
+    "noOtherPlayers": "Nessun altro player su questo Lyrion",
+    "backToOwn": "Torna a questo apparecchio",
     "addToQueue": "Aggiungi a coda",
     "playNext": "Riproduci dopo",
     "saveAsPlaylist": "Salva come playlist",
@@ -333,10 +386,10 @@
     "loadingSystem": "Caricamento dati di sistema...",
     "apiUnavailable": "⚠️ Server API non disponibile",
     "sections": {
-      "lyrion": "Configurazione Lyrion",
       "sources": "Sorgenti musicali",
       "audio": "Uscita Audio (DAC)",
       "playback": "Riproduzione",
+      "vuMeters": "VU meter",
       "dsp": "DSP / Equalizzatore",
       "multiroom": "Lyrion Music Server",
       "alarm": "Sveglia",
@@ -358,6 +411,27 @@
     "language": {
       "help": "Scegli la lingua dell'interfaccia."
     },
+    "remotePlayer": {
+      "note": "Stai pilotando «{{name}}». Queste impostazioni riguardano questo apparecchio: torna al suo player per modificarle.",
+      "back": "Torna a questo apparecchio"
+    },
+    "vuMeters": {
+      "help": "Gli strumenti analogici della schermata \"in riproduzione\": accendili o spegnili e scegli il loro aspetto.",
+      "storeTitle": "Altri VU meter da scaricare",
+      "storeHelp": "Nuovi aspetti pubblicati da Osmium Sound. Un VU meter scaricato si aggiorna da solo e compare tra gli stili qui sopra.",
+      "storeLoading": "Caricamento dell'elenco…",
+      "storeEmpty": "Al momento non ci sono altri VU meter da scaricare.",
+      "storeCheck": "Controlla di nuovo",
+      "install": "Scarica",
+      "update": "Aggiorna",
+      "remove": "Rimuovi",
+      "removeConfirm": "Rimuovere il VU meter «{{name}}» da questo apparecchio? Potrai scaricarlo di nuovo in seguito.",
+      "downloading": "Download in corso…",
+      "installing": "Installazione…",
+      "unsupported": "Serve un aggiornamento",
+      "badgeNew": "NUOVO",
+      "badgeUpdate": "NUOVA VERSIONE"
+    },
     "playback": {
       "help": "Opzioni di riproduzione applicate al player attivo: transizioni tra i brani (crossfade/gapless) e normalizzazione del volume (ReplayGain).",
       "noPlayer": "Nessun player attivo trovato. Avvia la riproduzione o verifica la connessione a Lyrion.",
@@ -378,6 +452,8 @@
       "fixedVolumeHelp": "Esclude completamente il controllo volume digitale del player: l'uscita è sempre al 100%. Necessario per la riproduzione bit-perfect; disattivalo per tornare a usare il cursore del volume a schermo.",
       "vuMeter": "VU meter animati",
       "vuMeterHelp": "Il quadrante VU nella schermata \"in riproduzione\" si aggiorna in tempo reale con il livello audio. Disattivalo per ridurre il carico sulla GPU su hardware più limitato.",
+      "vuStyle": "Stile dei VU meter",
+      "vuStyleHelp": "L'aspetto degli strumenti nella schermata \"in riproduzione\".",
       "autoExpand": "Apertura automatica in riproduzione",
       "autoExpandHelp": "Quando parte un brano, apre automaticamente la schermata a schermo intero \"in riproduzione\" dopo questi secondi. Si apre una sola volta per brano: se poi navighi altrove di tua scelta, resta ferma."
     },
@@ -456,9 +532,10 @@
         "help": "Questo dispositivo può eseguire il proprio Lyrion Music Server oppure usarne uno già presente sulla rete. Due dispositivi possono essere raggruppati solo se puntano allo stesso server.",
         "local": "Interno (questo dispositivo)",
         "follow": "Esterno (sulla mia rete)",
-        "hostPlaceholder": "Indirizzo IP, es. 192.168.1.50",
-        "hostRequired": "Inserisci l'indirizzo IP del dispositivo da seguire.",
+        "hostPlaceholder": "IP o nome, es. 192.168.1.50 o nas.local",
+        "hostRequired": "Inserisci l'indirizzo IP o il nome del dispositivo da seguire.",
         "apply": "Applica",
+        "rebootWarning": "Cambiare il server musicale richiede un riavvio per avere effetto. Riavviare ora?",
         "saved": "Server Lyrion aggiornato.",
         "failed": "Impossibile aggiornare il server Lyrion.",
         "discoveredLabel": "Dispositivi trovati in rete",
@@ -595,8 +672,6 @@
       "failed": "Impossibile cambiare il fuso orario."
     },
     "lyrion": {
-      "urlLabel": "URL Lyrion Server",
-      "urlHelp": "Inserisci l'indirizzo del tuo Lyrion Media Server (es. http://192.168.1.100:9000)",
       "skinLabel": "Aspetto del player web",
       "skinHint": "L'aspetto del player web di Lyrion (la pagina che apri da browser o telefono). Osmium è coerente con l'interfaccia di questo dispositivo.",
       "skinOsmium": "Osmium",
@@ -604,14 +679,7 @@
       "skinUnset": "Nessuna skin scelta finora — il player web usa ancora l'aspetto originale di Lyrion. Scegline una per cambiare.",
       "skinInstalling": "Installazione dell'interfaccia web Material…",
       "skinApplying": "Applicazione della skin…",
-      "skinFailed": "Impossibile applicare la skin. Controlla la connessione di rete e riprova.",
-      "rescanLabel": "Libreria musicale",
-      "rescanHelp": "Ricontrolla le cartelle musicali per trovare brani nuovi o modificati.",
-      "rescan": "Scansiona libreria",
-      "rescanning": "Scansione in corso…",
-      "rescanStarted": "Scansione della libreria avviata.",
-      "rescanDone": "Scansione completata.",
-      "rescanFailed": "Avvio della scansione fallito."
+      "skinFailed": "Impossibile applicare la skin. Controlla la connessione di rete e riprova."
     },
     "sources": {
       "help": "Aggiungi le cartelle musicali: chiavette/dischi USB (montati in automatico), cartelle di rete (SMB) o locali. Le modifiche hanno effetto subito."
@@ -666,6 +734,7 @@
       "channelWarning": "Canale di sviluppo: riceverai build prerelease, potenzialmente instabili. Rimetti su Produzione al termine dei test.",
       "confirmProdToDev": "Una volta aggiornato ad una release di dev sarà possibile tornare in produzione solo quando uscirà una release di produzione più nuova di quella di dev.",
       "available": "Aggiornamento disponibile",
+      "availableShort": "Aggiornamento",
       "upToDate": "Tutto aggiornato",
       "debian12Banner": "Questo dispositivo utilizza ancora Debian 12. I prossimi aggiornamenti richiedono Debian 13 — reinstallalo dall'ultima ISO per continuare a ricevere gli aggiornamenti.",
       "checking": "Controllo in corso...",
@@ -710,6 +779,7 @@
         "titleUi": "Aggiornamento interfaccia",
         "titleSystem": "Aggiornamento componenti di sistema",
         "titleOs": "Aggiornamento sistema operativo",
+        "titleImage": "Aggiornamento immagine di sistema",
         "titleLyrion": "Aggiornamento Lyrion",
         "done": "Completato",
         "keepPowered": "Non spegnere il dispositivo durante l'aggiornamento.",
@@ -719,7 +789,10 @@
     },
     "controls": {
       "reboot": "Riavvia Sistema",
-      "shutdown": "Spegni Sistema"
+      "shutdown": "Spegni Sistema",
+      "powerTitle": "Spegnimento",
+      "powerReboot": "Riavvia",
+      "powerShutdown": "Spegni"
     },
     "factory": {
       "help": "Cancella tutte le impostazioni e riporta il dispositivo allo stato iniziale (reti Wi-Fi, sorgenti musicali, DSP/room correction, Bluetooth, pairing companion e account interfaccia web vengono azzerati). Il dispositivo si riavvia nella configurazione guidata.",
@@ -735,7 +808,8 @@
       "failed": "Impossibile azzerare le credenziali dell'interfaccia web."
     },
     "about": {
-      "builtWith": "Realizzato con Electron, React e Tailwind CSS"
+      "builtWith": "Realizzato con Electron, React e Tailwind CSS",
+      "builtWithQt": "Realizzato con Qt 6 e QML"
     },
     "msg": {
       "apiUnavailable": "Errore: Server API non disponibile",

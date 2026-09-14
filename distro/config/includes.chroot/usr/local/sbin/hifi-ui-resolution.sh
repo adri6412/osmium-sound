@@ -470,14 +470,25 @@ case "${1:-}" in
             # richiama `apply` e Electron nasce già della dimensione giusta. È anche ciò
             # che fa hifi-ota-update.sh per rimettere in piedi il kiosk.
             #
-            # Guardato da is-active: in modalità headless lightdm NON è in
-            # esecuzione, e un restart lo avvierebbe — riaccendendo uno schermo
-            # che l'utente ha spento di proposito.
+            # Guardato da is-active: in modalità headless NON gira nessuna delle
+            # due interfacce, e un restart la avvierebbe — riaccendendo uno
+            # schermo che l'utente ha spento di proposito.
+            #
+            # 🚨 Da 2.5.24 le interfacce su schermo sono due e questo passo deve
+            # riavviare QUELLA ATTIVA. La Qt legge la risoluzione in
+            # /etc/hifi-player/ui-resolution una volta sola, all'avvio, per
+            # scegliere il modo video KMS: senza riavvio la scelta si vedeva solo
+            # al riavvio successivo, e dalle impostazioni sembrava non funzionare.
             if command -v systemd-run >/dev/null 2>&1; then
                 # Nome unità transitorio auto-generato (niente --unit fisso) così
                 # due cambi ravvicinati non collidono su un'unità esistente.
                 systemd-run --collect --description="HiFi UI resolution switch" \
-                    /bin/sh -c 'sleep 1; systemctl is-active --quiet lightdm && systemctl restart lightdm' \
+                    /bin/sh -c 'sleep 1
+                        if systemctl is-active --quiet hifi-qt; then
+                            systemctl restart hifi-qt
+                        elif systemctl is-active --quiet lightdm; then
+                            systemctl restart lightdm
+                        fi' \
                     >/dev/null 2>&1 || true
             fi
         fi

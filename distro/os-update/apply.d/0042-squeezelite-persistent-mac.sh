@@ -27,10 +27,20 @@
 # future release is never overwritten. Only restarts squeezelite if ARGS
 # actually changed and the service is currently active (brief audio
 # interruption, same tradeoff as 0037's DAC-priority change).
+#
+# The "already has -m" test must accept the opening quote as a word boundary.
+# The sed below PREPENDS, so the flag it writes lands immediately after that
+# quote — ARGS='-m 02:.. -o ..' — where a plain (^|[[:space:]])-m never
+# matched. apply.sh re-runs every migration on every OS update, so the guard
+# kept failing and a second (third, ...) identical -m was prepended each time:
+# ARGS='-m 02:43:.. -m 02:43:.. -o ..', as reported from the field. The test is
+# also scoped to the ARGS= line so a future comment mentioning -m can't disable
+# it. 0060-squeezelite-dedup-mac.sh cleans up units that already grew one.
 
 SQ_DEFAULT=/etc/default/squeezelite
 
-if [ -f "$SQ_DEFAULT" ] && ! grep -qE '(^|[[:space:]])-m([[:space:]]|$)' "$SQ_DEFAULT" 2>/dev/null; then
+if [ -f "$SQ_DEFAULT" ] && grep -q '^ARGS=' "$SQ_DEFAULT" 2>/dev/null \
+   && ! grep '^ARGS=' "$SQ_DEFAULT" | grep -qE "(^ARGS=['\"]|[[:space:]])-m[[:space:]]"; then
     _seed="$(cat /etc/machine-id 2>/dev/null)"
     [ -n "$_seed" ] || _seed="$(hostname)-no-machine-id-fallback"
     _hash="$(printf '%s' "$_seed" | md5sum | cut -c1-12)"
@@ -42,7 +52,7 @@ if [ -f "$SQ_DEFAULT" ] && ! grep -qE '(^|[[:space:]])-m([[:space:]]|$)' "$SQ_DE
     cp -a "$SQ_DEFAULT" "$_bak"
     sed -i "s/^ARGS=\(['\"]\)\(.*\)\1\$/ARGS=\1-m $_mac \2\1/" "$SQ_DEFAULT"
 
-    if grep -qF -- "-m $_mac" "$SQ_DEFAULT" 2>/dev/null; then
+    if grep '^ARGS=' "$SQ_DEFAULT" | grep -qF -- "-m $_mac"; then
         rm -f "$_bak"
         mark_changed "assigned persistent squeezelite MAC $_mac"
     else

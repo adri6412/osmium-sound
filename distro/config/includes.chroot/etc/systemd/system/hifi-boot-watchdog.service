@@ -1,0 +1,11 @@
+[Unit]
+Description=Osmium Sound — software watchdog for A/B trial boots
+ConditionPathExists=/etc/rauc/system.conf
+# A live session has nothing to configure and nothing to watch over: the
+# single-filesystem ISO boots the very same image the appliances run, so
+# without this line these units would start there too.
+ConditionKernelCommandLine=!boot=live
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/hifi-boot-watchdog.sh

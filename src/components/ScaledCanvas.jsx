@@ -55,8 +55,14 @@ export default function ScaledCanvas({ children }) {
         justifyContent: 'center', overflow: 'hidden', background: '#0a0a0a'
       }}
     >
+      {/* `font-display` anche qui: gli overlay portati su questo div (player
+          espanso, coda, modali, tastiera) stanno FUORI dal contenitore della
+          pagina e altrimenti ereditano la catena del <body>, che include
+          Cantarell — installato sull'apparecchio con plymouth-themes. Il
+          risultato era un player espanso in Cantarell e il resto in DejaVu. */}
       <div
         id={SCALED_CANVAS_ID}
+        className="font-display"
         style={{
           width: DESIGN_WIDTH, height: DESIGN_HEIGHT, position: 'relative',
           zoom: scale, flexShrink: 0, overflow: 'hidden'

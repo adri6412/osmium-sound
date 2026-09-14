@@ -32,6 +32,14 @@
 # ensure_file_content; the enable step enables+starts on first install, and
 # restarts the timer (to re-arm its schedule) if the unit content changed on
 # an already-enabled box, e.g. picking up this interval tightening.
+#
+# UPDATE (0054): the symptom kept being reported with this timer active, so
+# the router-side theory above was at best incomplete — ping + re-announce
+# are OUTBOUND traffic (and Tailscale already keeps that flowing), which can't
+# help when the box's own NIC is asleep and deaf to unsolicited frames. The
+# actual root cause (NIC power saving: Wi-Fi PS / Ethernet EEE / runtime PM)
+# is handled by 0054-nic-no-powersave.sh. This migration stays as-is: it is
+# harmless and still covers routers that genuinely expire idle neighbours.
 
 ensure_file_content /usr/local/sbin/hifi-mdns-keepalive.sh 755 root:root <<'EOF'
 #!/bin/sh

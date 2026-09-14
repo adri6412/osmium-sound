@@ -1,0 +1,5 @@
+# prodotti della compilazione (si rifanno con `make`)
+build/
+hifi-qt
+# fotografie di collaudo prese dall'apparecchio
+shots-dell/

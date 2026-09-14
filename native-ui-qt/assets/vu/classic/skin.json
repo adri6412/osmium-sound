@@ -1,0 +1,10 @@
+{
+  "name": {"en": "Classic", "it": "Classico"},
+  "order": 10,
+  "size": [1280, 675],
+  "under": "under.png",
+  "over": "over.png",
+  "needle": {"color": "#111111", "width": 3.84, "minWidth": 2, "height": 275, "cap": 17.92, "shadow": true},
+  "meters": [[335, 461], [944, 461]],
+  "angles": [-36.4, 37.0]
+}

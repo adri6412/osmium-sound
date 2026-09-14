@@ -31,7 +31,7 @@ let pollTimer = null;
 let interruptedStreak = 0;
 const MAX_INTERRUPTED_POLLS = 60; // ~2 minutes at 2s/poll
 
-const kindLabels = { ui: () => t('settings.updates.kindUi'), system: () => t('settings.updates.kindSystem'), os: () => t('settings.updates.kindOs') };
+const kindLabels = { ui: () => t('settings.updates.kindUi'), system: () => t('settings.updates.kindSystem'), os: () => t('settings.updates.kindOs'), image: () => t('settings.updates.kindImage') };
 
 function onSettingsActive(e) { settingsActive.value = !!e.detail; }
 
@@ -95,7 +95,7 @@ onUnmounted(() => {
 
 <template>
   <div v-if="applying.active && !settingsActive" class="overlay">
-    <div class="card" style="width: 340px; text-align: center;">
+    <div class="card" style="width: 340px; max-width: 92vw; text-align: center;">
       <template v-if="applying.state !== 'done' && applying.state !== 'error' && applying.state !== 'apply_error' && applying.state !== 'interrupted'">
         <div class="spinner"></div>
         <h3 style="justify-content: center;">{{ t('settings.updates.updating', { label: applying.kind ? kindLabels[applying.kind]?.() : '' }) }}</h3>

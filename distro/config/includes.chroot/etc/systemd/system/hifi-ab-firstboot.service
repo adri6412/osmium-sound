@@ -1,0 +1,25 @@
+[Unit]
+Description=Osmium Sound — first boot of an image on a converted device (account merge)
+# /data and the overlay on /etc are mounted by the initramfs before PID 1, so
+# there is no dependency on local-fs.target (which, through
+# udev -> tmpfiles-dev-early -> sysusers, would make a cycle with the
+# Before=systemd-sysusers below and systemd would drop the unit).
+DefaultDependencies=no
+ConditionPathExists=/usr/lib/osmium/IMAGE_VERSION
+ConditionPathExists=/data/etc/accounts-extra
+ConditionPathExists=!/data/etc/upper/.hifi-accounts-merged
+After=systemd-remount-fs.service
+Before=sysinit.target systemd-sysusers.service shutdown.target
+Conflicts=shutdown.target
+# A live session has nothing to configure and nothing to watch over: the
+# single-filesystem ISO boots the very same image the appliances run, so
+# without this line these units would start there too.
+ConditionKernelCommandLine=!boot=live
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/local/sbin/hifi-ab-firstboot.sh
+
+[Install]
+WantedBy=sysinit.target

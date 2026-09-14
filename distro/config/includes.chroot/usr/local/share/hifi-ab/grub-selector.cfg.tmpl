@@ -1,0 +1,74 @@
+# Osmium Sound — A/B boot selector (version 1).
+#
+# This text file sits on the ESP as /EFI/debian/grub.cfg, in place of the
+# three-line stub grub-install writes, and is read by Debian's signed
+# grubx64.efi (which stays UNTOUCHED: the bootloader binary is never modified
+# here, only its configuration). It picks the slot to boot the way RAUC's own
+# contrib/grub.conf does, from the ORDER / A_OK / A_TRY / B_OK / B_TRY
+# variables kept in /EFI/debian/grubenv, then hands over to the chosen slot's
+# grub.cfg — either the static script of a RAUC image or the Debian grub.cfg
+# of a converted legacy root.
+#
+# The LAST branch is, byte for byte, today's stub: if anything above does not
+# add up (grubenv missing or unreadable, partitions gone, both slots refusing
+# to start) the device boots the way it always has.
+#
+# Rendered by hifi-ab-convert.sh / hifi-disk-install.sh: @LEGACY_UUID@ is the
+# ext4 UUID of the legacy root (or of slot A on a fresh install).
+# Source: distro/config/includes.chroot/usr/local/share/hifi-ab/grub-selector.cfg.tmpl
+set legacy_uuid=@LEGACY_UUID@
+set envfile=($root)/EFI/debian/grubenv
+set ab=0
+set disk=
+regexp --set=1:disk '^\(?(hd[0-9]+),' "$root"
+if [ -n "$disk" -a -e ($root)/EFI/debian/ab-enabled -a -e ($root)/EFI/debian/grubenv ]; then
+    set ORDER="A B"
+    set A_OK=1
+    set A_TRY=0
+    set B_OK=0
+    set B_TRY=0
+    if load_env --file=$envfile ORDER A_OK A_TRY B_OK B_TRY; then
+        set ab=1
+    fi
+fi
+if [ "$ab" = 1 ]; then
+    for pass in 1 2; do
+        for S in $ORDER; do
+            set ok=0
+            set try=1
+            set part=
+            if [ "$S" = "A" ]; then set ok="$A_OK"; set try="$A_TRY"; set part=gpt3; fi
+            if [ "$S" = "B" ]; then set ok="$B_OK"; set try="$B_TRY"; set part=gpt4; fi
+            if [ -n "$part" -a "$ok" = 1 -a "$try" = 0 ]; then
+                if [ "$S" = "A" ]; then set A_TRY=1; fi
+                if [ "$S" = "B" ]; then set B_TRY=1; fi
+                save_env --file=$envfile A_TRY B_TRY
+                set slot_partuuid=
+                set slot_fsuuid=
+                probe --set=slot_partuuid --part-uuid ($disk,$part)
+                probe --set=slot_fsuuid --fs-uuid ($disk,$part)
+                set rauc_slot="$S"
+                export rauc_slot slot_partuuid slot_fsuuid
+                if [ -e ($disk,$part)/boot/grub/grub.cfg ]; then
+                    set root=($disk,$part)
+                    set prefix=($root)/boot/grub
+                    configfile $prefix/grub.cfg
+                fi
+                # Only reached when the slot failed to boot: try the next one.
+            fi
+        done
+        # No slot left to try: give both another chance (and the other one
+        # goes first next time) instead of stopping at a menu nobody can see.
+        set A_TRY=0
+        set B_TRY=0
+        save_env --file=$envfile A_TRY B_TRY
+    done
+fi
+# ── legacy branch: grub-install's own stub, unchanged ────────────────────
+search.fs_uuid $legacy_uuid root
+set prefix=($root)/boot/grub
+configfile $prefix/grub.cfg
+# If even this fails (legacy root overwritten and both images broken) a reboot
+# beats sitting at the prompt on a device with no keyboard attached.
+sleep 10
+reboot

@@ -1,0 +1,12 @@
+#!/bin/sh
+# Osmium Sound — NetworkManager dispatcher hook: on every interface `up`, turn
+# its power saving off (Wi-Fi PS / Ethernet EEE / NIC runtime PM).
+#   $1 = interface name, $2 = action
+#
+# NetworkManager only runs dispatcher scripts that are root-owned, executable
+# and not group/other-writable — 755 root:root satisfies that.
+[ "${2:-}" = "up" ] || exit 0
+[ -n "${1:-}" ] || exit 0
+[ -x /usr/local/sbin/hifi-nic-powersave-off.sh ] || exit 0
+/usr/local/sbin/hifi-nic-powersave-off.sh "$1" || true
+exit 0

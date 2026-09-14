@@ -158,6 +158,62 @@ class OtaChannelTestCase(unittest.TestCase):
         finally:
             api_server.urllib.request.urlopen = saved
 
+    # ── _fetch_release: Pages → file.osmiumsound.it mirror (prod only) → API ──
+
+    def _fake_by_url(self, table):
+        """urlopen stand-in keyed by URL prefix: a payload, or an exception to raise."""
+        def _open(req, *a, **k):
+            url = req.full_url if hasattr(req, 'full_url') else str(req)
+            for prefix, what in table.items():
+                if url.startswith(prefix):
+                    if isinstance(what, Exception):
+                        raise what
+                    return _FakeResponse(what)
+            raise AssertionError('unexpected URL ' + url)
+        api_server.urllib.request.urlopen = _open
+
+    def test_prod_reads_the_mirror_manifest_when_pages_is_down(self):
+        saved = api_server.urllib.request.urlopen
+        api_server._RELEASE_CACHE.clear()
+        try:
+            self._fake_by_url({
+                api_server.OTA_MANIFEST_BASE: OSError('pages down'),
+                api_server.OTA_PROD_MIRROR_BASE: _release('v2.5.30'),
+                'https://api.github.com/': [_release('v2.5.29')],
+            })
+            self.assertEqual(api_server._fetch_release('prod')['tag_name'], 'v2.5.30')
+        finally:
+            api_server.urllib.request.urlopen = saved
+            api_server._RELEASE_CACHE.clear()
+
+    def test_prod_falls_back_to_the_api_when_both_manifests_are_down(self):
+        saved = api_server.urllib.request.urlopen
+        api_server._RELEASE_CACHE.clear()
+        try:
+            self._fake_by_url({
+                api_server.OTA_MANIFEST_BASE: OSError('pages down'),
+                api_server.OTA_PROD_MIRROR_BASE: OSError('mirror down'),
+                'https://api.github.com/': [_release('v2.5.29')],
+            })
+            self.assertEqual(api_server._fetch_release('prod')['tag_name'], 'v2.5.29')
+        finally:
+            api_server.urllib.request.urlopen = saved
+            api_server._RELEASE_CACHE.clear()
+
+    def test_dev_never_touches_the_mirror(self):
+        saved = api_server.urllib.request.urlopen
+        api_server._RELEASE_CACHE.clear()
+        try:
+            self._fake_by_url({
+                api_server.OTA_MANIFEST_BASE: OSError('pages down'),
+                api_server.OTA_PROD_MIRROR_BASE: _release('v2.5.30'),
+                'https://api.github.com/': [_release('v2.5.31-dev.1', prerelease=True)],
+            })
+            self.assertEqual(api_server._fetch_release('dev')['tag_name'], 'v2.5.31-dev.1')
+        finally:
+            api_server.urllib.request.urlopen = saved
+            api_server._RELEASE_CACHE.clear()
+
     def test_alpha_semver_key_ranks_between_its_base_dev_and_the_next_one(self):
         base = api_server._semver_key('2.5.21-dev.50')
         alpha1 = api_server._semver_key('2.5.21-dev.50-alpha1')

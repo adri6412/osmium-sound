@@ -12,12 +12,15 @@
 // "Apply & rescan" button: sources_server.py pushes every edit into Lyrion's
 // live mediadirs and rescans on its own (_lyrion_push_live()), without the
 // service restart that would cut off whatever is playing.
-import { ref, reactive, computed, onMounted, onUnmounted } from 'vue';
+import { ref, reactive, computed, nextTick, onMounted, onUnmounted, onBeforeUnmount } from 'vue';
 import { api } from '../api.js';
 import { useI18n } from '../i18n';
 import FolderPicker from './FolderPicker.vue';
+import Icon from './Icon.vue';
+import { useRouter } from 'vue-router';
 
 const { t } = useI18n();
+const router = useRouter();
 
 const msg = ref('');
 const err = ref(false);
@@ -29,14 +32,47 @@ function say(m, isErr = false) {
 
 const busy = ref(false);
 
-// One band open at a time; the two container bands ("add source", "shared
-// folders") hold their own single-open sub-band.
-const open = ref('');
-const openAdd = ref('');     // 'smb' | 'internal' | 'local'
-const openShare = ref('');   // 'local'
-function toggle(k) { open.value = open.value === k ? '' : k; }
-function toggleAdd(k) { openAdd.value = openAdd.value === k ? '' : k; }
-function toggleShare(k) { openShare.value = openShare.value === k ? '' : k; }
+// One screen at a time, with a way back — not bands that unfold under each
+// other. Four sections' worth of accordion pushed everything below it off the
+// screen, and the nested ones ("add source" holding three more) left the
+// owner reading a folded map. `nav` is where we are: [] is the menu,
+// ['add','smb'] is the network-folder flow inside "Add source".
+const nav = ref([]);
+const page = computed(() => nav.value.join('/'));
+
+const PAGE_TITLE = {
+  active: 'settings.sources.active',
+  add: 'settings.sources.addSource',
+  'add/smb': 'settings.sources.addSmb',
+  'add/internal': 'settings.sources.internalTitle',
+  'add/local': 'settings.sources.addLocal',
+  playlist: 'settings.sources.playlistdirTitle',
+  share: 'settings.sources.shareTitle',
+  'share/local': 'settings.sources.shareLocal',
+};
+const pageTitle = computed(() => t(PAGE_TITLE[page.value] || 'settings.sections.sources.label'));
+// What "back" goes to, named — "‹ Add source" says more than a bare arrow.
+const backTitle = computed(() => {
+  const up = nav.value.slice(0, -1).join('/');
+  return up ? t(PAGE_TITLE[up]) : t('settings.sections.sources.label');
+});
+
+function go(key) {
+  nav.value = [...nav.value, key];
+  // Entering "network folder" starts the LAN scan straight away: the list is
+  // the point of the redesign, and waiting for a button to start it would put
+  // the empty state back where the four boxes used to be.
+  if (page.value === 'add/smb') { wizReset(); wizScan(); }
+}
+function back() {
+  const leaving = page.value;
+  nav.value = nav.value.slice(0, -1);
+  if (leaving === 'add/smb') { wizStopScan(); wizReset(); }
+  msg.value = '';
+}
+function openPage(path) {            // jump straight to a screen
+  nav.value = path ? path.split('/') : [];
+}
 
 // ── Active sources + USB needing attention ───────────────────────────
 const sources = ref([]);
@@ -164,32 +200,176 @@ async function addLocal(path, samba) {
   busy.value = false;
 }
 
-const smb = reactive({ server: '', share: '', username: '', password: '', rw: false });
-async function addSmb() {
-  if (!smb.server.trim() || !smb.share.trim()) return;
-  busy.value = true;
+// ── Guided "add a network folder" ─────────────────────────────────────
+// Four empty boxes (server, share, user, password) are unusable by anyone who
+// does not already know what an SMB share is. The appliance now looks for the
+// file servers on the LAN itself and reads back what each one shares, so this
+// is a list to pick from; typing it all in survives as the fallback, one
+// field at a time. Same endpoints and same steps as the kiosk's own wizard.
+const wiz = reactive({
+  step: 0,               // 0 find a device, 1 pick a folder, 2 confirm
+  manual: false,         // "I'll type it myself"
+  host: '', name: '', share: '',
+  username: '', password: '',
+  rw: false,
+  busy: false,
+  err: '', detail: '', detailOpen: false,
+  needsAuth: false,
+  canList: true,         // false when the shares of this server cannot be read
+  noClient: false,       // ...because this appliance has no smbclient at all
+});
+const scan = reactive({ state: '', progress: 0, hosts: [] });
+const wizShares = ref([]);
+let scanTimer = null;
+
+function wizStopScan() {
+  if (scanTimer) { clearInterval(scanTimer); scanTimer = null; }
+}
+function wizReset() {
+  wizStopScan();
+  Object.assign(wiz, { step: 0, manual: false, host: '', name: '', share: '',
+                       username: '', password: '', rw: false, busy: false,
+                       err: '', detail: '', detailOpen: false,
+                       needsAuth: false, canList: true, noClient: false });
+  Object.assign(scan, { state: '', progress: 0, hosts: [] });
+  wizShares.value = [];
+}
+function wizFail(data, fallbackKey) {
+  wiz.err = (data && data.message) || t(fallbackKey);
+  wiz.detail = (data && data.detail) || '';
+  wiz.detailOpen = false;
+}
+async function wizScan() {
+  wiz.manual = false; wiz.err = ''; wiz.detail = '';
+  Object.assign(scan, { state: 'running', progress: 0, hosts: [] });
+  await api.smbDiscoverStart();
+  await wizPoll();
+  wizStopScan();
+  scanTimer = setInterval(wizPoll, 900);
+}
+async function wizPoll() {
+  const r = await api.smbDiscoverStatus();
+  if (!r.ok) { wizStopScan(); return; }
+  scan.state = r.data.state || '';
+  scan.progress = Number(r.data.progress || 0);
+  scan.hosts = r.data.hosts || [];
+  // Without smbclient (a device that has not taken the new image yet) the
+  // shares cannot be listed, so the flow falls back to typing the name.
+  if (r.data.tools && r.data.tools.shares === false) { wiz.canList = false; wiz.noClient = true; }
+  if (scan.state !== 'running') wizStopScan();
+}
+async function wizPickHost(host) {
+  wizStopScan();
+  wiz.host = host.ip; wiz.name = host.name || host.ip;
+  wiz.share = ''; wizShares.value = []; wiz.needsAuth = false;
+  wiz.err = ''; wiz.detail = ''; wiz.step = 1;
+  if (wiz.canList) await wizLoadShares();
+}
+// Username and password are asked in a window, only once the device (or the
+// folder) turns out to want them -- never as an error, and never as fields
+// sitting on the page. `refused`: the previous attempt was turned down, and
+// the window says so. `retry` runs again with the new login.
+const login = reactive({ open: false, user: '', pass: '', err: '', retry: null });
+const loginUserEl = ref(null);
+const loginPassEl = ref(null);
+function wizAskAuth(refused, retry) {
+  Object.assign(login, { open: true, user: wiz.username, pass: '',
+                         err: refused ? t('settings.sources.wizWrongPassword') : '', retry });
+  nextTick(() => {
+    const el = login.user ? loginPassEl.value : loginUserEl.value;
+    if (el) el.focus();
+  });
+}
+function loginCancel() {
+  login.open = false; login.retry = null;
+}
+async function loginSubmit() {
+  const user = login.user.trim();
+  if (!user) return;
+  const retry = login.retry;
+  wiz.username = user; wiz.password = login.pass; wiz.needsAuth = true;
+  login.open = false; login.retry = null;
+  if (retry) await retry();
+}
+function wizChangeUser() {
+  // with no list yet the login is for reading it; otherwise the next folder
+  // picked uses it
+  wizAskAuth(false, async () => { if (wiz.canList && !wizShares.value.length) await wizLoadShares(); });
+}
+async function wizLoadShares() {
+  wiz.busy = true; wiz.err = ''; wiz.detail = '';
+  const tried = !!wiz.username;
+  const r = await api.smbShares({ server: wiz.host, username: wiz.username, password: wiz.password });
+  wiz.busy = false;
+  if (wiz.step !== 1) return;
+  if (!r.ok || !r.data || r.data.success === false) {
+    // Wrong password: ask again. Only a real failure falls back to typing
+    // the folder name.
+    if (r.data && r.data.code === 'msg.smbBadCredentials') {
+      wiz.needsAuth = true;
+      wizAskAuth(tried, wizLoadShares);
+      return;
+    }
+    wizFail(r.data, 'settings.sources.wizListFailed');
+    wiz.canList = false;
+    return;
+  }
+  wiz.needsAuth = !!r.data.needs_auth;
+  wizShares.value = r.data.shares || [];
+  // the list itself is behind a login
+  if (r.data.needs_auth && !wizShares.value.length) wizAskAuth(tried, wizLoadShares);
+}
+async function wizPickShare(name) {
+  wiz.share = name; wiz.err = ''; wiz.detail = ''; wiz.busy = true;
+  const tried = !!wiz.username;
+  const r = await api.smbTest({ server: wiz.host, share: name,
+                                username: wiz.username, password: wiz.password });
+  wiz.busy = false;
+  if (wiz.step !== 1) return;
+  if (r.ok && r.data && r.data.success !== false) { wiz.step = 2; return; }
+  // A folder that wants a login asks for it right here, not with an error
+  // and not at the end as a failed mount.
+  if (r.data && r.data.code === 'msg.smbBadCredentials') {
+    wiz.needsAuth = true;
+    wizAskAuth(tried, () => wizPickShare(name));
+    return;
+  }
+  wizFail(r.data, 'settings.sources.wizOpenFailed');
+}
+async function wizAdd() {
+  if (!wiz.host || !wiz.share) return;
+  wiz.busy = true; wiz.err = ''; wiz.detail = '';
   say(t('settings.sources.mounting'));
   // defer_activation: mount only, don't hand the share to Lyrion yet -- the
   // user still needs to pick "whole share" or a subfolder below, through the
   // same browse/subpath endpoints as "Pick a subfolder" on an existing
   // source (see sources_server.py's api_add_smb()/api_set_subpath()).
-  const r = await api.sourcesAddSmb({ ...smb, defer_activation: true });
-  if (!r.ok) {
+  const r = await api.sourcesAddSmb({
+    server: wiz.host, share: wiz.share, username: wiz.username,
+    password: wiz.password, rw: wiz.rw, defer_activation: true,
+  });
+  wiz.busy = false;
+  if (!r.ok || (r.data && r.data.success === false)) {
+    if (wiz.step === 2 && r.data && r.data.code === 'msg.smbBadCredentials') {
+      say('');
+      wiz.step = 1; wiz.needsAuth = true;
+      wizAskAuth(!!wiz.username, () => wizPickShare(wiz.share));
+      return;
+    }
+    wizFail(r.data, 'common.error');
     say((r.data && r.data.message) || t('common.error'), true);
-    busy.value = false;
     return;
   }
-  smb.server = ''; smb.share = ''; smb.username = ''; smb.password = ''; smb.rw = false;
+  const id = r.data.id;
+  wizReset();
   await loadSources();
   loadSmbCard();
-  const added = sources.value.find((s) => s.id === r.data.id);
-  if (added) {
-    open.value = 'active';
-    openBrowse(added);
-  }
+  const added = sources.value.find((x) => x.id === id);
+  if (added) { openPage('active'); openBrowse(added); }
   say(t('settings.sources.chooseFolderHint'));
-  busy.value = false;
 }
+
+onBeforeUnmount(wizStopScan);
 
 // ── Playlist folder ───────────────────────────────────────────────────
 // Where Lyrion saves playlists created from the player. The appliance
@@ -350,18 +530,71 @@ onUnmounted(() => {
 
 <template>
   <div>
-    <p class="muted">{{ t('settings.sources.autoApplyHint') }}</p>
+    <!-- Where we are, and the way back. One screen at a time: bands unfolding
+         under each other pushed everything below them off the page, and the
+         nested ones left the owner reading a folded map. -->
+    <template v-if="page">
+      <a class="backlink" href="#" @click.prevent="back">‹ {{ backTitle }}</a>
+      <h3 class="sec-title">{{ pageTitle }}</h3>
+    </template>
+    <p v-else class="muted">{{ t('settings.sources.autoApplyHint') }}</p>
+
+    <div v-if="!page">
+      <div class="net between" @click="go('active')">
+        <span class="menu-l">
+          <Icon class="gl" name="library" :size="19" />
+          <span>
+            <span style="display: block;">{{ t('settings.sources.active') }}</span>
+            <span class="muted">{{ sources.length ? t('settings.sources.countSummary', { count: sources.length }) : t('settings.sources.noneSummary') }}</span>
+          </span>
+        </span>
+        <span class="chev">›</span>
+      </div>
+      <div class="net between" @click="go('add')">
+        <span class="menu-l">
+          <Icon class="gl" name="plus" :size="19" />
+          <span>
+            <span style="display: block;">{{ t('settings.sources.addSource') }}</span>
+            <span class="muted">{{ t('settings.sources.addSourceHint') }}</span>
+          </span>
+        </span>
+        <span class="chev">›</span>
+      </div>
+      <div class="net between" @click="go('playlist')">
+        <span class="menu-l">
+          <Icon class="gl" name="list-music" :size="19" />
+          <span>
+            <span style="display: block;">{{ t('settings.sources.playlistdirTitle') }}</span>
+            <span class="muted" style="word-break: break-all;">{{ playlistdir || t('settings.sources.playlistdirUnset') }}</span>
+          </span>
+        </span>
+        <span class="chev">›</span>
+      </div>
+      <div class="net between" @click="go('share')">
+        <span class="menu-l">
+          <Icon class="gl" name="share-2" :size="19" />
+          <span>
+            <span style="display: block;">{{ t('settings.sources.shareTitle') }}</span>
+            <span class="muted">{{ shares.length ? t('settings.sources.shareCount', { count: shares.length }) : t('settings.sources.shareNone') }}</span>
+          </span>
+        </span>
+        <span class="chev">›</span>
+      </div>
+      <div class="net between" @click="router.push('/files')">
+        <span class="menu-l">
+          <Icon class="gl" name="folder-open" :size="19" />
+          <span>
+            <span style="display: block;">{{ t('files.open') }}</span>
+            <span class="muted">{{ t('files.menuHint') }}</span>
+          </span>
+        </span>
+        <span class="chev">›</span>
+      </div>
+    </div>
 
     <!-- ── Active sources ─────────────────────────────────────────── -->
-    <div class="acc" :class="{ open: open === 'active' }">
-      <div class="net between" @click="toggle('active')">
-        <span>
-          <span style="display: block;">{{ t('settings.sources.active') }}</span>
-          <span class="muted">{{ sources.length ? t('settings.sources.countSummary', { count: sources.length }) : t('settings.sources.none') }}</span>
-        </span>
-        <span class="chev">{{ open === 'active' ? '⌄' : '›' }}</span>
-      </div>
-      <div v-if="open === 'active'" class="acc-body">
+    <div v-else-if="page === 'active'">
+      <div>
         <p v-if="!sources.length" class="sub">{{ t('settings.sources.none') }}</p>
         <template v-for="s in sources" :key="s.id">
           <div class="net between" style="align-items: center; gap: 16px; flex-wrap: wrap;">
@@ -434,57 +667,168 @@ onUnmounted(() => {
     </div>
 
     <!-- ── Add source ─────────────────────────────────────────────── -->
-    <div class="acc" :class="{ open: open === 'add' }">
-      <div class="net between" @click="toggle('add')">
-        <span>
-          <span style="display: block;">{{ t('settings.sources.addSource') }}</span>
-          <span class="muted">{{ t('settings.sources.addSourceHint') }}</span>
-        </span>
-        <span class="chev">{{ open === 'add' ? '⌄' : '›' }}</span>
-      </div>
-      <div v-if="open === 'add'" class="acc-body">
-        <!-- Network folder (SMB) -->
-        <div class="acc" :class="{ open: openAdd === 'smb' }">
-          <div class="net between" @click="toggleAdd('smb')">
-            <span>{{ t('settings.sources.addSmb') }}</span>
-            <span class="chev">{{ openAdd === 'smb' ? '⌄' : '›' }}</span>
+    <div v-else-if="page.startsWith('add')">
+      <div>
+        <!-- Which kind. Three choices, in the words someone would use for
+             where their music actually is. -->
+        <div v-if="page === 'add'">
+          <div class="net between" @click="go('smb')">
+            <span class="menu-l">
+              <Icon class="gl" name="network" :size="19" />
+              <span>
+                <span style="display: block;">{{ t('settings.sources.addSmb') }}</span>
+                <span class="muted">{{ t('settings.sources.addSmbHint') }}</span>
+              </span>
+            </span>
+            <span class="chev">›</span>
           </div>
-          <div v-if="openAdd === 'smb'" class="acc-body">
-            <div class="row">
-              <div style="flex: 1;">
-                <label>{{ t('settings.sources.server') }}</label>
-                <input v-model="smb.server" type="text" placeholder="192.168.0.20" />
+          <div class="net between" @click="go('internal')">
+            <span class="menu-l">
+              <Icon class="gl" name="hard-drive" :size="19" />
+              <span>
+                <span style="display: block;">{{ t('settings.sources.internalTitle') }}</span>
+                <span class="muted">{{ t('settings.sources.addInternalHint') }}</span>
+              </span>
+            </span>
+            <span class="chev">›</span>
+          </div>
+          <div class="net between" @click="go('local')">
+            <span class="menu-l">
+              <Icon class="gl" name="folder-plus" :size="19" />
+              <span>
+                <span style="display: block;">{{ t('settings.sources.addLocal') }}</span>
+                <span class="muted">{{ t('settings.sources.addLocalHint') }}</span>
+              </span>
+            </span>
+            <span class="chev">›</span>
+          </div>
+        </div>
+
+        <!-- Network folder (SMB) -->
+        <div v-else-if="page === 'add/smb'">
+          <div>
+            <p class="sub">{{ t('settings.sources.wizIntro') }}</p>
+
+            <!-- 1. which device -->
+            <template v-if="wiz.step === 0">
+              <template v-if="!wiz.manual">
+                <p v-if="scan.state === 'running'" class="sub">
+                  {{ t('settings.sources.wizSearching') }} — {{ scan.progress }}%
+                </p>
+                <div v-for="h in scan.hosts" :key="h.ip" class="net between" @click="wizPickHost(h)">
+                  <span>
+                    <span style="display: block;">{{ h.name || h.ip }}</span>
+                    <span v-if="h.name" class="muted">{{ h.ip }}</span>
+                  </span>
+                  <span class="chev">›</span>
+                </div>
+                <p v-if="!scan.hosts.length && scan.state !== 'running'" class="sub">
+                  {{ t('settings.sources.wizNothing') }}
+                </p>
+                <div class="row" style="margin-top: 10px;">
+                  <button class="ghost" :disabled="scan.state === 'running'" @click="wizScan">
+                    {{ t('settings.sources.wizSearchAgain') }}
+                  </button>
+                  <button class="ghost" @click="wiz.manual = true">{{ t('settings.sources.wizTypeIt') }}</button>
+                </div>
+              </template>
+              <template v-else>
+                <label>{{ t('settings.sources.wizAddress') }}</label>
+                <input v-model="wiz.host" type="text" placeholder="192.168.0.20" />
+                <p class="sub">{{ t('settings.sources.wizManualHint') }}</p>
+                <div class="row">
+                  <button :disabled="!wiz.host.trim()" @click="wizPickHost({ ip: wiz.host.trim(), name: '' })">
+                    {{ t('settings.sources.wizContinue') }}
+                  </button>
+                  <button class="ghost" @click="wizScan">{{ t('settings.sources.wizSearchAgain') }}</button>
+                </div>
+              </template>
+            </template>
+
+            <!-- 2. which shared folder -->
+            <template v-else-if="wiz.step === 1">
+              <p class="sub">{{ t('settings.sources.wizOnDevice', { device: wiz.name || wiz.host }) }}</p>
+              <div v-if="wiz.username" class="net between">
+                <span>
+                  <span class="muted">{{ t('settings.sources.wizUserLabel') }}</span>
+                  <span class="mono" style="margin-left: 8px;">{{ wiz.username }}</span>
+                </span>
+                <button class="ghost fit" :disabled="wiz.busy" @click="wizChangeUser">
+                  {{ t('settings.sources.wizChangeUser') }}
+                </button>
               </div>
-              <div style="flex: 1;">
-                <label>{{ t('settings.sources.share') }}</label>
-                <input v-model="smb.share" type="text" :placeholder="t('settings.sources.sharePlaceholder')" />
+              <p v-if="wiz.busy" class="sub">{{ t('settings.sources.wizLoadingShares') }}</p>
+              <template v-else-if="!wiz.canList">
+                <label>{{ t('settings.sources.wizShareLabel') }}</label>
+                <input v-model="wiz.share" type="text" :placeholder="t('settings.sources.sharePlaceholder')" />
+                <p class="sub">
+                  <template v-if="wiz.noClient">{{ t('settings.sources.wizNoClientHint') }} </template>
+                  {{ t('settings.sources.wizTypeShareHint') }}
+                </p>
+                <button :disabled="!wiz.share.trim()" @click="wiz.step = 2">{{ t('settings.sources.wizContinue') }}</button>
+              </template>
+              <template v-else>
+                <div v-for="sh in wizShares" :key="sh.name" class="net between" @click="wizPickShare(sh.name)">
+                  <span>
+                    <span style="display: block;">{{ sh.name }}</span>
+                    <span v-if="sh.comment" class="muted">{{ sh.comment }}</span>
+                  </span>
+                  <span class="chev">›</span>
+                </div>
+                <p v-if="!wizShares.length && !wiz.needsAuth" class="sub">{{ t('settings.sources.wizNoShares') }}</p>
+                <div class="row" style="margin-top: 10px;">
+                  <button v-if="!wiz.username" class="ghost" :disabled="wiz.busy" @click="wizChangeUser">
+                    {{ t('settings.sources.wizNeedPassword') }}
+                  </button>
+                  <button class="ghost" @click="wiz.canList = false">{{ t('settings.sources.wizTypeIt') }}</button>
+                </div>
+              </template>
+            </template>
+
+            <!-- 3. confirm -->
+            <template v-else>
+              <div class="pathlist">
+                <span class="muted">{{ t('settings.sources.wizDevice') }}</span><span>{{ wiz.name || wiz.host }}</span>
+                <span class="muted">{{ t('settings.sources.wizFolder') }}</span><span>{{ wiz.share }}</span>
+                <template v-if="wiz.username">
+                  <span class="muted">{{ t('settings.sources.wizUserLabel') }}</span><span>{{ wiz.username }}</span>
+                </template>
               </div>
+              <div class="net between" style="margin-top: 10px;">
+                <span>
+                  <span style="display: block;">{{ t('settings.sources.wizAllowWrite') }}</span>
+                  <span class="muted">{{ t('settings.sources.wizWriteHint') }}</span>
+                </span>
+                <input v-model="wiz.rw" type="checkbox" style="width: auto;" />
+              </div>
+              <button style="margin-top: 10px;" :disabled="wiz.busy" @click="wizAdd">
+                {{ t('settings.sources.wizAddNow') }}
+              </button>
+            </template>
+
+            <!-- what went wrong, in words; the raw tool output stays reachable
+                 but is never the only thing on screen -->
+            <div v-if="wiz.err" class="msg err" style="margin-top: 10px;">
+              {{ wiz.err }}
+              <template v-if="wiz.detail">
+                <button class="ghost fit" style="margin-left: 8px;" @click="wiz.detailOpen = !wiz.detailOpen">
+                  {{ t(wiz.detailOpen ? 'settings.sources.wizHideDetail' : 'settings.sources.wizShowDetail') }}
+                </button>
+                <pre v-if="wiz.detailOpen" class="mono" style="white-space: pre-wrap; margin: 8px 0 0;">{{ wiz.detail }}</pre>
+              </template>
             </div>
-            <div class="row">
-              <div style="flex: 1;">
-                <label>{{ t('settings.sources.user') }}</label>
-                <input v-model="smb.username" type="text" :placeholder="t('settings.sources.userPlaceholder')" />
-              </div>
-              <div style="flex: 1;">
-                <label>{{ t('settings.sources.pass') }}</label>
-                <input v-model="smb.password" type="password" placeholder="••••••" />
-              </div>
+            <div v-if="wiz.step > 0" class="row" style="margin-top: 10px;">
+              <button class="ghost fit" :disabled="wiz.busy" @click="wiz.step = wiz.step - 1; wiz.err = ''">
+                {{ t('common.back') }}
+              </button>
+              <button class="ghost fit" @click="wizReset(); wizScan()">{{ t('settings.sources.wizStartOver') }}</button>
             </div>
-            <div class="net between" style="margin-top: 8px;">
-              <span class="muted">{{ t('settings.sources.smbRw') }}</span>
-              <input v-model="smb.rw" type="checkbox" style="width: auto;" />
-            </div>
-            <button style="margin-top: 8px;" :disabled="busy" @click="addSmb">{{ t('settings.sources.mountAndAdd') }}</button>
           </div>
         </div>
 
         <!-- Internal disks -->
-        <div class="acc" :class="{ open: openAdd === 'internal' }">
-          <div class="net between" @click="toggleAdd('internal')">
-            <span>{{ t('settings.sources.internalTitle') }}</span>
-            <span class="chev">{{ openAdd === 'internal' ? '⌄' : '›' }}</span>
-          </div>
-          <div v-if="openAdd === 'internal'" class="acc-body">
+        <div v-else-if="page === 'add/internal'">
+          <div>
             <p v-if="!internalDisks.length" class="sub">{{ t('settings.sources.internalNone') }}</p>
             <template v-for="dk in internalDisks" :key="dk.path">
               <div class="net between" style="align-items: flex-start;">
@@ -518,12 +862,8 @@ onUnmounted(() => {
 
         <!-- Local folder — file-browser picker (mirrors Lyrion's own folder
              picker) instead of a free-text path box. -->
-        <div class="acc" :class="{ open: openAdd === 'local' }">
-          <div class="net between" @click="toggleAdd('local')">
-            <span>{{ t('settings.sources.addLocal') }}</span>
-            <span class="chev">{{ openAdd === 'local' ? '⌄' : '›' }}</span>
-          </div>
-          <div v-if="openAdd === 'local'" class="acc-body">
+        <div v-else-if="page === 'add/local'">
+          <div>
             <FolderPicker
               :pick-label="t('settings.sources.useThisFolder')"
               :busy="busy"
@@ -536,15 +876,8 @@ onUnmounted(() => {
     </div>
 
     <!-- ── Playlist folder ────────────────────────────────────────── -->
-    <div class="acc" :class="{ open: open === 'playlist' }">
-      <div class="net between" @click="toggle('playlist')">
-        <span>
-          <span style="display: block;">{{ t('settings.sources.playlistdirTitle') }}</span>
-          <span class="muted" style="word-break: break-all;">{{ playlistdir || t('settings.sources.playlistdirUnset') }}</span>
-        </span>
-        <span class="chev">{{ open === 'playlist' ? '⌄' : '›' }}</span>
-      </div>
-      <div v-if="open === 'playlist'" class="acc-body">
+    <div v-else-if="page === 'playlist'">
+      <div>
         <p class="muted">{{ t('settings.sources.playlistdirHint') }}</p>
         <div class="net between" style="align-items: center; gap: 12px; flex-wrap: wrap;">
           <div class="muted" style="min-width: 220px; word-break: break-all;">
@@ -575,15 +908,8 @@ onUnmounted(() => {
     </div>
 
     <!-- ── Shared folders (what this player publishes on the network) ─ -->
-    <div class="acc" :class="{ open: open === 'share' }">
-      <div class="net between" @click="toggle('share')">
-        <span>
-          <span style="display: block;">{{ t('settings.sources.shareTitle') }}</span>
-          <span class="muted">{{ shares.length ? t('settings.sources.shareCount', { count: shares.length }) : t('settings.sources.shareNone') }}</span>
-        </span>
-        <span class="chev">{{ open === 'share' ? '⌄' : '›' }}</span>
-      </div>
-      <div v-if="open === 'share'" class="acc-body">
+    <div v-else-if="page.startsWith('share')">
+      <div v-if="page === 'share'">
         <p class="muted">{{ t('settings.sources.shareHint') }}</p>
         <p v-if="smbCard && !smbCard.installed" class="sub" style="color: var(--danger);">{{ t('settings.sources.needOsUpdate') }}</p>
         <template v-else-if="shares.length">
@@ -613,12 +939,16 @@ onUnmounted(() => {
 
         <!-- Share a local folder: same picker as "add local folder", with the
              Samba flag set so music can be copied onto it from a PC. -->
-        <div class="acc" :class="{ open: openShare === 'local' }">
-          <div class="net between" @click="toggleShare('local')">
+        <div class="net between" @click="go('local')">
+          <span class="menu-l">
+            <Icon class="gl" name="folder-plus" :size="19" />
             <span>{{ t('settings.sources.shareLocal') }}</span>
-            <span class="chev">{{ openShare === 'local' ? '⌄' : '›' }}</span>
-          </div>
-          <div v-if="openShare === 'local'" class="acc-body">
+          </span>
+          <span class="chev">›</span>
+        </div>
+      </div>
+      <div v-else-if="page === 'share/local'">
+        <div>
             <p class="muted">{{ t('settings.sources.localSambaHint') }}</p>
             <FolderPicker
               :pick-label="t('settings.sources.shareThisFolder')"
@@ -626,7 +956,6 @@ onUnmounted(() => {
               @pick="(p) => addLocal(p, true)"
               @error="(m) => say(m, true)"
             />
-          </div>
         </div>
       </div>
     </div>
@@ -665,9 +994,26 @@ onUnmounted(() => {
       </div>
     </div>
 
+    <!-- Sign in to a network device, asked only when it wants a login -->
+    <div v-if="login.open" class="overlay" @click.self="loginCancel">
+      <form class="card" style="width: 380px; max-width: calc(100vw - 32px);" @submit.prevent="loginSubmit" @keydown.esc="loginCancel">
+        <h3><span class="dot"></span>{{ t('settings.sources.wizSignInTo', { device: wiz.name || wiz.host }) }}</h3>
+        <p class="sub">{{ t('settings.sources.wizAuthHint') }}</p>
+        <label>{{ t('settings.sources.wizUserLabel') }}</label>
+        <input ref="loginUserEl" v-model="login.user" type="text" autocomplete="username" autocapitalize="off" @input="login.err = ''" />
+        <label>{{ t('settings.sources.pass') }}</label>
+        <input ref="loginPassEl" v-model="login.pass" type="password" autocomplete="current-password" @input="login.err = ''" />
+        <div v-if="login.err" class="msg err" style="margin-top: 10px;">{{ login.err }}</div>
+        <div class="row" style="margin-top: 16px;">
+          <button type="button" class="secondary" style="flex: 1;" @click="loginCancel">{{ t('common.cancel') }}</button>
+          <button type="submit" style="flex: 1;" :disabled="!login.user.trim()">{{ t('settings.sources.wizSignIn') }}</button>
+        </div>
+      </form>
+    </div>
+
     <!-- Format wizard -->
     <div v-if="wizardDisk" class="overlay">
-      <div class="card" style="width: 360px;">
+      <div class="card" style="width: 360px; max-width: calc(100vw - 32px);">
         <template v-if="wizardStep === 'choose'">
           <h3>{{ t('settings.sources.wizardTitle') }}</h3>
           <p class="sub">{{ wizardDisk.model || wizardDisk.path }} · {{ fmtSize(wizardDisk.size) }}</p>

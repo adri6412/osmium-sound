@@ -21,6 +21,7 @@ import io
 import glob
 from hifi_logging import get_logger
 from hifi_i18n import t as _t
+from hifi_i18n import MESSAGES as _I18N_MESSAGES
 
 app = Flask(__name__)
 # This API is bound to 127.0.0.1 only (see the bottom of this file) and has no
@@ -90,6 +91,13 @@ OTA_REPO = os.environ.get('HIFI_OTA_REPO', 'adri6412/hifi-media-player')
 # that fallback, then use the fast path again from then on.
 OTA_MANIFEST_BASE = os.environ.get('HIFI_OTA_MANIFEST_BASE',
                                    'https://osmium-sound.pages.dev/ota')
+# Stable releases are served from file.osmiumsound.it (Cloudflare R2, the
+# host the ISO and the flasher come from) and the release workflow drops a
+# copy of the prod manifest next to the payloads. Read that copy when Pages
+# is unreachable, before resorting to the rate-limited GitHub API. Prod only:
+# dev/alpha builds live on GitHub alone.
+OTA_PROD_MIRROR_BASE = os.environ.get('HIFI_OTA_PROD_MIRROR_BASE',
+                                      'https://file.osmiumsound.it/ota')
 # OTA release channel: 'prod' tracks GitHub's /releases/latest (stable releases
 # only); 'dev' tracks the newest release including prereleases (vX.Y.Z-dev.N).
 # 'alpha' tracks the newest release of ANY kind, including private test tags cut
@@ -104,11 +112,23 @@ OTA_CHANNELS = ('prod', 'dev', 'alpha')
 # out of the UI/API for every device except the owner's own, on purpose.
 OTA_ALPHA_MARKER_FILE = '/etc/hifi-player/ota-alpha-unlocked'
 OTA_APPDIR = '/opt/hifi-media-player'
-OTA_VERSION_FILE = os.path.join(OTA_APPDIR, 'UI_VERSION')
+# 🚨 Da 2.5.24 il canale "ui" porta l'interfaccia Qt (/opt/hifi-qt), non piu'
+# l'app Electron: la versione installata sta in un file suo, fuori dalle due
+# cartelle. Il vecchio percorso resta come ripiego per gli apparecchi che non
+# hanno ancora ricevuto questo aggiornamento.
+OTA_VERSION_FILE = '/etc/hifi-player/UI_VERSION'
+OTA_VERSION_FILE_LEGACY = os.path.join(OTA_APPDIR, 'UI_VERSION')
 OTA_SCRIPT = '/usr/local/sbin/hifi-ota-update.sh'
 OTA_STATUS_FILE = '/run/hifi-ota-status.json'
 # The UI release carries several tarballs; pick ours by name prefix.
-OTA_UI_PREFIX = 'hifi-ui-'
+# 🚨 Da 2.5.24 il pacchetto dell'interfaccia contiene Qt e si chiama
+# `hifi-qtui-`: il nome e' NUOVO di proposito, perche' l'aggiornatore
+# installato sugli apparecchi vecchi rifiuta un pacchetto senza Electron e
+# bloccherebbe l'intero aggiornamento. Non trovando `hifi-ui-` quegli
+# apparecchi considerano l'interfaccia aggiornata, applicano sistema e
+# sistema operativo, e al giro dopo — con l'aggiornatore nuovo — prendono
+# anche Qt. Il nome vecchio resta come ripiego per tornare indietro.
+OTA_UI_PREFIX = ('hifi-qtui-', 'hifi-ui-')
 
 # ──────────────────────────────────────────────────────────────────
 #  OTA update of the custom system components (Python API/daemons,
@@ -132,6 +152,12 @@ OS_VERSION_FILE = '/etc/hifi-player/OS_VERSION'
 OS_SCRIPT = '/usr/local/sbin/hifi-os-update.sh'
 OS_STATUS_FILE = '/run/hifi-os-status.json'
 OS_PREFIX = 'hifi-os-'
+# Immagine RAUC (schema A/B): un solo bundle che porta UI + componenti di
+# sistema + OS; lo installa RAUC nello slot inattivo in streaming dall'asset
+# della Release, senza passare dal disco (vedi hifi-image-update.sh).
+IMAGE_PREFIX = 'hifi-image-'
+IMAGE_STATUS_FILE = '/run/hifi-image-status.json'
+IMAGE_SCRIPT = '/usr/local/sbin/hifi-image-update.sh'
 
 # ──────────────────────────────────────────────────────────────────
 #  Installer (src/pages/InstallWizard.jsx): backend for the "Install
@@ -194,12 +220,19 @@ UPDATE_STAGE_RUNNER_UNIT = 'hifi-update-stage'
 SYSTEM_UPDATE_LINK = '/system-update'
 # Canonical order. system first (it delivers the API, daemons, helper
 # scripts and units everything else relies on), os second, ui last.
-UPDATE_PLAN_ORDER = ('system', 'os', 'ui')
+# 'image' per ultimo: sugli apparecchi non ancora convertiti non è mai offerto
+# (check_image_update), su quelli convertiti o già immagine è l'unico passo
+# che conta e supera gli altri (il riavvio va direttamente sul nuovo slot).
+UPDATE_PLAN_ORDER = ('system', 'os', 'ui', 'image')
 # How long a finished/failed outcome stays readable so clients can show it
 # — including a kiosk that only comes back up after both update-mode
 # reboots. After this it is cleared automatically, so a plan/outcome
 # nobody dismissed cannot keep re-opening the overlay forever.
 UPDATE_PLAN_TTL = 900
+# A 'phase=applying' left behind across the conversion-chain reboots (armed
+# on purpose by the apply runner so the kiosk shows one continuous update)
+# must still expire if the chain dies, or the overlay would spin forever.
+UPDATE_APPLYING_TTL = 2 * 3600
 # The plan file is whitespace-separated and parsed by /bin/sh, so every
 # field must be whitespace-free. Versions also land in a file name.
 _SAFE_VERSION_RE = re.compile(r'^[0-9A-Za-z._-]+$')
@@ -218,6 +251,7 @@ _SAFE_SHA_RE = re.compile(r'^[0-9a-fA-F]{64}$')
 # ──────────────────────────────────────────────────────────────────
 LYRION_DOWNLOADS_PAGE = os.environ.get('HIFI_LYRION_PAGE', 'https://lyrion.org/downloads')
 LYRION_PKG = 'lyrionmusicserver'
+LYRION_UNIT = 'lyrionmusicserver'
 LYRION_SCRIPT = '/usr/local/sbin/hifi-lyrion-update.sh'
 LYRION_STATUS_FILE = '/run/hifi-lyrion-status.json'
 LYRION_CHANNEL_FILE = '/etc/hifi-player/lyrion-channel'
@@ -347,23 +381,129 @@ def get_system_info():
             'error': _t('system.infoFetchFailed', _lang())
         }
 
-def _cpu_temp_c():
-    """Highest reading across /sys/class/thermal/thermal_zone* (usually the
-    CPU package sensor), in whole °C. None if no thermal zone is exposed."""
-    best = None
+def _sysfs(path):
+    """First line of a sysfs attribute, stripped. None when unreadable."""
     try:
-        for zone in glob.glob('/sys/class/thermal/thermal_zone*/temp'):
-            try:
-                with open(zone) as f:
-                    millideg = int(f.read().strip())
-            except Exception:
-                continue
-            c = millideg / 1000.0
-            if best is None or c > best:
-                best = c
+        with open(path) as f:
+            return f.readline().strip()
     except Exception:
-        pass
-    return round(best, 1) if best is not None else None
+        return None
+
+
+def _sysfs_temp_c(path):
+    """A sysfs millidegree attribute as °C, None when unreadable or outside
+    the range a real silicon sensor can report. The bounds are not cosmetic:
+    an ACPI zone with nothing behind it happily reads back 0 or 216.8 °C
+    (0xFFFF millidegrees), and the old "hottest zone wins" pick would put
+    exactly that on the dashboard."""
+    raw = _sysfs(path)
+    if raw is None:
+        return None
+    try:
+        c = int(raw) / 1000.0
+    except ValueError:
+        return None
+    return c if 5.0 <= c <= 125.0 else None
+
+
+THERMAL_ZONE_GLOB = '/sys/class/thermal/thermal_zone*'
+HWMON_GLOB = '/sys/class/hwmon/hwmon*'
+DRM_HWMON_TEMP_GLOB = '/sys/class/drm/card[0-9]/device/hwmon/hwmon*/temp*_input'
+
+# Zone types that really are the CPU die/package, in order of preference (not
+# of expected value).
+_CPU_ZONE_TYPES = ('x86_pkg_temp', 'coretemp', 'k10temp', 'zenpower',
+                   'cpu_thermal', 'cpu-thermal', 'soc_thermal', 'tcpu')
+
+# Zones that certainly do NOT measure the CPU. A mini PC lists half a dozen of
+# them (chipset, Wi-Fi card, NVMe, iGPU) and any one can be the hottest thing
+# in the box, so a plain max() over every zone reports some other component's
+# temperature under the "Temperature" label.
+_NON_CPU_ZONE_HINTS = ('pch', 'nvme', 'iwlwifi', 'wifi', 'wlan', 'gpu',
+                       'int3400', 'battery', 'charger', 'ambient', 'skin')
+
+# The same die sensors read straight from hwmon, for kernels that expose them
+# there without registering a thermal zone.
+_CPU_HWMON_NAMES = ('coretemp', 'k10temp', 'zenpower')
+
+
+def _cpu_temp_c():
+    """CPU temperature in °C (one decimal), None when the box exposes no CPU
+    sensor at all.
+
+    Chosen BY SENSOR NAME. This used to be the highest reading across every
+    thermal zone, which is only the CPU by luck: on a machine whose chipset,
+    Wi-Fi card or iGPU runs hotter than the die, that maximum silently became
+    some other chip's temperature."""
+    zones = []
+    for zone in glob.glob(THERMAL_ZONE_GLOB):
+        ztype = (_sysfs(os.path.join(zone, 'type')) or '').lower()
+        c = _sysfs_temp_c(os.path.join(zone, 'temp'))
+        if c is not None:
+            zones.append((ztype, c))
+
+    for name in _CPU_ZONE_TYPES:
+        # Several packages/cores can expose the same sensor type; the hottest
+        # of them is the one that matters.
+        matches = [c for ztype, c in zones if ztype.startswith(name)]
+        if matches:
+            return round(max(matches), 1)
+
+    # Before acpitz, not after: acpitz is an ACPI zone that on most boards
+    # tracks the board, while a coretemp hwmon is the die itself.
+    hwmon = _cpu_hwmon_temp_c()
+    if hwmon is not None:
+        return hwmon
+
+    fallback = [c for ztype, c in zones if ztype.startswith('acpitz')]
+    if not fallback:
+        # Bare ACPI names ('tz00' and friends): the hottest zone that is at
+        # least not a component we can name, rather than no reading at all.
+        fallback = [c for ztype, c in zones
+                    if not any(h in ztype for h in _NON_CPU_ZONE_HINTS)]
+    return round(max(fallback), 1) if fallback else None
+
+
+def _cpu_hwmon_temp_c():
+    """coretemp/k10temp read straight from hwmon: 'Package id 0' (Intel) or
+    'Tdie'/'Tctl' (AMD) when labelled, else the hottest core."""
+    for hwmon in sorted(glob.glob(HWMON_GLOB)):
+        if (_sysfs(os.path.join(hwmon, 'name')) or '').lower() not in _CPU_HWMON_NAMES:
+            continue
+        package = core = None
+        for entry in sorted(glob.glob(os.path.join(hwmon, 'temp*_input'))):
+            c = _sysfs_temp_c(entry)
+            if c is None:
+                continue
+            label = (_sysfs(entry.replace('_input', '_label')) or '').lower()
+            if label.startswith('package') or label in ('tdie', 'tctl'):
+                package = c if package is None else max(package, c)
+            core = c if core is None else max(core, c)
+        if package is not None:
+            return round(package, 1)
+        if core is not None:
+            return round(core, 1)
+    return None
+
+
+def _gpu_temp_c():
+    """GPU temperature in whole °C, None when the GPU has no sensor of its
+    own — which is the normal case for an Intel iGPU: it shares the CPU die,
+    so the package sensor already covers it and only discrete cards (and
+    amdgpu) publish a hwmon of their own under the DRM device."""
+    for entry in sorted(glob.glob(DRM_HWMON_TEMP_GLOB)):
+        label = (_sysfs(entry.replace('_input', '_label')) or '').lower()
+        if label in ('junction', 'mem', 'vrm', 'vram'):
+            continue  # hotspot/memory sensors, not the GPU core
+        c = _sysfs_temp_c(entry)
+        if c is not None:
+            return round(c, 1)
+    for zone in glob.glob(THERMAL_ZONE_GLOB):
+        if 'gpu' in (_sysfs(os.path.join(zone, 'type')) or '').lower():
+            c = _sysfs_temp_c(os.path.join(zone, 'temp'))
+            if c is not None:
+                return round(c, 1)
+    return None
 
 _gpu_warned = False  # log the first failure only -- this polls every 5s forever
 
@@ -457,6 +597,50 @@ def _amd_gpu_busy_pct():
         return None
 
 
+DATA_MOUNT = '/data'
+
+
+def _disk_path():
+    """The filesystem whose fill level actually means something to the owner.
+
+    On an image system / IS the squashfs slot: read-only, packed full at build
+    time, so it reports 100% forever and says nothing about the box. Everything
+    that grows -- music, Lyrion, /var, /home, the whole writable layer -- lives
+    on the data partition, so that is the disk to report. A legacy install has
+    no separate /data and keeps answering for /."""
+    try:
+        if os.path.ismount(DATA_MOUNT):
+            return DATA_MOUNT
+    except Exception:
+        pass
+    return '/'
+
+
+def _whole_disk_bytes(path):
+    """Size of the physical disk the given filesystem sits on, in bytes.
+
+    The owner thinks in terms of the disk they bought, not of partitions:
+    to answer "how much did the system take and how much is left for my
+    music" we need the whole device, not just the mounted filesystem. Read
+    it from sysfs (the mount's device -> the partition's parent disk -> its
+    size in 512-byte sectors), so no external tool has to be installed.
+    None when it can't be resolved (a network mount, a container, an
+    unusual device-mapper setup): the caller then omits the breakdown
+    rather than inventing numbers."""
+    try:
+        st = os.stat(path)
+        node = os.path.realpath('/sys/dev/block/%d:%d' % (os.major(st.st_dev), os.minor(st.st_dev)))
+        # a partition carries this file and hangs under its disk; a mount
+        # straight on a whole device (or on an LVM/loop node) does not
+        if os.path.exists(os.path.join(node, 'partition')):
+            node = os.path.dirname(node)
+        with open(os.path.join(node, 'size'), encoding='utf-8') as f:
+            size = int(f.read().strip()) * 512
+        return size if size > 0 else None
+    except Exception:
+        return None
+
+
 def get_system_stats():
     """CPU/RAM/disk/temperature/GPU snapshot for the admin dashboard. All
     fields are best-effort and independently None-able -- one missing sensor
@@ -472,23 +656,44 @@ def get_system_stats():
         # the dashboard already polls this endpoint only every 5s.
         cpu_pct = psutil.cpu_percent(interval=1.0)
         vm = psutil.virtual_memory()
-        du = shutil.disk_usage('/')
+        path = _disk_path()
+        du = shutil.disk_usage(path)
+        # How the disk is split, in the terms the owner cares about: the
+        # image slots and the boot partition are gone for good (the system
+        # keeps two full copies of itself so an update can fail safely), the
+        # data partition is theirs. Everything on the device that is not the
+        # reported filesystem counts as the system's share; on a legacy
+        # install, where / holds both the system and the music, the split
+        # cannot be drawn and stays None instead of being guessed.
+        whole = _whole_disk_bytes(path)
+        system = whole - du.total if whole and whole > du.total else None
+        if path == '/' and system is not None and not os.path.ismount(DATA_MOUNT):
+            system = None
         return {
             'cpu_percent': cpu_pct,
             'ram_percent': vm.percent,
             'ram_used_mb': round(vm.used / 1024 / 1024),
             'ram_total_mb': round(vm.total / 1024 / 1024),
+            'disk_path': path,
             'disk_percent': round(du.used / du.total * 100, 1) if du.total else None,
             'disk_used_gb': round(du.used / 1024 / 1024 / 1024, 1),
             'disk_total_gb': round(du.total / 1024 / 1024 / 1024, 1),
+            # what is still writable by the owner (statvfs' available, so the
+            # filesystem's root reserve is not promised to them)
+            'disk_free_gb': round(du.free / 1024 / 1024 / 1024, 1),
+            'disk_system_gb': round(system / 1024 / 1024 / 1024, 1) if system is not None else None,
+            'disk_device_gb': round(whole / 1024 / 1024 / 1024, 1) if whole else None,
             'temp_c': _cpu_temp_c(),
             'gpu_percent': _gpu_busy_pct(),
+            'gpu_temp_c': _gpu_temp_c(),
         }
     except Exception:
         log.exception("get_system_stats failed")
         return {'cpu_percent': None, 'ram_percent': None, 'ram_used_mb': None,
-                'ram_total_mb': None, 'disk_percent': None, 'disk_used_gb': None,
-                'disk_total_gb': None, 'temp_c': None, 'gpu_percent': None}
+                'ram_total_mb': None, 'disk_path': None, 'disk_percent': None,
+                'disk_used_gb': None, 'disk_total_gb': None, 'disk_free_gb': None,
+                'disk_system_gb': None, 'disk_device_gb': None, 'temp_c': None,
+                'gpu_percent': None, 'gpu_temp_c': None}
 
 _IFACE_RE = re.compile(r'^[A-Za-z0-9][A-Za-z0-9._-]*$')
 
@@ -774,6 +979,132 @@ def wifi_scan():
         return {'networks': [], 'error': _t('network.scanFailed', _lang())}
     return {'networks': networks}
 
+def _scan_security(ssid):
+    """The SECURITY column NetworkManager reports for this SSID, or None when
+    the SSID isn't in its scan list at all. '' is a meaningful answer — an
+    open network — so "never seen" has to stay distinguishable from it."""
+    try:
+        r = _run(['nmcli', '-t', '-f', 'SSID,SECURITY', 'device', 'wifi', 'list'])
+        for line in r.stdout.strip().split('\n'):
+            parts = _terse_split(line)
+            if len(parts) >= 2 and parts[0] == ssid:
+                return parts[1].strip()
+    except Exception:
+        pass
+    return None
+
+
+def _wifi_security_args(ssid, password):
+    """`nmcli connection add` arguments for this network's security.
+
+    `nmcli device wifi connect` takes these from the access point itself, so
+    building the profile by hand (see _wifi_join) means working out the key
+    management here: a WPA3-only AP needs `sae`, WEP needs a key or a
+    passphrase rather than a PSK, and a network that really is open must carry
+    no security setting at all. Anything else — including an SSID missing from
+    the scan list — falls back to WPA-PSK, which is what home networks use."""
+    if not password:
+        return []
+    sec = _scan_security(ssid)
+    if sec == '':          # seen in the scan, and reported as open
+        return []
+    sec = (sec or '').upper()
+    if 'WEP' in sec:
+        # Same rule nmcli uses: a value of exactly key length is a raw key,
+        # anything else is a passphrase (1 = key, 2 = passphrase).
+        is_key = re.fullmatch(r'[0-9a-fA-F]{10}|[0-9a-fA-F]{26}|.{5}|.{13}', password)
+        return ['802-11-wireless-security.key-mgmt', 'none',
+                '802-11-wireless-security.wep-key0', password,
+                '802-11-wireless-security.wep-key-type', '1' if is_key else '2']
+    # A WPA2/WPA3 transition AP advertises both and still takes wpa-psk; only
+    # a WPA3-only one has to be joined with SAE.
+    if 'WPA3' in sec and 'WPA2' not in sec and 'WPA1' not in sec:
+        return ['802-11-wireless-security.key-mgmt', 'sae',
+                '802-11-wireless-security.psk', password]
+    return ['802-11-wireless-security.key-mgmt', 'wpa-psk',
+            '802-11-wireless-security.psk', password]
+
+
+def _wifi_profile_exists(ssid):
+    """True when NetworkManager already has a Wi-Fi profile under this name —
+    which is what both nmcli and we name a profile after its SSID."""
+    return ssid in _connection_ids_for_device_type('wifi')
+
+
+def _preserved_ipv4_args(conn):
+    """`connection add` arguments that carry a profile's fixed address over to
+    the profile that replaces it.
+
+    Rebuilding the profile is what makes the join work at all (see _wifi_join),
+    but on its own it would quietly drop a fixed address the owner had set on
+    that same Wi-Fi network: the box would come back over DHCP at a different
+    address, which on a headless unit is indistinguishable from it having
+    disappeared. Only a 'manual' profile has anything worth carrying — a DHCP
+    one is already what a fresh profile does."""
+    cfg = _nm_connection_ipv4(conn)
+    if cfg.get('method') != 'manual' or not cfg.get('address'):
+        return []
+    args = ['ipv4.method', 'manual',
+            'ipv4.addresses', f"{cfg['address']}/{cfg.get('prefix') or 24}"]
+    if cfg.get('gateway'):
+        args += ['ipv4.gateway', cfg['gateway']]
+    if cfg.get('dns'):
+        args += ['ipv4.dns', ' '.join(cfg['dns'][:3]), 'ipv4.ignore-auto-dns', 'yes']
+    return args
+
+
+def _wifi_join(ssid, password, dev):
+    """Join `ssid`, returning the CompletedProcess of the step that decided it.
+
+    When a password is given the connection profile is built here
+    (`connection add` + `connection up`) rather than through the
+    `nmcli device wifi connect` shorthand. The shorthand only works the first
+    time a network is used: once a profile for that SSID exists it pushes the
+    new password into that profile as a bare `psk` with no `key-mgmt`, and
+    NetworkManager rejects the whole update with
+    "802-11-wireless-security.key-mgmt: property is missing" (issue #98).
+    Re-joining a network the box had already been on — exactly what someone
+    does after a spell on the cable — therefore always failed, and no amount
+    of retyping the password could help. Dropping the stale profile first and
+    spelling out key-mgmt ourselves removes both halves of that.
+
+    With no password there is nothing to write, so a saved profile is
+    activated as it stands (its stored secret is still good) and only a
+    network we have no profile for goes through the shorthand."""
+    if not password:
+        if _wifi_profile_exists(ssid):
+            return _run(['nmcli', 'connection', 'up', 'id', ssid], timeout=45)
+        return _run(['nmcli', 'device', 'wifi', 'connect', ssid], timeout=45)
+
+    sec_args = _wifi_security_args(ssid, password)
+    # Read before the delete, write back into the replacement: the admin web UI
+    # can put a fixed address on a Wi-Fi profile too, and it lives on the very
+    # profile being rebuilt here.
+    ip_args = _preserved_ipv4_args(ssid) if _wifi_profile_exists(ssid) else []
+    _run(['nmcli', 'connection', 'delete', 'id', ssid])   # clear any stale profile
+    add = ['nmcli', 'connection', 'add', 'type', 'wifi', 'con-name', ssid, 'ssid', ssid]
+    if dev:
+        add += ['ifname', dev]
+    r = _run(add + sec_args + ip_args)
+    if r.returncode != 0:
+        return r
+    # Association can still fail transiently on marginal signal, so one retry
+    # before calling it a failure (same reasoning as webui_server.py's
+    # _connect_wifi). Kept to two attempts on purpose: the admin web UI proxies
+    # this call and gives up on the whole request after 90s.
+    for attempt in range(2):
+        r = _run(['nmcli', 'connection', 'up', 'id', ssid], timeout=30)
+        if r.returncode == 0:
+            return r
+        if attempt == 0:
+            time.sleep(2)
+    # Don't leave a profile that can't associate lying around: it would be the
+    # stale profile the next attempt trips over, and until then NetworkManager
+    # keeps retrying it with a password we already know doesn't work.
+    _run(['nmcli', 'connection', 'delete', 'id', ssid])
+    return r
+
+
 def wifi_connect(ssid, password):
     if not ssid:
         return {'success': False, 'code': 'network.ssidMissing', 'message': _t('network.ssidMissing', _lang())}
@@ -786,11 +1117,10 @@ def wifi_connect(ssid, password):
         if value and not safe_arg.fullmatch(value):
             return {'success': False, 'code': 'network.invalidField',
                     'message': _t('network.invalidField', _lang(), label=label)}
-    cmd = ['nmcli', 'device', 'wifi', 'connect', ssid]
-    if password:
-        cmd += ['password', password]
+    dev = _first_device_of_type('wifi')
+    _ensure_networkmanager_state(dev)
     try:
-        r = _run(cmd, timeout=45)
+        r = _wifi_join(ssid, password, dev)
     except subprocess.TimeoutExpired:
         return {'success': False, 'code': 'network.connectTimeout',
                 'message': _t('network.connectTimeout', _lang())}
@@ -799,9 +1129,12 @@ def wifi_connect(ssid, password):
         return {'success': False, 'code': 'network.connectFailed',
                 'message': _t('network.connectFailed', _lang())}
     if r.returncode == 0:
-        device, _ = _active_device() or (None, None)
         msg = _t('network.connected', _lang(), ssid=ssid)
-        ip = _ensure_dhcp_ip(device) if device else None
+        # The Wi-Fi interface by name, not _active_device(): that one prefers
+        # Ethernet, so on a box joining Wi-Fi while still cabled it handed back
+        # the *wired* address — and the exclusivity flip below then unplugged
+        # the cable on the strength of the cable's own IP.
+        ip = _ensure_dhcp_ip(dev) if dev else None
         # Only make Wi-Fi exclusive once it actually has a working IP — never
         # turn Ethernet off on the strength of an nmcli command that merely
         # returned success, which would risk stranding the box with neither
@@ -832,6 +1165,289 @@ def wired_dhcp():
                 'message': _t('network.wiredConnected', _lang()), 'ip': ip}
     return {'success': False, 'code': 'network.cableNotConnected',
             'message': (r.stderr or r.stdout).strip() or _t('network.cableNotConnected', _lang()), 'ip': ip}
+
+# ──────────────────────────────────────────────────────────────────
+#  Static IPv4 (NetworkManager) — admin-webui only.
+#
+#  The kiosk Settings screen deliberately has no equivalent: mistyping an
+#  address there strands a headless box, and the remote admin at least
+#  reaches the owner's browser where the "you must reconnect at the new
+#  address" warning can be shown.
+#
+#  Everything goes through the *connection profile* (nmcli connection
+#  modify), never `ip addr add` like the legacy /configure_network route
+#  below — a runtime-only address is gone at the next reboot or NM restart,
+#  and writing /etc/resolv.conf by hand is undone by NetworkManager anyway.
+# ──────────────────────────────────────────────────────────────────
+
+def _valid_prefix(prefix):
+    """True for a usable IPv4 CIDR prefix. /31 and /32 leave no room for a
+    host+gateway pair on a LAN, so they're rejected rather than silently
+    producing an unreachable box."""
+    try:
+        return 1 <= int(prefix) <= 30
+    except (TypeError, ValueError):
+        return False
+
+def _ipv4_to_int(addr):
+    a, b, c, d = (int(p) for p in addr.split('.'))
+    return (a << 24) | (b << 16) | (c << 8) | d
+
+def _same_subnet(a, b, prefix):
+    mask = (0xFFFFFFFF << (32 - int(prefix))) & 0xFFFFFFFF
+    return (_ipv4_to_int(a) & mask) == (_ipv4_to_int(b) & mask)
+
+def _assignable_host(addr, prefix):
+    """Reject addresses that are valid dotted-quads but can't be a host on a
+    LAN: loopback/multicast/reserved ranges, and the subnet's own network and
+    broadcast addresses."""
+    first = int(addr.split('.')[0])
+    if first == 0 or first == 127 or first >= 224:
+        return False
+    host_bits = 32 - int(prefix)
+    val = _ipv4_to_int(addr)
+    mask = (0xFFFFFFFF << host_bits) & 0xFFFFFFFF
+    if val == (val & mask):            # network address
+        return False
+    if val == ((val & mask) | ((1 << host_bits) - 1)):   # broadcast address
+        return False
+    return True
+
+def _parse_dns(dns):
+    """Accept a list, or a string with comma/space/semicolon separators."""
+    if dns is None:
+        return []
+    if isinstance(dns, str):
+        parts = re.split(r'[,;\s]+', dns.strip())
+    elif isinstance(dns, (list, tuple)):
+        parts = [str(p).strip() for p in dns]
+    else:
+        return None
+    return [p for p in parts if p]
+
+def _nm_connection_ipv4(conn):
+    """ipv4.* settings as stored in the connection profile (what survives a
+    reboot), as opposed to whatever the interface happens to carry now."""
+    out = {'method': None, 'address': None, 'prefix': None, 'gateway': None, 'dns': []}
+    if not conn:
+        return out
+    try:
+        r = _run(['nmcli', '-t', '-f', 'ipv4.method,ipv4.addresses,ipv4.gateway,ipv4.dns',
+                  'connection', 'show', conn])
+    except Exception:
+        return out
+    for line in r.stdout.strip().split('\n'):
+        parts = _terse_split(line)
+        if len(parts) < 2:
+            continue
+        key, val = parts[0].strip(), parts[1].strip()
+        if val in ('', '--'):
+            continue
+        if key == 'ipv4.method':
+            out['method'] = val
+        elif key == 'ipv4.addresses':
+            first = val.split(',')[0].strip()
+            if '/' in first:
+                addr, _, prefix = first.partition('/')
+                out['address'] = addr.strip()
+                try:
+                    out['prefix'] = int(prefix)
+                except ValueError:
+                    pass
+            else:
+                out['address'] = first
+        elif key == 'ipv4.gateway':
+            out['gateway'] = val
+        elif key == 'ipv4.dns':
+            out['dns'] = [d.strip() for d in val.split(',') if d.strip()]
+    return out
+
+def _device_ipv4_runtime(device):
+    """Address/prefix/gateway/DNS the interface is actually using right now —
+    used to pre-fill the static form with the working DHCP values, so
+    "keep this address, just make it permanent" needs no typing."""
+    out = {'address': None, 'prefix': None, 'gateway': None, 'dns': []}
+    if not device:
+        return out
+    try:
+        r = _run(['nmcli', '-t', '-f', 'IP4.ADDRESS,IP4.GATEWAY,IP4.DNS', 'device', 'show', device])
+    except Exception:
+        return out
+    for line in r.stdout.strip().split('\n'):
+        parts = _terse_split(line)
+        if len(parts) < 2:
+            continue
+        key, val = parts[0].strip(), parts[1].strip()
+        if not val or val == '--':
+            continue
+        if key.startswith('IP4.ADDRESS') and out['address'] is None:
+            addr, _, prefix = val.partition('/')
+            out['address'] = addr.strip()
+            try:
+                out['prefix'] = int(prefix)
+            except ValueError:
+                pass
+        elif key.startswith('IP4.GATEWAY'):
+            out['gateway'] = val
+        elif key.startswith('IP4.DNS'):
+            out['dns'].append(val)
+    return out
+
+def get_ipv4_config():
+    """Current addressing of the uplink the admin is talking to us over."""
+    device, dtype = _active_device()
+    if not device:
+        return {'success': False, 'code': 'network.noActiveConnection',
+                'message': _t('network.noActiveConnection', _lang())}
+    conn = _active_connection_name(device)
+    profile = _nm_connection_ipv4(conn)
+    runtime = _device_ipv4_runtime(device)
+    mode = 'manual' if profile.get('method') == 'manual' else 'auto'
+    return {
+        'success': True,
+        'device': device,
+        'type': 'wireless' if dtype == 'wifi' else 'wired',
+        'connection': conn,
+        'mode': mode,
+        # For a manual profile these are what was configured; for DHCP they're
+        # the live lease, so switching to static starts from a working setup.
+        'address': profile['address'] if mode == 'manual' else runtime['address'],
+        'prefix': (profile['prefix'] if mode == 'manual' else runtime['prefix']) or 24,
+        'gateway': profile['gateway'] if mode == 'manual' else runtime['gateway'],
+        'dns': profile['dns'] if mode == 'manual' else runtime['dns'],
+        'current_ip': runtime['address'],
+    }
+
+def _bg_apply_ipv4(conn, device, expect_ip):
+    """Re-activate the profile after the HTTP reply has been flushed.
+
+    `nmcli connection up` tears the address down and back up, which kills the
+    very TCP connection carrying this request when the admin is on the LAN —
+    so the route answers first and the activation happens here.
+
+    If the interface never comes back with the requested address the profile
+    is put back on DHCP: a box that silently keeps a broken static address is
+    unreachable with no way in short of a keyboard and monitor. A *reachable*
+    address that simply routes badly (wrong gateway for the LAN) is left
+    alone — that's the owner's explicit choice, and the up-front subnet check
+    already rejects the common typo.
+    """
+    time.sleep(1.5)
+    try:
+        _run(['nmcli', 'connection', 'up', conn], timeout=60)
+    except Exception:
+        log.exception('ipv4 apply: bringing %s up failed', conn)
+    deadline = time.monotonic() + 25
+    while time.monotonic() < deadline:
+        ip = _device_ip(device)
+        if ip and (expect_ip is None or ip == expect_ip):
+            log.info('ipv4 apply: %s is up on %s', device, ip)
+            return
+        time.sleep(1)
+    log.error('ipv4 apply: %s never reached %s — reverting to DHCP',
+              device, expect_ip or 'a lease')
+    try:
+        _run(['nmcli', 'connection', 'modify', conn,
+              'ipv4.addresses', '', 'ipv4.gateway', '', 'ipv4.dns', '',
+              'ipv4.ignore-auto-dns', 'no', 'ipv4.method', 'auto'], timeout=20)
+        _run(['nmcli', 'connection', 'up', conn], timeout=60)
+    except Exception:
+        log.exception('ipv4 apply: DHCP rollback failed for %s', conn)
+
+def set_ipv4_config(cfg):
+    cfg = cfg or {}
+    mode = str(cfg.get('mode') or '').strip().lower()
+    # 'dhcp'/'static' are what the legacy /configure_network body called them;
+    # accepted here too so either vocabulary works.
+    mode = {'dhcp': 'auto', 'static': 'manual'}.get(mode, mode)
+    if mode not in ('auto', 'manual'):
+        return {'success': False, 'code': 'network.invalidMode',
+                'message': _t('network.invalidMode', _lang(), mode=cfg.get('mode'))}
+
+    device, dtype = _active_device()
+    if not device:
+        return {'success': False, 'code': 'network.noActiveConnection',
+                'message': _t('network.noActiveConnection', _lang())}
+    conn = _active_connection_name(device)
+    if not conn:
+        return {'success': False, 'code': 'network.noProfile',
+                'message': _t('network.noProfile', _lang(), device=device)}
+
+    if mode == 'auto':
+        args = ['ipv4.addresses', '', 'ipv4.gateway', '', 'ipv4.dns', '',
+                'ipv4.ignore-auto-dns', 'no', 'ipv4.method', 'auto']
+        expect_ip = None
+        new_ip = None
+    else:
+        address = str(cfg.get('address') or cfg.get('ip') or '').strip()
+        gateway = str(cfg.get('gateway') or '').strip()
+        prefix = cfg.get('prefix', 24)
+        if not _valid_ipv4(address):
+            return {'success': False, 'code': 'network.invalidAddress',
+                    'message': _t('network.invalidAddress', _lang(), address=address)}
+        if not _valid_prefix(prefix):
+            return {'success': False, 'code': 'network.invalidPrefix',
+                    'message': _t('network.invalidPrefix', _lang(), prefix=prefix)}
+        prefix = int(prefix)
+        if not _assignable_host(address, prefix):
+            return {'success': False, 'code': 'network.unusableAddress',
+                    'message': _t('network.unusableAddress', _lang(), address=address)}
+        # The gateway has to be a real host too: the subnet's network or
+        # broadcast address passes _same_subnet but can never answer ARP, and
+        # pointing it at our own address is a silent no-route-out.
+        if not _valid_ipv4(gateway) or not _assignable_host(gateway, prefix) or gateway == address:
+            return {'success': False, 'code': 'network.invalidGateway',
+                    'message': _t('network.invalidGateway', _lang(), gateway=gateway)}
+        if not _same_subnet(address, gateway, prefix):
+            # NM would accept the profile and then fail to install a default
+            # route, leaving a box with an address but no way off the LAN.
+            return {'success': False, 'code': 'network.gatewayOutsideSubnet',
+                    'message': _t('network.gatewayOutsideSubnet', _lang(),
+                                  gateway=gateway, address=address, prefix=prefix)}
+        dns = _parse_dns(cfg.get('dns'))
+        if dns is None:
+            return {'success': False, 'code': 'network.invalidDns',
+                    'message': _t('network.invalidDns', _lang(), dns=cfg.get('dns'))}
+        for d in dns:
+            if not _valid_ipv4(d):
+                return {'success': False, 'code': 'network.invalidDns',
+                        'message': _t('network.invalidDns', _lang(), dns=d)}
+        # Without a resolver a static box can still be reached by IP but
+        # nothing it does (streaming services, updates) resolves — fall back
+        # to the router, which is the resolver on virtually every home LAN.
+        if not dns:
+            dns = [gateway]
+        args = ['ipv4.addresses', f'{address}/{prefix}',
+                'ipv4.gateway', gateway,
+                'ipv4.dns', ' '.join(dns[:3]),
+                'ipv4.ignore-auto-dns', 'yes',
+                'ipv4.method', 'manual']
+        expect_ip = address
+        new_ip = address
+
+    try:
+        r = _run(['nmcli', 'connection', 'modify', conn] + args, timeout=25)
+    except Exception:
+        log.exception('set_ipv4_config: nmcli modify failed')
+        return {'success': False, 'code': 'network.ipv4ApplyFailed',
+                'message': _t('network.ipv4ApplyFailed', _lang())}
+    if r.returncode != 0:
+        return {'success': False, 'code': 'network.ipv4ApplyFailed',
+                'message': (r.stderr or r.stdout).strip() or _t('network.ipv4ApplyFailed', _lang())}
+
+    # A profile that doesn't auto-connect would come back on a *different*
+    # (or no) address after a reboot, defeating the point of a fixed address.
+    try:
+        _run(['nmcli', 'connection', 'modify', conn, 'connection.autoconnect', 'yes'], timeout=15)
+    except Exception:
+        pass
+
+    threading.Thread(target=_bg_apply_ipv4, args=(conn, device, expect_ip), daemon=True).start()
+
+    code = 'network.staticApplying' if mode == 'manual' else 'network.dhcpApplying'
+    return {'success': True, 'code': code,
+            'message': _t(code, _lang(), address=new_ip or ''),
+            'mode': mode, 'device': device, 'address': new_ip}
 
 # ──────────────────────────────────────────────────────────────────
 #  Audio output (DAC) selection for squeezelite — used by the wizard.
@@ -916,7 +1532,7 @@ def set_audio_device(device):
         with open(SQUEEZELITE_DEFAULT) as f:
             content = f.read()
     except Exception:
-        content = "ARGS='-o default -D -v -C 5 -s 127.0.0.1 -n HiFiPlayer'\n"
+        content = "ARGS='-o default -D -v -C 5 -s 127.0.0.1 -n OsmiumSound -M Osmium'\n"
 
     m = re.search(r"ARGS=(['\"])(.*?)\1", content)
     if m:
@@ -931,7 +1547,7 @@ def set_audio_device(device):
             args = re.sub(r'(-o\s+\S+)', r'\1 -D', args, count=1)
         content = content[:m.start()] + f"ARGS='{args}'" + content[m.end():]
     else:
-        content += f"\nARGS='-o {device} -D -v -C 5 -s 127.0.0.1 -n HiFiPlayer'\n"
+        content += f"\nARGS='-o {device} -D -v -C 5 -s 127.0.0.1 -n OsmiumSound -M Osmium'\n"
 
     try:
         with open(SQUEEZELITE_DEFAULT, 'w') as f:
@@ -965,22 +1581,88 @@ def _current_lms_host():
             return m.group(1)
     return '127.0.0.1'
 
+# A DNS name for an external Lyrion server (nas.lan, lms.example.com,
+# osmium.local). Letters, digits and hyphens per label only: the name ends up
+# inside squeezelite's ARGS='...' line, so no quote, space or shell character
+# may get through.
+_HOSTNAME_LABEL_RE = re.compile(r'^(?!-)[a-z0-9-]{1,63}(?<!-)$')
+
+def _valid_hostname(name):
+    if not isinstance(name, str) or not name or len(name) > 253:
+        return False
+    labels = name.split('.')
+    # All-numeric names are malformed IPv4 addresses, not host names.
+    if all(l.isdigit() for l in labels):
+        return False
+    return all(_HOSTNAME_LABEL_RE.match(l) for l in labels)
+
+def _resolves(name, timeout=5):
+    """True if the name resolves to an address, giving up after `timeout` s
+    (getaddrinfo has no timeout of its own and a dead DNS can hang for 30 s)."""
+    result = []
+    def lookup():
+        try:
+            result.append(bool(socket.getaddrinfo(name, 9000, proto=socket.IPPROTO_TCP)))
+        except OSError:
+            result.append(False)
+    th = threading.Thread(target=lookup, daemon=True)
+    th.start()
+    th.join(timeout)
+    return bool(result and result[0])
+
 def get_lms_role():
     host = _current_lms_host()
     if host == '127.0.0.1':
         return {'mode': 'local', 'host': None}
     return {'mode': 'follow', 'host': host}
 
+def _set_local_lyrion_enabled(enable):
+    """Start+enable, or stop+disable, this device's OWN Lyrion Music Server.
+
+    Following another server does not merely make the local one redundant: as
+    long as it keeps running it still answers on 127.0.0.1:9000, and anything
+    that reaches loopback before it has read this role talks to that empty
+    local server instead of the one being followed. The kiosk resolves the
+    server address asynchronously at startup (Api::refreshLmsHost), so on a
+    boot where the answer is late it latches onto the local one — which is the
+    "sometimes it connects to the local server anyway" owners report. Stopping
+    it is not enough on its own: without `disable` the unit comes straight back
+    at the next boot, so the choice would only hold until the next restart.
+
+    Best effort: the role itself is already persisted in
+    /etc/default/squeezelite by the time this runs, and a device that never
+    installed Lyrion has a unit that cannot start (ConditionPathExists on
+    /data/lyrion/current) or no unit at all — neither is a reason to report the
+    role change as failed.
+    """
+    action = ['enable', '--now'] if enable else ['disable', '--now']
+    try:
+        r = _run(['systemctl'] + action + [LYRION_UNIT], timeout=60)
+        if r.returncode != 0:
+            log.warning("set_lms_role: systemctl %s %s failed: %s",
+                        action[0], LYRION_UNIT, (r.stderr or '').strip())
+        return r.returncode == 0
+    except Exception:
+        log.exception("set_lms_role: systemctl %s %s failed", action[0], LYRION_UNIT)
+        return False
+
 def set_lms_role(mode, host):
     if mode == 'local':
         target = '127.0.0.1'
     elif mode == 'follow':
-        if not _valid_ipv4(host):
-            return {'success': False, 'code': 'lms.invalidIp',
-                    'message': _t('lms.invalidIp', _lang(), host=host)}
-        if host == '127.0.0.1':
+        host = host.strip().rstrip('.').lower() if isinstance(host, str) else host
+        if not (_valid_ipv4(host) or _valid_hostname(host)):
+            return {'success': False, 'code': 'lms.invalidHost',
+                    'message': _t('lms.invalidHost', _lang(), host=host)}
+        if host in ('127.0.0.1', 'localhost'):
             return {'success': False, 'code': 'lms.useLocalMode',
                     'message': _t('lms.useLocalMode', _lang())}
+        # squeezelite resolves the name once when it starts; a typo would only
+        # show after the reboot the owner is asked for next, as a player that
+        # never connects. Check it here while there is still a form to fix it.
+        if not _valid_ipv4(host) and not _resolves(host):
+            return {'success': False, 'code': 'lms.hostNotFound',
+                    'message': _t('lms.hostNotFound', _lang(), host=host)}
         target = host
     else:
         return {'success': False, 'code': 'lms.invalidMode',
@@ -991,6 +1673,10 @@ def set_lms_role(mode, host):
         return {'success': False, 'code': 'lms.sqConfigMissing',
                 'message': _t('lms.sqConfigMissing', _lang())}
     _write_sq_args(_sq_set_s(args, target))
+    # Before the player restart below, so squeezelite comes back up with the
+    # local server already stopped (following) or already running (standalone)
+    # and can only land on the one that was just chosen.
+    _set_local_lyrion_enabled(mode == 'local')
 
     try:
         r = _restart_squeezelite_if_enabled()
@@ -1004,6 +1690,13 @@ def set_lms_role(mode, host):
                 'message': _t('lms.serverSetRestartFailed', _lang(), target=target)}
     msg = (_t('lms.localRestored', _lang()) if mode == 'local'
            else _t('lms.serverSet', _lang(), target=target))
+    # A boot that came up without its data partition writes to a tmpfs /etc:
+    # the change applies right now and is gone at the next restart, with the
+    # previous choice back — which is exactly how "I set it back and at
+    # startup it is on the other server again" happens. Say so instead of
+    # reporting a clean success.
+    if _data_partition_mounted() is False:
+        msg = msg + ' — ' + _t('lms.volatileBoot', _lang())
     return {'success': True, 'host': target if mode == 'follow' else None, 'message': msg}
 
 # ── Player name (-n) — every device ships as "OsmiumSound" by default, which
@@ -1527,6 +2220,16 @@ SUPPORT_LOG_DIR = '/var/log/hifi'
 SUPPORT_JOURNAL_UNITS = [
     'hifi-api', 'hifi-webui', 'hifi-sources', 'hifi-vumeter', 'hifi-firstboot',
     'hifi-quiesce-audio-shutdown', 'squeezelite', 'lyrionmusicserver',
+    # Says whether this boot came up with its data partition — a boot that
+    # fell back to a tmpfs /data runs on the image's factory settings and
+    # silently drops everything written during it, which from the outside
+    # looks like settings reverting on their own.
+    'hifi-boot-health',
+    # The A/B chain. Without these a device that did not convert looks exactly
+    # like one that did nothing: the units enabled by the 0061 migration are
+    # where the conversion is armed and carried out, and a bundle that does not
+    # name them leaves "why is it still on the old layout" unanswerable.
+    'hifi-rauc-config', 'hifi-ab-finish', 'hifi-ab-image', 'hifi-ab-firstboot',
     'bluetooth', 'NetworkManager',
 ]
 # Config worth including — never secrets/keys. Mirrors the allow-list spirit of
@@ -1580,6 +2283,55 @@ def _support_services_snapshot():
     return '\n'.join(lines) + '\n'
 
 
+def _support_ab_snapshot():
+    """The A/B picture: image mode, booted slot, conversion state, and the
+    pre-check verdict.
+
+    🚨 The pre-check is RUN when its JSON is not there. That file lives in
+    /run, so it is gone after every reboot, and it is the only thing that says
+    why a device stayed on the old layout — a bundle collected the morning
+    after an update would otherwise carry no answer at all. Running it is safe:
+    it reports and changes nothing (see hifi-ab-precheck.sh)."""
+    out = {}
+    try:
+        out = ab_status()
+    except Exception as e:
+        return {'error': f'ab_status failed: {e}'}
+    if not out.get('precheck') and not out.get('image_mode'):
+        try:
+            r = subprocess.run([AB_PRECHECK_SCRIPT], capture_output=True, text=True, timeout=180)
+            out['precheck_run'] = {'exit': r.returncode,
+                                   'verdict': (r.stdout or r.stderr or '').strip()[:600]}
+            with open(AB_PRECHECK_FILE) as f:
+                out['precheck'] = json.load(f)
+        except Exception as e:
+            out['precheck_run'] = {'error': str(e)}
+    return out
+
+
+def _support_disks_snapshot():
+    """Partition table, mounts and free space.
+
+    The A/B conversion is a question about the disk — how many partitions,
+    which one is the root, is there an ESP, how much room is left — and none of
+    it was in the bundle, so every answer had to be asked of the owner by hand."""
+    out = []
+    for label, cmd in (
+            ('lsblk', ['lsblk', '-o', 'NAME,MAJ:MIN,RM,SIZE,RO,TYPE,FSTYPE,PARTLABEL,MOUNTPOINT']),
+            ('df', ['df', '-hT']),
+            ('findmnt', ['findmnt', '--real', '-o', 'TARGET,SOURCE,FSTYPE,OPTIONS']),
+            ('partitions', ['sfdisk', '-l']),
+            ('efi', ['test', '-d', '/sys/firmware/efi'])):
+        out.append(f'== {label} ==')
+        try:
+            r = subprocess.run(cmd, capture_output=True, text=True, timeout=20)
+            out.append((r.stdout or '').rstrip() or f'(exit {r.returncode}) {(r.stderr or "").strip()[:200]}')
+        except Exception as e:
+            out.append(f'({label} failed: {e})')
+        out.append('')
+    return '\n'.join(out) + '\n'
+
+
 def _support_bundle_build():
     """Build the support zip in memory. Every section is best-effort: one
     failing piece (e.g. journalctl unavailable) must never abort the rest."""
@@ -1600,6 +2352,15 @@ def _support_bundle_build():
 
         z.writestr('system_info.json', json.dumps(get_system_info(), indent=2))
         z.writestr('services.txt', _support_services_snapshot())
+
+        try:
+            z.writestr('ab_status.json', json.dumps(_support_ab_snapshot(), indent=2))
+        except Exception as e:
+            z.writestr('ab_status.json', json.dumps({'error': str(e)}))
+        try:
+            z.writestr('disks.txt', _support_disks_snapshot())
+        except Exception as e:
+            z.writestr('disks.txt', f'(disks snapshot failed: {e})\n')
 
         for fpath in SUPPORT_CONFIG_FILES:
             try:
@@ -1976,6 +2737,91 @@ def set_display_mode(mode):
     return {'success': True, 'mode': mode, 'message': msg}
 
 # ──────────────────────────────────────────────────────────────────
+#  Which on-screen interface runs: the Electron kiosk (historic) or the Qt
+#  one (draws straight on DRM/KMS, no X and no compositor). They are mutually
+#  exclusive — lightdm vs hifi-qt.service — and the switch is the same script
+#  that handles gui/headless, so the two settings can't fight each other.
+#
+#  ABSENT state means 'electron', the same fleet-safety default as display
+#  mode: a device that never chose must never change interface on its own
+#  because of an update.
+# ──────────────────────────────────────────────────────────────────
+UI_ENGINE_FILE = '/etc/hifi-player/ui-engine'
+UI_ENGINES = ('electron', 'qt')
+QT_UI_BIN = '/opt/hifi-qt/hifi-qt'
+ELECTRON_UI_DIR = '/opt/hifi-media-player'
+
+def _electron_ui_installed():
+    """The image ships the Qt interface only — Electron was 354 MiB of the
+    2715 and went out to make room for /data. So Electron is no longer a given:
+    it must be probed exactly like Qt, or a converted device whose /etc still
+    says "electron" (the overlay carries the legacy setting over) would be
+    offered an interface that isn't there and would come back to a black
+    screen."""
+    return os.path.isdir(ELECTRON_UI_DIR)
+
+def _qt_ui_installed():
+    """Vero solo se la seconda interfaccia puo' DAVVERO partire su questo
+    apparecchio: il programma (dal pacchetto di sistema) e le librerie Qt che
+    gli servono (dal pacchetto OS, l'unico che puo' installare pacchetti). Le
+    due meta' viaggiano su canali diversi e possono arrivare separate: offrire
+    la scelta con una meta' sola lascerebbe lo schermo nero al riavvio.
+    Il modulo grafico che disegna su DRM/KMS e il modulo QML di base non sono
+    librerie collegate al programma, quindi vanno cercati a parte."""
+    if not (os.path.isfile(QT_UI_BIN) and os.access(QT_UI_BIN, os.X_OK)):
+        return False
+    return bool(glob.glob('/usr/lib/*/qt6/plugins/platforms/libqeglfs.so')
+                and glob.glob('/usr/lib/*/qt6/qml/QtQuick/libqtquick2plugin.so'))
+
+def get_ui_engine():
+    """Return { engine, engines }. `engines` is what this device can actually
+    run right now — the Qt option only appears once its files are installed,
+    so an older unit that hasn't received them yet shows a single choice
+    instead of a switch that would leave it with a black screen."""
+    engine = 'electron'
+    try:
+        with open(UI_ENGINE_FILE) as f:
+            if f.read().strip() == 'qt':
+                engine = 'qt'
+    except Exception:
+        pass
+    engines = (['electron'] if _electron_ui_installed() else []) \
+        + (['qt'] if _qt_ui_installed() else [])
+    # the chosen interface is gone (package removed, or an image that only
+    # ships one of the two): say what is actually there
+    if engine not in engines:
+        engine = engines[0] if engines else 'electron'
+    return {'engine': engine, 'engines': engines}
+
+def set_ui_engine(engine):
+    """Switch Electron <-> Qt, live + persisted. Same update guard as the
+    display mode: swapping the on-screen interface mid-update would tear down
+    the session that is applying it."""
+    if engine not in UI_ENGINES:
+        return {'success': False, 'engine': get_ui_engine()['engine'],
+                'code': 'uiEngine.invalid', 'message': _t('uiEngine.invalid', _lang())}
+    if (engine == 'qt' and not _qt_ui_installed()) \
+       or (engine == 'electron' and not _electron_ui_installed()):
+        return {'success': False, 'engine': get_ui_engine()['engine'],
+                'code': 'uiEngine.notInstalled', 'message': _t('uiEngine.notInstalled', _lang())}
+    if _update_in_progress():
+        return {'success': False, 'engine': get_ui_engine()['engine'],
+                'code': 'update.inProgressRetry', 'message': _t('update.inProgressRetry', _lang())}
+    try:
+        r = subprocess.run([DISPLAY_MODE_SCRIPT, 'engine', 'set', engine, '--live'],
+                           capture_output=True, text=True, timeout=30)
+        if r.returncode != 0:
+            log.error("set_ui_engine failed: %s", (r.stderr or '').strip())
+            return {'success': False, 'engine': get_ui_engine()['engine'],
+                    'code': 'uiEngine.changeFailed', 'message': _t('uiEngine.changeFailed', _lang())}
+    except Exception:
+        log.exception("set_ui_engine failed")
+        return {'success': False, 'engine': get_ui_engine()['engine'],
+                'code': 'uiEngine.changeFailed', 'message': _t('uiEngine.changeFailed', _lang())}
+    msg = _t('uiEngine.qtEnabled' if engine == 'qt' else 'uiEngine.electronEnabled', _lang())
+    return {'success': True, 'engine': engine, 'message': msg}
+
+# ──────────────────────────────────────────────────────────────────
 #  Player enabled/disabled — whether this device plays audio at all
 #  (squeezelite), orthogonal to display mode above (which only controls the
 #  on-screen kiosk). A "server only" unit keeps Lyrion + every hifi-* daemon
@@ -2187,6 +3033,11 @@ def set_ui_refresh(mode):
 #  loop, so killing the process is all it takes: it comes back ~3s later with
 #  whatever OS state changed underneath it. A headless unit has no such
 #  process and this is a harmless no-op there.
+#
+#  🚨 Da 2.5.24 le interfacce su schermo sono due e si riavviano in modi
+#  diversi: la Qt non gira dentro nessuna sessione con ciclo di rilancio, e'
+#  un'unita' systemd tutta sua (hifi-qt.service), quindi un pkill sul processo
+#  Electron su quegli apparecchi non fa assolutamente niente.
 # ──────────────────────────────────────────────────────────────────
 # `pkill -x` matches the kernel's `comm`, which is capped at 15 characters:
 # "hifi-media-player" is 17, so the obvious pattern matches NOTHING (procps
@@ -2195,9 +3046,11 @@ def set_ui_refresh(mode):
 # here, it would also match any shell or script with the app name on its
 # command line, including the OTA updater.
 KIOSK_COMM = 'hifi-media-play'  # 'hifi-media-player' truncated to comm's 15 chars
+QT_UI_UNIT = 'hifi-qt.service'
 
 def restart_kiosk_ui(delay=1.5):
-    """Kill the on-screen Electron kiosk; its session loop relaunches it.
+    """Restart whichever on-screen interface this device runs (Electron kiosk
+    or Qt), so it picks up the OS state that just changed underneath it.
 
     Deferred onto a timer because the caller is usually serving a request that
     the kiosk itself made (on-device Settings): killing it inline would tear
@@ -2205,12 +3058,37 @@ def restart_kiosk_ui(delay=1.5):
     come back up reporting the change as failed. Same reason
     hifi-ui-resolution.sh delays its lightdm restart.
     """
-    def _kill():
+    def _restart_qt():
+        # try-restart e non restart: in modalita' headless non gira nessuna
+        # interfaccia, e un restart la avvierebbe — riaccendendo uno schermo
+        # che l'utente ha spento di proposito. Stessa scelta di
+        # hifi-ui-resolution.sh. Il codice d'uscita si ignora: sugli
+        # apparecchi Electron l'unita' non esiste nemmeno.
+        _run(['systemctl', 'try-restart', QT_UI_UNIT], timeout=30)
+
+    def _kill_electron():
+        subprocess.run(['pkill', '-x', KIOSK_COMM], capture_output=True, timeout=10)
+
+    def _restart():
         try:
-            subprocess.run(['pkill', '-x', KIOSK_COMM], capture_output=True, timeout=10)
+            engine = get_ui_engine()['engine']
         except Exception:
-            log.exception("restart_kiosk_ui failed")
-    t = threading.Timer(delay, _kill)
+            log.exception("restart_kiosk_ui: interfaccia in uso non determinabile")
+            engine = None
+        # Motore ignoto: si tentano tutte e due le strade. Ognuna e' innocua
+        # quando tocca all'altra (unita' assente / processo assente), mentre
+        # non riavviare l'interfaccia lascerebbe a schermo lo stato vecchio.
+        steps = []
+        if engine in (None, 'qt'):
+            steps.append(_restart_qt)
+        if engine in (None, 'electron'):
+            steps.append(_kill_electron)
+        for step in steps:
+            try:
+                step()
+            except Exception:
+                log.exception("restart_kiosk_ui failed")
+    t = threading.Timer(delay, _restart)
     t.daemon = True
     t.start()
 
@@ -2394,9 +3272,9 @@ def set_timezone(tz):
         time.tzset()
     except Exception:
         pass
-    # And the kiosk's Electron/Chromium process resolves its timezone (ICU)
-    # once at startup and never re-reads it, so the on-screen clock would keep
-    # showing the old offset until the next reboot.
+    # And the on-screen interface resolves its timezone once at startup and
+    # never re-reads it (Chromium through ICU, Qt through its own cache), so
+    # the clock would keep showing the old offset until the next reboot.
     restart_kiosk_ui()
     return {'success': True, 'timezone': tz,
             'message': _t('timezone.updated', _lang(), tz=tz)}
@@ -2436,6 +3314,608 @@ def set_vu_meter(enable):
     return {'success': True, 'enabled': enable}
 
 # ──────────────────────────────────────────────────────────────────
+#  VU meter skin: which look the kiosk's analog meters wear. Each skin is
+#  a folder the on-screen interface ships in its assets (skin.json plus
+#  images, built with native-ui-qt/tools/vu-skin-build.py), so adding one
+#  is dropping a folder in: the list below is read from disk, never kept
+#  by hand. Persisted like the on/off switch above, so the web admin can
+#  change it too; ABSENT (or a skin no longer installed) means "classic".
+# ──────────────────────────────────────────────────────────────────
+VU_STYLE_FILE = '/etc/hifi-player/vu-style'
+VU_SKINS_DIR = os.environ.get('HIFI_VU_SKINS_DIR', '/opt/hifi-qt/assets/vu')
+VU_STYLE_DEFAULT = 'classic'
+# Skins downloaded from the VU meter store: on the data partition, so they
+# survive the A/B image updates (the root file system is read-only).
+VU_STORE_DIR = os.environ.get('HIFI_VU_STORE_DIR', '/var/lib/hifi-player/vu-skins')
+_VU_STYLE_RE = re.compile(r'^[a-z0-9][a-z0-9_-]{0,40}$')
+
+def list_vu_styles():
+    """The installed skins, [{id, name:{en,it}}], in their declared order
+    (classic first): the ones the interface ships, then the ones downloaded
+    from the VU meter store (a shipped skin wins an id both have). A folder
+    whose skin.json does not parse is skipped: offering a look the kiosk
+    would then refuse to draw helps no one."""
+    styles = []
+    seen = set()
+    for base, source in ((VU_SKINS_DIR, 'builtin'), (VU_STORE_DIR, 'store')):
+        try:
+            names = sorted(os.listdir(base))
+        except OSError:
+            names = []
+        for sid in names:
+            if not _VU_STYLE_RE.match(sid) or sid in seen:
+                continue
+            try:
+                with open(os.path.join(base, sid, 'skin.json'), encoding='utf-8') as f:
+                    meta = json.load(f)
+            except (OSError, ValueError):
+                continue
+            if not isinstance(meta, dict):
+                continue
+            seen.add(sid)
+            name = meta.get('name')
+            if not isinstance(name, dict):
+                name = {'en': sid, 'it': sid}
+            styles.append({'id': sid, 'name': {'en': str(name.get('en') or sid), 'it': str(name.get('it') or name.get('en') or sid)},
+                           'order': meta.get('order', 50) if isinstance(meta.get('order', 50), int) else 50,
+                           'source': source})
+    if not any(st['id'] == VU_STYLE_DEFAULT for st in styles):
+        # the interface draws the classic look even without its folder
+        styles.append({'id': VU_STYLE_DEFAULT, 'name': {'en': 'Classic', 'it': 'Classico'}, 'order': 0, 'source': 'builtin'})
+    styles.sort(key=lambda st: (st['order'], st['id']))
+    return [{'id': st['id'], 'name': st['name'], 'source': st['source']} for st in styles]
+
+def get_vu_style():
+    """Return { style, styles }."""
+    styles = list_vu_styles()
+    style = VU_STYLE_DEFAULT
+    try:
+        with open(VU_STYLE_FILE) as f:
+            style = f.read().strip() or VU_STYLE_DEFAULT
+    except Exception:
+        pass
+    if not any(st['id'] == style for st in styles):
+        style = VU_STYLE_DEFAULT
+    return {'style': style, 'styles': styles}
+
+def set_vu_style(style):
+    """Persist the skin choice. Only an installed skin is accepted."""
+    style = str(style or '').strip()
+    if not _VU_STYLE_RE.match(style) or not any(st['id'] == style for st in list_vu_styles()):
+        return {'success': False, 'style': get_vu_style()['style'],
+                'code': 'prefs.vuStyleUnknown', 'message': _t('prefs.vuStyleUnknown', _lang())}
+    try:
+        os.makedirs(os.path.dirname(VU_STYLE_FILE), exist_ok=True)
+        tmp = VU_STYLE_FILE + '.tmp'
+        with open(tmp, 'w') as f:
+            f.write(style + '\n')
+        os.replace(tmp, VU_STYLE_FILE)
+    except Exception:
+        log.exception("set_vu_style: persist failed")
+        return {'success': False, 'style': get_vu_style()['style'],
+                'code': 'prefs.saveFailed', 'message': _t('prefs.saveFailed', _lang())}
+    return {'success': True, 'style': style}
+
+# ──────────────────────────────────────────────────────────────────
+#  VU meter store: more skins, downloaded on demand from
+#  file.osmiumsound.it/vu/. The catalogue (index.json) carries a detached
+#  Ed25519 signature made with the same key as the OS updates and checked
+#  against the same public key (ota-pubkey.pem); every package (.vupak, a
+#  zip holding skin.json and its images) and every preview is then checked
+#  against the sha256 the signed catalogue names. Only what passes all of
+#  that is unpacked, into VU_STORE_DIR, file by file: flat names, image and
+#  JSON files only, size limits, and a skin.json that describes a skin the
+#  interface can draw.
+#
+#  Nothing here runs code from a package: effects (needle ballistics, peak
+#  lamp, backlight, peak needle) are parameters of skin.json that the
+#  interface interprets. VU_SKIN_FORMAT is the highest skin.json format the
+#  interface shipped next to this API understands; newer entries are listed
+#  as needing an update and never installed.
+#
+#  The catalogue is refreshed in the background (at start, then every
+#  VU_STORE_REFRESH, and on a GET when older than VU_STORE_STALE), and a
+#  refresh also brings skins already installed from the store up to the
+#  version it lists. New skins are only offered: installing one is the
+#  owner's choice.
+# ──────────────────────────────────────────────────────────────────
+import base64 as _base64
+import hashlib as _hashlib
+import tempfile as _tempfile
+
+VU_STORE_URL = os.environ.get('HIFI_VU_STORE_URL', 'https://file.osmiumsound.it/vu/')
+VU_STORE_STATE_DIR = os.environ.get('HIFI_VU_STORE_STATE_DIR', '/var/lib/hifi-player/vu-store')
+VU_STORE_PUBKEY = os.environ.get('HIFI_VU_STORE_PUBKEY', '/etc/hifi-player/ota-pubkey.pem')
+VU_SKIN_FORMAT = 2
+VU_STORE_REFRESH = 12 * 3600
+VU_STORE_STALE = 600
+VU_STORE_FIRST_CHECK = 120
+VU_STORE_SIG_RETRY = 5
+VU_INDEX_MAX = 1024 * 1024
+VU_PACK_MAX = 40 * 1024 * 1024
+VU_PACK_UNPACKED_MAX = 80 * 1024 * 1024
+VU_PACK_FILES_MAX = 24
+VU_PREVIEW_MAX = 1024 * 1024
+_VU_FILE_RE = re.compile(r'^[a-z0-9][a-z0-9._-]{0,80}\.(png|jpg|json)$')
+_VU_PACK_RE = re.compile(r'^[a-z0-9][a-z0-9._-]{0,80}\.vupak$')
+_VU_PREVIEW_RE = re.compile(r'^[a-z0-9][a-z0-9._-]{0,80}\.jpg$')
+_VU_SHA_RE = re.compile(r'^[0-9a-f]{64}$')
+
+_vu_store_lock = threading.Lock()
+_vu_store = {'catalog': None, 'checked': 0, 'error': None, 'checking': False, 'loaded': False, 'jobs': {}}
+
+
+class _VuStoreError(Exception):
+    def __init__(self, code):
+        super().__init__(code)
+        self.code = code
+
+
+def _vu_msg(code):
+    return {'code': code, 'message': _t(code, _lang())}
+
+
+def _vu_http_get(url, limit, timeout=30):
+    # an explicit User-Agent: some static hosts refuse urllib's default one
+    req = urllib.request.Request(url, headers={'User-Agent': 'OsmiumSound-VU/1.0'})
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            data = resp.read(limit + 1)
+    except (urllib.error.URLError, OSError, ValueError) as e:
+        log.info("vu store: GET %s failed: %s", url, e)
+        raise _VuStoreError('vuStore.downloadFailed')
+    if len(data) > limit:
+        raise _VuStoreError('vuStore.verifyFailed')
+    return data
+
+
+def _vu_verify_signature(data, sig):
+    """Ed25519 over the exact catalogue bytes, like hifi-os-update.sh does for
+    the OS bundles. No key, no openssl or a bad signature all mean no."""
+    if not os.path.isfile(VU_STORE_PUBKEY):
+        log.warning("vu store: no public key at %s, catalogue refused", VU_STORE_PUBKEY)
+        return False
+    with _tempfile.TemporaryDirectory(prefix='hifi-vu-sig-') as d:
+        fdata, fsig = os.path.join(d, 'index.json'), os.path.join(d, 'index.json.sig')
+        with open(fdata, 'wb') as f:
+            f.write(data)
+        with open(fsig, 'wb') as f:
+            f.write(sig)
+        try:
+            r = subprocess.run(['openssl', 'pkeyutl', '-verify', '-pubin', '-inkey', VU_STORE_PUBKEY,
+                                '-rawin', '-in', fdata, '-sigfile', fsig],
+                               capture_output=True, timeout=20)
+        except (OSError, subprocess.SubprocessError) as e:
+            log.warning("vu store: openssl not usable: %s", e)
+            return False
+    return r.returncode == 0
+
+
+def _vu_is_num(v):
+    return isinstance(v, (int, float)) and not isinstance(v, bool)
+
+
+def _vu_parse_index(raw):
+    """The catalogue's entries, validated, highest version per id."""
+    try:
+        doc = json.loads(raw.decode('utf-8'))
+    except (UnicodeDecodeError, ValueError):
+        raise _VuStoreError('vuStore.catalogInvalid')
+    skins = doc.get('skins') if isinstance(doc, dict) else None
+    if not isinstance(skins, list):
+        raise _VuStoreError('vuStore.catalogInvalid')
+    out = {}
+    for e in skins:
+        if not isinstance(e, dict):
+            continue
+        sid, ver, fmt = e.get('id'), e.get('version'), e.get('format', 1)
+        name = e.get('name')
+        if not (isinstance(sid, str) and _VU_STYLE_RE.match(sid) and isinstance(ver, int) and not isinstance(ver, bool)
+                and ver >= 1 and isinstance(fmt, int) and fmt >= 1 and isinstance(name, dict)
+                and isinstance(name.get('en'), str) and name.get('en')):
+            continue
+        pack, size, sha = e.get('file'), e.get('size'), str(e.get('sha256') or '').lower()
+        if not (isinstance(pack, str) and _VU_PACK_RE.match(pack) and isinstance(size, int)
+                and 0 < size <= VU_PACK_MAX and _VU_SHA_RE.match(sha)):
+            continue
+        entry = {'id': sid, 'version': ver, 'format': fmt,
+                 'name': {'en': name['en'][:60], 'it': str(name.get('it') or name['en'])[:60]},
+                 'author': str(e.get('author') or '')[:80], 'license': str(e.get('license') or '')[:80],
+                 'file': pack, 'size': size, 'sha256': sha, 'preview': None}
+        pv, pvs, pvsize = e.get('preview'), str(e.get('previewSha256') or '').lower(), e.get('previewSize')
+        if (isinstance(pv, str) and _VU_PREVIEW_RE.match(pv) and _VU_SHA_RE.match(pvs)
+                and isinstance(pvsize, int) and 0 < pvsize <= VU_PREVIEW_MAX):
+            entry['preview'] = {'file': pv, 'sha256': pvs, 'size': pvsize}
+        if sid not in out or out[sid]['version'] < ver:
+            out[sid] = entry
+    return sorted(out.values(), key=lambda x: x['id'])
+
+
+def _vu_preview_path(entry):
+    return os.path.join(VU_STORE_STATE_DIR, 'previews', entry['preview']['sha256'] + '.jpg')
+
+
+def _vu_write_atomic(path, data):
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    tmp = path + '.tmp'
+    with open(tmp, 'wb') as f:
+        f.write(data)
+    os.replace(tmp, path)
+
+
+def _vu_store_load_cached():
+    """The last verified catalogue from disk, re-verified: a kiosk that
+    starts offline still shows what was there."""
+    with _vu_store_lock:
+        if _vu_store['loaded']:
+            return
+        _vu_store['loaded'] = True
+    try:
+        with open(os.path.join(VU_STORE_STATE_DIR, 'index.json'), 'rb') as f:
+            raw = f.read(VU_INDEX_MAX + 1)
+        with open(os.path.join(VU_STORE_STATE_DIR, 'index.json.sig'), 'rb') as f:
+            sig = f.read(4096)
+        mtime = os.path.getmtime(os.path.join(VU_STORE_STATE_DIR, 'index.json'))
+    except OSError:
+        return
+    if len(raw) > VU_INDEX_MAX or not _vu_verify_signature(raw, sig):
+        return
+    try:
+        catalog = _vu_parse_index(raw)
+    except _VuStoreError:
+        return
+    with _vu_store_lock:
+        if _vu_store['catalog'] is None:
+            _vu_store['catalog'] = catalog
+            # stale on purpose: the first GET still checks the network
+            _vu_store['checked'] = min(mtime, time.time() - VU_STORE_STALE - 1)
+
+
+def _vu_builtin_ids():
+    ids = {VU_STYLE_DEFAULT}
+    try:
+        ids.update(n for n in os.listdir(VU_SKINS_DIR) if _VU_STYLE_RE.match(n))
+    except OSError:
+        pass
+    return ids
+
+
+def _vu_installed_store():
+    """{id: version} of the skins unpacked from the store."""
+    out = {}
+    try:
+        names = os.listdir(VU_STORE_DIR)
+    except OSError:
+        return out
+    for sid in names:
+        if not _VU_STYLE_RE.match(sid):
+            continue
+        try:
+            with open(os.path.join(VU_STORE_DIR, sid, 'skin.json'), encoding='utf-8') as f:
+                v = json.load(f).get('version', 0)
+        except (OSError, ValueError, AttributeError):
+            continue
+        out[sid] = v if isinstance(v, int) and not isinstance(v, bool) else 0
+    return out
+
+
+def _vu_seen_ids():
+    try:
+        with open(os.path.join(VU_STORE_STATE_DIR, 'seen.json'), encoding='utf-8') as f:
+            v = json.load(f)
+        return set(x for x in v if isinstance(x, str)) if isinstance(v, list) else set()
+    except (OSError, ValueError):
+        return set()
+
+
+def _vu_check_skin(skin, entry, names):
+    """skin.json of a package: the id/version the catalogue promised and the
+    geometry VuPanel.qml needs, every file it names inside the package."""
+    def ok_file(n):
+        return isinstance(n, str) and _VU_FILE_RE.match(n) and n in names and not n.endswith('.json')
+
+    def ok_pair(p):
+        return isinstance(p, list) and len(p) == 2 and all(_vu_is_num(v) for v in p)
+
+    if not isinstance(skin, dict) or skin.get('id') != entry['id'] or skin.get('version') != entry['version']:
+        return False
+    fmt = skin.get('format', 1)
+    if not isinstance(fmt, int) or fmt > VU_SKIN_FORMAT:
+        return False
+    size = skin.get('size')
+    if not (ok_pair(size) and size[0] > 0 and size[1] > 0):
+        return False
+    meters = skin.get('meters')
+    if not (isinstance(meters, list) and len(meters) >= 2 and all(ok_pair(m) for m in meters[:2])):
+        return False
+    if not ok_pair(skin.get('angles')):
+        return False
+    if not ok_file(skin.get('under')) or not ok_file(skin.get('over')):
+        return False
+    needle = skin.get('needle')
+    if not isinstance(needle, dict) or ('image' in needle and not ok_file(needle['image'])):
+        return False
+    effects = skin.get('effects', {})
+    if not isinstance(effects, dict):
+        return False
+    for key in ('backlight', 'peakLamp', 'peakNeedle'):
+        eff = effects.get(key)
+        if eff is None:
+            continue
+        if not isinstance(eff, dict) or ('image' in eff and not ok_file(eff['image'])):
+            return False
+    return True
+
+
+def _vu_unpack(data, entry):
+    """Unpack a verified .vupak into VU_STORE_DIR/<id>, replacing an older
+    copy only once the new one is complete."""
+    try:
+        zf = zipfile.ZipFile(io.BytesIO(data))
+        infos = zf.infolist()
+    except (zipfile.BadZipFile, ValueError):
+        raise _VuStoreError('vuStore.invalidPackage')
+    if not infos or len(infos) > VU_PACK_FILES_MAX:
+        raise _VuStoreError('vuStore.invalidPackage')
+    names, total = set(), 0
+    for info in infos:
+        mode = (info.external_attr >> 16) & 0o170000
+        if (info.is_dir() or not _VU_FILE_RE.match(info.filename) or info.filename in names
+                or mode not in (0, 0o100000)):
+            raise _VuStoreError('vuStore.invalidPackage')
+        names.add(info.filename)
+        total += info.file_size
+    if total > VU_PACK_UNPACKED_MAX or 'skin.json' not in names:
+        raise _VuStoreError('vuStore.invalidPackage')
+    try:
+        files = {n: zf.read(n) for n in names}
+        skin = json.loads(files['skin.json'].decode('utf-8'))
+    except (zipfile.BadZipFile, UnicodeDecodeError, ValueError, OSError, RuntimeError):
+        raise _VuStoreError('vuStore.invalidPackage')
+    if not _vu_check_skin(skin, entry, names):
+        raise _VuStoreError('vuStore.invalidPackage')
+    for n, blob in files.items():
+        if n.endswith('.png') and not blob.startswith(b'\x89PNG\r\n\x1a\n'):
+            raise _VuStoreError('vuStore.invalidPackage')
+        if n.endswith('.jpg') and not blob.startswith(b'\xff\xd8\xff'):
+            raise _VuStoreError('vuStore.invalidPackage')
+    sid = entry['id']
+    dest = os.path.join(VU_STORE_DIR, sid)
+    tmp = os.path.join(VU_STORE_DIR, '.tmp-' + sid)
+    old = os.path.join(VU_STORE_DIR, '.old-' + sid)
+    try:
+        os.makedirs(VU_STORE_DIR, exist_ok=True)
+        shutil.rmtree(tmp, ignore_errors=True)
+        shutil.rmtree(old, ignore_errors=True)
+        os.makedirs(tmp)
+        for n, blob in files.items():
+            with open(os.path.join(tmp, n), 'wb') as f:
+                f.write(blob)
+        if os.path.isdir(dest):
+            os.rename(dest, old)
+        os.rename(tmp, dest)
+        shutil.rmtree(old, ignore_errors=True)
+    except OSError:
+        log.exception("vu store: unpacking %s failed", sid)
+        shutil.rmtree(tmp, ignore_errors=True)
+        if not os.path.isdir(dest) and os.path.isdir(old):
+            os.rename(old, dest)
+        raise _VuStoreError('vuStore.installFailed')
+
+
+def _vu_install_entry(entry):
+    """Download, verify and unpack one catalogue entry (job state in
+    _vu_store['jobs']). True when installed."""
+    sid = entry['id']
+    try:
+        data = _vu_http_get(urllib.parse.urljoin(VU_STORE_URL, entry['file']), entry['size'])
+        if len(data) != entry['size'] or _hashlib.sha256(data).hexdigest() != entry['sha256']:
+            raise _VuStoreError('vuStore.verifyFailed')
+        with _vu_store_lock:
+            _vu_store['jobs'][sid] = {'state': 'installing'}
+        _vu_unpack(data, entry)
+    except _VuStoreError as e:
+        log.warning("vu store: %s v%s not installed: %s", sid, entry['version'], e.code)
+        with _vu_store_lock:
+            _vu_store['jobs'][sid] = {'state': 'error', 'code': e.code}
+        return False
+    with _vu_store_lock:
+        _vu_store['jobs'].pop(sid, None)
+    log.info("vu store: %s v%s installed", sid, entry['version'])
+    return True
+
+
+def _vu_store_refresh():
+    """Fetch and verify the catalogue and its previews, then bring the skins
+    installed from the store up to date. One at a time."""
+    with _vu_store_lock:
+        if _vu_store['checking']:
+            return
+        _vu_store['checking'] = True
+    error = None
+    catalog = None
+    try:
+        raw = _vu_http_get(urllib.parse.urljoin(VU_STORE_URL, 'index.json'), VU_INDEX_MAX)
+        sig = _vu_http_get(urllib.parse.urljoin(VU_STORE_URL, 'index.json.sig'), 4096)
+        if not _vu_verify_signature(raw, sig):
+            # a publish uploads the list and its signature one after the other:
+            # read both again once before calling it a failure
+            time.sleep(VU_STORE_SIG_RETRY)
+            raw = _vu_http_get(urllib.parse.urljoin(VU_STORE_URL, 'index.json'), VU_INDEX_MAX)
+            sig = _vu_http_get(urllib.parse.urljoin(VU_STORE_URL, 'index.json.sig'), 4096)
+            if not _vu_verify_signature(raw, sig):
+                raise _VuStoreError('vuStore.signatureInvalid')
+        catalog = _vu_parse_index(raw)
+        for entry in catalog:
+            if not entry['preview'] or os.path.isfile(_vu_preview_path(entry)):
+                continue
+            try:
+                blob = _vu_http_get(urllib.parse.urljoin(VU_STORE_URL, entry['preview']['file']), entry['preview']['size'])
+            except _VuStoreError:
+                continue
+            if _hashlib.sha256(blob).hexdigest() == entry['preview']['sha256'] and blob.startswith(b'\xff\xd8\xff'):
+                _vu_write_atomic(_vu_preview_path(entry), blob)
+        try:
+            _vu_write_atomic(os.path.join(VU_STORE_STATE_DIR, 'index.json'), raw)
+            _vu_write_atomic(os.path.join(VU_STORE_STATE_DIR, 'index.json.sig'), sig)
+        except OSError:
+            log.exception("vu store: could not keep the catalogue on disk")
+    except _VuStoreError as e:
+        error = 'vuStore.catalogUnavailable' if e.code == 'vuStore.downloadFailed' else e.code
+    except Exception:
+        log.exception("vu store: refresh failed")
+        error = 'vuStore.catalogUnavailable'
+    with _vu_store_lock:
+        if catalog is not None:
+            _vu_store['catalog'] = catalog
+        _vu_store['error'] = error
+        _vu_store['checked'] = time.time()
+        _vu_store['loaded'] = True
+    try:
+        if catalog is not None:
+            installed, builtin = _vu_installed_store(), _vu_builtin_ids()
+            for entry in catalog:
+                if (entry['id'] in installed and entry['id'] not in builtin
+                        and entry['version'] > installed[entry['id']] and entry['format'] <= VU_SKIN_FORMAT):
+                    with _vu_store_lock:
+                        if entry['id'] in _vu_store['jobs'] and _vu_store['jobs'][entry['id']].get('state') != 'error':
+                            continue
+                        _vu_store['jobs'][entry['id']] = {'state': 'downloading'}
+                    _vu_install_entry(entry)
+    finally:
+        with _vu_store_lock:
+            _vu_store['checking'] = False
+
+
+def _vu_store_refresh_async():
+    threading.Thread(target=_vu_store_refresh, daemon=True, name='vu-store-refresh').start()
+
+
+def _vu_store_background():
+    time.sleep(VU_STORE_FIRST_CHECK)
+    while True:
+        try:
+            _vu_store_refresh()
+        except Exception:
+            log.exception("vu store: periodic check failed")
+        time.sleep(VU_STORE_REFRESH)
+
+
+def _vu_find_entry(sid):
+    with _vu_store_lock:
+        for entry in _vu_store['catalog'] or []:
+            if entry['id'] == sid:
+                return entry
+    return None
+
+
+def get_vu_store(summary=False):
+    """The store as the settings screens show it. summary=True only counts
+    what is new (for a badge) and never carries the previews."""
+    _vu_store_load_cached()
+    with _vu_store_lock:
+        stale = not _vu_store['checking'] and time.time() - _vu_store['checked'] > VU_STORE_STALE
+        catalog = list(_vu_store['catalog'] or [])
+        jobs = {k: dict(v) for k, v in _vu_store['jobs'].items()}
+        error, checked = _vu_store['error'], _vu_store['checked']
+    if stale:
+        _vu_store_refresh_async()
+    installed, builtin, seen = _vu_installed_store(), _vu_builtin_ids(), _vu_seen_ids()
+    items = []
+    for entry in catalog:
+        sid = entry['id']
+        if sid in builtin:
+            continue
+        have = installed.get(sid)
+        supported = entry['format'] <= VU_SKIN_FORMAT
+        item = {'id': sid, 'version': entry['version'], 'name': entry['name'], 'author': entry['author'],
+                'license': entry['license'], 'size': entry['size'], 'supported': supported,
+                'installed': have is not None, 'installedVersion': have,
+                'update': have is not None and supported and entry['version'] > have,
+                'new': have is None and supported and sid not in seen}
+        job = jobs.get(sid)
+        if job:
+            item['job'] = job['state']
+            if job.get('code'):
+                item['jobError'] = _vu_msg(job['code'])
+        if not summary:
+            item['preview'] = None
+            if entry['preview']:
+                try:
+                    with open(_vu_preview_path(entry), 'rb') as f:
+                        item['preview'] = 'data:image/jpeg;base64,' + _base64.b64encode(f.read()).decode('ascii')
+                except OSError:
+                    pass
+        items.append(item)
+    if summary:
+        return {'new': sum(1 for i in items if i['new']), 'updates': sum(1 for i in items if i['update'])}
+    with _vu_store_lock:
+        checking = _vu_store['checking']
+    return {'skins': items, 'checking': checking or stale, 'checked': int(checked),
+            'error': _vu_msg(error) if error else None,
+            'busy': any(i.get('job') in ('downloading', 'installing') for i in items)}
+
+
+def vu_store_check():
+    _vu_store_refresh_async()
+    return {'success': True, 'checking': True}
+
+
+def vu_store_install(sid):
+    sid = str(sid or '').strip()
+    _vu_store_load_cached()
+    entry = _vu_find_entry(sid) if _VU_STYLE_RE.match(sid) else None
+    if entry is None:
+        return {'success': False, **_vu_msg('vuStore.unknown')}
+    if sid in _vu_builtin_ids():
+        return {'success': False, **_vu_msg('vuStore.builtin')}
+    if entry['format'] > VU_SKIN_FORMAT:
+        return {'success': False, **_vu_msg('vuStore.unsupported')}
+    if _vu_installed_store().get(sid) == entry['version']:
+        return {'success': True, 'installed': True}
+    with _vu_store_lock:
+        if _vu_store['jobs'].get(sid, {}).get('state') in ('downloading', 'installing'):
+            return {'success': False, **_vu_msg('vuStore.busy')}
+        _vu_store['jobs'][sid] = {'state': 'downloading'}
+    threading.Thread(target=_vu_install_entry, args=(entry,), daemon=True, name='vu-store-install').start()
+    return {'success': True, 'started': True}
+
+
+def vu_store_remove(sid):
+    sid = str(sid or '').strip()
+    if not _VU_STYLE_RE.match(sid) or sid not in _vu_installed_store():
+        return {'success': False, **_vu_msg('vuStore.notInstalled')}
+    with _vu_store_lock:
+        if _vu_store['jobs'].get(sid, {}).get('state') in ('downloading', 'installing'):
+            return {'success': False, **_vu_msg('vuStore.busy')}
+        _vu_store['jobs'].pop(sid, None)
+    try:
+        shutil.rmtree(os.path.join(VU_STORE_DIR, sid))
+    except OSError:
+        log.exception("vu store: removing %s failed", sid)
+        return {'success': False, **_vu_msg('vuStore.removeFailed')}
+    # the look in use is gone: back to the default rather than a stale choice
+    try:
+        with open(VU_STYLE_FILE) as f:
+            if f.read().strip() == sid:
+                os.remove(VU_STYLE_FILE)
+    except OSError:
+        pass
+    return {'success': True}
+
+
+def vu_store_mark_seen():
+    _vu_store_load_cached()
+    with _vu_store_lock:
+        ids = [e['id'] for e in _vu_store['catalog'] or []]
+    seen = _vu_seen_ids() | set(ids)
+    try:
+        _vu_write_atomic(os.path.join(VU_STORE_STATE_DIR, 'seen.json'), json.dumps(sorted(seen)).encode('utf-8'))
+    except OSError:
+        return {'success': False, **_vu_msg('prefs.saveFailed')}
+    return {'success': True}
+
+# ──────────────────────────────────────────────────────────────────
 #  Now-playing auto-expand (kiosk-only UI behaviour, like the VU meter
 #  above): how long after a song starts playing the kiosk should
 #  automatically open the fullscreen now-playing view on its own, if the
@@ -2444,6 +3924,38 @@ def set_vu_meter(enable):
 #  vu-meter-enabled: reachable from the companion app / web admin on a
 #  headless unit.
 # ──────────────────────────────────────────────────────────────────
+UI_LANGUAGE_FILE = '/etc/hifi-player/ui-language'
+UI_LANGUAGE_CHOICES = ('en', 'it')
+
+def get_ui_language():
+    """Return { language }. The on-device UI (both the Electron kiosk and the
+    native one) reads this file, so the language follows the device rather
+    than whichever UI happened to set it."""
+    lang = ''
+    try:
+        with open(UI_LANGUAGE_FILE) as f:
+            lang = f.read().strip().lower()
+    except Exception:
+        pass
+    return {'language': lang if lang in UI_LANGUAGE_CHOICES else ''}
+
+def set_ui_language(lang):
+    lang = (lang or '').strip().lower()
+    if lang not in UI_LANGUAGE_CHOICES:
+        return {'success': False, 'language': get_ui_language()['language'],
+                'code': 'prefs.saveFailed', 'message': _t('prefs.saveFailed', _lang())}
+    try:
+        os.makedirs(os.path.dirname(UI_LANGUAGE_FILE), exist_ok=True)
+        tmp = UI_LANGUAGE_FILE + '.tmp'
+        with open(tmp, 'w') as f:
+            f.write(lang + '\n')
+        os.replace(tmp, UI_LANGUAGE_FILE)
+    except Exception:
+        log.exception("set_ui_language: persist failed")
+        return {'success': False, 'language': get_ui_language()['language'],
+                'code': 'prefs.saveFailed', 'message': _t('prefs.saveFailed', _lang())}
+    return {'success': True, 'language': lang}
+
 NOWPLAYING_AUTOEXPAND_FILE = '/etc/hifi-player/nowplaying-autoexpand-seconds'
 NOWPLAYING_AUTOEXPAND_CHOICES = (0, 3, 5, 10, 15)
 
@@ -3737,12 +5249,107 @@ def get_bluetooth_now_playing():
 #  OTA update helpers
 # ──────────────────────────────────────────────────────────────────
 
-def _installed_ui_version():
+# ── modalità immagine (schema A/B con RAUC) ───────────────────────────
+# Su uno slot immagine (root in sola lettura, costruita da distro/build-image.sh)
+# UI, componenti di sistema e OS viaggiano tutti nel bundle RAUC: i tre
+# canali legacy non hanno più senso e la versione "installata" è una sola.
+# Il marcatore sta fuori da /etc di proposito (l'upper dell'overlay potrebbe
+# ombreggiare qualunque cosa sotto /etc).
+IMAGE_VERSION_FILE = '/usr/lib/osmium/IMAGE_VERSION'
+LYRION_DATA_VERSION_FILE = '/data/lyrion/current/VERSION'
+AB_STATE_FILE = '/boot/efi/EFI/debian/abconvert.state'
+AB_PRECHECK_FILE = '/run/hifi-ab-precheck.json'
+AB_PRECHECK_SCRIPT = '/usr/local/sbin/hifi-ab-precheck.sh'
+RAUC_SYSTEM_CONF = '/etc/rauc/system.conf'
+
+def _image_mode():
+    """True on a device whose root IS a slot image.
+
+    🚨 A live session is never one, even when it boots from the very same
+    squashfs: the ISO is about to carry the image itself as its live
+    filesystem, so the marker file is present there too. Without this a live
+    session would block its own update channels and answer questions about
+    slots it does not have."""
+    if not os.path.exists(IMAGE_VERSION_FILE):
+        return False
     try:
-        with open(OTA_VERSION_FILE) as f:
-            return f.read().strip() or 'unknown'
+        return not _is_live_boot()
     except Exception:
-        return 'unknown'
+        return True
+
+def _ab_ready():
+    """Converted to the A/B layout (RAUC configured) but possibly still
+    running the legacy root: from here on the image channel is the only
+    one that makes sense — legacy bundles would patch a root the next
+    image install overwrites."""
+    return os.path.exists(RAUC_SYSTEM_CONF)
+
+def _image_version():
+    return _read_version_file(IMAGE_VERSION_FILE)
+
+def _booted_slot():
+    try:
+        with open(PROC_CMDLINE) as f:
+            for tok in f.read().split():
+                if tok.startswith('rauc.slot='):
+                    return tok.split('=', 1)[1]
+    except Exception:
+        pass
+    return None
+
+def _data_partition_mounted():
+    """True/False from the initramfs state file, None when it says nothing."""
+    try:
+        with open('/run/hifi-state/data-mounted') as f:
+            flag = f.read().strip()
+    except Exception:
+        return None
+    return flag == '1' if flag in ('0', '1') else None
+
+def ab_status():
+    """Stato dello schema A/B per l'interfaccia e per la prova sul campo:
+    modalità immagine, slot avviato, stato della conversione (ESP), esito
+    delle pre-verifiche e `rauc status` in JSON quando RAUC è configurato."""
+    out = {'image_mode': _image_mode(), 'image_version': _image_version() if _image_mode() else None,
+           'booted_slot': _booted_slot(), 'rauc_configured': os.path.exists(RAUC_SYSTEM_CONF),
+           'state': None, 'precheck': None, 'rauc': None,
+           # False = the initramfs fell back to a tmpfs /data (see the
+           # local-bottom hifi-state hook): this boot is running on the
+           # image's factory /etc and nothing written now survives a reboot.
+           # None on a device that predates the flag, or a legacy layout.
+           'data_mounted': _data_partition_mounted()}
+    try:
+        with open(AB_STATE_FILE) as f:
+            out['state'] = f.read().strip() or None
+    except Exception:
+        pass
+    try:
+        with open(AB_PRECHECK_FILE) as f:
+            out['precheck'] = json.load(f)
+    except Exception:
+        pass
+    if out['rauc_configured']:
+        try:
+            r = _run(['rauc', 'status', '--output-format=json'], timeout=20)
+            if r.returncode == 0 and r.stdout.strip():
+                out['rauc'] = json.loads(r.stdout)
+        except Exception:
+            log.exception("ab_status: rauc status failed")
+    return out
+
+def _installed_ui_version():
+    if _image_mode():
+        return _image_version()
+    # il file nuovo prima, quello vecchio come ripiego (apparecchi non ancora aggiornati)
+    for path in (OTA_VERSION_FILE, OTA_VERSION_FILE_LEGACY):
+        try:
+            with open(path) as f:
+                v = f.read().strip()
+            if v:
+                return v
+        except Exception:
+            pass
+    return 'unknown'
 
 def _version_tuple(v):
     """Best-effort numeric tuple from a version like 'v1.2.0' → (1, 2, 0)."""
@@ -3843,10 +5450,11 @@ _RELEASE_CACHE_TTL = 60    # seconds
 # cheap anyway.
 _RELEASE_CACHE_LOCK = threading.Lock()
 
-def _fetch_pages_manifest(channel):
-    """Read the channel's static manifest from GitHub Pages. Returns a release-
+def _fetch_pages_manifest(channel, base=None):
+    """Read the channel's static manifest from GitHub Pages (or from `base`,
+    the file.osmiumsound.it mirror of the prod manifest). Returns a release-
     shaped dict ({tag_name, assets:[…]}) or None if unavailable/empty."""
-    url = f'{OTA_MANIFEST_BASE}/latest-{channel}.json'
+    url = f'{base or OTA_MANIFEST_BASE}/latest-{channel}.json'
     req = urllib.request.Request(url, headers={'User-Agent': 'hifi-player-ota'})
     with urllib.request.urlopen(req, timeout=15) as resp:
         release = json.load(resp)
@@ -3904,7 +5512,18 @@ def _fetch_release(channel):
         except Exception:
             log.warning("Pages manifest fetch failed for channel %s; falling back to API", channel)
 
-        # 2. Fallback: the rate-limited GitHub REST API.
+        # 2. Stable channel: the copy of the manifest next to the payloads on
+        #    file.osmiumsound.it (same host the download comes from anyway).
+        if channel == 'prod':
+            try:
+                release = _fetch_pages_manifest(channel, OTA_PROD_MIRROR_BASE)
+                if release:
+                    _RELEASE_CACHE[channel] = (now, release)
+                    return release
+            except Exception:
+                log.warning("mirror manifest fetch failed for channel prod; falling back to API")
+
+        # 3. Fallback: the rate-limited GitHub REST API.
         try:
             release = _fetch_github_api_release(channel)
         except Exception:
@@ -3938,7 +5557,7 @@ def _debian_codename():
 # from the new (Debian 13) ISO instead of trying to update in place.
 _OTA_BLOCKED_CODENAMES = ('bookworm',)
 
-def _check_release_update(current, prefix, channel=None):
+def _check_release_update(current, prefix, channel=None, suffix='.tar.gz', image=False):
     """Look at the relevant GitHub Release and return update info for the asset
     whose name starts with `prefix` (e.g. 'hifi-ui-' or 'hifi-system-').
 
@@ -3947,6 +5566,14 @@ def _check_release_update(current, prefix, channel=None):
     one to check prod/dev independently of whatever the device's own channel
     setting happens to be, without touching it."""
     channel = channel or get_ota_channel()
+    if (_image_mode() or _ab_ready()) and not image:
+        # Slot immagine — o legacy già convertito allo schema A/B (system.conf
+        # presente): i canali legacy (ui/system/os) non esistono più, si
+        # aggiorna solo l'immagine intera (bundle RAUC). Senza questo blocco il
+        # piano post-conversione si portava dietro uno step `ui` inutile (la UI
+        # arriva con l'immagine) e Impostazioni mostrava aggiornamenti fantasma.
+        return {'current': current, 'latest': None, 'channel': channel,
+                'update_available': False, 'blocked': 'image'}
     if _debian_codename() in _OTA_BLOCKED_CODENAMES:
         # Deliberately not `error`: build_update_plan()/_plan_step_from_info()
         # treat that as a failed check and report it; this is a clean,
@@ -3964,13 +5591,19 @@ def _check_release_update(current, prefix, channel=None):
     assets = release.get('assets', [])
 
     def _named(suffix):
-        return next((a for a in assets
-                     if a.get('name', '').startswith(prefix)
-                     and a.get('name', '').endswith(suffix)), None)
+        # `prefix` puo' essere una tupla: si prova nell'ordine dato, cosi' il
+        # nome nuovo vince su quello vecchio quando ci sono entrambi
+        for pfx in ((prefix,) if isinstance(prefix, str) else prefix):
+            a = next((a for a in assets
+                      if a.get('name', '').startswith(pfx)
+                      and a.get('name', '').endswith(suffix)), None)
+            if a:
+                return a
+        return None
 
-    tarball = _named('.tar.gz')
-    sha_asset = _named('.tar.gz.sha256')
-    sig_asset = _named('.tar.gz.sha256.sig')
+    tarball = _named(suffix)
+    sha_asset = _named(suffix + '.sha256')
+    sig_asset = _named(suffix + '.sha256.sig')
 
     return {
         'current': current,
@@ -3986,6 +5619,26 @@ def _check_release_update(current, prefix, channel=None):
 
 def check_app_update():
     return _check_release_update(_installed_ui_version(), OTA_UI_PREFIX)
+
+def _installed_image_version():
+    """Versione dell'immagine in uso; su una root legacy già convertita (RAUC
+    configurato ma nessuna immagine ancora installata) è 'unknown', così la
+    prima immagine risulta sempre "più nuova"."""
+    if _image_mode():
+        return _image_version()
+    return 'unknown'
+
+def check_image_update(channel=None):
+    """Bundle immagine RAUC: offerto solo dove RAUC è configurato (apparecchio
+    convertito allo schema A/B, oppure già in modalità immagine). Un legacy non
+    convertito non lo vede: prima passa dal pacchetto 1 (system+OS) che, se le
+    pre-verifiche lo permettono, converte le partizioni."""
+    channel = channel or get_ota_channel()
+    if not os.path.exists(RAUC_SYSTEM_CONF):
+        return {'current': 'unknown', 'latest': None, 'channel': channel,
+                'update_available': False}
+    return _check_release_update(_installed_image_version(), IMAGE_PREFIX, channel,
+                                 suffix='.raucb', image=True)
 
 def _fetch_sha256(sha_url):
     """Download the .sha256 sidecar and return just the hex digest.
@@ -4063,6 +5716,8 @@ def app_update_status():
 #  OTA update of the custom system components
 # ──────────────────────────────────────────────────────────────────
 def _installed_system_version():
+    if _image_mode():
+        return _image_version()
     return _read_version_file(SYS_VERSION_FILE)
 
 def check_system_update():
@@ -4120,6 +5775,8 @@ def system_update_status():
 #  OTA update of the operating system (signed bundle + apply.sh)
 # ──────────────────────────────────────────────────────────────────
 def _installed_os_version():
+    if _image_mode():
+        return _image_version()
     return _read_version_file(OS_VERSION_FILE)
 
 def check_os_update():
@@ -4230,6 +5887,21 @@ def list_install_disks():
         path = dev.get('path')
         if not path or path == medium_disk:
             continue
+        # 🚨 Nothing you can install onto has zero bytes. Loading the nbd
+        # module — which RAUC needs to stream an image — makes the kernel
+        # create sixteen empty /dev/nbdN devices, and lsblk reports every one
+        # of them as a disk: the installer's picker filled up with
+        # "/dev/nbd2 · 0.0 GB" entries and the real disk was lost among them.
+        # Same for zram, loop and ram devices, which are memory, not storage.
+        try:
+            _size = int(dev.get('size') or 0)
+        except (TypeError, ValueError):
+            _size = 0
+        if _size <= 0:
+            continue
+        _name = path.rsplit('/', 1)[-1]
+        if _name.startswith(('nbd', 'zram', 'ram', 'loop', 'dm-')):
+            continue
         disks.append({
             'path': path,
             'size': dev.get('size'),
@@ -4283,6 +5955,7 @@ _PLAN_KINDS = {
     'system': (lambda: check_system_update(), SYS_STATUS_FILE, lambda: _installed_system_version()),
     'os':     (lambda: check_os_update(),     OS_STATUS_FILE,  lambda: _installed_os_version()),
     'ui':     (lambda: check_app_update(),    OTA_STATUS_FILE, lambda: _installed_ui_version()),
+    'image':  (lambda: check_image_update(),  IMAGE_STATUS_FILE, lambda: _installed_image_version()),
 }
 
 def _read_update_plan():
@@ -4370,6 +6043,28 @@ def _read_update_state():
         info['ts'] = 0
     return info
 
+def _runner_message(info, fallback=''):
+    """User-facing text for a record the shell side wrote (the k=v state file,
+    error.json, or a /run/hifi-*-status.json): the runners put a translation
+    `key` plus `params` (a JSON object, or a string holding one) next to their
+    plain-English `message`. A known key wins — translated into the caller's
+    language — so the kiosk in Italian and the web admin in English read the
+    same step in their own words; anything else falls back to the raw text."""
+    if not isinstance(info, dict):
+        return fallback
+    key = info.get('key')
+    if key and key in _I18N_MESSAGES:
+        params = info.get('params') or {}
+        if isinstance(params, str):
+            try:
+                params = json.loads(params)
+            except ValueError:
+                params = {}
+        if not isinstance(params, dict):
+            params = {}
+        return _t(key, _lang(), **params)
+    return info.get('message') or fallback
+
 def _clear_update_state():
     for f in (UPDATE_STATE_FILE, UPDATE_ERROR_FILE):
         try:
@@ -4436,6 +6131,8 @@ def build_update_plan():
     steps = []
     errors = []
     for kind in UPDATE_PLAN_ORDER:
+        if kind not in _PLAN_KINDS:
+            continue
         check_fn = _PLAN_KINDS[kind][0]
         try:
             info = check_fn()
@@ -4580,18 +6277,23 @@ def update_plan_status():
         if phase in ('done', 'error') and time.time() - ts > UPDATE_PLAN_TTL:
             _clear_update_state()
             _clear_update_plan()
+        elif phase == 'applying' and time.time() - ts > UPDATE_APPLYING_TTL:
+            # Stale: the isolated session (or the A/B conversion chain that
+            # deliberately leaves 'applying' across its reboots) never came
+            # back to finish. Clear it instead of spinning forever.
+            _clear_update_state()
         elif phase == 'applying':
             return {'state': 'applying',
-                    'message': state_info.get('message') or _t('update.applying', _lang()),
+                    'message': _runner_message(state_info, _t('update.applying', _lang())),
                     'finished': None}
         elif phase == 'done':
             return {'state': 'done',
-                    'message': state_info.get('message') or _t('update.applyDone', _lang()),
+                    'message': _runner_message(state_info, _t('update.applyDone', _lang())),
                     'finished': ts}
         else:
             err = _read_update_error() or {}
             return {'state': 'apply_error', 'kind': err.get('channel', ''),
-                    'message': (err.get('message') or state_info.get('message')
+                    'message': (_runner_message(err) or _runner_message(state_info)
                                 or _t('update.applyError', _lang())),
                     'finished': ts}
 
@@ -4609,6 +6311,22 @@ def update_plan_status():
     if plan.get('finished') and time.time() - plan['finished'] > UPDATE_PLAN_TTL:
         _clear_update_plan()
         return {'state': 'idle'}
+
+    # An image step has no apply phase: the reboot IS the apply, so nobody
+    # ever rewrites the state file afterwards the way the apply runner does
+    # for the legacy channels. Once the image now running is the one this plan
+    # staged, the update is over — without this the screen sits on "the device
+    # will restart to apply it" for good, on a device that already restarted
+    # and is running exactly what was asked for (seen on the Dell going to
+    # alpha3). Retiring the plan here is also what stops it from re-opening
+    # the overlay at every boot.
+    if state == 'finished' and _image_mode():
+        _img_step = next((st for st in plan['steps'] if st['kind'] == 'image'), None)
+        if _img_step and _img_step.get('version') == _image_version():
+            _clear_update_plan()
+            return {'state': 'done',
+                    'message': _t('update.applyDone', _lang()),
+                    'finished': plan.get('finished')}
 
     # Every step has staged; the stage runner is about to (or already did)
     # create /system-update and reboot into the isolated apply session. There
@@ -4647,7 +6365,7 @@ def update_plan_status():
         if live.get('version') == current['version']:
             step_state = live.get('state') or ''
             progress = live.get('progress') if isinstance(live.get('progress'), (int, float)) else None
-            message = live.get('message') or ''
+            message = _runner_message(live)
         else:
             step_state = 'starting'
 
@@ -4684,12 +6402,35 @@ def dismiss_update_plan():
 
 # ──────────────────────────────────────────────────────────────────
 #  Setup wizard: mandatory update gate, right after the network step.
-#  TEMPORARY (per explicit request): checks BOTH prod and dev, regardless of
-#  the device's own (always 'prod' this early) OTA channel setting -- a prod
-#  update applies automatically, a dev-only one needs the operator's
-#  confirmation on screen first. Drop the dev branch once this has shipped to
-#  production and prod-only checks are enough again.
+#  Checks the PROD channel only, regardless of the device's own OTA channel
+#  setting (always 'prod' this early): a fresh install must be on the current
+#  stable release before setup goes on. (Until 2026-08-28 this also checked
+#  dev, as a temporary measure from when the wizard only existed on dev
+#  builds -- a dev-only release then blocked setup on a stable install, and
+#  on a live boot of the very ISO we ship, which can't update at all.)
+#
+#  Skipped outright on a live session (boot=live): a "Try Osmium Sound" boot
+#  runs from the read-only squashfs with a RAM overlay, so nothing an update
+#  installs survives a reboot -- and the OS component even stages a reboot
+#  to apply itself (hifi-update-stage-resume.service, which deliberately
+#  doesn't run under boot=live). Demanding an update there only strands the
+#  operator on a step that can never complete.
 # ──────────────────────────────────────────────────────────────────
+PROC_CMDLINE = '/proc/cmdline'
+
+def _is_live_boot():
+    """True when this session booted from the live medium: the ISO's
+    bootloader always appends `boot=live` (distro/build-distro.sh), the same
+    token the systemd units gate on with ConditionKernelCommandLine=!boot=live.
+    Not the same thing as get_boot_mode() above -- that only tells the two
+    live menu entries apart ('installer' vs 'live') and answers 'live' on an
+    installed system as well."""
+    try:
+        with open(PROC_CMDLINE) as f:
+            return 'boot=live' in f.read().split()
+    except Exception:
+        return False
+
 def _channel_has_update(channel):
     """Returns (has_update, checked_ok). checked_ok is False only when EVERY
     component's check failed outright (network/API blip) -- distinct from a
@@ -4713,23 +6454,26 @@ def _channel_has_update(channel):
     return False, any_ok
 
 def wizard_update_check():
+    if _is_live_boot():
+        # Nothing to check: no network call, no retry loop in the wizard.
+        return {'available': False, 'live': True}
     prod_avail, prod_ok = _channel_has_update('prod')
     if prod_avail:
         return {'available': True, 'channel': 'prod', 'auto': True}
-    dev_avail, dev_ok = _channel_has_update('dev')
-    if dev_avail:
-        return {'available': True, 'channel': 'dev', 'auto': False}
-    if not prod_ok and not dev_ok:
-        # Neither channel could be checked at all -- report it distinctly so
-        # the wizard retries instead of treating "couldn't check" the same as
-        # "checked, nothing to update".
+    if not prod_ok:
+        # The check couldn't run at all -- report it distinctly so the wizard
+        # retries instead of treating "couldn't check" the same as "checked,
+        # nothing to update".
         return {'available': False, 'checkFailed': True}
     return {'available': False}
 
 def wizard_update_apply(channel):
-    if channel not in ('prod', 'dev'):
+    if channel != 'prod':
         return {'started': False, 'code': 'update.checkFailed',
                 'message': _t('update.checkFailed', _lang())}
+    if _is_live_boot():
+        return {'started': False, 'code': 'update.liveSession',
+                'message': _t('update.liveSession', _lang())}
     # Not a side-channel hack: this is a real, deliberate channel switch (the
     # same one Settings -> Updates would make), so the device legitimately
     # tracks whichever channel it was just updated from, same as if the
@@ -4742,6 +6486,9 @@ def wizard_update_apply(channel):
 # ──────────────────────────────────────────────────────────────────
 
 def _lyrion_installed_version():
+    if _image_mode():
+        # su /data, scompattato da hifi-lyrion-update.sh: niente dpkg
+        return _read_version_file(LYRION_DATA_VERSION_FILE)
     try:
         r = _run(['dpkg-query', '-W', '-f=${Version}', LYRION_PKG])
         if r.returncode == 0 and r.stdout.strip():
@@ -5092,9 +6839,36 @@ def roomcorr_discard():
 def api_check():
     return jsonify({"message": "ok"})
 
+def _ui_update_check(check_fn):
+    """What the three update cards on screen should show.
+
+    On an image system the interface, the system components and the OS are no
+    longer three things that update on their own: they are one image. The
+    legacy checks correctly answer "blocked" there, but the three frontends
+    only ever ask those three, so a perfectly available image update showed up
+    as "everything up to date" — the appliance knew, the screen did not (seen
+    on the Dell with alpha3 already published). So in image mode all three
+    answer with the image check. It is the same version in all three rows
+    because it is the same image, and the changelog rides along on the first.
+
+    The same holds for a device that has been converted but is still booting
+    its old root while it waits for the first image (system.conf present,
+    IMAGE_VERSION not yet): its legacy channels are blocked too, so without
+    this it would show nothing at all in the very window where the image is
+    what it needs.
+
+    The plan builder keeps calling check_app/system/os_update directly, so it
+    still sees "blocked" and does not try to stage a .raucb as a tarball.
+    """
+    if _image_mode() or _ab_ready():
+        info = dict(check_image_update())
+        info['kind'] = 'image'
+        return info
+    return check_fn()
+
 @app.route('/app_update/check', methods=['GET'])
 def api_app_update_check():
-    return jsonify(check_app_update())
+    return jsonify(_ui_update_check(check_app_update))
 
 @app.route('/app_update/apply', methods=['POST'])
 def api_app_update_apply():
@@ -5106,7 +6880,7 @@ def api_app_update_status():
 
 @app.route('/system_update/check', methods=['GET'])
 def api_system_update_check():
-    return jsonify(check_system_update())
+    return jsonify(_ui_update_check(check_system_update))
 
 @app.route('/system_update/apply', methods=['POST'])
 def api_system_update_apply():
@@ -5118,7 +6892,7 @@ def api_system_update_status():
 
 @app.route('/os_update/check', methods=['GET'])
 def api_os_update_check():
-    return jsonify(check_os_update())
+    return jsonify(_ui_update_check(check_os_update))
 
 @app.route('/os_update/apply', methods=['POST'])
 def api_os_update_apply():
@@ -5248,6 +7022,19 @@ def api_wifi_connect():
 def api_wired_dhcp():
     return jsonify(wired_dhcp())
 
+# Fixed (static) address for the active uplink — driven by the admin-webui
+# Network page. Unlike /configure_network above this edits the NetworkManager
+# profile, so the address survives a reboot.
+@app.route('/ipv4_config', methods=['GET'])
+def api_ipv4_config_get():
+    return jsonify(get_ipv4_config())
+
+@app.route('/ipv4_config', methods=['POST'])
+def api_ipv4_config_set():
+    data = request.get_json(silent=True) or {}
+    result = set_ipv4_config(data)
+    return jsonify(result), (200 if result.get('success') else 400)
+
 @app.route('/ssh_status', methods=['GET'])
 def api_ssh_status():
     return jsonify(get_ssh_status())
@@ -5324,6 +7111,15 @@ def api_set_display_mode():
     data = request.get_json(silent=True) or {}
     return jsonify(set_display_mode((data.get('mode') or '').strip()))
 
+@app.route('/ui_engine', methods=['GET'])
+def api_ui_engine():
+    return jsonify(get_ui_engine())
+
+@app.route('/ui_engine', methods=['POST'])
+def api_set_ui_engine():
+    data = request.get_json(silent=True) or {}
+    return jsonify(set_ui_engine((data.get('engine') or '').strip()))
+
 @app.route('/player_enabled', methods=['GET'])
 def api_player_enabled():
     return jsonify(get_player_enabled())
@@ -5368,10 +7164,50 @@ def api_list_timezones():
 def api_vu_meter():
     return jsonify(get_vu_meter())
 
+@app.route('/vu_style', methods=['GET'])
+def api_vu_style():
+    return jsonify(get_vu_style())
+
+@app.route('/vu_style', methods=['POST'])
+def api_set_vu_style():
+    data = request.get_json(silent=True) or {}
+    return jsonify(set_vu_style(data.get('style')))
+
+@app.route('/vu_store', methods=['GET'])
+def api_vu_store():
+    return jsonify(get_vu_store(summary=request.args.get('summary') == '1'))
+
+@app.route('/vu_store/check', methods=['POST'])
+def api_vu_store_check():
+    return jsonify(vu_store_check())
+
+@app.route('/vu_store/install', methods=['POST'])
+def api_vu_store_install():
+    data = request.get_json(silent=True) or {}
+    return jsonify(vu_store_install(data.get('id')))
+
+@app.route('/vu_store/remove', methods=['POST'])
+def api_vu_store_remove():
+    data = request.get_json(silent=True) or {}
+    return jsonify(vu_store_remove(data.get('id')))
+
+@app.route('/vu_store/seen', methods=['POST'])
+def api_vu_store_seen():
+    return jsonify(vu_store_mark_seen())
+
 @app.route('/vu_meter', methods=['POST'])
 def api_set_vu_meter():
     data = request.get_json(silent=True) or {}
     return jsonify(set_vu_meter(bool(data.get('enable'))))
+
+@app.route('/ui_language', methods=['GET'])
+def api_ui_language():
+    return jsonify(get_ui_language())
+
+@app.route('/ui_language', methods=['POST'])
+def api_set_ui_language():
+    data = request.get_json(silent=True) or {}
+    return jsonify(set_ui_language(data.get('language')))
 
 @app.route('/nowplaying_autoexpand', methods=['GET'])
 def api_nowplaying_autoexpand():
@@ -5409,6 +7245,14 @@ def api_factory_reset():
 @app.route('/webui_reset_credentials', methods=['POST'])
 def api_webui_reset_credentials():
     return jsonify(webui_reset_credentials())
+
+@app.route('/image_update/check', methods=['GET'])
+def api_image_update_check():
+    return jsonify(check_image_update())
+
+@app.route('/ab_status', methods=['GET'])
+def api_ab_status():
+    return jsonify(ab_status())
 
 @app.route('/ota_channel', methods=['GET'])
 def api_ota_channel():
@@ -5580,4 +7424,5 @@ if __name__ == '__main__':
     # 15s OTA fetch) doesn't block the kiosk UI's other requests behind it.
     _startup_network_recovery()
     threading.Thread(target=_resume_playback_after_boot, daemon=True).start()
+    threading.Thread(target=_vu_store_background, daemon=True, name='vu-store').start()
     app.run(host='127.0.0.1', port=8000, threaded=True)

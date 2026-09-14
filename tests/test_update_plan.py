@@ -85,6 +85,32 @@ class PlanTestCase(unittest.TestCase):
 
 
 class TestPlanRoundTrip(PlanTestCase):
+    def test_image_update_closes_itself_once_the_image_is_running(self):
+        """The reboot IS the apply for an image step, so nothing rewrites the
+        state file afterwards. Once the running image is the one the plan
+        staged, the update has to report itself finished — otherwise the screen
+        sits on "the device will restart to apply it" for good on a device that
+        already restarted into exactly what was asked for (seen on the Dell)."""
+        self._patch('IMAGE_VERSION_FILE', os.path.join(self.tmp, 'IMAGE_VERSION'))
+        api_server._PLAN_KINDS = dict(api_server._PLAN_KINDS)
+        api_server._PLAN_KINDS['image'] = (
+            lambda: {}, os.path.join(self.tmp, 'image-status.json'),
+            lambda: api_server._image_version())
+        self.write_plan([self.step('image', state='done', version='v3', attempts=1)],
+                        finished=int(time.time()), overall='finished')
+
+        # still on the old image: the update is genuinely pending a reboot
+        with open(api_server.IMAGE_VERSION_FILE, 'w') as f:
+            f.write('v2\n')
+        self.assertEqual(api_server.update_plan_status()['state'], 'staged_pending_reboot')
+
+        # rebooted into the staged image: done, and the plan is retired
+        with open(api_server.IMAGE_VERSION_FILE, 'w') as f:
+            f.write('v3\n')
+        got = api_server.update_plan_status()
+        self.assertEqual(got['state'], 'done')
+        self.assertEqual(api_server.update_plan_status()['state'], 'idle')
+
     def test_write_then_read_preserves_every_field(self):
         self.write_plan([self.step('system'),
                          self.step('os', sig='https://e/os.sig'),

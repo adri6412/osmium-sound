@@ -108,7 +108,55 @@
     "shareNone": "Nothing shared yet.",
     "shareCount": "{count} shared",
     "shareLocal": "Share a local folder",
-    "shareThisFolder": "Share this folder"
+    "shareThisFolder": "Share this folder",
+    "wizard": {
+      "title": "Add a network folder",
+      "intro": "Music kept on a NAS or another computer. The player looks for them on your network; you only have to pick one.",
+      "searchButton": "Search my network",
+      "searching": "Looking for devices on your network…",
+      "foundTitle": "Found on your network",
+      "nothingFound": "Nothing found. Check that the other device is switched on and on the same network, or type its address yourself.",
+      "searchAgain": "Search again",
+      "typeItMyself": "I'll type it myself",
+      "manualHint": "The name or address of the device that holds the music — for example nas.local or 192.168.1.20.",
+      "addressLabel": "Name or address",
+      "continue": "Continue",
+      "back": "Back",
+      "onDevice": "On {device}",
+      "authHint": "This device wants to know who you are. Use the same username and password you use on it.",
+      "signIn": "Sign in",
+      "signInTo": "Sign in to {device}",
+      "userLabel": "Username",
+      "wrongPassword": "Wrong username or password. Try again.",
+      "changeUser": "Change",
+      "loadingShares": "Reading the shared folders…",
+      "pickShare": "Pick the folder with your music",
+      "noShares": "This device is not sharing any folder.",
+      "needPassword": "It asks for a password",
+      "typeShareHint": "Type the name of the shared folder exactly as it appears on the other device.",
+      "shareLabel": "Shared folder name",
+      "device": "Device",
+      "folder": "Folder",
+      "writeHint": "Leave this off if the folder only has to be listened to. Turn it on to let the player save into it — needed to copy CDs onto it.",
+      "allowWrite": "Let the player write into this folder",
+      "addNow": "Add this folder",
+      "added": "{name} added — the music is being read now.",
+      "listFailed": "Could not read the shared folders from this device.",
+      "openFailed": "Could not open this folder.",
+      "showDetail": "Technical details",
+      "hideDetail": "Hide details",
+      "noClientHint": "This player cannot read the list of shared folders yet: update it and it will offer them next time."
+    },
+    "where": {
+      "title": "Where is your music?",
+      "hint": "Pick where it is kept: the player takes care of the rest.",
+      "disk": "On a disk inside or plugged into the player",
+      "diskHint": "USB sticks and internal disks",
+      "network": "On a NAS or a computer on my network",
+      "networkHint": "The player looks for them by itself",
+      "local": "Already inside the player",
+      "localHint": "A folder on this device"
+    }
   },
   "usbToast": {
     "mounted": "\"{label}\" connected and ready"
@@ -210,7 +258,7 @@
       "external": "External",
       "externalHint": "Pick the server found on your network, or type its address.",
       "noneFound": "No Lyrion server found on the network yet.",
-      "hostPlaceholder": "IP address, e.g. 192.168.1.50",
+      "hostPlaceholder": "IP or name, e.g. 192.168.1.50 or nas.local",
       "search": "Search again",
       "useExternal": "Use this server",
       "externalApplied": "This device now uses that server.",
@@ -299,6 +347,11 @@
     "repeat": "Repeat",
     "queue": "Queue",
     "queueEmpty": "The queue is empty",
+    "selectPlayer": "Player to control",
+    "thisDevice": "this device",
+    "controlling": "Controlling {{name}}",
+    "noOtherPlayers": "No other player on this Lyrion",
+    "backToOwn": "Back to this device",
     "addToQueue": "Add to queue",
     "playNext": "Play next",
     "saveAsPlaylist": "Save as playlist",
@@ -333,10 +386,10 @@
     "loadingSystem": "Loading system data...",
     "apiUnavailable": "⚠️ API server unavailable",
     "sections": {
-      "lyrion": "Lyrion Configuration",
       "sources": "Music sources",
       "audio": "Audio Output (DAC)",
       "playback": "Playback",
+      "vuMeters": "VU Meters",
       "dsp": "DSP / Equalizer",
       "multiroom": "Lyrion Music Server",
       "alarm": "Alarm Clock",
@@ -358,6 +411,27 @@
     "language": {
       "help": "Choose the interface language."
     },
+    "remotePlayer": {
+      "note": "You are controlling «{{name}}». These settings belong to this device: go back to its own player to change them.",
+      "back": "Back to this device"
+    },
+    "vuMeters": {
+      "help": "The analog meters on the Now Playing screen: turn them on or off and choose how they look.",
+      "storeTitle": "More VU meters to download",
+      "storeHelp": "New looks published by Osmium Sound. A downloaded VU meter is kept up to date by itself and appears among the styles above.",
+      "storeLoading": "Loading the list…",
+      "storeEmpty": "There are no other VU meters to download right now.",
+      "storeCheck": "Check again",
+      "install": "Download",
+      "update": "Update",
+      "remove": "Remove",
+      "removeConfirm": "Remove the VU meter «{{name}}» from this device? You can download it again later.",
+      "downloading": "Downloading…",
+      "installing": "Installing…",
+      "unsupported": "Needs a device update",
+      "badgeNew": "NEW",
+      "badgeUpdate": "NEW VERSION"
+    },
     "playback": {
       "help": "Playback options applied to the active player: track transitions (crossfade/gapless) and volume normalisation (ReplayGain).",
       "noPlayer": "No active player found. Start playback or check the Lyrion connection.",
@@ -378,6 +452,8 @@
       "fixedVolumeHelp": "Bypasses the player's digital volume control entirely — output is always at 100%. Required for bit-perfect playback; turn it off to use the on-screen volume slider again.",
       "vuMeter": "Animated VU meters",
       "vuMeterHelp": "The VU dial in the \"now playing\" screen updates live with the audio level. Turn it off to reduce GPU load on more limited hardware.",
+      "vuStyle": "VU meter style",
+      "vuStyleHelp": "The look of the meters in the \"now playing\" screen.",
       "autoExpand": "Auto-open now playing",
       "autoExpandHelp": "When a song starts playing, automatically open the fullscreen now-playing view after this many seconds. It only opens once per song — if you navigate away yourself, it stays put."
     },
@@ -456,9 +532,10 @@
         "help": "This device can run its own Lyrion Music Server, or use one that is already running on your network. Two devices can only be grouped when they point at the same server.",
         "local": "Internal (this device)",
         "follow": "External (on my network)",
-        "hostPlaceholder": "IP address, e.g. 192.168.1.50",
-        "hostRequired": "Enter the IP address of the device to follow.",
+        "hostPlaceholder": "IP or name, e.g. 192.168.1.50 or nas.local",
+        "hostRequired": "Enter the IP address or name of the device to follow.",
         "apply": "Apply",
+        "rebootWarning": "Changing the music server needs a restart to take effect. Restart now?",
         "saved": "Lyrion server updated.",
         "failed": "Could not update the Lyrion server.",
         "discoveredLabel": "Devices found on the network",
@@ -595,8 +672,6 @@
       "failed": "Could not change the timezone."
     },
     "lyrion": {
-      "urlLabel": "Lyrion Server URL",
-      "urlHelp": "Enter the address of your Lyrion Media Server (e.g. http://192.168.1.100:9000)",
       "skinLabel": "Web player look",
       "skinHint": "The look of Lyrion's web player (the page you open from a browser or phone). Osmium matches this device's interface.",
       "skinOsmium": "Osmium",
@@ -604,14 +679,7 @@
       "skinUnset": "No skin chosen yet — the web player still uses Lyrion's stock look. Pick one to switch.",
       "skinInstalling": "Installing the Material web interface…",
       "skinApplying": "Applying the skin…",
-      "skinFailed": "Could not apply the skin. Check the network connection and try again.",
-      "rescanLabel": "Music library",
-      "rescanHelp": "Re-check the music folders for new or changed tracks.",
-      "rescan": "Rescan library",
-      "rescanning": "Scanning…",
-      "rescanStarted": "Library scan started.",
-      "rescanDone": "Scan complete.",
-      "rescanFailed": "Failed to start the scan."
+      "skinFailed": "Could not apply the skin. Check the network connection and try again."
     },
     "sources": {
       "help": "Add your music folders: USB sticks/drives (auto-mounted), network (SMB) or local folders. Changes take effect right away."
@@ -666,6 +734,7 @@
       "os": "Operating system",
       "signed": "signed",
       "available": "Update available",
+      "availableShort": "Update",
       "upToDate": "Everything up to date",
       "debian12Banner": "This device still runs Debian 12. Future updates require Debian 13 — reinstall it from the latest ISO to keep receiving updates.",
       "checking": "Checking...",
@@ -710,6 +779,7 @@
         "titleUi": "Updating interface",
         "titleSystem": "Updating system components",
         "titleOs": "Updating operating system",
+        "titleImage": "Updating system image",
         "titleLyrion": "Updating Lyrion",
         "done": "Complete",
         "keepPowered": "Do not power off the device during the update.",
@@ -719,7 +789,10 @@
     },
     "controls": {
       "reboot": "Reboot System",
-      "shutdown": "Shut Down System"
+      "shutdown": "Shut Down System",
+      "powerTitle": "Power",
+      "powerReboot": "Restart",
+      "powerShutdown": "Shut down"
     },
     "factory": {
       "help": "Erase all settings and return the device to its initial state (Wi-Fi networks, music sources, DSP/room correction, Bluetooth, companion pairing and the web-admin account are all cleared). The device restarts into the setup wizard.",
@@ -735,7 +808,8 @@
       "failed": "Could not reset the web interface credentials."
     },
     "about": {
-      "builtWith": "Built with Electron, React, and Tailwind CSS"
+      "builtWith": "Built with Electron, React, and Tailwind CSS",
+      "builtWithQt": "Built with Qt 6 and QML"
     },
     "msg": {
       "apiUnavailable": "Error: API server unavailable",
