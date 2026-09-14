@@ -789,7 +789,10 @@
     },
     "controls": {
       "reboot": "Reboot System",
-      "shutdown": "Shut Down System"
+      "shutdown": "Shut Down System",
+      "powerTitle": "Power",
+      "powerReboot": "Restart",
+      "powerShutdown": "Shut down"
     },
     "factory": {
       "help": "Erase all settings and return the device to its initial state (Wi-Fi networks, music sources, DSP/room correction, Bluetooth, companion pairing and the web-admin account are all cleared). The device restarts into the setup wizard.",

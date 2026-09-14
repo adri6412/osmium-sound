@@ -174,21 +174,39 @@ Item {
         id: tabBar
         width: parent.width; height: 40; color: Theme.panelA(0.5)
         Rectangle { y: 39; width: parent.width; height: 1; color: Theme.border }
-        // the Osmium Sound mark, top right. The "update available" badge
-        // makes room for it: the full words, the short one, or just a gold
-        // dot on the gear.
+        // the power button and the Osmium Sound mark, top right. The "update
+        // available" badge makes room for them: the full words, the short
+        // one, or just a gold dot on the gear. The words go when the tabs
+        // need their space; the power button always stays.
         Item {
             id: brandMark
-            width: 16 + 8 + 8 + brandText.implicitWidth + 16; height: 40
+            width: 34 + brandText.implicitWidth + 16; height: 40
             x: parent.width - width
             visible: tabRow.width <= x
-            Glow { x: 20 - outer; y: 20 - outer; radius: 4; blur: 6; color: Theme.goldA(0.8) }
-            Rectangle { x: 16; y: 16; width: 8; height: 8; radius: 4; color: Theme.gold }
             Text {
                 id: brandText
-                x: 32; anchors.verticalCenter: parent.verticalCenter
+                x: 34; anchors.verticalCenter: parent.verticalCenter
                 text: "OSMIUM SOUND"; color: Theme.silverA(0.8)
                 font.family: Theme.font; font.pixelSize: 11; font.bold: true; font.letterSpacing: 2
+            }
+        }
+        Item {
+            id: powerBtn
+            width: 40; height: 40
+            x: brandMark.visible ? brandMark.x : parent.width - width
+            Icon {
+                anchors.centerIn: parent; name: "power"; size: 16
+                color: powerTap.mix(Theme.gold, Theme.white)
+                scale: powerTap.tapScale
+            }
+            Tap {
+                id: powerTap; tap: 0.9
+                onClicked: Ui.dialogs.power(function(act) {
+                    if (!act) return
+                    Api.post(Api.apiBase + "/" + act, {}, function() {}, 12000)
+                    Ui.toast.say(act === "reboot" ? "rotate-cw" : "power",
+                                 Tr.t(act === "reboot" ? "settings.msg.rebooting" : "settings.msg.shuttingDown"))
+                })
             }
         }
         // the tabs as they are without the badge, measured apart so the
