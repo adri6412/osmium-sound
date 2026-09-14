@@ -26,6 +26,25 @@ export const thirdPartyNotices = [
         notes: 'CD reading support. Installed from official Debian repositories.'
       },
       {
+        name: 'Qt 6 (qtbase, qtdeclarative, Qt Quick modules, plugins)',
+        version: 'Debian trixie',
+        license: 'LGPL-3.0',
+        notes: 'Runtime of the on-screen interface. Unmodified Debian shared libraries, dynamically linked.',
+        url: 'https://www.qt.io/licensing/open-source-lgpl-obligations'
+      },
+      {
+        name: 'libdrm',
+        version: 'Debian trixie',
+        license: 'MIT',
+        notes: 'Display mode setting (DRM/KMS).'
+      },
+      {
+        name: 'DejaVu fonts, Noto CJK fonts',
+        version: 'Debian trixie',
+        license: 'Bitstream Vera / OFL-1.1',
+        notes: 'Interface typeface and CJK glyphs.'
+      },
+      {
         name: 'Debian base system, kernel, firmware',
         version: 'trixie (Debian 13)',
         license: 'Various (GPL/BSD/firmware EULAs)',
@@ -81,7 +100,13 @@ export const thirdPartyNotices = [
     ]
   },
   {
-    section: 'Desktop Application Runtime Dependencies (npm)',
+    section: 'On-screen Interface (Qt)',
+    entries: [
+      { name: 'Lucide icons', license: 'ISC', notes: 'SVG icons generated from lucide-react 0.294.', url: 'https://lucide.dev' }
+    ]
+  },
+  {
+    section: 'Earlier Electron Kiosk (npm)',
     entries: [
       { name: 'React, react-dom', license: 'MIT' },
       { name: 'react-use-websocket', license: 'MIT' },

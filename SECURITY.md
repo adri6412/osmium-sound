@@ -2,12 +2,12 @@
 
 ## Supported Versions
 
-Osmium Sound (formerly HiFi Media Player) ships as a full appliance image (OS + Electron app) updated in place via the OTA system. Because every device is expected to update to the latest release on its channel, only the most recent stable release receives security fixes.
+Osmium Sound (formerly HiFi Media Player) ships as a full appliance image (OS, the Qt on-screen interface, the web admin and the backend services) updated in place via the OTA system. Because every device is expected to update to the latest release on its channel, only the most recent stable release receives security fixes.
 
 | Version                  | Supported          |
 | ------------------------ | ------------------ |
-| 2.5.23 (latest stable)   | :white_check_mark: |
-| < 2.5.22                | :x: (please update via OTA or the latest ISO) |
+| 2.5.24 (latest stable)   | :white_check_mark: |
+| < 2.5.24                 | :x: (please update via OTA or the latest ISO) |
 
 Pre-release builds are not covered by this policy — they exist for testing only:
 `vX.Y.Z-dev.N` (the public **dev** channel, cut from the `svil` branch) and
@@ -114,7 +114,7 @@ Instead, report it privately using one of these methods:
 Please include as much of the following as you can:
 
 - A description of the vulnerability and its potential impact.
-- Steps to reproduce, including affected component (Electron app, web admin, backend service, Android companion app, OS/OTA update mechanism, distro build, flasher, etc.).
+- Steps to reproduce, including affected component (on-screen Qt interface, web admin, backend service, Android companion app, OS/OTA update mechanism, distro build, flasher, etc.).
 - Version/build number or commit hash where the issue was found.
 
 ### What to expect
@@ -128,7 +128,7 @@ Please include as much of the following as you can:
 
 This policy covers:
 
-- The Electron application and its Node/main-process code.
+- The on-screen interface (`native-ui-qt/`, Qt/QML), and the earlier Electron kiosk (`src/`, `main/`) still running on installs that predate the A/B image layout.
 - The web admin (`admin-webui/`, `webui_server.py`) and the backend/API services included in this repository.
 - The Android companion app (`android-companion/`).
 - The OTA update client/server and update-signing pipeline.

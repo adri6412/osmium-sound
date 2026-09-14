@@ -7,7 +7,7 @@ storage housekeeping. Tag/branch conventions and the release channels are in
 
 | Workflow | Trigger | Produces |
 |---|---|---|
-| [`build-ui-ota.yml`](build-ui-ota.yml) | push of a `v*` tag (not `companion-*`); manual | OTA bundles `hifi-ui-`, `hifi-system-`, `hifi-os-` (+ sha256, OS signature), offline dev installer, GitHub Release, stable payloads also on `file.osmiumsound.it/ota/<tag>/`, OTA manifest on `gh-pages` (+ prod copy on file.osmiumsound.it) |
+| [`build-ui-ota.yml`](build-ui-ota.yml) | push of a `v*` tag (not `companion-*`); manual | OTA bundles `hifi-qtui-`, `hifi-system-`, `hifi-os-` (+ sha256, OS signature), offline dev installer, GitHub Release, stable payloads also on `file.osmiumsound.it/ota/<tag>/`, OTA manifest on `gh-pages` (+ prod copy on file.osmiumsound.it) |
 | [`build-iso.yml`](build-iso.yml) | manual (`workflow_dispatch`, tag as input) | `hifi-player-<tag>.iso` + `.sha256` + `.sha256.sig` + `latest.json` (artifact; optionally attached to the Release) |
 | [`build-companion-apk.yml`](build-companion-apk.yml) | push of a `companion-v*` tag; manual | signed APK, GitHub Release, unit-test/lint reports, self-hosted F-Droid repos on `gh-pages` |
 | [`build-flasher.yml`](build-flasher.yml) | manual | Osmium Flasher binaries (Windows `.exe`, Linux `.run`) as artifacts |
@@ -30,14 +30,26 @@ or a manual run (artifacts only, no Release).
 **Steps, in order:**
 
 1. Node 20 → `npm ci` → `npm run build` + `electron-builder --linux dir`
-   (the kiosk, `dist/linux-unpacked`).
+   (the Electron app, `dist/linux-unpacked`). It is no longer packaged into
+   any bundle; the `image` job rebuilds it only because `build-distro.sh`
+   requires `--app-dir`, and `build-image.sh` strips it from the slot image.
 2. Builds the web admin (`admin-webui/`, Vue) — it ships inside the **system**
-   bundle, not the UI one.
+   bundle, not the UI one — and the Qt on-screen interface payload with
+   `native-ui-qt/ci/build-payload.sh qtui` (compiled in a Debian 13 Docker
+   container, so this job does not run inside a container; the same script
+   feeds `build-iso.yml`). `qtui/` is kept as the `qt-payload` artifact for the
+   `image` job (`build-distro.sh --qt-dir`).
 3. Resolves the version (the tag name) and generates `CHANGELOG_RELEASE.md`
    from the commit log since the previous Release (`git log --no-merges`,
    `chore(release)` commits filtered out). This becomes the Release body and
    the "what's new" text shown by the Updates screens.
-4. Packages `hifi-ui-<ver>.tar.gz` (+ `.sha256`).
+4. Packages `hifi-qtui-<ver>.tar.gz` (+ `.sha256`): the Qt interface
+   (`qtui/`, installed to `/opt/hifi-qt`). The new name matters: an older
+   updater would refuse a bundle without Electron and block the whole update,
+   while finding no `hifi-ui-` asset it just skips the UI step. The current
+   `hifi-ota-update.sh` recognises the content by its executable (`hifi-qt` or
+   `hifi-media-player`), so older `hifi-ui-*` (Electron) bundles stay
+   installable.
 5. Packages `hifi-system-<ver>.tar.gz` (+ `.sha256`): the Python services,
    `/usr/local/sbin` helper scripts, systemd units, `/usr/local/share` data
    (LMS skin assets) and `/opt/hifi-webui/dist`.
@@ -55,10 +67,13 @@ or a manual run (artifacts only, no Release).
 10. Publishes everything to the GitHub Release for the tag; for a **stable**
     tag it also uploads the same files to `file.osmiumsound.it/ota/<tag>/`
     (Cloudflare R2, secrets `R2_ENDPOINT` / `R2_ACCESS_KEY_ID` /
-    `R2_SECRET_ACCESS_KEY`), checks every public URL, and points the prod
-    manifest at that host; `verify-release` then re-checks the nine files,
-    range requests on the `.raucb`, and the mirrored manifest. dev/alpha
-    builds stay on GitHub only.
+    `R2_SECRET_ACCESS_KEY`), checks each upload through R2's S3 API
+    (`head-object`, size compared with the local file — Cloudflare answers 403
+    to GitHub's runners on the public host), and points the prod manifest at
+    that host; `verify-release` then re-checks, again through the API, the
+    nine files, a range request on the `.raucb`, and the mirrored manifest,
+    and only at the end probes the public host (a 403 there is a warning, any
+    other failure fails the run). dev/alpha builds stay on GitHub only.
     `prerelease: ${{ contains(github.ref_name, '-') }}` — any tag with a hyphen
     (`-dev.N`, `-alphaM`) is a **prerelease**, which `/releases/latest` ignores,
     so prod devices never see it.
@@ -84,7 +99,7 @@ create the tag if missing and attach the ISO to its Release — prerelease when
 the tag has a hyphen), `lyrion_url` (override the Lyrion `.deb` URL),
 `suite` (default `trixie`).
 
-**Steps:** build the kiosk and the web admin → `distro/build-distro.sh --app-dir … --app-version <tag> --suite <suite>` as root → `hifi-player-<tag>.iso` → sha256 + **Ed25519 signature of the `.sha256` sidecar** (same key as the OS channel) → `latest.json` (`make-iso-manifest.py`, the manifest Osmium Flasher polls) → artifact `hifi-player-iso-<tag>` → optional Release upload.
+**Steps:** a separate `qt-payload` job on the bare runner builds the Qt on-screen interface (`native-ui-qt/ci/build-payload.sh`, needs Docker) → build the Electron app (still required by `build-distro.sh --app-dir`) and the web admin → `distro/build-distro.sh --app-dir … --qt-dir … --app-version <tag> --suite <suite>` as root → `hifi-player-<tag>.iso` → sha256 + **Ed25519 signature of the `.sha256` sidecar** (same key as the OS channel) → `latest.json` (`make-iso-manifest.py`, the manifest Osmium Flasher polls) → artifact `hifi-player-iso-<tag>` → optional Release upload.
 
 The ISO itself is **not** served from GitHub to end users: the published image,
 its sidecars and `latest.json` are uploaded to **file.osmiumsound.it** (the
@@ -199,4 +214,4 @@ only.
 
 ---
 
-**Last updated:** 2026-08-22
+**Last updated:** 2026-09-14

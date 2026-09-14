@@ -3,7 +3,7 @@
 <!-- Also rendered in-app (Settings → Third-Party Notices) from src/data/thirdPartyNotices.js.
      Keep that file in sync whenever a dependency is added, removed or changed here. -->
 
-Osmium Sound includes and/or redistributes the following third-party components under their respective licenses. **The AGPL-3.0-only license of this project applies ONLY to the project's own code** (Electron/React kiosk, Vue web admin, Python services, distro packaging scripts, Osmium Flasher, the "Osmium" theme/CSS for Material Skin) — with the exception of the Android companion app, which remains Apache-2.0 (see below), and of code published before 2026-08-23, which was released under MIT (see `LICENSING.md`). All third-party components are subject to their own licenses.
+Osmium Sound includes and/or redistributes the following third-party components under their respective licenses. **The AGPL-3.0-only license of this project applies ONLY to the project's own code** (Qt/QML on-screen interface, earlier Electron/React kiosk, Vue web admin, Python services, distro packaging scripts, Osmium Flasher, the "Osmium" theme/CSS for Material Skin) — with the exception of the Android companion app, which remains Apache-2.0 (see below), and of code published before 2026-08-23, which was released under MIT (see `LICENSING.md`). All third-party components are subject to their own licenses.
 
 **Osmium Sound is an independent project and is NOT affiliated with, sponsored by, or endorsed by the Lyrion / LMS-Community project.**
 
@@ -16,13 +16,17 @@ Osmium Sound includes and/or redistributes the following third-party components 
 | **Lyrion Music Server** | 9.1.0 (pinned in `hifi-firstboot.sh` / `build-distro.sh`) | GPL-2.0+ (with Perl/other) | **Not bundled as a file in the ISO.** Downloaded from the official LMS-Community server and installed on the first boot of the installed system (`hifi-firstboot.service`), or by the setup wizard; later updated in place from Settings. [Official source](https://downloads.lms-community.org/LyrionMusicServer_v9.1.0/) |
 | **squeezelite** | Debian trixie | GPL-3.0+ | Audio playback engine (Debian package). Installed from official Debian repos. |
 | **cdparanoia, icedax, libcdio-utils, cd-discid, flac, lame, faad, sox, wavpack, ffmpeg** | Debian trixie | GPL-2.0 / GPL-3.0 / LGPL (per package) | CD reading/ripping and codec support (Debian packages). Installed from official Debian repos. |
-| **labwc, wlroots, wlr-randr, XWayland, Xorg, LightDM, Plymouth** | Debian trixie | MIT / GPL / X11 (per package) | Kiosk session (Wayland compositor with X11 fallback), display manager, boot splash (Debian packages). |
+| **Qt 6** (qtbase, qtdeclarative, Qt Quick QML modules, QPA and image-format plugins) | Debian trixie | LGPL-3.0 (also available under GPL-2.0/GPL-3.0) | Runtime of the on-screen interface (`/opt/hifi-qt`). Unmodified Debian shared libraries, dynamically linked: they can be replaced with any compatible build, as the LGPL requires. |
+| **libdrm** | Debian trixie | MIT | Display mode setting for the on-screen interface (DRM/KMS). |
+| **DejaVu fonts, Noto CJK fonts** | Debian trixie | Bitstream Vera license / public domain; SIL OFL-1.1 | Interface typeface and CJK glyph coverage (Debian packages). |
+| **Plymouth** | Debian trixie | GPL-2.0+ | Boot splash (Debian package). |
+| **labwc, wlroots, wlr-randr, XWayland, Xorg, LightDM** | Debian trixie | MIT / GPL / X11 (per package) | Session of the earlier Electron kiosk (Wayland compositor with X11 fallback, display manager), still used by installs that predate the A/B image layout (Debian packages). |
 | **NetworkManager, dnsmasq-base, Avahi, Samba, wsdd2, Tailscale** | Debian trixie / Tailscale repo | GPL / LGPL / BSD (per package) | Networking, setup hotspot, mDNS, SMB shares and their discovery, optional remote access (Tailscale is installed from Tailscale's own repository). |
 | **Debian base system, kernel, firmware** | trixie (Debian 13) | Various (GPL/BSD/firmware EULAs) | Installed from official Debian repos. |
 
 ### GPL Source Code Offer
 
-The above GPL-licensed components (Lyrion, squeezelite, CD tools, …) are unmodified binaries from official Debian and LMS-Community sources. The corresponding source code is available from:
+The above GPL- and LGPL-licensed components (Lyrion, squeezelite, CD tools, Qt 6, …) are unmodified binaries from official Debian and LMS-Community sources. The corresponding source code is available from:
 
 - **Lyrion 9.1.0**: [LMS-Community GitHub](https://github.com/LMS-Community/slimserver/releases/tag/v9.1.0)
 - **Debian packages**: [Debian source repositories](https://deb.debian.org/debian-source/), suite `trixie`
@@ -49,9 +53,18 @@ A complete source code archive matching this ISO can be provided upon written re
 
 ---
 
-## Desktop Application Runtime Dependencies (npm)
+## On-screen Interface (`native-ui-qt/`)
 
-All npm dependencies bundled in the Electron kiosk build are permissive open source licenses:
+The interface on the device's screen is this project's own C++/QML code (AGPL-3.0-only), built against the Debian Qt 6 packages listed above. Besides those libraries it uses:
+
+- **Lucide icons** (ISC) — the SVG icons in `native-ui-qt/icons/`, generated from `lucide-react` 0.294 (the same set the earlier kiosk used) by `native-ui-qt/tools/gen-icons.mjs`
+- The QR code generator (`native-ui-qt/src/qr.c`) is this project's own implementation of the QR specification
+
+---
+
+## Earlier Electron Kiosk (npm, `src/` and `main/`)
+
+Used on screen by installs that predate the A/B image layout; image-based installs ship the Qt interface only. All npm dependencies bundled in the Electron kiosk build are permissive open source licenses:
 
 - **React, react-dom** (MIT)
 - **react-use-websocket** (MIT)
@@ -115,4 +128,4 @@ Osmium Sound is an **independent open-source project** developed to provide a to
 
 ---
 
-**Last reviewed:** 2026-08-23 (full transitive npm scan with license-checker for the AGPL relicensing), against `package.json`, `admin-webui/package.json`, `flasher/package.json`, `requirements.txt`, `distro/config/package-lists/hifi.list.chroot` and `android-companion/HiFiMediaPlayer/build.gradle`.
+**Last reviewed:** 2026-09-14 (on-screen interface moved from Electron to Qt 6); previously 2026-08-23 (full transitive npm scan with license-checker for the AGPL relicensing), against `package.json`, `admin-webui/package.json`, `flasher/package.json`, `requirements.txt`, `distro/config/package-lists/hifi.list.chroot`, `native-ui-qt/Makefile` and `android-companion/HiFiMediaPlayer/build.gradle`.

@@ -8,10 +8,9 @@ overview, features, and specs, see [README.md](README.md).
 
 ```mermaid
 flowchart TB
-    subgraph UI["Electron app (kiosk, 1024x600 — labwc/Wayland session, X11 fallback)"]
-        Renderer["React renderer\n(src/)"]
-        Preload["preload.cjs\n(setFrameRate, on-screen/physical keyboard)"]
-        Main["main.js\n(BrowserWindow, crash recovery)"]
+    subgraph UI["On-screen UI — hifi-qt (Qt 6 Quick, eglfs on DRM/KMS, 1024x600 canvas)"]
+        QML["QML scenes\n(native-ui-qt/qml/)"]
+        Core["C++ core\n(native-ui-qt/src/: Api, Player, VuMeter, LibraryModel, Sys)"]
     end
 
     subgraph Local["Local services on the appliance"]
@@ -27,12 +26,11 @@ flowchart TB
     Phone["Android companion app\n(HTTP + CometD, LAN)"]
     Browser["Browser on a phone/laptop\n(setup portal / admin UI)"]
 
-    Renderer -- IPC --> Preload
-    Preload --> Main
-    Renderer -- "fetch (src/utils/api.js)" --> Flask
-    Renderer -- "fetch (src/utils/lyrionApi.js)" --> Lyrion
-    Renderer -- "fetch, loopback (no token)" --> Sources
-    Renderer -- WebSocket --> VU
+    QML -- "context objects" --> Core
+    Core -- "HTTP (Api, QNetworkAccessManager)" --> Flask
+    Core -- "JSON-RPC (Player via Api)" --> Lyrion
+    Core -- "HTTP, loopback (no token)" --> Sources
+    Core -- "WebSocket (VuMeter)" --> VU
     VU -- "mmap /dev/shm/squeezelite-*" --> Squeezelite
     Flask -- systemd-run / systemctl --> Squeezelite
     Lyrion -- controls --> Squeezelite
@@ -50,15 +48,15 @@ flowchart TB
 
 | Component | Path | Role |
 |---|---|---|
-| Electron main | `main/main.js` | Window/kiosk management, renderer crash recovery, relaxes CSP only for the local Lyrion origin so the renderer can call its JSON-RPC API |
-| Preload | `main/preload.cjs` | Minimal `contextBridge` surface (`window.electronAPI`) — only UI-local concerns: frame-rate cap, global on-screen keyboard show/hide/toggle, physical-keyboard presence. **System control does not go through IPC.** |
-| React renderer | `src/` | The touchscreen UI: `pages/LyrionServer.jsx` (Now Playing + library/radio/apps/Discover via Lyrion), `pages/Settings.jsx`, `pages/SetupWizard.jsx` (first-boot network step + address), `pages/InstallWizard.jsx` (installer QR), plus `components/` (AnalogVUMeter, LedBar, Discover, CdRip, SourcesManager, InternalDisks, WifiConfigPanel, Screensaver, BootIntro, UpdatePlanOverlay, VirtualKeyboard, …). Strings in `src/i18n/locales/{en,it}.json`, English default. |
+| On-screen UI — C++ core | `native-ui-qt/src/` | `hifi-qt`, the touchscreen UI since v2.5.24: a Qt 6 Quick application that draws straight to the panel through Qt's eglfs platform on DRM/KMS — no X server, no Wayland compositor, no LightDM. `main.cpp` sets the video mode (`kmsmode.cpp`, from `/etc/hifi-player/ui-resolution`) and loads the QML; the objects it exposes are `Api` (async HTTP to the local services via `QNetworkAccessManager`, Lyrion JSON-RPC included), `Player` (Lyrion `status`/playerprefs polling and playback commands), `VuMeter` (WebSocket client of `vu_meter_daemon.py`, needle spring), `LibraryModel` (the browser lists), `I18n` and `Sys` (small files under `/etc/hifi-player`, physical-keyboard detection, pointer), plus the `Spring` and `QrCode` QML types. Only UI-local preferences (language, Now Playing view, update auto-check) are written directly; **system control goes through `api_server.py`**. Installed at `/opt/hifi-qt`, run by `hifi-qt.service`. Chosen over Electron for its footprint: on the reference mini PC, Now Playing with the VU meters at 720p measured about 3.3 W / ~175 MB RSS versus 4.9 W / ~653 MB. |
+| On-screen UI — QML | `native-ui-qt/qml/` | `Main.qml` scales the 1024x600 logical canvas to the real mode, `App.qml` stacks the screens and shared overlays: `MainScreen.qml` (mini player + `Browser.qml` library/radio/apps, `DiscoverTab.qml`), `NowPlaying.qml` (with `VuPanel.qml`, `LedBar.qml`, `Lyrics.qml`), `SettingsTab.qml` + `SettingsRows.qml`, `Wizard.qml` (first-boot setup and installer screens), `Dialogs.qml`, `VirtualKeyboard.qml`, `OtaOverlay.qml`, `BootIntro.qml`, `CdRip.qml`, `Screensaver.qml`, … Strings come from the same `src/i18n/locales/{en,it}.json` (copied to `/opt/hifi-qt/locales`), English default; the third-party notices from `third_party.json`, generated from `src/data/thirdPartyNotices.js`. |
+| Legacy Electron kiosk | `main/`, `src/` | The previous on-screen UI (Electron main process + React renderer). Image slots don't ship it; it survives only on legacy (pre-A/B) installs and is no longer updated — see [Legacy Electron kiosk](#legacy-electron-kiosk-pre-ab-installs). |
 | Flask API | `api_server.py` | Runs as root on the appliance; system info/control, network/Wi-Fi, OTA channels, multiroom (LMS role), pairing tokens, display mode, player on/off, disk installer. Loopback-only, port `8000`. |
 | Sources service | `sources_server.py` | USB/SMB/local source management, internal-disk adoption/formatting, Samba share config, audio-CD ripping, backup/restore (core logic shared via `hifi_backup.py`), and every piece of Lyrion-side configuration the appliance owns for the user (web-UI skin, first-run setup/plugins, media + playlist folders — see [Lyrion web UI](#lyrion-web-ui--osmium-skin--first-run-setup)). Binds `0.0.0.0:8080` — LAN-reachable like the web admin, but every route is gated by a pairing token (see [Pairing & security](#pairing--security)), which is what lets the Android companion talk to it directly. |
 | Web admin / provisioning gateway | `webui_server.py` | The primary LAN-facing service (the other one is the pairing-gated sources API above): serves the Vue admin app (`admin-webui/`) behind a session, reverse-proxies a whitelisted subset of `api_server.py`/`sources_server.py` calls, and — while `/etc/hifi-player/provisioning-pending` exists — serves the first-boot setup portal (plus, in installer boot mode, a Wi-Fi hotspot and captive portal). Plain HTTP on `:80`, no TLS: a per-device self-signed cert made every browser show a "connection not private" click-through on first visit, which was worse UX than the plain-HTTP tradeoff. See [Provisioning & first boot](#provisioning--first-boot). |
 | Lyrion Music Server | external (Debian package / on-demand download) | Library indexing, playback engine, plugin ecosystem (Spotty, TIDAL Connect, radio, UPnP/DLNA, AirPlay). Port `9000`. Its web UI is the Material Skin plugin, branded as "Osmium" — see [Lyrion web UI](#lyrion-web-ui--osmium-skin--first-run-setup). |
 | squeezelite | systemd service | Lyrion's player client; `-D` flag enables bit-perfect DSD via DoP; `-v` exports a shared-memory buffer the VU meter reads |
-| VU meter daemon | `vu_meter_daemon.py` | Runs as the `hifi` user; reads squeezelite's shared-memory visualizer segment (`/dev/shm/squeezelite-*`) via mmap, auto-detecting the header layout, computes 32-bar RMS and streams it over WebSocket (`127.0.0.1:9001`) to `AnalogVUMeter.jsx`. Re-attaches on shm inode changes (DAC switch, restart, multiroom follow-switch). |
+| VU meter daemon | `vu_meter_daemon.py` | Runs as the `hifi` user; reads squeezelite's shared-memory visualizer segment (`/dev/shm/squeezelite-*`) via mmap, auto-detecting the header layout, computes 32-bar RMS and streams it over WebSocket (`127.0.0.1:9001`) to the on-screen UI (`native-ui-qt/src/vumeter.cpp`). Re-attaches on shm inode changes (DAC switch, restart, multiroom follow-switch). |
 | Shared Python helpers | `hifi_backup.py`, `hifi_i18n.py`, `hifi_logging.py` | Backup/restore core (see [Backup & restore](#backup--restore)); bilingual (en/it) message catalogue selected per request by the `X-UI-Lang` header; journald-friendly logging. Installed next to the daemons in `/usr/local/bin`. |
 | Android companion | `android-companion/` | Native Android app (Java, fork of android-squeezer); talks to Lyrion (CometD, `:9000`) and to `sources_server.py` (`:8080`, pairing token) after QR-code pairing — the latter's `/api/system/*` proxy is its only path to the system API |
 | Osmium Flasher | `flasher/` | Desktop Electron app (Windows/Linux) that downloads the current install ISO from `file.osmiumsound.it`, verifies its Ed25519 signature and writes the USB stick. Not part of the appliance — see `flasher/README.md` |
@@ -72,7 +70,8 @@ flowchart TB
 | `hifi-webui` | `webui_server.py` | Web admin + provisioning gateway, port 80. Enabled at image-build time (no-op portwise on a fully configured unit; the provisioning marker gates the hotspot/captive behaviour) — see [Provisioning & first boot](#provisioning--first-boot) |
 | `hifi-vumeter` | `vu_meter_daemon.py` | VU meter shared-memory reader, WebSocket on 127.0.0.1:9001 (runs as `hifi`) |
 | `hifi-firstboot` | `hifi-firstboot.sh` | One-shot: installs Lyrion (absent from the image by design), then deletes its own unit — see [Provisioning & first boot](#provisioning--first-boot) |
-| `hifi-kiosk-session` | `hifi-kiosk-session.sh` | Oneshot before LightDM: decides Wayland (labwc) vs X11 for the kiosk session and writes LightDM's `user-session` accordingly — see [Kiosk session](#kiosk-session-wayland-with-x11-fallback) |
+| `hifi-qt` | `/opt/hifi-qt/hifi-qt` | The on-screen UI (eglfs, `TTYPath=/dev/tty1`, `Conflicts=lightdm.service`). `WantedBy=graphical.target`, so it stays down in headless mode — see [On-screen UI](#on-screen-ui-qt-on-drmkms) |
+| `hifi-kiosk-session` | `hifi-kiosk-session.sh` | Legacy Electron installs only. Oneshot before LightDM: decides Wayland (labwc) vs X11 for the kiosk session and writes LightDM's `user-session` accordingly — see [Legacy Electron kiosk](#legacy-electron-kiosk-pre-ab-installs) |
 | `hifi-update-stage-resume` / `hifi-update-apply` | `hifi-update-stage-runner.sh` / `hifi-update-apply-runner.sh` | Resume an interrupted staging; apply staged bundles inside `system-update.target` — see [OTA update system](#ota-update-system) |
 | `hifi-backup.timer` + `.service` | `hifi-backup-run.py --scheduled` | Weekly profile backup when enabled in Settings (shipped by `apply.d/0033`) |
 | `hifi-mdns-keepalive.timer` | `hifi-mdns-keepalive.sh` | Periodic mDNS/ARP re-announce so an idle unit stays reachable (`apply.d/0041`) |
@@ -181,7 +180,7 @@ can't set headers. `_require_pair_token()` gates every `sources_server.py`
 route that isn't localhost-only for minting — including the sources page
 itself (`GET /`) and the source listing (`GET /api/sources`), so a device on
 the LAN that isn't paired and isn't going through the webui:80 proxy or the
-Electron kiosk (both loopback) can't reach the Sources UI or its data at all
+on-screen UI (both loopback) can't reach the Sources UI or its data at all
 — with per-IP rate limiting (20 failures / 60s).
 
 ### SSH & the shell account
@@ -200,21 +199,22 @@ generation incomplete, and starting `sshd` with no host keys is the single
 most common cause of a "control process exited with error code" failure.
 `ssh-keygen -A` only fills in what's missing, so it's a no-op otherwise.
 
-**The interactive login is not the kiosk user.** `hifi` is the account the
-Electron kiosk runs as, and it is not a login target: its privilege surface
+**The interactive login is not the kiosk user.** `hifi` is the appliance's
+service account (`hifi-vumeter` runs as it, and so does the LightDM-autologged
+Electron session on legacy installs), and it is not a login target: its privilege surface
 is the pinned NOPASSWD list in `/etc/sudoers.d/hifi`, it is kept out of the
 `sudo` group (re-asserted on every OS update by
 `apply.d/0002-security-hardening.sh`), and once a real login exists its
 password is removed outright (`usermod -p '*'`, `_disable_kiosk_password()`)
-so the documented `hifi`/`hifi` default stops working. LightDM autologin is
-unaffected — it authenticates via the `autologin`/`nopasswdlogin` groups, not
+so the documented `hifi`/`hifi` default stops working. LightDM autologin on
+legacy installs is unaffected — it authenticates via the `autologin`/`nopasswdlogin` groups, not
 a password.
 
 **The owner picks the SSH login themselves, from the web admin.** Settings →
 Services has a username + password form right under the SSH toggle
 (`saveShellAccount()` in `admin-webui/src/views/Settings.vue` →
 `/api/system/shell_account` → `POST /shell_account` in `api_server.py`); the
-same form exists on the kiosk touchscreen (`src/pages/Settings.jsx`). The
+same form exists on the kiosk touchscreen (`native-ui-qt/qml/SettingsTab.qml`). The
 panel shows the resulting `ssh <user>@<host>` line, and `GET /shell_account`
 reports `{exists, username}` so a device that has no login yet says so
 instead of implying a default one works. `/ssh_set`'s response carries the
@@ -272,7 +272,7 @@ advertised to it.
 
 ## Backend API reference
 
-The renderer never talks to the OS directly — everything goes through one of
+The on-screen UI never drives the OS itself — everything goes through one of
 three local HTTP services: the root system API (`api_server.py`, loopback), the
 sources service (`sources_server.py`, LAN + pairing token) and the web admin
 gateway (`webui_server.py`, LAN + session). All three pick the language of
@@ -281,8 +281,10 @@ their user-facing messages from the `X-UI-Lang` request header via
 
 ### Flask API — `api_server.py` (port 8000, loopback, root)
 
-Called via [`src/utils/api.js`](src/utils/api.js) (`apiGet`/`apiPost`,
-`API_BASE_URL = http://localhost:8000`). Selected routes:
+Called by the on-screen UI through `Api`
+([`native-ui-qt/src/api.h`](native-ui-qt/src/api.h): `Api.get`/`Api.post`
+against `Api.apiBase = http://127.0.0.1:8000`; `HIFI_HOST` moves all three
+services to another host for development). Selected routes:
 
 ```
 GET  /system_info            hostname, platform, arch, versions (UI/System/OS), display/player state
@@ -313,7 +315,8 @@ GET  /support_bundle          diagnostic zip (logs, unit state, config)
 GET/POST /pointer_status, /pointer_set
 GET/POST /display_mode        screen (gui) vs headless
 GET/POST /player_enabled      player on/off — independent of display_mode, makes a unit "server-only"
-GET/POST /ui_resolution       kiosk render resolution (auto / 720p / 1080p / native) → hifi-ui-resolution.sh
+GET/POST /ui_engine           which on-screen UI starts (qt | electron; `engines` lists what is installed) → hifi-display-mode.sh engine set
+GET/POST /ui_resolution       on-screen UI render resolution (auto / 720p / 1080p / native) → hifi-ui-resolution.sh
 GET/POST /ui_refresh          panel refresh rate (native / low-power) → hifi-ui-refresh.sh
 GET/POST /vu_meter            analog VU meter on/off
 GET/POST /nowplaying_autoexpand   seconds before Now Playing auto-expands (0 = off)
@@ -327,7 +330,7 @@ GET  /boot_mode                'installer' (hifi.installer=1) vs 'live', read fr
 GET  /install/disks            candidate target disks for the disk installer
 POST /install/start            launch hifi-disk-install.sh (async systemd-run job)
 GET  /install/status           poll the running/finished install job
-POST /show_global_keyboard, /hide_global_keyboard   on-screen keyboard for the kiosk (called by the renderer)
+POST /show_global_keyboard, /hide_global_keyboard   system on-screen keyboard for the legacy Electron kiosk (the Qt UI draws its own, VirtualKeyboard.qml)
 ```
 
 The full route table is the source of truth — see the `@app.route` decorators
@@ -428,9 +431,9 @@ exist for running it on a laptop). Route families:
   `/api/system/*` mirrors — so this is the path for a bare browser or a
   QR-carried link.
 
-The Electron kiosk uses none of the above: it calls
-`http://localhost:8080/...` directly, where `_require_pair_token()` exempts
-loopback outright.
+The on-screen UI uses none of the above: it calls
+`http://127.0.0.1:8080/...` directly (`Api.srcBase`), where
+`_require_pair_token()` exempts loopback outright.
 
 ### Sources API — `sources_server.py` (port 8080)
 
@@ -491,7 +494,7 @@ GET    /api/restore/status         🔒   poll that restore job
 ```
 
 `_require_pair_token()` exempts calls from `127.0.0.1`/`::1` (the on-device
-Electron kiosk needs no token — no network hop), so 🔒 above means "required
+UI needs no token — no network hop), so 🔒 above means "required
 for LAN callers (the phone app), waived for the local kiosk." The two
 `/api/pair/token*` routes use a stricter, different check (`remote_addr`
 must literally be localhost, full stop) since they mint/revoke the very
@@ -597,27 +600,20 @@ any file written by the *other* account as DOS READ ONLY and refuses to delete
 it even when the filesystem allows it — the reported "I can copy and edit but
 deleting says I don't have permission, `sudo rm` over SSH is the only way".
 
-### Lyrion JSON-RPC — `src/utils/lyrionApi.js` (port 9000)
+### Lyrion JSON-RPC — `native-ui-qt/src/player.cpp` (port 9000)
 
-Playback control talks directly to Lyrion, not the Flask API:
-
-```javascript
-lyrionApi.play(playerMac)
-lyrionApi.pause(playerMac)
-lyrionApi.next(playerMac)
-lyrionApi.previous(playerMac)
-lyrionApi.setVolume(playerMac, volume)   // 0-100
-lyrionApi.seek(playerMac, time)
-```
-
-### Electron preload — `main/preload.cjs`
+Playback control talks directly to Lyrion, not the Flask API.
+`Api::lmsRequest()` posts `{"method": "slim.request", "params": [player, [...]]}`
+to `/jsonrpc.js` on `Api.lmsBase`, which follows `/lms_role` (the local server,
+or the followed device's in multiroom). `Player` wraps the commands QML uses:
 
 ```javascript
-window.electronAPI.setFrameRate(fps)                       // 60 during the boot intro, 30 otherwise (weak iGPU budget)
-window.electronAPI.showGlobalKeyboard() / hideGlobalKeyboard()
-window.electronAPI.onToggleSimpleKeyboard(cb) / removeToggleSimpleKeyboard(cb)
-window.electronAPI.getPhysicalKeyboard()                   // is a hardware keyboard attached? (hides the on-screen one)
-window.electronAPI.onPhysicalKeyboardChanged(cb) / removePhysicalKeyboardChanged(cb)
+Player.togglePlay()          // play | pause 1
+Player.next() / Player.prev()                   // playlist index +1 / -1
+Player.seek(seconds)         // time <s>
+Player.setVolume(v, final)   // mixer volume 0-100, throttled to one call per 120 ms while dragging
+Player.cmd([...])            // any other player command
+Player.query([...], cb)      // player query with a result (library browsing goes through LibraryModel)
 ```
 
 ## Provisioning & first boot
@@ -629,7 +625,7 @@ and only one of them still involves a hotspot:
 
 | | Installer (`hifi.installer=1`) | Setup (installed disk, or a live "Try") |
 |---|---|---|
-| On-screen | QR badge (`InstallWizard.jsx`) + read-only progress | Wi-Fi picker (`WifiConfigPanel`), then the box's address in plain text |
+| On-screen | QR badge (`Wizard.qml`, installer screen) + read-only progress | Wi-Fi picker (`Wizard.qml`, setup screen), then the box's address in plain text |
 | Hotspot | **Yes** — AP + captive portal | **No** — none is raised at all |
 | Phone reaches it via | `Osmium-Setup-XXXX` (open, no PSK) → `http://10.42.0.1`, or the LAN IP when wired | the box's own LAN address, `http://<ip>` (or `http://hifiplayer.local`) |
 
@@ -674,8 +670,8 @@ returns.
   automatically via the OS captive-portal probes (`_CAPTIVE_PROBES`) or by
   opening `http://10.42.0.1` by hand.
 - The page's *content* forks entirely on **boot mode**
-  (`get_boot_mode()` / kernel param `hifi.installer=1`, same detection
-  `InstallWizard.jsx` uses): booted from the **installer** → the disk-imaging
+  (`get_boot_mode()` / kernel param `hifi.installer=1`, the same parameter
+  `native-ui-qt/src/main.cpp` reads from `/proc/cmdline` to open the installer screen): booted from the **installer** → the disk-imaging
   flow; booted from an **already-installed disk still in provisioning** (or a
   live "Try" session) → the normal setup flow. Both are plain,
   dependency-free HTML/JS templates baked into `webui_server.py`
@@ -690,7 +686,7 @@ returns.
 
 ### Installer flow (booted with `hifi.installer=1`)
 
-`src/pages/InstallWizard.jsx` shows the QR immediately and mirrors
+The installer screen of `native-ui-qt/qml/Wizard.qml` shows the QR immediately and mirrors
 `GET /install/status` read-only (progress bar, no buttons). The phone drives:
 pick a target disk (`GET /api/provision/install_disks` → `api_server.py`'s
 `GET /install/disks`) → confirm the erase warning → start
@@ -699,21 +695,21 @@ pick a target disk (`GET /api/provision/install_disks` → `api_server.py`'s
 the live filesystem verbatim onto the target disk (see `distro/README.md`'s
 Compliance Notice for why Lyrion isn't part of that image at all), then
 chroots in to run `hifi-grub-install.sh` + `hifi-finalize-boot.sh`. Once
-`/install/status` reports `done`, the **on-screen kiosk itself** auto-reboots
-after a short countdown — it does not depend on the phone still being
+`/install/status` reports `done`, the **on-screen UI itself** auto-reboots
+after a short countdown (`POST /reboot`) — it does not depend on the phone still being
 connected (the phone's own tab independently offers the same reboot as a
 convenience/backup).
 
 ### Setup flow (an installed-but-unprovisioned disk, or a live "Try" session)
 
-`src/pages/SetupWizard.jsx` owns the network step on-screen — it renders
-`WifiConfigPanel` inline (the same picker Settings uses post-setup) and posts
-to `/provision_wifi_connect`; Ethernet needs nothing. Once the box is online it
+The setup screen of `native-ui-qt/qml/Wizard.qml` owns the network step
+on-screen — it lists the networks reported by `GET /provision_status`, takes
+the password and posts to `/provision_wifi_connect`; Ethernet needs nothing. Once the box is online it
 switches to showing its own address in plain text (`http://<ip>`, preferring
 the IP over `hifiplayer.local`, which is ambiguous with more than one unit on
 the LAN) and just polls `GET /provision_status` (proxied to
 `webui_server.py`'s `/api/provision/status`) until `pending: false` **and**
-`completed: true`, then hands off to the normal kiosk UI (or, on a
+`completed: true`, then hands off to the normal on-screen UI (or, on a
 headless/server-only choice, simply stays off — the display-mode switch
 already happened live at `finalize`). Everything from here on is driven from
 the browser, in order:
@@ -769,8 +765,8 @@ the browser, in order:
    `/api/provision/discover_lms`) skips the Lyrion-side steps and the sources
    step entirely (external Lyrion's sources are configured on that other
    device, not here — see also [Backend API reference](#backend-api-reference)
-   and `Settings.jsx`'s `settingsSections`, which hides Music Sources the same
-   way post-setup).
+   and the legacy Electron kiosk's `Settings.jsx` `settingsSections`, which
+   hides Music Sources the same way post-setup).
 10. **Lyrion install check** (internal Lyrion only) —
     `/api/provision/lyrion_check`, `/lyrion_install`, `/lyrion_status`.
     `hifi-firstboot.service` normally installs Lyrion on its own, but it only
@@ -960,9 +956,10 @@ Two independent, orthogonal controls decide what a unit actually does:
 - **Display mode** (`GET/POST /display_mode` in `api_server.py`, persisted
   to `/etc/hifi-player/display-mode`, applied via
   `/usr/local/sbin/hifi-display-mode.sh`) — *screen* (`gui`, the default)
-  flips the systemd default target to `graphical.target` and starts LightDM
-  + the Electron kiosk; *headless* (`headless`) flips it to
-  `multi-user.target` with no X session at all. Playback and control are
+  flips the systemd default target to `graphical.target` and starts the
+  on-screen UI (`hifi-qt.service`; LightDM + the Electron kiosk on a legacy
+  install still set to it); *headless* (`headless`) flips it to
+  `multi-user.target` with no on-screen UI at all. Playback and control are
   unaffected either way — squeezelite, Lyrion, and every hifi-\* daemon stay
   `WantedBy=multi-user.target` in both modes.
 - **Player on/off** (`GET/POST /player_enabled` in `api_server.py`,
@@ -976,16 +973,52 @@ Two independent, orthogonal controls decide what a unit actually does:
 The setup wizard's three-way "device mode" step (screen / headless /
 server-only) is the combination of both: server-only = headless display
 mode + player disabled. Both controls also have their own toggle in Settings
-(on-screen `Settings.jsx` → *Display mode*, the admin webui's `Settings.vue`,
+(on-screen `SettingsTab.qml` → *Display mode*, the admin webui's `Settings.vue`,
 and — display mode only — the Android companion) for changing either one
 independently after setup, guarded against switching mid-OTA the same way
 (`_update_in_progress()`).
 
-### Kiosk session: Wayland with X11 fallback
+### On-screen UI: Qt on DRM/KMS
 
-The image is Debian 13 ("trixie"). In screen mode LightDM autologs the `hifi`
-user into the `hifi-kiosk` session, which is one of two interchangeable
-implementations of "start Electron fullscreen on the panel":
+The image is Debian 13 ("trixie"). In screen mode `hifi-qt.service` starts
+`/opt/hifi-qt/hifi-qt --assets /opt/hifi-qt/assets --locales /opt/hifi-qt/locales`
+with `QT_QPA_PLATFORM=eglfs`: the program takes the DRM master and renders
+straight to the panel — no X server, no Wayland compositor, no display
+manager. The unit binds it to `/dev/tty1` (`TTYPath=`, brought to the front
+by `ExecStartPre=-/usr/bin/chvt 1` from the `kbd` package), starts after
+`plymouth-quit-wait.service` so Plymouth has released the screen, and retries
+without a start limit. Before eglfs opens the device, `kmsmode.cpp` turns
+`/etc/hifi-player/ui-resolution` into a `QT_QPA_EGLFS_KMS_CONFIG`: always a
+real mode of the panel, never a scaling transform; `hifi-ui-resolution.sh`
+restarts the unit when the setting changes. `Main.qml` then fits the 1024x600
+logical canvas into whatever mode was chosen.
+
+The binary and its QML, icons, assets and locales are one self-contained
+payload built by `native-ui-qt/ci/build-payload.sh` (compiled in a Debian 13
+container with `qt6-base-dev`, `qt6-declarative-dev`, `libdrm-dev`); the same
+payload goes into the image (`build-iso.yml` → `build-distro.sh --qt-dir`) and
+into the UI OTA bundle (see [OTA update system](#ota-update-system)). The Qt
+runtime itself comes from Debian packages in
+`distro/config/package-lists/hifi.list.chroot` (`qt6-qpa-plugins`,
+`qt6-image-formats-plugins`, the `qml6-module-qtquick*` modules, `kbd`).
+
+Which interface starts is `/etc/hifi-player/ui-engine` (`qt` | `electron`),
+handled by `hifi-display-mode.sh engine [set]`, which enables one unit and
+disables the other (`hifi-qt.service` also carries `Conflicts=lightdm.service`
+as a safety net). Image slots — every new install and every device converted
+to the A/B layout — ship **only** the Qt interface: section 5b of
+`distro/build-image.sh` removes `/opt/hifi-media-player`, seeds
+`ui-engine=qt` and fails the build if `/opt/hifi-qt/hifi-qt` is missing, and
+`get_engine()` answers `qt` whenever the Electron app is absent, even if a
+converted device's carried-over `/etc` still says `electron`.
+
+### Legacy Electron kiosk (pre-A/B installs)
+
+The Electron + React app (`main/`, `src/`, `package.json`) survives only on
+legacy single-root installs that have not switched `ui-engine` to `qt`, and
+it is no longer updated. There LightDM autologs the `hifi` user into the `hifi-kiosk`
+session, which is one of two interchangeable implementations of "start
+Electron fullscreen on the panel":
 
 - **Wayland** (`/usr/local/bin/hifi-kiosk-wayland` + `hifi-kiosk-launch`,
   `hifi-kiosk-wayland.desktop`): a bare **labwc** (wlroots) compositor with
@@ -1014,6 +1047,21 @@ for fullscreen itself, since under labwc no window manager will do it from the
 outside. The UI-resolution and refresh-rate settings apply in both sessions
 (`hifi-ui-resolution.sh` / `hifi-ui-refresh.sh` via `wlr-randr` or `xrandr`).
 
+Inside the app, `main/main.js` owns the window and renderer crash recovery and
+relaxes CSP only for the local Lyrion origin; the React renderer calls the
+same services as the Qt UI (`src/utils/api.js`, `src/utils/lyrionApi.js`,
+loopback `:8080`, the VU WebSocket). The only IPC is the minimal preload
+surface, for UI-local concerns:
+
+```javascript
+// main/preload.cjs
+window.electronAPI.setFrameRate(fps)                       // 60 during the boot intro, 30 otherwise (weak iGPU budget)
+window.electronAPI.showGlobalKeyboard() / hideGlobalKeyboard()
+window.electronAPI.onToggleSimpleKeyboard(cb) / removeToggleSimpleKeyboard(cb)
+window.electronAPI.getPhysicalKeyboard()                   // is a hardware keyboard attached? (hides the on-screen one)
+window.electronAPI.onPhysicalKeyboardChanged(cb) / removePhysicalKeyboardChanged(cb)
+```
+
 ## OTA update system
 
 Four independent channels, described by a static manifest per release
@@ -1021,7 +1069,7 @@ channel (`latest-<channel>.json` on Cloudflare Pages, mirrored for prod at
 `https://file.osmiumsound.it/ota/latest-prod.json`) and applied as root by
 helper scripts in `/usr/local/sbin/` (invoked from `api_server.py`
 via `systemd-run --no-block --collect`, so the updater survives any service
-restart — e.g. lightdm — its own payload triggers). Each channel writes live
+restart — e.g. `hifi-qt`, or lightdm on a legacy install — its own payload triggers). Each channel writes live
 progress to `/run/hifi-*-status.json`, polled by the UI via
 `GET /{app,system,os,lyrion}_update/status`.
 
@@ -1053,7 +1101,7 @@ now exposes three subcommands, not one:
 
 `POST /update/apply_all` (Settings → Updates → "Aggiorna ora") used to apply
 system → os → ui in sequence **on the live system** — a server restart
-(system step), a lightdm restart (ui step) or an OS-payload reboot could all
+(system step), a UI restart (ui step) or an OS-payload reboot could all
 interrupt an in-progress install and leave the device with some components
 updated and others stale.
 
@@ -1068,7 +1116,7 @@ It now splits into two isolated phases:
    redirected into `system-update.target` because `/system-update` exists —
    nothing from the app stack is even scheduled to start (not `hifi-api`, not
    `hifi-webui`, not `hifi-sources`/`hifi-vumeter`, not `squeezelite`, not
-   lightdm/Electron). With nothing left to race, it applies every staged
+   the on-screen UI). With nothing left to race, it applies every staged
    payload (system → os → ui) in one pass, clears `/system-update`, and
    reboots back to normal.
 
@@ -1090,8 +1138,8 @@ components are skipped by comparing the installed version file). Only the
 for an interrupted download.
 
 Progress during the isolated apply session is shown on the boot splash itself
-(Plymouth theme `hifi`, DRM-direct — no dependency on X/lightdm or on
-`/opt/hifi-media-player`, which is precisely the directory the ui step is
+(Plymouth theme `hifi`, DRM-direct — no dependency on the on-screen UI or on
+`/opt/hifi-qt`, which is precisely the directory the ui step is
 mid-replacing): a bar driven by `plymouth system-update --progress=N`, frozen
 and turned red on a sentinel `plymouth display-message` call if the apply
 fails. SSH is brought up in that isolated session only if the owner had
@@ -1100,48 +1148,45 @@ needs physical access.
 
 | Channel | Asset prefix | Updates | Verification | Script |
 |---|---|---|---|---|
-| UI | `hifi-qtui-` (era `hifi-ui-`) | `/opt/hifi-qt` (Qt) — i pacchetti col nome vecchio portano invece l'app Electron in `/opt/hifi-media-player`, e restano installabili | sha256 | `hifi-ota-update.sh` |
+| UI | `hifi-qtui-` (formerly `hifi-ui-`) | `/opt/hifi-qt` (the Qt UI) — packages with the old name carry the Electron app into `/opt/hifi-media-player` instead, and remain installable | sha256 | `hifi-ota-update.sh` |
 | System | `hifi-system-` | Python API/daemons, helper scripts (`/usr/local/bin`, `/usr/local/sbin`), shared data (`/usr/local/share` — the LMS skin assets), systemd units, `/opt/hifi-webui` | sha256 | `hifi-system-update.sh` |
 | OS | `hifi-os-` | arbitrary root `apply.sh` | sha256 **+ Ed25519 signature** | `hifi-os-update.sh` |
 | Lyrion | — | Lyrion Music Server `.deb` | version match | `hifi-lyrion-update.sh` |
 
-Da 2.5.24 il canale UI porta **l'interfaccia Qt**, non piu' l'app Electron:
-l'apparecchio ha due interfacce su schermo e quella che si aggiorna e' la Qt.
-Il nome del file e' cambiato di proposito (`hifi-qtui-`): l'aggiornatore
-installato sugli apparecchi piu' vecchi pretende un pacchetto Electron e
-rifiuterebbe l'altro, bloccando l'intero aggiornamento; non trovando
-`hifi-ui-` quegli apparecchi considerano l'interfaccia gia' aggiornata,
-applicano sistema e sistema operativo, e al giro successivo — con
-l'aggiornatore nuovo — prendono anche la Qt. `hifi-ota-update.sh` riconosce i
-due contenuti dal loro eseguibile (`hifi-qt` oppure `hifi-media-player`) e
-installa nella cartella giusta; la versione dell'interfaccia sta ora in
-`/etc/hifi-player/UI_VERSION`, fuori da entrambe. Alla prima installazione
-della Qt, **se nessuno ha ancora scelto**, diventa lei l'interfaccia che parte
-(`/etc/hifi-player/ui-engine`); una scelta gia' fatta — anche "electron" — non
-viene mai toccata, e dalla pagina di amministrazione si torna indietro quando
-si vuole.
+Since 2.5.24 the UI channel carries **the Qt interface**, no longer the
+Electron app. The file name changed on purpose (`hifi-qtui-`): the updater
+installed on older devices expects an Electron package and would refuse the
+other one, blocking the whole update; not finding `hifi-ui-`, those devices
+consider the UI already up to date, apply System and OS, and on the next round
+— with the new updater — take the Qt UI too. `hifi-ota-update.sh` recognises
+the two contents by their executable (`hifi-qt` or `hifi-media-player`) and
+installs into the matching directory; the UI version now lives in
+`/etc/hifi-player/UI_VERSION`, outside both. On the first Qt install, **if
+nobody has chosen yet**, it becomes the interface that starts
+(`/etc/hifi-player/ui-engine`); a choice already made — "electron" included —
+is never touched, and on a device that still has the Electron app the web admin
+can switch back (`GET/POST /ui_engine`).
 
-L'immagine ISO porta lo stesso identico pacchetto — lo costruisce
-`native-ui-qt/ci/build-payload.sh`, sorgente unica per aggiornamento e
-immagine — in `/opt/hifi-qt`, e parte con la Qt: l'hook
-`0400-enable-services` abilita `hifi-qt.service` e disabilita `lightdm`
-**solo se il programma c'e' davvero**, altrimenti l'immagine resta su
-Electron; cosi' un pacchetto non copiato non puo' tradursi in uno schermo
-nero. In CI il pacchetto lo costruisce un lavoro a parte (`qt-payload`),
-perche' quello dell'immagine gira dentro un contenitore e non ha docker.
+The image carries the very same payload — built by
+`native-ui-qt/ci/build-payload.sh`, the single source for both update and
+image — in `/opt/hifi-qt`, and boots with Qt: the `0400-enable-services` hook
+enables `hifi-qt.service` and disables `lightdm` **only if the program is
+really there**, otherwise the live-build system stays on Electron, so a payload
+that wasn't copied can't turn into a black screen. Image slots go further and
+drop Electron altogether (see [On-screen UI](#on-screen-ui-qt-on-drmkms)). In
+CI the payload is built by a separate job (`qt-payload`), because the image
+job runs inside a container and has no docker.
 
-Due dettagli di compatibilita' hanno una scadenza. Dentro il pacchetto c'e'
-un file `hifi-media-player` di due righe: e' un ponte per gli apparecchi
-fermi alla 2.5.24-dev.4, la cui verifica in fase di staging pretende ancora
-quel nome e senza il quale rifiuterebbe il pacchetto bloccando **l'intero**
-aggiornamento, sistema e sistema operativo compresi. Chi installa guarda
-`hifi-qt` per primo, quindi il contenuto finisce comunque in `/opt/hifi-qt`.
-Per lo stesso motivo la versione dell'interfaccia viene scritta anche nel
-posto vecchio (`/opt/hifi-media-player/UI_VERSION`): l'esecutore
-dell'applicazione gia' installato sugli apparecchi rilegge da li' per
-confermare che il passo sia riuscito, e quello che gira durante un
-aggiornamento e' sempre la versione precedente. Entrambi si potranno togliere
-quando nessun apparecchio sara' piu' fermo a quelle versioni.
+Two compatibility details have an expiry date. The payload contains a
+two-line `hifi-media-player` file: a bridge for devices stuck at
+2.5.24-dev.4, whose staging check still demands that name and would otherwise
+refuse the package, blocking **the whole** update, System and OS included. The
+installer looks for `hifi-qt` first, so the content still lands in
+`/opt/hifi-qt`. For the same reason the UI version is also written to the old
+location (`/opt/hifi-media-player/UI_VERSION`): the apply runner already
+installed on devices reads it back from there to confirm the step succeeded,
+and the runner executing during an update is always the previous version. Both
+can go once no device is left on those versions.
 
 Devices also pick a **release channel** (Settings → Updates, `GET/POST
 /ota_channel`, persisted in `/etc/hifi-player/ota-channel`): **Prod** follows
@@ -1292,8 +1337,11 @@ The UI channel (`hifi-ota-update.sh`) protects against the classic
 full-disk-corruption brick a different way, since it isn't idempotent
 migrations but a wholesale file replacement:
 
-- Extracts into a fresh `/opt/hifi-media-player.new`, never into the live
-  `/opt/hifi-media-player`.
+- Extracts into a fresh directory (the staging area
+  `/var/lib/hifi-player/update/staged/ui/<version>/payload`, or
+  `/opt/hifi-media-player.new` for the single-shot `full` path), never into
+  the live `/opt/hifi-qt` (or `/opt/hifi-media-player` for a legacy Electron
+  payload).
 - **Free-space guard**: computes the uncompressed size from the gzip footer
   and refuses to extract unless the filesystem has enough headroom — a full
   disk during `tar` silently truncates whatever file it was writing, which
@@ -1302,11 +1350,13 @@ migrations but a wholesale file replacement:
   every extracted file (not just the main binary) and aborts on any
   size/content mismatch, so a single corrupted `.so`/asar can't slip through.
 - **Atomic swap with rollback**: only after both checks pass does it `mv` the
-  old app dir aside and the new one into place; if the final `mv` into
-  `/opt/hifi-media-player` fails, it restores the previous directory from the
-  backup rather than leaving the app dir half-written.
-- The kiosk restart (`systemctl restart lightdm`) is the very last step, once
-  `UI_VERSION` is already committed.
+  old app dir aside (`/opt/hifi-qt.old`) and the new one into place
+  (`swap_dir()`); if the final `mv` fails, it restores the previous directory
+  from the backup rather than leaving the app dir half-written.
+- In the single-shot `full` path, restarting the running UI
+  (`systemctl restart hifi-qt`, or `lightdm` on a legacy Electron install) is
+  the very last step, once `UI_VERSION` is already committed; the isolated
+  `apply` path restarts nothing, since the apply session reboots at the end.
 
 One consequence worth knowing for the System channel: `hifi-system-update.sh`
 re-execs itself from a private copy under `/var/tmp` before applying (it is
@@ -1321,18 +1371,26 @@ carries it (`0048-lms-skin-assets.sh` is the worked example — see
 
 ```
 hifi-media-player/            (GitHub: adri6412/osmium-sound)
-├── main/                     # Electron main process
+├── native-ui-qt/             # On-screen UI (Qt 6 Quick, eglfs on DRM/KMS) → /opt/hifi-qt
+│   ├── src/                  # C++: main.cpp, Api, Player, VuMeter, LibraryModel, I18n, Sys, Spring, QrCode (qr.c), kmsmode.cpp
+│   ├── qml/                  # Main, App, MainScreen, NowPlaying, Browser, SettingsTab + SettingsRows, VuPanel, Wizard, Dialogs, VirtualKeyboard, OtaOverlay, BootIntro, CdRip, Screensaver, ...
+│   ├── icons/, assets/       # SVG icons; VU meter skins (assets/vu/<id>) and status-plate artwork (assets/ledbar)
+│   ├── ci/build-payload.sh   # builds the payload (Debian 13 container) shared by the image and the UI OTA bundle
+│   ├── tools/                # dev rig: Debian 13 chroot + Xvfb, mock-server.py (fake Lyrion/api/sources/VU), test command channel
+│   └── Makefile              # moc + g++ against pkg-config Qt6Quick/Qt6Qml/Qt6Gui/Qt6Network/Qt6Core + libdrm
+├── main/                     # Legacy Electron kiosk — main process
 │   ├── main.js               # kiosk window, fullscreen under labwc/X11, renderer crash recovery, CSP relax for Lyrion, keyboard IPC
 │   ├── inputDevices.js       # which kernel input devices count as a keyboard someone can type on (sysfs scan; drives the on-screen keyboard auto-show)
 │   └── preload.cjs           # window.electronAPI (frame rate, on-screen/physical keyboard)
-├── src/                      # React renderer (kiosk), Vite + Tailwind
+├── src/                      # Legacy Electron kiosk — React renderer, Vite + Tailwind; still the source of shared UI data
 │   ├── App.jsx               # boot-mode routing: InstallWizard / SetupWizard / kiosk, screensaver, boot intro
 │   ├── pages/                # LyrionServer (player + library), Settings, SetupWizard (on-screen Wi-Fi + address), InstallWizard (QR)
 │   ├── components/           # AnalogVUMeter, LedBar, Discover, CdRip, SourcesManager, InternalDisks, WifiConfigPanel, UpdatePlanOverlay, VirtualKeyboard, Screensaver, BootIntro, ...
 │   ├── hooks/                # useLyrionPlayer, useKeyboardInput, useLongPress
 │   ├── utils/                # api.js (Flask :8000), lyrionApi.js (Lyrion JSON-RPC :9000), physicalKeyboard.js
-│   ├── data/                 # thirdPartyNotices.js (in-app rendering of THIRD-PARTY-NOTICES.md)
-│   └── i18n/                 # en/it locale strings (English is the default)
+│   ├── assets/               # intro.mp4 (also unrolled into JPEG frames for the Qt boot intro)
+│   ├── data/                 # thirdPartyNotices.js (in-app rendering of THIRD-PARTY-NOTICES.md; exported to third_party.json for the Qt UI)
+│   └── i18n/                 # en/it locale strings (English is the default) — read by both UIs
 ├── admin-webui/              # Vue 3 web admin, built to dist/, served by webui_server.py from /opt/hifi-webui/dist
 │   └── src/
 │       ├── views/            # Login, Setup, Dashboard, Settings
@@ -1350,10 +1408,11 @@ hifi-media-player/            (GitHub: adri6412/osmium-sound)
 ├── fdroid/, fdroid-dev/      # self-hosted F-Droid repo configs (stable / dev), published to gh-pages by CI
 ├── flasher/                  # Osmium Flasher — desktop USB writer (Electron, Windows/Linux)
 ├── distro/                   # Custom Debian 13 appliance build (live-build)
-│   ├── build-distro.sh       # ISO build script (injects kiosk, web admin, daemons, session files, versions, OTA pubkey, provisioning marker)
+│   ├── build-distro.sh       # ISO build script (injects the Qt UI and the legacy kiosk, web admin, daemons, session files, versions, OTA pubkey, provisioning marker)
+│   ├── build-image.sh        # live-build chroot → A/B slot image + signed RAUC bundle (section 5b: drops the Electron app, seeds ui-engine=qt)
 │   ├── config/               # live-build package list, hooks, includes.chroot (systemd units, /usr/local/sbin scripts, sudoers, sshd/samba/lightdm conf, Plymouth theme)
 │   │   └── includes.chroot/usr/local/share/hifi-lms-skin/    # Osmium theme + global CSS + menu entry for Lyrion's Material Skin
-│   ├── os-update/            # OS OTA payload: apply.sh runner, lib.sh, apply.d/ migrations (cumulative), files/ (kiosk sessions, logo)
+│   ├── os-update/            # OS OTA payload: apply.sh runner, lib.sh, apply.d/ migrations (cumulative), files/ (legacy kiosk sessions, logo)
 │   ├── ota-keys/             # Ed25519 OTA public key (+ generator; private key never committed)
 │   └── dev-installer/        # template of the offline dev installer hifi-install-<ver>.sh
 ├── tools/                    # publish-iso.sh (sign an ISO + latest.json for file.osmiumsound.it), har-viewer/ (local HAR analysis tool)
@@ -1362,15 +1421,23 @@ hifi-media-player/            (GitHub: adri6412/osmium-sound)
 │   └── scripts/              # make-ota-manifest.py, make-iso-manifest.py
 ├── website/                  # Public site (osmiumsound.it, deployed from main via gh-pages → Cloudflare Pages)
 ├── hardware/                 # Hardware designs
-└── package.json              # kiosk app (Electron 43, React 18, Vite 6)
+└── package.json              # legacy kiosk app (Electron 43, React 18, Vite 6)
 ```
 
 ## Local development
 
-Node 20 (what CI uses), Python 3 with `requirements.txt`.
+Node 20 (what CI uses), Python 3 with `requirements.txt`; for the on-screen
+UI, a Debian 13 environment with `qt6-base-dev`, `qt6-declarative-dev` and
+`libdrm-dev` (or docker, for the payload script).
 
 ```bash
-npm install
+make -C native-ui-qt                                # on-screen UI binary (native-ui-qt/hifi-qt)
+bash native-ui-qt/ci/build-payload.sh qtui          # full /opt/hifi-qt payload, exactly as CI builds it (needs docker + node)
+QT_QPA_PLATFORM=xcb HIFI_WINDOW=1280x720 HIFI_HOST=<device-ip> \
+  qtui/hifi-qt --assets qtui/assets --locales qtui/locales   # windowed on a desktop, against a real device's services
+python3 native-ui-qt/tools/mock-server.py           # or a fake device (Lyrion :9000, api :8000, sources :8080, VU :9001) — see native-ui-qt/tools/README.md
+
+npm install                                         # legacy Electron kiosk
 npm run electron:dev    # Vite + Electron with hot reload (kiosk)
 npm run build           # production renderer build → renderer-dist/
 npm run electron        # run the built app
@@ -1390,7 +1457,7 @@ The Python services expect the appliance layout (root, `nmcli`, systemd,
 `/etc/hifi-player`) — for real end-to-end work use a test VM or a device and
 the offline dev installer (`hifi-install-<ver>.sh` on every Release) rather
 than running them on a workstation. `install-dietpi.sh` / `start-fullscreen.sh`
-are old developer conveniences for testing the kiosk on a bare Debian box by
+are old developer conveniences for testing the Electron kiosk on a bare Debian box by
 hand — they are **not** how the appliance ships. The real production path is:
 flash the install ISO once, then let the OTA system above keep the device
 (UI, System, OS, Lyrion) up to date.

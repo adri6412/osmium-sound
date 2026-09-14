@@ -4,8 +4,9 @@ Osmium Sound is **dual-licensed**. Copyright © 2026 Adriano Frongillo.
 
 ## 1. Open-source license (default): AGPL-3.0-only
 
-All code authored by this project — the Electron/React kiosk, the Vue web admin,
-the Python services, the distro/ISO packaging, Osmium Flasher, the "Osmium"
+All code authored by this project — the Qt/QML on-screen interface
+(`native-ui-qt/`), the earlier Electron/React kiosk (`src/`, `main/`), the Vue web
+admin, the Python services, the distro/ISO packaging, Osmium Flasher, the "Osmium"
 theme/CSS for Material Skin, and the hardware design files — is licensed under
 the **GNU Affero General Public License, version 3 only (AGPL-3.0-only)**.
 See [`LICENSE`](LICENSE) for the full text.
@@ -29,7 +30,7 @@ Contact: **info@osmiumsound.it**
 |------|---------|--------|
 | `android-companion/` | **Apache-2.0** | Rebranded derivative of [android-squeezer](https://github.com/kaaholst/android-squeezer) (Apache-2.0, © Kurt Aaholst, Google Inc.); this project's modifications are contributed under the same license. Full text in `android-companion/docs/LICENSE.md`. |
 | `flasher/vendor/file-type-compat/` | **MIT** | Vendored compatibility shim derived from the MIT-licensed `file-type` package. |
-| Third-party components | Various | Bundled/redistributed under their own licenses — see [`THIRD-PARTY-NOTICES.md`](THIRD-PARTY-NOTICES.md). |
+| Third-party components | Various | Bundled/redistributed under their own licenses — notably the Qt 6 libraries the on-screen interface links against, under LGPL-3.0. See [`THIRD-PARTY-NOTICES.md`](THIRD-PARTY-NOTICES.md). |
 
 ## Earlier MIT releases
 

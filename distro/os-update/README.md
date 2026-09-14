@@ -10,7 +10,7 @@ runs `apply.sh` as root.
 
 | Channel | Asset | What it changes | Verification |
 |---|---|---|---|
-| UI | `hifi-ui-*.tar.gz` | `/opt/hifi-media-player` (Electron kiosk) | sha256 |
+| UI | `hifi-qtui-*.tar.gz` (since 2.5.24; older `hifi-ui-*.tar.gz` still installable) | `/opt/hifi-qt` (Qt on-screen interface); an older Electron bundle goes to `/opt/hifi-media-player` — `hifi-ota-update.sh` tells them apart by their executable | sha256 |
 | System | `hifi-system-*.tar.gz` | Python API/daemons (`/usr/local/bin`), helper scripts (`/usr/local/sbin`), systemd units, `/usr/local/share` (LMS skin assets), `/opt/hifi-webui` | sha256 |
 | **OS** | **`hifi-os-*.tar.gz`** | **arbitrary, via `apply.sh` as root** | **sha256 + Ed25519 signature** |
 | Lyrion | (downloads server) | Lyrion Music Server `.deb` | version match |
@@ -32,7 +32,7 @@ ownership/permissions on extraction and runs `apply.sh` under `env -i` — see
 | [`apply.sh`](apply.sh) | **runner** — sources `lib.sh`, runs every `apply.d/NNNN-*.sh` in order, each in an isolated subshell; fail-fast; writes an audit ledger to `/var/lib/hifi-player/os-migrations`. Don't put OS changes here. |
 | [`lib.sh`](lib.sh) | shared POSIX helpers: `ensure_file_content`, `backup_and_edit` (validator + automatic restore), `ensure_pkg`, `mark_changed`, `request_reboot`, … |
 | `apply.d/NNNN-*.sh` | the actual migrations, one concern each, run in numeric order (currently 0001 → 0052) |
-| `files/` | data shipped with the bundle, read by migrations via `$HIFI_PAYLOAD_DIR/files/…`: `xsession` (X11 kiosk session), `kiosk-wayland-session` / `kiosk-wayland-launch` / `hifi-kiosk-wayland.desktop` (Wayland kiosk), `kiosk-session-select` + `hifi-kiosk-session.service` (Wayland-vs-X11 choice), `hifi-player-tmpfiles.conf`, `hifi-fix-efi-boot.sh`, `logo.png`. These are the **single source of truth** — `build-distro.sh` injects the very same files into new images. |
+| `files/` | data shipped with the bundle, read by migrations via `$HIFI_PAYLOAD_DIR/files/…`: `xsession` (X11 session of the legacy Electron kiosk), `kiosk-wayland-session` / `kiosk-wayland-launch` / `hifi-kiosk-wayland.desktop` (its Wayland session), `kiosk-session-select` + `hifi-kiosk-session.service` (its Wayland-vs-X11 choice), `hifi-player-tmpfiles.conf`, `hifi-fix-efi-boot.sh`, `logo.png` (the Qt on-screen interface uses none of the session files). These are the **single source of truth** — `build-distro.sh` injects the very same files into new images. |
 | `OS_VERSION` | version marker written to `/etc/hifi-player/OS_VERSION` by the updater (the tag is what the device compares against) |
 
 ## How it is applied on the device

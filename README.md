@@ -7,7 +7,7 @@
 **A touchscreen-first hi-fi media appliance for x86, built on Debian.**
 Bit-perfect audio, streaming services, and signed OTA updates — one sleek dark interface.
 
-![Platform](https://img.shields.io/badge/platform-Electron-blue)
+![UI](https://img.shields.io/badge/UI-Qt%206%20%2F%20QML-41cd52)
 ![License](https://img.shields.io/badge/license-AGPL--3.0-green)
 ![Node](https://img.shields.io/badge/node-20%2B-brightgreen)
 [![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/P4K825K4Y6)
@@ -42,7 +42,7 @@ Bit-perfect audio, streaming services, and signed OTA updates — one sleek dark
 | **Hardware** | x86-64 mini-PC (Intel iGPU-class graphics is plenty) |
 | **Display** | 1024×600 touchscreen (optimized for this resolution); headless operation also supported |
 | **OS** | Custom Debian 13 ("trixie") appliance image built with live-build |
-| **Interface** | Electron + React kiosk on a Wayland (labwc) session, with automatic X11 fallback where no real GPU is present |
+| **Interface** | Native Qt 6 / QML app drawing straight to the display over DRM/KMS (no X server, no compositor) — about 3.3 W and 175 MB on Now Playing with the VU meters, against 4.9 W and 650 MB for the previous Electron kiosk; a Vue web admin for any browser on the LAN |
 | **Media server** | Lyrion Music Server (installed on first boot), web player on Material Skin with the "Osmium" theme |
 | **Audio formats** | FLAC, DSD (64/128/256), MP3, AAC, WAV, AIFF |
 | **Max resolution** | 32-bit / 192kHz PCM |
@@ -78,13 +78,13 @@ Control Osmium Sound from your phone — browse the library, drive playback and 
 
 ## 📄 Licensing
 
-**The application code authored by this project** (Electron/React frontend, Vue web admin, Python services, distro packaging, flasher, hardware designs) is released under the **GNU Affero General Public License v3.0 only (AGPL-3.0-only)** — see [`LICENSE`](LICENSE). The project is **dual-licensed**: if the AGPL doesn't fit your use case (e.g. a commercial product or service that can't publish its source), commercial licenses are available — write to **info@osmiumsound.it**. See [`LICENSING.md`](LICENSING.md) for details.
+**The application code authored by this project** (the Qt/QML on-screen interface, the earlier Electron/React kiosk, Vue web admin, Python services, distro packaging, flasher, hardware designs) is released under the **GNU Affero General Public License v3.0 only (AGPL-3.0-only)** — see [`LICENSE`](LICENSE). The project is **dual-licensed**: if the AGPL doesn't fit your use case (e.g. a commercial product or service that can't publish its source), commercial licenses are available — write to **info@osmiumsound.it**. See [`LICENSING.md`](LICENSING.md) for details.
 
 **Exception:** the Android companion app (`android-companion/`) remains under **Apache-2.0**, as it is a rebranded derivative of [android-squeezer](https://github.com/kaaholst/android-squeezer).
 
 **Historical note:** code published by this project **before 2026-08-23** (all releases up to that date) was released under the MIT License and remains available under those terms; the AGPL-3.0 applies from this change onward.
 
-**This project also includes and redistributes third-party components** under their own licenses (Lyrion Music Server and squeezelite under GPL, npm/Python dependencies under MIT/BSD/ISC/Apache-2.0). See [`THIRD-PARTY-NOTICES.md`](THIRD-PARTY-NOTICES.md) for the complete list, license texts, and source locations.
+**This project also includes and redistributes third-party components** under their own licenses (Lyrion Music Server and squeezelite under GPL, the Qt 6 libraries under LGPL-3.0, npm/Python dependencies under MIT/BSD/ISC/Apache-2.0). See [`THIRD-PARTY-NOTICES.md`](THIRD-PARTY-NOTICES.md) for the complete list, license texts, and source locations.
 
 **Disclaimer of affiliation:** Osmium Sound is an independent open-source project and is **NOT affiliated with, sponsored by, endorsed by, or officially associated with** the Lyrion Music Server project or the LMS-Community. "Lyrion" is used in a nominative sense only, to describe the service this frontend connects to.
 

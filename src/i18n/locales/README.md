@@ -1,10 +1,15 @@
-# Translations / Traduzioni (kiosk UI)
+# Translations / Traduzioni (on-screen UI)
 
-Each language of the on-screen Electron kiosk is a single JSON file in this
-folder, named with its language code:
+Each language of the on-screen interface is a single JSON file in this folder,
+named with its language code:
 
 - `en.json` → English (the **default** and the fallback for missing keys)
 - `it.json` → Italiano
+
+The on-screen interface is the Qt one (`native-ui-qt/`):
+`native-ui-qt/ci/build-payload.sh` copies `en.json` and `it.json` into
+`/opt/hifi-qt/locales`, and `native-ui-qt/src/i18n.cpp` loads them at runtime.
+The legacy Electron kiosk (`src/i18n/index.jsx`) reads the very same files.
 
 The other two front-ends have their own, separate string sets — they are hand
 maintained and do **not** share keys with this folder:
@@ -17,7 +22,7 @@ maintained and do **not** share keys with this folder:
 Everything user-visible must exist in **both** English and Italian (the only
 deliberate exception is the live-USB installer page, which is English-only).
 
-## Add a new language (no programming needed)
+## Add a new language (no programming needed for the translation itself)
 
 1. Copy `en.json` and rename the copy to your language code, e.g. `fr.json`
    (French), `de.json` (German), `es.json` (Spanish).
@@ -35,14 +40,18 @@ deliberate exception is the live-USB installer page, which is English-only).
    they are.
 4. Leave anything inside curly braces untouched, e.g. `{ip}`, `{ssid}`,
    `{version}`. Those are filled in automatically by the app.
-5. Save the file. The new language appears automatically in Settings →
-   Language (and in the setup wizard's language step, which reads the same
-   list). No rebuild step beyond the normal app build.
+5. Save the file. The legacy Electron kiosk lists it in Settings → Language on
+   its own (from `_meta`). The Qt interface does not yet: a developer has to
+   add the file to the copy in `native-ui-qt/ci/build-payload.sh` and the
+   language to the list in `native-ui-qt/qml/SettingsTab.qml`
+   (`secLanguage()`), then rebuild the payload.
 
 ## Tips
 
-- The file must stay valid JSON. If the app shows the key name instead of the
-  text (e.g. `wizard.welcome.title`), there is likely a typo or a missing
-  comma/quote in your file — paste it into a JSON validator to find the issue.
+- The file must stay valid JSON. If the Qt interface stays in English after
+  you pick the language, the file is probably not valid (`journalctl -u hifi-qt`
+  shows an `i18n:` warning naming it) — paste it into a JSON validator to find
+  the typo or the missing comma/quote. A key name shown instead of the text
+  (e.g. `wizard.welcome.title`) means that key is missing from `en.json` too.
 - Anything you leave out (or that is added in a future version) falls back to
   **English**, so a partial translation still works.
