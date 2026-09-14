@@ -91,7 +91,10 @@
     "onscreen": "On-screen",
     "cpu": "CPU",
     "ram": "RAM",
-    "disk": "Disk",
+    "diskSystem": "Reserved for the system",
+    "diskFree": "Free for your music",
+    "diskFreeOf": "{free} of {total}",
+    "diskTotal": "Disk",
     "temperature": "CPU temperature",
     "gpu": "GPU"
   },
@@ -328,6 +331,10 @@
       "wizOnDevice": "On {device}",
       "wizAuthHint": "This device wants to know who you are. Use the same username and password you use on it.",
       "wizSignIn": "Sign in",
+      "wizSignInTo": "Sign in to {device}",
+      "wizUserLabel": "Username",
+      "wizWrongPassword": "Wrong username or password. Try again.",
+      "wizChangeUser": "Change",
       "wizLoadingShares": "Reading the shared folders…",
       "wizShareLabel": "Shared folder name",
       "wizTypeShareHint": "Type it exactly as it appears on the other device.",
@@ -473,7 +480,10 @@
       "vuMeterOn": "On",
       "vuMeterOff": "Off",
       "vuMeterChanged": "VU meter preference saved",
-      "vuMeterFailed": "Could not save the preference"
+      "vuMeterFailed": "Could not save the preference",
+      "vuStyleLabel": "VU meter style",
+      "vuStyleHelp": "The look of the meters in the \"now playing\" screen on the device.",
+      "vuStyleChanged": "VU meter style saved"
     },
     "display": {
       "currentLabel": "Current",

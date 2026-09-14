@@ -13,6 +13,7 @@ Item {
     signal expand()
     signal openQueue()
     signal openSleep()
+    signal openPlayerPicker()
     function showPlaylists() { browser.showPlaylists() }
 
     Rectangle { anchors.fill: parent; color: Theme.dark }
@@ -22,6 +23,7 @@ Item {
         onExpand: root.expand()
         onOpenQueue: root.openQueue()
         onOpenSleep: root.openSleep()
+        onOpenPlayerPicker: root.openPlayerPicker()
     }
     Rectangle {                                     // divisore
         x: 340; width: 1; height: 600

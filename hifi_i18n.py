@@ -158,6 +158,7 @@ MESSAGES = {
 
     # ── Mouse pointer / misc preferences ────────────────────────────
     'prefs.saveFailed': {'en': 'Could not save the preference', 'it': 'Impossibile salvare la preferenza'},
+    'prefs.vuStyleUnknown': {'en': 'That VU meter style is not installed', 'it': 'Questo stile di VU meter non è installato'},
     'pointer.shown': {'en': 'Mouse pointer shown', 'it': 'Puntatore mouse attivato'},
     'pointer.hidden': {'en': 'Mouse pointer hidden', 'it': 'Puntatore mouse disattivato'},
 

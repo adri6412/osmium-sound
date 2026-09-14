@@ -33,10 +33,10 @@
   --bottom-toolbar-border-color: rgba(37, 37, 37, 0.9) !important;
   --dialog-toolbar-border-color: rgba(37, 37, 37, 0.9) !important;
   --light-text-color: #f2f2f2 !important;
-  /* -- Blurs off: stessi override di desktop.css, vedi li' il perche'
+  /* -- Blurs off: the same overrides as desktop.css, see there for why
    * (copertina a piena pagina sfocata fino a blur(50px) su un layer
    * scale(1.35) -- costo GPU permanente). Material carica il customcss per
-   * layout, quindi vanno ripetuti qui. -- */
+   * layout, so they have to be repeated here. -- */
   --np-bgnd-filter: none !important;
   --np-full-bgnd-filter: none !important;
   --bgnd-filter: none !important;
@@ -84,13 +84,13 @@ html, body {
   color: #d4af37;
 }
 
-/* -- Format/quality chip + play/pause in oro: vedi desktop.css per il
- * ragionamento completo, incluse le due avvertenze su .np-tech (e' spenta
+/* -- Format/quality chip + play/pause in gold: see desktop.css for the full
+ * reasoning, including the two warnings about .np-tech (it is off
  * di default via localStorage, e fa doppio servizio come riga contatore
  * traccia). .np-tech e .np-playpause vivono in style.css di Material
- * (globale, non per layout), quindi valgono anche qui.
- * .np-bar-tech invece e' dimensionata solo in desktop.css di Material
- * (height:22px), quindi il chip della barra resta li' e non qui. -- */
+ * (global, not per layout), so they hold here too.
+ * .np-bar-tech, on the other hand, is sized only in Material's own
+ * desktop.css (height:22px), so the bar's chip stays there, not here. -- */
 .np-tech {
   max-width: fit-content !important;
   margin-left: auto;
@@ -106,9 +106,10 @@ html, body {
   color: #d4af37 !important;
   text-shadow: 0 0 18px rgba(212, 175, 55, 0.35);
 }
-/* Artista in oro. .np-text-sub-desktop non esiste in questo layout; qui
- * resta solo la coppia artista/album, disambiguata come su desktop --
- * "il subtext seguito da un altro subtext" puo' essere solo l'artista. */
+/* Artist in gold. .np-text-sub-desktop does not exist in this layout; all
+ * that is left here is the artist/album pair, told apart the same way as on
+ * desktop — "the subtext followed by another subtext" can only be the
+ * artist. */
 .np-text.subtext:has(~ .np-text.subtext) {
   color: #d4af37 !important;
 }

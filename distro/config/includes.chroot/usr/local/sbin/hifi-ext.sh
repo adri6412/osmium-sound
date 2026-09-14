@@ -30,10 +30,18 @@
 #      and `refresh` re-resolves the stored request against the new image and
 #      rebuilds it. What is kept on disk is the request, not just the result.
 #
-# What this is not: apt. Maintainer scripts are never executed (the safe parts —
-# ldconfig, sysusers, tmpfiles, /etc defaults — are done here), and a package
-# needing a library newer than the image's is refused with the reason, which is
-# the honest answer: that one arrives with the next image.
+# What this is not: apt. Maintainer scripts do run, but only once the extension
+# is merged and never fatally (see run_maintscripts); ldconfig, sysusers,
+# tmpfiles and /etc defaults are done here. A package needing a library newer
+# than the image's is refused with the reason, which is the honest answer: that
+# one arrives with the next image.
+#
+# Merged /usr. On this Debian /bin, /sbin and /lib are only symlinks into /usr,
+# but plenty of third-party packages still ship files under the old names —
+# Docker's own containerd.io puts its unit in lib/systemd/system. Those paths
+# are treated as the /usr paths they really are (see usr_path): anything else
+# would refuse a package that installs fine with dpkg, and, worse, leave its
+# files outside usr/ where systemd-sysext never merges them.
 set -eu
 
 IMAGE_VERSION_FILE=/usr/lib/osmium/IMAGE_VERSION
@@ -158,10 +166,34 @@ apt_resolve() {  # <workdir> <package>... -> .debs in <workdir>/cache/archives
 # on top of, because sysext would let it win over the image's own copy and the
 # next update would silently keep serving the old one. Paths outside /usr and
 # /opt are handled separately (see place_side_files): sysext merges only those.
+# The /usr path a package path really lands on. /bin, /sbin and /lib* are
+# symlinks into /usr on this system, so lib/systemd/system/x.service IS
+# usr/lib/systemd/system/x.service: that is what the checks have to judge, and
+# where the file has to end up for sysext to see it at all.
+usr_path() {  # <path relative to />
+    case "$1" in
+        bin/*|sbin/*|lib/*|lib32/*|lib64/*|libx32/*) printf 'usr/%s\n' "$1" ;;
+        *) printf '%s\n' "$1" ;;
+    esac
+}
+
+# Move the aliased top-level directories an unpacked package left behind into
+# usr/. Without this their content sits outside usr/, systemd-sysext ignores
+# it, and the add-on is "installed" with its unit or its binary missing.
+usrmerge_tree() {  # <unpacked root>
+    for _a in bin sbin lib lib32 lib64 libx32; do
+        if [ ! -d "$1/$_a" ] || [ -L "$1/$_a" ]; then continue; fi
+        mkdir -p "$1/usr/$_a"
+        cp -a "$1/$_a/." "$1/usr/$_a/" || die "could not move $_a/ into usr/$_a/"
+        rm -rf "${1:?}/$_a"
+    done
+}
+
 check_deb() {  # <deb> <extension name> <workdir>
     _deb=$1; _self=$2; _cw=$3
     _bad_path=""; _shadow=""
-    for _p in $(dpkg-deb -c "$_deb" | awk '$1 !~ /^d/ {print $6}' | sed 's|^\./||'); do
+    for _raw in $(dpkg-deb -c "$_deb" | awk '$1 !~ /^d/ {print $6}' | sed 's|^\./||'); do
+        _p=$(usr_path "$_raw")
         case "$_p" in
             usr/*|opt/*|etc/*|var/*) ;;
             *) _bad_path="$_bad_path $_p"; continue ;;
@@ -177,10 +209,18 @@ check_deb() {  # <deb> <extension name> <workdir>
     # Gli script di manutenzione si conservano: servono dopo, quando i file
     # sono al loro posto (vedi run_maintscripts). Uno per pacchetto.
     _pkg=$(dpkg-deb -f "$_deb" Package 2>/dev/null || basename "$_deb")
+    # 🚨 dpkg-deb -e creates only the LAST directory of the path, never its
+    # parents. Without this mkdir it failed on every package ("failed to create
+    # directory"), the error went to /dev/null, and no maintainer script was ever
+    # kept or run on a real device — docker-ce came out with no docker group and
+    # its service never enabled. The test's stub used mkdir -p and hid it.
+    mkdir -p "$_cw/ctl"
     if dpkg-deb -e "$_deb" "$_cw/ctl/$_pkg" 2>/dev/null; then
         for _s in preinst postinst prerm postrm; do
             [ -f "$_cw/ctl/$_pkg/$_s" ] && log "  $_pkg ships a $_s: it will run once the files are in place"
         done
+    else
+        warn "$_pkg: could not read its maintainer scripts — whatever they set up (users, groups, enabled services) will be missing"
     fi
 }
 
@@ -296,6 +336,7 @@ build_ext() {  # <name> <dry-run 0|1> <package>...
     for _d in $_debs; do
         dpkg-deb -x "$_d" "$_new" || die "could not unpack $(basename "$_d")"
     done
+    usrmerge_tree "$_new"
     # preinst prima che i file siano visibili, come fa dpkg
     run_maintscripts "$_w/ctl" install
     place_side_files "$_new"

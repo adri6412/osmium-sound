@@ -25,11 +25,15 @@ sudo cp "$SRC"/qml/*.qml "$DEST/qml/"
 sudo cp "$SRC"/icons/*.svg "$DEST/icons/"
 [ -d "$ASSETS_SRC" ] || { echo "mancano gli asset in $ASSETS_SRC (ASSETS_SRC=... per indicarli altrove)"; exit 1; }
 sudo cp -r "$ASSETS_SRC"/. "$ASSETS/"
+# VU meter skins live with the Qt sources, not in the shared asset folder
+[ -d "$(dirname "$0")/assets/vu" ] && sudo cp -r "$(dirname "$0")/assets/vu" "$ASSETS/"
+# and the status plate under the cover, over the shared (older) one
+[ -d "$(dirname "$0")/assets/ledbar" ] && sudo cp "$(dirname "$0")"/assets/ledbar/*.png "$ASSETS/"
 sudo cp "$LOCALES_SRC"/*.json "$LOCALES/"
 
 sudo tee /etc/systemd/system/hifi-qt.service >/dev/null <<UNIT
 [Unit]
-Description=Osmium Sound — interfaccia Qt (DRM/KMS, eglfs)
+Description=Osmium Sound — Qt on-screen interface (DRM/KMS, eglfs)
 After=hifi-api.service hifi-vumeter.service
 After=systemd-user-sessions.service plymouth-quit-wait.service
 Conflicts=lightdm.service hifi-native-ui.service

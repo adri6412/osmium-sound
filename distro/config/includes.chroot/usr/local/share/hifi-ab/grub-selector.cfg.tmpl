@@ -1,21 +1,21 @@
-# Osmium Sound — selettore di avvio A/B (versione 1).
+# Osmium Sound — A/B boot selector (version 1).
 #
-# Questo file di testo sta sulla ESP in /EFI/debian/grub.cfg, al posto dello
-# stub di 3 righe che scrive grub-install, e viene letto dal grubx64.efi
-# Debian firmato (che resta INTATTO: qui non si tocca mai il binario del
-# bootloader, solo la sua configurazione). Sceglie lo slot da avviare come il
-# contrib/grub.conf di RAUC, con le variabili ORDER / A_OK / A_TRY / B_OK /
-# B_TRY tenute in /EFI/debian/grubenv, e poi passa la mano al grub.cfg dello
-# slot scelto — che sia lo script statico di un'immagine RAUC o il grub.cfg
-# Debian di una root legacy convertita.
+# This text file sits on the ESP as /EFI/debian/grub.cfg, in place of the
+# three-line stub grub-install writes, and is read by Debian's signed
+# grubx64.efi (which stays UNTOUCHED: the bootloader binary is never modified
+# here, only its configuration). It picks the slot to boot the way RAUC's own
+# contrib/grub.conf does, from the ORDER / A_OK / A_TRY / B_OK / B_TRY
+# variables kept in /EFI/debian/grubenv, then hands over to the chosen slot's
+# grub.cfg — either the static script of a RAUC image or the Debian grub.cfg
+# of a converted legacy root.
 #
-# L'ULTIMO ramo è, byte per byte, lo stub di oggi: se qualcosa qui sopra non
-# torna (grubenv assente o illeggibile, partizioni mancanti, entrambi gli
-# slot che rifiutano di partire) si avvia come si è sempre avviato.
+# The LAST branch is, byte for byte, today's stub: if anything above does not
+# add up (grubenv missing or unreadable, partitions gone, both slots refusing
+# to start) the device boots the way it always has.
 #
-# Reso da hifi-ab-convert.sh / hifi-disk-install.sh: @LEGACY_UUID@ è l'UUID
-# ext4 della root legacy (o dello slot A su un'installazione nuova).
-# Sorgente: distro/config/includes.chroot/usr/local/share/hifi-ab/grub-selector.cfg.tmpl
+# Rendered by hifi-ab-convert.sh / hifi-disk-install.sh: @LEGACY_UUID@ is the
+# ext4 UUID of the legacy root (or of slot A on a fresh install).
+# Source: distro/config/includes.chroot/usr/local/share/hifi-ab/grub-selector.cfg.tmpl
 set legacy_uuid=@LEGACY_UUID@
 set envfile=($root)/EFI/debian/grubenv
 set ab=0
@@ -54,21 +54,21 @@ if [ "$ab" = 1 ]; then
                     set prefix=($root)/boot/grub
                     configfile $prefix/grub.cfg
                 fi
-                # Si arriva qui solo se lo slot non è partito: avanti col prossimo.
+                # Only reached when the slot failed to boot: try the next one.
             fi
         done
-        # Nessuno slot idoneo: si ridà una possibilità a entrambi (e la volta
-        # dopo tocca all'altro), invece di fermarsi a un menu che nessuno vede.
+        # No slot left to try: give both another chance (and the other one
+        # goes first next time) instead of stopping at a menu nobody can see.
         set A_TRY=0
         set B_TRY=0
         save_env --file=$envfile A_TRY B_TRY
     done
 fi
-# ── ramo legacy: lo stub di grub-install, invariato ──────────────────────
+# ── legacy branch: grub-install's own stub, unchanged ────────────────────
 search.fs_uuid $legacy_uuid root
 set prefix=($root)/boot/grub
 configfile $prefix/grub.cfg
-# Se anche questo fallisce (root legacy sovrascritta e due immagini rotte) è
-# meglio riavviare che restare al prompt su un apparecchio senza tastiera.
+# If even this fails (legacy root overwritten and both images broken) a reboot
+# beats sitting at the prompt on a device with no keyboard attached.
 sleep 10
 reboot

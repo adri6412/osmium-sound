@@ -176,5 +176,60 @@ class DiskPathTests(unittest.TestCase):
         self.assertEqual(api_server._disk_path(), '/')
 
 
+class WholeDiskTestCase(unittest.TestCase):
+    """_whole_disk_bytes reads the size of the DISK behind a mount, which is
+    what the dashboard's "reserved for the system" figure is measured against:
+    the disk minus the data partition. A fake /sys/dev/block tree stands in for
+    the real one, since the test host is a container whose / is an overlay."""
+
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp(prefix='hifi-stats-whole-')
+        self._realpath = os.path.realpath
+        self._stat = os.stat
+
+    def tearDown(self):
+        os.path.realpath = self._realpath
+        os.stat = self._stat
+        import shutil
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def _tree(self, disk_sectors, part_sectors=None):
+        """A disk node, plus a partition under it when part_sectors is given."""
+        disk = os.path.join(self.tmp, 'sda')
+        os.makedirs(disk, exist_ok=True)
+        with open(os.path.join(disk, 'size'), 'w') as f:
+            f.write('%d\n' % disk_sectors)
+        node = disk
+        if part_sectors is not None:
+            node = os.path.join(disk, 'sda5')
+            os.makedirs(node, exist_ok=True)
+            with open(os.path.join(node, 'size'), 'w') as f:
+                f.write('%d\n' % part_sectors)
+            with open(os.path.join(node, 'partition'), 'w') as f:
+                f.write('5\n')
+        os.path.realpath = lambda p: node if str(p).startswith('/sys/dev/block/') else self._realpath(p)
+
+    def test_a_partition_reports_its_whole_disk(self):
+        # 15758000128 B disk with an 8934916096 B data partition: the number
+        # the owner is shown is the disk's, not the partition's.
+        self._tree(15758000128 // 512, 8934916096 // 512)
+        self.assertEqual(api_server._whole_disk_bytes(self.tmp), 15758000128)
+
+    def test_a_mount_straight_on_a_device_reports_that_device(self):
+        # No `partition` file: the node IS the disk, don't climb to its parent.
+        self._tree(15758000128 // 512)
+        self.assertEqual(api_server._whole_disk_bytes(self.tmp), 15758000128)
+
+    def test_unresolvable_device_gives_none(self):
+        # An overlay / a network mount has no block device behind it: the
+        # dashboard then leaves the breakdown out instead of inventing it.
+        os.path.realpath = lambda p: os.path.join(self.tmp, 'nothing-here')
+        self.assertIsNone(api_server._whole_disk_bytes(self.tmp))
+
+    def test_zero_sized_device_gives_none(self):
+        self._tree(0)
+        self.assertIsNone(api_server._whole_disk_bytes(self.tmp))
+
+
 if __name__ == '__main__':
     unittest.main()

@@ -91,6 +91,13 @@ OTA_REPO = os.environ.get('HIFI_OTA_REPO', 'adri6412/hifi-media-player')
 # that fallback, then use the fast path again from then on.
 OTA_MANIFEST_BASE = os.environ.get('HIFI_OTA_MANIFEST_BASE',
                                    'https://osmium-sound.pages.dev/ota')
+# Stable releases are served from file.osmiumsound.it (Cloudflare R2, the
+# host the ISO and the flasher come from) and the release workflow drops a
+# copy of the prod manifest next to the payloads. Read that copy when Pages
+# is unreachable, before resorting to the rate-limited GitHub API. Prod only:
+# dev/alpha builds live on GitHub alone.
+OTA_PROD_MIRROR_BASE = os.environ.get('HIFI_OTA_PROD_MIRROR_BASE',
+                                      'https://file.osmiumsound.it/ota')
 # OTA release channel: 'prod' tracks GitHub's /releases/latest (stable releases
 # only); 'dev' tracks the newest release including prereleases (vX.Y.Z-dev.N).
 # 'alpha' tracks the newest release of ANY kind, including private test tags cut
@@ -609,6 +616,31 @@ def _disk_path():
     return '/'
 
 
+def _whole_disk_bytes(path):
+    """Size of the physical disk the given filesystem sits on, in bytes.
+
+    The owner thinks in terms of the disk they bought, not of partitions:
+    to answer "how much did the system take and how much is left for my
+    music" we need the whole device, not just the mounted filesystem. Read
+    it from sysfs (the mount's device -> the partition's parent disk -> its
+    size in 512-byte sectors), so no external tool has to be installed.
+    None when it can't be resolved (a network mount, a container, an
+    unusual device-mapper setup): the caller then omits the breakdown
+    rather than inventing numbers."""
+    try:
+        st = os.stat(path)
+        node = os.path.realpath('/sys/dev/block/%d:%d' % (os.major(st.st_dev), os.minor(st.st_dev)))
+        # a partition carries this file and hangs under its disk; a mount
+        # straight on a whole device (or on an LVM/loop node) does not
+        if os.path.exists(os.path.join(node, 'partition')):
+            node = os.path.dirname(node)
+        with open(os.path.join(node, 'size'), encoding='utf-8') as f:
+            size = int(f.read().strip()) * 512
+        return size if size > 0 else None
+    except Exception:
+        return None
+
+
 def get_system_stats():
     """CPU/RAM/disk/temperature/GPU snapshot for the admin dashboard. All
     fields are best-effort and independently None-able -- one missing sensor
@@ -626,6 +658,17 @@ def get_system_stats():
         vm = psutil.virtual_memory()
         path = _disk_path()
         du = shutil.disk_usage(path)
+        # How the disk is split, in the terms the owner cares about: the
+        # image slots and the boot partition are gone for good (the system
+        # keeps two full copies of itself so an update can fail safely), the
+        # data partition is theirs. Everything on the device that is not the
+        # reported filesystem counts as the system's share; on a legacy
+        # install, where / holds both the system and the music, the split
+        # cannot be drawn and stays None instead of being guessed.
+        whole = _whole_disk_bytes(path)
+        system = whole - du.total if whole and whole > du.total else None
+        if path == '/' and system is not None and not os.path.ismount(DATA_MOUNT):
+            system = None
         return {
             'cpu_percent': cpu_pct,
             'ram_percent': vm.percent,
@@ -635,6 +678,11 @@ def get_system_stats():
             'disk_percent': round(du.used / du.total * 100, 1) if du.total else None,
             'disk_used_gb': round(du.used / 1024 / 1024 / 1024, 1),
             'disk_total_gb': round(du.total / 1024 / 1024 / 1024, 1),
+            # what is still writable by the owner (statvfs' available, so the
+            # filesystem's root reserve is not promised to them)
+            'disk_free_gb': round(du.free / 1024 / 1024 / 1024, 1),
+            'disk_system_gb': round(system / 1024 / 1024 / 1024, 1) if system is not None else None,
+            'disk_device_gb': round(whole / 1024 / 1024 / 1024, 1) if whole else None,
             'temp_c': _cpu_temp_c(),
             'gpu_percent': _gpu_busy_pct(),
             'gpu_temp_c': _gpu_temp_c(),
@@ -643,7 +691,8 @@ def get_system_stats():
         log.exception("get_system_stats failed")
         return {'cpu_percent': None, 'ram_percent': None, 'ram_used_mb': None,
                 'ram_total_mb': None, 'disk_path': None, 'disk_percent': None,
-                'disk_used_gb': None, 'disk_total_gb': None, 'temp_c': None,
+                'disk_used_gb': None, 'disk_total_gb': None, 'disk_free_gb': None,
+                'disk_system_gb': None, 'disk_device_gb': None, 'temp_c': None,
                 'gpu_percent': None, 'gpu_temp_c': None}
 
 _IFACE_RE = re.compile(r'^[A-Za-z0-9][A-Za-z0-9._-]*$')
@@ -3229,6 +3278,78 @@ def set_vu_meter(enable):
     return {'success': True, 'enabled': enable}
 
 # ──────────────────────────────────────────────────────────────────
+#  VU meter skin: which look the kiosk's analog meters wear. Each skin is
+#  a folder the on-screen interface ships in its assets (skin.json plus
+#  images, built with native-ui-qt/tools/vu-skin-build.py), so adding one
+#  is dropping a folder in: the list below is read from disk, never kept
+#  by hand. Persisted like the on/off switch above, so the web admin can
+#  change it too; ABSENT (or a skin no longer installed) means "classic".
+# ──────────────────────────────────────────────────────────────────
+VU_STYLE_FILE = '/etc/hifi-player/vu-style'
+VU_SKINS_DIR = os.environ.get('HIFI_VU_SKINS_DIR', '/opt/hifi-qt/assets/vu')
+VU_STYLE_DEFAULT = 'classic'
+_VU_STYLE_RE = re.compile(r'^[a-z0-9][a-z0-9_-]{0,40}$')
+
+def list_vu_styles():
+    """The installed skins, [{id, name:{en,it}}], in their declared order
+    (classic first). A folder whose skin.json does not parse is skipped:
+    offering a look the kiosk would then refuse to draw helps no one."""
+    styles = []
+    try:
+        names = sorted(os.listdir(VU_SKINS_DIR))
+    except OSError:
+        names = []
+    for sid in names:
+        if not _VU_STYLE_RE.match(sid):
+            continue
+        try:
+            with open(os.path.join(VU_SKINS_DIR, sid, 'skin.json'), encoding='utf-8') as f:
+                meta = json.load(f)
+        except (OSError, ValueError):
+            continue
+        name = meta.get('name') if isinstance(meta, dict) else None
+        if not isinstance(name, dict):
+            name = {'en': sid, 'it': sid}
+        styles.append({'id': sid, 'name': {'en': str(name.get('en') or sid), 'it': str(name.get('it') or name.get('en') or sid)},
+                       'order': meta.get('order', 50) if isinstance(meta.get('order', 50), int) else 50})
+    if not any(st['id'] == VU_STYLE_DEFAULT for st in styles):
+        # the interface draws the classic look even without its folder
+        styles.append({'id': VU_STYLE_DEFAULT, 'name': {'en': 'Classic', 'it': 'Classico'}, 'order': 0})
+    styles.sort(key=lambda st: (st['order'], st['id']))
+    return [{'id': st['id'], 'name': st['name']} for st in styles]
+
+def get_vu_style():
+    """Return { style, styles }."""
+    styles = list_vu_styles()
+    style = VU_STYLE_DEFAULT
+    try:
+        with open(VU_STYLE_FILE) as f:
+            style = f.read().strip() or VU_STYLE_DEFAULT
+    except Exception:
+        pass
+    if not any(st['id'] == style for st in styles):
+        style = VU_STYLE_DEFAULT
+    return {'style': style, 'styles': styles}
+
+def set_vu_style(style):
+    """Persist the skin choice. Only an installed skin is accepted."""
+    style = str(style or '').strip()
+    if not _VU_STYLE_RE.match(style) or not any(st['id'] == style for st in list_vu_styles()):
+        return {'success': False, 'style': get_vu_style()['style'],
+                'code': 'prefs.vuStyleUnknown', 'message': _t('prefs.vuStyleUnknown', _lang())}
+    try:
+        os.makedirs(os.path.dirname(VU_STYLE_FILE), exist_ok=True)
+        tmp = VU_STYLE_FILE + '.tmp'
+        with open(tmp, 'w') as f:
+            f.write(style + '\n')
+        os.replace(tmp, VU_STYLE_FILE)
+    except Exception:
+        log.exception("set_vu_style: persist failed")
+        return {'success': False, 'style': get_vu_style()['style'],
+                'code': 'prefs.saveFailed', 'message': _t('prefs.saveFailed', _lang())}
+    return {'success': True, 'style': style}
+
+# ──────────────────────────────────────────────────────────────────
 #  Now-playing auto-expand (kiosk-only UI behaviour, like the VU meter
 #  above): how long after a song starts playing the kiosk should
 #  automatically open the fullscreen now-playing view on its own, if the
@@ -4763,10 +4884,11 @@ _RELEASE_CACHE_TTL = 60    # seconds
 # cheap anyway.
 _RELEASE_CACHE_LOCK = threading.Lock()
 
-def _fetch_pages_manifest(channel):
-    """Read the channel's static manifest from GitHub Pages. Returns a release-
+def _fetch_pages_manifest(channel, base=None):
+    """Read the channel's static manifest from GitHub Pages (or from `base`,
+    the file.osmiumsound.it mirror of the prod manifest). Returns a release-
     shaped dict ({tag_name, assets:[…]}) or None if unavailable/empty."""
-    url = f'{OTA_MANIFEST_BASE}/latest-{channel}.json'
+    url = f'{base or OTA_MANIFEST_BASE}/latest-{channel}.json'
     req = urllib.request.Request(url, headers={'User-Agent': 'hifi-player-ota'})
     with urllib.request.urlopen(req, timeout=15) as resp:
         release = json.load(resp)
@@ -4824,7 +4946,18 @@ def _fetch_release(channel):
         except Exception:
             log.warning("Pages manifest fetch failed for channel %s; falling back to API", channel)
 
-        # 2. Fallback: the rate-limited GitHub REST API.
+        # 2. Stable channel: the copy of the manifest next to the payloads on
+        #    file.osmiumsound.it (same host the download comes from anyway).
+        if channel == 'prod':
+            try:
+                release = _fetch_pages_manifest(channel, OTA_PROD_MIRROR_BASE)
+                if release:
+                    _RELEASE_CACHE[channel] = (now, release)
+                    return release
+            except Exception:
+                log.warning("mirror manifest fetch failed for channel prod; falling back to API")
+
+        # 3. Fallback: the rate-limited GitHub REST API.
         try:
             release = _fetch_github_api_release(channel)
         except Exception:
@@ -6464,6 +6597,15 @@ def api_list_timezones():
 @app.route('/vu_meter', methods=['GET'])
 def api_vu_meter():
     return jsonify(get_vu_meter())
+
+@app.route('/vu_style', methods=['GET'])
+def api_vu_style():
+    return jsonify(get_vu_style())
+
+@app.route('/vu_style', methods=['POST'])
+def api_set_vu_style():
+    data = request.get_json(silent=True) or {}
+    return jsonify(set_vu_style(data.get('style')))
 
 @app.route('/vu_meter', methods=['POST'])
 def api_set_vu_meter():

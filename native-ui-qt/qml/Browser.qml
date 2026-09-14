@@ -171,9 +171,47 @@ Item {
 
     // ─── barra dei tab ─────────────────────────────────────────────────────
     Rectangle {
+        id: tabBar
         width: parent.width; height: 40; color: Theme.panelA(0.5)
         Rectangle { y: 39; width: parent.width; height: 1; color: Theme.border }
+        // the Osmium Sound mark, top right. The "update available" badge
+        // makes room for it: the full words, the short one, or just a gold
+        // dot on the gear.
+        Item {
+            id: brandMark
+            width: 16 + 8 + 8 + brandText.implicitWidth + 16; height: 40
+            x: parent.width - width
+            visible: tabRow.width <= x
+            Glow { x: 20 - outer; y: 20 - outer; radius: 4; blur: 6; color: Theme.goldA(0.8) }
+            Rectangle { x: 16; y: 16; width: 8; height: 8; radius: 4; color: Theme.gold }
+            Text {
+                id: brandText
+                x: 32; anchors.verticalCenter: parent.verticalCenter
+                text: "OSMIUM SOUND"; color: Theme.silverA(0.8)
+                font.family: Theme.font; font.pixelSize: 11; font.bold: true; font.letterSpacing: 2
+            }
+        }
+        // the tabs as they are without the badge, measured apart so the
+        // badge's length can depend on them without a binding loop
         Row {
+            id: tabMeasure
+            visible: false
+            Repeater {
+                model: root.tabs
+                Item {
+                    required property var modelData
+                    width: 46 + (modelData.key ? 6 + mText.implicitWidth : 0); height: 1
+                    Text { id: mText; text: modelData.key ? Tr.t(modelData.key) : ""; font.family: Theme.font; font.pixelSize: 12 }
+                }
+            }
+        }
+        TextMetrics { id: updFull; font.family: Theme.font; font.pixelSize: 12; font.bold: true; text: Tr.t("settings.updates.available") }
+        TextMetrics { id: updShortM; font.family: Theme.font; font.pixelSize: 12; font.bold: true; text: Tr.t("settings.updates.availableShort") }
+        // 0 full words, 1 short word, 2 dot only
+        readonly property int updMode: tabMeasure.width + 6 + updFull.advanceWidth <= brandMark.x ? 0
+                                     : tabMeasure.width + 6 + updShortM.advanceWidth <= brandMark.x ? 1 : 2
+        Row {
+            id: tabRow
             Repeater {
                 model: root.tabs
                 Item {
@@ -183,16 +221,17 @@ Item {
                     readonly property bool active: root.tab === index
                     readonly property string label: modelData.key ? Tr.t(modelData.key) : ""
                     readonly property bool badge: modelData.icon === "settings" && root.updateAvailable
-                    width: 46 + (label ? 6 + tabText.implicitWidth : 0) + (badge ? 6 + updText.implicitWidth : 0); height: 40
+                    width: 46 + (label ? 6 + tabText.implicitWidth : 0) + (badge && updText.visible ? 6 + updText.implicitWidth : 0); height: 40
                     readonly property color c: active ? Theme.white : tabTap.mix(Theme.silverA(0.5), Theme.white)
                     Icon { x: 16; anchors.verticalCenter: parent.verticalCenter; name: tabItem.modelData.icon; size: 14; color: tabItem.c }
+                    Rectangle { visible: tabItem.badge && tabBar.updMode === 2; x: 26; y: 10; width: 7; height: 7; radius: 3.5; color: Theme.gold; border.width: 1; border.color: Theme.panel }
                     Text { id: tabText; x: 36; anchors.verticalCenter: parent.verticalCenter; text: tabItem.label; color: tabItem.c; font.family: Theme.font; font.pixelSize: 12 }
                     Text {
                         id: updText
-                        visible: tabItem.badge
+                        visible: tabItem.badge && tabBar.updMode < 2
                         x: 36 + (tabItem.label ? tabText.implicitWidth + 6 : 0)
                         anchors.verticalCenter: parent.verticalCenter
-                        text: Tr.t("settings.updates.available"); color: Theme.gold
+                        text: Tr.t(tabBar.updMode === 1 ? "settings.updates.availableShort" : "settings.updates.available"); color: Theme.gold
                         font.family: Theme.font; font.pixelSize: 12; font.bold: true
                     }
                     // rounded-t-sm: 2 px solo sui due angoli in alto

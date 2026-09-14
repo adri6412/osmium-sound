@@ -404,11 +404,11 @@ sed -e "s|@KVER@|$KVER|g" -e "s|@CMDLINE@|$CMDLINE|g" "$SHARE/slot-grub.cfg.tmpl
 if command -v grub-script-check >/dev/null 2>&1; then grub-script-check "$CH/boot/grub/grub.cfg" || die "grub.cfg dello slot non valido"; fi
 # /vmlinuz e /initrd.img (symlink Debian) restano: comodi per il ramo legacy del selettore
 cat > "$CH/etc/fstab" <<'FSTAB'
-# /etc/fstab — immagine Osmium Sound (slot A/B, root in sola lettura).
-# La root (squashfs, sola lettura), /data (PARTLABEL hifi-data, stesso disco), l'overlay di /etc, i bind
-# di /var e /home e la ESP su /boot/efi li monta l'initramfs
-# (scripts/local-bottom/hifi-state) PRIMA che parta systemd: qui restano solo
-# i punti di montaggio effimeri.
+# /etc/fstab — Osmium Sound image (A/B slot, read-only root).
+# The root (squashfs, read-only), /data (PARTLABEL hifi-data, same disk), the
+# overlay on /etc, the bind mounts of /var and /home and the ESP on /boot/efi
+# are all mounted by the initramfs (scripts/local-bottom/hifi-state) BEFORE
+# systemd starts: only the ephemeral mount points are left here.
 tmpfs  /mnt    tmpfs  mode=0755,nosuid,nodev  0  0
 tmpfs  /media  tmpfs  mode=0755,nosuid,nodev  0  0
 FSTAB

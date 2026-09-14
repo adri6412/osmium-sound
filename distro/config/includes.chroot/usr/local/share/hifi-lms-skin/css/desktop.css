@@ -37,29 +37,30 @@
   --bottom-toolbar-border-color: rgba(37, 37, 37, 0.9) !important;
   --dialog-toolbar-border-color: rgba(37, 37, 37, 0.9) !important;
   --light-text-color: #f2f2f2 !important;
-  /* -- Blurs off. Material sfoca la copertina a piena pagina dietro il
-   * now-playing: --np-full-bgnd-filter e' `saturate(3) blur(35px)` e sale a
-   * blur(50px) sui breakpoint grandi, su un layer che porta anche
-   * transform:scale(1.35). E' la stessa forma del difetto artwork-glow che
-   * su questo hardware (iGPU Intel) aveva triplicato il consumo GPU, ma qui
-   * resta acceso per tutto il tempo in cui il now-playing e' aperto.
-   * Sono tutti pilotati da var(), quindi si spengono a livello di variabile
-   * come prescrive l'intestazione di questo file. -- */
+  /* -- Blurs off. Material blurs the full-page artwork behind now-playing:
+   * --np-full-bgnd-filter is `saturate(3) blur(35px)`, rising to blur(50px)
+   * at the large breakpoints, on a layer that also carries
+   * transform:scale(1.35). It is the same shape as the artwork-glow fault
+   * that tripled GPU power on this hardware (Intel iGPU), except this one
+   * stays on the whole time now-playing is open.
+   * They are all driven by var(), so they are switched off at variable level,
+   * the way the header of this file prescribes. -- */
   --np-bgnd-filter: none !important;
   --np-full-bgnd-filter: none !important;
   --bgnd-filter: none !important;
   --backdrop-filter: none !important;
   --toolbar-filter: none !important;
 }
-/* .np-cover-dim ha il blur cablato, non da variabile: serve una regola sua. */
+/* .np-cover-dim has the blur hard-wired, not from a variable: it needs a rule of its own. */
 .np-cover-dim {
   filter: none !important;
   -webkit-filter: none !important;
 }
-/* Tolto il blur la copertina resterebbe nitida e ingrandita a 1.35x, che sta
- * male; si spegne anche l'immagine e si torna al fondo piatto del kiosk.
- * Material prevede questo stato da se' (.np-bgnd-cover-none), quindi non e'
- * una configurazione illegale -- l'inset box-shadow resta e fa da fondo. */
+/* With the blur gone the artwork would sit there sharp and scaled to 1.35x,
+ * which looks wrong; the image is switched off too and the kiosk's flat
+ * background comes back. Material caters for this state itself
+ * (.np-bgnd-cover-none), so it is not an illegal configuration -- the inset
+ * box-shadow stays and acts as the background. */
 .np-bgnd-cover {
   background-image: none !important;
 }
@@ -138,27 +139,27 @@ html, body {
   border-radius: 16px !important;
 }
 
-/* -- Format/quality chip: Material calcola gia' la riga tecnica (codec,
- * sample rate, bit depth) e la rende in due punti -- .np-tech nella pagina
- * now-playing e .np-bar-tech nella barra in basso. Qui viene solo vestita
- * come il chip del kiosk: volutamente sobrio, niente oro e niente glow,
- * perche' e' informazione, non decorazione. E' cio' che la vecchia placca
- * LED decorativa fingeva di mostrare, ma con dati veri.
+/* -- Format/quality chip: Material already works out the technical line
+ * (codec, sample rate, bit depth) and renders it in two places -- .np-tech on
+ * the now-playing page and .np-bar-tech in the bottom bar. All that happens
+ * here is dressing it like the kiosk's chip: deliberately plain, no gold and
+ * no glow, because it is information, not decoration. It is what the old
+ * decorative LED plate pretended to show, with real data this time.
  *
- * Due cose verificate sulla 6.4.6 installata, entrambe non ovvie:
- * 1) l'info tecnica e' SPENTA di default e vive in localStorage per browser
- *    (`techInfo: getLocalStorageBool("techInfo", false)`), quindi va accesa
- *    dalle impostazioni di Material. Se non compare, queste regole sono
- *    corrette ma inerti: non e' un selettore sbagliato.
- * 2) .np-tech fa doppio servizio -- e' renderizzata anche solo per il
- *    contatore traccia (`v-if="techInfo || playlist.count>1"`, contenuto
- *    `{{techInfo ? technicalInfo : ""}}{{...trackCount}}`). Quindi con
- *    techInfo spento il chip si vede lo stesso, con dentro il solo "N di M".
- *    E' accettabile (resta una pillola informativa compatta), ma va saputo:
- *    non e' un elemento dedicato al formato. -- */
+ * Two things verified on the installed 6.4.6, neither obvious:
+ * 1) the technical info is OFF by default and lives in per-browser
+ *    localStorage (`techInfo: getLocalStorageBool("techInfo", false)`), so it
+ *    has to be switched on in Material's settings. If it does not appear,
+ *    these rules are correct but inert: it is not a wrong selector.
+ * 2) .np-tech does double duty -- it is also rendered for the track counter
+ *    alone (`v-if="techInfo || playlist.count>1"`, content
+ *    `{{techInfo ? technicalInfo : ""}}{{...trackCount}}`). So with techInfo
+ *    off the chip still shows, carrying just "N of M". That is acceptable (it
+ *    stays a compact informative pill) but worth knowing: it is not an
+ *    element dedicated to the format. -- */
 .np-tech {
-  /* .np-tech e' un v-flex xs12 (flex-basis:100%): senza restringerlo il
-   * fondo del chip si allargherebbe a tutta la riga come una barra. */
+  /* .np-tech is a v-flex xs12 (flex-basis:100%): without narrowing it the
+   * chip's background would stretch across the whole row like a bar. */
   max-width: fit-content !important;
   margin-left: auto;
   margin-right: auto;
@@ -169,12 +170,12 @@ html, body {
   letter-spacing: 0.04em;
   color: rgba(192, 192, 192, 0.55);
 }
-/* .np-bar-tech vive in un contenitore alto esattamente 22px con
- * line-height 20px: con box-sizing:border-box il bordo da 1px sopra e sotto
- * ci sta al pixel (20 + 2), senza scomporre la barra. Il colore va ripreso
- * con la stessa specificita' della regola di Material
- * (.np-bar-details .np-bar-tech {color: ... !important}), altrimenti vince
- * quella; qui vinciamo perche' il customcss viene caricato dopo. */
+/* .np-bar-tech lives in a container exactly 22px tall with line-height 20px:
+ * with box-sizing:border-box the 1px border above and below fits to the pixel
+ * (20 + 2) without breaking the bar apart. The colour has to be restated at
+ * the same specificity as Material's own rule
+ * (.np-bar-details .np-bar-tech {color: ... !important}), or that one wins;
+ * here we win because the customcss is loaded afterwards. */
 .np-bar-details .np-bar-tech {
   box-sizing: border-box;
   padding: 0 6px;
@@ -184,33 +185,33 @@ html, body {
   color: rgba(192, 192, 192, 0.55) !important;
 }
 
-/* -- Play/pause in oro: e' l'unico transport control con una classe sua
- * (.np-playpause), quindi si tratta da solo senza toccare gli altri
- * icon-button, che restano volutamente com'e' Material. Il pulsante e'
- * 52x52 -- la stessa identica misura del play del kiosk.
- * Si colora il GLIFO e non si mette un background: l'icona e' grande quanto
- * il pulsante (font-size:52px), quindi disegna gia' il proprio cerchio; un
- * background oro darebbe un cerchio dentro un cerchio.
- * Il glow e' text-shadow e non filter/drop-shadow: segue comunque la forma
- * del glifo e non costa un layer filtrato (vedi i blur spenti in :root). -- */
+/* -- Play/pause in gold: it is the only transport control with a class of its
+ * own (.np-playpause), so it can be treated alone without touching the other
+ * icon-buttons, which stay deliberately as Material has them. The button is
+ * 52x52 -- the very same size as the kiosk's play button.
+ * The GLYPH is coloured rather than given a background: the icon is as large
+ * as the button (font-size:52px), so it already draws its own circle, and a
+ * gold background would put a circle inside a circle.
+ * The glow is a text-shadow, not filter/drop-shadow: it follows the shape of
+ * the glyph all the same and costs no filtered layer (see the blurs switched
+ * off in :root). -- */
 .np-playpause div i {
   color: #d4af37 !important;
   text-shadow: 0 0 18px rgba(212, 175, 55, 0.35);
 }
 
-/* -- Artista in oro: nel kiosk e' il segnale d'identita' piu' forte.
- * Nella barra in basso la riga artista ha una classe propria, quindi e'
- * diretto. -- */
+/* -- Artist in gold: in the kiosk it is the strongest signal of identity.
+ * In the bottom bar the artist line has a class of its own, so this one is
+ * straightforward. -- */
 .np-text-sub-desktop {
   color: #d4af37 !important;
 }
-/* Nella pagina now-playing artista e album condividono la STESSA coppia di
- * classi (.np-text-landscape.subtext), e il titolo e' anch'esso un <p>, per
- * cui :first-of-type prenderebbe il titolo -- non l'artista. Si usa invece
- * "il subtext che ha un altro subtext dopo di se'", che puo' combaciare solo
- * con l'artista: se l'album manca la regola semplicemente non si applica e
- * l'artista resta del colore di default, ma l'album non viene MAI colorato
- * per sbaglio. */
+/* On the now-playing page the artist and the album share the SAME pair of
+ * classes (.np-text-landscape.subtext), and the title is a <p> too, so
+ * :first-of-type would take the title -- not the artist. What is used instead
+ * is "the subtext that has another subtext after it", which can only match the
+ * artist: when there is no album the rule simply does not apply and the artist
+ * keeps the default colour, but the album is NEVER coloured by mistake. */
 .np-text-landscape.subtext:has(~ .np-text-landscape.subtext),
 .np-text.subtext:has(~ .np-text.subtext) {
   color: #d4af37 !important;

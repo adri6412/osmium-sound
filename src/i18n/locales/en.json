@@ -125,6 +125,10 @@
       "onDevice": "On {device}",
       "authHint": "This device wants to know who you are. Use the same username and password you use on it.",
       "signIn": "Sign in",
+      "signInTo": "Sign in to {device}",
+      "userLabel": "Username",
+      "wrongPassword": "Wrong username or password. Try again.",
+      "changeUser": "Change",
       "loadingShares": "Reading the shared folders…",
       "pickShare": "Pick the folder with your music",
       "noShares": "This device is not sharing any folder.",
@@ -343,6 +347,11 @@
     "repeat": "Repeat",
     "queue": "Queue",
     "queueEmpty": "The queue is empty",
+    "selectPlayer": "Player to control",
+    "thisDevice": "this device",
+    "controlling": "Controlling {{name}}",
+    "noOtherPlayers": "No other player on this Lyrion",
+    "backToOwn": "Back to this device",
     "addToQueue": "Add to queue",
     "playNext": "Play next",
     "saveAsPlaylist": "Save as playlist",
@@ -401,6 +410,10 @@
     "language": {
       "help": "Choose the interface language."
     },
+    "remotePlayer": {
+      "note": "You are controlling «{{name}}». These settings belong to this device: go back to its own player to change them.",
+      "back": "Back to this device"
+    },
     "playback": {
       "help": "Playback options applied to the active player: track transitions (crossfade/gapless) and volume normalisation (ReplayGain).",
       "noPlayer": "No active player found. Start playback or check the Lyrion connection.",
@@ -421,6 +434,11 @@
       "fixedVolumeHelp": "Bypasses the player's digital volume control entirely — output is always at 100%. Required for bit-perfect playback; turn it off to use the on-screen volume slider again.",
       "vuMeter": "Animated VU meters",
       "vuMeterHelp": "The VU dial in the \"now playing\" screen updates live with the audio level. Turn it off to reduce GPU load on more limited hardware.",
+      "vuStyle": "VU meter style",
+      "vuStyleHelp": "The look of the meters in the \"now playing\" screen.",
+      "vuSection": "VU meters",
+      "vuOff": "Off",
+      "vuOnStyle": "On · {style}",
       "autoExpand": "Auto-open now playing",
       "autoExpandHelp": "When a song starts playing, automatically open the fullscreen now-playing view after this many seconds. It only opens once per song — if you navigate away yourself, it stays put."
     },
@@ -701,6 +719,7 @@
       "os": "Operating system",
       "signed": "signed",
       "available": "Update available",
+      "availableShort": "Update",
       "upToDate": "Everything up to date",
       "debian12Banner": "This device still runs Debian 12. Future updates require Debian 13 — reinstall it from the latest ISO to keep receiving updates.",
       "checking": "Checking...",

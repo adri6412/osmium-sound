@@ -12,7 +12,7 @@
 // "Apply & rescan" button: sources_server.py pushes every edit into Lyrion's
 // live mediadirs and rescans on its own (_lyrion_push_live()), without the
 // service restart that would cut off whatever is playing.
-import { ref, reactive, computed, onMounted, onUnmounted, onBeforeUnmount } from 'vue';
+import { ref, reactive, computed, nextTick, onMounted, onUnmounted, onBeforeUnmount } from 'vue';
 import { api } from '../api.js';
 import { useI18n } from '../i18n';
 import FolderPicker from './FolderPicker.vue';
@@ -265,31 +265,76 @@ async function wizPickHost(host) {
   wiz.err = ''; wiz.detail = ''; wiz.step = 1;
   if (wiz.canList) await wizLoadShares();
 }
+// Username and password are asked in a window, only once the device (or the
+// folder) turns out to want them -- never as an error, and never as fields
+// sitting on the page. `refused`: the previous attempt was turned down, and
+// the window says so. `retry` runs again with the new login.
+const login = reactive({ open: false, user: '', pass: '', err: '', retry: null });
+const loginUserEl = ref(null);
+const loginPassEl = ref(null);
+function wizAskAuth(refused, retry) {
+  Object.assign(login, { open: true, user: wiz.username, pass: '',
+                         err: refused ? t('settings.sources.wizWrongPassword') : '', retry });
+  nextTick(() => {
+    const el = login.user ? loginPassEl.value : loginUserEl.value;
+    if (el) el.focus();
+  });
+}
+function loginCancel() {
+  login.open = false; login.retry = null;
+}
+async function loginSubmit() {
+  const user = login.user.trim();
+  if (!user) return;
+  const retry = login.retry;
+  wiz.username = user; wiz.password = login.pass; wiz.needsAuth = true;
+  login.open = false; login.retry = null;
+  if (retry) await retry();
+}
+function wizChangeUser() {
+  // with no list yet the login is for reading it; otherwise the next folder
+  // picked uses it
+  wizAskAuth(false, async () => { if (wiz.canList && !wizShares.value.length) await wizLoadShares(); });
+}
 async function wizLoadShares() {
   wiz.busy = true; wiz.err = ''; wiz.detail = '';
+  const tried = !!wiz.username;
   const r = await api.smbShares({ server: wiz.host, username: wiz.username, password: wiz.password });
   wiz.busy = false;
+  if (wiz.step !== 1) return;
   if (!r.ok || !r.data || r.data.success === false) {
+    // Wrong password: ask again. Only a real failure falls back to typing
+    // the folder name.
+    if (r.data && r.data.code === 'msg.smbBadCredentials') {
+      wiz.needsAuth = true;
+      wizAskAuth(tried, wizLoadShares);
+      return;
+    }
     wizFail(r.data, 'settings.sources.wizListFailed');
-    // A wrong password keeps the owner on the step that asked for it; only a
-    // real failure falls back to typing the folder name.
-    if (r.data && r.data.code === 'msg.smbBadCredentials') wiz.needsAuth = true;
-    else wiz.canList = false;
+    wiz.canList = false;
     return;
   }
   wiz.needsAuth = !!r.data.needs_auth;
   wizShares.value = r.data.shares || [];
+  // the list itself is behind a login
+  if (r.data.needs_auth && !wizShares.value.length) wizAskAuth(tried, wizLoadShares);
 }
 async function wizPickShare(name) {
   wiz.share = name; wiz.err = ''; wiz.detail = ''; wiz.busy = true;
+  const tried = !!wiz.username;
   const r = await api.smbTest({ server: wiz.host, share: name,
                                 username: wiz.username, password: wiz.password });
   wiz.busy = false;
+  if (wiz.step !== 1) return;
   if (r.ok && r.data && r.data.success !== false) { wiz.step = 2; return; }
+  // A folder that wants a login asks for it right here, not with an error
+  // and not at the end as a failed mount.
+  if (r.data && r.data.code === 'msg.smbBadCredentials') {
+    wiz.needsAuth = true;
+    wizAskAuth(tried, () => wizPickShare(name));
+    return;
+  }
   wizFail(r.data, 'settings.sources.wizOpenFailed');
-  // A wrong password is fixed on the step that asked for it, not at the end
-  // under a "mount failed" the owner cannot place.
-  if (r.data && r.data.code === 'msg.smbBadCredentials') { wiz.needsAuth = true; wiz.step = 1; }
 }
 async function wizAdd() {
   if (!wiz.host || !wiz.share) return;
@@ -305,6 +350,12 @@ async function wizAdd() {
   });
   wiz.busy = false;
   if (!r.ok || (r.data && r.data.success === false)) {
+    if (wiz.step === 2 && r.data && r.data.code === 'msg.smbBadCredentials') {
+      say('');
+      wiz.step = 1; wiz.needsAuth = true;
+      wizAskAuth(!!wiz.username, () => wizPickShare(wiz.share));
+      return;
+    }
     wizFail(r.data, 'common.error');
     say((r.data && r.data.message) || t('common.error'), true);
     return;
@@ -697,22 +748,15 @@ onUnmounted(() => {
             <!-- 2. which shared folder -->
             <template v-else-if="wiz.step === 1">
               <p class="sub">{{ t('settings.sources.wizOnDevice', { device: wiz.name || wiz.host }) }}</p>
-              <template v-if="wiz.needsAuth || wiz.username">
-                <p class="sub">{{ t('settings.sources.wizAuthHint') }}</p>
-                <div class="row">
-                  <div style="flex: 1;">
-                    <label>{{ t('settings.sources.user') }}</label>
-                    <input v-model="wiz.username" type="text" :placeholder="t('settings.sources.userPlaceholder')" />
-                  </div>
-                  <div style="flex: 1;">
-                    <label>{{ t('settings.sources.pass') }}</label>
-                    <input v-model="wiz.password" type="password" placeholder="••••••" />
-                  </div>
-                </div>
-                <button style="margin-bottom: 10px;" :disabled="wiz.busy || !wiz.username" @click="wizLoadShares">
-                  {{ t('settings.sources.wizSignIn') }}
+              <div v-if="wiz.username" class="net between">
+                <span>
+                  <span class="muted">{{ t('settings.sources.wizUserLabel') }}</span>
+                  <span class="mono" style="margin-left: 8px;">{{ wiz.username }}</span>
+                </span>
+                <button class="ghost fit" :disabled="wiz.busy" @click="wizChangeUser">
+                  {{ t('settings.sources.wizChangeUser') }}
                 </button>
-              </template>
+              </div>
               <p v-if="wiz.busy" class="sub">{{ t('settings.sources.wizLoadingShares') }}</p>
               <template v-else-if="!wiz.canList">
                 <label>{{ t('settings.sources.wizShareLabel') }}</label>
@@ -733,7 +777,7 @@ onUnmounted(() => {
                 </div>
                 <p v-if="!wizShares.length && !wiz.needsAuth" class="sub">{{ t('settings.sources.wizNoShares') }}</p>
                 <div class="row" style="margin-top: 10px;">
-                  <button v-if="!wiz.needsAuth && !wiz.username" class="ghost" @click="wiz.needsAuth = true">
+                  <button v-if="!wiz.username" class="ghost" :disabled="wiz.busy" @click="wizChangeUser">
                     {{ t('settings.sources.wizNeedPassword') }}
                   </button>
                   <button class="ghost" @click="wiz.canList = false">{{ t('settings.sources.wizTypeIt') }}</button>
@@ -747,7 +791,7 @@ onUnmounted(() => {
                 <span class="muted">{{ t('settings.sources.wizDevice') }}</span><span>{{ wiz.name || wiz.host }}</span>
                 <span class="muted">{{ t('settings.sources.wizFolder') }}</span><span>{{ wiz.share }}</span>
                 <template v-if="wiz.username">
-                  <span class="muted">{{ t('settings.sources.user') }}</span><span>{{ wiz.username }}</span>
+                  <span class="muted">{{ t('settings.sources.wizUserLabel') }}</span><span>{{ wiz.username }}</span>
                 </template>
               </div>
               <div class="net between" style="margin-top: 10px;">
@@ -948,6 +992,23 @@ onUnmounted(() => {
         </p>
         <button style="width: 100%; margin-top: 16px;" @click="howtoShare = null">{{ t('common.close') }}</button>
       </div>
+    </div>
+
+    <!-- Sign in to a network device, asked only when it wants a login -->
+    <div v-if="login.open" class="overlay" @click.self="loginCancel">
+      <form class="card" style="width: 380px; max-width: calc(100vw - 32px);" @submit.prevent="loginSubmit" @keydown.esc="loginCancel">
+        <h3><span class="dot"></span>{{ t('settings.sources.wizSignInTo', { device: wiz.name || wiz.host }) }}</h3>
+        <p class="sub">{{ t('settings.sources.wizAuthHint') }}</p>
+        <label>{{ t('settings.sources.wizUserLabel') }}</label>
+        <input ref="loginUserEl" v-model="login.user" type="text" autocomplete="username" autocapitalize="off" @input="login.err = ''" />
+        <label>{{ t('settings.sources.pass') }}</label>
+        <input ref="loginPassEl" v-model="login.pass" type="password" autocomplete="current-password" @input="login.err = ''" />
+        <div v-if="login.err" class="msg err" style="margin-top: 10px;">{{ login.err }}</div>
+        <div class="row" style="margin-top: 16px;">
+          <button type="button" class="secondary" style="flex: 1;" @click="loginCancel">{{ t('common.cancel') }}</button>
+          <button type="submit" style="flex: 1;" :disabled="!login.user.trim()">{{ t('settings.sources.wizSignIn') }}</button>
+        </div>
+      </form>
     </div>
 
     <!-- Format wizard -->

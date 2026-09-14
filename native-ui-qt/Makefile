@@ -4,6 +4,10 @@ CXX      ?= g++
 CXXFLAGS ?= -O2 -Wall -std=c++17 -fPIC
 PKGS      = Qt6Quick Qt6Qml Qt6Gui Qt6Network Qt6Core libdrm
 CXXFLAGS += $(shell pkg-config --cflags $(PKGS))
+# QtGui private (QPA) headers, for the touch injection of the test channel:
+# used only where qt6-base-private-dev is installed (__has_include in main.cpp)
+QTGUI_INC = $(shell pkg-config --variable=includedir Qt6Gui)/QtGui/$(shell pkg-config --modversion Qt6Gui)
+CXXFLAGS += -I$(QTGUI_INC) -I$(QTGUI_INC)/QtGui
 LDLIBS    = $(shell pkg-config --libs $(PKGS))
 MOC      ?= $(shell pkg-config --variable=libexecdir Qt6Core)/moc
 

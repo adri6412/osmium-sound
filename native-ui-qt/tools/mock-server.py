@@ -12,7 +12,7 @@ COVER = os.environ.get("MOCK_COVER", os.path.join(HERE, "..", "..", "logo osmium
 STATE = {
     "mode": "play", "time": 116.0, "duration": 330.0, "volume": 40, "index": 2, "shuffle": 0, "repeat": 0, "sleep": 0,
     "prefs": {"replayGainMode": "0", "transitionType": "0", "transitionDuration": "0", "digitalVolumeControl": "1"},
-    "vu": True, "autoexpand": 0, "ota": {"state": "idle"}, "lang": "it",
+    "vu": True, "vu_style": os.environ.get("MOCK_VU_STYLE", "classic"), "autoexpand": 0, "ota": {"state": "idle"}, "lang": "it",
     "display_mode": "gui", "ui_resolution": "auto", "ui_refresh": "native", "pointer": True, "ssh": False, "player_enabled": True,
     "lms_mode": "local", "lms_host": "", "tz": "Europe/Rome", "device_name": "Osmium", "ota_channel": "dev", "lyrion_channel": "release",
     "audio": "hw:CARD=DAC,DEV=0", "shell_user": "", "pldir": "/srv/music/playlist", "skin": "osmium", "fmt": {"state": "idle"},
@@ -29,6 +29,36 @@ ARTISTS = ["Toto", "Pink Floyd", "Dire Straits", "Ludovico Einaudi", "Ólafur Ar
 ALBUMS = [(i + 1, f"Album {i + 1} — {a}", a, (i % 12) + 1) for i, a in enumerate(ARTISTS * 2)]
 QUEUE = [("Rosanna", "TOTO", "TOTO IV"), ("Africa", "TOTO", "TOTO IV"), ("Hold the Line", "TOTO", "Toto"), ("Time", "Pink Floyd", "The Dark Side of the Moon"), ("Money", "Pink Floyd", "The Dark Side of the Moon")]
 T0 = time.time()
+# Scenarios (env):
+#   MOCK_LONG_QUEUE=1        40 tracks in the queue (scrolling tests, #100)
+#   MOCK_SHARED_LMS=N        somebody else's Lyrion (#99): the list holds a
+#                            phone player from the start, our "Osmium" only
+#                            shows up N seconds after the mock started (LAN
+#                            address, not loopback); the status of the phone
+#                            carries its own player_name
+if os.environ.get("MOCK_LONG_QUEUE"):
+    QUEUE = [(f"{t[0]} ({i + 1})", t[1], t[2]) for i in range(8) for t in QUEUE]
+#   MOCK_PLAYERS=1           two more players on the server (a phone and
+#                            "Cucina"), each with its own now playing, for
+#                            the player picker
+SHARED_LMS = float(os.environ.get("MOCK_SHARED_LMS", "0") or 0)
+EXTRA_PLAYERS = [
+    {"playerid": "de:ad:be:ef:00:01", "name": "iPhone di Ale", "ip": "192.168.0.23:51234", "connected": 1},
+    {"playerid": "de:ad:be:ef:00:02", "name": "Cucina", "ip": "192.168.0.31:3483", "connected": 1},
+] if os.environ.get("MOCK_PLAYERS") else []
+# what the other players are doing (status for a playerid that is not ours)
+OTHER = {
+    "de:ad:be:ef:00:01": {"title": "Blue in Green", "artist": "Miles Davis", "album": "Kind of Blue", "volume": 22, "mode": "play"},
+    "de:ad:be:ef:00:02": {"title": "Re", "artist": "Nils Frahm", "album": "Felt", "volume": 65, "mode": "pause"},
+}
+PHONE = {"playerid": "de:ad:be:ef:00:01", "name": "iPhone di Ale", "ip": "192.168.0.23:51234", "connected": 1}
+OWN = {"playerid": "aa:bb:cc:dd:ee:ff", "name": "Osmium", "ip": "127.0.0.1:41234", "connected": 1}
+
+def players_now():
+    if not SHARED_LMS:
+        return [OWN] + EXTRA_PLAYERS
+    own = dict(OWN, ip="192.168.0.40:41234")
+    return [PHONE, own] if time.time() - T0 >= SHARED_LMS else [PHONE]
 
 def status_now():
     if STATE["mode"] == "play":
@@ -39,11 +69,23 @@ def rpc(player, params):
     cmd = params[0] if params else ""
     r = {}
     if cmd == "players":
-        r = {"count": 1, "players_loop": [{"playerid": "aa:bb:cc:dd:ee:ff", "name": "Osmium", "ip": "127.0.0.1:41234", "connected": 1}]}
+        pl = players_now()
+        r = {"count": len(pl), "players_loop": pl}
     elif cmd == "status":
-        if len(params) > 1 and params[1] == "-":
+        if len(params) > 1 and params[1] == "-" and player in OTHER:
+            # a player that left the server answers nothing, like Lyrion does
+            if not any(p["playerid"] == player for p in players_now()):
+                return {}
+            o = OTHER[player]
+            owner = next((p["name"] for p in players_now() if p["playerid"] == player), player)
+            r = {"player_name": owner, "mode": o["mode"], "time": 42.0, "duration": 300.0, "mixer volume": o["volume"],
+                 "playlist_cur_index": 0, "playlist_tracks": 1, "playlist repeat": 0, "playlist shuffle": 0, "will_sleep_in": 0,
+                 "playlist_loop": [{"id": 2001, "title": o["title"], "artist": o["artist"], "album": o["album"], "coverid": "1001",
+                                    "bitrate": "1411kbps", "type": "flc", "samplesize": 16, "samplerate": 44100, "duration": 300.0, "remote": 0}]}
+        elif len(params) > 1 and params[1] == "-":
             t = QUEUE[STATE["index"] % len(QUEUE)]
-            r = {"mode": STATE["mode"], "time": STATE["time"], "duration": STATE["duration"], "mixer volume": STATE["volume"],
+            owner = next((p["name"] for p in players_now() if p["playerid"] == player), "Osmium")
+            r = {"player_name": owner, "mode": STATE["mode"], "time": STATE["time"], "duration": STATE["duration"], "mixer volume": STATE["volume"],
                  "playlist_cur_index": STATE["index"], "playlist_tracks": len(QUEUE), "playlist repeat": STATE["repeat"],
                  "playlist shuffle": STATE["shuffle"], "will_sleep_in": STATE["sleep"],
                  "playlist_loop": [{"id": 1001 + STATE["index"], "title": t[0], "artist": t[1], "album": t[2], "coverid": "1001",
@@ -52,7 +94,15 @@ def rpc(player, params):
             r = {"playlist_cur_index": STATE["index"], "playlist_tracks": len(QUEUE),
                  "playlist_loop": [{"id": 1001 + i, "title": q[0], "artist": q[1], "album": q[2], "playlist index": i} for i, q in enumerate(QUEUE)]}
     elif cmd == "playerpref":
+        # ["playerpref", name, "?"] reads, ["playerpref", name, value] writes (as Lyrion)
+        if len(params) > 2 and params[2] != "?":
+            STATE["prefs"][params[1]] = str(params[2])
         r = {"_p2": STATE["prefs"].get(params[1], "0")}
+    elif player in OTHER and cmd in ("play", "pause", "mixer"):
+        o = OTHER[player]
+        if cmd == "play": o["mode"] = "play"
+        elif cmd == "pause": o["mode"] = "pause" if params[1:2] == ["1"] else "play"
+        else: o["volume"] = int(params[2])
     elif cmd == "play": STATE["mode"] = "play"
     elif cmd == "pause": STATE["mode"] = "pause" if params[1:2] == ["1"] else "play"
     elif cmd == "time": STATE["time"] = float(params[1])
@@ -132,6 +182,8 @@ class H(BaseHTTPRequestHandler):
         if port == 8000:
             table = {
                 "/vu_meter": {"enabled": STATE["vu"]}, "/nowplaying_autoexpand": {"seconds": STATE["autoexpand"]},
+                "/vu_style": {"style": STATE["vu_style"], "styles": [{"id": "classic", "name": {"en": "Classic", "it": "Classico"}},
+                                                                  {"id": "modulometer", "name": {"en": "Modulometer", "it": "Modulometro"}}]},
                 "/update/status": STATE["ota"], "/boot_mode": {"mode": "live"}, "/provision_status": {"pending": False, "completed": True},
                 "/player_name": {"name": "Osmium"}, "/ui_language": {"lang": STATE["lang"]},
                 "/display_mode": {"mode": STATE["display_mode"]}, "/ui_resolution": {"mode": STATE["ui_resolution"]}, "/ui_refresh": {"supported": True, "mode": STATE["ui_refresh"]},
@@ -208,6 +260,7 @@ class H(BaseHTTPRequestHandler):
         except Exception: data = {}
         if port == 8000:
             if u.path == "/vu_meter": STATE["vu"] = bool(data.get("enable", data.get("enabled", True)))
+            if u.path == "/vu_style": STATE["vu_style"] = str(data.get("style") or "classic")
             if u.path == "/nowplaying_autoexpand": STATE["autoexpand"] = int(data.get("seconds", 0))
             if u.path == "/ui_language": STATE["lang"] = data.get("lang", "en")
             if u.path == "/display_mode": STATE["display_mode"] = data.get("mode", "gui")
@@ -246,6 +299,14 @@ class H(BaseHTTPRequestHandler):
                                    "shares": [{"name": "Musica", "comment": "La musica di casa"},
                                               {"name": "Backup", "comment": ""}]})
             if u.path == "/api/sources/smb/test":
+                # "Musica" on SYNOLOGY (192.168.0.50) lists as a guest but only
+                # opens with a login: the case where the folder, not the
+                # device, asks for the password.
+                if data.get("server") == "192.168.0.50" and data.get("share") == "Musica" and \
+                        (data.get("username") != "casa" or data.get("password") != "segreto"):
+                    return self._json({"success": False, "code": "msg.smbBadCredentials",
+                                       "message": "Nome utente o password non corretti per questo dispositivo.",
+                                       "detail": "tree connect failed: NT_STATUS_ACCESS_DENIED"}, 400)
                 if data.get("share") == "Backup":
                     return self._json({"success": False, "code": "msg.smbNoSuchShare",
                                        "message": "Su quel dispositivo non c\u2019\u00e8 nessuna cartella condivisa con questo nome.",

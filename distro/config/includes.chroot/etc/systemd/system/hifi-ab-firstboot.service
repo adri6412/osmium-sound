@@ -1,9 +1,9 @@
 [Unit]
-Description=Osmium Sound — primo avvio di un'immagine su apparecchio convertito (unione account)
-# /data e l'overlay di /etc li monta l'initramfs prima di PID 1: nessuna
-# dipendenza da local-fs.target (che, via udev → tmpfiles-dev-early → sysusers,
-# creerebbe un ciclo con il Before=systemd-sysusers qui sotto e systemd
-# salterebbe l'unità).
+Description=Osmium Sound — first boot of an image on a converted device (account merge)
+# /data and the overlay on /etc are mounted by the initramfs before PID 1, so
+# there is no dependency on local-fs.target (which, through
+# udev -> tmpfiles-dev-early -> sysusers, would make a cycle with the
+# Before=systemd-sysusers below and systemd would drop the unit).
 DefaultDependencies=no
 ConditionPathExists=/usr/lib/osmium/IMAGE_VERSION
 ConditionPathExists=/data/etc/accounts-extra
@@ -11,9 +11,9 @@ ConditionPathExists=!/data/etc/upper/.hifi-accounts-merged
 After=systemd-remount-fs.service
 Before=sysinit.target systemd-sysusers.service shutdown.target
 Conflicts=shutdown.target
-# In una sessione live non c'è niente da configurare né da sorvegliare:
-# la ISO a filesystem unico avvia la stessa immagine degli apparecchi,
-# quindi senza questa riga queste unità partirebbero anche lì.
+# A live session has nothing to configure and nothing to watch over: the
+# single-filesystem ISO boots the very same image the appliances run, so
+# without this line these units would start there too.
 ConditionKernelCommandLine=!boot=live
 
 [Service]

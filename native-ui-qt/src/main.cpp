@@ -39,6 +39,15 @@
 #include <QtDebug>
 #include <cstdio>
 #include <signal.h>
+// Touch injection for the test channel: goes through the QPA layer, the same
+// path a real touchscreen (libinput/evdev) takes, so touch-vs-mouse delivery
+// differences show up in the rig. The header ships with qt6-base-private-dev;
+// without it the "touch" command just is not compiled in.
+#if __has_include(<qpa/qwindowsysteminterface.h>)
+#include <qpa/qwindowsysteminterface.h>
+#include <QPointingDevice>
+#define HIFI_HAVE_QPA_TOUCH 1
+#endif
 
 static QQuickView *g_view = nullptr;
 
@@ -81,8 +90,21 @@ static QPointF canvasToWin(double x, double y) {
 }
 
 static void mouse(QEvent::Type t, QPointF p, Qt::MouseButton b = Qt::LeftButton) {
-    QMouseEvent ev(t, p, p, g_view->mapToGlobal(p.toPoint()), b, t == QEvent::MouseButtonRelease ? Qt::NoButton : Qt::LeftButton, Qt::NoModifier);
+    const Qt::MouseButtons held = t == QEvent::MouseButtonRelease ? Qt::NoButton : Qt::LeftButton;
+#ifdef HIFI_HAVE_QPA_TOUCH
+    // Through the QPA layer, like a real mouse: a QMouseEvent built by hand
+    // and sent straight to the window does not keep the press position and
+    // the grab from one event to the next, so drags never turned into flicks.
+    static ulong ts = 5000;
+    ts += 16;
+    // a move carries NO button (like a real mouse): with one, Qt takes every
+    // move for a new press and the drag restarts at each event
+    const Qt::MouseButton btn = t == QEvent::MouseMove ? Qt::NoButton : b;
+    QWindowSystemInterface::handleMouseEvent<QWindowSystemInterface::SynchronousDelivery>(g_view, ts, p, g_view->mapToGlobal(p.toPoint()), held, btn, t);
+#else
+    QMouseEvent ev(t, p, p, g_view->mapToGlobal(p.toPoint()), b, held, Qt::NoModifier);
     QCoreApplication::sendEvent(g_view, &ev);
+#endif
 }
 
 static void keyPress(int key, const QString &text = QString()) {
@@ -92,9 +114,33 @@ static void keyPress(int key, const QString &text = QString()) {
     QCoreApplication::sendEvent(g_view, &u);
 }
 
+#ifdef HIFI_HAVE_QPA_TOUCH
+// One finger on a fake touchscreen: down/move/up in canvas coordinates. Each
+// event carries its own timestamp (16 ms apart, like a 60 Hz panel) so that
+// Flickable's velocity/threshold arithmetic sees a plausible gesture.
+static void touch(const QString &phase, const QPointF &p) {
+    static QPointingDevice *dev = nullptr;
+    static ulong ts = 1000;
+    if (!dev) {
+        dev = new QPointingDevice("test touchscreen", 1, QInputDevice::DeviceType::TouchScreen, QPointingDevice::PointerType::Finger,
+                                  QInputDevice::Capability::Position | QInputDevice::Capability::Area, 10, 0);
+        QWindowSystemInterface::registerInputDevice(dev);
+    }
+    QWindowSystemInterface::TouchPoint tp;
+    tp.id = 0;
+    tp.state = phase == "down" ? QEventPoint::Pressed : phase == "up" ? QEventPoint::Released : QEventPoint::Updated;
+    QPointF g = g_view->mapToGlobal(p.toPoint());
+    tp.area = QRectF(g.x() - 2, g.y() - 2, 4, 4);
+    tp.normalPosition = QPointF(g.x() / qMax(1, g_view->width()), g.y() / qMax(1, g_view->height()));
+    ts += 16;
+    QWindowSystemInterface::handleTouchEvent<QWindowSystemInterface::SynchronousDelivery>(g_view, ts, dev, {tp});
+}
+#endif
+
 // Collaudo da remoto: /tmp/hifi-qt.cmd, una riga per comando (coordinate
 // della tela 1024x600). Il file viene consumato e cancellato.
 //   tap X Y | hold X Y | move X Y | release X Y | scroll X Y DY
+//   touch down|move|up X Y   (finto touchscreen, via QPA)
 //   type testo | key esc|enter|backspace|left|right|up|down
 //   shot [file] | eval <javascript nel contesto della radice> | quit
 static void cmdfilePoll() {
@@ -114,6 +160,10 @@ static void cmdfilePoll() {
             else if (c == "hold") mouse(QEvent::MouseButtonPress, p);
             else if (c == "move") mouse(QEvent::MouseMove, p);
             else mouse(QEvent::MouseButtonRelease, p);
+#ifdef HIFI_HAVE_QPA_TOUCH
+        } else if (c == "touch" && a.size() >= 4) {
+            touch(a[1], canvasToWin(a[2].toDouble(), a[3].toDouble()));
+#endif
         } else if (c == "scroll" && a.size() >= 4) {
             QPointF p = canvasToWin(a[1].toDouble(), a[2].toDouble());
             double dy = a[3].toDouble();
@@ -208,6 +258,7 @@ int main(int argc, char *argv[]) {
     VuMeter vu;
     LibraryModel library;
     QObject::connect(&player, &Player::connectedChanged, &library, [&]() { library.setProperty("playerId", player.playerId()); });
+    QObject::connect(&player, &Player::playerChanged, &library, [&]() { library.setProperty("playerId", player.playerId()); });
 
     qmlRegisterType<Spring>("Hifi", 1, 0, "Spring");
     qmlRegisterType<QrItem>("Hifi", 1, 0, "QrCode");

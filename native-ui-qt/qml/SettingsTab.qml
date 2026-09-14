@@ -88,6 +88,7 @@ Item {
         property string displayMode: "gui"; property string uiResolution: "auto"; property string uiRefresh: "native"; property bool uiRefreshSupported: false
         property string timezone: ""
         property bool vuMeter: true; property int autoexpand: 0; property bool playerEnabled: true
+        property var vuStyles: []                                   // [{id, name:{en,it}}]; the choice is Player.vuStyle
         property string otaChannel: "prod"; property var otaChannels: ["prod", "dev"]
         property string audioCur: ""; property var audio: []          // [{id,name}]
         property string lmsMode: "local"; property string lmsHost: ""; property string playerName: ""; property string lyrionChannel: "release"
@@ -138,6 +139,7 @@ Item {
             get(api("/ssh_status"), function(d) { sshEnabled = !!d.enabled; sshAvailable = !!d.available; sshActive = !!d.active })
             get(api("/pointer_status"), function(d) { pointerEnabled = d.enabled !== false; pointerAvailable = d.available !== false })
             get(api("/vu_meter"), function(d) { vuMeter = d.enabled !== false })
+            get(api("/vu_style"), function(d) { vuStyles = d.styles || [] })
             get(api("/player_enabled"), function(d) { playerEnabled = d.enabled !== false })
             get(api("/ui_refresh"), function(d) { uiRefreshSupported = !!d.supported; uiRefresh = str(d, "mode", "native") })
             get(api("/nowplaying_autoexpand"), function(d) { autoexpand = Number(d.seconds || 0) })
@@ -207,7 +209,7 @@ Item {
                 var out = []
                 for (var i = 0; i < (r.players_loop || []).length; i++) {
                     var p = r.players_loop[i]
-                    if (String(p.playerid) === Player.playerId) continue
+                    if (String(p.playerid) === (Player.ownPlayerId || Player.playerId)) continue
                     out.push({ id: String(p.playerid), name: String(p.name || ""), sync: false })
                 }
                 if (out.length) Player.query(["status", "-", "1"], function(ok2, r2) {
@@ -273,6 +275,7 @@ Item {
         function onModeChanged() { if (root.active >= 0) root.rebuild() }
         function onSettingsChanged() { if (root.active >= 0) root.rebuild() }
         function onConnectedChanged() { if (root.active >= 0) root.rebuild() }
+        function onPlayerChanged() { if (root.active >= 0) root.rebuild() }
     }
     signal dataChanged()
     onDataChanged: {
@@ -299,7 +302,7 @@ Item {
     function enter() { cfg.load(); goRoot() }
     function say(text, err) { msg = text; msgErr = !!err; rebuild() }
     function goRoot() { active = -1; msg = ""; pendAct = ""; rows = []; page.contentY = 0; appear() }
-    function openSection(i) {
+    function openSection(i, mark) {
         active = i; msg = ""; pendAct = ""; countdown = 0
         audioSel = ""; sshUser = ""; sshPass = ""; nameEdit = ""; hostEdit = ""
         band = -1; bandAdd = -1; bandShare = -1; brId = ""; pickOwner = 0; pickNew = ""
@@ -309,6 +312,33 @@ Item {
         if (i === 4 && cfg.lmsMode === "follow") cfg.loadDiscover()
         if (i === 18 && !thirdParty) { try { thirdParty = JSON.parse(Sys.readFile(I18n.dir + "/third_party.json")) } catch (e) { thirdParty = null } }
         rebuild(); page.contentY = 0; appear()
+        if (mark) { pendingMark = mark; markTimer.restart() }
+    }
+    // Scrolls to the row carrying `mark` (a row field) and flashes it once:
+    // how the status plate's lights land on the setting behind them.
+    property string pendingMark: ""
+    Timer { id: markTimer; interval: 60; onTriggered: root.showMark(root.pendingMark) }
+    function findMark(item, mark) {
+        var kids = item.children
+        for (var i = 0; i < kids.length; i++) {
+            var k = kids[i]
+            if (k.modelData && k.modelData.mark === mark) return k
+            var f = findMark(k, mark)
+            if (f) return f
+        }
+        return null
+    }
+    function showMark(mark) {
+        pendingMark = ""
+        var it = mark ? findMark(panelRows, mark) : null
+        if (!it) return
+        var p = it.mapToItem(body, 0, 0)
+        page.contentY = Math.max(0, Math.min(p.y - 24, page.contentHeight - page.height))
+        markFlash.x = p.x - 6; markFlash.y = p.y - 6
+        // the slot is the row plus the gap below it: frame the row alone
+        var rowH = it.children.length ? it.children[0].height : it.height
+        markFlash.width = it.width + 12; markFlash.height = rowH + 12
+        markFlashAnim.restart()
     }
     // ─── procedura guidata "cartella di rete" ──────────────────────────────
     function wizReset() {
@@ -356,38 +386,67 @@ Item {
         wizNeedsAuth = false; wizErr = ""; wizDetail = ""; wiz = 1
         if (wizCanList) wizLoadShares(); else rebuild()
     }
+    // Username and password are asked in a window, only when the device (or
+    // the folder) turns out to want them: there are no fields to fill in on
+    // the page. `refused` = the previous attempt was turned down, and the
+    // window says so. Cancel leaves the step as it is.
+    function wizAskAuth(refused, retry) {
+        if (wiz < 0 || !Ui.dialogs) return
+        var dev = wizName || wizHost
+        Ui.dialogs.login(Tr.tf("sources.wizard.signInTo", "device", dev),
+                         Tr.t("sources.wizard.authHint"), wizUser,
+                         refused ? Tr.t("sources.wizard.wrongPassword") : "",
+                         function(u, p) {
+                             if (u === null || wiz < 0) return
+                             wizUser = u; wizPw = p; wizNeedsAuth = true
+                             retry()
+                         })
+    }
     function wizLoadShares() {
         wizBusy = true; wizErr = ""; wizDetail = ""; rebuild()
+        var tried = wizUser !== ""
         Api.post(cfg.src("/api/sources/smb/shares"),
                  { server: wizHost, username: wizUser, password: wizPw },
                  function(ok, d) {
                      wizBusy = false
+                     if (wiz !== 1) return
                      if (!ok || !d || typeof d !== "object" || d.success === false) {
+                         // Wrong password: ask again. Only a real failure
+                         // falls back to typing the folder name by hand.
+                         if (d && d.code === "msg.smbBadCredentials") {
+                             wizNeedsAuth = true; rebuild()
+                             wizAskAuth(tried, wizLoadShares)
+                             return
+                         }
                          wizFail(d, "sources.wizard.listFailed")
-                         // Password sbagliata: si resta sul passo che l'ha
-                         // chiesta. Solo un guasto vero fa passare al ripiego
-                         // di scrivere il nome della cartella a mano.
-                         if (d && d.code === "msg.smbBadCredentials") wizNeedsAuth = true
-                         else wizCanList = false
+                         wizCanList = false
                          rebuild(); return
                      }
                      wizNeedsAuth = !!d.needs_auth
                      wizShares = (d.shares || []).map(function(x) {
                          return { name: String(x.name || ""), comment: String(x.comment || "") } })
                      rebuild()
+                     // the list itself is behind a login
+                     if (d.needs_auth && !wizShares.length) wizAskAuth(tried, wizLoadShares)
                  }, 40000)
     }
     function wizPickShare(name) {
         wizShare = name; wizErr = ""; wizDetail = ""; wizBusy = true; rebuild()
+        var tried = wizUser !== ""
         Api.post(cfg.src("/api/sources/smb/test"),
                  { server: wizHost, share: name, username: wizUser, password: wizPw },
                  function(ok, d) {
                      wizBusy = false
+                     if (wiz !== 1) return
                      if (ok && d && typeof d === "object" && d.success !== false) { wiz = 2; rebuild(); return }
+                     // A folder that wants a login asks for it right here,
+                     // not with an error and not at the end as a failed mount.
+                     if (d && d.code === "msg.smbBadCredentials") {
+                         wizNeedsAuth = true; rebuild()
+                         wizAskAuth(tried, function() { wizPickShare(name) })
+                         return
+                     }
                      wizFail(d, "sources.wizard.openFailed")
-                     // Una password sbagliata si corregge sul passo che l'ha
-                     // chiesta, non alla fine con un "mount fallito".
-                     if (d && d.code === "msg.smbBadCredentials") wizNeedsAuth = true
                      rebuild()
                  }, 40000)
     }
@@ -402,6 +461,12 @@ Item {
                      if (ok && d && typeof d === "object" && d.success !== false) {
                          wizReset(); band = 0; cfg.load()
                          say(Tr.tf("sources.wizard.added", "name", label))
+                         return
+                     }
+                     if (wiz < 0) return
+                     if (d && d.code === "msg.smbBadCredentials") {
+                         wiz = 1; wizNeedsAuth = true; rebuild()
+                         wizAskAuth(wizUser !== "", function() { wizPickShare(wizShare) })
                          return
                      }
                      wizFail(d, "sources.wizard.openFailed")
@@ -661,12 +726,9 @@ Item {
     }
     function wizStepShare() {
         helpText(Tr.tf("sources.wizard.onDevice", "device", wizName || wizHost), 13)
-        if (wizNeedsAuth || wizUser) {
-            help("sources.wizard.authHint", 13)
-            grid([{ type: "input", label: Tr.t("sources.user"), value: wizUser, act: "wiz_field", arg: "u" },
-                  { type: "input", label: Tr.t("sources.pass"), value: wizPw, act: "wiz_field", arg: "p", on: true }])
-            var lg = action(Tr.t("sources.wizard.signIn"), "wiz_auth", "gold")
-            lg.hh = 48; lg.dim = wizBusy || !wizUser
+        if (wizUser) {
+            var who = info(Tr.t("sources.wizard.userLabel"), wizUser); who.style = "seg"; who.hh = 32; who.mono = true
+            mini(who, Tr.t("sources.wizard.changeUser"), "wiz_needauth", "accent", wizBusy, "")
         }
         if (wizBusy) { help("sources.wizard.loadingShares", 13); return }
         if (!wizCanList) {
@@ -689,13 +751,13 @@ Item {
             }
         }
         var mr = miniRow()
-        if (!wizNeedsAuth && !wizUser) mini(mr, Tr.t("sources.wizard.needPassword"), "wiz_needauth", "accent", false, "")
+        if (!wizUser) mini(mr, Tr.t("sources.wizard.needPassword"), "wiz_needauth", "accent", wizBusy, "")
         mini(mr, Tr.t("sources.wizard.typeItMyself"), "wiz_share_type", "accent", false, "")
     }
     function wizStepConfirm() {
         var d = info(Tr.t("sources.wizard.device"), wizName || wizHost); d.hh = 44
         var f = info(Tr.t("sources.wizard.folder"), wizShare); f.hh = 44
-        if (wizUser) { var u = info(Tr.t("sources.user"), wizUser); u.hh = 40 }
+        if (wizUser) { var u = info(Tr.t("sources.wizard.userLabel"), wizUser); u.hh = 40 }
         help("sources.wizard.writeHint", 13)
         check(Tr.t("sources.wizard.allowWrite"), wizRw, "wiz_rw")
         var add = action(Tr.t("sources.wizard.addNow"), "wiz_add", "gold")
@@ -759,8 +821,57 @@ Item {
         grid([acell(Tr.t("settings.audio.refreshList"), "audio_refresh", "accent", { icon: "rotate-cw", hh: 48 }),
               acell(Tr.t("settings.audio.setOutput"), "audio_apply", "gold", { icon: "volume-2", bold: true, hh: 48 })])
     }
+    // Playback prefs, alarms and the sync group are THIS device's: while
+    // another player is being driven they are hidden behind a note (#99),
+    // so nothing gets written to somebody's phone
+    function remoteNote() {
+        if (Player.isOwn) return false
+        note(Tr.tf("settings.remotePlayer.note", "name", Player.playerName), "dark", "speaker")
+        action(Tr.t("settings.remotePlayer.back"), "player_back", "gold")
+        return true
+    }
     function secPlayback() {
         help("settings.playback.help")
+        // The player prefs below belong to this device's player: hidden while
+        // another one is driven (#99). The VU meters and the auto-open are
+        // about this screen, so they stay reachable either way.
+        if (!remoteNote()) playerPrefs()
+        vuBand()
+        label("settings.playback.autoExpand", 14); help("settings.playback.autoExpandHelp", 12)
+        var AE = [0, 3, 5, 10, 15], ae = []
+        for (var m = 0; m < 5; m++) ae.push(cell(AE[m] === 0 ? Tr.t("settings.playback.rgOff") : AE[m] + "s", String(AE[m]), cfg.autoexpand === AE[m], "autoexpand", { hh: 44 }))
+        grid(ae)
+    }
+    // The VU meters get a band of their own: the switch, then the looks to
+    // choose from, each with a still preview of the meters
+    function vuBand() {
+        var lang = I18n.lang, cur = ""
+        for (var i = 0; i < cfg.vuStyles.length; i++) {
+            if (cfg.vuStyles[i].id !== Player.vuStyle) continue
+            var n0 = cfg.vuStyles[i].name || {}
+            cur = String(n0[lang] || n0.en || cfg.vuStyles[i].id)
+        }
+        var sum = !cfg.vuMeter ? Tr.t("settings.playback.vuOff") : cur ? Tr.tf("settings.playback.vuOnStyle", "style", cur) : ""
+        var vb = bandRow("gauge", Tr.t("settings.playback.vuSection"), sum, band === 0, "band", "0", false)
+        if (band !== 0) return
+        begin(vb.children)
+        toggle(Tr.t("settings.playback.vuMeter"), Tr.t("settings.playback.vuMeterHelp"), cfg.vuMeter, "vumeter")
+        if (cfg.vuMeter && cfg.vuStyles.length > 1) {
+            label("settings.playback.vuStyle", 14); help("settings.playback.vuStyleHelp", 12)
+            var st = []
+            for (var v = 0; v < cfg.vuStyles.length; v++) {
+                var nm = cfg.vuStyles[v].name || {}
+                st.push({ type: "vuskin", label: String(nm[lang] || nm.en || cfg.vuStyles[v].id), arg: cfg.vuStyles[v].id,
+                          sel: Player.vuStyle === cfg.vuStyles[v].id, act: "vu_style" })
+                if (st.length === 2 || v === cfg.vuStyles.length - 1) {
+                    if (st.length === 1) st.push({ type: "help", label: "" })
+                    grid(st); st = []
+                }
+            }
+        }
+        end()
+    }
+    function playerPrefs() {
         if (!havePlayer) note(Tr.t("settings.playback.noPlayer"), "dark")
         label("settings.playback.transition", 14)
         var TR = ["settings.playback.transNone", "settings.playback.transCrossfade", "settings.playback.transFadeIn", "settings.playback.transFadeOut", "settings.playback.transFadeInOut"]
@@ -775,17 +886,13 @@ Item {
             var lab = info(Tr.t("settings.playback.transDuration"), dur + "s"); lab.style = "seg"; lab.tone = "gold"; lab.mono = true; lab.hh = 20
             push({ type: "slider", smin: 1, smax: 15, sval: dur, act: "transdur" })
         }
-        label("settings.playback.replayGain", 14)
+        label("settings.playback.replayGain", 14).mark = "replaygain"
         var RG = ["settings.playback.rgOff", "settings.playback.rgTrack", "settings.playback.rgAlbum", "settings.playback.rgSmart"]
         for (var k = 0; k < 4; k += 2)
             grid([cell(Tr.t(RG[k]), String(k), pref("rg") === String(k), "replaygain", { hh: 44, dim: !havePlayer }),
                   cell(Tr.t(RG[k + 1]), String(k + 1), pref("rg") === String(k + 1), "replaygain", { hh: 44, dim: !havePlayer })])
-        toggle(Tr.t("settings.playback.fixedVolume"), Tr.t("settings.playback.fixedVolumeHelp"), Player.prefDigitalVol === "0", "fixedvol").dim = !havePlayer
-        toggle(Tr.t("settings.playback.vuMeter"), Tr.t("settings.playback.vuMeterHelp"), cfg.vuMeter, "vumeter")
-        label("settings.playback.autoExpand", 14); help("settings.playback.autoExpandHelp", 12)
-        var AE = [0, 3, 5, 10, 15], ae = []
-        for (var m = 0; m < 5; m++) ae.push(cell(AE[m] === 0 ? Tr.t("settings.playback.rgOff") : AE[m] + "s", String(AE[m]), cfg.autoexpand === AE[m], "autoexpand", { hh: 44 }))
-        grid(ae)
+        var fv = toggle(Tr.t("settings.playback.fixedVolume"), Tr.t("settings.playback.fixedVolumeHelp"), Player.prefDigitalVol === "0", "fixedvol")
+        fv.dim = !havePlayer; fv.mark = "bitperfect"
     }
     function secMultiroom() {
         help("settings.multiroom.help")
@@ -834,6 +941,7 @@ Item {
             note(cfg.skinMsg || Tr.t(serr ? "settings.lyrion.skinFailed" : "settings.lyrion.skinInstalling"), serr ? "red" : "dark")
         }
         sep()
+        if (remoteNote()) return
         if (!havePlayer) { note(Tr.t("settings.playback.noPlayer"), "dark"); return }
         if (!cfg.players.length) { note(Tr.t("settings.multiroom.noOthers"), "dark"); return }
         for (var p = 0; p < cfg.players.length; p++) {
@@ -842,6 +950,7 @@ Item {
     }
     function secAlarm() {
         help("settings.alarm.help")
+        if (remoteNote()) return
         if (!havePlayer) { note(Tr.t("settings.playback.noPlayer"), "dark"); return }
         for (var i = 0; i < cfg.alarms.length; i++) {
             var a = cfg.alarms[i], mins = Math.floor(a.time / 60)
@@ -1023,8 +1132,6 @@ Item {
         case "wiz_field":
             if (row.arg === "h") wizHost = text
             else if (row.arg === "s") wizShare = text
-            else if (row.arg === "u") wizUser = text
-            else wizPw = text
             break
         case "ssh_user": sshUser = text; break
         case "ssh_pass": sshPass = text; break
@@ -1079,6 +1186,7 @@ Item {
             })
             return
         case "vumeter": post(A("/vu_meter"), { enable: !row.on }); cfg.vuMeter = !row.on; Player.vuEnabled = cfg.vuMeter; break
+        case "vu_style": post(A("/vu_style"), { style: arg }); Player.vuStyle = arg; break
         case "autoexpand": post(A("/nowplaying_autoexpand"), { seconds: parseInt(arg) }); cfg.autoexpand = parseInt(arg); Player.refreshSettings(); break
         case "transition": setPref("transitionType", arg); Player.refreshPrefs(); say(Tr.t("settings.playback.saved")); break
         case "transdur": setPref("transitionDuration", arg); Player.refreshPrefs(); say(Tr.t("settings.playback.saved")); break
@@ -1134,6 +1242,7 @@ Item {
             })
             return
         }
+        case "player_back": Player.selectPlayer("", ""); break
         case "player_name_apply":
             if (!nameEdit) return
             post(A("/device_name"), { name: nameEdit }); cfg.deviceName = nameEdit; say(Tr.t("settings.multiroom.name.saved")); break
@@ -1187,8 +1296,11 @@ Item {
         case "wiz_manual": wizManual = true; wizErr = ""; wizDetail = ""; break
         case "wiz_host": if (!arg) return; wizPickHost(arg, wizHostName(arg)); return
         case "wiz_host_manual": if (!wizHost) return; wizPickHost(wizHost, wizHost); return
-        case "wiz_needauth": wizNeedsAuth = true; break
-        case "wiz_auth": if (!wizUser) return; wizLoadShares(); return
+        case "wiz_needauth":
+            // with no list yet the new login is for reading it; otherwise the
+            // next tap on a folder uses it
+            wizAskAuth(false, function() { if (wizCanList && !wizShares.length) wizLoadShares(); else rebuild() })
+            return
         case "wiz_share": if (!arg) return; wizPickShare(arg); return
         // Il nome scritto a mano non passa dalla prova: la conferma finale e'
         // il mount stesso, che e' comunque il controllo di ultima istanza.
@@ -1381,6 +1493,18 @@ Item {
                 BoxShadow { z: -1; targetX: 0; targetY: 0; targetW: parent.width; targetH: parent.height; radius: 16; blur: 20; offsetY: 4; color: Theme.blackA(0.5) }   // shadow-hifi
                 Rectangle { x: 10; y: 1; width: parent.width - 20; height: 1; color: Theme.wa(0.1) }
                 SettingsRows { id: panelRows; x: 24; y: 24; width: parent.width - 48; rows: root.rows }
+            }
+            // one gold flash around the row a shortcut landed on
+            Rectangle {
+                id: markFlash
+                opacity: 0; radius: 12
+                color: "transparent"; border.width: 2; border.color: Theme.gold
+                SequentialAnimation {
+                    id: markFlashAnim
+                    NumberAnimation { target: markFlash; property: "opacity"; to: 1; duration: 150 }
+                    PauseAnimation { duration: 700 }
+                    NumberAnimation { target: markFlash; property: "opacity"; to: 0; duration: 500 }
+                }
             }
         }
         ScrollBar_ { flick: page; x: page.width - 3 }

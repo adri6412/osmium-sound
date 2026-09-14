@@ -125,6 +125,10 @@
       "onDevice": "Su {device}",
       "authHint": "Questo dispositivo vuole sapere chi sei. Usa lo stesso nome utente e la stessa password che usi su di esso.",
       "signIn": "Accedi",
+      "signInTo": "Accedi a {device}",
+      "userLabel": "Nome utente",
+      "wrongPassword": "Nome utente o password sbagliati. Riprova.",
+      "changeUser": "Cambia",
       "loadingShares": "Leggo le cartelle condivise…",
       "pickShare": "Scegli la cartella con la tua musica",
       "noShares": "Questo dispositivo non condivide nessuna cartella.",
@@ -343,6 +347,11 @@
     "repeat": "Ripeti",
     "queue": "Coda",
     "queueEmpty": "La coda è vuota",
+    "selectPlayer": "Player da controllare",
+    "thisDevice": "questo apparecchio",
+    "controlling": "Stai pilotando {{name}}",
+    "noOtherPlayers": "Nessun altro player su questo Lyrion",
+    "backToOwn": "Torna a questo apparecchio",
     "addToQueue": "Aggiungi a coda",
     "playNext": "Riproduci dopo",
     "saveAsPlaylist": "Salva come playlist",
@@ -401,6 +410,10 @@
     "language": {
       "help": "Scegli la lingua dell'interfaccia."
     },
+    "remotePlayer": {
+      "note": "Stai pilotando «{{name}}». Queste impostazioni riguardano questo apparecchio: torna al suo player per modificarle.",
+      "back": "Torna a questo apparecchio"
+    },
     "playback": {
       "help": "Opzioni di riproduzione applicate al player attivo: transizioni tra i brani (crossfade/gapless) e normalizzazione del volume (ReplayGain).",
       "noPlayer": "Nessun player attivo trovato. Avvia la riproduzione o verifica la connessione a Lyrion.",
@@ -421,6 +434,11 @@
       "fixedVolumeHelp": "Esclude completamente il controllo volume digitale del player: l'uscita è sempre al 100%. Necessario per la riproduzione bit-perfect; disattivalo per tornare a usare il cursore del volume a schermo.",
       "vuMeter": "VU meter animati",
       "vuMeterHelp": "Il quadrante VU nella schermata \"in riproduzione\" si aggiorna in tempo reale con il livello audio. Disattivalo per ridurre il carico sulla GPU su hardware più limitato.",
+      "vuStyle": "Stile dei VU meter",
+      "vuStyleHelp": "L'aspetto degli strumenti nella schermata \"in riproduzione\".",
+      "vuSection": "VU meter",
+      "vuOff": "Spenti",
+      "vuOnStyle": "Accesi · {style}",
       "autoExpand": "Apertura automatica in riproduzione",
       "autoExpandHelp": "Quando parte un brano, apre automaticamente la schermata a schermo intero \"in riproduzione\" dopo questi secondi. Si apre una sola volta per brano: se poi navighi altrove di tua scelta, resta ferma."
     },
@@ -701,6 +719,7 @@
       "channelWarning": "Canale di sviluppo: riceverai build prerelease, potenzialmente instabili. Rimetti su Produzione al termine dei test.",
       "confirmProdToDev": "Una volta aggiornato ad una release di dev sarà possibile tornare in produzione solo quando uscirà una release di produzione più nuova di quella di dev.",
       "available": "Aggiornamento disponibile",
+      "availableShort": "Aggiornamento",
       "upToDate": "Tutto aggiornato",
       "debian12Banner": "Questo dispositivo utilizza ancora Debian 12. I prossimi aggiornamenti richiedono Debian 13 — reinstallalo dall'ultima ISO per continuare a ricevere gli aggiornamenti.",
       "checking": "Controllo in corso...",

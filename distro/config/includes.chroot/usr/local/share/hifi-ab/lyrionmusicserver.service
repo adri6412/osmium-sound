@@ -1,8 +1,8 @@
 [Unit]
 Description=Lyrion Music Server
-# Copia dell'unità del .deb (9.x) per gli slot immagine: i file del server
-# stanno su /data/lyrion/current (symlink dai percorsi canonici), quindi
-# finché il canale Lyrion non li ha installati l'unità non parte.
+# A copy of the .deb's unit (9.x) for image slots: the server's files live on
+# /data/lyrion/current (symlinked from the canonical paths), so until the
+# Lyrion channel has installed them this unit does not start.
 ConditionPathExists=/data/lyrion/current/usr/sbin/squeezeboxserver
 After=network.target
 After=network-online.target
