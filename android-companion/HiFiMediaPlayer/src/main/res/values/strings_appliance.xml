@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Strings for the Osmium Sound device's own controls. -->
+<resources>
+    <!-- Top bar power button -->
+    <string name="appliance_shutdown_title">Turn off Osmium Sound</string>
+    <string name="appliance_shutdown_started">Osmium Sound is shutting down.</string>
+    <string name="appliance_shutdown_failed">Could not turn off Osmium Sound</string>
+</resources>

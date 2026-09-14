@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Top bar power button -->
+    <string name="appliance_shutdown_title">Spegni Osmium Sound</string>
+    <string name="appliance_shutdown_started">Osmium Sound si sta spegnendo.</string>
+    <string name="appliance_shutdown_failed">Impossibile spegnere Osmium Sound</string>
+</resources>
