@@ -21,8 +21,12 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+
       - name: Tools
-        run: python3 -m pip install --quiet pillow numpy
+        run: python -m pip install --quiet pillow numpy
 
       - name: Pack the skins and write the catalogue
         run: |
@@ -30,9 +34,9 @@ jobs:
           mkdir -p out
           for d in vu-store/*/; do
             [ -f "$d/skin.json" ] || continue
-            python3 native-ui-qt/tools/vu-skin-build.py pack "$d" --out out
+            python native-ui-qt/tools/vu-skin-build.py pack "$d" --out out
           done
-          python3 native-ui-qt/tools/vu-skin-build.py index out
+          python native-ui-qt/tools/vu-skin-build.py index out
           cat out/index.json
 
       - name: Sign the catalogue
