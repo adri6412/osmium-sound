@@ -31,11 +31,14 @@ on:
         required: false
         type: string
         default: 'trixie'
+      # The default since v2.5.24-dev.14: the two-filesystem ISO carried the
+      # same system twice (~2 GB, against GitHub's 2 GiB asset limit). Untick
+      # only to rebuild the historical layout.
       single_squashfs:
-        description: 'ISO a filesystem unico (il sistema live È l immagine, ~900 MiB in meno) — NON ancora collaudata su hardware'
+        description: 'One filesystem: the live system IS the image (~900 MiB smaller). Untick for the old two-filesystem ISO'
         required: false
         type: boolean
-        default: false
+        default: true
 
 permissions:
   contents: write
@@ -272,7 +275,8 @@ jobs:
           SZ=$(stat -c %s "$ISO")
           echo "ISO size: $((SZ / 1048576)) MiB"
           # A GitHub release asset cannot exceed 2 GiB (2147483648 bytes), and
-          # carrying the system image costs ~950 MiB of the total. The hard
+          # the two-filesystem ISO (single_squashfs unticked) carries the system
+          # image as a second copy, ~950 MiB of the total. The hard
           # stop is the real limit, not a made-up margin: the first version of
           # this check refused a 1978 MiB ISO that GitHub would have taken
           # perfectly well. Past 1900 MiB it only warns — that is the point
