@@ -112,6 +112,7 @@ Item {
         property var ifaces: []                                     // [{name,addr,wifi,active}]
         property var wifi: []                                       // [{ssid,security,signal}]
         property var upd: [{cur: "", latest: "", avail: false}, {cur: "", latest: "", avail: false}, {cur: "", latest: "", avail: false}]
+        property bool updChecking: false; property bool updCheckFailed: false
         property string otaState: ""; property string otaMsg: ""; property int otaPct: 0
         property string changelog: ""
         property var sources: []                                    // oggetti /api/sources
@@ -147,6 +148,36 @@ Item {
                 if (markSeen && d.skins.length) Api.post(api("/vu_store/seen"), {}, function() { vuStoreNew = 0 }, 5000)
                 root.rebuild()
             }, 10000)
+        }
+        // The three update checks read the release manifests over the network,
+        // and on an image system each one is the whole image check (manifest,
+        // then the sha256 with retries): easily longer than get()'s 5 s. A
+        // check that ran out of time was simply dropped, and the "Checking..."
+        // put up by the button stayed on screen for good, since nothing ever
+        // replaced it. So the checks run apart from load()'s pending count (a
+        // slow network must not hold the whole page in "loading"), with their
+        // own generous timeout, and always end in an outcome on screen:
+        // up to date, update available, or could not check.
+        function checkUpdates() {
+            if (updChecking) return
+            updChecking = true; updCheckFailed = false
+            root.dataChanged()
+            var paths = ["/app_update/check", "/system_update/check", "/os_update/check"]
+            var left = paths.length, failed = false
+            for (var i = 0; i < paths.length; i++) (function(i) {
+                Api.get(api(paths[i]), function(ok, d) {
+                    if (ok && d && typeof d === "object") {
+                        var u = upd.slice()
+                        u[i] = { cur: str(d, "current"), latest: str(d, "latest"), avail: !!d.update_available }
+                        upd = u
+                        if (i === 0 && d.notes) changelog = String(d.notes)
+                        if (d.error) failed = true
+                    } else {
+                        failed = true
+                    }
+                    if (--left === 0) { updChecking = false; updCheckFailed = failed; root.dataChanged() }
+                }, 60000)
+            })(i)
         }
         function str(d, k, fb) { return d[k] !== undefined && d[k] !== null ? String(d[k]) : (fb || "") }
         function load() {
@@ -194,15 +225,7 @@ Item {
             get(api("/lyrion_update/status"), function(d) { lyrStatus = str(d, "message"); lyrPct = Number(d.percent || 0); lyrRunning = !!d.running })
             get(api("/network_status"), function(d) { netConnected = !!d.connected; netType = str(d, "type"); netSsid = str(d, "ssid"); netIp = str(d, "ip"); netDev = str(d, "device") })
             get(api("/network_info"), function(d) { netSubnet = str(d, "netmask") })
-            var paths = ["/app_update/check", "/system_update/check", "/os_update/check"]
-            for (var i = 0; i < 3; i++) (function(i) {
-                get(api(paths[i]), function(d) {
-                    var u = upd.slice()
-                    u[i] = { cur: str(d, "current"), latest: str(d, "latest"), avail: !!d.update_available }
-                    upd = u
-                    if (i === 0 && d.notes) changelog = String(d.notes)
-                })
-            })(i)
+            checkUpdates()
             get(api("/update/status"), function(d) { otaState = str(d, "state"); otaMsg = str(d, "message"); otaPct = Number(d.percent || 0) })
             get(src("/api/lms_skin"), function(d) { lmsSkin = str(d, "skin", "unset") })
             get(src("/api/lms_skin_status"), function(d) { skinState = str(d, "state"); skinMsg = str(d, "message") })
@@ -1146,7 +1169,10 @@ Item {
                 if (k === 2) r.bold = true
             }
         })
-        note(Tr.t(any ? "settings.updates.available" : "settings.updates.upToDate"), any ? "gold" : "dark")
+        if (cfg.updChecking) note(Tr.t("settings.updates.checking"), "dark")
+        else if (any) note(Tr.t("settings.updates.available"), "gold")
+        else if (cfg.updCheckFailed) note(Tr.t("settings.updates.checkFailed"), "red")
+        else note(Tr.t("settings.updates.upToDate"), "dark")
         if (cfg.changelog) { var w = action(Tr.t("settings.updates.whatsNew"), "upd_changelog", "dark"); w.hh = 40; w.px = 14 }
         var ck = action(Tr.t("settings.updates.checkButton"), "upd_check", "accent"); ck.icon = "rotate-cw"; ck.hh = 48
         if (any) { var up = action(Tr.t("settings.updates.updateNow"), "upd_apply", "gold"); up.bold = true; up.hh = 56; up.icon = "download"; help("settings.updates.orderNote", 12) }
@@ -1328,7 +1354,7 @@ Item {
             if (cfg.otaChannel === "prod") { Ui.dialogs.confirm(Tr.t("settings.updates.confirmProdToDev"), Tr.t("common.confirm"), false, function(ok) { if (ok) apply() }); return }
             apply(); return
         }
-        case "upd_check": cfg.load(); say(Tr.t("settings.updates.checking")); break
+        case "upd_check": msg = ""; cfg.load(); break
         case "upd_apply": post(A("/update/apply_all"), {}); say(Tr.t("settings.updates.updating")); break
         case "upd_changelog":
             // il titolo porta la versione, come in Settings.jsx

@@ -41,7 +41,7 @@ Item {
                 u[i] = !!d.update_available
                 root.updSeen = u
                 root.updateAvailable = u[0] || u[1] || u[2]
-            }, 15000)
+            }, 60000)       // the image check alone can outlast 15 s (manifest + sha256 with retries)
         })(i)
     }
     Timer { interval: 15 * 60 * 1000; repeat: true; triggeredOnStart: true; running: true; onTriggered: root.checkUpdates() }

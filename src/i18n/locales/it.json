@@ -738,6 +738,7 @@
       "upToDate": "Tutto aggiornato",
       "debian12Banner": "Questo dispositivo utilizza ancora Debian 12. I prossimi aggiornamenti richiedono Debian 13 — reinstallalo dall'ultima ISO per continuare a ricevere gli aggiornamenti.",
       "checking": "Controllo in corso...",
+      "checkFailed": "Impossibile controllare gli aggiornamenti. Controlla la connessione di rete e riprova.",
       "checkButton": "Controlla aggiornamenti",
       "updating": "Aggiornamento...",
       "updateNow": "Aggiorna ora",

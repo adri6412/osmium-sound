@@ -738,6 +738,7 @@
       "upToDate": "Everything up to date",
       "debian12Banner": "This device still runs Debian 12. Future updates require Debian 13 — reinstall it from the latest ISO to keep receiving updates.",
       "checking": "Checking...",
+      "checkFailed": "Couldn't check for updates. Check the network connection and try again.",
       "checkButton": "Check for updates",
       "updating": "Updating...",
       "updateNow": "Update now",
