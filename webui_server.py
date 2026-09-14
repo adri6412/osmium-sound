@@ -2422,7 +2422,7 @@ SETUP_CAPTIVE_HTML = """<!doctype html><html lang="en"><head><meta charset="utf-
  <div id="lyrionfollow" style="display:none">
    <div id="lyrionservers"></div>
    <label id="lbl-lyrionhost">Server address</label>
-   <input id="lyrionhost" placeholder="192.168.1.50">
+   <input id="lyrionhost" placeholder="192.168.1.50 / nas.local" autocapitalize="off">
    <button onclick="setLyrion('follow')" id="btn-lyrion-follow-go">Use this server</button>
  </div>
  <p class="muted" id="lyrionmsg"></p>
@@ -2449,16 +2449,14 @@ SETUP_CAPTIVE_HTML = """<!doctype html><html lang="en"><head><meta charset="utf-
 
 <div class="card" id="step-lms-plugins" style="display:none">
  <label id="lbl-lms-plugins">Music services</label>
+ <p class="progress-label" id="lms-plugins-pageof"></p>
  <p class="muted" id="lms-plugins-help"></p>
  <div id="plugin-list"></div>
- <div class="sep">
-  <label class="chk" for="plg-analytics">
-   <input type="checkbox" id="plg-analytics">
-   <span><span class="t" id="lbl-analytics"></span><span class="d" id="analytics-help"></span></span>
-  </label>
+ <div id="plugin-nav" style="display:none">
+  <button onclick="pluginsNext()" id="btn-plugins-next">Next</button>
+  <button class="sec" onclick="pluginsBack()" id="btn-plugins-back">Back</button>
+  <button class="sec" onclick="skipLmsSetup()" id="btn-plugins-skip">Skip</button>
  </div>
- <button onclick="applyLmsSetup()" id="btn-plugins-go">Install and continue</button>
- <button class="sec" onclick="skipLmsSetup()" id="btn-plugins-skip">Skip</button>
  <button class="sec" onclick="checkAccountStep()" id="btn-plugins-continue" style="display:none">Continue anyway</button>
  <div class="bar" id="plugins-barwrap" style="display:none"><div id="plugins-bar" style="width:0%"></div></div>
  <p class="muted" id="pluginsmsg"></p>
@@ -2502,17 +2500,8 @@ SETUP_CAPTIVE_HTML = """<!doctype html><html lang="en"><head><meta charset="utf-
 
 <div class="card" id="step-sources-smb" style="display:none">
  <label id="lbl-sources-smb">Network drive (NAS)</label>
- <p class="muted" id="smb-intro">Enter your NAS's address and the name of the shared folder with your music.</p>
- <label id="lbl-smb-server">Server address</label>
- <input id="smb-server" placeholder="192.168.1.50">
- <label id="lbl-smb-share">Share name</label>
- <input id="smb-share" placeholder="Music">
- <label id="lbl-smb-user">Username (if needed)</label>
- <input id="smb-user">
- <label id="lbl-smb-pass">Password (if needed)</label>
- <input id="smb-pass" type="password">
- <button onclick="submitSmb()" id="btn-smb-connect">Connect</button>
- <button class="sec" onclick="show('step-sources-type')" id="btn-smb-back">Back</button>
+ <p class="muted" id="smb-intro"></p>
+ <div id="smb-body"></div>
  <p class="muted" id="smb-msg"></p>
 </div>
 
@@ -2576,6 +2565,20 @@ SETUP_CAPTIVE_HTML = """<!doctype html><html lang="en"><head><meta charset="utf-
  </div>
 </div>
 
+<div class="overlay" id="smb-login" style="display:none">
+ <form class="card" style="text-align:left" onsubmit="smbLoginSubmit();return false">
+  <h1 id="smb-login-title" style="font-size:16px;margin:0 0 6px"></h1>
+  <p class="muted" id="smb-login-hint"></p>
+  <label id="lbl-smb-login-user">Username</label>
+  <input id="smb-login-user" autocomplete="username" autocapitalize="off">
+  <label id="lbl-smb-login-pass">Password</label>
+  <input id="smb-login-pass" type="password" autocomplete="current-password">
+  <p class="muted" id="smb-login-err" style="color:#e88"></p>
+  <button type="submit" id="btn-smb-login">Sign in</button>
+  <button type="button" class="sec" onclick="smbLoginCancel()" id="btn-smb-login-cancel">Cancel</button>
+ </form>
+</div>
+
 <div class="overlay" id="restore-overlay" style="display:none">
  <div class="card">
   <div class="spinner"></div>
@@ -2586,8 +2589,8 @@ SETUP_CAPTIVE_HTML = """<!doctype html><html lang="en"><head><meta charset="utf-
 
 <script>
 var STRINGS={
- en:{restoreIntro:'Setting up a new device? Restore a previous backup, or start fresh.',fresh:'Start fresh',restoreFile:'Backup file',restorePass:'Passphrase (if the backup is encrypted)',restore:'Restore from backup',restoring:'Restoring…',restoreOverlayTitle:'Restoring from backup…',restoreDone:'Restore complete. Rebooting to apply it — reconnect in about a minute.',restoreFailed:'Restore failed.',restoreNoFile:'Choose a backup file first.',wifi:'Wi-Fi network',ssid:'Or enter the network name (SSID)',pass:'Wi-Fi password',connect:'Connect via Wi-Fi',wired:"I'm connected via cable (Ethernet)",connecting:'Connecting… the setup Wi-Fi will turn off. Reconnect your phone to your home network, then open http://hifiplayer.local to continue setup where you left off.',noCable:'No cable detected',netIntro:'Connect this device to your home network so it can finish setting up and be reachable from your phone/PC afterwards.',stepLabel:'Step {n} of {total}',audioIntro:'Pick the DAC / output device this player should send audio to. You can change this later from Settings.',lyrionIntro:'Choose where your music library lives: on this device, or on a Lyrion server you already run elsewhere on your network.',timezoneIntro:'Used for the clock, alarms and any scheduled tasks on this device.',updateRequired:'Update required',updateNow:'Update now',updateChecking:'Checking for updates…',updateAutoStarting:'An update is available and required — starting it now…',updateApplying:'Updating — this can take a few minutes…',updateDoneRebooting:'Update complete. Rebooting…',updateFailed:'Update check/install failed. Retrying is required to continue setup.',devname:'Name this player',devnameHelp:'Used as its network name (e.g. "livingroom" → livingroom.local) and its Bluetooth/multiroom name. Letters, numbers and dashes only — leave empty to keep the default.',devnameSaving:'Saving…',mode:'Device mode',modeGui:'With screen (touchscreen)',modeHeadless:'Headless (no screen)',modeOff:'Server only (player off)',modeHelp:'In headless/server-only you manage everything from this web interface.',pointer:'Mouse pointer',pointerHelp:"Show the mouse cursor on screen? Leave it off for a touchscreen — turn it on if you're driving this device with a mouse.",pointerHide:'Touchscreen (hide pointer)',pointerShow:'Mouse (show pointer)',audio:'Audio output',audioContinue:'Continue',lyrion:'Music server (Lyrion)',lyrionLocal:'Use this device as the server',lyrionFollow:'Use a server already on my network',lyrionHost:'Server address',lyrionUse:'Use this server',lyrionInstall:'Install Lyrion',lyrionChecking:'Checking whether Lyrion Music Server is installed…',lyrionMissing:"Lyrion Music Server isn't installed yet.",lyrionInstalling:'Installing Lyrion Music Server…',lyrionDownloading:'Downloading Lyrion Music Server…',lyrionRestarting:'Restarting Lyrion Music Server…',lyrionInstallFailed:'Lyrion install failed.',continueAnyway:'Continue anyway',skinTitle:'Web player look',skinHelp:"Choose the look of Lyrion's web player (the page you open from a browser or phone). Osmium matches this device's interface.",skinOsmium:'Osmium (recommended)',skinMaterial:'Material',skinInstalling:'Installing the Material web interface…',skinApplying:'Applying the skin…',skinDone:'Skin applied.',skinFailed:"Couldn't apply the skin. Check the network connection and try again.",lmsPlugins:'Music services',lmsPluginsHelp:'Choose what to add to your music server. You can add or remove these later from Lyrion.',lmsPluginsGo:'Install and continue',lmsPluginsSkip:'Skip',lmsPluginsInstalling:'Installing the selected services…',lmsPluginsApplying:'Finishing the music server setup…',lmsPluginsDone:'Music server ready.',lmsPluginsFailed:"Couldn't finish the music server setup.",plg_MusicArtistInfo:'Artist and album info',plgd_MusicArtistInfo:'Biographies, album reviews and lyrics inside the player.',plg_Spotty:'Spotify',plgd_Spotty:'Play your Spotify Premium account through this player.',plg_TIDAL:'TIDAL',plgd_TIDAL:'Listen with your TIDAL subscription.',plg_Qobuz:'Qobuz',plgd_Qobuz:'Listen with your Qobuz subscription.',plg_Deezer:'Deezer',plgd_Deezer:'Listen with your Deezer subscription.',plg_RadioNowPlaying:'Radio track info',plgd_RadioNowPlaying:'Shows the track and cover art playing on internet radio.',plg_RadioNet:'Radio.net',plgd_RadioNet:'Browse the Radio.net internet radio directory.',analytics:'Help improve Lyrion (optional)',analyticsHelp:'Every couple of days, sends an anonymous ID, the version and operating system, the list of active plugins and how many tracks and players you have to the Lyrion community (stats.lms-community.org). No personal data, no track titles. You can change this later from Lyrion.',sources:'Music sources',sourcesAskIntro:'Do you want to set up sources like a NAS or an internal hard disk? External devices (USB) already mount automatically — nothing to do for those.',sourcesYes:'Yes, set up sources',sourcesNo:'No, skip this',sourcesTypeIntro:'Choose what to add. You can add more than one before continuing.',addNas:'Network drive (NAS)',addInternal:'Internal disk',sourcesDone:'Done, continue',backBtn:'Back',cancelBtn:'Cancel',smbIntro:"Enter your NAS's address and the name of the shared folder with your music.",smbServer:'Server address',smbShare:'Share name',smbUser:'Username (if needed)',smbPass:'Password (if needed)',smbConnect:'Connect',smbFieldsRequired:'Server address and share name are required.',smbConnecting:'Connecting…',smbConnected:'Connected!',smbFolderTitle:'Choose what to add',smbFolderIntro:'Use the whole share, or open a folder to use just part of it.',smbFolderUp:'Up',smbFolderUse:'Use this folder',smbFolderNoSubfolders:'No subfolders here.',smbFolderSaving:'Saving…',internalIntro:'Pick a disk to use for your music library.',internalLoading:'Loading…',internalNone:'No internal disks found.',internalAlreadyUsed:'Already in use',internalUseBtn:'Use this disk',internalFormatBtn:'Format this disk',internalAdopting:'Adding…',formatTitle:'Format disk',formatFs:'Filesystem',formatLabel:'Disk name',formatWarn:'This will ERASE ALL DATA on {disk}.',formatConfirmMsg:'Type {label} below to confirm.',formatGo:'Format now',formatting:'Formatting — this can take a while…',formatDoneMsg:'Done — the disk is ready to use.',continueBtn:'Continue',timezone:'Time zone',tzSave:'Save and continue',account:'Web admin account',accountHelp:"Used to log into this device's web interface (http://…) from now on.",username:'Username',password:'Password',confirmPassword:'Confirm password',createAccount:'Create account',creating:'Creating…',accountMismatch:'Passwords do not match.',accountTooShort:'Username needs at least 3 characters, password at least 8.',finishGui:'Screen mode set. Setup is complete — press "Complete setup" below: the hotspot will turn off, reconnect your phone to your network. The device will then start its normal on-screen interface.',finishHeadless:'Headless mode set. Press "Complete setup" below: the hotspot will turn off, reconnect your phone to your network and open http://hifiplayer.local',finishOff:'Server-only mode set — this device will not play audio locally. Press "Complete setup" below: the hotspot will turn off, reconnect your phone to your network and open http://hifiplayer.local',finishBtn:'Complete setup',finishDone:'Setup complete — hotspot off. Open http://hifiplayer.local from your network.',finishToLyrion:'Setup complete. Opening the web player…',rebootTitle:'Rebooting…',rebootGoingDown:'The device is restarting.',rebootComingBack:'Waiting for the device to come back online.',rebootAuto:'This page will reconnect automatically — no need to refresh.',error:'Error: '},
- it:{restoreIntro:'Stai configurando un nuovo dispositivo? Ripristina un backup precedente, oppure inizia da zero.',fresh:'Inizia da zero',restoreFile:'File di backup',restorePass:'Passphrase (se il backup è cifrato)',restore:'Ripristina da backup',restoring:'Ripristino in corso…',restoreOverlayTitle:'Ripristino da backup in corso…',restoreDone:'Ripristino completato. Riavvio in corso per applicarlo — riconnettiti tra circa un minuto.',restoreFailed:'Ripristino non riuscito.',restoreNoFile:'Scegli prima un file di backup.',wifi:'Rete Wi-Fi',ssid:'Oppure inserisci il nome (SSID)',pass:'Password Wi-Fi',connect:'Connetti via Wi-Fi',wired:'Sono connesso via cavo (Ethernet)',connecting:'Connessione in corso… il Wi-Fi di setup si spegnerà. Riconnetti il telefono alla tua rete di casa, poi apri http://hifiplayer.local per continuare la configurazione da dove l\\'hai lasciata.',noCable:'Nessun cavo rilevato',netIntro:'Collega questo dispositivo alla tua rete di casa così può completare la configurazione ed essere raggiungibile da telefono/PC in seguito.',stepLabel:'Passo {n} di {total}',audioIntro:'Scegli il DAC / dispositivo di uscita a cui questo player deve inviare l\\'audio. Puoi cambiarlo in seguito dalle Impostazioni.',lyrionIntro:'Scegli dove vive la tua libreria musicale: su questo dispositivo, oppure su un server Lyrion che hai già altrove sulla tua rete.',timezoneIntro:'Usato per l\\'orologio, le sveglie e qualsiasi attività pianificata su questo dispositivo.',updateRequired:'Aggiornamento richiesto',updateNow:'Aggiorna ora',updateChecking:'Controllo aggiornamenti…',updateAutoStarting:'È disponibile un aggiornamento obbligatorio — avvio in corso…',updateApplying:'Aggiornamento in corso — può richiedere qualche minuto…',updateDoneRebooting:'Aggiornamento completato. Riavvio in corso…',updateFailed:'Controllo/installazione aggiornamento fallito. È necessario riprovare per continuare il setup.',devname:'Dai un nome a questo player',devnameHelp:'Usato come nome di rete (es. "salotto" → salotto.local) e come nome Bluetooth/multiroom. Solo lettere, numeri e trattini — lascia vuoto per mantenere quello predefinito.',devnameSaving:'Salvataggio…',mode:'Modalità dispositivo',modeGui:'Con schermo (touchscreen)',modeHeadless:'Headless (senza schermo)',modeOff:'Solo server (player spento)',modeHelp:'In headless/solo server gestisci tutto da questa interfaccia web.',pointer:'Puntatore del mouse',pointerHelp:'Mostrare il cursore del mouse a schermo? Lascialo spento per un touchscreen — accendilo se usi il dispositivo con un mouse.',pointerHide:'Touchscreen (nascondi puntatore)',pointerShow:'Mouse (mostra puntatore)',audio:'Uscita audio',audioContinue:'Continua',lyrion:'Server musicale (Lyrion)',lyrionLocal:'Usa questo dispositivo come server',lyrionFollow:'Usa un server già presente sulla rete',lyrionHost:'Indirizzo del server',lyrionUse:'Usa questo server',lyrionInstall:'Installa Lyrion',lyrionChecking:'Verifica se Lyrion Music Server è installato…',lyrionMissing:'Lyrion Music Server non è ancora installato.',lyrionInstalling:'Installazione di Lyrion Music Server…',lyrionDownloading:'Scaricamento di Lyrion Music Server…',lyrionRestarting:'Riavvio di Lyrion Music Server…',lyrionInstallFailed:'Installazione di Lyrion non riuscita.',continueAnyway:'Continua comunque',skinTitle:'Aspetto del player web',skinHelp:"Scegli l'aspetto del player web di Lyrion (la pagina che apri da browser o telefono). Osmium è coerente con l'interfaccia di questo dispositivo.",skinOsmium:'Osmium (consigliata)',skinMaterial:'Material',skinInstalling:"Installazione dell'interfaccia web Material…",skinApplying:'Applicazione della skin…',skinDone:'Skin applicata.',skinFailed:'Impossibile applicare la skin. Controlla la rete e riprova.',lmsPlugins:'Servizi musicali',lmsPluginsHelp:'Scegli cosa aggiungere al tuo server musicale. Puoi aggiungerli o rimuoverli in seguito da Lyrion.',lmsPluginsGo:'Installa e continua',lmsPluginsSkip:'Salta',lmsPluginsInstalling:'Installazione dei servizi selezionati…',lmsPluginsApplying:'Completamento della configurazione del server musicale…',lmsPluginsDone:'Server musicale pronto.',lmsPluginsFailed:'Impossibile completare la configurazione del server musicale.',plg_MusicArtistInfo:'Info artisti e album',plgd_MusicArtistInfo:'Biografie, recensioni e testi dentro al player.',plg_Spotty:'Spotify',plgd_Spotty:'Riproduci il tuo account Spotify Premium su questo player.',plg_TIDAL:'TIDAL',plgd_TIDAL:'Ascolta con il tuo abbonamento TIDAL.',plg_Qobuz:'Qobuz',plgd_Qobuz:'Ascolta con il tuo abbonamento Qobuz.',plg_Deezer:'Deezer',plgd_Deezer:'Ascolta con il tuo abbonamento Deezer.',plg_RadioNowPlaying:'Info brani radio',plgd_RadioNowPlaying:'Mostra brano e copertina di quello che sta passando in radio.',plg_RadioNet:'Radio.net',plgd_RadioNet:'Sfoglia la directory di radio internet Radio.net.',analytics:'Aiuta a migliorare Lyrion (facoltativo)',analyticsHelp:"Ogni due giorni invia alla community di Lyrion (stats.lms-community.org) un identificativo anonimo, la versione e il sistema operativo, l'elenco dei plugin attivi e quanti brani e player hai. Nessun dato personale, nessun titolo dei brani. Puoi cambiare idea più avanti da Lyrion.",sources:'Sorgenti musicali',sourcesAskIntro:'Vuoi configurare sorgenti come un NAS o un disco rigido interno? I dispositivi esterni (USB) si montano già automaticamente — per quelli non serve fare nulla.',sourcesYes:'Sì, configura le sorgenti',sourcesNo:'No, salta questo passaggio',sourcesTypeIntro:'Scegli cosa aggiungere. Puoi aggiungerne più di una prima di continuare.',addNas:'Unità di rete (NAS)',addInternal:'Disco interno',sourcesDone:'Fatto, continua',backBtn:'Indietro',cancelBtn:'Annulla',smbIntro:"Inserisci l'indirizzo del tuo NAS e il nome della cartella condivisa con la musica.",smbServer:'Indirizzo del server',smbShare:'Nome della condivisione',smbUser:'Nome utente (se richiesto)',smbPass:'Password (se richiesta)',smbConnect:'Connetti',smbFieldsRequired:'Indirizzo del server e nome della condivisione sono obbligatori.',smbConnecting:'Connessione in corso…',smbConnected:'Connesso!',smbFolderTitle:'Scegli cosa aggiungere',smbFolderIntro:"Usa l'intera condivisione, oppure apri una cartella per usarne solo una parte.",smbFolderUp:'Su',smbFolderUse:'Usa questa cartella',smbFolderNoSubfolders:'Nessuna sottocartella qui.',smbFolderSaving:'Salvataggio…',internalIntro:'Scegli un disco da usare per la tua libreria musicale.',internalLoading:'Caricamento…',internalNone:'Nessun disco interno trovato.',internalAlreadyUsed:'Già in uso',internalUseBtn:'Usa questo disco',internalFormatBtn:'Formatta questo disco',internalAdopting:'Aggiunta in corso…',formatTitle:'Formatta disco',formatFs:'Filesystem',formatLabel:'Nome del disco',formatWarn:'Questo CANCELLERÀ TUTTI I DATI su {disk}.',formatConfirmMsg:'Digita {label} qui sotto per confermare.',formatGo:'Formatta ora',formatting:"Formattazione in corso — può richiedere un po' di tempo…",formatDoneMsg:'Fatto — il disco è pronto all\\'uso.',continueBtn:'Continua',timezone:'Fuso orario',tzSave:'Salva e continua',account:'Account amministratore web',accountHelp:"Usato per accedere all'interfaccia web di questo dispositivo (http://…) da ora in poi.",username:'Nome utente',password:'Password',confirmPassword:'Conferma password',createAccount:'Crea account',creating:'Creazione…',accountMismatch:'Le password non coincidono.',accountTooShort:'Nome utente di almeno 3 caratteri, password di almeno 8.',finishGui:'Modalità con schermo impostata. Il setup è completo — premi "Completa setup" qui sotto: l\\'hotspot si spegnerà, riconnetti il telefono alla tua rete. Il dispositivo avvierà poi la sua normale interfaccia a schermo.',finishHeadless:'Modalità headless impostata. Premi "Completa setup" qui sotto: l\\'hotspot si spegnerà, riconnetti il telefono alla tua rete e apri http://hifiplayer.local',finishOff:'Modalità solo server impostata — questo dispositivo non riprodurrà audio in locale. Premi "Completa setup" qui sotto: l\\'hotspot si spegnerà, riconnetti il telefono alla tua rete e apri http://hifiplayer.local',finishBtn:'Completa setup',finishDone:'Setup completato — hotspot spento. Apri http://hifiplayer.local dalla tua rete.',finishToLyrion:'Setup completato. Apro il player web…',rebootTitle:'Riavvio in corso…',rebootGoingDown:'Il dispositivo si sta riavviando.',rebootComingBack:'In attesa che il dispositivo torni online.',rebootAuto:'Questa pagina si ricollegherà automaticamente — non serve aggiornarla.',error:'Errore: '}
+ en:{restoreIntro:'Setting up a new device? Restore a previous backup, or start fresh.',fresh:'Start fresh',restoreFile:'Backup file',restorePass:'Passphrase (if the backup is encrypted)',restore:'Restore from backup',restoring:'Restoring…',restoreOverlayTitle:'Restoring from backup…',restoreDone:'Restore complete. Rebooting to apply it — reconnect in about a minute.',restoreFailed:'Restore failed.',restoreNoFile:'Choose a backup file first.',wifi:'Wi-Fi network',ssid:'Or enter the network name (SSID)',pass:'Wi-Fi password',connect:'Connect via Wi-Fi',wired:"I'm connected via cable (Ethernet)",connecting:'Connecting… the setup Wi-Fi will turn off. Reconnect your phone to your home network, then open http://hifiplayer.local to continue setup where you left off.',noCable:'No cable detected',netIntro:'Connect this device to your home network so it can finish setting up and be reachable from your phone/PC afterwards.',stepLabel:'Step {n} of {total}',audioIntro:'Pick the DAC / output device this player should send audio to. You can change this later from Settings.',lyrionIntro:'Choose where your music library lives: on this device, or on a Lyrion server you already run elsewhere on your network.',timezoneIntro:'Used for the clock, alarms and any scheduled tasks on this device.',updateRequired:'Update required',updateNow:'Update now',updateChecking:'Checking for updates…',updateAutoStarting:'An update is available and required — starting it now…',updateApplying:'Updating — this can take a few minutes…',updateDoneRebooting:'Update complete. Rebooting…',updateFailed:'Update check/install failed. Retrying is required to continue setup.',devname:'Name this player',devnameHelp:'Used as its network name (e.g. "livingroom" → livingroom.local) and its Bluetooth/multiroom name. Letters, numbers and dashes only — leave empty to keep the default.',devnameSaving:'Saving…',mode:'Device mode',modeGui:'With screen (touchscreen)',modeHeadless:'Headless (no screen)',modeOff:'Server only (player off)',modeHelp:'In headless/server-only you manage everything from this web interface.',pointer:'Mouse pointer',pointerHelp:"Show the mouse cursor on screen? Leave it off for a touchscreen — turn it on if you're driving this device with a mouse.",pointerHide:'Touchscreen (hide pointer)',pointerShow:'Mouse (show pointer)',audio:'Audio output',audioContinue:'Continue',lyrion:'Music server (Lyrion)',lyrionLocal:'Use this device as the server',lyrionFollow:'Use a server already on my network',lyrionHost:'Server address',lyrionUse:'Use this server',lyrionInstall:'Install Lyrion',lyrionChecking:'Checking whether Lyrion Music Server is installed…',lyrionMissing:"Lyrion Music Server isn't installed yet.",lyrionInstalling:'Installing Lyrion Music Server…',lyrionDownloading:'Downloading Lyrion Music Server…',lyrionRestarting:'Restarting Lyrion Music Server…',lyrionInstallFailed:'Lyrion install failed.',continueAnyway:'Continue anyway',skinTitle:'Web player look',skinHelp:"Choose the look of Lyrion's web player (the page you open from a browser or phone). Osmium matches this device's interface.",skinOsmium:'Osmium (recommended)',skinMaterial:'Material',skinInstalling:'Installing the Material web interface…',skinApplying:'Applying the skin…',skinDone:'Skin applied.',skinFailed:"Couldn't apply the skin. Check the network connection and try again.",lmsPlugins:'Music services',lmsPluginsHelp:'Choose what to add to your music server. You can add or remove these later from Lyrion.',lmsPluginsGo:'Install and continue',lmsPluginsSkip:'Skip, add nothing',nextBtn:'Next',plgPageOf:'Page {n} of {total}',plgLater:'You can add or remove these later from Lyrion.',grp_streaming:'Streaming services',grpd_streaming:'Do you have a subscription? Tick the services you want to listen to on this device.',grp_radio:'Internet radio',grpd_radio:'Extras for listening to radio stations over the internet.',grp_info:'About your music',grpd_info:'More details on artists and albums while you listen.',analyticsTick:'Send anonymous usage statistics',lmsPluginsInstalling:'Installing the selected services…',lmsPluginsApplying:'Finishing the music server setup…',lmsPluginsDone:'Music server ready.',lmsPluginsFailed:"Couldn't finish the music server setup.",plg_MusicArtistInfo:'Artist and album info',plgd_MusicArtistInfo:'Biographies, album reviews and lyrics inside the player.',plg_Spotty:'Spotify',plgd_Spotty:'Play your Spotify Premium account through this player.',plg_TIDAL:'TIDAL',plgd_TIDAL:'Listen with your TIDAL subscription.',plg_Qobuz:'Qobuz',plgd_Qobuz:'Listen with your Qobuz subscription.',plg_Deezer:'Deezer',plgd_Deezer:'Listen with your Deezer subscription.',plg_RadioNowPlaying:'Radio track info',plgd_RadioNowPlaying:'Shows the track and cover art playing on internet radio.',plg_RadioNet:'Radio.net',plgd_RadioNet:'Browse the Radio.net internet radio directory.',analytics:'Help improve Lyrion (optional)',analyticsHelp:'Every couple of days, sends an anonymous ID, the version and operating system, the list of active plugins and how many tracks and players you have to the Lyrion community (stats.lms-community.org). No personal data, no track titles. You can change this later from Lyrion.',sources:'Music sources',sourcesAskIntro:'Do you want to set up sources like a NAS or an internal hard disk? External devices (USB) already mount automatically — nothing to do for those.',sourcesYes:'Yes, set up sources',sourcesNo:'No, skip this',sourcesTypeIntro:'Choose what to add. You can add more than one before continuing.',addNas:'Network drive (NAS)',addInternal:'Internal disk',sourcesDone:'Done, continue',backBtn:'Back',cancelBtn:'Cancel',smbWizIntro:"Music kept on a NAS or another computer. The player looks for them on your network; you only have to pick one.",smbSearching:'Looking for devices on your network',smbNothing:'Nothing found. Check that the other device is switched on and on the same network, or type its address yourself.',smbSearchAgain:'Search again',smbTypeIt:"I'll type it myself",smbAddress:'Name or address of the device',smbManualHint:'For example nas.local or 192.168.1.20.',smbOnDevice:'On {device}',smbAuthHint:'This device wants to know who you are. Use the same username and password you use on it.',smbSignIn:'Sign in',smbSignInTo:'Sign in to {device}',smbUserLabel:'Username',smbWrongPassword:'Wrong username or password. Try again.',smbChangeUser:'Change',smbLoadingShares:'Reading the shared folders…',smbShareLabel:'Shared folder name',smbTypeShareHint:'Type it exactly as it appears on the other device.',smbNoShares:'This device is not sharing any folder.',smbNeedPassword:'It asks for a password',smbDevice:'Device',smbFolder:'Folder',smbAllowWrite:'Let the player write into this folder',smbWriteHint:'Needed to copy CDs onto it. Leave it off if the folder only has to be listened to.',smbAddNow:'Add this folder',smbListFailed:'Could not read the shared folders from this device.',smbOpenFailed:'Could not open this folder.',smbShowDetail:'Technical details',smbNoClientHint:'This player cannot read the list of shared folders yet: update it and it will offer them next time.',smbConnecting:'Connecting…',smbConnected:'Connected!',smbFolderTitle:'Choose what to add',smbFolderIntro:'Use the whole share, or open a folder to use just part of it.',smbFolderUp:'Up',smbFolderUse:'Use this folder',smbFolderNoSubfolders:'No subfolders here.',smbFolderSaving:'Saving…',internalIntro:'Pick a disk to use for your music library.',internalLoading:'Loading…',internalNone:'No internal disks found.',internalAlreadyUsed:'Already in use',internalUseBtn:'Use this disk',internalFormatBtn:'Format this disk',internalAdopting:'Adding…',formatTitle:'Format disk',formatFs:'Filesystem',formatLabel:'Disk name',formatWarn:'This will ERASE ALL DATA on {disk}.',formatConfirmMsg:'Type {label} below to confirm.',formatGo:'Format now',formatting:'Formatting — this can take a while…',formatDoneMsg:'Done — the disk is ready to use.',continueBtn:'Continue',timezone:'Time zone',tzSave:'Save and continue',account:'Web admin account',accountHelp:"Used to log into this device's web interface (http://…) from now on.",username:'Username',password:'Password',confirmPassword:'Confirm password',createAccount:'Create account',creating:'Creating…',accountMismatch:'Passwords do not match.',accountTooShort:'Username needs at least 3 characters, password at least 8.',finishGui:'Screen mode set. Setup is complete — press "Complete setup" below: the hotspot will turn off, reconnect your phone to your network. The device will then start its normal on-screen interface.',finishHeadless:'Headless mode set. Press "Complete setup" below: the hotspot will turn off, reconnect your phone to your network and open http://hifiplayer.local',finishOff:'Server-only mode set — this device will not play audio locally. Press "Complete setup" below: the hotspot will turn off, reconnect your phone to your network and open http://hifiplayer.local',finishBtn:'Complete setup',finishDone:'Setup complete — hotspot off. Open http://hifiplayer.local from your network.',finishToLyrion:'Setup complete. Opening the web player…',rebootTitle:'Rebooting…',rebootGoingDown:'The device is restarting.',rebootComingBack:'Waiting for the device to come back online.',rebootAuto:'This page will reconnect automatically — no need to refresh.',error:'Error: '},
+ it:{restoreIntro:'Stai configurando un nuovo dispositivo? Ripristina un backup precedente, oppure inizia da zero.',fresh:'Inizia da zero',restoreFile:'File di backup',restorePass:'Passphrase (se il backup è cifrato)',restore:'Ripristina da backup',restoring:'Ripristino in corso…',restoreOverlayTitle:'Ripristino da backup in corso…',restoreDone:'Ripristino completato. Riavvio in corso per applicarlo — riconnettiti tra circa un minuto.',restoreFailed:'Ripristino non riuscito.',restoreNoFile:'Scegli prima un file di backup.',wifi:'Rete Wi-Fi',ssid:'Oppure inserisci il nome (SSID)',pass:'Password Wi-Fi',connect:'Connetti via Wi-Fi',wired:'Sono connesso via cavo (Ethernet)',connecting:'Connessione in corso… il Wi-Fi di setup si spegnerà. Riconnetti il telefono alla tua rete di casa, poi apri http://hifiplayer.local per continuare la configurazione da dove l\\'hai lasciata.',noCable:'Nessun cavo rilevato',netIntro:'Collega questo dispositivo alla tua rete di casa così può completare la configurazione ed essere raggiungibile da telefono/PC in seguito.',stepLabel:'Passo {n} di {total}',audioIntro:'Scegli il DAC / dispositivo di uscita a cui questo player deve inviare l\\'audio. Puoi cambiarlo in seguito dalle Impostazioni.',lyrionIntro:'Scegli dove vive la tua libreria musicale: su questo dispositivo, oppure su un server Lyrion che hai già altrove sulla tua rete.',timezoneIntro:'Usato per l\\'orologio, le sveglie e qualsiasi attività pianificata su questo dispositivo.',updateRequired:'Aggiornamento richiesto',updateNow:'Aggiorna ora',updateChecking:'Controllo aggiornamenti…',updateAutoStarting:'È disponibile un aggiornamento obbligatorio — avvio in corso…',updateApplying:'Aggiornamento in corso — può richiedere qualche minuto…',updateDoneRebooting:'Aggiornamento completato. Riavvio in corso…',updateFailed:'Controllo/installazione aggiornamento fallito. È necessario riprovare per continuare il setup.',devname:'Dai un nome a questo player',devnameHelp:'Usato come nome di rete (es. "salotto" → salotto.local) e come nome Bluetooth/multiroom. Solo lettere, numeri e trattini — lascia vuoto per mantenere quello predefinito.',devnameSaving:'Salvataggio…',mode:'Modalità dispositivo',modeGui:'Con schermo (touchscreen)',modeHeadless:'Headless (senza schermo)',modeOff:'Solo server (player spento)',modeHelp:'In headless/solo server gestisci tutto da questa interfaccia web.',pointer:'Puntatore del mouse',pointerHelp:'Mostrare il cursore del mouse a schermo? Lascialo spento per un touchscreen — accendilo se usi il dispositivo con un mouse.',pointerHide:'Touchscreen (nascondi puntatore)',pointerShow:'Mouse (mostra puntatore)',audio:'Uscita audio',audioContinue:'Continua',lyrion:'Server musicale (Lyrion)',lyrionLocal:'Usa questo dispositivo come server',lyrionFollow:'Usa un server già presente sulla rete',lyrionHost:'Indirizzo del server',lyrionUse:'Usa questo server',lyrionInstall:'Installa Lyrion',lyrionChecking:'Verifica se Lyrion Music Server è installato…',lyrionMissing:'Lyrion Music Server non è ancora installato.',lyrionInstalling:'Installazione di Lyrion Music Server…',lyrionDownloading:'Scaricamento di Lyrion Music Server…',lyrionRestarting:'Riavvio di Lyrion Music Server…',lyrionInstallFailed:'Installazione di Lyrion non riuscita.',continueAnyway:'Continua comunque',skinTitle:'Aspetto del player web',skinHelp:"Scegli l'aspetto del player web di Lyrion (la pagina che apri da browser o telefono). Osmium è coerente con l'interfaccia di questo dispositivo.",skinOsmium:'Osmium (consigliata)',skinMaterial:'Material',skinInstalling:"Installazione dell'interfaccia web Material…",skinApplying:'Applicazione della skin…',skinDone:'Skin applicata.',skinFailed:'Impossibile applicare la skin. Controlla la rete e riprova.',lmsPlugins:'Servizi musicali',lmsPluginsHelp:'Scegli cosa aggiungere al tuo server musicale. Puoi aggiungerli o rimuoverli in seguito da Lyrion.',lmsPluginsGo:'Installa e continua',lmsPluginsSkip:'Salta, non aggiungere nulla',nextBtn:'Avanti',plgPageOf:'Pagina {n} di {total}',plgLater:'Puoi aggiungerli o toglierli in seguito da Lyrion.',grp_streaming:'Servizi di streaming',grpd_streaming:'Hai un abbonamento? Spunta i servizi che vuoi ascoltare su questo apparecchio.',grp_radio:'Radio via internet',grpd_radio:'Aggiunte per ascoltare le stazioni radio via internet.',grp_info:'Informazioni sulla musica',grpd_info:'Più dettagli su artisti e album mentre ascolti.',analyticsTick:'Invia statistiche anonime di utilizzo',lmsPluginsInstalling:'Installazione dei servizi selezionati…',lmsPluginsApplying:'Completamento della configurazione del server musicale…',lmsPluginsDone:'Server musicale pronto.',lmsPluginsFailed:'Impossibile completare la configurazione del server musicale.',plg_MusicArtistInfo:'Info artisti e album',plgd_MusicArtistInfo:'Biografie, recensioni e testi dentro al player.',plg_Spotty:'Spotify',plgd_Spotty:'Riproduci il tuo account Spotify Premium su questo player.',plg_TIDAL:'TIDAL',plgd_TIDAL:'Ascolta con il tuo abbonamento TIDAL.',plg_Qobuz:'Qobuz',plgd_Qobuz:'Ascolta con il tuo abbonamento Qobuz.',plg_Deezer:'Deezer',plgd_Deezer:'Ascolta con il tuo abbonamento Deezer.',plg_RadioNowPlaying:'Info brani radio',plgd_RadioNowPlaying:'Mostra brano e copertina di quello che sta passando in radio.',plg_RadioNet:'Radio.net',plgd_RadioNet:'Sfoglia la directory di radio internet Radio.net.',analytics:'Aiuta a migliorare Lyrion (facoltativo)',analyticsHelp:"Ogni due giorni invia alla community di Lyrion (stats.lms-community.org) un identificativo anonimo, la versione e il sistema operativo, l'elenco dei plugin attivi e quanti brani e player hai. Nessun dato personale, nessun titolo dei brani. Puoi cambiare idea più avanti da Lyrion.",sources:'Sorgenti musicali',sourcesAskIntro:'Vuoi configurare sorgenti come un NAS o un disco rigido interno? I dispositivi esterni (USB) si montano già automaticamente — per quelli non serve fare nulla.',sourcesYes:'Sì, configura le sorgenti',sourcesNo:'No, salta questo passaggio',sourcesTypeIntro:'Scegli cosa aggiungere. Puoi aggiungerne più di una prima di continuare.',addNas:'Unità di rete (NAS)',addInternal:'Disco interno',sourcesDone:'Fatto, continua',backBtn:'Indietro',cancelBtn:'Annulla',smbWizIntro:"La musica tenuta su un NAS o su un altro computer. Il lettore la cerca da solo sulla tua rete: a te basta scegliere.",smbSearching:'Cerco i dispositivi sulla tua rete',smbNothing:"Non ho trovato niente. Controlla che l'altro dispositivo sia acceso e sulla stessa rete, oppure scrivi tu il suo indirizzo.",smbSearchAgain:'Cerca ancora',smbTypeIt:'Lo scrivo io',smbAddress:'Nome o indirizzo del dispositivo',smbManualHint:'Per esempio nas.local oppure 192.168.1.20.',smbOnDevice:'Su {device}',smbAuthHint:'Questo dispositivo vuole sapere chi sei. Usa lo stesso nome utente e la stessa password che usi su di esso.',smbSignIn:'Accedi',smbSignInTo:'Accedi a {device}',smbUserLabel:'Nome utente',smbWrongPassword:'Nome utente o password sbagliati. Riprova.',smbChangeUser:'Cambia',smbLoadingShares:'Leggo le cartelle condivise…',smbShareLabel:'Nome della cartella condivisa',smbTypeShareHint:"Scrivilo esattamente come appare sull'altro dispositivo.",smbNoShares:'Questo dispositivo non condivide nessuna cartella.',smbNeedPassword:'Chiede una password',smbDevice:'Dispositivo',smbFolder:'Cartella',smbAllowWrite:'Permetti al lettore di scrivere in questa cartella',smbWriteHint:'Serve per copiarci i CD. Lascialo spento se la cartella deve solo essere ascoltata.',smbAddNow:'Aggiungi questa cartella',smbListFailed:'Non sono riuscito a leggere le cartelle condivise di questo dispositivo.',smbOpenFailed:'Non sono riuscito ad aprire questa cartella.',smbShowDetail:'Dettagli tecnici',smbNoClientHint:"Questo lettore non sa ancora leggere l'elenco delle cartelle condivise: aggiornalo e la prossima volta te le proporrà.",smbConnecting:'Connessione in corso…',smbConnected:'Connesso!',smbFolderTitle:'Scegli cosa aggiungere',smbFolderIntro:"Usa l'intera condivisione, oppure apri una cartella per usarne solo una parte.",smbFolderUp:'Su',smbFolderUse:'Usa questa cartella',smbFolderNoSubfolders:'Nessuna sottocartella qui.',smbFolderSaving:'Salvataggio…',internalIntro:'Scegli un disco da usare per la tua libreria musicale.',internalLoading:'Caricamento…',internalNone:'Nessun disco interno trovato.',internalAlreadyUsed:'Già in uso',internalUseBtn:'Usa questo disco',internalFormatBtn:'Formatta questo disco',internalAdopting:'Aggiunta in corso…',formatTitle:'Formatta disco',formatFs:'Filesystem',formatLabel:'Nome del disco',formatWarn:'Questo CANCELLERÀ TUTTI I DATI su {disk}.',formatConfirmMsg:'Digita {label} qui sotto per confermare.',formatGo:'Formatta ora',formatting:"Formattazione in corso — può richiedere un po' di tempo…",formatDoneMsg:'Fatto — il disco è pronto all\\'uso.',continueBtn:'Continua',timezone:'Fuso orario',tzSave:'Salva e continua',account:'Account amministratore web',accountHelp:"Usato per accedere all'interfaccia web di questo dispositivo (http://…) da ora in poi.",username:'Nome utente',password:'Password',confirmPassword:'Conferma password',createAccount:'Crea account',creating:'Creazione…',accountMismatch:'Le password non coincidono.',accountTooShort:'Nome utente di almeno 3 caratteri, password di almeno 8.',finishGui:'Modalità con schermo impostata. Il setup è completo — premi "Completa setup" qui sotto: l\\'hotspot si spegnerà, riconnetti il telefono alla tua rete. Il dispositivo avvierà poi la sua normale interfaccia a schermo.',finishHeadless:'Modalità headless impostata. Premi "Completa setup" qui sotto: l\\'hotspot si spegnerà, riconnetti il telefono alla tua rete e apri http://hifiplayer.local',finishOff:'Modalità solo server impostata — questo dispositivo non riprodurrà audio in locale. Premi "Completa setup" qui sotto: l\\'hotspot si spegnerà, riconnetti il telefono alla tua rete e apri http://hifiplayer.local',finishBtn:'Completa setup',finishDone:'Setup completato — hotspot spento. Apri http://hifiplayer.local dalla tua rete.',finishToLyrion:'Setup completato. Apro il player web…',rebootTitle:'Riavvio in corso…',rebootGoingDown:'Il dispositivo si sta riavviando.',rebootComingBack:'In attesa che il dispositivo torni online.',rebootAuto:'Questa pagina si ricollegherà automaticamente — non serve aggiornarla.',error:'Errore: '}
 };
 // Chosen once, up front, on step-lang -- persisted so it survives the
 // network step's own reload (Wi-Fi hands off from the setup hotspot to the
@@ -2640,12 +2643,9 @@ document.getElementById('btn-skin-osmium').textContent=S.skinOsmium;
 document.getElementById('btn-skin-material').textContent=S.skinMaterial;
 document.getElementById('btn-skin-skip').textContent=S.continueAnyway;
 document.getElementById('lbl-lms-plugins').textContent=S.lmsPlugins;
-document.getElementById('lms-plugins-help').textContent=S.lmsPluginsHelp;
-document.getElementById('btn-plugins-go').textContent=S.lmsPluginsGo;
+document.getElementById('btn-plugins-back').textContent=S.backBtn;
 document.getElementById('btn-plugins-skip').textContent=S.lmsPluginsSkip;
 document.getElementById('btn-plugins-continue').textContent=S.continueAnyway;
-document.getElementById('lbl-analytics').textContent=S.analytics;
-document.getElementById('analytics-help').textContent=S.analyticsHelp;
 document.getElementById('lbl-sources').textContent=S.sources;
 document.getElementById('sources-ask-intro').textContent=S.sourcesAskIntro;
 document.getElementById('btn-sources-yes').textContent=S.sourcesYes;
@@ -2656,13 +2656,12 @@ document.getElementById('btn-sources-nas').textContent=S.addNas;
 document.getElementById('btn-sources-internal-open').textContent=S.addInternal;
 document.getElementById('btn-sources-done').textContent=S.sourcesDone;
 document.getElementById('lbl-sources-smb').textContent=S.addNas;
-document.getElementById('smb-intro').textContent=S.smbIntro;
-document.getElementById('lbl-smb-server').textContent=S.smbServer;
-document.getElementById('lbl-smb-share').textContent=S.smbShare;
-document.getElementById('lbl-smb-user').textContent=S.smbUser;
-document.getElementById('lbl-smb-pass').textContent=S.smbPass;
-document.getElementById('btn-smb-connect').textContent=S.smbConnect;
-document.getElementById('btn-smb-back').textContent=S.backBtn;
+document.getElementById('smb-intro').textContent=S.smbWizIntro;
+document.getElementById('smb-login-hint').textContent=S.smbAuthHint;
+document.getElementById('lbl-smb-login-user').textContent=S.smbUserLabel;
+document.getElementById('lbl-smb-login-pass').textContent=S.password;
+document.getElementById('btn-smb-login').textContent=S.smbSignIn;
+document.getElementById('btn-smb-login-cancel').textContent=S.cancelBtn;
 document.getElementById('lbl-smb-folder').textContent=S.smbFolderTitle;
 document.getElementById('smb-folder-intro').textContent=S.smbFolderIntro;
 document.getElementById('btn-smb-folder-up').textContent=S.smbFolderUp;
@@ -3120,50 +3119,97 @@ function pollSkinStatus(){
 // _lms_setup_apply() in sources_server.py. Nothing here is a gate: any failure
 // still lets the user reach the account step, and the plugins stay installable
 // from Lyrion afterwards.
+// One page per group of services, with Next/Back, instead of one long list of
+// checkboxes. The offered plugins still come from the backend
+// (LMS_SETUP_PLUGINS); one this page has no group for lands on "about your
+// music" rather than disappearing. A group with nothing offered is skipped, the
+// usage-report opt-in is always the last page, and the ticks survive going
+// back and forth: nothing is sent until the last page.
+var PLUGIN_GROUPS=[
+  {key:'streaming',ids:['Spotty','TIDAL','Qobuz','Deezer']},
+  {key:'radio',ids:['RadioNet','RadioNowPlaying']},
+  {key:'info',ids:['MusicArtistInfo']}
+];
+var plgPages=[],plgPage=0,plgChecked={},plgAnalytics=false;
+function byId(i){return document.getElementById(i)}
+function mk(tag,cls,text){var e=document.createElement(tag);if(cls)e.className=cls;if(text!=null)e.textContent=text;return e}
+function mkBtn(text,cls,fn,disabled){var b=mk('button',cls,text);b.type='button';b.onclick=fn;b.disabled=!!disabled;return b}
+function chkRow(id,title,desc,checked,onchange){
+  var lbl=mk('label','chk');lbl.htmlFor=id;
+  var cb=document.createElement('input');cb.type='checkbox';cb.id=id;cb.checked=!!checked;
+  cb.onchange=function(){onchange(cb.checked)};
+  var txt=mk('span');txt.appendChild(mk('span','t',title));if(desc)txt.appendChild(mk('span','d',desc));
+  lbl.appendChild(cb);lbl.appendChild(txt);
+  return lbl;
+}
 function showPluginsStep(){
   show('step-lms-plugins');
-  document.getElementById('pluginsmsg').textContent='';
-  document.getElementById('plugins-barwrap').style.display='none';
-  document.getElementById('btn-plugins-go').style.display='block';
-  document.getElementById('btn-plugins-skip').style.display='block';
-  document.getElementById('btn-plugins-continue').style.display='none';
-  var box=document.getElementById('plugin-list');box.innerHTML='';
-  // The offered list comes from the backend (LMS_SETUP_PLUGINS), the wording
-  // from our own dictionary -- the plugin repository's own descriptions are
-  // English-only marketing copy.
-  jget('/api/provision/lms_setup').then(function(res){
-    ((res&&res.plugins)||[]).forEach(function(p){
-      var lbl=document.createElement('label');lbl.className='chk';
-      var cb=document.createElement('input');cb.type='checkbox';
-      cb.id='plg-'+p.id;cb.checked=!!(p['default']||p.installed);
-      var txt=document.createElement('span');
-      var t=document.createElement('span');t.className='t';t.textContent=S['plg_'+p.id]||p.id;
-      var d=document.createElement('span');d.className='d';d.textContent=S['plgd_'+p.id]||'';
-      txt.appendChild(t);txt.appendChild(d);
-      lbl.appendChild(cb);lbl.appendChild(txt);
-      box.appendChild(lbl);
+  byId('pluginsmsg').textContent='';
+  byId('plugins-barwrap').style.display='none';
+  byId('btn-plugins-continue').style.display='none';
+  byId('plugin-nav').style.display='none';
+  byId('plugin-list').innerHTML='';
+  byId('lms-plugins-pageof').textContent='';
+  byId('lms-plugins-help').textContent='';
+  plgPages=[];plgPage=0;plgChecked={};plgAnalytics=false;
+  // The wording comes from our own dictionary -- the plugin repository's own
+  // descriptions are English-only marketing copy.
+  jget('/api/provision/lms_setup').then(buildPluginPages).catch(function(){buildPluginPages(null)});
+}
+function buildPluginPages(res){
+  var groupOf={},byGroup={};
+  PLUGIN_GROUPS.forEach(function(g){g.ids.forEach(function(id){groupOf[id]=g.key})});
+  ((res&&res.plugins)||[]).forEach(function(p){
+    plgChecked[p.id]=!!(p['default']||p.installed);
+    var k=groupOf[p.id]||'info';
+    (byGroup[k]=byGroup[k]||[]).push(p.id);
+  });
+  PLUGIN_GROUPS.forEach(function(g){if(byGroup[g.key])plgPages.push({key:g.key,ids:byGroup[g.key]})});
+  plgPages.push({key:'analytics',ids:[]});
+  plgAnalytics=!!(res&&res.analytics);
+  renderPluginPage();
+}
+function renderPluginPage(){
+  var pg=plgPages[plgPage],last=plgPage===plgPages.length-1,box=byId('plugin-list');
+  byId('lms-plugins-pageof').textContent=S.plgPageOf.replace('{n}',plgPage+1).replace('{total}',plgPages.length);
+  box.innerHTML='';
+  if(pg.key==='analytics'){
+    byId('lbl-lms-plugins').textContent=S.analytics;
+    byId('lms-plugins-help').textContent=S.analyticsHelp;
+    box.appendChild(chkRow('plg-analytics',S.analyticsTick,'',plgAnalytics,function(v){plgAnalytics=v}));
+  }else{
+    byId('lbl-lms-plugins').textContent=S['grp_'+pg.key];
+    byId('lms-plugins-help').textContent=S['grpd_'+pg.key]+' '+S.plgLater;
+    pg.ids.forEach(function(id){
+      box.appendChild(chkRow('plg-'+id,S['plg_'+id]||id,S['plgd_'+id]||'',plgChecked[id],function(v){plgChecked[id]=v}));
     });
-    document.getElementById('plg-analytics').checked=!!(res&&res.analytics);
-  }).catch(function(){});
+  }
+  box.style.display='block';
+  byId('plugin-nav').style.display='block';
+  byId('btn-plugins-next').textContent=last?S.lmsPluginsGo:S.nextBtn;
+  byId('btn-plugins-skip').style.display=plgPage===0?'block':'none';
+}
+function pluginsNext(){
+  if(plgPage<plgPages.length-1){plgPage++;show('step-lms-plugins');renderPluginPage();return}
+  applyLmsSetup();
+}
+function pluginsBack(){
+  if(plgPage>0){plgPage--;show('step-lms-plugins');renderPluginPage();return}
+  showSkinStep();
 }
 function selectedPlugins(){
-  var out=[];
-  var boxes=document.getElementById('plugin-list').querySelectorAll('input[type=checkbox]');
-  Array.prototype.forEach.call(boxes,function(cb){if(cb.checked)out.push(cb.id.slice(4))});
-  return out;
+  return Object.keys(plgChecked).filter(function(id){return plgChecked[id]});
 }
-function applyLmsSetup(){
-  sendLmsSetup(selectedPlugins(),document.getElementById('plg-analytics').checked);
-}
+function applyLmsSetup(){sendLmsSetup(selectedPlugins(),plgAnalytics)}
 // "Skip" still POSTs: marking Lyrion's wizard done (and pinning the usage
 // report to off) is the point of this step -- skipping only means "install
 // nothing". Without the call, the user would land straight in Lyrion's own
 // wizard at the end of setup, which is exactly what this replaces.
 function skipLmsSetup(){sendLmsSetup([],false)}
 function sendLmsSetup(plugins,analytics){
-  document.getElementById('btn-plugins-go').style.display='none';
-  document.getElementById('btn-plugins-skip').style.display='none';
-  document.getElementById('btn-plugins-continue').style.display='none';
+  byId('plugin-nav').style.display='none';
+  byId('plugin-list').style.display='none';
+  byId('btn-plugins-continue').style.display='none';
   document.getElementById('pluginsmsg').textContent=S.lmsPluginsInstalling;
   document.getElementById('plugins-barwrap').style.display='block';
   jpost('/api/provision/lms_setup',{plugins:plugins,analytics:analytics,language:LANG}).then(function(res){
@@ -3190,7 +3236,7 @@ function pollLmsSetup(){
       // wizardDone gets written, and a device that skips it shows Lyrion's own
       // wizard at the end of setup.
       document.getElementById('plugins-barwrap').style.display='none';
-      document.getElementById('btn-plugins-go').style.display='block';
+      renderPluginPage();
       document.getElementById('btn-plugins-continue').style.display='block';
       return;
     }
@@ -3261,38 +3307,220 @@ function sourcesAsk(yes){
 }
 
 // ── NAS / SMB share ────────────────────────────────────────────────
-function showSmbForm(){
-  document.getElementById('smb-server').value='';
-  document.getElementById('smb-share').value='';
-  document.getElementById('smb-user').value='';
-  document.getElementById('smb-pass').value='';
-  document.getElementById('smb-msg').textContent='';
-  show('step-sources-smb');
+// The same guided flow as the web admin's Sources tab (SourcesPanel.vue), on
+// the same endpoints: the appliance looks for the file servers on the network
+// and reads back what each one shares, so this is a list to pick from; typing
+// the address or the folder name survives as the fallback. Username and
+// password are asked in a window, only once the device (or the folder) turns
+// out to want them -- never as fields sitting on the page up front.
+var smb={},smbScanTimer=null,smbLoginRetry=null;
+function smbReset(){
+  smbStopScan();
+  smb={step:0,manual:false,host:'',name:'',share:'',username:'',password:'',rw:false,busy:false,
+       err:'',detail:'',needsAuth:false,canList:true,noClient:false,
+       scanState:'',scanProgress:0,hosts:[],shares:[]};
 }
-function submitSmb(){
-  var server=document.getElementById('smb-server').value.trim();
-  var share=document.getElementById('smb-share').value.trim();
-  if(!server||!share){document.getElementById('smb-msg').textContent=S.smbFieldsRequired;return}
-  document.getElementById('smb-msg').textContent=S.smbConnecting;
+function smbStopScan(){if(smbScanTimer){clearInterval(smbScanTimer);smbScanTimer=null}}
+function showSmbForm(){
+  smbReset();
+  byId('smb-msg').textContent='';
+  show('step-sources-smb');
+  smbScan();
+}
+function smbLeave(){smbStopScan();smbLoginCancel();show('step-sources-type')}
+function smbFail(r,fallback){smb.err=(r&&r.message)||fallback;smb.detail=(r&&r.detail)||''}
+function smbScan(){
+  smb.manual=false;smb.err='';smb.detail='';
+  smb.scanState='running';smb.scanProgress=0;smb.hosts=[];
+  renderSmb();
+  smbStopScan();
+  jpost('/api/system/sources/smb/discover',{}).catch(function(){}).then(function(){
+    smbPoll();
+    smbScanTimer=setInterval(smbPoll,900);
+  });
+}
+function smbPoll(){
+  jget('/api/system/sources/smb/discover').then(function(r){
+    if(!r||r.success===false){smbStopScan();smb.scanState='';}
+    else{
+      smb.scanState=r.state||'';smb.scanProgress=Number(r.progress||0);smb.hosts=r.hosts||[];
+      // Without smbclient (a device that has not taken the new image yet) the
+      // shares cannot be listed, so the flow falls back to typing the name.
+      if(r.tools&&r.tools.shares===false){smb.canList=false;smb.noClient=true}
+      if(smb.scanState!=='running')smbStopScan();
+    }
+    // re-drawing while someone types would throw their cursor out of the box
+    if(smb.step===0&&!smb.manual)renderSmb();
+  }).catch(function(){smbStopScan()});
+}
+function smbPickHost(ip,name){
+  smbStopScan();
+  smb.host=ip;smb.name=name||ip;smb.share='';smb.shares=[];smb.needsAuth=false;
+  smb.err='';smb.detail='';smb.step=1;
+  renderSmb();
+  if(smb.canList)smbLoadShares();
+}
+function smbAskAuth(refused,retry){
+  smbLoginRetry=retry;
+  byId('smb-login-title').textContent=S.smbSignInTo.replace('{device}',smb.name||smb.host);
+  byId('smb-login-user').value=smb.username;
+  byId('smb-login-pass').value='';
+  byId('smb-login-err').textContent=refused?S.smbWrongPassword:'';
+  byId('smb-login').style.display='flex';
+  (smb.username?byId('smb-login-pass'):byId('smb-login-user')).focus();
+}
+function smbLoginCancel(){byId('smb-login').style.display='none';smbLoginRetry=null}
+function smbLoginSubmit(){
+  var u=byId('smb-login-user').value.trim();
+  if(!u)return;
+  var retry=smbLoginRetry;
+  smb.username=u;smb.password=byId('smb-login-pass').value;smb.needsAuth=true;
+  smbLoginCancel();
+  renderSmb();
+  if(retry)retry();
+}
+function smbChangeUser(){
+  // with no list yet the login is for reading it; otherwise the next folder
+  // picked uses it
+  smbAskAuth(false,function(){if(smb.canList&&!smb.shares.length)smbLoadShares()});
+}
+function smbLoadShares(){
+  smb.busy=true;smb.err='';smb.detail='';renderSmb();
+  var tried=!!smb.username;
+  jpost('/api/system/sources/smb/shares',{server:smb.host,username:smb.username,password:smb.password}).then(function(r){
+    smb.busy=false;
+    if(smb.step!==1)return;
+    if(!r||r.success===false){
+      // Wrong password: ask again. Only a real failure falls back to typing
+      // the folder name.
+      if(r&&r.code==='msg.smbBadCredentials'){smb.needsAuth=true;renderSmb();smbAskAuth(tried,smbLoadShares);return}
+      smbFail(r,S.smbListFailed);smb.canList=false;renderSmb();return;
+    }
+    smb.needsAuth=!!r.needs_auth;smb.shares=r.shares||[];
+    renderSmb();
+    // the list itself is behind a login
+    if(r.needs_auth&&!smb.shares.length)smbAskAuth(tried,smbLoadShares);
+  }).catch(function(){smb.busy=false;smbFail(null,S.smbListFailed);smb.canList=false;renderSmb()});
+}
+function smbPickShare(name){
+  smb.share=name;smb.err='';smb.detail='';smb.busy=true;renderSmb();
+  var tried=!!smb.username;
+  jpost('/api/system/sources/smb/test',{server:smb.host,share:name,username:smb.username,password:smb.password}).then(function(r){
+    smb.busy=false;
+    if(smb.step!==1)return;
+    if(r&&r.success!==false){smb.step=2;renderSmb();return}
+    // A folder that wants a login asks for it right here, not with an error
+    // and not at the end as a failed mount.
+    if(r&&r.code==='msg.smbBadCredentials'){smb.needsAuth=true;renderSmb();smbAskAuth(tried,function(){smbPickShare(name)});return}
+    smbFail(r,S.smbOpenFailed);renderSmb();
+  }).catch(function(){smb.busy=false;smbFail(null,S.smbOpenFailed);renderSmb()});
+}
+function smbAdd(){
+  if(!smb.host||!smb.share)return;
+  smb.busy=true;smb.err='';smb.detail='';renderSmb();
+  byId('smb-msg').textContent=S.smbConnecting;
   jpost('/api/system/sources/smb',{
-    server:server,share:share,
-    username:document.getElementById('smb-user').value.trim(),
-    password:document.getElementById('smb-pass').value,
+    server:smb.host,share:smb.share,username:smb.username,password:smb.password,rw:smb.rw,
     // Mount only -- don't hand the share to Lyrion until the folder step
     // below confirms "whole share" or a subfolder (see api_add_smb()'s
     // defer_activation in sources_server.py).
     defer_activation:true
   }).then(function(res){
-    if(res.success){
-      document.getElementById('smb-msg').textContent=S.smbConnected;
-      smbFolderSourceId=res.id;
-      smbFolderPath='';
-      smbFolderParent=null;
-      setTimeout(function(){show('step-sources-smb-folder');loadSmbFolder()},800);
-    }else{
-      document.getElementById('smb-msg').textContent=res.message||S.error;
+    smb.busy=false;
+    if(res&&res.success){
+      byId('smb-msg').textContent=S.smbConnected;
+      smbFolderSourceId=res.id;smbFolderPath='';smbFolderParent=null;
+      setTimeout(function(){byId('smb-msg').textContent='';smbReset();show('step-sources-smb-folder');loadSmbFolder()},800);
+      return;
     }
-  }).catch(function(){document.getElementById('smb-msg').textContent=S.error});
+    byId('smb-msg').textContent='';
+    if(res&&res.code==='msg.smbBadCredentials'){
+      smb.step=1;smb.needsAuth=true;renderSmb();
+      smbAskAuth(!!smb.username,function(){smbPickShare(smb.share)});
+      return;
+    }
+    smbFail(res,S.error);renderSmb();
+  }).catch(function(){smb.busy=false;byId('smb-msg').textContent='';smbFail(null,S.error);renderSmb()});
+}
+function smbSummary(label,value){
+  var line=mk('div','row');line.appendChild(mk('span','muted',label));line.appendChild(mk('span','',value));
+  var row=mk('div','net');row.style.cursor='default';row.appendChild(line);
+  return row;
+}
+function smbRow(title,sub,onclick){
+  var row=mk('div','net');
+  var line=mk('div','row');
+  line.appendChild(mk('span','',title));
+  if(sub)line.appendChild(mk('span','muted',sub));
+  row.appendChild(line);
+  if(onclick)row.onclick=onclick;
+  return row;
+}
+function renderSmb(){
+  var box=byId('smb-body');box.innerHTML='';
+  if(smb.step===0&&!smb.manual){
+    if(smb.scanState==='running')box.appendChild(mk('p','muted',S.smbSearching+' — '+smb.scanProgress+'%'));
+    smb.hosts.forEach(function(hst){
+      box.appendChild(smbRow(hst.name||hst.ip,hst.name?hst.ip:'',function(){smbPickHost(hst.ip,hst.name)}));
+    });
+    if(!smb.hosts.length&&smb.scanState!=='running')box.appendChild(mk('p','muted',S.smbNothing));
+    box.appendChild(mkBtn(S.smbSearchAgain,'sec',smbScan,smb.scanState==='running'));
+    box.appendChild(mkBtn(S.smbTypeIt,'sec',function(){smbStopScan();smb.manual=true;renderSmb()}));
+    box.appendChild(mkBtn(S.backBtn,'sec',smbLeave));
+  }else if(smb.step===0){
+    box.appendChild(mk('label','',S.smbAddress));
+    var hin=document.createElement('input');hin.value=smb.host;hin.placeholder='192.168.1.20';
+    hin.autocapitalize='off';hin.oninput=function(){smb.host=hin.value};
+    box.appendChild(hin);
+    box.appendChild(mk('p','muted',S.smbManualHint));
+    box.appendChild(mkBtn(S.continueBtn,'',function(){var v=smb.host.trim();if(v)smbPickHost(v,'')}));
+    box.appendChild(mkBtn(S.smbSearchAgain,'sec',smbScan));
+    box.appendChild(mkBtn(S.backBtn,'sec',smbLeave));
+  }else if(smb.step===1){
+    box.appendChild(mk('p','muted',S.smbOnDevice.replace('{device}',smb.name||smb.host)));
+    if(smb.username){
+      var urow=smbRow(S.smbUserLabel+': '+smb.username,'',null);
+      var ch=mkBtn(S.smbChangeUser,'sec',smbChangeUser,smb.busy);
+      ch.style.cssText='width:auto;margin:0;padding:6px 12px';
+      urow.firstChild.appendChild(ch);
+      box.appendChild(urow);
+    }
+    if(smb.busy){
+      box.appendChild(mk('p','muted',S.smbLoadingShares));
+    }else if(!smb.canList){
+      box.appendChild(mk('label','',S.smbShareLabel));
+      var sin=document.createElement('input');sin.value=smb.share;sin.placeholder='Music';
+      sin.autocapitalize='off';sin.oninput=function(){smb.share=sin.value};
+      box.appendChild(sin);
+      box.appendChild(mk('p','muted',(smb.noClient?S.smbNoClientHint+' ':'')+S.smbTypeShareHint));
+      box.appendChild(mkBtn(S.continueBtn,'',function(){smb.share=smb.share.trim();if(smb.share){smb.err='';smb.step=2;renderSmb()}}));
+    }else{
+      smb.shares.forEach(function(sh){
+        box.appendChild(smbRow(sh.name,sh.comment||'',function(){smbPickShare(sh.name)}));
+      });
+      if(!smb.shares.length&&!smb.needsAuth)box.appendChild(mk('p','muted',S.smbNoShares));
+      if(!smb.username)box.appendChild(mkBtn(S.smbNeedPassword,'sec',smbChangeUser));
+      box.appendChild(mkBtn(S.smbTypeIt,'sec',function(){smb.canList=false;renderSmb()}));
+    }
+    box.appendChild(mkBtn(S.backBtn,'sec',function(){smb.step=0;smb.err='';smb.detail='';renderSmb();if(!smb.manual&&!smb.hosts.length)smbScan()},smb.busy));
+  }else{
+    box.appendChild(smbSummary(S.smbDevice,smb.name||smb.host));
+    box.appendChild(smbSummary(S.smbFolder,smb.share));
+    if(smb.username)box.appendChild(smbSummary(S.smbUserLabel,smb.username));
+    box.appendChild(chkRow('smb-rw',S.smbAllowWrite,S.smbWriteHint,smb.rw,function(v){smb.rw=v}));
+    box.appendChild(mkBtn(S.smbAddNow,'',smbAdd,smb.busy));
+    box.appendChild(mkBtn(S.backBtn,'sec',function(){smb.step=1;smb.err='';smb.detail='';renderSmb()},smb.busy));
+  }
+  // what went wrong, in words; the raw tool output stays reachable but is
+  // never the only thing on screen
+  if(smb.err){
+    var e=mk('p','muted',smb.err);e.style.color='#e88';box.appendChild(e);
+    if(smb.detail){
+      var det=mk('details','muted');det.appendChild(mk('summary','',S.smbShowDetail));
+      var pre=mk('pre','',smb.detail);pre.style.whiteSpace='pre-wrap';det.appendChild(pre);
+      box.appendChild(det);
+    }
+  }
 }
 
 // ── NAS / SMB: whole-share vs. subfolder, after the mount above succeeds ──
