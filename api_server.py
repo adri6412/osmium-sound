@@ -3288,35 +3288,46 @@ def set_vu_meter(enable):
 VU_STYLE_FILE = '/etc/hifi-player/vu-style'
 VU_SKINS_DIR = os.environ.get('HIFI_VU_SKINS_DIR', '/opt/hifi-qt/assets/vu')
 VU_STYLE_DEFAULT = 'classic'
+# Skins downloaded from the VU meter store: on the data partition, so they
+# survive the A/B image updates (the root file system is read-only).
+VU_STORE_DIR = os.environ.get('HIFI_VU_STORE_DIR', '/var/lib/hifi-player/vu-skins')
 _VU_STYLE_RE = re.compile(r'^[a-z0-9][a-z0-9_-]{0,40}$')
 
 def list_vu_styles():
     """The installed skins, [{id, name:{en,it}}], in their declared order
-    (classic first). A folder whose skin.json does not parse is skipped:
-    offering a look the kiosk would then refuse to draw helps no one."""
+    (classic first): the ones the interface ships, then the ones downloaded
+    from the VU meter store (a shipped skin wins an id both have). A folder
+    whose skin.json does not parse is skipped: offering a look the kiosk
+    would then refuse to draw helps no one."""
     styles = []
-    try:
-        names = sorted(os.listdir(VU_SKINS_DIR))
-    except OSError:
-        names = []
-    for sid in names:
-        if not _VU_STYLE_RE.match(sid):
-            continue
+    seen = set()
+    for base, source in ((VU_SKINS_DIR, 'builtin'), (VU_STORE_DIR, 'store')):
         try:
-            with open(os.path.join(VU_SKINS_DIR, sid, 'skin.json'), encoding='utf-8') as f:
-                meta = json.load(f)
-        except (OSError, ValueError):
-            continue
-        name = meta.get('name') if isinstance(meta, dict) else None
-        if not isinstance(name, dict):
-            name = {'en': sid, 'it': sid}
-        styles.append({'id': sid, 'name': {'en': str(name.get('en') or sid), 'it': str(name.get('it') or name.get('en') or sid)},
-                       'order': meta.get('order', 50) if isinstance(meta.get('order', 50), int) else 50})
+            names = sorted(os.listdir(base))
+        except OSError:
+            names = []
+        for sid in names:
+            if not _VU_STYLE_RE.match(sid) or sid in seen:
+                continue
+            try:
+                with open(os.path.join(base, sid, 'skin.json'), encoding='utf-8') as f:
+                    meta = json.load(f)
+            except (OSError, ValueError):
+                continue
+            if not isinstance(meta, dict):
+                continue
+            seen.add(sid)
+            name = meta.get('name')
+            if not isinstance(name, dict):
+                name = {'en': sid, 'it': sid}
+            styles.append({'id': sid, 'name': {'en': str(name.get('en') or sid), 'it': str(name.get('it') or name.get('en') or sid)},
+                           'order': meta.get('order', 50) if isinstance(meta.get('order', 50), int) else 50,
+                           'source': source})
     if not any(st['id'] == VU_STYLE_DEFAULT for st in styles):
         # the interface draws the classic look even without its folder
-        styles.append({'id': VU_STYLE_DEFAULT, 'name': {'en': 'Classic', 'it': 'Classico'}, 'order': 0})
+        styles.append({'id': VU_STYLE_DEFAULT, 'name': {'en': 'Classic', 'it': 'Classico'}, 'order': 0, 'source': 'builtin'})
     styles.sort(key=lambda st: (st['order'], st['id']))
-    return [{'id': st['id'], 'name': st['name']} for st in styles]
+    return [{'id': st['id'], 'name': st['name'], 'source': st['source']} for st in styles]
 
 def get_vu_style():
     """Return { style, styles }."""
@@ -3348,6 +3359,525 @@ def set_vu_style(style):
         return {'success': False, 'style': get_vu_style()['style'],
                 'code': 'prefs.saveFailed', 'message': _t('prefs.saveFailed', _lang())}
     return {'success': True, 'style': style}
+
+# ──────────────────────────────────────────────────────────────────
+#  VU meter store: more skins, downloaded on demand from
+#  file.osmiumsound.it/vu/. The catalogue (index.json) carries a detached
+#  Ed25519 signature made with the same key as the OS updates and checked
+#  against the same public key (ota-pubkey.pem); every package (.vupak, a
+#  zip holding skin.json and its images) and every preview is then checked
+#  against the sha256 the signed catalogue names. Only what passes all of
+#  that is unpacked, into VU_STORE_DIR, file by file: flat names, image and
+#  JSON files only, size limits, and a skin.json that describes a skin the
+#  interface can draw.
+#
+#  Nothing here runs code from a package: effects (needle ballistics, peak
+#  lamp, backlight, peak needle) are parameters of skin.json that the
+#  interface interprets. VU_SKIN_FORMAT is the highest skin.json format the
+#  interface shipped next to this API understands; newer entries are listed
+#  as needing an update and never installed.
+#
+#  The catalogue is refreshed in the background (at start, then every
+#  VU_STORE_REFRESH, and on a GET when older than VU_STORE_STALE), and a
+#  refresh also brings skins already installed from the store up to the
+#  version it lists. New skins are only offered: installing one is the
+#  owner's choice.
+# ──────────────────────────────────────────────────────────────────
+import base64 as _base64
+import hashlib as _hashlib
+import tempfile as _tempfile
+
+VU_STORE_URL = os.environ.get('HIFI_VU_STORE_URL', 'https://file.osmiumsound.it/vu/')
+VU_STORE_STATE_DIR = os.environ.get('HIFI_VU_STORE_STATE_DIR', '/var/lib/hifi-player/vu-store')
+VU_STORE_PUBKEY = os.environ.get('HIFI_VU_STORE_PUBKEY', '/etc/hifi-player/ota-pubkey.pem')
+VU_SKIN_FORMAT = 2
+VU_STORE_REFRESH = 12 * 3600
+VU_STORE_STALE = 600
+VU_STORE_FIRST_CHECK = 120
+VU_STORE_SIG_RETRY = 5
+VU_INDEX_MAX = 1024 * 1024
+VU_PACK_MAX = 40 * 1024 * 1024
+VU_PACK_UNPACKED_MAX = 80 * 1024 * 1024
+VU_PACK_FILES_MAX = 24
+VU_PREVIEW_MAX = 1024 * 1024
+_VU_FILE_RE = re.compile(r'^[a-z0-9][a-z0-9._-]{0,80}\.(png|jpg|json)$')
+_VU_PACK_RE = re.compile(r'^[a-z0-9][a-z0-9._-]{0,80}\.vupak$')
+_VU_PREVIEW_RE = re.compile(r'^[a-z0-9][a-z0-9._-]{0,80}\.jpg$')
+_VU_SHA_RE = re.compile(r'^[0-9a-f]{64}$')
+
+_vu_store_lock = threading.Lock()
+_vu_store = {'catalog': None, 'checked': 0, 'error': None, 'checking': False, 'loaded': False, 'jobs': {}}
+
+
+class _VuStoreError(Exception):
+    def __init__(self, code):
+        super().__init__(code)
+        self.code = code
+
+
+def _vu_msg(code):
+    return {'code': code, 'message': _t(code, _lang())}
+
+
+def _vu_http_get(url, limit, timeout=30):
+    # an explicit User-Agent: some static hosts refuse urllib's default one
+    req = urllib.request.Request(url, headers={'User-Agent': 'OsmiumSound-VU/1.0'})
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            data = resp.read(limit + 1)
+    except (urllib.error.URLError, OSError, ValueError) as e:
+        log.info("vu store: GET %s failed: %s", url, e)
+        raise _VuStoreError('vuStore.downloadFailed')
+    if len(data) > limit:
+        raise _VuStoreError('vuStore.verifyFailed')
+    return data
+
+
+def _vu_verify_signature(data, sig):
+    """Ed25519 over the exact catalogue bytes, like hifi-os-update.sh does for
+    the OS bundles. No key, no openssl or a bad signature all mean no."""
+    if not os.path.isfile(VU_STORE_PUBKEY):
+        log.warning("vu store: no public key at %s, catalogue refused", VU_STORE_PUBKEY)
+        return False
+    with _tempfile.TemporaryDirectory(prefix='hifi-vu-sig-') as d:
+        fdata, fsig = os.path.join(d, 'index.json'), os.path.join(d, 'index.json.sig')
+        with open(fdata, 'wb') as f:
+            f.write(data)
+        with open(fsig, 'wb') as f:
+            f.write(sig)
+        try:
+            r = subprocess.run(['openssl', 'pkeyutl', '-verify', '-pubin', '-inkey', VU_STORE_PUBKEY,
+                                '-rawin', '-in', fdata, '-sigfile', fsig],
+                               capture_output=True, timeout=20)
+        except (OSError, subprocess.SubprocessError) as e:
+            log.warning("vu store: openssl not usable: %s", e)
+            return False
+    return r.returncode == 0
+
+
+def _vu_is_num(v):
+    return isinstance(v, (int, float)) and not isinstance(v, bool)
+
+
+def _vu_parse_index(raw):
+    """The catalogue's entries, validated, highest version per id."""
+    try:
+        doc = json.loads(raw.decode('utf-8'))
+    except (UnicodeDecodeError, ValueError):
+        raise _VuStoreError('vuStore.catalogInvalid')
+    skins = doc.get('skins') if isinstance(doc, dict) else None
+    if not isinstance(skins, list):
+        raise _VuStoreError('vuStore.catalogInvalid')
+    out = {}
+    for e in skins:
+        if not isinstance(e, dict):
+            continue
+        sid, ver, fmt = e.get('id'), e.get('version'), e.get('format', 1)
+        name = e.get('name')
+        if not (isinstance(sid, str) and _VU_STYLE_RE.match(sid) and isinstance(ver, int) and not isinstance(ver, bool)
+                and ver >= 1 and isinstance(fmt, int) and fmt >= 1 and isinstance(name, dict)
+                and isinstance(name.get('en'), str) and name.get('en')):
+            continue
+        pack, size, sha = e.get('file'), e.get('size'), str(e.get('sha256') or '').lower()
+        if not (isinstance(pack, str) and _VU_PACK_RE.match(pack) and isinstance(size, int)
+                and 0 < size <= VU_PACK_MAX and _VU_SHA_RE.match(sha)):
+            continue
+        entry = {'id': sid, 'version': ver, 'format': fmt,
+                 'name': {'en': name['en'][:60], 'it': str(name.get('it') or name['en'])[:60]},
+                 'author': str(e.get('author') or '')[:80], 'license': str(e.get('license') or '')[:80],
+                 'file': pack, 'size': size, 'sha256': sha, 'preview': None}
+        pv, pvs, pvsize = e.get('preview'), str(e.get('previewSha256') or '').lower(), e.get('previewSize')
+        if (isinstance(pv, str) and _VU_PREVIEW_RE.match(pv) and _VU_SHA_RE.match(pvs)
+                and isinstance(pvsize, int) and 0 < pvsize <= VU_PREVIEW_MAX):
+            entry['preview'] = {'file': pv, 'sha256': pvs, 'size': pvsize}
+        if sid not in out or out[sid]['version'] < ver:
+            out[sid] = entry
+    return sorted(out.values(), key=lambda x: x['id'])
+
+
+def _vu_preview_path(entry):
+    return os.path.join(VU_STORE_STATE_DIR, 'previews', entry['preview']['sha256'] + '.jpg')
+
+
+def _vu_write_atomic(path, data):
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    tmp = path + '.tmp'
+    with open(tmp, 'wb') as f:
+        f.write(data)
+    os.replace(tmp, path)
+
+
+def _vu_store_load_cached():
+    """The last verified catalogue from disk, re-verified: a kiosk that
+    starts offline still shows what was there."""
+    with _vu_store_lock:
+        if _vu_store['loaded']:
+            return
+        _vu_store['loaded'] = True
+    try:
+        with open(os.path.join(VU_STORE_STATE_DIR, 'index.json'), 'rb') as f:
+            raw = f.read(VU_INDEX_MAX + 1)
+        with open(os.path.join(VU_STORE_STATE_DIR, 'index.json.sig'), 'rb') as f:
+            sig = f.read(4096)
+        mtime = os.path.getmtime(os.path.join(VU_STORE_STATE_DIR, 'index.json'))
+    except OSError:
+        return
+    if len(raw) > VU_INDEX_MAX or not _vu_verify_signature(raw, sig):
+        return
+    try:
+        catalog = _vu_parse_index(raw)
+    except _VuStoreError:
+        return
+    with _vu_store_lock:
+        if _vu_store['catalog'] is None:
+            _vu_store['catalog'] = catalog
+            # stale on purpose: the first GET still checks the network
+            _vu_store['checked'] = min(mtime, time.time() - VU_STORE_STALE - 1)
+
+
+def _vu_builtin_ids():
+    ids = {VU_STYLE_DEFAULT}
+    try:
+        ids.update(n for n in os.listdir(VU_SKINS_DIR) if _VU_STYLE_RE.match(n))
+    except OSError:
+        pass
+    return ids
+
+
+def _vu_installed_store():
+    """{id: version} of the skins unpacked from the store."""
+    out = {}
+    try:
+        names = os.listdir(VU_STORE_DIR)
+    except OSError:
+        return out
+    for sid in names:
+        if not _VU_STYLE_RE.match(sid):
+            continue
+        try:
+            with open(os.path.join(VU_STORE_DIR, sid, 'skin.json'), encoding='utf-8') as f:
+                v = json.load(f).get('version', 0)
+        except (OSError, ValueError, AttributeError):
+            continue
+        out[sid] = v if isinstance(v, int) and not isinstance(v, bool) else 0
+    return out
+
+
+def _vu_seen_ids():
+    try:
+        with open(os.path.join(VU_STORE_STATE_DIR, 'seen.json'), encoding='utf-8') as f:
+            v = json.load(f)
+        return set(x for x in v if isinstance(x, str)) if isinstance(v, list) else set()
+    except (OSError, ValueError):
+        return set()
+
+
+def _vu_check_skin(skin, entry, names):
+    """skin.json of a package: the id/version the catalogue promised and the
+    geometry VuPanel.qml needs, every file it names inside the package."""
+    def ok_file(n):
+        return isinstance(n, str) and _VU_FILE_RE.match(n) and n in names and not n.endswith('.json')
+
+    def ok_pair(p):
+        return isinstance(p, list) and len(p) == 2 and all(_vu_is_num(v) for v in p)
+
+    if not isinstance(skin, dict) or skin.get('id') != entry['id'] or skin.get('version') != entry['version']:
+        return False
+    fmt = skin.get('format', 1)
+    if not isinstance(fmt, int) or fmt > VU_SKIN_FORMAT:
+        return False
+    size = skin.get('size')
+    if not (ok_pair(size) and size[0] > 0 and size[1] > 0):
+        return False
+    meters = skin.get('meters')
+    if not (isinstance(meters, list) and len(meters) >= 2 and all(ok_pair(m) for m in meters[:2])):
+        return False
+    if not ok_pair(skin.get('angles')):
+        return False
+    if not ok_file(skin.get('under')) or not ok_file(skin.get('over')):
+        return False
+    needle = skin.get('needle')
+    if not isinstance(needle, dict) or ('image' in needle and not ok_file(needle['image'])):
+        return False
+    effects = skin.get('effects', {})
+    if not isinstance(effects, dict):
+        return False
+    for key in ('backlight', 'peakLamp', 'peakNeedle'):
+        eff = effects.get(key)
+        if eff is None:
+            continue
+        if not isinstance(eff, dict) or ('image' in eff and not ok_file(eff['image'])):
+            return False
+    return True
+
+
+def _vu_unpack(data, entry):
+    """Unpack a verified .vupak into VU_STORE_DIR/<id>, replacing an older
+    copy only once the new one is complete."""
+    try:
+        zf = zipfile.ZipFile(io.BytesIO(data))
+        infos = zf.infolist()
+    except (zipfile.BadZipFile, ValueError):
+        raise _VuStoreError('vuStore.invalidPackage')
+    if not infos or len(infos) > VU_PACK_FILES_MAX:
+        raise _VuStoreError('vuStore.invalidPackage')
+    names, total = set(), 0
+    for info in infos:
+        mode = (info.external_attr >> 16) & 0o170000
+        if (info.is_dir() or not _VU_FILE_RE.match(info.filename) or info.filename in names
+                or mode not in (0, 0o100000)):
+            raise _VuStoreError('vuStore.invalidPackage')
+        names.add(info.filename)
+        total += info.file_size
+    if total > VU_PACK_UNPACKED_MAX or 'skin.json' not in names:
+        raise _VuStoreError('vuStore.invalidPackage')
+    try:
+        files = {n: zf.read(n) for n in names}
+        skin = json.loads(files['skin.json'].decode('utf-8'))
+    except (zipfile.BadZipFile, UnicodeDecodeError, ValueError, OSError, RuntimeError):
+        raise _VuStoreError('vuStore.invalidPackage')
+    if not _vu_check_skin(skin, entry, names):
+        raise _VuStoreError('vuStore.invalidPackage')
+    for n, blob in files.items():
+        if n.endswith('.png') and not blob.startswith(b'\x89PNG\r\n\x1a\n'):
+            raise _VuStoreError('vuStore.invalidPackage')
+        if n.endswith('.jpg') and not blob.startswith(b'\xff\xd8\xff'):
+            raise _VuStoreError('vuStore.invalidPackage')
+    sid = entry['id']
+    dest = os.path.join(VU_STORE_DIR, sid)
+    tmp = os.path.join(VU_STORE_DIR, '.tmp-' + sid)
+    old = os.path.join(VU_STORE_DIR, '.old-' + sid)
+    try:
+        os.makedirs(VU_STORE_DIR, exist_ok=True)
+        shutil.rmtree(tmp, ignore_errors=True)
+        shutil.rmtree(old, ignore_errors=True)
+        os.makedirs(tmp)
+        for n, blob in files.items():
+            with open(os.path.join(tmp, n), 'wb') as f:
+                f.write(blob)
+        if os.path.isdir(dest):
+            os.rename(dest, old)
+        os.rename(tmp, dest)
+        shutil.rmtree(old, ignore_errors=True)
+    except OSError:
+        log.exception("vu store: unpacking %s failed", sid)
+        shutil.rmtree(tmp, ignore_errors=True)
+        if not os.path.isdir(dest) and os.path.isdir(old):
+            os.rename(old, dest)
+        raise _VuStoreError('vuStore.installFailed')
+
+
+def _vu_install_entry(entry):
+    """Download, verify and unpack one catalogue entry (job state in
+    _vu_store['jobs']). True when installed."""
+    sid = entry['id']
+    try:
+        data = _vu_http_get(urllib.parse.urljoin(VU_STORE_URL, entry['file']), entry['size'])
+        if len(data) != entry['size'] or _hashlib.sha256(data).hexdigest() != entry['sha256']:
+            raise _VuStoreError('vuStore.verifyFailed')
+        with _vu_store_lock:
+            _vu_store['jobs'][sid] = {'state': 'installing'}
+        _vu_unpack(data, entry)
+    except _VuStoreError as e:
+        log.warning("vu store: %s v%s not installed: %s", sid, entry['version'], e.code)
+        with _vu_store_lock:
+            _vu_store['jobs'][sid] = {'state': 'error', 'code': e.code}
+        return False
+    with _vu_store_lock:
+        _vu_store['jobs'].pop(sid, None)
+    log.info("vu store: %s v%s installed", sid, entry['version'])
+    return True
+
+
+def _vu_store_refresh():
+    """Fetch and verify the catalogue and its previews, then bring the skins
+    installed from the store up to date. One at a time."""
+    with _vu_store_lock:
+        if _vu_store['checking']:
+            return
+        _vu_store['checking'] = True
+    error = None
+    catalog = None
+    try:
+        raw = _vu_http_get(urllib.parse.urljoin(VU_STORE_URL, 'index.json'), VU_INDEX_MAX)
+        sig = _vu_http_get(urllib.parse.urljoin(VU_STORE_URL, 'index.json.sig'), 4096)
+        if not _vu_verify_signature(raw, sig):
+            # a publish uploads the list and its signature one after the other:
+            # read both again once before calling it a failure
+            time.sleep(VU_STORE_SIG_RETRY)
+            raw = _vu_http_get(urllib.parse.urljoin(VU_STORE_URL, 'index.json'), VU_INDEX_MAX)
+            sig = _vu_http_get(urllib.parse.urljoin(VU_STORE_URL, 'index.json.sig'), 4096)
+            if not _vu_verify_signature(raw, sig):
+                raise _VuStoreError('vuStore.signatureInvalid')
+        catalog = _vu_parse_index(raw)
+        for entry in catalog:
+            if not entry['preview'] or os.path.isfile(_vu_preview_path(entry)):
+                continue
+            try:
+                blob = _vu_http_get(urllib.parse.urljoin(VU_STORE_URL, entry['preview']['file']), entry['preview']['size'])
+            except _VuStoreError:
+                continue
+            if _hashlib.sha256(blob).hexdigest() == entry['preview']['sha256'] and blob.startswith(b'\xff\xd8\xff'):
+                _vu_write_atomic(_vu_preview_path(entry), blob)
+        try:
+            _vu_write_atomic(os.path.join(VU_STORE_STATE_DIR, 'index.json'), raw)
+            _vu_write_atomic(os.path.join(VU_STORE_STATE_DIR, 'index.json.sig'), sig)
+        except OSError:
+            log.exception("vu store: could not keep the catalogue on disk")
+    except _VuStoreError as e:
+        error = 'vuStore.catalogUnavailable' if e.code == 'vuStore.downloadFailed' else e.code
+    except Exception:
+        log.exception("vu store: refresh failed")
+        error = 'vuStore.catalogUnavailable'
+    with _vu_store_lock:
+        if catalog is not None:
+            _vu_store['catalog'] = catalog
+        _vu_store['error'] = error
+        _vu_store['checked'] = time.time()
+        _vu_store['loaded'] = True
+    try:
+        if catalog is not None:
+            installed, builtin = _vu_installed_store(), _vu_builtin_ids()
+            for entry in catalog:
+                if (entry['id'] in installed and entry['id'] not in builtin
+                        and entry['version'] > installed[entry['id']] and entry['format'] <= VU_SKIN_FORMAT):
+                    with _vu_store_lock:
+                        if entry['id'] in _vu_store['jobs'] and _vu_store['jobs'][entry['id']].get('state') != 'error':
+                            continue
+                        _vu_store['jobs'][entry['id']] = {'state': 'downloading'}
+                    _vu_install_entry(entry)
+    finally:
+        with _vu_store_lock:
+            _vu_store['checking'] = False
+
+
+def _vu_store_refresh_async():
+    threading.Thread(target=_vu_store_refresh, daemon=True, name='vu-store-refresh').start()
+
+
+def _vu_store_background():
+    time.sleep(VU_STORE_FIRST_CHECK)
+    while True:
+        try:
+            _vu_store_refresh()
+        except Exception:
+            log.exception("vu store: periodic check failed")
+        time.sleep(VU_STORE_REFRESH)
+
+
+def _vu_find_entry(sid):
+    with _vu_store_lock:
+        for entry in _vu_store['catalog'] or []:
+            if entry['id'] == sid:
+                return entry
+    return None
+
+
+def get_vu_store(summary=False):
+    """The store as the settings screens show it. summary=True only counts
+    what is new (for a badge) and never carries the previews."""
+    _vu_store_load_cached()
+    with _vu_store_lock:
+        stale = not _vu_store['checking'] and time.time() - _vu_store['checked'] > VU_STORE_STALE
+        catalog = list(_vu_store['catalog'] or [])
+        jobs = {k: dict(v) for k, v in _vu_store['jobs'].items()}
+        error, checked = _vu_store['error'], _vu_store['checked']
+    if stale:
+        _vu_store_refresh_async()
+    installed, builtin, seen = _vu_installed_store(), _vu_builtin_ids(), _vu_seen_ids()
+    items = []
+    for entry in catalog:
+        sid = entry['id']
+        if sid in builtin:
+            continue
+        have = installed.get(sid)
+        supported = entry['format'] <= VU_SKIN_FORMAT
+        item = {'id': sid, 'version': entry['version'], 'name': entry['name'], 'author': entry['author'],
+                'license': entry['license'], 'size': entry['size'], 'supported': supported,
+                'installed': have is not None, 'installedVersion': have,
+                'update': have is not None and supported and entry['version'] > have,
+                'new': have is None and supported and sid not in seen}
+        job = jobs.get(sid)
+        if job:
+            item['job'] = job['state']
+            if job.get('code'):
+                item['jobError'] = _vu_msg(job['code'])
+        if not summary:
+            item['preview'] = None
+            if entry['preview']:
+                try:
+                    with open(_vu_preview_path(entry), 'rb') as f:
+                        item['preview'] = 'data:image/jpeg;base64,' + _base64.b64encode(f.read()).decode('ascii')
+                except OSError:
+                    pass
+        items.append(item)
+    if summary:
+        return {'new': sum(1 for i in items if i['new']), 'updates': sum(1 for i in items if i['update'])}
+    with _vu_store_lock:
+        checking = _vu_store['checking']
+    return {'skins': items, 'checking': checking or stale, 'checked': int(checked),
+            'error': _vu_msg(error) if error else None,
+            'busy': any(i.get('job') in ('downloading', 'installing') for i in items)}
+
+
+def vu_store_check():
+    _vu_store_refresh_async()
+    return {'success': True, 'checking': True}
+
+
+def vu_store_install(sid):
+    sid = str(sid or '').strip()
+    _vu_store_load_cached()
+    entry = _vu_find_entry(sid) if _VU_STYLE_RE.match(sid) else None
+    if entry is None:
+        return {'success': False, **_vu_msg('vuStore.unknown')}
+    if sid in _vu_builtin_ids():
+        return {'success': False, **_vu_msg('vuStore.builtin')}
+    if entry['format'] > VU_SKIN_FORMAT:
+        return {'success': False, **_vu_msg('vuStore.unsupported')}
+    if _vu_installed_store().get(sid) == entry['version']:
+        return {'success': True, 'installed': True}
+    with _vu_store_lock:
+        if _vu_store['jobs'].get(sid, {}).get('state') in ('downloading', 'installing'):
+            return {'success': False, **_vu_msg('vuStore.busy')}
+        _vu_store['jobs'][sid] = {'state': 'downloading'}
+    threading.Thread(target=_vu_install_entry, args=(entry,), daemon=True, name='vu-store-install').start()
+    return {'success': True, 'started': True}
+
+
+def vu_store_remove(sid):
+    sid = str(sid or '').strip()
+    if not _VU_STYLE_RE.match(sid) or sid not in _vu_installed_store():
+        return {'success': False, **_vu_msg('vuStore.notInstalled')}
+    with _vu_store_lock:
+        if _vu_store['jobs'].get(sid, {}).get('state') in ('downloading', 'installing'):
+            return {'success': False, **_vu_msg('vuStore.busy')}
+        _vu_store['jobs'].pop(sid, None)
+    try:
+        shutil.rmtree(os.path.join(VU_STORE_DIR, sid))
+    except OSError:
+        log.exception("vu store: removing %s failed", sid)
+        return {'success': False, **_vu_msg('vuStore.removeFailed')}
+    # the look in use is gone: back to the default rather than a stale choice
+    try:
+        with open(VU_STYLE_FILE) as f:
+            if f.read().strip() == sid:
+                os.remove(VU_STYLE_FILE)
+    except OSError:
+        pass
+    return {'success': True}
+
+
+def vu_store_mark_seen():
+    _vu_store_load_cached()
+    with _vu_store_lock:
+        ids = [e['id'] for e in _vu_store['catalog'] or []]
+    seen = _vu_seen_ids() | set(ids)
+    try:
+        _vu_write_atomic(os.path.join(VU_STORE_STATE_DIR, 'seen.json'), json.dumps(sorted(seen)).encode('utf-8'))
+    except OSError:
+        return {'success': False, **_vu_msg('prefs.saveFailed')}
+    return {'success': True}
 
 # ──────────────────────────────────────────────────────────────────
 #  Now-playing auto-expand (kiosk-only UI behaviour, like the VU meter
@@ -6607,6 +7137,28 @@ def api_set_vu_style():
     data = request.get_json(silent=True) or {}
     return jsonify(set_vu_style(data.get('style')))
 
+@app.route('/vu_store', methods=['GET'])
+def api_vu_store():
+    return jsonify(get_vu_store(summary=request.args.get('summary') == '1'))
+
+@app.route('/vu_store/check', methods=['POST'])
+def api_vu_store_check():
+    return jsonify(vu_store_check())
+
+@app.route('/vu_store/install', methods=['POST'])
+def api_vu_store_install():
+    data = request.get_json(silent=True) or {}
+    return jsonify(vu_store_install(data.get('id')))
+
+@app.route('/vu_store/remove', methods=['POST'])
+def api_vu_store_remove():
+    data = request.get_json(silent=True) or {}
+    return jsonify(vu_store_remove(data.get('id')))
+
+@app.route('/vu_store/seen', methods=['POST'])
+def api_vu_store_seen():
+    return jsonify(vu_store_mark_seen())
+
 @app.route('/vu_meter', methods=['POST'])
 def api_set_vu_meter():
     data = request.get_json(silent=True) or {}
@@ -6836,4 +7388,5 @@ if __name__ == '__main__':
     # 15s OTA fetch) doesn't block the kiosk UI's other requests behind it.
     _startup_network_recovery()
     threading.Thread(target=_resume_playback_after_boot, daemon=True).start()
+    threading.Thread(target=_vu_store_background, daemon=True, name='vu-store').start()
     app.run(host='127.0.0.1', port=8000, threaded=True)

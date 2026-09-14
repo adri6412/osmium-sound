@@ -137,6 +137,9 @@ rm -f /etc/hifi-sources.json /etc/hifi-pairing-tokens.json \
 # while it's set), but cheap enough to not skip.
 rm -f /var/lib/hifi-player/dsp-target /var/lib/hifi-player/roomcorr-result 2>/dev/null || true
 rm -rf /var/lib/hifi-player/update 2>/dev/null || true
+# VU meters downloaded from the store, with the store's cached list and
+# what the owner has already seen: a reset device starts from the built-in looks.
+rm -rf /var/lib/hifi-player/vu-skins /var/lib/hifi-player/vu-store 2>/dev/null || true
 rm -f /system-update 2>/dev/null || true
 
 # Stored backup generations (Settings -> Backup e ripristino). These can carry
