@@ -84,6 +84,12 @@ Item {
         onOpenPlayerPicker: app.openPlayerPicker()
         onStartScreensaver: screensaver.show(true)
         onToggleView: { app.viewVu = !app.viewVu; Sys.setConf("nowplaying-view", app.viewVu ? "vu" : "lyrics") }
+        // the BitPerfect / ReplayGain lights open Settings → Playback on that setting
+        onOpenPlaybackSetting: (which) => {
+            app.setExpanded(false)
+            mainScreen.browser.openTab(4)
+            Ui.settings.openSection(3, which)
+        }
     }
     // Mentre le schermate scorrono i riquadri sotto il dito non sono quelli
     // disegnati: si lascia finire la molla (ui_transition_active).

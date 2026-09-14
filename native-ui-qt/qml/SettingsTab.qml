@@ -302,7 +302,7 @@ Item {
     function enter() { cfg.load(); goRoot() }
     function say(text, err) { msg = text; msgErr = !!err; rebuild() }
     function goRoot() { active = -1; msg = ""; pendAct = ""; rows = []; page.contentY = 0; appear() }
-    function openSection(i) {
+    function openSection(i, mark) {
         active = i; msg = ""; pendAct = ""; countdown = 0
         audioSel = ""; sshUser = ""; sshPass = ""; nameEdit = ""; hostEdit = ""
         band = -1; bandAdd = -1; bandShare = -1; brId = ""; pickOwner = 0; pickNew = ""
@@ -312,6 +312,33 @@ Item {
         if (i === 4 && cfg.lmsMode === "follow") cfg.loadDiscover()
         if (i === 18 && !thirdParty) { try { thirdParty = JSON.parse(Sys.readFile(I18n.dir + "/third_party.json")) } catch (e) { thirdParty = null } }
         rebuild(); page.contentY = 0; appear()
+        if (mark) { pendingMark = mark; markTimer.restart() }
+    }
+    // Scrolls to the row carrying `mark` (a row field) and flashes it once:
+    // how the status plate's lights land on the setting behind them.
+    property string pendingMark: ""
+    Timer { id: markTimer; interval: 60; onTriggered: root.showMark(root.pendingMark) }
+    function findMark(item, mark) {
+        var kids = item.children
+        for (var i = 0; i < kids.length; i++) {
+            var k = kids[i]
+            if (k.modelData && k.modelData.mark === mark) return k
+            var f = findMark(k, mark)
+            if (f) return f
+        }
+        return null
+    }
+    function showMark(mark) {
+        pendingMark = ""
+        var it = mark ? findMark(panelRows, mark) : null
+        if (!it) return
+        var p = it.mapToItem(body, 0, 0)
+        page.contentY = Math.max(0, Math.min(p.y - 24, page.contentHeight - page.height))
+        markFlash.x = p.x - 6; markFlash.y = p.y - 6
+        // the slot is the row plus the gap below it: frame the row alone
+        var rowH = it.children.length ? it.children[0].height : it.height
+        markFlash.width = it.width + 12; markFlash.height = rowH + 12
+        markFlashAnim.restart()
     }
     // ─── procedura guidata "cartella di rete" ──────────────────────────────
     function wizReset() {
@@ -859,12 +886,13 @@ Item {
             var lab = info(Tr.t("settings.playback.transDuration"), dur + "s"); lab.style = "seg"; lab.tone = "gold"; lab.mono = true; lab.hh = 20
             push({ type: "slider", smin: 1, smax: 15, sval: dur, act: "transdur" })
         }
-        label("settings.playback.replayGain", 14)
+        label("settings.playback.replayGain", 14).mark = "replaygain"
         var RG = ["settings.playback.rgOff", "settings.playback.rgTrack", "settings.playback.rgAlbum", "settings.playback.rgSmart"]
         for (var k = 0; k < 4; k += 2)
             grid([cell(Tr.t(RG[k]), String(k), pref("rg") === String(k), "replaygain", { hh: 44, dim: !havePlayer }),
                   cell(Tr.t(RG[k + 1]), String(k + 1), pref("rg") === String(k + 1), "replaygain", { hh: 44, dim: !havePlayer })])
-        toggle(Tr.t("settings.playback.fixedVolume"), Tr.t("settings.playback.fixedVolumeHelp"), Player.prefDigitalVol === "0", "fixedvol").dim = !havePlayer
+        var fv = toggle(Tr.t("settings.playback.fixedVolume"), Tr.t("settings.playback.fixedVolumeHelp"), Player.prefDigitalVol === "0", "fixedvol")
+        fv.dim = !havePlayer; fv.mark = "bitperfect"
     }
     function secMultiroom() {
         help("settings.multiroom.help")
@@ -1465,6 +1493,18 @@ Item {
                 BoxShadow { z: -1; targetX: 0; targetY: 0; targetW: parent.width; targetH: parent.height; radius: 16; blur: 20; offsetY: 4; color: Theme.blackA(0.5) }   // shadow-hifi
                 Rectangle { x: 10; y: 1; width: parent.width - 20; height: 1; color: Theme.wa(0.1) }
                 SettingsRows { id: panelRows; x: 24; y: 24; width: parent.width - 48; rows: root.rows }
+            }
+            // one gold flash around the row a shortcut landed on
+            Rectangle {
+                id: markFlash
+                opacity: 0; radius: 12
+                color: "transparent"; border.width: 2; border.color: Theme.gold
+                SequentialAnimation {
+                    id: markFlashAnim
+                    NumberAnimation { target: markFlash; property: "opacity"; to: 1; duration: 150 }
+                    PauseAnimation { duration: 700 }
+                    NumberAnimation { target: markFlash; property: "opacity"; to: 0; duration: 500 }
+                }
             }
         }
         ScrollBar_ { flick: page; x: page.width - 3 }

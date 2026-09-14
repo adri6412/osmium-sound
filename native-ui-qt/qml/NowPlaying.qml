@@ -20,6 +20,7 @@ Item {
     signal openPlayerPicker()
     signal startScreensaver()
     signal toggleView()
+    signal openPlaybackSetting(string which)
 
     readonly property real pad: 20
     readonly property real leftW: (1024 - pad * 2) * 0.44
@@ -182,6 +183,7 @@ Item {
         // while driving another player (the format LEDs stay, they are the
         // stream's)
         mode: Player.isOwn ? Player.ledMode : 0
+        onOpenSetting: (which) => root.openPlaybackSetting(which)
     }
 
     // ─── colonna di destra ─────────────────────────────────────────────────
