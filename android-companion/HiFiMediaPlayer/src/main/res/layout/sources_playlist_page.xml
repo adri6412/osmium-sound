@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Playlist folder: where Lyrion saves playlists made from the player. -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:orientation="vertical"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content">
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="@string/sources_playlistdir_hint"
+        android:textColor="@color/hifiSilver"
+        android:layout_marginBottom="12dp" />
+
+    <TextView
+        android:id="@+id/sources_playlist_path"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:textColor="@android:color/white"
+        android:textIsSelectable="true" />
+
+    <com.google.android.material.button.MaterialButton
+        android:id="@+id/sources_playlist_pick"
+        style="@style/Widget.Material3.Button.OutlinedButton"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:text="@string/sources_playlistdir_pick" />
+
+    <com.google.android.material.button.MaterialButton
+        android:id="@+id/sources_playlist_default"
+        style="@style/Widget.Material3.Button.OutlinedButton"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="@string/sources_playlistdir_default" />
+
+    <!-- The folder picker goes here while it is open. -->
+    <LinearLayout
+        android:id="@+id/sources_playlist_picker"
+        android:orientation="vertical"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content" />
+</LinearLayout>

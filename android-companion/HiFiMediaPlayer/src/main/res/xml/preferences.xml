@@ -31,11 +31,28 @@
             android:title="@string/settings_category_osmium_sound"
             android:summary="@string/settings_category_osmium_sound_summary">
 
+            <!-- Same sections, same order as the web admin's Settings page
+                 (admin-webui Settings.vue). Left out on purpose, because a
+                 pairing token is all that authenticates this app: network
+                 addressing, Tailscale, the SSH login, the admin account,
+                 pairing other phones, factory reset and the debug flags. -->
             <Preference
                 android:key="squeezer.audio_output.open"
                 android:icon="@drawable/ic_action_volume"
                 android:title="@string/settings_audio_output_title"
                 android:summary="@string/settings_audio_output_summary"/>
+
+            <Preference
+                android:key="squeezer.sources.open"
+                android:icon="@drawable/ic_archive"
+                android:title="@string/appliance_section_sources"
+                android:summary="@string/appliance_section_sources_desc"/>
+
+            <Preference
+                android:key="squeezer.services.open"
+                android:icon="@drawable/ic_dns"
+                android:title="@string/appliance_section_services"
+                android:summary="@string/appliance_section_services_desc"/>
 
             <Preference
                 android:key="squeezer.multiroom.open"
@@ -44,10 +61,35 @@
                 android:summary="@string/settings_multiroom_summary"/>
 
             <Preference
+                android:key="squeezer.appliance_playback.open"
+                android:icon="@drawable/ic_action_play"
+                android:title="@string/appliance_section_playback"
+                android:summary="@string/appliance_section_playback_desc"/>
+
+            <Preference
+                android:key="squeezer.display.open"
+                android:icon="@drawable/ic_action_view_as_grid"
+                android:title="@string/appliance_section_display"
+                android:summary="@string/appliance_section_display_desc"/>
+
+            <!-- Hidden at run time when the appliance can't answer. -->
+            <Preference
+                android:key="squeezer.timezone.open"
+                android:icon="@drawable/ic_globe"
+                android:title="@string/appliance_section_timezone"
+                android:summary="@string/appliance_section_timezone_desc"/>
+
+            <Preference
                 android:key="squeezer.updates.open"
                 android:icon="@drawable/ic_download"
                 android:title="@string/settings_updates_title"
                 android:summary="@string/settings_updates_summary"/>
+
+            <Preference
+                android:key="squeezer.lyrplay.open"
+                android:icon="@drawable/ic_qr_code_scanner"
+                android:title="@string/appliance_section_lyrplay"
+                android:summary="@string/appliance_section_lyrplay_desc"/>
 
             <Preference
                 android:key="squeezer.backup.open"

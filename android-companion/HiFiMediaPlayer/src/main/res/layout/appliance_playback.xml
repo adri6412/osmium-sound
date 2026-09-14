@@ -1,0 +1,91 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Body of AppliancePlaybackActivity: the web admin's Settings → Playback card. -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:orientation="vertical"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content">
+
+    <TextView style="@style/ApplianceHelp" android:text="@string/appliance_playback_help" />
+
+    <com.google.android.material.button.MaterialButton
+        android:id="@+id/button_playback_prefs"
+        style="@style/Widget.Material3.Button.OutlinedButton"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="@string/appliance_playback_prefs_button" />
+
+    <LinearLayout
+        android:id="@+id/playback_vu_block"
+        android:orientation="vertical"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:visibility="gone">
+        <View style="@style/ApplianceDivider" />
+        <TextView style="@style/ApplianceTitle" android:text="@string/appliance_vu_meter_label" />
+        <TextView style="@style/ApplianceHelp" android:text="@string/appliance_vu_meter_help" />
+        <RadioGroup
+            android:id="@+id/playback_vu_group"
+            android:orientation="horizontal"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content" />
+
+        <LinearLayout
+            android:id="@+id/playback_vu_style_block"
+            android:orientation="vertical"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:visibility="gone">
+            <TextView style="@style/ApplianceTitle" android:text="@string/appliance_vu_style_label" />
+            <TextView style="@style/ApplianceHelp" android:text="@string/appliance_vu_style_help" />
+            <RadioGroup
+                android:id="@+id/playback_vu_style_group"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content" />
+        </LinearLayout>
+    </LinearLayout>
+
+    <LinearLayout
+        android:id="@+id/playback_store_block"
+        android:orientation="vertical"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="16dp"
+        android:visibility="gone">
+        <TextView style="@style/ApplianceTitle" android:text="@string/appliance_vu_store_label" />
+        <TextView style="@style/ApplianceHelp" android:text="@string/appliance_vu_store_help" />
+        <TextView
+            android:id="@+id/playback_store_status"
+            style="@style/ApplianceHelp"
+            android:visibility="gone" />
+        <LinearLayout
+            android:id="@+id/playback_store_list"
+            android:orientation="vertical"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content" />
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/button_store_check"
+            style="@style/Widget.Material3.Button.TextButton"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/appliance_vu_store_check"
+            android:visibility="gone" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:id="@+id/playback_autoexpand_block"
+        android:orientation="vertical"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:visibility="gone">
+        <View style="@style/ApplianceDivider" />
+        <TextView style="@style/ApplianceTitle" android:text="@string/appliance_autoexpand_label" />
+        <TextView style="@style/ApplianceHelp" android:text="@string/appliance_autoexpand_help" />
+        <RadioGroup
+            android:id="@+id/playback_autoexpand_group"
+            android:orientation="horizontal"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content" />
+    </LinearLayout>
+
+</LinearLayout>

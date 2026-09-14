@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Body of ServicesActivity: the web admin's Settings → Services card. -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:orientation="vertical"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content">
+
+    <LinearLayout
+        android:id="@+id/services_tidal_row"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="16dp"
+        android:visibility="gone">
+        <TextView
+            android:layout_width="0dp"
+            android:layout_weight="1"
+            android:layout_height="wrap_content"
+            android:text="@string/appliance_services_tidal" />
+        <com.google.android.material.switchmaterial.SwitchMaterial
+            android:id="@+id/switch_tidal"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content" />
+    </LinearLayout>
+
+    <TextView style="@style/ApplianceTitle" android:text="@string/settings_ssh_title" />
+    <TextView style="@style/ApplianceHelp" android:text="@string/settings_ssh_warning" />
+
+    <LinearLayout
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content">
+        <TextView
+            android:layout_width="0dp"
+            android:layout_weight="1"
+            android:layout_height="wrap_content"
+            android:text="@string/settings_ssh_title" />
+        <com.google.android.material.switchmaterial.SwitchMaterial
+            android:id="@+id/switch_ssh"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content" />
+    </LinearLayout>
+
+    <!-- Which Linux login SSH accepts. Read-only on purpose: creating it mints
+         a user with full sudo, and a pairing token is all that authenticates
+         this app — that stays on the appliance's own screen or the web admin. -->
+    <TextView
+        android:id="@+id/ssh_login"
+        style="@style/ApplianceHelp"
+        android:layout_marginTop="4dp"
+        android:visibility="gone" />
+
+</LinearLayout>

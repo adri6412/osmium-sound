@@ -119,6 +119,9 @@ public class SettingsFragment  extends PreferenceFragmentCompat implements
             fillUpdatesPreferences();
             fillSystemAdminPreferences();
             fillMultiroomPreferences();
+            fillApplianceScreenPreferences();
+            fillTimezonePreferences();
+            fillLyrPlayPreferences();
             // The Lyrion entries moved in here: they act on the device's own
             // server, so this is where someone looks for them.
             fillLyrionRescanPreferences();
@@ -406,6 +409,161 @@ public class SettingsFragment  extends PreferenceFragmentCompat implements
             MultiroomActivity.show(requireActivity());
             return true;
         });
+    }
+
+    /** Sections of the web admin's Settings that are a screen of their own here. */
+    private void fillApplianceScreenPreferences() {
+        requirePreference("squeezer.sources.open").setOnPreferenceClickListener(preference -> {
+            SourcesActivity.show(requireActivity());
+            return true;
+        });
+        requirePreference("squeezer.services.open").setOnPreferenceClickListener(preference -> {
+            ServicesActivity.show(requireActivity());
+            return true;
+        });
+        requirePreference("squeezer.appliance_playback.open").setOnPreferenceClickListener(preference -> {
+            AppliancePlaybackActivity.show(requireActivity());
+            return true;
+        });
+        requirePreference("squeezer.display.open").setOnPreferenceClickListener(preference -> {
+            DisplayActivity.show(requireActivity());
+            return true;
+        });
+    }
+
+    // ── Timezone ────────────────────────────────────────────────────────
+    // Fresh installs default to UTC, so this (or the web admin / the device's
+    // screen) is the only place to correct it. Hidden when the appliance
+    // can't answer (older system bundle without the route, not paired yet).
+    private String timezone;
+
+    private void fillTimezonePreferences() {
+        Preference pref = requirePreference("squeezer.timezone.open");
+        pref.setOnPreferenceClickListener(preference -> {
+            showTimezoneDialog(pref);
+            return true;
+        });
+        loadTimezone(pref);
+    }
+
+    private void loadTimezone(Preference pref) {
+        ApplianceHttpClient.getJson("/api/system/timezone", new ApplianceHttpClient.JsonCallback() {
+            @Override
+            public void onSuccess(JSONObject body) {
+                if (!isAdded()) return;
+                if (!body.has("timezone")) {
+                    pref.setVisible(false);
+                    return;
+                }
+                timezone = body.optString("timezone");
+                pref.setSummary(getString(R.string.appliance_section_timezone_desc) + "\n"
+                        + getString(R.string.appliance_timezone_current, timezone));
+                pref.setVisible(true);
+            }
+
+            @Override
+            public void onFailure(String message) {
+                if (isAdded()) pref.setVisible(false);
+            }
+        });
+    }
+
+    private void showTimezoneDialog(Preference pref) {
+        ApplianceHttpClient.getJson("/api/system/timezones", new ApplianceHttpClient.JsonCallback() {
+            @Override
+            public void onSuccess(JSONObject body) {
+                if (!isAdded()) return;
+                org.json.JSONArray list = body.optJSONArray("timezones");
+                if (list == null || list.length() == 0) {
+                    Toast.makeText(getContext(), R.string.appliance_timezone_change_failed, Toast.LENGTH_LONG).show();
+                    return;
+                }
+                String[] zones = new String[list.length()];
+                int current = -1;
+                for (int i = 0; i < zones.length; i++) {
+                    zones[i] = list.optString(i);
+                    if (zones[i].equals(timezone)) current = i;
+                }
+                new MaterialAlertDialogBuilder(requireContext())
+                        .setTitle(R.string.appliance_timezone_pick)
+                        .setSingleChoiceItems(zones, current, (dialog, which) -> {
+                            dialog.dismiss();
+                            if (!zones[which].equals(timezone)) setTimezone(pref, zones[which]);
+                        })
+                        .setNegativeButton(android.R.string.cancel, null)
+                        .show();
+            }
+
+            @Override
+            public void onFailure(String message) {
+                if (!isAdded()) return;
+                Toast.makeText(getContext(), getString(R.string.appliance_timezone_change_failed) + ": " + message,
+                        Toast.LENGTH_LONG).show();
+            }
+        });
+    }
+
+    private void setTimezone(Preference pref, String zone) {
+        JSONObject payload = new JSONObject();
+        try {
+            payload.put("timezone", zone);
+        } catch (JSONException ignored) {
+        }
+        ApplianceHttpClient.postJson("/api/system/timezone", payload, new ApplianceHttpClient.JsonCallback() {
+            @Override
+            public void onSuccess(JSONObject body) {
+                if (!isAdded()) return;
+                boolean ok = body.optBoolean("success", true);
+                String message = body.optString("message", "");
+                Toast.makeText(getContext(), !message.isEmpty() ? message
+                        : getString(ok ? R.string.appliance_timezone_changed : R.string.appliance_timezone_change_failed),
+                        Toast.LENGTH_LONG).show();
+                loadTimezone(pref);
+            }
+
+            @Override
+            public void onFailure(String message) {
+                if (!isAdded()) return;
+                Toast.makeText(getContext(), getString(R.string.appliance_timezone_change_failed) + ": " + message,
+                        Toast.LENGTH_LONG).show();
+            }
+        });
+    }
+
+    // ── iPhone / iPad: LyrPlay ──────────────────────────────────────────
+    // There is no Osmium app for iOS; LyrPlay is a maintained App Store client
+    // for Lyrion. Static store link, no device address or token involved, so
+    // the QR is shown here for someone else's iPhone to scan.
+    private static final String LYRPLAY_APP_STORE_URL = "https://apps.apple.com/app/lyrplay/id6746776736";
+
+    private void fillLyrPlayPreferences() {
+        requirePreference("squeezer.lyrplay.open").setOnPreferenceClickListener(preference -> {
+            showLyrPlayDialog();
+            return true;
+        });
+    }
+
+    private void showLyrPlayDialog() {
+        View view = getLayoutInflater().inflate(R.layout.appliance_lyrplay_dialog, null);
+        try {
+            int size = getResources().getDimensionPixelSize(R.dimen.appliance_qr_size);
+            android.graphics.Bitmap qr = new com.journeyapps.barcodescanner.BarcodeEncoder()
+                    .encodeBitmap(LYRPLAY_APP_STORE_URL, com.google.zxing.BarcodeFormat.QR_CODE, size, size);
+            ((android.widget.ImageView) view.findViewById(R.id.lyrplay_qr)).setImageBitmap(qr);
+        } catch (Exception e) {
+            view.findViewById(R.id.lyrplay_qr).setVisibility(View.GONE);
+        }
+        new MaterialAlertDialogBuilder(requireContext())
+                .setTitle(R.string.appliance_section_lyrplay)
+                .setView(view)
+                .setNegativeButton(android.R.string.cancel, null)
+                .setPositiveButton(R.string.appliance_lyrplay_open, (dialog, which) -> {
+                    try {
+                        startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(LYRPLAY_APP_STORE_URL)));
+                    } catch (ActivityNotFoundException ignored) {
+                    }
+                })
+                .show();
     }
 
     private void fillScrobblePreferences(SharedPreferences preferences) {

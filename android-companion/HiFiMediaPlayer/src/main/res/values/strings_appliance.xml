@@ -1,6 +1,138 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Strings for the Osmium Sound device's own controls. -->
+<!-- Settings → Osmium Sound sections that mirror the web admin's Settings page
+     (Display, Playback, Services, Timezone, iPhone/iPad, Backup). Wording
+     follows admin-webui's locales, adapted to the phone. -->
 <resources>
+    <string name="appliance_section_sources">Music sources</string>
+    <string name="appliance_section_sources_desc">Folders, USB, network shares</string>
+    <string name="appliance_section_services">Services</string>
+    <string name="appliance_section_services_desc">Tidal Connect and SSH access</string>
+    <string name="appliance_section_playback">Playback</string>
+    <string name="appliance_section_playback_desc">Track transitions, VU meters, auto-open now playing</string>
+    <string name="appliance_section_display">Display</string>
+    <string name="appliance_section_display_desc">Screen or headless, interface, pointer, player on/off</string>
+    <string name="appliance_section_timezone">Timezone</string>
+    <string name="appliance_section_timezone_desc">The device\'s clock</string>
+    <string name="appliance_section_lyrplay">iPhone / iPad (LyrPlay)</string>
+    <string name="appliance_section_lyrplay_desc">Recommended third-party app (QR)</string>
+
+    <string name="appliance_rebooting">The device is restarting. It will be back in a minute or two.</string>
+    <string name="appliance_seconds">%1$d s</string>
+
+    <!-- Display -->
+    <string name="appliance_display_current">Current: %1$s</string>
+    <string name="appliance_display_headless">Headless (no screen)</string>
+    <string name="appliance_display_onscreen">On-screen interface</string>
+    <string name="appliance_display_switch_to_onscreen">Turn the on-screen interface back on</string>
+    <string name="appliance_display_switch_to_headless">Switch to headless</string>
+    <string name="appliance_display_confirm_headless">The device screen will turn off immediately. Continue?</string>
+    <string name="appliance_display_changed">Display mode changed</string>
+    <string name="appliance_display_change_failed">Could not change the display mode</string>
+    <string name="appliance_display_engine_label">On-screen interface</string>
+    <string name="appliance_display_engine_help">Which of the two interfaces runs on the device\'s screen. The new one (Qt) draws straight on the screen, with no browser: it uses less power and stays smooth even on 4K screens. Music keeps playing when you switch.</string>
+    <string name="appliance_display_engine_electron">Classic</string>
+    <string name="appliance_display_engine_qt">New (Qt)</string>
+    <string name="appliance_display_confirm_engine">The interface on the device\'s screen will close and come back with the one you picked. Playback continues. Go ahead?</string>
+    <string name="appliance_display_engine_changed">Interface changed</string>
+    <string name="appliance_display_engine_failed">Interface change failed</string>
+    <string name="appliance_display_resolution_label">Interface resolution</string>
+    <string name="appliance_display_resolution_help">On large screens the interface is drawn at full panel resolution, which keeps the graphics chip busy. Rendering it lower and letting the screen enlarge it makes everything much smoother, at the cost of some sharpness.</string>
+    <string name="appliance_display_resolution_auto">Automatic</string>
+    <string name="appliance_display_resolution_720">1280 × 720</string>
+    <string name="appliance_display_resolution_1080">1920 × 1080</string>
+    <string name="appliance_display_resolution_native">Native</string>
+    <string name="appliance_display_confirm_resolution">The device\'s interface will close and reopen after a few seconds. Playback is not interrupted. Continue?</string>
+    <string name="appliance_display_pointer_label">Mouse pointer</string>
+    <string name="appliance_display_pointer_help">Show the mouse pointer on screen, or hide it if you only use the touchscreen. Shown by default, so the on-screen setup wizard stays usable.</string>
+    <string name="appliance_display_pointer_on">On</string>
+    <string name="appliance_display_pointer_off">Off</string>
+    <string name="appliance_display_pointer_unavailable">Pointer control is not available on this device.</string>
+    <string name="appliance_display_pointer_changed">Pointer preference saved</string>
+    <string name="appliance_display_pointer_failed">Could not save the preference</string>
+    <string name="appliance_display_player_label">Player</string>
+    <string name="appliance_display_player_help">Turn the player itself off for a server-only unit: Lyrion Music Server and everything else keeps running, this device just never plays audio itself. Useful for a box in a closet serving other players elsewhere.</string>
+    <string name="appliance_display_player_on">On</string>
+    <string name="appliance_display_player_off">Off (server only)</string>
+    <string name="appliance_display_confirm_player_off">This device will stop playing audio itself. Lyrion Music Server and remote control keep working. Continue?</string>
+    <string name="appliance_display_player_changed">Player turned on/off</string>
+    <string name="appliance_display_player_failed">Could not turn the player on/off</string>
+
+    <!-- Playback -->
+    <string name="appliance_playback_help">Track transitions (crossfade/gapless), volume normalisation (ReplayGain) and fixed-volume (bit-perfect) output apply to the active player.</string>
+    <string name="appliance_playback_prefs_button">Transitions, ReplayGain and fixed volume</string>
+    <string name="appliance_vu_meter_label">Animated VU meters</string>
+    <string name="appliance_vu_meter_help">The VU dial in the device\'s \"now playing\" screen moves live with the music. Turn it off to take load off the graphics chip.</string>
+    <string name="appliance_vu_meter_on">On</string>
+    <string name="appliance_vu_meter_off">Off</string>
+    <string name="appliance_vu_meter_changed">VU meter preference saved</string>
+    <string name="appliance_vu_meter_failed">Could not save the preference</string>
+    <string name="appliance_vu_style_label">VU meter style</string>
+    <string name="appliance_vu_style_help">The look of the meters in the \"now playing\" screen on the device.</string>
+    <string name="appliance_vu_style_changed">VU meter style saved</string>
+    <string name="appliance_vu_store_label">More VU meters to download</string>
+    <string name="appliance_vu_store_help">New looks published by Osmium Sound. The device downloads them itself, keeps them up to date and lists them among the styles above.</string>
+    <string name="appliance_vu_store_loading">Loading the list…</string>
+    <string name="appliance_vu_store_empty">There are no other VU meters to download right now.</string>
+    <string name="appliance_vu_store_check">Check again</string>
+    <string name="appliance_vu_store_install">Download</string>
+    <string name="appliance_vu_store_update">Update</string>
+    <string name="appliance_vu_store_remove">Remove</string>
+    <string name="appliance_vu_store_downloading">Downloading…</string>
+    <string name="appliance_vu_store_installing">Installing…</string>
+    <string name="appliance_vu_store_unsupported">Needs a device update</string>
+    <string name="appliance_vu_store_new">New</string>
+    <string name="appliance_vu_store_new_version">New version</string>
+    <string name="appliance_vu_store_remove_confirm">Remove the VU meter «%1$s» from the device? You can download it again later.</string>
+    <string name="appliance_vu_store_failed">Operation failed</string>
+    <string name="appliance_autoexpand_label">Auto-open now playing</string>
+    <string name="appliance_autoexpand_help">When a song starts, the device\'s screen opens the full-screen \"now playing\" view after this many seconds. Only once per song: if someone moves away from it, it stays put.</string>
+    <string name="appliance_autoexpand_off">Off</string>
+    <string name="appliance_autoexpand_changed">Auto-open preference saved</string>
+    <string name="appliance_autoexpand_failed">Could not save the preference</string>
+
+    <!-- Services -->
+    <string name="appliance_services_tidal">Tidal Connect</string>
+    <string name="appliance_services_tidal_updated">Tidal Connect updated</string>
+
+    <!-- Lyrion -->
+    <string name="appliance_lyrion_reboot_warning">Changing the music server needs a restart to take effect. Restart now?</string>
+
+    <!-- Timezone -->
+    <string name="appliance_timezone_current">Current: %1$s</string>
+    <string name="appliance_timezone_pick">Change timezone</string>
+    <string name="appliance_timezone_changed">Timezone changed</string>
+    <string name="appliance_timezone_change_failed">Could not change the timezone</string>
+
+    <!-- iPhone / iPad -->
+    <string name="appliance_lyrplay_hint">On iPhone and iPad, use LyrPlay: a free App Store app for Lyrion, with FLAC playback, background playback, lock-screen controls, CarPlay and Siri. Scan the QR code with the iPhone to download it. Updates, restart and the music server choice stay in this app, on the device\'s screen and in the web admin.</string>
+    <string name="appliance_lyrplay_open">Open on the App Store</string>
+    <string name="appliance_lyrplay_disclaimer">LyrPlay is a third-party app, not developed by or affiliated with Osmium Sound. It is only recommended as an app that works with Lyrion.</string>
+
+    <!-- Backup & restore -->
+    <string name="appliance_backup_hint">Save the device\'s configuration, Lyrion preferences and playlists. Set a passphrase to also include passwords (Wi-Fi, network shares, the web admin account) in an encrypted file. Without one, only settings that aren\'t secret are saved.</string>
+    <string name="appliance_backup_passphrase">Passphrase (optional)</string>
+    <string name="appliance_backup_passphrase_hint">Leave empty for a plain backup with no passwords. Also needed to restore an encrypted backup.</string>
+    <string name="appliance_backup_create">Create backup on the device</string>
+    <string name="appliance_backup_download_now">Download a backup now</string>
+    <string name="appliance_backup_restore_from_file">Restore from file</string>
+    <string name="appliance_backup_working">Working…</string>
+    <string name="appliance_backup_created">Backup completed</string>
+    <string name="appliance_backup_create_failed">Backup failed</string>
+    <string name="appliance_backup_download">Download</string>
+    <string name="appliance_backup_download_failed">Download failed</string>
+    <string name="appliance_backup_restoring">Restoring…</string>
+    <string name="appliance_backup_restored">Restore completed</string>
+    <string name="appliance_backup_restored_rebooting">Restore completed. The device is restarting to apply it.</string>
+    <string name="appliance_backup_restore_confirm">Restore this backup? A safety copy of the current configuration is taken first, then the device restarts.</string>
+    <string name="appliance_backup_restore_this">Restore</string>
+    <string name="appliance_backup_delete">Delete</string>
+    <string name="appliance_backup_delete_confirm">Delete this backup? This cannot be undone.</string>
+    <string name="appliance_backup_settings_failed">Could not save the setting</string>
+    <string name="appliance_backup_scheduled">Automatic weekly backup</string>
+    <string name="appliance_backup_scheduled_hint">Runs on its own, so it never includes passwords: only device settings, sources and Lyrion preferences and playlists.</string>
+    <string name="appliance_backup_stored">Backups on this device</string>
+    <string name="appliance_backup_none">No backup yet.</string>
+    <string name="appliance_backup_encrypted">encrypted</string>
     <!-- Top bar power button -->
     <string name="appliance_shutdown_title">Turn off Osmium Sound</string>
     <string name="appliance_shutdown_started">Osmium Sound is shutting down.</string>

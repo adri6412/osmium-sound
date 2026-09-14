@@ -159,6 +159,30 @@
         </activity>
 
         <activity
+            android:name=".SourcesActivity"
+            android:label="@string/sources_title"
+            android:parentActivityName=".SettingsActivity">
+        </activity>
+
+        <activity
+            android:name=".ServicesActivity"
+            android:label="@string/appliance_section_services"
+            android:parentActivityName=".SettingsActivity">
+        </activity>
+
+        <activity
+            android:name=".AppliancePlaybackActivity"
+            android:label="@string/appliance_section_playback"
+            android:parentActivityName=".SettingsActivity">
+        </activity>
+
+        <activity
+            android:name=".DisplayActivity"
+            android:label="@string/appliance_section_display"
+            android:parentActivityName=".SettingsActivity">
+        </activity>
+
+        <activity
             android:name=".MultiroomActivity"
             android:label="@string/settings_multiroom_title"
             android:parentActivityName=".SettingsActivity">
