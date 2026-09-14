@@ -158,6 +158,12 @@ avahi-daemon
 # sources wizard finds NAS boxes, Macs and Linux machines that announce their
 # shares over mDNS. The daemon above only publishes ours.
 avahi-utils
+# ...and the lookup side: without it getaddrinfo() cannot resolve a *.local
+# name at all ("hosts: files dns"), so an external Lyrion or a NAS typed in as
+# nas.local was refused as "not found", and squeezelite given such a name
+# silently fell back to discovering whichever server answered first. Its
+# postinst adds mdns4_minimal to /etc/nsswitch.conf.
+libnss-mdns
 
 # Lyrion Music Server runtime dependencies (the .deb is installed via hook 0050)
 perl
