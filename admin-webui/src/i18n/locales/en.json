@@ -483,7 +483,22 @@
       "vuMeterFailed": "Could not save the preference",
       "vuStyleLabel": "VU meter style",
       "vuStyleHelp": "The look of the meters in the \"now playing\" screen on the device.",
-      "vuStyleChanged": "VU meter style saved"
+      "vuStyleChanged": "VU meter style saved",
+      "vuStoreLabel": "More VU meters to download",
+      "vuStoreHelp": "New looks published by Osmium Sound. The device downloads them itself, keeps them up to date and lists them among the styles above.",
+      "vuStoreLoading": "Loading the list…",
+      "vuStoreEmpty": "There are no other VU meters to download right now.",
+      "vuStoreCheck": "Check again",
+      "vuStoreInstall": "Download",
+      "vuStoreUpdate": "Update",
+      "vuStoreRemove": "Remove",
+      "vuStoreDownloading": "Downloading…",
+      "vuStoreInstalling": "Installing…",
+      "vuStoreUnsupported": "Needs a device update",
+      "vuStoreNew": "New",
+      "vuStoreNewVersion": "New version",
+      "vuStoreRemoveConfirm": "Remove the VU meter «{name}» from the device? You can download it again later.",
+      "vuStoreFailed": "Operation failed"
     },
     "display": {
       "currentLabel": "Current",

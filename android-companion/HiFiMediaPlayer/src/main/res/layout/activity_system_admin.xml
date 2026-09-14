@@ -1,301 +1,35 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- Body of SystemAdminActivity (inflated into appliance_settings_screen). -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:orientation="vertical"
     android:layout_width="match_parent"
-    android:layout_height="match_parent">
+    android:layout_height="wrap_content">
 
-    <com.google.android.material.appbar.AppBarLayout
+    <TextView style="@style/ApplianceTitle" android:text="@string/settings_system_info_title" />
+
+    <TextView
+        android:id="@+id/system_info_text"
+        style="@style/ApplianceHelp"
+        android:textIsSelectable="true" />
+
+    <View style="@style/ApplianceDivider" />
+
+    <TextView style="@style/ApplianceTitle" android:text="@string/settings_system_controls_title" />
+
+    <com.google.android.material.button.MaterialButton
+        android:id="@+id/button_reboot"
+        style="@style/Widget.Material3.Button.OutlinedButton"
         android:layout_width="match_parent"
-        android:layout_height="wrap_content">
-        <com.google.android.material.appbar.MaterialToolbar
-            android:id="@+id/toolbar"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:minHeight="?attr/actionBarSize"
-            app:navigationIcon="@drawable/ic_keyboard_arrow_left"
-            app:title="@string/settings_system_admin_title" />
-    </com.google.android.material.appbar.AppBarLayout>
+        android:layout_height="wrap_content"
+        android:layout_marginTop="4dp"
+        android:text="@string/settings_reboot_button"
+        android:layout_marginBottom="8dp" />
 
-    <ScrollView
-        android:id="@+id/system_admin_container"
+    <com.google.android.material.button.MaterialButton
+        android:id="@+id/button_shutdown"
+        style="@style/Widget.Material3.Button.OutlinedButton"
         android:layout_width="match_parent"
-        android:layout_height="match_parent">
-
-        <LinearLayout
-            android:orientation="vertical"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:padding="16dp">
-
-            <TextView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="@string/settings_ssh_title"
-                android:textColor="@android:color/white"
-                android:textStyle="bold"
-                android:layout_marginBottom="4dp" />
-
-            <TextView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="@string/settings_ssh_warning"
-                android:textColor="@color/hifiSilver"
-                android:layout_marginBottom="8dp" />
-
-            <LinearLayout
-                android:id="@+id/ssh_row"
-                android:orientation="horizontal"
-                android:gravity="center_vertical"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content">
-                <TextView
-                    android:layout_width="0dp"
-                    android:layout_weight="1"
-                    android:layout_height="wrap_content"
-                    android:text="@string/settings_ssh_title" />
-                <com.google.android.material.switchmaterial.SwitchMaterial
-                    android:id="@+id/switch_ssh"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content" />
-            </LinearLayout>
-
-            <!-- Which Linux login SSH accepts. Read-only on purpose: creating
-                 it mints a user with full sudo, and a pairing token is all that
-                 authenticates this app — that operation stays on the appliance's
-                 own screen or the web admin. -->
-            <TextView
-                android:id="@+id/ssh_login"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:textColor="@color/hifiSilver"
-                android:layout_marginTop="4dp"
-                android:visibility="gone" />
-
-            <LinearLayout
-                android:id="@+id/display_mode_row"
-                android:orientation="horizontal"
-                android:gravity="center_vertical"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="8dp">
-                <LinearLayout
-                    android:orientation="vertical"
-                    android:layout_width="0dp"
-                    android:layout_weight="1"
-                    android:layout_height="wrap_content">
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="@string/settings_display_mode_title" />
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:textSize="12sp"
-                        android:alpha="0.7"
-                        android:text="@string/settings_display_mode_summary" />
-                </LinearLayout>
-                <com.google.android.material.switchmaterial.SwitchMaterial
-                    android:id="@+id/switch_display_mode"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content" />
-            </LinearLayout>
-
-            <View
-                android:layout_width="match_parent"
-                android:layout_height="1dp"
-                android:background="?android:attr/listDivider"
-                android:layout_marginTop="16dp"
-                android:layout_marginBottom="16dp" />
-
-            <TextView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="@string/settings_ui_resolution_title"
-                android:textColor="@android:color/white"
-                android:textStyle="bold"
-                android:layout_marginBottom="4dp" />
-
-            <TextView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="@string/settings_ui_resolution_summary"
-                android:textColor="@color/hifiSilver"
-                android:layout_marginBottom="8dp" />
-
-            <RadioGroup
-                android:id="@+id/ui_resolution_group"
-                android:orientation="horizontal"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content">
-                <RadioButton
-                    android:id="@+id/radio_ui_resolution_auto"
-                    android:layout_width="0dp"
-                    android:layout_weight="1"
-                    android:layout_height="wrap_content"
-                    android:text="@string/settings_ui_resolution_auto" />
-                <RadioButton
-                    android:id="@+id/radio_ui_resolution_720"
-                    android:layout_width="0dp"
-                    android:layout_weight="1"
-                    android:layout_height="wrap_content"
-                    android:text="@string/settings_ui_resolution_720" />
-                <RadioButton
-                    android:id="@+id/radio_ui_resolution_1080"
-                    android:layout_width="0dp"
-                    android:layout_weight="1"
-                    android:layout_height="wrap_content"
-                    android:text="@string/settings_ui_resolution_1080" />
-                <RadioButton
-                    android:id="@+id/radio_ui_resolution_native"
-                    android:layout_width="0dp"
-                    android:layout_weight="1"
-                    android:layout_height="wrap_content"
-                    android:text="@string/settings_ui_resolution_native" />
-            </RadioGroup>
-
-            <!-- Panel refresh rate (native <-> low-power). Stays hidden until
-                 the appliance answers /api/system/ui_refresh (older units
-                 don't have the route); the radios give way to a note when
-                 the panel has no lower mode to offer. Mirrors admin-webui's
-                 Display card and the kiosk's "Refresh rate" section. -->
-            <LinearLayout
-                android:id="@+id/ui_refresh_block"
-                android:orientation="vertical"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="16dp"
-                android:visibility="gone">
-
-                <TextView
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:text="@string/settings_ui_refresh_title"
-                    android:textColor="@android:color/white"
-                    android:textStyle="bold"
-                    android:layout_marginBottom="4dp" />
-
-                <TextView
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:text="@string/settings_ui_refresh_summary"
-                    android:textColor="@color/hifiSilver"
-                    android:layout_marginBottom="8dp" />
-
-                <TextView
-                    android:id="@+id/ui_refresh_unsupported"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:text="@string/settings_ui_refresh_unsupported"
-                    android:textColor="@color/hifiSilver"
-                    android:visibility="gone" />
-
-                <RadioGroup
-                    android:id="@+id/ui_refresh_group"
-                    android:orientation="horizontal"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content">
-                    <RadioButton
-                        android:id="@+id/radio_ui_refresh_native"
-                        android:layout_width="0dp"
-                        android:layout_weight="1"
-                        android:layout_height="wrap_content"
-                        android:text="@string/settings_ui_refresh_native" />
-                    <RadioButton
-                        android:id="@+id/radio_ui_refresh_low"
-                        android:layout_width="0dp"
-                        android:layout_weight="1"
-                        android:layout_height="wrap_content"
-                        android:text="@string/settings_ui_refresh_low" />
-                </RadioGroup>
-            </LinearLayout>
-
-            <LinearLayout
-                android:id="@+id/vu_meter_row"
-                android:orientation="horizontal"
-                android:gravity="center_vertical"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="16dp">
-                <TextView
-                    android:layout_width="0dp"
-                    android:layout_weight="1"
-                    android:layout_height="wrap_content"
-                    android:text="@string/settings_vu_meter_title" />
-                <com.google.android.material.switchmaterial.SwitchMaterial
-                    android:id="@+id/switch_vu_meter"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content" />
-            </LinearLayout>
-
-            <View
-                android:layout_width="match_parent"
-                android:layout_height="1dp"
-                android:background="?android:attr/listDivider"
-                android:layout_marginTop="16dp"
-                android:layout_marginBottom="16dp" />
-
-            <TextView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="@string/settings_system_info_title"
-                android:textColor="@android:color/white"
-                android:textStyle="bold"
-                android:layout_marginBottom="8dp" />
-
-            <TextView
-                android:id="@+id/system_info_text"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:textColor="@color/hifiSilver"
-                android:textIsSelectable="true" />
-
-            <View
-                android:layout_width="match_parent"
-                android:layout_height="1dp"
-                android:background="?android:attr/listDivider"
-                android:layout_marginTop="16dp"
-                android:layout_marginBottom="16dp" />
-
-            <TextView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="@string/settings_system_controls_title"
-                android:textColor="@android:color/white"
-                android:textStyle="bold"
-                android:layout_marginBottom="8dp" />
-
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/button_reboot"
-                style="@style/Widget.Material3.Button.OutlinedButton"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="@string/settings_reboot_button"
-                android:layout_marginBottom="8dp" />
-
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/button_shutdown"
-                style="@style/Widget.Material3.Button.OutlinedButton"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="@string/settings_shutdown_button" />
-
-            <ProgressBar
-                android:id="@+id/system_admin_progress"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_gravity="center"
-                android:layout_marginTop="24dp"
-                android:visibility="gone" />
-
-            <TextView
-                android:id="@+id/system_admin_message"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="16dp"
-                android:textColor="@android:color/white" />
-
-        </LinearLayout>
-    </ScrollView>
+        android:layout_height="wrap_content"
+        android:text="@string/settings_shutdown_button" />
 
 </LinearLayout>

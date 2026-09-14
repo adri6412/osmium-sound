@@ -1,53 +1,37 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- Body of AudioOutputActivity (inflated into appliance_settings_screen). -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:orientation="vertical"
     android:layout_width="match_parent"
-    android:layout_height="match_parent">
+    android:layout_height="wrap_content">
 
-    <com.google.android.material.appbar.AppBarLayout
+    <RadioGroup
+        android:id="@+id/audio_device_group"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content" />
+
+    <View style="@style/ApplianceDivider" />
+
+    <TextView style="@style/ApplianceTitle" android:text="@string/settings_multiroom_name_title" />
+    <TextView style="@style/ApplianceHelp" android:text="@string/settings_multiroom_name_help" />
+
+    <com.google.android.material.textfield.TextInputLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content">
-        <com.google.android.material.appbar.MaterialToolbar
-            android:id="@+id/toolbar"
+        <com.google.android.material.textfield.TextInputEditText
+            android:id="@+id/audio_name_field"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:minHeight="?attr/actionBarSize"
-            app:navigationIcon="@drawable/ic_keyboard_arrow_left"
-            app:title="@string/settings_audio_output_title" />
-    </com.google.android.material.appbar.AppBarLayout>
+            android:inputType="text"
+            android:hint="@string/settings_multiroom_name_hint" />
+    </com.google.android.material.textfield.TextInputLayout>
 
-    <ScrollView
-        android:id="@+id/audio_output_container"
+    <com.google.android.material.button.MaterialButton
+        android:id="@+id/button_save_name"
+        style="@style/Widget.Material3.Button.OutlinedButton"
         android:layout_width="match_parent"
-        android:layout_height="match_parent">
-
-        <LinearLayout
-            android:orientation="vertical"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:padding="16dp">
-
-            <RadioGroup
-                android:id="@+id/audio_device_group"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content" />
-
-            <ProgressBar
-                android:id="@+id/audio_output_progress"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_gravity="center"
-                android:layout_marginTop="24dp" />
-
-            <TextView
-                android:id="@+id/audio_output_message"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="16dp"
-                android:textColor="@android:color/white" />
-
-        </LinearLayout>
-    </ScrollView>
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:text="@string/settings_multiroom_name_save" />
 
 </LinearLayout>

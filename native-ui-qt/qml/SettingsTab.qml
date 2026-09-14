@@ -50,26 +50,33 @@ Item {
     property var timezones: []
     property var thirdParty: null
 
+    // Sections are addressed by id, never by position: a new one moves every
+    // index after it (openSection() also takes the id)
+    function secIndex(id) {
+        for (var i = 0; i < secs.length; i++) if (secs[i].id === id) return i
+        return -1
+    }
     readonly property var secs: [
-        { icon: "globe", key: "settings.sections.language" },
-        { icon: "hard-drive", key: "settings.sections.sources" },
-        { icon: "volume-2", key: "settings.sections.audio" },
-        { icon: "sliders", key: "settings.sections.playback" },
-        { icon: "speaker", key: "settings.sections.multiroom" },
-        { icon: "alarm-clock", key: "settings.sections.alarm" },
-        { icon: "wifi", key: "settings.sections.network" },
-        { icon: "smartphone", key: "settings.sections.webRemote" },
-        { icon: "tablet", key: "settings.sections.webRemoteIos" },
-        { icon: "terminal", key: "settings.sections.ssh" },
-        { icon: "mouse-pointer-2", key: "settings.sections.pointer" },
-        { icon: "gauge", key: "settings.sections.uiResolution" },
-        { icon: "refresh-cw", key: "settings.sections.uiRefresh" },
-        { icon: "monitor", key: "settings.sections.displayMode" },
-        { icon: "clock", key: "settings.sections.timezone" },
-        { icon: "info", key: "settings.sections.systemInfo" },
-        { icon: "download", key: "settings.sections.updates" },
-        { icon: "power", key: "settings.sections.systemControls" },
-        { icon: "scroll-text", key: "settings.sections.thirdPartyNotices" }]
+        { id: "language", icon: "globe", key: "settings.sections.language" },
+        { id: "sources", icon: "hard-drive", key: "settings.sections.sources" },
+        { id: "audio", icon: "volume-2", key: "settings.sections.audio" },
+        { id: "playback", icon: "sliders", key: "settings.sections.playback" },
+        { id: "vuMeters", icon: "audio-lines", key: "settings.sections.vuMeters" },
+        { id: "multiroom", icon: "speaker", key: "settings.sections.multiroom" },
+        { id: "alarm", icon: "alarm-clock", key: "settings.sections.alarm" },
+        { id: "network", icon: "wifi", key: "settings.sections.network" },
+        { id: "webRemote", icon: "smartphone", key: "settings.sections.webRemote" },
+        { id: "webRemoteIos", icon: "tablet", key: "settings.sections.webRemoteIos" },
+        { id: "ssh", icon: "terminal", key: "settings.sections.ssh" },
+        { id: "pointer", icon: "mouse-pointer-2", key: "settings.sections.pointer" },
+        { id: "uiResolution", icon: "gauge", key: "settings.sections.uiResolution" },
+        { id: "uiRefresh", icon: "refresh-cw", key: "settings.sections.uiRefresh" },
+        { id: "displayMode", icon: "monitor", key: "settings.sections.displayMode" },
+        { id: "timezone", icon: "clock", key: "settings.sections.timezone" },
+        { id: "systemInfo", icon: "info", key: "settings.sections.systemInfo" },
+        { id: "updates", icon: "download", key: "settings.sections.updates" },
+        { id: "systemControls", icon: "power", key: "settings.sections.systemControls" },
+        { id: "thirdPartyNotices", icon: "scroll-text", key: "settings.sections.thirdPartyNotices" }]
 
     Component.onCompleted: Ui.settings = root
 
@@ -89,6 +96,10 @@ Item {
         property string timezone: ""
         property bool vuMeter: true; property int autoexpand: 0; property bool playerEnabled: true
         property var vuStyles: []                                   // [{id, name:{en,it}}]; the choice is Player.vuStyle
+        // VU meter store (api_server /vu_store): the full list only while the
+        // section is open, the count of news for the dot on its row always
+        property var vuStore: ({ skins: [], checking: false, busy: false, error: null, loaded: false })
+        property int vuStoreNew: 0
         property string otaChannel: "prod"; property var otaChannels: ["prod", "dev"]
         property string audioCur: ""; property var audio: []          // [{id,name}]
         property string lmsMode: "local"; property string lmsHost: ""; property string playerName: ""; property string lyrionChannel: "release"
@@ -123,6 +134,20 @@ Item {
                 if (--pending === 0 && g === gen) { loaded = true; root.dataChanged() }
             }, 5000)
         }
+        // the store's list, with previews: separate from load(), which runs on
+        // every settings change and would carry the images each time
+        function loadStore(markSeen) {
+            Api.get(api("/vu_store"), function(ok, d) {
+                if (!ok || !d || typeof d !== "object") { vuStore = Object.assign({}, vuStore, { loaded: true, checking: false, busy: false }); root.rebuild(); return }
+                var wasBusy = vuStore.busy
+                d.loaded = true
+                d.skins = d.skins || []
+                vuStore = d
+                if (wasBusy && !d.busy) get(api("/vu_style"), function(v) { vuStyles = v.styles || [] })
+                if (markSeen && d.skins.length) Api.post(api("/vu_store/seen"), {}, function() { vuStoreNew = 0 }, 5000)
+                root.rebuild()
+            }, 10000)
+        }
         function str(d, k, fb) { return d[k] !== undefined && d[k] !== null ? String(d[k]) : (fb || "") }
         function load() {
             gen++
@@ -140,6 +165,7 @@ Item {
             get(api("/pointer_status"), function(d) { pointerEnabled = d.enabled !== false; pointerAvailable = d.available !== false })
             get(api("/vu_meter"), function(d) { vuMeter = d.enabled !== false })
             get(api("/vu_style"), function(d) { vuStyles = d.styles || [] })
+            get(api("/vu_store?summary=1"), function(d) { vuStoreNew = Number(d.new || 0) + Number(d.updates || 0) })
             get(api("/player_enabled"), function(d) { playerEnabled = d.enabled !== false })
             get(api("/ui_refresh"), function(d) { uiRefreshSupported = !!d.supported; uiRefresh = str(d, "mode", "native") })
             get(api("/nowplaying_autoexpand"), function(d) { autoexpand = Number(d.seconds || 0) })
@@ -303,14 +329,18 @@ Item {
     function say(text, err) { msg = text; msgErr = !!err; rebuild() }
     function goRoot() { active = -1; msg = ""; pendAct = ""; rows = []; page.contentY = 0; appear() }
     function openSection(i, mark) {
+        if (typeof i === "string") i = secIndex(i)
+        if (i < 0 || i >= secs.length) return
+        var id = secs[i].id
         active = i; msg = ""; pendAct = ""; countdown = 0
         audioSel = ""; sshUser = ""; sshPass = ""; nameEdit = ""; hostEdit = ""
         band = -1; bandAdd = -1; bandShare = -1; brId = ""; pickOwner = 0; pickNew = ""
         wizReset()
-        if (i === 14 && timezones.length === 0) Api.get(cfg.api("/timezones"), function(ok, d) { if (ok && d && d.timezones) { timezones = d.timezones.map(String); rebuild() } })
-        if (i === 7) cfg.mintToken()
-        if (i === 4 && cfg.lmsMode === "follow") cfg.loadDiscover()
-        if (i === 18 && !thirdParty) { try { thirdParty = JSON.parse(Sys.readFile(I18n.dir + "/third_party.json")) } catch (e) { thirdParty = null } }
+        if (id === "timezone" && timezones.length === 0) Api.get(cfg.api("/timezones"), function(ok, d) { if (ok && d && d.timezones) { timezones = d.timezones.map(String); rebuild() } })
+        if (id === "webRemote") cfg.mintToken()
+        if (id === "multiroom" && cfg.lmsMode === "follow") cfg.loadDiscover()
+        if (id === "vuMeters") cfg.loadStore(true)
+        if (id === "thirdPartyNotices" && !thirdParty) { try { thirdParty = JSON.parse(Sys.readFile(I18n.dir + "/third_party.json")) } catch (e) { thirdParty = null } }
         rebuild(); page.contentY = 0; appear()
         if (mark) { pendingMark = mark; markTimer.restart() }
     }
@@ -538,26 +568,27 @@ Item {
         rebuildPending = false
         _stack = []; _cur = []
         if (active >= 0) {
-            switch (active) {
-            case 0: secLanguage(); break
-            case 1: secSources(); break
-            case 2: secAudio(); break
-            case 3: secPlayback(); break
-            case 4: secMultiroom(); break
-            case 5: secAlarm(); break
-            case 6: secNetwork(); break
-            case 7: secWebremote(); break
-            case 8: secWebremoteIos(); break
-            case 9: secSsh(); break
-            case 10: secPointer(); break
-            case 11: secUires(); break
-            case 12: secUirefresh(); break
-            case 13: secDisplaymode(); break
-            case 14: secTimezone(); break
-            case 15: secSysinfo(); break
-            case 16: secUpdates(); break
-            case 17: secSysctl(); break
-            case 18: secThirdparty(); break
+            switch (secs[active].id) {
+            case "language": secLanguage(); break
+            case "sources": secSources(); break
+            case "audio": secAudio(); break
+            case "playback": secPlayback(); break
+            case "vuMeters": secVuMeters(); break
+            case "multiroom": secMultiroom(); break
+            case "alarm": secAlarm(); break
+            case "network": secNetwork(); break
+            case "webRemote": secWebremote(); break
+            case "webRemoteIos": secWebremoteIos(); break
+            case "ssh": secSsh(); break
+            case "pointer": secPointer(); break
+            case "uiResolution": secUires(); break
+            case "uiRefresh": secUirefresh(); break
+            case "displayMode": secDisplaymode(); break
+            case "timezone": secTimezone(); break
+            case "systemInfo": secSysinfo(); break
+            case "updates": secUpdates(); break
+            case "systemControls": secSysctl(); break
+            case "thirdPartyNotices": secThirdparty(); break
             }
             if (msg) note(msg, msgErr ? "red" : "dark")
         }
@@ -833,29 +864,21 @@ Item {
     function secPlayback() {
         help("settings.playback.help")
         // The player prefs below belong to this device's player: hidden while
-        // another one is driven (#99). The VU meters and the auto-open are
-        // about this screen, so they stay reachable either way.
+        // another one is driven (#99). The auto-open is about this screen, so
+        // it stays reachable either way.
         if (!remoteNote()) playerPrefs()
-        vuBand()
         label("settings.playback.autoExpand", 14); help("settings.playback.autoExpandHelp", 12)
         var AE = [0, 3, 5, 10, 15], ae = []
         for (var m = 0; m < 5; m++) ae.push(cell(AE[m] === 0 ? Tr.t("settings.playback.rgOff") : AE[m] + "s", String(AE[m]), cfg.autoexpand === AE[m], "autoexpand", { hh: 44 }))
         grid(ae)
     }
-    // The VU meters get a band of their own: the switch, then the looks to
-    // choose from, each with a still preview of the meters
-    function vuBand() {
-        var lang = I18n.lang, cur = ""
-        for (var i = 0; i < cfg.vuStyles.length; i++) {
-            if (cfg.vuStyles[i].id !== Player.vuStyle) continue
-            var n0 = cfg.vuStyles[i].name || {}
-            cur = String(n0[lang] || n0.en || cfg.vuStyles[i].id)
-        }
-        var sum = !cfg.vuMeter ? Tr.t("settings.playback.vuOff") : cur ? Tr.tf("settings.playback.vuOnStyle", "style", cur) : ""
-        var vb = bandRow("gauge", Tr.t("settings.playback.vuSection"), sum, band === 0, "band", "0", false)
-        if (band !== 0) return
-        begin(vb.children)
+    // The VU meters have a section of their own: the switch, then the looks
+    // to choose from, each with a still preview of the meters. About this
+    // screen, not the player, so it never hides behind remoteNote().
+    function secVuMeters() {
+        help("settings.vuMeters.help")
         toggle(Tr.t("settings.playback.vuMeter"), Tr.t("settings.playback.vuMeterHelp"), cfg.vuMeter, "vumeter")
+        var lang = I18n.lang
         if (cfg.vuMeter && cfg.vuStyles.length > 1) {
             label("settings.playback.vuStyle", 14); help("settings.playback.vuStyleHelp", 12)
             var st = []
@@ -869,7 +892,35 @@ Item {
                 }
             }
         }
-        end()
+        vuStoreRows(lang)
+    }
+    // More looks to download: a card per skin of the store, with its preview,
+    // and what can be done with it
+    function vuStoreRows(lang) {
+        var vs = cfg.vuStore
+        label("settings.vuMeters.storeTitle", 14); help("settings.vuMeters.storeHelp", 12)
+        if (vs.error) note(vs.error.message || "", vs.skins.length ? "dark" : "red")
+        if (!vs.skins.length) {
+            if (!vs.loaded || vs.checking) note(Tr.t("settings.vuMeters.storeLoading"), "dark")
+            else if (!vs.error) note(Tr.t("settings.vuMeters.storeEmpty"), "dark")
+        }
+        var cards = []
+        for (var i = 0; i < vs.skins.length; i++) {
+            var k = vs.skins[i], nm = k.name || {}
+            var mb = (Number(k.size || 0) / 1048576).toFixed(1).replace(".", lang === "it" ? "," : ".") + " MB"
+            var state = k.job === "downloading" ? "downloading" : k.job === "installing" ? "installing"
+                      : !k.supported ? "unsupported" : k.update ? "update" : k.installed ? "installed" : "available"
+            cards.push({ type: "vustore", label: String(nm[lang] || nm.en || k.id), arg: k.id, preview: k.preview || "",
+                         meta: [k.author || "", mb].filter(function(x) { return !!x }).join(" · "),
+                         state: state, isNew: !!k.new, err: k.jobError ? String(k.jobError.message || "") : "",
+                         act: state === "installed" ? "vu_remove" : "vu_install" })
+            if (cards.length === 2 || i === vs.skins.length - 1) {
+                if (cards.length === 1) cards.push({ type: "help", label: "" })
+                grid(cards); cards = []
+            }
+        }
+        if (vs.loaded && !vs.checking && !vs.busy)
+            grid([acell(Tr.t("settings.vuMeters.storeCheck"), "vu_check", "accent", { icon: "rotate-cw", hh: 44 })])
     }
     function playerPrefs() {
         if (!havePlayer) note(Tr.t("settings.playback.noPlayer"), "dark")
@@ -1187,6 +1238,28 @@ Item {
             return
         case "vumeter": post(A("/vu_meter"), { enable: !row.on }); cfg.vuMeter = !row.on; Player.vuEnabled = cfg.vuMeter; break
         case "vu_style": post(A("/vu_style"), { style: arg }); Player.vuStyle = arg; break
+        case "vu_install":
+            if (row.state === "downloading" || row.state === "installing" || row.state === "unsupported") return
+            Api.post(A("/vu_store/install"), { id: arg }, function(ok, d) {
+                if (d && d.success === false) say(String(d.message || ""), true)
+                cfg.loadStore(false)
+            }, 12000)
+            cfg.vuStore = Object.assign({}, cfg.vuStore, { busy: true })
+            break
+        case "vu_remove":
+            Ui.dialogs.confirm(Tr.tf("settings.vuMeters.removeConfirm", "name", row.label), Tr.t("settings.vuMeters.remove"), true, function(ok) {
+                if (!ok) return
+                Api.post(A("/vu_store/remove"), { id: arg }, function(ok2, d) {
+                    if (d && d.success === false) say(String(d.message || ""), true)
+                    else if (Player.vuStyle === arg) Player.vuStyle = "classic"
+                    cfg.load(); cfg.loadStore(false)
+                }, 12000)
+            })
+            return
+        case "vu_check":
+            Api.post(A("/vu_store/check"), {}, function() { cfg.loadStore(false) }, 12000)
+            cfg.vuStore = Object.assign({}, cfg.vuStore, { checking: true })
+            break
         case "autoexpand": post(A("/nowplaying_autoexpand"), { seconds: parseInt(arg) }); cfg.autoexpand = parseInt(arg); Player.refreshSettings(); break
         case "transition": setPref("transitionType", arg); Player.refreshPrefs(); say(Tr.t("settings.playback.saved")); break
         case "transdur": setPref("transitionDuration", arg); Player.refreshPrefs(); say(Tr.t("settings.playback.saved")); break
@@ -1416,6 +1489,12 @@ Item {
             else root.rebuild()
         }
     }
+    // while the store checks its list or installs a skin, its state is re-read
+    Timer {
+        interval: 1500; repeat: true
+        running: root.visible && root.active >= 0 && root.secs[root.active].id === "vuMeters" && (cfg.vuStore.checking || cfg.vuStore.busy)
+        onTriggered: cfg.loadStore(false)
+    }
     // mentre il disco si formatta lo stato va riletto da solo
     Timer { interval: 2000; repeat: true; running: root.fmtWatch; onTriggered: { if (!Ui.dialogs.active) root.fmtWatch = false; else cfg.load() } }
 
@@ -1464,8 +1543,10 @@ Item {
                             color: sTap.mix(Theme.gray, Theme.light); border.width: 1; border.color: Theme.accent
                             Rectangle { x: 10; y: 1; width: parent.width - 20; height: 1; color: Theme.wa(0.1) }   // il riflesso a tutta larghezza, dentro gli angoli
                             Rectangle { x: 16; y: 17; width: 38; height: 38; radius: 8; color: Theme.goldA(0.2)
-                                        Icon { anchors.centerIn: parent; name: secRow.index === 14 && cfg.displayMode === "headless" ? "monitor-off" : secRow.modelData.icon; size: 22; color: Theme.gold } }
+                                        Icon { anchors.centerIn: parent; name: secRow.modelData.id === "displayMode" && cfg.displayMode === "headless" ? "monitor-off" : secRow.modelData.icon; size: 22; color: Theme.gold } }
                             Text { x: 66; width: parent.width - 66 - 46; anchors.verticalCenter: parent.verticalCenter; text: Tr.t(secRow.modelData.key); elide: Text.ElideRight; color: Theme.white; font.family: Theme.font; font.pixelSize: 18 }
+                            // news in the VU meter store: new skins or updates of downloaded ones
+                            Rectangle { visible: secRow.modelData.id === "vuMeters" && cfg.vuStoreNew > 0; x: parent.width - 16 - 22 - 20; anchors.verticalCenter: parent.verticalCenter; width: 10; height: 10; radius: 5; color: Theme.gold }
                             Icon { x: parent.width - 16 - 22; anchors.verticalCenter: parent.verticalCenter; name: "chevron-right"; size: 22; color: Theme.silver }
                         }
                         Tap { id: sTap; onClicked: root.openSection(secRow.index) }

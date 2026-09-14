@@ -1,0 +1,337 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Guided "add a network folder": 1. pick a device found on the network (or
+     type its address), 2. pick one of its shared folders (or type the name),
+     3. confirm. Visibility of each block is driven by SourcesActivity. -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:orientation="vertical"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content">
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="@string/sources_wiz_intro"
+        android:textColor="@color/hifiSilver"
+        android:layout_marginBottom="8dp" />
+
+    <!-- 1. which device, from the scan -->
+    <LinearLayout
+        android:id="@+id/sources_wiz_step_scan"
+        android:orientation="vertical"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content">
+
+        <TextView
+            android:id="@+id/sources_wiz_searching"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textColor="@color/hifiSilver"
+            android:visibility="gone" />
+
+        <LinearLayout
+            android:id="@+id/sources_wiz_hosts"
+            android:orientation="vertical"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content" />
+
+        <TextView
+            android:id="@+id/sources_wiz_nothing"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/sources_wiz_nothing"
+            android:textColor="@color/hifiSilver"
+            android:visibility="gone" />
+
+        <LinearLayout
+            android:orientation="horizontal"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="10dp">
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/sources_wiz_search_again"
+                style="@style/Widget.Material3.Button.TextButton"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/sources_wiz_search_again" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/sources_wiz_type_host"
+                style="@style/Widget.Material3.Button.TextButton"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/sources_wiz_type_it" />
+        </LinearLayout>
+    </LinearLayout>
+
+    <!-- 1b. which device, typed in -->
+    <LinearLayout
+        android:id="@+id/sources_wiz_step_manual"
+        android:orientation="vertical"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:visibility="gone">
+
+        <com.google.android.material.textfield.TextInputLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:hint="@string/sources_wiz_address">
+            <com.google.android.material.textfield.TextInputEditText
+                android:id="@+id/sources_wiz_host_field"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:inputType="textUri" />
+        </com.google.android.material.textfield.TextInputLayout>
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:text="@string/sources_wiz_manual_hint"
+            android:textColor="@color/hifiSilver" />
+
+        <LinearLayout
+            android:orientation="horizontal"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp">
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/sources_wiz_host_continue"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginEnd="8dp"
+                android:text="@string/sources_wiz_continue" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/sources_wiz_manual_search"
+                style="@style/Widget.Material3.Button.TextButton"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/sources_wiz_search_again" />
+        </LinearLayout>
+    </LinearLayout>
+
+    <!-- 2. which shared folder -->
+    <LinearLayout
+        android:id="@+id/sources_wiz_step_share"
+        android:orientation="vertical"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:visibility="gone">
+
+        <TextView
+            android:id="@+id/sources_wiz_on_device"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textColor="@color/hifiSilver" />
+
+        <LinearLayout
+            android:id="@+id/sources_wiz_user_row"
+            android:orientation="horizontal"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center_vertical"
+            android:visibility="gone">
+
+            <TextView
+                android:id="@+id/sources_wiz_user_text"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:textColor="@android:color/white" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/sources_wiz_change_user"
+                style="@style/Widget.Material3.Button.TextButton"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/sources_wiz_change_user" />
+        </LinearLayout>
+
+        <TextView
+            android:id="@+id/sources_wiz_loading_shares"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:text="@string/sources_wiz_loading_shares"
+            android:textColor="@color/hifiSilver"
+            android:visibility="gone" />
+
+        <!-- the share list cannot be read: type the name -->
+        <LinearLayout
+            android:id="@+id/sources_wiz_share_manual"
+            android:orientation="vertical"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:visibility="gone">
+
+            <com.google.android.material.textfield.TextInputLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:hint="@string/sources_wiz_share_label"
+                app:placeholderText="@string/sources_share_placeholder">
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/sources_wiz_share_field"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:inputType="text" />
+            </com.google.android.material.textfield.TextInputLayout>
+
+            <TextView
+                android:id="@+id/sources_wiz_share_hint"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:textColor="@color/hifiSilver" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/sources_wiz_share_continue"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:text="@string/sources_wiz_continue" />
+        </LinearLayout>
+
+        <!-- the share list -->
+        <LinearLayout
+            android:id="@+id/sources_wiz_share_list"
+            android:orientation="vertical"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:visibility="gone">
+
+            <LinearLayout
+                android:id="@+id/sources_wiz_shares"
+                android:orientation="vertical"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content" />
+
+            <TextView
+                android:id="@+id/sources_wiz_no_shares"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:text="@string/sources_wiz_no_shares"
+                android:textColor="@color/hifiSilver"
+                android:visibility="gone" />
+
+            <LinearLayout
+                android:orientation="horizontal"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="10dp">
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/sources_wiz_need_password"
+                    style="@style/Widget.Material3.Button.TextButton"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/sources_wiz_need_password" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/sources_wiz_type_share"
+                    style="@style/Widget.Material3.Button.TextButton"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/sources_wiz_type_it" />
+            </LinearLayout>
+        </LinearLayout>
+    </LinearLayout>
+
+    <!-- 3. confirm -->
+    <LinearLayout
+        android:id="@+id/sources_wiz_step_confirm"
+        android:orientation="vertical"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:visibility="gone">
+
+        <TextView
+            android:id="@+id/sources_wiz_summary"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textColor="@android:color/white"
+            android:lineSpacingExtra="4dp" />
+
+        <com.google.android.material.switchmaterial.SwitchMaterial
+            android:id="@+id/sources_wiz_rw"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="10dp"
+            android:text="@string/sources_wiz_allow_write" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/sources_wiz_write_hint"
+            android:textColor="@color/hifiSilver" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/sources_wiz_add"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="10dp"
+            android:text="@string/sources_wiz_add_now" />
+    </LinearLayout>
+
+    <!-- what went wrong, in words; the raw tool output stays reachable but is
+         never the only thing on screen -->
+    <LinearLayout
+        android:id="@+id/sources_wiz_error_block"
+        android:orientation="vertical"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="10dp"
+        android:visibility="gone">
+
+        <TextView
+            android:id="@+id/sources_wiz_error"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textColor="@color/osmium_error" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/sources_wiz_detail_toggle"
+            style="@style/Widget.Material3.Button.TextButton"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/sources_wiz_show_detail"
+            android:visibility="gone" />
+
+        <TextView
+            android:id="@+id/sources_wiz_detail"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:fontFamily="monospace"
+            android:textColor="@color/hifiSilver"
+            android:textIsSelectable="true"
+            android:textSize="12sp"
+            android:visibility="gone" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:id="@+id/sources_wiz_nav"
+        android:orientation="horizontal"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="10dp"
+        android:visibility="gone">
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/sources_wiz_back"
+            style="@style/Widget.Material3.Button.TextButton"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/sources_common_back" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/sources_wiz_start_over"
+            style="@style/Widget.Material3.Button.TextButton"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/sources_wiz_start_over" />
+    </LinearLayout>
+</LinearLayout>

@@ -1,5 +1,6 @@
 // L'avviso "chiavetta collegata" (UsbToast.jsx): in basso a destra, sparisce
-// da solo dopo 4,5 s, si chiude toccandolo. Non e' modale.
+// da solo dopo 4,5 s, si chiude toccandolo. Non e' modale. say() shows any
+// other short notice the same way (restart / shut down).
 import QtQuick
 import Hifi
 import Hifi.Ui
@@ -14,8 +15,10 @@ Item {
     Spring { id: rise; stiffness: 550; damping: 30 }
     property real fade: 0
     Behavior on fade { NumberAnimation { duration: 300; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.easeOut } }
-    function show(label) {
-        text = Tr.tf("usbToast.mounted", "label", label || "USB")
+    property string icon: "usb"
+    function show(label) { say("usb", Tr.tf("usbToast.mounted", "label", label || "USB")) }
+    function say(ic, t) {
+        icon = ic; text = t
         open = true; closing = false
         rise.set(0); rise.to = 1; fade = 1
         auto.restart()
@@ -31,7 +34,7 @@ Item {
         scale: 0.95 + 0.05 * rise.value                    // scale 0.95 -> 1 -> 0.95
         color: "#2a2a2a"; border.width: 1; border.color: "#3a3a3a"
         BoxShadow { z: -1; targetX: 0; targetY: 0; targetW: parent.width; targetH: parent.height; radius: 12; blur: 50; spread: -12; offsetY: 25; color: Theme.blackA(0.25) }   // shadow-2xl
-        Icon { x: 16; anchors.verticalCenter: parent.verticalCenter; name: "usb"; size: 18; color: Theme.gold }
+        Icon { x: 16; anchors.verticalCenter: parent.verticalCenter; name: root.icon; size: 18; color: Theme.gold }
         Text { id: msg; x: 46; width: parent.width - 62; anchors.verticalCenter: parent.verticalCenter; text: root.text; elide: Text.ElideRight; color: Theme.white; font.family: Theme.font; font.pixelSize: 14 }
         Tap { onClicked: root.close() }
     }

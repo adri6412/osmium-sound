@@ -26,22 +26,25 @@ Item {
             id: pickerPill
             readonly property color fg: Player.isOwn ? Theme.silver : Theme.gold
             x: 10; y: 4; height: 32; radius: 16
-            width: Math.min(10 + 16 + 8 + nameText.implicitWidth + 6 + 14 + 12, 252)
+            width: Math.min(10 + 16 + 8 + nameText.implicitWidth + 8 + 6 + 8 + 14 + 12, 266)
             visible: Player.connected
             color: nameTap.mix(Theme.wa(0.05), Theme.wa(0.12))
             border.width: 1; border.color: Player.isOwn ? Theme.wa(0.08) : Theme.goldA(0.4)
             Icon { x: 10; anchors.verticalCenter: parent.verticalCenter; name: "speaker"; size: 16; color: pickerPill.fg }
             Text {
                 id: nameText
-                x: 34; width: pickerPill.width - x - 6 - 14 - 12; height: parent.height; verticalAlignment: Text.AlignVCenter
+                x: 34; width: pickerPill.width - x - 8 - 6 - 8 - 14 - 12; height: parent.height; verticalAlignment: Text.AlignVCenter
                 text: Player.playerName; elide: Text.ElideRight
                 color: Player.isOwn ? Theme.white : Theme.gold
                 font.family: Theme.font; font.pixelSize: 14
             }
+            // connection light, right after the name
+            Rectangle { x: pickerPill.width - 12 - 14 - 8 - 6; y: 13; width: 6; height: 6; radius: 3; color: Theme.emerald }
             Icon { x: pickerPill.width - 12 - 14; anchors.verticalCenter: parent.verticalCenter; name: "chevron-down"; size: 14; color: pickerPill.fg }
             Tap { id: nameTap; grow: 4; onClicked: root.openPlayerPicker() }
         }
-        Rectangle { x: 270; y: 17; width: 6; height: 6; radius: 3; color: Player.connected ? Theme.emerald : Theme.redA(0.7) }
+        // without a player the pill is hidden: the red light stays on its own
+        Rectangle { x: 16; y: 17; width: 6; height: 6; radius: 3; visible: !Player.connected; color: Theme.redA(0.7) }
         RoundButton { x: 284; y: 3; width: 48; height: 34; icon: "chevron-up"; iconSize: 28; grow: 3; visible: Player.connected; onClicked: root.expand() }
     }
 

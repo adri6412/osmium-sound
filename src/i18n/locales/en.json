@@ -389,6 +389,7 @@
       "sources": "Music sources",
       "audio": "Audio Output (DAC)",
       "playback": "Playback",
+      "vuMeters": "VU Meters",
       "dsp": "DSP / Equalizer",
       "multiroom": "Lyrion Music Server",
       "alarm": "Alarm Clock",
@@ -414,6 +415,23 @@
       "note": "You are controlling «{{name}}». These settings belong to this device: go back to its own player to change them.",
       "back": "Back to this device"
     },
+    "vuMeters": {
+      "help": "The analog meters on the Now Playing screen: turn them on or off and choose how they look.",
+      "storeTitle": "More VU meters to download",
+      "storeHelp": "New looks published by Osmium Sound. A downloaded VU meter is kept up to date by itself and appears among the styles above.",
+      "storeLoading": "Loading the list…",
+      "storeEmpty": "There are no other VU meters to download right now.",
+      "storeCheck": "Check again",
+      "install": "Download",
+      "update": "Update",
+      "remove": "Remove",
+      "removeConfirm": "Remove the VU meter «{{name}}» from this device? You can download it again later.",
+      "downloading": "Downloading…",
+      "installing": "Installing…",
+      "unsupported": "Needs a device update",
+      "badgeNew": "NEW",
+      "badgeUpdate": "NEW VERSION"
+    },
     "playback": {
       "help": "Playback options applied to the active player: track transitions (crossfade/gapless) and volume normalisation (ReplayGain).",
       "noPlayer": "No active player found. Start playback or check the Lyrion connection.",
@@ -436,9 +454,6 @@
       "vuMeterHelp": "The VU dial in the \"now playing\" screen updates live with the audio level. Turn it off to reduce GPU load on more limited hardware.",
       "vuStyle": "VU meter style",
       "vuStyleHelp": "The look of the meters in the \"now playing\" screen.",
-      "vuSection": "VU meters",
-      "vuOff": "Off",
-      "vuOnStyle": "On · {style}",
       "autoExpand": "Auto-open now playing",
       "autoExpandHelp": "When a song starts playing, automatically open the fullscreen now-playing view after this many seconds. It only opens once per song — if you navigate away yourself, it stays put."
     },
@@ -774,7 +789,10 @@
     },
     "controls": {
       "reboot": "Reboot System",
-      "shutdown": "Shut Down System"
+      "shutdown": "Shut Down System",
+      "powerTitle": "Power",
+      "powerReboot": "Restart",
+      "powerShutdown": "Shut down"
     },
     "factory": {
       "help": "Erase all settings and return the device to its initial state (Wi-Fi networks, music sources, DSP/room correction, Bluetooth, companion pairing and the web-admin account are all cleared). The device restarts into the setup wizard.",

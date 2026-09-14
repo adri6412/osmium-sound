@@ -389,6 +389,7 @@
       "sources": "Sorgenti musicali",
       "audio": "Uscita Audio (DAC)",
       "playback": "Riproduzione",
+      "vuMeters": "VU meter",
       "dsp": "DSP / Equalizzatore",
       "multiroom": "Lyrion Music Server",
       "alarm": "Sveglia",
@@ -414,6 +415,23 @@
       "note": "Stai pilotando «{{name}}». Queste impostazioni riguardano questo apparecchio: torna al suo player per modificarle.",
       "back": "Torna a questo apparecchio"
     },
+    "vuMeters": {
+      "help": "Gli strumenti analogici della schermata \"in riproduzione\": accendili o spegnili e scegli il loro aspetto.",
+      "storeTitle": "Altri VU meter da scaricare",
+      "storeHelp": "Nuovi aspetti pubblicati da Osmium Sound. Un VU meter scaricato si aggiorna da solo e compare tra gli stili qui sopra.",
+      "storeLoading": "Caricamento dell'elenco…",
+      "storeEmpty": "Al momento non ci sono altri VU meter da scaricare.",
+      "storeCheck": "Controlla di nuovo",
+      "install": "Scarica",
+      "update": "Aggiorna",
+      "remove": "Rimuovi",
+      "removeConfirm": "Rimuovere il VU meter «{{name}}» da questo apparecchio? Potrai scaricarlo di nuovo in seguito.",
+      "downloading": "Download in corso…",
+      "installing": "Installazione…",
+      "unsupported": "Serve un aggiornamento",
+      "badgeNew": "NUOVO",
+      "badgeUpdate": "NUOVA VERSIONE"
+    },
     "playback": {
       "help": "Opzioni di riproduzione applicate al player attivo: transizioni tra i brani (crossfade/gapless) e normalizzazione del volume (ReplayGain).",
       "noPlayer": "Nessun player attivo trovato. Avvia la riproduzione o verifica la connessione a Lyrion.",
@@ -436,9 +454,6 @@
       "vuMeterHelp": "Il quadrante VU nella schermata \"in riproduzione\" si aggiorna in tempo reale con il livello audio. Disattivalo per ridurre il carico sulla GPU su hardware più limitato.",
       "vuStyle": "Stile dei VU meter",
       "vuStyleHelp": "L'aspetto degli strumenti nella schermata \"in riproduzione\".",
-      "vuSection": "VU meter",
-      "vuOff": "Spenti",
-      "vuOnStyle": "Accesi · {style}",
       "autoExpand": "Apertura automatica in riproduzione",
       "autoExpandHelp": "Quando parte un brano, apre automaticamente la schermata a schermo intero \"in riproduzione\" dopo questi secondi. Si apre una sola volta per brano: se poi navighi altrove di tua scelta, resta ferma."
     },
@@ -774,7 +789,10 @@
     },
     "controls": {
       "reboot": "Riavvia Sistema",
-      "shutdown": "Spegni Sistema"
+      "shutdown": "Spegni Sistema",
+      "powerTitle": "Spegnimento",
+      "powerReboot": "Riavvia",
+      "powerShutdown": "Spegni"
     },
     "factory": {
       "help": "Cancella tutte le impostazioni e riporta il dispositivo allo stato iniziale (reti Wi-Fi, sorgenti musicali, DSP/room correction, Bluetooth, pairing companion e account interfaccia web vengono azzerati). Il dispositivo si riavvia nella configurazione guidata.",

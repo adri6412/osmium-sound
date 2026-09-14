@@ -88,7 +88,7 @@ Item {
         onOpenPlaybackSetting: (which) => {
             app.setExpanded(false)
             mainScreen.browser.openTab(4)
-            Ui.settings.openSection(3, which)
+            Ui.settings.openSection("playback", which)
         }
     }
     // Mentre le schermate scorrono i riquadri sotto il dito non sono quelli

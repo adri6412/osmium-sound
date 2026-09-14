@@ -23,6 +23,7 @@ import android.content.Intent;
 import android.os.Bundle;
 import android.util.Log;
 import android.view.View;
+import android.widget.Toast;
 
 import androidx.annotation.IntDef;
 import androidx.annotation.NonNull;
@@ -72,6 +73,11 @@ public class ConnectActivity extends BaseActivity {
 
         setContentView(R.layout.disconnected);
         setSupportActionBar(findViewById(R.id.toolbar));
+        // "Disconnected" read as a fault to someone setting the app up for the
+        // first time; keep it for when there was a server to be disconnected from.
+        if (mDisconnectionReason == MANUAL_DISCONNECT && !HiFiMediaPlayer.getPreferences().hasServerConfig()) {
+            setTitle(R.string.wizard_toolbar_setup);
+        }
         ViewUtilities.setInsetsListener(findViewById(R.id.toolbar), true, false, false);
         ViewUtilities.setInsetsListener(findViewById(R.id.content), false, false, false);
         ViewUtilities.setInsetsListener(findViewById(R.id.bottom_container), false, true, true);
@@ -194,7 +200,14 @@ public class ConnectActivity extends BaseActivity {
 
     private void onHandshakeComplete(HandshakeComplete event) {
         Log.d("ConnectActivity", "Handshake complete");
-        HiFiMediaPlayer.getPreferences().saveServer();
+        Preferences preferences = HiFiMediaPlayer.getPreferences();
+        preferences.saveServer();
+        // The wizard used to vanish into the home screen with nothing saying the
+        // pairing had worked. A toast outlives this activity finishing.
+        String host = preferences.getServerAddress().host();
+        if (host != null) {
+            Toast.makeText(this, getString(R.string.wizard_connected, host), Toast.LENGTH_SHORT).show();
+        }
         HomeActivity.show(this);
     }
 }

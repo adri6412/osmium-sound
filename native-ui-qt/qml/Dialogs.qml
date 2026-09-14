@@ -9,7 +9,7 @@ import Hifi.Ui
 
 Item {
     id: root
-    property int kind: 0            // 0 nessuno 1 conferma 2 scelta 3 testo 4 wifi 5 formattazione 6 accesso
+    property int kind: 0            // 0 nessuno 1 conferma 2 scelta 3 testo 4 wifi 5 formattazione 6 accesso 7 spegnimento
     readonly property bool active: kind !== 0
     property bool closing: false
     visible: active
@@ -76,6 +76,8 @@ Item {
         openCommon(6); title = t || ""; body = b || ""
         luser = user || ""; lpass = ""; err = error || ""; cb = f
     }
+    // Restart or shut down: `f("reboot" | "shutdown")`, `f("")` on cancel.
+    function power(f) { openCommon(7); cb = f }
     function formatStatus(state, msg, pct) {
         if (kind !== 5 || step < 2) return
         fmsg = msg || ""; fpct = pct || 0
@@ -94,8 +96,10 @@ Item {
     function finishPick(i) { var f = cb; close(); if (f) f(i) }
     function finishWifi(ok) { var f = cb; var s = ssid, p = pass; close(); if (f) f(ok ? s : null, ok ? p : null) }
     function finishLogin(ok) { var f = cb; var u = luser.trim(), p = lpass; close(); if (f) f(ok ? u : null, ok ? p : null) }
+    function finishPower(act) { var f = cb; close(); if (f) f(act) }
     function backdrop() {
         if (kind === 1) finishOk(false)
+        else if (kind === 7) finishPower("")
         else if (kind === 2) finishPick(-1)
         else if (kind === 4) finishWifi(false)
         else if (kind === 6) finishLogin(false)
@@ -142,7 +146,7 @@ Item {
             id: content
             x: card.ipad; y: card.ipad
             width: card.width - 2 * card.ipad
-            implicitHeight: 2 * card.ipad + (root.kind === 1 ? confirmBox.height : root.kind === 2 ? pickBox.height : root.kind === 3 ? textBox.height : root.kind === 4 ? wifiBox.height : root.kind === 6 ? loginBox.height : fmtBox.height)
+            implicitHeight: 2 * card.ipad + (root.kind === 1 ? confirmBox.height : root.kind === 2 ? pickBox.height : root.kind === 3 ? textBox.height : root.kind === 4 ? wifiBox.height : root.kind === 6 ? loginBox.height : root.kind === 7 ? powerBox.height : fmtBox.height)
 
             // 1) conferma: max-w-md, testo 18, Annulla + azione 48
             Column {
@@ -330,6 +334,42 @@ Item {
                         Text { anchors.centerIn: parent; text: Tr.t("sources.wizard.signIn"); color: Theme.black; font.family: Theme.font; font.pixelSize: 16; font.bold: true }
                         Tap { id: loTap; enabled: root.luser.trim() !== ""; onClicked: root.finishLogin(true) }
                     }
+                }
+            }
+
+            // 7) power: two big tiles, restart and shut down, then Cancel.
+            // The popup is already the confirmation: a tile acts at once.
+            Column {
+                id: powerBox
+                visible: root.kind === 7
+                width: parent.width
+                Row {
+                    spacing: 8
+                    Icon { name: "power"; size: 18; color: Theme.gold; anchors.verticalCenter: parent.verticalCenter }
+                    Text { width: powerBox.width - 26; height: 28; verticalAlignment: Text.AlignVCenter; text: Tr.t("settings.controls.powerTitle"); elide: Text.ElideRight; color: Theme.white; font.family: Theme.font; font.pixelSize: 18; font.bold: true }
+                }
+                Item { width: 1; height: 20 }
+                Row {
+                    width: parent.width; spacing: 12
+                    Repeater {
+                        model: [{ act: "reboot", icon: "rotate-cw", key: "settings.controls.powerReboot", c: "#ea580c", p: "#c2410c" },
+                                { act: "shutdown", icon: "power", key: "settings.controls.powerShutdown", c: "#dc2626", p: "#b91c1c" }]
+                        Rectangle {
+                            required property var modelData
+                            width: (parent.width - 12) / 2; height: 112; radius: 12
+                            color: pwTap.mix(modelData.c, modelData.p)
+                            scale: pwTap.tapScale
+                            Icon { anchors.horizontalCenter: parent.horizontalCenter; y: 22; name: parent.modelData.icon; size: 36; color: Theme.white }
+                            Text { anchors.horizontalCenter: parent.horizontalCenter; y: 70; height: 24; verticalAlignment: Text.AlignVCenter; text: Tr.t(parent.modelData.key); color: Theme.white; font.family: Theme.font; font.pixelSize: 17; font.bold: true }
+                            Tap { id: pwTap; tap: 0.95; onClicked: root.finishPower(parent.modelData.act) }
+                        }
+                    }
+                }
+                Item { width: 1; height: 12 }
+                Rectangle {
+                    width: parent.width; height: 48; radius: 8; color: pwcTap.mix(Theme.accent, Theme.dark)
+                    Text { anchors.centerIn: parent; text: Tr.t("common.cancel"); color: Theme.white; font.family: Theme.font; font.pixelSize: 16 }
+                    Tap { id: pwcTap; onClicked: root.finishPower("") }
                 }
             }
 

@@ -29,8 +29,8 @@
 
     <string name="settings_serveraddr_hint">Apparecchio associato</string>
     <string name="settings_scan_qr">Scansiona codice QR</string>
-    <string name="settings_scan_qr_prompt">Inquadra il codice QR mostrato in Osmium Sound → Impostazioni → Controllo da telefono</string>
-    <string name="settings_scan_qr_failed">Impossibile leggere un indirizzo server da quel codice QR</string>
+    <string name="settings_scan_qr_prompt">Inquadra il codice QR mostrato in Osmium Sound → Impostazioni → Companion Android</string>
+    <string name="settings_scan_qr_failed">Questo non è il codice QR di Osmium Sound. Inquadra quello mostrato dall\'apparecchio in Impostazioni → Companion Android.</string>
     <string name="settings_pair_confirm_title">Associare a questo apparecchio?</string>
     <string name="settings_pair_confirm_message">Questo codice QR associa l\'app all\'apparecchio all\'indirizzo %1$s. Una volta associato, questo telefono potrà controllarlo da remoto — incluso riavvio, SSH e backup/ripristino. Continua solo se hai inquadrato il codice dallo schermo dell\'apparecchio.</string>
     <string name="settings_pair_confirm_button">Associa</string>
@@ -131,7 +131,7 @@
 
     <string name="connecting_text">Connessione in corso</string>
     <string name="connecting_to_text">Connessione a Lyrion Music Server su %s</string>
-    <string name="connection_failed_text">Connessione fallita.</string>
+    <string name="connection_failed_text">Connessione non riuscita. Controlla che il server sia acceso e nella stessa rete di questo telefono.</string>
     <string name="login_failed_text">Accesso fallito. Verifica che nome utente e password siano corretti.</string>
     <string name="invalid_url_text">Inserisci un indirizzo valido.</string>
     <string name="disconnected_text">Disconnesso.</string>
@@ -285,24 +285,18 @@
     <string name="settings_dsp_preset_loudness">Loudness (volume basso)</string>
 
     <string name="settings_backup_title">Backup e ripristino</string>
-    <string name="settings_backup_summary">Esporta o ripristina la configurazione dell\'apparecchio</string>
-    <string name="settings_backup_export_help">Scarica una copia della configurazione dell\'apparecchio (DAC, DSP/EQ, filtro di correzione ambientale, sorgenti musicali, canale aggiornamenti).</string>
-    <string name="settings_backup_export_button">Esporta backup</string>
+    <string name="settings_backup_summary">Salva e ripristina la configurazione del dispositivo</string>
     <string name="settings_backup_export_success">Backup esportato.</string>
-    <string name="settings_backup_export_failed">Esportazione del backup fallita</string>
-    <string name="settings_backup_restore_help">Ripristina la configurazione dell\'apparecchio da un file di backup esportato in precedenza.</string>
     <string name="settings_backup_restore_button">Ripristina da file</string>
-    <string name="settings_backup_restore_confirm_title">Ripristinare la configurazione?</string>
-    <string name="settings_backup_restore_confirm_message">Questa operazione sovrascrive la configurazione attuale dell\'apparecchio e riavvia Squeezelite/CamillaDSP/SMB. Non può essere annullata.</string>
     <string name="settings_backup_restore_failed">Ripristino fallito</string>
 
     <string name="settings_audio_output_title">Uscita audio</string>
-    <string name="settings_audio_output_summary">Scegli il DAC / dispositivo di uscita dell\'apparecchio</string>
+    <string name="settings_audio_output_summary">DAC e nome del player</string>
     <string name="settings_audio_output_applied">Dispositivo di uscita cambiato.</string>
     <string name="settings_audio_output_failed">Impossibile cambiare il dispositivo di uscita</string>
 
     <string name="settings_multiroom_title">Lyrion Music Server</string>
-    <string name="settings_multiroom_summary">Server musicale interno o esterno, la sua versione e il nome di questo player</string>
+    <string name="settings_multiroom_summary">Server musicale interno o esterno, e la sua versione</string>
     <string name="settings_multiroom_name_title">Nome di questo player</string>
     <string name="settings_multiroom_name_help">Ogni dispositivo Osmium Sound si chiama «OsmiumSound» di default: se ne raggruppi due non li distingui. Dagli un nome univoco (senza spazi).</string>
     <string name="settings_multiroom_name_hint">Nome del player</string>
@@ -358,21 +352,12 @@
     <string name="settings_lyrion_skin_failed">Impossibile applicare la skin. Controlla la connessione di rete e riprova.</string>
 
     <string name="settings_system_admin_title">Sistema</string>
-    <string name="settings_system_admin_summary">Accesso SSH, info di sistema, riavvio e spegnimento</string>
+    <string name="settings_system_admin_summary">Info di sistema, riavvio e spegnimento</string>
     <string name="settings_ssh_title">Accesso SSH</string>
     <string name="settings_ssh_warning">SSH dà accesso remoto da riga di comando all\'apparecchio, con pieni diritti di amministratore. Attivalo solo se sai a cosa vai incontro.</string>
     <string name="settings_ssh_unavailable">Il server SSH non è disponibile su questo apparecchio.</string>
     <string name="settings_ssh_login_is">Collegati con: ssh %1$s@</string>
     <string name="settings_ssh_no_login_app">Non è ancora stato creato un accesso SSH. Crealo dallo schermo dell\'apparecchio o dal web admin.</string>
-    <string name="settings_display_mode_title">Interfaccia su schermo</string>
-    <string name="settings_display_mode_summary">Disattiva per usarlo senza schermo; attiva per riportare l\'interfaccia touch</string>
-    <string name="settings_display_mode_changed">Modalità schermo cambiata.</string>
-    <string name="settings_ui_resolution_title">Risoluzione interfaccia</string>
-    <string name="settings_ui_resolution_summary">Riduce la risoluzione a cui viene disegnata l\'interfaccia sugli schermi grandi; la GPU la ridimensiona. Riavvia la sessione grafica.</string>
-    <string name="settings_ui_resolution_auto">Auto</string>
-    <string name="settings_ui_resolution_720">720p</string>
-    <string name="settings_ui_resolution_1080">1080p</string>
-    <string name="settings_ui_resolution_native">Nativa</string>
     <string name="settings_ui_resolution_changed">Risoluzione interfaccia cambiata.</string>
     <string name="settings_ui_resolution_failed">Impossibile cambiare la risoluzione dell\'interfaccia</string>
     <string name="settings_ui_refresh_title">Frequenza di aggiornamento</string>
@@ -383,7 +368,6 @@
     <string name="settings_ui_refresh_confirm">Lo schermo del dispositivo passerà a una frequenza di aggiornamento più bassa. Continuare?</string>
     <string name="settings_ui_refresh_changed">Frequenza di aggiornamento cambiata.</string>
     <string name="settings_ui_refresh_failed">Impossibile cambiare la frequenza di aggiornamento</string>
-    <string name="settings_vu_meter_title">VU meter animato</string>
     <string name="settings_system_info_title">Info di sistema</string>
     <string name="settings_system_info_hostname">Nome host</string>
     <string name="settings_system_info_ip">Indirizzo IP</string>
@@ -498,6 +482,29 @@
     <string name="wizard_change_mode">Cambia</string>
     <string name="settings_server_address_required">Inserisci l\'indirizzo del server, per esempio 192.168.0.10:9000</string>
     <string name="settings_server_address_remote_hint">Preso dal codice QR. Per usarlo fuori casa con Tailscale, sostituiscilo con il nome MagicDNS del server.</string>
+
+    <!-- Procedura di connessione: che cosa serve, e aiuto quando non funziona -->
+    <string name="wizard_toolbar_setup">Configurazione</string>
+    <string name="wizard_requirement">Questa app è un telecomando. Serve un apparecchio Osmium Sound o un Lyrion Music Server già acceso nella rete di casa: da sola non ha musica da suonare.</string>
+    <string name="wizard_no_device">Non hai ancora nessuno dei due?</string>
+    <string name="wizard_help">Problemi con il collegamento?</string>
+    <string name="wizard_help_title">Problemi con il collegamento</string>
+    <string name="wizard_help_text"><![CDATA[<b>Dov\'è il codice QR?</b><br>
+Sullo schermo di Osmium Sound: Impostazioni → Companion Android.<br>
+Apparecchio senza schermo: apri <i>http://hifiplayer.local</i> (o l\'indirizzo IP dell\'apparecchio) nel browser, poi Impostazioni → App companion → Genera QR di associazione.<br><br>
+<b>La fotocamera non si apre</b><br>
+Consenti la fotocamera a questa app nelle impostazioni di Android.<br><br>
+<b>La connessione non riesce</b><br>
+• L\'apparecchio deve essere acceso.<br>
+• Il telefono deve essere nella stessa rete Wi-Fi dell\'apparecchio.<br>
+• Fuori casa, collegati con Tailscale e usa l\'indirizzo da fuori casa.<br><br>
+<b>Non hai un apparecchio Osmium Sound?</b><br>
+Torna indietro e scegli \"Un altro server Lyrion\", poi scrivi il suo indirizzo, per esempio 192.168.0.10:9000.<br><br>
+Serve altro aiuto? Scrivi a support@osmiumsound.it]]></string>
+    <string name="wizard_camera_denied_title">Fotocamera non consentita</string>
+    <string name="wizard_camera_denied">Per inquadrare il codice QR l\'app ha bisogno della fotocamera. Consentila nelle impostazioni di Android, poi riprova.</string>
+    <string name="wizard_open_settings">Apri impostazioni</string>
+    <string name="wizard_connected">Connesso a %1$s</string>
 
     <!-- Impostazioni riorganizzate: l'apparecchio non e' piu' in fondo -->
     <string name="settings_category_appliance">Il tuo apparecchio Osmium Sound</string>

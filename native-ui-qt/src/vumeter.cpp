@@ -7,7 +7,7 @@ static const double ANGLE_MIN = -36.4, ANGLE_MAX = 37.0;
 static const double SPRING_K = 150.0, SPRING_C = 15.0, SPRING_M = 0.5, SPRING_REST = 0.02;
 static const double LEVEL_DELTA = 2.0;
 
-VuMeter::VuMeter(QObject *parent) : QObject(parent) {
+VuMeter::VuMeter(QObject *parent) : QObject(parent), m_k(SPRING_K), m_c(SPRING_C), m_m(SPRING_M) {
     m_clock.start();
     connect(&m_sock, &QTcpSocket::readyRead, this, &VuMeter::onRead);
     connect(&m_sock, &QTcpSocket::connected, this, [this]() {
@@ -131,16 +131,29 @@ void VuMeter::step() {
         int steps = (int)(dt / 0.004) + 1;
         double h = dt / steps;
         for (int i = 0; i < steps; i++) {
-            double a = (-SPRING_K * (m_pos[n] - m_target[n]) - SPRING_C * m_vel[n]) / SPRING_M;
+            double a = (-m_k * (m_pos[n] - m_target[n]) - m_c * m_vel[n]) / m_m;
             m_vel[n] += a * h;
             m_pos[n] += m_vel[n] * h;
         }
         if (std::fabs(m_pos[n] - m_target[n]) > SPRING_REST || std::fabs(m_vel[n]) > SPRING_REST) moving = true;
         else { m_pos[n] = m_target[n]; m_vel[n] = 0; }
+        // peak hold: follows the needle up, waits, then falls back to it; the
+        // timer keeps running until it has, so a held peak still comes down
+        // once the music stops
+        double p = qBound(0.0, m_pos[n], 100.0);
+        if (m_holdMs <= 0 || p >= m_hold[n]) {
+            m_hold[n] = p;
+            m_holdUntil[n] = now + m_holdMs;
+        } else {
+            if (now > m_holdUntil[n]) m_hold[n] = qMax(p, m_hold[n] - m_fall * dt);
+            if (m_hold[n] > p) moving = true;
+        }
     }
     // sotto il decimo di pixel sulla punta non vale un fotogramma (vu.c)
-    if (std::fabs(deg(0) - m_shown[0]) >= 0.02 || std::fabs(deg(1) - m_shown[1]) >= 0.02) {
+    if (std::fabs(deg(0) - m_shown[0]) >= 0.02 || std::fabs(deg(1) - m_shown[1]) >= 0.02
+        || std::fabs(m_hold[0] - m_shownHold[0]) >= 0.03 || std::fabs(m_hold[1] - m_shownHold[1]) >= 0.03) {
         m_shown[0] = deg(0); m_shown[1] = deg(1);
+        m_shownHold[0] = m_hold[0]; m_shownHold[1] = m_hold[1];
         emit levelsChanged();
     }
     if (!moving) m_sim.stop();
@@ -152,4 +165,21 @@ void VuMeter::setHz(int hz) {
     m_hz = hz;
     m_sim.setInterval(1000 / m_hz);
     emit hzChanged();
+}
+
+void VuMeter::setBallistics(double stiffness, double damping, double mass) {
+    // bounded: a typo in a skin must not make the spring explode or freeze
+    m_k = stiffness > 0 ? qBound(10.0, stiffness, 2000.0) : SPRING_K;
+    m_c = damping > 0 ? qBound(1.0, damping, 200.0) : SPRING_C;
+    m_m = mass > 0 ? qBound(0.05, mass, 5.0) : SPRING_M;
+}
+
+void VuMeter::setPeakHold(int holdMs, double fall) {
+    m_holdMs = qBound(0, holdMs, 10000);
+    m_fall = fall > 0 ? qBound(1.0, fall, 500.0) : 40.0;
+    if (m_holdMs <= 0) {
+        m_hold[0] = qBound(0.0, m_pos[0], 100.0);
+        m_hold[1] = qBound(0.0, m_pos[1], 100.0);
+        emit levelsChanged();
+    }
 }
