@@ -7,6 +7,7 @@ import { useI18n } from '../i18n';
 import Toggle from '../components/Toggle.vue';
 import LanguageSelector from '../components/LanguageSelector.vue';
 import SourcesPanel from '../components/SourcesPanel.vue';
+import VuSkinPreview from '../components/VuSkinPreview.vue';
 
 const host = location.hostname;
 const route = useRoute();
@@ -27,6 +28,9 @@ const sections = computed(() => [
   { key: 'tailscale', label: t('settings.sections.tailscale.label'), desc: t('settings.sections.tailscale.desc') },
   { key: 'lyrion',    label: t('settings.sections.lyrion.label'),    desc: t('settings.sections.lyrion.desc') },
   { key: 'playback',  label: t('settings.sections.playback.label'),  desc: t('settings.sections.playback.desc') },
+  // A section of its own, like the kiosk's Settings → VU meter: the switch,
+  // the styles with a preview each, and the store.
+  { key: 'vuMeters',  label: t('settings.sections.vuMeters.label'),  desc: t('settings.sections.vuMeters.desc') },
   { key: 'display',   label: t('settings.sections.display.label'),   desc: t('settings.sections.display.desc') },
   { key: 'timezone',  label: t('settings.sections.timezone.label'),  desc: t('settings.sections.timezone.desc') },
   { key: 'updates',   label: t('settings.sections.updates.label'),   desc: t('settings.sections.updates.desc') },
@@ -705,8 +709,8 @@ async function loadVuMeter() { const r = await api.sys('vu_meter'); if (r.ok) vu
 async function setVuMeter(enable) {
   if (enable === vuMeter.value) return;
   const r = await api.sysPost('vu_meter', { enable });
-  if (r.ok && r.data.success !== false) { vuMeter.value = r.data.enabled; say(bodyMsg(r, t('settings.playback.vuMeterChanged'))); }
-  else say(bodyMsg(r, t('settings.playback.vuMeterFailed')), true);
+  if (r.ok && r.data.success !== false) { vuMeter.value = r.data.enabled; say(bodyMsg(r, t('settings.vuMeters.saved'))); }
+  else say(bodyMsg(r, t('settings.vuMeters.failed')), true);
 }
 
 // ── VU meter style ─────────────────────────────────────────────────
@@ -723,8 +727,8 @@ function vuStyleName(st) { return (st.name && (st.name[lang.value] || st.name.en
 async function setVuStyle(style) {
   if (style === vuStyle.value) return;
   const r = await api.sysPost('vu_style', { style });
-  if (r.ok && r.data.success !== false) { vuStyle.value = r.data.style; say(bodyMsg(r, t('settings.playback.vuStyleChanged'))); }
-  else say(bodyMsg(r, t('settings.playback.vuMeterFailed')), true);
+  if (r.ok && r.data.success !== false) { vuStyle.value = r.data.style; say(bodyMsg(r, t('settings.vuMeters.styleSaved'))); }
+  else say(bodyMsg(r, t('settings.vuMeters.failed')), true);
 }
 
 // ── VU meter store ─────────────────────────────────────────────────
@@ -732,6 +736,7 @@ async function setVuStyle(style) {
 // list is signed and checked there). Re-read while the device checks the
 // list or installs a skin; a finished install refreshes the styles above.
 const vuStore = reactive({ skins: [], checking: false, busy: false, error: null, loaded: false });
+const vuStoreSeen = ref(false);
 let vuStorePoll = null;
 async function loadVuStore(markSeen) {
   const r = await api.sys('vu_store');
@@ -739,7 +744,7 @@ async function loadVuStore(markSeen) {
   const wasBusy = vuStore.busy;
   Object.assign(vuStore, { skins: r.data.skins || [], checking: !!r.data.checking, busy: !!r.data.busy, error: r.data.error || null, loaded: true });
   if (wasBusy && !vuStore.busy) loadVuStyle();
-  if (markSeen && vuStore.skins.length) api.sysPost('vu_store/seen', {});
+  if (markSeen && vuStore.skins.length) { api.sysPost('vu_store/seen', {}); vuStoreSeen.value = true; }
   if ((vuStore.checking || vuStore.busy) && !vuStorePoll) vuStorePoll = setInterval(() => loadVuStore(false), 1500);
   if (!vuStore.checking && !vuStore.busy && vuStorePoll) { clearInterval(vuStorePoll); vuStorePoll = null; }
 }
@@ -748,15 +753,20 @@ function vuStoreSize(bytes) {
 }
 async function installVuSkin(sk) {
   const r = await api.sysPost('vu_store/install', { id: sk.id });
-  if (!r.ok || r.data.success === false) say(bodyMsg(r, t('settings.playback.vuStoreFailed')), true);
+  if (!r.ok || r.data.success === false) say(bodyMsg(r, t('settings.vuMeters.storeFailed')), true);
   loadVuStore(false);
 }
 async function removeVuSkin(sk) {
-  if (!window.confirm(t('settings.playback.vuStoreRemoveConfirm', { name: vuStyleName(sk) }))) return;
+  if (!window.confirm(t('settings.vuMeters.removeConfirm', { name: vuStyleName(sk) }))) return;
   const r = await api.sysPost('vu_store/remove', { id: sk.id });
-  if (!r.ok || r.data.success === false) say(bodyMsg(r, t('settings.playback.vuStoreFailed')), true);
+  if (!r.ok || r.data.success === false) say(bodyMsg(r, t('settings.vuMeters.storeFailed')), true);
   loadVuStyle(); loadVuStore(false);
 }
+// news in the store (new skins, or updates of downloaded ones): the dot on the
+// section's row, gone once the section has been opened. The cards keep their
+// NEW badge for this visit, as on the kiosk.
+const vuStoreNew = computed(() => (vuStoreSeen.value ? 0 : vuStore.skins.filter((sk) => sk.new || sk.update).length));
+watch(open, (k) => { if (k === 'vuMeters') loadVuStore(true); }, { immediate: true });
 async function checkVuStore() {
   await api.sysPost('vu_store/check', {});
   vuStore.checking = true;
@@ -1241,7 +1251,7 @@ async function saveBackupScheduled(v) {
 
 onMounted(async () => {
   loadNet(); loadIpv4(); loadAudio(); loadDsp(); loadFir(); loadToggles(); loadShell(); loadLms(); loadLyrion(); loadSkin(); loadPlayback();
-  loadMode(); loadEngine(); loadPlayerEnabled(); loadUiRes(); loadUiRefresh(); loadPointer(); loadTimezone(); loadVuMeter(); loadVuStyle(); loadVuStore(true); loadAutoExpand(); loadChannel(); checkAll(); resumePlanIfRunning(); loadBackups(); loadTailscale(); loadDebugFlags();
+  loadMode(); loadEngine(); loadPlayerEnabled(); loadUiRes(); loadUiRefresh(); loadPointer(); loadTimezone(); loadVuMeter(); loadVuStyle(); loadVuStore(false); loadAutoExpand(); loadChannel(); checkAll(); resumePlanIfRunning(); loadBackups(); loadTailscale(); loadDebugFlags();
   timezonePoll = setInterval(pollTimezone, 10000);
   // Tell the global UpdateProgressOverlay (mounted in App.vue) that this page
   // owns the OTA modal while it's open, so the two never render on top of
@@ -1264,7 +1274,7 @@ onUnmounted(() => {
     <div class="card" style="padding: 6px 16px;">
       <div v-for="s in sections" :key="s.key" class="net between" @click="goto(s.key)">
         <span>
-          <span style="display:block;">{{ s.label }}</span>
+          <span style="display:block;">{{ s.label }}<span v-if="s.key === 'vuMeters' && vuStoreNew" class="dot-new"></span></span>
           <span class="muted">{{ s.desc }}</span>
         </span>
         <span class="silver" style="font-size: 18px;">›</span>
@@ -1542,50 +1552,6 @@ onUnmounted(() => {
       </template>
 
       <div style="margin-top: 18px; padding-top: 16px; border-top: 1px solid rgba(255,255,255,0.1);">
-        <p class="sub">{{ t('settings.playback.vuMeterLabel') }}</p>
-        <p class="muted">{{ t('settings.playback.vuMeterHelp') }}</p>
-        <span class="seg">
-          <button :class="{ active: vuMeter }" @click="setVuMeter(true)">{{ t('settings.playback.vuMeterOn') }}</button>
-          <button :class="{ active: !vuMeter }" @click="setVuMeter(false)">{{ t('settings.playback.vuMeterOff') }}</button>
-        </span>
-        <template v-if="vuMeter && vuStyles.length > 1">
-          <p class="sub" style="margin-top: 14px;">{{ t('settings.playback.vuStyleLabel') }}</p>
-          <p class="muted">{{ t('settings.playback.vuStyleHelp') }}</p>
-          <span class="seg">
-            <button v-for="st in vuStyles" :key="st.id" :class="{ active: vuStyle === st.id }" @click="setVuStyle(st.id)">{{ vuStyleName(st) }}</button>
-          </span>
-        </template>
-
-        <p class="sub" style="margin-top: 14px;">{{ t('settings.playback.vuStoreLabel') }}</p>
-        <p class="muted">{{ t('settings.playback.vuStoreHelp') }}</p>
-        <p v-if="vuStore.error" class="muted" style="color: #f0b4b4;">{{ vuStore.error.message }}</p>
-        <p v-if="!vuStore.skins.length && (!vuStore.loaded || vuStore.checking)" class="muted">{{ t('settings.playback.vuStoreLoading') }}</p>
-        <p v-else-if="!vuStore.skins.length && !vuStore.error" class="muted">{{ t('settings.playback.vuStoreEmpty') }}</p>
-        <div class="vu-store">
-          <div v-for="sk in vuStore.skins" :key="sk.id" class="vu-card" :class="{ fresh: sk.new }">
-            <div class="vu-preview">
-              <img v-if="sk.preview" :src="sk.preview" :alt="vuStyleName(sk)" />
-              <span v-if="sk.new" class="pill gold vu-badge">{{ t('settings.playback.vuStoreNew') }}</span>
-              <span v-else-if="sk.update" class="pill gold vu-badge">{{ t('settings.playback.vuStoreNewVersion') }}</span>
-            </div>
-            <strong>{{ vuStyleName(sk) }}</strong>
-            <span class="muted">{{ [sk.author, vuStoreSize(sk.size)].filter(Boolean).join(' · ') }}</span>
-            <span v-if="sk.jobError" class="muted" style="color: #f0b4b4;">{{ sk.jobError.message }}</span>
-            <button v-if="sk.job === 'downloading' || sk.job === 'installing'" disabled>
-              {{ sk.job === 'downloading' ? t('settings.playback.vuStoreDownloading') : t('settings.playback.vuStoreInstalling') }}
-            </button>
-            <button v-else-if="!sk.supported" class="secondary" disabled>{{ t('settings.playback.vuStoreUnsupported') }}</button>
-            <button v-else-if="sk.update" @click="installVuSkin(sk)">{{ t('settings.playback.vuStoreUpdate') }}</button>
-            <button v-else-if="sk.installed" class="danger" @click="removeVuSkin(sk)">{{ t('settings.playback.vuStoreRemove') }}</button>
-            <button v-else @click="installVuSkin(sk)">{{ t('settings.playback.vuStoreInstall') }}</button>
-          </div>
-        </div>
-        <button v-if="vuStore.loaded && !vuStore.checking && !vuStore.busy" class="ghost" style="margin-top: 10px;" @click="checkVuStore">
-          {{ t('settings.playback.vuStoreCheck') }}
-        </button>
-      </div>
-
-      <div style="margin-top: 18px; padding-top: 16px; border-top: 1px solid rgba(255,255,255,0.1);">
         <p class="sub">{{ t('settings.playback.autoExpandLabel') }}</p>
         <p class="muted">{{ t('settings.playback.autoExpandHelp') }}</p>
         <span class="seg">
@@ -1595,6 +1561,60 @@ onUnmounted(() => {
           </button>
         </span>
       </div>
+    </div>
+
+    <!-- VU meters: same as the kiosk's Settings → VU meter -->
+    <div class="card" v-if="open === 'vuMeters'">
+      <p class="sub">{{ t('settings.vuMeters.help') }}</p>
+      <div class="between item">
+        <span>{{ t('settings.vuMeters.animated') }}
+          <span class="muted">{{ t('settings.vuMeters.animatedHelp') }}</span>
+        </span>
+        <Toggle :model-value="vuMeter" @update:model-value="setVuMeter" />
+      </div>
+
+      <template v-if="vuMeter && vuStyles.length > 1">
+        <label style="margin-top: 16px;">{{ t('settings.vuMeters.style') }}</label>
+        <p class="muted" style="margin: 0 0 10px;">{{ t('settings.vuMeters.styleHelp') }}</p>
+        <div class="vu-grid">
+          <button v-for="st in vuStyles" :key="st.id" type="button" class="vu-skin" :class="{ sel: vuStyle === st.id }"
+                  @click="setVuStyle(st.id)">
+            <VuSkinPreview :skin-id="st.id" />
+            <span class="vu-skin-name">
+              <span>{{ vuStyleName(st) }}</span>
+              <span v-if="vuStyle === st.id" class="check">✓</span>
+            </span>
+          </button>
+        </div>
+      </template>
+
+      <label style="margin-top: 18px;">{{ t('settings.vuMeters.storeTitle') }}</label>
+      <p class="muted" style="margin: 0 0 10px;">{{ t('settings.vuMeters.storeHelp') }}</p>
+      <p v-if="vuStore.error" class="muted" style="color: #f0b4b4;">{{ vuStore.error.message }}</p>
+      <p v-if="!vuStore.skins.length && (!vuStore.loaded || vuStore.checking)" class="muted">{{ t('settings.vuMeters.storeLoading') }}</p>
+      <p v-else-if="!vuStore.skins.length && !vuStore.error" class="muted">{{ t('settings.vuMeters.storeEmpty') }}</p>
+      <div class="vu-grid">
+        <div v-for="sk in vuStore.skins" :key="sk.id" class="vu-card" :class="{ fresh: sk.new }">
+          <div class="vu-preview">
+            <img v-if="sk.preview" :src="sk.preview" :alt="vuStyleName(sk)" />
+            <span v-if="sk.new" class="pill gold vu-badge">{{ t('settings.vuMeters.badgeNew') }}</span>
+            <span v-else-if="sk.update" class="pill gold vu-badge">{{ t('settings.vuMeters.badgeUpdate') }}</span>
+          </div>
+          <strong>{{ vuStyleName(sk) }}</strong>
+          <span class="muted">{{ [sk.author, vuStoreSize(sk.size)].filter(Boolean).join(' · ') }}</span>
+          <span v-if="sk.jobError" class="muted" style="color: #f0b4b4;">{{ sk.jobError.message }}</span>
+          <button v-if="sk.job === 'downloading' || sk.job === 'installing'" disabled>
+            {{ sk.job === 'downloading' ? t('settings.vuMeters.downloading') : t('settings.vuMeters.installing') }}
+          </button>
+          <button v-else-if="!sk.supported" class="secondary" disabled>{{ t('settings.vuMeters.unsupported') }}</button>
+          <button v-else-if="sk.update" @click="installVuSkin(sk)">{{ t('settings.vuMeters.update') }}</button>
+          <button v-else-if="sk.installed" class="secondary" @click="removeVuSkin(sk)">{{ t('settings.vuMeters.remove') }}</button>
+          <button v-else @click="installVuSkin(sk)">{{ t('settings.vuMeters.install') }}</button>
+        </div>
+      </div>
+      <button v-if="vuStore.loaded && !vuStore.checking && !vuStore.busy" class="ghost" style="margin-top: 12px;" @click="checkVuStore">
+        {{ t('settings.vuMeters.storeCheck') }}
+      </button>
     </div>
 
     <!-- Display mode -->

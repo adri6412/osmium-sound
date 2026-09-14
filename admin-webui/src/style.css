@@ -418,7 +418,20 @@ h2.page { font-size: 20px; margin: 10px 0 4px; }
 .menu-l .gl { color: var(--gold); }
 
 /* VU meter store (Settings → Playback): a card per downloadable skin */
-.vu-store { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; margin-top: 10px; }
+/* Settings → VU meters: two cards per row, like the kiosk's section. */
+.vu-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.vu-skin { display: flex; flex-direction: column; gap: 0; padding: 8px; margin: 0; text-align: left; font-weight: 400;
+  background: var(--panel); color: var(--text); border: 1px solid var(--border); border-radius: 8px; cursor: pointer; }
+.vu-skin:hover { background: var(--light); }
+.vu-skin.sel { border: 2px solid var(--gold); padding: 7px; background: var(--gold-dim); }
+.vu-skin-name { display: flex; align-items: center; justify-content: space-between; gap: 6px; min-height: 36px; padding: 0 4px;
+  font-size: 14px; overflow: hidden; }
+.vu-skin-name > span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.vu-skin.sel .vu-skin-name { color: var(--gold); font-weight: 600; }
+.vu-skin-preview { width: 100%; max-width: 100%; aspect-ratio: 1280 / 675; }
+.vu-skin-preview svg { display: block; width: 100%; height: 100%; }
+.vu-skin-preview rect.shadow { filter: drop-shadow(1px 0 1.5px rgba(0, 0, 0, 0.6)); }
+.dot-new { display: inline-block; width: 8px; height: 8px; margin-left: 8px; border-radius: 50%; background: var(--gold); vertical-align: middle; }
 .vu-card { display: flex; flex-direction: column; gap: 6px; min-width: 0; padding: 10px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); }
 .vu-card.fresh { border-color: rgba(212, 175, 55, 0.6); }
 .vu-card strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

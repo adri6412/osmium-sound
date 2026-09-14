@@ -2177,6 +2177,21 @@ def support_bundle_proxy():
     return out
 
 
+# ── VU meter skin files, for the previews in Settings → VU meter ─────
+# Raw forward (images), same as the support bundle. The names are checked
+# again by api_server; here they only have to be plain path segments.
+@app.route('/api/system/vu_skin/<sid>/<name>', methods=['GET'])
+def vu_skin_file_proxy(sid, name):
+    denied = _require_session()
+    if denied:
+        return denied
+    if not re.fullmatch(r'[a-z0-9][a-z0-9_-]{0,40}', sid) or not re.fullmatch(r'[a-z0-9][a-z0-9._-]{0,80}', name):
+        return jsonify({'success': False}), 404
+    out = _forward_to(API_BASE, f'/vu_skin/{sid}/{name}', timeout=15, service_label='sistema')
+    out.headers['X-Content-Type-Options'] = 'nosniff'
+    return out
+
+
 # ── companion pairing (mint via loopback :8080, session-gated) ───────
 @app.route('/api/system/pair_token', methods=['POST'])
 def pair_token():

@@ -7174,6 +7174,31 @@ def api_vu_meter():
 def api_vu_style():
     return jsonify(get_vu_style())
 
+# One file of an installed skin (its skin.json or an image), so the web admin
+# can draw the same still preview of every style the kiosk shows in Settings →
+# VU meter. Names are flat, like the store unpacks them; a skin shipped with
+# the interface wins over a downloaded one with the same id, as in
+# list_vu_styles().
+_VU_SKIN_FILE_RE = re.compile(r'^[a-z0-9][a-z0-9._-]{0,80}\.(png|jpg|json)$')
+_VU_SKIN_MIME = {'png': 'image/png', 'jpg': 'image/jpeg', 'json': 'application/json'}
+
+@app.route('/vu_skin/<sid>/<name>', methods=['GET'])
+def api_vu_skin_file(sid, name):
+    if not _VU_STYLE_RE.match(sid) or not _VU_SKIN_FILE_RE.match(name):
+        return jsonify({'success': False}), 404
+    for base in (VU_SKINS_DIR, VU_STORE_DIR):
+        if not os.path.isfile(os.path.join(base, sid, 'skin.json')):
+            continue
+        try:
+            with open(os.path.join(base, sid, name), 'rb') as f:
+                data = f.read()
+        except OSError:
+            break
+        resp = Response(data, mimetype=_VU_SKIN_MIME[name.rsplit('.', 1)[1]])
+        resp.headers['Cache-Control'] = 'private, max-age=300'
+        return resp
+    return jsonify({'success': False}), 404
+
 @app.route('/vu_style', methods=['POST'])
 def api_set_vu_style():
     data = request.get_json(silent=True) or {}
