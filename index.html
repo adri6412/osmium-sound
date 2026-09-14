@@ -697,6 +697,7 @@
       .code-block pre { font-size: 0.75rem; }
     }
   </style>
+  <script defer src="/o.js"></script>
 </head>
 <body>
 
@@ -1399,6 +1400,7 @@
     dlDonate.addEventListener('click', () => {
       const url = dlUrl;
       closeDlModal();
+      if (url && window.osmiumTrack) window.osmiumTrack('download', url);
       if (url) setTimeout(() => window.location.assign(url), 0);
     });
     dlPlain.addEventListener('click', () => closeDlModal());   // its href is the file itself
