@@ -16,6 +16,8 @@ class Sys : public QObject {
     Q_PROPERTY(bool hasTouch READ hasTouch NOTIFY hasKeyboardChanged)
     Q_PROPERTY(bool pointerEnabled READ pointerEnabled WRITE setPointerEnabled NOTIFY pointerEnabledChanged)
     Q_PROPERTY(QString assets READ assets CONSTANT)
+    // skins downloaded from the VU meter store (api_server VU_STORE_DIR)
+    Q_PROPERTY(QString vuStore READ vuStore CONSTANT)
     Q_PROPERTY(QString configDir READ configDir CONSTANT)
     Q_PROPERTY(bool devMode READ devMode CONSTANT)
     Q_PROPERTY(QString forcedWizard READ forcedWizard CONSTANT)
@@ -30,6 +32,7 @@ public:
     bool pointerEnabled() const { return m_pointer; }
     void setPointerEnabled(bool on);
     QString assets() const { return m_assets; }
+    QString vuStore() const { return qEnvironmentVariable("HIFI_VU_STORE_DIR", QStringLiteral("/var/lib/hifi-player/vu-skins")); }
     QString configDir() const { return m_configDir; }
     bool devMode() const { return m_dev; }
     QString forcedWizard() const { return m_forcedWizard; }

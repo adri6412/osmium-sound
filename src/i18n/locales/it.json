@@ -416,7 +416,21 @@
       "back": "Torna a questo apparecchio"
     },
     "vuMeters": {
-      "help": "Gli strumenti analogici della schermata \"in riproduzione\": accendili o spegnili e scegli il loro aspetto."
+      "help": "Gli strumenti analogici della schermata \"in riproduzione\": accendili o spegnili e scegli il loro aspetto.",
+      "storeTitle": "Altri VU meter da scaricare",
+      "storeHelp": "Nuovi aspetti pubblicati da Osmium Sound. Un VU meter scaricato si aggiorna da solo e compare tra gli stili qui sopra.",
+      "storeLoading": "Caricamento dell'elenco…",
+      "storeEmpty": "Al momento non ci sono altri VU meter da scaricare.",
+      "storeCheck": "Controlla di nuovo",
+      "install": "Scarica",
+      "update": "Aggiorna",
+      "remove": "Rimuovi",
+      "removeConfirm": "Rimuovere il VU meter «{{name}}» da questo apparecchio? Potrai scaricarlo di nuovo in seguito.",
+      "downloading": "Download in corso…",
+      "installing": "Installazione…",
+      "unsupported": "Serve un aggiornamento",
+      "badgeNew": "NUOVO",
+      "badgeUpdate": "NUOVA VERSIONE"
     },
     "playback": {
       "help": "Opzioni di riproduzione applicate al player attivo: transizioni tra i brani (crossfade/gapless) e normalizzazione del volume (ReplayGain).",

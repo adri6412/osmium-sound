@@ -36,6 +36,18 @@ T0 = time.time()
 #                            shows up N seconds after the mock started (LAN
 #                            address, not loopback); the status of the phone
 #                            carries its own player_name
+#   MOCK_VU_STORE=1          the VU meter store runs on the real api_server.py
+#                            code (and so does /vu_style): configure it with
+#                            HIFI_VU_STORE_URL / HIFI_VU_STORE_PUBKEY /
+#                            HIFI_VU_STORE_DIR / HIFI_VU_STORE_STATE_DIR /
+#                            HIFI_VU_SKINS_DIR (a local catalogue signed with
+#                            a test key); without it the store is empty
+VU_API = None
+if os.environ.get("MOCK_VU_STORE"):
+    sys.path.insert(0, os.path.join(HERE, "..", ".."))
+    import api_server as VU_API
+    VU_API.VU_STYLE_FILE = os.environ.get("MOCK_VU_STYLE_FILE", "/tmp/hifi-mock-vu-style")
+    VU_API.VU_STORE_FIRST_CHECK = 0
 if os.environ.get("MOCK_LONG_QUEUE"):
     QUEUE = [(f"{t[0]} ({i + 1})", t[1], t[2]) for i in range(8) for t in QUEUE]
 #   MOCK_PLAYERS=1           two more players on the server (a phone and
@@ -179,6 +191,15 @@ class H(BaseHTTPRequestHandler):
             if u.path.startswith("/music/"): return self._file(COVER, "image/jpeg")
             if u.path.startswith("/plugins/"): return self._file(COVER, "image/png")
             return self._json({"ok": True})
+        if port == 8000 and u.path in ("/vu_store", "/vu_style"):
+            if VU_API is None:
+                if u.path == "/vu_store":
+                    return self._json({"new": 0, "updates": 0} if "summary=1" in (u.query or "") else
+                                      {"skins": [], "checking": False, "busy": False, "error": None, "checked": 0})
+            elif u.path == "/vu_store":
+                return self._json(VU_API.get_vu_store(summary="summary=1" in (u.query or "")))
+            else:
+                return self._json(VU_API.get_vu_style())
         if port == 8000:
             table = {
                 "/vu_meter": {"enabled": STATE["vu"]}, "/nowplaying_autoexpand": {"seconds": STATE["autoexpand"]},
@@ -262,6 +283,11 @@ class H(BaseHTTPRequestHandler):
             return self._json(rpc(pl, params))
         try: data = json.loads(body or b"{}")
         except Exception: data = {}
+        if port == 8000 and VU_API is not None and (u.path.startswith("/vu_store") or u.path == "/vu_style"):
+            fn = {"/vu_store/check": lambda: VU_API.vu_store_check(), "/vu_store/install": lambda: VU_API.vu_store_install(data.get("id")),
+                  "/vu_store/remove": lambda: VU_API.vu_store_remove(data.get("id")), "/vu_store/seen": lambda: VU_API.vu_store_mark_seen(),
+                  "/vu_style": lambda: VU_API.set_vu_style(data.get("style"))}.get(u.path)
+            if fn: return self._json(fn())
         if port == 8000:
             if u.path == "/vu_meter": STATE["vu"] = bool(data.get("enable", data.get("enabled", True)))
             if u.path == "/vu_style": STATE["vu_style"] = str(data.get("style") or "classic")

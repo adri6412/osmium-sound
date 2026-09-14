@@ -23,6 +23,10 @@ class VuMeter : public QObject {
     Q_PROPERTY(double rightDeg READ rightDeg NOTIFY levelsChanged)
     Q_PROPERTY(double left READ left NOTIFY levelsChanged)      // 0..100
     Q_PROPERTY(double right READ right NOTIFY levelsChanged)
+    // peak hold (0..100): the highest level of the last holdMs, then falling
+    // back at `fall` levels a second; equal to left/right when disabled
+    Q_PROPERTY(double peakLeft READ peakLeft NOTIFY levelsChanged)
+    Q_PROPERTY(double peakRight READ peakRight NOTIFY levelsChanged)
 public:
     explicit VuMeter(QObject *parent = nullptr);
     bool active() const { return m_active; }
@@ -34,6 +38,13 @@ public:
     double rightDeg() const { return deg(1); }
     double left() const { return m_pos[0]; }
     double right() const { return m_pos[1]; }
+    double peakLeft() const { return m_hold[0]; }
+    double peakRight() const { return m_hold[1]; }
+    // The needle spring of the skin in use (VU skins' effects.ballistics):
+    // stiffness, damping, mass; a value <= 0 keeps the default.
+    Q_INVOKABLE void setBallistics(double stiffness, double damping, double mass);
+    // Peak hold for the skin's peak needle: holdMs <= 0 turns it off.
+    Q_INVOKABLE void setPeakHold(int holdMs, double fall);
 signals:
     void hzChanged();
     void activeChanged();
@@ -54,4 +65,9 @@ private:
     qint64 m_lastStep = 0;
     double m_peak[2] = {0, 0}, m_target[2] = {0, 0}, m_pos[2] = {0, 0}, m_vel[2] = {0, 0}, m_committed[2] = {0, 0};
     double m_shown[2] = {-1000, -1000};
+    double m_k, m_c, m_m;
+    int m_holdMs = 0;
+    double m_fall = 40;
+    double m_hold[2] = {0, 0}, m_shownHold[2] = {-1000, -1000};
+    qint64 m_holdUntil[2] = {0, 0};
 };

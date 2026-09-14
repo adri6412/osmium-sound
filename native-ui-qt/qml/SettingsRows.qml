@@ -85,6 +85,7 @@ Column {
                     case "grid": return cGrid
                     case "box": return cBox
                     case "vuskin": return cVuSkin
+                    case "vustore": return cVuStore
                     }
                     return cHelp
                 }
@@ -515,6 +516,82 @@ Column {
                 Icon { visible: vs.sel; x: parent.width - 30; y: pv.y + pv.height + 9; name: "check-circle-2"; size: 18; color: Theme.gold }
             }
             Tap { id: vsTap; tap: 0.97; onClicked: root.ctl.activate(vs.row, vs.row.act) }
+        }
+    }
+    // a skin of the VU meter store: its preview, name, author and size, and
+    // one button for what can be done with it (download, update, remove)
+    Component { id: cVuStore
+        Item {
+            id: vt
+            property var row: ({})
+            readonly property string st: row.state || ""
+            readonly property bool working: st === "downloading" || st === "installing"
+            readonly property string btn: st === "downloading" ? Tr.t("settings.vuMeters.downloading")
+                                        : st === "installing" ? Tr.t("settings.vuMeters.installing")
+                                        : st === "unsupported" ? Tr.t("settings.vuMeters.unsupported")
+                                        : st === "update" ? Tr.t("settings.vuMeters.update")
+                                        : st === "installed" ? Tr.t("settings.vuMeters.remove")
+                                        : Tr.t("settings.vuMeters.install")
+            readonly property string btnStyle: st === "installed" || st === "unsupported" ? "accent" : "gold"
+            width: parent.width
+            height: 8 + pv.height + 8 + 20 + 18 + (row.err ? 18 : 0) + 8 + 40 + 8
+            Rectangle {
+                anchors.fill: parent; radius: 8
+                color: Theme.dark
+                border.width: 1; border.color: vt.row.isNew ? Theme.goldA(0.6) : Theme.accent
+                Rectangle {
+                    id: pv
+                    x: 8; y: 8; width: parent.width - 16; height: Math.round(width * 675 / 1280); radius: 6
+                    color: Theme.blackA(0.3); clip: true
+                    Image {
+                        anchors.fill: parent
+                        source: vt.row.preview || ""
+                        fillMode: Image.PreserveAspectFit; smooth: true; asynchronous: true
+                        sourceSize.width: Math.round(width * (root.ctl ? root.ctl.devScale : 1))
+                    }
+                    Icon { visible: !vt.row.preview; anchors.centerIn: parent; name: "gauge"; size: 32; color: Theme.silverA(0.4) }
+                    Rectangle {
+                        visible: !!vt.row.isNew || vt.st === "update"
+                        x: 8; y: 8; height: 22; width: badge.implicitWidth + 16; radius: 11; color: Theme.gold
+                        Text { id: badge; anchors.centerIn: parent; text: vt.st === "update" ? Tr.t("settings.vuMeters.badgeUpdate") : Tr.t("settings.vuMeters.badgeNew"); color: Theme.black; font.family: Theme.font; font.pixelSize: 11; font.bold: true }
+                    }
+                }
+                Text {
+                    id: nameT
+                    x: 12; y: pv.y + pv.height + 8; width: parent.width - 24; height: 20; verticalAlignment: Text.AlignVCenter
+                    text: vt.row.label || ""; elide: Text.ElideRight
+                    color: Theme.white; font.family: Theme.font; font.pixelSize: 14; font.bold: true
+                }
+                Text {
+                    id: metaT
+                    x: 12; y: nameT.y + 20; width: parent.width - 24; height: 18; verticalAlignment: Text.AlignVCenter
+                    text: vt.row.meta || ""; elide: Text.ElideRight
+                    color: Theme.silverA(0.7); font.family: Theme.font; font.pixelSize: 12
+                }
+                Text {
+                    visible: !!vt.row.err
+                    x: 12; y: metaT.y + 18; width: parent.width - 24; height: 18; verticalAlignment: Text.AlignVCenter
+                    text: vt.row.err || ""; elide: Text.ElideRight
+                    color: Theme.red300; font.family: Theme.font; font.pixelSize: 12
+                }
+                Item {
+                    id: vtBtn
+                    x: 8; y: parent.height - 8 - 40; width: parent.width - 16; height: 40
+                    opacity: vt.working || vt.st === "unsupported" ? 0.6 : 1
+                    Rectangle {
+                        anchors.fill: parent; radius: 8
+                        scale: vtTap.tapScale
+                        color: vtTap.mix(root.btnBg(vt.btnStyle, false), Theme.light)
+                    }
+                    Row {
+                        anchors.centerIn: parent; spacing: 8
+                        Spinner { visible: vt.working; active: vt.working && vt.visible; radius: 7; thickness: 2; anchors.verticalCenter: parent.verticalCenter }
+                        Icon { visible: !vt.working && vt.st !== "unsupported"; name: vt.st === "installed" ? "trash-2" : vt.st === "update" ? "rotate-cw" : "download"; size: 16; color: root.btnFg(vt.btnStyle); anchors.verticalCenter: parent.verticalCenter }
+                        Text { text: vt.btn; width: Math.min(implicitWidth, vtBtn.width - 56); elide: Text.ElideRight; color: root.btnFg(vt.btnStyle); font.family: Theme.font; font.pixelSize: 13; font.bold: vt.st !== "installed" && vt.st !== "unsupported"; anchors.verticalCenter: parent.verticalCenter }
+                    }
+                    Tap { id: vtTap; tap: 0.95; enabled: !vt.working && vt.st !== "unsupported"; onClicked: root.ctl.activate(vt.row, vt.row.act) }
+                }
+            }
         }
     }
     // scelte affiancate: le celle sulla stessa riga, alte quanto la piu' alta

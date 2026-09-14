@@ -96,6 +96,10 @@ Item {
         property string timezone: ""
         property bool vuMeter: true; property int autoexpand: 0; property bool playerEnabled: true
         property var vuStyles: []                                   // [{id, name:{en,it}}]; the choice is Player.vuStyle
+        // VU meter store (api_server /vu_store): the full list only while the
+        // section is open, the count of news for the dot on its row always
+        property var vuStore: ({ skins: [], checking: false, busy: false, error: null, loaded: false })
+        property int vuStoreNew: 0
         property string otaChannel: "prod"; property var otaChannels: ["prod", "dev"]
         property string audioCur: ""; property var audio: []          // [{id,name}]
         property string lmsMode: "local"; property string lmsHost: ""; property string playerName: ""; property string lyrionChannel: "release"
@@ -130,6 +134,20 @@ Item {
                 if (--pending === 0 && g === gen) { loaded = true; root.dataChanged() }
             }, 5000)
         }
+        // the store's list, with previews: separate from load(), which runs on
+        // every settings change and would carry the images each time
+        function loadStore(markSeen) {
+            Api.get(api("/vu_store"), function(ok, d) {
+                if (!ok || !d || typeof d !== "object") { vuStore = Object.assign({}, vuStore, { loaded: true, checking: false, busy: false }); root.rebuild(); return }
+                var wasBusy = vuStore.busy
+                d.loaded = true
+                d.skins = d.skins || []
+                vuStore = d
+                if (wasBusy && !d.busy) get(api("/vu_style"), function(v) { vuStyles = v.styles || [] })
+                if (markSeen && d.skins.length) Api.post(api("/vu_store/seen"), {}, function() { vuStoreNew = 0 }, 5000)
+                root.rebuild()
+            }, 10000)
+        }
         function str(d, k, fb) { return d[k] !== undefined && d[k] !== null ? String(d[k]) : (fb || "") }
         function load() {
             gen++
@@ -147,6 +165,7 @@ Item {
             get(api("/pointer_status"), function(d) { pointerEnabled = d.enabled !== false; pointerAvailable = d.available !== false })
             get(api("/vu_meter"), function(d) { vuMeter = d.enabled !== false })
             get(api("/vu_style"), function(d) { vuStyles = d.styles || [] })
+            get(api("/vu_store?summary=1"), function(d) { vuStoreNew = Number(d.new || 0) + Number(d.updates || 0) })
             get(api("/player_enabled"), function(d) { playerEnabled = d.enabled !== false })
             get(api("/ui_refresh"), function(d) { uiRefreshSupported = !!d.supported; uiRefresh = str(d, "mode", "native") })
             get(api("/nowplaying_autoexpand"), function(d) { autoexpand = Number(d.seconds || 0) })
@@ -320,6 +339,7 @@ Item {
         if (id === "timezone" && timezones.length === 0) Api.get(cfg.api("/timezones"), function(ok, d) { if (ok && d && d.timezones) { timezones = d.timezones.map(String); rebuild() } })
         if (id === "webRemote") cfg.mintToken()
         if (id === "multiroom" && cfg.lmsMode === "follow") cfg.loadDiscover()
+        if (id === "vuMeters") cfg.loadStore(true)
         if (id === "thirdPartyNotices" && !thirdParty) { try { thirdParty = JSON.parse(Sys.readFile(I18n.dir + "/third_party.json")) } catch (e) { thirdParty = null } }
         rebuild(); page.contentY = 0; appear()
         if (mark) { pendingMark = mark; markTimer.restart() }
@@ -858,18 +878,49 @@ Item {
     function secVuMeters() {
         help("settings.vuMeters.help")
         toggle(Tr.t("settings.playback.vuMeter"), Tr.t("settings.playback.vuMeterHelp"), cfg.vuMeter, "vumeter")
-        if (!cfg.vuMeter || cfg.vuStyles.length < 2) return
-        label("settings.playback.vuStyle", 14); help("settings.playback.vuStyleHelp", 12)
-        var lang = I18n.lang, st = []
-        for (var v = 0; v < cfg.vuStyles.length; v++) {
-            var nm = cfg.vuStyles[v].name || {}
-            st.push({ type: "vuskin", label: String(nm[lang] || nm.en || cfg.vuStyles[v].id), arg: cfg.vuStyles[v].id,
-                      sel: Player.vuStyle === cfg.vuStyles[v].id, act: "vu_style" })
-            if (st.length === 2 || v === cfg.vuStyles.length - 1) {
-                if (st.length === 1) st.push({ type: "help", label: "" })
-                grid(st); st = []
+        var lang = I18n.lang
+        if (cfg.vuMeter && cfg.vuStyles.length > 1) {
+            label("settings.playback.vuStyle", 14); help("settings.playback.vuStyleHelp", 12)
+            var st = []
+            for (var v = 0; v < cfg.vuStyles.length; v++) {
+                var nm = cfg.vuStyles[v].name || {}
+                st.push({ type: "vuskin", label: String(nm[lang] || nm.en || cfg.vuStyles[v].id), arg: cfg.vuStyles[v].id,
+                          sel: Player.vuStyle === cfg.vuStyles[v].id, act: "vu_style" })
+                if (st.length === 2 || v === cfg.vuStyles.length - 1) {
+                    if (st.length === 1) st.push({ type: "help", label: "" })
+                    grid(st); st = []
+                }
             }
         }
+        vuStoreRows(lang)
+    }
+    // More looks to download: a card per skin of the store, with its preview,
+    // and what can be done with it
+    function vuStoreRows(lang) {
+        var vs = cfg.vuStore
+        label("settings.vuMeters.storeTitle", 14); help("settings.vuMeters.storeHelp", 12)
+        if (vs.error) note(vs.error.message || "", vs.skins.length ? "dark" : "red")
+        if (!vs.skins.length) {
+            if (!vs.loaded || vs.checking) note(Tr.t("settings.vuMeters.storeLoading"), "dark")
+            else if (!vs.error) note(Tr.t("settings.vuMeters.storeEmpty"), "dark")
+        }
+        var cards = []
+        for (var i = 0; i < vs.skins.length; i++) {
+            var k = vs.skins[i], nm = k.name || {}
+            var mb = (Number(k.size || 0) / 1048576).toFixed(1).replace(".", lang === "it" ? "," : ".") + " MB"
+            var state = k.job === "downloading" ? "downloading" : k.job === "installing" ? "installing"
+                      : !k.supported ? "unsupported" : k.update ? "update" : k.installed ? "installed" : "available"
+            cards.push({ type: "vustore", label: String(nm[lang] || nm.en || k.id), arg: k.id, preview: k.preview || "",
+                         meta: [k.author || "", mb].filter(function(x) { return !!x }).join(" · "),
+                         state: state, isNew: !!k.new, err: k.jobError ? String(k.jobError.message || "") : "",
+                         act: state === "installed" ? "vu_remove" : "vu_install" })
+            if (cards.length === 2 || i === vs.skins.length - 1) {
+                if (cards.length === 1) cards.push({ type: "help", label: "" })
+                grid(cards); cards = []
+            }
+        }
+        if (vs.loaded && !vs.checking && !vs.busy)
+            grid([acell(Tr.t("settings.vuMeters.storeCheck"), "vu_check", "accent", { icon: "rotate-cw", hh: 44 })])
     }
     function playerPrefs() {
         if (!havePlayer) note(Tr.t("settings.playback.noPlayer"), "dark")
@@ -1187,6 +1238,28 @@ Item {
             return
         case "vumeter": post(A("/vu_meter"), { enable: !row.on }); cfg.vuMeter = !row.on; Player.vuEnabled = cfg.vuMeter; break
         case "vu_style": post(A("/vu_style"), { style: arg }); Player.vuStyle = arg; break
+        case "vu_install":
+            if (row.state === "downloading" || row.state === "installing" || row.state === "unsupported") return
+            Api.post(A("/vu_store/install"), { id: arg }, function(ok, d) {
+                if (d && d.success === false) say(String(d.message || ""), true)
+                cfg.loadStore(false)
+            }, 12000)
+            cfg.vuStore = Object.assign({}, cfg.vuStore, { busy: true })
+            break
+        case "vu_remove":
+            Ui.dialogs.confirm(Tr.tf("settings.vuMeters.removeConfirm", "name", row.label), Tr.t("settings.vuMeters.remove"), true, function(ok) {
+                if (!ok) return
+                Api.post(A("/vu_store/remove"), { id: arg }, function(ok2, d) {
+                    if (d && d.success === false) say(String(d.message || ""), true)
+                    else if (Player.vuStyle === arg) Player.vuStyle = "classic"
+                    cfg.load(); cfg.loadStore(false)
+                }, 12000)
+            })
+            return
+        case "vu_check":
+            Api.post(A("/vu_store/check"), {}, function() { cfg.loadStore(false) }, 12000)
+            cfg.vuStore = Object.assign({}, cfg.vuStore, { checking: true })
+            break
         case "autoexpand": post(A("/nowplaying_autoexpand"), { seconds: parseInt(arg) }); cfg.autoexpand = parseInt(arg); Player.refreshSettings(); break
         case "transition": setPref("transitionType", arg); Player.refreshPrefs(); say(Tr.t("settings.playback.saved")); break
         case "transdur": setPref("transitionDuration", arg); Player.refreshPrefs(); say(Tr.t("settings.playback.saved")); break
@@ -1416,6 +1489,12 @@ Item {
             else root.rebuild()
         }
     }
+    // while the store checks its list or installs a skin, its state is re-read
+    Timer {
+        interval: 1500; repeat: true
+        running: root.visible && root.active >= 0 && root.secs[root.active].id === "vuMeters" && (cfg.vuStore.checking || cfg.vuStore.busy)
+        onTriggered: cfg.loadStore(false)
+    }
     // mentre il disco si formatta lo stato va riletto da solo
     Timer { interval: 2000; repeat: true; running: root.fmtWatch; onTriggered: { if (!Ui.dialogs.active) root.fmtWatch = false; else cfg.load() } }
 
@@ -1466,6 +1545,8 @@ Item {
                             Rectangle { x: 16; y: 17; width: 38; height: 38; radius: 8; color: Theme.goldA(0.2)
                                         Icon { anchors.centerIn: parent; name: secRow.modelData.id === "displayMode" && cfg.displayMode === "headless" ? "monitor-off" : secRow.modelData.icon; size: 22; color: Theme.gold } }
                             Text { x: 66; width: parent.width - 66 - 46; anchors.verticalCenter: parent.verticalCenter; text: Tr.t(secRow.modelData.key); elide: Text.ElideRight; color: Theme.white; font.family: Theme.font; font.pixelSize: 18 }
+                            // news in the VU meter store: new skins or updates of downloaded ones
+                            Rectangle { visible: secRow.modelData.id === "vuMeters" && cfg.vuStoreNew > 0; x: parent.width - 16 - 22 - 20; anchors.verticalCenter: parent.verticalCenter; width: 10; height: 10; radius: 5; color: Theme.gold }
                             Icon { x: parent.width - 16 - 22; anchors.verticalCenter: parent.verticalCenter; name: "chevron-right"; size: 22; color: Theme.silver }
                         }
                         Tap { id: sTap; onClicked: root.openSection(secRow.index) }
