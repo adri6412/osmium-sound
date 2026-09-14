@@ -1673,22 +1673,23 @@ def _provision_playlistdir(data):
 def ensure_playlistdir():
     """Standalone provisioning used at service start (covers devices that were
     set up before this feature and never re-apply their sources). Idempotent:
-    only stops/edits/starts Lyrion when the folder is missing/unset."""
+    only stops/edits/starts Lyrion when the folder is missing/unset.
+    Returns True when it did restart Lyrion."""
     try:
         import yaml
     except Exception:
-        return
+        return False
     prefs = _find_prefs()
     if not prefs:
-        return
+        return False
     try:
         with open(prefs) as f:
             data = yaml.safe_load(f) or {}
     except Exception:
-        return
+        return False
     data, changed = _provision_playlistdir(data)
     if not changed:
-        return
+        return False
     _run(["systemctl", "stop", LYRION_SERVICE], timeout=60)
     try:
         tmp = prefs + ".tmp"
@@ -1706,6 +1707,20 @@ def ensure_playlistdir():
     finally:
         _systemctl_lyrion("start")
     print(f"[sources] playlistdir set to {data.get('playlistdir')}")
+    return True
+
+
+def _lyrion_wait_up(attempts=30, delay=2):
+    """True once Lyrion answers JSON-RPC after a start, i.e. it has loaded its
+    prefs. Stopping it before that is not harmless: it rewrites server.prefs
+    from memory on the way out."""
+    for _ in range(attempts):
+        try:
+            _lyrion_request(["version", "?"], timeout=5)
+            return True
+        except Exception:
+            time.sleep(delay)
+    return False
 
 
 # ── Playlist separators: Windows "\\" in a playlist copied onto the box ─────
@@ -2717,9 +2732,13 @@ def _lms_setup_apply(plugins, analytics, language):
     """Worker thread behind POST /api/lms_setup.
 
     Order matters twice over:
-      * playlistdir BEFORE the live pref writes — ensure_playlistdir() reads
-        the prefs file, then stops Lyrion, then writes the whole dict back, so
-        anything set live just before it would be clobbered by that stale read.
+      * playlistdir FIRST — ensure_playlistdir() reads the prefs file, then
+        stops Lyrion, then writes the whole dict back, so anything set live
+        just before it would be clobbered by that stale read. It also used to
+        run right after the plugin install had restarted Lyrion, and stopped
+        the server two seconds into extracting the new plugins (a Perl panic
+        in the log of a fresh install). Before the install, the only start it
+        can cut short is its own, and it waits for that one to finish.
       * wizardDone LAST — a device that dies halfway through then comes back
         still showing Lyrion's own wizard (recoverable) instead of a
         half-configured server with no wizard left to finish the job.
@@ -2733,6 +2752,11 @@ def _lms_setup_apply(plugins, analytics, language):
             if not _ensure_prefs():
                 _lms_setup_status_set("error", 0, "msg.skinLmsMissing")
                 return
+            try:
+                if ensure_playlistdir():
+                    _lyrion_wait_up()
+            except Exception as e:
+                print(f"[sources] lms-setup: playlistdir failed: {e}")
             # MaterialSkin is normally already in by now (the skin step runs
             # first); listing it here costs nothing and covers the case where
             # that step was skipped or failed.
@@ -2740,10 +2764,6 @@ def _lms_setup_apply(plugins, analytics, language):
                 ["MaterialSkin"] + list(plugins),
                 {LMS_ANALYTICS_PLUGIN: bool(analytics)})
             _lms_setup_status_set("applying", 70, "msg.lmsSetupApplying")
-            try:
-                ensure_playlistdir()
-            except Exception as e:
-                print(f"[sources] lms-setup: playlistdir failed: {e}")
             _set_lms_pref("language", "IT" if language == "it" else "EN")
             if not _set_lms_pref(LMS_WIZARD_DONE_PREF, 1):
                 _lms_setup_status_set("error", 0, "msg.lmsSetupFailed")
