@@ -1,51 +1,51 @@
 {
-  "tag_name": "v2.5.24-dev.11",
-  "name": "v2.5.24-dev.11",
-  "body": "## What's new in v2.5.24-dev.11\n\n- ab: finish the switch on its own instead of waiting to be switched off\n- support bundle: answer \"why is it still on the old layout\"\n",
+  "tag_name": "v2.5.24-dev.12",
+  "name": "v2.5.24-dev.12",
+  "body": "## What's new in v2.5.24-dev.12\n\n- site: count visits by network, not by user-agent alone\n",
   "assets": [
     {
-      "name": "hifi-qtui-v2.5.24-dev.11.tar.gz",
-      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.24-dev.11/hifi-qtui-v2.5.24-dev.11.tar.gz",
-      "size": 4844324
+      "name": "hifi-qtui-v2.5.24-dev.12.tar.gz",
+      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.24-dev.12/hifi-qtui-v2.5.24-dev.12.tar.gz",
+      "size": 8285588
     },
     {
-      "name": "hifi-qtui-v2.5.24-dev.11.tar.gz.sha256",
-      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.24-dev.11/hifi-qtui-v2.5.24-dev.11.tar.gz.sha256",
+      "name": "hifi-qtui-v2.5.24-dev.12.tar.gz.sha256",
+      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.24-dev.12/hifi-qtui-v2.5.24-dev.12.tar.gz.sha256",
       "size": 98
     },
     {
-      "name": "hifi-system-v2.5.24-dev.11.tar.gz",
-      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.24-dev.11/hifi-system-v2.5.24-dev.11.tar.gz",
-      "size": 527539
+      "name": "hifi-system-v2.5.24-dev.12.tar.gz",
+      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.24-dev.12/hifi-system-v2.5.24-dev.12.tar.gz",
+      "size": 531890
     },
     {
-      "name": "hifi-system-v2.5.24-dev.11.tar.gz.sha256",
-      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.24-dev.11/hifi-system-v2.5.24-dev.11.tar.gz.sha256",
+      "name": "hifi-system-v2.5.24-dev.12.tar.gz.sha256",
+      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.24-dev.12/hifi-system-v2.5.24-dev.12.tar.gz.sha256",
       "size": 100
     },
     {
-      "name": "hifi-os-v2.5.24-dev.11.tar.gz",
-      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.24-dev.11/hifi-os-v2.5.24-dev.11.tar.gz",
-      "size": 1403969
+      "name": "hifi-os-v2.5.24-dev.12.tar.gz",
+      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.24-dev.12/hifi-os-v2.5.24-dev.12.tar.gz",
+      "size": 1403926
     },
     {
-      "name": "hifi-os-v2.5.24-dev.11.tar.gz.sha256",
-      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.24-dev.11/hifi-os-v2.5.24-dev.11.tar.gz.sha256",
+      "name": "hifi-os-v2.5.24-dev.12.tar.gz.sha256",
+      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.24-dev.12/hifi-os-v2.5.24-dev.12.tar.gz.sha256",
       "size": 96
     },
     {
-      "name": "hifi-os-v2.5.24-dev.11.tar.gz.sha256.sig",
-      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.24-dev.11/hifi-os-v2.5.24-dev.11.tar.gz.sha256.sig",
+      "name": "hifi-os-v2.5.24-dev.12.tar.gz.sha256.sig",
+      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.24-dev.12/hifi-os-v2.5.24-dev.12.tar.gz.sha256.sig",
       "size": 64
     },
     {
-      "name": "hifi-image-v2.5.24-dev.11.raucb",
-      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.24-dev.11/hifi-image-v2.5.24-dev.11.raucb",
-      "size": 1001642646
+      "name": "hifi-image-v2.5.24-dev.12.raucb",
+      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.24-dev.12/hifi-image-v2.5.24-dev.12.raucb",
+      "size": 1005116055
     },
     {
-      "name": "hifi-image-v2.5.24-dev.11.raucb.sha256",
-      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.24-dev.11/hifi-image-v2.5.24-dev.11.raucb.sha256",
+      "name": "hifi-image-v2.5.24-dev.12.raucb.sha256",
+      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.24-dev.12/hifi-image-v2.5.24-dev.12.raucb.sha256",
       "size": 98
     }
   ]
