@@ -12,10 +12,10 @@
   "over": "over.png",
   "needle": {
     "image": "needle.png",
-    "width": 57.49,
-    "height": 481.46,
-    "pivotX": 21.92,
-    "pivotY": 422.24
+    "width": 240.73,
+    "height": 470.68,
+    "pivotX": 115.33,
+    "pivotY": 418.65
   },
   "meters": [
     [

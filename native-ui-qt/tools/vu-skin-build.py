@@ -20,15 +20,18 @@ output width and writes them into skin.json.
             --meter X,Y --meter X,Y --angles=MIN,MAX [--width 2048] [--order N]
           (write --angles with "=": a leading minus is otherwise read as an option)
 
-  needle  vu-skin-build.py needle needles.png --x X0,X1 --top Y --cut Y --to Y \\
-            --out needle.png --rest coil.png
+  needle  vu-skin-build.py needle needles.png --x X0,X1 --top Y --to Y --out needle.png
           For artwork that draws both needles, with their coils, in one layer
-          at rest (straight up): cuts the left needle out of columns X0..X1
-          from row TOP down to row CUT (where the collar begins) and stretches
-          its last row down to row TO, past the pivot, so the needle always
-          runs on behind the coil. Everything from row CUT down, for both
-          dials, goes to --rest: pass it to build as an --over below the
-          frame, the coil stays still while the needle turns behind it.
+          at rest (straight up): cuts the left dial's moving part (needle,
+          collar and coil) out of columns X0..X1, rows TOP..TO, and it turns
+          as one piece around the pivot, like a real moving-coil meter. The
+          coil stays inside the dark cavity round the magnet and slides under
+          the bracket in the frame layer.
+          With --cut Y --rest coil.png it keeps the coil still instead: the
+          needle stops at row CUT (where the collar begins), its last row is
+          stretched down to row TO (past the pivot) so it runs on behind the
+          coil, and everything from row CUT down, for both dials, goes to
+          --rest, to pass to build as an --over below the frame.
           Prints the --needle-pivot to pass to build for a pivot at AXIS,PY:
           AXIS-X0, PY-TOP.
 
@@ -100,15 +103,20 @@ def build(args):
 def needle(args):
     a = np.array(Image.open(args.layer).convert('RGBA'))
     (x0, x1), top, cut, to = (int(v) for v in args.x), args.top, args.cut, args.to
-    if not top < cut < to:
-        sys.exit('need TOP < CUT < TO')
-    sprite = np.zeros((to - top, x1 - x0, 4), np.uint8)
-    sprite[:cut - top] = a[top:cut, x0:x1]
-    sprite[cut - top:] = a[cut - 1, x0:x1]
-    Image.fromarray(sprite).save(args.out, optimize=True)
-    rest = a.copy()
-    rest[:cut] = 0
-    Image.fromarray(rest).save(args.rest, optimize=True)
+    if cut is None:
+        if not top < to:
+            sys.exit('need TOP < TO')
+        Image.fromarray(a[top:to, x0:x1]).save(args.out, optimize=True)
+    else:
+        if not top < cut < to or not args.rest:
+            sys.exit('--cut needs --rest and TOP < CUT < TO')
+        sprite = np.zeros((to - top, x1 - x0, 4), np.uint8)
+        sprite[:cut - top] = a[top:cut, x0:x1]
+        sprite[cut - top:] = a[cut - 1, x0:x1]
+        Image.fromarray(sprite).save(args.out, optimize=True)
+        rest = a.copy()
+        rest[:cut] = 0
+        Image.fromarray(rest).save(args.rest, optimize=True)
     print(f'{args.out}: {x1 - x0}x{to - top}, origin {x0},{top} -> --needle-pivot AXIS-{x0},PIVOT_Y-{top}')
 
 
@@ -185,12 +193,12 @@ def main():
     b.add_argument('--order', type=int, default=50)
     n = sub.add_parser('needle')
     n.add_argument('layer')
-    n.add_argument('--x', type=pair, required=True, help='column span of the left needle')
+    n.add_argument('--x', type=pair, required=True, help='column span of the left needle and coil')
     n.add_argument('--top', type=int, required=True, help='first row of the needle')
-    n.add_argument('--cut', type=int, required=True, help='first row of the collar / coil')
-    n.add_argument('--to', type=int, required=True, help='stretch the shaft down to this row (past the pivot)')
+    n.add_argument('--to', type=int, required=True, help='last row + 1 (with --cut: stretch the shaft down to it)')
+    n.add_argument('--cut', type=int, help='keep the coil still: first row of the collar')
     n.add_argument('--out', required=True)
-    n.add_argument('--rest', required=True)
+    n.add_argument('--rest', help='with --cut: the still coils, an --over for build')
     m = sub.add_parser('measure')
     m.add_argument('dials')
     m.add_argument('--range', type=pair, action='append', required=True, help='x span of one dial')
