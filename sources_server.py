@@ -4278,6 +4278,34 @@ _SYSTEM_PROXY_ROUTES = [
     # headless or across the room. Mirrors admin-webui's forwarder.
     ("/api/system/ui_refresh", "GET", "/ui_refresh"),
     ("/api/system/ui_refresh", "POST", "/ui_refresh"),
+    # The rest of the web admin's Settings the companion shows too: which
+    # interface runs on the screen, the pointer, whether this device plays at
+    # all, the timezone, the VU meter style and store, the now-playing
+    # auto-open delay, and the Tidal connector. Same rationale as the display
+    # settings above — none of them can cut the box off the network, lock
+    # anyone out or hand out a login, so the pairing token is enough. Network
+    # addressing, Tailscale, the SSH login, the admin account, factory reset
+    # and the boot-debug flags stay web-admin/on-screen only.
+    ("/api/system/ui_engine", "GET", "/ui_engine"),
+    ("/api/system/ui_engine", "POST", "/ui_engine"),
+    ("/api/system/pointer_status", "GET", "/pointer_status"),
+    ("/api/system/pointer_set", "POST", "/pointer_set"),
+    ("/api/system/player_enabled", "GET", "/player_enabled"),
+    ("/api/system/player_enabled", "POST", "/player_enabled"),
+    ("/api/system/timezone", "GET", "/timezone"),
+    ("/api/system/timezone", "POST", "/timezone"),
+    ("/api/system/timezones", "GET", "/timezones"),
+    ("/api/system/vu_style", "GET", "/vu_style"),
+    ("/api/system/vu_style", "POST", "/vu_style"),
+    ("/api/system/vu_store", "GET", "/vu_store"),
+    ("/api/system/vu_store/check", "POST", "/vu_store/check"),
+    ("/api/system/vu_store/install", "POST", "/vu_store/install"),
+    ("/api/system/vu_store/remove", "POST", "/vu_store/remove"),
+    ("/api/system/vu_store/seen", "POST", "/vu_store/seen"),
+    ("/api/system/nowplaying_autoexpand", "GET", "/nowplaying_autoexpand"),
+    ("/api/system/nowplaying_autoexpand", "POST", "/nowplaying_autoexpand"),
+    ("/api/system/tidal", "GET", "/tidal_status"),
+    ("/api/system/tidal", "POST", "/tidal_set"),
     ("/api/system/player_name", "GET", "/player_name"),
     ("/api/system/player_name", "POST", "/player_name"),
     # Renames BOTH the hostname and the squeezelite/Bluetooth player name
@@ -4320,6 +4348,8 @@ _SYSTEM_PROXY_ROUTES = [
     ("/api/system/shutdown", "POST", "/shutdown"),
 ]
 
+_SLOW_SYSTEM_PROXY_POSTS = {"/ui_engine", "/player_enabled", "/tidal_set", "/timezone"}
+
 
 def _make_system_proxy_view(remote_path, method):
     # Starting an update is slower than the default budget: api_server resolves
@@ -4327,7 +4357,14 @@ def _make_system_proxy_view(remote_path, method):
     # write the plan. Timing out here would tell the phone the update failed
     # while the appliance was in fact about to start it — and the phone would
     # then fall back to driving the sequence itself, on top of a running plan.
-    timeout = 90 if "apply" in remote_path else 10
+    # Switching the screen's interface, turning the player on/off or the Tidal
+    # connector on/off each wait on a systemctl call of up to 30s over there.
+    if "apply" in remote_path:
+        timeout = 90
+    elif method == "POST" and remote_path in _SLOW_SYSTEM_PROXY_POSTS:
+        timeout = 45
+    else:
+        timeout = 10
     def view():
         denied = _require_pair_token()
         if denied:
