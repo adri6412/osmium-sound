@@ -1,6 +1,6 @@
 {
   "id": "aluminium",
-  "version": 1,
+  "version": 2,
   "name": {
     "en": "Aluminium",
     "it": "Alluminio"
@@ -14,10 +14,10 @@
   "over": "over.png",
   "needle": {
     "image": "needle.png",
-    "width": 53.89,
-    "height": 578.47,
-    "pivotX": 25.08,
-    "pivotY": 723.56
+    "width": 57.49,
+    "height": 567.69,
+    "pivotX": 27.67,
+    "pivotY": 748.71
   },
   "meters": [
     [

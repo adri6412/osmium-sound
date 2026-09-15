@@ -33,9 +33,12 @@ needle axis − X0, dial pivot Y − T (all source-artwork pixels):
 
 | id | from | needle cut | --needle-pivot | --meter (left, right) | --angles |
 |---|---|---|---|---|---|
-| `copper` | VU Dagostino.zip: under backplate + quadranti, over frame | 715,790 / 340..875 | 34.5,557.93 | 744.31,897.93 · 2070.41,898.14 | -44.5,47.65 |
+| `copper` | VU Dagostino: under backplate + quadranti, over frame esterno 2 (v2) | 715,790 / 340..875 | 34.5,557.93 | 744.31,897.93 · 2070.41,898.14 | -44.5,47.65 |
 | `golden` | VU Golden: under quadranti, over frame | 700,775 / 280..1180 | 34.1,949.77 | 736.58,1229.77 · 2103.58,1231.77 | -34.1,34.3 |
-| `aluminium` | VU Aluminium Style: under quadrante fix, over frame | 760,835 / 265..1070 | 34.9,1006.91 | 796.59,1271.91 · 2024.46,1275.09 | -34.6,33.0 |
+| `aluminium` | VU Aluminium Style: under quadrante fix, over frame; v2 lancette | 750,830 / 230..1020 | 38.5,1041.91 | 796.59,1271.91 · 2024.46,1275.09 | -34.6,33.0 |
+
+The v2 Aluminium needle leans slightly in the artwork (tip at x 792, collar
+at 788.5): its axis is the collar's centre.
 
 The Aluminium scale is light on dark: `measure` looks for dark pixels, so its
 pivots were measured on the bright ones instead. For Golden, `measure` reads
