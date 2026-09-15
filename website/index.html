@@ -549,6 +549,10 @@
     .install-note strong { color: var(--accent); }
     .install-note a { color: var(--accent); font-weight: 600; text-decoration: underline; }
     .install-note a:hover { text-decoration: none; }
+    /* Collapsed boxes: install issues, returning beta testers. */
+    .install-more summary { cursor: pointer; font-weight: 600; color: var(--accent); }
+    .install-more p { margin: 0.7rem 0 0; }
+    .install-more code { background: rgba(255,255,255,0.08); padding: 0.1em 0.35em; border-radius: 4px; }
     /* Third-party recommendation, deliberately quieter than our own app. */
     .apple-companion {
       max-width: 760px; margin: 2.25rem auto 0;
@@ -574,15 +578,12 @@
       .apple-companion .qr-wrap { flex-direction: column; align-items: flex-start; }
     }
     /* end apple-companion */
-    .install-warning {
-      max-width: 760px; margin: 1.1rem auto 0;
-      font-size: 0.86rem; color: var(--text); line-height: 1.6;
-      background: rgba(255,99,71,0.10); border: 1px solid rgba(255,99,71,0.4);
-      border-radius: 10px; padding: 0.9rem 1.2rem; text-align: left;
-      display: flex; gap: 0.7rem; align-items: flex-start;
+    .install-req {
+      max-width: 760px; margin: 1.4rem auto 0; text-align: center;
+      font-size: 0.86rem; color: var(--muted); line-height: 1.6;
     }
-    .install-warning .warn-ico { flex-shrink: 0; font-size: 1.05rem; line-height: 1.5; }
-    .install-warning strong { color: #ff8166; }
+    .install-req strong { color: var(--text); font-weight: 600; }
+    .install-req a { color: var(--accent); }
 
     /* ── MANUAL CALLOUT ──────────────────────────────────── */
     #manual { border-top: 1px solid var(--border); background: var(--bg-card); }
@@ -773,15 +774,7 @@
     <h2 class="section-title" data-en="Download &amp; install" data-it="Scarica e installa">Download &amp; install</h2>
     <p class="section-desc" data-en="Flash one ISO image to a USB stick for the first install. From then on, every new version arrives over the air: it is installed next to the current one while the device keeps playing, and if it does not start properly the device goes back to the previous one by itself." data-it="Flasha una sola immagine ISO su una chiavetta USB per la prima installazione. Da lì in poi ogni nuova versione arriva via OTA: viene installata accanto a quella attuale mentre il dispositivo continua a suonare, e se non parte correttamente il dispositivo torna da solo alla versione precedente.">Flash one ISO image to a USB stick for the first install. From then on, every new version arrives over the air: it is installed next to the current one while the device keeps playing, and if it does not start properly the device goes back to the previous one by itself.</p>
 
-    <p class="install-warning">
-      <span class="warn-ico">⚠️</span>
-      <span data-en="&lt;strong&gt;Standard x86 PCs with UEFI firmware only.&lt;/strong&gt; UEFI is mandatory — legacy BIOS-only machines are not supported. Chromebooks are not supported either: their firmware is locked down by the manufacturer and refuses to boot anything else, unless you flash third-party modified firmware (not provided or endorsed by the manufacturer) and/or use drivers dedicated to that specific platform — neither of which this project provides or supports." data-it="&lt;strong&gt;Solo PC x86 standard con firmware UEFI.&lt;/strong&gt; L&#39;UEFI è obbligatorio: le macchine con solo BIOS legacy non sono supportate. Non sono supportati nemmeno i Chromebook: il loro firmware è bloccato dal produttore e impedisce l&#39;avvio di qualsiasi altro sistema operativo, se non tramite un firmware modificato di terze parti (non fornito né avallato dal produttore) e/o driver dedicati a quella specifica piattaforma — che questo progetto non fornisce né supporta."><strong>Standard x86 PCs with UEFI firmware only.</strong> UEFI is mandatory — legacy BIOS-only machines are not supported. Chromebooks are not supported either: their firmware is locked down by the manufacturer and refuses to boot anything else, unless you flash third-party modified firmware (not provided or endorsed by the manufacturer) and/or use drivers dedicated to that specific platform — neither of which this project provides or supports.</span>
-    </p>
-
-    <p class="install-warning">
-      <span class="warn-ico">⚠️</span>
-      <span data-en="&lt;strong&gt;Were you in the private beta on a Debian 12 build?&lt;/strong&gt; You need to reinstall from the latest ISO below: starting with the next release, Debian 12 is no longer supported and will not receive over-the-air updates any more — so you will not be able to update from it." data-it="&lt;strong&gt;Hai partecipato alla beta privata con una build su Debian 12?&lt;/strong&gt; Devi reinstallare dall&#39;ultima ISO qui sotto: dalla prossima versione in poi Debian 12 non sarà più supportato e non riceverà più aggiornamenti via OTA, quindi da lì non potrai più aggiornare."><strong>Were you in the private beta on a Debian 12 build?</strong> You need to reinstall from the latest ISO below: starting with the next release, Debian 12 is no longer supported and will not receive over-the-air updates any more — so you will not be able to update from it.</span>
-    </p>
+    <p class="install-req" data-en="Runs on standard x86 PCs with &lt;strong&gt;UEFI firmware&lt;/strong&gt; — as a rule of thumb, any PC built from 2015 onwards. Legacy BIOS-only machines and Chromebooks are not supported. &lt;a href=&quot;#hardware&quot;&gt;See the requirements&lt;/a&gt;." data-it="Funziona sui PC x86 standard con &lt;strong&gt;firmware UEFI&lt;/strong&gt; — come regola pratica, qualsiasi PC prodotto dal 2015 in poi. Le macchine con solo BIOS legacy e i Chromebook non sono supportati. &lt;a href=&quot;#hardware&quot;&gt;Vedi i requisiti&lt;/a&gt;.">Runs on standard x86 PCs with <strong>UEFI firmware</strong> — as a rule of thumb, any PC built from 2015 onwards. Legacy BIOS-only machines and Chromebooks are not supported. <a href="#hardware">See the requirements</a>.</p>
 
     <div class="flasher-block" data-flasher-version="1.0.0">
       <h3 data-en="The simplest way" data-it="Il modo più semplice">The simplest way</h3>
@@ -795,11 +788,6 @@
             <span data-en="Download Osmium Flasher for Windows" data-it="Scarica Osmium Flasher per Windows">Download Osmium Flasher for Windows</span>
           </a>
         </div>
-        <p class="dl-warning" data-en="&lt;strong&gt;Heads up:&lt;/strong&gt; the app is not code-signed, so Windows will warn you the first time you open it. That is expected — the note below says how to get past it." data-it="&lt;strong&gt;Attenzione:&lt;/strong&gt; l&#x27;app non è firmata digitalmente, quindi Windows ti avviserà al primo avvio. È previsto, e la nota qui sotto spiega come procedere."><strong>Heads up:</strong> the app is not code-signed, so Windows will warn you the first time you open it. That is expected — the note below says how to get past it.</p>
-        <details class="flasher-note" open>
-          <summary data-en="Windows — “unknown publisher”" data-it="Windows — “editore sconosciuto”">Windows — “unknown publisher”</summary>
-          <p data-en="Osmium Flasher is not code-signed, so SmartScreen stops it the first time. Click &lt;strong&gt;More info&lt;/strong&gt;, then &lt;strong&gt;Run anyway&lt;/strong&gt;. Windows will also ask for administrator rights: they are needed to write to the USB stick." data-it="Osmium Flasher non è firmato digitalmente, quindi la prima volta SmartScreen lo blocca. Clicca su &lt;strong&gt;Ulteriori informazioni&lt;/strong&gt; e poi su &lt;strong&gt;Esegui comunque&lt;/strong&gt;. Windows chiederà anche i permessi di amministratore: servono per scrivere sulla chiavetta.">Osmium Flasher is not code-signed, so SmartScreen stops it the first time. Click <strong>More info</strong>, then <strong>Run anyway</strong>. Windows will also ask for administrator rights: they are needed to write to the USB stick.</p>
-        </details>
       </div>
 
       <div class="dl-os" data-os="linux" hidden>
@@ -809,10 +797,7 @@
             <span data-en="Download Osmium Flasher for Linux" data-it="Scarica Osmium Flasher per Linux">Download Osmium Flasher for Linux</span>
           </a>
         </div>
-        <details class="flasher-note" open>
-          <summary data-en="Linux — one executable file" data-it="Linux — un solo file eseguibile">Linux — one executable file</summary>
-          <p data-en="Make it executable with &lt;code&gt;chmod +x Osmium-Flasher-*.run&lt;/code&gt; and run it. No warning to dismiss; you will get a polkit password prompt when the write starts. It is a self-extracting executable rather than an AppImage on purpose — an AppImage is mounted so that root cannot read it, which is exactly what the elevated write needs to do." data-it="Rendilo eseguibile con &lt;code&gt;chmod +x Osmium-Flasher-*.run&lt;/code&gt; e avvialo. Nessun avviso da chiudere; al momento della scrittura comparirà la richiesta password di polkit. È un eseguibile auto-estraente e non un AppImage di proposito: un AppImage viene montato in modo che root non possa leggerlo, ed è proprio quello che serve alla scrittura privilegiata.">Make it executable with <code>chmod +x Osmium-Flasher-*.run</code> and run it. No warning to dismiss; you will get a polkit password prompt when the write starts. It is a self-extracting executable rather than an AppImage on purpose — an AppImage is mounted so that root cannot read it, which is exactly what the elevated write needs to do.</p>
-        </details>
+        <p class="dl-warning" data-en="Make it executable with &lt;code&gt;chmod +x Osmium-Flasher-*.run&lt;/code&gt; and run it." data-it="Rendilo eseguibile con &lt;code&gt;chmod +x Osmium-Flasher-*.run&lt;/code&gt; e avvialo.">Make it executable with <code>chmod +x Osmium-Flasher-*.run</code> and run it.</p>
       </div>
 
       <div class="dl-os" data-os="mac" hidden>
@@ -870,6 +855,14 @@
       </div>
     </div>
 
+    <details class="install-note install-more">
+      <summary data-en="Common installation issues" data-it="Problemi comuni all&#x27;installazione">Common installation issues</summary>
+      <p data-en="&lt;strong&gt;Secure Boot&lt;/strong&gt; — turn it off in the firmware setup before booting from the stick. It is required on every machine." data-it="&lt;strong&gt;Secure Boot&lt;/strong&gt; — disattivalo nel setup del firmware prima di avviare dalla chiavetta. Serve su tutte le macchine."><strong>Secure Boot</strong> — turn it off in the firmware setup before booting from the stick. It is required on every machine.</p>
+      <p data-en="&lt;strong&gt;Windows — “unknown publisher”.&lt;/strong&gt; Osmium Flasher is not code-signed, so SmartScreen stops it the first time. Click &lt;strong&gt;More info&lt;/strong&gt;, then &lt;strong&gt;Run anyway&lt;/strong&gt;. Windows will also ask for administrator rights: they are needed to write to the USB stick." data-it="&lt;strong&gt;Windows — “editore sconosciuto”.&lt;/strong&gt; Osmium Flasher non è firmato digitalmente, quindi la prima volta SmartScreen lo blocca. Clicca su &lt;strong&gt;Ulteriori informazioni&lt;/strong&gt; e poi su &lt;strong&gt;Esegui comunque&lt;/strong&gt;. Windows chiederà anche i permessi di amministratore: servono per scrivere sulla chiavetta."><strong>Windows — “unknown publisher”.</strong> Osmium Flasher is not code-signed, so SmartScreen stops it the first time. Click <strong>More info</strong>, then <strong>Run anyway</strong>. Windows will also ask for administrator rights: they are needed to write to the USB stick.</p>
+      <p data-en="&lt;strong&gt;Linux — password prompt.&lt;/strong&gt; You will get a polkit password prompt when the write starts. It is a self-extracting executable rather than an AppImage on purpose — an AppImage is mounted so that root cannot read it, which is exactly what the elevated write needs to do." data-it="&lt;strong&gt;Linux — richiesta della password.&lt;/strong&gt; Al momento della scrittura comparirà la richiesta password di polkit. È un eseguibile auto-estraente e non un AppImage di proposito: un AppImage viene montato in modo che root non possa leggerlo, ed è proprio quello che serve alla scrittura privilegiata."><strong>Linux — password prompt.</strong> You will get a polkit password prompt when the write starts. It is a self-extracting executable rather than an AppImage on purpose — an AppImage is mounted so that root cannot read it, which is exactly what the elevated write needs to do.</p>
+      <p data-en="&lt;strong&gt;Chromebooks&lt;/strong&gt; — their firmware is locked down by the manufacturer and refuses to boot anything else, unless you flash third-party modified firmware (not provided or endorsed by the manufacturer) and/or use drivers dedicated to that specific platform — neither of which this project provides or supports." data-it="&lt;strong&gt;Chromebook&lt;/strong&gt; — il loro firmware è bloccato dal produttore e impedisce l&#x27;avvio di qualsiasi altro sistema operativo, se non tramite un firmware modificato di terze parti (non fornito né avallato dal produttore) e/o driver dedicati a quella specifica piattaforma — che questo progetto non fornisce né supporta."><strong>Chromebooks</strong> — their firmware is locked down by the manufacturer and refuses to boot anything else, unless you flash third-party modified firmware (not provided or endorsed by the manufacturer) and/or use drivers dedicated to that specific platform — neither of which this project provides or supports.</p>
+    </details>
+
     <p class="install-note" data-en="&lt;strong&gt;Note:&lt;/strong&gt; the installer asks which disk to install on before formatting it — nothing is wiped without confirmation (tested on UEFI; the ISO is only needed for the first install, every later version arrives automatically over the air)." data-it="&lt;strong&gt;Nota:&lt;/strong&gt; l'installer chiede su quale disco installare prima di formattarlo — nulla viene cancellato senza conferma (testato su UEFI; la ISO serve solo per la prima installazione, tutte le versioni successive arrivano automaticamente via OTA).">
       <strong>Note:</strong> the installer asks which disk to install on before formatting it — nothing is wiped without confirmation (tested on UEFI; the ISO is only needed for the first install, every later version arrives automatically over the air).
     </p>
@@ -878,9 +871,15 @@
       <strong>Try it live:</strong> pick <strong>Try Osmium Sound (no install)</strong> at the boot menu to run the interface straight from the USB stick, nothing written to disk.
     </p>
 
-    <p class="install-note" data-en="&lt;strong&gt;This is Osmium Sound&#39;s first public release&lt;/strong&gt; — it isn&#39;t exempt from problems. On the platforms we tested, every feature has been verified and validated, but the x86 hardware landscape is vast, and we can&#39;t rule out issues on other hardware combinations. If you run into one, please report it through the &lt;a href=&quot;#support&quot;&gt;official channels below&lt;/a&gt; — it really helps." data-it="&lt;strong&gt;Questa è la prima release pubblica di Osmium Sound&lt;/strong&gt; — non è esente da problemi. Sulle piattaforme che abbiamo testato tutte le funzioni sono state verificate e validate, ma il parco hardware x86 è vastissimo e non escludiamo che su altre combinazioni possano emergere anomalie. Se ne incontri una, segnalacela tramite i &lt;a href=&quot;#support&quot;&gt;canali ufficiali qui sotto&lt;/a&gt; — è molto importante.">
-      <strong>This is Osmium Sound's first public release</strong> — it isn't exempt from problems. On the platforms we tested, every feature has been verified and validated, but the x86 hardware landscape is vast, and we can't rule out issues on other hardware combinations. If you run into one, please report it through the <a href="#support">official channels below</a> — it really helps.
+
+    <p class="install-note" data-en="&lt;strong&gt;Verified on the platforms we tested:&lt;/strong&gt; there, every feature has been checked and validated. The x86 hardware landscape is vast, though: we can&#x27;t rule out issues on other hardware combinations. If you run into one, please report it through the &lt;a href=&quot;#support&quot;&gt;official channels below&lt;/a&gt; — it really helps." data-it="&lt;strong&gt;Verificata sulle piattaforme che abbiamo testato:&lt;/strong&gt; lì tutte le funzioni sono state controllate e validate. Il parco hardware x86 è però vastissimo: non escludiamo che su altre combinazioni possano emergere anomalie. Se ne incontri una, segnalacela tramite i &lt;a href=&quot;#support&quot;&gt;canali ufficiali qui sotto&lt;/a&gt; — è molto importante.">
+      <strong>Verified on the platforms we tested:</strong> there, every feature has been checked and validated. The x86 hardware landscape is vast, though: we can't rule out issues on other hardware combinations. If you run into one, please report it through the <a href="#support">official channels below</a> — it really helps.
     </p>
+
+    <details class="install-note install-more">
+      <summary data-en="Coming back from the private beta?" data-it="Torni dalla beta privata?">Coming back from the private beta?</summary>
+      <p data-en="&lt;strong&gt;Were you in the private beta on a Debian 12 build?&lt;/strong&gt; You need to reinstall from the latest ISO above: starting with the next release, Debian 12 is no longer supported and will not receive over-the-air updates any more — so you will not be able to update from it." data-it="&lt;strong&gt;Hai partecipato alla beta privata con una build su Debian 12?&lt;/strong&gt; Devi reinstallare dall&#x27;ultima ISO qui sopra: dalla prossima versione in poi Debian 12 non sarà più supportato e non riceverà più aggiornamenti via OTA, quindi da lì non potrai più aggiornare."><strong>Were you in the private beta on a Debian 12 build?</strong> You need to reinstall from the latest ISO above: starting with the next release, Debian 12 is no longer supported and will not receive over-the-air updates any more — so you will not be able to update from it.</p>
+    </details>
 
   </div>
 </section>
