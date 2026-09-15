@@ -123,23 +123,6 @@
         radial-gradient(ellipse 60% 40% at 20% 110%, rgba(245,184,32,0.04) 0%, transparent 60%);
       pointer-events: none;
     }
-    .hero-badge {
-      display: inline-flex; align-items: center; gap: 7px;
-      background: var(--accent-dim);
-      border: 1px solid rgba(245,184,32,0.28);
-      color: var(--accent); font-size: 0.78rem; font-weight: 600;
-      padding: 5px 13px; border-radius: 100px;
-      margin-bottom: 1.75rem; letter-spacing: 0.06em;
-    }
-    .badge-dot {
-      width: 6px; height: 6px; border-radius: 50%;
-      background: var(--accent);
-      animation: pulse 2s ease-in-out infinite;
-    }
-    @keyframes pulse {
-      0%, 100% { opacity: 1; transform: scale(1); }
-      50% { opacity: 0.5; transform: scale(0.8); }
-    }
     .hero h1 {
       font-size: clamp(2.8rem, 8vw, 5.5rem);
       font-weight: 800; line-height: 1.05;
@@ -754,10 +737,6 @@
 
 <!-- HERO -->
 <section class="hero">
-  <div class="hero-badge">
-    <span class="badge-dot"></span>
-    <span data-en="Dev &amp; Prod OTA channels" data-it="Canali OTA Dev e Prod">Dev &amp; Prod OTA channels</span>
-  </div>
   <h1><span class="accent">OSMIUM</span> SOUND</h1>
   <p class="hero-sub"
      data-en="&lt;strong&gt;Hi-fi on the mini PC you already own.&lt;/strong&gt; Osmium Sound turns an x86 mini PC into a touchscreen music player: bit-perfect playback, streaming services and CD ripping."
