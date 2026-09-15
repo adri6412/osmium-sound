@@ -88,11 +88,15 @@ Item {
         Text {
             width: parent.width; height: 19; verticalAlignment: Text.AlignVCenter
             text: Player.artist || Tr.t("player.unknownArtist")
-            color: Theme.gold; font.family: Theme.font; font.pixelSize: 13; elide: Text.ElideRight
+            color: miniArtistTap.pressed ? Theme.white : Theme.gold; font.family: Theme.font; font.pixelSize: 13; elide: Text.ElideRight
+            Tap { id: miniArtistTap; width: Math.min(parent.width, parent.implicitWidth); anchors.fill: undefined; height: parent.height
+                  enabled: Player.artistId !== ""; onClicked: Ui.app.openArtist(Player.artistId, Player.artist) }
         }
         Text {
             width: parent.width; height: 16; visible: root.hasAlbum; verticalAlignment: Text.AlignVCenter
-            text: Player.album; color: Theme.silverA(0.6); font.family: Theme.font; font.pixelSize: 12; elide: Text.ElideRight
+            text: Player.album; color: miniAlbumTap.pressed ? Theme.white : Theme.silverA(0.6); font.family: Theme.font; font.pixelSize: 12; elide: Text.ElideRight
+            Tap { id: miniAlbumTap; width: Math.min(parent.width, parent.implicitWidth); anchors.fill: undefined; height: parent.height
+                  enabled: Player.albumId !== ""; onClicked: Ui.app.openAlbum(Player.albumId, Player.album) }
         }
         Item { width: 1; height: 4; visible: root.hasChip }
         Rectangle {

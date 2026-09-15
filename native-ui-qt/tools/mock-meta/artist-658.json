@@ -1,0 +1,145 @@
+{
+ "status": "ok",
+ "artist_id": 658,
+ "artist": {
+  "mbid": "b10bbbfc-cf9e-42e0-be17-e2c3e1d2600d",
+  "name": "The Beatles",
+  "sort_name": "Beatles, The",
+  "type": "group",
+  "disambiguation": "UK rock band, “The Fab Four”",
+  "begin": "1960-03-27",
+  "end": "1970-04-10",
+  "ended": true,
+  "area": "United Kingdom",
+  "begin_area": "Liverpool",
+  "end_area": "",
+  "members": [
+   {
+    "name": "Stuart Sutcliffe",
+    "mbid": "49a51491-650e-44b3-8085-2f07ac2986dd",
+    "attrs": [
+     "bass guitar"
+    ],
+    "begin": "1960-01",
+    "end": "1961",
+    "ended": true,
+    "artist_id": null
+   },
+   {
+    "name": "Tommy Moore",
+    "mbid": "f7d30d7d-9976-4d31-9907-19f3c30a206d",
+    "attrs": [
+     "drums (drum set)"
+    ],
+    "begin": "1960-05",
+    "end": "1960-06",
+    "ended": true,
+    "artist_id": null
+   },
+   {
+    "name": "Norman Chapman",
+    "mbid": "6a0e143b-61bb-414f-99c8-96681be286a1",
+    "attrs": [
+     "drums (drum set)"
+    ],
+    "begin": "1960-06",
+    "end": "1960-06",
+    "ended": true,
+    "artist_id": null
+   },
+   {
+    "name": "Pete Best",
+    "mbid": "0d4ab0f9-bbda-4ab1-ae2c-f772ffcfbea9",
+    "attrs": [
+     "drums (drum set)"
+    ],
+    "begin": "1960-08-12",
+    "end": "1962-08-16",
+    "ended": true,
+    "artist_id": null
+   },
+   {
+    "name": "Chas Newby",
+    "mbid": "2629082c-19b4-42ae-b2e1-d6025ead67a0",
+    "attrs": [
+     "bass guitar"
+    ],
+    "begin": "1960-12",
+    "end": "1961-01",
+    "ended": true,
+    "artist_id": null
+   },
+   {
+    "name": "John Lennon",
+    "mbid": "4d5447d7-c61c-4120-ba1b-d7f471d385b9",
+    "attrs": [
+     "guitar",
+     "lead vocals",
+     "original"
+    ],
+    "begin": "1960",
+    "end": "1969-09",
+    "ended": true,
+    "artist_id": 755
+   },
+   {
+    "name": "George Harrison",
+    "mbid": "42a8f507-8412-4611-854f-926571049fa0",
+    "attrs": [
+     "guitar",
+     "lead vocals",
+     "original"
+    ],
+    "begin": "1960",
+    "end": "1970-04-10",
+    "ended": true,
+    "artist_id": null
+   },
+   {
+    "name": "Paul McCartney",
+    "mbid": "ba550d0e-adac-4864-b88b-407cab5e76af",
+    "attrs": [
+     "bass guitar",
+     "lead vocals",
+     "original"
+    ],
+    "begin": "1960",
+    "end": "1970-04-10",
+    "ended": true,
+    "artist_id": null
+   },
+   {
+    "name": "Ringo Starr",
+    "mbid": "300c4c73-33ac-4255-9d57-4e32627f5e13",
+    "attrs": [
+     "drums (drum set)"
+    ],
+    "begin": "1962-08",
+    "end": "1970-04-10",
+    "ended": true,
+    "artist_id": null
+   }
+  ],
+  "member_of": [],
+  "urls": {
+   "musicbrainz": "https://musicbrainz.org/artist/b10bbbfc-cf9e-42e0-be17-e2c3e1d2600d",
+   "official": "https://www.thebeatles.com/",
+   "wikipedia": "https://it.wikipedia.org/wiki/The_Beatles"
+  }
+ },
+ "bio": {
+  "text": "I The Beatles sono stati un gruppo musicale britannico fondato a Liverpool nel 1960 e attivo fino al 1970. Il gruppo era composto da John Lennon (1940-1980), Paul McCartney (1942), George Harrison (1943-2001) e Ringo Starr (1940), quest'ultimo a partire dal 1962, chiamato a sostituire Pete Best (1941); della prima formazione faceva parte anche Stuart Sutcliffe (1940-1962) bassista dei Beatles dal 1960 al 1961.\n\nRitenuti un fenomeno di comunicazione di massa di proporzioni internazionali, i Beatles hanno segnato un'epoca nella musica, nel costume, nella moda e nella pop art. A distanza di vari decenni dal loro scioglimento ufficiale – e dopo la morte di due dei quattro componenti – i Beatles contano ancora un enorme seguito e numerosi sono i loro fan club esistenti in varie nazioni del mondo.\n\nStando alle stime dichiarate hanno venduto a livello mondiale un totale di oltre un miliardo di copie fra album, singoli e musicassette, risultando fra gli artisti di maggior successo e quelli con il maggior numero di vendite negli Stati Uniti. Sono inoltre al primo posto della lista dei \"100 migliori artisti musicali\" redatta dalla rivista Rolling Stone (The 100 Greatest Artists of All Time).\n\nL'aura che circonda lo sviluppo del loro successo mediatico, la quale ha favorito la nascita della cosiddetta Beatlemania, così come la qualità della loro discografia, sono inoltre oggetto di studio di università, psicologi e addetti del settore.\n\nDurante la loro carriera decennale sono stati ufficialmente gli autori di 186 composizioni incise come gruppo a cui vanno aggiunti venti brani a firma Lennon-McCartney ceduti ad altri artisti.",
+  "lang": "it",
+  "title": "The Beatles",
+  "url": "https://it.wikipedia.org/wiki/The_Beatles",
+  "source": "Wikipedia",
+  "license": "CC BY-SA 4.0"
+ },
+ "attribution": [
+  {
+   "source": "MusicBrainz",
+   "url": "https://musicbrainz.org/artist/b10bbbfc-cf9e-42e0-be17-e2c3e1d2600d",
+   "license": "CC0"
+  }
+ ]
+}

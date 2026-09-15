@@ -49,6 +49,7 @@ QVariantMap LibraryModel::get(int row) const {
     m["go"] = it.go; m["play"] = it.play; m["doact"] = it.doact; m["isDir"] = it.isDir; m["hasItems"] = it.hasItems;
     m["isAudio"] = it.isAudio; m["hasInput"] = it.hasInput; m["duration"] = it.duration;
     m["url"] = it.url; m["favUrl"] = it.favUrl; m["kind"] = it.kind;
+    m["albumId"] = it.albumId; m["artistId"] = it.artistId;
     return m;
 }
 
@@ -175,10 +176,10 @@ void LibraryModel::request(int view, const QVariant &p1, const QVariant &p2, con
     case Composers: params = {"artists", "0", "9999", "tags:s", "role_id:COMPOSER"}; break;
     // Lyrion's own search: artists, albums and tracks that contain the words
     case Search: params = {"search", "0", "50", "term:" + input}; break;
-    case Tracks: params = {"titles", "0", "9999", "tags:aAlcdtu"}; if (!s1.isEmpty()) params << "album_id:" + s1; break;
+    case Tracks: params = {"titles", "0", "9999", "tags:aAlcdtues"}; if (!s1.isEmpty()) params << "album_id:" + s1; break;
     case Folders: params = {"musicfolder", "0", "9999", "tags:u"}; if (!s1.isEmpty()) params << "folder_id:" + s1; break;
     case Playlists: params = {"playlists", "0", "9999", "tags:u"}; break;
-    case PlaylistTracks: params = {"playlists", "tracks", "0", "9999", "playlist_id:" + s1, "tags:aAlcdtu"}; break;
+    case PlaylistTracks: params = {"playlists", "tracks", "0", "9999", "playlist_id:" + s1, "tags:aAlcdtues"}; break;
     case Radios: params = {"radios", "0", "9999"}; break;
     case Apps: params = {"apps", "0", "9999"}; break;
     case MenuHome: params = {"menu", "0", "999", "direct:1"}; break;
@@ -249,8 +250,10 @@ void LibraryModel::parse(int view, const QString &cmd, const QVariantMap &res) {
         switch (view) {
         case Artists: case Composers: o.id = str(it, "id"); o.text = str(it, "artist"); o.favUrl = str(it, "favorites_url"); break;
         case Albums: case NewMusic:
+            // 🚨 no artwork_track_id = no cover: the album id is NOT a track
+            // id, and /music/<album id>/cover showed some other track's cover
             o.id = str(it, "id"); o.text = str(it, "album"); o.sub = str(it, "artist"); o.art = str(it, "artwork_track_id");
-            if (o.art.isEmpty()) o.art = o.id;
+            o.artistId = str(it, "artist_id");
             o.favUrl = str(it, "favorites_url");          // db:album.title=…&contributor.name=…
             break;
         case Genres: o.id = str(it, "id"); o.text = str(it, "genre"); o.favUrl = str(it, "favorites_url"); break;
@@ -258,6 +261,7 @@ void LibraryModel::parse(int view, const QString &cmd, const QVariantMap &res) {
         case Tracks: case PlaylistTracks:
             o.id = str(it, "id"); o.text = str(it, "title"); o.sub = str(it, "artist"); o.duration = it.value("duration").toDouble();
             o.url = str(it, "url"); o.favUrl = str(it, "favorites_url"); if (o.favUrl.isEmpty()) o.favUrl = o.url;
+            o.albumId = str(it, "album_id"); o.artistId = str(it, "artist_id");
             break;
         case Folders:
             o.id = str(it, "id"); o.text = str(it, "filename"); if (o.text.isEmpty()) o.text = str(it, "title");

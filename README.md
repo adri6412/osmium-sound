@@ -25,9 +25,10 @@ Bit-perfect audio, streaming services, and signed OTA updates — one sleek dark
 - 🎵 **High-resolution audio** — FLAC, DSD (DoP), PCM up to 192kHz, bit-perfect (no resampling)
 - 🎧 **Streaming services** — Deezer, Qobuz, TIDAL, Spotify and more, via Lyrion plugins
 - 📁 **Music library** — browse by artist, album, genre, year, composer, new music, folder or playlist; search the whole library from the touchscreen; refresh it on demand with progress
+- 🎼 **Album & artist pages** — tracks, format and the credits in your own tags; online, who played what on which instrument, production and studios, first release, band members and biographies from MusicBrainz and Wikipedia (pick the edition if the match is wrong)
 - ⭐ **Favourites & playlists** — a heart on Now Playing, favourites you can edit, playlists you can rename and trim, all from the touchscreen
 - 💾 **Music sources** — USB drives, internal disks (adopt or format from the UI), NAS/SMB shares found for you on the network; adopted disks can be shared back on the LAN over SMB, and a file manager in the web admin copies, moves and renames what's on them
-- 💿 **CD playback & ripping** — insert a disc, play it or rip it to tagged FLAC (MusicBrainz metadata + cover art) straight into your library
+- 💿 **CD playback & ripping** — insert a disc, play it or rip it to tagged FLAC (MusicBrainz metadata and IDs + cover art) straight into your library
 - 🧭 **Discover** — endless random mixes, "keep playing similar music", similar artists and artist bios on the touchscreen
 - 📻 **Internet radio** — thousands of stations, save favourites from the touchscreen
 - 🎚️ **Analog VU meters** — six built-in looks, more downloadable from a signed online catalogue, plus a status plate showing Hi-Res/PCM/DSD and BitPerfect/ReplayGain

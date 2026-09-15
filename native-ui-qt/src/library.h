@@ -13,6 +13,7 @@
 struct LibItem {
     QString id, text, sub, art, icon;
     QString url, favUrl;        // the item's URL (tracks, playlists, plugin audio) and what `favorites add` wants for it
+    QString albumId, artistId;  // tracks and albums: where "go to album / artist" leads
     int kind = -1;              // search results only: 0 artist, 1 album, 2 track
     QVariantList go, play, doact;
     bool isDir = false, hasItems = false, isAudio = false, hasInput = false;
@@ -35,8 +36,10 @@ public:
     // `years`, `artists role_id:COMPOSER` and `albums sort:new`; Search is
     // Lyrion's server-side `search` (artists, albums and tracks in one list,
     // see `kind`). Albums also takes a filter in p2 (genre_id:, year:, role_id:).
+    // AlbumPage and ArtistPage are the album and artist pages: they load their
+    // own data (AlbumPage.qml, ArtistPage.qml), this model stays empty for them.
     enum View { Home, Artists, Albums, Tracks, Folders, Playlists, PlaylistTracks, Radios, Apps, MenuHome, Menu, PluginItems,
-                Genres, Years, Composers, NewMusic, Search };
+                Genres, Years, Composers, NewMusic, Search, AlbumPage, ArtistPage };
     Q_ENUM(View)
     enum Roles { IdRole = Qt::UserRole + 1, TextRole, SubRole, ArtRole, IconRole, GoRole, PlayRole, DoRole,
                  IsDirRole, HasItemsRole, IsAudioRole, HasInputRole, DurationRole, LetterRole,

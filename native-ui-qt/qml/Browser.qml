@@ -16,12 +16,15 @@ Item {
     readonly property bool hasSearch: tab === 0 && (view === LibraryModel.Artists || view === LibraryModel.Albums || view === LibraryModel.Composers)
     readonly property bool hasAz: hasSearch
     readonly property bool browsing: tab === 0 && view !== LibraryModel.Home
+    // the album and artist pages load their own data (AlbumPage.qml, ArtistPage.qml)
+    readonly property bool isPage: view === LibraryModel.AlbumPage || view === LibraryModel.ArtistPage
     property bool msearchOpen: false
     property string msearchTitle: ""
     property var msearchGo: []
     property var msearchPlugin: null      // { cmd, item } quando la ricerca e' di un plugin (Radio/App)
     property alias settingsTab: settingsTab
     property alias discoverTab: discoverTab
+    readonly property var pageItem: pageLoader.item       // the album/artist page on screen, if any
     x: 341; width: 1024 - 341; height: 600
 
     // ─── "Aggiornamento disponibile" sul tab delle impostazioni ────────────
@@ -64,6 +67,13 @@ Item {
     // ─── navigazione ───────────────────────────────────────────────────────
     function loadTop() {
         if (cur.view === LibraryModel.Home) return
+        if (cur.view === LibraryModel.AlbumPage || cur.view === LibraryModel.ArtistPage) {
+            // a fresh page every time, also from one album page to another
+            pageLoader.sourceComponent = null
+            pageLoader.sourceComponent = cur.view === LibraryModel.AlbumPage ? albumPageComp : artistPageComp
+            return
+        }
+        pageLoader.sourceComponent = null
         Library.request(cur.view, cur.p1, cur.p2, cur.input)
         list.scrollTop()
     }
@@ -86,6 +96,7 @@ Item {
     function navHome() {
         nav = [{ view: LibraryModel.Home, title: Tr.t("player.titles.home"), p1: "", p2: "", input: "" }]
         msearchOpen = false; ctx.visible = false; search.text = ""
+        pageLoader.sourceComponent = null
         appear()
     }
     function navBack() {
@@ -109,12 +120,29 @@ Item {
             if (!(v === LibraryModel.Home || v === LibraryModel.Artists || v === LibraryModel.Albums || v === LibraryModel.Tracks ||
                   v === LibraryModel.Folders || v === LibraryModel.Playlists || v === LibraryModel.PlaylistTracks ||
                   v === LibraryModel.Genres || v === LibraryModel.Years || v === LibraryModel.Composers ||
-                  v === LibraryModel.NewMusic || v === LibraryModel.Search)) navHome()
+                  v === LibraryModel.NewMusic || v === LibraryModel.Search || v === LibraryModel.AlbumPage || v === LibraryModel.ArtistPage)) navHome()
         } else if (i === 4) settingsTab.enter()
         else if (i === 3) discoverTab.enter()
         appear()
     }
     function showPlaylists() { tab = 0; navHome(); goView(LibraryModel.Playlists, Tr.t("player.titles.playlists")) }
+    // the album and artist pages, from anywhere (library, search, Now Playing,
+    // credits); a person known only to MusicBrainz opens the artist page by mbid
+    function showMusicTab() { if (tab !== 0) { tab = 0; ctx.visible = false } }
+    function openAlbum(id, title) { if (!id) return; showMusicTab(); goView(LibraryModel.AlbumPage, title, String(id)) }
+    function openArtist(id, name) { if (!id) return; showMusicTab(); goView(LibraryModel.ArtistPage, name, String(id)) }
+    function openPerson(mbid, name) { if (!mbid) return; showMusicTab(); goView(LibraryModel.ArtistPage, name, "", "mbid:" + mbid) }
+    function openMenu(items, x, y) { ctx.open(items, x, y) }
+    // a page opened without its title (from a track's menu) names its crumb once loaded
+    function setPageTitle(view, id, title) {
+        if (!title || cur.view !== view || String(cur.p1) !== String(id)) return
+        var n = nav.slice(); n[n.length - 1] = Object.assign({}, cur, { title: title }); nav = n
+    }
+    // shuffle on first, then load: Lyrion shuffles what it loads (two separate
+    // requests could arrive in either order)
+    function loadShuffled(type, id) {
+        Player.query(["playlist", "shuffle", "1"], function() { Player.cmd(["playlistcontrol", "cmd:load", type + ":" + id]) })
+    }
     function playItem(type, id, mode) { Player.cmd(["playlistcontrol", "cmd:" + mode, type + ":" + id]) }
     // la ricerca nella libreria (Lyrion `search`): dalla home, oppure da una
     // pagina di risultati per cercare di nuovo
@@ -199,13 +227,17 @@ Item {
         switch (v) {
         case LibraryModel.Tracks: case LibraryModel.PlaylistTracks:
             queueItems("track_id"); fav(it.favUrl, "audio")
+            if (it.albumId) L.push({ icon: "disc", label: Tr.t("player.page.goToAlbum"), cb: function() { openAlbum(it.albumId, "") } })
+            if (it.artistId) L.push({ icon: "user", label: Tr.t("player.page.goToArtist"), cb: function() { openArtist(it.artistId, it.sub) } })
             if (v === LibraryModel.PlaylistTracks) L.push({ icon: "list-x", label: Tr.t("player.removeFromPlaylist"), danger: true, cb: function() { removeFromPlaylist(row) } })
             break
         case LibraryModel.Folders:
             if (it.isDir) queueItems("folder_id"); else queueItems("track_id")
             break
         case LibraryModel.Albums: case LibraryModel.NewMusic:
-            queueItems("album_id"); fav(it.favUrl, "playlist"); break
+            queueItems("album_id"); fav(it.favUrl, "playlist")
+            if (it.artistId) L.push({ icon: "user", label: Tr.t("player.page.goToArtist"), cb: function() { openArtist(it.artistId, it.sub) } })
+            break
         case LibraryModel.Artists: case LibraryModel.Composers:
             queueItems("artist_id"); fav(it.favUrl, "playlist"); break
         case LibraryModel.Genres: queueItems("genre_id"); fav(it.favUrl, "playlist"); break
@@ -252,14 +284,13 @@ Item {
         if (Library.state !== 2) return
         var it = Library.get(row)
         switch (view) {
-        case LibraryModel.Artists: if (onPlay) playItem("artist_id", it.id, "load"); else goView(LibraryModel.Albums, it.text, it.id); break
-        case LibraryModel.Composers: if (onPlay) playItem("artist_id", it.id, "load"); else goView(LibraryModel.Albums, it.text, it.id, "role_id:COMPOSER"); break
-        case LibraryModel.Albums: case LibraryModel.NewMusic: if (onPlay) playItem("album_id", it.id, "load"); else goView(LibraryModel.Tracks, it.text, it.id); break
+        case LibraryModel.Artists: case LibraryModel.Composers: if (onPlay) playItem("artist_id", it.id, "load"); else openArtist(it.id, it.text); break
+        case LibraryModel.Albums: case LibraryModel.NewMusic: if (onPlay) playItem("album_id", it.id, "load"); else openAlbum(it.id, it.text); break
         case LibraryModel.Genres: if (onPlay) playItem("genre_id", it.id, "load"); else goView(LibraryModel.Albums, it.text, "", "genre_id:" + it.id); break
         case LibraryModel.Years: if (onPlay) playItem("year", it.id, "load"); else goView(LibraryModel.Albums, it.text, "", "year:" + it.id); break
         case LibraryModel.Search:
-            if (it.kind === 0) { if (onPlay) playItem("artist_id", it.id, "load"); else goView(LibraryModel.Albums, it.text, it.id) }
-            else if (it.kind === 1) { if (onPlay) playItem("album_id", it.id, "load"); else goView(LibraryModel.Tracks, it.text, it.id) }
+            if (it.kind === 0) { if (onPlay) playItem("artist_id", it.id, "load"); else openArtist(it.id, it.text) }
+            else if (it.kind === 1) { if (onPlay) playItem("album_id", it.id, "load"); else openAlbum(it.id, it.text) }
             else playItem("track_id", it.id, "load")
             break
         case LibraryModel.Tracks: case LibraryModel.PlaylistTracks: playItem("track_id", it.id, "load"); break
@@ -551,25 +582,44 @@ Item {
                     }
                 }
                 readonly property real listY: (root.msearchOpen ? 47 : 0) + (root.hasSearch ? 50 : 0)
+                // the album or artist page, in place of the list
+                Loader {
+                    id: pageLoader
+                    anchors.fill: parent
+                    visible: root.isPage
+                }
+                Component {
+                    id: albumPageComp
+                    AlbumPage { browser: root; albumId: String(root.cur.p1); devScale: root.devScale }
+                }
+                Component {
+                    id: artistPageComp
+                    ArtistPage {
+                        browser: root; devScale: root.devScale
+                        artistId: String(root.cur.p1 || "")
+                        mbid: String(root.cur.p2 || "").indexOf("mbid:") === 0 ? String(root.cur.p2).substring(5) : ""
+                        name: root.cur.title === "…" ? "" : root.cur.title
+                    }
+                }
                 LibraryList {
                     id: list
                     x: 12; y: parent.listY + 4
                     width: (root.hasAz ? root.width - 32 - 12 : root.width - 12) - 12
                     height: 600 - root.contentTop - y - 12
-                    visible: Library.state === 2 && Library.count > 0
+                    visible: Library.state === 2 && Library.count > 0 && !root.isPage
                     onRowTap: (row, onPlay) => root.rowTap(row, onPlay)
                     // list.y gia' comprende le barre di ricerca; la fascia del CD sposta tutto il contenitore
                     onRowLongPress: (row, x, y) => ctx.open(root.ctxItems(row), list.x + x, list.y + y + (cdBanner.visible ? 48 : 0))
                 }
-                Spinner { visible: Library.state === 1; active: root.visible && !(Ui.app && Ui.app.expanded); radius: 20; x: list.x + list.width / 2 - 20; y: list.y + 60 - 20 }   // w-10 h-10
+                Spinner { visible: Library.state === 1 && !root.isPage; active: visible && root.visible && !(Ui.app && Ui.app.expanded); radius: 20; x: list.x + list.width / 2 - 20; y: list.y + 60 - 20 }   // w-10 h-10
                 Column {
-                    visible: Library.state === 3
+                    visible: Library.state === 3 && !root.isPage
                     x: list.x; y: list.y + 40; width: list.width; spacing: 12
                     Icon { anchors.horizontalCenter: parent.horizontalCenter; name: "alert-circle"; size: 40; color: Theme.red400 }
                     Text { anchors.horizontalCenter: parent.horizontalCenter; text: Tr.t("player.connectionErrorTitle"); color: Theme.white; font.family: Theme.font; font.pixelSize: 16; font.bold: true }
                 }
                 Text {
-                    visible: Library.state === 2 && Library.count === 0
+                    visible: Library.state === 2 && Library.count === 0 && !root.isPage
                     x: list.x; y: list.y + 32; width: list.width; horizontalAlignment: Text.AlignHCenter
                     text: Tr.t("common.noResults"); color: Theme.silverA(0.4); font.family: Theme.font; font.pixelSize: 14
                 }

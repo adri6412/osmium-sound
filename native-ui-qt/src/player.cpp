@@ -208,7 +208,7 @@ static QString S(const QVariantMap &m, const char *k) { return m.value(k).toStri
 
 void Player::pollStatus() {
     m_statusInFlight = true;
-    Api::instance()->lmsRequest(m_playerId, {"status", "-", "1", "tags:aldoTINxcKu"}, [this](bool ok, const QVariant &data, int) {
+    Api::instance()->lmsRequest(m_playerId, {"status", "-", "1", "tags:aldoTINxcKues"}, [this](bool ok, const QVariant &data, int) {
         m_statusInFlight = false;
         QVariantMap r = data.toMap().value("result").toMap();
         if (!ok || r.isEmpty()) {
@@ -238,6 +238,7 @@ void Player::pollStatus() {
         QString title = S(tr, "title"), artist = S(tr, "artist"), album = S(tr, "album");
         QString coverid = S(tr, "coverid"), aurl = S(tr, "artwork_url"), bitrate = S(tr, "bitrate");
         QString type = S(tr, "type"), id = S(tr, "id"), url = S(tr, "url"), rawTitle = title;
+        QString albumId = S(tr, "album_id"), artistId = S(tr, "artist_id");
         int ssize = tr.value("samplesize").toInt();
         double srate = tr.value("samplerate").toDouble();
         bool remote = tr.value("remote").toInt() != 0;
@@ -249,14 +250,14 @@ void Player::pollStatus() {
 
         bool meta = title != m_title || artist != m_artist || album != m_album || type != m_type ||
                     ssize != m_sampleSize || srate != m_sampleRate || id != m_id || coverid != m_coverId ||
-                    remote != m_remote || bitrate != m_bitrate || url != m_url;
+                    remote != m_remote || bitrate != m_bitrate || url != m_url || albumId != m_albumId || artistId != m_artistId;
         bool track = title != m_title || artist != m_artist || album != m_album;
         bool prog = std::fabs(elapsed - m_elapsed) > 0.4 || std::fabs(duration - m_duration) > 0.4;
         bool ctl = playing != m_playing || power != m_power || volume != m_volume || shuffle != m_shuffle || repeat != m_repeat ||
                    sleep != m_sleepSecs || index != m_index || total != m_total;
         m_title = title; m_artist = artist; m_album = album; m_type = type; m_sampleSize = ssize; m_sampleRate = srate;
         m_id = id; m_coverId = coverid; m_artworkUrlLms = aurl; m_remote = remote; m_bitrate = bitrate; m_currentTitle = currentTitle;
-        m_url = url; m_rawTitle = rawTitle;
+        m_url = url; m_rawTitle = rawTitle; m_albumId = albumId; m_artistId = artistId;
         m_elapsed = elapsed; m_duration = duration;
         m_playing = playing; m_power = power; m_volume = volume; m_shuffle = shuffle; m_repeat = repeat; m_sleepSecs = sleep; m_index = index; m_total = total;
         m_lastElapsedTick = m_clock.elapsed();

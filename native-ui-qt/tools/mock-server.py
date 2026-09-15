@@ -121,7 +121,7 @@ def rpc(player, params):
                  "power": STATE["power"],
                  "playlist_cur_index": STATE["index"], "playlist_tracks": len(QUEUE), "playlist repeat": STATE["repeat"],
                  "playlist shuffle": STATE["shuffle"], "will_sleep_in": STATE["sleep"],
-                 "playlist_loop": [{"id": 1001 + STATE["index"], "title": t[0], "artist": t[1], "album": t[2], "coverid": "1001",
+                 "playlist_loop": [{"id": 1001 + STATE["index"], "title": t[0], "artist": t[1], "album": t[2], "coverid": "1001", "album_id": 1 + STATE["index"] % 24, "artist_id": 1,
                                     "url": "file:///srv/music/%d.dsf" % STATE["index"],
                                     "bitrate": "2822kHz", "type": "dsf", "samplesize": 1, "samplerate": 2822400, "duration": STATE["duration"], "remote": 0}]}
         else:
@@ -169,16 +169,36 @@ def rpc(player, params):
     elif cmd == "musicartistinfo":
         r = {"lyrics": "Meet you all the way<br>Rosanna, yeah<br><br>All I wanna do when I wake up in the morning<br>is see your eyes<br>" * 8}
     elif cmd == "artists":
+        def arg(k): return next((p[len(k):] for p in params if isinstance(p, str) and p.startswith(k)), None)
         names = ARTISTS[-4:] if any(p == "role_id:COMPOSER" for p in params) else ARTISTS
+        if arg("artist_id:"): names = [a for a in ARTISTS if str(ARTISTS.index(a) + 1) == arg("artist_id:")]
         r = {"artists_loop": [{"id": ARTISTS.index(a) + 1, "artist": a, "favorites_url": "db:contributor.name=" + a} for a in names], "count": len(names)}
+    elif cmd == "roles":
+        # the artist page asks which roles an artist has: albums, and some as composer
+        def arg(k): return next((p[len(k):] for p in params if isinstance(p, str) and p.startswith(k)), None)
+        aid = int(arg("artist_id:") or 0)
+        roles = [{"role_id": 1, "role_name": "ARTIST"}] + ([{"role_id": 2, "role_name": "COMPOSER"}] if aid > len(ARTISTS) - 4 else []) + [{"role_id": 6, "role_name": "TRACKARTIST"}]
+        r = {"roles_loop": roles, "count": len(roles)}
     elif cmd == "albums":
         def arg(k): return next((p[len(k):] for p in params if isinstance(p, str) and p.startswith(k)), None)
-        aid, gid, year, sort = arg("artist_id:"), arg("genre_id:"), arg("year:"), arg("sort:")
+        aid, gid, year, sort, alid, role = arg("artist_id:"), arg("genre_id:"), arg("year:"), arg("sort:"), arg("album_id:"), arg("role_id:") or ""
         rows = [(i, al, ar, arid) for i, al, ar, arid in ALBUMS if not aid or str(arid) == aid]
+        if alid: rows = [x for x in ALBUMS if str(x[0]) == alid]
         if gid: rows = [x for x in rows if x[0] % len(GENRES) == int(gid) - 1]
         if year: rows = [x for x in rows if YEARS[x[0] % len(YEARS)] == int(year)]
         if sort == "new": rows = list(reversed(rows))[:6]
-        loop = [{"id": i, "album": al, "artist": ar, "artwork_track_id": str(1000 + i), "favorites_url": "db:album.title=%s&contributor.name=%s" % (al, ar)} for i, al, ar, arid in rows]
+        if aid and role:
+            # ARTIST: the artist's own albums; COMPOSER / TRACKARTIST: two others each
+            if "ARTIST" in role.split(","): pass
+            elif role == "COMPOSER": rows = [x for x in ALBUMS if x[3] != int(aid)][:2]
+            elif role == "TRACKARTIST": rows = [x for x in ALBUMS if x[3] != int(aid)][2:5]
+            else: rows = []
+        if sort == "yearalbum": rows = sorted(rows, key=lambda x: YEARS[x[0] % len(YEARS)])
+        # album 3 has no cover (artwork_track_id missing), album 5 is on two discs, 7 is a compilation
+        loop = [{"id": i, "album": al, "artist": ar, "artist_id": arid, "artists": ar, "artist_ids": str(arid), "year": YEARS[i % len(YEARS)],
+                 "disccount": 2 if i == 5 else 1, "compilation": 1 if i == 7 else 0, "release_type": "ALBUM",
+                 **({} if i == 3 else {"artwork_track_id": str(1000 + i)}),
+                 "favorites_url": "db:album.title=%s&contributor.name=%s" % (al, ar)} for i, al, ar, arid in rows]
         r = {"albums_loop": loop, "count": len(loop)}
     elif cmd == "genres":
         r = {"genres_loop": [{"id": i + 1, "genre": g, "favorites_url": "db:genre.name=" + g} for i, g in enumerate(GENRES)], "count": len(GENRES)}
@@ -191,7 +211,27 @@ def rpc(player, params):
         trks = [{"track_id": 2000 + i, "track": t} for i, t in enumerate(["Rosanna", "Africa", "Hold the Line", "Time", "Money", "Rosanna (live)"]) if term in t.lower()]
         r = {"contributors_loop": arts, "albums_loop": albs, "tracks_loop": trks, "contributors_count": len(arts), "albums_count": len(albs), "tracks_count": len(trks), "count": len(arts) + len(albs) + len(trks)}
     elif cmd == "titles":
-        r = {"titles_loop": [{"id": 2000 + i, "title": f"Brano {i + 1}", "artist": "Toto", "duration": 200 + i * 7, "url": "file:///srv/music/toto/%d.flac" % i, "favorites_url": "file:///srv/music/toto/%d.flac" % i} for i in range(14)]}
+        alid = next((p[9:] for p in params if isinstance(p, str) and p.startswith("album_id:")), None)
+        al = next((x for x in ALBUMS if str(x[0]) == alid), None) if alid else None
+        if al:
+            # an album's tracks with the per-role tags (A + S) and the format of the files
+            i, name, ar, arid = al
+            n = 12 if i == 5 else 8
+            loop = []
+            for k in range(n):
+                disc = 1 + (k >= 6) if i == 5 else 1
+                t = {"id": 5000 + i * 100 + k, "title": f"Brano {k + 1} di {name}", "tracknum": (k % 6) + 1 if i == 5 else k + 1, "disc": disc,
+                     "duration": 180 + k * 23, "artist": ar, "artist_ids": str(arid), "album_id": i, "type": "flc", "samplesize": 24, "samplerate": 96000,
+                     "url": "file:///srv/music/%d/%d.flac" % (i, k), "composer": "Ludovico Einaudi" if k < 3 else "Nils Frahm", "composer_ids": "4" if k < 3 else "10"}
+                if i == 7:
+                    other = ARTISTS[(k + 2) % len(ARTISTS)]
+                    t.update({"trackartist": other, "trackartist_ids": str(ARTISTS.index(other) + 1)})
+                if k == 1:
+                    t.update({"conductor": "Beethoven", "conductor_ids": "12"})
+                loop.append(t)
+            r = {"titles_loop": loop, "count": len(loop)}
+        else:
+            r = {"titles_loop": [{"id": 2000 + i, "title": f"Brano {i + 1}", "artist": "Toto", "duration": 200 + i * 7, "album_id": (i % 24) + 1, "artist_id": 1, "url": "file:///srv/music/toto/%d.flac" % i, "favorites_url": "file:///srv/music/toto/%d.flac" % i} for i in range(14)]}
     elif cmd == "musicfolder":
         r = {"folder_loop": [{"id": 1, "filename": "Musica", "type": "folder"}, {"id": 2, "filename": "USB", "type": "folder"}, {"id": 3, "filename": "brano.flac", "type": "track"}]}
     elif cmd == "playlists":
@@ -364,6 +404,7 @@ class H(BaseHTTPRequestHandler):
                 return self._json({"success": True, "state": "done" if done else "running",
                                    "progress": 100 if done else min(95, int(el * 30)),
                                    "hosts": hosts, "tools": {"shares": True, "mdns": True}})
+            if u.path.startswith("/api/meta/"): return self._json(*meta_get(u.path, q))
             if u.path == "/api/cd/info": return self._json(STATE["cd"])
             if u.path == "/api/cd/rip/status": return self._json(STATE["cdrip"])
             if u.path in table: return self._json(table[u.path])
@@ -444,6 +485,14 @@ class H(BaseHTTPRequestHandler):
             if u.path == "/api/cd/rip":
                 STATE["cdrip"] = {"state": "ripping", "message": "Copia in corso", "progress": 30, "track": 2, "total": len(data.get("tracks", []))}
                 threading.Timer(6.0, lambda: STATE.__setitem__("cdrip", {"state": "done", "message": "Copia completata", "progress": 100})).start()
+            if u.path == "/api/meta/settings":
+                for k in ("online", "prefetch"):
+                    if k in data: META["settings"][k] = bool(data[k])
+                return self._json(meta_settings())
+            if u.path == "/api/meta/cache/clear": META["seen"].clear(); return self._json({"ok": True})
+            if u.path == "/api/meta/album/pin":
+                print("mock: meta pin", data, flush=True)
+                META["seen"].discard("album-%s" % data.get("album_id")); return self._json({"status": "pending"})
             if u.path == "/api/cd/eject": STATE["cd"] = {"no_disc": True}; STATE["cdrip"] = {"state": "idle"}
             if u.path == "/api/playlistdir": STATE["pldir"] = data.get("path", STATE["pldir"])
             if u.path == "/api/lms_skin": STATE["skin"] = data.get("skin", "unset")
@@ -453,6 +502,78 @@ class H(BaseHTTPRequestHandler):
         return self._json({"success": True, "ok": True, "data": data})
     do_DELETE = do_POST
     do_PUT = do_POST
+
+# /api/meta (sources_server + hifi_metadata.py): real-shaped answers saved from
+# MusicBrainz/Wikipedia in tools/mock-meta/ (album-<id>.json, artist-<id>.json,
+# person-<mbid>.json, candidates-<id>.json, settings.json). An id without its
+# own file gets the first one of its kind. The first request for each entity
+# answers "pending", like the real service while it looks things up.
+#   MOCK_META=off      the service says "disabled"
+#   MOCK_META=offline  the service says "offline"
+#   MOCK_META=nomatch  nothing found for any album or artist
+META_DIR = os.path.join(HERE, "mock-meta")
+META = {"seen": set(), "settings": {"online": True, "prefetch": True}}
+MOCK_META = os.environ.get("MOCK_META", "")
+
+def meta_file(kind, key):
+    try:
+        names = sorted(f for f in os.listdir(META_DIR) if f.startswith(kind + "-") and f.endswith(".json"))
+    except OSError:
+        return None
+    pick = "%s-%s.json" % (kind, key)
+    if pick in names:
+        names = [pick]
+    # an id without its own file borrows one that has data (not the nomatch example)
+    for name in names:
+        with open(os.path.join(META_DIR, name), encoding="utf-8") as f:
+            d = json.load(f)
+        if len(names) == 1 or d.get("status", "ok") == "ok":
+            return d
+    return None
+
+def meta_settings():
+    base = meta_file("settings", "") or {"cache": {"albums": 120, "artists": 48, "bytes": 3456789}, "prefetch_state": {"running": True, "done": 120, "total": 312}}
+    return dict(base, **META["settings"])
+
+def meta_get(path, q):
+    one = lambda k: (q.get(k) or [""])[0]
+    if path == "/api/meta/settings":
+        return meta_settings(), 200
+    if MOCK_META == "off":
+        return {"status": "disabled"}, 200
+    if MOCK_META == "offline":
+        return {"status": "offline"}, 200
+    kind, key = {"/api/meta/album": ("album", one("album_id")), "/api/meta/artist": ("artist", one("artist_id")),
+                 "/api/meta/person": ("person", one("mbid")), "/api/meta/album/candidates": ("candidates", one("album_id")),
+                 "/api/meta/appearances": ("appearances", one("mbid"))}.get(path, (None, None))
+    if not kind:
+        return {"status": "error", "message": "mock: " + path}, 404
+    seen = "%s-%s" % (kind, key)
+    if kind in ("album", "artist", "person") and seen not in META["seen"]:
+        META["seen"].add(seen)
+        return {"status": "pending"}, 200
+    if MOCK_META == "nomatch" and kind != "appearances":
+        return {"status": "nomatch", "candidates": []} if kind == "candidates" else {"status": "nomatch"}, 200
+    d = meta_file(kind, key)
+    if kind == "appearances" and d is None:
+        # albums whose saved credits name this person
+        albums = []
+        for f in sorted(os.listdir(META_DIR)) if os.path.isdir(META_DIR) else []:
+            if not f.startswith("album-"):
+                continue
+            with open(os.path.join(META_DIR, f), encoding="utf-8") as fh:
+                a = json.load(fh)
+            roles = [{"group": c.get("group"), "role": c.get("role"), "attr": c.get("attr", "")} for c in a.get("credits", [])
+                     if any(p.get("mbid") == key for p in c.get("people", []))]
+            if roles:
+                albums.append({"album_id": a.get("album_id"), "title": (a.get("release") or {}).get("title", ""), "artist": (a.get("release") or {}).get("artist", ""), "roles": roles})
+        return {"status": "ok", "albums": albums}, 200
+    if d is None:
+        return ({"status": "ok", "current": None, "pinned": None, "candidates": []} if kind == "candidates" else {"status": "nomatch"}), 200
+    d = dict(d)
+    if kind == "album": d["album_id"] = int(key or 0)
+    if kind == "artist": d["artist_id"] = int(key or 0)
+    return d, 200
 
 def serve(port):
     ThreadingHTTPServer.allow_reuse_address = True

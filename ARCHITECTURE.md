@@ -509,10 +509,18 @@ GET/POST /api/internal/smb         🔒   Samba share config (now also lists ado
 POST   /api/internal/smb/regenerate 🔒  rotate the Samba account password
 GET    /api/usb                    🔒   list mounted (not-yet-adopted) USB disks for the add-source UI
 POST   /api/usb/adopt              🔒   adopt a USB partition read-write (Samba-shared, like an internal disk)
-GET    /api/cd/info                🔒   audio-CD TOC + MusicBrainz metadata
-POST   /api/cd/rip                 🔒   rip to FLAC (async systemd-run job)
+GET    /api/cd/info                🔒   audio-CD TOC + MusicBrainz metadata (`releases`, `?release=<mbid>` to switch edition)
+POST   /api/cd/rip                 🔒   rip to FLAC (async systemd-run job; tags from `release`, MusicBrainz ids included)
 GET    /api/cd/rip/status          🔒   poll a rip job
 POST   /api/cd/eject               🔒   open the tray
+GET    /api/meta/album?album_id=   🔒   album credits/release/places/Wikipedia text (`pending` while looking up)
+GET    /api/meta/album/candidates  🔒   MusicBrainz releases this album could be
+POST   /api/meta/album/pin         🔒   {album_id, mbid | "none" | null}: use this edition / none / automatic
+GET    /api/meta/artist?artist_id= 🔒   artist details, members, Wikipedia biography
+GET    /api/meta/person?mbid=      🔒   the same for someone only MusicBrainz knows
+GET    /api/meta/appearances?mbid= 🔒   library albums (already looked up) crediting that person
+GET/POST /api/meta/settings        🔒   online look-ups / background prefetch on-off, cache and prefetch state
+POST   /api/meta/cache/clear       🔒   drop the cache (manual edition picks stay)
 POST   /api/pair/token                  mint a companion pairing token (localhost only)
 POST   /api/pair/tokens/revoke_all      revoke all tokens (localhost only)
 GET    /api/backup                 🔒   build + download a plain (non-secret) backup immediately
@@ -525,6 +533,21 @@ GET/POST /api/backup/settings      🔒   scheduled-backup on/off + retention
 POST   /api/restore                🔒   restore from an uploaded archive (async — returns once the job has started)
 GET    /api/restore/status         🔒   poll that restore job
 ```
+
+`/api/meta/*` lives in `hifi_metadata.py`, mounted by `sources_server.py`.
+It reads the album or artist from Lyrion (following the server the device
+uses), finds the MusicBrainz release — `MUSICBRAINZ_ALBUMID` from the file tags
+(`tags track_id:`), else a search checked against track counts and lengths —
+and builds credits by role from one release lookup (release, recording and
+work relationships), plus Wikipedia text through the Wikidata link. Only
+MusicBrainz's CC0 data is used (never genres, tags, ratings or annotations);
+Wikipedia text is shown with its CC BY-SA attribution. One worker thread with
+a priority queue (a page on screen before the background prefetch) keeps
+MusicBrainz at one request per 1.1 s with back-off on 503; answers are cached
+in SQLite under `/var/lib/hifi-player/metadata/` (60 days, 7 for "not found",
+100 MB cap that only drops the big re-downloadable lookups). Settings:
+`/etc/hifi-player/meta-online` and `meta-prefetch`, both on when missing. The
+CD ripper shares the same throttled client. Tests: `tests/test_metadata.py`.
 
 Plus `/api/system/*` (🔒): the companion's only path to the system API, a
 fixed forwarding table (`_SYSTEM_PROXY_ROUTES`) onto `api_server.py` over
@@ -694,6 +717,27 @@ from the on-screen keyboard's Confirm, `acceptOnVkConfirm`). Settings → Lyrion
 Music Server and the web admin Dashboard read `info total …` and
 `serverstatus` for the library counts and the last scan, and drive `rescan` /
 `abortscan` with `rescanprogress` while it runs.
+
+**Album and artist pages.** Albums, artists and composers open a page instead
+of a plain list: two more `LibraryModel` views (`AlbumPage`, `ArtistPage`) that
+leave the model empty and load `AlbumPage.qml` / `ArtistPage.qml` in the
+browser, which fetch their own data. From Lyrion: `albums album_id:X
+tags:alyqwaaSSjW`, `titles album_id:X tags:dtiqASeoTIu sort:tracknum` (per-role
+contributors from tags `A` + `S`, the file format for the chip, `play_index:` to
+start from a track), and for an artist `roles artist_id:X` then one `albums
+artist_id:X role_id:… sort:yearalbum` per role (as artist, band, composer,
+conductor, track artist, user-defined roles), portrait from
+`/contributor/<portraitid>/image_…`. From the metadata service (sources_server
+`/api/meta/*`, see below): credits by role with instruments, production,
+studios, first release, band members and Wikipedia text; the page shows the
+local credits until those arrive and polls while the service answers
+`pending`. `EditionPicker.qml` pins another MusicBrainz release. Now Playing's
+and the mini player's artist and album lines use the `album_id`/`artist_id` of
+`status` (tags `e`, `s`) to open the pages; the Tracks, playlist tracks and
+album grid menus gained "Go to album / artist". Shared helpers (role and
+instrument labels, durations, dates, track ranges) live in the `Meta` singleton
+(`Meta.qml`); role and instrument names are translated under `meta.*` in the
+locale files, falling back to MusicBrainz's English.
 
 **Own player and the player picker.** On a Lyrion shared by several players
 the kiosk looks for its own player by name and waits up to 30 s

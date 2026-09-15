@@ -1,0 +1,117 @@
+{
+ "status": "ok",
+ "artist_id": 977,
+ "artist": {
+  "mbid": "83d91898-7763-47d7-b03b-b92132375c47",
+  "name": "Pink Floyd",
+  "sort_name": "Pink Floyd",
+  "type": "group",
+  "disambiguation": "",
+  "begin": "1965",
+  "end": "2014",
+  "ended": true,
+  "area": "England",
+  "begin_area": "London",
+  "end_area": "",
+  "members": [
+   {
+    "name": "Syd Barrett",
+    "mbid": "12327d75-47d5-45d9-84c2-3760b9210c17",
+    "attrs": [
+     "guitar",
+     "lead vocals",
+     "original"
+    ],
+    "begin": "1965",
+    "end": "1968-04",
+    "ended": true,
+    "artist_id": null
+   },
+   {
+    "name": "Richard Wright",
+    "mbid": "6f7e36da-79d8-4219-990d-8e9224d04ebc",
+    "attrs": [
+     "keyboard",
+     "lead vocals",
+     "original"
+    ],
+    "begin": "1965",
+    "end": "1981",
+    "ended": true,
+    "artist_id": null
+   },
+   {
+    "name": "Roger Waters",
+    "mbid": "0f50beab-d77d-4f0f-ac26-0b87d3e9b11b",
+    "attrs": [
+     "bass guitar",
+     "lead vocals",
+     "original"
+    ],
+    "begin": "1965",
+    "end": "1985",
+    "ended": true,
+    "artist_id": 1000
+   },
+   {
+    "name": "Nick Mason",
+    "mbid": "d6c37074-0155-46a3-8af2-338a4f625afc",
+    "attrs": [
+     "drums (drum set)",
+     "original",
+     "percussion"
+    ],
+    "begin": "1965",
+    "end": "",
+    "ended": false,
+    "artist_id": null
+   },
+   {
+    "name": "David Gilmour",
+    "mbid": "1dce970e-34bc-48b2-ab51-48d87544a4c2",
+    "attrs": [
+     "guitar",
+     "lead vocals",
+     "slide guitar"
+    ],
+    "begin": "1968-02-18",
+    "end": "",
+    "ended": false,
+    "artist_id": null
+   },
+   {
+    "name": "Richard Wright",
+    "mbid": "6f7e36da-79d8-4219-990d-8e9224d04ebc",
+    "attrs": [
+     "keyboard",
+     "lead vocals"
+    ],
+    "begin": "1987",
+    "end": "2008-09-15",
+    "ended": true,
+    "artist_id": null
+   }
+  ],
+  "member_of": [],
+  "urls": {
+   "musicbrainz": "https://musicbrainz.org/artist/83d91898-7763-47d7-b03b-b92132375c47",
+   "official": "https://www.pinkfloyd.com/",
+   "wikipedia": "https://it.wikipedia.org/wiki/Pink_Floyd"
+  }
+ },
+ "bio": {
+  "text": "I Pink Floyd sono stati un gruppo musicale rock britannico fondato a Londra nel 1965 dal cantante e chitarrista Syd Barrett, dal bassista Roger Waters, dal batterista Nick Mason e dal tastierista Richard Wright. Nel gennaio 1968 si unì al quartetto anche il chitarrista e cantante David Gilmour che, in seguito, prese il posto di Barrett che si era gradualmente allontanato dal progetto a causa dell'uso di droghe e di una forma di alienazione.\n\nNel corso di una carriera trentennale, caratterizzata da costanti esperimenti sonori, grafiche innovative, testi di matrice filosofica e sofisticate esibizioni dal vivo, il gruppo riscrisse le tendenze artistiche della propria epoca, diventando una delle band più influenti nella storia della popular music. Sebbene agli inizi si siano dedicati alla musica psichedelica e allo space rock, stili di cui sono considerati pionieri, in un secondo momento si accostarono al rock progressivo, affermandosi come uno dei gruppi più conosciuti e rappresentativi di tale ambito.\n\nAlla guida della formazione si avvicendarono tre diversi membri, dapprima Barrett, poi Waters e infine Gilmour, ognuno dei quali ne influenzò in modo sostanziale il percorso artistico dando una personale impronta alla cifra stilistica. Il primo periodo fu contraddistinto dal genere psichedelico e dalla direzione di Barrett, principale autore dei brani del lavoro d'esordio, intitolato The Piper at the Gates of Dawn e dei brani singoli che lo precedettero; la seconda fase vide la preminenza di Waters, con la pubblicazione di The Dark Side of the Moon (l'album con il maggior numero di settimane in classifica Billboard 200), Wish You Were Here, Animals, The Wall e The Final Cut; l'ultimo frangente corrisponde agli album A Momentary Lapse of Reason, The Division Bell e The Endless River, firmati prevalentemente da Gilmour.\n\nDopo l'allontanamento di Barrett, la formazione conobbe un nuovo cambiamento nel 1979, durante la lavorazione di The Wall, allorché Wright fu estromesso dal gruppo per poi prendere parte alla successiva tournée solo in veste di turnista. Nel 1985 anche Waters abbandonò la band; a seguito di un contenzioso legale sull'uso del nome del gruppo, Gilmour e Mason furono autorizzati a proseguire l'attività dei Pink Floyd, riunendosi successivamente a Wright. I componenti della band cessarono la collaborazione nel 1994. Nel 2008 il gruppo venne insignito del Polar Music Prize, considerato \"il premio Nobel per la musica\".\n\nSi stima che fino al 2008 i Pink Floyd abbiano venduto circa 250 milioni di dischi in tutto il mondo, di cui 74,5 milioni negli Stati Uniti d'America.",
+  "lang": "it",
+  "title": "Pink Floyd",
+  "url": "https://it.wikipedia.org/wiki/Pink_Floyd",
+  "source": "Wikipedia",
+  "license": "CC BY-SA 4.0"
+ },
+ "attribution": [
+  {
+   "source": "MusicBrainz",
+   "url": "https://musicbrainz.org/artist/83d91898-7763-47d7-b03b-b92132375c47",
+   "license": "CC0"
+  }
+ ]
+}

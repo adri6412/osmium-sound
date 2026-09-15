@@ -83,9 +83,11 @@ scelto).
   cartelle, playlist, preferiti, con una casella di ricerca su tutta la
   libreria), radio internet, Scopri (mix
   casuali, artisti simili, biografie) e servizi di streaming (Deezer, Qobuz,
-  TIDAL, Spotify e altri) tramite i **plugin di Lyrion**. Tieni premuta una
+  TIDAL, Spotify e altri) tramite i **plugin di Lyrion**. Album e artisti
+  hanno una pagina tutta loro (brani, crediti, membri del gruppo, biografia —
+  i dettagli online da MusicBrainz e Wikipedia). Tieni premuta una
   riga per fare di più: aggiungi alla coda, riproduci dopo, preferito,
-  rinomina o elimina una playlist. I plugin scelti in fase di configurazione
+  vai all'album o all'artista, rinomina o elimina una playlist. I plugin scelti in fase di configurazione
   sono già pronti; gli altri si installano dalla web UI di Lyrion
   (Impostazioni → Plugin) e compaiono da soli, senza aggiornare l'app.
 - **In riproduzione**: copertina grande, trasporto e volume, VU meter analogico

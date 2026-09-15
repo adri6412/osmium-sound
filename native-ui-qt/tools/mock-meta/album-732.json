@@ -1,0 +1,6535 @@
+{
+ "status": "ok",
+ "album_id": 732,
+ "match": {
+  "mbid": "901adc01-b493-4bd2-ab9f-eedd54a8aa6d",
+  "release_group": "5bb120e2-fe76-33cc-a4bb-8f56f2fd3d67",
+  "how": "search",
+  "score": 73,
+  "medium": null
+ },
+ "release": {
+  "title": "1962–1966",
+  "artist": "The Beatles",
+  "date": "1994",
+  "first_release_date": "1973-04-02",
+  "type": "album",
+  "secondary_types": [
+   "compilation"
+  ],
+  "labels": [
+   {
+    "name": "Apple Records",
+    "catno": "0777 7 97036 2 3"
+   },
+   {
+    "name": "EMI Music Canada",
+    "catno": "0777 7 97036 2 3"
+   },
+   {
+    "name": "Apple Records",
+    "catno": "C2 0777 7 97036 2 3"
+   },
+   {
+    "name": "EMI Music Canada",
+    "catno": "C2 0777 7 97036 2 3"
+   }
+  ],
+  "country": "CA",
+  "barcode": "077779703623",
+  "disc_count": 2,
+  "track_count": 26,
+  "url": "https://musicbrainz.org/release/901adc01-b493-4bd2-ab9f-eedd54a8aa6d"
+ },
+ "credits": [
+  {
+   "group": "performer",
+   "role": "instrument",
+   "attr": "electric bass guitar",
+   "credit": "",
+   "people": [
+    {
+     "name": "Paul McCartney",
+     "mbid": "ba550d0e-adac-4864-b88b-407cab5e76af",
+     "artist_id": null
+    }
+   ],
+   "tracks": [
+    [
+     1,
+     1
+    ],
+    [
+     1,
+     2
+    ],
+    [
+     1,
+     3
+    ],
+    [
+     1,
+     4
+    ],
+    [
+     1,
+     5
+    ],
+    [
+     1,
+     6
+    ],
+    [
+     1,
+     7
+    ],
+    [
+     1,
+     8
+    ],
+    [
+     1,
+     9
+    ],
+    [
+     1,
+     11
+    ],
+    [
+     1,
+     12
+    ],
+    [
+     1,
+     14
+    ],
+    [
+     1,
+     15
+    ],
+    [
+     1,
+     16
+    ],
+    [
+     1,
+     17
+    ],
+    [
+     1,
+     18
+    ],
+    [
+     1,
+     19
+    ],
+    [
+     1,
+     20
+    ],
+    [
+     1,
+     21
+    ],
+    [
+     1,
+     22
+    ],
+    [
+     1,
+     23
+    ],
+    [
+     1,
+     24
+    ]
+   ]
+  },
+  {
+   "group": "performer",
+   "role": "instrument",
+   "attr": "drums (drum set)",
+   "credit": "",
+   "people": [
+    {
+     "name": "Ringo Starr",
+     "mbid": "300c4c73-33ac-4255-9d57-4e32627f5e13",
+     "artist_id": null
+    },
+    {
+     "name": "Andy White",
+     "mbid": "d5c226b6-4bae-4cae-bd96-aeae92a26c49",
+     "artist_id": null
+    }
+   ],
+   "tracks": [
+    [
+     1,
+     1
+    ],
+    [
+     1,
+     2
+    ],
+    [
+     1,
+     3
+    ],
+    [
+     1,
+     4
+    ],
+    [
+     1,
+     5
+    ],
+    [
+     1,
+     6
+    ],
+    [
+     1,
+     7
+    ],
+    [
+     1,
+     8
+    ],
+    [
+     1,
+     10
+    ],
+    [
+     1,
+     11
+    ],
+    [
+     1,
+     12
+    ],
+    [
+     1,
+     14
+    ],
+    [
+     1,
+     16
+    ],
+    [
+     1,
+     17
+    ],
+    [
+     1,
+     18
+    ],
+    [
+     1,
+     19
+    ],
+    [
+     1,
+     20
+    ],
+    [
+     1,
+     21
+    ],
+    [
+     1,
+     22
+    ],
+    [
+     1,
+     23
+    ],
+    [
+     1,
+     24
+    ]
+   ]
+  },
+  {
+   "group": "performer",
+   "role": "instrument",
+   "attr": "electric guitar",
+   "credit": "lead guitar",
+   "people": [
+    {
+     "name": "George Harrison",
+     "mbid": "42a8f507-8412-4611-854f-926571049fa0",
+     "artist_id": null
+    },
+    {
+     "name": "Paul McCartney",
+     "mbid": "ba550d0e-adac-4864-b88b-407cab5e76af",
+     "credited_as": "Paul",
+     "artist_id": null
+    },
+    {
+     "name": "John Lennon",
+     "mbid": "4d5447d7-c61c-4120-ba1b-d7f471d385b9",
+     "artist_id": 755
+    }
+   ],
+   "tracks": [
+    [
+     1,
+     3
+    ],
+    [
+     1,
+     4
+    ],
+    [
+     1,
+     5
+    ],
+    [
+     1,
+     6
+    ],
+    [
+     1,
+     7
+    ],
+    [
+     1,
+     12
+    ],
+    [
+     1,
+     14
+    ],
+    [
+     1,
+     17
+    ],
+    [
+     1,
+     18
+    ],
+    [
+     1,
+     20
+    ],
+    [
+     1,
+     21
+    ],
+    [
+     1,
+     22
+    ]
+   ]
+  },
+  {
+   "group": "performer",
+   "role": "instrument",
+   "attr": "tambourine",
+   "credit": "",
+   "people": [
+    {
+     "name": "Ringo Starr",
+     "mbid": "300c4c73-33ac-4255-9d57-4e32627f5e13",
+     "artist_id": null
+    },
+    {
+     "name": "George Harrison",
+     "mbid": "42a8f507-8412-4611-854f-926571049fa0",
+     "artist_id": null
+    },
+    {
+     "name": "John Lennon",
+     "mbid": "4d5447d7-c61c-4120-ba1b-d7f471d385b9",
+     "artist_id": 755
+    }
+   ],
+   "tracks": [
+    [
+     1,
+     1
+    ],
+    [
+     1,
+     12
+    ],
+    [
+     1,
+     14
+    ],
+    [
+     1,
+     15
+    ],
+    [
+     1,
+     16
+    ],
+    [
+     1,
+     17
+    ],
+    [
+     1,
+     18
+    ],
+    [
+     1,
+     19
+    ],
+    [
+     1,
+     22
+    ],
+    [
+     1,
+     24
+    ],
+    [
+     1,
+     26
+    ]
+   ]
+  },
+  {
+   "group": "performer",
+   "role": "instrument",
+   "attr": "acoustic guitar",
+   "credit": "rhythm guitar",
+   "people": [
+    {
+     "name": "John Lennon",
+     "mbid": "4d5447d7-c61c-4120-ba1b-d7f471d385b9",
+     "artist_id": 755
+    },
+    {
+     "name": "George Harrison",
+     "mbid": "42a8f507-8412-4611-854f-926571049fa0",
+     "artist_id": null
+    },
+    {
+     "name": "Paul McCartney",
+     "mbid": "ba550d0e-adac-4864-b88b-407cab5e76af",
+     "artist_id": null
+    }
+   ],
+   "tracks": [
+    [
+     1,
+     1
+    ],
+    [
+     1,
+     4
+    ],
+    [
+     1,
+     7
+    ],
+    [
+     1,
+     8
+    ],
+    [
+     1,
+     9
+    ],
+    [
+     1,
+     16
+    ],
+    [
+     1,
+     19
+    ],
+    [
+     1,
+     20
+    ],
+    [
+     1,
+     21
+    ],
+    [
+     1,
+     23
+    ]
+   ]
+  },
+  {
+   "group": "performer",
+   "role": "instrument",
+   "attr": "electric guitar",
+   "credit": "rhythm guitar",
+   "people": [
+    {
+     "name": "John Lennon",
+     "mbid": "4d5447d7-c61c-4120-ba1b-d7f471d385b9",
+     "artist_id": 755
+    },
+    {
+     "name": "George Harrison",
+     "mbid": "42a8f507-8412-4611-854f-926571049fa0",
+     "artist_id": null
+    }
+   ],
+   "tracks": [
+    [
+     1,
+     2
+    ],
+    [
+     1,
+     3
+    ],
+    [
+     1,
+     5
+    ],
+    [
+     1,
+     6
+    ],
+    [
+     1,
+     8
+    ],
+    [
+     1,
+     12
+    ],
+    [
+     1,
+     17
+    ],
+    [
+     1,
+     18
+    ],
+    [
+     1,
+     22
+    ]
+   ]
+  },
+  {
+   "group": "performer",
+   "role": "instrument",
+   "attr": "acoustic guitar",
+   "credit": "",
+   "people": [
+    {
+     "name": "John Lennon",
+     "mbid": "4d5447d7-c61c-4120-ba1b-d7f471d385b9",
+     "artist_id": 755
+    },
+    {
+     "name": "Paul McCartney",
+     "mbid": "ba550d0e-adac-4864-b88b-407cab5e76af",
+     "credited_as": "Paul",
+     "artist_id": null
+    }
+   ],
+   "tracks": [
+    [
+     1,
+     1
+    ],
+    [
+     1,
+     10
+    ],
+    [
+     1,
+     13
+    ],
+    [
+     1,
+     26
+    ]
+   ]
+  },
+  {
+   "group": "performer",
+   "role": "instrument",
+   "attr": "electric guitar",
+   "credit": "",
+   "people": [
+    {
+     "name": "George Harrison",
+     "mbid": "42a8f507-8412-4611-854f-926571049fa0",
+     "artist_id": null
+    },
+    {
+     "name": "John Lennon",
+     "mbid": "4d5447d7-c61c-4120-ba1b-d7f471d385b9",
+     "artist_id": 755
+    },
+    {
+     "name": "Paul McCartney",
+     "mbid": "ba550d0e-adac-4864-b88b-407cab5e76af",
+     "artist_id": null
+    }
+   ],
+   "tracks": [
+    [
+     1,
+     10
+    ],
+    [
+     1,
+     11
+    ],
+    [
+     1,
+     17
+    ],
+    [
+     1,
+     24
+    ]
+   ]
+  },
+  {
+   "group": "performer",
+   "role": "instrument",
+   "attr": "12 string guitar",
+   "credit": "lead guitar",
+   "people": [
+    {
+     "name": "George Harrison",
+     "mbid": "42a8f507-8412-4611-854f-926571049fa0",
+     "artist_id": null
+    }
+   ],
+   "tracks": [
+    [
+     1,
+     8
+    ],
+    [
+     1,
+     12
+    ],
+    [
+     1,
+     23
+    ]
+   ]
+  },
+  {
+   "group": "performer",
+   "role": "instrument",
+   "attr": "handclaps",
+   "credit": "",
+   "people": [
+    {
+     "name": "Ringo Starr",
+     "mbid": "300c4c73-33ac-4255-9d57-4e32627f5e13",
+     "artist_id": null
+    },
+    {
+     "name": "George Harrison",
+     "mbid": "42a8f507-8412-4611-854f-926571049fa0",
+     "artist_id": null
+    },
+    {
+     "name": "John Lennon",
+     "mbid": "4d5447d7-c61c-4120-ba1b-d7f471d385b9",
+     "artist_id": 755
+    },
+    {
+     "name": "Paul McCartney",
+     "mbid": "ba550d0e-adac-4864-b88b-407cab5e76af",
+     "artist_id": null
+    }
+   ],
+   "tracks": [
+    [
+     1,
+     5
+    ],
+    [
+     1,
+     10
+    ],
+    [
+     1,
+     12
+    ]
+   ]
+  },
+  {
+   "group": "performer",
+   "role": "instrument",
+   "attr": "harmonica",
+   "credit": "",
+   "people": [
+    {
+     "name": "John Lennon",
+     "mbid": "4d5447d7-c61c-4120-ba1b-d7f471d385b9",
+     "artist_id": 755
+    }
+   ],
+   "tracks": [
+    [
+     1,
+     1
+    ],
+    [
+     1,
+     2
+    ],
+    [
+     1,
+     3
+    ]
+   ]
+  },
+  {
+   "group": "performer",
+   "role": "instrument",
+   "attr": "piano",
+   "credit": "",
+   "people": [
+    {
+     "name": "George Martin",
+     "mbid": "26fa8b67-6c7f-406c-ad64-a1d070092df2",
+     "artist_id": null
+    },
+    {
+     "name": "Paul McCartney",
+     "mbid": "ba550d0e-adac-4864-b88b-407cab5e76af",
+     "artist_id": null
+    }
+   ],
+   "tracks": [
+    [
+     1,
+     8
+    ],
+    [
+     1,
+     18
+    ],
+    [
+     1,
+     22
+    ]
+   ]
+  },
+  {
+   "group": "performer",
+   "role": "instrument",
+   "attr": "12 string guitar",
+   "credit": "rhythm guitar",
+   "people": [
+    {
+     "name": "George Harrison",
+     "mbid": "42a8f507-8412-4611-854f-926571049fa0",
+     "artist_id": null
+    },
+    {
+     "name": "John Lennon",
+     "mbid": "4d5447d7-c61c-4120-ba1b-d7f471d385b9",
+     "artist_id": 755
+    }
+   ],
+   "tracks": [
+    [
+     1,
+     14
+    ],
+    [
+     1,
+     19
+    ]
+   ]
+  },
+  {
+   "group": "performer",
+   "role": "instrument",
+   "attr": "acoustic guitar",
+   "credit": "lead guitar",
+   "people": [
+    {
+     "name": "George Harrison",
+     "mbid": "42a8f507-8412-4611-854f-926571049fa0",
+     "artist_id": null
+    }
+   ],
+   "tracks": [
+    [
+     1,
+     9
+    ],
+    [
+     1,
+     15
+    ]
+   ]
+  },
+  {
+   "group": "performer",
+   "role": "instrument",
+   "attr": "bongos",
+   "credit": "",
+   "people": [
+    {
+     "name": "Ringo Starr",
+     "mbid": "300c4c73-33ac-4255-9d57-4e32627f5e13",
+     "artist_id": null
+    }
+   ],
+   "tracks": [
+    [
+     1,
+     8
+    ],
+    [
+     1,
+     9
+    ]
+   ]
+  },
+  {
+   "group": "performer",
+   "role": "instrument",
+   "attr": "cello",
+   "credit": "",
+   "people": [
+    {
+     "name": "Derek Simpson",
+     "mbid": "ab6ce138-98d3-44cb-8958-7099d16cce19",
+     "artist_id": null
+    },
+    {
+     "name": "Francisco Gabarro",
+     "mbid": "3da2cc91-a59e-4669-84a3-da196d86c2db",
+     "artist_id": null
+    },
+    {
+     "name": "Norman Jones",
+     "mbid": "17ee462b-d251-40f6-96dd-8605114e851a",
+     "artist_id": null
+    }
+   ],
+   "tracks": [
+    [
+     1,
+     13
+    ],
+    [
+     1,
+     25
+    ]
+   ]
+  },
+  {
+   "group": "performer",
+   "role": "instrument",
+   "attr": "cowbell",
+   "credit": "",
+   "people": [
+    {
+     "name": "Ringo Starr",
+     "mbid": "300c4c73-33ac-4255-9d57-4e32627f5e13",
+     "artist_id": null
+    }
+   ],
+   "tracks": [
+    [
+     1,
+     8
+    ],
+    [
+     1,
+     18
+    ]
+   ]
+  },
+  {
+   "group": "performer",
+   "role": "instrument",
+   "attr": "viola",
+   "credit": "",
+   "people": [
+    {
+     "name": "John Underwood",
+     "mbid": "2397ebdf-892f-4f09-a05f-a0dd8aeeb95a",
+     "artist_id": null
+    },
+    {
+     "name": "Kenneth Essex",
+     "mbid": "43ae16e3-7f9d-446e-8516-41026fabf998",
+     "artist_id": null
+    },
+    {
+     "name": "Stephen Shingles",
+     "mbid": "bfe61e03-b5d6-4f94-92a6-6606e2d1e525",
+     "artist_id": null
+    }
+   ],
+   "tracks": [
+    [
+     1,
+     13
+    ],
+    [
+     1,
+     25
+    ]
+   ]
+  },
+  {
+   "group": "performer",
+   "role": "instrument",
+   "attr": "violin",
+   "credit": "",
+   "people": [
+    {
+     "name": "Sidney Sax",
+     "mbid": "f8b6b5e9-28e2-4582-86ad-1a7c15174651",
+     "artist_id": null
+    },
+    {
+     "name": "Tony Gilbert",
+     "mbid": "56908419-3ab8-447b-a9da-7165a4f77e28",
+     "artist_id": null
+    },
+    {
+     "name": "John Sharpe",
+     "mbid": "ffc0ceb0-4dbd-44fb-9f0f-52f0dc002ee1",
+     "artist_id": null
+    },
+    {
+     "name": "Jurgen Hess",
+     "mbid": "5f6e67f2-c85b-477b-bee8-00337d7a1f62",
+     "artist_id": null
+    }
+   ],
+   "tracks": [
+    [
+     1,
+     13
+    ],
+    [
+     1,
+     25
+    ]
+   ]
+  },
+  {
+   "group": "performer",
+   "role": "instrument",
+   "attr": "12 string guitar",
+   "credit": "",
+   "people": [
+    {
+     "name": "John Lennon",
+     "mbid": "4d5447d7-c61c-4120-ba1b-d7f471d385b9",
+     "artist_id": 755
+    }
+   ],
+   "tracks": [
+    [
+     1,
+     15
+    ]
+   ]
+  },
+  {
+   "group": "performer",
+   "role": "instrument",
+   "attr": "alto flute",
+   "credit": "",
+   "people": [
+    {
+     "name": "John Scott",
+     "mbid": "b23deddf-047c-4c55-a69c-194b5899a34a",
+     "artist_id": null
+    }
+   ],
+   "tracks": [
+    [
+     1,
+     15
+    ]
+   ]
+  },
+  {
+   "group": "performer",
+   "role": "instrument",
+   "attr": "bass drum",
+   "credit": "",
+   "people": [
+    {
+     "name": "Mal Evans",
+     "mbid": "f8df9750-4f73-4c6c-b16b-24cbc57d10f6",
+     "artist_id": null
+    }
+   ],
+   "tracks": [
+    [
+     1,
+     26
+    ]
+   ]
+  },
+  {
+   "group": "performer",
+   "role": "instrument",
+   "attr": "bass guitar",
+   "credit": "",
+   "people": [
+    {
+     "name": "Paul McCartney",
+     "mbid": "ba550d0e-adac-4864-b88b-407cab5e76af",
+     "artist_id": null
+    }
+   ],
+   "tracks": [
+    [
+     1,
+     10
+    ]
+   ]
+  },
+  {
+   "group": "performer",
+   "role": "instrument",
+   "attr": "bass guitar",
+   "credit": "1964 Rickenbacker 4001S",
+   "people": [
+    {
+     "name": "Paul McCartney",
+     "mbid": "ba550d0e-adac-4864-b88b-407cab5e76af",
+     "artist_id": null
+    }
+   ],
+   "tracks": [
+    [
+     1,
+     26
+    ]
+   ]
+  },
+  {
+   "group": "performer",
+   "role": "instrument",
+   "attr": "claves",
+   "credit": "",
+   "people": [
+    {
+     "name": "Ringo Starr",
+     "mbid": "300c4c73-33ac-4255-9d57-4e32627f5e13",
+     "artist_id": null
+    }
+   ],
+   "tracks": [
+    [
+     1,
+     9
+    ]
+   ]
+  },
+  {
+   "group": "performer",
+   "role": "instrument",
+   "attr": "cymbal",
+   "credit": "",
+   "people": [
+    {
+     "name": "Ringo Starr",
+     "mbid": "300c4c73-33ac-4255-9d57-4e32627f5e13",
+     "artist_id": null
+    }
+   ],
+   "tracks": [
+    [
+     1,
+     7
+    ]
+   ]
+  },
+  {
+   "group": "performer",
+   "role": "instrument",
+   "attr": "drums (drum set)",
+   "credit": "1964 Ludwig Super Classic Black Oyster Pearl",
+   "people": [
+    {
+     "name": "Ringo Starr",
+     "mbid": "300c4c73-33ac-4255-9d57-4e32627f5e13",
+     "artist_id": null
+    }
+   ],
+   "tracks": [
+    [
+     1,
+     26
+    ]
+   ]
+  },
+  {
+   "group": "performer",
+   "role": "instrument",
+   "attr": "flûte d'amour",
+   "credit": "",
+   "people": [
+    {
+     "name": "John Scott",
+     "mbid": "b23deddf-047c-4c55-a69c-194b5899a34a",
+     "artist_id": null
+    }
+   ],
+   "tracks": [
+    [
+     1,
+     15
+    ]
+   ]
+  },
+  {
+   "group": "performer",
+   "role": "instrument",
+   "attr": "harmonium",
+   "credit": "",
+   "people": [
+    {
+     "name": "John Lennon",
+     "mbid": "4d5447d7-c61c-4120-ba1b-d7f471d385b9",
+     "artist_id": 755
+    }
+   ],
+   "tracks": [
+    [
+     1,
+     16
+    ]
+   ]
+  },
+  {
+   "group": "performer",
+   "role": "instrument",
+   "attr": "hi-hat",
+   "credit": "",
+   "people": [
+    {
+     "name": "Norman Smith",
+     "mbid": "3c4092d7-0b4b-4cc1-8098-eb2ebb43a1ca",
+     "artist_id": null
+    }
+   ],
+   "tracks": [
+    [
+     1,
+     7
+    ]
+   ]
+  },
+  {
+   "group": "performer",
+   "role": "instrument",
+   "attr": "maracas",
+   "credit": "",
+   "people": [
+    {
+     "name": "Paul McCartney",
+     "mbid": "ba550d0e-adac-4864-b88b-407cab5e76af",
+     "artist_id": null
+    }
+   ],
+   "tracks": [
+    [
+     1,
+     15
+    ]
+   ]
+  },
+  {
+   "group": "performer",
+   "role": "instrument",
+   "attr": "ocarina",
+   "credit": "",
+   "people": [
+    {
+     "name": "Brian Jones",
+     "mbid": "a704bc81-1d32-4b21-a1fd-ffaa6a1d86e1",
+     "artist_id": null
+    }
+   ],
+   "tracks": [
+    [
+     1,
+     26
+    ]
+   ]
+  },
+  {
+   "group": "performer",
+   "role": "instrument",
+   "attr": "sitar",
+   "credit": "",
+   "people": [
+    {
+     "name": "George Harrison",
+     "mbid": "42a8f507-8412-4611-854f-926571049fa0",
+     "artist_id": null
+    }
+   ],
+   "tracks": [
+    [
+     1,
+     19
+    ]
+   ]
+  },
+  {
+   "group": "performer",
+   "role": "instrument",
+   "attr": "snare drum",
+   "credit": "",
+   "people": [
+    {
+     "name": "Ringo Starr",
+     "mbid": "300c4c73-33ac-4255-9d57-4e32627f5e13",
+     "artist_id": null
+    }
+   ],
+   "tracks": [
+    [
+     1,
+     15
+    ]
+   ]
+  },
+  {
+   "group": "performer",
+   "role": "vocal",
+   "attr": "lead vocals",
+   "credit": "",
+   "people": [
+    {
+     "name": "John Lennon",
+     "mbid": "4d5447d7-c61c-4120-ba1b-d7f471d385b9",
+     "credited_as": "John",
+     "artist_id": 755
+    },
+    {
+     "name": "Paul McCartney",
+     "mbid": "ba550d0e-adac-4864-b88b-407cab5e76af",
+     "credited_as": "Paul",
+     "artist_id": null
+    },
+    {
+     "name": "George Harrison",
+     "mbid": "42a8f507-8412-4611-854f-926571049fa0",
+     "artist_id": null
+    },
+    {
+     "name": "Ringo Starr",
+     "mbid": "300c4c73-33ac-4255-9d57-4e32627f5e13",
+     "artist_id": null
+    }
+   ],
+   "tracks": null
+  },
+  {
+   "group": "performer",
+   "role": "vocal",
+   "attr": "background vocals",
+   "credit": "",
+   "people": [
+    {
+     "name": "Paul McCartney",
+     "mbid": "ba550d0e-adac-4864-b88b-407cab5e76af",
+     "credited_as": "Paul",
+     "artist_id": null
+    },
+    {
+     "name": "George Harrison",
+     "mbid": "42a8f507-8412-4611-854f-926571049fa0",
+     "credited_as": "George",
+     "artist_id": null
+    },
+    {
+     "name": "John Lennon",
+     "mbid": "4d5447d7-c61c-4120-ba1b-d7f471d385b9",
+     "artist_id": 755
+    },
+    {
+     "name": "Alf Bicknell",
+     "mbid": "3feb22b7-8c7d-4e3e-9b80-2180f07e8910",
+     "artist_id": null
+    },
+    {
+     "name": "Brian Jones",
+     "mbid": "a704bc81-1d32-4b21-a1fd-ffaa6a1d86e1",
+     "artist_id": null
+    },
+    {
+     "name": "Geoff Emerick",
+     "mbid": "3ff7a3d9-a800-4de4-94a6-41a35c96c0ae",
+     "artist_id": null
+    },
+    {
+     "name": "George Martin",
+     "mbid": "26fa8b67-6c7f-406c-ad64-a1d070092df2",
+     "artist_id": null
+    },
+    {
+     "name": "John Skinner",
+     "mbid": "7a4d4b04-cda2-410e-b50e-efae3afd1512",
+     "artist_id": null
+    },
+    {
+     "name": "Mal Evans",
+     "mbid": "f8df9750-4f73-4c6c-b16b-24cbc57d10f6",
+     "artist_id": null
+    },
+    {
+     "name": "Marianne Faithfull",
+     "mbid": "14ed9dea-1bb0-4743-ba32-39674a71da89",
+     "artist_id": null
+    },
+    {
+     "name": "Neil Aspinall",
+     "mbid": "aada1ac9-37cf-4fc0-af06-b2ed0bd99670",
+     "artist_id": null
+    },
+    {
+     "name": "Pattie Boyd",
+     "mbid": "301bd202-5a57-49d5-b719-8012eef480d4",
+     "artist_id": null
+    },
+    {
+     "name": "Terry Condon",
+     "mbid": "b4f8a14b-79dc-4bb9-a87d-82203ac9682a",
+     "artist_id": null
+    }
+   ],
+   "tracks": [
+    [
+     1,
+     1
+    ],
+    [
+     1,
+     2
+    ],
+    [
+     1,
+     5
+    ],
+    [
+     1,
+     6
+    ],
+    [
+     1,
+     8
+    ],
+    [
+     1,
+     12
+    ],
+    [
+     1,
+     14
+    ],
+    [
+     1,
+     16
+    ],
+    [
+     1,
+     17
+    ],
+    [
+     1,
+     18
+    ],
+    [
+     1,
+     19
+    ],
+    [
+     1,
+     20
+    ],
+    [
+     1,
+     21
+    ],
+    [
+     1,
+     22
+    ],
+    [
+     1,
+     23
+    ],
+    [
+     1,
+     24
+    ],
+    [
+     1,
+     25
+    ],
+    [
+     1,
+     26
+    ]
+   ]
+  },
+  {
+   "group": "performer",
+   "role": "vocal",
+   "attr": "",
+   "credit": "",
+   "people": [
+    {
+     "name": "George Harrison",
+     "mbid": "42a8f507-8412-4611-854f-926571049fa0",
+     "artist_id": null
+    },
+    {
+     "name": "John Lennon",
+     "mbid": "4d5447d7-c61c-4120-ba1b-d7f471d385b9",
+     "artist_id": 755
+    },
+    {
+     "name": "Paul McCartney",
+     "mbid": "ba550d0e-adac-4864-b88b-407cab5e76af",
+     "artist_id": null
+    }
+   ],
+   "tracks": [
+    [
+     1,
+     1
+    ],
+    [
+     1,
+     11
+    ]
+   ]
+  },
+  {
+   "group": "performer",
+   "role": "vocal",
+   "attr": "background vocals",
+   "credit": "harmony vocals",
+   "people": [
+    {
+     "name": "George Harrison",
+     "mbid": "42a8f507-8412-4611-854f-926571049fa0",
+     "artist_id": null
+    },
+    {
+     "name": "Paul McCartney",
+     "mbid": "ba550d0e-adac-4864-b88b-407cab5e76af",
+     "artist_id": null
+    }
+   ],
+   "tracks": [
+    [
+     1,
+     4
+    ],
+    [
+     1,
+     6
+    ]
+   ]
+  },
+  {
+   "group": "performer",
+   "role": "vocal",
+   "attr": "spoken vocals",
+   "credit": "",
+   "people": [
+    {
+     "name": "John Lennon",
+     "mbid": "4d5447d7-c61c-4120-ba1b-d7f471d385b9",
+     "artist_id": 755
+    },
+    {
+     "name": "Paul McCartney",
+     "mbid": "ba550d0e-adac-4864-b88b-407cab5e76af",
+     "artist_id": null
+    },
+    {
+     "name": "Ringo Starr",
+     "mbid": "300c4c73-33ac-4255-9d57-4e32627f5e13",
+     "artist_id": null
+    }
+   ],
+   "tracks": [
+    [
+     1,
+     26
+    ]
+   ]
+  },
+  {
+   "group": "composition",
+   "role": "composer",
+   "attr": "",
+   "credit": "",
+   "people": [
+    {
+     "name": "John Lennon",
+     "mbid": "4d5447d7-c61c-4120-ba1b-d7f471d385b9",
+     "artist_id": 755
+    },
+    {
+     "name": "Paul McCartney",
+     "mbid": "ba550d0e-adac-4864-b88b-407cab5e76af",
+     "artist_id": null
+    }
+   ],
+   "tracks": [
+    [
+     1,
+     16
+    ]
+   ]
+  },
+  {
+   "group": "composition",
+   "role": "lyricist",
+   "attr": "",
+   "credit": "",
+   "people": [
+    {
+     "name": "John Lennon",
+     "mbid": "4d5447d7-c61c-4120-ba1b-d7f471d385b9",
+     "artist_id": 755
+    },
+    {
+     "name": "Paul McCartney",
+     "mbid": "ba550d0e-adac-4864-b88b-407cab5e76af",
+     "artist_id": null
+    }
+   ],
+   "tracks": [
+    [
+     1,
+     16
+    ]
+   ]
+  },
+  {
+   "group": "composition",
+   "role": "writer",
+   "attr": "",
+   "credit": "",
+   "people": [
+    {
+     "name": "John Lennon",
+     "mbid": "4d5447d7-c61c-4120-ba1b-d7f471d385b9",
+     "artist_id": 755
+    },
+    {
+     "name": "Paul McCartney",
+     "mbid": "ba550d0e-adac-4864-b88b-407cab5e76af",
+     "artist_id": null
+    }
+   ],
+   "tracks": [
+    [
+     1,
+     1
+    ],
+    [
+     1,
+     2
+    ],
+    [
+     1,
+     3
+    ],
+    [
+     1,
+     4
+    ],
+    [
+     1,
+     5
+    ],
+    [
+     1,
+     6
+    ],
+    [
+     1,
+     7
+    ],
+    [
+     1,
+     8
+    ],
+    [
+     1,
+     9
+    ],
+    [
+     1,
+     10
+    ],
+    [
+     1,
+     11
+    ],
+    [
+     1,
+     12
+    ],
+    [
+     1,
+     13
+    ],
+    [
+     1,
+     14
+    ],
+    [
+     1,
+     15
+    ],
+    [
+     1,
+     17
+    ],
+    [
+     1,
+     18
+    ],
+    [
+     1,
+     19
+    ],
+    [
+     1,
+     20
+    ],
+    [
+     1,
+     21
+    ],
+    [
+     1,
+     22
+    ],
+    [
+     1,
+     23
+    ],
+    [
+     1,
+     24
+    ],
+    [
+     1,
+     25
+    ],
+    [
+     1,
+     26
+    ]
+   ]
+  },
+  {
+   "group": "composition",
+   "role": "arranger",
+   "attr": "string quartet",
+   "credit": "",
+   "people": [
+    {
+     "name": "George Martin",
+     "mbid": "26fa8b67-6c7f-406c-ad64-a1d070092df2",
+     "artist_id": null
+    }
+   ],
+   "tracks": [
+    [
+     1,
+     13
+    ]
+   ]
+  },
+  {
+   "group": "production",
+   "role": "producer",
+   "attr": "",
+   "credit": "",
+   "people": [
+    {
+     "name": "George Martin",
+     "mbid": "26fa8b67-6c7f-406c-ad64-a1d070092df2",
+     "artist_id": null
+    },
+    {
+     "name": "Ron Richards",
+     "mbid": "9f3ab5c7-315a-482f-8622-d95501b4a6aa",
+     "artist_id": null
+    }
+   ],
+   "tracks": null
+  },
+  {
+   "group": "engineering",
+   "role": "engineer",
+   "attr": "",
+   "credit": "",
+   "people": [
+    {
+     "name": "Norman Smith",
+     "mbid": "3c4092d7-0b4b-4cc1-8098-eb2ebb43a1ca",
+     "artist_id": null
+    },
+    {
+     "name": "Geoff Emerick",
+     "mbid": "3ff7a3d9-a800-4de4-94a6-41a35c96c0ae",
+     "artist_id": null
+    }
+   ],
+   "tracks": [
+    [
+     1,
+     1
+    ],
+    [
+     1,
+     2
+    ],
+    [
+     1,
+     3
+    ],
+    [
+     1,
+     4
+    ],
+    [
+     1,
+     5
+    ],
+    [
+     1,
+     6
+    ],
+    [
+     1,
+     7
+    ],
+    [
+     1,
+     8
+    ],
+    [
+     1,
+     9
+    ],
+    [
+     1,
+     10
+    ],
+    [
+     1,
+     11
+    ],
+    [
+     1,
+     12
+    ],
+    [
+     1,
+     13
+    ],
+    [
+     1,
+     14
+    ],
+    [
+     1,
+     15
+    ],
+    [
+     1,
+     16
+    ],
+    [
+     1,
+     17
+    ],
+    [
+     1,
+     18
+    ],
+    [
+     1,
+     19
+    ],
+    [
+     1,
+     20
+    ],
+    [
+     1,
+     21
+    ],
+    [
+     1,
+     22
+    ],
+    [
+     1,
+     23
+    ],
+    [
+     1,
+     24
+    ]
+   ]
+  },
+  {
+   "group": "engineering",
+   "role": "engineer",
+   "attr": "additional",
+   "credit": "",
+   "people": [
+    {
+     "name": "Ken Scott",
+     "mbid": "bca0229a-dbd3-4f4a-84ae-b40d87fbcde3",
+     "artist_id": null
+    },
+    {
+     "name": "Ron Pender",
+     "mbid": "33f0fdc3-a1c5-4be8-902e-fcc96eab31c6",
+     "artist_id": null
+    },
+    {
+     "name": "Geoff Emerick",
+     "mbid": "3ff7a3d9-a800-4de4-94a6-41a35c96c0ae",
+     "artist_id": null
+    },
+    {
+     "name": "B.T.",
+     "mbid": "d649902c-c8ed-4437-b939-486a934ab87e",
+     "artist_id": null
+    },
+    {
+     "name": "Jerry Boys",
+     "mbid": "9f8facfd-9ff6-4e40-a842-f0747de4fbdb",
+     "artist_id": null
+    },
+    {
+     "name": "Mike Stone",
+     "mbid": "cf1280fd-8d52-4871-bb8b-021fcc9add4f",
+     "artist_id": null
+    },
+    {
+     "name": "Phil McDonald",
+     "mbid": "91e7ebdb-07b3-4819-b269-08dab097e0ba",
+     "artist_id": null
+    },
+    {
+     "name": "Richard Langham",
+     "mbid": "97a48ba9-7320-423a-aeba-0a1b15eae50b",
+     "artist_id": null
+    },
+    {
+     "name": "Richard Lush",
+     "mbid": "602a0675-9684-4582-829a-8563ac349d05",
+     "artist_id": null
+    }
+   ],
+   "tracks": [
+    [
+     1,
+     6
+    ],
+    [
+     1,
+     8
+    ],
+    [
+     1,
+     12
+    ],
+    [
+     1,
+     13
+    ],
+    [
+     1,
+     14
+    ],
+    [
+     1,
+     15
+    ],
+    [
+     1,
+     16
+    ],
+    [
+     1,
+     17
+    ],
+    [
+     1,
+     18
+    ],
+    [
+     1,
+     19
+    ],
+    [
+     1,
+     21
+    ],
+    [
+     1,
+     22
+    ],
+    [
+     1,
+     23
+    ]
+   ]
+  },
+  {
+   "group": "engineering",
+   "role": "engineer",
+   "attr": "assistant",
+   "credit": "",
+   "people": [
+    {
+     "name": "Richard Langham",
+     "mbid": "97a48ba9-7320-423a-aeba-0a1b15eae50b",
+     "artist_id": null
+    },
+    {
+     "name": "Geoff Emerick",
+     "mbid": "3ff7a3d9-a800-4de4-94a6-41a35c96c0ae",
+     "artist_id": null
+    },
+    {
+     "name": "Jacques Esmenjaud",
+     "mbid": "bd333d09-ec4b-4346-a847-f18679875f01",
+     "artist_id": null
+    },
+    {
+     "name": "Mike Stone",
+     "mbid": "cf1280fd-8d52-4871-bb8b-021fcc9add4f",
+     "artist_id": null
+    }
+   ],
+   "tracks": [
+    [
+     1,
+     3
+    ],
+    [
+     1,
+     4
+    ],
+    [
+     1,
+     5
+    ],
+    [
+     1,
+     7
+    ],
+    [
+     1,
+     9
+    ]
+   ]
+  },
+  {
+   "group": "engineering",
+   "role": "engineer",
+   "attr": "additional",
+   "credit": "second engineer",
+   "people": [
+    {
+     "name": "Graham Kirkby",
+     "mbid": "6f64fe58-fa6d-4cc7-86ba-d98123c57087",
+     "artist_id": null
+    },
+    {
+     "name": "Ken Scott",
+     "mbid": "bca0229a-dbd3-4f4a-84ae-b40d87fbcde3",
+     "artist_id": null
+    }
+   ],
+   "tracks": [
+    [
+     1,
+     17
+    ]
+   ]
+  },
+  {
+   "group": "engineering",
+   "role": "recording",
+   "attr": "",
+   "credit": "",
+   "people": [
+    {
+     "name": "Geoff Emerick",
+     "mbid": "3ff7a3d9-a800-4de4-94a6-41a35c96c0ae",
+     "artist_id": null
+    }
+   ],
+   "tracks": [
+    [
+     1,
+     26
+    ]
+   ]
+  },
+  {
+   "group": "engineering",
+   "role": "mix",
+   "attr": "",
+   "credit": "",
+   "people": [
+    {
+     "name": "George Martin",
+     "mbid": "26fa8b67-6c7f-406c-ad64-a1d070092df2",
+     "artist_id": null
+    },
+    {
+     "name": "Peter Bown",
+     "mbid": "8a602f9e-6317-48f5-aabb-a16ef01d4d30",
+     "artist_id": null
+    }
+   ],
+   "tracks": [
+    [
+     1,
+     12
+    ],
+    [
+     1,
+     13
+    ],
+    [
+     1,
+     14
+    ],
+    [
+     1,
+     15
+    ],
+    [
+     1,
+     17
+    ]
+   ]
+  }
+ ],
+ "tracks": [
+  {
+   "disc": 1,
+   "n": 1,
+   "title": "Love Me Do",
+   "length_ms": 143000,
+   "credits": [
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "acoustic guitar",
+     "credit": "",
+     "people": [
+      {
+       "name": "John Lennon",
+       "mbid": "4d5447d7-c61c-4120-ba1b-d7f471d385b9",
+       "artist_id": 755
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "acoustic guitar",
+     "credit": "rhythm guitar",
+     "people": [
+      {
+       "name": "George Harrison",
+       "mbid": "42a8f507-8412-4611-854f-926571049fa0",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "drums (drum set)",
+     "credit": "",
+     "people": [
+      {
+       "name": "Andy White",
+       "mbid": "d5c226b6-4bae-4cae-bd96-aeae92a26c49",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "electric bass guitar",
+     "credit": "",
+     "people": [
+      {
+       "name": "Paul McCartney",
+       "mbid": "ba550d0e-adac-4864-b88b-407cab5e76af",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "harmonica",
+     "credit": "",
+     "people": [
+      {
+       "name": "John Lennon",
+       "mbid": "4d5447d7-c61c-4120-ba1b-d7f471d385b9",
+       "artist_id": 755
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "tambourine",
+     "credit": "",
+     "people": [
+      {
+       "name": "Ringo Starr",
+       "mbid": "300c4c73-33ac-4255-9d57-4e32627f5e13",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "vocal",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "John Lennon",
+       "mbid": "4d5447d7-c61c-4120-ba1b-d7f471d385b9",
+       "artist_id": 755
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "vocal",
+     "attr": "background vocals",
+     "credit": "",
+     "people": [
+      {
+       "name": "John Lennon",
+       "mbid": "4d5447d7-c61c-4120-ba1b-d7f471d385b9",
+       "artist_id": 755
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "vocal",
+     "attr": "lead vocals",
+     "credit": "",
+     "people": [
+      {
+       "name": "Paul McCartney",
+       "mbid": "ba550d0e-adac-4864-b88b-407cab5e76af",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "composition",
+     "role": "writer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "John Lennon",
+       "mbid": "4d5447d7-c61c-4120-ba1b-d7f471d385b9",
+       "artist_id": 755
+      },
+      {
+       "name": "Paul McCartney",
+       "mbid": "ba550d0e-adac-4864-b88b-407cab5e76af",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "production",
+     "role": "producer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Ron Richards",
+       "mbid": "9f3ab5c7-315a-482f-8622-d95501b4a6aa",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "engineering",
+     "role": "engineer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Norman Smith",
+       "mbid": "3c4092d7-0b4b-4cc1-8098-eb2ebb43a1ca",
+       "artist_id": null
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "disc": 1,
+   "n": 2,
+   "title": "Please Please Me",
+   "length_ms": 123000,
+   "credits": [
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "drums (drum set)",
+     "credit": "",
+     "people": [
+      {
+       "name": "Ringo Starr",
+       "mbid": "300c4c73-33ac-4255-9d57-4e32627f5e13",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "electric bass guitar",
+     "credit": "",
+     "people": [
+      {
+       "name": "Paul McCartney",
+       "mbid": "ba550d0e-adac-4864-b88b-407cab5e76af",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "electric guitar",
+     "credit": "rhythm guitar",
+     "people": [
+      {
+       "name": "George Harrison",
+       "mbid": "42a8f507-8412-4611-854f-926571049fa0",
+       "artist_id": null
+      },
+      {
+       "name": "John Lennon",
+       "mbid": "4d5447d7-c61c-4120-ba1b-d7f471d385b9",
+       "artist_id": 755
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "harmonica",
+     "credit": "",
+     "people": [
+      {
+       "name": "John Lennon",
+       "mbid": "4d5447d7-c61c-4120-ba1b-d7f471d385b9",
+       "artist_id": 755
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "vocal",
+     "attr": "background vocals",
+     "credit": "",
+     "people": [
+      {
+       "name": "George Harrison",
+       "mbid": "42a8f507-8412-4611-854f-926571049fa0",
+       "artist_id": null
+      },
+      {
+       "name": "Paul McCartney",
+       "mbid": "ba550d0e-adac-4864-b88b-407cab5e76af",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "vocal",
+     "attr": "lead vocals",
+     "credit": "",
+     "people": [
+      {
+       "name": "John Lennon",
+       "mbid": "4d5447d7-c61c-4120-ba1b-d7f471d385b9",
+       "artist_id": 755
+      }
+     ]
+    },
+    {
+     "group": "composition",
+     "role": "writer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "John Lennon",
+       "mbid": "4d5447d7-c61c-4120-ba1b-d7f471d385b9",
+       "artist_id": 755
+      },
+      {
+       "name": "Paul McCartney",
+       "mbid": "ba550d0e-adac-4864-b88b-407cab5e76af",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "production",
+     "role": "producer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "George Martin",
+       "mbid": "26fa8b67-6c7f-406c-ad64-a1d070092df2",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "engineering",
+     "role": "engineer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Norman Smith",
+       "mbid": "3c4092d7-0b4b-4cc1-8098-eb2ebb43a1ca",
+       "artist_id": null
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "disc": 1,
+   "n": 3,
+   "title": "From Me to You",
+   "length_ms": 117000,
+   "credits": [
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "drums (drum set)",
+     "credit": "",
+     "people": [
+      {
+       "name": "Ringo Starr",
+       "mbid": "300c4c73-33ac-4255-9d57-4e32627f5e13",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "electric bass guitar",
+     "credit": "",
+     "people": [
+      {
+       "name": "Paul McCartney",
+       "mbid": "ba550d0e-adac-4864-b88b-407cab5e76af",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "electric guitar",
+     "credit": "lead guitar",
+     "people": [
+      {
+       "name": "George Harrison",
+       "mbid": "42a8f507-8412-4611-854f-926571049fa0",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "electric guitar",
+     "credit": "rhythm guitar",
+     "people": [
+      {
+       "name": "John Lennon",
+       "mbid": "4d5447d7-c61c-4120-ba1b-d7f471d385b9",
+       "artist_id": 755
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "harmonica",
+     "credit": "",
+     "people": [
+      {
+       "name": "John Lennon",
+       "mbid": "4d5447d7-c61c-4120-ba1b-d7f471d385b9",
+       "artist_id": 755
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "vocal",
+     "attr": "lead vocals",
+     "credit": "",
+     "people": [
+      {
+       "name": "John Lennon",
+       "mbid": "4d5447d7-c61c-4120-ba1b-d7f471d385b9",
+       "artist_id": 755
+      },
+      {
+       "name": "Paul McCartney",
+       "mbid": "ba550d0e-adac-4864-b88b-407cab5e76af",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "composition",
+     "role": "writer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "John Lennon",
+       "mbid": "4d5447d7-c61c-4120-ba1b-d7f471d385b9",
+       "artist_id": 755
+      },
+      {
+       "name": "Paul McCartney",
+       "mbid": "ba550d0e-adac-4864-b88b-407cab5e76af",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "production",
+     "role": "producer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "George Martin",
+       "mbid": "26fa8b67-6c7f-406c-ad64-a1d070092df2",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "engineering",
+     "role": "engineer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Norman Smith",
+       "mbid": "3c4092d7-0b4b-4cc1-8098-eb2ebb43a1ca",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "engineering",
+     "role": "engineer",
+     "attr": "assistant",
+     "credit": "",
+     "people": [
+      {
+       "name": "Richard Langham",
+       "mbid": "97a48ba9-7320-423a-aeba-0a1b15eae50b",
+       "artist_id": null
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "disc": 1,
+   "n": 4,
+   "title": "She Loves You",
+   "length_ms": 142000,
+   "credits": [
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "acoustic guitar",
+     "credit": "rhythm guitar",
+     "people": [
+      {
+       "name": "John Lennon",
+       "mbid": "4d5447d7-c61c-4120-ba1b-d7f471d385b9",
+       "artist_id": 755
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "drums (drum set)",
+     "credit": "",
+     "people": [
+      {
+       "name": "Ringo Starr",
+       "mbid": "300c4c73-33ac-4255-9d57-4e32627f5e13",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "electric bass guitar",
+     "credit": "",
+     "people": [
+      {
+       "name": "Paul McCartney",
+       "mbid": "ba550d0e-adac-4864-b88b-407cab5e76af",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "electric guitar",
+     "credit": "lead guitar",
+     "people": [
+      {
+       "name": "George Harrison",
+       "mbid": "42a8f507-8412-4611-854f-926571049fa0",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "vocal",
+     "attr": "background vocals",
+     "credit": "harmony vocals",
+     "people": [
+      {
+       "name": "George Harrison",
+       "mbid": "42a8f507-8412-4611-854f-926571049fa0",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "vocal",
+     "attr": "lead vocals",
+     "credit": "",
+     "people": [
+      {
+       "name": "John Lennon",
+       "mbid": "4d5447d7-c61c-4120-ba1b-d7f471d385b9",
+       "artist_id": 755
+      },
+      {
+       "name": "Paul McCartney",
+       "mbid": "ba550d0e-adac-4864-b88b-407cab5e76af",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "composition",
+     "role": "writer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "John Lennon",
+       "mbid": "4d5447d7-c61c-4120-ba1b-d7f471d385b9",
+       "artist_id": 755
+      },
+      {
+       "name": "Paul McCartney",
+       "mbid": "ba550d0e-adac-4864-b88b-407cab5e76af",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "production",
+     "role": "producer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "George Martin",
+       "mbid": "26fa8b67-6c7f-406c-ad64-a1d070092df2",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "engineering",
+     "role": "engineer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Norman Smith",
+       "mbid": "3c4092d7-0b4b-4cc1-8098-eb2ebb43a1ca",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "engineering",
+     "role": "engineer",
+     "attr": "assistant",
+     "credit": "",
+     "people": [
+      {
+       "name": "Geoff Emerick",
+       "mbid": "3ff7a3d9-a800-4de4-94a6-41a35c96c0ae",
+       "artist_id": null
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "disc": 1,
+   "n": 5,
+   "title": "I Want to Hold Your Hand",
+   "length_ms": 147000,
+   "credits": [
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "drums (drum set)",
+     "credit": "",
+     "people": [
+      {
+       "name": "Ringo Starr",
+       "mbid": "300c4c73-33ac-4255-9d57-4e32627f5e13",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "electric bass guitar",
+     "credit": "",
+     "people": [
+      {
+       "name": "Paul McCartney",
+       "mbid": "ba550d0e-adac-4864-b88b-407cab5e76af",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "electric guitar",
+     "credit": "lead guitar",
+     "people": [
+      {
+       "name": "George Harrison",
+       "mbid": "42a8f507-8412-4611-854f-926571049fa0",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "electric guitar",
+     "credit": "rhythm guitar",
+     "people": [
+      {
+       "name": "John Lennon",
+       "mbid": "4d5447d7-c61c-4120-ba1b-d7f471d385b9",
+       "artist_id": 755
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "handclaps",
+     "credit": "",
+     "people": [
+      {
+       "name": "George Harrison",
+       "mbid": "42a8f507-8412-4611-854f-926571049fa0",
+       "artist_id": null
+      },
+      {
+       "name": "John Lennon",
+       "mbid": "4d5447d7-c61c-4120-ba1b-d7f471d385b9",
+       "artist_id": 755
+      },
+      {
+       "name": "Paul McCartney",
+       "mbid": "ba550d0e-adac-4864-b88b-407cab5e76af",
+       "artist_id": null
+      },
+      {
+       "name": "Ringo Starr",
+       "mbid": "300c4c73-33ac-4255-9d57-4e32627f5e13",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "vocal",
+     "attr": "background vocals",
+     "credit": "",
+     "people": [
+      {
+       "name": "Paul McCartney",
+       "mbid": "ba550d0e-adac-4864-b88b-407cab5e76af",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "vocal",
+     "attr": "lead vocals",
+     "credit": "",
+     "people": [
+      {
+       "name": "John Lennon",
+       "mbid": "4d5447d7-c61c-4120-ba1b-d7f471d385b9",
+       "artist_id": 755
+      },
+      {
+       "name": "Paul McCartney",
+       "mbid": "ba550d0e-adac-4864-b88b-407cab5e76af",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "composition",
+     "role": "writer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "John Lennon",
+       "mbid": "4d5447d7-c61c-4120-ba1b-d7f471d385b9",
+       "artist_id": 755
+      },
+      {
+       "name": "Paul McCartney",
+       "mbid": "ba550d0e-adac-4864-b88b-407cab5e76af",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "production",
+     "role": "producer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "George Martin",
+       "mbid": "26fa8b67-6c7f-406c-ad64-a1d070092df2",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "engineering",
+     "role": "engineer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Geoff Emerick",
+       "mbid": "3ff7a3d9-a800-4de4-94a6-41a35c96c0ae",
+       "artist_id": null
+      },
+      {
+       "name": "Norman Smith",
+       "mbid": "3c4092d7-0b4b-4cc1-8098-eb2ebb43a1ca",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "engineering",
+     "role": "engineer",
+     "attr": "assistant",
+     "credit": "",
+     "people": [
+      {
+       "name": "Geoff Emerick",
+       "mbid": "3ff7a3d9-a800-4de4-94a6-41a35c96c0ae",
+       "artist_id": null
+      },
+      {
+       "name": "Mike Stone",
+       "mbid": "cf1280fd-8d52-4871-bb8b-021fcc9add4f",
+       "artist_id": null
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "disc": 1,
+   "n": 6,
+   "title": "All My Loving",
+   "length_ms": 129000,
+   "credits": [
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "drums (drum set)",
+     "credit": "",
+     "people": [
+      {
+       "name": "Ringo Starr",
+       "mbid": "300c4c73-33ac-4255-9d57-4e32627f5e13",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "electric bass guitar",
+     "credit": "",
+     "people": [
+      {
+       "name": "Paul McCartney",
+       "mbid": "ba550d0e-adac-4864-b88b-407cab5e76af",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "electric guitar",
+     "credit": "lead guitar",
+     "people": [
+      {
+       "name": "George Harrison",
+       "mbid": "42a8f507-8412-4611-854f-926571049fa0",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "electric guitar",
+     "credit": "rhythm guitar",
+     "people": [
+      {
+       "name": "John Lennon",
+       "mbid": "4d5447d7-c61c-4120-ba1b-d7f471d385b9",
+       "artist_id": 755
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "vocal",
+     "attr": "background vocals",
+     "credit": "",
+     "people": [
+      {
+       "name": "George Harrison",
+       "mbid": "42a8f507-8412-4611-854f-926571049fa0",
+       "artist_id": null
+      },
+      {
+       "name": "John Lennon",
+       "mbid": "4d5447d7-c61c-4120-ba1b-d7f471d385b9",
+       "artist_id": 755
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "vocal",
+     "attr": "background vocals",
+     "credit": "harmony vocals",
+     "people": [
+      {
+       "name": "Paul McCartney",
+       "mbid": "ba550d0e-adac-4864-b88b-407cab5e76af",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "vocal",
+     "attr": "lead vocals",
+     "credit": "",
+     "people": [
+      {
+       "name": "Paul McCartney",
+       "mbid": "ba550d0e-adac-4864-b88b-407cab5e76af",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "composition",
+     "role": "writer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "John Lennon",
+       "mbid": "4d5447d7-c61c-4120-ba1b-d7f471d385b9",
+       "artist_id": 755
+      },
+      {
+       "name": "Paul McCartney",
+       "mbid": "ba550d0e-adac-4864-b88b-407cab5e76af",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "production",
+     "role": "producer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "George Martin",
+       "mbid": "26fa8b67-6c7f-406c-ad64-a1d070092df2",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "engineering",
+     "role": "engineer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Norman Smith",
+       "mbid": "3c4092d7-0b4b-4cc1-8098-eb2ebb43a1ca",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "engineering",
+     "role": "engineer",
+     "attr": "additional",
+     "credit": "",
+     "people": [
+      {
+       "name": "B.T.",
+       "mbid": "d649902c-c8ed-4437-b939-486a934ab87e",
+       "artist_id": null
+      },
+      {
+       "name": "Geoff Emerick",
+       "mbid": "3ff7a3d9-a800-4de4-94a6-41a35c96c0ae",
+       "artist_id": null
+      },
+      {
+       "name": "Richard Langham",
+       "mbid": "97a48ba9-7320-423a-aeba-0a1b15eae50b",
+       "artist_id": null
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "disc": 1,
+   "n": 7,
+   "title": "Can’t Buy Me Love",
+   "length_ms": 134000,
+   "credits": [
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "acoustic guitar",
+     "credit": "rhythm guitar",
+     "people": [
+      {
+       "name": "John Lennon",
+       "mbid": "4d5447d7-c61c-4120-ba1b-d7f471d385b9",
+       "artist_id": 755
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "cymbal",
+     "credit": "",
+     "people": [
+      {
+       "name": "Ringo Starr",
+       "mbid": "300c4c73-33ac-4255-9d57-4e32627f5e13",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "drums (drum set)",
+     "credit": "",
+     "people": [
+      {
+       "name": "Ringo Starr",
+       "mbid": "300c4c73-33ac-4255-9d57-4e32627f5e13",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "electric bass guitar",
+     "credit": "",
+     "people": [
+      {
+       "name": "Paul McCartney",
+       "mbid": "ba550d0e-adac-4864-b88b-407cab5e76af",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "electric guitar",
+     "credit": "lead guitar",
+     "people": [
+      {
+       "name": "George Harrison",
+       "mbid": "42a8f507-8412-4611-854f-926571049fa0",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "hi-hat",
+     "credit": "",
+     "people": [
+      {
+       "name": "Norman Smith",
+       "mbid": "3c4092d7-0b4b-4cc1-8098-eb2ebb43a1ca",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "vocal",
+     "attr": "lead vocals",
+     "credit": "",
+     "people": [
+      {
+       "name": "Paul McCartney",
+       "mbid": "ba550d0e-adac-4864-b88b-407cab5e76af",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "composition",
+     "role": "writer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "John Lennon",
+       "mbid": "4d5447d7-c61c-4120-ba1b-d7f471d385b9",
+       "artist_id": 755
+      },
+      {
+       "name": "Paul McCartney",
+       "mbid": "ba550d0e-adac-4864-b88b-407cab5e76af",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "production",
+     "role": "producer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "George Martin",
+       "mbid": "26fa8b67-6c7f-406c-ad64-a1d070092df2",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "engineering",
+     "role": "engineer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Geoff Emerick",
+       "mbid": "3ff7a3d9-a800-4de4-94a6-41a35c96c0ae",
+       "artist_id": null
+      },
+      {
+       "name": "Norman Smith",
+       "mbid": "3c4092d7-0b4b-4cc1-8098-eb2ebb43a1ca",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "engineering",
+     "role": "engineer",
+     "attr": "assistant",
+     "credit": "",
+     "people": [
+      {
+       "name": "Jacques Esmenjaud",
+       "mbid": "bd333d09-ec4b-4346-a847-f18679875f01",
+       "artist_id": null
+      },
+      {
+       "name": "Richard Langham",
+       "mbid": "97a48ba9-7320-423a-aeba-0a1b15eae50b",
+       "artist_id": null
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "disc": 1,
+   "n": 8,
+   "title": "A Hard Day’s Night",
+   "length_ms": 154000,
+   "credits": [
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "12 string guitar",
+     "credit": "lead guitar",
+     "people": [
+      {
+       "name": "George Harrison",
+       "mbid": "42a8f507-8412-4611-854f-926571049fa0",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "acoustic guitar",
+     "credit": "rhythm guitar",
+     "people": [
+      {
+       "name": "John Lennon",
+       "mbid": "4d5447d7-c61c-4120-ba1b-d7f471d385b9",
+       "artist_id": 755
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "bongos",
+     "credit": "",
+     "people": [
+      {
+       "name": "Ringo Starr",
+       "mbid": "300c4c73-33ac-4255-9d57-4e32627f5e13",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "cowbell",
+     "credit": "",
+     "people": [
+      {
+       "name": "Ringo Starr",
+       "mbid": "300c4c73-33ac-4255-9d57-4e32627f5e13",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "drums (drum set)",
+     "credit": "",
+     "people": [
+      {
+       "name": "Ringo Starr",
+       "mbid": "300c4c73-33ac-4255-9d57-4e32627f5e13",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "electric bass guitar",
+     "credit": "",
+     "people": [
+      {
+       "name": "Paul McCartney",
+       "mbid": "ba550d0e-adac-4864-b88b-407cab5e76af",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "electric guitar",
+     "credit": "rhythm guitar",
+     "people": [
+      {
+       "name": "John Lennon",
+       "mbid": "4d5447d7-c61c-4120-ba1b-d7f471d385b9",
+       "artist_id": 755
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "piano",
+     "credit": "",
+     "people": [
+      {
+       "name": "George Martin",
+       "mbid": "26fa8b67-6c7f-406c-ad64-a1d070092df2",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "vocal",
+     "attr": "background vocals",
+     "credit": "",
+     "people": [
+      {
+       "name": "Paul McCartney",
+       "mbid": "ba550d0e-adac-4864-b88b-407cab5e76af",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "vocal",
+     "attr": "lead vocals",
+     "credit": "",
+     "people": [
+      {
+       "name": "John Lennon",
+       "mbid": "4d5447d7-c61c-4120-ba1b-d7f471d385b9",
+       "artist_id": 755
+      },
+      {
+       "name": "Paul McCartney",
+       "mbid": "ba550d0e-adac-4864-b88b-407cab5e76af",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "composition",
+     "role": "writer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "John Lennon",
+       "mbid": "4d5447d7-c61c-4120-ba1b-d7f471d385b9",
+       "artist_id": 755
+      },
+      {
+       "name": "Paul McCartney",
+       "mbid": "ba550d0e-adac-4864-b88b-407cab5e76af",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "production",
+     "role": "producer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "George Martin",
+       "mbid": "26fa8b67-6c7f-406c-ad64-a1d070092df2",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "engineering",
+     "role": "engineer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Norman Smith",
+       "mbid": "3c4092d7-0b4b-4cc1-8098-eb2ebb43a1ca",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "engineering",
+     "role": "engineer",
+     "attr": "additional",
+     "credit": "",
+     "people": [
+      {
+       "name": "Geoff Emerick",
+       "mbid": "3ff7a3d9-a800-4de4-94a6-41a35c96c0ae",
+       "artist_id": null
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "disc": 1,
+   "n": 9,
+   "title": "And I Love Her",
+   "length_ms": 151000,
+   "credits": [
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "acoustic guitar",
+     "credit": "lead guitar",
+     "people": [
+      {
+       "name": "George Harrison",
+       "mbid": "42a8f507-8412-4611-854f-926571049fa0",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "acoustic guitar",
+     "credit": "rhythm guitar",
+     "people": [
+      {
+       "name": "John Lennon",
+       "mbid": "4d5447d7-c61c-4120-ba1b-d7f471d385b9",
+       "artist_id": 755
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "bongos",
+     "credit": "",
+     "people": [
+      {
+       "name": "Ringo Starr",
+       "mbid": "300c4c73-33ac-4255-9d57-4e32627f5e13",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "claves",
+     "credit": "",
+     "people": [
+      {
+       "name": "Ringo Starr",
+       "mbid": "300c4c73-33ac-4255-9d57-4e32627f5e13",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "electric bass guitar",
+     "credit": "",
+     "people": [
+      {
+       "name": "Paul McCartney",
+       "mbid": "ba550d0e-adac-4864-b88b-407cab5e76af",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "vocal",
+     "attr": "lead vocals",
+     "credit": "",
+     "people": [
+      {
+       "name": "Paul McCartney",
+       "mbid": "ba550d0e-adac-4864-b88b-407cab5e76af",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "composition",
+     "role": "writer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "John Lennon",
+       "mbid": "4d5447d7-c61c-4120-ba1b-d7f471d385b9",
+       "artist_id": 755
+      },
+      {
+       "name": "Paul McCartney",
+       "mbid": "ba550d0e-adac-4864-b88b-407cab5e76af",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "production",
+     "role": "producer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "George Martin",
+       "mbid": "26fa8b67-6c7f-406c-ad64-a1d070092df2",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "engineering",
+     "role": "engineer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Norman Smith",
+       "mbid": "3c4092d7-0b4b-4cc1-8098-eb2ebb43a1ca",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "engineering",
+     "role": "engineer",
+     "attr": "assistant",
+     "credit": "",
+     "people": [
+      {
+       "name": "Richard Langham",
+       "mbid": "97a48ba9-7320-423a-aeba-0a1b15eae50b",
+       "artist_id": null
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "disc": 1,
+   "n": 10,
+   "title": "Eight Days a Week",
+   "length_ms": 165000,
+   "credits": [
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "acoustic guitar",
+     "credit": "",
+     "people": [
+      {
+       "name": "John Lennon",
+       "mbid": "4d5447d7-c61c-4120-ba1b-d7f471d385b9",
+       "artist_id": 755
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "bass guitar",
+     "credit": "",
+     "people": [
+      {
+       "name": "Paul McCartney",
+       "mbid": "ba550d0e-adac-4864-b88b-407cab5e76af",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "drums (drum set)",
+     "credit": "",
+     "people": [
+      {
+       "name": "Ringo Starr",
+       "mbid": "300c4c73-33ac-4255-9d57-4e32627f5e13",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "electric guitar",
+     "credit": "",
+     "people": [
+      {
+       "name": "George Harrison",
+       "mbid": "42a8f507-8412-4611-854f-926571049fa0",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "handclaps",
+     "credit": "",
+     "people": [
+      {
+       "name": "George Harrison",
+       "mbid": "42a8f507-8412-4611-854f-926571049fa0",
+       "artist_id": null
+      },
+      {
+       "name": "John Lennon",
+       "mbid": "4d5447d7-c61c-4120-ba1b-d7f471d385b9",
+       "artist_id": 755
+      },
+      {
+       "name": "Paul McCartney",
+       "mbid": "ba550d0e-adac-4864-b88b-407cab5e76af",
+       "artist_id": null
+      },
+      {
+       "name": "Ringo Starr",
+       "mbid": "300c4c73-33ac-4255-9d57-4e32627f5e13",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "vocal",
+     "attr": "lead vocals",
+     "credit": "",
+     "people": [
+      {
+       "name": "George Harrison",
+       "mbid": "42a8f507-8412-4611-854f-926571049fa0",
+       "artist_id": null
+      },
+      {
+       "name": "John Lennon",
+       "mbid": "4d5447d7-c61c-4120-ba1b-d7f471d385b9",
+       "artist_id": 755
+      },
+      {
+       "name": "Paul McCartney",
+       "mbid": "ba550d0e-adac-4864-b88b-407cab5e76af",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "composition",
+     "role": "writer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "John Lennon",
+       "mbid": "4d5447d7-c61c-4120-ba1b-d7f471d385b9",
+       "artist_id": 755
+      },
+      {
+       "name": "Paul McCartney",
+       "mbid": "ba550d0e-adac-4864-b88b-407cab5e76af",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "production",
+     "role": "producer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "George Martin",
+       "mbid": "26fa8b67-6c7f-406c-ad64-a1d070092df2",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "engineering",
+     "role": "engineer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Norman Smith",
+       "mbid": "3c4092d7-0b4b-4cc1-8098-eb2ebb43a1ca",
+       "artist_id": null
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "disc": 1,
+   "n": 11,
+   "title": "I Feel Fine",
+   "length_ms": 140000,
+   "credits": [
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "drums (drum set)",
+     "credit": "",
+     "people": [
+      {
+       "name": "Ringo Starr",
+       "mbid": "300c4c73-33ac-4255-9d57-4e32627f5e13",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "electric bass guitar",
+     "credit": "",
+     "people": [
+      {
+       "name": "Paul McCartney",
+       "mbid": "ba550d0e-adac-4864-b88b-407cab5e76af",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "electric guitar",
+     "credit": "",
+     "people": [
+      {
+       "name": "George Harrison",
+       "mbid": "42a8f507-8412-4611-854f-926571049fa0",
+       "artist_id": null
+      },
+      {
+       "name": "John Lennon",
+       "mbid": "4d5447d7-c61c-4120-ba1b-d7f471d385b9",
+       "artist_id": 755
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "vocal",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "George Harrison",
+       "mbid": "42a8f507-8412-4611-854f-926571049fa0",
+       "artist_id": null
+      },
+      {
+       "name": "Paul McCartney",
+       "mbid": "ba550d0e-adac-4864-b88b-407cab5e76af",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "vocal",
+     "attr": "lead vocals",
+     "credit": "",
+     "people": [
+      {
+       "name": "John Lennon",
+       "mbid": "4d5447d7-c61c-4120-ba1b-d7f471d385b9",
+       "artist_id": 755
+      }
+     ]
+    },
+    {
+     "group": "composition",
+     "role": "writer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "John Lennon",
+       "mbid": "4d5447d7-c61c-4120-ba1b-d7f471d385b9",
+       "artist_id": 755
+      },
+      {
+       "name": "Paul McCartney",
+       "mbid": "ba550d0e-adac-4864-b88b-407cab5e76af",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "production",
+     "role": "producer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "George Martin",
+       "mbid": "26fa8b67-6c7f-406c-ad64-a1d070092df2",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "engineering",
+     "role": "engineer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Norman Smith",
+       "mbid": "3c4092d7-0b4b-4cc1-8098-eb2ebb43a1ca",
+       "artist_id": null
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "disc": 1,
+   "n": 12,
+   "title": "Ticket to Ride",
+   "length_ms": 191000,
+   "credits": [
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "12 string guitar",
+     "credit": "lead guitar",
+     "people": [
+      {
+       "name": "George Harrison",
+       "mbid": "42a8f507-8412-4611-854f-926571049fa0",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "drums (drum set)",
+     "credit": "",
+     "people": [
+      {
+       "name": "Ringo Starr",
+       "mbid": "300c4c73-33ac-4255-9d57-4e32627f5e13",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "electric bass guitar",
+     "credit": "",
+     "people": [
+      {
+       "name": "Paul McCartney",
+       "mbid": "ba550d0e-adac-4864-b88b-407cab5e76af",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "electric guitar",
+     "credit": "lead guitar",
+     "people": [
+      {
+       "name": "Paul McCartney",
+       "mbid": "ba550d0e-adac-4864-b88b-407cab5e76af",
+       "credited_as": "Paul",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "electric guitar",
+     "credit": "rhythm guitar",
+     "people": [
+      {
+       "name": "George Harrison",
+       "mbid": "42a8f507-8412-4611-854f-926571049fa0",
+       "artist_id": null
+      },
+      {
+       "name": "John Lennon",
+       "mbid": "4d5447d7-c61c-4120-ba1b-d7f471d385b9",
+       "artist_id": 755
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "handclaps",
+     "credit": "",
+     "people": [
+      {
+       "name": "Ringo Starr",
+       "mbid": "300c4c73-33ac-4255-9d57-4e32627f5e13",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "tambourine",
+     "credit": "",
+     "people": [
+      {
+       "name": "Ringo Starr",
+       "mbid": "300c4c73-33ac-4255-9d57-4e32627f5e13",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "vocal",
+     "attr": "background vocals",
+     "credit": "",
+     "people": [
+      {
+       "name": "Paul McCartney",
+       "mbid": "ba550d0e-adac-4864-b88b-407cab5e76af",
+       "credited_as": "Paul",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "vocal",
+     "attr": "lead vocals",
+     "credit": "",
+     "people": [
+      {
+       "name": "John Lennon",
+       "mbid": "4d5447d7-c61c-4120-ba1b-d7f471d385b9",
+       "credited_as": "John",
+       "artist_id": 755
+      }
+     ]
+    },
+    {
+     "group": "composition",
+     "role": "writer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "John Lennon",
+       "mbid": "4d5447d7-c61c-4120-ba1b-d7f471d385b9",
+       "artist_id": 755
+      },
+      {
+       "name": "Paul McCartney",
+       "mbid": "ba550d0e-adac-4864-b88b-407cab5e76af",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "production",
+     "role": "producer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "George Martin",
+       "mbid": "26fa8b67-6c7f-406c-ad64-a1d070092df2",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "engineering",
+     "role": "engineer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Norman Smith",
+       "mbid": "3c4092d7-0b4b-4cc1-8098-eb2ebb43a1ca",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "engineering",
+     "role": "engineer",
+     "attr": "additional",
+     "credit": "",
+     "people": [
+      {
+       "name": "Ken Scott",
+       "mbid": "bca0229a-dbd3-4f4a-84ae-b40d87fbcde3",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "engineering",
+     "role": "mix",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "George Martin",
+       "mbid": "26fa8b67-6c7f-406c-ad64-a1d070092df2",
+       "artist_id": null
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "disc": 1,
+   "n": 13,
+   "title": "Yesterday",
+   "length_ms": 125000,
+   "credits": [
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "acoustic guitar",
+     "credit": "",
+     "people": [
+      {
+       "name": "Paul McCartney",
+       "mbid": "ba550d0e-adac-4864-b88b-407cab5e76af",
+       "credited_as": "Paul",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "cello",
+     "credit": "",
+     "people": [
+      {
+       "name": "Francisco Gabarro",
+       "mbid": "3da2cc91-a59e-4669-84a3-da196d86c2db",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "viola",
+     "credit": "",
+     "people": [
+      {
+       "name": "Kenneth Essex",
+       "mbid": "43ae16e3-7f9d-446e-8516-41026fabf998",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "violin",
+     "credit": "",
+     "people": [
+      {
+       "name": "Sidney Sax",
+       "mbid": "f8b6b5e9-28e2-4582-86ad-1a7c15174651",
+       "artist_id": null
+      },
+      {
+       "name": "Tony Gilbert",
+       "mbid": "56908419-3ab8-447b-a9da-7165a4f77e28",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "vocal",
+     "attr": "lead vocals",
+     "credit": "",
+     "people": [
+      {
+       "name": "Paul McCartney",
+       "mbid": "ba550d0e-adac-4864-b88b-407cab5e76af",
+       "credited_as": "Paul",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "composition",
+     "role": "writer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "John Lennon",
+       "mbid": "4d5447d7-c61c-4120-ba1b-d7f471d385b9",
+       "artist_id": 755
+      },
+      {
+       "name": "Paul McCartney",
+       "mbid": "ba550d0e-adac-4864-b88b-407cab5e76af",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "composition",
+     "role": "arranger",
+     "attr": "string quartet",
+     "credit": "",
+     "people": [
+      {
+       "name": "George Martin",
+       "mbid": "26fa8b67-6c7f-406c-ad64-a1d070092df2",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "production",
+     "role": "producer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "George Martin",
+       "mbid": "26fa8b67-6c7f-406c-ad64-a1d070092df2",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "engineering",
+     "role": "engineer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Norman Smith",
+       "mbid": "3c4092d7-0b4b-4cc1-8098-eb2ebb43a1ca",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "engineering",
+     "role": "engineer",
+     "attr": "additional",
+     "credit": "",
+     "people": [
+      {
+       "name": "Phil McDonald",
+       "mbid": "91e7ebdb-07b3-4819-b269-08dab097e0ba",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "engineering",
+     "role": "mix",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "George Martin",
+       "mbid": "26fa8b67-6c7f-406c-ad64-a1d070092df2",
+       "artist_id": null
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "disc": 1,
+   "n": 14,
+   "title": "Help!",
+   "length_ms": 140000,
+   "credits": [
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "12 string guitar",
+     "credit": "rhythm guitar",
+     "people": [
+      {
+       "name": "John Lennon",
+       "mbid": "4d5447d7-c61c-4120-ba1b-d7f471d385b9",
+       "artist_id": 755
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "drums (drum set)",
+     "credit": "",
+     "people": [
+      {
+       "name": "Ringo Starr",
+       "mbid": "300c4c73-33ac-4255-9d57-4e32627f5e13",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "electric bass guitar",
+     "credit": "",
+     "people": [
+      {
+       "name": "Paul McCartney",
+       "mbid": "ba550d0e-adac-4864-b88b-407cab5e76af",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "electric guitar",
+     "credit": "lead guitar",
+     "people": [
+      {
+       "name": "George Harrison",
+       "mbid": "42a8f507-8412-4611-854f-926571049fa0",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "tambourine",
+     "credit": "",
+     "people": [
+      {
+       "name": "Ringo Starr",
+       "mbid": "300c4c73-33ac-4255-9d57-4e32627f5e13",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "vocal",
+     "attr": "background vocals",
+     "credit": "",
+     "people": [
+      {
+       "name": "George Harrison",
+       "mbid": "42a8f507-8412-4611-854f-926571049fa0",
+       "credited_as": "George",
+       "artist_id": null
+      },
+      {
+       "name": "Paul McCartney",
+       "mbid": "ba550d0e-adac-4864-b88b-407cab5e76af",
+       "credited_as": "Paul",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "vocal",
+     "attr": "lead vocals",
+     "credit": "",
+     "people": [
+      {
+       "name": "John Lennon",
+       "mbid": "4d5447d7-c61c-4120-ba1b-d7f471d385b9",
+       "credited_as": "John",
+       "artist_id": 755
+      }
+     ]
+    },
+    {
+     "group": "composition",
+     "role": "writer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "John Lennon",
+       "mbid": "4d5447d7-c61c-4120-ba1b-d7f471d385b9",
+       "artist_id": 755
+      },
+      {
+       "name": "Paul McCartney",
+       "mbid": "ba550d0e-adac-4864-b88b-407cab5e76af",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "production",
+     "role": "producer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "George Martin",
+       "mbid": "26fa8b67-6c7f-406c-ad64-a1d070092df2",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "engineering",
+     "role": "engineer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Norman Smith",
+       "mbid": "3c4092d7-0b4b-4cc1-8098-eb2ebb43a1ca",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "engineering",
+     "role": "engineer",
+     "attr": "additional",
+     "credit": "",
+     "people": [
+      {
+       "name": "Ken Scott",
+       "mbid": "bca0229a-dbd3-4f4a-84ae-b40d87fbcde3",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "engineering",
+     "role": "mix",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "George Martin",
+       "mbid": "26fa8b67-6c7f-406c-ad64-a1d070092df2",
+       "artist_id": null
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "disc": 1,
+   "n": 15,
+   "title": "You’ve Got to Hide Your Love Away",
+   "length_ms": 131000,
+   "credits": [
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "12 string guitar",
+     "credit": "",
+     "people": [
+      {
+       "name": "John Lennon",
+       "mbid": "4d5447d7-c61c-4120-ba1b-d7f471d385b9",
+       "artist_id": 755
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "acoustic guitar",
+     "credit": "lead guitar",
+     "people": [
+      {
+       "name": "George Harrison",
+       "mbid": "42a8f507-8412-4611-854f-926571049fa0",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "alto flute",
+     "credit": "",
+     "people": [
+      {
+       "name": "John Scott",
+       "mbid": "b23deddf-047c-4c55-a69c-194b5899a34a",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "electric bass guitar",
+     "credit": "",
+     "people": [
+      {
+       "name": "Paul McCartney",
+       "mbid": "ba550d0e-adac-4864-b88b-407cab5e76af",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "flûte d'amour",
+     "credit": "",
+     "people": [
+      {
+       "name": "John Scott",
+       "mbid": "b23deddf-047c-4c55-a69c-194b5899a34a",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "maracas",
+     "credit": "",
+     "people": [
+      {
+       "name": "Paul McCartney",
+       "mbid": "ba550d0e-adac-4864-b88b-407cab5e76af",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "snare drum",
+     "credit": "",
+     "people": [
+      {
+       "name": "Ringo Starr",
+       "mbid": "300c4c73-33ac-4255-9d57-4e32627f5e13",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "tambourine",
+     "credit": "",
+     "people": [
+      {
+       "name": "Ringo Starr",
+       "mbid": "300c4c73-33ac-4255-9d57-4e32627f5e13",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "vocal",
+     "attr": "lead vocals",
+     "credit": "",
+     "people": [
+      {
+       "name": "John Lennon",
+       "mbid": "4d5447d7-c61c-4120-ba1b-d7f471d385b9",
+       "credited_as": "John",
+       "artist_id": 755
+      }
+     ]
+    },
+    {
+     "group": "composition",
+     "role": "writer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "John Lennon",
+       "mbid": "4d5447d7-c61c-4120-ba1b-d7f471d385b9",
+       "artist_id": 755
+      },
+      {
+       "name": "Paul McCartney",
+       "mbid": "ba550d0e-adac-4864-b88b-407cab5e76af",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "production",
+     "role": "producer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "George Martin",
+       "mbid": "26fa8b67-6c7f-406c-ad64-a1d070092df2",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "engineering",
+     "role": "engineer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Norman Smith",
+       "mbid": "3c4092d7-0b4b-4cc1-8098-eb2ebb43a1ca",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "engineering",
+     "role": "engineer",
+     "attr": "additional",
+     "credit": "",
+     "people": [
+      {
+       "name": "Ken Scott",
+       "mbid": "bca0229a-dbd3-4f4a-84ae-b40d87fbcde3",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "engineering",
+     "role": "mix",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "George Martin",
+       "mbid": "26fa8b67-6c7f-406c-ad64-a1d070092df2",
+       "artist_id": null
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "disc": 1,
+   "n": 16,
+   "title": "We Can Work It Out",
+   "length_ms": 136000,
+   "credits": [
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "acoustic guitar",
+     "credit": "rhythm guitar",
+     "people": [
+      {
+       "name": "John Lennon",
+       "mbid": "4d5447d7-c61c-4120-ba1b-d7f471d385b9",
+       "artist_id": 755
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "drums (drum set)",
+     "credit": "",
+     "people": [
+      {
+       "name": "Ringo Starr",
+       "mbid": "300c4c73-33ac-4255-9d57-4e32627f5e13",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "electric bass guitar",
+     "credit": "",
+     "people": [
+      {
+       "name": "Paul McCartney",
+       "mbid": "ba550d0e-adac-4864-b88b-407cab5e76af",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "harmonium",
+     "credit": "",
+     "people": [
+      {
+       "name": "John Lennon",
+       "mbid": "4d5447d7-c61c-4120-ba1b-d7f471d385b9",
+       "artist_id": 755
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "tambourine",
+     "credit": "",
+     "people": [
+      {
+       "name": "George Harrison",
+       "mbid": "42a8f507-8412-4611-854f-926571049fa0",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "vocal",
+     "attr": "background vocals",
+     "credit": "",
+     "people": [
+      {
+       "name": "John Lennon",
+       "mbid": "4d5447d7-c61c-4120-ba1b-d7f471d385b9",
+       "artist_id": 755
+      },
+      {
+       "name": "Paul McCartney",
+       "mbid": "ba550d0e-adac-4864-b88b-407cab5e76af",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "vocal",
+     "attr": "lead vocals",
+     "credit": "",
+     "people": [
+      {
+       "name": "Paul McCartney",
+       "mbid": "ba550d0e-adac-4864-b88b-407cab5e76af",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "composition",
+     "role": "composer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "John Lennon",
+       "mbid": "4d5447d7-c61c-4120-ba1b-d7f471d385b9",
+       "artist_id": 755
+      },
+      {
+       "name": "Paul McCartney",
+       "mbid": "ba550d0e-adac-4864-b88b-407cab5e76af",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "composition",
+     "role": "lyricist",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "John Lennon",
+       "mbid": "4d5447d7-c61c-4120-ba1b-d7f471d385b9",
+       "artist_id": 755
+      },
+      {
+       "name": "Paul McCartney",
+       "mbid": "ba550d0e-adac-4864-b88b-407cab5e76af",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "production",
+     "role": "producer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "George Martin",
+       "mbid": "26fa8b67-6c7f-406c-ad64-a1d070092df2",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "engineering",
+     "role": "engineer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Norman Smith",
+       "mbid": "3c4092d7-0b4b-4cc1-8098-eb2ebb43a1ca",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "engineering",
+     "role": "engineer",
+     "attr": "additional",
+     "credit": "",
+     "people": [
+      {
+       "name": "Ken Scott",
+       "mbid": "bca0229a-dbd3-4f4a-84ae-b40d87fbcde3",
+       "artist_id": null
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "disc": 1,
+   "n": 17,
+   "title": "Day Tripper",
+   "length_ms": 170000,
+   "credits": [
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "drums (drum set)",
+     "credit": "",
+     "people": [
+      {
+       "name": "Ringo Starr",
+       "mbid": "300c4c73-33ac-4255-9d57-4e32627f5e13",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "electric bass guitar",
+     "credit": "",
+     "people": [
+      {
+       "name": "Paul McCartney",
+       "mbid": "ba550d0e-adac-4864-b88b-407cab5e76af",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "electric guitar",
+     "credit": "",
+     "people": [
+      {
+       "name": "George Harrison",
+       "mbid": "42a8f507-8412-4611-854f-926571049fa0",
+       "artist_id": null
+      },
+      {
+       "name": "John Lennon",
+       "mbid": "4d5447d7-c61c-4120-ba1b-d7f471d385b9",
+       "artist_id": 755
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "electric guitar",
+     "credit": "lead guitar",
+     "people": [
+      {
+       "name": "George Harrison",
+       "mbid": "42a8f507-8412-4611-854f-926571049fa0",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "electric guitar",
+     "credit": "rhythm guitar",
+     "people": [
+      {
+       "name": "John Lennon",
+       "mbid": "4d5447d7-c61c-4120-ba1b-d7f471d385b9",
+       "artist_id": 755
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "tambourine",
+     "credit": "",
+     "people": [
+      {
+       "name": "John Lennon",
+       "mbid": "4d5447d7-c61c-4120-ba1b-d7f471d385b9",
+       "artist_id": 755
+      },
+      {
+       "name": "Ringo Starr",
+       "mbid": "300c4c73-33ac-4255-9d57-4e32627f5e13",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "vocal",
+     "attr": "background vocals",
+     "credit": "",
+     "people": [
+      {
+       "name": "George Harrison",
+       "mbid": "42a8f507-8412-4611-854f-926571049fa0",
+       "artist_id": null
+      },
+      {
+       "name": "John Lennon",
+       "mbid": "4d5447d7-c61c-4120-ba1b-d7f471d385b9",
+       "artist_id": 755
+      },
+      {
+       "name": "Paul McCartney",
+       "mbid": "ba550d0e-adac-4864-b88b-407cab5e76af",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "vocal",
+     "attr": "lead vocals",
+     "credit": "",
+     "people": [
+      {
+       "name": "John Lennon",
+       "mbid": "4d5447d7-c61c-4120-ba1b-d7f471d385b9",
+       "artist_id": 755
+      },
+      {
+       "name": "Paul McCartney",
+       "mbid": "ba550d0e-adac-4864-b88b-407cab5e76af",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "composition",
+     "role": "writer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "John Lennon",
+       "mbid": "4d5447d7-c61c-4120-ba1b-d7f471d385b9",
+       "artist_id": 755
+      },
+      {
+       "name": "Paul McCartney",
+       "mbid": "ba550d0e-adac-4864-b88b-407cab5e76af",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "production",
+     "role": "producer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "George Martin",
+       "mbid": "26fa8b67-6c7f-406c-ad64-a1d070092df2",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "engineering",
+     "role": "engineer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Norman Smith",
+       "mbid": "3c4092d7-0b4b-4cc1-8098-eb2ebb43a1ca",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "engineering",
+     "role": "engineer",
+     "attr": "additional",
+     "credit": "",
+     "people": [
+      {
+       "name": "Ron Pender",
+       "mbid": "33f0fdc3-a1c5-4be8-902e-fcc96eab31c6",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "engineering",
+     "role": "engineer",
+     "attr": "additional",
+     "credit": "second engineer",
+     "people": [
+      {
+       "name": "Graham Kirkby",
+       "mbid": "6f64fe58-fa6d-4cc7-86ba-d98123c57087",
+       "artist_id": null
+      },
+      {
+       "name": "Ken Scott",
+       "mbid": "bca0229a-dbd3-4f4a-84ae-b40d87fbcde3",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "engineering",
+     "role": "mix",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Peter Bown",
+       "mbid": "8a602f9e-6317-48f5-aabb-a16ef01d4d30",
+       "artist_id": null
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "disc": 1,
+   "n": 18,
+   "title": "Drive My Car",
+   "length_ms": 148000,
+   "credits": [
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "cowbell",
+     "credit": "",
+     "people": [
+      {
+       "name": "Ringo Starr",
+       "mbid": "300c4c73-33ac-4255-9d57-4e32627f5e13",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "drums (drum set)",
+     "credit": "",
+     "people": [
+      {
+       "name": "Ringo Starr",
+       "mbid": "300c4c73-33ac-4255-9d57-4e32627f5e13",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "electric bass guitar",
+     "credit": "",
+     "people": [
+      {
+       "name": "Paul McCartney",
+       "mbid": "ba550d0e-adac-4864-b88b-407cab5e76af",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "electric guitar",
+     "credit": "lead guitar",
+     "people": [
+      {
+       "name": "Paul McCartney",
+       "mbid": "ba550d0e-adac-4864-b88b-407cab5e76af",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "electric guitar",
+     "credit": "rhythm guitar",
+     "people": [
+      {
+       "name": "George Harrison",
+       "mbid": "42a8f507-8412-4611-854f-926571049fa0",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "piano",
+     "credit": "",
+     "people": [
+      {
+       "name": "Paul McCartney",
+       "mbid": "ba550d0e-adac-4864-b88b-407cab5e76af",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "tambourine",
+     "credit": "",
+     "people": [
+      {
+       "name": "Ringo Starr",
+       "mbid": "300c4c73-33ac-4255-9d57-4e32627f5e13",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "vocal",
+     "attr": "background vocals",
+     "credit": "",
+     "people": [
+      {
+       "name": "George Harrison",
+       "mbid": "42a8f507-8412-4611-854f-926571049fa0",
+       "artist_id": null
+      },
+      {
+       "name": "John Lennon",
+       "mbid": "4d5447d7-c61c-4120-ba1b-d7f471d385b9",
+       "artist_id": 755
+      },
+      {
+       "name": "Paul McCartney",
+       "mbid": "ba550d0e-adac-4864-b88b-407cab5e76af",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "vocal",
+     "attr": "lead vocals",
+     "credit": "",
+     "people": [
+      {
+       "name": "John Lennon",
+       "mbid": "4d5447d7-c61c-4120-ba1b-d7f471d385b9",
+       "artist_id": 755
+      },
+      {
+       "name": "Paul McCartney",
+       "mbid": "ba550d0e-adac-4864-b88b-407cab5e76af",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "composition",
+     "role": "writer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "John Lennon",
+       "mbid": "4d5447d7-c61c-4120-ba1b-d7f471d385b9",
+       "artist_id": 755
+      },
+      {
+       "name": "Paul McCartney",
+       "mbid": "ba550d0e-adac-4864-b88b-407cab5e76af",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "production",
+     "role": "producer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "George Martin",
+       "mbid": "26fa8b67-6c7f-406c-ad64-a1d070092df2",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "engineering",
+     "role": "engineer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Norman Smith",
+       "mbid": "3c4092d7-0b4b-4cc1-8098-eb2ebb43a1ca",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "engineering",
+     "role": "engineer",
+     "attr": "additional",
+     "credit": "",
+     "people": [
+      {
+       "name": "Ken Scott",
+       "mbid": "bca0229a-dbd3-4f4a-84ae-b40d87fbcde3",
+       "artist_id": null
+      },
+      {
+       "name": "Ron Pender",
+       "mbid": "33f0fdc3-a1c5-4be8-902e-fcc96eab31c6",
+       "artist_id": null
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "disc": 1,
+   "n": 19,
+   "title": "Norwegian Wood (This Bird Has Flown)",
+   "length_ms": 125000,
+   "credits": [
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "12 string guitar",
+     "credit": "rhythm guitar",
+     "people": [
+      {
+       "name": "George Harrison",
+       "mbid": "42a8f507-8412-4611-854f-926571049fa0",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "acoustic guitar",
+     "credit": "rhythm guitar",
+     "people": [
+      {
+       "name": "John Lennon",
+       "mbid": "4d5447d7-c61c-4120-ba1b-d7f471d385b9",
+       "artist_id": 755
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "drums (drum set)",
+     "credit": "",
+     "people": [
+      {
+       "name": "Ringo Starr",
+       "mbid": "300c4c73-33ac-4255-9d57-4e32627f5e13",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "electric bass guitar",
+     "credit": "",
+     "people": [
+      {
+       "name": "Paul McCartney",
+       "mbid": "ba550d0e-adac-4864-b88b-407cab5e76af",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "sitar",
+     "credit": "",
+     "people": [
+      {
+       "name": "George Harrison",
+       "mbid": "42a8f507-8412-4611-854f-926571049fa0",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "tambourine",
+     "credit": "",
+     "people": [
+      {
+       "name": "Ringo Starr",
+       "mbid": "300c4c73-33ac-4255-9d57-4e32627f5e13",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "vocal",
+     "attr": "background vocals",
+     "credit": "",
+     "people": [
+      {
+       "name": "Paul McCartney",
+       "mbid": "ba550d0e-adac-4864-b88b-407cab5e76af",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "vocal",
+     "attr": "lead vocals",
+     "credit": "",
+     "people": [
+      {
+       "name": "John Lennon",
+       "mbid": "4d5447d7-c61c-4120-ba1b-d7f471d385b9",
+       "artist_id": 755
+      }
+     ]
+    },
+    {
+     "group": "composition",
+     "role": "writer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "John Lennon",
+       "mbid": "4d5447d7-c61c-4120-ba1b-d7f471d385b9",
+       "artist_id": 755
+      },
+      {
+       "name": "Paul McCartney",
+       "mbid": "ba550d0e-adac-4864-b88b-407cab5e76af",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "production",
+     "role": "producer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "George Martin",
+       "mbid": "26fa8b67-6c7f-406c-ad64-a1d070092df2",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "engineering",
+     "role": "engineer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Norman Smith",
+       "mbid": "3c4092d7-0b4b-4cc1-8098-eb2ebb43a1ca",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "engineering",
+     "role": "engineer",
+     "attr": "additional",
+     "credit": "",
+     "people": [
+      {
+       "name": "Ken Scott",
+       "mbid": "bca0229a-dbd3-4f4a-84ae-b40d87fbcde3",
+       "artist_id": null
+      },
+      {
+       "name": "Ron Pender",
+       "mbid": "33f0fdc3-a1c5-4be8-902e-fcc96eab31c6",
+       "artist_id": null
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "disc": 1,
+   "n": 20,
+   "title": "Nowhere Man",
+   "length_ms": 164000,
+   "credits": [
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "acoustic guitar",
+     "credit": "rhythm guitar",
+     "people": [
+      {
+       "name": "John Lennon",
+       "mbid": "4d5447d7-c61c-4120-ba1b-d7f471d385b9",
+       "artist_id": 755
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "drums (drum set)",
+     "credit": "",
+     "people": [
+      {
+       "name": "Ringo Starr",
+       "mbid": "300c4c73-33ac-4255-9d57-4e32627f5e13",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "electric bass guitar",
+     "credit": "",
+     "people": [
+      {
+       "name": "Paul McCartney",
+       "mbid": "ba550d0e-adac-4864-b88b-407cab5e76af",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "electric guitar",
+     "credit": "lead guitar",
+     "people": [
+      {
+       "name": "George Harrison",
+       "mbid": "42a8f507-8412-4611-854f-926571049fa0",
+       "artist_id": null
+      },
+      {
+       "name": "John Lennon",
+       "mbid": "4d5447d7-c61c-4120-ba1b-d7f471d385b9",
+       "artist_id": 755
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "vocal",
+     "attr": "background vocals",
+     "credit": "",
+     "people": [
+      {
+       "name": "George Harrison",
+       "mbid": "42a8f507-8412-4611-854f-926571049fa0",
+       "artist_id": null
+      },
+      {
+       "name": "Paul McCartney",
+       "mbid": "ba550d0e-adac-4864-b88b-407cab5e76af",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "vocal",
+     "attr": "lead vocals",
+     "credit": "",
+     "people": [
+      {
+       "name": "John Lennon",
+       "mbid": "4d5447d7-c61c-4120-ba1b-d7f471d385b9",
+       "artist_id": 755
+      }
+     ]
+    },
+    {
+     "group": "composition",
+     "role": "writer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "John Lennon",
+       "mbid": "4d5447d7-c61c-4120-ba1b-d7f471d385b9",
+       "artist_id": 755
+      },
+      {
+       "name": "Paul McCartney",
+       "mbid": "ba550d0e-adac-4864-b88b-407cab5e76af",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "production",
+     "role": "producer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "George Martin",
+       "mbid": "26fa8b67-6c7f-406c-ad64-a1d070092df2",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "engineering",
+     "role": "engineer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Norman Smith",
+       "mbid": "3c4092d7-0b4b-4cc1-8098-eb2ebb43a1ca",
+       "artist_id": null
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "disc": 1,
+   "n": 21,
+   "title": "Michelle",
+   "length_ms": 162000,
+   "credits": [
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "acoustic guitar",
+     "credit": "rhythm guitar",
+     "people": [
+      {
+       "name": "George Harrison",
+       "mbid": "42a8f507-8412-4611-854f-926571049fa0",
+       "artist_id": null
+      },
+      {
+       "name": "John Lennon",
+       "mbid": "4d5447d7-c61c-4120-ba1b-d7f471d385b9",
+       "artist_id": 755
+      },
+      {
+       "name": "Paul McCartney",
+       "mbid": "ba550d0e-adac-4864-b88b-407cab5e76af",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "drums (drum set)",
+     "credit": "",
+     "people": [
+      {
+       "name": "Ringo Starr",
+       "mbid": "300c4c73-33ac-4255-9d57-4e32627f5e13",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "electric bass guitar",
+     "credit": "",
+     "people": [
+      {
+       "name": "Paul McCartney",
+       "mbid": "ba550d0e-adac-4864-b88b-407cab5e76af",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "electric guitar",
+     "credit": "lead guitar",
+     "people": [
+      {
+       "name": "George Harrison",
+       "mbid": "42a8f507-8412-4611-854f-926571049fa0",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "vocal",
+     "attr": "background vocals",
+     "credit": "",
+     "people": [
+      {
+       "name": "George Harrison",
+       "mbid": "42a8f507-8412-4611-854f-926571049fa0",
+       "artist_id": null
+      },
+      {
+       "name": "John Lennon",
+       "mbid": "4d5447d7-c61c-4120-ba1b-d7f471d385b9",
+       "artist_id": 755
+      },
+      {
+       "name": "Paul McCartney",
+       "mbid": "ba550d0e-adac-4864-b88b-407cab5e76af",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "vocal",
+     "attr": "lead vocals",
+     "credit": "",
+     "people": [
+      {
+       "name": "Paul McCartney",
+       "mbid": "ba550d0e-adac-4864-b88b-407cab5e76af",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "composition",
+     "role": "writer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "John Lennon",
+       "mbid": "4d5447d7-c61c-4120-ba1b-d7f471d385b9",
+       "artist_id": 755
+      },
+      {
+       "name": "Paul McCartney",
+       "mbid": "ba550d0e-adac-4864-b88b-407cab5e76af",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "production",
+     "role": "producer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "George Martin",
+       "mbid": "26fa8b67-6c7f-406c-ad64-a1d070092df2",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "engineering",
+     "role": "engineer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Norman Smith",
+       "mbid": "3c4092d7-0b4b-4cc1-8098-eb2ebb43a1ca",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "engineering",
+     "role": "engineer",
+     "attr": "additional",
+     "credit": "",
+     "people": [
+      {
+       "name": "Jerry Boys",
+       "mbid": "9f8facfd-9ff6-4e40-a842-f0747de4fbdb",
+       "artist_id": null
+      },
+      {
+       "name": "Ken Scott",
+       "mbid": "bca0229a-dbd3-4f4a-84ae-b40d87fbcde3",
+       "artist_id": null
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "disc": 1,
+   "n": 22,
+   "title": "In My Life",
+   "length_ms": 147000,
+   "credits": [
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "drums (drum set)",
+     "credit": "",
+     "people": [
+      {
+       "name": "Ringo Starr",
+       "mbid": "300c4c73-33ac-4255-9d57-4e32627f5e13",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "electric bass guitar",
+     "credit": "",
+     "people": [
+      {
+       "name": "Paul McCartney",
+       "mbid": "ba550d0e-adac-4864-b88b-407cab5e76af",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "electric guitar",
+     "credit": "lead guitar",
+     "people": [
+      {
+       "name": "George Harrison",
+       "mbid": "42a8f507-8412-4611-854f-926571049fa0",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "electric guitar",
+     "credit": "rhythm guitar",
+     "people": [
+      {
+       "name": "John Lennon",
+       "mbid": "4d5447d7-c61c-4120-ba1b-d7f471d385b9",
+       "artist_id": 755
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "piano",
+     "credit": "",
+     "people": [
+      {
+       "name": "George Martin",
+       "mbid": "26fa8b67-6c7f-406c-ad64-a1d070092df2",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "tambourine",
+     "credit": "",
+     "people": [
+      {
+       "name": "Ringo Starr",
+       "mbid": "300c4c73-33ac-4255-9d57-4e32627f5e13",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "vocal",
+     "attr": "background vocals",
+     "credit": "",
+     "people": [
+      {
+       "name": "George Harrison",
+       "mbid": "42a8f507-8412-4611-854f-926571049fa0",
+       "artist_id": null
+      },
+      {
+       "name": "Paul McCartney",
+       "mbid": "ba550d0e-adac-4864-b88b-407cab5e76af",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "vocal",
+     "attr": "lead vocals",
+     "credit": "",
+     "people": [
+      {
+       "name": "John Lennon",
+       "mbid": "4d5447d7-c61c-4120-ba1b-d7f471d385b9",
+       "artist_id": 755
+      }
+     ]
+    },
+    {
+     "group": "composition",
+     "role": "writer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "John Lennon",
+       "mbid": "4d5447d7-c61c-4120-ba1b-d7f471d385b9",
+       "artist_id": 755
+      },
+      {
+       "name": "Paul McCartney",
+       "mbid": "ba550d0e-adac-4864-b88b-407cab5e76af",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "production",
+     "role": "producer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "George Martin",
+       "mbid": "26fa8b67-6c7f-406c-ad64-a1d070092df2",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "engineering",
+     "role": "engineer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Norman Smith",
+       "mbid": "3c4092d7-0b4b-4cc1-8098-eb2ebb43a1ca",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "engineering",
+     "role": "engineer",
+     "attr": "additional",
+     "credit": "",
+     "people": [
+      {
+       "name": "Ken Scott",
+       "mbid": "bca0229a-dbd3-4f4a-84ae-b40d87fbcde3",
+       "artist_id": null
+      },
+      {
+       "name": "Mike Stone",
+       "mbid": "cf1280fd-8d52-4871-bb8b-021fcc9add4f",
+       "artist_id": null
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "disc": 1,
+   "n": 23,
+   "title": "Girl",
+   "length_ms": 152000,
+   "credits": [
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "12 string guitar",
+     "credit": "lead guitar",
+     "people": [
+      {
+       "name": "George Harrison",
+       "mbid": "42a8f507-8412-4611-854f-926571049fa0",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "acoustic guitar",
+     "credit": "rhythm guitar",
+     "people": [
+      {
+       "name": "John Lennon",
+       "mbid": "4d5447d7-c61c-4120-ba1b-d7f471d385b9",
+       "artist_id": 755
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "drums (drum set)",
+     "credit": "",
+     "people": [
+      {
+       "name": "Ringo Starr",
+       "mbid": "300c4c73-33ac-4255-9d57-4e32627f5e13",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "electric bass guitar",
+     "credit": "",
+     "people": [
+      {
+       "name": "Paul McCartney",
+       "mbid": "ba550d0e-adac-4864-b88b-407cab5e76af",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "vocal",
+     "attr": "background vocals",
+     "credit": "",
+     "people": [
+      {
+       "name": "George Harrison",
+       "mbid": "42a8f507-8412-4611-854f-926571049fa0",
+       "artist_id": null
+      },
+      {
+       "name": "Paul McCartney",
+       "mbid": "ba550d0e-adac-4864-b88b-407cab5e76af",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "vocal",
+     "attr": "lead vocals",
+     "credit": "",
+     "people": [
+      {
+       "name": "John Lennon",
+       "mbid": "4d5447d7-c61c-4120-ba1b-d7f471d385b9",
+       "artist_id": 755
+      }
+     ]
+    },
+    {
+     "group": "composition",
+     "role": "writer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "John Lennon",
+       "mbid": "4d5447d7-c61c-4120-ba1b-d7f471d385b9",
+       "artist_id": 755
+      },
+      {
+       "name": "Paul McCartney",
+       "mbid": "ba550d0e-adac-4864-b88b-407cab5e76af",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "production",
+     "role": "producer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "George Martin",
+       "mbid": "26fa8b67-6c7f-406c-ad64-a1d070092df2",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "engineering",
+     "role": "engineer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Norman Smith",
+       "mbid": "3c4092d7-0b4b-4cc1-8098-eb2ebb43a1ca",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "engineering",
+     "role": "engineer",
+     "attr": "additional",
+     "credit": "",
+     "people": [
+      {
+       "name": "Ken Scott",
+       "mbid": "bca0229a-dbd3-4f4a-84ae-b40d87fbcde3",
+       "artist_id": null
+      },
+      {
+       "name": "Richard Lush",
+       "mbid": "602a0675-9684-4582-829a-8563ac349d05",
+       "artist_id": null
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "disc": 1,
+   "n": 24,
+   "title": "Paperback Writer",
+   "length_ms": 139000,
+   "credits": [
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "drums (drum set)",
+     "credit": "",
+     "people": [
+      {
+       "name": "Ringo Starr",
+       "mbid": "300c4c73-33ac-4255-9d57-4e32627f5e13",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "electric bass guitar",
+     "credit": "",
+     "people": [
+      {
+       "name": "Paul McCartney",
+       "mbid": "ba550d0e-adac-4864-b88b-407cab5e76af",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "electric guitar",
+     "credit": "",
+     "people": [
+      {
+       "name": "George Harrison",
+       "mbid": "42a8f507-8412-4611-854f-926571049fa0",
+       "artist_id": null
+      },
+      {
+       "name": "Paul McCartney",
+       "mbid": "ba550d0e-adac-4864-b88b-407cab5e76af",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "tambourine",
+     "credit": "",
+     "people": [
+      {
+       "name": "John Lennon",
+       "mbid": "4d5447d7-c61c-4120-ba1b-d7f471d385b9",
+       "artist_id": 755
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "vocal",
+     "attr": "background vocals",
+     "credit": "",
+     "people": [
+      {
+       "name": "George Harrison",
+       "mbid": "42a8f507-8412-4611-854f-926571049fa0",
+       "artist_id": null
+      },
+      {
+       "name": "John Lennon",
+       "mbid": "4d5447d7-c61c-4120-ba1b-d7f471d385b9",
+       "artist_id": 755
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "vocal",
+     "attr": "lead vocals",
+     "credit": "",
+     "people": [
+      {
+       "name": "Paul McCartney",
+       "mbid": "ba550d0e-adac-4864-b88b-407cab5e76af",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "composition",
+     "role": "writer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "John Lennon",
+       "mbid": "4d5447d7-c61c-4120-ba1b-d7f471d385b9",
+       "artist_id": 755
+      },
+      {
+       "name": "Paul McCartney",
+       "mbid": "ba550d0e-adac-4864-b88b-407cab5e76af",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "production",
+     "role": "producer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "George Martin",
+       "mbid": "26fa8b67-6c7f-406c-ad64-a1d070092df2",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "engineering",
+     "role": "engineer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Geoff Emerick",
+       "mbid": "3ff7a3d9-a800-4de4-94a6-41a35c96c0ae",
+       "artist_id": null
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "disc": 1,
+   "n": 25,
+   "title": "Eleanor Rigby",
+   "length_ms": 128000,
+   "credits": [
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "cello",
+     "credit": "",
+     "people": [
+      {
+       "name": "Derek Simpson",
+       "mbid": "ab6ce138-98d3-44cb-8958-7099d16cce19",
+       "artist_id": null
+      },
+      {
+       "name": "Norman Jones",
+       "mbid": "17ee462b-d251-40f6-96dd-8605114e851a",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "viola",
+     "credit": "",
+     "people": [
+      {
+       "name": "John Underwood",
+       "mbid": "2397ebdf-892f-4f09-a05f-a0dd8aeeb95a",
+       "artist_id": null
+      },
+      {
+       "name": "Stephen Shingles",
+       "mbid": "bfe61e03-b5d6-4f94-92a6-6606e2d1e525",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "violin",
+     "credit": "",
+     "people": [
+      {
+       "name": "John Sharpe",
+       "mbid": "ffc0ceb0-4dbd-44fb-9f0f-52f0dc002ee1",
+       "artist_id": null
+      },
+      {
+       "name": "Jurgen Hess",
+       "mbid": "5f6e67f2-c85b-477b-bee8-00337d7a1f62",
+       "artist_id": null
+      },
+      {
+       "name": "Sidney Sax",
+       "mbid": "f8b6b5e9-28e2-4582-86ad-1a7c15174651",
+       "artist_id": null
+      },
+      {
+       "name": "Tony Gilbert",
+       "mbid": "56908419-3ab8-447b-a9da-7165a4f77e28",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "vocal",
+     "attr": "background vocals",
+     "credit": "",
+     "people": [
+      {
+       "name": "George Harrison",
+       "mbid": "42a8f507-8412-4611-854f-926571049fa0",
+       "artist_id": null
+      },
+      {
+       "name": "John Lennon",
+       "mbid": "4d5447d7-c61c-4120-ba1b-d7f471d385b9",
+       "artist_id": 755
+      },
+      {
+       "name": "Paul McCartney",
+       "mbid": "ba550d0e-adac-4864-b88b-407cab5e76af",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "vocal",
+     "attr": "lead vocals",
+     "credit": "",
+     "people": [
+      {
+       "name": "Paul McCartney",
+       "mbid": "ba550d0e-adac-4864-b88b-407cab5e76af",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "composition",
+     "role": "writer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "John Lennon",
+       "mbid": "4d5447d7-c61c-4120-ba1b-d7f471d385b9",
+       "artist_id": 755
+      },
+      {
+       "name": "Paul McCartney",
+       "mbid": "ba550d0e-adac-4864-b88b-407cab5e76af",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "production",
+     "role": "producer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "George Martin",
+       "mbid": "26fa8b67-6c7f-406c-ad64-a1d070092df2",
+       "artist_id": null
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "disc": 1,
+   "n": 26,
+   "title": "Yellow Submarine",
+   "length_ms": 157000,
+   "credits": [
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "acoustic guitar",
+     "credit": "",
+     "people": [
+      {
+       "name": "John Lennon",
+       "mbid": "4d5447d7-c61c-4120-ba1b-d7f471d385b9",
+       "artist_id": 755
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "bass drum",
+     "credit": "",
+     "people": [
+      {
+       "name": "Mal Evans",
+       "mbid": "f8df9750-4f73-4c6c-b16b-24cbc57d10f6",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "bass guitar",
+     "credit": "1964 Rickenbacker 4001S",
+     "people": [
+      {
+       "name": "Paul McCartney",
+       "mbid": "ba550d0e-adac-4864-b88b-407cab5e76af",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "drums (drum set)",
+     "credit": "1964 Ludwig Super Classic Black Oyster Pearl",
+     "people": [
+      {
+       "name": "Ringo Starr",
+       "mbid": "300c4c73-33ac-4255-9d57-4e32627f5e13",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "ocarina",
+     "credit": "",
+     "people": [
+      {
+       "name": "Brian Jones",
+       "mbid": "a704bc81-1d32-4b21-a1fd-ffaa6a1d86e1",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "tambourine",
+     "credit": "",
+     "people": [
+      {
+       "name": "George Harrison",
+       "mbid": "42a8f507-8412-4611-854f-926571049fa0",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "vocal",
+     "attr": "background vocals",
+     "credit": "",
+     "people": [
+      {
+       "name": "Alf Bicknell",
+       "mbid": "3feb22b7-8c7d-4e3e-9b80-2180f07e8910",
+       "artist_id": null
+      },
+      {
+       "name": "Brian Jones",
+       "mbid": "a704bc81-1d32-4b21-a1fd-ffaa6a1d86e1",
+       "artist_id": null
+      },
+      {
+       "name": "Geoff Emerick",
+       "mbid": "3ff7a3d9-a800-4de4-94a6-41a35c96c0ae",
+       "artist_id": null
+      },
+      {
+       "name": "George Harrison",
+       "mbid": "42a8f507-8412-4611-854f-926571049fa0",
+       "artist_id": null
+      },
+      {
+       "name": "George Martin",
+       "mbid": "26fa8b67-6c7f-406c-ad64-a1d070092df2",
+       "artist_id": null
+      },
+      {
+       "name": "John Lennon",
+       "mbid": "4d5447d7-c61c-4120-ba1b-d7f471d385b9",
+       "artist_id": 755
+      },
+      {
+       "name": "John Skinner",
+       "mbid": "7a4d4b04-cda2-410e-b50e-efae3afd1512",
+       "artist_id": null
+      },
+      {
+       "name": "Mal Evans",
+       "mbid": "f8df9750-4f73-4c6c-b16b-24cbc57d10f6",
+       "artist_id": null
+      },
+      {
+       "name": "Marianne Faithfull",
+       "mbid": "14ed9dea-1bb0-4743-ba32-39674a71da89",
+       "artist_id": null
+      },
+      {
+       "name": "Neil Aspinall",
+       "mbid": "aada1ac9-37cf-4fc0-af06-b2ed0bd99670",
+       "artist_id": null
+      },
+      {
+       "name": "Pattie Boyd",
+       "mbid": "301bd202-5a57-49d5-b719-8012eef480d4",
+       "artist_id": null
+      },
+      {
+       "name": "Paul McCartney",
+       "mbid": "ba550d0e-adac-4864-b88b-407cab5e76af",
+       "artist_id": null
+      },
+      {
+       "name": "Terry Condon",
+       "mbid": "b4f8a14b-79dc-4bb9-a87d-82203ac9682a",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "vocal",
+     "attr": "lead vocals",
+     "credit": "",
+     "people": [
+      {
+       "name": "Ringo Starr",
+       "mbid": "300c4c73-33ac-4255-9d57-4e32627f5e13",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "vocal",
+     "attr": "spoken vocals",
+     "credit": "",
+     "people": [
+      {
+       "name": "John Lennon",
+       "mbid": "4d5447d7-c61c-4120-ba1b-d7f471d385b9",
+       "artist_id": 755
+      },
+      {
+       "name": "Paul McCartney",
+       "mbid": "ba550d0e-adac-4864-b88b-407cab5e76af",
+       "artist_id": null
+      },
+      {
+       "name": "Ringo Starr",
+       "mbid": "300c4c73-33ac-4255-9d57-4e32627f5e13",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "composition",
+     "role": "writer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "John Lennon",
+       "mbid": "4d5447d7-c61c-4120-ba1b-d7f471d385b9",
+       "artist_id": 755
+      },
+      {
+       "name": "Paul McCartney",
+       "mbid": "ba550d0e-adac-4864-b88b-407cab5e76af",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "production",
+     "role": "producer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "George Martin",
+       "mbid": "26fa8b67-6c7f-406c-ad64-a1d070092df2",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "engineering",
+     "role": "recording",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Geoff Emerick",
+       "mbid": "3ff7a3d9-a800-4de4-94a6-41a35c96c0ae",
+       "artist_id": null
+      }
+     ]
+    }
+   ]
+  }
+ ],
+ "places": [
+  {
+   "role": "mixed_at",
+   "name": "Abbey Road Studios: Studio 2",
+   "area": "St John's Wood"
+  },
+  {
+   "role": "recorded_at",
+   "name": "Abbey Road Studios: Studio 2",
+   "area": "St John's Wood"
+  },
+  {
+   "role": "edited_at",
+   "name": "Abbey Road Studios: Studio 2",
+   "area": "St John's Wood"
+  },
+  {
+   "role": "mixed_at",
+   "name": "Abbey Road Studios: Studio 1",
+   "area": "St John's Wood"
+  },
+  {
+   "role": "mixed_at",
+   "name": "Abbey Road Studios: Studio 3",
+   "area": "St John's Wood"
+  },
+  {
+   "role": "recorded_at",
+   "name": "Studios Pathé-Marconi EMI",
+   "area": "Boulogne-Billancourt"
+  },
+  {
+   "role": "mixed_at",
+   "name": "Abbey Road Studios",
+   "area": "St John's Wood"
+  },
+  {
+   "role": "mixed_at",
+   "name": "Abbey Road Studios: Room 65",
+   "area": "Westminster"
+  },
+  {
+   "role": "recorded_at",
+   "name": "Abbey Road Studios: Studio 3",
+   "area": "St John's Wood"
+  }
+ ],
+ "about": {
+  "text": "1962–1966 (also known as the Red Album) is a compilation album of songs by the English rock band the Beatles, spanning the years indicated in the title and the albums Please Please Me through to Revolver with numerous intervening single releases. Released with its counterpart 1967–1970 (the \"Blue Album\") in 1973, the double LP peaked at number 3 in the United Kingdom. In the United States, it topped the Cash Box albums chart and peaked at number 3 on the Billboard Top LPs & Tape chart while 1967–1970 reached the top spot. The album was re-released in September 1993 on compact disc, charting at number 3 in the UK.\n\nThe album was instigated by Apple Records manager Allen Klein shortly before he was dismissed from his position. Even though the group had success with cover versions of songs, particularly \"Twist and Shout\", the original release of 1962–1966 contains only songs composed by the Beatles. It also omits any George Harrison compositions from the era, such as \"Taxman\", and as such, consists entirely of Lennon–McCartney originals.\n\nAs with 1967–1970, the compilation was created by Apple and EMI/Capitol Records in response to a bootleg collection titled Alpha Omega, which had been sold on television the previous year. Print advertising for the two records made a point of declaring them \"the only authorized collection of the Beatles\". The success of the two official double LP compilations inspired Capitol's repackaging of the Beach Boys' 1960s hits, starting with the 1974 album Endless Summer.\n\nA deluxe expanded version of the album was released in 2023. The new release contained remixes of a majority of the tracks, and it added tracks not on the original release, including songs written by Harrison, cover songs and more tracks from Revolver.",
+  "lang": "en",
+  "title": "1962–1966",
+  "url": "https://en.wikipedia.org/wiki/1962%E2%80%931966",
+  "source": "Wikipedia",
+  "license": "CC BY-SA 4.0"
+ },
+ "attribution": [
+  {
+   "source": "MusicBrainz",
+   "url": "https://musicbrainz.org/release/901adc01-b493-4bd2-ab9f-eedd54a8aa6d",
+   "license": "CC0"
+  }
+ ]
+}

@@ -1,0 +1,3254 @@
+{
+ "status": "ok",
+ "album_id": 454,
+ "match": {
+  "mbid": "14518b26-55fe-387b-94c6-a3843a1af487",
+  "release_group": "120c786d-a3b2-3c19-b4ff-2b7b3b4435bf",
+  "how": "search",
+  "score": 95,
+  "medium": null
+ },
+ "release": {
+  "title": "A Rush of Blood to the Head",
+  "artist": "Coldplay",
+  "date": "2002-08-26",
+  "first_release_date": "2002-08-12",
+  "type": "album",
+  "secondary_types": [],
+  "labels": [
+   {
+    "name": "Parlophone",
+    "catno": "7243 5 40504 2 8"
+   }
+  ],
+  "country": "AU",
+  "barcode": "724354050428",
+  "disc_count": 1,
+  "track_count": 11,
+  "url": "https://musicbrainz.org/release/14518b26-55fe-387b-94c6-a3843a1af487"
+ },
+ "credits": [
+  {
+   "group": "performer",
+   "role": "instrument",
+   "attr": "acoustic guitar",
+   "credit": "",
+   "people": [
+    {
+     "name": "Chris Martin",
+     "mbid": "98d1ec5a-dd97-4c0b-9c83-7928aac89bca",
+     "artist_id": null
+    },
+    {
+     "name": "Jonny Buckland",
+     "mbid": "d156ceb2-fd90-4e82-baea-829bbdf1c127",
+     "artist_id": null
+    }
+   ],
+   "tracks": null
+  },
+  {
+   "group": "performer",
+   "role": "instrument",
+   "attr": "drums (drum set)",
+   "credit": "",
+   "people": [
+    {
+     "name": "Will Champion",
+     "mbid": "6953c4db-7214-4724-a140-e87550bde420",
+     "artist_id": null
+    }
+   ],
+   "tracks": null
+  },
+  {
+   "group": "performer",
+   "role": "instrument",
+   "attr": "electric bass guitar",
+   "credit": "",
+   "people": [
+    {
+     "name": "Guy Berryman",
+     "mbid": "18690715-59fa-4e4d-bcf3-8025cf1c23e0",
+     "artist_id": null
+    }
+   ],
+   "tracks": null
+  },
+  {
+   "group": "performer",
+   "role": "instrument",
+   "attr": "electric guitar",
+   "credit": "",
+   "people": [
+    {
+     "name": "Jonny Buckland",
+     "mbid": "d156ceb2-fd90-4e82-baea-829bbdf1c127",
+     "artist_id": null
+    }
+   ],
+   "tracks": null
+  },
+  {
+   "group": "performer",
+   "role": "instrument",
+   "attr": "percussion",
+   "credit": "",
+   "people": [
+    {
+     "name": "Will Champion",
+     "mbid": "6953c4db-7214-4724-a140-e87550bde420",
+     "artist_id": null
+    }
+   ],
+   "tracks": null
+  },
+  {
+   "group": "performer",
+   "role": "instrument",
+   "attr": "piano",
+   "credit": "",
+   "people": [
+    {
+     "name": "Chris Martin",
+     "mbid": "98d1ec5a-dd97-4c0b-9c83-7928aac89bca",
+     "artist_id": null
+    }
+   ],
+   "tracks": null
+  },
+  {
+   "group": "performer",
+   "role": "instrument",
+   "attr": "strings",
+   "credit": "",
+   "people": [
+    {
+     "name": "Ann Lines",
+     "mbid": "569bad00-87f7-4510-94c7-99d1a37ad0b0",
+     "artist_id": null
+    },
+    {
+     "name": "Audrey Riley",
+     "mbid": "cf58cc10-0145-48f5-9ac6-0f53183138fd",
+     "artist_id": null
+    },
+    {
+     "name": "Chris Tombling",
+     "mbid": "116c7405-78b1-4e7c-989e-f8f00d36604a",
+     "artist_id": null
+    },
+    {
+     "name": "Laura Melhuish",
+     "mbid": "09f358c8-a4a6-4d15-9d7a-cb51aa1af342",
+     "credited_as": "Laura Melhewish",
+     "artist_id": null
+    },
+    {
+     "name": "Leo Payne",
+     "mbid": "53de4422-1943-41dc-93e7-9d2a6e5d19b1",
+     "artist_id": null
+    },
+    {
+     "name": "Peter Lale",
+     "mbid": "f9ee230f-87b1-4852-b8a5-7cac6c762dd6",
+     "artist_id": null
+    },
+    {
+     "name": "Richard George",
+     "mbid": "7c30e7a1-c393-47f5-9eef-ba78f5138805",
+     "artist_id": null
+    },
+    {
+     "name": "Susan Dench",
+     "mbid": "d6608c30-921a-4475-a4a3-9bdd505841a7",
+     "artist_id": null
+    }
+   ],
+   "tracks": null
+  },
+  {
+   "group": "performer",
+   "role": "instrument",
+   "attr": "guitar",
+   "credit": "Rhythm Guitar",
+   "people": [
+    {
+     "name": "Chris Martin",
+     "mbid": "98d1ec5a-dd97-4c0b-9c83-7928aac89bca",
+     "artist_id": null
+    }
+   ],
+   "tracks": [
+    [
+     1,
+     8
+    ],
+    [
+     1,
+     9
+    ]
+   ]
+  },
+  {
+   "group": "performer",
+   "role": "instrument",
+   "attr": "12 string guitar",
+   "credit": "",
+   "people": [
+    {
+     "name": "Jonny Buckland",
+     "mbid": "d156ceb2-fd90-4e82-baea-829bbdf1c127",
+     "artist_id": null
+    }
+   ],
+   "tracks": [
+    [
+     1,
+     6
+    ]
+   ]
+  },
+  {
+   "group": "performer",
+   "role": "vocal",
+   "attr": "background vocals",
+   "credit": "",
+   "people": [
+    {
+     "name": "Will Champion",
+     "mbid": "6953c4db-7214-4724-a140-e87550bde420",
+     "artist_id": null
+    },
+    {
+     "name": "Jonny Buckland",
+     "mbid": "d156ceb2-fd90-4e82-baea-829bbdf1c127",
+     "artist_id": null
+    }
+   ],
+   "tracks": null
+  },
+  {
+   "group": "performer",
+   "role": "vocal",
+   "attr": "lead vocals",
+   "credit": "",
+   "people": [
+    {
+     "name": "Chris Martin",
+     "mbid": "98d1ec5a-dd97-4c0b-9c83-7928aac89bca",
+     "artist_id": null
+    }
+   ],
+   "tracks": null
+  },
+  {
+   "group": "composition",
+   "role": "composer",
+   "attr": "",
+   "credit": "",
+   "people": [
+    {
+     "name": "Chris Martin",
+     "mbid": "98d1ec5a-dd97-4c0b-9c83-7928aac89bca",
+     "artist_id": null
+    },
+    {
+     "name": "Guy Berryman",
+     "mbid": "18690715-59fa-4e4d-bcf3-8025cf1c23e0",
+     "artist_id": null
+    },
+    {
+     "name": "Jonny Buckland",
+     "mbid": "d156ceb2-fd90-4e82-baea-829bbdf1c127",
+     "artist_id": null
+    },
+    {
+     "name": "Will Champion",
+     "mbid": "6953c4db-7214-4724-a140-e87550bde420",
+     "artist_id": null
+    }
+   ],
+   "tracks": [
+    [
+     1,
+     6
+    ],
+    [
+     1,
+     7
+    ],
+    [
+     1,
+     8
+    ],
+    [
+     1,
+     9
+    ]
+   ]
+  },
+  {
+   "group": "composition",
+   "role": "writer",
+   "attr": "",
+   "credit": "",
+   "people": [
+    {
+     "name": "Chris Martin",
+     "mbid": "98d1ec5a-dd97-4c0b-9c83-7928aac89bca",
+     "artist_id": null
+    },
+    {
+     "name": "Guy Berryman",
+     "mbid": "18690715-59fa-4e4d-bcf3-8025cf1c23e0",
+     "artist_id": null
+    },
+    {
+     "name": "Jonny Buckland",
+     "mbid": "d156ceb2-fd90-4e82-baea-829bbdf1c127",
+     "artist_id": null
+    },
+    {
+     "name": "Will Champion",
+     "mbid": "6953c4db-7214-4724-a140-e87550bde420",
+     "artist_id": null
+    }
+   ],
+   "tracks": [
+    [
+     1,
+     1
+    ],
+    [
+     1,
+     2
+    ],
+    [
+     1,
+     3
+    ],
+    [
+     1,
+     4
+    ],
+    [
+     1,
+     5
+    ],
+    [
+     1,
+     10
+    ],
+    [
+     1,
+     11
+    ]
+   ]
+  },
+  {
+   "group": "composition",
+   "role": "arranger",
+   "attr": "strings",
+   "credit": "",
+   "people": [
+    {
+     "name": "Audrey Riley",
+     "mbid": "cf58cc10-0145-48f5-9ac6-0f53183138fd",
+     "artist_id": null
+    },
+    {
+     "name": "Coldplay",
+     "mbid": "cc197bad-dc9c-440d-a5b5-d52ba2e14234",
+     "artist_id": 698
+    }
+   ],
+   "tracks": null
+  },
+  {
+   "group": "production",
+   "role": "producer",
+   "attr": "",
+   "credit": "",
+   "people": [
+    {
+     "name": "Coldplay",
+     "mbid": "cc197bad-dc9c-440d-a5b5-d52ba2e14234",
+     "artist_id": 698
+    },
+    {
+     "name": "Ken Nelson",
+     "mbid": "588ce201-0088-4f5b-b9bf-914145a4bfa3",
+     "artist_id": null
+    }
+   ],
+   "tracks": null
+  },
+  {
+   "group": "production",
+   "role": "producer",
+   "attr": "additional",
+   "credit": "",
+   "people": [
+    {
+     "name": "Mark Phythian",
+     "mbid": "c58adc59-2607-4ca4-9895-c33620f5adf1",
+     "artist_id": null
+    }
+   ],
+   "tracks": null
+  },
+  {
+   "group": "production",
+   "role": "design",
+   "attr": "",
+   "credit": "",
+   "people": [
+    {
+     "name": "Sølve Sundsbø",
+     "mbid": "bd156484-bf1c-4b1d-9e1c-6b7f0f534d20",
+     "artist_id": null
+    }
+   ],
+   "tracks": null
+  },
+  {
+   "group": "production",
+   "role": "photography",
+   "attr": "",
+   "credit": "",
+   "people": [
+    {
+     "name": "Tom Sheehan",
+     "mbid": "4b2663d6-2232-405e-9d11-dee91117c057",
+     "artist_id": null
+    },
+    {
+     "name": "Zed Nelson",
+     "mbid": "bce2a74d-e0b2-4a5a-9acc-cb60d1628135",
+     "artist_id": null
+    }
+   ],
+   "tracks": null
+  },
+  {
+   "group": "production",
+   "role": "art_direction",
+   "attr": "",
+   "credit": "",
+   "people": [
+    {
+     "name": "Blue Source",
+     "mbid": "1040b352-c7f6-44a3-81d1-2da38f4944ca",
+     "artist_id": null
+    },
+    {
+     "name": "Coldplay",
+     "mbid": "cc197bad-dc9c-440d-a5b5-d52ba2e14234",
+     "artist_id": 698
+    }
+   ],
+   "tracks": null
+  },
+  {
+   "group": "engineering",
+   "role": "engineer",
+   "attr": "",
+   "credit": "",
+   "people": [
+    {
+     "name": "Ken Nelson",
+     "mbid": "588ce201-0088-4f5b-b9bf-914145a4bfa3",
+     "artist_id": null
+    }
+   ],
+   "tracks": null
+  },
+  {
+   "group": "engineering",
+   "role": "engineer",
+   "attr": "additional",
+   "credit": "",
+   "people": [
+    {
+     "name": "Rik Simpson",
+     "mbid": "f0a3dfaa-ac42-477c-885d-8e5b63bb20fe",
+     "artist_id": null
+    }
+   ],
+   "tracks": null
+  },
+  {
+   "group": "engineering",
+   "role": "engineer",
+   "attr": "additional assistant",
+   "credit": "",
+   "people": [
+    {
+     "name": "Andrea Wright",
+     "mbid": "2f8a9ace-3c53-460f-b895-da18b8719581",
+     "artist_id": null
+    },
+    {
+     "name": "Ben Tackeray",
+     "mbid": "d2933abf-3f64-471f-93df-7ebed716c722",
+     "artist_id": null
+    },
+    {
+     "name": "John Withnal",
+     "mbid": "99ddb3a9-a57a-4c63-9ed0-188f45059744",
+     "artist_id": null
+    },
+    {
+     "name": "Jon Bailey",
+     "mbid": "ecb6f2a6-32ba-4057-b7af-4ca1b35aeb9e",
+     "artist_id": null
+    }
+   ],
+   "tracks": null
+  },
+  {
+   "group": "engineering",
+   "role": "recording",
+   "attr": "",
+   "credit": "",
+   "people": [
+    {
+     "name": "Ken Nelson",
+     "mbid": "588ce201-0088-4f5b-b9bf-914145a4bfa3",
+     "artist_id": null
+    }
+   ],
+   "tracks": null
+  },
+  {
+   "group": "engineering",
+   "role": "recording",
+   "attr": "additional",
+   "credit": "",
+   "people": [
+    {
+     "name": "Mark Phythian",
+     "mbid": "c58adc59-2607-4ca4-9895-c33620f5adf1",
+     "artist_id": null
+    }
+   ],
+   "tracks": null
+  },
+  {
+   "group": "engineering",
+   "role": "mix",
+   "attr": "",
+   "credit": "",
+   "people": [
+    {
+     "name": "Coldplay",
+     "mbid": "cc197bad-dc9c-440d-a5b5-d52ba2e14234",
+     "artist_id": 698
+    },
+    {
+     "name": "Ken Nelson",
+     "mbid": "588ce201-0088-4f5b-b9bf-914145a4bfa3",
+     "artist_id": null
+    },
+    {
+     "name": "Mark Phythian",
+     "mbid": "c58adc59-2607-4ca4-9895-c33620f5adf1",
+     "artist_id": null
+    },
+    {
+     "name": "Danton Supple",
+     "mbid": "1ac13bc2-9719-45d4-acc9-351aed5402b0",
+     "artist_id": null
+    }
+   ],
+   "tracks": null
+  }
+ ],
+ "tracks": [
+  {
+   "disc": 1,
+   "n": 1,
+   "title": "Politik",
+   "length_ms": 318626,
+   "credits": [
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "acoustic guitar",
+     "credit": "",
+     "people": [
+      {
+       "name": "Chris Martin",
+       "mbid": "98d1ec5a-dd97-4c0b-9c83-7928aac89bca",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "drums (drum set)",
+     "credit": "",
+     "people": [
+      {
+       "name": "Will Champion",
+       "mbid": "6953c4db-7214-4724-a140-e87550bde420",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "electric bass guitar",
+     "credit": "",
+     "people": [
+      {
+       "name": "Guy Berryman",
+       "mbid": "18690715-59fa-4e4d-bcf3-8025cf1c23e0",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "electric guitar",
+     "credit": "",
+     "people": [
+      {
+       "name": "Jonny Buckland",
+       "mbid": "d156ceb2-fd90-4e82-baea-829bbdf1c127",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "percussion",
+     "credit": "",
+     "people": [
+      {
+       "name": "Will Champion",
+       "mbid": "6953c4db-7214-4724-a140-e87550bde420",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "piano",
+     "credit": "",
+     "people": [
+      {
+       "name": "Chris Martin",
+       "mbid": "98d1ec5a-dd97-4c0b-9c83-7928aac89bca",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "vocal",
+     "attr": "background vocals",
+     "credit": "",
+     "people": [
+      {
+       "name": "Jonny Buckland",
+       "mbid": "d156ceb2-fd90-4e82-baea-829bbdf1c127",
+       "artist_id": null
+      },
+      {
+       "name": "Will Champion",
+       "mbid": "6953c4db-7214-4724-a140-e87550bde420",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "vocal",
+     "attr": "lead vocals",
+     "credit": "",
+     "people": [
+      {
+       "name": "Chris Martin",
+       "mbid": "98d1ec5a-dd97-4c0b-9c83-7928aac89bca",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "composition",
+     "role": "writer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Chris Martin",
+       "mbid": "98d1ec5a-dd97-4c0b-9c83-7928aac89bca",
+       "artist_id": null
+      },
+      {
+       "name": "Guy Berryman",
+       "mbid": "18690715-59fa-4e4d-bcf3-8025cf1c23e0",
+       "artist_id": null
+      },
+      {
+       "name": "Jonny Buckland",
+       "mbid": "d156ceb2-fd90-4e82-baea-829bbdf1c127",
+       "artist_id": null
+      },
+      {
+       "name": "Will Champion",
+       "mbid": "6953c4db-7214-4724-a140-e87550bde420",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "production",
+     "role": "producer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Coldplay",
+       "mbid": "cc197bad-dc9c-440d-a5b5-d52ba2e14234",
+       "artist_id": 698
+      },
+      {
+       "name": "Ken Nelson",
+       "mbid": "588ce201-0088-4f5b-b9bf-914145a4bfa3",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "engineering",
+     "role": "engineer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Ken Nelson",
+       "mbid": "588ce201-0088-4f5b-b9bf-914145a4bfa3",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "engineering",
+     "role": "engineer",
+     "attr": "additional",
+     "credit": "",
+     "people": [
+      {
+       "name": "Rik Simpson",
+       "mbid": "f0a3dfaa-ac42-477c-885d-8e5b63bb20fe",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "engineering",
+     "role": "recording",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Ken Nelson",
+       "mbid": "588ce201-0088-4f5b-b9bf-914145a4bfa3",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "engineering",
+     "role": "recording",
+     "attr": "additional",
+     "credit": "",
+     "people": [
+      {
+       "name": "Mark Phythian",
+       "mbid": "c58adc59-2607-4ca4-9895-c33620f5adf1",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "engineering",
+     "role": "mix",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Coldplay",
+       "mbid": "cc197bad-dc9c-440d-a5b5-d52ba2e14234",
+       "artist_id": 698
+      },
+      {
+       "name": "Ken Nelson",
+       "mbid": "588ce201-0088-4f5b-b9bf-914145a4bfa3",
+       "artist_id": null
+      },
+      {
+       "name": "Mark Phythian",
+       "mbid": "c58adc59-2607-4ca4-9895-c33620f5adf1",
+       "artist_id": null
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "disc": 1,
+   "n": 2,
+   "title": "In My Place",
+   "length_ms": 228733,
+   "credits": [
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "acoustic guitar",
+     "credit": "",
+     "people": [
+      {
+       "name": "Chris Martin",
+       "mbid": "98d1ec5a-dd97-4c0b-9c83-7928aac89bca",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "drums (drum set)",
+     "credit": "",
+     "people": [
+      {
+       "name": "Will Champion",
+       "mbid": "6953c4db-7214-4724-a140-e87550bde420",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "electric bass guitar",
+     "credit": "",
+     "people": [
+      {
+       "name": "Guy Berryman",
+       "mbid": "18690715-59fa-4e4d-bcf3-8025cf1c23e0",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "electric guitar",
+     "credit": "",
+     "people": [
+      {
+       "name": "Jonny Buckland",
+       "mbid": "d156ceb2-fd90-4e82-baea-829bbdf1c127",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "percussion",
+     "credit": "",
+     "people": [
+      {
+       "name": "Will Champion",
+       "mbid": "6953c4db-7214-4724-a140-e87550bde420",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "piano",
+     "credit": "",
+     "people": [
+      {
+       "name": "Chris Martin",
+       "mbid": "98d1ec5a-dd97-4c0b-9c83-7928aac89bca",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "vocal",
+     "attr": "background vocals",
+     "credit": "",
+     "people": [
+      {
+       "name": "Will Champion",
+       "mbid": "6953c4db-7214-4724-a140-e87550bde420",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "vocal",
+     "attr": "lead vocals",
+     "credit": "",
+     "people": [
+      {
+       "name": "Chris Martin",
+       "mbid": "98d1ec5a-dd97-4c0b-9c83-7928aac89bca",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "composition",
+     "role": "writer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Chris Martin",
+       "mbid": "98d1ec5a-dd97-4c0b-9c83-7928aac89bca",
+       "artist_id": null
+      },
+      {
+       "name": "Guy Berryman",
+       "mbid": "18690715-59fa-4e4d-bcf3-8025cf1c23e0",
+       "artist_id": null
+      },
+      {
+       "name": "Jonny Buckland",
+       "mbid": "d156ceb2-fd90-4e82-baea-829bbdf1c127",
+       "artist_id": null
+      },
+      {
+       "name": "Will Champion",
+       "mbid": "6953c4db-7214-4724-a140-e87550bde420",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "production",
+     "role": "producer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Coldplay",
+       "mbid": "cc197bad-dc9c-440d-a5b5-d52ba2e14234",
+       "artist_id": 698
+      },
+      {
+       "name": "Ken Nelson",
+       "mbid": "588ce201-0088-4f5b-b9bf-914145a4bfa3",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "production",
+     "role": "producer",
+     "attr": "additional",
+     "credit": "",
+     "people": [
+      {
+       "name": "Mark Phythian",
+       "mbid": "c58adc59-2607-4ca4-9895-c33620f5adf1",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "engineering",
+     "role": "engineer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Ken Nelson",
+       "mbid": "588ce201-0088-4f5b-b9bf-914145a4bfa3",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "engineering",
+     "role": "engineer",
+     "attr": "additional",
+     "credit": "",
+     "people": [
+      {
+       "name": "Rik Simpson",
+       "mbid": "f0a3dfaa-ac42-477c-885d-8e5b63bb20fe",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "engineering",
+     "role": "recording",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Ken Nelson",
+       "mbid": "588ce201-0088-4f5b-b9bf-914145a4bfa3",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "engineering",
+     "role": "recording",
+     "attr": "additional",
+     "credit": "",
+     "people": [
+      {
+       "name": "Mark Phythian",
+       "mbid": "c58adc59-2607-4ca4-9895-c33620f5adf1",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "engineering",
+     "role": "mix",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Coldplay",
+       "mbid": "cc197bad-dc9c-440d-a5b5-d52ba2e14234",
+       "artist_id": 698
+      },
+      {
+       "name": "Danton Supple",
+       "mbid": "1ac13bc2-9719-45d4-acc9-351aed5402b0",
+       "artist_id": null
+      },
+      {
+       "name": "Ken Nelson",
+       "mbid": "588ce201-0088-4f5b-b9bf-914145a4bfa3",
+       "artist_id": null
+      },
+      {
+       "name": "Mark Phythian",
+       "mbid": "c58adc59-2607-4ca4-9895-c33620f5adf1",
+       "artist_id": null
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "disc": 1,
+   "n": 3,
+   "title": "God Put a Smile Upon Your Face",
+   "length_ms": 297266,
+   "credits": [
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "acoustic guitar",
+     "credit": "",
+     "people": [
+      {
+       "name": "Chris Martin",
+       "mbid": "98d1ec5a-dd97-4c0b-9c83-7928aac89bca",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "drums (drum set)",
+     "credit": "",
+     "people": [
+      {
+       "name": "Will Champion",
+       "mbid": "6953c4db-7214-4724-a140-e87550bde420",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "electric bass guitar",
+     "credit": "",
+     "people": [
+      {
+       "name": "Guy Berryman",
+       "mbid": "18690715-59fa-4e4d-bcf3-8025cf1c23e0",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "electric guitar",
+     "credit": "",
+     "people": [
+      {
+       "name": "Jonny Buckland",
+       "mbid": "d156ceb2-fd90-4e82-baea-829bbdf1c127",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "percussion",
+     "credit": "",
+     "people": [
+      {
+       "name": "Will Champion",
+       "mbid": "6953c4db-7214-4724-a140-e87550bde420",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "piano",
+     "credit": "",
+     "people": [
+      {
+       "name": "Chris Martin",
+       "mbid": "98d1ec5a-dd97-4c0b-9c83-7928aac89bca",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "vocal",
+     "attr": "background vocals",
+     "credit": "",
+     "people": [
+      {
+       "name": "Will Champion",
+       "mbid": "6953c4db-7214-4724-a140-e87550bde420",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "vocal",
+     "attr": "lead vocals",
+     "credit": "",
+     "people": [
+      {
+       "name": "Chris Martin",
+       "mbid": "98d1ec5a-dd97-4c0b-9c83-7928aac89bca",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "composition",
+     "role": "writer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Chris Martin",
+       "mbid": "98d1ec5a-dd97-4c0b-9c83-7928aac89bca",
+       "artist_id": null
+      },
+      {
+       "name": "Guy Berryman",
+       "mbid": "18690715-59fa-4e4d-bcf3-8025cf1c23e0",
+       "artist_id": null
+      },
+      {
+       "name": "Jonny Buckland",
+       "mbid": "d156ceb2-fd90-4e82-baea-829bbdf1c127",
+       "artist_id": null
+      },
+      {
+       "name": "Will Champion",
+       "mbid": "6953c4db-7214-4724-a140-e87550bde420",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "production",
+     "role": "producer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Coldplay",
+       "mbid": "cc197bad-dc9c-440d-a5b5-d52ba2e14234",
+       "artist_id": 698
+      },
+      {
+       "name": "Ken Nelson",
+       "mbid": "588ce201-0088-4f5b-b9bf-914145a4bfa3",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "engineering",
+     "role": "engineer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Ken Nelson",
+       "mbid": "588ce201-0088-4f5b-b9bf-914145a4bfa3",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "engineering",
+     "role": "engineer",
+     "attr": "additional",
+     "credit": "",
+     "people": [
+      {
+       "name": "Rik Simpson",
+       "mbid": "f0a3dfaa-ac42-477c-885d-8e5b63bb20fe",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "engineering",
+     "role": "recording",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Ken Nelson",
+       "mbid": "588ce201-0088-4f5b-b9bf-914145a4bfa3",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "engineering",
+     "role": "recording",
+     "attr": "additional",
+     "credit": "",
+     "people": [
+      {
+       "name": "Mark Phythian",
+       "mbid": "c58adc59-2607-4ca4-9895-c33620f5adf1",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "engineering",
+     "role": "mix",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Coldplay",
+       "mbid": "cc197bad-dc9c-440d-a5b5-d52ba2e14234",
+       "artist_id": 698
+      },
+      {
+       "name": "Danton Supple",
+       "mbid": "1ac13bc2-9719-45d4-acc9-351aed5402b0",
+       "artist_id": null
+      },
+      {
+       "name": "Ken Nelson",
+       "mbid": "588ce201-0088-4f5b-b9bf-914145a4bfa3",
+       "artist_id": null
+      },
+      {
+       "name": "Mark Phythian",
+       "mbid": "c58adc59-2607-4ca4-9895-c33620f5adf1",
+       "artist_id": null
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "disc": 1,
+   "n": 4,
+   "title": "The Scientist",
+   "length_ms": 309200,
+   "credits": [
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "acoustic guitar",
+     "credit": "",
+     "people": [
+      {
+       "name": "Chris Martin",
+       "mbid": "98d1ec5a-dd97-4c0b-9c83-7928aac89bca",
+       "artist_id": null
+      },
+      {
+       "name": "Jonny Buckland",
+       "mbid": "d156ceb2-fd90-4e82-baea-829bbdf1c127",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "drums (drum set)",
+     "credit": "",
+     "people": [
+      {
+       "name": "Will Champion",
+       "mbid": "6953c4db-7214-4724-a140-e87550bde420",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "electric bass guitar",
+     "credit": "",
+     "people": [
+      {
+       "name": "Guy Berryman",
+       "mbid": "18690715-59fa-4e4d-bcf3-8025cf1c23e0",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "electric guitar",
+     "credit": "",
+     "people": [
+      {
+       "name": "Jonny Buckland",
+       "mbid": "d156ceb2-fd90-4e82-baea-829bbdf1c127",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "percussion",
+     "credit": "",
+     "people": [
+      {
+       "name": "Will Champion",
+       "mbid": "6953c4db-7214-4724-a140-e87550bde420",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "piano",
+     "credit": "",
+     "people": [
+      {
+       "name": "Chris Martin",
+       "mbid": "98d1ec5a-dd97-4c0b-9c83-7928aac89bca",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "vocal",
+     "attr": "background vocals",
+     "credit": "",
+     "people": [
+      {
+       "name": "Will Champion",
+       "mbid": "6953c4db-7214-4724-a140-e87550bde420",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "vocal",
+     "attr": "lead vocals",
+     "credit": "",
+     "people": [
+      {
+       "name": "Chris Martin",
+       "mbid": "98d1ec5a-dd97-4c0b-9c83-7928aac89bca",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "composition",
+     "role": "writer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Chris Martin",
+       "mbid": "98d1ec5a-dd97-4c0b-9c83-7928aac89bca",
+       "artist_id": null
+      },
+      {
+       "name": "Guy Berryman",
+       "mbid": "18690715-59fa-4e4d-bcf3-8025cf1c23e0",
+       "artist_id": null
+      },
+      {
+       "name": "Jonny Buckland",
+       "mbid": "d156ceb2-fd90-4e82-baea-829bbdf1c127",
+       "artist_id": null
+      },
+      {
+       "name": "Will Champion",
+       "mbid": "6953c4db-7214-4724-a140-e87550bde420",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "production",
+     "role": "producer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Coldplay",
+       "mbid": "cc197bad-dc9c-440d-a5b5-d52ba2e14234",
+       "artist_id": 698
+      },
+      {
+       "name": "Ken Nelson",
+       "mbid": "588ce201-0088-4f5b-b9bf-914145a4bfa3",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "production",
+     "role": "producer",
+     "attr": "additional",
+     "credit": "",
+     "people": [
+      {
+       "name": "Mark Phythian",
+       "mbid": "c58adc59-2607-4ca4-9895-c33620f5adf1",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "engineering",
+     "role": "engineer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Ken Nelson",
+       "mbid": "588ce201-0088-4f5b-b9bf-914145a4bfa3",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "engineering",
+     "role": "engineer",
+     "attr": "additional",
+     "credit": "",
+     "people": [
+      {
+       "name": "Rik Simpson",
+       "mbid": "f0a3dfaa-ac42-477c-885d-8e5b63bb20fe",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "engineering",
+     "role": "recording",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Ken Nelson",
+       "mbid": "588ce201-0088-4f5b-b9bf-914145a4bfa3",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "engineering",
+     "role": "recording",
+     "attr": "additional",
+     "credit": "",
+     "people": [
+      {
+       "name": "Mark Phythian",
+       "mbid": "c58adc59-2607-4ca4-9895-c33620f5adf1",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "engineering",
+     "role": "mix",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Coldplay",
+       "mbid": "cc197bad-dc9c-440d-a5b5-d52ba2e14234",
+       "artist_id": 698
+      },
+      {
+       "name": "Ken Nelson",
+       "mbid": "588ce201-0088-4f5b-b9bf-914145a4bfa3",
+       "artist_id": null
+      },
+      {
+       "name": "Mark Phythian",
+       "mbid": "c58adc59-2607-4ca4-9895-c33620f5adf1",
+       "artist_id": null
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "disc": 1,
+   "n": 5,
+   "title": "Clocks",
+   "length_ms": 307466,
+   "credits": [
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "acoustic guitar",
+     "credit": "",
+     "people": [
+      {
+       "name": "Chris Martin",
+       "mbid": "98d1ec5a-dd97-4c0b-9c83-7928aac89bca",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "drums (drum set)",
+     "credit": "",
+     "people": [
+      {
+       "name": "Will Champion",
+       "mbid": "6953c4db-7214-4724-a140-e87550bde420",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "electric bass guitar",
+     "credit": "",
+     "people": [
+      {
+       "name": "Guy Berryman",
+       "mbid": "18690715-59fa-4e4d-bcf3-8025cf1c23e0",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "electric guitar",
+     "credit": "",
+     "people": [
+      {
+       "name": "Jonny Buckland",
+       "mbid": "d156ceb2-fd90-4e82-baea-829bbdf1c127",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "percussion",
+     "credit": "",
+     "people": [
+      {
+       "name": "Will Champion",
+       "mbid": "6953c4db-7214-4724-a140-e87550bde420",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "piano",
+     "credit": "",
+     "people": [
+      {
+       "name": "Chris Martin",
+       "mbid": "98d1ec5a-dd97-4c0b-9c83-7928aac89bca",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "vocal",
+     "attr": "background vocals",
+     "credit": "",
+     "people": [
+      {
+       "name": "Will Champion",
+       "mbid": "6953c4db-7214-4724-a140-e87550bde420",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "vocal",
+     "attr": "lead vocals",
+     "credit": "",
+     "people": [
+      {
+       "name": "Chris Martin",
+       "mbid": "98d1ec5a-dd97-4c0b-9c83-7928aac89bca",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "composition",
+     "role": "writer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Chris Martin",
+       "mbid": "98d1ec5a-dd97-4c0b-9c83-7928aac89bca",
+       "artist_id": null
+      },
+      {
+       "name": "Guy Berryman",
+       "mbid": "18690715-59fa-4e4d-bcf3-8025cf1c23e0",
+       "artist_id": null
+      },
+      {
+       "name": "Jonny Buckland",
+       "mbid": "d156ceb2-fd90-4e82-baea-829bbdf1c127",
+       "artist_id": null
+      },
+      {
+       "name": "Will Champion",
+       "mbid": "6953c4db-7214-4724-a140-e87550bde420",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "production",
+     "role": "producer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Coldplay",
+       "mbid": "cc197bad-dc9c-440d-a5b5-d52ba2e14234",
+       "artist_id": 698
+      },
+      {
+       "name": "Ken Nelson",
+       "mbid": "588ce201-0088-4f5b-b9bf-914145a4bfa3",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "engineering",
+     "role": "engineer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Ken Nelson",
+       "mbid": "588ce201-0088-4f5b-b9bf-914145a4bfa3",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "engineering",
+     "role": "engineer",
+     "attr": "additional",
+     "credit": "",
+     "people": [
+      {
+       "name": "Rik Simpson",
+       "mbid": "f0a3dfaa-ac42-477c-885d-8e5b63bb20fe",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "engineering",
+     "role": "recording",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Ken Nelson",
+       "mbid": "588ce201-0088-4f5b-b9bf-914145a4bfa3",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "engineering",
+     "role": "recording",
+     "attr": "additional",
+     "credit": "",
+     "people": [
+      {
+       "name": "Mark Phythian",
+       "mbid": "c58adc59-2607-4ca4-9895-c33620f5adf1",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "engineering",
+     "role": "mix",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Coldplay",
+       "mbid": "cc197bad-dc9c-440d-a5b5-d52ba2e14234",
+       "artist_id": 698
+      },
+      {
+       "name": "Ken Nelson",
+       "mbid": "588ce201-0088-4f5b-b9bf-914145a4bfa3",
+       "artist_id": null
+      },
+      {
+       "name": "Mark Phythian",
+       "mbid": "c58adc59-2607-4ca4-9895-c33620f5adf1",
+       "artist_id": null
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "disc": 1,
+   "n": 6,
+   "title": "Daylight",
+   "length_ms": 327800,
+   "credits": [
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "12 string guitar",
+     "credit": "",
+     "people": [
+      {
+       "name": "Jonny Buckland",
+       "mbid": "d156ceb2-fd90-4e82-baea-829bbdf1c127",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "acoustic guitar",
+     "credit": "",
+     "people": [
+      {
+       "name": "Chris Martin",
+       "mbid": "98d1ec5a-dd97-4c0b-9c83-7928aac89bca",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "drums (drum set)",
+     "credit": "",
+     "people": [
+      {
+       "name": "Will Champion",
+       "mbid": "6953c4db-7214-4724-a140-e87550bde420",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "electric bass guitar",
+     "credit": "",
+     "people": [
+      {
+       "name": "Guy Berryman",
+       "mbid": "18690715-59fa-4e4d-bcf3-8025cf1c23e0",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "electric guitar",
+     "credit": "",
+     "people": [
+      {
+       "name": "Jonny Buckland",
+       "mbid": "d156ceb2-fd90-4e82-baea-829bbdf1c127",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "percussion",
+     "credit": "",
+     "people": [
+      {
+       "name": "Will Champion",
+       "mbid": "6953c4db-7214-4724-a140-e87550bde420",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "piano",
+     "credit": "",
+     "people": [
+      {
+       "name": "Chris Martin",
+       "mbid": "98d1ec5a-dd97-4c0b-9c83-7928aac89bca",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "vocal",
+     "attr": "background vocals",
+     "credit": "",
+     "people": [
+      {
+       "name": "Jonny Buckland",
+       "mbid": "d156ceb2-fd90-4e82-baea-829bbdf1c127",
+       "artist_id": null
+      },
+      {
+       "name": "Will Champion",
+       "mbid": "6953c4db-7214-4724-a140-e87550bde420",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "vocal",
+     "attr": "lead vocals",
+     "credit": "",
+     "people": [
+      {
+       "name": "Chris Martin",
+       "mbid": "98d1ec5a-dd97-4c0b-9c83-7928aac89bca",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "composition",
+     "role": "composer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Chris Martin",
+       "mbid": "98d1ec5a-dd97-4c0b-9c83-7928aac89bca",
+       "artist_id": null
+      },
+      {
+       "name": "Guy Berryman",
+       "mbid": "18690715-59fa-4e4d-bcf3-8025cf1c23e0",
+       "artist_id": null
+      },
+      {
+       "name": "Jonny Buckland",
+       "mbid": "d156ceb2-fd90-4e82-baea-829bbdf1c127",
+       "artist_id": null
+      },
+      {
+       "name": "Will Champion",
+       "mbid": "6953c4db-7214-4724-a140-e87550bde420",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "production",
+     "role": "producer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Coldplay",
+       "mbid": "cc197bad-dc9c-440d-a5b5-d52ba2e14234",
+       "artist_id": 698
+      },
+      {
+       "name": "Ken Nelson",
+       "mbid": "588ce201-0088-4f5b-b9bf-914145a4bfa3",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "engineering",
+     "role": "engineer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Ken Nelson",
+       "mbid": "588ce201-0088-4f5b-b9bf-914145a4bfa3",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "engineering",
+     "role": "engineer",
+     "attr": "additional",
+     "credit": "",
+     "people": [
+      {
+       "name": "Rik Simpson",
+       "mbid": "f0a3dfaa-ac42-477c-885d-8e5b63bb20fe",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "engineering",
+     "role": "recording",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Ken Nelson",
+       "mbid": "588ce201-0088-4f5b-b9bf-914145a4bfa3",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "engineering",
+     "role": "recording",
+     "attr": "additional",
+     "credit": "",
+     "people": [
+      {
+       "name": "Mark Phythian",
+       "mbid": "c58adc59-2607-4ca4-9895-c33620f5adf1",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "engineering",
+     "role": "mix",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Coldplay",
+       "mbid": "cc197bad-dc9c-440d-a5b5-d52ba2e14234",
+       "artist_id": 698
+      },
+      {
+       "name": "Danton Supple",
+       "mbid": "1ac13bc2-9719-45d4-acc9-351aed5402b0",
+       "artist_id": null
+      },
+      {
+       "name": "Ken Nelson",
+       "mbid": "588ce201-0088-4f5b-b9bf-914145a4bfa3",
+       "artist_id": null
+      },
+      {
+       "name": "Mark Phythian",
+       "mbid": "c58adc59-2607-4ca4-9895-c33620f5adf1",
+       "artist_id": null
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "disc": 1,
+   "n": 7,
+   "title": "Green Eyes",
+   "length_ms": 223040,
+   "credits": [
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "acoustic guitar",
+     "credit": "",
+     "people": [
+      {
+       "name": "Chris Martin",
+       "mbid": "98d1ec5a-dd97-4c0b-9c83-7928aac89bca",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "drums (drum set)",
+     "credit": "",
+     "people": [
+      {
+       "name": "Will Champion",
+       "mbid": "6953c4db-7214-4724-a140-e87550bde420",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "electric bass guitar",
+     "credit": "",
+     "people": [
+      {
+       "name": "Guy Berryman",
+       "mbid": "18690715-59fa-4e4d-bcf3-8025cf1c23e0",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "electric guitar",
+     "credit": "",
+     "people": [
+      {
+       "name": "Jonny Buckland",
+       "mbid": "d156ceb2-fd90-4e82-baea-829bbdf1c127",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "percussion",
+     "credit": "",
+     "people": [
+      {
+       "name": "Will Champion",
+       "mbid": "6953c4db-7214-4724-a140-e87550bde420",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "piano",
+     "credit": "",
+     "people": [
+      {
+       "name": "Chris Martin",
+       "mbid": "98d1ec5a-dd97-4c0b-9c83-7928aac89bca",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "vocal",
+     "attr": "background vocals",
+     "credit": "",
+     "people": [
+      {
+       "name": "Will Champion",
+       "mbid": "6953c4db-7214-4724-a140-e87550bde420",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "vocal",
+     "attr": "lead vocals",
+     "credit": "",
+     "people": [
+      {
+       "name": "Chris Martin",
+       "mbid": "98d1ec5a-dd97-4c0b-9c83-7928aac89bca",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "composition",
+     "role": "composer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Chris Martin",
+       "mbid": "98d1ec5a-dd97-4c0b-9c83-7928aac89bca",
+       "artist_id": null
+      },
+      {
+       "name": "Guy Berryman",
+       "mbid": "18690715-59fa-4e4d-bcf3-8025cf1c23e0",
+       "artist_id": null
+      },
+      {
+       "name": "Jonny Buckland",
+       "mbid": "d156ceb2-fd90-4e82-baea-829bbdf1c127",
+       "artist_id": null
+      },
+      {
+       "name": "Will Champion",
+       "mbid": "6953c4db-7214-4724-a140-e87550bde420",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "production",
+     "role": "producer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Coldplay",
+       "mbid": "cc197bad-dc9c-440d-a5b5-d52ba2e14234",
+       "artist_id": 698
+      },
+      {
+       "name": "Ken Nelson",
+       "mbid": "588ce201-0088-4f5b-b9bf-914145a4bfa3",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "engineering",
+     "role": "engineer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Ken Nelson",
+       "mbid": "588ce201-0088-4f5b-b9bf-914145a4bfa3",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "engineering",
+     "role": "engineer",
+     "attr": "additional",
+     "credit": "",
+     "people": [
+      {
+       "name": "Rik Simpson",
+       "mbid": "f0a3dfaa-ac42-477c-885d-8e5b63bb20fe",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "engineering",
+     "role": "recording",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Ken Nelson",
+       "mbid": "588ce201-0088-4f5b-b9bf-914145a4bfa3",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "engineering",
+     "role": "recording",
+     "attr": "additional",
+     "credit": "",
+     "people": [
+      {
+       "name": "Mark Phythian",
+       "mbid": "c58adc59-2607-4ca4-9895-c33620f5adf1",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "engineering",
+     "role": "mix",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Coldplay",
+       "mbid": "cc197bad-dc9c-440d-a5b5-d52ba2e14234",
+       "artist_id": 698
+      },
+      {
+       "name": "Ken Nelson",
+       "mbid": "588ce201-0088-4f5b-b9bf-914145a4bfa3",
+       "artist_id": null
+      },
+      {
+       "name": "Mark Phythian",
+       "mbid": "c58adc59-2607-4ca4-9895-c33620f5adf1",
+       "artist_id": null
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "disc": 1,
+   "n": 8,
+   "title": "Warning Sign",
+   "length_ms": 331133,
+   "credits": [
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "acoustic guitar",
+     "credit": "",
+     "people": [
+      {
+       "name": "Chris Martin",
+       "mbid": "98d1ec5a-dd97-4c0b-9c83-7928aac89bca",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "drums (drum set)",
+     "credit": "",
+     "people": [
+      {
+       "name": "Will Champion",
+       "mbid": "6953c4db-7214-4724-a140-e87550bde420",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "electric bass guitar",
+     "credit": "",
+     "people": [
+      {
+       "name": "Guy Berryman",
+       "mbid": "18690715-59fa-4e4d-bcf3-8025cf1c23e0",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "electric guitar",
+     "credit": "",
+     "people": [
+      {
+       "name": "Jonny Buckland",
+       "mbid": "d156ceb2-fd90-4e82-baea-829bbdf1c127",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "guitar",
+     "credit": "Rhythm Guitar",
+     "people": [
+      {
+       "name": "Chris Martin",
+       "mbid": "98d1ec5a-dd97-4c0b-9c83-7928aac89bca",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "percussion",
+     "credit": "",
+     "people": [
+      {
+       "name": "Will Champion",
+       "mbid": "6953c4db-7214-4724-a140-e87550bde420",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "piano",
+     "credit": "",
+     "people": [
+      {
+       "name": "Chris Martin",
+       "mbid": "98d1ec5a-dd97-4c0b-9c83-7928aac89bca",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "vocal",
+     "attr": "background vocals",
+     "credit": "",
+     "people": [
+      {
+       "name": "Will Champion",
+       "mbid": "6953c4db-7214-4724-a140-e87550bde420",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "vocal",
+     "attr": "lead vocals",
+     "credit": "",
+     "people": [
+      {
+       "name": "Chris Martin",
+       "mbid": "98d1ec5a-dd97-4c0b-9c83-7928aac89bca",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "composition",
+     "role": "composer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Chris Martin",
+       "mbid": "98d1ec5a-dd97-4c0b-9c83-7928aac89bca",
+       "artist_id": null
+      },
+      {
+       "name": "Guy Berryman",
+       "mbid": "18690715-59fa-4e4d-bcf3-8025cf1c23e0",
+       "artist_id": null
+      },
+      {
+       "name": "Jonny Buckland",
+       "mbid": "d156ceb2-fd90-4e82-baea-829bbdf1c127",
+       "artist_id": null
+      },
+      {
+       "name": "Will Champion",
+       "mbid": "6953c4db-7214-4724-a140-e87550bde420",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "production",
+     "role": "producer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Coldplay",
+       "mbid": "cc197bad-dc9c-440d-a5b5-d52ba2e14234",
+       "artist_id": 698
+      },
+      {
+       "name": "Ken Nelson",
+       "mbid": "588ce201-0088-4f5b-b9bf-914145a4bfa3",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "engineering",
+     "role": "engineer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Ken Nelson",
+       "mbid": "588ce201-0088-4f5b-b9bf-914145a4bfa3",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "engineering",
+     "role": "engineer",
+     "attr": "additional",
+     "credit": "",
+     "people": [
+      {
+       "name": "Rik Simpson",
+       "mbid": "f0a3dfaa-ac42-477c-885d-8e5b63bb20fe",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "engineering",
+     "role": "recording",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Ken Nelson",
+       "mbid": "588ce201-0088-4f5b-b9bf-914145a4bfa3",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "engineering",
+     "role": "recording",
+     "attr": "additional",
+     "credit": "",
+     "people": [
+      {
+       "name": "Mark Phythian",
+       "mbid": "c58adc59-2607-4ca4-9895-c33620f5adf1",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "engineering",
+     "role": "mix",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Coldplay",
+       "mbid": "cc197bad-dc9c-440d-a5b5-d52ba2e14234",
+       "artist_id": 698
+      },
+      {
+       "name": "Danton Supple",
+       "mbid": "1ac13bc2-9719-45d4-acc9-351aed5402b0",
+       "artist_id": null
+      },
+      {
+       "name": "Ken Nelson",
+       "mbid": "588ce201-0088-4f5b-b9bf-914145a4bfa3",
+       "artist_id": null
+      },
+      {
+       "name": "Mark Phythian",
+       "mbid": "c58adc59-2607-4ca4-9895-c33620f5adf1",
+       "artist_id": null
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "disc": 1,
+   "n": 9,
+   "title": "A Whisper",
+   "length_ms": 238333,
+   "credits": [
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "acoustic guitar",
+     "credit": "",
+     "people": [
+      {
+       "name": "Chris Martin",
+       "mbid": "98d1ec5a-dd97-4c0b-9c83-7928aac89bca",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "drums (drum set)",
+     "credit": "",
+     "people": [
+      {
+       "name": "Will Champion",
+       "mbid": "6953c4db-7214-4724-a140-e87550bde420",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "electric bass guitar",
+     "credit": "",
+     "people": [
+      {
+       "name": "Guy Berryman",
+       "mbid": "18690715-59fa-4e4d-bcf3-8025cf1c23e0",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "electric guitar",
+     "credit": "",
+     "people": [
+      {
+       "name": "Jonny Buckland",
+       "mbid": "d156ceb2-fd90-4e82-baea-829bbdf1c127",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "guitar",
+     "credit": "Rhythm Guitar",
+     "people": [
+      {
+       "name": "Chris Martin",
+       "mbid": "98d1ec5a-dd97-4c0b-9c83-7928aac89bca",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "percussion",
+     "credit": "",
+     "people": [
+      {
+       "name": "Will Champion",
+       "mbid": "6953c4db-7214-4724-a140-e87550bde420",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "piano",
+     "credit": "",
+     "people": [
+      {
+       "name": "Chris Martin",
+       "mbid": "98d1ec5a-dd97-4c0b-9c83-7928aac89bca",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "vocal",
+     "attr": "background vocals",
+     "credit": "",
+     "people": [
+      {
+       "name": "Will Champion",
+       "mbid": "6953c4db-7214-4724-a140-e87550bde420",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "vocal",
+     "attr": "lead vocals",
+     "credit": "",
+     "people": [
+      {
+       "name": "Chris Martin",
+       "mbid": "98d1ec5a-dd97-4c0b-9c83-7928aac89bca",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "composition",
+     "role": "composer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Chris Martin",
+       "mbid": "98d1ec5a-dd97-4c0b-9c83-7928aac89bca",
+       "artist_id": null
+      },
+      {
+       "name": "Guy Berryman",
+       "mbid": "18690715-59fa-4e4d-bcf3-8025cf1c23e0",
+       "artist_id": null
+      },
+      {
+       "name": "Jonny Buckland",
+       "mbid": "d156ceb2-fd90-4e82-baea-829bbdf1c127",
+       "artist_id": null
+      },
+      {
+       "name": "Will Champion",
+       "mbid": "6953c4db-7214-4724-a140-e87550bde420",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "production",
+     "role": "producer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Coldplay",
+       "mbid": "cc197bad-dc9c-440d-a5b5-d52ba2e14234",
+       "artist_id": 698
+      },
+      {
+       "name": "Ken Nelson",
+       "mbid": "588ce201-0088-4f5b-b9bf-914145a4bfa3",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "engineering",
+     "role": "engineer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Ken Nelson",
+       "mbid": "588ce201-0088-4f5b-b9bf-914145a4bfa3",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "engineering",
+     "role": "engineer",
+     "attr": "additional",
+     "credit": "",
+     "people": [
+      {
+       "name": "Rik Simpson",
+       "mbid": "f0a3dfaa-ac42-477c-885d-8e5b63bb20fe",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "engineering",
+     "role": "recording",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Ken Nelson",
+       "mbid": "588ce201-0088-4f5b-b9bf-914145a4bfa3",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "engineering",
+     "role": "recording",
+     "attr": "additional",
+     "credit": "",
+     "people": [
+      {
+       "name": "Mark Phythian",
+       "mbid": "c58adc59-2607-4ca4-9895-c33620f5adf1",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "engineering",
+     "role": "mix",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Coldplay",
+       "mbid": "cc197bad-dc9c-440d-a5b5-d52ba2e14234",
+       "artist_id": 698
+      },
+      {
+       "name": "Ken Nelson",
+       "mbid": "588ce201-0088-4f5b-b9bf-914145a4bfa3",
+       "artist_id": null
+      },
+      {
+       "name": "Mark Phythian",
+       "mbid": "c58adc59-2607-4ca4-9895-c33620f5adf1",
+       "artist_id": null
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "disc": 1,
+   "n": 10,
+   "title": "A Rush of Blood to the Head",
+   "length_ms": 351400,
+   "credits": [
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "acoustic guitar",
+     "credit": "",
+     "people": [
+      {
+       "name": "Chris Martin",
+       "mbid": "98d1ec5a-dd97-4c0b-9c83-7928aac89bca",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "drums (drum set)",
+     "credit": "",
+     "people": [
+      {
+       "name": "Will Champion",
+       "mbid": "6953c4db-7214-4724-a140-e87550bde420",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "electric bass guitar",
+     "credit": "",
+     "people": [
+      {
+       "name": "Guy Berryman",
+       "mbid": "18690715-59fa-4e4d-bcf3-8025cf1c23e0",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "electric guitar",
+     "credit": "",
+     "people": [
+      {
+       "name": "Jonny Buckland",
+       "mbid": "d156ceb2-fd90-4e82-baea-829bbdf1c127",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "percussion",
+     "credit": "",
+     "people": [
+      {
+       "name": "Will Champion",
+       "mbid": "6953c4db-7214-4724-a140-e87550bde420",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "piano",
+     "credit": "",
+     "people": [
+      {
+       "name": "Chris Martin",
+       "mbid": "98d1ec5a-dd97-4c0b-9c83-7928aac89bca",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "vocal",
+     "attr": "background vocals",
+     "credit": "",
+     "people": [
+      {
+       "name": "Will Champion",
+       "mbid": "6953c4db-7214-4724-a140-e87550bde420",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "vocal",
+     "attr": "lead vocals",
+     "credit": "",
+     "people": [
+      {
+       "name": "Chris Martin",
+       "mbid": "98d1ec5a-dd97-4c0b-9c83-7928aac89bca",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "composition",
+     "role": "writer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Chris Martin",
+       "mbid": "98d1ec5a-dd97-4c0b-9c83-7928aac89bca",
+       "artist_id": null
+      },
+      {
+       "name": "Guy Berryman",
+       "mbid": "18690715-59fa-4e4d-bcf3-8025cf1c23e0",
+       "artist_id": null
+      },
+      {
+       "name": "Jonny Buckland",
+       "mbid": "d156ceb2-fd90-4e82-baea-829bbdf1c127",
+       "artist_id": null
+      },
+      {
+       "name": "Will Champion",
+       "mbid": "6953c4db-7214-4724-a140-e87550bde420",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "production",
+     "role": "producer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Coldplay",
+       "mbid": "cc197bad-dc9c-440d-a5b5-d52ba2e14234",
+       "artist_id": 698
+      },
+      {
+       "name": "Ken Nelson",
+       "mbid": "588ce201-0088-4f5b-b9bf-914145a4bfa3",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "engineering",
+     "role": "engineer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Ken Nelson",
+       "mbid": "588ce201-0088-4f5b-b9bf-914145a4bfa3",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "engineering",
+     "role": "engineer",
+     "attr": "additional",
+     "credit": "",
+     "people": [
+      {
+       "name": "Rik Simpson",
+       "mbid": "f0a3dfaa-ac42-477c-885d-8e5b63bb20fe",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "engineering",
+     "role": "recording",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Ken Nelson",
+       "mbid": "588ce201-0088-4f5b-b9bf-914145a4bfa3",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "engineering",
+     "role": "recording",
+     "attr": "additional",
+     "credit": "",
+     "people": [
+      {
+       "name": "Mark Phythian",
+       "mbid": "c58adc59-2607-4ca4-9895-c33620f5adf1",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "engineering",
+     "role": "mix",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Coldplay",
+       "mbid": "cc197bad-dc9c-440d-a5b5-d52ba2e14234",
+       "artist_id": 698
+      },
+      {
+       "name": "Danton Supple",
+       "mbid": "1ac13bc2-9719-45d4-acc9-351aed5402b0",
+       "artist_id": null
+      },
+      {
+       "name": "Ken Nelson",
+       "mbid": "588ce201-0088-4f5b-b9bf-914145a4bfa3",
+       "artist_id": null
+      },
+      {
+       "name": "Mark Phythian",
+       "mbid": "c58adc59-2607-4ca4-9895-c33620f5adf1",
+       "artist_id": null
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "disc": 1,
+   "n": 11,
+   "title": "Amsterdam",
+   "length_ms": 319360,
+   "credits": [
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "acoustic guitar",
+     "credit": "",
+     "people": [
+      {
+       "name": "Chris Martin",
+       "mbid": "98d1ec5a-dd97-4c0b-9c83-7928aac89bca",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "drums (drum set)",
+     "credit": "",
+     "people": [
+      {
+       "name": "Will Champion",
+       "mbid": "6953c4db-7214-4724-a140-e87550bde420",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "electric bass guitar",
+     "credit": "",
+     "people": [
+      {
+       "name": "Guy Berryman",
+       "mbid": "18690715-59fa-4e4d-bcf3-8025cf1c23e0",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "electric guitar",
+     "credit": "",
+     "people": [
+      {
+       "name": "Jonny Buckland",
+       "mbid": "d156ceb2-fd90-4e82-baea-829bbdf1c127",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "percussion",
+     "credit": "",
+     "people": [
+      {
+       "name": "Will Champion",
+       "mbid": "6953c4db-7214-4724-a140-e87550bde420",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "piano",
+     "credit": "",
+     "people": [
+      {
+       "name": "Chris Martin",
+       "mbid": "98d1ec5a-dd97-4c0b-9c83-7928aac89bca",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "vocal",
+     "attr": "background vocals",
+     "credit": "",
+     "people": [
+      {
+       "name": "Will Champion",
+       "mbid": "6953c4db-7214-4724-a140-e87550bde420",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "vocal",
+     "attr": "lead vocals",
+     "credit": "",
+     "people": [
+      {
+       "name": "Chris Martin",
+       "mbid": "98d1ec5a-dd97-4c0b-9c83-7928aac89bca",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "composition",
+     "role": "writer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Chris Martin",
+       "mbid": "98d1ec5a-dd97-4c0b-9c83-7928aac89bca",
+       "artist_id": null
+      },
+      {
+       "name": "Guy Berryman",
+       "mbid": "18690715-59fa-4e4d-bcf3-8025cf1c23e0",
+       "artist_id": null
+      },
+      {
+       "name": "Jonny Buckland",
+       "mbid": "d156ceb2-fd90-4e82-baea-829bbdf1c127",
+       "artist_id": null
+      },
+      {
+       "name": "Will Champion",
+       "mbid": "6953c4db-7214-4724-a140-e87550bde420",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "production",
+     "role": "producer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Coldplay",
+       "mbid": "cc197bad-dc9c-440d-a5b5-d52ba2e14234",
+       "artist_id": 698
+      },
+      {
+       "name": "Ken Nelson",
+       "mbid": "588ce201-0088-4f5b-b9bf-914145a4bfa3",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "engineering",
+     "role": "engineer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Ken Nelson",
+       "mbid": "588ce201-0088-4f5b-b9bf-914145a4bfa3",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "engineering",
+     "role": "engineer",
+     "attr": "additional",
+     "credit": "",
+     "people": [
+      {
+       "name": "Rik Simpson",
+       "mbid": "f0a3dfaa-ac42-477c-885d-8e5b63bb20fe",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "engineering",
+     "role": "recording",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Ken Nelson",
+       "mbid": "588ce201-0088-4f5b-b9bf-914145a4bfa3",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "engineering",
+     "role": "recording",
+     "attr": "additional",
+     "credit": "",
+     "people": [
+      {
+       "name": "Mark Phythian",
+       "mbid": "c58adc59-2607-4ca4-9895-c33620f5adf1",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "engineering",
+     "role": "mix",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Coldplay",
+       "mbid": "cc197bad-dc9c-440d-a5b5-d52ba2e14234",
+       "artist_id": 698
+      },
+      {
+       "name": "Ken Nelson",
+       "mbid": "588ce201-0088-4f5b-b9bf-914145a4bfa3",
+       "artist_id": null
+      },
+      {
+       "name": "Mark Phythian",
+       "mbid": "c58adc59-2607-4ca4-9895-c33620f5adf1",
+       "artist_id": null
+      }
+     ]
+    }
+   ]
+  }
+ ],
+ "places": [],
+ "about": {
+  "text": "A Rush of Blood to the Head è il secondo album in studio del gruppo musicale britannico Coldplay, pubblicato il 26 agosto 2002 dalla Parlophone.\n\nÈ stato inserito nella lista dei 100 migliori album musicali degli anni 2000 secondo la rivista Rolling Stone alla posizione numero 21.",
+  "lang": "it",
+  "title": "A Rush of Blood to the Head",
+  "url": "https://it.wikipedia.org/wiki/A_Rush_of_Blood_to_the_Head",
+  "source": "Wikipedia",
+  "license": "CC BY-SA 4.0"
+ },
+ "attribution": [
+  {
+   "source": "MusicBrainz",
+   "url": "https://musicbrainz.org/release/14518b26-55fe-387b-94c6-a3843a1af487",
+   "license": "CC0"
+  }
+ ]
+}

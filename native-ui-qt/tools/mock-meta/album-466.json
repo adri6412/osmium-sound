@@ -1,0 +1,1059 @@
+{
+ "status": "ok",
+ "album_id": 466,
+ "match": {
+  "mbid": "7d63089d-24d8-4e55-9e71-0097d5d9cdbd",
+  "release_group": "e6b72030-4c5f-416e-80f3-8496848b5cff",
+  "how": "search",
+  "score": 97,
+  "medium": 2
+ },
+ "release": {
+  "title": "Piano Sonatas",
+  "artist": "Schubert; Daniel Barenboim",
+  "date": "2014-08-18",
+  "first_release_date": "2014-08-18",
+  "type": "album",
+  "secondary_types": [
+   "compilation"
+  ],
+  "labels": [
+   {
+    "name": "Deutsche Grammophon",
+    "catno": "0289 479 2783 9"
+   }
+  ],
+  "country": "DE",
+  "barcode": "028947927839",
+  "disc_count": 5,
+  "track_count": 41,
+  "url": "https://musicbrainz.org/release/7d63089d-24d8-4e55-9e71-0097d5d9cdbd"
+ },
+ "credits": [
+  {
+   "group": "performer",
+   "role": "instrument",
+   "attr": "piano",
+   "credit": "",
+   "people": [
+    {
+     "name": "Daniel Barenboim",
+     "mbid": "fac566b2-7a0e-4977-ad92-533f43420975",
+     "artist_id": 703
+    }
+   ],
+   "tracks": null
+  },
+  {
+   "group": "composition",
+   "role": "composer",
+   "attr": "",
+   "credit": "",
+   "people": [
+    {
+     "name": "Franz Schubert",
+     "mbid": "f91e3a88-24ee-4563-8963-fab73d2765ed",
+     "artist_id": 824
+    }
+   ],
+   "tracks": null
+  },
+  {
+   "group": "production",
+   "role": "producer",
+   "attr": "",
+   "credit": "",
+   "people": [
+    {
+     "name": "Friedemann Engelbrecht",
+     "mbid": "090c9fd3-a553-4ae6-8734-d54566687489",
+     "artist_id": null
+    }
+   ],
+   "tracks": null
+  },
+  {
+   "group": "production",
+   "role": "producer",
+   "attr": "executive",
+   "credit": "",
+   "people": [
+    {
+     "name": "Ute Fesquet",
+     "mbid": "0d90ebe9-c8bb-4597-9169-131d50be7c23",
+     "artist_id": null
+    }
+   ],
+   "tracks": null
+  },
+  {
+   "group": "production",
+   "role": "liner_notes",
+   "attr": "",
+   "credit": "",
+   "people": [
+    {
+     "name": "Detlef Giese",
+     "mbid": "59be52a3-5cbe-4788-9dd3-9956d8eae175",
+     "artist_id": null
+    }
+   ],
+   "tracks": null
+  },
+  {
+   "group": "production",
+   "role": "liner_notes",
+   "attr": "translator",
+   "credit": "",
+   "people": [
+    {
+     "name": "Daniel Fesquet",
+     "mbid": "e3177bc2-e581-41ba-be2c-f62763c0af19",
+     "artist_id": null
+    },
+    {
+     "name": "Luis Carlos Gago",
+     "mbid": "cb4e05bc-a5de-4278-8968-b1e6b02766af",
+     "credited_as": "Luis Gago",
+     "artist_id": null
+    },
+    {
+     "name": "Stewart Spencer",
+     "mbid": "9ad65d47-5695-45c4-874e-b020c092dba8",
+     "artist_id": null
+    }
+   ],
+   "tracks": null
+  },
+  {
+   "group": "production",
+   "role": "design",
+   "attr": "",
+   "credit": "",
+   "people": [
+    {
+     "name": "Karen Friedrichs-Jöhnk",
+     "mbid": "06dae2ec-e502-4f46-a6d0-769efc1fbd6d",
+     "credited_as": "fri design | karen friedrichs",
+     "artist_id": null
+    }
+   ],
+   "tracks": null
+  },
+  {
+   "group": "production",
+   "role": "photography",
+   "attr": "",
+   "credit": "",
+   "people": [
+    {
+     "name": "Karina Schwarz",
+     "mbid": "23cbbbf7-df3d-402a-bdd6-aeab4ba708d8",
+     "artist_id": null
+    },
+    {
+     "name": "Paul Schirnhofer",
+     "mbid": "445299f3-b2cd-4530-947a-4431b46bf8d8",
+     "artist_id": null
+    }
+   ],
+   "tracks": null
+  },
+  {
+   "group": "production",
+   "role": "art_direction",
+   "attr": "",
+   "credit": "",
+   "people": [
+    {
+     "name": "Merle Kersten",
+     "mbid": "52af7e99-7b07-435c-ba23-c8700212e64f",
+     "artist_id": null
+    }
+   ],
+   "tracks": null
+  },
+  {
+   "group": "engineering",
+   "role": "recording",
+   "attr": "",
+   "credit": "",
+   "people": [
+    {
+     "name": "Julian Schwenkner",
+     "mbid": "4e7940c4-29ab-4bcb-8297-2df212abaa30",
+     "artist_id": null
+    }
+   ],
+   "tracks": null
+  },
+  {
+   "group": "engineering",
+   "role": "editor",
+   "attr": "",
+   "credit": "",
+   "people": [
+    {
+     "name": "Julian Schwenkner",
+     "mbid": "4e7940c4-29ab-4bcb-8297-2df212abaa30",
+     "artist_id": null
+    },
+    {
+     "name": "Sebastian Nattkemper",
+     "mbid": "4bf9b6bd-efa5-4baf-8e4e-7bc597a48fbc",
+     "artist_id": null
+    }
+   ],
+   "tracks": null
+  },
+  {
+   "group": "other",
+   "role": "booklet_editor",
+   "attr": "",
+   "credit": "",
+   "people": [
+    {
+     "name": "Annette Nubbemeyer",
+     "mbid": "56a5df2f-b77d-4196-9754-8fce48dba510",
+     "artist_id": null
+    },
+    {
+     "name": "Jens Schünemeyer",
+     "mbid": "f2f9f3df-a1c6-4832-a0ea-eadf340b515c",
+     "artist_id": null
+    }
+   ],
+   "tracks": null
+  },
+  {
+   "group": "other",
+   "role": "instrument_technician",
+   "attr": "piano",
+   "credit": "",
+   "people": [
+    {
+     "name": "Michel Brandjes",
+     "mbid": "ebe03f5a-c80a-402b-b77a-affcdfb15e61",
+     "artist_id": null
+    }
+   ],
+   "tracks": null
+  },
+  {
+   "group": "other",
+   "role": "production_coordinator",
+   "attr": "",
+   "credit": "",
+   "people": [
+    {
+     "name": "Burkhard Bartsch",
+     "mbid": "993467fc-febb-41f5-822b-0196f0662edb",
+     "artist_id": null
+    }
+   ],
+   "tracks": null
+  }
+ ],
+ "tracks": [
+  {
+   "disc": 1,
+   "n": 1,
+   "title": "Piano Sonata no. 9: I. Allegro ma non troppo",
+   "length_ms": 476000,
+   "credits": [
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "piano",
+     "credit": "",
+     "people": [
+      {
+       "name": "Daniel Barenboim",
+       "mbid": "fac566b2-7a0e-4977-ad92-533f43420975",
+       "artist_id": 703
+      }
+     ]
+    },
+    {
+     "group": "composition",
+     "role": "composer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Franz Schubert",
+       "mbid": "f91e3a88-24ee-4563-8963-fab73d2765ed",
+       "artist_id": 824
+      }
+     ]
+    },
+    {
+     "group": "production",
+     "role": "producer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Friedemann Engelbrecht",
+       "mbid": "090c9fd3-a553-4ae6-8734-d54566687489",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "engineering",
+     "role": "recording",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Julian Schwenkner",
+       "mbid": "4e7940c4-29ab-4bcb-8297-2df212abaa30",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "engineering",
+     "role": "editor",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Julian Schwenkner",
+       "mbid": "4e7940c4-29ab-4bcb-8297-2df212abaa30",
+       "artist_id": null
+      },
+      {
+       "name": "Sebastian Nattkemper",
+       "mbid": "4bf9b6bd-efa5-4baf-8e4e-7bc597a48fbc",
+       "artist_id": null
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "disc": 1,
+   "n": 2,
+   "title": "Piano Sonata no. 9: II. Andante",
+   "length_ms": 340000,
+   "credits": [
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "piano",
+     "credit": "",
+     "people": [
+      {
+       "name": "Daniel Barenboim",
+       "mbid": "fac566b2-7a0e-4977-ad92-533f43420975",
+       "artist_id": 703
+      }
+     ]
+    },
+    {
+     "group": "composition",
+     "role": "composer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Franz Schubert",
+       "mbid": "f91e3a88-24ee-4563-8963-fab73d2765ed",
+       "artist_id": 824
+      }
+     ]
+    },
+    {
+     "group": "production",
+     "role": "producer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Friedemann Engelbrecht",
+       "mbid": "090c9fd3-a553-4ae6-8734-d54566687489",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "engineering",
+     "role": "recording",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Julian Schwenkner",
+       "mbid": "4e7940c4-29ab-4bcb-8297-2df212abaa30",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "engineering",
+     "role": "editor",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Julian Schwenkner",
+       "mbid": "4e7940c4-29ab-4bcb-8297-2df212abaa30",
+       "artist_id": null
+      },
+      {
+       "name": "Sebastian Nattkemper",
+       "mbid": "4bf9b6bd-efa5-4baf-8e4e-7bc597a48fbc",
+       "artist_id": null
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "disc": 1,
+   "n": 3,
+   "title": "Piano Sonata no. 9: III. Scherzo (Allegretto)",
+   "length_ms": 382000,
+   "credits": [
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "piano",
+     "credit": "",
+     "people": [
+      {
+       "name": "Daniel Barenboim",
+       "mbid": "fac566b2-7a0e-4977-ad92-533f43420975",
+       "artist_id": 703
+      }
+     ]
+    },
+    {
+     "group": "composition",
+     "role": "composer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Franz Schubert",
+       "mbid": "f91e3a88-24ee-4563-8963-fab73d2765ed",
+       "artist_id": 824
+      }
+     ]
+    },
+    {
+     "group": "production",
+     "role": "producer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Friedemann Engelbrecht",
+       "mbid": "090c9fd3-a553-4ae6-8734-d54566687489",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "engineering",
+     "role": "recording",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Julian Schwenkner",
+       "mbid": "4e7940c4-29ab-4bcb-8297-2df212abaa30",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "engineering",
+     "role": "editor",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Julian Schwenkner",
+       "mbid": "4e7940c4-29ab-4bcb-8297-2df212abaa30",
+       "artist_id": null
+      },
+      {
+       "name": "Sebastian Nattkemper",
+       "mbid": "4bf9b6bd-efa5-4baf-8e4e-7bc597a48fbc",
+       "artist_id": null
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "disc": 1,
+   "n": 4,
+   "title": "Piano Sonata no. 9: IV. Allegro giusto",
+   "length_ms": 365000,
+   "credits": [
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "piano",
+     "credit": "",
+     "people": [
+      {
+       "name": "Daniel Barenboim",
+       "mbid": "fac566b2-7a0e-4977-ad92-533f43420975",
+       "artist_id": 703
+      }
+     ]
+    },
+    {
+     "group": "composition",
+     "role": "composer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Franz Schubert",
+       "mbid": "f91e3a88-24ee-4563-8963-fab73d2765ed",
+       "artist_id": 824
+      }
+     ]
+    },
+    {
+     "group": "production",
+     "role": "producer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Friedemann Engelbrecht",
+       "mbid": "090c9fd3-a553-4ae6-8734-d54566687489",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "engineering",
+     "role": "recording",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Julian Schwenkner",
+       "mbid": "4e7940c4-29ab-4bcb-8297-2df212abaa30",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "engineering",
+     "role": "editor",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Julian Schwenkner",
+       "mbid": "4e7940c4-29ab-4bcb-8297-2df212abaa30",
+       "artist_id": null
+      },
+      {
+       "name": "Sebastian Nattkemper",
+       "mbid": "4bf9b6bd-efa5-4baf-8e4e-7bc597a48fbc",
+       "artist_id": null
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "disc": 1,
+   "n": 5,
+   "title": "Piano Sonata no. 13: I. Allegro moderato",
+   "length_ms": 438000,
+   "credits": [
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "piano",
+     "credit": "",
+     "people": [
+      {
+       "name": "Daniel Barenboim",
+       "mbid": "fac566b2-7a0e-4977-ad92-533f43420975",
+       "artist_id": 703
+      }
+     ]
+    },
+    {
+     "group": "composition",
+     "role": "composer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Franz Schubert",
+       "mbid": "f91e3a88-24ee-4563-8963-fab73d2765ed",
+       "artist_id": 824
+      }
+     ]
+    },
+    {
+     "group": "production",
+     "role": "producer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Friedemann Engelbrecht",
+       "mbid": "090c9fd3-a553-4ae6-8734-d54566687489",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "engineering",
+     "role": "recording",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Julian Schwenkner",
+       "mbid": "4e7940c4-29ab-4bcb-8297-2df212abaa30",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "engineering",
+     "role": "editor",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Julian Schwenkner",
+       "mbid": "4e7940c4-29ab-4bcb-8297-2df212abaa30",
+       "artist_id": null
+      },
+      {
+       "name": "Sebastian Nattkemper",
+       "mbid": "4bf9b6bd-efa5-4baf-8e4e-7bc597a48fbc",
+       "artist_id": null
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "disc": 1,
+   "n": 6,
+   "title": "Piano Sonata no. 13: II. Andante",
+   "length_ms": 264000,
+   "credits": [
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "piano",
+     "credit": "",
+     "people": [
+      {
+       "name": "Daniel Barenboim",
+       "mbid": "fac566b2-7a0e-4977-ad92-533f43420975",
+       "artist_id": 703
+      }
+     ]
+    },
+    {
+     "group": "composition",
+     "role": "composer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Franz Schubert",
+       "mbid": "f91e3a88-24ee-4563-8963-fab73d2765ed",
+       "artist_id": 824
+      }
+     ]
+    },
+    {
+     "group": "production",
+     "role": "producer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Friedemann Engelbrecht",
+       "mbid": "090c9fd3-a553-4ae6-8734-d54566687489",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "engineering",
+     "role": "recording",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Julian Schwenkner",
+       "mbid": "4e7940c4-29ab-4bcb-8297-2df212abaa30",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "engineering",
+     "role": "editor",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Julian Schwenkner",
+       "mbid": "4e7940c4-29ab-4bcb-8297-2df212abaa30",
+       "artist_id": null
+      },
+      {
+       "name": "Sebastian Nattkemper",
+       "mbid": "4bf9b6bd-efa5-4baf-8e4e-7bc597a48fbc",
+       "artist_id": null
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "disc": 1,
+   "n": 7,
+   "title": "Piano Sonata no. 13: III. Allegro",
+   "length_ms": 464000,
+   "credits": [
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "piano",
+     "credit": "",
+     "people": [
+      {
+       "name": "Daniel Barenboim",
+       "mbid": "fac566b2-7a0e-4977-ad92-533f43420975",
+       "artist_id": 703
+      }
+     ]
+    },
+    {
+     "group": "composition",
+     "role": "composer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Franz Schubert",
+       "mbid": "f91e3a88-24ee-4563-8963-fab73d2765ed",
+       "artist_id": 824
+      }
+     ]
+    },
+    {
+     "group": "production",
+     "role": "producer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Friedemann Engelbrecht",
+       "mbid": "090c9fd3-a553-4ae6-8734-d54566687489",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "engineering",
+     "role": "recording",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Julian Schwenkner",
+       "mbid": "4e7940c4-29ab-4bcb-8297-2df212abaa30",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "engineering",
+     "role": "editor",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Julian Schwenkner",
+       "mbid": "4e7940c4-29ab-4bcb-8297-2df212abaa30",
+       "artist_id": null
+      },
+      {
+       "name": "Sebastian Nattkemper",
+       "mbid": "4bf9b6bd-efa5-4baf-8e4e-7bc597a48fbc",
+       "artist_id": null
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "disc": 1,
+   "n": 8,
+   "title": "Piano Sonata no. 14: I. Allegro giusto",
+   "length_ms": 805000,
+   "credits": [
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "piano",
+     "credit": "",
+     "people": [
+      {
+       "name": "Daniel Barenboim",
+       "mbid": "fac566b2-7a0e-4977-ad92-533f43420975",
+       "artist_id": 703
+      }
+     ]
+    },
+    {
+     "group": "composition",
+     "role": "composer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Franz Schubert",
+       "mbid": "f91e3a88-24ee-4563-8963-fab73d2765ed",
+       "artist_id": 824
+      }
+     ]
+    },
+    {
+     "group": "production",
+     "role": "producer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Friedemann Engelbrecht",
+       "mbid": "090c9fd3-a553-4ae6-8734-d54566687489",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "engineering",
+     "role": "recording",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Julian Schwenkner",
+       "mbid": "4e7940c4-29ab-4bcb-8297-2df212abaa30",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "engineering",
+     "role": "editor",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Julian Schwenkner",
+       "mbid": "4e7940c4-29ab-4bcb-8297-2df212abaa30",
+       "artist_id": null
+      },
+      {
+       "name": "Sebastian Nattkemper",
+       "mbid": "4bf9b6bd-efa5-4baf-8e4e-7bc597a48fbc",
+       "artist_id": null
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "disc": 1,
+   "n": 9,
+   "title": "Piano Sonata no. 14: II. Andante",
+   "length_ms": 248000,
+   "credits": [
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "piano",
+     "credit": "",
+     "people": [
+      {
+       "name": "Daniel Barenboim",
+       "mbid": "fac566b2-7a0e-4977-ad92-533f43420975",
+       "artist_id": 703
+      }
+     ]
+    },
+    {
+     "group": "composition",
+     "role": "composer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Franz Schubert",
+       "mbid": "f91e3a88-24ee-4563-8963-fab73d2765ed",
+       "artist_id": 824
+      }
+     ]
+    },
+    {
+     "group": "production",
+     "role": "producer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Friedemann Engelbrecht",
+       "mbid": "090c9fd3-a553-4ae6-8734-d54566687489",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "engineering",
+     "role": "recording",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Julian Schwenkner",
+       "mbid": "4e7940c4-29ab-4bcb-8297-2df212abaa30",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "engineering",
+     "role": "editor",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Julian Schwenkner",
+       "mbid": "4e7940c4-29ab-4bcb-8297-2df212abaa30",
+       "artist_id": null
+      },
+      {
+       "name": "Sebastian Nattkemper",
+       "mbid": "4bf9b6bd-efa5-4baf-8e4e-7bc597a48fbc",
+       "artist_id": null
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "disc": 1,
+   "n": 10,
+   "title": "Piano Sonata no. 14: III. Allegro vivace",
+   "length_ms": 331000,
+   "credits": [
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "piano",
+     "credit": "",
+     "people": [
+      {
+       "name": "Daniel Barenboim",
+       "mbid": "fac566b2-7a0e-4977-ad92-533f43420975",
+       "artist_id": 703
+      }
+     ]
+    },
+    {
+     "group": "composition",
+     "role": "composer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Franz Schubert",
+       "mbid": "f91e3a88-24ee-4563-8963-fab73d2765ed",
+       "artist_id": 824
+      }
+     ]
+    },
+    {
+     "group": "production",
+     "role": "producer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Friedemann Engelbrecht",
+       "mbid": "090c9fd3-a553-4ae6-8734-d54566687489",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "engineering",
+     "role": "recording",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Julian Schwenkner",
+       "mbid": "4e7940c4-29ab-4bcb-8297-2df212abaa30",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "engineering",
+     "role": "editor",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Julian Schwenkner",
+       "mbid": "4e7940c4-29ab-4bcb-8297-2df212abaa30",
+       "artist_id": null
+      },
+      {
+       "name": "Sebastian Nattkemper",
+       "mbid": "4bf9b6bd-efa5-4baf-8e4e-7bc597a48fbc",
+       "artist_id": null
+      }
+     ]
+    }
+   ]
+  }
+ ],
+ "places": [
+  {
+   "role": "mastered_at",
+   "name": "Teldex Studio",
+   "area": "Berlin"
+  },
+  {
+   "role": "recorded_at",
+   "name": "Teldex Studio",
+   "area": "Berlin"
+  }
+ ],
+ "about": null,
+ "attribution": [
+  {
+   "source": "MusicBrainz",
+   "url": "https://musicbrainz.org/release/7d63089d-24d8-4e55-9e71-0097d5d9cdbd",
+   "license": "CC0"
+  }
+ ]
+}

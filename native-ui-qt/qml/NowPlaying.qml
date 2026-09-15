@@ -224,12 +224,17 @@ Item {
         Text {
             width: parent.width; height: 28; verticalAlignment: Text.AlignVCenter
             text: Player.artist || Tr.t("player.unknownArtist")
-            color: Theme.gold; font.family: Theme.font; font.pixelSize: 18; elide: Text.ElideRight
+            color: npArtistTap.pressed ? Theme.white : Theme.gold; font.family: Theme.font; font.pixelSize: 18; elide: Text.ElideRight
+            // the artist's page (library tracks only)
+            Tap { id: npArtistTap; width: Math.min(parent.width, parent.implicitWidth); anchors.fill: undefined; height: parent.height
+                  enabled: Player.artistId !== ""; onClicked: Ui.app.openArtist(Player.artistId, Player.artist) }
         }
         Text {
             width: parent.width; height: 20; verticalAlignment: Text.AlignVCenter
             text: Player.album
-            color: Theme.silverA(0.7); font.family: Theme.font; font.pixelSize: 14; elide: Text.ElideRight
+            color: npAlbumTap.pressed ? Theme.white : Theme.silverA(0.7); font.family: Theme.font; font.pixelSize: 14; elide: Text.ElideRight
+            Tap { id: npAlbumTap; width: Math.min(parent.width, parent.implicitWidth); anchors.fill: undefined; height: parent.height
+                  enabled: Player.albumId !== ""; onClicked: Ui.app.openAlbum(Player.albumId, Player.album) }
         }
         Item { width: 1; height: 6; visible: Player.chip !== "" }
         Rectangle {                                // etichetta del formato

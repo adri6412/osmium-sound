@@ -1,0 +1,62 @@
+{
+ "status": "ok",
+ "artist_id": 1000,
+ "artist": {
+  "mbid": "0f50beab-d77d-4f0f-ac26-0b87d3e9b11b",
+  "name": "Roger Waters",
+  "sort_name": "Waters, Roger",
+  "type": "person",
+  "disambiguation": "",
+  "begin": "1943-09-06",
+  "end": "",
+  "ended": false,
+  "area": "United Kingdom",
+  "begin_area": "Great Bookham",
+  "end_area": "",
+  "members": [],
+  "member_of": [
+   {
+    "name": "Pink Floyd",
+    "mbid": "83d91898-7763-47d7-b03b-b92132375c47",
+    "attrs": [
+     "bass guitar",
+     "lead vocals",
+     "original"
+    ],
+    "begin": "1965",
+    "end": "1985",
+    "ended": true,
+    "artist_id": 977
+   },
+   {
+    "name": "Architectural Abdabs",
+    "mbid": "278a7bc9-670c-4f70-b356-626d8627620c",
+    "attrs": [],
+    "begin": "",
+    "end": "",
+    "ended": false,
+    "artist_id": null
+   }
+  ],
+  "urls": {
+   "musicbrainz": "https://musicbrainz.org/artist/0f50beab-d77d-4f0f-ac26-0b87d3e9b11b",
+   "official": "https://rogerwaters.com/",
+   "wikipedia": "https://it.wikipedia.org/wiki/Roger_Waters"
+  }
+ },
+ "bio": {
+  "text": "George Roger Waters (Great Bookham, 6 settembre 1943) è un cantautore, polistrumentista e compositore britannico.\n\nInsieme a Syd Barrett (cui subentrerà dopo poco David Gilmour), Richard Wright e Nick Mason, è fondatore del gruppo musicale inglese Pink Floyd, dove ha militato dal 1967 al 1983 nelle vesti di bassista, cantante e, dal 1968 - dopo l'abbandono del succitato Barrett - anche principale compositore dei testi.\n\nStorico autore del gruppo e ideatore delle tematiche sottese ad alcuni degli album più celebri del gruppo, come The Dark Side of the Moon, Animals e The Wall, considerato insieme a Bob Dylan come miglior paroliere su brani musicali, nella seconda metà degli anni settanta ha progressivamente acquistato sempre più influenza decisionale all'interno del gruppo, divenendone il leader, nonché principale autore, finché non ne uscì nel 1985 per proseguire la carriera da solista.",
+  "lang": "it",
+  "title": "Roger Waters",
+  "url": "https://it.wikipedia.org/wiki/Roger_Waters",
+  "source": "Wikipedia",
+  "license": "CC BY-SA 4.0"
+ },
+ "attribution": [
+  {
+   "source": "MusicBrainz",
+   "url": "https://musicbrainz.org/artist/0f50beab-d77d-4f0f-ac26-0b87d3e9b11b",
+   "license": "CC0"
+  }
+ ]
+}

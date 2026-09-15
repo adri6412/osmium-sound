@@ -28,6 +28,10 @@ class Player : public QObject {
     Q_PROPERTY(QString artist READ artist NOTIFY metaChanged)
     Q_PROPERTY(QString album READ album NOTIFY metaChanged)
     Q_PROPERTY(QString trackId READ trackId NOTIFY metaChanged)
+    // the library album and artist of the track on air (empty for streams):
+    // Now Playing's album and artist lead to their pages
+    Q_PROPERTY(QString albumId READ albumId NOTIFY metaChanged)
+    Q_PROPERTY(QString artistId READ artistId NOTIFY metaChanged)
     Q_PROPERTY(QString coverId READ coverId NOTIFY metaChanged)
     Q_PROPERTY(bool remote READ remote NOTIFY metaChanged)
     Q_PROPERTY(QString type READ type NOTIFY metaChanged)
@@ -95,6 +99,8 @@ public:
     QString artist() const { return m_artist; }
     QString album() const { return m_album; }
     QString trackId() const { return m_id; }
+    QString albumId() const { return m_albumId; }
+    QString artistId() const { return m_artistId; }
     QString coverId() const { return m_coverId; }
     bool remote() const { return m_remote; }
     QString type() const { return m_type; }
@@ -228,6 +234,7 @@ private:
     QString m_title, m_artist, m_album, m_id, m_coverId, m_artworkUrlLms, m_type, m_bitrate, m_chip, m_currentTitle;
     QString m_artworkUrl, m_artKey;
     QString m_url, m_rawTitle;      // the track's URL (favourites) and its title as Lyrion gives it
+    QString m_albumId, m_artistId;
     // favourites: what the last `favorites exists` was about, and its answer
     QString m_favKey, m_favIndex;
     bool m_favorite = false, m_favAvail = true;

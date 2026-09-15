@@ -77,8 +77,10 @@ screen (or stays headless, per what you chose).
   playlists, favourites, with a search box over the whole library), internet
   radio, Discover (random mixes, similar artists,
   artist bios) and streaming services (Deezer, Qobuz, TIDAL, Spotify, and
-  others) via **Lyrion plugins**. Press and hold a row for more: add to the
-  queue, play next, favourite, rename or delete a playlist. Plugins picked during setup are ready to go; others
+  others) via **Lyrion plugins**. Albums and artists open a page of their own
+  (tracks, credits, band members, biography — online details from MusicBrainz
+  and Wikipedia). Press and hold a row for more: add to the
+  queue, play next, favourite, go to the album or artist, rename or delete a playlist. Plugins picked during setup are ready to go; others
   can be installed from Lyrion's web UI (Settings → Plugins) and show up on
   their own, no app update needed.
 - **Now Playing**: large artwork, transport and volume, optional analog VU

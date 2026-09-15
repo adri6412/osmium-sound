@@ -262,10 +262,11 @@ Item {
                         Pill {
                             required property var modelData
                             readonly property bool has: modelData.id !== ""
-                            label: modelData.name; height: 32; icon: has ? "play" : ""; padX: 12
+                            label: modelData.name; height: 32; icon: has ? "user" : ""; padX: 12
                             fg: has ? Theme.white : Theme.silverA(0.6)
                             color: has ? Theme.surface : Theme.wa(0.05); border.width: has ? 1 : 0; border.color: Theme.border
-                            onClicked: if (has) Player.cmd(["playlistcontrol", "cmd:load", "artist_id:" + modelData.id])
+                            // the artist's page, where Play is
+                            onClicked: if (has && Ui.app) Ui.app.main.browser.openArtist(modelData.id, modelData.name)
                         }
                     }
                 }

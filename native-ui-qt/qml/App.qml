@@ -48,6 +48,10 @@ Item {
         })
     }
 
+    // Now Playing's artist and album lead to their pages in the library
+    function openAlbum(id, title) { if (!id) return; setExpanded(false); mainScreen.browser.openAlbum(id, title) }
+    function openArtist(id, name) { if (!id) return; setExpanded(false); mainScreen.browser.openArtist(id, name) }
+
     // per il canale di collaudo (eval): app.settings.openSection(n) ecc.
     readonly property var settings: Ui.settings
     readonly property var main: mainScreen

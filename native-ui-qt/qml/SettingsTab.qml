@@ -110,6 +110,8 @@ Item {
         property var disc: []                                       // [{name, ip}]
         // the server's library: totals, last scan, a scan in progress
         property var lib: ({ albums: -1, artists: -1, songs: -1, duration: 0, lastScan: 0, scanning: false, progress: "", pct: -1 })
+        // album and artist information from the web (sources_server /api/meta/settings)
+        property var meta: ({ available: false, online: true, prefetch: true, albums: 0, artists: 0, bytes: 0, running: false, done: 0, total: 0 })
         property var players: []                                    // [{id,name,sync}]
         property var alarms: []                                     // [{id,time,on}]
         property string netType: ""; property string netSsid: ""; property string netIp: ""; property string netDev: ""; property string netSubnet: ""; property bool netConnected: false
@@ -261,6 +263,12 @@ Item {
             get(src("/api/lms_skin_status"), function(d) { skinState = str(d, "state"); skinMsg = str(d, "message") })
             get(src("/api/sources"), function(d) { sources = d.sources || [] })
             loadLibrary()
+            get(src("/api/meta/settings"), function(d) {
+                if (d.online === undefined) return
+                var c = d.cache || {}, st = d.prefetch_state || {}
+                meta = { available: true, online: !!d.online, prefetch: !!d.prefetch, albums: Number(c.albums || 0), artists: Number(c.artists || 0),
+                         bytes: Number(c.bytes || 0), running: !!st.running, done: Number(st.done || 0), total: Number(st.total || 0) }
+            })
             get(src("/api/usb"), function(d) { usb = d.disks || [] })
             get(src("/api/internal/disks"), function(d) {
                 var out = []
@@ -1102,6 +1110,20 @@ Item {
             var rs = action(Tr.t("settings.lyrion.rescan"), "lib_rescan", "gold"); rs.bold = true; rs.hh = 44; rs.icon = "refresh-cw"
         }
         sep()
+        // credits, biographies and album details from MusicBrainz and Wikipedia
+        if (cfg.meta.available) {
+            label("settings.lyrion.metaTitle").mark = "meta"; help("settings.lyrion.metaHelp", 12)
+            toggle(Tr.t("settings.lyrion.metaOnline"), "", cfg.meta.online, "meta_online")
+            if (cfg.meta.online) toggle(Tr.t("settings.lyrion.metaPrefetch"), Tr.t("settings.lyrion.metaPrefetchHelp"), cfg.meta.prefetch, "meta_prefetch")
+            if (cfg.meta.online && cfg.meta.prefetch && cfg.meta.total > 0)
+                info(Tr.t("settings.lyrion.metaProgress"), Tr.tf("settings.lyrion.metaProgressValue", "done", String(cfg.meta.done)).replace("{total}", String(cfg.meta.total))).mono = true
+            if (cfg.meta.albums > 0 || cfg.meta.artists > 0) {
+                info(Tr.t("settings.lyrion.metaSaved"), Tr.tf("settings.lyrion.metaSavedValue", "albums", String(cfg.meta.albums))
+                     .replace("{artists}", String(cfg.meta.artists)).replace("{size}", Meta.bytes(cfg.meta.bytes))).mono = true
+                var mc = action(Tr.t("settings.lyrion.metaClear"), "meta_clear", "accent"); mc.hh = 40; mc.icon = "trash-2"
+            }
+            sep()
+        }
         if (remoteNote()) return
         if (!havePlayer) { note(Tr.t("settings.playback.noPlayer"), "dark"); return }
         if (!cfg.players.length) { note(Tr.t("settings.multiroom.noOthers"), "dark"); return }
@@ -1447,6 +1469,9 @@ Item {
             Player.queryServer(["rescan"], function() { cfg.loadLibrary() })
             cfg.lib = Object.assign({}, cfg.lib, { scanning: true, pct: -1, progress: "" })
             say(Tr.t("settings.lyrion.rescanStarted")); break
+        case "meta_online": post(S("/api/meta/settings"), { online: !row.on }); cfg.meta = Object.assign({}, cfg.meta, { online: !row.on }); break
+        case "meta_prefetch": post(S("/api/meta/settings"), { prefetch: !row.on }); cfg.meta = Object.assign({}, cfg.meta, { prefetch: !row.on }); break
+        case "meta_clear": post(S("/api/meta/cache/clear"), {}); say(Tr.t("settings.lyrion.metaCleared")); break
         case "lib_abort":
             Player.queryServer(["abortscan"], function() { cfg.loadLibrary() })
             say(Tr.t("settings.lyrion.scanAborted")); break
