@@ -1905,7 +1905,7 @@ def factory_reset():
 # auth (not cookies) also means these routes are CSRF-immune by design.
 _SOURCES_FWD_PREFIXES = ('/api/sources', '/api/usb', '/api/internal', '/api/apply',
                          '/api/backup', '/api/restore', '/api/cd', '/api/dsp', '/api/local',
-                         '/api/playlistdir')
+                         '/api/playlistdir', '/api/meta')
 _PAIR_TOKENS_FILE = '/etc/hifi-pairing-tokens.json'
 
 
@@ -2045,6 +2045,18 @@ def lms_skin_status_proxy():
     if denied:
         return denied
     return _forward_to_sources('/api/lms_skin_status')
+
+
+# Album and artist information (/api/meta/*, hifi_metadata.py via
+# sources_server): the web admin's Library card reads and changes its settings
+# and clears its cache through here, with the session as the gate — the
+# /api/meta prefix above is the pairing-token door for the phone.
+@app.route('/api/system/meta/<path:rest>', methods=['GET', 'POST'])
+def meta_proxy(rest):
+    denied = _require_session()
+    if denied:
+        return denied
+    return _forward_to_sources('/api/meta/' + rest)
 
 
 # Playlist folder (Sources -> Advanced). Same story as lms_skin: it is a Lyrion

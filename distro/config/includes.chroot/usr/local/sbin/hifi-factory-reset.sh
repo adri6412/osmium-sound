@@ -94,7 +94,8 @@ for f in display-mode ui-resolution pointer-enabled dsp.json dsp-presets.json bl
          samba-cred.json provisioning-state.json webui.db webui-secret.key \
          github-support-pat lyrion-channel lms-skin \
          ui-language ui-refresh nowplaying-view nowplaying-autoexpand-seconds \
-         nowplaying-animation ota-autocheck player-enabled vu-meter-enabled; do
+         nowplaying-animation ota-autocheck player-enabled vu-meter-enabled \
+         meta-online meta-prefetch; do
     rm -f "/etc/hifi-player/$f" 2>/dev/null || true
 done
 # Reset the OTA channel to the stable default (factory semantics).
@@ -140,6 +141,9 @@ rm -rf /var/lib/hifi-player/update 2>/dev/null || true
 # VU meters downloaded from the store, with the store's cached list and
 # what the owner has already seen: a reset device starts from the built-in looks.
 rm -rf /var/lib/hifi-player/vu-skins /var/lib/hifi-player/vu-store 2>/dev/null || true
+# Album and artist information fetched from MusicBrainz/Wikipedia, with the
+# owner's manual album choices (hifi_metadata.py).
+rm -rf /var/lib/hifi-player/metadata 2>/dev/null || true
 rm -f /system-update 2>/dev/null || true
 
 # Stored backup generations (Settings -> Backup e ripristino). These can carry

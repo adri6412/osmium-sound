@@ -347,7 +347,7 @@ persistent per-device player MAC (`apply.d/0042`).
 
 Python daemons are injected into `includes.chroot/usr/local/bin` by
 `build-distro.sh` from the repo root (`api_server.py`, `sources_server.py`,
-`webui_server.py`, `vu_meter_daemon.py`, `hifi_backup.py`, `hifi_i18n.py`,
+`webui_server.py`, `vu_meter_daemon.py`, `hifi_backup.py`, `hifi_i18n.py`, `hifi_metadata.py`,
 `hifi_logging.py`); the same files ship in the **system** OTA bundle.
 
 ## Over-the-air updates

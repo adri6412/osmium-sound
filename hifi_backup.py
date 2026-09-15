@@ -115,6 +115,7 @@ DENY_FILES = frozenset((
 ))
 DENY_PREFIXES = (
     "/var/lib/hifi-player/backups/",   # no backups inside backups
+    "/var/lib/hifi-player/metadata/",  # web info cache: re-downloadable, up to 100 MB
     "/etc/ssh/",                       # host keys are machine identity
 )
 

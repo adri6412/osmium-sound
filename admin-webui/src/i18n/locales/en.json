@@ -119,6 +119,22 @@
       "refresh": "Refresh the library",
       "stop": "Stop",
       "days": "days"
+    },
+    "meta": {
+      "title": "Information from the web",
+      "desc": "Album and artist information from the web (MusicBrainz, Wikipedia): who plays on each track, the story of an album, the life of an artist.",
+      "online": "Show information from the web",
+      "prefetch": "Download it for the whole library",
+      "prefetchHint": "a little at a time, so the pages open straight away",
+      "progress": "Albums looked up",
+      "progressRunning": "Looking up albums…",
+      "progressValue": "{done} of {total}",
+      "saved": "Saved on this device",
+      "savedValue": "{albums} albums, {artists} artists · {size}",
+      "clear": "Delete saved information",
+      "clearConfirm": "Delete the album and artist information saved on this device? It will be downloaded again when needed.",
+      "clearHint": "The albums you matched by hand keep your choice.",
+      "cleared": "Deleted. The albums you matched by hand keep your choice."
     }
   },
   "settings": {

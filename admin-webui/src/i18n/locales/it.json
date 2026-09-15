@@ -119,6 +119,22 @@
       "refresh": "Aggiorna la libreria",
       "stop": "Ferma",
       "days": "giorni"
+    },
+    "meta": {
+      "title": "Informazioni dal web",
+      "desc": "Informazioni su album e artisti dal web (MusicBrainz, Wikipedia): chi suona in ogni brano, la storia di un album, la vita di un artista.",
+      "online": "Mostra le informazioni dal web",
+      "prefetch": "Scaricale per tutta la libreria",
+      "prefetchHint": "poco alla volta, così le pagine si aprono subito",
+      "progress": "Album cercati",
+      "progressRunning": "Ricerca degli album in corso…",
+      "progressValue": "{done} su {total}",
+      "saved": "Salvate su questo apparecchio",
+      "savedValue": "{albums} album, {artists} artisti · {size}",
+      "clear": "Cancella le informazioni salvate",
+      "clearConfirm": "Cancellare le informazioni su album e artisti salvate su questo apparecchio? Verranno scaricate di nuovo quando servono.",
+      "clearHint": "Gli album abbinati a mano mantengono la tua scelta.",
+      "cleared": "Cancellate. Gli album abbinati a mano mantengono la tua scelta."
     }
   },
   "settings": {

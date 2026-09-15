@@ -1,0 +1,83 @@
+{
+ "asin": null,
+ "barcode": "724382975229",
+ "country": "GB",
+ "cover-art-archive": {
+  "artwork": true,
+  "back": true,
+  "count": 18,
+  "darkened": false,
+  "front": true
+ },
+ "date": "1994-07-25",
+ "disambiguation": "",
+ "id": "c712a2bc-1e57-46c1-9432-8b9a33dc4159",
+ "media": [
+  {
+   "discs": [
+    {
+     "id": "8jTZJTgjGGtKjwdt8UyAgK3DnbY-",
+     "offset-count": 9,
+     "offsets": [
+      183,
+      18018,
+      34143,
+      66003,
+      87533,
+      116218,
+      151488,
+      166913,
+      184200
+     ],
+     "sectors": 193293
+    }
+   ],
+   "format": "CD",
+   "format-id": "9712d52a-4509-3d4b-a1a2-67c88c643e31",
+   "id": "48bb6a2a-8ada-3a53-9fe6-b53f7c1b806c",
+   "position": 1,
+   "title": "",
+   "track-count": 9
+  }
+ ],
+ "packaging": "Jewel Case",
+ "packaging-id": "ec27701a-4a22-37f4-bfac-6616e0f9750a",
+ "quality": "normal",
+ "release-events": [
+  {
+   "area": {
+    "disambiguation": "",
+    "id": "8a754a16-0027-3a29-b6d7-2b40ea0481ed",
+    "iso-3166-1-codes": [
+     "GB"
+    ],
+    "name": "United Kingdom",
+    "sort-name": "United Kingdom",
+    "type": null,
+    "type-id": null
+   },
+   "date": "1994-07-25"
+  },
+  {
+   "area": {
+    "disambiguation": "",
+    "id": "89a675c2-3e37-3518-b83c-418bad59a85a",
+    "iso-3166-1-codes": [
+     "XE"
+    ],
+    "name": "Europe",
+    "sort-name": "Europe",
+    "type": null,
+    "type-id": null
+   },
+   "date": "1994-08"
+  }
+ ],
+ "status": "Official",
+ "status-id": "4e304316-386d-3409-af2e-78857eec5cfe",
+ "text-representation": {
+  "language": "eng",
+  "script": "Latn"
+ },
+ "title": "Dark Side of the Moon"
+}

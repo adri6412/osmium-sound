@@ -2,6 +2,7 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue';
 import { api } from '../api.js';
 import { useI18n } from '../i18n';
+import Toggle from '../components/Toggle.vue';
 
 const { t, lang } = useI18n();
 const host = location.hostname;
@@ -56,6 +57,42 @@ async function abortScan() {
   setTimeout(loadLibrary, 800);
 }
 
+// Album and artist information from the web (hifi_metadata.py behind
+// sources_server): the two switches, what is saved on the device and how far
+// the background download has got.
+const meta = ref(null);
+const metaBusy = ref(false);
+const metaCleared = ref(false);
+
+async function loadMeta() {
+  const r = await api.get('/api/system/meta/settings');
+  meta.value = r.ok && r.data && typeof r.data.online === 'boolean' ? r.data : null;
+}
+
+async function setMeta(key, value) {
+  metaBusy.value = true;
+  const r = await api.post('/api/system/meta/settings', { [key]: value });
+  if (r.ok && r.data && typeof r.data.online === 'boolean') meta.value = r.data;
+  metaBusy.value = false;
+}
+
+async function clearMeta() {
+  if (!confirm(t('dashboard.meta.clearConfirm'))) return;
+  metaBusy.value = true;
+  const r = await api.post('/api/system/meta/cache/clear', {});
+  metaBusy.value = false;
+  metaCleared.value = r.ok;
+  await loadMeta();
+}
+
+function fmtBytes(bytes) {
+  const n = Number(bytes);
+  if (!Number.isFinite(n) || n <= 0) return '0 MB';
+  const mb = n / 1024 ** 2;
+  // the decimal separator of the page's language (11,8 MB in Italian)
+  return mb >= 10 ? Math.round(mb) + ' MB' : mb.toFixed(1).replace('.', lang.value === 'it' ? ',' : '.') + ' MB';
+}
+
 function fmtDuration(sec) {
   const d = Math.floor(sec / 86400), h = Math.floor((sec % 86400) / 3600), m = Math.floor((sec % 3600) / 60);
   if (d > 0) return `${d} ${t('dashboard.library.days')} ${h} h`;
@@ -90,9 +127,10 @@ onMounted(async () => {
   }
   await loadStats();
   await loadLibrary();
+  await loadMeta();
   // CPU/RAM/disk/temperature/GPU are live figures -- keep the status card
   // current without requiring a manual page reload.
-  statsPoll = setInterval(() => { loadStats(); loadLibrary(); }, 5000);
+  statsPoll = setInterval(() => { loadStats(); loadLibrary(); loadMeta(); }, 5000);
 });
 
 onUnmounted(() => {
@@ -207,6 +245,31 @@ const gpu = computed(() => [
     <div class="row" style="margin-top: 12px" v-else>
       <button class="secondary" :disabled="lib.busy" @click="rescan">{{ t('dashboard.library.refresh') }}</button>
     </div>
+  </div>
+
+  <div class="card" v-if="meta">
+    <h3><span class="dot"></span>{{ t('dashboard.meta.title') }}</h3>
+    <p class="sub">{{ t('dashboard.meta.desc') }}</p>
+    <div class="between item">
+      <span>{{ t('dashboard.meta.online') }}</span>
+      <Toggle :model-value="meta.online" :disabled="metaBusy" @update:model-value="(v) => setMeta('online', v)" />
+    </div>
+    <div class="between item" v-if="meta.online">
+      <span>{{ t('dashboard.meta.prefetch') }} <span class="muted">{{ t('dashboard.meta.prefetchHint') }}</span></span>
+      <Toggle :model-value="meta.prefetch" :disabled="metaBusy" @update:model-value="(v) => setMeta('prefetch', v)" />
+    </div>
+    <div class="between item" v-if="meta.online && meta.prefetch && meta.prefetch_state && meta.prefetch_state.total > 0">
+      <span class="muted">{{ meta.prefetch_state.running ? t('dashboard.meta.progressRunning') : t('dashboard.meta.progress') }}</span>
+      <span class="silver">{{ t('dashboard.meta.progressValue', { done: meta.prefetch_state.done, total: meta.prefetch_state.total }) }}</span>
+    </div>
+    <div class="between item">
+      <span class="muted">{{ t('dashboard.meta.saved') }}</span>
+      <span class="silver">{{ t('dashboard.meta.savedValue', { albums: meta.cache.albums, artists: meta.cache.artists, size: fmtBytes(meta.cache.bytes) }) }}</span>
+    </div>
+    <div class="row" style="margin-top: 12px">
+      <button class="secondary" :disabled="metaBusy" @click="clearMeta">{{ t('dashboard.meta.clear') }}</button>
+    </div>
+    <p class="sub" style="margin: 10px 0 0">{{ metaCleared ? t('dashboard.meta.cleared') : t('dashboard.meta.clearHint') }}</p>
   </div>
 
   <div class="card" v-if="disk">
