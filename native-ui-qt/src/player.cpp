@@ -18,7 +18,6 @@ Player::Player(QObject *parent) : QObject(parent) {
         if (m_connected && m_playerProvisional && now - m_lastFind >= 3000) findPlayer();
         if ((m_localName.isEmpty() || m_playerProvisional) && now - m_lastNameFetch >= 5000) fetchLocalName();
         if (m_connected && now - m_lastPrefs >= 5000) { m_lastPrefs = now; pollPrefs(); }
-        if (m_connected && now - m_lastPresets >= 5000) { m_lastPresets = now; pollPresets(); }
         if (now - m_lastSettings >= 5000) { m_lastSettings = now; pollSettings(); }
         if (now - m_lastUsb >= 4000) { m_lastUsb = now; pollUsb(); }
         if (now - m_lastOta >= 3000) { m_lastOta = now; pollOta(); }
@@ -133,8 +132,7 @@ void Player::switchTo(const QString &id, const QString &name) {
     m_artKey.clear();
     emit connectedChanged(); emit playerChanged();
     m_favKey.clear();
-    if (!m_presets.isEmpty()) { m_presets.clear(); emit presetsChanged(); }
-    pollPrefs(); pollPresets(); m_wantNow = true;
+    pollPrefs(); m_wantNow = true;
 }
 
 void Player::selectPlayer(const QString &id, const QString &name) {
@@ -364,47 +362,6 @@ void Player::toggleFavorite() {
         m_favorite = true; emit favoriteChanged();
         favoriteAdd(m_url, m_rawTitle.isEmpty() ? m_title : m_rawTitle, "audio", QString(), QJSValue());
     }
-}
-
-// ─── preselezioni ──────────────────────────────────────────────────────────
-// Lyrion sends the presets only in the Jive flavour of `status`; one item is
-// asked for so the answer stays small.
-void Player::pollPresets() {
-    if (m_playerId.isEmpty()) return;
-    Api::instance()->lmsRequest(m_playerId, {"status", "0", "1", "menu:menu"}, [this](bool ok, const QVariant &data, int) {
-        if (!ok) return;
-        QVariantMap r = data.toMap().value("result").toMap();
-        if (!r.contains("preset_data")) return;
-        QVariantList pd = r.value("preset_data").toList(), out;
-        for (int i = 0; i < 10; i++) {
-            QVariantMap p = pd.value(i).toMap(), e;
-            QString url = p.value("URL").toString();
-            if (url.isEmpty()) url = p.value("url").toString();
-            if (!url.isEmpty()) { e["url"] = url; e["title"] = p.value("text").toString(); e["type"] = p.value("type").toString(); }
-            out << e;
-        }
-        if (out != m_presets) { m_presets = out; emit presetsChanged(); }
-    }, 6000);
-}
-void Player::refreshPresets() { m_lastPresets = 0; }
-
-void Player::setPreset(int key, const QString &url, const QString &title, const QString &type) {
-    if (key < 1 || key > 10 || url.isEmpty() || m_playerId.isEmpty()) return;
-    Api::instance()->lmsRequest(m_playerId, {"jivefavorites", "set_preset", "key:" + QString::number(key), "favorites_url:" + url,
-                                             "favorites_title:" + (title.isEmpty() ? url : title),
-                                             "favorites_type:" + (type == "playlist" ? QString("playlist") : QString("audio"))},
-                                [this](bool, const QVariant &, int) { pollPresets(); }, 8000);
-}
-void Player::setPresetFromQueue(int key) {
-    if (key < 1 || key > 10 || m_playerId.isEmpty() || m_url.isEmpty()) return;
-    Api::instance()->lmsRequest(m_playerId, {"jivefavorites", "set_preset", "key:" + QString::number(key), "playlist_index:" + QString::number(m_index)},
-                                [this](bool, const QVariant &, int) { pollPresets(); }, 8000);
-}
-void Player::playPreset(int key) {
-    QVariantMap p = m_presets.value(key - 1).toMap();
-    QString url = p.value("url").toString();
-    if (url.isEmpty()) return;
-    cmd({"playlist", "play", url, p.value("title").toString()});
 }
 
 void Player::pollSettings() {

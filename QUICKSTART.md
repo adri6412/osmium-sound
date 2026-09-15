@@ -74,11 +74,11 @@ screen (or stays headless, per what you chose).
 
 - **Library / Radio / Apps**: the interface for Lyrion Music Server — local
   library (artists, albums, genres, years, composers, new music, folders,
-  playlists, favourites, with a search box over the whole library and ten
-  one-tap presets), internet radio, Discover (random mixes, similar artists,
+  playlists, favourites, with a search box over the whole library), internet
+  radio, Discover (random mixes, similar artists,
   artist bios) and streaming services (Deezer, Qobuz, TIDAL, Spotify, and
   others) via **Lyrion plugins**. Press and hold a row for more: add to the
-  queue, play next, favourite, save as a preset, rename or delete a playlist. Plugins picked during setup are ready to go; others
+  queue, play next, favourite, rename or delete a playlist. Plugins picked during setup are ready to go; others
   can be installed from Lyrion's web UI (Settings → Plugins) and show up on
   their own, no app update needed.
 - **Now Playing**: large artwork, transport and volume, optional analog VU

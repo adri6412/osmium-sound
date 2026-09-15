@@ -671,21 +671,16 @@ Player.selectPlayer(id, name)   // drive one of them; isOwn / ownPlayerId tell w
 Player.toggleMute()          // mixer muting 0|1 (Lyrion's own mute, the volume comes back as it was)
 Player.toggleFavorite()      // favorites add|delete for the track on air (isFavorite via `favorites exists`)
 Player.favoriteExists/Add/Delete(...)   // the same for any row (URL, or db:… for albums, artists, genres, years)
-Player.setPreset(key, url, title, type) / setPresetFromQueue(key) / playPreset(key)
-                             // jivefavorites set_preset; `presets` is read through `status 0 1 menu:menu`
 ```
 
-**Favourites, presets, playlists.** All of it is Lyrion's own: the Favorites
+**Favourites and playlists.** All of it is Lyrion's own: the Favorites
 plugin (`favorites add/delete/rename/move/exists`, with the `favorites_url`
 Lyrion attaches to albums, artists, genres and years, and the track/stream URL
-otherwise), the ten Jive presets (`jivefavorites set_preset`, `preset_data` in
-the Jive flavour of `status`, played back with `playlist play <url>`), and the
-saved playlists (`playlists rename` with a `dry_run:1` first so a clash is
+otherwise) and the saved playlists (`playlists rename` with a `dry_run:1` first so a clash is
 refused instead of overwriting, `playlists delete`, `playlists edit
 cmd:delete`). The kiosk exposes them through the long-press menu
 (`ContextMenu.qml`, a list of entries built per view in `Browser.qml`), the
-heart in Now Playing, the presets strip on the Music home and the rename
-window (`Overlays.prompt`, the "save as playlist" window in prompt mode).
+heart in Now Playing and the rename window (`Overlays.prompt`, the "save as playlist" window in prompt mode).
 
 **Library browsing and search.** `LibraryModel` (`native-ui-qt/src/library.cpp`)
 adds the `Genres`, `Years`, `Composers` (`artists role_id:COMPOSER`),

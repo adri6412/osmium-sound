@@ -25,7 +25,7 @@ Bit-perfect audio, streaming services, and signed OTA updates — one sleek dark
 - 🎵 **High-resolution audio** — FLAC, DSD (DoP), PCM up to 192kHz, bit-perfect (no resampling)
 - 🎧 **Streaming services** — Deezer, Qobuz, TIDAL, Spotify and more, via Lyrion plugins
 - 📁 **Music library** — browse by artist, album, genre, year, composer, new music, folder or playlist; search the whole library from the touchscreen; refresh it on demand with progress
-- ⭐ **Favourites & presets** — a heart on Now Playing, favourites you can edit, ten one-tap presets like a car radio, playlists you can rename and trim, all from the touchscreen
+- ⭐ **Favourites & playlists** — a heart on Now Playing, favourites you can edit, playlists you can rename and trim, all from the touchscreen
 - 💾 **Music sources** — USB drives, internal disks (adopt or format from the UI), NAS/SMB shares found for you on the network; adopted disks can be shared back on the LAN over SMB, and a file manager in the web admin copies, moves and renames what's on them
 - 💿 **CD playback & ripping** — insert a disc, play it or rip it to tagged FLAC (MusicBrainz metadata + cover art) straight into your library
 - 🧭 **Discover** — endless random mixes, "keep playing similar music", similar artists and artist bios on the touchscreen

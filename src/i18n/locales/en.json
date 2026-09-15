@@ -387,12 +387,6 @@
       "tracks": "Tracks"
     },
     "librarySearchPlaceholder": "Search the library: artist, album, track…",
-    "presets": "Presets",
-    "presetFree": "free",
-    "presetPlay": "Play",
-    "presetSaveNow": "Save what is playing here",
-    "presetSaved": "Preset saved",
-    "saveAsPreset": "Save as preset…",
     "addToFavorites": "Add to favourites",
     "removeFromFavorites": "Remove from favourites",
     "addedToFavorites": "Added to favourites",

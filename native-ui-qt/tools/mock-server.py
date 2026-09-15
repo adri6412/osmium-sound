@@ -65,16 +65,13 @@ OTHER = {
 }
 PHONE = {"playerid": "de:ad:be:ef:00:01", "name": "iPhone di Ale", "ip": "192.168.0.23:51234", "connected": 1}
 OWN = {"playerid": "aa:bb:cc:dd:ee:ff", "name": "Osmium", "ip": "127.0.0.1:41234", "connected": 1}
-# favourites (Favorites plugin), presets (the `presets` player pref) and the
-# library scan, as Lyrion answers them; MOCK_SCAN=N makes a rescan last N s
+# favourites (Favorites plugin) and the library scan, as Lyrion answers
+# them; MOCK_SCAN=N makes a rescan last N s
 FAVS = [
     {"id": "0", "name": "Radio Paradise", "url": "http://stream.radioparadise.com/flac", "isaudio": 1, "hasitems": 0, "type": "audio"},
     {"id": "1", "name": "TOTO IV", "url": "db:album.title=TOTO%20IV&contributor.name=TOTO", "isaudio": 1, "hasitems": 0, "type": "playlist"},
     {"id": "2", "name": "Serate", "isaudio": 0, "hasitems": 1, "type": "link"},
 ]
-PRESETS = [None] * 10
-PRESETS[0] = {"URL": "http://stream.radioparadise.com/flac", "text": "Radio Paradise", "type": "audio"}
-PRESETS[3] = {"URL": "file:///srv/music/toto/africa.flac", "text": "Africa", "type": "audio"}
 MUTE = {"on": 0}
 SCAN = {"until": 0.0, "last": T0 - 3600 * 5}
 SCAN_SECS = float(os.environ.get("MOCK_SCAN", "12") or 12)
@@ -98,9 +95,6 @@ def rpc(player, params):
     if cmd == "players":
         pl = players_now()
         r = {"count": len(pl), "players_loop": pl}
-    elif cmd == "status" and any(p == "menu:menu" for p in params):
-        r = {"preset_loop": [1 if p else 0 for p in PRESETS], "preset_data": [dict(p) if p else {} for p in PRESETS],
-             "playlist_tracks": len(QUEUE), "item_loop": []}
     elif cmd == "status":
         if len(params) > 1 and params[1] == "-" and player in OTHER:
             # a player that left the server answers nothing, like Lyrion does
@@ -219,14 +213,6 @@ def rpc(player, params):
             a, b = int(arg("from_id:")), int(arg("to_id:"))
             FAVS.insert(b, FAVS.pop(a))
             for n, f in enumerate(FAVS): f["id"] = str(n)
-    elif cmd == "jivefavorites" and params[1:2] == ["set_preset"]:
-        def arg(k): return next((p[len(k):] for p in params if isinstance(p, str) and p.startswith(k)), None)
-        key = int(arg("key:"))
-        if arg("playlist_index:") is not None:
-            t = QUEUE[STATE["index"] % len(QUEUE)]
-            PRESETS[key - 1] = {"URL": "file:///srv/music/%d.dsf" % STATE["index"], "text": t[0], "type": "audio"}
-        else:
-            PRESETS[key - 1] = {"URL": arg("favorites_url:"), "text": arg("favorites_title:"), "type": arg("favorites_type:") or "audio"}
     elif cmd == "info" and params[1:2] == ["total"]:
         r = {"_" + params[2]: {"albums": 312, "artists": 148, "genres": len(GENRES), "songs": 4021, "duration": 986543}[params[2]]}
     elif cmd == "rescanprogress":
