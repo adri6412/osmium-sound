@@ -1,52 +1,52 @@
 {
-  "tag_name": "v2.5.24-dev.15-alpha2",
-  "name": "v2.5.24-dev.15-alpha2",
-  "body": "## What's new in v2.5.24-dev.15-alpha2\n\n- lyrion setup: playlist folder before the plugins, not two seconds after\n- lyrion: a deliberate start is never refused by the unit's start limit\n- image: resolve *.local names (libnss-mdns)\n- vu: new Amber over layer\n- kiosk: checking for updates always ends in an outcome\n- site: companion download points at v1.0.11\n- feat(companion): Settings \u2192 Osmium Sound mirrors the web admin's sections \u2014 1.0.11\n- site: Facebook page button next to GitHub in the hero\n- site: count visits with a browser beacon, like Plausible and Umami\n",
+  "tag_name": "v2.5.25-dev.1-alpha1",
+  "name": "v2.5.25-dev.1-alpha1",
+  "body": "## What's new in v2.5.25-dev.1-alpha1\n\n- chore: version 2.5.25 \u2014 the next cycle after the stable 2.5.24\n- kiosk: favourites, presets and playlist editing from the screen; library search, genres, years, composers, new music, refresh\n- Update YouTube iframe source in index.html\n- site: screen requirement lists the resolutions offered in Settings\n- site: UEFI came before 2015, say which PCs have it\n- site: no OTA channels badge in the hero\n- site: hero without the power and memory figures\n- site: screenshots of the Qt interface\n- site: absolute og:image, social meta tags and more room for the demo video\n- site: hardware requirements before the download\n- site: fewer warnings before the download button\n- site: hero leads with the mini PC you already own and the Qt footprint\n- site: the features the README lists and the page left out\n- site: AGPL license, Qt interface and the current specs\n- docs: A/B image, add-ons, VU meter store and the recent UI changes\n- docs: the on-screen interface is Qt now, not Electron\n",
   "assets": [
     {
-      "name": "hifi-qtui-v2.5.24-dev.15-alpha2.tar.gz",
-      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.24-dev.15-alpha2/hifi-qtui-v2.5.24-dev.15-alpha2.tar.gz",
-      "size": 18156199
+      "name": "hifi-qtui-v2.5.25-dev.1-alpha1.tar.gz",
+      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.25-dev.1-alpha1/hifi-qtui-v2.5.25-dev.1-alpha1.tar.gz",
+      "size": 18983577
     },
     {
-      "name": "hifi-qtui-v2.5.24-dev.15-alpha2.tar.gz.sha256",
-      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.24-dev.15-alpha2/hifi-qtui-v2.5.24-dev.15-alpha2.tar.gz.sha256",
-      "size": 105
+      "name": "hifi-qtui-v2.5.25-dev.1-alpha1.tar.gz.sha256",
+      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.25-dev.1-alpha1/hifi-qtui-v2.5.25-dev.1-alpha1.tar.gz.sha256",
+      "size": 104
     },
     {
-      "name": "hifi-system-v2.5.24-dev.15-alpha2.tar.gz",
-      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.24-dev.15-alpha2/hifi-system-v2.5.24-dev.15-alpha2.tar.gz",
-      "size": 549156
+      "name": "hifi-system-v2.5.25-dev.1-alpha1.tar.gz",
+      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.25-dev.1-alpha1/hifi-system-v2.5.25-dev.1-alpha1.tar.gz",
+      "size": 552302
     },
     {
-      "name": "hifi-system-v2.5.24-dev.15-alpha2.tar.gz.sha256",
-      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.24-dev.15-alpha2/hifi-system-v2.5.24-dev.15-alpha2.tar.gz.sha256",
-      "size": 107
+      "name": "hifi-system-v2.5.25-dev.1-alpha1.tar.gz.sha256",
+      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.25-dev.1-alpha1/hifi-system-v2.5.25-dev.1-alpha1.tar.gz.sha256",
+      "size": 106
     },
     {
-      "name": "hifi-os-v2.5.24-dev.15-alpha2.tar.gz",
-      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.24-dev.15-alpha2/hifi-os-v2.5.24-dev.15-alpha2.tar.gz",
-      "size": 1403935
+      "name": "hifi-os-v2.5.25-dev.1-alpha1.tar.gz",
+      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.25-dev.1-alpha1/hifi-os-v2.5.25-dev.1-alpha1.tar.gz",
+      "size": 1403922
     },
     {
-      "name": "hifi-os-v2.5.24-dev.15-alpha2.tar.gz.sha256",
-      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.24-dev.15-alpha2/hifi-os-v2.5.24-dev.15-alpha2.tar.gz.sha256",
-      "size": 103
+      "name": "hifi-os-v2.5.25-dev.1-alpha1.tar.gz.sha256",
+      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.25-dev.1-alpha1/hifi-os-v2.5.25-dev.1-alpha1.tar.gz.sha256",
+      "size": 102
     },
     {
-      "name": "hifi-os-v2.5.24-dev.15-alpha2.tar.gz.sha256.sig",
-      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.24-dev.15-alpha2/hifi-os-v2.5.24-dev.15-alpha2.tar.gz.sha256.sig",
+      "name": "hifi-os-v2.5.25-dev.1-alpha1.tar.gz.sha256.sig",
+      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.25-dev.1-alpha1/hifi-os-v2.5.25-dev.1-alpha1.tar.gz.sha256.sig",
       "size": 64
     },
     {
-      "name": "hifi-image-v2.5.24-dev.15-alpha2.raucb",
-      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.24-dev.15-alpha2/hifi-image-v2.5.24-dev.15-alpha2.raucb",
-      "size": 1015098021
+      "name": "hifi-image-v2.5.25-dev.1-alpha1.raucb",
+      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.25-dev.1-alpha1/hifi-image-v2.5.25-dev.1-alpha1.raucb",
+      "size": 1015863971
     },
     {
-      "name": "hifi-image-v2.5.24-dev.15-alpha2.raucb.sha256",
-      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.24-dev.15-alpha2/hifi-image-v2.5.24-dev.15-alpha2.raucb.sha256",
-      "size": 105
+      "name": "hifi-image-v2.5.25-dev.1-alpha1.raucb.sha256",
+      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.25-dev.1-alpha1/hifi-image-v2.5.25-dev.1-alpha1.raucb.sha256",
+      "size": 104
     }
   ]
 }
