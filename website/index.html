@@ -585,6 +585,16 @@
     .install-req strong { color: var(--text); font-weight: 600; }
     .install-req a { color: var(--accent); }
 
+    /* ── HARDWARE REQUIREMENTS ─────────────── */
+    #hardware { border-top: 1px solid var(--border); }
+    /* Requirements come before the download: a highlighted box, not a warning. */
+    .req-box {
+      background: var(--bg-card); border: 1px solid rgba(245,184,32,0.35);
+      border-radius: var(--radius); padding: 2rem 2.25rem;
+    }
+    @media (max-width: 640px) { .req-box { padding: 1.4rem 1.2rem; } }
+    .section-desc a, .specs-table a { color: var(--accent); }
+
     /* ── MANUAL CALLOUT ──────────────────────────────────── */
     #manual { border-top: 1px solid var(--border); background: var(--bg-card); }
     #support { border-top: 1px solid var(--border); }
@@ -715,6 +725,7 @@
     <span class="nav-dot"></span>
   </a>
   <ul class="nav-links">
+    <li><a href="#hardware" data-en="Requirements" data-it="Requisiti">Requirements</a></li>
     <li><a href="#install" data-en="Install" data-it="Installazione">Install</a></li>
     <li><a href="#manual" data-en="Manual" data-it="Manuale" style="color:var(--accent)">Manual</a></li>
     <li><a href="#features" data-en="Features" data-it="Funzioni">Features</a></li>
@@ -764,6 +775,39 @@
     <span class="pill"><strong>FLAC · DSD · 192kHz</strong></span>
     <span class="pill"><strong>Deezer · Qobuz · TIDAL · Spotify</strong></span>
     <span class="pill"><strong>AGPL-3.0</strong> Open Source</span>
+  </div>
+</section>
+
+<!-- HARDWARE REQUIREMENTS (from manual.html) -->
+<section id="hardware">
+  <div class="centered">
+    <div class="section-label" data-en="Hardware requirements" data-it="Requisiti hardware">Hardware requirements</div>
+    <h2 class="section-title" data-en="What you need" data-it="Cosa ti serve">What you need</h2>
+    <p class="section-desc" data-en="No high-end hardware needed: Osmium Sound runs well on inexpensive or recycled mini PCs. As a rule of thumb, any PC built from 2015 onwards is fine. Details in the &lt;a href=&quot;manual.html#en-requirements&quot; target=&quot;_blank&quot;&gt;manual&lt;/a&gt;." data-it="Non serve un dispositivo di fascia alta: Osmium Sound gira bene su mini PC economici o riciclati. Come regola pratica va bene qualsiasi PC prodotto dal 2015 in poi. I dettagli sono nel &lt;a href=&quot;manual.html#it-requisiti&quot; target=&quot;_blank&quot;&gt;manuale&lt;/a&gt;.">No high-end hardware needed: Osmium Sound runs well on inexpensive or recycled mini PCs. As a rule of thumb, any PC built from 2015 onwards is fine. Details in the <a href="manual.html#en-requirements" target="_blank">manual</a>.</p>
+  </div>
+  <div class="specs-inner req-box">
+    <div class="specs-group">
+      <h4 data-en="Components" data-it="Componenti">Components</h4>
+      <table class="specs-table">
+        <tr><td data-en="Computer" data-it="Computer">Computer</td><td data-en="x86-64 (64-bit) mini PC with &lt;strong&gt;UEFI firmware — mandatory&lt;/strong&gt;. Legacy BIOS-only machines are not supported." data-it="Mini PC x86-64 (64 bit) con firmware &lt;strong&gt;UEFI — obbligatorio&lt;/strong&gt;. Le macchine con solo BIOS legacy non sono supportate.">x86-64 (64-bit) mini PC with <strong>UEFI firmware — mandatory</strong>. Legacy BIOS-only machines are not supported.</td></tr>
+        <tr><td data-en="Storage" data-it="Storage">Storage</td><td data-en="Internal disk/SSD to install onto (16&amp;nbsp;GB recommended, 8&amp;nbsp;GB minimum)" data-it="Disco/SSD interno per l&#x27;installazione (16&amp;nbsp;GB consigliati, 8&amp;nbsp;GB minimo)">Internal disk/SSD to install onto (16&nbsp;GB recommended, 8&nbsp;GB minimum)</td></tr>
+        <tr><td data-en="USB stick" data-it="Chiavetta USB">USB stick</td><td data-en="8&amp;nbsp;GB or larger, needed only for the initial install" data-it="8&amp;nbsp;GB o superiore, solo per l&#x27;installazione iniziale">8&nbsp;GB or larger, needed only for the initial install</td></tr>
+        <tr><td data-en="Screen (optional)" data-it="Schermo (opzionale)">Screen (optional)</td><td data-en="1024×600 touchscreen recommended for “with screen” mode — not needed in headless or server-only mode" data-it="Touchscreen 1024×600 consigliato per la modalità “con schermo” — non necessario in modalità headless o solo server">1024×600 touchscreen recommended for “with screen” mode — not needed in headless or server-only mode</td></tr>
+        <tr><td data-en="Audio output" data-it="Uscita audio">Audio output</td><td data-en="USB DAC or HDMI output" data-it="DAC USB oppure uscita HDMI">USB DAC or HDMI output</td></tr>
+        <tr><td data-en="Network" data-it="Rete">Network</td><td data-en="Ethernet or Wi-Fi" data-it="Ethernet oppure Wi-Fi">Ethernet or Wi-Fi</td></tr>
+        <tr><td data-en="Setup device" data-it="Per la configurazione">Setup device</td><td data-en="Any device with a browser — phone, tablet or PC — for installation and first setup" data-it="Qualunque dispositivo con un browser — telefono, tablet o PC — per l&#x27;installazione e la prima configurazione">Any device with a browser — phone, tablet or PC — for installation and first setup</td></tr>
+      </table>
+    </div>
+    <div class="specs-group">
+      <h4 data-en="Processors that always come with UEFI" data-it="Processori che hanno sempre l&#x27;UEFI">Processors that always come with UEFI</h4>
+      <table class="specs-table">
+        <tr><td data-en="Intel Core" data-it="Intel Core">Intel Core</td><td data-en="i3/i5/i7/i9 from the 6th generation “Skylake” (2015) onwards, Core Ultra too" data-it="i3/i5/i7/i9 dalla 6ª generazione “Skylake” (2015) in poi, anche Core Ultra">i3/i5/i7/i9 from the 6th generation “Skylake” (2015) onwards, Core Ultra too</td></tr>
+        <tr><td data-en="Intel Celeron / Pentium / Atom / N-series" data-it="Intel Celeron / Pentium / Atom / serie N">Intel Celeron / Pentium / Atom / N-series</td><td data-en="“Braswell” (2015), “Apollo Lake” (2016), “Gemini Lake” (2017–2019), “Jasper Lake” (2021), “Alder Lake-N” (N95/N100/N200/i3-N305, 2023), “Twin Lake” (N150, 2025) — the chips found in most mini PCs" data-it="“Braswell” (2015), “Apollo Lake” (2016), “Gemini Lake” (2017–2019), “Jasper Lake” (2021), “Alder Lake-N” (N95/N100/N200/i3-N305, 2023), “Twin Lake” (N150, 2025) — i chip della maggior parte dei mini PC">“Braswell” (2015), “Apollo Lake” (2016), “Gemini Lake” (2017–2019), “Jasper Lake” (2021), “Alder Lake-N” (N95/N100/N200/i3-N305, 2023), “Twin Lake” (N150, 2025) — the chips found in most mini PCs</td></tr>
+        <tr><td data-en="AMD" data-it="AMD">AMD</td><td data-en="Any Ryzen (2017 onwards, every generation) or Athlon on the AM4 socket; A-series APUs “Carrizo” (2015) and “Bristol Ridge” (2016)" data-it="Qualsiasi Ryzen (dal 2017, tutte le generazioni) o Athlon su socket AM4; APU serie A “Carrizo” (2015) e “Bristol Ridge” (2016)">Any Ryzen (2017 onwards, every generation) or Athlon on the AM4 socket; A-series APUs “Carrizo” (2015) and “Bristol Ridge” (2016)</td></tr>
+        <tr><td data-en="Older PCs" data-it="PC più vecchi">Older PCs</td><td data-en="Many have UEFI too: they may work if their firmware offers a UEFI mode (any PC sold with Windows 8 or newer has it), but we don&#x27;t test them" data-it="Molti hanno già l&#x27;UEFI: possono funzionare se il firmware offre la modalità UEFI (ce l&#x27;ha qualsiasi PC venduto con Windows 8 o successivo), ma non li testiamo">Many have UEFI too: they may work if their firmware offers a UEFI mode (any PC sold with Windows 8 or newer has it), but we don't test them</td></tr>
+        <tr><td data-en="Avoid" data-it="Da evitare">Avoid</td><td data-en="Atom “Bay Trail”/“Cherry Trail” tablets and HDMI sticks (2013–2015): many have a 32-bit UEFI that cannot boot the 64-bit image" data-it="Tablet e “stick” HDMI con Atom “Bay Trail”/“Cherry Trail” (2013–2015): molti hanno un UEFI a 32 bit che non può avviare l&#x27;immagine a 64 bit">Atom “Bay Trail”/“Cherry Trail” tablets and HDMI sticks (2013–2015): many have a 32-bit UEFI that cannot boot the 64-bit image</td></tr>
+      </table>
+    </div>
   </div>
 </section>
 
