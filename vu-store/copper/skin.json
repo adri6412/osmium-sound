@@ -1,0 +1,36 @@
+{
+  "id": "copper",
+  "version": 1,
+  "name": {
+    "en": "Copper",
+    "it": "Rame"
+  },
+  "order": 70,
+  "size": [
+    2048,
+    1080
+  ],
+  "under": "under.png",
+  "over": "over.png",
+  "needle": {
+    "image": "needle.png",
+    "width": 53.89,
+    "height": 384.45,
+    "pivotX": 24.79,
+    "pivotY": 400.93
+  },
+  "meters": [
+    [
+      534.86,
+      645.25
+    ],
+    [
+      1487.79,
+      645.4
+    ]
+  ],
+  "angles": [
+    -44.5,
+    47.65
+  ]
+}

@@ -1,0 +1,36 @@
+{
+  "id": "golden",
+  "version": 1,
+  "name": {
+    "en": "Golden",
+    "it": "Dorato"
+  },
+  "order": 80,
+  "size": [
+    2048,
+    1080
+  ],
+  "under": "under.png",
+  "over": "over.png",
+  "needle": {
+    "image": "needle.png",
+    "width": 53.89,
+    "height": 646.74,
+    "pivotX": 24.5,
+    "pivotY": 682.5
+  },
+  "meters": [
+    [
+      529.3,
+      883.71
+    ],
+    [
+      1511.63,
+      885.15
+    ]
+  ],
+  "angles": [
+    -34.1,
+    34.3
+  ]
+}
