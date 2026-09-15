@@ -11,12 +11,12 @@
   <meta property="og:url" content="https://osmiumsound.it/">
   <meta property="og:title" content="Osmium Sound — Hi-Fi Media Appliance for x86">
   <meta property="og:description" content="Touchscreen hi-fi music player for x86 mini PCs, built on Debian. Bit-perfect FLAC, DSD and PCM up to 192kHz, Deezer, Qobuz, TIDAL &amp; Spotify via Lyrion, CD ripping and updates that roll back on their own.">
-  <meta property="og:image" content="https://osmiumsound.it/01.png">
-  <meta property="og:image:alt" content="Osmium Sound — Now Playing">
+  <meta property="og:image" content="https://osmiumsound.it/screens/02-now-playing-classic.jpg">
+  <meta property="og:image:alt" content="Osmium Sound — Now Playing with the VU meters">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="Osmium Sound — Hi-Fi Media Appliance for x86">
   <meta name="twitter:description" content="Touchscreen hi-fi music player for x86 mini PCs, built on Debian. Bit-perfect FLAC, DSD and PCM up to 192kHz, Deezer, Qobuz, TIDAL &amp; Spotify via Lyrion, CD ripping and updates that roll back on their own.">
-  <meta name="twitter:image" content="https://osmiumsound.it/01.png">
+  <meta name="twitter:image" content="https://osmiumsound.it/screens/02-now-playing-classic.jpg">
   <link rel="icon" type="image/svg+xml" href="favicon.svg">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -345,11 +345,6 @@
       padding: 3px 10px; border-radius: 100px;
       backdrop-filter: blur(8px);
       pointer-events: none;
-    }
-    .carousel-disclaimer {
-      margin-top: 14px; text-align: center;
-      font-size: 0.74rem; color: rgba(255,255,255,0.38);
-      font-style: italic;
     }
     .carousel-thumbs {
       display: flex; gap: 8px; margin-top: 12px;
@@ -1141,16 +1136,13 @@
 
   <div class="carousel-wrap">
     <div class="carousel-main" id="carouselMain">
-      <img id="carouselImg" src="01.png" alt="Osmium Sound — Main player view">
+      <img id="carouselImg" src="screens/01-home.jpg" alt="Osmium Sound — Home">
       <button class="carousel-nav prev" id="prevBtn" aria-label="Previous screenshot">&#8249;</button>
       <button class="carousel-nav next" id="nextBtn" aria-label="Next screenshot">&#8250;</button>
-      <div class="carousel-counter" id="counter">1 / 4</div>
-      <div class="carousel-caption" id="caption">Main player — Now Playing</div>
+      <div class="carousel-counter" id="counter">1 / 11</div>
+      <div class="carousel-caption" id="caption">Home — library and mini player</div>
     </div>
     <div class="carousel-thumbs" id="thumbsContainer"></div>
-    <p class="carousel-disclaimer" id="carouselDisclaimer"
-       data-en="Images are indicative and may differ from the current version as the interface evolves."
-       data-it="Le immagini sono indicative e possono differire dalla versione attuale, poiché l'interfaccia evolve nel tempo.">Images are indicative and may differ from the current version as the interface evolves.</p>
   </div>
 </section>
 
@@ -1324,10 +1316,17 @@
 <script>
   // ── Bilingual EN / IT support ────────────────────────────────
   const screens = [
-    { src: '01.png', cap: { en: 'Main player — Now Playing',                         it: 'Player principale — In riproduzione' } },
-    { src: '02.png', cap: { en: 'Full-screen Now Playing with analog VU meters',      it: 'In riproduzione a schermo intero con VU meter analogici' } },
-    { src: '03.png', cap: { en: 'Album grid view',                                    it: 'Vista a griglia degli album' } },
-    { src: '04.png', cap: { en: 'Apps & Streaming services',                          it: 'App e servizi di streaming' } },
+    { src: 'screens/01-home.jpg', thumb: 'screens/thumbs/01-home.jpg', cap: { en: 'Home — library and mini player', it: 'Home — libreria e mini player' } },
+    { src: 'screens/02-now-playing-classic.jpg', thumb: 'screens/thumbs/02-now-playing-classic.jpg', cap: { en: 'Now Playing — Classic VU meters', it: 'In riproduzione — VU meter Classic' } },
+    { src: 'screens/03-now-playing-modulometer.jpg', thumb: 'screens/thumbs/03-now-playing-modulometer.jpg', cap: { en: 'Now Playing — Modulometer VU meters', it: 'In riproduzione — VU meter Modulometer' } },
+    { src: 'screens/04-now-playing-amber.jpg', thumb: 'screens/thumbs/04-now-playing-amber.jpg', cap: { en: 'Now Playing — Amber VU meters', it: 'In riproduzione — VU meter Amber' } },
+    { src: 'screens/05-now-playing-ice-blue.jpg', thumb: 'screens/thumbs/05-now-playing-ice-blue.jpg', cap: { en: 'Now Playing — Ice Blue VU meters', it: 'In riproduzione — VU meter Ice Blue' } },
+    { src: 'screens/06-now-playing-exposed.jpg', thumb: 'screens/thumbs/06-now-playing-exposed.jpg', cap: { en: 'Now Playing — Exposed VU meters', it: 'In riproduzione — VU meter Exposed' } },
+    { src: 'screens/07-now-playing-panoramic.jpg', thumb: 'screens/thumbs/07-now-playing-panoramic.jpg', cap: { en: 'Now Playing — Panoramic VU meters', it: 'In riproduzione — VU meter Panoramic' } },
+    { src: 'screens/08-albums.jpg', thumb: 'screens/thumbs/08-albums.jpg', cap: { en: 'Album grid view', it: 'Vista a griglia degli album' } },
+    { src: 'screens/09-apps.jpg', thumb: 'screens/thumbs/09-apps.jpg', cap: { en: 'Apps & streaming services', it: 'App e servizi di streaming' } },
+    { src: 'screens/10-settings.jpg', thumb: 'screens/thumbs/10-settings.jpg', cap: { en: 'Settings', it: 'Impostazioni' } },
+    { src: 'screens/11-settings-vu-meters.jpg', thumb: 'screens/thumbs/11-settings-vu-meters.jpg', cap: { en: 'Settings — VU meter style', it: 'Impostazioni — stile dei VU meter' } },
   ];
 
   let lang = 'en';
@@ -1384,7 +1383,7 @@
   screens.forEach((s, i) => {
     const d = document.createElement('div');
     d.className = 'thumb' + (i === 0 ? ' active' : '');
-    d.innerHTML = `<img src="${s.src}" alt="Screenshot ${i+1}" loading="lazy">`;
+    d.innerHTML = `<img src="${s.thumb || s.src}" alt="Screenshot ${i+1}" loading="lazy">`;
     d.addEventListener('click', () => goTo(i));
     thumbsEl.appendChild(d);
   });
