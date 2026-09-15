@@ -25,15 +25,19 @@ Bit-perfect audio, streaming services, and signed OTA updates — one sleek dark
 - 🎵 **High-resolution audio** — FLAC, DSD (DoP), PCM up to 192kHz, bit-perfect (no resampling)
 - 🎧 **Streaming services** — Deezer, Qobuz, TIDAL, Spotify and more, via Lyrion plugins
 - 📁 **Music library** — browse by artist, album, folder or playlist, fast indexing
-- 💾 **Music sources** — USB drives, internal disks (adopt or format from the UI), NAS/SMB shares; adopted disks can be shared back on the LAN over SMB
+- 💾 **Music sources** — USB drives, internal disks (adopt or format from the UI), NAS/SMB shares found for you on the network; adopted disks can be shared back on the LAN over SMB, and a file manager in the web admin copies, moves and renames what's on them
 - 💿 **CD playback & ripping** — insert a disc, play it or rip it to tagged FLAC (MusicBrainz metadata + cover art) straight into your library
 - 🧭 **Discover** — endless random mixes, "keep playing similar music", similar artists and artist bios on the touchscreen
 - 📻 **Internet radio** — thousands of stations, save favourites from the touchscreen
+- 🎚️ **Analog VU meters** — six built-in looks, more downloadable from a signed online catalogue, plus a status plate showing Hi-Res/PCM/DSD and BitPerfect/ReplayGain
+- 🔀 **Any player, one screen** — drive the other players on the same Lyrion from the touchscreen, then come back to this one
 - 🖥️ **With screen or headless** — touchscreen kiosk, headless (web admin + companion app), or server-only (serves Lyrion to other players, plays nothing itself)
 - 🌐 **Web admin** — manage a unit from any browser on the LAN (network, audio, sources, updates, backups, SSH, Tailscale remote access)
-- 📱 **Android companion app** — browse, control playback/queue, adjust volume, pair by QR code
+- 📱 **Android companion app** — browse, control playback/queue, adjust volume, pair by QR code, the web admin's settings, turn the device off; the phone can also be a player itself
 - 💼 **Backup & restore** — profile backups (settings, sources, Lyrion prefs, optionally Wi-Fi/accounts encrypted), scheduled or on demand, restorable even from the first-boot wizard
-- ⬆️ **Signed OTA updates** — Ed25519-signed OS payloads, Prod / Dev release channels (plus a private Alpha channel for testers)
+- 🛡️ **Read-only system, A/B updates** — the OS is a signed image in one of two slots; an update is written to the other one and a device that doesn't come up healthy rolls back on its own. Older installs convert over the air, no reinstall
+- ⬆️ **Signed OTA updates** — signed image bundles (RAUC) and Ed25519-signed OS payloads, Prod / Dev release channels (plus a private Alpha channel for testers)
+- 🧩 **Add-ons** — `apt install` over SSH still works on the read-only image: extra packages become system extensions that survive updates
 
 ## 📋 Specs
 
@@ -41,13 +45,13 @@ Bit-perfect audio, streaming services, and signed OTA updates — one sleek dark
 |---|---|
 | **Hardware** | x86-64 mini-PC (Intel iGPU-class graphics is plenty) |
 | **Display** | 1024×600 touchscreen (optimized for this resolution); headless operation also supported |
-| **OS** | Custom Debian 13 ("trixie") appliance image built with live-build |
+| **OS** | Custom Debian 13 ("trixie") appliance image built with live-build: a ~850 MiB read-only squashfs in A/B slots, settings and music on a separate data partition |
 | **Interface** | Native Qt 6 / QML app drawing straight to the display over DRM/KMS (no X server, no compositor) — about 3.3 W and 175 MB on Now Playing with the VU meters, against 4.9 W and 650 MB for the previous Electron kiosk; a Vue web admin for any browser on the LAN |
-| **Media server** | Lyrion Music Server (installed on first boot), web player on Material Skin with the "Osmium" theme |
+| **Media server** | Lyrion Music Server (installed by the setup wizard when this device is the server, or an existing one on the LAN), web player on Material Skin with the "Osmium" theme |
 | **Audio formats** | FLAC, DSD (64/128/256), MP3, AAC, WAV, AIFF |
 | **Max resolution** | 32-bit / 192kHz PCM |
 | **Output** | USB DAC, HDMI |
-| **Update system** | Signed OTA (Ed25519), Prod/Dev channels |
+| **Update system** | Whole-image A/B updates with automatic rollback (RAUC, signed), streamed straight into the spare slot; Prod/Dev channels |
 | **License** | AGPL-3.0 (app code), commercial licenses available — see [Licensing](#-licensing) |
 
 ## 🚀 Get started
@@ -55,15 +59,15 @@ Bit-perfect audio, streaming services, and signed OTA updates — one sleek dark
 1. **Download** the latest install ISO from [Releases](https://github.com/adri6412/osmium-sound/releases) (or use **Osmium Flasher**, see `flasher/`, which downloads and verifies the current image for you).
 2. **Flash** it to an 8GB+ USB stick with [Osmium Flasher](https://osmiumsound.it), [balenaEtcher](https://etcher.balena.io/), Rufus, or `dd`.
 3. **Boot** your x86 mini-PC from the stick and finish the install from there: pick the disk, confirm, done.
-4. On first boot after install, the screen shows its own address (`http://<ip>`). Open it on your phone or laptop to finish setup: language, restore-from-backup or fresh start, device name and mode, audio output, Lyrion, web-player look, music services, web-admin account, time zone, music sources.
+4. On first boot after install, pick your Wi-Fi on the screen (or just plug in a cable); the screen then shows its own address (`http://<ip>`). Open it on your phone or laptop to finish setup: language, restore-from-backup or fresh start, any required update, device name and mode, audio output, Lyrion (this device, or a server already on your network), web-player look, music services, web-admin account, time zone, music sources.
 
-Every later version — UI, system, OS, and Lyrion — arrives automatically over the air from the Settings screen (or the web admin). No reflashing required.
+Every later version — the system image and Lyrion — arrives over the air from the Settings screen (or the web admin, or the companion). It is written to the spare slot while the device keeps playing, and the reboot switches over; if the new version doesn't come up healthy, the device goes back to the previous one by itself. No reflashing required.
 
-> **Try it live.** Pick **Try Osmium Sound (no install)** at the boot menu to run the kiosk straight from the USB stick, nothing is written to disk. If it doesn't log in automatically, use `hifi` / `hifi` at the login screen.
+> **Try it live.** Pick **Try Osmium Sound (no install)** at the boot menu to run the interface straight from the USB stick, nothing is written to disk.
 
 ## 📱 Android companion
 
-Control Osmium Sound from your phone — browse the library, drive playback and the queue, adjust volume, switch audio output, manage multiroom, updates, backups and basic system settings. Pair in seconds by scanning the QR code on the device's Settings screen. Distributed as a signed APK or via our self-hosted F-Droid repo (not on the Play Store) — see the [website](https://osmiumsound.it/#android) and [COMPANION_APP.md](COMPANION_APP.md).
+Control Osmium Sound from your phone — browse the library, drive playback and the queue, adjust volume, and reach the same settings as the web admin (audio output, music sources, Lyrion, playback and VU meters, display, updates, backups, system), or turn the device off from the top bar. The phone can also play music itself, as one more player in the house, and connect to any Lyrion server, not only an Osmium device. Pair in seconds by scanning the QR code on the device's Settings screen. Distributed as a signed APK or via our self-hosted F-Droid repo (not on the Play Store) — see the [website](https://osmiumsound.it/#android) and [COMPANION_APP.md](COMPANION_APP.md).
 
 ## 📖 Documentation
 
