@@ -4,10 +4,19 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title data-en="Osmium Sound — Hi-Fi Media Appliance for x86 / Debian" data-it="Osmium Sound — Media player Hi-Fi per x86 / Debian">Osmium Sound — Hi-Fi Media Appliance for x86 / Debian</title>
-  <meta name="description" content="Touchscreen-friendly hi-fi media player for x86 on Debian. FLAC, DSD, 192kHz, bit-perfect DoP. Streams Deezer, Qobuz, TIDAL &amp; Spotify.">
-  <meta property="og:title" content="Osmium Sound">
-  <meta property="og:description" content="Touchscreen-friendly hi-fi media appliance. Bit-perfect audio. Streaming services. No compromise.">
-  <meta property="og:image" content="01.png">
+  <meta name="description" content="Touchscreen hi-fi music player for x86 mini PCs, built on Debian. Bit-perfect FLAC, DSD and PCM up to 192kHz, Deezer, Qobuz, TIDAL &amp; Spotify via Lyrion, CD ripping and updates that roll back on their own.">
+  <link rel="canonical" href="https://osmiumsound.it/">
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="Osmium Sound">
+  <meta property="og:url" content="https://osmiumsound.it/">
+  <meta property="og:title" content="Osmium Sound — Hi-Fi Media Appliance for x86">
+  <meta property="og:description" content="Touchscreen hi-fi music player for x86 mini PCs, built on Debian. Bit-perfect FLAC, DSD and PCM up to 192kHz, Deezer, Qobuz, TIDAL &amp; Spotify via Lyrion, CD ripping and updates that roll back on their own.">
+  <meta property="og:image" content="https://osmiumsound.it/01.png">
+  <meta property="og:image:alt" content="Osmium Sound — Now Playing">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Osmium Sound — Hi-Fi Media Appliance for x86">
+  <meta name="twitter:description" content="Touchscreen hi-fi music player for x86 mini PCs, built on Debian. Bit-perfect FLAC, DSD and PCM up to 192kHz, Deezer, Qobuz, TIDAL &amp; Spotify via Lyrion, CD ripping and updates that roll back on their own.">
+  <meta name="twitter:image" content="https://osmiumsound.it/01.png">
   <link rel="icon" type="image/svg+xml" href="favicon.svg">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -246,7 +255,11 @@
     .carousel-wrap { max-width: 960px; margin: 2.5rem auto 0; }
     /* ── VIDEO EMBED ─────────────────────────────────── */
     .video-wrap {
-      max-width: 960px; margin: 2.5rem auto 0;
+      max-width: 1120px; margin: 2.5rem auto 0;
+    }
+    .video-title {
+      font-size: 0.72rem; font-weight: 700; letter-spacing: 0.18em;
+      text-transform: uppercase; color: var(--muted); margin-bottom: 0.9rem; text-align: center;
     }
     .video-frame {
       position: relative; width: 100%;
@@ -765,6 +778,10 @@
       <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0 0 24 12c0-6.63-5.37-12-12-12z"/></svg>
       <span data-en="View on GitHub" data-it="Guarda su GitHub">View on GitHub</span>
     </a>
+    <a class="btn-secondary" href="#demo">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg>
+      <span data-en="Watch the demo" data-it="Guarda la demo">Watch the demo</span>
+    </a>
     <a class="btn-secondary" href="https://www.facebook.com/profile.php?id=61593595246369" target="_blank" rel="noopener">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M24 12.07C24 5.4 18.63 0 12 0S0 5.4 0 12.07C0 18.1 4.39 23.1 10.13 24v-8.44H7.08v-3.49h3.05V9.41c0-3.02 1.79-4.69 4.53-4.69 1.31 0 2.68.24 2.68.24v2.97h-1.51c-1.49 0-1.96.93-1.96 1.89v2.25h3.33l-.53 3.49h-2.8V24C19.61 23.1 24 18.1 24 12.07z"/></svg>
       <span data-en="Follow us on Facebook" data-it="Seguici su Facebook">Follow us on Facebook</span>
@@ -1108,7 +1125,8 @@
     <p class="section-desc" data-en="Optimised for touchscreens. Clean, dark, distraction-free." data-it="Ottimizzata per i touchscreen. Pulita, scura, senza distrazioni.">Optimised for touchscreens. Clean, dark, distraction-free.</p>
   </div>
 
-  <div class="video-wrap">
+  <div class="video-wrap" id="demo">
+    <div class="video-title" data-en="Watch it in action" data-it="Guardalo in azione">Watch it in action</div>
     <div class="video-frame">
       <button class="video-facade" id="videoFacade" aria-label="Play demo video">
         <img src="https://i.ytimg.com/vi/SlzFc82tAqM/sddefault.jpg"
