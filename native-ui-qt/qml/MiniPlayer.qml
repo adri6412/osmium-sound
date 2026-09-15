@@ -187,7 +187,7 @@ Item {
         readonly property real frac: Math.max(0, Math.min(100, Player.volume)) / 100
         Item {
             x: 11; y: 4; width: 24; height: 24
-            Icon { anchors.centerIn: parent; name: Player.volume === 0 ? "volume-x" : "volume-2"; size: 14; color: Player.volumeFixed ? Theme.silverA(0.18) : Theme.silverA(0.6) }
+            Icon { anchors.centerIn: parent; name: Player.muted || Player.volume === 0 ? "volume-x" : "volume-2"; size: 14; color: Player.volumeFixed ? Theme.silverA(0.18) : Player.muted ? Theme.gold : Theme.silverA(0.6) }
             Tap { onClicked: Player.toggleMute() }
         }
         Item {

@@ -3,7 +3,7 @@ import { ref, computed, onMounted, onUnmounted } from 'vue';
 import { api } from '../api.js';
 import { useI18n } from '../i18n';
 
-const { t } = useI18n();
+const { t, lang } = useI18n();
 const host = location.hostname;
 // LMS link follows the skin choice: Material's page once a skin was chosen
 // (Osmium theme pre-selected for new browsers), bare root on legacy devices.
@@ -19,6 +19,52 @@ let statsPoll = null;
 async function loadStats() {
   const st = await api.sys('stats');
   if (st.ok) stats.value = st.data;
+}
+
+// The music server's library: counts and last scan from Lyrion itself
+// (`info total`, `serverstatus`), a refresh on demand (`rescan`). Read with
+// the stats, so a scan started here — or from the kiosk — shows its progress.
+const lib = ref({ albums: null, artists: null, songs: null, duration: 0, lastScan: 0, scanning: false, progress: '', pct: -1, ok: false, busy: false });
+
+async function loadLibrary() {
+  const ss = await api.lyrionQuery(['serverstatus', 0, 0]);
+  if (!ss.ok || !ss.data) { lib.value = { ...lib.value, ok: false }; return; }
+  const d = ss.data;
+  const total = Number(d.progresstotal || 0);
+  const scanning = Number(d.rescan || 0) !== 0;
+  const next = {
+    ...lib.value, ok: true, lastScan: Number(d.lastscan || 0), scanning,
+    progress: scanning && d.progressname ? String(d.progressname) : '',
+    pct: scanning && total > 0 ? Math.min(100, Math.round((100 * Number(d.progressdone || 0)) / total)) : -1,
+  };
+  for (const e of ['albums', 'artists', 'songs', 'duration']) {
+    const r = await api.lyrionQuery(['info', 'total', e, '?']);
+    if (r.ok && r.data && r.data['_' + e] !== undefined) next[e] = Number(r.data['_' + e]);
+  }
+  lib.value = next;
+}
+
+async function rescan() {
+  lib.value = { ...lib.value, busy: true };
+  await api.lyrionQuery(['rescan']);
+  lib.value = { ...lib.value, busy: false, scanning: true, pct: -1, progress: '' };
+  setTimeout(loadLibrary, 1500);
+}
+
+async function abortScan() {
+  await api.lyrionQuery(['abortscan']);
+  setTimeout(loadLibrary, 800);
+}
+
+function fmtDuration(sec) {
+  const d = Math.floor(sec / 86400), h = Math.floor((sec % 86400) / 3600), m = Math.floor((sec % 3600) / 60);
+  if (d > 0) return `${d} ${t('dashboard.library.days')} ${h} h`;
+  if (h > 0) return `${h} h ${m} min`;
+  return `${m} min`;
+}
+
+function fmtWhen(ts) {
+  return new Date(ts * 1000).toLocaleString(lang.value === 'it' ? 'it-IT' : 'en-GB', { dateStyle: 'medium', timeStyle: 'short' });
 }
 
 onMounted(async () => {
@@ -43,9 +89,10 @@ onMounted(async () => {
     else if (sk.ok && sk.data.skin === 'material') lmsUrl.value = `http://${host}:9000/material/`;
   }
   await loadStats();
+  await loadLibrary();
   // CPU/RAM/disk/temperature/GPU are live figures -- keep the status card
   // current without requiring a manual page reload.
-  statsPoll = setInterval(loadStats, 5000);
+  statsPoll = setInterval(() => { loadStats(); loadLibrary(); }, 5000);
 });
 
 onUnmounted(() => {
@@ -141,6 +188,24 @@ const gpu = computed(() => [
     </div>
     <div class="between item" v-if="gpu"><span class="muted">{{ t('dashboard.gpu') }}</span>
       <span class="silver">{{ gpu }}</span>
+    </div>
+  </div>
+
+  <div class="card" v-if="lib.ok">
+    <h3><span class="dot"></span>{{ t('dashboard.library.title') }}</h3>
+    <div class="between item"><span class="muted">{{ t('dashboard.library.albums') }}</span><span class="silver">{{ lib.albums ?? '—' }}</span></div>
+    <div class="between item"><span class="muted">{{ t('dashboard.library.artists') }}</span><span class="silver">{{ lib.artists ?? '—' }}</span></div>
+    <div class="between item"><span class="muted">{{ t('dashboard.library.tracks') }}</span><span class="silver">{{ lib.songs ?? '—' }}</span></div>
+    <div class="between item" v-if="lib.duration > 0"><span class="muted">{{ t('dashboard.library.duration') }}</span><span class="silver">{{ fmtDuration(lib.duration) }}</span></div>
+    <div class="between item"><span class="muted">{{ t('dashboard.library.lastScan') }}</span>
+      <span class="silver">{{ lib.lastScan > 0 ? fmtWhen(lib.lastScan) : t('dashboard.library.never') }}</span>
+    </div>
+    <div class="between item" v-if="lib.scanning">
+      <span class="muted">{{ t('dashboard.library.scanning') }}<template v-if="lib.pct >= 0">&nbsp;{{ lib.pct }}%</template><template v-if="lib.progress">&nbsp;· {{ lib.progress }}</template></span>
+      <button class="ghost fit" @click="abortScan">{{ t('dashboard.library.stop') }}</button>
+    </div>
+    <div class="row" style="margin-top: 12px" v-else>
+      <button class="secondary" :disabled="lib.busy" @click="rescan">{{ t('dashboard.library.refresh') }}</button>
     </div>
   </div>
 

@@ -18,6 +18,7 @@ Player::Player(QObject *parent) : QObject(parent) {
         if (m_connected && m_playerProvisional && now - m_lastFind >= 3000) findPlayer();
         if ((m_localName.isEmpty() || m_playerProvisional) && now - m_lastNameFetch >= 5000) fetchLocalName();
         if (m_connected && now - m_lastPrefs >= 5000) { m_lastPrefs = now; pollPrefs(); }
+        if (m_connected && now - m_lastPresets >= 5000) { m_lastPresets = now; pollPresets(); }
         if (now - m_lastSettings >= 5000) { m_lastSettings = now; pollSettings(); }
         if (now - m_lastUsb >= 4000) { m_lastUsb = now; pollUsb(); }
         if (now - m_lastOta >= 3000) { m_lastOta = now; pollOta(); }
@@ -131,7 +132,9 @@ void Player::switchTo(const QString &id, const QString &name) {
     m_connected = true;
     m_artKey.clear();
     emit connectedChanged(); emit playerChanged();
-    pollPrefs(); m_wantNow = true;
+    m_favKey.clear();
+    if (!m_presets.isEmpty()) { m_presets.clear(); emit presetsChanged(); }
+    pollPrefs(); pollPresets(); m_wantNow = true;
 }
 
 void Player::selectPlayer(const QString &id, const QString &name) {
@@ -207,7 +210,7 @@ static QString S(const QVariantMap &m, const char *k) { return m.value(k).toStri
 
 void Player::pollStatus() {
     m_statusInFlight = true;
-    Api::instance()->lmsRequest(m_playerId, {"status", "-", "1", "tags:aldoTINxcK"}, [this](bool ok, const QVariant &data, int) {
+    Api::instance()->lmsRequest(m_playerId, {"status", "-", "1", "tags:aldoTINxcKu"}, [this](bool ok, const QVariant &data, int) {
         m_statusInFlight = false;
         QVariantMap r = data.toMap().value("result").toMap();
         if (!ok || r.isEmpty()) {
@@ -234,7 +237,7 @@ void Player::pollStatus() {
         QVariantMap tr = pl.isEmpty() ? QVariantMap() : pl.first().toMap();
         QString title = S(tr, "title"), artist = S(tr, "artist"), album = S(tr, "album");
         QString coverid = S(tr, "coverid"), aurl = S(tr, "artwork_url"), bitrate = S(tr, "bitrate");
-        QString type = S(tr, "type"), id = S(tr, "id");
+        QString type = S(tr, "type"), id = S(tr, "id"), url = S(tr, "url"), rawTitle = title;
         int ssize = tr.value("samplesize").toInt();
         double srate = tr.value("samplerate").toDouble();
         bool remote = tr.value("remote").toInt() != 0;
@@ -246,13 +249,14 @@ void Player::pollStatus() {
 
         bool meta = title != m_title || artist != m_artist || album != m_album || type != m_type ||
                     ssize != m_sampleSize || srate != m_sampleRate || id != m_id || coverid != m_coverId ||
-                    remote != m_remote || bitrate != m_bitrate;
+                    remote != m_remote || bitrate != m_bitrate || url != m_url;
         bool track = title != m_title || artist != m_artist || album != m_album;
         bool prog = std::fabs(elapsed - m_elapsed) > 0.4 || std::fabs(duration - m_duration) > 0.4;
         bool ctl = playing != m_playing || volume != m_volume || shuffle != m_shuffle || repeat != m_repeat ||
                    sleep != m_sleepSecs || index != m_index || total != m_total;
         m_title = title; m_artist = artist; m_album = album; m_type = type; m_sampleSize = ssize; m_sampleRate = srate;
         m_id = id; m_coverId = coverid; m_artworkUrlLms = aurl; m_remote = remote; m_bitrate = bitrate; m_currentTitle = currentTitle;
+        m_url = url; m_rawTitle = rawTitle;
         m_elapsed = elapsed; m_duration = duration;
         m_playing = playing; m_volume = volume; m_shuffle = shuffle; m_repeat = repeat; m_sleepSecs = sleep; m_index = index; m_total = total;
         m_lastElapsedTick = m_clock.elapsed();
@@ -261,6 +265,7 @@ void Player::pollStatus() {
         if (ctl) { derive(); emit controlsChanged(); }
         if (track) emit trackChanged();
         updateArtwork();
+        checkFavorite();
     }, 8000);
 }
 
@@ -280,9 +285,127 @@ void Player::pollPrefs() {
             emit modeChanged();
         }, 4000);
     }
+    // Lyrion's mute is a flag of its own: the volume in `status` stays what it
+    // was, so the speaker icon needs this to know
+    Api::instance()->lmsRequest(m_playerId, {"mixer", "muting", "?"}, [this](bool ok, const QVariant &data, int) {
+        if (!ok) return;
+        QVariant v = data.toMap().value("result").toMap().value("_muting");
+        if (!v.isValid()) return;
+        bool m = v.toInt() != 0;
+        if (m != m_muted) { m_muted = m; emit controlsChanged(); }
+    }, 4000);
 }
 
 void Player::refreshPrefs() { if (m_connected) pollPrefs(); }
+
+// ─── preferiti ─────────────────────────────────────────────────────────────
+// Once per track: a local track is looked up by id, a stream by URL. The
+// answer also says where the favourite sits (`index`), which is what
+// `favorites delete` wants.
+void Player::checkFavorite() {
+    QString key = (!m_id.isEmpty() && !m_remote) ? m_id : m_url;
+    if (key.isEmpty()) {
+        m_favKey.clear();
+        if (m_favorite) { m_favorite = false; m_favIndex.clear(); emit favoriteChanged(); }
+        return;
+    }
+    if (key == m_favKey) return;
+    m_favKey = key;
+    favoriteExists(key, QJSValue());
+}
+
+void Player::favoriteExists(const QString &what, const QJSValue &cb) {
+    if (what.isEmpty() || m_playerId.isEmpty()) { callJs(cb, {false, QString()}); return; }
+    QJSValue f = cb;
+    const QString key = what;
+    Api::instance()->lmsRequest(m_playerId, {"favorites", "exists", what}, [this, f, key](bool ok, const QVariant &data, int) mutable {
+        QVariantMap r = data.toMap().value("result").toMap();
+        bool avail = ok && r.contains("exists");
+        bool ex = avail && r.value("exists").toInt() != 0;
+        QString idx = ex ? r.value("index").toString() : QString();
+        if (key == m_favKey && (avail != m_favAvail || ex != m_favorite || idx != m_favIndex)) {
+            m_favAvail = avail; m_favorite = ex; m_favIndex = idx;
+            emit favoriteChanged();
+        }
+        callJs(f, {ex, idx});
+    }, 6000);
+}
+
+void Player::favoriteAdd(const QString &url, const QString &title, const QString &type, const QString &icon, const QJSValue &cb) {
+    if (url.isEmpty() || m_playerId.isEmpty()) { callJs(cb, {false}); return; }
+    QVariantList params = {"favorites", "add", "url:" + url, "title:" + (title.isEmpty() ? url : title),
+                           "type:" + (type == "playlist" ? QString("playlist") : QString("audio"))};
+    if (!icon.isEmpty()) params << "icon:" + icon;
+    QJSValue f = cb;
+    Api::instance()->lmsRequest(m_playerId, params, [this, f, url](bool ok, const QVariant &data, int) mutable {
+        bool done = ok && data.toMap().value("result").toMap().value("count").toInt() > 0;
+        if (url == m_url || url == m_favKey) { m_favKey.clear(); checkFavorite(); }
+        callJs(f, {done});
+    }, 8000);
+}
+
+void Player::favoriteDelete(const QString &index, const QJSValue &cb) {
+    if (index.isEmpty() || m_playerId.isEmpty()) { callJs(cb, {false}); return; }
+    QJSValue f = cb;
+    Api::instance()->lmsRequest(m_playerId, {"favorites", "delete", "item_id:" + index}, [this, f](bool ok, const QVariant &, int) mutable {
+        m_favKey.clear(); checkFavorite();
+        callJs(f, {ok});
+    }, 8000);
+}
+
+void Player::toggleFavorite() {
+    if (!m_favAvail || m_playerId.isEmpty()) return;
+    if (m_favorite) {
+        if (m_favIndex.isEmpty()) return;
+        m_favorite = false; emit favoriteChanged();          // optimistic, the re-check follows
+        favoriteDelete(m_favIndex, QJSValue());
+    } else {
+        if (m_url.isEmpty()) return;
+        m_favorite = true; emit favoriteChanged();
+        favoriteAdd(m_url, m_rawTitle.isEmpty() ? m_title : m_rawTitle, "audio", QString(), QJSValue());
+    }
+}
+
+// ─── preselezioni ──────────────────────────────────────────────────────────
+// Lyrion sends the presets only in the Jive flavour of `status`; one item is
+// asked for so the answer stays small.
+void Player::pollPresets() {
+    if (m_playerId.isEmpty()) return;
+    Api::instance()->lmsRequest(m_playerId, {"status", "0", "1", "menu:menu"}, [this](bool ok, const QVariant &data, int) {
+        if (!ok) return;
+        QVariantMap r = data.toMap().value("result").toMap();
+        if (!r.contains("preset_data")) return;
+        QVariantList pd = r.value("preset_data").toList(), out;
+        for (int i = 0; i < 10; i++) {
+            QVariantMap p = pd.value(i).toMap(), e;
+            QString url = p.value("URL").toString();
+            if (url.isEmpty()) url = p.value("url").toString();
+            if (!url.isEmpty()) { e["url"] = url; e["title"] = p.value("text").toString(); e["type"] = p.value("type").toString(); }
+            out << e;
+        }
+        if (out != m_presets) { m_presets = out; emit presetsChanged(); }
+    }, 6000);
+}
+void Player::refreshPresets() { m_lastPresets = 0; }
+
+void Player::setPreset(int key, const QString &url, const QString &title, const QString &type) {
+    if (key < 1 || key > 10 || url.isEmpty() || m_playerId.isEmpty()) return;
+    Api::instance()->lmsRequest(m_playerId, {"jivefavorites", "set_preset", "key:" + QString::number(key), "favorites_url:" + url,
+                                             "favorites_title:" + (title.isEmpty() ? url : title),
+                                             "favorites_type:" + (type == "playlist" ? QString("playlist") : QString("audio"))},
+                                [this](bool, const QVariant &, int) { pollPresets(); }, 8000);
+}
+void Player::setPresetFromQueue(int key) {
+    if (key < 1 || key > 10 || m_playerId.isEmpty() || m_url.isEmpty()) return;
+    Api::instance()->lmsRequest(m_playerId, {"jivefavorites", "set_preset", "key:" + QString::number(key), "playlist_index:" + QString::number(m_index)},
+                                [this](bool, const QVariant &, int) { pollPresets(); }, 8000);
+}
+void Player::playPreset(int key) {
+    QVariantMap p = m_presets.value(key - 1).toMap();
+    QString url = p.value("url").toString();
+    if (url.isEmpty()) return;
+    cmd({"playlist", "play", url, p.value("title").toString()});
+}
 
 void Player::pollSettings() {
     Api *a = Api::instance();
@@ -456,9 +579,13 @@ void Player::flushVolume() {
     }
 }
 void Player::toggleMute() {
-    // toggleMute in useLyrionPlayer.js: 0 -> 50, altrimenti -> 0
+    // Lyrion's own mute (`mixer muting`): the volume is kept and comes back
+    // as it was, instead of the old 0 <-> 50 jump. Explicit value rather than
+    // `toggle`, so a double tap cannot race the next poll.
     if (m_volumeFixed) return;
-    setVolume(m_volume > 0 ? 0 : 50, true);
+    m_muted = !m_muted;
+    emit controlsChanged();
+    cmd({"mixer", "muting", m_muted ? "1" : "0"});
 }
 void Player::setShuffle(int m) { m_shuffle = m; cmd({"playlist", "shuffle", QString::number(m)}); emit controlsChanged(); }
 void Player::setRepeat(int m)  { m_repeat = m;  cmd({"playlist", "repeat", QString::number(m)});  emit controlsChanged(); }

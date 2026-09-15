@@ -36,6 +36,15 @@ class Player : public QObject {
     Q_PROPERTY(QString bitrate READ bitrate NOTIFY metaChanged)
     Q_PROPERTY(QString chip READ chip NOTIFY metaChanged)          // "FLAC · 24bit · 96kHz"
     Q_PROPERTY(QString artworkUrl READ artworkUrl NOTIFY artworkChanged)
+    Q_PROPERTY(QString trackUrl READ trackUrl NOTIFY metaChanged)
+    // The track on air is one of Lyrion's favourites (`favorites exists`);
+    // a server without the Favorites plugin answers with an error and the
+    // heart is hidden (favoritesAvailable).
+    Q_PROPERTY(bool isFavorite READ isFavorite NOTIFY favoriteChanged)
+    Q_PROPERTY(bool favoritesAvailable READ favoritesAvailable NOTIFY favoriteChanged)
+    // The player's ten presets (Lyrion's `presets` player pref, read through
+    // `status … menu:menu`): a list of 10 maps {url, title, type}, empty = free.
+    Q_PROPERTY(QVariantList presets READ presets NOTIFY presetsChanged)
     // quanti pixel chiedere a Lyrion per la copertina: la sceglie Main.qml
     // dal modo video (600 sulla tela 1 a 1, fino a 1200 a 4K)
     Q_PROPERTY(int coverPx READ coverPx WRITE setCoverPx NOTIFY coverPxChanged)
@@ -48,6 +57,7 @@ class Player : public QObject {
     // comandi
     Q_PROPERTY(bool playing READ playing NOTIFY controlsChanged)
     Q_PROPERTY(int volume READ volume NOTIFY controlsChanged)
+    Q_PROPERTY(bool muted READ muted NOTIFY controlsChanged)     // Lyrion's own mute (`mixer muting`)
     Q_PROPERTY(int shuffle READ shuffle NOTIFY controlsChanged)
     Q_PROPERTY(int repeat READ repeat NOTIFY controlsChanged)
     Q_PROPERTY(int sleepSecs READ sleepSecs NOTIFY controlsChanged)
@@ -92,6 +102,11 @@ public:
     QString bitrate() const { return m_bitrate; }
     QString chip() const { return m_chip; }
     QString artworkUrl() const { return m_artworkUrl; }
+    QString trackUrl() const { return m_url; }
+    bool isFavorite() const { return m_favorite; }
+    bool favoritesAvailable() const { return m_favAvail; }
+    QVariantList presets() const { return m_presets; }
+    bool muted() const { return m_muted; }
     int coverPx() const { return m_coverPx; }
     void setCoverPx(int px);
     bool qPcm() const { return m_qPcm; }
@@ -131,6 +146,16 @@ public:
     Q_INVOKABLE void seekFraction(double f);
     Q_INVOKABLE void setVolume(int v, bool final = true);   // throttle 120 ms, come ui.c
     Q_INVOKABLE void toggleMute();
+    // ─── preferiti e preselezioni (Favorites plugin + jivefavorites) ──────
+    Q_INVOKABLE void toggleFavorite();                          // the track on air
+    // cb(exists, index): `what` is a URL (db:… included) or a track id
+    Q_INVOKABLE void favoriteExists(const QString &what, const QJSValue &cb);
+    Q_INVOKABLE void favoriteAdd(const QString &url, const QString &title, const QString &type, const QString &icon, const QJSValue &cb);   // cb(ok)
+    Q_INVOKABLE void favoriteDelete(const QString &index, const QJSValue &cb);   // cb(ok)
+    Q_INVOKABLE void setPreset(int key, const QString &url, const QString &title, const QString &type);   // key 1..10
+    Q_INVOKABLE void setPresetFromQueue(int key);                // the track on air
+    Q_INVOKABLE void playPreset(int key);
+    Q_INVOKABLE void refreshPresets();
     Q_INVOKABLE void cycleShuffle();
     Q_INVOKABLE void cycleRepeat();
     Q_INVOKABLE void setShuffle(int m);
@@ -166,6 +191,8 @@ signals:
     void modeChanged();
     void settingsChanged();
     void otaChanged();
+    void favoriteChanged();
+    void presetsChanged();
     void usbMounted(const QString &label);
     void trackChanged();          // brano nuovo (titolo/artista/album diversi)
 
@@ -179,6 +206,8 @@ private:
     void pollSettings();
     void pollUsb();
     void pollOta();
+    void pollPresets();
+    void checkFavorite();
     void derive();
     void updateArtwork();
     void flushVolume();
@@ -186,7 +215,7 @@ private:
 
     QTimer m_tick, m_statusTimer;
     QElapsedTimer m_clock;
-    qint64 m_lastStatus = 0, m_lastPrefs = 0, m_lastSettings = 0, m_lastUsb = 0, m_lastOta = 0, m_lastElapsedTick = 0;
+    qint64 m_lastStatus = 0, m_lastPrefs = 0, m_lastSettings = 0, m_lastUsb = 0, m_lastOta = 0, m_lastElapsedTick = 0, m_lastPresets = 0;
     bool m_statusInFlight = false, m_wantNow = false;
 
     bool m_connected = false;
@@ -201,6 +230,12 @@ private:
     qint64 m_lookupSince = 0, m_lastFind = 0, m_lastNameFetch = 0;
     QString m_title, m_artist, m_album, m_id, m_coverId, m_artworkUrlLms, m_type, m_bitrate, m_chip, m_currentTitle;
     QString m_artworkUrl, m_artKey;
+    QString m_url, m_rawTitle;      // the track's URL (favourites, presets) and its title as Lyrion gives it
+    // favourites: what the last `favorites exists` was about, and its answer
+    QString m_favKey, m_favIndex;
+    bool m_favorite = false, m_favAvail = true;
+    QVariantList m_presets;
+    bool m_muted = false;
     bool m_remote = false, m_qPcm = false, m_qHires = false, m_qDsd = false;
     int m_sampleSize = 0;
     double m_sampleRate = 0, m_elapsed = 0, m_duration = 0;

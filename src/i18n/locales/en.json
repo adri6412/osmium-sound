@@ -323,7 +323,11 @@
       "radio": "Radio",
       "apps": "Apps",
       "favorites": "Favorites",
-      "search": "Search"
+      "search": "Search",
+      "genres": "Genres",
+      "years": "Years",
+      "composers": "Composers",
+      "newMusic": "New music"
     },
     "searchPlaceholder": "Type and press Search…",
     "filterArtistsPlaceholder": "Search artist…",
@@ -378,7 +382,33 @@
     "bluetooth": {
       "unknownTrack": "Bluetooth playback",
       "streaming": "Streaming from a phone"
-    }
+    },
+    "search": {
+      "tracks": "Tracks"
+    },
+    "librarySearchPlaceholder": "Search the library: artist, album, track…",
+    "presets": "Presets",
+    "presetFree": "free",
+    "presetPlay": "Play",
+    "presetSaveNow": "Save what is playing here",
+    "presetSaved": "Preset saved",
+    "saveAsPreset": "Save as preset…",
+    "addToFavorites": "Add to favourites",
+    "removeFromFavorites": "Remove from favourites",
+    "addedToFavorites": "Added to favourites",
+    "removedFromFavorites": "Removed from favourites",
+    "alreadyFavorite": "Already in favourites",
+    "favoriteError": "Couldn't add to favourites",
+    "favoriteDeleteConfirm": "Remove \"{name}\" from favourites?",
+    "rename": "Rename",
+    "delete": "Delete",
+    "moveUp": "Move up",
+    "moveDown": "Move down",
+    "renameTitle": "New name",
+    "namePlaceholder": "Name",
+    "removeFromPlaylist": "Remove from playlist",
+    "playlistDeleteConfirm": "Delete the playlist \"{name}\"?",
+    "playlistExists": "A playlist with that name already exists"
   },
   "settings": {
     "title": "Settings",
@@ -679,7 +709,21 @@
       "skinUnset": "No skin chosen yet — the web player still uses Lyrion's stock look. Pick one to switch.",
       "skinInstalling": "Installing the Material web interface…",
       "skinApplying": "Applying the skin…",
-      "skinFailed": "Could not apply the skin. Check the network connection and try again."
+      "skinFailed": "Could not apply the skin. Check the network connection and try again.",
+      "libraryTitle": "Library",
+      "libraryHelp": "What the music server has indexed. Refresh after adding or moving music by hand; the sources page does it on its own when a source changes.",
+      "libAlbums": "Albums",
+      "libArtists": "Artists",
+      "libSongs": "Tracks",
+      "libDuration": "Total playing time",
+      "lastScan": "Last scan",
+      "never": "Never",
+      "scanning": "Updating the library…",
+      "rescan": "Refresh the library",
+      "abortScan": "Stop",
+      "rescanStarted": "Library update started",
+      "scanAborted": "Library update stopped",
+      "days": "days"
     },
     "sources": {
       "help": "Add your music folders: USB sticks/drives (auto-mounted), network (SMB) or local folders. Changes take effect right away."

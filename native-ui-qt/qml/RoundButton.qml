@@ -6,6 +6,7 @@ import Hifi.Ui
 Item {
     id: root
     property string icon
+    property bool filled: false
     property real iconSize: 18
     property color bg: Theme.wa(0.10)
     property color bgPress: Theme.wa(0.20)
@@ -18,6 +19,6 @@ Item {
         radius: width / 2
         color: tap.mix(root.bg, root.bgPress)
     }
-    Icon { anchors.centerIn: parent; name: root.icon; size: root.iconSize; color: root.fg }
+    Icon { anchors.centerIn: parent; name: root.icon; filled: root.filled; size: root.iconSize; color: root.fg }
     Tap { id: tap; grow: root.grow; onClicked: root.clicked() }
 }

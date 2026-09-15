@@ -128,6 +128,19 @@ Item {
         text: Player.isOwn ? Tr.up("player.nowPlaying") : Tr.tf("player.controlling", "name", Player.playerName).toUpperCase()
         color: Player.isOwn ? Theme.silverA(0.7) : Theme.gold; font.family: Theme.font; font.pixelSize: 10; font.letterSpacing: 2.5
     }
+    RoundButton {                                 // preferito (Lyrion Favorites): cuore pieno se il brano lo e'
+        x: 1024 - root.pad - 34 * 5 - 32; y: 14; width: 34; height: 34
+        visible: Player.favoritesAvailable && Player.trackUrl !== ""
+        icon: "heart"; filled: Player.isFavorite; iconSize: 18
+        bg: Player.isFavorite ? Theme.goldA(0.3) : Theme.wa(0.10)
+        bgPress: Player.isFavorite ? Theme.goldA(0.3) : Theme.wa(0.20)
+        fg: Player.isFavorite ? Theme.gold : Theme.white
+        onClicked: {
+            var was = Player.isFavorite
+            Player.toggleFavorite()
+            Ui.toast.say("heart", Tr.t(was ? "player.removedFromFavorites" : "player.addedToFavorites"))
+        }
+    }
     RoundButton {                                 // player da pilotare (#99)
         x: 1024 - root.pad - 34 * 4 - 24; y: 14; width: 34; height: 34; icon: "speaker"; iconSize: 18
         bg: Player.isOwn ? Theme.wa(0.10) : Theme.goldA(0.3)
@@ -299,7 +312,7 @@ Item {
             // volume, a destra: icona + barra 155 px
             Item {
                 x: parent.width - 180 + 8.5 - 18; y: controls.cy - 18; width: 36; height: 36
-                Icon { anchors.centerIn: parent; name: Player.volume === 0 ? "volume-x" : "volume-2"; size: 17
+                Icon { anchors.centerIn: parent; name: Player.muted || Player.volume === 0 ? "volume-x" : "volume-2"; size: 17
                        color: Player.volumeFixed ? Theme.silverA(0.21) : Theme.silverA(0.7) }
                 Tap { onClicked: Player.toggleMute() }
             }

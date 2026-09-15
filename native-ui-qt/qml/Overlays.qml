@@ -7,7 +7,7 @@ import Hifi.Ui
 
 Item {
     id: root
-    property int active: 0            // 0 nessuno, 1 coda, 2 salva, 3 sonno
+    property int active: 0            // 0 nessuno, 1 coda, 2 salva, 3 sonno, 4 nome (rinomina)
     property int leaving: 0
     readonly property bool busy: active !== 0
     signal savedPlaylist()
@@ -34,6 +34,13 @@ Item {
         fadeAnim.duration = 180
         fade = 1
     }
+    // "Come lo chiamo?": cb(name) with the confirmed name; cancel = nothing
+    function prompt(title, initial, cb) {
+        namer.title = title || ""; namer.name = initial || ""; namer.msg = ""; namer.cb = cb
+        active = 4; leaving = 0
+        fadeAnim.duration = 180
+        fade = 1
+    }
     function close() {
         if (active === 0) return
         leaving = active
@@ -57,6 +64,16 @@ Item {
         anchors.fill: parent
         color: Qt.rgba(0, 0, 0, (root.active === 1 ? 0.6 : 0.7) * root.fade)
         MouseArea { anchors.fill: parent; onClicked: { if (root.active === 2) { root.active = 1; root.fade = 1 } else root.close() } }
+    }
+    SavePlaylistDialog {
+        id: namer
+        anchors.centerIn: parent
+        visible: root.active === 4
+        opacity: root.fade
+        scale: 0.92 + 0.08 * root.fade
+        cb: null
+        onCancel: root.close()
+        onSaved: root.close()
     }
 
     // ─── coda ──────────────────────────────────────────────────────────────

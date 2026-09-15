@@ -24,7 +24,7 @@ Item {
         if (on) autoexpand.armed = false
     }
     Component.onCompleted: {
-        Ui.app = app; Ui.vk = vk; Ui.dialogs = dialogs; Ui.toast = toast
+        Ui.app = app; Ui.vk = vk; Ui.dialogs = dialogs; Ui.toast = toast; Ui.overlays = overlays
         npSpring.set(Sys.startExpanded ? 0 : 1)
         expanded = Sys.startExpanded
     }

@@ -67,6 +67,8 @@ export const api = {
     return (r.data && (r.data._p2 ?? r.data[pref])) ?? null;
   },
   lyrionSetPref: (playerMac, pref, value) => lyrionRequest(playerMac, ['playerpref', pref, value]),
+  // server-scoped commands (no player): serverstatus, info total, rescan…
+  lyrionQuery: (command) => lyrionRequest('', command),
 
   // auth
   authStatus: () => req('/api/auth/status'),

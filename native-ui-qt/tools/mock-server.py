@@ -65,6 +65,21 @@ OTHER = {
 }
 PHONE = {"playerid": "de:ad:be:ef:00:01", "name": "iPhone di Ale", "ip": "192.168.0.23:51234", "connected": 1}
 OWN = {"playerid": "aa:bb:cc:dd:ee:ff", "name": "Osmium", "ip": "127.0.0.1:41234", "connected": 1}
+# favourites (Favorites plugin), presets (the `presets` player pref) and the
+# library scan, as Lyrion answers them; MOCK_SCAN=N makes a rescan last N s
+FAVS = [
+    {"id": "0", "name": "Radio Paradise", "url": "http://stream.radioparadise.com/flac", "isaudio": 1, "hasitems": 0, "type": "audio"},
+    {"id": "1", "name": "TOTO IV", "url": "db:album.title=TOTO%20IV&contributor.name=TOTO", "isaudio": 1, "hasitems": 0, "type": "playlist"},
+    {"id": "2", "name": "Serate", "isaudio": 0, "hasitems": 1, "type": "link"},
+]
+PRESETS = [None] * 10
+PRESETS[0] = {"URL": "http://stream.radioparadise.com/flac", "text": "Radio Paradise", "type": "audio"}
+PRESETS[3] = {"URL": "file:///srv/music/toto/africa.flac", "text": "Africa", "type": "audio"}
+MUTE = {"on": 0}
+SCAN = {"until": 0.0, "last": T0 - 3600 * 5}
+SCAN_SECS = float(os.environ.get("MOCK_SCAN", "12") or 12)
+GENRES = ["Rock", "Jazz", "Classica", "Elettronica", "Ambient"]
+YEARS = [1982, 1973, 1985, 2001, 2019, 0]
 
 def players_now():
     if not SHARED_LMS:
@@ -83,6 +98,9 @@ def rpc(player, params):
     if cmd == "players":
         pl = players_now()
         r = {"count": len(pl), "players_loop": pl}
+    elif cmd == "status" and any(p == "menu:menu" for p in params):
+        r = {"preset_loop": [1 if p else 0 for p in PRESETS], "preset_data": [dict(p) if p else {} for p in PRESETS],
+             "playlist_tracks": len(QUEUE), "item_loop": []}
     elif cmd == "status":
         if len(params) > 1 and params[1] == "-" and player in OTHER:
             # a player that left the server answers nothing, like Lyrion does
@@ -101,6 +119,7 @@ def rpc(player, params):
                  "playlist_cur_index": STATE["index"], "playlist_tracks": len(QUEUE), "playlist repeat": STATE["repeat"],
                  "playlist shuffle": STATE["shuffle"], "will_sleep_in": STATE["sleep"],
                  "playlist_loop": [{"id": 1001 + STATE["index"], "title": t[0], "artist": t[1], "album": t[2], "coverid": "1001",
+                                    "url": "file:///srv/music/%d.dsf" % STATE["index"],
                                     "bitrate": "2822kHz", "type": "dsf", "samplesize": 1, "samplerate": 2822400, "duration": STATE["duration"], "remote": 0}]}
         else:
             r = {"playlist_cur_index": STATE["index"], "playlist_tracks": len(QUEUE),
@@ -118,7 +137,11 @@ def rpc(player, params):
     elif cmd == "play": STATE["mode"] = "play"
     elif cmd == "pause": STATE["mode"] = "pause" if params[1:2] == ["1"] else "play"
     elif cmd == "time": STATE["time"] = float(params[1])
-    elif cmd == "mixer": STATE["volume"] = int(params[2])
+    elif cmd == "mixer":
+        if params[1] == "muting":
+            if params[2] == "?": r = {"_muting": MUTE["on"]}
+            else: MUTE["on"] = (1 - MUTE["on"]) if params[2] == "toggle" else int(params[2])
+        elif params[2] != "?": STATE["volume"] = int(params[2])
     elif cmd == "sleep": STATE["sleep"] = int(params[1])
     elif cmd == "playlist":
         sub = params[1]
@@ -131,23 +154,85 @@ def rpc(player, params):
         elif sub == "move": QUEUE.insert(int(params[3]), QUEUE.pop(int(params[2])))
         elif sub == "clear": QUEUE.clear()
         elif sub == "save": r = {"__playlist_id": 9}
+        elif sub == "play":
+            STATE["mode"] = "play"
+            print("mock: playlist play", params[2:], flush=True)
     elif cmd == "musicartistinfo":
         r = {"lyrics": "Meet you all the way<br>Rosanna, yeah<br><br>All I wanna do when I wake up in the morning<br>is see your eyes<br>" * 8}
     elif cmd == "artists":
-        r = {"artists_loop": [{"id": i + 1, "artist": a} for i, a in enumerate(ARTISTS)], "count": len(ARTISTS)}
+        names = ARTISTS[-4:] if any(p == "role_id:COMPOSER" for p in params) else ARTISTS
+        r = {"artists_loop": [{"id": ARTISTS.index(a) + 1, "artist": a, "favorites_url": "db:contributor.name=" + a} for a in names], "count": len(names)}
     elif cmd == "albums":
-        aid = next((p.split(":")[1] for p in params if isinstance(p, str) and p.startswith("artist_id:")), None)
-        loop = [{"id": i, "album": al, "artist": ar, "artwork_track_id": str(1000 + i)} for i, al, ar, arid in ALBUMS if not aid or str(arid) == aid]
+        def arg(k): return next((p[len(k):] for p in params if isinstance(p, str) and p.startswith(k)), None)
+        aid, gid, year, sort = arg("artist_id:"), arg("genre_id:"), arg("year:"), arg("sort:")
+        rows = [(i, al, ar, arid) for i, al, ar, arid in ALBUMS if not aid or str(arid) == aid]
+        if gid: rows = [x for x in rows if x[0] % len(GENRES) == int(gid) - 1]
+        if year: rows = [x for x in rows if YEARS[x[0] % len(YEARS)] == int(year)]
+        if sort == "new": rows = list(reversed(rows))[:6]
+        loop = [{"id": i, "album": al, "artist": ar, "artwork_track_id": str(1000 + i), "favorites_url": "db:album.title=%s&contributor.name=%s" % (al, ar)} for i, al, ar, arid in rows]
         r = {"albums_loop": loop, "count": len(loop)}
+    elif cmd == "genres":
+        r = {"genres_loop": [{"id": i + 1, "genre": g, "favorites_url": "db:genre.name=" + g} for i, g in enumerate(GENRES)], "count": len(GENRES)}
+    elif cmd == "years":
+        r = {"years_loop": [{"year": y, "favorites_url": "db:year.id=%d" % y} for y in sorted(YEARS, reverse=True)], "count": len(YEARS)}
+    elif cmd == "search":
+        term = next((p[5:] for p in params if isinstance(p, str) and p.startswith("term:")), "").lower()
+        arts = [{"contributor_id": i + 1, "contributor": a} for i, a in enumerate(ARTISTS) if term in a.lower()]
+        albs = [{"album_id": i, "album": al} for i, al, ar, arid in ALBUMS if term in al.lower()][:8]
+        trks = [{"track_id": 2000 + i, "track": t} for i, t in enumerate(["Rosanna", "Africa", "Hold the Line", "Time", "Money", "Rosanna (live)"]) if term in t.lower()]
+        r = {"contributors_loop": arts, "albums_loop": albs, "tracks_loop": trks, "contributors_count": len(arts), "albums_count": len(albs), "tracks_count": len(trks), "count": len(arts) + len(albs) + len(trks)}
     elif cmd == "titles":
-        r = {"titles_loop": [{"id": 2000 + i, "title": f"Brano {i + 1}", "artist": "Toto", "duration": 200 + i * 7} for i in range(14)]}
+        r = {"titles_loop": [{"id": 2000 + i, "title": f"Brano {i + 1}", "artist": "Toto", "duration": 200 + i * 7, "url": "file:///srv/music/toto/%d.flac" % i, "favorites_url": "file:///srv/music/toto/%d.flac" % i} for i in range(14)]}
     elif cmd == "musicfolder":
         r = {"folder_loop": [{"id": 1, "filename": "Musica", "type": "folder"}, {"id": 2, "filename": "USB", "type": "folder"}, {"id": 3, "filename": "brano.flac", "type": "track"}]}
     elif cmd == "playlists":
         if params[1:2] == ["tracks"]:
-            r = {"playlisttracks_loop": [{"id": 3000 + i, "title": f"Playlist brano {i + 1}", "artist": "Vari"} for i in range(6)]}
+            r = {"playlisttracks_loop": [{"id": 3000 + i, "title": f"Playlist brano {i + 1}", "artist": "Vari", "url": "file:///srv/music/pl/%d.flac" % i} for i in range(6)]}
+        elif params[1:2] == ["rename"]:
+            new = next((p[8:] for p in params if isinstance(p, str) and p.startswith("newname:")), "")
+            if new.lower() == "serata": r = {"overwritten_playlist_id": 2}
+            elif not any(p == "dry_run:1" for p in params): print("mock: playlist renamed", params[2:], flush=True)
+        elif params[1:2] in (["delete"], ["edit"]):
+            print("mock: playlists", params[1:], flush=True)
         else:
-            r = {"playlists_loop": [{"id": 1, "playlist": "Preferiti"}, {"id": 2, "playlist": "Serata"}]}
+            r = {"playlists_loop": [{"id": 1, "playlist": "Preferiti", "url": "file:///srv/music/playlist/preferiti.m3u"}, {"id": 2, "playlist": "Serata", "url": "file:///srv/music/playlist/serata.m3u"}]}
+    elif cmd == "favorites":
+        sub = params[1] if len(params) > 1 else ""
+        def arg(k): return next((p[len(k):] for p in params if isinstance(p, str) and p.startswith(k)), None)
+        if sub == "items":
+            r = {"loop_loop": [dict(f) for f in FAVS], "count": len(FAVS)}
+        elif sub == "exists":
+            what = params[2] if len(params) > 2 else ""
+            idx = next((f["id"] for f in FAVS if f.get("url") == what or (what.isdigit() and f.get("url", "").endswith("/%d.dsf" % (int(what) - 1001)))), None)
+            r = {"exists": 1 if idx is not None else 0, "index": idx or 0}
+        elif sub == "add":
+            FAVS.append({"id": str(len(FAVS)), "name": arg("title:") or arg("url:"), "url": arg("url:"), "isaudio": 1, "hasitems": 0, "type": arg("type:") or "audio"})
+            r = {"count": 1}
+        elif sub == "delete":
+            i = arg("item_id:"); FAVS[:] = [f for f in FAVS if f["id"] != i]
+            for n, f in enumerate(FAVS): f["id"] = str(n)
+        elif sub == "rename":
+            i = arg("item_id:")
+            for f in FAVS:
+                if f["id"] == i: f["name"] = arg("title:")
+        elif sub == "move":
+            a, b = int(arg("from_id:")), int(arg("to_id:"))
+            FAVS.insert(b, FAVS.pop(a))
+            for n, f in enumerate(FAVS): f["id"] = str(n)
+    elif cmd == "jivefavorites" and params[1:2] == ["set_preset"]:
+        def arg(k): return next((p[len(k):] for p in params if isinstance(p, str) and p.startswith(k)), None)
+        key = int(arg("key:"))
+        if arg("playlist_index:") is not None:
+            t = QUEUE[STATE["index"] % len(QUEUE)]
+            PRESETS[key - 1] = {"URL": "file:///srv/music/%d.dsf" % STATE["index"], "text": t[0], "type": "audio"}
+        else:
+            PRESETS[key - 1] = {"URL": arg("favorites_url:"), "text": arg("favorites_title:"), "type": arg("favorites_type:") or "audio"}
+    elif cmd == "info" and params[1:2] == ["total"]:
+        r = {"_" + params[2]: {"albums": 312, "artists": 148, "genres": len(GENRES), "songs": 4021, "duration": 986543}[params[2]]}
+    elif cmd == "rescanprogress":
+        r = {"rescan": 1, "steps": "directory", "directory": int(100 * (1 - (SCAN["until"] - time.time()) / SCAN_SECS))} if time.time() < SCAN["until"] else {"rescan": 0}
+    elif cmd == "abortscan":
+        SCAN["until"] = 0.0
     elif cmd == "radios":
         r = {"radioss_loop": [{"cmd": "local", "name": "Radio locali", "icon": "/plugins/cache/icons/local.png"}, {"cmd": "tunein", "name": "TuneIn", "icon": "/plugins/cache/icons/tunein.png"}]}
     elif cmd == "apps":
@@ -166,11 +251,17 @@ def rpc(player, params):
     elif cmd == "playlistcontrol":
         pass
     elif cmd == "serverstatus":
+        scanning = time.time() < SCAN["until"]
+        if not scanning and SCAN["until"] > 0: SCAN["last"] = SCAN["until"]; SCAN["until"] = 0.0
         r = {"players_loop": [{"playerid": "aa:bb:cc:dd:ee:ff", "name": "Osmium"}, {"playerid": "11:22:33:44:55:66", "name": "Cucina"}, {"playerid": "77:88:99:aa:bb:cc", "name": "Camera"}],
-             "rescan": 0, "progressdone": 0, "progresstotal": 0}
+             "lastscan": int(SCAN["last"]), "rescan": 1 if scanning else 0}
+        if scanning:
+            r.update({"progressname": "Cartelle", "progressdone": int(SCAN_SECS - (SCAN["until"] - time.time())), "progresstotal": int(SCAN_SECS)})
     elif cmd == "alarms":
         r = {"alarms_loop": [{"id": "a1", "time": 7 * 3600 + 30 * 60, "enabled": 1}, {"id": "a2", "time": 9 * 3600, "enabled": 0}]}
-    elif cmd == "alarm" or cmd == "sync" or cmd == "rescan":
+    elif cmd == "rescan":
+        SCAN["until"] = time.time() + SCAN_SECS
+    elif cmd == "alarm" or cmd == "sync":
         pass
     return {"id": 1, "method": "slim.request", "params": [player, params], "result": r}
 

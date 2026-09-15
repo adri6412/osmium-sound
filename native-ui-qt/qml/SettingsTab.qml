@@ -106,6 +106,8 @@ Item {
         property string lmsSkin: "unset"; property string skinState: ""; property string skinMsg: ""
         property string lyrInstalled: ""; property var lyrChVer: ["", "", ""]; property string lyrStatus: ""; property int lyrPct: 0; property bool lyrRunning: false
         property var disc: []                                       // [{name, ip}]
+        // the server's library: totals, last scan, a scan in progress
+        property var lib: ({ albums: -1, artists: -1, songs: -1, duration: 0, lastScan: 0, scanning: false, progress: "", pct: -1 })
         property var players: []                                    // [{id,name,sync}]
         property var alarms: []                                     // [{id,time,on}]
         property string netType: ""; property string netSsid: ""; property string netIp: ""; property string netDev: ""; property string netSubnet: ""; property bool netConnected: false
@@ -180,6 +182,31 @@ Item {
             })(i)
         }
         function str(d, k, fb) { return d[k] !== undefined && d[k] !== null ? String(d[k]) : (fb || "") }
+        // Library totals and scan state come from Lyrion itself (server
+        // queries, no player needed): `serverstatus` for the scan, `info
+        // total` for the counts. Apart from load()'s pending count, so a
+        // server that is slow to answer never holds the page in "loading".
+        function loadLibrary() {
+            var out = Object.assign({}, lib), left = 5
+            function done() { if (--left === 0) { lib = out; root.dataChanged() } }
+            Player.queryServer(["serverstatus", "0", "0"], function(ok, r) {
+                if (ok && r) {
+                    out.lastScan = Number(r.lastscan || 0)
+                    out.scanning = Number(r.rescan || 0) !== 0
+                    out.progress = r.progressname ? String(r.progressname) : ""
+                    var tot = Number(r.progresstotal || 0)
+                    out.pct = out.scanning && tot > 0 ? Math.min(100, Math.round(100 * Number(r.progressdone || 0) / tot)) : -1
+                }
+                done()
+            })
+            var ents = ["albums", "artists", "songs", "duration"]
+            for (var i = 0; i < ents.length; i++) (function(e) {
+                Player.queryServer(["info", "total", e, "?"], function(ok, r) {
+                    if (ok && r && r["_" + e] !== undefined) out[e] = Number(r["_" + e])
+                    done()
+                })
+            })(ents[i])
+        }
         function load() {
             gen++
             get(api("/system_info"), function(d) {
@@ -230,6 +257,7 @@ Item {
             get(src("/api/lms_skin"), function(d) { lmsSkin = str(d, "skin", "unset") })
             get(src("/api/lms_skin_status"), function(d) { skinState = str(d, "state"); skinMsg = str(d, "message") })
             get(src("/api/sources"), function(d) { sources = d.sources || [] })
+            loadLibrary()
             get(src("/api/usb"), function(d) { usb = d.disks || [] })
             get(src("/api/internal/disks"), function(d) {
                 var out = []
@@ -346,6 +374,15 @@ Item {
                            function(ok) { if (ok) apply() })
     }
     Timer { id: reloadLater; interval: 400; onTriggered: cfg.load() }
+    // while Lyrion scans, the Library rows follow it (only with that section open)
+    Timer { interval: 2000; repeat: true; running: cfg.lib.scanning && root.active >= 0 && root.secs[root.active].id === "multiroom"; onTriggered: cfg.loadLibrary() }
+    function fmtDuration(sec) {
+        var d = Math.floor(sec / 86400), h = Math.floor((sec % 86400) / 3600), m = Math.floor((sec % 3600) / 60)
+        if (d > 0) return d + " " + Tr.t("settings.lyrion.days") + " " + h + " h"
+        if (h > 0) return h + " h " + m + " min"
+        return m + " min"
+    }
+    function fmtWhen(ts) { return Qt.formatDateTime(new Date(ts * 1000), I18n.lang === "it" ? "dd/MM/yyyy HH:mm" : "yyyy-MM-dd HH:mm") }
     function setPref(name, value) { Player.cmd(["playerpref", name, value]) }
 
     function enter() { cfg.load(); goRoot() }
@@ -362,6 +399,7 @@ Item {
         if (id === "timezone" && timezones.length === 0) Api.get(cfg.api("/timezones"), function(ok, d) { if (ok && d && d.timezones) { timezones = d.timezones.map(String); rebuild() } })
         if (id === "webRemote") cfg.mintToken()
         if (id === "multiroom" && cfg.lmsMode === "follow") cfg.loadDiscover()
+        if (id === "multiroom") cfg.loadLibrary()
         if (id === "vuMeters") cfg.loadStore(true)
         if (id === "thirdPartyNotices" && !thirdParty) { try { thirdParty = JSON.parse(Sys.readFile(I18n.dir + "/third_party.json")) } catch (e) { thirdParty = null } }
         rebuild(); page.contentY = 0; appear()
@@ -615,7 +653,12 @@ Item {
             }
             if (msg) note(msg, msgErr ? "red" : "dark")
         }
+        // a rebuild hands the Repeater a new array: while the old rows are
+        // gone the page is empty and the Flickable snaps to the top. Put the
+        // reader back where they were (a periodic reload must not scroll).
+        var cy = page.contentY
         rows = _cur
+        Qt.callLater(function() { page.contentY = Math.max(0, Math.min(cy, page.contentHeight - page.height)) })
     }
 
     // ── sezioni ────────────────────────────────────────────────────────────
@@ -1015,6 +1058,23 @@ Item {
             note(cfg.skinMsg || Tr.t(serr ? "settings.lyrion.skinFailed" : "settings.lyrion.skinInstalling"), serr ? "red" : "dark")
         }
         sep()
+        // the library: what the server has indexed, and a refresh on demand
+        label("settings.lyrion.libraryTitle").mark = "library"; help("settings.lyrion.libraryHelp", 12)
+        var L = cfg.lib
+        if (L.albums >= 0) {
+            info(Tr.t("settings.lyrion.libAlbums"), String(L.albums)).mono = true
+            info(Tr.t("settings.lyrion.libArtists"), String(L.artists)).mono = true
+            info(Tr.t("settings.lyrion.libSongs"), String(L.songs)).mono = true
+            if (L.duration > 0) info(Tr.t("settings.lyrion.libDuration"), fmtDuration(L.duration)).mono = true
+        }
+        info(Tr.t("settings.lyrion.lastScan"), L.lastScan > 0 ? fmtWhen(L.lastScan) : Tr.t("settings.lyrion.never")).mono = true
+        if (L.scanning) {
+            note(Tr.t("settings.lyrion.scanning") + (L.pct >= 0 ? " " + L.pct + "%" : "") + (L.progress ? " · " + L.progress : ""), "dark")
+            var ab = action(Tr.t("settings.lyrion.abortScan"), "lib_abort", "darkred"); ab.hh = 40
+        } else {
+            var rs = action(Tr.t("settings.lyrion.rescan"), "lib_rescan", "gold"); rs.bold = true; rs.hh = 44; rs.icon = "refresh-cw"
+        }
+        sep()
         if (remoteNote()) return
         if (!havePlayer) { note(Tr.t("settings.playback.noPlayer"), "dark"); return }
         if (!cfg.players.length) { note(Tr.t("settings.multiroom.noOthers"), "dark"); return }
@@ -1348,6 +1408,13 @@ Item {
         case "lyrion_channel": post(A("/lyrion_channel"), { channel: arg }); cfg.lyrionChannel = arg; break
         case "lyrion_install": post(A("/lyrion_update/apply"), { channel: cfg.lyrionChannel }); say(Tr.t("settings.multiroom.server.update")); break
         case "lyrion_check": cfg.load(); break
+        case "lib_rescan":
+            Player.queryServer(["rescan"], function() { cfg.loadLibrary() })
+            cfg.lib = Object.assign({}, cfg.lib, { scanning: true, pct: -1, progress: "" })
+            say(Tr.t("settings.lyrion.rescanStarted")); break
+        case "lib_abort":
+            Player.queryServer(["abortscan"], function() { cfg.loadLibrary() })
+            say(Tr.t("settings.lyrion.scanAborted")); break
         case "ota_channel": {
             if (cfg.otaChannel === arg) return
             var apply = function() { post(A("/ota_channel"), { channel: arg }); cfg.otaChannel = arg; rebuild() }

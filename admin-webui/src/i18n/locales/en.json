@@ -106,7 +106,20 @@
       "total": "Total"
     },
     "temperature": "CPU temperature",
-    "gpu": "GPU"
+    "gpu": "GPU",
+    "library": {
+      "title": "Library",
+      "albums": "Albums",
+      "artists": "Artists",
+      "tracks": "Tracks",
+      "duration": "Total playing time",
+      "lastScan": "Last scan",
+      "never": "Never",
+      "scanning": "Updating the library…",
+      "refresh": "Refresh the library",
+      "stop": "Stop",
+      "days": "days"
+    }
   },
   "settings": {
     "title": "Settings",

@@ -18,6 +18,10 @@ Rectangle {
     property bool active: input.activeFocus
     signal textEdited(string t)
     signal accepted()
+    // Confirming the on-screen keyboard also counts as Enter: for the search
+    // fields, where "done typing" is the search itself (opt-in, the other
+    // fields keep their own confirm button)
+    property bool acceptOnVkConfirm: false
     radius: 8; color: Theme.dark
     border.width: 1
     border.color: input.activeFocus && focusBorder ? focusColor : restBorder

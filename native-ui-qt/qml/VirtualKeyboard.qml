@@ -41,6 +41,7 @@ Item {
         // (flushSync() in KeyboardContext.jsx): if a keystroke did not make it
         // through, confirming still commits the final text.
         flush()
+        if (confirmed && field && field.acceptOnVkConfirm) field.accepted()
         closing = true; closedOk = confirmed
         slide.to = 0; fade = 0
     }

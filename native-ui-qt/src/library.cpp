@@ -10,7 +10,8 @@ int LibraryModel::rowCount(const QModelIndex &parent) const { return parent.isVa
 QHash<int, QByteArray> LibraryModel::roleNames() const {
     return {{IdRole, "id"}, {TextRole, "text"}, {SubRole, "sub"}, {ArtRole, "art"}, {IconRole, "icon"},
             {GoRole, "go"}, {PlayRole, "play"}, {DoRole, "doact"}, {IsDirRole, "isDir"}, {HasItemsRole, "hasItems"},
-            {IsAudioRole, "isAudio"}, {HasInputRole, "hasInput"}, {DurationRole, "duration"}, {LetterRole, "letter"}};
+            {IsAudioRole, "isAudio"}, {HasInputRole, "hasInput"}, {DurationRole, "duration"}, {LetterRole, "letter"},
+            {UrlRole, "url"}, {FavUrlRole, "favUrl"}, {KindRole, "kind"}, {SectionRole, "section"}};
 }
 
 QVariant LibraryModel::data(const QModelIndex &idx, int role) const {
@@ -31,6 +32,11 @@ QVariant LibraryModel::data(const QModelIndex &idx, int role) const {
     case HasInputRole: return it.hasInput;
     case DurationRole: return it.duration;
     case LetterRole: return letterOf(idx.row());
+    case UrlRole: return it.url;
+    case FavUrlRole: return it.favUrl;
+    case KindRole: return it.kind;
+    // ListView sections of the search results: one per kind, in order
+    case SectionRole: return m_view == Search ? QString::number(it.kind) : QString();
     }
     return QVariant();
 }
@@ -42,6 +48,7 @@ QVariantMap LibraryModel::get(int row) const {
     m["id"] = it.id; m["text"] = it.text; m["sub"] = it.sub; m["art"] = it.art; m["icon"] = it.icon;
     m["go"] = it.go; m["play"] = it.play; m["doact"] = it.doact; m["isDir"] = it.isDir; m["hasItems"] = it.hasItems;
     m["isAudio"] = it.isAudio; m["hasInput"] = it.hasInput; m["duration"] = it.duration;
+    m["url"] = it.url; m["favUrl"] = it.favUrl; m["kind"] = it.kind;
     return m;
 }
 
@@ -155,12 +162,22 @@ void LibraryModel::request(int view, const QVariant &p1, const QVariant &p2, con
     QVariantList params;
     QString s1 = p1.typeId() == QMetaType::QVariantList ? QString() : p1.toString();
     QString s2 = p2.toString();
+    // server order only where Lyrion's ordering is the point (new music,
+    // random, search results); the alphabetical views sort here
+    m_serverOrder = view == NewMusic || view == Search || (view == Albums && s2.contains("sort:"));
     switch (view) {
     case Artists: params = {"artists", "0", "9999", "tags:s"}; break;
-    case Albums: params = {"albums", "0", "9999", "tags:alSj"}; if (!s1.isEmpty()) params << "artist_id:" + s1; break;
+    // p2 = extra filter for the albums query: genre_id:N, year:YYYY, role_id:COMPOSER, sort:new…
+    case Albums: params = {"albums", "0", "9999", "tags:alSj"}; if (!s1.isEmpty()) params << "artist_id:" + s1; if (!s2.isEmpty()) params << s2; break;
+    case NewMusic: params = {"albums", "0", "100", "tags:alSj", "sort:new"}; break;
+    case Genres: params = {"genres", "0", "9999"}; break;
+    case Years: params = {"years", "0", "9999"}; break;
+    case Composers: params = {"artists", "0", "9999", "tags:s", "role_id:COMPOSER"}; break;
+    // Lyrion's own search: artists, albums and tracks that contain the words
+    case Search: params = {"search", "0", "50", "term:" + input}; break;
     case Tracks: params = {"titles", "0", "9999", "tags:aAlcdtu"}; if (!s1.isEmpty()) params << "album_id:" + s1; break;
     case Folders: params = {"musicfolder", "0", "9999", "tags:u"}; if (!s1.isEmpty()) params << "folder_id:" + s1; break;
-    case Playlists: params = {"playlists", "0", "9999"}; break;
+    case Playlists: params = {"playlists", "0", "9999", "tags:u"}; break;
     case PlaylistTracks: params = {"playlists", "tracks", "0", "9999", "playlist_id:" + s1, "tags:aAlcdtu"}; break;
     case Radios: params = {"radios", "0", "9999"}; break;
     case Apps: params = {"apps", "0", "9999"}; break;
@@ -193,8 +210,26 @@ void LibraryModel::request(int view, const QVariant &p1, const QVariant &p2, con
 void LibraryModel::parse(int view, const QString &cmd, const QVariantMap &res) {
     QStringList loopNames;
     switch (view) {
-    case Artists: loopNames = {"artists_loop"}; break;
-    case Albums: loopNames = {"albums_loop"}; break;
+    case Artists: case Composers: loopNames = {"artists_loop"}; break;
+    case Albums: case NewMusic: loopNames = {"albums_loop"}; break;
+    case Genres: loopNames = {"genres_loop"}; break;
+    case Years: loopNames = {"years_loop"}; break;
+    case Search: {
+        // three loops, kept in this order (the ListView shows them as sections)
+        static const struct { const char *loop; const char *idKey; const char *textKey; int kind; } parts[] = {
+            {"contributors_loop", "contributor_id", "contributor", 0}, {"albums_loop", "album_id", "album", 1}, {"tracks_loop", "track_id", "track", 2}};
+        for (const auto &pt : parts) {
+            for (const QVariant &v : res.value(pt.loop).toList()) {
+                QVariantMap it = v.toMap();
+                LibItem o;
+                o.id = str(it, pt.idKey); o.text = str(it, pt.textKey); o.kind = pt.kind;
+                if (o.id.isEmpty() || o.text.isEmpty()) continue;
+                o.fold = fold(o.text);
+                m_items.append(o);
+            }
+        }
+        return;
+    }
     case Tracks: loopNames = {"titles_loop"}; break;
     case Folders: loopNames = {"folder_loop"}; break;
     case Playlists: loopNames = {"playlists_loop"}; break;
@@ -212,19 +247,23 @@ void LibraryModel::parse(int view, const QString &cmd, const QVariantMap &res) {
         QVariantMap it = v.toMap();
         LibItem o;
         switch (view) {
-        case Artists: o.id = str(it, "id"); o.text = str(it, "artist"); break;
-        case Albums:
+        case Artists: case Composers: o.id = str(it, "id"); o.text = str(it, "artist"); o.favUrl = str(it, "favorites_url"); break;
+        case Albums: case NewMusic:
             o.id = str(it, "id"); o.text = str(it, "album"); o.sub = str(it, "artist"); o.art = str(it, "artwork_track_id");
             if (o.art.isEmpty()) o.art = o.id;
+            o.favUrl = str(it, "favorites_url");          // db:album.title=…&contributor.name=…
             break;
+        case Genres: o.id = str(it, "id"); o.text = str(it, "genre"); o.favUrl = str(it, "favorites_url"); break;
+        case Years: o.id = str(it, "year"); o.text = o.id == "0" ? QString("—") : o.id; o.favUrl = str(it, "favorites_url"); break;
         case Tracks: case PlaylistTracks:
             o.id = str(it, "id"); o.text = str(it, "title"); o.sub = str(it, "artist"); o.duration = it.value("duration").toDouble();
+            o.url = str(it, "url"); o.favUrl = str(it, "favorites_url"); if (o.favUrl.isEmpty()) o.favUrl = o.url;
             break;
         case Folders:
             o.id = str(it, "id"); o.text = str(it, "filename"); if (o.text.isEmpty()) o.text = str(it, "title");
             o.isDir = str(it, "type") == "folder";
             break;
-        case Playlists: o.id = str(it, "id"); o.text = str(it, "playlist"); break;
+        case Playlists: o.id = str(it, "id"); o.text = str(it, "playlist"); o.url = str(it, "url"); o.favUrl = str(it, "favorites_url"); if (o.favUrl.isEmpty()) o.favUrl = o.url; break;
         case Radios: case Apps: o.id = str(it, "cmd"); o.text = str(it, "name"); o.icon = str(it, "icon"); break;
         case MenuHome: {
             QVariantMap acts = it.value("actions").toMap();
@@ -259,10 +298,12 @@ void LibraryModel::parse(int view, const QString &cmd, const QVariantMap &res) {
             o.hasInput = type == "search";
             o.hasItems = !o.hasInput && (it.value("hasitems").toInt() == 1 || type == "link");
             o.isAudio = it.value("isaudio").toInt() == 1 || type == "audio" || it.contains("play");
+            o.url = str(it, "url"); o.favUrl = o.url;     // the stream, when the plugin says it (radio stations do)
             break;
         }
+        default: break;
         }
-        o.fold = fold(view == Albums ? o.text + " " + o.sub : o.text);
+        o.fold = fold(view == Albums || view == NewMusic ? o.text + " " + o.sub : o.text);
         m_items.append(o);
     }
     if (view == MenuHome)
@@ -273,7 +314,7 @@ void LibraryModel::applyOrderFilter() {
     int k = m_items.size();
     QVector<int> order(k);
     for (int i = 0; i < k; i++) order[i] = i;
-    if (m_view == Artists || m_view == Albums)
+    if ((m_view == Artists || m_view == Albums || m_view == Composers) && !m_serverOrder)
         std::stable_sort(order.begin(), order.end(), [this](int a, int b) { return m_items[a].fold < m_items[b].fold; });
     QString f = fold(m_filter);
     if (!f.isEmpty()) {

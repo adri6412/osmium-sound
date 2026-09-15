@@ -13,7 +13,7 @@ Item {
     readonly property int view: cur.view
     readonly property bool hasCrumbs: tab !== 4 && tab !== 3
     readonly property real contentTop: hasCrumbs ? 83 : 40
-    readonly property bool hasSearch: tab === 0 && (view === LibraryModel.Artists || view === LibraryModel.Albums)
+    readonly property bool hasSearch: tab === 0 && (view === LibraryModel.Artists || view === LibraryModel.Albums || view === LibraryModel.Composers)
     readonly property bool hasAz: hasSearch
     readonly property bool browsing: tab === 0 && view !== LibraryModel.Home
     property bool msearchOpen: false
@@ -53,6 +53,10 @@ Item {
     readonly property var tiles: [
         { icon: "user", key: "player.titles.artists", view: LibraryModel.Artists },
         { icon: "disc", key: "player.titles.albums", view: LibraryModel.Albums },
+        { icon: "tag", key: "player.titles.genres", view: LibraryModel.Genres },
+        { icon: "calendar", key: "player.titles.years", view: LibraryModel.Years },
+        { icon: "piano", key: "player.titles.composers", view: LibraryModel.Composers },
+        { icon: "sparkles", key: "player.titles.newMusic", view: LibraryModel.NewMusic },
         { icon: "folder", key: "player.titles.folders", view: LibraryModel.Folders },
         { icon: "list-music", key: "player.titles.playlists", view: LibraryModel.Playlists },
         { icon: "heart", key: "player.titles.favorites", view: LibraryModel.PluginItems }]
@@ -103,13 +107,149 @@ Item {
         else if (i === 0) {
             var v = view
             if (!(v === LibraryModel.Home || v === LibraryModel.Artists || v === LibraryModel.Albums || v === LibraryModel.Tracks ||
-                  v === LibraryModel.Folders || v === LibraryModel.Playlists || v === LibraryModel.PlaylistTracks)) navHome()
+                  v === LibraryModel.Folders || v === LibraryModel.Playlists || v === LibraryModel.PlaylistTracks ||
+                  v === LibraryModel.Genres || v === LibraryModel.Years || v === LibraryModel.Composers ||
+                  v === LibraryModel.NewMusic || v === LibraryModel.Search)) navHome()
         } else if (i === 4) settingsTab.enter()
         else if (i === 3) discoverTab.enter()
         appear()
     }
     function showPlaylists() { tab = 0; navHome(); goView(LibraryModel.Playlists, Tr.t("player.titles.playlists")) }
     function playItem(type, id, mode) { Player.cmd(["playlistcontrol", "cmd:" + mode, type + ":" + id]) }
+    // la ricerca nella libreria (Lyrion `search`): dalla home, oppure da una
+    // pagina di risultati per cercare di nuovo
+    function submitLibrarySearch(text) {
+        var t = (text || "").trim()
+        if (t.length < 2) return
+        var same = cur.view === LibraryModel.Search
+        goView(LibraryModel.Search, Tr.t("player.titles.search") + ": " + t, "", "", t, same)
+    }
+
+    // ─── menu a pressione lunga: preferiti, preselezioni, playlist ────────
+    function say(icon, key) { Ui.toast.say(icon, Tr.t(key)) }
+    function addFavorite(url, title, type) {
+        if (!url) return
+        Player.favoriteExists(url, function(ex) {
+            if (ex) { say("heart", "player.alreadyFavorite"); return }
+            Player.favoriteAdd(url, title, type || "audio", "", function(ok) {
+                say("heart", ok ? "player.addedToFavorites" : "player.favoriteError")
+                if (ok && cur.view === LibraryModel.PluginItems && cur.p1 === "favorites") loadTop()
+            })
+        })
+    }
+    function presetLabel(i) {
+        var p = Player.presets[i] || {}
+        return (i + 1) + " · " + (p.url ? p.title : Tr.t("player.presetFree"))
+    }
+    function pickPreset(url, title, type) {
+        if (!url) return
+        var labels = []
+        for (var i = 0; i < 10; i++) labels.push(presetLabel(i))
+        Ui.dialogs.pick(Tr.t("player.saveAsPreset"), labels, -1, function(i) {
+            if (i < 0) return
+            Player.setPreset(i + 1, url, title, type || "audio")
+            say("star", "player.presetSaved")
+        })
+    }
+    // la voce delle preselezioni: tocco = suona (o, se libera, ci mette il
+    // brano in riproduzione); pressione lunga = sostituisci
+    function presetMenu(key, x, y) {
+        var L = []
+        var p = Player.presets[key - 1] || {}
+        if (p.url) L.push({ icon: "play", label: Tr.t("player.presetPlay"), cb: function() { Player.playPreset(key) } })
+        if (Player.trackUrl) L.push({ icon: "star", label: Tr.t("player.presetSaveNow"), cb: function() { Player.setPresetFromQueue(key); say("star", "player.presetSaved") } })
+        if (L.length) ctx.open(L, x, y)
+    }
+    function renamePlaylist(it) {
+        Ui.overlays.prompt(Tr.t("player.renameTitle"), it.text, function(name) {
+            if (!name || name === it.text) return
+            // prova a vuoto prima: rinominare su un nome esistente sovrascriverebbe l'altra playlist
+            Player.query(["playlists", "rename", "playlist_id:" + it.id, "newname:" + name, "dry_run:1"], function(ok, r) {
+                if (ok && r && r.overwritten_playlist_id !== undefined) { say("alert-triangle", "player.playlistExists"); return }
+                Player.query(["playlists", "rename", "playlist_id:" + it.id, "newname:" + name], function(ok2) {
+                    if (ok2) loadTop(); else say("alert-triangle", "player.saveError")
+                })
+            })
+        })
+    }
+    function deletePlaylist(it) {
+        Ui.dialogs.confirm(Tr.tf("player.playlistDeleteConfirm", "name", it.text), Tr.t("player.delete"), true, function(ok) {
+            if (!ok) return
+            Player.query(["playlists", "delete", "playlist_id:" + it.id], function() { loadTop() })
+        })
+    }
+    function removeFromPlaylist(row) {
+        Player.query(["playlists", "edit", "cmd:delete", "playlist_id:" + cur.p1, "index:" + row], function() { loadTop() })
+    }
+    // preferiti: la posizione e' l'id della voce ("3", oppure "1.2" in una cartella)
+    function favSibling(id, delta) {
+        var parts = String(id).split("."), n = parseInt(parts[parts.length - 1], 10) + delta
+        if (isNaN(n) || n < 0) return ""
+        parts[parts.length - 1] = String(n)
+        return parts.join(".")
+    }
+    function favoriteMenu(it, row) {
+        var L = []
+        var isDir = it.hasItems && !it.isAudio
+        if (it.isAudio || isDir) L.push({ icon: "pencil", label: Tr.t("player.rename"), cb: function() {
+            Ui.overlays.prompt(Tr.t("player.renameTitle"), it.text, function(name) {
+                if (!name || name === it.text) return
+                Player.query(["favorites", "rename", "item_id:" + it.id, "title:" + name], function() { loadTop() })
+            })
+        } })
+        if (row > 0) L.push({ icon: "arrow-up", label: Tr.t("player.moveUp"), cb: function() {
+            Player.query(["favorites", "move", "from_id:" + it.id, "to_id:" + favSibling(it.id, -1)], function() { loadTop() })
+        } })
+        if (row < Library.count - 1) L.push({ icon: "arrow-down", label: Tr.t("player.moveDown"), cb: function() {
+            Player.query(["favorites", "move", "from_id:" + it.id, "to_id:" + favSibling(it.id, 1)], function() { loadTop() })
+        } })
+        if (it.url && it.isAudio) L.push({ icon: "star", label: Tr.t("player.saveAsPreset"), cb: function() { pickPreset(it.url, it.text, "audio") } })
+        L.push({ icon: "trash-2", label: Tr.t("player.removeFromFavorites"), danger: true, cb: function() {
+            Ui.dialogs.confirm(Tr.tf("player.favoriteDeleteConfirm", "name", it.text), Tr.t("player.delete"), true, function(ok) {
+                if (ok) Player.favoriteDelete(it.id, function() { loadTop() })
+            })
+        } })
+        return L
+    }
+    // le voci del menu per la riga `it` della vista corrente
+    function ctxItems(row) {
+        var it = Library.get(row), v = view, L = []
+        function q(type, mode) { return function() { playItem(type, it.id, mode) } }
+        function queueItems(type) {
+            L.push({ icon: "list-plus", label: Tr.t("player.addToQueue"), cb: q(type, "add") })
+            L.push({ icon: "list-start", label: Tr.t("player.playNext"), cb: q(type, "insert") })
+        }
+        function fav(url, type) { if (url) L.push({ icon: "heart", label: Tr.t("player.addToFavorites"), cb: function() { addFavorite(url, it.text, type) } }) }
+        function preset(url, type) { if (url) L.push({ icon: "star", label: Tr.t("player.saveAsPreset"), cb: function() { pickPreset(url, it.text, type) } }) }
+        switch (v) {
+        case LibraryModel.Tracks: case LibraryModel.PlaylistTracks:
+            queueItems("track_id"); fav(it.favUrl, "audio"); preset(it.url, "audio")
+            if (v === LibraryModel.PlaylistTracks) L.push({ icon: "list-x", label: Tr.t("player.removeFromPlaylist"), danger: true, cb: function() { removeFromPlaylist(row) } })
+            break
+        case LibraryModel.Folders:
+            if (it.isDir) queueItems("folder_id"); else queueItems("track_id")
+            break
+        case LibraryModel.Albums: case LibraryModel.NewMusic:
+            queueItems("album_id"); fav(it.favUrl, "playlist"); preset(it.favUrl, "playlist"); break
+        case LibraryModel.Artists: case LibraryModel.Composers:
+            queueItems("artist_id"); fav(it.favUrl, "playlist"); break
+        case LibraryModel.Genres: queueItems("genre_id"); fav(it.favUrl, "playlist"); break
+        case LibraryModel.Years: queueItems("year"); fav(it.favUrl, "playlist"); break
+        case LibraryModel.Playlists:
+            queueItems("playlist_id"); fav(it.favUrl, "playlist"); preset(it.url, "playlist")
+            L.push({ icon: "pencil", label: Tr.t("player.rename"), cb: function() { renamePlaylist(it) } })
+            L.push({ icon: "trash-2", label: Tr.t("player.delete"), danger: true, cb: function() { deletePlaylist(it) } })
+            break
+        case LibraryModel.Search:
+            if (it.kind === 0) queueItems("artist_id"); else if (it.kind === 1) queueItems("album_id"); else queueItems("track_id")
+            break
+        case LibraryModel.PluginItems:
+            if (cur.p1 === "favorites") return favoriteMenu(it, row)
+            if (it.url && it.isAudio) { fav(it.url, "audio"); preset(it.url, "audio") }
+            break
+        }
+        return L
+    }
 
     function menuItemTap(it) {
         if (it.hasInput && it.go && it.go.length) {
@@ -138,7 +278,15 @@ Item {
         var it = Library.get(row)
         switch (view) {
         case LibraryModel.Artists: if (onPlay) playItem("artist_id", it.id, "load"); else goView(LibraryModel.Albums, it.text, it.id); break
-        case LibraryModel.Albums: if (onPlay) playItem("album_id", it.id, "load"); else goView(LibraryModel.Tracks, it.text, it.id); break
+        case LibraryModel.Composers: if (onPlay) playItem("artist_id", it.id, "load"); else goView(LibraryModel.Albums, it.text, it.id, "role_id:COMPOSER"); break
+        case LibraryModel.Albums: case LibraryModel.NewMusic: if (onPlay) playItem("album_id", it.id, "load"); else goView(LibraryModel.Tracks, it.text, it.id); break
+        case LibraryModel.Genres: if (onPlay) playItem("genre_id", it.id, "load"); else goView(LibraryModel.Albums, it.text, "", "genre_id:" + it.id); break
+        case LibraryModel.Years: if (onPlay) playItem("year", it.id, "load"); else goView(LibraryModel.Albums, it.text, "", "year:" + it.id); break
+        case LibraryModel.Search:
+            if (it.kind === 0) { if (onPlay) playItem("artist_id", it.id, "load"); else goView(LibraryModel.Albums, it.text, it.id) }
+            else if (it.kind === 1) { if (onPlay) playItem("album_id", it.id, "load"); else goView(LibraryModel.Tracks, it.text, it.id) }
+            else playItem("track_id", it.id, "load")
+            break
         case LibraryModel.Tracks: case LibraryModel.PlaylistTracks: playItem("track_id", it.id, "load"); break
         case LibraryModel.Playlists: if (onPlay) playItem("playlist_id", it.id, "load"); else goView(LibraryModel.PlaylistTracks, it.text, it.id); break
         case LibraryModel.Folders:
@@ -331,29 +479,95 @@ Item {
 
             // fascia "CD rilevato" in cima alla scheda Musica
             CdBanner { id: cdBanner; visible: root.tab === 0 && Ui.cdrip && Ui.cdrip.bannerVisible; width: parent.width }
-            // griglia della home
-            Item {
+            // la home: ricerca nella libreria, tessere, preselezioni. Entra
+            // tutta nella tela; scorre solo quando la fascia del CD la spinge giu'
+            Flickable {
+                id: home
                 anchors.fill: parent
                 anchors.topMargin: cdBanner.visible ? 48 : 0
                 visible: root.view === LibraryModel.Home && Player.connected
-                Repeater {
-                    model: root.tiles
+                contentHeight: homeBody.height
+                clip: true
+                boundsBehavior: Flickable.StopAtBounds
+                Item {
+                    id: homeBody
+                    width: home.width; height: presetsBox.y + presetsBox.height + 16
+                    // ricerca in tutta la libreria (artisti, album, brani)
+                    TextField_ {
+                        id: homeSearch
+                        x: 12; y: 12; width: parent.width - 24 - 8 - 38; height: 38
+                        textSize: 14; padding: 16; restBorder: Theme.accent
+                        placeholder: Tr.t("player.librarySearchPlaceholder")
+                        acceptOnVkConfirm: true
+                        onAccepted: root.submitLibrarySearch(homeSearch.text)
+                    }
                     Rectangle {
-                        required property var modelData
-                        required property int index
-                        readonly property real tw: (root.width - 32 - 24) / 3
-                        // py-7 (28) + icona 30 + mb-2.5 (10) + riga text-sm (20) + py-7 (28)
-                        // + 2 di bordo = 117: misurato 140 px a 720p in Electron (113 era 4 in meno)
-                        x: 16 + (index % 3) * (tw + 12); y: 16 + Math.floor(index / 3) * (117 + 12)
-                        width: tw; height: 117; radius: 12
-                        color: tileTap.mix(Theme.surface, Theme.light); border.width: 1; border.color: Theme.border
-                        Icon { anchors.horizontalCenter: parent.horizontalCenter; y: 29; name: modelData.icon; size: 30; color: Theme.silver }
-                        Text { anchors.horizontalCenter: parent.horizontalCenter; y: 69; height: 20; verticalAlignment: Text.AlignVCenter; text: Tr.t(modelData.key); color: Theme.white; font.family: Theme.font; font.pixelSize: 14 }
-                        Tap {
-                            id: tileTap
-                            onClicked: {
-                                if (modelData.view === LibraryModel.PluginItems) root.goView(LibraryModel.PluginItems, Tr.t(modelData.key), "favorites")
-                                else root.goView(modelData.view, Tr.t(modelData.key))
+                        x: parent.width - 12 - 38; y: 12; width: 38; height: 38; radius: 10
+                        color: homeSearch.text.trim().length >= 2 ? Theme.goldA(0.2) : Theme.goldA(0.08)
+                        Icon { anchors.centerIn: parent; name: "search"; size: 16; color: homeSearch.text.trim().length >= 2 ? Theme.gold : Theme.goldA(0.4) }
+                        Tap { onClicked: root.submitLibrarySearch(homeSearch.text) }
+                    }
+                    Repeater {
+                        model: root.tiles
+                        Rectangle {
+                            required property var modelData
+                            required property int index
+                            readonly property real tw: (root.width - 32 - 24) / 3
+                            // nove tessere in tre righe: piu' basse di quelle di Electron
+                            // (117), perche' sotto ci stanno le preselezioni
+                            x: 16 + (index % 3) * (tw + 12); y: 62 + Math.floor(index / 3) * (96 + 10)
+                            width: tw; height: 96; radius: 12
+                            color: tileTap.mix(Theme.surface, Theme.light); border.width: 1; border.color: Theme.border
+                            Icon { anchors.horizontalCenter: parent.horizontalCenter; y: 20; name: modelData.icon; size: 26; color: Theme.silver }
+                            Text { anchors.horizontalCenter: parent.horizontalCenter; y: 58; height: 20; verticalAlignment: Text.AlignVCenter; text: Tr.t(modelData.key); color: Theme.white; font.family: Theme.font; font.pixelSize: 14 }
+                            Tap {
+                                id: tileTap
+                                onClicked: {
+                                    if (modelData.view === LibraryModel.PluginItems) root.goView(LibraryModel.PluginItems, Tr.t(modelData.key), "favorites")
+                                    else root.goView(modelData.view, Tr.t(modelData.key))
+                                }
+                            }
+                        }
+                    }
+                    // le dieci preselezioni del player (Lyrion `presets`), come
+                    // i tasti di un'autoradio: tocco = suona, pressione lunga = sostituisci
+                    Item {
+                        id: presetsBox
+                        x: 16; y: 62 + 3 * 106 + 8; width: parent.width - 32; height: 24 + 2 * 40 + 8
+                        readonly property real cw: (width - 4 * 8) / 5
+                        Text { y: 0; height: 16; verticalAlignment: Text.AlignVCenter; text: Tr.up("player.presets"); color: Theme.silverA(0.6); font.family: Theme.font; font.pixelSize: 11; font.bold: true; font.letterSpacing: 2 }
+                        Repeater {
+                            model: 10
+                            Rectangle {
+                                id: chip
+                                required property int index
+                                readonly property var p: (Player.presets && Player.presets[index]) || {}
+                                readonly property bool set: !!p.url
+                                x: (index % 5) * (presetsBox.cw + 8); y: 24 + Math.floor(index / 5) * 48
+                                width: presetsBox.cw; height: 40; radius: 10
+                                color: set ? chipTap.mix(Theme.surface, Theme.light) : chipTap.mix(Qt.rgba(0, 0, 0, 0), Theme.wa(0.05))
+                                border.width: 1; border.color: set ? Theme.border : Theme.wa(0.12)
+                                Text { x: 10; anchors.verticalCenter: parent.verticalCenter; text: String(index + 1); color: set ? Theme.gold : Theme.silverA(0.3); font.family: Theme.font; font.pixelSize: 12; font.bold: true }
+                                Text {
+                                    x: 28; width: parent.width - 36; anchors.verticalCenter: parent.verticalCenter
+                                    text: set ? p.title : "—"; elide: Text.ElideRight
+                                    color: set ? Theme.white : Theme.silverA(0.3); font.family: Theme.font; font.pixelSize: 12
+                                }
+                                MouseArea {
+                                    id: chipTap
+                                    anchors.fill: parent
+                                    function mix(a, b) { return pressed && !moved ? b : a }
+                                    property bool moved: false
+                                    property real pressX: 0; property real pressY: 0
+                                    pressAndHoldInterval: 500
+                                    onPressed: (m) => { moved = false; pressX = m.x; pressY = m.y }
+                                    onPositionChanged: (m) => { if (Math.abs(m.y - pressY) > 10 || Math.abs(m.x - pressX) > 10) moved = true }
+                                    onClicked: {
+                                        if (chip.set) Player.playPreset(chip.index + 1)
+                                        else if (Player.trackUrl) { Player.setPresetFromQueue(chip.index + 1); root.say("star", "player.presetSaved") }
+                                    }
+                                    onPressAndHold: (m) => { if (!moved) root.presetMenu(chip.index + 1, chip.mapToItem(libArea, m.x, m.y).x, chip.mapToItem(libArea, m.x, m.y).y) }
+                                }
                             }
                         }
                     }
@@ -378,6 +592,7 @@ Item {
                         x: 35; y: 8; width: parent.width - 35 - 8 - 29 - 8 - 29 - 12; height: 31
                         textSize: 14; padding: 12
                         placeholder: root.msearchTitle || Tr.t("player.searchPlaceholder")
+                        acceptOnVkConfirm: true
                         onAccepted: root.submitMsearch()
                     }
                     Rectangle {
@@ -401,7 +616,7 @@ Item {
                         id: search
                         x: 12; y: 6; width: parent.width - 24; height: 38
                         textSize: 14; padding: 16; restBorder: Theme.accent
-                        placeholder: Tr.t(root.view === LibraryModel.Artists ? "player.filterArtistsPlaceholder" : "player.filterAlbumsPlaceholder")
+                        placeholder: Tr.t(root.view === LibraryModel.Albums ? "player.filterAlbumsPlaceholder" : "player.filterArtistsPlaceholder")
                         onTextEdited: debounce.restart()
                         Timer { id: debounce; interval: 200; onTriggered: Library.filter = search.text }
                         Item {
@@ -420,10 +635,8 @@ Item {
                     height: 600 - root.contentTop - y - 12
                     visible: Library.state === 2 && Library.count > 0
                     onRowTap: (row, onPlay) => root.rowTap(row, onPlay)
-                    onRowLongPress: (row, x, y) => {
-                        if (root.view === LibraryModel.Tracks || root.view === LibraryModel.PlaylistTracks)
-                            ctx.open(Library.get(row).id, list.x + x, list.y + y)
-                    }
+                    // list.y gia' comprende le barre di ricerca; la fascia del CD sposta tutto il contenitore
+                    onRowLongPress: (row, x, y) => ctx.open(root.ctxItems(row), list.x + x, list.y + y + (cdBanner.visible ? 48 : 0))
                 }
                 Spinner { visible: Library.state === 1; active: root.visible && !(Ui.app && Ui.app.expanded); radius: 20; x: list.x + list.width / 2 - 20; y: list.y + 60 - 20 }   // w-10 h-10
                 Column {

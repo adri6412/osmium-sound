@@ -10,4 +10,5 @@ QtObject {
     property var toast: null
     property var settings: null
     property var cdrip: null
+    property var overlays: null     // coda, salva playlist, sonno, finestra "nome"
 }

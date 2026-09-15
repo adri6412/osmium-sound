@@ -323,7 +323,11 @@
       "radio": "Radio",
       "apps": "App",
       "favorites": "Preferiti",
-      "search": "Cerca"
+      "search": "Cerca",
+      "genres": "Generi",
+      "years": "Anni",
+      "composers": "Compositori",
+      "newMusic": "Novità"
     },
     "searchPlaceholder": "Digita e premi Cerca…",
     "filterArtistsPlaceholder": "Cerca artista…",
@@ -378,7 +382,33 @@
     "bluetooth": {
       "unknownTrack": "Riproduzione Bluetooth",
       "streaming": "In riproduzione da un telefono"
-    }
+    },
+    "search": {
+      "tracks": "Brani"
+    },
+    "librarySearchPlaceholder": "Cerca nella libreria: artista, album, brano…",
+    "presets": "Preselezioni",
+    "presetFree": "libera",
+    "presetPlay": "Riproduci",
+    "presetSaveNow": "Salva qui ciò che è in riproduzione",
+    "presetSaved": "Preselezione salvata",
+    "saveAsPreset": "Salva come preselezione…",
+    "addToFavorites": "Aggiungi ai preferiti",
+    "removeFromFavorites": "Togli dai preferiti",
+    "addedToFavorites": "Aggiunto ai preferiti",
+    "removedFromFavorites": "Tolto dai preferiti",
+    "alreadyFavorite": "È già nei preferiti",
+    "favoriteError": "Non sono riuscito ad aggiungerlo ai preferiti",
+    "favoriteDeleteConfirm": "Togliere \"{name}\" dai preferiti?",
+    "rename": "Rinomina",
+    "delete": "Elimina",
+    "moveUp": "Sposta su",
+    "moveDown": "Sposta giù",
+    "renameTitle": "Nuovo nome",
+    "namePlaceholder": "Nome",
+    "removeFromPlaylist": "Togli dalla playlist",
+    "playlistDeleteConfirm": "Eliminare la playlist \"{name}\"?",
+    "playlistExists": "Esiste già una playlist con questo nome"
   },
   "settings": {
     "title": "Impostazioni",
@@ -679,7 +709,21 @@
       "skinUnset": "Nessuna skin scelta finora — il player web usa ancora l'aspetto originale di Lyrion. Scegline una per cambiare.",
       "skinInstalling": "Installazione dell'interfaccia web Material…",
       "skinApplying": "Applicazione della skin…",
-      "skinFailed": "Impossibile applicare la skin. Controlla la connessione di rete e riprova."
+      "skinFailed": "Impossibile applicare la skin. Controlla la connessione di rete e riprova.",
+      "libraryTitle": "Libreria",
+      "libraryHelp": "Quello che il server musicale ha indicizzato. Aggiorna dopo aver aggiunto o spostato musica a mano; la pagina delle sorgenti lo fa da sola quando cambia una sorgente.",
+      "libAlbums": "Album",
+      "libArtists": "Artisti",
+      "libSongs": "Brani",
+      "libDuration": "Durata complessiva",
+      "lastScan": "Ultima scansione",
+      "never": "Mai",
+      "scanning": "Aggiornamento della libreria in corso…",
+      "rescan": "Aggiorna la libreria",
+      "abortScan": "Ferma",
+      "rescanStarted": "Aggiornamento della libreria avviato",
+      "scanAborted": "Aggiornamento della libreria fermato",
+      "days": "giorni"
     },
     "sources": {
       "help": "Aggiungi le cartelle musicali: chiavette/dischi USB (montati in automatico), cartelle di rete (SMB) o locali. Le modifiche hanno effetto subito."

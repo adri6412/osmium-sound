@@ -11,7 +11,8 @@ Item {
     property string pluginCmd: ""
     signal rowTap(int row, bool onPlay)
     signal rowLongPress(int row, real x, real y)
-    readonly property bool grid: view === LibraryModel.Albums
+    readonly property bool grid: view === LibraryModel.Albums || view === LibraryModel.NewMusic
+    readonly property bool search: view === LibraryModel.Search
     readonly property int pitch: view === LibraryModel.Tracks || view === LibraryModel.PlaylistTracks ? 50
                                : view === LibraryModel.Radios || view === LibraryModel.Apps ? 54 : 58
     readonly property real cardW: (width - 24) / 3
@@ -60,6 +61,18 @@ Item {
         flickDeceleration: 1500; maximumFlickVelocity: 4000
         boundsBehavior: Flickable.StopAtBounds
         cacheBuffer: 200
+        // i risultati della ricerca in tre fasce: artisti, album, brani
+        section.property: root.search ? "section" : ""
+        section.criteria: ViewSection.FullString
+        section.delegate: Item {
+            required property string section
+            width: listView.width; height: 30
+            Text {
+                x: 4; anchors.bottom: parent.bottom; anchors.bottomMargin: 6
+                text: Tr.up(section === "0" ? "player.titles.artists" : section === "1" ? "player.titles.albums" : "player.search.tracks")
+                color: Theme.silverA(0.6); font.family: Theme.font; font.pixelSize: 11; font.bold: true; font.letterSpacing: 2
+            }
+        }
         delegate: Item {
             id: row
             required property int index
@@ -73,20 +86,22 @@ Item {
             required property bool hasItems
             required property bool isAudio
             required property bool hasInput          // nodo che chiede del testo (ricerca dei plugin)
+            required property int kind               // ricerca: 0 artista, 1 album, 2 brano
             width: listView.width; height: root.pitch - 4
             readonly property int v: root.view
-            readonly property bool playBtn: v === LibraryModel.Artists || v === LibraryModel.Playlists || v === LibraryModel.Folders ||
+            readonly property bool playBtn: v === LibraryModel.Artists || v === LibraryModel.Composers || v === LibraryModel.Playlists || v === LibraryModel.Folders ||
+                                            v === LibraryModel.Genres || v === LibraryModel.Years ||
                                             ((v === LibraryModel.MenuHome || v === LibraryModel.Menu) && play && play.length > 0) ||
-                                            (v === LibraryModel.PluginItems && isAudio)
-            readonly property real iconW: v === LibraryModel.Artists || v === LibraryModel.Playlists ? 28
+                                            (v === LibraryModel.PluginItems && isAudio) || (v === LibraryModel.Search && kind !== 2)
+            readonly property real iconW: v === LibraryModel.Artists || v === LibraryModel.Composers || v === LibraryModel.Playlists || v === LibraryModel.Search ? 28
                                         : v === LibraryModel.Tracks || v === LibraryModel.PlaylistTracks ? 13
-                                        : v === LibraryModel.Folders ? 15 : 24
+                                        : v === LibraryModel.Folders || v === LibraryModel.Genres || v === LibraryModel.Years ? 15 : 24
             // active:bg-hifi-light (bianco 5 % su #161616 era ~#161616: il tocco non si vedeva)
             Rectangle { anchors.fill: parent; radius: 8; color: rowTap.pressed && !rowTap.moved ? Theme.light : Theme.surface }
             // icona a sinistra
             Item {
                 x: 12; anchors.verticalCenter: parent.verticalCenter; width: row.iconW; height: row.iconW
-                Rectangle { anchors.fill: parent; radius: 14; color: Theme.light; visible: row.v === LibraryModel.Artists }
+                Rectangle { anchors.fill: parent; radius: 14; color: Theme.light; visible: row.v === LibraryModel.Artists || row.v === LibraryModel.Composers || (row.v === LibraryModel.Search && row.kind !== 2) }
                 Rectangle { anchors.fill: parent; radius: 8; color: Theme.light; visible: row.v === LibraryModel.Playlists }
                 Image {
                     id: rowImg
@@ -106,14 +121,16 @@ Item {
                 Icon {
                     anchors.centerIn: parent
                     visible: rowImg.status !== Image.Ready
-                    name: row.v === LibraryModel.Artists ? "user" : row.v === LibraryModel.Playlists ? "list-music"
+                    name: row.v === LibraryModel.Artists ? "user" : row.v === LibraryModel.Composers ? "piano" : row.v === LibraryModel.Playlists ? "list-music"
+                        : row.v === LibraryModel.Genres ? "tag" : row.v === LibraryModel.Years ? "calendar"
+                        : row.v === LibraryModel.Search ? (row.kind === 0 ? "user" : row.kind === 1 ? "disc" : "music")
                         : row.v === LibraryModel.Folders ? (row.isDir ? "folder" : "music")
                         : row.v === LibraryModel.Radios ? "radio" : row.v === LibraryModel.Apps ? "app-window"
                         : row.v === LibraryModel.PluginItems ? (row.hasInput ? "search" : row.hasItems ? "folder" : "music")   // lente sul nodo di ricerca, come Electron
                         : (row.v === LibraryModel.MenuHome || row.v === LibraryModel.Menu) ? ((row.go && row.go.length) ? "app-window" : "music") : "music"
-                    size: row.v === LibraryModel.Artists ? 13 : row.v === LibraryModel.Playlists ? 14 : row.v === LibraryModel.Folders ? 15 : row.v === LibraryModel.Tracks || row.v === LibraryModel.PlaylistTracks ? 13 : 15
-                    color: row.v === LibraryModel.Artists || row.v === LibraryModel.Playlists ? Theme.silver
-                         : (row.v === LibraryModel.Folders && row.isDir) ? Theme.gold : Theme.silverA(0.6)
+                    size: row.v === LibraryModel.Artists || row.v === LibraryModel.Composers || (row.v === LibraryModel.Search && row.kind !== 2) ? 13 : row.v === LibraryModel.Playlists ? 14 : row.v === LibraryModel.Folders || row.v === LibraryModel.Genres || row.v === LibraryModel.Years ? 15 : row.v === LibraryModel.Tracks || row.v === LibraryModel.PlaylistTracks ? 13 : 15
+                    color: row.v === LibraryModel.Artists || row.v === LibraryModel.Composers || row.v === LibraryModel.Playlists || (row.v === LibraryModel.Search && row.kind !== 2) ? Theme.silver
+                         : (row.v === LibraryModel.Folders && row.isDir) || row.v === LibraryModel.Genres || row.v === LibraryModel.Years ? Theme.gold : Theme.silverA(0.6)
                 }
             }
             Text {
@@ -121,6 +138,14 @@ Item {
                 width: parent.width - x - (row.playBtn ? 48 : 12)
                 text: row.text; elide: Text.ElideRight
                 color: Theme.white; font.family: Theme.font; font.pixelSize: 14
+            }
+            // il brano che cerca il proprio artista: righe con la seconda riga (album/artista) quando c'e'
+            Text {
+                visible: row.v === LibraryModel.Search && row.sub !== ""
+                x: 12 + row.iconW + 12; y: parent.height / 2 + 2
+                width: parent.width - x - (row.playBtn ? 48 : 12)
+                text: row.sub; elide: Text.ElideRight
+                color: Theme.silverA(0.6); font.family: Theme.font; font.pixelSize: 11
             }
             Rectangle {                                   // pulsante play a destra (opacity-70, active:opacity-100)
                 id: rowPlay
@@ -223,10 +248,16 @@ Item {
             MouseArea {
                 id: cardTap
                 anchors.fill: parent
+                property bool moved: false
+                property real pressX: 0; property real pressY: 0
+                pressAndHoldInterval: 500
+                onPressed: (m) => { moved = false; pressX = m.x; pressY = m.y }
+                onPositionChanged: (m) => { if (Math.abs(m.y - pressY) > 10 || Math.abs(m.x - pressX) > 10) moved = true }
                 onClicked: (m) => {
                     var bx = root.cardW - 6 - 15, by = root.cardW - 6 - 15
                     root.rowTap(card.index, Math.abs(m.x - bx) <= 18 && Math.abs(m.y - by) <= 18)
                 }
+                onPressAndHold: (m) => { if (!moved) root.rowLongPress(card.index, card.mapToItem(root, m.x, m.y).x, card.mapToItem(root, m.x, m.y).y) }
             }
         }
         // la vista sborda di 12 a destra: la barra sta sul bordo VISIBILE
