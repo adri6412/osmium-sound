@@ -82,7 +82,8 @@ screen (or stays headless, per what you chose).
   can be installed from Lyrion's web UI (Settings → Plugins) and show up on
   their own, no app update needed.
 - **Now Playing**: large artwork, transport and volume, optional analog VU
-  meter, bit-perfect / ReplayGain indicator.
+  meter (or, with it off, a CD, vinyl or cassette animation chosen in
+  Settings → Animations), bit-perfect / ReplayGain indicator.
 - **CD**: insert an audio CD to play it, or rip it to tagged FLAC into one of
   your sources.
 - **Settings** (on screen): language, Lyrion (server, web-player look,

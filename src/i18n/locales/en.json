@@ -414,6 +414,7 @@
       "audio": "Audio Output (DAC)",
       "playback": "Playback",
       "vuMeters": "VU Meters",
+      "animations": "Animations",
       "dsp": "DSP / Equalizer",
       "multiroom": "Lyrion Music Server",
       "alarm": "Alarm Clock",
@@ -454,7 +455,19 @@
       "installing": "Installing…",
       "unsupported": "Needs a device update",
       "badgeNew": "NEW",
-      "badgeUpdate": "NEW VERSION"
+      "badgeUpdate": "NEW VERSION",
+      "animationsHint": "With the VU meters off you can choose an animation.",
+      "chooseAnimation": "Choose an animation"
+    },
+    "animations": {
+      "help": "Instead of the VU meters, Now Playing can show a CD, a vinyl record or a cassette that turns with the music.",
+      "vuOn": "Animations are shown only when the VU meters are off.",
+      "turnOffVu": "Turn off the VU meters",
+      "none": "None",
+      "noneHelp": "Song lyrics",
+      "cd": "CD",
+      "vinyl": "Vinyl",
+      "cassette": "Cassette"
     },
     "playback": {
       "help": "Playback options applied to the active player: track transitions (crossfade/gapless) and volume normalisation (ReplayGain).",

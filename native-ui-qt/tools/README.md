@@ -30,6 +30,9 @@ un finto apparecchio in Python.
   Needs Pillow + numpy (`python3 -m venv` in the scratchpad). The Modulometer skin came from
   `VU Nagra.zip` with: `--needle-pivot 13.75,577 --meter 755.22,984.77 --meter 2098.24,994.79
   --angles=-46.5,47.2` (source-artwork pixels).
+- `np-anim/*.py` — generate the PNGs of the Now Playing animations (`assets/anim/<cd|vinyl|cassette>/`,
+  one script per scene, Pillow + numpy); the scenes are `qml/AnimCd.qml`, `AnimVinyl.qml`, `AnimCassette.qml`,
+  picked by `qml/NpAnimation.qml`. `MOCK_VU=0 MOCK_NP_ANIMATION=cd` starts the mock with one on screen.
 - `../sync.sh` — copia sorgenti+icone sul Dell e compila là.
 - `../install.sh` — installa in /opt/hifi-qt e registra l'unità systemd (vedi file).
 

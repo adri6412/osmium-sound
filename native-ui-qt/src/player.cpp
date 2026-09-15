@@ -226,6 +226,8 @@ void Player::pollStatus() {
             m_playerProvisional = true;
         }
         bool playing = S(r, "mode") == "play";
+        // a player that does not report it counts as on
+        bool power = !r.contains("power") || r.value("power").toInt() != 0;
         double elapsed = r.value("time").toDouble(), duration = r.value("duration").toDouble();
         int volume = r.value("mixer volume").toInt(), index = r.value("playlist_cur_index").toInt();
         int total = r.value("playlist_tracks").toInt(), repeat = r.value("playlist repeat").toInt();
@@ -250,13 +252,13 @@ void Player::pollStatus() {
                     remote != m_remote || bitrate != m_bitrate || url != m_url;
         bool track = title != m_title || artist != m_artist || album != m_album;
         bool prog = std::fabs(elapsed - m_elapsed) > 0.4 || std::fabs(duration - m_duration) > 0.4;
-        bool ctl = playing != m_playing || volume != m_volume || shuffle != m_shuffle || repeat != m_repeat ||
+        bool ctl = playing != m_playing || power != m_power || volume != m_volume || shuffle != m_shuffle || repeat != m_repeat ||
                    sleep != m_sleepSecs || index != m_index || total != m_total;
         m_title = title; m_artist = artist; m_album = album; m_type = type; m_sampleSize = ssize; m_sampleRate = srate;
         m_id = id; m_coverId = coverid; m_artworkUrlLms = aurl; m_remote = remote; m_bitrate = bitrate; m_currentTitle = currentTitle;
         m_url = url; m_rawTitle = rawTitle;
         m_elapsed = elapsed; m_duration = duration;
-        m_playing = playing; m_volume = volume; m_shuffle = shuffle; m_repeat = repeat; m_sleepSecs = sleep; m_index = index; m_total = total;
+        m_playing = playing; m_power = power; m_volume = volume; m_shuffle = shuffle; m_repeat = repeat; m_sleepSecs = sleep; m_index = index; m_total = total;
         m_lastElapsedTick = m_clock.elapsed();
         if (meta) { derive(); emit metaChanged(); }
         if (prog) emit progressChanged();
@@ -364,6 +366,12 @@ void Player::toggleFavorite() {
     }
 }
 
+// The Now Playing animations the kiosk knows how to draw (assets/anim/<id>).
+static bool isNpAnimation(const QString &v) {
+    return v == QLatin1String("none") || v == QLatin1String("cd")
+        || v == QLatin1String("vinyl") || v == QLatin1String("cassette");
+}
+
 void Player::pollSettings() {
     Api *a = Api::instance();
     a->request("GET", a->apiBase() + "/nowplaying_autoexpand", {}, [this](bool ok, const QVariant &d, int) {
@@ -381,6 +389,13 @@ void Player::pollSettings() {
         const QString v = d.toMap().value("style").toString();
         if (!v.isEmpty() && v != m_vuStyle) { m_vuStyle = v; emit settingsChanged(); }
     }, 3000);
+    a->request("GET", a->apiBase() + "/nowplaying_animation", {}, [this](bool ok, const QVariant &d, int) {
+        if (!ok || d.typeId() != QMetaType::QVariantMap) return;
+        const QString v = d.toMap().value("animation").toString();
+        if (!isNpAnimation(v) || v == m_npAnimation) return;
+        m_npAnimation = v;
+        emit settingsChanged();
+    }, 3000);
 }
 void Player::refreshSettings() { pollSettings(); }
 
@@ -395,6 +410,13 @@ void Player::setVuEnabled(bool on) {
 void Player::setVuStyle(const QString &style) {
     if (style.isEmpty() || m_vuStyle == style) return;
     m_vuStyle = style;
+    emit settingsChanged();
+}
+
+// Same optimistic pattern as the VU skin; unknown ids are ignored.
+void Player::setNpAnimation(const QString &kind) {
+    if (!isNpAnimation(kind) || m_npAnimation == kind) return;
+    m_npAnimation = kind;
     emit settingsChanged();
 }
 

@@ -86,6 +86,7 @@ Column {
                     case "box": return cBox
                     case "vuskin": return cVuSkin
                     case "vustore": return cVuStore
+                    case "animcard": return cAnimCard
                     }
                     return cHelp
                 }
@@ -516,6 +517,58 @@ Column {
                 Icon { visible: vs.sel; x: parent.width - 30; y: pv.y + pv.height + 9; name: "check-circle-2"; size: 18; color: Theme.gold }
             }
             Tap { id: vsTap; tap: 0.97; onClicked: root.ctl.activate(vs.row, vs.row.act) }
+        }
+    }
+    // a Now Playing animation to choose (Settings → Animations): a still of
+    // the scene, or for "none" the lyrics icon, with its name below; the same
+    // look as the VU skin cards
+    Component { id: cAnimCard
+        Item {
+            id: an
+            property var row: ({})
+            readonly property bool sel: !!row.sel
+            readonly property bool none: (row.arg || "") === "none"
+            width: parent.width
+            height: 8 + apv.height + 36
+            Rectangle {
+                anchors.fill: parent; radius: 8
+                scale: anTap.tapScale
+                color: an.sel ? Theme.goldA(0.1) : anTap.mix(Theme.dark, Theme.light)
+                border.width: an.sel ? 2 : 1; border.color: an.sel ? Theme.gold : Theme.accent
+                Rectangle {
+                    id: apv
+                    x: 8; y: 8; width: parent.width - 16; height: Math.round(width / 2); radius: 6
+                    color: Theme.blackA(0.3); clip: true
+                    // a still: live false, never active, nothing ever runs
+                    NpAnimation {
+                        anchors.fill: parent
+                        visible: !an.none
+                        kind: an.none ? "" : (an.row.arg || "")
+                        live: false
+                        active: false
+                        devScale: root.ctl ? root.ctl.devScale : 1
+                    }
+                    Column {
+                        visible: an.none
+                        anchors.centerIn: parent
+                        spacing: 8
+                        Icon { anchors.horizontalCenter: parent.horizontalCenter; name: "mic-2"; size: 32; color: Theme.silverA(0.5) }
+                        Text {
+                            anchors.horizontalCenter: parent.horizontalCenter
+                            width: Math.min(implicitWidth, apv.width - 16); elide: Text.ElideRight
+                            text: Tr.t("settings.animations.noneHelp")
+                            color: Theme.silverA(0.6); font.family: Theme.font; font.pixelSize: 12
+                        }
+                    }
+                }
+                Text {
+                    x: 12; y: apv.y + apv.height; width: parent.width - 24 - (an.sel ? 22 : 0); height: 36; verticalAlignment: Text.AlignVCenter
+                    text: an.row.label || ""; elide: Text.ElideRight
+                    color: an.sel ? Theme.gold : Theme.white; font.family: Theme.font; font.pixelSize: 14; font.bold: an.sel
+                }
+                Icon { visible: an.sel; x: parent.width - 30; y: apv.y + apv.height + 9; name: "check-circle-2"; size: 18; color: Theme.gold }
+            }
+            Tap { id: anTap; tap: 0.97; onClicked: root.ctl.activate(an.row, an.row.act) }
         }
     }
     // a skin of the VU meter store: its preview, name, author and size, and

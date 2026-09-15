@@ -161,6 +161,10 @@
         "label": "VU meter",
         "desc": "Accensione, aspetto degli strumenti e altri VU meter da scaricare"
       },
+      "animations": {
+        "label": "Animazioni",
+        "desc": "Un CD, un disco in vinile o una musicassetta al posto dei VU meter"
+      },
       "display": {
         "label": "Modalità schermo",
         "desc": "Interfaccia su schermo o headless"
@@ -526,7 +530,23 @@
       "saved": "Preferenza VU meter salvata",
       "failed": "Salvataggio preferenza fallito",
       "styleSaved": "Stile dei VU meter salvato",
-      "storeFailed": "Operazione non riuscita"
+      "storeFailed": "Operazione non riuscita",
+      "animationHint": "Con i VU meter spenti, lo schermo può mostrare un'animazione al loro posto.",
+      "chooseAnimation": "Scegli un'animazione"
+    },
+    "animations": {
+      "help": "Al posto dei VU meter, lo schermo dell'apparecchio può mostrare un CD, un disco in vinile o una musicassetta che gira con la musica.",
+      "vuOnNote": "Le animazioni si vedono solo con i VU meter spenti.",
+      "turnOffVu": "Spegni i VU meter",
+      "choice": {
+        "none": "Nessuna",
+        "cd": "CD",
+        "vinyl": "Vinile",
+        "cassette": "Musicassetta"
+      },
+      "noneHelp": "In riproduzione si vedono i testi del brano.",
+      "saved": "Animazione salvata",
+      "failed": "Impossibile salvare l'animazione"
     },
     "display": {
       "currentLabel": "Attuale",

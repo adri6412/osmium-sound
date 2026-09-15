@@ -62,6 +62,7 @@ Item {
         { id: "audio", icon: "volume-2", key: "settings.sections.audio" },
         { id: "playback", icon: "sliders", key: "settings.sections.playback" },
         { id: "vuMeters", icon: "audio-lines", key: "settings.sections.vuMeters" },
+        { id: "animations", icon: "disc-3", key: "settings.sections.animations" },
         { id: "multiroom", icon: "speaker", key: "settings.sections.multiroom" },
         { id: "alarm", icon: "alarm-clock", key: "settings.sections.alarm" },
         { id: "network", icon: "wifi", key: "settings.sections.network" },
@@ -96,6 +97,7 @@ Item {
         property string timezone: ""
         property bool vuMeter: true; property int autoexpand: 0; property bool playerEnabled: true
         property var vuStyles: []                                   // [{id, name:{en,it}}]; the choice is Player.vuStyle
+        property string npAnimation: "none"                         // Now Playing animation with the VU meters off
         // VU meter store (api_server /vu_store): the full list only while the
         // section is open, the count of news for the dot on its row always
         property var vuStore: ({ skins: [], checking: false, busy: false, error: null, loaded: false })
@@ -223,6 +225,7 @@ Item {
             get(api("/pointer_status"), function(d) { pointerEnabled = d.enabled !== false; pointerAvailable = d.available !== false })
             get(api("/vu_meter"), function(d) { vuMeter = d.enabled !== false })
             get(api("/vu_style"), function(d) { vuStyles = d.styles || [] })
+            get(api("/nowplaying_animation"), function(d) { npAnimation = str(d, "animation", "none") })
             get(api("/vu_store?summary=1"), function(d) { vuStoreNew = Number(d.new || 0) + Number(d.updates || 0) })
             get(api("/player_enabled"), function(d) { playerEnabled = d.enabled !== false })
             get(api("/ui_refresh"), function(d) { uiRefreshSupported = !!d.supported; uiRefresh = str(d, "mode", "native") })
@@ -635,6 +638,7 @@ Item {
             case "audio": secAudio(); break
             case "playback": secPlayback(); break
             case "vuMeters": secVuMeters(); break
+            case "animations": secAnimations(); break
             case "multiroom": secMultiroom(); break
             case "alarm": secAlarm(); break
             case "network": secNetwork(); break
@@ -944,6 +948,10 @@ Item {
     function secVuMeters() {
         help("settings.vuMeters.help")
         toggle(Tr.t("settings.playback.vuMeter"), Tr.t("settings.playback.vuMeterHelp"), cfg.vuMeter, "vumeter")
+        if (!cfg.vuMeter) {                    // their place can go to an animation
+            note(Tr.t("settings.vuMeters.animationsHint"), "dark", "disc-3")
+            grid([acell(Tr.t("settings.vuMeters.chooseAnimation"), "open_animations", "accent", { icon: "disc-3", hh: 44 })])
+        }
         var lang = I18n.lang
         if (cfg.vuMeter && cfg.vuStyles.length > 1) {
             label("settings.playback.vuStyle", 14); help("settings.playback.vuStyleHelp", 12)
@@ -987,6 +995,25 @@ Item {
         }
         if (vs.loaded && !vs.checking && !vs.busy)
             grid([acell(Tr.t("settings.vuMeters.storeCheck"), "vu_check", "accent", { icon: "rotate-cw", hh: 44 })])
+    }
+    // Now Playing animations: a CD, a vinyl record or a cassette in the VU
+    // meters' place. Only with the VU meters off; while they are on, a note
+    // and the button to turn them off. Each card is a still of the scene.
+    function secAnimations() {
+        help("settings.animations.help")
+        if (cfg.vuMeter) {
+            note(Tr.t("settings.animations.vuOn"), "dark")
+            action(Tr.t("settings.animations.turnOffVu"), "anim_vu_off", "accent")
+            return
+        }
+        var KINDS = ["none", "cd", "vinyl", "cassette"]
+        for (var i = 0; i < KINDS.length; i += 2) {
+            var cards = []
+            for (var j = i; j < i + 2; j++)
+                cards.push({ type: "animcard", label: Tr.t("settings.animations." + KINDS[j]), arg: KINDS[j],
+                             sel: Player.npAnimation === KINDS[j], act: "np_anim" })
+            grid(cards)
+        }
     }
     function playerPrefs() {
         if (!havePlayer) note(Tr.t("settings.playback.noPlayer"), "dark")
@@ -1324,6 +1351,14 @@ Item {
             return
         case "vumeter": post(A("/vu_meter"), { enable: !row.on }); cfg.vuMeter = !row.on; Player.vuEnabled = cfg.vuMeter; break
         case "vu_style": post(A("/vu_style"), { style: arg }); Player.vuStyle = arg; break
+        case "open_animations": openSection("animations"); return
+        case "anim_vu_off": post(A("/vu_meter"), { enable: false }); cfg.vuMeter = false; Player.vuEnabled = false; break
+        case "np_anim":
+            post(A("/nowplaying_animation"), { animation: arg }); cfg.npAnimation = arg; Player.npAnimation = arg
+            // a freshly chosen animation is what Now Playing shows next, even
+            // if the lyrics were the last view picked there
+            if (arg !== "none" && Ui.app && !Ui.app.viewVu) { Ui.app.viewVu = true; Sys.setConf("nowplaying-view", "vu") }
+            break
         case "vu_install":
             if (row.state === "downloading" || row.state === "installing" || row.state === "unsupported") return
             Api.post(A("/vu_store/install"), { id: arg }, function(ok, d) {

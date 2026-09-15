@@ -977,6 +977,8 @@ _AUTH_ROUTES = {
     ('/api/system/vu_meter', 'POST'): '/vu_meter',
     ('/api/system/vu_style', 'GET'): '/vu_style',
     ('/api/system/vu_style', 'POST'): '/vu_style',
+    ('/api/system/nowplaying_animation', 'GET'): '/nowplaying_animation',
+    ('/api/system/nowplaying_animation', 'POST'): '/nowplaying_animation',
     ('/api/system/vu_store', 'GET'): '/vu_store',
     ('/api/system/vu_store/check', 'POST'): '/vu_store/check',
     ('/api/system/vu_store/install', 'POST'): '/vu_store/install',

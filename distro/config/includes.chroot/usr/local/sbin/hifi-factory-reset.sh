@@ -94,7 +94,7 @@ for f in display-mode ui-resolution pointer-enabled dsp.json dsp-presets.json bl
          samba-cred.json provisioning-state.json webui.db webui-secret.key \
          github-support-pat lyrion-channel lms-skin \
          ui-language ui-refresh nowplaying-view nowplaying-autoexpand-seconds \
-         ota-autocheck player-enabled vu-meter-enabled; do
+         nowplaying-animation ota-autocheck player-enabled vu-meter-enabled; do
     rm -f "/etc/hifi-player/$f" 2>/dev/null || true
 done
 # Reset the OTA channel to the stable default (factory semantics).

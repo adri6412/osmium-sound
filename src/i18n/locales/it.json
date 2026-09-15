@@ -414,6 +414,7 @@
       "audio": "Uscita Audio (DAC)",
       "playback": "Riproduzione",
       "vuMeters": "VU meter",
+      "animations": "Animazioni",
       "dsp": "DSP / Equalizzatore",
       "multiroom": "Lyrion Music Server",
       "alarm": "Sveglia",
@@ -454,7 +455,19 @@
       "installing": "Installazione…",
       "unsupported": "Serve un aggiornamento",
       "badgeNew": "NUOVO",
-      "badgeUpdate": "NUOVA VERSIONE"
+      "badgeUpdate": "NUOVA VERSIONE",
+      "animationsHint": "Con i VU meter spenti puoi scegliere un'animazione.",
+      "chooseAnimation": "Scegli un'animazione"
+    },
+    "animations": {
+      "help": "Al posto dei VU meter, la schermata \"in riproduzione\" può mostrare un CD, un disco in vinile o una musicassetta che girano con la musica.",
+      "vuOn": "Le animazioni si vedono solo con i VU meter spenti.",
+      "turnOffVu": "Spegni i VU meter",
+      "none": "Nessuna",
+      "noneHelp": "Testi del brano",
+      "cd": "CD",
+      "vinyl": "Vinile",
+      "cassette": "Musicassetta"
     },
     "playback": {
       "help": "Opzioni di riproduzione applicate al player attivo: transizioni tra i brani (crossfade/gapless) e normalizzazione del volume (ReplayGain).",

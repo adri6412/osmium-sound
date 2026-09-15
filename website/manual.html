@@ -210,6 +210,7 @@
     <a href="#en-companion-apple">On iPhone and iPad</a>
     <a href="#en-daily-use">Daily use</a>
     <a href="#en-vu">VU meters</a>
+    <a href="#en-animations">Animations</a>
 
     <div class="grp">Advanced configuration</div>
     <a href="#en-sources">Music sources</a>
@@ -239,6 +240,7 @@
     <a href="#it-app-apple">Su iPhone e iPad</a>
     <a href="#it-uso-quotidiano">Uso quotidiano</a>
     <a href="#it-vu">VU meter</a>
+    <a href="#it-animazioni">Animazioni</a>
 
     <div class="grp">Configurazione avanzata</div>
     <a href="#it-sorgenti">Sorgenti musicali</a>
@@ -434,7 +436,7 @@
         <p>Every Osmium Sound device exposes a web administration page reachable from any browser on the same network — especially useful for headless or server-only devices, but always available. The address to use is the device's <strong>IP address</strong>, visible in Settings → System info (on screen or in the companion app), the web admin session itself, or your router's device list:</p>
         <table>
           <tr><th>Address</th><th>What's there</th></tr>
-          <tr><td><code>http://&lt;device-ip&gt;</code></td><td>Web administration: network, audio output, music sources and files, Lyrion Music Server, playback, VU meters, display mode, player on/off, time zone, updates, companion pairing, account, backup, SSH, Tailscale, restart/shut down, factory reset</td></tr>
+          <tr><td><code>http://&lt;device-ip&gt;</code></td><td>Web administration: network, audio output, music sources and files, Lyrion Music Server, playback, VU meters, animations, display mode, player on/off, time zone, updates, companion pairing, account, backup, SSH, Tailscale, restart/shut down, factory reset</td></tr>
           <tr><td><code>http://&lt;device-ip&gt;:9000</code></td><td>Lyrion Music Server's own web interface (library, playlists, server settings)</td></tr>
         </table>
         <p>The home page also has a <strong>Disk space</strong> card: a bar and a small table telling how much the system takes, how much your data uses, and how much is still free.</p>
@@ -456,7 +458,7 @@
           <li><strong>Use the app</strong>
             Once paired, the app talks directly to Lyrion and the device's API on the local network.</li>
         </ol>
-        <p>The device settings are grouped under Settings → <strong>Osmium Sound</strong>, with the same sections as web administration: audio output, music sources, services, Lyrion Music Server, playback and VU meters (including the looks to download), display, time zone, updates, iPhone/iPad, backup & restore, and system. A few things stay in web administration only, on purpose: network, the SSH login, the web account, factory reset and the debug tools. With an older device, sections it doesn't support yet simply don't appear.</p>
+        <p>The device settings are grouped under Settings → <strong>Osmium Sound</strong>, with the same sections as web administration: audio output, music sources, services, Lyrion Music Server, playback and VU meters (including the looks to download), display, time zone, updates, iPhone/iPad, backup & restore, and system. A few things stay in web administration only, on purpose: network, the SSH login, the web account, factory reset and the debug tools. The Now Playing animations are chosen on the device's screen or in web administration, not in the app. With an older device, sections it doesn't support yet simply don't appear.</p>
         <p>Once paired, a power icon in the app's top bar turns the Osmium Sound device off, after asking for confirmation.</p>
         <p>The first time you open the app it asks for your language, then what you are connecting to. Choose <strong>Osmium Sound</strong> to scan the pairing code and get the device settings listed above, or <strong>another Lyrion server</strong> to type in an address and port instead — in that case the device settings are not shown, because there is no Osmium device behind them. If the connection doesn't work, the "Trouble connecting?" guide on that screen walks you through the usual causes.</p>
         <h3>Listening on the phone itself</h3>
@@ -472,7 +474,7 @@
       <section id="en-daily-use">
         <h2>Daily use</h2>
         <ul>
-          <li><strong>Now Playing</strong> — the expanded view shows the analog VU meters (see <a href="#en-vu">VU meters</a>) and a status plate: the kind of audio playing (Hi-Res, PCM, DSD) and whether BitPerfect or ReplayGain is on. Tap BitPerfect or ReplayGain to jump straight to the setting behind it.</li>
+          <li><strong>Now Playing</strong> — the expanded view shows the analog VU meters (see <a href="#en-vu">VU meters</a>) — or, with them off, an animation (see <a href="#en-animations">Animations</a>) — and a status plate: the kind of audio playing (Hi-Res, PCM, DSD) and whether BitPerfect or ReplayGain is on. Tap BitPerfect or ReplayGain to jump straight to the setting behind it.</li>
           <li><strong>Choosing the player</strong> — tap the player name in the bar at the bottom (or the speaker button in Now Playing) to see the other players on the same music server, and pick one to control it from this screen: what's playing, the queue, the volume. The name turns gold as a reminder. Settings that belong to this device are hidden meanwhile, with a <strong>Back to this device</strong> button; after a restart the screen is always back on its own player.</li>
           <li><strong>Power button</strong> — the power icon at the right end of the top bar, next to the Osmium Sound mark, restarts or shuts down the device.</li>
           <li><strong>Music / Radio / Apps</strong> — Lyrion Music Server's interface: local library, internet radio, and streaming services (Deezer, Qobuz, TIDAL, Spotify and others) via Lyrion plugins. The Music tab opens on a search box that looks through the whole library (artists, albums, tracks) and on tiles for artists, albums, genres, years, composers, new music, folders, playlists and favourites.</li>
@@ -481,7 +483,7 @@
           <li><strong>CD</strong> — insert a disc to play it, or rip it to FLAC with automatic tags and cover art (MusicBrainz), straight into your library, an adopted USB drive, or a writable network share.</li>
           <li><strong>Discover</strong> — endless mixes by track, album, or artist, with a genre filter and saveable presets, plus "keep playing similar music", related artists, and bios, right on the touchscreen.</li>
           <li><strong>Settings → Playback</strong> — track transition, ReplayGain, the now-playing auto-expand timeout, and a fixed-volume-100% (BitPerfect) toggle that turns off Lyrion's own digital volume control and greys out the volume slider.</li>
-          <li><strong>Settings</strong> — system and network info, audio output, music sources, Lyrion Music Server, VU meters, updates, companion app pairing, backup, factory reset.</li>
+          <li><strong>Settings</strong> — system and network info, audio output, music sources, Lyrion Music Server, VU meters, animations, updates, companion app pairing, backup, factory reset.</li>
         </ul>
         <div class="box tip">
           <span class="label">Playback survives a restart</span>
@@ -500,6 +502,22 @@
         <div class="box tip">
           <span class="label">Only looks we have checked</span>
           <p>The downloadable looks come from Osmium Sound's own list, and the device refuses anything that doesn't match it exactly. A look that needs a newer version of the device says so, instead of installing.</p>
+        </div>
+      </section>
+
+      <section id="en-animations">
+        <h2>Animations</h2>
+        <p>With the VU meters turned off, Now Playing can show an animation in their place. Choose it in Settings → <strong>Animations</strong> — on the screen or in web administration:</p>
+        <ul>
+          <li><strong>None</strong> — nothing takes the place of the VU meters.</li>
+          <li><strong>CD</strong> — a disc goes into a player, then spins.</li>
+          <li><strong>Vinyl</strong> — the tonearm lowers onto a record, then the record spins.</li>
+          <li><strong>Cassette</strong> — a tape goes into a deck, then runs.</li>
+        </ul>
+        <p>It moves only while music is playing: pause, and it slows down and stops. When a new album starts, the disc or tape comes out and goes back in. The button in Now Playing that brings up the song lyrics switches between the animation and the lyrics.</p>
+        <div class="box tip">
+          <span class="label">VU meters or animation</span>
+          <p>The animations play on the device's screen only, and only while the VU meters are off. To see one, turn off Settings → <strong>VU meters</strong> first.</p>
         </div>
       </section>
 
@@ -832,7 +850,7 @@
         <p>Ogni dispositivo Osmium Sound espone una pagina di amministrazione web raggiungibile da qualsiasi browser sulla stessa rete, utile in particolare per i dispositivi in modalità headless o solo server, ma disponibile sempre. L'indirizzo da usare è l'<strong>indirizzo IP</strong> del dispositivo, visibile in Impostazioni → Info di sistema (a schermo o nell'app companion), nella sessione di amministrazione web stessa, oppure nell'elenco dispositivi del router:</p>
         <table>
           <tr><th>Indirizzo</th><th>Cosa trovi</th></tr>
-          <tr><td><code>http://&lt;ip-dispositivo&gt;</code></td><td>Amministrazione web: rete, uscita audio, sorgenti musicali e file, Lyrion Music Server, riproduzione, VU meter, modalità schermo, player on/off, fuso orario, aggiornamenti, abbinamento app companion, account, backup, SSH, Tailscale, riavvio/spegnimento, reset di fabbrica</td></tr>
+          <tr><td><code>http://&lt;ip-dispositivo&gt;</code></td><td>Amministrazione web: rete, uscita audio, sorgenti musicali e file, Lyrion Music Server, riproduzione, VU meter, animazioni, modalità schermo, player on/off, fuso orario, aggiornamenti, abbinamento app companion, account, backup, SSH, Tailscale, riavvio/spegnimento, reset di fabbrica</td></tr>
           <tr><td><code>http://&lt;ip-dispositivo&gt;:9000</code></td><td>Interfaccia web di Lyrion Music Server (libreria, playlist, impostazioni server)</td></tr>
         </table>
         <p>La pagina iniziale ha anche un riquadro <strong>Spazio su disco</strong>: una barra e una piccola tabella che dicono quanto occupa il sistema, quanto i tuoi dati e quanto spazio resta libero.</p>
@@ -854,7 +872,7 @@
           <li><strong>Usa l'app</strong>
             Una volta abbinata, l'app parla direttamente con Lyrion e con l'API del dispositivo sulla rete locale.</li>
         </ol>
-        <p>Le impostazioni del dispositivo sono raccolte in Impostazioni → <strong>Osmium Sound</strong>, con le stesse sezioni dell'amministrazione web: uscita audio, sorgenti musicali, servizi, Lyrion Music Server, riproduzione e VU meter (compresi gli aspetti da scaricare), schermo, fuso orario, aggiornamenti, iPhone/iPad, backup e ripristino, sistema. Alcune cose restano di proposito solo nell'amministrazione web: rete, accesso SSH, account web, reset di fabbrica e strumenti di debug. Con un apparecchio più vecchio, le sezioni che non supporta ancora semplicemente non compaiono.</p>
+        <p>Le impostazioni del dispositivo sono raccolte in Impostazioni → <strong>Osmium Sound</strong>, con le stesse sezioni dell'amministrazione web: uscita audio, sorgenti musicali, servizi, Lyrion Music Server, riproduzione e VU meter (compresi gli aspetti da scaricare), schermo, fuso orario, aggiornamenti, iPhone/iPad, backup e ripristino, sistema. Alcune cose restano di proposito solo nell'amministrazione web: rete, accesso SSH, account web, reset di fabbrica e strumenti di debug. Le animazioni di Now Playing si scelgono sullo schermo dell'apparecchio o nell'amministrazione web, non nell'app. Con un apparecchio più vecchio, le sezioni che non supporta ancora semplicemente non compaiono.</p>
         <p>Una volta abbinata, l'icona di spegnimento nella barra in alto dell'app spegne l'apparecchio Osmium Sound, dopo averti chiesto conferma.</p>
         <p>La prima volta che apri l'app ti chiede la lingua, poi a che cosa ti stai collegando. Scegli <strong>Osmium Sound</strong> per inquadrare il codice di abbinamento e avere le impostazioni del dispositivo elencate qui sopra, oppure <strong>un altro server Lyrion</strong> per scrivere a mano indirizzo e porta: in quel caso le impostazioni del dispositivo non compaiono, perché dietro non c'è un apparecchio Osmium. Se il collegamento non riesce, la guida "Problemi con il collegamento?" in quella schermata ti accompagna tra le cause più comuni.</p>
         <h3>Ascoltare sul telefono</h3>
@@ -870,7 +888,7 @@
       <section id="it-uso-quotidiano">
         <h2>Uso quotidiano</h2>
         <ul>
-          <li><strong>Now Playing</strong> — la vista espansa mostra i VU meter analogici (vedi <a href="#it-vu">VU meter</a>) e una targa di stato: il tipo di audio in riproduzione (Hi-Res, PCM, DSD) e se BitPerfect o ReplayGain sono attivi. Tocca BitPerfect o ReplayGain per andare dritto all'impostazione corrispondente.</li>
+          <li><strong>Now Playing</strong> — la vista espansa mostra i VU meter analogici (vedi <a href="#it-vu">VU meter</a>) — oppure, se sono spenti, un'animazione (vedi <a href="#it-animazioni">Animazioni</a>) — e una targa di stato: il tipo di audio in riproduzione (Hi-Res, PCM, DSD) e se BitPerfect o ReplayGain sono attivi. Tocca BitPerfect o ReplayGain per andare dritto all'impostazione corrispondente.</li>
           <li><strong>Scegliere il player</strong> — tocca il nome del player nella barra in basso (o il pulsante con l'altoparlante in Now Playing) per vedere gli altri player dello stesso server musicale, e scegline uno per comandarlo da questo schermo: cosa suona, la coda, il volume. Il nome diventa dorato come promemoria. Nel frattempo le impostazioni che riguardano questo apparecchio sono nascoste, con un pulsante <strong>Torna a questo apparecchio</strong>; dopo un riavvio lo schermo torna sempre al proprio player.</li>
           <li><strong>Pulsante di spegnimento</strong> — l'icona di accensione all'estremità destra della barra in alto, accanto al marchio Osmium Sound, riavvia o spegne l'apparecchio.</li>
           <li><strong>Musica / Radio / App</strong> — l'interfaccia di Lyrion Music Server: libreria locale, radio internet e servizi di streaming (Deezer, Qobuz, TIDAL, Spotify e altri) tramite i plugin di Lyrion. La scheda Musica si apre su una casella di ricerca che cerca in tutta la libreria (artisti, album, brani) e sulle tessere artisti, album, generi, anni, compositori, novità, cartelle, playlist e preferiti.</li>
@@ -879,7 +897,7 @@
           <li><strong>CD</strong> — inserisci un disco per riprodurlo oppure rippare in FLAC con tag e copertina automatici (MusicBrainz), direttamente nella libreria, su un disco USB adottato o su una condivisione di rete scrivibile.</li>
           <li><strong>Discover</strong> — mix infiniti per brano, album o artista, con filtro per genere e preset salvabili, oltre a "continua ad ascoltare musica simile", artisti correlati e biografie direttamente a schermo.</li>
           <li><strong>Impostazioni → Riproduzione</strong> — transizione tra i brani, ReplayGain, timeout di espansione automatica del now playing, e un interruttore volume fisso al 100% (BitPerfect) che disattiva il controllo volume digitale di Lyrion e disabilita visivamente lo slider del volume.</li>
-          <li><strong>Impostazioni</strong> — info di sistema e rete, uscita audio, sorgenti musicali, Lyrion Music Server, VU meter, aggiornamenti, abbinamento app companion, backup, reset di fabbrica.</li>
+          <li><strong>Impostazioni</strong> — info di sistema e rete, uscita audio, sorgenti musicali, Lyrion Music Server, VU meter, animazioni, aggiornamenti, abbinamento app companion, backup, reset di fabbrica.</li>
         </ul>
         <div class="box tip">
           <span class="label">La riproduzione sopravvive a un riavvio</span>
@@ -898,6 +916,22 @@
         <div class="box tip">
           <span class="label">Solo aspetti controllati da noi</span>
           <p>Gli aspetti da scaricare arrivano dall'elenco ufficiale di Osmium Sound, e l'apparecchio rifiuta qualsiasi cosa non corrisponda esattamente. Un aspetto che richiede una versione più recente dell'apparecchio lo dice, invece di installarsi.</p>
+        </div>
+      </section>
+
+      <section id="it-animazioni">
+        <h2>Animazioni</h2>
+        <p>Con i VU meter spenti, Now Playing può mostrare al loro posto un'animazione. Si sceglie in Impostazioni → <strong>Animazioni</strong> — sullo schermo o nell'amministrazione web:</p>
+        <ul>
+          <li><strong>Nessuna</strong> — al posto dei VU meter non compare nulla.</li>
+          <li><strong>CD</strong> — un disco entra in un lettore, poi gira.</li>
+          <li><strong>Vinile</strong> — il braccio con la puntina scende sul disco, poi il disco gira.</li>
+          <li><strong>Musicassetta</strong> — una cassetta entra in una piastra, poi scorre.</li>
+        </ul>
+        <p>Si muove solo mentre la musica suona: metti in pausa e rallenta fino a fermarsi. Quando parte un altro album, il disco o la cassetta esce e rientra. Il pulsante di Now Playing che mostra il testo della canzone passa dall'animazione al testo e viceversa.</p>
+        <div class="box tip">
+          <span class="label">VU meter o animazione</span>
+          <p>Le animazioni si vedono solo sullo schermo dell'apparecchio, e solo quando i VU meter sono spenti. Per vederne una, spegni prima Impostazioni → <strong>VU meter</strong>.</p>
         </div>
       </section>
 

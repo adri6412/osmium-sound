@@ -13,6 +13,10 @@ Item {
     // the VU needles come from this device's own DAC: meaningless while
     // driving another player (#99)
     readonly property bool effVu: viewVu && Player.vuEnabled && Player.isOwn
+    // with the VU meters off, a CD / vinyl / cassette may take their place
+    // (Settings → Animations); it is not tied to our own DAC, so no isOwn
+    readonly property bool animChosen: ["cd", "vinyl", "cassette"].indexOf(Player.npAnimation) >= 0
+    readonly property bool effAnim: viewVu && !Player.vuEnabled && animChosen
     property bool shown: false                         // a video (VU attivi solo qui)
     signal collapse()
     signal openQueue()
@@ -40,7 +44,7 @@ Item {
     Item {
         id: staticLayer
         anchors.fill: parent
-        layer.enabled: root.shown && root.effVu
+        layer.enabled: root.shown && (root.effVu || root.effAnim)
         layer.textureSize: Qt.size(Math.round(width * root.devScale), Math.round(height * root.devScale))
         layer.smooth: true
         // Senza canale alpha: la schermata e' opaca (ha il suo fondo scuro), e
@@ -148,10 +152,10 @@ Item {
         fg: Player.isOwn ? Theme.white : Theme.gold
         onClicked: root.openPlayerPicker()
     }
-    RoundButton {                                 // VU <-> testi (nascosto se i VU sono spenti)
+    RoundButton {                                 // VU or animation <-> lyrics (hidden when neither is available)
         x: 1024 - root.pad - 34 * 3 - 16; y: 14; width: 34; height: 34
-        visible: Player.vuEnabled && Player.isOwn
-        icon: root.viewVu ? "mic-2" : "audio-lines"; iconSize: 18
+        visible: (Player.vuEnabled && Player.isOwn) || (!Player.vuEnabled && root.animChosen)
+        icon: root.viewVu ? "mic-2" : (Player.vuEnabled ? "audio-lines" : "disc-3"); iconSize: 18
         onClicked: root.toggleView()
     }
     RoundButton { x: 1024 - root.pad - 34 * 2 - 8; y: 14; width: 34; height: 34; icon: "list-music"; iconSize: 18; onClicked: root.openQueue() }
@@ -339,7 +343,7 @@ Item {
     // ─── testi (nello strato: non si muovono da soli) ──────────────────────
     Lyrics {
         x: root.rx; y: col.y + col.height; width: root.rw; height: 600 - root.pad - y
-        visible: !root.effVu; active: root.shown && !root.effVu
+        visible: !root.effVu && !root.effAnim; active: root.shown && !root.effVu && !root.effAnim
     }
     }   // fine dello strato statico
 
@@ -347,6 +351,16 @@ Item {
     VuPanel {
         x: root.rx; y: col.y + col.height; width: root.rw; height: 600 - root.pad - y
         visible: root.effVu; devScale: root.devScale
+    }
+    // the animation in the same box, also outside the layer. Loaded while the
+    // VU meters are off and one is chosen (so switching to the lyrics and back
+    // does not reload the pictures); it runs only while visible on screen.
+    NpAnimation {
+        x: root.rx; y: col.y + col.height; width: root.rw; height: 600 - root.pad - y
+        kind: Player.vuEnabled ? "" : Player.npAnimation
+        visible: root.effAnim
+        active: root.shown && root.effAnim
+        devScale: root.devScale
     }
 
     Binding { target: Vu; property: "active"; value: root.shown && root.effVu }

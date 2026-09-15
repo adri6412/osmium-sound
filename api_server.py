@@ -3403,6 +3403,55 @@ def set_vu_style(style):
     return {'success': True, 'style': style}
 
 # ──────────────────────────────────────────────────────────────────
+#  Now-playing animation: a turning CD, vinyl record or cassette the kiosk
+#  draws where the VU meters would be. The interface shows it only while the
+#  VU meters are switched off; the two settings stay independent here, so
+#  turning the meters back on and off again brings the chosen animation back.
+#  Persisted like the VU choices above (reachable from the web admin on a
+#  headless unit); ABSENT, unreadable or unknown content means "none".
+# ──────────────────────────────────────────────────────────────────
+NOWPLAYING_ANIMATION_FILE = '/etc/hifi-player/nowplaying-animation'
+NOWPLAYING_ANIMATION_CHOICES = ('none', 'cd', 'vinyl', 'cassette')
+NOWPLAYING_ANIMATION_DEFAULT = 'none'
+
+# Error text for a refused id, added to the shared catalogue (hifi_i18n.py)
+# unless it already carries one, so _t() below answers in both languages.
+_I18N_MESSAGES.setdefault('prefs.animationUnknown',
+                          {'en': 'That animation is not available', 'it': 'Questa animazione non è disponibile'})
+
+def get_nowplaying_animation():
+    """Return { animation, choices }."""
+    animation = NOWPLAYING_ANIMATION_DEFAULT
+    try:
+        with open(NOWPLAYING_ANIMATION_FILE) as f:
+            animation = f.read(64).strip()
+    except Exception:
+        pass
+    if animation not in NOWPLAYING_ANIMATION_CHOICES:
+        animation = NOWPLAYING_ANIMATION_DEFAULT
+    return {'animation': animation, 'choices': list(NOWPLAYING_ANIMATION_CHOICES)}
+
+def set_nowplaying_animation(animation):
+    """Persist the animation choice. Only one of the fixed ids is accepted;
+    'none' is stored like any other, the way the switches above store "off".
+    Leaves the VU meter switch alone: the interface does the gating."""
+    if not isinstance(animation, str) or animation.strip() not in NOWPLAYING_ANIMATION_CHOICES:
+        return {'success': False, 'animation': get_nowplaying_animation()['animation'],
+                'code': 'prefs.animationUnknown', 'message': _t('prefs.animationUnknown', _lang())}
+    animation = animation.strip()
+    try:
+        os.makedirs(os.path.dirname(NOWPLAYING_ANIMATION_FILE), exist_ok=True)
+        tmp = NOWPLAYING_ANIMATION_FILE + '.tmp'
+        with open(tmp, 'w') as f:
+            f.write(animation + '\n')
+        os.replace(tmp, NOWPLAYING_ANIMATION_FILE)
+    except Exception:
+        log.exception("set_nowplaying_animation: persist failed")
+        return {'success': False, 'animation': get_nowplaying_animation()['animation'],
+                'code': 'prefs.saveFailed', 'message': _t('prefs.saveFailed', _lang())}
+    return {'success': True, 'animation': animation}
+
+# ──────────────────────────────────────────────────────────────────
 #  VU meter store: more skins, downloaded on demand from
 #  file.osmiumsound.it/vu/. The catalogue (index.json) carries a detached
 #  Ed25519 signature made with the same key as the OS updates and checked
@@ -7203,6 +7252,18 @@ def api_vu_skin_file(sid, name):
 def api_set_vu_style():
     data = request.get_json(silent=True) or {}
     return jsonify(set_vu_style(data.get('style')))
+
+@app.route('/nowplaying_animation', methods=['GET'])
+def api_nowplaying_animation():
+    return jsonify(get_nowplaying_animation())
+
+@app.route('/nowplaying_animation', methods=['POST'])
+def api_set_nowplaying_animation():
+    data = request.get_json(silent=True)
+    result = set_nowplaying_animation(data.get('animation') if isinstance(data, dict) else None)
+    if result['success']:
+        return jsonify(result)
+    return jsonify(result), (400 if result.get('code') == 'prefs.animationUnknown' else 500)
 
 @app.route('/vu_store', methods=['GET'])
 def api_vu_store():

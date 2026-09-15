@@ -31,7 +31,10 @@ const sections = computed(() => [
   // A section of its own, like the kiosk's Settings → VU meter: the switch,
   // the styles with a preview each, and the store.
   { key: 'vuMeters',  label: t('settings.sections.vuMeters.label'),  desc: t('settings.sections.vuMeters.desc') },
-  { key: 'display',   label: t('settings.sections.display.label'),   desc: t('settings.sections.display.desc') },
+  // What the kiosk draws in place of the meters when they are off. Only the
+  // choice lives here: the animations themselves exist on the device screen.
+  { key: 'animations', label: t('settings.sections.animations.label'), desc: t('settings.sections.animations.desc') },
+  { key: 'display',  label: t('settings.sections.display.label'),   desc: t('settings.sections.display.desc') },
   { key: 'timezone',  label: t('settings.sections.timezone.label'),  desc: t('settings.sections.timezone.desc') },
   { key: 'updates',   label: t('settings.sections.updates.label'),   desc: t('settings.sections.updates.desc') },
   { key: 'companion', label: t('settings.sections.companion.label'), desc: t('settings.sections.companion.desc') },
@@ -731,6 +734,28 @@ async function setVuStyle(style) {
   else say(bodyMsg(r, t('settings.vuMeters.failed')), true);
 }
 
+// ── Now-playing animation ──────────────────────────────────────────
+// A CD, vinyl record or cassette the kiosk shows where the VU meters would be,
+// only while they are off. The two settings stay independent on the device,
+// so this just stores the pick. Choices come from the device, limited to the
+// ones this page has a name for.
+const NP_ANIMATION_IDS = ['none', 'cd', 'vinyl', 'cassette'];
+const npAnimation = ref('none');
+const npAnimations = ref(NP_ANIMATION_IDS);
+async function loadNpAnimation() {
+  const r = await api.sys('nowplaying_animation');
+  if (!r.ok) return;
+  npAnimation.value = r.data.animation || 'none';
+  const known = (r.data.choices || []).filter((id) => NP_ANIMATION_IDS.includes(id));
+  if (known.length) npAnimations.value = known;
+}
+async function setNpAnimation(animation) {
+  if (animation === npAnimation.value) return;
+  const r = await api.sysPost('nowplaying_animation', { animation });
+  if (r.ok && r.data.success !== false) { npAnimation.value = r.data.animation; say(bodyMsg(r, t('settings.animations.saved'))); }
+  else say(bodyMsg(r, t('settings.animations.failed')), true);
+}
+
 // ── VU meter store ─────────────────────────────────────────────────
 // More looks published by Osmium Sound, downloaded by the device itself (the
 // list is signed and checked there). Re-read while the device checks the
@@ -1251,7 +1276,7 @@ async function saveBackupScheduled(v) {
 
 onMounted(async () => {
   loadNet(); loadIpv4(); loadAudio(); loadDsp(); loadFir(); loadToggles(); loadShell(); loadLms(); loadLyrion(); loadSkin(); loadPlayback();
-  loadMode(); loadEngine(); loadPlayerEnabled(); loadUiRes(); loadUiRefresh(); loadPointer(); loadTimezone(); loadVuMeter(); loadVuStyle(); loadVuStore(false); loadAutoExpand(); loadChannel(); checkAll(); resumePlanIfRunning(); loadBackups(); loadTailscale(); loadDebugFlags();
+  loadMode(); loadEngine(); loadPlayerEnabled(); loadUiRes(); loadUiRefresh(); loadPointer(); loadTimezone(); loadVuMeter(); loadVuStyle(); loadVuStore(false); loadNpAnimation(); loadAutoExpand(); loadChannel(); checkAll(); resumePlanIfRunning(); loadBackups(); loadTailscale(); loadDebugFlags();
   timezonePoll = setInterval(pollTimezone, 10000);
   // Tell the global UpdateProgressOverlay (mounted in App.vue) that this page
   // owns the OTA modal while it's open, so the two never render on top of
@@ -1572,6 +1597,10 @@ onUnmounted(() => {
         </span>
         <Toggle :model-value="vuMeter" @update:model-value="setVuMeter" />
       </div>
+      <!-- meters off: the screen can show an animation instead, picked in its own section -->
+      <p v-if="!vuMeter" class="muted" style="margin: 12px 0 0;">{{ t('settings.vuMeters.animationHint') }}
+        <a href="#" @click.prevent="goto('animations')">{{ t('settings.vuMeters.chooseAnimation') }}</a>
+      </p>
 
       <template v-if="vuMeter && vuStyles.length > 1">
         <label style="margin-top: 16px;">{{ t('settings.vuMeters.style') }}</label>
@@ -1615,6 +1644,24 @@ onUnmounted(() => {
       <button v-if="vuStore.loaded && !vuStore.checking && !vuStore.busy" class="ghost" style="margin-top: 12px;" @click="checkVuStore">
         {{ t('settings.vuMeters.storeCheck') }}
       </button>
+    </div>
+
+    <!-- Animations: only the pick, text-only; the animations exist on the kiosk alone -->
+    <div class="card" v-if="open === 'animations'">
+      <p class="sub">{{ t('settings.animations.help') }}</p>
+      <template v-if="vuMeter">
+        <p class="muted" style="margin: 0 0 12px;">{{ t('settings.animations.vuOnNote') }}</p>
+        <button class="secondary" @click="setVuMeter(false)">{{ t('settings.animations.turnOffVu') }}</button>
+      </template>
+      <template v-else>
+        <span class="seg">
+          <button v-for="a in npAnimations" :key="a"
+                  :class="{ active: npAnimation === a }" @click="setNpAnimation(a)">
+            {{ t('settings.animations.choice.' + a) }}
+          </button>
+        </span>
+        <p v-if="npAnimation === 'none'" class="muted" style="margin: 0;">{{ t('settings.animations.noneHelp') }}</p>
+      </template>
     </div>
 
     <!-- Display mode -->

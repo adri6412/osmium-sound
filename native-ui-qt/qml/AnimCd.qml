@@ -1,0 +1,406 @@
+// Now Playing animation "CD": a top-loading CD player seen from above. The
+// smoked lid slides open under the raised right block, the disc (the album
+// artwork printed on it) is lowered onto the turntable, the magnetic clamp
+// drops on it, the lid closes and the disc spins while playing.
+//
+// A pure scene (no Hifi imports) driven by NpAnimation.qml; the images are
+// built by tools/np-anim/cd.py, whose geometry constants are mirrored below.
+//
+// 🚨 The kiosk runs on a weak iGPU, 24/7: nothing here loops. The spin is one
+// 30 Hz Timer that runs only while the disc turns (playing, or slowing down
+// after a pause); insertion and removal are bounded animations. Paused,
+// stopped, hidden or previewed, the scene is fully idle.
+import QtQuick
+import QtQuick.Effects
+
+Item {
+    id: root
+    property url assetsBase
+    property real devScale: 1
+    property bool live: true
+    property bool active: false
+    property bool playing: false
+    property bool hasTrack: false
+    property real progress: 0
+    property string artwork: ""
+    property string mediaKey: ""
+    property string title: ""
+    property string subtitle: ""
+
+    // ── design: 520 x 260 points, scaled uniformly and centred ─────────────
+    readonly property real s: Math.max(0.01, Math.min(width / 520, height / 260))
+    // Texture scale in coarse steps: the Now Playing panel changes height by
+    // a few points with the title's line count (s between ~0.94 and 1.01),
+    // and an exact sourceSize would reload (and blank) every image on those
+    // track changes. Above 0.9 the steps are 0.9-1.05-1.2..., below 1/8.
+    readonly property real texScale: devScale * (s > 0.9 ? 0.9 + 0.15 * Math.ceil((s - 0.9) / 0.15) : Math.ceil(s * 8) / 8)
+    function px(v) { return Math.max(1, Math.round(v * root.texScale)) }
+
+    readonly property real wellX: 134
+    readonly property real wellY: 120
+    readonly property real discR: 92
+    readonly property real lidX: 17          // lid image (3 points of margin round the lid)
+    readonly property real lidTravel: 238
+    readonly property real barX0: 324
+    readonly property real barX1: 464
+    readonly property real barY: 74
+
+    // ── choreography state ─────────────────────────────────────────────────
+    // phase: 0 empty (lid closed or closing), 1 inserting, 2 loaded, 3 removing
+    property int phase: 0
+    property real lidOpen: 0                 // 0 closed .. 1 parked under the right block
+    property real discH: 1                   // disc height: 0 on the turntable .. 1 high above
+    property real discA: 0                   // disc opacity
+    property real puckH: 1
+    property real puckA: 0
+    property real angle: -24                 // degrees
+    property real speed: 0                   // degrees per second
+    property string labelArt: ""             // artwork printed on the disc now
+    property int lidDur: 0
+    property int gapDur: 0                   // beat between the old disc out and the new one in
+
+    readonly property real spinRate: 225
+    readonly property bool wantSpin: live && active && phase === 2 && playing && hasTrack
+    property real spinFrom: 0
+    property real spinTo: 0
+    property real spinDur: 800
+    property double spinT0: 0
+    property double lastT: 0
+
+    onWantSpinChanged: {
+        spinFrom = speed
+        spinTo = wantSpin ? spinRate : 0
+        spinDur = phase === 3 ? 350 : 800
+        spinT0 = Date.now()
+    }
+
+    // The only continuous motion: advances the angle by real elapsed time.
+    Timer {
+        id: spinTimer
+        interval: 33
+        repeat: true
+        running: root.live && root.active && (root.wantSpin || root.speed > 0)
+        onRunningChanged: if (running) root.lastT = Date.now()
+        onTriggered: root.tick()
+    }
+    function tick() {
+        var now = Date.now()
+        var dt = Math.min(0.1, Math.max(0, (now - lastT) / 1000))
+        lastT = now
+        var u = Math.min(1, Math.max(0, (now - spinT0) / spinDur))
+        var e = u * u * (3 - 2 * u)
+        var v = spinFrom + (spinTo - spinFrom) * e
+        var a = angle + (speed + v) * 0.5 * dt
+        angle = a - 360 * Math.floor(a / 360)
+        speed = (u >= 1 && spinTo === 0) ? 0 : v
+    }
+
+    function stopAll() {
+        insertAnim.stop(); removeAnim.stop(); closeAnim.stop()
+    }
+    // hidden: back to an empty, closed player, so the next appearance replays
+    // the insertion
+    function reset() {
+        stopAll()
+        phase = 0; lidOpen = 0; discH = 1; discA = 0; puckH = 1; puckA = 0; speed = 0
+    }
+    // the still preview: loaded, lid closed, a pleasant angle
+    function pose() {
+        stopAll()
+        phase = 2; lidOpen = 0; discH = 0; discA = 1; puckH = 0; puckA = 1; speed = 0; angle = 38
+        labelArt = artwork
+    }
+    function sync() {
+        if (!live) { pose(); return }
+        if (!active) { reset(); return }
+        if (hasTrack) {
+            if (phase === 0) insert()
+        } else if (phase === 1 || phase === 2) {
+            remove()
+        }
+    }
+    function insert(gap) {
+        stopAll()
+        gapDur = gap || 0
+        if (labelArt !== artwork) { artPrev.source = ""; labelArt = artwork }
+        phase = 1
+        discH = 1; discA = 0; puckH = 1; puckA = 0
+        lidDur = Math.round(560 * (1 - lidOpen))
+        insertAnim.start()
+    }
+    function remove() {
+        stopAll()
+        phase = 3
+        lidDur = Math.round(400 * (1 - lidOpen))
+        removeAnim.start()
+    }
+    function removed() {
+        if (active && hasTrack) {
+            insert(160)
+        } else {
+            phase = 0
+            labelArt = artwork
+            closeAnim.start()
+        }
+    }
+    // a new album: out with the old disc, in with the new one (the artwork
+    // of the old one stays printed on it until it is out of sight)
+    onMediaKeyChanged: if (live && active && (phase === 1 || phase === 2)) remove()
+    onActiveChanged: sync()
+    onHasTrackChanged: sync()
+    onLiveChanged: sync()
+    onArtworkChanged: Qt.callLater(applyArt)
+    // (hidden, nothing is loaded: insert() takes the artwork of the moment)
+    function applyArt() {
+        if (!live || (active && phase !== 3)) labelArt = artwork
+    }
+    Component.onCompleted: sync()
+
+    SequentialAnimation {
+        id: insertAnim
+        PauseAnimation { duration: root.gapDur }
+        ParallelAnimation {
+            NumberAnimation { target: root; property: "lidOpen"; to: 1; duration: root.lidDur; easing.type: Easing.InOutCubic }
+            SequentialAnimation {
+                PauseAnimation { duration: Math.round(root.lidDur * 0.55) }
+                ParallelAnimation {
+                    NumberAnimation { target: root; property: "discA"; to: 1; duration: 220; easing.type: Easing.OutQuad }
+                    NumberAnimation { target: root; property: "discH"; to: 0; duration: 1050; easing.type: Easing.InOutCubic }
+                }
+            }
+        }
+        PauseAnimation { duration: 90 }
+        ParallelAnimation {
+            NumberAnimation { target: root; property: "puckA"; to: 1; duration: 160; easing.type: Easing.OutQuad }
+            NumberAnimation { target: root; property: "puckH"; to: 0; duration: 380; easing.type: Easing.InQuad }
+        }
+        NumberAnimation { target: root; property: "puckH"; to: 0.04; duration: 70; easing.type: Easing.OutQuad }
+        NumberAnimation { target: root; property: "puckH"; to: 0; duration: 90; easing.type: Easing.InQuad }
+        PauseAnimation { duration: 120 }
+        NumberAnimation { target: root; property: "lidOpen"; to: 0; duration: 620; easing.type: Easing.InOutCubic }
+        onFinished: root.phase = 2
+    }
+    SequentialAnimation {
+        id: removeAnim
+        NumberAnimation { target: root; property: "lidOpen"; to: 1; duration: root.lidDur; easing.type: Easing.InOutCubic }
+        ParallelAnimation {
+            NumberAnimation { target: root; property: "puckH"; to: 1; duration: 220; easing.type: Easing.OutQuad }
+            NumberAnimation { target: root; property: "puckA"; to: 0; duration: 220; easing.type: Easing.InQuad }
+            SequentialAnimation {
+                PauseAnimation { duration: 60 }
+                ParallelAnimation {
+                    NumberAnimation { target: root; property: "discH"; to: 1; duration: 320; easing.type: Easing.InOutQuad }
+                    NumberAnimation { target: root; property: "discA"; to: 0; duration: 320; easing.type: Easing.InQuad }
+                }
+            }
+        }
+        onFinished: root.removed()
+    }
+    NumberAnimation {
+        id: closeAnim
+        target: root; property: "lidOpen"; to: 0; duration: 560; easing.type: Easing.InOutCubic
+    }
+
+    // ── what the display and the LED show ──────────────────────────────────
+    readonly property bool loaded: !live || (phase === 2 && hasTrack)
+    readonly property bool lit: !live || (loaded && playing)
+
+    component Pic: Image {
+        smooth: true
+        asynchronous: true
+        sourceSize.width: root.px(width)
+        sourceSize.height: root.px(height)
+    }
+
+    Item {
+        id: stage
+        width: 520; height: 260
+        x: (root.width - 520 * root.s) / 2
+        y: (root.height - 260 * root.s) / 2
+        scale: root.s
+        transformOrigin: Item.TopLeft
+        // all at once, not piece by piece while the images decode
+        visible: base.status === Image.Ready && bridge.status === Image.Ready && lid.status === Image.Ready
+
+        Pic { id: base; width: 520; height: 260; source: root.assetsBase + "cd-base.png" }
+
+        readonly property real dh: root.discH
+
+        // While it is off the turntable the disc is above the whole player:
+        // it (and its shadow) passes over the lid that is still parking. It
+        // is back under the lid before the lid closes over it (the lid only
+        // moves while the disc lies on the turntable or is out of sight).
+        Item {
+            width: 520; height: 260
+            z: stage.dh > 0 ? 10 : 0
+
+            // disc shadows: the far one (soft, wide, faint) gives way to the near
+            // one (sharp, dark) as the disc comes down
+            Pic {
+                width: 244; height: 244
+                x: root.wellX - 122 + 1.2 + 15 * stage.dh
+                y: root.wellY - 122 + 2.0 + 22 * stage.dh
+                scale: 1 + 0.26 * stage.dh
+                opacity: root.discA * (1 - Math.pow(1 - stage.dh, 3)) * (1.0 - 0.3 * stage.dh)
+                visible: opacity > 0.002
+                source: root.assetsBase + "cd-shadow-far.png"
+            }
+            Pic {
+                width: 244; height: 244
+                x: root.wellX - 122 + 1.2 + 15 * stage.dh
+                y: root.wellY - 122 + 2.0 + 22 * stage.dh
+                scale: 1 + 0.26 * stage.dh
+                opacity: root.discA * Math.pow(1 - stage.dh, 3)
+                visible: opacity > 0.002
+                source: root.assetsBase + "cd-shadow-near.png"
+            }
+
+            // the disc: label (artwork masked to the printed ring) + clear hub,
+            // mirror band and rim, cooked in one layer that turns as one quad
+            Item {
+                id: disc
+                width: root.discR * 2; height: root.discR * 2
+                x: root.wellX - root.discR - 3 * stage.dh
+                y: root.wellY - root.discR - 5 * stage.dh
+                scale: 1 + 0.22 * stage.dh
+                rotation: root.angle + 16 * stage.dh    // a slight twist of the hand while it lowers the disc
+                opacity: root.discA
+                visible: opacity > 0.002
+                layer.enabled: true
+                layer.smooth: true
+                layer.textureSize: Qt.size(root.px(width), root.px(height))
+
+                readonly property bool artReady: root.labelArt !== "" && (artImg.status === Image.Ready || artPrev.status === Image.Ready)
+
+                Pic { anchors.fill: parent; source: root.assetsBase + "cd-label.png" }
+                // 🚨 two images (see Cover.qml): radio artwork changes every few
+                // seconds and the new one must load hidden, or the label blinks
+                Image {
+                    id: artPrev
+                    anchors.fill: parent
+                    visible: false
+                    asynchronous: false
+                    smooth: true
+                    fillMode: Image.PreserveAspectCrop
+                    sourceSize.width: artImg.sourceSize.width
+                    sourceSize.height: artImg.sourceSize.height
+                    layer.enabled: true
+                    layer.smooth: true
+                    layer.textureSize: artImg.layer.textureSize
+                }
+                Image {
+                    id: artImg
+                    anchors.fill: parent
+                    visible: false
+                    asynchronous: true
+                    smooth: true
+                    fillMode: Image.PreserveAspectCrop
+                    source: root.labelArt
+                    sourceSize.width: root.px(width)
+                    sourceSize.height: root.px(height)
+                    layer.enabled: true
+                    layer.smooth: true
+                    layer.textureSize: Qt.size(root.px(width), root.px(height))
+                    onStatusChanged: if (status === Image.Ready) artPrev.source = source
+                }
+                Pic {
+                    id: printMask
+                    anchors.fill: parent
+                    visible: false
+                    source: root.assetsBase + "cd-mask.png"
+                    layer.enabled: true
+                    layer.smooth: true
+                    layer.textureSize: Qt.size(root.px(width), root.px(height))
+                }
+                MultiEffect {
+                    anchors.fill: parent
+                    source: artImg.status === Image.Ready ? artImg : artPrev
+                    // a new album's artwork arriving late fades in over the
+                    // generic print instead of popping
+                    opacity: disc.artReady ? 1 : 0
+                    visible: opacity > 0
+                    Behavior on opacity { enabled: root.live; NumberAnimation { duration: 250 } }
+                    maskEnabled: true
+                    maskSource: printMask
+                    // a smooth ramp over the mask's alpha (the defaults cut it at
+                    // 0, which leaves a jagged print edge)
+                    maskThresholdMin: 0.5
+                    maskSpreadAtMin: 1.0
+                }
+                Pic { anchors.fill: parent; source: root.assetsBase + "cd-disc.png" }
+            }
+            // the light on the disc stays where it is while the disc turns
+            Pic {
+                width: disc.width; height: disc.height
+                x: disc.x; y: disc.y
+                scale: disc.scale
+                opacity: root.discA
+                visible: disc.visible
+                source: root.assetsBase + "cd-sheen.png"
+            }
+        }
+
+        // the magnetic clamp
+        Pic {
+            width: 94; height: 94
+            x: root.wellX - 47 + 0.8 + 9 * root.puckH
+            y: root.wellY - 47 + 1.4 + 13 * root.puckH
+            scale: 1 + 0.45 * root.puckH
+            opacity: root.puckA * (0.9 - 0.55 * root.puckH)
+            visible: opacity > 0.002
+            source: root.assetsBase + "cd-puck-shadow.png"
+        }
+        Pic {
+            width: 64; height: 64
+            x: root.wellX - 32 - 2 * root.puckH
+            y: root.wellY - 32 - 3 * root.puckH
+            scale: 1 + 0.32 * root.puckH
+            opacity: root.puckA
+            visible: opacity > 0.002
+            source: root.assetsBase + "cd-puck.png"
+        }
+
+        Pic {
+            id: lid
+            width: 234; height: 216
+            x: root.lidX + root.lidTravel * root.lidOpen
+            y: 12
+            source: root.assetsBase + "cd-lid.png"
+        }
+        Pic { id: bridge; x: 244; y: 0; width: 276; height: 260; source: root.assetsBase + "cd-bridge.png" }
+
+        // display: progress bar and play symbol, under the glass reflection
+        Item {
+            opacity: root.loaded ? 1 : 0
+            visible: opacity > 0
+            Behavior on opacity { enabled: root.live; NumberAnimation { duration: 300 } }
+            Rectangle {
+                x: root.barX0 - 1; y: root.barY - 2.5
+                width: Math.max(0, (root.barX1 - root.barX0) * Math.max(0, Math.min(1, root.progress))) + 2; height: 5; radius: 2.5
+                color: "#d4af37"; opacity: 0.22
+                visible: root.progress > 0
+            }
+            Rectangle {
+                x: root.barX0; y: root.barY - 1
+                width: (root.barX1 - root.barX0) * Math.max(0, Math.min(1, root.progress)); height: 2; radius: 1
+                color: "#ecc865"
+                visible: root.progress > 0
+            }
+        }
+        Pic {
+            x: 296; y: 65; width: 18; height: 18
+            source: root.assetsBase + "cd-play.png"
+            opacity: root.lit ? 1 : root.loaded ? 0.3 : 0
+            visible: opacity > 0
+            Behavior on opacity { enabled: root.live; NumberAnimation { duration: 200 } }
+        }
+        Pic { x: 286; y: 40; width: 196; height: 68; source: root.assetsBase + "cd-glass.png" }
+        Pic {
+            x: 291.5; y: 156; width: 28; height: 28
+            source: root.assetsBase + "cd-led.png"
+            opacity: root.lit ? 1 : 0
+            visible: opacity > 0
+            Behavior on opacity { enabled: root.live; NumberAnimation { duration: 180 } }
+        }
+    }
+}

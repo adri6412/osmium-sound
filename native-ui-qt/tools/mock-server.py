@@ -10,9 +10,10 @@ from urllib.parse import urlparse, parse_qs
 HERE = os.path.dirname(os.path.abspath(__file__))
 COVER = os.environ.get("MOCK_COVER", os.path.join(HERE, "..", "..", "logo osmium.jpg"))
 STATE = {
-    "mode": "play", "time": 116.0, "duration": 330.0, "volume": 40, "index": 2, "shuffle": 0, "repeat": 0, "sleep": 0,
+    "mode": "play", "time": 116.0, "duration": 330.0, "volume": 40, "index": 2, "shuffle": 0, "repeat": 0, "sleep": 0, "power": 1,
     "prefs": {"replayGainMode": "0", "transitionType": "0", "transitionDuration": "0", "digitalVolumeControl": "1"},
-    "vu": True, "vu_style": os.environ.get("MOCK_VU_STYLE", "classic"), "autoexpand": 0, "ota": {"state": "idle"}, "lang": "it",
+    "vu": os.environ.get("MOCK_VU", "1") != "0", "vu_style": os.environ.get("MOCK_VU_STYLE", "classic"),
+    "np_animation": os.environ.get("MOCK_NP_ANIMATION", "none"), "autoexpand": 0, "ota": {"state": "idle"}, "lang": "it",
     "display_mode": "gui", "ui_resolution": "auto", "ui_refresh": "native", "pointer": True, "ssh": False, "player_enabled": True,
     "lms_mode": "local", "lms_host": "", "tz": "Europe/Rome", "device_name": "Osmium", "ota_channel": "dev", "lyrion_channel": "release",
     "audio": "hw:CARD=DAC,DEV=0", "shell_user": "", "pldir": "/srv/music/playlist", "skin": "osmium", "fmt": {"state": "idle"},
@@ -42,6 +43,10 @@ T0 = time.time()
 #                            HIFI_VU_STORE_DIR / HIFI_VU_STORE_STATE_DIR /
 #                            HIFI_VU_SKINS_DIR (a local catalogue signed with
 #                            a test key); without it the store is empty
+#   MOCK_VU=0                start with the VU meters off
+#   MOCK_NP_ANIMATION=cd     the Now Playing animation (none, cd, vinyl,
+#                            cassette) shown with the VU meters off
+NP_ANIMATIONS = ("none", "cd", "vinyl", "cassette")
 VU_API = None
 if os.environ.get("MOCK_VU_STORE"):
     sys.path.insert(0, os.path.join(HERE, "..", ".."))
@@ -92,6 +97,9 @@ def status_now():
 def rpc(player, params):
     cmd = params[0] if params else ""
     r = {}
+    # the transport commands, in the log (to check what the UI sends)
+    if cmd in ("play", "pause", "stop", "power") or params[:2] == ["playlist", "index"] or (params[:2] == ["mixer", "volume"] and params[2:3] != ["?"]):
+        print("mock: player", player, params, flush=True)
     if cmd == "players":
         pl = players_now()
         r = {"count": len(pl), "players_loop": pl}
@@ -110,6 +118,7 @@ def rpc(player, params):
             t = QUEUE[STATE["index"] % len(QUEUE)]
             owner = next((p["name"] for p in players_now() if p["playerid"] == player), "Osmium")
             r = {"player_name": owner, "mode": STATE["mode"], "time": STATE["time"], "duration": STATE["duration"], "mixer volume": STATE["volume"],
+                 "power": STATE["power"],
                  "playlist_cur_index": STATE["index"], "playlist_tracks": len(QUEUE), "playlist repeat": STATE["repeat"],
                  "playlist shuffle": STATE["shuffle"], "will_sleep_in": STATE["sleep"],
                  "playlist_loop": [{"id": 1001 + STATE["index"], "title": t[0], "artist": t[1], "album": t[2], "coverid": "1001",
@@ -128,8 +137,14 @@ def rpc(player, params):
         if cmd == "play": o["mode"] = "play"
         elif cmd == "pause": o["mode"] = "pause" if params[1:2] == ["1"] else "play"
         else: o["volume"] = int(params[2])
-    elif cmd == "play": STATE["mode"] = "play"
+    elif cmd == "play": STATE["mode"] = "play"; STATE["power"] = 1          # play turns the player on, as Lyrion
     elif cmd == "pause": STATE["mode"] = "pause" if params[1:2] == ["1"] else "play"
+    elif cmd == "stop": STATE["mode"] = "stop"; STATE["time"] = 0.0
+    elif cmd == "power":
+        if params[1:2] and params[1] != "?":
+            STATE["power"] = int(params[1])
+            if not STATE["power"]: STATE["mode"] = "stop"
+        r = {"_power": STATE["power"]}
     elif cmd == "time": STATE["time"] = float(params[1])
     elif cmd == "mixer":
         if params[1] == "muting":
@@ -280,6 +295,7 @@ class H(BaseHTTPRequestHandler):
         if port == 8000:
             table = {
                 "/vu_meter": {"enabled": STATE["vu"]}, "/nowplaying_autoexpand": {"seconds": STATE["autoexpand"]},
+                "/nowplaying_animation": {"animation": STATE["np_animation"], "choices": list(NP_ANIMATIONS)},
                 "/vu_style": {"style": STATE["vu_style"], "styles": [{"id": "classic", "name": {"en": "Classic", "it": "Classico"}},
                                                                   {"id": "modulometer", "name": {"en": "Modulometer", "it": "Modulometro"}},
                                                                   {"id": "amber", "name": {"en": "Amber", "it": "Ambra"}},
@@ -368,6 +384,12 @@ class H(BaseHTTPRequestHandler):
         if port == 8000:
             if u.path == "/vu_meter": STATE["vu"] = bool(data.get("enable", data.get("enabled", True)))
             if u.path == "/vu_style": STATE["vu_style"] = str(data.get("style") or "classic")
+            if u.path == "/nowplaying_animation":
+                kind = data.get("animation")
+                if kind not in NP_ANIMATIONS:
+                    return self._json({"success": False, "error": "unknown animation"}, 400)
+                STATE["np_animation"] = kind
+                return self._json({"success": True, "animation": kind})
             if u.path == "/nowplaying_autoexpand": STATE["autoexpand"] = int(data.get("seconds", 0))
             if u.path == "/ui_language": STATE["lang"] = data.get("lang", "en")
             if u.path == "/display_mode": STATE["display_mode"] = data.get("mode", "gui")

@@ -161,6 +161,10 @@
         "label": "VU meters",
         "desc": "On or off, how the meters look, and more to download"
       },
+      "animations": {
+        "label": "Animations",
+        "desc": "A CD, a vinyl record or a cassette instead of the VU meters"
+      },
       "display": {
         "label": "Display mode",
         "desc": "On-screen interface or headless"
@@ -526,7 +530,23 @@
       "saved": "VU meter preference saved",
       "failed": "Could not save the preference",
       "styleSaved": "VU meter style saved",
-      "storeFailed": "Operation failed"
+      "storeFailed": "Operation failed",
+      "animationHint": "With the VU meters off, the screen can show an animation instead.",
+      "chooseAnimation": "Choose an animation"
+    },
+    "animations": {
+      "help": "Instead of the VU meters, the device screen can show a CD, a vinyl record or a cassette that turns with the music.",
+      "vuOnNote": "Animations are shown only when the VU meters are off.",
+      "turnOffVu": "Turn off the VU meters",
+      "choice": {
+        "none": "None",
+        "cd": "CD",
+        "vinyl": "Vinyl",
+        "cassette": "Cassette"
+      },
+      "noneHelp": "Now Playing shows the song lyrics.",
+      "saved": "Animation saved",
+      "failed": "Could not save the animation"
     },
     "display": {
       "currentLabel": "Current",

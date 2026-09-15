@@ -49,7 +49,7 @@ flowchart TB
 | Component | Path | Role |
 |---|---|---|
 | On-screen UI — C++ core | `native-ui-qt/src/` | `hifi-qt`, the touchscreen UI since v2.5.24: a Qt 6 Quick application that draws straight to the panel through Qt's eglfs platform on DRM/KMS — no X server, no Wayland compositor, no LightDM. `main.cpp` sets the video mode (`kmsmode.cpp`, from `/etc/hifi-player/ui-resolution`) and loads the QML; the objects it exposes are `Api` (async HTTP to the local services via `QNetworkAccessManager`, Lyrion JSON-RPC included), `Player` (Lyrion `status`/playerprefs polling and playback commands), `VuMeter` (WebSocket client of `vu_meter_daemon.py`, needle spring), `LibraryModel` (the browser lists), `I18n` and `Sys` (small files under `/etc/hifi-player`, physical-keyboard detection, pointer), plus the `Spring` and `QrCode` QML types. Only UI-local preferences (language, Now Playing view, update auto-check) are written directly; **system control goes through `api_server.py`**. Installed at `/opt/hifi-qt`, run by `hifi-qt.service`. Chosen over Electron for its footprint: on the reference mini PC, Now Playing with the VU meters at 720p measured about 3.3 W / ~175 MB RSS versus 4.9 W / ~653 MB. |
-| On-screen UI — QML | `native-ui-qt/qml/` | `Main.qml` scales the 1024x600 logical canvas to the real mode, `App.qml` stacks the screens and shared overlays: `MainScreen.qml` (mini player + `Browser.qml` library/radio/apps, `DiscoverTab.qml`), `NowPlaying.qml` (with `VuPanel.qml`, `LedBar.qml`, `Lyrics.qml`), `SettingsTab.qml` + `SettingsRows.qml`, `Wizard.qml` (first-boot setup and installer screens), `Dialogs.qml`, `VirtualKeyboard.qml`, `OtaOverlay.qml`, `BootIntro.qml`, `CdRip.qml`, `Screensaver.qml`, … Strings come from the same `src/i18n/locales/{en,it}.json` (copied to `/opt/hifi-qt/locales`), English default; the third-party notices from `third_party.json`, generated from `src/data/thirdPartyNotices.js`. |
+| On-screen UI — QML | `native-ui-qt/qml/` | `Main.qml` scales the 1024x600 logical canvas to the real mode, `App.qml` stacks the screens and shared overlays: `MainScreen.qml` (mini player + `Browser.qml` library/radio/apps, `DiscoverTab.qml`), `NowPlaying.qml` (with `VuPanel.qml`, `NpAnimation.qml`, `LedBar.qml`, `Lyrics.qml`), `SettingsTab.qml` + `SettingsRows.qml`, `Wizard.qml` (first-boot setup and installer screens), `Dialogs.qml`, `VirtualKeyboard.qml`, `OtaOverlay.qml`, `BootIntro.qml`, `CdRip.qml`, `Screensaver.qml`, … Strings come from the same `src/i18n/locales/{en,it}.json` (copied to `/opt/hifi-qt/locales`), English default; the third-party notices from `third_party.json`, generated from `src/data/thirdPartyNotices.js`. |
 | Legacy Electron kiosk | `main/`, `src/` | The previous on-screen UI (Electron main process + React renderer). Image slots don't ship it; it survives only on legacy (pre-A/B) installs and is no longer updated — see [Legacy Electron kiosk](#legacy-electron-kiosk-pre-ab-installs). |
 | Flask API | `api_server.py` | Runs as root on the appliance; system info/control, network/Wi-Fi, OTA channels, multiroom (LMS role), pairing tokens, display mode, player on/off, disk installer. Loopback-only, port `8000`. |
 | Sources service | `sources_server.py` | USB/SMB/local source management, internal-disk adoption/formatting, Samba share config, audio-CD ripping, backup/restore (core logic shared via `hifi_backup.py`), and every piece of Lyrion-side configuration the appliance owns for the user (web-UI skin, first-run setup/plugins, media + playlist folders — see [Lyrion web UI](#lyrion-web-ui--osmium-skin--first-run-setup)). Binds `0.0.0.0:8080` — LAN-reachable like the web admin, but every route is gated by a pairing token (see [Pairing & security](#pairing--security)), which is what lets the Android companion talk to it directly. |
@@ -348,6 +348,7 @@ GET/POST /vu_style            which meter look is in use (built-in or downloaded
 GET  /vu_skin/<id>/<file>     a skin's layers, for the previews
 GET  /vu_store                signed catalogue state (?summary=1: only the new/update counts)
 POST /vu_store/check, /vu_store/install, /vu_store/remove, /vu_store/seen
+GET/POST /nowplaying_animation   what Now Playing shows instead of the VU meters when they are off: none | cd | vinyl | cassette
 GET/POST /ui_language         the on-screen UI language, owned by the device rather than by one UI
 GET/POST /nowplaying_autoexpand   seconds before Now Playing auto-expands (0 = off)
 GET/POST /timezone, GET /timezones
@@ -366,7 +367,7 @@ POST /show_global_keyboard, /hide_global_keyboard   system on-screen keyboard fo
 The full route table is the source of truth — see the `@app.route` decorators
 in `api_server.py`. State is persisted as small files under `/etc/hifi-player/`
 (`ota-channel`, `display-mode`, `player-enabled`, `ui-resolution`, `ui-refresh`,
-`vu-meter-enabled`, `pointer-enabled`, `nowplaying-autoexpand-seconds`,
+`vu-meter-enabled`, `nowplaying-animation`, `pointer-enabled`, `nowplaying-autoexpand-seconds`,
 `lyrion-channel`, `shell-account`, the version markers `UI_VERSION` /
 `SYSTEM_VERSION` / `OS_VERSION`, …); long-running jobs are `systemd-run`
 transient units reporting through `/run/hifi-*-status.json`.
@@ -388,7 +389,7 @@ exist for running it on a laptop). Route families:
   Flask API above (`_AUTH_ROUTES` in `webui_server.py`: info/stats, network,
   SSH + shell account, Tailscale, OTA channel, audio, names, multiroom, TIDAL,
   display mode, on-screen UI engine, player on/off, UI resolution/refresh,
-  time zone, VU meter with its style, skin previews and store,
+  time zone, VU meter with its style, skin previews and store, Now Playing animation,
   pointer, now-playing auto-expand, all `updates/*` incl. `apply_all` /
   `status` / `dismiss`, Lyrion channel, reboot/shutdown, debug flags), called
   by the admin webui (`admin-webui/src/api.js`, `api.sys`/`api.sysPost`). A
@@ -1174,6 +1175,25 @@ ReplayGain (`Player.ledMode`); tapping BitPerfect or ReplayGain closes Now
 Playing and opens Settings → Playback on the row behind it (Fixed volume, or
 ReplayGain), flashing its frame.
 
+### Now Playing animations
+
+With the VU meters off, the Now Playing panel under the controls can show one
+of three scenes instead: a CD going into a player and spinning, a record
+played by the tonearm, a cassette running in a deck. The choice is
+`/etc/hifi-player/nowplaying-animation` (`GET/POST /nowplaying_animation`,
+`none` | `cd` | `vinyl` | `cassette`; absent = none), read by `Player`
+(`npAnimation`) with the other settings and set from Settings → Animations on
+the kiosk and in the web admin — not in the companion. `NpAnimation.qml`
+picks the scene (`AnimCd.qml`, `AnimVinyl.qml`, `AnimCassette.qml`, layers in
+`native-ui-qt/assets/anim/<scene>/`); the Now Playing view button switches
+between it and the lyrics. The scenes are pure components (QtQuick only, no
+app singletons, testable with the bare `qml` runtime) and are built for the
+weak iGPU: a bounded insertion, then a single 30 Hz `Timer` advancing the
+angles by elapsed time, running only while playing and on screen — paused,
+stopped or hidden they go fully idle, never an infinite animation. Shadows and
+reflections are baked into the PNGs; with `live: false` they draw a still pose
+for the Settings previews.
+
 ### Legacy Electron kiosk (pre-A/B installs)
 
 The Electron + React app (`main/`, `src/`, `package.json`) survives only on
@@ -1704,7 +1724,7 @@ hifi-media-player/            (GitHub: adri6412/osmium-sound)
 ├── native-ui-qt/             # On-screen UI (Qt 6 Quick, eglfs on DRM/KMS) → /opt/hifi-qt
 │   ├── src/                  # C++: main.cpp, Api, Player, VuMeter, LibraryModel, I18n, Sys, Spring, QrCode (qr.c), kmsmode.cpp
 │   ├── qml/                  # Main, App, MainScreen, NowPlaying, Browser, SettingsTab + SettingsRows, VuPanel, Wizard, Dialogs, VirtualKeyboard, OtaOverlay, BootIntro, CdRip, Screensaver, ...
-│   ├── icons/, assets/       # SVG icons; VU meter skins (assets/vu/<id>) and status-plate artwork (assets/ledbar)
+│   ├── icons/, assets/       # SVG icons; VU meter skins (assets/vu/<id>), Now Playing animation layers (assets/anim/<scene>) and status-plate artwork (assets/ledbar)
 │   ├── ci/build-payload.sh   # builds the payload (Debian 13 container) shared by the image and the UI OTA bundle
 │   ├── tools/                # dev rig: Debian 13 chroot + Xvfb, mock-server.py (fake Lyrion/api/sources/VU), test command channel; vu-skin-build.py (build/pack/index VU skins)
 │   └── Makefile              # moc + g++ against pkg-config Qt6Quick/Qt6Qml/Qt6Gui/Qt6Network/Qt6Core + libdrm

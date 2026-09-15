@@ -53,6 +53,7 @@ class Player : public QObject {
     Q_PROPERTY(double duration READ duration NOTIFY progressChanged)
     // comandi
     Q_PROPERTY(bool playing READ playing NOTIFY controlsChanged)
+    Q_PROPERTY(bool power READ power NOTIFY controlsChanged)     // Lyrion's `power` of the player (true when not reported)
     Q_PROPERTY(int volume READ volume NOTIFY controlsChanged)
     Q_PROPERTY(bool muted READ muted NOTIFY controlsChanged)     // Lyrion's own mute (`mixer muting`)
     Q_PROPERTY(int shuffle READ shuffle NOTIFY controlsChanged)
@@ -71,6 +72,9 @@ class Player : public QObject {
     Q_PROPERTY(bool vuEnabled READ vuEnabled WRITE setVuEnabled NOTIFY settingsChanged)
     // the VU meter skin (a folder in assets/vu/), chosen in Settings → Playback
     Q_PROPERTY(QString vuStyle READ vuStyle WRITE setVuStyle NOTIFY settingsChanged)
+    // the Now Playing animation shown instead of the VU meters when they are
+    // off: "none", "cd", "vinyl" or "cassette" (Settings → Animations)
+    Q_PROPERTY(QString npAnimation READ npAnimation WRITE setNpAnimation NOTIFY settingsChanged)
     Q_PROPERTY(int autoexpandSecs READ autoexpandSecs NOTIFY settingsChanged)
     // aggiornamento in corso
     Q_PROPERTY(QString otaState READ otaState NOTIFY otaChanged)
@@ -111,6 +115,7 @@ public:
     double elapsed() const { return m_elapsed; }
     double duration() const { return m_duration; }
     bool playing() const { return m_playing; }
+    bool power() const { return m_power; }
     int volume() const { return m_volume; }
     int shuffle() const { return m_shuffle; }
     int repeat() const { return m_repeat; }
@@ -127,6 +132,8 @@ public:
     void setVuEnabled(bool on);
     QString vuStyle() const { return m_vuStyle; }
     void setVuStyle(const QString &style);
+    QString npAnimation() const { return m_npAnimation; }
+    void setNpAnimation(const QString &kind);
     int autoexpandSecs() const { return m_autoexpand; }
     QString otaState() const { return m_otaState; }
     QString otaMessage() const { return m_otaMsg; }
@@ -229,6 +236,7 @@ private:
     int m_sampleSize = 0;
     double m_sampleRate = 0, m_elapsed = 0, m_duration = 0;
     bool m_playing = false;
+    bool m_power = true;
     int m_volume = 0, m_shuffle = 0, m_repeat = 0, m_sleepSecs = 0, m_index = 0, m_total = 0;
     int m_ledMode = 0;
     int m_coverPx = 600;
@@ -236,6 +244,7 @@ private:
     QString m_prefRg = "0", m_prefTrType = "0", m_prefTrDur = "0", m_prefDigVol = "1";
     bool m_vuEnabled = true;
     QString m_vuStyle = "classic";
+    QString m_npAnimation = "none";
     int m_autoexpand = 0;
     QString m_otaState = "idle", m_otaMsg, m_otaKind;
     int m_otaPct = 0;

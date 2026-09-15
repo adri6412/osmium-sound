@@ -89,7 +89,8 @@ scelto).
   sono già pronti; gli altri si installano dalla web UI di Lyrion
   (Impostazioni → Plugin) e compaiono da soli, senza aggiornare l'app.
 - **In riproduzione**: copertina grande, trasporto e volume, VU meter analogico
-  opzionale, indicatore bit-perfect / ReplayGain.
+  opzionale (o, se è spento, un'animazione di CD, vinile o musicassetta scelta
+  in Impostazioni → Animazioni), indicatore bit-perfect / ReplayGain.
 - **CD**: inserisci un CD audio per riprodurlo, oppure rippalo in FLAC
   taggati dentro una delle tue sorgenti.
 - **Impostazioni** (a schermo): lingua, Lyrion (server, aspetto del player

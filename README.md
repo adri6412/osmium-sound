@@ -31,6 +31,7 @@ Bit-perfect audio, streaming services, and signed OTA updates — one sleek dark
 - 🧭 **Discover** — endless random mixes, "keep playing similar music", similar artists and artist bios on the touchscreen
 - 📻 **Internet radio** — thousands of stations, save favourites from the touchscreen
 - 🎚️ **Analog VU meters** — six built-in looks, more downloadable from a signed online catalogue, plus a status plate showing Hi-Res/PCM/DSD and BitPerfect/ReplayGain
+- 📀 **Now Playing animations** — with the VU meters off, a CD, a vinyl record or a cassette plays in their place on the touchscreen
 - 🔀 **Any player, one screen** — drive the other players on the same Lyrion from the touchscreen, then come back to this one
 - 🖥️ **With screen or headless** — touchscreen kiosk, headless (web admin + companion app), or server-only (serves Lyrion to other players, plays nothing itself)
 - 🌐 **Web admin** — manage a unit from any browser on the LAN (network, audio, sources, updates, backups, SSH, Tailscale remote access)
