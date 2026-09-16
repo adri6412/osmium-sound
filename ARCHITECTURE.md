@@ -521,6 +521,20 @@ GET    /api/meta/person?mbid=      🔒   the same for someone only MusicBrainz 
 GET    /api/meta/appearances?mbid= 🔒   library albums (already looked up) crediting that person
 GET/POST /api/meta/settings        🔒   online look-ups / background prefetch on-off, cache and prefetch state
 POST   /api/meta/cache/clear       🔒   drop the cache (manual edition picks stay)
+GET/POST /api/meta/album/edit      🔒   Library editor: credits as MusicBrainz gives them (with keys) + stored corrections + corrected answer; POST {album_id, overrides} replaces them
+GET/POST /api/meta/artist/edit     🔒   the same for a library artist {name, bio_hidden, hide_members}
+GET    /api/meta/artist/candidates 🔒   MusicBrainz artists this library artist could be
+POST   /api/meta/artist/pin        🔒   {artist_id, mbid | "none" | null}: use this artist / none / automatic
+GET    /api/meta/search/people?q=  🔒   people to link a credit to: library artists now, MusicBrainz (`pending` while queued)
+GET    /api/library/status         🔒   tag editing possible? {available, local, writers per format, mutagen, reason}
+GET    /api/library/albums         🔒   browse/search albums (?q=, ?artist_id=, offset/limit) with track counts
+GET    /api/library/artists        🔒   browse/search artists with album counts
+GET    /api/library/cover/<id>     🔒   cover image from Lyrion (?size=), 404 when there is none
+GET    /api/library/album?album_id= 🔒  the tags read from each file of an album, writable or why not
+POST   /api/library/album/tags     🔒   {album_id, changes: [{track_id, set, remove}]}: validated, starts the one background job
+GET    /api/library/job?id=        🔒   progress, per-track errors, rescan, undoable
+GET    /api/library/history        🔒   the last 50 tag jobs, newest first
+POST   /api/library/undo           🔒   {job_id, force?}: write the journaled values back (a new job)
 POST   /api/pair/token                  mint a companion pairing token (localhost only)
 POST   /api/pair/tokens/revoke_all      revoke all tokens (localhost only)
 GET    /api/backup                 🔒   build + download a plain (non-secret) backup immediately
@@ -548,6 +562,37 @@ in SQLite under `/var/lib/hifi-player/metadata/` (60 days, 7 for "not found",
 100 MB cap that only drops the big re-downloadable lookups). Settings:
 `/etc/hifi-player/meta-online` and `meta-prefetch`, both on when missing. The
 CD ripper shares the same throttled client. Tests: `tests/test_metadata.py`.
+
+Manual corrections (the web admin's Library editor, `/library`) live in
+`/var/lib/hifi-player/metadata-edits/`, not in the cache: one JSON file per
+album fingerprint (`albums/`, the edition pin and the credit overrides) and
+per library artist (`artists/`, keyed by the normalised name: pin, shown name,
+hidden biography and members). "Clear cache" keeps them, backups include the
+directory (`core` category), a factory reset deletes it; pins an older version
+kept in the cache database move there when the cache is first opened. Every
+credit line in `/api/meta/album` carries a stable `key` (`group|role|attr|credit`)
+and every person one (`mbid`, or `name:<normalised name>`); the override
+document names those keys (`hide`, `remove_people`, `people` — rename or relink,
+`artist_id: 0` / `mbid: ""` unlink — `entries`, `add`, per-track `tracks`,
+`about_hidden`) and is applied to the release's credit set before it is
+serialised, so the album's lines, each track's credits and the appearances
+index agree. Answers that changed say `"edited": true`.
+
+`/api/library/*` lives in `hifi_tags.py`, mounted by `sources_server.py` with
+its `ALLOWED_LOCAL_ROOTS`; the web admin reaches it (and `/api/meta/*`)
+through the session-gated `/api/system/library/*` and `/api/system/meta/*`
+relays, covers included. Tags are Vorbis-style keys with list values, mapped
+per format like Picard writes them (ID3v2.4 frames/TXXX/UFID, MP4 atoms and
+iTunes freeform atoms, APEv2 items). Files are written only when the device
+uses its own Lyrion, only below the allowed roots (symlinks resolved), never on
+a read-only mount or for a cue-sheet track; python3-mutagen writes every common
+format, without it `metaflac` writes FLAC and the rest is read-only (from
+Lyrion's `tags` dump). One job at a time: before writing, each file's previous
+values of the touched keys go to `metadata-edits/tag-jobs/<job_id>.json` (last
+50 kept) with the size/mtime after the write, so an undo restores exactly and
+refuses (`library.changed_since`, 409) a file that changed again unless forced;
+a busy writer answers `library.busy` (409). After a job, Lyrion's incremental
+`rescan`. Tests: `tests/test_tags.py`.
 
 Plus `/api/system/*` (🔒): the companion's only path to the system API, a
 fixed forwarding table (`_SYSTEM_PROXY_ROUTES`) onto `api_server.py` over

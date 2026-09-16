@@ -325,6 +325,15 @@ class CreditTests(unittest.TestCase):
         self.assertEqual(hm.classify_relation({'type': 'recording', 'attributes': []}),
                          [('engineering', 'recording', '', '')])
 
+    def test_track_credits_match_the_album_set(self):
+        # per-track credits come out of the album's credit set: every entry of
+        # track 2 is a line of the album that names track 2 (or the whole album)
+        credits, tracks, _ = hm.album_view(self.model)
+        for entry in tracks[1]['credits']:
+            album_line = find(credits, entry['group'], entry['role'], entry['attr'], entry['credit'])
+            self.assertIsNotNone(album_line)
+            self.assertTrue(album_line['tracks'] is None or [1, 2] in album_line['tracks'])
+
     def test_artist_model(self):
         a = hm.build_artist_model(fixture('artist-pinkfloyd.json'))
         self.assertEqual((a['type'], a['begin'], a['end'], a['ended']), ('group', '1965', '2014', True))
@@ -335,6 +344,159 @@ class CreditTests(unittest.TestCase):
         self.assertTrue(syd['ended'])
         self.assertEqual(len([m for m in a['members'] if m['name'] == 'Richard Wright']), 2)
         self.assertEqual(a['member_of'], [])
+
+
+# ── manual corrections ───────────────────────────────────────────────
+WATERS = '0f50beab-d77d-4f0f-ac26-0b87d3e9b11b'
+GILMOUR = '1dce970e-34bc-48b2-ab51-48d87544a4c2'
+
+
+class OverrideTests(unittest.TestCase):
+
+    def setUp(self):
+        self.model = hm.build_release_model(fixture('release-dsotm-be701edc-3tracks.json'))
+        self.people = {p['name']: p['mbid'] for c in hm.album_view(self.model)[0] for p in c['people']}
+
+    def view(self, overrides):
+        cset, coords, rows, _ = hm.credit_sets(self.model)
+        changed = hm.apply_album_overrides(cset, hm.validate_album_overrides(overrides), coords)
+        credits = hm._serialise_credits(cset, all_tracks=coords)
+        tracks = [dict(r, credits=hm.track_credits(cset, (r['disc'], r['n']))) for r in rows]
+        return changed, hm.keyed_credits(credits), [dict(t, credits=hm.keyed_credits(t['credits'])) for t in tracks]
+
+    def test_keys(self):
+        self.assertEqual(hm.credit_key('performer', 'instrument', 'piano', ''), 'performer|instrument|piano|')
+        self.assertEqual(hm.credit_key(('other', 'a|b', '', 'x')), 'other|a/b||x')
+        self.assertEqual(hm.person_key({'name': 'X', 'mbid': GILMOUR}), GILMOUR)
+        self.assertEqual(hm.person_key({'name': 'Péter  JAMES', 'mbid': None}), 'name:peter james')
+        changed, credits, tracks = self.view({})
+        self.assertFalse(changed)
+        tape = find(credits, 'performer', 'instrument', 'tape', 'tape effects')
+        self.assertEqual(tape['key'], 'performer|instrument|tape|tape effects')
+        self.assertEqual({p['key'] for p in tape['people']}, {self.people['Nick Mason'], WATERS})
+        self.assertTrue(all('key' in e for t in tracks for e in t['credits']))
+
+    def test_hide_and_remove_people(self):
+        changed, credits, tracks = self.view({
+            'hide': ['performer|instrument|piano|'],
+            'remove_people': {'performer|instrument|tape|tape effects': [WATERS]}})
+        self.assertTrue(changed)
+        self.assertIsNone(find(credits, 'performer', 'instrument', 'piano'))
+        self.assertFalse(any(e['key'] == 'performer|instrument|piano|' for t in tracks for e in t['credits']))
+        tape = find(credits, 'performer', 'instrument', 'tape', 'tape effects')
+        self.assertEqual([p['name'] for p in tape['people']], ['Nick Mason'])
+        # a line left with nobody goes
+        _, credits, _ = self.view({'remove_people': {'composition|lyricist||': [WATERS]}})
+        self.assertIsNone(find(credits, 'composition', 'lyricist'))
+
+    def test_rename_relink_and_role_change(self):
+        james = self.people['Peter James']
+        changed, credits, tracks = self.view({
+            'people': {james: {'name': 'Pete James', 'artist_id': 12}},
+            'entries': {'performer|instrument|electric guitar|': {'group': 'performer', 'role': 'instrument',
+                                                                 'attr': 'Guitar', 'credit': ''}}})
+        self.assertTrue(changed)
+        stomps = find(credits, 'performer', 'instrument', 'foot stomps')
+        self.assertEqual((stomps['people'][0]['name'], stomps['people'][0]['artist_id']), ('Pete James', 12))
+        assistant = find(credits, 'engineering', 'engineer', 'assistant')
+        self.assertEqual(assistant['people'][0]['name'], 'Pete James')      # everywhere on the album
+        self.assertIsNone(find(credits, 'performer', 'instrument', 'electric guitar'))
+        guitar = find(credits, 'performer', 'instrument', 'guitar')
+        self.assertEqual((guitar['key'], guitar['tracks']), ('performer|instrument|guitar|', [[1, 2], [1, 3]]))
+        self.assertIsNotNone(find(tracks[2]['credits'], 'performer', 'instrument', 'guitar'))
+
+    def test_unlink_values(self):
+        doc = hm.validate_album_overrides({'people': {GILMOUR: {'name': None, 'artist_id': 0, 'mbid': ''},
+                                                      WATERS: {'artist_id': '0'}}})
+        self.assertEqual(doc, {'people': {GILMOUR: {'artist_id': 0, 'mbid': ''}, WATERS: {'artist_id': 0}}})
+        _, credits, _ = self.view({'people': {GILMOUR: {'artist_id': 0, 'mbid': ''}}})
+        solo = find(credits, 'performer', 'instrument', 'pedal steel guitar')['people'][0]
+        self.assertEqual((solo['name'], solo['mbid'], solo['artist_id'], solo['key']),
+                         ('David Gilmour', None, None, 'name:david gilmour'))
+
+    def test_add_lines(self):
+        _, credits, tracks = self.view({'add': [
+            {'group': 'performer', 'role': 'instrument', 'attr': 'saxophone', 'credit': '',
+             'people': [{'name': 'Dick Parry', 'artist_id': None, 'mbid': None}], 'tracks': [[1, 2]]},
+            {'group': 'production', 'role': 'liner_notes', 'attr': '', 'credit': '',
+             'people': [{'name': 'Nobody', 'mbid': GILMOUR}], 'tracks': None},
+            # same key as an existing line: merged into it
+            {'group': 'composition', 'role': 'lyricist', 'attr': '', 'credit': '',
+             'people': [{'name': 'Someone Else'}], 'tracks': [[1, 3]]}]})
+        sax = find(credits, 'performer', 'instrument', 'saxophone')
+        self.assertEqual((sax['tracks'], sax['people'][0]['key']), ([[1, 2]], 'name:dick parry'))
+        self.assertIsNotNone(find(tracks[1]['credits'], 'performer', 'instrument', 'saxophone'))
+        self.assertIsNone(find(tracks[0]['credits'], 'performer', 'instrument', 'saxophone'))
+        notes = find(credits, 'production', 'liner_notes')
+        self.assertIsNone(notes['tracks'])
+        self.assertFalse(any(find(t['credits'], 'production', 'liner_notes') for t in tracks))
+        lyricist = find(credits, 'composition', 'lyricist')
+        self.assertEqual({p['name'] for p in lyricist['people']}, {'Roger Waters', 'Someone Else'})
+        self.assertEqual(lyricist['tracks'], [[1, 2], [1, 3]])
+
+    def test_per_track_corrections(self):
+        _, credits, tracks = self.view({'tracks': {'1.2': {
+            'hide': ['composition|lyricist||', 'performer|instrument|electric guitar|'],
+            'add': [{'group': 'performer', 'role': 'vocal', 'attr': 'choir vocals', 'credit': '',
+                     'people': [{'name': 'Choir'}]}]}}})
+        self.assertIsNone(find(credits, 'composition', 'lyricist'))                  # it was only on 1.2
+        self.assertEqual(find(credits, 'performer', 'instrument', 'electric guitar')['tracks'], [[1, 3]])
+        self.assertIsNone(find(tracks[1]['credits'], 'performer', 'instrument', 'electric guitar'))
+        self.assertIsNotNone(find(tracks[2]['credits'], 'performer', 'instrument', 'electric guitar'))
+        self.assertEqual(find(credits, 'performer', 'vocal', 'choir vocals')['tracks'], [[1, 2]])
+        roles = hm.cset_roles(hm.credit_sets(self.model)[0])
+        self.assertIn(('composition', 'lyricist', ''), roles[WATERS][1])
+
+    def test_validation(self):
+        bad = [
+            {'nonsense': True},
+            {'hide': 'performer|instrument|piano|'},
+            {'people': {'not-a-key': {'name': 'x'}}},
+            {'people': {GILMOUR: {'mbid': 'nope'}}},
+            {'entries': {'k': {'group': 'band', 'role': 'x'}}},
+            {'add': [{'group': 'performer', 'role': 'vocal', 'people': []}]},
+            {'add': [{'group': 'performer', 'role': 'vocal', 'people': [{'name': 'x'}], 'tracks': [[1]]}]},
+            {'tracks': {'side A': {'hide': ['x']}}},
+            {'about_hidden': 'yes'},
+            {'add': [{'group': 'performer', 'role': 'vocal', 'people': [{'name': 'x' * 400}]}]},
+        ]
+        for doc in bad:
+            with self.assertRaises(hm.OverrideError, msg=json.dumps(doc)[:80]):
+                hm.validate_album_overrides(doc)
+        ok = hm.validate_album_overrides({
+            'hide': ['b', 'a', 'a'], 'people': {'name:Peter  James': {'name': ' Peter\x07James ', 'artist_id': '12',
+                                                                        'mbid': None},
+                                                GILMOUR.upper(): {'name': None, 'artist_id': None, 'mbid': None}},
+            'add': [{'group': 'performer', 'role': 'Lead Vocal', 'attr': 'Lead', 'people': [{'name': 'x'}],
+                     'tracks': [[1, 3], [1, 3]]}],
+            'tracks': {'01.003': {}}, 'about_hidden': False, 'remove_people': {}})
+        self.assertEqual(ok, {'hide': ['a', 'b'], 'people': {'name:peter james': {'name': 'PeterJames', 'artist_id': 12}},
+                              'add': [{'group': 'performer', 'role': 'lead_vocal', 'attr': 'lead', 'credit': '',
+                                       'people': [{'name': 'x', 'artist_id': None, 'mbid': None}],
+                                       'tracks': [[1, 3]]}]})
+        self.assertEqual(hm.validate_album_overrides({}), {})
+        self.assertEqual(hm.validate_artist_overrides({'name': ' Floyd ', 'bio_hidden': True,
+                                                       'hide_members': [GILMOUR, 'name:Syd']}),
+                         {'name': 'Floyd', 'bio_hidden': True, 'hide_members': sorted([GILMOUR, 'name:syd'])})
+        with self.assertRaises(hm.OverrideError):
+            hm.validate_artist_overrides({'members': []})
+
+    def test_artist_overrides(self):
+        answer = {'status': 'ok', 'artist': {'name': 'Pink Floyd', 'urls': {'wikipedia': 'w', 'musicbrainz': 'm'},
+                                             'members': [{'name': 'David Gilmour', 'mbid': GILMOUR},
+                                                         {'name': 'Bob Klose', 'mbid': None}],
+                                             'member_of': []},
+                  'bio': {'text': 'wrong band'}}
+        self.assertTrue(hm.apply_artist_overrides(answer, {'name': 'The Pink Floyd', 'bio_hidden': True,
+                                                           'hide_members': ['name:bob klose']}))
+        self.assertEqual(answer['artist']['name'], 'The Pink Floyd')
+        self.assertEqual([m['name'] for m in answer['artist']['members']], ['David Gilmour'])
+        self.assertIsNone(answer['bio'])
+        self.assertEqual(answer['artist']['urls'], {'musicbrainz': 'm'})
+        self.assertTrue(answer['edited'])
+        untouched = {'status': 'ok', 'artist': {'name': 'X', 'members': [], 'member_of': []}, 'bio': None}
+        self.assertFalse(hm.apply_artist_overrides(untouched, {'hide_members': [GILMOUR]}))
+        self.assertNotIn('edited', untouched)
 
 
 # ── HTTP client ──────────────────────────────────────────────────────
@@ -514,6 +676,8 @@ class CacheTests(unittest.TestCase):
 
 # ── the service, end to end with fakes ───────────────────────────────
 MOONLIGHT_MBID = 'e6479787-3839-4082-b133-de2e5a1bd574'
+ASHKENAZY = '15a30428-87c4-455b-b7e8-71013237fea0'
+SOMEBODY = '5441c29d-3602-4898-b1a1-b77fa23b8e50'
 
 
 class FakeLyrion:
@@ -553,6 +717,16 @@ class FakeLyrion:
     def artist_albums(self, artist_id):
         return [{'id': a['id'], 'title': a['title'], 'artist': a['artist']} for a in self.albums.values()]
 
+    def artist(self, artist_id):
+        return {'id': 12, 'name': 'Vladimir Ashkenazy'} if artist_id == 12 else None
+
+    def request(self, params, timeout=None):
+        if params[0] == 'artists':
+            q = next((p[7:] for p in params if str(p).startswith('search:')), '')
+            loop = [{'id': 12, 'artist': 'Vladimir Ashkenazy'}] if q.lower() in 'vladimir ashkenazy' else []
+            return {'count': len(loop), 'artists_loop': loop}
+        raise AssertionError(f'unexpected Lyrion request {params}')
+
 
 class FakeClient:
     """Serves fixtures by URL; `fail` makes every call raise instead."""
@@ -561,6 +735,7 @@ class FakeClient:
         self.urls = []
         self.fail = None
         self.moonlight = fixture('release-moonlight-e6479787.json')
+        self.artist_search = []
 
     def offline(self):
         return False
@@ -581,7 +756,7 @@ class FakeClient:
         if '/ws/2/release?' in url and 'release-group=' in url:
             return {'releases': [self.moonlight]}
         if '/ws/2/artist?' in url:
-            return {'artists': []}
+            return {'artists': self.artist_search if 'query=artist%3A' not in url else []}
         if '/ws/2/artist/' in url:
             mbid = url.split('/ws/2/artist/')[1].split('?')[0]
             return {'id': mbid, 'name': 'Vladimir Ashkenazy', 'sort-name': 'Ashkenazy, Vladimir', 'type': 'Person',
@@ -699,6 +874,38 @@ class ServiceTests(unittest.TestCase):
         self.drain()
         self.assertEqual(len(self.client.urls), n)
 
+    def test_edits_move_with_a_renamed_album(self):
+        e = hm.Edits(os.path.join(self.tmp, 'edits'))
+        e.set_pin('old', 1, 'none', 'T', 'A')
+        e.set_album_overrides('old', 1, 'T', 'A', {'about_hidden': True})
+        e.set_album_overrides('taken', 2, 'U', 'B', {'hide': ['x']})
+        self.assertTrue(e.move_album('old', 'new', 3, 'T2', 'A'))
+        self.assertIsNone(e.album('old'))
+        doc = e.album('new')
+        self.assertEqual((doc['pin'], doc['overrides'], doc['album_id'], doc['title']), ('none', {'about_hidden': True}, 3, 'T2'))
+        # an album that already has its own edits under the new key keeps them
+        e.set_pin('other', 4, 'none')
+        self.assertFalse(e.move_album('other', 'taken', 4, 'U', 'B'))
+        self.assertEqual(e.album_overrides('taken'), {'hide': ['x']})
+        self.assertIsNotNone(e.album('other'))
+        # an artist name corrected in the tags: corrections copied, the old spelling keeps its own
+        e.set_artist_overrides('pnk floid', 9, 'Pnk Floid', None, {'bio_hidden': True})
+        self.assertTrue(e.copy_artist('pnk floid', 'pink floyd', 10, 'Pink Floyd'))
+        self.assertEqual(e.artist_overrides('pink floyd'), {'bio_hidden': True})
+        self.assertIsNotNone(e.artist('pnk floid'))
+
+    def test_album_renamed_moves_its_edits(self):
+        self.svc.album_pin(64, 'none')
+        old = {'title': 'Beethoven: Moonlight Sonata', 'artist': 'Vladimir Ashkenazy', 'track_count': len(self.lyrion.tracks)}
+        # the rescan after the tag edit: a new title, a new album id
+        self.lyrion.albums[65] = dict(self.lyrion.albums.pop(64), id=65, title='Moonlight Sonata (fixed)')
+        new_fp = self.svc.album_renamed(old, 65)
+        self.assertEqual(new_fp, hm.fingerprint('Moonlight Sonata (fixed)', 'Vladimir Ashkenazy', len(self.lyrion.tracks)))
+        self.assertEqual(self.svc.album(65)['status'], 'nomatch')       # the "none" choice followed it
+        self.assertIsNone(self.svc.edits.album(hm.fingerprint(old['title'], old['artist'], old['track_count'])))
+        self.assertIsNone(self.svc.album_renamed(old, 65))               # nothing left to move
+        self.assertIsNone(self.svc.album_renamed(old, 999))              # unknown album
+
     def test_pin_none_and_back(self):
         out = self.svc.album_pin(64, 'none')
         self.assertEqual(out['status'], 'nomatch')
@@ -747,6 +954,151 @@ class ServiceTests(unittest.TestCase):
             hm._Ctx(svc, hm.PRIO_INTERACTIVE).check()           # screens still get answers
         finally:
             svc._cache.close()
+
+    def test_album_corrections_end_to_end(self):
+        self.svc.album(64)
+        self.drain()
+        edit = self.svc.album_edit(64)
+        self.assertEqual((edit['status'], edit['overrides']), ('ok', {}))
+        piano = find(edit['credits'], 'performer', 'instrument', 'piano')
+        self.assertEqual(piano['key'], 'performer|instrument|piano|')
+        self.assertEqual(piano['people'][0]['key'], ASHKENAZY)
+        self.assertNotIn('edited', edit['effective'])
+        self.assertTrue(all('key' in e for t in edit['tracks'] for e in t['credits']))
+        saved = self.svc.album_edit_save(64, {
+            'hide': ['performer|instrument|piano|'],
+            'add': [{'group': 'performer', 'role': 'instrument', 'attr': 'Harpsichord', 'credit': '',
+                     'people': [{'name': 'Somebody', 'artist_id': None, 'mbid': SOMEBODY}], 'tracks': [[1, 2]]}],
+            'about_hidden': True})
+        # the corrected answer, at the top level and under `effective`, with what was stored
+        self.assertTrue(saved['edited'] and saved['effective']['edited'])
+        self.assertEqual(saved['credits'], saved['effective']['credits'])
+        self.assertEqual(saved['overrides']['hide'], ['performer|instrument|piano|'])
+        out = self.svc.album(64)
+        self.assertTrue(out['edited'])
+        self.assertIsNone(find(out['credits'], 'performer', 'instrument', 'piano'))
+        self.assertEqual(find(out['credits'], 'performer', 'instrument', 'harpsichord')['tracks'], [[1, 2]])
+        # the raw answer is still what MusicBrainz gave
+        self.assertIsNotNone(find(self.svc.album_edit(64)['credits'], 'performer', 'instrument', 'piano'))
+        # appearances follow the corrections, at once
+        self.assertEqual(self.svc.appearances(ASHKENAZY)['albums'], [])
+        self.assertEqual(self.svc.appearances(SOMEBODY)['albums'][0]['roles'],
+                         [{'group': 'performer', 'role': 'instrument', 'attr': 'harpsichord'}])
+        # stored with the edits, not in the cache: clearing the cache keeps them
+        fp = hm.fingerprint('Beethoven: Moonlight Sonata', 'Vladimir Ashkenazy', 9)
+        path = os.path.join(self.tmp, 'metadata-edits', 'albums', fp + '.json')
+        self.assertTrue(os.path.isfile(path))
+        self.svc.clear_cache()
+        self.svc.album(64)
+        self.drain()
+        self.assertTrue(self.svc.album(64)['edited'])
+        self.assertEqual(self.svc.appearances(ASHKENAZY)['albums'], [])        # rebuilt with the corrections
+        # a file put back from a backup is picked up without a restart
+        with open(path, encoding='utf-8') as f:
+            doc = json.load(f)
+        doc['overrides'] = {'about_hidden': True}
+        with open(path, 'w', encoding='utf-8') as f:
+            json.dump(doc, f)
+        os.utime(os.path.dirname(path), ns=(1, 1))
+        self.assertNotIn('edited', self.svc.album(64))          # nothing to hide: no about on this release
+        # {} = back to MusicBrainz; the file goes
+        reset = self.svc.album_edit_save(64, {})
+        self.assertNotIn('edited', reset)
+        self.assertFalse(os.path.exists(path))
+        with self.assertRaises(hm.OverrideError):
+            self.svc.album_edit_save(64, {'hide': 'not a list'})
+
+    def test_unlinking_people(self):
+        self.svc.album(64)
+        self.drain()
+        out = self.svc.album_edit_save(64, {'people': {ASHKENAZY: {'artist_id': 0, 'mbid': ''}}})
+        person = find(out['credits'], 'performer', 'instrument', 'piano')['people'][0]
+        self.assertEqual((person['artist_id'], person['mbid'], person['key']),
+                         (None, None, 'name:vladimir ashkenazy'))
+        self.assertTrue(out['edited'])
+        self.assertEqual(self.svc.appearances(ASHKENAZY)['albums'], [])
+        # null keeps; a number relinks by hand
+        out = self.svc.album_edit_save(64, {'people': {ASHKENAZY: {'name': None, 'artist_id': 99, 'mbid': None}}})
+        person = find(out['credits'], 'performer', 'instrument', 'piano')['people'][0]
+        self.assertEqual((person['artist_id'], person['mbid']), (99, ASHKENAZY))
+        stored = self.svc.edits.album_overrides(hm.fingerprint('Beethoven: Moonlight Sonata', 'Vladimir Ashkenazy', 9))
+        self.assertEqual(stored, {'people': {ASHKENAZY: {'artist_id': 99}}})
+
+    def test_nomatch_album_keeps_added_credits(self):
+        self.svc.album_pin(64, 'none')
+        out = self.svc.album_edit_save(64, {'add': [{'group': 'composition', 'role': 'composer', 'attr': '',
+                                                     'credit': '', 'tracks': None,
+                                                     'people': [{'name': 'Ludwig', 'mbid': SOMEBODY}]}]})
+        self.assertEqual((out['status'], out['edited']), ('nomatch', True))
+        self.assertEqual(out['credits'][0]['people'][0]['name'], 'Ludwig')
+        self.assertEqual(self.svc.appearances(SOMEBODY)['albums'][0]['album_id'], 64)
+
+    def test_pins_move_out_of_the_cache(self):
+        cache_dir = os.path.join(self.tmp, 'legacy-cache')
+        old = hm.Cache(cache_dir)
+        fp = hm.fingerprint('Beethoven: Moonlight Sonata', 'Vladimir Ashkenazy', 9)
+        old.set_pin(fp, 64, MOONLIGHT_MBID, 'Beethoven: Moonlight Sonata', 'Vladimir Ashkenazy')
+        old.set_pin('other', 5, 'none', 'T', 'A')
+        old.close()
+        svc = hm.MetadataService(cache_dir=cache_dir, etc_dir=self.tmp, lyrion=self.lyrion, client=self.client,
+                                 start_worker=False)
+        try:
+            self.assertEqual(svc.album(64)['status'], 'pending')
+            self.assertEqual(svc.edits.get_pin(fp), {'mbid': MOONLIGHT_MBID, 'album_id': 64})
+            self.assertEqual(svc.edits.get_pin('other')['mbid'], 'none')
+            self.assertEqual(svc.cache.all_pins(), [])
+            self.assertTrue(os.path.isfile(os.path.join(self.tmp, 'metadata-edits', 'albums', fp + '.json')))
+            self.assertEqual(svc.edits_dir, os.path.join(self.tmp, 'metadata-edits'))
+        finally:
+            svc._cache.close()
+
+    def test_artist_pin_corrections_and_candidates(self):
+        self.client.artist_search = [{'id': ASHKENAZY, 'name': 'Vladimir Ashkenazy', 'type': 'Person', 'score': 100,
+                                      'area': {'name': 'Iceland'}, 'life-span': {'begin': '1937-07-06'},
+                                      'disambiguation': 'pianist'},
+                                     {'id': SOMEBODY, 'name': 'Vladimir Ashkenazy', 'score': 60}]
+        self.assertEqual(self.svc.artist_candidates(12)['status'], 'pending')
+        self.drain()
+        cands = self.svc.artist_candidates(12)
+        self.assertEqual(cands['status'], 'ok')
+        self.assertEqual(cands['candidates'][0], {'mbid': ASHKENAZY, 'name': 'Vladimir Ashkenazy',
+                                                  'disambiguation': 'pianist', 'type': 'person', 'area': 'Iceland',
+                                                  'begin': '1937-07-06', 'end': '', 'score': 100})
+        self.assertIsNone(cands['pinned'])
+        self.svc.artist_pin(12, ASHKENAZY)
+        self.drain()
+        out = self.svc.artist(12)
+        self.assertEqual((out['status'], out['artist']['mbid']), ('ok', ASHKENAZY))
+        edit = self.svc.artist_edit(12)
+        self.assertEqual((edit['match'], edit['library_name'], edit['overrides']),
+                         ({'mbid': ASHKENAZY, 'how': 'manual'}, 'Vladimir Ashkenazy', {}))
+        self.assertEqual(self.svc.artist_candidates(12)['pinned'], ASHKENAZY)
+        saved = self.svc.artist_edit_save(12, {'name': 'V. Ashkenazy', 'bio_hidden': True, 'hide_members': []})
+        self.assertEqual((saved['artist']['name'], saved['edited'], saved['overrides']),
+                         ('V. Ashkenazy', True, {'name': 'V. Ashkenazy', 'bio_hidden': True}))
+        self.assertEqual(self.svc.artist(12)['artist']['name'], 'V. Ashkenazy')
+        self.assertEqual(self.svc.person(ASHKENAZY)['artist']['name'], 'V. Ashkenazy')   # same artist elsewhere
+        self.assertEqual(self.svc.artist_edit(12)['artist']['name'], 'Vladimir Ashkenazy')
+        self.svc.clear_cache()
+        self.assertEqual(self.svc.edits.artist_pin(hm.normalise('Vladimir Ashkenazy')), ASHKENAZY)
+        self.assertEqual(self.svc.artist_pin(12, 'none')['status'], 'nomatch')
+        self.assertEqual(self.svc.artist_pin(12, 'bad')['status'], 'error')
+
+    def test_search_people(self):
+        self.client.artist_search = [{'id': SOMEBODY, 'name': 'Vladimir Ashkenazy', 'type': 'Person',
+                                      'disambiguation': 'pianist', 'score': 90}]
+        first = self.svc.search_people('ashk')
+        self.assertEqual((first['status'], first['library'], first['musicbrainz']),
+                         ('pending', [{'artist_id': 12, 'name': 'Vladimir Ashkenazy'}], []))
+        self.svc.search_people('ashke')                     # typing on: only the latest search is asked
+        self.drain()
+        self.assertEqual(sum(1 for u in self.client.urls if '/ws/2/artist?' in u), 1)
+        out = self.svc.search_people('ashke')
+        self.assertEqual(out['musicbrainz'], [{'mbid': SOMEBODY, 'name': 'Vladimir Ashkenazy',
+                                               'disambiguation': 'pianist', 'type': 'person'}])
+        self.assertEqual(out['status'], 'ok')
+        self.svc.set_settings(online=False)
+        self.assertEqual(self.svc.search_people('ashke')['status'], 'disabled')
 
     def test_about_language_fallback(self):
         model = hm.build_release_model(fixture('release-dsotm-be701edc-3tracks.json'))
@@ -995,12 +1347,47 @@ class RoutesTests(unittest.TestCase):
         allowed['yes'] = False
         self.assertEqual(c.get('/api/meta/settings').status_code, 401)
 
+    def test_edit_routes(self):
+        from flask import Flask
+        app = Flask(__name__)
+        calls = []
+
+        class Svc:
+            def album_edit_save(self, album_id, overrides, lang):
+                calls.append(('album_save', album_id, lang))
+                hm.validate_album_overrides(overrides)
+                return {'status': 'ok', 'album_id': album_id}
+
+            def artist_pin(self, artist_id, mbid, lang):
+                calls.append(('artist_pin', artist_id, mbid))
+                return {'status': 'ok'}
+
+            def search_people(self, q):
+                return {'status': 'ok', 'library': [], 'musicbrainz': []}
+
+        svc = Svc()
+        hm.init_app(app, lambda: None, service_getter=lambda: svc)
+        c = app.test_client()
+        self.assertEqual(c.post('/api/meta/album/edit', json={'album_id': 3, 'overrides': {}}).get_json()['status'], 'ok')
+        r = c.post('/api/meta/album/edit', json={'album_id': 3, 'overrides': {'bogus': 1}}, headers={'X-UI-Lang': 'it'})
+        body = r.get_json()
+        self.assertEqual((r.status_code, body['success'], body['code']), (400, False, 'meta.badOverrides'))
+        self.assertTrue(body['message'].startswith('Impossibile salvare le correzioni'))
+        self.assertEqual(c.post('/api/meta/album/edit', json={'overrides': {}}).status_code, 400)
+        self.assertEqual(c.post('/api/meta/artist/pin', json={'artist_id': 1, 'mbid': 'x'}).status_code, 400)
+        c.post('/api/meta/artist/pin', json={'artist_id': 1, 'mbid': None})
+        self.assertEqual(calls[-1], ('artist_pin', 1, None))
+        self.assertEqual(c.get('/api/meta/search/people?q=a').status_code, 400)
+        self.assertEqual(c.get('/api/meta/search/people?q=ab').status_code, 200)
+
     def test_sources_server_mounts_the_routes(self):
         with mock.patch('hifi_logging.tee_stdio_to_file'):
             import sources_server
         rules = {r.rule for r in sources_server.app.url_map.iter_rules()}
         for path in ('/api/meta/album', '/api/meta/album/candidates', '/api/meta/album/pin', '/api/meta/artist',
-                     '/api/meta/person', '/api/meta/appearances', '/api/meta/settings', '/api/meta/cache/clear'):
+                     '/api/meta/person', '/api/meta/appearances', '/api/meta/settings', '/api/meta/cache/clear',
+                     '/api/meta/album/edit', '/api/meta/artist/edit', '/api/meta/artist/candidates',
+                     '/api/meta/artist/pin', '/api/meta/search/people'):
             self.assertIn(path, rules)
 
 

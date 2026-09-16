@@ -455,7 +455,8 @@
       "goToAlbum": "Go to album",
       "goToArtist": "Go to artist",
       "playAlbum": "Play album",
-      "notInLibrary": "Not in your library"
+      "notInLibrary": "Not in your library",
+      "edited": "corrected by hand"
     }
   },
   "settings": {

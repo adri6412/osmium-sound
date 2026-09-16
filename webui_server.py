@@ -2059,6 +2059,19 @@ def meta_proxy(rest):
     return _forward_to_sources('/api/meta/' + rest)
 
 
+# The Library editor (/library): the tags inside the music files
+# (/api/library/*, hifi_tags.py via sources_server), same session gate. Covers
+# come through here as images, content type and all: the admin page may be
+# HTTPS and Lyrion is plain HTTP on another port, so the browser could not
+# load them from there.
+@app.route('/api/system/library/<path:rest>', methods=['GET', 'POST'])
+def library_proxy(rest):
+    denied = _require_session()
+    if denied:
+        return denied
+    return _forward_to_sources('/api/library/' + rest)
+
+
 # Playlist folder (Sources -> Advanced). Same story as lms_skin: it is a Lyrion
 # pref, so it lives on sources_server.py, and this is the session-gated door
 # the web admin's own Settings page comes through.
@@ -2298,6 +2311,25 @@ def root():
         # than hardcoding the ISO's default 'hifiplayer' like this used to.
         html = NET_RECOVERY_HTML.replace('__DEVICE_HOST__', socket.gethostname())
         return Response(html, mimetype='text/html')
+    return _serve_spa('index.html')
+
+
+@app.route('/library', methods=['GET'])
+@app.route('/library/', methods=['GET'])
+def library_page():
+    # The Library editor: a second page of the same Vite build (library.html
+    # next to index.html in DIST_DIR), same origin, session and CSRF cookie;
+    # it checks the login itself, like the admin. Never during setup or a
+    # network recovery: those own the whole site (see root()).
+    if _provisioning() or _net_recovery['active']:
+        return redirect('/', code=302)
+    if request.path.endswith('/'):
+        # The build's asset paths are relative (base './'): from /library/ they
+        # would resolve under /library/assets/, which is not where they are.
+        qs = request.query_string.decode('utf-8')
+        return redirect('/library' + (f'?{qs}' if qs else ''), code=302)
+    if os.path.isfile(os.path.join(DIST_DIR, 'library.html')):
+        return send_from_directory(DIST_DIR, 'library.html')
     return _serve_spa('index.html')
 
 

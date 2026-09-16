@@ -444,7 +444,8 @@ Item {
             Text {
                 visible: root.metaOk
                 width: col.width; height: 18; verticalAlignment: Text.AlignVCenter; elide: Text.ElideRight
-                text: Tr.t("player.page.creditsSource"); color: Theme.silverA(0.4); font.family: Theme.font; font.pixelSize: 11
+                text: Tr.t("player.page.creditsSource") + (root.meta && root.meta.edited ? ", " + Tr.t("player.page.edited") : "")
+                color: Theme.silverA(0.4); font.family: Theme.font; font.pixelSize: 11
             }
         }
     }

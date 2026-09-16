@@ -270,6 +270,10 @@ const gpu = computed(() => [
       <button class="secondary" :disabled="metaBusy" @click="clearMeta">{{ t('dashboard.meta.clear') }}</button>
     </div>
     <p class="sub" style="margin: 10px 0 0">{{ metaCleared ? t('dashboard.meta.cleared') : t('dashboard.meta.clearHint') }}</p>
+    <div class="between item stack-narrow" style="margin-top: 8px; border-top: 1px solid var(--border); padding-top: 14px">
+      <span>{{ t('dashboard.meta.fix') }} <span class="muted">{{ t('dashboard.meta.fixHint') }}</span></span>
+      <a class="secondary fit" style="text-align: center" href="library">{{ t('dashboard.meta.fixOpen') }}</a>
+    </div>
   </div>
 
   <div class="card" v-if="disk">

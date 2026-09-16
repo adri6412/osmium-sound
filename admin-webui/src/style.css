@@ -34,6 +34,11 @@ a:hover { filter: brightness(1.15); }
 }
 .brand { font-weight: 700; letter-spacing: 2px; font-size: 14px; }
 .brand .gold { color: var(--gold); }
+.topbar-actions { display: flex; align-items: center; gap: 8px; }
+.topbar-link {
+  padding: 10px 14px; border-radius: 10px; font-size: 14px; font-weight: 500;
+  color: var(--gold); border: 1px solid rgba(212, 175, 55, 0.4);
+}
 
 .wrap { max-width: 760px; margin: 0 auto; padding: 22px 18px 60px; }
 

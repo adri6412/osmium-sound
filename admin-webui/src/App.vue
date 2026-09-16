@@ -1,10 +1,15 @@
 <script setup>
-import { RouterView } from 'vue-router';
+import { computed } from 'vue';
+import { RouterView, useRoute } from 'vue-router';
 import { api } from './api.js';
 import { useI18n } from './i18n';
 import UpdateProgressOverlay from './components/UpdateProgressOverlay.vue';
 
 const { t } = useI18n();
+const route = useRoute();
+// Only once inside the admin: not on the login form, the first-time setup or
+// the installer, where there is no library to fix yet.
+const showLibrary = computed(() => !!route.meta.auth);
 
 async function logout() {
   await api.logout();
@@ -21,7 +26,12 @@ async function logout() {
 <template>
   <div class="topbar">
     <div class="brand">OSMIUM <span class="gold">SOUND</span></div>
-    <button class="ghost" @click="logout">{{ t('app.logout') }}</button>
+    <div class="topbar-actions">
+      <!-- The Library editor is a page of its own next to this one (library.html,
+           /library on the same origin and session), so a plain link. -->
+      <a v-if="showLibrary" class="topbar-link" href="library">{{ t('app.library') }}</a>
+      <button class="ghost" @click="logout">{{ t('app.logout') }}</button>
+    </div>
   </div>
   <div class="wrap">
     <RouterView />

@@ -24,12 +24,18 @@ Shape of the thing:
     device follows (squeezelite's -s), or HIFI_META_LMS_URL.
   * Cache — SQLite in /var/lib/hifi-player/metadata (HIFI_META_CACHE_DIR):
     60 days for data, 7 for "not found", a size cap with least-recently-used
-    eviction, manual pins kept when the cache is cleared.
+    eviction. Everything in it can be downloaded again.
+  * Edits — what the owner decided by hand (the edition or artist picked,
+    corrections to credits, members and texts), one JSON file per album
+    fingerprint or artist in /var/lib/hifi-player/metadata-edits
+    (HIFI_META_EDITS_DIR): outside the cache so "clear cache" keeps them,
+    saved by backups, wiped by a factory reset.
   * MetadataService — the HTTP handlers never touch the network: they answer
     from the cache or say `pending` and queue a job for the single worker
     thread (interactive requests first, the background prefetch last).
 """
 import base64
+import copy
 import gzip
 import hashlib
 import heapq
@@ -49,6 +55,7 @@ import urllib.request
 
 # ── configuration ────────────────────────────────────────────────────
 CACHE_DIR = '/var/lib/hifi-player/metadata'
+EDITS_DIR_NAME = 'metadata-edits'      # next to CACHE_DIR: /var/lib/hifi-player/metadata-edits
 ETC_DIR = '/etc/hifi-player'
 SQUEEZELITE_DEFAULT = '/etc/default/squeezelite'
 VERSION_FILES = ('/etc/hifi-player/UI_VERSION', '/opt/hifi-media-player/UI_VERSION',
@@ -366,6 +373,38 @@ def snake(text):
     return re.sub(r'[^a-z0-9]+', '_', _fold(text).lower()).strip('_')
 
 
+_CONTROL_RE = re.compile('[\x00-\x1f\x7f-\x9f\u2028\u2029]')
+
+
+def clean_text(text, keep_newlines=False):
+    """A string typed by somebody, as it may be stored: control characters
+    removed (line breaks kept only where asked, as plain \\n), outer spaces
+    trimmed."""
+    s = str(text if text is not None else '')
+    if keep_newlines:
+        s = s.replace('\r\n', '\n').replace('\r', '\n')
+        s = '\n'.join(_CONTROL_RE.sub('', line) for line in s.split('\n'))
+    else:
+        s = _CONTROL_RE.sub('', s)
+    return s.strip()
+
+
+def person_key(person):
+    """Stable key of a credited person: the MBID, or the normalised name for
+    somebody MusicBrainz does not know (an added credit)."""
+    mbid = (person or {}).get('mbid')
+    return str(mbid) if mbid else 'name:' + normalise((person or {}).get('name'))
+
+
+def credit_key(group, role='', attr='', credit=''):
+    """Stable key of a credit line, `group|role|attr|credit`. Accepts the
+    four fields or the (group, role, attr, credit) tuple the credit sets use;
+    a `|` inside a field is written as `/` so the key stays four fields."""
+    if isinstance(group, (tuple, list)):
+        group, role, attr, credit = (list(group) + ['', '', '', ''])[:4]
+    return '|'.join(str(x or '').replace('|', '/') for x in (group, role, attr, credit))
+
+
 def lucene_phrase(text):
     return '"' + str(text or '').replace('\\', ' ').replace('"', ' ').strip() + '"'
 
@@ -655,8 +694,7 @@ class _CreditSet:
 
     def add(self, key, person, where):
         entry = self.entries.setdefault(key, {})
-        slot = entry.setdefault(person['mbid'] or person['name'],
-                                {'person': dict(person), 'where': set()})
+        slot = entry.setdefault(person_key(person), {'person': dict(person), 'where': set()})
         slot['where'].add(where)
         if person.get('credited_as') and not slot['person'].get('credited_as'):
             slot['person']['credited_as'] = person['credited_as']
@@ -805,21 +843,19 @@ def _place(rel):
             'area': (p.get('area') or {}).get('name') or '', 'mbid': p.get('id')}
 
 
-def album_view(model, mode='all', position=None, disc_for_medium=1, coords=None):
-    """Credits, tracks and places of a cached release model for one
-    alignment. Track coordinates are [disc, n]. With `coords` (one per aligned
-    track, in order — the library's own disc/track numbers) those are used, so
-    the screens can pair them with the library's tracks even when the numbering
-    differs (a 2×CD set tagged as one disc of 26 tracks). Otherwise: the medium
-    position for a whole-release fit (audio media renumbered 1..k for
-    'audio'), `disc_for_medium` when the album is one medium of a larger
-    release."""
+def credit_sets(model, mode='all', position=None, disc_for_medium=1, coords=None):
+    """The credits of a cached release model for one alignment, still as a
+    _CreditSet (so manual corrections can be applied before anything is
+    serialised): (credit set, track coordinates in order, track rows without
+    credits, places). Every credit remembers the [disc, n] it was given on,
+    None for release level, which is all a single track's credits need too
+    (track_credits). Track coordinates: see album_view."""
     chosen = aligned_media(model.get('media') or [], mode, position)
     if coords is not None and len(coords) != sum(len(m.get('tracks') or []) for m in chosen):
         coords = None
     album = _CreditSet()
     album.add_relations(model.get('relations'), None)
-    tracks_out = []
+    rows = []
     all_coords = []
     places = []
     seen_places = set()
@@ -830,53 +866,492 @@ def album_view(model, mode='all', position=None, disc_for_medium=1, coords=None)
             where = tuple(coords[index]) if coords is not None else (disc, t['n'])
             index += 1
             all_coords.append(where)
-            per_track = _CreditSet()
-            per_track.add_relations(t.get('relations'), where)
             album.add_relations(t.get('relations'), where)
             for w in t.get('works') or []:
-                per_track.add_relations(w.get('relations'), where)
                 album.add_relations(w.get('relations'), where)
                 for parent in w.get('parents') or []:
-                    rels = (model.get('parent_credits') or {}).get(parent) or []
-                    per_track.add_relations(rels, where)
-                    album.add_relations(rels, where)
+                    album.add_relations((model.get('parent_credits') or {}).get(parent) or [], where)
             for p in t.get('places') or []:
                 k = (p['role'], p['name'])
                 if k not in seen_places:
                     seen_places.add(k)
                     places.append({'role': p['role'], 'name': p['name'], 'area': p['area']})
-            tracks_out.append({'disc': where[0], 'n': where[1], 'title': t['title'], 'length_ms': t.get('length_ms'),
-                               'credits': _serialise_credits(per_track, with_tracks=False)})
+            rows.append({'disc': where[0], 'n': where[1], 'title': t['title'], 'length_ms': t.get('length_ms')})
     for p in model.get('places') or []:
         k = (p['role'], p['name'])
         if k not in seen_places:
             seen_places.add(k)
             places.insert(0, {'role': p['role'], 'name': p['name'], 'area': p['area']})
-    return _serialise_credits(album, all_tracks=all_coords), tracks_out, places
+    return album, all_coords, rows, places
 
 
-def model_people(model):
-    """mbid -> (name, set of (group, role, attr)) for everybody credited."""
+def track_credits(cset, where):
+    """The credits of the one track at `where` ([disc, n]), in display order,
+    without `tracks`: the slots of the album's set that were given there."""
+    sub = _CreditSet()
+    for key, slots in cset.entries.items():
+        for pk, slot in slots.items():
+            if where in slot['where']:
+                sub.entries.setdefault(key, {})[pk] = {'person': slot['person'], 'where': {where}}
+    return _serialise_credits(sub, with_tracks=False)
+
+
+def album_view(model, mode='all', position=None, disc_for_medium=1, coords=None):
+    """Credits, tracks and places of a cached release model for one
+    alignment. Track coordinates are [disc, n]. With `coords` (one per aligned
+    track, in order — the library's own disc/track numbers) those are used, so
+    the screens can pair them with the library's tracks even when the numbering
+    differs (a 2×CD set tagged as one disc of 26 tracks). Otherwise: the medium
+    position for a whole-release fit (audio media renumbered 1..k for
+    'audio'), `disc_for_medium` when the album is one medium of a larger
+    release."""
+    cset, all_coords, rows, places = credit_sets(model, mode, position, disc_for_medium, coords)
+    tracks_out = [dict(r, credits=track_credits(cset, (r['disc'], r['n']))) for r in rows]
+    return _serialise_credits(cset, all_tracks=all_coords), tracks_out, places
+
+
+def cset_roles(cset):
+    """mbid -> (name, set of (group, role, attr)) for everybody in a credit
+    set — what the appearances index keeps. People without an MBID (added by
+    hand under a name only) cannot be found by MBID and are left out."""
     out = {}
-
-    def take(relations):
-        for rel in relations or []:
-            a = rel.get('artist') or {}
-            if rel.get('target-type') != 'artist' or not a.get('id'):
+    for key, slots in cset.entries.items():
+        for slot in slots.values():
+            mbid = slot['person'].get('mbid')
+            if not mbid:
                 continue
-            slot = out.setdefault(a['id'], [a.get('name') or '', set()])
-            for g, r, attr, _c in classify_relation(rel):
-                slot[1].add((g, r, attr))
-
-    take(model.get('relations'))
-    for m in model.get('media') or []:
-        for t in m.get('tracks') or []:
-            take(t.get('relations'))
-            for w in t.get('works') or []:
-                take(w.get('relations'))
-    for rels in (model.get('parent_credits') or {}).values():
-        take(rels)
+            entry = out.setdefault(mbid, [slot['person'].get('name') or '', set()])
+            entry[1].add((key[0], key[1], key[2]))
     return out
+
+
+# ── manual corrections to the credits ────────────────────────────────
+# The owner's corrections are stored per album (see Edits) and applied to the
+# credit set built from the release, before it is serialised, so the album's
+# lines, each track's own credits and the appearances index all agree. Keys
+# name what MusicBrainz gave (credit_key, person_key); a key that no longer
+# matches anything (the release changed) is simply ignored.
+_ROLE_RE = re.compile(r'^[a-z0-9_]{1,60}$')
+_TRACK_COORD_RE = re.compile(r'^([0-9]{1,3})\.([0-9]{1,4})$')
+OVERRIDE_LIMITS = {'lines': 500, 'people': 50, 'tracks': 1000, 'text': 300, 'key': 800}
+
+
+class OverrideError(ValueError):
+    """An override document that cannot be stored; the message says where."""
+
+
+def _ov_str(value, field, limit=OVERRIDE_LIMITS['text'], required=False):
+    if value is None:
+        value = ''
+    if not isinstance(value, str):
+        raise OverrideError(f'{field}: text expected')
+    s = clean_text(value)
+    if len(s) > limit:
+        raise OverrideError(f'{field}: too long')
+    if required and not s:
+        raise OverrideError(f'{field}: empty')
+    return s
+
+
+def _ov_key(value, field):
+    if not isinstance(value, str) or not value or len(value) > OVERRIDE_LIMITS['key']:
+        raise OverrideError(f'{field}: key expected')
+    return clean_text(value)
+
+
+def _ov_person_key(value, field):
+    key = _ov_key(value, field)
+    if UUID_RE.fullmatch(key):
+        return key.lower()
+    if key.startswith('name:'):
+        return 'name:' + normalise(key[5:])
+    raise OverrideError(f'{field}: person key expected (mbid or name:…)')
+
+
+def _ov_mbid(value, field):
+    if value is None or value == '':
+        return None
+    if not isinstance(value, str) or not UUID_RE.fullmatch(value):
+        raise OverrideError(f'{field}: mbid expected')
+    return value.lower()
+
+
+def _ov_artist_id(value, field):
+    if value is None or value == '' or value == 0 or value == '0':
+        return None
+    if isinstance(value, bool) or not isinstance(value, (int, str)):
+        raise OverrideError(f'{field}: artist id expected')
+    try:
+        n = int(value)
+    except ValueError:
+        raise OverrideError(f'{field}: artist id expected')
+    if n <= 0:
+        raise OverrideError(f'{field}: artist id expected')
+    return n
+
+
+def _ov_list(value, field, limit):
+    if value is None:
+        return []
+    if not isinstance(value, list):
+        raise OverrideError(f'{field}: list expected')
+    if len(value) > limit:
+        raise OverrideError(f'{field}: too many items')
+    return value
+
+
+def _ov_dict(value, field, limit):
+    if value is None:
+        return {}
+    if not isinstance(value, dict):
+        raise OverrideError(f'{field}: object expected')
+    if len(value) > limit:
+        raise OverrideError(f'{field}: too many items')
+    return value
+
+
+def _ov_line(value, field):
+    """group/role/attr/credit of a credit line."""
+    if not isinstance(value, dict):
+        raise OverrideError(f'{field}: object expected')
+    group = _ov_str(value.get('group'), f'{field}.group', 40)
+    if group not in GROUP_ORDER:
+        raise OverrideError(f'{field}.group: one of {", ".join(GROUP_ORDER)}')
+    role = snake(_ov_str(value.get('role'), f'{field}.role', 60, required=True))
+    if not _ROLE_RE.match(role):
+        raise OverrideError(f'{field}.role: invalid')
+    return {'group': group, 'role': role,
+            'attr': _ov_str(value.get('attr'), f'{field}.attr', 200).lower(),
+            'credit': _ov_str(value.get('credit'), f'{field}.credit', 200)}
+
+
+def _ov_new_person(value, field):
+    if not isinstance(value, dict):
+        raise OverrideError(f'{field}: object expected')
+    return {'name': _ov_str(value.get('name'), f'{field}.name', required=True),
+            'artist_id': _ov_artist_id(value.get('artist_id'), f'{field}.artist_id'),
+            'mbid': _ov_mbid(value.get('mbid'), f'{field}.mbid')}
+
+
+def _ov_ops(doc, field, track_level):
+    out = {}
+    hide = [_ov_key(k, f'{field}hide[{i}]') for i, k in enumerate(_ov_list(doc.get('hide'), f'{field}hide',
+                                                                            OVERRIDE_LIMITS['lines']))]
+    if hide:
+        out['hide'] = sorted(set(hide))
+    people = {}
+    for k, v in _ov_dict(doc.get('people'), f'{field}people', OVERRIDE_LIMITS['lines']).items():
+        pk = _ov_person_key(k, f'{field}people')
+        if not isinstance(v, dict):
+            raise OverrideError(f'{field}people[{k}]: object expected')
+        # null keeps what MusicBrainz gave; an empty value clears it
+        # (artist_id 0: no library artist, mbid "": no MusicBrainz link)
+        change = {}
+        if v.get('name') is not None:
+            change['name'] = _ov_str(v.get('name'), f'{field}people[{k}].name', required=True)
+        if v.get('artist_id') is not None:
+            change['artist_id'] = _ov_artist_id(v.get('artist_id'), f'{field}people[{k}].artist_id') or 0
+        if v.get('mbid') is not None:
+            change['mbid'] = _ov_mbid(v.get('mbid'), f'{field}people[{k}].mbid') or ''
+        if change:
+            people[pk] = change
+    if people:
+        out['people'] = people
+    removals = {}
+    for k, v in _ov_dict(doc.get('remove_people'), f'{field}remove_people', OVERRIDE_LIMITS['lines']).items():
+        ek = _ov_key(k, f'{field}remove_people')
+        keys = [_ov_person_key(p, f'{field}remove_people[{k}]')
+                for p in _ov_list(v, f'{field}remove_people[{k}]', OVERRIDE_LIMITS['people'])]
+        if keys:
+            removals[ek] = sorted(set(keys))
+    if removals:
+        out['remove_people'] = removals
+    entries = {}
+    for k, v in _ov_dict(doc.get('entries'), f'{field}entries', OVERRIDE_LIMITS['lines']).items():
+        entries[_ov_key(k, f'{field}entries')] = _ov_line(v, f'{field}entries[{k}]')
+    if entries:
+        out['entries'] = entries
+    adds = []
+    for i, line in enumerate(_ov_list(doc.get('add'), f'{field}add', OVERRIDE_LIMITS['lines'])):
+        where = f'{field}add[{i}]'
+        item = _ov_line(line, where)
+        item['people'] = [_ov_new_person(p, f'{where}.people[{j}]')
+                          for j, p in enumerate(_ov_list(line.get('people'), f'{where}.people',
+                                                         OVERRIDE_LIMITS['people']))]
+        if not item['people']:
+            raise OverrideError(f'{where}.people: at least one person')
+        if not track_level:
+            tracks = line.get('tracks')
+            if tracks is None:
+                item['tracks'] = None
+            else:
+                coords = []
+                for c in _ov_list(tracks, f'{where}.tracks', OVERRIDE_LIMITS['tracks']):
+                    if not isinstance(c, (list, tuple)) or len(c) != 2 \
+                            or not all(isinstance(x, int) and not isinstance(x, bool) and 0 < x < 10000 for x in c):
+                        raise OverrideError(f'{where}.tracks: [disc, n] pairs expected')
+                    if [c[0], c[1]] not in coords:
+                        coords.append([c[0], c[1]])
+                item['tracks'] = sorted(coords) or None
+        adds.append(item)
+    if adds:
+        out['add'] = adds
+    return out
+
+
+def validate_album_overrides(doc):
+    """The override document of one album, checked and normalised (see the
+    contract in ARCHITECTURE.md); `{}` means "as MusicBrainz gives it".
+    Raises OverrideError."""
+    doc = _ov_dict(doc, 'overrides', 20)
+    unknown = set(doc) - {'hide', 'people', 'remove_people', 'entries', 'add', 'tracks', 'about_hidden'}
+    if unknown:
+        raise OverrideError('unknown fields: ' + ', '.join(sorted(unknown)))
+    out = _ov_ops(doc, '', track_level=False)
+    tracks = {}
+    for k, v in _ov_dict(doc.get('tracks'), 'tracks', OVERRIDE_LIMITS['tracks']).items():
+        m = _TRACK_COORD_RE.match(str(k))
+        if not m:
+            raise OverrideError(f'tracks[{k}]: "disc.n" expected')
+        v = _ov_dict(v, f'tracks[{k}]', 10)
+        extra = set(v) - {'hide', 'people', 'remove_people', 'entries', 'add'}
+        if extra:
+            raise OverrideError(f'tracks[{k}]: unknown fields: ' + ', '.join(sorted(extra)))
+        ops = _ov_ops(v, f'tracks[{k}].', track_level=True)
+        if ops:
+            tracks[f'{int(m.group(1))}.{int(m.group(2))}'] = ops
+    if tracks:
+        out['tracks'] = tracks
+    hidden = doc.get('about_hidden')
+    if hidden is not None and not isinstance(hidden, bool):
+        raise OverrideError('about_hidden: true or false')
+    if hidden:
+        out['about_hidden'] = True
+    return out
+
+
+def validate_artist_overrides(doc):
+    doc = _ov_dict(doc, 'overrides', 10)
+    unknown = set(doc) - {'name', 'bio_hidden', 'hide_members'}
+    if unknown:
+        raise OverrideError('unknown fields: ' + ', '.join(sorted(unknown)))
+    out = {}
+    if doc.get('name') is not None:
+        name = _ov_str(doc.get('name'), 'name')
+        if name:
+            out['name'] = name
+    hidden = doc.get('bio_hidden')
+    if hidden is not None and not isinstance(hidden, bool):
+        raise OverrideError('bio_hidden: true or false')
+    if hidden:
+        out['bio_hidden'] = True
+    members = [_ov_person_key(k, f'hide_members[{i}]')
+               for i, k in enumerate(_ov_list(doc.get('hide_members'), 'hide_members', OVERRIDE_LIMITS['lines']))]
+    if members:
+        out['hide_members'] = sorted(set(members))
+    return out
+
+
+def _find_entry(cset, key):
+    for k in cset.entries:
+        if credit_key(k) == key:
+            return k
+    return None
+
+
+def _merge_slot(entry, pk, slot):
+    have = entry.get(pk)
+    if have is None:
+        entry[pk] = slot
+    else:
+        have['where'] |= slot['where']
+        for field in ('artist_id', '_manual', 'credited_as'):
+            if field in slot['person'] and field not in have['person']:
+                have['person'][field] = slot['person'][field]
+
+
+def _ops_on_set(cset, ops, where=None, coords=()):
+    """Apply one level of corrections (hide, remove_people, people, entries,
+    add) to `cset`. With `where` ([disc, n]) they only touch what the set
+    holds for that track. Returns True when anything changed."""
+    changed = False
+    # hide: a whole line, or its credits on one track
+    for key in ops.get('hide') or []:
+        k = _find_entry(cset, key)
+        if k is None:
+            continue
+        if where is None:
+            del cset.entries[k]
+            changed = True
+            continue
+        for pk in list(cset.entries[k]):
+            slot = cset.entries[k][pk]
+            if where in slot['where']:
+                slot['where'].discard(where)
+                changed = True
+                if not slot['where']:
+                    del cset.entries[k][pk]
+        if not cset.entries[k]:
+            del cset.entries[k]
+    # remove_people: one person off one line
+    for key, people in (ops.get('remove_people') or {}).items():
+        k = _find_entry(cset, key)
+        if k is None:
+            continue
+        for pk in people:
+            slot = cset.entries[k].get(pk)
+            if slot is None:
+                continue
+            if where is None:
+                del cset.entries[k][pk]
+                changed = True
+            elif where in slot['where']:
+                slot['where'].discard(where)
+                changed = True
+                if not slot['where']:
+                    del cset.entries[k][pk]
+        if not cset.entries[k]:
+            del cset.entries[k]
+    # people: rename or relink a person
+    for pk, change in (ops.get('people') or {}).items():
+        for k in list(cset.entries):
+            slots = cset.entries[k]
+            slot = slots.get(pk)
+            if slot is None:
+                continue
+            if where is not None:
+                if where not in slot['where']:
+                    continue
+                if slot['where'] != {where}:
+                    # only this track's credit changes: split it off
+                    slot['where'].discard(where)
+                    slot = {'person': dict(slot['person']), 'where': {where}}
+                else:
+                    del slots[pk]
+            else:
+                del slots[pk]
+            person = dict(slot['person'])
+            if change.get('name'):
+                if person.get('credited_as') == change['name']:
+                    person.pop('credited_as', None)
+                person['name'] = change['name']
+            if 'mbid' in change:
+                person['mbid'] = change['mbid'] or None
+            if 'artist_id' in change:
+                person['artist_id'] = change['artist_id'] or None
+                person['_manual'] = True        # linked (or unlinked) by hand: not guessed again
+            slot['person'] = person
+            _merge_slot(slots, person_key(person), slot)
+            changed = True
+    # entries: a line's role, instrument or voice changes
+    for key, line in (ops.get('entries') or {}).items():
+        k = _find_entry(cset, key)
+        if k is None:
+            continue
+        new = (line['group'], line['role'], line['attr'], line['credit'])
+        if new == k:
+            continue
+        target = cset.entries.setdefault(new, {})
+        for pk in list(cset.entries[k]):
+            slot = cset.entries[k][pk]
+            if where is not None:
+                if where not in slot['where']:
+                    continue
+                slot['where'].discard(where)
+                moved = {'person': dict(slot['person']), 'where': {where}}
+                if not slot['where']:
+                    del cset.entries[k][pk]
+            else:
+                moved = slot
+                del cset.entries[k][pk]
+            _merge_slot(target, pk, moved)
+            changed = True
+        if not cset.entries[k]:
+            del cset.entries[k]
+        if not target:
+            del cset.entries[new]
+    # add: new lines (merged into an existing one with the same key)
+    for line in ops.get('add') or []:
+        if where is not None:
+            places = {where}
+        elif line.get('tracks'):
+            places = {tuple(c) for c in line['tracks']}
+        else:
+            places = {None}
+        k = (line['group'], line['role'], line['attr'], line['credit'])
+        entry = cset.entries.setdefault(k, {})
+        for p in line['people']:
+            person = {'name': p['name'], 'mbid': p.get('mbid')}
+            if p.get('artist_id'):
+                person['artist_id'] = p['artist_id']
+                person['_manual'] = True
+            _merge_slot(entry, person_key(person), {'person': person, 'where': set(places)})
+            changed = True
+    return changed
+
+
+def apply_album_overrides(cset, overrides, coords=()):
+    """Apply an album's validated override document to its credit set, in
+    place: per-track corrections first (their keys are the ones MusicBrainz
+    gave, before an album-wide role change renames a line), then the album's.
+    `about_hidden` is the caller's (it is not a credit). Returns True when
+    anything changed."""
+    ov = overrides or {}
+    changed = False
+    coords = [tuple(c) for c in coords or ()]
+    for coord, ops in (ov.get('tracks') or {}).items():
+        m = _TRACK_COORD_RE.match(coord)
+        if not m:
+            continue
+        where = (int(m.group(1)), int(m.group(2)))
+        first = {k: ops[k] for k in ('hide', 'remove_people', 'people', 'entries') if k in ops}
+        changed = _ops_on_set(cset, first, where) or changed
+    album_ops = {k: ov[k] for k in ('hide', 'remove_people', 'people', 'entries', 'add') if k in ov}
+    changed = _ops_on_set(cset, album_ops) or changed
+    for coord, ops in (ov.get('tracks') or {}).items():
+        m = _TRACK_COORD_RE.match(coord)
+        if m and ops.get('add'):
+            changed = _ops_on_set(cset, {'add': ops['add']}, (int(m.group(1)), int(m.group(2)))) or changed
+    return changed
+
+
+def keyed_credits(entries):
+    """Serialised credit entries (album or one track) with their stable keys
+    added, people included. Internal markers are dropped."""
+    for e in entries:
+        e['key'] = credit_key(e['group'], e['role'], e['attr'], e['credit'])
+        for p in e['people']:
+            p.pop('_manual', None)
+            p['key'] = person_key(p)
+    return entries
+
+
+def apply_artist_overrides(answer, overrides):
+    """An /api/meta/artist (or /person) answer with the owner's corrections:
+    the name shown, the Wikipedia text hidden, members (or bands) taken off.
+    In place; returns True when anything changed."""
+    ov = overrides or {}
+    changed = False
+    art = answer.get('artist')
+    if art:
+        if ov.get('name') and ov['name'] != art.get('name'):
+            art['name'] = ov['name']
+            changed = True
+        hidden = set(ov.get('hide_members') or [])
+        for field in ('members', 'member_of'):
+            items = art.get(field) or []
+            kept = [m for m in items if person_key(m) not in hidden]
+            if len(kept) != len(items):
+                art[field] = kept
+                changed = True
+    if ov.get('bio_hidden') and answer.get('bio'):
+        answer['bio'] = None
+        if art and isinstance(art.get('urls'), dict):
+            art['urls'] = {k: v for k, v in art['urls'].items() if k != 'wikipedia'}
+        changed = True
+    if changed:
+        answer['edited'] = True
+    return changed
 
 
 # ── artists ──────────────────────────────────────────────────────────
@@ -914,6 +1389,14 @@ def build_artist_model(a):
         'members': members, 'member_of': member_of, 'urls': urls, 'wikidata': wikidata,
         'aliases': sorted({x.get('name') for x in a.get('aliases') or [] if x.get('name')}),
     }
+
+
+def artist_summary(a):
+    """One MusicBrainz artist search result, for a manual choice."""
+    begin, end, _ended = _life(a.get('life-span'))
+    return {'mbid': a.get('id'), 'name': a.get('name') or '', 'disambiguation': a.get('disambiguation') or '',
+            'type': (a.get('type') or '').lower(), 'area': (a.get('area') or {}).get('name') or '',
+            'begin': begin, 'end': end, 'score': a.get('score')}
 
 
 # ── Wikipedia ────────────────────────────────────────────────────────
@@ -1400,7 +1883,18 @@ class Cache:
                 pass
         return {'albums': albums, 'artists': artists, 'bytes': size}
 
-    # pins
+    # pins — legacy: manual edition choices now live in Edits; the table stays
+    # so an older database can be read once and emptied (Edits.migrate_pins).
+    def all_pins(self):
+        with self._lock:
+            rows = self._db.execute('SELECT fingerprint, album_id, mbid, title, artist, created FROM pins').fetchall()
+        return [{'fingerprint': r[0], 'album_id': r[1], 'mbid': r[2], 'title': r[3] or '', 'artist': r[4] or '',
+                 'created': r[5]} for r in rows]
+
+    def delete_pins(self, fingerprints):
+        with self._lock:
+            self._db.executemany('DELETE FROM pins WHERE fingerprint=?', [(fp,) for fp in fingerprints])
+
     def get_pin(self, fp):
         with self._lock:
             row = self._db.execute('SELECT mbid, album_id FROM pins WHERE fingerprint=?', (fp,)).fetchone()
@@ -1453,6 +1947,204 @@ class Cache:
                              (album_id, title, artist, fp, self._clock()))
 
 
+# ── manual edits ─────────────────────────────────────────────────────
+class Edits:
+    """What the owner decided by hand, kept apart from the cache: one small
+    JSON file per album (keyed by fingerprint, so it survives a rescan that
+    renumbers the albums) in albums/, one per library artist (keyed by the
+    normalised name, like the artist match) in artists/.
+
+    Album document: {key, album_id, title, artist, pin: mbid|"none"|null,
+    overrides: {...}, updated}. Artist document: {key, artist_id, name, mbid
+    (the match the corrections were made on), pin, overrides, updated}. A
+    document with neither a pin nor overrides is deleted.
+
+    Everything is read once and kept in memory; the directory's mtime is
+    checked on every access, so files put back by a backup restore are picked
+    up without a restart."""
+
+    KINDS = ('albums', 'artists')
+
+    def __init__(self, directory, clock=None):
+        self.directory = directory
+        self._clock = clock or time.time
+        self._lock = threading.RLock()
+        self._docs = {kind: None for kind in self.KINDS}
+        self._stamp = {kind: None for kind in self.KINDS}
+
+    def _dir(self, kind):
+        return os.path.join(self.directory, kind)
+
+    @staticmethod
+    def _filename(key):
+        if re.fullmatch(r'[0-9a-f]{1,40}', key):
+            return key + '.json'
+        return hashlib.sha1(key.encode('utf-8')).hexdigest()[:24] + '.json'
+
+    def _mtime(self, kind):
+        try:
+            return os.stat(self._dir(kind)).st_mtime_ns
+        except OSError:
+            return None
+
+    def _load(self, kind):
+        stamp = self._mtime(kind)
+        with self._lock:
+            if self._docs[kind] is not None and self._stamp[kind] == stamp:
+                return self._docs[kind]
+            docs = {}
+            if stamp is not None:
+                try:
+                    names = sorted(os.listdir(self._dir(kind)))
+                except OSError:
+                    names = []
+                for name in names:
+                    if not name.endswith('.json'):
+                        continue
+                    try:
+                        with open(os.path.join(self._dir(kind), name), encoding='utf-8') as f:
+                            doc = json.load(f)
+                    except (OSError, ValueError) as e:
+                        _log(f'edits: {kind}/{name} unreadable: {e}')
+                        continue
+                    if isinstance(doc, dict) and isinstance(doc.get('key'), str) and doc['key']:
+                        docs[doc['key']] = doc
+            self._docs[kind] = docs
+            self._stamp[kind] = stamp
+            return docs
+
+    def _save(self, kind, key, doc):
+        with self._lock:
+            docs = self._load(kind)
+            path = os.path.join(self._dir(kind), self._filename(key))
+            if doc is None:
+                try:
+                    os.remove(path)
+                except FileNotFoundError:
+                    pass
+                docs.pop(key, None)
+            else:
+                os.makedirs(self._dir(kind), mode=0o755, exist_ok=True)
+                tmp = path + '.tmp'
+                with open(tmp, 'w', encoding='utf-8') as f:
+                    json.dump(doc, f, ensure_ascii=False, indent=1, sort_keys=True)
+                    f.flush()
+                    os.fsync(f.fileno())
+                os.replace(tmp, path)
+                docs[key] = doc
+            self._stamp[kind] = self._mtime(kind)
+
+    def _update(self, kind, key, **fields):
+        with self._lock:
+            doc = dict(self._load(kind).get(key) or {'key': key})
+            doc.update(fields)
+            doc['updated'] = self._clock()
+            if not doc.get('pin') and not doc.get('overrides'):
+                self._save(kind, key, None)
+                return None
+            self._save(kind, key, doc)
+            return doc
+
+    # albums
+    def album(self, fp):
+        doc = self._load('albums').get(fp)
+        return copy.deepcopy(doc) if doc else None
+
+    def get_pin(self, fp):
+        doc = self._load('albums').get(fp)
+        if not doc or not doc.get('pin'):
+            return None
+        return {'mbid': doc['pin'], 'album_id': doc.get('album_id')}
+
+    def set_pin(self, fp, album_id, mbid, title='', artist=''):
+        return self._update('albums', fp, pin=mbid or None, album_id=album_id, title=title, artist=artist)
+
+    def album_overrides(self, fp):
+        doc = self._load('albums').get(fp)
+        return copy.deepcopy(doc.get('overrides') or {}) if doc else {}
+
+    def set_album_overrides(self, fp, album_id, title, artist, overrides):
+        return self._update('albums', fp, overrides=overrides or {}, album_id=album_id, title=title, artist=artist)
+
+    def move_album(self, old_fp, new_fp, album_id, title, artist):
+        """An album renamed in its tags (a new fingerprint after the rescan):
+        its edition choice and corrections follow it. An album that already
+        has its own document under the new key keeps it."""
+        with self._lock:
+            docs = self._load('albums')
+            doc = docs.get(old_fp)
+            if not doc or old_fp == new_fp or new_fp in docs:
+                return False
+            moved = dict(copy.deepcopy(doc), key=new_fp, album_id=album_id, title=title, artist=artist,
+                         updated=self._clock())
+            self._save('albums', new_fp, moved)
+            self._save('albums', old_fp, None)
+            return True
+
+    def copy_artist(self, old_key, new_key, artist_id, name):
+        """The album artist's name was corrected in the tags: the artist's
+        corrections are copied to the new name (not moved, other albums may
+        still carry the old spelling)."""
+        with self._lock:
+            docs = self._load('artists')
+            doc = docs.get(old_key)
+            if not doc or old_key == new_key or new_key in docs:
+                return False
+            self._save('artists', new_key, dict(copy.deepcopy(doc), key=new_key, artist_id=artist_id, name=name,
+                                                updated=self._clock()))
+            return True
+
+    # artists
+    def artist(self, name_key):
+        doc = self._load('artists').get(name_key)
+        return copy.deepcopy(doc) if doc else None
+
+    def artist_pin(self, name_key):
+        doc = self._load('artists').get(name_key)
+        return (doc or {}).get('pin') or None
+
+    def set_artist_pin(self, name_key, artist_id, name, mbid):
+        fields = {'pin': mbid or None, 'artist_id': artist_id, 'name': name}
+        if mbid and mbid != 'none':
+            fields['mbid'] = mbid
+        return self._update('artists', name_key, **fields)
+
+    def artist_overrides(self, name_key):
+        doc = self._load('artists').get(name_key)
+        return copy.deepcopy(doc.get('overrides') or {}) if doc else {}
+
+    def set_artist_overrides(self, name_key, artist_id, name, mbid, overrides):
+        return self._update('artists', name_key, overrides=overrides or {}, artist_id=artist_id, name=name,
+                            mbid=mbid)
+
+    def artists(self):
+        return [copy.deepcopy(doc) for doc in self._load('artists').values()]
+
+    def migrate_pins(self, cache):
+        """One-time move of the edition choices an older version kept inside
+        the cache database. Idempotent: pins are deleted from the database only
+        once their file is written, and an album that already has a pin here
+        keeps it."""
+        try:
+            rows = cache.all_pins()
+        except sqlite3.Error:
+            return 0
+        moved = []
+        for row in rows:
+            fp = row['fingerprint']
+            try:
+                if not self.get_pin(fp):
+                    self._update('albums', fp, pin=row['mbid'], album_id=row['album_id'],
+                                 title=row['title'], artist=row['artist'])
+                moved.append(fp)
+            except OSError as e:
+                _log(f'edits: pin of {fp} not moved: {e}')
+        if moved:
+            cache.delete_pins(moved)
+            _log(f'edits: {len(moved)} manual edition choice(s) moved out of the cache')
+        return len(moved)
+
+
 # ── the service ──────────────────────────────────────────────────────
 class _Yield(Exception):
     """A background job steps aside for a more urgent one."""
@@ -1482,13 +2174,18 @@ def _lang_ok(lang):
 
 class MetadataService:
     def __init__(self, cache_dir=None, etc_dir=None, lyrion=None, client=None, clock=None,
-                 start_worker=True):
+                 start_worker=True, edits_dir=None):
         self.cache_dir = cache_dir or os.environ.get('HIFI_META_CACHE_DIR') or CACHE_DIR
         self.etc_dir = etc_dir or os.environ.get('HIFI_META_ETC_DIR') or ETC_DIR
+        # Next to the cache (/var/lib/hifi-player/metadata-edits on a device),
+        # unless given: a test that moves the cache moves the edits with it.
+        self.edits_dir = edits_dir or os.environ.get('HIFI_META_EDITS_DIR') or \
+            os.path.join(os.path.dirname(os.path.abspath(self.cache_dir)), EDITS_DIR_NAME)
         self.lyrion = lyrion or Lyrion()
         self.client = client or CLIENT
         self._clock = clock or time.time
         self._cache = None
+        self._edits = None
         self._cache_lock = threading.Lock()
         self._cv = threading.Condition()
         self._heap = []
@@ -1510,7 +2207,22 @@ class MetadataService:
         with self._cache_lock:
             if self._cache is None:
                 self._cache = Cache(self.cache_dir)
+                try:
+                    self.edits.migrate_pins(self._cache)
+                except Exception as e:  # noqa: BLE001 — the cache must open anyway
+                    _log(f'edits: pin migration failed: {e}')
             return self._cache
+
+    def _open_cache(self):
+        """Open the cache before reading the edits: opening it moves the
+        edition choices an older version kept inside it (Edits.migrate_pins)."""
+        return self.cache
+
+    @property
+    def edits(self):
+        if self._edits is None:
+            self._edits = Edits(self.edits_dir, clock=self._clock)
+        return self._edits
 
     def _start_worker(self):
         if self._worker is None:
@@ -1713,16 +2425,24 @@ class MetadataService:
             return {'status': 'error', 'album_id': album_id, 'message': f'lyrion: {e}'}
         if lib is None:
             return {'status': 'error', 'album_id': album_id, 'message': 'unknown album'}
+        return self._album_for(lib, lang, self.edits.album_overrides(lib['fingerprint']))
+
+    def _album_for(self, lib, lang, overrides):
+        """The /api/meta/album answer for a library album, with `overrides`
+        (the owner's corrections) applied — or as MusicBrainz gives it when
+        they are None."""
+        album_id = lib['id']
         fp = lib['fingerprint']
         job_key = f'album:{fp}'
 
         def job(ctx, _id=album_id, _lang=lang):
             self._job_album(ctx, _id, fp, _lang)
 
-        pin = self.cache.get_pin(fp)
+        pin = self.edits.get_pin(fp)
         if pin and pin['mbid'] == 'none':
-            return {'status': 'nomatch', 'album_id': album_id, 'match': {'mbid': None, 'how': 'manual'},
-                    'candidates': []}
+            return self._nomatch_answer({'status': 'nomatch', 'album_id': album_id,
+                                         'match': {'mbid': None, 'how': 'manual'}, 'candidates': []},
+                                        lib, overrides)
         if pin:
             match = {'mbid': pin['mbid'], 'how': 'manual', 'score': 100, 'release_group': None}
         else:
@@ -1735,9 +2455,11 @@ class MetadataService:
             if stale:
                 self._enqueue(job_key, job, PRIO_BACKGROUND)
             if negative:
-                return {'status': 'nomatch', 'album_id': album_id,
-                        'match': {'mbid': None, 'how': match.get('how') or 'search'},
-                        'candidates': [public_candidate(c) for c in (match.get('candidates') or [])[:5]]}
+                return self._nomatch_answer(
+                    {'status': 'nomatch', 'album_id': album_id,
+                     'match': {'mbid': None, 'how': match.get('how') or 'search'},
+                     'candidates': [public_candidate(c) for c in (match.get('candidates') or [])[:5]]},
+                    lib, overrides)
         rel_hit = self._fresh(f"release:{match['mbid']}")
         if rel_hit is None:
             status, message = self._ensure(job_key, job, PRIO_INTERACTIVE)
@@ -1747,8 +2469,9 @@ class MetadataService:
             return out
         model, negative, stale = rel_hit
         if negative:
-            return {'status': 'nomatch', 'album_id': album_id, 'match': {'mbid': match['mbid'], 'how': match.get('how')},
-                    'candidates': []}
+            return self._nomatch_answer({'status': 'nomatch', 'album_id': album_id,
+                                         'match': {'mbid': match['mbid'], 'how': match.get('how')},
+                                         'candidates': []}, lib, overrides)
         if stale:
             self._enqueue(job_key, job, PRIO_BACKGROUND)
         status = 'ok'
@@ -1762,32 +2485,71 @@ class MetadataService:
             about, wstatus = self._about(model['wikidata'], lang, PRIO_INTERACTIVE)
             if wstatus == 'pending':
                 status = 'pending'
-        return self._album_response(album_id, lib, match, model, about, status)
+        return self._album_response(album_id, lib, match, model, about, status, overrides)
 
-    def _album_response(self, album_id, lib, match, model, about, status):
-        mode, pos, ds = self._align(model, lib['tracks'])
+    @staticmethod
+    def _lib_coords(lib):
         coords = [(t['disc'] or 1, t['n'] or i + 1) for i, t in enumerate(lib['tracks'])]
-        if len(set(coords)) != len(coords):
-            coords = None       # the library's numbering is ambiguous: keep MusicBrainz's
-        credits, tracks, places = album_view(model, mode, pos, lib.get('disc') or 1, coords)
+        return coords if len(set(coords)) == len(coords) else None
+
+    def _album_cset(self, lib, model, overrides=None):
+        """The credit set of a library album's release, aligned with the
+        library's tracks and corrected by `overrides`."""
+        mode, pos, ds = self._align(model, lib['tracks'])
+        # the library's numbering, unless ambiguous: then MusicBrainz's
+        cset, coords, rows, places = credit_sets(model, mode, pos, lib.get('disc') or 1, self._lib_coords(lib))
+        applied = apply_album_overrides(cset, overrides, coords) if overrides else False
+        return {'cset': cset, 'coords': coords, 'rows': rows, 'places': places, 'mode': mode, 'pos': pos,
+                'ds': ds, 'applied': applied}
+
+    def _linked_credits(self, cset, coords, rows, match_mbid):
+        """Album credits and per-track credits serialised, people linked to
+        the library's artists, stable keys added."""
+        credits = _serialise_credits(cset, all_tracks=coords)
+        tracks = [dict(r, credits=track_credits(cset, (r['disc'], r['n']))) for r in rows]
         names = self._name_index()
         unresolved = {p['mbid'] for e in credits for p in e['people']
                       if p.get('mbid') and p['mbid'] not in self._people_ids}
         if unresolved:
             # Library ids by MBID are a local Lyrion question, but one per
             # person: asked by the worker, used by the next request.
-            self._enqueue(f'people:{match.get("mbid")}', lambda ctx, ids=unresolved: self._resolve_people_ids(ids),
+            self._enqueue(f'people:{match_mbid}', lambda ctx, ids=unresolved: self._resolve_people_ids(ids),
                           PRIO_BACKGROUND)
         for entry in credits:
             self._link_people(entry['people'], names)
         for t in tracks:
             for entry in t['credits']:
                 self._link_people(entry['people'], names)
+        keyed_credits(credits)
+        for t in tracks:
+            keyed_credits(t['credits'])
+        return credits, tracks
+
+    def _nomatch_answer(self, out, lib, overrides):
+        """A "no match" answer still carries the credits the owner added by
+        hand (an album MusicBrainz does not know)."""
+        if not overrides:
+            return out
+        cset = _CreditSet()
+        coords = self._lib_coords(lib) or []
+        if apply_album_overrides(cset, overrides, coords) and cset.entries:
+            out['credits'], _tracks = self._linked_credits(cset, coords, [], 'nomatch:' + lib['fingerprint'])
+            out['edited'] = True
+        return out
+
+    def _album_response(self, album_id, lib, match, model, about, status, overrides=None):
+        view = self._album_cset(lib, model, overrides)
+        mode, pos, ds = view['mode'], view['pos'], view['ds']
+        credits, tracks = self._linked_credits(view['cset'], view['coords'], view['rows'], match.get('mbid'))
+        edited = view['applied']
+        if overrides and overrides.get('about_hidden') and about:
+            about = None
+            edited = True
         url = f"{MB_WEB}/release/{model['mbid']}"
         score = match.get('score')
         if score is None and ds:
             score = ds['score']
-        return {
+        out = {
             'status': status,
             'album_id': album_id,
             'match': {'mbid': model['mbid'], 'release_group': model.get('release_group'),
@@ -1802,10 +2564,13 @@ class MetadataService:
             },
             'credits': credits,
             'tracks': tracks,
-            'places': places,
+            'places': view['places'],
             'about': about,
             'attribution': [{'source': 'MusicBrainz', 'url': url, 'license': 'CC0'}],
         }
+        if edited:
+            out['edited'] = True
+        return out
 
     def _align(self, model, lib_tracks):
         media = [{'position': m['position'], 'format': m['format'], 'track-count': m['track_count'],
@@ -1823,6 +2588,8 @@ class MetadataService:
 
     def _link_people(self, people, names):
         for p in people:
+            if p.get('_manual'):
+                continue        # linked by hand (see apply_album_overrides)
             aid = None
             known = self._people_ids.get(p.get('mbid'))
             if known and known[0] is not None:
@@ -1846,8 +2613,9 @@ class MetadataService:
         lib = self._library_album(album_id)
         if lib is None or lib['fingerprint'] != fp:
             return
-        pin = self.cache.get_pin(fp)
+        pin = self.edits.get_pin(fp)
         if pin and pin['mbid'] == 'none':
+            self._index_appearances(fp, lib, None)
             return
         if pin:
             mbid, how = pin['mbid'], 'manual'
@@ -1860,16 +2628,126 @@ class MetadataService:
                 match = hit[0]
             mbid, how = match.get('mbid'), match.get('how')
             if not mbid:
+                self._index_appearances(fp, lib, None)
                 return
         model = self._release_model(ctx, mbid)
         if model is None:
             return
-        people = model_people(model)
-        roles = {k: v[1] for k, v in people.items()}
-        self.cache.set_appearances(fp, album_id, lib['title'], lib['artist'], lib.get('artwork_track_id'), roles)
+        people = self._index_appearances(fp, lib, model)
         self._resolve_people_ids(people.keys())
         if model.get('wikidata'):
             self._job_about(ctx, model['wikidata'], lang)
+
+    def _index_appearances(self, fp, lib, model):
+        """Who is credited on this album, as the owner corrected it, for the
+        "credited on" list of a person's page. Without a release (no match)
+        only the people added by hand are there."""
+        overrides = self.edits.album_overrides(fp)
+        if model is not None:
+            cset = self._album_cset(lib, model, overrides)['cset']
+        else:
+            cset = _CreditSet()
+            if overrides:
+                apply_album_overrides(cset, overrides, self._lib_coords(lib) or [])
+        people = cset_roles(cset)
+        if people or model is not None:
+            self.cache.set_appearances(fp, lib['id'], lib['title'], lib['artist'], lib.get('artwork_track_id'),
+                                       {k: v[1] for k, v in people.items()})
+        else:
+            self.cache.drop_appearances(fp)
+        return people
+
+    def _reindex_album(self, lib):
+        """After a correction: rebuild the album's appearances from what is
+        cached (no request); an album not looked up yet is indexed by its job."""
+        fp = lib['fingerprint']
+        pin = self.edits.get_pin(fp)
+        model = None
+        if pin and pin['mbid'] == 'none':
+            mbid = None
+        elif pin:
+            mbid = pin['mbid']
+        else:
+            hit = self._fresh(f'match:{fp}')
+            if hit is None:
+                return
+            mbid = None if hit[1] else hit[0].get('mbid')
+        if mbid:
+            rel = self._fresh(f'release:{mbid}')
+            if rel is None or rel[1]:
+                return
+            model = rel[0]
+        self._index_appearances(fp, lib, model)
+
+    def album_edit(self, album_id, lang='en'):
+        """What the Library editor needs for one album: the answer as
+        MusicBrainz gives it (credits with their keys), the stored corrections
+        and the answer with them applied."""
+        lang = _lang_ok(lang)
+        try:
+            lib = self._library_album(album_id)
+        except LyrionError as e:
+            return {'status': 'error', 'album_id': album_id, 'message': f'lyrion: {e}'}
+        if lib is None:
+            return {'status': 'error', 'album_id': album_id, 'message': 'unknown album'}
+        overrides = self.edits.album_overrides(lib['fingerprint'])
+        if self.online_enabled():
+            raw = self._album_for(lib, lang, None)
+            effective = self._album_for(lib, lang, overrides)
+        else:
+            raw = {'status': 'disabled', 'album_id': album_id}
+            effective = dict(raw)
+        out = dict(raw)
+        out['overrides'] = overrides
+        out['effective'] = effective
+        return out
+
+    def album_renamed(self, before, album_id):
+        """Called by the tag editor once Lyrion has rescanned files whose
+        album, album artist or artist changed. `before` = {title, artist,
+        track_count} of the album as it was; `album_id` = the album those
+        files belong to now. Moves the edits to the new fingerprint (and
+        copies the artist's corrections to a corrected artist name).
+        Returns the new fingerprint, or None when nothing had to move."""
+        try:
+            lib = self._library_album(album_id)
+        except LyrionError as e:
+            _log(f'album {album_id} after rename: {e}')
+            return None
+        if lib is None:
+            return None
+        old_fp = fingerprint(before.get('title') or '', before.get('artist') or '', before.get('track_count') or 0)
+        moved = self.edits.move_album(old_fp, lib['fingerprint'], lib['id'], lib['title'], lib['artist'])
+        old_artist, new_artist = normalise(before.get('artist') or ''), normalise(lib['artist'])
+        if old_artist and new_artist and old_artist != new_artist:
+            self.edits.copy_artist(old_artist, new_artist, lib.get('artist_id'), lib['artist'])
+        if moved:
+            _log(f'album {album_id}: edits moved {old_fp} -> {lib["fingerprint"]}')
+        return lib['fingerprint'] if moved else None
+
+    def album_edit_save(self, album_id, overrides, lang='en'):
+        """Replace an album's corrections (`{}` = back to MusicBrainz). Raises
+        OverrideError for a document that cannot be stored. Answers with the
+        corrected album (its fields at the top level, and again under
+        `effective`) plus the stored `overrides`."""
+        lang = _lang_ok(lang)
+        overrides = validate_album_overrides(overrides)
+        try:
+            lib = self._library_album(album_id)
+        except LyrionError as e:
+            return {'status': 'error', 'album_id': album_id, 'message': f'lyrion: {e}'}
+        if lib is None:
+            return {'status': 'error', 'album_id': album_id, 'message': 'unknown album'}
+        self.edits.set_album_overrides(lib['fingerprint'], lib['id'], lib['title'], lib['artist'], overrides)
+        try:
+            self._reindex_album(lib)
+        except sqlite3.Error as e:
+            _log(f'appearances of album {album_id} not rebuilt: {e}')
+        if self.online_enabled():
+            effective = self._album_for(lib, lang, overrides)
+        else:
+            effective = {'status': 'disabled', 'album_id': album_id}
+        return dict(effective, effective=copy.deepcopy(effective), overrides=overrides)
 
     def _store_match(self, fp, lib, match):
         """The match is keyed by the album's fingerprint (Lyrion renumbers
@@ -2102,7 +2980,7 @@ class MetadataService:
         if lib is None:
             return {'status': 'error', 'album_id': album_id, 'message': 'unknown album', 'candidates': []}
         fp = lib['fingerprint']
-        pin = self.cache.get_pin(fp)
+        pin = self.edits.get_pin(fp)
         hit = self._fresh(f'match:{fp}')
         key = f'candidates:{fp}'
 
@@ -2155,7 +3033,7 @@ class MetadataService:
             self._store_match(fp, lib, match)
         else:
             match = hit[0]
-        pin = self.cache.get_pin(fp)
+        pin = self.edits.get_pin(fp)
         current = pin['mbid'] if pin and pin['mbid'] != 'none' else match.get('mbid')
         rg = match.get('release_group')
         if current and not rg:
@@ -2182,23 +3060,35 @@ class MetadataService:
                 return {'status': 'error', 'album_id': album_id, 'message': 'invalid mbid'}
             mbid = mbid.lower()
         fp = lib['fingerprint']
-        self.cache.set_pin(fp, album_id, mbid, lib['title'], lib['artist'])
+        self.edits.set_pin(fp, album_id, mbid, lib['title'], lib['artist'])
         if mbid == 'none':
-            self.cache.drop_appearances(fp)
+            # only the people added by hand stay findable
+            self._index_appearances(fp, lib, None)
         self._failures.pop(f'album:{fp}', None)
         return self.album(album_id, lang=lang)
 
     # ── artists ──
+    def _library_artist(self, artist_id):
+        """(Lyrion artist, None) or (None, error answer)."""
+        try:
+            art = self.lyrion.artist(artist_id)
+        except LyrionError as e:
+            return None, {'status': 'error', 'artist_id': artist_id, 'message': f'lyrion: {e}'}
+        if art is None:
+            return None, {'status': 'error', 'artist_id': artist_id, 'message': 'unknown artist'}
+        return art, None
+
     def artist(self, artist_id, lang='en'):
         lang = _lang_ok(lang)
         if not self.online_enabled():
             return {'status': 'disabled', 'artist_id': artist_id}
-        try:
-            art = self.lyrion.artist(artist_id)
-        except LyrionError as e:
-            return {'status': 'error', 'artist_id': artist_id, 'message': f'lyrion: {e}'}
-        if art is None:
-            return {'status': 'error', 'artist_id': artist_id, 'message': 'unknown artist'}
+        art, error = self._library_artist(artist_id)
+        if error:
+            return error
+        self._open_cache()
+        return self._artist_for(artist_id, art, lang, self.edits.artist_overrides(normalise(art['name'])))
+
+    def _artist_for(self, artist_id, art, lang, overrides):
         name_key = normalise(art['name'])
         if not name_key or is_various(art['name']):
             return {'status': 'nomatch', 'artist_id': artist_id}
@@ -2207,6 +3097,11 @@ class MetadataService:
         def job(ctx, _id=artist_id, _name=art['name']):
             self._job_artist(ctx, _id, _name, lang)
 
+        pin = self.edits.artist_pin(name_key)
+        if pin == 'none':
+            return {'status': 'nomatch', 'artist_id': artist_id}
+        if pin:
+            return self._artist_response(pin, lang, artist_id, key, job, overrides)
         hit = self._fresh(f'artistmatch:{name_key}')
         if hit is None or (hit[1] and hit[2]):
             status, message = self._ensure(key, job, PRIO_INTERACTIVE)
@@ -2219,7 +3114,7 @@ class MetadataService:
             self._enqueue(key, job, PRIO_BACKGROUND)
         if negative:
             return {'status': 'nomatch', 'artist_id': artist_id}
-        return self._artist_response(match['mbid'], lang, artist_id, key, job)
+        return self._artist_response(match['mbid'], lang, artist_id, key, job, overrides)
 
     def person(self, mbid, lang='en'):
         lang = _lang_ok(lang)
@@ -2238,12 +3133,13 @@ class MetadataService:
             artist_id = self.lyrion.artist_id_by_mbid(mbid)
         except LyrionError:
             pass
-        out = self._artist_response(mbid, lang, artist_id, key, job)
+        self._open_cache()
+        out = self._artist_response(mbid, lang, artist_id, key, job, self._artist_overrides_for_mbid(mbid))
         if out.get('artist') and out.get('artist_id') is None:
             out['artist_id'] = self._name_index().get(normalise(out['artist']['name']))
         return out
 
-    def _artist_response(self, mbid, lang, artist_id, key, job):
+    def _artist_response(self, mbid, lang, artist_id, key, job, overrides=None):
         hit = self._fresh(f'artist:{mbid}')
         if hit is None:
             status, message = self._ensure(key, job, PRIO_INTERACTIVE)
@@ -2270,9 +3166,14 @@ class MetadataService:
         artist['member_of'] = [dict(m) for m in artist['member_of']]
         self._link_people(artist['members'], names)
         self._link_people(artist['member_of'], names)
+        for m in artist['members'] + artist['member_of']:
+            m['key'] = person_key(m)
         url = f'{MB_WEB}/artist/{mbid}'
-        return {'status': status, 'artist_id': artist_id, 'artist': artist, 'bio': bio,
-                'attribution': [{'source': 'MusicBrainz', 'url': url, 'license': 'CC0'}]}
+        out = {'status': status, 'artist_id': artist_id, 'artist': artist, 'bio': bio,
+               'attribution': [{'source': 'MusicBrainz', 'url': url, 'license': 'CC0'}]}
+        if overrides:
+            apply_artist_overrides(out, overrides)
+        return out
 
     def _artist_model(self, ctx, mbid, lang):
         hit = self._fresh(f'artist:{mbid}')
@@ -2295,6 +3196,13 @@ class MetadataService:
 
     def _job_artist(self, ctx, artist_id, name, lang):
         name_key = normalise(name)
+        pin = self.edits.artist_pin(name_key)
+        if pin == 'none':
+            return
+        if pin:
+            self._artist_model(ctx, pin, lang)
+            self._people_ids[pin] = (artist_id, time.monotonic())
+            return
         hit = self._fresh(f'artistmatch:{name_key}')
         if hit is None or hit[2]:
             match = self._match_artist(ctx, artist_id, name)
@@ -2304,6 +3212,178 @@ class MetadataService:
         if match.get('mbid'):
             self._artist_model(ctx, match['mbid'], lang)
             self._people_ids[match['mbid']] = (artist_id, time.monotonic())
+
+    def _artist_overrides_for_mbid(self, mbid):
+        """The corrections made on the library artist matched to `mbid` — a
+        person page (/api/meta/person) of the same artist shows them too."""
+        for doc in self.edits.artists():
+            if not doc.get('overrides'):
+                continue
+            pin = doc.get('pin')
+            if pin == mbid:
+                return doc['overrides']
+            if pin:
+                continue
+            current = doc.get('mbid')
+            if not current:
+                hit = self._fresh(f"artistmatch:{doc['key']}")
+                current = hit[0].get('mbid') if hit and not hit[1] else None
+            if current == mbid:
+                return doc['overrides']
+        return {}
+
+    def _artist_match_info(self, name_key):
+        pin = self.edits.artist_pin(name_key)
+        if pin:
+            return {'mbid': None if pin == 'none' else pin, 'how': 'manual'}
+        hit = self._fresh(f'artistmatch:{name_key}') if name_key else None
+        if hit is None:
+            return {'mbid': None, 'how': None}
+        return {'mbid': None if hit[1] else hit[0].get('mbid'), 'how': hit[0].get('how') or 'search'}
+
+    def artist_edit(self, artist_id, lang='en'):
+        """The artist as MusicBrainz gives it (members with their keys), the
+        stored corrections and the answer with them applied."""
+        lang = _lang_ok(lang)
+        art, error = self._library_artist(artist_id)
+        if error:
+            return error
+        self._open_cache()
+        name_key = normalise(art['name'])
+        overrides = self.edits.artist_overrides(name_key) if name_key else {}
+        if self.online_enabled():
+            raw = self._artist_for(artist_id, art, lang, None)
+            effective = self._artist_for(artist_id, art, lang, overrides)
+        else:
+            raw = {'status': 'disabled', 'artist_id': artist_id}
+            effective = dict(raw)
+        out = {'status': raw['status'], 'artist_id': artist_id, 'library_name': art['name'],
+               'match': self._artist_match_info(name_key),
+               'artist': raw.get('artist'), 'bio': raw.get('bio'), 'overrides': overrides, 'effective': effective}
+        if raw.get('message'):
+            out['message'] = raw['message']
+        return out
+
+    def artist_edit_save(self, artist_id, overrides, lang='en'):
+        """Replace an artist's corrections; answers like album_edit_save."""
+        lang = _lang_ok(lang)
+        overrides = validate_artist_overrides(overrides)
+        art, error = self._library_artist(artist_id)
+        if error:
+            return error
+        name_key = normalise(art['name'])
+        if not name_key:
+            return {'status': 'error', 'artist_id': artist_id, 'message': 'unknown artist'}
+        self._open_cache()
+        self.edits.set_artist_overrides(name_key, artist_id, art['name'],
+                                        self._artist_match_info(name_key)['mbid'], overrides)
+        if self.online_enabled():
+            effective = self._artist_for(artist_id, art, lang, overrides)
+        else:
+            effective = {'status': 'disabled', 'artist_id': artist_id}
+        return dict(effective, effective=copy.deepcopy(effective), overrides=overrides)
+
+    def artist_pin(self, artist_id, mbid, lang='en'):
+        """Choose the MusicBrainz artist of a library artist by hand: an MBID,
+        "none" (nobody: no information) or None (back to automatic)."""
+        art, error = self._library_artist(artist_id)
+        if error:
+            return error
+        if mbid is not None and mbid != 'none':
+            if not UUID_RE.fullmatch(str(mbid)):
+                return {'status': 'error', 'artist_id': artist_id, 'message': 'invalid mbid'}
+            mbid = mbid.lower()
+        name_key = normalise(art['name'])
+        if not name_key:
+            return {'status': 'error', 'artist_id': artist_id, 'message': 'unknown artist'}
+        self._open_cache()
+        self.edits.set_artist_pin(name_key, artist_id, art['name'], mbid)
+        self._failures.pop(f'artist:{name_key}', None)
+        if mbid and mbid != 'none':
+            self._people_ids[mbid] = (artist_id, time.monotonic())
+        return self.artist(artist_id, lang=lang)
+
+    def artist_candidates(self, artist_id):
+        """MusicBrainz artists that could be this library artist, for the
+        manual choice."""
+        if not self.online_enabled():
+            return {'status': 'disabled', 'artist_id': artist_id, 'current': None, 'pinned': None, 'candidates': []}
+        art, error = self._library_artist(artist_id)
+        if error:
+            return dict(error, candidates=[])
+        self._open_cache()
+        name_key = normalise(art['name'])
+        pin = self.edits.artist_pin(name_key) if name_key else None
+        current = self._artist_match_info(name_key)['mbid'] if name_key else None
+        query = lucene_tokens(art['name'])
+        out = {'status': 'ok', 'artist_id': artist_id, 'current': current, 'pinned': pin, 'candidates': []}
+        if not query:
+            return out
+        ckey = 'search:artists:' + hashlib.sha1(query.encode('utf-8')).hexdigest()[:24]
+        hit = self._fresh(ckey, ttl=NEGATIVE_TTL)
+        if hit is None or hit[2]:
+            status, message = self._ensure(f'artistcand:{ckey}',
+                                           lambda ctx, _q=query, _k=ckey: self._job_search_artists(ctx, _q, _k, 25),
+                                           PRIO_INTERACTIVE)
+            if hit is None:
+                out['status'] = status
+                if message:
+                    out['message'] = message
+                return out
+        cands = [dict(c) for c in hit[0]] if not hit[1] else []
+        if current and all(c['mbid'] != current for c in cands):
+            model = self._fresh(f'artist:{current}')
+            if model and not model[1]:
+                m = model[0]
+                cands.insert(0, {'mbid': current, 'name': m.get('name') or '', 'disambiguation': m.get('disambiguation') or '',
+                                 'type': m.get('type') or '', 'area': m.get('area') or '', 'begin': m.get('begin') or '',
+                                 'end': m.get('end') or '', 'score': None})
+        cands.sort(key=lambda c: (c['mbid'] != current, -(c.get('score') or 0)))
+        out['candidates'] = cands
+        return out
+
+    def _job_search_artists(self, ctx, query, cache_key, limit):
+        data = self._mb(ctx, 'artist', query=query, limit=limit)
+        self.cache.put(cache_key, [artist_summary(a) for a in data.get('artists') or [] if a.get('id')])
+
+    def search_people(self, q):
+        """People to link a credit to: library artists (Lyrion's search) at
+        once, MusicBrainz artists through the worker queue (`pending` while
+        the search waits for its turn)."""
+        q = clean_text(q)[:100]
+        library = []
+        try:
+            r = self.lyrion.request(['artists', 0, 20, f'search:{q}'])
+            for a in r.get('artists_loop') or []:
+                if a.get('artist') and a.get('id') is not None:
+                    library.append({'artist_id': int(a['id']), 'name': a['artist']})
+        except (LyrionError, ValueError, TypeError):
+            pass
+        out = {'status': 'ok', 'library': library, 'musicbrainz': []}
+        if not self.online_enabled():
+            out['status'] = 'disabled'
+            return out
+        query = lucene_tokens(q)
+        if not query:
+            return out
+        digest = hashlib.sha1(query.encode('utf-8')).hexdigest()[:24]
+        ckey = 'search:people:' + digest
+        hit = self._fresh(ckey, ttl=NEGATIVE_TTL)
+        if hit is not None and not hit[2]:
+            out['musicbrainz'] = [{k: c.get(k) for k in ('mbid', 'name', 'disambiguation', 'type')}
+                                  for c in hit[0]] if not hit[1] else []
+            return out
+        job_key = 'peoplesearch:' + digest
+        with self._cv:
+            # somebody typing: only the latest search is worth a request
+            for k in [k for k in self._jobs if k.startswith('peoplesearch:') and k != job_key]:
+                del self._jobs[k]
+        status, message = self._ensure(job_key, lambda ctx, _q=query, _k=ckey: self._job_search_artists(ctx, _q, _k, 15),
+                                       PRIO_INTERACTIVE)
+        out['status'] = status
+        if message:
+            out['message'] = message
+        return out
 
     def _match_artist(self, ctx, artist_id, name):
         """MBID of a library artist: tags on one of their tracks, then the
@@ -2461,7 +3541,7 @@ class MetadataService:
         fp = self.cache.index_get(a['id'], a['title'], a['artist'])
         if not fp:
             return False
-        if self.cache.get_pin(fp):
+        if self.edits.get_pin(fp):
             return True
         hit = self._fresh(f'match:{fp}')
         if hit is None or hit[2]:
@@ -2551,6 +3631,18 @@ def init_app(app, require_auth, service_getter=None):
     def _bad(message):
         return jsonify({'status': 'error', 'message': message}), 400
 
+    def _fail(code, status=400, **fields):
+        """The error shape of the Library editor's calls: a stable `code`, a
+        message in the caller's language, `status: error` for the screens
+        that read the service's own answers."""
+        from hifi_i18n import t as translate
+        return jsonify({'success': False, 'status': 'error', 'code': code,
+                        'message': translate(code, request_lang(request), **fields)}), status
+
+    def _json_body():
+        data = request.get_json(silent=True)
+        return data if isinstance(data, dict) else {}
+
     def _guard(fn):
         def wrapper(*a, **kw):
             denied = require_auth()
@@ -2607,6 +3699,69 @@ def init_app(app, require_auth, service_getter=None):
     def appearances():
         return jsonify(svc().appearances(request.args.get('mbid') or ''))
 
+    # ── manual corrections (the Library editor) ──
+    @app.route('/api/meta/album/edit', methods=['GET', 'POST'])
+    @_guard
+    def album_edit():
+        if request.method == 'POST':
+            data = _json_body()
+            album_id = _int_arg('album_id', data)
+            if album_id is None:
+                return _fail('meta.albumRequired')
+            try:
+                return jsonify(svc().album_edit_save(album_id, data.get('overrides'), request_lang(request)))
+            except OverrideError as e:
+                return _fail('meta.badOverrides', detail=str(e))
+        album_id = _int_arg('album_id')
+        if album_id is None:
+            return _fail('meta.albumRequired')
+        return jsonify(svc().album_edit(album_id, request_lang(request)))
+
+    @app.route('/api/meta/artist/edit', methods=['GET', 'POST'])
+    @_guard
+    def artist_edit():
+        if request.method == 'POST':
+            data = _json_body()
+            artist_id = _int_arg('artist_id', data)
+            if artist_id is None:
+                return _fail('meta.artistRequired')
+            try:
+                return jsonify(svc().artist_edit_save(artist_id, data.get('overrides'), request_lang(request)))
+            except OverrideError as e:
+                return _fail('meta.badOverrides', detail=str(e))
+        artist_id = _int_arg('artist_id')
+        if artist_id is None:
+            return _fail('meta.artistRequired')
+        return jsonify(svc().artist_edit(artist_id, request_lang(request)))
+
+    @app.route('/api/meta/artist/candidates', methods=['GET'])
+    @_guard
+    def artist_candidates():
+        artist_id = _int_arg('artist_id')
+        if artist_id is None:
+            return _fail('meta.artistRequired')
+        return jsonify(svc().artist_candidates(artist_id))
+
+    @app.route('/api/meta/artist/pin', methods=['POST'])
+    @_guard
+    def artist_pin():
+        data = _json_body()
+        artist_id = _int_arg('artist_id', data)
+        if artist_id is None or 'mbid' not in data:
+            return _fail('meta.artistPinRequired')
+        mbid = data.get('mbid')
+        if mbid is not None and (not isinstance(mbid, str) or (mbid != 'none' and not UUID_RE.fullmatch(mbid))):
+            return _fail('meta.badMbid')
+        return jsonify(svc().artist_pin(artist_id, mbid, request_lang(request)))
+
+    @app.route('/api/meta/search/people', methods=['GET'])
+    @_guard
+    def search_people():
+        q = clean_text(request.args.get('q') or '')
+        if len(q) < 2 or len(q) > 100:
+            return _fail('meta.badQuery')
+        return jsonify(svc().search_people(q))
+
     @app.route('/api/meta/settings', methods=['GET', 'POST'])
     @_guard
     def settings():
@@ -2629,6 +3784,12 @@ def init_app(app, require_auth, service_getter=None):
 def start_background(delay=PREFETCH_START_DELAY):
     """Called from sources_server's __main__: the worker starts with the
     service, the library walk a couple of minutes later."""
+    try:
+        # opened now rather than at the first page: that is what moves the
+        # edition choices an older version kept in the cache (Edits.migrate_pins)
+        get_service()._open_cache()
+    except Exception as e:  # noqa: BLE001
+        _log(f'metadata cache not opened: {e}')
     try:
         get_service().start_prefetch(delay)
     except Exception as e:  # noqa: BLE001

@@ -199,6 +199,22 @@ class BuildArchiveTests(FakeRootTestCase):
             logicals)
         self.assertNotIn("/var/lib/squeezeboxserver/cache/library.db", logicals)
 
+    def test_library_edits_are_kept_and_the_metadata_cache_is_not(self):
+        # The owner's corrections (hifi_metadata.py / hifi_tags.py) cannot be
+        # downloaded again; the information cache next to them can.
+        _write(self.root, "/var/lib/hifi-player/metadata-edits/albums/0123abcd.json", b"{}")
+        _write(self.root, "/var/lib/hifi-player/metadata-edits/tag-jobs/20260915-120000-abcdef.json", b"{}")
+        _write(self.root, "/var/lib/hifi-player/metadata/metadata.db", b"CACHE")
+        logicals = [lg for lg, _ in hb.iter_members(hb.UNATTENDED_CATEGORIES, self.root)]
+        self.assertIn("/var/lib/hifi-player/metadata-edits/albums/0123abcd.json", logicals)
+        self.assertIn("/var/lib/hifi-player/metadata-edits/tag-jobs/20260915-120000-abcdef.json", logicals)
+        self.assertNotIn("/var/lib/hifi-player/metadata/metadata.db", logicals)
+        self.assertFalse(hb.is_denied("/var/lib/hifi-player/metadata-edits/albums/0123abcd.json"))
+        self.assertIsNotNone(hb.restore_dest_for_member(
+            "var/lib/hifi-player/metadata-edits/artists/x.json", ["core"], self.root))
+        self.assertIsNone(hb.restore_dest_for_member(
+            "var/lib/hifi-player/metadata/metadata.db", hb.ALL_CATEGORIES, self.root))
+
     def test_server_uuid_is_stripped(self):
         _write(self.root, "/var/lib/squeezeboxserver/prefs/server.prefs",
                b"server_uuid: 8f14e45f-ceea-4e58-a1b2-abcdef123456\nplaylistdir: /music\n")

@@ -102,6 +102,10 @@ if grep -q 'data-mounted' "$RESET_SCRIPT"; then ok; else
 for f in ui-language nowplaying-view ota-autocheck vu-meter-enabled; do
     if grep -q "$f" "$RESET_SCRIPT"; then ok; else bad "la lista legacy dimentica $f"; fi
 done
+# The Library editor's manual corrections live outside the metadata cache (they
+# survive "clear cache"), so the reset has to remove them on their own.
+if grep -q '/var/lib/hifi-player/metadata-edits' "$RESET_SCRIPT"; then ok; else
+   bad "hifi-factory-reset.sh does not delete the library corrections (metadata-edits)"; fi
 
 echo "$pass passed, $fail failed"
 [ "$fail" -eq 0 ]

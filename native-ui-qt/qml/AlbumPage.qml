@@ -377,7 +377,8 @@ Item {
             Text {
                 visible: root.metaOk
                 width: col.width; height: 18; verticalAlignment: Text.AlignVCenter; elide: Text.ElideRight
-                text: Tr.t("player.page.creditsSource") + (root.metaOk && root.meta.release && root.meta.release.date ? " · " + Tr.tf("player.page.edition", "date", Meta.date(root.meta.release.date)) : "")
+                text: Tr.t("player.page.creditsSource") + (root.metaOk && root.meta.edited ? ", " + Tr.t("player.page.edited") : "")
+                      + (root.metaOk && root.meta.release && root.meta.release.date ? " · " + Tr.tf("player.page.edition", "date", Meta.date(root.meta.release.date)) : "")
                 color: Theme.silverA(0.4); font.family: Theme.font; font.pixelSize: 11
             }
             Item {

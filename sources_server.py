@@ -38,6 +38,7 @@ from datetime import datetime, timezone
 
 import hifi_backup as hb
 import hifi_metadata as hmeta
+import hifi_tags as htags
 from hifi_logging import tee_stdio_to_file
 from hifi_i18n import t as _ht
 # Every print() below keeps reaching the console/journald unchanged AND now also
@@ -4227,6 +4228,10 @@ def _require_pair_token():
 # /api/meta/* (credits from MusicBrainz, texts from Wikipedia) lives in
 # hifi_metadata.py; mounted here so it shares this service's pairing check.
 hmeta.init_app(app, _require_pair_token)
+# /api/library/* (the Library editor: the tags inside the music files) lives in
+# hifi_tags.py. It writes only below the same roots every other file operation
+# here is confined to.
+htags.init_app(app, _require_pair_token, roots=ALLOWED_LOCAL_ROOTS)
 
 
 # ─────────────────────────── DSP status/control proxy ────────────────
