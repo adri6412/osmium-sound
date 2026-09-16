@@ -13,9 +13,13 @@
 struct LibItem {
     QString id, text, sub, art, icon;
     QString url, favUrl;        // the item's URL (tracks, playlists, plugin audio) and what `favorites add` wants for it
+    QString ptype;              // plugin items: the type Lyrion gives them (audio, playlist, link, search)
     QString albumId, artistId;  // tracks and albums: where "go to album / artist" leads
     int kind = -1;              // search results only: 0 artist, 1 album, 2 track
-    QVariantList go, play, doact;
+    // Jive menus carry their own actions: `add` puts the item at the end of
+    // the queue, `add-hold` plays it next — the same pair SqueezePlay binds to
+    // a tap and a long press on ADD.
+    QVariantList go, play, doact, addact, addhold;
     bool isDir = false, hasItems = false, isAudio = false, hasInput = false;
     double duration = 0, weight = 0;
     QString fold;               // testo normalizzato per ordinare/filtrare
@@ -43,7 +47,7 @@ public:
     Q_ENUM(View)
     enum Roles { IdRole = Qt::UserRole + 1, TextRole, SubRole, ArtRole, IconRole, GoRole, PlayRole, DoRole,
                  IsDirRole, HasItemsRole, IsAudioRole, HasInputRole, DurationRole, LetterRole,
-                 UrlRole, FavUrlRole, KindRole, SectionRole };
+                 UrlRole, FavUrlRole, KindRole, SectionRole, AddRole, AddHoldRole, PTypeRole };
     explicit LibraryModel(QObject *parent = nullptr);
 
     int rowCount(const QModelIndex &parent = QModelIndex()) const override;

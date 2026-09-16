@@ -94,6 +94,36 @@ def status_now():
         STATE["time"] = min(STATE["duration"], STATE["time"] + (time.time() - T0) % 1 * 0)
     return STATE
 
+# Le tre specie di voce che restituisce un plugin, per provare il menu a
+# pressione lunga: musica da suonare, un contenitore di musica (album, playlist)
+# e un nodo di navigazione. Lyrion mette presetParams.favorites_url solo sulle
+# prime due, ed e' da li' che la UI capisce quali sono musica.
+def plugin_item(cmd, i):
+    kind = i % 3
+    o = {"id": f"{cmd}.{i}", "name": f"{cmd} voce {i + 1}",
+         "hasitems": 0 if kind == 0 else 1,
+         "isaudio": 1 if kind == 0 else 0,
+         "type": "audio" if kind == 0 else "link"}
+    if kind == 0:
+        o["url"] = f"http://mock/{cmd}/{i}.mp3"
+        o["presetParams"] = {"favorites_url": o["url"], "favorites_title": o["name"]}
+    elif kind == 1:
+        o["presetParams"] = {"favorites_url": f"{cmd}://album/{i}", "favorites_title": o["name"]}
+    return o
+
+
+# La stessa voce in forma di menu Jive: si porta dietro le azioni, `add` accoda
+# e `add-hold` fa suonare dopo.
+def menu_item(cmd, i):
+    it = {"id": f"{cmd}.{i}", "text": f"{cmd} voce {i + 1}",
+          "actions": {"go": {"cmd": [cmd, "items"], "params": {"item_id": f"{cmd}.{i}"}}}}
+    if i % 3 != 2:
+        it["actions"]["add"] = {"cmd": [cmd, "playlist", "add"], "params": {"item_id": f"{cmd}.{i}"}}
+        it["actions"]["add-hold"] = {"cmd": [cmd, "playlist", "insert"], "params": {"item_id": f"{cmd}.{i}"}}
+        it["presetParams"] = {"favorites_url": f"{cmd}://item/{i}", "favorites_title": it["text"]}
+    return it
+
+
 def rpc(player, params):
     cmd = params[0] if params else ""
     r = {}
@@ -248,7 +278,9 @@ def rpc(player, params):
     elif cmd == "favorites":
         sub = params[1] if len(params) > 1 else ""
         def arg(k): return next((p[len(k):] for p in params if isinstance(p, str) and p.startswith(k)), None)
-        if sub == "items":
+        if sub == "playlist":
+            print("mock: favorites", params[1:], flush=True)
+        elif sub == "items":
             r = {"loop_loop": [dict(f) for f in FAVS], "count": len(FAVS)}
         elif sub == "exists":
             what = params[2] if len(params) > 2 else ""
@@ -287,8 +319,13 @@ def rpc(player, params):
             {"id": "qobuz", "node": "home", "text": "Qobuz", "weight": 5, "icon": "/plugins/cache/icons/qobuz.png", "actions": {"go": {"cmd": ["qobuz", "items"], "params": {"menu": "qobuz"}}}},
         ]}
     elif cmd in ("local", "tunein", "qobuz", "favorites", "search"):
-        r = {"loop_loop": [{"id": f"{cmd}.{i}", "name": f"{cmd} voce {i + 1}", "hasitems": 1 if i % 3 else 0, "isaudio": 0 if i % 3 else 1, "type": "link" if i % 3 else "audio"} for i in range(9)],
-             "item_loop": [{"id": f"{cmd}.{i}", "text": f"{cmd} voce {i + 1}", "actions": {"go": {"cmd": [cmd, "items"], "params": {"item_id": f"{cmd}.{i}"}}}} for i in range(9)]}
+        # <plugin> playlist add|insert|play item_id:… — quello che manda il menu
+        # a pressione lunga dentro un'app
+        if params[1:2] == ["playlist"]:
+            print("mock:", cmd, params[1:], flush=True)
+        else:
+            r = {"loop_loop": [plugin_item(cmd, i) for i in range(9)],
+                 "item_loop": [menu_item(cmd, i) for i in range(9)]}
     elif cmd == "playlistcontrol":
         pass
     elif cmd == "serverstatus":

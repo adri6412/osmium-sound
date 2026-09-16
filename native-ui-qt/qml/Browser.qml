@@ -193,15 +193,29 @@ Item {
         parts[parts.length - 1] = String(n)
         return parts.join(".")
     }
+    // dentro un'app o un plugin la coda si comanda col plugin stesso
+    // (`<cmd> playlist add|insert item_id:…`), non con playlistcontrol: gli id
+    // sono del plugin, non della libreria. Su un contenitore Lyrion prende
+    // tutto quello che c'e' sotto, come fa la sua interfaccia.
+    function pluginQueueItems(L, cmd, id) {
+        function q(mode) { return function() { Player.cmd([cmd, "playlist", mode, "item_id:" + id]) } }
+        L.push({ icon: "list-plus", label: Tr.t("player.addToQueue"), cb: q("add") })
+        L.push({ icon: "list-start", label: Tr.t("player.playNext"), cb: q("insert") })
+    }
     function favoriteMenu(it, row) {
         var L = []
+        // un preferito e' musica quanto la riga da cui e' nato: stessa coda,
+        // piu' le voci che valgono solo qui (rinomina, sposta, togli)
         var isDir = it.hasItems && !it.isAudio
-        if (it.isAudio || isDir) L.push({ icon: "pencil", label: Tr.t("player.rename"), cb: function() {
-            Ui.overlays.prompt(Tr.t("player.renameTitle"), it.text, function(name) {
-                if (!name || name === it.text) return
-                Player.query(["favorites", "rename", "item_id:" + it.id, "title:" + name], function() { loadTop() })
-            })
-        } })
+        if (it.isAudio || isDir) {
+            pluginQueueItems(L, "favorites", it.id)
+            L.push({ icon: "pencil", label: Tr.t("player.rename"), cb: function() {
+                Ui.overlays.prompt(Tr.t("player.renameTitle"), it.text, function(name) {
+                    if (!name || name === it.text) return
+                    Player.query(["favorites", "rename", "item_id:" + it.id, "title:" + name], function() { loadTop() })
+                })
+            } })
+        }
         if (row > 0) L.push({ icon: "arrow-up", label: Tr.t("player.moveUp"), cb: function() {
             Player.query(["favorites", "move", "from_id:" + it.id, "to_id:" + favSibling(it.id, -1)], function() { loadTop() })
         } })
@@ -252,7 +266,20 @@ Item {
             break
         case LibraryModel.PluginItems:
             if (cur.p1 === "favorites") return favoriteMenu(it, row)
-            if (it.url && it.isAudio) fav(it.url, "audio")
+            // musica vera: un brano o una stazione (isAudio), un contenitore
+            // che Lyrion marca "playlist" (album, playlist), o una voce a cui
+            // ha attaccato un favorites_url. I nodi di navigazione e la
+            // ricerca non hanno niente di tutto questo e restano come erano.
+            if (!it.hasInput && (it.isAudio || it.ptype === "playlist" || it.favUrl)) pluginQueueItems(L, cur.p1, it.id)
+            fav(it.favUrl, it.isAudio ? "audio" : "playlist")
+            break
+        case LibraryModel.MenuHome: case LibraryModel.Menu:
+            // i menu Jive portano le proprie azioni: `add` accoda, `add-hold`
+            // fa suonare dopo
+            if (it.addact && it.addact.length) L.push({ icon: "list-plus", label: Tr.t("player.addToQueue"), cb: function() { Player.cmd(it.addact) } })
+            if (it.addhold && it.addhold.length) L.push({ icon: "list-start", label: Tr.t("player.playNext"), cb: function() { Player.cmd(it.addhold) } })
+            // una voce che si suona e non si apre e' un brano o una stazione
+            fav(it.favUrl, (it.play && it.play.length && !(it.go && it.go.length)) ? "audio" : "playlist")
             break
         }
         return L
